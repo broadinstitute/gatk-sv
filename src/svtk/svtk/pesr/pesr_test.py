@@ -146,7 +146,7 @@ class PESRTestRunner:
         non_outlier_called = [s for s in called if s not in self.outlier_sample_ids]
         if len(non_outlier_called) > 0:
             called = non_outlier_called
-        
+
         non_outlier_background = [s for s in background if s not in self.outlier_sample_ids]
         if len(non_outlier_background) > 0:
             background = non_outlier_background

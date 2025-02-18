@@ -35,7 +35,7 @@ def preprocess(chrom, start, end, tbx, samples, window=None, called_samples=None
     """
     if window is None:
         window = end - start
-    
+
     bafs = deque()
     if window < 1000000:
         for record in tbx.fetch(chrom, max(1, start - window), end + window, parser=pysam.asTuple()):
@@ -47,7 +47,7 @@ def preprocess(chrom, start, end, tbx, samples, window=None, called_samples=None
             bafs.append(np.array(record))
         for record in tbx.fetch(chrom, end, end + 1000000, parser=pysam.asTuple()):
             bafs.append(np.array(record))
-    
+
     bafs = pd.DataFrame(np.array(bafs))
     if bafs.empty:
         return bafs, bafs, called_samples
@@ -65,7 +65,7 @@ def preprocess(chrom, start, end, tbx, samples, window=None, called_samples=None
     
     if bafs.empty:
         return bafs, bafs, called_samaples
-    
+
     bafs['pos'] = bafs.pos.astype(int)
     bafs['baf'] = bafs.baf.astype(float)
     bafs.loc[bafs.pos <= start, 'region'] = 'before'
@@ -79,7 +79,7 @@ def preprocess(chrom, start, end, tbx, samples, window=None, called_samples=None
     for colname in cols:
         if colname not in het_counts.columns:
             het_counts[colname] = 0
-    
+
     # Report BAF for variants inside CNV
     called_bafs = bafs.loc[bafs.region == 'inside'].copy()
     return het_counts, called_bafs, called_samaples
@@ -148,8 +148,8 @@ def main(argv):
                 type = dat[5]
                 try:
                     het_counts, called_bafs, samplelist = preprocess(
-                        chrom, start, end, tbx, samples=splist, 
-                        outlier_sample_ids=outlier_samples, 
+                        chrom, start, end, tbx, samples=splist,
+                        outlier_sample_ids=outlier_samples,
                         called_samples=samplelist
                     )
                 except ValueError:
