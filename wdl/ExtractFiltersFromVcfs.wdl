@@ -1,25 +1,29 @@
 version 1.0
 
+version 1.0
+
 workflow ExtractFiltersFromVCFs {
 
   input {
+    Array[String] sample_ids
     Array[File] vcf_files
 
     String sv_pipeline_docker
   }
 
-  scatter (vcf in vcf_files) {
+  scatter (idx in range(length(vcf_files))) {
     call ExtractSampleAndVariants { 
-			input:
-				vcf_file = vcf, 
-				sv_pipeline_docker = sv_pipeline_docker
+      input:
+        vcf_file = vcf_files[idx],
+        sample_id = sample_ids[idx],
+        sv_pipeline_docker = sv_pipeline_docker
     }
   }
 
   call MergeJSONs {
     input: 
-			json_files = ExtractSampleAndVariants.output_json,
-			sv_pipeline_docker = sv_pipeline_docker
+      json_files = ExtractSampleAndVariants.output_json,
+      sv_pipeline_docker = sv_pipeline_docker
   }
 
   output {
@@ -30,13 +34,12 @@ workflow ExtractFiltersFromVCFs {
 task ExtractSampleAndVariants {
   input {
     File vcf_file
+    String sample_id
     String sv_pipeline_docker
   }
 
   command <<<
     set -e
-
-    sample_id=$(bcftools query -l ~{vcf_file} | head -n 1)
 
     output_json="${sample_id}.json"
     echo "{ \"$sample_id\": {" > "$output_json"
@@ -61,7 +64,7 @@ task ExtractSampleAndVariants {
   >>>
 
   output {
-    File output_json = "~{vcf_file}.json"
+    File output_json = "${sample_id}.json"
   }
 
   runtime {
@@ -72,8 +75,7 @@ task ExtractSampleAndVariants {
 task MergeJSONs {
   input {
     Array[File] json_files
-
-		String sv_pipeline_docker
+    String sv_pipeline_docker
   }
 
   command <<<
@@ -94,7 +96,7 @@ task MergeJSONs {
     File merged_json = "merged.json"
   }
 
-	runtime {
+  runtime {
     docker: sv_pipeline_docker
   }
 }
