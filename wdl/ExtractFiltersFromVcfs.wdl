@@ -37,28 +37,33 @@ task ExtractSampleAndVariants {
   }
 
   command <<<
-    set -e
+    set -euo pipefail
+    python3 <<CODE
 
-    output_json="${sample_id}.json"
-    echo "{ \"$sample_id\": {" > "$output_json"
+    import json
+    import gzip
 
-    bcftools query -f '%ID\t%FILTER\n' ~{vcf_file} | \
-    awk -v sample="$sample_id" '
-    BEGIN { first=1 }
-    {
-      if ($2 != "PASS") {
-        gsub(":", "_", $1);
-        if (!seen[$2]) {
-          if (!first) print ",";
-          first=0;
-          printf "\"%s\": [\"%s\"]", $2, $1;
-          seen[$2]=1;
-        } else {
-          printf ", \"%s\"", $1;
-        }
-      }
-    }
-    END { print "}}" }' >> "$output_json"
+    vcf_file = "~{vcf_file}"
+    output_json = f"/cromwell_root/{sample_id}.json"
+
+    filter_dict = {}
+
+    with gzip.open(vcf_file, 'rt') as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            columns = line.strip().split('\t')
+            variant_id = columns[2].replace(":", "_")
+            filters = columns[6].split(';') if columns[6] != "PASS" else []
+            
+            for filt in filters:
+                if filt not in filter_dict:
+                    filter_dict[filt] = []
+                filter_dict[filt].append(variant_id)
+
+    with open(output_json, "w") as f:
+        json.dump({sample_id: filter_dict}, f, indent=4)
+    CODE
   >>>
 
   output {
@@ -77,17 +82,22 @@ task MergeJSONs {
   }
 
   command <<<
-    set -e
-    echo "{" > merged.json
+    set -euo pipefail
+    python3 <<CODE
+    import json
+    import glob
 
-    first=1
-    for f in ~{sep=' ' json_files}; do
-      if [[ "$first" -eq 0 ]]; then echo "," >> merged.json; fi
-      cat "$f" | jq -c . >> merged.json
-      first=0
-    done
+    output_file = "merged.json"
+    merged_dict = {}
 
-    echo "}" >> merged.json
+    for file in ~{json_files}:
+        with open(file, "r") as f:
+            data = json.load(f)
+            merged_dict.update(data)
+    
+    with open(output_file, "w") as f:
+        json.dump(merged_dict, f, indent=4)
+    CODE
   >>>
 
   output {
