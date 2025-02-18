@@ -43,26 +43,27 @@ task ExtractSampleAndVariants {
     import json
     import gzip
 
+    sample_id = "~{sample_id}"
     vcf_file = "~{vcf_file}"
-    output_json = f"/cromwell_root/{sample_id}.json"
+    output_json = f"{sample_id}.json"
 
     filter_dict = {}
 
     with gzip.open(vcf_file, 'rt') as f:
-        for line in f:
-            if line.startswith("#"):
-                continue
-            columns = line.strip().split('\t')
-            variant_id = columns[2].replace(":", "_")
-            filters = columns[6].split(';') if columns[6] != "PASS" else []
-            
-            for filt in filters:
-                if filt not in filter_dict:
-                    filter_dict[filt] = []
-                filter_dict[filt].append(variant_id)
+      for line in f:
+        if line.startswith("#"):
+          continue
+        columns = line.strip().split('\t')
+        variant_id = columns[2].replace(":", "_")
+        filters = columns[6].split(';') if columns[6] != "PASS" else []
+        
+        for filt in filters:
+          if filt not in filter_dict:
+            filter_dict[filt] = []
+          filter_dict[filt].append(variant_id)
 
     with open(output_json, "w") as f:
-        json.dump({sample_id: filter_dict}, f, indent=4)
+      json.dump({sample_id: filter_dict}, f, indent=4)
     CODE
   >>>
 
@@ -91,12 +92,12 @@ task MergeJSONs {
     merged_dict = {}
 
     for file in ~{json_files}:
-        with open(file, "r") as f:
-            data = json.load(f)
-            merged_dict.update(data)
+      with open(file, "r") as f:
+        data = json.load(f)
+        merged_dict.update(data)
     
     with open(output_file, "w") as f:
-        json.dump(merged_dict, f, indent=4)
+      json.dump(merged_dict, f, indent=4)
     CODE
   >>>
 
