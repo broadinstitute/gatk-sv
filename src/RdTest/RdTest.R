@@ -1180,14 +1180,25 @@ runRdTest<-function(bed)
   samplestokeep<-match(unlist(strsplit(sampleIDs,",")),idsforsearch)
   sampleIDs<-idsforsearch[na.omit(samplestokeep)]
 
-  #Exclude outlier samples only if non-outlier samples exist
   if (!is.null(opt$outlierSampleIds)) {
     outlier_ids <- readLines(opt$outlierSampleIds)
-    non_outlier_samples <- setdiff(sampleIDs, outlier_ids)
-    if (length(non_outlier_samples) > 0) {
-      sampleIDs <- non_outlier_samples
-      cnv_matrix <- cnv_matrix[!(rownames(cnv_matrix) %in% outlier_ids), , drop = FALSE]
+
+    # Create non-outlier sample lists
+    background_samples <- setdiff(rownames(cnv_matrix), sampleIDs)
+    non_outlier_called <- setdiff(sampleIDs, outlier_ids)
+    non_outlier_background <- setdiff(background_samples, outlier_ids)
+
+    # Exclude outlier samples only if non-outlier samples exist
+    if (length(non_outlier_called) > 0) {
+      outlier_called <- setdiff(sampleIDs, non_outlier_called)
+      cnv_matrix <- cnv_matrix[!(rownames(cnv_matrix) %in% outlier_called), , drop = FALSE]
+      sampleIDs <- non_outlier_called
     }
+    if (length(non_outlier_background) > 0) {
+      outlier_background <- setdiff(background_samples, non_outlier_background)
+      cnv_matrix <- cnv_matrix[!(rownames(cnv_matrix) %in% outlier_background), , drop = FALSE]
+    }
+  }
   }
   samplesPrior <-unlist(strsplit(as.character(sampleIDs),split=","))
 

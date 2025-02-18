@@ -53,19 +53,23 @@ def preprocess(chrom, start, end, tbx, samples, window=None, called_samples=None
         return bafs, bafs, called_samples
     bafs.columns = ['chr', 'pos', 'baf', 'sample']
 
-    # Exclude outlier samples from all samples only if non-outlier samples exist
-    bafs_no_outliers = bafs[bafs['sample'].isin(samples) & ~bafs['sample'].isin(outlier_sample_ids)]
-    if not bafs_no_outliers.empty:
-        bafs = bafs_no_outliers
+    # Create non-outlier sample lists
+    background_samples = list(set(samples) - set(called_samples))
+    non_outlier_called = [s for s in called_samples if s not in outlier_sample_ids]
+    non_outlier_background = [s for s in background_samples if s not in outlier_sample_ids]
+
+    # Exclude outlier samples only if non-outlier samples exist
+    if len(non_outlier_called) > 0:
+        called_samples = non_outlier_called
+    if len(non_outlier_background) > 0:
+        background_samples = non_outlier_background
     
-    # Exclude outlier samples from called samples only if non-outlier samples exist
-    non_outlier_called_samples = [s for s in called_samples if s not in outlier_sample_ids]
-    if len(non_outlier_called_samples) > 0:
-        called_samaples = non_outlier_called_samples
+    samples = list(set(called_samples) | set(background_samples))
+    bafs = bafs[bafs['sample'].isin(samples)]
     
     if bafs.empty:
-        return bafs, bafs, called_samaples
-
+        return bafs, bafs, called_samples
+    
     bafs['pos'] = bafs.pos.astype(int)
     bafs['baf'] = bafs.baf.astype(float)
     bafs.loc[bafs.pos <= start, 'region'] = 'before'
@@ -82,7 +86,7 @@ def preprocess(chrom, start, end, tbx, samples, window=None, called_samples=None
 
     # Report BAF for variants inside CNV
     called_bafs = bafs.loc[bafs.region == 'inside'].copy()
-    return het_counts, called_bafs, called_samaples
+    return het_counts, called_bafs, called_samples
 
 
 def main(argv):

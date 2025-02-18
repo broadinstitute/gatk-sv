@@ -142,12 +142,13 @@ class PESRTestRunner:
         called = svu.get_called_samples(record)
         background = [s for s in self.samples if s not in called]
 
-        # Exclude outlier samples only if non-outlier samples exist
+        # Create non-outlier sample lists
         non_outlier_called = [s for s in called if s not in self.outlier_sample_ids]
+        non_outlier_background = [s for s in background if s not in self.outlier_sample_ids]
+
+        # Exclude outlier samples only if non-outlier samples exist
         if len(non_outlier_called) > 0:
             called = non_outlier_called
-
-        non_outlier_background = [s for s in background if s not in self.outlier_sample_ids]
         if len(non_outlier_background) > 0:
             background = non_outlier_background
 
