@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 #
 """
-std_dragen_cnv.py
+std_depth.py
 
-Standardize a Dragen CNV record.
+Standardize a depth record from Dragen CNV.
 """
 
 
@@ -11,7 +11,7 @@ from svtk.utils import is_smaller_chrom
 from .standardize import VCFStandardizer
 
 
-@VCFStandardizer.register('dragen_cnv')
+@VCFStandardizer.register('depth')
 class DragenCnvStandardizer(VCFStandardizer):
     def standardize_records(self):
         """
@@ -68,7 +68,7 @@ class DragenCnvStandardizer(VCFStandardizer):
         std_rec.info['SVLEN'] = raw_rec.stop - raw_rec.pos
 
         # Define ALGORITHMS
-        std_rec.info['ALGORITHMS'] = ['dragen_cnv']
+        std_rec.info['ALGORITHMS'] = ['depth']
         
         return std_rec
 

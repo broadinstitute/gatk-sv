@@ -33,6 +33,7 @@ workflow PreprocessVcfForMakeGq {
 
 	output {
 		File dragen_vcf_std = FormatVcfForGatk.formatted_vcf
+		File dragen_vcf_std_idx = FormatVcfForGatk.formatted_vcf_index
 	}
 }
 
