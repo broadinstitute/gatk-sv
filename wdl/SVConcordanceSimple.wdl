@@ -24,8 +24,8 @@ workflow SVConcordanceSimple {
   }
 
   output {
-    File dragen_cnv_conc_vcf = SVConcordanceTask.out
-    File dragen_cnv_conc_vcf_idx = SVConcordanceTask.out_idx
+    File conc_vcf = SVConcordanceTask.out
+    File conc_vcf_idx = SVConcordanceTask.out_idx
   }
 }
 
