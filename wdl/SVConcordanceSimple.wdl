@@ -3,7 +3,10 @@ version 1.0
 workflow SVConcordanceSimple {
   input {
     File eval_vcf
+    File eval_vcf_idx
     File truth_vcf
+    File truth_vcf_idx
+
     String output_prefix
 
     Float depth_interval_overlap
@@ -16,7 +19,9 @@ workflow SVConcordanceSimple {
   call SVConcordanceTask {
     input:
       eval_vcf=eval_vcf,
+      eval_vcf_idx=eval_vcf_idx,
       truth_vcf=truth_vcf,
+      truth_vcf_idx=truth_vcf_idx,
       output_prefix=output_prefix,
       reference_dict=reference_dict,
       additional_args="--depth-interval-overlap ~{depth_interval_overlap}",
@@ -31,8 +36,11 @@ workflow SVConcordanceSimple {
 
 task SVConcordanceTask {
   input {
-    File truth_vcf
     File eval_vcf
+    File eval_vcf_idx
+    File truth_vcf
+    File truth_vcf_idx
+
     String output_prefix
     
     File reference_dict
