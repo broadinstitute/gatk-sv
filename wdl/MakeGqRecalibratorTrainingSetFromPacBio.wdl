@@ -45,6 +45,10 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     Float? pesr_size_similarity_strict = 0.5
     Int? pesr_breakend_window_strict = 5000
 
+    Float? depth_interval_overlap_strict = 0.5
+    Float? depth_size_similarity_strict = 0.0
+    Int? depth_breakend_window_strict = 10000000
+
     File? clustering_config_strict
     File? stratification_config_strict
     Array[String]? track_names_strict
@@ -53,6 +57,10 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     Float? pesr_interval_overlap_loose = 0
     Float? pesr_size_similarity_loose = 0
     Int? pesr_breakend_window_loose = 5000
+
+    Float? depth_interval_overlap_loose = 0.3
+    Float? depth_size_similarity_loose = 0.0
+    Int? depth_breakend_window_loose = 10000000
 
     File? clustering_config_loose
     File? stratification_config_loose
@@ -197,6 +205,9 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         pesr_interval_overlap=pesr_interval_overlap_loose,
         pesr_size_similarity=pesr_size_similarity_loose,
         pesr_breakend_window=pesr_breakend_window_loose,
+        depth_interval_overlap=depth_interval_overlap_loose,
+        depth_size_similarity=depth_size_similarity_loose,
+        depth_breakend_window=depth_breakend_window_loose,
         clustering_config = clustering_config_loose,
         stratification_config = stratification_config_loose,
         track_names = track_names_loose,
@@ -219,6 +230,9 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         pesr_interval_overlap=pesr_interval_overlap_strict,
         pesr_size_similarity=pesr_size_similarity_strict,
         pesr_breakend_window=pesr_breakend_window_strict,
+        depth_interval_overlap=depth_interval_overlap_strict,
+        depth_size_similarity=depth_size_similarity_strict,
+        depth_breakend_window=depth_breakend_window_strict,
         clustering_config = clustering_config_strict,
         stratification_config = stratification_config_strict,
         track_names = track_names_strict,
