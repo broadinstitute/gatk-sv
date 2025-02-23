@@ -90,3 +90,16 @@ class DragenCnvStandardizer(VCFStandardizer):
         std_rec.stop = stop
 
         return std_rec
+    
+    def standardize_format(self, std_rec, raw_rec):
+        """
+        Parse ./1 GTs for DUPs into 1/1.
+        """
+
+        # Iterate through samples
+        for sample, std_sample in zip(raw_rec.samples, self.std_sample_names):
+            gt = raw_rec.samples[sample]['GT']
+            if None in gt or any(allele == "." for allele in gt):
+                std_rec.samples[std_sample]['GT'] = (1, 1)
+        
+        return std_rec
