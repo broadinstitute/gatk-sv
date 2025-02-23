@@ -8,7 +8,7 @@ Standardize a depth record from Dragen CNV.
 
 
 from svtk.utils import is_smaller_chrom
-from .standardize import VCFStandardizer
+from .standardize import VCFStandardizer, NULL_GT
 
 
 @VCFStandardizer.register('depth')
@@ -95,11 +95,26 @@ class DragenCnvStandardizer(VCFStandardizer):
         """
         Parse ./1 GTs for DUPs into 1/1.
         """
-
-        # Iterate through samples
+            
+        source = std_rec.info['ALGORITHMS'][0]
+        
         for sample, std_sample in zip(raw_rec.samples, self.std_sample_names):
             gt = raw_rec.samples[sample]['GT']
+            if self.call_null_sites:
+                if gt == (None, None):
+                    gt = (0, 1)
+                if gt == (None,):
+                    gt = (1,)
+            
             if None in gt or any(allele == "." for allele in gt):
-                std_rec.samples[std_sample]['GT'] = (1, 1)
-        
+                gt = (1, 1)
+            std_rec.samples[std_sample]['GT'] = gt
+
+            if gt not in NULL_GT:
+                std_rec.samples[std_sample][source] = 1
+            else:
+                std_rec.samples[std_sample][source] = 0
+
         return std_rec
+    
+    
