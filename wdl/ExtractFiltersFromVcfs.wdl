@@ -54,7 +54,7 @@ task ExtractSampleAndVariants {
         if line.startswith("#"):
           continue
         columns = line.strip().split('\t')
-        variant_id = columns[2].replace(":", "_")
+        variant_id = columns[2].replace(":", "_").replace("-", "_")
         filters = columns[6].split(';') if columns[6] != "PASS" else []
         
         for filt in filters:

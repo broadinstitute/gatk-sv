@@ -24,6 +24,10 @@ workflow SVConcordancePacBioSample {
     Float? depth_size_similarity
     Int? depth_breakend_window
 
+    Float? mixed_interval_overlap
+    Float? mixed_size_similarity
+    Int? mixed_breakend_window
+
     File? clustering_config
     File? stratification_config
     Array[String]? track_names
@@ -65,7 +69,7 @@ workflow SVConcordancePacBioSample {
         truth_vcf=PrepPacBioVcf.out,
         eval_vcf=sample_vcf,
         output_prefix="~{prefix}.concordance.~{tool_names[i]}.~{sample_id}.unsorted",
-        additional_args="--pesr-interval-overlap ~{pesr_interval_overlap} --pesr-size-similarity ~{pesr_size_similarity} --pesr-breakend-window ~{pesr_breakend_window} --depth-interval-overlap ~{depth_interval_overlap} --depth-size-similarity ~{depth_size_similarity} --depth-breakend-window ~{depth_breakend_window}",
+        additional_args="--pesr-interval-overlap ~{pesr_interval_overlap} --pesr-size-similarity ~{pesr_size_similarity} --pesr-breakend-window ~{pesr_breakend_window} --depth-interval-overlap ~{depth_interval_overlap} --depth-size-similarity ~{depth_size_similarity} --depth-breakend-window ~{depth_breakend_window} --mixed-interval-overlap ~{mixed_interval_overlap} --mixed-size-similarity ~{mixed_size_similarity} --mixed-breakend-window ~{mixed_breakend_window}",
         clustering_config=clustering_config,
         stratification_config=stratification_config,
         track_names=track_names,
