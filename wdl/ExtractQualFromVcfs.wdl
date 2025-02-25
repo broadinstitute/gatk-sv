@@ -58,7 +58,7 @@ task ExtractSampleAndVariants {
         qual_dict[variant_id] = qual
 
     with open(output_json, "w") as f:
-      json.dump({sample_id: filter_dict}, f, indent=4)
+      json.dump({sample_id: qual_dict}, f, indent=4)
     CODE
   >>>
 
