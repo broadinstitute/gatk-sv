@@ -1,6 +1,6 @@
 version 1.0
 
-workflow ExtractFiltersFromVCFs {
+workflow ExtractQualFromVCFs {
 
   input {
     Array[String] sample_ids
