@@ -335,11 +335,16 @@ task RDTestGenotype {
 
     set -euo pipefail
 
+    # Fix end of file line in write_lines and bed
+    sed -e '$a\' ~{bed} > bed.fix.bed
+    sed -e '$a\' ~{write_lines(samples)} > sample.include.list.txt
+
+
     if [ -s ~{bed} ]; then
       java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
         --sequence-dictionary ~{ref_dict} \
         --evidence-file ~{coveragefile} \
-        -L ~{bed} \
+        -L bed.fix.bed \
         -O local.RD.txt.gz
     else
       touch local.RD.txt
@@ -348,12 +353,12 @@ task RDTestGenotype {
     fi
 
     Rscript /opt/RdTest/RdTest.R \
-      -b ~{bed} \
+      -b bed.fix.bed \
       -c local.RD.txt.gz \
       -m ~{medianfile} \
       ~{"-f " + famfile} \
       -n ~{prefix} \
-      -w ~{write_lines(samples)} \
+      -w sample.include.list.txt \
       -i ~{n_bins} \
       -r ~{gt_cutoffs} \
       -y ~{bin_exclude} \
