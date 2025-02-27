@@ -91,6 +91,7 @@
   "ssc_belyeu_site_level_benchmarking_dataset" : ["SSC_Belyeu", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/SSC_Belyeu"],
   "ssc_sanders_sample_level_benchmarking_dataset": ["SSC_Sanders", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/SSC_Sanders_perSample.v2.tar.gz"],
   "thousand_genomes_site_level_benchmarking_dataset" : ["1000G_Sudmant", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/1000G_Sudmant"],
+  "ref_std_scramble_vcf_tar": "<need-to-find>/all_samples.scramble_std.tar.gz",
 
   "asc_site_level_benchmarking_dataset" : ["ASC_Werling","gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling"],
   "hgsv_site_level_benchmarking_dataset" : ["HGSV_Chaisson", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/HGSV_Chaisson"],
