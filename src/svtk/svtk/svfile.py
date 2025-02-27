@@ -311,6 +311,11 @@ class SVRecordCluster:
             # TODO merge numeric INFO
             elif key == 'varGQ':
                 new_record.info[key] = max(values)
+
+            # Merge END2
+            elif key == 'END2':
+                if (len(values) > 0):
+                    new_record.info[key] = values[0]
             else:
                 pass
 
