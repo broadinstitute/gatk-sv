@@ -1442,9 +1442,17 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker = sv_pipeline_docker
   }
 
+
+  call BcftoolsViewSample {
+    input:
+      variants = UpdateBreakendRepresentation.out,
+      variants_index = UpdateBreakendRepresentation.out_idx,
+      sample = sample_id
+  }
+
   output {
-    File final_vcf = UpdateBreakendRepresentation.out
-    File final_vcf_idx = UpdateBreakendRepresentation.out_idx
+    File final_vcf = BcftoolsViewSample.vcf
+    File final_vcf_idx = BcftoolsViewSample.vcf_index
 
     File final_bed = VcfToBed.bed
 
@@ -1463,5 +1471,32 @@ workflow GATKSVPipelineSingleSample {
     # in the case sample and do not match a depth-based call from the reference panel.
     File non_genotyped_unique_depth_calls = GetUniqueNonGenotypedDepthCalls.out
     File non_genotyped_unique_depth_calls_idx = GetUniqueNonGenotypedDepthCalls.out_idx
+  }
+}
+
+
+task BcftoolsViewSample {
+  input {
+    File variants
+    File variants_index
+    String sample
+  }
+
+  command <<<
+    set -e
+    bcftools view -s ~{sample} -O z -o ~{sample}.gatk-sv.vcf.gz ~{variants}
+    bcftools index --tbi ~{sample}.gatk-sv.vcf.gz
+  >>>
+
+  runtime {
+    disks: "local-disk " + 10 + " HDD"
+    docker: "quay.io/biocontainers/bcftools:1.21--h3a4d415_1"
+    cpu: "1"
+    memory: "4 GB"
+  }
+
+  output {
+    File vcf = "~{sample}.gatk-sv.vcf.gz"
+    File vcf_index = "~{sample}.gatk-sv.vcf.gz.tbi"
   }
 }
