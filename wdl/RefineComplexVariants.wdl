@@ -499,7 +499,7 @@ task GenerateCpxReviewScript {
 
         bgzip -cd '~{bed}' \
           | awk -F'\t' '/^#/{print; next} {$2++; print}' OFS='\t' - \
-          | bgzip -c - > shifted.bed.gz
+          | bgzip -c > shifted.bed.gz
 
         python ~{default="/opt/sv-pipeline/scripts/reformat_CPX_bed_and_generate_script.py" script} \
         -i shifted.bed.gz \
