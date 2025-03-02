@@ -497,10 +497,12 @@ task GenerateCpxReviewScript {
 
         cut -f1,3 ~{sample_batch_pe_map} > sample_PE_metrics.tsv
 
-        awk -F'\t' '/^#/{print; next} {$2++; print}' OFS='\t' '~{bed}' > 'shifted.tsv'
+        bgzip -cd '~{bed}' \
+          | awk -F'\t' '/^#/{print; next} {$2++; print}' OFS='\t' - \
+          | bgzip -c - > shifted.bed.gz
 
         python ~{default="/opt/sv-pipeline/scripts/reformat_CPX_bed_and_generate_script.py" script} \
-        -i 'shifted.tsv' \
+        -i shifted.bed.gz \
         -s sample_PE_metrics.tsv \
         -p CPX_CTX_disINS.PASS.PE_evidences \
         -c collect_PE_evidences.CPX_CTX_disINS.PASS.sh \
