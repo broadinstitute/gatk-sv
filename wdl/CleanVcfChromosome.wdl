@@ -325,7 +325,7 @@ task CleanVcfReviseOverlappingCnvs {
 	}
 }
 
-task CleanVcfReviseLargeCnvs {
+task CleanVcfReviseMultiallelicCnvs {
 	input {
 		File vcf
 		File? outlier_samples_list
@@ -365,7 +365,7 @@ task CleanVcfReviseLargeCnvs {
 			tabix -p vcf ~{vcf}
 		fi
 		
-		gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseLargeCnvs \
+		gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseMutliallelicCnvs \
 			-V ~{vcf} \
 			-O ~{output_vcf} \
 			~{if defined(outlier_samples_list) then "--outlier-samples ~{outlier_samples_list}" else "" }
@@ -425,7 +425,7 @@ task CleanVcfReviseAbnormalAllosomes {
 	}
 }
 
-task CleanVcfReviseMultiallelicCnvs {
+task CleanVcfReviseOverlappingMultiallelics {
 	input {
 		File vcf
 		String prefix
@@ -462,7 +462,7 @@ task CleanVcfReviseMultiallelicCnvs {
 			tabix -p vcf ~{vcf}
 		fi
 		
-		gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseMultiallelicCnvs \
+		gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseOverlappingMultiallelics \
 			-V ~{vcf} \
 			-O ~{output_vcf}
 	>>>
