@@ -99,10 +99,10 @@ def process_allosomes(record, chrX, chrY):
                 if is_revisable_event(record, is_y, sex):
                     record.info[REVISED_EVENT] = True
                     adjust_male_genotype(genotype, sv_type)
-            elif sex == 2 and is_y:  # Female
-                genotype['GT'] = (None, None)  # NO_CALL for females on chrY
-            elif sex == 0:  # Unknown
-                genotype['GT'] = (None, None)  # NO_CALL for unknown sex
+            elif sex == 2 and is_y:  # Female - NO_CALL if chrY
+                genotype['GT'] = (None, None)
+            elif sex == 0:  # Unknown sex - NO_CALL
+                genotype['GT'] = (None, None)
             
             updated_samples.append(sample)
 
