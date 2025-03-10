@@ -48,14 +48,16 @@ workflow FilterBatchSites {
     }
   }
 
-  call RewriteScores {
-    input:
-      metrics = evidence_metrics_common,
-      cutoffs = select_first([adjudicate_cutoffs, AdjudicateSV.cutoffs]),
-      scores = select_first([adjudicate_scores, AdjudicateSV.scores]),
-      batch = batch,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_rewrite_scores
+  if (!defined(adjudicate_scores)) {
+    call RewriteScores {
+      input:
+        metrics = evidence_metrics_common,
+        cutoffs = select_first([adjudicate_cutoffs, AdjudicateSV.cutoffs]),
+        scores = select_first([adjudicate_scores, AdjudicateSV.scores]),
+        batch = batch,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_rewrite_scores
+    }
   }
 
   scatter (i in range(num_algorithms)) {
@@ -65,7 +67,7 @@ workflow FilterBatchSites {
           vcf = select_first([vcfs_array[i]]),
           metrics = evidence_metrics,
           prefix = "${batch}.${algorithms[i]}",
-          scores = RewriteScores.updated_scores,
+          scores = select_first([adjudicate_scores, RewriteScores.updated_scores]),
           cutoffs = select_first([adjudicate_cutoffs, AdjudicateSV.cutoffs]),
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_filter_annotate_vcf
@@ -92,7 +94,7 @@ workflow FilterBatchSites {
     File? sites_filtered_scramble_vcf = FilterAnnotateVcf.annotated_vcf[4]
     File? sites_filtered_wham_vcf = FilterAnnotateVcf.annotated_vcf[5]
     File cutoffs = select_first([adjudicate_cutoffs, AdjudicateSV.cutoffs])
-    File scores = RewriteScores.updated_scores
+    File scores = select_first([adjudicate_scores, RewriteScores.updated_scores])
     File RF_intermediate_files = select_first([adjudicate_rf_files, AdjudicateSV.RF_intermediate_files])
     Array[File] sites_filtered_sv_counts = PlotSVCountsPerSample.sv_counts
     Array[File] sites_filtered_sv_count_plots = PlotSVCountsPerSample.sv_count_plots
