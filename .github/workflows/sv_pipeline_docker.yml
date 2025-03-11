@@ -194,11 +194,17 @@ jobs:
         #
         # The build_docker.py uses the `--squash` flag when building the
         # images to be pushed to GCR. This flag is only available when
-        # experimental features are enabled, hence the features are enabled
-        # in this flag.
+        # experimental features are enabled, hence are enabled in this section.
+        #
+        # The /etc/docker/daemon.json is not created by default during 
+        # Docker installation; however, upstream configurations may 
+        # create and use this file for their configuration depending 
+        # on their versions. Hence, we create the file if it does not 
+        # exist in order to preserve compatibility.
         run: |
           gcloud auth configure-docker
           tmp=$(mktemp)
+          sudo touch /etc/docker/daemon.json
           sudo jq '.+{experimental:true}' /etc/docker/daemon.json > "$tmp"
           sudo mv "$tmp" /etc/docker/daemon.json
           sudo systemctl restart docker.service
