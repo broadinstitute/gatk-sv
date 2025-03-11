@@ -510,7 +510,6 @@ specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype
       columnswithsamp <- c(columnswithsamp, 1, 2, 3, 4)
       genotype_matrix[1,-columnswithsamp] = 2
     }
-
     return(genotype_matrix)
   }
 
@@ -1198,7 +1197,6 @@ runRdTest<-function(bed)
       outlier_background <- setdiff(background_samples, non_outlier_background)
       cnv_matrix <- cnv_matrix[!(rownames(cnv_matrix) %in% outlier_background), , drop = FALSE]
     }
-  }
   }
   samplesPrior <-unlist(strsplit(as.character(sampleIDs),split=","))
 
