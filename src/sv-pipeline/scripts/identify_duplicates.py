@@ -69,7 +69,7 @@ def process_duplicates(vcf, fout):
 
 
 def process_buffers(exact_buffer, ins_buffer, counts, f_records):
-    # Process exact matches    
+    # Process exact matches
     sorted_buffer = sorted(exact_buffer, key=lambda x: x[0])
     exact_matches = {
         key: [record for _, record in group] for key, group in groupby(sorted_buffer, key=lambda x: x[0])
