@@ -44,11 +44,11 @@ def process_duplicates(vcf, fout):
                 record.stop,
                 record.info.get('SVTYPE'),
                 record.info.get('SVLEN'),
-                record.info.get('CHR2'),
-                record.info.get('END2'),
-                record.info.get('STRANDS'),
-                record.info.get('CPX_TYPE'),
-                record.info.get('CPX_INTERVALS')
+                record.info.get('CHR2') or "",
+                record.info.get('END2') or 0,
+                record.info.get('STRANDS') or "",
+                record.info.get('CPX_TYPE') or "",
+                record.info.get('CPX_INTERVALS') or ""
             )
             exact_buffer.append((exact_key, record.id))
 
@@ -69,7 +69,7 @@ def process_duplicates(vcf, fout):
 
 
 def process_buffers(exact_buffer, ins_buffer, counts, f_records):
-    # Process exact matches
+    # Process exact matches    
     sorted_buffer = sorted(exact_buffer, key=lambda x: x[0])
     exact_matches = {
         key: [record for _, record in group] for key, group in groupby(sorted_buffer, key=lambda x: x[0])
