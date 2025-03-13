@@ -28,7 +28,7 @@ workflow MainVcfQc {
     Int? random_seed
     Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CleanVcf, use 999
     Int? downsample_qc_per_sample  # Number of samples to use for per-sample QC. Default: 1000
-    Boolean do_duplicate_identification = false
+    Boolean do_duplicate_identification = true
 
     String sv_base_mini_docker
     String sv_pipeline_docker
