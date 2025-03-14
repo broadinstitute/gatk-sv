@@ -64,13 +64,6 @@ too slow.
 #### `ped_file`
 Family structures and sex assignments determined in [EvidenceQC](./eqc). See [PED file format](/docs/gs/inputs#ped-format).
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `outlier_sample_ids`
-Provide a file containing sample IDs, delimited by new lines, to exclude from the generation of batch metrics - 
-this should can be based on outlier samples identified during sample QC that are still retained in the cohort. If 
-provided, the workflow discards any outlier samples from being considered as part of the called samples when 
-calculating metrics at a given site, as long as non-outlier samples are also called for that site. It does the 
-same for the set of background samples considered in the metric calculations for a given site.
-
 ## Outputs
 
 #### `metrics`
