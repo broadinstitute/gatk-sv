@@ -73,8 +73,8 @@ Provide one of these inputs to subset the input batch. `n_samples_subsample` wil
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `outlier_sample_ids`
 Provide a file containing sample IDs, delimited by new lines, to exclude from the from the gCNV model training 
-process - this should can be based on outlier samples identified during sample QC that are still retained in the 
-cohort.
+process - this should can be based on outlier samples identified following [EvidenceQC](./eqc) that are still 
+retained in the cohort.
 
 ## Outputs
 
