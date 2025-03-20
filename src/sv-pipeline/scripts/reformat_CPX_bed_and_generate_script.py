@@ -190,13 +190,13 @@ def extract_bp_list_v4(coordinates, segments, small_sv_size_threshold):
     dup_bp = [int(i) for i in dup_seg[1].split('-')]
     structures = []
     breakpoints = []
-    if del_bp[2] < dup_bp[0]:
+    if del_bp[2] <= dup_bp[0]:
         breakpoints = del_bp + dup_bp
         if del_bp[2] - del_bp[1] > small_sv_size_threshold:
             structures = ['abc', 'c^bc']
         else:
             structures = ['ab', 'b^ab']
-    elif del_bp[1] > dup_bp[1]:
+    elif del_bp[1] >= dup_bp[1]:
         breakpoints = [del_bp[0]] + dup_bp + del_bp[1:]
         if del_bp[2] - del_bp[1] > small_sv_size_threshold:
             structures = ['abc', 'aba^']
