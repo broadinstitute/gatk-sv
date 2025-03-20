@@ -87,7 +87,7 @@ workflow CleanVcfChromosome {
 		input:
 			vcf=CleanVcfReviseOverlappingCnvs.out,
 			outlier_samples_list=outlier_samples_list,
-			prefix="~{prefix}.revise_large_cnvs",
+			prefix="~{prefix}.revise_multiallelic_cnvs",
 			gatk_docker=gatk_docker,
 			runtime_attr_override=runtime_attr_revise_large_cnvs
 	}
@@ -100,17 +100,17 @@ workflow CleanVcfChromosome {
 			runtime_attr_override=runtime_attr_revise_abnormal_allosomes
 	}
 
-	call CleanVcfReviseMultiallelicCnvs {
+	call CleanVcfReviseOverlappingMultiallelics {
 		input:
 			vcf=CleanVcfReviseAbnormalAllosomes.out,
-			prefix="~{prefix}.revise_multiallelic_cnvs",
+			prefix="~{prefix}.revise_overlapping_multiallelics",
 			gatk_docker=gatk_docker,
 			runtime_attr_override=runtime_attr_revise_multiallelics
 	}
 
 	call CleanVcfPostprocess {
 		input:
-			vcf=CleanVcfReviseMultiallelicCnvs.out,
+			vcf=CleanVcfReviseOverlappingMultiallelics.out,
 			prefix="~{prefix}.postprocess",
 			sv_pipeline_docker=sv_pipeline_docker,
 			runtime_attr_override=runtime_attr_postprocess
