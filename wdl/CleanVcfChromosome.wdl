@@ -30,8 +30,8 @@ workflow CleanVcfChromosome {
 		String linux_docker
 		String sv_base_mini_docker
 		String sv_pipeline_docker
-    File? svtk_to_gatk_script  # For debugging
-    File? make_clean_gq_script
+		File? svtk_to_gatk_script  # For debugging
+		File? make_clean_gq_script
 
 		# overrides for local tasks
 		RuntimeAttr? runtime_attr_preprocess
@@ -83,7 +83,7 @@ workflow CleanVcfChromosome {
 			runtime_attr_override=runtime_attr_revise_overlapping_cnvs
 	}
 
-	call CleanVcfReviseLargeCnvs {
+	call CleanVcfReviseMultiallelicCnvs {
 		input:
 			vcf=CleanVcfReviseOverlappingCnvs.out,
 			outlier_samples_list=outlier_samples_list,
@@ -94,7 +94,7 @@ workflow CleanVcfChromosome {
 
 	call CleanVcfReviseAbnormalAllosomes {
 		input:
-			vcf=CleanVcfReviseLargeCnvs.out,
+			vcf=CleanVcfReviseMultiallelicCnvs.out,
 			prefix="~{prefix}.revise_abnormal_allosomes",
 			gatk_docker=gatk_docker,
 			runtime_attr_override=runtime_attr_revise_abnormal_allosomes
