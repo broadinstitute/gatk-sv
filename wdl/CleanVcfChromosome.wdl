@@ -18,8 +18,8 @@ workflow CleanVcfChromosome {
 		File? outlier_samples_list
 		File ped_file
 		File ploidy_table
-		File allosome_fai
 		
+		File allosome_fai
 		File HERVK_reference
 		File LINE1_reference
 
