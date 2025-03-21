@@ -48,7 +48,7 @@ workflow FilterBatchSites {
     }
   }
 
-  if (!defined(adjudicate_scores)) {
+  if (!defined(adjudicate_cutoffs) || !defined(adjudicate_scores)) {
     call RewriteScores {
       input:
         metrics = evidence_metrics_common,
