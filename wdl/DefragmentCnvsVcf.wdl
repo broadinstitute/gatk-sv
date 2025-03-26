@@ -61,8 +61,8 @@ task Vcf2Bed {
 
 	runtime {
 		cpu: 1
-		memory: "2 GiB"
-		disks: "local-disk 2 HDD"
+		memory: "4 GiB"
+		disks: "local-disk 4 HDD"
 		docker: sv_pipeline_docker
 	}
 }
@@ -90,8 +90,8 @@ task DefragmentCnvs {
 
 	runtime {
 		cpu: 1
-		memory: "2 GiB"
-		disks: "local-disk 2 HDD"
+		memory: "4 GiB"
+		disks: "local-disk 4 HDD"
 		docker: sv_pipeline_docker
 	}
 }
@@ -197,8 +197,8 @@ CODE
 
 	runtime {
 		cpu: 1
-		memory: "2 GiB"
-		disks: "local-disk 2 HDD"
+		memory: "4 GiB"
+		disks: "local-disk 4 HDD"
 		docker: sv_pipeline_docker
 	}
 }
