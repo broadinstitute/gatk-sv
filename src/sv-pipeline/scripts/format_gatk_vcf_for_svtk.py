@@ -153,7 +153,7 @@ def convert(record: pysam.VariantRecord,
         new_record.info['STRANDS'] = '+-'
         # END information is lost when setting POS=END, so we need to set it to SR2POS if it's available
         # Note that the END position is only important following SR breakpoint refinement in FilterBatch
-        if record.info.get('SR2POS') is not None:
+        if 'SR2POS' in record.info and record.info['SR2POS'] is not None:
             new_record.stop = record.info['SR2POS']
     elif svtype == 'BND' or svtype == 'CTX':
         new_record.stop = record.info['END2']

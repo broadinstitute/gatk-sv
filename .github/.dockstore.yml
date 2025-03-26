@@ -242,3 +242,12 @@ workflows:
         - main
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: CallDeNovoSV
+    primaryDescriptorPath: /wdl/RunDeNovoSVs.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/
