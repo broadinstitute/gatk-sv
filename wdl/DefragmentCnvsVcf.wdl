@@ -52,7 +52,7 @@ task Vcf2Bed {
 	command <<<
 		set -eu -o pipefail
 
-		svtk vcf2bed --info ALL ~{vcf} ~{prefix}.bed
+		svtk vcf2bed --info ALL ~{vcf} ~{prefix}.input.bed
 	>>>
 
 	output {
