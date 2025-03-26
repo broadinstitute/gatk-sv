@@ -24,10 +24,10 @@ mei_bed=${12}
 min_clipped_reads_fraction=${13:-0.22}
 percent_align_cutoff=${14:-70}
 
-#File? scramble_vcf_script
-#String? make_scramble_vcf_args
-
 part2_threads=${15:-7}
+
+scramble_vcf_script=${16:-"/opt/sv-pipeline/scripts/make_scramble_vcf.py"}
+make_scramble_vcf_args=${17:-""}
 
 
 # ScramblePart1
@@ -79,3 +79,21 @@ Rscript --vanilla $scrambleDir/cluster_analysis/bin/SCRAMble.R --out-name $clust
 # Save raw outputs
 mv ${clusterFile}_MEIs.txt "${sample_name}".scramble.tsv
 gzip "${sample_name}".scramble.tsv
+
+
+# MakeScrambleVcf
+# --------------
+
+scramble_table="${sample_name}.scramble.tsv.gz"
+
+python "${scramble_vcf_script}" \
+  --table "${scramble_table}" \
+  --manta-vcf "${manta_vcf}" \
+  --alignments-file "${original_bam_or_cram_file}" \
+  --sample "${sample_name}" \
+  --reference "${reference_fasta}" \
+  --mei-bed "${mei_bed}" \
+  --out unsorted.vcf.gz \
+  "${make_scramble_vcf_args}"
+bcftools sort unsorted.vcf.gz -Oz -o "${sample_name}".scramble.vcf.gz
+tabix "${sample_name}".scramble.vcf.gz
