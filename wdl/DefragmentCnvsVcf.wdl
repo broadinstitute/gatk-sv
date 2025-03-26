@@ -4,7 +4,7 @@ workflow DefragmentCnvsVcf {
 	input {
 		File vcf              								# Input VCF
 		File vcf_idx          								# Input VCF index file
-		Float? max_dist        									# Maximum distance for merging CNVs
+		Float? max_dist        								# Maximum distance for merging CNVs
 		String prefix													# Prefix for output files
 
 		String sv_pipeline_docker							# Docker image path
@@ -14,6 +14,7 @@ workflow DefragmentCnvsVcf {
 		input:
 			vcf = vcf,
 			vcf_idx = vcf_idx,
+			prefix = prefix,
 			sv_pipeline_docker = sv_pipeline_docker
 	}
 
@@ -30,6 +31,7 @@ workflow DefragmentCnvsVcf {
 			vcf = vcf,
 			vcf_idx = vcf_idx,
 			bed = DefragmentCnvs.bed_out,
+			prefix = prefix,
 			sv_pipeline_docker = sv_pipeline_docker
 	}
 

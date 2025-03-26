@@ -80,7 +80,7 @@ class MantaStandardizer(VCFStandardizer):
         if pos == 54564370:
             print(f"{std_rec.id}: {end}")
             print(f"{std_rec.id}: {std_rec.stop}")
-        
+
         # Strand parsing
         if svtype == 'INV':
             if 'INV3' in raw_rec.info.keys():
