@@ -11,7 +11,8 @@ workflow ExtractCnvsFromVcf {
 	call ExtractCnvs {
 		input:
 			vcf  					= vcf,
-			vcf_idx 	    = vcf_idx
+			vcf_idx 	    = vcf_idx,
+			gatk_docker 	= gatk_docker
 	}
 
 	output {

@@ -4,6 +4,7 @@ workflow SVClusterSimple {
 	input {
 		File vcf               # Input VCF
 		File vcf_idx           # Input VCF index file
+		Float defrag_fration	 # Defragment padding fraction
 
 		File ploidy_table      # Path to the ploidy table file
 		File ref_fasta         # Path to the reference FASTA file
@@ -15,13 +16,14 @@ workflow SVClusterSimple {
 	
 	call SVCluster {
 		input:
-			vcf  					= vcf,
-			vcf_idx 			= vcf_idx,
-			ploidy_table  = ploidy_table,
-			ref_fasta     = ref_fasta,
-			ref_fasta_fai = ref_fasta_fai,
-			ref_dict      = ref_dict,
-			gatk_docker   = gatk_docker
+			vcf  						= vcf,
+			vcf_idx 				= vcf_idx,
+			defrag_fration	= defrag_fration,
+			ploidy_table  	= ploidy_table,
+			ref_fasta     	= ref_fasta,
+			ref_fasta_fai 	= ref_fasta_fai,
+			ref_dict      	= ref_dict,
+			gatk_docker   	= gatk_docker
 	}
 
 	output {
@@ -34,6 +36,7 @@ task SVCluster {
 	input {
 		File vcf
 		File vcf_idx
+		Float defrag_fration
 		File ploidy_table
 		File ref_fasta
 		File ref_fasta_fai
@@ -50,8 +53,8 @@ task SVCluster {
 			--ploidy-table ~{ploidy_table} \
 			--reference ~{ref_fasta} \
 			--algorithm DEFRAGMENT_CNV \
-			--defrag-padding-fraction 0.25 \
-			--defrag-sample-overlap 1.0 \
+			--defrag-padding-fraction ~{defrag_fration} \
+			--defrag-sample-overlap 1.0
 	>>>
 
 	output {
