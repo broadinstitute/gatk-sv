@@ -990,7 +990,6 @@ plotJPG <- function(genotype_matrix, cnv_matrix, chr, start, end, cnvID, sampleI
   rect_index_right <- 1 + (n_bins - 1) * (orig_end - start) / (end - start)
 
   # Add light blue rectangle for the event region
-  # Using rect() with plot coordinates and setting alpha transparency
   rect(rect_index_left, par("usr")[3], rect_index_right, par("usr")[4], col = adjustcolor("azure3", alpha.f = 0.3), border = NA)
 
   # Overlay the lines after the rectangle
