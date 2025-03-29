@@ -896,9 +896,6 @@ plotJPG <- function(genotype_matrix, cnv_matrix, chr, start, end, cnvID, sampleI
   samplesPrior <- unlist(strsplit(as.character(sampleIDs),","))
   samplenames<-colnames(genotype_matrix)
 
-  if(missing(orig_start)) { orig_start <- start }
-  if(missing(orig_end)) { orig_end <- end }
-
   # Identify bins and segments after padding
   if (pad > 0) {
     total_bins <- ncol(cnv_matrix)
@@ -930,7 +927,7 @@ plotJPG <- function(genotype_matrix, cnv_matrix, chr, start, end, cnvID, sampleI
   if(size < 10000) {mysize <- prettyNum(paste("(", size, " bp)", sep=""), big.mark=",")}
   else if(size < 1000000) {mysize <- prettyNum(paste("(", signif(size/1000, 3), " kb)", sep=""), big.mark=",")}
   else {mysize <- prettyNum(paste("(", signif(size/1000000, 3), " Mb)", sep=""), big.mark=",")}
-  
+
   ##Formating##
   main2 = paste(sampleIDsToDisplay, " ", mysize, sep ="")
   mainText = paste(main1, "\n", main2, sep = "")
@@ -984,11 +981,21 @@ plotJPG <- function(genotype_matrix, cnv_matrix, chr, start, end, cnvID, sampleI
      lwd = 0.5
   )
 
-  # Overlay colored lines for samples in samplesPrior
-  called_sample_cols <- (ncol(plot_cnvmatrix) - length(samplesPrior) + 1):ncol(plot_cnvmatrix)
-  for (j in called_sample_cols) {
-    lines(active_start_idx:active_end_idx,
-          plot_cnvmatrix[active_start_idx:active_end_idx, j],
+  # Compute plotting coordinates for the event region rectangle
+  if(missing(orig_start)) { orig_start <- start }
+  if(missing(orig_end)) { orig_end <- end }
+  n_bins <- nrow(plot_cnvmatrix)
+  x_axis_positions <- seq(start, end, length.out = n_bins)
+  rect_index_left <- 1 + (n_bins - 1) * (orig_start - start) / (end - start)
+  rect_index_right <- 1 + (n_bins - 1) * (orig_end - start) / (end - start)
+
+  # Add light blue rectangle for the event region
+  # Using rect() with plot coordinates and setting alpha transparency
+  rect(rect_index_left, par("usr")[3], rect_index_right, par("usr")[4], col = adjustcolor("azure3", alpha.f = 0.3), border = NA)
+
+  # Overlay the lines after the rectangle
+  for (j in (ncol(plot_cnvmatrix) - length(samplesPrior) + 1):ncol(plot_cnvmatrix)) {
+    lines(1:n_bins, plot_cnvmatrix[, j],
           col = if (toupper(cnvtype) == "DEL") "red" else "blue",
           lwd = 3)
   }
