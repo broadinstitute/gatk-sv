@@ -906,6 +906,8 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
     active_start_idx <- 1
     active_end_idx <- ncol(cnv_matrix)
   }
+  if(missing(orig_start)) { orig_start <- start }
+  if(missing(orig_end)) { orig_end <- end }
   
   ##If only one bin##
   if(ncol(cnv_matrix)==1)
@@ -989,7 +991,6 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   )
 
   n_bins <- nrow(plot_cnvmatrix)
-  
   if (pad > 0) {
     # Compute plotting coordinates for the event region rectangle
     x_axis_positions <- seq(start, end, length.out = n_bins)
@@ -1352,7 +1353,7 @@ runRdTest<-function(bed)
               plotK=FALSE, plotfamily=FALSE, famfile, outFolder, pad=opt$padding, orig_start=orig_start, orig_end=orig_end)
     } else {
       plotJPG(genotype_matrix, cnv_matrix, chr, start, end, cnvID, sampleIDs, outputname, cnvtype, 
-              plotK=FALSE, plotfamily=FALSE, famfile, outFolder, orig_start=start, orig_end=end)
+              plotK=FALSE, plotfamily=FALSE, famfile, outFolder)
     }
   }
 
