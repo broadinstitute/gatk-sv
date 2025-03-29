@@ -23,6 +23,8 @@ import "Structs.wdl"
 # Runs GatherSampleEvidence, EvidenceQC, GatherBatchEvidence, ClusterBatch, FilterBatch.MergePesrVcfs, GenotypeBatch, 
 # MakeCohortVcf (CombineBatches, ResolveComplexVariants, GenotypeComplexVariants, GenotypeComplexVariants), and AnnotateVcf
 
+# TODO: Do we also have to include Dragen?
+
 workflow GATKSVPipelineSingleSample {
   meta {
     allowNestedInputs: true
