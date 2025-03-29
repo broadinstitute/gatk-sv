@@ -891,8 +891,8 @@ samprank_sep <- function(genotype_matrix,cnv_matrix,cnvtype,sample=NULL)
 }
 
 ##Plot of intensities across cohorts## 
-plotJPG <- function(genotype_matrix, cnv_matrix, chr, start, end, cnvID, sampleIDs, outputname, 
-                    cnvtype, plotK, plotfamily, famfile, outFolder, pad=0, orig_start, orig_end) {
+plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK,plotfamily,famfile,outFolder,pad=0,orig_start,orig_end)
+{
   samplesPrior <- unlist(strsplit(as.character(sampleIDs),","))
   samplenames<-colnames(genotype_matrix)
 
@@ -924,8 +924,8 @@ plotJPG <- function(genotype_matrix, cnv_matrix, chr, start, end, cnvID, sampleI
   
   ###Add proper size abbr. for larger events
   size <- orig_end - orig_start
-  if(size < 10000) {mysize <- prettyNum(paste("(", size, " bp)", sep=""), big.mark=",")}
-  else if(size < 1000000) {mysize <- prettyNum(paste("(", signif(size/1000, 3), " kb)", sep=""), big.mark=",")}
+  if(size<10000) {mysize <- prettyNum(paste("(", size, " bp)", sep=""), big.mark=",")}
+  else if(size<1000000) {mysize <- prettyNum(paste("(", signif(size/1000, 3), " kb)", sep=""), big.mark=",")}
   else {mysize <- prettyNum(paste("(", signif(size/1000000, 3), " Mb)", sep=""), big.mark=",")}
 
   ##Formating##
@@ -950,6 +950,7 @@ plotJPG <- function(genotype_matrix, cnv_matrix, chr, start, end, cnvID, sampleI
   columnstoshift <- which(colnames(genotype_matrix) %in% unlist(strsplit(as.character(samplesPrior),split=","))) 
   plot_colormatrix<-cbind(matrix(genotype_matrix[,-columnstoshift],nrow=1),matrix(genotype_matrix[,columnstoshift],nrow=1))
   endcolnormal<-ncol(plot_colormatrix)-(length(samplesPrior))
+  plot_linematrix<-cbind(matrix(genotype_matrix[,-columnstoshift],nrow=1),matrix(genotype_matrix[,columnstoshift],nrow=1))
 
   # Determine indices for the event calls based on the original (non-padded) data
   event_range <- (ncol(plot_colormatrix) - length(samplesPrior) + 1):ncol(plot_colormatrix)
@@ -958,39 +959,46 @@ plotJPG <- function(genotype_matrix, cnv_matrix, chr, start, end, cnvID, sampleI
 
   ##Blue if Dup; Red if Del
   if ( plotK == TRUE ) {
+    #keep plot_colormatrix
     main1=paste(chr,":",prettyNum(start,big.mark=","),"-",prettyNum(end,big.mark=",")," (hg19)",sep="")
     mainText = paste(main1, "\n", "Copy Estimate"," ", mysize, sep = "")  
+    plot_linematrix[,5:ncol(plot_linematrix)]<-"0.5"
   } else if (toupper(cnvtype) == "DEL") {
-    plot_colormatrix[, active_event_cols] <- "red"
-    plot_colormatrix[, setdiff(1:ncol(plot_colormatrix), active_event_cols)] <- "grey"
+    plot_colormatrix[, (endcolnormal + 1):ncol(plot_colormatrix)] <- "red"
+    plot_colormatrix[,5:endcolnormal]<-"grey"
+    plot_linematrix[, (endcolnormal + 1):ncol(plot_colormatrix)] <- "3"
+    plot_linematrix[,5:endcolnormal]<-"0.5"
   } else if (toupper(cnvtype) == "DUP") {
-    plot_colormatrix[, active_event_cols] <- "blue"
-    plot_colormatrix[, setdiff(1:ncol(plot_colormatrix), active_event_cols)] <- "grey"
-  }
+    plot_colormatrix[, (endcolnormal + 1):ncol(plot_colormatrix)] <- "blue"
+    plot_colormatrix[,5:endcolnormal]<-"grey"
+    plot_linematrix[, (endcolnormal + 1):ncol(plot_colormatrix)] <- "3"
+    plot_linematrix[,5:endcolnormal]<-"0.5"
+  } 
   
   ##Plotting Command##
   plot(as.zoo(plot_cnvmatrix),
-     plot.type = "single",
-     col = "grey",
-     main = mainText,
-     cex.main = maxcexXh,
-     xlab = "Position (bp)",
-     xaxt = 'n',
-     ann = FALSE,
-     ylab = "Intensity",
-     lwd = 0.5
+    plot.type = "single",
+    col = "grey",
+    main = mainText,
+    cex.main = maxcexXh,
+    xlab = "Position (bp)",
+    xaxt = 'n',
+    ann = FALSE,
+    ylab = "Intensity",
+    lwd = 0.5
   )
 
-  # Compute plotting coordinates for the event region rectangle
-  if(missing(orig_start)) { orig_start <- start }
-  if(missing(orig_end)) { orig_end <- end }
   n_bins <- nrow(plot_cnvmatrix)
-  x_axis_positions <- seq(start, end, length.out = n_bins)
-  rect_index_left <- 1 + (n_bins - 1) * (orig_start - start) / (end - start)
-  rect_index_right <- 1 + (n_bins - 1) * (orig_end - start) / (end - start)
+  
+  if (pad > 0) {
+    # Compute plotting coordinates for the event region rectangle
+    x_axis_positions <- seq(start, end, length.out = n_bins)
+    rect_index_left <- 1 + (n_bins - 1) * (orig_start - start) / (end - start)
+    rect_index_right <- 1 + (n_bins - 1) * (orig_end - start) / (end - start)
 
-  # Add light blue rectangle for the event region
-  rect(rect_index_left, par("usr")[3], rect_index_right, par("usr")[4], col = adjustcolor("azure3", alpha.f = 0.3), border = NA)
+    # Add light blue rectangle for the event region
+    rect(rect_index_left, par("usr")[3], rect_index_right, par("usr")[4], col = adjustcolor("azure3", alpha.f = 0.3), border = NA)
+  }
 
   # Overlay the lines after the rectangle
   for (j in (ncol(plot_cnvmatrix) - length(samplesPrior) + 1):ncol(plot_cnvmatrix)) {
@@ -1344,7 +1352,7 @@ runRdTest<-function(bed)
               plotK=FALSE, plotfamily=FALSE, famfile, outFolder, pad=opt$padding, orig_start=orig_start, orig_end=orig_end)
     } else {
       plotJPG(genotype_matrix, cnv_matrix, chr, start, end, cnvID, sampleIDs, outputname, cnvtype, 
-              plotK=FALSE, plotfamily=FALSE, famfile, outFolder)
+              plotK=FALSE, plotfamily=FALSE, famfile, outFolder, orig_start=start, orig_end=end)
     }
   }
 
