@@ -40,7 +40,6 @@ workflow SVConcordanceSimplePerSample {
   }
 
   scatter (sample in sample_ids) {
-
     call utils.SubsetVcfToSample as SubsetEval {
       input:
         vcf = eval_vcf,
@@ -63,7 +62,7 @@ workflow SVConcordanceSimplePerSample {
       input:
         truth_vcf = SubsetTruth.vcf_subset,
         eval_vcf = SubsetEval.vcf_subset,
-        output_prefix = "~{output_prefix}." ~{sample} ~".unsorted",
+        output_prefix = "~{output_prefix}.unsorted",
         additional_args = "--pesr-interval-overlap ~{pesr_interval_overlap} --pesr-size-similarity ~{pesr_size_similarity} --pesr-breakend-window ~{pesr_breakend_window} --depth-interval-overlap ~{depth_interval_overlap} --depth-size-similarity ~{depth_size_similarity} --depth-breakend-window ~{depth_breakend_window} --mixed-interval-overlap ~{mixed_interval_overlap} --mixed-size-similarity ~{mixed_size_similarity} --mixed-breakend-window ~{mixed_breakend_window}",
         clustering_config = clustering_config,
         stratification_config = stratification_config,
@@ -77,7 +76,7 @@ workflow SVConcordanceSimplePerSample {
     call tasks_cohort.SortVcf as Sort {
       input:
         vcf = Concordance.out_unsorted,
-        outfile_prefix = "~{output_prefix}." ~{sample} ~".sorted",
+        outfile_prefix = "~{output_prefix}.sorted",
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_attr_sort_vcf
     }
