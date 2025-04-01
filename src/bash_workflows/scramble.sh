@@ -2,6 +2,8 @@
 
 set -Eeuo pipefail
 
+# ./scramble.sh NA12878.final.cram NA12878.final.cram.crai NA12878.final.cram NA12878.final.cram.crai NA12878.counts.tsv.gz NA12878.manta.vcf.gz test Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai primary_contigs.list 90 hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz
+
 bam_or_cram_file=${1}
 bam_or_cram_index=${2}
 original_bam_or_cram_file=${3}
@@ -29,6 +31,9 @@ part2_threads=${15:-7}
 scramble_vcf_script=${16:-"/opt/sv-pipeline/scripts/make_scramble_vcf.py"}
 make_scramble_vcf_args=${17:-""}
 
+# In case it is re-run, the script will wait for a response
+# on override the existing file, that may not work in a pipeline.
+rm -f test.scramble.tsv.gz
 
 # ScramblePart1
 # -------------
@@ -41,7 +46,7 @@ zcat "${counts_file}" \
   | cut -f4 \
   | Rscript -e "cat(round(${min_clipped_reads_fraction}*median(data.matrix(read.csv(file(\"stdin\"))))))" \
   > cutoff.txt
-MIN_CLIPPED_READS=$(cat cutoff.txt)
+export MIN_CLIPPED_READS=$(cat cutoff.txt)
 echo "MIN_CLIPPED_READS: ${MIN_CLIPPED_READS}"
 
 # Identify clusters of split reads
@@ -50,20 +55,15 @@ while read region; do
     | gzip >> "${sample_name}".scramble_clusters.tsv.gz
 done < "${regions_list}"
 
-
-clusters_file="${sample_name}.scramble_clusters.tsv.gz"
-
-# In case it is re-run, the script will wait for a response
-# on override the existing file, that may not work in a pipeline.
-rm test.scramble.tsv.gz
+export clusters_file="${sample_name}.scramble_clusters.tsv.gz"
 
 # ScramblePart2
 # -------------
 
-xDir=$PWD
-clusterFile=$xDir/clusters
-scrambleDir="/app/scramble-gatk-sv"
-meiRef=$scrambleDir/cluster_analysis/resources/MEI_consensus_seqs.fa
+export xDir=$PWD
+export clusterFile=$xDir/clusters
+export scrambleDir="/app/scramble-gatk-sv"
+export meiRef=$scrambleDir/cluster_analysis/resources/MEI_consensus_seqs.fa
 
 # create a blast db from the reference
 cat "${reference_fasta}" | makeblastdb -in - -parse_seqids -title ref -dbtype nucl -out ref
@@ -71,10 +71,10 @@ cat "${reference_fasta}" | makeblastdb -in - -parse_seqids -title ref -dbtype nu
 gunzip -c "${clusters_file}" > $clusterFile
 
 # Produce ${clusterFile}_MEIs.txt
-Rscript --vanilla $scrambleDir/cluster_analysis/bin/SCRAMble.R --out-name $clusterFile \
-        --cluster-file $clusterFile --install-dir $scrambleDir/cluster_analysis/bin \
-        --mei-refs $meiRef --ref $xDir/ref --no-vcf --eval-meis --cores "${part2_threads}" \
-        --pct-align "${percent_align_cutoff}" -n $MIN_CLIPPED_READS --mei-score "${alignment_score_cutoff}"
+Rscript --vanilla "${scrambleDir}"/cluster_analysis/bin/SCRAMble.R --out-name "${clusterFile}" \
+        --cluster-file "${clusterFile}" --install-dir "${scrambleDir}"/cluster_analysis/bin \
+        --mei-refs "${meiRef}" --ref "${xDir}"/ref --no-vcf --eval-meis --cores "${part2_threads}" \
+        --pct-align "${percent_align_cutoff}" -n "${MIN_CLIPPED_READS}" --mei-score "${alignment_score_cutoff}"
 
 # Save raw outputs
 mv ${clusterFile}_MEIs.txt "${sample_name}".scramble.tsv
@@ -84,7 +84,7 @@ gzip "${sample_name}".scramble.tsv
 # MakeScrambleVcf
 # --------------
 
-scramble_table="${sample_name}.scramble.tsv.gz"
+export scramble_table="${sample_name}.scramble.tsv.gz"
 
 python "${scramble_vcf_script}" \
   --table "${scramble_table}" \
@@ -94,6 +94,6 @@ python "${scramble_vcf_script}" \
   --reference "${reference_fasta}" \
   --mei-bed "${mei_bed}" \
   --out unsorted.vcf.gz \
-  "${make_scramble_vcf_args}"
+  ${make_scramble_vcf_args}
 bcftools sort unsorted.vcf.gz -Oz -o "${sample_name}".scramble.vcf.gz
 tabix "${sample_name}".scramble.vcf.gz
