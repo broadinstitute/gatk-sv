@@ -204,6 +204,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_vapor_vcf
       tags:
         - /.*/
 
