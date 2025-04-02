@@ -41,7 +41,7 @@ workflow Vapor {
         vcf=select_first([vcf_file]),
         vcf_idx=select_first([vcf_file]) + ".tbi",
         sample=sample_id,
-        outfile_name=sample_id,
+        outfile_name="~{sample_id}.vapor.vcf.gz",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override = runtime_attr_subset_sample
     }
