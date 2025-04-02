@@ -71,3 +71,6 @@ RUN /app/scramble-gatk-sv/cluster_identifier/src/build/cluster_identifier -v
 
 # define default command
 CMD ["Rscript"]
+
+
+FROM us.gcr.io/broad-dsde-methods/gatk-sv/gatk:2024-12-05-4.6.1.0-6-gfc248dfc1-NIGHTLY-SNAPSHOT
