@@ -144,8 +144,8 @@ workflow MakeGqRecalibratorTrainingSetFromMultisampleVcf {
     }
     call utils.SubsetVcfToSample as SubsetPacBioSampleTruth {
       input:
-        vcf = vcfs[i],
-        vcf_idx = vcfs[i] + ".tbi",
+        vcf = truth_vcf,
+        vcf_idx = truth_vcf + ".tbi",
         sample = pacbio_sample_ids[i],
         outfile_name = "~{output_prefix_}.truth.~{pacbio_sample_ids[i]}.vcf.gz",
         remove_sample = false,
