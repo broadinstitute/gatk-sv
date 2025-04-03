@@ -36,17 +36,11 @@ workflow MakeGqRecalibratorTrainingSetFromMultisampleVcf {
     Float? irs_good_pvalue_threshold = 0.000001
     Int? irs_min_probes = 5
 
-    Float pesr_interval_overlap_strict = 0.1
-    Float pesr_size_similarity_strict = 0.5
-    Int pesr_breakend_window_strict = 5000
-    File? clustering_config_strict
-    File? stratification_config_strict
-
-    Float pesr_interval_overlap_loose = 0
-    Float pesr_size_similarity_loose = 0
-    Int pesr_breakend_window_loose = 5000
-    File? clustering_config_loose
-    File? stratification_config_loose
+    Float pesr_interval_overlap = 0
+    Float pesr_size_similarity = 0.5
+    Int pesr_breakend_window = 300
+    File? clustering_config
+    File? stratification_config
 
     # These arrays give the names and intervals for reference contexts for stratification (same lengths)
     # Names must correspond to those in the stratification config files
@@ -168,11 +162,11 @@ workflow MakeGqRecalibratorTrainingSetFromMultisampleVcf {
         prefix="~{output_prefix_}",
         ploidy_table=ploidy_table,
         reference_dict=reference_dict,
-        pesr_interval_overlap=pesr_interval_overlap_loose,
-        pesr_size_similarity=pesr_size_similarity_loose,
-        pesr_breakend_window=pesr_breakend_window_loose,
-        clustering_config=clustering_config_loose,
-        stratification_config=stratification_config_loose,
+        pesr_interval_overlap=pesr_interval_overlap,
+        pesr_size_similarity=pesr_size_similarity,
+        pesr_breakend_window=pesr_breakend_window,
+        clustering_config=clustering_config,
+        stratification_config=stratification_config,
         track_names=track_names,
         track_bed_files=track_bed_files,
         sv_base_mini_docker=sv_base_mini_docker,

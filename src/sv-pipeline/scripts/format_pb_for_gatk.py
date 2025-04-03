@@ -6,6 +6,7 @@ import sys
 from typing import Any, List, Text, Dict, Optional
 
 _gt_sum_map = dict()
+_gt_no_call_map = dict()
 
 
 def _parse_ploidy_table(path: Text) -> Dict[Text, Dict[Text, int]]:
@@ -116,7 +117,9 @@ def convert(record: pysam.VariantRecord,
         reformatted record
     """
     svtype = record.info['SVTYPE']
-    if not supported_type(record):
+    if isinstance(svtype, tuple):
+        svtype = svtype[0]  # unbox if list type
+    if not supported_type(svtype):
         return list()
     contig = record.contig
     if contig not in vcf_out.header.contigs:
@@ -158,17 +161,22 @@ def convert(record: pysam.VariantRecord,
         ecn = ploidy_dict[sample][contig]
         new_genotype['ECN'] = ecn
         gt_sum = _cache_gt_sum(genotype['GT'])
+        gt_no_call = _cache_no_call(genotype['GT'])
         if svtype == 'DEL':
             new_genotype['CN'] = max(ecn - gt_sum, 0)
         if new_genotype['ECN'] == 0:
             new_genotype['GT'] = ()
         elif ecn == 1:
-            if gt_sum == 0:
+            if gt_no_call:
+                new_genotype['GT'] = (None,)
+            elif gt_sum == 0:
                 new_genotype['GT'] = (0,)
             else:
                 new_genotype['GT'] = (1,)
         else:
-            if gt_sum == 0:
+            if gt_no_call:
+                new_genotype['GT'] = (None, None)
+            elif gt_sum == 0:
                 new_genotype['GT'] = (0, 0)
             elif gt_sum == 1:
                 new_genotype['GT'] = (0, 1)
@@ -186,8 +194,16 @@ def _cache_gt_sum(gt):
     return s
 
 
-def supported_type(record: pysam.VariantRecord) -> bool:
-    return record.info['SVTYPE'] in ['DEL', 'DUP', 'INS', 'INV']
+def _cache_no_call(gt):
+    s = _gt_no_call_map.get(gt, None)
+    if s is None:
+        s = not any(a is not None for a in gt)
+        _gt_no_call_map[gt] = s
+    return s
+
+
+def supported_type(svtype: str) -> bool:
+    return svtype in ['DEL', 'DUP', 'INS', 'INV']
 
 
 def _process(vcf_in: pysam.VariantFile,
