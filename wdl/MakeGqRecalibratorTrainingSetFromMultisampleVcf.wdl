@@ -148,13 +148,13 @@ workflow MakeGqRecalibratorTrainingSetFromMultisampleVcf {
         output_prefix=output_prefix_,
         sv_pipeline_docker=sv_pipeline_docker
     }
-    call utils.SubsetVcfBySample as SubsetPacBioSampleTruth {
+    call utils.SubsetVcfToSample as SubsetPacBioSampleTruth {
       input:
         vcf = vcfs[i],
         vcf_idx = vcfs[i] + ".tbi",
-        sample_id = pacbio_sample_ids[i],
-        outfile_name = "~{output_prefix_}.pacbio_samples.shard_~{i}.vcf.gz",
-        remove_samples = false,
+        sample = pacbio_sample_ids[i],
+        outfile_name = "~{output_prefix_}.truth.~{pacbio_sample_ids[i]}.vcf.gz",
+        remove_sample = false,
         remove_private_sites = true,
         keep_af = true,
         sv_base_mini_docker = sv_base_mini_docker
@@ -163,9 +163,9 @@ workflow MakeGqRecalibratorTrainingSetFromMultisampleVcf {
       input:
         sample_id=pacbio_sample_ids[i],
         sample_vcf=PrepSampleVcf.out,
-        pacbio_sample_vcfs=SubsetPacBioSampleTruth,
+        pacbio_sample_vcfs=[SubsetPacBioSampleTruth.vcf_subset],
         tool_names=["truth"],
-        prefix="~{output_prefix_}.loose",
+        prefix="~{output_prefix_}",
         ploidy_table=ploidy_table,
         reference_dict=reference_dict,
         pesr_interval_overlap=pesr_interval_overlap_loose,
