@@ -69,6 +69,9 @@ class DragenCnvStandardizer(VCFStandardizer):
         # Define ALGORITHMS
         std_rec.info['ALGORITHMS'] = ['depth']
 
+        # Retain QUAL score
+        std_rec.qual = raw_rec.qual
+
         return std_rec
 
     def standardize_alts(self, std_rec, raw_rec):
