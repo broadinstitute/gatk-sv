@@ -114,6 +114,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_combine_batches_gq
       tags:
         - /.*/
 
@@ -141,6 +142,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_combine_batches_gq
       tags:
         - /.*/
 
