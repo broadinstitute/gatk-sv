@@ -323,7 +323,6 @@ workflow CleanVcfChromosome {
     input:
       vcf=FinalCleanup.final_cleaned_shard,
       ploidy_table=ploidy_table,
-      args="--scale-down-gq",
       output_prefix="~{prefix}.final_format",
       script=svtk_to_gatk_script,
       sv_pipeline_docker=sv_pipeline_docker,
