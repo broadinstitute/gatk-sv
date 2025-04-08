@@ -151,6 +151,25 @@ class DragenStandardizer(VCFStandardizer):
 
         return std_rec
 
+    def standardize_format(self, std_rec, raw_rec):
+        """
+        Retain GT and GQ. 
+        """
+
+        for sample, std_sample in zip(raw_rec.samples, self.std_sample_names):
+            gt = raw_rec.samples[sample]['GT']
+            gq = raw_rec.samples[sample]['GQ']
+            if self.call_null_sites:
+                if gt == (None, None):
+                    gt = (0, 1)
+                if gt == (None,):
+                    gt = (1,)
+            
+            std_rec.samples[std_sample]['GT'] = gt
+            std_rec.samples[std_sample]['GQ'] = gq
+
+        return std_rec
+
     def standardize_alts(self, std_rec, raw_rec):
         """
         Standardize Dragen ALT field.

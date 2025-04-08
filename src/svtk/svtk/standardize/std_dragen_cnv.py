@@ -73,26 +73,7 @@ class DragenCnvStandardizer(VCFStandardizer):
         std_rec.qual = raw_rec.qual
 
         return std_rec
-
-    def standardize_alts(self, std_rec, raw_rec):
-        """
-        Standardize Dragen CNV ALT field.
-
-        Replace with N and SVTYPE.
-        """
-
-        # Set ALT to SVTYPE tag
-        svtype = std_rec.info['SVTYPE']
-        simple_alt = f'<{svtype}>'
-        std_rec.alts = (simple_alt, )
-
-        # Set REF to null
-        stop = std_rec.stop
-        std_rec.ref = 'N'
-        std_rec.stop = stop
-
-        return std_rec
-
+    
     def standardize_format(self, std_rec, raw_rec):
         """
         Parse ./1 GTs for DUPs into 1/1.
@@ -116,5 +97,24 @@ class DragenCnvStandardizer(VCFStandardizer):
                 std_rec.samples[std_sample][source] = 1
             else:
                 std_rec.samples[std_sample][source] = 0
+
+        return std_rec
+
+    def standardize_alts(self, std_rec, raw_rec):
+        """
+        Standardize Dragen CNV ALT field.
+
+        Replace with N and SVTYPE.
+        """
+
+        # Set ALT to SVTYPE tag
+        svtype = std_rec.info['SVTYPE']
+        simple_alt = f'<{svtype}>'
+        std_rec.alts = (simple_alt, )
+
+        # Set REF to null
+        stop = std_rec.stop
+        std_rec.ref = 'N'
+        std_rec.stop = stop
 
         return std_rec
