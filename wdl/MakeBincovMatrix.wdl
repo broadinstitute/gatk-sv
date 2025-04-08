@@ -16,6 +16,13 @@ workflow MakeBincovMatrix {
     RuntimeAttr? runtime_attr_override
   }
 
+  if(defined(bincov_matrix_samples)) {
+    String bincov_matrix_header = read_lines(SetBins.bincov_matrix_header_file)[0]
+  }
+
+  Array[String]+ all_samples = flatten([samples, select_all([bincov_matrix_header])])
+  Array[File]+ all_count_files = flatten([count_files, select_all([bincov_matrix])])
+
   call SetBins {
     input:
       count_file = all_count_files[0],
@@ -25,12 +32,6 @@ workflow MakeBincovMatrix {
       disk_overhead_gb = disk_overhead_gb,
       runtime_attr_override = runtime_attr_override
   }
-  if(defined(bincov_matrix_samples)) {
-    String bincov_matrix_header = read_lines(SetBins.bincov_matrix_header_file)[0]
-  }
-
-  Array[String]+ all_samples = flatten([samples, select_all([bincov_matrix_header])])
-  Array[File]+ all_count_files = flatten([count_files, select_all([bincov_matrix])])
 
   scatter(i in range(length(all_count_files))) {
     call MakeBincovMatrixColumns {
