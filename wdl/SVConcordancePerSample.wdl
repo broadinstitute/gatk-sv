@@ -40,17 +40,13 @@ workflow SVConcordancePerSample {
     }
   }
 
-  call mini_tasks.ConcatVcfs {
+  call utils.TarFiles {
     input:
-      vcfs=SVConcordance.concordance_vcf,
-      vcfs_idx=SVConcordance.concordance_vcf_index,
-      naive=true,
-      outfile_prefix="~{prefix}.concat_sample_concordance_vcfs",
-      sv_base_mini_docker=sv_base_mini_docker
+      files=flatten([SVConcordance.concordance_vcf, SVConcordance.concordance_vcf_index]),
+      prefix="~{prefix}.sample_concordance_vcfs"
   }
 
   output {
-    File persample_concordance_vcf = ConcatVcfs.concat_vcf
-    File persample_concordance_vcf_index = ConcatVcfs.concat_vcf_idx
+    File persample_concordance_vcf_tar = TarFiles.out
   }
 }
