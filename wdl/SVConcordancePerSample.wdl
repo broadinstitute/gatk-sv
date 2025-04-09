@@ -2,7 +2,6 @@ version 1.0
 
 import "SVConcordance.wdl" as conc
 import "Utils.wdl" as util
-import "TasksMakeCohortVcf.wdl" as mini_tasks
 
 workflow SVConcordancePerSample {
   input {
@@ -40,7 +39,7 @@ workflow SVConcordancePerSample {
     }
   }
 
-  call utils.TarFiles {
+  call util.TarFiles {
     input:
       files=flatten([SVConcordance.concordance_vcf, SVConcordance.concordance_vcf_index]),
       prefix="~{prefix}.sample_concordance_vcfs"
