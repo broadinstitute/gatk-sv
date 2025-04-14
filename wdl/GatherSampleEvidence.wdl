@@ -553,8 +553,8 @@ task RealignSoftClippedReads {
   String disk_type = if use_ssd then "SSD" else "HDD"
 
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, default_attr.mem_gb])} GiB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, default_attr.disk_gb])} ~{disk_type}"
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} ~{disk_type}"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
