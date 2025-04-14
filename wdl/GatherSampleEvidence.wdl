@@ -550,6 +550,7 @@ task RealignSoftClippedReads {
                                max_retries: 1
                              }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  
   String disk_type = if use_ssd then "SSD" else "HDD"
 
   output {
