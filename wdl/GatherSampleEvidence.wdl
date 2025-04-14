@@ -550,7 +550,6 @@ task RealignSoftClippedReads {
                                max_retries: 1
                              }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  Int n_cpu = select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
   String disk_type = if use_ssd then "SSD" else "HDD"
 
   output {
@@ -587,7 +586,7 @@ task RealignSoftClippedReads {
     samtools index -@${N_CORES} ~{sample_id}.realign_soft_clipped_reads.bam
   >>>
   runtime {
-    cpu: n_cpu
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " " + disk_type
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
