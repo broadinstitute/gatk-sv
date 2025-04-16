@@ -18,7 +18,7 @@ command_mem_mb=10240
 
 declare -a disabled_read_filters_arr
 if [ -n "$disabled_read_filters" ]; then
-  disabled_read_filters_arr=( "--disable-read-filter ${disabled_read_filters}" )
+  disabled_read_filters_arr=( "--disable-read-filter" "${disabled_read_filters}" )
 else
   disabled_read_filters_arr=()
 fi
