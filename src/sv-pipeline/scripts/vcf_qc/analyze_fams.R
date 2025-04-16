@@ -688,10 +688,12 @@ plotDNRvsSize <- function(DNRs, bins, k=4, title=NULL, legend=T,
  
   #Add legend
   if(legend==T){
-    idx.for.legend <- which(apply(DNRs, 1, function(vals){any(!is.na(vals))}))
-    legend("topright", bg="white", pch=19, cex=0.8*cex.lab, lwd=2,
-           legend=rownames(DNRs)[idx.for.legend],
-           col=colors[idx.for.legend])
+    idx.for.legend <- which(apply(DNRs, 1, function(vals){any(!is.na(vals) & !is.infinite(vals) & vals>0)}))
+    if(length(idx.for.legend) > 0) {
+      legend("topright", bg="white", pch=19, cex=0.8*cex.lab, lwd=2,
+             legend=rownames(DNRs)[idx.for.legend],
+             col=colors[idx.for.legend])
+    }
   }
  
   #Add title & number of families
@@ -776,9 +778,11 @@ plotDNRvsFreq <- function(DNRs, bins, k=4, title=NULL, legend=T,
   #Add legend
   if(legend==T){
     idx.for.legend <- which(apply(DNRs, 1, function(vals){any(!is.na(vals))}))
-    legend("topright", bg="white", pch=19, cex=0.7, lwd=3,
-           legend=rownames(DNRs)[idx.for.legend],
-           col=colors[idx.for.legend])
+    if(length(idx.for.legend) > 0) { 
+      legend("topright", bg="white", pch=19, cex=0.7, lwd=3,
+             legend=rownames(DNRs)[idx.for.legend],
+             col=colors[idx.for.legend])
+    }
   }
  
   #Add title & number of families
@@ -840,9 +844,11 @@ plotDNRvsGQ <- function(DNRs, bins, k=4, title=NULL, xlabel="Mininum GQ",
   #Add legend
   if(legend==T){
     idx.for.legend <- which(apply(DNRs, 1, function(vals){any(!is.na(vals))}))
-    legend("topright", bg="white", pch=19, cex=0.7, lwd=3,
-           legend=rownames(DNRs)[idx.for.legend],
-           col=colors[idx.for.legend])
+    if(length(idx.for.legend) > 0) {
+      legend("topright", bg="white", pch=19, cex=0.7, lwd=3,
+             legend=rownames(DNRs)[idx.for.legend],
+             col=colors[idx.for.legend])
+    }
   }
  
   #Add title & number of families
