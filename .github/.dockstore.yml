@@ -6,7 +6,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_darwin_svexpression
       tags:
         - /.*/
 
