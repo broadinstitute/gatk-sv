@@ -11,11 +11,7 @@ region_bed_index=$6
 num_cpu=${7:-8} # default 8 cores
 jobs_per_cpu=${8:-1.3}
 
-## WDL section >>>>>>>>>
-
 num_jobs=$(awk -v a="$num_cpu" -v b="$jobs_per_cpu" 'BEGIN {printf "%d", int(a * b + 0.5)}')
-
-## Command section >>>>>>>>>
 
 # prepare the analysis job
 /usr/local/bin/manta/bin/configManta.py \
