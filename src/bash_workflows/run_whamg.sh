@@ -25,19 +25,19 @@ export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
 echo "Converting cram to bam ..."
 # covert cram to bam
-#samtools view -b1@ ${cpu_cores} -T "${reference_fasta}" "${cram_file}" > sample.bam
+samtools view -b1@ ${cpu_cores} -T "${reference_fasta}" "${cram_file}" > sample.bam
 echo "Finished converting cram to bam."
 
 # index bam file
 echo "Indexing the bam file ..."
-#samtools index -@ ${cpu_cores} sample.bam
+samtools index -@ ${cpu_cores} sample.bam
 echo "Finished indexing the bam file."
 
 # ensure that index files are present in appropriate locations
-#ln -s sample.bam.bai sample.bai
-#if [ ! -e "${reference_fasta}.fai" ]; then
-#  ln -s "${reference_index}" "${reference_fasta}.fai"
-#fi
+ln -s sample.bam.bai sample.bai
+if [ ! -e "${reference_fasta}.fai" ]; then
+  ln -s "${reference_index}" "${reference_fasta}.fai"
+fi
 
 # run whamg on all specified intervals
 echo "Running whamg on specified intervals ..."
