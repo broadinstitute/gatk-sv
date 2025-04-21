@@ -86,7 +86,7 @@ bnds_to_ids = defaultdict(list)
 for record in vcf:
     # Filter depth-only CNVs
     # Note that in some cases CNVs are incorrectly missing an SR evidence annotation but usually have PE at least
-    if ('SR' not in record.info['EVIDENCE'] and 'PE' not in record.info['EVIDENCE']) \
+    if ('SR' not in record.info.get('EVIDENCE', '') and 'PE' not in record.info.get('EVIDENCE', '')) \
             and (record.info['SVTYPE'] == 'DEL' or record.info['SVTYPE'] == 'DUP') \
             and record.info['SVLEN'] >= 5000:
         continue
