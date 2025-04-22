@@ -1,4 +1,7 @@
 ARG SV_PIPELINE_IMAGE=sv-pipeline:latest
+
+FROM us.gcr.io/broad-dsde-methods/gatk-sv/wham:2024-10-25-v0.29-beta-5ea22a52 as wham_layer
+
 FROM $SV_PIPELINE_IMAGE
 
 # set noninterative mode
@@ -72,9 +75,23 @@ RUN /app/scramble-gatk-sv/cluster_identifier/src/build/cluster_identifier -v
 # define default command
 CMD ["Rscript"]
 
-FROM us.gcr.io/broad-dsde-methods/gatk-sv/wham:2024-10-25-v0.29-beta-5ea22a52
 
-# this layer must remain last
-FROM us.gcr.io/broad-dsde-methods/gatk-sv/gatk:2024-12-05-4.6.1.0-6-gfc248dfc1-NIGHTLY-SNAPSHOT
+# Whamg Docker
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get -qqy update --fix-missing && \
+    apt-get -qqy dist-upgrade && \
+    apt-get -qqy install --no-install-recommends \
+                 bcftools \
+                 gawk \
+                 libgomp1 \
+                 tabix \
+                 zlib1g-dev && \
+    apt-get -qqy autoremove --purge && \
+    apt-get -qqy clean
+COPY --from=wham_layer /bin/whamg /bin/
+
+# FROM us.gcr.io/broad-dsde-methods/gatk-sv/manta:2023-09-14-v0.28.3-beta-3f22f94d as manta_layer
+
+# FROM us.gcr.io/broad-dsde-methods/gatk-sv/gatk:2024-12-05-4.6.1.0-6-gfc248dfc1-NIGHTLY-SNAPSHOT as gatk_layer
 
 WORKDIR /

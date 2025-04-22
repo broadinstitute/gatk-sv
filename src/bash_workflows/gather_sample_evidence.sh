@@ -42,6 +42,7 @@ if [[ "${run_manta}" == true ]]; then
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
     "${reference_fasta}" \
-    "${manta_regions_bed}"
+    "${manta_regions_bed}" \
+    "${manta_regions_bed_index}"
 fi
 
