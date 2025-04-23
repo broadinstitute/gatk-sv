@@ -4,7 +4,6 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "HailMerge.wdl" as HailMerge
 
 # Workflow to shard a filtered vcf & run vcfcluster (sub-sub-sub workflow)
 workflow ShardedCluster {
@@ -25,9 +24,6 @@ workflow ShardedCluster {
     Array[String] sv_types
     Float merging_shard_scale_factor = 30000000
 
-    Boolean use_hail
-    String? gcs_project
-
     String sv_pipeline_docker
     String sv_base_mini_docker
 
@@ -39,7 +35,6 @@ workflow ShardedCluster {
     RuntimeAttr? runtime_override_get_vcf_header_with_members_info_line
 
     RuntimeAttr? runtime_override_preconcat_sharded_cluster
-    RuntimeAttr? runtime_override_hail_merge_sharded_cluster
     RuntimeAttr? runtime_override_fix_header_sharded_cluster
 
     # overrides for merge subworkflow
@@ -141,20 +136,6 @@ workflow ShardedCluster {
     }
   }
   if (length(SvtkVcfCluster.out) > 0) {
-    if (use_hail) {
-      call HailMerge.HailMerge as ConcatVcfsHail {
-        input:
-          vcfs=SortVcf.out,
-          prefix="~{prefix}.clustered",
-          gcs_project=gcs_project,
-          sv_base_mini_docker=sv_base_mini_docker,
-          sv_pipeline_docker=sv_pipeline_docker,
-          runtime_override_preconcat=runtime_override_preconcat_sharded_cluster,
-          runtime_override_hail_merge=runtime_override_hail_merge_sharded_cluster,
-          runtime_override_fix_header=runtime_override_fix_header_sharded_cluster
-      }
-    }
-    if (!use_hail) {
       call MiniTasks.ConcatVcfs as ConcatVcfs {
         input:
           vcfs=SortVcf.out,
@@ -164,13 +145,12 @@ workflow ShardedCluster {
           sv_base_mini_docker=sv_base_mini_docker,
           runtime_attr_override=runtime_override_concat_sharded_cluster
       }
-    }
   }
 
   #Output
   output {
-    File clustered_vcf = select_first([GetVcfHeaderWithMembersInfoLine.out, ConcatVcfs.concat_vcf, ConcatVcfsHail.merged_vcf])
-    File clustered_vcf_idx = select_first([GetVcfHeaderWithMembersInfoLine.out_idx, ConcatVcfs.concat_vcf_idx, ConcatVcfsHail.merged_vcf_index])
+    File clustered_vcf = select_first([GetVcfHeaderWithMembersInfoLine.out, ConcatVcfs.concat_vcf])
+    File clustered_vcf_idx = select_first([GetVcfHeaderWithMembersInfoLine.out_idx, ConcatVcfs.concat_vcf_idx])
   }
 }
 

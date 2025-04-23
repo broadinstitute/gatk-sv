@@ -66,13 +66,6 @@ These parameters control parallelism in scattered tasks. Please examine the
 Text file of samples IDs to exclude when identifying multi-allelic CNVs. Most users do not need this feature unless 
 excessive multi-allelic CNVs driven by low-quality samples are observed.
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `use_hail`
-Default: `false`. Use Hail for VCF concatenation. This should only be used for projects with over 50k samples. If enabled, the
-[gcs_project](#optional-gcs_project) must also be provided. Does not work on Terra.
-
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `gcs_project`
-Google Cloud project ID. Required only if enabling [use_hail](#optional-use_hail).
-
 ### Outputs
 
 #### `cleaned_vcf`
