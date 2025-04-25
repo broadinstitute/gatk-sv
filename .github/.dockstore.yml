@@ -15,7 +15,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -34,7 +33,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -44,7 +42,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -54,7 +51,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -64,7 +60,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -83,7 +78,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -165,7 +159,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -175,7 +168,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -212,7 +204,15 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: VisualizeCnvs
+    primaryDescriptorPath: /wdl/VisualizeCnvs.wdl
+    filters:
+      branches:
+        - main
       tags:
         - /.*/
 
@@ -223,15 +223,6 @@ workflows:
       branches:
         - main
         - kj_dragensv_benchmarking
-
-  - subclass: WDL
-    name: VisualizeCnvs
-    primaryDescriptorPath: /wdl/VisualizeCnvs.wdl
-    filters:
-      branches:
-        - main
-      tags:
-        - /.*/
 
   - subclass: WDL
     name: SingleSamplePipeline

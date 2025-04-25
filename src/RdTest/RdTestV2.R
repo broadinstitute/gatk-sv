@@ -94,10 +94,7 @@ option_list = list(
   make_option(c("-l", "--Blacklist"), type="character", default=NULL,
               help="Optional:Single column file with blacklist of samples to remove", metavar="character"),
   make_option(c("-w", "--Whitelist"), type="character", default=NULL,
-              help="Optional:Single column file with whitelist of samples to include", metavar="character"),
-  make_option(c("-P", "--padding"), type="numeric", default=0,
-              help="Optional: Fraction of the variant interval to pad on each side in depth plots.", metavar="numeric")
-
+              help="Optional:Single column file with whitelist of samples to include", metavar="character")
 );
 
 opt_parser = OptionParser(option_list = option_list)
@@ -891,23 +888,10 @@ samprank_sep <- function(genotype_matrix,cnv_matrix,cnvtype,sample=NULL)
 }
 
 ##Plot of intensities across cohorts## 
-plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK,plotfamily,famfile,outFolder,pad=0,orig_start,orig_end)
+plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK,plotfamily,famfile,outFolder)
 {
   samplesPrior <- unlist(strsplit(as.character(sampleIDs),","))
   samplenames<-colnames(genotype_matrix)
-
-  # Identify bins and segments after padding
-  if (pad > 0) {
-    total_bins <- ncol(cnv_matrix)
-    pad_bins <- round(total_bins * (pad / (1 + 2*pad)))
-    active_start_idx <- pad_bins + 1
-    active_end_idx   <- total_bins - pad_bins
-  } else {
-    active_start_idx <- 1
-    active_end_idx <- ncol(cnv_matrix)
-  }
-  if(missing(orig_start)) { orig_start <- start }
-  if(missing(orig_end)) { orig_end <- end }
   
   ##If only one bin##
   if(ncol(cnv_matrix)==1)
@@ -922,14 +906,14 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   ##Limits number of sample Ids due to size limiations for readablity
   if(nchar(as.character(sampleIDs))>44){sampleIDsToDisplay<-paste(substr(sampleIDs,1,44),"...",sep="")}else{sampleIDsToDisplay<-sampleIDs}
   ##Title line 1##
-  main1 <- paste(chr, ":", prettyNum(orig_start, big.mark=","), "-", prettyNum(orig_end, big.mark=","), " (hg19)", sep="")
+  main1=paste(chr,":",prettyNum(start,big.mark=","),"-",prettyNum(end,big.mark=",")," (hg19)",sep="")
   
   ###Add proper size abbr. for larger events
-  size <- orig_end - orig_start
-  if(size<10000) {mysize <- prettyNum(paste("(", size, " bp)", sep=""), big.mark=",")}
-  else if(size<1000000) {mysize <- prettyNum(paste("(", signif(size/1000, 3), " kb)", sep=""), big.mark=",")}
-  else {mysize <- prettyNum(paste("(", signif(size/1000000, 3), " Mb)", sep=""), big.mark=",")}
-
+  size=end-start
+  if(size<10000){mysize<-prettyNum(paste("(",size," bp)",sep=""), big.mark = ",")}
+  if(size>=10000){mysize<-prettyNum(paste("(",signif(size/1000,3)," kb)",sep=""), big.mark = ",")}
+  if(size>=1000000){mysize<-prettyNum(paste("(",signif(size/1000000,3)," Mb)",sep=""), big.mark = ",")}
+  
   ##Formating##
   main2 = paste(sampleIDsToDisplay, " ", mysize, sep ="")
   mainText = paste(main1, "\n", main2, sep = "")
@@ -954,11 +938,6 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   endcolnormal<-ncol(plot_colormatrix)-(length(samplesPrior))
   plot_linematrix<-cbind(matrix(genotype_matrix[,-columnstoshift],nrow=1),matrix(genotype_matrix[,columnstoshift],nrow=1))
 
-  # Determine indices for the event calls based on the original (non-padded) data
-  event_range <- (ncol(plot_colormatrix) - length(samplesPrior) + 1):ncol(plot_colormatrix)
-  # Restrict event_range to those bins that fall within the active region
-  active_event_cols <- intersect(event_range, active_start_idx:active_end_idx)
-
   ##Blue if Dup; Red if Del
   if ( plotK == TRUE ) {
     #keep plot_colormatrix
@@ -980,34 +959,15 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   ##Plotting Command##
   plot(as.zoo(plot_cnvmatrix),
     plot.type = "single",
-    col = "grey",
+    col = plot_colormatrix[1, 5:ncol(plot_colormatrix)],
     main = mainText,
     cex.main = maxcexXh,
     xlab = "Position (bp)",
     xaxt = 'n',
     ann = FALSE,
     ylab = "Intensity",
-    lwd = 0.5
+    lwd = plot_linematrix[1, 5:ncol(plot_linematrix)] 
   )
-
-  n_bins <- nrow(plot_cnvmatrix)
-  if (pad > 0) {
-    # Compute plotting coordinates for the event region rectangle
-    x_axis_positions <- seq(start, end, length.out = n_bins)
-    rect_index_left <- 1 + (n_bins - 1) * (orig_start - start) / (end - start)
-    rect_index_right <- 1 + (n_bins - 1) * (orig_end - start) / (end - start)
-
-    # Add light blue rectangle for the event region
-    rect(rect_index_left, par("usr")[3], rect_index_right, par("usr")[4], col = adjustcolor("azure3", alpha.f = 0.3), border = NA)
-  }
-
-  # Overlay the lines after the rectangle
-  for (j in (ncol(plot_cnvmatrix) - length(samplesPrior) + 1):ncol(plot_cnvmatrix)) {
-    lines(1:n_bins, plot_cnvmatrix[, j],
-          col = if (toupper(cnvtype) == "DEL") "red" else "blue",
-          lwd = 3)
-  }
-
   mtext(
     side = 1,
     text = paste( chr, " Position (bp)", sep = ""),
@@ -1341,22 +1301,9 @@ runRdTest<-function(bed)
         return(c(chr,start,end,cnvID,sampleOrigIDs,cnvtypeOrigIDs,"All_samples_called_CNV_no_analysis","All_samples_called_CNV_no_analysis","All_samples_called_CNV_no_analysis","All_samples_called_CNV_no_analysis","All_samples_called_CNV_no_analysis","All_samples_called_CNV_no_analysis"))
   } 
   ##Plot JPG##
-  if (opt$plot == TRUE) {
-    if (opt$padding > 0) {
-      orig_start <- start
-      orig_end <- end
-      orig_length <- as.numeric(orig_end) - as.numeric(orig_start)
-      padded_start <- floor(as.numeric(orig_start) - opt$padding * orig_length)
-      padded_end   <- ceiling(as.numeric(orig_end) + opt$padding * orig_length)
-      padded_cnv_matrix <- loadData(chr, padded_start, padded_end, cnvID, sampleIDs, coveragepath, medianfile, bins)
-      plotJPG(genotype_matrix, padded_cnv_matrix, chr, padded_start, padded_end, cnvID, sampleIDs, outputname, cnvtype, 
-              plotK=FALSE, plotfamily=FALSE, famfile, outFolder, pad=opt$padding, orig_start=orig_start, orig_end=orig_end)
-    } else {
-      plotJPG(genotype_matrix, cnv_matrix, chr, start, end, cnvID, sampleIDs, outputname, cnvtype, 
-              plotK=FALSE, plotfamily=FALSE, famfile, outFolder)
-    }
+  if (opt$plot == TRUE){
+    plotJPG(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK=FALSE,plotfamily=FALSE,famfile,outFolder)
   }
-
   ##De Novo Module##
   if (opt$denovo == TRUE) {
     ##Read in family file##
