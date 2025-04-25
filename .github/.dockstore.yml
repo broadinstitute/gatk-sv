@@ -194,7 +194,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
