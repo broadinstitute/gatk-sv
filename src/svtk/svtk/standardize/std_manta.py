@@ -71,9 +71,6 @@ class MantaStandardizer(VCFStandardizer):
 
         std_rec.info['CHR2'] = chr2
         std_rec.stop = end
-        if pos == 54564370:
-            print(f"{std_rec.id}: {end}")
-            print(f"{std_rec.id}: {std_rec.stop}")
 
         # Strand parsing
         if svtype == 'INV':
