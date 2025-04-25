@@ -54,7 +54,6 @@ class MantaStandardizer(VCFStandardizer):
         std_rec.info['SVTYPE'] = svtype
 
         # Define CHR2 and END
-        pos = 0
         if svtype == 'BND':
             chr2, end = parse_bnd_pos(raw_rec.alts[0])
             chrom, pos = raw_rec.chrom, raw_rec.pos
@@ -63,11 +62,6 @@ class MantaStandardizer(VCFStandardizer):
                 chrom, chr2 = chr2, chrom
                 std_rec.pos = pos
                 std_rec.chrom = chrom
-            if pos == 54564370:
-                print(f"{std_rec.id}: {chrom}")
-                print(f"{std_rec.id}: {pos}\n")
-                print(f"{std_rec.id}: {chr2}")
-                print(f"{std_rec.id}: {end}\n")
         elif svtype == 'INS':
             chr2 = raw_rec.chrom
             end = raw_rec.pos + 1

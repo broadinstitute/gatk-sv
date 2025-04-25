@@ -28,7 +28,6 @@ workflow MainVcfQc {
     Int? random_seed
     Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CombineBatches, use 999
     Int? downsample_qc_per_sample  # Number of samples to use for per-sample QC. Default: 1000
-    Boolean do_duplicate_identification = true
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -279,26 +278,24 @@ workflow MainVcfQc {
   }
 
   # Identify all duplicates
-  if (do_duplicate_identification) {
-    scatter(vcf in vcfs_for_qc) {
-      call IdentifyDuplicates {
-        input:
-          prefix=prefix,
-          vcf=vcf,
-          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-          runtime_attr_override=runtime_override_identify_duplicates
-      }
-    }
-
-    # Merge duplicates
-    call MergeDuplicates {
+  scatter(vcf in vcfs_for_qc) {
+    call IdentifyDuplicates {
       input:
         prefix=prefix,
-        tsv_records=IdentifyDuplicates.duplicate_records,
-        tsv_counts=IdentifyDuplicates.duplicate_counts,
+        vcf=vcf,
         sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-        runtime_attr_override=runtime_override_merge_duplicates
+        runtime_attr_override=runtime_override_identify_duplicates
     }
+  }
+
+  # Merge duplicates
+  call MergeDuplicates {
+    input:
+      prefix=prefix,
+      tsv_records=IdentifyDuplicates.duplicate_records,
+      tsv_counts=IdentifyDuplicates.duplicate_counts,
+      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+      runtime_attr_override=runtime_override_merge_duplicates
   }
 
   # Sanitize all outputs
@@ -322,8 +319,8 @@ workflow MainVcfQc {
   output {
     File sv_vcf_qc_output = SanitizeOutputs.vcf_qc_tarball
     File vcf2bed_output = MergeVcf2Bed.merged_bed_file
-    File? duplicate_records_output = MergeDuplicates.duplicate_records
-    File? duplicate_counts_output = MergeDuplicates.duplicate_counts
+    File duplicate_records_output = MergeDuplicates.duplicate_records
+    File duplicate_counts_output = MergeDuplicates.duplicate_counts
   }
 }
 

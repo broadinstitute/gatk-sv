@@ -15,7 +15,7 @@ workflow Scramble {
     File original_bam_or_cram_file
     File original_bam_or_cram_index
     File counts_file
-    # TODO: Do we also have to include Dragen?
+    # TODO: Do we also have to include Dragen? If so, we will need to update src/sv-pipeline/scripts/make_scramble_vcf.py too
     File manta_vcf
     String sample_name
     File reference_fasta
