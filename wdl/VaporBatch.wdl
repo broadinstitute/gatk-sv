@@ -24,7 +24,7 @@ workflow VaporBatch {
     RuntimeAttr? runtime_attr_subset_sample
     RuntimeAttr? runtime_attr_vcf_to_bed
     RuntimeAttr? runtime_attr_vapor
-    RuntimeAttr? runtime_attr_split_vcf
+    RuntimeAttr? runtime_attr_preprocess_bed
     RuntimeAttr? runtime_attr_concat_beds
   }
 
@@ -46,7 +46,7 @@ workflow VaporBatch {
         runtime_attr_vapor = runtime_attr_vapor,
         runtime_attr_subset_sample = runtime_attr_subset_sample,
         runtime_attr_vcf_to_bed = runtime_attr_vcf_to_bed,
-        runtime_attr_split_vcf = runtime_attr_split_vcf,
+        runtime_attr_preprocess_bed = runtime_attr_preprocess_bed,
         runtime_attr_concat_beds = runtime_attr_concat_beds
     }
   }
