@@ -15,7 +15,7 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -34,7 +34,7 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -44,7 +44,7 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -54,7 +54,7 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -64,7 +64,7 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -83,7 +83,7 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -165,7 +165,7 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -175,7 +175,7 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -212,17 +212,9 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
+        - kj_dragensv_integration
       tags:
         - /.*/
-
-  - subclass: WDL
-    name: MakeGqRecalibratorTrainingSetFromPacBio
-    primaryDescriptorPath: /wdl/MakeGqRecalibratorTrainingSetFromPacBio.wdl
-    filters:
-      branches:
-        - main
-        - kj_dragensv_benchmarking
 
   - subclass: WDL
     name: VisualizeCnvs
