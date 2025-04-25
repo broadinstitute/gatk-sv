@@ -15,6 +15,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -33,6 +34,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -42,6 +44,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -51,6 +54,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -60,6 +64,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -78,6 +83,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -159,6 +165,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -168,6 +175,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_benchmarking
       tags:
         - /.*/
 
@@ -204,8 +212,17 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_benchmarking
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: MakeGqRecalibratorTrainingSetFromPacBio
+    primaryDescriptorPath: /wdl/MakeGqRecalibratorTrainingSetFromPacBio.wdl
+    filters:
+      branches:
+        - main
+        - kj_dragensv_benchmarking
 
   - subclass: WDL
     name: VisualizeCnvs

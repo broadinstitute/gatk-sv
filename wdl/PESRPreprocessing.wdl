@@ -6,6 +6,7 @@ import "Utils.wdl" as utils
 workflow PreprocessPESR {
   input {
     Array[String] samples         # Sample ID
+    Array[File]? dragen_vcfs       # Dragen VCF
     Array[File]? manta_vcfs        # Manta VCF
     Array[File]? melt_vcfs         # Melt VCF
     Array[File]? scramble_vcfs     # Scramble VCF
@@ -17,8 +18,8 @@ workflow PreprocessPESR {
     RuntimeAttr? runtime_attr
   }
 
-  Array[String] algorithms = ["manta", "melt", "scramble", "wham"]
-  Array[Array[File]?] vcfs = [manta_vcfs, melt_vcfs, scramble_vcfs, wham_vcfs]
+  Array[String] algorithms = ["dragen", "manta", "melt", "scramble", "wham"]
+  Array[Array[File]?] vcfs = [dragen_vcfs, manta_vcfs, melt_vcfs, scramble_vcfs, wham_vcfs]
 
   scatter (i in range(length(algorithms))) {
     if (defined(vcfs[i]) && (length(select_first([vcfs[i]])) > 0)) {
@@ -37,10 +38,11 @@ workflow PreprocessPESR {
     }
   }
   output {
-    File? std_manta_vcf_tar = StandardizeVCFs.out[0]
-    File? std_melt_vcf_tar = StandardizeVCFs.out[1]
-    File? std_scramble_vcf_tar = StandardizeVCFs.out[2]
-    File? std_wham_vcf_tar = StandardizeVCFs.out[3]
+    File? std_dragen_vcf_tar = StandardizeVCFs.out[0]
+    File? std_manta_vcf_tar = StandardizeVCFs.out[1]
+    File? std_melt_vcf_tar = StandardizeVCFs.out[2]
+    File? std_scramble_vcf_tar = StandardizeVCFs.out[3]
+    File? std_wham_vcf_tar = StandardizeVCFs.out[4]
   }
 }
 

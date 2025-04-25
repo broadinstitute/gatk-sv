@@ -65,7 +65,7 @@ def overlap_pass(phase1, pilot, fout, dist=300, frac=0.1, prefix="SSC_merged"):
     sources = get_sources(fout.header)
 
     # Helper for testing if SVRecord has pe/sr support
-    pesr_sources = set('delly lumpy manta wham'.split())
+    pesr_sources = set('delly dragen lumpy manta wham'.split())
 
     def _has_pesr(record):
         sources = set(record.record.info['SOURCES'])
