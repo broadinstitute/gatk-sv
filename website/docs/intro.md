@@ -9,7 +9,7 @@ classes of structural variants (SV) from short-read whole genome sequencing (WGS
 deletions, duplications, multi-allelic copy number variants, balanced inversions, 
 insertions, translocations, and a diverse spectrum of complex SV. Briefly, GATK-SV 
 maximizes the sensitivity of SV discovery by harmonizing output from six tools: 
-Dragen, Manta, Wham, Scramble, cn.MOPS, and GATK-gCNV. To minimize false positives, raw SVs 
+Dragen/Manta, Wham, Scramble, cn.MOPS, and GATK-gCNV. To minimize false positives, raw SVs 
 are adjudicated and re-genotyped, considering all potential 
 sequencing evidence including anomalous paired-end (PE) reads, split reads (SR), 
 read-depth (RD), and B-allele frequencies (BAF). It also fully resolves 11 classes of complex 
