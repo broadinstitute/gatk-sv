@@ -1,5 +1,4 @@
 import gzip
-import sys
 
 # Input and output files
 in_vcf = "/Users/kjaising/Downloads/cluster_batch.dragen.fmt.vcf.gz"
@@ -18,16 +17,16 @@ with gzip.open(in_vcf, 'rt') as f_in, gzip.open(out_vcf, 'wt') as f_out:
             fields = line.strip().split('\t')
             format_idx = 8
             format_fields = fields[format_idx].split(':')
-            
+
             if 'GQ' not in format_fields:
                 format_fields.insert(1, 'GQ')
                 fields[format_idx] = ':'.join(format_fields)
-                
+
                 for i in range(9, len(fields)):
                     sample_values = fields[i].split(':')
                     sample_values.insert(1, DEFAULT_GQ)
                     fields[i] = ':'.join(sample_values)
-            
+
             f_out.write('\t'.join(fields) + '\n')
 
 print(f"Created new VCF with GQ fields at: {out_vcf}")
