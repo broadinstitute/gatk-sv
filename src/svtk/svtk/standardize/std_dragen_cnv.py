@@ -73,7 +73,7 @@ class DragenCnvStandardizer(VCFStandardizer):
         std_rec.qual = raw_rec.qual
 
         return std_rec
-    
+
     def standardize_format(self, std_rec, raw_rec):
         """
         Parse ./1 GTs for DUPs into 1/1.
