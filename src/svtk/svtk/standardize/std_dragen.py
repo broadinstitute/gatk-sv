@@ -153,7 +153,7 @@ class DragenStandardizer(VCFStandardizer):
 
     def standardize_format(self, std_rec, raw_rec):
         """
-        Retain GT and GQ. 
+        Retain GT and GQ.
         """
 
         for sample, std_sample in zip(raw_rec.samples, self.std_sample_names):
@@ -164,7 +164,7 @@ class DragenStandardizer(VCFStandardizer):
                     gt = (0, 1)
                 if gt == (None,):
                     gt = (1,)
-            
+
             std_rec.samples[std_sample]['GT'] = gt
             std_rec.samples[std_sample]['GQ'] = gq
 
