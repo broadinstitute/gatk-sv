@@ -20,6 +20,8 @@ workflow GatherSampleEvidence {
     String sample_id
 
     Boolean? is_dragen_3_7_8
+    # Optionally pass in DRAGEN-SV VCF if available
+    File? dragen_vcf
 
     # Evidence collection flags
     Boolean collect_coverage = true
@@ -271,7 +273,7 @@ workflow GatherSampleEvidence {
         original_bam_or_cram_file = reads_file_,
         original_bam_or_cram_index = reads_index_,
         counts_file = select_first([CollectCounts.counts]),
-        manta_vcf = select_first([Manta.vcf, manta_vcf_input]),
+        input_vcf = select_first([dragen_vcf, Manta.vcf, manta_vcf_input]),
         sample_name = sample_id,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
@@ -315,7 +317,7 @@ workflow GatherSampleEvidence {
           original_bam_or_cram_file = reads_file_,
           original_bam_or_cram_index = reads_index_,
           counts_file = select_first([CollectCounts.counts]),
-          manta_vcf = select_first([Manta.vcf, manta_vcf_input]),
+          input_vcf = select_first([dragen_vcf, Manta.vcf, manta_vcf_input]),
           sample_name = sample_id,
           reference_fasta = reference_fasta,
           reference_index = reference_index,

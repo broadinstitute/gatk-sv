@@ -275,7 +275,7 @@ def filter_and_write_vcf(vcf, samfile, df, sample_id, enable_indel_filter, mei_t
         mei_trees: dict of IntervalTree
             Reference MEI intervals
         del_filter_trees: dict of IntervalTree
-            Manta deletion calls, used for filtering
+            Deletion calls, used for filtering
         indel_window: int
             Window in bp to look for indels around the insertion site
         indel_reads: int
@@ -428,8 +428,8 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="BAM/CRAM file, must be indexed")
     parser.add_argument("--mei-bed", type=str, required=True,
                         help="Bed file containing MEI intervals from the reference")
-    parser.add_argument("--manta-vcf", type=str, required=True,
-                        help="Manta vcf")
+    parser.add_argument("--input-vcf", type=str, required=True,
+                        help="Input VCF (e.g.from DRAGEN-SV or Manta)")
     parser.add_argument("--sample", type=str, required=True,
                         help="Sample ID")
     parser.add_argument("--reference", type=str, required=True,
@@ -493,10 +493,10 @@ def main(argv: Optional[List[Text]] = None):
                     l1_size=arguments.l1_size)
     logging.info("Loading MEI bed...")
     mei_trees = create_trees_from_bed_records(arguments.mei_bed, padding=arguments.mei_padding)
-    logging.info("Loading Manta deletions...")
-    with pysam.VariantFile(arguments.manta_vcf) as f_manta:
+    logging.info("Loading deletions...")
+    with pysam.VariantFile(arguments.input_vcf) as f_vcf:
         del_filter_trees = dict()
-        add_del_ends_to_trees(vcf=f_manta, trees=del_filter_trees, padding=arguments.del_filter_window)
+        add_del_ends_to_trees(vcf=f_vcf, trees=del_filter_trees, padding=arguments.del_filter_window)
     logging.info("Writing vcf...")
     with pysam.VariantFile(arguments.out, "w", header=header) as vcf, \
             pysam.AlignmentFile(arguments.alignments_file, reference_filename=arguments.reference) as samfile:
