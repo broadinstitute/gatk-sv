@@ -8,7 +8,7 @@ GATK-SV uses an ensemble of SV discovery tools to produce a raw call set and the
 and annotates the calls from these tools to produce a final call set.
 
 The SV calling tools, sometimes referred to as "PE/SR" tools, include:
-- [DRAGEN-SV](https://help.dragen.illumina.com/product-guides/dragen-v4.3/dragen-dna-pipeline/sv-calling)
+- [DRAGEN-SV](https://help.dragen.illumina.com/product-guides/dragen-v4.3/dragen-dna-pipeline/sv-calling) (not yet fully supported)
 - [Manta](https://github.com/Illumina/manta)
 - [Wham](https://github.com/zeeev/wham)
 - [Scramble](https://github.com/GeneDx/scramble)
