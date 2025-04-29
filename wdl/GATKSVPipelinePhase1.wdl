@@ -9,8 +9,6 @@ import "Structs.wdl"
 # One mighty WDL to rule them all...
 # Runs GatherBatchEvidence, ClusterBatch, GenerateBatchMetrics, FilterBatch
 
-# TODO: Do we also have to include Dragen?
-
 workflow GATKSVPipelinePhase1 {
   input {
 
