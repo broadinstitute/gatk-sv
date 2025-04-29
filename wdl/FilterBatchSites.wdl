@@ -16,7 +16,7 @@ workflow FilterBatchSites {
     File evidence_metrics_common
     String sv_pipeline_docker
 
-    # PlotSVCountsPerSample metrics
+    # Overrides for cutoffs and scores that can be used to skip the adjudication step
     Int N_IQR_cutoff_plotting = 6
 
     # Optional overrides

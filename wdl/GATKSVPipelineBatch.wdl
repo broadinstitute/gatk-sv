@@ -14,8 +14,6 @@ import "TestUtils.wdl" as tu
 # Runs GatherSampleEvidence, EvidenceQC, GatherBatchEvidence, ClusterBatch, GenerateBatchMetrics, FilterBatch, GenotypeBatch, RegenotypeCNVs,
 # and MakeCohortVcf (CombineBatches, ResolveComplexVariants, GenotypeComplexVariants, and GenotypeComplexVariants)
 
-# TODO: Do we also have to include Dragen?
-
 workflow GATKSVPipelineBatch {
   input {
     # Batch data

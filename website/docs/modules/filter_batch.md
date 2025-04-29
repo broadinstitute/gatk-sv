@@ -70,6 +70,20 @@ A cutoff table to set permissible nIQR ranges for each SVTYPE. If provided, over
 columns are: `algorithm`, `svtype`, `lower_cuff`, `higher_cff`. See the `outlier_cutoff_table` resource in 
 [this json](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/ref_panel_1kg.json) for an example table.
 
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `adjudicate_cutoffs`
+A pre-computed table of random forest cutoffs that override the table that is generated in the workflow. It ensures
+that the workflow does not re-run the random forest model training if cutoffs are already available, or if 
+setting these in a manual manner is desired.
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `adjudicate_scores`
+A pre-computed table of variant scores that override the table that is generated in the workflow. It ensures
+that the workflow does not re-run the random forest model evaluation if scores are already available, or if 
+setting these in a manual manner is desired.
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `adjudicate_rf_files`
+A pre-computed series of interemediete random forest files that override what is generated in the workflow. 
+It ensures that the workflow does not re-save these intermediete files if they are already available.
+
 ### Outputs
 
 #### `filtered_depth_vcf`
