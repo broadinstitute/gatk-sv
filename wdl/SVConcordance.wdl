@@ -131,15 +131,15 @@ task SVConcordanceTask {
     JVM_MAX_MEM=$(getJavaMem MemTotal)
     echo "JVM memory: $JVM_MAX_MEM"
 
-    TRACK_NAMES=$( 
+    TRACK_NAMES=$(
       if [ ~{if defined(track_names) then "1" else "0"} -eq 1 ]; then
         echo "--track-name ~{sep=' --track-name ' track_names}"
       fi
     )
 
     TRACK_INTERVALS=$(
-      if [ ~{if defined(track_intervals) then "1" else "0"} -eq 1 ]; then
-        echo "--track-intervals ~{sep=' --track-intervals ' track_intervals}"
+      if [ ~{if defined(track_bed_files) then "1" else "0"} -eq 1 ]; then
+        echo "--track-intervals ~{sep=' --track-intervals ' track_bed_files}"
       fi
     )
 
