@@ -169,6 +169,7 @@ workflows:
       branches:
         - main
         - eph_grouped_concordance
+        - mw_strat_concordance
       tags:
         - /.*/
 
