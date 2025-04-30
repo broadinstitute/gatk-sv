@@ -115,9 +115,6 @@ task SVConcordanceTask {
     File out_unsorted = "~{output_prefix}.vcf.gz"
   }
 
-  Array[String] track_interval_args = if defined(track_bed_files) then prefix("--track-intervals ", select_first([track_bed_files])) else [""]
-  Array[String] track_name_args = if defined(track_names) then prefix("--track-name ", select_first([track_names])) else [""]
-
   command <<<
     set -euo pipefail
 
@@ -134,6 +131,18 @@ task SVConcordanceTask {
     JVM_MAX_MEM=$(getJavaMem MemTotal)
     echo "JVM memory: $JVM_MAX_MEM"
 
+    TRACK_NAMES=$( 
+      if [ ~{if defined(track_names) then "1" else "0"} -eq 1 ]; then
+        echo "--track-name ~{sep=' --track-name ' track_names}"
+      fi
+    )
+
+    TRACK_INTERVALS=$(
+      if [ ~{if defined(track_intervals) then "1" else "0"} -eq 1 ]; then
+        echo "--track-intervals ~{sep=' --track-intervals ' track_intervals}"
+      fi
+    )
+
     # As of 12/15/2023, the gatk docker contains an outdated version of bcftools so we sort in a subsequent task
     gatk --java-options "-Xmx${JVM_MAX_MEM}" SVConcordance \
       ~{"-L " + contig} \
@@ -143,8 +152,8 @@ task SVConcordanceTask {
       -O ~{output_prefix}.vcf.gz \
       ~{"--clustering-config " + clustering_config} \
       ~{"--stratify-config " + stratification_config} \
-      ~{sep=" " track_interval_args} \
-      ~{sep=" " track_name_args} \
+      $TRACK_INTERVALS \
+      $TRACK_NAMES \
       ~{additional_args}
   >>>
   runtime {
