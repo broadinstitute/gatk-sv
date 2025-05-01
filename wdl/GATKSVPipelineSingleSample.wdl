@@ -465,7 +465,6 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_restore_unresolved_cnv_per_shard
     RuntimeAttr? runtime_override_concat_resolved_per_shard
     RuntimeAttr? runtime_override_preconcat_resolve
-    RuntimeAttr? runtime_override_hail_merge_resolve
     RuntimeAttr? runtime_override_fix_header_resolve
 
     RuntimeAttr? runtime_override_get_se_cutoff_inv
@@ -477,7 +476,6 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_concat_resolved_per_shard_inv
     RuntimeAttr? runtime_override_pull_vcf_shard_inv
     RuntimeAttr? runtime_override_preconcat_resolve_inv
-    RuntimeAttr? runtime_override_hail_merge_resolve_inv
     RuntimeAttr? runtime_override_fix_header_resolve_inv
 
     # overrides for GenotypeComplexContig
@@ -493,12 +491,10 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_ids_from_vcf_regeno
     RuntimeAttr? runtime_attr_subset_ped_regeno
     RuntimeAttr? runtime_override_preconcat_regeno
-    RuntimeAttr? runtime_override_hail_merge_regeno
     RuntimeAttr? runtime_override_fix_header_regeno
 
     # overrides for CleanVcfContig
     RuntimeAttr? runtime_override_preconcat_clean_final
-    RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
     RuntimeAttr? runtime_attr_format_clean
 
@@ -523,11 +519,9 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_cat_multi_cnvs_1b
 
     RuntimeAttr? runtime_override_preconcat_step1
-    RuntimeAttr? runtime_override_hail_merge_step1
     RuntimeAttr? runtime_override_fix_header_step1
 
     RuntimeAttr? runtime_override_preconcat_drc
-    RuntimeAttr? runtime_override_hail_merge_drc
     RuntimeAttr? runtime_override_fix_header_drc
 
     RuntimeAttr? runtime_override_split_vcf_to_clean
@@ -1228,7 +1222,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_restore_unresolved_cnv_per_shard=runtime_override_restore_unresolved_cnv_per_shard,
       runtime_override_concat_resolved_per_shard=runtime_override_concat_resolved_per_shard,
       runtime_override_preconcat_resolve=runtime_override_preconcat_resolve,
-      runtime_override_hail_merge_resolve=runtime_override_hail_merge_resolve,
       runtime_override_fix_header_resolve=runtime_override_fix_header_resolve,
       runtime_override_get_se_cutoff_inv=runtime_override_get_se_cutoff_inv,
       runtime_override_shard_vcf_cpx_inv=runtime_override_shard_vcf_cpx_inv,
@@ -1239,7 +1232,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_concat_resolved_per_shard_inv=runtime_override_concat_resolved_per_shard_inv,
       runtime_override_pull_vcf_shard_inv=runtime_override_pull_vcf_shard_inv,
       runtime_override_preconcat_resolve_inv=runtime_override_preconcat_resolve_inv,
-      runtime_override_hail_merge_resolve_inv=runtime_override_hail_merge_resolve_inv,
       runtime_override_fix_header_resolve_inv=runtime_override_fix_header_resolve_inv,
       runtime_override_ids_from_median=runtime_override_ids_from_median,
       runtime_override_split_vcf_to_genotype=runtime_override_split_vcf_to_genotype,
@@ -1253,10 +1245,8 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_ids_from_vcf_regeno=runtime_attr_ids_from_vcf_regeno,
       runtime_attr_subset_ped_regeno=runtime_attr_subset_ped_regeno,
       runtime_override_preconcat_regeno=runtime_override_preconcat_regeno,
-      runtime_override_hail_merge_regeno=runtime_override_hail_merge_regeno,
       runtime_override_fix_header_regeno=runtime_override_fix_header_regeno,
       runtime_override_preconcat_clean_final=runtime_override_preconcat_clean_final,
-      runtime_override_hail_merge_clean_final=runtime_override_hail_merge_clean_final,
       runtime_override_fix_header_clean_final=runtime_override_fix_header_clean_final,
       runtime_override_clean_vcf_1a=runtime_override_clean_vcf_1a,
       runtime_override_clean_vcf_2=runtime_override_clean_vcf_2,
@@ -1277,10 +1267,8 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_concat_vcfs_1b=runtime_override_concat_vcfs_1b,
       runtime_override_cat_multi_cnvs_1b=runtime_override_cat_multi_cnvs_1b,
       runtime_override_preconcat_step1=runtime_override_preconcat_step1,
-      runtime_override_hail_merge_step1=runtime_override_hail_merge_step1,
       runtime_override_fix_header_step1=runtime_override_fix_header_step1,
       runtime_override_preconcat_drc=runtime_override_preconcat_drc,
-      runtime_override_hail_merge_drc=runtime_override_hail_merge_drc,
       runtime_override_fix_header_drc=runtime_override_fix_header_drc,
       runtime_override_split_vcf_to_clean=runtime_override_split_vcf_to_clean,
       runtime_override_combine_step_1_sex_chr_revisions=runtime_override_combine_step_1_sex_chr_revisions,
@@ -1390,7 +1378,6 @@ workflow GATKSVPipelineSingleSample {
         external_af_ref_bed = external_af_ref_bed,
         external_af_ref_prefix = external_af_ref_bed_prefix,
         external_af_population = external_af_population,
-        use_hail = false,
         sv_per_shard = annotation_sv_per_shard,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,

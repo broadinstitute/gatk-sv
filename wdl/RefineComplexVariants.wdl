@@ -1,7 +1,6 @@
 version 1.0
 
 import "Structs.wdl"
-import "HailMerge.wdl" as hail
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "CollectPEMetricsForCPX.wdl" as collect_pe_metrics_for_cpx
 import "CollectLargeCNVSupportForCPX.wdl" as collect_lg_cnv_supp_for_cpx
@@ -23,9 +22,6 @@ workflow RefineComplexVariants {
         Int min_pe_cpx = 3
         Int min_pe_ctx = 3
 
-        Boolean use_hail = false
-        String? gcs_project  # required if use_hail = true
-
         String sv_base_mini_docker
         String sv_pipeline_docker
         String linux_docker
@@ -40,7 +36,6 @@ workflow RefineComplexVariants {
         RuntimeAttr? runtime_attr_concat_evidence
         RuntimeAttr? runtime_attr_concat
         RuntimeAttr? runtime_attr_preconcat
-        RuntimeAttr? runtime_attr_hail_merge
         RuntimeAttr? runtime_attr_fix_header
         RuntimeAttr? runtime_attr_generate_cpx_review_script
         RuntimeAttr? runtime_attr_generate_cnv_segments_from_cpx
@@ -164,30 +159,14 @@ workflow RefineComplexVariants {
         }
     }
 
-    if (use_hail) {
-        call hail.HailMerge {
-            input:
-                vcfs=ReviseVcf.revised_vcf,
-                prefix="~{prefix}.cpx_refined",
-                gcs_project=gcs_project,
-                sv_base_mini_docker=sv_base_mini_docker,
-                sv_pipeline_docker=sv_pipeline_docker,
-                runtime_override_preconcat=runtime_attr_preconcat,
-                runtime_override_hail_merge=runtime_attr_hail_merge,
-                runtime_override_fix_header=runtime_attr_fix_header
-        }
-    }
-
-    if (!use_hail) {
-        call MiniTasks.ConcatVcfs {
-            input:
-                vcfs=ReviseVcf.revised_vcf,
-                vcfs_idx=ReviseVcf.revised_vcf_idx,
-                allow_overlaps=true,
-                outfile_prefix="~{prefix}.cpx_refined",
-                sv_base_mini_docker=sv_base_mini_docker,
-                runtime_attr_override=runtime_attr_concat
-        }
+    call MiniTasks.ConcatVcfs {
+        input:
+            vcfs=ReviseVcf.revised_vcf,
+            vcfs_idx=ReviseVcf.revised_vcf_idx,
+            allow_overlaps=true,
+            outfile_prefix="~{prefix}.cpx_refined",
+            sv_base_mini_docker=sv_base_mini_docker,
+            runtime_attr_override=runtime_attr_concat
     }
 
     call MiniTasks.ConcatHeaderedTextFiles {
@@ -199,8 +178,8 @@ workflow RefineComplexVariants {
     }
 
     output {
-        File cpx_refined_vcf = select_first([ConcatVcfs.concat_vcf, HailMerge.merged_vcf])
-        File cpx_refined_vcf_index = select_first([ConcatVcfs.concat_vcf_idx, HailMerge.merged_vcf_index])
+        File cpx_refined_vcf = ConcatVcfs.concat_vcf
+        File cpx_refined_vcf_index = ConcatVcfs.concat_vcf_idx
         File cpx_evidences = ConcatHeaderedTextFiles.out
     }
 }
