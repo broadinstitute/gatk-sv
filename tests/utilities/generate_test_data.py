@@ -42,15 +42,19 @@ SUBJECT_WORKFLOW_INPUTS = {
         ),
         "primary_contigs_list": Handler(
             transformers.PrimaryContigsDownsampler,
-            lambda x: {"primary_contigs_list": x}
+            lambda x, _: {"primary_contigs_list": x}
         ),
         "primary_contigs_fai": Handler(
             transformers.PrimaryContigsDownsampler,
-            lambda x: {"primary_contigs_fai": x}
+            lambda x, _: {"primary_contigs_fai": x}
         ),
         "wham_include_list_bed_file": Handler(
             transformers.BedDownsampler,
             lambda x: {"wham_include_list_bed_file": x}
+        ),
+        "manta_region_bed": Handler(
+            transformers.PrimaryContigsDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"manta_region_bed": bed_gz, "manta_region_bed.tbi": bed_gz_tbi}
         )
     }
 }

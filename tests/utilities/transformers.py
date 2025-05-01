@@ -1,7 +1,10 @@
+import gzip
 import logging
 import os
+import pathlib
 import pysam
 import subprocess
+import tempfile
 import uuid
 
 from typing import Callable, List
@@ -229,7 +232,7 @@ class BedDownsampler(BaseTransformer):
 
 
 class PrimaryContigsDownsampler(BaseTransformer):
-    def __init__(self, working_dir, callback: Callable[[str], dict], delimiter: str = "\t", **kwargs):
+    def __init__(self, working_dir, callback: Callable[[str, str], dict], delimiter: str = "\t", **kwargs):
         super().__init__(working_dir, callback)
         self.delimiter = delimiter
 
@@ -240,9 +243,33 @@ class PrimaryContigsDownsampler(BaseTransformer):
     def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
         output_filename = self.get_output_filename(input_filename, output_prefix)
         include_chrs = set([r.chr for r in regions])
-        with open(input_filename, "r") as input_file, open(output_filename, "w") as output_file:
+
+        is_gz = True if pathlib.Path(input_filename).suffix == ".gz" else False
+        input_file = gzip.open(input_filename, "rt") if is_gz else open(input_filename, "r")
+
+        if is_gz:
+            output_filename = output_filename.removesuffix(".gz")
+
+        with open(output_filename, "w") as out_file:
             for line in input_file:
                 cols = line.strip().split(self.delimiter)
                 if cols[0] in include_chrs:
-                    output_file.write(self.delimiter.join(cols) + "\n")
-        return self.callback(output_filename)
+                    out_file.write(self.delimiter.join(cols) + "\n")
+        input_file.close()
+
+        if is_gz:
+            _, tmp_sorted_output_filename = tempfile.mkstemp(prefix="tmp_", dir=self.working_dir)
+            sort_command = ["sort", "-k1,1", "-k2,2n", output_filename, "-o", tmp_sorted_output_filename]
+            _ = subprocess.run(sort_command, capture_output=True, text=True, check=True)
+
+            os.remove(output_filename)
+            os.rename(tmp_sorted_output_filename, output_filename)
+
+            output_gz_filename = output_filename + ".gz"
+            bgzip_command = ["bgzip", "-f", output_filename, "-o", output_gz_filename]
+            _ = subprocess.run(bgzip_command, check=True, capture_output=True)
+            pysam.tabix_index(output_gz_filename, preset="bed", force=True)
+
+            return self.callback(output_gz_filename, output_gz_filename + ".tbi")
+        else:
+            return self.callback(output_filename, None)
