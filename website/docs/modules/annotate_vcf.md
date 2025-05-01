@@ -88,13 +88,6 @@ External `AF` annotation prefix. Required if providing [external_af_ref_bed](#op
 Population names in the external SV reference set, e.g. "ALL", "AFR", "AMR", "EAS", "EUR". Required if providing 
 [external_af_ref_bed](#optional-external_af_ref_bed) and must match the populations in the bed file.
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `use_hail`
-Default: `false`. Use Hail for VCF concatenation. This should only be used for projects with over 50k samples. If enabled, the
-[gcs_project](#optional-gcs_project) must also be provided. Does not work on Terra.
-
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `gcs_project`
-Google Cloud project ID. Required only if enabling [use_hail](#optional-use_hail).
-
 ### Outputs
 
 #### `annotated_vcf`
