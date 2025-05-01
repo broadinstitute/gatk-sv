@@ -3,7 +3,6 @@ version 1.0
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "FormatVcfForGatk.wdl" as fvcf
-import "HailMerge.wdl" as HailMerge
 
 workflow CleanVcfChromosome {
 	input {
@@ -22,10 +21,7 @@ workflow CleanVcfChromosome {
 		File allosome_fai
 		File HERVK_reference
 		File LINE1_reference
-
-		Boolean use_hail
-		String? gcs_project
-
+		
 		String gatk_docker
 		String linux_docker
 		String sv_base_mini_docker
@@ -45,9 +41,8 @@ workflow CleanVcfChromosome {
 		RuntimeAttr? runtime_override_rescue_me_dels
 		RuntimeAttr? runtime_attr_add_high_fp_rate_filters
 
-		RuntimeAttr? runtime_override_preconcat_drc
-		RuntimeAttr? runtime_override_hail_merge_drc
-		RuntimeAttr? runtime_override_fix_header_drc
+    RuntimeAttr? runtime_override_preconcat_drc
+    RuntimeAttr? runtime_override_fix_header_drc
 
 		RuntimeAttr? runtime_override_drop_redundant_cnvs
 		RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
@@ -125,37 +120,21 @@ workflow CleanVcfChromosome {
 			runtime_attr_override=runtime_override_drop_redundant_cnvs
 	}
 
-	if (use_hail) {
-		call HailMerge.HailMerge as SortDropRedundantCnvsHail {
-			input:
-				vcfs=[DropRedundantCnvs.out],
-				prefix="~{prefix}.drop_redundant_cnvs.sorted",
-				gcs_project=gcs_project,
-				reset_cnv_gts=true,
-				sv_base_mini_docker=sv_base_mini_docker,
-				sv_pipeline_docker=sv_pipeline_docker,
-				runtime_override_preconcat=runtime_override_preconcat_drc,
-				runtime_override_hail_merge=runtime_override_hail_merge_drc,
-				runtime_override_fix_header=runtime_override_fix_header_drc
-		}
-	}
-	if (!use_hail) {
-		call MiniTasks.SortVcf as SortDropRedundantCnvs {
-			input:
-				vcf=DropRedundantCnvs.out,
-				outfile_prefix="~{prefix}.drop_redundant_cnvs.sorted",
-				sv_base_mini_docker=sv_base_mini_docker,
-				runtime_attr_override=runtime_override_sort_drop_redundant_cnvs
-		}
-	}
+  call MiniTasks.SortVcf as SortDropRedundantCnvs {
+    input:
+      vcf=DropRedundantCnvs.out,
+      outfile_prefix="~{prefix}.drop_redundant_cnvs.sorted",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_sort_drop_redundant_cnvs
+  }
 
-	call StitchFragmentedCnvs {
-		input:
-			vcf=select_first([SortDropRedundantCnvs.out, SortDropRedundantCnvsHail.merged_vcf]),
-			prefix="~{prefix}.stitch_fragmented_cnvs",
-			sv_pipeline_docker=sv_pipeline_docker,
-			runtime_attr_override=runtime_override_stitch_fragmented_cnvs
-	}
+  call StitchFragmentedCnvs {
+    input:
+      vcf=SortDropRedundantCnvs.out,
+      prefix="~{prefix}.stitch_fragmented_cnvs",
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_override_stitch_fragmented_cnvs
+  }
 
 	call RescueMobileElementDeletions {
 		input:
@@ -188,7 +167,6 @@ workflow CleanVcfChromosome {
     input:
       vcf=FinalCleanup.final_cleaned_shard,
       ploidy_table=ploidy_table,
-      args="--scale-down-gq",
       output_prefix="~{prefix}.final_format",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_format

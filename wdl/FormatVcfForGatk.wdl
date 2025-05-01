@@ -31,7 +31,6 @@ workflow FormatVcfForGatk {
     RuntimeAttr? runtime_attr_format
     RuntimeAttr? runtime_override_concat
     RuntimeAttr? runtime_override_preconcat_step1
-    RuntimeAttr? runtime_override_hail_merge_step1
     RuntimeAttr? runtime_override_fix_header_step1
   }
 
