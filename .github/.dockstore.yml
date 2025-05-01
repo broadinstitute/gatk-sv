@@ -241,6 +241,7 @@ workflows:
       branches:
         - main
         - mw_strat_concordance
+        - eph_mw_strat_concordance
       tags:
         - /.*/
 
