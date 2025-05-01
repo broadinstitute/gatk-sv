@@ -3,7 +3,6 @@ version 1.0
 import "CleanVcfChromosome.wdl" as CleanVcfChromosome
 import "TasksClusterBatch.wdl" as TasksCluster
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "HailMerge.wdl" as HailMerge
 import "MakeCohortVcfMetrics.wdl" as metrics
 
 workflow CleanVcf {
@@ -32,9 +31,6 @@ workflow CleanVcf {
 
     File? outlier_samples_list
 
-    Boolean use_hail = false
-    String? gcs_project
-
     # Module metrics parameters
     # Run module metrics workflow at the end - off by default to avoid resource errors
     Boolean? run_module_metrics
@@ -53,7 +49,6 @@ workflow CleanVcf {
 
     # overrides for mini tasks
     RuntimeAttr? runtime_override_preconcat_clean_final
-    RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
     RuntimeAttr? runtime_override_concat_cleaned_vcfs
     RuntimeAttr? runtime_attr_create_ploidy
@@ -83,11 +78,9 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_cat_multi_cnvs_1b
 
     RuntimeAttr? runtime_override_preconcat_step1
-    RuntimeAttr? runtime_override_hail_merge_step1
     RuntimeAttr? runtime_override_fix_header_step1
 
     RuntimeAttr? runtime_override_preconcat_drc
-    RuntimeAttr? runtime_override_hail_merge_drc
     RuntimeAttr? runtime_override_fix_header_drc
 
     RuntimeAttr? runtime_override_split_vcf_to_clean
@@ -132,8 +125,6 @@ workflow CleanVcf {
         samples_per_step2_shard=samples_per_step2_shard,
         max_samples_per_shard_step3=max_samples_per_shard_step3,
         outlier_samples_list=outlier_samples_list,
-        use_hail=use_hail,
-        gcs_project=gcs_project,
         clean_vcf1b_records_per_shard=clean_vcf1b_records_per_shard,
         clean_vcf5_records_per_shard=clean_vcf5_records_per_shard,
         ploidy_table=CreatePloidyTableFromPed.out,
@@ -161,10 +152,8 @@ workflow CleanVcf {
         runtime_override_combine_revised_4=runtime_override_combine_revised_4,
         runtime_override_combine_multi_ids_4=runtime_override_combine_multi_ids_4,
         runtime_override_preconcat_step1=runtime_override_preconcat_step1,
-        runtime_override_hail_merge_step1=runtime_override_hail_merge_step1,
         runtime_override_fix_header_step1=runtime_override_fix_header_step1,
         runtime_override_preconcat_drc=runtime_override_preconcat_drc,
-        runtime_override_hail_merge_drc=runtime_override_hail_merge_drc,
         runtime_override_fix_header_drc=runtime_override_fix_header_drc,
         runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
         runtime_attr_override_subset_large_cnvs_1b=runtime_attr_override_subset_large_cnvs_1b,
@@ -180,33 +169,15 @@ workflow CleanVcf {
     }
   }
 
-  if (use_hail) {
-    call HailMerge.HailMerge as ConcatVcfsHail {
-      input:
-        vcfs=CleanVcfChromosome.out,
-        prefix="~{cohort_name}.cleaned",
-        gcs_project=gcs_project,
-        reset_cnv_gts=true,
-        sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_override_preconcat=runtime_override_preconcat_clean_final,
-        runtime_override_hail_merge=runtime_override_hail_merge_clean_final,
-        runtime_override_fix_header=runtime_override_fix_header_clean_final
-    }
+  call MiniTasks.ConcatVcfs as ConcatCleanedVcfs {
+    input:
+      vcfs=CleanVcfChromosome.out,
+      vcfs_idx=CleanVcfChromosome.out_idx,
+      allow_overlaps=true,
+      outfile_prefix="~{cohort_name}.cleaned",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_concat_cleaned_vcfs
   }
-  if (!use_hail) {
-    call MiniTasks.ConcatVcfs as ConcatCleanedVcfs {
-      input:
-        vcfs=CleanVcfChromosome.out,
-        vcfs_idx=CleanVcfChromosome.out_idx,
-        allow_overlaps=true,
-        outfile_prefix="~{cohort_name}.cleaned",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_override_concat_cleaned_vcfs
-    }
-  }
-
-  File cleaned_vcf_ = select_first([ConcatCleanedVcfs.concat_vcf, ConcatVcfsHail.merged_vcf])
 
   Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else false
   if (run_module_metrics_) {
@@ -216,7 +187,7 @@ workflow CleanVcf {
         cluster_vcf = combine_batches_merged_vcf,
         complex_resolve_vcf = resolve_complex_merged_vcf,
         complex_genotype_vcf = genotype_complex_merged_vcf,
-        cleaned_vcf = cleaned_vcf_,
+        cleaned_vcf = ConcatCleanedVcfs.concat_vcf,
         baseline_cluster_vcf = baseline_cluster_vcf,
         baseline_complex_resolve_vcf = baseline_complex_resolve_vcf,
         baseline_complex_genotype_vcf = baseline_complex_genotype_vcf,
@@ -229,8 +200,8 @@ workflow CleanVcf {
   }
 
   output {
-    File cleaned_vcf = cleaned_vcf_
-    File cleaned_vcf_index = select_first([ConcatCleanedVcfs.concat_vcf_idx, ConcatVcfsHail.merged_vcf_index])
+    File cleaned_vcf = ConcatCleanedVcfs.concat_vcf
+    File cleaned_vcf_index = ConcatCleanedVcfs.concat_vcf_idx
     File? metrics_file_makecohortvcf = MakeCohortVcfMetrics.metrics_file
   }
 }
