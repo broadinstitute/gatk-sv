@@ -14,10 +14,12 @@ primary_contigs_list=${7}
 preprocessed_intervals=${8}
 manta_regions_bed=${9}
 manta_regions_bed_index=${10}
-disabled_read_filters=${11:-"MappingQualityReadFilter"}
-collect_coverage=${12:-true}
-run_scramble=${13:-true}
-run_manta=${14:-true}
+sd_locs_vcf=${11}
+disabled_read_filters=${12:-"MappingQualityReadFilter"}
+collect_coverage=${13:-true}
+run_scramble=${14:-true}
+run_manta=${15:-true}
+collect_pesr=${16:-true}
 
 
 if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
@@ -46,3 +48,14 @@ if [[ "${run_manta}" == true ]]; then
     "${manta_regions_bed_index}"
 fi
 
+if [[ "${collect_pesr}" == true ]]; then
+  ./collect_sv_evidence.sh \
+    "${sample_id}" \
+    "${bam_or_cram_file}" \
+    "${bam_or_cram_index}" \
+    "${reference_fasta}" \
+    "${reference_index}" \
+    "${reference_dict}" \
+    "${sd_locs_vcf}" \
+    "${preprocessed_intervals}"
+fi
