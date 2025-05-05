@@ -322,8 +322,10 @@ workflow MainVcfQc {
   output {
     File sv_vcf_qc_output = SanitizeOutputs.vcf_qc_tarball
     File vcf2bed_output = MergeVcf2Bed.merged_bed_file
-    File? duplicate_records_output = select_first([MergeDuplicates.duplicate_records])
-    File? duplicate_counts_output = select_first([MergeDuplicates.duplicate_counts])
+    # These outputs will only be defined when we don't skip duplicate detection
+    # WDL optional types (File?) handle the case when they're not defined
+    File? duplicate_records_output = MergeDuplicates.duplicate_records
+    File? duplicate_counts_output = MergeDuplicates.duplicate_counts
   }
 }
 
