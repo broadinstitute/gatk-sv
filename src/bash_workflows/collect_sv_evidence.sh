@@ -2,9 +2,9 @@
 
 set -Eeuo pipefail
 
-bam_or_cram_file=$1
-bam_or_cram_index=$2
-sample_id=$3
+sample_id=$1
+bam_or_cram_file=$2
+bam_or_cram_index=$3
 reference_fasta=$4
 reference_index=$5
 reference_dict=$6
@@ -23,7 +23,7 @@ if [[ -n "$primary_contigs_list" ]]; then
   primary_contigs_arg="-L $primary_contigs_list"
 fi
 
-/gatk/gatk --java-options "-Xmx${command_mem_mb}m" CollectSVEvidence \
+java -Xmx${command_mem_mb}m -jar /opt/gatk.jar CollectSVEvidence \
     -I "${bam_or_cram_file}" \
     --sample-name "${sample_id}" \
     -F "${sd_locs_vcf}" \
