@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# ./gather_sample_evidence.sh test NA12878.final.cram NA12878.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict primary_contigs.list preprocessed_intervals.interval_list
+#./gather_sample_evidence.sh test NA12878.final.cram NA12878.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict primary_contigs.list preprocessed_intervals.interval_list primary_contigs_plus_mito.bed.gz primary_contigs_plus_mito.bed.gz Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz
+#./gather_sample_evidence.sh test downsampled_HG00096.final.cram downsampled_HG00096.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict downsampled_primary_contigs.list downsampled_preprocessed_intervals.interval_list primary_contigs_plus_mito.bed.gz primary_contigs_plus_mito.bed.gz.tbi
 
 set -Eeuo pipefail
 
@@ -15,11 +16,13 @@ preprocessed_intervals=${8}
 manta_regions_bed=${9}
 manta_regions_bed_index=${10}
 sd_locs_vcf=${11}
-disabled_read_filters=${12:-"MappingQualityReadFilter"}
-collect_coverage=${13:-true}
-run_scramble=${14:-true}
-run_manta=${15:-true}
-collect_pesr=${16:-true}
+mei_bed=${12}
+disabled_read_filters=${13:-"MappingQualityReadFilter"}
+collect_coverage=${14:-true}
+run_scramble=${15:-true}
+run_manta=${16:-true}
+collect_pesr=${17:-true}
+scramble_alignment_score_cutoff=${18:-90}
 
 
 if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
@@ -58,4 +61,25 @@ if [[ "${collect_pesr}" == true ]]; then
     "${reference_dict}" \
     "${sd_locs_vcf}" \
     "${preprocessed_intervals}"
+fi
+
+
+# TODO: change all the scripts to take the name of the outputs they are expected produce,
+#       in the input, then change all the following to make sure such output names are used
+#       consistently, for instance `"${sample_id}.counts.tsv.gz"` or manta vcf in the following.
+
+if [[ "${run_scramble}" == true ]]; then
+  ./scramble.sh \
+    "${sample_id}" \
+    "${bam_or_cram_file}" \
+    "${bam_or_cram_index}" \
+    "${bam_or_cram_file}" \
+    "${bam_or_cram_index}" \
+    "${sample_id}.counts.tsv.gz" \
+    "/manta/${sample_id}.manta.vcf.gz" \
+    "${reference_fasta}" \
+    "${reference_index}" \
+    "${primary_contigs_list}" \
+    "${scramble_alignment_score_cutoff}" \
+    "${mei_bed}"
 fi

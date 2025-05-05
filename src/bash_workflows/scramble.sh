@@ -4,13 +4,13 @@ set -Eeuo pipefail
 
 # ./scramble.sh NA12878.final.cram NA12878.final.cram.crai NA12878.final.cram NA12878.final.cram.crai NA12878.counts.tsv.gz NA12878.manta.vcf.gz test Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai primary_contigs.list 90 hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz
 
-bam_or_cram_file=${1}
-bam_or_cram_index=${2}
-original_bam_or_cram_file=${3}
-original_bam_or_cram_index=${4}
-counts_file=${5}
-manta_vcf=${6}
-sample_name=${7}
+sample_name=${1}
+bam_or_cram_file=${2}
+bam_or_cram_index=${3}
+original_bam_or_cram_file=${4}
+original_bam_or_cram_index=${5}
+counts_file=${6}
+manta_vcf=${7}
 reference_fasta=${8}
 reference_index=${9}
 regions_list=${10}
