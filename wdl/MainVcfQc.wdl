@@ -278,7 +278,7 @@ workflow MainVcfQc {
     }
   }
 
-  # Identify all duplicates
+  # Identify duplicates
   if (!skip_duplicate_detection) {
     scatter(vcf in vcfs_for_qc) {
       call IdentifyDuplicates {
