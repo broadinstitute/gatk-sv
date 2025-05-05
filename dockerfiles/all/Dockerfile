@@ -2,9 +2,9 @@ ARG SV_PIPELINE_IMAGE=sv-pipeline:latest
 
 FROM us.gcr.io/broad-dsde-methods/gatk-sv/wham:2024-10-25-v0.29-beta-5ea22a52 as wham_layer
 
-FROM $SV_PIPELINE_IMAGE
+# FROM $SV_PIPELINE_IMAGE
+FROM us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-02-11-v1.0.2-hotfix-22bf77e0
 
-# set noninterative mode
 ENV DEBIAN_FRONTEND noninteractive
 
 # apt-get update and install global requirements
@@ -33,7 +33,9 @@ RUN apt-get clean all && \
         r-cran-stringr \
         r-cran-optparse \
         wget \
-        zlib1g-dev
+        zlib1g-dev \
+        # needed for manta
+        python2.7
 
 # apt-get clean and remove cached source lists
 RUN apt-get clean && \
@@ -57,6 +59,17 @@ RUN mkdir -p /opt && cd /opt && \
     cd / && rm -r /opt/bcftools-${HTSLIB_VERSION} /opt/bcftools-${HTSLIB_VERSION}.tar.bz2
 
 ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+
+# install manta
+ARG MANTA_RELEASE=1.6.0
+ARG MANTA_INSTALL_DIR=/usr/local/bin/manta/
+RUN wget -q https://github.com/Illumina/manta/releases/download/v${MANTA_RELEASE}/manta-${MANTA_RELEASE}.centos6_x86_64.tar.bz2 && \
+    tar -xjf manta-${MANTA_RELEASE}.centos6_x86_64.tar.bz2 && \
+    mv ./manta-${MANTA_RELEASE}.centos6_x86_64 ${MANTA_INSTALL_DIR} && \
+    ln -s $(which python2.7) /usr/bin/python2 && \
+    python2 ${MANTA_INSTALL_DIR}/bin/runMantaWorkflowDemo.py && \
+    rm -rf MantaDemoAnalysis && \
+    rm -rf ${MANTA_INSTALL_DIR}share/demo
 
 # install scramble
 ARG SCRAMBLE_COMMIT="56b5ae849d16ec1fc83ea1426b0ffc356ee6d99c"
