@@ -12,6 +12,8 @@ ref_fasta_dict=$7  # TODO: this is not used in commands, not sure if it is neede
 gatk4_jar_override=${8:-/root/gatk.jar}
 disabled_read_filters=${9:-""}
 
+rm -rf "${sample_id}".counts.tsv
+
 # TODO: in the original code, this is computed based on a few factors,
 #  the following is the result of the computation using the default values.
 command_mem_mb=10240
@@ -25,7 +27,7 @@ fi
 
 export GATK_LOCAL_JAR="$gatk4_jar_override"
 
-gatk --java-options "-Xmx${command_mem_mb}m" CollectReadCounts \
+java -Xmx${command_mem_mb}m -jar /opt/gatk.jar CollectReadCounts \
   -L "${intervals}" \
   --input "${cram_or_bam}" \
   --read-index "${cram_or_bam_idx}" \
