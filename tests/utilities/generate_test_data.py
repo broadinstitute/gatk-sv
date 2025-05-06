@@ -54,7 +54,7 @@ SUBJECT_WORKFLOW_INPUTS = {
         ),
         "manta_region_bed": Handler(
             transformers.PrimaryContigsDownsampler,
-            lambda bed_gz, bed_gz_tbi: {"manta_region_bed": bed_gz, "manta_region_bed.tbi": bed_gz_tbi}
+            lambda bed_gz, bed_gz_tbi: {"manta_region_bed": bed_gz}
         )
     }
 }
