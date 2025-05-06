@@ -2,9 +2,9 @@
 
 set -Eeuo pipefail
 
-cram_file=$1
-cram_index=$2
-sample_id=$3
+sample_id=$1
+cram_file=$2
+cram_index=$3
 reference_fasta=$4
 reference_index=$5
 include_bed_file=$6
@@ -19,9 +19,6 @@ chr_list=$(paste -s -d ',' "${primary_contigs_list}")
 # print some info that may be useful for debugging
 df -h
 echo "whamg $(whamg 2>&1 | grep Version)"
-
-# necessary for getting permission to read from google bucket directly
-export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
 echo "Converting cram to bam ..."
 # covert cram to bam
@@ -69,6 +66,3 @@ bcftools concat -a -Ov -f vcf.list | \
   bgzip -c > "../${sample_id}.wham.vcf.gz"
 cd ..
 bcftools index -t "${sample_id}.wham.vcf.gz"
-
-df -h
-ls -l

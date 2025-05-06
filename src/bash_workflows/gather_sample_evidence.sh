@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#./gather_sample_evidence.sh test NA12878.final.cram NA12878.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict primary_contigs.list preprocessed_intervals.interval_list primary_contigs_plus_mito.bed.gz primary_contigs_plus_mito.bed.gz Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz
+#./gather_sample_evidence.sh test NA12878.final.cram NA12878.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict primary_contigs.list preprocessed_intervals.interval_list primary_contigs_plus_mito.bed.gz primary_contigs_plus_mito.bed.gz Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz wham_whitelist.bed
 #./gather_sample_evidence.sh test downsampled_HG00096.final.cram downsampled_HG00096.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict downsampled_primary_contigs.list downsampled_preprocessed_intervals.interval_list primary_contigs_plus_mito.bed.gz primary_contigs_plus_mito.bed.gz.tbi
 
 set -Eeuo pipefail
@@ -17,12 +17,14 @@ manta_regions_bed=${9}
 manta_regions_bed_index=${10}
 sd_locs_vcf=${11}
 mei_bed=${12}
-disabled_read_filters=${13:-"MappingQualityReadFilter"}
-collect_coverage=${14:-true}
-run_scramble=${15:-true}
-run_manta=${16:-true}
-collect_pesr=${17:-true}
-scramble_alignment_score_cutoff=${18:-90}
+include_bed_file=${13}
+disabled_read_filters=${14:-"MappingQualityReadFilter"}
+collect_coverage=${15:-true}
+run_scramble=${16:-true}
+run_manta=${17:-true}
+run_wham=${18:-true}
+collect_pesr=${19:-true}
+scramble_alignment_score_cutoff=${20:-90}
 
 
 if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
@@ -82,4 +84,15 @@ if [[ "${run_scramble}" == true ]]; then
     "${primary_contigs_list}" \
     "${scramble_alignment_score_cutoff}" \
     "${mei_bed}"
+fi
+
+if [[ "${run_wham}" == true ]]; then
+  ./run_whamg.sh \
+    "${sample_id}" \
+    "${bam_or_cram_file}" \
+    "${bam_or_cram_index}" \
+    "${reference_fasta}" \
+    "${reference_index}" \
+    "${include_bed_file}" \
+    "${primary_contigs_list}"
 fi
