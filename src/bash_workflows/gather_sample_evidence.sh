@@ -2,6 +2,7 @@
 
 # chmod +x run_manta.sh collect_counts.sh collect_sv_evidence.sh gather_sample_evidence.sh scramble.sh run_whamg.sh standardize_vcf.sh
 # ./gather_sample_evidence.sh test NA12878.final.cram NA12878.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict primary_contigs.list contig.fai preprocessed_intervals.interval_list primary_contigs_plus_mito.bed.gz primary_contigs_plus_mito.bed.gz Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz wham_whitelist.bed
+# ./gather_sample_evidence.sh test downsampled_HG00096.final.cram downsampled_HG00096.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict downsampled_primary_contigs.list downsampled_contig.fai downsampled_preprocessed_intervals.interval_list downsampled_primary_contigs_plus_mito.bed.gz downsampled_primary_contigs_plus_mito.bed.gz downsampled_Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz downsampled_wham_whitelist.bed
 
 set -Eeuo pipefail
 
@@ -17,21 +18,21 @@ primary_contigs_list=${7}
 # however conditional inputs like that are confusing and need additional check and docs.
 # So, making it required here to keep the interface simpler.
 primary_contigs_fai=${8}
-preprocessed_intervals=${8}
-manta_regions_bed=${9}
-manta_regions_bed_index=${10}
-sd_locs_vcf=${11}
-mei_bed=${12}
-include_bed_file=${13}
-disabled_read_filters=${14:-"MappingQualityReadFilter"}
-collect_coverage=${15:-true}
-run_scramble=${16:-true}
-run_manta=${17:-true}
-run_wham=${18:-true}
-collect_pesr=${19:-true}
-scramble_alignment_score_cutoff=${20:-90}
-run_module_metrics=${21:-true}
-min_size=${22:-50}
+preprocessed_intervals=${9}
+manta_regions_bed=${10}
+manta_regions_bed_index=${11}
+sd_locs_vcf=${12}
+mei_bed=${13}
+include_bed_file=${14}
+disabled_read_filters=${15:-"MappingQualityReadFilter"}
+collect_coverage=${16:-true}
+run_scramble=${17:-true}
+run_manta=${18:-true}
+run_wham=${19:-true}
+collect_pesr=${20:-true}
+scramble_alignment_score_cutoff=${21:-90}
+run_module_metrics=${22:-true}
+min_size=${23:-50}
 
 
 if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
@@ -112,5 +113,15 @@ if [[ "${run_module_metrics}" == true ]]; then
       "manta" \
       "${primary_contigs_fai}" \
       "${min_size}"
+#
+#    prefix="manta_${sample_id}"
+#    svtest vcf \
+#     "/manta/${sample_id}.manta.vcf.gz" \
+#     "${contig_list}" \
+#     "${sample_id}" \
+#     "DEL,DUP,INS,INV,BND" \
+#     "${prefix}" \
+#     ~{if defined(baseline_vcf) then "--baseline-vcf " + baseline_vcf else ""} \
+#     > "${prefix}.vcf.tsv"
   fi
 fi
