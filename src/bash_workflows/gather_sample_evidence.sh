@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#./gather_sample_evidence.sh test NA12878.final.cram NA12878.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict primary_contigs.list preprocessed_intervals.interval_list primary_contigs_plus_mito.bed.gz primary_contigs_plus_mito.bed.gz Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz wham_whitelist.bed
-#./gather_sample_evidence.sh test downsampled_HG00096.final.cram downsampled_HG00096.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict downsampled_primary_contigs.list downsampled_preprocessed_intervals.interval_list primary_contigs_plus_mito.bed.gz primary_contigs_plus_mito.bed.gz.tbi
+# chmod +x run_manta.sh collect_counts.sh collect_sv_evidence.sh gather_sample_evidence.sh scramble.sh run_whamg.sh standardize_vcf.sh
+# ./gather_sample_evidence.sh test NA12878.final.cram NA12878.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict primary_contigs.list contig.fai preprocessed_intervals.interval_list primary_contigs_plus_mito.bed.gz primary_contigs_plus_mito.bed.gz Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz wham_whitelist.bed
 
 set -Eeuo pipefail
 
@@ -12,6 +12,11 @@ reference_fasta=${4}
 reference_index=${5}
 reference_dict=${6}
 primary_contigs_list=${7}
+
+# the wdl version sets this optional and requires it only if run_module_metrics is set,
+# however conditional inputs like that are confusing and need additional check and docs.
+# So, making it required here to keep the interface simpler.
+primary_contigs_fai=${8}
 preprocessed_intervals=${8}
 manta_regions_bed=${9}
 manta_regions_bed_index=${10}
@@ -25,6 +30,8 @@ run_manta=${17:-true}
 run_wham=${18:-true}
 collect_pesr=${19:-true}
 scramble_alignment_score_cutoff=${20:-90}
+run_module_metrics=${21:-true}
+min_size=${22:-50}
 
 
 if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
@@ -95,4 +102,15 @@ if [[ "${run_wham}" == true ]]; then
     "${reference_index}" \
     "${include_bed_file}" \
     "${primary_contigs_list}"
+fi
+
+if [[ "${run_module_metrics}" == true ]]; then
+  if [[ "${run_manta}" == true ]]; then
+    ./standardize_vcf.sh \
+      "${sample_id}" \
+      "/manta/${sample_id}.manta.vcf.gz" \
+      "manta" \
+      "${primary_contigs_fai}" \
+      "${min_size}"
+  fi
 fi
