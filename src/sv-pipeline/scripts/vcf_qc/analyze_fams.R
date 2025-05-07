@@ -464,6 +464,29 @@ deNovoRateBySize <- function(trio.dat.list, size.bins=40, count="variants"){
 }
 
 #Collect matrix of de novo rates by class by minimum proband GQ
+deNovoRateByProGQ <- function(trio.dat.list, GQ.bins=50,
+                              count="variants", max.GQ=99){
+  #Create evenly spaced GQ bins
+  GQ.steps <- seq(0, max.GQ+1, by=(max.GQ+1)/GQ.bins)
+ 
+  #Iterate over min GQs and gather de novo rates
+  DNRs <- sapply(GQ.steps, function(min.GQ){
+    tdl.tmp <- lapply(trio.dat.list, function(df){
+      return(df[which(df$pro.GQ>=min.GQ), ])
+    })
+    dnrs <- deNovoRateByClass(trio.dat.list=tdl.tmp)
+    return(as.numeric(dnrs[which(rownames(dnrs)==count), ]))
+  })
+ 
+  #Format & return DNRs & GQ.df
+  DNRs <- as.data.frame(DNRs)
+  DNRs <- apply(DNRs, 2, as.numeric)
+  rownames(DNRs) <- c("ALL", svtypes$svtype)
+  colnames(DNRs) <- paste("gt", GQ.steps, sep="")
+  return(list("DNRs"=DNRs, "bins"=GQ.steps))
+}
+
+
 ############################
 ###PLOTTING HELPER FUNCTIONS
 ############################
@@ -769,6 +792,62 @@ plotDNRvsFreq <- function(DNRs, bins, k=4, title=NULL, legend=T,
 }
 
 #Plot DNRs vs GQ for all classes
+plotDNRvsGQ <- function(DNRs, bins, k=4, title=NULL, xlabel="Mininum GQ",
+                        legend=T, fam.type="families", nfams,
+                        count="variants", cex.lab=1, max.GQ=99){
+  #Get x axis title
+  if(count=="variants"){
+    x.label <- "Carrier Frequency"
+  }else{
+    x.label <- "Allele Frequency"
+  }
+ 
+  #Prep plot area
+  par(mar=c(3.5, 3.5, 2.5, 1))
+  plot(x=range(bins), y=c(0, 1), type="n",
+       xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i")
+ 
+  #Add vertical gridlines
+  abline(v=seq(0, max.GQ+1, (max.GQ+1)/20), col="gray92")
+  abline(v=seq(0, max.GQ+1, (max.GQ+1)/10), col="gray85")
+ 
+  #Add axes & title
+  axis(1, at=seq(0, max.GQ+1, (max.GQ+1)/10), tck=-0.03, labels=NA)
+  axis(1, at=seq(0, max.GQ+1, (max.GQ+1)/10), tick=F, cex.axis=0.7*cex.lab,
+       line=-0.4, las=2, labels=paste(">", seq(0, max.GQ+1, (max.GQ+1)/10), sep=""))
+  mtext(1, text=xlabel, line=2.25, cex=cex.lab)
+  axis(2, at=seq(0, 1, 0.2), tck=-0.025, labels=NA)
+  axis(2, at=seq(0, 1, 0.2), tick=F, line=-0.4, cex.axis=0.8, las=2,
+       labels=paste(seq(0, 100, 20), "%", sep=""))
+  mtext(2, text="De Novo Rate", line=2.2, cex=cex.lab)
+ 
+  #Set type colors
+  colors <- c("gray15", svtypes$color)
+  lwds <- c(3, rep(2, times=nrow(svtypes)))
+ 
+  #Iterate over DNRs and plot per class
+  sapply(nrow(DNRs):1, function(i){
+    #Get values
+    vals <- as.numeric(DNRs[i, ])
+ 
+    #Plot line & points
+    points(x=bins, y=vals, pch=19, cex=0.4, col=colors[i])
+    points(x=bins,
+           y=rollapply(vals, k, mean, partial=T, na.rm=T),
+           type="l", lwd=lwds[i], col=colors[i])
+  })
+ 
+  #Add legend
+  if(legend==T){
+    idx.for.legend <- which(apply(DNRs, 1, function(vals){any(!is.na(vals))}))
+    legend("topright", bg="white", pch=19, cex=0.7, lwd=3,
+           legend=rownames(DNRs)[idx.for.legend],
+           col=colors[idx.for.legend])
+  }
+ 
+  #Add title & number of families
+  mtext(3, line=0.2, cex=0.8*cex.lab,
+        text=paste("n=", prettyNum(nfams, big.mark=","),
                    " ", fam.type, "s", sep=""))
   mtext(3, line=1, text=title, font=2, cex=cex.lab)
  
@@ -1043,8 +1122,20 @@ wrapperDeNovoRateLines <- function(fam.dat.list, fam.type, count="variants",
                 title=paste(title.prefix, "De Novo Rate by Freq.", sep=""),
                 count=count, fam.type=fam.type, legend=T)
   dev.off()
-  
-  # Never generate GQ plots, regardless of the gq parameter
+ 
+  #DNR by Proband GQ
+  if(gq) {
+    GQ.dat <- deNovoRateByProGQ(trio.dat.list=fam.dat.list, GQ.bins=50,
+                                count=count, max.GQ=max.GQ)
+    pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_de_novo_rate.",
+              fam.type, "s.", count, ".by_proband_GQ.pdf", sep=""),
+        height=4, width=5)
+    plotDNRvsGQ(DNRs=GQ.dat$DNRs, bins=GQ.dat$bins, k=4, nfams=length(fam.dat.list),
+                title=paste(title.prefix, "De Novo Rate by Min. Proband GQ", sep=""),
+                count=count, fam.type=fam.type, legend=T,
+                xlab="Min. Proband GQ", max.GQ=max.GQ)
+    dev.off()
+  }
 }
 
 #Wrapper for de novo rate heatmaps
@@ -1106,13 +1197,20 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
     }
   }
  
-  #Prepare plot area - always use the layout without GQ plots regardless of gq parameter
-  width <- 10
+  #Prepare plot area
+  width <- ifelse(gq, 12, 10)
   pdf(paste(OUTDIR, "/main_plots/VCF_QC.SV_", fam.type, "_inheritance.pdf", sep=""),
       height=5, width=width)
-  layout(matrix(c(1, 2, 3, 4,
-                  5, 6, 7, 8),
-                byrow=T, nrow=2))
+  if(gq) {
+    layout(matrix(c(1, 2, 3, 4, 5,
+                    6, 7, 8, 9, 10),
+                  byrow=T, nrow=2))
+  } else {
+    layout(matrix(c(1, 2, 3, 4,
+                    5, 6, 7, 8),
+                  byrow=T, nrow=2))
+  }
+ 
  
   #Set global cex.lab
   cex.lab <- 0.75
@@ -1138,7 +1236,16 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
                 nfams=length(fam.dat.list),
                 title=paste("Site De Novo Rate by Freq.", sep=""),
                 count="variants", fam.type=fam.type, legend=F, cex.lab=cex.lab)
-  
+  #DNR vs min proband GQ
+  if(gq) {
+    GQ.dat.v <- deNovoRateByProGQ(trio.dat.list=fam.dat.list, GQ.bins=50,
+                                  count="variants", max.GQ=max.GQ)
+    plotDNRvsGQ(DNRs=GQ.dat.v$DNRs, bins=GQ.dat.v$bins, k=4,
+                nfams=length(fam.dat.list),
+                title=paste("Site De Novo Rate by GQ", sep=""),
+                count="variants", fam.type=fam.type, legend=F,
+                cex.lab=cex.lab, xlab="Min. Proband GQ", max.GQ=max.GQ)
+  }
   #DNR heatmap (size vs freq.)
   DNR.dat.v <- deNovoRateBySizeFreq(trio.dat.list=fam.dat.list, count="variants",
                                     max.sizes=c(tiny.max.size, small.max.size,
@@ -1174,7 +1281,16 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
                 nfams=length(fam.dat.list),
                 title=paste("Allele De Novo Rate by Freq.", sep=""),
                 count="alleles", fam.type=fam.type, legend=F, cex.lab=cex.lab)
-  
+  #DNR vs min proband GQ
+  if(gq){
+    GQ.dat.a <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,
+                                  GQ.bins=50, count="alleles", max.GQ=max.GQ)
+    plotDNRvsGQ(DNRs=GQ.dat.a$DNRs, bins=GQ.dat.a$bins, k=4,
+                nfams=length(fam.dat.list),
+                title=paste("Allele De Novo Rate by GQ", sep=""),
+                count="alleles", fam.type=fam.type, legend=F, cex.lab=cex.lab,
+                xlabel="Min. Proband GQ", max.GQ=max.GQ)
+  }
   #DNR heatmap (size vs freq.)
   DNR.dat.a <- deNovoRateBySizeFreq(trio.dat.list=fam.dat.list, count="alleles",
                                     max.sizes=c(tiny.max.size, small.max.size,
@@ -1313,10 +1429,11 @@ if(nrow(trios)>0){
   })
   names(trio.dat) <- trios[,1]
  
-  # GQ values are still used for filtering but we never generate GQ plots
+  # if there are no GQ values in any of the trios, do not make GQ plots
+  gq <- any(unlist(lapply(trio.dat, function(trio){ sum(!is.na(trio$pro.GQ)) > 0 })))
  
   #Master wrapper
-  masterInhWrapper(fam.dat.list=trio.dat, fam.type="trio", gq=FALSE, max.GQ=maxgq)
+  masterInhWrapper(fam.dat.list=trio.dat, fam.type="trio", gq=gq, max.GQ=maxgq)
   #Standard inheritance panels
   sapply(c("variants", "alleles"), function(count){
     wrapperInheritancePlots(fam.dat.list=trio.dat,
@@ -1329,7 +1446,7 @@ if(nrow(trios)>0){
     wrapperDeNovoRateLines(fam.dat.list=trio.dat,
                            fam.type="trio",
                            count=count,
-                           gq=FALSE, max.GQ=maxgq)
+                           gq=gq, max.GQ=maxgq)
   })
  
   #De novo rate heatmaps
