@@ -11,11 +11,6 @@ workflow SVConcordanceSimple {
     File truth_vcf
     File truth_vcf_idx
 
-    # Optional file with list of sample IDs to subset both VCFs
-    File? sample_ids
-
-    String output_prefix
-
     Float? pesr_interval_overlap = 0.5
     Float? pesr_size_similarity = 0.0
     Int? pesr_breakend_window = 5000
@@ -28,6 +23,8 @@ workflow SVConcordanceSimple {
     Float? mixed_size_similarity = 0.0
     Int? mixed_breakend_window = 10000000
 
+    String output_prefix
+    File? sample_ids
     File? clustering_config
     File? stratification_config
     Array[String]? track_names
@@ -73,7 +70,7 @@ workflow SVConcordanceSimple {
         runtime_attr_override = runtime_attr_subset_vcf
     }
   }
-  
+
   call conc.SVConcordanceTask {
       input:
         truth_vcf=select_first([SubsetTruthVcf.vcf_subset, truth_vcf]),
