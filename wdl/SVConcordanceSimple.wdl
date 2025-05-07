@@ -2,6 +2,7 @@ version 1.0
 
 import "SVConcordance.wdl" as conc
 import "TasksMakeCohortVcf.wdl" as tasks_cohort
+import "Utils.wdl" as utils
 
 workflow SVConcordanceSimple {
   input {
@@ -9,6 +10,9 @@ workflow SVConcordanceSimple {
     File eval_vcf_idx
     File truth_vcf
     File truth_vcf_idx
+
+    # Optional file with list of sample IDs to subset both VCFs
+    File? sample_ids
 
     String output_prefix
 
@@ -38,12 +42,42 @@ workflow SVConcordanceSimple {
 
     RuntimeAttr? runtime_attr_sv_concordance
     RuntimeAttr? runtime_attr_sort_vcf
+    RuntimeAttr? runtime_attr_subset_vcf
   }
 
+  # If sample_ids is provided, subset both VCFs to only include those samples
+  if (defined(sample_ids)) {
+    call utils.SubsetVcfBySamplesList as SubsetEvalVcf {
+      input:
+        vcf = eval_vcf,
+        vcf_idx = eval_vcf_idx,
+        list_of_samples = select_first([sample_ids]),
+        outfile_name = "~{output_prefix}.eval.subset.vcf.gz",
+        remove_samples = false,
+        remove_private_sites = true,
+        keep_af = true,
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_subset_vcf
+    }
+
+    call utils.SubsetVcfBySamplesList as SubsetTruthVcf {
+      input:
+        vcf = truth_vcf,
+        vcf_idx = truth_vcf_idx,
+        list_of_samples = select_first([sample_ids]),
+        outfile_name = "~{output_prefix}.truth.subset.vcf.gz",
+        remove_samples = false,
+        remove_private_sites = true,
+        keep_af = true,
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_subset_vcf
+    }
+  }
+  
   call conc.SVConcordanceTask {
       input:
-        truth_vcf=truth_vcf,
-        eval_vcf=eval_vcf,
+        truth_vcf=select_first([SubsetTruthVcf.vcf_subset, truth_vcf]),
+        eval_vcf=select_first([SubsetEvalVcf.vcf_subset, eval_vcf]),
         output_prefix="~{output_prefix}.unsorted",
         additional_args="--pesr-interval-overlap ~{pesr_interval_overlap} --pesr-size-similarity ~{pesr_size_similarity} --pesr-breakend-window ~{pesr_breakend_window} --depth-interval-overlap ~{depth_interval_overlap} --depth-size-similarity ~{depth_size_similarity} --depth-breakend-window ~{depth_breakend_window} --mixed-interval-overlap ~{mixed_interval_overlap} --mixed-size-similarity ~{mixed_size_similarity} --mixed-breakend-window ~{mixed_breakend_window} --stratify-num-breakpoint-overlaps ~{stratify_num_breakpoint_overlaps} --stratify-overlap-fraction ~{stratify_overlap_fraction}",
         clustering_config=clustering_config,
