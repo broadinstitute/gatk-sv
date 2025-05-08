@@ -212,13 +212,13 @@ Read the full EvidenceQC documentation [here](/docs/modules/eqc).
 [batching](#batching) before moving on to [TrainGCNV](#traingcnv).
 
 
-### Sample QC (notebook) {#sample-qc}
+### Sample QC {#sample-qc}
 Read the documentation on preliminary sample QC [here](/docs/modules/eqc#preliminary-sample-qc).
 Follow the `SampleQC.ipynb` notebook step-by-step to evaluate sample data quality and remove low-quality samples as needed.
 The notebook will produce a table of passing samples to use for [batching](#batching).
 
 
-### Batching (notebook) {#batching}
+### Batching {#batching}
 Read the documentation on batching [here](/docs/modules/eqc#batching).
 If necessary, follow the `Batching.ipynb` notebook step-by-step to divide samples into batches
 and create corresponding `sample_sets` for use in `03-TrainGCNV` and beyond.
