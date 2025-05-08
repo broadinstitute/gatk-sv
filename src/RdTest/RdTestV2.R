@@ -922,13 +922,13 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   ##Limits number of sample Ids due to size limiations for readablity
   if(nchar(as.character(sampleIDs))>44){sampleIDsToDisplay<-paste(substr(sampleIDs,1,44),"...",sep="")}else{sampleIDsToDisplay<-sampleIDs}
   ##Title line 1##
-  main1 <- paste(chr, ":", prettyNum(orig_start, big.mark=","), "-", prettyNum(orig_end, big.mark=","), " (hg19)", sep="")
+  main1=paste(chr,":",prettyNum(start,big.mark=","),"-",prettyNum(end,big.mark=",")," (hg19)",sep="")
   
   ###Add proper size abbr. for larger events
-  size <- orig_end - orig_start
-  if(size<10000) {mysize <- prettyNum(paste("(", size, " bp)", sep=""), big.mark=",")}
-  else if(size<1000000) {mysize <- prettyNum(paste("(", signif(size/1000, 3), " kb)", sep=""), big.mark=",")}
-  else {mysize <- prettyNum(paste("(", signif(size/1000000, 3), " Mb)", sep=""), big.mark=",")}
+  size=end-start
+  if(size<10000){mysize<-prettyNum(paste("(",size," bp)",sep=""), big.mark = ",")}
+  if(size>=10000){mysize<-prettyNum(paste("(",signif(size/1000,3)," kb)",sep=""), big.mark = ",")}
+  if(size>=1000000){mysize<-prettyNum(paste("(",signif(size/1000000,3)," Mb)",sep=""), big.mark = ",")}
 
   ##Formating##
   main2 = paste(sampleIDsToDisplay, " ", mysize, sep ="")
@@ -953,11 +953,6 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   plot_colormatrix<-cbind(matrix(genotype_matrix[,-columnstoshift],nrow=1),matrix(genotype_matrix[,columnstoshift],nrow=1))
   endcolnormal<-ncol(plot_colormatrix)-(length(samplesPrior))
   plot_linematrix<-cbind(matrix(genotype_matrix[,-columnstoshift],nrow=1),matrix(genotype_matrix[,columnstoshift],nrow=1))
-
-  # Determine indices for the event calls based on the original (non-padded) data
-  event_range <- (ncol(plot_colormatrix) - length(samplesPrior) + 1):ncol(plot_colormatrix)
-  # Restrict event_range to those bins that fall within the active region
-  active_event_cols <- intersect(event_range, active_start_idx:active_end_idx)
 
   ##Blue if Dup; Red if Del
   if ( plotK == TRUE ) {
