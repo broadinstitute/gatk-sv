@@ -1343,14 +1343,35 @@ runRdTest<-function(bed)
   ##Plot JPG##
   if (opt$plot == TRUE) {
     if (opt$padding > 0) {
-      orig_start <- start
-      orig_end <- end
-      orig_length <- as.numeric(orig_end) - as.numeric(orig_start)
-      padded_start <- floor(as.numeric(orig_start) - opt$padding * orig_length)
-      padded_end   <- ceiling(as.numeric(orig_end) + opt$padding * orig_length)
-      padded_cnv_matrix <- loadData(chr, padded_start, padded_end, cnvID, sampleIDs, coveragepath, medianfile, bins)
-      plotJPG(genotype_matrix, padded_cnv_matrix, chr, padded_start, padded_end, cnvID, sampleIDs, outputname, cnvtype, 
-              plotK=FALSE, plotfamily=FALSE, famfile, outFolder, pad=opt$padding, orig_start=orig_start, orig_end=orig_end)
+      event_coords_for_padding_orig_start <- start
+      event_coords_for_padding_orig_end <- end
+      event_length <- as.numeric(event_coords_for_padding_orig_end) - as.numeric(event_coords_for_padding_orig_start)
+      padded_region_start <- floor(as.numeric(event_coords_for_padding_orig_start) - opt$padding * event_length)
+      padded_region_end   <- ceiling(as.numeric(event_coords_for_padding_orig_end) + opt$padding * event_length)
+      
+      # Track whether padding was successful
+      plot_padded_successfully <- FALSE
+      if (padded_region_start < padded_region_end && padded_region_start >= 0) {
+        padded_cnv_matrix_candidate <- loadData(chr, padded_region_start, padded_region_end, cnvID, sampleIDs, coveragepath, medianfile, bins)
+        if (! (is.character(padded_cnv_matrix_candidate) && length(padded_cnv_matrix_candidate) == 1 && padded_cnv_matrix_candidate[1] == "Failure") ) {
+          if (is.matrix(padded_cnv_matrix_candidate) && ncol(padded_cnv_matrix_candidate) > 0) {
+            plotJPG(genotype_matrix, padded_cnv_matrix_candidate, chr, padded_region_start, padded_region_end, cnvID, sampleIDs, outputname, cnvtype, 
+                    plotK=FALSE, plotfamily=FALSE, famfile, outFolder, 
+                    pad=opt$padding, orig_start=event_coords_for_padding_orig_start, orig_end=event_coords_for_padding_orig_end)
+            plot_padded_successfully <- TRUE
+          }
+        } else {
+          warning(paste("Failed to load data for padded region for CNV ID:", cnvID, "at", chr, ":", padded_region_start, "-", padded_region_end, ". Plotting without padding."))
+        }
+      } else {
+        warning(paste("Invalid padded interval for CNV ID:", cnvID, "at", chr, ":", event_coords_for_padding_orig_start, "-", event_coords_for_padding_orig_end, "is invalid (", padded_region_start, "-", padded_region_end, "). Plotting without padding."))
+      }
+      
+      # If plotting with padding was not successful, fall back to original plot
+      if (!plot_padded_successfully) {
+        plotJPG(genotype_matrix, cnv_matrix, chr, event_coords_for_padding_orig_start, event_coords_for_padding_orig_end, cnvID, sampleIDs, outputname, cnvtype, 
+                plotK=FALSE, plotfamily=FALSE, famfile, outFolder) 
+      }
     } else {
       plotJPG(genotype_matrix, cnv_matrix, chr, start, end, cnvID, sampleIDs, outputname, cnvtype, 
               plotK=FALSE, plotfamily=FALSE, famfile, outFolder)
