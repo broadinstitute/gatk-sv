@@ -90,7 +90,7 @@ option_list = list(
   make_option(c("-u", "--quartetDenovo"), type="logical", default=FALSE,
               help="Proband,Father,Mother, & Sib de novo analysis", metavar="logical"),
   make_option(c("-z", "--mosaicsep"), type="logical", default=FALSE,
-              help="Optional:Change sep calculation to a maxium rather than medium for determing mosaic variants", metavar="logical"),
+              help="Optional:Change sep calculation to a maximum rather than medium for determing mosaic variants", metavar="logical"),
   make_option(c("-l", "--Blacklist"), type="character", default=NULL,
               help="Optional:Single column file with blacklist of samples to remove", metavar="character"),
   make_option(c("-w", "--Whitelist"), type="character", default=NULL,
@@ -1240,7 +1240,7 @@ runRdTest<-function(bed)
   {
     assign(names,unname(unlist(opt[names])))
   }
-  #Speed up large cnvs by taking inner range of laregest desired size
+  #Speed up large cnvs by taking inner range of largest desired size
   if (end - start  > sizefilter)
   {
     cat(paste(chr,":",start,"-",end,":Large size so subsampling in middle\n",sep=""))
