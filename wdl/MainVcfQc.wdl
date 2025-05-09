@@ -518,7 +518,7 @@ task PlotQcPerSample {
       --directory tmp_untar/
     find tmp_untar/ -name "*.VIDs_genotypes.txt.gz" | while read FILE; do
       bname=$(basename $FILE)
-      zcat $FILE | awk '$3 != "./."' | gzip -f > ~{prefix}_perSample/$bname
+      zcat $FILE | awk '$2 != "./."' | gzip -f > ~{prefix}_perSample/$bname
       rm $FILE
     done
 
