@@ -1338,11 +1338,12 @@ runRdTest<-function(bed)
   ##Plot JPG##
   if (opt$plot == TRUE) {
     if (opt$padding > 0) {
-      event_coords_for_padding_orig_start <- start
-      event_coords_for_padding_orig_end <- end
-      event_length <- as.numeric(event_coords_for_padding_orig_end) - as.numeric(event_coords_for_padding_orig_start)
-      padded_region_start <- floor(as.numeric(event_coords_for_padding_orig_start) - opt$padding * event_length)
-      padded_region_end   <- ceiling(as.numeric(event_coords_for_padding_orig_end) + opt$padding * event_length)
+      # Define variables to govern padding
+      padded_orig_start <- start
+      padded_orig_end <- end
+      event_length <- as.numeric(padded_orig_end) - as.numeric(padded_orig_start)
+      padded_region_start <- floor(as.numeric(padded_orig_start) - opt$padding * event_length)
+      padded_region_end <- ceiling(as.numeric(padded_orig_end) + opt$padding * event_length)
       
       # Track whether padding was successful
       plot_padded_successfully <- FALSE
@@ -1352,19 +1353,19 @@ runRdTest<-function(bed)
           if (is.matrix(padded_cnv_matrix_candidate) && ncol(padded_cnv_matrix_candidate) > 0) {
             plotJPG(genotype_matrix, padded_cnv_matrix_candidate, chr, padded_region_start, padded_region_end, cnvID, sampleIDs, outputname, cnvtype, 
                     plotK=FALSE, plotfamily=FALSE, famfile, outFolder, 
-                    pad=opt$padding, orig_start=event_coords_for_padding_orig_start, orig_end=event_coords_for_padding_orig_end)
+                    pad=opt$padding, orig_start=padded_orig_start, orig_end=padded_orig_end)
             plot_padded_successfully <- TRUE
           }
         } else {
           warning(paste("Failed to load data for padded region for CNV ID:", cnvID, "at", chr, ":", padded_region_start, "-", padded_region_end, ". Plotting without padding."))
         }
       } else {
-        warning(paste("Invalid padded interval for CNV ID:", cnvID, "at", chr, ":", event_coords_for_padding_orig_start, "-", event_coords_for_padding_orig_end, "is invalid (", padded_region_start, "-", padded_region_end, "). Plotting without padding."))
+        warning(paste("Invalid padded interval for CNV ID:", cnvID, "at", chr, ":", padded_orig_start, "-", padded_orig_end, "is invalid (", padded_region_start, "-", padded_region_end, "). Plotting without padding."))
       }
       
       # If plotting with padding was not successful, fall back to original plot
       if (!plot_padded_successfully) {
-        plotJPG(genotype_matrix, cnv_matrix, chr, event_coords_for_padding_orig_start, event_coords_for_padding_orig_end, cnvID, sampleIDs, outputname, cnvtype, 
+        plotJPG(genotype_matrix, cnv_matrix, chr, padded_orig_start, padded_orig_end, cnvID, sampleIDs, outputname, cnvtype, 
                 plotK=FALSE, plotfamily=FALSE, famfile, outFolder) 
       }
     } else {
