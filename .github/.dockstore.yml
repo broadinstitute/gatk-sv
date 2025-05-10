@@ -186,6 +186,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_callset_evaluations
       tags:
         - /.*/
 
@@ -215,6 +216,14 @@ workflows:
         - main
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: MakeGqRecalibratorTrainingSetFromPacBio
+    primaryDescriptorPath: /wdl/MakeGqRecalibratorTrainingSetFromPacBio.wdl
+    filters:
+      branches:
+        - main
+        - kj_dragensv_benchmarking
 
   - subclass: WDL
     name: SingleSamplePipeline

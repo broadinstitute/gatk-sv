@@ -15,6 +15,8 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     )
     parser.add_argument("vcf", type=str,
                         help="Input VCF. Usually this will be the cleaned vcf.")
+    parser.add_argument("--max-variant-size", type=int, default=5000,
+                        help="Maximum size of variants to include in the output VCF.")
 
     if len(argv) <= 1:
         parser.parse_args(["--help"])
@@ -23,7 +25,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     return parsed_arguments
 
 
-def process(vcf: pysam.VariantFile) -> None:
+def process(vcf: pysam.VariantFile, max_variant_size: int) -> None:
     sys.stdout.write(str(vcf.header))
     allowed_svtypes = set(['DEL', 'DUP', 'INS', 'INV'])
     for record in vcf:
@@ -31,7 +33,7 @@ def process(vcf: pysam.VariantFile) -> None:
         if svtype not in allowed_svtypes:
             continue
         svlen = record.info.get('SVLEN', record.stop - record.pos)
-        if svlen > 5000:
+        if svlen > max_variant_size:
             continue
         if svtype != 'DUP':
             sys.stdout.write(str(record))
@@ -49,7 +51,7 @@ def main(argv: Optional[List[Text]] = None):
 
     # convert vcf header and records
     with pysam.VariantFile(arguments.vcf) as vcf:
-        process(vcf)
+        process(vcf, arguments.max_variant_size)
 
 
 if __name__ == "__main__":
