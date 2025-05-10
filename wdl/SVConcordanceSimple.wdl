@@ -23,8 +23,6 @@ workflow SVConcordanceSimple {
     Float? mixed_size_similarity = 0.0
     Int? mixed_breakend_window = 10000000
 
-    String output_prefix
-    File? sample_ids
     File? clustering_config
     File? stratification_config
     Array[String]? track_names
@@ -33,6 +31,9 @@ workflow SVConcordanceSimple {
     Float? stratify_overlap_fraction = 0.5
 
     File reference_dict
+
+    String output_prefix
+    File? sample_ids
 
     String sv_base_mini_docker
     String gatk_docker
