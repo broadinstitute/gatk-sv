@@ -24,8 +24,6 @@ mem_size=16
 # > Each analysis must be configured in a separate directory.
 TMPDIR=`mktemp -d -p .` || exit 1
 
-echo "================= Starting to run Manta ================="
-
 # prepare the analysis job
 /usr/local/bin/manta/bin/configManta.py \
   --bam "$bam_or_cram_file" \
@@ -52,7 +50,7 @@ python2 /usr/local/bin/manta/libexec/convertInversion.py \
 bgzip -c ${TMPDIR}/diploidSV.vcf > "${TMPDIR}/$sample_id.manta.vcf.gz"
 tabix -p vcf "${TMPDIR}/${sample_id}.manta.vcf.gz"
 
-mkdir "${output_dir}"
+mkdir -p "${output_dir}"
 mv "${TMPDIR}/$sample_id.manta.vcf.gz" "${output_dir}/$sample_id.manta.vcf.gz"
 mv "${TMPDIR}/${sample_id}.manta.vcf.gz.tbi" "${output_dir}/$sample_id.manta.vcf.gz.tbi"
 
