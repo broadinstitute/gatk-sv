@@ -6,18 +6,24 @@ import "PlotSVCountsPerSample.wdl" as sv_counts
 workflow FilterBatchSites {
   input {
     String batch
+    File? depth_vcf
+    File? dragen_vcf
     File? manta_vcf
-    File? wham_vcf
     File? melt_vcf
     File? scramble_vcf
-    File? depth_vcf
+    File? wham_vcf
     File evidence_metrics
     File evidence_metrics_common
     String sv_pipeline_docker
 
-    # PlotSVCountsPerSample metrics
+    # Overrides for cutoffs and scores that can be used to skip the adjudication step
     Int N_IQR_cutoff_plotting = 6
 
+    # Optional overrides
+    File? adjudicate_cutoffs
+    File? adjudicate_scores
+    File? adjudicate_rf_files
+    
     RuntimeAttr? runtime_attr_adjudicate
     RuntimeAttr? runtime_attr_rewrite_scores
     RuntimeAttr? runtime_attr_filter_annotate_vcf
@@ -28,26 +34,30 @@ workflow FilterBatchSites {
 
   }
 
-  Array[String] algorithms = ["manta", "wham", "melt", "scramble", "depth"]
-  Array[File?] vcfs_array = [manta_vcf, wham_vcf, melt_vcf, scramble_vcf, depth_vcf]
+  Array[String] algorithms = ["depth", "dragen", "manta", "melt", "scramble", "wham"]
+  Array[File?] vcfs_array = [depth_vcf, dragen_vcf, manta_vcf, melt_vcf, scramble_vcf, wham_vcf]
   Int num_algorithms = length(algorithms)
 
-  call AdjudicateSV {
-    input:
-      metrics = evidence_metrics,
-      batch = batch,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_adjudicate
+  if (!defined(adjudicate_cutoffs) || !defined(adjudicate_scores) || !defined(adjudicate_rf_files)) {
+    call AdjudicateSV {
+      input:
+        metrics = evidence_metrics,
+        batch = batch,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_adjudicate
+    }
   }
 
-  call RewriteScores {
-    input:
-      metrics = evidence_metrics_common,
-      cutoffs = AdjudicateSV.cutoffs,
-      scores = AdjudicateSV.scores,
-      batch = batch,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_rewrite_scores
+  if (!defined(adjudicate_cutoffs) || !defined(adjudicate_scores)) {
+    call RewriteScores {
+      input:
+        metrics = evidence_metrics_common,
+        cutoffs = select_first([adjudicate_cutoffs, AdjudicateSV.cutoffs]),
+        scores = select_first([adjudicate_scores, AdjudicateSV.scores]),
+        batch = batch,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_rewrite_scores
+    }
   }
 
   scatter (i in range(num_algorithms)) {
@@ -57,8 +67,8 @@ workflow FilterBatchSites {
           vcf = select_first([vcfs_array[i]]),
           metrics = evidence_metrics,
           prefix = "${batch}.${algorithms[i]}",
-          scores = RewriteScores.updated_scores,
-          cutoffs = AdjudicateSV.cutoffs,
+          scores = select_first([adjudicate_scores, RewriteScores.updated_scores]),
+          cutoffs = select_first([adjudicate_cutoffs, AdjudicateSV.cutoffs]),
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_filter_annotate_vcf
       }
@@ -77,14 +87,15 @@ workflow FilterBatchSites {
   }
 
   output {
-    File? sites_filtered_manta_vcf = FilterAnnotateVcf.annotated_vcf[0]
-    File? sites_filtered_wham_vcf = FilterAnnotateVcf.annotated_vcf[1]
-    File? sites_filtered_melt_vcf = FilterAnnotateVcf.annotated_vcf[2]
-    File? sites_filtered_scramble_vcf = FilterAnnotateVcf.annotated_vcf[3]
-    File? sites_filtered_depth_vcf = FilterAnnotateVcf.annotated_vcf[4]
-    File cutoffs = AdjudicateSV.cutoffs
-    File scores = RewriteScores.updated_scores
-    File RF_intermediate_files = AdjudicateSV.RF_intermediate_files
+    File? sites_filtered_depth_vcf = FilterAnnotateVcf.annotated_vcf[0]
+    File? sites_filtered_dragen_vcf = FilterAnnotateVcf.annotated_vcf[1]
+    File? sites_filtered_manta_vcf = FilterAnnotateVcf.annotated_vcf[2]
+    File? sites_filtered_melt_vcf = FilterAnnotateVcf.annotated_vcf[3]
+    File? sites_filtered_scramble_vcf = FilterAnnotateVcf.annotated_vcf[4]
+    File? sites_filtered_wham_vcf = FilterAnnotateVcf.annotated_vcf[5]
+    File cutoffs = select_first([adjudicate_cutoffs, AdjudicateSV.cutoffs])
+    File scores = select_first([adjudicate_scores, RewriteScores.updated_scores])
+    File RF_intermediate_files = select_first([adjudicate_rf_files, AdjudicateSV.RF_intermediate_files])
     Array[File] sites_filtered_sv_counts = PlotSVCountsPerSample.sv_counts
     Array[File] sites_filtered_sv_count_plots = PlotSVCountsPerSample.sv_count_plots
     File sites_filtered_outlier_samples_preview = PlotSVCountsPerSample.outlier_samples_preview
