@@ -102,6 +102,7 @@ if [[ "${run_scramble}" == true ]]; then
   # TODO: update the "${sample_name}.scramble.tsv.gz"  so it
   #  matches exactly with what the scramble part 2 script outputs
   # TODO: also, do we need is bam/cram?
+  # addresses bug in dragmap where some reads are incorrectly soft-clipped
   ./realign_soft_clipped_reads.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
@@ -116,6 +117,22 @@ if [[ "${run_scramble}" == true ]]; then
     "${reference_bwa_bwt}" \
     "${reference_bwa_pac}" \
     "${reference_bwa_sa}"
+
+  # TODO: bam name in the following should match the output of realigned_soft_clipped_reads step.
+  # ScrambleRealigned
+  ./scramble.sh \
+    "${sample_id}" \
+    "${sample_id}.realign_soft_clipped_reads.bam" \
+    "${sample_id}.realign_soft_clipped_reads.bam.bai" \
+    "${bam_or_cram_file}" \
+    "${bam_or_cram_index}" \
+    "${sample_id}.counts.tsv.gz" \
+    "/manta/${sample_id}.manta.vcf.gz" \
+    "${reference_fasta}" \
+    "${reference_index}" \
+    "${primary_contigs_list}" \
+    "${scramble_alignment_score_cutoff}" \
+    "${mei_bed}"
 fi
 
 if [[ "${run_wham}" == true ]]; then
@@ -129,14 +146,15 @@ if [[ "${run_wham}" == true ]]; then
     "${primary_contigs_list}"
 fi
 
-if [[ "${run_module_metrics}" == true ]]; then
-  if [[ "${run_manta}" == true ]]; then
-    ./standardize_vcf.sh \
-      "${sample_id}" \
-      "/manta/${sample_id}.manta.vcf.gz" \
-      "manta" \
-      "${primary_contigs_fai}" \
-      "${min_size}"
+# per discussion with Mark, we're not running module metrics.
+#if [[ "${run_module_metrics}" == true ]]; then
+#  if [[ "${run_manta}" == true ]]; then
+#    ./standardize_vcf.sh \
+#      "${sample_id}" \
+#      "/manta/${sample_id}.manta.vcf.gz" \
+#      "manta" \
+#      "${primary_contigs_fai}" \
+#      "${min_size}"
 #
 #    prefix="manta_${sample_id}"
 #    svtest vcf \
@@ -147,5 +165,5 @@ if [[ "${run_module_metrics}" == true ]]; then
 #     "${prefix}" \
 #     ~{if defined(baseline_vcf) then "--baseline-vcf " + baseline_vcf else ""} \
 #     > "${prefix}.vcf.tsv"
-  fi
-fi
+#  fi
+#fi
