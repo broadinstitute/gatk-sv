@@ -151,7 +151,7 @@ This file should have one line per sample, plus a header (first) line. The first
 [sample ID requirements](/docs/gs/inputs#sampleids). For an example sample set membership file, refer to
 [this one in the GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/templates/terra_workspaces/cohort_mode/sample_set_membership_1kgp.tsv.tmpl).
 
-## [Workflow instructions](#instructions)
+## <a name="instructions"></a>[Workflow instructions]
 
 ### General recommendations
 
@@ -188,7 +188,7 @@ delete any files from the failed workflow until you have run it successfully.
 * To display run costs, see [this article](https://support.terra.bio/hc/en-us/articles/360037862771#h_01EX5ED53HAZ59M29DRCG24CXY) 
 for one-time setup instructions for non-Broad users.
 
-### [01-GatherSampleEvidence](#gather-sample-evidence)
+### <a name="gathersampleevidence"></a>[01-GatherSampleEvidence]
 
 Read the full GatherSampleEvidence documentation [here](/docs/modules/gse).
 * This workflow runs on a per-sample level, but you can launch many (a few hundred) samples at once, in arbitrary 
@@ -204,7 +204,7 @@ not enabled. Since BAM files are large, we recommend deleting them to save on st
 re-running the failed workflow, so that it will call-cache.
 
 
-### [02-EvidenceQC](#evidenceqc)
+### <a name="evidenceqc"></a>[02-EvidenceQC]
 
 Read the full EvidenceQC documentation [here](/docs/modules/eqc).
 * `02-EvidenceQC` is run on arbitrary cohort partitions of up to 500 samples.
@@ -212,7 +212,7 @@ Read the full EvidenceQC documentation [here](/docs/modules/eqc).
 [batching](#batching) before moving on to [TrainGCNV](#traingcnv).
 
 
-### [Sample QC](#sample-qc)
+### [Sample QC]
 Read the documentation on preliminary sample QC [here](/docs/modules/eqc#preliminary-sample-qc).
 Follow the `SampleQC.ipynb` notebook step-by-step to evaluate sample data quality and remove low-quality samples as needed.
 The notebook will produce a table of passing samples to use for [batching](#batching).
@@ -224,7 +224,7 @@ If necessary, follow the `Batching.ipynb` notebook step-by-step to divide sample
 and create corresponding `sample_sets` for use in `03-TrainGCNV` and beyond.
 
 
-### [03-TrainGCNV](#traingcnv)
+### <a name="traingcnv"></a>[03-TrainGCNV]
 
 Read the full TrainGCNV documentation [here](/docs/modules/gcnv).
 * Before running this workflow, create the batches (~100-500 samples) you will use for the rest of the pipeline according 
@@ -233,7 +233,7 @@ to the [batching](#batching) instructions. These will likely not be the same as 
 set to create a gCNV model for each batch. To modify this behavior, you can set the `n_samples_subsample` parameter 
 to the number of samples to use for training.
 
-### [04-GatherBatchEvidence](#gatherbatchevidence)
+### <a name="gatherbatchevidence"></a>[04-GatherBatchEvidence]
 
 Read the full GatherBatchEvidence documentation [here](/docs/modules/gbe).
 * Use the same `sample_set` definitions you used for `03-TrainGCNV`.
@@ -262,7 +262,7 @@ at least one SV type. To tune the filtering threshold to your needs, edit the `N
 plots and outlier sample preview lists from `07-FilterBatchSites`. The default value for `N_IQR_cutoff` in this step 
 is 10000, which essentially means that no samples are filtered.
 
-### 09-MergeBatchSites
+### <a name="mergebatchsites"></a>09-MergeBatchSites
 
 Read the full MergeBatchSites documentation [here](/docs/modules/msites).
 * `09-MergeBatchSites` is a cohort-level workflow, so it is run on a `sample_set_set` containing all the batches 
@@ -282,7 +282,7 @@ that follows the [sample ID requirements](/docs/gs/inputs#sampleids).
 
 <img alt="creating a cohort sample_set_set" title="How to create a cohort sample_set_set" src="https://i.imgur.com/zKEtSbe.png" width="500" />
 
-### 10-GenotypeBatch
+### <a name="genotypebatch"></a>10-GenotypeBatch
 
 Read the full GenotypeBatch documentation [here](/docs/modules/gb).
 * Use the same `sample_set` definitions you used for `03-TrainGCNV` through `08-FilterBatchSamples`.
