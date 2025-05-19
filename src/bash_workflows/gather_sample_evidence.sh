@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# chmod +x run_manta.sh collect_counts.sh collect_sv_evidence.sh gather_sample_evidence.sh scramble.sh run_whamg.sh standardize_vcf.sh
-# ./gather_sample_evidence.sh test NA12878.final.cram NA12878.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict primary_contigs.list contig.fai preprocessed_intervals.interval_list primary_contigs_plus_mito.bed.gz primary_contigs_plus_mito.bed.gz Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz wham_whitelist.bed
-# ./gather_sample_evidence.sh test downsampled_HG00096.final.cram downsampled_HG00096.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict downsampled_primary_contigs.list downsampled_contig.fai downsampled_preprocessed_intervals.interval_list downsampled_primary_contigs_plus_mito.bed.gz downsampled_primary_contigs_plus_mito.bed.gz downsampled_Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz downsampled_wham_whitelist.bed
+# chmod +x run_manta.sh collect_counts.sh collect_sv_evidence.sh gather_sample_evidence.sh scramble.sh run_whamg.sh standardize_vcf.sh realign_soft_clipped_reads.sh
+# ./gather_sample_evidence.sh test NA12878.final.cram NA12878.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict primary_contigs.list contig.fai preprocessed_intervals.interval_list primary_contigs_plus_mito.bed.gz primary_contigs_plus_mito.bed.gz Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz wham_whitelist.bed Homo_sapiens_assembly38.fasta.64.alt Homo_sapiens_assembly38.fasta.64.amb Homo_sapiens_assembly38.fasta.64.ann Homo_sapiens_assembly38.fasta.64.bwt Homo_sapiens_assembly38.fasta.64.pac Homo_sapiens_assembly38.fasta.64.sa
+# ./gather_sample_evidence.sh test downsampled_HG00096.final.cram downsampled_HG00096.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict downsampled_primary_contigs.list downsampled_contig.fai downsampled_preprocessed_intervals.interval_list downsampled_primary_contigs_plus_mito.bed.gz downsampled_primary_contigs_plus_mito.bed.gz downsampled_Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz downsampled_wham_whitelist.bed Homo_sapiens_assembly38.fasta.64.alt Homo_sapiens_assembly38.fasta.64.amb Homo_sapiens_assembly38.fasta.64.ann Homo_sapiens_assembly38.fasta.64.bwt Homo_sapiens_assembly38.fasta.64.pac Homo_sapiens_assembly38.fasta.64.sa
 
 set -Eeuo pipefail
 
@@ -24,15 +24,21 @@ manta_regions_bed_index=${11}
 sd_locs_vcf=${12}
 mei_bed=${13}
 include_bed_file=${14}
-disabled_read_filters=${15:-"MappingQualityReadFilter"}
-collect_coverage=${16:-true}
-run_scramble=${17:-true}
-run_manta=${18:-true}
-run_wham=${19:-true}
-collect_pesr=${20:-true}
-scramble_alignment_score_cutoff=${21:-90}
-run_module_metrics=${22:-true}
-min_size=${23:-50}
+reference_bwa_alt=${15}
+reference_bwa_amb=${16}
+reference_bwa_ann=${17}
+reference_bwa_bwt=${18}
+reference_bwa_pac=${19}
+reference_bwa_sa=${20}
+disabled_read_filters=${21:-"MappingQualityReadFilter"}
+collect_coverage=${22:-true}
+run_scramble=${23:-true}
+run_manta=${24:-true}
+run_wham=${25:-true}
+collect_pesr=${26:-false}
+scramble_alignment_score_cutoff=${27:-90}
+run_module_metrics=${28:-true}
+min_size=${29:-50}
 
 
 if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
@@ -92,6 +98,24 @@ if [[ "${run_scramble}" == true ]]; then
     "${primary_contigs_list}" \
     "${scramble_alignment_score_cutoff}" \
     "${mei_bed}"
+
+  # TODO: update the "${sample_name}.scramble.tsv.gz"  so it
+  #  matches exactly with what the scramble part 2 script outputs
+  # TODO: also, do we need is bam/cram?
+  ./realign_soft_clipped_reads.sh \
+    "${sample_id}" \
+    "${bam_or_cram_file}" \
+    "${bam_or_cram_index}" \
+    "${sample_id}.scramble.tsv.gz" \
+    false \
+    "${reference_fasta}" \
+    "${reference_index}" \
+    "${reference_bwa_alt}" \
+    "${reference_bwa_amb}" \
+    "${reference_bwa_ann}" \
+    "${reference_bwa_bwt}" \
+    "${reference_bwa_pac}" \
+    "${reference_bwa_sa}"
 fi
 
 if [[ "${run_wham}" == true ]]; then
