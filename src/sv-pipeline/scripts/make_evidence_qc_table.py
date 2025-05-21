@@ -101,20 +101,6 @@ def read_melt_insert_size(filename: str, col_name="mean_insert_size") -> pd.Data
     return df
 
 
-def read_variant_counts(filename: str) -> pd.DataFrame:
-    """
-    Reads variant counts from a TSV file.
-    Args:
-        filename: TSV file containing variant counts by sample, SV type, and chromosome.
-    Returns:
-        A pandas DataFrame containing variant counts by sample.
-    """
-    if filename is None:
-        return pd.DataFrame(columns=[ID_COL])
-    df = pd.read_csv(filename, sep="\t")
-    return df
-
-
 def get_col_name(caller: str, outlier_type: str) -> str:
     return f"{caller}_{outlier_type}_outlier"
 
@@ -186,6 +172,20 @@ def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFra
     return all_outliers_df
 
 
+def read_variant_counts(filename: str) -> pd.DataFrame:
+    """
+    Reads variant counts from a TSV file.
+    Args:
+        filename: TSV file containing variant counts by sample, SV type, and chromosome.
+    Returns:
+        A pandas DataFrame containing variant counts by sample.
+    """
+    if filename is None:
+        return pd.DataFrame(columns=[ID_COL])
+    df = pd.read_csv(filename, sep="\t")
+    return df
+
+
 def merge_evidence_qc_table(
         filename_estimated_cn: str,
         filename_sex_assignments: str,
@@ -200,11 +200,11 @@ def merge_evidence_qc_table(
         filename_low_melt: str,
         filename_low_wham: str,
         filename_low_scramble: str,
-        filename_melt_insert_size: str,
         filename_manta_variant_counts: str,
         filename_melt_variant_counts: str,
         filename_wham_variant_counts: str,
         filename_scramble_variant_counts: str,
+        filename_melt_insert_size: str,
         output_prefix: str) -> None:
     """
     Reads the provided TSV files (tab-delimited) and merges all the information in one table
@@ -225,13 +225,11 @@ def merge_evidence_qc_table(
     df_wham_low_outlier = read_outlier(filename_low_wham, get_col_name("wham", "low"))
     df_scramble_low_outlier = read_outlier(filename_low_scramble, get_col_name("scramble", "low"))
     df_total_low_outliers = read_all_outlier(df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_scramble_low_outlier, "low")
-    df_melt_insert_size = read_melt_insert_size(filename_melt_insert_size)
-    
-    # Read variant counts files
     df_manta_variant_counts = read_variant_counts(filename_manta_variant_counts)
     df_melt_variant_counts = read_variant_counts(filename_melt_variant_counts)
     df_wham_variant_counts = read_variant_counts(filename_wham_variant_counts)
     df_scramble_variant_counts = read_variant_counts(filename_scramble_variant_counts)
+    df_melt_insert_size = read_melt_insert_size(filename_melt_insert_size)
 
     # outlier column names
     callers = ["wham", "melt", "manta", "scramble", "overall"]
