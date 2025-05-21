@@ -115,10 +115,10 @@ workflow EvidenceQC {
           vcfs = select_first([manta_vcfs]),
           prefix = batch,
           caller = "Manta",
+          sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_qc = runtime_attr_qc,
           runtime_attr_outlier = runtime_attr_qc_outlier,
-          runtime_attr_counts = runtime_attr_qc_counts,
-          sv_pipeline_docker = sv_pipeline_docker
+          runtime_attr_counts = runtime_attr_qc_counts
       }
     }
     if (defined(melt_vcfs) && (length(select_first([melt_vcfs])) > 0)) {
@@ -127,10 +127,10 @@ workflow EvidenceQC {
           vcfs = select_first([melt_vcfs]),
           prefix = batch,
           caller = "Melt",
+          sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_qc = runtime_attr_qc,
           runtime_attr_outlier = runtime_attr_qc_outlier,
-          runtime_attr_counts = runtime_attr_qc_counts,
-          sv_pipeline_docker = sv_pipeline_docker
+          runtime_attr_counts = runtime_attr_qc_counts
       }
     }
     if (defined(wham_vcfs) && (length(select_first([wham_vcfs])) > 0)) {
@@ -139,10 +139,10 @@ workflow EvidenceQC {
           vcfs = select_first([wham_vcfs]),
           prefix = batch,
           caller = "Wham",
+          sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_qc = runtime_attr_qc,
           runtime_attr_outlier = runtime_attr_qc_outlier,
-          runtime_attr_counts = runtime_attr_qc_counts,
-          sv_pipeline_docker = sv_pipeline_docker
+          runtime_attr_counts = runtime_attr_qc_counts
       }
     }
     if (defined(scramble_vcfs) && (length(select_first([scramble_vcfs])) > 0)) {
@@ -151,10 +151,10 @@ workflow EvidenceQC {
           vcfs = select_first([scramble_vcfs]),
           prefix = batch,
           caller = "Scramble",
+          sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_qc = runtime_attr_qc,
           runtime_attr_outlier = runtime_attr_qc_outlier,
-          runtime_attr_counts = runtime_attr_qc_counts,
-          sv_pipeline_docker = sv_pipeline_docker
+          runtime_attr_counts = runtime_attr_qc_counts
       }
     }
   }

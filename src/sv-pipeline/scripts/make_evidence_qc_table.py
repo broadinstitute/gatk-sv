@@ -362,11 +362,11 @@ def main():
         args.melt_qc_outlier_low_filename,
         args.wham_qc_outlier_low_filename,
         args.scramble_qc_outlier_low_filename,
-        args.melt_insert_size_filename,
         args.manta_variant_counts_filename,
         args.melt_variant_counts_filename,
         args.wham_variant_counts_filename,
         args.scramble_variant_counts_filename,
+        args.melt_insert_size_filename,
         args.output_prefix)
 
 
