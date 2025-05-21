@@ -16,6 +16,7 @@ workflow RawVcfQC {
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_qc
     RuntimeAttr? runtime_attr_outlier
+    RuntimeAttr? runtime_attr_counts
   }
 
   scatter (vcf in vcfs) {
@@ -37,9 +38,19 @@ workflow RawVcfQC {
       runtime_attr_override = runtime_attr_outlier
   }
 
+  call MergeVariantCounts {
+    input:
+      stat_files = RunIndividualQC.stat,
+      prefix = prefix,
+      caller = caller,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_counts
+  }
+
   output {
     File low = PickOutliers.low
     File high = PickOutliers.high
+    File variant_counts = MergeVariantCounts.variant_counts
   }
 }
 
@@ -116,6 +127,66 @@ task PickOutliers {
     /opt/sv-pipeline/pre_SVCalling_and_QC/raw_vcf_qc/calc_num_svs_pick_outlier.py ~{caller}.QC.input ~{prefix}.~{caller}.QC.outlier -z
     
   >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task MergeVariantCounts {
+  input {
+    Array[File] stat_files
+    String prefix
+    String caller
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Int disk_gb = ceil(50 + 2 * size(stat_files, "GiB"))
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 3.75,
+    disk_gb: disk_gb,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File variant_counts = "${prefix}.${caller}.variant_counts.tsv"
+  }
+  command <<<
+    set -euo pipefail
+    
+    # Concatenate all stat files
+    xargs cat < ~{write_lines(stat_files)} > all_stats.txt
+    
+    # Process the stats data to create a counts table
+    python <<CODE
+import pandas as pd
+import os
+
+stats_df = pd.read_csv('all_stats.txt', sep='\t')
+stats_df.rename(columns={'SAMPLE': 'sample_id'}, inplace=True)
+
+stats_df['metric'] = '~{caller}_' + stats_df['SVTYPE'] + '_' + stats_df['#CHROM']
+
+pivoted = stats_df.pivot(index='sample_id', columns='metric', values='NUM')
+pivoted = pivoted.fillna(0)
+pivoted = pivoted.astype(int)
+pivoted = pivoted.reset_index()
+
+pivoted.to_csv('~{prefix}.~{caller}.variant_counts.tsv', sep='\t', index=False)
+CODE
+  >>>
+  
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"

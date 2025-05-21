@@ -50,6 +50,7 @@ workflow EvidenceQC {
 
     RuntimeAttr? runtime_attr_qc
     RuntimeAttr? runtime_attr_qc_outlier
+    RuntimeAttr? runtime_attr_qc_counts
     RuntimeAttr? ploidy_score_runtime_attr
     RuntimeAttr? ploidy_build_runtime_attr
     RuntimeAttr? ploidy_denoising_runtime_attr
@@ -115,8 +116,9 @@ workflow EvidenceQC {
           prefix = batch,
           caller = "Manta",
           runtime_attr_qc = runtime_attr_qc,
-          sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_outlier = runtime_attr_qc_outlier
+          runtime_attr_outlier = runtime_attr_qc_outlier,
+          runtime_attr_counts = runtime_attr_qc_counts,
+          sv_pipeline_docker = sv_pipeline_docker
       }
     }
     if (defined(melt_vcfs) && (length(select_first([melt_vcfs])) > 0)) {
@@ -126,8 +128,9 @@ workflow EvidenceQC {
           prefix = batch,
           caller = "Melt",
           runtime_attr_qc = runtime_attr_qc,
-          sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_outlier = runtime_attr_qc_outlier
+          runtime_attr_outlier = runtime_attr_qc_outlier,
+          runtime_attr_counts = runtime_attr_qc_counts,
+          sv_pipeline_docker = sv_pipeline_docker
       }
     }
     if (defined(wham_vcfs) && (length(select_first([wham_vcfs])) > 0)) {
@@ -137,8 +140,9 @@ workflow EvidenceQC {
           prefix = batch,
           caller = "Wham",
           runtime_attr_qc = runtime_attr_qc,
-          sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_outlier = runtime_attr_qc_outlier
+          runtime_attr_outlier = runtime_attr_qc_outlier,
+          runtime_attr_counts = runtime_attr_qc_counts,
+          sv_pipeline_docker = sv_pipeline_docker
       }
     }
     if (defined(scramble_vcfs) && (length(select_first([scramble_vcfs])) > 0)) {
@@ -148,8 +152,9 @@ workflow EvidenceQC {
           prefix = batch,
           caller = "Scramble",
           runtime_attr_qc = runtime_attr_qc,
-          sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_outlier = runtime_attr_qc_outlier
+          runtime_attr_outlier = runtime_attr_qc_outlier,
+          runtime_attr_counts = runtime_attr_qc_counts,
+          sv_pipeline_docker = sv_pipeline_docker
       }
     }
   }
@@ -165,12 +170,19 @@ workflow EvidenceQC {
 
           manta_qc_low = RawVcfQC_Manta.low,
           manta_qc_high = RawVcfQC_Manta.high,
+          manta_variant_counts = RawVcfQC_Manta.variant_counts,
+
           melt_qc_low = RawVcfQC_Melt.low,
           melt_qc_high = RawVcfQC_Melt.high,
+          melt_variant_counts = RawVcfQC_Melt.variant_counts,
+
           wham_qc_low = RawVcfQC_Wham.low,
           wham_qc_high = RawVcfQC_Wham.high,
+          wham_variant_counts = RawVcfQC_Wham.variant_counts,
+
           scramble_qc_low = RawVcfQC_Scramble.low,
           scramble_qc_high = RawVcfQC_Scramble.high,
+          scramble_variant_counts = RawVcfQC_Scramble.variant_counts,
 
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_override = runtime_attr_make_qc_table
@@ -186,6 +198,11 @@ workflow EvidenceQC {
     File? wham_qc_high = RawVcfQC_Wham.high
     File? scramble_qc_low = RawVcfQC_Scramble.low
     File? scramble_qc_high = RawVcfQC_Scramble.high
+    
+    File? manta_variant_counts = RawVcfQC_Manta.variant_counts
+    File? melt_variant_counts = RawVcfQC_Melt.variant_counts
+    File? wham_variant_counts = RawVcfQC_Wham.variant_counts
+    File? scramble_variant_counts = RawVcfQC_Scramble.variant_counts
 
     File? ploidy_matrix = Ploidy.ploidy_matrix
     File? ploidy_plots = Ploidy.ploidy_plots
@@ -216,12 +233,19 @@ task MakeQcTable {
 
     File? manta_qc_low
     File? manta_qc_high
+    File? manta_variant_counts
+
     File? melt_qc_low
     File? melt_qc_high
+    File? melt_variant_counts
+
     File? wham_qc_low
     File? wham_qc_high
+    File? wham_variant_counts
+
     File? scramble_qc_low
     File? scramble_qc_high
+    File? scramble_variant_counts
 
     String sv_pipeline_docker
     String output_prefix
@@ -256,6 +280,10 @@ task MakeQcTable {
       ~{"--melt-qc-outlier-low-filename " + melt_qc_low} \
       ~{"--wham-qc-outlier-low-filename " + wham_qc_low} \
       ~{"--scramble-qc-outlier-low-filename " + scramble_qc_low} \
+      ~{"--manta-variant-counts-filename " + manta_variant_counts} \
+      ~{"--melt-variant-counts-filename " + melt_variant_counts} \
+      ~{"--wham-variant-counts-filename " + wham_variant_counts} \
+      ~{"--scramble-variant-counts-filename " + scramble_variant_counts} \
       ~{if (length(melt_insert_size) > 0) then "--melt-insert-size mean_insert_size.tsv" else ""} \
       ~{"--output-prefix " + output_prefix}
   >>>
