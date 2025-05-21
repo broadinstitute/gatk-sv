@@ -41,6 +41,27 @@ run_module_metrics=${28:-true}
 min_size=${29:-50}
 
 
+bam_or_cram_file="$(realpath ${bam_or_cram_file})"
+bam_or_cram_index="$(realpath ${bam_or_cram_index})"
+reference_fasta="$(realpath ${reference_fasta})"
+reference_index="$(realpath ${reference_index})"
+reference_dict="$(realpath ${reference_dict})"
+primary_contigs_list="$(realpath ${primary_contigs_list})"
+primary_contigs_fai="$(realpath ${primary_contigs_fai})"
+preprocessed_intervals="$(realpath ${preprocessed_intervals})"
+manta_regions_bed="$(realpath ${manta_regions_bed})"
+manta_regions_bed_index="$(realpath ${manta_regions_bed_index})"
+sd_locs_vcf="$(realpath ${sd_locs_vcf})"
+mei_bed="$(realpath ${mei_bed})"
+include_bed_file="$(realpath ${include_bed_file})"
+reference_bwa_alt="$(realpath ${reference_bwa_alt})"
+reference_bwa_amb="$(realpath ${reference_bwa_amb})"
+reference_bwa_ann="$(realpath ${reference_bwa_ann})"
+reference_bwa_bwt="$(realpath ${reference_bwa_bwt})"
+reference_bwa_pac="$(realpath ${reference_bwa_pac})"
+reference_bwa_sa="$(realpath ${reference_bwa_sa})"
+
+
 if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
   # Collects read counts at specified intervals.
   # The count for each interval is calculated by counting the number of
