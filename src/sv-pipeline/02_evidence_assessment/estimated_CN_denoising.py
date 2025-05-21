@@ -6,10 +6,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
+
 def calculate_median_mad(group):
     median = np.median(group)
     mad = np.median(np.abs(group - median))
     return median, mad
+
 
 def main():
     parser = argparse.ArgumentParser(description="Generate MAD/median stats and plots from copy number data.")
@@ -17,7 +19,7 @@ def main():
     parser.add_argument('--estimated-copy-number', required=True, help="TSV file with estimated copy number per sample (wide format)")
     parser.add_argument('--output-stats', required=True, help="Output TSV file with median and MAD per sample and chromosome")
     parser.add_argument('--output-pdf', required=True, help="Output PDF file with error bar plots")
-    
+
     args = parser.parse_args()
 
     binwise_cn = pd.read_csv(args.binwise_copy_number, sep='\t')
@@ -75,5 +77,6 @@ def main():
             pdf.savefig()
             plt.close()
 
+
 if __name__ == "__main__":
-    main() 
+    main()

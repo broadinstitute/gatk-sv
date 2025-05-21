@@ -242,7 +242,7 @@ def merge_evidence_qc_table(
            df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_scramble_low_outlier, df_total_low_outliers,
            df_manta_variant_counts, df_melt_variant_counts, df_wham_variant_counts, df_scramble_variant_counts,
            df_melt_insert_size]
-    
+
     for df in dfs:
         df[ID_COL] = df[ID_COL].astype(object)
     output_df = reduce(lambda left, right: pd.merge(left, right, on=ID_COL, how="outer"), dfs)
