@@ -619,8 +619,9 @@ create_groups <- function(genotype_matrix, cnv_matrix)
 powerCalc <- function(genotype_matrix, cnv_matrix)
 {
   #Call Treat (have SV) and Control Groups
-  Control<-create_groups(genotype_matrix, cnv_matrix)$Control
-  Treat<-create_groups(genotype_matrix, cnv_matrix)$Treat
+  groups <- create_groups(genotype_matrix, cnv_matrix)
+  Control <- groups$Control
+  Treat <- groups$Treat
   if (length(Control) > 1 && length(Treat) > 1)
   {
     #doesn't matter less or greater since absolute deviation, use 0.5 diffrence in mean between CNV to estimate effect size
@@ -638,11 +639,12 @@ powerCalc <- function(genotype_matrix, cnv_matrix)
 onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvtype)
 {
   #Call Treat (have SV) and Control Groups
-  Control<-create_groups(genotype_matrix, cnv_matrix)$Control
-  Treat<-create_groups(genotype_matrix, cnv_matrix)$Treat
-  Treat<-Treat[singlesample]
-  a<-create_groups(genotype_matrix, cnv_matrix)$a
-  b<-create_groups(genotype_matrix, cnv_matrix)$b
+  groups <- create_groups(genotype_matrix, cnv_matrix)
+  Control <- groups$Control
+  Treat <- groups$Treat
+  Treat <- Treat[singlesample]
+  a <- groups$a
+  b <- groups$b
   ##Calculate one-sided z score##
   if (toupper(cnvtype) == "DEL") {
     ztest.p <- pnorm((Treat - mean(Control)) / sd(Control))
@@ -683,10 +685,11 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
 twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
 {
   #Call Treat (have SV) and Control Groups
-  Control<-create_groups(genotype_matrix, cnv_matrix)$Control
-  Treat<-create_groups(genotype_matrix, cnv_matrix)$Treat
-  a<-create_groups(genotype_matrix, cnv_matrix)$a
-  b<-create_groups(genotype_matrix, cnv_matrix)$b
+  groups <- create_groups(genotype_matrix, cnv_matrix)
+  Control <- groups$Control
+  Treat <- groups$Treat
+  a <- groups$a
+  b <- groups$b
   if (toupper(cnvtype) == "DEL") {
     P_object <- permTS(Control, Treat, alternative = "greater", method = 'pclt')$p.value
   } else{ P_object <- permTS(Control, Treat, alternative = "less", method = 'pclt')$p.value }
@@ -724,8 +727,9 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
 samprank_sep <- function(genotype_matrix,cnv_matrix,cnvtype,sample=NULL)
 {
   #Call Treat (have SV) and Control Groups
-  Control<-create_groups(genotype_matrix, cnv_matrix)$Control
-  Treat<-create_groups(genotype_matrix, cnv_matrix)$Treat
+  groups <- create_groups(genotype_matrix, cnv_matrix)
+  Control <- groups$Control
+  Treat <- groups$Treat
   combined<-c(Treat,Control)
   if (toupper(cnvtype) == "DEL")
   {
@@ -750,8 +754,8 @@ samprank_sep <- function(genotype_matrix,cnv_matrix,cnvtype,sample=NULL)
   }
   #If mosaic flag then replace median sep test with a max test##
   if (opt$mosaicsep == TRUE) {
-    a <- create_groups(genotype_matrix, cnv_matrix)$a
-    b <- create_groups(genotype_matrix, cnv_matrix)$b
+    a <- groups$a
+    b <- groups$b
     seplist <- c()
     i = 1
     for (column in a:b)
@@ -934,7 +938,8 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
 genotype<- function(cnv_matrix,genotype_matrix,refgeno,chr,start,end,cnvID,sampleIDs,cnvtype,outFolder,outputname,plot_cnvmatrix)
 {
  ##get depth intensities##  
- cnv_median <-c(create_groups(genotype_matrix, cnv_matrix)$Control,create_groups(genotype_matrix, cnv_matrix)$Treat)
+ groups <- create_groups(genotype_matrix, cnv_matrix)
+ cnv_median <-c(groups$Control, groups$Treat)
  ##order by names so same geno output for each variant##
  cnv_median<-cnv_median[order(names(cnv_median))]
  cutoff_table <-read.table(refgeno, header = TRUE, sep="\t")
