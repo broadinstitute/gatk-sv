@@ -17,6 +17,9 @@ output_dir=${9:-"/manta"}
 num_jobs=8
 mem_size=16
 
+echo "=============== Running manta"
+
+
 # you need to define a separate directory for each manta run
 # (e.g., when multiple runs invoked in a single docker image).
 # Otherwise, you will get the following error:
@@ -24,17 +27,23 @@ mem_size=16
 # > Each analysis must be configured in a separate directory.
 TMPDIR=`mktemp -d -p .` || exit 1
 
+working_dir=$(mktemp -d wd_manta_XXXXXXXX)
+working_dir="$(realpath ${working_dir})"
+output_dir=$(mktemp -d output_manta_XXXXXXXX)
+output_dir="$(realpath ${output_dir})"
+cd "${working_dir}"
+
 # prepare the analysis job
 /usr/local/bin/manta/bin/configManta.py \
   --bam "$bam_or_cram_file" \
   --referenceFasta "$reference_fasta" \
-  --runDir ${TMPDIR} \
+  --runDir ${working_dir} \
   --callRegions "$region_bed"
 
 # always tell manta there are 2 GiB per job, otherwise it will
 # scale back the requested number of jobs, even if they won't
 # need that much memory
-${TMPDIR}/runWorkflow.py \
+${working_dir}/runWorkflow.py \
   --mode local \
   --jobs "$num_jobs" \
   --memGb ${mem_size}
@@ -43,15 +52,12 @@ ${TMPDIR}/runWorkflow.py \
 python2 /usr/local/bin/manta/libexec/convertInversion.py \
   /opt/samtools/bin/samtools \
   "$reference_fasta" \
-  ${TMPDIR}/results/variants/diploidSV.vcf.gz \
+  ${working_dir}/results/variants/diploidSV.vcf.gz \
   | bcftools reheader -s <(echo "$sample_id") \
-  > ${TMPDIR}/diploidSV.vcf
+  > ${working_dir}/diploidSV.vcf
 
-bgzip -c ${TMPDIR}/diploidSV.vcf > "${TMPDIR}/$sample_id.manta.vcf.gz"
-tabix -p vcf "${TMPDIR}/${sample_id}.manta.vcf.gz"
+bgzip -c ${working_dir}/diploidSV.vcf > "${working_dir}/$sample_id.manta.vcf.gz"
+tabix -p vcf "${working_dir}/${sample_id}.manta.vcf.gz"
 
-mkdir -p "${output_dir}"
-mv "${TMPDIR}/$sample_id.manta.vcf.gz" "${output_dir}/$sample_id.manta.vcf.gz"
-mv "${TMPDIR}/${sample_id}.manta.vcf.gz.tbi" "${output_dir}/$sample_id.manta.vcf.gz.tbi"
-
-rm -rf ${TMPDIR}
+mv "${working_dir}/$sample_id.manta.vcf.gz" "${output_dir}/$sample_id.manta.vcf.gz"
+mv "${working_dir}/${sample_id}.manta.vcf.gz.tbi" "${output_dir}/$sample_id.manta.vcf.gz.tbi"
