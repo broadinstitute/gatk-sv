@@ -182,19 +182,19 @@ def read_variant_counts(filename: str) -> pd.DataFrame:
     """
     if filename is None:
         return pd.DataFrame(columns=[ID_COL])
-    
+
     # Read the file and ensure sample_id is used as a regular column
     df = pd.read_csv(filename, sep="\t")
-    
+
     # If there are no rows or no matching column, return empty DataFrame
     if df.empty or ID_COL not in df.columns:
         return pd.DataFrame(columns=[ID_COL])
-    
+
     # Ensure all columns have integer values (replace NaN with 0)
     value_columns = [col for col in df.columns if col != ID_COL]
     if value_columns:
         df[value_columns] = df[value_columns].fillna(0).astype(int)
-    
+
     return df
 
 
@@ -252,34 +252,11 @@ def merge_evidence_qc_table(
     dfs = [df_ploidy, df_sex_assignments, df_bincov_median, df_wgd_scores, df_non_diploid,
            df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, df_scramble_high_outlier, df_total_high_outliers,
            df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_scramble_low_outlier, df_total_low_outliers,
+           df_manta_variant_counts, df_melt_variant_counts, df_wham_variant_counts, df_scramble_variant_counts,
            df_melt_insert_size]
-    
-    # Filter and add variant counts dataframes
-    variant_dfs = []
-    if not df_manta_variant_counts.empty and ID_COL in df_manta_variant_counts.columns:
-        variant_dfs.append(df_manta_variant_counts)
-    if not df_melt_variant_counts.empty and ID_COL in df_melt_variant_counts.columns:
-        variant_dfs.append(df_melt_variant_counts)
-    if not df_wham_variant_counts.empty and ID_COL in df_wham_variant_counts.columns:
-        variant_dfs.append(df_wham_variant_counts)
-    if not df_scramble_variant_counts.empty and ID_COL in df_scramble_variant_counts.columns:
-        variant_dfs.append(df_scramble_variant_counts)
-    
-    # For each dataframe, ensure that the ID_COL is treated as a string
     for df in dfs:
-        df[ID_COL] = df[ID_COL].astype(str)
-    
-    # Merge all base dataframes
+        df[ID_COL] = df[ID_COL].astype(object)
     output_df = reduce(lambda left, right: pd.merge(left, right, on=ID_COL, how="outer"), dfs)
-    
-    # Add variant count dataframes one by one to avoid issues with duplicate columns
-    for variant_df in variant_dfs:
-        variant_df[ID_COL] = variant_df[ID_COL].astype(str)
-        # Only merge the columns not already in output_df
-        cols_to_merge = [col for col in variant_df.columns if col not in output_df.columns or col == ID_COL]
-        if len(cols_to_merge) > 1:  # ID_COL + at least one more column
-            output_df = pd.merge(output_df, variant_df[cols_to_merge], on=ID_COL, how="outer")
-    
     output_df = output_df[output_df[ID_COL] != EMPTY_OUTLIERS]
     output_df[outlier_cols] = output_df[outlier_cols].replace([None, np.nan], 0.0)
 
