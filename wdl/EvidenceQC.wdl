@@ -52,6 +52,7 @@ workflow EvidenceQC {
     RuntimeAttr? runtime_attr_qc_outlier
     RuntimeAttr? ploidy_score_runtime_attr
     RuntimeAttr? ploidy_build_runtime_attr
+    RuntimeAttr? ploidy_denoising_runtime_attr
 
     RuntimeAttr? wgd_build_runtime_attr
     RuntimeAttr? wgd_score_runtime_attr
@@ -91,7 +92,8 @@ workflow EvidenceQC {
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,
         runtime_attr_score = ploidy_score_runtime_attr,
-        runtime_attr_build = ploidy_build_runtime_attr
+        runtime_attr_build = ploidy_build_runtime_attr,
+        runtime_attr_denoising = ploidy_denoising_runtime_attr
     }
   }
 
@@ -187,6 +189,8 @@ workflow EvidenceQC {
 
     File? ploidy_matrix = Ploidy.ploidy_matrix
     File? ploidy_plots = Ploidy.ploidy_plots
+    File? cn_denoising_stats = Ploidy.cn_denoising_stats
+    File? cn_denoising_plots = Ploidy.cn_denoising_plots
 
     File WGD_dist = WGD.WGD_dist
     File WGD_matrix = WGD.WGD_matrix
