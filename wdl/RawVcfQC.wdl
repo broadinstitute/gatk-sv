@@ -165,24 +165,61 @@ task MergeVariantCounts {
   command <<<
     set -euo pipefail
     
-    # Concatenate all stat files
-    xargs cat < ~{write_lines(stat_files)} > all_stats.txt
+    # Create a list of stat files for Python to read
+    echo "~{sep='\n' stat_files}" > stat_files.list
     
-    # Process the stats data to create a counts table
     python <<CODE
 import pandas as pd
 import os
 
-stats_df = pd.read_csv('all_stats.txt', sep='\t')
-stats_df.rename(columns={'SAMPLE': 'sample_id'}, inplace=True)
+dfs = []
+with open('stat_files.list', 'r') as file_list:
+    # Iterate over each stats file
+    for file_path in file_list:
+        file_path = file_path.strip()
+        if not os.path.exists(file_path):
+            continue
+            
+        # Read the stat file
+        df = pd.read_csv(file_path, sep='\t')
+        
+        # Iterate over each row in the stat file
+        records = []
+        for _, row in df.iterrows():
+            # Skip header rows
+            if row['#CHROM'].startswith('#'):
+                continue
+                
+            # Extract sample ID from file path
+            sample_name = row['SAMPLE']
+            if '/' in sample_name:
+                sample_name = sample_name.split('/')[-1]
+            if '.' in sample_name:
+                sample_name = sample_name.split('.')[0]
+                
+            # Create metric name
+            metric = f"~{caller}_{row['SVTYPE']}_{row['#CHROM']}"
+            
+            # Add to records
+            records.append({
+                'sample_id': sample_name,
+                'metric': metric,
+                'count': row['NUM']
+            })
+        
+        # Convert records to dataframe and add to list
+        if records:
+            dfs.append(pd.DataFrame(records))
 
-stats_df['metric'] = '~{caller}_' + stats_df['SVTYPE'] + '_' + stats_df['#CHROM']
+# Combine all dataframes
+combined = pd.concat(dfs, ignore_index=True)
 
-pivoted = stats_df.pivot(index='sample_id', columns='metric', values='NUM')
-pivoted = pivoted.fillna(0)
-pivoted = pivoted.astype(int)
+# Pivot to create a wide format table
+pivoted = combined.pivot(index='sample_id', columns='metric', values='count')
+pivoted = pivoted.fillna(0).astype(int)
 pivoted = pivoted.reset_index()
 
+# Write output
 pivoted.to_csv('~{prefix}.~{caller}.variant_counts.tsv', sep='\t', index=False)
 CODE
   >>>
