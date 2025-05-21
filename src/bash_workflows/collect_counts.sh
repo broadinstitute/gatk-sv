@@ -9,6 +9,7 @@ sample_id=$4
 ref_fasta=$5
 ref_fasta_fai=$6
 ref_fasta_dict=$7
+
 gatk4_jar_override=${8:-/root/gatk.jar}
 disabled_read_filters=${9:-""}
 
@@ -23,8 +24,14 @@ echo "ref_fasta_dict:        " "${ref_fasta_dict}"
 echo "gatk4_jar_override:    " "${gatk4_jar_override}"
 echo "disabled_read_filters: " "${disabled_read_filters}"
 
+working_dir=$(mktemp -d wd_collect_counts_XXXXXXXX)
+working_dir="$(realpath ${working_dir})"
+output_dir=$(mktemp -d output_collect_counts_XXXXXXXX)
+output_dir="$(realpath ${output_dir})"
+cd "${working_dir}"
+
 # deleting the files of any previous run
-rm -f "${sample_id}.counts.tsv" "${sample_id}.counts.tsv.gz"
+#rm -f "${sample_id}.counts.tsv" "${sample_id}.counts.tsv.gz"
 
 # TODO: in the original code, this is computed based on a few factors,
 #  the following is the result of the computation using the default values.
@@ -51,3 +58,5 @@ java -Xmx${command_mem_mb}m -jar /opt/gatk.jar CollectReadCounts \
 
 sed -ri "s/@RG\tID:GATKCopyNumber\tSM:.+/@RG\tID:GATKCopyNumber\tSM:${sample_id}/g" "${sample_id}.counts.tsv"
 bgzip --force "${sample_id}.counts.tsv"
+
+mv "${sample_id}.counts.tsv.gz" "${output_dir}/${sample_id}.counts.tsv.gz"
