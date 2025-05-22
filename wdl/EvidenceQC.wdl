@@ -204,8 +204,6 @@ workflow EvidenceQC {
 
     File? ploidy_matrix = Ploidy.ploidy_matrix
     File? ploidy_plots = Ploidy.ploidy_plots
-    File? cn_denoising_stats = Ploidy.cn_denoising_stats
-    File? cn_denoising_plots = Ploidy.cn_denoising_plots
 
     File WGD_dist = WGD.WGD_dist
     File WGD_matrix = WGD.WGD_matrix

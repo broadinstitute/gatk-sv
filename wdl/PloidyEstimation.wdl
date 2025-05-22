@@ -34,8 +34,6 @@ workflow Ploidy {
   output {
     File ploidy_matrix = BuildPloidyMatrix.ploidy_matrix
     File ploidy_plots = PloidyScore.ploidy_plots
-    File cn_denoising_stats = PloidyScore.cn_denoising_stats
-    File cn_denoising_plots = PloidyScore.cn_denoising_plots
   }
 }
 
@@ -101,7 +99,7 @@ task PloidyScore {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 4,
+    mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -111,8 +109,6 @@ task PloidyScore {
   
   output {
     File ploidy_plots = "${batch}_ploidy_plots.tar.gz"
-    File cn_denoising_stats = "${batch}.cn_denoising_stats.tsv"
-    File cn_denoising_plots = "${batch}.cn_denoising_plots.pdf"
   }
   
   command <<<
