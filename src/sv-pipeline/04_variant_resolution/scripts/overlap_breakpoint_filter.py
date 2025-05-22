@@ -64,6 +64,7 @@ class RecordData:
         self.length = record.info['SVLEN']
         self.cnv_gt_5kbp = (record.info['SVTYPE'] == 'DEL' or record.info['SVTYPE'] == 'DUP') and self.length >= 5000
         self.gt_50bp = self.length >= 50
+        self.is_dragen = 'dragen' in record.info['ALGORITHMS']
         self.is_melt = 'melt' in record.info['ALGORITHMS']
         self.is_scramble = 'scramble' in record.info['ALGORITHMS']
         self.is_manta = 'manta' in record.info['ALGORITHMS']
@@ -164,10 +165,10 @@ for first, second in pairwise_record_data:
     if len(sample_intersection) < 0.50 * max_freq:
         continue
     # Determine which to filter
-    # Special case if one is a Manta insertion and the other is MEI, keep the MEI
-    if first.is_manta and first.svtype == "INS" and second.is_mei:
+    # Special case if one is a Dragen/Manta insertion and the other is MEI, keep the MEI
+    if (first.is_dragen or first.is_manta) and first.svtype == "INS" and second.is_mei:
         sorted_data_list = [second, first]
-    elif second.is_manta and second.svtype == "INS" and first.is_mei:
+    elif (second.is_dragen or second.is_manta) and second.svtype == "INS" and first.is_mei:
         sorted_data_list = [first, second]
     else:
         # Otherwise use sorting spec
