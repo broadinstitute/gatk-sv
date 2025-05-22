@@ -53,7 +53,6 @@ workflow EvidenceQC {
     RuntimeAttr? runtime_attr_qc_counts
     RuntimeAttr? ploidy_score_runtime_attr
     RuntimeAttr? ploidy_build_runtime_attr
-    RuntimeAttr? ploidy_denoising_runtime_attr
 
     RuntimeAttr? wgd_build_runtime_attr
     RuntimeAttr? wgd_score_runtime_attr
@@ -93,8 +92,7 @@ workflow EvidenceQC {
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,
         runtime_attr_score = ploidy_score_runtime_attr,
-        runtime_attr_build = ploidy_build_runtime_attr,
-        runtime_attr_denoising = ploidy_denoising_runtime_attr
+        runtime_attr_build = ploidy_build_runtime_attr
     }
   }
 
