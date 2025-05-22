@@ -122,11 +122,11 @@ task PloidyScore {
     python /opt/sv-pipeline/02_evidence_assessment/estimated_CN_denoising.py \
       --binwise-copy-number ./ploidy_est/binwise_estimated_copy_numbers.bed.gz \
       --estimated-copy-number ./ploidy_est/estimated_copy_numbers.txt.gz \
-      --output-stats ~{batch}.cn_denoising_stats.tsv \
-      --output-pdf ~{batch}.cn_denoising_plots.pdf
+      --output-stats cn_denoising_stats.tsv \
+      --output-pdf cn_denoising_plots.pdf
     
-    cp ~{batch}.cn_denoising_stats.tsv ./ploidy_est/
-    cp ~{batch}.cn_denoising_plots.pdf ./ploidy_est/
+    cp cn_denoising_stats.tsv ./ploidy_est/
+    cp cn_denoising_plots.pdf ./ploidy_est/
     
     tar -zcf ./ploidy_est.tar.gz ./ploidy_est
     mv ploidy_est.tar.gz ~{batch}_ploidy_plots.tar.gz
