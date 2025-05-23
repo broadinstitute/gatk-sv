@@ -643,12 +643,33 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   Treat<-Treat[singlesample]
   a<-create_groups(genotype_matrix, cnv_matrix)$a
   b<-create_groups(genotype_matrix, cnv_matrix)$b
+  
+  # Debug printing for specific CNV IDs
+  cnvID <- genotype_matrix[1,1]
+  if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5", "all_samples_depth_chr12_0000011e")) {
+    cat("\nDEBUG - One Sample Z-test for CNV:", cnvID, "\n")
+    cat("Number of control samples:", length(Control), "\n")
+    cat("Control group summary:\n")
+    cat("  Mean:", format(mean(Control), digits=6), "\n")
+    cat("  SD:", format(sd(Control), digits=6), "\n")
+    cat("  Min:", format(min(Control), digits=6), "\n")
+    cat("  Max:", format(max(Control), digits=6), "\n")
+    cat("Treatment value:", format(Treat, digits=6), "\n")
+  }
+  
   ##Calculate one-sided z score##
   if (toupper(cnvtype) == "DEL") {
     ztest.p <- pnorm((Treat - mean(Control)) / sd(Control))
   } else{
     ztest.p <- pnorm((mean(Control) - Treat) / sd(Control))
   }
+  
+  # Debug printing for specific CNV IDs
+  if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5", "all_samples_depth_chr12_0000011e")) {
+    cat("Z-score:", format((Treat - mean(Control)) / sd(Control), digits=6), "\n")
+    cat("P-value:", format(ztest.p, scientific=TRUE, digits=6), "\n")
+  }
+  
   ##Find the secondest worst p-value and record as an assement metric## 
   plist <- c()
   i = 1
@@ -687,9 +708,33 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   Treat<-create_groups(genotype_matrix, cnv_matrix)$Treat
   a<-create_groups(genotype_matrix, cnv_matrix)$a
   b<-create_groups(genotype_matrix, cnv_matrix)$b
+  
+  # Debug printing for specific CNV IDs
+  cnvID <- genotype_matrix[1,1]
+  if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5", "all_samples_depth_chr12_0000011e")) {
+    cat("\nDEBUG - Two Sample Z-test for CNV:", cnvID, "\n")
+    cat("Control group summary:\n")
+    cat("  N:", length(Control), "\n")
+    cat("  Mean:", format(mean(Control), digits=6), "\n")
+    cat("  SD:", format(sd(Control), digits=6), "\n")
+    cat("  Min:", format(min(Control), digits=6), "\n")
+    cat("  Max:", format(max(Control), digits=6), "\n")
+    cat("Treatment group summary:\n")
+    cat("  N:", length(Treat), "\n")
+    cat("  Mean:", format(mean(Treat), digits=6), "\n")
+    cat("  SD:", format(sd(Treat), digits=6), "\n")
+    cat("  Min:", format(min(Treat), digits=6), "\n")
+    cat("  Max:", format(max(Treat), digits=6), "\n")
+  }
+  
   if (toupper(cnvtype) == "DEL") {
     P_object <- permTS(Control, Treat, alternative = "greater", method = 'pclt')$p.value
   } else{ P_object <- permTS(Control, Treat, alternative = "less", method = 'pclt')$p.value }
+  
+  # Debug printing for specific CNV IDs
+  if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5", "all_samples_depth_chr12_0000011e")) {
+    cat("P-value:", format(P_object, scientific=TRUE, digits=6), "\n")
+  }
   
   ##Find the secondest worst p-value and record as an assement metric#
   plist<-c()
