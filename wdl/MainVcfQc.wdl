@@ -512,12 +512,14 @@ task PlotQcPerSample {
     # Make per-sample directory
     mkdir ~{prefix}_perSample/
 
-    # Untar per-sample VID lists
+    # Untar per-sample VID lists and exclude null genotypes
     mkdir tmp_untar/
     tar -xvzf ~{per_sample_tarball} \
       --directory tmp_untar/
     find tmp_untar/ -name "*.VIDs_genotypes.txt.gz" | while read FILE; do
-      mv $FILE ~{prefix}_perSample/
+      bname=$(basename $FILE)
+      zcat $FILE | awk '$2 != "./."' | gzip -f > ~{prefix}_perSample/$bname
+      rm $FILE
     done
 
     # Plot per-sample distributions
