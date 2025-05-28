@@ -28,12 +28,11 @@ Optional arguments:
   -C  CARRIER     Report carrier frequencies (default: report allele frequencies)
 
 Notes:
-  1) SET1/SET2 are expected to be BED3+ formatted files
-  2) SET1 must have at least the following five columns, in order:
-     chr, start, end, SV ID, SV type
-  3) The last column of SET1 must contain allele frequency
-  4) SET2 must have exactly six columns as follows, in order:
-     chr, start, end, SV type, SV size, allele frequency
+  1) SET1/SET2 are expected to be BED3+ formatted files.
+  2) SET1 must have the following six columns, in order:
+     chrom, start, end, name, SVTYPE, SVLEN.
+  3) SET2 must have the following eight columns, in order:
+     chrom, start, end, VID, svtype, length, AF, samples.
 EOF
 }
 
@@ -107,15 +106,27 @@ fi
 
 ###PREP INPUT FILES
 OVRTMP=`mktemp -d`
+
+echo "OVRTMP: ${OVRTMP}"
+
+# Function to handle both compressed and uncompressed files
+read_file() {
+  if [[ "$1" =~ \.(gz|Z|bz2)$ ]]; then
+    zcat "$1" 2>/dev/null || gunzip -c "$1" 2>/dev/null || cat "$1"
+  else
+    cat "$1"
+  fi
+}
+
 #Unzip SET1, if gzipped, and automatically set SVs with size <1 to 1
-  zcat ${SET1} | fgrep "#" > ${OVRTMP}/set1.bed
-  zcat ${SET1} | fgrep -v "#" | awk -v OFS="\t" '{ if ($3<$2) $3=$2; print }' | \
-  sort -Vk1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set1.bed
+read_file ${SET1} | fgrep "#" > ${OVRTMP}/set1.bed
+read_file ${SET1} | fgrep -v "#" | awk -v OFS="\t" '{ if ($3<$2) $3=$2; print }' | \
+sort -k1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set1.bed
 
 #Unzip & format SET2, if gzipped
-  zcat ${SET2} | fgrep "#" | cut -f1-7 > ${OVRTMP}/set2.bed
-  zcat ${SET2} | fgrep -v "#" | awk -v OFS="\t" '{ if ($3<$2) $3=$2; print }' | \
-  cut -f1-7 | sort -Vk1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set2.bed
+read_file ${SET2} | fgrep "#" | cut -f1-7 > ${OVRTMP}/set2.bed
+read_file ${SET2} | fgrep -v "#" | awk -v OFS="\t" '{ if ($3<$2) $3=$2; print }' | \
+cut -f1-7 | sort -k1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set2.bed
 
 ###RUN INTERSECTIONS
 #Intersect method 1 data
