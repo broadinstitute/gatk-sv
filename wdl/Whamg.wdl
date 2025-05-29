@@ -251,6 +251,7 @@ task RunWhamgOnCram {
     echo "whamg $(whamg 2>&1 | grep Version)"
 
     # necessary for getting permission to read from google bucket directly
+    unset CLOUDSDK_PYTHON
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
     # covert cram to bam
