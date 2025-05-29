@@ -9,9 +9,9 @@ sample_id=$4
 ref_fasta=$5
 ref_fasta_fai=$6
 ref_fasta_dict=$7
-
-gatk4_jar_override=${8:-/root/gatk.jar}
-disabled_read_filters=${9:-""}
+outputs_json_filename=$8
+gatk4_jar_override=${9:-/root/gatk.jar}
+disabled_read_filters=${10:-""}
 
 echo "=============== Running collect_counts.sh"
 echo "intervals:             " "${intervals}"
@@ -59,4 +59,12 @@ java -Xmx${command_mem_mb}m -jar /opt/gatk.jar CollectReadCounts \
 sed -ri "s/@RG\tID:GATKCopyNumber\tSM:.+/@RG\tID:GATKCopyNumber\tSM:${sample_id}/g" "${sample_id}.counts.tsv"
 bgzip --force "${sample_id}.counts.tsv"
 
-mv "${sample_id}.counts.tsv.gz" "${output_dir}/${sample_id}.counts.tsv.gz"
+counts_filename="${output_dir}/${sample_id}.counts.tsv.gz"
+mv "${sample_id}.counts.tsv.gz" "${counts_filename}"
+
+outputs_filename="${output_dir}/outputs.json"
+outputs_json=$(jq -n \
+  --arg c "${counts_filename}" \
+  '{counts: $c}' )
+echo "${outputs_json}" > "${outputs_filename}"
+cp "${outputs_filename}" "${outputs_json_filename}"

@@ -179,7 +179,6 @@ workflow GatherSampleEvidence {
     }
   }
 
-  # ------------- done
   if (run_manta) {
     call manta.Manta {
       input:

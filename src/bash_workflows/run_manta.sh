@@ -8,9 +8,12 @@ bam_or_cram_index=$3
 reference_fasta=$4
 region_bed=$5
 region_bed_index=$6
-num_cpu=${7:-8} # default 8 cores
-jobs_per_cpu=${8:-1.3}
-output_dir=${9:-"/manta"}
+outputs_json_filename=$7
+num_cpu=${8:-8} # default 8 cores
+jobs_per_cpu=${9:-1.3}
+output_dir=${10:-"/manta"}
+
+# TODO: outputs dir in the above should not be defined
 
 #num_jobs=$(awk -v a="$num_cpu" -v b="$jobs_per_cpu" 'BEGIN {printf "%d", int(a * b + 0.5)}')
 #mem_size=$(( num_jobs * 2 ))
@@ -59,5 +62,15 @@ python2 /usr/local/bin/manta/libexec/convertInversion.py \
 bgzip -c ${working_dir}/diploidSV.vcf > "${working_dir}/$sample_id.manta.vcf.gz"
 tabix -p vcf "${working_dir}/${sample_id}.manta.vcf.gz"
 
-mv "${working_dir}/$sample_id.manta.vcf.gz" "${output_dir}/$sample_id.manta.vcf.gz"
-mv "${working_dir}/${sample_id}.manta.vcf.gz.tbi" "${output_dir}/$sample_id.manta.vcf.gz.tbi"
+output_vcf_filename="$(realpath ${output_dir}/$sample_id.manta.vcf.gz)"
+output_vcf_index_filename="$(realpath ${output_dir}/$sample_id.manta.vcf.gz.tbi)"
+mv "${working_dir}/$sample_id.manta.vcf.gz" "${output_vcf_filename}"
+mv "${working_dir}/${sample_id}.manta.vcf.gz.tbi" "${output_vcf_index_filename}"
+
+outputs_filename="${output_dir}/outputs.json"
+outputs_json=$(jq -n \
+  --arg vcf "${output_vcf_filename}" \
+  --arg vcf_idx "${output_vcf_index_filename}" \
+  '{vcf: $vcf, index: $vcf_idx}' )
+echo "${outputs_json}" > "${outputs_filename}"
+cp "${outputs_filename}" "${outputs_json_filename}"

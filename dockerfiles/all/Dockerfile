@@ -34,6 +34,7 @@ RUN apt-get clean all && \
         r-cran-optparse \
         wget \
         zlib1g-dev \
+        jq \
         # needed for manta
         python2.7
 

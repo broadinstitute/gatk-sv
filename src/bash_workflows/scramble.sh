@@ -23,20 +23,21 @@ alignment_score_cutoff=${11}
 
 mei_bed=${12}
 
-min_clipped_reads_fraction=${13:-0.22}
-percent_align_cutoff=${14:-70}
+outputs_json_filename=${13}
 
-part2_threads=${15:-7}
+min_clipped_reads_fraction=${14:-0.22}
+percent_align_cutoff=${15:-70}
 
-scramble_vcf_script=${16:-"/opt/sv-pipeline/scripts/make_scramble_vcf.py"}
-make_scramble_vcf_args=${17:-""}
+part2_threads=${16:-7}
 
-min_clipped_reads=${18:-20}
+scramble_vcf_script=${17:-"/opt/sv-pipeline/scripts/make_scramble_vcf.py"}
+make_scramble_vcf_args=${18:-""}
+
+min_clipped_reads=${19:-20}
 # TODO: let this to be settable from the caller,
 #  if you set it to "" it will result in calculating this
 #  based on the read depth, override it mainly for testing using downsampled files.
 #  Note that the default value is set to 20 to match the downsampled data for testing purpose.
-
 
 echo "=============== Running scramble.sh"
 echo "sample_name:                " "${sample_name}"
@@ -58,9 +59,15 @@ echo "scramble_vcf_script:        " "${scramble_vcf_script}"
 echo "make_scramble_vcf_args:     " "${make_scramble_vcf_args}"
 
 
+initial_wd=$PWD
+output_dir=$(mktemp -d output_scramble_XXXXXXXX)
+output_dir="$(realpath ${output_dir})"
+
+scramble_dir="/app/scramble-gatk-sv"
+
 # In case it is re-run, the script will wait for a response
 # on override the existing file, that may not work in a pipeline.
-rm -f test.scramble.tsv.gz
+#rm -f test.scramble.tsv.gz
 
 # TODO: this seems an overkill
 # Check aligner
@@ -77,8 +84,13 @@ rm -f test.scramble.tsv.gz
 #  is_dragen_3_7_8="false"
 #fi
 
+# -------------
 # ScramblePart1
 # -------------
+
+working_dir_p1=$(mktemp -d wd_scramble_p1_XXXXXXXX)
+working_dir_p1="$(realpath ${working_dir_p1})"
+cd "${working_dir_p1}"
 
 # Calibrate clipped reads cutoff based on median coverage
 if [[ "${min_clipped_reads}" == "" ]]; then
@@ -89,55 +101,64 @@ if [[ "${min_clipped_reads}" == "" ]]; then
     | cut -f4 \
     | Rscript -e "cat(round(${min_clipped_reads_fraction}*median(data.matrix(read.csv(file(\"stdin\"))))))" \
     > cutoff.txt
-  export MIN_CLIPPED_READS=$(cat cutoff.txt)
+  MIN_CLIPPED_READS=$(cat cutoff.txt)
   echo "MIN_CLIPPED_READS: ${MIN_CLIPPED_READS}"
 else
-  export MIN_CLIPPED_READS="${min_clipped_reads}"
+  MIN_CLIPPED_READS="${min_clipped_reads}"
 fi
+
+gzipped_clusters_file="${working_dir_p1}/${sample_name}_scramble_clusters.tsv.gz)"
+gzipped_clusters_file="$(realpath ${gzipped_clusters_file})"
 
 # Identify clusters of split reads
 while read region; do
-  time /app/scramble-gatk-sv/cluster_identifier/src/build/cluster_identifier -l -s ${MIN_CLIPPED_READS} -r "${region}" -t "${reference_fasta}" "${bam_or_cram_file}" \
-    | gzip >> "${sample_name}".scramble_clusters.tsv.gz
+  time "${scramble_dir}"/cluster_identifier/src/build/cluster_identifier -l -s ${MIN_CLIPPED_READS} -r "${region}" -t "${reference_fasta}" "${bam_or_cram_file}" \
+    | gzip >> "${gzipped_clusters_file}"
 done < "${regions_list}"
 
-export clusters_file="${sample_name}.scramble_clusters.tsv.gz"
-
+# -------------
 # ScramblePart2
 # -------------
 
-export xDir="" # $PWD
-export clusterFile="${xDir}/clusters"
-export scrambleDir="/app/scramble-gatk-sv"
-export meiRef=$scrambleDir/cluster_analysis/resources/MEI_consensus_seqs.fa
+cd "${initial_wd}"
+working_dir_p2=$(mktemp -d wd_scramble_p2_XXXXXXXX)
+working_dir_p2="$(realpath ${working_dir_p2})"
+cd "${working_dir_p2}"
+
+clusters_file="${working_dir_p2}/${sample_name}_scramble_clusters.tsv"
+meiRef="${scramble_dir}/cluster_analysis/resources/MEI_consensus_seqs.fa"
 
 # create a blast db from the reference
 cat "${reference_fasta}" | makeblastdb -in - -parse_seqids -title ref -dbtype nucl -out ref
 
-gunzip -c "${clusters_file}" > "${clusterFile}"
+gunzip -c "${gzipped_clusters_file}" > "${clusters_file}"
 
 # Produce ${clusterFile}_MEIs.txt
-Rscript --vanilla "${scrambleDir}"/cluster_analysis/bin/SCRAMble.R \
-  --out-name "${clusterFile}" \
-  --cluster-file "${clusterFile}" \
-  --install-dir "${scrambleDir}"/cluster_analysis/bin \
+Rscript --vanilla "${scramble_dir}"/cluster_analysis/bin/SCRAMble.R \
+  --out-name "${clusters_file}" \
+  --cluster-file "${clusters_file}" \
+  --install-dir "${scramble_dir}"/cluster_analysis/bin \
   --mei-refs "${meiRef}" \
-  --ref "${xDir}/ref" \
+  --ref "${working_dir_p2}/ref" \
   --no-vcf --eval-meis \
   --cores "${part2_threads}" \
   --pct-align "${percent_align_cutoff}" \
   -n "${MIN_CLIPPED_READS}" \
   --mei-score "${alignment_score_cutoff}"
 
-# Save raw outputs
-mv ${clusterFile}_MEIs.txt "${sample_name}".scramble.tsv
+mv ${clusters_file}_MEIs.txt "${sample_name}".scramble.tsv
 gzip "${sample_name}".scramble.tsv
+scramble_table="$(realpath ${sample_name}.scramble.tsv.gz)"
 
 
+# ---------------
 # MakeScrambleVcf
-# --------------
+# ---------------
 
-export scramble_table="${sample_name}.scramble.tsv.gz"
+cd "${initial_wd}"
+working_dir_make_vcf=$(mktemp -d wd_scramble_make_vcf_XXXXXXXX)
+working_dir_make_vcf="$(realpath ${working_dir_make_vcf})"
+cd "${working_dir_make_vcf}"
 
 python "${scramble_vcf_script}" \
   --table "${scramble_table}" \
@@ -150,3 +171,23 @@ python "${scramble_vcf_script}" \
   ${make_scramble_vcf_args}
 bcftools sort unsorted.vcf.gz -Oz -o "${sample_name}".scramble.vcf.gz
 tabix "${sample_name}".scramble.vcf.gz
+
+vcf_filename="${output_dir}/${sample_name}.scramble.vcf.gz"
+vcf_idx_filename="${output_dir}/${sample_name}.scramble.vcf.gz.tbi"
+clusters_filename="${output_dir}/${sample_name}.scramble_clusters.tsv.gz"
+table_filename="${output_dir}/${sample_name}.scramble.tsv.gz"
+
+mv "${sample_name}.scramble.vcf.gz" "${vcf_filename}"
+mv "${sample_name}.scramble.vcf.gz.tbi" "${vcf_idx_filename}"
+mv "${gzipped_clusters_file}" "${clusters_filename}"
+mv "${scramble_table}" "${table_filename}"
+
+outputs_filename="${output_dir}/outputs.json"
+outputs_json=$(jq -n \
+  --arg vcf "${vcf_filename}" \
+  --arg vcf_idx "${vcf_idx_filename}" \
+  --arg clusters "${clusters_filename}" \
+  --arg table "${table_filename}" \
+  '{vcf: $vcf, index: $vcf_idx, clusters: $clusters, table: $table}')
+echo "${outputs_json}" > "${outputs_filename}"
+cp "${outputs_filename}" "${outputs_json_filename}"

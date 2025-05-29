@@ -9,10 +9,17 @@ reference_fasta=$4
 reference_index=$5
 include_bed_file=$6
 primary_contigs_list=$7
-cpu_cores=${8:-4}
+outputs_json_filename=$8
+cpu_cores=${9:-4}
 
 include_bed_file_abs_path=$(realpath $include_bed_file)
 reference_fasta_abs_path=$(realpath $reference_fasta)
+
+working_dir=$(mktemp -d wd_collect_counts_XXXXXXXX)
+working_dir="$(realpath ${working_dir})"
+output_dir=$(mktemp -d output_collect_counts_XXXXXXXX)
+output_dir="$(realpath ${output_dir})"
+cd "${working_dir}"
 
 chr_list=$(paste -s -d ',' "${primary_contigs_list}")
 
@@ -66,3 +73,16 @@ bcftools concat -a -Ov -f vcf.list | \
   bgzip -c > "../${sample_id}.wham.vcf.gz"
 cd ..
 bcftools index -t "${sample_id}.wham.vcf.gz"
+
+vcf_filename="${output_dir}/${sample_id}.wham.vcf.gz"
+mv "${sample_id}.wham.vcf.gz" "${vcf_filename}"
+index_filename="${output_dir}/${sample_id}.wham.vcf.gz.tbi"
+mv "${sample_id}.wham.vcf.gz.tbi" "${index_filename}"
+
+outputs_filename="${output_dir}/outputs.json"
+outputs_json=$(jq -n \
+  --arg vcf "${vcf_filename}" \
+  --arg index "${index_filename}" \
+  '{vcf: $vcf, index: $index}' )
+echo "${outputs_json}" > "${outputs_filename}"
+cp "${outputs_filename}" "${outputs_json_filename}"

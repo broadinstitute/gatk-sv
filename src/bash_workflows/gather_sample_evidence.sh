@@ -6,6 +6,9 @@
 
 set -Eeuo pipefail
 
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
 sample_id=${1}
 bam_or_cram_file=${2}
 bam_or_cram_index=${3}
@@ -39,6 +42,7 @@ collect_pesr=${26:-false}
 scramble_alignment_score_cutoff=${27:-90}
 run_module_metrics=${28:-true}
 min_size=${29:-50}
+output_dir=${30:-""}
 
 
 bam_or_cram_file="$(realpath ${bam_or_cram_file})"
@@ -61,11 +65,16 @@ reference_bwa_bwt="$(realpath ${reference_bwa_bwt})"
 reference_bwa_pac="$(realpath ${reference_bwa_pac})"
 reference_bwa_sa="$(realpath ${reference_bwa_sa})"
 
+if [[ "${output_dir}" == "" ]]; then
+  output_dir=$(mktemp -d output_gather_sample_evidence_XXXXXXXX)
+  output_dir="$(realpath ${output_dir})"
+fi
 
 if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
   # Collects read counts at specified intervals.
   # The count for each interval is calculated by counting the number of
   # read starts that lie in the interval.
+  collect_counts_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/collect_counts_XXXXXX")
   ./collect_counts.sh \
     "${preprocessed_intervals}" \
     "${bam_or_cram_file}" \
@@ -74,21 +83,25 @@ if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
     "${reference_fasta}" \
     "${reference_index}" \
     "${reference_dict}" \
+    "${collect_counts_outputs_json_filename}" \
     "/root/gatk.jar" \
     "${disabled_read_filters}"
 fi
 
 if [[ "${run_manta}" == true ]]; then
+  manta_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/manta_XXXXXX")
   ./run_manta.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
     "${reference_fasta}" \
     "${manta_regions_bed}" \
-    "${manta_regions_bed_index}"
+    "${manta_regions_bed_index}" \
+    "${manta_outputs_json_filename}"
 fi
 
 if [[ "${collect_pesr}" == true ]]; then
+  collect_pesr_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/collect_pesr_XXXXXX")
   ./collect_sv_evidence.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
@@ -97,7 +110,8 @@ if [[ "${collect_pesr}" == true ]]; then
     "${reference_index}" \
     "${reference_dict}" \
     "${sd_locs_vcf}" \
-    "${preprocessed_intervals}"
+    "${preprocessed_intervals}" \
+    "${collect_pesr_outputs_json_filename}"
 fi
 
 
@@ -106,29 +120,34 @@ fi
 #       consistently, for instance `"${sample_id}.counts.tsv.gz"` or manta vcf in the following.
 
 if [[ "${run_scramble}" == true ]]; then
+  scramble_p1_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/scramble_p1_XXXXXX")
+  # TODO: counts and manta files in the following should be updated
   ./scramble.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
-    "${sample_id}.counts.tsv.gz" \
-    "/manta/${sample_id}.manta.vcf.gz" \
+    "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".counts" "${collect_pesr_outputs_json_filename}")" \
+    "$([ "${run_manta}" = "false" ] && echo "" || jq -r ".vcf" "${manta_outputs_json_filename}")" \
     "${reference_fasta}" \
     "${reference_index}" \
     "${primary_contigs_list}" \
     "${scramble_alignment_score_cutoff}" \
-    "${mei_bed}"
+    "${mei_bed}" \
+    "${scramble_p1_outputs_json_filename}"
 
   # TODO: update the "${sample_name}.scramble.tsv.gz"  so it
   #  matches exactly with what the scramble part 2 script outputs
   # TODO: also, do we need is bam/cram?
+  realign_soft_clipped_reads_json_filename=$(mktemp --suffix=.json "${output_dir}/realign_soft_clipped_reads_XXXXXX")
   # addresses bug in dragmap where some reads are incorrectly soft-clipped
+
   ./realign_soft_clipped_reads.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
-    "${sample_id}.scramble.tsv.gz" \
+    $(jq -r ".table" ${scramble_p1_outputs_json_filename}) \
     false \
     "${reference_fasta}" \
     "${reference_index}" \
@@ -137,26 +156,31 @@ if [[ "${run_scramble}" == true ]]; then
     "${reference_bwa_ann}" \
     "${reference_bwa_bwt}" \
     "${reference_bwa_pac}" \
-    "${reference_bwa_sa}"
+    "${reference_bwa_sa}" \
+    "${realign_soft_clipped_reads_json_filename}"
 
-  # TODO: bam name in the following should match the output of realigned_soft_clipped_reads step.
+
   # ScrambleRealigned
+  scramble_p2_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/scramble_p2_XXXXXX")
   ./scramble.sh \
     "${sample_id}" \
-    "${sample_id}.realign_soft_clipped_reads.bam" \
-    "${sample_id}.realign_soft_clipped_reads.bam.bai" \
+    $(jq -r ".out" ${realign_soft_clipped_reads_json_filename}) \
+    $(jq -r ".out_index" ${realign_soft_clipped_reads_json_filename}) \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
-    "${sample_id}.counts.tsv.gz" \
-    "/manta/${sample_id}.manta.vcf.gz" \
+    "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".counts" "${collect_pesr_outputs_json_filename}")" \
+    "$([ "${run_manta}" = "false" ] && echo "" || jq -r ".vcf" "${manta_outputs_json_filename}")" \
     "${reference_fasta}" \
     "${reference_index}" \
     "${primary_contigs_list}" \
     "${scramble_alignment_score_cutoff}" \
-    "${mei_bed}"
+    "${mei_bed}" \
+    "${scramble_p1_outputs_json_filename}"
 fi
 
 if [[ "${run_wham}" == true ]]; then
+  wham_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/wham_XXXXXX")
+
   ./run_whamg.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
@@ -164,7 +188,8 @@ if [[ "${run_wham}" == true ]]; then
     "${reference_fasta}" \
     "${reference_index}" \
     "${include_bed_file}" \
-    "${primary_contigs_list}"
+    "${primary_contigs_list}" \
+    "${wham_outputs_json_filename}"
 fi
 
 # per discussion with Mark, we're not running module metrics.
@@ -188,3 +213,42 @@ fi
 #     > "${prefix}.vcf.tsv"
 #  fi
 #fi
+
+outputs_filename="${output_dir}/gather_sample_evidence_outputs.json"
+outputs_json=$(jq -n \
+  --arg coverage_counts "$([ "${collect_coverage}" = "false" ] && echo "" || jq -r ".counts" "${collect_counts_outputs_json_filename}")" \
+  --arg manta_vcf "$([ "${run_manta}" = "false" ] && echo "" || jq -r ".vcf" "${manta_outputs_json_filename}")" \
+  --arg manta_index "$([ "${run_manta}" = "false" ] && echo "" || jq -r ".index" "${manta_outputs_json_filename}")" \
+  --arg scramble_vcf "$([ "${run_scramble}" = "false" ] && echo "" || jq -r ".vcf" "${scramble_p2_outputs_json_filename}")" \
+  --arg scramble_index "$([ "${run_scramble}" = "false" ] && echo "" || jq -r ".index" "${scramble_p2_outputs_json_filename}")" \
+  --arg scramble_clusters "$([ "${run_scramble}" = "false" ] && echo "" || jq -r ".clusters" "${scramble_p2_outputs_json_filename}")" \
+  --arg scramble_table "$([ "${run_scramble}" = "false" ] && echo "" || jq -r ".table" "${scramble_p2_outputs_json_filename}")" \
+  --arg pesr_disc "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".disc_out" "${collect_pesr_outputs_json_filename}")" \
+  --arg pesr_disc_index "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".disc_out_index" "${collect_pesr_outputs_json_filename}")" \
+  --arg pesr_split "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".split_out" "${collect_pesr_outputs_json_filename}")" \
+  --arg pesr_split_index "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".split_out_index" "${collect_pesr_outputs_json_filename}")" \
+  --arg pesr_sd "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".sd_out" "${collect_pesr_outputs_json_filename}")" \
+  --arg pesr_sd_index "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".sd_out_index" "${collect_pesr_outputs_json_filename}")" \
+  --arg wham_vcf "$([ "${run_wham}" = "false" ] && echo "" || jq -r ".vcf" "${wham_outputs_json_filename}")" \
+  --arg wham_index "$([ "${run_wham}" = "false" ] && echo "" || jq -r ".index" "${wham_outputs_json_filename}")" \
+  '{
+     "coverage_counts": $coverage_counts,
+     "manta_vcf": $manta_vcf,
+     "manta_index": $manta_index,
+     "scramble_vcf": $scramble_vcf,
+     "scramble_index": $scramble_index,
+     "scramble_clusters": $scramble_clusters,
+     "scramble_table": $scramble_table,
+     "pesr_disc": $pesr_disc,
+     "pesr_disc_index": $pesr_disc_index,
+     "pesr_split": $pesr_split,
+     "pesr_split_index": $pesr_split_index,
+     "pesr_sd": $pesr_sd,
+     "pesr_sd_index": $pesr_sd_index,
+     "wham_vcf": $wham_vcf,
+     "wham_index": $wham_index
+   }' \
+)
+echo "${outputs_json}" > "${outputs_filename}"
+
+echo -e "${GREEN}Successfully finished running `gather_sample_evidence`.${NC} Outputs are serialized to: ${outputs_filename}"
