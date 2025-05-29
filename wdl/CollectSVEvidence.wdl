@@ -64,15 +64,6 @@ task RunCollectSVEvidence {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-      bam_or_cram_file: {
-        localization_optional: true
-      }
-      bam_or_cram_index: {
-        localization_optional: true
-      }
-  }
-
   Float bam_or_cram_size = size(bam_or_cram_file, "GiB")
   Int vm_disk_size = ceil(bam_or_cram_size + 50)
 
