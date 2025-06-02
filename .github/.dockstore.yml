@@ -6,7 +6,6 @@ workflows:
     filters:
       branches:
         - main
-        - patch-streaming
       tags:
         - /.*/
 
