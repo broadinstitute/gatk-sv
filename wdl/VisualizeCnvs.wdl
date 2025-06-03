@@ -12,7 +12,6 @@ workflow VisualizeCnvs {
     String prefix
     Array[File] median_files
     Array[File] rd_files
-    File ped_file
     Int min_size
     String flags
     String sv_pipeline_docker
@@ -27,7 +26,6 @@ workflow VisualizeCnvs {
     input:
       vcf_or_bed=vcf_or_bed,
       median_files=median_files,
-      ped_file=ped_file,
       rd_files=rd_files,
       rd_file_indexes=rd_file_indexes,
       prefix=prefix,
@@ -48,7 +46,6 @@ task RdTestPlot {
     Array[File] rd_file_indexes
     Array[File] median_files
     Int min_size
-    File ped_file
     String prefix
     String sv_pipeline_docker
     String flags
@@ -111,7 +108,6 @@ task RdTestPlot {
       -n ~{prefix} \
       -x rd_subsets \
       -m median_file.txt \
-      -f ~{ped_file} \
       -p TRUE \
       -w samples.txt \
       ~{flags}
