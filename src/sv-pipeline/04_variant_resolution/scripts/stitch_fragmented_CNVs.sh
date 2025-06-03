@@ -58,7 +58,7 @@ while getopts ":e:m:x:h" opt; do
       MAXPAD=${OPTARG}
       ;;
     x)
-      MAXOVR=${OPTART}
+      MAXOVR=${OPTARG}
       ;;
   esac
 done
