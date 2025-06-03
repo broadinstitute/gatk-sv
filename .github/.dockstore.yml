@@ -213,6 +213,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_vis_mcnvs
       tags:
         - /.*/
 

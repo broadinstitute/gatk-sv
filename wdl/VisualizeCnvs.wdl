@@ -68,7 +68,7 @@ task RdTestPlot {
 
     if [[ ~{vcf_or_bed} == *.vcf.gz ]]; then
       # Subset to DEL/DUP above min size and covert to bed format
-      bcftools view -i '(SVTYPE=="DEL" || SVTYPE=="DUP") && SVLEN>=~{min_size}' ~{vcf_or_bed} \
+      bcftools view -i '(SVTYPE=="CNV") && SVLEN>=~{min_size}' ~{vcf_or_bed} \
         | svtk vcf2bed stdin raw.bed
       # Swap columns 5/6 for RdTest
       awk -F '\t' -v OFS="\t" '{print $1,$2,$3,$4,$6,$5}' raw.bed > cnvs.bed
@@ -83,7 +83,7 @@ task RdTestPlot {
         DECOMPRESSED_BED="~{vcf_or_bed}"
       fi
       # Subset to DEL/DUP above min size and swap columns 5/6 for RdTest
-      awk -F '\t' -v OFS="\t" '{ if ($0!~"#" && $3-$2>=~{min_size} && ($5=="DEL" || $5=="DUP")) {print $1,$2,$3,$4,$6,$5} }' $DECOMPRESSED_BED > cnvs.bed
+      awk -F '\t' -v OFS="\t" '{ if ($0!~"#" && $3-$2>=~{min_size} && ($5=="CNV")) {print $1,$2,$3,$4,$6,$5} }' $DECOMPRESSED_BED > cnvs.bed
       # Get list of all sample IDs
       awk -F '\t' -v OFS="\t" '{ if ($0!~"#") {print $6} }' $DECOMPRESSED_BED \
         | sed 's/\,/\n/g' \
