@@ -650,23 +650,27 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
     cat("\nDEBUG - One Sample Z-test for CNV:", cnvID, "\n")
     cat("Number of control samples:", length(Control), "\n")
     cat("Control group summary:\n")
-    cat("  Mean:", format(mean(Control), digits=6), "\n")
-    cat("  SD:", format(sd(Control), digits=6), "\n")
+    cat("  Median:", format(median(Control), digits=6), "\n")
+    cat("  MAD:", format(mad(Control), digits=6), "\n")
     cat("  Min:", format(min(Control), digits=6), "\n")
     cat("  Max:", format(max(Control), digits=6), "\n")
     cat("Treatment value:", format(Treat, digits=6), "\n")
   }
   
-  ##Calculate one-sided z score##
+  ##Calculate one-sided z score using median and MAD with robust Z-score##
+  # Use robust Z-score: 0.6745 * (x - median) / mad
+  # The 0.6745 factor makes robust Z-score comparable to standard Z-score
   if (toupper(cnvtype) == "DEL") {
-    ztest.p <- pnorm((Treat - mean(Control)) / sd(Control))
+    robust_z <- 0.6745 * (Treat - median(Control)) / mad(Control)
+    ztest.p <- pnorm(robust_z)
   } else{
-    ztest.p <- pnorm((mean(Control) - Treat) / sd(Control))
+    robust_z <- 0.6745 * (median(Control) - Treat) / mad(Control) 
+    ztest.p <- pnorm(robust_z)
   }
   
   # Debug printing for specific CNV IDs
   if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5", "all_samples_depth_chr12_0000011e")) {
-    cat("Z-score:", format((Treat - mean(Control)) / sd(Control), digits=6), "\n")
+    cat("Robust Z-score (0.6745 * (x-median)/MAD):", format(robust_z, digits=6), "\n")
     cat("P-value:", format(ztest.p, scientific=TRUE, digits=6), "\n")
   }
   
@@ -680,9 +684,11 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
     Treat2 <-
       cnv_matrix[singlesample, column]
     if (toupper(cnvtype) == "DEL") {
-      single.p <- pnorm((Treat2 - mean(Control2)) / sd(Control2))
+      robust_z2 <- 0.6745 * (Treat2 - median(Control2)) / mad(Control2)
+      single.p <- pnorm(robust_z2)
     } else {
-      single.p <- pnorm((mean(Control2) - Treat2) / sd(Control2))
+      robust_z2 <- 0.6745 * (median(Control2) - Treat2) / mad(Control2)
+      single.p <- pnorm(robust_z2)
     }
     #store diffrent z p-value by column##
     plist[i] <- single.p
@@ -712,28 +718,40 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   # Debug printing for specific CNV IDs
   cnvID <- genotype_matrix[1,1]
   if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5", "all_samples_depth_chr12_0000011e")) {
-    cat("\nDEBUG - Two Sample Z-test for CNV:", cnvID, "\n")
+    cat("\nDEBUG - Two Sample Robust t-test for CNV:", cnvID, "\n")
     cat("Control group summary:\n")
     cat("  N:", length(Control), "\n")
-    cat("  Mean:", format(mean(Control), digits=6), "\n")
-    cat("  SD:", format(sd(Control), digits=6), "\n")
+    cat("  Median:", format(median(Control), digits=6), "\n")
+    cat("  Trimmed Mean (10%):", format(mean(Control, trim=0.1), digits=6), "\n")
     cat("  Min:", format(min(Control), digits=6), "\n")
     cat("  Max:", format(max(Control), digits=6), "\n")
     cat("Treatment group summary:\n")
     cat("  N:", length(Treat), "\n")
-    cat("  Mean:", format(mean(Treat), digits=6), "\n")
-    cat("  SD:", format(sd(Treat), digits=6), "\n")
+    cat("  Median:", format(median(Treat), digits=6), "\n")
+    cat("  Trimmed Mean (10%):", format(mean(Treat, trim=0.1), digits=6), "\n")
     cat("  Min:", format(min(Treat), digits=6), "\n")
     cat("  Max:", format(max(Treat), digits=6), "\n")
   }
   
+  # Robust t-test using trimmed means and Welch's method for unequal variances
   if (toupper(cnvtype) == "DEL") {
-    P_object <- permTS(Control, Treat, alternative = "greater", method = 'pclt')$p.value
-  } else{ P_object <- permTS(Control, Treat, alternative = "less", method = 'pclt')$p.value }
+    # For deletions: control should be greater than treatment
+    P_object <- t.test(Control, Treat, alternative = "greater", 
+                      var.equal = FALSE, paired = FALSE)$p.value
+  } else{ 
+    # For duplications: treatment should be greater than control
+    P_object <- t.test(Control, Treat, alternative = "less", 
+                      var.equal = FALSE, paired = FALSE)$p.value 
+  }
   
   # Debug printing for specific CNV IDs
   if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5", "all_samples_depth_chr12_0000011e")) {
-    cat("P-value:", format(P_object, scientific=TRUE, digits=6), "\n")
+    cat("P-value (Robust t-test):", format(P_object, scientific=TRUE, digits=6), "\n")
+    
+    # Also calculate effect size (Cohen's d with pooled SD)
+    pooled_sd <- sqrt(((length(Control)-1)*var(Control) + (length(Treat)-1)*var(Treat)) / (length(Control)+length(Treat)-2))
+    cohens_d <- abs(mean(Control) - mean(Treat)) / pooled_sd
+    cat("Effect size (Cohen's d):", format(cohens_d, digits=4), "\n")
   }
   
   ##Find the secondest worst p-value and record as an assement metric#
@@ -744,9 +762,9 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
     Control2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)] == 2), column]
     Treat2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)]!=2), column]
     if (toupper(cnvtype) == "DEL") {
-      singlep <- permTS(Control2, Treat2, alternative = "greater", method = 'pclt')$p.value
+      singlep <- wilcox.test(Control2, Treat2, alternative = "greater", exact = FALSE, correct = TRUE)$p.value
     } else{
-      singlep <- permTS(Control2, Treat2, alternative = "less", method = 'pclt')$p.value
+      singlep <- wilcox.test(Control2, Treat2, alternative = "less", exact = FALSE, correct = TRUE)$p.value
     }
     #store diffrent z p-value by column##
     plist[i] <- singlep
