@@ -20,9 +20,12 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
 
     Array[String] pacbio_sample_ids  # Corresponding to files below (must be a subset of training_sample_ids)
     Array[File] vapor_files
-    Array[File] pbsv_vcfs
-    Array[File] pav_vcfs
-    Array[File] sniffles_vcfs
+    Array[File]? pbsv_vcfs
+    Array[File]? pav_vcfs
+    Array[File]? sniffles_vcfs
+
+    # Override if not all tools are provided. Must be in order: pbsv, pav, sniffles
+    Array[String] tool_names = ["pbsv", "pav", "sniffles"]
 
     # Optional: array intensity ratio files
     Array[File]? irs_sample_batches
@@ -53,9 +56,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     String sv_pipeline_docker
     String linux_docker
   }
-
-  Array[String] tool_names = ["pbsv", "pav", "sniffles"]
-  Array[Array[File]] pacbio_vcfs = transpose([pbsv_vcfs, pav_vcfs, sniffles_vcfs])
+  Array[Array[File]] pacbio_vcfs = transpose(select_all([pbsv_vcfs, pav_vcfs, sniffles_vcfs]))
 
   String output_prefix_ =
     if defined(output_prefix) then

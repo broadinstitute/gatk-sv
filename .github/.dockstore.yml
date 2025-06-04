@@ -233,3 +233,13 @@ workflows:
         - main
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: MakeGqRecalibratorTrainingSetFromPacBio
+    primaryDescriptorPath: /wdl/MakeGqRecalibratorTrainingSetFromPacBio.wdl
+    filters:
+      branches:
+        - main
+        - mw_makegq_optional_vcfs
+      tags:
+        - /.*/
