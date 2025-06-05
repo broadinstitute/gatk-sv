@@ -483,12 +483,14 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   Treat<-Treat[singlesample]
   a<-create_groups(genotype_matrix, cnv_matrix)$a
   b<-create_groups(genotype_matrix, cnv_matrix)$b
-  ##Calculate one-sided z score##
+  
+  ##Calculate one-sided z score using median and MAD##
   if (toupper(cnvtype) == "DEL") {
-    ztest.p <- pnorm((Treat - mean(Control)) / sd(Control))
+    ztest.p <- pnorm((Treat - median(Control)) / mad(Control))
   } else{
-    ztest.p <- pnorm((mean(Control) - Treat) / sd(Control))
+    ztest.p <- pnorm((median(Control) - Treat) / mad(Control))
   }
+  
   ##Find the secondest worst p-value and record as an assement metric## 
   plist <- c()
   i = 1
@@ -499,9 +501,11 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
     Treat2 <-
       cnv_matrix[singlesample, column]
     if (toupper(cnvtype) == "DEL") {
-      single.p <- pnorm((Treat2 - mean(Control2)) / sd(Control2))
+      robust_z <- 0.6745 * (Treat2 - median(Control2)) / mad(Control2)
+      single.p <- pnorm(robust_z)
     } else {
-      single.p <- pnorm((mean(Control2) - Treat2) / sd(Control2))
+      robust_z <- 0.6745 * (median(Control2) - Treat2) / mad(Control2)
+      single.p <- pnorm(robust_z)
     }
     #store diffrent z p-value by column##
     plist[i] <- single.p
@@ -527,9 +531,34 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   Treat<-create_groups(genotype_matrix, cnv_matrix)$Treat
   a<-create_groups(genotype_matrix, cnv_matrix)$a
   b<-create_groups(genotype_matrix, cnv_matrix)$b
+  
+  # Debug printing for specific CNV IDs
+  cnvID <- genotype_matrix[1,1]
+  if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5", "all_samples_depth_chr12_0000011e")) {
+    cat("\nDEBUG - Two Sample Wilcoxon Rank Sum Test for CNV:", cnvID, "\n")
+    cat("Control group summary:\n")
+    cat("  N:", length(Control), "\n")
+    cat("  Median:", format(median(Control), digits=6), "\n")
+    cat("  Min:", format(min(Control), digits=6), "\n")
+    cat("  Max:", format(max(Control), digits=6), "\n")
+    cat("Treatment group summary:\n")
+    cat("  N:", length(Treat), "\n")
+    cat("  Median:", format(median(Treat), digits=6), "\n")
+    cat("  Min:", format(min(Treat), digits=6), "\n")
+    cat("  Max:", format(max(Treat), digits=6), "\n")
+  }
+  
+  # Wilcoxon Rank Sum Test (Mann-Whitney U test)
   if (toupper(cnvtype) == "DEL") {
-    P_object <- permTS(Control, Treat, alternative = "greater", method = 'pclt')$p.value
-  } else{ P_object <- permTS(Control, Treat, alternative = "less", method = 'pclt')$p.value }
+    P_object <- wilcox.test(Control, Treat, alternative = "greater", exact = FALSE)$p.value
+  } else{ 
+    P_object <- wilcox.test(Control, Treat, alternative = "less", exact = FALSE)$p.value 
+  }
+  
+  # Debug printing for specific CNV IDs
+  if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5", "all_samples_depth_chr12_0000011e")) {
+    cat("P-value (Wilcoxon Rank Sum Test):", format(P_object, scientific=TRUE, digits=6), "\n")
+  }
   
   ##Find the secondest worst p-value and record as an assement metric#
   plist<-c()
@@ -539,9 +568,9 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
     Control2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)] == 2), column]
     Treat2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)]!=2), column]
     if (toupper(cnvtype) == "DEL") {
-      singlep <- permTS(Control2, Treat2, alternative = "greater", method = 'pclt')$p.value
+      singlep <- wilcox.test(Control2, Treat2, alternative = "greater", exact = FALSE)$p.value
     } else{
-      singlep <- permTS(Control2, Treat2, alternative = "less", method = 'pclt')$p.value
+      singlep <- wilcox.test(Control2, Treat2, alternative = "less", exact = FALSE)$p.value
     }
     #store diffrent z p-value by column##
     plist[i] <- singlep
@@ -651,7 +680,7 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   } else if (toupper(cnvtype) == "DEL") {
     plot_colormatrix[, (endcolnormal + 1):ncol(plot_colormatrix)] <- "red"
     plot_colormatrix[,5:endcolnormal]<-"grey"
-    plot_linematrix[, (endcolnormal + 1):ncol(plot_colormatrix)] <- "3"
+    plot_linematrix[, (endcolnormal + 1):ncol(plot_linematrix)] <- "3"
     plot_linematrix[,5:endcolnormal]<-"0.5"
   } else if (toupper(cnvtype) == "DUP") {
     plot_colormatrix[, (endcolnormal + 1):ncol(plot_colormatrix)] <- "blue"
