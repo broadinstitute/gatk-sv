@@ -87,7 +87,6 @@ task BuildPloidyMatrix {
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-
 }
 
 task PloidyScore {
@@ -107,22 +106,32 @@ task PloidyScore {
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  
   output {
     File ploidy_plots = "${batch}_ploidy_plots.tar.gz"
   }
+  
   command <<<
-
     set -euo pipefail
+    
     mkdir ploidy_est
     Rscript /opt/WGD/bin/estimatePloidy.R -z -O ./ploidy_est ~{ploidy_matrix}
 
-    #TODO: hotfix for "file changed as we read it" error caused by non-blocking system() calls in the R script
     sleep 10
-
+    
+    python /opt/sv-pipeline/02_evidence_assessment/estimated_CN_denoising.py \
+      --binwise-copy-number ./ploidy_est/binwise_estimated_copy_numbers.bed.gz \
+      --estimated-copy-number ./ploidy_est/estimated_copy_numbers.txt.gz \
+      --output-stats cn_denoising_stats.tsv \
+      --output-pdf cn_denoising_plots.pdf
+    
+    cp cn_denoising_stats.tsv ./ploidy_est/
+    cp cn_denoising_plots.pdf ./ploidy_est/
+    
     tar -zcf ./ploidy_est.tar.gz ./ploidy_est
     mv ploidy_est.tar.gz ~{batch}_ploidy_plots.tar.gz
-  
   >>>
+  
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
@@ -132,6 +141,5 @@ task PloidyScore {
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-
 }
 
