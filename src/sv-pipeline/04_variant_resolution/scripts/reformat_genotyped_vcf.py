@@ -3,8 +3,7 @@
 #
 
 """
-Replaces EV field numeric codes with strings and fixes alleles for multi-allelic CNVs. Optionally drops records with
-invalid coordinates.
+Fixes alleles for multi-allelic CNVs. Optionally drops records with invalid coordinates.
 """
 
 import argparse
@@ -12,28 +11,12 @@ import logging
 import pysam
 import sys
 
-EVIDENCE_LIST = [
-    '',           # 0
-    'RD',         # 1
-    'PE',         # 2
-    'RD,PE',      # 3
-    'SR',         # 4
-    'RD,SR',      # 5
-    'PE,SR',      # 6
-    'RD,PE,SR'    # 7
-]
-
-EV_FORMAT_HEADER = '##FORMAT=<ID=EV,Number=.,Type=String,Description="Classes of evidence supporting final genotype">'
-
 
 def get_new_header(header):
     header_list = str(header).split('\n')
     new_header_lines = list()
     for line in header_list:
-        if line.startswith('##FORMAT=<ID=EV,'):
-            # Updates Number/Type
-            new_header_lines.append(EV_FORMAT_HEADER)
-        elif line.startswith('##INFO=<ID=MULTIALLELIC,'):
+        if line.startswith('##INFO=<ID=MULTIALLELIC,'):
             # Remove MULTIALLELIC field (legacy)
             continue
         elif line.startswith('#CHROM'):
@@ -112,7 +95,6 @@ def process_record(record, drop_invalid_coords, ref_contig_length_dict):
     # Remove MULTIALLELIC field (legacy)
     record.info.pop('MULTIALLELIC')
     # Since pysam messes with some of the formatting (i.e. END limitation) we parse the string and replace
-    max_ev = len(EVIDENCE_LIST) - 1
     record_tokens = str(record).strip().split('\t')
     if drop_invalid_coords:
         if not valid_record_coordinates(record_tokens=record_tokens, ref_contig_length_dict=ref_contig_length_dict):
@@ -120,7 +102,6 @@ def process_record(record, drop_invalid_coords, ref_contig_length_dict):
             return None
     format_keys = record_tokens[8].split(':')
     gt_index = format_keys.index('GT')
-    ev_index = format_keys.index('EV')
     new_record_tokens = record_tokens[:9]
     for format in record_tokens[9:]:
         format_tokens = format.split(':')
@@ -128,16 +109,6 @@ def process_record(record, drop_invalid_coords, ref_contig_length_dict):
         if record.info['SVTYPE'] == 'CNV':
             gt_tokens = format_tokens[gt_index].split('/')
             format_tokens[gt_index] = "/".join(["." for _ in gt_tokens])
-        # Convert evidence as string list representation
-        ev = format.split(':')[ev_index]
-        if ev == '.' or not ev:
-            new_ev = '.'
-        else:
-            ev_int = int(ev)
-            if ev_int < 0 or ev_int > max_ev:
-                raise ValueError(f"Invalid EV value {ev_int} in record {record.id}")
-            new_ev = EVIDENCE_LIST[ev_int]
-        format_tokens[ev_index] = new_ev
         new_record_tokens.append(':'.join(format_tokens))
     return '\t'.join(new_record_tokens)
 
