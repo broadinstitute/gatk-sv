@@ -96,10 +96,8 @@ zcat ${INVCF} \
   | grep -e 'SVTYPE=DEL\|SVTYPE=DUP' \
   | fgrep -v "MULTIALLELIC" \
   | awk -v OFS="\t" '{ print $3, $8 }' \
-  | sed 's/EVIDENCE=/\t/g' \
-  | cut -f1,3 \
   | sed 's/\;/\t/g' \
-  | awk -v check=${CHECK_EVIDENCE} '{ if (check=="true" && ($2~"RD" || $2~"BAF") && $2!~"PE" && $2!~"SR") print $1 }' \
+  | cut -f1 \
   | fgrep -wf - <( zcat ${INVCF} ) \
   | cat <( zcat ${INVCF} | fgrep "#" ) - \
   | vcf-sort \
