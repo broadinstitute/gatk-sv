@@ -1,5 +1,7 @@
 #!/usr/bin/env Rscript
 
+library(vioplot)
+
 args <- commandArgs(trailingOnly=TRUE)
 if (length(args) != 2) {
   stop("Usage: plot_variant_counts.R <variant_count_file> <caller>")
@@ -45,10 +47,10 @@ for (Y in y_vals) {
       vals <- vals[vals > 0]
       
       if (length(vals) > 0) {
-        boxplot(vals, main=contig, ylab="Count", col="skyblue", 
-                cex.main=1.2, cex.lab=1.1)
-        stripchart(vals, vertical=TRUE, method="jitter", 
-                  add=TRUE, col="darkblue", pch=16, cex=0.8)
+        vioplot(vals, main=contig, ylab="Count", col="skyblue", 
+                cex.main=1.2, cex.lab=1.1, border="black")
+        points(jitter(rep(1, length(vals)), amount=0.1), vals, 
+                col="darkblue", pch=16, cex=0.8)
       } else {
         plot.new()
         title(main=contig, cex.main=1.2)
@@ -56,7 +58,6 @@ for (Y in y_vals) {
       }
     }
     
-    dev.off()
     cat("Generated plot:", out_file, "\n")
   }
 }
