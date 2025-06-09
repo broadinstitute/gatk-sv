@@ -1425,8 +1425,8 @@ runRdTest<-function(bed)
     ##Combine individual P-values with fisher.method##
     if (length(p.list) > 1) {
     ##Need to change 0 to 1e-300 for sumlog function##  
-      p.list<-rapply(p.list,function(x) ifelse(x==0,1e-300,x), how = "replace")
-      p.2ndmax<-rapply(p.2ndmax,function(x) ifelse(x==0,1e-300,x), how = "replace")
+      p.list<-rapply(p.list,function(x) ifelse(is.na(x),1e-300,ifelse(x==0,1e-300,x)), how = "replace")
+      p.2ndmax<-rapply(p.2ndmax,function(x) ifelse(is.na(x),1e-300,ifelse(x==0,1e-300,x)), how = "replace")
       p <- list(sumlog(unlist(p.list))$p, sumlog(unlist(p.2ndmax))$p)
     } else {
       p <- c(p.list[1], p.2ndmax[1])
