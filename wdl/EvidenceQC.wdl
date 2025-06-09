@@ -267,8 +267,8 @@ task CreateVariantCountPlots {
     tar -xzf ~{ploidy_plots_tarball}
 
     mkdir -p ploidy_est/variant_count_plots
-
-    ~{sep=' ' variant_count_files} | tr ' ' '\n' | while read file; do
+    
+    for file in ~{sep=' ' variant_count_files}; do
       if [[ -f "$file" ]]; then
         caller=$(basename "$file" | cut -d'.' -f2)
         echo "Processing $caller variant counts from $file"
