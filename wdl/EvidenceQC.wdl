@@ -274,7 +274,7 @@ task CreateVariantCountPlots {
         echo "Processing $caller variant counts from $file"
         
         cd ploidy_est/variant_count_plots
-        Rscript /opt/sv-pipeline/scripts/plot_variant_counts.R "../../$file" "$caller"
+        Rscript /opt/sv-pipeline/scripts/plot_variant_counts.R "$file" "$caller"
         cd ../..
       fi
     done
