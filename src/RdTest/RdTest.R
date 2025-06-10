@@ -646,7 +646,7 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   
   # Debug printing for specific CNV IDs
   cnvID <- genotype_matrix[1,1]
-  if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5", "all_samples_depth_chr12_0000011e")) {
+  if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5")) {
     cat("\nDEBUG - One Sample Z-test for CNV:", cnvID, "\n")
     cat("Number of control samples:", length(Control), "\n")
     cat("Control group summary:\n")
@@ -669,7 +669,7 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   }
   
   # Debug printing for specific CNV IDs
-  if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5", "all_samples_depth_chr12_0000011e")) {
+  if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5")) {
     cat("Robust Z-score (0.6745 * (x-median)/MAD):", format(robust_z, digits=6), "\n")
     cat("P-value:", format(ztest.p, scientific=TRUE, digits=6), "\n")
   }
@@ -717,25 +717,23 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   
   # Debug printing for specific CNV IDs
   cnvID <- genotype_matrix[1,1]
-  if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5", "all_samples_depth_chr12_0000011e")) {
-    cat("\nDEBUG - Two Sample Robust t-test for CNV:", cnvID, "\n")
+  if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
+    cat("\nDEBUG - Two Sample t-test for CNV:", cnvID, "\n")
     cat("Control group summary:\n")
     cat("  N:", length(Control), "\n")
     cat("  Mean:", format(mean(Control), digits=6), "\n")
-    cat("  Trimmed Mean (10%):", format(mean(Control, trim=0.1), digits=6), "\n")
     cat("  SD:", format(sd(Control), digits=6), "\n")
     cat("  Min:", format(min(Control), digits=6), "\n")
     cat("  Max:", format(max(Control), digits=6), "\n")
     cat("Treatment group summary:\n")
     cat("  N:", length(Treat), "\n")
     cat("  Mean:", format(mean(Treat), digits=6), "\n")
-    cat("  Trimmed Mean (10%):", format(mean(Treat, trim=0.1), digits=6), "\n")
     cat("  SD:", format(sd(Treat), digits=6), "\n")
     cat("  Min:", format(min(Treat), digits=6), "\n")
     cat("  Max:", format(max(Treat), digits=6), "\n")
   }
   
-  # Robust t-test with trimmed means (removes extreme 10% from each tail)
+  # Standard t-test without trimming
   if (toupper(cnvtype) == "DEL") {
     # For deletions: control should be greater than treatment
     P_object <- t.test(Control, Treat, alternative = "greater", var.equal = FALSE)$p.value
@@ -745,8 +743,8 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   }
   
   # Debug printing for specific CNV IDs
-  if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5", "all_samples_depth_chr12_0000011e")) {
-    cat("P-value (Robust t-test):", format(P_object, scientific=TRUE, digits=6), "\n")
+  if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
+    cat("P-value (t-test):", format(P_object, scientific=TRUE, digits=6), "\n")
   }
   
   ##Find the secondest worst p-value and record as an assement metric#
