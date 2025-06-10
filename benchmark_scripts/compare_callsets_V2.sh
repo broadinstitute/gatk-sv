@@ -238,5 +238,5 @@ ${BIN}/compare_callsets_helper.V2.R \
 
 
 ###CLEAN UP
-rm -rf ${QCTMP}
+rm -rf ${OVRTMP}
 
