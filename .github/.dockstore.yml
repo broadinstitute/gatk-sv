@@ -15,7 +15,7 @@ workflows:
     filters:
       branches:
         - main
-        - kj_evidenceqc_enhancement
+        - kj_denoising_evidence_qc
       tags:
         - /.*/
 
