@@ -47,8 +47,8 @@ for (Y in y_vals) {
       vals <- vals[vals > 0]
       
       if (length(vals) > 0) {
-        vioplot(vals, main=contig, ylab="Count", col="skyblue", 
-                cex.main=1.2, cex.lab=1.1, border="black")
+        vioplot(vals, main=contig, col="skyblue", 
+                cex.main=1.2, border="black", xaxt="n")
         points(jitter(rep(1, length(vals)), amount=0.1), vals, 
                 col="darkblue", pch=16, cex=0.8)
       } else {
@@ -58,6 +58,7 @@ for (Y in y_vals) {
       }
     }
     
+    dev.off()
     cat("Generated plot:", out_file, "\n")
   }
 }
