@@ -266,20 +266,20 @@ task CreateVariantCountPlots {
 
     tar -xzf ~{ploidy_plots_tarball}
 
-    mkdir -p ploidy_est/variant_count_plots
+    mkdir -p ./ploidy_est/variant_count_plots
     
     for file in ~{sep=' ' variant_count_files}; do
       if [[ -f "$file" ]]; then
         caller=$(basename "$file" | cut -d'.' -f2)
         echo "Processing $caller variant counts from $file"
         
-        cd ploidy_est/variant_count_plots
+        cd ./ploidy_est/variant_count_plots
         Rscript /opt/sv-pipeline/scripts/plot_variant_counts.R "$file" "$caller"
         cd ../..
       fi
     done
 
-    tar -czf ~{output_prefix}.ploidy_est.tar.gz ploidy_est/
+    tar -czf ~{output_prefix}.ploidy_est.tar.gz ./ploidy_est/
   >>>
 
   runtime {
