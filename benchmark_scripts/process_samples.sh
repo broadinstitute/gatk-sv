@@ -115,7 +115,7 @@ process_sr_sample() {
     python3 "${SCRIPT_DIR}/extract_filter_info.py" --vcf "$sr_filtered_revised_vcf" --output "${sample_dir}/${sr_id}.sr.filter_info.tsv" || return 1
     
     echo "Annotating genomic context..."
-    "${GATK_SV_ROOT}/module18_annotate_genomic_context/annotate_genomic_context.sh" "$sr_bed" "$sr_annotated_bed" "$rm_ref" "$sd_ref" "$sr_ref" || return 1
+    "${SCRIPT_DIR}/annotate_genomic_context.sh" "$sr_bed" "$sr_annotated_bed" "$rm_ref" "$sd_ref" "$sr_ref" || return 1
     
     return 0
 }
@@ -186,7 +186,7 @@ process_lr_sample() {
     python3 "${SCRIPT_DIR}/extract_filter_info.py" --vcf "$lr_filtered_vcf" --output "${sample_dir}/${sr_id}.lr.filter_info.tsv" || return 1
     
     echo "Annotating genomic context..."
-    "${GATK_SV_ROOT}/module18_annotate_genomic_context/annotate_genomic_context.sh" "$lr_bed" "$lr_annotated_bed" "$rm_ref" "$sd_ref" "$sr_ref" || return 1
+    "${SCRIPT_DIR}/annotate_genomic_context.sh" "$lr_bed" "$lr_annotated_bed" "$rm_ref" "$sd_ref" "$sr_ref" || return 1
     
     return 0
 }
