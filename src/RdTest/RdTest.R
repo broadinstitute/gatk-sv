@@ -706,7 +706,7 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   return(output)
 }
 
-#twosamplet t-test
+#twosample wilcoxon rank sum test
 twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
 {
   #Call Treat (have SV) and Control Groups
@@ -718,33 +718,31 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   # Debug printing for specific CNV IDs
   cnvID <- genotype_matrix[1,1]
   if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
-    cat("\nDEBUG - Two Sample t-test for CNV:", cnvID, "\n")
+    cat("\nDEBUG - Two Sample Wilcoxon test for CNV:", cnvID, "\n")
     cat("Control group summary:\n")
     cat("  N:", length(Control), "\n")
-    cat("  Mean:", format(mean(Control), digits=6), "\n")
-    cat("  SD:", format(sd(Control), digits=6), "\n")
+    cat("  Median:", format(median(Control), digits=6), "\n")
     cat("  Min:", format(min(Control), digits=6), "\n")
     cat("  Max:", format(max(Control), digits=6), "\n")
     cat("Treatment group summary:\n")
     cat("  N:", length(Treat), "\n")
-    cat("  Mean:", format(mean(Treat), digits=6), "\n")
-    cat("  SD:", format(sd(Treat), digits=6), "\n")
+    cat("  Median:", format(median(Treat), digits=6), "\n")
     cat("  Min:", format(min(Treat), digits=6), "\n")
     cat("  Max:", format(max(Treat), digits=6), "\n")
   }
   
-  # Standard t-test without trimming
+  # Wilcoxon rank sum test (Mann-Whitney U test)
   if (toupper(cnvtype) == "DEL") {
     # For deletions: control should be greater than treatment
-    P_object <- t.test(Control, Treat, alternative = "greater", var.equal = FALSE)$p.value
+    P_object <- wilcox.test(Control, Treat, alternative = "greater")$p.value
   } else{ 
     # For duplications: treatment should be greater than control
-    P_object <- t.test(Control, Treat, alternative = "less", var.equal = FALSE)$p.value 
+    P_object <- wilcox.test(Control, Treat, alternative = "less")$p.value 
   }
   
   # Debug printing for specific CNV IDs
   if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
-    cat("P-value (t-test):", format(P_object, scientific=TRUE, digits=6), "\n")
+    cat("P-value (Wilcoxon test):", format(P_object, scientific=TRUE, digits=6), "\n")
   }
   
   ##Find the secondest worst p-value and record as an assement metric#
@@ -755,11 +753,11 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
     Control2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)] == 2), column]
     Treat2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)]!=2), column]
     if (toupper(cnvtype) == "DEL") {
-      singlep <- t.test(Control2, Treat2, alternative = "greater", var.equal = FALSE)$p.value
+      singlep <- wilcox.test(Control2, Treat2, alternative = "greater")$p.value
     } else{
-      singlep <- t.test(Control2, Treat2, alternative = "less", var.equal = FALSE)$p.value
+      singlep <- wilcox.test(Control2, Treat2, alternative = "less")$p.value
     }
-    #store diffrent z p-value by column##
+    #store diffrent p-value by column##
     plist[i] <- singlep
     i=i+1
   }
@@ -1373,7 +1371,7 @@ runRdTest<-function(bed)
   power<-ifelse(length(unlist(strsplit(as.character(sampleIDs), split = ","))) > 1,power,NA)
   if (!is.na(power) && power > 0.8) {
     p <- twosamplezscore.median(genotype_matrix, cnv_matrix, cnvtype)
-    p[3]<-"twoSampPerm"
+    p[3]<-"wilcoxon"
     names(p)<-c("Pvalue","Pmax_2nd","Test")
   } else {
     ##Need to break down underpowerd samples into multiple single z-tests##
