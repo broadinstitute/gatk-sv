@@ -23,7 +23,7 @@ options(error = function() {
 })
 
 #Loads required packages; installs if necessary
-RPackages <- c("optparse", "plyr", "MASS", "zoo","methods","metap", "e1071", "fpc", "BSDA", "DAAG", "pwr", "reshape", "perm", "hash")
+RPackages <- c("optparse", "plyr", "MASS", "zoo","methods","metap", "e1071", "fpc", "BSDA", "DAAG", "pwr", "reshape", "perm", "hash", "kSamples")
 for (i in RPackages)
 {
   if (i %in% rownames(installed.packages()) == FALSE) {
@@ -706,7 +706,7 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   return(output)
 }
 
-#twosample non-parametric permutation t-test
+#twosample Anderson-Darling test
 twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
 {
   #Call Treat (have SV) and Control Groups
@@ -718,7 +718,7 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   # Debug printing for specific CNV IDs
   cnvID <- genotype_matrix[1,1]
   if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
-    cat("\nDEBUG - Two Sample non-parametric permutation t-test for CNV:", cnvID, "\n")
+    cat("\nDEBUG - Two Sample Anderson-Darling test for CNV:", cnvID, "\n")
     cat("Control group summary:\n")
     cat("  N:", length(Control), "\n")
     cat("  Median:", format(median(Control), digits=6), "\n")
@@ -731,55 +731,21 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
     cat("  Max:", format(max(Treat), digits=6), "\n")
   }
   
-  # Non-parametric permutation t-test
-  # Calculate observed t-statistic
-  combined_data <- c(Control, Treat)
-  n_control <- length(Control)
-  n_treat <- length(Treat)
-  n_total <- n_control + n_treat
-  
-  # Observed t-statistic
-  mean_control <- mean(Control)
-  mean_treat <- mean(Treat)
-  var_control <- var(Control)
-  var_treat <- var(Treat)
-  pooled_var <- ((n_control - 1) * var_control + (n_treat - 1) * var_treat) / (n_total - 2)
-  se_diff <- sqrt(pooled_var * (1/n_control + 1/n_treat))
-  observed_t <- (mean_control - mean_treat) / se_diff
-  
-  # Permutation test with 1000 permutations
-  n_permutations <- 1000
-  perm_t_stats <- numeric(n_permutations)
-  
-  for (i in 1:n_permutations) {
-    # Randomly permute the combined data
-    perm_data <- sample(combined_data)
-    perm_control <- perm_data[1:n_control]
-    perm_treat <- perm_data[(n_control + 1):n_total]
-    
-    # Calculate permuted t-statistic
-    perm_mean_control <- mean(perm_control)
-    perm_mean_treat <- mean(perm_treat)
-    perm_var_control <- var(perm_control)
-    perm_var_treat <- var(perm_treat)
-    perm_pooled_var <- ((n_control - 1) * perm_var_control + (n_treat - 1) * perm_var_treat) / (n_total - 2)
-    perm_se_diff <- sqrt(perm_pooled_var * (1/n_control + 1/n_treat))
-    perm_t_stats[i] <- (perm_mean_control - perm_mean_treat) / perm_se_diff
-  }
-  
-  # Calculate p-value based on direction
+  # Anderson-Darling test for two samples
+  # Note: ad.test from nortest package is for one sample, so we use kSamples::ad.test
   if (toupper(cnvtype) == "DEL") {
-    # For deletions: control should be greater than treatment (positive t-stat)
-    P_object <- sum(perm_t_stats >= observed_t) / n_permutations
-  } else {
-    # For duplications: treatment should be greater than control (negative t-stat)
-    P_object <- sum(perm_t_stats <= observed_t) / n_permutations
+    # For deletions: control should be greater than treatment
+    ad_result <- kSamples::ad.test(Control, Treat)
+    P_object <- ad_result$ad[1,3]  # Extract p-value from AD test result
+  } else{ 
+    # For duplications: treatment should be greater than control
+    ad_result <- kSamples::ad.test(Control, Treat)
+    P_object <- ad_result$ad[1,3]  # Extract p-value from AD test result
   }
   
   # Debug printing for specific CNV IDs
   if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
-    cat("Observed t-statistic:", format(observed_t, digits=6), "\n")
-    cat("P-value (permutation t-test):", format(P_object, scientific=TRUE, digits=6), "\n")
+    cat("P-value (Anderson-Darling test):", format(P_object, scientific=TRUE, digits=6), "\n")
   }
   
   ##Find the secondest worst p-value and record as an assement metric#
@@ -789,46 +755,8 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   {
     Control2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)] == 2), column]
     Treat2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)]!=2), column]
-    
-    # Single column permutation t-test
-    combined_data2 <- c(Control2, Treat2)
-    n_control2 <- length(Control2)
-    n_treat2 <- length(Treat2)
-    n_total2 <- n_control2 + n_treat2
-    
-    # Observed t-statistic for this column
-    mean_control2 <- mean(Control2)
-    mean_treat2 <- mean(Treat2)
-    var_control2 <- var(Control2)
-    var_treat2 <- var(Treat2)
-    pooled_var2 <- ((n_control2 - 1) * var_control2 + (n_treat2 - 1) * var_treat2) / (n_total2 - 2)
-    se_diff2 <- sqrt(pooled_var2 * (1/n_control2 + 1/n_treat2))
-    observed_t2 <- (mean_control2 - mean_treat2) / se_diff2
-    
-    # Fewer permutations for per-column tests (for speed)
-    n_perm_col <- 1000
-    perm_t_stats2 <- numeric(n_perm_col)
-    
-    for (j in 1:n_perm_col) {
-      perm_data2 <- sample(combined_data2)
-      perm_control2 <- perm_data2[1:n_control2]
-      perm_treat2 <- perm_data2[(n_control2 + 1):n_total2]
-      
-      perm_mean_control2 <- mean(perm_control2)
-      perm_mean_treat2 <- mean(perm_treat2)
-      perm_var_control2 <- var(perm_control2)
-      perm_var_treat2 <- var(perm_treat2)
-      perm_pooled_var2 <- ((n_control2 - 1) * perm_var_control2 + (n_treat2 - 1) * perm_var_treat2) / (n_total2 - 2)
-      perm_se_diff2 <- sqrt(perm_pooled_var2 * (1/n_control2 + 1/n_treat2))
-      perm_t_stats2[j] <- (perm_mean_control2 - perm_mean_treat2) / perm_se_diff2
-    }
-    
-    if (toupper(cnvtype) == "DEL") {
-      singlep <- sum(perm_t_stats2 >= observed_t2) / n_perm_col
-    } else {
-      singlep <- sum(perm_t_stats2 <= observed_t2) / n_perm_col
-    }
-    
+    ad_result2 <- kSamples::ad.test(Control2, Treat2)
+    singlep <- ad_result2$ad[1,3]  # Extract p-value
     #store diffrent p-value by column##
     plist[i] <- singlep
     i=i+1
@@ -1443,7 +1371,7 @@ runRdTest<-function(bed)
   power<-ifelse(length(unlist(strsplit(as.character(sampleIDs), split = ","))) > 1,power,NA)
   if (!is.na(power) && power > 0.8) {
     p <- twosamplezscore.median(genotype_matrix, cnv_matrix, cnvtype)
-    p[3]<-"permutation.t"
+    p[3]<-"anderson.darling"
     names(p)<-c("Pvalue","Pmax_2nd","Test")
   } else {
     ##Need to break down underpowerd samples into multiple single z-tests##
