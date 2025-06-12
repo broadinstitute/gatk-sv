@@ -23,7 +23,7 @@ options(error = function() {
 })
 
 #Loads required packages; installs if necessary
-RPackages <- c("optparse", "plyr", "MASS", "zoo","methods","metap", "e1071", "fpc", "BSDA", "DAAG", "pwr", "reshape", "perm", "hash")
+RPackages <- c("optparse", "plyr", "MASS", "zoo","methods","metap", "e1071", "fpc", "BSDA", "DAAG", "pwr", "reshape", "perm", "hash", "kSamples")
 for (i in RPackages)
 {
   if (i %in% rownames(installed.packages()) == FALSE) {
@@ -706,7 +706,7 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   return(output)
 }
 
-#twosample robust Welch's t-test (using median and MAD)
+#twosample Anderson-Darling test
 twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
 {
   #Call Treat (have SV) and Control Groups
@@ -718,56 +718,27 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   # Debug printing for specific CNV IDs
   cnvID <- genotype_matrix[1,1]
   if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
-    cat("\nDEBUG - Two Sample Robust Welch's t-test for CNV:", cnvID, "\n")
+    cat("\nDEBUG - Anderson-Darling Test for CNV:", cnvID, "\n")
     cat("Control group summary:\n")
     cat("  N:", length(Control), "\n")
     cat("  Median:", format(median(Control), digits=6), "\n")
-    cat("  MAD:", format(mad(Control), digits=6), "\n")
     cat("  Min:", format(min(Control), digits=6), "\n")
     cat("  Max:", format(max(Control), digits=6), "\n")
     cat("Treatment group summary:\n")
     cat("  N:", length(Treat), "\n")
     cat("  Median:", format(median(Treat), digits=6), "\n")
-    cat("  MAD:", format(mad(Treat), digits=6), "\n")
     cat("  Min:", format(min(Treat), digits=6), "\n")
     cat("  Max:", format(max(Treat), digits=6), "\n")
   }
   
-  # Robust Welch's t-test using median and MAD
-  # Calculate robust t-statistic: (median1 - median2) / sqrt(MAD1²/n1 + MAD2²/n2)
-  # MAD correction factor: 1.4826 to make MAD consistent with SD under normality
-  mad_correction <- 1.4826
-  
-  median_control <- median(Control)
-  median_treat <- median(Treat)
-  mad_control <- mad(Control) * mad_correction
-  mad_treat <- mad(Treat) * mad_correction
-  n_control <- length(Control)
-  n_treat <- length(Treat)
-  
-  # Calculate robust t-statistic
-  pooled_se <- sqrt((mad_control^2 / n_control) + (mad_treat^2 / n_treat))
-  t_stat <- (median_control - median_treat) / pooled_se
-  
-  # Calculate degrees of freedom using Welch-Satterthwaite equation
-  df <- ((mad_control^2 / n_control) + (mad_treat^2 / n_treat))^2 / 
-        (((mad_control^2 / n_control)^2 / (n_control - 1)) + 
-         ((mad_treat^2 / n_treat)^2 / (n_treat - 1)))
-  
-  # Calculate p-value based on CNV type
-  if (toupper(cnvtype) == "DEL") {
-    # For deletions: expect control > treatment (one-tailed test)
-    P_object <- pt(t_stat, df, lower.tail = FALSE)
-  } else {
-    # For duplications: expect treatment > control (one-tailed test) 
-    P_object <- pt(-t_stat, df, lower.tail = FALSE)
-  }
+  # Anderson-Darling two-sample test
+  ad_result <- kSamples::ad.test(Control, Treat)
+  P_object <- ad_result$ad[1,3]  # Extract p-value from the result
   
   # Debug printing for specific CNV IDs
   if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
-    cat("Robust t-statistic:", format(t_stat, digits=6), "\n")
-    cat("Degrees of freedom:", format(df, digits=6), "\n")
-    cat("P-value (Robust Welch's t-test):", format(P_object, scientific=TRUE, digits=6), "\n")
+    cat("Anderson-Darling test statistic:", format(ad_result$ad[1,1], digits=6), "\n")
+    cat("P-value (Anderson-Darling):", format(P_object, scientific=TRUE, digits=6), "\n")
   }
   
   ##Find the secondest worst p-value and record as an assement metric#
@@ -778,25 +749,9 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
     Control2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)] == 2), column]
     Treat2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)]!=2), column]
     
-    # Calculate robust t-test for each column
-    median_control2 <- median(Control2)
-    median_treat2 <- median(Treat2)
-    mad_control2 <- mad(Control2) * mad_correction
-    mad_treat2 <- mad(Treat2) * mad_correction
-    n_control2 <- length(Control2)
-    n_treat2 <- length(Treat2)
-    
-    pooled_se2 <- sqrt((mad_control2^2 / n_control2) + (mad_treat2^2 / n_treat2))
-    t_stat2 <- (median_control2 - median_treat2) / pooled_se2
-    df2 <- ((mad_control2^2 / n_control2) + (mad_treat2^2 / n_treat2))^2 / 
-           (((mad_control2^2 / n_control2)^2 / (n_control2 - 1)) + 
-            ((mad_treat2^2 / n_treat2)^2 / (n_treat2 - 1)))
-    
-    if (toupper(cnvtype) == "DEL") {
-      singlep <- pt(t_stat2, df2, lower.tail = FALSE)
-    } else {
-      singlep <- pt(-t_stat2, df2, lower.tail = FALSE)
-    }
+    # Anderson-Darling test for each column
+    ad_result2 <- kSamples::ad.test(Control2, Treat2)
+    singlep <- ad_result2$ad[1,3]  # Extract p-value
     
     #store diffrent p-value by column##
     plist[i] <- singlep
@@ -1412,7 +1367,7 @@ runRdTest<-function(bed)
   power<-ifelse(length(unlist(strsplit(as.character(sampleIDs), split = ","))) > 1,power,NA)
   if (!is.na(power) && power > 0.8) {
     p <- twosamplezscore.median(genotype_matrix, cnv_matrix, cnvtype)
-    p[3]<-"robust.welch.t"
+    p[3]<-"anderson.darling"
     names(p)<-c("Pvalue","Pmax_2nd","Test")
   } else {
     ##Need to break down underpowerd samples into multiple single z-tests##
