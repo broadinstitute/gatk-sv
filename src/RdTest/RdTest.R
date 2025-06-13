@@ -201,9 +201,9 @@ twosample.pclt.robust <- function(scores, group) {
   # Use robust statistics: median and MAD instead of mean and SD
   median.scores <- median(scores)
   median.grp <- median(grp)
-  # MAD with correction factor 1.4826 to make it consistent with normal distribution SD
-  mad.scores <- mad(scores, constant = 1.4826)
-  mad.grp <- mad(grp, constant = 1.4826)
+  # MAD with default correction factor (1.4826) for normal distribution consistency
+  mad.scores <- mad(scores)
+  mad.grp <- mad(grp)
   
   # Calculate robust SSE using median absolute deviations
   SSE.scores.robust <- sum((scores - median.scores)^2)
@@ -820,19 +820,19 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   }
   
   ##Calculate one-sided z score using median and MAD with robust Z-score##
-  # Use robust Z-score: 0.6745 * (x - median) / mad
-  # The 0.6745 factor makes robust Z-score comparable to standard Z-score
+  # Use robust Z-score: (x - median) / mad
+  # MAD already includes the 1.4826 correction factor for normal distribution consistency
   if (toupper(cnvtype) == "DEL") {
-    robust_z <- 0.6745 * (Treat - median(Control)) / mad(Control)
+    robust_z <- (Treat - median(Control)) / mad(Control)
     ztest.p <- pnorm(robust_z)
   } else{
-    robust_z <- 0.6745 * (median(Control) - Treat) / mad(Control) 
+    robust_z <- (median(Control) - Treat) / mad(Control) 
     ztest.p <- pnorm(robust_z)
   }
   
   # Debug printing for specific CNV IDs
   if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5")) {
-    cat("Robust Z-score (0.6745 * (x-median)/MAD):", format(robust_z, digits=6), "\n")
+    cat("Robust Z-score ((x-median)/MAD):", format(robust_z, digits=6), "\n")
     cat("P-value:", format(ztest.p, scientific=TRUE, digits=6), "\n")
   }
   
@@ -846,10 +846,10 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
     Treat2 <-
       cnv_matrix[singlesample, column]
     if (toupper(cnvtype) == "DEL") {
-      robust_z2 <- 0.6745 * (Treat2 - median(Control2)) / mad(Control2)
+      robust_z2 <- (Treat2 - median(Control2)) / mad(Control2)
       single.p <- pnorm(robust_z2)
     } else {
-      robust_z2 <- 0.6745 * (median(Control2) - Treat2) / mad(Control2)
+      robust_z2 <- (median(Control2) - Treat2) / mad(Control2)
       single.p <- pnorm(robust_z2)
     }
     #store diffrent z p-value by column##
