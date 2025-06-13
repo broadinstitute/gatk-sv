@@ -891,13 +891,12 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   }
   
   # Anderson-Darling two-sample test
-  ad_result <- kSamples::ad.test(Control, Treat)
-  P_object <- ad_result$ad[1,3]  # Extract p-value from the result
+  cvm_result <- kSamples::ad.test(Control, Treat)
+  P_object <- cvm_result$ad[1,3]  # Extract p-value from the result
   
   # Debug printing for specific CNV IDs
   if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
-    cat("Anderson-Darling test statistic:", format(ad_result$ad[1,1], digits=6), "\n")
-    cat("P-value (Anderson-Darling):", format(P_object, scientific=TRUE, digits=6), "\n")
+    cat("P-value (Cramer-von Mises):", format(P_object, scientific=TRUE, digits=6), "\n")
   }
   
   ##Find the secondest worst p-value and record as an assement metric#
@@ -909,8 +908,8 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
     Treat2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)]!=2), column]
     
     # Anderson-Darling test for each column
-    ad_result2 <- kSamples::ad.test(Control2, Treat2)
-    singlep <- ad_result2$ad[1,3]  # Extract p-value
+    cvm_result2 <- kSamples::ad.test(Control2, Treat2)
+    singlep <- cvm_result2$ad[1,3]  # Extract p-value
     
     #store diffrent p-value by column##
     plist[i] <- singlep
