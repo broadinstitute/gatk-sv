@@ -23,17 +23,14 @@ options(error = function() {
 })
 
 #Loads required packages; installs if necessary
-RPackages <- c("optparse", "plyr", "MASS", "zoo","methods","metap", "e1071", "fpc", "BSDA", "DAAG", "pwr", "reshape", "perm", "hash")
+RPackages <- c("optparse", "plyr", "MASS", "zoo","methods","metap", "e1071", "fpc", "BSDA", "DAAG", "pwr", "reshape", "kSamples", "hash")
 for (i in RPackages)
 {
   if (i %in% rownames(installed.packages()) == FALSE) {
-    response <- readline("Install Required package (Y/N):")
-    if (response == "Y") {
-      install.packages((i), repos = "http://cran.rstudio.com")
-      library(i, character.only = TRUE)
-    } else {
-      stop (paste("Unable to run script without package: ", i, sep = ""))
-    }
+    # In non-interactive environments, automatically install missing packages
+    cat("Installing required package:", i, "\n")
+    install.packages((i), repos = "http://cran.rstudio.com")
+    library(i, character.only = TRUE)
   } else {
     library(i, character.only = TRUE)
   }
@@ -187,6 +184,168 @@ if (length(paste(opt$coveragefile,".tbi",sep=""))<1)
 options(scipen = 1000)
 
 ##RdTest functions
+
+#Robust two-sample permutation test using median and MAD
+twosample.pclt.robust <- function(scores, group) {
+  tab <- table(group, scores)
+  m <- sum(tab[2, ])
+  n <- length(scores)
+  Grp1 <- dimnames(tab)[[1]][2]
+  grp <- rep(0, n)
+  grp[group == Grp1] <- 1
+  T0 <- sum(scores * grp)
+  
+  # Use robust statistics: median and MAD instead of mean and SD
+  median.scores <- median(scores)
+  median.grp <- median(grp)
+  # MAD with default correction factor (1.4826) for normal distribution consistency
+  mad.scores <- mad(scores)
+  mad.grp <- mad(grp)
+  
+  # Calculate robust SSE using median absolute deviations
+  SSE.scores.robust <- sum((scores - median.scores)^2)
+  SSE.grp.robust <- sum((grp - median.grp)^2)
+  
+  # Robust Z-score calculation using median instead of mean
+  Z <- sqrt(n - 1) * (T0 - n * median.scores * median.grp) / sqrt(SSE.scores.robust * SSE.grp.robust)
+  
+  p.lte <- pnorm(Z)
+  p.gte <- 1 - pnorm(Z)
+  p.twosidedAbs <- 1 - pchisq(Z^2, 1)
+  p.values <- c(p.twosided = min(1, 2 * min(p.lte, p.gte)), 
+                p.lte = p.lte, p.gte = p.gte, p.twosidedAbs = p.twosidedAbs)
+  out <- list(p.values = p.values, Z = Z)
+  out
+}
+
+#Override permTS.default to use robust implementation when method='pclt'
+permTS.default.robust <- function(x, y, alternative = c("two.sided", "less", "greater"), 
+                                  exact = NULL, method = NULL, methodRule = NULL, 
+                                  control = NULL, ...) {
+  # Set defaults if not provided
+  if (is.null(methodRule)) {
+    methodRule <- get("methodRuleTS1", envir = asNamespace("perm"))
+  }
+  if (is.null(control)) {
+    control <- get("permControl", envir = asNamespace("perm"))()
+  }
+  
+  cm <- control$cm
+  nmc <- control$nmc
+  seed <- control$seed
+  digits <- control$digits
+  p.conf.level <- control$p.conf.level
+  setSEED <- control$setSEED
+  tsmethod <- control$tsmethod
+  
+  if (alternative[1] == "two.sidedAbs") {
+    warning("alternative='two.sidedAbs' may be deprecated in the future,\n            use alternative='two.sided' and control=permControl(tsmethod='abs'))")
+    alternative <- "two.sided"
+    tsmethod <- "abs"
+  }
+  alternative <- match.arg(alternative)
+  
+  if (!(tsmethod == "central" | tsmethod == "abs") & alternative == "two.sided") {
+    stop("only tsmethod='central' and tsmethod='abs' allowed")
+  }
+  if (tsmethod == "abs" & alternative == "two.sided") {
+    alternative <- "two.sidedAbs"
+  } else if (tsmethod == "central" & alternative == "two.sided") {
+    alternative <- "two.sided"
+  }
+  
+  if (!is.numeric(x) | !is.numeric(y) | !is.vector(x) | !is.vector(y)) 
+    stop("x and y must be numeric vectors")
+  
+  W <- c(x, y)
+  Z <- c(rep(1, length(x)), rep(0, length(y)))
+  
+  if (is.null(method)) 
+    method <- methodRule(W, Z, exact)
+  
+  method.OK <- (method == "pclt" | method == "exact.mc" | method == "exact.network" | method == "exact.ce")
+  if (!method.OK) 
+    stop("method not one of: 'pclt', 'exact.mc'. 'exact.network', 'exact.ce'")
+  
+  # Use robust version for pclt method, original functions for others
+  if (method == "pclt") {
+    mout <- twosample.pclt.robust(W, Z)
+  } else {
+    # Use original perm package functions for non-pclt methods
+    twosample.exact.network <- get("twosample.exact.network", envir = asNamespace("perm"))
+    twosample.exact.ce <- get("twosample.exact.ce", envir = asNamespace("perm"))
+    twosample.exact.mc <- get("twosample.exact.mc", envir = asNamespace("perm"))
+    
+    mout <- switch(method, 
+                   exact.network = twosample.exact.network(W, Z, digits), 
+                   exact.ce = twosample.exact.ce(W, Z, cm, digits), 
+                   exact.mc = twosample.exact.mc(W, Z, alternative, nmc, seed, digits, p.conf.level, setSEED))
+  }
+  
+  p.values <- mout$p.values
+  PVAL <- switch(alternative, 
+                 two.sided = p.values["p.twosided"], 
+                 greater = p.values["p.gte"], 
+                 less = p.values["p.lte"], 
+                 two.sidedAbs = p.values["p.twosidedAbs"])
+  
+  if (method == "exact.network") 
+    METHOD <- "Exact Permutation Test (network algorithm)"
+  else if (method == "pclt") 
+    METHOD <- "Robust Permutation Test using Asymptotic Approximation (median/MAD)"
+  else if (method == "exact.mc") 
+    METHOD <- "Exact Permutation Test Estimated by Monte Carlo"
+  else if (method == "exact.ce") 
+    METHOD <- "Exact Permutation Test (complete enumeration)"
+  
+  m <- match.call()
+  xname <- deparse(substitute(x))
+  yname <- deparse(substitute(y))
+  if (length(xname) > 1 || nchar(xname) > 10) 
+    xname <- c("GROUP 1")
+  if (length(yname) > 1 || nchar(yname) > 10) 
+    yname <- c("GROUP 2")
+  DNAME <- paste(xname, "and", yname)
+  
+  Z.stat <- mout$Z
+  if (!is.null(Z.stat)) 
+    names(Z.stat) <- "Z"
+  
+  null.value <- 0
+  estimate <- median(x) - median(y)  # Use median instead of mean for robust estimate
+  names(estimate) <- names(null.value) <- paste("median", xname, "- median", yname)
+  
+  p.conf.int <- if (exists("p.conf.int", mout)) mout$p.conf.int else NULL
+  if (method != "exact.mc") 
+    nmc <- NULL
+  
+  OUT <- list(statistic = Z.stat, estimate = estimate, parameter = NULL, 
+              p.value = as.numeric(PVAL), null.value = null.value, 
+              alternative = alternative, method = METHOD, data.name = DNAME, 
+              p.values = p.values, p.conf.int = p.conf.int, nmc = nmc)
+  
+  if (method == "exact.mc") 
+    class(OUT) <- "mchtest"
+  else class(OUT) <- "htest"
+  
+  return(OUT)
+}
+
+#Override permTS to use robust version
+permTS <- function(x, ...) {
+  if (missing(x)) {
+    UseMethod("permTS")
+  } else if (is.vector(x) && is.numeric(x) && length(list(...)) > 0) {
+    # This is the two-sample case - call our robust version
+    permTS.default.robust(x, ...)
+  } else {
+    # Fall back to original method dispatch for other cases
+    UseMethod("permTS")
+  }
+}
+
+# Ensure our permTS function has access to the perm namespace
+environment(permTS) <- asNamespace("perm")
 
 #Rebinning helper function (df=dataframe,compression amount)
 rebin <- function(df, compression) {
@@ -643,12 +802,37 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   Treat<-Treat[singlesample]
   a<-create_groups(genotype_matrix, cnv_matrix)$a
   b<-create_groups(genotype_matrix, cnv_matrix)$b
-  ##Calculate one-sided z score##
-  if (toupper(cnvtype) == "DEL") {
-    ztest.p <- pnorm((Treat - mean(Control)) / sd(Control))
-  } else{
-    ztest.p <- pnorm((mean(Control) - Treat) / sd(Control))
+  
+  # Debug printing for specific CNV IDs
+  cnvID <- genotype_matrix[1,1]
+  if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5")) {
+    cat("\nDEBUG - One Sample Z-test for CNV:", cnvID, "\n")
+    cat("Number of control samples:", length(Control), "\n")
+    cat("Control group summary:\n")
+    cat("  Median:", format(median(Control), digits=6), "\n")
+    cat("  MAD:", format(mad(Control), digits=6), "\n")
+    cat("  Min:", format(min(Control), digits=6), "\n")
+    cat("  Max:", format(max(Control), digits=6), "\n")
+    cat("Treatment value:", format(Treat, digits=6), "\n")
   }
+  
+  ##Calculate one-sided z score using median and MAD with robust Z-score##
+  # Use robust Z-score: (x - median) / mad
+  # MAD already includes the 1.4826 correction factor for normal distribution consistency
+  if (toupper(cnvtype) == "DEL") {
+    robust_z <- (Treat - median(Control)) / mad(Control)
+    ztest.p <- pnorm(robust_z)
+  } else{
+    robust_z <- (median(Control) - Treat) / mad(Control) 
+    ztest.p <- pnorm(robust_z)
+  }
+  
+  # Debug printing for specific CNV IDs
+  if (cnvID %in% c("all_samples_depth_chr10_00001b24", "all_samples_depth_chr10_00002ca5")) {
+    cat("Robust Z-score ((x-median)/MAD):", format(robust_z, digits=6), "\n")
+    cat("P-value:", format(ztest.p, scientific=TRUE, digits=6), "\n")
+  }
+  
   ##Find the secondest worst p-value and record as an assement metric## 
   plist <- c()
   i = 1
@@ -659,9 +843,11 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
     Treat2 <-
       cnv_matrix[singlesample, column]
     if (toupper(cnvtype) == "DEL") {
-      single.p <- pnorm((Treat2 - mean(Control2)) / sd(Control2))
+      robust_z2 <- (Treat2 - median(Control2)) / mad(Control2)
+      single.p <- pnorm(robust_z2)
     } else {
-      single.p <- pnorm((mean(Control2) - Treat2) / sd(Control2))
+      robust_z2 <- (median(Control2) - Treat2) / mad(Control2)
+      single.p <- pnorm(robust_z2)
     }
     #store diffrent z p-value by column##
     plist[i] <- single.p
@@ -679,7 +865,7 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   return(output)
 }
 
-#twosamplet t-test
+#twosample Anderson-Darling test
 twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
 {
   #Call Treat (have SV) and Control Groups
@@ -687,9 +873,31 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   Treat<-create_groups(genotype_matrix, cnv_matrix)$Treat
   a<-create_groups(genotype_matrix, cnv_matrix)$a
   b<-create_groups(genotype_matrix, cnv_matrix)$b
-  if (toupper(cnvtype) == "DEL") {
-    P_object <- permTS(Control, Treat, alternative = "greater", method = 'pclt')$p.value
-  } else{ P_object <- permTS(Control, Treat, alternative = "less", method = 'pclt')$p.value }
+  
+  # Debug printing for specific CNV IDs
+  cnvID <- genotype_matrix[1,1]
+  if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
+    cat("\nDEBUG - Anderson-Darling Test for CNV:", cnvID, "\n")
+    cat("Control group summary:\n")
+    cat("  N:", length(Control), "\n")
+    cat("  Median:", format(median(Control), digits=6), "\n")
+    cat("  Min:", format(min(Control), digits=6), "\n")
+    cat("  Max:", format(max(Control), digits=6), "\n")
+    cat("Treatment group summary:\n")
+    cat("  N:", length(Treat), "\n")
+    cat("  Median:", format(median(Treat), digits=6), "\n")
+    cat("  Min:", format(min(Treat), digits=6), "\n")
+    cat("  Max:", format(max(Treat), digits=6), "\n")
+  }
+  
+  # Anderson-Darling two-sample test
+  cvm_result <- kSamples::ad.test(Control, Treat)
+  P_object <- cvm_result$ad[1,3]  # Extract p-value from the result
+  
+  # Debug printing for specific CNV IDs
+  if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
+    cat("P-value (Cramer-von Mises):", format(P_object, scientific=TRUE, digits=6), "\n")
+  }
   
   ##Find the secondest worst p-value and record as an assement metric#
   plist<-c()
@@ -698,12 +906,12 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   {
     Control2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)] == 2), column]
     Treat2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)]!=2), column]
-    if (toupper(cnvtype) == "DEL") {
-      singlep <- permTS(Control2, Treat2, alternative = "greater", method = 'pclt')$p.value
-    } else{
-      singlep <- permTS(Control2, Treat2, alternative = "less", method = 'pclt')$p.value
-    }
-    #store diffrent z p-value by column##
+    
+    # Anderson-Darling test for each column
+    cvm_result2 <- kSamples::ad.test(Control2, Treat2)
+    singlep <- cvm_result2$ad[1,3]  # Extract p-value
+    
+    #store diffrent p-value by column##
     plist[i] <- singlep
     i=i+1
   }
@@ -1317,7 +1525,7 @@ runRdTest<-function(bed)
   power<-ifelse(length(unlist(strsplit(as.character(sampleIDs), split = ","))) > 1,power,NA)
   if (!is.na(power) && power > 0.8) {
     p <- twosamplezscore.median(genotype_matrix, cnv_matrix, cnvtype)
-    p[3]<-"twoSampPerm"
+    p[3]<-"AndersonDarling"
     names(p)<-c("Pvalue","Pmax_2nd","Test")
   } else {
     ##Need to break down underpowerd samples into multiple single z-tests##
