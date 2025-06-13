@@ -23,17 +23,14 @@ options(error = function() {
 })
 
 #Loads required packages; installs if necessary
-RPackages <- c("optparse", "plyr", "MASS", "zoo","methods","metap", "e1071", "fpc", "BSDA", "DAAG", "pwr", "reshape", "perm", "hash")
+RPackages <- c("optparse", "plyr", "MASS", "zoo","methods","metap", "e1071", "fpc", "BSDA", "DAAG", "pwr", "reshape", "kSamples", "hash")
 for (i in RPackages)
 {
   if (i %in% rownames(installed.packages()) == FALSE) {
-    response <- readline("Install Required package (Y/N):")
-    if (response == "Y") {
-      install.packages((i), repos = "http://cran.rstudio.com")
-      library(i, character.only = TRUE)
-    } else {
-      stop (paste("Unable to run script without package: ", i, sep = ""))
-    }
+    # In non-interactive environments, automatically install missing packages
+    cat("Installing required package:", i, "\n")
+    install.packages((i), repos = "http://cran.rstudio.com")
+    library(i, character.only = TRUE)
   } else {
     library(i, character.only = TRUE)
   }
@@ -868,7 +865,7 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   return(output)
 }
 
-#twosample permTS test
+#twosample Anderson-Darling test
 twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
 {
   #Call Treat (have SV) and Control Groups
@@ -880,7 +877,7 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   # Debug printing for specific CNV IDs
   cnvID <- genotype_matrix[1,1]
   if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
-    cat("\nDEBUG - permTS Test for CNV:", cnvID, "\n")
+    cat("\nDEBUG - Anderson-Darling Test for CNV:", cnvID, "\n")
     cat("Control group summary:\n")
     cat("  N:", length(Control), "\n")
     cat("  Median:", format(median(Control), digits=6), "\n")
@@ -893,16 +890,14 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
     cat("  Max:", format(max(Treat), digits=6), "\n")
   }
   
-  # permTS two-sample test
-  if (toupper(cnvtype) == "DEL") {
-    P_object <- permTS(Control, Treat, alternative = "greater", method = 'pclt')$p.value
-  } else{ 
-    P_object <- permTS(Control, Treat, alternative = "less", method = 'pclt')$p.value 
-  }
+  # Anderson-Darling two-sample test
+  ad_result <- kSamples::ad.test(Control, Treat)
+  P_object <- ad_result$ad[1,3]  # Extract p-value from the result
   
   # Debug printing for specific CNV IDs
   if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
-    cat("P-value (permTS):", format(P_object, scientific=TRUE, digits=6), "\n")
+    cat("Anderson-Darling test statistic:", format(ad_result$ad[1,1], digits=6), "\n")
+    cat("P-value (Anderson-Darling):", format(P_object, scientific=TRUE, digits=6), "\n")
   }
   
   ##Find the secondest worst p-value and record as an assement metric#
@@ -913,12 +908,9 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
     Control2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)] == 2), column]
     Treat2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)]!=2), column]
     
-    # permTS test for each column
-    if (toupper(cnvtype) == "DEL") {
-      singlep <- permTS(Control2, Treat2, alternative = "greater", method = 'pclt')$p.value
-    } else{
-      singlep <- permTS(Control2, Treat2, alternative = "less", method = 'pclt')$p.value
-    }
+    # Anderson-Darling test for each column
+    ad_result2 <- kSamples::ad.test(Control2, Treat2)
+    singlep <- ad_result2$ad[1,3]  # Extract p-value
     
     #store diffrent p-value by column##
     plist[i] <- singlep
@@ -1534,7 +1526,7 @@ runRdTest<-function(bed)
   power<-ifelse(length(unlist(strsplit(as.character(sampleIDs), split = ","))) > 1,power,NA)
   if (!is.na(power) && power > 0.8) {
     p <- twosamplezscore.median(genotype_matrix, cnv_matrix, cnvtype)
-    p[3]<-"twoSampPerm"
+    p[3]<-"AndersonDarling"
     names(p)<-c("Pvalue","Pmax_2nd","Test")
   } else {
     ##Need to break down underpowerd samples into multiple single z-tests##
