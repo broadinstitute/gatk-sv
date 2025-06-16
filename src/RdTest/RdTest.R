@@ -23,14 +23,17 @@ options(error = function() {
 })
 
 #Loads required packages; installs if necessary
-RPackages <- c("optparse", "plyr", "MASS", "zoo","methods","metap", "e1071", "fpc", "BSDA", "DAAG", "pwr", "reshape", "kSamples", "hash")
+RPackages <- c("optparse", "plyr", "MASS", "zoo","methods","metap", "e1071", "fpc", "BSDA", "DAAG", "pwr", "reshape", "perm", "hash")
 for (i in RPackages)
 {
   if (i %in% rownames(installed.packages()) == FALSE) {
-    # In non-interactive environments, automatically install missing packages
-    cat("Installing required package:", i, "\n")
-    install.packages((i), repos = "http://cran.rstudio.com")
-    library(i, character.only = TRUE)
+    response <- readline("Install Required package (Y/N):")
+    if (response == "Y") {
+      install.packages((i), repos = "http://cran.rstudio.com")
+      library(i, character.only = TRUE)
+    } else {
+      stop (paste("Unable to run script without package: ", i, sep = ""))
+    }
   } else {
     library(i, character.only = TRUE)
   }
@@ -188,27 +191,43 @@ options(scipen = 1000)
 #Robust two-sample permutation test using median and MAD
 twosample.pclt.robust <- function(scores, group) {
   tab <- table(group, scores)
-  m <- sum(tab[2, ])
   n <- length(scores)
+  
+  # Determine group membership
   Grp1 <- dimnames(tab)[[1]][2]
-  grp <- rep(0, n)
-  grp[group == Grp1] <- 1
+  grp <- as.integer(group == Grp1)
+  m <- sum(grp)
+  
+  # If all samples are in one group, the test is not meaningful
+  if (m == 0 || m == n) {
+    return(list(p.values = c(p.twosided=1, p.lte=1, p.gte=1, p.twosidedAbs=1), Z=0))
+  }
+  
   T0 <- sum(scores * grp)
   
-  # Use robust statistics: median and MAD instead of mean and SD
+  # Use robust statistics for scores
   median.scores <- median(scores)
-  median.grp <- median(grp)
-  # MAD with default correction factor (1.4826) for normal distribution consistency
-  mad.scores <- mad(scores)
-  mad.grp <- mad(grp)
+  # A robust estimate of variance is mad^2. mad() in R already includes the 1.4826 correction factor.
+  var.scores.robust <- mad(scores)^2
   
-  # Calculate robust SSE using median absolute deviations
-  SSE.scores.robust <- sum((scores - median.scores)^2)
-  SSE.grp.robust <- sum((grp - median.grp)^2)
+  # If MAD is zero (all scores are identical), Z cannot be computed. Return non-significant p-value.
+  if (var.scores.robust == 0) {
+    return(list(p.values = c(p.twosided=1, p.lte=1, p.gte=1, p.twosidedAbs=1), Z=0))
+  }
   
-  # Robust Z-score calculation using median instead of mean
-  Z <- sqrt(n - 1) * (T0 - n * median.scores * median.grp) / sqrt(SSE.scores.robust * SSE.grp.robust)
+  # Robust Z-score calculation based on permutation theory
+  # E[T0] = m * median(scores)
+  # Var(T0) = (m * (n-m) / (n-1)) * var_sample(scores)
   
+  expected_T0_robust <- m * median.scores
+  var_T0_robust <- (m * (n - m) / (n - 1)) * var.scores.robust
+  
+  if (var_T0_robust > 0) {
+    Z <- (T0 - expected_T0_robust) / sqrt(var_T0_robust)
+  } else {
+    Z <- 0
+  }
+
   p.lte <- pnorm(Z)
   p.gte <- 1 - pnorm(Z)
   p.twosidedAbs <- 1 - pchisq(Z^2, 1)
@@ -865,7 +884,7 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   return(output)
 }
 
-#twosample Anderson-Darling test
+#twosample permTS test
 twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
 {
   #Call Treat (have SV) and Control Groups
@@ -877,7 +896,7 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   # Debug printing for specific CNV IDs
   cnvID <- genotype_matrix[1,1]
   if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
-    cat("\nDEBUG - Anderson-Darling Test for CNV:", cnvID, "\n")
+    cat("\nDEBUG - permTS Test for CNV:", cnvID, "\n")
     cat("Control group summary:\n")
     cat("  N:", length(Control), "\n")
     cat("  Median:", format(median(Control), digits=6), "\n")
@@ -890,13 +909,16 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
     cat("  Max:", format(max(Treat), digits=6), "\n")
   }
   
-  # Anderson-Darling two-sample test
-  cvm_result <- kSamples::ad.test(Control, Treat)
-  P_object <- cvm_result$ad[1,3]  # Extract p-value from the result
+  # permTS two-sample test
+  if (toupper(cnvtype) == "DEL") {
+    P_object <- permTS(Control, Treat, alternative = "greater", method = 'pclt')$p.value
+  } else{ 
+    P_object <- permTS(Control, Treat, alternative = "less", method = 'pclt')$p.value 
+  }
   
   # Debug printing for specific CNV IDs
   if (cnvID %in% c("all_samples_depth_chr12_0000011e")) {
-    cat("P-value (Cramer-von Mises):", format(P_object, scientific=TRUE, digits=6), "\n")
+    cat("P-value (permTS):", format(P_object, scientific=TRUE, digits=6), "\n")
   }
   
   ##Find the secondest worst p-value and record as an assement metric#
@@ -907,9 +929,12 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
     Control2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)] == 2), column]
     Treat2 <- cnv_matrix[which(genotype_matrix[, 5:ncol(genotype_matrix)]!=2), column]
     
-    # Anderson-Darling test for each column
-    cvm_result2 <- kSamples::ad.test(Control2, Treat2)
-    singlep <- cvm_result2$ad[1,3]  # Extract p-value
+    # permTS test for each column
+    if (toupper(cnvtype) == "DEL") {
+      singlep <- permTS(Control2, Treat2, alternative = "greater", method = 'pclt')$p.value
+    } else{
+      singlep <- permTS(Control2, Treat2, alternative = "less", method = 'pclt')$p.value
+    }
     
     #store diffrent p-value by column##
     plist[i] <- singlep
@@ -1525,7 +1550,7 @@ runRdTest<-function(bed)
   power<-ifelse(length(unlist(strsplit(as.character(sampleIDs), split = ","))) > 1,power,NA)
   if (!is.na(power) && power > 0.8) {
     p <- twosamplezscore.median(genotype_matrix, cnv_matrix, cnvtype)
-    p[3]<-"AndersonDarling"
+    p[3]<-"twoSampPerm"
     names(p)<-c("Pvalue","Pmax_2nd","Test")
   } else {
     ##Need to break down underpowerd samples into multiple single z-tests##
