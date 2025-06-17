@@ -47,6 +47,8 @@ workflow ShardedAnnotateVcf {
     RuntimeAttr? runtime_attr_bedtools_closest
     RuntimeAttr? runtime_attr_select_matched_svs
     RuntimeAttr? runtime_attr_scatter_vcf
+    RuntimeAttr? runtime_attr_subset_vcf
+    RuntimeAttr? runtime_attr_concat_vcf
   }
 
   if (defined(ref_bed)) {
@@ -96,7 +98,10 @@ workflow ShardedAnnotateVcf {
           additional_args = svannotate_additional_args,
           min_annotation_size = min_annotation_size,
           gatk_docker = gatk_docker,
-          runtime_attr_svannotate = runtime_attr_svannotate
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_svannotate = runtime_attr_svannotate,
+          runtime_attr_subset_vcf = runtime_attr_subset_vcf,
+          runtime_attr_concat_vcf = runtime_attr_concat_vcf
       }
     }
 

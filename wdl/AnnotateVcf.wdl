@@ -45,6 +45,8 @@ workflow AnnotateVcf {
     RuntimeAttr? runtime_attr_concat
     RuntimeAttr? runtime_attr_preconcat
     RuntimeAttr? runtime_attr_fix_header
+    RuntimeAttr? runtime_attr_subset_vcf
+    RuntimeAttr? runtime_attr_concat_vcf
   }
 
   Array[String] contigs = read_lines(contig_list)
@@ -86,7 +88,9 @@ workflow AnnotateVcf {
         runtime_attr_split_ref_bed  = runtime_attr_split_ref_bed,
         runtime_attr_split_query_vcf  = runtime_attr_split_query_vcf,
         runtime_attr_bedtools_closest = runtime_attr_bedtools_closest,
-        runtime_attr_select_matched_svs = runtime_attr_select_matched_svs
+        runtime_attr_select_matched_svs = runtime_attr_select_matched_svs,
+        runtime_attr_subset_vcf = runtime_attr_subset_vcf,
+        runtime_attr_concat_vcf = runtime_attr_concat_vcf
     }
   }
 
