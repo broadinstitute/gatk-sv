@@ -27,6 +27,7 @@ workflow AnnotateVcf {
     File? external_af_ref_bed              # File with external allele frequencies
     String? external_af_ref_prefix         # prefix name for external AF call set (required if ref_bed set)
     Array[String]? external_af_population  # populations to annotate external AF for (required if ref_bed set)
+    Int? min_annotation_size
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -60,6 +61,7 @@ workflow AnnotateVcf {
         promoter_window = promoter_window,
         svannotate_additional_args = svannotate_additional_args,
         max_breakend_as_cnv_length = max_breakend_as_cnv_length,
+        min_annotation_size = min_annotation_size,
 
         sample_pop_assignments = sample_pop_assignments,
         sample_keep_list = sample_keep_list,

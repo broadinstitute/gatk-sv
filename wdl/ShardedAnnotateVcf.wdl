@@ -28,6 +28,7 @@ workflow ShardedAnnotateVcf {
     File? par_bed
     File? allosomes_list
     Int   sv_per_shard
+    Int?  min_annotation_size
 
     File? ref_bed              # File with external allele frequencies
     String? ref_prefix         # prefix name for external AF call set (required if ref_bed set)
@@ -93,7 +94,9 @@ workflow ShardedAnnotateVcf {
           promoter_window = promoter_window,
           max_breakend_as_cnv_length = max_breakend_as_cnv_length,
           additional_args = svannotate_additional_args,
+          min_annotation_size = min_annotation_size,
           gatk_docker = gatk_docker,
+          sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_svannotate = runtime_attr_svannotate
       }
     }
