@@ -243,7 +243,6 @@ workflow GatherSampleEvidence {
   }
 
   if (run_scramble) {
-    # condition not clear, it needs to run on this specific version only, or this and newer, or this and older?
     if (!defined(is_dragen_3_7_8)) {
       # check if the reads were aligned with dragen 3.7.8
       call CheckAligner {
