@@ -204,7 +204,6 @@ workflow GATKSVPipelineSingleSamplePart2 {
       external_af_ref_bed = external_af_ref_bed,
       external_af_ref_prefix = external_af_ref_bed_prefix,
       external_af_population = external_af_population,
-      use_hail = false,
       sv_per_shard = annotation_sv_per_shard,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
