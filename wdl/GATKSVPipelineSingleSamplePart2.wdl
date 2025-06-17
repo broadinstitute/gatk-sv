@@ -25,6 +25,9 @@ workflow GATKSVPipelineSingleSamplePart2 {
     File Depth_DEL_bed
     File Depth_DUP_bed
 
+    Int? min_pe_cpx
+    Int? min_pe_ctx
+
     # JoinRawCalls
     File? clustered_manta_vcf
     File? clustered_manta_vcf_index
@@ -100,6 +103,8 @@ workflow GATKSVPipelineSingleSamplePart2 {
       PE_metrics_indexes=[PE_metrics_index],
       Depth_DEL_beds=[Depth_DEL_bed],
       Depth_DUP_beds=[Depth_DUP_bed],
+      min_pe_cpx=min_pe_cpx,
+      min_pe_ctx=min_pe_ctx,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       linux_docker=linux_docker
