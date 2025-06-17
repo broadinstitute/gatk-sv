@@ -96,7 +96,6 @@ workflow ShardedAnnotateVcf {
           additional_args = svannotate_additional_args,
           min_annotation_size = min_annotation_size,
           gatk_docker = gatk_docker,
-          sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_svannotate = runtime_attr_svannotate
       }
     }

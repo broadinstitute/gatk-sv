@@ -16,7 +16,6 @@ workflow AnnotateFunctionalConsequences {
     Int? min_annotation_size
 
     String gatk_docker
-    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_svannotate
   }
 
@@ -32,7 +31,6 @@ workflow AnnotateFunctionalConsequences {
       additional_args = additional_args,
       min_annotation_size = min_annotation_size,
       gatk_docker = gatk_docker,
-      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_svannotate
   }
 
@@ -56,7 +54,6 @@ task SVAnnotate {
     Int? min_annotation_size
 
     String gatk_docker
-    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
