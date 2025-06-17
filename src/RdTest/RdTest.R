@@ -188,183 +188,77 @@ options(scipen = 1000)
 
 ##RdTest functions
 
-#Robust two-sample permutation test using median and MAD
-twosample.pclt.robust <- function(scores, group) {
-  tab <- table(group, scores)
-  n <- length(scores)
-  
-  # Determine group membership
-  Grp1 <- dimnames(tab)[[1]][2]
-  grp <- as.integer(group == Grp1)
-  m <- sum(grp)
-  
-  # If all samples are in one group, the test is not meaningful
-  if (m == 0 || m == n) {
-    return(list(p.values = c(p.twosided=1, p.lte=1, p.gte=1, p.twosidedAbs=1), Z=0))
-  }
-  
-  T0 <- sum(scores * grp)
-  
-  # Use robust statistics for scores
-  median.scores <- median(scores)
-  # A robust estimate of variance is mad^2. mad() in R already includes the 1.4826 correction factor.
-  var.scores.robust <- mad(scores)^2
-  
-  # If MAD is zero (all scores are identical), Z cannot be computed. Return non-significant p-value.
-  if (var.scores.robust == 0) {
-    return(list(p.values = c(p.twosided=1, p.lte=1, p.gte=1, p.twosidedAbs=1), Z=0))
-  }
-  
-  # Robust Z-score calculation based on permutation theory
-  # E[T0] = m * median(scores)
-  # Var(T0) = (m * (n-m) / (n-1)) * var_sample(scores)
-  
-  expected_T0_robust <- m * median.scores
-  var_T0_robust <- (m * (n - m) / (n - 1)) * var.scores.robust
-  
-  if (var_T0_robust > 0) {
-    Z <- (T0 - expected_T0_robust) / sqrt(var_T0_robust)
-  } else {
-    Z <- 0
-  }
+#Robust permutation test using median and MAD
+twosample.pclt.robust <- function(scores, group){
+    tab <- table(group, scores)
+    m <- sum(tab[2,])
+    n <- length(scores)
+    Grp1 <- dimnames(tab)[[1]][2]
+    grp <- rep(0, n)
+    grp[group == Grp1] <- 1
+    T0 <- sum(scores * grp)
 
-  p.lte <- pnorm(Z)
-  p.gte <- 1 - pnorm(Z)
-  p.twosidedAbs <- 1 - pchisq(Z^2, 1)
-  p.values <- c(p.twosided = min(1, 2 * min(p.lte, p.gte)), 
-                p.lte = p.lte, p.gte = p.gte, p.twosidedAbs = p.twosidedAbs)
-  out <- list(p.values = p.values, Z = Z)
-  out
+    # Use robust statistics: median and MAD instead of mean and SD
+    SSE.scores.robust <- (n - 1) * mad(scores, constant = 1.4826)^2
+    SSE.grp.robust <- (n - 1) * mad(grp, constant = 1.4826)^2
+    Z <- sqrt(n-1) * (T0 - n*median(scores)*median(grp)) /
+          sqrt(SSE.scores.robust*SSE.grp.robust)
+
+    p.lte <- pnorm(Z)
+    p.gte <- 1 - pnorm(Z)
+    p.twosidedAbs <- 1 - pchisq(Z^2, 1)
+    p.values <- c(p.twosided = min(1, 2 * min(p.lte, p.gte)), p.lte = p.lte, p.gte = p.gte, p.twosidedAbs = p.twosidedAbs)
+    out <- list(p.values = p.values, Z = Z)
+    out
 }
 
-#Override permTS.default to use robust implementation when method='pclt'
-permTS.default.robust <- function(x, y, alternative = c("two.sided", "less", "greater"), 
-                                  exact = NULL, method = NULL, methodRule = NULL, 
-                                  control = NULL, ...) {
-  # Set defaults if not provided
-  if (is.null(methodRule)) {
-    methodRule <- get("methodRuleTS1", envir = asNamespace("perm"))
-  }
-  if (is.null(control)) {
-    control <- get("permControl", envir = asNamespace("perm"))()
-  }
-  
-  cm <- control$cm
-  nmc <- control$nmc
-  seed <- control$seed
-  digits <- control$digits
-  p.conf.level <- control$p.conf.level
-  setSEED <- control$setSEED
-  tsmethod <- control$tsmethod
-  
-  if (alternative[1] == "two.sidedAbs") {
-    warning("alternative='two.sidedAbs' may be deprecated in the future,\n            use alternative='two.sided' and control=permControl(tsmethod='abs'))")
-    alternative <- "two.sided"
-    tsmethod <- "abs"
-  }
-  alternative <- match.arg(alternative)
-  
-  if (!(tsmethod == "central" | tsmethod == "abs") & alternative == "two.sided") {
-    stop("only tsmethod='central' and tsmethod='abs' allowed")
-  }
-  if (tsmethod == "abs" & alternative == "two.sided") {
-    alternative <- "two.sidedAbs"
-  } else if (tsmethod == "central" & alternative == "two.sided") {
-    alternative <- "two.sided"
-  }
-  
-  if (!is.numeric(x) | !is.numeric(y) | !is.vector(x) | !is.vector(y)) 
-    stop("x and y must be numeric vectors")
-  
-  W <- c(x, y)
-  Z <- c(rep(1, length(x)), rep(0, length(y)))
-  
-  if (is.null(method)) 
-    method <- methodRule(W, Z, exact)
-  
-  method.OK <- (method == "pclt" | method == "exact.mc" | method == "exact.network" | method == "exact.ce")
-  if (!method.OK) 
-    stop("method not one of: 'pclt', 'exact.mc'. 'exact.network', 'exact.ce'")
-  
-  # Use robust version for pclt method, original functions for others
-  if (method == "pclt") {
-    mout <- twosample.pclt.robust(W, Z)
-  } else {
-    # Use original perm package functions for non-pclt methods
-    twosample.exact.network <- get("twosample.exact.network", envir = asNamespace("perm"))
-    twosample.exact.ce <- get("twosample.exact.ce", envir = asNamespace("perm"))
-    twosample.exact.mc <- get("twosample.exact.mc", envir = asNamespace("perm"))
+# Override permTS to use the robust pclt method
+permTS <- function(x, y, alternative = c("two.sided", "less", "greater"), method = "pclt", ...){
+    # This override only supports the two-sample case with method='pclt'
+    if (method != 'pclt'){
+        stop("This custom permTS implementation only supports method='pclt'")
+    }
+
+    alternative <- match.arg(alternative)
+
+    if (!is.numeric(x) | !is.numeric(y) | !is.vector(x) | !is.vector(y) ) stop("x and y must be numeric vectors")
+
+    W <- c(x, y)
+    Z.group <- c(rep(1, length(x)), rep(0, length(y)))
     
-    mout <- switch(method, 
-                   exact.network = twosample.exact.network(W, Z, digits), 
-                   exact.ce = twosample.exact.ce(W, Z, cm, digits), 
-                   exact.mc = twosample.exact.mc(W, Z, alternative, nmc, seed, digits, p.conf.level, setSEED))
-  }
-  
-  p.values <- mout$p.values
-  PVAL <- switch(alternative, 
-                 two.sided = p.values["p.twosided"], 
-                 greater = p.values["p.gte"], 
-                 less = p.values["p.lte"], 
-                 two.sidedAbs = p.values["p.twosidedAbs"])
-  
-  if (method == "exact.network") 
-    METHOD <- "Exact Permutation Test (network algorithm)"
-  else if (method == "pclt") 
-    METHOD <- "Robust Permutation Test using Asymptotic Approximation (median/MAD)"
-  else if (method == "exact.mc") 
-    METHOD <- "Exact Permutation Test Estimated by Monte Carlo"
-  else if (method == "exact.ce") 
-    METHOD <- "Exact Permutation Test (complete enumeration)"
-  
-  m <- match.call()
-  xname <- deparse(substitute(x))
-  yname <- deparse(substitute(y))
-  if (length(xname) > 1 || nchar(xname) > 10) 
-    xname <- c("GROUP 1")
-  if (length(yname) > 1 || nchar(yname) > 10) 
-    yname <- c("GROUP 2")
-  DNAME <- paste(xname, "and", yname)
-  
-  Z.stat <- mout$Z
-  if (!is.null(Z.stat)) 
-    names(Z.stat) <- "Z"
-  
-  null.value <- 0
-  estimate <- median(x) - median(y)  # Use median instead of mean for robust estimate
-  names(estimate) <- names(null.value) <- paste("median", xname, "- median", yname)
-  
-  p.conf.int <- if (exists("p.conf.int", mout)) mout$p.conf.int else NULL
-  if (method != "exact.mc") 
-    nmc <- NULL
-  
-  OUT <- list(statistic = Z.stat, estimate = estimate, parameter = NULL, 
-              p.value = as.numeric(PVAL), null.value = null.value, 
-              alternative = alternative, method = METHOD, data.name = DNAME, 
-              p.values = p.values, p.conf.int = p.conf.int, nmc = nmc)
-  
-  if (method == "exact.mc") 
-    class(OUT) <- "mchtest"
-  else class(OUT) <- "htest"
-  
-  return(OUT)
-}
+    # We call our robust version of twosample.pclt
+    mout <- twosample.pclt.robust(W, Z.group)
+    
+    p.values <- mout$p.values
+    PVAL <- switch(alternative, 
+                   two.sided=p.values["p.twosided"], 
+                   greater=p.values["p.gte"], 
+                   less=p.values["p.lte"],
+                   two.sidedAbs=p.values["p.twosidedAbs"])
+    
+    METHOD <- "Permutation Test using Asymptotic Approximation (Robust Z-score)"
+    
+    xname <- deparse(substitute(x))
+    yname <- deparse(substitute(y))
+    if (length(xname) > 1 || nchar(xname) > 10) xname <- "GROUP 1"
+    if (length(yname) > 1 || nchar(yname) > 10) yname <- "GROUP 2"
+    DNAME <- paste(xname, "and", yname)
+    
+    Z.stat <- mout$Z
+    if (!is.null(Z.stat)) names(Z.stat) <- "Z"
+   
+    null.value <- 0
+    # Use median for estimate
+    estimate <- median(x) - median(y)
+    names(estimate) <- names(null.value) <- paste("median", xname, "- median", yname)
 
-#Override permTS to use robust version
-permTS <- function(x, ...) {
-  if (missing(x)) {
-    UseMethod("permTS")
-  } else if (is.vector(x) && is.numeric(x) && length(list(...)) > 0) {
-    # This is the two-sample case - call our robust version
-    permTS.default.robust(x, ...)
-  } else {
-    # Fall back to original method dispatch for other cases
-    UseMethod("permTS")
-  }
+    OUT <- list(statistic = Z.stat, estimate = estimate, parameter = NULL, p.value = as.numeric(PVAL), 
+                null.value = null.value, alternative = alternative, method = METHOD, 
+                data.name = DNAME, p.values = p.values)
+    
+    class(OUT) <- "htest"
+    return(OUT)
 }
-
-# Ensure our permTS function has access to the perm namespace
-environment(permTS) <- asNamespace("perm")
 
 #Rebinning helper function (df=dataframe,compression amount)
 rebin <- function(df, compression) {
