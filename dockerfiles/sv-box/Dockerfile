@@ -1,9 +1,8 @@
 ARG SV_PIPELINE_IMAGE=sv-pipeline:latest
+ARG WHAM_IMAGE=wham:latest
 
-FROM us.gcr.io/broad-dsde-methods/gatk-sv/wham:2024-10-25-v0.29-beta-5ea22a52 as wham_layer
-
-# FROM $SV_PIPELINE_IMAGE
-FROM us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-02-11-v1.0.2-hotfix-22bf77e0
+FROM $WHAM_IMAGE as wham_layer
+FROM $SV_PIPELINE_IMAGE
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -103,9 +102,5 @@ RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy autoremove --purge && \
     apt-get -qqy clean
 COPY --from=wham_layer /bin/whamg /bin/
-
-# FROM us.gcr.io/broad-dsde-methods/gatk-sv/manta:2023-09-14-v0.28.3-beta-3f22f94d as manta_layer
-
-# FROM us.gcr.io/broad-dsde-methods/gatk-sv/gatk:2024-12-05-4.6.1.0-6-gfc248dfc1-NIGHTLY-SNAPSHOT as gatk_layer
 
 WORKDIR /
