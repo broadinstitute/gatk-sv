@@ -96,6 +96,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_zip_regeno_cov_med
       tags:
         - /.*/
 
@@ -105,6 +106,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_zip_regeno_cov_med
       tags:
         - /.*/
 
