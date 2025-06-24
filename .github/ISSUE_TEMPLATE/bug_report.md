@@ -19,16 +19,13 @@ assignees: ''
 _Module/script name(s), special parameters?_
 
 ### Affected version(s)
-- [ ] Latest public release version _[version?]_
-- [ ] Latest master branch as of _[date of test?]_
+_Release tag(s)? Date or commit of latest main branch?_
 
 ### Mode
-- [ ] Single-sample mode
-- [ ] Cohort mode
+_Single-sample or cohort mode?_
 
 ### Runtime environment
-- [ ] Terra on GCP
-- [ ] Other _[describe]_
+_Terra on GCP or other environment?_
 
 ### Description 
 _Describe the problem below. Provide **screenshots**, **stacktrace**, **logs** where appropriate._
