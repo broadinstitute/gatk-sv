@@ -22,6 +22,10 @@ workflow ShardedAnnotateVcf {
     Int? max_breakend_as_cnv_length
     String? svannotate_additional_args
 
+    Boolean annotate_external_af
+    Boolean annotate_internal_af
+    Boolean annotate_functional_consequences
+
     File? sample_pop_assignments  # Two-column file with sample ID & pop assignment. "." for pop will ignore sample
     File? sample_keep_list
     File? ped_file                # Used for M/F AF calculations
@@ -82,11 +86,14 @@ workflow ShardedAnnotateVcf {
       }
     }
 
-    if (defined (protein_coding_gtf) || defined (noncoding_bed)) {
+    File vcf_for_chain = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]])
+    File? vcf_idx_for_chain = SubsetVcfBySamplesList.vcf_subset_index
+
+    if (annotate_functional_consequences) {
       call func.AnnotateFunctionalConsequences {
         input:
-          vcf = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
-          vcf_index = SubsetVcfBySamplesList.vcf_subset_index,
+          vcf = vcf_for_chain,
+          vcf_index = vcf_idx_for_chain,
           prefix = shard_prefix,
           protein_coding_gtf = protein_coding_gtf,
           noncoding_bed = noncoding_bed,
@@ -98,24 +105,31 @@ workflow ShardedAnnotateVcf {
       }
     }
 
-    # Compute AC, AN, and AF per population & sex combination
-    call ComputeAFs {
-      input:
-        vcf = select_first([AnnotateFunctionalConsequences.annotated_vcf, SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
-        prefix = shard_prefix,
-        sample_pop_assignments = sample_pop_assignments,
-        ped_file = ped_file,
-        par_bed = par_bed,
-        allosomes_list = allosomes_list,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_compute_AFs
+    File vcf_after_func = select_first([AnnotateFunctionalConsequences.annotated_vcf, vcf_for_chain])
+    File? vcf_idx_after_func = select_first([AnnotateFunctionalConsequences.annotated_vcf_index, vcf_idx_for_chain])
+
+    if (annotate_internal_af) {
+      call ComputeAFs {
+        input:
+          vcf = vcf_after_func,
+          prefix = shard_prefix,
+          sample_pop_assignments = sample_pop_assignments,
+          ped_file = ped_file,
+          par_bed = par_bed,
+          allosomes_list = allosomes_list,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_attr_compute_AFs
+      }
     }
 
-    if (defined(ref_bed)) {
+    File vcf_after_af = select_first([ComputeAFs.af_vcf, vcf_after_func])
+    File vcf_idx_after_af = select_first([ComputeAFs.af_vcf_idx, vcf_idx_after_func])
+
+    if (annotate_external_af && defined(ref_bed)) {
       call eaf.AnnotateExternalAFPerShard {
         input:
-          vcf = ComputeAFs.af_vcf,
-          vcf_idx = ComputeAFs.af_vcf_idx,
+          vcf = vcf_after_af,
+          vcf_idx = vcf_idx_after_af,
           split_ref_bed_del = select_first([SplitRefBed.del]),
           split_ref_bed_dup = select_first([SplitRefBed.dup]),
           split_ref_bed_ins = select_first([SplitRefBed.ins]),
@@ -132,11 +146,14 @@ workflow ShardedAnnotateVcf {
           runtime_attr_select_matched_svs = runtime_attr_select_matched_svs
       }
     }
+
+    File final_vcf = select_first([AnnotateExternalAFPerShard.annotated_vcf, vcf_after_af])
+    File final_vcf_idx = select_first([AnnotateExternalAFPerShard.annotated_vcf_tbi, vcf_idx_after_af])
   }
 
   output {
-    Array[File] sharded_annotated_vcf = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf) else ComputeAFs.af_vcf
-    Array[File] sharded_annotated_vcf_idx = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi) else ComputeAFs.af_vcf_idx
+    Array[File] sharded_annotated_vcf = final_vcf
+    Array[File] sharded_annotated_vcf_idx = final_vcf_idx
   }
 }
 

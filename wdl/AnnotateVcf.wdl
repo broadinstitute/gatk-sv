@@ -24,6 +24,10 @@ workflow AnnotateVcf {
     File? allosomes_list
     Int   sv_per_shard
 
+    Boolean annotate_external_af = true
+    Boolean annotate_internal_af = true
+    Boolean annotate_functional_consequences = true
+
     File? external_af_ref_bed              # File with external allele frequencies
     String? external_af_ref_prefix         # prefix name for external AF call set (required if ref_bed set)
     Array[String]? external_af_population  # populations to annotate external AF for (required if ref_bed set)
@@ -60,6 +64,10 @@ workflow AnnotateVcf {
         promoter_window = promoter_window,
         svannotate_additional_args = svannotate_additional_args,
         max_breakend_as_cnv_length = max_breakend_as_cnv_length,
+
+        annotate_external_af = annotate_external_af,
+        annotate_internal_af = annotate_internal_af,
+        annotate_functional_consequences = annotate_functional_consequences,
 
         sample_pop_assignments = sample_pop_assignments,
         sample_keep_list = sample_keep_list,
