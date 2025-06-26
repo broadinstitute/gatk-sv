@@ -94,12 +94,11 @@ task SetBins {
   }
 
   command <<<
-    set -Eeu
+    set -Eeuo pipefail
 
     # make the CollectReadCounts output consistent with the old bincov code
     # determine what format this is
-    firstchar=$(gunzip -c ~{count_file} | head -c 1)
-    set -o pipefail
+    firstchar=$(head -c 1 <(gunzip -c "${count_file}"))
     if [ $firstchar == '@' ]; then
       shift=1  # GATK CollectReadCounts (to convert from 1-based closed intervals)
     else
