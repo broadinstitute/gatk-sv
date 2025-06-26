@@ -87,7 +87,7 @@ workflow ShardedAnnotateVcf {
     }
 
     File vcf_for_chain = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]])
-    File vcf_idx_for_chain = select_first([SubsetVcfBySamplesList.vcf_subset_index, ScatterVcf.shards_idx[i]])
+    File vcf_idx_for_chain = select_first([SubsetVcfBySamplesList.vcf_subset_index, ScatterVcf.shards_index[i]])
 
     if (annotate_functional_consequences) {
       call func.AnnotateFunctionalConsequences {
