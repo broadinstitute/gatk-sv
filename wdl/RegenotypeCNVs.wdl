@@ -632,7 +632,7 @@ task GetMedianSubset {
         return open(filename, 'r')
 
 
-    with _open("~{medians}", 'r') as inp, open("~{batch}_to_regeno.bed", 'w') as outp:
+    with _open("~{medians}") as inp, open("~{batch}_to_regeno.bed", 'w') as outp:
       for line in inp:
         fields = line.strip().split('\t')
         # first 4 fields are variant info (chr, start, end, varID)
