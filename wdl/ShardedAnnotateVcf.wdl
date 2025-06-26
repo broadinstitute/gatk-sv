@@ -52,7 +52,7 @@ workflow ShardedAnnotateVcf {
     RuntimeAttr? runtime_attr_scatter_vcf
   }
 
-  if (defined(ref_bed)) {
+  if (annotate_external_af && defined(ref_bed)) {
     call eaf.SplitRefBed {
       input:
         bed = select_first([ref_bed]),
@@ -87,7 +87,7 @@ workflow ShardedAnnotateVcf {
     }
 
     File vcf_for_chain = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]])
-    File? vcf_idx_for_chain = SubsetVcfBySamplesList.vcf_subset_index
+    File vcf_idx_for_chain = select_first([SubsetVcfBySamplesList.vcf_subset_index, ScatterVcf.shards_idx[i]])
 
     if (annotate_functional_consequences) {
       call func.AnnotateFunctionalConsequences {
@@ -106,7 +106,7 @@ workflow ShardedAnnotateVcf {
     }
 
     File vcf_after_func = select_first([AnnotateFunctionalConsequences.annotated_vcf, vcf_for_chain])
-    File? vcf_idx_after_func = select_first([AnnotateFunctionalConsequences.annotated_vcf_index, vcf_idx_for_chain])
+    File vcf_idx_after_func = select_first([AnnotateFunctionalConsequences.annotated_vcf_index, vcf_idx_for_chain])
 
     if (annotate_internal_af) {
       call ComputeAFs {
