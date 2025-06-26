@@ -129,9 +129,12 @@ bedtools coverage -a ${TMPPATH}/il_inte.ri_bp -b ${SimpRep}  | awk '{if ($NF>0) 
 bedtools coverage -a ${TMPPATH}/il_inte.ri_bp -b ${SegDup}   | awk '{if ($NF>0) print}'> ${TMPPATH}/il_inte.ri_bp.vs.SD
 bedtools coverage -a ${TMPPATH}/il_inte.ri_bp -b ${RepMask}  | awk '{if ($NF>0) print}'> ${TMPPATH}/il_inte.ri_bp.vs.RM
 
-bedtools coverage -a ${TMPPATH}/il_inte.lg_cnv -b ${SimpRep}  > ${TMPPATH}/il_inte.lg_cnv.vs.SR
-bedtools coverage -a ${TMPPATH}/il_inte.lg_cnv -b ${SegDup}   > ${TMPPATH}/il_inte.lg_cnv.vs.SD
-bedtools coverage -a ${TMPPATH}/il_inte.lg_cnv -b ${RepMask}  > ${TMPPATH}/il_inte.lg_cnv.vs.RM
+if [ "$(wc -l < ${TMPPATH}/il_inte.lg_cnv)" -gt 1 ]; then
+	bedtools coverage -a ${TMPPATH}/il_inte.lg_cnv -b ${SimpRep}  > ${TMPPATH}/il_inte.lg_cnv.vs.SR
+	bedtools coverage -a ${TMPPATH}/il_inte.lg_cnv -b ${SegDup}   > ${TMPPATH}/il_inte.lg_cnv.vs.SD
+	bedtools coverage -a ${TMPPATH}/il_inte.lg_cnv -b ${RepMask}  > ${TMPPATH}/il_inte.lg_cnv.vs.RM
+fi
+
 
 Rscript ${BIN}/annotate_genomic_context_helper.R -i ${INPUT} -o ${OUTPUT} -p "${TMPPATH}"
 
