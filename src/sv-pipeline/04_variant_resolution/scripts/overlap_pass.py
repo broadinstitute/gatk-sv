@@ -51,8 +51,9 @@ def to_bed(record, cluster):
            '{batch}\t{cluster}\n')
 
     batch = 'Pilot' if 'Pilot' in record.id else 'Phase1'
+    end = record.info.get('END2') if record.info.get('SVTYPE') == 'BND' else record.stop
 
-    return fmt.format(chrom=record.chrom, start=record.pos, end=record.stop,
+    return fmt.format(chrom=record.chrom, start=record.pos, end=end,
                       name=record.id + '__' + record.chrom,
                       svtype=record.info['SVTYPE'],
                       samples=','.join(svu.get_called_samples(record)),
@@ -91,17 +92,31 @@ def overlap_pass(phase1, pilot, fout, dist=300, frac=0.1, prefix="SSC_merged"):
             pesr_records = [r for r in phase1_records if _has_pesr(r)]
             depth_records = [r for r in phase1_records if not _has_pesr(r)]
 
+            is_bnd = phase1_records[0].record.info['SVTYPE'] == 'BND'
+
             # Set record position to median of phase1, defaulting to pe/sr
             if len(pesr_records) > 0:
                 record.pos = np.median([r.record.pos for r in pesr_records])
-                record.stop = np.median([r.record.stop for r in pesr_records])
+                if is_bnd:
+                    record.info['END2'] = np.median([r.record.info.get('END2') for r in pesr_records])
+                    record.stop = record.pos + 1
+                else:
+                    record.stop = np.median([r.record.stop for r in pesr_records])
             else:
                 record.pos = np.median([r.record.pos for r in depth_records])
-                record.stop = np.median([r.record.stop for r in depth_records])
+                if is_bnd:
+                    record.info['END2'] = np.median([r.record.info.get('END2') for r in depth_records])
+                    record.stop = record.pos + 1
+                else:
+                    record.stop = np.median([r.record.stop for r in depth_records])
         else:
             phase1_record = phase1_records[0]
             record.pos = phase1_record.record.pos
-            record.stop = phase1_record.record.stop
+            if phase1_record.record.info.get('SVTYPE') == 'BND':
+                record.info['END2'] = phase1_record.record.info.get('END2')
+                record.stop = record.pos + 1
+            else:
+                record.stop = phase1_record.record.stop
 
         record.id = prefix + '_' + str(i)
         fout.write(record)

@@ -46,7 +46,8 @@ def get_vids_and_bypass(vcf: pysam.VariantFile,
     for record in vcf:
         vids.add(record.id)
         svtype = record.info['SVTYPE']
-        svlen = record.info['SVLEN'] if 'SVLEN' in record.info else record.stop - record.pos
+        end = record.info.get('END2') if svtype == 'BND' else record.stop
+        svlen = record.info['SVLEN'] if 'SVLEN' in record.info else end - record.pos
         if svtype in cnv_types and svlen >= cnv_size_cutoff:
             large_cnv_vids.add(record.id)
         if svtype in ['INS', 'INV'] and svlen >= non_cnv_size_cutoff:

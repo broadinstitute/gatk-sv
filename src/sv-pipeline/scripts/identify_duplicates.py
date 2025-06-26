@@ -38,10 +38,11 @@ def process_duplicates(vcf, fout):
                 current_pos = record.pos
 
             # Update buffers with new record
+            end = record.info.get('END2') if record.info.get('SVTYPE') == 'BND' else record.stop
             exact_key = (
                 record.chrom,
                 record.pos,
-                record.stop,
+                end,
                 record.info.get('SVTYPE'),
                 record.info.get('SVLEN'),
                 record.info.get('CHR2', ""),

@@ -17,9 +17,11 @@ def records_match(record, other):
     Test if two records are same SV: check chromosome, position, stop, SVTYPE, SVLEN (for insertions),
     STRANDS (for BNDS and INVs), and (if they exist) CHR2/END2 for multi-chromosomal events
     """
+    end1 = record.info.get('END2') if record.info.get('SVTYPE') == 'BND' else record.stop
+    end2 = other.info.get('END2') if other.info.get('SVTYPE') == 'BND' else other.stop
     return (record.chrom == other.chrom and
             record.pos == other.pos and
-            record.stop == other.stop and
+            end1 == end2 and
             record.info['SVTYPE'] == other.info['SVTYPE'] and
             record.info['SVLEN'] == other.info['SVLEN'] and
             record.info['STRANDS'] == other.info['STRANDS'] and
@@ -33,8 +35,8 @@ def merge_key(record):
     so that all identical records according to records_match will be adjacent
     """
     chr2 = record.info['CHR2'] if 'CHR2' in record.info else None
-    end2 = record.info['END2'] if 'END2' in record.info else None
-    return (record.pos, record.stop, record.info['SVTYPE'], record.info['SVLEN'], chr2, end2, record.info['STRANDS'], record.id)
+    end = record.info.get('END2') if record.info.get('SVTYPE') == 'BND' else record.stop
+    return (record.pos, end, record.info['SVTYPE'], record.info['SVLEN'], chr2, record.info.get('END2'), record.info['STRANDS'], record.id)
 
 
 def dedup_records(records):

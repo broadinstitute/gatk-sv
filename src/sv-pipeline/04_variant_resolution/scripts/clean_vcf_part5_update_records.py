@@ -91,20 +91,23 @@ def main():
                     print("processed {} records".format(idx), file=sys.stderr)
                 if record.id in revised_lines_by_id:
                     record = revised_lines_by_id[record.id]
+                
+                end = record.info.get('END2') if record.info.get('SVTYPE') == 'BND' else record.stop
+                
                 if record.info.get('SVTYPE', None) == 'DEL':
-                    if abs(record.stop - record.pos) >= 1000:
+                    if abs(end - record.pos) >= 1000:
                         sample_cn_map = {s: record.samples[s].get('RD_CN') for s in non_outlier_samples}
                         if len([s for s in sample_cn_map if (sample_cn_map[s] is not None and sample_cn_map[s] > 3)]) > vf_1:
                             multi_del = True
                     gts = [record.samples[s].get('GT') for s in non_outlier_samples]
                     if any(gt not in biallelic_gts for gt in gts):
                         gt5kb_del = True
-                    if abs(record.stop - record.pos) >= 5000 or '<CN0>' in record.alts:
+                    if abs(end - record.pos) >= 5000 or '<CN0>' in record.alts:
                         if not multi_del:
                             gt5kb_del = True
 
                 if record.info.get('SVTYPE', None) == 'DUP':
-                    if abs(record.stop - record.pos) >= 1000:
+                    if abs(end - record.pos) >= 1000:
                         sample_cn_map = {s: record.samples[s].get('RD_CN') for s in non_outlier_samples}
                         if sum(1 for s in sample_cn_map if sample_cn_map[s] is not None and sample_cn_map[s] > 4) > vf_1:
                             multi_dup = True
@@ -116,7 +119,7 @@ def main():
                     gts = [record.samples[s].get('GT') for s in non_outlier_samples]
                     if any(gt not in biallelic_gts for gt in gts):
                         gt5kb_dup = True
-                    if abs(record.stop - record.pos) >= 5000 or '<CN0>' in record.alts:
+                    if abs(end - record.pos) >= 5000 or '<CN0>' in record.alts:
                         if not multi_dup:
                             gt5kb_dup = True
 

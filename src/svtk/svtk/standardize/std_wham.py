@@ -32,7 +32,11 @@ class WhamStandardizer(VCFStandardizer):
 
         # No CTX events
         std_rec.info['CHR2'] = std_rec.chrom
-        std_rec.stop = raw_rec.stop
+        if std_rec.info['SVTYPE'] == 'BND':
+            std_rec.info['END2'] = raw_rec.info['END2']
+            std_rec.stop = std_rec.pos + 1
+        else:
+            std_rec.stop = raw_rec.stop
 
         # Strand not provided for inv/tloc
         if std_rec.info['SVTYPE'] == 'DEL':

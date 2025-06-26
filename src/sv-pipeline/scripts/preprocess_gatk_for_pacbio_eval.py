@@ -30,13 +30,14 @@ def process(vcf: pysam.VariantFile) -> None:
         svtype = record.info['SVTYPE']
         if svtype not in allowed_svtypes:
             continue
-        svlen = record.info.get('SVLEN', record.stop - record.pos)
+        end = record.info.get('END2') if svtype == 'BND' else record.stop
+        svlen = record.info.get('SVLEN', end - record.pos)
         if svlen > 5000:
             continue
         if svtype != 'DUP':
             sys.stdout.write(str(record))
         else:
-            record.info['SVLEN'] = record.stop - record.pos
+            record.info['SVLEN'] = end - record.pos
             record.info['SVTYPE'] = 'INS'
             record.stop = record.pos + 1
             sys.stdout.write(str(record).replace("<DUP>", "<INS>"))

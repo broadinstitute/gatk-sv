@@ -28,9 +28,10 @@ class SRTest(PESRTest):
             record.pos, record.info['STRANDS'][0], record.chrom,
             called, background, record.pos - self.window, record.pos + self.window)
 
+        end = record.info.get('END2') if record.info['SVTYPE'] == 'BND' else record.stop
         resultB = self._test_coord(
-            record.stop, record.info['STRANDS'][1], record.info['CHR2'],
-            called, background, record.stop - self.window, record.stop + self.window)
+            end, record.info['STRANDS'][1], record.info['CHR2'],
+            called, background, end - self.window, end + self.window)
 
         posA = int(resultA.pos)
         posB = int(resultB.pos)
@@ -56,15 +57,15 @@ class SRTest(PESRTest):
                 # Note that the case posA > posB is allowed and corrected for in the SR coordinate rewriting step later
                 if posA == posB and self.window > 0:
                     resultB = self._test_coord(
-                        record.stop, record.info['STRANDS'][1], record.info['CHR2'],
-                        called, background, record.stop - self.window, record.stop + self.window,
+                        end, record.info['STRANDS'][1], record.info['CHR2'],
+                        called, background, end - self.window, end + self.window,
                         invalid_pos_list=[posA])
             elif posA >= posB:
                 # Invalid coordinates, need to re-optimize around the better coordinate
                 if log_pval_A >= log_pval_B:
                     # posA is better, so use posA as anchor and check for best posB in valid window
                     resultB = self._test_coord(
-                        record.stop, record.info['STRANDS'][1], record.info['CHR2'],
+                        end, record.info['STRANDS'][1], record.info['CHR2'],
                         called, background, posA, posA + self.window)
                 else:
                     # vice versa

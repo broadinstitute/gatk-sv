@@ -209,14 +209,15 @@ def vcf2bedtool(vcf, split_bnd=True, include_samples=False,
 
             chrom = record.chrom
             name = record.id
+            end = record.info.get('END2') if record.info['SVTYPE'] == 'BND' else record.stop
 
             # Set start & end coordinates to appropriate sorted order
             # for all records (to not break bedtools)
             if no_sort_coords:
                 start = int(record.pos)
-                end = int(record.stop)
+                end = int(end)
             else:
-                start, end = sorted([int(record.pos), int(record.stop)])
+                start, end = sorted([int(record.pos), int(end)])
 
             # Subtract 1bp from pos to convert to 0-based BED vs 1-based VCF
             start = max([0, int(start) - 1])
@@ -239,7 +240,7 @@ def vcf2bedtool(vcf, split_bnd=True, include_samples=False,
                 for key in include_infos:
                     # Can't access END through info
                     if key == 'END':
-                        infos.append(record.stop)
+                        infos.append(end)
                     else:
                         infos.append(record.info.get(key))
 

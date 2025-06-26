@@ -113,10 +113,11 @@ def fix_record(
         fixed_record: pysam.VariantRecord
             Corrected variant line
     """
+    end = record.info.get(VcfKeys.bnd_end_2) if record.info[VcfKeys.svtype] in BND_TYPES else record.stop
     if VcfKeys.bnd_contig_2 in record.info:
         if record.info[VcfKeys.svtype] in BND_TYPES:
             if VcfKeys.bnd_end_2 not in record.info:
-                record.info[VcfKeys.bnd_end_2] = record.stop
+                record.info[VcfKeys.bnd_end_2] = end
             record.stop = record.pos + 1
         else:
             # not a break-end, figure out what's going on here...
@@ -144,10 +145,10 @@ def fix_record(
                     )
                 record.info.pop(VcfKeys.bnd_contig_2)
 
-    if record.pos >= record.stop:
-        if record.pos == record.stop:
+    if record.pos >= end:
+        if record.pos == end:
             # empty interval, valid for INS, otherwise an error
-            if record.info[VcfKeys.svtype] not in ["INS", "BND", "CPX", "CTX"]:
+            if record.info[VcfKeys.svtype] not in VALID_EMPTY_INTERVAL_TYPES:
                 raise ValueError(
                     f"Variant {record.id} with {VcfKeys.svtype}={record.info[VcfKeys.svtype]} has pos=stop={record.pos}"
                 )
@@ -204,11 +205,17 @@ def low_mem_cheat_sort(record_iterator: Iterator[pysam.VariantRecord]) -> Iterat
             buffer.append(record)
         else:
             # finished the current contig
-            yield from sorted(buffer, key=lambda r: (genomics_io.contig_sort_key(r.chrom), r.pos, r.stop))
+            yield from sorted(buffer, key=lambda r: (
+                genomics_io.contig_sort_key(r.chrom), r.pos,
+                r.info.get(VcfKeys.bnd_end_2) if r.info[VcfKeys.svtype] in BND_TYPES else r.stop
+            ))
             buffer = [record]
             chrom = record.chrom
     # finished last contig
-    yield from sorted(buffer, key=lambda r: (genomics_io.contig_sort_key(r.chrom), r.pos, r.stop))
+    yield from sorted(buffer, key=lambda r: (
+        genomics_io.contig_sort_key(r.chrom), r.pos,
+        r.info.get(VcfKeys.bnd_end_2) if r.info[VcfKeys.svtype] in BND_TYPES else r.stop
+    ))
 
 
 def fix_vcf(

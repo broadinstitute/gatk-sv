@@ -117,7 +117,8 @@ class VcfRecord:
         # TODO despite implementing the same strategy as svtk vcf2bed, small differences in some CPX intervals
         #  may occur because pysam forces stop to be max(pos, end)
         self.sink_chrom = variant_record.chrom
-        start, end = sorted([variant_record.pos, end_dict.get(self.vid, variant_record.stop)])
+        end = variant_record.info.get('END2') if variant_record.info.get('SVTYPE') == 'BND' else variant_record.stop
+        start, end = sorted([variant_record.pos, end_dict.get(self.vid, end)])
         self.sink_start = max(0, start - 1)
         if variant_record.info.get("UNRESOLVED_TYPE", "").startswith("INVERSION_SINGLE_ENDER"):
             self.sink_end = variant_record.info.get("END2", variant_record.stop)

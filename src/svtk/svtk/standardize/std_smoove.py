@@ -54,21 +54,27 @@ class SmooveStandardizer(VCFStandardizer):
         # Parse CHR2 and END
         if std_rec.info['SVTYPE'] == 'BND':
             chr2, end = parse_bnd_pos(std_rec.alts[0])
+            chrom, pos = std_rec.chrom, std_rec.pos
 
             # swap chr2/chrom, pos/end, and reverse strandedness
-            if not is_smaller_chrom(std_rec.chrom, chr2):
-                std_rec.pos, end = end, std_rec.pos
-                std_rec.chrom, chr2 = chr2, std_rec.chrom
+            if not is_smaller_chrom(chrom, chr2):
+                pos, end = end, pos
+                chrom, chr2 = chr2, chrom
                 std_rec.info['STRANDS'] = std_rec.info['STRANDS'][::-1]
-        else:
-            chr2, end = raw_rec.chrom, raw_rec.stop
 
-        std_rec.info['CHR2'] = chr2
-        std_rec.stop = end
+            std_rec.chrom = chrom
+            std_rec.pos = pos
+            std_rec.info['CHR2'] = chr2
+            std_rec.info['END2'] = end
+            std_rec.stop = std_rec.pos + 1
+        else:
+            std_rec.info['CHR2'] = raw_rec.chrom
+            std_rec.stop = raw_rec.stop
 
         # Add SVLEN
         if std_rec.chrom == std_rec.info['CHR2']:
-            std_rec.info['SVLEN'] = end - std_rec.pos
+            sv_end = std_rec.info.get('END2') if std_rec.info['SVTYPE'] == 'BND' else std_rec.stop
+            std_rec.info['SVLEN'] = sv_end - std_rec.pos
         else:
             std_rec.info['SVLEN'] = -1
 

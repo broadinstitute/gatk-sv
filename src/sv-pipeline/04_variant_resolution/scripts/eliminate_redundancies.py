@@ -90,12 +90,20 @@ def merge_linked_depth_calls(vcf, ID_links):
 
         # Take maximal region
         start = np.min([record.pos for record in cluster])
-        end = np.max([record.stop for record in cluster])
+        end = np.max([record.info.get('END2') if record.info.get('SVTYPE') == 'BND' else record.stop for record in cluster])
 
         merged_record = cluster[0].copy()
         merged_record.pos = start
-        merged_record.stop = end
-        merged_record.info['SVLEN'] = end - start
+        if merged_record.info['SVTYPE'] == 'BND':
+            merged_record.info['END2'] = end
+            merged_record.stop = merged_record.pos + 1
+        else:
+            merged_record.stop = end
+
+        if merged_record.chrom == merged_record.info.get('CHR2', merged_record.chrom):
+            merged_record.info['SVLEN'] = end - start
+        else:
+            merged_record.info['SVLEN'] = -1
 
         members = list(record.info['MEMBERS']) + [r.id for r in cluster]
         merged_record.info['MEMBERS'] = members

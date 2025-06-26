@@ -68,7 +68,9 @@ def merge_pesr_depth(vcf, fout, prefix, frac, sample_overlap, min_depth_only_siz
         return len(alg) == 1 and alg[0] == 'depth'
 
     def _reciprocal_overlap(record_a, record_b):
-        return svu.recip(record_a.pos, record_a.stop, record_b.pos, record_b.stop, frac=frac)
+        end_a = record_a.info.get('END2') if record_a.info.get('SVTYPE') == 'BND' else record_a.stop
+        end_b = record_b.info.get('END2') if record_b.info.get('SVTYPE') == 'BND' else record_b.stop
+        return svu.recip(record_a.pos, end_a, record_b.pos, end_b, frac=frac)
 
     def _cache_sample_overlap(record, force=False):
         if force or record.id not in sample_overlap_cache:

@@ -111,7 +111,7 @@ class SVRecord(GSNode):
             chrB = record.info['CHR2']
         else:
             chrB = chrA
-        posB = record.stop
+        posB = record.info.get('END2') if record.info['SVTYPE'] == 'BND' else record.stop
         name = record.id
 
         super().__init__(chrA, posA, chrB, posB, name)
@@ -227,16 +227,17 @@ class SVRecordCluster:
         # Merge coordinates
         POS, END, CIPOS, CIEND = self.merge_pos()
         new_record.pos = POS
-        new_record.stop = END
-        #  new_record.info['CIPOS'] = CIPOS
-        #  new_record.info['CIEND'] = CIEND
+        if new_record.info['SVTYPE'] == 'BND':
+            new_record.info['END2'] = END
+            new_record.stop = new_record.pos + 1
+        else:
+            new_record.stop = END
 
         # Assign alts, updating translocation alt based on merged coordinates
         if new_record.info['SVTYPE'] == 'BND':
             strands = new_record.info['STRANDS']
             alt = make_bnd_alt(base_record.chrB, END, strands)
             new_record.alts = (alt, )
-            new_record.stop = END
         if new_record.info['SVTYPE'] == 'INS':
             alts = set()
             for record in self.records:
@@ -244,10 +245,8 @@ class SVRecordCluster:
             if len(alts) > 1:
                 alts = tuple(a for a in alts if a != '<INS>')
             new_record.alts = alts
-            new_record.stop = END
         else:
             new_record.alts = base_record.record.alts
-            new_record.stop = END
 
         # SVLEN for intra-chromosomal is -1
         if base_record.is_tloc:
@@ -276,6 +275,10 @@ class SVRecordCluster:
         # If merging, all will have same CLUSTER ID
         if 'CLUSTER' in base_record.record.info:
             new_record.info['CLUSTER'] = base_record.record.info['CLUSTER']
+
+        # Merge INFO
+        new_record = self.merge_record_infos(new_record,
+                                             new_record.header)
 
         return new_record
 

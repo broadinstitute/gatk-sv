@@ -45,7 +45,8 @@ def modify_variants(dict_file_gz, vcf, multi_cnvs):
                         o.update({"GT": (0, 1)})
                         o.update({"GQ": o.get("RD_GQ")})
 
-                if variant.stop - variant.start >= 1000:
+                end = variant.info.get('END2') if variant.info.get('SVTYPE') == 'BND' else variant.stop
+                if end - variant.start >= 1000:
                     if variant.info[SVTYPE] in [SVType.DEL, SVType.DUP]:
                         is_del = variant.info[SVTYPE] == SVType.DEL
                         for k, v in variant.samples.items():

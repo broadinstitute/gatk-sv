@@ -30,11 +30,12 @@ class DellyStandardizer(VCFStandardizer):
         if svtype == 'TRA':
             svtype = 'BND'
         std_rec.info['SVTYPE'] = svtype
-        END = std_rec.stop
+
+        # Add placeholder ALT and REF to avoid pysam errors
         if "<" not in std_rec.alts[0]:
             std_rec.alts = ('<' + svtype + '>', )
         std_rec.ref = "N"
-        std_rec.stop = END
+
         # Convert strandedness notation
         raw_strands = raw_rec.info['CT']
         if raw_strands == '5to3':
@@ -65,20 +66,25 @@ class DellyStandardizer(VCFStandardizer):
             if not is_smaller_chrom(chrom, chr2):
                 if end == 0:
                     end = 1
-                std_rec.pos, end = end, pos
-                std_rec.chrom, chr2 = chr2, chrom
+                pos, end = end, pos
+                chrom, chr2 = chr2, chrom
                 std_rec.info['STRANDS'] = strands[::-1]
+            
+            std_rec.chrom = chrom
+            std_rec.pos = pos
+            std_rec.info['CHR2'] = chr2
+            std_rec.info['END2'] = end
+            std_rec.stop = pos
 
         else:
             chr2 = raw_rec.chrom
-
-        # Add CHR2 and END
-        std_rec.stop = end
-        std_rec.info['CHR2'] = chr2
+            std_rec.info['CHR2'] = chr2
+            std_rec.stop = end
 
         # Add SVLEN
         if std_rec.chrom == std_rec.info['CHR2']:
-            std_rec.info['SVLEN'] = std_rec.stop - std_rec.pos
+            sv_end = std_rec.info.get('END2') if svtype == 'BND' else std_rec.stop
+            std_rec.info['SVLEN'] = sv_end - std_rec.pos
         else:
             std_rec.info['SVLEN'] = -1
 

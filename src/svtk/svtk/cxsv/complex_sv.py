@@ -217,16 +217,18 @@ class ComplexSV:
 
         # If event is >1kb and both breakpoints are SR-only,
         # leave variant as unresolved
+        ff_end = FF.info.get('END2') if FF.info.get('SVTYPE') == 'BND' else FF.stop
+        rr_end = RR.info.get('END2') if RR.info.get('SVTYPE') == 'BND' else RR.stop
         if 'EVIDENCE' in FF.info.keys() and 'EVIDENCE' in RR.info.keys():
             if FF.info['EVIDENCE'] == ('SR',) and RR.info['EVIDENCE'] == ('SR',):
-                if max(FF.stop, RR.stop) - min(FF.pos, RR.pos) > SR_only_cutoff:
+                if max(ff_end, rr_end) - min(FF.pos, RR.pos) > SR_only_cutoff:
                     self.cpx_type = 'UNK'
                     self.svtype = 'UNR'
 
         # Overall variant start/end
         if self.svtype in ['INV', 'CPX', 'UNR']:
             self.vcf_record.pos = min(FF.pos, RR.pos)
-            self.vcf_record.stop = max(FF.stop, RR.stop)
+            self.vcf_record.stop = max(ff_end, rr_end)
 
             self.vcf_record.info['SVLEN'] = abs(self.vcf_record.stop -
                                                 self.vcf_record.pos)
@@ -241,12 +243,12 @@ class ComplexSV:
             # -->|<----|-->
             if self.cpx_type == 'DUP5/INS3':
                 source_start, source_end = RR.pos, FF.pos
-                sink_start, sink_end = FF.stop, RR.stop
+                sink_start, sink_end = ff_end, rr_end
 
             #   A D   C B
             # -->|<----|-->
             elif self.cpx_type == 'DUP3/INS5':
-                source_start, source_end = RR.stop, FF.stop
+                source_start, source_end = rr_end, ff_end
                 sink_start, sink_end = FF.pos, RR.pos
 
             # first check for overlap with MEI

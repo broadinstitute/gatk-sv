@@ -80,7 +80,7 @@ def make_reciprocal_translocation_bnds(record, ref_fasta):
     if 'END2' in record.info.keys():
         chr2_pos1 = int(record.info['END2'])
     else:
-        chr2_pos1 = record.stop
+        chr2_pos1 = record.info.get('END2') if record.info.get('SVTYPE') == 'BND' else record.stop
     chr2_pos1_ref = get_ref_base(chr2, chr2_pos1, ref_fasta)
     chr2_pos2 = chr2_pos1 + 1
     chr2_pos2_ref = get_ref_base(chr2, chr2_pos2, ref_fasta)
@@ -137,7 +137,7 @@ def make_reciprocal_translocation_bnds(record, ref_fasta):
     m1.id = m1_id
     m1.contig = chr1
     m1.pos = m1_pos1
-    m1.stop = m1_pos1 + 1
+    m1.stop = m1.pos + 1
     m1.ref = m1_ref
     m1.alts = (svu.make_bnd_alt(chr2, m1_pos2, strands_m1, ref_base=m1.ref), )
     m1.info['MATEID'] = m2_id
@@ -146,7 +146,7 @@ def make_reciprocal_translocation_bnds(record, ref_fasta):
     m2.id = m2_id
     m2.contig = chr2
     m2.pos = m2_pos1
-    m2.stop = m2_pos1 + 1
+    m2.stop = m2.pos + 1
     m2.ref = m2_ref
     m2.alts = (svu.make_bnd_alt(chr1, m2_pos2, strands_m2, ref_base=m2.ref), )
     m2.info['MATEID'] = m2_id
@@ -155,7 +155,7 @@ def make_reciprocal_translocation_bnds(record, ref_fasta):
     m3.id = m3_id
     m3.contig = chr1
     m3.pos = m3_pos1
-    m3.stop = m3_pos1 + 1
+    m3.stop = m3.pos + 1
     m3.ref = m3_ref
     m3.alts = (svu.make_bnd_alt(chr2, m3_pos2, strands_m3, ref_base=m3.ref), )
     m3.info['MATEID'] = m4_id
@@ -164,7 +164,7 @@ def make_reciprocal_translocation_bnds(record, ref_fasta):
     m4.id = m4_id
     m4.contig = chr2
     m4.pos = m4_pos1
-    m4.stop = m4_pos1 + 1
+    m4.stop = m4.pos + 1
     m4.ref = m4_ref
     m4.alts = (svu.make_bnd_alt(chr1, m4_pos2, strands_m4, ref_base=m4.ref), )
     m4.info['MATEID'] = m3_id

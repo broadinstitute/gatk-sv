@@ -87,7 +87,9 @@ class PETest(PESRTest):
 
         strandA, strandB = record.info['STRANDS']
         startA, endA = _get_coords(record.pos, strandA)
-        startB, endB = _get_coords(record.stop, strandB)
+        
+        end_pos = record.info.get('END2') if record.info['SVTYPE'] == 'BND' else record.stop
+        startB, endB = _get_coords(end_pos, strandB)
 
         # Add 1 because evidence is stored/indexed with 0-based coordinates
         region = '{0}:{1}-{2}'.format(record.chrom, startA + 1, endA + 1)

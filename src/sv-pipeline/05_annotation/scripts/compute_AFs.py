@@ -34,7 +34,8 @@ def in_par(record, parbt):
     """
 
     # Sort start & end to handle edge cases and ensure end > start for pbt functionality
-    sstart, send = [str(x) for x in sorted([record.start, record.stop])]
+    end = record.info.get('END2') if record.info.get('SVTYPE') == 'BND' else record.stop
+    sstart, send = [str(x) for x in sorted([record.start, end])]
     svbt_str = '\t'.join([record.chrom, sstart, send]) + '\n'
     svbt = pbt.BedTool(svbt_str, from_string=True)
     if len(svbt.intersect(parbt)) > 0:

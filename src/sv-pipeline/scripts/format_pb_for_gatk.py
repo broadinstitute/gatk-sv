@@ -135,8 +135,8 @@ def convert(record: pysam.VariantRecord,
         else:
             end = record.start + svlen
     else:
-        svlen = record.stop - record.pos
         end = record.stop
+        svlen = end - record.pos
     if svlen < min_size:
         return list()
     if end <= record.start:

@@ -15,8 +15,9 @@ DEFAULT_CUTOFF = 30
 
 
 def write_bed_entry(file, record, score, type, sample):
+    end = record.info.get('END2') if record.info.get('SVTYPE') == 'BND' else record.stop
     bed_entries = (record.chrom, str(record.start), str(
-        record.stop), str(score), sample, type, 'gcnv')
+        end), str(score), sample, type, 'gcnv')
     file.write('\t'.join(bed_entries) + '\n')
 
 # Writes record in bed format if it is a del or dup of sufficient quality

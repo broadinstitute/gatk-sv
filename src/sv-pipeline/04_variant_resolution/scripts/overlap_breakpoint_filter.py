@@ -92,7 +92,8 @@ for record in vcf:
         continue
     strands = record.info['STRANDS']
     bnd1 = "{}_{}_{}".format(record.chrom, record.pos, strands[0])
-    bnd2 = "{}_{}_{}".format(record.info['CHR2'], record.stop, strands[1])
+    end = record.info.get('END2') if record.info.get('SVTYPE') == 'BND' else record.stop
+    bnd2 = "{}_{}_{}".format(record.info['CHR2'], end, strands[1])
     bnds_to_ids[bnd1].append(record.id)
     bnds_to_ids[bnd2].append(record.id)
 
