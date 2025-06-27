@@ -13,6 +13,12 @@ workflow SVConcordance {
     File contig_list
     File reference_dict
 
+    # Reclustering parameters
+    File? clustering_config
+    File? stratification_config
+    Array[String]? track_names
+    Array[File]? track_intervals
+
     String gatk_docker
     String sv_base_mini_docker
 
@@ -30,6 +36,10 @@ workflow SVConcordance {
         truth_vcf=truth_vcf,
         output_prefix="~{output_prefix}.concordance.~{contig}.unsorted",
         contig=contig,
+        clustering_config=clustering_config,
+        stratification_config=stratification_config,
+        track_names=track_names,
+        track_intervals=track_intervals,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
@@ -68,6 +78,10 @@ task SVConcordanceTask {
     String output_prefix
     File reference_dict
     String? contig
+    File? clustering_config
+    File? stratification_config
+    Array[String]? track_names
+    Array[File]? track_intervals
     String? additional_args
 
     Float? java_mem_fraction
@@ -113,14 +127,28 @@ task SVConcordanceTask {
     JVM_MAX_MEM=$(getJavaMem MemTotal)
     echo "JVM memory: $JVM_MAX_MEM"
 
-    # As of 12/15/2023, the gatk docker contains an outdated version of bcftools so we sort in a subsequent task
+    TRACK_NAMES_CMD=$( 
+      if [ ~{if defined(track_names) then "1" else "0"} -eq 1 ]; then
+        echo "--track-name ~{sep=' --track-name ' track_names}"
+      fi
+    )
+
+    TRACK_INTERVALS_CMD=$(
+      if [ ~{if defined(track_intervals) then "1" else "0"} -eq 1 ]; then
+        echo "--track-intervals ~{sep=' --track-intervals ' track_intervals}"
+      fi
+    )
+
     gatk --java-options "-Xmx${JVM_MAX_MEM}" SVConcordance \
       ~{"-L " + contig} \
       --sequence-dictionary ~{reference_dict} \
       --eval ~{eval_vcf} \
       --truth ~{truth_vcf} \
       -O ~{output_prefix}.vcf.gz \
-      --do-not-sort \
+      ~{if defined(clustering_config) then "--clustering-config " + clustering_config else ""} \
+      ~{if defined(stratification_config) then "--stratify-config " + stratification_config else ""} \
+      $TRACK_INTERVALS_CMD \
+      $TRACK_NAMES_CMD \
       ~{additional_args}
   >>>
   runtime {
