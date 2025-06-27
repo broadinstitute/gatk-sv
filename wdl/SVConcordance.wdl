@@ -13,7 +13,7 @@ workflow SVConcordance {
     File contig_list
     File reference_dict
 
-    # Reclustering parameters
+    # Stratification parameters
     File? clustering_config
     File? stratification_config
     Array[String]? track_names
