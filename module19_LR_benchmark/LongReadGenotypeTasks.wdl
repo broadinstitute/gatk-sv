@@ -222,7 +222,6 @@ task ConcatVcfs {
     RuntimeAttr? runtime_attr_override
   }
 
-  String outfile_name = outfile_prefix + ".vcf.gz"
   String merge_flag = if merge_sort then "--allow-overlaps" else ""
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
@@ -231,6 +230,7 @@ task ConcatVcfs {
   Float compression_factor = 5.0
   Float base_disk_gb = 5.0
   Float base_mem_gb = 2.0
+
   RuntimeAttr runtime_default = object {
     mem_gb: base_mem_gb + compression_factor * input_size,
     disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
@@ -239,7 +239,9 @@ task ConcatVcfs {
     max_retries: 1,
     boot_disk_gb: 10
   }
+
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
   runtime {
     memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
     disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
@@ -252,86 +254,29 @@ task ConcatVcfs {
 
   command <<<
     set -euo pipefail
+
     VCFS="~{write_lines(vcfs)}"
     if ~{!defined(vcfs_idx)}; then
       cat ${VCFS} | xargs -n1 tabix
     fi
-    bcftools concat -a ~{merge_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
-    tabix -p vcf -f "~{outfile_name}"
-  >>>
-
-  output {
-    File concat_vcf = outfile_name
-    File concat_vcf_idx = outfile_name + ".tbi"
-  }
-}
-
-task MergeVcfs {
-  input {
-    Array[File] input_vcfs
-    String output_name
-    String docker_image
-    RuntimeAttr? runtime_attr_override
-  }
-
-  command <<<
-    set -e
-
-    mkdir -p indexed_vcfs
-
-    # Ensure all input VCFs are indexed
-    for vcf in ~{sep=' ' input_vcfs}; do
-      cp "$vcf" indexed_vcfs/
-      vcf_basename=$(basename "$vcf")
-      if [ ! -f "${vcf}.tbi" ]; then
-        echo "Index not found for $vcf, creating it..."
-        tabix -p vcf "$vcf"
-        cp "${vcf}.tbi" "indexed_vcfs/${vcf_basename}.tbi"
-      else
-        cp "${vcf}.tbi" "indexed_vcfs/${vcf_basename}.tbi"
-      fi
-    done
 
     # Merge the input VCFs
-    bcftools concat -a \
-      ~{sep=' ' input_vcfs} \
-      -Oz -o merged.tmp.vcf.gz
+    bcftools concat -a ~{merge_flag} --output-type z --file-list ${VCFS} --output merged.tmp.vcf.gz
 
     # Index the temp merged VCF
     tabix -p vcf merged.tmp.vcf.gz
 
     # Remove duplicates
-    bcftools norm -d all \
-      -Oz -o ~{output_name} merged.tmp.vcf.gz
+    bcftools norm -d all -Oz -o ~{outfile_prefix}.vcf.gz merged.tmp.vcf.gz
 
     # Index the final deduplicated VCF
-    tabix -p vcf ~{output_name}
-  >>>
+    tabix -p vcf ~{outfile_prefix}.vcf.gz
+
+ >>>
 
   output {
-    File merged_vcf = "~{output_name}"
-    File merged_vcf_index = "~{output_name}.tbi"
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 15,
-    disk_gb: 20,
-    boot_disk_gb: 10,
-    preemptible_tries: 1,
-    max_retries: 1
-  }
-
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: docker_image
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    File concat_vcf = "~{outfile_prefix}.vcf.gz"
+    File concat_vcf_idx =  "~{outfile_prefix}.vcf.gz.tbi"
   }
 }
 
