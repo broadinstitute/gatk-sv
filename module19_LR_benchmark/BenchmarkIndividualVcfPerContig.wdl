@@ -42,6 +42,7 @@ workflow BenchmarkIndividualVcfPerContig{
     input:
       vcf_file = extract_variant_sites_query.updated_vcf,
       sample_ids = sample_ids,
+      sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
@@ -49,6 +50,7 @@ workflow BenchmarkIndividualVcfPerContig{
     input:
       vcf_file = extract_variant_sites_ref.updated_vcf,
       sample_ids = sample_ids,
+      sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
