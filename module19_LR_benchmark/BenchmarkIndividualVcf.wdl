@@ -1,10 +1,8 @@
 version 1.0
 
-import BenchmarkIndividualVcfPerContig.wdl as BenchmarkIndividualVcfPerContig
-
-import ExtractFileByIndex.wdl as ExtractFileByIndex
-
-import LongReadGenotypeTasks.wdl as LongReadGenotypeTasks
+import "ExtractFileByIndex.wdl" as ExtractFileByIndex
+import "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
+import "BenchmarkIndividualVcfPerContig.wdl" as BenchmarkIndividualVcfPerContig
 
 
 workflow BenchmarkIndividualVcf{

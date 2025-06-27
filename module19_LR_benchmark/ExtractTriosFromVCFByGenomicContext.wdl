@@ -1,8 +1,7 @@
 version 1.0
 
-import ExtractTriosFromVCF.wdl as ExtractTriosFromVCF
-
-import LongReadGenotypeTasks.wdl as LongReadGenotypeTasks
+import "ExtractTriosFromVCF.wdl" as ExtractTriosFromVCF
+import "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
 
 workflow ExtractTriosFromVCFByGenomicContext {
   input {

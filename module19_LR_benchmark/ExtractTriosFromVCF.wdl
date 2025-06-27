@@ -1,6 +1,6 @@
 version 1.0
 
-import  LongReadGenotypeTasks.wdl as LongReadGenotypeTasks
+import  "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
 
 workflow ExtractTriosFromVCF {
 

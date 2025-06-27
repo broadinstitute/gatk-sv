@@ -859,7 +859,7 @@ task IntegrateInheritanceTable {
     process_and_collapse <- function(df) {
       # Step 1: Replace "." with "0" in columns 2 to 4
       for(i in c(2:4)){
-        df[,i] = sapply(df[,i], function(x){strsplit(as.character(x),':')[[1]][1]})
+        df[,i] = sapply(df[,i], function(x){strsplit(as.character(x),":")[[1]][1]})
       }
       df = df[df[,2]!="./." | df[,3]!="./." | df[,4]!="./.",]
 

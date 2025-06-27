@@ -1,6 +1,7 @@
 version 1.0
 
-import AnnotateGenomicContext.wdl as AnnotateGenomicContext
+import "AnnotateGenomicContext.wdl" as AnnotateGenomicContext
+
 workflow ExtractIndividualFromVCF {
   input {
     File vcf_file

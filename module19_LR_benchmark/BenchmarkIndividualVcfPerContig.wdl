@@ -1,9 +1,9 @@
 version 1.0
 
-import ExtractIndividualFromVCF.wdl as ExtractIndividualFromVCF
-import ExtractTriosFromVCFByGenomicContext.wdl  as ExtractTriosFromVCFByGenomicContext
-import TruvariBench.wdl as TruvariBench
-import LongReadGenotypeTasks.wdl as LongReadGenotypeTasks
+import "TruvariBench.wdl" as TruvariBench
+import "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
+import "ExtractIndividualFromVCF.wdl" as ExtractIndividualFromVCF
+import "ExtractTriosFromVCFByGenomicContext.wdl" as ExtractTriosFromVCFByGenomicContext
 
 
 workflow BenchmarkIndividualVcfPerContig{
