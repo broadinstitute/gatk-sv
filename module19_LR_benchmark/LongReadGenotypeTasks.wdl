@@ -498,8 +498,8 @@ task SplitVcfIntoShards {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb:  10,
-    disk_gb: 10 + ceil(size(input_vcf,"GiB")*2),
+    mem_gb:  20,
+    disk_gb: 20 + ceil(size(input_vcf,"GiB")*5),
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
@@ -810,8 +810,6 @@ task SplitVariantsBySize {
     
     CODE
 
-
-
     mv snvs.vcf "~{prefix}.snv.vcf"
     mv indels_1_30.vcf "~{prefix}.indel_1_30.vcf"
     mv indels_30_50.vcf "~{prefix}.indel_31_50.vcf"
@@ -844,7 +842,7 @@ task SplitVariantsBySize {
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 15,
-    disk_gb: 20,
+    disk_gb: 20 + ceil(size(input_vcf, "GiB")*5),
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
