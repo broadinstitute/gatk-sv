@@ -51,7 +51,7 @@ task AnnotateGenomicContext {
   }
 }
 
-task AddGenomicContextToVcf {
+task AddGenomicContextToVcfPython {
   input {
     File vcf_file         # Input VCF file (bgzipped or plain)
     File svid_annotation  # 2-column TSV: SVID <tab> annotation
@@ -99,7 +99,7 @@ task AddGenomicContextToVcf {
     header = vcf_in.header
     header.info.add("GC", number=1, type="String", description="Genomic context of the variant")
 
-    vcf_out = pysam.VariantFile("mc.variants_t2t.HG00512.ref_tp.GC_anno.vcf.gz", 'w', header = header)
+    vcf_out = pysam.VariantFile("~{prefix}.GC_anno.vcf.gz", 'w', header = header)
 
     for rec in vcf_in.fetch():
         svid = rec.id
@@ -111,6 +111,80 @@ task AddGenomicContextToVcf {
 
     CODE
   >>>
+
+  output {
+    File annotated_vcf = "~{prefix}.GC_anno.vcf.gz"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 15,
+    disk_gb: 15 + ceil(size(vcf_file)*2),
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task AddGenomicContextToVcfR {
+  input {
+    File vcf_file         # Input VCF file (bgzipped or plain)
+    File svid_annotation  # 2-column TSV: SVID <tab> annotation
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String prefix = basename(vcf_file,'.vcf.gz')
+
+  command <<<
+    set -e
+
+    # use R script to add GC to the vcf
+    R --vanilla <<EOF
+
+    svid_gc <- read.table("~{svid_annotation}", header = TRUE)
+    vcf_in <- read.table("~{vcf_file}", header = FALSE)
+    colnames(vcf_in)[3] = 'SVID'
+    vcf_out <- merge(vcf_in, svid_gc, by='SVID')
+    vcf_out[,8] = paste(vcf_out[,8], paste('GC',vcf_out$GC, sep='='),sep=';')
+    vcf_out_v2 = vcf_out[,c(2,3,1,4:(ncol(vcf_out)-1))]
+
+    write.table(vcf_out, file = "~{prefix}.GC_anno.vcf", quote = FALSE, sep = "\t", col.names = FALSE, row.names = FALSE)
+
+    EOF
+
+    #use python script to add GC to vcf header
+    python3 <<CODE
+
+    import pysam
+    import os
+
+    vcf_in = pysam.VariantFile("~{vcf_file}", "r")
+    header = vcf_in.header
+    header.info.add("GC", number=1, type="String", description="Genomic context of the variant")
+    vcf_out = pysam.VariantFile("~{prefix}.header.vcf.gz", 'w', header = header)
+    vcf_in.close()
+    vcf_out.close()
+    
+    CODE
+
+    cat <(zcat ~{prefix}.header.vcf.gz) ~{prefix}.GC_anno.vcf | bgzip > ~{prefix}.GC_anno.vcf.gz
+    tabix -p vcf ~{prefix}.GC_anno.vcf.gz
+
+  >>>
+
 
   output {
     File annotated_vcf = "~{prefix}.GC_anno.vcf.gz"
