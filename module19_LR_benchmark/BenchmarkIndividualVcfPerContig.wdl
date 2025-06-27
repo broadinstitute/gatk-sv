@@ -164,28 +164,28 @@ workflow BenchmarkIndividualVcfPerContig{
         docker_image = sv_pipeline_base_docker  
     }
 
-    call LongReadGenotypeTasks.AddGenomicContextToVcf as add_genomic_context_query_tp{
+    call LongReadGenotypeTasks.AddGenomicContextToVcfR as add_genomic_context_query_tp{
       input:
           vcf_file = merge_tp_query.merged_vcf,
           svid_annotation = annotate_genomic_context_query.variant_anno,
           docker_image = sv_pipeline_base_docker
     }
 
-    call LongReadGenotypeTasks.AddGenomicContextToVcf as add_genomic_context_ref_tp{
+    call LongReadGenotypeTasks.AddGenomicContextToVcfR as add_genomic_context_ref_tp{
       input:
           vcf_file = merge_tp_ref.merged_vcf,
           svid_annotation = annotate_genomic_context_ref.variant_anno,
           docker_image = sv_pipeline_base_docker
     }
 
-    call LongReadGenotypeTasks.AddGenomicContextToVcf as add_genomic_context_query_fp{
+    call LongReadGenotypeTasks.AddGenomicContextToVcfR as add_genomic_context_query_fp{
       input:
           vcf_file = merge_fp_query.merged_vcf,
           svid_annotation = annotate_genomic_context_query.variant_anno,
           docker_image = sv_pipeline_base_docker
     }
 
-    call LongReadGenotypeTasks.AddGenomicContextToVcf as add_genomic_context_ref_fp{
+    call LongReadGenotypeTasks.AddGenomicContextToVcfR as add_genomic_context_ref_fp{
       input:
           vcf_file = merge_fp_ref.merged_vcf,
           svid_annotation = annotate_genomic_context_ref.variant_anno,
