@@ -620,7 +620,19 @@ task GetMedianSubset {
     python3 <<CODE
 
     from statistics import median
-    with open("~{medians}", 'r') as inp, open("~{batch}_to_regeno.bed", 'w') as outp:
+    import gzip
+
+    # Flexibly open .gz or uncompressed file to read
+    # Expect bgzipped BED file but should be able to handle legacy uncompressed files
+    # Output file is smaller and deleted as a workflow intermediate so can be uncompressed
+    def _open(filename):
+      if filename.endswith(".gz"):
+        return gzip.open(filename, 'rt')
+      else:
+        return open(filename, 'r')
+
+
+    with _open("~{medians}") as inp, open("~{batch}_to_regeno.bed", 'w') as outp:
       for line in inp:
         fields = line.strip().split('\t')
         # first 4 fields are variant info (chr, start, end, varID)
