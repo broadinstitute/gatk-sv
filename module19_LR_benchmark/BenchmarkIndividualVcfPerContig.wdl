@@ -22,6 +22,7 @@ workflow BenchmarkIndividualVcfPerContig{
     File ref_dict
 
     String? truvari_params
+    String sv_base_mini_docker
     String sv_pipeline_base_docker
   }
 

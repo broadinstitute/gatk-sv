@@ -63,6 +63,7 @@ workflow BenchmarkIndividualVcf{
                 sample_ids = sample_ids,
                 ref_dict = ref_dict,
                 truvari_params = truvari_params,
+                sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_base_docker = sv_pipeline_base_docker
         }
 
