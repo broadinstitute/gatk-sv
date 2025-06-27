@@ -1,6 +1,6 @@
 version 1.0
 
-import "AnnotateGenomicContext.wdl" as AnnotateGenomicContext
+import "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
 
 workflow ExtractIndividualFromVCF {
   input {
@@ -10,20 +10,20 @@ workflow ExtractIndividualFromVCF {
   }
 
   scatter (sample_id in sample_ids) {
-    call AnnotateGenomicContext.ExtractVariantIndividualGenome {
+    call LongReadGenotypeTasks.ExtractVariantIndividualGenome {
       input:
         vcf_file = vcf_file,
         sample_id = sample_id,
         docker_image = sv_pipeline_base_docker
     }
 
-    call AnnotateGenomicContext.SplitVariantsBySize{
+    call LongReadGenotypeTasks.SplitVariantsBySize{
       input:
         input_vcf = ExtractVariantIndividualGenome.non_ref_vcf,
         docker_image = sv_pipeline_base_docker
     }
 
-    call AnnotateGenomicContext.ConcatVcfs as concat_vcf_1to50bp{
+    call LongReadGenotypeTasks.ConcatVcfs as concat_vcf_1to50bp{
       input:
         vcf1 = SplitVariantsBySize.indel_1_30_vcf,
         vcf2 = SplitVariantsBySize.indel_31_50_vcf,
@@ -34,7 +34,7 @@ workflow ExtractIndividualFromVCF {
         docker_image = sv_pipeline_base_docker
     }
 
-    call AnnotateGenomicContext.ConcatVcfs as concat_vcf_over30bp{
+    call LongReadGenotypeTasks.ConcatVcfs as concat_vcf_over30bp{
       input:
         vcf1 = SplitVariantsBySize.indel_31_50_vcf,
         vcf2 = SplitVariantsBySize.sv_vcf,
