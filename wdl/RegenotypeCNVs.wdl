@@ -620,7 +620,7 @@ task GetMedianSubset {
     python3 <<CODE
 
     from statistics import median
-
+    import gzip
 
     # Flexibly open .gz or uncompressed file to read
     # Expect bgzipped BED file but should be able to handle legacy uncompressed files
