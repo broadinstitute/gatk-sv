@@ -15,7 +15,7 @@ workflow Scramble {
     File original_bam_or_cram_file
     File original_bam_or_cram_index
     File counts_file
-    File manta_vcf
+    File input_vcf
     String sample_name
     File reference_fasta
     File reference_index
@@ -72,7 +72,7 @@ workflow Scramble {
       scramble_table = ScramblePart2.table,
       original_bam_or_cram_file = original_bam_or_cram_file,
       original_bam_or_cram_index = original_bam_or_cram_index,
-      manta_vcf = manta_vcf,
+      input_vcf = input_vcf,
       sample_name = sample_name,
       reference_fasta = reference_fasta,
       reference_index = reference_index,
@@ -219,7 +219,7 @@ task MakeScrambleVcf {
     File scramble_table
     File original_bam_or_cram_file
     File original_bam_or_cram_index
-    File manta_vcf
+    File input_vcf
     File reference_fasta
     File reference_index
     File mei_bed
@@ -255,7 +255,7 @@ task MakeScrambleVcf {
     set -euxo pipefail
     python ~{default="/opt/sv-pipeline/scripts/make_scramble_vcf.py" scramble_vcf_script} \
       --table ~{scramble_table} \
-      --manta-vcf ~{manta_vcf} \
+      --input-vcf ~{input_vcf} \
       --alignments-file ~{original_bam_or_cram_file} \
       --sample ~{sample_name} \
       --reference ~{reference_fasta} \
