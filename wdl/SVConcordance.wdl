@@ -132,7 +132,6 @@ task SVConcordanceTask {
     echo "args.txt:"
     cat args.txt
 
-    # As of 12/15/2023, the gatk docker contains an outdated version of bcftools so we sort in a subsequent task
     gatk --java-options "-Xmx${JVM_MAX_MEM}" SVConcordance \
       --arguments_file args.txt \
       ~{"-L " + contig} \
