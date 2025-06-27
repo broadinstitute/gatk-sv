@@ -128,40 +128,49 @@ workflow BenchmarkIndividualVcfPerContig{
           truvari_params = truvari_params
     }
 
-    call LongReadGenotypeTasks.MergeVcfs as merge_tp_query{
+
+    call LongReadGenotypeTasks.ConcatVcfs as merge_tp_query{
       input:
-        input_vcfs = [truvari_bench_snvs.tp_comp_vcf, truvari_bench_indels_sm.tp_comp_vcf, truvari_bench_indels_lg_1.tp_comp_vcf, truvari_bench_indels_lg_2.tp_comp_vcf, truvari_bench_sv.tp_comp_vcf],
-        output_name  = "~{prefix_query}.~{sample_ids[index]}.query_tp.vcf.gz",
-        docker_image = sv_pipeline_base_docker  
+        vcfs = [truvari_bench_snvs.tp_comp_vcf, 
+                truvari_bench_indels_sm.tp_comp_vcf, 
+                truvari_bench_indels_lg_1.tp_comp_vcf, 
+                truvari_bench_indels_lg_2.tp_comp_vcf, 
+                truvari_bench_sv.tp_comp_vcf],
+        outfile_prefix  = "~{prefix_query}.~{sample_ids[index]}.query_tp",
+        sv_base_mini_docker = sv_base_mini_docker
     }
 
-    call LongReadGenotypeTasks.MergeVcfs as merge_tp_ref{
+    call LongReadGenotypeTasks.ConcatVcfs as merge_tp_ref{
       input:
-        input_vcfs = [truvari_bench_snvs.tp_base_vcf, truvari_bench_indels_sm.tp_base_vcf, truvari_bench_indels_lg_1.tp_base_vcf, truvari_bench_indels_lg_2.tp_base_vcf, truvari_bench_sv.tp_base_vcf],
-        output_name  = "~{prefix_ref}.~{sample_ids[index]}.ref_tp.vcf.gz",
-        docker_image = sv_pipeline_base_docker  
+        vcfs = [truvari_bench_snvs.tp_base_vcf, 
+                truvari_bench_indels_sm.tp_base_vcf, 
+                truvari_bench_indels_lg_1.tp_base_vcf, 
+                truvari_bench_indels_lg_2.tp_base_vcf, 
+                truvari_bench_sv.tp_base_vcf],
+        outfile_prefix  = "~{prefix_ref}.~{sample_ids[index]}.ref_tp",
+        sv_base_mini_docker = sv_base_mini_docker
     }
 
-    call LongReadGenotypeTasks.MergeVcfs as merge_fp_query{
+    call LongReadGenotypeTasks.ConcatVcfs as merge_fp_query{
       input:
-        input_vcfs = [truvari_bench_snvs.fp_vcf, 
+        vcfs = [truvari_bench_snvs.fp_vcf, 
                       truvari_bench_indels_sm.fp_vcf, 
                       truvari_bench_indels_lg_1.fp_vcf, 
                       truvari_bench_indels_lg_2.fp_vcf, 
                       truvari_bench_sv.fp_vcf],
-        output_name  = "~{prefix_query}.~{sample_ids[index]}.query_fp.vcf.gz",
-        docker_image = sv_pipeline_base_docker  
+        outfile_prefix  = "~{prefix_query}.~{sample_ids[index]}.query_fp",
+        sv_base_mini_docker = sv_base_mini_docker
     }
 
-    call LongReadGenotypeTasks.MergeVcfs as merge_fp_ref{
+    call LongReadGenotypeTasks.ConcatVcfs as merge_fp_ref{
       input:
-        input_vcfs = [truvari_bench_snvs.fn_vcf, 
+        vcfs = [truvari_bench_snvs.fn_vcf, 
                       truvari_bench_indels_sm.fn_vcf, 
                       truvari_bench_indels_lg_1.fn_vcf, 
                       truvari_bench_indels_lg_2.fn_vcf, 
                       truvari_bench_sv.fn_vcf],
-        output_name  = "~{prefix_ref}.~{sample_ids[index]}.ref_fp.vcf.gz",
-        docker_image = sv_pipeline_base_docker  
+        outfile_prefix  = "~{prefix_ref}.~{sample_ids[index]}.ref_fp",
+        sv_base_mini_docker = sv_base_mini_docker
     }
 
     call LongReadGenotypeTasks.AddGenomicContextToVcfR as add_genomic_context_query_tp{
