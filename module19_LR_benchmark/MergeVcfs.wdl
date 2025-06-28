@@ -198,14 +198,14 @@ task IndexVcf {
 
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-
+  vcf_name = basename(vcf)
   command <<<
     set -e
       tabix -p vcf ~{vcf}
   >>>
 
   output {
-    File indexed_vcf_idx = "~{vcf}.tbi"
+    File indexed_vcf_idx = "~{vcf_name}.tbi"
   }
 
   runtime {
