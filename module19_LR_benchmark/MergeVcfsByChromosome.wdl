@@ -168,6 +168,7 @@ task ConcatVcfs {
   }
 }
 
+# Task 4: index VCFs
 task IndexVcf {
   input {
     File vcf                # input VCF (.vcf.gz)
