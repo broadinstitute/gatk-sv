@@ -12,7 +12,7 @@ workflow MergeVcfsByChromosome {
 
     scatter (idx in range(length(input_vcfs))) {
 
-      if (!defined(vcf_idx)) {
+      if (!defined(input_vcfs_idx)) {
         call IndexVcf{
           input:
             vcf = input_vcfs[idx],
