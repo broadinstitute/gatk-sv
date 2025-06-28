@@ -5,23 +5,30 @@ import "MergeVcfsByChromosome.wdl" as MergeVcfsByChromosome
 
 workflow MergeVcfs {
   input {
-    Array[File] input_vcfs            # bgzipped VCFs with .tbi
-    Array[String] chromosomes         # e.g. ["1", "2", ..., "22", "X"]
-    String output_prefix = "merged"
+    Array[File] input_vcfs     
+    Array[File?] input_vcfs_idx
+    Array[String] chromosomes    
+    String output_prefix 
+    String sv_base_mini_docker
   }
+
 
   scatter (chrom in chromosomes) {
   	call MergeVcfsByChromosome.MergeVcfsByChromosome {
       input:
+        chrom = chrom,
     		input_vcfs = input_vcfs,
-    		chrom = chrom
+        input_vcfs_idx = input_vcfs_idx,
+        sv_base_mini_docker = sv_base_mini_docker
   	}
   }
 
   call ConcatVcfs {
     input:
       input_vcfs = MergeVcfsByChromosome.merged_vcf,
-      output_name = "${output_prefix}.vcf.gz"
+      input_vcfs_idx = MergeVcfsByChromosome.merged_vcf_idx,
+      output_name = "${output_prefix}.vcf.gz",
+      sv_base_mini_docker = sv_base_mini_docker
   }
 
   output {
@@ -35,22 +42,41 @@ task ExtractChromosomeVcf {
   input {
     File input_vcf
     String chromosome
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
   }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 2,
+    disk_gb: ceil(size(input_vcf, "GB") * 2),
+    boot_disk_gb: 10,
+    preemptible_tries: 0,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
 
   command <<<
     set -e
-    bcftools view -r ~{chromosome} ~{input_vcf} -Oz -o chr~{chromosome}.vcf.gz
-    tabix -p vcf chr~{chromosome}.vcf.gz
+    bcftools view -r ~{chromosome} ~{input_vcf} -Oz -o ~{chromosome}.vcf.gz
+    tabix -p vcf ~{chromosome}.vcf.gz
   >>>
 
   output {
-    File output_vcf = "chr~{chromosome}.vcf.gz"
+    File output_vcf = "~{chromosome}.vcf.gz"
+    File output_vcf_idx = "~{chromosome}.vcf.gz.tbi"
   }
 
   runtime {
-    docker: "biocontainers/bcftools:v1.17-1-deb-py3"
-    cpu: 1
-    memory: "2G"
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
@@ -59,7 +85,20 @@ task MergeVcfs {
   input {
     Array[File] input_vcfs
     String output_name
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
   }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 10,
+    disk_gb: ceil(10 + size(input_vcfs, "GB") * 2),
+    boot_disk_gb: 10,
+    preemptible_tries: 0,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
     set -e
@@ -69,13 +108,17 @@ task MergeVcfs {
 
   output {
     File output_merged_vcf = output_name
-    File output_merged_vcf_index = "${output_name}.tbi"
+    File output_merged_vcf_idx = "${output_name}.tbi"
   }
 
   runtime {
-    docker: "biocontainers/bcftools:v1.17-1-deb-py3"
-    cpu: 2
-    memory: "4G"
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
@@ -83,8 +126,23 @@ task MergeVcfs {
 task ConcatVcfs {
   input {
     Array[File] input_vcfs
+    Array[File] input_vcfs_idx
     String output_name
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
   }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 10,
+    disk_gb: ceil(10 + size(input_vcfs, "GB") * 2),
+    boot_disk_gb: 10,
+    preemptible_tries: 0,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
 
   command <<<
     set -e
@@ -94,12 +152,17 @@ task ConcatVcfs {
 
   output {
     File output_vcf = output_name
-    File output_vcf_index = "${output_name}.tbi"
+    File output_vcf_idx = "${output_name}.tbi"
   }
 
   runtime {
-    docker: "biocontainers/bcftools:v1.17-1-deb-py3"
-    cpu: 2
-    memory: "4G"
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
