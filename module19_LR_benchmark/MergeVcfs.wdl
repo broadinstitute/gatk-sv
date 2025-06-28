@@ -33,7 +33,7 @@ workflow MergeVcfs {
 
   output {
     File final_merged_vcf = ConcatVcfs.output_vcf
-    File final_merged_vcf_index = ConcatVcfs.output_vcf_index
+    File final_merged_vcf_index = ConcatVcfs.output_vcf_idx
   }
 }
 
