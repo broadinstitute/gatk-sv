@@ -14,10 +14,11 @@ workflow MergeVcfsByChromosome {
 
       if (!defined(vcf_idx)) {
         call IndexVcf{
-          vcf = input_vcfs[idx],
-          sv_base_mini_docker = sv_base_mini_docker
-          }
+          input:
+            vcf = input_vcfs[idx],
+            sv_base_mini_docker = sv_base_mini_docker
         }
+      }
 
       File vcf_idx = select_first([IndexVcf.indexed_vcf_idx,input_vcfs_idx[idx]])
 
