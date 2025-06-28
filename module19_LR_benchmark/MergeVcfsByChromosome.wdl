@@ -18,6 +18,7 @@ workflow MergeVcfsByChromosome {
             vcf = input_vcfs[idx],
             sv_base_mini_docker = sv_base_mini_docker
         }
+      }
     }
 
     Array[File] vcfs_idx = select_first([IndexVcf.indexed_vcf_idx,input_vcfs_idx])
