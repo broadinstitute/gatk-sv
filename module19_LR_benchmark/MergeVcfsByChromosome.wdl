@@ -202,8 +202,6 @@ task IndexVcf {
   command <<<
     set -e
       tabix -p vcf ~{vcf}
-
-    }
   >>>
 
   output {
