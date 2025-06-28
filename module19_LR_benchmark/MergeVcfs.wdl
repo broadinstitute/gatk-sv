@@ -198,7 +198,7 @@ task IndexVcf {
 
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  vcf_name = basename(vcf)
+  String vcf_name = basename(vcf)
   command <<<
     set -e
       tabix -p vcf ~{vcf}
