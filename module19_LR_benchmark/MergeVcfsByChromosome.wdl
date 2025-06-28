@@ -6,7 +6,7 @@ workflow MergeVcfsByChromosome {
   input {
     String chrom
     Array[File] input_vcfs
-    Array[File?] input_vcfs_idx
+    Array[File]? input_vcfs_idx
     String sv_base_mini_docker
   }
 

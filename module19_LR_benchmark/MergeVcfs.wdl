@@ -6,7 +6,7 @@ import "MergeVcfsByChromosome.wdl" as MergeVcfsByChromosome
 workflow MergeVcfs {
   input {
     Array[File] input_vcfs     
-    Array[File?] input_vcfs_idx
+    Array[File]? input_vcfs_idx
     Array[String] chromosomes    
     String output_prefix 
     String sv_base_mini_docker
@@ -14,13 +14,13 @@ workflow MergeVcfs {
 
 
   scatter (chrom in chromosomes) {
-  	call MergeVcfsByChromosome.MergeVcfsByChromosome {
-      input:
-        chrom = chrom,
-    		input_vcfs = input_vcfs,
-        input_vcfs_idx = input_vcfs_idx,
-        sv_base_mini_docker = sv_base_mini_docker
-  	}
+    call MergeVcfsByChromosome.MergeVcfsByChromosome {
+        input:
+          chrom = chrom,
+          input_vcfs = input_vcfs,
+          input_vcfs_idx = input_vcfs_idx,
+          sv_base_mini_docker = sv_base_mini_docker
+    }
   }
 
   call ConcatVcfs {
