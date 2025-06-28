@@ -6,29 +6,17 @@ workflow MergeVcfsByChromosome {
   input {
     String chrom
     Array[File] input_vcfs
-    Array[File]? input_vcfs_idx
+    Array[File] input_vcfs_idx
     String sv_base_mini_docker
   }
 
-
-    if (!defined(input_vcfs_idx)) {
-      scatter (idx in range(length(input_vcfs))) {
-        call IndexVcf{
-          input:
-            vcf = input_vcfs[idx],
-            sv_base_mini_docker = sv_base_mini_docker
-        }
-      }
-    }
-
-    Array[File] vcfs_idx = select_first([IndexVcf.indexed_vcf_idx,input_vcfs_idx])
 
     scatter (idx in range(length(input_vcfs))) {
 
       call ExtractChromosomeVcf {
         input:
           input_vcf = input_vcfs[idx],
-          input_vcf_idx = vcfs_idx[idx],
+          input_vcf_idx = input_vcfs_idx[idx],
           chromosome = chrom,
           sv_base_mini_docker = sv_base_mini_docker
       }

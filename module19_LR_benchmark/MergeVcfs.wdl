@@ -13,12 +13,25 @@ workflow MergeVcfs {
   }
 
 
+
+  if (!defined(input_vcfs_idx)) {
+    scatter (idx in range(length(input_vcfs))) {
+      call IndexVcf{
+        input:
+          vcf = input_vcfs[idx],
+          sv_base_mini_docker = sv_base_mini_docker
+      }
+    }
+  }
+
+  Array[File] vcfs_idx = select_first([IndexVcf.indexed_vcf_idx,input_vcfs_idx])
+
   scatter (chrom in chromosomes) {
     call MergeVcfsByChromosome.MergeVcfsByChromosome {
         input:
           chrom = chrom,
           input_vcfs = input_vcfs,
-          input_vcfs_idx = input_vcfs_idx,
+          input_vcfs_idx = vcfs_idx,
           sv_base_mini_docker = sv_base_mini_docker
     }
   }
