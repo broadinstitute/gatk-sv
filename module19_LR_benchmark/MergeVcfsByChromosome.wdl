@@ -1,5 +1,7 @@
 version 1.0
 
+import "Structs.wdl"
+
 workflow MergeVcfsByChromosome {
   input {
     Array[File] input_vcfs            # bgzipped VCFs with .tbi

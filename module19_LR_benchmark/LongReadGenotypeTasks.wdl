@@ -1,5 +1,7 @@
 version 1.0
 
+import "Structs.wdl"
+import "Structs.wdl"
 
 task AnnotateGenomicContext {
   input {
@@ -58,6 +60,7 @@ task AddGenomicContextToVcfPython {
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
+
 
   String prefix = basename(vcf_file,'.vcf.gz')
 
@@ -1015,14 +1018,3 @@ task ExtractVariantIndividualGenome {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
-struct RuntimeAttr {
-    Float? mem_gb
-    Int? cpu_cores
-    Int? disk_gb
-    Int? boot_disk_gb
-    Int? preemptible_tries
-    Int? max_retries
-}
-
-

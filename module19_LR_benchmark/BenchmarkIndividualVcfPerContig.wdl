@@ -1,5 +1,6 @@
 version 1.0
 
+import "Structs.wdl"
 import "TruvariBench.wdl" as TruvariBench
 import "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
 import "ExtractIndividualFromVCF.wdl" as ExtractIndividualFromVCF

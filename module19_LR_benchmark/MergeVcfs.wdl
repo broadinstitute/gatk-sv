@@ -1,5 +1,6 @@
 version 1.0
 
+import "Structs.wdl"
 import "MergeVcfsByChromosome.wdl" as MergeVcfsByChromosome
 
 workflow MergeVcfs {
