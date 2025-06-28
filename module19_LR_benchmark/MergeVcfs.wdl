@@ -1,6 +1,6 @@
 version 1.0
 
-imprt "MergeVcfsByChromosome.wdl" as MergeVcfsByChromosome
+import "MergeVcfsByChromosome.wdl" as MergeVcfsByChromosome
 
 workflow MergeVcfs {
   input {
