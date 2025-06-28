@@ -12,8 +12,9 @@ workflow MergeVcfs {
 
   scatter (chrom in chromosomes) {
   	call MergeVcfsByChromosome.MergeVcfsByChromosome {
-  		input_vcfs = input_vcfs,
-  		chrom = chrom
+      input:
+    		input_vcfs = input_vcfs,
+    		chrom = chrom
   	}
   }
 
