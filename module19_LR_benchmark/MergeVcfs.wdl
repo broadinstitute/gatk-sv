@@ -20,7 +20,7 @@ workflow MergeVcfs {
 
   call ConcatVcfs {
     input:
-      input_vcfs = MergeVcfsByChromosome.output_merged_vcf,
+      input_vcfs = MergeVcfsByChromosome.merged_vcf,
       output_name = "${output_prefix}.vcf.gz"
   }
 
