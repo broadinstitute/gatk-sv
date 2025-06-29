@@ -1,7 +1,6 @@
 version 1.0
 
 import "Structs.wdl"
-import "Structs.wdl"
 
 task AnnotateGenomicContext {
   input {
@@ -164,7 +163,7 @@ task AddGenomicContextToVcfR {
     vcf_out[,8] = paste(vcf_out[,8], paste('GC',vcf_out$GC, sep='='),sep=';')
     vcf_out_v2 = vcf_out[,c(2,3,1,4:(ncol(vcf_out)-1))]
 
-    write.table(vcf_out, file = "~{prefix}.GC_anno.vcf", quote = FALSE, sep = "\t", col.names = FALSE, row.names = FALSE)
+    write.table(vcf_out_v2, file = "~{prefix}.GC_anno.vcf", quote = FALSE, sep = "\t", col.names = FALSE, row.names = FALSE)
 
     EOF
 
