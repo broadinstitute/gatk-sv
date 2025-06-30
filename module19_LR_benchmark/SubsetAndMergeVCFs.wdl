@@ -29,8 +29,8 @@ workflow SubsetAndMergeVCFs {
   }
 
   output {
-    File merged_vcf = MergeVCFs.concat_vcf
-    File merged_vcf_idx = MergeVCFs.concat_vcf_idx
+    File merged_vcf = ConcatVcfs.concat_vcf
+    File merged_vcf_idx = ConcatVcfs.concat_vcf_idx
   }
 }
 
