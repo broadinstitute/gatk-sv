@@ -154,18 +154,18 @@ task AddGenomicContextToVcfR {
     set -e
 
     # use R script to add GC to the vcf
-    R --vanilla <<EOF
+    Rscript -e '
 
     svid_gc <- read.table("~{svid_annotation}", header = TRUE)
     vcf_in <- read.table("~{vcf_file}", header = FALSE)
     colnames(vcf_in)[3] = 'SVID'
     vcf_out <- merge(vcf_in, svid_gc, by='SVID')
-    vcf_out[,8] = paste(vcf_out[,8], paste('GC',vcf_out$GC, sep='='),sep=';')
+    vcf_out[,8] = apply(vcf_out[,c('V8','GC')], 1, function(x){paste(x[1], paste('GC', x[2], sep='='), sep=';')})
     vcf_out_v2 = vcf_out[,c(2,3,1,4:(ncol(vcf_out)-1))]
 
     write.table(vcf_out_v2, file = "~{prefix}.GC_anno.vcf", quote = FALSE, sep = "\t", col.names = FALSE, row.names = FALSE)
+    '
 
-    EOF
 
     #use python script to add GC to vcf header
     python3 <<CODE
@@ -180,7 +180,6 @@ task AddGenomicContextToVcfR {
     vcf_in.close()
     vcf_out.close()
     
-    CODE
 
     cat <(zcat ~{prefix}.header.vcf.gz) ~{prefix}.GC_anno.vcf | bgzip > ~{prefix}.GC_anno.vcf.gz
     #bcftools sort -Oz -o ~{prefix}.GC_anno.sorted.vcf.gz ~{prefix}.GC_anno.vcf.gz
