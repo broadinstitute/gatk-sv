@@ -158,8 +158,9 @@ task AddGenomicContextToVcfR {
 
     svid_gc <- read.table("~{svid_annotation}", header = TRUE)
     vcf_in <- read.table("~{vcf_file}", header = FALSE)
-    colnames(vcf_in)[3] = 'SVID'
-    vcf_out <- merge(vcf_in, svid_gc, by='SVID')
+    colnames(vcf_in)[3] = "SVID"
+    svid_gc = unique(svid_gc)
+    vcf_out <- merge(vcf_in, svid_gc, by="SVID")
     vcf_out[,8] = apply(vcf_out[,c('V8','GC')], 1, function(x){paste(x[1], paste('GC', x[2], sep='='), sep=';')})
     vcf_out_v2 = vcf_out[,c(2,3,1,4:(ncol(vcf_out)-1))]
 
@@ -191,6 +192,7 @@ task AddGenomicContextToVcfR {
 
 
   output {
+    File test_vcf = "~{prefix}.GC_anno.vcf"
     File annotated_vcf = "~{prefix}.GC_anno.vcf.gz"
   }
 
