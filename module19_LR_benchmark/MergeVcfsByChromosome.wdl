@@ -104,7 +104,7 @@ task MergeVcfs {
 
   command <<<
     set -e
-    bcftools merge ~{sep=' ' input_vcfs} -Oz -o ~{output_name}
+    bcftools merge --merge none ~{sep=' ' input_vcfs} -Oz -o ~{output_name}
     tabix -p vcf ~{output_name}
   >>>
 
