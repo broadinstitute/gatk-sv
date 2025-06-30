@@ -113,7 +113,6 @@ task SVConcordanceTask {
     JVM_MAX_MEM=$(getJavaMem MemTotal)
     echo "JVM memory: $JVM_MAX_MEM"
 
-    # As of 12/15/2023, the gatk docker contains an outdated version of bcftools so we sort in a subsequent task
     gatk --java-options "-Xmx${JVM_MAX_MEM}" SVConcordance \
       ~{"-L " + contig} \
       --sequence-dictionary ~{reference_dict} \
