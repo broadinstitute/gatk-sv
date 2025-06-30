@@ -887,8 +887,11 @@ task IntegrateInheritanceTable {
       df[, 2:4] <- lapply(df[, 2:4], function(col) gsub("/", "|", col))
       df[, 2:4] <- lapply(df[, 2:4], function(col) gsub("\\.", "0", col))
       for(i in c(2:4)){
-        df[df[,i]==0,][,i] = "0|0"
+        if(nrow(df[df[,i]==0,])>0){
+          df[df[,i]==0,][,i] = "0|0"  
+        }
       }
+
 
       # Step 2: Collapse rows by columns 2–4, summing column 1
       # Convert column 1 to numeric (if not already)
