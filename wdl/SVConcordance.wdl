@@ -27,7 +27,7 @@ workflow SVConcordance {
       input:
         eval_vcf=eval_vcf,
         truth_vcf=truth_vcf,
-        output_prefix="~{output_prefix}.concordance.~{contig}.unsorted",
+        output_prefix="~{output_prefix}.concordance.~{contig}",
         contig=contig,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
