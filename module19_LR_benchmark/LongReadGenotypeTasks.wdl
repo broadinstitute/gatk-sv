@@ -179,6 +179,8 @@ task AddGenomicContextToVcfR {
     vcf_out = pysam.VariantFile("~{prefix}.header.vcf.gz", 'w', header = header)
     vcf_in.close()
     vcf_out.close()
+
+    CODE
     
 
     cat <(zcat ~{prefix}.header.vcf.gz) ~{prefix}.GC_anno.vcf | bgzip > ~{prefix}.GC_anno.vcf.gz
