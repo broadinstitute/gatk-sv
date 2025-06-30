@@ -120,7 +120,6 @@ task SVConcordanceTask {
       --eval ~{eval_vcf} \
       --truth ~{truth_vcf} \
       -O ~{output_prefix}.vcf.gz \
-      --do-not-sort \
       ~{additional_args}
   >>>
   runtime {
