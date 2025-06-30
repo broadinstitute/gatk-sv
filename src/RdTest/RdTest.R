@@ -785,6 +785,24 @@ samprank_sep <- function(genotype_matrix,cnv_matrix,cnvtype,sample=NULL)
 
 ## Override permTS to use median instead of mean for pclt method
 twosample.pclt <- function(scores, group) {
+  # Original code:
+    # tab<-table(group,scores)
+    # m<-sum(tab[2,])
+    # n<-length(scores)
+    # Grp1<-dimnames(tab)[[1]][2]
+    # grp<-rep(0,n)
+    # grp[group==Grp1]<-1
+    # T0<-sum(scores*grp)
+    # SSE.scores<-sum((scores-mean(scores))^2)
+    # SSE.grp<-sum((grp-mean(grp))^2)
+    # Z<-sqrt(n-1)*(T0-n*mean(scores)*mean(grp))/sqrt(SSE.scores*SSE.grp)
+    # p.lte<-pnorm(Z)
+    # p.gte<-1-pnorm(Z)
+    # p.twosidedAbs<-1-pchisq(Z^2,1)
+    # p.values<-c(p.twosided=min(1,2*min(p.lte,p.gte)),p.lte=p.lte,p.gte=p.gte,p.twosidedAbs=p.twosidedAbs)
+    # out<-list(p.values=p.values,Z=Z)
+    # out
+  
   tab <- table(group, scores)
   m <- sum(tab[2, ])
   n <- length(scores)
@@ -792,10 +810,9 @@ twosample.pclt <- function(scores, group) {
   grp <- rep(0, n)
   grp[group == Grp1] <- 1
   T0 <- sum(scores * grp)
-  # Using median instead of mean for scores
-  SSE.scores <- sum((scores - median(scores))^2)
+  SSE.scores <- sum((scores - mean(scores))^2)
   SSE.grp <- sum((grp - mean(grp))^2)
-  Z <- sqrt(n - 1) * (T0 - n * median(scores) * mean(grp)) /
+  Z <- sqrt(n - 1) * (T0 - n * mean(scores) * mean(grp)) /
     sqrt(SSE.scores * SSE.grp)
   p.lte <- pnorm(Z)
   p.gte <- 1 - pnorm(Z)
