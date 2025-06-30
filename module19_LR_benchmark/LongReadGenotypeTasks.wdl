@@ -186,8 +186,8 @@ task AddGenomicContextToVcfR {
     
 
     cat <(zcat ~{prefix}.header.vcf.gz) ~{prefix}.GC_anno.vcf | bgzip > ~{prefix}.GC_anno.vcf.gz
-    #bcftools sort -Oz -o ~{prefix}.GC_anno.sorted.vcf.gz ~{prefix}.GC_anno.vcf.gz
-    #tabix -p vcf ~{prefix}.GC_anno.sorted.vcf.gz
+    bcftools sort -Oz -o ~{prefix}.GC_anno.sorted.vcf.gz ~{prefix}.GC_anno.vcf.gz
+    tabix -p vcf ~{prefix}.GC_anno.sorted.vcf.gz
 
   >>>
 
@@ -195,6 +195,7 @@ task AddGenomicContextToVcfR {
   output {
     File test_vcf = "~{prefix}.GC_anno.vcf"
     File annotated_vcf = "~{prefix}.GC_anno.vcf.gz"
+    File annotated_vcf_idx = "~{prefix}.GC_anno.vcf.gz.tbi"
   }
 
   RuntimeAttr default_attr = object {
