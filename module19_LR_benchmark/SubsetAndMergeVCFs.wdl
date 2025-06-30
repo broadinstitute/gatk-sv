@@ -39,6 +39,7 @@ task SubsetVCF {
     File input_vcf
     File sample_list
     String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
   }
 
   command <<<
