@@ -26,7 +26,7 @@ workflow MainVcfQc {
     Array[Array[String]]? sample_level_comparison_datasets  # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to per-sample tarballs]
     File primary_contigs_fai
     Int? random_seed
-    Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CleanVcf, use 999
+    Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CombineBatches, use 999
     Int? downsample_qc_per_sample  # Number of samples to use for per-sample QC. Default: 1000
 
     String sv_base_mini_docker

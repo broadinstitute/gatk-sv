@@ -29,12 +29,6 @@ workflow MakeCohortVcf {
     Array[File] median_coverage_files
     Array[File] rf_cutoff_files
 
-    # Enables use of Hail for merging and sorting VCFs
-    # Recommended for cohorts of 10,000 samples or more
-    # Requires that DataProc be enabled in the GCP project
-    Boolean use_hail = false
-    String? gcs_project
-
     # CombineBatches parameters
     Boolean? legacy_vcfs
     File clustering_config_part1
@@ -71,7 +65,7 @@ workflow MakeCohortVcf {
 
     File? outlier_samples_list
     Int? random_seed
-    Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CleanVcf, use 999
+    Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CombineBatches, use 999
 
     Array[Array[String]]? site_level_comparison_datasets    # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to directory with one BED per population]
     Array[Array[String]]? sample_level_comparison_datasets  # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to per-sample tarballs]
@@ -132,7 +126,6 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_concat_resolved_per_shard
     RuntimeAttr? runtime_override_pull_vcf_shard
     RuntimeAttr? runtime_override_preconcat_resolve
-    RuntimeAttr? runtime_override_hail_merge_resolve
     RuntimeAttr? runtime_override_fix_header_resolve
 
     RuntimeAttr? runtime_override_get_se_cutoff_inv
@@ -144,7 +137,6 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_concat_resolved_per_shard_inv
     RuntimeAttr? runtime_override_pull_vcf_shard_inv
     RuntimeAttr? runtime_override_preconcat_resolve_inv
-    RuntimeAttr? runtime_override_hail_merge_resolve_inv
     RuntimeAttr? runtime_override_fix_header_resolve_inv
 
     # overrides for ReshardVcf
@@ -163,12 +155,10 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_attr_ids_from_vcf_regeno
     RuntimeAttr? runtime_attr_subset_ped_regeno
     RuntimeAttr? runtime_override_preconcat_regeno
-    RuntimeAttr? runtime_override_hail_merge_regeno
     RuntimeAttr? runtime_override_fix_header_regeno
 
     # overrides for CleanVcfContig
     RuntimeAttr? runtime_override_preconcat_clean_final
-    RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
 
     RuntimeAttr? runtime_override_clean_vcf_1a
@@ -193,11 +183,9 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_cat_multi_cnvs_1b
 
     RuntimeAttr? runtime_override_preconcat_step1
-    RuntimeAttr? runtime_override_hail_merge_step1
     RuntimeAttr? runtime_override_fix_header_step1
 
     RuntimeAttr? runtime_override_preconcat_drc
-    RuntimeAttr? runtime_override_hail_merge_drc
     RuntimeAttr? runtime_override_fix_header_drc
 
     RuntimeAttr? runtime_override_split_vcf_to_clean
@@ -292,8 +280,6 @@ workflow MakeCohortVcf {
       mei_bed=mei_bed,
       pe_exclude_list=pe_exclude_list,
       ref_dict=reference_dict,
-      use_hail=use_hail,
-      gcs_project=gcs_project,
       max_shard_size=max_shard_size_resolve,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -316,7 +302,6 @@ workflow MakeCohortVcf {
       runtime_override_concat_resolved_per_shard=runtime_override_concat_resolved_per_shard,
       runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard,
       runtime_override_preconcat=runtime_override_preconcat_resolve,
-      runtime_override_hail_merge=runtime_override_hail_merge_resolve,
       runtime_override_fix_header=runtime_override_fix_header_resolve,
 
       runtime_override_get_se_cutoff_inv=runtime_override_get_se_cutoff_inv,
@@ -328,7 +313,6 @@ workflow MakeCohortVcf {
       runtime_override_concat_resolved_per_shard_inv=runtime_override_concat_resolved_per_shard_inv,
       runtime_override_pull_vcf_shard_inv=runtime_override_pull_vcf_shard_inv,
       runtime_override_preconcat_inv=runtime_override_preconcat_resolve_inv,
-      runtime_override_hail_merge_inv=runtime_override_hail_merge_resolve_inv,
       runtime_override_fix_header_inv=runtime_override_fix_header_resolve_inv
   }
 
@@ -362,7 +346,6 @@ workflow MakeCohortVcf {
       runtime_attr_ids_from_vcf=runtime_attr_ids_from_vcf_regeno,
       runtime_attr_subset_ped=runtime_attr_subset_ped_regeno,
       runtime_override_preconcat=runtime_override_preconcat_regeno,
-      runtime_override_hail_merge=runtime_override_hail_merge_regeno,
       runtime_override_fix_header=runtime_override_fix_header_regeno
   }
 
@@ -386,8 +369,6 @@ workflow MakeCohortVcf {
       max_samples_per_shard_step3=max_samples_per_shard_clean_vcf_step3,
       clean_vcf5_records_per_shard=clean_vcf5_records_per_shard,
       outlier_samples_list=outlier_samples_list,
-      use_hail=use_hail,
-      gcs_project=gcs_project,
       combine_batches_merged_vcf=CombineBatches.combine_batches_merged_vcf,
       resolve_complex_merged_vcf=ResolveComplexVariants.complex_resolve_merged_vcf,
       genotype_complex_merged_vcf=GenotypeComplexVariants.complex_genotype_merged_vcf,
@@ -401,7 +382,6 @@ workflow MakeCohortVcf {
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_override_preconcat_clean_final=runtime_override_preconcat_clean_final,
-      runtime_override_hail_merge_clean_final=runtime_override_hail_merge_clean_final,
       runtime_override_fix_header_clean_final=runtime_override_fix_header_clean_final,
       runtime_override_concat_cleaned_vcfs=runtime_override_concat_cleaned_vcfs,
       runtime_override_clean_vcf_1a=runtime_override_clean_vcf_1a,
@@ -423,10 +403,8 @@ workflow MakeCohortVcf {
       runtime_override_concat_vcfs_1b=runtime_override_concat_vcfs_1b,
       runtime_override_cat_multi_cnvs_1b=runtime_override_cat_multi_cnvs_1b,
       runtime_override_preconcat_step1=runtime_override_preconcat_step1,
-      runtime_override_hail_merge_step1=runtime_override_hail_merge_step1,
       runtime_override_fix_header_step1=runtime_override_fix_header_step1,
       runtime_override_preconcat_drc=runtime_override_preconcat_drc,
-      runtime_override_hail_merge_drc=runtime_override_hail_merge_drc,
       runtime_override_fix_header_drc=runtime_override_fix_header_drc,
       runtime_override_split_vcf_to_clean=runtime_override_split_vcf_to_clean,
       runtime_override_combine_step_1_sex_chr_revisions=runtime_override_combine_step_1_sex_chr_revisions,

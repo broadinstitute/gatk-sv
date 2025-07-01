@@ -5,7 +5,6 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "FormatVcfForGatk.wdl" as fvcf
 import "CleanVcf1b.wdl" as c1b
 import "CleanVcf5.wdl" as c5
-import "HailMerge.wdl" as HailMerge
 
 workflow CleanVcfChromosome {
   input {
@@ -34,9 +33,6 @@ workflow CleanVcfChromosome {
 
     File? svtk_to_gatk_script  # For debugging
     File? make_clean_gq_script
-
-    Boolean use_hail
-    String? gcs_project
 
     String linux_docker
     String sv_base_mini_docker
@@ -67,11 +63,9 @@ workflow CleanVcfChromosome {
     RuntimeAttr? runtime_override_cat_multi_cnvs_1b
 
     RuntimeAttr? runtime_override_preconcat_step1
-    RuntimeAttr? runtime_override_hail_merge_step1
     RuntimeAttr? runtime_override_fix_header_step1
 
     RuntimeAttr? runtime_override_preconcat_drc
-    RuntimeAttr? runtime_override_hail_merge_drc
     RuntimeAttr? runtime_override_fix_header_drc
 
     # overrides for MiniTasks
@@ -115,30 +109,15 @@ workflow CleanVcfChromosome {
     }
   }
 
-  if (use_hail) {
-    call HailMerge.HailMerge as CombineStep1VcfsHail {
-      input:
-        vcfs=CleanVcf1a.intermediate_vcf,
-        prefix="~{prefix}.combine_step_1_vcfs",
-        gcs_project=gcs_project,
-        sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_override_preconcat=runtime_override_preconcat_step1,
-        runtime_override_hail_merge=runtime_override_hail_merge_step1,
-        runtime_override_fix_header=runtime_override_fix_header_step1
-    }
-  }
-  if (!use_hail) {
-    call MiniTasks.ConcatVcfs as CombineStep1Vcfs {
-      input:
-        vcfs=CleanVcf1a.intermediate_vcf,
-        vcfs_idx=CleanVcf1a.intermediate_vcf_idx,
-        naive=true,
-        generate_index=false,
-        outfile_prefix="~{prefix}.combine_step_1_vcfs",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_override_combine_step_1_vcfs
-    }
+  call MiniTasks.ConcatVcfs as CombineStep1Vcfs {
+    input:
+      vcfs=CleanVcf1a.intermediate_vcf,
+      vcfs_idx=CleanVcf1a.intermediate_vcf_idx,
+      naive=true,
+      generate_index=false,
+      outfile_prefix="~{prefix}.combine_step_1_vcfs",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_combine_step_1_vcfs
   }
 
   call MiniTasks.CatUncompressedFiles as CombineStep1SexChrRevisions {
@@ -151,7 +130,7 @@ workflow CleanVcfChromosome {
 
   call c1b.CleanVcf1b {
     input:
-      intermediate_vcf=select_first([CombineStep1Vcfs.concat_vcf, CombineStep1VcfsHail.merged_vcf]),
+      intermediate_vcf=CombineStep1Vcfs.concat_vcf,
       prefix="~{prefix}.clean_vcf_1b",
       records_per_shard=clean_vcf1b_records_per_shard,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -260,33 +239,17 @@ workflow CleanVcfChromosome {
       runtime_attr_override=runtime_override_drop_redundant_cnvs
   }
 
-  if (use_hail) {
-    call HailMerge.HailMerge as SortDropRedundantCnvsHail {
-      input:
-        vcfs=[DropRedundantCnvs.out],
-        prefix="~{prefix}.drop_redundant_cnvs.sorted",
-        gcs_project=gcs_project,
-        reset_cnv_gts=true,
-        sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_override_preconcat=runtime_override_preconcat_drc,
-        runtime_override_hail_merge=runtime_override_hail_merge_drc,
-        runtime_override_fix_header=runtime_override_fix_header_drc
-    }
-  }
-  if (!use_hail) {
-    call MiniTasks.SortVcf as SortDropRedundantCnvs {
-      input:
-        vcf=DropRedundantCnvs.out,
-        outfile_prefix="~{prefix}.drop_redundant_cnvs.sorted",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_override_sort_drop_redundant_cnvs
-    }
+  call MiniTasks.SortVcf as SortDropRedundantCnvs {
+    input:
+      vcf=DropRedundantCnvs.out,
+      outfile_prefix="~{prefix}.drop_redundant_cnvs.sorted",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_sort_drop_redundant_cnvs
   }
 
   call StitchFragmentedCnvs {
     input:
-      vcf=select_first([SortDropRedundantCnvs.out, SortDropRedundantCnvsHail.merged_vcf]),
+      vcf=SortDropRedundantCnvs.out,
       prefix="~{prefix}.stitch_fragmented_cnvs",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_stitch_fragmented_cnvs
@@ -323,7 +286,6 @@ workflow CleanVcfChromosome {
     input:
       vcf=FinalCleanup.final_cleaned_shard,
       ploidy_table=ploidy_table,
-      args="--scale-down-gq",
       output_prefix="~{prefix}.final_format",
       script=svtk_to_gatk_script,
       sv_pipeline_docker=sv_pipeline_docker,
