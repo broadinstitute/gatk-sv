@@ -94,14 +94,24 @@ task SetBins {
   }
 
   command <<<
-    set -Eeuo pipefail
+    set -Eeu
+
+    # make the CollectReadCounts output consistent with the old bincov code
+    # determine what format this is
+    firstchar=$(gunzip -c ~{count_file} | head -c 1)
+    set -o pipefail
+    if [ $firstchar == '@' ]; then
+      shift=1  # GATK CollectReadCounts (to convert from 1-based closed intervals)
+    else
+      shift=0  # bincov sample or matrix
+    fi
 
     # kill the dictionary | kill the header | adjust to bed format: 0-based half-open intervals
     zcat ~{count_file} \
       | sed '/^@/d' \
       | sed '/^CONTIG	START	END	COUNT$/d' \
       | sed '/^#/d' \
-      | awk -v x="1" 'BEGIN{OFS="\t"}{$2=$2-x; print $1,$2,$3}' > tmp_locs
+      | awk -v x="${shift}" 'BEGIN{OFS="\t"}{$2=$2-x; print $1,$2,$3}' > tmp_locs
 
     # determine bin size, and drop all bins not exactly equal to this size
     if ~{defined(binsize)}; then
@@ -171,7 +181,14 @@ task MakeBincovMatrixColumns {
   }
 
   command <<<
-    set -Eeuo pipefail
+    set -Eeu
+    firstchar=$(gunzip -c "~{count_file}" | head -c 1)
+    set -o pipefail
+    if [ $firstchar == '@' ]; then
+      shift=1
+    else
+      shift=0
+    fi
 
     TMP_BED="$(basename "~{count_file}").tmp.bed"
     printf "#Chr\tStart\tEnd\t%s\n" "~{sample}" > $TMP_BED
@@ -179,7 +196,7 @@ task MakeBincovMatrixColumns {
       | sed '/^@/d' \
       | sed '/^CONTIG	START	END	COUNT$/d' \
       | sed '/^#/d' \
-      | awk -v x=1 -v b=~{binsize} \
+      | awk -v x=$shift -v b=~{binsize} \
         'BEGIN{OFS="\t"}{$2=$2-x; if ($3-$2==b) print $0}' \
       >> "$TMP_BED"
 
