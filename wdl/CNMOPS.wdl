@@ -254,12 +254,6 @@ task CNSampleNormal {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    bincov_matrix: {
-      localization_optional: true
-    }
-  }
-
   Float mem_gb_base = 4.0
   Float mem_gb_scale = 4.0
   Float mem_gb = mem_gb_base + mem_gb_scale * size(bincov_matrix, "GiB")
