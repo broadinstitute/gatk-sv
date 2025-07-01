@@ -249,6 +249,12 @@ class ProjectBuilder:
             git_dependencies=("dockerfiles/denovo/*", "src/denovo/*"),
             docker_dependencies={
                 "sv-pipeline": "SV_PIPELINE_IMAGE"}
+        ),
+        "sv-box": ImageDependencies(
+            git_dependencies=("dockerfiles/sv-box/*", "src/sv_box/*"),
+            docker_dependencies={
+                "sv-pipeline": "SV_PIPELINE_IMAGE",
+                "wham": "WHAM_IMAGE"}
         )
     }
     non_public_images = frozenset({"melt"})
