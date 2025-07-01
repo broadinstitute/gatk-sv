@@ -723,8 +723,9 @@ task SplitVariantsBySize {
         len_ref = len(ref)
         len_alt = len(alt)
         svlen = abs(len_ref - len_alt)
-
-        if len_ref == 1 and len_alt == 1:
+        if "<" in alt and ">" in alt:
+          return "SV_GT_50", 0
+        elif len_ref == 1 and len_alt == 1:
             return "SNV", 0
         elif svlen <= 30:
             return "INDEL_1_30", svlen
@@ -751,7 +752,6 @@ task SplitVariantsBySize {
             ref = rec.ref
             alt = rec.alts[0]
             vtype, svlen = get_variant_type_size(ref, alt)
-
             outputs[vtype].write(rec)
 
         # Close all files
@@ -813,6 +813,7 @@ task SplitVariantsBySize {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
 
 task CalculateInheritanceTable {
   input {
