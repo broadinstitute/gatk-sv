@@ -232,6 +232,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_ss_mode_v1
       tags:
         - /.*/
 
