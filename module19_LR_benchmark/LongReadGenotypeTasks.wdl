@@ -194,13 +194,13 @@ task AddGenomicContextToVcfR {
 
   output {
     File test_vcf = "~{prefix}.GC_anno.vcf"
-    File annotated_vcf = "~{prefix}.GC_anno.vcf.gz"
-    File annotated_vcf_idx = "~{prefix}.GC_anno.vcf.gz.tbi"
+    File annotated_vcf = "~{prefix}.GC_anno.sorted.vcf.gz"
+    File annotated_vcf_idx = "~{prefix}.GC_anno.sorted.vcf.gz.tbi"
   }
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 15,
+    mem_gb: 10 + ceil(size(vcf_file,"GiB")*2),
     disk_gb: 15 + ceil(size(vcf_file,"GiB")*2),
     boot_disk_gb: 10,
     preemptible_tries: 1,
