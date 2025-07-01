@@ -814,7 +814,6 @@ task SplitVariantsBySize {
   }
 }
 
-
 task CalculateInheritanceTable {
   input {
     File input_vcf
@@ -999,7 +998,7 @@ task ExtractVariantIndividualGenome {
     tabix -p vcf ~{sample_id}.vcf.gz
 
     # Filter informative, alternative genotypes
-    bcftools view -e 'GT="0|0" || GT=".|." || GT=".|0" || GT="0|."' ~{sample_id}.vcf.gz -Oz -o ~{sample_id}.non_ref.vcf.gz
+    bcftools view -c 1 ~{sample_id}.vcf.gz -Oz -o ~{sample_id}.non_ref.vcf.gz
     tabix -p vcf ~{sample_id}.non_ref.vcf.gz
 
   >>>
