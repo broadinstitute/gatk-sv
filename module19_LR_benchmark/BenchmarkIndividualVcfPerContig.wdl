@@ -82,14 +82,11 @@ workflow BenchmarkIndividualVcfPerContig{
 
   scatter (index in range(length(sample_ids))){
 
-    call TruvariBench.CallTruvariBench as truvari_bench_snvs{
+    call LongReadGenotypeTasks.BenchmarkSNVs as truvari_bench_snvs{
       input:
-          chromosomes = [chromosome],
-          comp_vcf  = extract_individual_query.all_snv_vcfs[index],
-          truth_vcf   = extract_individual_ref.all_snv_vcfs[index],
-          prefix = "~{sample_ids[index]}.SNVs",
-          ref_dict = ref_dict, 
-          truvari_params = truvari_params
+          comp_vcf = extract_individual_query.all_snv_vcfs[index],
+          base_vcf = extract_individual_ref.all_snv_vcfs[index],
+          docker_image = sv_base_mini_docker
     }
 
     call TruvariBench.CallTruvariBench as truvari_bench_indels_sm{
@@ -99,7 +96,7 @@ workflow BenchmarkIndividualVcfPerContig{
           truth_vcf   = extract_individual_ref.all_indel_1_50[index],
           prefix = "~{sample_ids[index]}.indels_sm",
           ref_dict = ref_dict, 
-          truvari_params = truvari_params
+          truvari_params = "-s 1 -S 1"
     }
 
     call TruvariBench.CallTruvariBench as truvari_bench_indels_lg_1{
@@ -109,7 +106,7 @@ workflow BenchmarkIndividualVcfPerContig{
           truth_vcf   = extract_individual_ref.all_indel_1_50[index],
           prefix = "~{sample_ids[index]}.indels_lg_1",
           ref_dict = ref_dict, 
-          truvari_params = truvari_params
+          truvari_params = "-s 1 -S 1"
     }
 
     call TruvariBench.CallTruvariBench as truvari_bench_indels_lg_2{
@@ -119,7 +116,7 @@ workflow BenchmarkIndividualVcfPerContig{
           truth_vcf   = extract_individual_ref.all_sv_over30[index],
           prefix = "~{sample_ids[index]}.indels_lg_2",
           ref_dict = ref_dict, 
-          truvari_params = truvari_params
+          truvari_params = "-s 1 -S 1"
     }
 
     call TruvariBench.CallTruvariBench as truvari_bench_sv{
@@ -129,7 +126,7 @@ workflow BenchmarkIndividualVcfPerContig{
           truth_vcf   = extract_individual_ref.all_sv_over30[index],
           prefix = "~{sample_ids[index]}.sv",
           ref_dict = ref_dict, 
-          truvari_params = truvari_params
+          truvari_params = "-s 1 -S 1"
     }
 
 

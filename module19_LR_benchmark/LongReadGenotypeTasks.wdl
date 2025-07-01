@@ -220,6 +220,132 @@ task AddGenomicContextToVcfR {
   }
 }
 
+task BenchmarkSNVs{
+  input{
+    File comp_vcf
+    File base_vcf
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 10 + ceil(size(comp_vcf,"GiB") + size(base_vcf, "GiB"))*2,
+    disk_gb: 15 + ceil(size(comp_vcf,"GiB") + size(base_vcf, "GiB"))*2,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  String comp_pbaseix = basename(comp_vcf, ".vcf.gz")
+  String base_pbaseix = basename(base_vcf, ".vcf.gz")
+
+  command <<<
+    set -e
+
+    # use R script to add GC to the vcf
+    Rscript -e '
+
+    comp = read.table("~{comp_vcf}")
+    base = read.table("~{base_vcf}")
+    colnames(comp)[3] = 'SVID_comp'
+    colnames(base)[3] = 'SVID_truth'
+
+    dat=merge(comp[,c(1:5)], base[,c(1:5)], by=c('V1','V2','V4','V5'))
+
+    fp_comp = comp[!comp$SVID_comp%in%dat$SVID_comp, ]
+    tp_comp = comp[comp$SVID_comp%in%dat$SVID_comp, ]
+    fn_base = base[!base$SVID_truth%in%dat$SVID_truth, ]
+    tp_base = base[base$SVID_truth%in%dat$SVID_truth, ]
+
+    write.table(fp_comp, 'fp_comp.vcf' , quote=F, sep='\t', col.names=F, row.names=F)
+    write.table(tp_comp, 'tp_comp.vcf' , quote=F, sep='\t', col.names=F, row.names=F)
+    write.table(fn_base, 'fn_base.vcf' , quote=F, sep='\t', col.names=F, row.names=F)
+    write.table(tp_base, 'tp_base.vcf' , quote=F, sep='\t', col.names=F, row.names=F)
+    '
+
+    #tabix input vcf
+    tabix -p vcf ~{comp_vcf}
+    tabix -p vcf ~{base_vcf}
+
+    #extract vcf headers
+    bcftools view -h ~{comp_vcf} > comp.header
+    bcftools view -h ~{base_vcf} > base.header
+
+    #generate output vcf
+    cat comp.header fp_comp.vcf | bgzip > fp_comp.vcf.gz
+    cat comp.header tp_comp.vcf | bgzip > tp_comp.vcf.gz
+    cat base.header fn_base.vcf | bgzip > fn_base.vcf.gz
+    cat base.header tp_base.vcf | bgzip > tp_base.vcf.gz
+
+    >>>
+
+
+  output {
+    File fp_vcf = "fp_comp.vcf.gz"
+    File fn_vcf = "fn_base.vcf.gz"
+    File tp_comp_vcf = "tp_comp.vcf.gz"
+    File tp_base_vcf = "tp_base.vcf.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task CalculateInheritanceTable {
+  input {
+    File input_vcf
+    File input_vcf_idx
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Int disk_size = 10 + ceil(size(input_vcf,"GB") * 2)
+  Int mem_size =  ceil(size(input_vcf,"GB") * 2)
+
+  String prefix = basename(input_vcf, ".vcf.gz")
+  command <<<
+    set -euxo pipefail
+
+    bcftools view -H ~{input_vcf} | cut -f10- | sort | uniq -c > ~{prefix}.inheri.stat
+
+  >>>
+
+  output {
+    File inheri_stat = "~{prefix}.inheri.stat"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: mem_size,
+    disk_gb: disk_size,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task ConcatVcfs {
   input {
     Array[File] vcfs
@@ -349,6 +475,93 @@ task ExtractVariantSites {
     cpu_cores: 1,
     mem_gb: 20,
     disk_gb: 20 + ceil(size(input_vcf,"GiB")*2),
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task ExtractTrioVCF {
+  input {
+    File input_vcf
+    File sample_file
+    String family_id
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  command {
+    bcftools view -S ~{sample_file} -Oz -o ~{family_id}.trio.vcf.gz ~{input_vcf}
+  }
+
+  output {
+    File output_vcf = "~{family_id}.trio.vcf.gz"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 15,
+    disk_gb: 20,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task ExtractVariantIndividualGenome {
+  input {
+    File vcf_file
+    String sample_id
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  command <<<
+    set -euxo pipefail
+
+    # Extract variants for the sample
+    bcftools view -s ~{sample_id} ~{vcf_file} -Oz -o ~{sample_id}.vcf.gz
+    tabix -p vcf ~{sample_id}.vcf.gz
+
+    # Filter informative, alternative genotypes
+    bcftools view -c 1 ~{sample_id}.vcf.gz -Oz -o ~{sample_id}.non_ref.vcf.gz
+    tabix -p vcf ~{sample_id}.non_ref.vcf.gz
+
+  >>>
+
+  output {
+    File non_ref_vcf = "~{sample_id}.non_ref.vcf.gz"
+    File non_ref_vcf_idx = "~{sample_id}.non_ref.vcf.gz.tbi"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 15,
+    disk_gb: 20,
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
@@ -659,45 +872,6 @@ task WriteTrioSampleFile {
   }
 }
 
-task ExtractTrioVCF {
-  input {
-    File input_vcf
-    File sample_file
-    String family_id
-    String docker_image
-    RuntimeAttr? runtime_attr_override
-  }
-
-  command {
-    bcftools view -S ~{sample_file} -Oz -o ~{family_id}.trio.vcf.gz ~{input_vcf}
-  }
-
-  output {
-    File output_vcf = "~{family_id}.trio.vcf.gz"
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 15,
-    disk_gb: 20,
-    boot_disk_gb: 10,
-    preemptible_tries: 1,
-    max_retries: 1
-  }
-
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: docker_image
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
 task SplitVariantsBySize {
   input {
     File input_vcf
@@ -796,51 +970,6 @@ task SplitVariantsBySize {
     cpu_cores: 1,
     mem_gb: 15,
     disk_gb: 20 + ceil(size(input_vcf, "GiB")*5),
-    boot_disk_gb: 10,
-    preemptible_tries: 1,
-    max_retries: 1
-  }
-
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: docker_image
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
-task CalculateInheritanceTable {
-  input {
-    File input_vcf
-    File input_vcf_idx
-    String docker_image
-    RuntimeAttr? runtime_attr_override
-  }
-
-  Int disk_size = 10 + ceil(size(input_vcf,"GB") * 2)
-  Int mem_size =  ceil(size(input_vcf,"GB") * 2)
-
-  String prefix = basename(input_vcf, ".vcf.gz")
-  command <<<
-    set -euxo pipefail
-
-    bcftools view -H ~{input_vcf} | cut -f10- | sort | uniq -c > ~{prefix}.inheri.stat
-
-  >>>
-
-  output {
-    File inheri_stat = "~{prefix}.inheri.stat"
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: mem_size,
-    disk_gb: disk_size,
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
@@ -982,50 +1111,3 @@ task IntegrateInheritanceTable {
   }
 }
 
-task ExtractVariantIndividualGenome {
-  input {
-    File vcf_file
-    String sample_id
-    String docker_image
-    RuntimeAttr? runtime_attr_override
-  }
-
-  command <<<
-    set -euxo pipefail
-
-    # Extract variants for the sample
-    bcftools view -s ~{sample_id} ~{vcf_file} -Oz -o ~{sample_id}.vcf.gz
-    tabix -p vcf ~{sample_id}.vcf.gz
-
-    # Filter informative, alternative genotypes
-    bcftools view -c 1 ~{sample_id}.vcf.gz -Oz -o ~{sample_id}.non_ref.vcf.gz
-    tabix -p vcf ~{sample_id}.non_ref.vcf.gz
-
-  >>>
-
-  output {
-    File non_ref_vcf = "~{sample_id}.non_ref.vcf.gz"
-    File non_ref_vcf_idx = "~{sample_id}.non_ref.vcf.gz.tbi"
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 15,
-    disk_gb: 20,
-    boot_disk_gb: 10,
-    preemptible_tries: 1,
-    max_retries: 1
-  }
-
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: docker_image
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
