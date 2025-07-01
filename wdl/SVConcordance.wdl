@@ -25,7 +25,6 @@ workflow SVConcordance {
     Float? java_mem_fraction
 
     RuntimeAttr? runtime_attr_sv_concordance
-    RuntimeAttr? runtime_attr_sort_vcf
     RuntimeAttr? runtime_override_concat_shards
   }
 
@@ -34,7 +33,7 @@ workflow SVConcordance {
       input:
         eval_vcf=eval_vcf,
         truth_vcf=truth_vcf,
-        output_prefix="~{output_prefix}.concordance.~{contig}.unsorted",
+        output_prefix="~{output_prefix}.concordance.~{contig}",
         contig=contig,
         clustering_config=clustering_config,
         stratification_config=stratification_config,
@@ -45,20 +44,12 @@ workflow SVConcordance {
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_sv_concordance
     }
-
-    call tasks_cohort.SortVcf {
-      input:
-        vcf=SVConcordanceTask.out_unsorted,
-        outfile_prefix="~{output_prefix}.concordance.~{contig}.sorted",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_sort_vcf
-    }
   }
 
   call tasks_cohort.ConcatVcfs {
     input:
-      vcfs=SortVcf.out,
-      vcfs_idx=SortVcf.out_index,
+      vcfs=SVConcordanceTask.out,
+      vcfs_idx=SVConcordanceTask.out_index,
       naive=true,
       outfile_prefix="~{output_prefix}.concordance",
       sv_base_mini_docker=sv_base_mini_docker,
@@ -109,7 +100,8 @@ task SVConcordanceTask {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File out_unsorted = "~{output_prefix}.vcf.gz"
+    File out = "~{output_prefix}.vcf.gz"
+    File out_index = "~{output_prefix}.vcf.gz.tbi"
   }
   command <<<
     set -euo pipefail
