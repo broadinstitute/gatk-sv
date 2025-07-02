@@ -86,7 +86,7 @@ workflow BenchmarkIndividualVcfPerContig{
       input:
           comp_vcf = extract_individual_query.all_snv_vcfs[index],
           base_vcf = extract_individual_ref.all_snv_vcfs[index],
-          docker_image = sv_base_mini_docker
+          docker_image = sv_pipeline_base_docker
     }
 
     call TruvariBench.CallTruvariBench as truvari_bench_indels_sm{
