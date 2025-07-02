@@ -93,7 +93,7 @@ workflow BenchmarkIndividualVcf{
         call LongReadGenotypeTasks.ConcatVcfs as combine_vcfs_tp_ref{
           input:
             vcfs = extract_tp_ref.processed_files,
-            outfile_prefix = "~{sample_ids[i]}.~{ref_prefix}.vs.~{ref_prefix}.tp_ref",
+            outfile_prefix = "~{sample_ids[i]}.~{query_prefix}.vs.~{ref_prefix}.tp_ref",
             sv_base_mini_docker = sv_base_mini_docker
         }
 
@@ -119,7 +119,7 @@ workflow BenchmarkIndividualVcf{
         call LongReadGenotypeTasks.ConcatVcfs as combine_vcfs_fp_ref{
           input:
             vcfs = extract_fp_ref.processed_files,
-            outfile_prefix = "~{sample_ids[i]}.~{ref_prefix}.vs.~{ref_prefix}.fp_ref",
+            outfile_prefix = "~{sample_ids[i]}.~{query_prefix}.vs.~{ref_prefix}.fp_ref",
             sv_base_mini_docker = sv_base_mini_docker
         }
     }
