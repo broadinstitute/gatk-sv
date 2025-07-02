@@ -51,7 +51,8 @@ def match_cluster(record, cluster, dist=300):
     -------
     match : bool
     """
-    r_start, r_end = record.pos, record.stop
+    r_start = record.pos
+    r_end = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
 
     if record.info['STRANDS'] == '++':
         # Choose max start/end of ++ pairs
@@ -230,14 +231,20 @@ def make_new_record(pairs, old_record, retain_algs=False):
     # Take first quartile of - read positions for -/- breakpoints
     if pairs[0].strandA == '+':
         record.pos = round(np.percentile([p.posA for p in pairs], 90), 0)
-        record.stop = round(np.percentile([p.posB for p in pairs], 90), 0)
+        end = round(np.percentile([p.posB for p in pairs], 90), 0)
         record.info['STRANDS'] = '++'
     else:
         record.pos = round(np.percentile([p.posA for p in pairs], 10), 0)
-        record.stop = round(np.percentile([p.posB for p in pairs], 10), 0)
+        end = round(np.percentile([p.posB for p in pairs], 10), 0)
         record.info['STRANDS'] = '--'
 
-    record.info['SVLEN'] = record.stop - record.pos
+    if record.info.get('SVTYPE') == 'BND':
+        record.info['END2'] = end
+        record.stop = record.pos + 1
+    else:
+        record.stop = end
+
+    record.info['SVLEN'] = end - record.pos
     if retain_algs:
         old_algs = list(record.info['ALGORITHMS'])
         old_algs.append('rescan')
