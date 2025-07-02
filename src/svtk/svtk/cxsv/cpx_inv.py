@@ -137,7 +137,7 @@ def classify_2_cnv(FF, RR, cnvs, min_frac=0.5):
         interval3 = (ff_end, rr_end)
     else:
         interval3 = (rr_end, ff_end)
-    cnv3_end = cnv3_end.info['END2'] if cnv3_end.info['SVTYPE'] == 'BND' else cnv3_end.stop
+    cnv3_end = cnv3.info['END2'] if cnv3.info['SVTYPE'] == 'BND' else cnv3.stop
     frac3 = svu.reciprocal_overlap(cnv3.pos, cnv3_end, *interval3)
 
     # Report cxSV class based on whether CNVs matched intervals
