@@ -231,7 +231,7 @@ task PlotCompResults{
     RuntimeAttr? runtime_attr_override
   }
 
-  String prefix = basename(fp_query,'.fp_query.vcf.gz')
+  String prefix = basename(fp_query, ".fp_query.vcf.gz")
 
   command <<<
     set -e
@@ -310,7 +310,7 @@ task PlotCompResults{
       stat = merge(query.stat, ref.stat, by=c("Genomic_Context","SVTYPE","V4"))
       colnames(stat) = c("Genomic_Context","SVTYPE","SizeRange","fp_query","tp_query","fp_ref","tp_ref")
 
-      write.table(stat, paste(prefix, "stat", sep="."), quote=F, sep='\t', col.names=T, row.names=F)
+      write.table(stat, paste(prefix, "stat", sep="."), quote=F, sep="\t", col.names=T, row.names=F)
 
       pdf(paste(prefix, "pdf", sep="."), height = 3, width = 6)
       par(mfrow=c(1,2))
@@ -378,7 +378,6 @@ task PlotCompResults{
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-  
 }
 
 task BenchmarkSNVs{
