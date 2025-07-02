@@ -217,9 +217,11 @@ class ComplexSV:
 
         # If event is >1kb and both breakpoints are SR-only,
         # leave variant as unresolved
+        ff_end = FF.info['END2'] if FF.info['SVTYPE'] == 'BND' else FF.stop
+        rr_end = RR.info['END2'] if RR.info['SVTYPE'] == 'BND' else RR.stop
         if 'EVIDENCE' in FF.info.keys() and 'EVIDENCE' in RR.info.keys():
             if FF.info['EVIDENCE'] == ('SR',) and RR.info['EVIDENCE'] == ('SR',):
-                if max(FF.stop, RR.stop) - min(FF.pos, RR.pos) > SR_only_cutoff:
+                if max(ff_end, rr_end) - min(FF.pos, RR.pos) > SR_only_cutoff:
                     self.cpx_type = 'UNK'
                     self.svtype = 'UNR'
 
