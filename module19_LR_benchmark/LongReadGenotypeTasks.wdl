@@ -250,20 +250,20 @@ task BenchmarkSNVs{
 
     comp = read.table("~{comp_vcf}")
     base = read.table("~{base_vcf}")
-    colnames(comp)[3] = 'SVID_comp'
-    colnames(base)[3] = 'SVID_truth'
+    colnames(comp)[3] = "SVID_comp"
+    colnames(base)[3] = "SVID_truth"
 
-    dat=merge(comp[,c(1:5)], base[,c(1:5)], by=c('V1','V2','V4','V5'))
+    dat=merge(comp[,c(1:5)], base[,c(1:5)], by=c("V1","V2","V4","V5"))
 
     fp_comp = comp[!comp$SVID_comp%in%dat$SVID_comp, ]
     tp_comp = comp[comp$SVID_comp%in%dat$SVID_comp, ]
     fn_base = base[!base$SVID_truth%in%dat$SVID_truth, ]
     tp_base = base[base$SVID_truth%in%dat$SVID_truth, ]
 
-    write.table(fp_comp, 'fp_comp.vcf' , quote=F, sep='\t', col.names=F, row.names=F)
-    write.table(tp_comp, 'tp_comp.vcf' , quote=F, sep='\t', col.names=F, row.names=F)
-    write.table(fn_base, 'fn_base.vcf' , quote=F, sep='\t', col.names=F, row.names=F)
-    write.table(tp_base, 'tp_base.vcf' , quote=F, sep='\t', col.names=F, row.names=F)
+    write.table(fp_comp, "fp_comp.vcf" , quote=F, sep="\t", col.names=F, row.names=F)
+    write.table(tp_comp, "tp_comp.vcf" , quote=F, sep="\t", col.names=F, row.names=F)
+    write.table(fn_base, "fn_base.vcf" , quote=F, sep="\t", col.names=F, row.names=F)
+    write.table(tp_base, "tp_base.vcf" , quote=F, sep="\t", col.names=F, row.names=F)
     '
 
     #tabix input vcf
