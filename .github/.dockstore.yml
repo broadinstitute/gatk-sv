@@ -6,6 +6,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -25,6 +26,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -93,6 +95,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -102,6 +105,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -111,6 +115,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -120,6 +125,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -129,6 +135,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -138,6 +145,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -147,6 +155,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -156,6 +165,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -185,6 +195,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -194,6 +205,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -203,6 +215,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_integration
       tags:
         - /.*/
 
@@ -222,6 +235,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragensv_integration
       tags:
         - /.*/
 
