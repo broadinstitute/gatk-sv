@@ -16,6 +16,13 @@ workflow BenchmarkIndividualVcf{
 
         File anno_script_bash
         File anno_script_Rscript
+
+        File anno_script_bash
+        File anno_script_helper_R
+        File benchmark_script_bash
+        File banchmark_script_helper_R
+
+
         File repeat_mask
         File simple_repeats
         File segmental_duplicates
@@ -56,8 +63,12 @@ workflow BenchmarkIndividualVcf{
                 query_vcf = extract_chrom_variants_query.chr_vcf,
                 ref_vcf = extract_chrom_variants_ref.chr_vcf,
                 chromosome = chromosomes[index],
+
                 anno_script_bash = anno_script_bash,
-                anno_script_Rscript = anno_script_Rscript,
+                anno_script_helper_R = anno_script_helper_R,
+                benchmark_script_bash = benchmark_script_bash,
+                banchmark_script_helper_R = banchmark_script_helper_R,
+
                 repeat_mask = repeat_mask,
                 simple_repeats = simple_repeats,
                 segmental_duplicates = segmental_duplicates,

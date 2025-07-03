@@ -13,7 +13,10 @@ workflow BenchmarkIndividualVcfPerContig{
     File ref_vcf
 
     File anno_script_bash
-    File anno_script_Rscript
+    File anno_script_helper_R
+    File benchmark_script_bash
+    File banchmark_script_helper_R
+
     File repeat_mask
     File simple_repeats
     File segmental_duplicates
@@ -61,7 +64,7 @@ workflow BenchmarkIndividualVcfPerContig{
     input:
       variant_sites = extract_variant_sites_query.variant_sites,
       anno_script_bash = anno_script_bash,
-      anno_script_Rscript = anno_script_Rscript,
+      anno_script_Rscript = anno_script_helper_R,
       repeat_mask = repeat_mask,
       simple_repeats = simple_repeats,
       segmental_duplicates = segmental_duplicates,
@@ -72,7 +75,7 @@ workflow BenchmarkIndividualVcfPerContig{
     input:
       variant_sites = extract_variant_sites_ref.variant_sites,
       anno_script_bash = anno_script_bash,
-      anno_script_Rscript = anno_script_Rscript,
+      anno_script_Rscript = anno_script_helper_R,
       repeat_mask = repeat_mask,
       simple_repeats = simple_repeats,
       segmental_duplicates = segmental_duplicates,
@@ -106,8 +109,8 @@ workflow BenchmarkIndividualVcfPerContig{
         input:
           comp_vcf  = extract_individual_query.all_sv_over30[index],
           base_vcf  = extract_individual_ref.all_sv_over30[index],
-          benchmark_bash = benchmark_bash,
-          banchmark_helper_R = banchmark_helper_R,
+          benchmark_bash = benchmark_script_bash,
+          banchmark_helper_R = banchmark_script_helper_R,
           docker_image = sv_pipeline_base_docker
           }
       }
