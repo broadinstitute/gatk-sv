@@ -143,7 +143,7 @@ if [[ "${run_scramble}" == true ]]; then
   #  matches exactly with what the scramble part 2 script outputs
   # TODO: also, do we need is bam/cram?
   realign_soft_clipped_reads_json_filename=$(mktemp --suffix=.json "${output_dir}/realign_soft_clipped_reads_XXXXXX")
-  # addresses bug in dragmap where some reads are incorrectly soft-clipped
+  # addresses bug in Dragen v3.7.8 where some reads are incorrectly soft-clipped
 
   ./realign_soft_clipped_reads.sh \
     "${sample_id}" \
