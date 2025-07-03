@@ -1,10 +1,9 @@
 #!/bin/bash
 
 # Examples on running this script:
-# chmod +x run_manta.sh collect_counts.sh collect_sv_evidence.sh gather_sample_evidence.sh scramble.sh run_whamg.sh realign_soft_clipped_reads.sh
-# ./gather_sample_evidence.sh test NA12878.final.cram NA12878.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict primary_contigs.list contig.fai preprocessed_intervals.interval_list primary_contigs_plus_mito.bed.gz primary_contigs_plus_mito.bed.gz Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz wham_whitelist.bed Homo_sapiens_assembly38.fasta.64.alt Homo_sapiens_assembly38.fasta.64.amb Homo_sapiens_assembly38.fasta.64.ann Homo_sapiens_assembly38.fasta.64.bwt Homo_sapiens_assembly38.fasta.64.pac Homo_sapiens_assembly38.fasta.64.sa
+# bash gather_sample_evidence.sh test NA12878.final.cram NA12878.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict primary_contigs.list contig.fai preprocessed_intervals.interval_list primary_contigs_plus_mito.bed.gz primary_contigs_plus_mito.bed.gz Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz wham_whitelist.bed Homo_sapiens_assembly38.fasta.64.alt Homo_sapiens_assembly38.fasta.64.amb Homo_sapiens_assembly38.fasta.64.ann Homo_sapiens_assembly38.fasta.64.bwt Homo_sapiens_assembly38.fasta.64.pac Homo_sapiens_assembly38.fasta.64.sa
 # example running using downsampled data.
-# ./gather_sample_evidence.sh test downsampled_HG00096.final.cram downsampled_HG00096.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict downsampled_primary_contigs.list downsampled_contig.fai downsampled_preprocessed_intervals.interval_list downsampled_primary_contigs_plus_mito.bed.gz downsampled_primary_contigs_plus_mito.bed.gz downsampled_Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz downsampled_wham_whitelist.bed Homo_sapiens_assembly38.fasta.64.alt Homo_sapiens_assembly38.fasta.64.amb Homo_sapiens_assembly38.fasta.64.ann Homo_sapiens_assembly38.fasta.64.bwt Homo_sapiens_assembly38.fasta.64.pac Homo_sapiens_assembly38.fasta.64.sa
+# bash gather_sample_evidence.sh test downsampled_HG00096.final.cram downsampled_HG00096.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict downsampled_primary_contigs.list downsampled_contig.fai downsampled_preprocessed_intervals.interval_list downsampled_primary_contigs_plus_mito.bed.gz downsampled_primary_contigs_plus_mito.bed.gz downsampled_Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz downsampled_wham_whitelist.bed Homo_sapiens_assembly38.fasta.64.alt Homo_sapiens_assembly38.fasta.64.amb Homo_sapiens_assembly38.fasta.64.ann Homo_sapiens_assembly38.fasta.64.bwt Homo_sapiens_assembly38.fasta.64.pac Homo_sapiens_assembly38.fasta.64.sa
 
 # Implementation notes:
 # This script closely reproduces the GatherSampleEvidence workflow.
@@ -83,7 +82,7 @@ if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
   # The count for each interval is calculated by counting the number of
   # read starts that lie in the interval.
   collect_counts_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/collect_counts_XXXXXX")
-  ./collect_counts.sh \
+  bash collect_counts.sh \
     "${preprocessed_intervals}" \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
@@ -98,7 +97,7 @@ fi
 
 if [[ "${run_manta}" == true ]]; then
   manta_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/manta_XXXXXX")
-  ./run_manta.sh \
+  bash run_manta.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
@@ -110,7 +109,7 @@ fi
 
 if [[ "${collect_pesr}" == true ]]; then
   collect_pesr_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/collect_pesr_XXXXXX")
-  ./collect_sv_evidence.sh \
+  bash collect_sv_evidence.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
@@ -130,7 +129,7 @@ fi
 if [[ "${run_scramble}" == true ]]; then
   scramble_p1_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/scramble_p1_XXXXXX")
   # TODO: counts and manta files in the following should be updated
-  ./scramble.sh \
+  bash scramble.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
@@ -151,7 +150,7 @@ if [[ "${run_scramble}" == true ]]; then
   realign_soft_clipped_reads_json_filename=$(mktemp --suffix=.json "${output_dir}/realign_soft_clipped_reads_XXXXXX")
   # addresses bug in Dragen v3.7.8 where some reads are incorrectly soft-clipped
 
-  ./realign_soft_clipped_reads.sh \
+  bash realign_soft_clipped_reads.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
@@ -170,7 +169,7 @@ if [[ "${run_scramble}" == true ]]; then
 
   # ScrambleRealigned
   scramble_p2_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/scramble_p2_XXXXXX")
-  ./scramble.sh \
+  bash scramble.sh \
     "${sample_id}" \
     $(jq -r ".out" ${realign_soft_clipped_reads_json_filename}) \
     $(jq -r ".out_index" ${realign_soft_clipped_reads_json_filename}) \
@@ -189,7 +188,7 @@ fi
 if [[ "${run_wham}" == true ]]; then
   wham_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/wham_XXXXXX")
 
-  ./run_whamg.sh \
+  bash run_whamg.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
