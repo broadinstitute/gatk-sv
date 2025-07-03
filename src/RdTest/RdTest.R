@@ -109,7 +109,9 @@ option_list <- list(
   make_option(c("-l", "--SampleExcludeList"), type="character", default=NULL,
               help="Optional:Single column file with list of samples to exclude", metavar="character"),
   make_option(c("-w", "--SampleIncludeList"), type="character", default=NULL,
-              help="Optional:Single column file with list of samples to include", metavar="character")
+              help="Optional:Single column file with list of samples to include", metavar="character"),
+  make_option(c("--outlierSampleIds"), type="character", default=NULL,
+              help="Optional:Path to file containing outlier sample IDs", metavar="character")
 )
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -507,13 +509,13 @@ specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype
       ##make sure first four columns are not modified##
       columnswithsamp <- c(columnswithsamp, 1, 2, 3, 4)
       genotype_matrix[1,-columnswithsamp] = 2
-    } 
+    }
     return(genotype_matrix)
   }
 
 ###Kmeans multi-CNV Test##
 ##interval is measured by predicted copy state##
-kMeans <-function(cnv_matrix,chr,start,end,cnvID,Kinterval,Kintervalstart,Kintervalend,outFolder,outputname)
+kMeans <- function(cnv_matrix,chr,start,end,cnvID,Kinterval,Kintervalstart,Kintervalend,outFolder,outputname)
   {
     samplenames <- rownames(cnv_matrix)
     #create Eucledian matrix###
@@ -931,7 +933,7 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
 }
 
 ##Provide genotype for VCF format##
-genotype<- function(cnv_matrix,genotype_matrix,refgeno,chr,start,end,cnvID,sampleIDs,cnvtype,outFolder,outputname,plot_cnvmatrix)
+genotype <- function(cnv_matrix,genotype_matrix,refgeno,chr,start,end,cnvID,sampleIDs,cnvtype,outFolder,outputname,plot_cnvmatrix)
 {
  ##get depth intensities##  
  cnv_median <-c(create_groups(genotype_matrix, cnv_matrix)$Control,create_groups(genotype_matrix, cnv_matrix)$Treat)
@@ -1107,12 +1109,11 @@ runRdTest<-function(bed)
     end = round(center + (sizefilter/2))
   } 
   
+  ##Make sure region is in tabix##
   if (end - start <= 0 )
   {
    end=start+1 
   }  
-  ##Make sure region is in tabix##
-  
   
   ##Get Intesity Data##
   if (exists("poorbincov")) {
@@ -1177,7 +1178,28 @@ runRdTest<-function(bed)
   idsforsearch<-rownames(cnv_matrix)
   samplestokeep<-match(unlist(strsplit(sampleIDs,",")),idsforsearch)
   sampleIDs<-idsforsearch[na.omit(samplestokeep)]
+
+  if (!is.null(opt$outlierSampleIds)) {
+    outlier_ids <- readLines(opt$outlierSampleIds)
+
+    # Create non-outlier sample lists
+    background_samples <- setdiff(rownames(cnv_matrix), sampleIDs)
+    non_outlier_called <- setdiff(sampleIDs, outlier_ids)
+    non_outlier_background <- setdiff(background_samples, outlier_ids)
+
+    # Exclude outlier samples only if non-outlier samples exist
+    if (length(non_outlier_called) > 0) {
+      outlier_called <- setdiff(sampleIDs, non_outlier_called)
+      cnv_matrix <- cnv_matrix[!(rownames(cnv_matrix) %in% outlier_called), , drop = FALSE]
+      sampleIDs <- non_outlier_called
+    }
+    if (length(non_outlier_background) > 0) {
+      outlier_background <- setdiff(background_samples, non_outlier_background)
+      cnv_matrix <- cnv_matrix[!(rownames(cnv_matrix) %in% outlier_background), , drop = FALSE]
+    }
+  }
   samplesPrior <-unlist(strsplit(as.character(sampleIDs),split=","))
+
   ##Run K Test if Specified##
   if (opt$runKmeans == TRUE) {
     k_matrix<-kMeans(cnv_matrix,chr,start,end,cnvID,Kinterval,Kintervalstart,Kintervalend,outFolder,outputname)
