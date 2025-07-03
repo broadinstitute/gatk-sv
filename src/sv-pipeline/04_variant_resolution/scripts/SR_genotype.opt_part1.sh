@@ -181,36 +181,52 @@ echo "len(pass.pe_rd.txt): $(wc -l pass.pe_rd.txt)"
 
 ##passing ids##
 ##filter the recover file which has variants passing both single and both ends ##
+zcat sr.geno.final.oneside.txt.gz \
+  | awk '{if ($NF>0) print $1 "\t" $1"@"$2 }' \
+  | sort -k1,1 > sr_oneside_temp.txt
+
 cat recover.txt \
-  |sort -k1,1 \
-  |join -j 1 - <(zcat sr.geno.final.oneside.txt.gz|awk '{if ($NF>0) print $1 "\t" $1"@"$2 }'|sort -k1,1) \
-  |tr ' ' '\t' \
-  |awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} ($5 in ids)' pass.pe_rd.txt - \
-  >recover.single.txt
+  | sort -k1,1 \
+  | join -j 1 - sr_oneside_temp.txt \
+  | tr ' ' '\t' \
+  | sort -k5,5 \
+  | join -1 5 -2 1 - <(sort pass.pe_rd.txt) \
+  | awk '{print $2,$3,$4,$5,$1}' \
+  | tr ' ' '\t' \
+  > recover.single.txt
 echo "len(recover.single.txt): $(wc -l recover.single.txt)"
 
 cat recover.bothsides.txt \
-  |sort -k1,1 \
-  |join -j 1 - <(zcat sr.geno.final.oneside.txt.gz|awk '{if ($NF>0) print $1 "\t" $1"@"$2 }'|sort -k1,1) \
-  |tr ' ' '\t' \
-  |awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} ($5 in ids)' pass.pe_rd.txt - \
-  >recover.both.txt
+  | sort -k1,1 \
+  | join -j 1 - sr_oneside_temp.txt \
+  | tr ' ' '\t' \
+  | sort -k5,5 \
+  | join -1 5 -2 1 - <(sort pass.pe_rd.txt) \
+  | awk '{print $2,$3,$4,$5,$1}' \
+  | tr ' ' '\t' \
+  > recover.both.txt
 echo "len(recover.both.txt): $(wc -l recover.both.txt)"
 
 cat recover.txt \
-  |sort -k1,1 \
-  |join -j 1 - <(zcat sr.geno.final.oneside.txt.gz|awk '{if ($NF>0) print $1 "\t" $1"@"$2 }'|sort -k1,1) \
-  |tr ' ' '\t' \
-  |awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} (!($5 in ids))' pass.pe_rd.txt - \
-  >recover.single.fail.txt
+  | sort -k1,1 \
+  | join -j 1 - sr_oneside_temp.txt \
+  | tr ' ' '\t' \
+  | sort -k5,5 \
+  | join -1 5 -2 1 -v 1 - <(sort pass.pe_rd.txt) \
+  | awk '{print $2,$3,$4,$5,$1}' \
+  | tr ' ' '\t' \
+  > recover.single.fail.txt
 echo "len(recover.single.fail.txt): $(wc -l recover.single.fail.txt)"
 
 cat recover.bothsides.txt \
-  |sort -k1,1 \
-  |join -j 1 - <(zcat sr.geno.final.oneside.txt.gz|awk '{if ($NF>0) print $1 "\t" $1"@"$2 }'|sort -k1,1) \
-  |tr ' ' '\t' \
-  |awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} (!($5 in ids))' pass.pe_rd.txt - \
-  >recover.both.fail.txt
+  | sort -k1,1 \
+  | join -j 1 - sr_oneside_temp.txt \
+  | tr ' ' '\t' \
+  | sort -k5,5 \
+  | join -1 5 -2 1 -v 1 - <(sort pass.pe_rd.txt) \
+  | awk '{print $2,$3,$4,$5,$1}' \
+  | tr ' ' '\t' \
+  > recover.both.fail.txt
 echo "len(recover.both.fail.txt): $(wc -l recover.both.fail.txt)"
 
 echo "--- step5 ---"
