@@ -3,7 +3,7 @@
 """
 std_dragen.py
 
-Standardize a Dragen record.
+Standardize a DRAGEN-SV record.
 """
 
 
