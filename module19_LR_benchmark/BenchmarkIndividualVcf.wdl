@@ -30,6 +30,8 @@ workflow BenchmarkIndividualVcf{
         Array[String] sample_ids
         File ref_dict
 
+        Boolean short_read_benchmark = false
+
         String? truvari_params
         String sv_base_mini_docker
         String sv_pipeline_base_docker
@@ -72,6 +74,9 @@ workflow BenchmarkIndividualVcf{
                 repeat_mask = repeat_mask,
                 simple_repeats = simple_repeats,
                 segmental_duplicates = segmental_duplicates,
+
+                short_read_benchmark = short_read_benchmark,
+
                 sample_ids = sample_ids,
                 ref_dict = ref_dict,
                 truvari_params = truvari_params,

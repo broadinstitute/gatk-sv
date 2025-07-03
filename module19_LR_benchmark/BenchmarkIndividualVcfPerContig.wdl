@@ -25,7 +25,7 @@ workflow BenchmarkIndividualVcfPerContig{
     String chromosome
     File ref_dict
 
-    Boolean? short_read_benchmark = false
+    Boolean short_read_benchmark = false
 
     String? truvari_params
     String sv_base_mini_docker
