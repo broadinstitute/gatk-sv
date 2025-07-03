@@ -274,6 +274,7 @@ task PlotCompResults{
     }
 
     add_ovr_bar.US_RM<-function(query_vs_ref.stat,size_range, svtype, y_axis){
+      rec_width = .3
       rect(-1,y_axis - rec_width, 1, y_axis+rec_width, col=colorBlindGrey8[1])
       snv_usrm = colSums(query_vs_ref.stat[query_vs_ref.stat$SizeRange==size_range & query_vs_ref.stat$SVTYPE==svtype & query_vs_ref.stat$Genomic_Context%in%c("US","RM"),c(4:7)])
       rect(-snv_usrm[2]/sum(snv_usrm[c(1,2)]),y_axis - rec_width, snv_usrm[4]/sum(snv_usrm[c(3,4)]), y_axis+rec_width, col=colorBlindGrey8[2])
@@ -282,6 +283,7 @@ task PlotCompResults{
     }
 
     add_ovr_bar.SD_SR<-function(query_vs_ref.stat,size_range, svtype, y_axis){
+      rec_width = .3
       rect(-1,y_axis - rec_width, 1, y_axis+rec_width, col=colorBlindGrey8[1])
       snv_usrm = colSums(query_vs_ref.stat[query_vs_ref.stat$SizeRange==size_range & query_vs_ref.stat$SVTYPE==svtype & query_vs_ref.stat$Genomic_Context%in%c("SD","SR"),c(4:7)])
       rect(-snv_usrm[2]/sum(snv_usrm[c(1,2)]),y_axis - rec_width, snv_usrm[4]/sum(snv_usrm[c(3,4)]), y_axis+rec_width, col=colorBlindGrey8[2])
@@ -320,7 +322,7 @@ task PlotCompResults{
       axis(1,c(-5:5)/5, c(5:0,1:5)/5,mgp = c(1,.5,0))
       abline(v =c(-5:5)/5, col="grey")
       abline(v =0, col="black",lwd=2)
-      rec_width = .3
+      
       add_ovr_bar.US_RM(stat, "SNV","SNV", 7.5)
       add_ovr_bar.US_RM(stat, "Indel_sm","DEL", 6)
       add_ovr_bar.US_RM(stat, "Indel_lg","DEL", 5)
