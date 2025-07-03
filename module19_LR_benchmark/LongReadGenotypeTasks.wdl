@@ -314,7 +314,7 @@ task PlotCompResults{
 
       write.table(stat, paste(prefix, "stat", sep="."), quote=F, sep="\t", col.names=T, row.names=F)
 
-      pdf(paste(prefix, "pdf", sep="."), height = 3, width = 6)
+      pdf(paste(prefix, "pdf", sep="."), height = 4, width = 8)
       par(mfrow=c(1,2))
       par(mar=c(2,3,4,2))
       plot(c(-1.2,1.2),c(0.2,8),frame.plot = F, type = "n", xlab = "", ylab = "", xaxt="n", yaxt="n", main = "(US/RM)")
