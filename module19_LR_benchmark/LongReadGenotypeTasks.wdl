@@ -220,168 +220,6 @@ task AddGenomicContextToVcfR {
   }
 }
 
-task PlotCompResults{
-  input {
-    File tp_query 
-    File tp_ref
-    File fp_query 
-    File fp_ref
-
-    String docker_image
-    RuntimeAttr? runtime_attr_override
-  }
-
-  String prefix = basename(fp_query, ".fp_query.vcf.gz")
-
-  command <<<
-    set -e
-
-    Rscript -e '
-
-    calcu_counts_by_variant_type_and_GC<-function(dat){
-      snv_stat = data.frame(table(dat[dat$SVTYPE=="SNV",c("Genomic_Context", "SVTYPE")]))
-      indel_sm_stat = data.frame(table(dat[dat$SVLEN>0 & dat$SVLEN<30,c("Genomic_Context", "SVTYPE")]))
-      indel_lg_stat = data.frame(table(dat[dat$SVLEN>29 & dat$SVLEN<50,c("Genomic_Context", "SVTYPE")]))
-      sv_stat = data.frame(table(dat[dat$SVLEN>49,c("Genomic_Context", "SVTYPE")]))
-      snv_stat[,ncol(snv_stat)+1] = "SNV"
-      indel_sm_stat[,ncol(indel_sm_stat)+1] = "Indel_sm"
-      indel_lg_stat[,ncol(indel_lg_stat)+1] = "Indel_lg"
-      sv_stat[,ncol(sv_stat)+1] = "SV"
-      out = rbind(snv_stat, indel_sm_stat, indel_lg_stat, sv_stat)
-      return(out)      
-    }
-
-    readin_benchmark_results<-function(filename){
-      print("read in data ... ")
-      dat=read.table(filename)
-      print("extract svtype information ... ")
-      dat[,ncol(dat)+1] = sapply(dat[,3], function(x){strsplit(as.character(x),"_")[[1]][4]})
-      colnames(dat)[ncol(dat)] = "SVTYPE"
-      print("extract svlen information ... ")
-      dat[,ncol(dat)+1] = sapply(dat[,3], function(x){strsplit(as.character(x),"_")[[1]][5]})
-      colnames(dat)[ncol(dat)] = "SVLEN"
-      dat$SVLEN = as.integer(dat$SVLEN)
-      print("extract genomic context information ... ")
-      dat[,ncol(dat)+1] = sapply(dat[,8], function(x){extract_GC(x)})
-      colnames(dat)[ncol(dat)] = "Genomic_Context"
-      return(dat)
-    }
-
-    extract_GC<-function(info){
-      tmp = strsplit(as.character(info),";")[[1]]
-      out = tmp[grepl("GC=", tmp)]
-      return(strsplit(as.character(out),"=")[[1]][2])
-    }
-
-    add_ovr_bar.US_RM<-function(query_vs_ref.stat,size_range, svtype, y_axis){
-      rec_width = .3
-      rect(-1,y_axis - rec_width, 1, y_axis+rec_width, col=colorBlindGrey8[1])
-      snv_usrm = colSums(query_vs_ref.stat[query_vs_ref.stat$SizeRange==size_range & query_vs_ref.stat$SVTYPE==svtype & query_vs_ref.stat$Genomic_Context%in%c("US","RM"),c(4:7)])
-      rect(-snv_usrm[2]/sum(snv_usrm[c(1,2)]),y_axis - rec_width, snv_usrm[4]/sum(snv_usrm[c(3,4)]), y_axis+rec_width, col=colorBlindGrey8[2])
-      text(-1.2, y_axis+rec_width, format(sum(snv_usrm[c(1,2)]), big.mark = ","), adj=c(0,0))
-      text(1.2, y_axis+rec_width, format(sum(snv_usrm[c(3,4)]), big.mark = ","), adj=c(1,0))
-    }
-
-    add_ovr_bar.SD_SR<-function(query_vs_ref.stat,size_range, svtype, y_axis){
-      rec_width = .3
-      rect(-1,y_axis - rec_width, 1, y_axis+rec_width, col=colorBlindGrey8[1])
-      snv_usrm = colSums(query_vs_ref.stat[query_vs_ref.stat$SizeRange==size_range & query_vs_ref.stat$SVTYPE==svtype & query_vs_ref.stat$Genomic_Context%in%c("SD","SR"),c(4:7)])
-      rect(-snv_usrm[2]/sum(snv_usrm[c(1,2)]),y_axis - rec_width, snv_usrm[4]/sum(snv_usrm[c(3,4)]), y_axis+rec_width, col=colorBlindGrey8[2])
-      text(-1.2, y_axis+rec_width, format(sum(snv_usrm[c(1,2)]), big.mark = ","), adj=c(0,0))
-      text(1.2, y_axis+rec_width, format(sum(snv_usrm[c(3,4)]), big.mark = ","), adj=c(1,0))
-    }
-
-    colorBlindGrey8   <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-
-    plot_ovr_bar<-function(fp_query_file,  tp_query_file, fp_ref_file, tp_ref_file, prefix){
-      fp_query=readin_benchmark_results(fp_query_file)
-      tp_query=readin_benchmark_results(tp_query_file)
-      fp_query = fp_query[!fp_query$V3%in%tp_query$V3,]
-      fp_ref=readin_benchmark_results(fp_ref_file)
-      tp_ref=readin_benchmark_results(tp_ref_file)
-      fp_ref = fp_ref[!fp_ref$V3%in%tp_ref$V3,]
-      
-      #generate statistics
-      fp_query.stat = calcu_counts_by_variant_type_and_GC(fp_query)
-      tp_query.stat = calcu_counts_by_variant_type_and_GC(tp_query)
-      fp_ref.stat = calcu_counts_by_variant_type_and_GC(fp_ref)
-      tp_ref.stat = calcu_counts_by_variant_type_and_GC(tp_ref)
-      #integrate statistics
-      query.stat = merge(fp_query.stat, tp_query.stat, by=c("Genomic_Context","SVTYPE","V4"))
-      ref.stat = merge(fp_ref.stat, tp_ref.stat, by=c("Genomic_Context","SVTYPE","V4"))
-      stat = merge(query.stat, ref.stat, by=c("Genomic_Context","SVTYPE","V4"))
-      colnames(stat) = c("Genomic_Context","SVTYPE","SizeRange","fp_query","tp_query","fp_ref","tp_ref")
-
-      write.table(stat, paste(prefix, "stat", sep="."), quote=F, sep="\t", col.names=T, row.names=F)
-
-      pdf(paste(prefix, "pdf", sep="."), height = 4, width = 8)
-      par(mfrow=c(1,2))
-      par(mar=c(2,3,4,2))
-      plot(c(-1.2,1.2),c(0.2,8),frame.plot = F, type = "n", xlab = "", ylab = "", xaxt="n", yaxt="n", main = "(US/RM)")
-      axis(2,c(7.5,6:4,3:1-.5), labels = c("SNV","1-30","30-50",">50","1-30","30-50",">50"), las=2,mgp = c(1,.5,0))
-      axis(1,c(-5:5)/5, c(5:0,1:5)/5,mgp = c(1,.5,0))
-      abline(v =c(-5:5)/5, col="grey")
-      abline(v =0, col="black",lwd=2)
-      
-      add_ovr_bar.US_RM(stat, "SNV","SNV", 7.5)
-      add_ovr_bar.US_RM(stat, "Indel_sm","DEL", 6)
-      add_ovr_bar.US_RM(stat, "Indel_lg","DEL", 5)
-      add_ovr_bar.US_RM(stat, "SV","DEL", 4)
-      add_ovr_bar.US_RM(stat, "Indel_sm","INS", 2.5)
-      add_ovr_bar.US_RM(stat, "Indel_lg","INS", 1.5)
-      add_ovr_bar.US_RM(stat, "SV","INS", 0.5)
-      
-      plot(c(-1.2,1.2),c(0.2,8),frame.plot = F, type = "n", xlab = "", ylab = "", xaxt="n", yaxt="n", main = "(SD/SR)")
-      axis(2,c(7.5,6:4,3:1-.5), labels = c("SNV","1-30","30-50",">50","1-30","30-50",">50"), las=2,mgp = c(1,.5,0))
-      axis(1,c(-5:5)/5, c(5:0,1:5)/5,mgp = c(1,.5,0))
-      abline(v =c(-5:5)/5, col="grey")
-      abline(v =0, col="black",lwd=2)
-      rec_width = .3
-      add_ovr_bar.SD_SR(stat, "SNV","SNV", 7.5)
-      add_ovr_bar.SD_SR(stat, "Indel_sm","DEL", 6)
-      add_ovr_bar.SD_SR(stat, "Indel_lg","DEL", 5)
-      add_ovr_bar.SD_SR(stat, "SV","DEL", 4)
-      add_ovr_bar.SD_SR(stat, "Indel_sm","INS", 2.5)
-      add_ovr_bar.SD_SR(stat, "Indel_lg","INS", 1.5)
-      add_ovr_bar.SD_SR(stat, "SV","INS", 0.5)
-     
-      dev.off() 
-    }
-
-    plot_ovr_bar("~{fp_query}", "~{tp_query}", "~{fp_ref}", "~{tp_ref}", "~{prefix}")
-
-    '
-
-  >>>
-
-
-  output {
-    File figure = "~{prefix}.pdf"
-    File stat = "~{prefix}.stat"
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 20 + ceil(size(tp_query,"GiB") + size(tp_ref,"GiB") + size(fp_query,"GiB") + size(fp_ref,"GiB"))*2,
-    disk_gb: 25 + ceil(size(tp_query,"GiB") + size(tp_ref,"GiB") + size(fp_query,"GiB") + size(fp_ref,"GiB"))*2,
-    boot_disk_gb: 10,
-    preemptible_tries: 1,
-    max_retries: 1
-  }
-
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: docker_image
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
 task BenchmarkSNVs{
   input{
     File comp_vcf
@@ -437,6 +275,117 @@ task BenchmarkSNVs{
     bcftools view -h ~{base_vcf} > base.header
 
     #generate output vcf
+    cat comp.header fp_comp.vcf | bgzip > fp_comp.vcf.gz
+    cat comp.header tp_comp.vcf | bgzip > tp_comp.vcf.gz
+    cat base.header fn_base.vcf | bgzip > fn_base.vcf.gz
+    cat base.header tp_base.vcf | bgzip > tp_base.vcf.gz
+
+    >>>
+
+
+  output {
+    File fp_vcf = "fp_comp.vcf.gz"
+    File fn_vcf = "fn_base.vcf.gz"
+    File tp_comp_vcf = "tp_comp.vcf.gz"
+    File tp_base_vcf = "tp_base.vcf.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task BenchmarkSVs{
+  input{
+    File comp_vcf
+    File base_vcf
+    File benchmark_bash
+    File banchmark_helper_R
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 10 + ceil(size(comp_vcf,"GiB") + size(base_vcf, "GiB"))*2,
+    disk_gb: 15 + ceil(size(comp_vcf,"GiB") + size(base_vcf, "GiB"))*2,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  String comp_base = basename(comp_vcf, ".vcf.gz")
+  String base_base = basename(base_vcf, ".vcf.gz")
+
+  command <<<
+    set -e
+
+    #index the input vcf:
+    tabix -p vcf ~{comp_vcf}
+    tabix -p vcf ~{base_vcf}
+
+    #extract vcf headers
+    bcftools view -h ~{comp_vcf} > comp.header
+    bcftools view -h ~{base_vcf} > base.header
+
+    #generate headers of query and ref:
+    echo -e "#chrom\tstart\tend\tname\tSVTYPE\tSVLEN" > query.header
+    echo -e "#chrom\tstart\tend\tVID\tsvtype\tlength\tAF\tsamples" > ref.header
+
+    #generate bed files:
+    svtk vcf2bed -i SVTYPE -i SVLEN ~{comp_vcf} ~{comp_base}.bed
+    svtk vcf2bed -i SVTYPE -i SVLEN ~{base_vcf} ~{base_base}.bed
+
+    #generate query files:
+    cat query.header <(tail -n+2 ~{comp_base}.bed | awk '{if ($7!="NA") print}' | cut -f1-4,7,8) | bgzip > ~{comp_base}.query.gz
+    cat query.header <(tail -n+2 ~{base_base}.bed | awk '{if ($7!="NA") print}' | cut -f1-4,7,8) | bgzip > ~{base_base}.query.gz
+
+    #generate ref files:
+    cat ref.header <(tail -n+2 ~{comp_base}.bed | awk '{if ($7!="NA") print}' | cut -f1-4,7,8 | sed -e "s/$/\t0\tsample/" ) | bgzip > ~{comp_base}.ref.gz
+    cat ref.header <(tail -n+2 ~{base_base}.bed | awk '{if ($7!="NA") print}' | cut -f1-4,7,8 | sed -e "s/$/\t0\tsample/" ) | bgzip > ~{base_base}.ref.gz
+
+    #run comparison:
+    bash ~{benchmark_bash} -O comp_vs_base.bed -p comp_vs_base ~{comp_base}.query.gz ~{base_base}.ref.gz
+    bash ~{benchmark_bash} -O base_vs_comp.bed -p base_vs_comp ~{base_base}.query.gz ~{comp_base}.ref.gz  
+
+
+    # use R script to add GC to the vcf
+    Rscript -e '
+
+    comp_dat=read.table("base_vs_comp.bed", header=T, sep="\t", comment.char="")
+    base_dat=read.table("comp_vs_base.bed", header=T, sep="\t", comment.char="")
+
+    fp_comp = comp_dat[comp_dat[,8]=="NO_OVR",]
+    tp_comp = comp_dat[comp_dat[,8]!="NO_OVR",]
+    fn_base = base_dat[base_dat[,8]=="NO_OVR",]
+    tp_base = base_dat[base_dat[,8]!="NO_OVR",]
+
+    comp_vcf = read.table("~{comp_vcf}")
+    base_vcf = read.table("~{base_vcf}")
+
+    fp_comp_vcf = comp_vcf[comp_vcf[,3]%in%fp_comp[,4],]
+    tp_comp_vcf = comp_vcf[comp_vcf[,3]%in%tp_comp[,4],]
+    fn_base_vcf = base_vcf[base_vcf[,3]%in%fn_base[,4],]
+    tp_base_vcf = base_vcf[base_vcf[,3]%in%tp_base[,4],]
+
+    write.table(fp_comp_vcf, "fp_comp.vcf", quote=F, sep="\t", col.names=F, row.names=F)
+    write.table(tp_comp_vcf, "tp_comp.vcf", quote=F, sep="\t", col.names=F, row.names=F)
+    write.table(fn_base_vcf, "fn_base.vcf", quote=F, sep="\t", col.names=F, row.names=F)
+    write.table(tp_base_vcf, "tp_base.vcf", quote=F, sep="\t", col.names=F, row.names=F)
+
+    '
+
+
+    #generate output vcf
+
     cat comp.header fp_comp.vcf | bgzip > fp_comp.vcf.gz
     cat comp.header tp_comp.vcf | bgzip > tp_comp.vcf.gz
     cat base.header fn_base.vcf | bgzip > fn_base.vcf.gz
@@ -771,6 +720,168 @@ task ExtractChromosomeVariants {
     cpu_cores: 1,
     mem_gb:  10,
     disk_gb: 10 + ceil(size(input_vcf,"GiB")*1.5),
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task PlotCompResults{
+  input {
+    File tp_query 
+    File tp_ref
+    File fp_query 
+    File fp_ref
+
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String prefix = basename(fp_query, ".fp_query.vcf.gz")
+
+  command <<<
+    set -e
+
+    Rscript -e '
+
+    calcu_counts_by_variant_type_and_GC<-function(dat){
+      snv_stat = data.frame(table(dat[dat$SVTYPE=="SNV",c("Genomic_Context", "SVTYPE")]))
+      indel_sm_stat = data.frame(table(dat[dat$SVLEN>0 & dat$SVLEN<30,c("Genomic_Context", "SVTYPE")]))
+      indel_lg_stat = data.frame(table(dat[dat$SVLEN>29 & dat$SVLEN<50,c("Genomic_Context", "SVTYPE")]))
+      sv_stat = data.frame(table(dat[dat$SVLEN>49,c("Genomic_Context", "SVTYPE")]))
+      snv_stat[,ncol(snv_stat)+1] = "SNV"
+      indel_sm_stat[,ncol(indel_sm_stat)+1] = "Indel_sm"
+      indel_lg_stat[,ncol(indel_lg_stat)+1] = "Indel_lg"
+      sv_stat[,ncol(sv_stat)+1] = "SV"
+      out = rbind(snv_stat, indel_sm_stat, indel_lg_stat, sv_stat)
+      return(out)      
+    }
+
+    readin_benchmark_results<-function(filename){
+      print("read in data ... ")
+      dat=read.table(filename)
+      print("extract svtype information ... ")
+      dat[,ncol(dat)+1] = sapply(dat[,3], function(x){strsplit(as.character(x),"_")[[1]][4]})
+      colnames(dat)[ncol(dat)] = "SVTYPE"
+      print("extract svlen information ... ")
+      dat[,ncol(dat)+1] = sapply(dat[,3], function(x){strsplit(as.character(x),"_")[[1]][5]})
+      colnames(dat)[ncol(dat)] = "SVLEN"
+      dat$SVLEN = as.integer(dat$SVLEN)
+      print("extract genomic context information ... ")
+      dat[,ncol(dat)+1] = sapply(dat[,8], function(x){extract_GC(x)})
+      colnames(dat)[ncol(dat)] = "Genomic_Context"
+      return(dat)
+    }
+
+    extract_GC<-function(info){
+      tmp = strsplit(as.character(info),";")[[1]]
+      out = tmp[grepl("GC=", tmp)]
+      return(strsplit(as.character(out),"=")[[1]][2])
+    }
+
+    add_ovr_bar.US_RM<-function(query_vs_ref.stat,size_range, svtype, y_axis){
+      rec_width = .3
+      rect(-1,y_axis - rec_width, 1, y_axis+rec_width, col=colorBlindGrey8[1])
+      snv_usrm = colSums(query_vs_ref.stat[query_vs_ref.stat$SizeRange==size_range & query_vs_ref.stat$SVTYPE==svtype & query_vs_ref.stat$Genomic_Context%in%c("US","RM"),c(4:7)])
+      rect(-snv_usrm[2]/sum(snv_usrm[c(1,2)]),y_axis - rec_width, snv_usrm[4]/sum(snv_usrm[c(3,4)]), y_axis+rec_width, col=colorBlindGrey8[2])
+      text(-1.2, y_axis+rec_width, format(sum(snv_usrm[c(1,2)]), big.mark = ","), adj=c(0,0))
+      text(1.2, y_axis+rec_width, format(sum(snv_usrm[c(3,4)]), big.mark = ","), adj=c(1,0))
+    }
+
+    add_ovr_bar.SD_SR<-function(query_vs_ref.stat,size_range, svtype, y_axis){
+      rec_width = .3
+      rect(-1,y_axis - rec_width, 1, y_axis+rec_width, col=colorBlindGrey8[1])
+      snv_usrm = colSums(query_vs_ref.stat[query_vs_ref.stat$SizeRange==size_range & query_vs_ref.stat$SVTYPE==svtype & query_vs_ref.stat$Genomic_Context%in%c("SD","SR"),c(4:7)])
+      rect(-snv_usrm[2]/sum(snv_usrm[c(1,2)]),y_axis - rec_width, snv_usrm[4]/sum(snv_usrm[c(3,4)]), y_axis+rec_width, col=colorBlindGrey8[2])
+      text(-1.2, y_axis+rec_width, format(sum(snv_usrm[c(1,2)]), big.mark = ","), adj=c(0,0))
+      text(1.2, y_axis+rec_width, format(sum(snv_usrm[c(3,4)]), big.mark = ","), adj=c(1,0))
+    }
+
+    colorBlindGrey8   <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+    plot_ovr_bar<-function(fp_query_file,  tp_query_file, fp_ref_file, tp_ref_file, prefix){
+      fp_query=readin_benchmark_results(fp_query_file)
+      tp_query=readin_benchmark_results(tp_query_file)
+      fp_query = fp_query[!fp_query$V3%in%tp_query$V3,]
+      fp_ref=readin_benchmark_results(fp_ref_file)
+      tp_ref=readin_benchmark_results(tp_ref_file)
+      fp_ref = fp_ref[!fp_ref$V3%in%tp_ref$V3,]
+      
+      #generate statistics
+      fp_query.stat = calcu_counts_by_variant_type_and_GC(fp_query)
+      tp_query.stat = calcu_counts_by_variant_type_and_GC(tp_query)
+      fp_ref.stat = calcu_counts_by_variant_type_and_GC(fp_ref)
+      tp_ref.stat = calcu_counts_by_variant_type_and_GC(tp_ref)
+      #integrate statistics
+      query.stat = merge(fp_query.stat, tp_query.stat, by=c("Genomic_Context","SVTYPE","V4"))
+      ref.stat = merge(fp_ref.stat, tp_ref.stat, by=c("Genomic_Context","SVTYPE","V4"))
+      stat = merge(query.stat, ref.stat, by=c("Genomic_Context","SVTYPE","V4"))
+      colnames(stat) = c("Genomic_Context","SVTYPE","SizeRange","fp_query","tp_query","fp_ref","tp_ref")
+
+      write.table(stat, paste(prefix, "stat", sep="."), quote=F, sep="\t", col.names=T, row.names=F)
+
+      pdf(paste(prefix, "pdf", sep="."), height = 4, width = 8)
+      par(mfrow=c(1,2))
+      par(mar=c(2,3,4,2))
+      plot(c(-1.2,1.2),c(0.2,8),frame.plot = F, type = "n", xlab = "", ylab = "", xaxt="n", yaxt="n", main = "(US/RM)")
+      axis(2,c(7.5,6:4,3:1-.5), labels = c("SNV","1-30","30-50",">50","1-30","30-50",">50"), las=2,mgp = c(1,.5,0))
+      axis(1,c(-5:5)/5, c(5:0,1:5)/5,mgp = c(1,.5,0))
+      abline(v =c(-5:5)/5, col="grey")
+      abline(v =0, col="black",lwd=2)
+      
+      add_ovr_bar.US_RM(stat, "SNV","SNV", 7.5)
+      add_ovr_bar.US_RM(stat, "Indel_sm","DEL", 6)
+      add_ovr_bar.US_RM(stat, "Indel_lg","DEL", 5)
+      add_ovr_bar.US_RM(stat, "SV","DEL", 4)
+      add_ovr_bar.US_RM(stat, "Indel_sm","INS", 2.5)
+      add_ovr_bar.US_RM(stat, "Indel_lg","INS", 1.5)
+      add_ovr_bar.US_RM(stat, "SV","INS", 0.5)
+      
+      plot(c(-1.2,1.2),c(0.2,8),frame.plot = F, type = "n", xlab = "", ylab = "", xaxt="n", yaxt="n", main = "(SD/SR)")
+      axis(2,c(7.5,6:4,3:1-.5), labels = c("SNV","1-30","30-50",">50","1-30","30-50",">50"), las=2,mgp = c(1,.5,0))
+      axis(1,c(-5:5)/5, c(5:0,1:5)/5,mgp = c(1,.5,0))
+      abline(v =c(-5:5)/5, col="grey")
+      abline(v =0, col="black",lwd=2)
+      rec_width = .3
+      add_ovr_bar.SD_SR(stat, "SNV","SNV", 7.5)
+      add_ovr_bar.SD_SR(stat, "Indel_sm","DEL", 6)
+      add_ovr_bar.SD_SR(stat, "Indel_lg","DEL", 5)
+      add_ovr_bar.SD_SR(stat, "SV","DEL", 4)
+      add_ovr_bar.SD_SR(stat, "Indel_sm","INS", 2.5)
+      add_ovr_bar.SD_SR(stat, "Indel_lg","INS", 1.5)
+      add_ovr_bar.SD_SR(stat, "SV","INS", 0.5)
+     
+      dev.off() 
+    }
+
+    plot_ovr_bar("~{fp_query}", "~{tp_query}", "~{fp_ref}", "~{tp_ref}", "~{prefix}")
+
+    '
+
+  >>>
+
+
+  output {
+    File figure = "~{prefix}.pdf"
+    File stat = "~{prefix}.stat"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 20 + ceil(size(tp_query,"GiB") + size(tp_ref,"GiB") + size(fp_query,"GiB") + size(fp_ref,"GiB"))*2,
+    disk_gb: 25 + ceil(size(tp_query,"GiB") + size(tp_ref,"GiB") + size(fp_query,"GiB") + size(fp_ref,"GiB"))*2,
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
