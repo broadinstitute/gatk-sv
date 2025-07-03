@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -euo pipefail
+set -Exeuo pipefail
 
 reads_path=$1
 reads_index=$2
