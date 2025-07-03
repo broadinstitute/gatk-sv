@@ -1475,7 +1475,7 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker = sv_pipeline_docker
   }
 
-  call SingleSampleFiltering.UpdateBreakendRepresentation {
+  call SingleSampleFiltering.UpdateBreakendRepresentationAndRemoveFilters {
     input:
       vcf=AnnotateVcf.annotated_vcf,
       vcf_idx=AnnotateVcf.annotated_vcf_index,
@@ -1495,7 +1495,7 @@ workflow GATKSVPipelineSingleSample {
       sample_sr = case_sr_file,
       sample_counts = case_counts_file,
       cleaned_vcf = FilterVcfForCaseSampleGenotype.out,
-      final_vcf = UpdateBreakendRepresentation.out,
+      final_vcf = UpdateBreakendRepresentationAndRemoveFilters.out,
       genotyped_pesr_vcf = ConvertCNVsWithoutDepthSupportToBNDs.out_vcf,
       genotyped_depth_vcf = GenotypeBatch.genotyped_depth_vcf,
       non_genotyped_unique_depth_calls_vcf = GetUniqueNonGenotypedDepthCalls.out,
@@ -1513,8 +1513,8 @@ workflow GATKSVPipelineSingleSample {
   }
 
   output {
-    File final_vcf = UpdateBreakendRepresentation.out
-    File final_vcf_idx = UpdateBreakendRepresentation.out_idx
+    File final_vcf = UpdateBreakendRepresentationAndRemoveFilters.out
+    File final_vcf_idx = UpdateBreakendRepresentationAndRemoveFilters.out_idx
 
     File final_bed = VcfToBed.bed
 

@@ -408,7 +408,7 @@ task FilterVcfWithReferencePanelCalls {
   }
 }
 
-task UpdateBreakendRepresentation {
+task UpdateBreakendRepresentationAndRemoveFilters {
   input {
     File vcf
     File vcf_idx
@@ -442,7 +442,8 @@ task UpdateBreakendRepresentation {
 
      set -euo pipefail
     python ~{default="/opt/sv-pipeline/scripts/single_sample/update_variant_representations.py" script_override} ~{vcf} ~{ref_fasta} \
-        | bcftools sort -Oz -o ~{outfile}
+        | bcftools sort \
+        | bcftools annotate --no-version -x "FILTER/HIGH_ALGORITHM_FDR" -Oz -o ~{outfile}
      tabix ~{outfile}
   >>>
   runtime {
