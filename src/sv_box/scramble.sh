@@ -69,7 +69,7 @@ scramble_dir="/app/scramble-gatk-sv"
 # on override the existing file, that may not work in a pipeline.
 #rm -f test.scramble.tsv.gz
 
-# TODO: this seems an overkill
+# We bypass version detection and conservatively assume Dragen 3.7.8. This adds a few extra steps but is safer logic in case of issues with other Dragen aligner versions.
 # Check aligner
 #gatk PrintReadsHeader \
 #  -I "${bam_or_cram_file}" \
