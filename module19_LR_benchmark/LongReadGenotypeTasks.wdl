@@ -362,8 +362,8 @@ task PlotCompResults{
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 10 + ceil(size(tp_query,"GiB") + size(tp_ref,"GiB") + size(fp_query,"GiB") + size(fp_ref,"GiB"))*2,
-    disk_gb: 15 + ceil(size(tp_query,"GiB") + size(tp_ref,"GiB") + size(fp_query,"GiB") + size(fp_ref,"GiB"))*2,
+    mem_gb: 20 + ceil(size(tp_query,"GiB") + size(tp_ref,"GiB") + size(fp_query,"GiB") + size(fp_ref,"GiB"))*2,
+    disk_gb: 25 + ceil(size(tp_query,"GiB") + size(tp_ref,"GiB") + size(fp_query,"GiB") + size(fp_ref,"GiB"))*2,
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
