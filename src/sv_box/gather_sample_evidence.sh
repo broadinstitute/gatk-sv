@@ -6,6 +6,12 @@
 # example running using downsampled data.
 # ./gather_sample_evidence.sh test downsampled_HG00096.final.cram downsampled_HG00096.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict downsampled_primary_contigs.list downsampled_contig.fai downsampled_preprocessed_intervals.interval_list downsampled_primary_contigs_plus_mito.bed.gz downsampled_primary_contigs_plus_mito.bed.gz downsampled_Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz downsampled_wham_whitelist.bed Homo_sapiens_assembly38.fasta.64.alt Homo_sapiens_assembly38.fasta.64.amb Homo_sapiens_assembly38.fasta.64.ann Homo_sapiens_assembly38.fasta.64.bwt Homo_sapiens_assembly38.fasta.64.pac Homo_sapiens_assembly38.fasta.64.sa
 
+# Implementation notes:
+# This script closely reproduces the GatherSampleEvidence workflow.
+# However, there are few adjustments in the implementation and the pipeline
+# to better suit the use case; for instance, we decided to skip running
+# GatherSampleEvidenceMetrics module.
+
 set -Exeuo pipefail
 
 GREEN='\033[0;32m'
@@ -193,28 +199,6 @@ if [[ "${run_wham}" == true ]]; then
     "${primary_contigs_list}" \
     "${wham_outputs_json_filename}"
 fi
-
-# per discussion with Mark, we're not running module metrics.
-#if [[ "${run_module_metrics}" == true ]]; then
-#  if [[ "${run_manta}" == true ]]; then
-#    ./standardize_vcf.sh \
-#      "${sample_id}" \
-#      "/manta/${sample_id}.manta.vcf.gz" \
-#      "manta" \
-#      "${primary_contigs_fai}" \
-#      "${min_size}"
-#
-#    prefix="manta_${sample_id}"
-#    svtest vcf \
-#     "/manta/${sample_id}.manta.vcf.gz" \
-#     "${contig_list}" \
-#     "${sample_id}" \
-#     "DEL,DUP,INS,INV,BND" \
-#     "${prefix}" \
-#     ~{if defined(baseline_vcf) then "--baseline-vcf " + baseline_vcf else ""} \
-#     > "${prefix}.vcf.tsv"
-#  fi
-#fi
 
 outputs_filename="${output_dir}/gather_sample_evidence_outputs.json"
 outputs_json=$(jq -n \
