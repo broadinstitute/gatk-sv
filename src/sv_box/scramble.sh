@@ -2,8 +2,6 @@
 
 set -Exeuo pipefail
 
-# ./scramble.sh NA12878.final.cram NA12878.final.cram.crai NA12878.final.cram NA12878.final.cram.crai NA12878.counts.tsv.gz NA12878.manta.vcf.gz test Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai primary_contigs.list 90 hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz
-
 sample_name=${1}
 bam_or_cram_file=${2}
 bam_or_cram_index=${3}

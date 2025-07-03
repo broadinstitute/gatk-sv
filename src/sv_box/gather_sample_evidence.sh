@@ -144,8 +144,6 @@ if [[ "${run_scramble}" == true ]]; then
     "${mei_bed}" \
     "${scramble_p1_outputs_json_filename}"
 
-  # TODO: update the "${sample_name}.scramble.tsv.gz"  so it
-  #  matches exactly with what the scramble part 2 script outputs
   # TODO: also, do we need is bam/cram?
   realign_soft_clipped_reads_json_filename=$(mktemp --suffix=.json "${output_dir}/realign_soft_clipped_reads_XXXXXX")
   # addresses bug in Dragen v3.7.8 where some reads are incorrectly soft-clipped
