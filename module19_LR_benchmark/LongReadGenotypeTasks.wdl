@@ -778,6 +778,17 @@ task PlotCompResults{
       dat[,ncol(dat)+1] = sapply(dat[,3], function(x){strsplit(as.character(x),"_")[[1]][5]})
       colnames(dat)[ncol(dat)] = "SVLEN"
       dat$SVLEN = as.integer(dat$SVLEN)
+
+      if(nrow(dat[grepl("<",dat[,5]),])>0){
+        tmp1 = dat[!grepl("<",dat[,5]),]
+        tmp = dat[grepl("<",dat[,5]),]
+        tmp$SVTYPE = sapply(tmp[,8], function(x){extract_SVTYPE_from_info(x)})
+        tmp$SVLEN = sapply(tmp[,8], function(x){extract_SVLEN_from_info(x)})
+        tmp$SVLEN = abs(as.integer(tmp$SVLEN))
+        dat = rbind(tmp, tmp1)
+      }
+
+
       print("extract genomic context information ... ")
       dat[,ncol(dat)+1] = sapply(dat[,8], function(x){extract_GC(x)})
       colnames(dat)[ncol(dat)] = "Genomic_Context"
