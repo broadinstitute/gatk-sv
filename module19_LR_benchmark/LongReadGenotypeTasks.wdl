@@ -224,6 +224,7 @@ task BenchmarkSNVs{
   input{
     File comp_vcf
     File base_vcf
+    String prefix
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
@@ -275,19 +276,19 @@ task BenchmarkSNVs{
     bcftools view -h ~{base_vcf} > base.header
 
     #generate output vcf
-    cat comp.header fp_comp.vcf | bgzip > fp_comp.vcf.gz
-    cat comp.header tp_comp.vcf | bgzip > tp_comp.vcf.gz
-    cat base.header fn_base.vcf | bgzip > fn_base.vcf.gz
-    cat base.header tp_base.vcf | bgzip > tp_base.vcf.gz
+    cat comp.header fp_comp.vcf | bgzip > "~{prefix}.fp_comp.vcf.gz"
+    cat comp.header tp_comp.vcf | bgzip > "~{prefix}.tp_comp.vcf.gz"
+    cat base.header fn_base.vcf | bgzip > "~{prefix}.fn_base.vcf.gz"
+    cat base.header tp_base.vcf | bgzip > "~{prefix}.tp_base.vcf.gz"
 
     >>>
 
 
   output {
-    File fp_vcf = "fp_comp.vcf.gz"
-    File fn_vcf = "fn_base.vcf.gz"
-    File tp_comp_vcf = "tp_comp.vcf.gz"
-    File tp_base_vcf = "tp_base.vcf.gz"
+    File fp_vcf = "~{prefix}.fp_comp.vcf.gz"
+    File fn_vcf = "~{prefix}.fn_base.vcf.gz"
+    File tp_comp_vcf = "~{prefix}.tp_comp.vcf.gz"
+    File tp_base_vcf = "~{prefix}.tp_base.vcf.gz"
   }
 
   runtime {
@@ -307,6 +308,7 @@ task BenchmarkSVs{
     File base_vcf
     File benchmark_bash
     File banchmark_helper_R
+    String prefix
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
@@ -321,9 +323,6 @@ task BenchmarkSVs{
   }
 
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  String comp_base = basename(comp_vcf, ".vcf.gz")
-  String base_base = basename(base_vcf, ".vcf.gz")
 
   command <<<
     set -e
@@ -341,20 +340,20 @@ task BenchmarkSVs{
     echo -e "#chrom\tstart\tend\tVID\tsvtype\tlength\tAF\tsamples" > ref.header
 
     #generate bed files:
-    svtk vcf2bed -i SVTYPE -i SVLEN ~{comp_vcf} ~{comp_base}.bed
-    svtk vcf2bed -i SVTYPE -i SVLEN ~{base_vcf} ~{base_base}.bed
+    svtk vcf2bed -i SVTYPE -i SVLEN ~{comp_vcf} comp.bed
+    svtk vcf2bed -i SVTYPE -i SVLEN ~{base_vcf} base.bed
 
     #generate query files:
-    cat query.header <(tail -n+2 ~{comp_base}.bed | awk '{if ($7!="NA") print}' | cut -f1-4,7,8) | bgzip > ~{comp_base}.query.gz
-    cat query.header <(tail -n+2 ~{base_base}.bed | awk '{if ($7!="NA") print}' | cut -f1-4,7,8) | bgzip > ~{base_base}.query.gz
+    cat query.header <(tail -n+2 comp.bed | awk '{if ($7!="NA") print}' | cut -f1-4,7,8) | bgzip > comp.query.gz
+    cat query.header <(tail -n+2 base.bed | awk '{if ($7!="NA") print}' | cut -f1-4,7,8) | bgzip > base.query.gz
 
     #generate ref files:
-    cat ref.header <(tail -n+2 ~{comp_base}.bed | awk '{if ($7!="NA") print}' | cut -f1-4,7,8 | sed -e "s/$/\t0\tsample/" ) | bgzip > ~{comp_base}.ref.gz
-    cat ref.header <(tail -n+2 ~{base_base}.bed | awk '{if ($7!="NA") print}' | cut -f1-4,7,8 | sed -e "s/$/\t0\tsample/" ) | bgzip > ~{base_base}.ref.gz
+    cat ref.header <(tail -n+2 comp.bed | awk '{if ($7!="NA") print}' | cut -f1-4,7,8 | sed -e "s/$/\t0\tsample/" ) | bgzip > comp.ref.gz
+    cat ref.header <(tail -n+2 base.bed | awk '{if ($7!="NA") print}' | cut -f1-4,7,8 | sed -e "s/$/\t0\tsample/" ) | bgzip > base.ref.gz
 
     #run comparison:
-    bash ~{benchmark_bash} -O comp_vs_base.bed -p comp_vs_base ~{comp_base}.query.gz ~{base_base}.ref.gz
-    bash ~{benchmark_bash} -O base_vs_comp.bed -p base_vs_comp ~{base_base}.query.gz ~{comp_base}.ref.gz  
+    bash ~{benchmark_bash} -O comp_vs_base.bed -p comp_vs_base comp.query.gz base.ref.gz
+    bash ~{benchmark_bash} -O base_vs_comp.bed -p base_vs_comp base.query.gz comp.ref.gz  
 
 
     # use R script to add GC to the vcf
@@ -386,19 +385,19 @@ task BenchmarkSVs{
 
     #generate output vcf
 
-    cat comp.header fp_comp.vcf | bgzip > fp_comp.vcf.gz
-    cat comp.header tp_comp.vcf | bgzip > tp_comp.vcf.gz
-    cat base.header fn_base.vcf | bgzip > fn_base.vcf.gz
-    cat base.header tp_base.vcf | bgzip > tp_base.vcf.gz
+    cat comp.header fp_comp.vcf | bgzip > "~{prefix}.fp_comp.vcf.gz"
+    cat comp.header tp_comp.vcf | bgzip > "~{prefix}.tp_comp.vcf.gz"
+    cat base.header fn_base.vcf | bgzip > "~{prefix}.fn_base.vcf.gz"
+    cat base.header tp_base.vcf | bgzip > "~{prefix}.tp_base.vcf.gz"
 
     >>>
 
 
   output {
-    File fp_vcf = "fp_comp.vcf.gz"
-    File fn_vcf = "fn_base.vcf.gz"
-    File tp_comp_vcf = "tp_comp.vcf.gz"
-    File tp_base_vcf = "tp_base.vcf.gz"
+    File fp_vcf = "~{prefix}.fp_comp.vcf.gz"
+    File fn_vcf = "~{prefix}.fn_base.vcf.gz"
+    File tp_comp_vcf = "~{prefix}.tp_comp.vcf.gz"
+    File tp_base_vcf = "~{prefix}.tp_base.vcf.gz"
   }
 
   runtime {
@@ -1107,44 +1106,6 @@ task SplitVcfByAnnotationR {
   }
 }
 
-task WriteTrioSampleFile {
-  input {
-    Array[String] family  # [father, mother, child]
-    String docker_image
-    RuntimeAttr? runtime_attr_override
-  }
-
-  command {
-    echo -e "${family[0]}\n${family[1]}\n${family[2]}" > trio_${family[0]}_${family[2]}.samples.txt
-  }
-
-  output {
-    File sample_file = "trio_${family[0]}_${family[2]}.samples.txt"
-    String family_id = "${family[0]}_${family[2]}"
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 2,
-    disk_gb: 5,
-    boot_disk_gb: 10,
-    preemptible_tries: 1,
-    max_retries: 1
-  }
-
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: docker_image
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
 task SplitVariantsBySize {
   input {
     File input_vcf
@@ -1366,6 +1327,44 @@ task IntegrateInheritanceTable {
     cpu_cores: 1,
     mem_gb: mem_size,
     disk_gb: disk_size,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task WriteTrioSampleFile {
+  input {
+    Array[String] family  # [father, mother, child]
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  command {
+    echo -e "${family[0]}\n${family[1]}\n${family[2]}" > trio_${family[0]}_${family[2]}.samples.txt
+  }
+
+  output {
+    File sample_file = "trio_${family[0]}_${family[2]}.samples.txt"
+    String family_id = "${family[0]}_${family[2]}"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 2,
+    disk_gb: 5,
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
