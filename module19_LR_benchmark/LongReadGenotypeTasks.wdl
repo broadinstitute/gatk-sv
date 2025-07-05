@@ -782,22 +782,41 @@ task PlotCompResults{
       if(nrow(dat[grepl("<",dat[,5]),])>0){
         tmp1 = dat[!grepl("<",dat[,5]),]
         tmp = dat[grepl("<",dat[,5]),]
-        tmp$SVTYPE = sapply(tmp[,8], function(x){extract_SVTYPE_from_info(x)})
-        tmp$SVLEN = sapply(tmp[,8], function(x){extract_SVLEN_from_info(x)})
+        tmp$SVTYPE = sapply(tmp[,8], function(x){extract_info_col(x,"SVTYPE")})
+        tmp$SVLEN = sapply(tmp[,8], function(x){extract_info_col(x,"SVLEN")})
         tmp$SVLEN = abs(as.integer(tmp$SVLEN))
         dat = rbind(tmp, tmp1)
       }
 
 
       print("extract genomic context information ... ")
-      dat[,ncol(dat)+1] = sapply(dat[,8], function(x){extract_GC(x)})
+      dat[,ncol(dat)+1] = sapply(dat[,8], function(x){extract_info_col(x,"GC")})
       colnames(dat)[ncol(dat)] = "Genomic_Context"
       return(dat)
+    }
+
+    extract_info_col<-function(info, col){
+      #col represents columns in info, eg. GC, SVTYPE, SVLEN
+      tmp = strsplit(as.character(info),";")[[1]]
+      out = tmp[grepl(paste(col, "=", sep=''), tmp)]
+      return(strsplit(as.character(out),"=")[[1]][2])
     }
 
     extract_GC<-function(info){
       tmp = strsplit(as.character(info),";")[[1]]
       out = tmp[grepl("GC=", tmp)]
+      return(strsplit(as.character(out),"=")[[1]][2])
+    }
+
+    extract_SVTYPE_from_info<-function(info){
+      tmp = strsplit(as.character(info),";")[[1]]
+      out = tmp[grepl("SVTYPE=", tmp)]
+      return(strsplit(as.character(out),"=")[[1]][2])
+    }
+
+    extract_SVLEN_from_info<-function(info){
+      tmp = strsplit(as.character(info),";")[[1]]
+      out = tmp[grepl("SVLEN=", tmp)]
       return(strsplit(as.character(out),"=")[[1]][2])
     }
 
