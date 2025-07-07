@@ -80,6 +80,26 @@ workflow ExtractTriosFromVCFByGenomicContext {
           docker_image = sv_pipeline_base_docker
       }
 
+    call LongReadGenotypeTasks.SplitVcfByAnnotationR as split_vcf_by_annotation_rm {
+        input:
+          vcf_file = ExtractVariantSites.updated_vcf,
+          vcf_idx = ExtractVariantSites.updated_vcf_idx,
+          svid_annotation = AnnotateGenomicContext.variant_anno, 
+          anno_list = "RM",
+          midfix = "RM",
+          docker_image = sv_pipeline_base_docker
+      }
+
+    call LongReadGenotypeTasks.SplitVcfByAnnotationR as split_vcf_by_annotation_us {
+        input:
+          vcf_file = ExtractVariantSites.updated_vcf,
+          vcf_idx = ExtractVariantSites.updated_vcf_idx,
+          svid_annotation = AnnotateGenomicContext.variant_anno, 
+          anno_list = "US",
+          midfix = "US",
+          docker_image = sv_pipeline_base_docker
+      }
+
     call LongReadGenotypeTasks.SplitVcfByAnnotationR as split_vcf_by_annotation_clean {
         input:
           vcf_file = ExtractVariantSites.updated_vcf,
@@ -104,6 +124,22 @@ workflow ExtractTriosFromVCFByGenomicContext {
         vcfs = split_vcf_by_annotation_sd.split_vcf,
         vcfs_idx = split_vcf_by_annotation_sd.split_vcf_idx,
         outfile_prefix = "SD",
+        sv_base_mini_docker = sv_base_mini_docker
+  }
+
+  call LongReadGenotypeTasks.ConcatVcfs as concat_vcf_by_annotation_rm{
+      input:
+        vcfs = split_vcf_by_annotation_rm.split_vcf,
+        vcfs_idx = split_vcf_by_annotation_rm.split_vcf_idx,
+        outfile_prefix = "RM",
+        sv_base_mini_docker = sv_base_mini_docker
+  }
+
+  call LongReadGenotypeTasks.ConcatVcfs as concat_vcf_by_annotation_us{
+      input:
+        vcfs = split_vcf_by_annotation_us.split_vcf,
+        vcfs_idx = split_vcf_by_annotation_us.split_vcf_idx,
+        outfile_prefix = "US",
         sv_base_mini_docker = sv_base_mini_docker
   }
 
@@ -143,6 +179,34 @@ workflow ExtractTriosFromVCFByGenomicContext {
       runtime_attr_ovr_calcu_inheri_table_indel_lg = runtime_attr_ovr_calcu_inheri_table_indel_lg
     }
 
+  call ExtractTriosFromVCF.ExtractTriosFromVCF as extract_trios_from_RMs{
+    input:
+      input_vcf = concat_vcf_by_annotation_rm.concat_vcf,
+      families = families,
+      inheri_table = inheri_table,
+      prefix = "~{prefix}.RM",
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_override,
+      runtime_attr_ovr_calcu_inheri_table_sv = runtime_attr_ovr_calcu_inheri_table_sv,
+      runtime_attr_ovr_calcu_inheri_table_snv = runtime_attr_ovr_calcu_inheri_table_snv,
+      runtime_attr_ovr_calcu_inheri_table_indel_sm = runtime_attr_ovr_calcu_inheri_table_indel_sm,
+      runtime_attr_ovr_calcu_inheri_table_indel_lg = runtime_attr_ovr_calcu_inheri_table_indel_lg
+    }
+
+  call ExtractTriosFromVCF.ExtractTriosFromVCF as extract_trios_from_USs{
+    input:
+      input_vcf = concat_vcf_by_annotation_us.concat_vcf,
+      families = families,
+      inheri_table = inheri_table,
+      prefix = "~{prefix}.US",
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_override,
+      runtime_attr_ovr_calcu_inheri_table_sv = runtime_attr_ovr_calcu_inheri_table_sv,
+      runtime_attr_ovr_calcu_inheri_table_snv = runtime_attr_ovr_calcu_inheri_table_snv,
+      runtime_attr_ovr_calcu_inheri_table_indel_sm = runtime_attr_ovr_calcu_inheri_table_indel_sm,
+      runtime_attr_ovr_calcu_inheri_table_indel_lg = runtime_attr_ovr_calcu_inheri_table_indel_lg
+    }
+
   call ExtractTriosFromVCF.ExtractTriosFromVCF as extract_trios_from_USRMs{
     input:
       input_vcf = concat_vcf_by_annotation_clean.concat_vcf,
@@ -174,6 +238,8 @@ workflow ExtractTriosFromVCFByGenomicContext {
   output{
     Array[File] inheritance_table_inte_SR = extract_trios_from_SRs.inheritance_table_inte
     Array[File] inheritance_table_inte_SD = extract_trios_from_SDs.inheritance_table_inte
+    Array[File] inheritance_table_inte_RM = extract_trios_from_RMs.inheritance_table_inte
+    Array[File] inheritance_table_inte_US = extract_trios_from_USs.inheritance_table_inte
     Array[File] inheritance_table_inte_US_RM = extract_trios_from_USRMs.inheritance_table_inte
     Array[File] inheritance_table_inte_all = extract_trios_from_all.inheritance_table_inte
   }
