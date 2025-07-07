@@ -1275,41 +1275,80 @@ task IntegrateInheritanceTable {
     Rscript -e '
 
     process_and_collapse <- function(df) {
-      # Step 1: Replace "." with "0" in columns 2 to 4
-      for(i in c(2:4)){
-        df[,i] = sapply(df[,i], function(x){strsplit(as.character(x),":")[[1]][1]})
-      }
-      df = df[df[,2]!="./." | df[,3]!="./." | df[,4]!="./.",]
-
-      df[, 2:4] <- lapply(df[, 2:4], function(col) gsub("/", "|", col))
-      df[, 2:4] <- lapply(df[, 2:4], function(col) gsub("\\.", "0", col))
-      for(i in c(2:4)){
-        if(nrow(df[df[,i]==0,])>0){
-          df[df[,i]==0,][,i] = "0|0"  
+      if(nrow(df)>0){
+        # Step 1: Replace "." with "0" in columns 2 to 4
+        for(i in c(2:4)){
+          df[,i] = sapply(df[,i], function(x){strsplit(as.character(x),":")[[1]][1]})
         }
+        df = df[df[,2]!="./." | df[,3]!="./." | df[,4]!="./.",]
+
+        df[, 2:4] <- lapply(df[, 2:4], function(col) gsub("/", "|", col))
+        df[, 2:4] <- lapply(df[, 2:4], function(col) gsub("\\.", "0", col))
+        for(i in c(2:4)){
+          if(nrow(df[df[,i]==0,])>0){
+            df[df[,i]==0,][,i] = "0|0"  
+          }
+          if(nrow(df[df[,i]==1,])>0){
+            df[df[,i]==0,][,i] = "0|1"  
+          }
+          if(nrow(df[df[,i]==2,])>0){
+            df[df[,i]==0,][,i] = "1|1"  
+          }
+        }
+
+
+        # Step 2: Collapse rows by columns 2–4, summing column 1
+        # Convert column 1 to numeric (if not already)
+        df[, 1] <- as.numeric(df[, 1])
+
+        # Use aggregate to group and sum
+        collapsed_df <- aggregate(df[, 1], by = df[, 2:4], FUN = sum)
+
+        # Rename the columns appropriately
+        colnames(collapsed_df) <- c("fa", "mo", "pb", "count_variants")
+
+        return(collapsed_df)
+      } else {
+          df <- data.frame(
+            fa = character(),
+            mo = character(),
+            pb = character(),
+            count_variants = character(),
+            stringsAsFactors = FALSE
+          )
       }
-
-
-      # Step 2: Collapse rows by columns 2–4, summing column 1
-      # Convert column 1 to numeric (if not already)
-      df[, 1] <- as.numeric(df[, 1])
-      
-      # Use aggregate to group and sum
-      collapsed_df <- aggregate(df[, 1], by = df[, 2:4], FUN = sum)
-      
-      # Rename the columns appropriately
-      colnames(collapsed_df) <- c("fa", "mo", "pb", "count_variants")
-      
-      return(collapsed_df)
     }
 
 
+    read_or_empty <- function(file1) {
+      if (!file.exists(file1)) {
+        stop("File does not exist.")
+      }
+      
+      # Check if file has any lines
+      line_count <- length(readLines(file1, warn = FALSE))
+      
+      if (line_count > 0) {
+        df <- read.table(file1, header = FALSE, stringsAsFactors = FALSE)
+      } else {
+        df <- data.frame(
+          V1 = character(),
+          V2 = character(),
+          V3 = character(),
+          V4 = character(),
+          stringsAsFactors = FALSE
+        )
+      }
+      
+      return(df)
+    }
+
     read_and_merge_five_tables <- function(file1, file2, file3, file4, file5) {
       # Read tables 1-4 without headers
-      t1 <- read.table(file1, header = FALSE, stringsAsFactors = FALSE)
-      t2 <- read.table(file2, header = FALSE, stringsAsFactors = FALSE)
-      t3 <- read.table(file3, header = FALSE, stringsAsFactors = FALSE)
-      t4 <- read.table(file4, header = FALSE, stringsAsFactors = FALSE)
+      t1 <- read_or_empty(file1)
+      t2 <- read_or_empty(file2)
+      t3 <- read_or_empty(file3)
+      t4 <- read_or_empty(file4)
 
       # Process tables 1–4
       p1 <- process_and_collapse(t1)
