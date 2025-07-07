@@ -251,7 +251,7 @@ task RunWhamgOnCram {
     echo "whamg $(whamg 2>&1 | grep Version)"
 
     # necessary for getting permission to read from google bucket directly
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+    export GCS_OAUTH_TOKEN=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" | python3 -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
 
     # covert cram to bam
     samtools view -b1@ ~{cpu_cores} -T "~{reference_fasta}" "~{cram_file}" > sample.bam
