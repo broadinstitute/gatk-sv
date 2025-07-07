@@ -798,7 +798,7 @@ task PlotCompResults{
     extract_info_col<-function(info, col){
       #col represents columns in info, eg. GC, SVTYPE, SVLEN
       tmp = strsplit(as.character(info),";")[[1]]
-      out = tmp[grepl(paste(col, "=", sep=''), tmp)]
+      out = tmp[grepl(paste(col, "=", sep=""), tmp)]
       return(strsplit(as.character(out),"=")[[1]][2])
     }
 
