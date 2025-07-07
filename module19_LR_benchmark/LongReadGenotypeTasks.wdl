@@ -249,8 +249,35 @@ task BenchmarkSNVs{
     # use R script to add GC to the vcf
     Rscript -e '
 
-    comp = read.table("~{comp_vcf}")
-    base = read.table("~{base_vcf}")
+
+    read_or_empty <- function(file1) {
+      if (!file.exists(file1)) {
+        stop("File does not exist.")
+      }
+      
+      # Check if file has any lines
+      lines <- readLines(file1, warn = FALSE)
+      line_count <- length(lines[!grepl("^#", lines)])
+      
+      if (line_count > 0) {
+        df <- read.table(file1, header = FALSE, stringsAsFactors = FALSE)
+      } else {
+        df <- data.frame(
+          V1 = character(),
+          V2 = character(),
+          V3 = character(),
+          V4 = character(),
+          V5 = character(),
+          stringsAsFactors = FALSE
+        )
+      }
+      
+      return(df)
+    }
+
+    comp = read_or_empty("~{comp_vcf}")
+    base = read_or_empty("~{base_vcf}")
+
     colnames(comp)[3] = "SVID_comp"
     colnames(base)[3] = "SVID_truth"
 
