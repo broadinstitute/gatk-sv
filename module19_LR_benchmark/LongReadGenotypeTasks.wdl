@@ -1316,10 +1316,10 @@ task IntegrateInheritanceTable {
             df[df[,i]==0,][,i] = "0|0"  
           }
           if(nrow(df[df[,i]==1,])>0){
-            df[df[,i]==0,][,i] = "0|1"  
+            df[df[,i]==1,][,i] = "0|1"  
           }
           if(nrow(df[df[,i]==2,])>0){
-            df[df[,i]==0,][,i] = "1|1"  
+            df[df[,i]==2,][,i] = "1|1"  
           }
         }
 
