@@ -124,7 +124,7 @@ task MergePerChrCalls {
     RuntimeAttr? runtime_attr_override
   }
 
-   Int disk_size = 2*ceil(size(vcfs, "GB")) + 1
+   Int disk_size = 2*ceil(size(vcfs, "GB")) + 10
 
   command <<<
     # Index each VCF using tabix
