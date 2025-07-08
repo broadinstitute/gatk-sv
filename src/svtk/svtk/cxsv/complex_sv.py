@@ -475,10 +475,10 @@ class ComplexSV:
             self.vcf_record.info['ALGORITHMS'] = algs
 
     def report_simple_insertion(self):
-        end = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
         if len(self.cnvs) == 1:
             if self.cnvs[0].info['SVTYPE'] == 'DUP':
                 record = self.cnvs[0]
+                end = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
                 self.svtype = 'DUP'
                 self.vcf_record.pos = record.pos
                 self.vcf_record.stop = end
@@ -492,7 +492,7 @@ class ComplexSV:
                 self.cpx_type = record.alts[0].strip('<>')
                 self.svtype = 'INS'
                 self.vcf_record.pos = record.pos
-                self.vcf_record.stop = end
+                self.vcf_record.stop = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
                 self.vcf_record.alts = record.alts
                 self.vcf_record.id = record.id
                 self.vcf_record.info['SVTYPE'] = self.svtype
@@ -504,7 +504,7 @@ class ComplexSV:
             self.cpx_type = record.alts[0].strip('<>')
             self.svtype = 'INS'
             self.vcf_record.pos = record.pos
-            self.vcf_record.stop = end
+            self.vcf_record.stop = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
             self.vcf_record.id = record.id
             self.vcf_record.alts = record.alts
             self.vcf_record.info['SVTYPE'] = self.svtype
