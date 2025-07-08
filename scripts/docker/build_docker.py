@@ -250,8 +250,8 @@ class ProjectBuilder:
             docker_dependencies={
                 "sv-pipeline": "SV_PIPELINE_IMAGE"}
         ),
-        "sv-box": ImageDependencies(
-            git_dependencies=("dockerfiles/sv-box/*", "src/sv_box/*"),
+        "sv-shell": ImageDependencies(
+            git_dependencies=("dockerfiles/sv-shell/*", "src/sv_shell/*"),
             docker_dependencies={
                 "sv-pipeline": "SV_PIPELINE_IMAGE",
                 "wham": "WHAM_IMAGE"}
