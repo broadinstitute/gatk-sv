@@ -1019,15 +1019,39 @@ task PlotCompResults{
 
     Rscript -e '
 
+    init_empty_sv_table <- function() {
+      df <- data.frame(
+        Genomic_Context = character(),
+        SVTYPE = character(),
+        Freq = numeric(),
+        Freq = numeric(),
+        V4 = character(),
+        stringsAsFactors = FALSE
+      )
+      return(df)
+    }
+
     calcu_counts_by_variant_type_and_GC<-function(dat){
       snv_stat = data.frame(table(dat[dat$SVTYPE=="SNV",c("Genomic_Context", "SVTYPE")]))
       indel_sm_stat = data.frame(table(dat[dat$SVLEN>0 & dat$SVLEN<30,c("Genomic_Context", "SVTYPE")]))
       indel_lg_stat = data.frame(table(dat[dat$SVLEN>29 & dat$SVLEN<50,c("Genomic_Context", "SVTYPE")]))
       sv_stat = data.frame(table(dat[dat$SVLEN>49,c("Genomic_Context", "SVTYPE")]))
-      snv_stat[,ncol(snv_stat)+1] = "SNV"
-      indel_sm_stat[,ncol(indel_sm_stat)+1] = "Indel_sm"
-      indel_lg_stat[,ncol(indel_lg_stat)+1] = "Indel_lg"
-      sv_stat[,ncol(sv_stat)+1] = "SV"
+      if(nrow(snv_stat)>0){
+        snv_stat[,ncol(snv_stat)+1] = "SNV"
+      } else{ snv_stat = init_empty_sv_table()  }
+
+      if(nrow(indel_sm_stat)>0){
+        indel_sm_stat[,ncol(indel_sm_stat)+1] = "Indel_sm"
+      } else{ indel_sm_stat = init_empty_sv_table()  }
+
+      if(nrow(indel_lg_stat)>0){
+        indel_lg_stat[,ncol(indel_lg_stat)+1] = "Indel_lg"
+      } else{ indel_lg_stat = init_empty_sv_table()  }
+
+      if(nrow(sv_stat)>0){
+        sv_stat[,ncol(sv_stat)+1] = "SV"
+      } else{ sv_stat = init_empty_sv_table()  }
+      
       out = rbind(snv_stat, indel_sm_stat, indel_lg_stat, sv_stat)
       return(out)      
     }
