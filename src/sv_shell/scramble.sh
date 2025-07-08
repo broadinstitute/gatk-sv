@@ -36,10 +36,9 @@ scramble_vcf_script=${17:-"/opt/sv-pipeline/scripts/make_scramble_vcf.py"}
 make_scramble_vcf_args=${18:-""}
 
 min_clipped_reads=${19:-20}
-# TODO: let this to be settable from the caller,
-#  if you set it to "" it will result in calculating this
-#  based on the read depth, override it mainly for testing using downsampled files.
-#  Note that the default value is set to 20 to match the downsampled data for testing purpose.
+# TODO: make this settable from the caller script.
+#  If set to "" it will result in calculating this based on the read depth.
+#  The default value is set to 20 to match the downsampled data for testing purpose.
 
 echo "=============== Running scramble.sh"
 echo "sample_name:                " "${sample_name}"
@@ -67,11 +66,8 @@ output_dir="$(realpath ${output_dir})"
 
 scramble_dir="/app/scramble-gatk-sv"
 
-# In case it is re-run, the script will wait for a response
-# on override the existing file, that may not work in a pipeline.
-#rm -f test.scramble.tsv.gz
-
-# We bypass version detection and conservatively assume Dragen 3.7.8. This adds a few extra steps but is safer logic in case of issues with other Dragen aligner versions.
+# We bypass version detection and conservatively assume Dragen 3.7.8.
+# This adds a few extra steps but is safer logic in case of issues with other Dragen aligner versions.
 # Check aligner
 #gatk PrintReadsHeader \
 #  -I "${bam_or_cram_file}" \

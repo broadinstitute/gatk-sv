@@ -34,11 +34,8 @@ output_dir=$(mktemp -d output_collect_counts_XXXXXXXX)
 output_dir="$(realpath ${output_dir})"
 cd "${working_dir}"
 
-# deleting the files of any previous run
-#rm -f "${sample_id}.counts.tsv" "${sample_id}.counts.tsv.gz"
-
-# TODO: in the original code, this is computed based on a few factors,
-#  the following is the result of the computation using the default values.
+# In the WDL implementation, this is computed based on a few factors,
+# the following is the result of the computation using the default values.
 command_mem_mb=10240
 
 declare -a disabled_read_filters_arr

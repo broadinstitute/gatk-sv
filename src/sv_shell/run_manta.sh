@@ -15,17 +15,15 @@ region_bed_index=$6
 outputs_json_filename=$7
 num_cpu=${8:-8} # default 8 cores
 jobs_per_cpu=${9:-1.3}
-output_dir=${10:-"/manta"}
 
-# TODO: outputs dir in the above should not be defined
-
+# You may automatically adjust the job count and memory size as the following.
+# We currently use the hardcoded values for simplicity.
 #num_jobs=$(awk -v a="$num_cpu" -v b="$jobs_per_cpu" 'BEGIN {printf "%d", int(a * b + 0.5)}')
 #mem_size=$(( num_jobs * 2 ))
 num_jobs=8
 mem_size=16
 
 echo "=============== Running manta"
-
 
 # you need to define a separate directory for each manta run
 # (e.g., when multiple runs invoked in a single docker image).

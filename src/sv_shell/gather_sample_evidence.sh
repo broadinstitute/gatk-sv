@@ -128,7 +128,6 @@ fi
 
 if [[ "${run_scramble}" == true ]]; then
   scramble_p1_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/scramble_p1_XXXXXX")
-  # TODO: counts and manta files in the following should be updated
   bash scramble.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
@@ -144,7 +143,6 @@ if [[ "${run_scramble}" == true ]]; then
     "${mei_bed}" \
     "${scramble_p1_outputs_json_filename}"
 
-  # TODO: also, do we need is bam/cram?
   realign_soft_clipped_reads_json_filename=$(mktemp --suffix=.json "${output_dir}/realign_soft_clipped_reads_XXXXXX")
   # addresses bug in Dragen v3.7.8 where some reads are incorrectly soft-clipped
 
