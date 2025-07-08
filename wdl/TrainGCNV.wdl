@@ -105,8 +105,8 @@ workflow TrainGCNV {
     call util.GetFilteredSubsampledIndices {
       input:
         all_strings = write_lines(samples),
-        exclude_strings = select_first([outlier_sample_ids]),
-        subset_size = select_first([n_samples_subsample]),
+        exclude_strings = outlier_sample_ids,
+        subset_size = n_samples_subsample,
         seed = subsample_seed,
         prefix = cohort,
         sv_pipeline_docker = select_first([sv_pipeline_docker])
