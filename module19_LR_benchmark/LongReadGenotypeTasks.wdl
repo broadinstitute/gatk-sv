@@ -715,41 +715,8 @@ task EvaluateInheriByGQ {
       ")
     }
 
-    # Parse command-line arguments
-    args <- commandArgs(trailingOnly = TRUE)
-
-    # Show help if requested or no arguments provided
-    if (length(args) == 0 || "-h" %in% args || "--help" %in% args) {
-      print_help()
-      quit(save = "no", status = 0)
-    }
-
-    # Helper to parse -i, -t, -o flags
-    parse_args <- function(args) {
-      parsed <- list()
-      for (i in seq(1, length(args), by = 2)) {
-        flag <- args[i]
-        value <- args[i + 1]
-        if (flag == "-i") {
-          parsed$input_vcf <- value
-        } else if (flag == "-t") {
-          parsed$inheri_table <- value
-        } else if (flag == "-o") {
-          parsed$output_table <- value
-        } else {
-          stop(paste("Unknown flag:", flag))
-        }
-      }
-      return(parsed)
-    }
-
     # Assign variables
     inheri_table <- read.table("~{inheri_stat}", header = TRUE, sep = "\t", stringsAsFactors = FALSE)
-
-    # Placeholder: You must define or source these functions elsewhere
-    # - read_in_vcf_gt_gq()
-    # - generate_gt_stat()
-    # - categorize_gt_stat()
 
     gt_table <- read_in_vcf_gt_gq("~{vcf_file}")
     gt_stat <- generate_gt_stat(gt_table[, 3:ncol(gt_table)], inheri_table)
@@ -768,8 +735,8 @@ task EvaluateInheriByGQ {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 2 + ceil(size(vcf_file,"GiB")*2),
-    disk_gb: 5 + ceil(size(vcf_file,"GiB")*2),
+    mem_gb: 10 + ceil(size(vcf_file,"GiB")*3),
+    disk_gb: 15 + ceil(size(vcf_file,"GiB")*3),
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
