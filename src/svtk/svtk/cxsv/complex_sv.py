@@ -673,20 +673,19 @@ def make_inversion_intervals(FF, RR, cnvs, cpx_type):
     # Then add inversion
     svtype = 'INV'
     start = RR.pos
-    end = FF.info['END2'] if FF.info['SVTYPE'] == 'BND' else FF.stop
     intervals.append(interval.format(**locals()))
 
     # Finally add 3' CNV
     if cpx_type.endswith('del'):
         svtype = 'DEL'
-        start = end
+        start = FF.info['END2'] if FF.info['SVTYPE'] == 'BND' else FF.stop
         end = RR.info['END2'] if RR.info['SVTYPE'] == 'BND' else RR.stop
         intervals.append(interval.format(**locals()))
 
     if cpx_type.endswith('dup'):
         svtype = 'DUP'
         start = RR.info['END2'] if RR.info['SVTYPE'] == 'BND' else RR.stop
-        end = end
+        end = FF.info['END2'] if FF.info['SVTYPE'] == 'BND' else FF.stop
         intervals.append(interval.format(**locals()))
 
     return intervals
