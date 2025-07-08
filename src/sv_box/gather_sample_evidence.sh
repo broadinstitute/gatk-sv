@@ -122,10 +122,6 @@ if [[ "${collect_pesr}" == true ]]; then
 fi
 
 
-# TODO: change all the scripts to take the name of the outputs they are expected produce,
-#       in the input, then change all the following to make sure such output names are used
-#       consistently, for instance `"${sample_id}.counts.tsv.gz"` or manta vcf in the following.
-
 if [[ "${run_scramble}" == true ]]; then
   scramble_p1_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/scramble_p1_XXXXXX")
   # TODO: counts and manta files in the following should be updated
