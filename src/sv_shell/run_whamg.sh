@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# This script is a bash implementation of the following workflow/task in WDL:
+# Filename: wdl/Whamg.wdl
+# Workflow: Whamg
+
 set -Exeuo pipefail
 
 sample_id=$1

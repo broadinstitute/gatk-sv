@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# This script is a bash implementation of the following workflow/task in WDL:
+# Filename: wdl/Scramble.wdl
+# Workflow: Scramble
+
 set -Exeuo pipefail
 
 sample_name=${1}

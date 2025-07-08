@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# This script is a bash implementation of the following workflow/task in WDL:
+# Filename: wdl/CollectCoverage.wdl
+# Task: CollectCounts
+
 set -Exeuo pipefail
 
 intervals=$1
