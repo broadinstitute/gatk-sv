@@ -551,6 +551,243 @@ task ConcatVcfs {
   }
 }
 
+task EvaluateInheriByGQ {
+  input {
+    File vcf_file         # Input VCF file (bgzipped or plain)
+    File vcf_idx_file
+    File inheri_stat  # 2-column TSV: SVID <tab> annotation
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String prefix = basename(vcf_file,'.vcf.gz')
+
+  command <<<
+    set -e
+
+    # use R script to add GC to the vcf
+    Rscript -e '
+
+    init_dataframe <- function(colnames, nrows = 0) {
+      if (!is.character(colnames)) {
+        stop("Column names must be a character vector.")
+      }
+      if (!is.numeric(nrows) || nrows < 0 || nrows %% 1 != 0) {
+        stop("Number of rows must be a non-negative integer.")
+      }
+
+      # Create a list of empty character vectors of length nrows
+      data_list <- setNames(
+        replicate(length(colnames), rep(NA_character_, nrows), simplify = FALSE),
+        colnames
+      )
+      
+      # Create data frame
+      df <- as.data.frame(data_list, stringsAsFactors = FALSE)
+      return(df)
+    }
+
+    read_in_vcf_gt_gq<-function(vcf_file){
+      # Read in all lines, excluding meta-information lines (those starting with "##")
+      vcf_lines <- readLines(vcf_file)
+      vcf_lines <- vcf_lines[!startsWith(vcf_lines, "##")]
+
+      # Split the last header line to get column names (starts with "#CHROM")
+      header <- strsplit(vcf_lines[1], "\t")[[1]]
+      sample_names <- header[10:length(header)]
+
+      # Read the VCF body (data part)
+      vcf_data <- read.table(text = vcf_lines[-1], header = FALSE, sep = "\t", stringsAsFactors = FALSE)
+      colnames(vcf_data) <- header
+
+      #generate the table of GT and GQ of each sample
+      sample = sample_names[1]
+      print(sample)
+      result = data.frame(sapply(vcf_data[,colnames(vcf_data) == sample], function(x){strsplit(as.character(x),":")[[1]][1]}))
+      colnames(result)[ncol(result)] = paste(sample,"GT", sep="_")
+      result[,2]  = data.frame(sapply(vcf_data[,colnames(vcf_data) == sample], function(x){strsplit(as.character(x),":")[[1]][2]}))
+      colnames(result)[ncol(result)] = paste(sample,"GQ", sep="_")
+      for(sample in sample_names[2:length(sample_names)]){
+        print(sample)
+        result[,ncol(result)+1]  = data.frame(sapply(vcf_data[,colnames(vcf_data) == sample], function(x){strsplit(as.character(x),":")[[1]][1]}))
+        colnames(result)[ncol(result)] = paste(sample,"GT", sep="_")
+        result[,ncol(result)+1]  = data.frame(sapply(vcf_data[,colnames(vcf_data) == sample], function(x){strsplit(as.character(x),":")[[1]][2]}))
+        colnames(result)[ncol(result)] = paste(sample,"GQ", sep="_")
+      }
+
+      # Optional: Add CHROM and POS if you want to track variant position
+      result$CHROM <- vcf_data$`#CHROM`
+      result$POS <- vcf_data$POS
+
+      # Reorder columns to put CHROM and POS first
+      result <- result[, c("CHROM", "POS", setdiff(names(result), c("CHROM", "POS")))]
+      return(result)
+    }
+
+    generate_gt_stat<-function(dat,inheri_table){
+      #assuming 6 columns in dat: fa_GT, fa_GQ, mo_GT, mo_GQ, pb_GT, pb_GQ
+      dat=dat[dat[,2]!="." & dat[,4]!="." & dat[,6]!=".",]
+      dat = dat[dat[,1]!="0/0" | dat[,3]!="0/0" | dat[,5]!="0/0", ]
+      dat[,2] = as.integer(dat[,2])
+      dat[,4] = as.integer(dat[,4])
+      dat[,6] = as.integer(dat[,6])
+      dat=dat[order(dat[,6]),]
+
+      #add decile to the GQ of proband
+      dat[,7] = as.integer((c(1:nrow(dat))-1) /nrow(dat) *10)
+
+      stat = data.frame(table(dat[,c(1,3,5,7)]))
+      stat[,1] = gsub("/","|", stat[,1])
+      stat[,2] = gsub("/","|", stat[,2])
+      stat[,3] = gsub("/","|", stat[,3])
+      colnames(stat)=c("fa","mo","pb","gt_cate","SV_count")
+      stat = merge(stat, inheri_table, by=c("fa","mo","pb"))
+      stat$SV_count = as.integer(stat$SV_count)
+      return(stat)
+    }
+
+    categorize_gt_stat<-function(stat, dat){
+      #assuming 6 columns in dat: fa_GT, fa_GQ, mo_GT, mo_GQ, pb_GT, pb_GQ
+      dat=dat[dat[,2]!="." & dat[,4]!="." & dat[,6]!=".",]
+      dat = dat[dat[,1]!="0/0" | dat[,3]!="0/0" | dat[,5]!="0/0", ]
+      dat[,2] = as.integer(dat[,2])
+      dat[,4] = as.integer(dat[,4])
+      dat[,6] = as.integer(dat[,6])
+      dat=dat[order(dat[,6]),]
+
+      #add decile to the GQ of proband
+      dat[,7] = as.integer((c(1:nrow(dat))-1) /nrow(dat) *10)
+      
+      #define the categories that infer de novo or mendelian errors:
+      dnv = c("de_novo")
+      me = c("Mendelian_Error_Fa_Pb" , "Mendelian_Error_Mo_Pb", "Mendelian_Error_Fa_Mo_Pb", "Mendelian_Error")
+
+      error_rate_table = data.frame(table(stat$gt_cate))
+
+      #calculate dnv counts by GQ decile:
+      error_rate_table[,2] = sapply(error_rate_table[,1], function(x){sum(stat[stat$gt_cate == x & stat$category%in%dnv,]$SV_count)})
+      #calculate mendelian error counts by GQ decile:
+      error_rate_table[,3] = sapply(error_rate_table[,1], function(x){sum(stat[stat$gt_cate == x & stat$category%in%me & stat$pb!="0|0",]$SV_count)})
+      #calculate SV counts by GQ decile:
+      error_rate_table[,4] = sapply(error_rate_table[,1], function(x){sum(stat[stat$gt_cate == x & stat$pb!="0|0",]$SV_count)})
+
+      #calculate mendelian error counts by GQ decile:
+      error_rate_table[,5] = sapply(error_rate_table[,1], function(x){sum(stat[stat$gt_cate == x & stat$category%in%me,]$SV_count)})
+      #calculate SV counts by GQ decile:
+      error_rate_table[,6] = sapply(error_rate_table[,1], function(x){sum(stat[stat$gt_cate == x & stat$category!="REF",]$SV_count)})
+      
+      colnames(error_rate_table) = c("gt_cate","dnv","Mendelian_Error_child","in_child","Mendelian_Error_fam","in_fam")
+      
+      #calculate accumulative dnv rate
+      #calculate accumulative dnv rate
+      error_rate_table[,7] = sapply(c(1:nrow(error_rate_table)), function(x){sum(error_rate_table[c(x:nrow(error_rate_table)),]$dnv) / sum(error_rate_table[c(x:nrow(error_rate_table)),]$in_child)})
+      #calculate accumulative mendelian error rate in child
+      error_rate_table[,8] = sapply(c(1:nrow(error_rate_table)), function(x){sum(error_rate_table[c(x:nrow(error_rate_table)),]$Mendelian_Error_child) / sum(error_rate_table[c(x:nrow(error_rate_table)),]$in_child)})
+      #calculate accumulative SV count in child
+      error_rate_table[,9] = sapply(c(1:nrow(error_rate_table)), function(x){sum(error_rate_table[c(x:nrow(error_rate_table)),]$in_child)})
+      #calculate accumulative mendelian error rate in family
+      error_rate_table[,10] = sapply(c(1:nrow(error_rate_table)), function(x){sum(error_rate_table[c(x:nrow(error_rate_table)),]$Mendelian_Error_fam) / sum(error_rate_table[c(x:nrow(error_rate_table)),]$in_fam)})
+      #calculate accumulative SV count in family
+      error_rate_table[,11] = sapply(c(1:nrow(error_rate_table)), function(x){sum(error_rate_table[c(x:nrow(error_rate_table)),]$in_fam)})
+      
+      #add the GQ range for each decile
+      error_rate_table[,12] = sapply(error_rate_table$gt_cate, function(x){min(dat[dat[,7]==x,][,6])})
+      error_rate_table[,13] = sapply(error_rate_table$gt_cate, function(x){max(dat[dat[,7]==x,][,6])})
+      colnames(error_rate_table)[c(5:ncol(error_rate_table))] = c("dnv_rate","Mendelian_Error_rate", "total_sv_count", "min_GQ","max_GQ")
+      return(error_rate_table)
+    }
+
+    # Function to print help message
+    print_help <- function() {
+      cat("
+      Usage: Rscript run_gt_categorization.R -i <input.vcf> -t <inheri_table.tsv> -o <output.tsv>
+
+      Options:
+        -i    Path to input VCF file
+        -t    Path to inheritance table (tab-delimited, with header)
+        -o    Path to output table (tab-delimited)
+        -h, --help    Show this help message and exit
+
+      Description:
+        This script reads a VCF file, processes genotypes (GT) and genotype quality (GQ),
+        integrates with an inheritance table, generates GT statistics,
+        categorizes them, and writes the results to an output file.
+      ")
+    }
+
+    # Parse command-line arguments
+    args <- commandArgs(trailingOnly = TRUE)
+
+    # Show help if requested or no arguments provided
+    if (length(args) == 0 || "-h" %in% args || "--help" %in% args) {
+      print_help()
+      quit(save = "no", status = 0)
+    }
+
+    # Helper to parse -i, -t, -o flags
+    parse_args <- function(args) {
+      parsed <- list()
+      for (i in seq(1, length(args), by = 2)) {
+        flag <- args[i]
+        value <- args[i + 1]
+        if (flag == "-i") {
+          parsed$input_vcf <- value
+        } else if (flag == "-t") {
+          parsed$inheri_table <- value
+        } else if (flag == "-o") {
+          parsed$output_table <- value
+        } else {
+          stop(paste("Unknown flag:", flag))
+        }
+      }
+      return(parsed)
+    }
+
+    # Assign variables
+    inheri_table <- read.table("~{inheri_stat}", header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+
+    # Placeholder: You must define or source these functions elsewhere
+    # - read_in_vcf_gt_gq()
+    # - generate_gt_stat()
+    # - categorize_gt_stat()
+
+    gt_table <- read_in_vcf_gt_gq("~{vcf_file}")
+    gt_stat <- generate_gt_stat(gt_table[, 3:ncol(gt_table)], inheri_table)
+    gt_cate <- categorize_gt_stat(gt_stat, gt_table[, 3:ncol(gt_table)])
+
+    # Write output
+    write.table(gt_cate, "~{prefix}.inheri_by_GQ.stat", quote = FALSE, sep = "\t", col.names = TRUE, row.names = FALSE)
+
+    '
+
+  >>>
+
+  output {
+    File inheri_by_GQ_stat = "~{prefix}.inheri_by_GQ.stat"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 2 + ceil(size(vcf_file,"GiB")*2),
+    disk_gb: 5 + ceil(size(vcf_file,"GiB")*2),
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task ExtractVariantSites {
   input {
     File input_vcf
@@ -1417,6 +1654,58 @@ task IntegrateInheritanceTable {
 
   output {
     File integrated_inheri_stat = "~{family_id}.~{prefix}.integrated_inheritance_table.tsv"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: mem_size,
+    disk_gb: disk_size,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task IntegrateInheriByGQTable {
+  input {
+    File inheri_gq_table_snv
+    File inheri_gq_table_indel_sm
+    File inheri_gq_table_indel_lg
+    File inheri_gq_table_sv
+    String family_id
+    String prefix
+
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Int disk_size = 10 
+  Int mem_size =  15
+
+  command <<<
+    set -euxo pipefail
+
+    sed -e 's/$/\tSNV/' ~{inheri_gq_table_snv} > "~{family_id}.~{prefix}.inheri_by_gq.stat"
+    sed -e 's/$/\tIndel_sm/' ~{inheri_gq_table_indel_sm} > "~{family_id}.~{prefix}.inheri_by_gq.stat"
+    sed -e 's/$/\tIndel_lg/' ~{inheri_gq_table_indel_lg} > "~{family_id}.~{prefix}.inheri_by_gq.stat"
+    sed -e 's/$/\tSV/' ~{inheri_gq_table_sv} > "~{family_id}.~{prefix}.inheri_by_gq.stat"
+
+  >>>
+
+  output {
+    File integrated_inheri_by_gq_stat = "~{family_id}.~{prefix}.inheri_by_gq.stat"
   }
 
   RuntimeAttr default_attr = object {

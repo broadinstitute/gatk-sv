@@ -73,6 +73,38 @@ workflow ExtractTriosFromVCF {
         runtime_attr_override = runtime_attr_ovr_calcu_inheri_table_sv
     }
 
+    call LongReadGenotypeTasks.EvaluateInheriByGQ as evaluate_inheri_by_gq_snv{
+      input:
+        vcf_file = SplitVariantsBySize.snv_vcf,
+        vcf_idx_file = SplitVariantsBySize.snv_vcf_idx,
+        inheri_stat = inheri_table,
+        docker_image   = sv_pipeline_base_docker
+      }
+
+    call LongReadGenotypeTasks.EvaluateInheriByGQ as evaluate_inheri_by_gq_indel_sm{
+      input:
+        vcf_file = SplitVariantsBySize.indel_1_30_vcf,
+        vcf_idx_file = SplitVariantsBySize.indel_1_30_vcf_idx,
+        inheri_stat = inheri_table,
+        docker_image   = sv_pipeline_base_docker
+      }
+
+    call LongReadGenotypeTasks.EvaluateInheriByGQ as evaluate_inheri_by_gq_indel_lg{
+      input:
+        vcf_file = SplitVariantsBySize.indel_31_50_vcf,
+        vcf_idx_file = SplitVariantsBySize.indel_31_50_vcf_idx,
+        inheri_stat = inheri_table,
+        docker_image   = sv_pipeline_base_docker
+      }
+
+    call LongReadGenotypeTasks.EvaluateInheriByGQ as evaluate_inheri_by_gq_sv{
+      input:
+        vcf_file = SplitVariantsBySize.sv_vcf,
+        vcf_idx_file = SplitVariantsBySize.sv_vcf_idx,
+        inheri_stat = inheri_table,
+        docker_image   = sv_pipeline_base_docker
+      }
+
     call LongReadGenotypeTasks.IntegrateInheritanceTable as IntegrateInheritanceTable{
       input:
         inheri_table_snv = calcu_inheri_table_snv.inheri_stat,
@@ -85,10 +117,22 @@ workflow ExtractTriosFromVCF {
         docker_image = sv_pipeline_base_docker
     }    
 
+    call LongReadGenotypeTasks.IntegrateInheriByGQTable as IntegrateInheriByGQTable{
+      input:
+        inheri_gq_table_snv = evaluate_inheri_by_gq_snv.inheri_by_GQ_stat ,
+        inheri_gq_table_indel_sm = evaluate_inheri_by_gq_indel_sm.inheri_by_GQ_stat,
+        inheri_gq_table_indel_lg = evaluate_inheri_by_gq_indel_lg.inheri_by_GQ_stat,
+        inheri_gq_table_sv = evaluate_inheri_by_gq_sv.inheri_by_GQ_stat,
+        family_id = WriteTrioSampleFile.family_id,
+        prefix   = prefix,
+        docker_image = sv_pipeline_base_docker
+    }
+
   }
 
   output{
     Array[File] inheritance_table_inte = IntegrateInheritanceTable.integrated_inheri_stat
+    Array[File] inheritance_by_gq_table_inte = IntegrateInheriByGQTable.integrated_inheri_by_gq_stat
   }
 }
 
