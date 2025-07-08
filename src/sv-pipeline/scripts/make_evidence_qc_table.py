@@ -172,6 +172,32 @@ def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFra
     return all_outliers_df
 
 
+def read_variant_counts(filename: str) -> pd.DataFrame:
+    """
+    Reads variant counts from a TSV file.
+    Args:
+        filename: TSV file containing variant counts by sample, SV type, and chromosome.
+    Returns:
+        A pandas DataFrame containing variant counts by sample.
+    """
+    if filename is None:
+        return pd.DataFrame(columns=[ID_COL])
+
+    # Read the file and ensure sample_id is used as a regular column
+    df = pd.read_csv(filename, sep="\t")
+
+    # If there are no rows or no matching column, return empty DataFrame
+    if df.empty or ID_COL not in df.columns:
+        return pd.DataFrame(columns=[ID_COL])
+
+    # Ensure all columns have integer values (replace NaN with 0)
+    value_columns = [col for col in df.columns if col != ID_COL]
+    if value_columns:
+        df[value_columns] = df[value_columns].fillna(0).astype(int)
+
+    return df
+
+
 def merge_evidence_qc_table(
         filename_estimated_cn: str,
         filename_sex_assignments: str,
@@ -186,6 +212,10 @@ def merge_evidence_qc_table(
         filename_low_melt: str,
         filename_low_wham: str,
         filename_low_scramble: str,
+        filename_manta_variant_counts: str,
+        filename_melt_variant_counts: str,
+        filename_wham_variant_counts: str,
+        filename_scramble_variant_counts: str,
         filename_melt_insert_size: str,
         output_prefix: str) -> None:
     """
@@ -207,6 +237,10 @@ def merge_evidence_qc_table(
     df_wham_low_outlier = read_outlier(filename_low_wham, get_col_name("wham", "low"))
     df_scramble_low_outlier = read_outlier(filename_low_scramble, get_col_name("scramble", "low"))
     df_total_low_outliers = read_all_outlier(df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_scramble_low_outlier, "low")
+    df_manta_variant_counts = read_variant_counts(filename_manta_variant_counts)
+    df_melt_variant_counts = read_variant_counts(filename_melt_variant_counts)
+    df_wham_variant_counts = read_variant_counts(filename_wham_variant_counts)
+    df_scramble_variant_counts = read_variant_counts(filename_scramble_variant_counts)
     df_melt_insert_size = read_melt_insert_size(filename_melt_insert_size)
 
     # outlier column names
@@ -218,6 +252,7 @@ def merge_evidence_qc_table(
     dfs = [df_ploidy, df_sex_assignments, df_bincov_median, df_wgd_scores, df_non_diploid,
            df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, df_scramble_high_outlier, df_total_high_outliers,
            df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_scramble_low_outlier, df_total_low_outliers,
+           df_manta_variant_counts, df_melt_variant_counts, df_wham_variant_counts, df_scramble_variant_counts,
            df_melt_insert_size]
     for df in dfs:
         df[ID_COL] = df[ID_COL].astype(object)
@@ -284,7 +319,23 @@ def main():
         help="Sets the filename containing Scramble QC outlier high.")
 
     parser.add_argument(
-        "-m", "--melt-insert-size-filename",
+        "-v", "--manta-variant-counts-filename",
+        help="Sets the filename containing Manta variant counts per sample.")
+
+    parser.add_argument(
+        "-k", "--melt-variant-counts-filename",
+        help="Sets the filename containing Melt variant counts per sample.")
+
+    parser.add_argument(
+        "-l", "--wham-variant-counts-filename",
+        help="Sets the filename containing Wham variant counts per sample.")
+
+    parser.add_argument(
+        "-p", "--scramble-variant-counts-filename",
+        help="Sets the filename containing Scramble variant counts per sample.")
+
+    parser.add_argument(
+        "-m", "--melt-insert-size", dest="melt_insert_size_filename",
         help="Sets the filename containing Melt insert size. "
              "This file is expected to have two columns, containing "
              "sample ID and mean insert size in the first and second "
@@ -311,6 +362,10 @@ def main():
         args.melt_qc_outlier_low_filename,
         args.wham_qc_outlier_low_filename,
         args.scramble_qc_outlier_low_filename,
+        args.manta_variant_counts_filename,
+        args.melt_variant_counts_filename,
+        args.wham_variant_counts_filename,
+        args.scramble_variant_counts_filename,
         args.melt_insert_size_filename,
         args.output_prefix)
 
