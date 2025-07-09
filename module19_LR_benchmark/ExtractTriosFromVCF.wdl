@@ -78,7 +78,8 @@ workflow ExtractTriosFromVCF {
         vcf_file = SplitVariantsBySize.snv_vcf,
         vcf_idx_file = SplitVariantsBySize.snv_vcf_idx,
         inheri_stat = inheri_table,
-        docker_image   = sv_pipeline_base_docker
+        docker_image   = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_evaluate_inheri_by_gq_snv
       }
 
     call LongReadGenotypeTasks.EvaluateInheriByGQ as evaluate_inheri_by_gq_indel_sm{
@@ -86,7 +87,8 @@ workflow ExtractTriosFromVCF {
         vcf_file = SplitVariantsBySize.indel_1_30_vcf,
         vcf_idx_file = SplitVariantsBySize.indel_1_30_vcf_idx,
         inheri_stat = inheri_table,
-        docker_image   = sv_pipeline_base_docker
+        docker_image   = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_evaluate_inheri_by_gq_indel_sm
       }
 
     call LongReadGenotypeTasks.EvaluateInheriByGQ as evaluate_inheri_by_gq_indel_lg{
@@ -94,7 +96,8 @@ workflow ExtractTriosFromVCF {
         vcf_file = SplitVariantsBySize.indel_31_50_vcf,
         vcf_idx_file = SplitVariantsBySize.indel_31_50_vcf_idx,
         inheri_stat = inheri_table,
-        docker_image   = sv_pipeline_base_docker
+        docker_image   = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_evaluate_inheri_by_gq_indel_lg
       }
 
     call LongReadGenotypeTasks.EvaluateInheriByGQ as evaluate_inheri_by_gq_sv{
@@ -102,7 +105,8 @@ workflow ExtractTriosFromVCF {
         vcf_file = SplitVariantsBySize.sv_vcf,
         vcf_idx_file = SplitVariantsBySize.sv_vcf_idx,
         inheri_stat = inheri_table,
-        docker_image   = sv_pipeline_base_docker
+        docker_image   = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_evaluate_inheri_by_gq_sv
       }
 
     call LongReadGenotypeTasks.IntegrateInheritanceTable as IntegrateInheritanceTable{
