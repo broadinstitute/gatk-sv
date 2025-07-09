@@ -20,6 +20,8 @@ workflow ExtractTriosFromVCFByGenomicContext {
     File simple_repeats
     File segmental_duplicates
 
+    Boolean split_inheri_by_gq = false
+
     String sv_base_mini_docker 
     String sv_pipeline_base_docker 
 
@@ -162,6 +164,7 @@ workflow ExtractTriosFromVCFByGenomicContext {
       families = families,
       inheri_table = inheri_table,
       prefix = "~{prefix}.SR",
+      split_inheri_by_gq = split_inheri_by_gq,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_override,
       runtime_attr_calcu_inheri_table_snv = runtime_attr_calcu_inheri_table_snv,
@@ -180,6 +183,7 @@ workflow ExtractTriosFromVCFByGenomicContext {
       families = families,
       inheri_table = inheri_table,
       prefix = "~{prefix}.SD",
+      split_inheri_by_gq = split_inheri_by_gq,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_override,
       runtime_attr_calcu_inheri_table_snv = runtime_attr_calcu_inheri_table_snv,
@@ -198,6 +202,7 @@ workflow ExtractTriosFromVCFByGenomicContext {
       families = families,
       inheri_table = inheri_table,
       prefix = "~{prefix}.RM",
+      split_inheri_by_gq = split_inheri_by_gq,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_override,
       runtime_attr_calcu_inheri_table_snv = runtime_attr_calcu_inheri_table_snv,
@@ -216,6 +221,7 @@ workflow ExtractTriosFromVCFByGenomicContext {
       families = families,
       inheri_table = inheri_table,
       prefix = "~{prefix}.US",
+      split_inheri_by_gq = split_inheri_by_gq,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_override,
       runtime_attr_calcu_inheri_table_snv = runtime_attr_calcu_inheri_table_snv,
@@ -234,6 +240,7 @@ workflow ExtractTriosFromVCFByGenomicContext {
       families = families,
       inheri_table = inheri_table,
       prefix = "~{prefix}.US_RM",
+      split_inheri_by_gq = split_inheri_by_gq,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_override,
       runtime_attr_calcu_inheri_table_snv = runtime_attr_calcu_inheri_table_snv,
@@ -252,6 +259,7 @@ workflow ExtractTriosFromVCFByGenomicContext {
       families = families,
       inheri_table = inheri_table,
       prefix = "~{prefix}.all",
+      split_inheri_by_gq = split_inheri_by_gq,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_override,
       runtime_attr_calcu_inheri_table_snv = runtime_attr_calcu_inheri_table_snv,
