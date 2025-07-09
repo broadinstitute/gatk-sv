@@ -1507,6 +1507,108 @@ task SplitVariantsBySize {
   }
 }
 
+task SplitVariantsBySizeAt20bp {
+  input {
+    File input_vcf
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String prefix = basename(input_vcf, ".vcf.gz")
+  command <<<
+    set -euxo pipefail
+
+    # Index VCF if needed
+    if [[ ! -f "~{input_vcf}.tbi" && ! -f "~{input_vcf}.csi" ]]; then
+      bcftools index ~{input_vcf}
+    fi
+
+    python3 <<CODE
+  
+    import pysam
+    import os
+
+    def get_variant_type_size(ref, alt):
+        len_ref = len(ref)
+        len_alt = len(alt)
+        svlen = abs(len_ref - len_alt)
+        if "<" in alt and ">" in alt:
+          return "SV_GT_20", 0
+        elif len_ref == 1 and len_alt == 1:
+            return "INDEL_LT_20", 0
+        elif svlen < 20:
+            return "INDEL_LT_20", svlen
+        else:
+            return "SV_GT_20", svlen
+
+    def main(input_vcf):
+        # Open input VCF
+        vcf_in = pysam.VariantFile(input_vcf)
+
+        # Prepare output files
+        outputs = {
+            "INDEL_LT_20": pysam.VariantFile(f"indels_lt_20.vcf", 'w', header=vcf_in.header),
+            "SV_GT_20": pysam.VariantFile(f"svs_gt_20.vcf", 'w', header=vcf_in.header)
+        }
+
+        for rec in vcf_in.fetch():
+            if len(rec.alts) != 1:
+                continue  # skip multiallelics for now
+            ref = rec.ref
+            alt = rec.alts[0]
+            vtype, svlen = get_variant_type_size(ref, alt)
+            outputs[vtype].write(rec)
+
+        # Close all files
+        for f in outputs.values():
+            f.close()
+        vcf_in.close()
+
+    main("~{input_vcf}")
+    
+    CODE
+
+    mv indels_lt_20.vcf "~{prefix}.indels_lt_20.vcf"
+    mv svs_gt_20.vcf "~{prefix}.svs_gt_20.vcf"
+
+    bgzip "~{prefix}.indels_lt_20.vcf"
+    bgzip "~{prefix}.svs_gt_20.vcf"
+
+    tabix -p vcf "~{prefix}.indels_lt_20.vcf.gz"
+    tabix -p vcf "~{prefix}.svs_gt_20.vcf.gz"
+
+  >>>
+
+  output {
+    File indels_lt_20_vcf = "~{prefix}.indels_lt_20.vcf.gz"
+    File svs_gt_20_vcf = "~{prefix}.svs_gt_20.vcf.gz"
+
+    File indels_lt_20_vcf_idx = "~{prefix}.indels_lt_20.vcf.gz.tbi"
+    File svs_gt_20_vcf_idx = "~{prefix}.svs_gt_20.vcf.gz.tbi"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 15,
+    disk_gb: 20 + ceil(size(input_vcf, "GiB")*5),
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task IntegrateInheritanceTable {
   input {
     File inheri_table_snv
