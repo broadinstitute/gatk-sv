@@ -33,8 +33,8 @@ workflow MergeVcfsByChromosome {
         }
       }
 
-      Array[File] chrom_vcf = select_first([ConvertMultiToBiAllelic.bi_allelic_vcf, ExtractChromosomeVcf.output_vcf])
-      Array[File] chrom_vcf_idx = select_first([ConvertMultiToBiAllelic.bi_allelic_vcf_idx, ExtractChromosomeVcf.output_vcf_idx])
+      File chrom_vcf = select_first([ConvertMultiToBiAllelic.bi_allelic_vcf, ExtractChromosomeVcf.output_vcf])
+      File chrom_vcf_idx = select_first([ConvertMultiToBiAllelic.bi_allelic_vcf_idx, ExtractChromosomeVcf.output_vcf_idx])
     }
 
     call MergeVcfs {
