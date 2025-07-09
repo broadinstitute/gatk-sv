@@ -36,13 +36,13 @@ workflow MergeVcfsBySize {
     }
   }
 
-  Array[File] input_vcfs_idx = select_first([IndexVcf.indexed_vcf_idx, input_vcfs_idx])
+  Array[File] vcf_idxes = select_first([IndexVcf.indexed_vcf_idx, input_vcfs_idx])
 
   scatter (idx in range(length(input_vcfs))) {
     call LongReadGenotypeTasks.SplitVariantsBySizeAt20bp {
       input:
         input_vcf = input_vcfs[idx],
-        input_vcf_idx = input_vcfs_idx[idx],
+        input_vcf_idx = vcf_idxes[idx],
         docker_image = sv_pipeline_base_docker
     }
   }
