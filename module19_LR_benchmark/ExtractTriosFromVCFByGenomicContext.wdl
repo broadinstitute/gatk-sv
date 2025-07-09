@@ -24,6 +24,7 @@ workflow ExtractTriosFromVCFByGenomicContext {
     String sv_pipeline_base_docker 
 
     RuntimeAttr? runtime_attr_override
+    RuntimeAttr? runtime_attr_annotate_genomic_context
     RuntimeAttr? runtime_attr_calcu_inheri_table_snv
     RuntimeAttr? runtime_attr_calcu_inheri_table_sv
     RuntimeAttr? runtime_attr_calcu_inheri_table_indel_sm
