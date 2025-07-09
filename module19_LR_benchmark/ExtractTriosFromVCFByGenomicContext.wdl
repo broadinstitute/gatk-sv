@@ -280,12 +280,12 @@ workflow ExtractTriosFromVCFByGenomicContext {
     Array[File] inheritance_table_inte_US_RM = extract_trios_from_USRMs.inheritance_table_inte
     Array[File] inheritance_table_inte_all = extract_trios_from_all.inheritance_table_inte
 
-    Array[File]? inheritance_by_gq_table_SR = extract_trios_from_SRs.inheritance_by_gq_table_inte
-    Array[File]? inheritance_by_gq_table_SD = extract_trios_from_SDs.inheritance_by_gq_table_inte
-    Array[File]? inheritance_by_gq_table_RM = extract_trios_from_RMs.inheritance_by_gq_table_inte
-    Array[File]? inheritance_by_gq_table_US = extract_trios_from_USs.inheritance_by_gq_table_inte
-    Array[File]? inheritance_by_gq_table_US_RM = extract_trios_from_USRMs.inheritance_by_gq_table_inte
-    Array[File]? inheritance_by_gq_table_all = extract_trios_from_all.inheritance_by_gq_table_inte
+    Array[File?] inheritance_by_gq_table_SR = extract_trios_from_SRs.inheritance_by_gq_table_inte
+    Array[File?] inheritance_by_gq_table_SD = extract_trios_from_SDs.inheritance_by_gq_table_inte
+    Array[File?] inheritance_by_gq_table_RM = extract_trios_from_RMs.inheritance_by_gq_table_inte
+    Array[File?] inheritance_by_gq_table_US = extract_trios_from_USs.inheritance_by_gq_table_inte
+    Array[File?] inheritance_by_gq_table_US_RM = extract_trios_from_USRMs.inheritance_by_gq_table_inte
+    Array[File?] inheritance_by_gq_table_all = extract_trios_from_all.inheritance_by_gq_table_inte
 
 
   }

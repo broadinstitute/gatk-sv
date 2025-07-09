@@ -144,7 +144,7 @@ workflow ExtractTriosFromVCF {
 
   output{
     Array[File] inheritance_table_inte = IntegrateInheritanceTable.integrated_inheri_stat
-    Array[File]? inheritance_by_gq_table_inte = IntegrateInheriByGQTable.integrated_inheri_by_gq_stat
+    Array[File?] inheritance_by_gq_table_inte = IntegrateInheriByGQTable.integrated_inheri_by_gq_stat
   }
 }
 
