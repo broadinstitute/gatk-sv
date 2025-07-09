@@ -1510,6 +1510,7 @@ task SplitVariantsBySize {
 task SplitVariantsBySizeAt20bp {
   input {
     File input_vcf
+    File input_vcf_idx
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
