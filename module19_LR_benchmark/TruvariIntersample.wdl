@@ -11,6 +11,8 @@ workflow TruvariIntersample {
         Array[String] sample_ids
         String chrom
 
+        String sv_base_mini_docker
+        
         File reference_fai
         File density_counter_py
         Int max_records_per_chunk = 10000

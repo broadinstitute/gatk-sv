@@ -68,7 +68,8 @@ workflow MergeVcfsBySize {
         sample_ids = sample_list,
         chrom = chrom,
         reference_fai = reference_fai,
-        density_counter_py = density_counter_py
+        density_counter_py = density_counter_py,
+        sv_base_mini_docker = sv_base_mini_docker
     }
 
   }
