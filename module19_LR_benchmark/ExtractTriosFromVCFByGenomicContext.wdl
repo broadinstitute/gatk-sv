@@ -24,11 +24,15 @@ workflow ExtractTriosFromVCFByGenomicContext {
     String sv_pipeline_base_docker 
 
     RuntimeAttr? runtime_attr_override
-    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_snv
-    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_sv
-    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_indel_lg
-    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_indel_sm
-    RuntimeAttr? runtime_attr_annotate_genomic_context
+    RuntimeAttr? runtime_attr_calcu_inheri_table_snv
+    RuntimeAttr? runtime_attr_calcu_inheri_table_sv
+    RuntimeAttr? runtime_attr_calcu_inheri_table_indel_sm
+    RuntimeAttr? runtime_attr_calcu_inheri_table_indel_lg
+    RuntimeAttr? runtime_attr_evaluate_inheri_by_gq_snv
+    RuntimeAttr? runtime_attr_evaluate_inheri_by_gq_indel_sm
+    RuntimeAttr? runtime_attr_evaluate_inheri_by_gq_indel_lg
+    RuntimeAttr? runtime_attr_evaluate_inheri_by_gq_sv
+
   }
 
   call LongReadGenotypeTasks.SplitVcfIntoShards as SplitVcfIntoShards {
@@ -159,10 +163,14 @@ workflow ExtractTriosFromVCFByGenomicContext {
       prefix = "~{prefix}.SR",
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_override,
-      runtime_attr_ovr_calcu_inheri_table_sv = runtime_attr_ovr_calcu_inheri_table_sv,
-      runtime_attr_ovr_calcu_inheri_table_snv = runtime_attr_ovr_calcu_inheri_table_snv,
-      runtime_attr_ovr_calcu_inheri_table_indel_sm = runtime_attr_ovr_calcu_inheri_table_indel_sm,
-      runtime_attr_ovr_calcu_inheri_table_indel_lg = runtime_attr_ovr_calcu_inheri_table_indel_lg
+      runtime_attr_calcu_inheri_table_snv = runtime_attr_calcu_inheri_table_snv,
+      runtime_attr_calcu_inheri_table_sv = runtime_attr_calcu_inheri_table_sv,
+      runtime_attr_calcu_inheri_table_indel_sm = runtime_attr_calcu_inheri_table_indel_sm,
+      runtime_attr_calcu_inheri_table_indel_lg = runtime_attr_calcu_inheri_table_indel_lg,
+      runtime_attr_evaluate_inheri_by_gq_snv = runtime_attr_evaluate_inheri_by_gq_snv,
+      runtime_attr_evaluate_inheri_by_gq_sv = runtime_attr_evaluate_inheri_by_gq_sv,
+      runtime_attr_evaluate_inheri_by_gq_indel_sm = runtime_attr_evaluate_inheri_by_gq_indel_sm,
+      runtime_attr_evaluate_inheri_by_gq_indel_lg = runtime_attr_evaluate_inheri_by_gq_indel_lg
     }
 
   call ExtractTriosFromVCF.ExtractTriosFromVCF as extract_trios_from_SDs{
@@ -173,10 +181,14 @@ workflow ExtractTriosFromVCFByGenomicContext {
       prefix = "~{prefix}.SD",
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_override,
-      runtime_attr_ovr_calcu_inheri_table_sv = runtime_attr_ovr_calcu_inheri_table_sv,
-      runtime_attr_ovr_calcu_inheri_table_snv = runtime_attr_ovr_calcu_inheri_table_snv,
-      runtime_attr_ovr_calcu_inheri_table_indel_sm = runtime_attr_ovr_calcu_inheri_table_indel_sm,
-      runtime_attr_ovr_calcu_inheri_table_indel_lg = runtime_attr_ovr_calcu_inheri_table_indel_lg
+      runtime_attr_calcu_inheri_table_snv = runtime_attr_calcu_inheri_table_snv,
+      runtime_attr_calcu_inheri_table_sv = runtime_attr_calcu_inheri_table_sv,
+      runtime_attr_calcu_inheri_table_indel_sm = runtime_attr_calcu_inheri_table_indel_sm,
+      runtime_attr_calcu_inheri_table_indel_lg = runtime_attr_calcu_inheri_table_indel_lg,
+      runtime_attr_evaluate_inheri_by_gq_snv = runtime_attr_evaluate_inheri_by_gq_snv,
+      runtime_attr_evaluate_inheri_by_gq_sv = runtime_attr_evaluate_inheri_by_gq_sv,
+      runtime_attr_evaluate_inheri_by_gq_indel_sm = runtime_attr_evaluate_inheri_by_gq_indel_sm,
+      runtime_attr_evaluate_inheri_by_gq_indel_lg = runtime_attr_evaluate_inheri_by_gq_indel_lg
     }
 
   call ExtractTriosFromVCF.ExtractTriosFromVCF as extract_trios_from_RMs{
@@ -187,10 +199,14 @@ workflow ExtractTriosFromVCFByGenomicContext {
       prefix = "~{prefix}.RM",
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_override,
-      runtime_attr_ovr_calcu_inheri_table_sv = runtime_attr_ovr_calcu_inheri_table_sv,
-      runtime_attr_ovr_calcu_inheri_table_snv = runtime_attr_ovr_calcu_inheri_table_snv,
-      runtime_attr_ovr_calcu_inheri_table_indel_sm = runtime_attr_ovr_calcu_inheri_table_indel_sm,
-      runtime_attr_ovr_calcu_inheri_table_indel_lg = runtime_attr_ovr_calcu_inheri_table_indel_lg
+      runtime_attr_calcu_inheri_table_snv = runtime_attr_calcu_inheri_table_snv,
+      runtime_attr_calcu_inheri_table_sv = runtime_attr_calcu_inheri_table_sv,
+      runtime_attr_calcu_inheri_table_indel_sm = runtime_attr_calcu_inheri_table_indel_sm,
+      runtime_attr_calcu_inheri_table_indel_lg = runtime_attr_calcu_inheri_table_indel_lg,
+      runtime_attr_evaluate_inheri_by_gq_snv = runtime_attr_evaluate_inheri_by_gq_snv,
+      runtime_attr_evaluate_inheri_by_gq_sv = runtime_attr_evaluate_inheri_by_gq_sv,
+      runtime_attr_evaluate_inheri_by_gq_indel_sm = runtime_attr_evaluate_inheri_by_gq_indel_sm,
+      runtime_attr_evaluate_inheri_by_gq_indel_lg = runtime_attr_evaluate_inheri_by_gq_indel_lg
     }
 
   call ExtractTriosFromVCF.ExtractTriosFromVCF as extract_trios_from_USs{
@@ -201,10 +217,14 @@ workflow ExtractTriosFromVCFByGenomicContext {
       prefix = "~{prefix}.US",
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_override,
-      runtime_attr_ovr_calcu_inheri_table_sv = runtime_attr_ovr_calcu_inheri_table_sv,
-      runtime_attr_ovr_calcu_inheri_table_snv = runtime_attr_ovr_calcu_inheri_table_snv,
-      runtime_attr_ovr_calcu_inheri_table_indel_sm = runtime_attr_ovr_calcu_inheri_table_indel_sm,
-      runtime_attr_ovr_calcu_inheri_table_indel_lg = runtime_attr_ovr_calcu_inheri_table_indel_lg
+      runtime_attr_calcu_inheri_table_snv = runtime_attr_calcu_inheri_table_snv,
+      runtime_attr_calcu_inheri_table_sv = runtime_attr_calcu_inheri_table_sv,
+      runtime_attr_calcu_inheri_table_indel_sm = runtime_attr_calcu_inheri_table_indel_sm,
+      runtime_attr_calcu_inheri_table_indel_lg = runtime_attr_calcu_inheri_table_indel_lg,
+      runtime_attr_evaluate_inheri_by_gq_snv = runtime_attr_evaluate_inheri_by_gq_snv,
+      runtime_attr_evaluate_inheri_by_gq_sv = runtime_attr_evaluate_inheri_by_gq_sv,
+      runtime_attr_evaluate_inheri_by_gq_indel_sm = runtime_attr_evaluate_inheri_by_gq_indel_sm,
+      runtime_attr_evaluate_inheri_by_gq_indel_lg = runtime_attr_evaluate_inheri_by_gq_indel_lg
     }
 
   call ExtractTriosFromVCF.ExtractTriosFromVCF as extract_trios_from_USRMs{
@@ -215,10 +235,14 @@ workflow ExtractTriosFromVCFByGenomicContext {
       prefix = "~{prefix}.US_RM",
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_override,
-      runtime_attr_ovr_calcu_inheri_table_sv = runtime_attr_ovr_calcu_inheri_table_sv,
-      runtime_attr_ovr_calcu_inheri_table_snv = runtime_attr_ovr_calcu_inheri_table_snv,
-      runtime_attr_ovr_calcu_inheri_table_indel_sm = runtime_attr_ovr_calcu_inheri_table_indel_sm,
-      runtime_attr_ovr_calcu_inheri_table_indel_lg = runtime_attr_ovr_calcu_inheri_table_indel_lg
+      runtime_attr_calcu_inheri_table_snv = runtime_attr_calcu_inheri_table_snv,
+      runtime_attr_calcu_inheri_table_sv = runtime_attr_calcu_inheri_table_sv,
+      runtime_attr_calcu_inheri_table_indel_sm = runtime_attr_calcu_inheri_table_indel_sm,
+      runtime_attr_calcu_inheri_table_indel_lg = runtime_attr_calcu_inheri_table_indel_lg,
+      runtime_attr_evaluate_inheri_by_gq_snv = runtime_attr_evaluate_inheri_by_gq_snv,
+      runtime_attr_evaluate_inheri_by_gq_sv = runtime_attr_evaluate_inheri_by_gq_sv,
+      runtime_attr_evaluate_inheri_by_gq_indel_sm = runtime_attr_evaluate_inheri_by_gq_indel_sm,
+      runtime_attr_evaluate_inheri_by_gq_indel_lg = runtime_attr_evaluate_inheri_by_gq_indel_lg
     }
 
   call ExtractTriosFromVCF.ExtractTriosFromVCF as extract_trios_from_all{
@@ -229,10 +253,14 @@ workflow ExtractTriosFromVCFByGenomicContext {
       prefix = "~{prefix}.all",
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_override,
-      runtime_attr_ovr_calcu_inheri_table_sv = runtime_attr_ovr_calcu_inheri_table_sv,
-      runtime_attr_ovr_calcu_inheri_table_snv = runtime_attr_ovr_calcu_inheri_table_snv,
-      runtime_attr_ovr_calcu_inheri_table_indel_sm = runtime_attr_ovr_calcu_inheri_table_indel_sm,
-      runtime_attr_ovr_calcu_inheri_table_indel_lg = runtime_attr_ovr_calcu_inheri_table_indel_lg
+      runtime_attr_calcu_inheri_table_snv = runtime_attr_calcu_inheri_table_snv,
+      runtime_attr_calcu_inheri_table_sv = runtime_attr_calcu_inheri_table_sv,
+      runtime_attr_calcu_inheri_table_indel_sm = runtime_attr_calcu_inheri_table_indel_sm,
+      runtime_attr_calcu_inheri_table_indel_lg = runtime_attr_calcu_inheri_table_indel_lg,
+      runtime_attr_evaluate_inheri_by_gq_snv = runtime_attr_evaluate_inheri_by_gq_snv,
+      runtime_attr_evaluate_inheri_by_gq_sv = runtime_attr_evaluate_inheri_by_gq_sv,
+      runtime_attr_evaluate_inheri_by_gq_indel_sm = runtime_attr_evaluate_inheri_by_gq_indel_sm,
+      runtime_attr_evaluate_inheri_by_gq_indel_lg = runtime_attr_evaluate_inheri_by_gq_indel_lg
     }
   
   output{
