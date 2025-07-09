@@ -13,14 +13,14 @@ workflow ExtractTriosFromVCF {
     String prefix
 
     RuntimeAttr? runtime_attr_override
-    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_snv
-    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_sv
-    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_indel_lg
-    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_indel_sm
-    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_snv
-    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_indel_lg
-    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_indel_sm
-    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_sv
+    RuntimeAttr? runtime_attr_calcu_inheri_table_snv
+    RuntimeAttr? runtime_attr_calcu_inheri_table_sv
+    RuntimeAttr? runtime_attr_calcu_inheri_table_indel_sm
+    RuntimeAttr? runtime_attr_calcu_inheri_table_indel_lg
+    RuntimeAttr? runtime_attr_evaluate_inheri_by_gq_snv
+    RuntimeAttr? runtime_attr_evaluate_inheri_by_gq_indel_sm
+    RuntimeAttr? runtime_attr_evaluate_inheri_by_gq_indel_lg
+    RuntimeAttr? runtime_attr_evaluate_inheri_by_gq_sv
   }
 
 
@@ -50,7 +50,7 @@ workflow ExtractTriosFromVCF {
         input_vcf = SplitVariantsBySize.snv_vcf,
         input_vcf_idx = SplitVariantsBySize.snv_vcf_idx,
         docker_image = sv_pipeline_base_docker,
-        runtime_attr_override = runtime_attr_ovr_calcu_inheri_table_snv
+        runtime_attr_override = runtime_attr_calcu_inheri_table_snv
     }
 
     call LongReadGenotypeTasks.CalculateInheritanceTable as calcu_inheri_table_indel_sm{
@@ -58,7 +58,7 @@ workflow ExtractTriosFromVCF {
         input_vcf = SplitVariantsBySize.indel_1_30_vcf,
         input_vcf_idx = SplitVariantsBySize.indel_1_30_vcf_idx,
         docker_image = sv_pipeline_base_docker,
-        runtime_attr_override = runtime_attr_ovr_calcu_inheri_table_indel_sm
+        runtime_attr_override = runtime_attr_calcu_inheri_table_indel_sm
     }
 
     call LongReadGenotypeTasks.CalculateInheritanceTable as calcu_inheri_table_indel_lg{
@@ -66,7 +66,7 @@ workflow ExtractTriosFromVCF {
         input_vcf = SplitVariantsBySize.indel_31_50_vcf,
         input_vcf_idx = SplitVariantsBySize.indel_31_50_vcf_idx,
         docker_image = sv_pipeline_base_docker,
-        runtime_attr_override = runtime_attr_ovr_calcu_inheri_table_indel_lg
+        runtime_attr_override = runtime_attr_calcu_inheri_table_indel_lg
     }
     
     call LongReadGenotypeTasks.CalculateInheritanceTable as calcu_inheri_table_sv{
@@ -74,7 +74,7 @@ workflow ExtractTriosFromVCF {
         input_vcf = SplitVariantsBySize.sv_vcf,
         input_vcf_idx = SplitVariantsBySize.sv_vcf_idx,
         docker_image = sv_pipeline_base_docker,
-        runtime_attr_override = runtime_attr_ovr_calcu_inheri_table_sv
+        runtime_attr_override = runtime_attr_calcu_inheri_table_sv
     }
 
     call LongReadGenotypeTasks.EvaluateInheriByGQ as evaluate_inheri_by_gq_snv{
