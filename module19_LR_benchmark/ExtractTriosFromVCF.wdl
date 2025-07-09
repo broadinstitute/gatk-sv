@@ -17,6 +17,10 @@ workflow ExtractTriosFromVCF {
     RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_sv
     RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_indel_lg
     RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_indel_sm
+    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_snv
+    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_indel_lg
+    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_indel_sm
+    RuntimeAttr? runtime_attr_ovr_calcu_inheri_table_sv
   }
 
 
