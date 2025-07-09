@@ -23,33 +23,32 @@ workflow MergeVcfsByChromosome {
           chromosome = chrom,
           sv_base_mini_docker = sv_base_mini_docker
       }
-
-      if(convert_to_biallelic){
-        call ConvertMultiToBiAllelic {
-          input:
-            vcf = input_vcfs[idx],
-            vcf_idx = input_vcfs_idx[idx],
-            sample = sample_list[idx],
-            sv_pipeline_base_docker = sv_pipeline_base_docker
-        }
-      }
-
-      File chrom_vcf = select_first([ConvertMultiToBiAllelic.bi_allelic_vcf, ExtractChromosomeVcf.output_vcf])
-      File chrom_vcf_idx = select_first([ConvertMultiToBiAllelic.bi_allelic_vcf_idx, ExtractChromosomeVcf.output_vcf_idx])
     }
 
     call MergeVcfs {
       input:
-        input_vcfs =chrom_vcf,
-        input_vcfs_idx = chrom_vcf_idx,
+        input_vcfs = ExtractChromosomeVcf.output_vcf,
+        input_vcfs_idx = ExtractChromosomeVcf.output_vcf_idx,
         output_name = "${chrom}.vcf.gz",
         sv_base_mini_docker = sv_base_mini_docker
 
     }
 
+    if(convert_to_biallelic){
+      call ConvertMultiToBiAllelic {
+        input:
+          vcf = MergeVcfs.output_merged_vcf,
+          vcf_idx = MergeVcfs.output_merged_vcf_idx,
+          sv_pipeline_base_docker = sv_pipeline_base_docker
+        }
+      }
+
+
+
+
   output {
-    File merged_vcf = MergeVcfs.output_merged_vcf
-    File merged_vcf_idx = MergeVcfs.output_merged_vcf_idx
+    File merged_vcf = select_first([ConvertMultiToBiAllelic.bi_allelic_vcf , MergeVcfs.output_merged_vcf])
+    File merged_vcf_idx = select_first([ConvertMultiToBiAllelic.bi_allelic_vcf_idx, MergeVcfs.output_merged_vcf_idx])
   }
 }
 
@@ -229,7 +228,6 @@ task ConvertMultiToBiAllelic {
   input {
     File vcf                # input VCF (.vcf.gz)
     File vcf_idx
-    String sample
     String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -251,51 +249,40 @@ task ConvertMultiToBiAllelic {
 
     python3 <<CODE
 
-    import os
     import pysam
+    import sys
 
-    def keep_unique_items(lst):
-        seen = set()
-        unique_list = []
-        for item in lst:
-            if item not in seen:
-                seen.add(item)
-                unique_list.append(item)
-        return unique_list
-
-    fin=pysam.VariantFile("~{vcf}")
-    vcf_out=pysam.VariantFile("~{prefix}.biallelic.vcf.gz","w", header=fin.header)
-
-    sample_id = "~{sample}"
-    for rec in fin:
-      if len(rec.alts)>1: 
-        gt = rec.samples[sample_id]["GT"]
-        if any(allele is not None and allele != 0 for allele in gt):
-          alts = keep_unique_items([rec.alts[i-1] for i in gt if not i==0])
-          svid = keep_unique_items([rec.info["ID"][i-1] for i in gt if not i==0])
-          if len(alts) == 0:
-            rec.id = rec.info["ID"][0]
-            vcf_out.write(rec)
-          elif len(alts)==1:
-            rec.alts = (alts[0],)
-            rec.id = svid[0]
-            rec.samples[sample_id]["GT"] = [1 if i!=0 else 0 for i in rec.samples[sample_id]["GT"] ]
-            vcf_out.write(rec)
-          elif len(alts)==2:
-            rec.alts = (alts[0],)
-            rec.id = svid[0]
-            rec.samples[sample_id]["GT"] = (1,0)
-            vcf_out.write(rec)
-            rec.alts = (alts[1],)
-            rec.id = svid[1]
-            rec.samples[sample_id]["GT"] = (0,1)
-            vcf_out.write(rec)
-      else:
-        rec.id = rec.info["ID"][0]
-        vcf_out.write(rec)
-
-    fin.close()
-    vcf_out.close()
+    def split_multiallelic_to_biallelic(input_vcf, output_vcf):
+      vcf_in = pysam.VariantFile(input_vcf)
+      vcf_out = pysam.VariantFile(output_vcf, 'w', header=vcf_in.header)
+        for rec in vcf_in:
+            if len(rec.alts) <= 1:
+                vcf_out.write(rec)
+                continue
+            for alt_index, alt_allele in enumerate(rec.alts):
+                new_rec = rec
+                rec.alts = alts=(alt_allele,)
+                for sample in rec.samples:
+                    orig_gt = rec.samples[sample]["GT"]
+                    if orig_gt is None:
+                        new_rec.samples[sample]["GT"] = (None, None)
+                        continue
+                    # remap genotype to bi-allelic
+                    new_gt = []
+                    for allele in orig_gt:
+                        if allele == 0:
+                            new_gt.append(0)
+                        elif allele == alt_index + 1:
+                            new_gt.append(1)
+                        elif allele is None:
+                            new_gt.append(None)
+                        else:
+                            new_gt.append(0)  # non-matching ALT treated as REF
+                    new_rec.samples[sample]["GT"] = tuple(new_gt)
+                vcf_out.write(new_rec)
+        vcf_in.close()
+        vcf_out.close()
+    split_multiallelic_to_biallelic("~{vcf}", "~{prefix}.biallelic.vcf.gz")
 
     CODE
 
