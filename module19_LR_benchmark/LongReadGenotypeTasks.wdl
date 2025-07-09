@@ -538,7 +538,7 @@ task ConcatVcfs {
     tabix -p vcf merged.tmp.vcf.gz
 
     # Remove duplicates
-    bcftools norm -d all -Oz -o ~{outfile_prefix}.vcf.gz merged.tmp.vcf.gz
+    bcftools norm -d exact -Oz -o ~{outfile_prefix}.vcf.gz merged.tmp.vcf.gz
 
     # Index the final deduplicated VCF
     tabix -p vcf ~{outfile_prefix}.vcf.gz
