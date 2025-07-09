@@ -10,6 +10,7 @@ workflow MergeVcfsByChromosome {
     Array[String] sample_list
     Boolean convert_to_biallelic = false
     String sv_base_mini_docker
+    String sv_pipeline_base_docker
   }
 
 
@@ -29,7 +30,7 @@ workflow MergeVcfsByChromosome {
             vcf = input_vcfs[idx],
             vcf_idx = input_vcfs_idx[idx],
             sample = sample_list[idx],
-            sv_base_mini_docker = sv_base_mini_docker
+            sv_pipeline_base_docker = sv_pipeline_base_docker
         }
       }
 
@@ -229,7 +230,7 @@ task ConvertMultiToBiAllelic {
     File vcf                # input VCF (.vcf.gz)
     File vcf_idx
     String sample
-    String sv_base_mini_docker
+    String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -314,7 +315,7 @@ task ConvertMultiToBiAllelic {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
+    docker: sv_pipeline_base_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

@@ -12,6 +12,7 @@ workflow MergeVcfs {
     Boolean convert_to_biallelic = false
     String output_prefix 
     String sv_base_mini_docker
+    String sv_pipeline_base_docker
   }
 
 
@@ -36,7 +37,8 @@ workflow MergeVcfs {
           input_vcfs_idx = vcfs_idx,
           sample_list = sample_list,
           convert_to_biallelic = convert_to_biallelic,
-          sv_base_mini_docker = sv_base_mini_docker
+          sv_base_mini_docker = sv_base_mini_docker,
+          sv_pipeline_base_docker = sv_pipeline_base_docker
     }
   }
 
