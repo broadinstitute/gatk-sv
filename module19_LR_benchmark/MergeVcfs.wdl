@@ -7,7 +7,9 @@ workflow MergeVcfs {
   input {
     Array[File] input_vcfs     
     Array[File]? input_vcfs_idx
+    Array[String] sample_list
     Array[String] chromosomes    
+    Boolean convert_to_biallelic = false
     String output_prefix 
     String sv_base_mini_docker
   }
@@ -32,6 +34,8 @@ workflow MergeVcfs {
           chrom = chrom,
           input_vcfs = input_vcfs,
           input_vcfs_idx = vcfs_idx,
+          sample_list = sample_list,
+          convert_to_biallelic = convert_to_biallelic,
           sv_base_mini_docker = sv_base_mini_docker
     }
   }
