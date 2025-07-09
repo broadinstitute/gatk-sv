@@ -68,8 +68,7 @@ workflow MergeVcfsBySize {
         sample_ids = sample_list,
         chrom = chrom,
         reference_fai = reference_fai,
-        density_counter_py = density_counter_py,
-        Int max_records_per_chunk = 10000
+        density_counter_py = density_counter_py
     }
 
   }
