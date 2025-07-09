@@ -25,10 +25,11 @@ workflow MergeVcfsByChromosome {
 
       if(convert_to_biallelic){
         call ConvertMultiToBiAllelic {
-          vcf = input_vcfs[idx],
-          vcf_idx = input_vcfs_idx[idx],
-          sample = sample_list[idx],
-          sv_base_mini_docker = sv_base_mini_docker
+          input:
+            vcf = input_vcfs[idx],
+            vcf_idx = input_vcfs_idx[idx],
+            sample = sample_list[idx],
+            sv_base_mini_docker = sv_base_mini_docker
         }
       }
 
