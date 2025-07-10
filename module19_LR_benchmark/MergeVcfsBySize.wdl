@@ -191,6 +191,7 @@ task ConcatVcfs {
     Array[File] input_vcfs_idx
     String output_name
     String sv_base_mini_docker
+    Boolean sort_vcf = false
     RuntimeAttr? runtime_attr_override
   }
 
@@ -204,17 +205,23 @@ task ConcatVcfs {
   }
 
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
+  String out_prefix = basename(output_name, ".vcf.gz")
 
   command <<<
-    set -e
-    bcftools concat ~{sep=' ' input_vcfs} -Oz -o ~{output_name}
-    tabix -p vcf ~{output_name}
+    set -euo pipefail
+
+    bcftools concat ~{sep=' ' input_vcfs} -Oz -o tmp.vcf.gz
+    if [[ ~{sort_vcf} == "true" ]]; then
+      bcftools sort tmp.vcf.gz -Oz -o ~{output_name}
+    else
+      mv tmp.vcf.gz ~{output_name}
+
+    tabix -p vcf "~{output_name}"
   >>>
 
   output {
-    File output_vcf = output_name
-    File output_vcf_idx = "${output_name}.tbi"
+    File output_vcf = "~{output_name}"
+    File output_vcf_idx = "~{output_name}.tbi"
   }
 
   runtime {
