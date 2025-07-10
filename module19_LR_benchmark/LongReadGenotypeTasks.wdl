@@ -1792,9 +1792,9 @@ task IntegrateInheriByGQTable {
     set -euxo pipefail
 
     sed -e 's/$/\tSNV/' ~{inheri_gq_table_snv} > "~{family_id}.~{prefix}.inheri_by_gq.stat"
-    sed -e 's/$/\tIndel_sm/' ~{inheri_gq_table_indel_sm} > "~{family_id}.~{prefix}.inheri_by_gq.stat"
-    sed -e 's/$/\tIndel_lg/' ~{inheri_gq_table_indel_lg} > "~{family_id}.~{prefix}.inheri_by_gq.stat"
-    sed -e 's/$/\tSV/' ~{inheri_gq_table_sv} > "~{family_id}.~{prefix}.inheri_by_gq.stat"
+    sed -e 's/$/\tIndel_sm/' ~{inheri_gq_table_indel_sm} >> "~{family_id}.~{prefix}.inheri_by_gq.stat"
+    sed -e 's/$/\tIndel_lg/' ~{inheri_gq_table_indel_lg} >> "~{family_id}.~{prefix}.inheri_by_gq.stat"
+    sed -e 's/$/\tSV/' ~{inheri_gq_table_sv} >> "~{family_id}.~{prefix}.inheri_by_gq.stat"
 
   >>>
 
