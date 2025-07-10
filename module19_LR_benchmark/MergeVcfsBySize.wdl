@@ -211,12 +211,8 @@ task ConcatVcfs {
     set -euo pipefail
 
     bcftools concat ~{sep=' ' input_vcfs} -Oz -o tmp.vcf.gz
-    if [[ ~{sort_vcf} == "true" ]]; then
-      bcftools sort tmp.vcf.gz -Oz -o ~{output_name}
-    else
-      mv tmp.vcf.gz ~{output_name}
-
-    tabix -p vcf "~{output_name}"
+    bcftools sort tmp.vcf.gz -Oz -o ~{output_name}
+    tabix -p vcf ~{output_name}
   >>>
 
   output {
