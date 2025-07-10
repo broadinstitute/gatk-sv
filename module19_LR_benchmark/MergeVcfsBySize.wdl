@@ -75,7 +75,7 @@ workflow MergeVcfsBySize {
         sv_base_mini_docker = sv_base_mini_docker
     }
 
-    call ConcatVcfs as concat_sm_lg_variants {
+    call ConcatSortVcfs as concat_sm_lg_variants {
       input:
         input_vcfs = [merge_vcfs_by_chrom_sm.merged_vcf, merge_vcfs_by_chrom_lg.merged_vcf],
         input_vcfs_idx = [merge_vcfs_by_chrom_sm.merged_vcf_idx, merge_vcfs_by_chrom_lg.merged_vcf_tbi],
@@ -185,13 +185,12 @@ task MergeVcfs {
 }
 
 # Task 3: Concatenate per-chromosome VCFs
-task ConcatVcfs {
+task ConcatSortVcfs {
   input {
     Array[File] input_vcfs
     Array[File] input_vcfs_idx
     String output_name
     String sv_base_mini_docker
-    Boolean sort_vcf = false
     RuntimeAttr? runtime_attr_override
   }
 
@@ -212,6 +211,50 @@ task ConcatVcfs {
 
     bcftools concat ~{sep=' ' input_vcfs} -Oz -o tmp.vcf.gz
     bcftools sort tmp.vcf.gz -Oz -o ~{output_name}
+    tabix -p vcf ~{output_name}
+  >>>
+
+  output {
+    File output_vcf = "~{output_name}"
+    File output_vcf_idx = "~{output_name}.tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task ConcatVcfs {
+  input {
+    Array[File] input_vcfs
+    Array[File] input_vcfs_idx
+    String output_name
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 10,
+    disk_gb: ceil(10 + size(input_vcfs, "GB") * 2),
+    boot_disk_gb: 10,
+    preemptible_tries: 0,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  String out_prefix = basename(output_name, ".vcf.gz")
+
+  command <<<
+    set -euo pipefail
+
+    bcftools concat ~{sep=' ' input_vcfs} -Oz -o ~{output_name}
     tabix -p vcf ~{output_name}
   >>>
 
