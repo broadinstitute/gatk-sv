@@ -13,6 +13,8 @@ workflow ExtractTriosFromVCF {
     String prefix
     Boolean split_inheri_by_gq = true
     RuntimeAttr? runtime_attr_override
+    RuntimeAttr? runtime_attr_extract_trio_vcf
+    RuntimeAttr? runtime_attr_split_variants_by_size
     RuntimeAttr? runtime_attr_calcu_inheri_table_snv
     RuntimeAttr? runtime_attr_calcu_inheri_table_sv
     RuntimeAttr? runtime_attr_calcu_inheri_table_indel_sm
@@ -21,6 +23,8 @@ workflow ExtractTriosFromVCF {
     RuntimeAttr? runtime_attr_evaluate_inheri_by_gq_indel_sm
     RuntimeAttr? runtime_attr_evaluate_inheri_by_gq_indel_lg
     RuntimeAttr? runtime_attr_evaluate_inheri_by_gq_sv
+    RuntimeAttr? runtime_attr_integrate_inheri_by_gq_table
+    RuntimeAttr? runtime_attr_integrate_inheritance_table
   }
 
 
@@ -36,13 +40,15 @@ workflow ExtractTriosFromVCF {
         input_vcf = input_vcf,
         sample_file = WriteTrioSampleFile.sample_file,
         family_id = WriteTrioSampleFile.family_id,
-        docker_image = sv_pipeline_base_docker
+        docker_image = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_extract_trio_vcf
     }
 
     call LongReadGenotypeTasks.SplitVariantsBySize as SplitVariantsBySize {
       input:
         input_vcf = ExtractTrioVCF.output_vcf,
-        docker_image = sv_pipeline_base_docker
+        docker_image = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_split_variants_by_size
     }
 
     call LongReadGenotypeTasks.CalculateInheritanceTable as calcu_inheri_table_snv{
@@ -123,7 +129,8 @@ workflow ExtractTriosFromVCF {
           inheri_gq_table_sv = evaluate_inheri_by_gq_sv.inheri_by_GQ_stat,
           family_id = WriteTrioSampleFile.family_id,
           prefix   = prefix,
-          docker_image = sv_pipeline_base_docker
+          docker_image = sv_pipeline_base_docker,
+          runtime_attr_override = runtime_attr_integrate_inheri_by_gq_table
       }
     }
 
@@ -136,7 +143,8 @@ workflow ExtractTriosFromVCF {
         inheri_table_ref = inheri_table,
         family_id = WriteTrioSampleFile.family_id,
         prefix   = prefix,
-        docker_image = sv_pipeline_base_docker
+        docker_image = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_integrate_inheritance_table
     }    
 
 
