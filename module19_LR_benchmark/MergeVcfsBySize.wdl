@@ -75,19 +75,27 @@ workflow MergeVcfsBySize {
         sv_base_mini_docker = sv_base_mini_docker
     }
 
+    call ConcatVcfs as concat_sm_lg_variants {
+      input:
+        input_vcfs = [merge_vcfs_by_chrom_sm.merged_vcf, merge_vcfs_by_chrom_lg.merged_vcf],
+        input_vcfs_idx = [merge_vcfs_by_chrom_sm.merged_vcf_idx, merge_vcfs_by_chrom_lg.merged_vcf_tbi],
+        output_name = "~{chrom}.sm_lg_integrated.vcf.gz",
+        sv_base_mini_docker = sv_base_mini_docker
+    }
+
   }
 
-  call ConcatVcfs {
+  call ConcatVcfs as concat_across_contigs{
     input:
-      input_vcfs = merge_vcfs_by_chrom_sm.merged_vcf,
-      input_vcfs_idx = merge_vcfs_by_chrom_sm.merged_vcf_idx,
+      input_vcfs = concat_sm_lg_variants.output_vcf,
+      input_vcfs_idx = concat_sm_lg_variants.output_vcf_idx,
       output_name = "${output_prefix}.vcf.gz",
       sv_base_mini_docker = sv_base_mini_docker
   }
 
   output {
-    File final_merged_vcf = ConcatVcfs.output_vcf
-    File final_merged_vcf_index = ConcatVcfs.output_vcf_idx
+    File final_merged_vcf = concat_across_contigs.output_vcf
+    File final_merged_vcf_index = concat_across_contigs.output_vcf_idx
   }
 }
 
