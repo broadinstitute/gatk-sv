@@ -14,9 +14,9 @@ workflow MergeVcfsByChromosome {
   }
 
 
-    scatter (idx in range(length(input_vcfs))) {
+  scatter (idx in range(length(input_vcfs))) {
 
-      call ExtractChromosomeVcf {
+    call ExtractChromosomeVcf {
         input:
           input_vcf = input_vcfs[idx],
           input_vcf_idx = input_vcfs_idx[idx],
@@ -31,7 +31,6 @@ workflow MergeVcfsByChromosome {
         input_vcfs_idx = ExtractChromosomeVcf.output_vcf_idx,
         output_name = "${chrom}.vcf.gz",
         sv_base_mini_docker = sv_base_mini_docker
-
     }
 
     if(convert_to_biallelic){
@@ -253,8 +252,8 @@ task ConvertMultiToBiAllelic {
     import sys
 
     def split_multiallelic_to_biallelic(input_vcf, output_vcf):
-      vcf_in = pysam.VariantFile(input_vcf)
-      vcf_out = pysam.VariantFile(output_vcf, 'w', header=vcf_in.header)
+        vcf_in = pysam.VariantFile(input_vcf)
+        vcf_out = pysam.VariantFile(output_vcf, 'w', header=vcf_in.header)
         for rec in vcf_in:
             if len(rec.alts) <= 1:
                 vcf_out.write(rec)
@@ -282,6 +281,7 @@ task ConvertMultiToBiAllelic {
                 vcf_out.write(new_rec)
         vcf_in.close()
         vcf_out.close()
+
     split_multiallelic_to_biallelic("~{vcf}", "~{prefix}.biallelic.vcf.gz")
 
     CODE
