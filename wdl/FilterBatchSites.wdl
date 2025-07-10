@@ -14,6 +14,7 @@ workflow FilterBatchSites {
     File evidence_metrics
     File evidence_metrics_common
     String sv_pipeline_docker
+    Boolean? remove_wham
 
     # PlotSVCountsPerSample metrics
     Int N_IQR_cutoff_plotting = 6
@@ -36,6 +37,7 @@ workflow FilterBatchSites {
     input:
       metrics = evidence_metrics,
       batch = batch,
+      remove_wham = select_first([remove_wham, false]),
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_adjudicate
   }
@@ -98,6 +100,7 @@ task AdjudicateSV {
   input {
     File metrics
     String batch
+    Boolean remove_wham = false
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -120,7 +123,7 @@ task AdjudicateSV {
   command <<<
 
     set -euo pipefail
-    svtk adjudicate ~{metrics} ~{batch}.scores ~{batch}.cutoffs
+    svtk adjudicate ~{metrics} ~{batch}.scores ~{batch}.cutoffs ~{true="--remove-wham" false="" remove_wham}
     mkdir ~{batch}.RF_intermediate_files
     mv *_trainable.txt ~{batch}.RF_intermediate_files/
     mv *_testable.txt ~{batch}.RF_intermediate_files/

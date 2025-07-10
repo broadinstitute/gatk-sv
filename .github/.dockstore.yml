@@ -60,6 +60,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_modified_genotyping
       tags:
         - /.*/
 

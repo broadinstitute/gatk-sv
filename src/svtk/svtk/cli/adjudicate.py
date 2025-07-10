@@ -22,6 +22,8 @@ def main(argv):
                         help='Final variant scores.')
     parser.add_argument('cutoffs', type=argparse.FileType('w'),
                         help='Learned cutoffs.')
+    parser.add_argument('--remove-wham', action='store_true',
+                        help='Remove WHAM deletions from metrics table.')
 
     # Print help if no arguments specified
     if len(argv) == 0:
@@ -30,7 +32,7 @@ def main(argv):
     args = parser.parse_args(argv)
 
     metrics = pd.read_table(args.metrics)
-    scores, cutoffs = adjudicate_SV(metrics)
+    scores, cutoffs = adjudicate_SV(metrics, remove_wham=args.remove_wham)
     scores.to_csv(args.scores, index=False, sep='\t')
     cutoffs.to_csv(args.cutoffs, index=False, sep='\t')
 
