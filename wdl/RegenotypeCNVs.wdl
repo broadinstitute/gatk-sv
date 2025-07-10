@@ -541,17 +541,22 @@ task GetRegenotype {
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  command <<< 
-  set -euxo pipefail
+  command <<<
+    set -euxo pipefail
 
-  # Make BED from VCF
-  svtk vcf2bed ~{depth_genotyped_vcf} ~{Batch}.bed
+    # Inputs
+    n_samp=~{n_samples_cohort}
+    max_af=~{regeno_max_allele_freq}
+    min_count=~{regeno_allele_count_threshold}
 
-  # Filter regeno_raw_combined_depth to get only variants from this batch
-  fgrep "~{Batch}_" ~{regeno_raw_combined_depth} > ~{Batch}.origin.raw_combined_depth.bed
+    # svtk vcf2bed step
+    svtk vcf2bed ~{depth_genotyped_vcf} ~{Batch}.bed
 
-  # Run python script to do hashmap join, find missing, and filter on AF/AC
-  python3 <<CODE
+    # restrict to variants originating in this batch
+    fgrep "~{Batch}_" ~{regeno_raw_combined_depth} > ~{Batch}.origin.raw_combined_depth.bed
+
+    # Python script does the rest
+    python3 <<CODE
 import sys
 
 batch = "~{Batch}"
@@ -564,15 +569,14 @@ origin_file = f"{batch}.origin.raw_combined_depth.bed"
 sample_counts_file = "~{regeno_sample_counts_lookup}"
 
 # ------------------------------------------------------------------------------
-# Build variant maps with chr_start_end_svtype identifier
-
+# Build maps: identifier -> line fields
 def build_variant_map(filepath):
     variant_map = {}
     with open(filepath) as f:
         for line in f:
             if line.startswith("#") or not line.strip():
                 continue
-            fields = line.strip().split("\\t")
+            fields = line.strip().split('\t')
             identifier = "_".join(fields[0:3] + [fields[4]])
             variant_map[identifier] = fields
     return variant_map
@@ -581,20 +585,20 @@ bed_map = build_variant_map(bed_file)
 origin_map = build_variant_map(origin_file)
 
 # ------------------------------------------------------------------------------
-# Join on variant identifier
-
+# Mimic `join`: build lines like `identifier <bed fields> <origin samples>`
 joined_lines = []
 for var_id in bed_map:
     if var_id in origin_map:
-        joined_lines.append(bed_map[var_id] + origin_map[var_id][6:])
+        bed_fields = bed_map[var_id]
+        origin_samples = origin_map[var_id][5] if len(origin_map[var_id]) > 5 else ""
+        joined_lines.append([var_id] + bed_fields + [origin_samples])
 
 # ------------------------------------------------------------------------------
-# Find lost/gained samples after genotyping
-
+# Find missing or gained samples
 missing_variants = set()
 for line in joined_lines:
-    chrom, start, end, var, typ, samples_post, *rest = line[:7]
-    samples_pre = line[7] if len(line) > 7 else ""
+    line = line + [""] * (8 - len(line))
+    identifier, chrom, start, end, var, typ, samples_post, samples_pre = line[:8]
 
     post_set = set(samples_post.split(",")) if samples_post else set()
     pre_set = set(samples_pre.split(",")) if samples_pre else set()
@@ -607,31 +611,32 @@ for line in joined_lines:
             missing_variants.add((chrom, start, end, var, typ))
 
 # ------------------------------------------------------------------------------
-# Load sample counts lookup
-
+# Load sample counts file into lookup
 sample_counts = {}
 with open(sample_counts_file) as f:
     for line in f:
-        parts = line.strip().split("\\t")
+        parts = line.strip().split('\t')
         if len(parts) >= 8:
             var_id = parts[0]
             count = parts[7]
             sample_counts[var_id] = count
 
 # ------------------------------------------------------------------------------
-# Apply AF/AC filtering
+# Get a sample name from the BED
+sample = next((fields[5].split(",")[0] for fields in bed_map.values() if len(fields) > 5 and fields[5]), "NA")
 
-sample = next((fields[5].split(",")[0] for fields in bed_map.values() if fields[5]), "NA")
-
+# ------------------------------------------------------------------------------
+# Apply AF / AC filter and write output
 with open(f"{batch}.to_regeno.bed", "w") as out:
     for chrom, start, end, var, typ in sorted(missing_variants):
-        var_id = f"{var}:"
-        num = int(sample_counts.get(var_id, 0))
+        var_lookup = f"{var}:"
+        num = int(sample_counts.get(var_lookup, 0))
         af = num / n_samples_cohort if n_samples_cohort else 0
         if af < max_af or num <= min_count:
-            out.write(f"{chrom}\\t{start}\\t{end}\\t{var}\\t{sample}\\t{typ}\\n")
+            out.write(f"{chrom}\t{start}\t{end}\t{var}\t{sample}\t{typ}\n")
 CODE
 >>>
+
   output {
     File regeno_bed="~{Batch}.to_regeno.bed"
   }
