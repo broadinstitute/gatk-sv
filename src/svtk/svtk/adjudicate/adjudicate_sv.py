@@ -78,11 +78,18 @@ def adjudicate_BAF2(metrics):
     return cutoffs
 
 
-def adjudicate_SR1(metrics):
+def adjudicate_SR1(metrics, remove_wham=False):
     testable = metrics.loc[~metrics.name.str.contains('_depth_')].copy()
     trainable = testable.loc[(testable.poor_region_cov < 0.3) &
                              ~testable.chrom.isin(ALLOSOMES) &
                              ~testable.is_outlier_specific].copy()
+
+    # Optionally filter out Wham deletions
+    if remove_wham:
+        wham_del_mask = (metrics['svtype'] == 'DEL') & metrics['name'].str.contains('wham', case=False, na=False)
+        trainable = trainable[~wham_del_mask].copy()
+        testable = testable[~wham_del_mask].copy()
+
     features = ['SR_sum_log_pval', 'SR_sum_bg_frac']
     cutoffs = {'indep': ['SR_sum_log_pval'], 'dep': ['SR_sum_bg_frac']}
     labeler = labelers.SR1TrainingLabeler()
@@ -332,11 +339,6 @@ def adjudicate_SV(metrics, remove_wham=False):
     if 'chrom' not in metrics.columns:
         metrics['chrom'] = metrics.name.str.split('_').str[-2]
 
-    # Optionally filter out Wham deletions
-    if remove_wham:
-        wham_del_mask = (metrics['svtype'] == 'DEL') & metrics['name'].str.contains('wham', case=False, na=False)
-        metrics = metrics[~wham_del_mask].copy()
-
     # Remove PE metrics from Manta insertions
     PE_cols = [c for c in metrics.columns if c.startswith('PE_')]
     for col in PE_cols:
@@ -346,7 +348,7 @@ def adjudicate_SV(metrics, remove_wham=False):
     sys.stderr.write('Adjudicating BAF (1)...\n')
     cutoffs[0] = adjudicate_BAF1(metrics)
     sys.stderr.write('Adjudicating SR (1)...\n')
-    cutoffs[1] = adjudicate_SR1(metrics)
+    cutoffs[1] = adjudicate_SR1(metrics, remove_wham)
     sys.stderr.write('Adjudicating RD...\n')
     cutoffs[2] = adjudicate_RD(metrics)
     sys.stderr.write('Adjudicating PE...\n')
