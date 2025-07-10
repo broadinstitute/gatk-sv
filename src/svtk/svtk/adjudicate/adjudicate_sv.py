@@ -332,7 +332,7 @@ def adjudicate_SV(metrics, remove_wham=False):
     if 'chrom' not in metrics.columns:
         metrics['chrom'] = metrics.name.str.split('_').str[-2]
 
-    # Filter out WHAM deletions if requested
+    # Optionally filter out Wham deletions
     if remove_wham:
         wham_del_mask = (metrics['svtype'] == 'DEL') & metrics['name'].str.contains('wham', case=False, na=False)
         metrics = metrics[~wham_del_mask].copy()
