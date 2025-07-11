@@ -1476,7 +1476,7 @@ task SplitVcfToSites {
 
   output {
     File vcf_sites = "~{prefix}.sites.gz"
-    File vcf_idx =  "~{prefix}.sites.gz.tbi"
+    File vcf_sites_idx =  "~{prefix}.sites.gz.tbi"
   }
 
   RuntimeAttr default_attr = object {

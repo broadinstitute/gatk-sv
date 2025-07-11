@@ -41,21 +41,19 @@ workflow BenchmarkVcfSitesPerContig{
       docker_image = sv_base_mini_docker
   }
 
-
   call LongReadGenotypeTasks.AddDummyGT as add_dummy_gt_query{
     input:
       sites_file = split_query_vcf_into_sites.vcf_sites,
-      sites_idx  = split_query_vcf_into_sites.vcf_idx,
+      sites_idx  = split_query_vcf_into_sites.vcf_sites_idx,
       docker_image   = sv_pipeline_base_docker
   }
 
   call LongReadGenotypeTasks.AddDummyGT as add_dummy_gt_ref{
     input:
       sites_file = split_ref_vcf_into_sites.vcf_sites,
-      sites_idx  = split_ref_vcf_into_sites.vcf_idx,
+      sites_idx  = split_ref_vcf_into_sites.vcf_sites_idx,
       docker_image   = sv_pipeline_base_docker
   }
-
 
   call LongReadGenotypeTasks.SplitVariantsBySizeAt20bp as split_query{
     input:
