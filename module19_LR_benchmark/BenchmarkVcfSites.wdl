@@ -96,7 +96,6 @@ workflow BenchmarkVcfSites{
         fp_ref = combine_vcfs_fp_ref.concat_vcf,
         docker_image = sv_pipeline_base_docker
       }
-    }
 
   output {
     Array[File] tp_query = combine_vcfs_tp_query.concat_vcf  
