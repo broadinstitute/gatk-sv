@@ -1025,6 +1025,7 @@ task filter_vcf_by_intersection {
     File vcf_file
     File vcf_idx
     File vcf_file_b
+    String docker_image
     RuntimeAttr? runtime_attr_override
   }
 
