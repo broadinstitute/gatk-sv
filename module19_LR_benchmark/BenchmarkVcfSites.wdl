@@ -118,12 +118,12 @@ workflow BenchmarkVcfSites{
       }
 
   output {
-    Array[File] tp_query = combine_vcfs_tp_query.concat_vcf  
-    Array[File] tp_ref = combine_vcfs_tp_ref.concat_vcf
-    Array[File] fp_query = combine_vcfs_fp_query.concat_vcf  
-    Array[File] fp_ref = combine_vcfs_fp_ref.concat_vcf
-    Array[File] benchmark_stat = plot_comp_results.stat
-    Array[File] benchmark_figure = plot_comp_results.figure
+    File tp_query = combine_vcfs_tp_query.concat_vcf  
+    File tp_ref = combine_vcfs_tp_ref.concat_vcf
+    File fp_query = combine_vcfs_fp_query.concat_vcf  
+    File fp_ref = combine_vcfs_fp_ref.concat_vcf
+    File benchmark_stat = plot_comp_results.stat
+    File benchmark_figure = plot_comp_results.figure
   }
 
 }
