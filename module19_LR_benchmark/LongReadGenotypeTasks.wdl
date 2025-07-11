@@ -1040,7 +1040,7 @@ task filter_vcf_by_intersection {
 
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  String prefix = basename(~{vcf_file}, 'vcf.gz')
+  String prefix = basename(vcf_file, "vcf.gz")
 
   command <<<
     set -euo pipefail
