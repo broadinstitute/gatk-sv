@@ -2,6 +2,71 @@ version 1.0
 
 import "Structs.wdl"
 
+task AddDummyGT {
+  input {
+    File sites_file         # Input VCF file (bgzipped or plain)
+    File sites_idx
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String prefix = basename(sites_file,'.sites.gz')
+
+  command <<<
+    set -e
+
+    python3 <<CODE
+
+    import pysam
+    import sys
+
+    def add_dummy_sample(input_vcf, output_vcf, dummy_name="DUMMY"):
+        vcf_in = pysam.VariantFile(input_vcf)
+        vcf_in.header.add_sample(dummy_name)
+
+        vcf_out = pysam.VariantFile(output_vcf, "w", header=vcf_in.header)
+
+        for rec in vcf_in:
+            rec.samples[dummy_name]["GT"] = (0, 1)
+            vcf_out.write(rec)
+
+        vcf_in.close()
+        vcf_out.close()
+        
+        add_dummy_sample("~{sites_file}", "~{prefix}.with_dummy_gt.vcf.gz")
+
+    CODE
+
+    tabix -p vcf  "~{prefix}.with_dummy_gt.vcf.gz")
+  >>>
+
+  output {
+    File vcf_file = "~{prefix}.with_dummy_gt.vcf.gz"
+    File vcf_idx = "~{prefix}.with_dummy_gt.vcf.gz.tbi"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 10 + ceil(size(sites_file, "GiB")*2),
+    disk_gb: 15 + ceil(size(sites_file, "GiB")*2),
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }}
+
+
 task AnnotateGenomicContext {
   input {
     File variant_sites
@@ -1373,6 +1438,51 @@ task SplitVcfByAnnotationR {
     cpu_cores: 1,
     mem_gb: 10 + ceil(size(vcf_file, "GiB")*5),
     disk_gb: 15 + ceil(size(vcf_file, "GiB")*5),
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task SplitVcfToSites {
+  input {
+    File vcf_file         # Input VCF file (bgzipped or plain)
+    File vcf_idx
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String prefix = basename(vcf_file,'.vcf.gz')
+
+  command <<<
+    set -e
+
+    zcat ~{vcf_file} | cut -f1-8 | bgzip > "~{prefix}.sites.gz"
+    tabix -p vcf "~{prefix}.sites.gz"
+
+  >>>
+
+  output {
+    File vcf_sites = "~{prefix}.sites.gz"
+    File vcf_idx =  "~{prefix}.sites.gz.tbi"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 10 + ceil(size(vcf_file, "GiB")*2),
+    disk_gb: 15 + ceil(size(vcf_file, "GiB")*2),
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1

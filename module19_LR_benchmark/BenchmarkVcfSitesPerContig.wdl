@@ -27,15 +27,47 @@ workflow BenchmarkVcfSitesPerContig{
   String prefix_query = basename(query_vcf,'.vcf.gz')
   String prefix_ref = basename(ref_vcf,'.vcf.gz')
 
+  call LongReadGenotypeTasks.SplitVcfToSites as split_query_vcf_into_sites{
+    input:
+      vcf_file = query_vcf,
+      vcf_idx = query_vcf_idx,
+      docker_image = sv_base_mini_docker
+  }
+
+  call LongReadGenotypeTasks.SplitVcfToSites as split_ref_vcf_into_sites{
+    input:
+      vcf_file = ref_vcf,
+      vcf_idx = ref_vcf_idx,
+      docker_image = sv_base_mini_docker
+  }
+
+
+  call LongReadGenotypeTasks.AddDummyGT as add_dummy_gt_query{
+    input:
+      sites_file = split_query_vcf_into_sites.vcf_sites,
+      sites_idx  = split_query_vcf_into_sites.vcf_idx,
+      docker_image   = sv_pipeline_base_docker
+  }
+
+  call LongReadGenotypeTasks.AddDummyGT as add_dummy_gt_ref{
+    input:
+      sites_file = split_ref_vcf_into_sites.vcf_sites,
+      sites_idx  = split_ref_vcf_into_sites.vcf_idx,
+      docker_image   = sv_pipeline_base_docker
+  }
+
+
   call LongReadGenotypeTasks.SplitVariantsBySizeAt20bp as split_query{
-      input_vcf = query_vcf,
-      input_vcf_idx  = query_vcf_idx, 
+    input:
+      input_vcf = add_dummy_gt_query.vcf_file,
+      input_vcf_idx  = add_dummy_gt_query.vcf_idx, 
       docker_image   = sv_pipeline_base_docker
     }
 
   call LongReadGenotypeTasks.SplitVariantsBySizeAt20bp as split_ref{
-      input_vcf = ref_vcf,
-      input_vcf_idx  = ref_vcf_idx, 
+    input:
+      input_vcf = add_dummy_gt_ref.vcf_file,
+      input_vcf_idx  = add_dummy_gt_ref.vcf_idx, 
       docker_image   = sv_pipeline_base_docker
     }
     
