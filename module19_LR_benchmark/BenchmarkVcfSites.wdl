@@ -15,6 +15,16 @@ workflow BenchmarkVcfSites{
 
         File ref_dict
 
+        File anno_script_bash
+        File anno_script_helper_R
+        File benchmark_script_bash
+        File banchmark_script_helper_R
+
+        File repeat_mask
+        File simple_repeats
+        File segmental_duplicates
+
+
         Boolean short_read_benchmark = false
 
         String? truvari_params
@@ -54,6 +64,16 @@ workflow BenchmarkVcfSites{
                 chromosome = chromosomes[index],
                 ref_dict = ref_dict,
                 short_read_benchmark = false,
+
+                anno_script_bash = anno_script_bash,
+                anno_script_helper_R = anno_script_helper_R,
+                benchmark_script_bash = benchmark_script_bash,
+                banchmark_script_helper_R = banchmark_script_helper_R,
+
+                repeat_mask = repeat_mask,
+                simple_repeats = simple_repeats,
+                segmental_duplicates = segmental_duplicates,
+
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_base_docker = sv_pipeline_base_docker
           }

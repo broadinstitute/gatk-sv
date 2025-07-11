@@ -17,6 +17,15 @@ workflow BenchmarkVcfSitesPerContig{
     String chromosome
     File ref_dict
 
+    File anno_script_bash
+    File anno_script_helper_R
+    File benchmark_script_bash
+    File banchmark_script_helper_R
+
+    File repeat_mask
+    File simple_repeats
+    File segmental_duplicates
+
     Boolean short_read_benchmark = false
 
     String? truvari_params
@@ -114,6 +123,41 @@ workflow BenchmarkVcfSitesPerContig{
       vcfs = [truvari_bench_lt_20bp.fn_vcf,  truvari_bench_gt_20bp.fn_vcf],
       outfile_prefix  = "~{prefix_query}.ref_fp",
       sv_base_mini_docker = sv_base_mini_docker
+  }
+
+  call LongReadGenotypeTasks.ExtractVariantSites as extract_variant_sites_query{
+    input:
+      input_vcf = add_dummy_gt_query.vcf_file,
+      docker_image = sv_pipeline_base_docker
+  }
+
+  call LongReadGenotypeTasks.ExtractVariantSites as extract_variant_sites_ref{
+    input:
+      input_vcf = add_dummy_gt_ref.vcf_file,
+      docker_image = sv_pipeline_base_docker
+  }
+
+
+  call LongReadGenotypeTasks.AnnotateGenomicContext as annotate_genomic_context_query{
+    input:
+      variant_sites = extract_variant_sites_query.variant_sites,
+      anno_script_bash = anno_script_bash,
+      anno_script_Rscript = anno_script_helper_R,
+      repeat_mask = repeat_mask,
+      simple_repeats = simple_repeats,
+      segmental_duplicates = segmental_duplicates,
+      docker_image = sv_pipeline_base_docker
+  }
+
+  call LongReadGenotypeTasks.AnnotateGenomicContext as annotate_genomic_context_ref{
+    input:
+      variant_sites = extract_variant_sites_ref.variant_sites,
+      anno_script_bash = anno_script_bash,
+      anno_script_Rscript = anno_script_helper_R,
+      repeat_mask = repeat_mask,
+      simple_repeats = simple_repeats,
+      segmental_duplicates = segmental_duplicates,
+      docker_image = sv_pipeline_base_docker
   }
 
   call LongReadGenotypeTasks.AddGenomicContextToVcfR as add_genomic_context_query_tp{
