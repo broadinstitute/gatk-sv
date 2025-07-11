@@ -60,7 +60,7 @@ workflow BenchmarkVcfSitesPerContig{
       input_vcf = add_dummy_gt_query.vcf_file,
       input_vcf_idx  = add_dummy_gt_query.vcf_idx, 
       docker_image   = sv_pipeline_base_docker
-    }
+  }
 
   call LongReadGenotypeTasks.SplitVariantsBySizeAt20bp as split_ref{
     input:
@@ -70,79 +70,78 @@ workflow BenchmarkVcfSitesPerContig{
     }
     
 
-    call LongReadGenotypeTasks.BenchmarkSNVs as truvari_bench_lt_20bp{
-      input:
-          comp_vcf = split_query.indels_lt_20_vcf,
-          base_vcf = split_ref.indels_lt_20_vcf,
-          prefix = "~{chromosome}.lt_20bp",
-          docker_image = sv_pipeline_base_docker
-    }
+  call LongReadGenotypeTasks.BenchmarkSNVs as truvari_bench_lt_20bp{
+    input:
+        comp_vcf = split_query.indels_lt_20_vcf,
+        base_vcf = split_ref.indels_lt_20_vcf,
+        prefix = "~{chromosome}.lt_20bp",
+        docker_image = sv_pipeline_base_docker
+  }
 
-    call TruvariBench.CallTruvariBench as truvari_bench_gt_20bp{
-      input:
-          chromosomes = [chromosome],
-          comp_vcf  = split_query.svs_gt_20_vcf,
-          truth_vcf = split_ref.svs_gt_20_vcf,
-          prefix = "~{chromosome}.gt_20bp",
-          ref_dict = ref_dict, 
-          truvari_params = "-s 10 -S 10"
-    }
+  call TruvariBench.CallTruvariBench as truvari_bench_gt_20bp{
+    input:
+        chromosomes = [chromosome],
+        comp_vcf  = split_query.svs_gt_20_vcf,
+        truth_vcf = split_ref.svs_gt_20_vcf,
+        prefix = "~{chromosome}.gt_20bp",
+        ref_dict = ref_dict, 
+        truvari_params = "-s 10 -S 10"
+  }
 
-    call LongReadGenotypeTasks.ConcatVcfs as merge_tp_query{
-      input:
-        vcfs = [truvari_bench_lt_20bp.tp_comp_vcf, truvari_bench_gt_20bp.tp_comp_vcf],
-        outfile_prefix  = "~{prefix_query}.query_tp",
-        sv_base_mini_docker = sv_base_mini_docker
-    }
+  call LongReadGenotypeTasks.ConcatVcfs as merge_tp_query{
+    input:
+      vcfs = [truvari_bench_lt_20bp.tp_comp_vcf, truvari_bench_gt_20bp.tp_comp_vcf],
+      outfile_prefix  = "~{prefix_query}.query_tp",
+      sv_base_mini_docker = sv_base_mini_docker
+  }
 
-    call LongReadGenotypeTasks.ConcatVcfs as merge_tp_ref{
-      input:
-        vcfs = [truvari_bench_lt_20bp.tp_base_vcf,  truvari_bench_gt_20bp.tp_base_vcf],
-        outfile_prefix  = "~{prefix_query}.ref_tp",
-        sv_base_mini_docker = sv_base_mini_docker
-    }
+  call LongReadGenotypeTasks.ConcatVcfs as merge_tp_ref{
+    input:
+      vcfs = [truvari_bench_lt_20bp.tp_base_vcf,  truvari_bench_gt_20bp.tp_base_vcf],
+      outfile_prefix  = "~{prefix_query}.ref_tp",
+      sv_base_mini_docker = sv_base_mini_docker
+  }
 
-    call LongReadGenotypeTasks.ConcatVcfs as merge_fp_query{
-      input:
-        vcfs = [truvari_bench_lt_20bp.fp_vcf, truvari_bench_gt_20bp.fp_vcf],
-        outfile_prefix  = "~{prefix_query}.query_fp",
-        sv_base_mini_docker = sv_base_mini_docker
-    }
+  call LongReadGenotypeTasks.ConcatVcfs as merge_fp_query{
+    input:
+      vcfs = [truvari_bench_lt_20bp.fp_vcf, truvari_bench_gt_20bp.fp_vcf],
+      outfile_prefix  = "~{prefix_query}.query_fp",
+      sv_base_mini_docker = sv_base_mini_docker
+  }
 
-    call LongReadGenotypeTasks.ConcatVcfs as merge_fp_ref{
-      input:
-        vcfs = [truvari_bench_lt_20bp.fn_vcf,  truvari_bench_gt_20bp.fn_vcf],
-        outfile_prefix  = "~{prefix_query}.ref_fp",
-        sv_base_mini_docker = sv_base_mini_docker
-    }
+  call LongReadGenotypeTasks.ConcatVcfs as merge_fp_ref{
+    input:
+      vcfs = [truvari_bench_lt_20bp.fn_vcf,  truvari_bench_gt_20bp.fn_vcf],
+      outfile_prefix  = "~{prefix_query}.ref_fp",
+      sv_base_mini_docker = sv_base_mini_docker
+  }
 
-    call LongReadGenotypeTasks.AddGenomicContextToVcfR as add_genomic_context_query_tp{
-      input:
-          vcf_file = merge_tp_query.concat_vcf,
-          svid_annotation = annotate_genomic_context_query.variant_anno,
-          docker_image = sv_pipeline_base_docker
-    }
+  call LongReadGenotypeTasks.AddGenomicContextToVcfR as add_genomic_context_query_tp{
+    input:
+        vcf_file = merge_tp_query.concat_vcf,
+        svid_annotation = annotate_genomic_context_query.variant_anno,
+        docker_image = sv_pipeline_base_docker
+  }
 
-    call LongReadGenotypeTasks.AddGenomicContextToVcfR as add_genomic_context_ref_tp{
-      input:
-          vcf_file = merge_tp_ref.concat_vcf,
-          svid_annotation = annotate_genomic_context_ref.variant_anno,
-          docker_image = sv_pipeline_base_docker
-    }
+  call LongReadGenotypeTasks.AddGenomicContextToVcfR as add_genomic_context_ref_tp{
+    input:
+        vcf_file = merge_tp_ref.concat_vcf,
+        svid_annotation = annotate_genomic_context_ref.variant_anno,
+        docker_image = sv_pipeline_base_docker
+  }
 
-    call LongReadGenotypeTasks.AddGenomicContextToVcfR as add_genomic_context_query_fp{
-      input:
-          vcf_file = merge_fp_query.concat_vcf,
-          svid_annotation = annotate_genomic_context_query.variant_anno,
-          docker_image = sv_pipeline_base_docker
-    }
+  call LongReadGenotypeTasks.AddGenomicContextToVcfR as add_genomic_context_query_fp{
+    input:
+        vcf_file = merge_fp_query.concat_vcf,
+        svid_annotation = annotate_genomic_context_query.variant_anno,
+        docker_image = sv_pipeline_base_docker
+  }
 
-    call LongReadGenotypeTasks.AddGenomicContextToVcfR as add_genomic_context_ref_fp{
-      input:
-          vcf_file = merge_fp_ref.concat_vcf,
-          svid_annotation = annotate_genomic_context_ref.variant_anno,
-          docker_image = sv_pipeline_base_docker
-    }
+  call LongReadGenotypeTasks.AddGenomicContextToVcfR as add_genomic_context_ref_fp{
+    input:
+        vcf_file = merge_fp_ref.concat_vcf,
+        svid_annotation = annotate_genomic_context_ref.variant_anno,
+        docker_image = sv_pipeline_base_docker
   }
 
   output {
