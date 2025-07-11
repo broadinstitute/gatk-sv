@@ -189,10 +189,10 @@ workflow BenchmarkVcfSitesPerContig{
   }
 
   output {
-    Array[File] tp_query = add_genomic_context_query_tp.annotated_vcf  
-    Array[File] tp_ref = add_genomic_context_ref_tp.annotated_vcf
-    Array[File] fp_query = add_genomic_context_query_fp.annotated_vcf  
-    Array[File] fp_ref = add_genomic_context_ref_fp.annotated_vcf
+    File tp_query = add_genomic_context_query_tp.annotated_vcf  
+    File tp_ref = add_genomic_context_ref_tp.annotated_vcf
+    File fp_query = add_genomic_context_query_fp.annotated_vcf  
+    File fp_ref = add_genomic_context_ref_fp.annotated_vcf
   }
 }
 
