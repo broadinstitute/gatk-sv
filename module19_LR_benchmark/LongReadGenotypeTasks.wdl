@@ -1046,13 +1046,13 @@ task filter_vcf_by_intersection {
     set -euo pipefail
 
     # Write Python script
-    cat << 'EOF' > filter_vcf.py
+    python3 <<CODE
     import sys
     import pysam
 
-    vcf_a_path = sys.argv[1]
-    vcf_b_path = sys.argv[2]
-    output_path = sys.argv[3]
+    vcf_a_path = "~{vcf_file}"
+    vcf_b_path = "~{vcf_file_b}"
+    output_path = "~{prefix}.filtered.vcf.gz"
 
     def variant_key(record):
         return (record.contig, record.pos, record.id, record.ref, tuple(record.alts))
@@ -1072,9 +1072,9 @@ task filter_vcf_by_intersection {
 
     vcf_a.close()
     vcf_out.close()
-    EOF
+    
+    CODE
 
-    python3 filter_vcf.py ~{vcf_file} ~{vcf_file_b} "~{prefix}.filtered.vcf.gz"
     tabix -p vcf "~{prefix}.filtered.vcf.gz"
   >>>
 
