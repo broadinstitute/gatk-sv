@@ -15,29 +15,16 @@ task AddDummyGT {
   command <<<
     set -e
 
-    python3 <<CODE
-
-    import pysam
-    import sys
-
-    def add_dummy_sample(input_vcf, output_vcf, dummy_name="DUMMY"):
-        vcf_in = pysam.VariantFile(input_vcf)
-        vcf_in.header.add_sample(dummy_name)
-
-        vcf_out = pysam.VariantFile(output_vcf, "w", header=vcf_in.header)
-
-        for rec in vcf_in:
-            rec.samples[dummy_name]["GT"] = (0, 1)
-            vcf_out.write(rec)
-
-        vcf_in.close()
-        vcf_out.close()
-        
-        add_dummy_sample("~{sites_file}", "~{prefix}.with_dummy_gt.vcf.gz")
-
-    CODE
-
+    #take out vcf header
+    bcftools view -h ~{sites_file} > header.tmp
+    #revise to add sample column
+    head -n $(($(wc -l < header.tmp) - 1)) header.tmp > header.vcf
+    tail -n 1 header.tmp | sed -e 's/$/\tFORMAT\tDUMMY/' >> header.vcf
+    bcftools view -H ~{sites_file} | sed -e 's/$/\tGT\t0|1/' >> header.vcf
+    bgzip header.vcf 
+    mv header.vcf.gz "~{prefix}.with_dummy_gt.vcf.gz"
     tabix -p vcf  "~{prefix}.with_dummy_gt.vcf.gz")
+
   >>>
 
   output {
@@ -1021,6 +1008,80 @@ task ExtractChromosomeVariants {
   }
 
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task filter_vcf_by_intersection {
+  input {
+    File vcf_file
+    File vcf_idx
+    File vcf_file_b
+    RuntimeAttr? runtime_attr_override
+  }
+
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb:  10 + ceil(size(vcf_file,"GiB") + size(vcf_file_b, "GiB"))*4,
+    disk_gb: 20 + ceil(size(vcf_file,"GiB") + size(vcf_file_b, "GiB"))*4,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  String prefix = basename(~{vcf_file}, 'vcf.gz')
+
+  command <<<
+    set -euo pipefail
+
+    # Write Python script
+    cat << 'EOF' > filter_vcf.py
+import sys
+import pysam
+
+vcf_a_path = sys.argv[1]
+vcf_b_path = sys.argv[2]
+output_path = sys.argv[3]
+
+def variant_key(record):
+    return (record.contig, record.pos, record.id, record.ref, tuple(record.alts))
+
+# Load B into set
+vcf_b = pysam.VariantFile(vcf_b_path)
+b_variants = set(variant_key(rec) for rec in vcf_b)
+vcf_b.close()
+
+# Filter A
+vcf_a = pysam.VariantFile(vcf_a_path)
+vcf_out = pysam.VariantFile(output_path, "w", header=vcf_a.header)
+
+for rec in vcf_a:
+    if variant_key(rec) in b_variants:
+        vcf_out.write(rec)
+
+vcf_a.close()
+vcf_out.close()
+EOF
+
+    python3 filter_vcf.py ~{vcf_file} ~{vcf_file_b} "~{prefix}.filtered.vcf.gz"
+    tabix -p vcf "~{prefix}.filtered.vcf.gz"
+  >>>
+
+  output {
+    File filtered_vcf = "~{prefix}.filtered.vcf.gz"
+    File filtered_vcf_idx = "~{prefix}.filtered.vcf.gz.tbi"
+  }
 
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
