@@ -1047,32 +1047,32 @@ task filter_vcf_by_intersection {
 
     # Write Python script
     cat << 'EOF' > filter_vcf.py
-import sys
-import pysam
+    import sys
+    import pysam
 
-vcf_a_path = sys.argv[1]
-vcf_b_path = sys.argv[2]
-output_path = sys.argv[3]
+    vcf_a_path = sys.argv[1]
+    vcf_b_path = sys.argv[2]
+    output_path = sys.argv[3]
 
-def variant_key(record):
-    return (record.contig, record.pos, record.id, record.ref, tuple(record.alts))
+    def variant_key(record):
+        return (record.contig, record.pos, record.id, record.ref, tuple(record.alts))
 
-# Load B into set
-vcf_b = pysam.VariantFile(vcf_b_path)
-b_variants = set(variant_key(rec) for rec in vcf_b)
-vcf_b.close()
+    # Load B into set
+    vcf_b = pysam.VariantFile(vcf_b_path)
+    b_variants = set(variant_key(rec) for rec in vcf_b)
+    vcf_b.close()
 
-# Filter A
-vcf_a = pysam.VariantFile(vcf_a_path)
-vcf_out = pysam.VariantFile(output_path, "w", header=vcf_a.header)
+    # Filter A
+    vcf_a = pysam.VariantFile(vcf_a_path)
+    vcf_out = pysam.VariantFile(output_path, "w", header=vcf_a.header)
 
-for rec in vcf_a:
-    if variant_key(rec) in b_variants:
-        vcf_out.write(rec)
+    for rec in vcf_a:
+        if variant_key(rec) in b_variants:
+            vcf_out.write(rec)
 
-vcf_a.close()
-vcf_out.close()
-EOF
+    vcf_a.close()
+    vcf_out.close()
+    EOF
 
     python3 filter_vcf.py ~{vcf_file} ~{vcf_file_b} "~{prefix}.filtered.vcf.gz"
     tabix -p vcf "~{prefix}.filtered.vcf.gz"
