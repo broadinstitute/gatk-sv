@@ -1216,7 +1216,7 @@ task CalcuCompStat{
   }
 }
 
-task PlotCompResults{
+task CalcuPlotCompResults{
   input {
     File tp_query 
     File tp_ref
@@ -1408,6 +1408,110 @@ task PlotCompResults{
   output {
     File figure = "~{prefix}.pdf"
     File stat = "~{prefix}.stat"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 20 + ceil(size(tp_query,"GiB") + size(tp_ref,"GiB") + size(fp_query,"GiB") + size(fp_ref,"GiB"))*2,
+    disk_gb: 25 + ceil(size(tp_query,"GiB") + size(tp_ref,"GiB") + size(fp_query,"GiB") + size(fp_ref,"GiB"))*2,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task PlotCompResults{
+  input {
+    File comp_stat
+
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String prefix = basename(comp_stat, ".stat")
+
+  command <<<
+    set -e
+
+    Rscript -e '
+
+    add_ovr_bar.US_RM<-function(query_vs_ref.stat,size_range, svtype, y_axis){
+      rec_width = .3
+      rect(-1,y_axis - rec_width, 1, y_axis+rec_width, col=colorBlindGrey8[1])
+      snv_usrm = colSums(query_vs_ref.stat[query_vs_ref.stat$SizeRange==size_range & query_vs_ref.stat$SVTYPE==svtype & query_vs_ref.stat$Genomic_Context%in%c("US","RM"),c(4:7)])
+      rect(-snv_usrm[2]/sum(snv_usrm[c(1,2)]),y_axis - rec_width, snv_usrm[4]/sum(snv_usrm[c(3,4)]), y_axis+rec_width, col=colorBlindGrey8[2])
+      text(-1.2, y_axis+rec_width, format(sum(snv_usrm[c(1,2)]), big.mark = ","), adj=c(0,0))
+      text(1.2, y_axis+rec_width, format(sum(snv_usrm[c(3,4)]), big.mark = ","), adj=c(1,0))
+    }
+
+    add_ovr_bar.SD_SR<-function(query_vs_ref.stat,size_range, svtype, y_axis){
+      rec_width = .3
+      rect(-1,y_axis - rec_width, 1, y_axis+rec_width, col=colorBlindGrey8[1])
+      snv_usrm = colSums(query_vs_ref.stat[query_vs_ref.stat$SizeRange==size_range & query_vs_ref.stat$SVTYPE==svtype & query_vs_ref.stat$Genomic_Context%in%c("SD","SR"),c(4:7)])
+      rect(-snv_usrm[2]/sum(snv_usrm[c(1,2)]),y_axis - rec_width, snv_usrm[4]/sum(snv_usrm[c(3,4)]), y_axis+rec_width, col=colorBlindGrey8[2])
+      text(-1.2, y_axis+rec_width, format(sum(snv_usrm[c(1,2)]), big.mark = ","), adj=c(0,0))
+      text(1.2, y_axis+rec_width, format(sum(snv_usrm[c(3,4)]), big.mark = ","), adj=c(1,0))
+    }
+
+    plot_ovr_bar<-function(stat, prefix){
+
+      pdf(paste(prefix, "pdf", sep="."), height = 4, width = 8)
+      par(mfrow=c(1,2))
+      par(mar=c(2,3,4,2))
+      plot(c(-1.2,1.2),c(0.2,8),frame.plot = F, type = "n", xlab = "", ylab = "", xaxt="n", yaxt="n", main = "(US/RM)")
+      axis(2,c(7.5,6:4,3:1-.5), labels = c("SNV","1-30","30-50",">50","1-30","30-50",">50"), las=2,mgp = c(1,.5,0))
+      axis(1,c(-5:5)/5, c(5:0,1:5)/5,mgp = c(1,.5,0))
+      abline(v =c(-5:5)/5, col="grey")
+      abline(v =0, col="black",lwd=2)
+      
+      add_ovr_bar.US_RM(stat, "SNV","SNV", 7.5)
+      add_ovr_bar.US_RM(stat, "Indel_sm","DEL", 6)
+      add_ovr_bar.US_RM(stat, "Indel_lg","DEL", 5)
+      add_ovr_bar.US_RM(stat, "SV","DEL", 4)
+      add_ovr_bar.US_RM(stat, "Indel_sm","INS", 2.5)
+      add_ovr_bar.US_RM(stat, "Indel_lg","INS", 1.5)
+      add_ovr_bar.US_RM(stat, "SV","INS", 0.5)
+      
+      plot(c(-1.2,1.2),c(0.2,8),frame.plot = F, type = "n", xlab = "", ylab = "", xaxt="n", yaxt="n", main = "(SD/SR)")
+      axis(2,c(7.5,6:4,3:1-.5), labels = c("SNV","1-30","30-50",">50","1-30","30-50",">50"), las=2,mgp = c(1,.5,0))
+      axis(1,c(-5:5)/5, c(5:0,1:5)/5,mgp = c(1,.5,0))
+      abline(v =c(-5:5)/5, col="grey")
+      abline(v =0, col="black",lwd=2)
+      rec_width = .3
+      add_ovr_bar.SD_SR(stat, "SNV","SNV", 7.5)
+      add_ovr_bar.SD_SR(stat, "Indel_sm","DEL", 6)
+      add_ovr_bar.SD_SR(stat, "Indel_lg","DEL", 5)
+      add_ovr_bar.SD_SR(stat, "SV","DEL", 4)
+      add_ovr_bar.SD_SR(stat, "Indel_sm","INS", 2.5)
+      add_ovr_bar.SD_SR(stat, "Indel_lg","INS", 1.5)
+      add_ovr_bar.SD_SR(stat, "SV","INS", 0.5)
+     
+      dev.off() 
+    }
+
+    colorBlindGrey8   <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+    stat = read.table("~{comp_stat}", header=T)
+    plot_ovr_bar(stat, "~{prefix}")
+
+    '
+
+  >>>
+
+
+  output {
+    File figure = "~{prefix}.pdf"
   }
 
   RuntimeAttr default_attr = object {

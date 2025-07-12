@@ -117,12 +117,19 @@ workflow BenchmarkVcfSites{
         docker_image = sv_pipeline_base_docker
       }
 
+      call LongReadGenotypeTasks.PlotCompResults as plot_comp_results{
+        input:
+            comp_stat = calcu_comp_stat.comp_stat,
+            docker_image = sv_pipeline_base_docker
+        }
+
   output {
     File tp_query = combine_vcfs_tp_query.concat_vcf  
     File tp_ref = combine_vcfs_tp_ref.concat_vcf
     File fp_query = combine_vcfs_fp_query.concat_vcf  
     File fp_ref = combine_vcfs_fp_ref.concat_vcf
     File benchmark_stat = calcu_comp_stat.comp_stat
+    File benchmark_plot = plot_comp_results.figure
   }
 
 }
