@@ -93,7 +93,6 @@ workflow BenchmarkVcfSites{
         sv_base_mini_docker = sv_base_mini_docker
     }
 
-
     call LongReadGenotypeTasks.ConcatVcfs as combine_vcfs_fp_ref{
       input:
         vcfs = BenchmarkVcfSitesPerContig.fp_ref,
@@ -117,7 +116,7 @@ workflow BenchmarkVcfSites{
         docker_image = sv_pipeline_base_docker
       }
 
-      call LongReadGenotypeTasks.PlotCompResults as plot_comp_results{
+    call LongReadGenotypeTasks.PlotCompResults as plot_comp_results{
         input:
             comp_stat = calcu_comp_stat.comp_stat,
             docker_image = sv_pipeline_base_docker

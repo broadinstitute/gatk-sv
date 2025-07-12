@@ -172,12 +172,18 @@ workflow BenchmarkIndividualVcf{
             sv_base_mini_docker = sv_base_mini_docker
         }
 
-        call LongReadGenotypeTasks.PlotCompResults as plot_comp_results{
+        call LongReadGenotypeTasks.CalcuCompStat as calcu_comp_stat{
           input:
             tp_query = combine_vcfs_tp_query.concat_vcf,
             tp_ref = combine_vcfs_tp_ref.concat_vcf,
             fp_query = combine_vcfs_fp_query.concat_vcf,
             fp_ref = combine_vcfs_fp_ref.concat_vcf,
+            docker_image = sv_pipeline_base_docker
+        }
+
+        call LongReadGenotypeTasks.PlotCompResults as plot_comp_results{
+          input:
+            comp_stat = calcu_comp_stat.comp_stat,
             docker_image = sv_pipeline_base_docker
         }
     }
@@ -187,7 +193,7 @@ workflow BenchmarkIndividualVcf{
     Array[File] tp_ref = combine_vcfs_tp_ref.concat_vcf
     Array[File] fp_query = combine_vcfs_fp_query.concat_vcf  
     Array[File] fp_ref = combine_vcfs_fp_ref.concat_vcf
-    Array[File] benchmark_stat = plot_comp_results.stat
+    Array[File] benchmark_stat = calcu_comp_stat.comp_stat
     Array[File] benchmark_figure = plot_comp_results.figure
   }
 
