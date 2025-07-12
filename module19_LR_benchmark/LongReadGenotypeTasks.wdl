@@ -1097,6 +1097,125 @@ task FilterVcfByAnotherVcf {
   }
 }
 
+task CalcuCompStat{
+  input {
+    File tp_query 
+    File tp_ref
+    File fp_query 
+    File fp_ref
+
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String prefix = basename(tp_query, ".tp_query.vcf.gz")
+
+  command <<<
+    set -euxo pipefail
+
+    # Index VCF if needed
+    if [[ ! -f "~{tp_query}.tbi" && ! -f "~{tp_query}.csi" ]]; then
+      bcftools index ~{tp_query}
+    fi
+
+    if [[ ! -f "~{fp_query}.tbi" && ! -f "~{fp_query}.csi" ]]; then
+      bcftools index ~{fp_query}
+    fi
+
+    if [[ ! -f "~{tp_ref}.tbi" && ! -f "~{tp_ref}.csi" ]]; then
+      bcftools index ~{tp_ref}
+    fi
+
+    if [[ ! -f "~{fp_ref}.tbi" && ! -f "~{fp_ref}.csi" ]]; then
+      bcftools index ~{fp_ref}
+    fi
+
+
+    echo -e "Genomic_Context\tSVTYPE\tSizeRange\tfp_query\ttp_query\tfp_ref\ttp_ref" > "~{prefix}.stat"
+
+    bcftools  view -i 'INFO/GC="US"'  ~{fp_query} | cut -f1-3 > fp_query.US
+    bcftools  view -i 'INFO/GC="US"'  ~{tp_query} | cut -f1-3 > tp_query.US
+    bcftools  view -i 'INFO/GC="US"'  ~{fp_ref} | cut -f1-3 > fp_ref.US
+    bcftools  view -i 'INFO/GC="US"'  ~{tp_ref} | cut -f1-3 > tp_ref.US
+
+    paste <(grep -v "#" fp_query.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) <(grep -v "#" tp_query.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) <(grep -v "#" fp_ref.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) <(grep -v "#" tp_ref.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) | sed -e 's/^/US\tSNV\tSNV\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) <(grep -v "#" tp_query.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) <(grep -v "#" fp_ref.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) <(grep -v "#" tp_ref.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) | sed -e 's/^/US\tDEL\tIndel_sm\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_query.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" fp_ref.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_ref.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) | sed -e 's/^/US\tDEL\tIndel_lg\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_query.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) <(grep -v "#" fp_ref.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_ref.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) | sed -e 's/^/US\tDEL\tSV\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) <(grep -v "#" tp_query.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) <(grep -v "#" fp_ref.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) <(grep -v "#" tp_ref.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) | sed -e 's/^/US\tINS\tIndel_sm\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_query.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" fp_ref.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_ref.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) | sed -e 's/^/US\tINS\tIndel_lg\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_query.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) <(grep -v "#" fp_ref.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_ref.US | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) | sed -e 's/^/US\tINS\tSV\t/'  >> "~{prefix}.stat"
+
+
+    bcftools  view -i 'INFO/GC="RM"'  ~{fp_query} | cut -f1-3 > fp_query.RM
+    bcftools  view -i 'INFO/GC="RM"'  ~{tp_query} | cut -f1-3 > tp_query.RM
+    bcftools  view -i 'INFO/GC="RM"'  ~{fp_ref} | cut -f1-3 > fp_ref.RM
+    bcftools  view -i 'INFO/GC="RM"'  ~{tp_ref} | cut -f1-3 > tp_ref.RM
+
+    paste <(grep -v "#" fp_query.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) <(grep -v "#" tp_query.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) <(grep -v "#" fp_ref.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) <(grep -v "#" tp_ref.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) | sed -e 's/^/RM\tSNV\tSNV\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) <(grep -v "#" tp_query.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) <(grep -v "#" fp_ref.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) <(grep -v "#" tp_ref.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) | sed -e 's/^/RM\tDEL\tIndel_sm\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_query.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" fp_ref.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_ref.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) | sed -e 's/^/RM\tDEL\tIndel_lg\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_query.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) <(grep -v "#" fp_ref.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_ref.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) | sed -e 's/^/RM\tDEL\tSV\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) <(grep -v "#" tp_query.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) <(grep -v "#" fp_ref.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) <(grep -v "#" tp_ref.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) | sed -e 's/^/RM\tINS\tIndel_sm\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_query.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" fp_ref.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_ref.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) | sed -e 's/^/RM\tINS\tIndel_lg\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_query.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) <(grep -v "#" fp_ref.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_ref.RM | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) | sed -e 's/^/RM\tINS\tSV\t/'  >> "~{prefix}.stat"
+
+
+    bcftools  view -i 'INFO/GC="SD"'  ~{fp_query} | cut -f1-3 > fp_query.SD
+    bcftools  view -i 'INFO/GC="SD"'  ~{tp_query} | cut -f1-3 > tp_query.SD
+    bcftools  view -i 'INFO/GC="SD"'  ~{fp_ref} | cut -f1-3 > fp_ref.SD
+    bcftools  view -i 'INFO/GC="SD"'  ~{tp_ref} | cut -f1-3 > tp_ref.SD
+
+    paste <(grep -v "#" fp_query.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) <(grep -v "#" tp_query.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) <(grep -v "#" fp_ref.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) <(grep -v "#" tp_ref.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) | sed -e 's/^/SD\tSNV\tSNV\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) <(grep -v "#" tp_query.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) <(grep -v "#" fp_ref.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) <(grep -v "#" tp_ref.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) | sed -e 's/^/SD\tDEL\tIndel_sm\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_query.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" fp_ref.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_ref.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) | sed -e 's/^/SD\tDEL\tIndel_lg\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_query.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) <(grep -v "#" fp_ref.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_ref.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) | sed -e 's/^/SD\tDEL\tSV\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) <(grep -v "#" tp_query.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) <(grep -v "#" fp_ref.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) <(grep -v "#" tp_ref.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) | sed -e 's/^/SD\tINS\tIndel_sm\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_query.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" fp_ref.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_ref.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) | sed -e 's/^/SD\tINS\tIndel_lg\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_query.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) <(grep -v "#" fp_ref.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_ref.SD | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) | sed -e 's/^/SD\tINS\tSV\t/'  >> "~{prefix}.stat"
+
+
+    bcftools  view -i 'INFO/GC="SR"'  ~{fp_query} | cut -f1-3 > fp_query.SR
+    bcftools  view -i 'INFO/GC="SR"'  ~{tp_query} | cut -f1-3 > tp_query.SR
+    bcftools  view -i 'INFO/GC="SR"'  ~{fp_ref} | cut -f1-3 > fp_ref.SR
+    bcftools  view -i 'INFO/GC="SR"'  ~{tp_ref} | cut -f1-3 > tp_ref.SR
+
+    paste <(grep -v "#" fp_query.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) <(grep -v "#" tp_query.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) <(grep -v "#" fp_ref.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) <(grep -v "#" tp_ref.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="SNV") print}'  | wc -l) | sed -e 's/^/SR\tSNV\tSNV\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) <(grep -v "#" tp_query.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) <(grep -v "#" fp_ref.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) <(grep -v "#" tp_ref.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5<30) print}'  | wc -l) | sed -e 's/^/SR\tDEL\tIndel_sm\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_query.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" fp_ref.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_ref.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>29 && $5<50) print}'  | wc -l) | sed -e 's/^/SR\tDEL\tIndel_lg\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_query.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) <(grep -v "#" fp_ref.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_ref.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="DEL" && $5>49 ) print}'  | wc -l) | sed -e 's/^/SR\tDEL\tSV\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) <(grep -v "#" tp_query.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) <(grep -v "#" fp_ref.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) <(grep -v "#" tp_ref.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5<30) print}'  | wc -l) | sed -e 's/^/SR\tINS\tIndel_sm\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_query.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" fp_ref.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) <(grep -v "#" tp_ref.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>29 && $5<50) print}'  | wc -l) | sed -e 's/^/SR\tINS\tIndel_lg\t/'  >> "~{prefix}.stat"
+    paste <(grep -v "#" fp_query.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_query.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) <(grep -v "#" fp_ref.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) <(grep -v "#" tp_ref.SR | cut -f3 | sed -e 's/_/\t/g' | awk '{if ($4=="INS" && $5>49 ) print}'  | wc -l) | sed -e 's/^/SR\tINS\tSV\t/'  >> "~{prefix}.stat"
+
+  >>>
+
+  output {
+    File comp_stat = "~{prefix}.stat"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 15,
+    disk_gb: 20 + ceil(size(tp_query, "GiB") + size(fp_query, "GiB") + size(tp_ref, "GiB") + size(fp_ref, "GiB"))*4,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task PlotCompResults{
   input {
     File tp_query 

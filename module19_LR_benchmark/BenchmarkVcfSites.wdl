@@ -108,7 +108,7 @@ workflow BenchmarkVcfSites{
         sv_base_mini_docker = sv_base_mini_docker
     }
 
-    call LongReadGenotypeTasks.PlotCompResults as plot_comp_results{
+    call LongReadGenotypeTasks.CalcuCompStat as calcu_comp_stat{
       input:
         tp_query = combine_vcfs_tp_query.concat_vcf,
         tp_ref = combine_vcfs_tp_ref.concat_vcf,
@@ -122,8 +122,7 @@ workflow BenchmarkVcfSites{
     File tp_ref = combine_vcfs_tp_ref.concat_vcf
     File fp_query = combine_vcfs_fp_query.concat_vcf  
     File fp_ref = combine_vcfs_fp_ref.concat_vcf
-    File benchmark_stat = plot_comp_results.stat
-    File benchmark_figure = plot_comp_results.figure
+    File benchmark_stat = calcu_comp_stat.comp_stat
   }
 
 }
