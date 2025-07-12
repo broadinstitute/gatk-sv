@@ -9,8 +9,14 @@ import "ExtractTriosFromVCFByGenomicContext.wdl" as ExtractTriosFromVCFByGenomic
 
 workflow BenchmarkIndividualVcfPerContig{
   input{
-    File query_vcf
     File ref_vcf
+    File ref_vcf_idx
+    File ref_filter_vcf
+    File ref_filter_vcf_idx
+    File query_vcf
+    File query_vcf_idx  
+    File query_filter_vcf
+    File query_filter_vcf_idx
 
     File anno_script_bash
     File anno_script_helper_R
@@ -32,15 +38,34 @@ workflow BenchmarkIndividualVcfPerContig{
     String sv_pipeline_base_docker
   }
 
+  call LongReadGenotypeTasks.FilterVcfByAnotherVcf as filter_query_vcf_by_ovr {
+    input:
+      vcf_file = query_vcf,
+      vcf_idx = query_vcf_idx,
+      vcf_file_b = query_filter_vcf,
+      vcf_file_b_idx = query_filter_vcf_idx,
+      docker_image = sv_pipeline_base_docker
+  }
+
+  call LongReadGenotypeTasks.FilterVcfByAnotherVcf as filter_ref_vcf_by_ovr {
+    input:
+      vcf_file = ref_vcf,
+      vcf_idx = ref_vcf_idx,
+      vcf_file_b = ref_filter_vcf,
+      vcf_file_b_idx = ref_filter_vcf_idx,
+      docker_image = sv_pipeline_base_docker
+  }
+
+
   call LongReadGenotypeTasks.ExtractVariantSites as extract_variant_sites_query{
     input:
-      input_vcf = query_vcf,
+      input_vcf = filter_query_vcf_by_ovr.filtered_vcf,
       docker_image = sv_pipeline_base_docker
   }
 
   call LongReadGenotypeTasks.ExtractVariantSites as extract_variant_sites_ref{
     input:
-      input_vcf = ref_vcf,
+      input_vcf = filter_ref_vcf_by_ovr.filtered_vcf,
       docker_image = sv_pipeline_base_docker
   }
 

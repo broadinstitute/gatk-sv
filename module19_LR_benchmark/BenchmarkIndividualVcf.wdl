@@ -8,10 +8,15 @@ import "BenchmarkIndividualVcfPerContig.wdl" as BenchmarkIndividualVcfPerContig
 
 workflow BenchmarkIndividualVcf{
     input{
-        File query_vcf
-        File query_vcf_idx  
         File ref_vcf
         File ref_vcf_idx
+        File ref_filter_vcf
+        File ref_filter_vcf_idx
+        File query_vcf
+        File query_vcf_idx  
+        File query_filter_vcf
+        File query_filter_vcf_idx
+
         Array[String] chromosomes
 
         File anno_script_bash
@@ -60,28 +65,56 @@ workflow BenchmarkIndividualVcf{
                 docker_image = sv_pipeline_base_docker  
             }
 
+
+        call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_query_filter{
+            input:
+                input_vcf = query_filter_vcf,
+                input_vcf_index = query_filter_vcf_idx,
+                chromosome = chromosomes[index],
+                output_name = "~{query_prefix}.~{chromosomes[index]}.filter.vcf.gz",
+                docker_image = sv_pipeline_base_docker  
+            }
+
+        call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_ref_filter{
+            input:
+                input_vcf = ref_filter_vcf,
+                input_vcf_index = ref_filter_vcf_idx,
+                chromosome = chromosomes[index],
+                output_name = "~{ref_prefix}.~{chromosomes[index]}.filter.vcf.gz",
+                docker_image = sv_pipeline_base_docker  
+            }
+
+
         call BenchmarkIndividualVcfPerContig.BenchmarkIndividualVcfPerContig{
             input:
-                query_vcf = extract_chrom_variants_query.chr_vcf,
-                ref_vcf = extract_chrom_variants_ref.chr_vcf,
-                chromosome = chromosomes[index],
+              query_vcf = extract_chrom_variants_query.chr_vcf,
+              query_vcf_idx = extract_chrom_variants_query.chr_vcf_idx, 
+              query_filter_vcf = extract_chrom_variants_query_filter.chr_vcf,
+              query_filter_vcf_idx = extract_chrom_variants_query_filter.chr_vcf_idx,
 
-                anno_script_bash = anno_script_bash,
-                anno_script_helper_R = anno_script_helper_R,
-                benchmark_script_bash = benchmark_script_bash,
-                banchmark_script_helper_R = banchmark_script_helper_R,
+              ref_vcf = extract_chrom_variants_ref.chr_vcf,
+              ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
+              ref_filter_vcf = extract_chrom_variants_ref_filter.chr_vcf,
+              ref_filter_vcf_idx = extract_chrom_variants_ref_filter.chr_vcf_idx,
 
-                repeat_mask = repeat_mask,
-                simple_repeats = simple_repeats,
-                segmental_duplicates = segmental_duplicates,
+              chromosome = chromosomes[index],
 
-                short_read_benchmark = short_read_benchmark,
+              anno_script_bash = anno_script_bash,
+              anno_script_helper_R = anno_script_helper_R,
+              benchmark_script_bash = benchmark_script_bash,
+              banchmark_script_helper_R = banchmark_script_helper_R,
 
-                sample_ids = sample_ids,
-                ref_dict = ref_dict,
-                truvari_params = truvari_params,
-                sv_base_mini_docker = sv_base_mini_docker,
-                sv_pipeline_base_docker = sv_pipeline_base_docker
+              repeat_mask = repeat_mask,
+              simple_repeats = simple_repeats,
+              segmental_duplicates = segmental_duplicates,
+
+              short_read_benchmark = short_read_benchmark,
+
+              sample_ids = sample_ids,
+              ref_dict = ref_dict,
+              truvari_params = truvari_params,
+              sv_base_mini_docker = sv_base_mini_docker,
+              sv_pipeline_base_docker = sv_pipeline_base_docker
         }
 
     }

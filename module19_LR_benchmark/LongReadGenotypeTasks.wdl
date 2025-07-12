@@ -995,7 +995,7 @@ task ExtractChromosomeVariants {
 
   output {
     File chr_vcf = output_name
-    File chr_vcf_index = output_name + ".tbi"
+    File chr_vcf_idx = output_name + ".tbi"
   }
 
   RuntimeAttr default_attr = object {
@@ -1020,11 +1020,13 @@ task ExtractChromosomeVariants {
   }
 }
 
-task filter_vcf_by_intersection {
+task FilterVcfByAnotherVcf {
+  #this task will filter vcf_file to the variants in filter_vcf_b by matching chrom, pos, svid, ref, and alts
   input {
     File vcf_file
     File vcf_idx
     File vcf_file_b
+    File vcf_file_b_idx
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
