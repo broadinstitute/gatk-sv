@@ -58,9 +58,9 @@ workflow BenchmarkVcfSites{
         call BenchmarkVcfSitesPerContig.BenchmarkVcfSitesPerContig{
             input:
                 query_vcf = extract_chrom_variants_query.chr_vcf,
-                query_vcf_idx = extract_chrom_variants_query.chr_vcf_index,
+                query_vcf_idx = extract_chrom_variants_query.chr_vcf_idx,
                 ref_vcf = extract_chrom_variants_ref.chr_vcf,
-                ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_index,
+                ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
                 chromosome = chromosomes[index],
                 ref_dict = ref_dict,
                 short_read_benchmark = false,
