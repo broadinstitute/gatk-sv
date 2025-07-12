@@ -36,29 +36,17 @@ workflow BenchmarkVcfSitesPerContig{
   String prefix_query = basename(query_vcf,'.vcf.gz')
   String prefix_ref = basename(ref_vcf,'.vcf.gz')
 
-  call LongReadGenotypeTasks.ExtractVariantSites as extract_variant_sites_query{
-    input:
-      input_vcf = add_dummy_gt_query.vcf_file,
-      docker_image = sv_pipeline_base_docker
-  }
-
-  call LongReadGenotypeTasks.ExtractVariantSites as extract_variant_sites_ref{
-    input:
-      input_vcf = add_dummy_gt_ref.vcf_file,
-      docker_image = sv_pipeline_base_docker
-  }
-
   call LongReadGenotypeTasks.SplitVcfToSites as split_query_vcf_into_sites{
     input:
-      vcf_file = extract_variant_sites_query.updated_vcf,
-      vcf_idx = extract_variant_sites_query.updated_vcf_idx,
+      vcf_file = query_vcf,
+      vcf_idx = query_vcf_idx,
       docker_image = sv_base_mini_docker
   }
 
   call LongReadGenotypeTasks.SplitVcfToSites as split_ref_vcf_into_sites{
     input:
-      vcf_file = extract_variant_sites_ref.updated_vcf,
-      vcf_idx = extract_variant_sites_ref.updated_vcf_idx,
+      vcf_file = ref_vcf,
+      vcf_idx = ref_vcf_idx,
       docker_image = sv_base_mini_docker
   }
 
@@ -76,17 +64,32 @@ workflow BenchmarkVcfSitesPerContig{
       docker_image   = sv_pipeline_base_docker
   }
 
-  call LongReadGenotypeTasks.SplitVariantsBySizeAt20bp as split_query{
+
+  call LongReadGenotypeTasks.ExtractVariantSites as extract_variant_sites_query{
     input:
       input_vcf = add_dummy_gt_query.vcf_file,
-      input_vcf_idx  = add_dummy_gt_query.vcf_idx, 
+      docker_image = sv_pipeline_base_docker
+  }
+
+  call LongReadGenotypeTasks.ExtractVariantSites as extract_variant_sites_ref{
+    input:
+      input_vcf = add_dummy_gt_ref.vcf_file,
+      docker_image = sv_pipeline_base_docker
+  }
+
+
+
+  call LongReadGenotypeTasks.SplitVariantsBySizeAt20bp as split_query{
+    input:
+      input_vcf      = extract_variant_sites_query.updated_vcf,
+      input_vcf_idx  = extract_variant_sites_query.updated_vcf_idx, 
       docker_image   = sv_pipeline_base_docker
   }
 
   call LongReadGenotypeTasks.SplitVariantsBySizeAt20bp as split_ref{
     input:
-      input_vcf = add_dummy_gt_ref.vcf_file,
-      input_vcf_idx  = add_dummy_gt_ref.vcf_idx, 
+      input_vcf      = extract_variant_sites_ref.updated_vcf,
+      input_vcf_idx  = extract_variant_sites_ref.updated_vcf_idx, 
       docker_image   = sv_pipeline_base_docker
     }
     
