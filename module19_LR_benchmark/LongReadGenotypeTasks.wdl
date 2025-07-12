@@ -23,7 +23,7 @@ task AddDummyGT {
     bcftools view -H ~{sites_file} | sed -e 's/$/\tGT\t0|1/' >> header.vcf
     bgzip header.vcf 
     mv header.vcf.gz "~{prefix}.with_dummy_gt.vcf.gz"
-    tabix -p vcf  "~{prefix}.with_dummy_gt.vcf.gz")
+    tabix -p vcf  "~{prefix}.with_dummy_gt.vcf.gz"
 
   >>>
 
