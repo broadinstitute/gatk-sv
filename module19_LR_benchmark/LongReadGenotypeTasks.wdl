@@ -490,6 +490,108 @@ task BenchmarkSVs{
   }
 }
 
+task BenchmarkSVsV2{
+  #this function would benchmark SVs using the benchmark_bash script, the SV into will be parsed from SVID column
+
+  input{
+    File comp_vcf
+    File base_vcf
+    File benchmark_bash
+    File banchmark_helper_R
+    String prefix
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 10 + ceil(size(comp_vcf,"GiB") + size(base_vcf, "GiB"))*2,
+    disk_gb: 15 + ceil(size(comp_vcf,"GiB") + size(base_vcf, "GiB"))*2,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -e
+
+    #generate headers of query and ref:
+    echo -e "#chrom\tstart\tend\tname\tSVTYPE\tSVLEN" > query.header
+    echo -e "#chrom\tstart\tend\tVID\tsvtype\tlength\tAF\tsamples" > ref.header
+
+    #generate query files:
+    paste <(bcftools view -H ~{comp_vcf} | cut -f1,2) <(bcftools view -H ~{comp_vcf} | cut -f3 | sed -e 's/_/\t/g' | cut -f3) <(bcftools view -H ~{comp_vcf} | cut -f3) <(bcftools view -H ~{comp_vcf} | cut -f3 | sed -e 's/_/\t/g' | cut -f4,5) | cat query.header - | bgzip > comp.query.gz
+
+    paste <(bcftools view -H ~{base_vcf} | cut -f1,2) <(bcftools view -H ~{base_vcf} | cut -f3 | sed -e 's/_/\t/g' | cut -f3) <(bcftools view -H ~{base_vcf} | cut -f3) <(bcftools view -H ~{base_vcf} | cut -f3 | sed -e 's/_/\t/g' | cut -f4,5) | cat query.header - | bgzip > base.query.gz
+
+    #generate ref files:
+    paste <(bcftools view -H ~{comp_vcf} | cut -f1,2) <(bcftools view -H ~{comp_vcf} | cut -f3 | sed -e 's/_/\t/g' | cut -f3) <(bcftools view -H ~{comp_vcf} | cut -f3) <(bcftools view -H ~{comp_vcf} | cut -f3 | sed -e 's/_/\t/g' | cut -f4,5) | sed -e "s/$/\t0\tsample/" | cat ref.header - | bgzip > comp.ref.gz
+
+    paste <(bcftools view -H ~{base_vcf} | cut -f1,2) <(bcftools view -H ~{base_vcf} | cut -f3 | sed -e 's/_/\t/g' | cut -f3) <(bcftools view -H ~{base_vcf} | cut -f3) <(bcftools view -H ~{base_vcf} | cut -f3 | sed -e 's/_/\t/g' | cut -f4,5) | sed -e "s/$/\t0\tsample/" | cat ref.header - | bgzip > base.ref.gz
+
+
+    #run comparison:
+    bash ~{benchmark_bash} -O comp_vs_base.bed -p comp_vs_base comp.query.gz base.ref.gz
+    bash ~{benchmark_bash} -O base_vs_comp.bed -p base_vs_comp base.query.gz comp.ref.gz  
+
+
+    # use R script to add GC to the vcf
+    Rscript -e '
+
+    comp_dat=read.table("base_vs_comp.bed", header=T, sep="\t", comment.char="")
+    base_dat=read.table("comp_vs_base.bed", header=T, sep="\t", comment.char="")
+
+    fp_comp = comp_dat[comp_dat[,8]=="NO_OVR",]
+    tp_comp = comp_dat[comp_dat[,8]!="NO_OVR",]
+    fn_base = base_dat[base_dat[,8]=="NO_OVR",]
+    tp_base = base_dat[base_dat[,8]!="NO_OVR",]
+
+    comp_vcf = read.table("~{comp_vcf}")
+    base_vcf = read.table("~{base_vcf}")
+
+    fp_comp_vcf = comp_vcf[comp_vcf[,3]%in%fp_comp[,4],]
+    tp_comp_vcf = comp_vcf[comp_vcf[,3]%in%tp_comp[,4],]
+    fn_base_vcf = base_vcf[base_vcf[,3]%in%fn_base[,4],]
+    tp_base_vcf = base_vcf[base_vcf[,3]%in%tp_base[,4],]
+
+    write.table(fp_comp_vcf, "fp_comp.vcf", quote=F, sep="\t", col.names=F, row.names=F)
+    write.table(tp_comp_vcf, "tp_comp.vcf", quote=F, sep="\t", col.names=F, row.names=F)
+    write.table(fn_base_vcf, "fn_base.vcf", quote=F, sep="\t", col.names=F, row.names=F)
+    write.table(tp_base_vcf, "tp_base.vcf", quote=F, sep="\t", col.names=F, row.names=F)
+
+    '
+
+
+    #generate output vcf
+
+    cat comp.header fp_comp.vcf | bgzip > "~{prefix}.fp_comp.vcf.gz"
+    cat comp.header tp_comp.vcf | bgzip > "~{prefix}.tp_comp.vcf.gz"
+    cat base.header fn_base.vcf | bgzip > "~{prefix}.fn_base.vcf.gz"
+    cat base.header tp_base.vcf | bgzip > "~{prefix}.tp_base.vcf.gz"
+
+    >>>
+
+
+  output {
+    File fp_vcf = "~{prefix}.fp_comp.vcf.gz"
+    File fn_vcf = "~{prefix}.fn_base.vcf.gz"
+    File tp_comp_vcf = "~{prefix}.tp_comp.vcf.gz"
+    File tp_base_vcf = "~{prefix}.tp_base.vcf.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task CalculateInheritanceTable {
   input {
     File input_vcf

@@ -70,8 +70,6 @@ workflow BenchmarkIndividualVcfPerContig{
       docker_image = sv_pipeline_base_docker
   }
 
-
-
   call ExtractIndividualFromVCF.ExtractIndividualFromVCF as extract_individual_query{
     input:
       vcf_file = filter_query_vcf_by_ovr.filtered_vcf,
