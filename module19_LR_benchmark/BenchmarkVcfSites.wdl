@@ -63,7 +63,7 @@ workflow BenchmarkVcfSites{
                 ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
                 chromosome = chromosomes[index],
                 ref_dict = ref_dict,
-                short_read_benchmark = false,
+                short_read_benchmark = short_read_benchmark,
 
                 anno_script_bash = anno_script_bash,
                 anno_script_helper_R = anno_script_helper_R,
