@@ -517,6 +517,14 @@ task BenchmarkSVsV2{
   command <<<
     set -e
 
+    #index the input vcf:
+    tabix -p vcf ~{comp_vcf}
+    tabix -p vcf ~{base_vcf}
+
+    #extract vcf headers
+    bcftools view -h ~{comp_vcf} > comp.header
+    bcftools view -h ~{base_vcf} > base.header
+
     #generate headers of query and ref:
     echo -e "#chrom\tstart\tend\tname\tSVTYPE\tSVLEN" > query.header
     echo -e "#chrom\tstart\tend\tVID\tsvtype\tlength\tAF\tsamples" > ref.header
