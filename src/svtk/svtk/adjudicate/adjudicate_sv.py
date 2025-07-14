@@ -208,11 +208,18 @@ def adjudicate_RD(metrics):
     return cutoffs
 
 
-def adjudicate_PE(metrics):
+def adjudicate_PE(metrics, remove_wham=False):
     testable = metrics.loc[~metrics.name.str.contains('_depth_')].copy()
     trainable = testable.loc[(testable.poor_region_cov < 0.3) &
                              ~testable.chrom.isin(ALLOSOMES) &
                              ~testable.is_outlier_specific].copy()
+    
+    # Optionally filter out Wham deletions
+    if remove_wham:
+        wham_del_mask = (metrics['svtype'] == 'DEL') & metrics['name'].str.contains('wham', case=False, na=False)
+        trainable = trainable[~wham_del_mask].copy()
+        testable = testable[~wham_del_mask].copy()
+
     features = ['PE_log_pval', 'PE_bg_frac']
     cutoffs = {'indep': ['PE_log_pval'], 'dep': ['PE_bg_frac']}
     labeler = labelers.PETrainingLabeler()
@@ -255,11 +262,18 @@ def adjudicate_SR2(metrics):
     return cutoffs
 
 
-def adjudicate_PESR(metrics):
+def adjudicate_PESR(metrics, remove_wham=False):
     testable = metrics.loc[~metrics.name.str.contains('_depth_')].copy()
     trainable = testable.loc[(testable.poor_region_cov < 0.3) &
                              ~testable.chrom.isin(ALLOSOMES) &
                              ~testable.is_outlier_specific].copy()
+    
+    # Optionally filter out Wham deletions
+    if remove_wham:
+        wham_del_mask = (metrics['svtype'] == 'DEL') & metrics['name'].str.contains('wham', case=False, na=False)
+        trainable = trainable[~wham_del_mask].copy()
+        testable = testable[~wham_del_mask].copy()
+
     features = ['PESR_log_pval', 'PESR_bg_frac']
     cutoffs = {'indep': ['PESR_log_pval'], 'dep': ['PESR_bg_frac']}
     labeler = labelers.PESRTrainingLabeler()
@@ -352,13 +366,13 @@ def adjudicate_SV(metrics, remove_wham=False):
     sys.stderr.write('Adjudicating RD...\n')
     cutoffs[2] = adjudicate_RD(metrics)
     sys.stderr.write('Adjudicating PE...\n')
-    cutoffs[3] = adjudicate_PE(metrics)
+    cutoffs[3] = adjudicate_PE(metrics, remove_wham)
     #  sys.stderr.write('Adjudicating BAF (2)...\n')
     #  cutoffs[4] = adjudicate_BAF2(metrics)
     #  sys.stderr.write('Adjudicating SR (2)...\n')
     #  cutoffs[5] = adjudicate_SR2(metrics)
     sys.stderr.write('Adjudicating PESR...\n')
-    cutoffs[6] = adjudicate_PESR(metrics)
+    cutoffs[6] = adjudicate_PESR(metrics, remove_wham)
 
     cutoffs = pd.concat(cutoffs)
     # force consistent column order, since many downstream tools ignore headers and work off column number:

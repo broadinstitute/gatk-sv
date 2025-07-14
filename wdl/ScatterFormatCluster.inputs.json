@@ -1,0 +1,32 @@
+{
+  "ScatterFormatCluster.vcf1": "path/to/your/first.vcf.gz",
+  "ScatterFormatCluster.vcf1_index": "path/to/your/first.vcf.gz.tbi",
+  "ScatterFormatCluster.vcf2": "path/to/your/second.vcf.gz",
+  "ScatterFormatCluster.vcf2_index": "path/to/your/second.vcf.gz.tbi",
+  "ScatterFormatCluster.contigs": ["chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX", "chrY"],
+  "ScatterFormatCluster.prefix": "my_cohort",
+
+  "ScatterFormatCluster.ped_file": "path/to/your/cohort.ped",
+  "ScatterFormatCluster.contig_list": "path/to/your/contig_list.txt",
+  "ScatterFormatCluster.ploidy_table": "path/to/your/ploidy_table.txt",
+  "ScatterFormatCluster.reference_fasta": "path/to/your/reference.fasta",
+  "ScatterFormatCluster.reference_fasta_fai": "path/to/your/reference.fasta.fai",
+  "ScatterFormatCluster.reference_dict": "path/to/your/reference.dict",
+
+  "ScatterFormatCluster.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:v1.0.0",
+  "ScatterFormatCluster.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:v1.0.0",
+  "ScatterFormatCluster.gatk_docker": "us.gcr.io/broad-gatk/gatk:4.2.0.0",
+
+  "_comment": "Optional SVCluster overlap parameters - customize as needed",
+  "ScatterFormatCluster.depth_sample_overlap": 0.5,
+  "ScatterFormatCluster.depth_interval_overlap": 0.5,
+  "ScatterFormatCluster.depth_size_similarity": 0.25,
+  "ScatterFormatCluster.pesr_sample_overlap": 0.1,
+  "ScatterFormatCluster.pesr_interval_overlap": 0.1,
+  "ScatterFormatCluster.pesr_size_similarity": 0.25,
+
+  "_comment": "Optional formatting parameters",
+  "ScatterFormatCluster.chr_x": "chrX",
+  "ScatterFormatCluster.chr_y": "chrY",
+  "ScatterFormatCluster.records_per_shard": 40000
+} 
