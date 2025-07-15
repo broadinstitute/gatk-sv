@@ -222,7 +222,6 @@ workflows:
     filters:
       branches:
         - main
-        - mw_ss_mode_v1
       tags:
         - /.*/
 
@@ -242,14 +241,5 @@ workflows:
     filters:
       branches:
         - main
-      tags:
-        - /.*/
-
-  - subclass: WDL
-    name: SingleSamplePipelinePart2
-    primaryDescriptorPath: /wdl/GATKSVPipelineSingleSamplePart2.wdl
-    filters:
-      branches:
-        - mw_ss_mode_v1
       tags:
         - /.*/
