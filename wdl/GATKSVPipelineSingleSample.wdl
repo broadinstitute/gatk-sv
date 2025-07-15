@@ -1527,7 +1527,6 @@ workflow GATKSVPipelineSingleSample {
     # QC files
     File metrics_file = SingleSampleMetrics.metrics_file
     File qc_file = SingleSampleQC.out
-    File wgd_scores = EvidenceQC.WGD_scores
 
     # Ploidy estimates
     File ploidy_matrix = select_first([GatherBatchEvidence.batch_ploidy_matrix])
