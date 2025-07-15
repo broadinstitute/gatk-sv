@@ -63,11 +63,11 @@ class MantaStandardizer(VCFStandardizer):
                 std_rec.pos = pos
                 std_rec.chrom = chrom
             std_rec.info['CHR2'] = chr2
-            std_rec.stop = std_rec.pos + 1
+            std_rec.stop = std_rec.pos
             std_rec.info['END2'] = end
         elif svtype == 'INS':
             std_rec.info['CHR2'] = raw_rec.chrom
-            std_rec.stop = raw_rec.pos + 1
+            std_rec.stop = raw_rec.pos
         else:
             std_rec.info['CHR2'] = raw_rec.chrom
             std_rec.stop = raw_rec.stop
