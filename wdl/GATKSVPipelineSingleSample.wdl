@@ -1513,9 +1513,9 @@ workflow GATKSVPipelineSingleSample {
   }
 
   output {
+    # Final calls
     File final_vcf = UpdateBreakendRepresentationAndRemoveFilters.out
     File final_vcf_idx = UpdateBreakendRepresentationAndRemoveFilters.out_idx
-
     File final_bed = VcfToBed.bed
 
     # These files contain events reported in the internal VCF representation
@@ -1524,40 +1524,12 @@ workflow GATKSVPipelineSingleSample {
     File pre_cleanup_vcf = AnnotateVcf.annotated_vcf
     File pre_cleanup_vcf_idx = AnnotateVcf.annotated_vcf_index
 
+    # QC files
     File metrics_file = SingleSampleMetrics.metrics_file
     File qc_file = SingleSampleQC.out
-
-    # TODO: useful temp files, to be removed later
-    File filter_vcf_for_case_sample_vcf =  FilterVcfForCaseSampleGenotype.out
-    File ped_file_out = combined_ped_file
-
-    # RefineComplexVariants
-    File samples_list = SamplesList.samples_file
-    File PE_matrix = GatherBatchEvidence.merged_PE
-    File PE_matrix_index = GatherBatchEvidence.merged_PE_index
-    File Depth_DEL_bed = MergeSetDel.out
-    File Depth_DUP_bed = MergeSetDup.out
-
-    # JoinRawCalls
-    File? clustered_manta_vcf = ClusterBatch.clustered_manta_vcf
-    File? clustered_manta_vcf_index = ClusterBatch.clustered_manta_vcf_index
-    File? clustered_melt_vcf = ClusterBatch.clustered_melt_vcf
-    File? clustered_melt_vcf_index = ClusterBatch.clustered_melt_vcf_index
-    File? clustered_scramble_vcf = ClusterBatch.clustered_scramble_vcf
-    File? clustered_scramble_vcf_index = ClusterBatch.clustered_scramble_vcf_index
-    File? clustered_wham_vcf = ClusterBatch.clustered_wham_vcf
-    File? clustered_wham_vcf_index = ClusterBatch.clustered_wham_vcf_index
-    File? clustered_depth_vcf = ClusterBatch.clustered_depth_vcf
-    File? clustered_depth_vcf_index = ClusterBatch.clustered_depth_vcf_index
-
     File wgd_scores = EvidenceQC.WGD_scores
-    File case_counts_file_out = case_counts_file_
-    File case_pe_file_out = case_pe_file_
-    File case_sr_file_out = case_sr_file_
 
-    File convert_cnvs_without_depth_support_vcf = ConvertCNVsWithoutDepthSupportToBNDs.out_vcf
-    File genotyped_depth_vcf = GenotypeBatch.genotyped_depth_vcf
-
+    # Ploidy estimates
     File ploidy_matrix = select_first([GatherBatchEvidence.batch_ploidy_matrix])
     File ploidy_plots = select_first([GatherBatchEvidence.batch_ploidy_plots])
 
