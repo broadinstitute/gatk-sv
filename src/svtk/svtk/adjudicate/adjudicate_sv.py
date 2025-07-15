@@ -107,7 +107,7 @@ def adjudicate_SR1(metrics, remove_wham=False):
     return cutoffs
 
 
-def adjudicate_RD(metrics):
+def adjudicate_RD(metrics, remove_wham=False):
     features = ["RD_Median_Separation", "RD_log_pval", "RD_log_2ndMaxP"]
     cutoff_features = {'indep': ['RD_log_pval', 'RD_Median_Separation'],
                        'dep': ['RD_log_2ndMaxP']}
@@ -121,6 +121,12 @@ def adjudicate_RD(metrics):
                              (testable.poor_region_cov < 0.3) &
                              ~testable.chrom.isin(ALLOSOMES) &
                              ~testable.is_outlier_specific].copy()
+    
+    # Optionally filter out Wham deletions
+    if remove_wham:
+        wham_del_mask = (metrics['svtype'] == 'DEL') & metrics['name'].str.contains('wham', case=False, na=False)
+        trainable = trainable[~wham_del_mask].copy()
+        testable = testable[~wham_del_mask].copy()
 
     testable.to_csv('RD_pesr_gt5kb_testable.txt', index=False, sep='\t')
     trainable['label'] = labeler.label(trainable)
@@ -141,6 +147,13 @@ def adjudicate_RD(metrics):
                              (testable.poor_region_cov < 0.3) &
                              ~testable.chrom.isin(ALLOSOMES) &
                              ~testable.is_outlier_specific].copy()
+    
+    # Optionally filter out Wham deletions
+    if remove_wham:
+        wham_del_mask = (metrics['svtype'] == 'DEL') & metrics['name'].str.contains('wham', case=False, na=False)
+        trainable = trainable[~wham_del_mask].copy()
+        testable = testable[~wham_del_mask].copy()
+
     testable.to_csv('RD_pesr_lt5kb_testable.txt', index=False, sep='\t')
     trainable['label'] = labeler.label(trainable)
     trainable.to_csv('RD_pesr_lt5kb_trainable.txt', index=False, sep='\t')
@@ -364,7 +377,7 @@ def adjudicate_SV(metrics, remove_wham=False):
     sys.stderr.write('Adjudicating SR (1)...\n')
     cutoffs[1] = adjudicate_SR1(metrics, remove_wham)
     sys.stderr.write('Adjudicating RD...\n')
-    cutoffs[2] = adjudicate_RD(metrics)
+    cutoffs[2] = adjudicate_RD(metrics, remove_wham)
     sys.stderr.write('Adjudicating PE...\n')
     cutoffs[3] = adjudicate_PE(metrics, remove_wham)
     #  sys.stderr.write('Adjudicating BAF (2)...\n')
