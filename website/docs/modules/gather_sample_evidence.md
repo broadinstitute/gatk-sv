@@ -17,6 +17,11 @@ Manta, Wham, and Scramble. For guidance on pre-filtering prior to GatherSampleEv
 MELT is no longer supported as a raw caller. Please see [SV/CNV callers](/docs/gs/sv_callers) for more information.
 :::
 
+:::note
+By default, GATK-SV runs Manta on the raw calls. However, if you already have DRAGEN-SV calls for the samples, you
+can skip running Manta by setting `manta_docker` to null.
+:::
+
 The following diagram illustrates the recommended invocation order:
 
 ```mermaid
