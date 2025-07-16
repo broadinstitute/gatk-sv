@@ -68,7 +68,7 @@ workflow PanGenieIndexGenotype {
 
     scatter (i in range(length(sample_name_list))){
         if (!defined(input_crai_list[i])) {
-            call LongReadGenotypeTasks.IndexPanGenieCaseReads {
+            call LongReadGenotypeTasks.IndexPanGenieCaseReads as index_pangenie_case_reads {
                 # TODO we require the alignments to subset by chromosome; change to start from raw reads
                 input:
                     input_cram = input_cram_list[i],
@@ -79,11 +79,11 @@ workflow PanGenieIndexGenotype {
         }
 
         if (subset_reads) {
-          call LongReadGenotypeTasks.PreprocessPanGenieCaseReads {
+          call LongReadGenotypeTasks.PreprocessPanGenieCaseReads as preprocess_pangenie_case_reads {
               # TODO we require the alignments to subset by chromosome; change to start from raw reads
               input:
                   input_cram = input_cram_list[i],
-                  input_cram_idx = select_first([input_crai_list[i], IndexCaseReads.cram_idx]),
+                  input_cram_idx = select_first([input_crai_list[i], index_pangenie_case_reads.cram_idx]),
                   reference_fasta = reference_fasta,
                   reference_fasta_fai = reference_fasta_fai,
                   output_prefix = sample_name_list[i],
@@ -95,11 +95,11 @@ workflow PanGenieIndexGenotype {
         }
 
         if (!subset_reads) {
-            call LongReadGenotypeTasks.PreprocessPanGenieCaseReadsWithoutSubsetting {
+            call LongReadGenotypeTasks.PreprocessPanGenieCaseReadsWithoutSubsetting as preprocess_pangenie_case_reads_wo_sub {
                 # TODO we require the alignments to subset by chromosome; change to start from raw reads
                 input:
                     input_cram = input_cram_list[i],
-                    input_cram_idx = select_first([input_crai_list[i], IndexCaseReads.cram_idx]),
+                    input_cram_idx = select_first([input_crai_list[i], index_pangenie_case_reads.cram_idx]),
                     reference_fasta = reference_fasta,
                     reference_fasta_fai = reference_fasta_fai,
                     output_prefix = sample_name_list[i],
@@ -116,7 +116,7 @@ workflow PanGenieIndexGenotype {
                 pangenie_index_unique_kmers_map = Pindex_unique_kmers_map,
                 pangenie_index_path_segments_fasta = Pindex_path_segments_fasta,
                 index_prefix = index_prefix,
-                input_fasta = select_first([PreprocessCaseReads.preprocessed_fasta, PreprocessCaseReadsWithoutSubsetting.preprocessed_fasta]),
+                input_fasta = select_first([preprocess_pangenie_case_reads.preprocessed_fasta, preprocess_pangenie_case_reads_wo_sub.preprocessed_fasta]),
                 sample_name = sample_name_list[i],
                 output_prefix = sample_name_list[i],
                 docker = pangenie_docker,
@@ -125,7 +125,7 @@ workflow PanGenieIndexGenotype {
                 runtime_attributes = runtime_attr_pangenie_genotype
         }
 
-        call LongReadGenotypeTasks.ConvertBubblesToBiallelic{
+        call LongReadGenotypeTasks.ConvertBubblesToBiallelic as convert_bubbles_to_biallelic{
           input:
             input_vcf = pangenie_genotype.genotyping_vcf_gz,
             input_vcf_idx = pangenie_genotype.genotyping_vcf_gz_tbi,
@@ -143,8 +143,8 @@ workflow PanGenieIndexGenotype {
     output{
       File pangenie_genotyped_vcf = pangenie_genotype.genotyping_vcf_gz
       File pangenie_genotyped_vcf_idx = pangenie_genotype.genotyping_vcf_gz_tbi
-      File pangenie_genotyped_biallelic_vcf = ConvertBubblesToBiallelic.biallelic_vcf
-      File pangenie_genotyped_biallelic_vcf_idx = ConvertBubblesToBiallelic.biallelic_vcf_idx
+      File pangenie_genotyped_biallelic_vcf = convert_bubbles_to_biallelic.biallelic_vcf
+      File pangenie_genotyped_biallelic_vcf_idx = convert_bubbles_to_biallelic.biallelic_vcf_idx
 
     }
 }
