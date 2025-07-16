@@ -2472,14 +2472,25 @@ task IndexPanGenieRefPanel {
             ~{extra_args}
     }
 
+    RuntimeAttr default_attr = object {
+      cpu_cores: 1,
+      mem_gb: 2,
+      disk_gb: 5,
+      boot_disk_gb: 10,
+      preemptible_tries: 1,
+      max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     runtime {
-        docker: docker_image
-        cpu: select_first([runtime_attributes.cpu, 1])
-        memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
-        disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, false]) then " SSD" else " HDD"
-        bootDiskSizeGb: select_first([runtime_attributes.boot_disk_size_gb, 15])
-        preemptible: select_first([runtime_attributes.preemptible, 2])
-        maxRetries: select_first([runtime_attributes.max_retries, 1])
+      cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+      memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+      bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+      docker: docker_image
+      preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+      maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 
     output {
@@ -2517,14 +2528,25 @@ task IndexPanGenieCaseReads {
         samtools index -@ $(nproc) ~{input_cram} ~{output_prefix}.cram.crai
     }
 
+    RuntimeAttr default_attr = object {
+      cpu_cores: 1,
+      mem_gb: 2,
+      disk_gb: 5,
+      boot_disk_gb: 10,
+      preemptible_tries: 1,
+      max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     runtime {
-        docker: docker_image
-        cpu: select_first([runtime_attributes.cpu, 2])
-        memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
-        disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, true]) then " SSD" else " HDD"
-        bootDiskSizeGb: select_first([runtime_attributes.boot_disk_size_gb, 15])
-        preemptible: select_first([runtime_attributes.preemptible, 2])
-        maxRetries: select_first([runtime_attributes.max_retries, 1])
+      cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+      memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+      bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+      docker: docker_image
+      preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+      maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 
     output {
@@ -2569,16 +2591,26 @@ task PreprocessPanGenieCaseReads {
             sed -E '~{filter_N_regex}' > ~{output_prefix}.preprocessed.fasta
     }
 
-    runtime {
-        docker: docker_image
-        cpu: select_first([runtime_attributes.cpu, 2])
-        memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
-        disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, false]) then " SSD" else " HDD"
-        bootDiskSizeGb: select_first([runtime_attributes.boot_disk_size_gb, 15])
-        preemptible: select_first([runtime_attributes.preemptible, 2])
-        maxRetries: select_first([runtime_attributes.max_retries, 1])
+    RuntimeAttr default_attr = object {
+      cpu_cores: 1,
+      mem_gb: 2,
+      disk_gb: 5,
+      boot_disk_gb: 10,
+      preemptible_tries: 1,
+      max_retries: 1
     }
 
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    runtime {
+      cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+      memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+      bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+      docker: docker_image
+      preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+      maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
     output {
         File monitoring_log = "monitoring.log"
         File preprocessed_fasta = "~{output_prefix}.preprocessed.fasta"
@@ -2615,14 +2647,25 @@ task PreprocessPanGenieCaseReadsWithoutSubsetting {
         samtools fasta --reference ~{reference_fasta} -@ $(nproc) ~{input_cram} | sed -E '~{filter_N_regex}' > ~{output_prefix}.preprocessed.fasta
     }
 
+    RuntimeAttr default_attr = object {
+      cpu_cores: 1,
+      mem_gb: 2,
+      disk_gb: 5,
+      boot_disk_gb: 10,
+      preemptible_tries: 1,
+      max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     runtime {
-        docker: docker_image
-        cpu: select_first([runtime_attributes.cpu, 2])
-        memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
-        disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, false]) then " SSD" else " HDD"
-        bootDiskSizeGb: select_first([runtime_attributes.boot_disk_size_gb, 15])
-        preemptible: select_first([runtime_attributes.preemptible, 2])
-        maxRetries: select_first([runtime_attributes.max_retries, 1])
+      cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+      memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+      bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+      docker: docker_image
+      preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+      maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 
     output {
@@ -2683,14 +2726,25 @@ task PanGenieGenotype {
         bcftools index -t ~{output_prefix}_genotyping_naively_phased.vcf.gz
     }
 
+    RuntimeAttr default_attr = object {
+      cpu_cores: 1,
+      mem_gb: 2,
+      disk_gb: 5,
+      boot_disk_gb: 10,
+      preemptible_tries: 1,
+      max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     runtime {
-        docker: docker_image
-        cpu: select_first([runtime_attributes.cpu, 1])
-        memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
-        disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, false]) then " SSD" else " HDD"
-        bootDiskSizeGb: select_first([runtime_attributes.boot_disk_size_gb, 15])
-        preemptible: select_first([runtime_attributes.preemptible, 2])
-        maxRetries: select_first([runtime_attributes.max_retries, 1])
+      cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+      memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+      bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+      docker: docker_image
+      preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+      maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 
     output {
