@@ -27,6 +27,8 @@ workflow PanGenieIndexGenotype {
         Array[File?] input_crai_list
         Array[String] sample_name_list
 
+        File convert_to_biallelic_script
+
         Boolean subset_reads = true
 
         String? pangenie_extra_args
