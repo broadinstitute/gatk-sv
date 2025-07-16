@@ -713,6 +713,64 @@ task ConcatVcfs {
   }
 }
 
+task ConvertBubblesToBiallelic{
+  input {
+    File input_vcf
+    File input_vcf_idx
+
+    File panel_biallelic_vcf
+    File panel_biallelic_vcf_idx
+    File convert_to_biallelic_script
+
+    String docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+
+  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
+  # be held in memory or disk while working, potentially in a form that takes up more space)
+  Float input_size = size(input_vcf, "GB")
+  Float compression_factor = 10.0
+  Float base_disk_gb = 20.0
+  Float base_mem_gb = 10.0
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: base_mem_gb + compression_factor * input_size,
+    disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  String prefix = basename(input_vcf, ".vcf.gz")
+  command <<<
+    set -euo pipefail
+
+    zcat ~{input_vcf} | python3 ~{convert_to_biallelic_script} "~{panel_biallelic_vcf}" > "~{input_vcf}_biallelic.vcf"
+    bgzip  "~{input_vcf}_biallelic.vcf"
+    tabix -p vcf  "~{input_vcf}_biallelic.vcf.gz"
+
+ >>>
+
+  output {
+    File biallelic_vcf = "~{input_vcf}_biallelic.vcf.gz"
+    File biallelic_vcf_idx =  "~{input_vcf}_biallelic.vcf.gz.tbi"
+  }
+}
+
 task EvaluateInheriByGQ {
   input {
     File vcf_file         # Input VCF file (bgzipped or plain)
@@ -2368,4 +2426,282 @@ task WriteTrioSampleFile {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+task IndexPanGenieRefPanel {
+    input {
+        File panel_vcf_gz
+        File panel_vcf_gz_tbi
+        File reference_fasta
+        Array[String] chromosomes
+        String output_prefix
+
+        String docker
+        File? monitoring_script
+        Int? kmer_length = 31
+        String? extra_args
+
+        RuntimeAttributes runtime_attributes = {}
+    }
+
+    Int num_chromosomes = length(chromosomes)
+
+    command {
+        set -e
+
+        # Create a zero-size monitoring log file so it exists even if we don't pass a monitoring script
+        touch monitoring.log
+        if [ -s ~{monitoring_script} ]; then
+            bash ~{monitoring_script} > monitoring.log &
+        fi
+
+        # subset reference and panel VCF to chromosomes
+        samtools faidx -r <(echo -e "~{sep="\n" chromosomes}") ~{reference_fasta} > reference.subset.fa
+        bcftools view ~{panel_vcf_gz} -r ~{sep="," chromosomes} > panel.subset.vcf
+
+        NPROC=$(nproc)
+        # NUM_CHROMOSOMES=~{num_chromosomes}
+        # NUM_THREADS=$(( NPROC < NUM_CHROMOSOMES ? NPROC : NUM_CHROMOSOMES ))
+        NUM_THREADS=$NPROC
+
+        /pangenie/build/src/PanGenie-index \
+            -o ~{output_prefix} \
+            -r reference.subset.fa \
+            -t $NUM_THREADS \
+            -v panel.subset.vcf \
+            -k ~{kmer_length} \
+            ~{extra_args}
+    }
+
+    runtime {
+        docker: docker
+        cpu: select_first([runtime_attributes.cpu, 1])
+        memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
+        disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, false]) then " SSD" else " HDD"
+        bootDiskSizeGb: select_first([runtime_attributes.boot_disk_size_gb, 15])
+        preemptible: select_first([runtime_attributes.preemptible, 2])
+        maxRetries: select_first([runtime_attributes.max_retries, 1])
+    }
+
+    output {
+        File monitoring_log = "monitoring.log"
+        Array[File] pangenie_index_chromosome_graphs = glob("~{output_prefix}_*_Graph.cereal")
+        Array[File] pangenie_index_chromosome_kmers = glob("~{output_prefix}_*_kmers.tsv.gz")
+        File pangenie_index_unique_kmers_map = "~{output_prefix}_UniqueKmersMap.cereal"
+        File pangenie_index_path_segments_fasta = "~{output_prefix}_path_segments.fasta"
+    }
+}
+
+task IndexPanGenieCaseReads {
+    input {
+        File input_cram
+
+        String docker
+        File? monitoring_script
+
+        RuntimeAttributes runtime_attributes = {}
+    }
+
+    # if we instead simply use File cram_idx = "~{input_cram}.crai" in the output block,
+    # Terra tries to localize an index adjacent to the CRAM in PreprocessCaseReads???
+    String output_prefix = basename(input_cram, ".cram")
+
+    command {
+        set -e
+
+        # Create a zero-size monitoring log file so it exists even if we don't pass a monitoring script
+        touch monitoring.log
+        if [ -s ~{monitoring_script} ]; then
+            bash ~{monitoring_script} > monitoring.log &
+        fi
+
+        samtools index -@ $(nproc) ~{input_cram} ~{output_prefix}.cram.crai
+    }
+
+    runtime {
+        docker: docker
+        cpu: select_first([runtime_attributes.cpu, 2])
+        memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
+        disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, true]) then " SSD" else " HDD"
+        bootDiskSizeGb: select_first([runtime_attributes.boot_disk_size_gb, 15])
+        preemptible: select_first([runtime_attributes.preemptible, 2])
+        maxRetries: select_first([runtime_attributes.max_retries, 1])
+    }
+
+    output {
+        File monitoring_log = "monitoring.log"
+        File cram_idx = "~{output_prefix}.cram.crai"
+    }
+}
+
+task PreprocessPanGenieCaseReads {
+    input {
+        File input_cram
+        File input_cram_idx
+        File reference_fasta
+        File reference_fasta_fai
+        Array[String] chromosomes
+        String output_prefix
+
+        String docker
+        File? monitoring_script
+
+        RuntimeAttributes runtime_attributes = {}
+    }
+
+    String filter_N_regex = "/^>/{N;/^>.*\\n.*N.*/d}"
+
+    command {
+        set -e
+
+        # Create a zero-size monitoring log file so it exists even if we don't pass a monitoring script
+        touch monitoring.log
+        if [ -s ~{monitoring_script} ]; then
+            bash ~{monitoring_script} > monitoring.log &
+        fi
+
+        # hacky way to get chromosomes into bed file
+        grep -P '~{sep="\\t|" chromosomes}\t' ~{reference_fasta_fai} | cut -f 1,2 | sed -e 's/\t/\t1\t/g' > chromosomes.bed
+
+        # filter out read pairs containing N nucleotides
+        # TODO move functionality into KAGE code
+        samtools view --reference ~{reference_fasta} -@ $(nproc) -L chromosomes.bed -u ~{input_cram} | \
+            samtools fasta --reference ~{reference_fasta} -@ $(nproc) | \
+            sed -E '~{filter_N_regex}' > ~{output_prefix}.preprocessed.fasta
+    }
+
+    runtime {
+        docker: docker
+        cpu: select_first([runtime_attributes.cpu, 2])
+        memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
+        disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, false]) then " SSD" else " HDD"
+        bootDiskSizeGb: select_first([runtime_attributes.boot_disk_size_gb, 15])
+        preemptible: select_first([runtime_attributes.preemptible, 2])
+        maxRetries: select_first([runtime_attributes.max_retries, 1])
+    }
+
+    output {
+        File monitoring_log = "monitoring.log"
+        File preprocessed_fasta = "~{output_prefix}.preprocessed.fasta"
+    }
+}
+
+task PreprocessPanGenieCaseReadsWithoutSubsetting {
+    input {
+        File input_cram
+        File input_cram_idx
+        File reference_fasta
+        File reference_fasta_fai
+        String output_prefix
+
+        String docker
+        File? monitoring_script
+
+        RuntimeAttributes runtime_attributes = {}
+    }
+
+    String filter_N_regex = "/^>/{N;/^>.*\\n.*N.*/d}"
+
+    command {
+        set -e
+
+        # Create a zero-size monitoring log file so it exists even if we don't pass a monitoring script
+        touch monitoring.log
+        if [ -s ~{monitoring_script} ]; then
+            bash ~{monitoring_script} > monitoring.log &
+        fi
+
+        # filter out read pairs containing N nucleotides
+        # TODO move functionality into KAGE code
+        samtools fasta --reference ~{reference_fasta} -@ $(nproc) ~{input_cram} | sed -E '~{filter_N_regex}' > ~{output_prefix}.preprocessed.fasta
+    }
+
+    runtime {
+        docker: docker
+        cpu: select_first([runtime_attributes.cpu, 2])
+        memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
+        disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, false]) then " SSD" else " HDD"
+        bootDiskSizeGb: select_first([runtime_attributes.boot_disk_size_gb, 15])
+        preemptible: select_first([runtime_attributes.preemptible, 2])
+        maxRetries: select_first([runtime_attributes.max_retries, 1])
+    }
+
+    output {
+        File monitoring_log = "monitoring.log"
+        File preprocessed_fasta = "~{output_prefix}.preprocessed.fasta"
+    }
+}
+
+task PanGenieGenotype {
+    input {
+        Array[File] pangenie_index_chromosome_graphs
+        Array[File] pangenie_index_chromosome_kmers
+        File pangenie_index_unique_kmers_map
+        File pangenie_index_path_segments_fasta
+        String index_prefix
+        File input_fasta
+        String sample_name
+        String output_prefix
+
+        String docker
+        File? monitoring_script
+        String? extra_args
+
+        RuntimeAttributes runtime_attributes = {}
+    }
+
+    command {
+        set -e
+
+        # Create a zero-size monitoring log file so it exists even if we don't pass a monitoring script
+        touch monitoring.log
+        if [ -s ~{monitoring_script} ]; then
+            bash ~{monitoring_script} > monitoring.log &
+        fi
+
+        NPROC=$(nproc)
+        NUM_THREADS=$NPROC
+
+        mv ~{sep=" " pangenie_index_chromosome_graphs} .
+        mv ~{sep=" " pangenie_index_chromosome_kmers} .
+        mv ~{pangenie_index_unique_kmers_map} .
+        mv ~{pangenie_index_path_segments_fasta} .
+
+        /pangenie/build/src/PanGenie \
+            -i ~{input_fasta} \
+            -f ~{index_prefix} \
+            -o ~{output_prefix} \
+            -s ~{sample_name} \
+            -t $NUM_THREADS \
+            -j $NUM_THREADS \
+            ~{extra_args}
+
+        bgzip -c ~{output_prefix}_genotyping.vcf > ~{output_prefix}_genotyping.vcf.gz
+        bcftools index -t ~{output_prefix}_genotyping.vcf.gz
+
+        # naively set all GTs to phased for Vcfdist evaluation
+        bcftools +setGT ~{output_prefix}_genotyping.vcf.gz -Oz -o ~{output_prefix}_genotyping_naively_phased.vcf.gz -- -t a -n p
+        bcftools index -t ~{output_prefix}_genotyping_naively_phased.vcf.gz
+    }
+
+    runtime {
+        docker: docker
+        cpu: select_first([runtime_attributes.cpu, 1])
+        memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
+        disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, false]) then " SSD" else " HDD"
+        bootDiskSizeGb: select_first([runtime_attributes.boot_disk_size_gb, 15])
+        preemptible: select_first([runtime_attributes.preemptible, 2])
+        maxRetries: select_first([runtime_attributes.max_retries, 1])
+    }
+
+    output {
+        File monitoring_log = "monitoring.log"
+        File genotyping_vcf_gz = "~{output_prefix}_genotyping.vcf.gz"
+        File genotyping_vcf_gz_tbi = "~{output_prefix}_genotyping.vcf.gz.tbi"
+        File genotyping_naively_phased_vcf_gz = "~{output_prefix}_genotyping_naively_phased.vcf.gz"
+        File genotyping_naively_phased_vcf_gz_tbi = "~{output_prefix}_genotyping_naively_phased.vcf.gz.tbi"
+        File histogram = "~{output_prefix}_histogram.histo"
+        #File path_segments_fasta = "~{output_prefix}_path_segments.fasta"
+    }
+}
+
 
