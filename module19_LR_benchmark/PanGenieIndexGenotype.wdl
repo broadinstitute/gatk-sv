@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-
+import "MergeVcfs.wdl" as MergeVcfs
 import "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
 
 workflow PanGenieIndexGenotype {
@@ -142,12 +142,25 @@ workflow PanGenieIndexGenotype {
         }
     }
 
+    call MergeVcfs.MergeVcfs as merge_vcfs{
+        input:
+            input_vcfs = convert_bubbles_to_biallelic.biallelic_vcf,
+            input_vcfs_idx = convert_bubbles_to_biallelic.biallelic_vcf_idx,
+            sample_list = sample_name_list,
+            chromosomes = chromosomes,
+            convert_to_biallelic = false,
+            output_prefix = "~{index_prefix}.PanGenie_Biallelic",
+            sv_base_mini_docker = sv_base_mini_docker,
+            sv_pipeline_base_docker = sv_pipeline_base_docker
+    }
+
     output{
       Array[File] pangenie_genotyped_vcf = pangenie_genotype.genotyping_vcf_gz
       Array[File] pangenie_genotyped_vcf_idx = pangenie_genotype.genotyping_vcf_gz_tbi
       Array[File] pangenie_genotyped_biallelic_vcf = convert_bubbles_to_biallelic.biallelic_vcf
       Array[File] pangenie_genotyped_biallelic_vcf_idx = convert_bubbles_to_biallelic.biallelic_vcf_idx
-
+      File pangenie_genotyped_merged_biallelic_vcf = merge_vcfs.final_merged_vcf
+      File pangenie_genotyped_merged_biallelic_vcf_idx = merge_vcfs.final_merged_vcf_index
     }
 }
 
