@@ -143,10 +143,10 @@ workflow PanGenieIndexGenotype {
     }
 
     output{
-      File pangenie_genotyped_vcf = pangenie_genotype.genotyping_vcf_gz
-      File pangenie_genotyped_vcf_idx = pangenie_genotype.genotyping_vcf_gz_tbi
-      File pangenie_genotyped_biallelic_vcf = convert_bubbles_to_biallelic.biallelic_vcf
-      File pangenie_genotyped_biallelic_vcf_idx = convert_bubbles_to_biallelic.biallelic_vcf_idx
+      Array[File] pangenie_genotyped_vcf = pangenie_genotype.genotyping_vcf_gz
+      Array[File] pangenie_genotyped_vcf_idx = pangenie_genotype.genotyping_vcf_gz_tbi
+      Array[File] pangenie_genotyped_biallelic_vcf = convert_bubbles_to_biallelic.biallelic_vcf
+      Array[File] pangenie_genotyped_biallelic_vcf_idx = convert_bubbles_to_biallelic.biallelic_vcf_idx
 
     }
 }
