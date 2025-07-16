@@ -122,7 +122,7 @@ workflow PanGenieIndexGenotype {
                 docker_image = pangenie_docker,
                 extra_args = pangenie_extra_args,
                 monitoring_script = monitoring_script,
-                runtime_attributes = runtime_attr_pangenie_genotype
+                runtime_attr_override = runtime_attr_pangenie_genotype
         }
 
         call LongReadGenotypeTasks.ConvertBubblesToBiallelic as convert_bubbles_to_biallelic{
@@ -136,7 +136,7 @@ workflow PanGenieIndexGenotype {
             convert_to_biallelic_script = convert_to_biallelic_script,
 
             docker_image = sv_base_pipeline_docker,
-            runtime_attributes = runtime_attr_convert_bubbles_to_biallelic
+            runtime_attr_override = runtime_attr_convert_bubbles_to_biallelic
         }
     }
 
