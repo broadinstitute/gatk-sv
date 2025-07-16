@@ -46,7 +46,7 @@ workflow PanGenieIndexGenotype {
     }
 
     if(!defined(pangenie_index_unique_kmers_map)){
-        call LongReadGenotypeTasks.IndexPanGenieRefPanel {
+        call LongReadGenotypeTasks.IndexPanGenieRefPanel as index_pangenie_ref_panel {
             input:
                 panel_vcf_gz = panel_vcf_gz,
                 panel_vcf_gz_tbi = panel_vcf_gz_tbi,
@@ -60,10 +60,10 @@ workflow PanGenieIndexGenotype {
     }
 
 
-    File Pindex_unique_kmers_map = select_first([Index.pangenie_index_unique_kmers_map pangenie_index_unique_kmers_map])
-    File Pindex_path_segments_fasta = select_first([Index.pangenie_index_path_segments_fasta, pangenie_index_path_segments_fasta])
-    Array[File] Pindex_chromosome_kmers = select_first([Index.pangenie_index_chromosome_kmers, pangenie_index_chromosome_kmers])
-    Array[File] Pindex_chromosome_graphs = select_first([Index.pangenie_index_chromosome_graphs, pangenie_index_chromosome_graphs])
+    File Pindex_unique_kmers_map = select_first([index_pangenie_ref_panel.pangenie_index_unique_kmers_map, pangenie_index_unique_kmers_map])
+    File Pindex_path_segments_fasta = select_first([index_pangenie_ref_panel.pangenie_index_path_segments_fasta, pangenie_index_path_segments_fasta])
+    Array[File] Pindex_chromosome_kmers = select_first([index_pangenie_ref_panel.pangenie_index_chromosome_kmers, pangenie_index_chromosome_kmers])
+    Array[File] Pindex_chromosome_graphs = select_first([index_pangenie_ref_panel.pangenie_index_chromosome_graphs, pangenie_index_chromosome_graphs])
 
 
     scatter (i in range(length(sample_name_list))){
