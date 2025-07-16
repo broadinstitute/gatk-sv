@@ -2440,7 +2440,7 @@ task IndexPanGenieRefPanel {
         Int? kmer_length = 31
         String? extra_args
 
-        RuntimeAttributes runtime_attributes = {}
+        RuntimeAttr? runtime_attr_override
     }
 
     Int num_chromosomes = length(chromosomes)
@@ -2498,7 +2498,7 @@ task IndexPanGenieCaseReads {
         String docker_image
         File? monitoring_script
 
-        RuntimeAttributes runtime_attributes = {}
+        RuntimeAttr? runtime_attr_override
     }
 
     # if we instead simply use File cram_idx = "~{input_cram}.crai" in the output block,
@@ -2545,7 +2545,7 @@ task PreprocessPanGenieCaseReads {
         String docker_image
         File? monitoring_script
 
-        RuntimeAttributes runtime_attributes = {}
+        RuntimeAttr? runtime_attr_override
     }
 
     String filter_N_regex = "/^>/{N;/^>.*\\n.*N.*/d}"
@@ -2596,7 +2596,7 @@ task PreprocessPanGenieCaseReadsWithoutSubsetting {
         String docker_image
         File? monitoring_script
 
-        RuntimeAttributes runtime_attributes = {}
+        RuntimeAttr? runtime_attr_override
     }
 
     String filter_N_regex = "/^>/{N;/^>.*\\n.*N.*/d}"
@@ -2646,7 +2646,7 @@ task PanGenieGenotype {
         File? monitoring_script
         String? extra_args
 
-        RuntimeAttributes runtime_attributes = {}
+        RuntimeAttr? runtime_attr_override
     }
 
     command {
