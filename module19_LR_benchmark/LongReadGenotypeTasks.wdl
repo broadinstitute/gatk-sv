@@ -722,7 +722,7 @@ task ConvertBubblesToBiallelic{
     File panel_biallelic_vcf_idx
     File convert_to_biallelic_script
 
-    String docker
+    String docker_image
     RuntimeAttr? runtime_attr_override
   }
 
@@ -751,7 +751,7 @@ task ConvertBubblesToBiallelic{
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_base_mini_docker
+    docker: docker_image
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
@@ -2435,7 +2435,7 @@ task IndexPanGenieRefPanel {
         Array[String] chromosomes
         String output_prefix
 
-        String docker
+        String docker_image
         File? monitoring_script
         Int? kmer_length = 31
         String? extra_args
@@ -2473,7 +2473,7 @@ task IndexPanGenieRefPanel {
     }
 
     runtime {
-        docker: docker
+        docker: docker_image
         cpu: select_first([runtime_attributes.cpu, 1])
         memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
         disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, false]) then " SSD" else " HDD"
@@ -2495,7 +2495,7 @@ task IndexPanGenieCaseReads {
     input {
         File input_cram
 
-        String docker
+        String docker_image
         File? monitoring_script
 
         RuntimeAttributes runtime_attributes = {}
@@ -2518,7 +2518,7 @@ task IndexPanGenieCaseReads {
     }
 
     runtime {
-        docker: docker
+        docker: docker_image
         cpu: select_first([runtime_attributes.cpu, 2])
         memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
         disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, true]) then " SSD" else " HDD"
@@ -2542,7 +2542,7 @@ task PreprocessPanGenieCaseReads {
         Array[String] chromosomes
         String output_prefix
 
-        String docker
+        String docker_image
         File? monitoring_script
 
         RuntimeAttributes runtime_attributes = {}
@@ -2570,7 +2570,7 @@ task PreprocessPanGenieCaseReads {
     }
 
     runtime {
-        docker: docker
+        docker: docker_image
         cpu: select_first([runtime_attributes.cpu, 2])
         memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
         disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, false]) then " SSD" else " HDD"
@@ -2593,7 +2593,7 @@ task PreprocessPanGenieCaseReadsWithoutSubsetting {
         File reference_fasta_fai
         String output_prefix
 
-        String docker
+        String docker_image
         File? monitoring_script
 
         RuntimeAttributes runtime_attributes = {}
@@ -2616,7 +2616,7 @@ task PreprocessPanGenieCaseReadsWithoutSubsetting {
     }
 
     runtime {
-        docker: docker
+        docker: docker_image
         cpu: select_first([runtime_attributes.cpu, 2])
         memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
         disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, false]) then " SSD" else " HDD"
@@ -2642,7 +2642,7 @@ task PanGenieGenotype {
         String sample_name
         String output_prefix
 
-        String docker
+        String docker_image
         File? monitoring_script
         String? extra_args
 
@@ -2684,7 +2684,7 @@ task PanGenieGenotype {
     }
 
     runtime {
-        docker: docker
+        docker: docker_image
         cpu: select_first([runtime_attributes.cpu, 1])
         memory: select_first([runtime_attributes.command_mem_gb, 6]) + select_first([runtime_attributes.additional_mem_gb, 1]) + " GB"
         disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + if select_first([runtime_attributes.use_ssd, false]) then " SSD" else " HDD"
