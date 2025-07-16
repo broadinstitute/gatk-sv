@@ -66,7 +66,7 @@ workflow PanGenieIndexGenotype {
     Pindex_chromosome_graphs = select_first([Index.pangenie_index_chromosome_graphs, pangenie_index_chromosome_graphs])
 
 
-    scatter(i for range(length(sample_name_list))){
+    scatter (i in range(length(sample_name_list))){
         if (!defined(input_crai_list[i])) {
             call LongReadGenotypeTasks.IndexPanGenieCaseReads {
                 # TODO we require the alignments to subset by chromosome; change to start from raw reads
