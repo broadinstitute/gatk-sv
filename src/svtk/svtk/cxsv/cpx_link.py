@@ -157,11 +157,12 @@ def link_cpx_V2(linked_INV, cpx_dist=2000):
     cluster = []
     for inv in overlapping_inv:
         if len(inv) > 1:
-            if abs(inv[1].pos - inv[0].pos) > cpx_dist and abs(inv[1].stop - inv[0].stop) > cpx_dist:
+            end1 = inv[0].info['END2'] if inv[0].info['SVTYPE'] == 'BND' else inv[0].stop
+            end2 = inv[1].info['END2'] if inv[1].info['SVTYPE'] == 'BND' else inv[1].stop
+            if abs(inv[1].pos - inv[0].pos) > cpx_dist and abs(end2 - end1) > cpx_dist:
                 if 'STRANDS' in inv[0].info.keys() and 'STRANDS' in inv[1].info.keys():
                     if inv[0].info['STRANDS'] != inv[1].info['STRANDS']:
-                        if inv[0].pos < inv[1].pos < inv[0].stop < inv[1].stop \
-                                or inv[1].pos < inv[0].pos < inv[1].stop < inv[0].stop:
+                        if inv[0].pos < inv[1].pos < end1 < end2 or inv[1].pos < inv[0].pos < end2 < end1:
                             cluster.append(inv)
         else:
             cluster.append(inv)
@@ -170,9 +171,13 @@ def link_cpx_V2(linked_INV, cpx_dist=2000):
 
 def close_enough(r1, r2, cpx_dist=2000):
     distA = np.abs(r1.pos - r2.pos)
-    distB = np.abs(r1.stop - r2.stop)
+    end1 = r1.info['END2'] if r1.info['SVTYPE'] == 'BND' else r1.stop
+    end2 = r2.info.get('END2') if r2.info['SVTYPE'] == 'BND' else r2.stop
+    distB = np.abs(end1 - end2)
     return distA < cpx_dist or distB < cpx_dist
 
 
 def records_overlap(r1, r2):
-    return r1.chrom == r2.chrom and not (r1.pos > r2.stop or r1.stop < r2.pos)
+    end1 = r1.info['END2'] if r1.info['SVTYPE'] == 'BND' else r1.stop
+    end2 = r2.info['END2'] if r2.info['SVTYPE'] == 'BND' else r2.stop
+    return r1.chrom == r2.chrom and not (r1.pos > end2 or end1 < r2.pos)
