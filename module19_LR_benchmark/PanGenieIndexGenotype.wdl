@@ -34,7 +34,8 @@ workflow PanGenieIndexGenotype {
         String? pangenie_extra_args
 
         String pangenie_docker
-        String sv_base_pipeline_docker
+        String sv_base_mini_docker
+        String sv_pipeline_base_docker
 
         File? monitoring_script
 
@@ -74,7 +75,7 @@ workflow PanGenieIndexGenotype {
                 # TODO we require the alignments to subset by chromosome; change to start from raw reads
                 input:
                     input_cram = input_cram_list[i],
-                    docker_image = sv_base_pipeline_docker,
+                    docker_image = sv_pipeline_base_docker,
                     monitoring_script = monitoring_script,
                     runtime_attr_override = runtime_attr_cram_index
             }
@@ -90,7 +91,7 @@ workflow PanGenieIndexGenotype {
                   reference_fasta_fai = reference_fasta_fai,
                   output_prefix = sample_name_list[i],
                   chromosomes = chromosomes,
-                  docker_image = sv_base_pipeline_docker,
+                  docker_image = sv_pipeline_base_docker,
                   monitoring_script = monitoring_script,
                   runtime_attr_override = runtime_attr_process_case_reads
           }
@@ -105,7 +106,7 @@ workflow PanGenieIndexGenotype {
                     reference_fasta = reference_fasta,
                     reference_fasta_fai = reference_fasta_fai,
                     output_prefix = sample_name_list[i],
-                    docker_image = sv_base_pipeline_docker,
+                    docker_image = sv_pipeline_base_docker,
                     monitoring_script = monitoring_script,
                     runtime_attr_override = runtime_attr_process_case_reads_wo_subset
             }
@@ -137,7 +138,7 @@ workflow PanGenieIndexGenotype {
 
             convert_to_biallelic_script = convert_to_biallelic_script,
 
-            docker_image = sv_base_pipeline_docker,
+            docker_image = sv_pipeline_base_docker,
             runtime_attr_override = runtime_attr_convert_bubbles_to_biallelic
         }
     }
