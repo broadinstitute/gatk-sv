@@ -2703,6 +2703,7 @@ task PanGenieGenotype {
 
         NPROC=$(nproc)
         NUM_THREADS=$NPROC
+        NUM_THREADS=32
 
         mv ~{sep=" " pangenie_index_chromosome_graphs} .
         mv ~{sep=" " pangenie_index_chromosome_kmers} .
