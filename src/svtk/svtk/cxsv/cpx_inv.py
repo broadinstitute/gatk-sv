@@ -319,7 +319,7 @@ def filter_multiple_cnvs(FF, RR, cnvs, min_frac=0.5):
             name = '__'.join([c.id for c in cnvlist])
 
             merged_cnv.pos = start
-            merged_cnv.stop = end
+            merged_cnv.stop = start + 1 if merged_cnv.info['SVTYPE'] == 'BND' else end
             merged_cnv.id = name
             if merged_cnv.info['SVTYPE'] == 'BND':
                 merged_cnv.info['END2'] = end

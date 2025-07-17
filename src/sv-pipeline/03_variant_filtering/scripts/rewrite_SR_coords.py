@@ -31,7 +31,7 @@ def rewrite_SR_coords(record, metrics, pval_cutoff, bg_cutoff):
             record.pos, record.stop = sorted([posA, posB])
         elif record.info['SVTYPE'] == 'BND':
             record.pos = int(posA)
-            record.stop = int(posA)
+            record.stop = int(posA) + 1
             record.info['END2'] = int(posB)
         else:
             record.pos = posA

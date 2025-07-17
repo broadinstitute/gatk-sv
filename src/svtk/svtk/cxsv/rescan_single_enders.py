@@ -240,7 +240,7 @@ def make_new_record(pairs, old_record, retain_algs=False):
 
     if record.info.get('SVTYPE') == 'BND':
         record.info['END2'] = end
-        record.stop = record.pos
+        record.stop = record.pos + 1
     else:
         record.stop = end
 
