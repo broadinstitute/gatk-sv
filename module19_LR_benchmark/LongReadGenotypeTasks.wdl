@@ -2594,7 +2594,7 @@ task PreprocessPanGenieCaseReads {
     RuntimeAttr default_attr = object {
       cpu_cores: 1,
       mem_gb: 30,
-      disk_gb: ceil(size(input_cram, "GiB")*6)+100,
+      disk_gb: 500,
       boot_disk_gb: 10,
       preemptible_tries: 1,
       max_retries: 1
@@ -2650,7 +2650,7 @@ task PreprocessPanGenieCaseReadsWithoutSubsetting {
     RuntimeAttr default_attr = object {
       cpu_cores: 1,
       mem_gb: 30,
-      disk_gb: ceil(size(input_cram, "GiB")*6)+100,
+      disk_gb: 500,
       boot_disk_gb: 10,
       preemptible_tries: 1,
       max_retries: 1
@@ -2757,7 +2757,6 @@ task PanGenieGenotype {
         #File path_segments_fasta = "~{output_prefix}_path_segments.fasta"
     }
 }
-
 
 struct RuntimeAttributes {
     Int? cpu
