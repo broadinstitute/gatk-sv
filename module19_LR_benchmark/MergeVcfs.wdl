@@ -100,7 +100,7 @@ task ExtractChromosomeVcf {
 }
 
 # Task 2: Merge multiple VCFs
-task MergeVcfs {
+task MergeVcfTask {
   input {
     Array[File] input_vcfs
     String output_name
