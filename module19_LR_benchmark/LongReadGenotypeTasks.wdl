@@ -2593,8 +2593,8 @@ task PreprocessPanGenieCaseReads {
 
     RuntimeAttr default_attr = object {
       cpu_cores: 1,
-      mem_gb: 20,
-      disk_gb: 200,
+      mem_gb: 30,
+      disk_gb: 500,
       boot_disk_gb: 10,
       preemptible_tries: 1,
       max_retries: 1
@@ -2649,8 +2649,8 @@ task PreprocessPanGenieCaseReadsWithoutSubsetting {
 
     RuntimeAttr default_attr = object {
       cpu_cores: 1,
-      mem_gb: 20,
-      disk_gb: 200,
+      mem_gb: 30,
+      disk_gb: 500,
       boot_disk_gb: 10,
       preemptible_tries: 1,
       max_retries: 1
