@@ -2594,7 +2594,7 @@ task PreprocessPanGenieCaseReads {
     RuntimeAttr default_attr = object {
       cpu_cores: 1,
       mem_gb: 30,
-      disk_gb: 500,
+      disk_gb: ceil(size(input_cram, "GiB")*6)+100,
       boot_disk_gb: 10,
       preemptible_tries: 1,
       max_retries: 1
@@ -2650,7 +2650,7 @@ task PreprocessPanGenieCaseReadsWithoutSubsetting {
     RuntimeAttr default_attr = object {
       cpu_cores: 1,
       mem_gb: 30,
-      disk_gb: 500,
+      disk_gb: ceil(size(input_cram, "GiB")*6)+100,
       boot_disk_gb: 10,
       preemptible_tries: 1,
       max_retries: 1
@@ -2729,7 +2729,7 @@ task PanGenieGenotype {
     RuntimeAttr default_attr = object {
       cpu_cores: 1,
       mem_gb: 20,
-      disk_gb: 200,
+      disk_gb: ceil(size(input_fasta, "GiB")*2),
       boot_disk_gb: 10,
       preemptible_tries: 1,
       max_retries: 1
@@ -2740,7 +2740,7 @@ task PanGenieGenotype {
     runtime {
       cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
       memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
       bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
       docker: docker_image
       preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
@@ -2758,4 +2758,15 @@ task PanGenieGenotype {
     }
 }
 
+
+struct RuntimeAttributes {
+    Int? cpu
+    Int? command_mem_gb
+    Int? additional_mem_gb
+    Int? disk_size_gb
+    Int? boot_disk_size_gb
+    Boolean? use_ssd
+    Int? preemptible
+    Int? max_retries
+}
 
