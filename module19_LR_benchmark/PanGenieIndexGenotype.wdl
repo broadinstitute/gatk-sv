@@ -8,8 +8,10 @@ workflow PanGenieIndexGenotype {
     input {
         File panel_vcf_gz
         File panel_vcf_gz_tbi
-        File panel_biallelic_vcf
-        File panel_biallelic_vcf_idx
+
+        Array[File] panel_biallelic_vcf_list
+        Array[File] panel_biallelic_vcf_idx_list
+
 
         String index_prefix
 
@@ -67,6 +69,24 @@ workflow PanGenieIndexGenotype {
     File Pindex_path_segments_fasta = select_first([index_pangenie_ref_panel.pangenie_index_path_segments_fasta, pangenie_index_path_segments_fasta])
     Array[File] Pindex_chromosome_kmers = select_first([index_pangenie_ref_panel.pangenie_index_chromosome_kmers, pangenie_index_chromosome_kmers])
     Array[File] Pindex_chromosome_graphs = select_first([index_pangenie_ref_panel.pangenie_index_chromosome_graphs, pangenie_index_chromosome_graphs])
+
+    scatter (j in range(length(panel_biallelic_vcf_list))){
+
+        call LongReadGenotypeTasks.PreprocessBiallelicRefPanelVcf{
+            input:
+                input_vcf = panel_biallelic_vcf_list[j],
+                input_vf_idx = panel_biallelic_vcf_list[j],
+                docker_image = sv_base_mini_docker,
+                runtime_attr_override = runtime_attr_preprocess_biallelic_ref_panel_vcf
+        }
+    }
+
+    call ConcatVcfs as concat_biallelic_vcf{
+        input:
+            vcfs = PreprocessBiallelicRefPanelVcf.preprocessed_vcf,
+            vcfs_idx = PreprocessBiallelicRefPanelVcf.preprocessed_vcf_preprocessed_vcf_idx,
+            sv_base_mini_docker =sv_base_mini_docker
+    }
 
 
     scatter (i in range(length(sample_name_list))){
@@ -133,8 +153,8 @@ workflow PanGenieIndexGenotype {
             input_vcf = pangenie_genotype.genotyping_vcf_gz,
             input_vcf_idx = pangenie_genotype.genotyping_vcf_gz_tbi,
 
-            panel_biallelic_vcf = panel_biallelic_vcf,
-            panel_biallelic_vcf_idx = panel_biallelic_vcf_idx,
+            panel_biallelic_vcf = concat_biallelic_vcf.concat_vcf,
+            panel_biallelic_vcf_idx = concat_biallelic_vcf.concat_vcf_idx,
 
             convert_to_biallelic_script = convert_to_biallelic_script,
 

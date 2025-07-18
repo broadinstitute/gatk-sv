@@ -2555,6 +2555,84 @@ task IndexPanGenieCaseReads {
     }
 }
 
+takes PreprocessBiallelicRefPanelVcf{
+    input{
+      File input_vcf
+      File? input_vcf_idx
+
+      String docker_image
+      File? monitoring_script
+
+      RuntimeAttr? runtime_attr_override
+    }
+
+    String prefix = basename(input_vcf, ".vcf.gz")
+
+    command <<<
+      set -euxo pipefail
+
+      # Index VCF if needed
+      if [[ ! -f "~{input_vcf}.tbi" && ! -f "~{input_vcf}.csi" ]]; then
+        bcftools index ~{input_vcf}
+      fi
+
+      python3 <<CODE
+
+      import pysam
+      import sys
+
+      def extract_info_id_to_record_id(input_vcf, output_vcf):
+          vcf_in = pysam.VariantFile(input_vcf, "r")
+
+          vcf_out = pysam.VariantFile(output_vcf, "w", header=vcf_in.header)
+
+          for rec in vcf_in:
+              # Get ID from INFO column
+              info_id = rec.info.get("ID", None)
+              if info_id:
+                  # Set record.id to the info value
+                  rec.id = str(info_id[0])
+              vcf_out.write(rec)
+
+          vcf_in.close()
+          vcf_out.close()
+          print(f"Updated VCF written to: {output_vcf}")
+
+      extract_info_id_to_record_id("~{input_vcf}", "~{prefix}.preprocessed.vcf.gz")    
+
+      CODE
+
+      tabix -p vcf "~{prefix}.preprocessed.vcf.gz"
+
+    >>>
+
+    RuntimeAttr default_attr = object {
+      cpu_cores: 1,
+      mem_gb: 5,
+      disk_gb: 10 + ceil(size(input_vcf, "GiB")*2),
+      boot_disk_gb: 10,
+      preemptible_tries: 1,
+      max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    runtime {
+      cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+      memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+      bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+      docker: docker_image
+      preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+      maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+
+    output {
+      File preprocessed_vcf = "~{prefix}.preprocessed.vcf.gz"
+      File preprocessed_vcf_idx = "~{prefix}.preprocessed.vcf.gz.tbi"
+    }
+}
+
 task PreprocessPanGenieCaseReads {
     input {
         File input_cram
