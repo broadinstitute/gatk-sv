@@ -199,6 +199,13 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: DropSamplesAndRefresh
+    primaryDescriptorPath: /wdl/DropSamplesAndRefresh.wdl
+    filters:
+      branches:
+        - eph_aou_refresh
+
+  - subclass: WDL
     name: Vapor
     primaryDescriptorPath: /wdl/Vapor.wdl
     filters:
