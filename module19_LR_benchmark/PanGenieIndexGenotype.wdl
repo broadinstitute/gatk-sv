@@ -86,8 +86,8 @@ workflow PanGenieIndexGenotype {
     if(defined(panel_biallelic_vcf_list)){
         call LongReadGenotypeTasks.ConcatVcfs as concat_biallelic_vcf{
             input:
-                vcfs = panel_biallelic_vcf_list,
-                vcfs_idx = panel_biallelic_vcf_idx_list,
+                vcfs = select_first([panel_biallelic_vcf_list]),
+                vcfs_idx = select_first([panel_biallelic_vcf_idx_list]),
                 sv_base_mini_docker =sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_concat_biallelic_vcf
         }
