@@ -78,7 +78,7 @@ workflow PanGenieIndexGenotype {
             input:
                 input_vcf = panel_biallelic_vcf_list[j],
                 input_vcf_idx = panel_biallelic_vcf_list[j],
-                docker_image = sv_base_mini_docker,
+                docker_image = sv_pipeline_base_docker,
                 runtime_attr_override = runtime_attr_preprocess_biallelic_ref_panel_vcf
         }
     }
