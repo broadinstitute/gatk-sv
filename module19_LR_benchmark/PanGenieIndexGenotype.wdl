@@ -72,21 +72,20 @@ workflow PanGenieIndexGenotype {
     Array[File] Pindex_chromosome_kmers = select_first([index_pangenie_ref_panel.pangenie_index_chromosome_kmers, pangenie_index_chromosome_kmers])
     Array[File] Pindex_chromosome_graphs = select_first([index_pangenie_ref_panel.pangenie_index_chromosome_graphs, pangenie_index_chromosome_graphs])
 
-    scatter (j in range(length(panel_biallelic_vcf_list))){
-
-        call LongReadGenotypeTasks.PreprocessBiallelicRefPanelVcf{
-            input:
-                input_vcf = panel_biallelic_vcf_list[j],
-                input_vcf_idx = panel_biallelic_vcf_list[j],
-                docker_image = sv_pipeline_base_docker,
-                runtime_attr_override = runtime_attr_preprocess_biallelic_ref_panel_vcf
-        }
-    }
+    #scatter (j in range(length(panel_biallelic_vcf_list))){
+    #    call LongReadGenotypeTasks.PreprocessBiallelicRefPanelVcf{
+    #       input:
+    #            input_vcf = panel_biallelic_vcf_list[j],
+    #            input_vcf_idx = panel_biallelic_vcf_list[j],
+    #            docker_image = sv_pipeline_base_docker,
+    #            runtime_attr_override = runtime_attr_preprocess_biallelic_ref_panel_vcf
+    #    }
+    #}
 
     call LongReadGenotypeTasks.ConcatVcfs as concat_biallelic_vcf{
         input:
-            vcfs = PreprocessBiallelicRefPanelVcf.preprocessed_vcf,
-            vcfs_idx = PreprocessBiallelicRefPanelVcf.preprocessed_vcf_idx,
+            vcfs = panel_biallelic_vcf_list,
+            vcfs_idx = panel_biallelic_vcf_idx_list,
             sv_base_mini_docker =sv_base_mini_docker,
             runtime_attr_override = runtime_attr_concat_biallelic_vcf
     }
