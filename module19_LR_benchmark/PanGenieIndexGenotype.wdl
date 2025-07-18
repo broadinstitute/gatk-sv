@@ -43,11 +43,13 @@ workflow PanGenieIndexGenotype {
 
         RuntimeAttr? runtime_attr_cram_index
         RuntimeAttr? runtime_attr_pangenie_index
-        RuntimeAttr? runtime_attr_process_case_reads
-        RuntimeAttr? runtime_attr_process_case_reads_wo_subset
-        RuntimeAttr? runtime_attr_pangenie_genotype
         RuntimeAttr? runtime_attr_pangenie_convert
+        RuntimeAttr? runtime_attr_pangenie_genotype
+        RuntimeAttr? runtime_attr_process_case_reads
+        RuntimeAttr? runtime_attr_concat_biallelic_vcf
         RuntimeAttr? runtime_attr_convert_bubbles_to_biallelic
+        RuntimeAttr? runtime_attr_process_case_reads_wo_subset
+        RuntimeAttr? runtime_attr_preprocess_biallelic_ref_panel_vcf
     }
 
     if(!defined(pangenie_index_unique_kmers_map)){
@@ -85,7 +87,8 @@ workflow PanGenieIndexGenotype {
         input:
             vcfs = PreprocessBiallelicRefPanelVcf.preprocessed_vcf,
             vcfs_idx = PreprocessBiallelicRefPanelVcf.preprocessed_vcf_idx,
-            sv_base_mini_docker =sv_base_mini_docker
+            sv_base_mini_docker =sv_base_mini_docker,
+            runtime_attr_override = runtime_attr_concat_biallelic_vcf
     }
 
 
