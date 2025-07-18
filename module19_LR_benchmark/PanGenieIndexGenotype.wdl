@@ -84,7 +84,7 @@ workflow PanGenieIndexGenotype {
     call LongReadGenotypeTasks.ConcatVcfs as concat_biallelic_vcf{
         input:
             vcfs = PreprocessBiallelicRefPanelVcf.preprocessed_vcf,
-            vcfs_idx = PreprocessBiallelicRefPanelVcf.preprocessed_vcf_preprocessed_vcf_idx,
+            vcfs_idx = PreprocessBiallelicRefPanelVcf.preprocessed_vcf_idx,
             sv_base_mini_docker =sv_base_mini_docker
     }
 
