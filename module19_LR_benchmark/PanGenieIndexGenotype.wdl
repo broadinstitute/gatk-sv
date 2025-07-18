@@ -9,9 +9,10 @@ workflow PanGenieIndexGenotype {
         File panel_vcf_gz
         File panel_vcf_gz_tbi
 
-        Array[File] panel_biallelic_vcf_list
-        Array[File] panel_biallelic_vcf_idx_list
-
+        Array[File]? panel_biallelic_vcf_list
+        Array[File]? panel_biallelic_vcf_idx_list
+        File? panel_biallelic_vcf
+        File? panel_biallelic_vcf_idx
 
         String index_prefix
 
@@ -82,14 +83,18 @@ workflow PanGenieIndexGenotype {
     #    }
     #}
 
-    call LongReadGenotypeTasks.ConcatVcfs as concat_biallelic_vcf{
-        input:
-            vcfs = panel_biallelic_vcf_list,
-            vcfs_idx = panel_biallelic_vcf_idx_list,
-            sv_base_mini_docker =sv_base_mini_docker,
-            runtime_attr_override = runtime_attr_concat_biallelic_vcf
+    if(defined(panel_biallelic_vcf_list)){
+        call LongReadGenotypeTasks.ConcatVcfs as concat_biallelic_vcf{
+            input:
+                vcfs = panel_biallelic_vcf_list,
+                vcfs_idx = panel_biallelic_vcf_idx_list,
+                sv_base_mini_docker =sv_base_mini_docker,
+                runtime_attr_override = runtime_attr_concat_biallelic_vcf
+        }
     }
 
+    File ref_panel_biallelic_vcf     = select_first([panel_biallelic_vcf, concat_biallelic_vcf.concat_vcf])
+    File ref_panel_biallelic_vcf_idx = select_first([panel_biallelic_vcf_idx, concat_biallelic_vcf.concat_vcf_idx])
 
     scatter (i in range(length(sample_name_list))){
         if (!defined(input_crai_list[i])) {
@@ -155,8 +160,8 @@ workflow PanGenieIndexGenotype {
             input_vcf = pangenie_genotype.genotyping_vcf_gz,
             input_vcf_idx = pangenie_genotype.genotyping_vcf_gz_tbi,
 
-            panel_biallelic_vcf = concat_biallelic_vcf.concat_vcf,
-            panel_biallelic_vcf_idx = concat_biallelic_vcf.concat_vcf_idx,
+            panel_biallelic_vcf = ref_panel_biallelic_vcf,
+            panel_biallelic_vcf_idx = ref_panel_biallelic_vcf_idx,
 
             convert_to_biallelic_script = convert_to_biallelic_script,
 
