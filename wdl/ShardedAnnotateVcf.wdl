@@ -16,7 +16,7 @@ workflow ShardedAnnotateVcf {
     String prefix
     String contig
 
-    File? protein_coding_gtf
+    File protein_coding_gtf
     File? noncoding_bed
     Int? promoter_window
     Int? max_breakend_as_cnv_length
@@ -46,6 +46,7 @@ workflow ShardedAnnotateVcf {
     RuntimeAttr? runtime_attr_bedtools_closest
     RuntimeAttr? runtime_attr_select_matched_svs
     RuntimeAttr? runtime_attr_scatter_vcf
+    RuntimeAttr? runtime_attr_concat
   }
 
   if (defined(ref_bed)) {
@@ -82,26 +83,32 @@ workflow ShardedAnnotateVcf {
       }
     }
 
-    if (defined (protein_coding_gtf) || defined (noncoding_bed)) {
-      call func.AnnotateFunctionalConsequences {
-        input:
-          vcf = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
-          vcf_index = SubsetVcfBySamplesList.vcf_subset_index,
-          prefix = shard_prefix,
-          protein_coding_gtf = protein_coding_gtf,
-          noncoding_bed = noncoding_bed,
-          promoter_window = promoter_window,
-          max_breakend_as_cnv_length = max_breakend_as_cnv_length,
-          additional_args = svannotate_additional_args,
-          gatk_docker = gatk_docker,
-          runtime_attr_svannotate = runtime_attr_svannotate
-      }
+    call func.AnnotateFunctionalConsequences {
+      input:
+        vcf = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
+        vcf_index = SubsetVcfBySamplesList.vcf_subset_index,
+        prefix = shard_prefix,
+        protein_coding_gtf = protein_coding_gtf,
+        noncoding_bed = noncoding_bed,
+        promoter_window = promoter_window,
+        max_breakend_as_cnv_length = max_breakend_as_cnv_length,
+        additional_args = svannotate_additional_args,
+        gatk_docker = gatk_docker,
+        runtime_attr_svannotate = runtime_attr_svannotate
     }
 
+    if (contig == "chrX") {
+      call FixGTPloidy {
+        input:
+          vcf = AnnotateFunctionalConsequences.annotated_vcf,
+          prefix = shard_prefix,
+          sv_pipeline_docker = sv_pipeline_docker
+      }
+    }
     # Compute AC, AN, and AF per population & sex combination
     call ComputeAFs {
       input:
-        vcf = select_first([AnnotateFunctionalConsequences.annotated_vcf, SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
+        vcf = select_first([FixGTPloidy.gt_ploidy_fixed_vcf, AnnotateFunctionalConsequences.annotated_vcf]),
         prefix = shard_prefix,
         sample_pop_assignments = sample_pop_assignments,
         ped_file = ped_file,
@@ -123,7 +130,7 @@ workflow ShardedAnnotateVcf {
           split_ref_bed_bnd = select_first([SplitRefBed.bnd]),
           population = select_first([population]),
           ref_prefix = select_first([ref_prefix]),
-          prefix = "~{prefix}.~{contig}.~{i}",
+          prefix = shard_prefix,
           sv_base_mini_docker = sv_base_mini_docker,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_modify_vcf = runtime_attr_modify_vcf,
@@ -134,11 +141,75 @@ workflow ShardedAnnotateVcf {
     }
   }
 
+  call MiniTasks.ConcatVcfs {
+    input:
+      vcfs= if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf) else ComputeAFs.af_vcf,
+      vcfs_idx= if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi) else ComputeAFs.af_vcf_idx,
+      naive=true,
+      outfile_prefix="~{prefix}.~{contig}.annotated",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_concat
+  }
+
   output {
-    Array[File] sharded_annotated_vcf = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf) else ComputeAFs.af_vcf
-    Array[File] sharded_annotated_vcf_idx = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi) else ComputeAFs.af_vcf_idx
+    File annotated_vcf = ConcatVcfs.concat_vcf
+    File annotated_vcf_idx = ConcatVcfs.concat_vcf_idx
   }
 }
+
+
+task FixGTPloidy {
+  input {
+    File vcf
+    String prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1.5,
+    disk_gb: ceil(20 + size(vcf, "GB") * 2),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+    python <<CODE
+import pysam
+vcf = pysam.VariantFile("~{vcf}", 'r')
+out = pysam.VariantFile("~{prefix}.fixedGTploidy.vcf.gz", 'w', header=vcf.header)
+gt_update = {(None,):(None,None), (0,):(0,0), (1,):(0,1)}
+for record in vcf:
+  if record.info['SVTYPE'] != 'CNV':
+    for s, gt in record.samples.items():
+      if len(gt['GT']) == 1:
+        orig_gt = gt['GT']
+        gt['GT'] = gt_update[orig_gt]
+  out.write(record)
+CODE
+
+    tabix -p vcf "~{prefix}.fixedGTploidy.vcf.gz"
+  >>>
+
+  output {
+    File gt_ploidy_fixed_vcf = "~{prefix}.fixedGTploidy.vcf.gz"
+    File gt_ploidy_fixed_idx = "~{prefix}.fixedGTploidy.vcf.gz.tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 
 task ComputeAFs {
   input {

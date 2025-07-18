@@ -7,11 +7,11 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 workflow AnnotateVcf {
 
   input {
-    File vcf  # GATK-SV VCF for annotation. Index .tbi must be located at the same path
+    Array[File] vcfs  # GATK-SV VCF for annotation. Index .tbi must be located at the same path
     File contig_list  # Ordered list of contigs to annotate that are present in the input VCF
     String prefix
 
-    File? protein_coding_gtf  # Provide at least one of protein_coding_gtf or noncoding_bed to perform functional annotation
+    File protein_coding_gtf
     File? noncoding_bed
     Int? promoter_window
     Int? max_breakend_as_cnv_length
@@ -24,9 +24,9 @@ workflow AnnotateVcf {
     File? allosomes_list
     Int   sv_per_shard
 
-    File? external_af_ref_bed              # File with external allele frequencies
-    String? external_af_ref_prefix         # prefix name for external AF call set (required if ref_bed set)
-    Array[String]? external_af_population  # populations to annotate external AF for (required if ref_bed set)
+    File? ref_bed              # File with external allele frequencies
+    String? ref_prefix         # prefix name for external AF call set (required if ref_bed set)
+    Array[String]? population  # populations to annotate external AF for (required if ref_bed set)
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -42,18 +42,16 @@ workflow AnnotateVcf {
     RuntimeAttr? runtime_attr_bedtools_closest
     RuntimeAttr? runtime_attr_select_matched_svs
     RuntimeAttr? runtime_attr_concat
-    RuntimeAttr? runtime_attr_preconcat
-    RuntimeAttr? runtime_attr_fix_header
   }
 
   Array[String] contigs = read_lines(contig_list)
 
-  scatter (contig in contigs) {
+  scatter (i in range(length(contigs))) {
     call sharded_annotate_vcf.ShardedAnnotateVcf {
       input:
-        vcf = vcf,
-        vcf_idx = vcf + ".tbi",
-        contig = contig,
+        vcf = vcfs[i],
+        vcf_idx = vcfs[i] + ".tbi",
+        contig = contigs[i],
         prefix = prefix,
         protein_coding_gtf = protein_coding_gtf,
         noncoding_bed = noncoding_bed,
@@ -68,9 +66,9 @@ workflow AnnotateVcf {
         sv_per_shard = sv_per_shard,
         allosomes_list = allosomes_list,
 
-        ref_bed = external_af_ref_bed,
-        ref_prefix = external_af_ref_prefix,
-        population = external_af_population,
+        ref_bed = ref_bed,
+        ref_prefix = ref_prefix,
+        population = population,
 
         gatk_docker = gatk_docker,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -84,26 +82,13 @@ workflow AnnotateVcf {
         runtime_attr_split_ref_bed  = runtime_attr_split_ref_bed,
         runtime_attr_split_query_vcf  = runtime_attr_split_query_vcf,
         runtime_attr_bedtools_closest = runtime_attr_bedtools_closest,
-        runtime_attr_select_matched_svs = runtime_attr_select_matched_svs
+        runtime_attr_select_matched_svs = runtime_attr_select_matched_svs,
+        runtime_attr_concat = runtime_attr_concat
     }
   }
 
-  # ShardedAnnotateVcf.sharded_annotated_vcf is is an Array[Array[File]] with one inner Array[File] of shards per contig
-  Array[File] vcfs_for_concatenation = flatten(ShardedAnnotateVcf.sharded_annotated_vcf)
-  Array[File] vcf_idxs_for_concatenation = flatten(ShardedAnnotateVcf.sharded_annotated_vcf_idx)
-
-  call MiniTasks.ConcatVcfs {
-    input:
-      vcfs=vcfs_for_concatenation,
-      vcfs_idx=vcf_idxs_for_concatenation,
-      allow_overlaps=true,
-      outfile_prefix="~{prefix}.annotated",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_concat
-  }
-
   output {
-    File annotated_vcf = ConcatVcfs.concat_vcf
-    File annotated_vcf_index = ConcatVcfs.concat_vcf_idx
+    Array[File] annotated_vcfs = ShardedAnnotateVcf.annotated_vcf
+    Array[File] annotated_vcf_indexes = ShardedAnnotateVcf.annotated_vcf_idx
   }
 }
