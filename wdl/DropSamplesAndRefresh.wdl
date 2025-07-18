@@ -20,7 +20,6 @@ workflow DropSamplesAndRefresh {
 
     String sv_pipeline_docker
     String sv_base_mini_docker
-
   }
 
   call subset.SubsetVcfBySamples as DropSamples {
