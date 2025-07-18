@@ -76,7 +76,6 @@ task ExtractChromosomeVcf {
 
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-
   command <<<
     set -e
     bcftools view -r ~{chromosome} ~{input_vcf} -Oz -o ~{chromosome}.vcf.gz
@@ -161,7 +160,6 @@ task ConcatVcfs {
   }
 
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
 
   command <<<
     set -e
