@@ -2555,7 +2555,7 @@ task IndexPanGenieCaseReads {
     }
 }
 
-takes PreprocessBiallelicRefPanelVcf{
+task PreprocessBiallelicRefPanelVcf{
     input{
       File input_vcf
       File? input_vcf_idx
