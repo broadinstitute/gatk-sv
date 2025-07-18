@@ -2729,7 +2729,7 @@ task PanGenieGenotype {
 
     RuntimeAttr default_attr = object {
       cpu_cores: 1,
-      mem_gb: 20,
+      mem_gb: 50,
       disk_gb: ceil(size(input_fasta, "GiB")*2),
       boot_disk_gb: 10,
       preemptible_tries: 1,
