@@ -22,7 +22,7 @@ workflow MergeVcfsByChromosome {
           input_vcf = input_vcfs[idx],
           input_vcf_idx = input_vcfs_idx[idx],
           chromosome = chrom,
-          sv_base_mini_docker = sv_base_mini_docker
+          docker_image = sv_base_mini_docker
       }
     }
 
