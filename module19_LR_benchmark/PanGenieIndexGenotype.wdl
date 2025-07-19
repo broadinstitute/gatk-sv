@@ -3,16 +3,17 @@ version 1.0
 import "Structs.wdl"
 import "MergeVcfs.wdl" as MergeVcfs
 import "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
+import "ConvertBubblesToBiallelicByChromosome.wdl" as ConvertBubblesToBiallelicByChromosome
 
 workflow PanGenieIndexGenotype {
     input {
         File panel_vcf_gz
         File panel_vcf_gz_tbi
 
-        Array[File]? panel_biallelic_vcf_list
-        Array[File]? panel_biallelic_vcf_idx_list
-        File? panel_biallelic_vcf
-        File? panel_biallelic_vcf_idx
+        Array[File] panel_biallelic_vcf_list
+        Array[File] panel_biallelic_vcf_idx_list
+        #File? panel_biallelic_vcf
+        #File? panel_biallelic_vcf_idx
 
         String index_prefix
 
@@ -73,29 +74,6 @@ workflow PanGenieIndexGenotype {
     Array[File] Pindex_chromosome_kmers = select_first([index_pangenie_ref_panel.pangenie_index_chromosome_kmers, pangenie_index_chromosome_kmers])
     Array[File] Pindex_chromosome_graphs = select_first([index_pangenie_ref_panel.pangenie_index_chromosome_graphs, pangenie_index_chromosome_graphs])
 
-    #scatter (j in range(length(panel_biallelic_vcf_list))){
-    #    call LongReadGenotypeTasks.PreprocessBiallelicRefPanelVcf{
-    #       input:
-    #            input_vcf = panel_biallelic_vcf_list[j],
-    #            input_vcf_idx = panel_biallelic_vcf_list[j],
-    #            docker_image = sv_pipeline_base_docker,
-    #            runtime_attr_override = runtime_attr_preprocess_biallelic_ref_panel_vcf
-    #    }
-    #}
-
-    if(defined(panel_biallelic_vcf_list)){
-        call LongReadGenotypeTasks.ConcatVcfs as concat_biallelic_vcf{
-            input:
-                vcfs = select_first([panel_biallelic_vcf_list]),
-                vcfs_idx = select_first([panel_biallelic_vcf_idx_list]),
-                sv_base_mini_docker =sv_base_mini_docker,
-                runtime_attr_override = runtime_attr_concat_biallelic_vcf
-        }
-    }
-
-    File ref_panel_biallelic_vcf     = select_first([panel_biallelic_vcf, concat_biallelic_vcf.concat_vcf])
-    File ref_panel_biallelic_vcf_idx = select_first([panel_biallelic_vcf_idx, concat_biallelic_vcf.concat_vcf_idx])
-
     scatter (i in range(length(sample_name_list))){
         if (!defined(input_crai_list[i])) {
             call LongReadGenotypeTasks.IndexPanGenieCaseReads as index_pangenie_case_reads {
@@ -155,19 +133,21 @@ workflow PanGenieIndexGenotype {
                 runtime_attr_override = runtime_attr_pangenie_genotype
         }
 
-        call LongReadGenotypeTasks.ConvertBubblesToBiallelic as convert_bubbles_to_biallelic{
+
+        call ConvertBubblesToBiallelicByChromosome.ConvertBubblesToBiallelicByChromosome as convert_bubbles_to_biallelic{
           input:
             input_vcf = pangenie_genotype.genotyping_vcf_gz,
             input_vcf_idx = pangenie_genotype.genotyping_vcf_gz_tbi,
 
-            panel_biallelic_vcf = ref_panel_biallelic_vcf,
-            panel_biallelic_vcf_idx = ref_panel_biallelic_vcf_idx,
+            panel_biallelic_vcf_list = panel_biallelic_vcf_list,
+            panel_biallelic_vcf_idx_list = panel_biallelic_vcf_idx_list,
 
             convert_to_biallelic_script = convert_to_biallelic_script,
 
-            docker_image = sv_pipeline_base_docker,
-            runtime_attr_override = runtime_attr_convert_bubbles_to_biallelic
+            sv_base_mini_docker = sv_base_mini_docker,
+            sv_pipeline_base_docker = sv_pipeline_base_docker
         }
+
     }
 
     call MergeVcfs.MergeVcfs as merge_vcfs{
@@ -185,8 +165,8 @@ workflow PanGenieIndexGenotype {
     output{
       Array[File] pangenie_genotyped_vcf = pangenie_genotype.genotyping_vcf_gz
       Array[File] pangenie_genotyped_vcf_idx = pangenie_genotype.genotyping_vcf_gz_tbi
-      Array[File] pangenie_genotyped_biallelic_vcf = convert_bubbles_to_biallelic.biallelic_vcf
-      Array[File] pangenie_genotyped_biallelic_vcf_idx = convert_bubbles_to_biallelic.biallelic_vcf_idx
+      Array[File] pangenie_genotyped_biallelic_vcf = convert_bubbles_to_biallelic.converted_biallelic_vcf
+      Array[File] pangenie_genotyped_biallelic_vcf_idx = convert_bubbles_to_biallelic.converted_biallelic_vcf_idx
       File pangenie_genotyped_merged_biallelic_vcf = merge_vcfs.final_merged_vcf
       File pangenie_genotyped_merged_biallelic_vcf_idx = merge_vcfs.final_merged_vcf_index
     }

@@ -650,6 +650,7 @@ task ConcatVcfs {
     Array[File] vcfs
     Array[File]? vcfs_idx
     Boolean merge_sort = false
+    Boolean remove_dup = true
     String? outfile_prefix
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
@@ -699,8 +700,14 @@ task ConcatVcfs {
     # Index the temp merged VCF
     tabix -p vcf merged.tmp.vcf.gz
 
-    # Remove duplicates
-    bcftools norm -d exact -Oz -o ~{outfile_prefix}.vcf.gz merged.tmp.vcf.gz
+
+    if [[ ~{remove_dup} == "true" ]]; then
+      # Remove duplicates
+      bcftools norm -d exact -Oz -o ~{outfile_prefix}.vcf.gz merged.tmp.vcf.gz
+    else
+      mv merged.tmp.vcf.gz ~{outfile_prefix}.vcf.gz
+    fi
+
 
     # Index the final deduplicated VCF
     tabix -p vcf ~{outfile_prefix}.vcf.gz
@@ -815,18 +822,19 @@ task ConvertBubblesToBiallelic{
   }
 
   String prefix = basename(input_vcf, ".vcf.gz")
+
   command <<<
     set -euo pipefail
 
-    zcat ~{input_vcf} | python3 ~{convert_to_biallelic_script} "~{panel_biallelic_vcf}" > "~{input_vcf}_biallelic.vcf"
-    bgzip  "~{input_vcf}_biallelic.vcf"
-    tabix -p vcf  "~{input_vcf}_biallelic.vcf.gz"
+    zcat ~{input_vcf} | python3 ~{convert_to_biallelic_script} "~{panel_biallelic_vcf}" > "~{prefix}_biallelic.vcf"
+    bgzip  "~{prefix}_biallelic.vcf"
+    tabix -p vcf  "~{prefix}_biallelic.vcf.gz"
 
  >>>
 
   output {
-    File biallelic_vcf = "~{input_vcf}_biallelic.vcf.gz"
-    File biallelic_vcf_idx =  "~{input_vcf}_biallelic.vcf.gz.tbi"
+    File biallelic_vcf = "~{prefix}_biallelic.vcf.gz"
+    File biallelic_vcf_idx =  "~{prefix}_biallelic.vcf.gz.tbi"
   }
 }
 
