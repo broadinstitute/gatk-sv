@@ -1,6 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
+import "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
 
 workflow MergeVcfsByChromosome {
   input {
@@ -16,7 +17,7 @@ workflow MergeVcfsByChromosome {
 
   scatter (idx in range(length(input_vcfs))) {
 
-    call ExtractChromosomeVcf {
+    call LongReadGenotypeTasks.ExtractChromosomeVcf {
         input:
           input_vcf = input_vcfs[idx],
           input_vcf_idx = input_vcfs_idx[idx],
@@ -25,10 +26,10 @@ workflow MergeVcfsByChromosome {
       }
     }
 
-    call MergeVcfs {
+    call LongReadGenotypeTasks.MergeVcfs {
       input:
-        input_vcfs = ExtractChromosomeVcf.output_vcf,
-        input_vcfs_idx = ExtractChromosomeVcf.output_vcf_idx,
+        vcfs = ExtractChromosomeVcf.output_vcf,
+        vcfs_idx = ExtractChromosomeVcf.output_vcf_idx,
         output_name = "${chrom}.vcf.gz",
         sv_base_mini_docker = sv_base_mini_docker
     }
@@ -51,91 +52,6 @@ workflow MergeVcfsByChromosome {
   }
 }
 
-# Task 1: Extract a chromosome from a VCF
-task ExtractChromosomeVcf {
-  input {
-    File input_vcf
-    File input_vcf_idx
-    String chromosome
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 2,
-    disk_gb: ceil(size(input_vcf, "GB") * 2),
-    boot_disk_gb: 10,
-    preemptible_tries: 0,
-    max_retries: 1
-  }
-
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  command <<<
-    set -e
-    bcftools view -r ~{chromosome} ~{input_vcf} -Oz -o ~{chromosome}.vcf.gz
-    tabix -p vcf ~{chromosome}.vcf.gz
-  >>>
-
-  output {
-    File output_vcf = "~{chromosome}.vcf.gz"
-    File output_vcf_idx = "~{chromosome}.vcf.gz.tbi"
-  }
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
-# Task 2: Merge multiple VCFs
-task MergeVcfs {
-  input {
-    Array[File] input_vcfs
-    Array[File] input_vcfs_idx
-    String output_name
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 10,
-    disk_gb: ceil(10 + size(input_vcfs, "GB") * 2),
-    boot_disk_gb: 10,
-    preemptible_tries: 0,
-    max_retries: 1
-  }
-
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  command <<<
-    set -e
-    bcftools merge --merge none ~{sep=' ' input_vcfs} -Oz -o ~{output_name}
-    tabix -p vcf ~{output_name}
-  >>>
-
-  output {
-    File output_merged_vcf = output_name
-    File output_merged_vcf_idx = "${output_name}.tbi"
-  }
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
 
 # Task 3: Concatenate per-chromosome VCFs
 task ConcatVcfs {

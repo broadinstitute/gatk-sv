@@ -714,6 +714,65 @@ task ConcatVcfs {
   }
 }
 
+task MergeVcfs {
+  input {
+    Array[File] vcfs
+    Array[File]? vcfs_idx
+    Boolean merge_sort = false
+    String output_name
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+
+  }
+
+
+  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
+  # be held in memory or disk while working, potentially in a form that takes up more space)
+  Float input_size = size(vcfs, "GB")
+  Float compression_factor = 10.0
+  Float base_disk_gb = 20.0
+  Float base_mem_gb = 10.0
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: base_mem_gb + compression_factor * input_size,
+    disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+
+    VCFS="~{write_lines(vcfs)}"
+    if ~{!defined(vcfs_idx)}; then
+      cat ${VCFS} | xargs -n1 tabix
+    fi
+
+    bcftools merge --merge none ~{sep=' ' vcfs} -Oz -o ~{output_name}
+    tabix -p vcf ~{output_name}
+
+ >>>
+
+  output {
+    File merged_vcf = "~{output_name}"
+    File merged_vcf_idx =  "~{output_name}.tbi"
+  }
+}
+
 task ConvertBubblesToBiallelic{
   input {
     File input_vcf
@@ -1064,12 +1123,17 @@ task ExtractTrioVCF {
     RuntimeAttr? runtime_attr_override
   }
 
-  command {
+  command <<<
+    set -euxo pipefail
+
     bcftools view -S ~{sample_file} -Oz -o ~{family_id}.trio.vcf.gz ~{input_vcf}
-  }
+    tabix -p vcf "~{family_id}.trio.vcf.gz"
+
+  >>>
 
   output {
     File output_vcf = "~{family_id}.trio.vcf.gz"
+    File output_vcf_idx = "~{family_id}.trio.vcf.gz.tbi"
   }
 
   RuntimeAttr default_attr = object {
@@ -1093,6 +1157,53 @@ task ExtractTrioVCF {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+task ExtractChromosomeVcf {
+  input {
+    File input_vcf
+    File input_vcf_idx
+    String chromosome
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  
+  command <<<
+    set -euxo pipefail
+
+    bcftools view -r ~{chromosome} ~{input_vcf} -Oz -o ~{chromosome}.vcf.gz
+    tabix -p vcf "~{chromosome}.vcf.gz"
+
+  >>>
+
+  output {
+    File output_vcf = "~{chromosome}.vcf.gz"
+    File output_vcf_idx = "~{chromosome}.vcf.gz.tbi"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 15,
+    disk_gb: 20,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
 
 task ExtractVariantIndividualGenome {
   input {
