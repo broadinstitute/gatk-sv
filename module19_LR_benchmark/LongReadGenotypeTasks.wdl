@@ -13,7 +13,7 @@ task AddDummyGT {
   String prefix = basename(sites_file,'.sites.gz')
 
   command <<<
-    set -e
+    set -euxo pipefail
 
     #take out vcf header
     bcftools view -h ~{sites_file} > header.tmp
@@ -203,7 +203,7 @@ task AddGenomicContextToVcfR {
   String prefix = basename(vcf_file,'.vcf.gz')
 
   command <<<
-    set -e
+    set -euxo pipefail
 
     # use R script to add GC to the vcf
     Rscript -e '
@@ -296,7 +296,7 @@ task BenchmarkSNVs{
   String base_pbaseix = basename(base_vcf, ".vcf.gz")
 
   command <<<
-    set -e
+    set -euxo pipefail
 
     # use R script to add GC to the vcf
     Rscript -e '
@@ -404,7 +404,7 @@ task BenchmarkSVs{
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    set -e
+    set -euxo pipefail
 
     #index the input vcf:
     tabix -p vcf ~{comp_vcf}
@@ -515,7 +515,7 @@ task BenchmarkSVsV2{
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    set -e
+    set -euxo pipefail
 
     #index the input vcf:
     tabix -p vcf ~{comp_vcf}
@@ -850,7 +850,7 @@ task EvaluateInheriByGQ {
   String prefix = basename(vcf_file,'.vcf.gz')
 
   command <<<
-    set -e
+    set -euxo pipefail
 
     # use R script to add GC to the vcf
     Rscript -e '
@@ -1171,12 +1171,20 @@ task ExtractChromosomeVcf {
     File input_vcf_idx
     String chromosome
     String docker_image
+    File? monitoring_script
     RuntimeAttr? runtime_attr_override
   }
 
   
   command <<<
     set -euxo pipefail
+
+    # Create a zero-size monitoring log file so it exists even if we don't pass a monitoring script
+    touch monitoring.log
+    if [ -s ~{monitoring_script} ]; then
+        bash ~{monitoring_script} > monitoring.log &
+    fi
+
 
     bcftools view -r ~{chromosome} ~{input_vcf} -Oz -o ~{chromosome}.vcf.gz
     tabix -p vcf "~{chromosome}.vcf.gz"
@@ -1269,7 +1277,7 @@ task ExtractChromosomeVariants {
   }
 
   command <<<
-    set -e
+    set -euxo pipefail
 
     # Extract chromosome-specific variants
     bcftools view -r ~{chromosome} ~{input_vcf} -Oz -o ~{output_name}
@@ -1515,7 +1523,7 @@ task CalcuPlotCompResults{
   String prefix = basename(fp_query, ".fp_query.vcf.gz")
 
   command <<<
-    set -e
+    set -euxo pipefail
 
     Rscript -e '
 
@@ -1728,7 +1736,7 @@ task PlotCompResults{
   String prefix = basename(comp_stat, ".stat")
 
   command <<<
-    set -e
+    set -euxo pipefail
 
     Rscript -e '
 
@@ -1832,7 +1840,7 @@ task SplitVcfIntoShards {
   }
 
   command <<<
-    set -e
+    set -euxo pipefail
 
     mkdir chunks
 
@@ -1981,7 +1989,7 @@ task SplitVcfByAnnotationR {
   String prefix = basename(vcf_file,'.vcf.gz')
 
   command <<<
-    set -e
+    set -euxo pipefail
 
     R --vanilla <<EOF
 
@@ -2039,7 +2047,7 @@ task SplitVcfToSites {
   String prefix = basename(vcf_file,'.vcf.gz')
 
   command <<<
-    set -e
+    set -euxo pipefail
 
     zcat ~{vcf_file} | cut -f1-8 | bgzip > "~{prefix}.sites.gz"
     tabix -p vcf "~{prefix}.sites.gz"
@@ -2563,7 +2571,7 @@ task IndexPanGenieRefPanel {
     Int num_chromosomes = length(chromosomes)
 
     command {
-        set -e
+        set -euxo pipefail
 
         # Create a zero-size monitoring log file so it exists even if we don't pass a monitoring script
         touch monitoring.log
@@ -2634,7 +2642,7 @@ task IndexPanGenieCaseReads {
     String output_prefix = basename(input_cram, ".cram")
 
     command {
-        set -e
+        set -euxo pipefail
 
         # Create a zero-size monitoring log file so it exists even if we don't pass a monitoring script
         touch monitoring.log
@@ -2768,7 +2776,7 @@ task PreprocessPanGenieCaseReads {
     String filter_N_regex = "/^>/{N;/^>.*\\n.*N.*/d}"
 
     command {
-        set -e
+        set -euxo pipefail
 
         # Create a zero-size monitoring log file so it exists even if we don't pass a monitoring script
         touch monitoring.log
@@ -2829,7 +2837,7 @@ task PreprocessPanGenieCaseReadsWithoutSubsetting {
     String filter_N_regex = "/^>/{N;/^>.*\\n.*N.*/d}"
 
     command {
-        set -e
+        set -euxo pipefail
 
         # Create a zero-size monitoring log file so it exists even if we don't pass a monitoring script
         touch monitoring.log
@@ -2888,7 +2896,7 @@ task PanGenieGenotype {
     }
 
     command {
-        set -e
+        set -euxo pipefail
 
         # Create a zero-size monitoring log file so it exists even if we don't pass a monitoring script
         touch monitoring.log
