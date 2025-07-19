@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "MergeVcfsByChromosome.wdl" as MergeVcfsByChromosome
+import "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
 
 workflow ConvertBubblesToBiallelicByChromosome {
     input{
