@@ -52,8 +52,7 @@ task AddDummyGT {
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-  }
-
+}
 
 task AnnotateGenomicContext {
   input {
@@ -768,8 +767,8 @@ task MergeVcfs {
  >>>
 
   output {
-    File merged_vcf = "~{output_name}"
-    File merged_vcf_idx =  "~{output_name}.tbi"
+    File output_merged_vcf = "~{output_name}"
+    File output_merged_vcf_idx =  "~{output_name}.tbi"
   }
 }
 
@@ -1202,8 +1201,6 @@ task ExtractChromosomeVcf {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
-
 
 task ExtractVariantIndividualGenome {
   input {
