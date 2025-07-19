@@ -152,8 +152,8 @@ workflow PanGenieIndexGenotype {
 
     call MergeVcfs.MergeVcfs as merge_vcfs{
         input:
-            input_vcfs = convert_bubbles_to_biallelic.biallelic_vcf,
-            input_vcfs_idx = convert_bubbles_to_biallelic.biallelic_vcf_idx,
+            input_vcfs = convert_bubbles_to_biallelic.converted_biallelic_vcf,
+            input_vcfs_idx = convert_bubbles_to_biallelic.converted_biallelic_vcf_idx,
             sample_list = sample_name_list,
             chromosomes = chromosomes,
             convert_to_biallelic = false,
