@@ -223,7 +223,8 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                             vapor_support_old = vapor_rec['p_non_ref_old'] > 1 - arguments.vapor_min_precision
                             vapor_support_genotyped = vapor_rec['p_non_ref_genotyped'] > 1 - arguments.vapor_min_precision
                             vapor_support_read_threshold = vapor_rec['p_non_ref_read_threshold'] > 1 - arguments.vapor_min_precision
-                            if vapor_support_old or vapor_support_genotyped or vapor_support_read_threshold:
+                            vapor_support = vapor_support_old or vapor_support_genotyped or vapor_support_read_threshold
+                            if vapor_support:
                                 vapor_support_gt = vapor_rec[genomics_io.Keys.gt]
                                 vapor_support_gq = vapor_rec[genomics_io.Keys.gq]
                                 vapor_support_reads = vapor_rec[genomics_io.Keys.vapor_read_scores]
@@ -259,9 +260,9 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                                                  sample,
                                                  record.info['SVTYPE'],
                                                  record.info['SVLEN'],
-                                                 record.samples[sample]['GT'][0],
-                                                 record.samples[sample]['GT'][1],
-                                                 record.samples[sample]['GQ'],
+                                                 record.samples[sample].get('GT', ['N/A', 'N/A'])[0],
+                                                 record.samples[sample].get('GT', ['N/A', 'N/A'])[1],
+                                                 record.samples[sample].get('GQ', 'N/A'),
                                                  vapor_support_gt,
                                                  vapor_support_gq,
                                                  vapor_support_reads,

@@ -20,7 +20,7 @@ on:
 
 jobs:
   build_args_job:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     name: Determine Build Args
     env:
       GITHUB_CONTEXT: ${{ toJson(github) }}
@@ -30,7 +30,7 @@ jobs:
       image_tag: ${{ steps.image_tag.outputs.IMAGE_TAG }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           # By default, this checks out only the current commit;
           # however, since a diff between the current commit and
@@ -109,7 +109,7 @@ jobs:
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
   build_job:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     name: Test Images Build
     if: github.event_name == 'pull_request'
     needs: build_args_job
@@ -118,13 +118,13 @@ jobs:
         python-version: ['3.8']
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           # See the comment on build_args_job.
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -143,7 +143,7 @@ jobs:
     # credentials. Finally, it rebuilds the docker images (targets are
     # determined by the `build_args_job`) and pushes them to GCR.
     name: Publish
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     environment: Deploy
     if: github.event_name == 'push'
     needs: build_args_job
@@ -155,7 +155,7 @@ jobs:
       DOCKERS_GCP: "./inputs/values/dockers.json"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           # See the comment on build_args_job.
           fetch-depth: 0
@@ -163,22 +163,26 @@ jobs:
           token: ${{ secrets.BOT_PAT }}
 
       - name: Setup Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Azure login
-        uses: azure/docker-login@v1
+        uses: azure/docker-login@v2
         with:
           login-server: ${{ secrets.AZ_CR }}
           username: ${{ secrets.AZ_USERNAME }}
           password: ${{ secrets.AZ_PASSWORD }}
 
+      - name: GCP login
+        uses: google-github-actions/auth@v2.0.0
+        with:
+          credentials_json: '${{ secrets.GCP_SA_CREDENTIALS }}'
+
       - name: Setup gcloud CLI
-        uses: google-github-actions/setup-gcloud@v0.3.0
+        uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-          service_account_key: ${{ secrets.GCP_GCR_SA_KEY }}
           # xref: https://github.com/google-github-actions/setup-gcloud#inputs
           # If you need to set `export_default_credentials: true`
           # make sure to pass the `--disable-git-protect` flag to
@@ -194,11 +198,17 @@ jobs:
         #
         # The build_docker.py uses the `--squash` flag when building the
         # images to be pushed to GCR. This flag is only available when
-        # experimental features are enabled, hence the features are enabled
-        # in this flag.
+        # experimental features are enabled, hence are enabled in this section.
+        #
+        # The /etc/docker/daemon.json is not created by default during 
+        # Docker installation; however, upstream configurations may 
+        # create and use this file for their configuration depending 
+        # on their versions. Hence, we create the file if it does not 
+        # exist in order to preserve compatibility.
         run: |
           gcloud auth configure-docker
           tmp=$(mktemp)
+          sudo touch /etc/docker/daemon.json
           sudo jq '.+{experimental:true}' /etc/docker/daemon.json > "$tmp"
           sudo mv "$tmp" /etc/docker/daemon.json
           sudo systemctl restart docker.service

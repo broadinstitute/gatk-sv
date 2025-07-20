@@ -3,7 +3,6 @@ version 1.0
 import "Structs.wdl"
 import "CollectCoverage.wdl" as cov
 import "CollectSVEvidence.wdl" as coev
-import "CramToBam.ReviseBase.wdl" as rb
 import "Manta.wdl" as manta
 import "MELT.wdl" as melt
 import "Scramble.wdl" as scramble
@@ -34,10 +33,6 @@ workflow GatherSampleEvidence {
     # However, when run on shared file systems (e.g., HPC), it will, by default, create a copy of the
     # input files, and all subsequent operations will run on the deep copy of the input file.
     Boolean move_bam_or_cram_files = false
-
-    # Convert ambiguous bases (e.g. K, S, Y, etc.) to N
-    # Only use if encountering errors (expensive!)
-    Boolean revise_base = false
 
     # Localize reads parameters
     # set to true on default, skips localize_reads if set to false
@@ -123,7 +118,6 @@ workflow GatherSampleEvidence {
     # Runtime configuration overrides
     RuntimeAttr? runtime_attr_localize_reads
     RuntimeAttr? runtime_attr_split_cram
-    RuntimeAttr? runtime_attr_revise_base
     RuntimeAttr? runtime_attr_concat_bam
     RuntimeAttr? runtime_attr_manta
     RuntimeAttr? runtime_attr_melt_coverage
@@ -165,23 +159,8 @@ workflow GatherSampleEvidence {
     }
   }
 
-  if (revise_base) {
-    call rb.CramToBamReviseBase {
-      input:
-        cram_file = select_first([LocalizeReads.output_file, bam_or_cram_file]),
-        cram_index = select_first([LocalizeReads.output_index, bam_or_cram_index]),
-        reference_fasta = reference_fasta,
-        reference_index = reference_index,
-        contiglist = select_first([primary_contigs_fai]),
-        samtools_cloud_docker = samtools_cloud_docker,
-        runtime_attr_split_cram = runtime_attr_split_cram,
-        runtime_attr_revise_base = runtime_attr_revise_base,
-        runtime_attr_concat_bam = runtime_attr_concat_bam
-    }
-  }
-
-  File reads_file_ = select_first([CramToBamReviseBase.bam_file, LocalizeReads.output_file, bam_or_cram_file])
-  File reads_index_ = select_first([CramToBamReviseBase.bam_index, LocalizeReads.output_index, bam_or_cram_index_])
+  File reads_file_ = select_first([LocalizeReads.output_file, bam_or_cram_file])
+  File reads_index_ = select_first([LocalizeReads.output_index, bam_or_cram_index_])
 
   if (collect_coverage || run_melt || run_scramble) {
     call cov.CollectCounts {
@@ -562,7 +541,7 @@ task RealignSoftClippedReads {
     RuntimeAttr? runtime_attr_override
   }
 
-  RuntimeAttr default_attr = object {
+  RuntimeAttr runtime_default = object {
                                cpu_cores: 4,
                                mem_gb: 20,
                                disk_gb: ceil(10 + size(reads_path, "GB") * 2 + size([reference_bwa_bwt, reference_bwa_pac, reference_bwa_sa], "GB")),
@@ -570,9 +549,18 @@ task RealignSoftClippedReads {
                                preemptible_tries: 3,
                                max_retries: 1
                              }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  Int n_cpu = select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   String disk_type = if use_ssd then "SSD" else "HDD"
+
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} ~{disk_type}"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
 
   output {
     File out = "~{sample_id}.realign_soft_clipped_reads.bam"
@@ -607,13 +595,4 @@ task RealignSoftClippedReads {
       | samtools view -1 -h -O BAM -o ~{sample_id}.realign_soft_clipped_reads.bam
     samtools index -@${N_CORES} ~{sample_id}.realign_soft_clipped_reads.bam
   >>>
-  runtime {
-    cpu: n_cpu
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " " + disk_type
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
 }

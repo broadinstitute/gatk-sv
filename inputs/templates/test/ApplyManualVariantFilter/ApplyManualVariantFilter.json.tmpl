@@ -1,7 +1,0 @@
-{
-  "ApplyManualVariantFilter.vcf" :   {{ test_batch.clean_vcf | tojson }},
-  "ApplyManualVariantFilter.prefix" : {{ test_batch.name | tojson }},
-  "ApplyManualVariantFilter.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
-  "ApplyManualVariantFilter.bcftools_filter": "(SVTYPE==\"DEL\" && COUNT(ALGORITHMS)==1 && ALGORITHMS==\"wham\") || (ALT==\"<INS:ME:SVA>\" && COUNT(ALGORITHMS)==1 && ALGORITHMS==\"scramble\" && HIGH_SR_BACKGROUND==1)",
-  "ApplyManualVariantFilter.filter_name": "high_algorithm_fp_rate"
-}

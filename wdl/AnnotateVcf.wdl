@@ -3,7 +3,6 @@ version 1.0
 import "Structs.wdl"
 import "ShardedAnnotateVcf.wdl" as sharded_annotate_vcf
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "HailMerge.wdl" as HailMerge
 
 workflow AnnotateVcf {
 
@@ -12,7 +11,7 @@ workflow AnnotateVcf {
     File contig_list  # Ordered list of contigs to annotate that are present in the input VCF
     String prefix
 
-    File protein_coding_gtf
+    File? protein_coding_gtf  # Provide at least one of protein_coding_gtf or noncoding_bed to perform functional annotation
     File? noncoding_bed
     Int? promoter_window
     Int? max_breakend_as_cnv_length
@@ -29,9 +28,6 @@ workflow AnnotateVcf {
     String? external_af_ref_prefix         # prefix name for external AF call set (required if ref_bed set)
     Array[String]? external_af_population  # populations to annotate external AF for (required if ref_bed set)
 
-    Boolean use_hail
-    String? gcs_project
-
     String sv_pipeline_docker
     String sv_base_mini_docker
     String gatk_docker
@@ -47,7 +43,6 @@ workflow AnnotateVcf {
     RuntimeAttr? runtime_attr_select_matched_svs
     RuntimeAttr? runtime_attr_concat
     RuntimeAttr? runtime_attr_preconcat
-    RuntimeAttr? runtime_attr_hail_merge
     RuntimeAttr? runtime_attr_fix_header
   }
 
@@ -77,9 +72,6 @@ workflow AnnotateVcf {
         ref_prefix = external_af_ref_prefix,
         population = external_af_population,
 
-        use_hail = use_hail,
-        gcs_project = gcs_project,
-
         gatk_docker = gatk_docker,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker,
@@ -96,38 +88,22 @@ workflow AnnotateVcf {
     }
   }
 
-  # Concat VCF shards with or without hail
   # ShardedAnnotateVcf.sharded_annotated_vcf is is an Array[Array[File]] with one inner Array[File] of shards per contig
   Array[File] vcfs_for_concatenation = flatten(ShardedAnnotateVcf.sharded_annotated_vcf)
   Array[File] vcf_idxs_for_concatenation = flatten(ShardedAnnotateVcf.sharded_annotated_vcf_idx)
-  if (use_hail) {
-    call HailMerge.HailMerge {
-      input:
-        vcfs=vcfs_for_concatenation,
-        prefix="~{prefix}.annotated",
-        gcs_project=gcs_project,
-        sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_override_preconcat=runtime_attr_preconcat,
-        runtime_override_hail_merge=runtime_attr_hail_merge,
-        runtime_override_fix_header=runtime_attr_fix_header
-    }
-  }
 
-  if (!use_hail) {
-    call MiniTasks.ConcatVcfs {
-      input:
-        vcfs=vcfs_for_concatenation,
-        vcfs_idx=vcf_idxs_for_concatenation,
-        allow_overlaps=true,
-        outfile_prefix="~{prefix}.annotated",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_concat
-    }
+  call MiniTasks.ConcatVcfs {
+    input:
+      vcfs=vcfs_for_concatenation,
+      vcfs_idx=vcf_idxs_for_concatenation,
+      allow_overlaps=true,
+      outfile_prefix="~{prefix}.annotated",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_concat
   }
 
   output {
-    File annotated_vcf = select_first([ConcatVcfs.concat_vcf, HailMerge.merged_vcf])
-    File annotated_vcf_index = select_first([ConcatVcfs.concat_vcf_idx, HailMerge.merged_vcf_index])
+    File annotated_vcf = ConcatVcfs.concat_vcf
+    File annotated_vcf_index = ConcatVcfs.concat_vcf_idx
   }
 }

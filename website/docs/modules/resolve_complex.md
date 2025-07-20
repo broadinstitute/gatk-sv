@@ -5,7 +5,7 @@ sidebar_position: 12
 slug: rcv
 ---
 
-import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.js"
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/ResolveComplexVariants.wdl)
 
@@ -63,13 +63,6 @@ Array of PE evidence files for all batches from [GatherBatchEvidence](./gbe#merg
 #### `rf_cutoffs`
 Array of batch genotyping cutoff files trained with the random forest filtering model from [FilterBatch](./fb#cutoffs).
 Must match the order of [disc_files](#disc_files).
-
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `use_hail`
-Default: `false`. Use Hail for VCF concatenation. This should only be used for projects with over 50k samples. If enabled, the
-[gcs_project](#optional-gcs_project) must also be provided. Does not work on Terra.
-
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `gcs_project`
-Google Cloud project ID. Required only if enabling [use_hail](#optional-use_hail).
 
 ### Outputs
 

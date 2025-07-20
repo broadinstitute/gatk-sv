@@ -783,6 +783,72 @@ task SubsetVcfBySamplesList {
   }
 }
 
+# Subset a VCF to a specific sample
+task SubsetVcfToSample {
+  input {
+    File vcf
+    File? vcf_idx
+    String sample
+    String? outfile_name
+    Boolean remove_sample = false  # If false (default), keep the sample If true, remove it.
+    Boolean remove_private_sites = true  # If true (default), remove sites that are private to excluded samples. If false, keep sites even if no remaining samples are non-ref.
+    Boolean keep_af = true  # If true (default), do not recalculate allele frequencies (AC/AF/AN)
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String vcf_subset_filename = select_first([outfile_name, basename(vcf, ".vcf.gz") + ".subset.vcf.gz"])
+  String vcf_subset_idx_filename = vcf_subset_filename + ".tbi"
+
+  String remove_private_sites_flag = if remove_private_sites then " | bcftools view -e 'SVTYPE!=\"CNV\" && COUNT(GT=\"alt\")==0' " else ""
+  String keep_af_flag = if keep_af then "--no-update" else ""
+  String complement_flag = if remove_sample then "^" else ""
+
+  # Disk must be scaled proportionally to the size of the VCF
+  Float input_size = size(vcf, "GiB")
+  RuntimeAttr default_attr = object {
+                               mem_gb: 3.75,
+                               disk_gb: ceil(10.0 + (input_size * 2)),
+                               cpu_cores: 1,
+                               preemptible_tries: 3,
+                               max_retries: 1,
+                               boot_disk_gb: 10
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+
+    set -euo pipefail
+
+    bcftools view \
+      -s ~{complement_flag}~{sample} \
+      --force-samples \
+      ~{keep_af_flag} \
+      ~{vcf} \
+      ~{remove_private_sites_flag} \
+      -O z \
+      -o ~{vcf_subset_filename}
+
+    tabix -f -p vcf ~{vcf_subset_filename}
+
+  >>>
+
+  output {
+    File vcf_subset = vcf_subset_filename
+    File vcf_subset_index = vcf_subset_idx_filename
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task VcfToBed {
 
     input {

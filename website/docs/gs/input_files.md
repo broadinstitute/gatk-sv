@@ -45,16 +45,14 @@ their sample IDs according to the following requirements.
 - Be a substring of another sample ID in the same cohort
 - Contain any of the following substrings: `chr`, `name`, `DEL`, `DUP`, `CPX`, `CHROM`
 
-The same requirements apply to family IDs in the PED file, as well as batch IDs and the cohort ID provided as workflow inputs.
+The same requirements apply to family IDs in the PED file, as well as batch IDs and the cohort ID provided as workflow 
+inputs. [This script](https://github.com/broadinstitute/gatk-sv/blob/main/scripts/inputs/convert_sample_ids.py)
+can be used to transform a list of sample IDs to meet safe ID requirements.
 
-Users should set sample IDs in [GatherSampleEvidence](/docs/modules/gse) with the `sample_id` input, which needs not match 
-the sample name defined in the BAM/CRAM header. `GetSampleID.wdl` can be used to fetch BAM sample IDs and also generates a set 
-of alternate IDs that are considered safe for this pipeline. Alternatively, 
-[this script](https://github.com/talkowski-lab/gnomad_sv_v3/blob/master/sample_id/convert_sample_ids.py) 
-transforms a list of sample IDs to fit these requirements. 
-
-Sample IDs can be replaced again in [GatherBatchEvidence](/docs/modules/gbe). To do so, set the parameter 
-`rename_samples = True` and provide updated sample IDs via the `samples` parameter.
+Users should assign sample IDs in [GatherSampleEvidence](/docs/modules/gse) with the `sample_id` input, which needs not 
+match the sample name defined in the BAM/CRAM header. Alternatively, sample IDs can be replaced again in 
+[GatherBatchEvidence](/docs/modules/gbe) by setting the parameter `rename_samples = True` and providing updated 
+sample IDs via the `samples` parameter.
 
 Note that following inputs will need to be updated with the transformed sample IDs:
 

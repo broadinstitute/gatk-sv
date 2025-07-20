@@ -5,7 +5,7 @@ sidebar_position: 13
 slug: gcv
 ---
 
-import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.js"
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/GenotypeComplexVariants.wdl)
 
@@ -72,13 +72,6 @@ Array of "depth_depth" genotype cutoff files (depth evidence for depth-based cal
 
 #### `median_coverage_files`
 Array of median coverage tables for all batches from [GatherBatchEvidence](./gbe#median_cov). Order must match that of [batches](#batches).
-
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `use_hail`
-Default: `false`. Use Hail for VCF concatenation. This should only be used for projects with over 50k samples. If enabled, the
-[gcs_project](#optional-gcs_project) must also be provided. Does not work on Terra.
-
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `gcs_project`
-Google Cloud project ID. Required only if enabling [use_hail](#optional-use_hail).
 
 ### Outputs
 

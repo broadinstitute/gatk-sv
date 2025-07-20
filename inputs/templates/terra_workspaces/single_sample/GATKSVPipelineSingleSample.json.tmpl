@@ -30,6 +30,7 @@
 
   "GATKSVPipelineSingleSample.linux_docker" : "${workspace.linux_docker}",
   "GATKSVPipelineSingleSample.manta_docker": "${workspace.manta_docker}",
+  "GATKSVPipelineSingleSample.scramble_docker": "${workspace.scramble_docker}",
   "GATKSVPipelineSingleSample.sv_base_docker": "${workspace.sv_base_docker}",
   "GATKSVPipelineSingleSample.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
   "GATKSVPipelineSingleSample.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
@@ -42,7 +43,6 @@
   "GATKSVPipelineSingleSample.autosome_file" : "${workspace.reference_autosome_file}",
   "GATKSVPipelineSingleSample.primary_contigs_list" : "${workspace.reference_primary_contigs_list}",
   "GATKSVPipelineSingleSample.primary_contigs_fai" : "${workspace.reference_primary_contigs_fai}",
-  "GATKSVPipelineSingleSample.empty_file" : "${workspace.reference_empty_file}",
   "GATKSVPipelineSingleSample.genome_file" : "${workspace.reference_genome_file}",
   "GATKSVPipelineSingleSample.max_ref_panel_carrier_freq": 0.03,
   "GATKSVPipelineSingleSample.manta_region_bed" : "${workspace.reference_manta_region_bed}",
@@ -85,6 +85,14 @@
   "GATKSVPipelineSingleSample.depth_exclude_overlap_fraction": "0.5",
   "GATKSVPipelineSingleSample.depth_interval_overlap": "0.8",
   "GATKSVPipelineSingleSample.depth_clustering_algorithm": "SINGLE_LINKAGE",
+
+  "GATKSVPipelineSingleSample.clustering_config_part1" : "${workspace.clustering_config_part1}",
+  "GATKSVPipelineSingleSample.stratification_config_part1" : "${workspace.clustering_config_part1}",
+  "GATKSVPipelineSingleSample.clustering_config_part2" : "${workspace.clustering_config_part2}",
+  "GATKSVPipelineSingleSample.stratification_config_part2" : "${workspace.stratification_config_part2}",
+
+  "GATKSVPipelineSingleSample.clustering_track_names" : {{ reference_resources.clustering_track_names | tojson }},
+  "GATKSVPipelineSingleSample.clustering_track_bed_files" : {{ reference_resources.clustering_tracks | tojson }},
 
   "GATKSVPipelineSingleSample.ref_copy_number_autosomal_contigs" : 2,
   "GATKSVPipelineSingleSample.clean_vcf_min_sr_background_fail_batches": 0.5,

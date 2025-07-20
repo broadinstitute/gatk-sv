@@ -24,9 +24,6 @@ workflow ResolveComplexVariants {
     File pe_exclude_list
     File ref_dict
 
-    Boolean use_hail = false
-    String? gcs_project
-
     String sv_base_mini_docker
     String sv_pipeline_docker
 
@@ -51,7 +48,6 @@ workflow ResolveComplexVariants {
     RuntimeAttr? runtime_override_concat_resolved_per_shard
     RuntimeAttr? runtime_override_pull_vcf_shard
     RuntimeAttr? runtime_override_preconcat
-    RuntimeAttr? runtime_override_hail_merge
     RuntimeAttr? runtime_override_fix_header
 
     RuntimeAttr? runtime_override_get_se_cutoff_inv
@@ -63,7 +59,6 @@ workflow ResolveComplexVariants {
     RuntimeAttr? runtime_override_concat_resolved_per_shard_inv
     RuntimeAttr? runtime_override_pull_vcf_shard_inv
     RuntimeAttr? runtime_override_preconcat_inv
-    RuntimeAttr? runtime_override_hail_merge_inv
     RuntimeAttr? runtime_override_fix_header_inv
 
     # overrides for ReshardVcf
@@ -103,8 +98,6 @@ workflow ResolveComplexVariants {
         ref_dict=ref_dict,
         precluster_distance=50000000,
         precluster_overlap_frac=0.1,
-        use_hail=use_hail,
-        gcs_project=gcs_project,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_get_se_cutoff=runtime_override_get_se_cutoff_inv,
@@ -116,7 +109,6 @@ workflow ResolveComplexVariants {
         runtime_override_concat_resolved_per_shard=runtime_override_concat_resolved_per_shard_inv,
         runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard_inv,
         runtime_override_preconcat=runtime_override_preconcat_inv,
-        runtime_override_hail_merge=runtime_override_hail_merge_inv,
         runtime_override_fix_header=runtime_override_fix_header_inv
     }
 
@@ -148,8 +140,6 @@ workflow ResolveComplexVariants {
         ref_dict=ref_dict,
         precluster_distance=2000,
         precluster_overlap_frac=0.000000001,
-        use_hail=use_hail,
-        gcs_project=gcs_project,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_get_se_cutoff=runtime_override_get_se_cutoff,
@@ -161,7 +151,6 @@ workflow ResolveComplexVariants {
         runtime_override_concat_resolved_per_shard=runtime_override_concat_resolved_per_shard,
         runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard,
         runtime_override_preconcat=runtime_override_preconcat,
-        runtime_override_hail_merge=runtime_override_hail_merge,
         runtime_override_fix_header=runtime_override_fix_header
     }
 
@@ -318,6 +307,7 @@ task BreakpointOverlap {
     File bothside_pass_list
     File background_fail_list
     String prefix
+    File? script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -346,7 +336,7 @@ task BreakpointOverlap {
 
   command <<<
     set -euo pipefail
-    python /opt/sv-pipeline/04_variant_resolution/scripts/overlap_breakpoint_filter.py \
+    python ~{default="/opt/sv-pipeline/04_variant_resolution/scripts/overlap_breakpoint_filter.py" script} \
       ~{vcf} \
       ~{bothside_pass_list} \
       ~{background_fail_list} \

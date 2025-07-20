@@ -8,7 +8,7 @@ workflow AnnotateFunctionalConsequences {
     File? vcf_index
     String prefix
 
-    File protein_coding_gtf
+    File? protein_coding_gtf
     File? noncoding_bed
     Int? promoter_window
     Int? max_breakend_as_cnv_length
@@ -44,7 +44,7 @@ task SVAnnotate {
     File? vcf_index
     String prefix
 
-    File protein_coding_gtf
+    File? protein_coding_gtf
     File? noncoding_bed
     Int? promoter_window
     Int? max_breakend_as_cnv_length
@@ -85,7 +85,7 @@ task SVAnnotate {
     gatk --java-options "-Xmx~{java_mem_mb}m" SVAnnotate \
       -V ~{vcf} \
       -O ~{outfile} \
-      --protein-coding-gtf ~{protein_coding_gtf} \
+      ~{"--protein-coding-gtf " + protein_coding_gtf} \
       ~{"--non-coding-bed " + noncoding_bed} \
       ~{"--promoter-window-length " + promoter_window} \
       ~{"--max-breakend-as-cnv-length " + max_breakend_as_cnv_length} \

@@ -5,7 +5,7 @@ sidebar_position: 20
 slug: av
 ---
 
-import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.js"
 
 Adds annotations, such as the inferred function and allele frequencies of variants, to a VCF.
 
@@ -87,13 +87,6 @@ External `AF` annotation prefix. Required if providing [external_af_ref_bed](#op
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `external_af_population`
 Population names in the external SV reference set, e.g. "ALL", "AFR", "AMR", "EAS", "EUR". Required if providing 
 [external_af_ref_bed](#optional-external_af_ref_bed) and must match the populations in the bed file.
-
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `use_hail`
-Default: `false`. Use Hail for VCF concatenation. This should only be used for projects with over 50k samples. If enabled, the
-[gcs_project](#optional-gcs_project) must also be provided. Does not work on Terra.
-
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `gcs_project`
-Google Cloud project ID. Required only if enabling [use_hail](#optional-use_hail).
 
 ### Outputs
 

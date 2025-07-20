@@ -156,6 +156,7 @@ workflow GenotypeDepthPart2 {
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_concat_vcfs
   }
+
   output {
     File genotyped_vcf = ConcatVcfs.concat_vcf
     File genotyped_vcf_index = ConcatVcfs.concat_vcf_idx
@@ -224,10 +225,10 @@ task MergeRegenoCoverageMedians {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File regeno_coverage_medians = "~{batch}.regeno.coverage_medians_merged.bed"
+    File regeno_coverage_medians = "~{batch}.regeno.coverage_medians_merged.bed.gz"
   }
   command <<<
-    cat ~{sep=' ' regeno_coverage_medians_array} | fgrep -v $'chr\tstart\tend\tcnvID' > ~{batch}.regeno.coverage_medians_merged.bed
+    cat ~{sep=' ' regeno_coverage_medians_array} | fgrep -v $'chr\tstart\tend\tcnvID' | bgzip -c > ~{batch}.regeno.coverage_medians_merged.bed.gz
   >>>
 
   runtime {

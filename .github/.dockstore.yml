@@ -199,6 +199,15 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: Vapor
+    primaryDescriptorPath: /wdl/Vapor.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: VisualizeCnvs
     primaryDescriptorPath: /wdl/VisualizeCnvs.wdl
     filters:
@@ -210,6 +219,15 @@ workflows:
   - subclass: WDL
     name: SingleSamplePipeline
     primaryDescriptorPath: /wdl/GATKSVPipelineSingleSample.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: CallDeNovoSV
+    primaryDescriptorPath: /wdl/RunDeNovoSVs.wdl
     filters:
       branches:
         - main

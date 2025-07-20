@@ -5,7 +5,6 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
 For technical documentation on GATK-SV, including how to run the pipeline, please refer to our [website](https://broadinstitute.github.io/gatk-sv/).
 
 ## Repository structure
-* `/carrot`: [Carrot](https://github.com/broadinstitute/carrot) tests
 * `/dockerfiles`: Resources for building pipeline docker images
 * `/inputs`: files for generating workflow inputs
   * `/templates`: Input json file templates

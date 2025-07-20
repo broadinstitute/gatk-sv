@@ -5,7 +5,7 @@ sidebar_position: 21
 slug: mvqc
 ---
 
-import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.js"
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/MainVcfQC.wdl)
 
@@ -214,7 +214,7 @@ section for available benchmarking call sets.
 Default: `0`. Random seed for sample subsetting in external call set comparisons.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `max_gq`
-Default: `99`. Max value to define range for `GQ` plotting. For modules prior to `CleanVcf`, use `999`.
+Default: `99`. Max value to define range for `GQ` plotting. For modules prior to `CombineBatches`, use `999`.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `downsample_qc_per_sample`
 Default: `1000`. Number of samples to subset to for per-sample QC.

@@ -5,16 +5,36 @@ import pysam
 import sys
 from typing import Optional, List, Text, Set
 
-_gt_sum_map = dict()
+_gt_map = dict()
+_cnv_gt_map = dict()
 
 
-def _cache_gt_sum(gt):
+def _cache_gt(gt):
     if gt is None:
-        return 0
-    s = _gt_sum_map.get(gt, None)
+        return 0, 0
+    s = _gt_map.get(gt, None)
     if s is None:
-        s = sum([1 for a in gt if a is not None and a > 0])
-        _gt_sum_map[gt] = s
+        x = sum([1 for a in gt if a is not None and a > 0])
+        if x == 0:
+            s = (0, 0)
+        elif x == 1:
+            s = (0, 1)
+        else:
+            s = (1, 1)
+        _gt_map[gt] = s
+    return s
+
+
+def _cache_cnv_gt(cn):
+    if cn is None:
+        return 0, 0
+    s = _cnv_gt_map.get(cn, None)
+    if s is None:
+        # Split copies evenly between alleles, giving one more copy to the second allele if odd
+        x = max(0, cn - 2)
+        alt1 = min(x // 2, 4)
+        alt2 = min(x - alt1, 4)
+        _cnv_gt_map[cn] = (alt1, alt2)
     return s
 
 
@@ -71,7 +91,8 @@ def create_header(header_in: pysam.VariantHeader,
 def convert(record: pysam.VariantRecord,
             vcf_out: pysam.VariantFile,
             remove_infos: Set[Text],
-            remove_formats: Set[Text]) -> pysam.VariantRecord:
+            remove_formats: Set[Text],
+            set_pass: bool) -> pysam.VariantRecord:
     """
     Converts a record from gatk to svtk style. This includes updating all GT fields to diploid and reverting END
     tag values.
@@ -86,6 +107,8 @@ def convert(record: pysam.VariantRecord,
         info fields to remove
     remove_formats: Set[Text]
         format fields to remove
+    set_pass: bool
+        set empty FILTER statuses to PASS
 
     Returns
     -------
@@ -100,15 +123,26 @@ def convert(record: pysam.VariantRecord,
     if svtype == 'BND':
         # Ensure we aren't using breakend notation here, since it isn't supported in some modules
         alleles = ('N', '<BND>')
+    elif svtype == 'CNV':
+        # Prior to CleanVcf, all CNVs have <CNx> alleles
+        alleles = ('N', '<CN0>', '<CN1>', '<CN2>', '<CN3>')
     else:
         alleles = ('N', alleles[1])
     contig = record.contig
-    new_record = vcf_out.new_record(contig=contig, start=record.start, stop=record.stop, alleles=alleles)
+    # Change filter to PASS if requested
+    if set_pass and len(record.filter) == 0:
+        filter = ('PASS',)
+    else:
+        filter = record.filter
+    new_record = vcf_out.new_record(contig=contig, start=record.start, stop=record.stop, alleles=alleles, filter=filter)
     new_record.id = record.id
     # copy INFO fields
     for key in record.info:
         if key not in remove_infos:
             new_record.info[key] = record.info[key]
+    if svtype == 'CNV':
+        # Prior to CleanVcf, all mCNVs are DUP type
+        new_record.info['SVTYPE'] = 'DUP'
     # svtk generally expects all records to have CHR2 assigned
     chr2 = record.info.get('CHR2', None)
     if chr2 is None:
@@ -117,6 +151,10 @@ def convert(record: pysam.VariantRecord,
     if svtype == 'INS':
         new_record.info['SVLEN'] = record.info.get('SVLEN', -1)
         new_record.info['STRANDS'] = '+-'
+        # END information is lost when setting POS=END, so we need to set it to SR2POS if it's available
+        # Note that the END position is only important following SR breakpoint refinement in FilterBatch
+        if 'SR2POS' in record.info and record.info['SR2POS'] is not None:
+            new_record.stop = record.info['SR2POS']
     elif svtype == 'BND' or svtype == 'CTX':
         new_record.stop = record.info['END2']
         new_record.info['SVLEN'] = -1
@@ -124,7 +162,7 @@ def convert(record: pysam.VariantRecord,
         new_record.info['SVLEN'] = record.info.get('SVLEN', -1)
     elif svtype == 'DEL':
         new_record.info['STRANDS'] = '+-'
-    elif svtype == 'DUP':
+    elif svtype == 'DUP' or svtype == 'CNV':
         new_record.info['STRANDS'] = '-+'
     elif svtype == 'INV':
         new_record.info['STRANDS'] = record.info.get('STRANDS', None)
@@ -137,10 +175,10 @@ def convert(record: pysam.VariantRecord,
             if key not in remove_formats:
                 new_genotype[key] = genotype[key]
         # fix GT, always assuming diploid
-        if _cache_gt_sum(genotype.get('GT', None)) > 0:
-            new_genotype['GT'] = (0, 1)
+        if svtype == 'CNV':
+            new_genotype['GT'] = _cache_cnv_gt(genotype.get('CN', genotype.get('RD_CN')))
         else:
-            new_genotype['GT'] = (0, 0)
+            new_genotype['GT'] = _cache_gt(genotype.get('GT', None))
     return new_record
 
 
@@ -159,7 +197,7 @@ def __parse_arg_list(arg: Text) -> List[Text]:
 def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(
-        description="Convert a GATK-style SV VCF from ClusterBatch for consumption by GenerateBatchMetrics.",
+        description="Convert a GATK-style SV VCF for consumption by svtk. Not to be used after CleanVcf.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument("--vcf", type=str, required=True,
@@ -174,6 +212,8 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Comma-delimited list of FORMAT fields to remove")
     parser.add_argument("--remove-infos", type=str,
                         help="Comma-delimited list of INFO fields to remove")
+    parser.add_argument("--set-pass", default=False, action='store_true',
+                        help="Set empty FILTER fields (\".\") to PASS")
     if len(argv) <= 1:
         parser.parse_args(["--help"])
         sys.exit(0)
@@ -207,7 +247,8 @@ def main(argv: Optional[List[Text]] = None):
                     record=record,
                     vcf_out=vcf_out,
                     remove_infos=remove_infos,
-                    remove_formats=remove_formats
+                    remove_formats=remove_formats,
+                    set_pass=arguments.set_pass
                 ))
 
 

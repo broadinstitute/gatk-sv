@@ -2,7 +2,6 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "HailMerge.wdl" as HailMerge
 import "Utils.wdl" as util
 import "AnnotateFunctionalConsequences.wdl" as func
 import "AnnotateExternalAFPerShard.wdl" as eaf
@@ -17,7 +16,7 @@ workflow ShardedAnnotateVcf {
     String prefix
     String contig
 
-    File protein_coding_gtf
+    File? protein_coding_gtf
     File? noncoding_bed
     Int? promoter_window
     Int? max_breakend_as_cnv_length
@@ -33,9 +32,6 @@ workflow ShardedAnnotateVcf {
     File? ref_bed              # File with external allele frequencies
     String? ref_prefix         # prefix name for external AF call set (required if ref_bed set)
     Array[String]? population  # populations to annotate external AF for (required if ref_bed set)
-
-    Boolean use_hail
-    String? gcs_project
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -86,24 +82,26 @@ workflow ShardedAnnotateVcf {
       }
     }
 
-    call func.AnnotateFunctionalConsequences {
-      input:
-        vcf = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
-        vcf_index = SubsetVcfBySamplesList.vcf_subset_index,
-        prefix = shard_prefix,
-        protein_coding_gtf = protein_coding_gtf,
-        noncoding_bed = noncoding_bed,
-        promoter_window = promoter_window,
-        max_breakend_as_cnv_length = max_breakend_as_cnv_length,
-        additional_args = svannotate_additional_args,
-        gatk_docker = gatk_docker,
-        runtime_attr_svannotate = runtime_attr_svannotate
+    if (defined (protein_coding_gtf) || defined (noncoding_bed)) {
+      call func.AnnotateFunctionalConsequences {
+        input:
+          vcf = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
+          vcf_index = SubsetVcfBySamplesList.vcf_subset_index,
+          prefix = shard_prefix,
+          protein_coding_gtf = protein_coding_gtf,
+          noncoding_bed = noncoding_bed,
+          promoter_window = promoter_window,
+          max_breakend_as_cnv_length = max_breakend_as_cnv_length,
+          additional_args = svannotate_additional_args,
+          gatk_docker = gatk_docker,
+          runtime_attr_svannotate = runtime_attr_svannotate
+      }
     }
 
     # Compute AC, AN, and AF per population & sex combination
     call ComputeAFs {
       input:
-        vcf = AnnotateFunctionalConsequences.annotated_vcf,
+        vcf = select_first([AnnotateFunctionalConsequences.annotated_vcf, SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
         prefix = shard_prefix,
         sample_pop_assignments = sample_pop_assignments,
         ped_file = ped_file,

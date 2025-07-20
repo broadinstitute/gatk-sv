@@ -5,7 +5,7 @@ sidebar_position: 11
 slug: cmb
 ---
 
-import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.js"
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/CombineBatches.wdl)
 
@@ -69,13 +69,6 @@ Shard size for parallel computations. Decreasing this parameter may help reduce 
 #### `min_sr_background_fail_batches`
 Threshold fraction of batches with high SR background for a given variant required in order to assign this 
 `HIGH_SR_BACKGROUND` flag. Most users should leave this at the default value.
-
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `use_hail`
-Default: `false`. Use Hail for VCF concatenation. This should only be used for projects with over 50k samples. If enabled, the 
-[gcs_project](#optional-gcs_project) must also be provided. Does not work on Terra.
-
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `gcs_project`
-Google Cloud project ID. Required only if enabling [use_hail](#optional-use_hail).
 
 ### Outputs
 

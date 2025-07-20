@@ -5,7 +5,7 @@ sidebar_position: 3
 slug: gcnv
 ---
 
-import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.js"
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/TrainGCNV.wdl)
 
@@ -20,7 +20,7 @@ coverage, library preparation, etc.) and similar to the samples on which the mod
 For small, relatively homogeneous cohorts, a single gCNV model is usually sufficient. 
 However, for larger cohorts, especially those with multiple data sources, 
 we recommend training a separate model for each batch or group of batches (see 
-[batching section](/docs/execution/joint#batching) for details).
+[batching section](/docs/execution/joint/#batching) for details).
 The model can be trained on all or a subset of the samples to which it will be applied. 
 A subset of 100 randomly selected samples from the batch is a reasonable
 input size for training the model; when the `n_samples_subsample` input is provided, 
