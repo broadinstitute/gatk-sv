@@ -48,8 +48,8 @@ RUN export SETUPTOOLS_VERSION=$(python -c 'import setuptools; print(setuptools._
     pip install setuptools==$SETUPTOOLS_VERSION
 
 # pybedtools needs to be installed via pip because it doesn't like the updated python
-# hail's latest version is only available via pip or local build. Run cache purge in case the base is out of date.
-ARG PIP_PKGS="pybedtools==0.9.0 hail==0.2.93"
+# Run cache purge in case the base is out of date.
+ARG PIP_PKGS="pybedtools==0.9.0"
 RUN pip3 cache purge && pip3 --no-cache-dir install $PIP_PKGS
 
 # clean unneeded stuff
