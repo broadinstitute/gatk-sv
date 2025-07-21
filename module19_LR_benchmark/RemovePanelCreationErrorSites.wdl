@@ -11,21 +11,17 @@ workflow RemovePanelCreationErrorSites {
     String sv_pipeline_base_docker
   }
 
-
-  scatter (chrom in chromosome_list) {
-
-    call RemovePanelCreationError {
+  call RemovePanelCreationError {
         input:
           input_vcf = input_vcf,
           input_vcf_idx = input_vcfs_idx,
           get_panel_creation_error_sites_py = get_panel_creation_error_sites_py,
           docker_image = sv_pipeline_base_docker
-      }
-    }
+  }
 
   output {
-    Array[File] per_chr_vcf = ExtractChromosomeVcf.output_vcf
-    Array[File] per_chr_vcf_idx = ExtractChromosomeVcf.output_vcf_idx
+    File panel_error_removed_vcf = RemovePanelCreationError.output_vcf
+    File panel_error_removed_idx = RemovePanelCreationError.output_vcf_idx
   }
 }
 
@@ -58,9 +54,6 @@ task RemovePanelCreationError {
     bcftools view -T ^remove_sites.txt -S ^remove_samples.txt ~{input_vcf} -Oz -o "~{prefix}.remove_error_sites.vcf.gz"
 
     bcftools index -t "~{prefix}.remove_error_sites.vcf.gz"
-
-
-
 
   >>>
 
