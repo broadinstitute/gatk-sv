@@ -22,8 +22,10 @@ workflow PanGenieIndexGenotype {
         File? pangenie_index_unique_kmers_map
         File? pangenie_index_path_segments_fasta
 
-        File reference_fasta
-        File reference_fasta_fai
+        File ref_panel_fa
+        File ref_panel_fa_fai
+        File samp_seq_fa
+        File samp_seq_fa_fai
 
         Array[String] chromosomes
 
@@ -59,7 +61,7 @@ workflow PanGenieIndexGenotype {
             input:
                 panel_vcf_gz = panel_vcf_gz,
                 panel_vcf_gz_tbi = panel_vcf_gz_tbi,
-                reference_fasta = reference_fasta,
+                reference_fasta = ref_panel_fa,
                 chromosomes = chromosomes,
                 output_prefix = index_prefix,
                 docker_image = pangenie_docker,
@@ -92,8 +94,8 @@ workflow PanGenieIndexGenotype {
               input:
                   input_cram = input_cram_list[i],
                   input_cram_idx = select_first([input_crai_list[i], index_pangenie_case_reads.cram_idx]),
-                  reference_fasta = reference_fasta,
-                  reference_fasta_fai = reference_fasta_fai,
+                  reference_fasta = samp_seq_fa,
+                  reference_fasta_fai = samp_seq_fa_fai,
                   output_prefix = sample_name_list[i],
                   chromosomes = chromosomes,
                   docker_image = sv_pipeline_base_docker,
@@ -108,8 +110,8 @@ workflow PanGenieIndexGenotype {
                 input:
                     input_cram = input_cram_list[i],
                     input_cram_idx = select_first([input_crai_list[i], index_pangenie_case_reads.cram_idx]),
-                    reference_fasta = reference_fasta,
-                    reference_fasta_fai = reference_fasta_fai,
+                    reference_fasta = samp_seq_fa,
+                    reference_fasta_fai = samp_seq_fa_fai,
                     output_prefix = sample_name_list[i],
                     docker_image = sv_pipeline_base_docker,
                     monitoring_script = monitoring_script,
