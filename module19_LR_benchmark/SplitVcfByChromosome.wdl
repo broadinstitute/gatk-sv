@@ -24,7 +24,7 @@ workflow SplitVcfByChromosome {
     }
 
   output {
-    Array[File] per_chr_vcf = ExtractChromosomeVcf.output_vcf,
+    Array[File] per_chr_vcf = ExtractChromosomeVcf.output_vcf
     Array[File] per_chr_vcf_idx = ExtractChromosomeVcf.output_vcf_idx
   }
 }
