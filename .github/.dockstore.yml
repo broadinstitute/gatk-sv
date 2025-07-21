@@ -186,6 +186,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_tenk10k
       tags:
         - /.*/
 
