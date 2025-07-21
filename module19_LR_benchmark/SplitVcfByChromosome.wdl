@@ -8,7 +8,7 @@ workflow SplitVcfByChromosome {
     Array[String] chromosome_list
     File input_vcf
     File input_vcfs_idx
-    String sv_pipeline_base_docker
+    String sv_base_mini_docker
   }
 
 
