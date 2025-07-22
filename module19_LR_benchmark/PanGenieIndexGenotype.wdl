@@ -140,8 +140,8 @@ workflow PanGenieIndexGenotype {
             }
         }
 
-        File genotype_vcf_gz = select_first(pangenie_genotype.genotyping_vcf_gz, genotype_vcf_list[i])
-        File genotype_vcf_gz_tbi = select_first(pangenie_genotype.genotyping_vcf_gz_tbi, genotype_vcf_idx_list[i])
+        File genotype_vcf_gz = select_first([pangenie_genotype.genotyping_vcf_gz, genotype_vcf_list[i]])
+        File genotype_vcf_gz_tbi = select_first([pangenie_genotype.genotyping_vcf_gz_tbi, genotype_vcf_idx_list[i]])
 
 
         call ConvertBubblesToBiallelicByChromosome.ConvertBubblesToBiallelicByChromosome as convert_bubbles_to_biallelic{
