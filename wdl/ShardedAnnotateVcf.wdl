@@ -2,7 +2,6 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "HailMerge.wdl" as HailMerge
 import "Utils.wdl" as util
 import "AnnotateFunctionalConsequences.wdl" as func
 import "AnnotateExternalAFPerShard.wdl" as eaf
@@ -33,9 +32,6 @@ workflow ShardedAnnotateVcf {
     File? ref_bed              # File with external allele frequencies
     String? ref_prefix         # prefix name for external AF call set (required if ref_bed set)
     Array[String]? population  # populations to annotate external AF for (required if ref_bed set)
-
-    Boolean use_hail
-    String? gcs_project
 
     String sv_pipeline_docker
     String sv_base_mini_docker

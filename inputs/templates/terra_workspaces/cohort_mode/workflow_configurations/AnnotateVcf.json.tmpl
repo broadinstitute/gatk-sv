@@ -1,5 +1,5 @@
 {
-  "AnnotateVcf.vcf" : "${this.cleaned_vcf}",
+  "AnnotateVcf.vcf" : "${this.filtered_vcf}",
 
   "AnnotateVcf.protein_coding_gtf" : "${workspace.protein_coding_gtf}",
   "AnnotateVcf.noncoding_bed" : "${workspace.noncoding_bed}",
@@ -13,7 +13,6 @@
   "AnnotateVcf.sv_per_shard" : "5000",
   
   "AnnotateVcf.prefix" : "${this.sample_set_set_id}",
-  "AnnotateVcf.use_hail": "false",
 
   "AnnotateVcf.gatk_docker" : "${workspace.gatk_docker}",
   "AnnotateVcf.sv_base_mini_docker" : "${workspace.sv_base_mini_docker}",

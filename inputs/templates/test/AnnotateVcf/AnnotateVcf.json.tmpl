@@ -1,5 +1,5 @@
 {
-  "AnnotateVcf.vcf": {{ test_batch.clean_vcf | tojson }},
+  "AnnotateVcf.vcf": {{ test_batch.genotype_filtered_vcf | tojson }},
 
   "AnnotateVcf.protein_coding_gtf" : {{ reference_resources.protein_coding_gtf | tojson }},
   "AnnotateVcf.noncoding_bed" :       {{ reference_resources.noncoding_bed | tojson }},
@@ -14,7 +14,6 @@
   "AnnotateVcf.sv_per_shard" : "5000",
 
   "AnnotateVcf.prefix" : {{ test_batch.name | tojson }},
-  "AnnotateVcf.use_hail": "false",
 
   "AnnotateVcf.gatk_docker":{{ dockers.gatk_docker | tojson }},
   "AnnotateVcf.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},

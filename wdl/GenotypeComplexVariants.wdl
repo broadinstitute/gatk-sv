@@ -26,9 +26,6 @@ workflow GenotypeComplexVariants {
     File contig_list
     File ref_dict
 
-    Boolean use_hail = false
-    String? gcs_project
-
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -49,7 +46,6 @@ workflow GenotypeComplexVariants {
     RuntimeAttr? runtime_attr_ids_from_vcf
     RuntimeAttr? runtime_attr_subset_ped
     RuntimeAttr? runtime_override_preconcat
-    RuntimeAttr? runtime_override_hail_merge
     RuntimeAttr? runtime_override_fix_header
   }
 
@@ -93,8 +89,6 @@ workflow GenotypeComplexVariants {
         contig=contig,
         ped_files=SubsetPedFile.ped_subset_file,
         ref_dict=ref_dict,
-        use_hail=use_hail,
-        gcs_project=gcs_project,
         linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
@@ -108,7 +102,6 @@ workflow GenotypeComplexVariants {
         runtime_override_rd_genotype=runtime_override_rd_genotype,
         runtime_override_concat_melted_genotypes=runtime_override_concat_melted_genotypes,
         runtime_override_preconcat=runtime_override_preconcat,
-        runtime_override_hail_merge=runtime_override_hail_merge,
         runtime_override_fix_header=runtime_override_fix_header
     }
   }

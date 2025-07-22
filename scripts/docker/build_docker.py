@@ -249,6 +249,12 @@ class ProjectBuilder:
             git_dependencies=("dockerfiles/denovo/*", "src/denovo/*"),
             docker_dependencies={
                 "sv-pipeline": "SV_PIPELINE_IMAGE"}
+        ),
+        "sv-shell": ImageDependencies(
+            git_dependencies=("dockerfiles/sv-shell/*", "src/sv_shell/*"),
+            docker_dependencies={
+                "sv-pipeline": "SV_PIPELINE_IMAGE",
+                "wham": "WHAM_IMAGE"}
         )
     }
     non_public_images = frozenset({"melt"})
@@ -672,10 +678,10 @@ def get_command_output(
     Execute shell command. Raise exception if unsuccessful, otherwise return string with output
     """
     sub_p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    with sub_p.stdout as pipe_in, sub_p.stderr as pipe_err:
-        output = pipe_in.read().decode(encoding)
-        stderr = pipe_err.read().decode(encoding)
-    return_code = sub_p.poll()
+    byte_stdout, byte_stderr = sub_p.communicate()
+    output = byte_stdout.decode(encoding)
+    stderr = byte_stderr.decode(encoding)
+    return_code = sub_p.returncode
     if raise_on_error and return_code != 0:
         raise RuntimeError("Error executing %s:\n%s" % (command, stderr[:-1]))
     return (output, stderr, return_code) if return_error_info else output

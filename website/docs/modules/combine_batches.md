@@ -70,13 +70,6 @@ Shard size for parallel computations. Decreasing this parameter may help reduce 
 Threshold fraction of batches with high SR background for a given variant required in order to assign this 
 `HIGH_SR_BACKGROUND` flag. Most users should leave this at the default value.
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `use_hail`
-Default: `false`. Use Hail for VCF concatenation. This should only be used for projects with over 50k samples. If enabled, the 
-[gcs_project](#optional-gcs_project) must also be provided. Does not work on Terra.
-
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `gcs_project`
-Google Cloud project ID. Required only if enabling [use_hail](#optional-use_hail).
-
 ### Outputs
 
 #### `combined_vcfs`
