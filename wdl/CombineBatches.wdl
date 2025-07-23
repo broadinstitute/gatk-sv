@@ -112,7 +112,7 @@ workflow CombineBatches {
       input:
         vcf=reformatted_vcf,
         ploidy_table=CreatePloidyTableFromPed.out,
-        args="--fix-end --add-sr-pos --scale-down-gq",
+        args="--add-sr-pos --scale-down-gq",
         output_prefix=basename(vcf, ".vcf.gz") + ".reformat_gatk",
         bothside_pass_list=CombineSRBothsidePass.out,
         background_fail_list=CombineBackgroundFail.outfile,
