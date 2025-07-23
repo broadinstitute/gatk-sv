@@ -83,7 +83,7 @@ workflow PostProcessGlimpseResults {
     }
 
     output{
-        File output_vcf = ConcatVcfs.concat_vcf,
+        File output_vcf = ConcatVcfs.concat_vcf
         File output_vcf_idx = ConcatVcfs.concat_vcf_idx
     }
 }
