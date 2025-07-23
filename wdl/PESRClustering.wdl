@@ -96,7 +96,6 @@ workflow ClusterPESR {
         source=caller,
         contig_list=contig_list,
         remove_formats="CN",
-        remove_infos="END2",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_gatk_to_svtk_vcf
     }
