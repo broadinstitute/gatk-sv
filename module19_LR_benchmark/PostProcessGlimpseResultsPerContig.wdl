@@ -36,8 +36,8 @@ workflow PostProcessGlimpseResultsPerContig {
 
     call AddIdToInfoColumn {
         input:
-            a_vcf = ref_panel_vcf,
-            a_vcf_idx = ref_panel_vcf_tbi,
+            a_vcf = genotype_output_vcf,
+            a_vcf_idx = genotype_output_vcf_tbi,
             b_vcf = SplitRefPanel.split_id_vcf,
             b_vcf_idx = SplitRefPanel.split_id_vcf_idx,
             docker_image = sv_pipeline_base_docker,
