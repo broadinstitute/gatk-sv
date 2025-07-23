@@ -53,6 +53,8 @@ def sr_test(argv):
                         help='Print progress log to stderr.')
     parser.add_argument('--outlier-sample-ids', default=None,
                         help='Path to file containing outlier sample IDs.')
+    parser.add_argument('--seed', type=int, default=0,
+                        help='Random seed.')
 
     # Print help if no arguments specified
     if len(argv) == 0:
@@ -96,7 +98,7 @@ def sr_test(argv):
     runner = SRTestRunner(vcf, countfile, fout, args.background, common=args.common,
                           window=args.window, ins_window=args.insertion_window,
                           whitelist=whitelist, medians=medians, log=args.log,
-                          outlier_sample_ids=outlier_sample_ids)
+                          outlier_sample_ids=outlier_sample_ids, seed=args.seed)
     runner.run()
 
 
@@ -135,6 +137,8 @@ def pe_test(argv):
                         help='Print progress log to stderr.')
     parser.add_argument('--outlier-sample-ids', default=None,
                         help='Path to file containing outlier sample IDs.')
+    parser.add_argument('--seed', type=int, default=0,
+                        help='Random seed.')
 
     if len(argv) == 0:
         parser.print_help()
@@ -177,7 +181,8 @@ def pe_test(argv):
         outlier_sample_ids = args.outlier_sample_ids
 
     runner = PETestRunner(vcf, discfile, fout, args.background, args.common, args.window_in, args.window_out,
-                          whitelist, medians=medians, log=args.log, outlier_sample_ids=outlier_sample_ids)
+                          whitelist, medians=medians, log=args.log, outlier_sample_ids=outlier_sample_ids,
+                          seed=args.seed)
 
     runner.run()
 

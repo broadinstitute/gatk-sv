@@ -93,7 +93,7 @@ class PESRTest:
 
 class PESRTestRunner:
     def __init__(self, vcf, common=False, n_background=160, whitelist=None, blacklist=None,
-                 log=False, outlier_sample_ids=None):
+                 log=False, outlier_sample_ids=None, seed=0):
         self.vcf = vcf
 
         self.common = common
@@ -104,6 +104,8 @@ class PESRTestRunner:
         self.blacklist = blacklist if blacklist else []
 
         self.log = log
+
+        np.random.seed(seed)
 
         outlier_samples = set()
         if outlier_sample_ids:
