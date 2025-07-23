@@ -160,7 +160,19 @@ workflow PanGenieIndexGenotype {
 
     }
 
-    call MergeVcfs.MergeVcfs as merge_vcfs{
+    call MergeVcfs.MergeVcfs as merge_vcfs_pangenie_vcf{
+        input:
+            input_vcfs = genotype_vcf_gz,
+            input_vcfs_idx = genotype_vcf_gz_tbi,
+            sample_list = sample_name_list,
+            chromosomes = chromosomes,
+            convert_to_biallelic = false,
+            output_prefix = "~{index_prefix}.PanGenie",
+            sv_base_mini_docker = sv_base_mini_docker,
+            sv_pipeline_base_docker = sv_pipeline_base_docker
+    }
+
+    call MergeVcfs.MergeVcfs as merge_vcfs_biallelic_vcf{
         input:
             input_vcfs = convert_bubbles_to_biallelic.converted_biallelic_vcf,
             input_vcfs_idx = convert_bubbles_to_biallelic.converted_biallelic_vcf_idx,
@@ -177,8 +189,10 @@ workflow PanGenieIndexGenotype {
       Array[File] pangenie_genotyped_vcf_idx = genotype_vcf_gz_tbi
       Array[File] pangenie_genotyped_biallelic_vcf = convert_bubbles_to_biallelic.converted_biallelic_vcf
       Array[File] pangenie_genotyped_biallelic_vcf_idx = convert_bubbles_to_biallelic.converted_biallelic_vcf_idx
-      File pangenie_genotyped_merged_biallelic_vcf = merge_vcfs.final_merged_vcf
-      File pangenie_genotyped_merged_biallelic_vcf_idx = merge_vcfs.final_merged_vcf_index
+      File pangenie_genotyped_merged_biallelic_vcf = merge_vcfs_biallelic_vcf.final_merged_vcf
+      File pangenie_genotyped_merged_biallelic_vcf_idx = merge_vcfs_biallelic_vcf.final_merged_vcf_index
+      File pangenie_genotyped_merged_pangenie_vcf = merge_vcfs_pangenie_vcf.final_merged_vcf
+      File pangenie_genotyped_merged_pangenie_vcf_idx = merge_vcfs_pangenie_vcf.final_merged_vcf_index
     }
 }
 
