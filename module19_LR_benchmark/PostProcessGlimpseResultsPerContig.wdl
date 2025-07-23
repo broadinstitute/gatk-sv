@@ -122,7 +122,7 @@ task SplitRefPanel {
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 15,
-    disk_gb: 15 + ceil(size(vcf_file, "GiB")*2),
+    disk_gb: 15 + ceil(size(ref_panel_vcf, "GiB")*2),
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
@@ -212,7 +212,7 @@ task AddIdToInfoColumn {
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 15,
-    disk_gb: 15 + ceil(size(vcf_file, "GiB")*2),
+    disk_gb: 15 + ceil(size(a_vcf, "GiB") + size(b_vcf, "GiB)) *2,
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
