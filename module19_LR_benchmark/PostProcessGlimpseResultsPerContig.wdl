@@ -52,6 +52,7 @@ workflow PostProcessGlimpseResultsPerContig {
             panel_biallelic_vcf = panel_biallelic_vcf,
             panel_biallelic_vcf_idx = panel_biallelic_vcf_idx,
 
+            sort = true,
             convert_to_biallelic_script = convert_to_biallelic_script,
             docker_image = sv_pipeline_base_docker,
             runtime_attr_override = runtime_attr_convert_bubbles_to_biallelic

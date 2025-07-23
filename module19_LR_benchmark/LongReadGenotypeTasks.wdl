@@ -788,6 +788,7 @@ task ConvertBubblesToBiallelic{
     File panel_biallelic_vcf_idx
     File convert_to_biallelic_script
 
+    Boolean sort = false
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
@@ -826,8 +827,17 @@ task ConvertBubblesToBiallelic{
   command <<<
     set -euo pipefail
 
-    zcat ~{input_vcf} | python3 ~{convert_to_biallelic_script} "~{panel_biallelic_vcf}" > "~{prefix}_biallelic.vcf"
-    bgzip  "~{prefix}_biallelic.vcf"
+    zcat ~{input_vcf} | python3 ~{convert_to_biallelic_script} "~{panel_biallelic_vcf}" > "temp.vcf"
+    bgzip  "temp.vcf"
+
+    if [[ ~{sort} == "true" ]]; then
+      # sort vcf
+      bcftools sort "temp.vcf.gz" -O z -o "~{prefix}_biallelic.vcf.gz"
+    else
+      mv temp.vcf.gz "~{prefix}_biallelic.vcf.gz"
+    fi
+
+
     tabix -p vcf  "~{prefix}_biallelic.vcf.gz"
 
  >>>
