@@ -50,7 +50,7 @@ workflow PostProcessGlimpseResultsPerContig {
             input_vcf_idx = AddIdToInfoColumn.with_id_vcf_idx,
 
             panel_biallelic_vcf = panel_biallelic_vcf,
-            panel_biallelic_vcf_idx = panel_biallelic_vcf_idx_list,
+            panel_biallelic_vcf_idx = panel_biallelic_vcf_idx,
 
             convert_to_biallelic_script = convert_to_biallelic_script,
             docker_image = sv_pipeline_base_docker,
