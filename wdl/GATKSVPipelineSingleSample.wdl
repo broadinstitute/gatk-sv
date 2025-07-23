@@ -1422,7 +1422,6 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker=sv_pipeline_docker
   }
 
-  Array[String] ref_samples = read_lines(ref_samples_list)
   call SingleSampleMetrics.SingleSampleMetrics as SampleFilterMetrics {
     input:
       name = batch,
