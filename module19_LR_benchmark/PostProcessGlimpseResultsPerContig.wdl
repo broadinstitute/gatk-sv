@@ -212,8 +212,8 @@ task AddIdToInfoColumn {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 15,
-    disk_gb: 15 + ceil(size(a_vcf, "GiB") *5),
+    mem_gb: 30,
+    disk_gb: 50 + ceil(size(a_vcf, "GiB") *10),
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
