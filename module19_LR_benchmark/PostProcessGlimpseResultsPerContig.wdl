@@ -58,7 +58,7 @@ workflow PostProcessGlimpseResultsPerContig {
     }
 
     output{
-        File output_biallelic_vcf = ConvertBubblesToBiallelic.biallelic_vcf,
+        File output_biallelic_vcf = ConvertBubblesToBiallelic.biallelic_vcf
         File output_biallelic_vcf_idx = ConvertBubblesToBiallelic.biallelic_vcf_idx
     }
 }
