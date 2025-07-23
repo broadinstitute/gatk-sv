@@ -53,7 +53,7 @@ def sr_test(argv):
                         help='Print progress log to stderr.')
     parser.add_argument('--outlier-sample-ids', default=None,
                         help='Path to file containing outlier sample IDs.')
-    parser.add_argument('--seed', type=int, default=0,
+    parser.add_argument('--seed', type=int, default=42,
                         help='Random seed.')
 
     # Print help if no arguments specified
@@ -137,7 +137,7 @@ def pe_test(argv):
                         help='Print progress log to stderr.')
     parser.add_argument('--outlier-sample-ids', default=None,
                         help='Path to file containing outlier sample IDs.')
-    parser.add_argument('--seed', type=int, default=0,
+    parser.add_argument('--seed', type=int, default=42,
                         help='Random seed.')
 
     if len(argv) == 0:

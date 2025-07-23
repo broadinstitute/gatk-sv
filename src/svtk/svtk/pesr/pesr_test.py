@@ -93,7 +93,7 @@ class PESRTest:
 
 class PESRTestRunner:
     def __init__(self, vcf, common=False, n_background=160, whitelist=None, blacklist=None,
-                 log=False, outlier_sample_ids=None, seed=0):
+                 log=False, outlier_sample_ids=None, seed=42):
         self.vcf = vcf
 
         self.common = common
