@@ -68,13 +68,6 @@ Default: `3`. Minimum PE read count for complex variants (CPX).
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `min_pe_ctx`
 Default: `3`. Minimum PE read count for translocations (CTX).
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `use_hail`
-Default: `false`. Use Hail for VCF concatenation. This should only be used for projects with over 50k samples. If enabled, the
-[gcs_project](#optional-gcs_project) must also be provided. Does not work on Terra.
-
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `gcs_project`
-Google Cloud project ID. Required only if enabling [use_hail](#optional-use_hail).
-
 ### Outputs
 
 #### `cpx_refined_vcf`

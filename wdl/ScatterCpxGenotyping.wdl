@@ -4,7 +4,6 @@ version 1.0
 
 import "GenotypeCpxCnvs.wdl" as GenotypeCpx
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "HailMerge.wdl" as HailMerge
 
 # Workflow to perform depth-based genotyping for a single vcf shard scattered 
 # across batches on predicted CPX CNVs
@@ -26,9 +25,6 @@ workflow ScatterCpxGenotyping {
     String contig
     File ref_dict
 
-    Boolean use_hail
-    String? gcs_project
-
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -38,7 +34,6 @@ workflow ScatterCpxGenotyping {
     RuntimeAttr? runtime_override_concat_cpx_cnv_vcfs
 
     RuntimeAttr? runtime_override_preconcat
-    RuntimeAttr? runtime_override_hail_merge
     RuntimeAttr? runtime_override_fix_header
 
     # overrides for GenotypeCpx
@@ -95,34 +90,19 @@ workflow ScatterCpxGenotyping {
     }
   }
 
-  if (use_hail) {
-    call HailMerge.HailMerge as ConcatCpxCnvVcfsHail {
-      input:
-        vcfs=GenotypeShard.cpx_depth_gt_resolved_vcf,
-        prefix="~{prefix}.regenotyped",
-        gcs_project=gcs_project,
-        sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_override_preconcat=runtime_override_preconcat,
-        runtime_override_hail_merge=runtime_override_hail_merge,
-        runtime_override_fix_header=runtime_override_fix_header
-    }
-  }
-  if (!use_hail) {
-    call MiniTasks.ConcatVcfs as ConcatCpxCnvVcfs {
-      input:
-        vcfs=GenotypeShard.cpx_depth_gt_resolved_vcf,
-        vcfs_idx=GenotypeShard.cpx_depth_gt_resolved_vcf_idx,
-        allow_overlaps=true,
-        outfile_prefix="~{prefix}.regenotyped",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_override_concat_cpx_cnv_vcfs
-    }
+  call MiniTasks.ConcatVcfs as ConcatCpxCnvVcfs {
+    input:
+      vcfs=GenotypeShard.cpx_depth_gt_resolved_vcf,
+      vcfs_idx=GenotypeShard.cpx_depth_gt_resolved_vcf_idx,
+      allow_overlaps=true,
+      outfile_prefix="~{prefix}.regenotyped",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_concat_cpx_cnv_vcfs
   }
 
   # Output merged VCF
   output {
-    File cpx_depth_gt_resolved_vcf = select_first([ConcatCpxCnvVcfs.concat_vcf, ConcatCpxCnvVcfsHail.merged_vcf])
-    File cpx_depth_gt_resolved_vcf_idx = select_first([ConcatCpxCnvVcfs.concat_vcf_idx, ConcatCpxCnvVcfsHail.merged_vcf_index])
+    File cpx_depth_gt_resolved_vcf = ConcatCpxCnvVcfs.concat_vcf
+    File cpx_depth_gt_resolved_vcf_idx = ConcatCpxCnvVcfs.concat_vcf_idx
   }
  }

@@ -190,7 +190,7 @@ def extract_bp_list_v4(coordinates, segments, small_sv_size_threshold):
     dup_bp = [int(i) for i in dup_seg[1].split('-')]
     structures = []
     breakpoints = []
-    if del_bp[2] < dup_bp[0]:
+    if del_bp[2] <= dup_bp[0]:
         breakpoints = del_bp + dup_bp
         if del_bp[2] - del_bp[1] > small_sv_size_threshold:
             structures = ['abc', 'c^bc']
@@ -202,6 +202,8 @@ def extract_bp_list_v4(coordinates, segments, small_sv_size_threshold):
             structures = ['abc', 'aba^']
         else:
             structures = ['ab', 'aba^']
+    else:
+        return 'unresolved'
     return [breakpoints, structures]
 
 
@@ -274,6 +276,9 @@ def cpx_sv_readin(input_bed, header_pos, unresolved):
                 else:
                     segments = pin[header_pos['SOURCE']].split(',')
                     cpx_info = extract_bp_list_v4(pin[:3], segments, small_sv_size_threshold)
+                    if cpx_info == 'unresolved':
+                        unresolved_svids.append(pin[header_pos['name']])
+                        continue
                     ref_alt = cpx_info[1]
                     breakpoints = cpx_info[0]
                 out.append([breakpoints, ref_alt, pin[3]])

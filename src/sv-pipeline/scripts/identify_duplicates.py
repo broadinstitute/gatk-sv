@@ -44,11 +44,11 @@ def process_duplicates(vcf, fout):
                 record.stop,
                 record.info.get('SVTYPE'),
                 record.info.get('SVLEN'),
-                record.info.get('CHR2'),
-                record.info.get('END2'),
-                record.info.get('STRANDS'),
-                record.info.get('CPX_TYPE'),
-                record.info.get('CPX_INTERVALS')
+                record.info.get('CHR2', ""),
+                record.info.get('END2', 0),
+                record.info.get('STRANDS', ""),
+                record.info.get('CPX_TYPE', ""),
+                record.info.get('CPX_INTERVALS', "")
             )
             exact_buffer.append((exact_key, record.id))
 
