@@ -129,16 +129,16 @@ class PETest(PESRTest):
 class PETestRunner(PESRTestRunner):
     def __init__(self, vcf, discfile, fout, n_background=160, common=False,
                  window_in=50, window_out=500, whitelist=None, blacklist=None,
-                 medians=None, log=False, outlier_sample_ids=None):
+                 medians=None, log=False, outlier_sample_ids=None, seed=42):
         """
         vcf : pysam.VariantFile
         discfile : pysam.TabixFile
         """
-        self.petest = PETest(discfile, common, window_in,
-                             window_out, medians=medians)
+        self.petest = PETest(discfile, common=common, window_in=window_in,
+                             window_out=window_out, medians=medians)
         self.fout = fout
 
-        super().__init__(vcf, common, n_background, whitelist, blacklist, log, outlier_sample_ids)
+        super().__init__(vcf, common, n_background, whitelist, blacklist, log, outlier_sample_ids, seed)
 
     def test_record(self, record):
         if not self._strand_check(record):
