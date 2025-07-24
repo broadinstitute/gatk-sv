@@ -51,6 +51,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_gatk_agg_v2
       tags:
         - /.*/
 
@@ -60,6 +61,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_gatk_agg_v2
       tags:
         - /.*/
 
