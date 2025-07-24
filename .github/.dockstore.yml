@@ -232,6 +232,7 @@ workflows:
       branches:
         - main
         - mw_ss_mode_v1
+        - mw_ss_mode_v1_cleanup
       tags:
         - /.*/
 
