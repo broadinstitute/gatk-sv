@@ -627,10 +627,24 @@ task CalculateInheritanceTable {
   Int mem_size =  ceil(size(input_vcf,"GB") * 2)
 
   String prefix = basename(input_vcf, ".vcf.gz")
+
   command <<<
     set -euxo pipefail
 
-    bcftools view -H ~{input_vcf} | cut -f10- | sort | uniq -c > ~{prefix}.inheri.stat
+    bcftools view -H ~{input_vcf} | cut -f10- > gt_table.tsv
+
+    Rscript -e '
+
+    dat=read.table("gt_table.tsv")
+    for(i in 1:ncol(dat)){
+      dat[,i] = sapply(dat[,i], function(x){gsub("/","|", strsplit(as.character(x),":")[[1]][1])})
+    }
+
+    out = data.frame(table(dat))
+    out = out[out[,ncol(out)]>0, ]
+    write.table(out[,c(ncol(out), 1:(ncol(out)-1))],  "~{prefix}.inheri.stat", quote=F, sep="\t", col.names=F, row.names=F)
+
+    '
 
   >>>
 
