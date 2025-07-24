@@ -6,20 +6,20 @@
 
 set -Exeuo pipefail
 
-sample_id=$1
-bam_or_cram_file=$2
-bam_or_cram_index=$3
-reference_fasta=$4
-reference_index=$5
-reference_dict=$6
-sd_locs_vcf=$7
-preprocessed_intervals=$8
-outputs_json_filename=${14}
-site_depth_min_mapq=${9:-6}
-site_depth_min_baseq=${10:-10}
-primary_contigs_list="${11:-}"
-gatk_jar_override="${12:-/root/gatk.jar}"
-command_mem_mb=${13:-3250}
+sample_id=${1}
+bam_or_cram_file=${2}
+bam_or_cram_index=${3}
+reference_fasta=${4}
+reference_index=${5}
+reference_dict=${6}
+sd_locs_vcf=${7}
+preprocessed_intervals=${8}
+outputs_json_filename=${9}
+site_depth_min_mapq=${10:-6}
+site_depth_min_baseq=${11:-10}
+primary_contigs_list="${12:-}"
+gatk_jar_override="${13:-/root/gatk.jar}"
+command_mem_mb=${14:-3250}
 
 working_dir=$(mktemp -d wd_collect_sv_evidence_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
