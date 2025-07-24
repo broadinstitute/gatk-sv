@@ -210,16 +210,18 @@ task AddGenomicContextToVcfR {
 
 
     read_or_empty <- function(file_path) {
-      if (length(readLines(file_path, n = 1)) < 2) {
-        # File is empty: return 0-row data frame with named columns
+
+      lines <- readLines(file_path, warn = FALSE)
+      if(any(!grepl("^#", lines))){
+        return(read.table(file_path, header = FALSE, sep = "", stringsAsFactors = FALSE))
+      } else{
         empty_df <- data.frame(matrix(ncol = 10, nrow = 0))
         colnames(empty_df) <- paste0("V", 1:10)
         return(empty_df)
-      } else {
-        # File has content: read normally
-        return(read.table(file_path, header = FALSE, sep = "", stringsAsFactors = FALSE))
+
       }
     }
+
 
     svid_gc <- read.table("~{svid_annotation}", header = TRUE)
     vcf_in <- read_or_empty("~{vcf_file}")
