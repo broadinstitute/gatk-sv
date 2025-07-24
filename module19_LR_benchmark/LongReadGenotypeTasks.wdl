@@ -623,8 +623,8 @@ task CalculateInheritanceTable {
     RuntimeAttr? runtime_attr_override
   }
 
-  Int disk_size = 10 + ceil(size(input_vcf,"GB") * 2)
-  Int mem_size =  ceil(size(input_vcf,"GB") * 2)
+  Int disk_size = 30 + ceil(size(input_vcf,"GB") * 3)
+  Int mem_size =  20 + ceil(size(input_vcf,"GB") * 2)
 
   String prefix = basename(input_vcf, ".vcf.gz")
 
