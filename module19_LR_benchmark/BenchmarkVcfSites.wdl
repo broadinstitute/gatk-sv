@@ -127,6 +127,12 @@ workflow BenchmarkVcfSites{
     File tp_ref = combine_vcfs_tp_ref.concat_vcf
     File fp_query = combine_vcfs_fp_query.concat_vcf  
     File fp_ref = combine_vcfs_fp_ref.concat_vcf
+
+    File tp_query_idx = combine_vcfs_tp_query.concat_vcf_idx  
+    File tp_ref_idx = combine_vcfs_tp_ref.concat_vcf_idx
+    File fp_query_idx = combine_vcfs_fp_query.concat_vcf_idx  
+    File fp_ref_idx = combine_vcfs_fp_ref.concat_vcf_idx
+
     File benchmark_stat = calcu_comp_stat.comp_stat
     File benchmark_plot = plot_comp_results.figure
   }
