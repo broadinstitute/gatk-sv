@@ -208,8 +208,21 @@ task AddGenomicContextToVcfR {
     # use R script to add GC to the vcf
     Rscript -e '
 
+
+    read_or_empty <- function(file_path) {
+      if (length(readLines(file_path, n = 1)) < 2) {
+        # File is empty: return 0-row data frame with named columns
+        empty_df <- data.frame(matrix(ncol = 10, nrow = 0))
+        colnames(empty_df) <- paste0("V", 1:10)
+        return(empty_df)
+      } else {
+        # File has content: read normally
+        return(read.table(file_path, header = FALSE, sep = "", stringsAsFactors = FALSE))
+      }
+    }
+
     svid_gc <- read.table("~{svid_annotation}", header = TRUE)
-    vcf_in <- read.table("~{vcf_file}", header = FALSE)
+    vcf_in <- read_or_empty("~{vcf_file}")
     colnames(vcf_in)[3] = "SVID"
     svid_gc = unique(svid_gc)
     vcf_out <- merge(vcf_in, svid_gc, by="SVID")
