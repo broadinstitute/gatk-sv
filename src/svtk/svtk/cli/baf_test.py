@@ -53,18 +53,21 @@ def preprocess(chrom, start, end, tbx, samples, window=None, called_samples=None
         return bafs, bafs, called_samples
     bafs.columns = ['chr', 'pos', 'baf', 'sample']
 
-    # Create non-outlier sample lists
-    background_samples = list(set(samples) - set(called_samples))
-    non_outlier_called = [s for s in called_samples if s not in outlier_sample_ids]
-    non_outlier_background = [s for s in background_samples if s not in outlier_sample_ids]
+    if outlier_sample_ids and len(outlier_sample_ids) > 0:
+        # Create non-outlier sample lists
+        background_samples = list(set(samples) - set(called_samples))
+        non_outlier_called = [s for s in called_samples if s not in outlier_sample_ids]
+        non_outlier_background = [s for s in background_samples if s not in outlier_sample_ids]
 
-    # Exclude outlier samples only if non-outlier samples exist
-    if len(non_outlier_called) > 0:
-        called_samples = non_outlier_called
-    if len(non_outlier_background) > 0:
-        background_samples = non_outlier_background
+        # Exclude outlier samples only if non-outlier samples exist
+        if len(non_outlier_called) > 0:
+            called_samples = non_outlier_called
+        if len(non_outlier_background) > 0:
+            background_samples = non_outlier_background
     
-    samples = list(set(called_samples) | set(background_samples))
+        # Prune samples list
+        samples = list(set(called_samples) | set(background_samples))
+    
     bafs = bafs[bafs['sample'].isin(samples)]
     
     if bafs.empty:
