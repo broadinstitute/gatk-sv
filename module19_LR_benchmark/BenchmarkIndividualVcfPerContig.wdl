@@ -11,12 +11,12 @@ workflow BenchmarkIndividualVcfPerContig{
   input{
     File ref_vcf
     File ref_vcf_idx
-    File ref_filter_vcf
-    File ref_filter_vcf_idx
     File query_vcf
     File query_vcf_idx  
-    File query_filter_vcf
-    File query_filter_vcf_idx
+    File? ref_filter_vcf
+    File? ref_filter_vcf_idx
+    File? query_filter_vcf
+    File? query_filter_vcf_idx
 
     File anno_script_bash
     File anno_script_helper_R
@@ -52,27 +52,38 @@ workflow BenchmarkIndividualVcfPerContig{
   }
 
 
-  call LongReadGenotypeTasks.FilterVcfByAnotherVcf as filter_query_vcf_by_ovr {
-    input:
-      vcf_file = extract_variant_sites_query.updated_vcf,
-      vcf_idx = extract_variant_sites_query.updated_vcf_idx ,
-      vcf_file_b = query_filter_vcf,
-      vcf_file_b_idx = query_filter_vcf_idx,
-      docker_image = sv_pipeline_base_docker
+  if (defined(query_filter_vcf)){
+    call LongReadGenotypeTasks.FilterVcfByAnotherVcf as filter_query_vcf_by_ovr {
+      input:
+        vcf_file = extract_variant_sites_query.updated_vcf,
+        vcf_idx = extract_variant_sites_query.updated_vcf_idx ,
+        vcf_file_b = query_filter_vcf,
+        vcf_file_b_idx = query_filter_vcf_idx,
+        docker_image = sv_pipeline_base_docker
+    }
   }
 
-  call LongReadGenotypeTasks.FilterVcfByAnotherVcf as filter_ref_vcf_by_ovr {
+  File updated_query_vcf = select_first([filter_query_vcf_by_ovr.filtered_vcf, extract_variant_sites_query.updated_vcf])
+  File updated_query_vcf_idx = select_first([filter_query_vcf_by_ovr.filtered_vcf_idx, extract_variant_sites_query.updated_vcf_idx])
+
+
+  if (defined(ref_filter_vcf)){
+    call LongReadGenotypeTasks.FilterVcfByAnotherVcf as filter_ref_vcf_by_ovr {
     input:
       vcf_file = extract_variant_sites_ref.updated_vcf,
       vcf_idx = extract_variant_sites_ref.updated_vcf_idx,
       vcf_file_b = ref_filter_vcf,
       vcf_file_b_idx = ref_filter_vcf_idx,
       docker_image = sv_pipeline_base_docker
+    }
   }
+
+  File updated_ref_vcf = select_first([filter_ref_vcf_by_ovr.filtered_vcf, extract_variant_sites_ref.updated_vcf])
+  File updated_ref_vcf_idx = select_first([filter_ref_vcf_by_ovr.filtered_vcf_idx, extract_variant_sites_ref.updated_vcf_idx])
 
   call ExtractIndividualFromVCF.ExtractIndividualFromVCF as extract_individual_query{
     input:
-      vcf_file = filter_query_vcf_by_ovr.filtered_vcf,
+      vcf_file = updated_query_vcf,
       sample_ids = sample_ids,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_base_docker = sv_pipeline_base_docker
@@ -80,7 +91,7 @@ workflow BenchmarkIndividualVcfPerContig{
 
   call ExtractIndividualFromVCF.ExtractIndividualFromVCF as extract_individual_ref{
     input:
-      vcf_file = filter_ref_vcf_by_ovr.filtered_vcf,
+      vcf_file = updated_ref_vcf,
       sample_ids = sample_ids,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_base_docker = sv_pipeline_base_docker

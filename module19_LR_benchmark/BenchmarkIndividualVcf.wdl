@@ -10,12 +10,12 @@ workflow BenchmarkIndividualVcf{
     input{
         File ref_vcf
         File ref_vcf_idx
-        File ref_filter_vcf
-        File ref_filter_vcf_idx
+        File? ref_filter_vcf
+        File? ref_filter_vcf_idx
         File query_vcf
         File query_vcf_idx  
-        File query_filter_vcf
-        File query_filter_vcf_idx
+        File? query_filter_vcf
+        File? query_filter_vcf_idx
 
         Array[String] chromosomes
 
@@ -65,37 +65,41 @@ workflow BenchmarkIndividualVcf{
                 docker_image = sv_pipeline_base_docker  
             }
 
-
-        call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_query_filter{
-            input:
-                input_vcf = query_filter_vcf,
-                input_vcf_index = query_filter_vcf_idx,
-                chromosome = chromosomes[index],
-                output_name = "~{query_prefix}.~{chromosomes[index]}.filter.vcf.gz",
-                docker_image = sv_pipeline_base_docker  
+        if (defined(query_filter_vcf)){
+          call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_query_filter{
+              input:
+                  input_vcf = query_filter_vcf,
+                  input_vcf_index = query_filter_vcf_idx,
+                  chromosome = chromosomes[index],
+                  output_name = "~{query_prefix}.~{chromosomes[index]}.filter.vcf.gz",
+                  docker_image = sv_pipeline_base_docker  
             }
+        }
 
-        call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_ref_filter{
+        if (defined(ref_filter_vcf)){
+          call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_ref_filter{
             input:
                 input_vcf = ref_filter_vcf,
                 input_vcf_index = ref_filter_vcf_idx,
                 chromosome = chromosomes[index],
                 output_name = "~{ref_prefix}.~{chromosomes[index]}.filter.vcf.gz",
                 docker_image = sv_pipeline_base_docker  
-            }
+            }      
+        }
 
 
         call BenchmarkIndividualVcfPerContig.BenchmarkIndividualVcfPerContig{
             input:
               query_vcf = extract_chrom_variants_query.chr_vcf,
               query_vcf_idx = extract_chrom_variants_query.chr_vcf_idx, 
-              query_filter_vcf = extract_chrom_variants_query_filter.chr_vcf,
-              query_filter_vcf_idx = extract_chrom_variants_query_filter.chr_vcf_idx,
-
               ref_vcf = extract_chrom_variants_ref.chr_vcf,
               ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
-              ref_filter_vcf = extract_chrom_variants_ref_filter.chr_vcf,
-              ref_filter_vcf_idx = extract_chrom_variants_ref_filter.chr_vcf_idx,
+
+              query_filter_vcf = select_first([extract_chrom_variants_query_filter.chr_vcf, query_filter_vcf]), 
+              query_filter_vcf_idx = select_first([extract_chrom_variants_query_filter.chr_vcf_idx, query_filter_vcf_idx]),
+
+              ref_filter_vcf = select_first([extract_chrom_variants_ref_filter.chr_vcf, ref_filter_vcf]), 
+              ref_filter_vcf_idx = select_first([extract_chrom_variants_ref_filter.chr_vcf_idx, ref_filter_vcf_idx]), 
 
               chromosome = chromosomes[index],
 
