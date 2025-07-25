@@ -1357,7 +1357,7 @@ workflow GATKSVPipelineSingleSample {
       prefix=sample_id,
       batch_name_list=[sample_id],
       batch_sample_lists=[SamplesList.samples_file],
-      PE_metrics=[PE_metrics],
+      PE_metrics=[GatherBatchEvidence.merged_PE],
       PE_metrics_indexes=[GatherBatchEvidence.merged_PE_index],
       Depth_DEL_beds=[GatherBatchEvidence.merged_dels],
       Depth_DUP_beds=[GatherBatchEvidence.merged_dups],
