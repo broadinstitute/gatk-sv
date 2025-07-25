@@ -239,19 +239,19 @@ workflow BenchmarkIndividualVcf{
           }
 
         }
-      }
 
 
-
-
-
-
+      Array[File] tp_query_list = select_first([benchmark_individual_vcf_per_contig_filter_query_ref.tp_query,benchmark_individual_vcf_per_contig_filter_query.tp_query,benchmark_individual_vcf_per_contig_filter_ref.tp_query,benchmark_individual_vcf_per_contig.tp_query])
+      Array[File] tp_ref_list = select_first([benchmark_individual_vcf_per_contig_filter_query_ref.tp_ref,benchmark_individual_vcf_per_contig_filter_query.tp_ref,benchmark_individual_vcf_per_contig_filter_ref.tp_ref,benchmark_individual_vcf_per_contig.tp_ref])
+      Array[File] fp_query_list = select_first([benchmark_individual_vcf_per_contig_filter_query_ref.fp_query,benchmark_individual_vcf_per_contig_filter_query.fp_query,benchmark_individual_vcf_per_contig_filter_ref.fp_query,benchmark_individual_vcf_per_contig.fp_query])
+      Array[File] fp_ref_list = select_first([benchmark_individual_vcf_per_contig_filter_query_ref.fp_ref,benchmark_individual_vcf_per_contig_filter_query.fp_ref,benchmark_individual_vcf_per_contig_filter_ref.fp_ref,benchmark_individual_vcf_per_contig.fp_ref])
+    }
 
     scatter (i in range(length(sample_ids))){
         call ExtractFileByIndex.ExtractFileByIndex as extract_tp_query{
           input:
             index = i,
-            nested_files = select_first([benchmark_individual_vcf_per_contig_filter_query_ref.tp_query,benchmark_individual_vcf_per_contig_filter_query.tp_query,benchmark_individual_vcf_per_contig_filter_ref.tp_query,benchmark_individual_vcf_per_contig.tp_query])
+            nested_files = tp_query_list
         }
 
         call LongReadGenotypeTasks.ConcatVcfs as combine_vcfs_tp_query{
@@ -264,7 +264,7 @@ workflow BenchmarkIndividualVcf{
         call ExtractFileByIndex.ExtractFileByIndex as extract_tp_ref{
           input:
             index = i,
-            nested_files = select_first([benchmark_individual_vcf_per_contig_filter_query_ref.tp_ref,benchmark_individual_vcf_per_contig_filter_query.tp_ref,benchmark_individual_vcf_per_contig_filter_ref.tp_ref,benchmark_individual_vcf_per_contig.tp_ref])
+            nested_files = tp_ref_list
         }
 
         call LongReadGenotypeTasks.ConcatVcfs as combine_vcfs_tp_ref{
@@ -277,7 +277,7 @@ workflow BenchmarkIndividualVcf{
         call ExtractFileByIndex.ExtractFileByIndex as extract_fp_query{
           input:
             index = i,
-            nested_files = select_first([benchmark_individual_vcf_per_contig_filter_query_ref.fp_query,benchmark_individual_vcf_per_contig_filter_query.fp_query,benchmark_individual_vcf_per_contig_filter_ref.fp_query,benchmark_individual_vcf_per_contig.fp_query])
+            nested_files = fp_query_list
         }
 
         call LongReadGenotypeTasks.ConcatVcfs as combine_vcfs_fp_query{
@@ -290,7 +290,7 @@ workflow BenchmarkIndividualVcf{
         call ExtractFileByIndex.ExtractFileByIndex as extract_fp_ref{
           input:
             index = i,
-            nested_files = select_first([benchmark_individual_vcf_per_contig_filter_query_ref.fp_ref,benchmark_individual_vcf_per_contig_filter_query.fp_ref,benchmark_individual_vcf_per_contig_filter_ref.fp_ref,benchmark_individual_vcf_per_contig.fp_ref])
+            nested_files = fp_ref_list
         }
 
         call LongReadGenotypeTasks.ConcatVcfs as combine_vcfs_fp_ref{
