@@ -65,7 +65,8 @@ workflow BenchmarkIndividualVcf{
                 docker_image = sv_pipeline_base_docker  
             }
 
-        if (defined(query_filter_vcf)){
+        if (defined(query_filter_vcf) && defined(ref_filter_vcf)){
+
           call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_query_filter{
               input:
                   input_vcf = query_filter_vcf,
@@ -74,9 +75,7 @@ workflow BenchmarkIndividualVcf{
                   output_name = "~{query_prefix}.~{chromosomes[index]}.filter.vcf.gz",
                   docker_image = sv_pipeline_base_docker  
             }
-        }
 
-        if (defined(ref_filter_vcf)){
           call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_ref_filter{
             input:
                 input_vcf = ref_filter_vcf,
@@ -84,50 +83,175 @@ workflow BenchmarkIndividualVcf{
                 chromosome = chromosomes[index],
                 output_name = "~{ref_prefix}.~{chromosomes[index]}.filter.vcf.gz",
                 docker_image = sv_pipeline_base_docker  
-            }      
+            }  
+        
+          call BenchmarkIndividualVcfPerContig.BenchmarkIndividualVcfPerContig as benchmark_individual_vcf_per_contig_filter_query_ref{
+              input:
+                query_vcf = extract_chrom_variants_query.chr_vcf,
+                query_vcf_idx = extract_chrom_variants_query.chr_vcf_idx, 
+
+                ref_vcf = extract_chrom_variants_ref.chr_vcf,
+                ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
+
+                query_filter_vcf = extract_chrom_variants_query_filter.chr_vcf, 
+                query_filter_vcf_idx = extract_chrom_variants_query_filter.chr_vcf_idx,
+
+                ref_filter_vcf = extract_chrom_variants_ref_filter.chr_vcf, 
+                ref_filter_vcf_idx = extract_chrom_variants_ref_filter.chr_vcf_idx, 
+
+                chromosome = chromosomes[index],
+
+                anno_script_bash = anno_script_bash,
+                anno_script_helper_R = anno_script_helper_R,
+                benchmark_script_bash = benchmark_script_bash,
+                banchmark_script_helper_R = banchmark_script_helper_R,
+
+                repeat_mask = repeat_mask,
+                simple_repeats = simple_repeats,
+                segmental_duplicates = segmental_duplicates,
+
+                short_read_benchmark = short_read_benchmark,
+
+                sample_ids = sample_ids,
+                ref_dict = ref_dict,
+                truvari_params = truvari_params,
+                sv_base_mini_docker = sv_base_mini_docker,
+                sv_pipeline_base_docker = sv_pipeline_base_docker
+          }
+        
         }
 
+        if (defined(query_filter_vcf) && !defined(ref_filter_vcf)){
+          call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_query_filter{
+              input:
+                  input_vcf = query_filter_vcf,
+                  input_vcf_index = query_filter_vcf_idx,
+                  chromosome = chromosomes[index],
+                  output_name = "~{query_prefix}.~{chromosomes[index]}.filter.vcf.gz",
+                  docker_image = sv_pipeline_base_docker  
+            }
 
-        call BenchmarkIndividualVcfPerContig.BenchmarkIndividualVcfPerContig{
+          call BenchmarkIndividualVcfPerContig.BenchmarkIndividualVcfPerContig as benchmark_individual_vcf_per_contig_filter_query{
+              input:
+                query_vcf = extract_chrom_variants_query.chr_vcf,
+                query_vcf_idx = extract_chrom_variants_query.chr_vcf_idx, 
+
+                ref_vcf = extract_chrom_variants_ref.chr_vcf,
+                ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
+
+                query_filter_vcf = extract_chrom_variants_query_filter.chr_vcf, 
+                query_filter_vcf_idx = extract_chrom_variants_query_filter.chr_vcf_idx,
+
+                chromosome = chromosomes[index],
+
+                anno_script_bash = anno_script_bash,
+                anno_script_helper_R = anno_script_helper_R,
+                benchmark_script_bash = benchmark_script_bash,
+                banchmark_script_helper_R = banchmark_script_helper_R,
+
+                repeat_mask = repeat_mask,
+                simple_repeats = simple_repeats,
+                segmental_duplicates = segmental_duplicates,
+
+                short_read_benchmark = short_read_benchmark,
+
+                sample_ids = sample_ids,
+                ref_dict = ref_dict,
+                truvari_params = truvari_params,
+                sv_base_mini_docker = sv_base_mini_docker,
+                sv_pipeline_base_docker = sv_pipeline_base_docker
+          }
+
+        }
+
+        if (!defined(query_filter_vcf) && defined(ref_filter_vcf)){
+
+          call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_ref_filter{
             input:
-              query_vcf = extract_chrom_variants_query.chr_vcf,
-              query_vcf_idx = extract_chrom_variants_query.chr_vcf_idx, 
-              ref_vcf = extract_chrom_variants_ref.chr_vcf,
-              ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
+                input_vcf = ref_filter_vcf,
+                input_vcf_index = ref_filter_vcf_idx,
+                chromosome = chromosomes[index],
+                output_name = "~{ref_prefix}.~{chromosomes[index]}.filter.vcf.gz",
+                docker_image = sv_pipeline_base_docker  
+            }  
+        
+          call BenchmarkIndividualVcfPerContig.BenchmarkIndividualVcfPerContig as benchmark_individual_vcf_per_contig_filter_ref{
+              input:
+                query_vcf = extract_chrom_variants_query.chr_vcf,
+                query_vcf_idx = extract_chrom_variants_query.chr_vcf_idx, 
 
-              query_filter_vcf = select_first([extract_chrom_variants_query_filter.chr_vcf, query_filter_vcf]), 
-              query_filter_vcf_idx = select_first([extract_chrom_variants_query_filter.chr_vcf_idx, query_filter_vcf_idx]),
+                ref_vcf = extract_chrom_variants_ref.chr_vcf,
+                ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
 
-              ref_filter_vcf = select_first([extract_chrom_variants_ref_filter.chr_vcf, ref_filter_vcf]), 
-              ref_filter_vcf_idx = select_first([extract_chrom_variants_ref_filter.chr_vcf_idx, ref_filter_vcf_idx]), 
+                ref_filter_vcf = extract_chrom_variants_ref_filter.chr_vcf, 
+                ref_filter_vcf_idx = extract_chrom_variants_ref_filter.chr_vcf_idx, 
 
-              chromosome = chromosomes[index],
+                chromosome = chromosomes[index],
 
-              anno_script_bash = anno_script_bash,
-              anno_script_helper_R = anno_script_helper_R,
-              benchmark_script_bash = benchmark_script_bash,
-              banchmark_script_helper_R = banchmark_script_helper_R,
+                anno_script_bash = anno_script_bash,
+                anno_script_helper_R = anno_script_helper_R,
+                benchmark_script_bash = benchmark_script_bash,
+                banchmark_script_helper_R = banchmark_script_helper_R,
 
-              repeat_mask = repeat_mask,
-              simple_repeats = simple_repeats,
-              segmental_duplicates = segmental_duplicates,
+                repeat_mask = repeat_mask,
+                simple_repeats = simple_repeats,
+                segmental_duplicates = segmental_duplicates,
 
-              short_read_benchmark = short_read_benchmark,
+                short_read_benchmark = short_read_benchmark,
 
-              sample_ids = sample_ids,
-              ref_dict = ref_dict,
-              truvari_params = truvari_params,
-              sv_base_mini_docker = sv_base_mini_docker,
-              sv_pipeline_base_docker = sv_pipeline_base_docker
+                sample_ids = sample_ids,
+                ref_dict = ref_dict,
+                truvari_params = truvari_params,
+                sv_base_mini_docker = sv_base_mini_docker,
+                sv_pipeline_base_docker = sv_pipeline_base_docker
+          }
+        
         }
 
-    }
+        if (!defined(query_filter_vcf) && !defined(ref_filter_vcf)){
+        
+          call BenchmarkIndividualVcfPerContig.BenchmarkIndividualVcfPerContig as benchmark_individual_vcf_per_contig{
+              input:
+                query_vcf = extract_chrom_variants_query.chr_vcf,
+                query_vcf_idx = extract_chrom_variants_query.chr_vcf_idx, 
+
+                ref_vcf = extract_chrom_variants_ref.chr_vcf,
+                ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
+
+                chromosome = chromosomes[index],
+
+                anno_script_bash = anno_script_bash,
+                anno_script_helper_R = anno_script_helper_R,
+                benchmark_script_bash = benchmark_script_bash,
+                banchmark_script_helper_R = banchmark_script_helper_R,
+
+                repeat_mask = repeat_mask,
+                simple_repeats = simple_repeats,
+                segmental_duplicates = segmental_duplicates,
+
+                short_read_benchmark = short_read_benchmark,
+
+                sample_ids = sample_ids,
+                ref_dict = ref_dict,
+                truvari_params = truvari_params,
+                sv_base_mini_docker = sv_base_mini_docker,
+                sv_pipeline_base_docker = sv_pipeline_base_docker
+          }
+
+        }
+      }
+
+
+
+
+
+
 
     scatter (i in range(length(sample_ids))){
         call ExtractFileByIndex.ExtractFileByIndex as extract_tp_query{
           input:
             index = i,
-            nested_files = BenchmarkIndividualVcfPerContig.tp_query
+            nested_files = select_first([benchmark_individual_vcf_per_contig_filter_query_ref.tp_query,benchmark_individual_vcf_per_contig_filter_query.tp_query,benchmark_individual_vcf_per_contig_filter_ref.tp_query,benchmark_individual_vcf_per_contig.tp_query])
         }
 
         call LongReadGenotypeTasks.ConcatVcfs as combine_vcfs_tp_query{
@@ -140,7 +264,7 @@ workflow BenchmarkIndividualVcf{
         call ExtractFileByIndex.ExtractFileByIndex as extract_tp_ref{
           input:
             index = i,
-            nested_files = BenchmarkIndividualVcfPerContig.tp_ref
+            nested_files = select_first([benchmark_individual_vcf_per_contig_filter_query_ref.tp_ref,benchmark_individual_vcf_per_contig_filter_query.tp_ref,benchmark_individual_vcf_per_contig_filter_ref.tp_ref,benchmark_individual_vcf_per_contig.tp_ref])
         }
 
         call LongReadGenotypeTasks.ConcatVcfs as combine_vcfs_tp_ref{
@@ -153,7 +277,7 @@ workflow BenchmarkIndividualVcf{
         call ExtractFileByIndex.ExtractFileByIndex as extract_fp_query{
           input:
             index = i,
-            nested_files = BenchmarkIndividualVcfPerContig.fp_query
+            nested_files = select_first([benchmark_individual_vcf_per_contig_filter_query_ref.fp_query,benchmark_individual_vcf_per_contig_filter_query.fp_query,benchmark_individual_vcf_per_contig_filter_ref.fp_query,benchmark_individual_vcf_per_contig.fp_query])
         }
 
         call LongReadGenotypeTasks.ConcatVcfs as combine_vcfs_fp_query{
@@ -166,7 +290,7 @@ workflow BenchmarkIndividualVcf{
         call ExtractFileByIndex.ExtractFileByIndex as extract_fp_ref{
           input:
             index = i,
-            nested_files = BenchmarkIndividualVcfPerContig.fp_ref
+            nested_files = select_first([benchmark_individual_vcf_per_contig_filter_query_ref.fp_ref,benchmark_individual_vcf_per_contig_filter_query.fp_ref,benchmark_individual_vcf_per_contig_filter_ref.fp_ref,benchmark_individual_vcf_per_contig.fp_ref])
         }
 
         call LongReadGenotypeTasks.ConcatVcfs as combine_vcfs_fp_ref{
