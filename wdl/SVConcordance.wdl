@@ -127,8 +127,8 @@ task SVConcordanceTask {
       -O ~{output_prefix}.vcf.gz \
       ~{if defined(clustering_config) then "--clustering-config " + clustering_config else ""} \
       ~{if defined(stratification_config) then "--stratify-config "  + stratification_config else ""} \
-      ~{if defined(track_bed_files) then "--track-intervals " + sep=' --track-intervals ' track_bed_files else ""} \
       ~{if defined(track_names) then "--track-name " + sep=' --track-name ' track_names else ""} \
+      ~{if defined(track_intervals) then "--track-intervals " + sep=' --track-intervals ' track_intervals else ""} \
       ~{additional_args}
   >>>
   runtime {
