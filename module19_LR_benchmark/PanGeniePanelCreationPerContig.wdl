@@ -14,7 +14,7 @@ workflow PanGeniePanelCreationPerContig {
         Float frac_missing = 0.2
         String output_prefix
 
-        String docker
+        String docker_image
         File? monitoring_script
     }
 
@@ -28,7 +28,7 @@ workflow PanGeniePanelCreationPerContig {
             merge_vcfs_script = merge_vcfs_script,
             frac_missing = frac_missing,
             output_prefix = output_prefix,
-            docker = docker,
+            docker_image = docker_image,
             monitoring_script = monitoring_script
     }
 
@@ -54,7 +54,8 @@ task PanGeniePanelCreation {
         File merge_vcfs_script
         Float frac_missing
 
-        String docker
+        String docker_image
+
         File? monitoring_script
 
         RuntimeAttr? runtime_attr_override

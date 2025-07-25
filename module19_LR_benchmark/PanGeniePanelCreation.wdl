@@ -20,7 +20,7 @@ workflow PanGeniePanelCreation {
 
         Array[String] contig_list
 
-        String docker
+        String docker_image
         String sv_pipeline_base_docker
         String sv_base_mini_docker
         File? monitoring_script
@@ -49,7 +49,7 @@ workflow PanGeniePanelCreation {
                 merge_vcfs_script = merge_vcfs_script,
                 frac_missing = frac_missing,
                 output_prefix = "~{chrom}.panel",
-                docker =docker,
+                docker_image =docker_image,
                 monitoring_script = monitoring_script
         }
     }
