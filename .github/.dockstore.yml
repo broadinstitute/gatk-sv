@@ -168,7 +168,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_mw_svconcordance_update
       tags:
         - /.*/
 
