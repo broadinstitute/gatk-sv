@@ -1357,8 +1357,8 @@ task FilterVcfByAnotherVcf {
   input {
     File vcf_file
     File vcf_idx
-    File vcf_file_b
-    File vcf_file_b_idx
+    File? vcf_file_b
+    File? vcf_file_b_idx
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
