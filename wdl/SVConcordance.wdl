@@ -119,18 +119,6 @@ task SVConcordanceTask {
     JVM_MAX_MEM=$(getJavaMem MemTotal)
     echo "JVM memory: $JVM_MAX_MEM"
 
-    TRACK_NAMES_CMD=$( 
-      if [ ~{if defined(track_names) then "1" else "0"} -eq 1 ]; then
-        echo "--track-name ~{sep=' --track-name ' track_names}"
-      fi
-    )
-
-    TRACK_INTERVALS_CMD=$(
-      if [ ~{if defined(track_intervals) then "1" else "0"} -eq 1 ]; then
-        echo "--track-intervals ~{sep=' --track-intervals ' track_intervals}"
-      fi
-    )
-
     gatk --java-options "-Xmx${JVM_MAX_MEM}" SVConcordance \
       ~{"-L " + contig} \
       --sequence-dictionary ~{reference_dict} \
@@ -138,9 +126,9 @@ task SVConcordanceTask {
       --truth ~{truth_vcf} \
       -O ~{output_prefix}.vcf.gz \
       ~{if defined(clustering_config) then "--clustering-config " + clustering_config else ""} \
-      ~{if defined(stratification_config) then "--stratify-config " + stratification_config else ""} \
-      $TRACK_INTERVALS_CMD \
-      $TRACK_NAMES_CMD \
+      ~{if defined(stratification_config) then "--stratify-config "  + stratification_config else ""} \
+      ~{if defined(track_bed_files) then "--track-intervals " + sep=' --track-intervals ' track_bed_files else ""} \
+      ~{if defined(track_names) then "--track-name " + sep=' --track-name ' track_names else ""} \
       ~{additional_args}
   >>>
   runtime {
