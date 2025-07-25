@@ -1,5 +1,6 @@
 version 1.0
 
+import "FormatVcfForGatk.wdl" as format
 import "RDTest.wdl" as rdt
 import "TasksMakeCohortVcf.wdl" as taskscohort
 import "Utils.wdl" as util
@@ -122,7 +123,7 @@ workflow GenerateBatchMetrics {
   }
 
   scatter ( i in range(length(ScatterVcf.shards)) ) {
-    call FormatVcfForGatk {
+    call format.FormatVcf {
       input:
         vcf=ScatterVcf.shards[i],
         ploidy_table=ploidy_table,
@@ -133,8 +134,8 @@ workflow GenerateBatchMetrics {
     }
     call SVRegionOverlap {
       input:
-        vcf = FormatVcfForGatk.out,
-        vcf_index = FormatVcfForGatk.out_index,
+        vcf = FormatVcf.out,
+        vcf_index = FormatVcf.out_index,
         reference_dict = reference_dict,
         output_prefix = "~{prefix}.region_overlap.shard_~{i}",
         region_files = [segdups, rmsk],
@@ -460,54 +461,6 @@ task GetMaleOnlyVariantIDs {
     bcftools view -t ~{contig} -S ~{male_samples} ~{vcf} | bcftools view --min-ac 1 | bcftools query -f '%ID\n' > variant_ids_in_males.txt
     bcftools view -t ~{contig} -S ~{female_samples} ~{vcf} | bcftools view --min-ac 1 | bcftools query -f '%ID\n' > variant_ids_in_females.txt
     awk 'NR==FNR{a[$0];next} !($0 in a)' variant_ids_in_females.txt variant_ids_in_males.txt > male_only_variant_ids.txt
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
-task FormatVcfForGatk {
-  input {
-    File vcf
-    File ploidy_table
-    File? script
-    String? remove_infos
-    String? remove_formats
-    String output_prefix
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-                               cpu_cores: 1,
-                               mem_gb: 3.75,
-                               disk_gb: ceil(10 + size(vcf, "GB") * 2.0),
-                               boot_disk_gb: 10,
-                               preemptible_tries: 3,
-                               max_retries: 1
-                             }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File out = "~{output_prefix}.vcf.gz"
-    File out_index = "~{output_prefix}.vcf.gz.tbi"
-  }
-  command <<<
-    set -euo pipefail
-    python ~{default="/opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py" script} \
-      --vcf ~{vcf} \
-      --out ~{output_prefix}.vcf.gz \
-      --ploidy-table ~{ploidy_table} \
-      ~{"--remove-infos " + remove_infos} \
-      ~{"--remove-formats " + remove_formats} \
-      --fix-end
-    tabix ~{output_prefix}.vcf.gz
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
