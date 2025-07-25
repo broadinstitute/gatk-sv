@@ -21,6 +21,7 @@ workflow PanGeniePanelCreation {
         Array[String] contig_list
 
         String docker
+        String sv_pipeline_base_docker
         String sv_base_mini_docker
         File? monitoring_script
     }
