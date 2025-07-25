@@ -67,7 +67,7 @@ workflow BenchmarkIndividualVcf{
 
         if (defined(query_filter_vcf) && defined(ref_filter_vcf)){
 
-          call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_query_filter{
+          call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_query_filter_a{
               input:
                   input_vcf = query_filter_vcf,
                   input_vcf_index = query_filter_vcf_idx,
@@ -76,7 +76,7 @@ workflow BenchmarkIndividualVcf{
                   docker_image = sv_pipeline_base_docker  
             }
 
-          call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_ref_filter{
+          call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_ref_filter_a{
             input:
                 input_vcf = ref_filter_vcf,
                 input_vcf_index = ref_filter_vcf_idx,
@@ -93,11 +93,11 @@ workflow BenchmarkIndividualVcf{
                 ref_vcf = extract_chrom_variants_ref.chr_vcf,
                 ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
 
-                query_filter_vcf = extract_chrom_variants_query_filter.chr_vcf, 
-                query_filter_vcf_idx = extract_chrom_variants_query_filter.chr_vcf_idx,
+                query_filter_vcf = extract_chrom_variants_query_filter_a.chr_vcf, 
+                query_filter_vcf_idx = extract_chrom_variants_query_filter_a.chr_vcf_idx,
 
-                ref_filter_vcf = extract_chrom_variants_ref_filter.chr_vcf, 
-                ref_filter_vcf_idx = extract_chrom_variants_ref_filter.chr_vcf_idx, 
+                ref_filter_vcf = extract_chrom_variants_ref_filter_a.chr_vcf, 
+                ref_filter_vcf_idx = extract_chrom_variants_ref_filter_a.chr_vcf_idx, 
 
                 chromosome = chromosomes[index],
 
@@ -122,7 +122,7 @@ workflow BenchmarkIndividualVcf{
         }
 
         if (defined(query_filter_vcf) && !defined(ref_filter_vcf)){
-          call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_query_filter{
+          call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_query_filter_b{
               input:
                   input_vcf = query_filter_vcf,
                   input_vcf_index = query_filter_vcf_idx,
@@ -139,8 +139,8 @@ workflow BenchmarkIndividualVcf{
                 ref_vcf = extract_chrom_variants_ref.chr_vcf,
                 ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
 
-                query_filter_vcf = extract_chrom_variants_query_filter.chr_vcf, 
-                query_filter_vcf_idx = extract_chrom_variants_query_filter.chr_vcf_idx,
+                query_filter_vcf = extract_chrom_variants_query_filter_b.chr_vcf, 
+                query_filter_vcf_idx = extract_chrom_variants_query_filter_b.chr_vcf_idx,
 
                 chromosome = chromosomes[index],
 
@@ -166,7 +166,7 @@ workflow BenchmarkIndividualVcf{
 
         if (!defined(query_filter_vcf) && defined(ref_filter_vcf)){
 
-          call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_ref_filter{
+          call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_ref_filter_b{
             input:
                 input_vcf = ref_filter_vcf,
                 input_vcf_index = ref_filter_vcf_idx,
@@ -183,8 +183,8 @@ workflow BenchmarkIndividualVcf{
                 ref_vcf = extract_chrom_variants_ref.chr_vcf,
                 ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
 
-                ref_filter_vcf = extract_chrom_variants_ref_filter.chr_vcf, 
-                ref_filter_vcf_idx = extract_chrom_variants_ref_filter.chr_vcf_idx, 
+                ref_filter_vcf = extract_chrom_variants_ref_filter_b.chr_vcf, 
+                ref_filter_vcf_idx = extract_chrom_variants_ref_filter_b.chr_vcf_idx, 
 
                 chromosome = chromosomes[index],
 
