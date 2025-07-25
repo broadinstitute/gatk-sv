@@ -1307,8 +1307,8 @@ task ExtractVariantIndividualGenome {
 
 task ExtractChromosomeVariants {
   input {
-    File input_vcf       # .vcf.gz
-    File input_vcf_index # .vcf.gz.tbi
+    File? input_vcf       # .vcf.gz
+    File? input_vcf_index # .vcf.gz.tbi
     String chromosome    # e.g. "chr1" or "1"
     String output_name   # e.g. "chr1.vcf.gz"
     String docker_image = "biocontainers/bcftools:v1.17-1-deb-py3"

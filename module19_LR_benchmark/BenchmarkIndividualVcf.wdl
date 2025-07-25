@@ -68,8 +68,8 @@ workflow BenchmarkIndividualVcf{
         if (defined(query_filter_vcf)){
           call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_query_filter{
               input:
-                  input_vcf = select_first([query_filter_vcf]),
-                  input_vcf_index = select_first([query_filter_vcf_idx]),
+                  input_vcf = query_filter_vcf,
+                  input_vcf_index = query_filter_vcf_idx,
                   chromosome = chromosomes[index],
                   output_name = "~{query_prefix}.~{chromosomes[index]}.filter.vcf.gz",
                   docker_image = sv_pipeline_base_docker  
@@ -79,8 +79,8 @@ workflow BenchmarkIndividualVcf{
         if (defined(ref_filter_vcf)){
           call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_ref_filter{
             input:
-                input_vcf = select_first([ref_filter_vcf]),
-                input_vcf_index = select_first([ref_filter_vcf_idx]),
+                input_vcf = ref_filter_vcf,
+                input_vcf_index = ref_filter_vcf_idx,
                 chromosome = chromosomes[index],
                 output_name = "~{ref_prefix}.~{chromosomes[index]}.filter.vcf.gz",
                 docker_image = sv_pipeline_base_docker  
