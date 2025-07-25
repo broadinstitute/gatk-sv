@@ -1,5 +1,8 @@
 version 1.0
 
+import "Structs.wdl"
+
+
 workflow PanGeniePanelCreationPerContig {
     input {
         File phased_bcf
@@ -54,7 +57,7 @@ task PanGeniePanelCreation {
         String docker
         File? monitoring_script
 
-        RuntimeAttributes runtime_attributes = {}
+        RuntimeAttr? runtime_attr_override
     }
 
     command {
@@ -110,16 +113,26 @@ task PanGeniePanelCreation {
         bcftools index -t ~{output_prefix}.prepare.id.split.vcf.gz
     }
 
-    runtime {
-        docker: docker
-        cpu: select_first([runtime_attributes.cpu, 1])
-        memory: select_first([runtime_attributes.command_mem_gb, 20]) + select_first([runtime_attributes.additional_mem_gb, 5]) + " GB"
-        disks: "local-disk " + select_first([runtime_attributes.disk_size_gb, 500]) + " SSD"
-        bootDiskSizeGb: select_first([runtime_attributes.boot_disk_size_gb, 15])
-        preemptible: select_first([runtime_attributes.preemptible, 1])
-        maxRetries: select_first([runtime_attributes.max_retries, 1])
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1,
+        mem_gb: 10 + ceil(size(phased_bcf, "GiB")*2),
+        disk_gb: 15 + ceil(size(phased_bcf, "GiB")*2),
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
     }
 
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: docker_image
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+        }
     output {
         File monitoring_log = "monitoring.log"
         Array[File] logs = glob("*.log")
@@ -131,15 +144,3 @@ task PanGeniePanelCreation {
         File panel_id_split_vcf_gz_tbi = "~{output_prefix}.prepare.id.split.vcf.gz.tbi"
     }
 }
-
-struct RuntimeAttributes {
-    Int? cpu
-    Int? command_mem_gb
-    Int? additional_mem_gb
-    Int? disk_size_gb
-    Int? boot_disk_size_gb
-    Boolean? use_ssd
-    Int? preemptible
-    Int? max_retries
-}
-
