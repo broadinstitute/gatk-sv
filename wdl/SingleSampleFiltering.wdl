@@ -408,13 +408,15 @@ task FilterVcfWithReferencePanelCalls {
   }
 }
 
-task UpdateBreakendRepresentation {
+task UpdateBreakendRepresentationAndRemoveFilters {
   input {
     File vcf
     File vcf_idx
     File ref_fasta
     File ref_fasta_idx
     String prefix
+
+    File? script_override
 
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -439,11 +441,9 @@ task UpdateBreakendRepresentation {
   command <<<
 
      set -euo pipefail
-
-     /opt/sv-pipeline/scripts/single_sample/update_variant_representations.py ~{vcf} ~{ref_fasta} \
-        | vcf-sort -c \
-        | bgzip -c > ~{outfile}
-
+    python ~{default="/opt/sv-pipeline/scripts/single_sample/update_variant_representations.py" script_override} ~{vcf} ~{ref_fasta} \
+        | bcftools sort \
+        | bcftools annotate --no-version -x "FILTER/HIGH_ALGORITHM_FDR" -Oz -o ~{outfile}
      tabix ~{outfile}
   >>>
   runtime {
