@@ -33,9 +33,6 @@ workflow PanGenieIndexGenotype {
         Array[File?] input_crai_list
         Array[String] sample_name_list
 
-        Array[File]? genotype_vcf_list
-        Array[File]? genotype_vcf_idx_list
-
         File convert_to_biallelic_script
 
         Boolean subset_reads = true
