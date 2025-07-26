@@ -36,7 +36,6 @@ workflow PanGenieIndexGenotype {
         File convert_to_biallelic_script
 
         Boolean subset_reads = true
-        Boolean run_genotype = true
         String? pangenie_extra_args
 
         String pangenie_docker
