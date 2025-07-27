@@ -162,7 +162,7 @@ def process_metadata(variants, bed=False, batch_list=None):
         else:
             chrom = variant.chrom
             start = variant.pos
-            end = variant.stop
+            end = variant.info['END2'] if variant.info['SVTYPE'] == 'BND' else variant.stop
             called = svu.get_called_samples(variant)
             name = variant.id
             svtype = variant.info['SVTYPE']
