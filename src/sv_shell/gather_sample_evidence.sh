@@ -15,12 +15,31 @@
 # to better suit the use case; for instance, we decided to skip running
 # GatherSampleEvidenceMetrics module.
 
+# For details: https://serverfault.com/a/103569
+# saves original stdout to &3 and original stderr to &4
+# without this, the logs of subprocess can get mixed with the parent's logs.
+exec 3>&1 4>&2
+
 set -Exeuo pipefail
 
+RED='\033[0;31m'
+BOLD_RED="\033[1;31m"
 GREEN='\033[0;32m'
 MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+
+CURRENT_STDERR_FILE="N/A"
+# See https://stackoverflow.com/a/35800451 for details.
+log_err() {
+  local exit_code=$?
+  local line_no=$1
+  echo -e "${RED}Script on line ${line_no} exited with status ${exit_code}.${NC}" >&4
+  echo -e "${BOLD_RED}Stdout: ${CURRENT_STDERR_FILE}${NC}" >&4
+}
+trap 'log_err $LINENO' ERR
+
 
 sample_id=${1}
 bam_or_cram_file=${2}
@@ -101,6 +120,7 @@ if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
   echo -e "${CYAN}Running collect_counts.sh ... stdout:${collect_counts_stdout} and stderr:${collect_counts_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
   collect_counts_start_time=`date +%s`
 
+  CURRENT_STDERR_FILE="${collect_counts_stderr}"
   bash collect_counts.sh \
     "${preprocessed_intervals}" \
     "${bam_or_cram_file}" \
@@ -126,6 +146,7 @@ if [[ "${run_manta}" == true ]]; then
   echo -e "${CYAN}Running run_manta.sh ... stdout:${manta_stdout} and stderr:${manta_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
   manta_start_time=`date +%s`
 
+  CURRENT_STDERR_FILE="${manta_stderr}"
   bash run_manta.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
@@ -148,6 +169,7 @@ if [[ "${collect_pesr}" == true ]]; then
   echo -e "${CYAN}Running collect_sv_evidence.sh ... stdout:${collect_pesr_stdout} and stderr:${collect_pesr_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
   collect_pesr_start_time=`date +%s`
 
+  CURRENT_STDERR_FILE="${collect_pesr_stderr}"
   bash collect_sv_evidence.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
@@ -172,6 +194,8 @@ if [[ "${run_scramble}" == true ]]; then
   scramble_stderr=$(mktemp --suffix=.txt "${output_dir}/scramble_stderr_XXXXXX")
   echo -e "${CYAN}Running scramble.sh (part 1 & 2)... stdout:${scramble_stdout} and stderr:${scramble_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
   scramble_start_time=`date +%s`
+
+  CURRENT_STDERR_FILE="${scramble_stderr}"
 
   {
     bash scramble.sh \
@@ -239,6 +263,7 @@ if [[ "${run_wham}" == true ]]; then
   echo -e "${CYAN}Running run_whamg.sh ... stdout:${wham_stdout} and stderr:${wham_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
   wham_start_time=`date +%s`
 
+  CURRENT_STDERR_FILE="${wham_stderr}"
   bash run_whamg.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
