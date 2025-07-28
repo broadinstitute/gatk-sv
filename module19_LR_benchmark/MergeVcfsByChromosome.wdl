@@ -8,9 +8,14 @@ workflow MergeVcfsByChromosome {
     String chrom
     Array[File] input_vcfs
     Array[File] input_vcfs_idx
+
     Boolean convert_to_biallelic = false
+
     String sv_base_mini_docker
     String sv_pipeline_base_docker
+
+    RuntimeAttr? runtime_attr_merge_vcfs
+    RuntimeAttr? runtime_attr_extract_chromosome_vcf
   }
 
 
@@ -21,7 +26,8 @@ workflow MergeVcfsByChromosome {
           input_vcf = input_vcfs[idx],
           input_vcf_idx = input_vcfs_idx[idx],
           chromosome = chrom,
-          docker_image = sv_base_mini_docker
+          docker_image = sv_base_mini_docker,
+          runtime_attr_override = runtime_attr_extract_chromosome_vcf
       }
     }
 
@@ -30,7 +36,8 @@ workflow MergeVcfsByChromosome {
         vcfs = ExtractChromosomeVcf.output_vcf,
         vcfs_idx = ExtractChromosomeVcf.output_vcf_idx,
         output_name = "${chrom}.vcf.gz",
-        sv_base_mini_docker = sv_base_mini_docker
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_merge_vcfs
     }
 
     if(convert_to_biallelic){

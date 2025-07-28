@@ -12,6 +12,11 @@ workflow MergeVcfs {
     String output_prefix 
     String sv_base_mini_docker
     String sv_pipeline_base_docker
+
+    RuntimeAttr? runtime_attr_merge_vcfs
+    RuntimeAttr? runtime_attr_concat_vcfs
+    RuntimeAttr? runtime_attr_extract_chromosome_vcf
+
   }
 
 
@@ -36,7 +41,9 @@ workflow MergeVcfs {
           input_vcfs_idx = vcfs_idx,
           convert_to_biallelic = convert_to_biallelic,
           sv_base_mini_docker = sv_base_mini_docker,
-          sv_pipeline_base_docker = sv_pipeline_base_docker
+          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          runtime_attr_merge_vcfs = runtime_attr_merge_vcfs,
+          runtime_attr_extract_chromosome_vcf = runtime_attr_extract_chromosome_vcf
     }
   }
 
@@ -45,7 +52,8 @@ workflow MergeVcfs {
       input_vcfs = MergeVcfsByChromosome.merged_vcf,
       input_vcfs_idx = MergeVcfsByChromosome.merged_vcf_idx,
       output_name = "${output_prefix}.vcf.gz",
-      sv_base_mini_docker = sv_base_mini_docker
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_concat_vcfs
   }
 
   output {
