@@ -187,7 +187,7 @@ if [[ "${collect_pesr}" == true ]]; then
 fi
 
 
-if [[ "${run_scramble}" == true ]]; then
+if [[ "${run_scramble}" == true && "${run_manta}" == true ]]; then
 
   scramble_p1_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/scramble_p1_XXXXXX")
   scramble_stdout=$(mktemp --suffix=.txt "${output_dir}/scramble_stdout_XXXXXX")
