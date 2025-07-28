@@ -57,7 +57,7 @@ def main(argv):
 
     # Columns used as features for adjudication in module 03
     feature_cols = ["poor_region_cov", "is_outlier_specific",
-                    "SRQ", "SRCS", "PEQ", "PECS", "PESRQ", "PESRCS", "BAF_HET_RATIO", "BAF_MWU_QUAL",
+                    "SRQ", "SRCS", "PEQ", "PECS", "PESRQ", "PESRCS", "BAF_HET_RATIO", "BAF_KS_Q", "BAF_KS_STAT",
                     "RD_Median_Separation", "RD_log_pval", "RD_log_2ndMaxP"]
 
     # Read file
