@@ -24,7 +24,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj/44_outlier_sample_removal
       tags:
         - /.*/
 
@@ -52,7 +51,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj/44_outlier_sample_removal
       tags:
         - /.*/
 
