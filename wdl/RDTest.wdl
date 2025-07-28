@@ -20,6 +20,7 @@ workflow RDTest {
     File male_only_variant_ids
     File samples
     File ref_dict
+    File? outlier_sample_ids
 
     String sv_pipeline_docker
     String linux_docker
@@ -50,6 +51,7 @@ workflow RDTest {
         male_only_variant_ids = male_only_variant_ids,
         allosome = false,
         ref_dict = ref_dict,
+        outlier_sample_ids = outlier_sample_ids,
         sv_pipeline_docker = sv_pipeline_docker,
         linux_docker = linux_docker,
         runtime_attr_rdtest = runtime_attr_rdtest,
@@ -77,6 +79,7 @@ workflow RDTest {
         male_only_variant_ids = male_only_variant_ids,
         allosome = true,
         ref_dict = ref_dict,
+        outlier_sample_ids = outlier_sample_ids,
         sv_pipeline_docker = sv_pipeline_docker,
         linux_docker = linux_docker,
         runtime_attr_rdtest = runtime_attr_rdtest,
