@@ -8,7 +8,6 @@ workflow MergeVcfsByChromosome {
     String chrom
     Array[File] input_vcfs
     Array[File] input_vcfs_idx
-    Array[String] sample_list
     Boolean convert_to_biallelic = false
     String sv_base_mini_docker
     String sv_pipeline_base_docker
