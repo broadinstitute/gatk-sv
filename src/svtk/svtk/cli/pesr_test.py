@@ -51,6 +51,10 @@ def sr_test(argv):
                         'Same format as RdTest, one column per sample.')
     parser.add_argument('--log', action='store_true', default=False,
                         help='Print progress log to stderr.')
+    parser.add_argument('--outlier-sample-ids', default=None,
+                        help='Path to file containing outlier sample IDs.')
+    parser.add_argument('--seed', type=int, default=42,
+                        help='Random seed.')
 
     # Print help if no arguments specified
     if len(argv) == 0:
@@ -87,9 +91,14 @@ def sr_test(argv):
     else:
         medians = None
 
+    outlier_sample_ids = None
+    if args.outlier_sample_ids:
+        outlier_sample_ids = args.outlier_sample_ids
+
     runner = SRTestRunner(vcf, countfile, fout, args.background, common=args.common,
                           window=args.window, ins_window=args.insertion_window,
-                          whitelist=whitelist, medians=medians, log=args.log)
+                          whitelist=whitelist, medians=medians, log=args.log,
+                          outlier_sample_ids=outlier_sample_ids, seed=args.seed)
     runner.run()
 
 
@@ -126,6 +135,10 @@ def pe_test(argv):
                         'Same format as RdTest, one column per sample.')
     parser.add_argument('--log', action='store_true', default=False,
                         help='Print progress log to stderr.')
+    parser.add_argument('--outlier-sample-ids', default=None,
+                        help='Path to file containing outlier sample IDs.')
+    parser.add_argument('--seed', type=int, default=42,
+                        help='Random seed.')
 
     if len(argv) == 0:
         parser.print_help()
@@ -163,8 +176,13 @@ def pe_test(argv):
     else:
         medians = None
 
-    runner = PETestRunner(vcf, discfile, fout, args.background, args.common,
-                          args.window_in, args.window_out, whitelist, medians=medians, log=args.log)
+    outlier_sample_ids = None
+    if args.outlier_sample_ids:
+        outlier_sample_ids = args.outlier_sample_ids
+
+    runner = PETestRunner(vcf, discfile, fout, args.background, args.common, args.window_in, args.window_out,
+                          whitelist, medians=medians, log=args.log, outlier_sample_ids=outlier_sample_ids,
+                          seed=args.seed)
 
     runner.run()
 
