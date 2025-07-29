@@ -365,9 +365,6 @@ task DeDuplicateBiallelicVcfs{
 
 
 
-bcftools view -H chr22.with_id_biallelic.vcf.gz | cut -f3 | sort | uniq -c | awk '{if ($1>1) print $2}' > duplicated_SVID.tsv
-
-
 
 
 
