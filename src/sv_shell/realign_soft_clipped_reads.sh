@@ -51,7 +51,7 @@ time samtools view --no-header \
 bwa mem -H header.sam -K 100000000 -v 3 -t ${N_CORES} -Y "${reference_fasta}" reads.fastq \
   | samtools sort -T "${working_dir}" \
   | samtools view -1 -h -O BAM -o "${sample_id}.realign_soft_clipped_reads.bam"
-samtools index -@${N_CORES} "${sample_id}.realign_soft_clipped_reads.bam"
+samtools index "-@${N_CORES}" "${sample_id}.realign_soft_clipped_reads.bam"
 
 
 out_filename="${output_dir}/${sample_id}.realign_soft_clipped_reads.bam"
