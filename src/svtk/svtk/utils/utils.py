@@ -263,6 +263,8 @@ def vcf2bedtool(vcf, split_bnd=True, include_samples=False,
                     else:
                         chrom = record.info.get('CHR2', None)
                         end = record.info.get('END2', None)
+                    if not end:
+                        print(record.id)
                     start = max([0, int(end) - 1])
                     yield entry.format(**locals())
 
