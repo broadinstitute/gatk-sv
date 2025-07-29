@@ -61,9 +61,9 @@ def process_metadata(vcf):
         # List of variants specific to each sample
         called_samples[svtype] = defaultdict(list)
 
-    stats_int = ['BAF_KS_Q', 'SR1Q', 'SR1CS', 'SR2Q', 'SR2CS', 'SRQ', 'SRCS', 'SR1POS', 'SR2POS', 'PEQ', 'PECS',
-                 'PESRQ', 'PESRCS']
-    stats_float = ['BAF_HET_RATIO', 'BAF_KS_STAT']
+    stats_int = ['SR1POS', 'SR2POS']
+    stats_float = ['BAF_KS_Q', 'SR1Q', 'SR1CS', 'SR2Q', 'SR2CS', 'SRQ', 'SRCS', 'BAF_HET_RATIO', 'BAF_KS_STAT',
+                   'PEQ', 'PECS', 'PESRQ', 'PESRCS']
     metadata = deque()
     for variant in vcf:
         chrom = variant.chrom
