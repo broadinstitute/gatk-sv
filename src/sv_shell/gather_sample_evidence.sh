@@ -318,4 +318,4 @@ echo "${outputs_json}" > "${outputs_filename}"
 
 gather_sample_evidence_end_time=`date +%s`
 gather_sample_evidence_et=$((gather_sample_evidence_end_time-gather_sample_evidence_start_time))
-echo -e "${GREEN}Successfully finished running `gather_sample_evidence` in ${gather_sample_evidence_et} seconds. Outputs are serialized to: ${outputs_filename} ${NC}" | tee -a "${gather_sample_evidence_stdout}"
+echo -e "${GREEN}Successfully finished running gather_sample_evidence in ${gather_sample_evidence_et} seconds. Outputs are serialized to: ${outputs_filename} ${NC}" | tee -a "${gather_sample_evidence_stdout}"
