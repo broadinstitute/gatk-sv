@@ -211,13 +211,17 @@ task FilterAnnotateVcf {
     set -euo pipefail
     cat \
     <(sed -e '1d' ~{scores} | fgrep -e DEL -e DUP | awk '($3!="NA" && $3>=0.5)' | cut -f1 | fgrep -w -f - <(zcat ~{vcf})) \
-    <(sed -e '1d' ~{scores} | fgrep -e INV -e BND -e INS | awk '($3!="NA" && $3>=0.5)' | cut -f1 | fgrep -w -f - <(zcat ~{vcf}) | sed -e 's/SVTYPE=DEL/SVTYPE=BND/' -e 's/SVTYPE=DUP/SVTYPE=BND/' -e 's/<DEL>/<BND>/' -e 's/<DUP>/<BND>/' | bcftools annotate -c INFO/END2:=INFO/END - | awk -F'\t' -v OFS='\t' '{sub("END=[^;]+", "END=" $2+1, $8); print}') \
+    <(sed -e '1d' ~{scores} | fgrep -e INV -e BND -e INS | awk '($3!="NA" && $3>=0.5)' | cut -f1 | fgrep -w -f - <(zcat ~{vcf}) | sed -e 's/SVTYPE=DEL/SVTYPE=BND/' -e 's/SVTYPE=DUP/SVTYPE=BND/' -e 's/<DEL>/<BND>/' -e 's/<DUP>/<BND>/') \
       | cat <(sed -n -e '/^#/p' <(zcat ~{vcf})) - \
       | vcf-sort -c \
       | bgzip -c \
       > filtered.vcf.gz
 
-    /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.vcf.gz ~{metrics} ~{cutoffs} stdout \
+    /opt/sv-pipeline/scripts/annotate_bnd_coords.py \
+      filtered.vcf.gz \
+      filtered.updated_bnds.vcf.gz
+
+    /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.updated_bnds.vcf.gz ~{metrics} ~{cutoffs} stdout \
       | vcf-sort -c \
       | bgzip -c \
       > filtered.corrected_coords.vcf.gz
