@@ -77,6 +77,26 @@ min_size=${29:-50}
 output_dir=${30:-""}
 
 
+if [[ "${output_dir}" == "" ]]; then
+  output_dir=$(mktemp -d output_gather_sample_evidence_XXXXXXXX)
+  output_dir="$(realpath ${output_dir})"
+fi
+
+gather_sample_evidence_stdout="${output_dir}/gather_sample_evidence_stdout.txt"
+gather_sample_evidence_stderr="${output_dir}/gather_sample_evidence_stderr.txt"
+touch "${gather_sample_evidence_stdout}"
+touch "${gather_sample_evidence_stderr}"
+
+# The following directs all the trace output to a file descriptor 100 & also shows them on terminal.
+# See https://stackoverflow.com/a/26611009
+# If you want to skip showing trace on terminal, you may remove tee (copy-paste the solution from the above link).
+exec 100> >(tee -a "${gather_sample_evidence_stdout}" >&2)
+export BASH_XTRACEFD=100
+
+echo -e "${MAGENTA}gather_sample_evidence.sh logs at: stdout:${gather_sample_evidence_stdout} and stderr:${gather_sample_evidence_stderr}${NC}"
+gather_sample_evidence_start_time=`date +%s`
+
+
 bam_or_cram_file="$(realpath ${bam_or_cram_file})"
 bam_or_cram_index="$(realpath ${bam_or_cram_index})"
 reference_fasta="$(realpath ${reference_fasta})"
@@ -97,17 +117,6 @@ reference_bwa_bwt="$(realpath ${reference_bwa_bwt})"
 reference_bwa_pac="$(realpath ${reference_bwa_pac})"
 reference_bwa_sa="$(realpath ${reference_bwa_sa})"
 
-if [[ "${output_dir}" == "" ]]; then
-  output_dir=$(mktemp -d output_gather_sample_evidence_XXXXXXXX)
-  output_dir="$(realpath ${output_dir})"
-fi
-
-gather_sample_evidence_stdout="${output_dir}/gather_sample_evidence_stdout.txt"
-gather_sample_evidence_stderr="${output_dir}/gather_sample_evidence_stderr.txt"
-touch "${gather_sample_evidence_stdout}"
-touch "${gather_sample_evidence_stderr}"
-echo -e "${MAGENTA}gather_sample_evidence.sh logs at: stdout:${gather_sample_evidence_stdout} and stderr:${gather_sample_evidence_stderr}${NC}"
-gather_sample_evidence_start_time=`date +%s`
 
 if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
   # Collects read counts at specified intervals.
