@@ -23,6 +23,7 @@ workflow PostProcessGlimpseResultsPerContig {
         RuntimeAttr? runtime_attr_split_ref_panel
         RuntimeAttr? runtime_attr_add_id_to_info_column
         RuntimeAttr? runtime_attr_convert_bubbles_to_biallelic
+        RuntimeAttr? runtime_attr_deduplicate_vcf
     }
 
 
@@ -58,9 +59,18 @@ workflow PostProcessGlimpseResultsPerContig {
             runtime_attr_override = runtime_attr_convert_bubbles_to_biallelic
     }
 
+    call DeDuplicateBiallelicVcfs{
+        input:
+            biallelic_vcf = ConvertBubblesToBiallelic.biallelic_vcf,
+            biallelic_vcf_idx = ConvertBubblesToBiallelic.biallelic_vcf_idx, 
+            docker_image = sv_pipeline_base_docker, 
+            runtime_attr_override = runtime_attr_deduplicate_vcf
+  }
+
+
     output{
-        File output_biallelic_vcf = ConvertBubblesToBiallelic.biallelic_vcf
-        File output_biallelic_vcf_idx = ConvertBubblesToBiallelic.biallelic_vcf_idx
+        File output_biallelic_vcf = DeDuplicateBiallelicVcfs.deduplicated_vcf
+        File output_biallelic_vcf_idx = DeDuplicateBiallelicVcfs.deduplicated_vcf_idx
     }
 }
 
@@ -231,6 +241,134 @@ task AddIdToInfoColumn {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+task DeDuplicateBiallelicVcfs{
+  input {
+    File biallelic_vcf
+    File biallelic_vcf_idx
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+
+  String prefix = basename(biallelic_vcf,'.vcf.gz')
+
+  command <<<
+
+    bcftools view -H ~{biallelic_vcf} | cut -f3 | sort | uniq -c | awk '{if ($1>1) print $2}' > duplicated_SVID.tsv
+
+    python3 <<CODE
+    #!/usr/bin/env python3
+
+    import argparse
+    import pysam
+    from collections import defaultdict, Counter
+
+    def parse_svid_list(svid_file):
+        with open(svid_file) as f:
+            return set(line.strip() for line in f if line.strip())
+
+    def is_alt_gt(gt):
+        return gt in {(0, 1), (1, 0), (1, 1)}
+
+    def is_alt_hom_gt(gt):
+        return gt in {(1, 1)}
+
+    def select_genotype(gts):
+        count = Counter(gts)
+        most_common = count.most_common()
+        top_count = most_common[0][1]
+        top_gts = [gt for gt, c in most_common if c == top_count]
+        
+        if len(top_gts) == 1:
+            return top_gts[0]
+        else:
+            # Prefer genotype with alt allele if tie
+            for gt in top_gts:
+                if is_alt_hom_gt(gt):
+                    return gt
+                elif is_alt_gt(gt):
+                    return gt
+            return top_gts[0]
+
+    def collapse_vcf_by_svid(input_vcf, svid_file, output_vcf, output_2_vcf):
+        svids = parse_svid_list(svid_file)
+        vcf_in = pysam.VariantFile(input_vcf)
+        vcf_out = pysam.VariantFile(output_vcf, 'w', header=vcf_in.header)
+        vcf_2_out = pysam.VariantFile(output_2_vcf, 'w', header=vcf_in.header)
+
+        # Group records by ID (SVID)
+        grouped = defaultdict(list)
+        for rec in vcf_in.fetch():
+            if rec.id in svids:
+                grouped[rec.id].append(rec)
+            else:
+                vcf_2_out.write(rec)
+
+        for svid, records in grouped.items():
+            new_rec = records[0]  # Take the first as representative
+            for sample in vcf_in.header.samples:
+                gts = [rec.samples[sample]["GT"] for rec in records]
+                chosen_gt = select_genotype(gts)
+                new_rec.samples[sample]["GT"] = chosen_gt
+
+            vcf_out.write(new_rec)
+
+        vcf_out.close()
+        vcf_2_out.close()
+        print(f"Output written to {output_vcf}")
+
+
+
+    input_vcf = 'chr22.with_id_biallelic.vcf.gz'
+    svid_file = 'duplicated_SVID.tsv'
+    output_vcf = 'chr22.with_id_biallelic.dedup.vcf.gz'
+    output2_vcf = 'chr22.with_id_biallelic.uniq.vcf.gz'
+
+    collapse_vcf_by_svid("~{biallelic_vcf}", "duplicated_SVID.tsv", "~{prefix}.dedup.vcf.gz", "~{prefix}.uniq.vcf.gz")
+
+    CODE
+
+    tabix -p vcf "~{prefix}.dedup.vcf.gz"
+    tabix -p vcf "~{prefix}.uniq.vcf.gz"
+    bcftools concat -a -Oz -o "~{prefix}.dedup.sort.vcf.gz"  "~{prefix}.dedup.vcf.gz" "~{prefix}.uniq.vcf.gz"
+    tabix -p vcf "~{prefix}.dedup.sort.vcf.gz"
+
+  >>>
+
+  output {
+    File deduplicated_vcf =  "~{prefix}.dedup.sort.vcf.gz"
+    File deduplicated_vcf_idx = "~{prefix}.dedup.sort.vcf.gz.tbi"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 30,
+    disk_gb: 50 + ceil(size(biallelic_vcf, "GiB") *5),
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+
+bcftools view -H chr22.with_id_biallelic.vcf.gz | cut -f3 | sort | uniq -c | awk '{if ($1>1) print $2}' > duplicated_SVID.tsv
+
+
+
 
 
 
