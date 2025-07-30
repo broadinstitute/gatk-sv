@@ -30,14 +30,14 @@ for (Y in y_vals) {
     ncol <- min(4, length(contigs_present))
     nrow <- ceiling(length(contigs_present) / ncol)
     
-    cell_w <- 4.0
-    cell_h <- 2.5
+    cell_w <- 3.0
+    cell_h <- 2.0
     fig_w <- ncol * cell_w
     fig_h <- nrow * cell_h
     
-    out_file <- paste0(caller,"_",Y,".jpg")
+    out_file <- paste0(caller,"_",Y,".png")
     
-    jpeg(out_file, width=fig_w, height=fig_h, units="in", res=300)
+    png(out_file, width=fig_w, height=fig_h, units="in", res=150)
     
     par(mfrow=c(nrow, ncol), mar=c(4,4,2,1))
     
