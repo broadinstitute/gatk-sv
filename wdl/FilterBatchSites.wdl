@@ -217,7 +217,7 @@ task FilterAnnotateVcf {
       | bgzip -c \
       > filtered.vcf.gz
 
-    /opt/sv-pipeline/scripts/annotate_bnd_coords.py \
+    python /opt/sv-pipeline/scripts/annotate_bnd_coords.py \
       filtered.vcf.gz \
       filtered.updated_bnds.vcf.gz
 
