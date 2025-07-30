@@ -747,11 +747,13 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   Treat<-Treat[singlesample]
   a<-create_groups(genotype_matrix, cnv_matrix)$a
   b<-create_groups(genotype_matrix, cnv_matrix)$b
-  ##Calculate one-sided z score##
+  ##Calculate one-sided z score using median and MAD with robust Z-score##
   if (toupper(cnvtype) == "DEL") {
-    ztest.p <- pnorm((Treat - mean(Control)) / sd(Control))
+    robust_z <- 0.6745 * (Treat - median(Control)) / mad(Control)
+    ztest.p <- pnorm(robust_z)
   } else{
-    ztest.p <- pnorm((mean(Control) - Treat) / sd(Control))
+    robust_z <- 0.6745 * (median(Control) - Treat) / mad(Control) 
+    ztest.p <- pnorm(robust_z)
   }
   ##Find the secondest worst p-value and record as an assement metric## 
   plist <- c()
@@ -763,9 +765,11 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
     Treat2 <-
       cnv_matrix[singlesample, column]
     if (toupper(cnvtype) == "DEL") {
-      single.p <- pnorm((Treat2 - mean(Control2)) / sd(Control2))
+      robust_z2 <- 0.6745 * (Treat2 - median(Control2)) / mad(Control2)
+      single.p <- pnorm(robust_z2)
     } else {
-      single.p <- pnorm((mean(Control2) - Treat2) / sd(Control2))
+      robust_z2 <- 0.6745 * (median(Control2) - Treat2) / mad(Control2)
+      single.p <- pnorm(robust_z2)
     }
     #store diffrent z p-value by column##
     plist[i] <- single.p
