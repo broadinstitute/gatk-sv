@@ -2,12 +2,23 @@
 # -*- coding: utf-8 -*-
 #
 
+"""
+
+"""
 
 import pysam
 import argparse
 
 
-def annotate_bnd_coords(input_vcf_path, output_vcf_path):
+def main():
+    parser = argparse.ArgumentParser(description="Update coordinates for BND variants in a VCF file.")
+    parser.add_argument("input_vcf", help="Input VCF file path.")
+    parser.add_argument("output_vcf", help="Output VCF file path.")
+    args = parser.parse_args()
+
+    input_vcf_path = args.input_vcf
+    output_vcf_path = args.output_vcf
+
     with pysam.VariantFile(input_vcf_path, 'r') as vcf_in:
         header = vcf_in.header
 
@@ -20,9 +31,4 @@ def annotate_bnd_coords(input_vcf_path, output_vcf_path):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Update coordinates for BND variants in a VCF file.")
-    parser.add_argument("input_vcf", help="Input VCF file path.")
-    parser.add_argument("output_vcf", help="Output VCF file path.")
-    args = parser.parse_args()
-
-    annotate_bnd_coords(args.input_vcf, args.output_vcf)
+    main()
