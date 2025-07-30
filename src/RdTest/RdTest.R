@@ -39,6 +39,31 @@ for (i in RPackages)
   }
 }
 
+## Override permTS to use median instead of mean for pclt method
+pclt_kj <- function(scores, group) {
+  tab <- table(group, scores)
+  m <- sum(tab[2, ])
+  n <- length(scores)
+  Grp1 <- dimnames(tab)[[1]][2]
+  grp <- rep(0, n)
+  grp[group == Grp1] <- 1
+  T0 <- sum(scores * grp)
+  # Using median instead of mean for scores
+  SSE.scores <- sum((scores - median(scores))^2)
+  SSE.grp <- sum((grp - mean(grp))^2)
+  Z <- sqrt(n - 1) * (T0 - n * median(scores) * mean(grp)) /
+    sqrt(SSE.scores * SSE.grp)
+  p.lte <- pnorm(Z)
+  p.gte <- 1 - pnorm(Z)
+  p.twosidedAbs <- 1 - pchisq(Z^2, 1)
+  p.values <- c(p.twosided = min(1, 2 * min(p.lte, p.gte)), p.lte = p.lte, p.gte = p.gte, p.twosidedAbs = p.twosidedAbs)
+  out <- list(p.values = p.values, Z = Z)
+  out
+}
+
+## Assign in namespace to trigger override
+assignInNamespace("twosample.pclt", pclt_kj, ns="perm")
+
 ##build a list of command line options##
 list <- structure(NA, class = "result")
 "[<-.result" <- function(x, ..., value) {
@@ -647,11 +672,9 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   b<-create_groups(genotype_matrix, cnv_matrix)$b
   ##Calculate one-sided z score using median and MAD with robust Z-score##
   if (toupper(cnvtype) == "DEL") {
-    robust_z <- 0.6745 * (Treat - median(Control)) / mad(Control)
-    ztest.p <- pnorm(robust_z)
+    ztest.p <- pnorm(0.6745 * (Treat - median(Control)) / mad(Control))
   } else{
-    robust_z <- 0.6745 * (median(Control) - Treat) / mad(Control) 
-    ztest.p <- pnorm(robust_z)
+    ztest.p <- pnorm(0.6745 * (median(Control) - Treat) / mad(Control))
   }
   ##Find the secondest worst p-value and record as an assement metric## 
   plist <- c()
@@ -787,110 +810,6 @@ samprank_sep <- function(genotype_matrix,cnv_matrix,cnvtype,sample=NULL)
   output <- list(order.rank, Sep)
   names(output) <- c("rank", "Sep")
   return(output)
-}
-
-## Override permTS to use median instead of mean for pclt method
-twosample.pclt <- function(scores, group) {
-  tab <- table(group, scores)
-  m <- sum(tab[2, ])
-  n <- length(scores)
-  Grp1 <- dimnames(tab)[[1]][2]
-  grp <- rep(0, n)
-  grp[group == Grp1] <- 1
-  T0 <- sum(scores * grp)
-  # Using median instead of mean for scores
-  SSE.scores <- sum((scores - median(scores))^2)
-  SSE.grp <- sum((grp - mean(grp))^2)
-  Z <- sqrt(n - 1) * (T0 - n * median(scores) * mean(grp)) /
-    sqrt(SSE.scores * SSE.grp)
-  p.lte <- pnorm(Z)
-  p.gte <- 1 - pnorm(Z)
-  p.twosidedAbs <- 1 - pchisq(Z^2, 1)
-  p.values <- c(p.twosided = min(1, 2 * min(p.lte, p.gte)), p.lte = p.lte, p.gte = p.gte, p.twosidedAbs = p.twosidedAbs)
-  out <- list(p.values = p.values, Z = Z)
-  out
-}
-
-permTS <- function(x, y, alternative = c("two.sided", "less", "greater"),
-                   exact = NULL, method = NULL, methodRule = perm::methodRuleTS1, control = perm::permControl(), ...) {
-  if (is.null(method)) {
-    method <- "pclt"
-  }
-  if (method != "pclt") {
-    # Fallback to the original permTS for other methods
-    return(perm::permTS(x = x, y = y, alternative = alternative, exact = exact, method = method, methodRule = methodRule, control = control, ...))
-  }
-
-  tsmethod <- control$tsmethod
-
-  # Replicate logic from original permTS.default for robustness
-  if (alternative[1] == "two.sidedAbs") {
-    warning("alternative='two.sidedAbs' may be deprecated in the future,
-        use alternative='two.sided' and control=permControl(tsmethod='abs'))")
-    alternative <- "two.sided"
-    tsmethod <- "abs"
-  }
-  alternative <- match.arg(alternative)
-
-  if (!(tsmethod %in% c("central", "abs")) && alternative == "two.sided") {
-    stop("for two-sided tests, tsmethod must be 'central' or 'abs'")
-  }
-
-  # Use an effective alternative for p-value switching to not modify the returned alternative
-  effective_alternative <- alternative
-  if (tsmethod == "abs" && alternative == "two.sided") {
-    effective_alternative <- "two.sidedAbs"
-  }
-
-  if (!is.numeric(x) | !is.numeric(y) | !is.vector(x) | !is.vector(y)) {
-    stop("x and y must be numeric vectors")
-  }
-
-  W <- c(x, y)
-  Z_group <- c(rep(1, length(x)), rep(0, length(y)))
-
-  # Call our local twosample.pclt
-  mout <- twosample.pclt(W, Z_group)
-
-  p.values <- mout$p.values
-  PVAL <- switch(effective_alternative,
-    two.sided = p.values["p.twosided"],
-    greater = p.values["p.gte"],
-    less = p.values["p.lte"],
-    two.sidedAbs = p.values["p.twosidedAbs"]
-  )
-
-  METHOD <- "Permutation Test using Asymptotic Approximation (Median)"
-  xname <- deparse(substitute(x))
-  yname <- deparse(substitute(y))
-  if (length(xname) > 1 || nchar(xname) > 10) xname <- c("GROUP 1")
-  if (length(yname) > 1 || nchar(yname) > 10) yname <- c("GROUP 2")
-  DNAME <- paste(xname, "and", yname)
-  Z.stat <- mout$Z
-  if (!is.null(Z.stat)) {
-    names(Z.stat) <- "Z"
-  }
-
-  null.value <- 0
-  # Using median for the estimate
-  estimate <- median(x) - median(y)
-  names(estimate) <- names(null.value) <- paste("median", xname, "- median", yname)
-
-  OUT <- list(
-    statistic = Z.stat,
-    estimate = estimate,
-    parameter = NULL,
-    p.value = as.numeric(PVAL),
-    null.value = null.value,
-    alternative = alternative,
-    method = METHOD,
-    data.name = DNAME,
-    p.values = p.values,
-    p.conf.int = NULL,
-    nmc = NULL
-  )
-  class(OUT) <- "htest"
-  return(OUT)
 }
 
 ##Plot of intensities across cohorts## 
