@@ -71,6 +71,11 @@ Per-sample binned read counts (`*.rd.txt.gz`) generated in the [GatherSampleEvid
 Provide one of these inputs to subset the input batch. `n_samples_subsample` will randomly subset, while 
 `sample_ids_training_subset` is for defining a predetermined subset. These options are provided for convenience in Terra.
 
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `outlier_sample_ids`
+Provide a file containing sample IDs, delimited by new lines, to exclude from the from the gCNV model training 
+process - this should can be based on outlier samples identified following [EvidenceQC](./eqc) that are still 
+retained in the cohort.
+
 ## Outputs
 
 #### `cohort_contig_ploidy_model_tar`
