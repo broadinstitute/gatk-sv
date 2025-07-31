@@ -8,11 +8,13 @@ workflow GatherSampleEvidenceMetrics {
     File? coverage_counts
     File? pesr_disc
     File? pesr_split
+    File? dragen_vcf
     File? manta_vcf
     File? melt_vcf
     File? scramble_vcf
     File? wham_vcf
 
+    File? baseline_dragen_vcf
     File? baseline_manta_vcf
     File? baseline_melt_vcf
     File? baseline_scramble_vcf
@@ -23,6 +25,8 @@ workflow GatherSampleEvidenceMetrics {
     Int min_size = 50
     String sv_pipeline_docker
 
+    RuntimeAttr? runtime_attr_dragen_std
+    RuntimeAttr? runtime_attr_dragen_metrics
     RuntimeAttr? runtime_attr_manta_std
     RuntimeAttr? runtime_attr_manta_metrics
     RuntimeAttr? runtime_attr_melt_std
@@ -35,6 +39,41 @@ workflow GatherSampleEvidenceMetrics {
     RuntimeAttr? runtime_attr_counts_metrics
   }
 
+  if (defined(dragen_vcf)) {
+    call tu.StandardizeVCF as Dragen_Std {
+      input:
+        vcf = select_first([dragen_vcf]),
+        sample_id = sample,
+        caller = "dragen",
+        contig_index = contig_index,
+        min_size = min_size,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_dragen_std
+    }
+    if (defined(baseline_dragen_vcf)) {
+      call tu.StandardizeVCF as Dragen_Std_Base {
+        input:
+          vcf = select_first([baseline_dragen_vcf]),
+          sample_id = sample,
+          caller = "dragen",
+          contig_index = contig_index,
+          min_size = min_size,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_attr_dragen_std
+      }
+    }
+    call tu.VCFMetrics as Dragen_Metrics {
+      input:
+        vcf = Dragen_Std.out,
+        baseline_vcf = Dragen_Std_Base.out,
+        samples = [sample],
+        prefix = "dragen_" + sample,
+        types = "DEL,DUP,INS,INV,BND",
+        contig_list = contig_list,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_dragen_metrics
+    }
+  }
   if (defined(manta_vcf)) {
     call tu.StandardizeVCF as Manta_Std {
       input:
@@ -182,6 +221,6 @@ workflow GatherSampleEvidenceMetrics {
   }
 
   output {
-    Array[File] sample_metrics_files = select_all([Manta_Metrics.out, Melt_Metrics.out, Scramble_Metrics.out, Wham_Metrics.out, SRMetrics.out, PEMetrics.out, CountsMetrics.out])
+    Array[File] sample_metrics_files = select_all([Dragen_Metrics.out, Manta_Metrics.out, Melt_Metrics.out, Scramble_Metrics.out, Wham_Metrics.out, SRMetrics.out, PEMetrics.out, CountsMetrics.out])
   }
 }

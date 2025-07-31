@@ -67,7 +67,7 @@ Plain text bed file of non-coding elements in the reference genome.
 Plain text bed file of pseudoautosomal regions.
 
 #### pesr_exclude_list
-Block-compressed bed file of intervals for filtering calls. Variants generated with non-CNV tools (Manta, MELT, 
+Block-compressed bed file of intervals for filtering calls. Variants generated with non-CNV tools (Dragen, Manta, MELT, 
 Scramble, Wham) that have either end in any of these intervals are hard-filtered.
 
 #### preprocessed_intervals
