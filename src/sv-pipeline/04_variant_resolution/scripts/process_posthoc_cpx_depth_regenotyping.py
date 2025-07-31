@@ -16,7 +16,7 @@ from intervaltree import IntervalTree
 MIN_SIZE = 1000
 MIN_DIFF = 0.4
 MIN_SIZE_IDEL = 150
-MIN_DDUP_THRESH = 1000000
+MIN_DDUP_THRESH = 2000
 
 
 def interval_string(chrom, start, end):
