@@ -124,11 +124,16 @@ def fam_info_readin(fam_file):
     return [fam, samp, fa, mo]
 
 
-def process_metadata(variants, bed=False, batch_list=None):
+def process_metadata(variants, bed=False, batch_list=None, outlier_sample_ids=None):
     if bed:
         samples = [s.strip() for s in batch_list.readlines()]
     else:
         samples = list(variants.header.samples)
+
+    outlier_set = set()
+    if outlier_sample_ids:
+        with open(outlier_sample_ids, 'r') as f:
+            outlier_set = set(line.strip() for line in f)
 
     # parents = [s for s in samples if _is_parent(s)]
     # children = [s for s in samples if _is_child(s)]
@@ -192,23 +197,11 @@ def process_metadata(variants, bed=False, batch_list=None):
 
     # Flag variants specific to outlier samples
     metadata['is_outlier_specific'] = False
-    for svtype in 'DEL DUP INV BND INS'.split():
-        counts = pd.DataFrame.from_dict(called_counts[svtype], orient='index')\
-                             .reset_index()\
-                             .rename(columns={'index': 'sample', 0: 'var_count'})
-        if counts.shape[0] == 0:
-            continue
-
-        q1 = counts.var_count.quantile(0.25)
-        q3 = counts.var_count.quantile(0.75)
-        thresh = q3 + 1.5 * (q3 - q1)
-        outliers = counts.loc[counts.var_count >= thresh, 'sample'].values
-
-        flagged = []
-        for var_name, samples in called_samples[svtype].items():
-            if samples.issubset(outliers):
-                flagged.append(var_name)
-        metadata.loc[metadata.name.isin(flagged), 'is_outlier_specific'] = True
+    if len(outlier_set) > 0:
+        for variants in called_samples.values():
+            for name, called in variants.items():
+                if called and called.issubset(outlier_set):
+                    metadata.loc[metadata.name == name, 'is_outlier_specific'] = True
 
     for col in 'start end svsize'.split():
         metadata[col] = metadata[col].astype(int)
@@ -273,6 +266,7 @@ def main():
     parser.add_argument('-b', '--BAFtest')
     parser.add_argument('-s', '--SRtest')
     parser.add_argument('-p', '--PEtest')
+    parser.add_argument('-o', '--outlier-sample-ids')
     parser.add_argument('--batch-list', type=argparse.FileType('r'))
     parser.add_argument('--segdups', required=True)
     parser.add_argument('--rmsk', required=True)
@@ -290,7 +284,11 @@ def main():
         variants = pysam.VariantFile(args.variants)
         dtypes = 'PE SR RD BAF'.split()
 
-    metadata = process_metadata(variants, args.bed, args.batch_list)
+    outlier_sample_ids = None
+    if args.outlier_sample_ids:
+        outlier_sample_ids = args.outlier_sample_ids
+
+    metadata = process_metadata(variants, args.bed, args.batch_list, outlier_sample_ids)
 
     # Calculate segdup coverage
     bt = pbt.BedTool.from_dataframe(metadata['chrom start end'.split()])
