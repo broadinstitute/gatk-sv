@@ -19,6 +19,7 @@ workflow GenotypeCpxCnvs {
     Int n_per_split_small
     Int n_per_split_large
     Int n_rd_test_bins
+    Int? min_ddup_thresh
     String prefix
     File ped_file
     String contig
@@ -94,11 +95,13 @@ workflow GenotypeCpxCnvs {
       vcf=vcf,
       intervals=GetCpxCnvIntervals.cpx_cnv_bed,
       genotypes=MergeMeltedGts.outfile,
+      min_ddup_thresh=min_ddup_thresh,
       prefix=contig_prefix,
       ped_file=ped_file,
       contig=contig,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_parse_genotypes
+    }
   }
 
   # Final output
@@ -166,6 +169,7 @@ task ParseGenotypes {
     File vcf
     File intervals
     File genotypes
+    Int? min_ddup_thresh
     File ped_file
     String prefix
     String contig
@@ -203,7 +207,8 @@ task ParseGenotypes {
       --genotypes ~{genotypes} \
       --ped ~{ped_file} \
       --out out.vcf.gz \
-      --reclassification-table ~{prefix}.CPXregenotyping_reclassification_table.~{contig}.txt
+      --reclassification-table ~{prefix}.CPXregenotyping_reclassification_table.~{contig}.txt \
+      ~{"--min-ddup-thresh " + min_ddup_thresh}
 
     # Compress for storage
     gzip ~{prefix}.CPXregenotyping_reclassification_table.~{contig}.txt

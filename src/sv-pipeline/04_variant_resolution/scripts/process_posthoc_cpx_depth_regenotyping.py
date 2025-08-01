@@ -16,7 +16,6 @@ from intervaltree import IntervalTree
 MIN_SIZE = 1000
 MIN_DIFF = 0.4
 MIN_SIZE_IDEL = 150
-MIN_DDUP_THRESH = 1000000
 
 
 def interval_string(chrom, start, end):
@@ -662,8 +661,9 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                     reason="INVERTED_DISPERSED_DUPLICATION",
                     new_sv_type="CPX",
                     new_cpx_type="dDUP",
-                    new_cpx_intervals=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)},"
-                                      f"INV_{interval_string(dup_chrom, dup_start, dup_end)}",
+                    new_cpx_intervals=f"INV_{interval_string(dup_chrom, dup_start, dup_end)},"
+                                      f"DUP_{interval_string(dup_chrom, dup_start, dup_end)}",
+
                     new_svlen=dup_size,
                     new_source=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)}",
                     new_start=None,
@@ -1124,6 +1124,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--ped', type=str, help='PED family file')
     parser.add_argument('--out', type=str, help='Output file')
     parser.add_argument('--reclassification-table', type=str, help='Output reclassification table path', required=False)
+    parser.add_argument('--min-ddup-thresh', type=int, help="Min DUP threshold", default=1000000)
     parser.add_argument('--chrx', type=str, help='Chromosome X contig name', default='chrX')
     parser.add_argument('--chry', type=str, help='Chromosome Y contig name', default='chrY')
     parser.add_argument("-l", "--log-level", required=False, default="INFO",
@@ -1147,6 +1148,8 @@ def main(argv: Optional[List[Text]] = None):
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: %s' % log_level)
     logging.basicConfig(level=numeric_level, format='%(asctime)s - %(levelname)s: %(message)s')
+
+    MIN_DDUP_THRESH = args.min_ddup_thresh
 
     all_samples, male_samples, female_samples = parse_ped(args.ped)
     genotype_dict = parse_genotypes(args.genotypes)
