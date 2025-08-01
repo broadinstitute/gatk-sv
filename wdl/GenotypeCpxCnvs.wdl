@@ -101,7 +101,6 @@ workflow GenotypeCpxCnvs {
       contig=contig,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_parse_genotypes
-    }
   }
 
   # Final output
@@ -205,7 +204,7 @@ task ParseGenotypes {
       --vcf ~{vcf} \
       --intervals ~{intervals} \
       --genotypes ~{genotypes} \
-      ~{"--min-ddup-thresh " + min_ddup_thresh} \
+      ~{if defined(min_ddup_thresh) then "--min-ddup-thresh " + min_ddup_thresh else ""} \
       --ped ~{ped_file} \
       --out out.vcf.gz \
       --reclassification-table ~{prefix}.CPXregenotyping_reclassification_table.~{contig}.txt
