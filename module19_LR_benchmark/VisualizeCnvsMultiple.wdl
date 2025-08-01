@@ -32,7 +32,6 @@ workflow VisualizeCnvsMultiple {
   			flags = flags,
   			sv_pipeline_docker = sv_pipeline_docker,
   			runtime_attr_rdtest = runtime_attr_rdtest
-
   	}
   }
 
@@ -42,11 +41,4 @@ workflow VisualizeCnvsMultiple {
  }
 
 
-
-
-
-
-
-
-  }
 
