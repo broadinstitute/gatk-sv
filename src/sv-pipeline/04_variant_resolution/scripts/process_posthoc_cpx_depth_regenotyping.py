@@ -1148,6 +1148,7 @@ def main(argv: Optional[List[Text]] = None):
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: %s' % log_level)
     logging.basicConfig(level=numeric_level, format='%(asctime)s - %(levelname)s: %(message)s')
+    
     MIN_DDUP_THRESH = args.min_ddup_thresh
 
     all_samples, male_samples, female_samples = parse_ped(args.ped)
