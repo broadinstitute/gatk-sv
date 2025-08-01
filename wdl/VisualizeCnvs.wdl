@@ -117,7 +117,9 @@ task RdTestPlot {
       ~{flags}
 
     mkdir ~{prefix}_rd_plots
-    mv *jpg ~{prefix}_rd_plots
+    for file in *.jpg; do
+      mv $file ~{prefix}_rd_plots/
+    done
     tar -czvf ~{prefix}_rd_plots.tar.gz ~{prefix}_rd_plots/
   >>>
 
