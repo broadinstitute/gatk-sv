@@ -7,14 +7,22 @@ slug: build_ref_panel
 
 ## Overview
 
-The [single-sample mode](/docs/gs/calling_modes#single-sample-mode) requires a reference panel of samples. GATK-SV provides a default reference panel described [here](/docs/execution/single#reference-panel). However, users may wish to generate new reference panels. The panel samples should be chosen using the same criteria as [joint calling batching](/docs/modules/eqc#batching), i.e. even sex balance and similar depth, WGD score, insert size, aligner, etc. with respect to each other and with respect to all samples that will be called in single-sample mode.
+The [single-sample mode](/docs/gs/calling_modes#single-sample-mode) requires a reference panel of samples. GATK-SV provides a default reference panel described [here](/docs/execution/single#reference-panel). However, users may wish to generate new reference panels. The panel samples should be chosen using the same criteria as [joint calling batching](/docs/modules/eqc#batching), i.e. even sex balance and similar depth, WGD score, insert size, aligner, etc. with respect to each other and with respect to all samples that will be called in single-sample mode. The reference panel may only consist of a single batch - multi-batch reference panels are not supported. 
+
+In addition, we recommend the following guidelines:
+
+- Maximize genetic diversity
+- No related samples
+- No aneuploidies, germline or mosaic, on allosomes or autosomes
+- No samples with low sequencing coverage
+- No samples in tails of WGD score distribution
 
 ### Run joint calling
 
 First run the new reference panel samples through the [joint calling Terra workspace](https://app.terra.bio/#workspaces/broad-firecloud-dsde-methods/GATK-Structural-Variants-Joint-Calling). All numbered workflows must be run. Refer to the [joint calling documentation](/docs/execution/joint) for further instructions. Optional workflows without numbers do not need to be run.
 
 :::important
-The default configurations should be used for all workflows. The following steps assume that specific output fields are populated in the workspace data table and that workspace attributes are set according to the default configuration.
+The default configurations should be used for all workflows. The following steps assume that specific output fields are populated in the workspace data table and that workspace attributes are set according to the default configuration. However, users may adjust numeric parameters such as genotype filtering cutoffs.
 :::
 
 ### Run notebook
@@ -36,7 +44,7 @@ Source: Dockstore
 indicates that the current version is `v0.26.9-beta`. Take note of the version, as you will need it in the next step.
 
 :::warning
-The public Terra workspace is kept up to date with the latest version that has undergone testing. Users may elect a newer version through the workflow configuration, but be aware that it may not be fully tested.
+The public Terra workspaces are kept up to date with the latest versions of joint calling and single-sample modes that have undergone testing. The versions may be out of sync, however, but should not generally be mixed, and the above step ensures that the latest safe version is being used. Users may also elect newer versions through the workflow configuration, but be aware that it may not be fully tested.
 :::
 
 ### Clone and checkout Git repository
@@ -44,47 +52,56 @@ The public Terra workspace is kept up to date with the latest version that has u
 The notebook will have generated a json file that can be consumed by the GATK-SV [inputs generation framework](/docs/advanced/build_inputs). Create a clone of the Git repository and checkout the current version:
 
 ```shell
-> github clone https://github.com/broadinstitute/gatk-sv.git
-> cd gatk-sv
-> git checkout RELEASE_VERSION
+github clone https://github.com/broadinstitute/gatk-sv.git
+cd gatk-sv
+git checkout RELEASE_VERSION
 ```
 
 where `RELEASE_VERSION` is the workflow version from the cloned workspace in the previous step.
 
-### Create resources json
+### Download resources json
 
-Next create an empty file to populate with the reference panel resources:
+The path to the reference panel resources json is printed out after the last cell, for example:
 
-```shell
-> touch ./inputs/values/REF_PANEL_NAME.json
+```
+File test_panel.json uploaded to gs://fc-7dd8986b-d916-46b0-ba1a-8b09f80f7b83/json/test_panel.json
 ```
 
-The file name should exactly match the `REF_PANEL_NAME` variable from the notebook. Open the new json in a text editor and copy and paste the notebook output into the file. Save the file and exit your editor.
+Download the json to the `inputs/values/` subdirectory in your gatk-sv git clone:
+
+```shell
+gsutil cp gs://fc-7dd8986b-d916-46b0-ba1a-8b09f80f7b83/json/test_panel.json ./inputs/values/
+```
 
 ### Build single-sample Terra workspace configuration
 
 Next run the following command from the root of your local gatk-sv Git clone:
 
-   ```shell 
-   > python scripts/inputs/build_inputs.py \
-      inputs/values \
-      inputs/templates/terra_workspaces/single_sample \
-      inputs/build/NA12878/MY_TERRA_CONFIG \
-      -a '{ "single_sample" : "test_single_sample_NA12878", "ref_panel" : "REF_PANEL_NAME" }'
-   ```
+```shell 
+python scripts/inputs/build_inputs.py \
+  inputs/values \
+  inputs/templates/terra_workspaces/single_sample \
+  inputs/build/NA12878/MY_TERRA_CONFIG \
+  -a '{ "single_sample" : "test_single_sample_NA12878", "ref_panel" : "REF_PANEL_NAME" }'
+```
 
-where `REF_PANEL_NAME` again exactly matches the corresponding variable from the notebook. In addition, `MY_TERRA_CONFIG` can be renamed if desired.
+where `REF_PANEL_NAME` again exactly matches the corresponding variable from the notebook (the json is named `REF_PANEL_NAME.json`). In addition, `MY_TERRA_CONFIG` can be renamed if desired.
 
-Confirm that the build was successful:
+Confirm that the build was successful by running:
 
-   ```shell
-   > ls inputs/build/NA12878/MY_TERRA_CONFIG
-   GATKSVPipelineSingleSample.json
-   participant.tsv
-   sample.tsv
-   single_sample_workspace_dashboard.md
-   workspace.tsv
-   ```
+```shell
+ls inputs/build/NA12878/MY_TERRA_CONFIG
+```
+
+and seeing the output:
+
+```
+GATKSVPipelineSingleSample.json
+participant.tsv
+sample.tsv
+single_sample_workspace_dashboard.md
+workspace.tsv
+```
 
 If the directory does not exist then the build was not successful. If this occurs, run the `build_inputs.py` script with the `--log-info` flag to print troubleshooting logs.
 
