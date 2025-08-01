@@ -34,6 +34,7 @@ workflow VisualizeCnvsMultiple {
   			runtime_attr_rdtest = runtime_attr_rdtest
 
   	}
+  }
 
   ouput{
   	Array[File] rdtest_plot_tars = VisualizeCnvs.rdtest_plots
