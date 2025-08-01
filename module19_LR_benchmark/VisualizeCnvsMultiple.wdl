@@ -35,7 +35,7 @@ workflow VisualizeCnvsMultiple {
   	}
   }
 
-  ouput{
+  output{
   	Array[File] rdtest_plot_tars = VisualizeCnvs.rdtest_plots
   }
  }
