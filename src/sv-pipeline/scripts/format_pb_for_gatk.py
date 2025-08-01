@@ -61,6 +61,8 @@ def create_header(header_in: pysam.VariantHeader) -> pysam.VariantHeader:
     header.add_line('##INFO=<ID=STRANDS,Number=1,Type=String,Description="First and second strands">')
     header.add_line('##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="Length of affected segment on the reference">')
     header.add_line('##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">')
+    header.add_line('##INFO=<ID=ORIGINAL_SVTYPE,Number=1,Type=String,Description="Original type of structural variant">')
+    header.add_line('##INFO=<ID=ORIGINAL_ALT,Number=1,Type=String,Description="Original ALT allele">')
     header.add_line('##contig=<ID=chr1,length=248956422,assembly=38>')
     header.add_line('##contig=<ID=chr2,length=242193529,assembly=38>')
     header.add_line('##contig=<ID=chr3,length=198295559,assembly=38>')
@@ -146,6 +148,8 @@ def convert(record: pysam.VariantRecord,
     new_record = vcf_out.new_record(id=record.id, contig=contig, start=record.start, stop=end, alleles=alleles)
     new_record.info['ALGORITHMS'] = [algorithm]
     new_record.info['SVTYPE'] = svtype
+    new_record.info['ORIGINAL_SVTYPE'] = record.info['SVTYPE']
+    new_record.info['ORIGINAL_ALT'] = record.alts[0]
     # fix SVLEN, STRANDS, CHR2, and END2 where needed
     if svtype == 'INS':
         new_record.info['SVLEN'] = svlen
