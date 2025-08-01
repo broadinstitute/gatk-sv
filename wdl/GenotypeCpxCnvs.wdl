@@ -205,10 +205,10 @@ task ParseGenotypes {
       --vcf ~{vcf} \
       --intervals ~{intervals} \
       --genotypes ~{genotypes} \
+      ~{"--min-ddup-thresh " + min_ddup_thresh} \
       --ped ~{ped_file} \
       --out out.vcf.gz \
-      --reclassification-table ~{prefix}.CPXregenotyping_reclassification_table.~{contig}.txt \
-      ~{"--min-ddup-thresh " + min_ddup_thresh}
+      --reclassification-table ~{prefix}.CPXregenotyping_reclassification_table.~{contig}.txt
 
     # Compress for storage
     gzip ~{prefix}.CPXregenotyping_reclassification_table.~{contig}.txt
