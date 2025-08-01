@@ -213,6 +213,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_visualize_cnvs_mv
       tags:
         - /.*/
 
