@@ -15,3 +15,4 @@ src/svtk/svtk/utils/utils.pyc
 src/svtk/svtk/vcfcluster.pyc
 /inputs/build/
 /inputs/values/google_cloud.*.json
+src/RdTest/RdTestV0.R
