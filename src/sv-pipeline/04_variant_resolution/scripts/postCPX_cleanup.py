@@ -93,7 +93,7 @@ def cleanup(vcf, fout):
 
             # Correct alt syntax
             record.alts = ('<BND>', )
-            record.stop = record.start + 1
+            record.stop = record.pos + 1
 
             # All BNDs are unresolved by definition
             record.info['UNRESOLVED'] = True
