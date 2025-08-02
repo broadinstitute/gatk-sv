@@ -16,7 +16,6 @@ from intervaltree import IntervalTree
 MIN_SIZE = 1000
 MIN_DIFF = 0.4
 MIN_SIZE_IDEL = 150
-MIN_DDUP_THRESH = 1000000
 
 
 def interval_string(chrom, start, end):
@@ -411,7 +410,7 @@ def read_vcf(vcf_path, cleaned_genotype_counts_vids):
         return {r.id: VcfRecord(r, end_dict) for r in f if r.id in cleaned_genotype_counts_vids}
 
 
-def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
+def final_assessment(cleaned_genotype_counts, variants_to_reclassify, min_ddup_thresh):
 
     def _subtract_interval(start1, end1, start2, end2):
         # Spanning case results in null (shouldn't ever do this in this context)
@@ -577,7 +576,7 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
 
     # Solve inverted dispersed duplications vs dupINV / dupINVdel or INVdup / delINVdup
     # DUP5/INS3 or dupINV / dupINVdel
-    def _evaluate_dup5_ins3(r, records_list, default_sv_type, default_cpx_type):
+    def _evaluate_dup5_ins3(r, records_list, default_sv_type, default_cpx_type, min_ddup_thresh):
         # Get duplication/insertion interval
         dup_chrom = r.source_chrom
         dup_start = r.source_start
@@ -601,7 +600,7 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
             inv_end = r.sink_end
             inv_size = inv_end - inv_start
             # If inversion length < MINdDUPTHRESH, classify as dupINV or dupINVdel
-            if inv_size < MIN_DDUP_THRESH:
+            if inv_size < min_ddup_thresh:
                 # If sink is deleted, classify as dupINVdel
                 if sink_is_del:
                     # Revise inv interval (subtracting del interval)
@@ -686,7 +685,7 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
             )
 
     # DUP3/INS5 or INVdup / delINVdup
-    def _evaluate_dup3_ins5(r, records_list, default_sv_type, default_cpx_type):
+    def _evaluate_dup3_ins5(r, records_list, default_sv_type, default_cpx_type, min_ddup_thresh):
         # Get duplication/insertion interval
         dup_chrom = r.source_chrom
         dup_start = r.source_start
@@ -710,7 +709,7 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
             inv_end = dup_end
             inv_size = inv_end - inv_start
             # If inversion length < MINdDUPTHRESH, classify as dupINV or dupINVdel
-            if inv_size < MIN_DDUP_THRESH:
+            if inv_size < min_ddup_thresh:
                 # If sink is deleted, classify as delINVdup
                 if sink_is_del:
                     # Revise inv interval (subtracting del interval)
@@ -960,9 +959,9 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
             if _is_ctx_ins(cpx_type):
                 result = _evaluate_ctx_ins(vcf_record, records, sv_type, cpx_type)
             elif cpx_type == "DUP5/INS3":
-                result = _evaluate_dup5_ins3(vcf_record, records, sv_type, cpx_type)
+                result = _evaluate_dup5_ins3(vcf_record, records, sv_type, cpx_type, min_ddup_thresh)
             elif cpx_type == "DUP3/INS5":
-                result = _evaluate_dup3_ins5(vcf_record, records, sv_type, cpx_type)
+                result = _evaluate_dup3_ins5(vcf_record, records, sv_type, cpx_type, min_ddup_thresh)
             else:
                 result = _evaluate_ins_idel(vcf_record, records, sv_type, cpx_type)
         elif sv_type == "BND":
@@ -1149,7 +1148,6 @@ def main(argv: Optional[List[Text]] = None):
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: %s' % log_level)
     logging.basicConfig(level=numeric_level, format='%(asctime)s - %(levelname)s: %(message)s')
-    MIN_DDUP_THRESH = args.min_ddup_thresh
 
     all_samples, male_samples, female_samples = parse_ped(args.ped)
     genotype_dict = parse_genotypes(args.genotypes)
@@ -1165,7 +1163,7 @@ def main(argv: Optional[List[Text]] = None):
     cleaned_genotype_counts = clean_up_intervals(genotype_counts, intervals_list_dict, genotype_counts_tree_dict)
     del genotype_counts, intervals_list_dict, genotype_counts_tree_dict
     variants_to_reclassify = read_vcf(args.vcf, cleaned_genotype_counts_vids=cleaned_genotype_counts.keys())
-    assessment = list(final_assessment(cleaned_genotype_counts, variants_to_reclassify))
+    assessment = list(final_assessment(cleaned_genotype_counts, variants_to_reclassify, args.min_ddup_thresh))
     del cleaned_genotype_counts, variants_to_reclassify
     if args.reclassification_table:
         write_reclassification_table(args.reclassification_table, assessment)
