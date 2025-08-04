@@ -47,6 +47,7 @@ pclt_kj <- function(scores, group) {
   grp <- rep(0, n)
   grp[group == Grp1] <- 1
   T0 <- sum(scores * grp)
+  # Using median instead of mean for scores
   SSE.scores <- sum((scores - median(scores))^2)
   SSE.grp <- sum((grp - mean(grp))^2)
   Z <- sqrt(n - 1) * (T0 - n * median(scores) * mean(grp)) /
