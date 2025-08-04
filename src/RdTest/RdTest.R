@@ -39,6 +39,30 @@ for (i in RPackages)
   }
 }
 
+pclt_kj <- function(scores, group) {
+  tab <- table(group, scores)
+  m <- sum(tab[2, ])
+  n <- length(scores)
+  Grp1 <- dimnames(tab)[[1]][2]
+  grp <- rep(0, n)
+  grp[group == Grp1] <- 1
+  T0 <- sum(scores * grp)
+  # Using median instead of mean for scores
+  SSE.scores <- sum((scores - median(scores))^2)
+  SSE.grp <- sum((grp - mean(grp))^2)
+  Z <- sqrt(n - 1) * (T0 - n * median(scores) * mean(grp)) /
+    sqrt(SSE.scores * SSE.grp)
+  p.lte <- pnorm(Z)
+  p.gte <- 1 - pnorm(Z)
+  p.twosidedAbs <- 1 - pchisq(Z^2, 1)
+  p.values <- c(p.twosided = min(1, 2 * min(p.lte, p.gte)), p.lte = p.lte, p.gte = p.gte, p.twosidedAbs = p.twosidedAbs)
+  out <- list(p.values = p.values, Z = Z)
+  out
+}
+
+## Assign in namespace to trigger override
+assignInNamespace("twosample.pclt", pclt_kj, ns="perm")
+
 ##build a list of command line options##
 list <- structure(NA, class = "result")
 "[<-.result" <- function(x, ..., value) {
@@ -647,9 +671,9 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   b<-create_groups(genotype_matrix, cnv_matrix)$b
   ##Calculate one-sided z score##
   if (toupper(cnvtype) == "DEL") {
-    ztest.p <- pnorm((Treat - mean(Control)) / sd(Control))
+    ztest.p <- pnorm(0.6745 * (Treat - median(Control)) / mad(Control))
   } else{
-    ztest.p <- pnorm((mean(Control) - Treat) / sd(Control))
+    ztest.p <- pnorm(0.6745 * (median(Control) - Treat) / mad(Control))
   }
   ##Find the secondest worst p-value and record as an assement metric## 
   plist <- c()
@@ -661,9 +685,9 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
     Treat2 <-
       cnv_matrix[singlesample, column]
     if (toupper(cnvtype) == "DEL") {
-      single.p <- pnorm((Treat2 - mean(Control2)) / sd(Control2))
+      single.p <- pnorm(0.6745 * (Treat2 - median(Control2)) / mad(Control2))
     } else {
-      single.p <- pnorm((mean(Control2) - Treat2) / sd(Control2))
+      single.p <- pnorm(0.6745 * (median(Control2) - Treat2) / mad(Control2))
     }
     #store diffrent z p-value by column##
     plist[i] <- single.p
