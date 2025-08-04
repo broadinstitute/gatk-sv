@@ -686,11 +686,9 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
     Treat2 <-
       cnv_matrix[singlesample, column]
     if (toupper(cnvtype) == "DEL") {
-      robust_z2 <- 0.6745 * (Treat2 - median(Control2)) / mad(Control2)
-      single.p <- pnorm(robust_z2)
+      single.p <- pnorm(0.6745 * (Treat2 - median(Control2)) / mad(Control2))
     } else {
-      robust_z2 <- 0.6745 * (median(Control2) - Treat2) / mad(Control2)
-      single.p <- pnorm(robust_z2)
+      single.p <- pnorm(0.6745 * (median(Control2) - Treat2) / mad(Control2))
     }
     #store diffrent z p-value by column##
     plist[i] <- single.p
