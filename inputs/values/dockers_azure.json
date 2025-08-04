@@ -12,8 +12,8 @@
   "samtools_cloud_docker": "vahid.azurecr.io/gatk-sv/samtools-cloud:2024-10-25-v0.29-beta-5ea22a52",
   "sv_base_docker": "vahid.azurecr.io/gatk-sv/sv-base:2024-10-25-v0.29-beta-5ea22a52",
   "sv_base_mini_docker": "vahid.azurecr.io/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
-  "sv_pipeline_docker": "vahid.azurecr.io/gatk-sv/sv-pipeline:2025-07-31-v1.0.5-9e614379",
-  "sv_pipeline_qc_docker": "vahid.azurecr.io/gatk-sv/sv-pipeline:2025-07-31-v1.0.5-9e614379",
+  "sv_pipeline_docker": "vahid.azurecr.io/gatk-sv/sv-pipeline:2025-08-04-v1.0.5-23d17304",
+  "sv_pipeline_qc_docker": "vahid.azurecr.io/gatk-sv/sv-pipeline:2025-08-04-v1.0.5-23d17304",
   "wham_docker": "vahid.azurecr.io/gatk-sv/wham:2024-10-25-v0.29-beta-5ea22a52",
   "igv_docker": "vahid.azurecr.io/gatk-sv/igv:mw-xz-fixes-2-b1be6a9",
   "duphold_docker": "vahid.azurecr.io/gatk-sv/duphold:mw-xz-fixes-2-b1be6a9",
@@ -28,6 +28,6 @@
   "sv_utils_docker": "vahid.azurecr.io/gatk-sv/sv-utils:2025-01-06-v1.0.1-e902bf4e",
   "gq_recalibrator_docker": "vahid.azurecr.io/markw/gatk:mw-tb-form-sv-filter-training-data-899360a",
   "str": "vahid.azurecr.io/gatk-sv/str:2023-05-23-v0.27.3-beta-e537bdd6",
-  "denovo": "vahid.azurecr.io/gatk-sv/denovo:2025-07-31-v1.0.5-9e614379",
-  "sv-shell": "vahid.azurecr.io/gatk-sv/sv-shell:2025-07-31-v1.0.5-9e614379"
+  "denovo": "vahid.azurecr.io/gatk-sv/denovo:2025-08-04-v1.0.5-23d17304",
+  "sv-shell": "vahid.azurecr.io/gatk-sv/sv-shell:2025-08-04-v1.0.5-23d17304"
 }
