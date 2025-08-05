@@ -37,13 +37,17 @@ chosen from the NYGC/AnVIL 1000 Genomes high coverage data linked above.
 
 Inputs to the pipeline for the reference panel include:
 - A precomputed SV callset VCF, and joint-called depth-based CNV call files
-- Raw calls for the reference panel samples from Manta and WHAM
+- Raw calls for the reference panel samples from Manta, Scramble, and Wham
 - Trained models for calling copy number variation in GATK gCNV case mode
 - Parameters learned by the cohort mode pipeline in training machine learning models on the reference panel samples.
 
 These resources are primarily configured in the "Workspace Data" for this workspace. However, several of the resources need
 to be passed  to the workflow as large lists of files or strings. Due to Terra limitations on uploading data containing lists to the
 workspace data table, these resources are specified directly in the workflow configuration.
+
+:::note
+Refer to the [Building reference panels](/docs/advanced/build_ref_panel) guide for instructions on building custom reference panels.
+:::
 
 ### Reference resources
 
