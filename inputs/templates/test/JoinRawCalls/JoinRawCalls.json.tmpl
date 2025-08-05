@@ -14,9 +14,7 @@
 
   "JoinRawCalls.clustered_melt_vcfs" : [{{ test_batch.merged_melt_vcf | tojson }}],
   "JoinRawCalls.clustered_melt_vcf_indexes" : [{{ test_batch.merged_melt_vcf_index | tojson }}],
-
-  "JoinRawCalls.FormatVcfForGatk.formatter_args": "--fix-end",
-
+  
   "JoinRawCalls.ped_file": {{ test_batch.ped_file | tojson }},
 
   "JoinRawCalls.contig_list": {{ reference_resources.primary_contigs_list | tojson }},
