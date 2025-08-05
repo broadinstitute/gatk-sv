@@ -3,241 +3,122 @@ version 1.0
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "FormatVcfForGatk.wdl" as fvcf
-import "CleanVcf1b.wdl" as c1b
-import "CleanVcf5.wdl" as c5
 
 workflow CleanVcfChromosome {
-  input {
-    File vcf
-    String contig
-    File background_list
-    File ped_file
-    File allosome_fai
-    String prefix
-    Int max_shards_per_chrom_step1
-    File bothsides_pass_list
-    Int min_records_per_shard_step1
-    Int samples_per_step2_shard
-    Int clean_vcf1b_records_per_shard
-    Int clean_vcf5_records_per_shard
-    Int? clean_vcf5_threads_per_task
-    File? outlier_samples_list
-    Int? max_samples_per_shard_step3
+	input {
+		File vcf
+		String contig
+		String chr_x
+		String chr_y
+		String prefix
 
-    File HERVK_reference
-    File LINE1_reference
+		File background_list
+		File bothsides_pass_list
+		File? outlier_samples_list
+		File ped_file
+		File ploidy_table
+		
+		File allosome_fai
+		File HERVK_reference
+		File LINE1_reference
+		
+		String gatk_docker
+		String linux_docker
+		String sv_base_mini_docker
+		String sv_pipeline_docker
+		File? svtk_to_gatk_script  # For debugging
+		File? make_clean_gq_script
 
-    File ploidy_table
-    String chr_x
-    String chr_y
-
-    File? svtk_to_gatk_script  # For debugging
-    File? make_clean_gq_script
-
-    String linux_docker
-    String sv_base_mini_docker
-    String sv_pipeline_docker
-
-    # overrides for local tasks
-    RuntimeAttr? runtime_override_clean_vcf_1a
-    RuntimeAttr? runtime_override_clean_vcf_2
-    RuntimeAttr? runtime_override_clean_vcf_3
-    RuntimeAttr? runtime_override_clean_vcf_4
-    RuntimeAttr? runtime_override_clean_vcf_5_scatter
-    RuntimeAttr? runtime_override_clean_vcf_5_make_cleangq
-    RuntimeAttr? runtime_override_clean_vcf_5_find_redundant_multiallelics
-    RuntimeAttr? runtime_override_clean_vcf_5_polish
-    RuntimeAttr? runtime_override_stitch_fragmented_cnvs
-    RuntimeAttr? runtime_override_final_cleanup
-    RuntimeAttr? runtime_override_rescue_me_dels
-    RuntimeAttr? runtime_attr_add_high_fp_rate_filters
-
-    # Clean vcf 1b
-    RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
-    RuntimeAttr? runtime_attr_override_sort_bed_1b
-    RuntimeAttr? runtime_attr_override_intersect_bed_1b
-    RuntimeAttr? runtime_attr_override_build_dict_1b
-    RuntimeAttr? runtime_attr_override_scatter_1b
-    RuntimeAttr? runtime_attr_override_filter_vcf_1b
-    RuntimeAttr? runtime_override_concat_vcfs_1b
-    RuntimeAttr? runtime_override_cat_multi_cnvs_1b
-
-    RuntimeAttr? runtime_override_preconcat_step1
-    RuntimeAttr? runtime_override_fix_header_step1
+		# overrides for local tasks
+		RuntimeAttr? runtime_attr_preprocess
+		RuntimeAttr? runtime_attr_revise_overlapping_cnvs
+		RuntimeAttr? runtime_attr_revise_large_cnvs
+		RuntimeAttr? runtime_attr_revise_abnormal_allosomes
+		RuntimeAttr? runtime_attr_revise_multiallelics
+		RuntimeAttr? runtime_attr_postprocess
+		RuntimeAttr? runtime_override_stitch_fragmented_cnvs
+		RuntimeAttr? runtime_override_final_cleanup
+		RuntimeAttr? runtime_override_rescue_me_dels
+		RuntimeAttr? runtime_attr_add_high_fp_rate_filters
 
     RuntimeAttr? runtime_override_preconcat_drc
     RuntimeAttr? runtime_override_fix_header_drc
 
-    # overrides for MiniTasks
-    RuntimeAttr? runtime_override_split_vcf_to_clean
-    RuntimeAttr? runtime_override_combine_step_1_sex_chr_revisions
-    RuntimeAttr? runtime_override_split_include_list
-    RuntimeAttr? runtime_override_combine_clean_vcf_2
-    RuntimeAttr? runtime_override_combine_revised_4
-    RuntimeAttr? runtime_override_combine_multi_ids_4
-    RuntimeAttr? runtime_override_drop_redundant_cnvs
-    RuntimeAttr? runtime_override_combine_step_1_vcfs
-    RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
-    RuntimeAttr? runtime_attr_format
+		RuntimeAttr? runtime_override_drop_redundant_cnvs
+		RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
+		RuntimeAttr? runtime_attr_format
+	}
 
-  }
+	call fvcf.FormatVcf as FormatVcfToClean {
+		input:
+			vcf=vcf,
+			ploidy_table=ploidy_table,
+			output_prefix="~{prefix}.formatted",
+			sv_pipeline_docker=sv_pipeline_docker,
+			runtime_attr_override=runtime_attr_format
+	}
 
-  call MiniTasks.SplitVcf as SplitVcfToClean {
-    input:
-      vcf=vcf,
-      contig=contig,
-      prefix="~{prefix}.shard_",
-      n_shards=max_shards_per_chrom_step1,
-      min_vars_per_shard=min_records_per_shard_step1,
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_split_vcf_to_clean
-  }
+	call CleanVcfPreprocess {
+		input:
+			vcf=FormatVcfToClean.out,
+			chr_x=chr_x,
+			chr_y=chr_y,
+			background_list=background_list,
+			bothsides_pass_list=bothsides_pass_list,
+			prefix="~{prefix}.preprocess",
+			sv_pipeline_docker=sv_pipeline_docker,
+			runtime_attr_override=runtime_attr_preprocess
+	}
 
-  scatter ( i in range(length(SplitVcfToClean.vcf_shards)) ) {
-    call CleanVcf1a {
-      input:
-        vcf=SplitVcfToClean.vcf_shards[i],
-        prefix="~{prefix}.clean_vcf_1.shard_~{i}",
-        background_fail_list=background_list,
-        bothsides_pass_list=bothsides_pass_list,
-        ped_file=ped_file,
-        allosome_fai=allosome_fai,
-        chr_x=chr_x,
-        chr_y=chr_y,
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_override_clean_vcf_1a
-    }
-  }
+	call CleanVcfReviseOverlappingCnvs {
+		input:
+			vcf=CleanVcfPreprocess.out,
+			prefix="~{prefix}.revise_overlapping_cnvs",
+			gatk_docker=gatk_docker,
+			runtime_attr_override=runtime_attr_revise_overlapping_cnvs
+	}
 
-  call MiniTasks.ConcatVcfs as CombineStep1Vcfs {
-    input:
-      vcfs=CleanVcf1a.intermediate_vcf,
-      vcfs_idx=CleanVcf1a.intermediate_vcf_idx,
-      naive=true,
-      generate_index=false,
-      outfile_prefix="~{prefix}.combine_step_1_vcfs",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_combine_step_1_vcfs
-  }
+	call CleanVcfReviseMultiallelicCnvs {
+		input:
+			vcf=CleanVcfReviseOverlappingCnvs.out,
+			outlier_samples_list=outlier_samples_list,
+			prefix="~{prefix}.revise_multiallelic_cnvs",
+			gatk_docker=gatk_docker,
+			runtime_attr_override=runtime_attr_revise_large_cnvs
+	}
 
-  call MiniTasks.CatUncompressedFiles as CombineStep1SexChrRevisions {
-    input:
-      shards=CleanVcf1a.sex,
-      outfile_name="~{prefix}.combine_step_1_sex_chr_revisions.txt",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_combine_step_1_sex_chr_revisions
-  }
+	call CleanVcfReviseAbnormalAllosomes {
+		input:
+			vcf=CleanVcfReviseMultiallelicCnvs.out,
+			prefix="~{prefix}.revise_abnormal_allosomes",
+			gatk_docker=gatk_docker,
+			runtime_attr_override=runtime_attr_revise_abnormal_allosomes
+	}
 
-  call c1b.CleanVcf1b {
-    input:
-      intermediate_vcf=CombineStep1Vcfs.concat_vcf,
-      prefix="~{prefix}.clean_vcf_1b",
-      records_per_shard=clean_vcf1b_records_per_shard,
-      sv_pipeline_docker=sv_pipeline_docker,
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override_subset_large_cnvs=runtime_attr_override_subset_large_cnvs_1b,
-      runtime_attr_override_sort_bed=runtime_attr_override_sort_bed_1b,
-      runtime_attr_override_intersect_bed=runtime_attr_override_intersect_bed_1b,
-      runtime_attr_override_build_dict=runtime_attr_override_build_dict_1b,
-      runtime_attr_override_scatter=runtime_attr_override_scatter_1b,
-      runtime_attr_override_filter_vcf=runtime_attr_override_filter_vcf_1b,
-      runtime_override_concat_vcfs=runtime_override_concat_vcfs_1b,
-      runtime_override_cat_multi_cnvs=runtime_override_cat_multi_cnvs_1b
-  }
+	call CleanVcfReviseOverlappingMultiallelics {
+		input:
+			vcf=CleanVcfReviseAbnormalAllosomes.out,
+			prefix="~{prefix}.revise_overlapping_multiallelics",
+			gatk_docker=gatk_docker,
+			runtime_attr_override=runtime_attr_revise_multiallelics
+	}
 
-  call MiniTasks.SplitUncompressed as SplitIncludeList {
-    input:
-      whole_file=CleanVcf1a.include_list[0],
-      lines_per_shard=samples_per_step2_shard,
-      shard_prefix="~{prefix}.split_include_list.",
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_split_include_list
-  }
+	call CleanVcfPostprocess {
+		input:
+			vcf=CleanVcfReviseOverlappingMultiallelics.out,
+			prefix="~{prefix}.postprocess",
+			sv_pipeline_docker=sv_pipeline_docker,
+			runtime_attr_override=runtime_attr_postprocess
+	}
 
-  scatter ( i in range(length(SplitIncludeList.shards)) ){
-    call CleanVcf2 {
-      input:
-        normal_revise_vcf=CleanVcf1b.normal,
-        prefix="~{prefix}.clean_vcf_2.shard_~{i}",
-        include_list=SplitIncludeList.shards[i],
-        multi_cnvs=CleanVcf1b.multi,
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_override_clean_vcf_2
-      }
-  }
-
-  call MiniTasks.CatUncompressedFiles as CombineCleanVcf2 {
-    input:
-      shards=CleanVcf2.out,
-      outfile_name="~{prefix}.combine_clean_vcf_2.txt",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_combine_clean_vcf_2
-  }
-
-  call CleanVcf3 {
-    input:
-      rd_cn_revise=CombineCleanVcf2.outfile,
-      max_samples_shard = max_samples_per_shard_step3,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_clean_vcf_3
-  }
-
-  scatter ( i in range(length(CleanVcf3.shards)) ){
-    call CleanVcf4 {
-      input:
-        rd_cn_revise=CleanVcf3.shards[i],
-        normal_revise_vcf=CleanVcf1b.normal,
-        prefix="~{prefix}.clean_vcf_4.shard_~{i}",
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_override_clean_vcf_4
-    }
-  }
-
-  call MiniTasks.CatUncompressedFiles as CombineRevised4 {
-    input:
-      shards=CleanVcf4.out,
-      outfile_name="~{prefix}.combine_revised_4.txt.gz",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_combine_revised_4
-  }
-
-  call MiniTasks.CatUncompressedFiles as CombineMultiIds4 {
-    input:
-      shards=CleanVcf4.multi_ids,
-      outfile_name="~{prefix}.combine_multi_ids_4.txt.gz",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_combine_multi_ids_4
-  }
-
-  call c5.CleanVcf5 {
-    input:
-      revise_vcf_lines=CombineRevised4.outfile,
-      normal_revise_vcf=CleanVcf1b.normal,
-      ped_file=ped_file,
-      sex_chr_revise=CombineStep1SexChrRevisions.outfile,
-      multi_ids=CombineMultiIds4.outfile,
-      outlier_samples_list=outlier_samples_list,
-      contig=contig,
-      prefix="~{prefix}.clean_vcf_5",
-      records_per_shard=clean_vcf5_records_per_shard,
-      threads_per_task=clean_vcf5_threads_per_task,
-      make_clean_gq_script=make_clean_gq_script,
-      sv_pipeline_docker=sv_pipeline_docker,
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override_scatter=runtime_override_clean_vcf_5_scatter,
-      runtime_attr_override_make_cleangq=runtime_override_clean_vcf_5_make_cleangq,
-      runtime_attr_override_find_redundant_multiallelics=runtime_override_clean_vcf_5_find_redundant_multiallelics,
-      runtime_attr_override_polish=runtime_override_clean_vcf_5_polish
-  }
-
-  call DropRedundantCnvs {
-    input:
-      vcf=CleanVcf5.polished,
-      prefix="~{prefix}.drop_redundant_cnvs",
-      contig=contig,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_drop_redundant_cnvs
-  }
+	call DropRedundantCnvs {
+		input:
+			vcf=CleanVcfPostprocess.out,
+			prefix="~{prefix}.drop_redundant_cnvs",
+			contig=contig,
+			sv_pipeline_docker=sv_pipeline_docker,
+			runtime_attr_override=runtime_override_drop_redundant_cnvs
+	}
 
   call MiniTasks.SortVcf as SortDropRedundantCnvs {
     input:
@@ -255,14 +136,14 @@ workflow CleanVcfChromosome {
       runtime_attr_override=runtime_override_stitch_fragmented_cnvs
   }
 
-  call RescueMobileElementDeletions {
-    input:
-      vcf = StitchFragmentedCnvs.stitched_vcf_shard,
-      prefix = "~{prefix}.rescue_me_dels",
-      LINE1 = LINE1_reference,
-      HERVK = HERVK_reference,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_override_rescue_me_dels
+	call RescueMobileElementDeletions {
+		input:
+		vcf = StitchFragmentedCnvs.stitched_vcf_shard,
+		prefix = "~{prefix}.rescue_me_dels",
+		LINE1 = LINE1_reference,
+		HERVK = HERVK_reference,
+		sv_pipeline_docker = sv_pipeline_docker,
+		runtime_attr_override = runtime_override_rescue_me_dels
   }
 
   call AddHighFDRFilters {
@@ -282,304 +163,355 @@ workflow CleanVcfChromosome {
       runtime_attr_override=runtime_override_final_cleanup
   }
 
-  call fvcf.FormatVcf {
+  call fvcf.FormatVcf as FormatVcfToOutput {
     input:
       vcf=FinalCleanup.final_cleaned_shard,
       ploidy_table=ploidy_table,
       output_prefix="~{prefix}.final_format",
-      script=svtk_to_gatk_script,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_format
   }
-  
-  output {
-    File out = FormatVcf.out
-    File out_idx = FormatVcf.out_index
-  }
+	
+	output {
+		File out = FormatVcfToOutput.out
+		File out_idx = FormatVcfToOutput.out_index
+	}
 }
 
+task CleanVcfPreprocess {
+	input {
+		File vcf
+		String chr_x
+		String chr_y
+		File background_list
+		File bothsides_pass_list
+		String prefix
+		String sv_pipeline_docker
+		RuntimeAttr? runtime_attr_override
+	}
 
-task CleanVcf1a {
-  input {
-    File vcf
-    String prefix
-    File background_fail_list
-    File bothsides_pass_list
-    File ped_file
-    File allosome_fai
-    String chr_x
-    String chr_y
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
+	RuntimeAttr runtime_default = object {
+		mem_gb: 3.75,
+		disk_gb: ceil(10.0 + size(vcf, "GB") * 2),
+		cpu_cores: 1,
+		preemptible_tries: 3,
+		max_retries: 1,
+		boot_disk_gb: 10
+	}						
+	RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+	runtime {
+		memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+		disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+		docker: sv_pipeline_docker
+		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+	}
 
-  Float input_size = size([vcf, background_fail_list, bothsides_pass_list], "GB")
-  RuntimeAttr runtime_default = object {
-                                  mem_gb: 3.75,
-                                  disk_gb: ceil(10.0 + input_size * 2),
-                                  cpu_cores: 1,
-                                  preemptible_tries: 3,
-                                  max_retries: 1,
-                                  boot_disk_gb: 10
-                                }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-  }
+	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
+	String output_vcf = "~{prefix}.vcf.gz"
 
-  command <<<
-    set -euo pipefail
+	command <<<
+		set -euo pipefail
 
-    touch ~{prefix}.includelist.txt
-    touch ~{prefix}.sexchr.revise.txt
+		if [ ! -f "~{vcf}.tbi" ]; then
+			tabix -p vcf ~{vcf}
+		fi
 
-    # outputs
-    # includelist.txt: the names of all the samples in the input vcf
-    # sexchr.revise.txt: the names of the events where genotypes got tweaked on allosomes
-    # stdout: a revised vcf
-    java -jar $CLEAN_VCF_PART_1_JAR \
-      ~{vcf} \
-      ~{ped_file} \
-      ~{chr_x} \
-      ~{chr_y} \
-      ~{background_fail_list} \
-      ~{bothsides_pass_list} \
-      ~{prefix}.includelist.txt \
-      ~{prefix}.sexchr.revise.txt \
-      | bgzip \
-      > ~{prefix}.vcf.gz
-    tabix ~{prefix}.vcf.gz
-  >>>
+		python /opt/sv-pipeline/04_variant_resolution/scripts/replace_ev_numeric_code_with_string.py \
+			~{vcf} \
+			processed.vcf.gz
 
-  output {
-    File include_list="~{prefix}.includelist.txt"
-    File sex="~{prefix}.sexchr.revise.txt"
-    File intermediate_vcf="~{prefix}.vcf.gz"
-    File intermediate_vcf_idx="~{prefix}.vcf.gz.tbi"
-  }
+		zgrep '^##' processed.vcf.gz > header.txt
+
+		cat <<EOF >> header.txt
+		##FILTER=<ID=UNRESOLVED,Description="Variant is unresolved">
+		##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description="Variant has high number of SR splits in background samples">
+		##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description="Variant has read-level support for both sides of breakpoint">
+		##INFO=<ID=REVISED_EVENT,Number=0,Type=Flag,Description="Variant has been revised due to a copy number mismatch">
+		EOF
+
+		zgrep '^#CHROM' processed.vcf.gz >> header.txt
+
+		bcftools view processed.vcf.gz | bcftools reheader -h header.txt | bgzip -c > processed.reheader.vcf.gz
+
+		rm processed.vcf.gz header.txt
+		
+		python /opt/sv-pipeline/04_variant_resolution/scripts/cleanvcf_preprocess.py \
+			-V processed.reheader.vcf.gz \
+			-O ~{output_vcf} \
+			--chrX ~{chr_x} \
+			--chrY ~{chr_y} \
+			--fail-list ~{background_list} \
+			--pass-list ~{bothsides_pass_list}
+
+		tabix -p vcf ~{output_vcf}
+	>>>
+
+	output {
+		File out="~{output_vcf}"
+		File out_idx="~{output_vcf}.tbi"
+	}
 }
 
-task CleanVcf2 {
-  input {
-    File normal_revise_vcf
-    String prefix
-    File include_list
-    File multi_cnvs
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
+task CleanVcfReviseOverlappingCnvs {
+	input {
+		File vcf
+		String prefix
+		String gatk_docker
+		RuntimeAttr? runtime_attr_override
+	}
 
-  # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
-  # generally assume working memory is ~3 * inputs
-  Float input_size = size([normal_revise_vcf, include_list, multi_cnvs], "GB")
-  Float base_disk_gb = 10.0
-  Float input_disk_scale = 3.0
-  RuntimeAttr runtime_default = object {
-    mem_gb: 2.0,
-    disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
-    cpu_cores: 1,
-    preemptible_tries: 3,
-    max_retries: 1,
-    boot_disk_gb: 10
-  }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-  }
+	RuntimeAttr runtime_default = object {
+		mem_gb: 3.75,
+		disk_gb: ceil(10.0 + size(vcf, "GB") * 2),
+		cpu_cores: 1,
+		preemptible_tries: 3,
+		max_retries: 1,
+		boot_disk_gb: 10
+	}						
+	RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+	runtime {
+		memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+		disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+		docker: gatk_docker
+		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+	}
 
-  command <<<
-    set -eu -o pipefail
+	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
+	String output_vcf = "~{prefix}.vcf.gz"
 
-    bcftools index ~{normal_revise_vcf}
-    /opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part2.sh \
-      ~{normal_revise_vcf} \
-      ~{include_list} \
-      ~{multi_cnvs} \
-      "~{prefix}.txt"
-  >>>
+	command <<<
+		set -euo pipefail
 
-  output {
-    File out="~{prefix}.txt"
-  }
+		if [ ! -f "~{vcf}.tbi" ]; then
+			tabix -p vcf ~{vcf}
+		fi
+		
+		gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseOverlappingCnvs \
+			-V ~{vcf} \
+			-O ~{output_vcf}
+	>>>
+
+	output {
+		File out="~{output_vcf}"
+		File out_idx="~{output_vcf}.tbi"
+	}
 }
 
+task CleanVcfReviseMultiallelicCnvs {
+	input {
+		File vcf
+		File? outlier_samples_list
+		String prefix
+		String gatk_docker
+		RuntimeAttr? runtime_attr_override
+	}
 
-task CleanVcf3 {
-  input {
-    File rd_cn_revise
-    Int? max_samples_shard
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-  Int max_samples_shard_ = select_first([max_samples_shard, 7000])
-  # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
-  # generally assume working memory is ~3 * inputs
-  Float input_size = size(rd_cn_revise, "GB")
-  RuntimeAttr runtime_default = object {
-    mem_gb: 3.75,
-    disk_gb: ceil(10.0 + input_size * 2.0),
-    cpu_cores: 1,
-    preemptible_tries: 3,
-    max_retries: 1,
-    boot_disk_gb: 10
-  }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-  }
+	RuntimeAttr runtime_default = object {
+		mem_gb: 3.75,
+		disk_gb: ceil(10.0 + size(vcf, "GB") * 2),
+		cpu_cores: 1,
+		preemptible_tries: 3,
+		max_retries: 1,
+		boot_disk_gb: 10
+	}
+																
+																					
+	RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+	runtime {
+		memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+		disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+		docker: gatk_docker
+		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+	}
 
-  command <<<
-    set -euo pipefail
-    python /opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part3.py ~{rd_cn_revise} -s ~{max_samples_shard_}
-    # Ensure there is at least one shard
-    touch shards/out.0_0.txt
-  >>>
+	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
+	String output_vcf = "~{prefix}.vcf.gz"
 
-  output {
-     Array[File] shards = glob("shards/*")
-  }
+	command <<<
+		set -euo pipefail
+
+		if [ ! -f "~{vcf}.tbi" ]; then
+			tabix -p vcf ~{vcf}
+		fi
+		
+		gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseMutliallelicCnvs \
+			-V ~{vcf} \
+			-O ~{output_vcf} \
+			~{if defined(outlier_samples_list) then "--outlier-samples ~{outlier_samples_list}" else "" }
+	>>>
+
+	output {
+		File out="~{output_vcf}"
+		File out_idx="~{output_vcf}.tbi"
+	}
 }
 
+task CleanVcfReviseAbnormalAllosomes {
+	input {
+		File vcf
+		String prefix
+		String gatk_docker
+		RuntimeAttr? runtime_attr_override
+	}
 
-task CleanVcf4 {
-  input {
-    File rd_cn_revise
-    File normal_revise_vcf
-    String prefix
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
+	RuntimeAttr runtime_default = object {
+		mem_gb: 3.75,
+		disk_gb: ceil(10.0 + size(vcf, "GB") * 2),
+		cpu_cores: 1,
+		preemptible_tries: 3,
+		max_retries: 1,
+		boot_disk_gb: 10
+	}						
+	RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+	runtime {
+		memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+		disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+		docker: gatk_docker
+		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+	}
 
-  Float input_size = size([rd_cn_revise, normal_revise_vcf], "GB")
-  RuntimeAttr runtime_default = object {
-                                  mem_gb: 2.0,
-                                  disk_gb: 50,
-                                  cpu_cores: 1,
-                                  preemptible_tries: 3,
-                                  max_retries: 1,
-                                  boot_disk_gb: 10
-                                }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-  }
+	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
+	String output_vcf = "~{prefix}.vcf.gz"
 
-  command <<<
-    set -euo pipefail
-    python3 <<CODE
-    import pysam
-    import os
+	command <<<
+		set -euo pipefail
 
-    # Inputs
-    REGENO_FILE="~{rd_cn_revise}"
-    VCF_FILE="~{normal_revise_vcf}"
+		if [ ! -f "~{vcf}.tbi" ]; then
+			tabix -p vcf ~{vcf}
+		fi
+		
+		gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseAbnormalAllosomes \
+			-V ~{vcf} \
+			-O ~{output_vcf}
+	>>>
 
-    # Build map of variants to regenotype
-    with open(REGENO_FILE) as f:
-      vid_sample_cn_map = {}
-      for line in f:
-        tokens = line.strip().split('\t')
-        vid = tokens[0]
-        if vid not in vid_sample_cn_map:
-          vid_sample_cn_map[vid] = []
-        vid_sample_cn_map[vid].append(tuple(tokens[1:]))
+	output {
+		File out="~{output_vcf}"
+		File out_idx="~{output_vcf}.tbi"
+	}
+}
 
-    # Traverse VCF and replace genotypes
-    with open("~{prefix}.revise_vcf_lines.txt", "w") as f:
-      vcf = pysam.VariantFile(VCF_FILE)
-      num_vcf_records = 0
-      for record in vcf:
-        num_vcf_records += 1
-        if record.id not in vid_sample_cn_map:
-          continue
-        for entry in vid_sample_cn_map[record.id]:
-          s = record.samples[entry[0]]
-          s['GT'] = (0, 1)
-          s['RD_CN'] = int(entry[1])
-        f.write(str(record))
-      vcf.close()
+task CleanVcfReviseOverlappingMultiallelics {
+	input {
+		File vcf
+		String prefix
+		String gatk_docker
+		RuntimeAttr? runtime_attr_override
+	}
 
-    # Get batch size
-    regeno_file_name_tokens = os.path.basename(REGENO_FILE).split('.')[1].split('_')
-    batch_num = max(int(regeno_file_name_tokens[0]), 1)
-    total_batch = max(int(regeno_file_name_tokens[1]), 1)
-    segments = num_vcf_records / float(total_batch)
-    print("{} {} {}".format(batch_num, total_batch, segments))
+	RuntimeAttr runtime_default = object {
+		mem_gb: 3.75,
+		disk_gb: ceil(10.0 + size(vcf, "GB") * 2),
+		cpu_cores: 1,
+		preemptible_tries: 3,
+		max_retries: 1,
+		boot_disk_gb: 10
+	}			
+	RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+	runtime {
+		memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+		disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+		docker: gatk_docker
+		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+	}
 
-    vcf = pysam.VariantFile(VCF_FILE)
-    # Max sample count with PE or SR GT over 3
-    max_vf = max(len(vcf.header.samples) * 0.01, 2)
-    record_start = (batch_num - 1) * segments
-    record_end = batch_num * segments
-    record_idx = 0
-    print("{} {} {}".format(max_vf, record_start, record_end))
-    multi_geno_ids = set([])
-    for record in vcf:
-      record_idx += 1
-      if record_idx < record_start:
-        continue
-      elif record_idx > record_end:
-        break
-      num_gt_over_2 = 0
-      for sid in record.samples:
-        s = record.samples[sid]
-        # Pick best GT
-        if s.get('PE_GT') is None:
-          continue
-        elif s.get('SR_GT') is None:
-          gt = s.get('PE_GT')
-        elif s.get('PE_GT') > 0 and s.get('SR_GT') == 0:
-          gt = s.get('PE_GT')
-        elif s.get('PE_GT') == 0:
-          gt = s.get('SR_GT')
-        elif s.get('PE_GQ') >= s.get('SR_GQ'):
-          gt = s.get('PE_GT')
-        else:
-          gt = s.get('SR_GT')
-        if gt > 2:
-          num_gt_over_2 += 1
-      if num_gt_over_2 > max_vf:
-        multi_geno_ids.add(record.id)
-    vcf.close()
+	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
+	String output_vcf = "~{prefix}.vcf.gz"
 
-    multi_geno_ids = sorted(list(multi_geno_ids))
-    with open("~{prefix}.multi_geno_ids.txt", "w") as f:
-      for vid in multi_geno_ids:
-        f.write(vid + "\n")
-    CODE
+	command <<<
+		set -euo pipefail
 
-    bgzip ~{prefix}.revise_vcf_lines.txt
-    gzip ~{prefix}.multi_geno_ids.txt
-  >>>
+		if [ ! -f "~{vcf}.tbi" ]; then
+			tabix -p vcf ~{vcf}
+		fi
+		
+		gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseOverlappingMultiallelics \
+			-V ~{vcf} \
+			-O ~{output_vcf}
+	>>>
 
-  output {
-    File out="~{prefix}.revise_vcf_lines.txt.gz"
-    File multi_ids="~{prefix}.multi_geno_ids.txt.gz"
-  }
+	output {
+		File out="~{output_vcf}"
+		File out_idx="~{output_vcf}.tbi"
+	}
+}
+
+task CleanVcfPostprocess {
+	input {
+		File vcf
+		String prefix
+		String sv_pipeline_docker
+		RuntimeAttr? runtime_attr_override
+	}
+
+	RuntimeAttr runtime_default = object {
+		mem_gb: 3.75,
+		disk_gb: ceil(10.0 + size(vcf, "GB") * 2),
+		cpu_cores: 1,
+		preemptible_tries: 3,
+		max_retries: 1,
+		boot_disk_gb: 10
+	}				
+	RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+	runtime {
+		memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+		disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+		docker: sv_pipeline_docker
+		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+	}
+
+	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
+	String output_vcf = "~{prefix}.vcf.gz"
+
+	command <<<
+		set -euo pipefail
+
+		if [ ! -f "~{vcf}.tbi" ]; then
+			tabix -p vcf ~{vcf}
+		fi
+
+		python /opt/sv-pipeline/04_variant_resolution/scripts/cleanvcf_postprocess.py \
+			-V ~{vcf} \
+			-O processed.vcf.gz
+
+		bcftools annotate -x INFO/MULTIALLELIC,INFO/UNRESOLVED,INFO/EVENT,INFO/REVISED_EVENT,INFO/MULTI_CNV,INFO/varGQ processed.vcf.gz -o processed.annotated.vcf.gz -O z
+
+		bcftools view -h processed.annotated.vcf.gz | grep "^##" | \
+			grep -v -E "CIPOS|CIEND|RMSSTD|source|bcftools|GATKCommandLine|##FORMAT=<ID=EV>|##ALT=<ID=UNR>|##INFO=<ID=(MULTIALLELIC|UNRESOLVED|EVENT|REVISED_EVENT|MULTI_CNV|varGQ)" > temp_header.txt
+		echo '##INFO=<ID=UNRESOLVED_TYPE,Number=1,Type=String,Description="Class of unresolved variant.">' >> temp_header.txt
+		echo '##ALT=<ID=CNV,Description="Copy Number Polymorphism">' >> temp_header.txt
+
+		bcftools view -h processed.annotated.vcf.gz | grep "^#CHROM" > chrom_header.txt
+
+		cat temp_header.txt chrom_header.txt > header.txt
+		
+		bcftools reheader -h header.txt processed.annotated.vcf.gz -o ~{output_vcf}
+		
+		tabix -p vcf ~{output_vcf}
+	>>>
+
+	output {
+		File out="~{output_vcf}"
+		File out_idx="~{output_vcf}.tbi"
+	}
 }
 
 task RescueMobileElementDeletions {
