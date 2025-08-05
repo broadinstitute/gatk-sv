@@ -153,13 +153,13 @@ def get_threshold(record, sl_thresholds, med_size, large_size, xlarge_size):
     if svtype in _cnv_types:
         svlen = record.info['SVLEN']
         if svlen < med_size:
-            size_index = 0  # small
+            size_index = 0
         elif svlen < large_size:
-            size_index = 1  # medium
+            size_index = 1
         elif svlen < xlarge_size:
-            size_index = 2  # large
+            size_index = 2
         else:
-            size_index = 3  # xlarge
+            size_index = 3
         return sl_thresholds[svtype][size_index]
     else:
         return sl_thresholds[svtype][0]
