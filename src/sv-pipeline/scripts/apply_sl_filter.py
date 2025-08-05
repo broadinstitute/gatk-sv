@@ -250,9 +250,9 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
 
     parser.add_argument("--medium-size", type=float, default=500,
                         help="Min size for medium DEL/DUP")
-    parser.add_argument("--large-size", type=float, default=5000,
+    parser.add_argument("--large-size", type=float, default=10000,
                         help="Min size for large DEL/DUP")
-    parser.add_argument("--xlarge-size", type=float, default=10000,
+    parser.add_argument("--xlarge-size", type=float, default=20000,
                         help="Min size for xlarge DEL/DUP")
     parser.add_argument("--small-del-threshold", type=float,
                         help="Threshold SL for small DELs")
