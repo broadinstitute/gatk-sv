@@ -29,10 +29,10 @@ def adjudicate_BAF(metrics, labeler, name):
     testable.to_csv('{0}_DEL_testable.txt'.format(name), index=False, sep='\t')
 
     features = 'BAF_HET_RATIO'.split()
-    cutoffs = {'indep': [], 'dep': ['BAF_HET_RATIO']}
+    cutoffs = {'indep': ['BAF_HET_RATIO'], 'dep': []}
 
     del_cutoffs = rf_classify(metrics, trainable, testable, features,
-                              labeler, cutoffs, name, trim_probs=False)
+                              labeler, cutoffs, name, trim_probs=True)
 
     # Duplications
     testable = metrics.loc[(metrics.svtype == 'DUP') &
@@ -46,10 +46,10 @@ def adjudicate_BAF(metrics, labeler, name):
     testable.to_csv('{0}_DUP_testable.txt'.format(name), index=False, sep='\t')
 
     features = 'BAF_KS_Q BAF_KS_STAT'.split()
-    cutoffs = {'indep': ['BAF_KS_Q'], 'dep': ['BAF_KS_STAT']}
+    cutoffs = {'indep': ['BAF_KS_STAT'], 'dep': ['BAF_KS_Q']}
 
     dup_cutoffs = rf_classify(metrics, trainable, testable, features,
-                              labeler, cutoffs, name, trim_probs=False)
+                              labeler, cutoffs, name, trim_probs=True)
 
     # Combine cutoffs
     del_cutoffs['svtype'] = 'DEL'
