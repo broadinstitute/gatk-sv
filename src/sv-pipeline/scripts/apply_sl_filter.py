@@ -148,7 +148,6 @@ def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref, ncr_threshol
 
 
 def get_threshold(record, sl_thresholds, med_size, large_size, xlarge_size):
-    """Enhanced version with 4 size categories for DEL/DUP"""
     svtype = record.info['SVTYPE']
     if svtype in _cnv_types:
         svlen = record.info['SVLEN']
