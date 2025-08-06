@@ -41,7 +41,7 @@ task IntegrateVariantsFromHaplotyes {
     File h2_vcf
     File un_vcf
     File sample
-    File monitoring_script  
+    File? monitoring_script  
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
