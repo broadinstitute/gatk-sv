@@ -155,7 +155,6 @@ workflow PanGenieIndexGenotype {
         input:
             input_vcfs = pangenie_genotype.genotyping_vcf_gz,
             input_vcfs_idx = pangenie_genotype.genotyping_vcf_gz_tbi,
-            sample_list = sample_name_list,
             chromosomes = chromosomes,
             convert_to_biallelic = false,
             output_prefix = "~{index_prefix}.PanGenie",
@@ -167,7 +166,6 @@ workflow PanGenieIndexGenotype {
         input:
             input_vcfs = convert_bubbles_to_biallelic.converted_biallelic_vcf,
             input_vcfs_idx = convert_bubbles_to_biallelic.converted_biallelic_vcf_idx,
-            sample_list = sample_name_list,
             chromosomes = chromosomes,
             convert_to_biallelic = false,
             output_prefix = "~{index_prefix}.PanGenie_Biallelic",
