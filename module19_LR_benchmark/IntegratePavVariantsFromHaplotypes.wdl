@@ -46,8 +46,6 @@ task IntegrateVariantsFromHaplotyes {
     RuntimeAttr? runtime_attr_override
   }
 
-
-
   command <<<
 
     python3 <<CODE
