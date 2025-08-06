@@ -13,7 +13,7 @@ workflow IntegratePavVariantsFromHaplotypes {
 
         String sv_pipeline_base_docker
 
-        RuntimeAttr? runtime_attr_split_ref_panel
+        RuntimeAttr? runtime_attr_integrate_variants_in_haplotypes
     }
 
     scatter (i in range(length(samples))){
@@ -142,8 +142,8 @@ task IntegrateVariantsFromHaplotyes {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 25,
-    disk_gb: 50 + ceil(size(h1_vcf, "GiB")*6),
+    mem_gb: 10 + ceil(size(h1_vcf, "GiB")*6),
+    disk_gb: 15 + ceil(size(h1_vcf, "GiB")*6),
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
@@ -161,5 +161,4 @@ task IntegrateVariantsFromHaplotyes {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
 
