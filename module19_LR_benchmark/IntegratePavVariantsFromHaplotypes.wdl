@@ -7,7 +7,7 @@ workflow IntegratePavVariantsFromHaplotypes {
         Array[File] h1_vcfs
         Array[File] h2_vcfs
         Array[File] un_vcfs
-        Array[Structs] samples
+        Array[String] samples
 
         File? monitoring_script
 
