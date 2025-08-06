@@ -4,10 +4,10 @@ import "Structs.wdl"
 
 workflow IntegratePavVariantsFromHaplotypes {
     input {
-        Array[File] h1_vcfs
-        Array[File] h2_vcfs
-        Array[File] un_vcfs
-        Array[String] samples
+        File h1_vcf
+        File h2_vcf
+        File un_vcf
+        String sample
 
         File? monitoring_script
 
@@ -16,22 +16,20 @@ workflow IntegratePavVariantsFromHaplotypes {
         RuntimeAttr? runtime_attr_integrate_variants_in_haplotypes
     }
 
-    scatter (i in range(length(samples))){
-        call IntegrateVariantsFromHaplotyes{
-            input:
-                h1_vcf = h1_vcfs[i],
-                h2_vcf = h2_vcfs[i],
-                un_vcf = un_vcfs[i],
-                sample = samples[i],
-                monitoring_script = monitoring_script,
-                docker_image = sv_pipeline_base_docker,
-                runtime_attr_override = runtime_attr_integrate_variants_in_haplotypes
-        }
+    call IntegrateVariantsFromHaplotyes{
+        input:
+            h1_vcf = h1_vcf,
+            h2_vcf = h2_vcf,
+            un_vcf = un_vcf,
+            sample = sample,
+            monitoring_script = monitoring_script,
+            docker_image = sv_pipeline_base_docker,
+            runtime_attr_override = runtime_attr_integrate_variants_in_haplotypes
     }
 
     output{
-        Array[File] output_vcf = IntegrateVariantsFromHaplotyes.inte_vcf
-        Array[File] output_vcf_idx = IntegrateVariantsFromHaplotyes.inte_vcf_idx
+        File output_vcf = IntegrateVariantsFromHaplotyes.inte_vcf
+        File output_vcf_idx = IntegrateVariantsFromHaplotyes.inte_vcf_idx
     }
 }
 
@@ -40,7 +38,7 @@ task IntegrateVariantsFromHaplotyes {
     File h1_vcf
     File h2_vcf
     File un_vcf
-    File sample
+    String sample
     File? monitoring_script  
     String docker_image
     RuntimeAttr? runtime_attr_override
