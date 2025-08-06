@@ -31,7 +31,7 @@ workflow IntegratePavVariantsFromHaplotypes {
 
     output{
         Array[File] output_vcf = IntegrateVariantsFromHaplotyes.inte_vcf
-        Array[File] output_vcf_idx = ntegrateVariantsFromHaplotyes.inte_vcf_idx
+        Array[File] output_vcf_idx = IntegrateVariantsFromHaplotyes.inte_vcf_idx
     }
 }
 
