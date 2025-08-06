@@ -123,11 +123,12 @@ task IntegrateVariantsFromHaplotyes {
     _, h2_vars = parse_vcf("~{h2_vcf}")
     _, un_vars = parse_vcf("~{un_vcf}")
     merged = merge_variants(h1_vars, h2_vars, un_vars)
-    write_merged_vcf(header_h1, merged, "PAV_~{sample}.vcf.gz", "~{sample}")
+    write_merged_vcf(header_h1, merged, "PAV_~{sample}.vcf", "~{sample}")
 
 
     CODE
 
+    bgzip "PAV_~{sample}.vcf"
     tabix -p vcf "PAV_~{sample}.vcf.gz"
   >>>
 
