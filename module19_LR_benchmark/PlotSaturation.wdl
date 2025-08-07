@@ -179,7 +179,7 @@ workflow PlotSaturation {
     }
 
     output{
-      File Array[satu_stat] = inte_satu_tables.integrated_stat
+      Array[File] satu_stat = inte_satu_tables.integrated_stat
     }
   }
 
