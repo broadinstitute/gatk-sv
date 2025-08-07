@@ -34,6 +34,7 @@ workflow PlotSaturation {
     RuntimeAttr? runtime_attr_calcu_satu_table_sm_indel
     RuntimeAttr? runtime_attr_calcu_satu_table_lg_indel
     RuntimeAttr? runtime_attr_calcu_satu_table_sv
+    RuntimeAttr? runtime_attr_inte_satu_tables
 
   }
 
