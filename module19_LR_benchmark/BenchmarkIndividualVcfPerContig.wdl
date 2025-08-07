@@ -56,7 +56,7 @@ workflow BenchmarkIndividualVcfPerContig{
     call LongReadGenotypeTasks.FilterVcfByAnotherVcf as filter_query_vcf_by_ovr {
       input:
         vcf_file = extract_variant_sites_query.updated_vcf,
-        vcf_idx = extract_variant_sites_query.updated_vcf_idx ,
+        vcf_idx = extract_variant_sites_query.updated_vcf_idx,
         vcf_file_b = query_filter_vcf,
         vcf_file_b_idx = query_filter_vcf_idx,
         docker_image = sv_pipeline_base_docker
