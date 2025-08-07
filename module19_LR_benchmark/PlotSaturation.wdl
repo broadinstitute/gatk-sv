@@ -55,7 +55,7 @@ workflow PlotSaturation {
         runtime_attr_override = runtime_attr_split_variants_by_size
     }
 
-    cal LongReadGenotypeTasks.ExtractVariantSites as extract_snv_sites{
+    call LongReadGenotypeTasks.ExtractVariantSites as extract_snv_sites{
       input:
         input_vcf = SplitVariantsBySize.snv_vcf,
         docker_image = sv_pipeline_base_docker,
