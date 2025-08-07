@@ -1120,12 +1120,13 @@ task ExtractVariantSites {
             ref = rec.ref
             end = str(rec.pos + len(ref) -1)  # .stop is preferred over parsing INFO['END']
             alt = rec.alts[0] if rec.alts else "."
-            svtype = determine_svtype(ref, alt)
-            svlen = determine_svlen(ref, alt)
-            ID = f"{chrom}_{pos}_{end}_{svtype}_{svlen}"
-            rec.id = ID
-            out.write('\t'.join([chrom, pos, end, ID, svtype, svlen]) + "\n")
-            vcf_out.write(rec)
+            if alt!="<INV>":
+              svtype = determine_svtype(ref, alt)
+              svlen = determine_svlen(ref, alt)
+              ID = f"{chrom}_{pos}_{end}_{svtype}_{svlen}"
+              rec.id = ID
+              out.write('\t'.join([chrom, pos, end, ID, svtype, svlen]) + "\n")
+              vcf_out.write(rec)
     CODE
 
     tabix -p vcf "~{prefix}.SVID_updated.vcf.gz"
