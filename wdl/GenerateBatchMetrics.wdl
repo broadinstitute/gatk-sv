@@ -22,7 +22,6 @@ workflow GenerateBatchMetrics {
     File rd_file
 
     File median_file
-    File mean_coverage_file
     File ploidy_table
 
     Int records_per_shard_agg
@@ -150,7 +149,7 @@ workflow GenerateBatchMetrics {
         vcf = SVRegionOverlap.out,
         vcf_index = SVRegionOverlap.out_index,
         output_prefix = "~{prefix}.aggregate.shard_~{i}",
-        mean_coverage_file = mean_coverage_file,
+        median_file = median_file,
         ploidy_table=ploidy_table,
         pe_file = pe_file,
         pe_file_index = pe_file + ".tbi",
@@ -348,7 +347,7 @@ task AggregateSVEvidence {
     File vcf_index
     String output_prefix
 
-    File mean_coverage_file
+    File median_file
     File ploidy_table
     File? pe_file
     File? pe_file_index
@@ -413,7 +412,7 @@ task AggregateSVEvidence {
     gatk --java-options "-Xmx${JVM_MAX_MEM}" AggregateSVEvidence \
       -V ~{vcf} \
       -O ~{output_prefix}.vcf.gz \
-      --sample-coverage ~{mean_coverage_file} \
+      --median-coverage ~{median_file} \
       --ploidy-table ~{ploidy_table} \
       --x-chromosome-name ~{chr_x} \
       --y-chromosome-name ~{chr_y} \
