@@ -264,7 +264,7 @@ def merge_evidence_qc_table(
 
     # all data frames
     dfs = [df_ploidy, df_sex_assignments, df_bincov_median, df_wgd_scores, df_non_diploid, df_melt_insert_size,
-           df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, df_scramble_high_outlier, df_dragen_high_outlier, df_total_high_outliers, 
+           df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, df_scramble_high_outlier, df_dragen_high_outlier, df_total_high_outliers,
            df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_scramble_low_outlier, df_dragen_low_outlier, df_total_low_outliers,
            df_manta_variant_counts, df_melt_variant_counts, df_wham_variant_counts, df_scramble_variant_counts, df_dragen_variant_counts]
     for df in dfs:
