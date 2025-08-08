@@ -300,7 +300,7 @@ def main():
         help="Sets the filename containing bin-wise CNV q-values.")
 
     parser.add_argument(
-        "-z", "--manta-qc-outlier-high-filename",
+        "-h", "--manta-qc-outlier-high-filename",
         help="Sets the filename containing Manta QC outlier high.")
 
     parser.add_argument(
