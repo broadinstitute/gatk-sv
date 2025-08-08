@@ -147,7 +147,7 @@ def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref, ncr_threshol
             del record.info[field]
 
 
-def get_threshold(record, sl_thresholds, med_size, large_size, xlarge_size):
+def get_threshold(record, sl_thresholds, med_size, large_size, xlarge_size, xxlarge_size):
     svtype = record.info['SVTYPE']
     if svtype in _cnv_types:
         svlen = record.info['SVLEN']
@@ -157,8 +157,10 @@ def get_threshold(record, sl_thresholds, med_size, large_size, xlarge_size):
             size_index = 1
         elif svlen < xlarge_size:
             size_index = 2
-        else:
+        elif svlen < xxlarge_size:
             size_index = 3
+        else:
+            size_index = 4
         return sl_thresholds[svtype][size_index]
     else:
         return sl_thresholds[svtype][0]
@@ -170,7 +172,8 @@ def process(vcf, fout, ploidy_dict, thresholds, args):
         raise ValueError("This is a sites-only vcf")
     for record in vcf:
         sl_threshold = get_threshold(record=record, sl_thresholds=thresholds, med_size=args.medium_size,
-                                     large_size=args.large_size, xlarge_size=args.xlarge_size)
+                                     large_size=args.large_size, xlarge_size=args.xlarge_size,
+                                     xxlarge_size=args.xxlarge_size)
         _apply_filter(record=record, sl_threshold=sl_threshold,
                       ploidy_dict=ploidy_dict, apply_hom_ref=args.apply_hom_ref,
                       ncr_threshold=args.ncr_threshold,
@@ -182,8 +185,8 @@ def process(vcf, fout, ploidy_dict, thresholds, args):
 
 def _create_threshold_dict(args):
     return {
-        'DEL': [args.small_del_threshold, args.medium_del_threshold, args.large_del_threshold, args.xlarge_del_threshold],
-        'DUP': [args.small_dup_threshold, args.medium_dup_threshold, args.large_dup_threshold, args.xlarge_dup_threshold],
+        'DEL': [args.small_del_threshold, args.medium_del_threshold, args.large_del_threshold, args.xlarge_del_threshold, args.xxlarge_del_threshold],
+        'DUP': [args.small_dup_threshold, args.medium_dup_threshold, args.large_dup_threshold, args.xlarge_dup_threshold, args.xxlarge_dup_threshold],
         'INS': [args.ins_threshold],
         'INV': [args.inv_threshold],
         'BND': [args.bnd_threshold],
@@ -253,6 +256,8 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Min size for large DEL/DUP")
     parser.add_argument("--xlarge-size", type=float, default=20000,
                         help="Min size for xlarge DEL/DUP")
+    parser.add_argument("--xxlarge-size", type=float, default=50000,
+                        help="Min size for xxlarge DEL/DUP")
     parser.add_argument("--small-del-threshold", type=float,
                         help="Threshold SL for small DELs")
     parser.add_argument("--medium-del-threshold", type=float,
@@ -261,6 +266,8 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Threshold SL for large DELs")
     parser.add_argument("--xlarge-del-threshold", type=float,
                         help="Threshold SL for xlarge DELs")
+    parser.add_argument("--xxlarge-del-threshold", type=float,
+                        help="Threshold SL for xxlarge DELs")
     parser.add_argument("--small-dup-threshold", type=float,
                         help="Threshold SL for small DUPs")
     parser.add_argument("--medium-dup-threshold", type=float,
@@ -269,6 +276,8 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Threshold SL for large DUPs")
     parser.add_argument("--xlarge-dup-threshold", type=float,
                         help="Threshold SL for xlarge DUPs")
+    parser.add_argument("--xxlarge-dup-threshold", type=float,
+                        help="Threshold SL for xxlarge DUPs")
     parser.add_argument("--ins-threshold", type=float,
                         help="Threshold SL for INS")
     parser.add_argument("--inv-threshold", type=float,
