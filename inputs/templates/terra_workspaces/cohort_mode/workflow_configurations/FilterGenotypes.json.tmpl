@@ -5,7 +5,6 @@
   "FilterGenotypes.gq_recalibrator_model_file": "${workspace.recalibrate_gq_model_file}",
   "FilterGenotypes.sl_filter_args": "--small-del-threshold 93 --medium-del-threshold 150 --small-dup-threshold -51 --medium-dup-threshold -4 --ins-threshold -13 --inv-threshold -19",
 
-  "FilterGenotypes.genome_tracks": "${workspace.recalibrate_gq_genome_tracks}",
   "FilterGenotypes.genome_tracks": [
     {{ reference_resources.recalibrate_gq_genome_track_repeatmasker | tojson }},
     {{ reference_resources.recalibrate_gq_genome_track_segdup | tojson }},

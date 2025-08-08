@@ -147,6 +147,10 @@ def main():
         'sample': str}, sep='\s+')
     genotypes = genotypes.set_index('name sample'.split())
 
+    # Catch empty shard case
+    if genotypes.shape[0] == 0:
+        return
+
     # sort genotype table for faster indexing
     ids = [record.id for record in vcf]
     vcf.reset()
