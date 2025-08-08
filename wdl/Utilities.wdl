@@ -168,12 +168,6 @@ task GetContigsFromVcfHeader {
 
   Int disk_gb = ceil(1.2 * size(vcf, "GB")) + 10
 
-  parameter_meta {
-    vcf: {
-      localization_optional: true
-    }
-  }
-
   command <<<
     set -eu -o pipefail
 
