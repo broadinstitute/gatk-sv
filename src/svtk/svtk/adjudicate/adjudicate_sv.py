@@ -198,7 +198,6 @@ def adjudicate_RD(metrics):
     cutoffs = pd.concat(cutoff_dfs)
     cutoffs.to_csv('RD_cutoffs.txt', index=False, sep='\t')
     cutoffs['test'] = 'RD'
-    print(cutoffs)
 
     return cutoffs
 
