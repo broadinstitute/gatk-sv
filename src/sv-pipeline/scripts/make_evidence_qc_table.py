@@ -356,7 +356,7 @@ def main():
         help="Sets the filename containing Scramble variant counts per sample.")
 
     parser.add_argument(
-        "-h", "--dragen-variant-counts-filename",
+        "-q", "--dragen-variant-counts-filename",
         help="Sets the filename containing DRAGEN-SV variant counts per sample.")
 
     parser.add_argument(
