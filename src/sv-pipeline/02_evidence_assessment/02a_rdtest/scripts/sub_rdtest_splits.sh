@@ -10,7 +10,7 @@ medianfile=/data/talkowski/Samples/SFARI/deep_sv/asc_540/bincov/matrices/ASC540.
 famfile=/data/talkowski/Samples/SFARI/lists/SFARI_Real.fam
 
 for batch in Phase1 Pilot; do
-  for source in delly lumpy manta wham depth; do
+  for source in delly dragen lumpy manta wham depth; do
     for chrom in 1; do
     # for chrom in $(seq 1 22) X Y; do
       for bed in split_beds/${batch}.${source}.${chrom}.*; do
