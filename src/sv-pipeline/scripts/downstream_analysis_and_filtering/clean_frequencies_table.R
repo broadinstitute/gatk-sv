@@ -19,9 +19,22 @@ import.freq.table <- function(path, pops){
   colnames(dat)[1:3] <- c("VID","SVLEN","SVTYPE")
   #Convert multiallelic CN_NONREF_COUNT and CN_NUMBER to AC and AN, and drop CN_ columns
   mcnv.idxs <- which(dat$SVTYPE %in% c("CNV", "MCNV"))
-  dat[mcnv.idxs, grep("_AC",colnames(dat),fixed=T)] <- dat[mcnv.idxs, grep("_CN_NONREF_COUNT",colnames(dat),fixed=T)]
-  dat[mcnv.idxs, grep("_AN",colnames(dat),fixed=T)] <- dat[mcnv.idxs, grep("_CN_NUMBER",colnames(dat),fixed=T)]
-  dat <- dat[, -union(grep("_CN_NONREF_COUNT", colnames(dat), fixed=T), grep("_CN_NUMBER", colnames(dat), fixed=T))]
+  ac_cols <- grep("AC_",colnames(dat),fixed=T)
+  cn_nonref_cols <- grep("CN_NONREF_COUNT",colnames(dat),fixed=T)
+  an_cols <- grep("AN_",colnames(dat),fixed=T)
+  cn_number_cols <- grep("CN_NUMBER",colnames(dat),fixed=T)
+  
+  if(length(mcnv.idxs) > 0 && length(ac_cols) > 0 && length(cn_nonref_cols) > 0) {
+    dat[mcnv.idxs, ac_cols] <- dat[mcnv.idxs, cn_nonref_cols]
+  }
+  if(length(mcnv.idxs) > 0 && length(an_cols) > 0 && length(cn_number_cols) > 0) {
+    dat[mcnv.idxs, an_cols] <- dat[mcnv.idxs, cn_number_cols]
+  }
+  
+  cols_to_remove <- union(cn_nonref_cols, cn_number_cols)
+  if(length(cols_to_remove) > 0) {
+    dat <- dat[, -cols_to_remove]
+  }
   #Convert all ANs and ACs to numerics
   dat[, -c(1:3)] <- apply(dat[, -c(1:3)], 2, as.numeric)
   #Adjust calls on sex chromosomes
