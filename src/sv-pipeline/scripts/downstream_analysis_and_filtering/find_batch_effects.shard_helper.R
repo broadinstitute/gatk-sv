@@ -23,36 +23,45 @@ compare.batches <- function(dat, batch1, batch2, allpops, min.AN=30){
   #Subset data for each batch (for convenience)
   #1: restrict to sites with >0 AC in at least one batch
   b1.dat <- dat[,c(1:3,grep_col_by_batch(dat, batch1))]
-  if(length(grep("_AC",colnames(b1.dat),fixed=T))>1){
-    b1.maxAC <- apply(b1.dat[,grep("_AC",colnames(b1.dat),fixed=T)],1,max)
+  ac_cols_b1 <- grep("AC_",colnames(b1.dat),fixed=T)
+  if(length(ac_cols_b1)>1){
+    b1.maxAC <- apply(b1.dat[,ac_cols_b1],1,max)
+  }else if(length(ac_cols_b1)==1){
+    b1.maxAC <- b1.dat[,ac_cols_b1]
   }else{
-    b1.maxAC <- b1.dat[,grep("_AC",colnames(b1.dat),fixed=T)]
+    b1.maxAC <- rep(0, nrow(b1.dat))
   }
   if(batch2 != "ALL_OTHERS"){
     b2.dat <- dat[,c(1:3,grep_col_by_batch(dat, batch2))]
-    if(length(grep("_AC",colnames(b2.dat),fixed=T))>1){
-      b2.maxAC <- apply(b2.dat[,grep("_AC",colnames(b2.dat),fixed=T)],1,max)	
+    ac_cols_b2 <- grep("AC_",colnames(b2.dat),fixed=T)
+    if(length(ac_cols_b2)>1){
+      b2.maxAC <- apply(b2.dat[,ac_cols_b2],1,max)	
+    }else if(length(ac_cols_b2)==1){
+      b2.maxAC <- b2.dat[,ac_cols_b2]
     }else{
-      b2.maxAC <- b2.dat[,grep("_AC",colnames(b2.dat),fixed=T)]
+      b2.maxAC <- rep(0, nrow(b2.dat))
     }
   }else{
     b2.consolidated.dat <- do.call("cbind", lapply(allpops,function(pop){
-      ACs <- apply(as.data.frame(dat[,setdiff(grep(paste(pop,"AC",sep="_"),colnames(dat),fixed=T),
+      ACs <- apply(as.data.frame(dat[,setdiff(grep(paste("AC",pop,sep="_"),colnames(dat),fixed=T),
                                 grep(batch1,colnames(dat),fixed=T))]),
                    1, sum, na.rm=T)
-      ANs <- apply(as.data.frame(dat[,setdiff(grep(paste(pop,"AN",sep="_"),colnames(dat),fixed=T),
+      ANs <- apply(as.data.frame(dat[,setdiff(grep(paste("AN",pop,sep="_"),colnames(dat),fixed=T),
                                 grep(batch1,colnames(dat),fixed=T))]),
                    1, sum, na.rm=T)
       dtmp <- data.frame(ANs,ACs)
-      colnames(dtmp) <- c(paste(pop,"_AN.ALL_OTHERS",sep=""),
-                          paste(pop,"_AC.ALL_OTHERS",sep=""))
+      colnames(dtmp) <- c(paste("AN",pop,"ALL_OTHERS",sep="_"),
+                          paste("AC",pop,"ALL_OTHERS",sep="_"))
       return(dtmp)
     }))
     b2.dat <- cbind(dat[,1:3],b2.consolidated.dat)
-    if(length(grep("_AC",colnames(b2.dat),fixed=T))>1){
-      b2.maxAC <- apply(b2.dat[,grep("_AC",colnames(b2.dat),fixed=T)],1,max)
+    ac_cols_b2_all <- grep("AC",colnames(b2.dat),fixed=T)
+    if(length(ac_cols_b2_all)>1){
+      b2.maxAC <- apply(b2.dat[,ac_cols_b2_all],1,max)
+    }else if(length(ac_cols_b2_all)==1){
+      b2.maxAC <- b2.dat[,ac_cols_b2_all]
     }else{
-      b2.maxAC <- b2.dat[,grep("_AC",colnames(b2.dat),fixed=T)]
+      b2.maxAC <- rep(0, nrow(b2.dat))
     }
   }
   keepers.idx <- which(b1.maxAC > 0 | b2.maxAC > 0)
@@ -64,16 +73,16 @@ compare.batches <- function(dat, batch1, batch2, allpops, min.AN=30){
     #Find pop with largest min AN and at least one alternate allele between the two batches
     AN.bypop <- sapply(allpops,function(pop){
       min(b1.dat[which(b1.dat$VID==VID),
-                 grep(paste(pop,"AN",sep="_"),colnames(b1.dat))],
+                 grep(paste("AN",pop,sep="_"),colnames(b1.dat))],
           b2.dat[which(b2.dat$VID==VID),
-                 grep(paste(pop,"AN",sep="_"),colnames(b2.dat))],
+                 grep(paste("AN",pop,sep="_"),colnames(b2.dat))],
           na.rm=T)
     })
     AC.bypop <- sapply(allpops,function(pop){
       max(b1.dat[which(b1.dat$VID==VID),
-                 grep(paste(pop,"AC",sep="_"),colnames(b1.dat))],
+                 grep(paste("AC",pop,sep="_"),colnames(b1.dat))],
           b2.dat[which(b2.dat$VID==VID),
-                 grep(paste(pop,"AC",sep="_"),colnames(b2.dat))],
+                 grep(paste("AC",pop,sep="_"),colnames(b2.dat))],
           na.rm=T)
     })
     AN.bypop[which(AC.bypop<1)] <- 0
@@ -82,17 +91,17 @@ compare.batches <- function(dat, batch1, batch2, allpops, min.AN=30){
     if(any(AN.bypop>min.AN)){
       bestpop <- names(AN.bypop)[which(AN.bypop==max(AN.bypop,na.rm=T))]
       b1.AC <- as.numeric(b1.dat[which(b1.dat$VID==VID),
-                                 grep(paste(bestpop,"AC",sep="_"),colnames(b1.dat),fixed=T)])
+                                 grep(paste("AC",bestpop,sep="_"),colnames(b1.dat),fixed=T)])
       b1.AN <- as.numeric(b1.dat[which(b1.dat$VID==VID),
-                                 grep(paste(bestpop,"AN",sep="_"),colnames(b1.dat),fixed=T)])
+                                 grep(paste("AN",bestpop,sep="_"),colnames(b1.dat),fixed=T)])
       if(b1.AC>b1.AN){
         b1.AC <- b1.AN
       }
       b1.AF <- b1.AC/b1.AN
       b2.AC <- as.numeric(b2.dat[which(b2.dat$VID==VID),
-                                 grep(paste(bestpop,"AC",sep="_"),colnames(b2.dat),fixed=T)])
+                                 grep(paste("AC",bestpop,sep="_"),colnames(b2.dat),fixed=T)])
       b2.AN <- as.numeric(b2.dat[which(b2.dat$VID==VID),
-                                 grep(paste(bestpop,"AN",sep="_"),colnames(b2.dat),fixed=T)])
+                                 grep(paste("AN",bestpop,sep="_"),colnames(b2.dat),fixed=T)])
       if(b2.AC>b2.AN){
         b2.AC <- b2.AN
       }
@@ -131,7 +140,18 @@ OUTFILE <- as.character(args[4])
 ###Process data & write output
 dat <- read.table(infile,header=T,sep="\t",comment.char="")
 allpops <- unique(sapply(colnames(dat)[4:ncol(dat)],
-                         function(x){strsplit(as.character(x),'_')[[1]][1]}))
+                         function(x){
+                           # Extract population from column names like AN_diverse.Batch1 -> diverse
+                           parts <- strsplit(as.character(x),'_')[[1]]
+                           if(length(parts) >= 2) {
+                             # Get the part after the first underscore and before the dot
+                             pop_batch <- parts[2]
+                             pop <- strsplit(pop_batch, '\\.')[[1]][1]
+                             return(pop)
+                           } else {
+                             return(parts[1])
+                           }
+                         }))
 res <- compare.batches(dat=dat, batch1=batch1, batch2=batch2, allpops=allpops)
 write.table(res,OUTFILE,col.names=T,row.names=F,sep="\t",quote=F)
 
