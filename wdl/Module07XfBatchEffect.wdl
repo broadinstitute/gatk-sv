@@ -248,7 +248,7 @@ task GetFreqTable {
     idxs=$( sed -n '1p' "~{prefix}.vcf2bed.bed" \
       | sed 's/\t/\n/g' \
       | awk -v OFS="\t" '{ print $1, NR }' \
-      | grep -e 'name\|SVLEN\|SVTYPE\|_AC\|_AN\|AC_\|AN_\|_CN_NONREF_COUNT\|_CN_NUMBER' \
+      | grep -e 'name\|SVLEN\|SVTYPE\|_AC\|_AN\|AC_\|AN_\|_CN_NONREF_COUNT\|_CN_NUMBER\|CN_NONREF_COUNT_\|CN_NUMBER_' \
       | fgrep -v "OTH" \
       | cut -f2 \
       | paste -s -d\, || true )
