@@ -122,6 +122,27 @@ workflow PlotSaturation {
         runtime_attr_override = runtime_attr_extract_sv_sites
     }
 
+    call LongReadGenotypeTasks.SplitVariantsByType as split_sv_sites {
+      input:
+        input_vcf = extract_sv_sites.updated_vcf,
+        input_vcf_idx = extract_sv_sites.updated_vcf_idx,
+        docker_image = sv_pipeline_base_docker
+    }
+
+    call LongReadGenotypeTasks.SplitVariantsByType as split_sm_indel_sites {
+      input:
+        input_vcf = extract_sm_indel_sites.updated_vcf,
+        input_vcf_idx = extract_sm_indel_sites.updated_vcf_idx,
+        docker_image = sv_pipeline_base_docker
+    }
+
+    call LongReadGenotypeTasks.SplitVariantsByType as split_lg_indel_sites {
+      input:
+        input_vcf = extract_lg_indel_sites.updated_vcf,
+        input_vcf_idx = extract_lg_indel_sites.updated_vcf_idx,
+        docker_image = sv_pipeline_base_docker
+    }
+
     call LongReadGenotypeTasks.AnnotateGenomicContext as annotate_genomic_context_sv{
       input:
         variant_sites = extract_sv_sites.variant_sites,
@@ -152,9 +173,45 @@ workflow PlotSaturation {
         runtime_attr_override = runtime_attr_calcu_satu_table_sm_indel
     }
 
+    call CalcuSaturationTable as calcu_satu_table_sm_indel_del{
+      input:
+        vcf_file   = split_sm_indel_sites.del_vcf,
+        SVID_GC = annotate_genomic_context_sm_indel.variant_anno,
+        sample_list = sample_list,
+        docker_image = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_calcu_satu_table_sm_indel
+    }
+
+    call CalcuSaturationTable as calcu_satu_table_sm_indel_ins{
+      input:
+        vcf_file   = split_sm_indel_sites.ins_vcf,
+        SVID_GC = annotate_genomic_context_sm_indel.variant_anno,
+        sample_list = sample_list,
+        docker_image = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_calcu_satu_table_sm_indel
+    }
+
     call CalcuSaturationTable as calcu_satu_table_lg_indel{
       input:
         vcf_file   = extract_lg_indel_sites.updated_vcf,
+        SVID_GC = annotate_genomic_context_lg_indel.variant_anno,
+        sample_list = sample_list,
+        docker_image = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_calcu_satu_table_lg_indel
+    }
+
+    call CalcuSaturationTable as calcu_satu_table_lg_indel_del{
+      input:
+        vcf_file   = split_lg_indel_sites.del_vcf,
+        SVID_GC = annotate_genomic_context_lg_indel.variant_anno,
+        sample_list = sample_list,
+        docker_image = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_calcu_satu_table_lg_indel
+    }
+
+    call CalcuSaturationTable as calcu_satu_table_lg_indel_ins{
+      input:
+        vcf_file   = split_lg_indel_sites.ins_vcf,
         SVID_GC = annotate_genomic_context_lg_indel.variant_anno,
         sample_list = sample_list,
         docker_image = sv_pipeline_base_docker,
@@ -170,12 +227,40 @@ workflow PlotSaturation {
         runtime_attr_override = runtime_attr_calcu_satu_table_sv
     }
 
+    call CalcuSaturationTable as calcu_satu_table_sv_del{
+      input:
+        vcf_file   = split_sv_sites.del_vcf,
+        SVID_GC = annotate_genomic_context_sv.variant_anno,
+        sample_list = sample_list,
+        docker_image = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_calcu_satu_table_sv
+    }
+
+    call CalcuSaturationTable as calcu_satu_table_sv_ins{
+      input:
+        vcf_file   = split_sv_sites.ins_vcf,
+        SVID_GC = annotate_genomic_context_sv.variant_anno,
+        sample_list = sample_list,
+        docker_image = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_calcu_satu_table_sv
+    }
+
     call IntegrateSaturateTables as inte_satu_tables{
       input:
         snv_table = calcu_satu_table_snv.Satu_Stat,
+
         sm_indel_table = calcu_satu_table_sm_indel.Satu_Stat,
+        sm_del_indel_table = calcu_satu_table_sm_indel_del.Satu_Stat,
+        sm_ins_indel_table = calcu_satu_table_sm_indel_ins.Satu_Stat,
+
         lg_indel_table = calcu_satu_table_lg_indel.Satu_Stat,
+        lg_del_indel_table = calcu_satu_table_lg_indel_del.Satu_Stat,
+        lg_ins_indel_table = calcu_satu_table_lg_indel_ins.Satu_Stat,
+
         sv_table = calcu_satu_table_sv.Satu_Stat,
+        sv_del_table = calcu_satu_table_sv_del.Satu_Stat,
+        sv_ins_table = calcu_satu_table_sv_ins.Satu_Stat,
+
         docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_inte_satu_tables
     }
@@ -343,9 +428,19 @@ task CalcuSaturationTable {
 task IntegrateSaturateTables {
   input {
     File snv_table
+
     File sm_indel_table
+    File sm_del_indel_table
+    File sm_ins_indel_table
+
     File lg_indel_table
+    File lg_del_indel_table
+    File lg_ins_indel_table
+
     File sv_table
+    File sv_del_table
+    File sv_ins_table
+
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
@@ -362,19 +457,49 @@ task IntegrateSaturateTables {
     snv_table = read.table("~{snv_table}", header = T)
     colnames(snv_table)[c(2:ncol(snv_table))] = paste("snv", colnames(snv_table)[c(2:ncol(snv_table))], sep="_") 
 
+
     sm_indel_table = read.table("~{sm_indel_table}", header = T)
     colnames(sm_indel_table)[c(2:ncol(sm_indel_table))] = paste("sm_indel", colnames(sm_indel_table)[c(2:ncol(sm_indel_table))], sep="_") 
+
+    sm_del_indel_table = read.table("~{sm_del_indel_table}", header = T)
+    colnames(sm_del_indel_table)[c(2:ncol(sm_del_indel_table))] = paste("sm_del_indel", colnames(sm_del_indel_table)[c(2:ncol(sm_del_indel_table))], sep="_") 
+
+    sm_ins_indel_table = read.table("~{sm_ins_indel_table}", header = T)
+    colnames(sm_ins_indel_table)[c(2:ncol(sm_ins_indel_table))] = paste("sm_ins_indel", colnames(sm_ins_indel_table)[c(2:ncol(sm_ins_indel_table))], sep="_") 
+
 
     lg_indel_table = read.table("~{lg_indel_table}", header = T)
     colnames(lg_indel_table)[c(2:ncol(lg_indel_table))] = paste("lg_indel", colnames(lg_indel_table)[c(2:ncol(lg_indel_table))], sep="_") 
 
+    lg_del_indel_table = read.table("~{lg_del_indel_table}", header = T)
+    colnames(lg_del_indel_table)[c(2:ncol(lg_del_indel_table))] = paste("lg_del_indel", colnames(lg_del_indel_table)[c(2:ncol(lg_del_indel_table))], sep="_") 
+
+    lg_ins_indel_table = read.table("~{lg_ins_indel_table}", header = T)
+    colnames(lg_ins_indel_table)[c(2:ncol(lg_ins_indel_table))] = paste("lg_ins_indel", colnames(lg_ins_indel_table)[c(2:ncol(lg_ins_indel_table))], sep="_") 
+
+
     sv_table = read.table("~{sv_table}", header = T)
     colnames(sv_table)[c(2:ncol(sv_table))] = paste("sv", colnames(sv_table)[c(2:ncol(sv_table))], sep="_") 
 
+    sv_del_table = read.table("~{sv_del_table}", header = T)
+    colnames(sv_del_table)[c(2:ncol(sv_del_table))] = paste("sv_del", colnames(sv_del_table)[c(2:ncol(sv_del_table))], sep="_") 
+
+    sv_ins_table = read.table("~{sv_ins_table}", header = T)
+    colnames(sv_ins_table)[c(2:ncol(sv_ins_table))] = paste("sv_ins", colnames(sv_ins_table)[c(2:ncol(sv_ins_table))], sep="_") 
+
+
 
     out = merge(snv_table, sm_indel_table, by="samp")
+    out = merge(out, sm_del_indel_table, by="samp")
+    out = merge(out, sm_ins_indel_table, by="samp")
+
     out = merge(out, lg_indel_table, by="samp")
+    out = merge(out, lg_del_indel_table, by="samp")
+    out = merge(out, lg_ins_indel_table, by="samp")
+
     out = merge(out, sv_table, by="samp")
+    out = merge(out, sv_del_table, by="samp")
+    out = merge(out, sv_ins_table, by="samp")
 
     write.table(out, "~{prefix}.integrated.satu.stat", quote=F, sep="\t", col.names=T, row.names=F)
     

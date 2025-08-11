@@ -2237,6 +2237,55 @@ task SplitVariantsBySize {
   }
 }
 
+task SplitVariantsByType {
+  input {
+    File input_vcf
+    File input_vcf_idx
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String prefix = basename(input_vcf, ".vcf.gz")
+  command <<<
+    set -euxo pipefail
+
+    bcftools view -i 'ID ~ "DEL"' ~{input_vcf} -Oz -o ~{prefix}.DEL.vcf.gz
+    bcftools view -i 'ID ~ "INS"' ~{input_vcf} -Oz -o ~{prefix}.INS.vcf.gz
+    tabix -p vcf ~{prefix}.DEL.vcf.gz
+    tabix -p vcf ~{prefix}.INS.vcf.gz
+
+  >>>
+
+  output {
+    File del_vcf = "~{prefix}.DEL.vcf.gz"
+    File ins_vcf = "~{prefix}.INS.vcf.gz"
+    File del_idx = "~{prefix}.DEL.vcf.gz.tbi"
+    File ins_idx = "~{prefix}.INS.vcf.gz.tbi"
+
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 15,
+    disk_gb: 20 + ceil(size(input_vcf, "GiB")*3),
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task SplitVariantsBySizeAt20bp {
   input {
     File input_vcf
