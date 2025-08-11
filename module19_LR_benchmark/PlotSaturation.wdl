@@ -277,6 +277,12 @@ task CalcuSaturationTable {
               samples[i,3] = sum(samples[1:i, 2])
               tmp = tmp[tmp[,col_count+1] == 0,]        
             }
+
+            if(nrow(tmp) == 0){
+                    samples[i,3] = samples[i-1,3]
+                }
+            }
+
         }
         colnames(samples)  = c("Samp","New_Variants","Total_Variants")
 
