@@ -6,7 +6,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj-ssd
       tags:
         - /.*/
 
@@ -232,6 +231,7 @@ workflows:
     filters:
       branches:
         - main
+        - vj-ssd
       tags:
         - /.*/
 
