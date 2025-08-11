@@ -246,7 +246,7 @@ task CalcuSaturationTable {
     Rscript -e '
 
     calcu_satu_table<-function(tmp){
-        samples=read.table("sample_list.HPRC2.tsv")
+        samples=read.table("~{sample_list}")
         samples[,2] = 0
         samples[,3] = 0
 
