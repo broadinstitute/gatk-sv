@@ -221,9 +221,18 @@ task CalcuSaturationTable {
                 ref = record.ref
                 alts = record.alts if record.alts else ["."]
                 alt = ",".join(alts)
-                ac = ",".join(str(x) for x in record.info.get("AC", ["."]))
-                af = ",".join(f"{x:.5f}" for x in record.info.get("AF", [0.0]))
-                an = record.info.get("AN", ".")
+                if "AC" in record.info.keys():
+                    ac = ",".join(str(x) for x in record.info.get("AC", ["."]))
+                else:
+                    ac = "NA"
+                if "AF" in record.info.keys():
+                    af = ",".join(f"{x:.5f}" for x in record.info.get("AF", [0.0]))
+                else:
+                    af = "NA"
+                if "AN" in record.info.keys():
+                    an = record.info.get("AN", ".")
+                else:
+                    an = "NA"
                 filt = ";".join(record.filter.keys()) if record.filter else "PASS"
                 # Identify samples with ALT allele (i.e., genotype includes non-zero)
                 alt_carriers = []
