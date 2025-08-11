@@ -9,6 +9,7 @@ workflow PlotSaturation {
     File vcf_idx
     File sample_list
     Array[String] contig_list
+    String prefix
 
     File anno_script_bash
     File anno_script_helper_R
@@ -35,6 +36,7 @@ workflow PlotSaturation {
     RuntimeAttr? runtime_attr_calcu_satu_table_lg_indel
     RuntimeAttr? runtime_attr_calcu_satu_table_sv
     RuntimeAttr? runtime_attr_inte_satu_tables
+    RuntimeAttr? runtime_attr_inte_satu_across_chrom
 
   }
 
@@ -177,12 +179,20 @@ workflow PlotSaturation {
         docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_inte_satu_tables
     }
-    }
-
-    output{
-      Array[File] satu_stat = inte_satu_tables.integrated_stat
-    }
   }
+
+  call IntegrateSaturateTablesAcrossChrom{
+    input:
+      prefix = prefix,
+      input_files = inte_satu_tables.integrated_stat,
+      docker_image = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_inte_satu_across_chrom
+  }
+
+  output{
+    Array[File] satu_stat = inte_satu_tables.integrated_stat
+  }
+}
 
 
 
@@ -394,7 +404,53 @@ task IntegrateSaturateTables {
   }
 }
 
+task IntegrateSaturateTablesAcrossChrom{
+  input{
+    Array[File] input_files
+    String prefix
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
 
+  command <<<
+      Rscript -e '
+      args <- commandArgs(trailingOnly = TRUE)
+      dfs <- lapply(args, function(f) read.table(f, sep = "\t", header = T, stringsAsFactors = FALSE))
+      combined <- dfs[[1]]
+      if (length(dfs) > 1) {
+          for (i in 2:length(dfs)) {
+              combined[, -1] <- combined[, -1] + dfs[[i]][, -1]
+          }
+      }
+      write.table(combined, file = "~{prefix}.satu.stat", sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
+      ' ~{sep=' ' input_files}
+  >>>
+
+  output {
+    File output_satu_stat = "~{prefix}.satu.stat"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 10,
+    disk_gb: 20,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
 
 
 
