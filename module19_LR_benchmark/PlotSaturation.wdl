@@ -264,7 +264,7 @@ task CalcuSaturationTable {
             if(nrow(tmp)>0){
               tmp[,col_count+1] = sapply(tmp$ALT_CARRIERS, function(x){length(strsplit(x,",")[[1]][strsplit(x,",")[[1]]%in%c(samples[i,1])])})
               samples[i,2] = nrow(tmp[tmp[,col_count+1] == 1, ])
-              samples[i,3] = sum(tmp[1:i, 2])
+              samples[i,3] = sum(samples[1:i, 2])
               tmp = tmp[tmp[,col_count+1] == 0,]        
             }
         }
@@ -290,6 +290,8 @@ task CalcuSaturationTable {
     satu_stat = merge(satu_stat_us[,c(1,3)], satu_stat_rm[,c(1,3)],  by = "Samp") 
     satu_stat = merge(satu_stat, satu_stat_sd[,c(1,3)],  by = "Samp") 
     satu_stat = merge(satu_stat, satu_stat_sr[,c(1,3)],  by = "Samp") 
+    satu_stat = satu_stat[order(satu_stat[,2]),]
+
     colnames(satu_stat) = c("samp","US","RM","SD","SR")
 
     write.table(satu_stat, "~{prefix}.satu.stat", quote=F, sep="\t", col.names=T, row.names=F)
