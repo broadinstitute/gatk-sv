@@ -33,7 +33,8 @@ import.freqs <- function(freq.table.in){
 #Process failure lists for a single comparison type
 import.fails <- function(minus.in,prefix){
   # Check file size and return an empty dataframe if no records are marked as batch effects
-  if(file.info(minus.in)$size == 0){
+  file_size <- file.info(minus.in)$size
+  if(is.na(file_size) || file_size == 0){
     a <- as.data.frame(matrix(ncol=2))
   }else{
     a <- read.table(minus.in,header=F,sep="\t")
@@ -118,13 +119,12 @@ categorize.failures <- function(dat,pairwise.cutoff,onevsall.cutoff){
 ###Read command-line arguments
 args <- commandArgs(trailingOnly=T)
 freq.table.in <- as.character(args[1])
-pairwise.in <- as.character(args[2])
-#pairwise.minus.in <- as.character(args[3])
-onevsall.in <- as.character(args[3])
-#onevsall.minus.in <- as.character(args[5])
-OUTFILE <- as.character(args[4])
-pairwise.cutoff <- as.integer(args[5])
-onevsall.cutoff <- as.integer(args[6])
+onevsall.in <- as.character(args[2])
+OUTFILE <- as.character(args[3])
+onevsall.cutoff <- as.integer(args[4])
+# For PCRMinus_only version, we don't use pairwise comparisons
+# Set defaults for missing parameters
+pairwise.cutoff <- 999999  # Set very high so no pairwise failures are detected
 
 # #Dev parameters:
 # freq.table.in <- "~/scratch/gnomAD_v2_SV_MASTER.merged_AF_table.txt.gz"
@@ -138,9 +138,8 @@ onevsall.cutoff <- as.integer(args[6])
 ###Read data
 freq.dat <- import.freqs(freq.table.in)
 
-
-pairwise.fails <- import.fails(pairwise.in, prefix="pairwise")
-pairwise.fails <- pairwise.fails[which(pairwise.fails$fails_pairwise>=pairwise.cutoff), ]
+# For PCRMinus_only version, create empty pairwise.fails since we don't have pairwise comparisons
+pairwise.fails <- data.frame(VID=character(0), fails_pairwise=integer(0), frac_plus_fails_pairwise=numeric(0))
 onevsall.fails <- import.fails(onevsall.in, prefix="onevsall")
 onevsall.fails <- onevsall.fails[which(onevsall.fails$fails_onevsall>=onevsall.cutoff), ]
 
