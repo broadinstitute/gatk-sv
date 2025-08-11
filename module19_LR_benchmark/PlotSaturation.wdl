@@ -245,17 +245,19 @@ task CalcuSaturationTable {
     # use R script to calculate the saturation table
     Rscript -e '
 
-    calcu_satu_table<-function(dat){
-        samples=read.table("~{sample_list}")
+    calcu_satu_table<-function(tmp){
+        samples=read.table("sample_list.HPRC2.tsv")
         samples[,2] = 0
         samples[,3] = 0
 
         #calculate the count of new variants carried by each individual
         for(i in 1:nrow(samples)){
-          dat[,col_count+1] = sapply(dat$ALT_CARRIERS, function(x){length(strsplit(x,",")[[1]][strsplit(x,",")[[1]]%in%c(samples[i,1])])})
-          samples[i,2] = nrow(dat[dat[,col_count+1] == 1, ])
-          samples[i,3] = sum(dat[1:i, 2])
-          dat = dat[dat[,col_count+1] == 0,]
+            if(nrow(tmp)>0){
+              tmp[,col_count+1] = sapply(tmp$ALT_CARRIERS, function(x){length(strsplit(x,",")[[1]][strsplit(x,",")[[1]]%in%c(samples[i,1])])})
+              samples[i,2] = nrow(tmp[tmp[,col_count+1] == 1, ])
+              samples[i,3] = sum(tmp[1:i, 2])
+              tmp = tmp[tmp[,col_count+1] == 0,]        
+            }
         }
         colnames(samples)  = c("Samp","New_Variants","Total_Variants")
 
