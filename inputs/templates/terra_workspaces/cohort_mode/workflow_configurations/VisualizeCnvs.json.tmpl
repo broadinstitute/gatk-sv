@@ -5,6 +5,6 @@
   "VisualizeCnvs.rd_files": "${this.sample_sets.merged_bincov}",
   "VisualizeCnvs.ped_file": "${workspace.cohort_ped_file}",
   "VisualizeCnvs.min_size": 50000,
-  "VisualizeCnvs.flags": "-s 999999999",
+  "VisualizeCnvs.flags": "--sizefilter 999999999 --padding 0.25",
   "VisualizeCnvs.sv_pipeline_docker": "${workspace.sv_pipeline_docker}"
 }
