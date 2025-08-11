@@ -405,8 +405,8 @@ task CalcuSaturationTable {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 20 + ceil(size(vcf_file,"GiB")*2),
-    disk_gb: 30 + ceil(size(vcf_file,"GiB")*3),
+    mem_gb: 20 + ceil(size(vcf_file,"GiB")*3),
+    disk_gb: 30 + ceil(size(vcf_file,"GiB")*4),
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
