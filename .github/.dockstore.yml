@@ -6,6 +6,7 @@ workflows:
     filters:
       branches:
         - main
+        - vj-ssd
       tags:
         - /.*/
 
