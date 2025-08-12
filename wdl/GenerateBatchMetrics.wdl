@@ -13,6 +13,7 @@ workflow GenerateBatchMetrics {
     String batch
 
     File? depth_vcf
+    File? dragen_vcf
     File? melt_vcf
     File? scramble_vcf
     File? wham_vcf
@@ -68,8 +69,8 @@ workflow GenerateBatchMetrics {
     RuntimeAttr? runtime_attr_get_male_only
   }
 
-  Array[String] algorithms = ["depth", "melt", "scramble", "wham", "manta"]
-  Array[File?] vcfs = [depth_vcf, melt_vcf, scramble_vcf, wham_vcf, manta_vcf]
+  Array[String] algorithms = ["depth", "dragen", "melt", "scramble", "wham", "manta"]
+  Array[File?] vcfs = [depth_vcf, dragen_vcf, melt_vcf, scramble_vcf, wham_vcf, manta_vcf]
 
   call util.GetSampleIdsFromVcf {
     input:

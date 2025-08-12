@@ -30,7 +30,7 @@ def main(argv):
     parser.add_argument('vcf', help='Raw VCF.')
     parser.add_argument('fout', help='Standardized VCF.')
     parser.add_argument('source', help='Source algorithm. '
-                        '[delly,lumpy,manta,wham,melt,scramble]')
+                        '[delly,dragen,lumpy,manta,wham,melt,scramble]')
     parser.add_argument('-p', '--prefix', help='If provided, variant names '
                         'will be overwritten with this prefix.')
     parser.add_argument('--include-reference-sites', action='store_true',
