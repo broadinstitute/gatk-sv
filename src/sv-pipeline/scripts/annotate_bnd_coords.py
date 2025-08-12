@@ -21,12 +21,11 @@ def main():
 
     with pysam.VariantFile(input_vcf_path, 'r') as vcf_in:
         header = vcf_in.header
-
         with pysam.VariantFile(output_vcf_path, 'w', header=header) as vcf_out:
             for record in vcf_in:
                 if record.info['SVTYPE'] == 'BND' and 'END2' not in record.info:
                     record.info['END2'] = record.stop
-                    record.stop = record.pos + 1
+                    record.stop = record.pos
                 vcf_out.write(record)
 
 
