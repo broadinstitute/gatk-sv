@@ -13,6 +13,10 @@ workflow JoinRawCalls {
     String prefix
 
     # ClusterBatch outputs
+    Array[File]? clustered_depth_vcfs
+    Array[File]? clustered_depth_vcf_indexes
+    Array[File]? clustered_dragen_vcfs
+    Array[File]? clustered_dragen_vcf_indexes
     Array[File]? clustered_manta_vcfs
     Array[File]? clustered_manta_vcf_indexes
     Array[File]? clustered_melt_vcfs
@@ -21,8 +25,6 @@ workflow JoinRawCalls {
     Array[File]? clustered_scramble_vcf_indexes
     Array[File]? clustered_wham_vcfs
     Array[File]? clustered_wham_vcf_indexes
-    Array[File]? clustered_depth_vcfs
-    Array[File]? clustered_depth_vcf_indexes
 
     File ped_file
 
@@ -59,8 +61,8 @@ workflow JoinRawCalls {
       runtime_attr_override=runtime_attr_create_ploidy
   }
 
-  Array[Array[File]] vcf_matrix = transpose(select_all([clustered_manta_vcfs, clustered_melt_vcfs, clustered_scramble_vcfs, clustered_wham_vcfs, clustered_depth_vcfs]))
-  Array[Array[File]] vcf_index_matrix = transpose(select_all([clustered_manta_vcf_indexes, clustered_melt_vcf_indexes, clustered_scramble_vcf_indexes, clustered_wham_vcf_indexes, clustered_depth_vcf_indexes]))
+  Array[Array[File]] vcf_matrix = transpose(select_all([clustered_depth_vcfs, clustered_dragen_vcfs, clustered_manta_vcfs, clustered_melt_vcfs, clustered_scramble_vcfs, clustered_wham_vcfs]))
+  Array[Array[File]] vcf_index_matrix = transpose(select_all([clustered_depth_vcf_indexes, clustered_dragen_vcf_indexes, clustered_manta_vcf_indexes, clustered_melt_vcf_indexes, clustered_scramble_vcf_indexes, clustered_wham_vcf_indexes]))
   scatter (i in range(length(vcf_matrix))) {
     call tasks_cohort.ConcatVcfs as ConcatInputVcfs {
       input:
