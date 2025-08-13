@@ -40,6 +40,26 @@ for (i in RPackages)
 }
 
 pclt_kj <- function(scores, group) {
+  g <- group
+  bg_label <- 1
+  treat_label <- 0
+  n_control_before <- sum(g == bg_label, na.rm = TRUE)
+  n_treat_before <- sum(g == treat_label, na.rm = TRUE)
+ 
+  bg_idx <- g == bg_label
+  bg_scores <- scores[bg_idx]
+  qs <- stats::quantile(bg_scores, probs = c(0.1, 0.9), na.rm = TRUE)
+  keep_bg <- (bg_scores >= qs[1]) & (bg_scores <= qs[2])
+  keep <- rep(TRUE, length(scores))
+  keep[bg_idx] <- keep_bg
+  if (sum(keep & bg_idx) >= 1) {
+    scores <- scores[keep]
+    group <- group[keep]
+    g <- g[keep]
+  }
+  n_control_after <- sum(g == bg_label, na.rm = TRUE)
+  n_treat_after <- sum(g == treat_label, na.rm = TRUE)
+
   tab <- table(group, scores)
   m <- sum(tab[2, ])
   n <- length(scores)
@@ -47,7 +67,6 @@ pclt_kj <- function(scores, group) {
   grp <- rep(0, n)
   grp[group == Grp1] <- 1
   T0 <- sum(scores * grp)
-  # Using median instead of mean for scores
   SSE.scores <- sum((scores - mean(scores))^2)
   SSE.grp <- sum((grp - mean(grp))^2)
   Z <- sqrt(n - 1) * (T0 - n * mean(scores) * mean(grp)) /
