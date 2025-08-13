@@ -103,27 +103,4 @@ RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy clean
 COPY --from=wham_layer /bin/whamg /bin/
 
-
-
-
-
-
-# TEMP
-ARG GATK_COMMIT="725f9b0ffb1eeac8c9f6da317855cc46b6f137fa"
-ARG GATK_JAR="/opt/gatk.jar"
-
-RUN GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git && \
-    cd gatk && \
-    git checkout ${GATK_COMMIT}
-# build GATK_JAR
-RUN cd gatk && \
-    ./gradlew localJar && \
-    mv $(readlink -f build/libs/gatk.jar) ${GATK_JAR}
-ARG GATK_JAR
-ENV GATK_JAR=$GATK_JAR
-
-
-
-
-
 WORKDIR /
