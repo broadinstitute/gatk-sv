@@ -48,8 +48,9 @@ pclt_kj <- function(scores, group) {
  
   bg_idx <- g == bg_label
   bg_scores <- scores[bg_idx]
-  qs <- stats::quantile(bg_scores, probs = c(0.1, 0.9), na.rm = TRUE)
-  keep_bg <- (bg_scores >= qs[1]) & (bg_scores <= qs[2])
+  bg_med <- stats::median(bg_scores, na.rm = TRUE)
+  bg_mad <- stats::mad(bg_scores, center = bg_med, constant = 1.4826, na.rm = TRUE)
+  keep_bg <- abs(bg_scores - bg_med) <= (6 * bg_mad)
   keep <- rep(TRUE, length(scores))
   keep[bg_idx] <- keep_bg
   if (sum(keep & bg_idx) >= 1) {
@@ -57,9 +58,7 @@ pclt_kj <- function(scores, group) {
     group <- group[keep]
     g <- g[keep]
   }
-  n_control_after <- sum(g == bg_label, na.rm = TRUE)
-  n_treat_after <- sum(g == treat_label, na.rm = TRUE)
-
+  
   tab <- table(group, scores)
   m <- sum(tab[2, ])
   n <- length(scores)
