@@ -804,7 +804,7 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   ##Limits number of sample Ids due to size limiations for readablity
   if(nchar(as.character(sampleIDs))>44){sampleIDsToDisplay<-paste(substr(sampleIDs,1,44),"...",sep="")}else{sampleIDsToDisplay<-sampleIDs}
   ##Title line 1##
-  main1=paste(chr,":",prettyNum(start,big.mark=","),"-",prettyNum(end,big.mark=",")," (hg19)",sep="")
+  main1=paste(chr,":",prettyNum(start,big.mark=","),"-",prettyNum(end,big.mark=",")," (hg38)",sep="")
   
   ###Add proper size abbr. for larger events
   size=end-start
@@ -839,7 +839,7 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   ##Blue if Dup; Red if Del
   if ( plotK == TRUE ) {
     #keep plot_colormatrix
-    main1=paste(chr,":",prettyNum(start,big.mark=","),"-",prettyNum(end,big.mark=",")," (hg19)",sep="")
+    main1=paste(chr,":",prettyNum(start,big.mark=","),"-",prettyNum(end,big.mark=",")," (hg38)",sep="")
     mainText = paste(main1, "\n", "Copy Estimate"," ", mysize, sep = "")  
     plot_linematrix[,5:ncol(plot_linematrix)]<-"0.5"
   } else if (toupper(cnvtype) == "DEL") {
