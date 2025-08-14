@@ -425,7 +425,7 @@ task LocalizeReads {
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
     memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} SSD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -511,7 +511,7 @@ task CheckAligner {
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
@@ -556,7 +556,7 @@ task RealignSoftClippedReads {
 
   runtime {
     memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} ~{disk_type}"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} SSD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])

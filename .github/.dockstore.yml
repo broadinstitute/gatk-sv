@@ -6,6 +6,7 @@ workflows:
     filters:
       branches:
         - main
+        - ssd-gather-sample-evidence
       tags:
         - /.*/
 
