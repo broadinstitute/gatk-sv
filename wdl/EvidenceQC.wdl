@@ -63,6 +63,9 @@ workflow EvidenceQC {
 
     RuntimeAttr? runtime_attr_mediancov       # Memory ignored, use median_cov_mem_gb_per_sample
     Float? median_cov_mem_gb_per_sample
+
+    # Do not use
+    File? NONE_FILE_
   }
 
   call mbm.MakeBincovMatrix as MakeBincovMatrix {
@@ -243,7 +246,7 @@ workflow EvidenceQC {
     File? scramble_variant_counts = RawVcfQC_Scramble.variant_counts
 
     File? ploidy_matrix = Ploidy.ploidy_matrix
-    File? ploidy_plots = select_first([CreateVariantCountPlots.ploidy_plots, Ploidy.ploidy_plots])
+    File? ploidy_plots = if run_ploidy then select_first([CreateVariantCountPlots.ploidy_plots, Ploidy.ploidy_plots]) else NONE_FILE_
 
     File WGD_dist = WGD.WGD_dist
     File WGD_matrix = WGD.WGD_matrix
