@@ -63,6 +63,17 @@ pclt_kj <- function(scores, group) {
     group <- group[keep]
     g <- g[keep]
   }
+  n_control_after <- sum(g == bg_label, na.rm = TRUE)
+  n_treat_after <- sum(g == treat_label, na.rm = TRUE)
+
+  var_id <- getOption("rdtest_variant_id", default = NA)
+  var_start <- getOption("rdtest_variant_start", default = NA)
+  cat(paste0(
+    "RdTest permTS | CNVID=", var_id,
+    " | Control(before/after)=", n_control_before, "/", n_control_after,
+    " | Treat(before/after)=", n_treat_before, "/", n_treat_after,
+    "\n"
+  ))
 
   tab <- table(group, scores)
   m <- sum(tab[2, ])
