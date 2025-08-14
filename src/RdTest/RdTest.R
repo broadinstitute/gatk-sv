@@ -48,9 +48,14 @@ pclt_kj <- function(scores, group) {
  
   bg_idx <- g == bg_label
   bg_scores <- scores[bg_idx]
-  bg_med <- stats::median(bg_scores, na.rm = TRUE)
-  bg_mad <- stats::mad(bg_scores, center = bg_med, constant = 1.4826, na.rm = TRUE)
-  keep_bg <- abs(bg_scores - bg_med) <= (6 * bg_mad)
+  cnvtype_opt <- getOption("rdtest_cnvtype", default = NA)
+  if (!is.na(cnvtype_opt) && cnvtype_opt == "DEL") {
+    keep_bg <- bg_scores <= 1.4
+  } else if (!is.na(cnvtype_opt) && cnvtype_opt == "DUP") {
+    keep_bg <- bg_scores >= 0.7
+  } else {
+    keep_bg <- rep(TRUE, length(bg_scores))
+  }
   keep <- rep(TRUE, length(scores))
   keep[bg_idx] <- keep_bg
   if (sum(keep & bg_idx) >= 1) {
@@ -58,7 +63,7 @@ pclt_kj <- function(scores, group) {
     group <- group[keep]
     g <- g[keep]
   }
-  
+
   tab <- table(group, scores)
   m <- sum(tab[2, ])
   n <- length(scores)
@@ -731,6 +736,7 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   Treat<-create_groups(genotype_matrix, cnv_matrix)$Treat
   a<-create_groups(genotype_matrix, cnv_matrix)$a
   b<-create_groups(genotype_matrix, cnv_matrix)$b
+  options(rdtest_cnvtype = toupper(cnvtype))
   if (toupper(cnvtype) == "DEL") {
     P_object <- permTS(Control, Treat, alternative = "greater", method = 'pclt')$p.value
   } else{ P_object <- permTS(Control, Treat, alternative = "less", method = 'pclt')$p.value }
