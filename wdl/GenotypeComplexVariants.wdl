@@ -13,6 +13,7 @@ workflow GenotypeComplexVariants {
 
     Boolean merge_vcfs = false
     Int? records_per_shard
+    Int? min_ddup_thresh
 
     Array[File] complex_resolve_vcfs
     Array[File] complex_resolve_vcf_indexes
@@ -85,6 +86,7 @@ workflow GenotypeComplexVariants {
         n_per_split_small=2500,
         n_per_split_large=250,
         n_rd_test_bins=100000,
+        min_ddup_thresh=min_ddup_thresh,
         prefix="~{cohort_name}.~{contig}",
         contig=contig,
         ped_files=SubsetPedFile.ped_subset_file,
