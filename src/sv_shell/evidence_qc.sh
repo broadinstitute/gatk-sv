@@ -13,7 +13,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d output_make_bincov_matrix_XXXXXXXX)
+  output_dir=$(mktemp -d output_evidence_qc_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
