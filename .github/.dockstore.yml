@@ -10,6 +10,16 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: ScrambleRealignSR
+    primaryDescriptorPath: /wdl/ScrambleRealignSR.wdl
+    filters:
+      branches:
+        - main
+        - eph_only_scramble_realign
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: EvidenceQC
     primaryDescriptorPath: /wdl/EvidenceQC.wdl
     filters:
