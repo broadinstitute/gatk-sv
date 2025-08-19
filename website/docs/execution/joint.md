@@ -58,7 +58,7 @@ The following are the main pipeline outputs. For more information on the outputs
 The following workflows and Jupyter notebooks are included in this workspace, to be executed in this order:
 
 1. `01-GatherSampleEvidence`: Per-sample SV evidence collection, including calls from a configurable set of 
-algorithms (Manta, MELT, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
+algorithms (Manta, Scramble, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
 2. `02-EvidenceQC`: Dosage bias scoring and ploidy estimation, run on preliminary batches
 3. [Notebook] `SampleQC.ipynb`: Interactively perform sample QC and filtering using outputs from `02-EvidenceQC`
 4. [Notebook] `Batching.ipynb`: Create batches for subsequent steps. For cohorts >500 samples or smaller heterogeneous cohorts
