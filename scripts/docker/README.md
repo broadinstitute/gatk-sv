@@ -34,7 +34,7 @@ Conda packages `termcolor` and `pprint` are assumed to be available.
 
 * A full build (e.g. using `--targets all`) may take a few hours
 
-* Due to license restrictions, we cannot provide the binaries required for running the MELT docker. Users must obtain a license and download `MELTv2.0.5_patch.tar.gz` to `dockerfiles/melt` in order to build the MELT docker for module 00a. Alternatively, users may run MELT locally, and upload the VCFs to a GCS bucket to use as input to modules 00b and 00c. 
+* We have deprecated MELT in favor of Scramble. Users wishing to run MELT on legacy data should be aware that due to license restrictions, we cannot provide the binaries required for running the MELT docker. Users must obtain a license and download `MELTv2.0.5_patch.tar.gz` to `dockerfiles/melt` in order to build the MELT docker for GatherSampleEvidence.
 
 * When building from local files, we cautiously refuse to build when there are uncommitted changes, and/or un-tracked files, unless you specifically turn off that protection with `--disable-git-protect`.
 
