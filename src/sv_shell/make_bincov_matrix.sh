@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# -------------------------------------------------------
+# ==================== Input & Setup ====================
+# -------------------------------------------------------
+
 set -Eeuo pipefail
 
 # TODO: test this
@@ -23,10 +27,11 @@ function getJavaMem() {
 JVM_MAX_MEM=$(getJavaMem MemTotal)
 echo "JVM memory: $JVM_MAX_MEM"
 
-inputs_json=${1}
-output_dir=${2:-""}
+input_json=${1}
+output_json_filename=${2-""}
+output_dir=${3:-""}
 
-inputs_json="$(realpath ${inputs_json})"
+input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
   output_dir=$(mktemp -d output_make_bincov_matrix_XXXXXXXX)
@@ -35,30 +40,39 @@ else
 fi
 output_dir="$(realpath ${output_dir})"
 
+if [ -z "${output_json_filename}" ]; then
+  output_json_filename="${output_dir}/output.json"
+else
+  output_json_filename="$(realpath ${output_json_filename})"
+fi
+
 working_dir=$(mktemp -d wd_make_bincov_matrix_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
-batch_name=$(jq -r ".batch" "${inputs_json}")
-merged_bincov="$(realpath ${batch_name}.RD.txt.gz)"
+batch_name=$(jq -r ".batch" "${input_json}")
 
-readarray -t count_files < <(jq -r '.count_files[]' "${inputs_json}")
+readarray -t count_files < <(jq -r '.count_files[]' "${input_json}")
 
 # These files need to have the `.list` extension (gatk requirement)
 evidence_files_list="evidence_files.list"
 samples_filename="samples.list"
 
-reference_dict=$(jq -r ".reference_dict" "${inputs_json}")
+reference_dict=$(jq -r ".reference_dict" "${input_json}")
 
 # TODO: not sure if/why you need the following inputs
-binsize=$(jq -r ".binsize" "${inputs_json}")
-bincov_matrix=$(jq -r ".bincov_matrix" "${inputs_json}")
+binsize=$(jq -r ".binsize" "${input_json}")
+bincov_matrix=$(jq -r ".bincov_matrix" "${input_json}")
 
-jq -r ".samples[]" "${inputs_json}" >> "${samples_filename}"
+jq -r ".samples[]" "${input_json}" >> "${samples_filename}"
 # TODO: adding the folloiwng results in getting values for all the samples in the bincov matrix,
 #  and the output is generates does not match the current output (it mostly contains -1
 #  for all the columns except the sample in samples list).
-#jq -r ".bincov_matrix_samples[]" "${inputs_json}" >> "${samples_filename}"
+#jq -r ".bincov_matrix_samples[]" "${input_json}" >> "${samples_filename}"
+
+# -------------------------------------------------------
+# ======================= Command =======================
+# -------------------------------------------------------
 
 for filename in "${count_files[@]}"; do
   case "${filename}" in
@@ -84,6 +98,7 @@ for filename in "${count_files[@]}"; do
   esac
 done
 
+merged_bincov="$(realpath ${batch_name}.RD.txt.gz)"
 java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar \
   PrintSVEvidence \
     -F "${evidence_files_list}" \
@@ -91,9 +106,19 @@ java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar \
     --sequence-dictionary "${reference_dict}" \
     --output "${merged_bincov}"
 
-outputs_filename="${output_dir}/outputs.json"
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+merged_bincov_output="${output_dir}/$(basename "${merged_bincov}")"
+mv "${merged_bincov}" "${merged_bincov_output}"
+
+merged_bincov_idx_output="${output_dir}/$(basename "${merged_bincov}.tbi")"
+mv "${merged_bincov}.tbi" "${merged_bincov_idx_output}"
+
 outputs_json=$(jq -n \
-  --arg merged_bincov "${merged_bincov}" \
-  --arg merged_bincov_idx "${merged_bincov}.tbi" \
+  --arg merged_bincov "${merged_bincov_output}" \
+  --arg merged_bincov_idx "${merged_bincov_idx_output}" \
   '{merged_bincov: $merged_bincov, merged_bincov_idx: $merged_bincov_idx}' )
-echo "${outputs_json}" > "${outputs_filename}"
+echo "${outputs_json}" > "${output_json_filename}"
