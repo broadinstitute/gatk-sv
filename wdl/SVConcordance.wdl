@@ -80,15 +80,6 @@ task SVConcordanceTask {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    truth_vcf: {
-                 localization_optional: true
-               }
-    eval_vcf:  {
-                 localization_optional: true
-               }
-  }
-
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 16,

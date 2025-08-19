@@ -195,19 +195,9 @@ task RdTestGenotype {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    coverage_file: {
-      localization_optional: true
-    }
-  }
-
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
-  # NOTE: doubled representation of "bed" below is NOT A TYPO
-  #  bincov information is remote-tabixed in, preventing accurate measurement of size, but the bincov
-  #  info is at lower resolution than the input bed file, so an upper estimate can be obtained by just
-  #  doubling the representation of "bed" in the input size
-  Float input_size = size([bed, bed, median_file, ped_file, samples_list, gt_cutoffs], "GiB")
+  Float input_size = size([bed, coverage_file, median_file, ped_file, samples_list, gt_cutoffs], "GiB")
   Float compression_factor = 5.0
   Float base_disk_gb = 5.0
   Float base_mem_gb = 2.0

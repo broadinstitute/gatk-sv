@@ -190,16 +190,10 @@ task PETest {
   Int window = 1000
   String common_arg = if common_model then "--common" else ""
 
-  parameter_meta {
-    discfile: {
-      localization_optional: true
-    }
-  }
-
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 3.75,
-    disk_gb: 10,
+    disk_gb: round(10 + size(discfile, "GiB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
