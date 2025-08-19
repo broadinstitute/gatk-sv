@@ -255,7 +255,7 @@ task MakeScrambleVcf {
     set -euxo pipefail
     python ~{default="/opt/sv-pipeline/scripts/make_scramble_vcf.py" scramble_vcf_script} \
       --table ~{scramble_table} \
-      --input-vcf ~{input_vcf} \
+      --manta-vcf ~{input_vcf} \
       --alignments-file ~{original_bam_or_cram_file} \
       --sample ~{sample_name} \
       --reference ~{reference_fasta} \
