@@ -15,6 +15,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -24,6 +25,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -33,6 +35,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -42,6 +45,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -51,6 +55,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -60,6 +65,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -69,6 +75,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -78,6 +85,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -87,6 +95,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -96,6 +105,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -105,6 +115,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -114,6 +125,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -123,6 +135,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -132,6 +145,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -141,6 +155,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -150,6 +165,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -159,6 +175,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -168,6 +185,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -177,6 +195,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -186,6 +205,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -195,6 +215,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
@@ -213,6 +234,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_main_08202025
       tags:
         - /.*/
 
