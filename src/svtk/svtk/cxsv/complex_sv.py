@@ -223,7 +223,7 @@ class ComplexSV:
             self.vcf_record.info['SVLEN'] = abs(self.vcf_record.stop -
                                                 self.vcf_record.pos)
 
-            if self.svtype is not 'UNR':
+            if self.svtype != 'UNR':
                 cpx_intervals = make_inversion_intervals(FF, RR, self.cnvs,
                                                          self.cpx_type)
                 self.vcf_record.info['CPX_INTERVALS'] = cpx_intervals

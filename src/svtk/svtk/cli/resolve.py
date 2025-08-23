@@ -487,7 +487,7 @@ def main(argv):
         #Passes unresolved single-ender inversions to second-pass,
         # otherwise writes resolved records to output files
         if record.info['UNRESOLVED']:
-            if record.info['SVTYPE'] == 'INV' and record.info['UNRESOLVED_TYPE'] is not 'SR_ONLY_LARGE_INVERSION':
+            if record.info['SVTYPE'] == 'INV' and record.info['UNRESOLVED_TYPE'] != 'SR_ONLY_LARGE_INVERSION':
                 resolve_INV.append(record)
             else:
                 unresolved_records.append(record)
