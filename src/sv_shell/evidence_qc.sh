@@ -31,6 +31,7 @@ cd "${working_dir}"
 
 batch=$(jq -r ".batch" "${input_json}")
 bincov_matrix=$(jq -r ".bincov_matrix" "${input_json}")
+run_ploidy=$(jq -r ".run_ploidy" "${input_json}")
 
 
 # -------------------------------------------------------
@@ -52,12 +53,97 @@ jq '
   jq '.' > "${make_bincov_matrix_input_json}"
 make_bincov_matrix_output_json="$(realpath "${output_dir}/make_bincov_matrix_output.json")"
 bash /make_bincov_matrix.sh "${make_bincov_matrix_input_json}" "${make_bincov_matrix_output_json}"
+merged_bincov=$(jq -r ".merged_bincov" "${make_bincov_matrix_output_json}")
+merged_bincov_idx=$(jq -r ".merged_bincov_idx" "${make_bincov_matrix_output_json}")
 
 
 # --- MedianCov
-merged_bincov=$(jq -r ".merged_bincov" "${make_bincov_matrix_output_json}")
 zcat "${merged_bincov}" > "${batch}_fixed.bed"
 Rscript /opt/WGD/bin/medianCoverage.R "${batch}_fixed.bed" -H "${batch}_medianCov.bed"
 Rscript -e "x <- read.table(\"${batch}_medianCov.bed\",check.names=FALSE); xtransposed <- t(x[,c(1,2)]); write.table(xtransposed,file=\"${batch}_medianCov.transposed.bed\",sep=\"\\t\",row.names=F,col.names=F,quote=F)"
 
 medianCov="$(realpath "${batch}_medianCov.transposed.bed")"
+
+
+# ---- Ploidy estimation
+if [ "${Ploidy}" = true ]; then
+  # TODO: run ploidy estimate.
+  # this is set to false on single-sample, so maybe not needed at all.
+fi
+
+
+# ---- WGD
+wgd_input_json="$(realpath "${output_dir}/wgd_input.json")"
+jq '
+  {
+    batch,
+    bincov_matrix,
+    wgd_scoring_mask
+  }
+' "${input_json}" |
+  jq '.' > "${wgd_input_json}"
+wgd_output_json="$(realpath "${output_dir}/wgd_output.json")"
+bash /wgd.sh "${wgd_input_json}" "${wgd_output_json}"
+
+WGD_scores=$(jq -r ".WGD_scores" "${wgd_output_json}")
+WGD_dist=$(jq -r ".WGD_dist" "${wgd_output_json}")
+WGD_matrix=$(jq -r ".WGD_matrix" "${wgd_output_json}")
+
+
+# ---- Make QC table
+# TODO: it seems this task is not run for single-sample
+
+#if ~{length(melt_insert_size) > 0} ; then
+#  echo -e "sample_ID\tmean_insert_size" > mean_insert_size.tsv
+#  paste ~{write_lines(samples)} ~{write_lines(melt_insert_size)} >> mean_insert_size.tsv
+#fi
+#
+#tar -xvf ~{ploidy_plots}
+#
+#python /opt/sv-pipeline/scripts/make_evidence_qc_table.py \
+#  --estimated-copy-number-filename ./ploidy_est/estimated_copy_numbers.txt.gz \
+#  --sex-assignments-filename ./ploidy_est/sample_sex_assignments.txt.gz \
+#  --median-cov-filename "${medianCov}" \
+#  --wgd-scores-filename "${WGD_scores}" \
+#  --binwise-cnv-qvalues-filename ./ploidy_est/binwise_CNV_qValues.bed.gz \
+#  --dragen-qc-outlier-high-filename " + dragen_qc_high} \
+#  ~{"--manta-qc-outlier-high-filename " + manta_qc_high} \
+#  ~{"--melt-qc-outlier-high-filename " + melt_qc_high} \
+#  ~{"--wham-qc-outlier-high-filename " + wham_qc_high} \
+#  ~{"--scramble-qc-outlier-high-filename " + scramble_qc_high} \
+#  ~{"--dragen-qc-outlier-low-filename " + dragen_qc_low} \
+#  ~{"--manta-qc-outlier-low-filename " + manta_qc_low} \
+#  ~{"--melt-qc-outlier-low-filename " + melt_qc_low} \
+#  ~{"--wham-qc-outlier-low-filename " + wham_qc_low} \
+#  ~{"--scramble-qc-outlier-low-filename " + scramble_qc_low} \
+#  ~{"--dragen-variant-counts-filename " + dragen_variant_counts} \
+#  ~{"--manta-variant-counts-filename " + manta_variant_counts} \
+#  ~{"--melt-variant-counts-filename " + melt_variant_counts} \
+#  ~{"--wham-variant-counts-filename " + wham_variant_counts} \
+#  ~{"--scramble-variant-counts-filename " + scramble_variant_counts} \
+#  ~{if (length(melt_insert_size) > 0) then "--melt-insert-size mean_insert_size.tsv" else ""} \
+#  ~{"--output-prefix " + output_prefix}
+
+
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+outputs_json=$(jq -n \
+  --arg WGD_dist "${WGD_dist}" \
+  --arg WGD_matrix "${WGD_matrix}" \
+  --arg WGD_scores "${WGD_scores}" \
+  --arg bincov_matrix "${merged_bincov}" \
+  --arg bincov_matrix_index "${merged_bincov_idx}" \
+  --arg bincov_median "${medianCov}"
+  '{
+     "WGD_dist": $WGD_dist,
+     "WGD_matrix": $WGD_matrix,
+     "WGD_scores": $WGD_scores,
+     "bincov_matrix": $bincov_matrix,
+     "bincov_matrix_index": $bincov_matrix_index,
+     "bincov_median": $bincov_median
+   }' \
+)
+echo "${outputs_json}" > "${output_json_filename}"
