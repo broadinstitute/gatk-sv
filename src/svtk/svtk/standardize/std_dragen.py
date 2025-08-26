@@ -96,7 +96,7 @@ class DragenStandardizer(VCFStandardizer):
         if svtype == 'BND' or svtype == 'INV':
             chr2, end = parse_bnd_pos(raw_rec.alts[0])
             chrom, pos = raw_rec.chrom, raw_rec.pos
-            if not is_smaller_chrom(chrA, chrB):
+            if not is_smaller_chrom(chrom, chr2):
                 pos, end = end, pos
                 chrom, chr2 = chr2, chrom
                 std_rec.pos = pos
