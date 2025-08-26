@@ -78,6 +78,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_plotsvcounts_6vcfs
       tags:
         - /.*/
 
