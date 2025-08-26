@@ -2142,12 +2142,17 @@ task SplitVariantsBySize {
     import pysam
     import os
 
-    def get_variant_type_size(ref, alt):
+    def get_variant_type_size(rec):
+        ref = rec.ref
+        alt = rec.alts[0]
         len_ref = len(ref)
         len_alt = len(alt)
         svlen = abs(len_ref - len_alt)
         if "<" in alt and ">" in alt:
-          return "SV_GT_50", 0
+          if "SVLEN" in rec.info.keys():
+            return "SV_GT_50", rec.info["SVLEN"]
+          else:
+            return "SV_GT_50", 50
         elif len_ref == 1 and len_alt == 1:
             return "SNV", 0
         elif svlen <= 30:
@@ -2172,9 +2177,7 @@ task SplitVariantsBySize {
         for rec in vcf_in.fetch():
             if len(rec.alts) != 1:
                 continue  # skip multiallelics for now
-            ref = rec.ref
-            alt = rec.alts[0]
-            vtype, svlen = get_variant_type_size(ref, alt)
+            vtype, svlen = get_variant_type_size(rec)
             outputs[vtype].write(rec)
 
         # Close all files
