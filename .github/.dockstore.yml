@@ -242,3 +242,13 @@ workflows:
         - main
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: FederateCohorts
+    primaryDescriptorPath: /wdl/FederateCohorts.wdl
+    filters:
+      branches:
+        - main
+        - eph_federate_svs
+      tags:
+        - /.*/
