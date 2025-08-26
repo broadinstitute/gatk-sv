@@ -94,28 +94,29 @@ class DragenStandardizer(VCFStandardizer):
 
         # Define CHR2 and END
         if svtype == 'BND' or svtype == 'INV':
-            chrA, posA = raw_rec.chrom, raw_rec.pos
-            chrB, posB = parse_bnd_pos(raw_rec.alts[0])
+            chr2, end = parse_bnd_pos(raw_rec.alts[0])
+            chrom, pos = raw_rec.chrom, raw_rec.pos
             if not is_smaller_chrom(chrA, chrB):
-                posA, posB = posB, posA
-                chrA, chrB = chrB, chrA
-                std_rec.chrom = chrA
-                std_rec.pos = posA
+                pos, end = end, pos
+                chrom, chr2 = chr2, chrom
+                std_rec.pos = pos
+                std_rec.chrom = chrom
+            std_rec.info['CHR2'] = chr2
+            std_rec.stop = std_rec.pos
+            std_rec.info['END2'] = end
         elif svtype == 'INS':
-            chrB = raw_rec.chrom
-            posB = raw_rec.pos + 1
+            std_rec.info['CHR2'] = raw_rec.chrom
+            std_rec.stop = raw_rec.pos + 1
         elif svtype == 'DUP':
-            chrB = raw_rec.chrom
+            std_rec.info['CHR2'] = raw_rec.chrom
             if isinstance(raw_rec.info.get('SVLEN', 0), tuple):
                 svlen = raw_rec.info['SVLEN'][0]
             else:
                 svlen = raw_rec.info.get('SVLEN', 0)
-            posB = raw_rec.pos + svlen
+            std_rec.stop = raw_rec.pos + svlen
         else:
-            chrB = raw_rec.chrom
-            posB = raw_rec.stop
-        std_rec.info['CHR2'] = chrB
-        std_rec.stop = posB
+            std_rec.info['CHR2'] = raw_rec.chrom
+            std_rec.stop = raw_rec.stop
 
         # Define STRANDS
         if svtype == 'INV':
