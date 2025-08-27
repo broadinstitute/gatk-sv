@@ -1122,7 +1122,7 @@ task ExtractVariantSites {
     def determine_svlen(ref, alt, rec):
         if "<" in alt and ">" in alt:
           if "SVLEN" in rec.info.keys():
-            return str(rec.info["SVLEN"])
+            return str(abs(rec.info["SVLEN"]))
           else:
             return 50
         else:
@@ -2170,7 +2170,7 @@ task SplitVariantsBySize {
         svlen = abs(len_ref - len_alt)
         if "<" in alt and ">" in alt:
           if "SVLEN" in rec.info.keys():
-            return "SV_GT_50", rec.info["SVLEN"]
+            return "SV_GT_50", abs(rec.info["SVLEN"])
           else:
             return "SV_GT_50", 50
         elif len_ref == 1 and len_alt == 1:
