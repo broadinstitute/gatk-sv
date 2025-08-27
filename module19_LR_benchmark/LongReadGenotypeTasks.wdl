@@ -1096,24 +1096,27 @@ task ExtractVariantSites {
     import pysam
 
     def determine_svtype(ref, alt, rec):
-        if len(ref) == 1 and len(alt) == 1:
-            return "SNV"
-        elif len(ref) < len(alt):
-            return "INS"
-        elif len(ref) > len(alt):
-            return "DEL"
-        elif "<" in alt and ">" in alt:
+        if "<" in alt and ">" in alt:
             if "SVTYPE" in rec.info.keys():
               return rec.info["SVTYPE"]
             else:
               return gsub(">", "", gsub("<", "", alt))
         else:
-            return "OTH"
+          if len(ref) == 1 and len(alt) == 1:
+              return "SNV"
+          elif len(ref) < len(alt):
+              return "INS"
+          elif len(ref) > len(alt):
+              return "DEL"
+          else:
+              return "OTH"
 
     def determine_svlen(ref, alt, rec):
         if "<" in alt and ">" in alt:
           if "SVLEN" in rec.info.keys():
-            return rec.info["SVLEN"]
+            return str(rec.info["SVLEN"])
+          else:
+            return 50
         else:
           return str(abs(len(alt) - len(ref)))
 
@@ -1130,8 +1133,8 @@ task ExtractVariantSites {
             end = str(rec.pos + len(ref) -1)  # .stop is preferred over parsing INFO['END']
             alt = rec.alts[0] if rec.alts else "."
             if alt!="<INV>":
-              svtype = determine_svtype(ref, alt)
-              svlen = determine_svlen(ref, alt, rec)
+              svtype = determine_svtype(ref, alt, rec)
+              svlen  = determine_svlen(ref, alt, rec)
               ID = f"{chrom}_{pos}_{end}_{svtype}_{svlen}"
               rec.id = ID
               out.write('\t'.join([chrom, pos, end, ID, svtype, svlen]) + "\n")
