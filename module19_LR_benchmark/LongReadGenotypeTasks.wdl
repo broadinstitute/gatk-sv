@@ -446,12 +446,12 @@ task BenchmarkSVs{
 
 
     #generate query files:
-    cat query.header <(tail -n+2 comp.bed | awk '{if ($7!="NA") print}' ) | bgzip > comp.query.gz
-    cat query.header <(tail -n+2 base.bed | awk '{if ($7!="NA") print}' ) | bgzip > base.query.gz
+    cat query.header <(awk '{if ($5!="NA") print}' comp.bed ) | bgzip > comp.query.gz
+    cat query.header <(awk '{if ($5!="NA") print}' base.bed ) | bgzip > base.query.gz
 
     #generate ref files:
-    cat ref.header <(tail -n+2 comp.bed | awk '{if ($7!="NA") print}' | sed -e "s/$/\t0\tsample/" ) | bgzip > comp.ref.gz
-    cat ref.header <(tail -n+2 base.bed | awk '{if ($7!="NA") print}'  | sed -e "s/$/\t0\tsample/" ) | bgzip > base.ref.gz
+    cat ref.header <(awk '{if ($5!="NA") print}' comp.bed | sed -e "s/$/\t0\tsample/" ) | bgzip > comp.ref.gz
+    cat ref.header <(awk '{if ($5!="NA") print}' base.bed | sed -e "s/$/\t0\tsample/" ) | bgzip > base.ref.gz
 
     #run comparison:
     bash ~{benchmark_bash} -O comp_vs_base.bed -p comp_vs_base comp.query.gz base.ref.gz
