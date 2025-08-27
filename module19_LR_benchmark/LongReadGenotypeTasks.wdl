@@ -434,8 +434,16 @@ task BenchmarkSVs{
     echo -e "#chrom\tstart\tend\tVID\tsvtype\tlength\tAF\tsamples" > ref.header
 
     #generate bed files:
-    svtk vcf2bed -i SVTYPE -i SVLEN ~{comp_vcf} comp.bed
-    svtk vcf2bed -i SVTYPE -i SVLEN ~{base_vcf} base.bed
+    #svtk vcf2bed -i SVTYPE -i SVLEN ~{comp_vcf} comp.bed
+    #svtk vcf2bed -i SVTYPE -i SVLEN ~{base_vcf} base.bed
+    bcftools view -H ~{comp_vcf} \
+    | awk '{ split($3, a, "_"); if (a[5] < 0) a[5] = -a[5]; print a[1], a[2], a[3], $3, a[4], a[5] }' \
+    | sed -e 's/ /\t/g' > comp.bed
+
+    bcftools view -H ~{base_vcf} \
+    | awk '{ split($3, a, "_"); if (a[5] < 0) a[5] = -a[5]; print a[1], a[2], a[3], $3, a[4], a[5] }' \
+    | sed -e 's/ /\t/g' > base.bed
+
 
     #generate query files:
     cat query.header <(tail -n+2 comp.bed | awk '{if ($7!="NA") print}' | cut -f1-4,7,8) | bgzip > comp.query.gz
