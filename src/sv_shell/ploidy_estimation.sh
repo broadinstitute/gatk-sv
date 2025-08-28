@@ -76,31 +76,3 @@ cp cn_denoising_plots.pdf ./ploidy_est/
 
 tar -zcf ./ploidy_est.tar.gz ./ploidy_est
 mv ploidy_est.tar.gz "${batch}_ploidy_plots.tar.gz"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
