@@ -6,6 +6,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_realign_by_default
       tags:
         - /.*/
 
