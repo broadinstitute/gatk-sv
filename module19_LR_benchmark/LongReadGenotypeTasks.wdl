@@ -1138,7 +1138,7 @@ task ExtractVariantSites {
             chrom = rec.contig
             pos = str(rec.pos)
             ref = rec.ref
-            end = str(rec.pos + len(ref) -1)  # .stop is preferred over parsing INFO['END']
+            end = rec.stop  # .stop is preferred over parsing INFO['END']
             alt = rec.alts[0] if rec.alts else "."
             if alt!="<INV>":
               svtype = determine_svtype(ref, alt, rec)
