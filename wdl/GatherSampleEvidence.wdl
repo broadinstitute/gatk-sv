@@ -19,7 +19,11 @@ workflow GatherSampleEvidence {
     # Note: raw and "safe" CRAM/BAM IDs can be generated with GetSampleID
     String sample_id
 
-    Boolean? is_dragen_3_7_8
+    # Split read realignment with BWA is performed by default when running Scramble
+    # To address a bug in some versions of DRAGEN aligner (3.7.8 at minimum)
+    # Set to false to skip
+    Boolean do_sr_realignment = true
+
     # Optionally pass in DRAGEN-SV VCF if available
     File? dragen_vcf
 
@@ -245,25 +249,8 @@ workflow GatherSampleEvidence {
   }
 
   if (run_scramble) {
-    if (!defined(is_dragen_3_7_8)) {
-      # check if the reads were aligned with dragen 3.7.8
-      call CheckAligner {
-        input:
-          reads_path = reads_file_,
-          reads_index = reads_index_,
-          reference_fasta = if is_bam_ then NONE_FILE_ else reference_fasta,
-          reference_index = if is_bam_ then NONE_FILE_ else reference_index,
-          reference_dict = if is_bam_ then NONE_FILE_ else reference_dict,
-          sample_id = sample_id,
-          gatk_docker = gatk_docker,
-          runtime_attr_override = runtime_attr_localize_reads
-      }
-    }
-    Boolean is_dragen_3_7_8_ = (defined(CheckAligner.is_dragen_3_7_8) && select_first([CheckAligner.is_dragen_3_7_8]) > 0)
-      || (!defined(CheckAligner.is_dragen_3_7_8) && select_first([is_dragen_3_7_8]))
-
     # Significant modulator of precision/sensitivity
-    Int auto_alignment_score_cutoff = if is_dragen_3_7_8_ then 60 else 90
+    Int auto_alignment_score_cutoff = if do_sr_realignment then 60 else 90
     Int scramble_alignment_score_cutoff_ = select_first([scramble_alignment_score_cutoff, auto_alignment_score_cutoff])
 
     call scramble.Scramble {
@@ -290,7 +277,7 @@ workflow GatherSampleEvidence {
         runtime_attr_scramble_part2 = runtime_attr_scramble_part2,
         runtime_attr_scramble_make_vcf = runtime_attr_scramble_make_vcf
     }
-    if (is_dragen_3_7_8_) {
+    if (do_sr_realignment) {
       # addresses bug in dragmap where some reads are incorrectly soft-clipped
       call RealignSoftClippedReads {
         input:
@@ -461,63 +448,6 @@ task LocalizeReads {
   }
 }
 
-
-task CheckAligner {
-  input {
-    File reads_path
-    File reads_index
-    File? reference_fasta
-    File? reference_index
-    File? reference_dict
-    String sample_id
-
-    String gatk_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  parameter_meta {
-    reads_path: {
-                 localization_optional: true
-               }
-  }
-
-  RuntimeAttr default_attr = object {
-                               cpu_cores: 1,
-                               mem_gb: 1.0,
-                               disk_gb: 10,
-                               boot_disk_gb: 10,
-                               preemptible_tries: 3,
-                               max_retries: 1
-                             }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File header = "~{sample_id}.header.sam"
-    Int is_dragen_3_7_8 = read_int("is_dragen_3_7_8.txt")
-  }
-  command <<<
-    set -euo pipefail
-
-    gatk PrintReadsHeader \
-      -I ~{reads_path} \
-      --read-index ~{reads_index} \
-      -O ~{sample_id}.header.sam \
-      ~{"-R " + reference_fasta}
-
-    awk '$0~"@PG" && $0~"ID: DRAGEN SW build" && $0~"VN: 05.021.604.3.7.8"' ~{sample_id}.header.sam \
-      | wc -l \
-      > is_dragen_3_7_8.txt
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: gatk_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
 
 task RealignSoftClippedReads {
   input {

@@ -45,7 +45,7 @@ workflow GATKSVPipelineSingleSample {
     Boolean use_scramble = true
     Boolean use_wham = true
 
-    Boolean? is_dragen_3_7_8
+    Boolean? do_sr_realignment
 
     # If GatherSampleEvidence outputs already prepared
     File? case_manta_vcf
@@ -635,7 +635,7 @@ workflow GATKSVPipelineSingleSample {
         sample_id=sample_id,
         collect_coverage = collect_coverage,
         collect_pesr = collect_pesr,
-        is_dragen_3_7_8 = is_dragen_3_7_8,
+        do_sr_realignment = do_sr_realignment,
         primary_contigs_list=primary_contigs_list,
         reference_bwa_alt=reference_bwa_alt,
         reference_bwa_amb=reference_bwa_amb,

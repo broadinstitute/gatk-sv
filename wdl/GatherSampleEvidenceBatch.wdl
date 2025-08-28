@@ -15,7 +15,7 @@ workflow GatherSampleEvidenceBatch {
     Boolean collect_coverage = true
     Boolean collect_pesr = true
 
-    Boolean? is_dragen_3_7_8
+    Boolean? do_sr_realignment
 
     # Localize reads parameters
     # set to true on default, skips localize_reads if set to false
@@ -127,7 +127,7 @@ workflow GatherSampleEvidenceBatch {
         sample_id = sample_ids[i],
         collect_coverage = collect_coverage,
         collect_pesr = collect_pesr,
-        is_dragen_3_7_8 = is_dragen_3_7_8,
+        do_sr_realignment = do_sr_realignment,
         primary_contigs_list = primary_contigs_list,
         primary_contigs_fai = primary_contigs_fai,
         reference_bwa_alt=reference_bwa_alt,

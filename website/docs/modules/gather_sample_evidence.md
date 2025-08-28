@@ -50,11 +50,11 @@ An indexed BAM or CRAM file aligned to hg38. See [input data requirements](/docs
 Identifier string for the sample. Refer to the [sample ID requirements](/docs/gs/inputs#sampleids) 
 for specifications of allowable sample IDs. IDs that do not meet these requirements may lead to errors.
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `is_dragen_3_7_8`
-Default: detect automtically from BAM/CRAM header. The header check can be skippped by setting this parameter when it 
-is known whether the BAM/CRAM is aligned with Dragen v3.7.8. If this is true and Scramble is configured to run then 
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `do_sr_realignment`
+Default: `true`. If this is true and Scramble is configured to run then 
 soft-clipped reads at sites called by Scramble in the original alignments will be realigned with BWA for re-calling with 
-Scramble.
+Scramble. This addresses a bug causing excess soft-clipping in some versions of DRAGEN (3.7.8 at minimum).
+The correction runs by default and is inexpensive, but it can be disabled if a known safe aligner version is used (i.e. BWA, DRAGEN 3.4.12).
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `collect_coverage` {#collect-coverage}
 Default: `true`. Collect read depth.
