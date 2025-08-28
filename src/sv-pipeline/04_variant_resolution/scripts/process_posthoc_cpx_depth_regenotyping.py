@@ -630,8 +630,8 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify, min_ddup_t
                         reason="DUP_FLANKED_INVERSION",
                         new_sv_type="CPX",
                         new_cpx_type="dupINV",
-                        new_cpx_intervals=f"INV_{interval_string(dup_chrom, dup_start, dup_end)},"
-                                          f"DUP_{interval_string(inv_chrom, inv_start, inv_end)}",
+                        new_cpx_intervals=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)},"
+                                          f"INV_{interval_string(inv_chrom, inv_start, inv_end)}",
                         new_svlen=inv_size,
                         new_source=None,
                         new_start=min(dup_start, dup_end, inv_start, inv_end),
@@ -645,8 +645,8 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify, min_ddup_t
                     reason="INVERTED_DISPERSED_DUPLICATION_WITH_DELETION",
                     new_sv_type="CPX",
                     new_cpx_type="dDUP_iDEL",
-                    new_cpx_intervals=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)},"
-                                      f"INV_{interval_string(dup_chrom, dup_start, dup_end)},"
+                    new_cpx_intervals=f"INV_{interval_string(dup_chrom, dup_start, dup_end)},"
+                                      f"DUP_{interval_string(dup_chrom, dup_start, dup_end)},"
                                       f"DEL_{r.sink_string()}",
                     new_svlen=dup_size + r.sink_size(),
                     new_source=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)}",
