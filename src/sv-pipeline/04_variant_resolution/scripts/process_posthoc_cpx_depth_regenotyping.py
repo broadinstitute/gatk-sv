@@ -630,8 +630,8 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify, min_ddup_t
                         reason="DUP_FLANKED_INVERSION",
                         new_sv_type="CPX",
                         new_cpx_type="dupINV",
-                        new_cpx_intervals=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)},"
-                                          f"INV_{interval_string(inv_chrom, inv_start, inv_end)}",
+                        new_cpx_intervals=f"INV_{interval_string(dup_chrom, dup_start, dup_end)},"
+                                          f"DUP_{interval_string(inv_chrom, inv_start, inv_end)}",
                         new_svlen=inv_size,
                         new_source=None,
                         new_start=min(dup_start, dup_end, inv_start, inv_end),
@@ -1124,7 +1124,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--ped', type=str, help='PED family file')
     parser.add_argument('--out', type=str, help='Output file')
     parser.add_argument('--reclassification-table', type=str, help='Output reclassification table path', required=False)
-    parser.add_argument('--min-ddup-thresh', type=int, help="Min DUP threshold", default=1000000)
+    parser.add_argument('--min-ddup-thresh', type=int, help="Min DUP threshold", default=5000)
     parser.add_argument('--chrx', type=str, help='Chromosome X contig name', default='chrX')
     parser.add_argument('--chry', type=str, help='Chromosome Y contig name', default='chrY')
     parser.add_argument("-l", "--log-level", required=False, default="INFO",
