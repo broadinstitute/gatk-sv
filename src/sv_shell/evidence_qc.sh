@@ -64,14 +64,6 @@ Rscript -e "x <- read.table(\"${batch}_medianCov.bed\",check.names=FALSE); xtran
 
 medianCov="$(realpath "${batch}_medianCov.transposed.bed")"
 
-
-# ---- Ploidy estimation
-if [ "${Ploidy}" = true ]; then
-  # TODO: run ploidy estimate.
-  # this is set to false on single-sample, so maybe not needed at all.
-fi
-
-
 # ---- WGD
 wgd_input_json="$(realpath "${output_dir}/wgd_input.json")"
 jq '
@@ -136,7 +128,7 @@ outputs_json=$(jq -n \
   --arg WGD_scores "${WGD_scores}" \
   --arg bincov_matrix "${merged_bincov}" \
   --arg bincov_matrix_index "${merged_bincov_idx}" \
-  --arg bincov_median "${medianCov}"
+  --arg bincov_median "${medianCov}" \
   '{
      "WGD_dist": $WGD_dist,
      "WGD_matrix": $WGD_matrix,
