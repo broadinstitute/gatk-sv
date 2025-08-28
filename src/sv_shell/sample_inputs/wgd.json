@@ -1,0 +1,5 @@
+{
+  "batch": "NA12878",
+  "bincov_matrix": "/all_samples.RD.txt.gz",
+  "wgd_scoring_mask": "/wgd_scoring_mask.hg38.gnomad_v3.bed"
+}
