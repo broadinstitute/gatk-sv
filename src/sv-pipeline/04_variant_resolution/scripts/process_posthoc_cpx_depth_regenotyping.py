@@ -663,7 +663,6 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify, min_ddup_t
                     new_cpx_type="dDUP",
                     new_cpx_intervals=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)},"
                                       f"INV_{interval_string(dup_chrom, dup_start, dup_end)}",
-
                     new_svlen=dup_size,
                     new_source=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)}",
                     new_start=None,
