@@ -1,7 +1,7 @@
 # This is the base dockerfile for the GATK SV pipeline that adds R, a few R packages, and GATK
 ARG SAMTOOLS_CLOUD_IMAGE=samtools-cloud:latest
 ARG VIRTUAL_ENV_IMAGE=sv-base-virtual-env:latest
-ARG GATK_COMMIT="725f9b0ffb1eeac8c9f6da317855cc46b6f137fa"
+ARG GATK_COMMIT="64348bc9750ebf6cc473ecb8c1ced3fc66f05488"
 ARG GATK_JAR="/opt/gatk.jar"
 ARG R_INSTALL_PATH=/opt/R
 
