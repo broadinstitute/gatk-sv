@@ -67,7 +67,7 @@ covPerSample <- function(cov,downsample=1000000,mad=F){
   }
   # Replace sample IDs if input matrix has header
   if(opts$header==T){
-    res$ID <- names(cov[,-c(1:3)])
+    res$ID <- names(cov[, -c(1:3), drop = FALSE])
   }
   # Return output df
   return(res)
