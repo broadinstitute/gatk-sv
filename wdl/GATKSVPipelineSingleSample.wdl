@@ -415,6 +415,9 @@ workflow GATKSVPipelineSingleSample {
 
     File cytobands
     File mei_bed
+    File HERVK_reference
+    File LINE1_reference
+    File intron_reference
 
     Int max_shard_size_resolve
     Int clean_vcf_max_shards_per_chrom_clean_vcf_step1
@@ -513,6 +516,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_clean_vcf_5_polish
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
+    RuntimeAttr? runtime_attr_add_retro_del_filters
 
     RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
     RuntimeAttr? runtime_attr_override_sort_bed_1b
@@ -1170,6 +1174,9 @@ workflow GATKSVPipelineSingleSample {
       bincov_files=[GatherBatchEvidence.merged_bincov],
 
       mei_bed=mei_bed,
+      HERVK_reference=HERVK_reference,
+      LINE1_reference=LINE1_reference,
+      intron_reference=intron_reference,
       pe_exclude_list=pesr_exclude_intervals,
       clustering_config_part1=clustering_config_part1,
       stratification_config_part1=stratification_config_part1,
@@ -1322,7 +1329,8 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_benchmark_samples=runtime_override_benchmark_samples,
       runtime_override_split_shuffled_list=runtime_override_split_shuffled_list,
       runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks,
-      runtime_attr_format_clean=runtime_attr_format_clean
+      runtime_attr_format_clean=runtime_attr_format_clean,
+      runtime_attr_add_retro_del_filters=runtime_attr_add_retro_del_filters
 
   }
 
