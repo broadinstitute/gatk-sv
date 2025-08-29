@@ -10,8 +10,8 @@ Classification of reciprocal translocations.
 def classify_insertion(plus, minus, mh_buffer=50):
     plus_A = plus.pos
     minus_A = minus.pos
-    plus_B = plus.stop
-    minus_B = minus.stop
+    plus_B = plus.info['END2'] if plus.info['SVTYPE'] == 'BND' else plus.stop
+    minus_B = minus.info['END2'] if minus.info['SVTYPE'] == 'BND' else minus.stop
 
     # Buffer comparisons
     def _greater(p1, p2):
@@ -57,8 +57,8 @@ def classify_simple_translocation(plus, minus, mh_buffer=10):
     # get positions
     plus_A = plus.pos
     minus_A = minus.pos
-    plus_B = plus.stop
-    minus_B = minus.stop
+    plus_B = plus.info['END2'] if plus.info['SVTYPE'] == 'BND' else plus.stop
+    minus_B = minus.info['END2'] if minus.info['SVTYPE'] == 'BND' else minus.stop
 
     plus_strands = plus.info['STRANDS']
 

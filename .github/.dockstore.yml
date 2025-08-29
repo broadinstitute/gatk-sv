@@ -6,7 +6,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -16,7 +15,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -26,7 +24,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -36,7 +33,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -46,7 +42,7 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
+        - kj_bnd_pipeline_fixes_updated_dockers
       tags:
         - /.*/
 
@@ -56,7 +52,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -66,7 +61,7 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
+        - kj_bnd_pipeline_fixes_updated_dockers
       tags:
         - /.*/
 
@@ -76,7 +71,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -86,7 +80,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -96,7 +89,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -106,7 +98,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -116,7 +107,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -126,7 +116,7 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
+        - kj_bnd_pipeline_fixes_updated_dockers
       tags:
         - /.*/
 
@@ -136,7 +126,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -146,7 +135,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -156,7 +144,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -166,7 +153,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -176,7 +162,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -186,7 +171,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -196,7 +180,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -206,7 +189,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -216,7 +198,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -226,7 +207,6 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/
 
@@ -236,7 +216,15 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: MakeGqRecalibratorTrainingSetFromPacBio
+    primaryDescriptorPath: /wdl/MakeGqRecalibratorTrainingSetFromPacBio.wdl
+    filters:
+      branches:
+        - main
       tags:
         - /.*/
 
@@ -246,7 +234,7 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
+        - kj_bnd_pipeline_fixes_updated_dockers
       tags:
         - /.*/
 
@@ -256,6 +244,5 @@ workflows:
     filters:
       branches:
         - main
-        - vj_update_docker_images
       tags:
         - /.*/

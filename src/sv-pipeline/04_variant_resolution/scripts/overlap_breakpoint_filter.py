@@ -64,6 +64,7 @@ class RecordData:
         self.length = record.info['SVLEN']
         self.cnv_gt_5kbp = (record.info['SVTYPE'] == 'DEL' or record.info['SVTYPE'] == 'DUP') and self.length >= 5000
         self.gt_50bp = self.length >= 50
+        self.is_dragen = 'dragen' in record.info['ALGORITHMS']
         self.is_melt = 'melt' in record.info['ALGORITHMS']
         self.is_scramble = 'scramble' in record.info['ALGORITHMS']
         self.is_manta = 'manta' in record.info['ALGORITHMS']
@@ -91,8 +92,9 @@ for record in vcf:
             and record.info['SVLEN'] >= 5000:
         continue
     strands = record.info['STRANDS']
+    end = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
     bnd1 = "{}_{}_{}".format(record.chrom, record.pos, strands[0])
-    bnd2 = "{}_{}_{}".format(record.info['CHR2'], record.stop, strands[1])
+    bnd2 = "{}_{}_{}".format(record.info['CHR2'], end, strands[1])
     bnds_to_ids[bnd1].append(record.id)
     bnds_to_ids[bnd2].append(record.id)
 
@@ -164,10 +166,10 @@ for first, second in pairwise_record_data:
     if len(sample_intersection) < 0.50 * max_freq:
         continue
     # Determine which to filter
-    # Special case if one is a Manta insertion and the other is MEI, keep the MEI
-    if first.is_manta and first.svtype == "INS" and second.is_mei:
+    # Special case if one is a Dragen/Manta insertion and the other is MEI, keep the MEI
+    if (first.is_dragen or first.is_manta) and first.svtype == "INS" and second.is_mei:
         sorted_data_list = [second, first]
-    elif second.is_manta and second.svtype == "INS" and first.is_mei:
+    elif (second.is_dragen or second.is_manta) and second.svtype == "INS" and first.is_mei:
         sorted_data_list = [first, second]
     else:
         # Otherwise use sorting spec
