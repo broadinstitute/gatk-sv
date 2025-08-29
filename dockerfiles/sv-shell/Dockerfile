@@ -45,7 +45,7 @@ RUN apt-get clean && \
 RUN Rscript -e "install.packages('htmlwidgets', repos='http://cran.us.r-project.org')"
 RUN Rscript -e "install.packages('shiny', repos='http://cran.us.r-project.org')"
 RUN echo "r <- getOption('repos'); r['CRAN'] <- 'http://cran.us.r-project.org'; options(repos = r);" > ~/.Rprofile
-RUN Rscript -e "library(devtools); install_github('mhahsler/rBLAST')"
+RUN Rscript -e "options(repos = 'https://CRAN.R-project.org'); library(devtools); install_github('mhahsler/rBLAST')"
 
 # install bcftools and htslib
 ARG HTSLIB_VERSION="1.18"
