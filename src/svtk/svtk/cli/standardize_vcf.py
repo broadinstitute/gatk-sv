@@ -92,6 +92,7 @@ def main(argv):
     meta = meta.format(args.source, args.source.capitalize())
     header.add_line(meta)
     header.add_line('##source={0}'.format(args.source))
+    header.add_line('##INFO=<ID=END2,Number=1,Type=Integer,Description="Position of breakpoint on CHR2">')
 
     fout = VariantFile(args.fout, mode='w', header=header)
 

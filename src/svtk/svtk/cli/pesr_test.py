@@ -337,7 +337,8 @@ def count_sr(argv):
                 pos, strand, chrom = record.pos, record.info['STRANDS'][0], record.chrom
             else:
                 # TODO: With a properly formatted VCF, should be using END2 instead of END here
-                pos, strand, chrom = record.stop, record.info['STRANDS'][1], record.info['CHR2']
+                pos = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
+                strand, chrom = record.info['STRANDS'][1], record.info['CHR2']
 
             counts = srtest.load_counts(chrom, pos, strand)
             counts = srtest.normalize_counts(counts)
