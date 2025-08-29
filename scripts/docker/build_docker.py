@@ -176,9 +176,9 @@ class ProjectBuilder:
             docker_dependencies={
                 "sv-base": "SVBASE_IMAGE"}
         ),
-        "scramble": ImageDependencies(
-            git_dependencies=("dockerfiles/scramble/*")
-        ),
+        # "scramble": ImageDependencies(
+        #     git_dependencies=("dockerfiles/scramble/*")
+        # ),
         "wham": ImageDependencies(
             git_dependencies="dockerfiles/wham/*",
             docker_dependencies={
@@ -250,12 +250,12 @@ class ProjectBuilder:
             docker_dependencies={
                 "sv-pipeline": "SV_PIPELINE_IMAGE"}
         ),
-        "sv-shell": ImageDependencies(
-            git_dependencies=("dockerfiles/sv-shell/*", "src/sv_shell/*"),
-            docker_dependencies={
-                "sv-pipeline": "SV_PIPELINE_IMAGE",
-                "wham": "WHAM_IMAGE"}
-        )
+        # "sv-shell": ImageDependencies(
+        #     git_dependencies=("dockerfiles/sv-shell/*", "src/sv_shell/*"),
+        #     docker_dependencies={
+        #         "sv-pipeline": "SV_PIPELINE_IMAGE",
+        #         "wham": "WHAM_IMAGE"}
+        # )
     }
     non_public_images = frozenset({"melt"})
     images_built_by_all = frozenset(dependencies.keys()).difference({"melt"})
