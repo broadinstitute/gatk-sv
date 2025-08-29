@@ -20,6 +20,7 @@ workflow ScatterCpxGenotyping {
     Int n_per_split_small
     Int n_per_split_large
     Int n_rd_test_bins
+    Int? min_ddup_thresh
     String prefix
     File ped_file
     String contig
@@ -73,6 +74,7 @@ workflow ScatterCpxGenotyping {
         n_per_split_large=n_per_split_large,
         n_per_split_small=n_per_split_small,
         n_rd_test_bins=n_rd_test_bins,
+        min_ddup_thresh=min_ddup_thresh,
         prefix=prefix,
         ped_file=ped_file,
         contig=contig,
