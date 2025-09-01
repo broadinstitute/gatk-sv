@@ -177,6 +177,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_modify_sl_filter_input_format
       tags:
         - /.*/
 
