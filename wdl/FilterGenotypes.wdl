@@ -19,8 +19,8 @@ workflow FilterGenotypes {
     Float fmax_beta = 0.4  # Recommended range [0.3, 0.5] (use lower values for higher specificity)
 
     # One of the following must be provided
-    File? truth_json  # If given, SL cutoffs will be automatically optimized. Overrides sl_filter_args.
-    String? sl_filter_args  # Explicitly set SL cutoffs. See apply_sl_filter.py for arguments.
+    File? truth_json  # If given, SL cutoffs will be automatically optimized. Overrides sl_cutoff_table.
+    File? sl_cutoff_table
 
     Int optimize_vcf_records_per_shard = 50000
     Int filter_vcf_records_per_shard = 20000
@@ -109,7 +109,8 @@ workflow FilterGenotypes {
       input:
         vcf=ScatterForFilter.shards[i],
         ploidy_table=ploidy_table,
-        args=select_first([OptimizeCutoffs.filter_args, sl_filter_args]) + " --ncr-threshold ~{no_call_rate_cutoff}",
+        sl_cutoff_table=sl_cutoff_table,
+        args=select_first([OptimizeCutoffs.filter_args, ""]) + " --ncr-threshold ~{no_call_rate_cutoff}",
         output_prefix="~{output_prefix_}.filter_genotypes.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker
     }
@@ -262,6 +263,7 @@ task FilterVcf {
   input {
     File vcf
     File ploidy_table
+    File? sl_cutoff_table
     File? script
     String? args
     String output_prefix
@@ -272,7 +274,7 @@ task FilterVcf {
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 3.75,
-                               disk_gb: ceil(100 + size(vcf, "GB") * 2),
+                               disk_gb: ceil(100 + size(vcf, "GB") * 2 + size(sl_cutoff_table, "GB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
                                max_retries: 1
@@ -291,6 +293,7 @@ task FilterVcf {
       --vcf ~{vcf} \
       --out tmp.vcf.gz \
       --ploidy-table ~{ploidy_table} \
+      ~{if defined(sl_cutoff_table) then "--sl-cutoff-table " + sl_cutoff_table else ""} \
       ~{args}
 
     bcftools +fill-tags tmp.vcf.gz -- -t AC,AN,AF \
