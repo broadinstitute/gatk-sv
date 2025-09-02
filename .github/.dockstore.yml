@@ -15,7 +15,6 @@ workflows:
     filters:
       branches:
         - main
-        - fix-median-cov
       tags:
         - /.*/
 
