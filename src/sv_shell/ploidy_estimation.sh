@@ -62,9 +62,6 @@ mkdir ploidy_est
 Rscript /opt/WGD/bin/estimatePloidy.R -z -O ./ploidy_est "${ploidy_matrix}"
 
 
-# TODO: why sleep?!
-sleep 10
-
 python /opt/sv-pipeline/02_evidence_assessment/estimated_CN_denoising.py \
   --binwise-copy-number ./ploidy_est/binwise_estimated_copy_numbers.bed.gz \
   --estimated-copy-number ./ploidy_est/estimated_copy_numbers.txt.gz \
