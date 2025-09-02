@@ -3,7 +3,7 @@
   "FilterGenotypes.output_prefix": "${this.sample_set_set_id}",
   "FilterGenotypes.ploidy_table": "${this.ploidy_table}",
   "FilterGenotypes.gq_recalibrator_model_file": "${workspace.recalibrate_gq_model_file}",
-  "FilterGenotypes.sl_cutoff_table": "{$workspace.sl_cutoff_file}",
+  "FilterGenotypes.sl_cutoff_table": "${workspace.sl_cutoff_file}",
 
   "FilterGenotypes.genome_tracks": [
     {{ reference_resources.recalibrate_gq_genome_track_repeatmasker | tojson }},
