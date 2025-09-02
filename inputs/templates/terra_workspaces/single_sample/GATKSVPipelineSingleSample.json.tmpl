@@ -111,7 +111,7 @@
   "GATKSVPipelineSingleSample.RefineComplexVariants.n_per_split": "15000",
 
   "GATKSVPipelineSingleSample.gq_recalibrator_model_file": "${workspace.recalibrate_gq_model_file}",
-  "GATKSVPipelineSingleSample.sl_cutoff_table": "${workspace.sl_cutoff_file}",
+  "GATKSVPipelineSingleSample.sl_cutoff_table": "${workspace.sl_cutoff_table}",
   "GATKSVPipelineSingleSample.genome_tracks": [
     {{ reference_resources.recalibrate_gq_genome_track_repeatmasker | tojson }},
     {{ reference_resources.recalibrate_gq_genome_track_segdup | tojson }},

@@ -2,23 +2,7 @@
   "FilterGenotypes.vcf": "${this.concordance_vcf}",
   "FilterGenotypes.output_prefix": "${this.sample_set_set_id}",
   "FilterGenotypes.ploidy_table": "${this.ploidy_table}",
-  "FilterGenotypes.gq_recalibrator_model_file": "${workspace.recalibrate_gq_model_file}",
-  "FilterGenotypes.sl_cutoff_table": "${workspace.sl_cutoff_file}",
-
-  "FilterGenotypes.genome_tracks": [
-    {{ reference_resources.recalibrate_gq_genome_track_repeatmasker | tojson }},
-    {{ reference_resources.recalibrate_gq_genome_track_segdup | tojson }},
-    {{ reference_resources.recalibrate_gq_genome_track_simple_repeats | tojson }},
-    {{ reference_resources.recalibrate_gq_genome_track_umap100 | tojson }},
-    {{ reference_resources.recalibrate_gq_genome_track_umap24 | tojson }}
-  ],
-  "FilterGenotypes.recalibrate_gq_args": [
-    "--keep-homvar false",
-    "--keep-homref true",
-    "--keep-multiallelic true",
-    "--skip-genotype-filtering true",
-    "--min-samples-to-estimate-allele-frequency -1"
-  ],
+  "FilterGenotypes.sl_cutoff_table": "${workspace.sl_cutoff_table}",
 
   "FilterGenotypes.ped_file": "${workspace.cohort_ped_file}",
   "FilterGenotypes.primary_contigs_fai": "${workspace.primary_contigs_fai}",
@@ -33,8 +17,6 @@
     "disk_gb": 100
   },
 
-  "FilterGenotypes.linux_docker": "${workspace.linux_docker}",
-  "FilterGenotypes.gatk_docker": "${workspace.gq_recalibrator_docker}",
   "FilterGenotypes.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
   "FilterGenotypes.sv_pipeline_docker": "${workspace.sv_pipeline_docker}"
 }

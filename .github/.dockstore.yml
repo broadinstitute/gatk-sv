@@ -172,6 +172,16 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: TrainGenotypeFilteringModel
+    primaryDescriptorPath: /wdl/TrainGenotypeFilteringModel.wdl
+    filters:
+      branches:
+        - main
+        - kj_modify_sl_filter_input_format
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: FilterGenotypes
     primaryDescriptorPath: /wdl/FilterGenotypes.wdl
     filters:
