@@ -12,7 +12,7 @@ bam_or_cram_index=${3}
 original_bam_or_cram_file=${4}
 original_bam_or_cram_index=${5}
 counts_file=${6}
-manta_vcf=${7}
+input_vcf=${7}
 reference_fasta=${8}
 reference_index=${9}
 regions_list=${10}
@@ -47,7 +47,7 @@ echo "bam_or_cram_index:          " "${bam_or_cram_index}"
 echo "original_bam_or_cram_file:  " "${original_bam_or_cram_file}"
 echo "original_bam_or_cram_index: " "${original_bam_or_cram_index}"
 echo "counts_file:                " "${counts_file}"
-echo "manta_vcf:                  " "${manta_vcf}"
+echo "input_vcf:                  " "${input_vcf}"
 echo "reference_fasta:            " "${reference_fasta}"
 echo "reference_index:            " "${reference_index}"
 echo "regions_list:               " "${regions_list}"
@@ -160,7 +160,7 @@ cd "${working_dir_make_vcf}"
 
 python "${scramble_vcf_script}" \
   --table "${scramble_table}" \
-  --manta-vcf "${manta_vcf}" \
+  --input-vcf "${input_vcf}" \
   --alignments-file "${original_bam_or_cram_file}" \
   --sample "${sample_name}" \
   --reference "${reference_fasta}" \
