@@ -81,11 +81,19 @@ A more positive `SL` score indicates higher probability that the given genotype 
 
 This workflow can be run in one of two modes:
 
-1. (Recommended) The user explicitly provides a set of `SL` cutoffs through the `sl_filter_args` parameter, e.g.
+1. (Recommended) The user explicitly provides a set of `SL` cutoffs through the `sl_cutoff_table` parameter, e.g.
     ```
-    "--small-del-threshold 93 --medium-del-threshold 150 --small-dup-threshold -51 --medium-dup-threshold -4 --ins-threshold -13 --inv-threshold -19"
+    sv_type	min_size	max_size	sl_cutoff
+    DEL	-1	500	93
+    DEL	500	10000	150
+    DUP	-1	500	-51
+    DUP	500	10000	-4
+    INS	-1	-1	-13
+    INV	-1	-1	-19
     ```
-   Genotypes with `SL` scores less than the cutoffs are set to no-call (`./.`). The above values were taken directly from Appendix N of the [All of Us Genomic Quality Report C2022Q4R9 CDR v7 ](https://support.researchallofus.org/hc/en-us/articles/4617899955092-All-of-Us-Genomic-Quality-Report-ARCHIVED-C2022Q4R9-CDR-v7). Users should adjust the thresholds depending on data quality and desired accuracy. Please see the arguments in [this script](https://github.com/broadinstitute/gatk-sv/blob/main/src/sv-pipeline/scripts/apply_sl_filter.py) for all available options.
+    wherein each row corresponds to a `sl_cutoff` between the size range of `min_size` (inclusive) and `max_size` (exclusive), and a `-1` corresponds to a non-existent size limit in either direction.
+    
+    Genotypes with `SL` scores less than the cutoffs are set to no-call (`./.`). The above values were taken directly from Appendix N of the [All of Us Genomic Quality Report C2022Q4R9 CDR v7 ](https://support.researchallofus.org/hc/en-us/articles/4617899955092-All-of-Us-Genomic-Quality-Report-ARCHIVED-C2022Q4R9-CDR-v7). Users should adjust the thresholds depending on data quality and desired accuracy. Please see the arguments in [this script](https://github.com/broadinstitute/gatk-sv/blob/main/src/sv-pipeline/scripts/apply_sl_filter.py) for all available options.
 
 2. (Advanced) The user provides truth labels for a subset of non-reference calls, and `SL` cutoffs are automatically optimized. These truth labels should be provided as a json file in the following format:
    ```json
@@ -141,9 +149,9 @@ Default: `0.4`. If providing a truth set, defines the beta parameter for F-score
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `truth_json`
 Truth labels for input variants. If provided, the workflow will attempt to optimize filtering cutoffs automatically 
-using the F-score. If provided, [sl_filter_args](#optional-sl_filter_args) is ignored.
+using the F-score. If provided, [sl_cutoff_table](#optional-sl_cutoff_table) is ignored.
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `sl_filter_args`
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `sl_cutoff_table`
 Arguments for the [SL filtering script](https://github.com/broadinstitute/gatk-sv/blob/main/src/sv-pipeline/scripts/apply_sl_filter.py). 
 This should be used to set `SL` cutoffs for filtering (refer to description above). Overridden by [truth_json](#optional-truth_json).
 

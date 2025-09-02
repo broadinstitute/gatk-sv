@@ -104,7 +104,7 @@ workflow FilterGenotypes {
   }
 
   scatter ( i in range(length(ScatterForFilter.shards)) ) {
-    # Applies genotype and NCR filtering as specified by sl_filter_args
+    # Applies genotype and NCR filtering as specified by sl_cutoff_table
     call FilterVcf {
       input:
         vcf=ScatterForFilter.shards[i],

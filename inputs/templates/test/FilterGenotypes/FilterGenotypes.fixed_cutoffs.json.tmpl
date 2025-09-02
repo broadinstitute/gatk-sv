@@ -3,7 +3,7 @@
   "FilterGenotypes.output_prefix": {{ test_batch.name | tojson }},
   "FilterGenotypes.ploidy_table": {{ test_batch.ploidy_table | tojson }},
   "FilterGenotypes.gq_recalibrator_model_file": {{ reference_resources.aou_recalibrate_gq_model_file | tojson }},
-  "FilterGenotypes.sl_filter_args": "--small-del-threshold 93 --medium-del-threshold 150 --small-dup-threshold -51 --medium-dup-threshold -4 --ins-threshold -13 --inv-threshold -19",
+  "FilterGenotypes.sl_cutoff_table": {{ reference_reousrces.aou_sl_cutoff_file | tojson }},
 
   "FilterGenotypes.genome_tracks": [
     {{ reference_resources.recalibrate_gq_genome_track_repeatmasker | tojson }},
