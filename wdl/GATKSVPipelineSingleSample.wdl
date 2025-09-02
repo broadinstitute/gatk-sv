@@ -593,7 +593,7 @@ workflow GATKSVPipelineSingleSample {
     Array[String] recalibrate_gq_args = []
     Array[File] genome_tracks = []
     Float no_call_rate_cutoff = 0.05  # Set to 1 to disable NCR filtering
-    String sl_filter_args  # Explicitly set SL cutoffs. See apply_sl_filter.py for arguments.
+    File? sl_cutoff_table
 
     ############################################################
     ## Single sample metrics
@@ -1413,7 +1413,7 @@ workflow GATKSVPipelineSingleSample {
       recalibrate_gq_args=recalibrate_gq_args,
       genome_tracks=genome_tracks,
       no_call_rate_cutoff=no_call_rate_cutoff,
-      sl_filter_args=sl_filter_args,
+      sl_cutoff_table=sl_cutoff_table,
       run_qc=false,
       primary_contigs_fai=primary_contigs_fai,
       linux_docker=linux_docker,

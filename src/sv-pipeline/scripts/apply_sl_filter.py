@@ -150,19 +150,18 @@ def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref, ncr_threshol
 def get_threshold(record, cutoff_rules):
     svtype = record.info['SVTYPE']
     svlen = record.info.get('SVLEN', None)
-    
     for rule in cutoff_rules:
         if rule['sv_type'] != svtype:
             continue
-        
+
         if rule['min_size'] is not None and (svlen is None or svlen < rule['min_size']):
             continue
-        
+
         if rule['max_size'] is not None and (svlen is None or svlen >= rule['max_size']):
             continue
-        
+
         return rule['sl_cutoff']
-    
+
     return None
 
 
@@ -179,9 +178,6 @@ def process(vcf, fout, ploidy_dict, cutoff_rules, args):
                       upper_sl_cap=args.upper_sl_cap, lower_sl_cap=args.lower_sl_cap, sl_shift=args.sl_shift,
                       max_gq=args.max_gq)
         fout.write(record)
-
-
-
 
 
 def _parse_ploidy_table(path: Text) -> Dict[Text, Dict[Text, int]]:
@@ -224,7 +220,7 @@ def _parse_sl_cutoff_table(path: Text) -> List[Dict[Text, float]]:
     """
     cutoff_rules = []
     with open(path, 'r') as f:
-        header = f.readline().strip().split('\t')
+        f.readline()
         for line in f:
             tokens = line.strip().split('\t')
             rule = {
@@ -267,7 +263,6 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument("--sl-shift", type=float, default=100,
                         help="SL=SL+shift is applied for GQ calculations")
     parser.add_argument("--max-gq", type=int, default=99, help="GQ cap")
-
 
     if len(argv) <= 1:
         parser.parse_args(["--help"])
