@@ -6,12 +6,6 @@
 
 set -Eeuo pipefail
 
-# TODO: test this
-#if [[ "${1:-}" == "--verbose" ]]; then
-#  echo "Verbose mode enabled."
-#  set -x
-#fi
-
 function getJavaMem() {
   # get JVM memory in MiB by getting total memory from /proc/meminfo
   # and multiplying by java_mem_fraction
