@@ -26,7 +26,7 @@ RUN mamba install -qy --freeze-installed -n $CONDA_ENV_NAME -c conda-forge -c bi
 # duplicate libraries. The older pysam that needs to be installed for BND issues has problems with cython during pip
 # install, so must be built from source. One last pysam wrinkle: it's install can't handle the newest versions of
 # setuptools, so we're going to downgrade then re-upgrade them just for pysam
-ARG PYSAM_VERSION=0.23.3
+ARG PYSAM_VERSION=0.15.4
 RUN export SETUPTOOLS_VERSION=$(python -c 'import setuptools; print(setuptools.__version__)') && \
     pip install setuptools==57.5.0 && \
     wget -q https://github.com/pysam-developers/pysam/archive/refs/tags/v$PYSAM_VERSION.tar.gz && \
