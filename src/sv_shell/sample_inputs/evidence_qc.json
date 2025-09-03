@@ -16,10 +16,5 @@
   "wgd_scoring_mask": "/wgd_scoring_mask.hg38.gnomad_v3.bed",
   "genome_file": "${workspace.genome_file}",
 
-  "run_ploidy": false,
-
-  "dragen_vcfs": "TODO",
-  "manta_vcfs": "TODO",
-  "wham_vcfs": "TODO",
-  "scramble_vcfs": "TODO"
+  "run_ploidy": false
 }
