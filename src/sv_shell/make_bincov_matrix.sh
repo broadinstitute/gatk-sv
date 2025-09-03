@@ -54,8 +54,6 @@ samples_filename="samples.list"
 
 reference_dict=$(jq -r ".reference_dict" "${input_json}")
 
-# TODO: not sure if/why you need the following inputs
-binsize=$(jq -r ".binsize" "${input_json}")
 bincov_matrix=$(jq -r ".bincov_matrix" "${input_json}")
 
 jq -r ".samples[]" "${input_json}" >> "${samples_filename}"
