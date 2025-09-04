@@ -14,6 +14,10 @@ import "MakeCohortVcf.wdl" as makecohortvcf
 import "TasksMakeCohortVcf.wdl" as tasks_makecohortvcf
 import "AnnotateVcf.wdl" as annotate
 import "GermlineCNVCase.wdl" as gcnv
+import "FilterGenotypes.wdl" as fg
+import "JoinRawCalls.wdl" as jrc
+import "RefineComplexVariants.wdl" as rcv
+import "SVConcordance.wdl" as svc
 import "SingleSampleFiltering.wdl" as SingleSampleFiltering
 import "GATKSVPipelineSingleSampleMetrics.wdl" as SingleSampleMetrics
 import "Utils.wdl" as utils
@@ -32,6 +36,7 @@ workflow GATKSVPipelineSingleSample {
     # Batch info
     String batch
     String sample_id
+    File ref_samples_list
 
     # Define raw callers to use
     # Overrides presence of case_*_vcf parameters below
@@ -54,7 +59,6 @@ workflow GATKSVPipelineSingleSample {
 
     # Global files
     File ref_ped_file
-    File ref_samples_list
     File genome_file
     File primary_contigs_list
     File primary_contigs_fai
@@ -74,6 +78,7 @@ workflow GATKSVPipelineSingleSample {
     String gatk_docker
     String? gcnv_gatk_docker
     String? gatk_docker_pesr_override
+    String gq_recalibrator_gatk_docker
     String condense_counts_docker
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
@@ -182,14 +187,14 @@ workflow GATKSVPipelineSingleSample {
 
     # gCNV inputs
     File contig_ploidy_model_tar
-    File gcnv_model_tars_list  # list of files, one per line
+    File gcnv_model_tars_list
 
     # bincov counts files (for cn.mops)
     File ref_panel_bincov_matrix
 
-    File ref_pesr_disc_files_list  # list of files, one per line
-    File ref_pesr_split_files_list  # list of files, one per line
-    File ref_pesr_sd_files_list  # list of files, one per line
+    File ref_pesr_disc_files_list
+    File ref_pesr_split_files_list
+    File ref_pesr_sd_files_list
 
     File? gatk4_jar_override
     Float? gcnv_p_alt
@@ -579,7 +584,16 @@ workflow GATKSVPipelineSingleSample {
     ## Single sample filtering
     ############################################################
 
-    Float? max_ref_panel_carrier_freq
+    # Minimum discordant pair counts for complex and translocation variants
+    Int min_pe_cpx = 3
+    Int min_pe_ctx = 3
+
+    # FilterGenotypes
+    File gq_recalibrator_model_file
+    Array[String] recalibrate_gq_args = []
+    Array[File] genome_tracks = []
+    Float no_call_rate_cutoff = 0.05  # Set to 1 to disable NCR filtering
+    String sl_filter_args  # Explicitly set SL cutoffs. See apply_sl_filter.py for arguments.
 
     ############################################################
     ## Single sample metrics
@@ -599,6 +613,7 @@ workflow GATKSVPipelineSingleSample {
 
     # Do not use
     String? NONE_STRING_
+    Array[File]? NONE_ARRAY_
 
   }
 
@@ -719,6 +734,11 @@ workflow GATKSVPipelineSingleSample {
 
   Array[String] ref_samples = read_lines(ref_samples_list)
 
+  Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
+  Array[File] ref_pesr_disc_files = read_lines(ref_pesr_disc_files_list)
+  Array[File] ref_pesr_split_files = read_lines(ref_pesr_split_files_list)
+  Array[File] ref_pesr_sd_files = read_lines(ref_pesr_sd_files_list)
+
   call batchevidence.GatherBatchEvidence as GatherBatchEvidence {
     input:
       batch=batch,
@@ -736,14 +756,14 @@ workflow GATKSVPipelineSingleSample {
       PE_files=[case_pe_file_],
       cytoband=cytobands,
       mei_bed=mei_bed,
-      ref_panel_PE_files=read_lines(ref_pesr_disc_files_list),
+      ref_panel_PE_files=ref_pesr_disc_files,
       SR_files=[case_sr_file_],
-      ref_panel_SR_files=read_lines(ref_pesr_split_files_list),
+      ref_panel_SR_files=ref_pesr_split_files,
       SD_files=[case_sd_file_],
-      ref_panel_SD_files=read_lines(ref_pesr_sd_files_list),
+      ref_panel_SD_files=ref_pesr_sd_files,
       sd_locs_vcf=sd_locs_vcf,
       contig_ploidy_model_tar = contig_ploidy_model_tar,
-      gcnv_model_tars = read_lines(gcnv_model_tars_list),
+      gcnv_model_tars = gcnv_model_tars,
       gatk4_jar_override = gatk4_jar_override,
       run_ploidy = true,
       append_first_sample_to_ped = true,
@@ -1330,12 +1350,75 @@ workflow GATKSVPipelineSingleSample {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call SingleSampleFiltering.FilterVcfWithReferencePanelCalls as FilterVcfWithReferencePanelCalls {
+
+  call rcv.RefineComplexVariants {
     input:
-      single_sample_vcf=FilterVcfForCaseSampleGenotype.out,
-      cohort_vcf=ref_panel_vcf,
-      case_sample_id=sample_id,
-      max_ref_panel_carrier_freq=max_ref_panel_carrier_freq,
+      vcf=FilterVcfForCaseSampleGenotype.out,
+      prefix=sample_id,
+      batch_name_list=[sample_id],
+      batch_sample_lists=[SamplesList.samples_file],
+      PE_metrics=[GatherBatchEvidence.merged_PE],
+      PE_metrics_indexes=[GatherBatchEvidence.merged_PE_index],
+      Depth_DEL_beds=[MergeSetDel.out],
+      Depth_DUP_beds=[MergeSetDup.out],
+      min_pe_cpx=min_pe_cpx,
+      min_pe_ctx=min_pe_ctx,
+      sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
+      linux_docker=linux_docker
+  }
+
+  call jrc.JoinRawCalls {
+    input:
+      prefix=sample_id,
+      clustered_manta_vcfs=if defined(ClusterBatch.clustered_manta_vcf) then select_all([ClusterBatch.clustered_manta_vcf]) else NONE_ARRAY_,
+      clustered_manta_vcf_indexes=if defined(ClusterBatch.clustered_manta_vcf_index) then select_all([ClusterBatch.clustered_manta_vcf_index]) else NONE_ARRAY_,
+      clustered_melt_vcfs=if defined(ClusterBatch.clustered_melt_vcf) then select_all([ClusterBatch.clustered_melt_vcf]) else NONE_ARRAY_,
+      clustered_melt_vcf_indexes=if defined(ClusterBatch.clustered_melt_vcf_index) then select_all([ClusterBatch.clustered_melt_vcf_index]) else NONE_ARRAY_,
+      clustered_scramble_vcfs=if defined(ClusterBatch.clustered_scramble_vcf) then select_all([ClusterBatch.clustered_scramble_vcf]) else NONE_ARRAY_,
+      clustered_scramble_vcf_indexes=if defined(ClusterBatch.clustered_scramble_vcf_index) then select_all([ClusterBatch.clustered_scramble_vcf_index]) else NONE_ARRAY_,
+      clustered_wham_vcfs=if defined(ClusterBatch.clustered_wham_vcf) then select_all([ClusterBatch.clustered_wham_vcf]) else NONE_ARRAY_,
+      clustered_wham_vcf_indexes=if defined(ClusterBatch.clustered_wham_vcf_index) then select_all([ClusterBatch.clustered_wham_vcf_index]) else NONE_ARRAY_,
+      clustered_depth_vcfs=if defined(ClusterBatch.clustered_depth_vcf) then select_all([ClusterBatch.clustered_depth_vcf]) else NONE_ARRAY_,
+      clustered_depth_vcf_indexes=if defined(ClusterBatch.clustered_depth_vcf_index) then select_all([ClusterBatch.clustered_depth_vcf_index]) else NONE_ARRAY_,
+      ped_file=combined_ped_file,
+      contig_list=primary_contigs_list,
+      reference_fasta=reference_fasta,
+      reference_fasta_fai=reference_index,
+      reference_dict=reference_dict,
+      chr_x=chr_x,
+      chr_y=chr_y,
+      gatk_docker=gatk_docker,
+      sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
+  }
+
+  call svc.SVConcordance {
+    input:
+      eval_vcf=RefineComplexVariants.cpx_refined_vcf,
+      truth_vcf=JoinRawCalls.joined_raw_calls_vcf,
+      output_prefix=sample_id,
+      contig_list=primary_contigs_list,
+      reference_dict=reference_dict,
+      gatk_docker=gatk_docker,
+      sv_base_mini_docker=sv_base_mini_docker
+  }
+
+  call fg.FilterGenotypes {
+    input:
+      vcf=SVConcordance.concordance_vcf,
+      output_prefix=sample_id,
+      ploidy_table=JoinRawCalls.ploidy_table,
+      gq_recalibrator_model_file=gq_recalibrator_model_file,
+      recalibrate_gq_args=recalibrate_gq_args,
+      genome_tracks=genome_tracks,
+      no_call_rate_cutoff=no_call_rate_cutoff,
+      sl_filter_args=sl_filter_args,
+      run_qc=false,
+      primary_contigs_fai=primary_contigs_fai,
+      linux_docker=linux_docker,
+      gatk_docker=gq_recalibrator_gatk_docker,
+      sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker
   }
 
@@ -1345,7 +1428,7 @@ workflow GATKSVPipelineSingleSample {
       ref_samples = ref_samples,
       case_sample = sample_id,
       wgd_scores = EvidenceQC.WGD_scores,
-      sample_counts = case_counts_file_,
+      sample_counts = case_counts_file,
       contig_list = primary_contigs_list,
       linux_docker = linux_docker,
       sv_pipeline_docker = sv_pipeline_docker
@@ -1361,28 +1444,27 @@ workflow GATKSVPipelineSingleSample {
 
   call SingleSampleFiltering.SampleQC as FilterSample {
     input:
-      vcf=FilterVcfWithReferencePanelCalls.out,
+      vcf=FilterGenotypes.filtered_vcf,
       sample_filtering_qc_file=SampleFilterQC.out,
       sv_pipeline_docker=sv_pipeline_docker,
   }
 
   call annotate.AnnotateVcf {
-       input:
-        vcf = FilterSample.out,
-        prefix = batch,
-        contig_list = primary_contigs_list,
-        protein_coding_gtf = protein_coding_gtf,
-        noncoding_bed = noncoding_bed,
-        promoter_window = promoter_window,
-        max_breakend_as_cnv_length = max_breakend_as_cnv_length,
-        external_af_ref_bed = external_af_ref_bed,
-        external_af_ref_prefix = external_af_ref_bed_prefix,
-        external_af_population = external_af_population,
-        sv_per_shard = annotation_sv_per_shard,
-        sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_docker = sv_pipeline_docker,
-        gatk_docker = gatk_docker,
-        runtime_attr_svannotate = runtime_attr_svannotate
+    input:
+      vcf = FilterSample.out,
+      prefix = batch,
+      contig_list = primary_contigs_list,
+      protein_coding_gtf = protein_coding_gtf,
+      noncoding_bed = noncoding_bed,
+      promoter_window = promoter_window,
+      max_breakend_as_cnv_length = max_breakend_as_cnv_length,
+      external_af_ref_bed = external_af_ref_bed,
+      external_af_ref_prefix = external_af_ref_bed_prefix,
+      external_af_population = external_af_population,
+      sv_per_shard = annotation_sv_per_shard,
+      sv_base_mini_docker = sv_base_mini_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
+      gatk_docker = gatk_docker
   }
 
   call SingleSampleFiltering.VcfToBed as VcfToBed {
@@ -1392,7 +1474,7 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker = sv_pipeline_docker
   }
 
-  call SingleSampleFiltering.UpdateBreakendRepresentation {
+  call SingleSampleFiltering.UpdateBreakendRepresentationAndRemoveFilters {
     input:
       vcf=AnnotateVcf.annotated_vcf,
       vcf_idx=AnnotateVcf.annotated_vcf_index,
@@ -1408,11 +1490,11 @@ workflow GATKSVPipelineSingleSample {
       ref_samples = ref_samples,
       case_sample = sample_id,
       wgd_scores = EvidenceQC.WGD_scores,
-      sample_pe = case_pe_file_,
-      sample_sr = case_sr_file_,
-      sample_counts = case_counts_file_,
-      cleaned_vcf = MakeCohortVcf.vcf,
-      final_vcf = UpdateBreakendRepresentation.out,
+      sample_pe = case_pe_file,
+      sample_sr = case_sr_file,
+      sample_counts = case_counts_file,
+      cleaned_vcf = FilterVcfForCaseSampleGenotype.out,
+      final_vcf = UpdateBreakendRepresentationAndRemoveFilters.out,
       genotyped_pesr_vcf = ConvertCNVsWithoutDepthSupportToBNDs.out_vcf,
       genotyped_depth_vcf = GenotypeBatch.genotyped_depth_vcf,
       non_genotyped_unique_depth_calls_vcf = GetUniqueNonGenotypedDepthCalls.out,
@@ -1430,9 +1512,9 @@ workflow GATKSVPipelineSingleSample {
   }
 
   output {
-    File final_vcf = UpdateBreakendRepresentation.out
-    File final_vcf_idx = UpdateBreakendRepresentation.out_idx
-
+    # Final calls
+    File final_vcf = UpdateBreakendRepresentationAndRemoveFilters.out
+    File final_vcf_idx = UpdateBreakendRepresentationAndRemoveFilters.out_idx
     File final_bed = VcfToBed.bed
 
     # These files contain events reported in the internal VCF representation
@@ -1441,10 +1523,13 @@ workflow GATKSVPipelineSingleSample {
     File pre_cleanup_vcf = AnnotateVcf.annotated_vcf
     File pre_cleanup_vcf_idx = AnnotateVcf.annotated_vcf_index
 
-    File ploidy_matrix = select_first([GatherBatchEvidence.batch_ploidy_matrix])
-    File ploidy_plots = select_first([GatherBatchEvidence.batch_ploidy_plots])
+    # QC files
     File metrics_file = SingleSampleMetrics.metrics_file
     File qc_file = SingleSampleQC.out
+
+    # Ploidy estimates
+    File ploidy_matrix = select_first([GatherBatchEvidence.batch_ploidy_matrix])
+    File ploidy_plots = select_first([GatherBatchEvidence.batch_ploidy_plots])
 
     # These files contain any depth based calls made in the case sample that did not pass genotyping
     # in the case sample and do not match a depth-based call from the reference panel.

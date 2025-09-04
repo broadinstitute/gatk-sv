@@ -8,7 +8,7 @@ import "Utils.wdl" as util
 workflow TinyResolve {
   input {
     Array[String] samples         # Sample ID
-    File manta_vcf_tar           # tarballed Manta VCFs
+    File vcf_tar                  # Tarballed VCFs
     File cytoband
     Array[File] discfile
     File mei_bed
@@ -30,7 +30,7 @@ workflow TinyResolve {
 
   call util.UntarFiles {
     input:
-      tar = manta_vcf_tar,
+      tar = vcf_tar,
       glob_suffix = ".vcf.gz",
       linux_docker = linux_docker,
       runtime_attr_override = runtime_attr_untar
