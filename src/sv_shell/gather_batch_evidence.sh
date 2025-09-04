@@ -35,10 +35,17 @@ ped_file=$(jq -r ".ped_file" "${input_json}")
 ref_panel_samples=($(jq -r '.ref_panel_samples[]' "$input_json"))
 append_first_sample_to_ped=($(jq -r '.append_first_sample_to_ped' "$input_json"))
 
+sample_bincov_matrix=$(jq -r ".sample_bincov_matrix" "${input_json}")
+ref_panel_bincov_matrx=$(jq -r ".ref_panel_bincov_matrix" "${input_json}")
+
 # -------------------------------------------------------
 # ======================= Command =======================
 # -------------------------------------------------------
 
+
+# TODO: maybe you don't need to run make bin cov matrix
+# check if that is run on the reference panel only or it includes ref panel plus the query sample
+# teh current exec path seems to have an exec path that does not need re-running make bincov matrix.
 
 
 # TODO: you will get this file from running ploidy and then from the following direcotry in its output:
