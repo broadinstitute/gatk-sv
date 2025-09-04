@@ -1,7 +1,7 @@
 ---
 title: VisualizeCnvs
 description: Visualize CNVs
-sidebar_position: 22
+sidebar_position: 23
 slug: viz
 ---
 
