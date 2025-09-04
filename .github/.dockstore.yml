@@ -159,7 +159,6 @@ workflows:
     filters:
       branches:
         - main
-        - eph_empty_lists_joinrawcalls
       tags:
         - /.*/
 
