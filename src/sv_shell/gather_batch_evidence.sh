@@ -36,16 +36,28 @@ ref_panel_samples=($(jq -r '.ref_panel_samples[]' "$input_json"))
 append_first_sample_to_ped=($(jq -r '.append_first_sample_to_ped' "$input_json"))
 
 sample_bincov_matrix=$(jq -r ".sample_bincov_matrix" "${input_json}")
-ref_panel_bincov_matrx=$(jq -r ".ref_panel_bincov_matrix" "${input_json}")
+ref_panel_bincov_matrix=$(jq -r ".ref_panel_bincov_matrix" "${input_json}")
+reference_dict=$(jq -r ".reference_dict" "${input_json}")
 
 # -------------------------------------------------------
 # ======================= Command =======================
 # -------------------------------------------------------
 
 
-# TODO: maybe you don't need to run make bin cov matrix
-# check if that is run on the reference panel only or it includes ref panel plus the query sample
-# teh current exec path seems to have an exec path that does not need re-running make bincov matrix.
+# ---- make binned coverage matrix
+counts_files=("${ref_panel_bincov_matrix}" "${sample_bincov_matrix}")
+make_bin_cov_matrix_json="make_bincov_matrix.json"
+jq -n \
+  --argfile s <(jq '.samples' "${input_json}") \
+  --arg c "${counts_files[*]}" \
+  --argfile r <(jq '.ref_panel_samples' "${input_json}") \
+  --arg b "${ref_panel_bincov_matrix}" \
+  --arg p "${reference_dict}" \
+  --arg t "${batch}" \
+  '{samples: $s, count_files: ($c | split(" ")), bincov_matrix_samples: $r, bincov_matrix: $b, reference_dict: $p, batch: $t, skip_bin_size_filter: true}' > "${make_bin_cov_matrix_json}"
+
+bash /make_bincov_matrix.sh "${make_bin_cov_matrix_json}"
+
 
 
 # TODO: you will get this file from running ploidy and then from the following direcotry in its output:
