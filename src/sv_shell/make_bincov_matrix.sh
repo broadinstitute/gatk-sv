@@ -49,6 +49,7 @@ batch_name=$(jq -r ".batch" "${input_json}")
 readarray -t count_files < <(jq -r '.count_files[]' "${input_json}")
 
 bin_size=$(jq -r ".bin_size // 100" "${input_json}")
+skip_bin_size_filter=$(jq -r ".skip_bin_size_filter // false" "${input_json}")
 
 # These files need to have the `.list` extension (gatk requirement)
 evidence_files_list="evidence_files.list"
@@ -68,6 +69,7 @@ jq -r ".samples[]" "${input_json}" >> "${samples_filename}"
 # ======================= Command =======================
 # -------------------------------------------------------
 
+shopt -s nocasematch # for case-insensitive extension matching
 for filename in "${count_files[@]}"; do
   case "${filename}" in
     *.counts.tsv.gz)
@@ -83,11 +85,15 @@ for filename in "${count_files[@]}"; do
       ;;
 
     *.rd.tsv.gz)
-      echo filename >> "${evidence_files_list}"
+      echo "${filename}" >> "${evidence_files_list}"
+      ;;
+
+    *.rd.txt.gz)
+      echo "${filename}" >> "${evidence_files_list}"
       ;;
 
     *)
-      echo "File extension does not match *.counts.tsv.gz or *.rd.tsv.gz."
+      echo "${filename} extension does not match *.counts.tsv.gz or *.rd.tsv.gz or *.rd.txt.gz."
       ;;
   esac
 done
@@ -102,15 +108,20 @@ java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar \
 
 # Note that the following removes bins that do not have
 # the same bin size as the given bin_size variable.
-# This is a quick, and ultimately we want to update
+# This is a quick patch, and ultimately we want to update
 # the PrintSVEvidence tool to take bin_size and bin_locus
 # input arguments.
 merged_bincov="$(realpath ${batch_name}.RD.txt.gz)"
-zcat "${merged_bincov_pre_filter}" | \
-  awk -v bin_size="${bin_size}" 'NR==1 || ($3 - $2) == bin_size' | \
-  bgzip > "${merged_bincov}"
+if [[ "${skip_bin_size_filter}" == "false" ]]; then
+  zcat "${merged_bincov_pre_filter}" | \
+    awk -v bin_size="${bin_size}" 'NR==1 || ($3 - $2) == bin_size' | \
+    bgzip > "${merged_bincov}"
 
-tabix -p bed "${merged_bincov}"
+  tabix -p bed "${merged_bincov}"
+else
+  mv "${merged_bincov_pre_filter}" "${merged_bincov}"
+  mv "${merged_bincov_pre_filter}.tbi" "${merged_bincov}.tbi"
+fi
 
 # -------------------------------------------------------
 # ======================= Output ========================

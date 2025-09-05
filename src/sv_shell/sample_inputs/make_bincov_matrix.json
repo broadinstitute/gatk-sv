@@ -11,5 +11,6 @@
   "bincov_matrix": "/all_samples.RD.txt.gz",
   "reference_dict": "/Homo_sapiens_assembly38.dict",
   "batch": "NA12878",
-  "bin_size": null
+  "bin_size": null,
+  "skip_bin_size_filter": false
 }
