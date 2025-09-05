@@ -59,6 +59,16 @@ jq -n \
 bash /make_bincov_matrix.sh "${make_bin_cov_matrix_json}"
 
 
+# ---- ploidy estimation
+ploidy_estimation_json="ploidy_estimation.json"
+jq -n \
+  --arg b "${batch}" \
+  --arg m "/NA12878.RD.txt.gz" \     # TODO: you'll get this from the make bincov matrix
+  '{batch: $b, bincov_matrix: $m}' > "${ploidy_estimation_json}"
+bash /ploidy_estimation.sh "${ploidy_estimation_json}"
+
+
+
 
 # TODO: you will get this file from running ploidy and then from the following direcotry in its output:
 # ploidy_est/sample_sex_assignments.txt.gz

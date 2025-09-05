@@ -39,6 +39,8 @@ bin_size=1000000
 # -------------------------------------------------------
 
 # --- Build ploidy matrix
+ploidy_matrix="$(realpath "${batch}_ploidy_matrix.bed.gz")"
+
 zcat "${bincov_matrix}" \
  | awk -v bin_size="${bin_size}" ' \
    function printRow() \
@@ -52,15 +54,12 @@ zcat "${bincov_matrix}" \
           else if($2>=stop) {printRow(); while($2>=stop) {start=stop; stop=start+binSize}} \
           for(i=4;i<=nf;++i) {vals[i]+=$i}} \
    END   {if(nf!=0)printRow()}' \
- | bgzip > "${batch}_ploidy_matrix.bed.gz"
-
-ploidy_matrix="$(realpath "${batch}_ploidy_matrix.bed.gz")"
+ | bgzip > "${ploidy_matrix}"
 
 
 # --- Ploidy Score
 mkdir ploidy_est
 Rscript /opt/WGD/bin/estimatePloidy.R -z -O ./ploidy_est "${ploidy_matrix}"
-
 
 python /opt/sv-pipeline/02_evidence_assessment/estimated_CN_denoising.py \
   --binwise-copy-number ./ploidy_est/binwise_estimated_copy_numbers.bed.gz \
@@ -72,4 +71,25 @@ cp cn_denoising_stats.tsv ./ploidy_est/
 cp cn_denoising_plots.pdf ./ploidy_est/
 
 tar -zcf ./ploidy_est.tar.gz ./ploidy_est
-mv ploidy_est.tar.gz "${batch}_ploidy_plots.tar.gz"
+
+ploidy_plots="${batch}_ploidy_plots.tar.gz"
+mv ploidy_est.tar.gz "${ploidy_plots}"
+
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+outputs_json=$(jq -n \
+  --arg ploidy_matrix "${ploidy_matrix}" \
+  --arg ploidy_plots "${ploidy_plots}" \
+  --arg WGD_scores "${WGD_scores}" \
+  --arg bincov_matrix "${merged_bincov}" \
+  --arg bincov_matrix_index "${merged_bincov_idx}" \
+  --arg bincov_median "${medianCov}" \
+  '{
+     "ploidy_matrix": $ploidy_matrix,
+     "ploidy_plots": $ploidy_plots
+   }' \
+)
+echo "${outputs_json}" > "${output_json_filename}"
