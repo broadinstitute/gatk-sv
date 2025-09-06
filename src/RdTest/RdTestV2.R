@@ -156,7 +156,13 @@ intervals[, c(2:3)] <-
 if (length(grep("del",intervals[,6],ignore.case = TRUE))+
     length(grep("dup",intervals[,6],ignore.case = TRUE))<length(intervals[,6]))
   {
-    stop("WARNING: Incorrect CNV type specified")
+    # Allow other SVTYPEs by treating them as DUP for plotting
+    other_types <- which(!grepl("del|dup", intervals[,6], ignore.case = TRUE))
+    if(length(other_types) > 0) {
+      # Store original types for later plotting logic
+      intervals$original_type <- intervals[,6]
+      intervals[other_types, 6] <- "DUP"
+    }
   }
 
 #Checks to make sure start less than end
@@ -966,10 +972,19 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
     plot_linematrix[, (endcolnormal + 1):ncol(plot_colormatrix)] <- "3"
     plot_linematrix[,5:endcolnormal]<-"0.5"
   } else if (toupper(cnvtype) == "DUP") {
-    plot_colormatrix[, (endcolnormal + 1):ncol(plot_colormatrix)] <- "blue"
-    plot_colormatrix[,5:endcolnormal]<-"grey"
-    plot_linematrix[, (endcolnormal + 1):ncol(plot_colormatrix)] <- "3"
-    plot_linematrix[,5:endcolnormal]<-"0.5"
+    # Check if this is an original other type that was converted to DUP
+    if (exists("intervals") && "original_type" %in% colnames(intervals) && 
+        any(!grepl("del|dup", intervals$original_type, ignore.case = TRUE))) {
+      plot_colormatrix[, (endcolnormal + 1):ncol(plot_colormatrix)] <- "green"
+      plot_colormatrix[,5:endcolnormal]<-"grey"
+      plot_linematrix[, (endcolnormal + 1):ncol(plot_colormatrix)] <- "3"
+      plot_linematrix[,5:endcolnormal]<-"0.5"
+    } else {
+      plot_colormatrix[, (endcolnormal + 1):ncol(plot_colormatrix)] <- "blue"
+      plot_colormatrix[,5:endcolnormal]<-"grey"
+      plot_linematrix[, (endcolnormal + 1):ncol(plot_colormatrix)] <- "3"
+      plot_linematrix[,5:endcolnormal]<-"0.5"
+    }
   } 
   
   ##Plotting Command##
@@ -1058,13 +1073,25 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
       cex = .5
     )
   } else {
-    legend(
-      'topright',
-      c("Diploid", "Duplication"),
-      lty = 1,
-      col = c("grey", "blue"),
-      cex = .5
-    )
+    # Check if this is an original other type that was converted to DUP
+    if (exists("intervals") && "original_type" %in% colnames(intervals) && 
+        any(!grepl("del|dup", intervals$original_type, ignore.case = TRUE))) {
+      legend(
+        'topright',
+        c("Diploid", "Variant"),
+        lty = 1,
+        col = c("grey", "green"),
+        cex = .5
+      )
+    } else {
+      legend(
+        'topright',
+        c("Diploid", "Duplication"),
+        lty = 1,
+        col = c("grey", "blue"),
+        cex = .5
+      )
+    }
   }
   dev.off()
 }
