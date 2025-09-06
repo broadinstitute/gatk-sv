@@ -228,7 +228,11 @@ task FilterAnnotateVcf {
       | bgzip -c \
       > filtered.vcf.gz
 
-    /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.vcf.gz ~{metrics} ~{cutoffs} stdout \
+    python /opt/sv-pipeline/scripts/annotate_bnd_coords.py \
+      filtered.vcf.gz \
+      filtered.updated_bnds.vcf.gz
+
+    /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.updated_bnds.vcf.gz ~{metrics} ~{cutoffs} stdout \
       | vcf-sort -c \
       | bgzip -c \
       > filtered.corrected_coords.vcf.gz

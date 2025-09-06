@@ -275,7 +275,19 @@ task FilterLargePESRCallsWithoutRawDepthSupport {
     cat large_dels_without_raw_depth_support.list large_dups_without_raw_depth_support.list > large_pesr_without_raw_depth_support.list
 
     cat \
-        <(gzip -cd ~{pesr_vcf} | grep -v '^#' | grep -w -f large_pesr_without_raw_depth_support.list | sed -e 's/SVTYPE=DEL/SVTYPE=BND/' -e 's/SVTYPE=DUP/SVTYPE=BND/' -e 's/<DEL>/<BND>/' -e 's/<DUP>/<BND>/') \
+        <(gzip -cd ~{pesr_vcf} | grep -v '^#' | grep -w -f large_pesr_without_raw_depth_support.list | sed -e 's/SVTYPE=DEL/SVTYPE=BND/' -e 's/SVTYPE=DUP/SVTYPE=BND/' -e 's/<DEL>/<BND>/' -e 's/<DUP>/<BND>/' \
+          | awk -F'\t' '
+              BEGIN { OFS="\t" }
+              {
+                end="";
+                if (match($8, /(^|;)END=([0-9]+)/, m)) { end=m[2]; }
+                if ($8 !~ /(^|;)CHR2=/) { $8 = $8 ";CHR2=" $1; }
+                if (end != "" && $8 !~ /(^|;)END2=/) { $8 = $8 ";END2=" end; }
+                if ($8 ~ /(^|;)END=[0-9]+/) { gsub(/END=[0-9]+/, "END=" $2, $8); }
+                else { $8 = $8 ";END=" $2; }
+                print $0;
+              }'
+        ) \
         <(gzip -cd ~{pesr_vcf} | grep -v '^#' | grep -v -w -f large_pesr_without_raw_depth_support.list) \
        | cat <(sed -n -e '/^#/p' <(zcat ~{pesr_vcf})) - \
        | vcf-sort -c \
