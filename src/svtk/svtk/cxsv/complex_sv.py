@@ -67,11 +67,15 @@ class ComplexSV:
                 self.set_unresolved()
                 self.vcf_record.info['SVTYPE'] = 'BND'
                 self.vcf_record.info['UNRESOLVED_TYPE'] = 'SR_ONLY_LARGE_INVERSION'
+                if 'END2' not in self.vcf_record.info:
+                    self.vcf_record.info['END2'] = self.vcf_record.stop
                 self.cluster_type = 'SR_ONLY_LARGE_INVERSION'
                 for r in self.records:
                     r.info['UNRESOLVED'] = True
                     r.info['UNRESOLVED_TYPE'] = 'SR_ONLY_LARGE_INVERSION'
                     r.info['SVTYPE'] = 'BND'
+                    if 'END2' not in r.info:
+                        r.info['END2'] = r.stop
                     if 'CPX_TYPE' in r.info.keys():
                         r.info.pop('CPX_TYPE')
                     if 'CPX_INTERVALS' in r.info.keys():
@@ -120,11 +124,15 @@ class ComplexSV:
                         self.set_unresolved()
                         self.vcf_record.info['SVTYPE'] = 'BND'
                         self.vcf_record.info['UNRESOLVED_TYPE'] = 'SR_ONLY_LARGE_INVERSION'
+                        if 'END2' not in self.vcf_record.info:
+                            self.vcf_record.info['END2'] = self.vcf_record.stop
                         self.cluster_type = 'SR_ONLY_LARGE_INVERSION'
                         for r in self.records:
                             r.info['UNRESOLVED'] = True
                             r.info['UNRESOLVED_TYPE'] = 'SR_ONLY_LARGE_INVERSION'
                             r.info['SVTYPE'] = 'BND'
+                            if 'END2' not in r.info:
+                                r.info['END2'] = r.stop
                             if 'CPX_TYPE' in r.info.keys():
                                 r.info.pop('CPX_TYPE')
                             if 'CPX_INTERVALS' in r.info.keys():
