@@ -100,17 +100,11 @@ def main():
                 if not has_depth_support_autosome(record, case_sample) and pesr_support:
                     record.info['SVTYPE'] = 'BND'
                     record.alts = ['<BND>']
-                    record.stop = record.pos
-                    record.info['CHR2'] = record.contig
-                    record.info['END2'] = record.stop
             else:
                 if not has_depth_support_allosome(record, case_sample, samples_by_sex[case_sample_sex]) \
                         and pesr_support:
                     record.info['SVTYPE'] = 'BND'
                     record.alts = ['<BND>']
-                    record.stop = record.pos
-                    record.info['CHR2'] = record.contig
-                    record.info['END2'] = record.stop
         fout.write(record)
 
 
