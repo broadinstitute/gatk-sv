@@ -17,6 +17,7 @@ workflow VisualizeCnvs {
     String flags
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_rdtest
+    Float? padding
   }
 
   scatter (file in rd_files) {
@@ -34,7 +35,8 @@ workflow VisualizeCnvs {
       min_size=min_size,
       flags=flags,
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_rdtest
+      runtime_attr_override = runtime_attr_rdtest,
+      padding=padding
   }
   output{
     File rdtest_plots = RdTestPlot.plots
@@ -53,6 +55,7 @@ task RdTestPlot {
     String sv_pipeline_docker
     String flags
     RuntimeAttr? runtime_attr_override
+    Float? padding
   }
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
@@ -94,8 +97,15 @@ task RdTestPlot {
       exit 1
     fi
 
+    if [[ "~{defined(padding)}" == "true" ]]; then
+      awk -F "\t" -v OFS="\t" -v PAD="~{padding}" '{len=$3-$2; ps=int($2 - PAD*len); if(ps<0) ps=0; pe=int($3 + PAD*len); print $1,ps,pe,$4,$5,$6}' cnvs.bed > cnvs_padded.bed
+      MERGE_SOURCE="cnvs_padded.bed"
+    else
+      MERGE_SOURCE="cnvs.bed"
+    fi
+
     paste ~{sep=" " median_files} > median_file.txt
-    bedtools merge -i cnvs.bed | cut -f1-3 > merged.bed
+    bedtools merge -i "$MERGE_SOURCE" | cut -f1-3 > merged.bed
 
     i=0
     mkdir rd_subsets
@@ -114,6 +124,7 @@ task RdTestPlot {
       -f ~{ped_file} \
       -p TRUE \
       -w samples.txt \
+      ~{if defined(padding) then ("-P " + padding) else ""} \
       ~{flags}
 
     mkdir ~{prefix}_rd_plots
