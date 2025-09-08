@@ -48,7 +48,7 @@ reference_dict=$(jq -r ".reference_dict" "${input_json}")
 counts_files=("${ref_panel_bincov_matrix}" "${sample_bincov_matrix}")
 make_bin_cov_matrix_json="make_bincov_matrix.json"
 jq -n \
-  --argfile s <(jq '.samples' "${input_json}") \
+  --argfile s <(jq '.ref_panel_samples + .samples' "${input_json}") \
   --arg c "${counts_files[*]}" \
   --argfile r <(jq '.ref_panel_samples' "${input_json}") \
   --arg b "${ref_panel_bincov_matrix}" \
