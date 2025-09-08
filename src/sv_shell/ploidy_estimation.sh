@@ -83,7 +83,7 @@ mv ploidy_est.tar.gz "${ploidy_plots}"
 outputs_json=$(jq -n \
   --arg ploidy_matrix "${ploidy_matrix}" \
   --arg ploidy_plots "${ploidy_plots}" \
-  --arg sample_sex_assignments "./ploidy_est/sample_sex_assignments.txt.gz" \
+  --arg sample_sex_assignments "$(realpath "./ploidy_est/sample_sex_assignments.txt.gz")" \
   '{
      "ploidy_matrix": $ploidy_matrix,
      "ploidy_plots": $ploidy_plots,

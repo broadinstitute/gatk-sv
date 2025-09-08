@@ -77,12 +77,7 @@ jq -n \
 
 bash /ploidy_estimation.sh "${ploidy_estimation_inputs_json}" "${ploidy_estimation_outputs_json}"
 
-
-
-# TODO: you will get this file from running ploidy and then from the following direcotry in its output:
-# ploidy_est/sample_sex_assignments.txt.gz
-sample_sex_assignments="/sample_sex_assignments.txt.gz"
-
+sample_sex_assignments=$(jq -r ".sample_sex_assignments" "${ploidy_estimation_outputs_json}")
 
 if [[ -n "${ref_panel_samples}" ]]; then
   samples_batch=("${ref_panel_samples[@]}")
