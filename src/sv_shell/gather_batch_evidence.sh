@@ -46,7 +46,8 @@ reference_dict=$(jq -r ".reference_dict" "${input_json}")
 
 # ---- make binned coverage matrix
 counts_files=("${ref_panel_bincov_matrix}" "${sample_bincov_matrix}")
-make_bin_cov_matrix_json="make_bincov_matrix.json"
+make_bin_cov_matrix_inputs_json="make_bincov_matrix_inputs.json"
+make_bin_cov_matrix_outputs_json="make_bincov_matrix_outputs.json"
 jq -n \
   --argfile s <(jq '.ref_panel_samples + .samples' "${input_json}") \
   --arg c "${counts_files[*]}" \
@@ -56,7 +57,7 @@ jq -n \
   --arg t "${batch}" \
   '{samples: $s, count_files: ($c | split(" ")), bincov_matrix_samples: $r, bincov_matrix: $b, reference_dict: $p, batch: $t, skip_bin_size_filter: true}' > "${make_bin_cov_matrix_json}"
 
-bash /make_bincov_matrix.sh "${make_bin_cov_matrix_json}"
+bash /make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "${make_bin_cov_matrix_outputs_json}"
 
 
 # ---- ploidy estimation
