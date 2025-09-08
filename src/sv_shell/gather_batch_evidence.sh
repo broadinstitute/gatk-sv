@@ -55,7 +55,14 @@ jq -n \
   --arg b "${ref_panel_bincov_matrix}" \
   --arg p "${reference_dict}" \
   --arg t "${batch}" \
-  '{samples: $s, count_files: ($c | split(" ")), bincov_matrix_samples: $r, bincov_matrix: $b, reference_dict: $p, batch: $t, skip_bin_size_filter: true}' > "${make_bin_cov_matrix_json}"
+  '{
+      "samples": $s,
+      "count_files": ($c | split(" ")),
+      "bincov_matrix_samples": $r,
+      "bincov_matrix": $b,
+      "reference_dict": $p,
+      "batch": $t,
+      "skip_bin_size_filter": true}' > "${make_bin_cov_matrix_json}"
 
 bash /make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "${make_bin_cov_matrix_outputs_json}"
 
