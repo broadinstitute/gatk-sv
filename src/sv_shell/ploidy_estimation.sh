@@ -83,13 +83,11 @@ mv ploidy_est.tar.gz "${ploidy_plots}"
 outputs_json=$(jq -n \
   --arg ploidy_matrix "${ploidy_matrix}" \
   --arg ploidy_plots "${ploidy_plots}" \
-  --arg WGD_scores "${WGD_scores}" \
-  --arg bincov_matrix "${merged_bincov}" \
-  --arg bincov_matrix_index "${merged_bincov_idx}" \
-  --arg bincov_median "${medianCov}" \
+  --arg sample_sex_assignments "./ploidy_est/sample_sex_assignments.txt.gz" \
   '{
      "ploidy_matrix": $ploidy_matrix,
-     "ploidy_plots": $ploidy_plots
+     "ploidy_plots": $ploidy_plots,
+     "sample_sex_assignments": $sample_sex_assignments
    }' \
 )
 echo "${outputs_json}" > "${output_json_filename}"

@@ -68,13 +68,14 @@ bash /make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "${make_bin_cov
 
 
 # ---- ploidy estimation
-ploidy_estimation_json="ploidy_estimation.json"
+ploidy_estimation_inputs_json="ploidy_estimation_inputs.json"
+ploidy_estimation_outputs_json="ploidy_estimation_outputs.json"
 jq -n \
   --arg b "${batch}" \
-  --arg m "/NA12878.RD.txt.gz" \     # TODO: you'll get this from the make bincov matrix
-  '{batch: $b, bincov_matrix: $m}' > "${ploidy_estimation_json}"
-bash /ploidy_estimation.sh "${ploidy_estimation_json}"
+  --argfile m <(jq '.merged_bincov' "${make_bin_cov_matrix_outputs_json}") \
+  '{batch: $b, bincov_matrix: $m}' > "${ploidy_estimation_inputs_json}"
 
+bash /ploidy_estimation.sh "${ploidy_estimation_inputs_json}" "${ploidy_estimation_outputs_json}"
 
 
 
