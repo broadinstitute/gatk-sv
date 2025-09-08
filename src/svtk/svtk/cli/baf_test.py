@@ -38,15 +38,15 @@ def preprocess(chrom, start, end, tbx, samples, window=None, called_samples=None
 
     bafs = deque()
     if window < 1000000:
-        for record in tbx.fetch(chrom, max(1, start - window), end + window, parser=pysam.asTuple()):
-            bafs.append(np.array(record))
+        for record in tbx.fetch(chrom, max(1, start - window), end + window):
+            bafs.append(np.array(record.split('\t')))
     else:
-        for record in tbx.fetch(chrom, max(1, start - 1000000), start, parser=pysam.asTuple()):
-            bafs.append(np.array(record))
-        for record in tbx.fetch(chrom, (start + end) // 2 - 500000, (start + end) // 2 + 500000, parser=pysam.asTuple()):
-            bafs.append(np.array(record))
-        for record in tbx.fetch(chrom, end, end + 1000000, parser=pysam.asTuple()):
-            bafs.append(np.array(record))
+        for record in tbx.fetch(chrom, max(1, start - 1000000), start):
+            bafs.append(np.array(record.split('\t')))
+        for record in tbx.fetch(chrom, (start + end) // 2 - 500000, (start + end) // 2 + 500000):
+            bafs.append(np.array(record.split('\t')))
+        for record in tbx.fetch(chrom, end, end + 1000000):
+            bafs.append(np.array(record.split('\t')))
 
     bafs = pd.DataFrame(np.array(bafs))
     if bafs.empty:

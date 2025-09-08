@@ -135,7 +135,7 @@ class SRTest(PESRTest):
         #  dtypes = dict(chrom=str, pos=int, clip=str, count=int, sample=str)
 
         counts = pd.DataFrame.from_records(
-            [l[:5] for l in lines], columns=cols)
+            [l.split('\t')[:5] for l in lines], columns=cols)
         counts['count'] = counts['count'].astype(int)
 
         # Restrict to splits in orientation of interest

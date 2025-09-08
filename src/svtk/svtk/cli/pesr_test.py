@@ -65,12 +65,11 @@ def sr_test(argv):
     vcf = pysam.VariantFile(args.vcf)
 
     if args.index is not None:
-        countfile = pysam.TabixFile(args.countfile, index=args.index,
-                                    parser=pysam.asTuple())
+        countfile = pysam.TabixFile(args.countfile, index=args.index)
     else:
         if args.countfile.startswith('http'):
             raise Exception('Must provide tabix index with remote URL')
-        countfile = pysam.TabixFile(args.countfile, parser=pysam.asTuple())
+        countfile = pysam.TabixFile(args.countfile)
 
     if args.fout in '- stdout'.split():
         fout = sys.stdout
@@ -304,12 +303,11 @@ def count_sr(argv):
     vcf = pysam.VariantFile(args.vcf)
 
     if args.index is not None:
-        countfile = pysam.TabixFile(args.countfile, index=args.index,
-                                    parser=pysam.asTuple())
+        countfile = pysam.TabixFile(args.countfile, index=args.index)
     else:
         if args.countfile.startswith('http'):
             raise Exception('Must provide tabix index with remote URL')
-        countfile = pysam.TabixFile(args.countfile, parser=pysam.asTuple())
+        countfile = pysam.TabixFile(args.countfile)
 
     if args.fout in '- stdout'.split():
         fout = sys.stdout

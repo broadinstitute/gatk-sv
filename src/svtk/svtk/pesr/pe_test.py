@@ -94,14 +94,14 @@ class PETest(PESRTest):
         region = '{0}:{1}-{2}'.format(record.chrom, startA + 1, endA + 1)
 
         try:
-            pairs = self.discfile.fetch(region=region, parser=pysam.asTuple())
+            pairs = self.discfile.fetch(region=region)
         except ValueError:
             pairs = []
 
         counts = defaultdict(int)
         i = 0
-        for pair in pairs:
-            pair = _DiscPair(*pair)
+        for pair_record in pairs:
+            pair = _DiscPair(*pair_record.split('\t'))
             if (i > 1000000):
                 print(region)
                 counts = defaultdict(int)
