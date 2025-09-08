@@ -10,6 +10,8 @@ workflow SVConcordance {
     File truth_vcf
     String output_prefix
 
+    Boolean run_match_svs = false
+
     File contig_list
     File reference_dict
 
@@ -33,6 +35,7 @@ workflow SVConcordance {
       input:
         eval_vcf=eval_vcf,
         truth_vcf=truth_vcf,
+        run_match_svs=run_match_svs,
         output_prefix="~{output_prefix}.concordance.~{contig}",
         contig=contig,
         clustering_config=clustering_config,
@@ -66,6 +69,7 @@ task SVConcordanceTask {
   input {
     File truth_vcf
     File eval_vcf
+    Boolean run_match_svs
     String output_prefix
     File reference_dict
     String? contig
@@ -119,7 +123,7 @@ task SVConcordanceTask {
     JVM_MAX_MEM=$(getJavaMem MemTotal)
     echo "JVM memory: $JVM_MAX_MEM"
 
-    gatk --java-options "-Xmx${JVM_MAX_MEM}" SVConcordance \
+    gatk --java-options "-Xmx${JVM_MAX_MEM}" ~{if (run_match_svs) then "MatchSVs" else "SVConcordance"} \
       ~{"-L " + contig} \
       --sequence-dictionary ~{reference_dict} \
       --eval ~{eval_vcf} \

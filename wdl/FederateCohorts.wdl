@@ -7,9 +7,12 @@ workflow FederateCohorts {
     File vcf_a
     File vcf_b
 
+    String prefix_a
+    String prefix_b
+    String additional_args
+
     File scores
     String prefix
-    File ploidy_table
 
     File reference_fasta
     File reference_fasta_fai
@@ -25,7 +28,6 @@ workflow FederateCohorts {
       vcf_b=vcf_b,
       scores=scores,
       prefix=prefix,
-      ploidy_table=ploidy_table,
       reference_fasta=reference_fasta,
       reference_fasta_fai=reference_fasta_fai,
       reference_dict=reference_dict,
@@ -44,9 +46,12 @@ task SVFederate {
     File vcf_a
     File vcf_b
 
+    String prefix_a
+    String prefix_b
+
     String prefix
     File scores
-    File ploidy_table
+    String additional_args
 
     File reference_fasta
     File reference_fasta_fai
@@ -99,9 +104,11 @@ task SVFederate {
     gatk --java-options "-Xmx${JVM_MAX_MEM}" SVFederate \
       -A ~{vcf_a} \
       -B ~{vcf_b} \
+      --prefix-A ~{prefix_a} \
+      --prefix-B ~{prefix_b} \
       --sv-pairs ~{scores} \
       -R ~{reference_fasta} \
-      --ploidy-table ~{ploidy_table} \
+      ~{additional_args} \
       -O ~{prefix}.vcf.gz
 
   >>>
