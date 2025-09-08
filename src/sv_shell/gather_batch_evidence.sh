@@ -62,7 +62,7 @@ jq -n \
       "bincov_matrix": $b,
       "reference_dict": $p,
       "batch": $t,
-      "skip_bin_size_filter": true}' > "${make_bin_cov_matrix_json}"
+      "skip_bin_size_filter": true}' > "${make_bin_cov_matrix_inputs_json}"
 
 bash /make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "${make_bin_cov_matrix_outputs_json}"
 
