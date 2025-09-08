@@ -776,8 +776,9 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   endcolnormal<-ncol(plot_colormatrix)-(length(samplesPrior))
   plot_linematrix<-cbind(matrix(genotype_matrix[,-columnstoshift],nrow=1),matrix(genotype_matrix[,columnstoshift],nrow=1))
 
+  plot_cnvmatrix[plot_cnvmatrix == 0] <- NA
   # Mask samples with no coverage
-  mask_no_cov <- apply(plot_cnvmatrix, 2, function(v) all(is.na(v)) || all(v == 0))
+  mask_no_cov <- apply(plot_cnvmatrix, 2, function(v) all(is.na(v)))
   if (any(mask_no_cov)) {
     plot_cnvmatrix[, mask_no_cov] <- NA
   }
@@ -827,7 +828,7 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   # Overlay the lines after the rectangle
   for (j in (ncol(plot_cnvmatrix) - length(samplesPrior) + 1):ncol(plot_cnvmatrix)) {
     vals <- plot_cnvmatrix[, j]
-    if (all(is.na(vals)) || all(vals == 0)) { next }
+    if (all(is.na(vals))) { next }
     lines(1:n_bins, vals,
           col = if (toupper(cnvtype) == "DEL") "red" else "blue",
           lwd = 3)
