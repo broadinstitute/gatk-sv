@@ -195,14 +195,16 @@ def main():
     fam = parse_famfile(args.famfile)
 
     if args.discfile_index is None:
-        discfile = pysam.TabixFile(args.discfile)
+        discfile = pysam.TabixFile(args.discfile, parser=pysam.asTuple())
     else:
-        discfile = pysam.TabixFile(args.discfile, index=args.discfile_index)
+        discfile = pysam.TabixFile(args.discfile, index=args.discfile_index,
+                                   parser=pysam.asTuple())
 
     if args.countfile_index is None:
-        countfile = pysam.TabixFile(args.countfile)
+        countfile = pysam.TabixFile(args.countfile, parser=pysam.asTuple())
     else:
-        countfile = pysam.TabixFile(args.countfile, index=args.countfile_index)
+        countfile = pysam.TabixFile(args.countfile, index=args.countfile_index,
+                                    parser=pysam.asTuple())
 
     header = 'name sample log_pval called_median bg_median'.split()
     args.petest.write('\t'.join(header) + '\n')
