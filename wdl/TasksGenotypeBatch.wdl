@@ -341,6 +341,8 @@ task RDTestGenotype {
         --evidence-file ~{coveragefile} \
         -L ~{bed} \
         -O local.RD.txt.gz
+
+      tabix -f -0 -s1 -b2 -e2 local.RD.txt.gz
     else
       touch local.RD.txt
       bgzip local.RD.txt
@@ -439,6 +441,8 @@ task CountPE {
         --evidence-file ~{discfile} \
         -L region.merged.bed \
         -O local.PE.txt.gz
+
+      tabix -f -0 -s1 -b2 -e2 local.PE.txt.gz
     else
       touch local.PE.txt
       bgzip local.PE.txt
@@ -515,6 +519,8 @@ task CountSR {
         --evidence-file ~{splitfile} \
         -L region.merged.bed \
         -O local.SR.txt.gz
+
+      tabix -f -0 -s1 -b2 -e2 local.SR.txt.gz
     else
       touch local.SR.txt
       bgzip local.SR.txt

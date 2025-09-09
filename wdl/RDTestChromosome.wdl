@@ -178,6 +178,8 @@ task RDTest {
         --evidence-file ~{coveragefile} \
         -L "${chrom}:${start}-${end}" \
         -O local.RD.txt.gz
+
+      tabix -f -0 -s1 -b2 -e2 local.PE.txt.gz
     else
       touch local.RD.txt
       bgzip local.RD.txt
