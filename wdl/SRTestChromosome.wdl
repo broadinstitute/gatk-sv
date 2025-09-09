@@ -228,6 +228,8 @@ task SRTest {
         --evidence-file ~{splitfile} \
         -L region.merged.bed \
         -O local.SR.txt.gz
+
+      tabix -f -0 -s1 -b2 -e2 local.SR.txt.gz
     else
       touch local.SR.txt
       bgzip local.SR.txt

@@ -292,6 +292,8 @@ task CNSampleNormal {
       -L ~{chr} \
       -O ~{chr}.RD.txt
 
+    tabix -f -0 -s1 -b2 -e2 ~{chr}.RD.txt
+
     if [ ~{mode} == "normal" ]; then  
       mv ~{chr}.RD.txt ~{chr}.~{mode}.RD.txt
     else 

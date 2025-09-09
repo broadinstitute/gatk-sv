@@ -227,6 +227,8 @@ task PETest {
         --evidence-file ~{discfile} \
         -L region.merged.bed \
         -O local.PE.txt.gz
+
+      tabix -f -0 -s1 -b2 -e2 local.PE.txt.gz
     else
       touch local.PE.txt
       bgzip local.PE.txt
