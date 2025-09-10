@@ -328,8 +328,6 @@ task ResolvePrep {
                 --evidence-file $GS_PATH_TO_DISC_FILE \
                 -L regions.bed \
                 -O ${SLICE}.PE.txt
-
-          tabix -f -0 -s1 -b2 -e2 ${SLICE}.PE.txt
         else
           touch ${SLICE}.PE.txt
         fi
