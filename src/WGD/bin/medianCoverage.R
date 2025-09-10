@@ -19,7 +19,7 @@ option_list <- list(
               help="compute median absolute deviation of all bins per sample [default: FALSE]"),
   make_option(c("-H","--header"), action="store_true", default=FALSE,
               help="input coverage matrix has header with sample IDs [default: FALSE]"),
-  make_option(c("-s","--seed"), type="integer", default=NULL,
+  make_option(c("-s","--seed"), type="integer", default=42,
               help="random seed for reproducible sampling [default: no seed set]"))
 
 # Get command-line arguments and options
@@ -28,10 +28,8 @@ args <- parse_args(OptionParser(usage="%prog [options] covMatrix.bed OUTFILE",
                    positional_arguments=TRUE)
 opts <- args$options
 
-# Set random seed if provided
-if(!is.null(opts$seed)){
-  set.seed(opts$seed)
-}
+# Set random seed
+set.seed(opts$seed)
 
 # Checks for appropriate positional arguments
 if(length(args$args) != 2)

@@ -11,7 +11,7 @@ workflow MedianCov {
     Float? mem_gb_override
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr
-    Int? subsample_seed = 42
+    Int? subsample_seed
   }
 
   call CalcMedCov {
@@ -33,7 +33,7 @@ task CalcMedCov {
   input {
     File bincov_matrix
     String cohort_id
-    Int sesubsample_seeded
+    Int? subsample_seed
     Float? mem_gb_override
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
@@ -56,7 +56,11 @@ task CalcMedCov {
 
     set -euo pipefail
     zcat ~{bincov_matrix} > ~{cohort_id}_fixed.bed 
-    Rscript /opt/WGD/bin/medianCoverage.R ~{cohort_id}_fixed.bed -H --seed ~{subsample_seed} ~{cohort_id}_medianCov.bed
+    Rscript /opt/WGD/bin/medianCoverage.R \
+      ~{cohort_id}_fixed.bed \
+      -H \
+      ~{if defined(subsample_seed) then "--seed ~{subsample_seed}" else ""}
+      ~{cohort_id}_medianCov.bed
     Rscript -e "x <- read.table(\"~{cohort_id}_medianCov.bed\",check.names=FALSE); xtransposed <- t(x[,c(1,2)]); write.table(xtransposed,file=\"~{cohort_id}_medianCov.transposed.bed\",sep=\"\\t\",row.names=F,col.names=F,quote=F)"
   
   >>>
