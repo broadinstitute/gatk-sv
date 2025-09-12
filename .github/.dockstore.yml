@@ -195,7 +195,7 @@ workflows:
     filters:
       branches:
         - main
-        - kj_gnomad_lr
+        - kj_project_gnomad_lr
       tags:
         - /.*/
 
