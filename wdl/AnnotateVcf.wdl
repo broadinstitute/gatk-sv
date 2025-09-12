@@ -7,7 +7,8 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 workflow AnnotateVcf {
 
   input {
-    File vcf  # GATK-SV VCF for annotation. Index .tbi must be located at the same path
+    File vcf
+    File vcf_index
     File contig_list  # Ordered list of contigs to annotate that are present in the input VCF
     String prefix
 
@@ -56,7 +57,7 @@ workflow AnnotateVcf {
     call sharded_annotate_vcf.ShardedAnnotateVcf {
       input:
         vcf = vcf,
-        vcf_idx = vcf + ".tbi",
+        vcf_idx = vcf_index,
         contig = contig,
         prefix = prefix,
         protein_coding_gtf = protein_coding_gtf,
@@ -111,7 +112,7 @@ workflow AnnotateVcf {
   }
 
   output {
-    File annotated_vcf = ConcatVcfs.concat_vcf
-    File annotated_vcf_index = ConcatVcfs.concat_vcf_idx
+    File af_annotated_vcf = ConcatVcfs.concat_vcf
+    File af_annotated_vcf_index = ConcatVcfs.concat_vcf_idx
   }
 }
