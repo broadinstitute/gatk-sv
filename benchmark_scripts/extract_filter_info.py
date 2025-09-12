@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/Users/kjaising/miniconda3/envs/venv/bin/python
 
 """
 Extract filter information from VCF files and assign variants to filter categories.

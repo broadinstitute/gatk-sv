@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/Users/kjaising/miniconda3/envs/venv/bin/python3
 
 """
 Analyze match rates between LR and SR callsets.

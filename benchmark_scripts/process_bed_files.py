@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/Users/kjaising/miniconda3/envs/venv/bin/python3
 """
 Process BED files to create query and ref formatted outputs.
 Handles both sr.bed (with AF column) and lr.bed (without AF column) formats.
