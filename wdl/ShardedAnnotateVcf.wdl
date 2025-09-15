@@ -26,7 +26,7 @@ workflow ShardedAnnotateVcf {
     Boolean annotate_internal_af
     Boolean annotate_functional_consequences
 
-    File? sample_pop_assignments  # Two-column file with sample ID & pop assignment. "." for pop will ignore sample
+    Array[File]? sample_pop_assignments  # Two-column file with sample ID & pop assignment. "." for pop will ignore sample
     File? sample_keep_list
     File? ped_file                # Used for M/F AF calculations
     File? par_bed
@@ -161,7 +161,7 @@ task ComputeAFs {
   input {
     File vcf
     String prefix
-    File? sample_pop_assignments
+    Array[File]? sample_pop_assignments
     File? ped_file
     File? par_bed
     File? allosomes_list
@@ -178,17 +178,30 @@ task ComputeAFs {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
+  Array[File] popfiles = select_first([sample_pop_assignments, []])
+
   command <<<
     set -euo pipefail
-    /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py "~{vcf}" stdout \
-      ~{"-p " + sample_pop_assignments} \
-      ~{"-f " + ped_file} \
-      ~{"--par " + par_bed} \
-      ~{"--allosomes-list " + allosomes_list} \
-    | bgzip -c \
-    > "~{prefix}.wAFs.vcf.gz"
 
-    tabix -p vcf "~{prefix}.wAFs.vcf.gz"
+    in_vcf="~{vcf}"
+    tmp_vcf="$in_vcf"
+    
+    i=0
+    for pop in ~{sep(' ', popfiles)}; do
+      out_prefix="~{prefix}.wAFs.round_${i}"
+      /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py "$tmp_vcf" stdout \
+        -p "$pop" \
+        ~{"-f " + ped_file} \
+        ~{"--par " + par_bed} \
+        ~{"--allosomes-list " + allosomes_list} \
+      | bgzip -c > "${out_prefix}.vcf.gz"
+      tabix -p vcf "${out_prefix}.vcf.gz"
+      tmp_vcf="${out_prefix}.vcf.gz"
+      i=$((i+1))
+    done
+
+    ln -s "$tmp_vcf" "~{prefix}.wAFs.vcf.gz"
+    ln -s "${tmp_vcf}.tbi" "~{prefix}.wAFs.vcf.gz.tbi"
   >>>
 
   output {
