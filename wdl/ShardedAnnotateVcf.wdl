@@ -179,15 +179,15 @@ task ComputeAFs {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   Array[File] popfiles = select_first([sample_pop_assignments, []])
+  File popfiles_list = write_lines(popfiles)
 
   command <<<
     set -euo pipefail
 
     in_vcf="~{vcf}"
     tmp_vcf="$in_vcf"
-    
     i=0
-    for pop in ~{sep(' ', popfiles)}; do
+    for pop in $(cat "~{popfiles_list}"); do
       out_prefix="~{prefix}.wAFs.round_${i}"
       /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py "$tmp_vcf" stdout \
         -p "$pop" \
