@@ -187,7 +187,7 @@ task ComputeAFs {
     in_vcf="~{vcf}"
     tmp_vcf="$in_vcf"
     i=0
-    for pop in $(cat "~{popfiles_list}"); do
+    for pop in ~{sep=' ' popfiles}; do
       out_prefix="~{prefix}.wAFs.round_${i}"
       /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py "$tmp_vcf" stdout \
         -p "$pop" \
@@ -203,7 +203,7 @@ task ComputeAFs {
     ln -s "$tmp_vcf" "~{prefix}.wAFs.vcf.gz"
     ln -s "${tmp_vcf}.tbi" "~{prefix}.wAFs.vcf.gz.tbi"
   >>>
-
+  
   output {
     File af_vcf = "~{prefix}.wAFs.vcf.gz"
     File af_vcf_idx = "~{prefix}.wAFs.vcf.gz.tbi"
