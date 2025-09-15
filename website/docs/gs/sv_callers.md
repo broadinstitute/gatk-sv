@@ -11,6 +11,7 @@ The SV calling tools, sometimes referred to as "PE/SR" tools, include:
 - [Manta](https://github.com/Illumina/manta)
 - [Wham](https://github.com/zeeev/wham)
 - [Scramble](https://github.com/GeneDx/scramble)
+- [DRAGEN-SV](https://help.dragen.illumina.com/product-guides/dragen-v4.3/dragen-dna-pipeline/sv-calling) (not yet fully supported)
 
 Depth-based calling of copy number variants (CNVs) is performed by two tools:
 - [GATK-gCNV](https://github.com/broadinstitute/gatk)

@@ -5,6 +5,6 @@
   "VisualizeCnvs.rd_files": [{{ test_batch.merged_coverage_file | tojson }}],
   "VisualizeCnvs.ped_file": {{ test_batch.ped_file | tojson }},
   "VisualizeCnvs.min_size": 50000,
-  "VisualizeCnvs.flags": "-s 999999999",
+  "VisualizeCnvs.flags": "--sizefilter 999999999 --padding 0.25",
   "VisualizeCnvs.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
 }

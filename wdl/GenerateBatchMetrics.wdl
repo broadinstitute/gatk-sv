@@ -13,6 +13,7 @@ workflow GenerateBatchMetrics {
     String batch
 
     File? depth_vcf
+    File? dragen_vcf
     File? melt_vcf
     File? scramble_vcf
     File? wham_vcf
@@ -42,6 +43,7 @@ workflow GenerateBatchMetrics {
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
     File? primary_contigs_list  # required if run_module_metrics = true
+    File? outlier_sample_ids # sample IDs to exclude from training
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -67,8 +69,8 @@ workflow GenerateBatchMetrics {
     RuntimeAttr? runtime_attr_get_male_only
   }
 
-  Array[String] algorithms = ["depth", "melt", "scramble", "wham", "manta"]
-  Array[File?] vcfs = [depth_vcf, melt_vcf, scramble_vcf, wham_vcf, manta_vcf]
+  Array[String] algorithms = ["depth", "dragen", "melt", "scramble", "wham", "manta"]
+  Array[File?] vcfs = [depth_vcf, dragen_vcf, melt_vcf, scramble_vcf, wham_vcf, manta_vcf]
 
   call util.GetSampleIdsFromVcf {
     input:
@@ -129,6 +131,7 @@ workflow GenerateBatchMetrics {
             male_samples = GetSampleLists.male_samples,
             female_samples = GetSampleLists.female_samples,
             male_only_variant_ids = GetMaleOnlyVariantIDs.male_only_variant_ids,
+            outlier_sample_ids = outlier_sample_ids,
             sv_pipeline_docker = sv_pipeline_docker,
             linux_docker = linux_docker,
             runtime_attr_rdtest = runtime_attr_rdtest,
@@ -147,6 +150,7 @@ workflow GenerateBatchMetrics {
             algorithm = algorithm,
             batch = batch,
             samples = GetSampleIdsFromVcf.out_array,
+            outlier_sample_ids = outlier_sample_ids,
             linux_docker = linux_docker,
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_baftest = runtime_attr_baftest,
@@ -175,6 +179,7 @@ workflow GenerateBatchMetrics {
             male_only_variant_ids = GetMaleOnlyVariantIDs.male_only_variant_ids,
             run_common = true,
             common_cnv_size_cutoff = common_cnv_size_cutoff,
+            outlier_sample_ids = outlier_sample_ids,
             sv_base_mini_docker = sv_base_mini_docker,
             linux_docker = linux_docker,
             sv_pipeline_docker = sv_pipeline_docker,
@@ -203,6 +208,7 @@ workflow GenerateBatchMetrics {
             female_samples = GetSampleLists.female_samples,
             male_only_variant_ids = GetMaleOnlyVariantIDs.male_only_variant_ids,
             common_cnv_size_cutoff = common_cnv_size_cutoff,
+            outlier_sample_ids = outlier_sample_ids,
             sv_base_mini_docker = sv_base_mini_docker,
             linux_docker = linux_docker,
             sv_pipeline_docker = sv_pipeline_docker,
@@ -222,6 +228,7 @@ workflow GenerateBatchMetrics {
           baftest = BAFTest.baftest,
           segdups = segdups,
           rmsk = rmsk,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_aggregate_tests
       }
@@ -241,6 +248,7 @@ workflow GenerateBatchMetrics {
           srtest = SRTest.srtest_common,
           segdups = segdups,
           rmsk = rmsk,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_aggregate_tests
       }
@@ -393,6 +401,7 @@ task AggregateTests {
     File? srtest
     File segdups
     File rmsk
+    File? outlier_sample_ids
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -418,6 +427,7 @@ task AggregateTests {
       ~{if defined(baftest) then "-b ~{baftest}" else "" } \
       ~{if defined(petest) then "-p ~{petest}" else "" } \
       ~{if defined(srtest) then "-s ~{srtest}" else "" } \
+      ~{if defined(outlier_sample_ids) then "-o ~{outlier_sample_ids}" else ""} \
       --segdups ~{segdups} \
       --rmsk ~{rmsk} \
       aggregated.metrics
