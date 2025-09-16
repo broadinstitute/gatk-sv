@@ -15,11 +15,7 @@ from collections import Counter
 import pybedtools as pbt
 
 
-ALLOWED_PARTS = set([
-    'XX','XY','afr','ami',
-    'amr','asj','eas','fin',
-    'mid','nfe','remaining','sas'
-])
+ALLOWED_POPS = set(['afr', 'ami', 'amr', 'asj', 'eas','fin', 'mid','nfe','remaining','sas'])
 
 
 def create_pop_dict(popfile):
@@ -335,7 +331,7 @@ def main():
         pops = list(set(pop_dict.values()))
         pops = sorted([p for p in pops if p != "."])
         for label in pops:
-            if label not in ALLOWED_PARTS:
+            if label not in ALLOWED_POPS:
                 raise ValueError(f"Invalid label: '{label}'.")
     else:
         pop_dict = {}
