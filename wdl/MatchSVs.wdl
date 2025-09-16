@@ -27,7 +27,7 @@ workflow MatchSVs {
     input:
       eval_vcf=vcf_a,
       truth_vcf=vcf_b,
-      run_match_svs="true",
+      run_match_svs=true,
       output_prefix=prefix + ".AtoB",
       clustering_config=clustering_config,
       stratification_config=stratification_config,
@@ -44,7 +44,7 @@ workflow MatchSVs {
     input:
       eval_vcf=vcf_b,
       truth_vcf=vcf_a,
-      run_match_svs="true",
+      run_match_svs=true,
       output_prefix=prefix + ".BtoA",
       clustering_config=clustering_config,
       stratification_config=stratification_config,
