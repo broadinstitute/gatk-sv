@@ -11,6 +11,11 @@ workflow MatchSVs {
     File contig_list
     String prefix
 
+    File? clustering_config
+    File? stratification_config
+    Array[String]? track_names
+    Array[File]? track_intervals
+
     File reference_dict
 
     Float? java_mem_fraction
@@ -24,6 +29,10 @@ workflow MatchSVs {
       truth_vcf=vcf_b,
       run_match_svs="true",
       output_prefix=prefix + ".AtoB",
+      clustering_config=clustering_config,
+      stratification_config=stratification_config,
+      track_names=track_names,
+      track_intervals=track_intervals,
       contig_list=contig_list,
       reference_dict=reference_dict,
       java_mem_fraction=java_mem_fraction,
@@ -37,6 +46,10 @@ workflow MatchSVs {
       truth_vcf=vcf_a,
       run_match_svs="true",
       output_prefix=prefix + ".BtoA",
+      clustering_config=clustering_config,
+      stratification_config=stratification_config,
+      track_names=track_names,
+      track_intervals=track_intervals,
       contig_list=contig_list,
       reference_dict=reference_dict,
       java_mem_fraction=java_mem_fraction,
