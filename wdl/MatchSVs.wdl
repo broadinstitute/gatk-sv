@@ -8,7 +8,6 @@ workflow MatchSVs {
     File vcf_a
     File vcf_b
 
-    String additional_args
     File contig_list
     String prefix
 
