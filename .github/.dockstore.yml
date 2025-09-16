@@ -252,3 +252,13 @@ workflows:
         - eph_federate_svs
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: MatchSVs
+    primaryDescriptorPath: /wdl/MatchSVs.wdl
+    filters:
+      branches:
+        - main
+        - eph_federate_svs
+      tags:
+        - /.*/

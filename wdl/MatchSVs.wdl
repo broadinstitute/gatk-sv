@@ -25,7 +25,6 @@ workflow MatchSVs {
       truth_vcf=vcf_b,
       run_match_svs="true",
       output_prefix=prefix + ".AtoB",
-      additional_args=additional_args,
       contig_list=contig_list,
       reference_dict=reference_dict,
       java_mem_fraction=java_mem_fraction,
@@ -39,7 +38,6 @@ workflow MatchSVs {
       truth_vcf=vcf_a,
       run_match_svs="true",
       output_prefix=prefix + ".BtoA",
-      additional_args=additional_args,
       contig_list=contig_list,
       reference_dict=reference_dict,
       java_mem_fraction=java_mem_fraction,
@@ -48,10 +46,10 @@ workflow MatchSVs {
   }
 
   output {
-    File match_vcf_atob = MatchAtoB.out
-    File match_vcf_atob_index = MatchAtoB.out_index
+    File match_vcf_atob = MatchAtoB.concordance_vcf
+    File match_vcf_atob_index = MatchAtoB.concordance_vcf_index
 
-    File match_vcf_btoa = MatchBtoA.out
-    File match_vcf_btoa_index = MatchBtoA.out_index
+    File match_vcf_btoa = MatchBtoA.concordance_vcf
+    File match_vcf_btoa_index = MatchBtoA.concordance_vcf_index
   }
 }

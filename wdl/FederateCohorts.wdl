@@ -9,7 +9,7 @@ workflow FederateCohorts {
 
     String prefix_a
     String prefix_b
-    String additional_args
+    String? additional_args
 
     File scores
     String prefix
@@ -28,6 +28,9 @@ workflow FederateCohorts {
       vcf_b=vcf_b,
       scores=scores,
       prefix=prefix,
+      prefix_a=prefix_a,
+      prefix_b=prefix_b,
+      additional_args=additional_args,
       reference_fasta=reference_fasta,
       reference_fasta_fai=reference_fasta_fai,
       reference_dict=reference_dict,
@@ -51,7 +54,7 @@ task SVFederate {
 
     String prefix
     File scores
-    String additional_args
+    String? additional_args
 
     File reference_fasta
     File reference_fasta_fai

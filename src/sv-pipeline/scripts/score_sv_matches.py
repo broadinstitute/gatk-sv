@@ -46,7 +46,7 @@ def load_matches(vcf_path, this_cohort, that_cohort):
                             dist_start = f
                             # store but don't add to the row data
                         elif k == 'AF':
-                                af = f
+                            af = f
                         elif k == 'TRUTH_AF':
                             truth_af = f
                         elif k == 'TRUTH_DISTANCE_END':
