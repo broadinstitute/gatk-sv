@@ -7,7 +7,7 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 workflow AnnotateVcf {
 
   input {
-    File vcf
+    File vcf  # GATK-SV VCF for annotation
     File vcf_index
     File contig_list  # Ordered list of contigs to annotate that are present in the input VCF
     String prefix
@@ -18,7 +18,7 @@ workflow AnnotateVcf {
     Int? max_breakend_as_cnv_length
     String? svannotate_additional_args
 
-    File? sample_pop_assignments # Two-column file with sample ID & pop assignment. "." for pop will ignore sample
+    File? sample_pop_assignments  # Two-column file with sample ID & pop assignment. "." for pop will ignore sample
     File? sample_keep_list              # List of samples to be retained from the output vcf
     File? ped_file                # Used for M/F AF calculations
     File? par_bed
