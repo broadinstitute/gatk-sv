@@ -143,11 +143,14 @@ workflow ShardedAnnotateVcf {
           runtime_attr_select_matched_svs = runtime_attr_select_matched_svs
       }
     }
+
+    File final_vcf = select_first([AnnotateExternalAFPerShard.annotated_vcf, vcf_after_af])
+    File final_vcf_idx = select_first([AnnotateExternalAFPerShard.annotated_vcf_tbi, vcf_idx_after_af])
   }
 
   output {
-    Array[File] sharded_annotated_vcf = select_first([AnnotateExternalAFPerShard.annotated_vcf, vcf_after_af])
-    Array[File] sharded_annotated_vcf_idx = select_first([AnnotateExternalAFPerShard.annotated_vcf_tbi, vcf_idx_after_af])
+    Array[File] sharded_annotated_vcf = final_vcf
+    Array[File] sharded_annotated_vcf_idx = final_vcf_idx
   }
 }
 
@@ -174,6 +177,7 @@ task ComputeAFs {
 
   command <<<
     set -euo pipefail
+
     /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py "~{vcf}" stdout \
       ~{"-p " + sample_pop_assignments} \
       ~{"-f " + ped_file} \
