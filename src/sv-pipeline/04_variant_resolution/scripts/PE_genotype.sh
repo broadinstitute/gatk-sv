@@ -1,18 +1,7 @@
 #!/bin/bash
 #
-# Global timeout mechanism
-TIMEOUT_SECONDS=600  # 10 minutes
-START_TIME=$(date +%s)
-check_timeout() {
-  CURRENT_TIME=$(date +%s)
-  ELAPSED=$((CURRENT_TIME - START_TIME))
-  if [ $ELAPSED -gt $TIMEOUT_SECONDS ]; then
-    echo "$(date): ERROR - Script timed out after $ELAPSED seconds (limit: $TIMEOUT_SECONDS)"
-    echo "$(date): This usually indicates a performance issue with large datasets"
-    exit 1
-  fi
-}
-echo "$(date): Script started with $TIMEOUT_SECONDS second timeout"
+
+set -euo pipefail
 
 bed=$1
 PE_counts=$2
@@ -23,32 +12,20 @@ blacklist=$6
 batch=$7
 
 egrep "DEL|DUP" ${bed} > cnv.bed;
-echo "$(date): Input file sizes:"
-echo "  bed file: $(wc -l < ${bed}) lines"
-echo "  PE_counts: $(zcat ${PE_counts} | wc -l) lines"
-echo "  RD_genotypes: $(wc -l < ${RD_genotypes}) lines"
-echo "  RD_melted_genotypes: $(zcat ${RD_melted_genotypes} | wc -l) lines"
-echo "$(date): Starting - filtering DEL|DUP variants"
 
-check_timeout
-echo "$(date): Starting bedtools intersect - this may take a while for large datasets..."
 # filter out potential overlapping variants##
-timeout 300 bedtools intersect -wa -wb -a cnv.bed -b cnv.bed \
+bedtools intersect -wa -wb -a cnv.bed -b cnv.bed \
   | awk '{if ($4 != $11) print $4"\n"$11}' \
   | sort -u \
   > cnv.exclude.all.bed;
-echo "$(date): Completed - bedtools intersect for overlapping variants"
 
 # size filter (>1kb)
 awk '{if ($3-$2>=1000) print $4}' cnv.bed > size.pass.txt;
-echo "$(date): Completed - size filter (>1kb)"
 
 # remove depth only
 awk '{if ($NF=="depth") print $4}' ${bed} > depthonly.fail.txt;
-echo "$(date): Completed - depth only filter"
   
 # only allow up to three copy state (0,1,2 or 1,2) for training 
-echo "  Processing RD_genotypes for copystate validation..."
 if [ $(tail -n +2 ${RD_genotypes} \
   | cut -f4- \
   | fgrep -w 1 \
@@ -64,9 +41,7 @@ then
   | sort -u \
   > copystatefail.txt;
 fi
-echo "$(date): Completed - first copystate validation"
 
-echo "  Processing RD_genotypes for copystate validation..."
 if [ $(tail -n +2 ${RD_genotypes} \
   | cut -f4- \
   | fgrep -w 2 \
@@ -82,9 +57,7 @@ then
   | sort -u \
   >> copystatefail.txt;
 fi
-echo "$(date): Completed - second copystate validation"
 
-echo "  Processing RD_genotypes for copystate validation..."
 if [ $(tail -n +2 ${RD_genotypes} \
   | cut -f4- \
   | fgrep -wvf copystatefail.txt \
@@ -100,9 +73,7 @@ tail -n +2 ${RD_genotypes} \
   | awk '{print $1}' \
   > copystate.pass.txt;
 fi
-echo "$(date): Completed - third copystate validation"
 
-echo "  Processing RD_genotypes for copystate validation..."
 if [ $(tail -n +2 ${RD_genotypes} \
   | cut -f4- \
   | fgrep -wvf copystatefail.txt \
@@ -118,16 +89,14 @@ tail -n +2 ${RD_genotypes} \
   | awk '{print $1}' \
   >> copystate.pass.txt;
 fi
-echo "$(date): Completed - fourth copystate validation"
 
 # check for mulitcopystate
-timeout 60 zcat ${RD_melted_genotypes} \
+zcat ${RD_melted_genotypes} \
   | awk '!seen[$1"_" $NF]++' \
   | awk '{print $1}' \
   | sort \
   | uniq -c \
   > cnv.copystate.multi.count.txt;
-echo "$(date): Completed - multicopystate count analysis"
   
 if [ $(cat cnv.copystate.multi.count.txt \
    | awk '{if ($1>3) print $2}' \
@@ -144,16 +113,13 @@ then
    | egrep -v "^X|^Y" \
    > multi.test.bed;
 fi
-echo "$(date): Completed - multicopystate test"
 
 # remove repetitive breakpoints
-echo "  Processing blacklist for repeat breakpoint filtering..."
 cat ${blacklist} \
   | bedtools coverage -a <(awk '{print $1,$2,$2+1,$4 "\n" $1,$3,$3+1,$4}' cnv.bed | tr ' ' '\t')  -b - \
   | awk '{if($NF>0) print $4}' \
   | sort -u \
   > repeat.breakpoint.fail.ids.txt;
-echo "$(date): Completed - repeat breakpoint filter"
 
 # final filter - remove X & Y
 # check to make sure you have variants to train PE cutoffs
@@ -168,25 +134,19 @@ awk '{if ($1!~"X" && $1!~"Y") print $4}' cnv.bed \
   | fgrep -wf size.pass.txt \
   | fgrep -wvf <(cat cnv.exclude.all.bed depthonly.fail.txt repeat.breakpoint.fail.ids.txt) \
   > "$batch.pe.train.include.txt";
-echo "$(date): Completed - final filter and training set selection"
-check_timeout
-echo "$(date): Starting join operation - merging RD and PE genotypes..."
 
 # select training
 pe_pval=$(awk -F'\t' 'NR==1{for(i=1;i<=NF;i++) col[$i]=i; next}
           {if ( $col["metric"]=="PE_log_pval") print $col["cutoff"]}' $RF_cutoffs)
 pe_count=$(/opt/sv-pipeline/04_variant_resolution/scripts/convert_poisson_p.py $pe_pval)
-timeout 60 zcat ${PE_counts} \
+zcat ${PE_counts} \
   | awk -v var=$pe_count '{if ($3>=var) print}' \
   | fgrep -v name \
   | gzip -c \
   > pe.geno.all.txt.gz;
-echo "$(date): Completed - PE counts processing"
 
 # Join RD and PE genotypes
-timeout 300 join -j 1 -a 1 -e "2" -o 1.2 1.3 1.4 2.2 \
-check_timeout
-echo "$(date): Starting R calculations for het cutoff..."
+join -j 1 -a 1 -e "2" -o 1.2 1.3 1.4 2.2 \
     <(zcat pe.geno.all.txt.gz \
         | fgrep -wf "$batch.pe.train.include.txt" \
         | awk '{print $1"_"$2 "\t" $0}' \
@@ -196,10 +156,7 @@ echo "$(date): Starting R calculations for het cutoff..."
         | sort -k1,1) \
   | tr ' ' '\t' \
   > PE.RD.merged.txt; 
-echo "$(date): Completed - RD and PE genotypes join"
 
-check_timeout
-echo "$(date): Starting R calculations for median hom..."
 
 # Get cutoffs to filter out incorrectly label hom in R and treat combine het (1 and 3) and hom (0 and 4) copy states 
 # throw out any copy state  calls that have reads less than with p=0.05 away from copy state 1 or 3
@@ -212,10 +169,7 @@ het_cutoff=$(awk '{print $1"_"$2"\t" $3 "\t" $4}' PE.RD.merged.txt \
 
 # Rerun with excluding 0 or 4 copy states that fail het_cutoff
 awk -v var=$het_cutoff '{if (!(($4=="0" || $4=="4") && $3<var)) print}' PE.RD.merged.txt > PE.RD.hetfilter.merged.txt
-echo "$(date): Completed - het cutoff calculation and filtering"
 
-check_timeout
-echo "$(date): Starting R calculations for sd het..."
 # get median from copy state 0 and 4
 median_hom=$(awk '{if ($NF==0 || $NF==4) print $3}' PE.RD.hetfilter.merged.txt \
               | Rscript -e 'd<-scan("stdin", quiet=TRUE)' \
@@ -229,51 +183,37 @@ then
 median_hom=$(echo 1 \
    |awk -v het_cutoff=$het_cutoff 'function ceil(x, y){y=int(x); return(x>y?y+1:y)} {print ceil(het_cutoff+2)}')
 fi
-echo "$(date): Completed - median hom calculation"
 
 # get std from 1 && 3 for hom restriction
 sd_het=$(awk '{if ($NF==1 || $NF==3) print $3}' PE.RD.hetfilter.merged.txt \
           | Rscript -e 'd<-scan("stdin", quiet=TRUE)' \
                     -e 'mad(d)' \
-check_timeout
-echo "$(date): Starting R calculations for normalization..."
           | tr '\n' '\t' \
           | awk '{print $NF*1.645}')
-echo "$(date): Completed - sd het calculation"
 
 ##generate PE metric file##
 echo -e "pe_count"'\t'$pe_count>"$batch.pe_metric_file.txt"
 echo -e "median_hom"'\t'$median_hom>>"$batch.pe_metric_file.txt"
 echo -e "sd_het"'\t'$sd_het>>"$batch.pe_metric_file.txt"
-echo "$(date): Completed - PE metric file generation"
 
-timeout 60 zcat ${PE_counts} \
-check_timeout
-echo "$(date): Starting R calculations for null with reads..."
+zcat ${PE_counts} \
   | fgrep -v name \
   |awk -v var=$pe_count -v var1=$median_hom -v var2=$sd_het '{if ($3<var) print $1,$2,$3,0;else if ($3<=var1-var2) print $1,$2,$3,1; else print $1,$2,$3,int($3/(var1/2)+0.5)}'  | gzip \
   > pe.geno.final.txt.gz
-echo "$(date): Completed - PE geno final processing"
 
 ##Genotype##
 ##normalization factor##
 ##Phred score for z score of 0 (p=0.5) normalized (3.0103) to 999 after subtracting nearest alternative genotype like GATK  ##
 normalization=$(Rscript -e "print(-10*log10((1-pnorm(($median_hom/2)/$sd_het) )))"  \
-check_timeout
-echo "$(date): Starting R calculations for genotype z scores..."
                   | tr '\n' '\t' \
                   | awk '{print 999/($NF-3.0103)}')
-echo "$(date): Completed - normalization calculation"
 
 ##null genotype get max quality score##
 zcat pe.geno.final.txt.gz|awk '{if ($NF==0 && $3==0) print $0 "\t" 999}'|gzip>null.geno.txt.gz
-echo "$(date): Completed - null genotype processing"
 
 ##null genotype but has PE reads determined by poisson test##
 zcat pe.geno.final.txt.gz|awk '{if ($NF==0 && $3>0) print}' > null.wreads.txt
 if [ -s null.wreads.txt ]; then
-check_timeout
-echo "$(date): Starting R calculations for variant quality normalization..."
   cat null.wreads.txt \
     | Rscript -e 'd<-read.table("stdin")' \
     -e "z<-cbind(d[1],d[,2],d[,3],d[,4],round(matrix(apply(d[,3,drop=F],1, function (x) -10*log10(1-ppois(0, lambda=x))* $normalization) ,ncol=1)) )" \
@@ -281,9 +221,6 @@ echo "$(date): Starting R calculations for variant quality normalization..."
 else
   touch null.wreads.geno.txt
 fi
-check_timeout
-echo "$(date): Starting R calculations for variant quality..."
-echo "$(date): Completed - null with reads processing"
 
 ##genotype based on z score for observation with genotypes##
 zcat pe.geno.final.txt.gz|awk '{if ($NF>0) print}' \
@@ -293,10 +230,8 @@ zcat pe.geno.final.txt.gz|awk '{if ($NF>0) print}' \
   -e "z2<-apply(d[,3,drop=F]-((d[,4,drop=F]*$median_hom/2)+($median_hom/2)),1, function (x) -10*log10((1-pnorm(abs(x)/$sd_het) )))" \
   -e "zfinal<-round((pmin(z1,z2)-z)* $normalization)" \
   -e 'write.table(cbind(d[1],d[,2],d[,3],d[,4],zfinal),"wreads.geno.txt",col.names=FALSE,quote=FALSE,row.names=FALSE,sep = "\t")'
-echo "$(date): Completed - genotype based on z score"
 
 cat wreads.geno.txt null.wreads.geno.txt <(zcat null.geno.txt.gz)|awk '{if ($NF<0) print $1,$2,$3,$4,1;else if ($NF>999) print $1,$2,$3,$4,999 ;else print}' |tr ' ' '\t'|sort -k1,1 -k2,2|gzip>"$batch.pe.geno.withquality.txt.gz"
-echo "$(date): Completed - final genotype merge"
 
 ##Per variant quality scores##
 ##Assign a normalization factor to scale variant up to 999 if based on expected het median ##
@@ -309,7 +244,6 @@ zcat pe.geno.final.txt.gz|awk '{if ($NF>0) print}' \
   -e 'x<-tapply(d[,3],d[,1],median)' \
   -e 'z<-cbind(names(x),(-10*log10(ppois(0, lambda=x))))' \
   -e 'write.table(z,"pe.variant.quality.final.txt",col.names=FALSE,quote=FALSE,row.names=FALSE,sep = "\t")'
-echo "$(date): Completed - variant quality calculation"
 
 ##add back variants with no PE support##
 awk '{print $1}' pe.variant.quality.final.txt \
@@ -318,11 +252,8 @@ awk '{print $1}' pe.variant.quality.final.txt \
   |sort -u \
   |awk '{print $1 "\t" 0}' \
   >pe.variant.quality.final.null.txt
-echo "$(date): Completed - null variant quality processing"
 
 awk -v var=$normalization_var '{if ($2*var>999) print $1 "\t" 999;else print $1 "\t" $2*var}' pe.variant.quality.final.txt \
   |cat - pe.variant.quality.final.null.txt \
   |sort -k1,1|gzip \
   >"$batch.pe.variant.quality.final.txt.gz"
-echo "$(date): Script completed successfully"
-
