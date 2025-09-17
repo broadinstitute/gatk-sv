@@ -4,10 +4,11 @@ import "Structs.wdl"
 import "ShardedAnnotateVcf.wdl" as sharded_annotate_vcf
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
-workflow AnnotateVcf {
+workflow AnnotateAF {
 
   input {
-    File vcf  # GATK-SV VCF for annotation. Index .tbi must be located at the same path
+    File vcf  # GATK-SV VCF for annotation
+    File vcf_index
     File contig_list  # Ordered list of contigs to annotate that are present in the input VCF
     String prefix
 
@@ -23,6 +24,10 @@ workflow AnnotateVcf {
     File? par_bed
     File? allosomes_list
     Int   sv_per_shard
+
+    Boolean annotate_external_af = true
+    Boolean annotate_internal_af = true
+    Boolean annotate_functional_consequences = true
 
     File? external_af_ref_bed              # File with external allele frequencies
     String? external_af_ref_prefix         # prefix name for external AF call set (required if ref_bed set)
@@ -52,7 +57,7 @@ workflow AnnotateVcf {
     call sharded_annotate_vcf.ShardedAnnotateVcf {
       input:
         vcf = vcf,
-        vcf_idx = vcf + ".tbi",
+        vcf_idx = vcf_index,
         contig = contig,
         prefix = prefix,
         protein_coding_gtf = protein_coding_gtf,
@@ -60,6 +65,10 @@ workflow AnnotateVcf {
         promoter_window = promoter_window,
         svannotate_additional_args = svannotate_additional_args,
         max_breakend_as_cnv_length = max_breakend_as_cnv_length,
+
+        annotate_external_af = annotate_external_af,
+        annotate_internal_af = annotate_internal_af,
+        annotate_functional_consequences = annotate_functional_consequences,
 
         sample_pop_assignments = sample_pop_assignments,
         sample_keep_list = sample_keep_list,
@@ -103,7 +112,7 @@ workflow AnnotateVcf {
   }
 
   output {
-    File annotated_vcf = ConcatVcfs.concat_vcf
-    File annotated_vcf_index = ConcatVcfs.concat_vcf_idx
+    File af_annotated_vcf = ConcatVcfs.concat_vcf
+    File af_annotated_vcf_index = ConcatVcfs.concat_vcf_idx
   }
 }

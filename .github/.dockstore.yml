@@ -195,6 +195,15 @@ workflows:
     filters:
       branches:
         - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: AnnotateAF
+    primaryDescriptorPath: /wdl/AnnotateAF.wdl
+    filters:
+      branches:
+        - main
         - kj_project_gnomad_lr
       tags:
         - /.*/
