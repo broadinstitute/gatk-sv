@@ -5,6 +5,9 @@ workflow GTConcordanceWorkflow {
     File pav_vcf
     File kg_vcf
     File pg_vcf
+    File pav_vcf_tbi
+    File kg_vcf_tbi
+    File pg_vcf_tbi
     Array[String] contigs
     File rscript  # GT_concordant_2.calcu_GT_concordance.R
     String sv_base_mini_docker
@@ -16,6 +19,7 @@ workflow GTConcordanceWorkflow {
     call SplitVCFs as split_input_vcf {
       input:
         input_vcf = pav_vcf,
+        input_vcf_tbi = pav_vcf_tbi,
         contig = contig,
         docker_image  = sv_base_mini_docker
     }
@@ -24,6 +28,7 @@ workflow GTConcordanceWorkflow {
    call SplitVCFs as split_kg_vcf {
       input:
         input_vcf = kg_vcf,
+        input_vcf_tbi = kg_vcf_tbi,
         contig = contig,
         docker_image  = sv_base_mini_docker
     }
@@ -31,6 +36,7 @@ workflow GTConcordanceWorkflow {
    call SplitVCFs as split_pg_vcf {
       input:
         input_vcf = pg_vcf,
+        input_vcf_tbi = pg_vcf_tbi,
         contig = contig,
         docker_image  = sv_base_mini_docker
     }
@@ -53,6 +59,7 @@ workflow GTConcordanceWorkflow {
 task SplitVCFs {
   input {
     File input_vcf
+    File input_vcf_tbi
     String contig
     String docker_image
   }
