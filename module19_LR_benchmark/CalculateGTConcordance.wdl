@@ -206,17 +206,17 @@ task RunConcordance {
   # ----------------------------
   # Load data
   # ----------------------------
-  d1 <- read.table(~{pav_contig}, header=FALSE)
-  kg <- read.table(~{kg_contig}, header=FALSE)
-  pg <- read.table(~{pg_contig}, header=FALSE)
+  d1 <- read.table("~{pav_contig}", header=FALSE)
+  kg <- read.table("~{kg_contig}", header=FALSE)
+  pg <- read.table("~{pg_contig}", header=FALSE)
 
 
   # ----------------------------
   # Fix column names
   # ----------------------------
-  samples <- c('HG00512','HG00513','HG00514',
-               'HG00731','HG00732','HG00733',
-               'NA19238','NA19239','NA19240')
+  samples <- c("HG00512","HG00513","HG00514",
+               "HG00731","HG00732","HG00733",
+               "NA19238","NA19239","NA19240")
 
   colnames(d1)[10:18] <- samples
   colnames(kg)[10:18] <- samples
@@ -225,8 +225,8 @@ task RunConcordance {
   # ----------------------------
   # Merge
   # ----------------------------
-  pav_kg <- merge(d1[,c(1,2,4,5,10:18)], kg[,c(1,2,4,5,10:18)], by=c('V1','V2','V4','V5'))
-  pav_pg <- merge(d1[,c(1,2,4,5,10:18)], pg[,c(1,2,4,5,10:18)], by=c('V1','V2','V4','V5'))
+  pav_kg <- merge(d1[,c(1,2,4,5,10:18)], kg[,c(1,2,4,5,10:18)], by=c("V1","V2","V4","V5"))
+  pav_pg <- merge(d1[,c(1,2,4,5,10:18)], pg[,c(1,2,4,5,10:18)], by=c("V1","V2","V4","V5"))
 
   # ----------------------------
   # Run concordance
@@ -237,8 +237,8 @@ task RunConcordance {
   # ----------------------------
   # Save results
   # ----------------------------
-  write.table(results_kg, ~{kg_output},quote=FALSE, sep='\t', col.names=TRUE, row.names=FALSE)
-  write.table(results_pg, ~{pg_output}, sep='\t', col.names=TRUE, row.names=FALSE)
+  write.table(results_kg, "~{kg_output}", quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
+  write.table(results_pg, "~{pg_output}", sep="\t", col.names=TRUE, row.names=FALSE)
 
   >>>
 
