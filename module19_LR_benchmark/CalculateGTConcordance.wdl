@@ -5,12 +5,11 @@ workflow GTConcordanceWorkflow {
     File pav_vcf
     File kg_vcf
     File pg_vcf
-    File contig_list
+    Array[String] contigs
     File rscript  # GT_concordant_2.calcu_GT_concordance.R
     String sv_base_mini_docker
   }
 
-  Array[String] contigs = read_lines(contig_list)
 
   scatter (contig in contigs) {
 
