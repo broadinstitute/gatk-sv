@@ -90,7 +90,7 @@ task RunConcordance {
     File kg_contig
     File pg_contig
     File rscript
-    File  docker_image
+    String docker_image
   }
 
   String kg_output = sub(basename(kg_contig), ".vcf.gz", ".SVID_concor")
