@@ -47,6 +47,8 @@ workflow JoinRawCalls {
     RuntimeAttr? runtime_attr_prepare_truth
     RuntimeAttr? runtime_attr_svcluster
     RuntimeAttr? runtime_override_concat_vcfs_pesr
+
+    Array[File]? NONE_ARRAY_  # Do not assign
   }
 
   call tasks_cluster.CreatePloidyTableFromPed {
@@ -61,8 +63,27 @@ workflow JoinRawCalls {
       runtime_attr_override=runtime_attr_create_ploidy
   }
 
-  Array[Array[File]] vcf_matrix = transpose(select_all([clustered_depth_vcfs, clustered_dragen_vcfs, clustered_manta_vcfs, clustered_melt_vcfs, clustered_scramble_vcfs, clustered_wham_vcfs]))
-  Array[Array[File]] vcf_index_matrix = transpose(select_all([clustered_depth_vcf_indexes, clustered_dragen_vcf_indexes, clustered_manta_vcf_indexes, clustered_melt_vcf_indexes, clustered_scramble_vcf_indexes, clustered_wham_vcf_indexes]))
+  # Handle zero-length arrays
+  Array[File]? clustered_depth_vcfs_ = if (defined(clustered_depth_vcfs) && length(select_first([clustered_depth_vcfs])) > 0) then clustered_depth_vcfs else NONE_ARRAY_
+  Array[File]? clustered_depth_vcf_indexes_ = if (defined(clustered_depth_vcf_indexes) && length(select_first([clustered_depth_vcf_indexes])) > 0) then clustered_depth_vcf_indexes else NONE_ARRAY_
+
+  Array[File]? clustered_dragen_vcfs_ = if (defined(clustered_dragen_vcfs) && length(select_first([clustered_dragen_vcfs])) > 0) then clustered_dragen_vcfs else NONE_ARRAY_
+  Array[File]? clustered_dragen_vcf_indexes_ = if (defined(clustered_dragen_vcf_indexes) && length(select_first([clustered_dragen_vcf_indexes])) > 0) then clustered_dragen_vcf_indexes else NONE_ARRAY_
+
+  Array[File]? clustered_manta_vcfs_ = if (defined(clustered_manta_vcfs) && length(select_first([clustered_manta_vcfs])) > 0) then clustered_manta_vcfs else NONE_ARRAY_
+  Array[File]? clustered_manta_vcf_indexes_ = if (defined(clustered_manta_vcf_indexes) && length(select_first([clustered_manta_vcf_indexes])) > 0) then clustered_manta_vcf_indexes else NONE_ARRAY_
+
+  Array[File]? clustered_melt_vcfs_ = if (defined(clustered_melt_vcfs) && length(select_first([clustered_melt_vcfs])) > 0) then clustered_melt_vcfs else NONE_ARRAY_
+  Array[File]? clustered_melt_vcf_indexes_ = if (defined(clustered_melt_vcf_indexes) && length(select_first([clustered_melt_vcf_indexes])) > 0) then clustered_melt_vcf_indexes else NONE_ARRAY_
+
+  Array[File]? clustered_scramble_vcfs_ = if (defined(clustered_scramble_vcfs) && length(select_first([clustered_scramble_vcfs])) > 0) then clustered_scramble_vcfs else NONE_ARRAY_
+  Array[File]? clustered_scramble_vcf_indexes_ = if (defined(clustered_scramble_vcf_indexes) && length(select_first([clustered_scramble_vcf_indexes])) > 0) then clustered_scramble_vcf_indexes else NONE_ARRAY_
+
+  Array[File]? clustered_wham_vcfs_ = if (defined(clustered_wham_vcfs) && length(select_first([clustered_wham_vcfs])) > 0) then clustered_wham_vcfs else NONE_ARRAY_
+  Array[File]? clustered_wham_vcf_indexes_ = if (defined(clustered_wham_vcf_indexes) && length(select_first([clustered_wham_vcf_indexes])) > 0) then clustered_wham_vcf_indexes else NONE_ARRAY_
+
+  Array[Array[File]] vcf_matrix = transpose(select_all([clustered_depth_vcfs_, clustered_dragen_vcfs_, clustered_manta_vcfs_, clustered_melt_vcfs_, clustered_scramble_vcfs_, clustered_wham_vcfs_]))
+  Array[Array[File]] vcf_index_matrix = transpose(select_all([clustered_depth_vcf_indexes_, clustered_dragen_vcf_indexes_, clustered_manta_vcf_indexes_, clustered_melt_vcf_indexes_, clustered_scramble_vcf_indexes_, clustered_wham_vcf_indexes_]))
   scatter (i in range(length(vcf_matrix))) {
     call tasks_cohort.ConcatVcfs as ConcatInputVcfs {
       input:
