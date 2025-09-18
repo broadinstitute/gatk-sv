@@ -11,6 +11,7 @@ workflow GTConcordanceWorkflow {
     Array[String] contigs
     File rscript  # GT_concordant_2.calcu_GT_concordance.R
     String sv_base_mini_docker
+    String sv_pipeline_docker
   }
 
 
@@ -47,7 +48,7 @@ workflow GTConcordanceWorkflow {
         kg_contig = split_kg_vcf.contig_vcf,
         pg_contig = split_pg_vcf.contig_vcf,
         rscript   = rscript,
-        docker_image = sv_base_mini_docker
+        docker_image = sv_pipeline_docker
     }
   }
 
