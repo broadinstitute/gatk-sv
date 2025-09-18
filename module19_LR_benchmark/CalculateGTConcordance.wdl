@@ -46,7 +46,8 @@ workflow GTConcordanceWorkflow {
         pav_contig = split_input_vcf.contig_vcf,
         kg_contig = split_kg_vcf.contig_vcf,
         pg_contig = split_pg_vcf.contig_vcf,
-        rscript   = rscript
+        rscript   = rscript,
+        docker_image = sv_base_mini_docker
     }
   }
 
@@ -89,6 +90,7 @@ task RunConcordance {
     File kg_contig
     File pg_contig
     File rscript
+    File  docker_image
   }
 
   String kg_output = sub(basename(kg_contig), ".vcf.gz", ".SVID_concor")
@@ -109,7 +111,7 @@ task RunConcordance {
   }
 
   runtime {
-    docker: "rocker/r-base:4.3.1"
+    docker: docker_image
     memory: "8G"
     cpu: 2
   }
