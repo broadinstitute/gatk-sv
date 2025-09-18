@@ -58,12 +58,13 @@ task SplitVCFs {
   }
 
   String prefix = basename(input_vcf, ".vcf.gz") 
+  
   command <<<
-    bcftools view -r ${contig} -Oz -o ${prefix}.${contig}.vcf.gz ${input_vcf}
+    bcftools view -r ~{contig} -Oz -o ~{prefix}.~{contig}.vcf.gz ~{input_vcf}
    >>>
 
   output {
-    File contig_vcf = "${prefix}.${contig}.vcf.gz"
+    File contig_vcf = "~{prefix}.~{contig}.vcf.gz"
 
   }
 
@@ -87,17 +88,17 @@ task RunConcordance {
   String pg_output = sub(basename(pg_contig), ".vcf.gz", ".SVID_concor")
 
   command <<<
-    Rscript ${rscript} \
-      --pav_input ${pav_contig} \
-      --KG_input ${kg_contig} \
-      --PG_input ${pg_contig} \
-      --KG_output ${kg_output} \
-      --PG_output ${pg_output}
+    Rscript ~{rscript} \
+      --pav_input ~{pav_contig} \
+      --KG_input ~{kg_contig} \
+      --PG_input ~{pg_contig} \
+      --KG_output ~{kg_output} \
+      --PG_output ~{pg_output}
   >>>
 
   output {
-    File kg_output = "${kg_output}"
-    File pg_output = "${pg_output}"
+    File kg_output = "~{kg_output}"
+    File pg_output = "~{pg_output}"
   }
 
   runtime {
