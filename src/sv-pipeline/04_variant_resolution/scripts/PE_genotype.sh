@@ -257,4 +257,3 @@ awk -v var=$normalization_var '{if ($2*var>999) print $1 "\t" 999;else print $1 
   |cat - pe.variant.quality.final.null.txt \
   |sort -k1,1|gzip \
   >"$batch.pe.variant.quality.final.txt.gz"
-

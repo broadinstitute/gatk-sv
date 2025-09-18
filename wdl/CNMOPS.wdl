@@ -291,7 +291,7 @@ task CNSampleNormal {
       --evidence-file ~{bincov_matrix} \
       -L ~{chr} \
       -O ~{chr}.RD.txt
-    
+
     if [ ~{mode} == "normal" ]; then  
       mv ~{chr}.RD.txt ~{chr}.~{mode}.RD.txt
     else 
