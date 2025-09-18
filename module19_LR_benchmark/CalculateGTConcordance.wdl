@@ -9,7 +9,6 @@ workflow GTConcordanceWorkflow {
     File kg_vcf_tbi
     File pg_vcf_tbi
     Array[String] contigs
-    File rscript  # GT_concordant_2.calcu_GT_concordance.R
     String sv_base_mini_docker
     String sv_pipeline_docker
   }
@@ -47,7 +46,6 @@ workflow GTConcordanceWorkflow {
         pav_contig = split_input_vcf.contig_vcf,
         kg_contig = split_kg_vcf.contig_vcf,
         pg_contig = split_pg_vcf.contig_vcf,
-        rscript   = rscript,
         docker_image = sv_pipeline_docker
     }
   }
@@ -90,7 +88,6 @@ task RunConcordance {
     File pav_contig
     File kg_contig
     File pg_contig
-    File rscript
     String docker_image
   }
 
@@ -98,12 +95,151 @@ task RunConcordance {
   String pg_output = sub(basename(pg_contig), ".vcf.gz", ".SVID_concor")
 
   command <<<
-    Rscript ~{rscript} \
-      --pav_input ~{pav_contig} \
-      --KG_input ~{kg_contig} \
-      --PG_input ~{pg_contig} \
-      --KG_output ~{kg_output} \
-      --PG_output ~{pg_output}
+
+  set -Eeuo pipefail
+
+  Rscript -e ' 
+
+  calc_genotype_concordance <- function(df) {
+    # Extract genotypes from method 1 (cols 5–13) and method 2 (cols 14–22)
+    gt1 <- as.character(unlist(df[1, 5:13]))
+    gt2 <- as.character(unlist(df[1, 14:22]))
+
+    # Construct table of 9 rows × 2 columns
+    gt_table <- data.frame(method1 = gt1, method2 = gt2, stringsAsFactors = FALSE)
+    gt_table[,1] = gsub("[|]", "/" , gt_table[,1])
+
+    # Exclude rows with missing genotypes (".", "./.", NA)
+    valid_rows <- !(grepl("\\.", gt_table$method1) | grepl("\\.", gt_table$method2))
+
+    gt_table <- gt_table[valid_rows, ]
+    effective_gt = nrow(gt_table)
+
+    #if (nrow(gt_table) == 0) {
+    #  return(c(effective_gt,NA,NA,NA))
+    #}
+    if (nrow(gt_table) == 0) {
+      return(list(
+        effective_gt = effective_gt,
+        concordance_exact = NA,
+        concordance_altref = NA,
+        concordance_nonref = NA
+      ))
+    }
+
+
+    ## 1. Exact concordance
+    matches_exact <- gt_table$method1 == gt_table$method2
+    concordance_exact <- sum(matches_exact) / nrow(gt_table)
+
+    ## 2. Alt vs Ref concordance
+    to_altref <- function(gt) {
+      if (gt %in% c("0/0")) return("Ref")
+      if (gt %in% c("0/1", "1/0", "1/1")) return("Alt")
+      return(NA)
+    }
+    gt_table$method1_altref <- vapply(gt_table$method1, to_altref, character(1))
+    gt_table$method2_altref <- vapply(gt_table$method2, to_altref, character(1))
+
+    valid_altref <- !(is.na(gt_table$method1_altref) | is.na(gt_table$method2_altref))
+    matches_altref <- gt_table$method1_altref[valid_altref] == gt_table$method2_altref[valid_altref]
+    concordance_altref <- if (sum(valid_altref) > 0) sum(matches_altref) / sum(valid_altref) else NA
+
+    ## 3. Non-ref concordance (only rows where at least one method ≠ 0/0)
+    nonref_rows <- (gt_table$method1 != "0/0") | (gt_table$method2 != "0/0")
+    gt_nonref <- gt_table[nonref_rows, ]
+
+    if (nrow(gt_nonref) == 0) {
+      concordance_nonref <- NA
+    } else {
+      matches_nonref <- gt_nonref$method1 == gt_nonref$method2
+      concordance_nonref <- sum(matches_nonref) / nrow(gt_nonref)
+    }
+
+    ## Return results
+    #return(c(effective_gt,concordance_exact,concordance_altref,concordance_nonref))
+      return(list(
+          effective_gt = effective_gt,
+          concordance_exact = concordance_exact,
+          concordance_altref = concordance_altref,
+          concordance_nonref = concordance_nonref
+        ))
+
+
+    }
+
+  apply_concordance <- function(df) {
+    # Apply the concordance function to each row
+    results <- apply(df, 1, function(row) {
+      res <- calc_genotype_concordance(as.data.frame(t(row), stringsAsFactors = FALSE))
+      unlist(res)
+    })
+
+    # Transpose results and convert to data.frame
+    results_df <- as.data.frame(t(results), stringsAsFactors = FALSE)
+
+    # Make sure numeric
+    results_df <- data.frame(lapply(results_df, as.numeric))
+
+    # Bind to original table
+    df_out <- cbind(df, results_df)
+    return(df_out)
+  }
+
+  # Wrapper to split, process in chunks, and combine results
+  apply_concordance_in_chunks <- function(df, chunk_size = 1000) {
+    n <- nrow(df)
+    idx <- seq(1, n, by = chunk_size)
+
+    results_list <- lapply(idx, function(i) {
+      j <- min(i + chunk_size - 1, n)  # end index
+      print(i)
+      df_chunk <- df[i:j, , drop = FALSE]
+      apply_concordance(df_chunk)
+    })
+
+    # Combine all chunks
+    df_out <- do.call(rbind, results_list)
+    return(df_out)
+  }
+
+  # ----------------------------
+  # Load data
+  # ----------------------------
+  d1 <- read.table(~{pav_contig}, header=FALSE)
+  kg <- read.table(~{kg_contig}, header=FALSE)
+  pg <- read.table(~{pg_contig}, header=FALSE)
+
+
+  # ----------------------------
+  # Fix column names
+  # ----------------------------
+  samples <- c('HG00512','HG00513','HG00514',
+               'HG00731','HG00732','HG00733',
+               'NA19238','NA19239','NA19240')
+
+  colnames(d1)[10:18] <- samples
+  colnames(kg)[10:18] <- samples
+  colnames(pg)[10:18] <- samples
+
+  # ----------------------------
+  # Merge
+  # ----------------------------
+  pav_kg <- merge(d1[,c(1,2,4,5,10:18)], kg[,c(1,2,4,5,10:18)], by=c('V1','V2','V4','V5'))
+  pav_pg <- merge(d1[,c(1,2,4,5,10:18)], pg[,c(1,2,4,5,10:18)], by=c('V1','V2','V4','V5'))
+
+  # ----------------------------
+  # Run concordance
+  # ----------------------------
+  results_kg <- apply_concordance_in_chunks(pav_kg, chunk_size=1000)
+  results_pg <- apply_concordance_in_chunks(pav_pg, chunk_size=1000)
+
+  # ----------------------------
+  # Save results
+  # ----------------------------
+  write.table(results_kg, ~{kg_output},quote=FALSE, sep='\t', col.names=TRUE, row.names=FALSE)
+  write.table(results_pg, ~{pg_output}, sep='\t', col.names=TRUE, row.names=FALSE)
+
   >>>
 
   output {
