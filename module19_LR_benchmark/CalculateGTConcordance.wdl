@@ -96,7 +96,7 @@ task RunConcordance {
 
   command <<<
 
-  set -Eeuo pipefail
+  set -euxo pipefail
 
   Rscript -e ' 
 
@@ -239,6 +239,8 @@ task RunConcordance {
   # ----------------------------
   write.table(results_kg, "~{kg_output}", quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
   write.table(results_pg, "~{pg_output}", sep="\t", col.names=TRUE, row.names=FALSE)
+ 
+  '
 
   >>>
 
