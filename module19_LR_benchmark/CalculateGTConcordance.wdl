@@ -211,7 +211,7 @@ task RunConcordance {
   kg <- read.table("~{kg_contig}", header=FALSE)
   pg <- read.table("~{pg_contig}", header=FALSE)
   for(i in c(10:ncol(pg))){
-    pg[,i] = sapply(pg[,i], function(x){strsplit(as.character(x),':')[[1]][1]})
+    pg[,i] = sapply(pg[,i], function(x){strsplit(as.character(x),":")[[1]][1]})
   }
 
 
