@@ -138,6 +138,7 @@ task RunConcordance {
       if (gt %in% c("0/1", "1/0", "1/1")) return("Alt")
       return(NA)
     }
+
     gt_table$method1_altref <- vapply(gt_table$method1, to_altref, character(1))
     gt_table$method2_altref <- vapply(gt_table$method2, to_altref, character(1))
 
@@ -209,6 +210,9 @@ task RunConcordance {
   d1 <- read.table("~{pav_contig}", header=FALSE)
   kg <- read.table("~{kg_contig}", header=FALSE)
   pg <- read.table("~{pg_contig}", header=FALSE)
+  for(i in c(10:ncol(pg))){
+    pg[,i] = sapply(pg[,i], function(x){strsplit(as.character(x),':')[[1]][1]})
+  }
 
 
   # ----------------------------
