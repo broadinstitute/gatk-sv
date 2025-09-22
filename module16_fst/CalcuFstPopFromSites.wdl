@@ -50,11 +50,11 @@ task Unzip{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     String prefix = basename(file, '.gz')
+
     output{
         File output_file = "~{prefix} "
     }
 
-    String filebase = basename(Fst_sites,".sites")
 
     command <<<
         set -Eeuo pipefail
