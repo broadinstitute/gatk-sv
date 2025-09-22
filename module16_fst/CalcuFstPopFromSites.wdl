@@ -51,11 +51,11 @@ task CalcuFstPop{
     command <<<
         set -Eeuo pipefail
 
-        head -1  ~{Fst_sites} > temp.sites
+        zcat ~{Fst_sites} | head -1 > temp.sites
 
         set -o pipefail
 
-        grep -v "_num" ~{Fst_sites}  >> temp.sites
+        zcat ~{Fst_sites} | grep -v "_num"  >> temp.sites
 
         python /src/Calcu_Fst_pop_from_sites.py -i temp.sites -p ~{filebase}.pop
    >>>
