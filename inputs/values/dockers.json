@@ -1,6 +1,6 @@
 {
   "name": "dockers",
-  "cnmops_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/cnmops:2024-11-08-v1.0-62adb329",
+  "cnmops_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/cnmops:2025-09-02-v1.0.5-f091af0b",
   "condense_counts_docker": "us.gcr.io/broad-dsde-methods/tsharpe/gatk:4.2.6.1-57-g9e03432",
   "gatk_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/gatk:2025-05-20-4.6.2.0-4-g1facd911e-NIGHTLY-SNAPSHOT",
   "gatk_docker_pesr_override": "us.gcr.io/broad-dsde-methods/tsharpe/gatk:4.2.6.1-57-g9e03432",
@@ -12,8 +12,8 @@
   "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2024-10-25-v0.29-beta-5ea22a52",
   "sv_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base:2024-10-25-v0.29-beta-5ea22a52",
   "sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
-  "sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-08-15-v1.0.5-697baf80",
-  "sv_pipeline_qc_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-08-15-v1.0.5-697baf80",
+  "sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-09-02-v1.0.5-631368eb",
+  "sv_pipeline_qc_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2025-09-02-v1.0.5-631368eb",
   "wham_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/wham:2024-10-25-v0.29-beta-5ea22a52",
   "vapor_docker": "us.gcr.io/broad-dsde-methods/eph/vapor:header-hash-2fc8f12",
   "cloud_sdk_docker": "google/cloud-sdk",
@@ -25,6 +25,6 @@
   "sv_utils_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-utils:2025-01-06-v1.0.1-e902bf4e",
   "gq_recalibrator_docker": "us.gcr.io/broad-dsde-methods/markw/gatk:mw-tb-form-sv-filter-training-data-eb62a3",
   "str": "us.gcr.io/broad-dsde-methods/gatk-sv/str:2023-05-23-v0.27.3-beta-e537bdd6",
-  "denovo": "us.gcr.io/broad-dsde-methods/gatk-sv/denovo:2025-08-15-v1.0.5-697baf80",
+  "denovo": "us.gcr.io/broad-dsde-methods/gatk-sv/denovo:2025-09-02-v1.0.5-631368eb",
   "sv-shell": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-shell:2025-08-15-v1.0.5-697baf80"
 }
