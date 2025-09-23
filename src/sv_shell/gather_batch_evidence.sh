@@ -13,7 +13,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d output_gather_batch_evidence_XXXXXXXX)
+  output_dir=$(mktemp -d /output_gather_batch_evidence_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -25,16 +25,16 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d wd_gather_batch_evidence_XXXXXXXX)
+working_dir=$(mktemp -d /wd_gather_batch_evidence_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
 batch=$(jq -r ".batch" "${input_json}")
 samples=$(jq -r ".samples[]" "${input_json}")
-ped_file=$(jq -r ".ped_file" "${input_json}")
 ref_panel_samples=($(jq -r '.ref_panel_samples[]' "$input_json"))
+all_samples=($(jq -r '(.samples + .ref_panel_samples)[]' "$input_json"))
+ped_file=$(jq -r ".ped_file" "${input_json}")
 append_first_sample_to_ped=($(jq -r '.append_first_sample_to_ped' "$input_json"))
-
 sample_bincov_matrix=$(jq -r ".sample_bincov_matrix" "${input_json}")
 ref_panel_bincov_matrix=$(jq -r ".ref_panel_bincov_matrix" "${input_json}")
 reference_dict=$(jq -r ".reference_dict" "${input_json}")
@@ -64,7 +64,7 @@ jq -n \
       "batch": $t,
       "skip_bin_size_filter": true}' > "${make_bin_cov_matrix_inputs_json}"
 
-bash /make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "${make_bin_cov_matrix_outputs_json}"
+bash /opt/sv_shell/make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "${make_bin_cov_matrix_outputs_json}"
 
 
 # ---- ploidy estimation
@@ -75,7 +75,7 @@ jq -n \
   --argfile m <(jq '.merged_bincov' "${make_bin_cov_matrix_outputs_json}") \
   '{batch: $b, bincov_matrix: $m}' > "${ploidy_estimation_inputs_json}"
 
-bash /ploidy_estimation.sh "${ploidy_estimation_inputs_json}" "${ploidy_estimation_outputs_json}"
+bash /opt/sv_shell/ploidy_estimation.sh "${ploidy_estimation_inputs_json}" "${ploidy_estimation_outputs_json}"
 
 sample_sex_assignments=$(jq -r ".sample_sex_assignments" "${ploidy_estimation_outputs_json}")
 
