@@ -3,5 +3,6 @@
 
   "bam_or_cram_file" : "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.cram.2019-02-06/Sample_NA12878/analysis/NA12878.final.cram",
   "bam_or_cram_index" : "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.cram.2019-02-06/Sample_NA12878/analysis/NA12878.final.cram.crai",
-  "sample_id" : "NA12878"
+  "sample_id" : "NA12878",
+  "sl_cutoff_table": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/sl_cutoffs.tsv"
 }
