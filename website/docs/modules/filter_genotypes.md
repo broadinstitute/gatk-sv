@@ -61,6 +61,9 @@ This is an output from the [SL optimization script](https://github.com/broadinst
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `no_call_rate_cutoff`
 Default: `0.05`. Threshold fraction of samples that must have no-call genotypes in order to filter a variant. Set to 1 to disable.
 
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `sl_filter_args`
+Arguments for the [SL filtering script](https://github.com/broadinstitute/gatk-sv/blob/main/src/sv-pipeline/scripts/apply_sl_filter.py). 
+
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `run_qc`
 Default: `true`. Enable running [MainVcfQc](./mvqc) automatically. By default, filtered variants will be excluded from
 the plots.

@@ -589,15 +589,17 @@ workflow GATKSVPipelineSingleSample {
     Int min_pe_cpx = 3
     Int min_pe_ctx = 3
 
-    # FilterGenotypes
+    # TrainGenotypeFilteringModel
+    File? truth_json
     File gq_recalibrator_model_file
     Array[String] recalibrate_gq_args = []
     Array[File] genome_tracks = []
-    Float no_call_rate_cutoff = 0.05
     Float fmax_beta = 0.4
     
-    File? truth_json
+    # FilterGenotypes
     File sl_cutoff_table
+    Float no_call_rate_cutoff = 0.05 # Set to 1 to disable NCR filtering
+    String? sl_filter_args # Explicitly set SL arguments - see apply_sl_filter.py
 
     ############################################################
     ## Single sample metrics
@@ -1428,9 +1430,10 @@ workflow GATKSVPipelineSingleSample {
       vcf=TrainGenotypeFilteringModel.unfiltered_recalibrated_vcf,
       output_prefix=sample_id,
       ploidy_table=JoinRawCalls.ploidy_table,
+      no_call_rate_cutoff=no_call_rate_cutoff,
       sl_cutoff_table=sl_cutoff_table,
       optimized_sl_cutoff_table=TrainGenotypeFilteringModel.sl_cutoff_table,
-      no_call_rate_cutoff=no_call_rate_cutoff,
+      sl_filter_args=sl_filter_args,
       run_qc=false,
       primary_contigs_fai=primary_contigs_fai,
       sv_base_mini_docker=sv_base_mini_docker,

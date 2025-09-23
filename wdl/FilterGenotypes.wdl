@@ -12,8 +12,9 @@ workflow FilterGenotypes {
     File ploidy_table
     File sl_cutoff_table
     File? optimized_sl_cutoff_table
+    Float no_call_rate_cutoff = 0.05 # Set to 1 to disable NCR filtering
+    String? sl_filter_args # Explicitly set SL arguments - see apply_sl_filter.py
 
-    Float no_call_rate_cutoff = 0.05
     Int filter_vcf_records_per_shard = 20000
     String header_drop_fields = "FILTER/LOW_QUALITY,FORMAT/TRUTH_CN_EQUAL,FORMAT/GT_FILTER,FORMAT/CONC_ST,INFO/STATUS,INFO/TRUTH_AC,INFO/TRUTH_AN,INFO/TRUTH_AF,INFO/TRUTH_VID,INFO/CNV_CONCORDANCE,INFO/GENOTYPE_CONCORDANCE,INFO/HET_PPV,INFO/HET_SENSITIVITY,INFO/HOMVAR_PPV,INFO/HOMVAR_SENSITIVITY,INFO/MINSL,INFO/NON_REF_GENOTYPE_CONCORDANCE,INFO/SL_MAX,INFO/SL_MEAN,INFO/VAR_PPV,INFO/VAR_SENSITIVITY,INFO/VAR_SPECIFICITY"
 
@@ -51,6 +52,7 @@ workflow FilterGenotypes {
         ploidy_table=ploidy_table,
         ncr_threshold=no_call_rate_cutoff,
         sl_cutoff_table=select_first([optimized_sl_cutoff_table, sl_cutoff_table]),
+        args=sl_filter_args,
         output_prefix="~{output_prefix_}.filter_genotypes.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker
     }
@@ -108,6 +110,7 @@ task FilterVcf {
     Float ncr_threshold
     File? sl_cutoff_table
     File? script
+    String? args
     String output_prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -137,6 +140,7 @@ task FilterVcf {
       --ploidy-table ~{ploidy_table} \
       --ncr-threshold ~{ncr_threshold} \
       ~{if defined(sl_cutoff_table) then "--sl-cutoff-table " + sl_cutoff_table else ""} \
+      ~{args}
 
     bcftools +fill-tags tmp.vcf.gz -- -t AC,AN,AF \
       | bcftools view --no-update -i 'SVTYPE=="CNV" || AC>0' -Oz -o ~{output_prefix}.vcf.gz
