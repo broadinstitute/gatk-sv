@@ -28,7 +28,6 @@ workflow VcfLiftOver {
         call LiftOver{
             input:
                 bed = Vcf2Bed.bed,
-                chain = chain_file,
                 docker_file = liftover_docker,
                 runtime_attr_override = runtime_attr_liftover
         }
