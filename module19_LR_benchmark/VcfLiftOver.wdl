@@ -38,7 +38,7 @@ workflow VcfLiftOver {
                 bed = LiftOver.bed_hg38, 
                 vcf = vcfs[i],
                 vcf_idx = vcf_idxes[i],
-                UpdateVcfWithBed_script = UpdateVcfWithBed_script
+                UpdateVcfWithBed_script = UpdateVcfWithBed_script,
                 docker_file = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_update_vcf
         }
