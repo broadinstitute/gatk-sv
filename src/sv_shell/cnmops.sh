@@ -1,0 +1,141 @@
+#!/bin/bash
+
+set -Eeuo pipefail
+
+
+function getJavaMem() {
+  # get JVM memory in MiB by getting total memory from /proc/meminfo
+  # and multiplying by java_mem_fraction
+
+  local mem_fraction=${java_mem_fraction:=0.85}
+  cat /proc/meminfo | \
+    awk -v MEM_FIELD="$1" -v frac="${mem_fraction}" '{
+      f[substr($1, 1, length($1)-1)] = $2
+    } END {
+      printf "%dM", f[MEM_FIELD] * frac / 1024
+    }'
+}
+JVM_MAX_MEM=$(getJavaMem MemTotal)
+echo "JVM memory: $JVM_MAX_MEM"
+
+
+function CNSampleNormal() {
+  # TODO: check if these variables are correctly set
+  local _chr=$1
+  local _exclude=$2  # TODO no need for local
+  local _ped=$3  # TODO no need for local
+  local _mode=$4
+  local _r=$5
+  local _ref_dict=$6  # TODO: no need for local
+  local _bincov_matrix=$7  # TODO: no need for local
+
+
+  echo "---------------------------------------------------"
+  echo "${_chr}"
+  echo "${_exclude}"
+  echo "${_ped}"
+  echo "${_mode}"
+  echo "${_r}"
+  echo "${_ref_dict}"
+  echo "${_bincov_matrix}"
+  echo "---------------------------------------------------"
+
+  # TODO: need to create a temp dir and cd into that dir AT THE CALLER LEVEL, then you know where the output file is
+
+  java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar PrintSVEvidence \
+    --sequence-dictionary "${_ref_dict}" \
+    --evidence-file "${_bincov_matrix}" \
+    -L "${_chr}" \
+    -O "${_chr}.RD.txt"
+
+  if [ "${_mode}" == "normal" ]; then
+    mv "${_chr}.RD.txt" "${_chr}.${_mode}.RD.txt"
+  else
+    awk -v sex="${_mode}" '$5==sex' "${_ped}" | cut -f2 > ids.to.include
+    col=$(head -n 1 "${_chr}.RD.txt" | tr '\t' '\n'|cat -n| grep -wf ids.to.include | awk -v ORS="," '{print $1}' | sed 's/,$//g' | sed 's:\([0-9]\+\):$&:g')
+    col_a="{print \$1,\$2,\$3,$col}"
+    awk -f <(echo "$col_a") "${_chr}.RD.txt" | tr ' ' '\t' > "${_chr}.${_mode}.RD.txt"
+  fi
+
+  # redirect stdout and stderr to cnmops.out so that EMPTY_OUTPUT_ERROR can be detected, but use tee to also output them to
+  # terminal so that errors can be debugged
+  EMPTY_OUTPUT_ERROR="No CNV regions in result object. Rerun cn.mops with different parameters!"
+  set +e
+  bash /opt/WGD/bin/cnMOPS_workflow.sh -S "${_exclude}" -x "${_exclude}" -r "${_r}" -o . -M "${_chr}.${_mode}.RD.txt" 2>&1 | tee cnmops.out
+  RC=$?
+  set -e
+  if [ ! $RC -eq 0 ]; then
+    if grep -q "$EMPTY_OUTPUT_ERROR" "cnmops.out"; then
+      touch calls/cnMOPS.cnMOPS.gff
+    else
+      echo "cnMOPS_workflow.sh returned a non-zero code that was not due to an empty call file."
+      exit $RC
+    fi
+  fi
+}
+
+
+
+
+
+
+# -------------------------------------------------------
+# ==================== Input & Setup ====================
+# -------------------------------------------------------
+
+
+input_json=${1}
+output_json_filename=${2-""}
+output_dir=${3:-""}
+
+input_json="$(realpath ${input_json})"
+
+if [ -z "${output_dir}" ]; then
+  output_dir=$(mktemp -d /output_batch_evidence_merging_XXXXXXXX)
+else
+  mkdir -p "${output_dir}"
+fi
+output_dir="$(realpath ${output_dir})"
+
+if [ -z "${output_json_filename}" ]; then
+  output_json_filename="${output_dir}/output.json"
+else
+  output_json_filename="$(realpath ${output_json_filename})"
+fi
+
+working_dir=$(mktemp -d /wd_batch_evidence_merging_XXXXXXXX)
+working_dir="$(realpath ${working_dir})"
+cd "${working_dir}"
+
+
+allo_file=($(jq -r '.allo_file' "$input_json"))
+exclude_list=($(jq -r '.exclude_list' "$input_json"))
+ped_file=($(jq -r '.ped_file' "$input_json"))
+r1=($(jq -r '.r1' "$input_json"))
+r2=($(jq -r '.r2' "$input_json"))
+ref_dict=($(jq -r '.ref_dict' "$input_json"))
+bincov_matrix=($(jq -r '.bincov_matrix' "$input_json"))
+
+
+# -------------------------------------------------------
+# ======================= Command =======================
+# -------------------------------------------------------
+
+
+allos=($(awk '{print $1}' "${allo_file}"))
+
+# Male R2
+for allo in "${allos[@]}"; do
+  CNSampleNormal "${allo}" "${exclude_list}" "${ped_file}" "1" "${r2}" "${ref_dict}" "${bincov_matrix}"
+done
+
+first_row_string="${Allos[0]}"
+
+echo "${first_row_string}"
+
+# Split that string into a new array called 'fields'
+# read -ra splits on whitespace (tabs and spaces)
+read -ra fields <<< "$first_row_string"
+
+# Now access an element from the 'fields' array (e.g., the 2nd field is at index 1)
+echo "${fields[1]}"
