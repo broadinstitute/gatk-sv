@@ -5,7 +5,6 @@ workflow VcfLiftOver {
     input {
         Array[File] vcfs
         Array[File] vcf_idxes
-        File chain_file   # hs1ToHg38.over.chain.gz
         File vcf2bed_script
         File UpdateVcfWithBed_script
         String sv_base_mini_docker
@@ -59,7 +58,7 @@ task Vcf2Bed {
         File vcf
         File vcf_idx
         File vcf2bed_script
-        File docker_file
+        String docker_file
         RuntimeAttr? runtime_attr_override
     }
 
@@ -79,7 +78,7 @@ task Vcf2Bed {
 
 
     command <<<
-        python ~{vcf2bed_script} ~{vcf} ~{prefix}.bed
+        python /vcf2bed.mc_vcf.py ~{vcf} ~{prefix}.bed
     >>>
 
     output {
@@ -100,8 +99,7 @@ task Vcf2Bed {
 task LiftOver {
     input {
         File bed
-        File chain
-        File docker_file
+        String docker_file
         RuntimeAttr? runtime_attr_override
     }
 
@@ -120,7 +118,7 @@ task LiftOver {
     String prefix = basename(bed, ".bed")
 
     command <<<
-        ./src/liftOver ~{bed} ~{chain} ~{prefix}.hg38.bed ~{prefix}.hg38.remain
+        /opt/liftOver ~{bed} /opt/chain_data/hs1ToHg38.over.chain.gz ~{prefix}.hg38.bed ~{prefix}.hg38.remain
     >>>
 
     output {
@@ -145,7 +143,7 @@ task UpdateVcf {
         File vcf
         File vcf_idx
         File UpdateVcfWithBed_script
-        File docker_file
+        String docker_file
         RuntimeAttr? runtime_attr_override
     }
 
@@ -164,7 +162,7 @@ task UpdateVcf {
     String prefix = basename(vcf, ".vcf.gz")
 
     command <<<
-        python ~{UpdateVcfWithBed_script} ~{bed} ~{vcf} ~{prefix}.hg38.vcf.gz
+        python /opt/UpdateVcfWithBed.py ~{bed} ~{vcf} ~{prefix}.hg38.vcf.gz
         tabix -p vcf ~{prefix}.hg38.vcf.gz
     >>>
 
