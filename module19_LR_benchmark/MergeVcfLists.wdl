@@ -5,6 +5,7 @@ workflow MergeVCFLists {
     input {
         Array[File] vcf_list1  # List of bgzipped VCFs
         Array[File] vcf_list2  # List of bgzipped VCFs
+        Array[String] contig_list
         String output_prefix
         String sv_base_mini_docker
         RuntimeAttr? runtime_attr_merge1
@@ -18,7 +19,8 @@ workflow MergeVCFLists {
             input:
                 vcf1 = vcf_list1[i],
                 vcf2 = vcf_list2[i],
-                prefix = "pair_~{i}",
+                prefix = output_prefix,
+                contig = contig_list[i],
                 docker_file = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_merge1
         }
@@ -45,6 +47,7 @@ task MergePair {
         File vcf1
         File vcf2
         String prefix
+        String contig
         String docker_file
         RuntimeAttr? runtime_attr_override
 
@@ -62,14 +65,14 @@ task MergePair {
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     command <<<
-        bcftools merge -Oz -o ~{prefix}.temp_merged.vcf.gz ~{vcf1} ~{vcf2}
-        bcftools sort -Oz -o ~{prefix}.vcf.gz ~{prefix}.temp_merged.vcf.gz
-        tabix -p vcf ~{prefix}.vcf.gz
-        rm ~{prefix}.temp_merged.vcf.gz
+        bcftools merge -Oz -o ~{prefix}.~{contig}.temp_merged.vcf.gz ~{vcf1} ~{vcf2}
+        bcftools sort -Oz -o ~{prefix}.~{contig}.vcf.gz ~{prefix}.~{contig}.temp_merged.vcf.gz
+        tabix -p vcf ~{prefix}.~{contig}.vcf.gz
+        rm ~{prefix}.~{contig}.temp_merged.vcf.gz
     >>>
 
     output {
-        File output_vcfs = "~{prefix}.vcf.gz"
+        File output_vcfs = "~{prefix}.~{contig}.vcf.gz"
     }
 
     runtime {
