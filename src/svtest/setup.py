@@ -16,4 +16,4 @@ setup(name='svtest',
       include_package_data=True,
       zip_safe=False,
       scripts=['scripts/svtest'],
-      install_requires=['numpy', 'matplotlib', 'pandas', 'intervaltree', 'pysam'])
+      install_requires=['numpy', 'matplotlib', 'pandas', 'intervaltree', 'pysam>=0.23.3'])
