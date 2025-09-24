@@ -77,7 +77,7 @@ task Vcf2Bed {
 
 
     command <<<
-        python /vcf2bed.mc_vcf.py ~{vcf} ~{prefix}.bed
+        python /opt/xz_scripts/vcf2bed.mc_vcf.py ~{vcf} ~{prefix}.bed
     >>>
 
     output {
@@ -161,7 +161,7 @@ task UpdateVcf {
     String prefix = basename(vcf, ".vcf.gz")
 
     command <<<
-        python /opt/UpdateVcfWithBed.py ~{bed} ~{vcf} ~{prefix}.hg38.vcf.gz
+        python /opt/xz_scripts/UpdateVcfWithBed.py ~{bed} ~{vcf} ~{prefix}.hg38.vcf.gz
         tabix -p vcf ~{prefix}.hg38.vcf.gz
     >>>
 
