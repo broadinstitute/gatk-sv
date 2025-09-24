@@ -10,9 +10,9 @@ workflow FilterGenotypes {
     File vcf
     String? output_prefix
     File ploidy_table
-    File sl_cutoff_table
-    File? optimized_sl_cutoff_table
     Float no_call_rate_cutoff = 0.05 # Set to 1 to disable NCR filtering
+    File sl_cutoff_table # Sl filtering cutoff table
+    File? optimized_sl_cutoff_table # Overrides sl_cutoff_table if provided
     String? sl_filter_args # Explicitly set SL arguments - see apply_sl_filter.py
 
     Int filter_vcf_records_per_shard = 20000

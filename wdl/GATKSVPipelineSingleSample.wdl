@@ -597,8 +597,8 @@ workflow GATKSVPipelineSingleSample {
     Float fmax_beta = 0.4
     
     # FilterGenotypes
-    File sl_cutoff_table
     Float no_call_rate_cutoff = 0.05 # Set to 1 to disable NCR filtering
+    File sl_cutoff_table
     String? sl_filter_args # Explicitly set SL arguments - see apply_sl_filter.py
 
     ############################################################
