@@ -4,6 +4,7 @@ import "Structs.wdl"
 workflow FilterVCFsByAf {
     input {
         Array[File] vcfs
+        Array[File] vcf_idxes
         String sv_base_pipeline_docker
         RuntimeAttr? runtime_attr_filter_to_01_perc
         RuntimeAttr? runtime_attr_filter_to_05_perc
@@ -11,27 +12,30 @@ workflow FilterVCFsByAf {
 
     }
 
-    scatter (vcf in vcfs) {
+    scatter (i in range(length(vcfs))) {
         call FilterVcfTo01Perc { 
-        	input: 
-        		vcf = vcf,
-        		sv_base_pipeline_docker = sv_base_pipeline_docker,
-        		runtime_attr_override = runtime_attr_filter_to_01_perc
+            input: 
+                vcf = vcfs[i],
+                vcf_idx = vcf_idxes[i],
+                sv_base_pipeline_docker = sv_base_pipeline_docker,
+                runtime_attr_override = runtime_attr_filter_to_01_perc
         }
 
         call FilterVcfTo05Perc{
-        	input: 
-        		vcf = vcf,
-        		sv_base_pipeline_docker = sv_base_pipeline_docker,
-        		runtime_attr_override = runtime_attr_filter_to_05_perc
+            input: 
+                vcf = vcfs[i],
+                vcf_idx = vcf_idxes[i],
+                sv_base_pipeline_docker = sv_base_pipeline_docker,
+                runtime_attr_override = runtime_attr_filter_to_05_perc
         }
 
 
         call FilterVcfTo1Perc{
-        	input: 
-        		vcf = vcf,
-        		sv_base_pipeline_docker = sv_base_pipeline_docker,
-        		runtime_attr_override = runtime_attr_filter_to_1_perc
+            input: 
+                vcf = vcfs[i],
+                vcf_idx = vcf_idxes[i],
+                sv_base_pipeline_docker = sv_base_pipeline_docker,
+                runtime_attr_override = runtime_attr_filter_to_1_perc
         }
 
     }
@@ -49,6 +53,7 @@ workflow FilterVCFsByAf {
 task FilterVcfTo01Perc {
     input {
         File vcf
+        File vcf_idx
         String sv_base_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
@@ -96,6 +101,7 @@ task FilterVcfTo01Perc {
 task FilterVcfTo05Perc {
     input {
         File vcf
+        File vcf_idx
         String sv_base_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
@@ -143,6 +149,7 @@ task FilterVcfTo05Perc {
 task FilterVcfTo1Perc {
     input {
         File vcf
+        File vcf_idx
         String sv_base_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
