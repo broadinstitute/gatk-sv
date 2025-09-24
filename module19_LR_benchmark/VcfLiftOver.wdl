@@ -5,8 +5,6 @@ workflow VcfLiftOver {
     input {
         Array[File] vcfs
         Array[File] vcf_idxes
-        File vcf2bed_script
-        File UpdateVcfWithBed_script
         String sv_base_mini_docker
         String liftover_docker
         RuntimeAttr? runtime_attr_vcf2bed
@@ -20,7 +18,6 @@ workflow VcfLiftOver {
             input: 
                 vcf = vcfs[i],
                 vcf_idx = vcf_idxes[i],
-                vcf2bed_script = vcf2bed_script,
                 docker_file = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_vcf2bed
             }
@@ -37,7 +34,6 @@ workflow VcfLiftOver {
                 bed = LiftOver.bed_hg38, 
                 vcf = vcfs[i],
                 vcf_idx = vcf_idxes[i],
-                UpdateVcfWithBed_script = UpdateVcfWithBed_script,
                 docker_file = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_update_vcf
         }
@@ -56,7 +52,6 @@ task Vcf2Bed {
     input {
         File vcf
         File vcf_idx
-        File vcf2bed_script
         String docker_file
         RuntimeAttr? runtime_attr_override
     }
@@ -141,7 +136,6 @@ task UpdateVcf {
         File bed
         File vcf
         File vcf_idx
-        File UpdateVcfWithBed_script
         String docker_file
         RuntimeAttr? runtime_attr_override
     }
