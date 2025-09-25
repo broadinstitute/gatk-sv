@@ -5,6 +5,8 @@ workflow MergeVCFLists {
     input {
         Array[File] vcf_list1  # List of bgzipped VCFs
         Array[File] vcf_list2  # List of bgzipped VCFs
+        Array[File] vcf_idx_list1  # List of vcf index
+        Array[File] vcf_idx_list2  # List of vcf index
         Array[String] contig_list
         String output_prefix
         String sv_base_mini_docker
@@ -19,6 +21,8 @@ workflow MergeVCFLists {
             input:
                 vcf1 = vcf_list1[i],
                 vcf2 = vcf_list2[i],
+                idx1 = vcf_idx_list1[i],
+                idx2 = vcf_idx_list2[i],
                 prefix = output_prefix,
                 contig = contig_list[i],
                 docker_file = sv_base_mini_docker,
@@ -29,7 +33,8 @@ workflow MergeVCFLists {
     # Merge all pairwise merged VCFs into final output
     call MergeAll {
         input:
-            vcfs_to_merge = MergePair.output_vcfs,
+            vcfs_to_merge = MergePair.output_vcf,
+            idxes_to_merge = MergePair.output_idx,
             output_prefix = output_prefix,
             docker_file = sv_base_mini_docker,
             runtime_attr_override = runtime_attr_merge2
@@ -46,6 +51,8 @@ task MergePair {
     input {
         File vcf1
         File vcf2
+        File idx1
+        File idx2
         String prefix
         String contig
         String docker_file
@@ -72,7 +79,8 @@ task MergePair {
     >>>
 
     output {
-        File output_vcfs = "~{prefix}.~{contig}.vcf.gz"
+        File output_vcf = "~{prefix}.~{contig}.vcf.gz"
+        File output_idx = "~{prefix}.~{contig}.vcf.gz.tbi"
     }
 
     runtime {
@@ -89,6 +97,7 @@ task MergePair {
 task MergeAll {
     input {
         Array[File] vcfs_to_merge
+        Array[File] idxes_to_merge
         String output_prefix
         String docker_file
         RuntimeAttr? runtime_attr_override
