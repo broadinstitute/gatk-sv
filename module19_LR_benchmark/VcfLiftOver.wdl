@@ -18,7 +18,7 @@ workflow VcfLiftOver {
             input: 
                 vcf = vcfs[i],
                 vcf_idx = vcf_idxes[i],
-                docker_file = sv_base_mini_docker,
+                docker_file = liftover_docker,
                 runtime_attr_override = runtime_attr_vcf2bed
             }
 
@@ -34,7 +34,7 @@ workflow VcfLiftOver {
                 bed = LiftOver.bed_hg38, 
                 vcf = vcfs[i],
                 vcf_idx = vcf_idxes[i],
-                docker_file = sv_base_mini_docker,
+                docker_file = liftover_docker,
                 runtime_attr_override = runtime_attr_update_vcf
         }
 
