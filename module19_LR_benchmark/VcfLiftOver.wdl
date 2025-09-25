@@ -156,12 +156,12 @@ task UpdateVcf {
 
     command <<<
         python /opt/xz_scripts/UpdateVcfWithBed.py ~{bed} ~{vcf} ~{prefix}.hg38.vcf.gz
-        tabix -p vcf ~{prefix}.hg38.vcf.gz
+        #tabix -p vcf ~{prefix}.hg38.vcf.gz
     >>>
 
     output {
         File updated_vcf = "~{prefix}.hg38.vcf.gz"
-        File updated_vcf_tbi = "~{prefix}.hg38.vcf.gz.tbi"
+        #File updated_vcf_tbi = "~{prefix}.hg38.vcf.gz.tbi"
     }
 
     runtime {
