@@ -24,7 +24,7 @@ setup(
     install_requires=[
         'numpy',
         'scipy',
-        'pysam>=0.23.3',
+        'pysam>=0.11.2.2',
         'pybedtools',
         'cython',
         'natsort',

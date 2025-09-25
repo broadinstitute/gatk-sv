@@ -30,7 +30,7 @@ setup(
         "pandas",
         "tqdm",
         "psutil",
-        "pysam>=0.23.3",
+        "pysam",
         "dill",
         "pympler",
         "matplotlib",

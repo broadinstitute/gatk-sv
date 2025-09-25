@@ -1,8 +1,0 @@
-[build-system]
-requires = [
-    "setuptools>=80.1.0",
-    "wheel",
-    "cython>=0.29.28",
-    "pysam>=0.23.0"
-]
-build-backend = "setuptools.build_meta"
