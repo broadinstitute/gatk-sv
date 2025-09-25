@@ -7,6 +7,7 @@ workflow VcfLiftOver {
         File vcf_idx
         String sv_base_mini_docker
         String liftover_docker
+        File update_vcf_py
         RuntimeAttr? runtime_attr_vcf2bed
         RuntimeAttr? runtime_attr_liftover
         RuntimeAttr? runtime_attr_update_vcf
@@ -33,6 +34,7 @@ workflow VcfLiftOver {
             bed = LiftOver.bed_hg38, 
             vcf = vcf,
             vcf_idx = vcf_idx,
+            update_vcf_py = update_vcf_py,
             docker_file = liftover_docker,
             runtime_attr_override = runtime_attr_update_vcf
     }
@@ -132,6 +134,7 @@ task UpdateVcf {
         File bed
         File vcf
         File vcf_idx
+        File update_vcf_py
         String docker_file
         RuntimeAttr? runtime_attr_override
     }
@@ -151,7 +154,7 @@ task UpdateVcf {
     String prefix = basename(vcf, ".vcf.gz")
 
     command <<<
-        python /opt/xz_scripts/UpdateVcfWithBed.py ~{bed} ~{vcf} ~{prefix}.hg38.vcf.gz
+        python ~{update_vcf_py} ~{bed} ~{vcf} ~{prefix}.hg38.vcf.gz
         gunzip ~{prefix}.hg38.vcf.gz
         bgzip ~{prefix}.hg38.vcf
         bcftools sort ~{prefix}.hg38.vcf.gz -Oz -o ~{prefix}.hg38.sorted.vcf.gz
