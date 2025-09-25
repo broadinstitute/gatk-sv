@@ -30,6 +30,8 @@ workflow BenchmarkVcfSites{
         String? truvari_params
         String sv_base_mini_docker
         String sv_pipeline_base_docker
+
+        RuntimeAttr? runtime_attr_benchmark_SNVs
     }
 
     String query_prefix = basename(query_vcf, ".vcf.gz")
@@ -75,7 +77,9 @@ workflow BenchmarkVcfSites{
                 segmental_duplicates = segmental_duplicates,
 
                 sv_base_mini_docker = sv_base_mini_docker,
-                sv_pipeline_base_docker = sv_pipeline_base_docker
+                sv_pipeline_base_docker = sv_pipeline_base_docker,
+
+                runtime_attr_benchmark_SNVs = runtime_attr_benchmark_SNVs
           }
     }
 

@@ -31,6 +31,8 @@ workflow BenchmarkVcfSitesPerContig{
     String? truvari_params
     String sv_base_mini_docker
     String sv_pipeline_base_docker
+
+    RuntimeAttr? runtime_attr_benchmark_SNVs
   }
 
   String prefix_query = basename(query_vcf,'.vcf.gz')
@@ -96,12 +98,13 @@ workflow BenchmarkVcfSitesPerContig{
         comp_vcf = split_query.indels_lt_20_vcf,
         base_vcf = split_ref.indels_lt_20_vcf,
         prefix = "~{chromosome}.lt_20bp",
-        docker_image = sv_pipeline_base_docker
+        docker_image = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_benchmark_SNVs
   }
 
 
   if (short_read_benchmark){
-    call LongReadGenotypeTasks.BenchmarkSVsV2 as truvari_bench_lt_20bp_sr{
+    call LongReadGenotypeTasks.BenchmarkSVsV2 as truvari_bench_gt_20bp_sr{
       input:
         comp_vcf  = split_query.svs_gt_20_vcf,
         base_vcf  = split_ref.svs_gt_20_vcf,
@@ -124,10 +127,10 @@ workflow BenchmarkVcfSitesPerContig{
     }
   }
 
-  File SV_tp_comp_vcf =  select_first([truvari_bench_lt_20bp_sr.tp_comp_vcf, truvari_bench_gt_20bp_lr.tp_comp_vcf])
-  File SV_tp_base_vcf =  select_first([truvari_bench_lt_20bp_sr.tp_base_vcf, truvari_bench_gt_20bp_lr.tp_base_vcf])
-  File SV_fp_vcf      =  select_first([truvari_bench_lt_20bp_sr.fp_vcf,      truvari_bench_gt_20bp_lr.fp_vcf])
-  File SV_fn_vcf      =  select_first([truvari_bench_lt_20bp_sr.fn_vcf,      truvari_bench_gt_20bp_lr.fn_vcf])
+  File SV_tp_comp_vcf =  select_first([truvari_bench_gt_20bp_sr.tp_comp_vcf, truvari_bench_gt_20bp_lr.tp_comp_vcf])
+  File SV_tp_base_vcf =  select_first([truvari_bench_gt_20bp_sr.tp_base_vcf, truvari_bench_gt_20bp_lr.tp_base_vcf])
+  File SV_fp_vcf      =  select_first([truvari_bench_gt_20bp_sr.fp_vcf,      truvari_bench_gt_20bp_lr.fp_vcf])
+  File SV_fn_vcf      =  select_first([truvari_bench_gt_20bp_sr.fn_vcf,      truvari_bench_gt_20bp_lr.fn_vcf])
 
   call LongReadGenotypeTasks.ConcatVcfs as merge_tp_query{
     input:
