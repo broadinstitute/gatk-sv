@@ -116,9 +116,10 @@ task ConcatAll {
 
     command <<<
 
-        cat > vcfs.list <<EOF
-        ~{sep="\n" vcfs_to_merge}
-        EOF
+
+        for vcf in ~{sep=" " vcfs_to_merge}; do
+          echo $vcf >> vcfs.list
+        done
 
 
         bcftools concat -a -Oz -f vcfs.list -o ~{output_prefix}.vcf.gz
