@@ -3,8 +3,8 @@ import "Structs.wdl"
 
 workflow VcfLiftOver {
     input {
-        Array[File] vcfs
-        Array[File] vcf_idxes
+        File vcf
+        File vcf_idx
         String sv_base_mini_docker
         String liftover_docker
         RuntimeAttr? runtime_attr_vcf2bed
@@ -13,37 +13,34 @@ workflow VcfLiftOver {
 
     }
 
-    scatter(i in range(length(vcfs))){
-        call Vcf2Bed {
-            input: 
-                vcf = vcfs[i],
-                vcf_idx = vcf_idxes[i],
-                docker_file = liftover_docker,
-                runtime_attr_override = runtime_attr_vcf2bed
-            }
-
-        call LiftOver{
-            input:
-                bed = Vcf2Bed.bed,
-                docker_file = liftover_docker,
-                runtime_attr_override = runtime_attr_liftover
+    call Vcf2Bed {
+        input: 
+            vcf = vcf,
+            vcf_idx = vcf_idx,
+            docker_file = liftover_docker,
+            runtime_attr_override = runtime_attr_vcf2bed
         }
 
-        call UpdateVcf {
-            input: 
-                bed = LiftOver.bed_hg38, 
-                vcf = vcfs[i],
-                vcf_idx = vcf_idxes[i],
-                docker_file = liftover_docker,
-                runtime_attr_override = runtime_attr_update_vcf
-        }
+    call LiftOver{
+        input:
+            bed = Vcf2Bed.bed,
+            docker_file = liftover_docker,
+            runtime_attr_override = runtime_attr_liftover
+    }
 
-
+    call UpdateVcf {
+        input: 
+            bed = LiftOver.bed_hg38, 
+            vcf = vcf,
+            vcf_idx = vcf_idx,
+            docker_file = liftover_docker,
+            runtime_attr_override = runtime_attr_update_vcf
     }
 
 
     output {
-        Array[File] lifted_vcf = UpdateVcf.updated_vcf
+        File lifted_vcf = UpdateVcf.updated_vcf
+        File lifted_vcf_idx = UpdateVcf.updated_vcf_tbi
     }
 }
 
@@ -155,12 +152,15 @@ task UpdateVcf {
 
     command <<<
         python /opt/xz_scripts/UpdateVcfWithBed.py ~{bed} ~{vcf} ~{prefix}.hg38.vcf.gz
-        #tabix -p vcf ~{prefix}.hg38.vcf.gz
+        gunzip ~{prefix}.hg38.vcf.gz
+        bgzip ~{prefix}.hg38.vcf
+        bcftools sort ~{prefix}.hg38.vcf.gz -Oz -o ~{prefix}.hg38.sorted.vcf.gz
+        tabix -p vcf ~{prefix}.hg38.sorted.vcf.gz
     >>>
 
     output {
-        File updated_vcf = "~{prefix}.hg38.vcf.gz"
-        #File updated_vcf_tbi = "~{prefix}.hg38.vcf.gz.tbi"
+        File updated_vcf = "~{prefix}.hg38.sorted.vcf.gz"
+        File updated_vcf_tbi = "~{prefix}.hg38.sorted.vcf.gz.tbi"
     }
 
     runtime {
