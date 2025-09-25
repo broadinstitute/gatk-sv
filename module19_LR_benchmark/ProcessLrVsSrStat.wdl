@@ -35,7 +35,7 @@ workflow ProcessLrVsSrStat {
           bed = AddGC.out_bed, 
           calcu_stat_R = calcu_stat_R, 
           related = related,
-          String appdix = "full",
+          appdix = "full",
           docker_file = sv_base_mini_docker
       }
 
@@ -51,8 +51,8 @@ workflow ProcessLrVsSrStat {
           bed = TpVcf2Bed.bed, 
           calcu_stat_R = calcu_stat_R, 
           related = related,
-          String appdix = "TP",
-        docker_file = sv_base_mini_docker
+          appdix = "TP",
+          docker_file = sv_base_mini_docker
      }
 
   output {
