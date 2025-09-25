@@ -44,7 +44,6 @@ workflow VcfLiftOver {
 
     output {
         Array[File] lifted_vcf = UpdateVcf.updated_vcf
-        Array[File] lifted_vcf_idx = UpdateVcf.updated_vcf_tbi
     }
 }
 
