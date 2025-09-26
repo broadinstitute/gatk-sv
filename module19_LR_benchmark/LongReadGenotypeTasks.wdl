@@ -1128,10 +1128,19 @@ task ExtractVariantSites {
         else:
           return str(abs(len(alt) - len(ref)))
 
-
+    #read in the vcf:
     vcf_in = pysam.VariantFile("~{input_vcf}")
+    header = vcf_in.header
+    if "GT" not in header.formats:
+        header.formats.add(
+            "GT",      # ID
+            1,         # Number
+            "String",  # Type
+            "Genotype" # Description
+        )
+
     #rewrite the vcfs in the a new file with the SVID updated to be consistent with the bed file
-    vcf_out= pysam.VariantFile("~{prefix}.SVID_updated.vcf.gz", 'w', header = vcf_in.header)
+    vcf_out= pysam.VariantFile("~{prefix}.SVID_updated.vcf.gz", 'w', header = header)
     
     with open("~{prefix}.variant_sites.bed", "w") as out:
         for rec in vcf_in.fetch():
