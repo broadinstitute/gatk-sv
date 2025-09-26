@@ -123,10 +123,11 @@ task AddGC {
 
   command <<<
     Rscript ~{add_GC_R} ~{bed} ~{SVID_GC} ~{prefix}.with_GC
+    bgzip ~{prefix}.with_GC
   >>>
 
   output {
-    File out_bed = "~{prefix}.with_GC"
+    File out_bed = "~{prefix}.with_GC.gz"
   }
 
   RuntimeAttr default_attr = object {
