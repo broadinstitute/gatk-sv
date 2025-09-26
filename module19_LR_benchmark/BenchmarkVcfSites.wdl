@@ -34,6 +34,8 @@ workflow BenchmarkVcfSites{
         RuntimeAttr? runtime_attr_benchmark_SNVs
         RuntimeAttr? runtime_attr_add_dummy_gt_ref
         RuntimeAttr? runtime_attr_add_dummy_gt_query
+        RuntimeAttr? runtime_attr_extract_variant_sites_ref
+        RuntimeAttr? runtime_attr_extract_variant_sites_query
     }
 
     String query_prefix = basename(query_vcf, ".vcf.gz")
@@ -83,7 +85,9 @@ workflow BenchmarkVcfSites{
 
                 runtime_attr_benchmark_SNVs = runtime_attr_benchmark_SNVs,
                 runtime_attr_add_dummy_gt_ref = runtime_attr_add_dummy_gt_ref,
-                runtime_attr_add_dummy_gt_query = runtime_attr_add_dummy_gt_query
+                runtime_attr_add_dummy_gt_query = runtime_attr_add_dummy_gt_query,
+                runtime_attr_extract_variant_sites_ref = runtime_attr_extract_variant_sites_ref,
+                runtime_attr_extract_variant_sites_query = runtime_attr_extract_variant_sites_query
           }
     }
 

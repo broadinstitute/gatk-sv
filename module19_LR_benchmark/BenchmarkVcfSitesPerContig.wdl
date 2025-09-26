@@ -35,6 +35,8 @@ workflow BenchmarkVcfSitesPerContig{
     RuntimeAttr? runtime_attr_benchmark_SNVs
     RuntimeAttr? runtime_attr_add_dummy_gt_ref
     RuntimeAttr? runtime_attr_add_dummy_gt_query
+    RuntimeAttr? runtime_attr_extract_variant_sites_ref
+    RuntimeAttr? runtime_attr_extract_variant_sites_query
   }
 
   String prefix_query = basename(query_vcf,'.vcf.gz')
@@ -73,13 +75,15 @@ workflow BenchmarkVcfSitesPerContig{
   call LongReadGenotypeTasks.ExtractVariantSites as extract_variant_sites_query{
     input:
       input_vcf = add_dummy_gt_query.vcf_file,
-      docker_image = sv_pipeline_base_docker
+      docker_image = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_extract_variant_sites_query
   }
 
   call LongReadGenotypeTasks.ExtractVariantSites as extract_variant_sites_ref{
     input:
       input_vcf = add_dummy_gt_ref.vcf_file,
-      docker_image = sv_pipeline_base_docker
+      docker_image = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_extract_variant_sites_ref
   }
 
   call LongReadGenotypeTasks.SplitVariantsBySizeAt20bp as split_query{
