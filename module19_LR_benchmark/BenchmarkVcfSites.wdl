@@ -32,6 +32,8 @@ workflow BenchmarkVcfSites{
         String sv_pipeline_base_docker
 
         RuntimeAttr? runtime_attr_benchmark_SNVs
+        RuntimeAttr? runtime_attr_split_ref
+        RuntimeAttr? runtime_attr_split_query
         RuntimeAttr? runtime_attr_add_dummy_gt_ref
         RuntimeAttr? runtime_attr_add_dummy_gt_query
         RuntimeAttr? runtime_attr_extract_variant_sites_ref
@@ -84,6 +86,8 @@ workflow BenchmarkVcfSites{
                 sv_pipeline_base_docker = sv_pipeline_base_docker,
 
                 runtime_attr_benchmark_SNVs = runtime_attr_benchmark_SNVs,
+                runtime_attr_split_ref = runtime_attr_split_ref,
+                runtime_attr_split_query = runtime_attr_split_query,
                 runtime_attr_add_dummy_gt_ref = runtime_attr_add_dummy_gt_ref,
                 runtime_attr_add_dummy_gt_query = runtime_attr_add_dummy_gt_query,
                 runtime_attr_extract_variant_sites_ref = runtime_attr_extract_variant_sites_ref,
