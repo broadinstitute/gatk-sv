@@ -239,7 +239,7 @@ task SplitBed {
 
     set -euo pipefail
 
-    awk '{if ($1==~{contig}) print}' ~{bed} >> ~{contig}.bed
+    awk '{if ($1=="~{contig}") print}' ~{bed} >> ~{contig}.bed
   >>>
 
   output {
