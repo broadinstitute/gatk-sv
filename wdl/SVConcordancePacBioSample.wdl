@@ -81,7 +81,7 @@ workflow SVConcordancePacBioSample {
     }
     call tasks_cohort.SortVcf {
       input:
-        vcf=SVConcordanceTask.out_unsorted,
+        vcf=SVConcordanceTask.out,
         outfile_prefix="~{prefix}.concordance.~{tool_names[i]}.~{sample_id}.sorted",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_attr_sort_vcf

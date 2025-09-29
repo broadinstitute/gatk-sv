@@ -60,6 +60,9 @@ downstream workflows.
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `localize_shard_size`
 Default: `50000`. Shard size for parallel computations. Decreasing this parameter may help reduce run time.
 
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `min_ddup_thresh`
+Default: `5000`. Minimize size threshold used to classify a dispersed deletion.
+
 #### `complex_resolve_vcfs`
 Array of contig-sharded VCFs containing putative complex variants, generated in [ResolveComplexVariants](./rcv#complex_resolve_vcfs).
 

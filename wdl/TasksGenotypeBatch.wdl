@@ -358,6 +358,14 @@ task RDTestGenotype {
       -r ~{gt_cutoffs} \
       -y ~{bin_exclude} \
       -g TRUE
+
+    # In case of empty output, these files are not created
+    touch ~{prefix}.geno
+    touch ~{prefix}.median_geno
+    touch ~{prefix}.metrics
+    touch ~{prefix}.gq
+    touch ~{prefix}.vargq
+
     if [ ~{generate_melted_genotypes} == "true" ]; then
       /opt/sv-pipeline/04_variant_resolution/scripts/merge_RdTest_genotypes.py ~{prefix}.geno ~{prefix}.gq rd.geno.cnv.bed
       sort -k1,1V -k2,2n rd.geno.cnv.bed | uniq | bgzip -c > rd.geno.cnv.bed.gz

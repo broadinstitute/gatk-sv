@@ -121,7 +121,7 @@ workflow SingleSampleMetrics {
         baseline_vcf = baseline_genotyped_depth_vcf,
         samples = samples,
         prefix = "genotyped_depth",
-        types = "DEL,DUP",
+        types = "DEL,DUP,CNV",
         contig_list = contig_list,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_depth_metrics

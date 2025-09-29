@@ -13,7 +13,7 @@ workflow SVConcordance {
     File contig_list
     File reference_dict
 
-    # Reclustering parameters
+    # Stratification parameters
     File? clustering_config
     File? stratification_config
     Array[String]? track_names
@@ -25,7 +25,6 @@ workflow SVConcordance {
     Float? java_mem_fraction
 
     RuntimeAttr? runtime_attr_sv_concordance
-    RuntimeAttr? runtime_attr_sort_vcf
     RuntimeAttr? runtime_override_concat_shards
   }
 
@@ -34,7 +33,7 @@ workflow SVConcordance {
       input:
         eval_vcf=eval_vcf,
         truth_vcf=truth_vcf,
-        output_prefix="~{output_prefix}.concordance.~{contig}.unsorted",
+        output_prefix="~{output_prefix}.concordance.~{contig}",
         contig=contig,
         clustering_config=clustering_config,
         stratification_config=stratification_config,
@@ -45,20 +44,12 @@ workflow SVConcordance {
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_sv_concordance
     }
-
-    call tasks_cohort.SortVcf {
-      input:
-        vcf=SVConcordanceTask.out_unsorted,
-        outfile_prefix="~{output_prefix}.concordance.~{contig}.sorted",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_sort_vcf
-    }
   }
 
   call tasks_cohort.ConcatVcfs {
     input:
-      vcfs=SortVcf.out,
-      vcfs_idx=SortVcf.out_index,
+      vcfs=SVConcordanceTask.out,
+      vcfs_idx=SVConcordanceTask.out_index,
       naive=true,
       outfile_prefix="~{output_prefix}.concordance",
       sv_base_mini_docker=sv_base_mini_docker,
@@ -109,7 +100,8 @@ task SVConcordanceTask {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File out_unsorted = "~{output_prefix}.vcf.gz"
+    File out = "~{output_prefix}.vcf.gz"
+    File out_index = "~{output_prefix}.vcf.gz.tbi"
   }
   command <<<
     set -euo pipefail
@@ -127,19 +119,6 @@ task SVConcordanceTask {
     JVM_MAX_MEM=$(getJavaMem MemTotal)
     echo "JVM memory: $JVM_MAX_MEM"
 
-    TRACK_NAMES_CMD=$( 
-      if [ ~{if defined(track_names) then "1" else "0"} -eq 1 ]; then
-        echo "--track-name ~{sep=' --track-name ' track_names}"
-      fi
-    )
-
-    TRACK_INTERVALS_CMD=$(
-      if [ ~{if defined(track_intervals) then "1" else "0"} -eq 1 ]; then
-        echo "--track-intervals ~{sep=' --track-intervals ' track_intervals}"
-      fi
-    )
-
-    # As of 12/15/2023, the gatk docker contains an outdated version of bcftools so we sort in a subsequent task
     gatk --java-options "-Xmx${JVM_MAX_MEM}" SVConcordance \
       ~{"-L " + contig} \
       --sequence-dictionary ~{reference_dict} \
@@ -147,9 +126,9 @@ task SVConcordanceTask {
       --truth ~{truth_vcf} \
       -O ~{output_prefix}.vcf.gz \
       ~{if defined(clustering_config) then "--clustering-config " + clustering_config else ""} \
-      ~{if defined(stratification_config) then "--stratify-config " + stratification_config else ""} \
-      $TRACK_INTERVALS_CMD \
-      $TRACK_NAMES_CMD \
+      ~{if defined(stratification_config) then "--stratify-config "  + stratification_config else ""} \
+      ~{if length(select_first([track_names, []])) > 0 then "--track-name" else ""} ~{sep=" --track-name " select_first([track_names, []])} \
+      ~{if length(select_first([track_intervals, []])) > 0 then "--track-intervals" else ""} ~{sep=" --track-intervals " select_first([track_intervals, []])} \
       ~{additional_args}
   >>>
   runtime {

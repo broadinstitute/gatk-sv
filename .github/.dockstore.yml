@@ -223,7 +223,9 @@ workflows:
     filters:
       branches:
         - main
-        - kj_dragensv_benchmarking
+        - kj_callset_evaluations
+      tags:
+        - /.*/
 
   - subclass: WDL
     name: SingleSamplePipeline

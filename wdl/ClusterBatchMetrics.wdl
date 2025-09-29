@@ -9,12 +9,14 @@ workflow ClusterBatchMetrics {
     String name
 
     File depth_vcf
+    File? dragen_vcf
     File? manta_vcf
     File? wham_vcf
     File? melt_vcf
     File? scramble_vcf
 
     File? baseline_depth_vcf
+    File? baseline_dragen_vcf
     File? baseline_manta_vcf
     File? baseline_wham_vcf
     File? baseline_melt_vcf
@@ -27,6 +29,7 @@ workflow ClusterBatchMetrics {
 
     RuntimeAttr? runtime_attr_sample_ids_from_vcf
     RuntimeAttr? runtime_attr_depth_metrics
+    RuntimeAttr? runtime_attr_dragen_metrics
     RuntimeAttr? runtime_attr_manta_metrics
     RuntimeAttr? runtime_attr_melt_metrics
     RuntimeAttr? runtime_attr_scramble_metrics
@@ -53,6 +56,19 @@ workflow ClusterBatchMetrics {
       contig_list = contig_list,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_depth_metrics
+  }
+  if (defined(dragen_vcf)) {
+    call tu.VCFMetrics as dragen_metrics {
+      input:
+        vcf = select_first([dragen_vcf]),
+        baseline_vcf = baseline_dragen_vcf,
+        samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
+        prefix = "dragen_clustered",
+        types = "DEL,DUP,INS,INV,BND",
+        contig_list = contig_list,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_dragen_metrics
+    }
   }
   if (defined(manta_vcf)) {
     call tu.VCFMetrics as manta_metrics {
@@ -110,7 +126,7 @@ workflow ClusterBatchMetrics {
   call tu.CatMetrics {
     input:
       prefix = "ClusterBatch." + name,
-      metric_files = select_all([depth_metrics.out, manta_metrics.out, melt_metrics.out, scramble_metrics.out, wham_metrics.out]),
+      metric_files = select_all([depth_metrics.out, dragen_metrics.out, manta_metrics.out, melt_metrics.out, scramble_metrics.out, wham_metrics.out]),
       linux_docker = linux_docker,
       runtime_attr_override = runtime_attr_cat_metrics
   }

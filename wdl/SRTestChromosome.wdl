@@ -21,6 +21,7 @@ workflow SRTestChromosome {
     Boolean allosome
     Boolean run_common
     Int? common_cnv_size_cutoff
+    File? outlier_sample_ids
 
     String sv_pipeline_docker
     String linux_docker
@@ -57,6 +58,7 @@ workflow SRTestChromosome {
           common_model = false,
           prefix = basename(split),
           ref_dict = ref_dict,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_srtest
       }
@@ -71,6 +73,7 @@ workflow SRTestChromosome {
           common_model = false,
           prefix = basename(split),
           ref_dict = ref_dict,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_srtest
       }
@@ -98,6 +101,7 @@ workflow SRTestChromosome {
           common_model = false,
           prefix = basename(split),
           ref_dict = ref_dict,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_srtest
       }
@@ -136,6 +140,7 @@ workflow SRTestChromosome {
           common_model = true,
           prefix = basename(split),
           ref_dict = ref_dict,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_srtest
       }
@@ -179,6 +184,7 @@ task SRTest {
     Boolean common_model
     String prefix
     File ref_dict
+    File? outlier_sample_ids
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -227,8 +233,8 @@ task SRTest {
       bgzip local.SR.txt
       tabix -0 -s1 -b2 -e2 local.SR.txt.gz
     fi
-
-    svtk sr-test -w 50 --log ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.SR.txt.gz ~{prefix}.stats
+    
+    svtk sr-test -w 50 --log ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.SR.txt.gz ~{prefix}.stats ~{if defined(outlier_sample_ids) then "--outlier-sample-ids ~{outlier_sample_ids}" else ""}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
