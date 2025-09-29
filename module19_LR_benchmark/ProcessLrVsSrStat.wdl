@@ -24,41 +24,56 @@ workflow ProcessLrVsSrStat {
 
       }
   
-  scatter (contig in contig_list){
+  if(length(contig_list)>1){
+    scatter (contig in contig_list){
 
-    call SplitSvidGc{
-        input:
-          SVID_GC = SVID_GC,
-          contig = contig,
-          docker_file = sv_base_mini_docker
-    }
-
-    call SplitBed{
-        input:
-          bed = Vcf2Bed.bed, 
-          contig = contig,
-          docker_file = sv_base_mini_docker
-    }
-
-    call AddGC { 
-        input: 
-            bed = SplitBed.contig_bed, 
-            SVID_GC = SplitSvidGc.contig_SVID_GC,
-            add_GC_R = add_GC_R, 
+      call SplitSvidGc{
+          input:
+            SVID_GC = SVID_GC,
+            contig = contig,
             docker_file = sv_base_mini_docker
-        }
+      }
+
+      call SplitBed{
+          input:
+            bed = Vcf2Bed.bed, 
+            contig = contig,
+            docker_file = sv_base_mini_docker
+      }
+
+      call AddGC{ 
+          input: 
+              bed = SplitBed.contig_bed, 
+              SVID_GC = SplitSvidGc.contig_SVID_GC,
+              add_GC_R = add_GC_R, 
+              docker_file = sv_base_mini_docker
+          }
+      call ConcatBeds{
+          input:
+              shard_bed_files = AddGC.out_bed,
+              prefix = "full",
+              sv_base_mini_docker = sv_base_mini_docker
+      }
+  
+    }
   }
 
-  call ConcatBeds{
-      input:
-          shard_bed_files = AddGC.out_bed,
-          prefix = "full",
-          sv_base_mini_docker = sv_base_mini_docker
+  if(length(contig_list)==1){
+      call AddGC as add_gc_2{ 
+          input: 
+              bed = Vcf2Bed.bed, 
+              SVID_GC = SVID_GC,
+              add_GC_R = add_GC_R, 
+              docker_file = sv_base_mini_docker
+          }
   }
+
+  File bed_with_gc = select_first([ConcatBeds.merged_bed_file, add_gc_2.out_bed])
+
 
   call CalcuStat { 
       input: 
-          bed = ConcatBeds.merged_bed_file, 
+          bed = bed_with_gc, 
           calcu_stat_R = calcu_stat_R, 
           related = related,
           appdix = "full",
