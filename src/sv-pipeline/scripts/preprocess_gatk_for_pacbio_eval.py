@@ -39,7 +39,7 @@ def add_header_lines(header: pysam.VariantHeader) -> pysam.VariantHeader:
     header.add_line('##INFO=<ID=ORIGINAL_ALT,Number=1,Type=String,Description="Original ALT allele">')
 
 
-def process(vcf: pysam.VariantFile) -> None:
+def process(vcf: pysam.VariantFile, max_variant_size: int) -> None:
     add_header_lines(vcf.header)
     sys.stdout.write(str(vcf.header))
     allowed_svtypes = set(['DEL', 'DUP', 'INS', 'INV'])
