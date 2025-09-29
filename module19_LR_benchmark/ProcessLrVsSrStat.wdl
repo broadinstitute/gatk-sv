@@ -25,6 +25,7 @@ workflow ProcessLrVsSrStat {
       }
   
   if(length(contig_list)>1){
+    
     scatter (contig in contig_list){
 
       call SplitSvidGc{
@@ -48,14 +49,15 @@ workflow ProcessLrVsSrStat {
               add_GC_R = add_GC_R, 
               docker_file = sv_base_mini_docker
           }
-      call ConcatBeds{
+    }
+
+    call ConcatBeds{
           input:
               shard_bed_files = AddGC.out_bed,
               prefix = "full",
               sv_base_mini_docker = sv_base_mini_docker
       }
-  
-    }
+
   }
 
   if(length(contig_list)==1){
