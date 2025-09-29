@@ -1,7 +1,6 @@
 version 1.0
 
 import "SVConcordance.wdl" as conc
-import "TasksMakeCohortVcf.wdl" as tasks_cohort
 import "Utils.wdl" as utils
 
 workflow SVConcordanceSimple {
@@ -87,16 +86,8 @@ workflow SVConcordanceSimple {
         runtime_attr_override=runtime_attr_sv_concordance
   }
 
-  call tasks_cohort.SortVcf {
-      input:
-        vcf=SVConcordanceTask.out_unsorted,
-        outfile_prefix="~{output_prefix}.sorted",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_sort_vcf
-    }
-
   output {
-    File conc_vcf = SortVcf.out
-    File conc_vcf_idx = SortVcf.out_index
+    File conc_vcf = SoSVConcordanceTaskrtVcf.concordance_vcf
+    File conc_vcf_idx = SVConcordanceTask.concordance_vcf_index
   }
 }
