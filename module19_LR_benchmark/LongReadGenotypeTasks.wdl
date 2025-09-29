@@ -353,11 +353,11 @@ task BenchmarkSNVs{
 
     dat=merge(comp[,c(1:5)], base[,c(1:5)], by=c("V1","V2","V4","V5"))
 
-    comp[,ncol(comp)+1] = paste(ID), comp[,3], sep='=')
+    comp[,ncol(comp)+1] = paste("ID", comp[,3], sep="=")
     comp[,ncol(comp)+1] = "GT"
     comp[,ncol(comp)+1] = "0|1"
 
-    base[,ncol(base)+1] = paste(ID), base[,3], sep='=')
+    base[,ncol(base)+1] = paste("ID", base[,3], sep="=")
     base[,ncol(base)+1] = "GT"
     base[,ncol(base)+1] = "0|1"
 
