@@ -87,7 +87,7 @@ workflow SVConcordanceSimple {
   }
 
   output {
-    File conc_vcf = SoSVConcordanceTaskrtVcf.concordance_vcf
-    File conc_vcf_idx = SVConcordanceTask.concordance_vcf_index
+    File conc_vcf = SVConcordanceTask.out
+    File conc_vcf_idx = SVConcordanceTask.out_index
   }
 }
