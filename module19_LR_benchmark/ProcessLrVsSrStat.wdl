@@ -335,7 +335,7 @@ task ConcatBeds {
     while read SPLIT; do
       zcat $SPLIT
     done < ~{write_lines(shard_bed_files)} \
-      | (grep -Ev "^#" || printf "") \
+      | tail -n+2 \
       | sort -Vk1,1 -k2,2n -k3,3n \
       | cat header.txt - \
       | bgzip -c \
