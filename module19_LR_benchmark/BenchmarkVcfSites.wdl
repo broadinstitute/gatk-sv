@@ -26,6 +26,9 @@ workflow BenchmarkVcfSites{
 
 
         Boolean short_read_benchmark = false
+        Boolean simplify_comp_vcf_lt_20bp = false
+        Boolean simplify_base_vcf_lt_20bp = false
+
 
         String? truvari_params
         String sv_base_mini_docker
@@ -72,6 +75,8 @@ workflow BenchmarkVcfSites{
                 chromosome = chromosomes[index],
                 ref_dict = ref_dict,
                 short_read_benchmark = short_read_benchmark,
+                simplify_comp_vcf_lt_20bp = simplify_comp_vcf_lt_20bp,
+                simplify_base_vcf_lt_20bp = simplify_base_vcf_lt_20bp,
 
                 anno_script_bash = anno_script_bash,
                 anno_script_helper_R = anno_script_helper_R,

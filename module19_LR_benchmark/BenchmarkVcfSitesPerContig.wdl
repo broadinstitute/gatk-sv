@@ -27,6 +27,9 @@ workflow BenchmarkVcfSitesPerContig{
     File segmental_duplicates
 
     Boolean short_read_benchmark = false
+    Boolean simplify_comp_vcf_lt_20bp = false
+    Boolean simplify_base_vcf_lt_20bp = false
+
 
     String? truvari_params
     String sv_base_mini_docker
@@ -110,6 +113,8 @@ workflow BenchmarkVcfSitesPerContig{
         comp_vcf = split_query.indels_lt_20_vcf,
         base_vcf = split_ref.indels_lt_20_vcf,
         prefix = "~{chromosome}.lt_20bp",
+        simplify_comp_vcf = simplify_comp_vcf_lt_20bp,
+        simplify_base_vcf = simplify_base_vcf_lt_20bp,
         docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_benchmark_SNVs
   }

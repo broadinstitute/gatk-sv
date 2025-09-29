@@ -291,6 +291,8 @@ task BenchmarkSNVs{
   input{
     File comp_vcf
     File base_vcf
+    Boolean simplify_comp_vcf = false
+    Boolean simplify_base_vcf = false
     String prefix
     String docker_image
     RuntimeAttr? runtime_attr_override
@@ -345,22 +347,35 @@ task BenchmarkSNVs{
       return(df)
     }
 
-    comp = read_or_empty("comp.vcf.gz")
-    base = read_or_empty("base.vcf.gz")
+    if (~{simplify_comp_vcf} == "true") {
+      comp = read_or_empty("comp.vcf.gz")
+    } else {
+      comp = read_or_empty("~{comp_vcf}")
+    }
+
+    if (~{simplify_base_vcf} == "true") {
+      base = read_or_empty("base.vcf.gz")
+    } else {
+      base = read_or_empty("~{base_vcf}")
+    }
+    
 
     colnames(comp)[3] = "SVID_comp"
     colnames(base)[3] = "SVID_truth"
 
     dat=merge(comp[,c(1:5)], base[,c(1:5)], by=c("V1","V2","V4","V5"))
 
-    comp[,ncol(comp)+1] = paste("ID", comp[,3], sep="=")
-    comp[,ncol(comp)+1] = "GT"
-    comp[,ncol(comp)+1] = "0|1"
+    if (~{simplify_comp_vcf} == "true") {
+      comp[,ncol(comp)+1] = "AC=1"
+      comp[,ncol(comp)+1] = "GT"
+      comp[,ncol(comp)+1] = "0|1"
+      }
 
-    base[,ncol(base)+1] = paste("ID", base[,3], sep="=")
-    base[,ncol(base)+1] = "GT"
-    base[,ncol(base)+1] = "0|1"
-
+  if (~{simplify_base_vcf} == "true") {
+      base[,ncol(base)+1] = "AC=1"
+      base[,ncol(base)+1] = "GT"
+      base[,ncol(base)+1] = "0|1"
+      }
 
     fp_comp = comp[!comp$SVID_comp%in%dat$SVID_comp, ]
     tp_comp = comp[comp$SVID_comp%in%dat$SVID_comp, ]
