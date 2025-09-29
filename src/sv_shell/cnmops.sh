@@ -28,19 +28,20 @@ function CNSampleNormal() {
   local _r=$5
   local _ref_dict=$6  # TODO: no need for local
   local _bincov_matrix=$7  # TODO: no need for local
-
+  local _wd=$8
 
   echo "---------------------------------------------------"
-  echo "${_chr}"
-  echo "${_exclude}"
-  echo "${_ped}"
-  echo "${_mode}"
-  echo "${_r}"
-  echo "${_ref_dict}"
-  echo "${_bincov_matrix}"
+  echo "chr: ${_chr}"
+  echo "exclude: ${_exclude}"
+  echo "ped: ${_ped}"
+  echo "mode: ${_mode}"
+  echo "r: ${_r}"
+  echo "ref_dict: ${_ref_dict}"
+  echo "bincov_matrix: ${_bincov_matrix}"
+  echo "Working dir: ${_wd}"
   echo "---------------------------------------------------"
 
-  # TODO: need to create a temp dir and cd into that dir AT THE CALLER LEVEL, then you know where the output file is
+  cd "${_wd}"
 
   java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar PrintSVEvidence \
     --sequence-dictionary "${_ref_dict}" \
@@ -61,7 +62,9 @@ function CNSampleNormal() {
   # terminal so that errors can be debugged
   EMPTY_OUTPUT_ERROR="No CNV regions in result object. Rerun cn.mops with different parameters!"
   set +e
+  echo "Starting to run cnMOPS_workflow"
   bash /opt/WGD/bin/cnMOPS_workflow.sh -S "${_exclude}" -x "${_exclude}" -r "${_r}" -o . -M "${_chr}.${_mode}.RD.txt" 2>&1 | tee cnmops.out
+  echo "Finished running cnMOPS_workflow"
   RC=$?
   set -e
   if [ ! $RC -eq 0 ]; then
@@ -126,7 +129,9 @@ allos=($(awk '{print $1}' "${allo_file}"))
 
 # Male R2
 for allo in "${allos[@]}"; do
-  CNSampleNormal "${allo}" "${exclude_list}" "${ped_file}" "1" "${r2}" "${ref_dict}" "${bincov_matrix}"
+  working_dir=$(mktemp -d /wd_cn_sample_normal_${allo}_${r2}_XXXXXXXX)
+  working_dir="$(realpath ${working_dir})"
+  CNSampleNormal "${allo}" "${exclude_list}" "${ped_file}" "1" "${r2}" "${ref_dict}" "${bincov_matrix}" "${working_dir}"
 done
 
 first_row_string="${Allos[0]}"
