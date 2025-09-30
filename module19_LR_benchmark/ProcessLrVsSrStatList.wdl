@@ -87,9 +87,10 @@ task MergeStatTable {
       }
       library(dplyr)
 
-      file_list <- c(~{sep=', ' freq_files})
-      file_list <- unlist(strsplit(file_list, ', '))
+      #file_list <- c(~{sep=', ' freq_files})
+      #file_list <- unlist(strsplit(file_list, ', '))
 
+      file_list <- c(~{sep=', ' '"' + freq_files + '"'})
 
       tables <- lapply(file_list, function(f) {
         df <- read.table(f, header = TRUE, sep = "\t", stringsAsFactors = FALSE)
