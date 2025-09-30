@@ -22,37 +22,29 @@ echo "JVM memory: $JVM_MAX_MEM"
 function CNSampleNormal() {
   # TODO: check if these variables are correctly set
   local _chr=$1
-  local _exclude=$2  # TODO no need for local
-  local _ped=$3  # TODO no need for local
-  local _mode=$4
-  local _r=$5
-  local _ref_dict=$6  # TODO: no need for local
-  local _bincov_matrix=$7  # TODO: no need for local
-  local _wd=$8
+  local _mode=$2
+  local _r=$3
+  local _wd=$4
 
-  echo "---------------------------------------------------"
+  echo "----------- Starting CN Sample Normal -------------"
   echo "chr: ${_chr}"
-  echo "exclude: ${_exclude}"
-  echo "ped: ${_ped}"
   echo "mode: ${_mode}"
   echo "r: ${_r}"
-  echo "ref_dict: ${_ref_dict}"
-  echo "bincov_matrix: ${_bincov_matrix}"
   echo "Working dir: ${_wd}"
   echo "---------------------------------------------------"
 
   cd "${_wd}"
 
   java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar PrintSVEvidence \
-    --sequence-dictionary "${_ref_dict}" \
-    --evidence-file "${_bincov_matrix}" \
+    --sequence-dictionary "${ref_dict}" \
+    --evidence-file "${bincov_matrix}" \
     -L "${_chr}" \
     -O "${_chr}.RD.txt"
 
   if [ "${_mode}" == "normal" ]; then
     mv "${_chr}.RD.txt" "${_chr}.${_mode}.RD.txt"
   else
-    awk -v sex="${_mode}" '$5==sex' "${_ped}" | cut -f2 > ids.to.include
+    awk -v sex="${_mode}" '$5==sex' "${ped_file}" | cut -f2 > ids.to.include
     col=$(head -n 1 "${_chr}.RD.txt" | tr '\t' '\n'|cat -n| grep -wf ids.to.include | awk -v ORS="," '{print $1}' | sed 's/,$//g' | sed 's:\([0-9]\+\):$&:g')
     col_a="{print \$1,\$2,\$3,$col}"
     awk -f <(echo "$col_a") "${_chr}.RD.txt" | tr ' ' '\t' > "${_chr}.${_mode}.RD.txt"
@@ -63,7 +55,7 @@ function CNSampleNormal() {
   EMPTY_OUTPUT_ERROR="No CNV regions in result object. Rerun cn.mops with different parameters!"
   set +e
   echo "Starting to run cnMOPS_workflow"
-  bash /opt/WGD/bin/cnMOPS_workflow.sh -S "${_exclude}" -x "${_exclude}" -r "${_r}" -o . -M "${_chr}.${_mode}.RD.txt" 2>&1 | tee cnmops.out
+  bash /opt/WGD/bin/cnMOPS_workflow.sh -S "${exclude_list}" -x "${exclude_list}" -r "${_r}" -o . -M "${_chr}.${_mode}.RD.txt" </dev/null wor2>&1 | tee cnmops.out
   echo "Finished running cnMOPS_workflow"
   RC=$?
   set -e
@@ -75,6 +67,8 @@ function CNSampleNormal() {
       exit $RC
     fi
   fi
+
+  echo "----------- Finished CN Sample Normal -------------"
 }
 
 
@@ -131,8 +125,14 @@ allos=($(awk '{print $1}' "${allo_file}"))
 for allo in "${allos[@]}"; do
   working_dir=$(mktemp -d /wd_cn_sample_normal_${allo}_${r2}_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
-  CNSampleNormal "${allo}" "${exclude_list}" "${ped_file}" "1" "${r2}" "${ref_dict}" "${bincov_matrix}" "${working_dir}"
+  CNSampleNormal "${allo}" "1" "${r2}" "${working_dir}"
+
+  working_dir=$(mktemp -d /wd_cn_sample_normal_${allo}_${r1}_XXXXXXXX)
+  working_dir="$(realpath ${working_dir})"
+  CNSampleNormal "${allo}" "1" "${r1}" "${working_dir}"
 done
+
+
 
 first_row_string="${Allos[0]}"
 
