@@ -104,7 +104,7 @@ task MergeStatTable {
   >>>
 
   output {
-    File merged_table = ~{output_prefix}.stat
+    File merged_table = "~{output_prefix}.stat"
   }
 
   RuntimeAttr default_attr = object {
@@ -137,6 +137,7 @@ task MergeFillAndTpTables {
     String output_prefix = "merged_two_freq.tsv"
     String docker_image
     RuntimeAttr? runtime_attr_override
+    
     }
 
 
@@ -149,6 +150,7 @@ task MergeFillAndTpTables {
       if (!requireNamespace("dplyr", quietly = TRUE)) {
         install.packages("dplyr", repos = "http://cran.us.r-project.org")
       }
+      
       library(dplyr)
 
       # Read input files
