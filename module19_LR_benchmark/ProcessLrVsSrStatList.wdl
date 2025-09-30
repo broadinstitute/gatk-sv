@@ -78,6 +78,10 @@ task MergeStatTable {
   }
 
   command <<<
+    set -euxo pipefail
+
+    printf "%s\n" ~{sep=' ' freq_files} > vcfs.list
+
     Rscript -e '
 
       out_file <- "~{output_prefix}.stat"
@@ -89,8 +93,8 @@ task MergeStatTable {
 
       #file_list <- c(~{sep=', ' freq_files})
       #file_list <- unlist(strsplit(file_list, ', '))
-
-      file_list <- c(~{sep=', ' '"' + freq_files + '"'})
+      file_list = read.table("vcfs.list")
+      file_list = file_list[,1]
 
       tables <- lapply(file_list, function(f) {
         df <- read.table(f, header = TRUE, sep = "\t", stringsAsFactors = FALSE)
