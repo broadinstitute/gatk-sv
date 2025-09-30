@@ -82,7 +82,7 @@ task MergeStatTable {
 
     printf "%s\n" ~{sep=' ' freq_files} > vcfs.list
 
-    Rscript -e '
+    R --vanilla --slave -e '
 
       out_file <- "~{output_prefix}.stat"
 
@@ -91,24 +91,19 @@ task MergeStatTable {
       }
       library(dplyr)
 
-      #file_list <- c(~{sep=', ' freq_files})
-      #file_list <- unlist(strsplit(file_list, ', '))
       file_list = read.table("vcfs.list")
-      file_list = file_list[,1]
 
-      tables <- lapply(file_list, function(f) {
-        df <- read.table(f, header = TRUE, sep = "\t", stringsAsFactors = FALSE)
-        required_cols <- c("SVTYPE", "SVLEN_bin", "GC", "AF_bin", "Freq")
-        if (!all(required_cols %in% colnames(df))) {
-          stop(paste("File", f, "is missing required columns."))
-        }
-        df
-      })
+      df <- read.table(file_list[1,1], header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+      for(f in file_list[2:nrow(file_list) ,1]){
+        tmp = read.table(f, header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+        df=merge(df, tmp, by=c("SVTYPE", "SVLEN_bin", "GC", "AF_bin"), all=T)
+      }
 
-      merged <- bind_rows(tables) %>%
-        group_by(SVTYPE, SVLEN_bin, GC, AF_bin) %>%
-        summarise(Freq = sum(Freq, na.rm = TRUE), .groups = "drop")
+      df[is.na(df)] = 0
+      df[,ncol(df)+1] = rowSums(df[,c(5:ncol(df))])
+      colnames(df)[ncol(df)] = "Freq"
 
+      merged = df[,c(1:4,ncol(df))]
       write.table(merged, file = out_file, sep = "\t", quote = FALSE, row.names = FALSE)
     '
   >>>
