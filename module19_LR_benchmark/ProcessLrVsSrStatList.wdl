@@ -87,7 +87,9 @@ task MergeStatTable {
       }
       library(dplyr)
 
-      tables <- lapply("~{freq_files}", function(f) {
+      file_list <- c(~{sep=' ' freq_files})
+
+      tables <- lapply(file_list, function(f) {
         df <- read.table(f, header = TRUE, sep = "\t", stringsAsFactors = FALSE)
         required_cols <- c("SVTYPE", "SVLEN_bin", "GC", "AF_bin", "Freq")
         if (!all(required_cols %in% colnames(df))) {
