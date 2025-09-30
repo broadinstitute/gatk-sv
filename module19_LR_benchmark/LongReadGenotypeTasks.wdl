@@ -1154,7 +1154,7 @@ task ExtractVariantSites {
           if "SVLEN" in rec.info.keys():
             return str(abs(rec.info["SVLEN"]))
           else:
-            return 50
+            return "50"
         else:
           return str(abs(len(alt) - len(ref)))
 
