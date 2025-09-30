@@ -13,7 +13,7 @@ workflow ProcessLrVsSrStatList {
     Array[String] contig_list
 
     File vcf2bed_py
-    File add_GC_R
+    File add_GC_py
     File calcu_stat_R
 
     String output_prefix
@@ -30,7 +30,7 @@ workflow ProcessLrVsSrStatList {
         SVID_GC = SVID_GC_list[i],
 
         vcf2bed_py = vcf2bed_py,
-        add_GC_R = add_GC_R,
+        add_GC_py = add_GC_py,
         calcu_stat_R = calcu_stat_R,
 
         contig_list = [contig_list[i]],
