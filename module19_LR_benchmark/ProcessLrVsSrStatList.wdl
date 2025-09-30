@@ -54,7 +54,7 @@ workflow ProcessLrVsSrStatList {
       docker_image = sv_base_mini_docker
   }
 
-  call MergeFillAndTpTables merge_full_and_tp_stat {
+  call MergeFillAndTpTables as merge_full_and_tp_stat {
     input:
       file_a = merge_full_stat.merged_table,
       file_b = merge_tp_stat.merged_table,
