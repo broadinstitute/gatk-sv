@@ -368,16 +368,20 @@ task BenchmarkSNVs{
 
     dat=merge(comp[,c(1:5)], base[,c(1:5)], by=c("V1","V2","V4","V5"))
 
-    if (simplify_comp_vcf & nrow(comp)>0) {
-      comp[,ncol(comp)+1] = "AC=1"
-      comp[,ncol(comp)+1] = "GT"
-      comp[,ncol(comp)+1] = "0|1"
+    if (simplify_comp_vcf) {
+      if(nrow(comp)>0){
+        comp[,ncol(comp)+1] = "AC=1"
+        comp[,ncol(comp)+1] = "GT"
+        comp[,ncol(comp)+1] = "0|1"
+        }
       }
 
-  if (simplify_base_vcf & nrow(base)>0) {
-      base[,ncol(base)+1] = "AC=1"
-      base[,ncol(base)+1] = "GT"
-      base[,ncol(base)+1] = "0|1"
+    if (simplify_base_vcf) {
+      if(nrow(base)>0){
+        base[,ncol(base)+1] = "AC=1"
+        base[,ncol(base)+1] = "GT"
+        base[,ncol(base)+1] = "0|1"
+      }
       }
 
     fp_comp = comp[!comp$SVID_comp%in%dat$SVID_comp, ]
