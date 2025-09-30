@@ -18,6 +18,7 @@ workflow ProcessLrVsSrStatList {
 
     String output_prefix
     Boolean related = false   # default is false
+    Boolean filter_flag = false
 
     String sv_base_mini_docker
   }
@@ -35,6 +36,7 @@ workflow ProcessLrVsSrStatList {
 
         contig_list = [contig_list[i]],
         related = related,
+        filter_flag = filter_flag,
 
         sv_base_mini_docker = sv_base_mini_docker
     }

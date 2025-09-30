@@ -10,7 +10,9 @@ workflow ProcessLrVsSrStat {
     File calcu_stat_R
     File SVID_GC
     Array[String] contig_list
+
     Boolean related = false   # default is false
+    Boolean filter_flag = false
 
     String sv_base_mini_docker
 
@@ -23,6 +25,7 @@ workflow ProcessLrVsSrStat {
       input: 
           vcf = full_vcf, 
           vcf2bed_py = vcf2bed_py,
+          filter_flag = filter_flag,
           docker_file = sv_base_mini_docker
 
       }
@@ -91,6 +94,7 @@ workflow ProcessLrVsSrStat {
       input: 
           vcf = tp_vcf, 
           vcf2bed_py = vcf2bed_py,
+          filter_flag = filter_flag,
           docker_file = sv_base_mini_docker
           }
   
@@ -113,13 +117,14 @@ task Vcf2Bed {
   input {
     File vcf
     File vcf2bed_py
+    Boolean filter_flag = false
     String docker_file
   }
 
   String prefix = basename(vcf, ".vcf.gz")
 
   command <<<
-    python ~{vcf2bed_py} ~{vcf} ~{prefix}.bed
+    python ~{vcf2bed_py} ~{vcf} ~{prefix}.bed ~{filter_flag}
   >>>
 
   output {
@@ -219,7 +224,6 @@ task CalcuStat {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
 
 task SplitSvidGc {
   input {
