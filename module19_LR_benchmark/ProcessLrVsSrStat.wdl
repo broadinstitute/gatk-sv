@@ -124,7 +124,13 @@ task Vcf2Bed {
   String prefix = basename(vcf, ".vcf.gz")
 
   command <<<
-    python ~{vcf2bed_py} ~{vcf} ~{prefix}.bed ~{filter_flag}
+
+    if [ "~{filter_flag}" == "true" ]; then
+      python ~{vcf2bed_py} ~{vcf} ~{prefix}.bed true
+    else
+      python ~{vcf2bed_py} ~{vcf} ~{prefix}.bed false
+    fi
+
   >>>
 
   output {
