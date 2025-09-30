@@ -232,6 +232,8 @@ workflow BenchmarkVcfSitesPerContig{
     File tp_ref = add_genomic_context_ref_tp.annotated_vcf
     File fp_query = add_genomic_context_query_fp.annotated_vcf  
     File fp_ref = add_genomic_context_ref_fp.annotated_vcf
+    File query_svid_gc = annotate_genomic_context_query.variant_anno
+    File ref_svid_gc = annotate_genomic_context_ref.variant_anno
   }
 }
 

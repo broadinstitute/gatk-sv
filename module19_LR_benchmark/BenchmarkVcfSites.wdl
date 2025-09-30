@@ -154,6 +154,9 @@ workflow BenchmarkVcfSites{
     File fp_query_idx = combine_vcfs_fp_query.concat_vcf_idx  
     File fp_ref_idx = combine_vcfs_fp_ref.concat_vcf_idx
 
+    Array[File] query_svid_gc = BenchmarkVcfSitesPerContig.query_svid_gc
+    Array[File] ref_svid_gc = BenchmarkVcfSitesPerContig.ref_svid_gc
+
     File benchmark_stat = calcu_comp_stat.comp_stat
     File benchmark_plot = plot_comp_results.figure
   }
