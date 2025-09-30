@@ -106,6 +106,7 @@ cd "${working_dir}"
 
 
 allo_file=($(jq -r '.allo_file' "$input_json"))
+chrom_file=($(jq -r '.chrom_file' "$input_json"))
 exclude_list=($(jq -r '.exclude_list' "$input_json"))
 ped_file=($(jq -r '.ped_file' "$input_json"))
 r1=($(jq -r '.r1' "$input_json"))
@@ -121,15 +122,29 @@ bincov_matrix=($(jq -r '.bincov_matrix' "$input_json"))
 
 allos=($(awk '{print $1}' "${allo_file}"))
 
-# Male R2
 for allo in "${allos[@]}"; do
+  # Male R2
   working_dir=$(mktemp -d /wd_cn_sample_normal_${allo}_${r2}_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
   CNSampleNormal "${allo}" "1" "${r2}" "${working_dir}"
 
+  # Male R1
   working_dir=$(mktemp -d /wd_cn_sample_normal_${allo}_${r1}_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
   CNSampleNormal "${allo}" "1" "${r1}" "${working_dir}"
+done
+
+chroms=($(awk '{print $1}' "${chrom_file}"))
+for chrom in "${chroms[@]}"; do
+  # Normal R2
+  working_dir=$(mktemp -d /wd_cn_sample_normal_${chrom}_${r2}_XXXXXXXX)
+  working_dir="$(realpath ${working_dir})"
+  CNSampleNormal "${chrom}" "normal" "${r2}" "${working_dir}"
+
+  # Normal R1
+  working_dir=$(mktemp -d /wd_cn_sample_normal_${chrom}_${r1}_XXXXXXXX)
+  working_dir="$(realpath ${working_dir})"
+  CNSampleNormal "${chrom}" "normal" "${r1}" "${working_dir}"
 done
 
 
