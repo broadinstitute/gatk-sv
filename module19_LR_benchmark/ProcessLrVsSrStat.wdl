@@ -14,6 +14,9 @@ workflow ProcessLrVsSrStat {
 
     String sv_base_mini_docker
 
+    RuntimeAttr? runtime_attr_add_gc_1
+    RuntimeAttr? runtime_attr_add_gc_2
+
   }
 
   call Vcf2Bed { 
@@ -47,7 +50,8 @@ workflow ProcessLrVsSrStat {
               bed = SplitBed.contig_bed, 
               SVID_GC = SplitSvidGc.contig_SVID_GC,
               add_GC_R = add_GC_R, 
-              docker_file = sv_base_mini_docker
+              docker_file = sv_base_mini_docker,
+              runtime_attr_override = runtime_attr_add_gc_1
           }
     }
 
@@ -66,7 +70,8 @@ workflow ProcessLrVsSrStat {
               bed = Vcf2Bed.bed, 
               SVID_GC = SVID_GC,
               add_GC_R = add_GC_R, 
-              docker_file = sv_base_mini_docker
+              docker_file = sv_base_mini_docker,
+              runtime_attr_override = runtime_attr_add_gc_2
           }
   }
 
