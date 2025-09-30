@@ -347,13 +347,16 @@ task BenchmarkSNVs{
       return(df)
     }
 
-    if (~{simplify_comp_vcf} == "true") {
+    simplify_comp_vcf <- ~{simplify_comp_vcf}
+    simplify_base_vcf <- ~{simplify_base_vcf}
+
+    if (simplify_comp_vcf) {
       comp = read_or_empty("comp.vcf.gz")
     } else {
       comp = read_or_empty("~{comp_vcf}")
     }
 
-    if (~{simplify_base_vcf} == "true") {
+    if (simplify_base_vcf) {
       base = read_or_empty("base.vcf.gz")
     } else {
       base = read_or_empty("~{base_vcf}")
@@ -365,13 +368,13 @@ task BenchmarkSNVs{
 
     dat=merge(comp[,c(1:5)], base[,c(1:5)], by=c("V1","V2","V4","V5"))
 
-    if (~{simplify_comp_vcf} == "true") {
+    if (simplify_comp_vcf) {
       comp[,ncol(comp)+1] = "AC=1"
       comp[,ncol(comp)+1] = "GT"
       comp[,ncol(comp)+1] = "0|1"
       }
 
-  if (~{simplify_base_vcf} == "true") {
+  if (simplify_base_vcf) {
       base[,ncol(base)+1] = "AC=1"
       base[,ncol(base)+1] = "GT"
       base[,ncol(base)+1] = "0|1"
