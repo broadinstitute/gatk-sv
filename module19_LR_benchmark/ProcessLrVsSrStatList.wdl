@@ -24,18 +24,19 @@ workflow ProcessLrVsSrStatList {
 
   scatter (i in range(length(full_vcf_list))){
     call ProcessLrVsSrStat.ProcessLrVsSrStat as ProcessLrVsSrStat{
-      full_vcf = full_vcf_list[i],
-      tp_vcf = tp_vcf_list[i],
-      SVID_GC = SVID_GC_list[i],
+      input:
+        full_vcf = full_vcf_list[i],
+        tp_vcf = tp_vcf_list[i],
+        SVID_GC = SVID_GC_list[i],
 
-      vcf2bed_py = vcf2bed_py,
-      add_GC_R = add_GC_R,
-      calcu_stat_R = calcu_stat_R,
+        vcf2bed_py = vcf2bed_py,
+        add_GC_R = add_GC_R,
+        calcu_stat_R = calcu_stat_R,
 
-      contig_list = contig_list,
-      related = related,
+        contig_list = contig_list,
+        related = related,
 
-      sv_base_mini_docker = sv_base_mini_docker
+        sv_base_mini_docker = sv_base_mini_docker
     }
   }
 
@@ -150,7 +151,7 @@ task MergeFillAndTpTables {
       if (!requireNamespace("dplyr", quietly = TRUE)) {
         install.packages("dplyr", repos = "http://cran.us.r-project.org")
       }
-      
+
       library(dplyr)
 
       # Read input files
