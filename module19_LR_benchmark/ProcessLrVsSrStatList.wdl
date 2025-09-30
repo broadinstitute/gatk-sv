@@ -20,7 +20,6 @@ workflow ProcessLrVsSrStatList {
     Boolean related = false   # default is false
 
     String sv_base_mini_docker
-
   }
 
   scatter (i in range(length(full_vcf_list))){
@@ -78,17 +77,16 @@ task MergeStatTable {
   }
 
   command <<<
-    Rscript - <<'RSCRIPT'
-      args <- commandArgs(trailingOnly = TRUE)
-      files <- strsplit(args[1], ",")[[1]]
-      out_file <- args[2]
+    Rscript -e '
+
+      out_file <- "~{output_prefix}.stat"
 
       if (!requireNamespace("dplyr", quietly = TRUE)) {
         install.packages("dplyr", repos = "http://cran.us.r-project.org")
       }
       library(dplyr)
 
-      tables <- lapply(files, function(f) {
+      tables <- lapply("~{freq_files}", function(f) {
         df <- read.table(f, header = TRUE, sep = "\t", stringsAsFactors = FALSE)
         required_cols <- c("SVTYPE", "SVLEN_bin", "GC", "AF_bin", "Freq")
         if (!all(required_cols %in% colnames(df))) {
@@ -102,12 +100,11 @@ task MergeStatTable {
         summarise(Freq = sum(Freq, na.rm = TRUE), .groups = "drop")
 
       write.table(merged, file = out_file, sep = "\t", quote = FALSE, row.names = FALSE)
-    RSCRIPT
-    "$(sep=',' freq_files)" ~{output_name}.stat
+    '
   >>>
 
   output {
-    File merged_table = ~{output_name}.stat
+    File merged_table = ~{output_prefix}.stat
   }
 
   RuntimeAttr default_attr = object {
@@ -144,11 +141,10 @@ task MergeFillAndTpTables {
 
 
   command <<<
-    Rscript - <<'RSCRIPT'
-      args <- commandArgs(trailingOnly = TRUE)
-      file_a <- args[1]
-      file_b <- args[2]
-      out_file <- args[3]
+    Rscript -e '
+      file_a <- "~{file_a}"
+      file_b <- "~{file_b}"
+      out_file <- "~{output_prefix}.stat"
 
       if (!requireNamespace("dplyr", quietly = TRUE)) {
         install.packages("dplyr", repos = "http://cran.us.r-project.org")
@@ -177,8 +173,7 @@ task MergeFillAndTpTables {
                 arrange(SVTYPE, SVLEN_bin, GC, AF_bin)
 
       write.table(merged, file = out_file, sep = "\t", quote = FALSE, row.names = FALSE)
-    RSCRIPT
-    ~{file_a} ~{file_b} "~{output_prefix}.stat"
+    '
   >>>
 
   output {
