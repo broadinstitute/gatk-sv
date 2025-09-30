@@ -6,7 +6,7 @@ workflow ProcessLrVsSrStat {
     File full_vcf
     File tp_vcf
     File vcf2bed_py
-    File add_GC_R
+    File add_GC_py
     File calcu_stat_R
     File SVID_GC
     Array[String] contig_list
@@ -49,7 +49,7 @@ workflow ProcessLrVsSrStat {
           input: 
               bed = SplitBed.contig_bed, 
               SVID_GC = SplitSvidGc.contig_SVID_GC,
-              add_GC_R = add_GC_R, 
+              add_GC_py = add_GC_py, 
               docker_file = sv_base_mini_docker,
               runtime_attr_override = runtime_attr_add_gc_1
           }
@@ -69,7 +69,7 @@ workflow ProcessLrVsSrStat {
           input: 
               bed = Vcf2Bed.bed, 
               SVID_GC = SVID_GC,
-              add_GC_R = add_GC_R, 
+              add_GC_py = add_GC_py, 
               docker_file = sv_base_mini_docker,
               runtime_attr_override = runtime_attr_add_gc_2
           }
@@ -134,7 +134,7 @@ task Vcf2Bed {
 task AddGC {
   input {
     File bed
-    File add_GC_R
+    File add_GC_py
     File SVID_GC
     String docker_file
     RuntimeAttr? runtime_attr_override
@@ -144,7 +144,7 @@ task AddGC {
   String prefix = basename(bed, ".bed")
 
   command <<<
-    Rscript ~{add_GC_R} ~{bed} ~{SVID_GC} ~{prefix}.with_GC
+    python ~{add_GC_py} ~{bed} ~{SVID_GC} ~{prefix}.with_GC
     bgzip ~{prefix}.with_GC
   >>>
 
