@@ -347,8 +347,8 @@ task BenchmarkSNVs{
       return(df)
     }
 
-    simplify_comp_vcf <- ~{simplify_comp_vcf}
-    simplify_base_vcf <- ~{simplify_base_vcf}
+    simplify_comp_vcf <- "~{simplify_comp_vcf}"
+    simplify_base_vcf <- "~{simplify_base_vcf}"
 
     if (simplify_comp_vcf) {
       comp = read_or_empty("comp.vcf.gz")
