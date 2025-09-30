@@ -33,7 +33,7 @@ workflow ProcessLrVsSrStatList {
         add_GC_R = add_GC_R,
         calcu_stat_R = calcu_stat_R,
 
-        contig_list = contig_list,
+        contig_list = [contig_list[i]],
         related = related,
 
         sv_base_mini_docker = sv_base_mini_docker
