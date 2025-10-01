@@ -65,8 +65,8 @@ def process_metadata(vcf, outlier_sample_ids):
         called_samples[svtype][name] = set(called)
 
         # Repeatmasker / segdup track overlap
-        rmsk = variant.info['OVERLAP_FRAC_RMSK'] > 0
-        segdup = variant.info['OVERLAP_FRAC_SEGDUP']
+        rmsk = variant.info['OVERLAP_FRAC_RMSK'] > 0 if 'OVERLAP_FRAC_RMSK' in variant.info.keys() else None
+        segdup = variant.info['OVERLAP_FRAC_SEGDUP'] if 'OVERLAP_FRAC_SEGDUP' in variant.info.keys() else None
 
         dat = [chrom, start, end, name, svtype, svlen, vf, rmsk, segdup]
         dat.extend([int(variant.info[stat]) if stat in variant.info.keys() and variant.info[stat] is not None else None for stat in stats_int])
