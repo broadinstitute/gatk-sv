@@ -187,7 +187,7 @@ task CalcuStat {
     RuntimeAttr? runtime_attr_override
   }
 
-  String prefix = basename(bed, ".with_GC")
+  String prefix = basename(full_bed, ".with_GC")
 
   command <<<
     set -euxo pipefail
