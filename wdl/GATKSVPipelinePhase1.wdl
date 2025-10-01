@@ -32,7 +32,6 @@ workflow GATKSVPipelinePhase1 {
     String cnmops_docker
     String gatk_docker
     String? gcnv_gatk_docker
-    String condense_counts_docker
 
     ############################################################
     ## GatherBatchEvidence
@@ -313,7 +312,6 @@ workflow GATKSVPipelinePhase1 {
       cnmops_docker=cnmops_docker,
       gatk_docker=gatk_docker,
       gcnv_gatk_docker=gcnv_gatk_docker,
-      condense_counts_docker=condense_counts_docker,
       evidence_merging_bincov_runtime_attr=evidence_merging_bincov_runtime_attr,
       cnmops_sample10_runtime_attr=cnmops_sample10_runtime_attr,
       cnmops_sample3_runtime_attr=cnmops_sample3_runtime_attr,

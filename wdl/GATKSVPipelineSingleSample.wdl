@@ -78,9 +78,7 @@ workflow GATKSVPipelineSingleSample {
     String cnmops_docker
     String gatk_docker
     String? gcnv_gatk_docker
-    String? gatk_docker_pesr_override
     String gq_recalibrator_gatk_docker
-    String condense_counts_docker
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
     String cloud_sdk_docker
@@ -675,7 +673,6 @@ workflow GATKSVPipelineSingleSample {
         scramble_docker=scramble_docker_,
         wham_docker=wham_docker_,
         gatk_docker=gatk_docker,
-        gatk_docker_pesr_override = gatk_docker_pesr_override,
         genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
         samtools_cloud_docker=samtools_cloud_docker,
         cloud_sdk_docker = cloud_sdk_docker,
@@ -813,7 +810,6 @@ workflow GATKSVPipelineSingleSample {
       cnmops_docker=cnmops_docker,
       gatk_docker = gatk_docker,
       gcnv_gatk_docker=gcnv_gatk_docker,
-      condense_counts_docker = condense_counts_docker,
       median_cov_runtime_attr=median_cov_runtime_attr,
       median_cov_mem_gb_per_sample=median_cov_mem_gb_per_sample,
       evidence_merging_bincov_runtime_attr=evidence_merging_bincov_runtime_attr,
