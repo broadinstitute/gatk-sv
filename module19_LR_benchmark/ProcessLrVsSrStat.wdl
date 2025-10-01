@@ -89,7 +89,7 @@ workflow ProcessLrVsSrStat {
           docker_file = sv_base_mini_docker
           }
   
-  call CalcuStat as TpCalcuStat { 
+  call CalcuStat { 
       input: 
           full_bed = bed_with_gc,
           tp_bed = TpVcf2Bed.bed, 
