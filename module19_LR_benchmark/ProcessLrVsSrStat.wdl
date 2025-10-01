@@ -244,6 +244,7 @@ task CalcuStat {
     # Write output with all new columns
     write.table(output, "~{prefix}_~{appdix}_stat", sep = "\t", quote = FALSE, row.names = FALSE)
 
+    '
 
   >>>
 
