@@ -214,7 +214,7 @@ task CalcuStat {
       
 
     # ---- Adjust AC if samples are related ----
-    if ("~{filter_flag}" == "true") {
+    if ("~{related}" == "true") {
       message("Samples are related: converting AC==2 to AC==1")
       data$AC[data$AC == 2] <- 1
     }
