@@ -81,15 +81,6 @@ workflow ProcessLrVsSrStat {
   File bed_with_gc = select_first([ConcatBeds.merged_bed_file, add_gc_2.out_bed])
 
 
-  call CalcuStat { 
-      input: 
-          bed = bed_with_gc, 
-          calcu_stat_R = calcu_stat_R, 
-          related = related,
-          appdix = "full",
-          docker_file = sv_base_mini_docker
-      }
-
   call Vcf2Bed as TpVcf2Bed { 
       input: 
           vcf = tp_vcf, 
@@ -100,7 +91,8 @@ workflow ProcessLrVsSrStat {
   
   call CalcuStat as TpCalcuStat { 
       input: 
-          bed = TpVcf2Bed.bed, 
+          full_bed = bed_with_gc,
+          tp_bed = TpVcf2Bed.bed, 
           calcu_stat_R = calcu_stat_R, 
           related = related,
           appdix = "TP",
@@ -109,7 +101,6 @@ workflow ProcessLrVsSrStat {
 
   output {
     File full_stat = CalcuStat.stat
-    File tp_stat = TpCalcuStat.stat
   }
 }
 
@@ -187,7 +178,8 @@ task AddGC {
 
 task CalcuStat {
   input {
-    File bed
+    File full_bed
+    File tp_bed
     File calcu_stat_R
     String appdix
     Boolean related = false   # default is false
@@ -198,11 +190,61 @@ task CalcuStat {
   String prefix = basename(bed, ".with_GC")
 
   command <<<
-    if [ "~{related}" == "true" ]; then
-      Rscript ~{calcu_stat_R} -i ~{bed} -o ~{prefix}_~{appdix}_stat -r
-    else
-      Rscript ~{calcu_stat_R} -i ~{bed} -o ~{prefix}_~{appdix}_stat
-    fi
+    set -euxo pipefail
+
+    Rscript -e '
+
+    #!/usr/bin/env Rscript
+
+    full <- read.table("~{full_bed}", header = TRUE, sep = "\t", stringsAsFactors = FALSE, comment.char = "")
+    tp   <- read.table("~{tp_bed}",   header = TRUE, sep = "\t", stringsAsFactors = FALSE, comment.char = "")
+
+    full$SVLEN = abs(full$SVLEN)
+    tp$SVLEN = abs(tp$SVLEN)
+
+    colnames(full)[1:5] <- c("CHROM", "START", "END", "REF", "ALT")
+    colnames(tp)[1:5]   <- c("CHROM", "START", "END", "REF", "ALT")
+
+    # Mark true positives
+    key_cols <- c("CHROM", "START", "END", "REF", "ALT")
+    full$TP <- 0
+    idx <- paste(full$CHROM, full$START, full$END, full$REF, full$ALT) %in%
+         paste(tp$CHROM,   tp$START,   tp$END,   tp$REF,   tp$ALT)
+    full$TP[idx] <- 1
+      
+
+    # ---- Adjust AC if samples are related ----
+    if ("~{filter_flag}" == "true") {
+      message("Samples are related: converting AC==2 to AC==1")
+      data$AC[data$AC == 2] <- 1
+    }
+
+    # ---- SVLEN bins ----
+    full$SVLEN_bin <- cut(abs(as.numeric(data$SVLEN)),
+                          breaks=c(-Inf,0,10,30,50,100,500,1000,5000,50000,Inf),
+                          labels=c("0","1-10","10-30","30-50","50-100",
+                                   "100-500","500-1000","1000-5000","5000-50000",">50000"),
+                          right=TRUE)
+
+    # ---- AF/AC bins ----
+    full$AF_bin <- with(full, ifelse(AC == 1, "AC=1",
+                              ifelse(AC > 1 & AF < 0.001, "AC>1 & AF<0.001",
+                              ifelse(AF >= 0.001 & AF < 0.005, "AF 0.001-0.005",
+                              ifelse(AF >= 0.005 & AF < 0.01, "AF 0.005-0.01",
+                              ifelse(AF >= 0.01 & AF < 0.05, "AF 0.01-0.05",
+                              ifelse(AF >= 0.05 & AF < 0.1, "AF 0.05-0.1",
+                              ifelse(AF >= 0.1, "AF >0.1", "Other"))))))))
+
+    full_stat = data.frame(table(full[,c('SVTYPE','SVLEN_bin','GC','AF_bin' )]))
+    tp_stat = data.frame(table(full[full$TP==1,c('SVTYPE','SVLEN_bin','GC','AF_bin' )]))
+    output = merge(full_stat, tp_stat, by=c('SVTYPE','SVLEN_bin','GC','AF_bin'), all=T)
+    colnames(output)[c(5,6)] = c('full','tp')
+    output = output[output$full>0,]
+
+    # Write output with all new columns
+    write.table(output, "~{prefix}_~{appdix}_stat", sep = "\t", quote = FALSE, row.names = FALSE)
+
+
   >>>
 
   output {
