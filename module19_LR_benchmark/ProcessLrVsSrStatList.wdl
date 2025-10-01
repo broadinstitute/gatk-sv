@@ -83,7 +83,6 @@ task MergeStatTable {
       df <- read.table(file_list[1,1], header = TRUE, sep = "\t", stringsAsFactors = FALSE)
       for(f in file_list[2:nrow(file_list) ,1]){
         tmp = read.table(f, header = TRUE, sep = "\t", stringsAsFactors = FALSE)
-        df=merge(df, tmp, by=c("SVTYPE", "SVLEN_bin", "GC", "AF_bin"), all=T)
       
         df <- merge(df, tmp,
                     by = c("SVTYPE", "SVLEN_bin", "GC", "AF_bin"),
