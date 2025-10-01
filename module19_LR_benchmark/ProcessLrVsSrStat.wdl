@@ -220,7 +220,7 @@ task CalcuStat {
     }
 
     # ---- SVLEN bins ----
-    full$SVLEN_bin <- cut(abs(as.numeric(data$SVLEN)),
+    full$SVLEN_bin <- cut(abs(as.numeric(full$SVLEN)),
                           breaks=c(-Inf,0,10,30,50,100,500,1000,5000,50000,Inf),
                           labels=c("0","1-10","10-30","30-50","50-100",
                                    "100-500","500-1000","1000-5000","5000-50000",">50000"),
