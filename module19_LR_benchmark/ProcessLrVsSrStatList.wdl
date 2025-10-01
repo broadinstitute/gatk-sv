@@ -49,23 +49,8 @@ workflow ProcessLrVsSrStatList {
       docker_image = sv_base_mini_docker
   }
 
-  call MergeStatTable as merge_tp_stat{
-    input:
-      freq_files = ProcessLrVsSrStat.tp_stat, 
-      output_prefix = "~{output_prefix}.tp",
-      docker_image = sv_base_mini_docker
-  }
-
-  call MergeFillAndTpTables as merge_full_and_tp_stat {
-    input:
-      file_a = merge_full_stat.merged_table,
-      file_b = merge_tp_stat.merged_table,
-      output_prefix = output_prefix,
-      docker_image = sv_base_mini_docker
-  }
-
   output {
-    File merged_stat = merge_full_and_tp_stat.merged_table
+    File merged_stat = merge_full_stat.merged_table
   }
 }
 
