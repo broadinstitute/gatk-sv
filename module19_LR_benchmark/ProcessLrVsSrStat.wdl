@@ -235,10 +235,10 @@ task CalcuStat {
                               ifelse(AF >= 0.05 & AF < 0.1, "AF 0.05-0.1",
                               ifelse(AF >= 0.1, "AF >0.1", "Other"))))))))
 
-    full_stat = data.frame(table(full[,c('SVTYPE','SVLEN_bin','GC','AF_bin' )]))
-    tp_stat = data.frame(table(full[full$TP==1,c('SVTYPE','SVLEN_bin','GC','AF_bin' )]))
-    output = merge(full_stat, tp_stat, by=c('SVTYPE','SVLEN_bin','GC','AF_bin'), all=T)
-    colnames(output)[c(5,6)] = c('full','tp')
+    full_stat = data.frame(table(full[,c("SVTYPE","SVLEN_bin","GC","AF_bin" )]))
+    tp_stat = data.frame(table(full[full$TP==1,c("SVTYPE","SVLEN_bin","GC","AF_bin" )]))
+    output = merge(full_stat, tp_stat, by=c("SVTYPE","SVLEN_bin","GC","AF_bin"), all=T)
+    colnames(output)[c(5,6)] = c("full","tp")
     output = output[output$full>0,]
 
     # Write output with all new columns

@@ -99,14 +99,30 @@ task MergeStatTable {
       for(f in file_list[2:nrow(file_list) ,1]){
         tmp = read.table(f, header = TRUE, sep = "\t", stringsAsFactors = FALSE)
         df=merge(df, tmp, by=c("SVTYPE", "SVLEN_bin", "GC", "AF_bin"), all=T)
+      
+        df <- merge(df, tmp,
+                    by = c("SVTYPE", "SVLEN_bin", "GC", "AF_bin"),
+                    all = TRUE,
+                    suffixes = c("", ".new"))
+        
+        # Replace NAs with 0
+        df$full[is.na(df$full)] <- 0
+        df$tp[is.na(df$tp)]     <- 0
+        df$full.new[is.na(df$full.new)] <- 0
+        df$tp.new[is.na(df$tp.new)]     <- 0
+        
+        # Add counts
+        df$full <- df$full + df$full.new
+        df$tp   <- df$tp + df$tp.new
+        
+        # Drop temporary columns
+        df$full.new <- NULL
+        df$tp.new   <- NULL
+
+
       }
 
-      df[is.na(df)] = 0
-      df[,ncol(df)+1] = rowSums(df[,c(5:ncol(df))])
-      colnames(df)[ncol(df)] = "Freq"
-
-      merged = df[,c(1:4,ncol(df))]
-      write.table(merged, file = out_file, sep = "\t", quote = FALSE, row.names = FALSE)
+      write.table(df, file = out_file, sep = "\t", quote = FALSE, row.names = FALSE)
     '
   >>>
 
