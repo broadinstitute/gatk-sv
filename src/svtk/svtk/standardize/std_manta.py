@@ -100,6 +100,8 @@ class MantaStandardizer(VCFStandardizer):
 
         std_rec.info['ALGORITHMS'] = ['manta']
 
+        std_rec.qual = raw_rec.qual
+
         return std_rec
 
     def standardize_alts(self, std_rec, raw_rec):

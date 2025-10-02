@@ -22,6 +22,7 @@ workflow MainVcfQc {
     Int sv_per_shard
     Int samples_per_shard
     Boolean do_per_sample_qc = true
+    Boolean skip_duplicate_detection = false
     Array[Array[String]]? site_level_comparison_datasets    # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to directory with one BED per population]
     Array[Array[String]]? sample_level_comparison_datasets  # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to per-sample tarballs]
     File primary_contigs_fai
@@ -277,25 +278,27 @@ workflow MainVcfQc {
     }
   }
 
-  # Identify all duplicates
-  scatter(vcf in vcfs_for_qc) {
-    call IdentifyDuplicates {
+  # Identify duplicates
+  if (!skip_duplicate_detection) {
+    scatter(vcf in vcfs_for_qc) {
+      call IdentifyDuplicates {
+        input:
+          prefix=prefix,
+          vcf=vcf,
+          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+          runtime_attr_override=runtime_override_identify_duplicates
+      }
+    }
+
+    # Merge duplicates
+    call MergeDuplicates {
       input:
         prefix=prefix,
-        vcf=vcf,
+        tsv_records=IdentifyDuplicates.duplicate_records,
+        tsv_counts=IdentifyDuplicates.duplicate_counts,
         sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-        runtime_attr_override=runtime_override_identify_duplicates
+        runtime_attr_override=runtime_override_merge_duplicates
     }
-  }
-
-  # Merge duplicates
-  call MergeDuplicates {
-    input:
-      prefix=prefix,
-      tsv_records=IdentifyDuplicates.duplicate_records,
-      tsv_counts=IdentifyDuplicates.duplicate_counts,
-      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-      runtime_attr_override=runtime_override_merge_duplicates
   }
 
   # Sanitize all outputs
@@ -319,8 +322,10 @@ workflow MainVcfQc {
   output {
     File sv_vcf_qc_output = SanitizeOutputs.vcf_qc_tarball
     File vcf2bed_output = MergeVcf2Bed.merged_bed_file
-    File duplicate_records_output = MergeDuplicates.duplicate_records
-    File duplicate_counts_output = MergeDuplicates.duplicate_counts
+    # These outputs will only be defined when we don't skip duplicate detection
+    # WDL optional types (File?) handle the case when they're not defined
+    File? duplicate_records_output = MergeDuplicates.duplicate_records
+    File? duplicate_counts_output = MergeDuplicates.duplicate_counts
   }
 }
 
