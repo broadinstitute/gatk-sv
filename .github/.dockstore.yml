@@ -6,7 +6,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_bnd_pipeline_fixes_V2
       tags:
         - /.*/
 
@@ -34,7 +33,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_bnd_pipeline_fixes_V2
       tags:
         - /.*/
 
@@ -44,7 +42,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_bnd_pipeline_fixes_V2
       tags:
         - /.*/
 
@@ -54,7 +51,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_bnd_pipeline_fixes_V2
       tags:
         - /.*/
 
@@ -64,7 +60,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_bnd_pipeline_fixes_V2
       tags:
         - /.*/
 
@@ -101,7 +96,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_bnd_pipeline_fixes_V2
       tags:
         - /.*/
 
@@ -120,7 +114,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_bnd_pipeline_fixes_V2
       tags:
         - /.*/
 
@@ -139,7 +132,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_bnd_pipeline_fixes_V2
       tags:
         - /.*/
 
@@ -239,7 +231,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_bnd_pipeline_fixes_V2
       tags:
         - /.*/
 
