@@ -72,6 +72,21 @@ function CNSampleNormal() {
 }
 
 
+function CleanCNMops() {
+  local _sample_list=$1
+  local _cnmops_gff=$2
+
+  echo "----------- Starting Clearn CN Mops -------------"
+  echo "sample_list: ${_sample_list}"
+  echo "cnmops_gff: ${_cnmops_gff}"
+  echo "---------------------------------------------------"
+
+  cut -f2 "${_sample_list}" > sample.list
+
+  mkdir calls
+  grep -v "#" "${_cnmops_gff}" > cnmops.gff1
+  echo "./cnmops.gff1" > GFF.list
+  /opt/WGD/bin/cleancnMOPS.sh -z -o calls/ -S "${exclude_list}" sample.list GFF.list
 
 
 
