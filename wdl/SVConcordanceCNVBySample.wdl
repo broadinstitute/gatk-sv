@@ -15,9 +15,6 @@ workflow SVConcordanceCNVBySample {
     # Sample IDs to process
     Array[String] sample_ids
     String output_prefix
-    
-    # Required for SVConcordance
-    File contig_list
     File reference_dict
 
     # Optional clustering parameters
@@ -46,7 +43,6 @@ workflow SVConcordanceCNVBySample {
     String sv_base_mini_docker
     
     # Runtime parameters
-    Float? java_mem_fraction
     RuntimeAttr? runtime_attr_subset_vcf
     RuntimeAttr? runtime_attr_sv_concordance
   }
