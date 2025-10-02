@@ -54,7 +54,9 @@ workflow SVConcordanceCNVBySample {
         vcf=vcf_eval,
         sample=sample_id,
         outfile_name="~{output_prefix}.~{sample_id}.eval.vcf.gz",
+        remove_sample = false,
         remove_private_sites=true,
+        keep_af = true,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_attr_subset_vcf
     }
