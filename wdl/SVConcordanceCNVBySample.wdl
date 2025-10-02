@@ -39,8 +39,9 @@ workflow SVConcordanceCNVBySample {
     Float? stratify_overlap_fraction = 0.5
     
     # Docker images
-    String gatk_docker
     String sv_base_mini_docker
+    String linux_docker
+    String gatk_docker
     
     # Runtime parameters
     RuntimeAttr? runtime_attr_subset_vcf
@@ -85,8 +86,15 @@ workflow SVConcordanceCNVBySample {
     }
   }
   
+  call utils.TarFiles as TarConcordanceFiles {
+    input:
+      files=flatten([SVConcordanceSample.out, SVConcordanceSample.out_index]),
+      prefix=output_prefix + ".concordance_results",
+      linux_docker=linux_docker,
+      runtime_attr_override=runtime_attr_subset_vcf
+  }
+  
   output {
-    Array[File] concordance_vcfs = SVConcordanceSample.out
-    Array[File] concordance_vcf_indices = SVConcordanceSample.out_index
+    File concordance_results_tar = TarConcordanceFiles.out
   }
 }
