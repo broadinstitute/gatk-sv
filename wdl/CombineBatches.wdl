@@ -112,7 +112,7 @@ workflow CombineBatches {
       input:
         vcf=reformatted_vcf,
         ploidy_table=CreatePloidyTableFromPed.out,
-        args="--fix-end --add-sr-pos --scale-down-gq",
+        args="--add-sr-pos --scale-down-gq",
         output_prefix=basename(vcf, ".vcf.gz") + ".reformat_gatk",
         bothside_pass_list=CombineSRBothsidePass.out,
         background_fail_list=CombineBackgroundFail.outfile,
@@ -223,7 +223,7 @@ workflow CombineBatches {
         source="depth",
         contig_list=contig_list,
         remove_formats="CN",
-        remove_infos="END2,AC,AF,AN,HIGH_SR_BACKGROUND,BOTHSIDES_SUPPORT,SR1POS,SR2POS",
+        remove_infos="AC,AF,AN,HIGH_SR_BACKGROUND,BOTHSIDES_SUPPORT,SR1POS,SR2POS",
         set_pass=true,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_gatk_to_svtk_vcf

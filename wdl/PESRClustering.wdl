@@ -96,7 +96,6 @@ workflow ClusterPESR {
         source=caller,
         contig_list=contig_list,
         remove_formats="CN",
-        remove_infos="END2",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_gatk_to_svtk_vcf
     }
@@ -159,9 +158,7 @@ task PreparePESRVcfs {
       python ~{default="/opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py" script} \
         --vcf $VCF \
         --out tmp.vcf.gz \
-        --ploidy-table ~{ploidy_table} \
-        --fix-end
-
+        --ploidy-table ~{ploidy_table}
       # Interval, contig, and size filtering
       bcftools query -f '%CHROM\t%POS\t%POS\t%ID\t%SVTYPE\n%CHROM\t%END\t%END\t%ID\t%SVTYPE\n%CHR2\t%END2\t%END2\t%ID\t%SVTYPE\n' tmp.vcf.gz \
         | awk '$1!="." && $2!="."' \
