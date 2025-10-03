@@ -79,6 +79,7 @@ workflow DropSamplesAndRefresh {
     input:
       vcfs=ApplyNCRAndRefArtifactFilters.filtered_vcfs,
       contig_list=primary_contigs_list,
+      prefix=prefix,
       protein_coding_gtf=protein_coding_gtf,
       ped_file=ped_file,
       par_bed=par_bed,
