@@ -167,6 +167,8 @@ workflow DropSamplesAndRefresh {
       samples_per_shard=600,
       random_seed=9,
       sv_per_shard=qc_sv_per_shard,
+      primary_contigs_fai=primary_contigs_fai,
+      sv_per_shard=qc_sv_per_shard,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_docker
@@ -180,6 +182,8 @@ workflow DropSamplesAndRefresh {
       do_per_sample_qc=false,
       samples_per_shard=600,
       random_seed=9,
+      sv_per_shard=qc_sv_per_shard,
+      primary_contigs_fai=primary_contigs_fai,
       sv_per_shard=qc_sv_per_shard,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
