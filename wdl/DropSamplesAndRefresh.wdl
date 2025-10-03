@@ -11,22 +11,45 @@ import "TasksMakeCohortVcf.wdl" as tasks
 workflow DropSamplesAndRefresh {
   input {
     Array[File] vcfs
-    File remove_samples
+    File keep_samples
     File related_samples
     String prefix
 
     File primary_contigs_list
     File ploidy_table
 
+    # NCR
+    File apply_filters_script
+
+    # SanitizeHeader
+    String drop_fields
+    File sample_id_rename_map
+
+    # AnnotateVcf
+    File protein_coding_gtf
+    Int anno_sv_per_shard
+    File ped_file
+    File par_bed
+    File sample_pop_assignments
+    File ref_bed
+    File ref_prefix
+    Array[String]? ref_populations
+
+    # MainVcfQc
+    File primary_contigs_fai
+    Int qc_sv_per_shard
+
+
     String sv_pipeline_docker
     String sv_base_mini_docker
+    String gatk_docker
   }
 
   call subset.SubsetVcfBySamples as DropSamples {
     input:
       vcfs=vcfs,
-      list_of_samples=remove_samples,
-      remove_samples=true,
+      list_of_samples=keep_samples,
+      remove_samples=false,
       remove_private_sites=true,
       sv_base_mini_docker=sv_base_mini_docker
   }
@@ -34,6 +57,7 @@ workflow DropSamplesAndRefresh {
   call ncr.ApplyNCRAndRefArtifactFilters {
     input:
       vcfs=DropSamples.vcfs_subset,
+      apply_filters_script=apply_filters_script,
       primary_contigs_list=primary_contigs_list,
       cohort_id=prefix,
       ploidy_table=ploidy_table,
@@ -55,6 +79,15 @@ workflow DropSamplesAndRefresh {
     input:
       vcfs=ApplyNCRAndRefArtifactFilters.filtered_vcfs,
       contig_list=primary_contigs_list,
+      protein_coding_gtf=protein_coding_gtf,
+      ped_file=ped_file,
+      par_bed=par_bed,
+      sample_pop_assignments=sample_pop_assignments,
+      ref_bed=ref_bed,
+      ref_prefix=ref_prefix,
+      population=ref_populations,
+      sv_per_shard=anno_sv_per_shard,
+      gatk_docker=gatk_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker
   }
@@ -64,6 +97,15 @@ workflow DropSamplesAndRefresh {
       vcfs=SubsetToUnrelated.vcfs_subset,
       contig_list=primary_contigs_list,
       prefix="~{prefix}.unrelated",
+      protein_coding_gtf=protein_coding_gtf,
+      ped_file=ped_file,
+      par_bed=par_bed,
+      sample_pop_assignments=sample_pop_assignments,
+      ref_bed=ref_bed,
+      ref_prefix=ref_prefix,
+      population=ref_populations,
+      sv_per_shard=anno_sv_per_shard,
+      gatk_docker=gatk_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker
   }
@@ -73,6 +115,8 @@ workflow DropSamplesAndRefresh {
     input:
       vcfs=AnnotateVcf.annotated_vcfs,
       prefix=prefix,
+      drop_fields=drop_fields,
+      sample_id_rename_map=sample_id_rename_map,
       primary_contigs_list=primary_contigs_list,
       sv_pipeline_docker=sv_pipeline_docker
   }
@@ -81,6 +125,8 @@ workflow DropSamplesAndRefresh {
     input:
       vcfs=AnnotateUnrelated.annotated_vcfs,
       prefix="~{prefix}.unrelated",
+      drop_fields=drop_fields,
+      sample_id_rename_map=sample_id_rename_map,
       primary_contigs_list=primary_contigs_list,
       sv_pipeline_docker=sv_pipeline_docker
   }
@@ -117,6 +163,9 @@ workflow DropSamplesAndRefresh {
       bcftools_preprocessing_options="-i 'FILTER=\"PASS\" || FILTER=\"MULTIALLELIC\"'",
       prefix=prefix,
       do_per_sample_qc=false,
+      samples_per_shard=600,
+      random_seed=9,
+      sv_per_shard=qc_sv_per_shard,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_docker
@@ -128,6 +177,9 @@ workflow DropSamplesAndRefresh {
       bcftools_preprocessing_options="-i 'FILTER=\"PASS\" || FILTER=\"MULTIALLELIC\"'",
       prefix="~{prefix}.unrelated",
       do_per_sample_qc=false,
+      samples_per_shard=600,
+      random_seed=9,
+      sv_per_shard=qc_sv_per_shard,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_docker
