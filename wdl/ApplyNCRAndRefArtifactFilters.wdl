@@ -10,6 +10,8 @@ workflow ApplyNCRAndRefArtifactFilters {
     String label = "ncr_and_refartifact"
     File ploidy_table
 
+    Float? no_call_rate_cutoff
+
     File? apply_filters_script
 
     String sv_pipeline_docker
@@ -25,6 +27,7 @@ workflow ApplyNCRAndRefArtifactFilters {
         prefix = "~{cohort_id}.~{label}.~{contigs[i]}",
         cohort_id = cohort_id,
         ploidy_table = ploidy_table,
+        no_call_rate_cutoff=no_call_rate_cutoff,
         apply_filters_script = apply_filters_script,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker
