@@ -33,7 +33,7 @@ workflow DropSamplesAndRefresh {
     File sample_pop_assignments
     File ref_bed
     File ref_prefix
-    Array[String]? ref_populations
+    Array[String] ref_populations
 
     # MainVcfQc
     File primary_contigs_fai
