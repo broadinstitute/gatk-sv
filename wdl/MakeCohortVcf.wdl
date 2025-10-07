@@ -50,6 +50,7 @@ workflow MakeCohortVcf {
     File pe_exclude_list
     File HERVK_reference
     File LINE1_reference
+    File intron_reference
     Int max_shard_size_resolve
     Int max_shards_per_chrom_clean_vcf_step1
     Int min_records_per_shard_clean_vcf_step1
@@ -172,6 +173,7 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
     RuntimeAttr? runtime_attr_format_clean
+    RuntimeAttr? runtime_attr_add_retro_del_filters
 
     RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
     RuntimeAttr? runtime_attr_override_sort_bed_1b
@@ -362,6 +364,7 @@ workflow MakeCohortVcf {
       chr_y=chr_y,
       HERVK_reference=HERVK_reference,
       LINE1_reference=LINE1_reference,
+      intron_reference=intron_reference,
       max_shards_per_chrom_step1=max_shards_per_chrom_clean_vcf_step1,
       min_records_per_shard_step1=min_records_per_shard_clean_vcf_step1,
       clean_vcf1b_records_per_shard=clean_vcf1b_records_per_shard,
@@ -415,7 +418,8 @@ workflow MakeCohortVcf {
       runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
       runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
       runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs,
-      runtime_attr_format=runtime_attr_format_clean
+      runtime_attr_format=runtime_attr_format_clean,
+      runtime_attr_add_retro_del_filters=runtime_attr_add_retro_del_filters
   }
 
   call VcfQc.MainVcfQc {
