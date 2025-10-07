@@ -325,7 +325,7 @@ task AggregateDepthEvidence {
     gatk --java-options "-Xmx${JVM_MAX_MEM}" AggregateDepthEvidence \
       -V ~{vcf} \
       -O ~{output_prefix}.vcf.gz \
-      --median-counts ~{median_file} \
+      --median-coverage ~{median_file} \
       ~{"--rd-file " + rd_file} \
       ~{additional_args}
   >>>
