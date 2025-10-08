@@ -62,7 +62,8 @@ jq -n \
       "bincov_matrix": $b,
       "reference_dict": $p,
       "batch": $t,
-      "skip_bin_size_filter": true}' > "${make_bin_cov_matrix_inputs_json}"
+      "skip_bin_size_filter": true
+  }' > "${make_bin_cov_matrix_inputs_json}"
 
 bash /opt/sv_shell/make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "${make_bin_cov_matrix_outputs_json}"
 
@@ -87,12 +88,15 @@ fi
 samples_batch_file="samples_batch_file.txt"
 printf "%s\n" "${samples_batch[@]}" > "${samples_batch_file}"
 
+
 # validate PED file
 python /opt/sv-pipeline/scripts/validate_ped.py -p "${ped_file}" -s "${samples_batch_file}"
+
 
 # subset PED file
 ped_subset_filename="$(basename "${ped_file}" .ped).${batch}.ped"
 awk 'FNR==NR {a[$1]; next}; $2 in a' "${samples_batch_file}" "${ped_file}" > "${ped_subset_filename}"
+
 
 # Add case sample to PED
 combined_ped_file="combined_ped_file.ped"
@@ -106,7 +110,7 @@ if [[ "${append_first_sample_to_ped}" == "true" ]]; then
     exit 1
   fi
   SEX=$(echo "$RECORD" | cut -f2)
-  # TODO: would not it be better to just accept the fact that ped already has the sample and move on? or we should really error-out?
+
   awk -v sample="${sample_id}" '$2 == sample { print "ERROR: A sample with the name "sample" is already present in the ped file." > "/dev/stderr"; exit 1; }' < "${ped_subset_filename}"
   awk -v sample="${sample_id}" -v sex="${SEX}" '{print} END {OFS="\t"; print "case_sample",sample,"0","0",sex,"1" }' < "${ped_subset_filename}" > "${combined_ped_file}"
 fi
