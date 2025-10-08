@@ -55,8 +55,8 @@ workflow FilterBatchSites {
           vcf = select_first([vcfs_array[i]]),
           metrics = evidence_metrics,
           prefix = "${batch}.${algorithms[i]}",
-          scores = select_first([AdjudicateSV.cutoffs, adjudicate_scores]),
-          cutoffs = select_first([AdjudicateSV.scores, adjudicate_cutoffs]),
+          scores = select_first([AdjudicateSV.scores, adjudicate_scores]),
+          cutoffs = select_first([AdjudicateSV.cutoffs, adjudicate_cutoffs]),
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_filter_annotate_vcf
       }
