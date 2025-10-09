@@ -38,6 +38,10 @@ append_first_sample_to_ped=($(jq -r '.append_first_sample_to_ped' "$input_json")
 sample_bincov_matrix=$(jq -r ".sample_bincov_matrix" "${input_json}")
 ref_panel_bincov_matrix=$(jq -r ".ref_panel_bincov_matrix" "${input_json}")
 reference_dict=$(jq -r ".reference_dict" "${input_json}")
+sd_locs_vcf=$(jq -r ".sd_locs_vcf" "${input_json}")
+primary_contigs_fai=$(jq -r ".primary_contigs_fai" "${input_json}")
+subset_primary_contigs=$(jq -r ".subset_primary_contigs" "${input_json}")
+rename_samples=$(jq -r ".rename_samples" "${input_json}")
 
 # -------------------------------------------------------
 # ======================= Command =======================
@@ -45,7 +49,7 @@ reference_dict=$(jq -r ".reference_dict" "${input_json}")
 
 
 # ---- make binned coverage matrix
-counts_files=("${ref_panel_bincov_matrix}" "${sample_bincov_matrix}")
+counts_files=("${sample_bincov_matrix}")
 make_bin_cov_matrix_inputs_json="make_bincov_matrix_inputs.json"
 make_bin_cov_matrix_outputs_json="make_bincov_matrix_outputs.json"
 jq -n \
@@ -116,7 +120,72 @@ if [[ "${append_first_sample_to_ped}" == "true" ]]; then
 fi
 
 
+# Batch evidence merging
+# ---------------------------------------------------------------------------------------------------------------------
+batch_evidence_merging_inputs_json="$(realpath "${output_dir}/batch_evidence_merging_inputs.json")"
+batch_evidence_merging_outputs_json="$(realpath "${output_dir}/batch_evidence_merging_outputs.json")"
+jq -n \
+  --arg batch "${batch}" \
+  --argfile samples <(jq '.samples + .ref_panel_samples' "${input_json}") \
+  --argfile pe_files <(jq '.PE_files + (.ref_panel_PE_files // [])' "${input_json}") \
+  --argfile sr_files <(jq '.SR_files + (.ref_panel_SR_files // [])' "${input_json}") \
+  --argfile sd_files <(jq '.SD_files + (.ref_panel_SD_files // [])' "${input_json}") \
+  --arg sd_locs_vcf "${sd_locs_vcf}" \
+  --arg reference_dict "${reference_dict}" \
+  --arg primary_contigs_fai "${primary_contigs_fai}" \
+  --arg subset_primary_contigs "${subset_primary_contigs}" \
+  --arg rename_samples "${rename_samples}" \
+  '{
+      "batch": $batch,
+      "samples": $samples,
+      "PE_files": $pe_files,
+      "SR_files": $sr_files,
+      "SD_files": $sd_files,
+      "sd_locs_vcf": $sd_locs_vcf,
+      "reference_dict": $reference_dict,
+      "primary_contigs_fai": $primary_contigs_fai,
+      "min_het_probability": 0.5,
+      "subset_primary_contigs": $subset_primary_contigs,
+      "rename_samples": $rename_samples
+  }' > "${batch_evidence_merging_inputs_json}"
 
+bash /opt/sv_shell/batch_evidence_merging.sh \
+  "${batch_evidence_merging_inputs_json}" \
+  "${batch_evidence_merging_outputs_json}"
+
+
+
+# CNMOPS
+# ---------------------------------------------------------------------------------------------------------------------
+cnmops_inputs_json="$(realpath "${output_dir}/cnmops_inputs.json")"
+cnmops_outputs_json="$(realpath "${output_dir}/cnmops_outputs.json")"
+
+jq -n \
+  --arg batch "${batch}" \
+  --arg r1 "3" \
+  --arg r2 "10" \
+  --argfile samples <(jq '.samples + .ref_panel_samples' "${input_json}") \
+  --arg bincov_matrix
+
+  --argfile sd_files <(jq '.SD_files + (.ref_panel_SD_files // [])' "${input_json}") \
+  --arg sd_locs_vcf "${sd_locs_vcf}" \
+  --arg reference_dict "${reference_dict}" \
+  --arg primary_contigs_fai "${primary_contigs_fai}" \
+  --arg subset_primary_contigs "${subset_primary_contigs}" \
+  --arg rename_samples "${rename_samples}" \
+  '{
+      "batch": $batch,
+      "samples": $samples,
+      "PE_files": $pe_files,
+      "SR_files": $sr_files,
+      "SD_files": $sd_files,
+      "sd_locs_vcf": $sd_locs_vcf,
+      "reference_dict": $reference_dict,
+      "primary_contigs_fai": $primary_contigs_fai,
+      "min_het_probability": 0.5,
+      "subset_primary_contigs": $subset_primary_contigs,
+      "rename_samples": $rename_samples
+  }' > "${batch_evidence_merging_inputs_json}"
 
 
 
