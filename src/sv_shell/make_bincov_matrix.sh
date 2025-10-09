@@ -4,7 +4,7 @@
 # ==================== Input & Setup ====================
 # -------------------------------------------------------
 
-set -Eeuo pipefail
+set -Exeuo pipefail
 
 function getJavaMem() {
   # get JVM memory in MiB by getting total memory from /proc/meminfo

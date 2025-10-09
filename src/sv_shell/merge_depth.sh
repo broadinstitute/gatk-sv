@@ -4,7 +4,7 @@
 # this script has temporarily dropped any gcnv related logic, as
 # we're postponing implementing gcnv.
 
-set -Eeuo pipefail
+set -Exeuo pipefail
 
 function MergeSample() {
   local _sample_id=$1

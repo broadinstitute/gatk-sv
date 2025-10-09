@@ -4,7 +4,7 @@
 # ==================== Input & Setup ====================
 # -------------------------------------------------------
 
-set -Eeuo pipefail
+set -Exeuo pipefail
 
 input_json=${1}
 output_json_filename=${2-""}

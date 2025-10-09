@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -Eeuo pipefail
+set -Exeuo pipefail
 
 # -------------------------------------------------------
 # ==================== Input & Setup ====================
@@ -39,7 +39,6 @@ gatk4_jar_override=$(jq -r --arg default_value "/root/gatk.jar" '.gatk4_jar_over
 
 min_interval_size=$(jq -r --arg default_value "101" '.min_interval_size // $default_value' "${input_json}")
 max_interval_size=$(jq -r --arg default_value "2000" '.max_interval_size // $default_value' "${input_json}")
-
 
 
 # -------------------------------------------------------

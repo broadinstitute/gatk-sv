@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -Eeuo pipefail
+set -Exeuo pipefail
 
 function getJavaMem() {
   # get JVM memory in MiB by getting total memory from /proc/meminfo
@@ -133,6 +133,7 @@ merged_sr_output_filename="$(realpath ${merged_sr_output_filename})"
 # Note that "SR_files" and "samples" in the following is not passing a string, it is rather passing the samples variable.
 MergeEvidence "SR_files" "samples" "${primary_contigs_fai}" "${reference_dict}" "${merged_sr_output_filename}"
 echo "Finished running Merge SR Evidence."
+
 
 # ---- MergePEEvidence
 echo "Started running Merge PE Evidence."
