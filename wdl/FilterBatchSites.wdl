@@ -168,7 +168,20 @@ task FilterAnnotateVcf {
     <(sed -e '1d' ~{scores} | fgrep -e DEL -e DUP | awk '($3!="NA" && $3>=0.5)' | cut -f1 | fgrep -w -f - <(zcat ~{vcf})) \
     <(sed -e '1d' ~{scores} | fgrep -e INV -e BND -e INS | awk '($3!="NA" && $3>=0.5)' | cut -f1 | fgrep -w -f - <(zcat ~{vcf}) | sed -e 's/SVTYPE=DEL/SVTYPE=BND/' -e 's/SVTYPE=DUP/SVTYPE=BND/' -e 's/<DEL>/<BND>/' -e 's/<DUP>/<BND>/') \
       | cat <(sed -n -e '/^#/p' <(zcat ~{vcf})) - \
-      | bcftools sort -Oz -o filtered.updated_bnds.vcf.gz
+      | bcftools sort -Oz -o filtered.vcf.gz
+
+    python3 <<CODE
+    import pysam
+
+    with pysam.VariantFile("filtered.vcf.gz", 'r') as vcf_in, pysam.VariantFile("filtered.updated_bnds.vcf.gz", 'w', header=vcf_in.header) as vcf_out:
+      for record in vcf_in:
+        if record.info.get('SVTYPE') == 'BND' and 'END2' not in record.info:
+          record.info['END2'] = record.stop
+          record.stop = record.pos
+        if record.info.get('SVTYPE') == 'BND' and 'CHR2' not in record.info:
+          record.info['CHR2'] = record.chrom
+        vcf_out.write(record)
+    CODE
 
     /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.updated_bnds.vcf.gz ~{metrics} ~{cutoffs} stdout \
       | bcftools sort -Oz -o filtered.corrected_coords.vcf.gz
