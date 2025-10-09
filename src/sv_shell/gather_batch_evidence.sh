@@ -50,8 +50,8 @@ rename_samples=$(jq -r ".rename_samples" "${input_json}")
 
 # ---- make binned coverage matrix
 counts_files=("${sample_bincov_matrix}")
-make_bin_cov_matrix_inputs_json="make_bincov_matrix_inputs.json"
-make_bin_cov_matrix_outputs_json="make_bincov_matrix_outputs.json"
+make_bin_cov_matrix_inputs_json="$(realpath "${output_dir}/make_bincov_matrix_inputs.json")"
+make_bin_cov_matrix_outputs_json="$(realpath "${output_dir}/make_bincov_matrix_outputs.json")"
 jq -n \
   --argfile s <(jq '.ref_panel_samples + .samples' "${input_json}") \
   --arg c "${counts_files[*]}" \
@@ -73,8 +73,8 @@ bash /opt/sv_shell/make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "$
 
 
 # ---- ploidy estimation
-ploidy_estimation_inputs_json="ploidy_estimation_inputs.json"
-ploidy_estimation_outputs_json="ploidy_estimation_outputs.json"
+ploidy_estimation_inputs_json="$(realpath "${output_dir}/ploidy_estimation_inputs.json")"
+ploidy_estimation_outputs_json="$(realpath "${output_dir}/ploidy_estimation_outputs.json")"
 jq -n \
   --arg b "${batch}" \
   --argfile m <(jq '.merged_bincov' "${make_bin_cov_matrix_outputs_json}") \

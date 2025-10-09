@@ -478,5 +478,7 @@
   "sd_locs_vcf": "/inputs/Homo_sapiens_assembly38.dbsnp138.vcf",
   "reference_dict": "/inputs/Homo_sapiens_assembly38.dict",
   "primary_contigs_fai":"/inputs/contig.fai",
-  "min_het_probability": 0.5
+  "min_het_probability": 0.5,
+  "subset_primary_contigs": false,
+  "rename_samples": false
 }
