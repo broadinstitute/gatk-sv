@@ -222,27 +222,11 @@ CNSampleNormal "chrX" "2" "${r1}"
 female_r1_gff=("${working_dir}/calls/cnMOPS.cnMOPS.gff")
 
 
-# TODO: TEMP TEST
-#mapfile -t normal_r1_gff < <(find /inputs_sv_shell/ -name "NR1_*_cnMOPS.cnMOPS.gff" | sort -V)
-#mapfile -t normal_r2_gff < <(find /inputs_sv_shell/ -name "NR2_*_cnMOPS.cnMOPS.gff" | sort -V)
-#mapfile -t male_r1_gff < <(find /inputs_sv_shell/ -name "MR1_*_cnMOPS.cnMOPS.gff" | sort -V)
-#mapfile -t male_r2_gff < <(find /inputs_sv_shell/ -name "MR2_*_cnMOPS.cnMOPS.gff" | sort -V)
-#mapfile -t female_r1_gff < <(find /inputs_sv_shell/ -name "FR1_*_cnMOPS.cnMOPS.gff" | sort -V)
-#mapfile -t female_r2_gff < <(find /inputs_sv_shell/ -name "FR2_*_cnMOPS.cnMOPS.gff" | sort -V)
-#sample_list="/inputs_sv_shell/combined_ped_file.ped"
-#exclude_list="/inputs_sv_shell/GRCh38_Nmask.bed"
-
-
-
 # CleanCNMops
 working_dir=$(mktemp -d /wd_clean_cnmops_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
-#echo "--------------- ${working_dir}"
-#echo "Bash script is using these files:"
-#echo "${normal_r1_gff[@]}" "${normal_r2_gff[@]}" "${male_r1_gff[@]}" "${male_r2_gff[@]}" "${female_r1_gff[@]}" "${female_r2_gff[@]}"
-#echo "********************************************"
 cnmops_gff_filename="$(realpath ${working_dir}/cnmops.gff)"
 cat \
   "${normal_r1_gff[@]}" \
@@ -255,16 +239,6 @@ cat \
 CleanCNMops "${ped_file}" "${cnmops_gff_filename}"
 
 echo "Finished running CleanCNMops."
-#first_row_string="${Allos[0]}"
-
-#echo "${first_row_string}"
-
-# Split that string into a new array called 'fields'
-# read -ra splits on whitespace (tabs and spaces)
-#read -ra fields <<< "$first_row_string"
-
-# Now access an element from the 'fields' array (e.g., the 2nd field is at index 1)
-#echo "${fields[1]}"
 
 
 # -------------------------------------------------------
