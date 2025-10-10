@@ -50,12 +50,15 @@ primary_contigs_fai=$(jq -r ".primary_contigs_fai" "${input_json}")
 subset_primary_contigs=$(jq -r ".subset_primary_contigs" "${input_json}")
 rename_samples=$(jq -r ".rename_samples" "${input_json}")
 
+
 # -------------------------------------------------------
 # ======================= Command =======================
 # -------------------------------------------------------
 
 
-# ---- make binned coverage matrix
+# make binned coverage matrix
+# ---------------------------------------------------------------------------------------------------------------------
+echo -e "${MAGENTA}Running make binned coverage matrix.${NC}"
 counts_files=("${sample_bincov_matrix}")
 make_bin_cov_matrix_inputs_json="$(realpath "${output_dir}/make_bincov_matrix_inputs.json")"
 make_bin_cov_matrix_outputs_json="$(realpath "${output_dir}/make_bincov_matrix_outputs.json")"
@@ -78,8 +81,12 @@ jq -n \
 
 bash /opt/sv_shell/make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "${make_bin_cov_matrix_outputs_json}"
 
+echo -e "${GREEN}Successfully finished make binned coverage matrix.${NC}"
 
-# ---- ploidy estimation
+
+# ploidy estimation
+# ---------------------------------------------------------------------------------------------------------------------
+echo -e "${MAGENTA}Running ploidy estimation.${NC}"
 ploidy_estimation_inputs_json="$(realpath "${output_dir}/ploidy_estimation_inputs.json")"
 ploidy_estimation_outputs_json="$(realpath "${output_dir}/ploidy_estimation_outputs.json")"
 jq -n \
@@ -101,6 +108,8 @@ printf "%s\n" "${samples_batch[@]}" > "${samples_batch_file}"
 
 
 # validate PED file
+# ---------------------------------------------------------------------------------------------------------------------
+echo -e "${MAGENTA}Validating, subsetting, and adding sample to PED file.${NC}"
 python /opt/sv-pipeline/scripts/validate_ped.py -p "${ped_file}" -s "${samples_batch_file}"
 
 
@@ -110,7 +119,7 @@ awk 'FNR==NR {a[$1]; next}; $2 in a' "${samples_batch_file}" "${ped_file}" > "${
 
 
 # Add case sample to PED
-combined_ped_file="combined_ped_file.ped"
+combined_ped_file="$(realpath "combined_ped_file.ped")"
 if [[ "${append_first_sample_to_ped}" == "true" ]]; then
 
   sample_id=${samples[0]}
@@ -126,9 +135,12 @@ if [[ "${append_first_sample_to_ped}" == "true" ]]; then
   awk -v sample="${sample_id}" -v sex="${SEX}" '{print} END {OFS="\t"; print "case_sample",sample,"0","0",sex,"1" }' < "${ped_subset_filename}" > "${combined_ped_file}"
 fi
 
+echo -e "${GREEN}Successfully finished Validating, subsetting, and adding sample to PED file.${NC}"
+
 
 # Batch evidence merging
 # ---------------------------------------------------------------------------------------------------------------------
+echo -e "${MAGENTA}Starting batch evidence merging.${NC}"
 batch_evidence_merging_inputs_json="$(realpath "${output_dir}/batch_evidence_merging_inputs.json")"
 batch_evidence_merging_outputs_json="$(realpath "${output_dir}/batch_evidence_merging_outputs.json")"
 jq -n \
@@ -164,6 +176,7 @@ bash /opt/sv_shell/batch_evidence_merging.sh \
 
 # CNMOPS
 # ---------------------------------------------------------------------------------------------------------------------
+echo -e "${MAGENTA}Starting cnMOPS.${NC}"
 cnmops_inputs_json="$(realpath "${output_dir}/cnmops_inputs.json")"
 cnmops_outputs_json="$(realpath "${output_dir}/cnmops_outputs.json")"
 
