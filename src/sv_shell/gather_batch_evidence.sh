@@ -320,6 +320,7 @@ jq -n \
   }' > "${merge_depth_inputs_json}"
 
 
+echo -e "${GREEN}Successfully finished running Merge Depth.${NC}"
 
 
 
@@ -433,17 +434,115 @@ merge_depth_dup_task_out=$(jq -r ".Dup" "${merge_depth_outputs_json}")
 merge_depth_dup="${output_dir}/$(basename "${merge_depth_dup_task_out}")"
 mv "${merge_depth_dup_task_out}" "${merge_depth_dup}"
 
+cnmops_del_task_out=$(jq -r ".Del" "${cnmops_outputs_json}")
+cnmops_del="${output_dir}/$(basename "${cnmops_del_task_out}")"
+mv "${cnmops_del_task_out}" "${cnmops_del}"
+
+cnmops_del_idx_task_out=$(jq -r ".Del_idx" "${cnmops_outputs_json}")
+cnmops_del_idx="${output_dir}/$(basename "${cnmops_del_idx_task_out}")"
+mv "${cnmops_del_idx_task_out}" "${cnmops_del_idx}"
+
+cnmops_dup_task_out=$(jq -r ".Dup" "${cnmops_outputs_json}")
+cnmops_dup="${output_dir}/$(basename "${cnmops_dup_task_out}")"
+mv "${cnmops_dup_task_out}" "${cnmops_dup}"
+
+cnmops_dup_idx_task_out=$(jq -r ".Dup_idx" "${cnmops_outputs_json}")
+cnmops_dup_idx="${output_dir}/$(basename "${cnmops_dup_idx_task_out}")"
+mv "${cnmops_dup_idx_task_out}" "${cnmops_dup_idx}"
+
+cnmops_large_del_task_out=$(jq -r ".Del" "${cnmops_large_outputs_json}")
+cnmops_large_del="${output_dir}/$(basename "${cnmops_large_del_task_out}")"
+mv "${cnmops_large_del_task_out}" "${cnmops_large_del}"
+
+cnmops_large_del_idx_task_out=$(jq -r ".Del_idx" "${cnmops_large_outputs_json}")
+cnmops_large_del_idx="${output_dir}/$(basename "${cnmops_large_del_idx_task_out}")"
+mv "${cnmops_large_del_idx_task_out}" "${cnmops_large_del_idx}"
+
+cnmops_large_dup_task_out=$(jq -r ".Dup" "${cnmops_large_outputs_json}")
+cnmops_large_dup="${output_dir}/$(basename "${cnmops_large_dup_task_out}")"
+mv "${cnmops_large_dup_task_out}" "${cnmops_large_dup}"
+
+cnmops_large_dup_idx_task_out=$(jq -r ".Dup_idx" "${cnmops_large_outputs_json}")
+cnmops_large_dup_idx="${output_dir}/$(basename "${cnmops_large_dup_idx_task_out}")"
+mv "${cnmops_large_dup_idx_task_out}" "${cnmops_large_dup_idx}"
+
+output_median_cov_output="${output_dir}/$(basename "${output_median_cov}")"
+mv "${output_median_cov}" "${output_median_cov_output}"
+
+std_manta_vcf_tar_task_out=$(jq -r ".std_manta_vcf_tar" "${preprocess_pesr_outputs_json}")
+std_manta_vcf_tar="${output_dir}/$(basename "${std_manta_vcf_tar_task_out}")"
+mv "${std_manta_vcf_tar_task_out}" "${std_manta_vcf_tar}"
+
+std_dragen_vcf_tar_task_out=$(jq -r ".std_dragen_vcf_tar" "${preprocess_pesr_outputs_json}")
+std_dragen_vcf_tar="${output_dir}/$(basename "${std_dragen_vcf_tar_task_out}")"
+mv "${std_dragen_vcf_tar_task_out}" "${std_dragen_vcf_tar}"
+
+std_scramble_vcf_tar_task_out=$(jq -r ".std_scramble_vcf_tar" "${preprocess_pesr_outputs_json}")
+std_scramble_vcf_tar="${output_dir}/$(basename "${std_scramble_vcf_tar_task_out}")"
+mv "${std_scramble_vcf_tar_task_out}" "${std_scramble_vcf_tar}"
+
+std_wham_vcf_tar_task_out=$(jq -r ".std_wham_vcf_tar" "${preprocess_pesr_outputs_json}")
+std_wham_vcf_tar="${output_dir}/$(basename "${std_wham_vcf_tar_task_out}")"
+mv "${std_wham_vcf_tar_task_out}" "${std_wham_vcf_tar}"
 
 
 
 
 
 outputs_json=$(jq -n \
-  --arg del "${del_out}" \
-  --arg del_index "${del_index_out}" \
-  --arg dup "${dup_out}" \
-  --arg dup_index "${dup_index_out}" \
-  '{Del: $del, Del_idx: $del_index, Dup: $dup, Dup_idx: $dup_index}' )
-echo "${outputs_json}" > "${output_json_filename}"
+  --arg merged_BAF "${merged_BAF}" \
+  --arg merged_BAF_index "${merged_BAF_index}" \
+  --arg merged_SR "${merged_SR}" \
+  --arg merged_SR_index "${merged_SR_index}" \
+  --arg merged_PE "${merged_PE}" \
+  --arg merged_PE_index "${merged_PE_index}" \
+  --arg merged_bincov "${merged_bincov_out}" \
+  --arg merged_bincov_index "${merged_bincov_idx_out}" \
+  --arg batch_ploidy_matrix "${ploidy_matrix}" \
+  --arg batch_ploidy_plots "${ploidy_plots}" \
+  --arg combined_ped_file "${combined_ped_file_output}" \
+  --arg merged_dels "${merge_depth_del}" \
+  --arg merged_dups "${merge_depth_dup}" \
+  --arg cnmops_del "${cnmops_del}" \
+  --arg cnmops_del_index "${cnmops_del_idx}" \
+  --arg cnmops_dup "${cnmops_dup}" \
+  --arg cnmops_dup_index "${cnmops_dup_idx}" \
+  --arg cnmops_large_del "${cnmops_large_del}" \
+  --arg cnmops_large_del_index "${cnmops_large_del_idx}" \
+  --arg cnmops_large_dup "${cnmops_large_dup}" \
+  --arg cnmops_large_dup_index "${cnmops_large_dup_idx}" \
+  --arg median_cov "${output_median_cov_output}" \
+  --arg std_manta_vcf_tar "${std_manta_vcf_tar}" \
+  --arg std_dragen_vcf_tar "${std_dragen_vcf_tar}" \
+  --arg std_scramble_vcf_tar "${std_scramble_vcf_tar}" \
+  --arg std_wham_vcf_tar "${std_wham_vcf_tar}" \
+  '{
+      "merged_BAF": $merged_BAF,
+      "merged_BAF_index": $merged_BAF_index,
+      "merged_SR": $merged_SR,
+      "merged_SR_index": $merged_SR_index,
+      "merged_PE": $merged_PE,
+      "merged_PE_index": $merged_PE_index,
+      "merged_bincov": $merged_bincov,
+      "merged_bincov_index": $merged_bincov_index,
+      "batch_ploidy_matrix": $batch_ploidy_matrix,
+      "batch_ploidy_plots": $batch_ploidy_plots,
+      "combined_ped_file": $combined_ped_file,
+      "merged_dels": $merged_dels,
+      "merged_dups": $merged_dups,
+      "cnmops_del": $cnmops_del,
+      "cnmops_del_index": $cnmops_del_index,
+      "cnmops_dup": $cnmops_dup,
+      "cnmops_dup_index": $cnmops_dup_index,
+      "cnmops_large_del": $cnmops_large_del,
+      "cnmops_large_del_index": $cnmops_large_del_index,
+      "cnmops_large_dup": $cnmops_large_dup,
+      "cnmops_large_dup_index": $cnmops_large_dup_index,
+      "median_cov": $median_cov,
+      "std_manta_vcf_tar": $std_manta_vcf_tar,
+      "std_dragen_vcf_tar": $std_dragen_vcf_tar,
+      "std_scramble_vcf_tar": $std_scramble_vcf_tar,
+      "std_wham_vcf_tar": $std_wham_vcf_tar
+  }' > "${output_json_filename}"
 
 echo "Successfully finished Gather Batch Evidence, output json filename: ${output_json_filename}"
