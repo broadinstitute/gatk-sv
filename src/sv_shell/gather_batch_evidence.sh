@@ -259,8 +259,32 @@ echo -e "${GREEN}Successfully finished running cnMOPS Large.${NC}"
 
 
 
+# Condense Read Counts
+# ---------------------------------------------------------------------------------------------------------------------
 
+# Note that the WDL version implements this as a for loop over all the 'samples' in the input;
+# however, since in the single-sample mode the 'samples' list contains one sample only,
+# for simplicity, the in the sv-shell version we're not implementing the loop.
 
+echo -e "${MAGENTA}Starting Condense Read Counts.${NC}"
+condense_read_counts_inputs_json="$(realpath "${output_dir}/condense_read_counts_inputs.json")"
+condense_read_counts_outputs_json="$(realpath "${output_dir}/condense_read_counts_outputs.json")"
+
+jq -n \
+  --arg counts "${counts[0]}" \
+  --arg sample "${samples[0]}" \
+  --argfile min_interval_size <(jq '.min_interval_size' "${input_json}") \
+  --argfile max_interval_size <(jq '.max_interval_size' "${input_json}") \
+  '{
+      "sample": $sample,
+      "counts": $counts,
+      "min_interval_size": $min_interval_size,
+      "max_interval_size": $max_interval_size
+  }' > "${condense_read_counts_inputs_json}"
+
+bash /opt/sv_shell/condense_read_counts.sh "${condense_read_counts_inputs_json}" "${condense_read_counts_outputs_json}"
+
+echo -e "${GREEN}Successfully finished running Condense Read Counts.${NC}"
 
 
 
