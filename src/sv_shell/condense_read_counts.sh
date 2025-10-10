@@ -76,4 +76,4 @@ outputs_json=$(jq -n \
   '{out: $out}' )
 echo "${outputs_json}" > "${output_json_filename}"
 
-echo "Finished cnmops successfully, output json filename: ${output_json_filename}"
+echo "Finished condense read counts successfully, output json filename: ${output_json_filename}"
