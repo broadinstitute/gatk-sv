@@ -379,3 +379,71 @@ bash /opt/sv_shell/preprocess_pesr.sh "${preprocess_pesr_inputs_json}" "${prepro
 
 echo -e "${GREEN}Successfully finished running Preprocess PE/SR.${NC}"
 
+
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+merged_BAF_task_out=$(jq -r ".merged_BAF" "${batch_evidence_merging_outputs_json}")
+merged_BAF="${output_dir}/$(basename "${merged_BAF_task_out}")"
+mv "${merged_BAF_task_out}" "${merged_BAF}"
+
+merged_BAF_index_task_out=$(jq -r ".merged_BAF_index" "${batch_evidence_merging_outputs_json}")
+merged_BAF_index="${output_dir}/$(basename "${merged_BAF_index_task_out}")"
+mv "${merged_BAF_index_task_out}" "${merged_BAF_index}"
+
+merged_SR_task_out=$(jq -r ".merged_SR" "${batch_evidence_merging_outputs_json}")
+merged_SR="${output_dir}/$(basename "${merged_SR_task_out}")"
+mv "${merged_SR_task_out}" "${merged_SR}"
+
+merged_SR_index_task_out=$(jq -r ".merged_SR_index" "${batch_evidence_merging_outputs_json}")
+merged_SR_index="${output_dir}/$(basename "${merged_SR_index_task_out}")"
+mv "${merged_SR_index_task_out}" "${merged_SR_index}"
+
+merged_PE_task_out=$(jq -r ".merged_PE" "${batch_evidence_merging_outputs_json}")
+merged_PE="${output_dir}/$(basename "${merged_PE_task_out}")"
+mv "${merged_PE_task_out}" "${merged_PE}"
+
+merged_PE_index_task_out=$(jq -r ".merged_PE_index" "${batch_evidence_merging_outputs_json}")
+merged_PE_index="${output_dir}/$(basename "${merged_PE_index_task_out}")"
+mv "${merged_PE_index_task_out}" "${merged_PE_index}"
+
+merged_bincov_out="${output_dir}/$(basename "${merged_bincov_}")"
+merged_bincov_idx_out="${output_dir}/$(basename "${merged_bincov_idx_}")"
+mv "${merged_bincov_}" "${merged_bincov_out}"
+mv "${merged_bincov_idx_}" "${merged_bincov_idx_out}"
+
+ploidy_matrix_task_out=$(jq -r ".ploidy_matrix" "${ploidy_estimation_outputs_json}")
+ploidy_matrix="${output_dir}/$(basename "${ploidy_matrix_task_out}")"
+mv "${ploidy_matrix_task_out}" "${ploidy_matrix}"
+
+ploidy_plots_task_out=$(jq -r ".ploidy_plots" "${ploidy_estimation_outputs_json}")
+ploidy_plots="${output_dir}/$(basename "${ploidy_plots_task_out}")"
+mv "${ploidy_plots_task_out}" "${ploidy_plots}"
+
+combined_ped_file_output="${output_dir}/$(basename "${combined_ped_file}")"
+mv "${combined_ped_file}" "${combined_ped_file_output}"
+
+merge_depth_del_task_out=$(jq -r ".Del" "${merge_depth_outputs_json}")
+merge_depth_del="${output_dir}/$(basename "${merge_depth_del_task_out}")"
+mv "${merge_depth_del_task_out}" "${merge_depth_del}"
+
+merge_depth_dup_task_out=$(jq -r ".Dup" "${merge_depth_outputs_json}")
+merge_depth_dup="${output_dir}/$(basename "${merge_depth_dup_task_out}")"
+mv "${merge_depth_dup_task_out}" "${merge_depth_dup}"
+
+
+
+
+
+
+outputs_json=$(jq -n \
+  --arg del "${del_out}" \
+  --arg del_index "${del_index_out}" \
+  --arg dup "${dup_out}" \
+  --arg dup_index "${dup_index_out}" \
+  '{Del: $del, Del_idx: $del_index, Dup: $dup, Dup_idx: $dup_index}' )
+echo "${outputs_json}" > "${output_json_filename}"
+
+echo "Successfully finished Gather Batch Evidence, output json filename: ${output_json_filename}"
