@@ -82,6 +82,9 @@ jq -n \
 
 bash /opt/sv_shell/make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "${make_bin_cov_matrix_outputs_json}"
 
+merged_bincov_=$(jq -r ".merged_bincov" "${make_bin_cov_matrix_outputs_json}")
+merged_bincov_idx_=$(jq -r ".merged_bincov_idx" "${make_bin_cov_matrix_outputs_json}")
+
 echo -e "${GREEN}Successfully finished make binned coverage matrix.${NC}"
 
 
@@ -96,6 +99,8 @@ jq -n \
   '{batch: $b, bincov_matrix: $m}' > "${ploidy_estimation_inputs_json}"
 
 bash /opt/sv_shell/ploidy_estimation.sh "${ploidy_estimation_inputs_json}" "${ploidy_estimation_outputs_json}"
+
+echo -e "${GREEN}Successfully finished running ploidy estimation.${NC}"
 
 sample_sex_assignments=$(jq -r ".sample_sex_assignments" "${ploidy_estimation_outputs_json}")
 
@@ -172,6 +177,8 @@ jq -n \
 bash /opt/sv_shell/batch_evidence_merging.sh \
   "${batch_evidence_merging_inputs_json}" \
   "${batch_evidence_merging_outputs_json}"
+
+echo -e "${GREEN}Successfully finished batch evidence merging.${NC}"
 
 
 
@@ -319,6 +326,7 @@ jq -n \
       "batch": $batch
   }' > "${merge_depth_inputs_json}"
 
+bash /opt/sv_shell/merge_depth.sh "${merge_depth_inputs_json}" "${merge_depth_outputs_json}"
 
 echo -e "${GREEN}Successfully finished running Merge Depth.${NC}"
 
@@ -484,9 +492,6 @@ mv "${std_scramble_vcf_tar_task_out}" "${std_scramble_vcf_tar}"
 std_wham_vcf_tar_task_out=$(jq -r ".std_wham_vcf_tar" "${preprocess_pesr_outputs_json}")
 std_wham_vcf_tar="${output_dir}/$(basename "${std_wham_vcf_tar_task_out}")"
 mv "${std_wham_vcf_tar_task_out}" "${std_wham_vcf_tar}"
-
-
-
 
 
 outputs_json=$(jq -n \
