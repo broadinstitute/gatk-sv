@@ -38,6 +38,7 @@ cd "${working_dir}"
 
 batch=$(jq -r ".batch" "${input_json}")
 samples=$(jq -r ".samples[]" "${input_json}")
+counts=$(jq -r ".counts[]" "${input_json}")
 ref_panel_samples=($(jq -r '.ref_panel_samples[]' "$input_json"))
 all_samples=($(jq -r '(.samples + .ref_panel_samples)[]' "$input_json"))
 ped_file=$(jq -r ".ped_file" "${input_json}")
@@ -288,36 +289,93 @@ echo -e "${GREEN}Successfully finished running Condense Read Counts.${NC}"
 
 
 
+# Merge Depth
+# ---------------------------------------------------------------------------------------------------------------------
+
+echo -e "${MAGENTA}Starting Merge Depth.${NC}"
+merge_depth_inputs_json="$(realpath "${output_dir}/merge_depth_inputs.json")"
+merge_depth_outputs_json="$(realpath "${output_dir}/mergge_depth_outputs.json")"
+
+# The following args are all temporarily skipped as they are gcnv related.
+#  --arg genotyped_segments_vcfs
+#  --arg contig_ploidy_calls
+#  --arg gcnv_qs_cutoff
+
+jq -n \
+  --argfile samples <(jq '.samples' "${input_json}") \
+  --argfile defragment_max_dist <(jq '.defragment_max_dist // ""' "${input_json}") \
+  --argfile std_cnmops_del <(jq '.Del // ""' "${cnmops_outputs_json}") \
+  --argfile std_cnmops_dup <(jq '.Dup // ""' "${cnmops_outputs_json}") \
+  --argfile large_cnmops_del <(jq '.Del // ""' "${cnmops_large_outputs_json}") \
+  --argfile large_cnmops_dup <(jq '.Dup // ""' "${cnmops_large_outputs_json}") \
+  --arg batch "${batch}" \
+  '{
+      "samples": $samples,
+      "defragment_max_dist": $defragment_max_dist,
+      "std_cnmops_del": $std_cnmops_del,
+      "std_cnmops_dup": $std_cnmops_dup,
+      "large_cnmops_del": $large_cnmops_del,
+      "large_cnmops_dup": $large_cnmops_dup,
+      "batch": $batch
+  }' > "${merge_depth_inputs_json}"
 
 
 
 
 
+# Median Cov
+# ---------------------------------------------------------------------------------------------------------------------
+echo -e "${MAGENTA}Starting Median Cov.${NC}"
+merged_median_cov="$(realpath "${working_dir}/merged_median_cov.bed")"
 
+paste -d'\t' \
+  $(jq -r ".ref_panel_median_cov" "${input_json}") \
+  $(jq -r ".sample_median_cov" "${input_json}") \
+  > "${merged_median_cov}"
 
+## zcat "${merged_median_cov}" > "${batch}_fixed.bed"
+# since the file is already unzipped, so just cp it as following to keep original untouched,
+# use the above if the file was gzipped.
+cp "${merged_median_cov}" "${batch}_fixed.bed"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-median_cov_filename="/all_samples_medianCov.transposed.bed"
-
-
-paste -d'\t' all_samples_medianCov.transposed.bed wd_evidence_qc_XGqRWD02/NA12878_medianCov.transposed.bed > merged_mediancov.bed
-
-
-zcat "${merged_bincov}" > "${batch}_fixed.bed"
 Rscript /opt/WGD/bin/medianCoverage.R "${batch}_fixed.bed" -H "${batch}_medianCov.bed"
 Rscript -e "x <- read.table(\"${batch}_medianCov.bed\",check.names=FALSE); xtransposed <- t(x[,c(1,2)]); write.table(xtransposed,file=\"${batch}_medianCov.transposed.bed\",sep=\"\\t\",row.names=F,col.names=F,quote=F)"
+
+output_median_cov="$(realpath "${batch}_medianCov.transposed.bed")"
+
+echo -e "${GREEN}Successfully finished running Median Cov.${NC}"
+
+
+
+# Preprocess PE/SR
+# ---------------------------------------------------------------------------------------------------------------------
+
+echo -e "${MAGENTA}Starting Preprocess PE/SR.${NC}"
+preprocess_pesr_inputs_json="$(realpath "${output_dir}/preprocess_pesr_inputs.json")"
+preprocess_pesr_outputs_json="$(realpath "${output_dir}/preprocess_pesr_outputs.json")"
+
+# TODO: the following includes scramble VCFs, but they are not included in the WDL equivalent, bug in WDL or by design?
+jq -n \
+  --argfile samples <(jq '.samples' "${input_json}") \
+  --argfile manta_vcfs <(jq '.manta_vcfs // ""' "${input_json}") \
+  --argfile scramble_vcfs <(jq '.scramble_vcfs // ""' "${input_json}") \
+  --argfile wham_vcfs <(jq '.wham_vcfs // ""' "${input_json}") \
+  --argfile dragen_vcfs <(jq '.dragen_vcfs // []' "${input_json}") \
+  --argfile contigs <(jq '.primary_contigs_fai' "${input_json}") \
+  --argfile min_svsize <(jq '.min_svsize' "${input_json}") \
+  --arg batch "${batch}" \
+  '{
+      "samples": $samples,
+      "manta_vcfs": $manta_vcfs,
+      "scramble_vcfs": $scramble_vcfs,
+      "wham_vcfs": $wham_vcfs,
+      "dragen_vcfs": $dragen_vcfs,
+      "contigs": $contigs,
+      "min_svsize": $min_svsize,
+      "batch": $batch
+  }' > "${preprocess_pesr_inputs_json}"
+
+bash /opt/sv_shell/preprocess_pesr.sh "${preprocess_pesr_inputs_json}" "${preprocess_pesr_outputs_json}"
+
+echo -e "${GREEN}Successfully finished running Preprocess PE/SR.${NC}"
+

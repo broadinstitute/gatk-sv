@@ -507,5 +507,18 @@
   "cnmops_min_size": 1000000,
   "cnmops_large_min_size": 1000000,
   "min_interval_size": 101,
-  "max_interval_size": 2000
+  "max_interval_size": 2000,
+  "ref_panel_median_cov": "/inputs/all_samples_medianCov.transposed.bed",
+  "sample_median_cov": "/inputs/NA12878_medianCov.transposed.bed",
+  "dragen_vcfs": [],
+  "manta_vcfs": [
+    "/inputs/NA12878.manta.vcf.gz"
+  ],
+  "scramble_vcfs": [
+    "/inputs/NA12878.scramble.vcf.gz"
+  ],
+  "wham_vcfs": [
+    "/inputs/NA12878.wham.vcf.gz"
+  ],
+  "min_svsize": 50
 }
