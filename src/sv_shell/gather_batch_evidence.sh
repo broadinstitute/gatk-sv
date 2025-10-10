@@ -2,6 +2,13 @@
 
 set -Exeuo pipefail
 
+RED='\033[0;31m'
+BOLD_RED="\033[1;31m"
+GREEN='\033[0;32m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
 # -------------------------------------------------------
 # ==================== Input & Setup ====================
 # -------------------------------------------------------
@@ -161,35 +168,81 @@ cnmops_inputs_json="$(realpath "${output_dir}/cnmops_inputs.json")"
 cnmops_outputs_json="$(realpath "${output_dir}/cnmops_outputs.json")"
 
 jq -n \
-  --arg batch "${batch}" \
   --arg r1 "3" \
   --arg r2 "10" \
+  --arg batch "${batch}" \
   --argfile samples <(jq '.samples + .ref_panel_samples' "${input_json}") \
-  --arg bincov_matrix
-
-  --argfile sd_files <(jq '.SD_files + (.ref_panel_SD_files // [])' "${input_json}") \
-  --arg sd_locs_vcf "${sd_locs_vcf}" \
-  --arg reference_dict "${reference_dict}" \
-  --arg primary_contigs_fai "${primary_contigs_fai}" \
-  --arg subset_primary_contigs "${subset_primary_contigs}" \
-  --arg rename_samples "${rename_samples}" \
+  --arg bincov_matrix "${merged_bincov_}" \
+  --arg bincov_matrix_index "${merged_bincov_idx_}" \
+  --argfile chrom_file <(jq '.cnmops_chrom_file' "${input_json}") \
+  --argfile exclude_list <(jq '.cnmops_exclude_list' "${input_json}") \
+  --argfile allo_file <(jq '.cnmops_allo_file' "${input_json}") \
+  --argfile min_size <(jq '.cnmops_min_size // 1000000' "${input_json}") \
+  --arg ped_file "${combined_ped_file}" \
+  --arg ref_dict "${reference_dict}" \
+  --arg prefix "header" \
+  --arg stitch_and_clean_large_events false \
   '{
+      "r1": $r1,
+      "r2": $r2,
       "batch": $batch,
       "samples": $samples,
-      "PE_files": $pe_files,
-      "SR_files": $sr_files,
-      "SD_files": $sd_files,
-      "sd_locs_vcf": $sd_locs_vcf,
-      "reference_dict": $reference_dict,
-      "primary_contigs_fai": $primary_contigs_fai,
-      "min_het_probability": 0.5,
-      "subset_primary_contigs": $subset_primary_contigs,
-      "rename_samples": $rename_samples
-  }' > "${batch_evidence_merging_inputs_json}"
+      "bincov_matrix": $bincov_matrix,
+      "bincov_matrix_index": $bincov_matrix_index,
+      "chrom_file": $chrom_file,
+      "ped_file": $ped_file,
+      "exclude_list": $exclude_list,
+      "allo_file": $allo_file,
+      "ref_dict": $ref_dict,
+      "prefix": $prefix,
+      "stitch_and_clean_large_events": $stitch_and_clean_large_events
+  }' > "${cnmops_inputs_json}"
+
+bash /opt/sv_shell/cnmops.sh "${cnmops_inputs_json}" "${cnmops_outputs_json}"
+
+echo -e "${GREEN}Successfully finished running cnMOPS.${NC}"
 
 
+# CNMOPS Large
+# ---------------------------------------------------------------------------------------------------------------------
+echo -e "${MAGENTA}Starting cnMOPS Large.${NC}"
+cnmops_large_inputs_json="$(realpath "${output_dir}/cnmops_large_inputs.json")"
+cnmops_large_outputs_json="$(realpath "${output_dir}/cnmops_large_outputs.json")"
 
+jq -n \
+  --arg r1 "1000" \
+  --arg r2 "100" \
+  --arg batch "${batch}" \
+  --argfile samples <(jq '.samples + .ref_panel_samples' "${input_json}") \
+  --arg bincov_matrix "${merged_bincov_}" \
+  --arg bincov_matrix_index "${merged_bincov_idx_}" \
+  --argfile chrom_file <(jq '.cnmops_chrom_file' "${input_json}") \
+  --argfile exclude_list <(jq '.cnmops_exclude_list' "${input_json}") \
+  --argfile allo_file <(jq '.cnmops_allo_file' "${input_json}") \
+  --argfile min_size <(jq '.cnmops_large_min_size // 1000000' "${input_json}") \
+  --arg ped_file "${combined_ped_file}" \
+  --arg ref_dict "${reference_dict}" \
+  --arg prefix "large" \
+  --arg stitch_and_clean_large_events false \
+  '{
+      "r1": $r1,
+      "r2": $r2,
+      "batch": $batch,
+      "samples": $samples,
+      "bincov_matrix": $bincov_matrix,
+      "bincov_matrix_index": $bincov_matrix_index,
+      "chrom_file": $chrom_file,
+      "ped_file": $ped_file,
+      "exclude_list": $exclude_list,
+      "allo_file": $allo_file,
+      "ref_dict": $ref_dict,
+      "prefix": $prefix,
+      "stitch_and_clean_large_events": $stitch_and_clean_large_events
+  }' > "${cnmops_large_inputs_json}"
 
+bash /opt/sv_shell/cnmops.sh "${cnmops_large_inputs_json}" "${cnmops_large_outputs_json}"
+
+echo -e "${GREEN}Successfully finished running cnMOPS Large.${NC}"
 
 
 

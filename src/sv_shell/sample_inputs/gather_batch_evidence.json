@@ -497,5 +497,10 @@
   "sd_locs_vcf": "/inputs/Homo_sapiens_assembly38.dbsnp138.vcf",
   "primary_contigs_fai": "/inputs/contig.fai",
   "subset_primary_contigs": false,
-  "rename_samples": false
+  "rename_samples": false,
+  "cnmops_chrom_file": "/inputs/autosome.fai",
+  "cnmops_exclude_list": "/inputs/GRCh38_Nmask.bed",
+  "cnmops_allo_file": "/inputs/allosome.fai",
+  "cnmops_min_size": 1000000,
+  "cnmops_large_min_size": 1000000
 }
