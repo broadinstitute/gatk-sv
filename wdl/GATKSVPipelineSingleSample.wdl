@@ -7,6 +7,7 @@ import "GatherBatchEvidence.wdl" as batchevidence
 import "DepthPreprocessing.wdl" as dpn
 import "ClusterBatch.wdl" as clusterbatch
 import "GenerateBatchMetrics.wdl" as batchmetrics
+import "Stripy.wdl" as stripy
 import "SRTest.wdl" as SRTest
 import "FilterBatchSamples.wdl" as filterbatch
 import "GenotypeBatch.wdl" as genotypebatch
@@ -44,6 +45,7 @@ workflow GATKSVPipelineSingleSample {
     Boolean use_melt = false
     Boolean use_scramble = true
     Boolean use_wham = true
+    Boolean use_stripy = true
 
     Boolean? is_dragen_3_7_8
 
@@ -83,6 +85,7 @@ workflow GATKSVPipelineSingleSample {
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
     String cloud_sdk_docker
+    String stripy_docker
 
     # Must be provided if corresponding use_* is true and case_*_vcf is not provided
     String? manta_docker
@@ -841,6 +844,29 @@ workflow GATKSVPipelineSingleSample {
 
   File combined_ped_file = select_first([GatherBatchEvidence.combined_ped_file])
 
+  if (use_stripy) {
+    call utils.GetSampleSex {
+      input:
+        ped_file=combined_ped_file,
+        sample_id=sample_id,
+        linux_docker=linux_docker
+    }
+
+    call stripy.RunSTRipy {
+      input:
+        input_bam = select_first([bam_or_cram_file]),
+        input_bam_index = select_first([bam_or_cram_index]),
+        genome_build = "hg38",
+        reference_fasta = reference_fasta,
+        locus = "all",
+        sex = GetSampleSex.out_string,
+        docker_image = stripy_docker
+    }
+  }
+
+  # TODO need outputs to continue
+  # File? case_stripy_file_ = select_first([RunSTRipy. case_sd_file, ])
+
   # Merge calls with reference panel
   if (defined(GatherBatchEvidence.std_manta_vcf_tar)) {
     call utils.CombineTars as CombineMantaStd {
@@ -1484,6 +1510,14 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker=sv_pipeline_docker
   }
 
+  call utils.MergeStripyVcf {
+    input:
+    vcf = UpdateBreakendRepresentationAndRemoveFilters.out,
+    stripy_vcf = stripy_vcf, # TODO
+    output_prefix = sample_id,
+    sv_pipeline_docker = sv_pipeline_docker
+  }
+
   call SingleSampleMetrics.SingleSampleMetrics {
     input:
       name = batch,
@@ -1513,8 +1547,8 @@ workflow GATKSVPipelineSingleSample {
 
   output {
     # Final calls
-    File final_vcf = UpdateBreakendRepresentationAndRemoveFilters.out
-    File final_vcf_idx = UpdateBreakendRepresentationAndRemoveFilters.out_idx
+    File final_vcf = MergeStripyVcf.out
+    File final_vcf_idx = MergeStripyVcf.out_index
     File final_bed = VcfToBed.bed
 
     # These files contain events reported in the internal VCF representation

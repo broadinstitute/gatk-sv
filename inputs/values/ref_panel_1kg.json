@@ -958,6 +958,7 @@
     "annotated_vcf": "gs://gatk-sv-ref-panel-1kg-v1-0-1/submissions/898ebafe-83b9-4639-bf21-19edd9bf9d2d/AnnotateVcf/f9ccb65f-0214-4f23-a84d-d2e946c4b003/call-ConcatVcfs/all_batches.annotated.vcf.gz",
     "annotated_vcf_index": "gs://gatk-sv-ref-panel-1kg-v1-0-1/submissions/898ebafe-83b9-4639-bf21-19edd9bf9d2d/AnnotateVcf/f9ccb65f-0214-4f23-a84d-d2e946c4b003/call-ConcatVcfs/all_batches.annotated.vcf.gz.tbi",
     "bam_or_cram_example": "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.cram.2019-02-06/Sample_HG00096/analysis/HG00096.final.cram",
+    "bam_or_cram_index_example": "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.cram.2019-02-06/Sample_HG00096/analysis/HG00096.final.cram.crai",
     "bam_or_cram_files": [
         "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.cram.2019-02-06/Sample_HG00096/analysis/HG00096.final.cram",
         "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.cram.2019-02-06/Sample_HG00129/analysis/HG00129.final.cram",
