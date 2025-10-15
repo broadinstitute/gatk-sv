@@ -24,6 +24,7 @@
   "sv-utils-env": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-utils-env:2023-02-01-v0.26.8-beta-9b25c72d",
   "sv_utils_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-utils:2025-01-06-v1.0.1-e902bf4e",
   "gq_recalibrator_docker": "us.gcr.io/broad-dsde-methods/markw/gatk:mw-tb-form-sv-filter-training-data-eb62a3",
+  "stripy_docker": "us.gcr.io/broad-dsde-methods/markw/stripy:mw-stripy-0e57e6cd",
   "str": "us.gcr.io/broad-dsde-methods/gatk-sv/str:2023-05-23-v0.27.3-beta-e537bdd6",
   "denovo": "us.gcr.io/broad-dsde-methods/gatk-sv/denovo:2025-11-14-v1.1-2a5a9471",
   "sv-shell": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-shell:2025-08-15-v1.0.5-697baf80"

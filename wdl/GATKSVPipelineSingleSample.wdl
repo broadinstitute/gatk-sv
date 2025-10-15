@@ -7,6 +7,7 @@ import "GatherBatchEvidence.wdl" as batchevidence
 import "DepthPreprocessing.wdl" as dpn
 import "ClusterBatch.wdl" as clusterbatch
 import "GenerateBatchMetrics.wdl" as batchmetrics
+import "StripyWorkflow.wdl" as stripy
 import "SRTest.wdl" as SRTest
 import "FilterBatchSamples.wdl" as filterbatch
 import "GenotypeBatch.wdl" as genotypebatch
@@ -45,6 +46,7 @@ workflow GATKSVPipelineSingleSample {
     Boolean use_melt = false
     Boolean use_scramble = true
     Boolean use_wham = true
+    Boolean use_stripy = true
 
     Boolean? is_dragen_3_7_8
 
@@ -54,6 +56,7 @@ workflow GATKSVPipelineSingleSample {
     File? case_melt_vcf
     File? case_scramble_vcf
     File? case_wham_vcf
+    File? case_stripy_file
     File? case_counts_file
     File? case_pe_file
     File? case_sr_file
@@ -85,6 +88,7 @@ workflow GATKSVPipelineSingleSample {
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
     String cloud_sdk_docker
+    String stripy_docker
 
     # Must be provided if corresponding use_* is true and case_*_vcf is not provided
     String? manta_docker
@@ -852,6 +856,18 @@ workflow GATKSVPipelineSingleSample {
 
   File combined_ped_file = select_first([GatherBatchEvidence.combined_ped_file])
 
+  if (use_stripy && !defined(case_stripy_file)) {
+    call stripy.StripyWorkflow {
+      input:
+        bam_or_cram_file = select_first([bam_or_cram_file]),
+        sample_name = sample_id,
+        ped_file = combined_ped_file,
+        reference_fasta = reference_fasta,
+        linux_docker = linux_docker,
+        stripy_docker = stripy_docker
+    }
+  }
+
   # Merge calls with reference panel
   if (defined(GatherBatchEvidence.std_dragen_vcf_tar) && defined(ref_std_dragen_vcf_tar)) {
     call utils.CombineTars as CombineDragenStd {
@@ -1510,13 +1526,6 @@ workflow GATKSVPipelineSingleSample {
       gatk_docker = gatk_docker
   }
 
-  call SingleSampleFiltering.VcfToBed as VcfToBed {
-    input:
-      vcf = AnnotateVcf.annotated_vcf,
-      prefix = batch,
-      sv_pipeline_docker = sv_pipeline_docker
-  }
-
   call SingleSampleFiltering.UpdateBreakendRepresentationAndRemoveFilters {
     input:
       vcf=AnnotateVcf.annotated_vcf,
@@ -1525,6 +1534,16 @@ workflow GATKSVPipelineSingleSample {
       ref_fasta_idx=reference_index,
       prefix=basename(AnnotateVcf.annotated_vcf, ".vcf.gz") + ".final_cleanup",
       sv_pipeline_docker=sv_pipeline_docker
+  }
+
+  if (use_stripy) {
+    call SingleSampleFiltering.MergeStripyVcf {
+      input:
+      vcf = UpdateBreakendRepresentationAndRemoveFilters.out,
+      stripy_vcf = select_first([StripyWorkflow.vcf_output, case_stripy_file]),
+      output_prefix = sample_id + ".gatk_sv",
+      sv_pipeline_docker = sv_pipeline_docker
+    }
   }
 
   call SingleSampleMetrics.SingleSampleMetrics {
@@ -1556,15 +1575,20 @@ workflow GATKSVPipelineSingleSample {
 
   output {
     # Final calls
-    File final_vcf = UpdateBreakendRepresentationAndRemoveFilters.out
-    File final_vcf_idx = UpdateBreakendRepresentationAndRemoveFilters.out_idx
-    File final_bed = VcfToBed.bed
+    File final_vcf = select_first([MergeStripyVcf.out, UpdateBreakendRepresentationAndRemoveFilters.out])
+    File final_vcf_idx = select_first([MergeStripyVcf.out_index, UpdateBreakendRepresentationAndRemoveFilters.out_idx])
 
     # These files contain events reported in the internal VCF representation
     # They are less VCF-spec compliant but may be useful if components of the pipeline need to be re-run
     # on the output.
     File pre_cleanup_vcf = AnnotateVcf.annotated_vcf
     File pre_cleanup_vcf_idx = AnnotateVcf.annotated_vcf_index
+
+    # STRipy outputs
+    File? stripy_json_output = StripyWorkflow.json_output
+    File? stripy_tsv_output = StripyWorkflow.tsv_output
+    File? stripy_html_output = StripyWorkflow.html_output
+    File? stripy_vcf_output = StripyWorkflow.vcf_output
 
     # QC files
     File metrics_file = SingleSampleMetrics.metrics_file

@@ -187,6 +187,9 @@ class ProjectBuilder:
         "str": ImageDependencies(
             git_dependencies=("dockerfiles/str/*", "src/str/*")
         ),
+        "stripy": ImageDependencies(
+            git_dependencies=("dockerfiles/stripy/*", "src/stripy/*"),
+        ),
         "sv-base-mini": ImageDependencies(
             git_dependencies="dockerfiles/sv-base-mini/*"
         ),
