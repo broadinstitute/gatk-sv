@@ -36,6 +36,8 @@ vcf_tar=$(jq -r ".vcf_tar" "${input_json}")
 ploidy_table=$(jq -r ".ploidy_table" "${input_json}")
 exclude_intervals=$(jq -r ".exclude_intervals" "${input_json}")
 min_size=$(jq -r ".min_size" "${input_json}")
+contig_list=$(jq -r '.contig_list // ""' "${input_json}")
+contig_subset_list=$(jq -r '.contig_subset_list // ""' "${input_json}")
 
 
 # -------------------------------------------------------
@@ -72,3 +74,12 @@ for VCF in in/*.vcf.gz; do
   i=$((i+1))
 done
 tar czf "${output_prefix}.tar.gz" -C out/ .
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+contigs_list="${contig_subset_list:-$contig_list}"
+contigs=()
+while IFS= read -r line; do
+    contigs+=("$line")
+done < "${contigs_list}"
+
