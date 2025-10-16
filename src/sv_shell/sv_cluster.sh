@@ -29,7 +29,7 @@ working_dir=$(mktemp -d /wd_sv_cluster_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
-vcfs=($(jq -r '.vcfs[]' "$input_json"))
+vcfs=($(jq -r '(.vcfs // [])[]' "$input_json"))
 vcfs_tar=$(jq -r '.vcfs_tar // ""' "$input_json")
 
 
@@ -61,7 +61,7 @@ insertion_length_summary_strategy=$(jq -r '.insertion_length_summary_strategy //
 breakpoint_summary_strategy=$(jq -r '.breakpoint_summary_strategy // ""' "$input_json")
 alt_allele_summary_strategy=$(jq -r '.alt_allele_summary_strategy // ""' "$input_json")
 additional_args=$(jq -r '.additional_args // ""' "$input_json")
-
+java_mem_fraction=$(jq -r '.java_mem_fraction // 0.85' "$input_json")
 
 
 # -------------------------------------------------------
