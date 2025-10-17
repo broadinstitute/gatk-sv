@@ -97,13 +97,14 @@ for VCF in in/*.vcf.gz; do
     > ends.bed
   bedtools intersect -sorted -u -wa -g genome.file -wa -a ends.bed -b "${exclude_intervals}" | cut -f4 | sort | uniq \
     > excluded_vids.list
-  bcftools view -i "ID!=@excluded_vids.list && (INFO/SVLEN='.' || INFO/SVLEN=-1 || abs(INFO/SVLEN)>=${min_size})" tmp.vcf.gz \
+  bcftools view -i "ID!=@excluded_vids.list && (INFO/SVLEN='.' || INFO/SVLEN=-1 || INFO/SVLEN>=${min_size})" tmp.vcf.gz \
     -Oz -o "out/${SAMPLE_NUM}.${NAME}.vcf.gz"
   tabix out/$SAMPLE_NUM.$NAME.vcf.gz
   i=$((i+1))
 done
 tar czf "${output_prefix}.tar.gz" -C out/ .
 
+prepare_pesr_vcf_out="$(realpath ${output_prefix}.tar.gz)"
 
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -126,15 +127,15 @@ for contig in "${contigs[@]}"; do
   sv_cluster_outputs_json="$(realpath "${sv_cluster_output_dir}/sv_cluster_outputs.json")"
 
   jq -n \
-    --arg vcfs_tar "${ttt}" \
+    --arg vcfs_tar "${prepare_pesr_vcf_out}" \
     --arg ploidy_table "${ploidy_table}" \
     --arg output_prefix "${batch}.cluster_batch.${caller}.${contig}.clustered" \
     --arg contig "${contig}" \
     --arg fast_mode true \
     --arg algorithm "${clustering_algorithm}" \
-    --arg pesr_sample_overlap 0 \
-    --arg pesr_interval_overlap "${pesr_interval_overlap}" \
-    --arg pesr_breakend_window "${pesr_breakend_window}" \
+    --argjson pesr_sample_overlap 0 \
+    --argjson pesr_interval_overlap ${pesr_interval_overlap} \
+    --argjson pesr_breakend_window ${pesr_breakend_window} \
     --arg reference_fasta "${reference_fasta}" \
     --arg reference_fasta_fai "${reference_fasta_fai}" \
     --arg reference_dict "${reference_dict}" \
@@ -154,7 +155,6 @@ for contig in "${contigs[@]}"; do
         "reference_fasta_fai": $reference_fasta_fai,
         "reference_dict": $reference_dict,
         "java_mem_fraction": $java_mem_fraction,
-        "variant_prefix": $variant_prefix
     }' > "${sv_cluster_inputs_json}"
 
   bash /opt/sv_shell/sv_cluster.sh "${sv_cluster_inputs_json}" "${sv_cluster_outputs_json}" "${sv_cluster_output_dir}"
