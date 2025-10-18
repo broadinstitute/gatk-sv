@@ -14,6 +14,7 @@ workflow Vapor {
     File? vcf_file
 
     Boolean save_plots  # Control whether plots are final output
+    String? project_id  # Control whether to localize CRAM files (for requester-pays buckets)
 
     File ref_fasta
     File ref_fai
@@ -26,10 +27,11 @@ workflow Vapor {
 
     RuntimeAttr? runtime_attr_subset_sample
     RuntimeAttr? runtime_attr_vcf_to_bed
+    RuntimeAttr? runtime_attr_preprocess_bed
+    RuntimeAttr? runtime_attr_localize_cram
     RuntimeAttr? runtime_attr_vapor
-    RuntimeAttr? runtime_attr_split_vcf
     RuntimeAttr? runtime_attr_concat_beds
-
+    
     File? NONE_FILE_ # Create a null file - do not use this input
   }
 
@@ -65,15 +67,30 @@ workflow Vapor {
         sample_to_extract = sample_id,
         bed_file = select_first([bed_file, VcfToBed.bed_output]),
         sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_split_vcf
+        runtime_attr_override = runtime_attr_preprocess_bed
+    }
+
+    if (defined(project_id)) {
+      call LocalizeCramRequestPay {
+        input:
+            contig = contig,
+            ref_fasta = ref_fasta,
+            ref_fai = ref_fai,
+            ref_dict = ref_dict,
+            project_id = select_first([project_id]),
+            bam_or_cram_file = bam_or_cram_file,
+            bam_or_cram_index = bam_or_cram_index,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_localize_cram
+      }
     }
 
     call RunVaporWithCram {
       input:
         prefix = "~{sample_id}.~{contig}",
         contig = contig,
-        bam_or_cram_file = bam_or_cram_file,
-        bam_or_cram_index = bam_or_cram_index,
+        bam_or_cram_file = select_first([LocalizeCramRequestPay.local_bam, bam_or_cram_file]),
+        bam_or_cram_index = select_first([LocalizeCramRequestPay.local_bai, bam_or_cram_index]),
         bed = PreprocessBedForVapor.contig_bed,
         ref_fasta = ref_fasta,
         ref_fai = ref_fai,
@@ -95,6 +112,58 @@ workflow Vapor {
   output {
     File vapor_bed = ConcatVapor.merged_bed_file
     File? vapor_plots = if save_plots then ConcatVapor.merged_bed_plot else NONE_FILE_
+  }
+}
+
+task LocalizeCramRequestPay {
+  input {
+    String contig
+    File ref_fasta
+    File ref_fai
+    File ref_dict
+    String project_id
+    String bam_or_cram_file
+    String bam_or_cram_index
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 3.75, 
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+  output{
+    File local_bam = "~{contig}.bam"
+    File local_bai = "~{contig}.bai"
+  }
+
+  command <<<
+    set -Eeuo pipefail
+
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR}  PrintReads \
+      -I ~{bam_or_cram_file} \
+      -L ~{contig} \
+      -O ~{contig}.bam \
+      -R ~{ref_fasta} \
+      --disable-read-filter WellformedReadFilter \
+      --gcs-project-for-requester-pays ~{project_id}
+  >>>
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
