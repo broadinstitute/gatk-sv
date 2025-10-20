@@ -1025,7 +1025,7 @@ workflow GATKSVPipelineSingleSample {
             runtime_attr_override=runtime_attr_filter_vcf_by_id
     }
   }
-  if (use_dragen_vcf) {
+  if (use_dragen && defined(dragen_vcf)) {
     call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDragen {
         input :
             vcf_gz=select_first([ClusterBatch.clustered_dragen_vcf]),
