@@ -639,6 +639,7 @@ workflow GATKSVPipelineSingleSample {
         bam_or_cram_file=select_first([bam_or_cram_file]),
         bam_or_cram_index=bam_or_cram_index,
         sample_id=sample_id,
+        dragen_vcf=dragen_vcf,
         collect_coverage = collect_coverage,
         collect_pesr = collect_pesr,
         is_dragen_3_7_8 = is_dragen_3_7_8,
