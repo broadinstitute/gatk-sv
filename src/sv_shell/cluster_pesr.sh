@@ -195,5 +195,44 @@ for contig in "${contigs[@]}"; do
 done
 
 
+# ConcatVcfs
+# -------------------------------------------------------------------------------------------------------------------
+# Note the following is a simplified implementation than the WDL-based
+# as it only includes the execution path/args used for this PE/SR clustering task.
+
+working_dir=$(mktemp -d /wd_ConcatVcfs_XXXXXXXX)
+working_dir="$(realpath ${working_dir})"
+cd "${working_dir}"
+
+vcfs_filename="$(realpath ${working_dir}/vcfs.txt)"
+printf "%s\n" "${svtk_format_vcfs[@]}" > "${vcfs_filename}"
 
 
+output_filename="${batch}.cluster_batch.${caller}.vcf.gz"
+bcftools concat --no-version --naive -Oz --file-list "${vcfs_filename}" \
+  > "${output_filename}"
+tabix "${output_filename}"
+
+concat_vcf="$(realpath ${output_filename})"
+concat_vcf_idx="$(realpath ${output_filename}.tbi)"
+
+
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+
+concat_vcf_output="${output_dir}/$(basename "${concat_vcf}")"
+concat_vcf_idx_output="${output_dir}/$(basename "${concat_vcf_idx}")"
+
+mv "${concat_vcf}" "${concat_vcf_output}"
+mv "${concat_vcf_idx}" "${concat_vcf_idx_output}"
+
+outputs_json=$(jq -n \
+  --arg vcf "${concat_vcf_output}" \
+  --arg idx "${concat_vcf_idx_output}" \
+  '{clustered_vcf: $vcf, clustered_vcf_index: $idx}' )
+echo "${outputs_json}" > "${output_json_filename}"
+
+echo "Finished Cluster PE/SR successfully, output json filename: ${output_json_filename}"
