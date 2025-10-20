@@ -40,6 +40,7 @@ workflow GATKSVPipelineSingleSample {
 
     # Define raw callers to use
     # Overrides presence of case_*_vcf parameters below
+    Boolean use_dragen = false
     Boolean use_manta = true
     Boolean use_melt = false
     Boolean use_scramble = true
@@ -48,6 +49,7 @@ workflow GATKSVPipelineSingleSample {
     Boolean? is_dragen_3_7_8
 
     # If GatherSampleEvidence outputs already prepared
+    File? dragen_vcf
     File? case_manta_vcf
     File? case_melt_vcf
     File? case_scramble_vcf
@@ -278,12 +280,14 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_combine_wham_std
     RuntimeAttr? runtime_attr_combine_scramble_std
     RuntimeAttr? runtime_attr_combine_melt_std
+    RuntimeAttr? runtime_attr_combine_dragen_std
 
     # Reference panel standardized caller VCFs
     File ref_std_manta_vcf_tar
     File ref_std_wham_vcf_tar
     File? ref_std_scramble_vcf_tar
     File? ref_std_melt_vcf_tar
+    File? ref_std_dragen_vcf_tar
 
     File ref_panel_del_bed
     File ref_panel_dup_bed
@@ -301,6 +305,7 @@ workflow GATKSVPipelineSingleSample {
     String? pesr_clustering_algorithm
 
     File? baseline_depth_vcf_cluster_batch
+    File? baseline_dragen_vcf_cluster_batch
     File? baseline_manta_vcf_cluster_batch
     File? baseline_wham_vcf_cluster_batch
     File? baseline_scramble_vcf_cluster_batch
@@ -311,6 +316,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_ids_from_vcf_list_cluster_batch
     RuntimeAttr? runtime_attr_create_ploidy_cluster_batch
     RuntimeAttr? runtime_attr_prepare_pesr_vcfs_cluster_batch
+    RuntimeAttr? runtime_attr_svcluster_dragen_cluster_batch
     RuntimeAttr? runtime_attr_svcluster_manta_cluster_batch
     RuntimeAttr? runtime_attr_svcluster_melt_cluster_batch
     RuntimeAttr? runtime_attr_svcluster_scramble_cluster_batch
@@ -722,6 +728,9 @@ workflow GATKSVPipelineSingleSample {
   if (use_manta) {
     Array[File] manta_vcfs_ = [select_first([case_manta_vcf, GatherSampleEvidence.manta_vcf])]
   }
+  if (use_dragen && defined(dragen_vcf)) {
+    Array[File] dragen_vcfs_ = [select_first([dragen_vcf])]
+  }
   if (use_melt) {
     Array[File] melt_vcfs_ = [select_first([case_melt_vcf, GatherSampleEvidence.melt_vcf])]
   }
@@ -798,6 +807,7 @@ workflow GATKSVPipelineSingleSample {
       ref_copy_number_autosomal_contigs = ref_copy_number_autosomal_contigs,
       allosomal_contigs = allosomal_contigs,
       gcnv_qs_cutoff=gcnv_qs_cutoff,
+      dragen_vcfs=dragen_vcfs_,
       manta_vcfs=manta_vcfs_,
       melt_vcfs=melt_vcfs_,
       scramble_vcfs=scramble_vcfs_,
@@ -878,6 +888,15 @@ workflow GATKSVPipelineSingleSample {
         runtime_attr_override=runtime_attr_combine_melt_std
     }
   }
+  if (defined(GatherBatchEvidence.std_dragen_vcf_tar) && defined(ref_std_dragen_vcf_tar)) {
+    call utils.CombineTars as CombineDragenStd {
+      input:
+        tar1=select_first([ref_std_dragen_vcf_tar]),
+        tar2=select_first([GatherBatchEvidence.std_dragen_vcf_tar]),
+        linux_docker=linux_docker,
+        runtime_attr_override=runtime_attr_combine_dragen_std
+    }
+  }
   File merged_manta_vcf_tar = select_first([CombineMantaStd.out, ref_std_manta_vcf_tar])
   File merged_wham_vcf_tar = select_first([CombineWhamStd.out, ref_std_wham_vcf_tar])
   if (defined(CombineScrambleStd.out) || defined(ref_std_scramble_vcf_tar)) {
@@ -885,6 +904,9 @@ workflow GATKSVPipelineSingleSample {
   }
   if (defined(CombineMeltStd.out) || defined(ref_std_melt_vcf_tar)) {
     File merged_melt_vcf_tar = select_first([CombineMeltStd.out, ref_std_melt_vcf_tar])
+  }
+  if (defined(CombineDragenStd.out) || defined(ref_std_dragen_vcf_tar)) {
+    File merged_dragen_vcf_tar = select_first([CombineDragenStd.out, ref_std_dragen_vcf_tar])
   }
 
   call dpn.MergeSet as MergeSetDel {
@@ -910,6 +932,7 @@ workflow GATKSVPipelineSingleSample {
       wham_vcf_tar=merged_wham_vcf_tar,
       scramble_vcf_tar=merged_scramble_vcf_tar,
       melt_vcf_tar=merged_melt_vcf_tar,
+      dragen_vcf_tar=merged_dragen_vcf_tar,
       del_bed=MergeSetDel.out,
       dup_bed=MergeSetDup.out,
       batch=batch,
@@ -933,6 +956,7 @@ workflow GATKSVPipelineSingleSample {
       run_module_metrics=run_clusterbatch_metrics,
       linux_docker=linux_docker,
       baseline_depth_vcf=baseline_depth_vcf_cluster_batch,
+      baseline_dragen_vcf=baseline_dragen_vcf_cluster_batch,
       baseline_manta_vcf=baseline_manta_vcf_cluster_batch,
       baseline_wham_vcf=baseline_wham_vcf_cluster_batch,
       baseline_scramble_vcf=baseline_scramble_vcf_cluster_batch,
@@ -944,6 +968,7 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_ids_from_vcf_list=runtime_attr_ids_from_vcf_list_cluster_batch,
       runtime_attr_create_ploidy=runtime_attr_create_ploidy_cluster_batch,
       runtime_attr_prepare_pesr_vcfs=runtime_attr_prepare_pesr_vcfs_cluster_batch,
+      runtime_attr_svcluster_dragen=runtime_attr_svcluster_dragen_cluster_batch,
       runtime_attr_svcluster_manta=runtime_attr_svcluster_manta_cluster_batch,
       runtime_attr_svcluster_melt=runtime_attr_svcluster_melt_cluster_batch,
       runtime_attr_svcluster_wham=runtime_attr_svcluster_wham_cluster_batch,
@@ -1000,6 +1025,16 @@ workflow GATKSVPipelineSingleSample {
             runtime_attr_override=runtime_attr_filter_vcf_by_id
     }
   }
+  if (use_dragen_vcf) {
+    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDragen {
+        input :
+            vcf_gz=select_first([ClusterBatch.clustered_dragen_vcf]),
+            sample_id=sample_id,
+            evidence="RD,PE,SR",
+            sv_base_mini_docker=sv_base_mini_docker,
+            runtime_attr_override=runtime_attr_filter_vcf_by_id
+    }
+  }
 
   call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDepth {
     input :
@@ -1012,8 +1047,8 @@ workflow GATKSVPipelineSingleSample {
 
   call tasks_makecohortvcf.ConcatVcfs as MergePesrVcfs {
     input:
-      vcfs=select_all([FilterManta.out, FilterWham.out, FilterScramble.out, FilterMelt.out]),
-      vcfs_idx=select_all([FilterManta.out_index, FilterWham.out_index, FilterScramble.out_index, FilterMelt.out_index]),
+      vcfs=select_all([FilterManta.out, FilterWham.out, FilterScramble.out, FilterMelt.out, FilterDragen.out]),
+      vcfs_idx=select_all([FilterManta.out_index, FilterWham.out_index, FilterScramble.out_index, FilterMelt.out_index, FilterDragen.out_index]),
       allow_overlaps=true,
       outfile_prefix="~{batch}.filtered_pesr_merged",
       sv_base_mini_docker=sv_base_mini_docker,
@@ -1371,6 +1406,8 @@ workflow GATKSVPipelineSingleSample {
   call jrc.JoinRawCalls {
     input:
       prefix=sample_id,
+      clustered_dragen_vcfs=if defined(ClusterBatch.clustered_dragen_vcf) then select_all([ClusterBatch.clustered_dragen_vcf]) else NONE_ARRAY_,
+      clustered_dragen_vcf_indexes=if defined(ClusterBatch.clustered_dragen_vcf_index) then select_all([ClusterBatch.clustered_dragen_vcf_index]) else NONE_ARRAY_,
       clustered_manta_vcfs=if defined(ClusterBatch.clustered_manta_vcf) then select_all([ClusterBatch.clustered_manta_vcf]) else NONE_ARRAY_,
       clustered_manta_vcf_indexes=if defined(ClusterBatch.clustered_manta_vcf_index) then select_all([ClusterBatch.clustered_manta_vcf_index]) else NONE_ARRAY_,
       clustered_melt_vcfs=if defined(ClusterBatch.clustered_melt_vcf) then select_all([ClusterBatch.clustered_melt_vcf]) else NONE_ARRAY_,

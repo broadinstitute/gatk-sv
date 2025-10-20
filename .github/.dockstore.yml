@@ -231,6 +231,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_dragen_ss
       tags:
         - /.*/
 
