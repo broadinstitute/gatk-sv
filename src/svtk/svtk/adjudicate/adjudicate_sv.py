@@ -316,6 +316,11 @@ def adjudicate_SV(metrics):
 
     metrics.loc[:, 'is_outlier_specific'] = metrics.loc[:, 'is_outlier_specific'].astype(bool)
 
+    # Fix carrier signal to 100% for common variants
+    CS_cols = ('SRCS', 'PECS', 'PESRCS')
+    for col in CS_cols:
+        metrics.loc[metrics['vf'] > 0.5, col] = 100.
+
     cutoffs = np.empty(7, dtype=object)
     sys.stderr.write('Adjudicating BAF (1)...\n')
     cutoffs[0] = adjudicate_BAF1(metrics)
