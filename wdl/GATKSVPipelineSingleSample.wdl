@@ -283,8 +283,8 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_combine_dragen_std
 
     # Reference panel standardized caller VCFs
-    File ref_std_manta_vcf_tar
-    File ref_std_wham_vcf_tar
+    File? ref_std_manta_vcf_tar
+    File? ref_std_wham_vcf_tar
     File? ref_std_scramble_vcf_tar
     File? ref_std_melt_vcf_tar
     File? ref_std_dragen_vcf_tar
@@ -853,31 +853,22 @@ workflow GATKSVPipelineSingleSample {
   File combined_ped_file = select_first([GatherBatchEvidence.combined_ped_file])
 
   # Merge calls with reference panel
-  if (defined(GatherBatchEvidence.std_manta_vcf_tar)) {
+  if (defined(GatherBatchEvidence.std_dragen_vcf_tar) && defined(ref_std_dragen_vcf_tar)) {
+    call utils.CombineTars as CombineDragenStd {
+      input:
+        tar1=select_first([ref_std_dragen_vcf_tar]),
+        tar2=select_first([GatherBatchEvidence.std_dragen_vcf_tar]),
+        linux_docker=linux_docker,
+        runtime_attr_override=runtime_attr_combine_dragen_std
+    }
+  }
+  if (defined(GatherBatchEvidence.std_manta_vcf_tar) && defined(ref_std_manta_vcf_tar)) {
     call utils.CombineTars as CombineMantaStd {
       input:
-        tar1=ref_std_manta_vcf_tar,
+        tar1=select_first([ref_std_manta_vcf_tar]),
         tar2=select_first([GatherBatchEvidence.std_manta_vcf_tar]),
         linux_docker=linux_docker,
         runtime_attr_override=runtime_attr_combine_manta_std
-    }
-  }
-  if (defined(GatherBatchEvidence.std_wham_vcf_tar)) {
-    call utils.CombineTars as CombineWhamStd {
-      input:
-        tar1=ref_std_wham_vcf_tar,
-        tar2=select_first([GatherBatchEvidence.std_wham_vcf_tar]),
-        linux_docker=linux_docker,
-        runtime_attr_override=runtime_attr_combine_wham_std
-    }
-  }
-  if (defined(GatherBatchEvidence.std_scramble_vcf_tar) && defined(ref_std_scramble_vcf_tar)) {
-    call utils.CombineTars as CombineScrambleStd {
-      input:
-        tar1=select_first([ref_std_scramble_vcf_tar]),
-        tar2=select_first([GatherBatchEvidence.std_scramble_vcf_tar]),
-        linux_docker=linux_docker,
-        runtime_attr_override=runtime_attr_combine_scramble_std
     }
   }
   if (defined(GatherBatchEvidence.std_melt_vcf_tar) && defined(ref_std_melt_vcf_tar)) {
@@ -889,26 +880,41 @@ workflow GATKSVPipelineSingleSample {
         runtime_attr_override=runtime_attr_combine_melt_std
     }
   }
-  if (defined(GatherBatchEvidence.std_dragen_vcf_tar) && defined(ref_std_dragen_vcf_tar)) {
-    call utils.CombineTars as CombineDragenStd {
+  if (defined(GatherBatchEvidence.std_scramble_vcf_tar) && defined(ref_std_scramble_vcf_tar)) {
+    call utils.CombineTars as CombineScrambleStd {
       input:
-        tar1=select_first([ref_std_dragen_vcf_tar]),
-        tar2=select_first([GatherBatchEvidence.std_dragen_vcf_tar]),
+        tar1=select_first([ref_std_scramble_vcf_tar]),
+        tar2=select_first([GatherBatchEvidence.std_scramble_vcf_tar]),
         linux_docker=linux_docker,
-        runtime_attr_override=runtime_attr_combine_dragen_std
+        runtime_attr_override=runtime_attr_combine_scramble_std
     }
   }
-  File merged_manta_vcf_tar = select_first([CombineMantaStd.out, ref_std_manta_vcf_tar])
-  File merged_wham_vcf_tar = select_first([CombineWhamStd.out, ref_std_wham_vcf_tar])
-  if (defined(CombineScrambleStd.out) || defined(ref_std_scramble_vcf_tar)) {
-    File merged_scramble_vcf_tar = select_first([CombineScrambleStd.out, ref_std_scramble_vcf_tar])
+  if (defined(GatherBatchEvidence.std_wham_vcf_tar) && defined(ref_std_wham_vcf_tar)) {
+    call utils.CombineTars as CombineWhamStd {
+      input:
+        tar1=select_first([ref_std_wham_vcf_tar]),
+        tar2=select_first([GatherBatchEvidence.std_wham_vcf_tar]),
+        linux_docker=linux_docker,
+        runtime_attr_override=runtime_attr_combine_wham_std
+    }
+  }
+
+  if (defined(CombineDragenStd.out) || defined(ref_std_dragen_vcf_tar)) {
+    File merged_dragen_vcf_tar = select_first([CombineDragenStd.out, ref_std_dragen_vcf_tar])
+  }
+  if (defined(CombineMantaStd.out) || defined(ref_std_manta_vcf_tar)) {
+    File merged_manta_vcf_tar = select_first([CombineMantaStd.out, ref_std_manta_vcf_tar])
   }
   if (defined(CombineMeltStd.out) || defined(ref_std_melt_vcf_tar)) {
     File merged_melt_vcf_tar = select_first([CombineMeltStd.out, ref_std_melt_vcf_tar])
   }
-  if (defined(CombineDragenStd.out) || defined(ref_std_dragen_vcf_tar)) {
-    File merged_dragen_vcf_tar = select_first([CombineDragenStd.out, ref_std_dragen_vcf_tar])
+  if (defined(CombineScrambleStd.out) || defined(ref_std_scramble_vcf_tar)) {
+    File merged_scramble_vcf_tar = select_first([CombineScrambleStd.out, ref_std_scramble_vcf_tar])
   }
+  if (defined(CombineWhamStd.out) || defined(ref_std_wham_vcf_tar)) {
+    File merged_wham_vcf_tar = select_first([CombineWhamStd.out, ref_std_wham_vcf_tar])
+  }
+  
 
   call dpn.MergeSet as MergeSetDel {
     input:
