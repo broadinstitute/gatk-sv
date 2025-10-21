@@ -172,10 +172,10 @@ mv "${merged_pe_output_filename}.tbi" "${merged_pe_output_filename_outdir}.tbi"
 outputs_json=$(jq -n \
   --arg merged_BAF "${sd_to_baf_output_filename_outdir}" \
   --arg merged_BAF_index "${sd_to_baf_output_filename_outdir}.tbi" \
-  --arg merged_SR "${merged_sr_output_filename}" \
-  --arg merged_SR_index "${merged_sr_output_filename}.tbi" \
-  --arg merged_PE "${merged_pe_output_filename}" \
-  --arg merged_PE_index "${merged_pe_output_filename}.tbi" \
+  --arg merged_SR "${merged_sr_output_filename_outdir}" \
+  --arg merged_SR_index "${merged_sr_output_filename_outdir}.tbi" \
+  --arg merged_PE "${merged_pe_output_filename_outdir}" \
+  --arg merged_PE_index "${merged_pe_output_filename_outdir}.tbi" \
   '{
      "merged_BAF": $merged_BAF,
      "merged_BAF_index": $merged_BAF_index,
