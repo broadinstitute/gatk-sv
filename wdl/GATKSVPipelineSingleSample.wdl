@@ -276,18 +276,18 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_depth_merge_pre_clusterbatch
 
     # VCF merging parameters
-    RuntimeAttr? runtime_attr_combine_manta_std
-    RuntimeAttr? runtime_attr_combine_wham_std
-    RuntimeAttr? runtime_attr_combine_scramble_std
-    RuntimeAttr? runtime_attr_combine_melt_std
     RuntimeAttr? runtime_attr_combine_dragen_std
-
+    RuntimeAttr? runtime_attr_combine_manta_std
+    RuntimeAttr? runtime_attr_combine_melt_std
+    RuntimeAttr? runtime_attr_combine_scramble_std
+    RuntimeAttr? runtime_attr_combine_wham_std
+    
     # Reference panel standardized caller VCFs
-    File? ref_std_manta_vcf_tar
-    File? ref_std_wham_vcf_tar
-    File? ref_std_scramble_vcf_tar
-    File? ref_std_melt_vcf_tar
     File? ref_std_dragen_vcf_tar
+    File? ref_std_manta_vcf_tar
+    File? ref_std_melt_vcf_tar
+    File? ref_std_scramble_vcf_tar
+    File? ref_std_wham_vcf_tar
 
     File ref_panel_del_bed
     File ref_panel_dup_bed
