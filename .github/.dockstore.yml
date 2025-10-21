@@ -15,6 +15,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_mediancov_seeded
       tags:
         - /.*/
 
