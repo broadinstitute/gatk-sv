@@ -88,12 +88,10 @@ def cleanup(vcf, fout):
                 chr2, end2 = parse_bnd_pos(record.alts[0])
                 record.info['CHR2'] = chr2
                 record.info['END2'] = end2
-            else:
-                record.info['END2'] = record.stop
 
             # Correct alt syntax
             record.alts = ('<BND>', )
-            record.stop = record.start + 1
+            record.stop = record.pos
 
             # All BNDs are unresolved by definition
             record.info['UNRESOLVED'] = True

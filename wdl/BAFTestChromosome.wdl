@@ -120,6 +120,8 @@ task BAFTest {
         --evidence-file ~{baf_metrics} \
         -L "${chrom}:${start}-${end}" \
         -O local.BAF.txt.gz
+
+      tabix -f -0 -s1 -b2 -e2 local.BAF.txt.gz
     else
       touch local.BAF.txt
       bgzip local.BAF.txt

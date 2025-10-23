@@ -228,7 +228,20 @@ task FilterAnnotateVcf {
       | bgzip -c \
       > filtered.vcf.gz
 
-    /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.vcf.gz ~{metrics} ~{cutoffs} stdout \
+    python3 <<CODE
+    import pysam
+
+    with pysam.VariantFile("filtered.vcf.gz", 'r') as vcf_in, pysam.VariantFile("filtered.updated_bnds.vcf.gz", 'w', header=vcf_in.header) as vcf_out:
+      for record in vcf_in:
+        if record.info.get('SVTYPE') == 'BND' and 'END2' not in record.info:
+          record.info['END2'] = record.stop
+          record.stop = record.pos
+        if record.info.get('SVTYPE') == 'BND' and 'CHR2' not in record.info:
+          record.info['CHR2'] = record.chrom
+        vcf_out.write(record)
+    CODE
+
+    /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.updated_bnds.vcf.gz ~{metrics} ~{cutoffs} stdout \
       | vcf-sort -c \
       | bgzip -c \
       > filtered.corrected_coords.vcf.gz

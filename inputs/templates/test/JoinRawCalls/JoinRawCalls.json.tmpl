@@ -14,9 +14,7 @@
 
   "JoinRawCalls.clustered_scramble_vcfs" : [{{ test_batch.merged_scramble_vcf | tojson }}],
   "JoinRawCalls.clustered_scramble_vcf_indexes" : [{{ test_batch.merged_scramble_vcf_index | tojson }}],
-
-  "JoinRawCalls.FormatVcfForGatk.formatter_args": "--fix-end",
-
+  
   "JoinRawCalls.ped_file": {{ test_batch.ped_file | tojson }},
 
   "JoinRawCalls.contig_list": {{ reference_resources.primary_contigs_list | tojson }},
