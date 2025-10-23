@@ -2,17 +2,22 @@
 
 set -Exeuo pipefail
 
-function ScatterCompressedBedOmitHeaders()
+function ShardBedThenConvertToVcf()
 {
-  local _bed=$1
-  local _prefix=$2
-  local -n _out_array=$3
+  local _del_or_dup=$1
+  local _bed=$2
+  local -n vcfs_array=$3
+  local -n vcfs_idx_array=$4
 
-  scatter_compressed_bed_working_dir=$(mktemp -d /wd_scatter_compressed_bed_XXXXXXXX)
-  scatter_compressed_bed_working_dir="$(realpath ${scatter_compressed_bed_working_dir})"
-  cd "${scatter_compressed_bed_working_dir}"
+  cd "${working_dir}"
+
+  # Task: ScatterCompressedBedOmitHeaders
+  shard_bed_convert_vcf_working_dir=$(mktemp -d /wd_shard_bed_convert_vcf_XXXXXXXX)
+  shard_bed_convert_vcf_working_dir="$(realpath ${shard_bed_convert_vcf_working_dir})"
+  cd "${shard_bed_convert_vcf_working_dir}"
   n_digits=6
   mkdir out
+  _prefix="${batch}.cluster_batch.depth.${_del_or_dup}.shard_"
   gunzip -c "${_bed}" \
     | awk '$0!~"#"' \
     | split -d -a "${n_digits}" -l "${records_per_bed_shard}" - "out/${_prefix}"
@@ -23,7 +28,31 @@ function ScatterCompressedBedOmitHeaders()
 
   # Note that the following generates an empty array if it does not find a file matching the pattern,
   # similar to WDL equivalent, rather than failing.
-  _out_array=($(ls out/${_prefix}*.bed.gz 2>/dev/null))
+  beds_array=($(ls out/${_prefix}*.bed.gz 2>/dev/null))
+
+  vcfs_array=()
+  vcfs_idx_array=()
+
+  # Task: CNVBedToGatkVcf
+  counter=0
+  for _bed_file in "${beds_array[@]}"; do
+    _out_prefix="${batch}.cluster_batch.depth.gatk_formatted.${_del_or_dup}.shard_${counter}"
+    python /opt/sv-pipeline/scripts/convert_bed_to_gatk_vcf.py \
+      --bed "${_bed_file}" \
+      --out "${_out_prefix}.vcf.gz" \
+      --samples "${sample_list}" \
+      --contigs "${contig_list}" \
+      --vid-prefix "${batch}_raw_depth_${_del_or_dup}_shard_${counter}_" \
+      --ploidy-table "${ploidy_table}" \
+      --fai "${reference_fasta_fai}"
+
+    tabix "${_out_prefix}.vcf.gz"
+
+    vcfs_array+=("$(realpath "${_out_prefix}.vcf.gz")")
+    vcfs_idx_array+=("$(realpath "${_out_prefix}.vcf.gz.tbi")")
+
+    counter=$((counter + 1))
+  done
 }
 
 
@@ -59,7 +88,10 @@ batch=$(jq -r ".batch" "${input_json}")
 del_bed=$(jq -r ".del_bed" "${input_json}")
 dup_bed=$(jq -r ".dup_bed" "${input_json}")
 records_per_bed_shard=$(jq -r ".records_per_bed_shard" "${input_json}")
-
+sample_list=$(jq -r ".sample_list" "${input_json}")
+contig_list=$(jq -r ".contig_list" "${input_json}")
+ploidy_table=$(jq -r ".ploidy_table" "${input_json}")
+reference_fasta_fai=$(jq -r ".reference_fasta_fai" "${input_json}")
 
 # -------------------------------------------------------
 # ======================= Command =======================
@@ -69,10 +101,10 @@ records_per_bed_shard=$(jq -r ".records_per_bed_shard" "${input_json}")
 # ScatterCompressedBedOmitHeaders
 # ---------------------------------------------------------------------------------------------------------------------
 
-del_depth_bed_list=()
-ScatterCompressedBedOmitHeaders "${del_bed}" "${batch}.cluster_batch.depth.del.shard_" "del_depth_bed_list"
+del_vcfs_array=()
+del_vcfs_idx_array=()
+ShardBedThenConvertToVcf "DEL" "${del_bed}" "del_vcfs_array" "del_vcfs_idx_array"
 
-dup_depth_bed_list=()
-ScatterCompressedBedOmitHeaders "${dup_bed}" "${batch}.cluster_batch.depth.dup.shard_" "dup_depth_bed_list"
-
-
+dup_vcfs_array=()
+dup_vcfs_idx_array=()
+ShardBedThenConvertToVcf "DUP" "${dup_bed}" "dup_vcfs_array" "dup_vcfs_idx_array"
