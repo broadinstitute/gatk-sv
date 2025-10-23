@@ -72,7 +72,7 @@ cp cn_denoising_plots.pdf ./ploidy_est/
 
 tar -zcf ./ploidy_est.tar.gz ./ploidy_est
 
-ploidy_plots="${batch}_ploidy_plots.tar.gz"
+ploidy_plots="$(realpath "${batch}_ploidy_plots.tar.gz")"
 mv ploidy_est.tar.gz "${ploidy_plots}"
 
 
@@ -80,10 +80,20 @@ mv ploidy_est.tar.gz "${ploidy_plots}"
 # ======================= Output ========================
 # -------------------------------------------------------
 
+ploidy_matrix_out_dir="${output_dir}/$(basename "${ploidy_matrix}")"
+mv "${ploidy_matrix}" "${ploidy_matrix_out_dir}"
+
+ploidy_plots_out_dir="${output_dir}/$(basename "${ploidy_plots}")"
+mv "${ploidy_plots}" "${ploidy_plots_out_dir}"
+
+sample_sex_assignments="$(realpath "./ploidy_est/sample_sex_assignments.txt.gz")"
+sample_sex_assignments_out_dir="${output_dir}/$(basename "${sample_sex_assignments}")"
+mv "${sample_sex_assignments}" "${sample_sex_assignments_out_dir}"
+
 outputs_json=$(jq -n \
-  --arg ploidy_matrix "${ploidy_matrix}" \
-  --arg ploidy_plots "${ploidy_plots}" \
-  --arg sample_sex_assignments "$(realpath "./ploidy_est/sample_sex_assignments.txt.gz")" \
+  --arg ploidy_matrix "${ploidy_matrix_out_dir}" \
+  --arg ploidy_plots "${ploidy_plots_out_dir}" \
+  --arg sample_sex_assignments "${sample_sex_assignments_out_dir}" \
   '{
      "ploidy_matrix": $ploidy_matrix,
      "ploidy_plots": $ploidy_plots,
