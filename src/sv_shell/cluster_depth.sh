@@ -2,6 +2,30 @@
 
 set -Exeuo pipefail
 
+function ScatterCompressedBedOmitHeaders()
+{
+  local _bed=$1
+  local _prefix=$2
+  local -n _out_array=$3
+
+  scatter_compressed_bed_working_dir=$(mktemp -d /wd_scatter_compressed_bed_XXXXXXXX)
+  scatter_compressed_bed_working_dir="$(realpath ${scatter_compressed_bed_working_dir})"
+  cd "${scatter_compressed_bed_working_dir}"
+  n_digits=6
+  mkdir out
+  gunzip -c "${_bed}" \
+    | awk '$0!~"#"' \
+    | split -d -a "${n_digits}" -l "${records_per_bed_shard}" - "out/${_prefix}"
+  for file in out/${_prefix}*; do
+    mv $file $file.bed
+    bgzip $file.bed
+  done
+
+  # Note that the following generates an empty array if it does not find a file matching the pattern,
+  # similar to WDL equivalent, rather than failing.
+  _out_array=($(ls out/${_prefix}*.bed.gz 2>/dev/null))
+}
+
 
 # -------------------------------------------------------
 # ==================== Input & Setup ====================
@@ -33,6 +57,7 @@ cd "${working_dir}"
 
 batch=$(jq -r ".batch" "${input_json}")
 del_bed=$(jq -r ".del_bed" "${input_json}")
+dup_bed=$(jq -r ".dup_bed" "${input_json}")
 records_per_bed_shard=$(jq -r ".records_per_bed_shard" "${input_json}")
 
 
@@ -44,16 +69,10 @@ records_per_bed_shard=$(jq -r ".records_per_bed_shard" "${input_json}")
 # ScatterCompressedBedOmitHeaders
 # ---------------------------------------------------------------------------------------------------------------------
 
-scatter_compressed_bed_working_dir=$(mktemp -d /wd_scatter_compressed_bed_XXXXXXXX)
-scatter_compressed_bed_working_dir="$(realpath ${scatter_compressed_bed_working_dir})"
-cd "${scatter_compressed_bed_working_dir}"
-n_digits=6
-del_depth_prefix="${batch}.cluster_batch.depth.del.shard_"
-mkdir out
-gunzip -c "${del_bed}" \
-    | awk '$0!~"#"' \
-    | split -d -a "${n_digits}" -l "${records_per_bed_shard}" - "out/${del_depth_prefix}"
-for file in out/${del_depth_prefix}*; do
-    mv $file $file.bed
-    bgzip $file.bed
-done
+del_depth_bed_list=()
+ScatterCompressedBedOmitHeaders "${del_bed}" "${batch}.cluster_batch.depth.del.shard_" "del_depth_bed_list"
+
+dup_depth_bed_list=()
+ScatterCompressedBedOmitHeaders "${dup_bed}" "${batch}.cluster_batch.depth.dup.shard_" "dup_depth_bed_list"
+
+
