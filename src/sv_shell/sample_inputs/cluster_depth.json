@@ -1,0 +1,24 @@
+{
+  "allow_overlaps": false,
+  "batch": "NA12878",
+  "clustering_algorithm": "SINGLE_LINKAGE",
+  "contig_list": "/inputs/primary_contigs.list",
+  "contig_subset_list": null,
+  "del_bed": "/inputs/NA12878.DEL.bed.gz",
+  "depth_interval_overlap": 0.8,
+  "dup_bed": "/inputs/NA12878.DUP.bed.gz",
+  "exclude_intervals": "/inputs/depth_blacklist.sorted.bed.gz",
+  "exclude_overlap_fraction": 0.5,
+  "generate_index": true,
+  "n_digits": 6,
+  "ploidy_table": "/inputs/NA12878.ploidy.FEMALE_chrY_1.tsv",
+  "records_per_bed_shard": 1000000,
+  "reference_dict": "/inputs/Homo_sapiens_assembly38.dict",
+  "reference_fasta": "/inputs/Homo_sapiens_assembly38.fasta",
+  "reference_fasta_fai": "/inputs/Homo_sapiens_assembly38.fasta.fai",
+  "sample_list": "/inputs/NA12878.samples.txt",
+  "set_pass": false,
+  "sites_only": false,
+  "sort_vcf_list": false
+}
+
