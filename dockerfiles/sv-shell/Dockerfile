@@ -103,4 +103,12 @@ RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy clean
 COPY --from=wham_layer /bin/whamg /bin/
 
+
+# cnmops
+# Note that the following installation is different from the installation in cnmops docker
+# since that method does not compile on this docker.
+RUN mkdir -p /opt/R/4.1.3/lib/R/doc/html && \
+    R -e 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/focal/latest")); BiocManager::install(c("cn.mops", "rtracklayer", "XML"), update=FALSE, ask=FALSE)'
+
+
 WORKDIR /
