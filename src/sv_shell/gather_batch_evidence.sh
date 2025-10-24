@@ -485,9 +485,12 @@ std_dragen_vcf_tar_task_out=$(jq -r ".std_dragen_vcf_tar" "${preprocess_pesr_out
 std_dragen_vcf_tar="${output_dir}/$(basename "${std_dragen_vcf_tar_task_out}")"
 mv "${std_dragen_vcf_tar_task_out}" "${std_dragen_vcf_tar}"
 
-std_scramble_vcf_tar_task_out=$(jq -r ".std_scramble_vcf_tar" "${preprocess_pesr_outputs_json}")
-std_scramble_vcf_tar="${output_dir}/$(basename "${std_scramble_vcf_tar_task_out}")"
-mv "${std_scramble_vcf_tar_task_out}" "${std_scramble_vcf_tar}"
+std_scramble_vcf_tar_task_out=$(jq -r '.std_scramble_vcf_tar // ""' "${preprocess_pesr_outputs_json}")
+std_scramble_vcf_tar=""
+if [[ -n "${std_scramble_vcf_tar_task_out}" ]]; then
+  std_scramble_vcf_tar="${output_dir}/$(basename "${std_scramble_vcf_tar_task_out}")"
+  mv "${std_scramble_vcf_tar_task_out}" "${std_scramble_vcf_tar}"
+fi
 
 std_wham_vcf_tar_task_out=$(jq -r ".std_wham_vcf_tar" "${preprocess_pesr_outputs_json}")
 std_wham_vcf_tar="${output_dir}/$(basename "${std_wham_vcf_tar_task_out}")"
