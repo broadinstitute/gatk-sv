@@ -91,14 +91,20 @@ records_per_bed_shard=$(jq -r ".records_per_bed_shard" "${input_json}")
 sample_list=$(jq -r ".sample_list" "${input_json}")
 contig_list=$(jq -r ".contig_list" "${input_json}")
 ploidy_table=$(jq -r ".ploidy_table" "${input_json}")
+contig_list=$(jq -r '.contig_list // ""' "${input_json}")
+contig_subset_list=$(jq -r '.contig_subset_list // ""' "${input_json}")
+depth_interval_overlap=$(jq -r ".depth_interval_overlap" "${input_json}")
+reference_fasta=$(jq -r ".reference_fasta" "${input_json}")
 reference_fasta_fai=$(jq -r ".reference_fasta_fai" "${input_json}")
+reference_dict=$(jq -r ".reference_dict" "${input_json}")
+java_mem_fraction=$(jq -r '.java_mem_fraction // ""' "${input_json}")
 
 # -------------------------------------------------------
 # ======================= Command =======================
 # -------------------------------------------------------
 
 
-# ScatterCompressedBedOmitHeaders
+# ScatterCompressedBedOmitHeaders and CNVBedToGatkVcf
 # ---------------------------------------------------------------------------------------------------------------------
 
 del_vcfs_array=()
@@ -108,3 +114,59 @@ ShardBedThenConvertToVcf "DEL" "${del_bed}" "del_vcfs_array" "del_vcfs_idx_array
 dup_vcfs_array=()
 dup_vcfs_idx_array=()
 ShardBedThenConvertToVcf "DUP" "${dup_bed}" "dup_vcfs_array" "dup_vcfs_idx_array"
+
+
+# Per contig clustering
+# ---------------------------------------------------------------------------------------------------------------------
+
+vcfs=("${del_vcfs_array[@]}" "${dup_vcfs_array[@]}")
+vcfs_string="$(printf '%s\n' "${vcfs[@]}" | jq -R . | jq -s . | jq -c .)"
+
+contigs_list_file="${contig_subset_list:-$contig_list}"
+contigs=($(cat "${contigs_list_file}"))
+
+for contig in "${contigs[@]}"; do
+  echo "Starting to cluster ${contig}."
+
+  cd "${working_dir}"
+  cluster_contig_output_dir=$(mktemp -d /output_cluster_contig_XXXXXXXX)
+  cluster_contig_output_dir="$(realpath ${cluster_contig_output_dir})"
+  contig_cluster_inputs_json="$(realpath "${cluster_contig_output_dir}/contig_cluster_inputs.json")"
+  contig_cluster_output_json="$(realpath "${cluster_contig_output_dir}/contig_cluster_output.json")"
+
+  jq -n \
+    --argjson vcfs "${vcfs_string}" \
+    --arg ploidy_table "${ploidy_table}" \
+    --arg output_prefix "${batch}.cluster_batch.depth.${contig}.clustered" \
+    --arg contig "${contig}" \
+    --argjson fast_mode true \
+    --arg algorithm "SINGLE_LINKAGE" \
+    --argjson depth_sample_overlap 0 \
+    --argjson depth_interval_overlap "${depth_interval_overlap}" \
+    --argjson depth_breakend_window 10000000 \
+    --arg reference_fasta "${reference_fasta}" \
+    --arg reference_fasta_fai "${reference_fasta_fai}" \
+    --arg reference_dict "${reference_dict}" \
+    --arg java_mem_fraction "${java_mem_fraction}" \
+    --arg variant_prefix "${batch}_depth_${contig}_" \
+    '{
+        "vcfs": $vcfs,
+        "ploidy_table": $ploidy_table,
+        "output_prefix": $output_prefix,
+        "contig": $contig,
+        "fast_mode": $fast_mode,
+        "algorithm": $algorithm,
+        "depth_sample_overlap": $depth_sample_overlap,
+        "depth_interval_overlap": $depth_interval_overlap,
+        "depth_breakend_window": $depth_breakend_window,
+        "reference_fasta": $reference_fasta,
+        "reference_fasta_fai": $reference_fasta_fai,
+        "reference_dict": $reference_dict,
+        "java_mem_fraction": $java_mem_fraction,
+        "variant_prefix": $variant_prefix
+    }' > "${contig_cluster_inputs_json}"
+
+    bash /opt/sv_shell/sv_cluster.sh "${contig_cluster_inputs_json}" "${contig_cluster_output_json}" "${cluster_contig_output_dir}"
+
+    echo "Finished clustering ${contig}; output json: ${cluster_contig_output_dir}"
+done
