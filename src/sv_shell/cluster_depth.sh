@@ -98,6 +98,9 @@ reference_fasta=$(jq -r ".reference_fasta" "${input_json}")
 reference_fasta_fai=$(jq -r ".reference_fasta_fai" "${input_json}")
 reference_dict=$(jq -r ".reference_dict" "${input_json}")
 java_mem_fraction=$(jq -r '.java_mem_fraction // ""' "${input_json}")
+reference_dict=$(jq -r ".reference_dict" "${input_json}")
+exclude_overlap_fraction=$(jq -r ".exclude_overlap_fraction" "${input_json}")
+exclude_intervals=$(jq -r ".exclude_intervals" "${input_json}")
 
 # -------------------------------------------------------
 # ======================= Command =======================
@@ -134,6 +137,9 @@ for contig in "${contigs[@]}"; do
   contig_cluster_inputs_json="$(realpath "${cluster_contig_output_dir}/contig_cluster_inputs.json")"
   contig_cluster_output_json="$(realpath "${cluster_contig_output_dir}/contig_cluster_output.json")"
 
+  cluster_contig_wd_dir=$(mktemp -d /wd_cluster_contig_XXXXXXXX)
+  cluster_contig_wd_dir="$(realpath ${cluster_contig_wd_dir})"
+
   jq -n \
     --argjson vcfs "${vcfs_string}" \
     --arg ploidy_table "${ploidy_table}" \
@@ -169,4 +175,28 @@ for contig in "${contigs[@]}"; do
     bash /opt/sv_shell/sv_cluster.sh "${contig_cluster_inputs_json}" "${contig_cluster_output_json}" "${cluster_contig_output_dir}"
 
     echo "Finished clustering ${contig}; output json: ${cluster_contig_output_dir}"
+
+    sv_cluster_vcf_out=$(jq -r ".out" "${contig_cluster_output_json}")
+
+    # ExcludeIntervalsByIntervalOverlap
+    # -----------------------------------------------------------------------------------------------------------------
+    cd "${cluster_contig_wd_dir}"
+
+    exclude_out_prefix="${batch}.cluster_batch.depth.${contig}.exclude_intervals"
+    cut -f1,2 "${reference_fasta_fai}" > genome.file
+    bcftools query -f '%CHROM\t%POS\t%END\t%ID\t%SVTYPE\n' "${sv_cluster_vcf_out}" > variants.bed
+    bedtools coverage -sorted \
+      -g genome.file \
+      -f "${exclude_overlap_fraction}" \
+      -a variants.bed \
+      -b "${exclude_intervals}" \
+      | awk -F"\t" '$6>0' \
+      | cut -f4 \
+      > excluded_vids.list
+
+    bcftools view -i '%ID!=@excluded_vids.list' "${sv_cluster_vcf_out}" -Oz -o "${exclude_out_prefix}.vcf.gz"
+    tabix "${exclude_out_prefix}.vcf.gz"
+
+    exclude_out="$(realpath ${exclude_out_prefix}.vcf.gz)"
+    exclude_index_out="$(realpath ${exclude_out_prefix}.vcf.gz.tbi)"
 done
