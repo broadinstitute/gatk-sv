@@ -478,12 +478,18 @@ output_median_cov_output="${output_dir}/$(basename "${output_median_cov}")"
 mv "${output_median_cov}" "${output_median_cov_output}"
 
 std_manta_vcf_tar_task_out=$(jq -r ".std_manta_vcf_tar" "${preprocess_pesr_outputs_json}")
-std_manta_vcf_tar="${output_dir}/$(basename "${std_manta_vcf_tar_task_out}")"
-mv "${std_manta_vcf_tar_task_out}" "${std_manta_vcf_tar}"
+std_manta_vcf_tar=""
+if [[ -n "${std_manta_vcf_tar_task_out}" ]]; then
+  std_manta_vcf_tar="${output_dir}/$(basename "${std_manta_vcf_tar_task_out}")"
+  mv "${std_manta_vcf_tar_task_out}" "${std_manta_vcf_tar}"
+fi
 
 std_dragen_vcf_tar_task_out=$(jq -r ".std_dragen_vcf_tar" "${preprocess_pesr_outputs_json}")
-std_dragen_vcf_tar="${output_dir}/$(basename "${std_dragen_vcf_tar_task_out}")"
-mv "${std_dragen_vcf_tar_task_out}" "${std_dragen_vcf_tar}"
+std_dragen_vcf_tar=""
+if [[ -n "${std_dragen_vcf_tar_task_out}" ]]; then
+  std_dragen_vcf_tar="${output_dir}/$(basename "${std_dragen_vcf_tar_task_out}")"
+  mv "${std_dragen_vcf_tar_task_out}" "${std_dragen_vcf_tar}"
+fi
 
 std_scramble_vcf_tar_task_out=$(jq -r '.std_scramble_vcf_tar // ""' "${preprocess_pesr_outputs_json}")
 std_scramble_vcf_tar=""
@@ -493,8 +499,11 @@ if [[ -n "${std_scramble_vcf_tar_task_out}" ]]; then
 fi
 
 std_wham_vcf_tar_task_out=$(jq -r ".std_wham_vcf_tar" "${preprocess_pesr_outputs_json}")
-std_wham_vcf_tar="${output_dir}/$(basename "${std_wham_vcf_tar_task_out}")"
-mv "${std_wham_vcf_tar_task_out}" "${std_wham_vcf_tar}"
+std_wham_vcf_tar=""
+if [[ -n "${std_wham_vcf_tar_task_out}" ]]; then
+  std_wham_vcf_tar="${output_dir}/$(basename "${std_wham_vcf_tar_task_out}")"
+  mv "${std_wham_vcf_tar_task_out}" "${std_wham_vcf_tar}"
+fi
 
 
 outputs_json=$(jq -n \
