@@ -307,9 +307,9 @@ workflow GATKSVPipelineSingleSample {
     File? baseline_depth_vcf_cluster_batch
     File? baseline_dragen_vcf_cluster_batch
     File? baseline_manta_vcf_cluster_batch
-    File? baseline_wham_vcf_cluster_batch
-    File? baseline_scramble_vcf_cluster_batch
     File? baseline_melt_vcf_cluster_batch
+    File? baseline_scramble_vcf_cluster_batch
+    File? baseline_wham_vcf_cluster_batch
 
     Float? java_mem_fraction_cluster_batch
 
@@ -726,11 +726,11 @@ workflow GATKSVPipelineSingleSample {
       wgd_score_runtime_attr=wgd_score_runtime_attr
   }
 
-  if (use_manta) {
-    Array[File] manta_vcfs_ = [select_first([case_manta_vcf, GatherSampleEvidence.manta_vcf])]
-  }
   if (use_dragen && defined(dragen_vcf)) {
     Array[File] dragen_vcfs_ = [select_first([dragen_vcf])]
+  }
+  if (use_manta) {
+    Array[File] manta_vcfs_ = [select_first([case_manta_vcf, GatherSampleEvidence.manta_vcf])]
   }
   if (use_melt) {
     Array[File] melt_vcfs_ = [select_first([case_melt_vcf, GatherSampleEvidence.melt_vcf])]
@@ -935,11 +935,11 @@ workflow GATKSVPipelineSingleSample {
 
   call clusterbatch.ClusterBatch {
     input:
-      manta_vcf_tar=merged_manta_vcf_tar,
-      wham_vcf_tar=merged_wham_vcf_tar,
-      scramble_vcf_tar=merged_scramble_vcf_tar,
-      melt_vcf_tar=merged_melt_vcf_tar,
       dragen_vcf_tar=merged_dragen_vcf_tar,
+      manta_vcf_tar=merged_manta_vcf_tar,
+      melt_vcf_tar=merged_melt_vcf_tar,
+      scramble_vcf_tar=merged_scramble_vcf_tar,
+      wham_vcf_tar=merged_wham_vcf_tar,
       del_bed=MergeSetDel.out,
       dup_bed=MergeSetDup.out,
       batch=batch,
@@ -965,9 +965,9 @@ workflow GATKSVPipelineSingleSample {
       baseline_depth_vcf=baseline_depth_vcf_cluster_batch,
       baseline_dragen_vcf=baseline_dragen_vcf_cluster_batch,
       baseline_manta_vcf=baseline_manta_vcf_cluster_batch,
-      baseline_wham_vcf=baseline_wham_vcf_cluster_batch,
-      baseline_scramble_vcf=baseline_scramble_vcf_cluster_batch,
       baseline_melt_vcf=baseline_melt_vcf_cluster_batch,
+      baseline_scramble_vcf=baseline_scramble_vcf_cluster_batch,
+      baseline_wham_vcf=baseline_wham_vcf_cluster_batch,
       gatk_docker=gatk_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -978,8 +978,8 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_svcluster_dragen=runtime_attr_svcluster_dragen_cluster_batch,
       runtime_attr_svcluster_manta=runtime_attr_svcluster_manta_cluster_batch,
       runtime_attr_svcluster_melt=runtime_attr_svcluster_melt_cluster_batch,
-      runtime_attr_svcluster_wham=runtime_attr_svcluster_wham_cluster_batch,
       runtime_attr_svcluster_scramble=runtime_attr_svcluster_scramble_cluster_batch,
+      runtime_attr_svcluster_wham=runtime_attr_svcluster_wham_cluster_batch,
       runtime_override_concat_vcfs_pesr=runtime_override_concat_vcfs_pesr_cluster_batch,
       runtime_attr_gatk_to_svtk_vcf_pesr=runtime_attr_gatk_to_svtk_vcf_pesr_cluster_batch,
       runtime_attr_scatter_bed=runtime_attr_scatter_bed_cluster_batch,
@@ -992,20 +992,28 @@ workflow GATKSVPipelineSingleSample {
   }
 
   # Pull out clustered calls from this sample only
-  if (use_manta) {
-    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterManta {
+  call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDepth {
+    input :
+      vcf_gz=ClusterBatch.clustered_depth_vcf,
+      sample_id=sample_id,
+      evidence="RD",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_filter_vcf_by_id
+  }
+  if (use_dragen && defined(dragen_vcf)) {
+    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDragen {
         input :
-            vcf_gz=select_first([ClusterBatch.clustered_manta_vcf]),
+            vcf_gz=select_first([ClusterBatch.clustered_dragen_vcf]),
             sample_id=sample_id,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
             runtime_attr_override=runtime_attr_filter_vcf_by_id
     }
   }
-  if (use_wham) {
-    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterWham {
+  if (use_manta) {
+    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterManta {
         input :
-            vcf_gz=select_first([ClusterBatch.clustered_wham_vcf]),
+            vcf_gz=select_first([ClusterBatch.clustered_manta_vcf]),
             sample_id=sample_id,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
@@ -1032,10 +1040,10 @@ workflow GATKSVPipelineSingleSample {
             runtime_attr_override=runtime_attr_filter_vcf_by_id
     }
   }
-  if (use_dragen && defined(dragen_vcf)) {
-    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDragen {
+  if (use_wham) {
+    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterWham {
         input :
-            vcf_gz=select_first([ClusterBatch.clustered_dragen_vcf]),
+            vcf_gz=select_first([ClusterBatch.clustered_wham_vcf]),
             sample_id=sample_id,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
@@ -1043,19 +1051,10 @@ workflow GATKSVPipelineSingleSample {
     }
   }
 
-  call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDepth {
-    input :
-      vcf_gz=ClusterBatch.clustered_depth_vcf,
-      sample_id=sample_id,
-      evidence="RD",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_filter_vcf_by_id
-  }
-
   call tasks_makecohortvcf.ConcatVcfs as MergePesrVcfs {
     input:
-      vcfs=select_all([FilterManta.out, FilterWham.out, FilterScramble.out, FilterMelt.out, FilterDragen.out]),
-      vcfs_idx=select_all([FilterManta.out_index, FilterWham.out_index, FilterScramble.out_index, FilterMelt.out_index, FilterDragen.out_index]),
+      vcfs=select_all([FilterDragen.out, FilterManta.out, FilterMelt.out, FilterScramble.out, FilterWham.out]),
+      vcfs_idx=select_all([FilterDragen.out_index, FilterManta.out_index, FilterMelt.out_index, FilterScramble.out_index, FilterWham.out_index]),
       allow_overlaps=true,
       outfile_prefix="~{batch}.filtered_pesr_merged",
       sv_base_mini_docker=sv_base_mini_docker,
@@ -1413,6 +1412,8 @@ workflow GATKSVPipelineSingleSample {
   call jrc.JoinRawCalls {
     input:
       prefix=sample_id,
+      clustered_depth_vcfs=if defined(ClusterBatch.clustered_depth_vcf) then select_all([ClusterBatch.clustered_depth_vcf]) else NONE_ARRAY_,
+      clustered_depth_vcf_indexes=if defined(ClusterBatch.clustered_depth_vcf_index) then select_all([ClusterBatch.clustered_depth_vcf_index]) else NONE_ARRAY_,
       clustered_dragen_vcfs=if defined(ClusterBatch.clustered_dragen_vcf) then select_all([ClusterBatch.clustered_dragen_vcf]) else NONE_ARRAY_,
       clustered_dragen_vcf_indexes=if defined(ClusterBatch.clustered_dragen_vcf_index) then select_all([ClusterBatch.clustered_dragen_vcf_index]) else NONE_ARRAY_,
       clustered_manta_vcfs=if defined(ClusterBatch.clustered_manta_vcf) then select_all([ClusterBatch.clustered_manta_vcf]) else NONE_ARRAY_,
@@ -1423,8 +1424,6 @@ workflow GATKSVPipelineSingleSample {
       clustered_scramble_vcf_indexes=if defined(ClusterBatch.clustered_scramble_vcf_index) then select_all([ClusterBatch.clustered_scramble_vcf_index]) else NONE_ARRAY_,
       clustered_wham_vcfs=if defined(ClusterBatch.clustered_wham_vcf) then select_all([ClusterBatch.clustered_wham_vcf]) else NONE_ARRAY_,
       clustered_wham_vcf_indexes=if defined(ClusterBatch.clustered_wham_vcf_index) then select_all([ClusterBatch.clustered_wham_vcf_index]) else NONE_ARRAY_,
-      clustered_depth_vcfs=if defined(ClusterBatch.clustered_depth_vcf) then select_all([ClusterBatch.clustered_depth_vcf]) else NONE_ARRAY_,
-      clustered_depth_vcf_indexes=if defined(ClusterBatch.clustered_depth_vcf_index) then select_all([ClusterBatch.clustered_depth_vcf_index]) else NONE_ARRAY_,
       ped_file=combined_ped_file,
       contig_list=primary_contigs_list,
       reference_fasta=reference_fasta,
