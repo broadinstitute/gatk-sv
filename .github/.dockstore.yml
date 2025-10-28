@@ -231,6 +231,7 @@ workflows:
     filters:
       branches:
         - main
+        - vj-sv-cluster-test
       tags:
         - /.*/
 

@@ -70,6 +70,7 @@ task SVCluster {
     output {
         File out = "~{output_prefix}.vcf.gz"
         File out_index = "~{output_prefix}.vcf.gz.tbi"
+        File arguments = "arguments.txt"
     }
     command <<<
         set -euxo pipefail
