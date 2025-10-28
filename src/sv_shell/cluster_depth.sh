@@ -128,6 +128,9 @@ vcfs_string="$(printf '%s\n' "${vcfs[@]}" | jq -R . | jq -s . | jq -c .)"
 contigs_list_file="${contig_subset_list:-$contig_list}"
 contigs=($(cat "${contigs_list_file}"))
 
+svtk_format_vcfs=()
+svtk_format_vcf_indexes=()
+
 for contig in "${contigs[@]}"; do
   echo "Starting to cluster ${contig}."
 
@@ -212,5 +215,48 @@ for contig in "${contigs[@]}"; do
       --remove-formats CN
     tabix "${gatk_to_svtk_out_vcf}"
 
-    gatk_to_svtk_out_vcf_idx="${gatk_to_svtk_out_vcf}.tbi"
+    svtk_format_vcfs+=("${gatk_to_svtk_out_vcf}")
+    svtk_format_vcf_indexes+=("${gatk_to_svtk_out_vcf}.tbi")
 done
+
+# ConcatVcfs
+# -------------------------------------------------------------------------------------------------------------------
+# Note the following is a simplified implementation than the WDL-based
+# as it only includes the execution path/args used for this Depth clustering task.
+
+cd "${working_dir}"
+concat_vcf_working_dir=$(mktemp -d /wd_ConcatVcfs_XXXXXXXX)
+concat_vcf_working_dir="$(realpath ${concat_vcf_working_dir})"
+cd "${concat_vcf_working_dir}"
+
+vcfs_filename="$(realpath ${concat_vcf_working_dir}/vcfs.txt)"
+printf "%s\n" "${svtk_format_vcfs[@]}" > "${vcfs_filename}"
+
+output_filename="${batch}.cluster_batch.depth.vcf.gz"
+bcftools concat --no-version --naive -Oz --file-list "${vcfs_filename}" \
+  > "${output_filename}"
+tabix "${output_filename}"
+
+concat_vcf="$(realpath ${output_filename})"
+concat_vcf_idx="$(realpath ${output_filename}.tbi)"
+
+
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+
+concat_vcf_output="${output_dir}/$(basename "${concat_vcf}")"
+concat_vcf_idx_output="${output_dir}/$(basename "${concat_vcf_idx}")"
+
+mv "${concat_vcf}" "${concat_vcf_output}"
+mv "${concat_vcf_idx}" "${concat_vcf_idx_output}"
+
+outputs_json=$(jq -n \
+  --arg vcf "${concat_vcf_output}" \
+  --arg idx "${concat_vcf_idx_output}" \
+  '{clustered_vcf: $vcf, clustered_vcf_index: $idx}' )
+echo "${outputs_json}" > "${output_json_filename}"
+
+echo "Finished Cluster PE/SR successfully, output json filename: ${output_json_filename}"
