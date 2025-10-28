@@ -25,7 +25,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_sv_cluster_XXXXXXXX)
+working_dir="$(mktemp -d /wd_sv_cluster_XXXXXXXX)"
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 

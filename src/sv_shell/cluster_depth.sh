@@ -132,12 +132,12 @@ for contig in "${contigs[@]}"; do
   echo "Starting to cluster ${contig}."
 
   cd "${working_dir}"
-  cluster_contig_output_dir=$(mktemp -d /output_cluster_contig_XXXXXXXX)
+  cluster_contig_output_dir=$(mktemp -d "/output_cluster_contig_${contig}_XXXXXXXX")
   cluster_contig_output_dir="$(realpath ${cluster_contig_output_dir})"
   contig_cluster_inputs_json="$(realpath "${cluster_contig_output_dir}/contig_cluster_inputs.json")"
   contig_cluster_output_json="$(realpath "${cluster_contig_output_dir}/contig_cluster_output.json")"
 
-  cluster_contig_wd_dir=$(mktemp -d /wd_cluster_contig_XXXXXXXX)
+  cluster_contig_wd_dir=$(mktemp -d "/wd_cluster_contig_${contig}_XXXXXXXX")
   cluster_contig_wd_dir="$(realpath ${cluster_contig_wd_dir})"
 
   jq -n \
@@ -199,4 +199,18 @@ for contig in "${contigs[@]}"; do
 
     exclude_out="$(realpath ${exclude_out_prefix}.vcf.gz)"
     exclude_index_out="$(realpath ${exclude_out_prefix}.vcf.gz.tbi)"
+
+    # GatkToSvtkVcf
+    # -----------------------------------------------------------------------------------------------------------------
+    gatk_to_svtk_out_prefix="${batch}.cluster_batch.depth.${contig}.svtk_formatted"
+    gatk_to_svtk_out_vcf="$(realpath ${gatk_to_svtk_out_prefix}.vcf.gz)"
+    python /opt/sv-pipeline/scripts/format_gatk_vcf_for_svtk.py \
+      --vcf "${exclude_out}" \
+      --out "${gatk_to_svtk_out_vcf}" \
+      --source "depth" \
+      --contigs "${contig_list}" \
+      --remove-formats CN
+    tabix "${gatk_to_svtk_out_vcf}"
+
+    gatk_to_svtk_out_vcf_idx="${gatk_to_svtk_out_vcf}.tbi"
 done
