@@ -1,0 +1,5 @@
+{
+  "sample": "NA12878",
+  "counts": "/inputs/NA12878.counts.tsv.gz",
+  "gatk4_jar_override": null
+}
