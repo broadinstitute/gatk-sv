@@ -561,5 +561,6 @@ outputs_json=$(jq -n \
       "std_scramble_vcf_tar": $std_scramble_vcf_tar,
       "std_wham_vcf_tar": $std_wham_vcf_tar
   }' > "${output_json_filename}"
+)
 
 echo "Successfully finished Gather Batch Evidence, output json filename: ${output_json_filename}"
