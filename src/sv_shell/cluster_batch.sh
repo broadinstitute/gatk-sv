@@ -32,13 +32,30 @@ cd "${working_dir}"
 batch=$(jq -r ".batch" "${input_json}")
 contig_list=$(jq -r ".contig_list" "${input_json}")
 ped_file=$(jq -r ".ped_file" "${input_json}")
+del_bed=$(jq -r ".del_bed" "${input_json}")
+dup_bed=$(jq -r ".dup_bed" "${input_json}")
 dragen_vcf_tar=$(jq -r '.dragen_vcf_tar // ""' "${input_json}")
 manta_vcf_tar=$(jq -r '.manta_vcf_tar // ""' "${input_json}")
 melt_vcf_tar=$(jq -r '.melt_vcf_tar // ""' "${input_json}")
 wham_vcf_tar=$(jq -r '.wham_vcf_tar // ""' "${input_json}")
+scramble_vcf_tar=$(jq -r '.scramble_vcf_tar // ""' "${input_json}")
 chr_x=$(jq -r '.chr_x // ""' "${input_json}")
 chr_y=$(jq -r '.chr_y // ""' "${input_json}")
 retain_female_chr_y=$(jq -r '.retain_female_chr_y' "${input_json}")
+pesr_min_size=$(jq -r '.pesr_min_size // "50"' "${input_json}")
+pesr_exclude_intervals=$(jq -r '.pesr_exclude_intervals' "${input_json}")
+contig_subset_list=$(jq -r '.contig_subset_list // ""' "${input_json}")
+pesr_interval_overlap=$(jq -r '.pesr_interval_overlap' "${input_json}")
+pesr_breakend_window=$(jq -r '.pesr_breakend_window' "${input_json}")
+pesr_clustering_algorithm=$(jq -r '.pesr_clustering_algorithm // ""' "${input_json}")
+reference_fasta=$(jq -r '.reference_fasta' "${input_json}")
+reference_fasta_fai=$(jq -r '.reference_fasta_fai' "${input_json}")
+reference_dict=$(jq -r '.reference_dict' "${input_json}")
+depth_records_per_bed_shard=$(jq -r '.depth_records_per_bed_shard // "1000000"' "${input_json}")
+depth_exclude_intervals=$(jq -r '.depth_exclude_intervals' "${input_json}")
+exclude_overlap_fraction=$(jq -r '.exclude_overlap_fraction' "${input_json}")
+depth_clustering_algorithm=$(jq -r '.depth_clustering_algorithm' "${input_json}")
+depth_interval_overlap=$(jq -r '.depth_interval_overlap' "${input_json}")
 
 
 # -------------------------------------------------------
@@ -61,6 +78,8 @@ fi
 mkdir vcfs
 tar xzf "${vcf_tar}" -C vcfs/
 ls vcfs/*.vcf.gz | xargs -n1 bcftools query -l | sort -u > "${batch}.samples.txt"
+
+GetSampleIdsFromVcfTar_out_file="$(realpath "${batch}.samples.txt")"
 
 
 
@@ -88,3 +107,285 @@ if [ "${retain_female_chr_y}" = true ]; then
 else
     mv tmp.tsv "${ploidy_table_output_file}"
 fi
+
+
+# Cluster PESR Dragen
+# ---------------------------------------------------------------------------------------------------------------------
+
+dragen_pesr_clustered_vcf=""
+dragen_pesr_clustered_vcf_idx=""
+if [ -n "${dragen_vcf_tar}" ]; then
+  echo "Running PE/SR clustering on Dragen VCF."
+
+  cd "${working_dir}"
+  dragen_pesr_output_dir=$(mktemp -d "/output_dragen_pesr_XXXXXXXX")
+  dragen_pesr_output_dir="$(realpath ${dragen_pesr_output_dir})"
+  dragen_pesr_inputs_json="$(realpath "${dragen_pesr_output_dir}/dragen_pesr_inputs.json")"
+  dragen_pesr_output_json="$(realpath "${dragen_pesr_output_dir}/dragen_pesr_output.json")"
+
+  jq -n \
+    --arg vcf_tar "${dragen_vcf_tar}" \
+    --arg ploidy_table "${ploidy_table_output_file}" \
+    --arg batch "${batch}" \
+    --arg caller "dragen" \
+    --argjson min_size "${pesr_min_size}" \
+    --arg exclude_intervals "${pesr_exclude_intervals}" \
+    --arg contig_list "${contig_list}" \
+    --argjson contig_subset_list "${contig_subset_list:-null}" \
+    --argjson pesr_interval_overlap ${pesr_interval_overlap} \
+    --argjson pesr_breakend_window ${pesr_breakend_window} \
+    --arg clustering_algorithm "${pesr_clustering_algorithm}" \
+    --arg reference_fasta "${reference_fasta}" \
+    --arg reference_fasta_fai "${reference_fasta_fai}" \
+    --arg reference_dict "${reference_dict}" \
+    --argjson sort_vcf_list false \
+    --argjson vcfs '[]' \
+    '{
+          "batch": $batch,
+          "caller": $caller,
+          "clustering_algorithm": $clustering_algorithm,
+          "contig_list": $contig_list,
+          "contig_subset_list": $contig_subset_list,
+          "exclude_intervals": $exclude_intervals,
+          "min_size": $min_size,
+          "pesr_breakend_window": $pesr_breakend_window,
+          "pesr_interval_overlap": $pesr_interval_overlap,
+          "ploidy_table": $ploidy_table,
+          "reference_dict": $reference_dict,
+          "reference_fasta": $reference_fasta,
+          "reference_fasta_fai": $reference_fasta_fai,
+          "sort_vcf_list": $sort_vcf_list,
+          "vcf_tar": $vcf_tar,
+          "vcfs": $vcfs
+      }' > "${dragen_pesr_inputs_json}"
+
+    bash /opt/sv_shell/cluster_pesr.sh "${dragen_pesr_inputs_json}" "${dragen_pesr_output_json}"
+
+    dragen_pesr_clustered_vcf=$(jq -r '.clustered_vcf' "${dragen_pesr_output_json}")
+    dragen_pesr_clustered_vcf_idx=$(jq -r '.clustered_vcf_index' "${dragen_pesr_output_json}")
+
+    echo "Finished running PE/SR clustering on Dragen VCF."
+fi
+
+
+# Cluster PESR Manta
+# ---------------------------------------------------------------------------------------------------------------------
+
+manta_pesr_clustered_vcf=""
+manta_pesr_clustered_vcf_idx=""
+if [ -n "${manta_vcf_tar}" ]; then
+  echo "Running PE/SR clustering on Manta VCF."
+
+  cd "${working_dir}"
+  manta_pesr_output_dir=$(mktemp -d "/output_manta_pesr_XXXXXXXX")
+  manta_pesr_output_dir="$(realpath ${manta_pesr_output_dir})"
+  manta_pesr_inputs_json="$(realpath "${manta_pesr_output_dir}/manta_pesr_inputs.json")"
+  manta_pesr_output_json="$(realpath "${manta_pesr_output_dir}/manta_pesr_output.json")"
+
+  jq -n \
+    --arg vcf_tar "${manta_vcf_tar}" \
+    --arg ploidy_table "${ploidy_table_output_file}" \
+    --arg batch "${batch}" \
+    --arg caller "manta" \
+    --argjson min_size "${pesr_min_size}" \
+    --arg exclude_intervals "${pesr_exclude_intervals}" \
+    --arg contig_list "${contig_list}" \
+    --argjson contig_subset_list "${contig_subset_list:-null}" \
+    --argjson pesr_interval_overlap ${pesr_interval_overlap} \
+    --argjson pesr_breakend_window ${pesr_breakend_window} \
+    --arg clustering_algorithm "${pesr_clustering_algorithm}" \
+    --arg reference_fasta "${reference_fasta}" \
+    --arg reference_fasta_fai "${reference_fasta_fai}" \
+    --arg reference_dict "${reference_dict}" \
+    --argjson sort_vcf_list false \
+    --argjson vcfs '[]' \
+    '{
+          "batch": $batch,
+          "caller": $caller,
+          "clustering_algorithm": $clustering_algorithm,
+          "contig_list": $contig_list,
+          "contig_subset_list": $contig_subset_list,
+          "exclude_intervals": $exclude_intervals,
+          "min_size": $min_size,
+          "pesr_breakend_window": $pesr_breakend_window,
+          "pesr_interval_overlap": $pesr_interval_overlap,
+          "ploidy_table": $ploidy_table,
+          "reference_dict": $reference_dict,
+          "reference_fasta": $reference_fasta,
+          "reference_fasta_fai": $reference_fasta_fai,
+          "sort_vcf_list": $sort_vcf_list,
+          "vcf_tar": $vcf_tar,
+          "vcfs": $vcfs
+      }' > "${manta_pesr_inputs_json}"
+
+    bash /opt/sv_shell/cluster_pesr.sh "${manta_pesr_inputs_json}" "${manta_pesr_output_json}"
+
+    manta_pesr_clustered_vcf=$(jq -r '.clustered_vcf' "${manta_pesr_output_json}")
+    manta_pesr_clustered_vcf_idx=$(jq -r '.clustered_vcf_index' "${manta_pesr_output_json}")
+
+    echo "Finished running PE/SR clustering on Manta VCF."
+fi
+
+
+# Cluster PESR Wham
+# ---------------------------------------------------------------------------------------------------------------------
+
+wham_pesr_clustered_vcf=""
+wham_pesr_clustered_vcf_idx=""
+if [ -n "${wham_vcf_tar}" ]; then
+  echo "Running PE/SR clustering on Wham VCF."
+
+  cd "${working_dir}"
+  wham_pesr_output_dir=$(mktemp -d "/output_wham_pesr_XXXXXXXX")
+  wham_pesr_output_dir="$(realpath ${wham_pesr_output_dir})"
+  wham_pesr_inputs_json="$(realpath "${wham_pesr_output_dir}/wham_pesr_inputs.json")"
+  wham_pesr_output_json="$(realpath "${wham_pesr_output_dir}/wham_pesr_output.json")"
+
+  jq -n \
+    --arg vcf_tar "${wham_vcf_tar}" \
+    --arg ploidy_table "${ploidy_table_output_file}" \
+    --arg batch "${batch}" \
+    --arg caller "wham" \
+    --argjson min_size "${pesr_min_size}" \
+    --arg exclude_intervals "${pesr_exclude_intervals}" \
+    --arg contig_list "${contig_list}" \
+    --argjson contig_subset_list "${contig_subset_list:-null}" \
+    --argjson pesr_interval_overlap ${pesr_interval_overlap} \
+    --argjson pesr_breakend_window ${pesr_breakend_window} \
+    --arg clustering_algorithm "${pesr_clustering_algorithm}" \
+    --arg reference_fasta "${reference_fasta}" \
+    --arg reference_fasta_fai "${reference_fasta_fai}" \
+    --arg reference_dict "${reference_dict}" \
+    --argjson sort_vcf_list false \
+    --argjson vcfs '[]' \
+    '{
+          "batch": $batch,
+          "caller": $caller,
+          "clustering_algorithm": $clustering_algorithm,
+          "contig_list": $contig_list,
+          "contig_subset_list": $contig_subset_list,
+          "exclude_intervals": $exclude_intervals,
+          "min_size": $min_size,
+          "pesr_breakend_window": $pesr_breakend_window,
+          "pesr_interval_overlap": $pesr_interval_overlap,
+          "ploidy_table": $ploidy_table,
+          "reference_dict": $reference_dict,
+          "reference_fasta": $reference_fasta,
+          "reference_fasta_fai": $reference_fasta_fai,
+          "sort_vcf_list": $sort_vcf_list,
+          "vcf_tar": $vcf_tar,
+          "vcfs": $vcfs
+      }' > "${wham_pesr_inputs_json}"
+
+    bash /opt/sv_shell/cluster_pesr.sh "${wham_pesr_inputs_json}" "${wham_pesr_output_json}"
+
+    wham_pesr_clustered_vcf=$(jq -r '.clustered_vcf' "${wham_pesr_output_json}")
+    wham_pesr_clustered_vcf_idx=$(jq -r '.clustered_vcf_index' "${wham_pesr_output_json}")
+
+    echo "Finished running PE/SR clustering on Wham VCF."
+fi
+
+
+# Cluster PESR Scramble
+# ---------------------------------------------------------------------------------------------------------------------
+
+scramble_pesr_clustered_vcf=""
+scramble_pesr_clustered_vcf_idx=""
+if [ -n "${scramble_vcf_tar}" ]; then
+  echo "Running PE/SR clustering on Scramble VCF."
+
+  cd "${working_dir}"
+  scramble_pesr_output_dir=$(mktemp -d "/output_scramble_pesr_XXXXXXXX")
+  scramble_pesr_output_dir="$(realpath ${scramble_pesr_output_dir})"
+  scramble_pesr_inputs_json="$(realpath "${scramble_pesr_output_dir}/scramble_pesr_inputs.json")"
+  scramble_pesr_output_json="$(realpath "${scramble_pesr_output_dir}/scramble_pesr_output.json")"
+
+  jq -n \
+    --arg vcf_tar "${scramble_vcf_tar}" \
+    --arg ploidy_table "${ploidy_table_output_file}" \
+    --arg batch "${batch}" \
+    --arg caller "scramble" \
+    --argjson min_size "${pesr_min_size}" \
+    --arg exclude_intervals "${pesr_exclude_intervals}" \
+    --arg contig_list "${contig_list}" \
+    --argjson contig_subset_list "${contig_subset_list:-null}" \
+    --argjson pesr_interval_overlap ${pesr_interval_overlap} \
+    --argjson pesr_breakend_window ${pesr_breakend_window} \
+    --arg clustering_algorithm "${pesr_clustering_algorithm}" \
+    --arg reference_fasta "${reference_fasta}" \
+    --arg reference_fasta_fai "${reference_fasta_fai}" \
+    --arg reference_dict "${reference_dict}" \
+    --argjson sort_vcf_list false \
+    --argjson vcfs '[]' \
+    '{
+          "batch": $batch,
+          "caller": $caller,
+          "clustering_algorithm": $clustering_algorithm,
+          "contig_list": $contig_list,
+          "contig_subset_list": $contig_subset_list,
+          "exclude_intervals": $exclude_intervals,
+          "min_size": $min_size,
+          "pesr_breakend_window": $pesr_breakend_window,
+          "pesr_interval_overlap": $pesr_interval_overlap,
+          "ploidy_table": $ploidy_table,
+          "reference_dict": $reference_dict,
+          "reference_fasta": $reference_fasta,
+          "reference_fasta_fai": $reference_fasta_fai,
+          "sort_vcf_list": $sort_vcf_list,
+          "vcf_tar": $vcf_tar,
+          "vcfs": $vcfs
+      }' > "${scramble_pesr_inputs_json}"
+
+    bash /opt/sv_shell/cluster_pesr.sh "${scramble_pesr_inputs_json}" "${scramble_pesr_output_json}"
+
+    scramble_pesr_clustered_vcf=$(jq -r '.clustered_vcf' "${scramble_pesr_output_json}")
+    scramble_pesr_clustered_vcf_idx=$(jq -r '.clustered_vcf_index' "${scramble_pesr_output_json}")
+
+    echo "Finished running PE/SR clustering on Scramble VCF."
+fi
+
+
+# Cluster Depth
+# ---------------------------------------------------------------------------------------------------------------------
+
+echo "Running cluster depth"
+
+cd "${working_dir}"
+cluster_depth_output_dir=$(mktemp -d "/output_cluster_depth_XXXXXXXX")
+cluster_depth_output_dir="$(realpath ${cluster_depth_output_dir})"
+cluster_depth_inputs_json="$(realpath "${cluster_depth_output_dir}/cluster_depth_inputs.json")"
+cluster_depth_output_json="$(realpath "${cluster_depth_output_dir}/cluster_depth_output.json")"
+
+jq -n \
+  --arg del_bed "${del_bed}" \
+  --arg dup_bed "${dup_bed}" \
+  --arg batch "${batch}" \
+  --arg ploidy_table "${ploidy_table_output_file}" \
+  --arg contig_list "${contig_list}" \
+  --argjson contig_subset_list "${contig_subset_list:-null}" \
+  --arg sample_list "${GetSampleIdsFromVcfTar_out_file}" \
+  --arg records_per_bed_shard "${depth_records_per_bed_shard}" \
+  --arg exclude_intervals "${depth_exclude_intervals}" \
+  --arg exclude_overlap_fraction "${exclude_overlap_fraction}" \
+  --arg clustering_algorithm "${depth_clustering_algorithm}" \
+  --arg depth_interval_overlap "${depth_interval_overlap}" \
+  --arg reference_fasta "${reference_fasta}" \
+  --arg reference_fasta_fai "${reference_fasta_fai}" \
+  --arg reference_dict "${reference_dict}" \
+  '{
+        "del_bed": $del_bed,
+        "dup_bed": $dup_bed,
+        "batch": $batch,
+        "ploidy_table": $ploidy_table,
+        "contig_list": $contig_list,
+        "contig_subset_list": $contig_subset_list,
+        "sample_list": $sample_list,
+        "records_per_bed_shard": $records_per_bed_shard,
+        "exclude_intervals": $exclude_intervals,
+        "exclude_overlap_fraction": $exclude_overlap_fraction,
+        "clustering_algorithm": $clustering_algorithm,
+        "depth_interval_overlap": $depth_interval_overlap,
+        "reference_fasta": $reference_fasta,
+        "reference_fasta_fai": $reference_fasta_fai,
+        "reference_dict": $reference_dict
+    }' > "${cluster_depth_inputs_json}"
