@@ -15,7 +15,8 @@ import numpy as np
 
 def rewrite_SR_coords(record, metrics, pval_cutoff, bg_cutoff):
     row = metrics.loc[record.id]
-    if row.SRQ >= pval_cutoff and row.SRCS >= bg_cutoff:
+    # Do not use bg_cutoff for common variants
+    if row.SRQ >= pval_cutoff and (row.SRCS >= bg_cutoff or row.vf > 0.5):
         posA = int(row.SR1POS - 1) if row.SR1POS and not np.isnan(row.SR1POS) else record.pos
         posB = int(row.SR2POS - 1) if row.SR2POS and not np.isnan(row.SR2POS) else record.stop
         if record.info['SVTYPE'] == 'INS':
