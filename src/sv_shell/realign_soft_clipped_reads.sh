@@ -21,9 +21,9 @@ reference_bwa_pac=${12}
 reference_bwa_sa=${13}
 outputs_json_filename=${14}
 
-working_dir=$(mktemp -d wd_realign_soft_clipped_reads_XXXXXXXX)
+working_dir=$(mktemp -d /wd_realign_soft_clipped_reads_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
-output_dir=$(mktemp -d output_realign_soft_clipped_reads_XXXXXXXX)
+output_dir=$(mktemp -d /output_realign_soft_clipped_reads_XXXXXXXX)
 output_dir="$(realpath ${output_dir})"
 cd "${working_dir}"
 

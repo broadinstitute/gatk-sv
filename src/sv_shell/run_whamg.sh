@@ -19,9 +19,9 @@ cpu_cores=${9:-4}
 include_bed_file_abs_path=$(realpath $include_bed_file)
 reference_fasta_abs_path=$(realpath $reference_fasta)
 
-working_dir=$(mktemp -d wd_collect_counts_XXXXXXXX)
+working_dir=$(mktemp -d /wd_collect_counts_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
-output_dir=$(mktemp -d output_collect_counts_XXXXXXXX)
+output_dir=$(mktemp -d /output_collect_counts_XXXXXXXX)
 output_dir="$(realpath ${output_dir})"
 cd "${working_dir}"
 

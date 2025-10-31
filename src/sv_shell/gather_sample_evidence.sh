@@ -78,7 +78,7 @@ output_dir=${30:-""}
 
 
 if [[ "${output_dir}" == "" ]]; then
-  output_dir=$(mktemp -d output_gather_sample_evidence_XXXXXXXX)
+  output_dir=$(mktemp -d /output_gather_sample_evidence_XXXXXXXX)
   output_dir="$(realpath ${output_dir})"
 fi
 
