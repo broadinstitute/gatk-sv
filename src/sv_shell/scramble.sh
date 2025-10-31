@@ -61,7 +61,7 @@ echo "make_scramble_vcf_args:     " "${make_scramble_vcf_args}"
 
 
 initial_wd=$PWD
-output_dir=$(mktemp -d output_scramble_XXXXXXXX)
+output_dir=$(mktemp -d /output_scramble_XXXXXXXX)
 output_dir="$(realpath ${output_dir})"
 
 scramble_dir="/app/scramble-gatk-sv"
