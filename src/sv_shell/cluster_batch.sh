@@ -53,7 +53,7 @@ reference_fasta_fai=$(jq -r '.reference_fasta_fai' "${input_json}")
 reference_dict=$(jq -r '.reference_dict' "${input_json}")
 depth_records_per_bed_shard=$(jq -r '.depth_records_per_bed_shard // "1000000"' "${input_json}")
 depth_exclude_intervals=$(jq -r '.depth_exclude_intervals' "${input_json}")
-exclude_overlap_fraction=$(jq -r '.exclude_overlap_fraction' "${input_json}")
+depth_exclude_overlap_fraction=$(jq -r '.depth_exclude_overlap_fraction' "${input_json}")
 depth_clustering_algorithm=$(jq -r '.depth_clustering_algorithm' "${input_json}")
 depth_interval_overlap=$(jq -r '.depth_interval_overlap' "${input_json}")
 
@@ -366,7 +366,7 @@ jq -n \
   --arg sample_list "${GetSampleIdsFromVcfTar_out_file}" \
   --arg records_per_bed_shard "${depth_records_per_bed_shard}" \
   --arg exclude_intervals "${depth_exclude_intervals}" \
-  --arg exclude_overlap_fraction "${exclude_overlap_fraction}" \
+  --arg exclude_overlap_fraction "${depth_exclude_overlap_fraction}" \
   --arg clustering_algorithm "${depth_clustering_algorithm}" \
   --arg depth_interval_overlap "${depth_interval_overlap}" \
   --arg reference_fasta "${reference_fasta}" \
@@ -389,3 +389,94 @@ jq -n \
         "reference_fasta_fai": $reference_fasta_fai,
         "reference_dict": $reference_dict
     }' > "${cluster_depth_inputs_json}"
+
+bash /opt/sv_shell/cluster_depth.sh "${cluster_depth_inputs_json}" "${cluster_depth_output_json}"
+
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+
+clustered_depth_vcf_wd=$(jq -r ".clustered_vcf" "${cluster_depth_output_json}")
+clustered_depth_vcf_out="${output_dir}/$(basename "${clustered_depth_vcf_wd}")"
+mv "${clustered_depth_vcf_wd}" "${clustered_depth_vcf_out}"
+
+clustered_depth_vcf_index_wd=$(jq -r ".clustered_vcf_index" "${cluster_depth_output_json}")
+clustered_depth_vcf_index_out="${output_dir}/$(basename "${clustered_depth_vcf_index_wd}")"
+mv "${clustered_depth_vcf_index_wd}" "${clustered_depth_vcf_index_out}"
+
+dragen_pesr_clustered_vcf_out=""
+if [[ -n "${dragen_pesr_clustered_vcf}" ]]; then
+  dragen_pesr_clustered_vcf_out="${output_dir}/$(basename "${dragen_pesr_clustered_vcf}")"
+  mv "${dragen_pesr_clustered_vcf}" "${dragen_pesr_clustered_vcf_out}"
+fi
+
+dragen_pesr_clustered_vcf_idx_out=""
+if [[ -n "${dragen_pesr_clustered_vcf_idx}" ]]; then
+  dragen_pesr_clustered_vcf_idx_out="${output_dir}/$(basename "${dragen_pesr_clustered_vcf_idx}")"
+  mv "${dragen_pesr_clustered_vcf_idx}" "${dragen_pesr_clustered_vcf_idx_out}"
+fi
+
+manta_pesr_clustered_vcf_out=""
+if [[ -n "${manta_pesr_clustered_vcf}" ]]; then
+  manta_pesr_clustered_vcf_out="${output_dir}/$(basename "${manta_pesr_clustered_vcf}")"
+  mv "${manta_pesr_clustered_vcf}" "${manta_pesr_clustered_vcf_out}"
+fi
+
+manta_pesr_clustered_vcf_idx_out=""
+if [[ -n "${manta_pesr_clustered_vcf_idx}" ]]; then
+  manta_pesr_clustered_vcf_idx_out="${output_dir}/$(basename "${manta_pesr_clustered_vcf_idx}")"
+  mv "${manta_pesr_clustered_vcf_idx}" "${manta_pesr_clustered_vcf_idx_out}"
+fi
+
+wham_pesr_clustered_vcf_out=""
+if [[ -n "${wham_pesr_clustered_vcf}" ]]; then
+  wham_pesr_clustered_vcf_out="${output_dir}/$(basename "${wham_pesr_clustered_vcf}")"
+  mv "${wham_pesr_clustered_vcf}" "${wham_pesr_clustered_vcf_out}"
+fi
+
+wham_pesr_clustered_vcf_idx_out=""
+if [[ -n "${wham_pesr_clustered_vcf_idx}" ]]; then
+  wham_pesr_clustered_vcf_idx_out="${output_dir}/$(basename "${wham_pesr_clustered_vcf_idx}")"
+  mv "${wham_pesr_clustered_vcf_idx}" "${wham_pesr_clustered_vcf_idx_out}"
+fi
+
+scramble_pesr_clustered_vcf_out=""
+if [[ -n "${scramble_pesr_clustered_vcf}" ]]; then
+  scramble_pesr_clustered_vcf_out="${output_dir}/$(basename "${scramble_pesr_clustered_vcf}")"
+  mv "${scramble_pesr_clustered_vcf}" "${scramble_pesr_clustered_vcf_out}"
+fi
+
+scramble_pesr_clustered_vcf_idx_out=""
+if [[ -n "${scramble_pesr_clustered_vcf_idx}" ]]; then
+  scramble_pesr_clustered_vcf_idx_out="${output_dir}/$(basename "${scramble_pesr_clustered_vcf_idx}")"
+  mv "${scramble_pesr_clustered_vcf_idx}" "${scramble_pesr_clustered_vcf_idx_out}"
+fi
+
+outputs_json=$(jq -n \
+  --arg clustered_depth_vcf "${clustered_depth_vcf_out}" \
+  --arg clustered_depth_vcf_index "${clustered_depth_vcf_index_out}" \
+  --arg clustered_dragen_vcf "${dragen_pesr_clustered_vcf_out}" \
+  --arg clustered_dragen_vcf_index "${dragen_pesr_clustered_vcf_idx_out}" \
+  --arg clustered_manta_vcf "${manta_pesr_clustered_vcf_out}" \
+  --arg clustered_manta_vcf_index "${manta_pesr_clustered_vcf_idx_out}" \
+  --arg clustered_wham_vcf "${wham_pesr_clustered_vcf_out}" \
+  --arg clustered_wham_vcf_index "${wham_pesr_clustered_vcf_idx_out}" \
+  --arg clustered_scramble_vcf "${scramble_pesr_clustered_vcf_out}" \
+  --arg clustered_scramble_vcf_index "${scramble_pesr_clustered_vcf_idx_out}" \
+  '{
+      "clustered_depth_vcf": $clustered_depth_vcf,
+      "clustered_depth_vcf_index": $clustered_depth_vcf_index,
+      "clustered_dragen_vcf": $clustered_dragen_vcf,
+      "clustered_dragen_vcf_index": $clustered_dragen_vcf_index,
+      "clustered_manta_vcf": $clustered_manta_vcf,
+      "clustered_manta_vcf_index": $clustered_manta_vcf_index,
+      "clustered_wham_vcf": $clustered_wham_vcf,
+      "clustered_wham_vcf_index": $clustered_wham_vcf_index,
+      "clustered_scramble_vcf": $clustered_scramble_vcf,
+      "clustered_scramble_vcf_index": $clustered_scramble_vcf_index
+  }' > "${output_json_filename}"
+)
+
+echo "Successfully finished Gather Batch Evidence, output json filename: ${output_json_filename}"

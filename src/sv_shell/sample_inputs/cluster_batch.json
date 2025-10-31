@@ -1,7 +1,7 @@
 {
   "batch": "NA12878",
   "contig_list": "/inputs/primary_contigs.list",
-  "del_bed": "NA12878.DEL.bed.gz",
+  "del_bed": "/inputs/NA12878.DEL.bed.gz",
   "depth_clustering_algorithm": "SINGLE_LINKAGE",
   "depth_exclude_intervals": "/inputs/depth_blacklist.sorted.bed.gz",
   "depth_exclude_overlap_fraction": 0.5,
@@ -16,7 +16,6 @@
   "reference_dict": "/inputs/Homo_sapiens_assembly38.dict",
   "reference_fasta": "/inputs/Homo_sapiens_assembly38.fasta",
   "reference_fasta_fai": "/inputs/Homo_sapiens_assembly38.fasta.fai",
-  "run_module_metrics": false,
   "scramble_vcf_tar": "/inputs/NA12878.scramble_std.tar.gz",
   "wham_vcf_tar": "/inputs/NA12878.wham_std.tar.gz",
   "retain_female_chr_y": true
