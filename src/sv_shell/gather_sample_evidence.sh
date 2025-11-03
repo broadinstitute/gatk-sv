@@ -9,11 +9,6 @@
 # example running using downsampled data.
 # bash gather_sample_evidence.sh test downsampled_HG00096.final.cram downsampled_HG00096.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict downsampled_primary_contigs.list downsampled_contig.fai downsampled_preprocessed_intervals.interval_list downsampled_primary_contigs_plus_mito.bed.gz downsampled_primary_contigs_plus_mito.bed.gz downsampled_Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz downsampled_wham_whitelist.bed Homo_sapiens_assembly38.fasta.64.alt Homo_sapiens_assembly38.fasta.64.amb Homo_sapiens_assembly38.fasta.64.ann Homo_sapiens_assembly38.fasta.64.bwt Homo_sapiens_assembly38.fasta.64.pac Homo_sapiens_assembly38.fasta.64.sa
 
-# Implementation notes:
-# This script closely reproduces the GatherSampleEvidence workflow.
-# However, there are few adjustments in the implementation and the pipeline
-# to better suit the use case; for instance, we decided to skip running
-# GatherSampleEvidenceMetrics module.
 
 # For details: https://serverfault.com/a/103569
 # saves original stdout to &3 and original stderr to &4
@@ -22,12 +17,41 @@ exec 3>&1 4>&2
 
 set -Exeuo pipefail
 
+
+# -------------------------------------------------------
+# ==================== Input & Setup ====================
+# -------------------------------------------------------
+
 RED='\033[0;31m'
 BOLD_RED="\033[1;31m"
 GREEN='\033[0;32m'
 MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+
+input_json=${1}
+output_json_filename=${2:-""}
+output_dir=${3:-""}
+
+input_json="$(realpath ${input_json})"
+
+if [ -z "${output_dir}" ]; then
+  output_dir=$(mktemp -d /output_gather_sample_evidence_XXXXXXXX)
+else
+  mkdir -p "${output_dir}"
+fi
+output_dir="$(realpath ${output_dir})"
+
+if [ -z "${output_json_filename}" ]; then
+  output_json_filename="${output_dir}/output.json"
+else
+  output_json_filename="$(realpath ${output_json_filename})"
+fi
+
+working_dir=$(mktemp -d /wd_gather_sample_evidence_XXXXXXXX)
+working_dir="$(realpath ${working_dir})"
+cd "${working_dir}"
 
 
 CURRENT_STDERR_FILE="N/A"
@@ -41,46 +65,76 @@ log_err() {
 trap 'log_err $LINENO' ERR
 
 
-sample_id=${1}
-bam_or_cram_file=${2}
-bam_or_cram_index=${3}
-reference_fasta=${4}
-reference_index=${5}
-reference_dict=${6}
-primary_contigs_list=${7}
+sample_id=$(jq -r ".sample_id" "${input_json}")
+bam_or_cram_file=$(jq -r ".bam_or_cram_file" "${input_json}")
+bam_or_cram_index=$(jq -r ".bam_or_cram_index" "${input_json}")
+reference_fasta=$(jq -r ".reference_fasta" "${input_json}")
+reference_index=$(jq -r ".reference_index" "${input_json}")
+reference_dict=$(jq -r ".reference_dict" "${input_json}")
+primary_contigs_list=$(jq -r ".primary_contigs_list" "${input_json}")
+primary_contigs_fai=$(jq -r ".primary_contigs_fai" "${input_json}")
+preprocessed_intervals=$(jq -r ".preprocessed_intervals" "${input_json}")
+manta_regions_bed=$(jq -r ".manta_regions_bed" "${input_json}")
+manta_regions_bed_index=$(jq -r ".manta_regions_bed_index" "${input_json}")
+sd_locs_vcf=$(jq -r ".sd_locs_vcf" "${input_json}")
+mei_bed=$(jq -r ".mei_bed" "${input_json}")
+include_bed_file=$(jq -r ".include_bed_file" "${input_json}")
+reference_bwa_alt=$(jq -r ".reference_bwa_alt" "${input_json}")
+reference_bwa_amb=$(jq -r ".reference_bwa_amb" "${input_json}")
+reference_bwa_ann=$(jq -r ".reference_bwa_ann" "${input_json}")
+reference_bwa_bwt=$(jq -r ".reference_bwa_bwt" "${input_json}")
+reference_bwa_pac=$(jq -r ".reference_bwa_pac" "${input_json}")
+reference_bwa_sa=$(jq -r ".reference_bwa_sa" "${input_json}")
+disabled_read_filters=$(jq -r ".disabled_read_filters" "${input_json}")
+collect_coverage=$(jq -r ".collect_coverage" "${input_json}")
+run_scramble=$(jq -r ".run_scramble" "${input_json}")
+run_manta=$(jq -r ".run_manta" "${input_json}")
+run_wham=$(jq -r ".run_wham" "${input_json}")
+collect_pesr=$(jq -r ".collect_pesr" "${input_json}")
+scramble_alignment_score_cutoff=$(jq -r ".scramble_alignment_score_cutoff" "${input_json}")
+run_module_metrics=$(jq -r ".run_module_metrics" "${input_json}")
+min_size=$(jq -r ".min_size" "${input_json}")
+
+#sample_id=${1}
+#bam_or_cram_file=${2}
+#bam_or_cram_index=${3}
+#reference_fasta=${4}
+#reference_index=${5}
+#reference_dict=${6}
+#primary_contigs_list=${7}
 
 # the wdl version sets this optional and requires it only if run_module_metrics is set,
 # however conditional inputs like that are confusing and need additional check and docs.
 # So, making it required here to keep the interface simpler.
-primary_contigs_fai=${8}
-preprocessed_intervals=${9}
-manta_regions_bed=${10}
-manta_regions_bed_index=${11}
-sd_locs_vcf=${12}
-mei_bed=${13}
-include_bed_file=${14}
-reference_bwa_alt=${15}
-reference_bwa_amb=${16}
-reference_bwa_ann=${17}
-reference_bwa_bwt=${18}
-reference_bwa_pac=${19}
-reference_bwa_sa=${20}
-disabled_read_filters=${21:-"MappingQualityReadFilter"}
-collect_coverage=${22:-true}
-run_scramble=${23:-true}
-run_manta=${24:-true}
-run_wham=${25:-true}
-collect_pesr=${26:-true}
-scramble_alignment_score_cutoff=${27:-90}
-run_module_metrics=${28:-true}
+#primary_contigs_fai=${8}
+#preprocessed_intervals=${9}
+#manta_regions_bed=${10}
+#manta_regions_bed_index=${11}
+#sd_locs_vcf=${12}
+#mei_bed=${13}
+#include_bed_file=${14}
+#reference_bwa_alt=${15}
+#reference_bwa_amb=${16}
+#reference_bwa_ann=${17}
+#reference_bwa_bwt=${18}
+#reference_bwa_pac=${19}
+#reference_bwa_sa=${20}
+#disabled_read_filters=${21:-"MappingQualityReadFilter"}
+#collect_coverage=${22:-true}
+#run_scramble=${23:-true}
+#run_manta=${24:-true}
+#run_wham=${25:-true}
+#collect_pesr=${26:-true}
+#scramble_alignment_score_cutoff=${27:-90}
+#run_module_metrics=${28:-true}
 min_size=${29:-50}
 output_dir=${30:-""}
 
 
-if [[ "${output_dir}" == "" ]]; then
-  output_dir=$(mktemp -d /output_gather_sample_evidence_XXXXXXXX)
-  output_dir="$(realpath ${output_dir})"
-fi
+#if [[ "${output_dir}" == "" ]]; then
+#  output_dir=$(mktemp -d /output_gather_sample_evidence_XXXXXXXX)
+#  output_dir="$(realpath ${output_dir})"
+#fi
 
 gather_sample_evidence_stdout="${output_dir}/gather_sample_evidence_stdout.txt"
 gather_sample_evidence_stderr="${output_dir}/gather_sample_evidence_stderr.txt"
@@ -116,6 +170,11 @@ reference_bwa_ann="$(realpath ${reference_bwa_ann})"
 reference_bwa_bwt="$(realpath ${reference_bwa_bwt})"
 reference_bwa_pac="$(realpath ${reference_bwa_pac})"
 reference_bwa_sa="$(realpath ${reference_bwa_sa})"
+
+
+# -------------------------------------------------------
+# ======================= Command =======================
+# -------------------------------------------------------
 
 
 if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
@@ -287,6 +346,13 @@ if [[ "${run_wham}" == true ]]; then
   wham_et=$((wham_end_time-wham_start_time))
   echo -e "${GREEN}Successfully finished running run_whamg.sh (part 1 & 2) in ${wham_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
 fi
+
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+
 
 outputs_filename="${output_dir}/gather_sample_evidence_outputs.json"
 outputs_json=$(jq -n \
