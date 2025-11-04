@@ -1,6 +1,6 @@
 ---
 title: FilterGenotypes
-description: Filters genotypes using trained GQ recalibrator model
+description: Filters genotypes using GQ recalibrator model
 sidebar_position: 20
 slug: fg
 ---
@@ -9,7 +9,7 @@ import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/FilterGenotypes.wdl)
 
-Filter genotypes using the trained model with recalibrated quality scores. The output VCF contains the `HIGH_NCR`  field, which is a filter status assigned to variants exceeding a [threshold proportion](#optional-no_call_rate_cutoff) 
+Filter genotypes using the GQ model with recalibrated quality scores. The output VCF contains the `HIGH_NCR`  field, which is a filter status assigned to variants exceeding a [threshold proportion](#optional-no_call_rate_cutoff) 
 of no-call genotypes. This will also be applied to variants with genotypes that have already been filtered in the input VCF.
 
 The following diagram illustrates the recommended invocation order:

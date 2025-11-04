@@ -1,6 +1,6 @@
 ---
 title: ScoreGenotypes
-description: Trains GQ recalibrator model for genotype filtering
+description: Scores genotypes to optimize GQ recalibrator model
 sidebar_position: 19
 slug: sg
 ---
@@ -9,7 +9,7 @@ import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/ScoreGenotypes.wdl)
 
-Trains a machine learning model based on [xgboost](https://github.com/dmlc/xgboost), to recalibrate quality scores, which is then used to filter genotypes. The output VCF contains the following updated fields:
+Calibrate quality scores to provide as input to a machine learning model based on [xgboost](https://github.com/dmlc/xgboost), which is then used to filter genotypes. The output VCF contains the following updated fields:
 
 - `SL` : Scaled logit scores (see [here](#sl-scores))
 - `GQ` : Updated genotype quality rescaled using `SL`
@@ -66,7 +66,7 @@ For ease of use, we provide a model pre-trained on high-quality data with truth 
 ```
 gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gatk-sv-recalibrator.aou_phase_1.v1.model
 ```
-See the SV "Genotype Filter" section on page 34 of the [All of Us Genomic Quality Report C2022Q4R9 CDR v7](https://support.researchallofus.org/hc/en-us/articles/4617899955092-All-of-Us-Genomic-Quality-Report-ARCHIVED-C2022Q4R9-CDR-v7) for further details on model training. The generation and release of this model was made possible by the All of Us program (see [here](/docs/acknowledgements)).
+See the SV "Genotype Filter" section on page 34 of the [All of Us Genomic Quality Report C2022Q4R9 CDR v7](https://support.researchallofus.org/hc/en-us/articles/4617899955092-All-of-Us-Genomic-Quality-Report-ARCHIVED-C2022Q4R9-CDR-v7) for further details on model optimization. The generation and release of this model was made possible by the All of Us program (see [here](/docs/acknowledgements)).
 
 ### SL scores
 
