@@ -274,13 +274,27 @@ task FilterLargePESRCallsWithoutRawDepthSupport {
 
     cat large_dels_without_raw_depth_support.list large_dups_without_raw_depth_support.list > large_pesr_without_raw_depth_support.list
 
-    cat \
-        <(gzip -cd ~{pesr_vcf} | grep -v '^#' | grep -w -f large_pesr_without_raw_depth_support.list | sed -e 's/SVTYPE=DEL/SVTYPE=BND/' -e 's/SVTYPE=DUP/SVTYPE=BND/' -e 's/<DEL>/<BND>/' -e 's/<DUP>/<BND>/') \
-        <(gzip -cd ~{pesr_vcf} | grep -v '^#' | grep -v -w -f large_pesr_without_raw_depth_support.list) \
-       | cat <(sed -n -e '/^#/p' <(zcat ~{pesr_vcf})) - \
-       | vcf-sort -c \
-       | bgzip -c \
-       > ~{outfile}
+    gzip -cd ~{pesr_vcf} > uncompressed.vcf
+
+    python3 <<CODE
+    import pysam
+
+    with open("large_pesr_without_raw_depth_support.list", "r") as f:
+      ids_to_modify = set(line.strip() for line in f)
+
+    with pysam.VariantFile("uncompressed.vcf", "r") as vcf_in, pysam.VariantFile("modified.vcf", "w", header=vcf_in.header) as vcf_out:
+      for record in vcf_in:
+        if record.id in ids_to_modify:
+          original_end = record.stop
+          record.info['SVTYPE'] = 'BND'
+          record.info['CHR2'] = record.chrom
+          record.info['END2'] = original_end
+          record.alts = ('<BND>',)
+          record.stop = record.pos
+        vcf_out.write(record)
+    CODE
+
+    vcf-sort modified.vcf | bgzip -c > ~{outfile}
 
     tabix ~{outfile}
   >>>

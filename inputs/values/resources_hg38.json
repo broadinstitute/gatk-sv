@@ -83,6 +83,7 @@
   "recalibrate_gq_genome_track_umap24_index": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s24.bed.gz.tbi",
 
   "ccdg_abel_site_level_benchmarking_dataset" : ["CCDG_abel", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/CCDG_Abel"],
+  "gnomad_v4_site_level_benchmarking_dataset": ["gnomAD_v4", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gnomAD_v4"],
   "gnomad_v2_collins_sample_level_benchmarking_dataset": ["gnomAD_v2_Collins", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/gnomAD_v2_Collins_perSample.tar.gz"],
   "gnomad_v2_collins_site_level_benchmarking_dataset" : ["gnomAD_v2_Collins", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gnomAD_v2_Collins"],
   "hgsv_byrska_bishop_sample_level_benchmarking_dataset": ["HGSV_ByrskaBishop", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_ByrskaBishop_GATKSV_perSample.tar.gz"],

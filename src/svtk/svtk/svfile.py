@@ -111,7 +111,7 @@ class SVRecord(GSNode):
             chrB = record.info['CHR2']
         else:
             chrB = chrA
-        posB = record.stop
+        posB = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
         name = record.id
 
         super().__init__(chrA, posA, chrB, posB, name)

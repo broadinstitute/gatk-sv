@@ -78,7 +78,7 @@ workflow FilterBatchSites {
   call sv_counts.PlotSVCountsPerSample {
     input:
       prefix = batch,
-      vcfs=[FilterAnnotateVcf.annotated_vcf[0], FilterAnnotateVcf.annotated_vcf[1], FilterAnnotateVcf.annotated_vcf[2], FilterAnnotateVcf.annotated_vcf[3], FilterAnnotateVcf.annotated_vcf[4]],
+      vcfs=[FilterAnnotateVcf.annotated_vcf[0], FilterAnnotateVcf.annotated_vcf[1], FilterAnnotateVcf.annotated_vcf[2], FilterAnnotateVcf.annotated_vcf[3], FilterAnnotateVcf.annotated_vcf[4], FilterAnnotateVcf.annotated_vcf[5]],
       N_IQR_cutoff = N_IQR_cutoff_plotting,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_count_svs = runtime_attr_count_svs,
@@ -228,7 +228,20 @@ task FilterAnnotateVcf {
       | bgzip -c \
       > filtered.vcf.gz
 
-    /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.vcf.gz ~{metrics} ~{cutoffs} stdout \
+    python3 <<CODE
+    import pysam
+
+    with pysam.VariantFile("filtered.vcf.gz", 'r') as vcf_in, pysam.VariantFile("filtered.updated_bnds.vcf.gz", 'w', header=vcf_in.header) as vcf_out:
+      for record in vcf_in:
+        if record.info.get('SVTYPE') == 'BND' and 'END2' not in record.info:
+          record.info['END2'] = record.stop
+          record.stop = record.pos
+        if record.info.get('SVTYPE') == 'BND' and 'CHR2' not in record.info:
+          record.info['CHR2'] = record.chrom
+        vcf_out.write(record)
+    CODE
+
+    /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.updated_bnds.vcf.gz ~{metrics} ~{cutoffs} stdout \
       | vcf-sort -c \
       | bgzip -c \
       > filtered.corrected_coords.vcf.gz

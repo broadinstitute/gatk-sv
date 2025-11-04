@@ -28,9 +28,10 @@ class SRTest(PESRTest):
             record.pos, record.info['STRANDS'][0], record.chrom,
             called, background, record.pos - self.window, record.pos + self.window)
 
+        end = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
         resultB = self._test_coord(
-            record.stop, record.info['STRANDS'][1], record.info['CHR2'],
-            called, background, record.stop - self.window, record.stop + self.window)
+            end, record.info['STRANDS'][1], record.info['CHR2'],
+            called, background, end - self.window, end + self.window)
 
         posA = int(resultA.pos)
         posB = int(resultB.pos)
@@ -51,20 +52,20 @@ class SRTest(PESRTest):
                         called, background, posB - self.ins_window, posB + self.ins_window)
         elif record.chrom == record.info['CHR2']:
             # Check some corner cases for intrachromosomal variants
+            end = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
             if record.info['STRANDS'][0] == record.info['STRANDS'][1]:
                 # If strands are the same, disallow case where posA = posB, which can happen for small variants
                 # Note that the case posA > posB is allowed and corrected for in the SR coordinate rewriting step later
                 if posA == posB and self.window > 0:
                     resultB = self._test_coord(
-                        record.stop, record.info['STRANDS'][1], record.info['CHR2'],
-                        called, background, record.stop - self.window, record.stop + self.window,
-                        invalid_pos_list=[posA])
+                        end, record.info['STRANDS'][1], record.info['CHR2'], called, 
+                        background, end - self.window, end + self.window, invalid_pos_list=[posA])
             elif posA >= posB:
                 # Invalid coordinates, need to re-optimize around the better coordinate
                 if log_pval_A >= log_pval_B:
                     # posA is better, so use posA as anchor and check for best posB in valid window
                     resultB = self._test_coord(
-                        record.stop, record.info['STRANDS'][1], record.info['CHR2'],
+                        end, record.info['STRANDS'][1], record.info['CHR2'],
                         called, background, posA, posA + self.window)
                 else:
                     # vice versa
