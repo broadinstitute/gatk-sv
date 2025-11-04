@@ -282,7 +282,7 @@ class VCFStandardizer:
 
         # Standardize tloc ALT after SVTYPE and CHR2/END are standardized
         if std_rec.info['SVTYPE'] == 'BND':
-            alt = make_bnd_alt(std_rec.info['CHR2'], std_rec.stop,
+            alt = make_bnd_alt(std_rec.info['CHR2'], std_rec.info['END2'],
                                std_rec.info['STRANDS'])
             stop = std_rec.stop
             std_rec.alts = (alt, )
