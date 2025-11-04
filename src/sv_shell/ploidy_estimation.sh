@@ -4,7 +4,7 @@
 # ==================== Input & Setup ====================
 # -------------------------------------------------------
 
-set -Eeuo pipefail
+set -Exeuo pipefail
 
 input_json=${1}
 output_json_filename=${2-""}
@@ -13,7 +13,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d output_ploidy_estimation_XXXXXXXX)
+  output_dir=$(mktemp -d /output_ploidy_estimation_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -25,7 +25,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d wd_ploidy_estimation_XXXXXXXX)
+working_dir=$(mktemp -d /wd_ploidy_estimation_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
@@ -39,6 +39,8 @@ bin_size=1000000
 # -------------------------------------------------------
 
 # --- Build ploidy matrix
+ploidy_matrix="$(realpath "${batch}_ploidy_matrix.bed.gz")"
+
 zcat "${bincov_matrix}" \
  | awk -v bin_size="${bin_size}" ' \
    function printRow() \
@@ -52,15 +54,12 @@ zcat "${bincov_matrix}" \
           else if($2>=stop) {printRow(); while($2>=stop) {start=stop; stop=start+binSize}} \
           for(i=4;i<=nf;++i) {vals[i]+=$i}} \
    END   {if(nf!=0)printRow()}' \
- | bgzip > "${batch}_ploidy_matrix.bed.gz"
-
-ploidy_matrix="$(realpath "${batch}_ploidy_matrix.bed.gz")"
+ | bgzip > "${ploidy_matrix}"
 
 
 # --- Ploidy Score
 mkdir ploidy_est
 Rscript /opt/WGD/bin/estimatePloidy.R -z -O ./ploidy_est "${ploidy_matrix}"
-
 
 python /opt/sv-pipeline/02_evidence_assessment/estimated_CN_denoising.py \
   --binwise-copy-number ./ploidy_est/binwise_estimated_copy_numbers.bed.gz \
@@ -72,4 +71,33 @@ cp cn_denoising_stats.tsv ./ploidy_est/
 cp cn_denoising_plots.pdf ./ploidy_est/
 
 tar -zcf ./ploidy_est.tar.gz ./ploidy_est
-mv ploidy_est.tar.gz "${batch}_ploidy_plots.tar.gz"
+
+ploidy_plots="$(realpath "${batch}_ploidy_plots.tar.gz")"
+mv ploidy_est.tar.gz "${ploidy_plots}"
+
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+ploidy_matrix_out_dir="${output_dir}/$(basename "${ploidy_matrix}")"
+mv "${ploidy_matrix}" "${ploidy_matrix_out_dir}"
+
+ploidy_plots_out_dir="${output_dir}/$(basename "${ploidy_plots}")"
+mv "${ploidy_plots}" "${ploidy_plots_out_dir}"
+
+sample_sex_assignments="$(realpath "./ploidy_est/sample_sex_assignments.txt.gz")"
+sample_sex_assignments_out_dir="${output_dir}/$(basename "${sample_sex_assignments}")"
+mv "${sample_sex_assignments}" "${sample_sex_assignments_out_dir}"
+
+outputs_json=$(jq -n \
+  --arg ploidy_matrix "${ploidy_matrix_out_dir}" \
+  --arg ploidy_plots "${ploidy_plots_out_dir}" \
+  --arg sample_sex_assignments "${sample_sex_assignments_out_dir}" \
+  '{
+     "ploidy_matrix": $ploidy_matrix,
+     "ploidy_plots": $ploidy_plots,
+     "sample_sex_assignments": $sample_sex_assignments
+   }' \
+)
+echo "${outputs_json}" > "${output_json_filename}"
