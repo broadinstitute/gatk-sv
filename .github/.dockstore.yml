@@ -141,7 +141,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_annotate_retro_del
       tags:
         - /.*/
 
