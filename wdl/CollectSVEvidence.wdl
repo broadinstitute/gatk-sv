@@ -116,6 +116,9 @@ task RunCollectSVEvidence {
         ~{"-L " + primary_contigs_list} \
         --read-filter NonZeroReferenceLengthAlignmentReadFilter
 
+    tabix -f -0 -s1 -b2 -e2 "~{sample_id}.sr.txt.gz"
+    tabix -f -0 -s1 -b2 -e2 "~{sample_id}.pe.txt.gz"
+    tabix -f -0 -s1 -b2 -e2 "~{sample_id}.sd.txt.gz"
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

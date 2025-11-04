@@ -67,11 +67,15 @@ class ComplexSV:
                 self.set_unresolved()
                 self.vcf_record.info['SVTYPE'] = 'BND'
                 self.vcf_record.info['UNRESOLVED_TYPE'] = 'SR_ONLY_LARGE_INVERSION'
+                if 'END2' not in self.vcf_record.info:
+                    self.vcf_record.info['END2'] = self.vcf_record.stop
                 self.cluster_type = 'SR_ONLY_LARGE_INVERSION'
                 for r in self.records:
                     r.info['UNRESOLVED'] = True
                     r.info['UNRESOLVED_TYPE'] = 'SR_ONLY_LARGE_INVERSION'
                     r.info['SVTYPE'] = 'BND'
+                    if 'END2' not in r.info:
+                        r.info['END2'] = r.stop
                     if 'CPX_TYPE' in r.info.keys():
                         r.info.pop('CPX_TYPE')
                     if 'CPX_INTERVALS' in r.info.keys():
@@ -120,11 +124,15 @@ class ComplexSV:
                         self.set_unresolved()
                         self.vcf_record.info['SVTYPE'] = 'BND'
                         self.vcf_record.info['UNRESOLVED_TYPE'] = 'SR_ONLY_LARGE_INVERSION'
+                        if 'END2' not in self.vcf_record.info:
+                            self.vcf_record.info['END2'] = self.vcf_record.stop
                         self.cluster_type = 'SR_ONLY_LARGE_INVERSION'
                         for r in self.records:
                             r.info['UNRESOLVED'] = True
                             r.info['UNRESOLVED_TYPE'] = 'SR_ONLY_LARGE_INVERSION'
                             r.info['SVTYPE'] = 'BND'
+                            if 'END2' not in r.info:
+                                r.info['END2'] = r.stop
                             if 'CPX_TYPE' in r.info.keys():
                                 r.info.pop('CPX_TYPE')
                             if 'CPX_INTERVALS' in r.info.keys():
@@ -217,16 +225,18 @@ class ComplexSV:
 
         # If event is >1kb and both breakpoints are SR-only,
         # leave variant as unresolved
+        ff_end = FF.info['END2'] if FF.info['SVTYPE'] == 'BND' else FF.stop
+        rr_end = RR.info['END2'] if RR.info['SVTYPE'] == 'BND' else RR.stop
         if 'EVIDENCE' in FF.info.keys() and 'EVIDENCE' in RR.info.keys():
             if FF.info['EVIDENCE'] == ('SR',) and RR.info['EVIDENCE'] == ('SR',):
-                if max(FF.stop, RR.stop) - min(FF.pos, RR.pos) > SR_only_cutoff:
+                if max(ff_end, rr_end) - min(FF.pos, RR.pos) > SR_only_cutoff:
                     self.cpx_type = 'UNK'
                     self.svtype = 'UNR'
 
         # Overall variant start/end
         if self.svtype in ['INV', 'CPX', 'UNR']:
             self.vcf_record.pos = min(FF.pos, RR.pos)
-            self.vcf_record.stop = max(FF.stop, RR.stop)
+            self.vcf_record.stop = max(ff_end, rr_end)
 
             self.vcf_record.info['SVLEN'] = abs(self.vcf_record.stop -
                                                 self.vcf_record.pos)
@@ -241,12 +251,12 @@ class ComplexSV:
             # -->|<----|-->
             if self.cpx_type == 'DUP5/INS3':
                 source_start, source_end = RR.pos, FF.pos
-                sink_start, sink_end = FF.stop, RR.stop
+                sink_start, sink_end = ff_end, rr_end
 
             #   A D   C B
             # -->|<----|-->
             elif self.cpx_type == 'DUP3/INS5':
-                source_start, source_end = RR.stop, FF.stop
+                source_start, source_end = rr_end, ff_end
                 sink_start, sink_end = FF.pos, RR.pos
 
             # first check for overlap with MEI
@@ -279,13 +289,16 @@ class ComplexSV:
 
         self.cpx_type = classify_simple_translocation(plus, minus)
 
+        plus_end = plus.info['END2'] if plus.info['SVTYPE'] == 'BND' else plus.stop
+        minus_end = minus.info['END2'] if minus.info['SVTYPE'] == 'BND' else minus.stop
+
         if 'INS' in self.cpx_type:
             self.svtype = 'INS'
         elif self.cpx_type in ['TLOC_MISMATCH_CHROM', 'CTX_UNR']:
             self.svtype = 'UNR'
         elif self.cpx_type == 'CTX_PP/QQ':
             # Don't report sites where posA/posB are identical at each bkpt
-            if plus.pos == minus.pos and plus.stop == minus.stop:
+            if plus.pos == minus.pos and plus_end == minus_end:
                 self.svtype = 'UNR'
                 self.cpx_type += '_DUPLICATE_COORDS'
             elif armA == armB:
@@ -294,7 +307,7 @@ class ComplexSV:
                 self.svtype = 'UNR'
                 self.cpx_type += '_MISMATCH'
         elif self.cpx_type == 'CTX_PQ/QP':
-            if plus.pos == minus.pos and plus.stop == minus.stop:
+            if plus.pos == minus.pos and plus_end == minus_end:
                 self.svtype = 'UNR'
                 self.cpx_type += '_DUPLICATE_COORDS'
             elif armA != armB:
@@ -314,8 +327,8 @@ class ComplexSV:
             self.vcf_record.chrom = plus.chrom
             self.vcf_record.pos = plus.pos
             self.vcf_record.info['CHR2'] = plus.info['CHR2']
-            self.vcf_record.info['END2'] = plus.stop
-            self.vcf_record.stop = plus.stop
+            self.vcf_record.info['END2'] = plus_end
+            self.vcf_record.stop = plus_end
             self.vcf_record.info['SVLEN'] = -1
 
         elif self.svtype == 'INS':
@@ -327,21 +340,21 @@ class ComplexSV:
             if self.cpx_type == 'CTX_INS_B2A':
                 sink_start = plus.pos
                 sink_end = minus.pos
-                source_start = plus.stop
-                source_end = minus.stop
+                source_start = plus_end
+                source_end = minus_end
             elif self.cpx_type == 'CTX_INV_INS_B2A':
                 sink_start = plus.pos
                 sink_end = minus.pos
-                source_start = minus.stop
-                source_end = plus.stop
+                source_start = minus_end
+                source_end = plus_end
             elif self.cpx_type == 'CTX_INS_A2B':
-                sink_start = minus.stop
-                sink_end = plus.stop
+                sink_start = minus_end
+                sink_end = plus_end
                 source_start = minus.pos
                 source_end = plus.pos
             elif self.cpx_type == 'CTX_INV_INS_A2B':
-                sink_start = plus.stop
-                sink_end = minus.stop
+                sink_start = plus_end
+                sink_end = minus_end
                 source_start = minus.pos
                 source_end = plus.pos
 
@@ -380,14 +393,17 @@ class ComplexSV:
         sink_chrom = plus.chrom
         source_chrom = plus.chrom
 
+        plus_end = plus.info['END2'] if plus.info['SVTYPE'] == 'BND' else plus.stop
+        minus_end = minus.info['END2'] if minus.info['SVTYPE'] == 'BND' else minus.stop
+
         if self.cpx_type == 'INS_B2A':
             sink_start = plus.pos
             sink_end = minus.pos
-            source_start = plus.stop
-            source_end = minus.stop
+            source_start = plus_end
+            source_end = minus_end
         elif self.cpx_type == 'INS_A2B':
-            sink_start = minus.stop
-            sink_end = plus.stop
+            sink_start = minus_end
+            sink_end = plus_end
             source_start = minus.pos
             source_end = plus.pos
 
@@ -413,6 +429,9 @@ class ComplexSV:
         plus, minus = sorted(self.cnvs, key=lambda t: t.info['STRANDS'])
         self.cpx_type = classify_insertion(plus, minus)
 
+        plus_end = plus.info['END2'] if plus.info['SVTYPE'] == 'BND' else plus.stop
+        minus_end = minus.info['END2'] if minus.info['SVTYPE'] == 'BND' else minus.stop
+
         if self.cpx_type == 'INS_UNCLASSIFIED':
             self.svtype = 'UNR'
             return
@@ -430,11 +449,11 @@ class ComplexSV:
         if self.cpx_type == 'INS_B2A':
             sink_start = plus.pos
             sink_end = minus.pos
-            source_start = plus.stop
-            source_end = minus.stop
+            source_start = plus_end
+            source_end = minus_end
         elif self.cpx_type == 'INS_A2B':
-            sink_start = minus.stop
-            sink_end = plus.stop
+            sink_start = minus_end
+            sink_end = plus_end
             source_start = minus.pos
             source_end = plus.pos
 
@@ -469,7 +488,7 @@ class ComplexSV:
                 record = self.cnvs[0]
                 self.svtype = 'DUP'
                 self.vcf_record.pos = record.pos
-                self.vcf_record.stop = record.stop
+                self.vcf_record.stop = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
                 self.vcf_record.id = record.id
                 self.vcf_record.alts = record.alts
                 self.vcf_record.info['SVTYPE'] = self.svtype
@@ -480,7 +499,7 @@ class ComplexSV:
                 self.cpx_type = record.alts[0].strip('<>')
                 self.svtype = 'INS'
                 self.vcf_record.pos = record.pos
-                self.vcf_record.stop = record.stop
+                self.vcf_record.stop = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
                 self.vcf_record.alts = record.alts
                 self.vcf_record.id = record.id
                 self.vcf_record.info['SVTYPE'] = self.svtype
@@ -492,7 +511,7 @@ class ComplexSV:
             self.cpx_type = record.alts[0].strip('<>')
             self.svtype = 'INS'
             self.vcf_record.pos = record.pos
-            self.vcf_record.stop = record.stop
+            self.vcf_record.stop = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
             self.vcf_record.id = record.id
             self.vcf_record.alts = record.alts
             self.vcf_record.info['SVTYPE'] = self.svtype
@@ -512,7 +531,7 @@ class ComplexSV:
             record = self.cnvs[0]
             self.svtype = 'DUP'
             self.vcf_record.pos = record.pos
-            self.vcf_record.stop = record.stop
+            self.vcf_record.stop = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
             self.vcf_record.id = record.id
             self.vcf_record.alts = record.alts
             self.vcf_record.info['SVTYPE'] = self.svtype
@@ -530,7 +549,7 @@ class ComplexSV:
         self.cpx_type = record.alts[0].strip('<>')
         self.svtype = 'DUP'
         self.vcf_record.pos = record.pos
-        self.vcf_record.stop = record.stop
+        self.vcf_record.stop = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
         self.vcf_record.alts = record.alts
         self.vcf_record.info['SVTYPE'] = self.svtype
         self.vcf_record.info['CPX_TYPE'] = self.cpx_type
@@ -631,7 +650,7 @@ def ok_ins_strands(bnd1, bnd2):
 
 def get_arms(record, cytobands):
     regionA = '{0}:{1}-{1}'.format(record.chrom, record.pos)
-    regionB = '{0}:{1}-{1}'.format(record.info['CHR2'], record.stop)
+    regionB = '{0}:{1}-{1}'.format(record.info['CHR2'], record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop)
 
     def _get_arm(region):
         arm = next(cytobands.fetch(region))
@@ -662,20 +681,20 @@ def make_inversion_intervals(FF, RR, cnvs, cpx_type):
     # Then add inversion
     svtype = 'INV'
     start = RR.pos
-    end = FF.stop
+    end = FF.info['END2'] if FF.info['SVTYPE'] == 'BND' else FF.stop
     intervals.append(interval.format(**locals()))
 
     # Finally add 3' CNV
     if cpx_type.endswith('del'):
         svtype = 'DEL'
-        start = FF.stop
-        end = RR.stop
+        start = FF.info['END2'] if FF.info['SVTYPE'] == 'BND' else FF.stop
+        end = RR.info['END2'] if RR.info['SVTYPE'] == 'BND' else RR.stop
         intervals.append(interval.format(**locals()))
 
     if cpx_type.endswith('dup'):
         svtype = 'DUP'
-        start = RR.stop
-        end = FF.stop
+        start = RR.info['END2'] if RR.info['SVTYPE'] == 'BND' else RR.stop
+        end = FF.info['END2'] if FF.info['SVTYPE'] == 'BND' else FF.stop
         intervals.append(interval.format(**locals()))
 
     return intervals

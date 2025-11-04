@@ -247,6 +247,8 @@ task RdTestGenotype {
         --evidence-file ~{coverage_file} \
         -L merged.bed \
         -O local.RD.txt.gz
+
+      tabix -f -0 -s1 -b2 -e3 local.RD.txt.gz
     else
       touch local.RD.txt
       bgzip local.RD.txt
