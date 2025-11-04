@@ -1,0 +1,43 @@
+{
+  "allow_overlaps": false,
+  "batches": "NA12878",
+  "chr_x": "chrX",
+  "chr_y": "chrY",
+  "clustering_config_part1": "/inputs/clustering_config.part_one.tsv",
+  "clustering_config_part2": "/inputs/clustering_config.part_two.tsv",
+  "cohort_name": "NA12878",
+  "context_interchrom_num_breakpoint_overlaps": 1,
+  "context_num_breakpoint_overlaps": 1,
+  "context_overlap_frac": 0,
+  "contig_list": "/inputs/contig.fai",
+  "depth_vcfs": "/inputs/NA12878.genotyped_depth.vcf.gz",
+  "generate_index": true,
+  "java_mem_fraction": null,
+  "merge_vcfs": false,
+  "min_sr_background_fail_batches": 0.5,
+  "ped_file": "/inputs/combined_ped_file.ped",
+  "pesr_vcfs": "/inputs/NA12878.genotyped_pesr.convert_cnvs_to_bnd.vcf.gz",
+  "raw_sr_background_fail_files": [
+    "/inputs/NA12878.genotype_SR_part2_background_fail.txt"
+  ],
+  "raw_sr_bothside_pass_files": [
+    "/inputs/NA12878.genotype_SR_part2_bothside_pass.txt"
+  ],
+  "reference_dict": "/inputs/Homo_sapiens_assembly38.dict",
+  "reference_fasta": "/inputs/Homo_sapiens_assembly38.fasta",
+  "reference_fasta_fai": "/inputs/Homo_sapiens_assembly38.fasta.fai",
+  "sites_only": false,
+  "sort_vcf_list": false,
+  "stratification_config_part1": "/inputs/stratify_config.part_one.tsv",
+  "stratification_config_part2": "/inputs/stratify_config.part_two.tsv",
+  "track_bed_files": [
+    "/inputs/hg38.SimpRep.sorted.pad_100.merged.bed",
+    "/inputs/hg38.SegDup.sorted.merged.bed",
+    "/inputs/hg38.RM.sorted.merged.bed"
+  ],
+  "track_names": [
+    "SR",
+    "SD",
+    "RM"
+  ]
+}
