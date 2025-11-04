@@ -1,13 +1,13 @@
 ---
-title: TrainGenotypeFilteringModel
+title: ScoreGenotypes
 description: Trains GQ recalibrator model for genotype filtering
 sidebar_position: 19
-slug: tgfm
+slug: sg
 ---
 
 import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.js"
 
-[WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/TrainGenotypeFilteringModel.wdl)
+[WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/ScoreGenotypes.wdl)
 
 Trains a machine learning model based on [xgboost](https://github.com/dmlc/xgboost), to recalibrate quality scores, which is then used to filter genotypes. The output VCF contains the following updated fields:
 
@@ -27,12 +27,12 @@ stateDiagram
   classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
 
   svc: SVConcordance
-  tgfm: TrainGenotypeFilteringModel
+  sg: ScoreGenotypes
   fg: FilterGenotypes
-  svc --> tgfm
-  tgfm --> fg
+  svc --> sg
+  sg --> fg
   
-  class tgfm thisModule
+  class sg thisModule
   class svc inModules
   class fg outModules
 ```
@@ -92,7 +92,7 @@ The combination of this and the following `FilterGenotypes` workflow can be run 
     
     Genotypes with `SL` scores less than the cutoffs are set to no-call (`./.`). The above values were taken directly from Appendix N of the [All of Us Genomic Quality Report C2022Q4R9 CDR v7 ](https://support.researchallofus.org/hc/en-us/articles/4617899955092-All-of-Us-Genomic-Quality-Report-ARCHIVED-C2022Q4R9-CDR-v7). Users should adjust the thresholds depending on data quality and desired accuracy. Please see the arguments in [this script](https://github.com/broadinstitute/gatk-sv/blob/main/src/sv-pipeline/scripts/apply_sl_filter.py) for all available options.
 
-2. (Advanced) The user provides truth labels for a subset of non-reference calls through the `truth_json` parameter in `TrainGenotypeFilteringModel`, e.g.
+2. (Advanced) The user provides truth labels for a subset of non-reference calls through the `truth_json` parameter in `ScoreGenotypes`, e.g.
    ```json
     {
       "sample_1": 

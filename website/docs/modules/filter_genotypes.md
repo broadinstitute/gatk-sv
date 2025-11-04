@@ -23,14 +23,14 @@ stateDiagram
   classDef thisModule font-weight:bold,stroke-width:0px,fill:#ff9900,color:white
   classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
 
-  tgfm: TrainGenotypeFilteringModel
+  sg: ScoreGenotypes
   fg: FilterGenotypes
   avcf: AnnotateVcf
   svc --> fg
   fg --> avcf
   
   class fg thisModule
-  class tgfm inModules
+  class sg inModules
   class avcf outModules
 ```
 
@@ -44,7 +44,7 @@ QC criteria.
 ### Inputs
 
 #### `vcf`
-Input VCF with recalibrated scores generated from [TrainGenotypeFilteringModel](./tgfm#train_genotype_filtering_model).
+Input VCF with recalibrated scores generated from [ScoreGenotypes](./sg#score_genotype).
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `output_prefix`
 Default: use input VCF filename. Prefix for the output VCF, such as the cohort name. May be alphanumeric with underscores.

@@ -4,7 +4,7 @@ import "Structs.wdl"
 import "RecalibrateGq.wdl" as recalibrate_gq
 import "TasksMakeCohortVcf.wdl" as tasks_cohort
 
-workflow TrainGenotypeFilteringModel {
+workflow ScoreGenotypes {
 
   input {
     File vcf

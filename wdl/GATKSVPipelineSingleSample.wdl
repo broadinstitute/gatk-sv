@@ -14,7 +14,7 @@ import "MakeCohortVcf.wdl" as makecohortvcf
 import "TasksMakeCohortVcf.wdl" as tasks_makecohortvcf
 import "AnnotateVcf.wdl" as annotate
 import "GermlineCNVCase.wdl" as gcnv
-import "TrainGenotypeFilteringModel.wdl" as tgfm
+import "ScoreGenotypes.wdl" as sg
 import "FilterGenotypes.wdl" as fg
 import "JoinRawCalls.wdl" as jrc
 import "RefineComplexVariants.wdl" as rcv
@@ -589,7 +589,7 @@ workflow GATKSVPipelineSingleSample {
     Int min_pe_cpx = 3
     Int min_pe_ctx = 3
 
-    # TrainGenotypeFilteringModel
+    # ScoreGenotypes
     File? truth_json
     File gq_recalibrator_model_file
     Array[String] recalibrate_gq_args = []
@@ -1410,7 +1410,7 @@ workflow GATKSVPipelineSingleSample {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call tgfm.TrainGenotypeFilteringModel as TrainGenotypeFilteringModel {
+  call sg.ScoreGenotypes as ScoreGenotypes {
     input:
       vcf=SVConcordance.concordance_vcf,
       output_prefix=sample_id,
@@ -1427,12 +1427,12 @@ workflow GATKSVPipelineSingleSample {
 
   call fg.FilterGenotypes {
     input:
-      vcf=TrainGenotypeFilteringModel.unfiltered_recalibrated_vcf,
+      vcf=ScoreGenotypes.unfiltered_recalibrated_vcf,
       output_prefix=sample_id,
       ploidy_table=JoinRawCalls.ploidy_table,
       no_call_rate_cutoff=no_call_rate_cutoff,
       sl_cutoff_table=sl_cutoff_table,
-      optimized_sl_cutoff_table=TrainGenotypeFilteringModel.sl_cutoff_table,
+      optimized_sl_cutoff_table=ScoreGenotypes.sl_cutoff_table,
       sl_filter_args=sl_filter_args,
       run_qc=false,
       primary_contigs_fai=primary_contigs_fai,

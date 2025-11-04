@@ -172,8 +172,8 @@ workflows:
         - /.*/
 
   - subclass: WDL
-    name: TrainGenotypeFilteringModel
-    primaryDescriptorPath: /wdl/TrainGenotypeFilteringModel.wdl
+    name: ScoreGenotypes
+    primaryDescriptorPath: /wdl/ScoreGenotypes.wdl
     filters:
       branches:
         - main
