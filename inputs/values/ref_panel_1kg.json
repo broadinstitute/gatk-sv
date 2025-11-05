@@ -2691,8 +2691,8 @@
     "sites_filtered_manta_vcf": "gs://gatk-sv-ref-panel-1kg-v1-0-1/submissions/9f2af2ea-e2e8-4430-a767-6425fe3e5dd2/FilterBatchSites/0ed783e0-16fb-45fb-895b-4f378c5a1486/call-FilterAnnotateVcf/shard-0/all_samples.manta.with_evidence.vcf.gz",
     "sites_filtered_scramble_vcf": "gs://gatk-sv-ref-panel-1kg-v1-0-1/submissions/9f2af2ea-e2e8-4430-a767-6425fe3e5dd2/FilterBatchSites/0ed783e0-16fb-45fb-895b-4f378c5a1486/call-FilterAnnotateVcf/shard-3/all_samples.scramble.with_evidence.vcf.gz",
     "sites_filtered_wham_vcf": "gs://gatk-sv-ref-panel-1kg-v1-0-1/submissions/9f2af2ea-e2e8-4430-a767-6425fe3e5dd2/FilterBatchSites/0ed783e0-16fb-45fb-895b-4f378c5a1486/call-FilterAnnotateVcf/shard-1/all_samples.wham.with_evidence.vcf.gz",
-    "std_dragen_vcf_tar": "TODO-SET-GCS-PATH-TO-MANTA",
-    "std_manta_vcf_tar": "TODO-UPDATE-GCS-PATH-TO-UPDATED-BND",
+    "std_dragen_vcf_tar": "gs://gatk-sv-ref-panel-1kg-v1-0-1/kj-dragen-ss-875/all_samples.manta_std.tar.gz",
+    "std_manta_vcf_tar": "gs://gatk-sv-ref-panel-1kg-v1-0-1/kj-dragen-ss-875/all_samples.manta_std.tar.gz",
     "std_scramble_vcf_tar": "gs://gatk-sv-ref-panel-1kg-v1-0-1/submissions/fc210106-1723-4e08-9df9-05eff559431f/GatherBatchEvidence/dec313be-2d72-4769-9e65-704a24892f59/call-PreprocessPESR/PreprocessPESR/8ed8b713-dd62-494f-a39e-03bd01997bcd/call-StandardizeVCFs/shard-2/all_samples.scramble_std.tar.gz",
     "std_wham_vcf_tar": "gs://gatk-sv-ref-panel-1kg-v1-0-1/submissions/fc210106-1723-4e08-9df9-05eff559431f/GatherBatchEvidence/dec313be-2d72-4769-9e65-704a24892f59/call-PreprocessPESR/PreprocessPESR/8ed8b713-dd62-494f-a39e-03bd01997bcd/call-StandardizeVCFs/shard-3/all_samples.wham_std.tar.gz",
     "wham_vcfs": [
