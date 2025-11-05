@@ -61,18 +61,32 @@ workflow BenchmarkVcfSitesPerContig{
       docker_image = sv_base_mini_docker
   }
 
+  call LongReadGenotypeTasks.SplitMultiAllelicToBiAllelic as split_multi_allelic_to_biallelic_query{
+    input:
+      vcf_file = split_query_vcf_into_sites.vcf_sites,
+      vcf_idx = split_query_vcf_into_sites.vcf_sites_idx,
+      docker_image = sv_base_mini_docker
+  }
+
+  call  LongReadGenotypeTasks.SplitMultiAllelicToBiAllelic as split_multi_allelic_to_biallelic_ref{
+    input:
+      vcf_file = split_ref_vcf_into_sites.vcf_sites,
+      vcf_idx = split_ref_vcf_into_sites.vcf_sites_idx,
+      docker_image = sv_base_mini_docker
+  }
+
   call LongReadGenotypeTasks.AddDummyGT as add_dummy_gt_query{
     input:
-      sites_file = split_query_vcf_into_sites.vcf_sites,
-      sites_idx  = split_query_vcf_into_sites.vcf_sites_idx,
+      sites_file = split_multi_allelic_to_biallelic_query.biallelic_vcf_sites,
+      sites_idx  = split_multi_allelic_to_biallelic_query.biallelic_vcf_sites_idx,
       docker_image   = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_add_dummy_gt_query
   }
 
   call LongReadGenotypeTasks.AddDummyGT as add_dummy_gt_ref{
     input:
-      sites_file = split_ref_vcf_into_sites.vcf_sites,
-      sites_idx  = split_ref_vcf_into_sites.vcf_sites_idx,
+      sites_file = split_multi_allelic_to_biallelic_ref.biallelic_vcf_sites,
+      sites_idx  = split_multi_allelic_to_biallelic_ref.biallelic_vcf_sites_idx,
       docker_image   = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_add_dummy_gt_ref
   }

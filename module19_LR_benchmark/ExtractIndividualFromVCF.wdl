@@ -19,13 +19,20 @@ workflow ExtractIndividualFromVCF {
         docker_image = sv_pipeline_base_docker
     }
 
-    call LongReadGenotypeTasks.SplitVariantsBySize{
+    call LongReadGenotypeTasks.SplitMultiAllelicToBiAllelicSingleSample{
       input:
-        input_vcf = ExtractVariantIndividualGenome.non_ref_vcf,
+        vcf_file = ExtractVariantIndividualGenome.non_ref_vcf,
+        vcf_idx = ExtractVariantIndividualGenome.non_ref_vcf_idx,
         docker_image = sv_pipeline_base_docker
     }
 
-    String prefix = basename(ExtractVariantIndividualGenome.non_ref_vcf, ".vcf.gz")
+    call LongReadGenotypeTasks.SplitVariantsBySize{
+      input:
+        input_vcf = SplitMultiAllelicToBiAllelicSingleSample.biallelic_vcf,
+        docker_image = sv_pipeline_base_docker
+    }
+
+    String prefix = basename(SplitMultiAllelicToBiAllelicSingleSample.biallelic_vcf, ".vcf.gz")
 
     call LongReadGenotypeTasks.ConcatVcfs as concat_vcf_1to50bp{
       input:

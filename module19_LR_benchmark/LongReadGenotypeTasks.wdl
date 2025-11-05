@@ -2184,6 +2184,230 @@ task SplitVcfToSites {
   }
 }
 
+task SplitMultiAllelicToBiAllelic{
+  input {
+    File vcf_file         # Input VCF file (bgzipped or plain)
+    File vcf_idx
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String prefix = basename(vcf_file,'.gz')
+
+  command <<<
+    set -euxo pipefail
+
+    python3 <<CODE
+
+    #!/usr/bin/env python3
+    import pysam
+    import sys
+    import os
+
+    def split_multiallelic_vcf(input_vcf, output_vcf):
+        """
+        Split multi-allelic variants in a VCF into separate bi-allelic records.
+        Each split record gets a unique ID suffix (_1, _2, ...).
+        Keeps all existing bi-allelic sites as-is.
+        """
+        # Open input and output VCFs
+        vcf_in = pysam.VariantFile(input_vcf, "r")
+        vcf_out = pysam.VariantFile(output_vcf, "w", header=vcf_in.header)
+        for record in vcf_in:
+            # If bi-allelic, write directly
+            if len(record.alts) == 1:
+                vcf_out.write(record)
+                continue
+            # Multi-allelic: split into separate records
+            for i, alt in enumerate(record.alts, start=1):
+                new_rec = record.copy()
+                new_rec.alts = (alt,)
+                # Update ID: add suffix (_1, _2, ...)
+                if record.id:
+                    new_rec.id = f"{record.id}_{i}"
+                else:
+                    new_rec.id = f"._{i}"
+                # Adjust INFO fields that depend on allele count (if necessary)
+                for key, val in record.info.items():
+                    # INFO fields that are lists and length matches ALT count
+                    if isinstance(val, (list, tuple)) and len(val) == len(record.alts):
+                        new_rec.info[key] = val[i - 1]
+                # For FORMAT fields (genotypes, etc.), pysam cannot easily remap them
+                # unless the fields are biallelic-safe. Keep as-is for simplicity.
+                vcf_out.write(new_rec)
+        vcf_in.close()
+        vcf_out.close()
+        print(f"✅ Split VCF written to: {output_vcf}")
+
+    input_vcf = "~{vcf_file}"
+    output_vcf = "~{prefix}.bi_allelic.gz"
+    split_multiallelic_vcf(input_vcf, output_vcf)
+
+    CODE
+
+    tabix -p vcf "~{prefix}.bi_allelic.gz"
+
+  >>>
+
+  output {
+    File biallelic_vcf_sites = "~{prefix}.bi_allelic.gz"
+    File biallelic_vcf_sites_idx =  "~{prefix}.bi_allelic.gz.tbi"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 10 + ceil(size(vcf_file, "GiB")*3),
+    disk_gb: 15 + ceil(size(vcf_file, "GiB")*3),
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task SplitMultiAllelicToBiAllelicSingleSample{
+  input {
+    File vcf_file         # Input VCF file (bgzipped or plain)
+    File vcf_idx
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String prefix = basename(vcf_file,'.gz')
+
+  command <<<
+    set -euxo pipefail
+
+    python3 <<CODE
+
+    #!/usr/bin/env python3
+    import pysam
+    import sys
+    import os
+
+    def split_multiallelic_single_sample_vcf(input_vcf, output_vcf):
+        """
+        Split multi-allelic sites in a single-sample VCF into bi-allelic sites.
+        Adjusts ALT and phased GT (keeps '|' separator) accordingly.
+        Example:
+          GT=0|4  -> keep ALT[3], set GT=0|1
+          GT=3|0  -> keep ALT[2], set GT=1|0
+          GT=2|5  -> produce two variants:
+                        record1: ALT=ALT[1], GT=1|0
+                        record2: ALT=ALT[4], GT=0|1
+        """
+
+        vcf_in = pysam.VariantFile(input_vcf, "r")
+        vcf_out = pysam.VariantFile(output_vcf, "w", header=vcf_in.header)
+
+        sample_name = list(vcf_in.header.samples)[0]
+
+        for record in vcf_in:
+            gt = record.samples[sample_name].get("GT")
+            if gt is None:
+                continue  # skip missing genotype
+
+            alleles = list(record.alleles)  # REF + ALTs
+
+            # Skip already bi-allelic sites
+            if len(record.alts) == 1:
+                vcf_out.write(record)
+                continue
+
+            def make_new_record(ref, alt, new_gt):
+                new_rec = record.copy()
+                new_rec.alleles = (ref, alt)
+                # Enforce phasing — always tuple with phasing marker
+                new_rec.samples[sample_name]["GT"] = new_gt
+                new_rec.samples[sample_name].phased = True
+                return new_rec
+
+            a1, a2 = gt
+            new_records = []
+
+            # REF homozygous (0|0)
+            if a1 in [None,0] and a2 in [None,0]:
+                vcf_out.write(record)
+                continue
+
+            # Heterozygous (one REF, one ALT)
+            elif a1 in [None,0] and a2 > 0:
+                alt = alleles[a2]
+                new_records.append(make_new_record(alleles[0], alt, (0, 1)))
+            elif a2 in [None,0] and a1 > 0:
+                alt = alleles[a1]
+                new_records.append(make_new_record(alleles[0], alt, (1, 0)))
+
+            # Homozygous ALT (same ALT allele)
+            elif a1 == a2 and a1 > 0:
+                alt = alleles[a1]
+                new_records.append(make_new_record(alleles[0], alt, (1, 1)))
+
+            # Compound heterozygous (two different ALTs)
+            elif a1 > 0 and a2 > 0 and a1 != a2:
+                alt1 = alleles[a1]
+                alt2 = alleles[a2]
+                new_records.append(make_new_record(alleles[0], alt1, (1, 0)))
+                new_records.append(make_new_record(alleles[0], alt2, (0, 1)))
+
+            # Write new records with suffixed IDs
+            for i, new_rec in enumerate(new_records, start=1):
+                if record.id:
+                    new_rec.id = f"{record.id}_{i}"
+                else:
+                    new_rec.id = f"._{i}"
+                vcf_out.write(new_rec)
+
+        vcf_in.close()
+        vcf_out.close()
+        print(f"✅ Output written to: {output_vcf}")
+
+    split_multiallelic_single_sample_vcf("~{vcf_file}", "~{prefix}.bi_allelic.gz")
+
+    CODE
+
+    tabix -p vcf "~{prefix}.bi_allelic.gz"
+
+  >>>
+
+  output {
+    File biallelic_vcf = "~{prefix}.bi_allelic.gz"
+    File biallelic_vcf_idx =  "~{prefix}.bi_allelic.gz.tbi"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 10 + ceil(size(vcf_file, "GiB")*3),
+    disk_gb: 15 + ceil(size(vcf_file, "GiB")*3),
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task SplitVariantsBySize {
   input {
     File input_vcf
