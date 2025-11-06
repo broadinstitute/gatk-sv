@@ -74,8 +74,8 @@ reference_dict=$(jq -r ".reference_dict" "${input_json}")
 primary_contigs_list=$(jq -r ".primary_contigs_list" "${input_json}")
 primary_contigs_fai=$(jq -r ".primary_contigs_fai" "${input_json}")
 preprocessed_intervals=$(jq -r ".preprocessed_intervals" "${input_json}")
-manta_regions_bed=$(jq -r ".manta_regions_bed" "${input_json}")
-manta_regions_bed_index=$(jq -r ".manta_regions_bed_index" "${input_json}")
+manta_regions_bed=$(jq -r ".manta_region_bed" "${input_json}")
+manta_regions_bed_index=$(jq -r ".manta_region_bed_index" "${input_json}")
 sd_locs_vcf=$(jq -r ".sd_locs_vcf" "${input_json}")
 mei_bed=$(jq -r ".mei_bed" "${input_json}")
 include_bed_file=$(jq -r ".include_bed_file" "${input_json}")
@@ -189,7 +189,7 @@ if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
   collect_counts_start_time=`date +%s`
 
   CURRENT_STDERR_FILE="${collect_counts_stderr}"
-  bash collect_counts.sh \
+  bash /opt/sv_shell/collect_counts.sh \
     "${preprocessed_intervals}" \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
@@ -215,7 +215,7 @@ if [[ "${run_manta}" == true ]]; then
   manta_start_time=`date +%s`
 
   CURRENT_STDERR_FILE="${manta_stderr}"
-  bash run_manta.sh \
+  bash /opt/sv_shell/run_manta.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
@@ -238,7 +238,7 @@ if [[ "${collect_pesr}" == true ]]; then
   collect_pesr_start_time=`date +%s`
 
   CURRENT_STDERR_FILE="${collect_pesr_stderr}"
-  bash collect_sv_evidence.sh \
+  bash /opt/sv_shell/collect_sv_evidence.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
@@ -266,7 +266,8 @@ if [[ "${run_scramble}" == true && "${run_manta}" == true ]]; then
   CURRENT_STDERR_FILE="${scramble_stderr}"
 
   {
-    bash scramble.sh \
+    echo "Running scramble."
+    bash /opt/sv_shell/scramble.sh \
       "${sample_id}" \
       "${bam_or_cram_file}" \
       "${bam_or_cram_index}" \
@@ -284,7 +285,8 @@ if [[ "${run_scramble}" == true && "${run_manta}" == true ]]; then
     realign_soft_clipped_reads_json_filename=$(mktemp --suffix=.json "${output_dir}/realign_soft_clipped_reads_XXXXXX")
     # addresses bug in Dragen v3.7.8 where some reads are incorrectly soft-clipped
 
-    bash realign_soft_clipped_reads.sh \
+    echo "Running Realign soft clipped reads."
+    bash /opt/sv_shell/realign_soft_clipped_reads.sh \
       "${sample_id}" \
       "${bam_or_cram_file}" \
       "${bam_or_cram_index}" \
@@ -301,8 +303,9 @@ if [[ "${run_scramble}" == true && "${run_manta}" == true ]]; then
       "${realign_soft_clipped_reads_json_filename}"
 
     # ScrambleRealigned
+    echo "Running Scramble part 2."
     scramble_p2_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/scramble_p2_XXXXXX")
-    bash scramble.sh \
+    bash /opt/sv_shell/scramble.sh \
       "${sample_id}" \
       $(jq -r ".out" ${realign_soft_clipped_reads_json_filename}) \
       $(jq -r ".out_index" ${realign_soft_clipped_reads_json_filename}) \
@@ -332,7 +335,7 @@ if [[ "${run_wham}" == true ]]; then
   wham_start_time=`date +%s`
 
   CURRENT_STDERR_FILE="${wham_stderr}"
-  bash run_whamg.sh \
+  bash /opt/sv_shell/run_whamg.sh \
     "${sample_id}" \
     "${bam_or_cram_file}" \
     "${bam_or_cram_index}" \
