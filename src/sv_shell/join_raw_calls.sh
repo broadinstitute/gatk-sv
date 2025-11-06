@@ -158,3 +158,30 @@ jq -n \
   echo "Finished SV clustering; output json: ${sv_cluster_output_dir}"
 
   sv_cluster_vcf_out=$(jq -r ".out" "${sv_cluster_output_json}")
+
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+
+joined_raw_calls_vcf_output_dir="${output_dir}/$(basename "${sv_cluster_vcf_out}")"
+mv "${sv_cluster_vcf_out}" "${joined_raw_calls_vcf_output_dir}"
+mv "${sv_cluster_vcf_out}.tbi" "${joined_raw_calls_vcf_output_dir}.tbi"
+
+ploidy_table_output_dir="${output_dir}/$(basename "${CreatePloidyTableFromPed_out}")"
+mv "${CreatePloidyTableFromPed_out}" "${ploidy_table_output_dir}"
+
+outputs_json=$(jq -n \
+  --arg joined_raw_calls_vcf "${joined_raw_calls_vcf_output_dir}" \
+  --arg joined_raw_calls_vcf_index "${joined_raw_calls_vcf_output_dir}.tbi" \
+  --arg ploidy_table "${ploidy_table_output_dir}" \
+  '{
+     "joined_raw_calls_vcf": $joined_raw_calls_vcf,
+     "joined_raw_calls_vcf_index": $joined_raw_calls_vcf_index,
+     "ploidy_table": $ploidy_table
+   }' \
+)
+echo "${outputs_json}" > "${output_json_filename}"
+
+echo "Successfully finished Join Raw Calls, output json filename: ${output_json_filename}"
