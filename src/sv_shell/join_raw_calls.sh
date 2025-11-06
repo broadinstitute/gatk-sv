@@ -47,6 +47,9 @@ clustered_scramble_vcf_index=$(jq -r '.clustered_scramble_vcf_index // ""' "${in
 clustered_wham_vcf=$(jq -r '.clustered_wham_vcf // ""' "${input_json}")
 clustered_wham_vcf_index=$(jq -r '.clustered_wham_vcf_index // ""' "${input_json}")
 
+ped_file=$(jq -r ".ped_file" "${input_json}")
+contig_list=$(jq -r ".contig_list" "${input_json}")
+
 
 # -------------------------------------------------------
 # ======================= Command =======================
@@ -79,3 +82,23 @@ VCFS="~{write_lines(vcfs)}"
 bcftools concat --no-version --allow-overlaps -Oz --file-list "${vcf_files_list}" > "${concat_vcf}"
 
 tabix "${concat_vcf}"
+
+
+# FormatVcfForGatk
+# ---------------------------------------------------------------------------------------------------------------------
+CreatePloidyTableFromPed_out="$(realpath "${prefix}.ploidy.tsv")"
+python /opt/sv-pipeline/scripts/ploidy_table_from_ped.py \
+  --ped "${ped_file}" \
+  --out "${CreatePloidyTableFromPed_out}" \
+  --contigs "${contig_list}"
+
+
+FormatVcfForGatk_gatk_formatted_vcf="$(realpath "${prefix}.join_raw_calls.gatk_formatted.vcf.gz")"
+FormatVcfForGatk_gatk_formatted_vcf_index="$(realpath "${prefix}.join_raw_calls.gatk_formatted.vcf.gz.tbi")"
+
+python /opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py \
+  --vcf "${concat_vcf}" \
+  --out "${FormatVcfForGatk_gatk_formatted_vcf}" \
+  --ploidy-table "${CreatePloidyTableFromPed_out}"
+
+tabix "${FormatVcfForGatk_gatk_formatted_vcf}"
