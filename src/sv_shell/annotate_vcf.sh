@@ -35,6 +35,7 @@ echo "Median coverage Working directory: ${working_dir}"
 vcf=$(jq -r '.vcf' "$input_json")
 prefix=$(jq -r '.prefix' "$input_json")
 external_af_ref_bed=$(jq -r '.external_af_ref_bed' "$input_json")
+par_bed=$(jq -r '.par_bed' "$input_json")
 
 # Note that the following files are optional in the WDL version,
 # however, since they are used in the single-sample pipeline,
@@ -97,8 +98,24 @@ cat header <(zcat "${external_af_ref_bed}" | awk '{if ($6=="BND" || $6=="CTX") p
 AnnotateFunctionalConsequences_annotated_vcf="$(realpath "${prefix}.annotated.vcf.gz")"
 AnnotateFunctionalConsequences_annotated_vcf_index="$(realpath "${prefix}.annotated.vcf.gz.tbi")"
 
+tabix -f -p vcf "${vcf}"
+
 java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar SVAnnotate \
   -V "${vcf}" \
   -O "${AnnotateFunctionalConsequences_annotated_vcf}" \
   --protein-coding-gtf "${protein_coding_gtf}" \
   --non-coding-bed "${noncoding_bed}"
+
+
+# ComputeAFs
+# ---------------------------------------------------------------------------------------------------------------------
+
+ComputeAFs_af_vcf="${prefix}.wAFs.vcf.gz"
+ComputeAFs_af_vcf_idx="${prefix}.wAFs.vcf.gz.tbi"
+
+/opt/sv-pipeline/05_annotation/scripts/compute_AFs.py "${AnnotateFunctionalConsequences_annotated_vcf}" stdout \
+  --par "${par_bed}" \
+| bgzip -c \
+> "${ComputeAFs_af_vcf}"
+
+tabix -p vcf "${ComputeAFs_af_vcf}"
