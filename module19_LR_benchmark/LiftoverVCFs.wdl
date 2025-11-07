@@ -25,7 +25,6 @@ workflow LiftoverVCFs {
       input:
         vcf = vcfs[i],
         vcf_idx = vcf_idxs[i],
-        vcf_to_bed_script = vcf_to_bed_script,
         docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_vcf_to_bed
     }
@@ -68,7 +67,6 @@ task VCFToBED {
     input {
         File vcf
         File vcf_idx
-        File vcf_to_bed_script
         String docker_image
         RuntimeAttr? runtime_attr_override
     }
