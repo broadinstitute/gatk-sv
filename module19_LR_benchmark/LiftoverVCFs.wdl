@@ -7,6 +7,7 @@ workflow LiftoverVCFs {
     Array[File] vcfs
     Array[File] vcf_idxs
     File chain_file
+    File liftover_tool
     String liftover_ref_version
 
     String liftover_docker
@@ -33,8 +34,9 @@ workflow LiftoverVCFs {
       input:
         bed = VCFToBED.bed,
         chain_file = chain_file,
+        liftover_tool = liftover_tool,
         liftover_ref_version = liftover_ref_version,
-        docker_image = liftover_docker,
+        docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_liftover
     }
 
@@ -140,6 +142,7 @@ task Liftover {
     input {
         File bed
         File chain_file
+        File liftover_tool
         String liftover_ref_version
         String docker_image
         RuntimeAttr? runtime_attr_override
@@ -149,7 +152,9 @@ task Liftover {
 
     command <<<
         set -euo pipefail
-        liftOver ~{bed} ~{chain_file} ~{prefix}.~{liftover_ref_version}.liftover.bed ~{prefix}.~{liftover_ref_version}.liftover.unmap
+        gsutil cp ~{liftover_tool} ./
+        chmod +x liftOver
+        ./liftOver ~{bed} ~{chain_file} ~{prefix}.~{liftover_ref_version}.liftover.bed ~{prefix}.~{liftover_ref_version}.liftover.unmap
     >>>
 
     output {
