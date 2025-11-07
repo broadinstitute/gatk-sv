@@ -111,7 +111,7 @@ task VCFToBED {
     >>>
 
     output {
-        File bed = "${prefix}.bed"
+        File bed = "~{prefix}.bed"
     }
 
     RuntimeAttr default_attr = object {
@@ -149,12 +149,12 @@ task Liftover {
 
     command <<<
         set -euo pipefail
-        liftOver ~{bed} ~{chain_file} ${prefix}.~{liftover_ref_version}.liftover.bed ${prefix}.~{liftover_ref_version}.liftover.unmap
+        liftOver ~{bed} ~{chain_file} ~{prefix}.~{liftover_ref_version}.liftover.bed ~{prefix}.~{liftover_ref_version}.liftover.unmap
     >>>
 
     output {
-        File lifted_bed = "${prefix}.~{liftover_ref_version}.liftover.bed"
-        File unmap = "${prefix}.~{liftover_ref_version}.liftover.unmap"
+        File lifted_bed = "~{prefix}.~{liftover_ref_version}.liftover.bed"
+        File unmap = "~{prefix}.~{liftover_ref_version}.liftover.unmap"
     }
 
     RuntimeAttr default_attr = object {
@@ -285,8 +285,8 @@ task SortAndIndex {
     command <<<
         set -euo pipefail
 
-        bcftools sort ~{vcf} -Oz -o ${prefix}.sorted.vcf.gz
-        tabix -p vcf ${prefix}.sorted.vcf.gz
+        bcftools sort ~{vcf} -Oz -o ~{prefix}.sorted.vcf.gz
+        tabix -p vcf ~{prefix}.sorted.vcf.gz
     >>>
 
     output {
