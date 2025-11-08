@@ -1,15 +1,5 @@
 #!/bin/bash
 
-# This script is a bash implementation of the following workflow/task in WDL:
-# Filename: wdl/GatherSampleEvidence.wdl
-# Workflow: GatherSampleEvidence
-
-# Examples on running this script:
-# bash gather_sample_evidence.sh test NA12878.final.cram NA12878.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict primary_contigs.list contig.fai preprocessed_intervals.interval_list primary_contigs_plus_mito.bed.gz primary_contigs_plus_mito.bed.gz Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz wham_whitelist.bed Homo_sapiens_assembly38.fasta.64.alt Homo_sapiens_assembly38.fasta.64.amb Homo_sapiens_assembly38.fasta.64.ann Homo_sapiens_assembly38.fasta.64.bwt Homo_sapiens_assembly38.fasta.64.pac Homo_sapiens_assembly38.fasta.64.sa
-# example running using downsampled data.
-# bash gather_sample_evidence.sh test downsampled_HG00096.final.cram downsampled_HG00096.final.cram.crai Homo_sapiens_assembly38.fasta Homo_sapiens_assembly38.fasta.fai Homo_sapiens_assembly38.dict downsampled_primary_contigs.list downsampled_contig.fai downsampled_preprocessed_intervals.interval_list downsampled_primary_contigs_plus_mito.bed.gz downsampled_primary_contigs_plus_mito.bed.gz downsampled_Homo_sapiens_assembly38.dbsnp138.vcf hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz downsampled_wham_whitelist.bed Homo_sapiens_assembly38.fasta.64.alt Homo_sapiens_assembly38.fasta.64.amb Homo_sapiens_assembly38.fasta.64.ann Homo_sapiens_assembly38.fasta.64.bwt Homo_sapiens_assembly38.fasta.64.pac Homo_sapiens_assembly38.fasta.64.sa
-
-
 # For details: https://serverfault.com/a/103569
 # saves original stdout to &3 and original stderr to &4
 # without this, the logs of subprocess can get mixed with the parent's logs.
@@ -78,7 +68,7 @@ manta_regions_bed=$(jq -r ".manta_region_bed" "${input_json}")
 manta_regions_bed_index=$(jq -r ".manta_region_bed_index" "${input_json}")
 sd_locs_vcf=$(jq -r ".sd_locs_vcf" "${input_json}")
 mei_bed=$(jq -r ".mei_bed" "${input_json}")
-include_bed_file=$(jq -r ".include_bed_file" "${input_json}")
+include_bed_file=$(jq -r ".wham_include_list_bed_file" "${input_json}")
 reference_bwa_alt=$(jq -r ".reference_bwa_alt" "${input_json}")
 reference_bwa_amb=$(jq -r ".reference_bwa_amb" "${input_json}")
 reference_bwa_ann=$(jq -r ".reference_bwa_ann" "${input_json}")
@@ -95,46 +85,6 @@ scramble_alignment_score_cutoff=$(jq -r ".scramble_alignment_score_cutoff" "${in
 run_module_metrics=$(jq -r ".run_module_metrics" "${input_json}")
 min_size=$(jq -r ".min_size" "${input_json}")
 
-#sample_id=${1}
-#bam_or_cram_file=${2}
-#bam_or_cram_index=${3}
-#reference_fasta=${4}
-#reference_index=${5}
-#reference_dict=${6}
-#primary_contigs_list=${7}
-
-# the wdl version sets this optional and requires it only if run_module_metrics is set,
-# however conditional inputs like that are confusing and need additional check and docs.
-# So, making it required here to keep the interface simpler.
-#primary_contigs_fai=${8}
-#preprocessed_intervals=${9}
-#manta_regions_bed=${10}
-#manta_regions_bed_index=${11}
-#sd_locs_vcf=${12}
-#mei_bed=${13}
-#include_bed_file=${14}
-#reference_bwa_alt=${15}
-#reference_bwa_amb=${16}
-#reference_bwa_ann=${17}
-#reference_bwa_bwt=${18}
-#reference_bwa_pac=${19}
-#reference_bwa_sa=${20}
-#disabled_read_filters=${21:-"MappingQualityReadFilter"}
-#collect_coverage=${22:-true}
-#run_scramble=${23:-true}
-#run_manta=${24:-true}
-#run_wham=${25:-true}
-#collect_pesr=${26:-true}
-#scramble_alignment_score_cutoff=${27:-90}
-#run_module_metrics=${28:-true}
-min_size=${29:-50}
-output_dir=${30:-""}
-
-
-#if [[ "${output_dir}" == "" ]]; then
-#  output_dir=$(mktemp -d /output_gather_sample_evidence_XXXXXXXX)
-#  output_dir="$(realpath ${output_dir})"
-#fi
 
 gather_sample_evidence_stdout="${output_dir}/gather_sample_evidence_stdout.txt"
 gather_sample_evidence_stderr="${output_dir}/gather_sample_evidence_stderr.txt"
