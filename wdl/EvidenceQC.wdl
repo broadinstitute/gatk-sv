@@ -195,7 +195,7 @@ workflow EvidenceQC {
       }
     }
 
-    if (!(defined(melt_insert_size)) && (defined(insert_size_metrics))) {
+    if (defined(insert_size_metrics)) {
       call GetMeanInsertSizesFromFiles {
         input:
           insert_size_metrics=select_first([insert_size_metrics]),
