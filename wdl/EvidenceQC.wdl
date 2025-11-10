@@ -211,7 +211,7 @@ workflow EvidenceQC {
         ploidy_plots = select_first([CreateVariantCountPlots.ploidy_plots, Ploidy.ploidy_plots]),
         bincov_median = MedianCov.medianCov,
         WGD_scores = WGD.WGD_scores,
-        melt_insert_size = select_first([melt_insert_size, GetMeanInsertSizesFromFiles.insert_sizes, []]),
+        melt_insert_size = select_first([GetMeanInsertSizesFromFiles.insert_sizes, melt_insert_size, []]),
 
         dragen_qc_low = RawVcfQC_Dragen.low,
         dragen_qc_high = RawVcfQC_Dragen.high,
