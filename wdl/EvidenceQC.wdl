@@ -48,6 +48,7 @@ workflow EvidenceQC {
     Boolean run_ploidy = true
 
     Array[Float]? melt_insert_size
+    Array[File]? insert_size_metrics
 
     RuntimeAttr? runtime_attr_qc
     RuntimeAttr? runtime_attr_qc_outlier
@@ -60,6 +61,7 @@ workflow EvidenceQC {
     RuntimeAttr? runtime_attr_bincov_attr
     RuntimeAttr? runtime_attr_make_qc_table
     RuntimeAttr? runtime_attr_variant_count_plots
+    RuntimeAttr? runtime_attr_get_insert_sizes
 
     RuntimeAttr? runtime_attr_mediancov       # Memory ignored, use median_cov_mem_gb_per_sample
     Float? median_cov_mem_gb_per_sample
@@ -193,6 +195,15 @@ workflow EvidenceQC {
       }
     }
 
+    if (!(defined(melt_insert_size)) && (defined(insert_size_metrics))) {
+      call GetMeanInsertSizesFromFiles {
+        input:
+          insert_size_metrics=select_first([insert_size_metrics]),
+          sv_base_mini_docker=sv_base_mini_docker,
+          runtime_attr_override=runtime_attr_get_insert_sizes
+      }
+    }
+
     call MakeQcTable {
       input:
         output_prefix = batch,
@@ -200,7 +211,7 @@ workflow EvidenceQC {
         ploidy_plots = select_first([CreateVariantCountPlots.ploidy_plots, Ploidy.ploidy_plots]),
         bincov_median = MedianCov.medianCov,
         WGD_scores = WGD.WGD_scores,
-        melt_insert_size = select_first([melt_insert_size, []]),
+        melt_insert_size = select_first([melt_insert_size, GetMeanInsertSizesFromFiles.insert_sizes, []]),
 
         dragen_qc_low = RawVcfQC_Dragen.low,
         dragen_qc_high = RawVcfQC_Dragen.high,
@@ -259,6 +270,74 @@ workflow EvidenceQC {
     File? qc_table = MakeQcTable.qc_table
   }
 }
+
+
+task GetMeanInsertSizesFromFiles {
+  input {
+    Array[File] insert_size_metrics
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 0.9,
+    disk_gb: 10 + ceil(size(insert_size_metrics, "GiB")),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+
+    set -euo pipefail
+    function transpose_table() {
+          cat \
+          | awk ' {
+              for (col = 1; col <= NF; ++col) {
+                table[NR, col] = $col
+              }
+              if(NF > num_cols) {
+                num_cols = NF
+              }
+            } END {
+              for (row = 1; row <= num_cols; ++row) {
+                printf "%s", table[1, row]
+                for (col = 2; col <= NR; ++col) {
+                  printf "\t%s", table[col, row]
+                }
+                printf "\n"
+              }
+            }'
+        }
+
+    for file in ~{sep=' ' insert_size_metrics}; do
+      grep -A1 MEDIAN_INSERT_SIZE $file  \
+      | transpose_table \
+      | grep -m 1 "MEAN_INSERT_SIZE" \
+      | cut -f2 \
+      >> mean_insert_sizes.txt
+    done
+
+  >>>
+
+  output {
+    Array[Float] insert_sizes = read_lines("mean_insert_sizes.txt")
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 
 task CreateVariantCountPlots {
   input {
