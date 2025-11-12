@@ -82,7 +82,7 @@ echo "JVM memory: $JVM_MAX_MEM"
 
 # SplitRefBed
 # ---------------------------------------------------------------------------------------------------------------------
-# TODO: assuming you always provide external_af_ref_bed
+# TODO: assuming you always provide external_af_ref_bed, this is an optional input and is currently configured
 
 split_ref_bed_working_dir=$(mktemp -d /wd_split_ref_bed_XXXXXXXX)
 split_ref_bed_working_dir="$(realpath ${split_ref_bed_working_dir})"

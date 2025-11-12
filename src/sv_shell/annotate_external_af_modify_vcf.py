@@ -26,8 +26,10 @@ def main(args):
 
     for line in fin:
         pin = line.strip().split()
-        if pin[0] == 'query_svid': continue
-        if not pin[0] in body.keys(): continue
+        if pin[0] == 'query_svid':
+            continue
+        if not pin[0] in body.keys():
+            continue
         info_add = [args.ref_prefix + '_SVID' + '=' + pin[1]]
         for j in range(len(colname) - 1):
             if j > 1:
