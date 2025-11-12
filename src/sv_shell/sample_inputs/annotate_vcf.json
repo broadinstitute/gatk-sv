@@ -1,5 +1,4 @@
 {
-  "allosomes_list": null,
   "contig_list": "/inputs/primary_contigs.list",
   "external_af_population": [
     "ALL",
@@ -20,11 +19,9 @@
   "naive": false,
   "noncoding_bed": "/inputs/noncoding.sort.hg38.bed",
   "par_bed": "/inputs/hg38.par.bed",
-  "ped_file": null,
   "prefix": "NA12878",
   "protein_coding_gtf": "/inputs/gencode.v47.basic.protein_coding.canonical.gtf",
   "sample_keep_list": null,
-  "sample_pop_assignments": null,
   "sites_only": false,
   "sort_vcf_list": false,
   "sv_per_shard": 5000,
