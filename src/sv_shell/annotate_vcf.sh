@@ -238,7 +238,7 @@ python /opt/sv_shell/annotate_external_af_modify_vcf.py \
   --labeled-bed labeled.bed \
   --output-filename "${ModifyVcf_annotated_vcf}"
 
-bgzip "${ModifyVcf_annotated_vcf}"
+bgzip -f "${ModifyVcf_annotated_vcf}"
 ModifyVcf_annotated_vcf="${ModifyVcf_annotated_vcf}.gz"
 tabix "${ModifyVcf_annotated_vcf}"
 
