@@ -57,13 +57,7 @@ samples_filename="samples.list"
 
 reference_dict=$(jq -r ".reference_dict" "${input_json}")
 
-bincov_matrix=$(jq -r ".bincov_matrix" "${input_json}")
-
 jq -r ".samples[]" "${input_json}" >> "${samples_filename}"
-# TODO: adding the folloiwng results in getting values for all the samples in the bincov matrix,
-#  and the output is generates does not match the current output (it mostly contains -1
-#  for all the columns except the sample in samples list).
-#jq -r ".bincov_matrix_samples[]" "${input_json}" >> "${samples_filename}"
 
 # -------------------------------------------------------
 # ======================= Command =======================
@@ -133,8 +127,12 @@ mv "${merged_bincov}" "${merged_bincov_output}"
 merged_bincov_idx_output="${output_dir}/$(basename "${merged_bincov}.tbi")"
 mv "${merged_bincov}.tbi" "${merged_bincov_idx_output}"
 
-outputs_json=$(jq -n \
+jq -n \
   --arg merged_bincov "${merged_bincov_output}" \
   --arg merged_bincov_idx "${merged_bincov_idx_output}" \
-  '{merged_bincov: $merged_bincov, merged_bincov_idx: $merged_bincov_idx}' )
-echo "${outputs_json}" > "${output_json_filename}"
+  '{
+      merged_bincov: $merged_bincov,
+      merged_bincov_idx: $merged_bincov_idx
+  }' > "${output_json_filename}"
+
+echo "Finished make bincov matrix, output json filename: ${output_json_filename}"
