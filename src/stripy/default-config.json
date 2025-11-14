@@ -1,0 +1,30 @@
+{
+    "filepath_expansionhunter": "ExpansionHunter",
+    "filepath_reviewer": "REViewer",
+    "filepath_samtools": "samtools",
+    "filepath_bwa": "bwa",
+    "num_threads": "all",
+    "verbose": false,
+    "output_html": true,
+    "output_json": false,
+    "output_tsv": true,
+    "output_svg_flag_threshold": 1,
+    "log_flag_threshold": 1,
+    "outlier_zscore": 3.719,
+    "filter_likely_false_gcn": false,
+    "use_alt_contigs": false,
+    "extended_analysis": "stripy",
+    "ea_max_depth_offtarget": 500,
+    "eh_analysis_mode": "seeking",
+    "fregion_length_bp": 2000,
+    "min_no_reads_eh": 10,
+    "min_no_reads_stripy": 0,
+    "ot_edges_bp": 300,
+    "min_req_seq_len_proportion": 0.98,
+    "min_req_str_locus_proportion": 0.5,
+    "supported_genomes": [
+        "hg38",
+        "hg19",
+        "hs1"
+    ]
+}

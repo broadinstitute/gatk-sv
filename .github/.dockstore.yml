@@ -240,6 +240,16 @@ workflows:
     filters:
       branches:
         - main
+        - mw_stripy
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: StripyWorkflow
+    primaryDescriptorPath: /wdl/StripyWorkflow.wdl
+    filters:
+      branches:
+        - mw_stripy
       tags:
         - /.*/
 
