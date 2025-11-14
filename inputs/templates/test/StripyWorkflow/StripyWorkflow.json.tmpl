@@ -1,6 +1,6 @@
 {
-  "StripyWorkflow.input_bam": {{ test_batch.bam_or_cram_example | tojson }},
-  "StripyWorkflow.input_bam_index": {{ test_batch.bam_or_cram_index_example | tojson }},
+  "StripyWorkflow.bam_or_cram_file": {{ test_batch.bam_or_cram_example | tojson }},
+  "StripyWorkflow.bam_or_cram_index": {{ test_batch.bam_or_cram_index_example | tojson }},
   "StripyWorkflow.sample_name": {{ test_batch.sample_example | tojson }},
   "StripyWorkflow.ped_file": {{ test_batch.ped_file | tojson }},
   "StripyWorkflow.reference_fasta": {{ reference_resources.reference_fasta | tojson }},
