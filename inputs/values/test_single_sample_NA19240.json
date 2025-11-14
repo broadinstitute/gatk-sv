@@ -10,5 +10,5 @@
   "baseline_non_genotyped_unique_depth_calls_vcf" : "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.cleaned.filter_depth_lt_5000.unique_SM-GN4BI_depth_non_alt_gt.with_vargq.vcf.gz",
   "base_metrics" : "gs://gatk-sv-resources/test/clinical/na19240/clinical.test_na19240.metrics.tsv",
   "sample_id" : "SM-GN4BI",
-  "sl_cutoff_table": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/sl_cutoffs_blank.tsv"
+  "sl_cutoff_table": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/baseline_sl_cutoffs.tsv"
 }
