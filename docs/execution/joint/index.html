@@ -11,8 +11,8 @@
 
 
 <link rel="search" type="application/opensearchdescription+xml" title="GATK-SV" href="/gatk-sv/opensearch.xml"><link rel="stylesheet" href="/gatk-sv/assets/css/styles.82e231fb.css">
-<script src="/gatk-sv/assets/js/runtime~main.0333ddf4.js" defer="defer"></script>
-<script src="/gatk-sv/assets/js/main.1ed6e5ce.js" defer="defer"></script>
+<script src="/gatk-sv/assets/js/runtime~main.05c3c900.js" defer="defer"></script>
+<script src="/gatk-sv/assets/js/main.efb3af0b.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
 <svg xmlns="http://www.w3.org/2000/svg" style="display: none;"><defs>
@@ -68,7 +68,8 @@ cutoff for outlier filtration in <code>08-FilterBatchSamples</code></li>
 <li><code>16-RefineComplexVariants</code>: Complex variant filtering and refinement</li>
 <li><code>17-JoinRawCalls</code>: Raw call aggregation</li>
 <li><code>18-SVConcordance</code>: Annotate genotype concordance with raw calls</li>
-<li><code>19-FilterGenotypes</code>: Genotype filtering</li>
+<li><code>19-ScoreGenotypes</code>: Scores genotypes to optimize GQ recalibrator model</li>
+<li><code>19-FilterGenotypes</code>: Apply genotype filtering using GQ recalibrator model</li>
 <li><code>20-AnnotateVcf</code>: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and
 AF annotation with external population callsets</li>
 </ol>
