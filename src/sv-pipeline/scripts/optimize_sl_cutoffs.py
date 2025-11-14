@@ -210,29 +210,28 @@ def write_stats(out_path, stats, stat_name):
         f.write(f"Total count across subclasses: {total:0.0f}\n")
 
 
-# The next step is to filter genotypes using the FilterRecalibratedVcf workflow
-# Use fmax thresholds to set the SL cutoffs
-def write_sl_filter_args(out_path, stats):
-    key_to_arg_map = {
-        'DEL_s': 'small-del-threshold',
-        'DEL_m': 'medium-del-threshold',
-        'DEL_l': 'large-del-threshold',
-        'DUP_s': 'small-dup-threshold',
-        'DUP_m': 'medium-dup-threshold',
-        'DUP_l': 'large-dup-threshold',
-        'INS': 'ins-threshold',
-        'INV': 'inv-threshold',
-        'BND': 'bnd-threshold',
-        'CPX': 'cpx-threshold',
-        'CTX': 'ctx-threshold'
+def write_sl_cutoff_table(out_path, stats):
+    key_to_size_map = {
+        'DEL_s': ('DEL', -1, 500),
+        'DEL_m': ('DEL', 500, 10000),
+        'DEL_l': ('DEL', 10000, -1),
+        'DUP_s': ('DUP', -1, 500),
+        'DUP_m': ('DUP', 500, 10000),
+        'DUP_l': ('DUP', 10000, -1),
+        'INS': ('INS', -1, -1),
+        'INV': ('INV', -1, -1),
+        'BND': ('BND', -1, -1),
+        'CPX': ('CPX', -1, -1),
+        'CTX': ('CTX', -1, -1)
     }
-    suggested_filter_args = []
-    for key in stats:
-        if key == 'ALL' or 'fmax_thresh' not in stats[key]:
-            continue
-        suggested_filter_args.append(f"--{key_to_arg_map[key]} {stats[key]['fmax_thresh']}")
     with open(out_path, 'w') as f:
-        f.write(" ".join(suggested_filter_args) + "\n")
+        f.write("sv_type\tmin_size\tmax_size\tsl_cutoff\n")
+        for key in stats:
+            if key == 'ALL' or 'fmax_thresh' not in stats[key] or key not in key_to_size_map:
+                continue
+            sv_type, min_size, max_size = key_to_size_map[key]
+            threshold = stats[key]['fmax_thresh']
+            f.write(f"{sv_type}\t{min_size}\t{max_size}\t{threshold}\n")
 
 
 def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
@@ -279,8 +278,8 @@ def main(argv: Optional[List[Text]] = None):
     stats = plot_precision_recall(plot_df, stat_name, out_dir=args.out_dir, out_name=args.out_name, beta=args.beta)
     print("Writing stats file...")
     write_stats(out_path=os.path.join(args.out_dir, f"{args.out_name}.stats.txt"), stats=stats, stat_name=stat_name)
-    print("Writing arguments file...")
-    write_sl_filter_args(out_path=os.path.join(args.out_dir, f"{args.out_name}.filter_args.txt"), stats=stats)
+    print("Writing cutoff table...")
+    write_sl_cutoff_table(out_path=os.path.join(args.out_dir, f"{args.out_name}.sl_cutoff_table.tsv"), stats=stats)
     print("Done!")
 
 

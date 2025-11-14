@@ -1,0 +1,9 @@
+{
+  "eval_vcf": "/inputs/NA12878.cpx_refined.vcf.gz",
+  "eval_vcf_index": "/inputs/NA12878.cpx_refined.vcf.gz.tbi",
+  "java_mem_fraction": null,
+  "output_prefix": "NA12878",
+  "reference_dict": "/inputs/Homo_sapiens_assembly38.dict",
+  "truth_vcf": "/inputs/NA12878.join_raw_calls.vcf.gz",
+  "truth_vcf_index": "/inputs/NA12878.join_raw_calls.vcf.gz.tbi"
+}
