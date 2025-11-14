@@ -60,7 +60,7 @@ class StripyBEDValidator:
     def validate_file(self, filepath: str) -> bool:
         """
         Validate a Stripy BED file.
-        
+
         Returns:
             bool: True if file is valid, False otherwise
         """
@@ -126,7 +126,7 @@ class StripyBEDValidator:
     def _validate_row(self, row: List[str], line_num: int) -> bool:
         """
         Validate a single row.
-        
+
         Returns:
             bool: True if row is valid, False otherwise
         """
@@ -314,7 +314,7 @@ class StripyBEDValidator:
         print("=" * 80)
 
         # Statistics
-        print(f"\nStatistics:")
+        print("\nStatistics:")
         print(f"  Total lines processed: {self.stats['total_lines']}")
         print(f"  Valid lines: {self.stats['valid_lines']}")
         print(f"  Minimal format (4 cols): {self.stats['format_minimal']}")
