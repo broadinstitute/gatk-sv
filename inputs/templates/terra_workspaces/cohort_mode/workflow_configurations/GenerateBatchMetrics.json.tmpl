@@ -3,8 +3,6 @@
   "GenerateBatchMetrics.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
   "GenerateBatchMetrics.gatk_docker": "${workspace.gatk_docker}",
 
-  "GenerateBatchMetrics.records_per_shard_agg": "10000",
-
   "GenerateBatchMetrics.rmsk": "${workspace.rmsk}",
   "GenerateBatchMetrics.segdups": "${workspace.segdups}",
   "GenerateBatchMetrics.reference_dict": "${workspace.reference_dict}",
@@ -21,7 +19,6 @@
   "GenerateBatchMetrics.rd_file": "${this.merged_bincov}",
   "GenerateBatchMetrics.sr_file": "${this.merged_SR}",
   "GenerateBatchMetrics.median_file": "${this.median_cov}",
-  "GenerateBatchMetrics.ploidy_table": "gs://broad-dsde-methods-markw/mw-gatk-agg-v2/1kg_ref_panel_v1.ploidy_table.tsv",
 
   "GenerateBatchMetrics.depth_vcf" : "${this.clustered_depth_vcf}",
   "GenerateBatchMetrics.dragen_vcf" : "${this.clustered_dragen_vcf}",

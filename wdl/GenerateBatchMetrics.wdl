@@ -2,6 +2,7 @@ version 1.0
 
 import "FormatVcfForGatk.wdl" as format
 import "TasksMakeCohortVcf.wdl" as taskscohort
+import "TasksClusterBatch.wdl" as taskscluster
 import "TestUtils.wdl" as tu
 
 workflow GenerateBatchMetrics {
@@ -21,15 +22,16 @@ workflow GenerateBatchMetrics {
     File rd_file
 
     File median_file
-    File ploidy_table
+    File ped_file
 
-    Int records_per_shard_agg
+    Int records_per_shard_agg = 10000
 
     String? additional_gatk_args_agg_pesr
     String? additional_gatk_args_agg_depth
 
     File? svtk_to_gatk_script
 
+    File primary_contigs_list
     String chr_x
     String chr_y
 
@@ -42,7 +44,6 @@ workflow GenerateBatchMetrics {
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
-    File? primary_contigs_list  # required if run_module_metrics = true
 
     File? outlier_sample_ids # sample IDs to exclude from training
 
@@ -50,6 +51,7 @@ workflow GenerateBatchMetrics {
     String sv_pipeline_docker
     String sv_base_mini_docker
 
+    RuntimeAttr? runtime_attr_create_ploidy
     RuntimeAttr? runtime_attr_aggregate_tests
     RuntimeAttr? runtime_attr_scatter_vcf
     RuntimeAttr? runtime_attr_format
@@ -67,6 +69,18 @@ workflow GenerateBatchMetrics {
   Array[File] vcfs_ = select_all([depth_vcf, manta_vcf, melt_vcf, scramble_vcf, wham_vcf])
   scatter (i in range(length(vcfs_))) {
     File vcfs_index_ = vcfs_[i] + ".tbi"
+  }
+
+  call taskscluster.CreatePloidyTableFromPed {
+    input:
+      ped_file=ped_file,
+      contig_list=primary_contigs_list,
+      retain_female_chr_y=false,
+      chr_x=chr_x,
+      chr_y=chr_y,
+      output_prefix="~{batch}.ploidy",
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_create_ploidy
   }
 
   call taskscohort.ConcatVcfs as ConcatInputVcfs {
@@ -92,7 +106,7 @@ workflow GenerateBatchMetrics {
     call format.FormatVcf {
       input:
         vcf=ScatterVcf.shards[i],
-        ploidy_table=ploidy_table,
+        ploidy_table=CreatePloidyTableFromPed.out,
         output_prefix="~{prefix}.format.shard_~{i}",
         script=svtk_to_gatk_script,
         sv_pipeline_docker=sv_pipeline_docker,
@@ -117,7 +131,7 @@ workflow GenerateBatchMetrics {
         vcf_index = SVRegionOverlap.out_index,
         output_prefix = "~{prefix}.aggregate_pesr.shard_~{i}",
         median_file = median_file,
-        ploidy_table=ploidy_table,
+        ploidy_table=CreatePloidyTableFromPed.out,
         pe_file = pe_file,
         pe_file_index = pe_file + ".tbi",
         sr_file = sr_file,
@@ -182,6 +196,7 @@ workflow GenerateBatchMetrics {
   output {
     File metrics = AggregateTests.out
     File? metrics_file_batchmetrics = MetricsFileMetrics.out
+    File ploidy_table = CreatePloidyTableFromPed.out
   }
 }
 
