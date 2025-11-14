@@ -195,6 +195,7 @@ workflows:
     filters:
       branches:
         - main
+        - annotate-vcf
       tags:
         - /.*/
 
