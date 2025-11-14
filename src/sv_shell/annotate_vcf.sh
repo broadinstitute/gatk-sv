@@ -39,7 +39,7 @@ fi
 working_dir=$(mktemp -d /wd_annotate_vcf_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
-echo "Median coverage Working directory: ${working_dir}"
+echo "Annotate VCF Working directory: ${working_dir}"
 
 
 vcf=$(jq -r '.vcf' "$input_json")
