@@ -232,7 +232,7 @@ cat "${calcu_bnd_output_comp}" >> labeled.bed
 
 ModifyVcf_annotated_vcf="$(realpath "${prefix}.annotated.vcf")"
 
-python /opt/sv_shell/annotate_external_af_modify_vcf.py \
+python /opt/sv-pipeline/05_annotation/scripts/annotate_external_af_modify_vcf.py \
   --vcf "${ComputeAFs_af_vcf}" \
   --ref-prefix "${external_af_ref_prefix}" \
   --labeled-bed labeled.bed \
