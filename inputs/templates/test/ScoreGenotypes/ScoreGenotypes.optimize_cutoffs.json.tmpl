@@ -1,0 +1,26 @@
+{
+  "ScoreGenotypes.vcf": {{ test_batch.concordance_vcf | tojson }},
+  "ScoreGenotypes.output_prefix": {{ test_batch.name | tojson }},
+  "ScoreGenotypes.gq_recalibrator_model_file": {{ reference_resources.aou_recalibrate_gq_model_file | tojson }},
+  "ScoreGenotypes.truth_json": {{ test_batch.recalibrate_gq_truth_json | tojson }},
+
+  "ScoreGenotypes.recalibrate_gq_args": [
+    "--keep-homvar false",
+    "--keep-homref true",
+    "--keep-multiallelic true",
+    "--skip-genotype-filtering true",
+    "--min-samples-to-estimate-allele-frequency -1"
+  ],
+  "ScoreGenotypes.genome_tracks": [
+    {{ reference_resources.recalibrate_gq_genome_track_repeatmasker | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_segdup | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_simple_repeats | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_umap100 | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_umap24 | tojson }}
+  ],
+
+  "ScoreGenotypes.linux_docker": {{ dockers.linux_docker | tojson }},
+  "ScoreGenotypes.gatk_docker": {{ dockers.gq_recalibrator_docker | tojson }},
+  "ScoreGenotypes.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "ScoreGenotypes.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
+}

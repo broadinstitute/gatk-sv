@@ -172,6 +172,15 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: ScoreGenotypes
+    primaryDescriptorPath: /wdl/ScoreGenotypes.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: FilterGenotypes
     primaryDescriptorPath: /wdl/FilterGenotypes.wdl
     filters:

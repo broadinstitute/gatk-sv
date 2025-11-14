@@ -14,6 +14,7 @@ import "MakeCohortVcf.wdl" as makecohortvcf
 import "TasksMakeCohortVcf.wdl" as tasks_makecohortvcf
 import "AnnotateVcf.wdl" as annotate
 import "GermlineCNVCase.wdl" as gcnv
+import "ScoreGenotypes.wdl" as sg
 import "FilterGenotypes.wdl" as fg
 import "JoinRawCalls.wdl" as jrc
 import "RefineComplexVariants.wdl" as rcv
@@ -594,12 +595,17 @@ workflow GATKSVPipelineSingleSample {
     Int min_pe_cpx = 3
     Int min_pe_ctx = 3
 
-    # FilterGenotypes
+    # ScoreGenotypes
+    File? truth_json
     File gq_recalibrator_model_file
     Array[String] recalibrate_gq_args = []
     Array[File] genome_tracks = []
-    Float no_call_rate_cutoff = 0.05  # Set to 1 to disable NCR filtering
-    String sl_filter_args  # Explicitly set SL cutoffs. See apply_sl_filter.py for arguments.
+    Float fmax_beta = 0.4
+    
+    # FilterGenotypes
+    Float no_call_rate_cutoff = 0.05 # Set to 1 to disable NCR filtering
+    File sl_cutoff_table
+    String? sl_filter_args # Explicitly set SL arguments - see apply_sl_filter.py
 
     ############################################################
     ## Single sample metrics
@@ -1447,20 +1453,32 @@ workflow GATKSVPipelineSingleSample {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call fg.FilterGenotypes {
+  call sg.ScoreGenotypes as ScoreGenotypes {
     input:
       vcf=SVConcordance.concordance_vcf,
       output_prefix=sample_id,
-      ploidy_table=JoinRawCalls.ploidy_table,
+      truth_json=truth_json,
       gq_recalibrator_model_file=gq_recalibrator_model_file,
       recalibrate_gq_args=recalibrate_gq_args,
       genome_tracks=genome_tracks,
+      fmax_beta=fmax_beta,
+      linux_docker=linux_docker,
+      gatk_docker=gq_recalibrator_gatk_docker,
+      sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_docker=sv_pipeline_docker
+  }
+
+  call fg.FilterGenotypes {
+    input:
+      vcf=ScoreGenotypes.unfiltered_recalibrated_vcf,
+      output_prefix=sample_id,
+      ploidy_table=JoinRawCalls.ploidy_table,
       no_call_rate_cutoff=no_call_rate_cutoff,
+      sl_cutoff_table=sl_cutoff_table,
+      optimized_sl_cutoff_table=ScoreGenotypes.sl_cutoff_table,
       sl_filter_args=sl_filter_args,
       run_qc=false,
       primary_contigs_fai=primary_contigs_fai,
-      linux_docker=linux_docker,
-      gatk_docker=gq_recalibrator_gatk_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker
   }

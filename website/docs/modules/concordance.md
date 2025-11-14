@@ -28,15 +28,15 @@ stateDiagram
   refcv: RefineComplexVariants
   jrc: JoinRawCalls
   svc: SVConcordance
-  fg: FilterGenotypes
+  sg: ScoreGenotypes
   refcv --> svc
   jrc --> svc
-  svc --> fg
+  svc --> sg
   
   class svc thisModule
   class refcv inModules
   class jrc inModules
-  class fg outModules
+  class sg outModules
 ```
 
 ### Inputs
