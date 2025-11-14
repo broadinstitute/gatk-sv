@@ -31,6 +31,7 @@
   "genome_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.genome",
   "hervk_reference": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HERVK.sorted.bed.gz",
   "line1_reference": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/LINE1.sorted.bed.gz",
+  "intron_reference": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gencode.v39.CDS.intron.tsv.gz",
   "manta_region_bed" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs_plus_mito.bed.gz",
   "manta_region_bed_index" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs_plus_mito.bed.gz.tbi",
   "mei_bed" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz",
