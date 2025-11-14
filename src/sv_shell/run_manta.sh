@@ -32,9 +32,9 @@ echo "=============== Running manta"
 # > Each analysis must be configured in a separate directory.
 TMPDIR=`mktemp -d -p .` || exit 1
 
-working_dir=$(mktemp -d wd_manta_XXXXXXXX)
+working_dir=$(mktemp -d /wd_manta_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
-output_dir=$(mktemp -d output_manta_XXXXXXXX)
+output_dir=$(mktemp -d /output_manta_XXXXXXXX)
 output_dir="$(realpath ${output_dir})"
 cd "${working_dir}"
 
