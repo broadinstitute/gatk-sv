@@ -427,47 +427,11 @@ task ModifyVcf {
         cat ~{labeled_inv} >> labeled.bed
         cat ~{labeled_bnd} >> labeled.bed
 
-        python <<CODE
-        import os
-        fin=os.popen(r'''zcat %s'''%("~{vcf}"))
-        header = []
-        body = {}
-        SVID_key = []
-        for line in fin:
-            pin=line.strip().split()
-            if pin[0][:2]=='##':
-                header.append(pin)
-            else:
-                body[pin[2]]=pin
-                SVID_key.append(pin[2])
-        header.append(['##INFO=<ID='+"~{ref_prefix}"+'_SVID'+',Number=1,Type=String,Description="SVID of an overlapping event in gnomad used for external allele frequency annotation.">'])
-
-        fin.close()
-        fin=open('labeled.bed')
-        colname = fin.readline().strip().split()
-
-        for j in range(len(colname)-1):
-            if j>1:
-                header.append(['##INFO=<ID='+"~{ref_prefix}"+'_'+colname[j]+',Number=1,Type=Float,Description="Allele frequency (for biallelic sites) or copy-state frequency (for multiallelic sites) of an overlapping event in gnomad.">'])
-
-        for line in fin:
-            pin=line.strip().split()
-            if pin[0]=='query_svid': continue
-            if not pin[0] in body.keys(): continue
-            info_add = ["~{ref_prefix}"+'_SVID'+'='+pin[1]]
-            for j in range(len(colname)-1):
-                if j>1:
-                    info_add.append("~{ref_prefix}"+'_'+colname[j]+'='+pin[j])
-            body[pin[0]][7]+=';'+';'.join(info_add)
-        fin.close()
-
-        fo=open('~{prefix}.annotated.vcf','w')
-        for i in header:
-            print(' '.join(i), file=fo)
-        for i in SVID_key:
-            print('\t'.join(body[i]), file=fo)
-        fo.close()
-        CODE
+        python /opt/sv-pipeline/05_annotation/scripts/annotate_external_af_modify_vcf.py \
+            --vcf ~{vcf} \
+            --ref-prefix ~{ref_prefix} \
+            --labeled-bed labeled.bed \
+            --output-filename ~{prefix}.annotated.vcf
 
         bgzip ~{prefix}.annotated.vcf
         tabix ~{prefix}.annotated.vcf.gz
