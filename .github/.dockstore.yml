@@ -7,6 +7,7 @@ workflows:
       branches:
         - main
         - eph_no_ip_address
+        - eph_no_ip_localize_wham
       tags:
         - /.*/
 
