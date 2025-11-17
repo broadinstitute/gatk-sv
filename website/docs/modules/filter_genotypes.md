@@ -26,7 +26,7 @@ stateDiagram
   sg: ScoreGenotypes
   fg: FilterGenotypes
   avcf: AnnotateVcf
-  svc --> fg
+  sg --> fg
   fg --> avcf
   
   class fg thisModule
@@ -53,7 +53,7 @@ Default: use input VCF filename. Prefix for the output VCF, such as the cohort n
 Table of sample ploidies generated in [JoinRawCalls](./jrc#ploidy_table).
 
 #### `sl_cutoff_table`
-An argument for the [SL filtering script](https://github.com/broadinstitute/gatk-sv/blob/main/src/sv-pipeline/scripts/apply_sl_filter.py) which is used to set `SL` cutoffs for filtering. Overridden by [optimized_sl_cutoff_table](#optimized_sl_cutoff_table).
+An argument for the [SL filtering script](https://github.com/broadinstitute/gatk-sv/blob/main/src/sv-pipeline/scripts/apply_sl_filter.py) which is used to set [_scaled logit_](./sg#sl-scores) (`SL`) cutoffs for filtering. Overridden by [optimized_sl_cutoff_table](#optimized_sl_cutoff_table).
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `optimized_sl_cutoff_table`
 This is an output from the [SL optimization script](https://github.com/broadinstitute/gatk-sv/blob/main/src/sv-pipeline/scripts/optimize_sl_filter.py). This can be used to set `SL` cutoffs for filtering in a more truth-aware manner. Overrides [sl_cutoff_table](#sl_cutoff_table) if passed.
