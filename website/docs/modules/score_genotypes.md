@@ -11,7 +11,7 @@ import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.
 
 Calibrate quality scores to provide as input to a machine learning model based on [xgboost](https://github.com/dmlc/xgboost), which is then used to filter genotypes. The output VCF contains the following updated fields:
 
-- `SL` : Scaled logit scores (see [here](#sl-scores))
+- `SL` : [Scaled logit](#sl-scores) scores
 - `GQ` : Updated genotype quality rescaled using `SL`
 - `OGQ` : Original `GQ` score before recalibration
 
