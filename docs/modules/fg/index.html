@@ -11,7 +11,7 @@
 
 
 <link rel="search" type="application/opensearchdescription+xml" title="GATK-SV" href="/gatk-sv/opensearch.xml"><link rel="stylesheet" href="/gatk-sv/assets/css/styles.82e231fb.css">
-<script src="/gatk-sv/assets/js/runtime~main.05c3c900.js" defer="defer"></script>
+<script src="/gatk-sv/assets/js/runtime~main.03397643.js" defer="defer"></script>
 <script src="/gatk-sv/assets/js/main.efb3af0b.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -36,7 +36,7 @@ QC criteria.</p>
 <h4 class="anchor anchorWithStickyNavbar_LWe7" id="ploidy_table"><code>ploidy_table</code><a href="#ploidy_table" class="hash-link" aria-label="Direct link to ploidy_table" title="Direct link to ploidy_table">​</a></h4>
 <p>Table of sample ploidies generated in <a href="/gatk-sv/docs/modules/jrc#ploidy_table">JoinRawCalls</a>.</p>
 <h4 class="anchor anchorWithStickyNavbar_LWe7" id="sl_cutoff_table"><code>sl_cutoff_table</code><a href="#sl_cutoff_table" class="hash-link" aria-label="Direct link to sl_cutoff_table" title="Direct link to sl_cutoff_table">​</a></h4>
-<p>An argument for the <a href="https://github.com/broadinstitute/gatk-sv/blob/main/src/sv-pipeline/scripts/apply_sl_filter.py" target="_blank" rel="noopener noreferrer">SL filtering script</a> which is used to set <code>SL</code> cutoffs for filtering. Overridden by <a href="#optimized_sl_cutoff_table">optimized_sl_cutoff_table</a>.</p>
+<p>An argument for the <a href="https://github.com/broadinstitute/gatk-sv/blob/main/src/sv-pipeline/scripts/apply_sl_filter.py" target="_blank" rel="noopener noreferrer">SL filtering script</a> which is used to set <a href="/gatk-sv/docs/modules/sg#sl-scores"><em>scaled logit</em></a> (<code>SL</code>) cutoffs for filtering. Overridden by <a href="#optimized_sl_cutoff_table">optimized_sl_cutoff_table</a>.</p>
 <h4 class="anchor anchorWithStickyNavbar_LWe7" id="optional-optimized_sl_cutoff_table"><span style="background-color:var(--highlight-optional-arg-background-color);border-radius:2px;color:var(--highlight-optional-arg-text-color);padding:0.2rem">Optional</span> <code>optimized_sl_cutoff_table</code><a href="#optional-optimized_sl_cutoff_table" class="hash-link" aria-label="Direct link to optional-optimized_sl_cutoff_table" title="Direct link to optional-optimized_sl_cutoff_table">​</a></h4>
 <p>This is an output from the <a href="https://github.com/broadinstitute/gatk-sv/blob/main/src/sv-pipeline/scripts/optimize_sl_filter.py" target="_blank" rel="noopener noreferrer">SL optimization script</a>. This can be used to set <code>SL</code> cutoffs for filtering in a more truth-aware manner. Overrides <a href="#sl_cutoff_table">sl_cutoff_table</a> if passed.</p>
 <h4 class="anchor anchorWithStickyNavbar_LWe7" id="optional-no_call_rate_cutoff"><span style="background-color:var(--highlight-optional-arg-background-color);border-radius:2px;color:var(--highlight-optional-arg-text-color);padding:0.2rem">Optional</span> <code>no_call_rate_cutoff</code><a href="#optional-no_call_rate_cutoff" class="hash-link" aria-label="Direct link to optional-no_call_rate_cutoff" title="Direct link to optional-no_call_rate_cutoff">​</a></h4>
