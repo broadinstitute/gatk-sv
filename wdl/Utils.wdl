@@ -557,13 +557,7 @@ task GetVcfSize {
         String samtools_cloud_docker
     }
 
-    parameter_meta {
-        vcf: {
-          localization_optional: true
-        }
-    }
-
-    Int disk_gb = round(10 + size(vcf_index, "GiB"))
+    Int disk_gb = round(10 + size(vcf, "GiB"))
     String num_records_file = "num_records.txt"
     String num_samples_file = "num_samples.txt"
     # if vcf_index is not supplied, try this path automatically:

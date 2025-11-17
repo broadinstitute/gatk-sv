@@ -116,19 +116,10 @@ task PESRBAF_QC {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    matrix_file: {
-      localization_optional: true
-    }
-    matrix_index: {
-      localization_optional: true
-    }
-  }
-
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75, 
-    disk_gb: 10,
+    disk_gb: round(10 + size(matrix_file, "GiB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -197,19 +188,10 @@ task RD_QC {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    matrix_file: {
-      localization_optional: true
-    }
-    matrix_index: {
-      localization_optional: true
-    }
-  }
-
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75, 
-    disk_gb: 10,
+    disk_gb: round(10 + size(matrix_file, "GiB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1

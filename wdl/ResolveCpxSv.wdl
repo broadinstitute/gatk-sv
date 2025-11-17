@@ -265,20 +265,11 @@ task ResolvePrep {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    disc_files: {
-      localization_optional: true
-    }
-    disc_files_index: {
-      localization_optional: true
-    }
-  }
-
   # sections of disc_files are straemed, but the every operation in this task is record-by-record except
   # bedtools merge, which should only need to keep a few records in memory at a time.
   RuntimeAttr runtime_default = object {
     mem_gb: 2.0,
-    disk_gb: ceil(20.0 + 200.0 * size(vcf, "GiB")),
+    disk_gb: ceil(20.0 + 200.0 * size(vcf, "GiB") + size(disc_files, "GiB")),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,

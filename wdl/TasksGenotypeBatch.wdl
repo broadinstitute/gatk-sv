@@ -301,19 +301,10 @@ task RDTestGenotype {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    coveragefile: {
-      localization_optional: true
-    }
-    coveragefile_index: {
-      localization_optional: true
-    }
-  }
-
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 3.75,
-    disk_gb: 10,
+    disk_gb: round(10 + size(coveragefile, "GiB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -399,19 +390,10 @@ task CountPE {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    discfile: {
-      localization_optional: true
-    }
-    discfile_index: {
-      localization_optional: true
-    }
-  }
-
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 3.75,
-    disk_gb: 10,
+    disk_gb: round(10 + size(discfile, "GiB") + size(vcf, "GiB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -476,19 +458,10 @@ task CountSR {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    splitfile: {
-      localization_optional: true
-    }
-    splitfile_index: {
-      localization_optional: true
-    }
-  }
-
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 3.75,
-    disk_gb: 10,
+    disk_gb: round(10 + size(splitfile, "GiB") + size(vcf, "GiB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1

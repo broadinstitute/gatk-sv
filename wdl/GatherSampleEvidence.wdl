@@ -475,16 +475,10 @@ task CheckAligner {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    reads_path: {
-                 localization_optional: true
-               }
-  }
-
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 1.0,
-                               disk_gb: 10,
+                               disk_gb: round(10 + size(reads_path, "GiB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
                                max_retries: 1

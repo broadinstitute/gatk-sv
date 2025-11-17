@@ -23,15 +23,7 @@ task CollectCounts {
     Int? preemptible_attempts
   }
 
-  parameter_meta {
-    cram_or_bam: {
-      localization_optional: true
-    }
-    cram_or_bam_idx: {
-      localization_optional: true
-    }
-  }
-
+  Int default_disk_gb = round(10 + size(cram_or_bam, "GiB"))
   Float mem_overhead_gb = 2.0
   Float machine_mem_gb = select_first([mem_gb, 12.0])
   Int command_mem_mb = floor((machine_mem_gb - mem_overhead_gb) * 1024)
@@ -65,7 +57,7 @@ task CollectCounts {
   runtime {
     docker: gatk_docker
     memory: machine_mem_gb + " GiB"
-    disks: "local-disk " + select_first([disk_space_gb, 10]) + if use_ssd then " SSD" else " HDD"
+    disks: "local-disk " + select_first([disk_space_gb, default_disk_gb]) + if use_ssd then " SSD" else " HDD"
     cpu: select_first([cpu, 1])
     preemptible: select_first([preemptible_attempts, 3])
     maxRetries: 1
