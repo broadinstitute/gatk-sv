@@ -53,8 +53,8 @@ python /opt/sv-pipeline/scripts/apply_sl_filter.py \
   --out tmp.vcf.gz \
   --ploidy-table "${ploidy_table}" \
   --ncr-threshold "${no_call_rate_cutoff}" \
-  "--sl-cutoff-table ${sl_cutoff_table}" \
-  "${sl_filter_args}"
+  --sl-cutoff-table "${sl_cutoff_table}" \
+  ${sl_filter_args}
 
 FilterVcf_out="$(realpath "${FilterVcf_output_prefix}.vcf.gz")"
 bcftools +fill-tags tmp.vcf.gz -- -t AC,AN,AF \
