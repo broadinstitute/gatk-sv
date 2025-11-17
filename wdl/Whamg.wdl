@@ -200,15 +200,6 @@ task RunWhamgOnCram {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    cram_file: {
-      localization_optional: true
-    }
-    cram_index: {
-      localization_optional: true
-    }
-  }
-
   Array[String] chr_list = read_lines(primary_contigs_list)
 
   # Calculate default disk size
