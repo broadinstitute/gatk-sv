@@ -29,6 +29,6 @@
   "gq_recalibrator_docker": "vahid.azurecr.io/markw/gatk:mw-tb-form-sv-filter-training-data-899360a",
   "str": "vahid.azurecr.io/gatk-sv/str:2023-05-23-v0.27.3-beta-e537bdd6",
   "denovo": "vahid.azurecr.io/gatk-sv/denovo:2025-11-15-v1.1-99ad3600",
-  "sv-shell": "vahid.azurecr.io/gatk-sv/sv-shell:2025-08-15-v1.0.5-697baf80",
+  "sv-shell": "vahid.azurecr.io/gatk-sv/sv-shell:2025-11-18-v1.1-fbe6e8b2",
   "stripy": "vahid.azurecr.io/gatk-sv/stripy:2025-11-14-v1.1-7b56c3ac"
 }
