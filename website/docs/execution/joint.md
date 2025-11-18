@@ -53,12 +53,12 @@ The following are the main pipeline outputs. For more information on the outputs
 
 ### Pipeline overview
 
-<img alt="pipeline_diagram" title="Pipeline diagram" src="https://media.githubusercontent.com/media/broadinstitute/gatk-sv/refs/tags/v1.0/terra_pipeline_diagram.jpg" width="1000" />
+![Pipeline Diagram](https://media.githubusercontent.com/media/broadinstitute/gatk-sv/refs/tags/v1.0/terra_pipeline_diagram.jpg)
 
 The following workflows and Jupyter notebooks are included in this workspace, to be executed in this order:
 
 1. `01-GatherSampleEvidence`: Per-sample SV evidence collection, including calls from a configurable set of 
-algorithms (Manta, MELT, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
+algorithms (Manta, Scramble, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
 2. `02-EvidenceQC`: Dosage bias scoring and ploidy estimation, run on preliminary batches
 3. [Notebook] `SampleQC.ipynb`: Interactively perform sample QC and filtering using outputs from `02-EvidenceQC`
 4. [Notebook] `Batching.ipynb`: Create batches for subsequent steps. For cohorts >500 samples or smaller heterogeneous cohorts
@@ -80,7 +80,8 @@ cutoff for outlier filtration in `08-FilterBatchSamples`
 18. `16-RefineComplexVariants`: Complex variant filtering and refinement
 19. `17-JoinRawCalls`: Raw call aggregation
 20. `18-SVConcordance`: Annotate genotype concordance with raw calls
-21. `19-FilterGenotypes`: Genotype filtering
+21. `19-ScoreGenotypes`: Scores genotypes to optimize GQ recalibrator model
+21. `19-FilterGenotypes`: Apply genotype filtering using GQ recalibrator model
 22. `20-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
 AF annotation with external population callsets
 
@@ -125,7 +126,7 @@ of improperly paired reads have been observed to cost more. Consider
 2. In your new workspace, delete the example data. To do this, go to the *Data* tab of the workspace. Delete the data 
    tables in this order: `sample_set_set`, `sample_set`, and `sample`. For each table, click the 3 dots icon to the 
    right of the table name and click "Delete table". Confirm when prompted.
-   <img alt="deleting data tables" title="How to delete the sample data table" src="https://i.imgur.com/43M51WH.png" width="300" />
+   <img alt="deleting data tables" title="How to delete the sample data table" src="https://i.imgur.com/43M51WH.png" width="300" height="420" />
 
 3. Create and upload a new sample data table for your samples. This should be a tab-separated file (.tsv) with one line 
    per sample, as well as a header (first) line. It should contain the columns `entity:sample_id` (first column) and 
@@ -134,11 +135,11 @@ of improperly paired reads have been observed to cost more. Consider
    [here in the GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/templates/terra_workspaces/cohort_mode/samples_1kgp_156.tsv.tmpl). 
    To upload the TSV file, navigate to the *Data* tab of the workspace, click the `Import Data` button on the top left, 
    and select "Upload TSV".
-   <img alt="uploading a TSV data table" title="How to upload a TSV data table" src="https://i.imgur.com/1ZtwseH.png" width="300" />
+   <img alt="uploading a TSV data table" title="How to upload a TSV data table" src="https://i.imgur.com/1ZtwseH.png" width="300" height="250" />
 
 4. Edit the `cohort_ped_file` item in the Workspace Data table (as shown in the screenshot below) to provide the Google 
    URI to the PED file for your cohort (make sure to share it with your Terra proxy account!).
-   <img alt="editing cohort_ped_file" title="How to edit the cohort_ped_file attribute" src="https://i.imgur.com/IFwc0gs.png" width="800" />
+   <img alt="editing cohort_ped_file" title="How to edit the cohort_ped_file attribute" src="https://i.imgur.com/IFwc0gs.png" width="800" height="400" />
 
 
 ### Creating sample_sets
@@ -212,13 +213,13 @@ Read the full EvidenceQC documentation [here](/docs/modules/eqc).
 [batching](#batching) before moving on to [TrainGCNV](#traingcnv).
 
 
-### Sample QC (notebook) {#sample-qc}
+### Sample QC {#sample-qc}
 Read the documentation on preliminary sample QC [here](/docs/modules/eqc#preliminary-sample-qc).
 Follow the `SampleQC.ipynb` notebook step-by-step to evaluate sample data quality and remove low-quality samples as needed.
 The notebook will produce a table of passing samples to use for [batching](#batching).
 
 
-### Batching (notebook) {#batching}
+### Batching {#batching}
 Read the documentation on batching [here](/docs/modules/eqc#batching).
 If necessary, follow the `Batching.ipynb` notebook step-by-step to divide samples into batches
 and create corresponding `sample_sets` for use in `03-TrainGCNV` and beyond.
@@ -273,14 +274,14 @@ to create it. To do this, select the `sample_set` data table, then select (with 
 that follows the **Sample ID requirements**. This will create a new `sample_set_set` containing all of the `sample_sets` 
 in your cohort. When you launch MergeBatchSites, you can now select this `sample_set_set`.
 
-<img alt="selecting batches" title="Selecting sample_sets in the data table" src="https://i.imgur.com/E5x3qqk.png" width="400" />
-<img alt="creating a new set" title="Creating a new sample_set_set" src="https://i.imgur.com/pizOtX9.png" width="400" />
+<img alt="selecting batches" title="Selecting sample_sets in the data table" src="https://i.imgur.com/E5x3qqk.png" width="400" height="200" />
+<img alt="creating a new set" title="Creating a new sample_set_set" src="https://i.imgur.com/pizOtX9.png" width="400" height="200" />
 * If there is already a `sample_set_set` data table in your workspace, you can create this `sample_set_set` while you 
 are launching the `09-MergeBatchSites` workflow: click "Select Data", choose "Create new sample_set_set [...]", check 
 all the batches to include (all the ones used in `03-TrainGCNV` through `08-FilterBatchSamples`), and give it a name 
 that follows the [sample ID requirements](/docs/gs/inputs#sampleids).
 
-<img alt="creating a cohort sample_set_set" title="How to create a cohort sample_set_set" src="https://i.imgur.com/zKEtSbe.png" width="500" />
+<img alt="creating a cohort sample_set_set" title="How to create a cohort sample_set_set" src="https://i.imgur.com/zKEtSbe.png" width="377" height="363" />
 
 ### 10-GenotypeBatch
 

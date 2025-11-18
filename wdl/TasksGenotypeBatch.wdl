@@ -341,6 +341,8 @@ task RDTestGenotype {
         --evidence-file ~{coveragefile} \
         -L ~{bed} \
         -O local.RD.txt.gz
+
+      tabix -f -0 -s1 -b2 -e3 local.RD.txt.gz
     else
       touch local.RD.txt
       bgzip local.RD.txt
@@ -358,6 +360,14 @@ task RDTestGenotype {
       -r ~{gt_cutoffs} \
       -y ~{bin_exclude} \
       -g TRUE
+
+    # In case of empty output, these files are not created
+    touch ~{prefix}.geno
+    touch ~{prefix}.median_geno
+    touch ~{prefix}.metrics
+    touch ~{prefix}.gq
+    touch ~{prefix}.vargq
+
     if [ ~{generate_melted_genotypes} == "true" ]; then
       /opt/sv-pipeline/04_variant_resolution/scripts/merge_RdTest_genotypes.py ~{prefix}.geno ~{prefix}.gq rd.geno.cnv.bed
       sort -k1,1V -k2,2n rd.geno.cnv.bed | uniq | bgzip -c > rd.geno.cnv.bed.gz
@@ -431,6 +441,8 @@ task CountPE {
         --evidence-file ~{discfile} \
         -L region.merged.bed \
         -O local.PE.txt.gz
+
+      tabix -f -0 -s1 -b2 -e2 local.PE.txt.gz
     else
       touch local.PE.txt
       bgzip local.PE.txt
@@ -507,6 +519,8 @@ task CountSR {
         --evidence-file ~{splitfile} \
         -L region.merged.bed \
         -O local.SR.txt.gz
+
+      tabix -f -0 -s1 -b2 -e2 local.SR.txt.gz
     else
       touch local.SR.txt
       bgzip local.SR.txt

@@ -16,13 +16,10 @@ workflow CleanVcf {
 
     File contig_list
     File allosome_fai
-    Int max_shards_per_chrom_step1
-    Int min_records_per_shard_step1
-    Int samples_per_step2_shard
-    Int? max_samples_per_shard_step3
 
     File HERVK_reference
     File LINE1_reference
+    File intron_reference
 
     String chr_x
     String chr_y
@@ -46,29 +43,23 @@ workflow CleanVcf {
     String sv_base_mini_docker
     String sv_pipeline_docker
 
-    # overrides for mini tasks
-    RuntimeAttr? runtime_override_preconcat_clean_final
-    RuntimeAttr? runtime_override_fix_header_clean_final
-    RuntimeAttr? runtime_override_concat_cleaned_vcfs
     RuntimeAttr? runtime_attr_create_ploidy
-
-    # overrides for CleanVcfContig
-    RuntimeAttr? runtime_attr_preprocess
+    RuntimeAttr? runtime_attr_format_to_clean
+		RuntimeAttr? runtime_attr_preprocess
 		RuntimeAttr? runtime_attr_revise_overlapping_cnvs
 		RuntimeAttr? runtime_attr_revise_large_cnvs
 		RuntimeAttr? runtime_attr_revise_abnormal_allosomes
 		RuntimeAttr? runtime_attr_revise_multiallelics
 		RuntimeAttr? runtime_attr_postprocess
-    RuntimeAttr? runtime_override_stitch_fragmented_cnvs
-    RuntimeAttr? runtime_override_final_cleanup
-    RuntimeAttr? runtime_attr_format
-    RuntimeAttr? runtime_override_rescue_me_dels
-
-    RuntimeAttr? runtime_override_preconcat_drc
-    RuntimeAttr? runtime_override_fix_header_drc
-
-    RuntimeAttr? runtime_override_drop_redundant_cnvs
-    RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
+		RuntimeAttr? runtime_override_drop_redundant_cnvs
+		RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
+		RuntimeAttr? runtime_override_stitch_fragmented_cnvs
+		RuntimeAttr? runtime_override_rescue_me_dels
+		RuntimeAttr? runtime_attr_add_high_fp_rate_filters
+		RuntimeAttr? runtime_attr_add_retro_del_filters
+		RuntimeAttr? runtime_override_final_cleanup
+		RuntimeAttr? runtime_attr_format_to_output
+    RuntimeAttr? runtime_override_concat_cleaned_vcfs
   }
 
   call TasksCluster.CreatePloidyTableFromPed {
@@ -87,44 +78,41 @@ workflow CleanVcf {
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter ( i in range(length(contigs)) ) {
     String contig = contigs[i]
-
     call CleanVcfChromosome.CleanVcfChromosome {
       input:
         vcf=complex_genotype_vcfs[i],
         contig=contig,
-        chr_x=chr_x,
-        chr_y=chr_y,
-        prefix="~{cohort_name}.~{contig}",
-
         background_list=complex_resolve_background_fail_list,
         bothsides_pass_list=complex_resolve_bothside_pass_list,
-        outlier_samples_list=outlier_samples_list,
         ped_file=ped_file,
         allosome_fai=allosome_fai,
-
+        prefix="~{cohort_name}.~{contig}",
+        outlier_samples_list=outlier_samples_list,
+        ploidy_table=CreatePloidyTableFromPed.out,
         HERVK_reference=HERVK_reference,
         LINE1_reference=LINE1_reference,
-        ploidy_table=CreatePloidyTableFromPed.out,
-
+        intron_reference=intron_reference,
+        chr_x=chr_x,
+        chr_y=chr_y,
         gatk_docker=gatk_docker,
         linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        
+        runtime_attr_format_to_clean=runtime_attr_format_to_clean,
         runtime_attr_preprocess=runtime_attr_preprocess,
         runtime_attr_revise_overlapping_cnvs=runtime_attr_revise_overlapping_cnvs,
         runtime_attr_revise_large_cnvs=runtime_attr_revise_large_cnvs,
         runtime_attr_revise_abnormal_allosomes=runtime_attr_revise_abnormal_allosomes,
         runtime_attr_revise_multiallelics=runtime_attr_revise_multiallelics,
         runtime_attr_postprocess=runtime_attr_postprocess,
-        runtime_override_stitch_fragmented_cnvs=runtime_override_stitch_fragmented_cnvs,
-        runtime_override_final_cleanup=runtime_override_final_cleanup,
-        runtime_override_preconcat_drc=runtime_override_preconcat_drc,
-        runtime_override_fix_header_drc=runtime_override_fix_header_drc,
         runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
         runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs,
-        runtime_attr_format=runtime_attr_format,
-        runtime_override_rescue_me_dels=runtime_override_rescue_me_dels
+        runtime_override_stitch_fragmented_cnvs=runtime_override_stitch_fragmented_cnvs,
+        runtime_override_rescue_me_dels=runtime_override_rescue_me_dels,
+        runtime_attr_add_high_fp_rate_filters=runtime_attr_add_high_fp_rate_filters,
+        runtime_attr_add_retro_del_filters=runtime_attr_add_retro_del_filters,
+        runtime_override_final_cleanup=runtime_override_final_cleanup,
+        runtime_attr_format_to_output=runtime_attr_format_to_output
     }
   }
 

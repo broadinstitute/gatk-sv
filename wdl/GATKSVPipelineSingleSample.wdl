@@ -7,6 +7,7 @@ import "GatherBatchEvidence.wdl" as batchevidence
 import "DepthPreprocessing.wdl" as dpn
 import "ClusterBatch.wdl" as clusterbatch
 import "GenerateBatchMetrics.wdl" as batchmetrics
+import "StripyWorkflow.wdl" as stripy
 import "SRTest.wdl" as SRTest
 import "FilterBatchSamples.wdl" as filterbatch
 import "GenotypeBatch.wdl" as genotypebatch
@@ -14,6 +15,11 @@ import "MakeCohortVcf.wdl" as makecohortvcf
 import "TasksMakeCohortVcf.wdl" as tasks_makecohortvcf
 import "AnnotateVcf.wdl" as annotate
 import "GermlineCNVCase.wdl" as gcnv
+import "ScoreGenotypes.wdl" as sg
+import "FilterGenotypes.wdl" as fg
+import "JoinRawCalls.wdl" as jrc
+import "RefineComplexVariants.wdl" as rcv
+import "SVConcordance.wdl" as svc
 import "SingleSampleFiltering.wdl" as SingleSampleFiltering
 import "GATKSVPipelineSingleSampleMetrics.wdl" as SingleSampleMetrics
 import "Utils.wdl" as utils
@@ -32,21 +38,26 @@ workflow GATKSVPipelineSingleSample {
     # Batch info
     String batch
     String sample_id
+    File ref_samples_list
 
     # Define raw callers to use
     # Overrides presence of case_*_vcf parameters below
+    Boolean use_dragen = false
     Boolean use_manta = true
     Boolean use_melt = false
     Boolean use_scramble = true
     Boolean use_wham = true
+    Boolean use_stripy = true
 
     Boolean? is_dragen_3_7_8
 
     # If GatherSampleEvidence outputs already prepared
+    File? dragen_vcf
     File? case_manta_vcf
     File? case_melt_vcf
     File? case_scramble_vcf
     File? case_wham_vcf
+    File? case_stripy_file
     File? case_counts_file
     File? case_pe_file
     File? case_sr_file
@@ -54,7 +65,6 @@ workflow GATKSVPipelineSingleSample {
 
     # Global files
     File ref_ped_file
-    File ref_samples_list
     File genome_file
     File primary_contigs_list
     File primary_contigs_fai
@@ -74,10 +84,12 @@ workflow GATKSVPipelineSingleSample {
     String gatk_docker
     String? gcnv_gatk_docker
     String? gatk_docker_pesr_override
+    String gq_recalibrator_gatk_docker
     String condense_counts_docker
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
     String cloud_sdk_docker
+    String stripy_docker
 
     # Must be provided if corresponding use_* is true and case_*_vcf is not provided
     String? manta_docker
@@ -182,14 +194,14 @@ workflow GATKSVPipelineSingleSample {
 
     # gCNV inputs
     File contig_ploidy_model_tar
-    File gcnv_model_tars_list  # list of files, one per line
+    File gcnv_model_tars_list
 
     # bincov counts files (for cn.mops)
     File ref_panel_bincov_matrix
 
-    File ref_pesr_disc_files_list  # list of files, one per line
-    File ref_pesr_split_files_list  # list of files, one per line
-    File ref_pesr_sd_files_list  # list of files, one per line
+    File ref_pesr_disc_files_list
+    File ref_pesr_split_files_list
+    File ref_pesr_sd_files_list
 
     File? gatk4_jar_override
     Float? gcnv_p_alt
@@ -269,16 +281,18 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_depth_merge_pre_clusterbatch
 
     # VCF merging parameters
+    RuntimeAttr? runtime_attr_combine_dragen_std
     RuntimeAttr? runtime_attr_combine_manta_std
-    RuntimeAttr? runtime_attr_combine_wham_std
-    RuntimeAttr? runtime_attr_combine_scramble_std
     RuntimeAttr? runtime_attr_combine_melt_std
-
+    RuntimeAttr? runtime_attr_combine_scramble_std
+    RuntimeAttr? runtime_attr_combine_wham_std
+    
     # Reference panel standardized caller VCFs
-    File ref_std_manta_vcf_tar
-    File ref_std_wham_vcf_tar
-    File? ref_std_scramble_vcf_tar
+    File? ref_std_dragen_vcf_tar
+    File? ref_std_manta_vcf_tar
     File? ref_std_melt_vcf_tar
+    File? ref_std_scramble_vcf_tar
+    File? ref_std_wham_vcf_tar
 
     File ref_panel_del_bed
     File ref_panel_dup_bed
@@ -296,16 +310,18 @@ workflow GATKSVPipelineSingleSample {
     String? pesr_clustering_algorithm
 
     File? baseline_depth_vcf_cluster_batch
+    File? baseline_dragen_vcf_cluster_batch
     File? baseline_manta_vcf_cluster_batch
-    File? baseline_wham_vcf_cluster_batch
-    File? baseline_scramble_vcf_cluster_batch
     File? baseline_melt_vcf_cluster_batch
+    File? baseline_scramble_vcf_cluster_batch
+    File? baseline_wham_vcf_cluster_batch
 
     Float? java_mem_fraction_cluster_batch
 
     RuntimeAttr? runtime_attr_ids_from_vcf_list_cluster_batch
     RuntimeAttr? runtime_attr_create_ploidy_cluster_batch
     RuntimeAttr? runtime_attr_prepare_pesr_vcfs_cluster_batch
+    RuntimeAttr? runtime_attr_svcluster_dragen_cluster_batch
     RuntimeAttr? runtime_attr_svcluster_manta_cluster_batch
     RuntimeAttr? runtime_attr_svcluster_melt_cluster_batch
     RuntimeAttr? runtime_attr_svcluster_scramble_cluster_batch
@@ -579,7 +595,21 @@ workflow GATKSVPipelineSingleSample {
     ## Single sample filtering
     ############################################################
 
-    Float? max_ref_panel_carrier_freq
+    # Minimum discordant pair counts for complex and translocation variants
+    Int min_pe_cpx = 3
+    Int min_pe_ctx = 3
+
+    # ScoreGenotypes
+    File? truth_json
+    File gq_recalibrator_model_file
+    Array[String] recalibrate_gq_args = []
+    Array[File] genome_tracks = []
+    Float fmax_beta = 0.4
+    
+    # FilterGenotypes
+    Float no_call_rate_cutoff = 0.05 # Set to 1 to disable NCR filtering
+    File sl_cutoff_table
+    String? sl_filter_args # Explicitly set SL arguments - see apply_sl_filter.py
 
     ############################################################
     ## Single sample metrics
@@ -599,6 +629,7 @@ workflow GATKSVPipelineSingleSample {
 
     # Do not use
     String? NONE_STRING_
+    Array[File]? NONE_ARRAY_
 
   }
 
@@ -618,6 +649,7 @@ workflow GATKSVPipelineSingleSample {
         bam_or_cram_file=select_first([bam_or_cram_file]),
         bam_or_cram_index=bam_or_cram_index,
         sample_id=sample_id,
+        dragen_vcf=dragen_vcf,
         collect_coverage = collect_coverage,
         collect_pesr = collect_pesr,
         is_dragen_3_7_8 = is_dragen_3_7_8,
@@ -704,6 +736,9 @@ workflow GATKSVPipelineSingleSample {
       wgd_score_runtime_attr=wgd_score_runtime_attr
   }
 
+  if (use_dragen && defined(dragen_vcf)) {
+    Array[File] dragen_vcfs_ = [select_first([dragen_vcf])]
+  }
   if (use_manta) {
     Array[File] manta_vcfs_ = [select_first([case_manta_vcf, GatherSampleEvidence.manta_vcf])]
   }
@@ -718,6 +753,11 @@ workflow GATKSVPipelineSingleSample {
   }
 
   Array[String] ref_samples = read_lines(ref_samples_list)
+
+  Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
+  Array[File] ref_pesr_disc_files = read_lines(ref_pesr_disc_files_list)
+  Array[File] ref_pesr_split_files = read_lines(ref_pesr_split_files_list)
+  Array[File] ref_pesr_sd_files = read_lines(ref_pesr_sd_files_list)
 
   call batchevidence.GatherBatchEvidence as GatherBatchEvidence {
     input:
@@ -736,14 +776,14 @@ workflow GATKSVPipelineSingleSample {
       PE_files=[case_pe_file_],
       cytoband=cytobands,
       mei_bed=mei_bed,
-      ref_panel_PE_files=read_lines(ref_pesr_disc_files_list),
+      ref_panel_PE_files=ref_pesr_disc_files,
       SR_files=[case_sr_file_],
-      ref_panel_SR_files=read_lines(ref_pesr_split_files_list),
+      ref_panel_SR_files=ref_pesr_split_files,
       SD_files=[case_sd_file_],
-      ref_panel_SD_files=read_lines(ref_pesr_sd_files_list),
+      ref_panel_SD_files=ref_pesr_sd_files,
       sd_locs_vcf=sd_locs_vcf,
       contig_ploidy_model_tar = contig_ploidy_model_tar,
-      gcnv_model_tars = read_lines(gcnv_model_tars_list),
+      gcnv_model_tars = gcnv_model_tars,
       gatk4_jar_override = gatk4_jar_override,
       run_ploidy = true,
       append_first_sample_to_ped = true,
@@ -778,6 +818,7 @@ workflow GATKSVPipelineSingleSample {
       ref_copy_number_autosomal_contigs = ref_copy_number_autosomal_contigs,
       allosomal_contigs = allosomal_contigs,
       gcnv_qs_cutoff=gcnv_qs_cutoff,
+      dragen_vcfs=dragen_vcfs_,
       manta_vcfs=manta_vcfs_,
       melt_vcfs=melt_vcfs_,
       scramble_vcfs=scramble_vcfs_,
@@ -821,32 +862,35 @@ workflow GATKSVPipelineSingleSample {
 
   File combined_ped_file = select_first([GatherBatchEvidence.combined_ped_file])
 
+  if (use_stripy && !defined(case_stripy_file)) {
+    call stripy.StripyWorkflow {
+      input:
+        bam_or_cram_file = select_first([bam_or_cram_file]),
+        sample_name = sample_id,
+        ped_file = combined_ped_file,
+        reference_fasta = reference_fasta,
+        linux_docker = linux_docker,
+        stripy_docker = stripy_docker
+    }
+  }
+
   # Merge calls with reference panel
-  if (defined(GatherBatchEvidence.std_manta_vcf_tar)) {
+  if (defined(GatherBatchEvidence.std_dragen_vcf_tar) && defined(ref_std_dragen_vcf_tar)) {
+    call utils.CombineTars as CombineDragenStd {
+      input:
+        tar1=select_first([ref_std_dragen_vcf_tar]),
+        tar2=select_first([GatherBatchEvidence.std_dragen_vcf_tar]),
+        linux_docker=linux_docker,
+        runtime_attr_override=runtime_attr_combine_dragen_std
+    }
+  }
+  if (defined(GatherBatchEvidence.std_manta_vcf_tar) && defined(ref_std_manta_vcf_tar)) {
     call utils.CombineTars as CombineMantaStd {
       input:
-        tar1=ref_std_manta_vcf_tar,
+        tar1=select_first([ref_std_manta_vcf_tar]),
         tar2=select_first([GatherBatchEvidence.std_manta_vcf_tar]),
         linux_docker=linux_docker,
         runtime_attr_override=runtime_attr_combine_manta_std
-    }
-  }
-  if (defined(GatherBatchEvidence.std_wham_vcf_tar)) {
-    call utils.CombineTars as CombineWhamStd {
-      input:
-        tar1=ref_std_wham_vcf_tar,
-        tar2=select_first([GatherBatchEvidence.std_wham_vcf_tar]),
-        linux_docker=linux_docker,
-        runtime_attr_override=runtime_attr_combine_wham_std
-    }
-  }
-  if (defined(GatherBatchEvidence.std_scramble_vcf_tar) && defined(ref_std_scramble_vcf_tar)) {
-    call utils.CombineTars as CombineScrambleStd {
-      input:
-        tar1=select_first([ref_std_scramble_vcf_tar]),
-        tar2=select_first([GatherBatchEvidence.std_scramble_vcf_tar]),
-        linux_docker=linux_docker,
-        runtime_attr_override=runtime_attr_combine_scramble_std
     }
   }
   if (defined(GatherBatchEvidence.std_melt_vcf_tar) && defined(ref_std_melt_vcf_tar)) {
@@ -858,14 +902,41 @@ workflow GATKSVPipelineSingleSample {
         runtime_attr_override=runtime_attr_combine_melt_std
     }
   }
-  File merged_manta_vcf_tar = select_first([CombineMantaStd.out, ref_std_manta_vcf_tar])
-  File merged_wham_vcf_tar = select_first([CombineWhamStd.out, ref_std_wham_vcf_tar])
-  if (defined(CombineScrambleStd.out) || defined(ref_std_scramble_vcf_tar)) {
-    File merged_scramble_vcf_tar = select_first([CombineScrambleStd.out, ref_std_scramble_vcf_tar])
+  if (defined(GatherBatchEvidence.std_scramble_vcf_tar) && defined(ref_std_scramble_vcf_tar)) {
+    call utils.CombineTars as CombineScrambleStd {
+      input:
+        tar1=select_first([ref_std_scramble_vcf_tar]),
+        tar2=select_first([GatherBatchEvidence.std_scramble_vcf_tar]),
+        linux_docker=linux_docker,
+        runtime_attr_override=runtime_attr_combine_scramble_std
+    }
+  }
+  if (defined(GatherBatchEvidence.std_wham_vcf_tar) && defined(ref_std_wham_vcf_tar)) {
+    call utils.CombineTars as CombineWhamStd {
+      input:
+        tar1=select_first([ref_std_wham_vcf_tar]),
+        tar2=select_first([GatherBatchEvidence.std_wham_vcf_tar]),
+        linux_docker=linux_docker,
+        runtime_attr_override=runtime_attr_combine_wham_std
+    }
+  }
+
+  if (defined(CombineDragenStd.out) || defined(ref_std_dragen_vcf_tar)) {
+    File merged_dragen_vcf_tar = select_first([CombineDragenStd.out, ref_std_dragen_vcf_tar])
+  }
+  if (defined(CombineMantaStd.out) || defined(ref_std_manta_vcf_tar)) {
+    File merged_manta_vcf_tar = select_first([CombineMantaStd.out, ref_std_manta_vcf_tar])
   }
   if (defined(CombineMeltStd.out) || defined(ref_std_melt_vcf_tar)) {
     File merged_melt_vcf_tar = select_first([CombineMeltStd.out, ref_std_melt_vcf_tar])
   }
+  if (defined(CombineScrambleStd.out) || defined(ref_std_scramble_vcf_tar)) {
+    File merged_scramble_vcf_tar = select_first([CombineScrambleStd.out, ref_std_scramble_vcf_tar])
+  }
+  if (defined(CombineWhamStd.out) || defined(ref_std_wham_vcf_tar)) {
+    File merged_wham_vcf_tar = select_first([CombineWhamStd.out, ref_std_wham_vcf_tar])
+  }
+  
 
   call dpn.MergeSet as MergeSetDel {
     input:
@@ -886,10 +957,11 @@ workflow GATKSVPipelineSingleSample {
 
   call clusterbatch.ClusterBatch {
     input:
+      dragen_vcf_tar=merged_dragen_vcf_tar,
       manta_vcf_tar=merged_manta_vcf_tar,
-      wham_vcf_tar=merged_wham_vcf_tar,
-      scramble_vcf_tar=merged_scramble_vcf_tar,
       melt_vcf_tar=merged_melt_vcf_tar,
+      scramble_vcf_tar=merged_scramble_vcf_tar,
+      wham_vcf_tar=merged_wham_vcf_tar,
       del_bed=MergeSetDel.out,
       dup_bed=MergeSetDup.out,
       batch=batch,
@@ -913,10 +985,11 @@ workflow GATKSVPipelineSingleSample {
       run_module_metrics=run_clusterbatch_metrics,
       linux_docker=linux_docker,
       baseline_depth_vcf=baseline_depth_vcf_cluster_batch,
+      baseline_dragen_vcf=baseline_dragen_vcf_cluster_batch,
       baseline_manta_vcf=baseline_manta_vcf_cluster_batch,
-      baseline_wham_vcf=baseline_wham_vcf_cluster_batch,
-      baseline_scramble_vcf=baseline_scramble_vcf_cluster_batch,
       baseline_melt_vcf=baseline_melt_vcf_cluster_batch,
+      baseline_scramble_vcf=baseline_scramble_vcf_cluster_batch,
+      baseline_wham_vcf=baseline_wham_vcf_cluster_batch,
       gatk_docker=gatk_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -924,10 +997,11 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_ids_from_vcf_list=runtime_attr_ids_from_vcf_list_cluster_batch,
       runtime_attr_create_ploidy=runtime_attr_create_ploidy_cluster_batch,
       runtime_attr_prepare_pesr_vcfs=runtime_attr_prepare_pesr_vcfs_cluster_batch,
+      runtime_attr_svcluster_dragen=runtime_attr_svcluster_dragen_cluster_batch,
       runtime_attr_svcluster_manta=runtime_attr_svcluster_manta_cluster_batch,
       runtime_attr_svcluster_melt=runtime_attr_svcluster_melt_cluster_batch,
-      runtime_attr_svcluster_wham=runtime_attr_svcluster_wham_cluster_batch,
       runtime_attr_svcluster_scramble=runtime_attr_svcluster_scramble_cluster_batch,
+      runtime_attr_svcluster_wham=runtime_attr_svcluster_wham_cluster_batch,
       runtime_override_concat_vcfs_pesr=runtime_override_concat_vcfs_pesr_cluster_batch,
       runtime_attr_gatk_to_svtk_vcf_pesr=runtime_attr_gatk_to_svtk_vcf_pesr_cluster_batch,
       runtime_attr_scatter_bed=runtime_attr_scatter_bed_cluster_batch,
@@ -940,20 +1014,28 @@ workflow GATKSVPipelineSingleSample {
   }
 
   # Pull out clustered calls from this sample only
-  if (use_manta) {
-    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterManta {
+  call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDepth {
+    input :
+      vcf_gz=ClusterBatch.clustered_depth_vcf,
+      sample_id=sample_id,
+      evidence="RD",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_filter_vcf_by_id
+  }
+  if (use_dragen && defined(dragen_vcf)) {
+    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDragen {
         input :
-            vcf_gz=select_first([ClusterBatch.clustered_manta_vcf]),
+            vcf_gz=select_first([ClusterBatch.clustered_dragen_vcf]),
             sample_id=sample_id,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
             runtime_attr_override=runtime_attr_filter_vcf_by_id
     }
   }
-  if (use_wham) {
-    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterWham {
+  if (use_manta) {
+    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterManta {
         input :
-            vcf_gz=select_first([ClusterBatch.clustered_wham_vcf]),
+            vcf_gz=select_first([ClusterBatch.clustered_manta_vcf]),
             sample_id=sample_id,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
@@ -980,20 +1062,21 @@ workflow GATKSVPipelineSingleSample {
             runtime_attr_override=runtime_attr_filter_vcf_by_id
     }
   }
-
-  call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDepth {
-    input :
-      vcf_gz=ClusterBatch.clustered_depth_vcf,
-      sample_id=sample_id,
-      evidence="RD",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_filter_vcf_by_id
+  if (use_wham) {
+    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterWham {
+        input :
+            vcf_gz=select_first([ClusterBatch.clustered_wham_vcf]),
+            sample_id=sample_id,
+            evidence="RD,PE,SR",
+            sv_base_mini_docker=sv_base_mini_docker,
+            runtime_attr_override=runtime_attr_filter_vcf_by_id
+    }
   }
 
   call tasks_makecohortvcf.ConcatVcfs as MergePesrVcfs {
     input:
-      vcfs=select_all([FilterManta.out, FilterWham.out, FilterScramble.out, FilterMelt.out]),
-      vcfs_idx=select_all([FilterManta.out_index, FilterWham.out_index, FilterScramble.out_index, FilterMelt.out_index]),
+      vcfs=select_all([FilterDragen.out, FilterManta.out, FilterMelt.out, FilterScramble.out, FilterWham.out]),
+      vcfs_idx=select_all([FilterDragen.out_index, FilterManta.out_index, FilterMelt.out_index, FilterScramble.out_index, FilterWham.out_index]),
       allow_overlaps=true,
       outfile_prefix="~{batch}.filtered_pesr_merged",
       sv_base_mini_docker=sv_base_mini_docker,
@@ -1330,12 +1413,89 @@ workflow GATKSVPipelineSingleSample {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call SingleSampleFiltering.FilterVcfWithReferencePanelCalls as FilterVcfWithReferencePanelCalls {
+
+  call rcv.RefineComplexVariants {
     input:
-      single_sample_vcf=FilterVcfForCaseSampleGenotype.out,
-      cohort_vcf=ref_panel_vcf,
-      case_sample_id=sample_id,
-      max_ref_panel_carrier_freq=max_ref_panel_carrier_freq,
+      vcf=FilterVcfForCaseSampleGenotype.out,
+      prefix=sample_id,
+      batch_name_list=[sample_id],
+      batch_sample_lists=[SamplesList.samples_file],
+      PE_metrics=[GatherBatchEvidence.merged_PE],
+      PE_metrics_indexes=[GatherBatchEvidence.merged_PE_index],
+      Depth_DEL_beds=[MergeSetDel.out],
+      Depth_DUP_beds=[MergeSetDup.out],
+      min_pe_cpx=min_pe_cpx,
+      min_pe_ctx=min_pe_ctx,
+      sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
+      linux_docker=linux_docker
+  }
+
+  call jrc.JoinRawCalls {
+    input:
+      prefix=sample_id,
+      clustered_depth_vcfs=if defined(ClusterBatch.clustered_depth_vcf) then select_all([ClusterBatch.clustered_depth_vcf]) else NONE_ARRAY_,
+      clustered_depth_vcf_indexes=if defined(ClusterBatch.clustered_depth_vcf_index) then select_all([ClusterBatch.clustered_depth_vcf_index]) else NONE_ARRAY_,
+      clustered_dragen_vcfs=if defined(ClusterBatch.clustered_dragen_vcf) then select_all([ClusterBatch.clustered_dragen_vcf]) else NONE_ARRAY_,
+      clustered_dragen_vcf_indexes=if defined(ClusterBatch.clustered_dragen_vcf_index) then select_all([ClusterBatch.clustered_dragen_vcf_index]) else NONE_ARRAY_,
+      clustered_manta_vcfs=if defined(ClusterBatch.clustered_manta_vcf) then select_all([ClusterBatch.clustered_manta_vcf]) else NONE_ARRAY_,
+      clustered_manta_vcf_indexes=if defined(ClusterBatch.clustered_manta_vcf_index) then select_all([ClusterBatch.clustered_manta_vcf_index]) else NONE_ARRAY_,
+      clustered_melt_vcfs=if defined(ClusterBatch.clustered_melt_vcf) then select_all([ClusterBatch.clustered_melt_vcf]) else NONE_ARRAY_,
+      clustered_melt_vcf_indexes=if defined(ClusterBatch.clustered_melt_vcf_index) then select_all([ClusterBatch.clustered_melt_vcf_index]) else NONE_ARRAY_,
+      clustered_scramble_vcfs=if defined(ClusterBatch.clustered_scramble_vcf) then select_all([ClusterBatch.clustered_scramble_vcf]) else NONE_ARRAY_,
+      clustered_scramble_vcf_indexes=if defined(ClusterBatch.clustered_scramble_vcf_index) then select_all([ClusterBatch.clustered_scramble_vcf_index]) else NONE_ARRAY_,
+      clustered_wham_vcfs=if defined(ClusterBatch.clustered_wham_vcf) then select_all([ClusterBatch.clustered_wham_vcf]) else NONE_ARRAY_,
+      clustered_wham_vcf_indexes=if defined(ClusterBatch.clustered_wham_vcf_index) then select_all([ClusterBatch.clustered_wham_vcf_index]) else NONE_ARRAY_,
+      ped_file=combined_ped_file,
+      contig_list=primary_contigs_list,
+      reference_fasta=reference_fasta,
+      reference_fasta_fai=reference_index,
+      reference_dict=reference_dict,
+      chr_x=chr_x,
+      chr_y=chr_y,
+      gatk_docker=gatk_docker,
+      sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
+  }
+
+  call svc.SVConcordance {
+    input:
+      eval_vcf=RefineComplexVariants.cpx_refined_vcf,
+      truth_vcf=JoinRawCalls.joined_raw_calls_vcf,
+      output_prefix=sample_id,
+      contig_list=primary_contigs_list,
+      reference_dict=reference_dict,
+      gatk_docker=gatk_docker,
+      sv_base_mini_docker=sv_base_mini_docker
+  }
+
+  call sg.ScoreGenotypes as ScoreGenotypes {
+    input:
+      vcf=SVConcordance.concordance_vcf,
+      output_prefix=sample_id,
+      truth_json=truth_json,
+      gq_recalibrator_model_file=gq_recalibrator_model_file,
+      recalibrate_gq_args=recalibrate_gq_args,
+      genome_tracks=genome_tracks,
+      fmax_beta=fmax_beta,
+      linux_docker=linux_docker,
+      gatk_docker=gq_recalibrator_gatk_docker,
+      sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_docker=sv_pipeline_docker
+  }
+
+  call fg.FilterGenotypes {
+    input:
+      vcf=ScoreGenotypes.unfiltered_recalibrated_vcf,
+      output_prefix=sample_id,
+      ploidy_table=JoinRawCalls.ploidy_table,
+      no_call_rate_cutoff=no_call_rate_cutoff,
+      sl_cutoff_table=sl_cutoff_table,
+      optimized_sl_cutoff_table=ScoreGenotypes.sl_cutoff_table,
+      sl_filter_args=sl_filter_args,
+      run_qc=false,
+      primary_contigs_fai=primary_contigs_fai,
+      sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker
   }
 
@@ -1345,7 +1505,7 @@ workflow GATKSVPipelineSingleSample {
       ref_samples = ref_samples,
       case_sample = sample_id,
       wgd_scores = EvidenceQC.WGD_scores,
-      sample_counts = case_counts_file_,
+      sample_counts = case_counts_file,
       contig_list = primary_contigs_list,
       linux_docker = linux_docker,
       sv_pipeline_docker = sv_pipeline_docker
@@ -1361,38 +1521,30 @@ workflow GATKSVPipelineSingleSample {
 
   call SingleSampleFiltering.SampleQC as FilterSample {
     input:
-      vcf=FilterVcfWithReferencePanelCalls.out,
+      vcf=FilterGenotypes.filtered_vcf,
       sample_filtering_qc_file=SampleFilterQC.out,
       sv_pipeline_docker=sv_pipeline_docker,
   }
 
   call annotate.AnnotateVcf {
-       input:
-        vcf = FilterSample.out,
-        prefix = batch,
-        contig_list = primary_contigs_list,
-        protein_coding_gtf = protein_coding_gtf,
-        noncoding_bed = noncoding_bed,
-        promoter_window = promoter_window,
-        max_breakend_as_cnv_length = max_breakend_as_cnv_length,
-        external_af_ref_bed = external_af_ref_bed,
-        external_af_ref_prefix = external_af_ref_bed_prefix,
-        external_af_population = external_af_population,
-        sv_per_shard = annotation_sv_per_shard,
-        sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_docker = sv_pipeline_docker,
-        gatk_docker = gatk_docker,
-        runtime_attr_svannotate = runtime_attr_svannotate
-  }
-
-  call SingleSampleFiltering.VcfToBed as VcfToBed {
     input:
-      vcf = AnnotateVcf.annotated_vcf,
+      vcf = FilterSample.out,
       prefix = batch,
-      sv_pipeline_docker = sv_pipeline_docker
+      contig_list = primary_contigs_list,
+      protein_coding_gtf = protein_coding_gtf,
+      noncoding_bed = noncoding_bed,
+      promoter_window = promoter_window,
+      max_breakend_as_cnv_length = max_breakend_as_cnv_length,
+      external_af_ref_bed = external_af_ref_bed,
+      external_af_ref_prefix = external_af_ref_bed_prefix,
+      external_af_population = external_af_population,
+      sv_per_shard = annotation_sv_per_shard,
+      sv_base_mini_docker = sv_base_mini_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
+      gatk_docker = gatk_docker
   }
 
-  call SingleSampleFiltering.UpdateBreakendRepresentation {
+  call SingleSampleFiltering.UpdateBreakendRepresentationAndRemoveFilters {
     input:
       vcf=AnnotateVcf.annotated_vcf,
       vcf_idx=AnnotateVcf.annotated_vcf_index,
@@ -1402,17 +1554,27 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker=sv_pipeline_docker
   }
 
+  if (use_stripy) {
+    call SingleSampleFiltering.MergeStripyVcf {
+      input:
+      vcf = UpdateBreakendRepresentationAndRemoveFilters.out,
+      stripy_vcf = select_first([StripyWorkflow.vcf_output, case_stripy_file]),
+      output_prefix = sample_id + ".gatk_sv",
+      sv_pipeline_docker = sv_pipeline_docker
+    }
+  }
+
   call SingleSampleMetrics.SingleSampleMetrics {
     input:
       name = batch,
       ref_samples = ref_samples,
       case_sample = sample_id,
       wgd_scores = EvidenceQC.WGD_scores,
-      sample_pe = case_pe_file_,
-      sample_sr = case_sr_file_,
-      sample_counts = case_counts_file_,
-      cleaned_vcf = MakeCohortVcf.vcf,
-      final_vcf = UpdateBreakendRepresentation.out,
+      sample_pe = case_pe_file,
+      sample_sr = case_sr_file,
+      sample_counts = case_counts_file,
+      cleaned_vcf = FilterVcfForCaseSampleGenotype.out,
+      final_vcf = UpdateBreakendRepresentationAndRemoveFilters.out,
       genotyped_pesr_vcf = ConvertCNVsWithoutDepthSupportToBNDs.out_vcf,
       genotyped_depth_vcf = GenotypeBatch.genotyped_depth_vcf,
       non_genotyped_unique_depth_calls_vcf = GetUniqueNonGenotypedDepthCalls.out,
@@ -1430,10 +1592,9 @@ workflow GATKSVPipelineSingleSample {
   }
 
   output {
-    File final_vcf = UpdateBreakendRepresentation.out
-    File final_vcf_idx = UpdateBreakendRepresentation.out_idx
-
-    File final_bed = VcfToBed.bed
+    # Final calls
+    File final_vcf = select_first([MergeStripyVcf.out, UpdateBreakendRepresentationAndRemoveFilters.out])
+    File final_vcf_idx = select_first([MergeStripyVcf.out_index, UpdateBreakendRepresentationAndRemoveFilters.out_idx])
 
     # These files contain events reported in the internal VCF representation
     # They are less VCF-spec compliant but may be useful if components of the pipeline need to be re-run
@@ -1441,10 +1602,19 @@ workflow GATKSVPipelineSingleSample {
     File pre_cleanup_vcf = AnnotateVcf.annotated_vcf
     File pre_cleanup_vcf_idx = AnnotateVcf.annotated_vcf_index
 
-    File ploidy_matrix = select_first([GatherBatchEvidence.batch_ploidy_matrix])
-    File ploidy_plots = select_first([GatherBatchEvidence.batch_ploidy_plots])
+    # STRipy outputs
+    File? stripy_json_output = StripyWorkflow.json_output
+    File? stripy_tsv_output = StripyWorkflow.tsv_output
+    File? stripy_html_output = StripyWorkflow.html_output
+    File? stripy_vcf_output = StripyWorkflow.vcf_output
+
+    # QC files
     File metrics_file = SingleSampleMetrics.metrics_file
     File qc_file = SingleSampleQC.out
+
+    # Ploidy estimates
+    File ploidy_matrix = select_first([GatherBatchEvidence.batch_ploidy_matrix])
+    File ploidy_plots = select_first([GatherBatchEvidence.batch_ploidy_plots])
 
     # These files contain any depth based calls made in the case sample that did not pass genotyping
     # in the case sample and do not match a depth-based call from the reference panel.

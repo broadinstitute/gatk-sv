@@ -1,0 +1,288 @@
+#!/usr/bin/env python3
+
+import json
+import sys
+import os
+import argparse
+import tempfile
+import subprocess
+from pathlib import Path
+
+def load_locus_profiles(profiles_path=None):
+    """Load locus profiles from JSON file"""
+    if profiles_path is None:
+        # Try multiple possible paths
+        possible_paths = [
+            "scripts/catalogs/loci_profiles.json",
+            "/opt/stripy-pipeline/scripts/catalogs/loci_profiles.json",
+            "catalogs/loci_profiles.json"
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                profiles_path = path
+                break
+        else:
+            profiles_path = "scripts/catalogs/loci_profiles.json"
+    
+    try:
+        with open(profiles_path, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print(f"Warning: Could not find {profiles_path}", file=sys.stderr)
+        return {}
+    except json.JSONDecodeError:
+        print(f"Warning: Invalid JSON in {profiles_path}", file=sys.stderr)
+        return {}
+
+def expand_locus(locus_arg, profiles):
+    """Expand locus argument by replacing profile names with actual loci"""
+    if not locus_arg:
+        return []
+    
+    locus_list = [locus.strip() for locus in locus_arg.split(',')]
+    expanded_locus = []
+    
+    for locus in locus_list:
+        if locus in profiles:
+            expanded_locus.extend(profiles[locus])
+        else:
+            expanded_locus.append(locus)
+    
+    return list(set(expanded_locus))
+
+def find_base_config(base_config_path=None):
+    """Find base config file - use provided path or look in current directory"""
+    if base_config_path and os.path.exists(base_config_path):
+        return base_config_path
+    
+    # Look for config files in current working directory
+    possible_configs = [
+        "config.json",
+        "stripy-config.json"
+    ]
+    
+    for config_name in possible_configs:
+        if os.path.exists(config_name):
+            return config_name
+    
+    # Look for default config in the same directory as this script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    default_config_path = os.path.join(script_dir, "default-config.json")
+    
+    if os.path.exists(default_config_path):
+        print(f"Using default config: {default_config_path}", file=sys.stderr)
+        return default_config_path
+    
+    # If no config found, create a minimal default one
+    print("Warning: No base config found, using minimal default config", file=sys.stderr)
+    return None
+
+def create_config_file(base_config_path=None, output_json=None, output_tsv=None, 
+                      output_html=None, verbose=None, num_threads=None):
+    """Create a config file by merging base config with overrides"""
+    config = {}
+    
+    # Find and load base config
+    actual_base_config = find_base_config(base_config_path)
+    if actual_base_config:
+        try:
+            with open(actual_base_config, 'r') as f:
+                config = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Warning: Could not load base config {actual_base_config}: {e}", file=sys.stderr)
+    
+    # Apply overrides
+    if output_json is not None:
+        config["output_json"] = output_json
+    if output_tsv is not None:
+        config["output_tsv"] = output_tsv
+    if output_html is not None:
+        config["output_html"] = output_html
+    if verbose is not None:
+        config["verbose"] = verbose
+    if num_threads is not None:
+        config["num_threads"] = num_threads
+    
+    # Create temporary config file
+    config_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+    json.dump(config, config_file, indent=2)
+    config_file.close()
+    
+    return config_file.name
+
+def find_validator_script():
+    possible_paths = [
+        "scripts/validate_custom_loci_bed.py",
+        "/opt/stripy-pipeline/scripts/validate_custom_loci_bed.py",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "validate_custom_loci_bed.py")
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+    return None
+
+def find_vcf_script():
+    possible_paths = [
+        "scripts/stripy_to_vcf.py",
+        "/opt/stripy-pipeline/scripts/stripy_to_vcf.py",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "stripy_to_vcf.py")
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+    return None
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: stripy [STRipy arguments...]", file=sys.stderr)
+        sys.exit(1)
+    
+    args = sys.argv[1:]
+    new_args = []
+    locus_expanded = False
+    custom_bed_path = None
+    output_vcf = None
+    output_dir = None
+    reference_fasta = None
+    input_bam = None
+    
+    # Config options we handle
+    config_options = {
+        'base_config': None,
+        'output_json': None,
+        'output_tsv': None,
+        'output_html': None,
+        'verbose': None,
+        'num_threads': None
+    }
+    
+    # Parse arguments manually to avoid conflicts with STRipy
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        
+        # Handle our config options
+        if arg == "--base-config" and i + 1 < len(args):
+            config_options['base_config'] = args[i + 1]
+            i += 2
+        elif arg == "--output-json" and i + 1 < len(args):
+            config_options['output_json'] = args[i + 1].lower() == 'true'
+            i += 2
+        elif arg == "--output-tsv" and i + 1 < len(args):
+            config_options['output_tsv'] = args[i + 1].lower() == 'true'
+            i += 2
+        elif arg == "--output-html" and i + 1 < len(args):
+            config_options['output_html'] = args[i + 1].lower() == 'true'
+            i += 2
+        elif arg == "--verbose" and i + 1 < len(args):
+            config_options['verbose'] = args[i + 1].lower() == 'true'
+            i += 2
+        elif arg == "--num-threads" and i + 1 < len(args):
+            try:
+                config_options['num_threads'] = int(args[i + 1])
+            except ValueError:
+                print(f"Warning: Invalid num-threads value: {args[i + 1]}", file=sys.stderr)
+            i += 2
+        elif arg == "--custom" and i + 1 < len(args):
+            custom_bed_path = args[i + 1]
+            new_args.extend([arg, custom_bed_path])
+            i += 2
+        elif arg == "--output-vcf" and i + 1 < len(args):
+            output_vcf = args[i + 1].lower() == 'true'
+            i += 2
+        elif arg == "--output" and i + 1 < len(args):
+            output_dir = args[i + 1]
+            new_args.extend([arg, output_dir])
+            i += 2
+        elif arg == "--reference" and i + 1 < len(args):
+            reference_fasta = args[i + 1]
+            new_args.extend([arg, reference_fasta])
+            i += 2
+        elif arg == "--input" and i + 1 < len(args):
+            input_bam = args[i + 1]
+            new_args.extend([arg, input_bam])
+            i += 2
+        elif arg == "--locus" and i + 1 < len(args):
+            # Found --locus, expand it
+            profiles = load_locus_profiles()
+            locus_arg = args[i + 1]
+            expanded_locus = expand_locus(locus_arg, profiles)
+            new_args.extend(["--locus", ",".join(expanded_locus)])
+            locus_expanded = True
+            i += 2
+        else:
+            new_args.append(arg)
+            i += 1
+    
+    # Always create config file (base config is required)
+    config_file = create_config_file(
+        base_config_path=config_options['base_config'],
+        output_json=config_options['output_json'],
+        output_tsv=config_options['output_tsv'],
+        output_html=config_options['output_html'],
+        verbose=config_options['verbose'],
+        num_threads=config_options['num_threads']
+    )
+    
+    # Add config file to STRipy args
+    new_args.extend(["--config", config_file])
+    
+    if locus_expanded:
+        print(f"Expanded locus: {new_args[new_args.index('--locus') + 1]}", file=sys.stderr)
+    
+    if custom_bed_path:
+        validator = find_validator_script()
+        if validator:
+            print(f"Validating custom loci BED: {custom_bed_path}", file=sys.stderr)
+            result = subprocess.run(["python3", validator, custom_bed_path], capture_output=True, text=True)
+            if result.stdout:
+                print(result.stdout, file=sys.stderr, end="")
+            if result.stderr:
+                print(result.stderr, file=sys.stderr, end="")
+            if result.returncode != 0:
+                print("Custom loci BED validation failed. Aborting.", file=sys.stderr)
+                sys.exit(result.returncode)
+    
+    if output_vcf:
+        # preflight
+        vcf_tool = find_vcf_script()
+        # execute STRipy
+        cmd = ["python3", "/opt/stripy-pipeline/stri.py"] + new_args
+        result = subprocess.run(cmd)
+        if result.returncode != 0:
+            sys.exit(result.returncode)
+        if not output_dir:
+            print("ERROR: --output is required when --output-vcf is true", file=sys.stderr)
+            sys.exit(1)
+        if not vcf_tool:
+            print("ERROR: Could not locate stripy_to_vcf.py script", file=sys.stderr)
+            sys.exit(1)
+        json_candidates = []
+        if os.path.isdir(output_dir):
+            for name in os.listdir(output_dir):
+                if name.lower().endswith('.json'):
+                    json_candidates.append(os.path.join(output_dir, name))
+        if not json_candidates:
+            print("ERROR: No JSON output found to convert to VCF", file=sys.stderr)
+            sys.exit(1)
+        json_path = sorted(json_candidates, key=lambda p: os.path.getsize(p), reverse=True)[0]
+        
+        # Derive VCF filename from input BAM filename (like other outputs)
+        if input_bam:
+            base_name = os.path.splitext(os.path.basename(input_bam))[0]
+            vcf_filename = f"{base_name}.vcf"
+        else:
+            vcf_filename = "stripy.vcf"
+        
+        vcf_out = os.path.join(output_dir, vcf_filename)
+        vcf_cmd = ["python3", vcf_tool, "--json", json_path, "-o", vcf_out]
+        if reference_fasta:
+            vcf_cmd.extend(["--reference", reference_fasta])
+        vcf_res = subprocess.run(vcf_cmd)
+        sys.exit(vcf_res.returncode)
+    else:
+        os.execvp("python3", ["python3", "/opt/stripy-pipeline/stri.py"] + new_args)
+
+if __name__ == "__main__":
+    main()

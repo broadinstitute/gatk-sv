@@ -8,45 +8,44 @@ workflow CleanVcfChromosome {
 	input {
 		File vcf
 		String contig
-		String chr_x
-		String chr_y
-		String prefix
-
 		File background_list
 		File bothsides_pass_list
 		File? outlier_samples_list
 		File ped_file
-		File ploidy_table
-		
 		File allosome_fai
+		String prefix
+		
 		File HERVK_reference
 		File LINE1_reference
-		
+		File intron_reference
+
+		File ploidy_table
+		String chr_x
+		String chr_y
+
+		File? svtk_to_gatk_script  # For debugging
+		File? make_clean_gq_script
+
 		String gatk_docker
 		String linux_docker
 		String sv_base_mini_docker
 		String sv_pipeline_docker
-		File? svtk_to_gatk_script  # For debugging
-		File? make_clean_gq_script
 
-		# overrides for local tasks
+		RuntimeAttr? runtime_attr_format_to_clean
 		RuntimeAttr? runtime_attr_preprocess
 		RuntimeAttr? runtime_attr_revise_overlapping_cnvs
 		RuntimeAttr? runtime_attr_revise_large_cnvs
 		RuntimeAttr? runtime_attr_revise_abnormal_allosomes
 		RuntimeAttr? runtime_attr_revise_multiallelics
 		RuntimeAttr? runtime_attr_postprocess
-		RuntimeAttr? runtime_override_stitch_fragmented_cnvs
-		RuntimeAttr? runtime_override_final_cleanup
-		RuntimeAttr? runtime_override_rescue_me_dels
-		RuntimeAttr? runtime_attr_add_high_fp_rate_filters
-
-    RuntimeAttr? runtime_override_preconcat_drc
-    RuntimeAttr? runtime_override_fix_header_drc
-
 		RuntimeAttr? runtime_override_drop_redundant_cnvs
 		RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
-		RuntimeAttr? runtime_attr_format
+		RuntimeAttr? runtime_override_stitch_fragmented_cnvs
+		RuntimeAttr? runtime_override_rescue_me_dels
+		RuntimeAttr? runtime_attr_add_high_fp_rate_filters
+		RuntimeAttr? runtime_attr_add_retro_del_filters
+		RuntimeAttr? runtime_override_final_cleanup
+		RuntimeAttr? runtime_attr_format_to_output
 	}
 
 	call fvcf.FormatVcf as FormatVcfToClean {
@@ -55,7 +54,7 @@ workflow CleanVcfChromosome {
 			ploidy_table=ploidy_table,
 			output_prefix="~{prefix}.formatted",
 			sv_pipeline_docker=sv_pipeline_docker,
-			runtime_attr_override=runtime_attr_format
+			runtime_attr_override=runtime_attr_format_to_clean
 	}
 
 	call CleanVcfPreprocess {
@@ -154,9 +153,19 @@ workflow CleanVcfChromosome {
       runtime_attr_override=runtime_attr_add_high_fp_rate_filters
   }
 
-  call FinalCleanup {
+  call AddRetroDelFilters {
     input:
       vcf=AddHighFDRFilters.out,
+      intron_reference=intron_reference,
+      contig=contig,
+      prefix="~{prefix}.retro_del_filtered",
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_add_retro_del_filters
+  }
+
+  call FinalCleanup {
+    input:
+      vcf=AddRetroDelFilters.out,
       contig=contig,
       prefix="~{prefix}.final_cleanup",
       sv_pipeline_docker=sv_pipeline_docker,
@@ -169,7 +178,7 @@ workflow CleanVcfChromosome {
       ploidy_table=ploidy_table,
       output_prefix="~{prefix}.final_format",
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_format
+      runtime_attr_override=runtime_attr_format_to_output
   }
 	
 	output {
@@ -755,6 +764,52 @@ CODE
   }
 }
 
+# Add FILTER status for variants that are close to an intron
+task AddRetroDelFilters {
+  input {
+    File vcf
+    File intron_reference
+    String contig
+    String prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Float input_size = size(vcf, "GiB")
+  Float intron_size = size(intron_reference, "GiB")
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: ceil(10.0 + input_size * 3.0 + intron_size * 2.0),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+    
+    python /opt/sv-pipeline/04_variant_resolution/scripts/add_retro_del_filters.py \
+      ~{vcf} \
+      ~{intron_reference} \
+      ~{contig} \
+      ~{prefix}.vcf.gz
+  >>>
+
+  output {
+    File out = "~{prefix}.vcf.gz"
+  }
+}
 
 
 # Final VCF cleanup

@@ -10,7 +10,7 @@ medianfile=/data/talkowski/Samples/common-mind/matrices/CMC.all.binCov.median
 famfile=/data/talkowski/Samples/common-mind/ref/CMC.fam
 
 for batch in CMC; do
-  for source in delly lumpy manta wham depth; do
+  for source in delly dragen lumpy manta wham depth; do
     for chrom in 1; do
     # for chrom in $(seq 1 22) X Y; do
       for bed in split_beds/${batch}.${source}.${chrom}.*; do

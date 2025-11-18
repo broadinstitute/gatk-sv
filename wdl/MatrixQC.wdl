@@ -155,6 +155,8 @@ task PESRBAF_QC {
         --evidence-file ~{matrix_file} \
         -L regions.bed \
         -O ~{print_ev_output}
+
+      tabix -f -0 -s1 -b2 -e2 ~{print_ev_output}
     else
       touch ~{print_ev_output}
       bgzip ~{print_ev_output}

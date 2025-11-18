@@ -1,0 +1,18 @@
+{
+  "clustered_depth_vcf": "/inputs/NA12878.cluster_batch.depth.vcf.gz",
+  "clustered_depth_vcf_index": "/inputs/NA12878.cluster_batch.depth.vcf.gz.tbi",
+  "clustered_dragen_vcf": null,
+  "clustered_dragen_vcf_index": null,
+  "clustered_manta_vcf": "/inputs/NA12878.cluster_batch.manta.vcf.gz",
+  "clustered_manta_vcf_index": "/inputs/NA12878.cluster_batch.manta.vcf.gz.tbi",
+  "clustered_scramble_vcf": "/inputs/NA12878.cluster_batch.scramble.vcf.gz",
+  "clustered_scramble_vcf_index": "/inputs/NA12878.cluster_batch.scramble.vcf.gz.tbi",
+  "clustered_wham_vcf": "/inputs/NA12878.cluster_batch.wham.vcf.gz",
+  "clustered_wham_vcf_index": "/inputs/NA12878.cluster_batch.wham.vcf.gz.tbi",
+  "contig_list": "/inputs/primary_contigs.list",
+  "ped_file": "/inputs/combined_ped_file.ped",
+  "prefix": "NA12878",
+  "reference_dict": "/inputs/Homo_sapiens_assembly38.dict",
+  "reference_fasta": "/inputs/Homo_sapiens_assembly38.fasta",
+  "reference_fasta_fai": "/inputs/Homo_sapiens_assembly38.fasta.fai"
+}

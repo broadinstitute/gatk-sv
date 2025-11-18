@@ -31,6 +31,7 @@
   "genome_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.genome",
   "hervk_reference": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HERVK.sorted.bed.gz",
   "line1_reference": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/LINE1.sorted.bed.gz",
+  "intron_reference": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gencode.v39.CDS.intron.tsv.gz",
   "manta_region_bed" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs_plus_mito.bed.gz",
   "manta_region_bed_index" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs_plus_mito.bed.gz.tbi",
   "mei_bed" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz",
@@ -67,7 +68,9 @@
   "wham_include_list_bed_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed",
 
   "aou_recalibrate_gq_model_file": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gatk-sv-recalibrator.aou_phase_1.v1.model",
+  "hgsvc_release3_gq_model_file": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gatk-sv-recalibrator.hgsvc_release3.v1.model",
   "hgdp_recalibrate_gq_model_file": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.gq_recalibrator.model",
+  "sl_cutoff_table": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/baseline_sl_cutoffs.tsv",
 
   "recalibrate_gq_genome_track_repeatmasker": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
   "recalibrate_gq_genome_track_repeatmasker_index": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz.tbi",
@@ -81,6 +84,7 @@
   "recalibrate_gq_genome_track_umap24_index": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s24.bed.gz.tbi",
 
   "ccdg_abel_site_level_benchmarking_dataset" : ["CCDG_abel", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/CCDG_Abel"],
+  "gnomad_v4_site_level_benchmarking_dataset": ["gnomAD_v4", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gnomAD_v4"],
   "gnomad_v2_collins_sample_level_benchmarking_dataset": ["gnomAD_v2_Collins", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/gnomAD_v2_Collins_perSample.tar.gz"],
   "gnomad_v2_collins_site_level_benchmarking_dataset" : ["gnomAD_v2_Collins", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gnomAD_v2_Collins"],
   "hgsv_byrska_bishop_sample_level_benchmarking_dataset": ["HGSV_ByrskaBishop", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_ByrskaBishop_GATKSV_perSample.tar.gz"],

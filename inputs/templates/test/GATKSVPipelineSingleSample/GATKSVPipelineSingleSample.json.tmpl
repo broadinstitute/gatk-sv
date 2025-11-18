@@ -27,11 +27,13 @@
   "GATKSVPipelineSingleSample.condense_counts_docker" : {{ dockers.condense_counts_docker | tojson }},
   "GATKSVPipelineSingleSample.gatk_docker": {{ dockers.gatk_docker | tojson }},
   "GATKSVPipelineSingleSample.gatk_docker_pesr_override" : {{ dockers.gatk_docker | tojson }},
+  "GATKSVPipelineSingleSample.gq_recalibrator_gatk_docker" : {{ dockers.gq_recalibrator_docker | tojson }},
   "GATKSVPipelineSingleSample.genomes_in_the_cloud_docker" : {{ dockers.genomes_in_the_cloud_docker | tojson }},
 
   "GATKSVPipelineSingleSample.linux_docker" : {{ dockers.linux_docker | tojson }},
   "GATKSVPipelineSingleSample.manta_docker": {{ dockers.manta_docker | tojson }},
   "GATKSVPipelineSingleSample.scramble_docker": {{ dockers.scramble_docker | tojson }},
+  "GATKSVPipelineSingleSample.stripy_docker": {{ dockers.stripy_docker | tojson }},
   "GATKSVPipelineSingleSample.sv_base_docker": {{ dockers.sv_base_docker | tojson }},
   "GATKSVPipelineSingleSample.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
   "GATKSVPipelineSingleSample.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
@@ -46,7 +48,6 @@
   "GATKSVPipelineSingleSample.primary_contigs_list" : {{ reference_resources.primary_contigs_list | tojson }},
   "GATKSVPipelineSingleSample.primary_contigs_fai" : {{ reference_resources.primary_contigs_fai | tojson }},
   "GATKSVPipelineSingleSample.genome_file" : {{ reference_resources.genome_file | tojson }},
-  "GATKSVPipelineSingleSample.max_ref_panel_carrier_freq": 0.03,
   "GATKSVPipelineSingleSample.manta_region_bed" : {{ reference_resources.manta_region_bed | tojson }},
   "GATKSVPipelineSingleSample.manta_region_bed_index" : {{ reference_resources.manta_region_bed_index | tojson }},
   "GATKSVPipelineSingleSample.mei_bed": {{ reference_resources.mei_bed | tojson }},
@@ -89,7 +90,7 @@
   "GATKSVPipelineSingleSample.depth_clustering_algorithm": "SINGLE_LINKAGE",
 
   "GATKSVPipelineSingleSample.clustering_config_part1" : {{ reference_resources.clustering_config_part1 | tojson }},
-  "GATKSVPipelineSingleSample.stratification_config_part1" : {{ reference_resources.clustering_config_part1 | tojson }},
+  "GATKSVPipelineSingleSample.stratification_config_part1" : {{ reference_resources.stratification_config_part1 | tojson }},
   "GATKSVPipelineSingleSample.clustering_config_part2" : {{ reference_resources.clustering_config_part2 | tojson }},
   "GATKSVPipelineSingleSample.stratification_config_part2" : {{ reference_resources.stratification_config_part2 | tojson }},
   "GATKSVPipelineSingleSample.clustering_track_bed_files": {{ reference_resources.clustering_tracks | tojson }},
@@ -108,6 +109,27 @@
 
   "GATKSVPipelineSingleSample.MakeCohortVcf.HERVK_reference": {{ reference_resources.hervk_reference | tojson }},
   "GATKSVPipelineSingleSample.MakeCohortVcf.LINE1_reference": {{ reference_resources.line1_reference | tojson }},
+  "GATKSVPipelineSingleSample.MakeCohortVcf.intron_reference": {{ reference_resources.intron_reference | tojson }},
+
+  "GATKSVPipelineSingleSample.RefineComplexVariants.n_per_split": "15000",
+
+  "GATKSVPipelineSingleSample.gq_recalibrator_model_file": {{ reference_resources.hgsvc_release3_gq_model_file | tojson }},
+  "GATKSVPipelineSingleSample.sl_filter_args": "--gq-scale-factor 1.012072 --upper-sl-cap 1500 --lower-sl-cap -1000 --sl-shift 300",
+  "GATKSVPipelineSingleSample.sl_cutoff_table": {{ ref_panel.sl_cutoff_table | tojson }},
+  "GATKSVPipelineSingleSample.genome_tracks": [
+    {{ reference_resources.recalibrate_gq_genome_track_repeatmasker | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_segdup | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_simple_repeats | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_umap100 | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_umap24 | tojson }}
+  ],
+  "GATKSVPipelineSingleSample.recalibrate_gq_args": [
+    "--keep-homvar false",
+    "--keep-homref true",
+    "--keep-multiallelic true",
+    "--skip-genotype-filtering true",
+    "--min-samples-to-estimate-allele-frequency -1"
+  ],
 
   "GATKSVPipelineSingleSample.protein_coding_gtf" : {{ reference_resources.protein_coding_gtf | tojson }},
   "GATKSVPipelineSingleSample.noncoding_bed" :       {{ reference_resources.noncoding_bed | tojson }},
@@ -121,6 +143,7 @@
   "GATKSVPipelineSingleSample.ref_samples_list" : {{ ref_panel.samples_list | tojson }},
   "GATKSVPipelineSingleSample.ref_std_manta_vcf_tar" : {{ ref_panel.std_manta_vcf_tar | tojson }},
   "GATKSVPipelineSingleSample.ref_std_wham_vcf_tar" : {{ ref_panel.std_wham_vcf_tar | tojson }},
+  "GATKSVPipelineSingleSample.ref_std_scramble_vcf_tar" : {{ ref_panel.std_scramble_vcf_tar | tojson }},
   "GATKSVPipelineSingleSample.ref_pesr_disc_files_list" : {{ ref_panel.PE_files_list | tojson }},
   "GATKSVPipelineSingleSample.ref_pesr_split_files_list" : {{ ref_panel.SR_files_list | tojson }},
   "GATKSVPipelineSingleSample.ref_pesr_sd_files_list" : {{ ref_panel.SD_files_list | tojson }},

@@ -20,6 +20,7 @@ workflow RDTestChromosome {
     File samples
     Boolean allosome
     File ref_dict
+    File? outlier_sample_ids
 
     String sv_pipeline_docker
     String linux_docker
@@ -56,6 +57,7 @@ workflow RDTestChromosome {
           prefix = basename(split),
           flags = flags,
           ref_dict = ref_dict,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_rdtest
       }
@@ -71,6 +73,7 @@ workflow RDTestChromosome {
           prefix = basename(split),
           flags = flags,
           ref_dict = ref_dict,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_rdtest
       }
@@ -99,6 +102,7 @@ workflow RDTestChromosome {
           prefix = basename(split),
           flags = flags,
           ref_dict = ref_dict,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_rdtest
       }
@@ -131,6 +135,7 @@ task RDTest {
     File ref_dict
     String prefix
     String flags
+    File? outlier_sample_ids
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -173,12 +178,14 @@ task RDTest {
         --evidence-file ~{coveragefile} \
         -L "${chrom}:${start}-${end}" \
         -O local.RD.txt.gz
+
+      tabix -f -0 -s1 -b2 -e3 local.RD.txt.gz
     else
       touch local.RD.txt
       bgzip local.RD.txt
       tabix -p bed local.RD.txt.gz
     fi
-
+    
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
       -n ~{prefix} \
@@ -186,7 +193,7 @@ task RDTest {
       -m ~{medianfile} \
       -f ~{ped_file} \
       -w ~{include_list} \
-      ~{flags}
+      ~{if defined(outlier_sample_ids) then "--outlierSampleIds ~{outlier_sample_ids}" else ""} ~{flags}
   
   >>>
   runtime {
