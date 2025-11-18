@@ -95,7 +95,6 @@ workflow CleanVcf {
         chr_x=chr_x,
         chr_y=chr_y,
         gatk_docker=gatk_docker,
-        linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_format_to_clean=runtime_attr_format_to_clean,
