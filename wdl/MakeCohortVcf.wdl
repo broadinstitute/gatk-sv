@@ -153,7 +153,6 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_fix_header_regeno
 
     # overrides for CleanVcf
-    RuntimeAttr? runtime_attr_create_ploidy
     RuntimeAttr? runtime_attr_format_to_clean
     RuntimeAttr? runtime_attr_preprocess
     RuntimeAttr? runtime_attr_revise_overlapping_cnvs

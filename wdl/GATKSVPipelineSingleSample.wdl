@@ -1292,7 +1292,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_preconcat_regeno=runtime_override_preconcat_regeno,
       runtime_override_fix_header_regeno=runtime_override_fix_header_regeno,
 
-      runtime_attr_create_ploidy=runtime_attr_create_ploidy,
       runtime_attr_format_to_clean=runtime_attr_format_to_clean,
       runtime_attr_preprocess=runtime_attr_preprocess,
       runtime_attr_revise_overlapping_cnvs=runtime_attr_revise_overlapping_cnvs,
