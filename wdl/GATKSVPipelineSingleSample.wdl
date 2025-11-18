@@ -517,7 +517,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_final_cleanup
     RuntimeAttr? runtime_attr_format_to_output
     RuntimeAttr? runtime_override_concat_cleaned_vcfs
-
+    
     # overrides for VcfQc
     RuntimeAttr? runtime_override_site_level_benchmark_plot
     RuntimeAttr? runtime_override_per_sample_benchmark_plot

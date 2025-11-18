@@ -346,7 +346,7 @@ task CleanVcfReviseMultiallelicCnvs {
       tabix -p vcf ~{vcf}
     fi
     
-    gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseMutliallelicCnvs \
+    gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseMultiallelicCnvs \
       -V ~{vcf} \
       -O ~{output_vcf} \
       ~{if defined(outlier_samples_list) then "--outlier-samples ~{outlier_samples_list}" else "" }
