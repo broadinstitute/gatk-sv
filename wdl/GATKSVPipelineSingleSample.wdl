@@ -503,7 +503,6 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_fix_header_regeno
 
     # overrides for CleanVcf
-    RuntimeAttr? runtime_attr_create_ploidy_clean_vcf
     RuntimeAttr? runtime_attr_format_to_clean
     RuntimeAttr? runtime_attr_preprocess
     RuntimeAttr? runtime_attr_revise_overlapping_cnvs
@@ -1215,7 +1214,6 @@ workflow GATKSVPipelineSingleSample {
       reference_fasta_fai=reference_index,
       reference_dict=reference_dict,
       java_mem_fraction=combine_batches_java_mem_fraction,
-      gatk_docker=gatk_docker,
 
       cohort_name=batch,
 
@@ -1294,7 +1292,7 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_preconcat_regeno=runtime_override_preconcat_regeno,
       runtime_override_fix_header_regeno=runtime_override_fix_header_regeno,
 
-      runtime_attr_create_ploidy=runtime_attr_create_ploidy_clean_vcf,
+      runtime_attr_create_ploidy=runtime_attr_create_ploidy,
       runtime_attr_format_to_clean=runtime_attr_format_to_clean,
       runtime_attr_preprocess=runtime_attr_preprocess,
       runtime_attr_revise_overlapping_cnvs=runtime_attr_revise_overlapping_cnvs,
