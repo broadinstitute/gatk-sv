@@ -440,7 +440,6 @@ workflow GATKSVPipelineSingleSample {
 
     # overrides for mini tasks
     RuntimeAttr? runtime_override_subset_inversions
-    RuntimeAttr? runtime_override_concat_cleaned_vcfs
 
     # overrides for CombineBatches
     RuntimeAttr? runtime_attr_create_ploidy
