@@ -45,20 +45,20 @@ workflow CleanVcf {
 
     RuntimeAttr? runtime_attr_create_ploidy
     RuntimeAttr? runtime_attr_format_to_clean
-		RuntimeAttr? runtime_attr_preprocess
-		RuntimeAttr? runtime_attr_revise_overlapping_cnvs
-		RuntimeAttr? runtime_attr_revise_large_cnvs
-		RuntimeAttr? runtime_attr_revise_abnormal_allosomes
-		RuntimeAttr? runtime_attr_revise_multiallelics
-		RuntimeAttr? runtime_attr_postprocess
-		RuntimeAttr? runtime_override_drop_redundant_cnvs
-		RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
-		RuntimeAttr? runtime_override_stitch_fragmented_cnvs
-		RuntimeAttr? runtime_override_rescue_me_dels
-		RuntimeAttr? runtime_attr_add_high_fp_rate_filters
-		RuntimeAttr? runtime_attr_add_retro_del_filters
-		RuntimeAttr? runtime_override_final_cleanup
-		RuntimeAttr? runtime_attr_format_to_output
+    RuntimeAttr? runtime_attr_preprocess
+    RuntimeAttr? runtime_attr_revise_overlapping_cnvs
+    RuntimeAttr? runtime_attr_revise_large_cnvs
+    RuntimeAttr? runtime_attr_revise_abnormal_allosomes
+    RuntimeAttr? runtime_attr_revise_multiallelics
+    RuntimeAttr? runtime_attr_postprocess
+    RuntimeAttr? runtime_override_drop_redundant_cnvs
+    RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
+    RuntimeAttr? runtime_override_stitch_fragmented_cnvs
+    RuntimeAttr? runtime_override_rescue_me_dels
+    RuntimeAttr? runtime_attr_add_high_fp_rate_filters
+    RuntimeAttr? runtime_attr_add_retro_del_filters
+    RuntimeAttr? runtime_override_final_cleanup
+    RuntimeAttr? runtime_attr_format_to_output
     RuntimeAttr? runtime_override_concat_cleaned_vcfs
   }
 
