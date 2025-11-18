@@ -6,15 +6,9 @@
   "CleanVcf.intron_reference": {{ reference_resources.intron_reference | tojson }},
   "CleanVcf.chr_x": {{ reference_resources.chr_x | tojson }},
   "CleanVcf.chr_y": {{ reference_resources.chr_y | tojson }},
-
-  "CleanVcf.max_shards_per_chrom_step1": 200,
-  "CleanVcf.min_records_per_shard_step1": 5000,
-  "CleanVcf.clean_vcf1b_records_per_shard": 10000,
-  "CleanVcf.samples_per_step2_shard": 100,
-  "CleanVcf.clean_vcf5_records_per_shard": 5000,
-
   "CleanVcf.primary_contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
 
+  "CleanVcf.gatk_docker": {{ dockers.gatk_docker | tojson }},
   "CleanVcf.linux_docker": {{ dockers.linux_docker | tojson }},
   "CleanVcf.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
   "CleanVcf.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},

@@ -428,16 +428,9 @@ workflow GATKSVPipelineSingleSample {
     File mei_bed
 
     Int max_shard_size_resolve
-    Int clean_vcf_max_shards_per_chrom_clean_vcf_step1
-    Int clean_vcf_min_records_per_shard_clean_vcf_step1
-    Int clean_vcf_samples_per_clean_vcf_step2_shard
-    Int clean_vcf5_records_per_shard
-    Int clean_vcf1b_records_per_shard
 
     String? chr_x
     String? chr_y
-
-    Int? clean_vcf_random_seed
 
     # Run MakeCohortVcf metrics - default is off for single sample pipeline
     Boolean? run_makecohortvcf_metrics = false
@@ -509,46 +502,24 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_preconcat_regeno
     RuntimeAttr? runtime_override_fix_header_regeno
 
-    # overrides for CleanVcfContig
-    RuntimeAttr? runtime_override_preconcat_clean_final
-    RuntimeAttr? runtime_override_fix_header_clean_final
-    RuntimeAttr? runtime_attr_format_clean
-
-    RuntimeAttr? runtime_override_clean_vcf_1a
-    RuntimeAttr? runtime_override_clean_vcf_2
-    RuntimeAttr? runtime_override_clean_vcf_3
-    RuntimeAttr? runtime_override_clean_vcf_4
-    RuntimeAttr? runtime_override_clean_vcf_5_scatter
-    RuntimeAttr? runtime_override_clean_vcf_5_make_cleangq
-    RuntimeAttr? runtime_override_clean_vcf_5_find_redundant_multiallelics
-    RuntimeAttr? runtime_override_clean_vcf_5_polish
-    RuntimeAttr? runtime_override_stitch_fragmented_cnvs
-    RuntimeAttr? runtime_override_final_cleanup
-
-    RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
-    RuntimeAttr? runtime_attr_override_sort_bed_1b
-    RuntimeAttr? runtime_attr_override_intersect_bed_1b
-    RuntimeAttr? runtime_attr_override_build_dict_1b
-    RuntimeAttr? runtime_attr_override_scatter_1b
-    RuntimeAttr? runtime_attr_override_filter_vcf_1b
-    RuntimeAttr? runtime_override_concat_vcfs_1b
-    RuntimeAttr? runtime_override_cat_multi_cnvs_1b
-
-    RuntimeAttr? runtime_override_preconcat_step1
-    RuntimeAttr? runtime_override_fix_header_step1
-
-    RuntimeAttr? runtime_override_preconcat_drc
-    RuntimeAttr? runtime_override_fix_header_drc
-
-    RuntimeAttr? runtime_override_split_vcf_to_clean
-    RuntimeAttr? runtime_override_combine_step_1_sex_chr_revisions
-    RuntimeAttr? runtime_override_split_include_list
-    RuntimeAttr? runtime_override_combine_clean_vcf_2
-    RuntimeAttr? runtime_override_combine_revised_4
-    RuntimeAttr? runtime_override_combine_multi_ids_4
+    # overrides for CleanVcf
+    RuntimeAttr? runtime_attr_create_ploidy_clean_vcf
+    RuntimeAttr? runtime_attr_format_to_clean
+    RuntimeAttr? runtime_attr_preprocess
+    RuntimeAttr? runtime_attr_revise_overlapping_cnvs
+    RuntimeAttr? runtime_attr_revise_large_cnvs
+    RuntimeAttr? runtime_attr_revise_abnormal_allosomes
+    RuntimeAttr? runtime_attr_revise_multiallelics
+    RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_override_drop_redundant_cnvs
-    RuntimeAttr? runtime_override_combine_step_1_vcfs
     RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
+    RuntimeAttr? runtime_override_stitch_fragmented_cnvs
+    RuntimeAttr? runtime_override_rescue_me_dels
+    RuntimeAttr? runtime_attr_add_high_fp_rate_filters
+    RuntimeAttr? runtime_attr_add_retro_del_filters
+    RuntimeAttr? runtime_override_final_cleanup
+    RuntimeAttr? runtime_attr_format_to_output
+    RuntimeAttr? runtime_override_concat_cleaned_vcfs
 
     # overrides for VcfQc
     RuntimeAttr? runtime_override_site_level_benchmark_plot
@@ -1254,21 +1225,15 @@ workflow GATKSVPipelineSingleSample {
       median_coverage_files=[GatherBatchEvidence.median_cov],
 
       max_shard_size_resolve=max_shard_size_resolve,
-      max_shards_per_chrom_clean_vcf_step1=clean_vcf_max_shards_per_chrom_clean_vcf_step1,
-      min_records_per_shard_clean_vcf_step1=clean_vcf_min_records_per_shard_clean_vcf_step1,
-      samples_per_clean_vcf_step2_shard=clean_vcf_samples_per_clean_vcf_step2_shard,
-      clean_vcf5_records_per_shard=clean_vcf5_records_per_shard,
-      clean_vcf1b_records_per_shard=clean_vcf1b_records_per_shard,
 
       chr_x=select_first([chr_x, "chrX"]),
       chr_y=select_first([chr_y, "chrY"]),
-
-      random_seed=clean_vcf_random_seed,
 
       run_module_metrics = run_makecohortvcf_metrics,
 
       primary_contigs_list=primary_contigs_list,
 
+      gatk_docker=gatk_docker,
       linux_docker=linux_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
@@ -1278,7 +1243,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_rename_variants=runtime_override_rename_variants,
       runtime_override_breakpoint_overlap_filter=runtime_override_breakpoint_overlap_filter,
       runtime_override_clean_background_fail=runtime_override_clean_background_fail,
-      runtime_override_concat_cleaned_vcfs=runtime_override_concat_cleaned_vcfs,
       runtime_attr_create_ploidy=runtime_attr_create_ploidy,
       runtime_attr_reformat_1=runtime_attr_reformat_1,
       runtime_attr_reformat_2=runtime_attr_reformat_2,
@@ -1329,39 +1293,25 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_subset_ped_regeno=runtime_attr_subset_ped_regeno,
       runtime_override_preconcat_regeno=runtime_override_preconcat_regeno,
       runtime_override_fix_header_regeno=runtime_override_fix_header_regeno,
-      runtime_override_preconcat_clean_final=runtime_override_preconcat_clean_final,
-      runtime_override_fix_header_clean_final=runtime_override_fix_header_clean_final,
-      runtime_override_clean_vcf_1a=runtime_override_clean_vcf_1a,
-      runtime_override_clean_vcf_2=runtime_override_clean_vcf_2,
-      runtime_override_clean_vcf_3=runtime_override_clean_vcf_3,
-      runtime_override_clean_vcf_4=runtime_override_clean_vcf_4,
-      runtime_override_clean_vcf_5_scatter=runtime_override_clean_vcf_5_scatter,
-      runtime_override_clean_vcf_5_make_cleangq=runtime_override_clean_vcf_5_make_cleangq,
-      runtime_override_clean_vcf_5_find_redundant_multiallelics=runtime_override_clean_vcf_5_find_redundant_multiallelics,
-      runtime_override_clean_vcf_5_polish=runtime_override_clean_vcf_5_polish,
-      runtime_override_stitch_fragmented_cnvs=runtime_override_stitch_fragmented_cnvs,
-      runtime_override_final_cleanup=runtime_override_final_cleanup,
-      runtime_attr_override_subset_large_cnvs_1b=runtime_attr_override_subset_large_cnvs_1b,
-      runtime_attr_override_sort_bed_1b=runtime_attr_override_sort_bed_1b,
-      runtime_attr_override_intersect_bed_1b=runtime_attr_override_intersect_bed_1b,
-      runtime_attr_override_build_dict_1b=runtime_attr_override_build_dict_1b,
-      runtime_attr_override_scatter_1b=runtime_attr_override_scatter_1b,
-      runtime_attr_override_filter_vcf_1b=runtime_attr_override_filter_vcf_1b,
-      runtime_override_concat_vcfs_1b=runtime_override_concat_vcfs_1b,
-      runtime_override_cat_multi_cnvs_1b=runtime_override_cat_multi_cnvs_1b,
-      runtime_override_preconcat_step1=runtime_override_preconcat_step1,
-      runtime_override_fix_header_step1=runtime_override_fix_header_step1,
-      runtime_override_preconcat_drc=runtime_override_preconcat_drc,
-      runtime_override_fix_header_drc=runtime_override_fix_header_drc,
-      runtime_override_split_vcf_to_clean=runtime_override_split_vcf_to_clean,
-      runtime_override_combine_step_1_sex_chr_revisions=runtime_override_combine_step_1_sex_chr_revisions,
-      runtime_override_split_include_list=runtime_override_split_include_list,
-      runtime_override_combine_clean_vcf_2=runtime_override_combine_clean_vcf_2,
-      runtime_override_combine_revised_4=runtime_override_combine_revised_4,
-      runtime_override_combine_multi_ids_4=runtime_override_combine_multi_ids_4,
+
+      runtime_attr_create_ploidy=runtime_attr_create_ploidy_clean_vcf,
+      runtime_attr_format_to_clean=runtime_attr_format_to_clean,
+      runtime_attr_preprocess=runtime_attr_preprocess,
+      runtime_attr_revise_overlapping_cnvs=runtime_attr_revise_overlapping_cnvs,
+      runtime_attr_revise_large_cnvs=runtime_attr_revise_large_cnvs,
+      runtime_attr_revise_abnormal_allosomes=runtime_attr_revise_abnormal_allosomes,
+      runtime_attr_revise_multiallelics=runtime_attr_revise_multiallelics,
+      runtime_attr_postprocess=runtime_attr_postprocess,
       runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
-      runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
       runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs,
+      runtime_override_stitch_fragmented_cnvs=runtime_override_stitch_fragmented_cnvs,
+      runtime_override_rescue_me_dels=runtime_override_rescue_me_dels,
+      runtime_attr_add_high_fp_rate_filters=runtime_attr_add_high_fp_rate_filters,
+      runtime_attr_add_retro_del_filters=runtime_attr_add_retro_del_filters,
+      runtime_override_final_cleanup=runtime_override_final_cleanup,
+      runtime_attr_format_to_output=runtime_attr_format_to_output,
+      runtime_override_concat_cleaned_vcfs=runtime_override_concat_cleaned_vcfs,
+
       runtime_override_site_level_benchmark_plot=runtime_override_site_level_benchmark_plot,
       runtime_override_per_sample_benchmark_plot=runtime_override_per_sample_benchmark_plot,
       runtime_override_subset_vcf=runtime_override_subset_vcf,
@@ -1385,8 +1335,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_benchmark_samples=runtime_override_benchmark_samples,
       runtime_override_split_shuffled_list=runtime_override_split_shuffled_list,
       runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks,
-      runtime_attr_format_clean=runtime_attr_format_clean
-
   }
 
   call SingleSampleFiltering.FilterVcfForShortDepthCalls as FilterVcfDepthLt5kb {

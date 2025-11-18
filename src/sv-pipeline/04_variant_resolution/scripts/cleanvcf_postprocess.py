@@ -6,6 +6,7 @@ import gzip
 
 DUP_SVTYPE = 'DUP'
 
+
 def process_record(record):
     record = process_svtype(record)
     return record
@@ -29,7 +30,7 @@ if __name__ == '__main__':
         vcf_in = pysam.VariantFile(gzip.open(args.input_vcf, 'rt'))
     else:
         vcf_in = pysam.VariantFile(args.input_vcf)
-    
+
     # Open output file
     if args.output_vcf.endswith('.gz'):
         vcf_out = pysam.VariantFile(args.output_vcf, 'wz', header=vcf_in.header)
@@ -40,7 +41,7 @@ if __name__ == '__main__':
     for record in vcf_in:
         record = process_record(record)
         vcf_out.write(record)
-    
+
     # Close files
     vcf_in.close()
     vcf_out.close()

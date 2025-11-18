@@ -103,7 +103,7 @@ def process_allosomes(record, chrX, chrY):
                 genotype['GT'] = (None, None)
             elif sex == 0:  # Unknown sex - NO_CALL
                 genotype['GT'] = (None, None)
-            
+
             updated_samples.append(sample)
 
     return record
@@ -183,7 +183,7 @@ if __name__ == '__main__':
         vcf_in = pysam.VariantFile(gzip.open(args.input_vcf, 'rt'))
     else:
         vcf_in = pysam.VariantFile(args.input_vcf)
-    
+
     # Open output file
     if args.output_vcf.endswith('.gz'):
         vcf_out = pysam.VariantFile(args.output_vcf, 'wz', header=vcf_in.header)
@@ -194,7 +194,7 @@ if __name__ == '__main__':
     for record in vcf_in:
         record = process_record(record, chrX, chrY, fail_set, pass_set)
         vcf_out.write(record)
-    
+
     # Close files
     vcf_in.close()
     vcf_out.close()
