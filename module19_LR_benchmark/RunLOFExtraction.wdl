@@ -84,11 +84,11 @@ task SplitVCF {
     command <<<
         set -euo pipefail
 
-        mkdir splits
-        cd splits
-
         # Count total variants
-        total=$(bcftools index --nrecords ../~{vcf})
+        total=$(bcftools index --nrecords ~{vcf})
+
+        mkdir splits
+
 
         # Compute number of chunks
         chunks=$(( (total + ~{chunk_size} - 1) / ~{chunk_size} ))
@@ -99,9 +99,9 @@ task SplitVCF {
 
             bcftools view -H ../~{vcf} | \
                 sed -n "${start},${end}p" | \
-                bcftools view -O z -o chunk_${i}.vcf.gz
+                bcftools view -O z -o splits/chunk_${i}.vcf.gz
 
-            bcftools index chunk_${i}.vcf.gz
+            bcftools index splits/chunk_${i}.vcf.gz
         done
     >>>
 
