@@ -85,7 +85,8 @@ task SplitVCF {
         set -euo pipefail
 
         # Count total variants
-        total=$(bcftools index --nrecords ~{vcf})
+        total=$(bcftools view -H ~{vcf} | wc -l)
+
 
         mkdir splits
 
