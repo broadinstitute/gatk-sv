@@ -86,18 +86,18 @@ task SplitVCF {
 
         # Count total variants
         total=$(bcftools view -H ~{vcf} | wc -l)
-
+        echo "variant counts calculated "
 
         mkdir splits
 
-
         # Compute number of chunks
         chunks=$(( (total + ~{chunk_size} - 1) / ~{chunk_size} ))
+        echo "number of chunks calculated "
 
         for i in $(seq 0 $((chunks - 1))); do
+            echo "processing each chunk ... "
             start=$(( i * ~{chunk_size} + 1 ))
             end=$(( (i + 1) * ~{chunk_size} ))
-
             bcftools view -H ~{vcf} | \
                 sed -n "${start},${end}p" | \
                 bcftools view -O z -o splits/chunk_${i}.vcf.gz
