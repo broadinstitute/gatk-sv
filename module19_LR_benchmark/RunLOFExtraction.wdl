@@ -97,7 +97,7 @@ task SplitVCF {
             start=$(( i * ${chunk_size} + 1 ))
             end=$(( (i + 1) * ${chunk_size} ))
 
-            bcftools view -H ../${vcf} | \
+            bcftools view -H ../~{vcf} | \
                 sed -n "${start},${end}p" | \
                 bcftools view -O z -o chunk_${i}.vcf.gz
 
