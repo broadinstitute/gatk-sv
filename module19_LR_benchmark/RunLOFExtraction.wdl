@@ -51,8 +51,9 @@ workflow RunLOFExtraction {
     }
 
     output {
-        File output = concat_beds.merged_bed_file
+        File output_bed = concat_beds.merged_bed_file
     }
+
 }
 
 ################################################################################
