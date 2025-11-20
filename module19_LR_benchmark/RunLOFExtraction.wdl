@@ -1,5 +1,6 @@
 version 1.0
 
+import "Structs.wdl"
 import "RunLOFExtractionPerChrom.wdl" as RunLOFExtractionPerChrom
 
 workflow RunLOFExtraction {

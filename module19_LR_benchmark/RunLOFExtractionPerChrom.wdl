@@ -1,5 +1,7 @@
 version 1.0
 
+import "Structs.wdl"
+
 workflow RunLOFExtractionPerChrom {
     input {
         Array[File] vcfs
