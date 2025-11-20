@@ -88,14 +88,14 @@ task SplitVCF {
         cd splits
 
         # Count total variants
-        total=$(bcftools index --nrecords ../${vcf})
+        total=$(bcftools index --nrecords ../~{vcf})
 
         # Compute number of chunks
-        chunks=$(( (total + ${chunk_size} - 1) / ${chunk_size} ))
+        chunks=$(( (total + ~{chunk_size} - 1) / ~{chunk_size} ))
 
         for i in $(seq 0 $((chunks - 1))); do
-            start=$(( i * ${chunk_size} + 1 ))
-            end=$(( (i + 1) * ${chunk_size} ))
+            start=$(( i * ~{chunk_size} + 1 ))
+            end=$(( (i + 1) * ~{chunk_size} ))
 
             bcftools view -H ../~{vcf} | \
                 sed -n "${start},${end}p" | \
