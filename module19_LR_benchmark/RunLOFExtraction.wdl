@@ -71,7 +71,7 @@ task SplitVCF {
 
     RuntimeAttr runtime_default = object {
         mem_gb: 10.0,
-        disk_gb: ceil(10.0 + vcf * 3.0),
+        disk_gb: ceil(10.0 + size(vcf, "GiB") * 3.0),
         cpu_cores: 1,
         preemptible_tries: 1,
         max_retries: 1,
