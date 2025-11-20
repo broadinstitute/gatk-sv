@@ -23,6 +23,10 @@ workflow GATKSVPipelinePhase1 {
     File reference_fasta
     File reference_index
     File reference_dict     # Dictionary (.dict), must be in same dir as fasta
+    File primary_contigs_list
+    String chr_x
+    String chr_y
+
 
     String sv_base_mini_docker
     String sv_base_docker
@@ -32,7 +36,6 @@ workflow GATKSVPipelinePhase1 {
     String cnmops_docker
     String gatk_docker
     String? gcnv_gatk_docker
-    String condense_counts_docker
 
     ############################################################
     ## GatherBatchEvidence
@@ -143,9 +146,6 @@ workflow GATKSVPipelinePhase1 {
     ############################################################
     ## ClusterBatch
     ############################################################
-    String? chr_x
-    String? chr_y
-
     Int? depth_records_per_bed_shard_cluster_batch
     File depth_exclude_intervals
     Float depth_exclude_overlap_fraction
@@ -191,27 +191,18 @@ workflow GATKSVPipelinePhase1 {
     ## GenerateBatchMetrics
     ############################################################
 
-    Int BAF_split_size
-    Int RD_split_size
-    Int PE_split_size
-    Int SR_split_size
-    Int common_cnv_size_cutoff
-
     File rmsk
     File segdups
-    File autosome_contigs
-    File allosome_contigs
 
-    RuntimeAttr? runtime_attr_sample_list
-    RuntimeAttr? runtime_attr_petest
-    RuntimeAttr? runtime_attr_srtest
-    RuntimeAttr? runtime_attr_rdtest
-    RuntimeAttr? runtime_attr_baftest
-    RuntimeAttr? runtime_attr_split_vcf
-    RuntimeAttr? runtime_attr_split_rd_vcf
-    RuntimeAttr? runtime_attr_split_baf_vcf
-    RuntimeAttr? runtime_attr_merge_allo
-    RuntimeAttr? runtime_attr_merge_stats
+    RuntimeAttr? runtime_attr_create_ploidy
+    RuntimeAttr? runtime_attr_aggregate_tests
+    RuntimeAttr? runtime_attr_scatter_vcf
+    RuntimeAttr? runtime_attr_format
+    RuntimeAttr? runtime_attr_concat_vcfs
+    RuntimeAttr? runtime_attr_agg_pesr
+    RuntimeAttr? runtime_attr_agg_depth
+    RuntimeAttr? runtime_attr_metrics_file_metrics
+    RuntimeAttr? runtime_attr_annotate_overlap
 
     ############################################################
     ## FilterBatch
@@ -238,7 +229,6 @@ workflow GATKSVPipelinePhase1 {
     Boolean? run_clusterbatch_metrics
     Boolean? run_batchmetrics_metrics
     Boolean? run_filterbatch_metrics
-    File? primary_contigs_list  # required if run_module_metrics = true
 
   }
 
@@ -313,7 +303,6 @@ workflow GATKSVPipelinePhase1 {
       cnmops_docker=cnmops_docker,
       gatk_docker=gatk_docker,
       gcnv_gatk_docker=gcnv_gatk_docker,
-      condense_counts_docker=condense_counts_docker,
       evidence_merging_bincov_runtime_attr=evidence_merging_bincov_runtime_attr,
       cnmops_sample10_runtime_attr=cnmops_sample10_runtime_attr,
       cnmops_sample3_runtime_attr=cnmops_sample3_runtime_attr,
@@ -400,38 +389,29 @@ workflow GATKSVPipelinePhase1 {
       scramble_vcf=ClusterBatch.clustered_scramble_vcf,
       wham_vcf=ClusterBatch.clustered_wham_vcf,
       manta_vcf=ClusterBatch.clustered_manta_vcf,
-      baf_metrics=GatherBatchEvidence.merged_BAF,
-      discfile=GatherBatchEvidence.merged_PE,
-      coveragefile=GatherBatchEvidence.merged_bincov,
-      splitfile=GatherBatchEvidence.merged_SR,
-      medianfile=GatherBatchEvidence.median_cov,
-      BAF_split_size=BAF_split_size,
-      RD_split_size=RD_split_size,
-      PE_split_size=PE_split_size,
-      SR_split_size=SR_split_size,
-      common_cnv_size_cutoff=common_cnv_size_cutoff,
-      ref_dict=reference_dict,
+      baf_file=GatherBatchEvidence.merged_BAF,
+      pe_file=GatherBatchEvidence.merged_PE,
+      rd_file=GatherBatchEvidence.merged_bincov,
+      sr_file=GatherBatchEvidence.merged_SR,
+      median_file=GatherBatchEvidence.median_cov,
+      reference_dict=reference_dict,
+      chr_x=chr_x,
+      chr_y=chr_y,
       rmsk=rmsk,
       segdups=segdups,
       ped_file=ped_file,
-      autosome_contigs=autosome_contigs,
-      allosome_contigs=allosome_contigs,
       sv_base_mini_docker=sv_base_mini_docker,
-      sv_base_docker=sv_base_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      linux_docker=linux_docker,
-      runtime_attr_sample_list=runtime_attr_sample_list,
-      runtime_attr_petest=runtime_attr_petest,
-      runtime_attr_srtest=runtime_attr_srtest,
-      runtime_attr_rdtest=runtime_attr_rdtest,
-      runtime_attr_baftest=runtime_attr_baftest,
-      runtime_attr_split_vcf=runtime_attr_split_vcf,
-      runtime_attr_split_rd_vcf=runtime_attr_split_rd_vcf,
-      runtime_attr_split_baf_vcf=runtime_attr_split_baf_vcf,
-      runtime_attr_merge_allo=runtime_attr_merge_allo,
-      runtime_attr_merge_baf=runtime_attr_merge_baf,
-      runtime_attr_merge_stats=runtime_attr_merge_stats,
-      run_module_metrics = run_batchmetrics_metrics,
+      gatk_docker=gatk_docker,
+      runtime_attr_create_ploidy=runtime_attr_create_ploidy,
+      runtime_attr_aggregate_tests=runtime_attr_aggregate_tests,
+      runtime_attr_scatter_vcf=runtime_attr_scatter_vcf,
+      runtime_attr_format=runtime_attr_format,
+      runtime_attr_concat_vcfs=runtime_attr_concat_vcfs,
+      runtime_attr_agg_pesr=runtime_attr_agg_pesr,
+      runtime_attr_agg_depth=runtime_attr_agg_depth,
+      runtime_attr_metrics_file_metrics=runtime_attr_metrics_file_metrics,
+      runtime_attr_annotate_overlap=runtime_attr_annotate_overlap,
       primary_contigs_list = primary_contigs_list
   }
 
@@ -445,7 +425,6 @@ workflow GATKSVPipelinePhase1 {
       depth_vcf=ClusterBatch.clustered_depth_vcf,
       outlier_cutoff_table=outlier_cutoff_table,
       evidence_metrics=GenerateBatchMetrics.metrics,
-      evidence_metrics_common=GenerateBatchMetrics.metrics_common,
       outlier_cutoff_nIQR=outlier_cutoff_nIQR,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -512,7 +491,6 @@ workflow GATKSVPipelinePhase1 {
 
     # GenerateBatchMetrics
     File evidence_metrics = GenerateBatchMetrics.metrics
-    File evidence_metrics_common = GenerateBatchMetrics.metrics_common
 
     File? metrics_file_batchmetrics = GenerateBatchMetrics.metrics_file_batchmetrics
 
@@ -526,8 +504,6 @@ workflow GATKSVPipelinePhase1 {
     File cutoffs = FilterBatch.cutoffs
     File scores = FilterBatch.scores
     File RF_intermediate_files = FilterBatch.RF_intermediate_files
-    Array[String] outlier_samples_excluded = FilterBatch.outlier_samples_excluded
-    Array[String] batch_samples_postOutlierExclusion = FilterBatch.batch_samples_postOutlierExclusion
     File outlier_samples_excluded_file = FilterBatch.outlier_samples_excluded_file
     File batch_samples_postOutlierExclusion_file = FilterBatch.batch_samples_postOutlierExclusion_file
 

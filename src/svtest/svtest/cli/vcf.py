@@ -44,7 +44,7 @@ EVIDENCE_TYPES = ["RD", "BAF", "PE", "SR"]
 
 # Accepted "passing" filters
 PASSING_FILTERS = ["PASS", "BOTHSIDES_SUPPORT",
-                   "MULTIALLELIC", "HIGH_SR_BACKGROUND"]
+                   "MULTIALLELIC"]
 
 INVALID_CHR2_STR = "invalid_chr2"
 INVALID_END_STR = "invalid_end"

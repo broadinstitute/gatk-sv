@@ -93,9 +93,7 @@ workflow GATKSVPipelineBatch {
     String linux_docker
     String cnmops_docker
     String gatk_docker
-    String? gatk_docker_pesr_override
     String? gcnv_gatk_docker
-    String condense_counts_docker
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
     String? manta_docker
@@ -146,7 +144,6 @@ workflow GATKSVPipelineBatch {
         scramble_docker=scramble_docker_,
         wham_docker=wham_docker_,
         gatk_docker=gatk_docker,
-        gatk_docker_pesr_override = gatk_docker_pesr_override,
         genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
         samtools_cloud_docker=samtools_cloud_docker,
         cloud_sdk_docker = cloud_sdk_docker
@@ -213,8 +210,6 @@ workflow GATKSVPipelineBatch {
 
       cnmops_chrom_file=autosome_file,
       cnmops_allo_file=allosome_file,
-      allosome_contigs=allosome_file,
-      autosome_contigs=autosome_file,
       run_batchevidence_metrics = run_batchevidence_metrics,
       run_clusterbatch_metrics = run_clusterbatch_metrics,
       run_batchmetrics_metrics = run_batchmetrics_metrics,
@@ -227,8 +222,7 @@ workflow GATKSVPipelineBatch {
       linux_docker=linux_docker,
       cnmops_docker=cnmops_docker,
       gatk_docker=gatk_docker,
-      gcnv_gatk_docker=gcnv_gatk_docker,
-      condense_counts_docker=condense_counts_docker
+      gcnv_gatk_docker=gcnv_gatk_docker
   }
 
   call genotypebatch.GenotypeBatch as GenotypeBatch {
@@ -420,7 +414,6 @@ workflow GATKSVPipelineBatch {
     Int? clustered_num_outlier_samples = GATKSVPipelinePhase1.clustered_num_outlier_samples
 
     File evidence_metrics = GATKSVPipelinePhase1.evidence_metrics
-    File evidence_metrics_common = GATKSVPipelinePhase1.evidence_metrics_common
 
     File filtered_depth_vcf = select_first([GATKSVPipelinePhase1.filtered_depth_vcf])
     File filtered_pesr_vcf = select_first([GATKSVPipelinePhase1.filtered_pesr_vcf])
