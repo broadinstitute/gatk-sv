@@ -68,6 +68,7 @@ workflow CleanVcfChromosome {
   call CleanVcfReviseOverlappingCnvs {
     input:
       vcf=CleanVcfPreprocess.out,
+      vcf_idx=CleanVcfPreprocess.out_idx,
       prefix="~{prefix}.revise_overlapping_cnvs",
       gatk_docker=gatk_docker,
       runtime_attr_override=runtime_attr_revise_overlapping_cnvs
@@ -76,6 +77,7 @@ workflow CleanVcfChromosome {
   call CleanVcfReviseMultiallelicCnvs {
     input:
       vcf=CleanVcfReviseOverlappingCnvs.out,
+      vcf_idx=CleanVcfReviseOverlappingCnvs.out_idx,
       outlier_samples_list=outlier_samples_list,
       prefix="~{prefix}.revise_multiallelic_cnvs",
       gatk_docker=gatk_docker,
@@ -85,6 +87,7 @@ workflow CleanVcfChromosome {
   call CleanVcfReviseAbnormalAllosomes {
     input:
       vcf=CleanVcfReviseMultiallelicCnvs.out,
+      vcf_idx=CleanVcfReviseMultiallelicCnvs.out_idx,
       prefix="~{prefix}.revise_abnormal_allosomes",
       gatk_docker=gatk_docker,
       runtime_attr_override=runtime_attr_revise_abnormal_allosomes
@@ -93,6 +96,7 @@ workflow CleanVcfChromosome {
   call CleanVcfReviseOverlappingMultiallelics {
     input:
       vcf=CleanVcfReviseAbnormalAllosomes.out,
+      vcf_idx=CleanVcfReviseAbnormalAllosomes.out_idx,
       prefix="~{prefix}.revise_overlapping_multiallelics",
       gatk_docker=gatk_docker,
       runtime_attr_override=runtime_attr_revise_multiallelics
@@ -263,6 +267,7 @@ task CleanVcfPreprocess {
 task CleanVcfReviseOverlappingCnvs {
   input {
     File vcf
+    File vcf_idx
     String prefix
     String gatk_docker
     RuntimeAttr? runtime_attr_override
@@ -292,10 +297,6 @@ task CleanVcfReviseOverlappingCnvs {
 
   command <<<
     set -euo pipefail
-
-    if [ ! -f "~{vcf}.tbi" ]; then
-      tabix -p vcf ~{vcf}
-    fi
     
     gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseOverlappingCnvs \
       -V ~{vcf} \
@@ -311,6 +312,7 @@ task CleanVcfReviseOverlappingCnvs {
 task CleanVcfReviseMultiallelicCnvs {
   input {
     File vcf
+    File vcf_idx
     File? outlier_samples_list
     String prefix
     String gatk_docker
@@ -341,10 +343,6 @@ task CleanVcfReviseMultiallelicCnvs {
 
   command <<<
     set -euo pipefail
-
-    if [ ! -f "~{vcf}.tbi" ]; then
-      tabix -p vcf ~{vcf}
-    fi
     
     gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseMultiallelicCnvs \
       -V ~{vcf} \
@@ -361,6 +359,7 @@ task CleanVcfReviseMultiallelicCnvs {
 task CleanVcfReviseAbnormalAllosomes {
   input {
     File vcf
+    File vcf_idx
     String prefix
     String gatk_docker
     RuntimeAttr? runtime_attr_override
@@ -390,10 +389,6 @@ task CleanVcfReviseAbnormalAllosomes {
 
   command <<<
     set -euo pipefail
-
-    if [ ! -f "~{vcf}.tbi" ]; then
-      tabix -p vcf ~{vcf}
-    fi
       
     gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseAbnormalAllosomes \
       -V ~{vcf} \
@@ -409,6 +404,7 @@ task CleanVcfReviseAbnormalAllosomes {
 task CleanVcfReviseOverlappingMultiallelics {
   input {
     File vcf
+    File vcf_idx
     String prefix
     String gatk_docker
     RuntimeAttr? runtime_attr_override
@@ -438,10 +434,6 @@ task CleanVcfReviseOverlappingMultiallelics {
 
   command <<<
     set -euo pipefail
-
-    if [ ! -f "~{vcf}.tbi" ]; then
-      tabix -p vcf ~{vcf}
-    fi
     
     gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseOverlappingMultiallelics \
       -V ~{vcf} \
