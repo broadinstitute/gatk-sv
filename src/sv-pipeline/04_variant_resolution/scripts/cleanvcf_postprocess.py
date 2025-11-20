@@ -1,14 +1,18 @@
 #!/bin/python
 
 import argparse
-import pysam
 import gzip
+
+import pysam
+from svtk.utils import get_called_samples
 
 DUP_SVTYPE = 'DUP'
 
 
 def process_record(record):
     record = process_svtype(record)
+    if len(get_called_samples(record)) == 0:
+        return None
     return record
 
 
@@ -39,8 +43,10 @@ if __name__ == '__main__':
 
     # Process records
     for record in vcf_in:
-        record = process_record(record)
-        vcf_out.write(record)
+        processed = process_record(record)
+        if processed is None:
+            continue
+        vcf_out.write(processed)
 
     # Close files
     vcf_in.close()
