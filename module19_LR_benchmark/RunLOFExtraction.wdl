@@ -69,6 +69,18 @@ task SplitVCF {
         RuntimeAttr? runtime_attr_override
     }
 
+    RuntimeAttr runtime_default = object {
+        mem_gb: 10.0,
+        disk_gb: ceil(10.0 + vcf * 3.0),
+        cpu_cores: 1,
+        preemptible_tries: 1,
+        max_retries: 1,
+        boot_disk_gb: 10
+    }   
+
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+
     command <<<
         set -euo pipefail
 
@@ -97,17 +109,6 @@ task SplitVCF {
         Array[File] split_vcfs = glob("splits/chunk_*.vcf.gz")
         Array[File] split_indexes = glob("splits/chunk_*.vcf.gz.tbi")
     }
-
-    RuntimeAttr runtime_default = object {
-        mem_gb: 10.0,
-        disk_gb: ceil(10.0 + vcf * 3.0),
-        cpu_cores: 1,
-        preemptible_tries: 1,
-        max_retries: 1,
-        boot_disk_gb: 10
-    }   
-
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
     runtime {
         memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
