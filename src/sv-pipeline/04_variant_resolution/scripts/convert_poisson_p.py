@@ -19,7 +19,7 @@ def convert_poisson_p(qual):
     """
     count = 0
     while True:
-        pval_cmp = -10.*np.log10(ss.poisson.cdf(0, count))
+        pval_cmp = -10. * np.log10(ss.poisson.cdf(0, count))
 
         if pval_cmp > qual:
             return max(1, count - 1)

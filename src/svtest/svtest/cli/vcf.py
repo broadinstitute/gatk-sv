@@ -170,14 +170,14 @@ def get_metrics(ftest, fbase_vcf, fbase_bed, contigs, variant_types, min_ro, pad
     if fbase_vcf is not None:
         base_vcf = VariantFile(fbase_vcf)
         if genotyped != check_if_genotyped(base_vcf):
-           raise ValueError(
-               "One of the vcfs seems to be genotyped but the other does not")
+            raise ValueError(
+                "One of the vcfs seems to be genotyped but the other does not")
         if has_vargq != check_if_vargq(base_vcf):
-           raise ValueError(
-               "One of the vcfs has the varGQ field but the other does not")
+            raise ValueError(
+                "One of the vcfs has the varGQ field but the other does not")
         if collect_evidence != check_if_evidence(base_vcf):
-           raise ValueError(
-               "One of the vcfs has the EVIDENCE field but the other does not")
+            raise ValueError(
+                "One of the vcfs has the EVIDENCE field but the other does not")
         base_records = list(base_vcf.fetch())
         test_tree = iu.create_trees_from_records(
             test_records, variant_types, contigs)

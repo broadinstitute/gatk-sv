@@ -63,7 +63,7 @@ workflow ClusterBatchMetrics {
       input:
         vcf = select_first([dragen_vcf]),
         baseline_vcf = baseline_dragen_vcf,
-        samples = select_first([samples_array, GetSampleIdsFromVcf.out_file]),
+        samples = samples_array,
         prefix = "dragen_clustered",
         types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
