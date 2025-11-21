@@ -98,9 +98,10 @@ task SplitVCF {
             echo "processing each chunk ... "
             start=$(( i * ~{chunk_size} + 1 ))
             end=$(( (i + 1) * ~{chunk_size} ))
-            bcftools view -H ~{vcf} | \
-                sed -n "${start},${end}p" | \
-                bcftools view -O z -o splits/chunk_${i}.vcf.gz
+            bcftools view -H ~{vcf} \
+            | sed -n "${start},${end}p" \
+            | cat <(bcftools view -h ~{vcf}) - \
+            | bgzip > splits/chunk_${i}.vcf.gz
 
             bcftools index splits/chunk_${i}.vcf.gz
         done
