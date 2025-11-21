@@ -120,9 +120,18 @@ RUN GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git &
     cd gatk && \
     git checkout mw_gatk_sv && \
     git checkout 1eac9db89b65f9493d2a91539e2b9274159a5b5c && \
+    mkdir -p /opt/gatk_miniconda3 && \
+    wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.10.0-1-Linux-x86_64.sh -O /opt/gatk_miniconda3/miniconda.sh && \
+    bash /opt/gatk_miniconda3/miniconda.sh -p /opt/gatk_miniconda3 -b -u && \
+    rm /opt/gatk_miniconda3/miniconda.sh && \
+    source /opt/gatk_miniconda3/bin/activate && \
+    conda config --set auto_update_conda false && \
+    conda config --set solver libmamba && \
+    conda init --all && \
+    ./gradlew localDevCondaEnv && \
     ./gradlew localJar && \
+    cp ./build/libs/gatk.jar /opt/gatk.jar && \
     cd .. && \
-    cp gatk/build/libs/gatk.jar /opt/gatk.jar && \
     rm -rf gatk/
 
 
