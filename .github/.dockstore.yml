@@ -195,6 +195,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_callset_evaluations
       tags:
         - /.*/
 
@@ -231,6 +232,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_callset_evaluations
       tags:
         - /.*/
 

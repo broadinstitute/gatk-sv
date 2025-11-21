@@ -20,6 +20,19 @@ workflow SVConcordancePacBioSample {
     Float? pesr_size_similarity
     Int? pesr_breakend_window
 
+    Float? depth_interval_overlap
+    Float? depth_size_similarity
+    Int? depth_breakend_window
+
+    Float? mixed_interval_overlap
+    Float? mixed_size_similarity
+    Int? mixed_breakend_window
+
+    File? clustering_config
+    File? stratification_config
+    Array[String]? track_names
+    Array[File]? track_intervals
+
     File reference_dict
 
     # For debugging
@@ -56,7 +69,11 @@ workflow SVConcordancePacBioSample {
         truth_vcf=PrepPacBioVcf.out,
         eval_vcf=sample_vcf,
         output_prefix="~{prefix}.concordance.~{tool_names[i]}.~{sample_id}.unsorted",
-        additional_args="--pesr-interval-overlap ~{pesr_interval_overlap} --pesr-size-similarity ~{pesr_size_similarity} --pesr-breakend-window ~{pesr_breakend_window}",
+        additional_args="--pesr-interval-overlap ~{pesr_interval_overlap} --pesr-size-similarity ~{pesr_size_similarity} --pesr-breakend-window ~{pesr_breakend_window} --depth-interval-overlap ~{depth_interval_overlap} --depth-size-similarity ~{depth_size_similarity} --depth-breakend-window ~{depth_breakend_window} --mixed-interval-overlap ~{mixed_interval_overlap} --mixed-size-similarity ~{mixed_size_similarity} --mixed-breakend-window ~{mixed_breakend_window}",
+        clustering_config=clustering_config,
+        stratification_config=stratification_config,
+        track_names=track_names,
+        track_intervals=track_intervals,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
@@ -98,16 +115,6 @@ task PrepPacBioVcf {
     RuntimeAttr? runtime_attr_override
   }
 
-  RuntimeAttr default_attr = object {
-                               cpu_cores: 1,
-                               mem_gb: 1.5,
-                               disk_gb: ceil(10 + 3 * size(vcf, "GB")),
-                               boot_disk_gb: 10,
-                               preemptible_tries: 3,
-                               max_retries: 1
-                             }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
   output {
     File out = "~{output_prefix}.vcf.gz"
     File out_index = "~{output_prefix}.vcf.gz.tbi"
@@ -127,6 +134,17 @@ task PrepPacBioVcf {
       | bcftools annotate --set-id '~{truth_tool_name}_%CHROM\_%POS\_%END\_%SVTYPE\_%SVLEN' -Oz -o ~{output_prefix}.vcf.gz
     tabix ~{output_prefix}.vcf.gz
   >>>
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1.5,
+    disk_gb: ceil(10 + 3 * size(vcf, "GB")),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"

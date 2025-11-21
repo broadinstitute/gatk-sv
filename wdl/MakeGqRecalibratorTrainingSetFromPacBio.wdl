@@ -14,15 +14,18 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     # Assumes all vcfs have indexes, i.e. at {VCF_PATH}.tbi
     Array[File] vcfs
 
+    Array[File]? vapor_files
+    Array[File]? pbsv_vcfs
+    Array[File]? pav_vcfs
+    Array[File]? sniffles_vcfs
+    Array[File]? hifi_cnv_vcfs
+    Array[File]? hapdiff_vcfs
+    
     File training_sample_ids  # Sample IDs with PacBio or array data
+    Array[String] pacbio_sample_ids  # Corresponding to files below (must be a subset of training_sample_ids)
+    
     String? output_prefix
     File ploidy_table
-
-    Array[String] pacbio_sample_ids  # Corresponding to files below (must be a subset of training_sample_ids)
-    Array[File] vapor_files
-    Array[File] pbsv_vcfs
-    Array[File] pav_vcfs
-    Array[File] sniffles_vcfs
 
     # Optional: array intensity ratio files
     Array[File]? irs_sample_batches
@@ -31,6 +34,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
 
     Boolean write_detail_report = true
     Int? vapor_max_cnv_size = 5000
+    Int? vapor_max_non_cnv_size = 5000
     Float? vapor_min_precision = 0.999
     Int? vapor_pos_read_threshold = 2
     Int? irs_min_cnv_size = 10000
@@ -41,9 +45,35 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     Float? pesr_size_similarity_strict = 0.5
     Int? pesr_breakend_window_strict = 5000
 
+    Float? depth_interval_overlap_strict = 0.8
+    Float? depth_size_similarity_strict = 0.0
+    Int? depth_breakend_window_strict = 10000000
+
+    Float? mixed_interval_overlap_strict = 0.8
+    Float? mixed_size_similarity_strict = 0.0
+    Int? mixed_breakend_window_strict = 10000000
+
+    File? clustering_config_strict
+    File? stratification_config_strict
+    Array[String]? track_names_strict
+    Array[File]? track_intervals_strict
+
     Float? pesr_interval_overlap_loose = 0
     Float? pesr_size_similarity_loose = 0
     Int? pesr_breakend_window_loose = 5000
+
+    Float? depth_interval_overlap_loose = 0.5
+    Float? depth_size_similarity_loose = 0.0
+    Int? depth_breakend_window_loose = 10000000
+
+    Float? mixed_interval_overlap_loose = 0.5
+    Float? mixed_size_similarity_loose = 0.0
+    Int? mixed_breakend_window_loose = 10000000
+
+    File? clustering_config_loose
+    File? stratification_config_loose
+    Array[String]? track_names_loose
+    Array[File]? track_intervals_loose
 
     File reference_dict
 
@@ -54,14 +84,19 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     String linux_docker
   }
 
-  Array[String] tool_names = ["pbsv", "pav", "sniffles"]
-  Array[Array[File]] pacbio_vcfs = transpose([pbsv_vcfs, pav_vcfs, sniffles_vcfs])
+  Array[String] tool_names = flatten([
+    if defined(pbsv_vcfs) then ["pbsv"] else [],
+    if defined(pav_vcfs) then ["pav"] else [],
+    if defined(sniffles_vcfs) then ["sniffles"] else [],
+    if defined(hifi_cnv_vcfs) then ["hifi_cnv"] else [],
+    if defined(hapdiff_vcfs) then ["hapdiff"] else []
+  ])
 
-  String output_prefix_ =
-    if defined(output_prefix) then
-      select_first([output_prefix])
-    else
-        basename(vcfs[0], ".vcf.gz")
+  Array[Array[File]] tool_vcfs_list = select_all([pbsv_vcfs, pav_vcfs, sniffles_vcfs, hifi_cnv_vcfs, hapdiff_vcfs])
+
+  Array[Array[File]] pacbio_vcfs = transpose(tool_vcfs_list)
+
+  String output_prefix_ = if defined(output_prefix) then select_first([output_prefix]) else basename(vcfs[0], ".vcf.gz")
 
   scatter (i in range(length(vcfs))) {
     call utils.SubsetVcfBySamplesList as SubsetTrainingSamples {
@@ -86,41 +121,43 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call GetVariantListsFromVaporAndIRS {
-    input:
-      vcf=ConcatTrainingSampleVcfs.concat_vcf,
-      output_prefix=output_prefix_,
-      vapor_sample_ids=pacbio_sample_ids,
-      vapor_files=vapor_files,
-      irs_sample_batches=select_first([irs_sample_batches, []]),
-      irs_test_reports=select_first([irs_test_reports, []]),
-      irs_contigs_fai=irs_contigs_fai,
-      vapor_max_cnv_size=vapor_max_cnv_size,
-      vapor_min_precision=vapor_min_precision,
-      vapor_pos_read_threshold=vapor_pos_read_threshold,
-      irs_min_cnv_size=irs_min_cnv_size,
-      irs_good_pvalue_threshold=irs_good_pvalue_threshold,
-      irs_min_probes=irs_min_probes,
-      sv_utils_docker=sv_utils_docker
-  }
+  if (defined(vapor_files)) {
+    call GetVariantListsFromVaporAndIRS {
+      input:
+        vcf=ConcatTrainingSampleVcfs.concat_vcf,
+        output_prefix=output_prefix_,
+        vapor_sample_ids=pacbio_sample_ids,
+        vapor_files=select_first([vapor_files, []]),
+        irs_sample_batches=select_first([irs_sample_batches, []]),
+        irs_test_reports=select_first([irs_test_reports, []]),
+        irs_contigs_fai=irs_contigs_fai,
+        vapor_max_cnv_size=vapor_max_cnv_size,
+        vapor_min_precision=vapor_min_precision,
+        vapor_pos_read_threshold=vapor_pos_read_threshold,
+        irs_min_cnv_size=irs_min_cnv_size,
+        irs_good_pvalue_threshold=irs_good_pvalue_threshold,
+        irs_min_probes=irs_min_probes,
+        sv_utils_docker=sv_utils_docker
+    }
 
-  call VaporAndIRSSupportReport {
-    input:
-      vcf=ConcatTrainingSampleVcfs.concat_vcf,
-      output_prefix=output_prefix_,
-      vapor_sample_ids=pacbio_sample_ids,
-      vapor_files=vapor_files,
-      write_detail_report=write_detail_report,
-      irs_sample_batches=select_first([irs_sample_batches, []]),
-      irs_test_reports=select_first([irs_test_reports, []]),
-      irs_contigs_fai=irs_contigs_fai,
-      vapor_max_cnv_size=vapor_max_cnv_size,
-      vapor_min_precision=vapor_min_precision,
-      vapor_pos_read_threshold=vapor_pos_read_threshold,
-      irs_min_cnv_size=irs_min_cnv_size,
-      irs_good_pvalue_threshold=irs_good_pvalue_threshold,
-      irs_min_probes=irs_min_probes,
-      sv_utils_docker=sv_utils_docker
+    call VaporAndIRSSupportReport {
+      input:
+        vcf=ConcatTrainingSampleVcfs.concat_vcf,
+        output_prefix=output_prefix_,
+        vapor_sample_ids=pacbio_sample_ids,
+        vapor_files=select_first([vapor_files, []]),
+        write_detail_report=write_detail_report,
+        irs_sample_batches=select_first([irs_sample_batches, []]),
+        irs_test_reports=select_first([irs_test_reports, []]),
+        irs_contigs_fai=irs_contigs_fai,
+        vapor_max_cnv_size=vapor_max_cnv_size,
+        vapor_min_precision=vapor_min_precision,
+        vapor_pos_read_threshold=vapor_pos_read_threshold,
+        irs_min_cnv_size=irs_min_cnv_size,
+        irs_good_pvalue_threshold=irs_good_pvalue_threshold,
+        irs_min_probes=irs_min_probes,
+        sv_utils_docker=sv_utils_docker
+    }
   }
 
   call utils.WriteLines as WritePacBioSampleIds {
@@ -159,9 +196,11 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         sample_id=pacbio_sample_ids[i],
         vcf=ConcatPacbioSampleVcfs.concat_vcf,
         vcf_index=ConcatPacbioSampleVcfs.concat_vcf_idx,
+        max_variant_size=vapor_max_cnv_size,
         output_prefix=output_prefix_,
         sv_pipeline_docker=sv_pipeline_docker
     }
+
     call concordance.SVConcordancePacBioSample as SVConcordanceLoose {
       input:
         sample_id=pacbio_sample_ids[i],
@@ -174,11 +213,22 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         pesr_interval_overlap=pesr_interval_overlap_loose,
         pesr_size_similarity=pesr_size_similarity_loose,
         pesr_breakend_window=pesr_breakend_window_loose,
+        depth_interval_overlap=depth_interval_overlap_loose,
+        depth_size_similarity=depth_size_similarity_loose,
+        depth_breakend_window=depth_breakend_window_loose,
+        mixed_interval_overlap=mixed_interval_overlap_loose,
+        mixed_size_similarity=mixed_size_similarity_loose,
+        mixed_breakend_window=mixed_breakend_window_loose,
+        clustering_config=clustering_config_loose,
+        stratification_config=stratification_config_loose,
+        track_names=track_names_loose,
+        track_intervals=track_intervals_loose,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         gatk_docker=gatk_docker,
         linux_docker=linux_docker
     }
+
     call concordance.SVConcordancePacBioSample as SVConcordanceStrict {
       input:
         sample_id=pacbio_sample_ids[i],
@@ -191,52 +241,69 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         pesr_interval_overlap=pesr_interval_overlap_strict,
         pesr_size_similarity=pesr_size_similarity_strict,
         pesr_breakend_window=pesr_breakend_window_strict,
+        depth_interval_overlap=depth_interval_overlap_strict,
+        depth_size_similarity=depth_size_similarity_strict,
+        depth_breakend_window=depth_breakend_window_strict,
+        mixed_interval_overlap=mixed_interval_overlap_strict,
+        mixed_size_similarity=mixed_size_similarity_strict,
+        mixed_breakend_window=mixed_breakend_window_strict,
+        clustering_config=clustering_config_strict,
+        stratification_config=stratification_config_strict,
+        track_names=track_names_strict,
+        track_intervals=track_intervals_strict,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         gatk_docker=gatk_docker,
         linux_docker=linux_docker
     }
-    call RefineSampleLabels {
-      input:
-        sample_id=pacbio_sample_ids[i],
-        main_vcf=PrepSampleVcf.out,
-        vapor_json=GetVariantListsFromVaporAndIRS.vapor_json,
-        tool_names=tool_names,
-        loose_concordance_vcfs=SVConcordanceLoose.pacbio_concordance_vcfs,
-        strict_concordance_vcfs=SVConcordanceStrict.pacbio_concordance_vcfs,
-        output_prefix="~{output_prefix_}.gq_training_labels.~{pacbio_sample_ids[i]}",
-        sv_pipeline_docker=sv_pipeline_docker
+
+    if (defined(vapor_files)) {
+      call RefineSampleLabels {
+        input:
+          sample_id=pacbio_sample_ids[i],
+          main_vcf=PrepSampleVcf.out,
+          vapor_json=select_first([GetVariantListsFromVaporAndIRS.vapor_json]),
+          tool_names=tool_names,
+          loose_concordance_vcfs=SVConcordanceLoose.pacbio_concordance_vcfs,
+          strict_concordance_vcfs=SVConcordanceStrict.pacbio_concordance_vcfs,
+          vapor_max_cnv_size=vapor_max_cnv_size,
+          vapor_max_non_cnv_size=vapor_max_non_cnv_size,
+          output_prefix="~{output_prefix_}.gq_training_labels.~{pacbio_sample_ids[i]}",
+          sv_pipeline_docker=sv_pipeline_docker
+      }
     }
   }
 
-  call MergeJsons {
-    input:
-      jsons=flatten([[GetVariantListsFromVaporAndIRS.irs_json], RefineSampleLabels.out_json]),
-      output_prefix="~{output_prefix_}.gq_training_labels",
-      sv_pipeline_docker=sv_pipeline_docker
-  }
+  if (defined(vapor_files)) {
+    call MergeJsons {
+      input:
+        jsons=select_all(flatten([[GetVariantListsFromVaporAndIRS.irs_json], RefineSampleLabels.out_json])),
+        output_prefix="~{output_prefix_}.gq_training_labels",
+        sv_pipeline_docker=sv_pipeline_docker
+    }
 
-  call mini_tasks.ConcatHeaderedTextFiles {
-    input:
-      text_files=RefineSampleLabels.out_table,
-      gzipped=false,
-      output_filename="~{output_prefix_}.gq_training_labels.tsv",
-      linux_docker=linux_docker
+    call mini_tasks.ConcatHeaderedTextFiles {
+      input:
+        text_files=select_all(RefineSampleLabels.out_table),
+        gzipped=false,
+        output_filename="~{output_prefix_}.gq_training_labels.tsv",
+        linux_docker=linux_docker
+    }
   }
 
   output {
-    File gq_recalibrator_training_json = MergeJsons.out
-    File pacbio_support_summary_table = ConcatHeaderedTextFiles.out
+    File? gq_recalibrator_training_json = MergeJsons.out
+    File? pacbio_support_summary_table = ConcatHeaderedTextFiles.out
 
     File training_sample_vcf = ConcatTrainingSampleVcfs.concat_vcf
     File training_sample_vcf_index = ConcatTrainingSampleVcfs.concat_vcf_idx
     File pacbio_sample_vcf = ConcatPacbioSampleVcfs.concat_vcf
     File pacbio_sample_vcf_index = ConcatPacbioSampleVcfs.concat_vcf_idx
 
-    File vapor_output_json = GetVariantListsFromVaporAndIRS.vapor_json
-    File irs_output_json = GetVariantListsFromVaporAndIRS.irs_json
-    File vapor_and_irs_summary_report = VaporAndIRSSupportReport.summary
-    File vapor_and_irs_detail_report = VaporAndIRSSupportReport.detail
+    File? vapor_output_json = GetVariantListsFromVaporAndIRS.vapor_json
+    File? irs_output_json = GetVariantListsFromVaporAndIRS.irs_json
+    File? vapor_and_irs_summary_report = VaporAndIRSSupportReport.summary
+    File? vapor_and_irs_detail_report = VaporAndIRSSupportReport.detail
     Array[File] loose_pacbio_concordance_vcf_tars = SVConcordanceLoose.pacbio_concordance_vcfs_tar
     Array[File] strict_pacbio_concordance_vcf_tars = SVConcordanceStrict.pacbio_concordance_vcfs_tar
   }
@@ -349,6 +416,7 @@ task PrepSampleVcf {
     String sample_id
     File vcf
     File vcf_index
+    Int? max_variant_size
     File? script
     String output_prefix
     String sv_pipeline_docker
@@ -374,7 +442,9 @@ task PrepSampleVcf {
 
     # Subset to DEL/DUP/INS and convert DUP to INS
     bcftools view -s "~{sample_id}" ~{vcf} | bcftools view --no-update --min-ac 1 -Oz -o tmp1.vcf.gz
-    python ~{default="/opt/sv-pipeline/scripts/preprocess_gatk_for_pacbio_eval.py" script} tmp1.vcf.gz \
+    python ~{default="/opt/sv-pipeline/scripts/preprocess_gatk_for_pacbio_eval.py" script} \
+      tmp1.vcf.gz \
+      --max-variant-size ~{max_variant_size} \
       | bcftools sort -Oz -o ~{output_prefix}.~{sample_id}.prepped_for_pb.vcf.gz
     tabix ~{output_prefix}.~{sample_id}.prepped_for_pb.vcf.gz
   >>>
@@ -491,6 +561,8 @@ task RefineSampleLabels {
     Array[String] tool_names
     Array[File] loose_concordance_vcfs
     Array[File] strict_concordance_vcfs
+    Int? vapor_max_cnv_size
+    Int? vapor_max_non_cnv_size
     String? additional_args
     File? script
     String output_prefix
@@ -521,6 +593,8 @@ task RefineSampleLabels {
       --main-vcf ~{main_vcf} \
       --vapor-json ~{vapor_json} \
       --sample-id ~{sample_id} \
+      --cnv-size-cutoff ~{vapor_max_cnv_size} \
+      --non-cnv-size-cutoff ~{vapor_max_non_cnv_size} \
       --json-out ~{output_prefix}.json \
       --table-out ~{output_prefix}.tsv \
       --truth-algorithms ~{sep="," tool_names} \
