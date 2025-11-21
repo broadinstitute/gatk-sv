@@ -115,6 +115,8 @@ RUN mkdir -p /opt/R/4.1.3/lib/R/doc/html && \
 # note that gatk is installed in sv-base docker, which this docker image inherits.
 # however, the base images are currently being updated: https://github.com/broadinstitute/gatk-sv/pull/816
 # so as a temporary work-around we're re-installing gatk in this image using code in a specific branch.
+# SHELL in the following is needed for the `source` command in the following.
+SHELL ["/bin/bash", "-c"]
 RUN apt-get -qqy install --no-upgrade --no-install-recommends git git-lfs openjdk-17-jdk openjdk-17-jre-headless libgomp1 && \
     GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git && \
     cd gatk && \
