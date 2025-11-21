@@ -1,3 +1,49 @@
+task ConvertDupToIns {
+  input {
+    File vcf
+    String? outfile_name
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Float input_size = size(vcf, "GiB")
+  String out_vcf = select_first([outfile_name, basename(vcf, ".vcf.gz") + ".DUPtoINS.vcf.gz"])
+  String out_vcf_idx = out_vcf + ".tbi"
+  RuntimeAttr default_attr = object {
+    mem_gb: 3.75,
+    disk_gb: ceil(10.0 + (input_size * 2)),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+    bcftools view -Oz -o temp.vcf.gz ~{vcf}
+    tabix -p vcf temp.vcf.gz
+    bcftools view temp.vcf.gz | \
+      awk 'BEGIN{OFS="\t"} /^#/ {print $0; next} {if ($0 ~ /SVTYPE=DUP/) {gsub("SVTYPE=DUP", "SVTYPE=INS", $8); $5="<INS>"}; print $0}' | \
+      bgzip -c > ~{out_vcf}
+    tabix -f -p vcf ~{out_vcf}
+  >>>
+
+  output {
+    File out = out_vcf
+    File out_index = out_vcf_idx
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
 version 1.0
 
 import "Structs.wdl"
