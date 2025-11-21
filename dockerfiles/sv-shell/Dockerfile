@@ -115,24 +115,24 @@ RUN mkdir -p /opt/R/4.1.3/lib/R/doc/html && \
 # note that gatk is installed in sv-base docker, which this docker image inherits.
 # however, the base images are currently being updated: https://github.com/broadinstitute/gatk-sv/pull/816
 # so as a temporary work-around we're re-installing gatk in this image using code in a specific branch.
-RUN apt-get -qqy install --no-upgrade --no-install-recommends git git-lfs openjdk-17-jdk openjdk-17-jre-headless libgomp1
-RUN GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git
-RUN cd gatk
-RUN git checkout mw_gatk_sv
-RUN git checkout 1eac9db89b65f9493d2a91539e2b9274159a5b5c
-RUN mkdir -p /opt/gatk_miniconda3
-RUN wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.10.0-1-Linux-x86_64.sh -O /opt/gatk_miniconda3/miniconda.sh
-RUN bash /opt/gatk_miniconda3/miniconda.sh -p /opt/gatk_miniconda3 -b -u
-RUN rm /opt/gatk_miniconda3/miniconda.sh
-RUN source /opt/gatk_miniconda3/bin/activate
-RUN conda config --set auto_update_conda false
-RUN conda config --set solver libmamba
-RUN conda init --all
-RUN ./gradlew localDevCondaEnv
-RUN ./gradlew localJar
-RUN cp ./build/libs/gatk.jar /opt/gatk.jar
-RUN cd ..
-RUN rm -rf gatk/
+RUN apt-get -qqy install --no-upgrade --no-install-recommends git git-lfs openjdk-17-jdk openjdk-17-jre-headless libgomp1 && \
+    GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git && \
+    cd gatk && \
+    git checkout mw_gatk_sv && \
+    git checkout 1eac9db89b65f9493d2a91539e2b9274159a5b5c && \
+    mkdir -p /opt/gatk_miniconda3 && \
+    wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.10.0-1-Linux-x86_64.sh -O /opt/gatk_miniconda3/miniconda.sh && \
+    bash /opt/gatk_miniconda3/miniconda.sh -p /opt/gatk_miniconda3 -b -u && \
+    rm /opt/gatk_miniconda3/miniconda.sh && \
+    source /opt/gatk_miniconda3/bin/activate && \
+    conda config --set auto_update_conda false && \
+    conda config --set solver libmamba && \
+    conda init --all && \
+    ./gradlew localDevCondaEnv && \
+    ./gradlew localJar && \
+    cp ./build/libs/gatk.jar /opt/gatk.jar && \
+    cd .. && \
+    rm -rf gatk/
 
 
 WORKDIR /
