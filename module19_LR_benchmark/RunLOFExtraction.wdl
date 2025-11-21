@@ -103,7 +103,7 @@ task SplitVCF {
             | cat <(bcftools view -h ~{vcf}) - \
             | bgzip > splits/chunk_${i}.vcf.gz
 
-            bcftools index splits/chunk_${i}.vcf.gz
+            tabix -p vcf splits/chunk_${i}.vcf.gz
         done
     >>>
 
