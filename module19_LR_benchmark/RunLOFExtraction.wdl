@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "RunLOFExtractionPerChrom.wdl" as RunLOFExtractionPerChrom
+import "RunLOFExtractionPerShard.wdl" as RunLOFExtractionPerShard
 
 workflow RunLOFExtraction {
     input {
@@ -29,7 +29,7 @@ workflow RunLOFExtraction {
                 runtime_attr_override = runtime_attr_split_vcf
         }
 
-        call RunLOFExtractionPerChrom.RunLOFExtractionPerChrom as run_lof_extraction_per_chrom{
+        call RunLOFExtractionPerShard.RunLOFExtractionPerShard as run_lof_extraction_per_chrom{
             input:
                 vcfs = SplitVCF.split_vcfs,
                 vcf_indexes = SplitVCF.split_indexes,
@@ -42,7 +42,7 @@ workflow RunLOFExtraction {
         }
     }
 
-    call RunLOFExtractionPerChrom.ConcatBeds as concat_beds{
+    call RunLOFExtractionPerShard.ConcatBeds as concat_beds{
         input:
             shard_bed_files = run_lof_extraction_per_chrom.bed_file,
             prefix = output_prefix,
