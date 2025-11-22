@@ -6,9 +6,11 @@ workflow VCFToBEDWorkflow {
     input {
         Array[File] vcfs
         Array[File] idxs
+
         String output_prefix
         String sv_base_mini_docker
-        String sv_base_pipeline_docker
+        String sv_pipeline_base_docker
+
         RuntimeAttr? runtime_attr_vcf2bed
         RuntimeAttr? runtime_attr_concat_bed
     }
@@ -18,7 +20,7 @@ workflow VCFToBEDWorkflow {
             input:
                 vcf = vcfs[i],
                 index = idxs[i],
-                sv_base_pipeline_docker = sv_base_pipeline_docker,
+                sv_pipeline_base_docker = sv_pipeline_base_docker,
                 runtime_attr_override = runtime_attr_vcf2bed
         }
     }
@@ -42,7 +44,7 @@ task VCFToBED {
     input {
         File vcf
         File index
-        String sv_base_pipeline_docker
+        String sv_pipeline_base_docker
         RuntimeAttr? runtime_attr_override
     }
 
