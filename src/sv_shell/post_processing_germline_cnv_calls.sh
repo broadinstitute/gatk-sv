@@ -101,14 +101,16 @@ done
 
 mkdir -p contig-ploidy-calls
 tar xzf "${contig_ploidy_calls_tar}" -C contig-ploidy-calls
-rm "${contig_ploidy_calls_tar}"
 
 
 genotyped_intervals_vcf_filename="$(realpath "genotyped-intervals-${entity_id}.vcf.gz")"
 genotyped_segments_vcf_filename="$(realpath "genotyped-segments-${entity_id}.vcf.gz")"
 denoised_copy_ratios_filename="$(realpath "denoised_copy_ratios-${entity_id}.tsv")"
 
-allosomal_contigs_args=$(printf "--allosomal-contig %s " "${allosomal_contigs[@]}")
+allosomal_contigs_args=""
+if [ ${#allosomal_contigs[@]} -gt 0 ]; then
+    allosomal_contigs_args=$(printf -- "--allosomal-contig %s " "${allosomal_contigs[@]}")
+fi
 
 java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar PostprocessGermlineCNVCalls \
     --arguments_file calls_and_model_args.txt \
