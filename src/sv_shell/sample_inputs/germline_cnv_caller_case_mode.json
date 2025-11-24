@@ -7,7 +7,6 @@
   "caller_internal_admixing_rate": null,
   "caller_update_convergence_threshold": null,
   "cnv_coherence_length": null,
-  "command_mem_mb": 6000,
   "contig_ploidy_calls_tar": "/inputs/case-contig-ploidy-calls.tar.gz",
   "convergence_snr_averaging_window": null,
   "convergence_snr_countdown_window": null,
@@ -16,7 +15,6 @@
   "cpu": 4,
   "depth_correction_tau": null,
   "disable_annealing": null,
-  "disk_gb": 11,
   "gcnv_model_tar": "/inputs/all_samples-gcnv-model-shard-0.tar.gz",
   "initial_temperature": null,
   "learning_rate": null,
@@ -29,17 +27,13 @@
   "max_calling_iters": null,
   "max_copy_number": null,
   "max_training_epochs": null,
-  "mem_gb": 10,
   "min_training_epochs": null,
   "num_samples": 1,
   "num_thermal_advi_iters": null,
-  "output_dir": null,
-  "output_dir_": "out",
   "p_alt": null,
   "read_count_files": [
     "/inputs/condensed_counts.NA12878.tsv.gz"
   ],
   "sample_psi_scale": null,
-  "scatter_index": 0,
-  "unzip_factor": 10
+  "scatter_index": 0
 }
