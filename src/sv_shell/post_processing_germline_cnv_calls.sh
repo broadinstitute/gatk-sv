@@ -39,7 +39,7 @@ allosomal_contigs=($(jq -r '(.allosomal_contigs // [])[]' "${input_json}"))
 
 entity_id=$(jq -r ".entity_id" "${input_json}")
 contig_ploidy_calls_tar=$(jq -r ".contig_ploidy_calls_tar" "${input_json}")
-ref_copy_number_autosomal_contigs=$(jq -r ".ref_copy_number_autosomal_contigs" "${input_json}")
+ref_copy_number_autosomal_contigs=$(jq -r '.ref_copy_number_autosomal_contigs // "2"' "${input_json}")
 sample_index=$(jq -r ".sample_index" "${input_json}")
 
 
@@ -66,6 +66,12 @@ set +u
 conda activate gatk
 set -u
 
+# Note that the following script has a questionable mechanism
+# built around filenames, that will break if the naming convention
+# in the upstream tasks is changed.
+# This design is copy-pasted from the WDL based implementation
+# and kept unchanged to maintain the ability for debug/dev the workflow with WDL input/outputs.
+
 touch calls_and_model_args.txt
 
 for (( CALL_INDEX=0; CALL_INDEX<${#gcnv_calls_tars[@]}; CALL_INDEX++ )); do
@@ -82,10 +88,19 @@ for (( CALL_INDEX=0; CALL_INDEX<${#gcnv_calls_tars[@]}; CALL_INDEX++ )); do
 
   tar xzf "$GCNV_CALLS_TAR" -C "$CALL_DIR/SAMPLE_${sample_index}"
 
-  ln -rsf "$CALLING_CONFIG" "${CALL_DIR}"
-  ln -rsf "$DENOISING_CONFIG" "${CALL_DIR}"
-  ln -rsf "$GCNVKERNEL_VERSION" "${CALL_DIR}"
-  ln -rsf "$SHARDED_INTERVAL_LIST" "${CALL_DIR}"
+  # gcnv has hardcoded the filenames it expects,
+  # e.g., it will break if you provide `shard_0_interval_list.tsv` instead of `interval_list.tsv`.
+  # the following symlinking is based on the wdl implementation that is
+  # built around the "uniqueness in filepath, but identical filename" assumption
+  # that aligns with the gcnv's hardcoded filenames.
+  # That is not a reliable design, hence, to slightly improve it in sv-shell,
+  # the following symlinking includes filename in addition to the path so that
+  # regardless of the input filename/path, links are pointing as
+  # gcnv's hardcoded filename expectations.
+  ln -rsf "$CALLING_CONFIG" "${CALL_DIR}/calling_config.json"
+  ln -rsf "$DENOISING_CONFIG" "${CALL_DIR}/denoising_config.json"
+  ln -rsf "$GCNVKERNEL_VERSION" "${CALL_DIR}/gcnvkernel_version.json"
+  ln -rsf "$SHARDED_INTERVAL_LIST" "${CALL_DIR}/interval_list.tsv"
 
   echo "--calls-shard-path ${CALL_DIR}" >> calls_and_model_args.txt
 
