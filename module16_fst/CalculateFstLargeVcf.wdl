@@ -14,6 +14,7 @@ workflow CalculateFstLargeVcf {
         File? region_bed
         RuntimeAttr? runtime_tabix_vcf
         RuntimeAttr? runtime_attr_fst
+        RuntimeAttr? runtime_attr_fst_pop_from_sites
     }
 
     if (defined(region_bed)){
