@@ -111,13 +111,7 @@ set -u
 # GermlineCNVCallerCaseMode
 # ---------------------------------------------------------------------------------------------------------------------
 
-temp_counter=0
-
 gcnv_output_jsons=()
-#calling_config_jsons=()
-#denoising_config_jsons=()
-#gcnvkernel_version_jsons=()
-#sharded_interval_lists=()
 
 for (( scatter_index=0; scatter_index<${#gcnv_model_tars[@]}; scatter_index++ )); do
 
@@ -172,17 +166,6 @@ for (( scatter_index=0; scatter_index<${#gcnv_model_tars[@]}; scatter_index++ ))
       "${gcnv_case_scatter_wd}"
 
     gcnv_output_jsons+=("${gcnv_case_shard_outputs_json}")
-#    calling_config_jsons+=($(jq -r ".calling_config_json" "${gcnv_case_shard_outputs_json}"))
-#    denoising_config_jsons+=($(jq -r ".denoising_config_json" "${gcnv_case_shard_outputs_json}"))
-#    gcnvkernel_version_jsons+=($(jq -r ".gcnvkernel_version_json" "${gcnv_case_shard_outputs_json}"))
-#    sharded_interval_lists+=($(jq -r ".sharded_interval_list" "${gcnv_case_shard_outputs_json}"))
-
-    # TODO: remove temp
-    temp_counter=$((temp_counter + 1))
-    if [ "$temp_counter" -ge 2 ]; then
-        echo "DEBUG: Processed 2 samples. Breaking loop."
-        break
-    fi
 done
 
 
@@ -216,19 +199,17 @@ cd "${working_dir}"
 # Array[Array[File]] call_tars_sample_by_shard = transpose(GermlineCNVCallerCaseMode.gcnv_call_tars)
 aggregated_shards_json="${working_dir}/aggregated_shards.json"
 jq -s '{
-  calling_configs:        map(.calling_config_json),
-  denoising_configs:      map(.denoising_config_json),
-  gcnvkernel_versions:    map(.gcnvkernel_version_json),
+  calling_configs: map(.calling_config_json),
+  denoising_configs: map(.denoising_config_json),
+  gcnvkernel_versions: map(.gcnvkernel_version_json),
   sharded_interval_lists: map(.sharded_interval_list),
-  call_tars_matrix:       (map(.gcnv_call_tars) | transpose)
+  call_tars_matrix: (map(.gcnv_call_tars) | transpose)
 }' "${gcnv_output_jsons[@]}" > "${aggregated_shards_json}"
 
 
-#call_tars_sample_by_shard_json=$(jq -s 'map(.gcnv_call_tars) | transpose' "${gcnv_output_jsons[@]}")
+PostprocessGermlineCNVCalls_outputs_jsons=()
 num_samples=${#counts[@]}
 for (( sample_index=0; sample_index<num_samples; sample_index++ )); do
-
-#  current_sample_tars_json=$(echo "${call_tars_sample_by_shard_json}" | jq -c ".[${sample_index}]")
 
   PostprocessGermlineCNVCalls_wd=$(mktemp -d "/wd_PostprocessGermlineCNVCalls_${sample_index}_XXXXXXXX")
   PostprocessGermlineCNVCalls_wd="$(realpath ${PostprocessGermlineCNVCalls_wd})"
@@ -261,6 +242,8 @@ for (( sample_index=0; sample_index<num_samples; sample_index++ )); do
     "${PostprocessGermlineCNVCalls_inputs_json}" \
     "${PostprocessGermlineCNVCalls_outputs_json}" \
     "${PostprocessGermlineCNVCalls_wd}"
+
+  PostprocessGermlineCNVCalls_outputs_jsons+=("${PostprocessGermlineCNVCalls_outputs_json}")
 done
 
 
@@ -288,13 +271,128 @@ do
   tar -czf "sample_${sample_no}.${sample_id}.contig_ploidy_calls.tar.gz" -C "calls/SAMPLE_${i}" .
 done
 
+sample_contig_ploidy_calls_tar=( sample_*.contig_ploidy_calls.tar.gz )
+
 
 # -------------------------------------------------------
 # ======================= Output ========================
 # -------------------------------------------------------
 
+# Adding a few anchors to help cross-reference this implementation with the WDL implementation.
+
+# WDL >>>
+# File contig_ploidy_calls_tar = DetermineGermlineContigPloidyCaseMode.contig_ploidy_calls_tar
+# <<<
 contig_ploidy_calls_tar_output_dir="${output_dir}/$(basename "${DetermineGermlineContigPloidyCaseMode_contig_ploidy_calls_tar}")"
 mv "${DetermineGermlineContigPloidyCaseMode_contig_ploidy_calls_tar}" "${contig_ploidy_calls_tar_output_dir}"
 
+# WDL >>>
+# Array[File] sample_contig_ploidy_calls_tars = ExplodePloidyCalls.sample_contig_ploidy_calls_tar
+# <<<
+sample_contig_ploidy_calls_tar_output=()
+for ploidy_calls_tar in "${sample_contig_ploidy_calls_tar[@]}"; do
+  d="${output_dir}/$(basename "${ploidy_calls_tar}")"
+  mv "${ploidy_calls_tar}" "${d}"
+  sample_contig_ploidy_calls_tar_output+=("${d}")
+done
+sample_contig_ploidy_calls_tars_json=$(jq -n -c '$ARGS.positional' --args "${sample_contig_ploidy_calls_tar_output[@]}")
 
-sample_contig_ploidy_calls_tars
+
+# WDL >>>
+# Array[Array[File]] gcnv_calls_tars = GermlineCNVCallerCaseMode.gcnv_call_tars
+# Array[File] gcnv_tracking_tars = GermlineCNVCallerCaseMode.gcnv_tracking_tar
+# <<<
+#
+# the following iterates over all the JSON files belong to various scatters of GermlineCNVCallerCaseMode,
+# for each file in the scatter (which is either a single-file or a list of files):
+# - it moves the files to the output directory,
+# - adds them to a temporary json, in the same format as the `output` of the `CNVGermlineCaseWorkflow` workflow,
+#   so it will be easier to pass from this temporary json to the output json of the workflow.
+# This implementation is not ideal as it involves reading and updating a helper json multiple time.
+# Give that the tasks in wdl implementation output/work-with array of arrays, and given we're
+# yielding the output of each bash implementation using json, we have few options,
+# and all rely on intermediate files.
+tmp_outs_helper="tmp_GermlineCNVCallerCaseMode_convert_helper.json"
+echo "[]" > "${tmp_outs_helper}"
+
+for json_file in "${gcnv_output_jsons[@]}"; do
+  gcnv_call_tars=$(jq -r ".gcnv_call_tars[]" "$json_file")
+  gcnv_call_tars_in_output_dir=()
+
+  for src_path in ${gcnv_call_tars}; do
+    dest_path="${output_dir}/$(basename "${src_path}")"
+    mv "${src_path}" "${dest_path}"
+    gcnv_call_tars_in_output_dir+=("$dest_path")
+  done
+
+  gcnv_tracking_tar=$(jq -r ".gcnv_tracking_tar" "$json_file")
+  gcnv_tracking_tar_in_output_dir="${output_dir}/$(basename "${gcnv_tracking_tar}")"
+  mv "${gcnv_tracking_tar}" "${gcnv_tracking_tar_in_output_dir}"
+
+  # the following is a two-step process (not optimal, but easier to use downstream):
+  # a- create a json object for this iteration
+  # b- read the json containing data of all iterations, and add (a) to it, serialize it.
+  current_item_json=$(jq -n -c \
+    --arg tracking_tar "${gcnv_tracking_tar_in_output_dir}" \
+    '{
+       gcnv_call_tars: $ARGS.positional,
+       gcnv_tracking_tar: $tracking_tar
+    }' \
+    --args "${gcnv_call_tars_in_output_dir[@]}")
+
+  jq --argjson c "$current_item_json" '. + [$c]' "${tmp_outs_helper}" > "${tmp_outs_helper}.tmp"
+  mv "${tmp_outs_helper}.tmp" "${tmp_outs_helper}"
+done
+
+
+# WDL >>>
+# Array[File] genotyped_intervals_vcf = PostprocessGermlineCNVCalls.genotyped_intervals_vcf
+# Array[File] genotyped_segments_vcf = PostprocessGermlineCNVCalls.genotyped_segments_vcf
+# Array[File] denoised_copy_ratios = PostprocessGermlineCNVCalls.denoised_copy_ratios
+# <<<
+genotyped_intervals_vcfs=()
+genotyped_segments_vcfs=()
+denoised_copy_ratios_all=()
+for json_file in "${PostprocessGermlineCNVCalls_outputs_jsons[@]}"; do
+  genotyped_intervals_vcf=$(jq -r ".genotyped_intervals_vcf" "$json_file")
+  d="${output_dir}/$(basename "${genotyped_intervals_vcf}")"
+  mv "${genotyped_intervals_vcf}" "${d}"
+  genotyped_intervals_vcfs+=("${d}")
+
+  genotyped_segments_vcf=$(jq -r ".genotyped_segments_vcf" "$json_file")
+  d="${output_dir}/$(basename "${genotyped_segments_vcf}")"
+  mv "${genotyped_segments_vcf}" "${d}"
+  genotyped_segments_vcfs+=("${d}")
+
+  denoised_copy_ratios=$(jq -r ".denoised_copy_ratios" "$json_file")
+  d="${output_dir}/$(basename "${denoised_copy_ratios}")"
+  mv "${denoised_copy_ratios}" "${d}"
+  denoised_copy_ratios_all+=("${d}")
+done
+genotyped_intervals_vcfs_json=$(jq -n -c '$ARGS.positional' --args "${genotyped_intervals_vcfs[@]}")
+genotyped_segments_vcfs_json=$(jq -n -c '$ARGS.positional' --args "${genotyped_segments_vcfs[@]}")
+denoised_copy_ratios_all_json=$(jq -n -c '$ARGS.positional' --args "${denoised_copy_ratios_all[@]}")
+
+
+
+jq -n \
+  --slurpfile gcnv_casemode_json "${tmp_outs_helper}" \
+  --arg contig_ploidy_calls_tar "${contig_ploidy_calls_tar_output_dir}" \
+  --argjson sample_contig_ploidy_calls_tars "${sample_contig_ploidy_calls_tars_json}" \
+  --argjson genotyped_intervals_vcf "${genotyped_intervals_vcfs_json}" \
+  --argjson genotyped_segments_vcf "${genotyped_segments_vcfs_json}" \
+  --argjson denoised_copy_ratios "${denoised_copy_ratios_all_json}" \
+  '{
+    "contig_ploidy_calls_tar": $contig_ploidy_calls_tar,
+    "sample_contig_ploidy_calls_tars": $sample_contig_ploidy_calls_tars,
+
+    # FIX: Use map() to extract the column from the list of objects
+    "gcnv_calls_tars": ($gcnv_casemode_json[0] | map(.gcnv_call_tars)),
+    "gcnv_tracking_tars": ($gcnv_casemode_json[0] | map(.gcnv_tracking_tar)),
+
+    "genotyped_intervals_vcf": $genotyped_intervals_vcf,
+    "genotyped_segments_vcf": $genotyped_segments_vcf,
+    "denoised_copy_ratios": $denoised_copy_ratios
+  }' > "${output_json_filename}"
+
+echo "Successfully finished cnv germline cace, output json filename: ${output_json_filename}"
