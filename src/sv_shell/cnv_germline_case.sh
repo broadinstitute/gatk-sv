@@ -105,6 +105,7 @@ DetermineGermlineContigPloidyCaseMode_contig_ploidy_calls_tar="$(realpath "case-
 
 set +u
 conda deactivate
+conda activate gatk-sv
 set -u
 
 

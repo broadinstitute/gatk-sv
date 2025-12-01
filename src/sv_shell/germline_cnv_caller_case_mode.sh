@@ -189,6 +189,7 @@ sed 's/\.gz$//' "$read_count_files_list" \
 
 set +u
 conda deactivate
+conda activate gatk-sv
 set -u
 
 

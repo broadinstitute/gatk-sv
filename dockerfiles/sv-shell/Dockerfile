@@ -127,6 +127,7 @@ RUN apt-get -qqy install --no-upgrade --no-install-recommends git git-lfs openjd
     wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.10.0-1-Linux-x86_64.sh -O /opt/gatk_miniconda3/miniconda.sh && \
     bash /opt/gatk_miniconda3/miniconda.sh -p /opt/gatk_miniconda3 -b -u && \
     rm /opt/gatk_miniconda3/miniconda.sh && \
+    /opt/gatk_miniconda3/bin/conda config --append envs_dirs /opt/conda/envs && \
     source /opt/gatk_miniconda3/bin/activate && \
     conda config --set auto_update_conda false && \
     conda config --set solver libmamba && \

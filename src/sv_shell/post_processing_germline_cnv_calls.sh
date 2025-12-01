@@ -140,6 +140,7 @@ java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar PostprocessGermlineCNVCalls \
 
 set +u
 conda deactivate
+conda activate gatk-sv
 set -u
 
 # -------------------------------------------------------
