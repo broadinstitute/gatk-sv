@@ -111,4 +111,19 @@ RUN mkdir -p /opt/R/4.1.3/lib/R/doc/html && \
     R -e 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/focal/latest")); BiocManager::install(c("cn.mops", "rtracklayer", "XML"), update=FALSE, ask=FALSE)'
 
 
+# Install GATK
+# note that gatk is installed in sv-base docker, which this docker image inherits.
+# however, the base images are currently being updated: https://github.com/broadinstitute/gatk-sv/pull/816
+# so as a temporary work-around we're re-installing gatk in this image using code in a specific branch.
+RUN apt-get -qqy install --no-upgrade --no-install-recommends git git-lfs openjdk-17-jdk openjdk-17-jre-headless libgomp1
+RUN GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git && \
+    cd gatk && \
+    git checkout mw_gatk_sv && \
+    git checkout 1eac9db89b65f9493d2a91539e2b9274159a5b5c && \
+    ./gradlew localJar && \
+    cd .. && \
+    cp gatk/build/libs/gatk.jar /opt/gatk.jar && \
+    rm -rf gatk/
+
+
 WORKDIR /
