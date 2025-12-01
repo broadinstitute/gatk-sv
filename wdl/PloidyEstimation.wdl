@@ -6,6 +6,7 @@ workflow Ploidy {
   input {
     File bincov_matrix
     String batch
+    String? plot_highlight_sample
     String sv_base_mini_docker
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_score
@@ -27,6 +28,7 @@ workflow Ploidy {
     input:
       ploidy_matrix = BuildPloidyMatrix.ploidy_matrix,
       batch = batch,
+      plot_highlight_sample = plot_highlight_sample,
       sv_pipeline_qc_docker = sv_pipeline_qc_docker,
       runtime_attr_override = runtime_attr_score
   }
@@ -94,6 +96,7 @@ task PloidyScore {
   input {
     File ploidy_matrix
     String batch
+    String? plot_highlight_sample
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -116,7 +119,9 @@ task PloidyScore {
     set -euo pipefail
     
     mkdir ploidy_est
-    Rscript /opt/WGD/bin/estimatePloidy.R -z -O ./ploidy_est ~{ploidy_matrix}
+    Rscript /opt/WGD/bin/estimatePloidy.R \
+      -z -O ./ploidy_est ~{ploidy_matrix} \
+      ~{if defined(plot_highlight_sample) then "--highlightSample " + plot_highlight_sample else ""}
 
     sleep 10
     

@@ -100,6 +100,7 @@ workflow GatherBatchEvidence {
     Array[String]? allosomal_contigs
 
     Boolean run_ploidy = false
+    String? ploidy_plot_highlight_sample  # for single-sample mode
 
     # Option to add first sample to the ped file (for single sample mode); run_ploidy must be true
     Boolean append_first_sample_to_ped = false
@@ -206,6 +207,7 @@ workflow GatherBatchEvidence {
       input:
         bincov_matrix = merged_bincov_,
         batch = batch,
+        plot_highlight_sample = ploidy_plot_highlight_sample,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,
         runtime_attr_score = ploidy_score_runtime_attr,

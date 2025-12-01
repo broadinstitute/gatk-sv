@@ -596,7 +596,7 @@ testCNs <- function(dat, FDR=T){
 assignSex <- function(dat, sexChr=24:25, 
                       sexAssign.df, #four-column df: cn(X), cn(Y), label, color
                       mosaicThresh="Bonferroni", 
-                      plot=T, axLim=3){
+                      plot=T, axLim=3, highlightSample=""){
   #Exclude incomplete entries
   sample.exclude <- unlist(sapply(1:nrow(dat), function(i){
     if(any(is.na(dat[i, sexChr]))){
@@ -717,9 +717,7 @@ assignSex <- function(dat, sexChr=24:25,
     if(mosaicThresh=="FDR"){
       if(length(sample.exclude)>0){
         colVect <- apply(sexes[-sample.exclude, c(4, 7:8)], 1, function(vals){
-          if(!all(is.na(vals[2:3])) & min(as.numeric(vals[2:3]))<0.05){
-            return("#53edd0")
-          }else if(vals[1] %in% sexAssign.df$label){
+          if(vals[1] %in% sexAssign.df$label){
             return(sexAssign.df[which(sexAssign.df$label==vals[1]), ]$color)
           }else{
             return("#8F1336")
@@ -727,9 +725,7 @@ assignSex <- function(dat, sexChr=24:25,
         })
       }else{
         colVect <- apply(sexes[, c(4, 7:8)], 1, function(vals){
-          if(!all(is.na(vals[2:3])) & min(as.numeric(vals[2:3]))<0.05){
-            return("#53edd0")
-          }else if(vals[1] %in% sexAssign.df$label){
+          if(vals[1] %in% sexAssign.df$label){
             return(sexAssign.df[which(sexAssign.df$label==vals[1]), ]$color)
           }else{
             return("#8F1336")
@@ -739,9 +735,7 @@ assignSex <- function(dat, sexChr=24:25,
     }else{
       if(length(sample.exclude)>0){
         colVect <- apply(sexes[-sample.exclude, c(4:6)], 1, function(vals){
-          if(!all(is.na(vals[2:3])) & min(as.numeric(vals[2:3]))<0.05/nrow(dat.mod)){
-            return("#53edd0")
-          }else if(vals[1] %in% sexAssign.df$label){
+          if(vals[1] %in% sexAssign.df$label){
             return(sexAssign.df[which(sexAssign.df$label==vals[1]), ]$color)
           }else{
             return("#8F1336")
@@ -749,9 +743,7 @@ assignSex <- function(dat, sexChr=24:25,
         })
       }else{
         colVect <- apply(sexes[, c(4:6)], 1, function(vals){
-          if(!all(is.na(vals[2:3])) & min(as.numeric(vals[2:3]))<0.05/nrow(dat.mod)){
-            return("#53edd0")
-          }else if(vals[1] %in% sexAssign.df$label){
+          if(vals[1] %in% sexAssign.df$label){
             return(sexAssign.df[which(sexAssign.df$label==vals[1]), ]$color)
           }else{
             return("#8F1336")
@@ -760,8 +752,13 @@ assignSex <- function(dat, sexChr=24:25,
       }
     }
 
-    #Plot points
-    points(dat.mod[, -1], pch=19, col=colVect, cex=0.5)
+    #Plot points, highlighting specified sample
+    isHighlightSample = dat.mod$sample_id == highlightSample
+    pch_vector <- ifelse(isHighlightSample, 17, 19)
+    cex_vector <- ifelse(isHighlightSample, 1.0, 0.5)
+    points(dat.mod[, -1], pch=pch_vector, col=colVect, cex=cex_vector)
+    abline(h = dat.mod[isHighlightSample, 3], lty=1, lwd=2, col="gray")
+    abline(v = dat.mod[isHighlightSample, 2], lty=1, lwd=2, col="gray")
 
     #Add x-axis
     axis(1, at=0:axLim)
@@ -778,10 +775,19 @@ assignSex <- function(dat, sexChr=24:25,
             paste(rep("Y", times=vals[2]), collapse=""), 
             ")", sep="")
     })
-    legend("topright", bg="white", 
-           legend=c(legendLabs, "MOSAIC", "OTHER"), 
-           pch=19, col=c(sexAssign.df$color, "#53edd0", "#8F1336"), 
+    legendLabs = c(legendLabs, "OTHER")
+    colors = c(sexAssign.df$color, "#8F1336")
+    legend("topright", bg="white",
+           legend=legendLabs,
+           pch=19, col=colors,
            cex=0.75, pt.cex=1)
+    if (highlightSample != "" && highlightSample %in% dat.mod$sample_id) {
+      legendLabs = c(legendLabs, highlightSample)
+      colors = c(colors, "gray")
+      legend("topleft", bg="white",
+           legend=highlightSample,
+           col="gray", lty=1, lwd=2, cex=1)
+    }
   }
 
   #Return sex assignments
@@ -794,7 +800,8 @@ assignSex <- function(dat, sexChr=24:25,
 boxplotsPerContig <- function(dat, exclude, genome.ploidy=2, contig.ploidy, 
                               contigLabels=paste("chr", c(1:22, "X", "Y"), sep=""), 
                               xmain="Chromosome", ymax=NULL, 
-                              colorSignif=T, connect=F, boxes=T){
+                              colorSignif=T, connect=F, boxes=T,
+                              highlightSample=""){
   #Load library
   require(beeswarm)
 
@@ -905,6 +912,15 @@ boxplotsPerContig <- function(dat, exclude, genome.ploidy=2, contig.ploidy,
     }
   }
 
+  #Add single sample
+  if (highlightSample != "" && highlightSample %in% dat[, 1]) {
+    isHighlightSample = dat[, 1] == highlightSample
+    lines((1:(ncol(dat)-1))-0.5, dat[isHighlightSample, -1], col="magenta")
+    legend("topright", bg="white",
+      legend=c(highlightSample),
+      col=c("magenta"), lty=1)
+  }
+
   #Add x-axis labels
   axis(1, at=(1:length(contigLabels))-0.5, tick=F, line=-0.8, las=2, labels=contigLabels)
   mtext(1, text=xmain, line=2.2)
@@ -960,7 +976,9 @@ option_list <- list(
               metavar="integer"), 
   make_option(c("--maxBatch"), type="integer", default=150, 
               help="maximum number of samples per batch (requires -k) [default: %default]", 
-              metavar="integer")
+              metavar="integer"),
+  make_option(c("--highlightSample"), default="",
+              help="ID of sample to highlight in plots")
 )
 
 #Get command-line arguments & options
@@ -986,6 +1004,7 @@ nPCs <- args$options$dimensions
 batch.ideal <- args$options$batchSize
 batch.min <- args$options$minBatch
 batch.max <- args$options$batchMax
+highlightSample = args$options$highlightSample
 
 # ##Jan 2020 dev parameters (on local machine)
 # # INFILE <- "/Users/rlc/scratch/1KGP_2504_sub_batch_10_ploidy_matrix.bed.gz"
@@ -1083,7 +1102,7 @@ sexAssign.df <- data.frame("CN.X"=c(1, 2, 1, 3, 2, 1),
 #Assign sexes
 png(paste(OUTDIR, "/sex_assignments.png", sep=""), 
     height=1500, width=1500, res=300)
-sexes <- assignSex(chr.dat, plot=T, sexAssign.df=sexAssign.df)
+sexes <- assignSex(chr.dat, plot=T, sexAssign.df=sexAssign.df, highlightSample=highlightSample)
 dev.off()
 
 #Split data by chrX copy number (≥2 or <2) & evenly distribute NAs among M & F
@@ -1109,31 +1128,31 @@ if(length(sex.NAs)==0){
 #Plot CN per contig - Males
 png(paste(OUTDIR, "/estimated_CN_per_contig.chrX_lessThan_2copies.with_contours.png", sep=""), 
     height=1250, width=2500, res=300)
-boxplotsPerContig(chr.dat.males, exclude=NA, contig.ploidy=c(rep(2, 22), 1, 1), connect=T)
+boxplotsPerContig(chr.dat.males, exclude=NA, contig.ploidy=c(rep(2, 22), 1, 1), connect=T, highlightSample=highlightSample)
 dev.off()
 png(paste(OUTDIR, "/estimated_CN_per_contig.chrX_lessThan_2copies.no_contours.png", sep=""), 
     height=1250, width=2500, res=300)
-boxplotsPerContig(chr.dat.males, exclude=NA, contig.ploidy=c(rep(2, 22), 1, 1), connect=F)
+boxplotsPerContig(chr.dat.males, exclude=NA, contig.ploidy=c(rep(2, 22), 1, 1), connect=F, highlightSample=highlightSample)
 dev.off()
 
 #Plot CN per contig - Females
 png(paste(OUTDIR, "/estimated_CN_per_contig.chrX_atLeast_2copies.with_contours.png", sep=""), 
     height=1250, width=2500, res=300)
-boxplotsPerContig(chr.dat.females, exclude=NA, contig.ploidy=c(rep(2, 22), 2, 0), connect=T)
+boxplotsPerContig(chr.dat.females, exclude=NA, contig.ploidy=c(rep(2, 22), 2, 0), connect=T, highlightSample=highlightSample)
 dev.off()
 png(paste(OUTDIR, "/estimated_CN_per_contig.chrX_atLeast_2copies.no_contours.png", sep=""), 
     height=1250, width=2500, res=300)
-boxplotsPerContig(chr.dat.females, exclude=NA, contig.ploidy=c(rep(2, 22), 2, 0), connect=F)
+boxplotsPerContig(chr.dat.females, exclude=NA, contig.ploidy=c(rep(2, 22), 2, 0), connect=F, highlightSample=highlightSample)
 dev.off()
 
 #Plot CN per contig - all samples
 png(paste(OUTDIR, "/estimated_CN_per_contig.all_samples.with_contours.png", sep=""), 
     height=1250, width=2500, res=300)
-boxplotsPerContig(chr.dat, exclude=NA, contig.ploidy=c(rep(2, 22), 2, 0), connect=T, boxes=F)
+boxplotsPerContig(chr.dat, exclude=NA, contig.ploidy=c(rep(2, 22), 2, 0), connect=T, boxes=F, highlightSample=highlightSample)
 dev.off()
 png(paste(OUTDIR, "/estimated_CN_per_contig.all_samples.no_contours.png", sep=""), 
     height=1250, width=2500, res=300)
-boxplotsPerContig(chr.dat, exclude=NA, contig.ploidy=c(rep(2, 22), 2, 0), connect=F, boxes=F)
+boxplotsPerContig(chr.dat, exclude=NA, contig.ploidy=c(rep(2, 22), 2, 0), connect=F, boxes=F, highlightSample=highlightSample)
 dev.off()
 
 #Write table of sexes
@@ -1198,7 +1217,7 @@ sapply(setdiff(unique(dat[, 1]), c("X", "Y")), function(contig){
       height=1250, width=2500, res=300)
   plot.dat <- binwise.dat[, c(1, which(dat[, 1]==contig)+1)]
   boxplotsPerContig(plot.dat, exclude=NA, contig.ploidy=rep(2, ncol(plot.dat)-1), connect=T, 
-                    xmain=paste(contig, "Position (Binned)"), ymax=5, contigLabels=NA)
+                    xmain=paste(contig, "Position (Binned)"), ymax=5, contigLabels=NA, highlightSample=highlightSample)
   dev.off()
 })
 
@@ -1215,14 +1234,14 @@ sapply(intersect(unique(dat[, 1]), c("X", "Y")), function(contig){
       height=1250, width=2500, res=300)
   plot.dat <- binwise.dat.males[, c(1, which(dat[, 1]==contig)+1)]
   boxplotsPerContig(plot.dat, exclude=NA, contig.ploidy=rep(2, ncol(plot.dat)-1), connect=T, 
-                    xmain=paste(contig, "Position (Binned)"), ymax=5, contigLabels=NA)
+                    xmain=paste(contig, "Position (Binned)"), ymax=5, contigLabels=NA, highlightSample=highlightSample)
   dev.off()
   #Females
   png(paste(OUTDIR, "/estimated_CN_per_bin.chrX_atLeast_2copies.", contig, ".png", sep=""), 
       height=1250, width=2500, res=300)
   plot.dat <- binwise.dat.females[, c(1, which(dat[, 1]==contig)+1)]
   boxplotsPerContig(plot.dat, exclude=NA, contig.ploidy=rep(2, ncol(plot.dat)-1), connect=T, 
-                    xmain=paste(contig, "Position (Binned)"), ymax=5, contigLabels=NA)
+                    xmain=paste(contig, "Position (Binned)"), ymax=5, contigLabels=NA, highlightSample=highlightSample)
   dev.off()
 })
 
