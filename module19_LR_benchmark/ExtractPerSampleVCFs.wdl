@@ -12,16 +12,21 @@ workflow ExtractPerSampleVCFs {
     }
 
     # If no list is provided, query all sample names
-    call GetSamples {
-        input:
-            vcf = vcf,
-            vcf_index = vcf_index,
-            sample_list = sample_list,
-            docker_image = sv_pipeline_base_docker,
-            runtime_attr_override = runtime_attr_get_samples
+    if (!defined(sample_list)) {
+
+        call GetSamples {
+            input:
+                vcf = vcf,
+                vcf_index = vcf_index,
+                sample_list = sample_list,
+                docker_image = sv_pipeline_base_docker,
+                runtime_attr_override = runtime_attr_get_samples
+        }
     }
 
-    scatter (s in GetSamples.sample_ids) {
+    Array[String] samp_list = select_first([GetSamples.sample_ids,sample_list])
+
+    scatter (s in samp_list) {
         call ExtractSample {
             input:
                 vcf = vcf,
@@ -43,19 +48,12 @@ task GetSamples {
     input {
         File vcf
         File vcf_index
-        Array[String]? sample_list
         String docker_image
         RuntimeAttr? runtime_attr_override
     }
 
     command <<<
-        if [[ -z "${sample_list}" ]]; then
-            # extract sample names from VCF
             bcftools query -l ~{vcf} > samples.txt
-        else
-            # write provided list to file
-            printf "%s\n" ~{sep="\n" sample_list} > samples.txt
-        fi
     >>>
 
     output {
