@@ -18,7 +18,6 @@ workflow ExtractPerSampleVCFs {
             input:
                 vcf = vcf,
                 vcf_index = vcf_index,
-                sample_list = sample_list,
                 docker_image = sv_pipeline_base_docker,
                 runtime_attr_override = runtime_attr_get_samples
         }
