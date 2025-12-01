@@ -717,6 +717,7 @@ workflow GATKSVPipelineSingleSample {
       gcnv_model_tars = gcnv_model_tars,
       gatk4_jar_override = gatk4_jar_override,
       run_ploidy = true,
+      ploidy_plot_highlight_sample = sample_id,
       append_first_sample_to_ped = true,
       gcnv_p_alt = gcnv_p_alt,
       gcnv_cnv_coherence_length = gcnv_cnv_coherence_length,
