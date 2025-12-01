@@ -48,6 +48,8 @@ workflow GATKSVPipelinePhase1 {
     Array[File] SR_files
     Array[File]? SD_files
     File? sd_locs_vcf
+    File? ploidy_sd_locs_vcf
+    File? ploidy_poor_regions
     Array[File] counts
     File? bincov_matrix
     File? bincov_matrix_index
@@ -244,6 +246,8 @@ workflow GATKSVPipelinePhase1 {
       SR_files = SR_files,
       SD_files = SD_files,
       sd_locs_vcf = sd_locs_vcf,
+      ploidy_sd_locs_vcf = ploidy_sd_locs_vcf,
+      ploidy_poor_regions = ploidy_poor_regions,
       ref_dict = reference_dict,
       cytoband = cytoband,
       mei_bed = mei_bed,
@@ -453,6 +457,7 @@ workflow GATKSVPipelinePhase1 {
     File merged_bincov_index = GatherBatchEvidence.merged_bincov_index
 
     File median_cov = GatherBatchEvidence.median_cov
+    File ploidy_table = GenerateBatchMetrics.ploidy_table
 
     File? PE_stats = GatherBatchEvidence.PE_stats
     File? RD_stats = GatherBatchEvidence.RD_stats

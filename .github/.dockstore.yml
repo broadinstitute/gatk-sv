@@ -6,6 +6,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_ploidy_simplified
       tags:
         - /.*/
 
@@ -15,6 +16,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_ploidy_simplified
       tags:
         - /.*/
 
@@ -33,6 +35,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_ploidy_simplified
       tags:
         - /.*/
 
@@ -240,6 +243,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_ploidy_simplified
       tags:
         - /.*/
 
@@ -267,5 +271,41 @@ workflows:
     filters:
       branches:
         - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: SparsifySD
+    primaryDescriptorPath: /wdl/SparsifySD.wdl
+    filters:
+      branches:
+        - mw_ploidy_simplified
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: CollectSparseSD
+    primaryDescriptorPath: /wdl/CollectSparseSD.wdl
+    filters:
+      branches:
+        - mw_ploidy_simplified
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: SubsetSD
+    primaryDescriptorPath: /wdl/SubsetSD.wdl
+    filters:
+      branches:
+        - mw_ploidy_simplified
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: Ploidy
+    primaryDescriptorPath: /wdl/PloidyEstimation.wdl
+    filters:
+      branches:
+        - mw_ploidy_simplified
       tags:
         - /.*/

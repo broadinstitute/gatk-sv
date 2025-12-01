@@ -118,6 +118,8 @@ workflow GATKSVPipelineSingleSample {
 
     # PESR inputs
     File sd_locs_vcf
+    File sparse_sd_locs_vcf
+    File? ploidy_poor_regions
 
     # Melt inputs
     File? melt_standard_vcf_header # required if use_melt True
@@ -654,9 +656,11 @@ workflow GATKSVPipelineSingleSample {
       samples=[sample_id],
       run_vcf_qc=run_vcf_qc,
       genome_file=genome_file,
+      reference_dict=reference_dict,
       counts=[case_counts_file_],
       run_ploidy = false,
       wgd_scoring_mask=wgd_scoring_mask,
+      gatk_docker=gatk_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
@@ -713,6 +717,8 @@ workflow GATKSVPipelineSingleSample {
       SD_files=[case_sd_file_],
       ref_panel_SD_files=ref_pesr_sd_files,
       sd_locs_vcf=sd_locs_vcf,
+      ploidy_sd_locs_vcf=sparse_sd_locs_vcf,
+      ploidy_poor_regions=ploidy_poor_regions,
       contig_ploidy_model_tar = contig_ploidy_model_tar,
       gcnv_model_tars = gcnv_model_tars,
       gatk4_jar_override = gatk4_jar_override,
@@ -1138,6 +1144,7 @@ workflow GATKSVPipelineSingleSample {
 
   call makecohortvcf.MakeCohortVcf {
     input:
+      run_vcf_qc=false,
       min_sr_background_fail_batches=clean_vcf_min_sr_background_fail_batches,
       ped_file=combined_ped_file,
       pesr_vcfs=[ConvertCNVsWithoutDepthSupportToBNDs.out_vcf],

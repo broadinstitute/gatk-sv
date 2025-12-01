@@ -1021,11 +1021,13 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
   
   #Only run if there's data
   if(nrow(HW.dat)>0){
-    #Prep HW matrix
+    #Prep HW matrix (use matrix, not data.frame, for compatibility with
+    #HardyWeinberg package functions and R >= 4.3 which errors on
+    #sort()/xtfrm() of data frames)
     nsamps <- HW.dat$reference_gts+HW.dat$het_gts+HW.dat$hom_gts
-    HW.mat <- data.frame("AA"=HW.dat$reference_gts/nsamps,
-                         "AB"=HW.dat$het_gts/nsamps,
-                         "BB"=HW.dat$hom_gts/nsamps)
+    HW.mat <- cbind("AA"=HW.dat$reference_gts/nsamps,
+                    "AB"=HW.dat$het_gts/nsamps,
+                    "BB"=HW.dat$hom_gts/nsamps)
     
     #Gather HW p-values & colors
     HW.p <- HWChisqStats(X=HW.mat*nsamp,x.linked=F,pvalues=T)

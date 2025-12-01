@@ -1,17 +1,20 @@
 {
   "EvidenceQC.run_vcf_qc" : "true",
+  "EvidenceQC.gatk_docker":{{ dockers.gatk_docker | tojson }},
   "EvidenceQC.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
   "EvidenceQC.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
   "EvidenceQC.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
   "EvidenceQC.sv_base_docker": {{ dockers.sv_base_docker | tojson }},
   "EvidenceQC.wgd_scoring_mask": {{ reference_resources.wgd_scoring_mask | tojson }},
   "EvidenceQC.genome_file": {{ reference_resources.genome_file | tojson }},
+  "EvidenceQC.reference_dict": {{ reference_resources.reference_dict | tojson }},
 
   "EvidenceQC.batch": {{ test_batch.name | tojson }},
   "EvidenceQC.counts": {{ test_batch.counts | tojson }},
   "EvidenceQC.manta_vcfs": {{ test_batch.manta_vcfs | tojson }},
   "EvidenceQC.scramble_vcfs": {{ test_batch.scramble_vcfs | tojson }},
   "EvidenceQC.wham_vcfs": {{ test_batch.wham_vcfs | tojson }},
-  "EvidenceQC.scramble_vcfs": {{ test_batch.scramble_vcf | tojson }},
-  "EvidenceQC.samples": {{ test_batch.samples | tojson }}
+  "EvidenceQC.samples": {{ test_batch.samples | tojson }},
+  "EvidenceQC.sd_files": {{ test_batch.SD_files | tojson }},
+  "EvidenceQC.ploidy_sd_locs_vcf": {{ reference_resources.sparse_sd_locs_vcf | tojson }}
 }

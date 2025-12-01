@@ -23,6 +23,7 @@ workflow EvidenceQC {
 
     # Global files
     File genome_file
+    File reference_dict
 
     # Coverage files
     Array[File] counts
@@ -38,20 +39,34 @@ workflow EvidenceQC {
     File wgd_scoring_mask
 
     # Runtime parameters
+    String gatk_docker
     String sv_base_mini_docker
     String sv_base_docker
     String sv_pipeline_docker
     String sv_pipeline_qc_docker
 
-    Int? disk_overhead_bincov_gb
-
     Boolean run_ploidy = true
+
+    # Regular SD files for ploidy estimation; subsetting happens inside PloidyEstimation
+    Array[File] sd_files = []
+    File? ploidy_sd_locs_vcf
+    File? ploidy_poor_regions
+    Int ploidy_subset_sd_stride = 10
+    String? ploidy_preprocess_args
+    String? ploidy_polyploidy_args
+    String? ploidy_infer_args
+    String? ploidy_ppd_args
+    String? ploidy_call_args
+    String? ploidy_plot_args
+    Boolean ploidy_enable_ppd = false
+    Boolean ploidy_use_callq20 = false
 
     Array[Float]? melt_insert_size
 
     RuntimeAttr? runtime_attr_qc
     RuntimeAttr? runtime_attr_qc_outlier
     RuntimeAttr? runtime_attr_qc_counts
+    RuntimeAttr? ploidy_subset_sd_runtime_attr
     RuntimeAttr? ploidy_score_runtime_attr
     RuntimeAttr? ploidy_build_runtime_attr
 
@@ -72,8 +87,9 @@ workflow EvidenceQC {
     input:
       samples = samples,
       count_files = counts,
+      reference_dict = reference_dict,
       batch = batch,
-      disk_overhead_gb = disk_overhead_bincov_gb,
+      gatk_docker = gatk_docker,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_base_docker = sv_base_docker,
       runtime_attr_override = runtime_attr_bincov_attr
@@ -92,10 +108,26 @@ workflow EvidenceQC {
   if (run_ploidy) {
     call pe.Ploidy as Ploidy {
       input:
-        bincov_matrix = MakeBincovMatrix.merged_bincov,
+        merged_depth_file = MakeBincovMatrix.merged_bincov,
         batch = batch,
-        sv_base_mini_docker = sv_base_mini_docker,
+        sample_ids = samples,
+        sd_files = sd_files,
+        ploidy_sd_locs_vcf = ploidy_sd_locs_vcf,
+        poor_regions = ploidy_poor_regions,
+        preprocess_args = ploidy_preprocess_args,
+        polyploidy_args = ploidy_polyploidy_args,
+        infer_args = ploidy_infer_args,
+        ppd_args = ploidy_ppd_args,
+        call_args = ploidy_call_args,
+        plot_args = ploidy_plot_args,
+        subset_sd_stride = ploidy_subset_sd_stride,
+        enable_ppd = ploidy_enable_ppd,
+        use_callq20 = ploidy_use_callq20,
+        reference_dict = reference_dict,
+        gatk_docker = gatk_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,
+        runtime_attr_subset_sd = ploidy_subset_sd_runtime_attr,
         runtime_attr_score = ploidy_score_runtime_attr,
         runtime_attr_build = ploidy_build_runtime_attr
     }
@@ -116,6 +148,7 @@ workflow EvidenceQC {
       call vcfqc.RawVcfQC as RawVcfQC_Dragen {
         input:
           vcfs = select_first([dragen_vcfs]),
+          samples = samples,
           prefix = batch,
           caller = "Dragen",
           runtime_attr_qc = runtime_attr_qc,
@@ -127,6 +160,7 @@ workflow EvidenceQC {
       call vcfqc.RawVcfQC as RawVcfQC_Manta {
         input:
           vcfs = select_first([manta_vcfs]),
+          samples = samples,
           prefix = batch,
           caller = "Manta",
           sv_pipeline_docker = sv_pipeline_docker,
@@ -139,6 +173,7 @@ workflow EvidenceQC {
       call vcfqc.RawVcfQC as RawVcfQC_Melt {
         input:
           vcfs = select_first([melt_vcfs]),
+          samples = samples,
           prefix = batch,
           caller = "Melt",
           sv_pipeline_docker = sv_pipeline_docker,
@@ -151,6 +186,7 @@ workflow EvidenceQC {
       call vcfqc.RawVcfQC as RawVcfQC_Wham {
         input:
           vcfs = select_first([wham_vcfs]),
+          samples = samples,
           prefix = batch,
           caller = "Wham",
           sv_pipeline_docker = sv_pipeline_docker,
@@ -163,6 +199,7 @@ workflow EvidenceQC {
       call vcfqc.RawVcfQC as RawVcfQC_Scramble {
         input:
           vcfs = select_first([scramble_vcfs]),
+          samples = samples,
           prefix = batch,
           caller = "Scramble",
           sv_pipeline_docker = sv_pipeline_docker,
@@ -187,7 +224,7 @@ workflow EvidenceQC {
         input:
           variant_count_files = variant_count_files,
           ploidy_plots_tarball = select_first([Ploidy.ploidy_plots]),
-          output_prefix = batch,
+          batch = batch,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_variant_count_plots
       }
@@ -197,7 +234,9 @@ workflow EvidenceQC {
       input:
         output_prefix = batch,
         samples = samples,
-        ploidy_plots = select_first([CreateVariantCountPlots.ploidy_plots, Ploidy.ploidy_plots]),
+        ploidy_chromosome_stats = select_first([Ploidy.chromosome_stats]),
+        ploidy_bin_stats = select_first([Ploidy.bin_stats]),
+        sample_sex_assignments = select_first([Ploidy.sample_sex_assignments]),
         bincov_median = MedianCov.medianCov,
         WGD_scores = WGD.WGD_scores,
         melt_insert_size = select_first([melt_insert_size, []]),
@@ -264,7 +303,7 @@ task CreateVariantCountPlots {
   input {
     Array[File] variant_count_files
     File ploidy_plots_tarball
-    String output_prefix
+    String batch
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -281,7 +320,7 @@ task CreateVariantCountPlots {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_default])
 
   output {
-    File ploidy_plots = "${output_prefix}.ploidy_est.tar.gz"
+    File ploidy_plots = "~{batch}_ploidy.tar.gz"
   }
 
   command <<<
@@ -289,20 +328,20 @@ task CreateVariantCountPlots {
 
     tar -xzf ~{ploidy_plots_tarball}
 
-    mkdir -p ./ploidy_est/variant_count_plots
+    mkdir -p ./~{batch}_ploidy/variant_count_plots
     
     for file in ~{sep=' ' variant_count_files}; do
       if [[ -f "$file" ]]; then
         caller=$(basename "$file" | cut -d'.' -f2)
         echo "Processing $caller variant counts from $file"
         
-        cd ./ploidy_est/variant_count_plots
+        cd ./~{batch}_ploidy/variant_count_plots
         Rscript /opt/sv-pipeline/scripts/plot_variant_counts.R "$file" "$caller"
         cd ../..
       fi
     done
 
-    tar -czf ~{output_prefix}.ploidy_est.tar.gz ./ploidy_est/
+    tar -czf ~{batch}_ploidy.tar.gz ./~{batch}_ploidy
   >>>
 
   runtime {
@@ -318,8 +357,9 @@ task CreateVariantCountPlots {
 
 task MakeQcTable {
   input {
-
-    File ploidy_plots
+    File ploidy_chromosome_stats
+    File ploidy_bin_stats
+    File sample_sex_assignments
     File bincov_median
     File WGD_scores
     Array[Float] melt_insert_size
@@ -352,7 +392,7 @@ task MakeQcTable {
   }
 
   output {
-    File qc_table = "${output_prefix}.evidence_qc_table.tsv"
+    File qc_table = "~{output_prefix}.evidence_qc_table.tsv"
   }
 
   command <<<
@@ -363,14 +403,12 @@ task MakeQcTable {
       paste ~{write_lines(samples)} ~{write_lines(melt_insert_size)} >> mean_insert_size.tsv
     fi
 
-    tar -xvf ~{ploidy_plots}
-
     python /opt/sv-pipeline/scripts/make_evidence_qc_table.py \
-      ~{"--estimated-copy-number-filename " + "./ploidy_est/estimated_copy_numbers.txt.gz"} \
-      ~{"--sex-assignments-filename " + "./ploidy_est/sample_sex_assignments.txt.gz"} \
+      ~{"--estimated-copy-number-filename " + ploidy_chromosome_stats} \
+      ~{"--sex-assignments-filename " + sample_sex_assignments} \
+      ~{"--ploidy-bin-stats-filename " + ploidy_bin_stats} \
       ~{"--median-cov-filename " + bincov_median} \
       ~{"--wgd-scores-filename " + WGD_scores} \
-      ~{"--binwise-cnv-qvalues-filename " + "./ploidy_est/binwise_CNV_qValues.bed.gz"} \
       ~{"--dragen-qc-outlier-high-filename " + dragen_qc_high} \
       ~{"--manta-qc-outlier-high-filename " + manta_qc_high} \
       ~{"--melt-qc-outlier-high-filename " + melt_qc_high} \

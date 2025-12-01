@@ -43,6 +43,8 @@
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.manta_region_bed": {{ reference_resources.manta_region_bed | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.manta_region_bed_index": {{ reference_resources.manta_region_bed_index | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.sd_locs_vcf": {{ reference_resources.sd_locs_vcf | tojson }},
+  "GATKSVPipelineBatch.sparse_sd_locs_vcf": {{ reference_resources.sparse_sd_locs_vcf | tojson }},
+  "GATKSVPipelineBatch.ploidy_poor_regions": {{ reference_resources.ploidy_poor_regions | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.melt_standard_vcf_header": {{ reference_resources.melt_std_vcf_header | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.wham_include_list_bed_file": {{ reference_resources.wham_include_list_bed_file | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.preprocessed_intervals": {{ reference_resources.preprocessed_intervals | tojson }},
@@ -100,16 +102,14 @@
 
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.rmsk": {{ reference_resources.rmsk | tojson }},
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.segdups": {{ reference_resources.segdups | tojson }},
+  "GATKSVPipelineBatch.GATKSVPipelinePhase1.outlier_cutoff_nIQR": "10000",
 
   "GATKSVPipelineBatch.outlier_cutoff_table" : {{ test_batch.outlier_cutoff_table | tojson }},
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.outlier_cutoff_nIQR": "999999",
 
-  "GATKSVPipelineBatch.GenotypeBatch.n_RD_genotype_bins": "100000",
-  "GATKSVPipelineBatch.GenotypeBatch.n_per_split": "5000",
-  "GATKSVPipelineBatch.GenotypeBatch.pesr_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
-  "GATKSVPipelineBatch.GenotypeBatch.seed_cutoffs": {{ reference_resources.seed_cutoffs | tojson }},
-  "GATKSVPipelineBatch.GenotypeBatch.reference_build": "hg38",
-  "GATKSVPipelineBatch.GenotypeBatch.bin_exclude": {{ reference_resources.bin_exclude | tojson }},
+  "GATKSVPipelineBatch.GenotypeBatch.training_intervals": {{ reference_resources.depth_training_bed | tojson }},
+  "GATKSVPipelineBatch.GenotypeBatch.pesr_exclusion_intervals": {{ reference_resources.pesr_exclude_list | tojson }},
+  "GATKSVPipelineBatch.GenotypeBatch.depth_exclusion_intervals": {{ reference_resources.bin_exclude | tojson }},
 
   "GATKSVPipelineBatch.RegenotypeCNVs.n_RdTest_bins": "100000",
   "GATKSVPipelineBatch.RegenotypeCNVs.n_per_split": "5000",

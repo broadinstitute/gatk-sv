@@ -102,7 +102,7 @@ inputs beyond their defaults.
 |`File`|`metrics_file`|Metrics computed from the input data and intermediate and final VCFs. Includes metrics on the SV evidence, and on the number of variants called, broken down by type and size range.|
 |`File`|`qc_file`|Quality-control check file. This extracts several key metrics from the `metrics_file` and compares them to pre-specified threshold values. If any QC checks evaluate to FAIL, further diagnostics may be required.|
 |`File`|`ploidy_matrix`|Matrix of contig ploidy estimates computed by GATK gCNV.|
-|`File`|`ploidy_plots`|Plots of contig ploidy generated from `ploidy_matrix`|
+|`File`|`ploidy_plots`|Tarball of contig ploidy plots, editable PDF sidecars, and the static ploidy report. After extraction, open `plot/report/index.html`; `plot/plot_manifest.tsv` lists every linked figure and table.|
 |`File`|`non_genotyped_unique_depth_calls`|This VCF file contains any depth based calls made in the case sample that did not pass genotyping checks and do not match a depth-based call from the reference panel. If very high sensitivity is desired, examine this file for additional large CNV calls.|
 |`File`|`non_genotyped_unique_depth_calls_idx`|Index file for `non_genotyped_unique_depth_calls`|
 |`File`|`pre_cleanup_vcf`|VCF output in a representation used internally in the pipeline. This file is less compliant with the VCF spec and is intended for debugging purposes.|

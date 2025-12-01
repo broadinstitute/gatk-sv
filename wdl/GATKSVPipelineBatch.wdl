@@ -60,6 +60,10 @@ workflow GATKSVPipelineBatch {
     String chr_x
     String chr_y
 
+    # Ploidy site list used to subset regular SD files on the fly
+    File sparse_sd_locs_vcf
+    File? ploidy_poor_regions
+
     # gCNV
     File contig_ploidy_model_tar
     Array[File] gcnv_model_tars
@@ -176,10 +180,12 @@ workflow GATKSVPipelineBatch {
       genome_file=genome_file,
       counts=counts_files_,
       run_ploidy = false,
+      reference_dict = reference_dict,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
-      sv_base_docker=sv_base_docker
+      sv_base_docker=sv_base_docker,
+      gatk_docker=gatk_docker
   }
 
   call phase1.GATKSVPipelinePhase1 {
@@ -204,6 +210,8 @@ workflow GATKSVPipelineBatch {
       PE_files=pe_files_,
       SR_files=sr_files_,
       SD_files=sd_files_,
+      ploidy_sd_locs_vcf=sparse_sd_locs_vcf,
+      ploidy_poor_regions=ploidy_poor_regions,
       manta_vcfs=manta_vcfs_,
       melt_vcfs=melt_vcfs_,
       scramble_vcfs=scramble_vcfs_,
@@ -245,6 +253,7 @@ workflow GATKSVPipelineBatch {
       rd_file=GATKSVPipelinePhase1.merged_bincov,
       pe_file=GATKSVPipelinePhase1.merged_PE,
       sr_file=GATKSVPipelinePhase1.merged_SR,
+      ploidy_table = GATKSVPipelinePhase1.ploidy_table,
       reference_dict=reference_dict,
       contig_list = primary_contigs_list,
       sv_base_mini_docker=sv_base_mini_docker,
@@ -254,6 +263,7 @@ workflow GATKSVPipelineBatch {
 
   call regenocnvs.RegenotypeCNVs as RegenotypeCNVs {
     input:
+      merge_batch_sites_vcf=MergePesrDepthVcfs.concat_vcf,
       depth_vcfs=[GenotypeBatch.genotyped_depth_vcf],
       batch_depth_vcfs=[select_first([GATKSVPipelinePhase1.filtered_depth_vcf])],
       batches=[name],
@@ -262,6 +272,7 @@ workflow GATKSVPipelineBatch {
       coveragefiles=[GATKSVPipelinePhase1.merged_bincov],
       coveragefile_idxs=[GATKSVPipelinePhase1.merged_bincov_index],
       genotyping_rd_table=[select_first([GenotypeBatch.genotyping_rd_table])],
+      ploidy_tables=[GATKSVPipelinePhase1.ploidy_table],
       contig_list=primary_contigs_list,
       regeno_coverage_medians=[GenotypeBatch.regeno_coverage_medians],
       sv_base_mini_docker=sv_base_mini_docker,
@@ -362,7 +373,7 @@ workflow GATKSVPipelineBatch {
     File clean_vcf_index = MakeCohortVcf.vcf_index
     File metrics_file_batch = CatBatchMetrics.out
     File qc_file = BatchQC.out
-    File master_vcf_qc = MakeCohortVcf.vcf_qc
+    File? master_vcf_qc = MakeCohortVcf.vcf_qc
     File? metrics_file_makecohortvcf = MakeCohortVcf.metrics_file_makecohortvcf
     File final_sample_list = GATKSVPipelinePhase1.batch_samples_postOutlierExclusion_file
     File final_sample_outlier_list = GATKSVPipelinePhase1.outlier_samples_excluded_file

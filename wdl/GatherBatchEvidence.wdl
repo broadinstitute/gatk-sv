@@ -54,6 +54,8 @@ workflow GatherBatchEvidence {
     Array[File]? SD_files	# required unless BAF_files or ref_panel_SD_files is supplied
     Array[File]? ref_panel_SD_files	# required unless BAF_files or SD_files is supplied
     File? sd_locs_vcf	# must be same sd_locs_vcf that was presented to GatherSampleEvidence
+    File? ploidy_sd_locs_vcf	# VCF of ploidy SD sites used to subset regular SD files before scoring
+    File? ploidy_poor_regions	# Optional BED of poor regions to mask during ploidy preprocess
 
     # Condense read counts
     Int? min_interval_size
@@ -100,6 +102,15 @@ workflow GatherBatchEvidence {
     Array[String]? allosomal_contigs
 
     Boolean run_ploidy = false
+    String? ploidy_preprocess_args
+    String? ploidy_polyploidy_args
+    String? ploidy_infer_args
+    String? ploidy_ppd_args
+    String? ploidy_call_args
+    String? ploidy_plot_args
+    Int ploidy_subset_sd_stride = 1
+    Boolean ploidy_enable_ppd = false
+    Boolean ploidy_use_callq20 = false
 
     # Option to add first sample to the ped file (for single sample mode); run_ploidy must be true
     Boolean append_first_sample_to_ped = false
@@ -157,6 +168,7 @@ workflow GatherBatchEvidence {
     RuntimeAttr? cnmops_sample10_runtime_attr
     RuntimeAttr? cnmops_sample3_runtime_attr
 
+    RuntimeAttr? ploidy_subset_sd_runtime_attr
     RuntimeAttr? ploidy_score_runtime_attr
     RuntimeAttr? ploidy_build_runtime_attr
     RuntimeAttr? runtime_attr_subset_ped
@@ -183,7 +195,6 @@ workflow GatherBatchEvidence {
   Array[File] all_PE_files = flatten(select_all([PE_files, ref_panel_PE_files]))
   Array[File] all_SR_files = flatten(select_all([SR_files, ref_panel_SR_files]))
   Array[File] all_SD_files = flatten(select_all([SD_files, ref_panel_SD_files]))
-
   if(defined(ref_panel_bincov_matrix)
      || !(defined(bincov_matrix) && defined(bincov_matrix_index))) {
     call mbm.MakeBincovMatrix as MakeBincovMatrix {
@@ -192,7 +203,9 @@ workflow GatherBatchEvidence {
         count_files = counts,
         bincov_matrix = ref_panel_bincov_matrix,
         bincov_matrix_samples = ref_panel_samples,
+        reference_dict = ref_dict,
         batch = batch,
+        gatk_docker = gatk_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_base_docker = sv_base_docker,
         runtime_attr_override = evidence_merging_bincov_runtime_attr
@@ -202,12 +215,28 @@ workflow GatherBatchEvidence {
   File merged_bincov_idx_ = select_first([MakeBincovMatrix.merged_bincov_idx, bincov_matrix_index])
 
   if (run_ploidy) {
-    call pe.Ploidy as Ploidy {
+    call pe.Ploidy {
       input:
-        bincov_matrix = merged_bincov_,
+        merged_depth_file = merged_bincov_,
         batch = batch,
-        sv_base_mini_docker = sv_base_mini_docker,
+        sample_ids = all_samples,
+        sd_files = all_SD_files,
+        ploidy_sd_locs_vcf = ploidy_sd_locs_vcf,
+        poor_regions = ploidy_poor_regions,
+        reference_dict = ref_dict,
+        preprocess_args = ploidy_preprocess_args,
+        polyploidy_args = ploidy_polyploidy_args,
+        infer_args = ploidy_infer_args,
+        ppd_args = ploidy_ppd_args,
+        call_args = ploidy_call_args,
+        plot_args = ploidy_plot_args,
+        subset_sd_stride = ploidy_subset_sd_stride,
+        enable_ppd = ploidy_enable_ppd,
+        use_callq20 = ploidy_use_callq20,
+        gatk_docker = gatk_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,
+        runtime_attr_subset_sd = ploidy_subset_sd_runtime_attr,
         runtime_attr_score = ploidy_score_runtime_attr,
         runtime_attr_build = ploidy_build_runtime_attr
     }
@@ -236,6 +265,7 @@ workflow GatherBatchEvidence {
       input:
         ref_ped_file = SubsetPedFile.ped_subset_file,
         ploidy_plots = select_first([Ploidy.ploidy_plots]),
+        batch = batch,
         sample_id = samples[0],
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = add_sample_to_ped_runtime_attr
@@ -516,6 +546,7 @@ task AddCaseSampleToPed {
   input {
     File ref_ped_file
     File ploidy_plots
+    String batch
     String sample_id
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
@@ -540,11 +571,22 @@ task AddCaseSampleToPed {
     set -euo pipefail
 
     tar xzf ~{ploidy_plots} -C .
-    RECORD=$(gunzip -c ploidy_est/sample_sex_assignments.txt.gz | { grep -w "^~{sample_id}" || true; })
+
+    # Expect sex assignments at <batch>_ploidy/call/sex_assignments.txt.gz
+    SEX_FILE="~{batch}_ploidy/call/sex_assignments.txt.gz"
+    if [ ! -f "$SEX_FILE" ]; then
+      >&2 echo "Error: sex assignments file '$SEX_FILE' not found in ploidy tar"
+      exit 1
+    fi
+
+    # The file is expected to be gzipped; read with gunzip
+    RECORD=$(gunzip -c "$SEX_FILE" | { grep -w "^~{sample_id}" || true; })
+
     if [ -z "$RECORD" ]; then
       >&2 echo "Error: Sample ~{sample_id} not found in ploidy calls"
       exit 1
     fi
+
     SEX=$(echo "$RECORD" | cut -f2)
 
     awk -v sample=~{sample_id} '$2 == sample { print "ERROR: A sample with the name "sample" is already present in the ped file." > "/dev/stderr"; exit 1; }' < ~{ref_ped_file}

@@ -22,6 +22,9 @@ FROM $SVBASE_IMAGE
 # Copy in updated virtual environment
 COPY --from=virtual_env_image /opt /opt
 
+ARG GATK_SV_PLOIDY_REPO=https://github.com/broadinstitute/gatk-sv-ploidy.git
+ARG GATK_SV_PLOIDY_SHA=432c70e8a93adf02628969f049854a8fac9dd495
+
 # NOTE: restore these when we upgrade pysam to latest version. For now: modern HTSLIB prevents pysam from opening
 # ENV HTSLIB_LIBRARY_DIR=/opt/samtools/lib
 # ENV HTSLIB_INCLUDE_DIR=/opt/samtools/include
@@ -39,14 +42,18 @@ ENV PATH=/opt/WGD/bin:/opt/bin:$PATH
 # install any missing support libraries, along with libraries needed for build
 # Install svtk, svtest, svqc
 # purge transient (build) deps, leaving only the required packages
-ARG BUILD_DEPS="make cmake g++ gcc gfortran"
+ARG BUILD_DEPS="git make cmake g++ gcc gfortran"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED_PACKAGES) && \
     apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends $BUILD_DEPS $(fix_spaces.sh $APT_REQUIRED_PACKAGES) && \
+    git clone "$GATK_SV_PLOIDY_REPO" /opt/gatk-sv-ploidy && \
+    git -C /opt/gatk-sv-ploidy checkout "$GATK_SV_PLOIDY_SHA" && \
+    rm -rf /opt/gatk-sv-ploidy/.git && \
     pip install -e /opt/svtk && \
     pip install -e /opt/svtest && \
     pip install -e /opt/svqc && \
+    pip install -e /opt/gatk-sv-ploidy && \
     apt-get -qqy remove --purge $APT_TRANSIENT_PACKAGES && \
     apt-get -qqy autoremove --purge && \
     apt-get -qqy clean && \
@@ -61,6 +68,7 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
 RUN svtk -h
 RUN svtest -h
 RUN svqc -h
+RUN gatk-sv-ploidy -h
 RUN plink2 || true
 # the command should be installed, but has no help mode, and outputs an error if not used on data
 #RUN king

@@ -3,7 +3,7 @@ version 1.0
 import "Structs.wdl"
 
 # Workflow to run PE/SR collection on a single sample
-workflow CollectSVEvidence {
+workflow CollectSparseSD {
   input {
     File bam_or_cram_file
     File bam_or_cram_index
@@ -11,15 +11,14 @@ workflow CollectSVEvidence {
     File reference_fasta
     File reference_index
     File reference_dict
-    File sd_locs_vcf
-    File preprocessed_intervals
+    File sparse_sd_locs_vcf
     File? primary_contigs_list
     File? gatk_jar_override
     String gatk_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  call RunCollectSVEvidence {
+  call RunCollectSparseSDEvidence {
     input:
       bam_or_cram_file = bam_or_cram_file,
       bam_or_cram_index = bam_or_cram_index,
@@ -27,8 +26,8 @@ workflow CollectSVEvidence {
       reference_fasta = reference_fasta,
       reference_index = reference_index,
       reference_dict = reference_dict,
-      sd_locs_vcf = sd_locs_vcf,
-      preprocessed_intervals = preprocessed_intervals,
+      sparse_sd_locs_vcf = sparse_sd_locs_vcf,
+      sparse_sd_locs_vcf_index = sparse_sd_locs_vcf + ".tbi",
       primary_contigs_list = primary_contigs_list,
       gatk_jar_override = gatk_jar_override,
       gatk_docker = gatk_docker,
@@ -36,17 +35,12 @@ workflow CollectSVEvidence {
   }
 
   output {
-    File disc_out = RunCollectSVEvidence.disc_out
-    File disc_out_index = RunCollectSVEvidence.disc_out_index
-    File split_out = RunCollectSVEvidence.split_out
-    File split_out_index = RunCollectSVEvidence.split_out_index
-    File sd_out = RunCollectSVEvidence.sd_out
-    File sd_out_index = RunCollectSVEvidence.sd_out_index
+    File? sparse_sd_out = RunCollectSparseSDEvidence.sparse_sd_out
+    File? sparse_sd_out_index = RunCollectSparseSDEvidence.sparse_sd_out_index
   }
 }
 
-# Task to run collect-pesr on a single sample
-task RunCollectSVEvidence {
+task RunCollectSparseSDEvidence {
   input {
     File bam_or_cram_file
     File bam_or_cram_index
@@ -54,10 +48,10 @@ task RunCollectSVEvidence {
     File reference_fasta
     File reference_index
     File reference_dict
-    File sd_locs_vcf
+    File sparse_sd_locs_vcf
+    File sparse_sd_locs_vcf_index
     Int site_depth_min_mapq = 6
     Int site_depth_min_baseq = 10
-    File preprocessed_intervals
     File? primary_contigs_list
     File? gatk_jar_override
     String gatk_docker
@@ -81,12 +75,8 @@ task RunCollectSVEvidence {
   Int command_mem_mb = ceil(mem_gb * 1000 - 500)
 
   output {
-    File split_out = "${sample_id}.sr.txt.gz"
-    File split_out_index = "${sample_id}.sr.txt.gz.tbi"
-    File disc_out = "${sample_id}.pe.txt.gz"
-    File disc_out_index = "${sample_id}.pe.txt.gz.tbi"
-    File sd_out = "${sample_id}.sd.txt.gz"
-    File sd_out_index = "${sample_id}.sd.txt.gz.tbi"
+    File? sparse_sd_out = "${sample_id}.sparse.sd.txt.gz"
+    File? sparse_sd_out_index = "${sample_id}.sparse.sd.txt.gz.tbi"
   }
   command <<<
 
@@ -94,22 +84,19 @@ task RunCollectSVEvidence {
 
     export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk_jar_override}
 
+    # Collect sparse site-depth for ploidy estimation (smaller site list)
     /gatk/gatk --java-options "-Xmx~{command_mem_mb}m" CollectSVEvidence \
         -I "~{bam_or_cram_file}" \
         --sample-name "~{sample_id}" \
-        -F "~{sd_locs_vcf}" \
-        -SR "~{sample_id}.sr.txt.gz" \
-        -PE "~{sample_id}.pe.txt.gz" \
-        -SD "~{sample_id}.sd.txt.gz" \
+        -F "~{sparse_sd_locs_vcf}" \
+        -SD "~{sample_id}.sparse.sd.txt.gz" \
         --site-depth-min-mapq "~{site_depth_min_mapq}" \
         --site-depth-min-baseq "~{site_depth_min_baseq}" \
         ~{"-R " + reference_fasta} \
         ~{"-L " + primary_contigs_list} \
         --read-filter NonZeroReferenceLengthAlignmentReadFilter
 
-    tabix -f -0 -s1 -b2 -e2 "~{sample_id}.sr.txt.gz"
-    tabix -f -0 -s1 -b2 -e2 "~{sample_id}.pe.txt.gz"
-    tabix -f -0 -s1 -b2 -e2 "~{sample_id}.sd.txt.gz"
+    tabix -f -0 -s1 -b2 -e2 "~{sample_id}.sparse.sd.txt.gz"
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
