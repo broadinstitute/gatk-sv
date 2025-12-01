@@ -6,6 +6,7 @@ workflow ExtractPerSampleVCFs {
         File vcf
         File vcf_index
         Array[String]? sample_list   # optional
+        String output_prefix
         String sv_pipeline_base_docker
         RuntimeAttr? runtime_attr_get_samples
         RuntimeAttr? runtime_attr_extract_sample
@@ -31,6 +32,7 @@ workflow ExtractPerSampleVCFs {
                 vcf = vcf,
                 vcf_index = vcf_index,
                 sample_id = s,
+                output_prefix = output_prefix,
                 docker_image = sv_pipeline_base_docker,
                 runtime_attr_override = runtime_attr_extract_sample
         }
@@ -87,18 +89,19 @@ task ExtractSample {
         File vcf
         File vcf_index
         String sample_id
+        String output_prefix
         String docker_image
         RuntimeAttr? runtime_attr_override
     }
 
     command <<<
-        bcftools view -s ~{sample_id} -c 1 -Oz ~{vcf} > ~{sample_id}.vcf.gz
-        bcftools index -t ~{sample_id}.vcf.gz
+        bcftools view -s ~{sample_id} -c 1 -Oz ~{vcf} > ~{output_prefix}.~{sample_id}.vcf.gz
+        bcftools index -t ~{output_prefix}.~{sample_id}.vcf.gz
     >>>
 
     output {
-        File per_sample_vcf = "~{sample_id}.vcf.gz"
-        File per_sample_tbi = "~{sample_id}.vcf.gz.tbi"
+        File per_sample_vcf = "~{output_prefix}.~{sample_id}.vcf.gz"
+        File per_sample_tbi = "~{output_prefix}.~{sample_id}.vcf.gz.tbi"
     }
 
     RuntimeAttr default_attr = object {
