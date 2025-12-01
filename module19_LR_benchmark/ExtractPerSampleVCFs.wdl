@@ -95,7 +95,7 @@ task ExtractSample {
     }
 
     command <<<
-        bcftools view -s ~{sample_id} -Oz ~{vcf} > ~{sample_id}.vcf.gz
+        bcftools view -s ~{sample_id} -c 1 -Oz ~{vcf} > ~{sample_id}.vcf.gz
         bcftools index -t ~{sample_id}.vcf.gz
     >>>
 
