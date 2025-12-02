@@ -342,7 +342,7 @@ task BenchmarkSNVs{
       line_count <- length(lines[!grepl("^#", lines)])
       
       if (line_count > 0) {
-        df <- read.table(file1, header = FALSE, stringsAsFactors = FALSE)
+        df <- read.table(file1, header = T, comment.char = "", sep = "\t")
       } else {
         df <- data.frame(
           V1 = character(),
