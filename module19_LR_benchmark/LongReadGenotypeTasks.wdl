@@ -315,8 +315,18 @@ task BenchmarkSNVs{
   command <<<
     set -euxo pipefail
 
-    zcat ~{comp_vcf} | cut -f1-7 | bgzip > comp.vcf.gz
-    zcat ~{base_vcf} | cut -f1-7 | bgzip > base.vcf.gz
+    if [[ ${simplify_comp_vcf} == true ]]; then
+        zcat ~{comp_vcf} | cut -f1-7 | grep -v "##" | bgzip > comp.vcf.gz
+    else
+        zcat ~{comp_vcf} | grep -v "##" | bgzip > comp.vcf.gz
+    fi
+
+    if [[ ${simplify_base_vcf} == true ]]; then
+        zcat ~{base_vcf} | cut -f1-7 | grep -v "##" | bgzip > base.vcf.gz
+    else
+        zcat ~{base_vcf} | grep -v "##" | bgzip > base.vcf.gz
+    fi
+
 
     # use R script to add GC to the vcf
     Rscript -e '
@@ -350,18 +360,8 @@ task BenchmarkSNVs{
     simplify_comp_vcf <- "~{simplify_comp_vcf}"
     simplify_base_vcf <- "~{simplify_base_vcf}"
 
-    if (simplify_comp_vcf) {
-      comp = read_or_empty("comp.vcf.gz")
-    } else {
-      comp = read_or_empty("~{comp_vcf}")
-    }
-
-    if (simplify_base_vcf) {
-      base = read_or_empty("base.vcf.gz")
-    } else {
-      base = read_or_empty("~{base_vcf}")
-    }
-    
+    comp = read_or_empty("comp.vcf.gz")
+    base = read_or_empty("base.vcf.gz")
 
     colnames(comp)[3] = "SVID_comp"
     colnames(base)[3] = "SVID_truth"
