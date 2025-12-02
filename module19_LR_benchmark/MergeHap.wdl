@@ -8,7 +8,7 @@ workflow MergeHap {
 		Array[File] vcf_pat_idxes
 		Array[File] vcf_mat_vcfs
 		Array[File] vcf_mat_idxes
-		Arrayp[String] samples
+		Array[String] samples
 		String collapse_params
 		File ref_fa
 		File ref_fai
