@@ -354,6 +354,7 @@ task BenchmarkSNVs{
         )
       }
       
+      colnames(df)[c(1:5)]=c("V1","V2","V3","V4","V5")
       return(df)
     }
 
