@@ -315,13 +315,13 @@ task BenchmarkSNVs{
   command <<<
     set -euxo pipefail
 
-    if [[ ${simplify_comp_vcf} == true ]]; then
+    if [[ ~{simplify_comp_vcf} == true ]]; then
         zcat ~{comp_vcf} | cut -f1-7 | grep -v "##" | bgzip > comp.vcf.gz
     else
         zcat ~{comp_vcf} | grep -v "##" | bgzip > comp.vcf.gz
     fi
 
-    if [[ ${simplify_base_vcf} == true ]]; then
+    if [[ ~{simplify_base_vcf} == true ]]; then
         zcat ~{base_vcf} | cut -f1-7 | grep -v "##" | bgzip > base.vcf.gz
     else
         zcat ~{base_vcf} | grep -v "##" | bgzip > base.vcf.gz
