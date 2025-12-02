@@ -12,6 +12,8 @@ workflow VcfToBed {
 
     String sv_pipeline_docker
     String sv_base_mini_docker
+
+    RuntimeAttr? runtime_attr_svtk_vcf2bed
   }
 
   call MiniTasks.ScatterVcf {
@@ -29,7 +31,8 @@ workflow VcfToBed {
         vcf=ScatterVcf.shards[i],
         flags=flags,
         prefix="~{prefix}.shard_~{i}",
-        sv_pipeline_docker=sv_pipeline_docker
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_svtk_vcf2bed
     }
   }
 
