@@ -355,6 +355,8 @@ task BenchmarkSNVs{
       }
       
       colnames(df)[c(1:5)]=c("V1","V2","V3","V4","V5")
+      df[,4] = toupper(df[,4])
+      df[,5] = toupper(df[,5])
       return(df)
     }
 
