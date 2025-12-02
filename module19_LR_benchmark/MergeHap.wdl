@@ -33,6 +33,12 @@ workflow MergeHap {
 		}
 	}
 
+	output{
+		Array[File] merged_vcf = TruvariCollapse.diploid_vcf
+		Array[File] merged_idx = TruvariCollapse.diploid_vcf_idx
+	}
+}
+
 
 task TruvariCollapse {
 	input {
