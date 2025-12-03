@@ -197,11 +197,22 @@ task UpdateVCF {
     command <<<
         set -euo pipefail
 
+        bcftools view -h ~{vcf} | grep "^##contig" | cut -d= -f3 | cut -d',' -f1 > contig_list.tsv
+
         python3 <<CODE
 
         #!/usr/bin/env python3
         import sys
         import gzip
+
+        def readin_contig(contig_list):
+            fin=open(contig_list)
+            out = []
+            for line in fin:
+                pin=line.strip().split()
+                out+=pin
+            fin.close()
+            return out
 
         def open_file(filename, mode="rt"):
             """Open plain text or gzipped files."""
@@ -209,7 +220,7 @@ task UpdateVCF {
                 return gzip.open(filename, mode)
             return open(filename, mode)
 
-        def load_bed(bed_file):
+        def load_bed(bed_file, contig_list):
             """Load BED into dict {ID: (chr, pos)}"""
             bed_dict = {}
             with open_file(bed_file, "rt") as f:
@@ -220,7 +231,10 @@ task UpdateVCF {
                     if len(cols) < 4:
                         continue
                     chrom, pos, _, vid = cols[:4]
-                    bed_dict[vid] = (chrom, pos)
+                    if chrom in contig_list:
+                        bed_dict[vid] = (chrom, pos)
+                    else:
+                        print(chrom)
             return bed_dict
 
         def update_vcf(vcf_file, bed_dict, output_file):
@@ -244,7 +258,10 @@ task UpdateVCF {
         bed_file = "~{bed}"
         output_file = "~{prefix}.vcf.gz"
 
-        bed_dict = load_bed(bed_file)
+        contig_list = readin_contig("contig_list.tsv")
+        bed_dict = load_bed(bed_file, contig_list)
+
+
         print(f"Loaded {len(bed_dict)} entries from BED file.")
         update_vcf(vcf_file, bed_dict, output_file)
         print(f"Updated VCF written to: {output_file}")
