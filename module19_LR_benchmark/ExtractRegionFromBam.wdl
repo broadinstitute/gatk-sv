@@ -9,6 +9,7 @@ workflow ExtractRegionFromBam {
         Int start
         Int end
         String chrom
+        String mid_fix
         String gatk_docker
         RuntimeAttr? runtime_attr_extract_region
     }
@@ -18,9 +19,10 @@ workflow ExtractRegionFromBam {
             input:
                 bam = bam_list[i],
                 bai = bai_list[i],
-                chrom = chrom,
                 start = start,
                 end = end,
+                chrom = chrom,
+                mid_fix = mid_fix,
                 docker_image = gatk_docker,
                 runtime_attr_override = runtime_attr_extract_region
         }
@@ -38,6 +40,7 @@ task ExtractRegion {
         String chrom
         Int start
         Int end
+        String mid_fix
         String docker_image
         RuntimeAttr? runtime_attr_override
     }
@@ -50,12 +53,12 @@ task ExtractRegion {
         gatk PrintReads \
            -I ~{bam} \
            -L ~{chrom}:~{start}-~{end} \
-           -O "~{prefix}.~{chrom}_~{start}_~{end}.bam"
+           -O "~{prefix}.~{mid_fix}.bam"
 
     >>>
 
     output {
-        File regional_bam = "~{prefix}.~{chrom}_~{start}_~{end}.bam"
+        File regional_bam = "~{prefix}.~{mid_fix}.bam"
     }
 
   RuntimeAttr default_attr = object {
