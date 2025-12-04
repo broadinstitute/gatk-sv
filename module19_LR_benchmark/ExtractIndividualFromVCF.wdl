@@ -32,7 +32,7 @@ workflow ExtractIndividualFromVCF {
         docker_image = sv_pipeline_base_docker
     }
 
-    call LongReadGenotypeTasks.ExtractVariantSites{
+    call LongReadGenotypeTasks.ExtractVariantSitesSimple{
       input:
         input_vcf = SplitMultiAllelicToBiAllelicSingleSample.biallelic_vcf,
         docker_image = sv_pipeline_base_docker
@@ -60,7 +60,7 @@ workflow ExtractIndividualFromVCF {
 
 
   output {
-    Array[File] all_variant_sites = ExtractVariantSites.variant_sites
+    Array[File] all_variant_sites = ExtractVariantSitesSimple.variant_sites
     Array[File] all_snv_vcfs = SplitVariantsBySize.snv_vcf  
     Array[File] all_indel_1_30 = SplitVariantsBySize.indel_1_30_vcf
     Array[File] all_indel_31_50 = SplitVariantsBySize.indel_31_50_vcf
