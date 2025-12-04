@@ -123,7 +123,6 @@ workflow BenchmarkIndividualVcfPerContig{
         docker_image = sv_pipeline_base_docker
     }
 
-
     call LongReadGenotypeTasks.BenchmarkSNVs as truvari_bench_snvs{
       input:
           comp_vcf = extract_individual_query.all_snv_vcfs[index],
