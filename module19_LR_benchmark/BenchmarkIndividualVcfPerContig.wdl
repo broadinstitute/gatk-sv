@@ -38,6 +38,9 @@ workflow BenchmarkIndividualVcfPerContig{
     String sv_pipeline_base_docker
   }
 
+  String prefix_query = basename(query_vcf,'.vcf.gz')
+  String prefix_ref = basename(ref_vcf,'.vcf.gz')
+
 
   call LongReadGenotypeTasks.ExtractVariantSites as extract_variant_sites_query{
     input:
@@ -51,7 +54,6 @@ workflow BenchmarkIndividualVcfPerContig{
       docker_image = sv_pipeline_base_docker
   }
 
-
   if (defined(query_filter_vcf)){
     call LongReadGenotypeTasks.FilterVcfByAnotherVcf as filter_query_vcf_by_ovr {
       input:
@@ -62,10 +64,6 @@ workflow BenchmarkIndividualVcfPerContig{
         docker_image = sv_pipeline_base_docker
     }
   }
-
-  File updated_query_vcf = select_first([filter_query_vcf_by_ovr.filtered_vcf, extract_variant_sites_query.updated_vcf])
-  File updated_query_vcf_idx = select_first([filter_query_vcf_by_ovr.filtered_vcf_idx, extract_variant_sites_query.updated_vcf_idx])
-
 
   if (defined(ref_filter_vcf)){
     call LongReadGenotypeTasks.FilterVcfByAnotherVcf as filter_ref_vcf_by_ovr {
@@ -78,6 +76,9 @@ workflow BenchmarkIndividualVcfPerContig{
     }
   }
 
+  File updated_query_vcf = select_first([filter_query_vcf_by_ovr.filtered_vcf, extract_variant_sites_query.updated_vcf])
+  File updated_query_vcf_idx = select_first([filter_query_vcf_by_ovr.filtered_vcf_idx, extract_variant_sites_query.updated_vcf_idx])
+
   File updated_ref_vcf = select_first([filter_ref_vcf_by_ovr.filtered_vcf, extract_variant_sites_ref.updated_vcf])
   File updated_ref_vcf_idx = select_first([filter_ref_vcf_by_ovr.filtered_vcf_idx, extract_variant_sites_ref.updated_vcf_idx])
 
@@ -89,6 +90,7 @@ workflow BenchmarkIndividualVcfPerContig{
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
+
   call ExtractIndividualFromVCF.ExtractIndividualFromVCF as extract_individual_ref{
     input:
       vcf_file = updated_ref_vcf,
@@ -97,32 +99,30 @@ workflow BenchmarkIndividualVcfPerContig{
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
-  call LongReadGenotypeTasks.AnnotateGenomicContext as annotate_genomic_context_query{
-    input:
-      variant_sites = extract_variant_sites_query.variant_sites,
-      anno_script_bash = anno_script_bash,
-      anno_script_Rscript = anno_script_helper_R,
-      repeat_mask = repeat_mask,
-      simple_repeats = simple_repeats,
-      segmental_duplicates = segmental_duplicates,
-      docker_image = sv_pipeline_base_docker
-  }
-
-  call LongReadGenotypeTasks.AnnotateGenomicContext as annotate_genomic_context_ref{
-    input:
-      variant_sites = extract_variant_sites_ref.variant_sites,
-      anno_script_bash = anno_script_bash,
-      anno_script_Rscript = anno_script_helper_R,
-      repeat_mask = repeat_mask,
-      simple_repeats = simple_repeats,
-      segmental_duplicates = segmental_duplicates,
-      docker_image = sv_pipeline_base_docker
-  }
-
-  String prefix_query = basename(query_vcf,'.vcf.gz')
-  String prefix_ref = basename(ref_vcf,'.vcf.gz')
-
   scatter (index in range(length(sample_ids))){
+
+    call LongReadGenotypeTasks.AnnotateGenomicContext as annotate_genomic_context_query{
+      input:
+        variant_sites = extract_individual_query.all_variant_sites,
+        anno_script_bash = anno_script_bash,
+        anno_script_Rscript = anno_script_helper_R,
+        repeat_mask = repeat_mask,
+        simple_repeats = simple_repeats,
+        segmental_duplicates = segmental_duplicates,
+        docker_image = sv_pipeline_base_docker
+    }
+
+    call LongReadGenotypeTasks.AnnotateGenomicContext as annotate_genomic_context_ref{
+      input:
+        variant_sites = extract_individual_ref.all_variant_sites,
+        anno_script_bash = anno_script_bash,
+        anno_script_Rscript = anno_script_helper_R,
+        repeat_mask = repeat_mask,
+        simple_repeats = simple_repeats,
+        segmental_duplicates = segmental_duplicates,
+        docker_image = sv_pipeline_base_docker
+    }
+
 
     call LongReadGenotypeTasks.BenchmarkSNVs as truvari_bench_snvs{
       input:
