@@ -103,7 +103,7 @@ workflow BenchmarkIndividualVcfPerContig{
 
     call LongReadGenotypeTasks.AnnotateGenomicContext as annotate_genomic_context_query{
       input:
-        variant_sites = extract_individual_query.all_variant_sites,
+        variant_sites = extract_individual_query.all_variant_sites[index],
         anno_script_bash = anno_script_bash,
         anno_script_Rscript = anno_script_helper_R,
         repeat_mask = repeat_mask,
@@ -114,7 +114,7 @@ workflow BenchmarkIndividualVcfPerContig{
 
     call LongReadGenotypeTasks.AnnotateGenomicContext as annotate_genomic_context_ref{
       input:
-        variant_sites = extract_individual_ref.all_variant_sites,
+        variant_sites = extract_individual_ref.all_variant_sites[index],
         anno_script_bash = anno_script_bash,
         anno_script_Rscript = anno_script_helper_R,
         repeat_mask = repeat_mask,
