@@ -1,10 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "ExtractFileByIndex.wdl" as ExtractFileByIndex
 import "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
-import "BenchmarkIndividualVcf.wdl" as BenchmarkIndividualVcf
-import "BenchmarkIndividualVcfPerContig.wdl" as BenchmarkIndividualVcfPerContig
 
 
 workflow PlotBenchmarkResults{
