@@ -11,6 +11,7 @@ workflow ExtractRegionFromBam {
         String chrom
         String mid_fix
         String gatk_docker
+        String sv_pipeline_base_docker
         RuntimeAttr? runtime_attr_extract_region
     }
 
