@@ -60,8 +60,8 @@ workflow ExtractIndividualFromVCF {
 
 
   output {
-    Array[File] all_variant_sites = ExtractVariantSites.updated_vcf,  
-    Array[File] all_variant_sites_idx = ExtractVariantSites.updated_vcf_idx,  
+    Array[File] all_variant_sites = ExtractVariantSites.updated_vcf
+    Array[File] all_variant_sites_idx = ExtractVariantSites.updated_vcf_idx
     Array[File] all_snv_vcfs = SplitVariantsBySize.snv_vcf  
     Array[File] all_indel_1_30 = SplitVariantsBySize.indel_1_30_vcf
     Array[File] all_indel_31_50 = SplitVariantsBySize.indel_31_50_vcf
