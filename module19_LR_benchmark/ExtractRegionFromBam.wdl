@@ -42,7 +42,8 @@ task ExtractRegion {
         RuntimeAttr? runtime_attr_override
     }
 
-    String prefix = basename(~{bam}, ".bam")
+    String prefix = basename(bam, ".bam")
+
     command <<<
         set -euo pipefail
 
