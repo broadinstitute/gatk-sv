@@ -23,9 +23,10 @@ workflow RenameVcfID {
   if (!defined(vcf_idx)) {
 
     call IndexVcf{
-      vcf = vcf,
-      docker_image = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_index_vcf
+      input:
+        vcf = vcf,
+        docker_image = sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_index_vcf
     }
 
   }
