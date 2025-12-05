@@ -8,6 +8,7 @@ workflow LiftoverVCFs {
     Array[File] vcf_idxs
     File chain_file
     File liftover_tool
+    File contig_file
     String liftover_ref_version
 
     String liftover_docker
@@ -18,6 +19,7 @@ workflow LiftoverVCFs {
     RuntimeAttr? runtime_attr_liftover
     RuntimeAttr? runtime_attr_update_vcf
     RuntimeAttr? runtime_attr_sort_index
+    RuntimeAttr? runtime_attr_update_vcf_header
 
   }
 
@@ -54,6 +56,15 @@ workflow LiftoverVCFs {
         vcf = UpdateVCF.updated_vcf,
         docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_sort_index
+    }
+
+    call UpdateVCFHeader{
+        input:
+            vcf = SortAndIndex.sorted_vcf,
+            vcf_idx = SortAndIndex.sorted_tbi,
+            new_contigs = contig_file,
+            docker_image = sv_pipeline_base_docker,
+            runtime_attr_override = runtime_attr_update_vcf_header
     }
   }
 
@@ -337,3 +348,52 @@ task SortAndIndex {
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 }
+
+task UpdateVCFHeader {
+    input {
+        File vcf              # input VCF (can be .vcf or .vcf.gz)
+        File vcf_idx
+        File new_contigs      # text file containing new ##contig= lines
+        String docker_image
+        RuntimeAttr? runtime_attr_override
+    }
+
+    String prefix = basename(vcf, ".vcf.gz")
+    command <<<
+        set -e
+
+        bcftools annotate \
+            --header-lines ~{new_contigs} \
+            -o ~{prefix}.header_updated.vcf.gz -O z \
+            ~{vcf}
+
+        tabix -p vcf ~{prefix}.header_updated.vcf.gz
+    >>>
+
+    output {
+        File out_vcf = "~{prefix}.header_updated.vcf.gz"
+        File out_vcf_tbi = "~{prefix}.header_updated.vcf.gz.tbi"
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1,
+        mem_gb: 10,
+        disk_gb: 15 + ceil(size(vcf, "GiB") *3),
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: docker_image
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+}
+
