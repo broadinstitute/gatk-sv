@@ -69,8 +69,8 @@ workflow LiftoverVCFs {
   }
 
     output {
-        Array[File] lifted_sorted_vcfs = SortAndIndex.sorted_vcf
-        Array[File] lifted_sorted_tbis = SortAndIndex.sorted_tbi
+        Array[File] lifted_sorted_vcfs = UpdateVCFHeader.out_vcf
+        Array[File] lifted_sorted_tbis = UpdateVCFHeader.out_vcf_tbi
     }
 }
 
