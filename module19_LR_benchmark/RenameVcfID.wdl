@@ -31,7 +31,7 @@ workflow RenameVcfID {
 
   }
 
-  vcf_index = select_first([IndexVcf.vcf_idx, vcf_idx])
+  File vcf_index = select_first([IndexVcf.vcf_idx, vcf_idx])
  
  
 
