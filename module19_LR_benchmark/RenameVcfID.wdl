@@ -77,7 +77,7 @@ task IndexVcf {
 
     command <<<
         set -euo pipefail
-        tabix -p vcf 
+        tabix -p vcf ~{vcf}
     >>>
 
     output {
