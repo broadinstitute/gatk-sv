@@ -360,12 +360,18 @@ task UpdateVCFHeader {
 
     String prefix = basename(vcf, ".vcf.gz")
     command <<<
-        set -e
+        set -euo pipefail
 
-        bcftools annotate \
-            --header-lines ~{new_contigs} \
-            -o ~{prefix}.header_updated.vcf.gz -O z \
-            ~{vcf}
+        bcftools view -h ~{vcf} > header.vcf
+
+        grep -v '^##contig=' header.vcf > header.no_contig
+        
+        cat <(grep -v "#CHROM" header.no_contig) \
+            ~{new_contigs} \
+            <(grep "#CHROM" header.no_contig) \
+             > new_header.txt
+
+        bcftools reheader -h new_header.txt -o ~{prefix}.header_updated.vcf.gz ~{vcf}
 
         tabix -p vcf ~{prefix}.header_updated.vcf.gz
     >>>
