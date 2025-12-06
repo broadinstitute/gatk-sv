@@ -93,10 +93,11 @@ task CalcuUpsetStat1 {
     command <<<
         set -euo pipefail
 
-        while read path; do
+        for path in ~{sep=' ' vcf_list}; do
             echo "Downloading ${path}"
-            gsutil cp "${path}" ./
-        done < ~{vcf_list}
+            gsutil cp "${path}" vcfs/
+        done
+
 
         Rscript -e '
           
