@@ -163,8 +163,8 @@ task CalcuUpsetStat1 {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 10 + ceil(size(vcf_list, "GiB")*2),
-        disk_gb: 15 + ceil(size(vcf_list, "GiB")*2),
+        mem_gb: 10 + ceil(size(vcf_list, "GiB")*4),
+        disk_gb: 15 + ceil(size(vcf_list, "GiB")*4),
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
@@ -267,8 +267,8 @@ task CalcuUpsetStat2 {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 10 + ceil(size(vcf_list, "GiB")*2),
-        disk_gb: 15 + ceil(size(vcf_list, "GiB")*2),
+        mem_gb: 10 + ceil(size(vcf_list, "GiB")*4),
+        disk_gb: 15 + ceil(size(vcf_list, "GiB")*4),
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
@@ -373,8 +373,8 @@ task CalcuUpsetStat3 {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 10 + ceil(size(vcf_list, "GiB")*2),
-        disk_gb: 15 + ceil(size(vcf_list, "GiB")*2),
+        mem_gb: 10 + ceil(size(vcf_list, "GiB")*4),
+        disk_gb: 15 + ceil(size(vcf_list, "GiB")*4),
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
@@ -479,8 +479,8 @@ task CalcuUpsetStat4 {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 10 + ceil(size(vcf_list, "GiB")*2),
-        disk_gb: 15 + ceil(size(vcf_list, "GiB")*2),
+        mem_gb: 10 + ceil(size(vcf_list, "GiB")*4),
+        disk_gb: 15 + ceil(size(vcf_list, "GiB")*4),
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
@@ -585,8 +585,8 @@ task CalcuUpsetStat5 {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 10 + ceil(size(vcf_list, "GiB")*2),
-        disk_gb: 15 + ceil(size(vcf_list, "GiB")*2),
+        mem_gb: 10 + ceil(size(vcf_list, "GiB")*4),
+        disk_gb: 15 + ceil(size(vcf_list, "GiB")*4),
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
@@ -690,8 +690,8 @@ task CalcuUpsetStat6 {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 10 + ceil(size(vcf_list, "GiB")*2),
-        disk_gb: 15 + ceil(size(vcf_list, "GiB")*2),
+        mem_gb: 10 + ceil(size(vcf_list, "GiB")*4),
+        disk_gb: 15 + ceil(size(vcf_list, "GiB")*4),
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
@@ -793,8 +793,8 @@ task CalcuUpsetStat7 {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 10 + ceil(size(vcf_list, "GiB")*2),
-        disk_gb: 15 + ceil(size(vcf_list, "GiB")*2),
+        mem_gb: 10 + ceil(size(vcf_list, "GiB")*4),
+        disk_gb: 15 + ceil(size(vcf_list, "GiB")*4),
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
@@ -895,8 +895,8 @@ task CalcuUpsetStat8 {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 10 + ceil(size(vcf_list, "GiB")*2),
-        disk_gb: 15 + ceil(size(vcf_list, "GiB")*2),
+        mem_gb: 10 + ceil(size(vcf_list, "GiB")*4),
+        disk_gb: 15 + ceil(size(vcf_list, "GiB")*4),
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
