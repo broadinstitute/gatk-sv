@@ -130,7 +130,7 @@ task CalcuUpsetStat1 {
             return(out)
         }
 
-        sample = ~{sample}
+        sample = "~{sample}"
         query = paste(sample, "deepvariant.g.alt_cleaned", sep=".")
         ref1 = paste("hgsv_3", sample, sep=".")
         ref2 = paste("hprc_y2_release", sample, sep=".")
@@ -231,7 +231,7 @@ task CalcuUpsetStat2 {
             return(out)
         }
 
-        sample = ~{sample}
+        sample = "~{sample}"
 
         query = paste("hgsv_3", sample, sep=".")
         ref1 = paste(sample, "deepvariant.g.alt_cleaned", sep=".")
@@ -335,7 +335,7 @@ task CalcuUpsetStat3 {
             return(out)
         }
 
-        sample = ~{sample}
+        sample = "~{sample}"
 
         query = paste("hprc_y2_release", sample, sep=".")
         ref1 = paste(sample, "deepvariant.g.alt_cleaned", sep=".")
@@ -441,7 +441,7 @@ task CalcuUpsetStat4 {
             return(out)
         }
 
-        sample = ~{sample}
+        sample = "~{sample}"
 
 
         query = paste("hprc_y2_mc_pangenie", sample, sep=".")
@@ -547,7 +547,7 @@ task CalcuUpsetStat5 {
             return(out)
         }
 
-        sample = ~{sample}
+        sample = "~{sample}"
 
         query = paste("Jiadong_integration", sample, sep=".")
         ref1 = paste("hgsv_3", sample, sep=".")
@@ -653,7 +653,7 @@ task CalcuUpsetStat6 {
             return(out)
         }
 
-        sample = ~{sample}
+        sample = "~{sample}"
 
         query = paste("hgsv_3", sample, sep=".")
         ref1 = paste("Jiadong_integration", sample, sep=".")
@@ -758,7 +758,7 @@ task CalcuUpsetStat7 {
             return(out)
         }
 
-        sample = ~{sample}
+        sample = "~{sample}"
 
         query = paste("hprc_y2_release", sample, sep=".")
         ref1 = paste("Jiadong_integration", sample, sep=".")
@@ -861,7 +861,7 @@ task CalcuUpsetStat8 {
             return(out)
         }
 
-        sample = ~{sample}
+        sample = "~{sample}"
 
         query = paste("hprc_y2_mc_pangenie", sample, sep=".")
         ref1 = paste("Jiadong_integration", sample, sep=".")
