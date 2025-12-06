@@ -7,7 +7,7 @@ import "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
 workflow IntegrateUpsetStat {
     input {
         String     sample
-        Array[File] vcf_list
+        Array[String] vcf_list
         String sv_base_mini_docker
         String sv_pipeline_base_docker
     }
@@ -85,7 +85,7 @@ workflow IntegrateUpsetStat {
 task CalcuUpsetStat1 {
     input {
         String sample
-        Array[File] vcf_list
+        Array[String] vcf_list
         String docker_image
         RuntimeAttr? runtime_attr_override
     }
@@ -187,7 +187,7 @@ task CalcuUpsetStat1 {
 task CalcuUpsetStat2 {
     input {
         String sample
-        Array[File] vcf_list
+        Array[String] vcf_list
         String docker_image
         RuntimeAttr? runtime_attr_override
     }
@@ -291,7 +291,7 @@ task CalcuUpsetStat2 {
 task CalcuUpsetStat3 {
     input {
         String sample
-        Array[File] vcf_list
+        Array[String] vcf_list
         String docker_image
         RuntimeAttr? runtime_attr_override
     }
@@ -397,7 +397,7 @@ task CalcuUpsetStat3 {
 task CalcuUpsetStat4 {
     input {
         String sample
-        Array[File] vcf_list
+        Array[String] vcf_list
         String docker_image
         RuntimeAttr? runtime_attr_override
     }
@@ -503,7 +503,7 @@ task CalcuUpsetStat4 {
 task CalcuUpsetStat5 {
     input {
         String sample
-        Array[File] vcf_list
+        Array[String] vcf_list
         String docker_image
         RuntimeAttr? runtime_attr_override
     }
@@ -609,7 +609,7 @@ task CalcuUpsetStat5 {
 task CalcuUpsetStat6 {
     input {
         String sample
-        Array[File] vcf_list
+        Array[String] vcf_list
         String docker_image
         RuntimeAttr? runtime_attr_override
     }
@@ -714,7 +714,7 @@ task CalcuUpsetStat6 {
 task CalcuUpsetStat7 {
     input {
         String sample
-        Array[File] vcf_list
+        Array[String] vcf_list
         String docker_image
         RuntimeAttr? runtime_attr_override
     }
@@ -817,7 +817,7 @@ task CalcuUpsetStat7 {
 task CalcuUpsetStat8 {
     input {
         String sample
-        Array[File] vcf_list
+        Array[String] vcf_list
         String docker_image
         RuntimeAttr? runtime_attr_override
     }
