@@ -80,8 +80,6 @@ workflow IntegrateUpsetStat {
   }
  }
 
-
-
 task CalcuUpsetStat1 {
     input {
         String sample
@@ -93,8 +91,8 @@ task CalcuUpsetStat1 {
     command <<<
         set -euo pipefail
 
+        grep "~{sample}" ~{vcf_list} | grep "deepvariant.g.alt_cleaned.vs." | grep "_query.vcf.gz" > vcf_list.tsv
 
-        grep ~{sample} ~{vcf_list} | grep "deepvariant.g.alt_cleaned.vs." | grep "_query.vcf.gz" > vcf_list.tsv
         while read path; do
             echo "Downloading ${path}"
             gsutil cp "${path}" ./
@@ -200,11 +198,12 @@ task CalcuUpsetStat2 {
     command <<<
         set -euo pipefail
 
+        grep "~{sample}" ~{vcf_list} | grep ".vs.hgsv_3" | grep "_ref.vcf.gz" > vcf_list.tsv
 
         while read path; do
             echo "Downloading ${path}"
             gsutil cp "${path}" ./
-        done < ~{vcf_list}
+        done < vcf_list.tsv
 
         Rscript -e '
           
@@ -310,10 +309,13 @@ task CalcuUpsetStat3 {
     command <<<
         set -euo pipefail
 
+        grep "~{sample}" ~{vcf_list} | grep "deepvariant.g.alt_cleaned.vs.hprc_y2_release" | grep "_ref.vcf.gz" > vcf_list.tsv
+        grep "~{sample}" ~{vcf_list} | grep "hprc_y2_release" | grep "_query.vcf.gz" >> vcf_list.tsv
+
         while read path; do
             echo "Downloading ${path}"
             gsutil cp "${path}" ./
-        done < ~{vcf_list}
+        done < vcf_list.tsv
 
         Rscript -e '
           
@@ -420,10 +422,13 @@ task CalcuUpsetStat4 {
     command <<<
         set -euo pipefail
 
+        grep "~{sample}" ~{vcf_list} | grep ".vs.hprc_y2_mc_pangenie" | grep "_ref.vcf.gz" > vcf_list.tsv
+        grep "~{sample}" ~{vcf_list} | grep ".vs.hgsv_3" | grep "_query.vcf.gz" >> vcf_list.tsv
+
         while read path; do
             echo "Downloading ${path}"
             gsutil cp "${path}" ./
-        done < ~{vcf_list}
+        done < vcf_list.tsv
 
         Rscript -e '
           
