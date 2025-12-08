@@ -140,19 +140,19 @@ task CalcuUpsetStat1 {
         name2 = "MC_release"
         name3 = "MC_liftover"
 
-        print('read in dv vs pav ... ')
+        print("read in dv vs pav ... ")
         dv_vs_pav.fp = read.table(paste(sample, query, "vs", ref1,"fp_query.vcf.gz", sep="."))
         dv_vs_pav.tp = read.table(paste(sample, query, "vs", ref1,"tp_query.vcf.gz", sep="."))
 
-        print('read in dv vs mc release ... ')
+        print("read in dv vs mc release ... ")
         dv_vs_mc_release.fp = read.table(paste(sample, query,"vs", ref2,"fp_query.vcf.gz", sep="."))
         dv_vs_mc_release.tp = read.table(paste(sample, query,"vs", ref2,"tp_query.vcf.gz", sep="."))
 
-        print('read in dv vs mc liftover ... ')
+        print("read in dv vs mc liftover ... ")
         dv_vs_mc_liftover.fp = read.table(paste(sample, query,"vs", ref3,"fp_query.vcf.gz", sep="."))
         dv_vs_mc_liftover.tp = read.table(paste(sample, query,"vs", ref3,"tp_query.vcf.gz", sep="."))
 
-        print('integrating the dv benchmarking statistics ... ')
+        print("integrating the dv benchmarking statistics ... ")
         dv_stat = calcu_benchmark_stat(dv_vs_pav.fp, dv_vs_pav.tp, dv_vs_mc_release.fp, dv_vs_mc_release.tp, dv_vs_mc_liftover.fp, dv_vs_mc_liftover.tp, name1, name2, name3)
         write.table(dv_stat, paste(sample, paste(name_query,name1, name2, name3, sep=".vs."), "stat", sep="."), quote=F, sep="\t", col.names=T, row.names=T)
 
@@ -248,19 +248,19 @@ task CalcuUpsetStat2 {
         name2 = "MC_release"
         name3 = "MC_liftover"
 
-        print('read in pav vs dv ... ')
+        print("read in pav vs dv ... ")
         pav_vs_dv.fp = read.table(paste(sample, ref1,"vs", query,"fp_ref.vcf.gz", sep="."))
         pav_vs_dv.tp = read.table(paste(sample, ref1,"vs", query,"tp_ref.vcf.gz", sep="."))
 
-        print('read in pav vs mc release ... ')
+        print("read in pav vs mc release ... ")
         pav_vs_mc_release.fp = read.table(paste(sample, ref2, "vs", query, "fp_ref.vcf.gz", sep="."))
         pav_vs_mc_release.tp = read.table(paste(sample, ref2, "vs", query, "tp_ref.vcf.gz", sep="."))
 
-        print('read in pav vs mc liftover ... ')
+        print("read in pav vs mc liftover ... ")
         pav_vs_mc_liftover.fp = read.table(paste(sample, ref3, "vs", query, "fp_ref.vcf.gz", sep="."))
         pav_vs_mc_liftover.tp = read.table(paste(sample, ref3, "vs", query, "tp_ref.vcf.gz", sep="."))
 
-        print('integrating benchmarking statistics ... ')
+        print("integrating benchmarking statistics ... ")
         pav_stat = calcu_benchmark_stat(pav_vs_dv.fp, pav_vs_dv.tp, 
                                         pav_vs_mc_release.fp, pav_vs_mc_release.tp,
                                         pav_vs_mc_liftover.fp, pav_vs_mc_liftover.tp,
@@ -360,19 +360,19 @@ task CalcuUpsetStat3 {
         name2 = "PAV"
         name3 = "MC_liftover"
 
-        print('read in mc release vs dv ... ')
+        print("read in mc release vs dv ... ")
         mc_release_vs_dv.fp = read.table(paste(sample, ref1,"vs", query,"fp_ref.vcf.gz", sep="."))
         mc_release_vs_dv.tp = read.table(paste(sample, ref1,"vs", query,"tp_ref.vcf.gz", sep="."))
 
-        print('read in mc release vs pav ... ')
+        print("read in mc release vs pav ... ")
         mc_release_vs_pav.fp = read.table(paste(sample, query,"vs", ref2,"fp_query.vcf.gz", sep="."))
         mc_release_vs_pav.tp = read.table(paste(sample, query,"vs", ref2,"tp_query.vcf.gz", sep="."))
 
-        print('read in mc release vs mc liftover ... ')
+        print("read in mc release vs mc liftover ... ")
         mc_release_vs_mc_liftover.fp = read.table(paste(sample, query,"vs", ref3,"fp_query.vcf.gz", sep="."))
         mc_release_vs_mc_liftover.tp = read.table(paste(sample, query,"vs", ref3,"tp_query.vcf.gz", sep="."))
 
-        print('integrating benchmarking results ...')
+        print("integrating benchmarking results ...")
         mc_release_stat = calcu_benchmark_stat(mc_release_vs_dv.fp, mc_release_vs_dv.tp, 
                                         mc_release_vs_pav.fp, mc_release_vs_pav.tp,
                                         mc_release_vs_mc_liftover.fp, mc_release_vs_mc_liftover.tp,
@@ -472,19 +472,19 @@ task CalcuUpsetStat4 {
         name2 = "PAV"
         name3 = "MC_release"
 
-        print('read in mc liftover vs dv ... ')
+        print("read in mc liftover vs dv ... ")
         mc_liftover_vs_dv.fp = read.table(paste(sample, ref1,"vs", query,"fp_ref.vcf.gz", sep="."))
         mc_liftover_vs_dv.tp = read.table(paste(sample, ref1,"vs", query,"tp_ref.vcf.gz", sep="."))
 
-        print('read in mc liftover vs pav ... ')
+        print("read in mc liftover vs pav ... ")
         mc_liftover_vs_pav.fp = read.table(paste(sample, query,"vs", ref2,"fp_query.vcf.gz", sep="."))
         mc_liftover_vs_pav.tp = read.table(paste(sample, query,"vs", ref2,"tp_query.vcf.gz", sep="."))
 
-        print('read in mc liftover vs mc release ... ')
+        print("read in mc liftover vs mc release ... ")
         mc_liftover_vs_mc_release.fp = read.table(paste(sample, ref3,"vs", query,"fp_ref.vcf.gz", sep="."))
         mc_liftover_vs_mc_release.tp = read.table(paste(sample, ref3,"vs", query,"tp_ref.vcf.gz", sep="."))
 
-        print('integrating benchmarking statistics ... ')
+        print("integrating benchmarking statistics ... ")
         mc_liftover_stat = calcu_benchmark_stat(mc_liftover_vs_dv.fp, mc_liftover_vs_dv.tp, 
                                                 mc_liftover_vs_pav.fp, mc_liftover_vs_pav.tp,
                                                 mc_liftover_vs_mc_release.fp, mc_liftover_vs_mc_release.tp,
@@ -582,19 +582,19 @@ task CalcuUpsetStat5 {
         name2 = "MC_release"
         name3 = "MC_liftover"
 
-        print('read in jiadong integration vs pav ... ')
+        print("read in jiadong integration vs pav ... ")
         jiadong_vs_pav.fp = read.table(paste(sample, query,"vs", ref1,"fp_query.vcf.gz", sep="."))
         jiadong_vs_pav.tp = read.table(paste(sample, query,"vs", ref1,"tp_query.vcf.gz", sep="."))
 
-        print('read in jiadong integration vs mc release ... ')
+        print("read in jiadong integration vs mc release ... ")
         jiadong_vs_mc_release.fp = read.table(paste(sample, query,"vs", ref2,"fp_query.vcf.gz", sep="."))
         jiadong_vs_mc_release.tp = read.table(paste(sample, query,"vs", ref2,"tp_query.vcf.gz", sep="."))
 
-        print('read in jiadong integration vs mc liftover ... ')
+        print("read in jiadong integration vs mc liftover ... ")
         jiadong_vs_mc_liftover.fp = read.table(paste(sample, query,"vs", ref3,"fp_query.vcf.gz", sep="."))
         jiadong_vs_mc_liftover.tp = read.table(paste(sample, query,"vs", ref3,"tp_query.vcf.gz", sep="."))
 
-        print('integrating benchmarking results ...')
+        print("integrating benchmarking results ...")
         jiadong_stat = calcu_benchmark_stat(jiadong_vs_pav.fp, jiadong_vs_pav.tp, 
                                        jiadong_vs_mc_release.fp, jiadong_vs_mc_release.tp, 
                                        jiadong_vs_mc_liftover.fp, jiadong_vs_mc_liftover.tp, 
@@ -692,19 +692,19 @@ task CalcuUpsetStat6 {
         name2 = "MC_release"
         name3 = "MC_liftover"
 
-        print('read in pav vs jiadong integration ... ')
+        print("read in pav vs jiadong integration ... ")
         pav_vs_jiadong.fp = read.table(paste(sample, ref1,"vs", query,"fp_ref.vcf.gz", sep="."))
         pav_vs_jiadong.tp = read.table(paste(sample, ref1,"vs", query,"tp_ref.vcf.gz", sep="."))
 
-        print('read in pav vs mc release ... ')
+        print("read in pav vs mc release ... ")
         pav_vs_mc_release.fp = read.table(paste(sample, ref2,"vs", query,"fp_ref.vcf.gz", sep="."))
         pav_vs_mc_release.tp = read.table(paste(sample, ref2,"vs", query,"tp_ref.vcf.gz", sep="."))
 
-        print('read in pav vs mc liftover ... ')
+        print("read in pav vs mc liftover ... ")
         pav_vs_mc_liftover.fp = read.table(paste(sample, ref3,"vs", query,"fp_ref.vcf.gz", sep="."))
         pav_vs_mc_liftover.tp = read.table(paste(sample, ref3,"vs", query,"tp_ref.vcf.gz", sep="."))
 
-        print('integrating benchmarking results ...')
+        print("integrating benchmarking results ...")
         pav_stat = calcu_benchmark_stat(pav_vs_jiadong.fp, pav_vs_jiadong.tp, 
                                         pav_vs_mc_release.fp, pav_vs_mc_release.tp,
                                         pav_vs_mc_liftover.fp, pav_vs_mc_liftover.tp,
@@ -802,19 +802,19 @@ task CalcuUpsetStat7 {
         name2 = "PAV"
         name3 = "MC_liftover"
 
-        print('read in mc release vs jiadong integration ... ')
+        print("read in mc release vs jiadong integration ... ")
         mc_release_vs_jiadong.fp = read.table(paste(sample, ref1,"vs", query,"fp_ref.vcf.gz", sep="."))
         mc_release_vs_jiadong.tp = read.table(paste(sample, ref1,"vs", query,"tp_ref.vcf.gz", sep="."))
 
-        print('read in mc release vs pav ... ')
+        print("read in mc release vs pav ... ")
         mc_release_vs_pav.fp = read.table(paste(sample, query,"vs", ref2,"fp_query.vcf.gz", sep="."))
         mc_release_vs_pav.tp = read.table(paste(sample, query,"vs", ref2,"tp_query.vcf.gz", sep="."))
 
-        print('read in mc release vs mc liftover ... ')
+        print("read in mc release vs mc liftover ... ")
         mc_release_vs_mc_liftover.fp = read.table(paste(sample, query,"vs", ref3,"fp_query.vcf.gz", sep="."))
         mc_release_vs_mc_liftover.tp = read.table(paste(sample, query,"vs", ref3,"tp_query.vcf.gz", sep="."))
 
-        print('integrating benchmarking results ...')
+        print("integrating benchmarking results ...")
         mc_release_stat = calcu_benchmark_stat(mc_release_vs_jiadong.fp, mc_release_vs_jiadong.tp, 
                                         mc_release_vs_pav.fp, mc_release_vs_pav.tp,
                                         mc_release_vs_mc_liftover.fp, mc_release_vs_mc_liftover.tp,
@@ -909,19 +909,19 @@ task CalcuUpsetStat8 {
         name2 = "PAV"
         name3 = "MC_release"
 
-        print('read in mc liftover vs jiadong integration ... ')
+        print("read in mc liftover vs jiadong integration ... ")
         mc_liftover_vs_jiadong.fp = read.table(paste(sample, ref1,"vs", query,"fp_ref.vcf.gz", sep="."))
         mc_liftover_vs_jiadong.tp = read.table(paste(sample, ref1,"vs", query,"tp_ref.vcf.gz", sep="."))
 
-        print('read in mc liftover vs pav ... ')
+        print("read in mc liftover vs pav ... ")
         mc_liftover_vs_pav.fp = read.table(paste(sample, query,"vs", ref2,"fp_query.vcf.gz", sep="."))
         mc_liftover_vs_pav.tp = read.table(paste(sample, query,"vs", ref2,"tp_query.vcf.gz", sep="."))
 
-        print('read in mc liftover vs mc release ... ')
+        print("read in mc liftover vs mc release ... ")
         mc_liftover_vs_mc_release.fp = read.table(paste(sample, ref3,"vs", query,"fp_ref.vcf.gz", sep="."))
         mc_liftover_vs_mc_release.tp = read.table(paste(sample, ref3,"vs", query,"tp_ref.vcf.gz", sep="."))
 
-        print('integrating benchmarking results ...')
+        print("integrating benchmarking results ...")
         mc_liftover_stat = calcu_benchmark_stat(mc_liftover_vs_jiadong.fp, mc_liftover_vs_jiadong.tp, 
                                                 mc_liftover_vs_pav.fp, mc_liftover_vs_pav.tp,
                                                 mc_liftover_vs_mc_release.fp, mc_liftover_vs_mc_release.tp,
