@@ -131,12 +131,12 @@ RUN apt-get -qqy install --no-upgrade --no-install-recommends git git-lfs openjd
     source /opt/gatk_miniconda3/bin/activate && \
     conda config --set auto_update_conda false && \
     conda config --set solver libmamba && \
-    conda init --all && \
     ./gradlew localDevCondaEnv && \
     ./gradlew localJar && \
     cp ./build/libs/gatk.jar /opt/gatk.jar && \
     cd .. && \
-    rm -rf gatk/
+    rm -rf gatk/ && \
+    ln -s /opt/gatk_miniconda3/bin/conda /usr/local/bin/conda
 
 
 WORKDIR /
