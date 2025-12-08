@@ -94,10 +94,11 @@ task CalcuUpsetStat1 {
         set -euo pipefail
 
 
+        grep ~{sample} ~{vcf_list} | grep "deepvariant.g.alt_cleaned.vs." | grep "_query.vcf.gz" > vcf_list.tsv
         while read path; do
             echo "Downloading ${path}"
             gsutil cp "${path}" ./
-        done < ~{vcf_list}
+        done < vcf_list.tsv
 
         Rscript -e '
           
