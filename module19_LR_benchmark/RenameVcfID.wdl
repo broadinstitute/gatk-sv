@@ -75,13 +75,14 @@ task IndexVcf {
         RuntimeAttr? runtime_attr_override
     }
 
+    String prefix = basename(vcf, '.vcf.gz')
     command <<<
         set -euo pipefail
         tabix -p vcf ~{vcf}
     >>>
 
     output {
-        File vcf_idx = "~{vcf}.tbi"
+        File vcf_idx = "~{prefix}.vcf.gz.tbi"
     }
 
     RuntimeAttr default_attr = object {
