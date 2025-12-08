@@ -7,6 +7,7 @@ workflow RdTestMultiBatches {
 
 	input{
 		File rdtest_bed
+    File? whitelist
 		String prefix
 		File sample_batch_list
 		File Rdtest_V2_script
@@ -33,6 +34,7 @@ workflow RdTestMultiBatches {
 		input:
 			rdtest_bed = rdtest_bed,
  			prefix = prefix,
+      whitelist = whitelist,
 			rd_metrics_folder = RemoteTabixRdMetrics.rd_metrics_folder,
 			rd_median_file = CollectRdMedian.rd_median_file,
 			Rdtest_V2_script  = Rdtest_V2_script,
@@ -48,6 +50,7 @@ workflow RdTestMultiBatches {
 task RdTest {
   input {
     File rdtest_bed
+    File? whitelist
     String prefix
     File rd_metrics_folder
     File rd_median_file
@@ -69,9 +72,7 @@ task RdTest {
   Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
   Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
 
-  output {
-    File rd_plots = "~{prefix}.tar.gz"
-  }
+  String whitelist_arg = if defined(whitelist) then "-w ~{whitelist}" else ""
   command <<<
 
     set -euo pipefail
@@ -84,7 +85,9 @@ task RdTest {
       -c rd_metrics_folder/ \
       -p TRUE \
       -o rd_plots/ \
-      -s 10000000000
+      -s 10000000000 \
+      ~{whitelist_arg}
+
     tar czvf ~{prefix}.tar.gz rd_plots
 
    >>>
@@ -97,6 +100,11 @@ task RdTest {
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
+
+  output {
+    File rd_plots = "~{prefix}.tar.gz"
+  }
+
 }
 
 task RemoteTabixRdMetrics {
