@@ -119,6 +119,8 @@ task CalcuUpsetStat1 {
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "type"
             all_variant_sites[,ncol(all_variant_sites)+1] = sapply(all_variant_sites[,3], function(x){strsplit(as.character(x),"_")[[1]][5]})
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "length"
+            all_variant_sites$length = as.integer(all_variant_sites$length)
+
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
             all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
@@ -226,6 +228,8 @@ task CalcuUpsetStat2 {
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "type"
             all_variant_sites[,ncol(all_variant_sites)+1] = sapply(all_variant_sites[,3], function(x){strsplit(as.character(x),"_")[[1]][5]})
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "length"
+            all_variant_sites$length = as.integer(all_variant_sites$length)
+
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
             all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
@@ -338,6 +342,8 @@ task CalcuUpsetStat3 {
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "type"
             all_variant_sites[,ncol(all_variant_sites)+1] = sapply(all_variant_sites[,3], function(x){strsplit(as.character(x),"_")[[1]][5]})
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "length"
+            all_variant_sites$length = as.integer(all_variant_sites$length)
+
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
             all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
@@ -450,6 +456,8 @@ task CalcuUpsetStat4 {
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "type"
             all_variant_sites[,ncol(all_variant_sites)+1] = sapply(all_variant_sites[,3], function(x){strsplit(as.character(x),"_")[[1]][5]})
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "length"
+            all_variant_sites$length = as.integer(all_variant_sites$length)
+
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
             all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
@@ -560,6 +568,8 @@ task CalcuUpsetStat5 {
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "type"
             all_variant_sites[,ncol(all_variant_sites)+1] = sapply(all_variant_sites[,3], function(x){strsplit(as.character(x),"_")[[1]][5]})
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "length"
+            all_variant_sites$length = as.integer(all_variant_sites$length)
+
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
             all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
@@ -670,6 +680,8 @@ task CalcuUpsetStat6 {
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "type"
             all_variant_sites[,ncol(all_variant_sites)+1] = sapply(all_variant_sites[,3], function(x){strsplit(as.character(x),"_")[[1]][5]})
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "length"
+            all_variant_sites$length = as.integer(all_variant_sites$length)
+
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
             all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
@@ -780,6 +792,8 @@ task CalcuUpsetStat7 {
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "type"
             all_variant_sites[,ncol(all_variant_sites)+1] = sapply(all_variant_sites[,3], function(x){strsplit(as.character(x),"_")[[1]][5]})
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "length"
+            all_variant_sites$length = as.integer(all_variant_sites$length)
+
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
             all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
@@ -887,6 +901,8 @@ task CalcuUpsetStat8 {
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "type"
             all_variant_sites[,ncol(all_variant_sites)+1] = sapply(all_variant_sites[,3], function(x){strsplit(as.character(x),"_")[[1]][5]})
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "length"
+            all_variant_sites$length = as.integer(all_variant_sites$length)
+
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
             all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
