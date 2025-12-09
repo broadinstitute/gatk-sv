@@ -72,12 +72,17 @@ task RdTest {
   Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
   Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
 
-  String whitelist_arg = if defined(whitelist) then "-w ~{whitelist}" else ""
+  String whitelist_arg = if defined(whitelist) then "-w whitelist.local" else ""
   command <<<
 
     set -euo pipefail
 
+    if [[ "~{defined(whitelist)}" == "true" ]]; then
+      gsutil cp "~{whitelist}" whitelist.local
+    fi
+
     mkdir rd_plots/
+
     tar zxvf ~{rd_metrics_folder}
     Rscript ~{Rdtest_V2_script} \
       -b ~{rdtest_bed} \
