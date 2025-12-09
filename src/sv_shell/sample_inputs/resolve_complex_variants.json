@@ -13,5 +13,7 @@
   "cytobands": "/inputs/cytobands_hg38.bed.gz",
   "mei_bed": "/inputs/hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz",
   "pe_exclude_list": "/inputs/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz",
-  "ref_dict": "/inputs/Homo_sapiens_assembly38.dict"
+  "ref_dict": "/inputs/Homo_sapiens_assembly38.dict",
+  "contig_list": "/inputs/contig.fai",
+  "max_shard_size": 500
 }

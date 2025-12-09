@@ -31,6 +31,8 @@ cd "${working_dir}"
 
 cohort_name=$(jq -r ".cohort_name" "$input_json")
 cluster_vcfs=$(jq -r ".cluster_vcfs" "$input_json")
+cluster_bothside_pass_lists=$(jq -r ".cluster_bothside_pass_lists" "$input_json")
+cluster_background_fail_lists=$(jq -r ".cluster_background_fail_lists" "$input_json")
 
 
 # -------------------------------------------------------
@@ -44,3 +46,53 @@ cluster_vcfs=$(jq -r ".cluster_vcfs" "$input_json")
 SubsetInversions_filtered_vcf="${cohort_name}.inversions_only.vcf.gz"
 bcftools view --no-version --no-update -i 'INFO/SVTYPE="INV"' -O z -o "${SubsetInversions_filtered_vcf}" "${cluster_vcfs}"
 tabix "${SubsetInversions_filtered_vcf}"
+
+SubsetInversions_filtered_vcf="$(realpath "${SubsetInversions_filtered_vcf}")"
+SubsetInversions_filtered_vcf_idx="${SubsetInversions_filtered_vcf}.tbi"
+
+
+# ResolveCpxInv
+# ---------------------------------------------------------------------------------------------------------------------
+ResolveCpxInv_wd=$(mktemp -d "/wd_ResolveCpxInv_XXXXXXXX")
+ResolveCpxInv_wd="$(realpath ${ResolveCpxInv_wd})"
+ResolveCpxInv_inputs_json="${ResolveCpxInv_wd}/inputs.json"
+ResolveCpxInv_outputs_json="${ResolveCpxInv_wd}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --arg vcf "${SubsetInversions_filtered_vcf}" \
+  --arg prefix "${cohort_name}.inv_only" \
+  '{
+    "vcf": $vcf,
+    "prefix": $prefix,
+    "max_shard_size": $inputs[0].max_shard_size,
+    "cytobands": $inputs[0].cytobands,
+    "disc_files": $inputs[0].disc_files,
+    "mei_bed": $inputs[0].mei_bed,
+    "pe_exclude_list": $inputs[0].pe_exclude_list,
+    "rf_cutoff_files": $inputs[0].rf_cutoff_files,
+    "ref_dict": $inputs[0].ref_dict,
+    "precluster_distance": 2000,
+    "precluster_overlap_frac": 0.000000001
+  }' > "${ResolveCpxInv_inputs_json}"
+
+bash /opt/sv_shell/resolve_complex_sv.sh "${ResolveCpxInv_inputs_json}" "${ResolveCpxInv_outputs_json}"
+cd "${working_dir}"
+
+# BreakpointOverlap
+# ---------------------------------------------------------------------------------------------------------------------
+BreakpointOverlap_prefix="${cohort_name}.breakpoint_overlap"
+python /opt/sv-pipeline/04_variant_resolution/scripts/overlap_breakpoint_filter.py \
+  "${cluster_vcfs}" \
+  "${cluster_bothside_pass_lists}" \
+  "${cluster_background_fail_lists}" \
+  "${BreakpointOverlap_prefix}.dropped_records.vcf.gz" \
+  | bgzip \
+  > "${BreakpointOverlap_prefix}.vcf.gz"
+tabix "${BreakpointOverlap_prefix}.vcf.gz"
+tabix "${BreakpointOverlap_prefix}.dropped_records.vcf.gz"
+
+BreakpointOverlap_out="$(realpath "${BreakpointOverlap_prefix}.vcf.gz")"
+BreakpointOverlap_out_index="$(realpath "${BreakpointOverlap_prefix}.vcf.gz.tbi")"
+BreakpointOverlap_dropped_record_vcf="$(realpath "${BreakpointOverlap_prefix}.dropped_records.vcf.gz")"
+BreakpointOverlap_dropped_record_vcf_index="$(realpath "${BreakpointOverlap_prefix}.dropped_records.vcf.gz.tbi")"
