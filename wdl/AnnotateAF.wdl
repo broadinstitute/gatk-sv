@@ -7,20 +7,20 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 workflow AnnotateAF {
 
   input {
-    File vcf  # GATK-SV VCF for annotation
+    File vcf
     File vcf_index
-    File contig_list  # Ordered list of contigs to annotate that are present in the input VCF
+    Array[String] contigs
     String prefix
 
-    File? protein_coding_gtf  # Provide at least one of protein_coding_gtf or noncoding_bed to perform functional annotation
+    File? protein_coding_gtf
     File? noncoding_bed
     Int? promoter_window
     Int? max_breakend_as_cnv_length
     String? svannotate_additional_args
 
-    File? sample_pop_assignments  # Two-column file with sample ID & pop assignment. "." for pop will ignore sample
-    File? sample_keep_list              # List of samples to be retained from the output vcf
-    File? ped_file                # Used for M/F AF calculations
+    File? sample_pop_assignments
+    File? sample_keep_list
+    File? ped_file
     File? par_bed
     File? allosomes_list
     Int   sv_per_shard
@@ -29,9 +29,9 @@ workflow AnnotateAF {
     Boolean annotate_internal_af = true
     Boolean annotate_functional_consequences = true
 
-    File? external_af_ref_bed              # File with external allele frequencies
-    String? external_af_ref_prefix         # prefix name for external AF call set (required if ref_bed set)
-    Array[String]? external_af_population  # populations to annotate external AF for (required if ref_bed set)
+    File? external_af_ref_bed
+    String? external_af_ref_prefix
+    Array[String]? external_af_population
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -50,8 +50,6 @@ workflow AnnotateAF {
     RuntimeAttr? runtime_attr_preconcat
     RuntimeAttr? runtime_attr_fix_header
   }
-
-  Array[String] contigs = read_lines(contig_list)
 
   scatter (contig in contigs) {
     call sharded_annotate_vcf.ShardedAnnotateVcf {
