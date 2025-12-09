@@ -123,10 +123,22 @@ task CalcuUpsetStat1 {
 
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"        
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+            }
 
             out = table(all_variant_sites[,c(10,7)])
             return(out)
@@ -232,10 +244,22 @@ task CalcuUpsetStat2 {
 
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"        
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+            }
 
             out = table(all_variant_sites[,c(10,7)])
             return(out)
@@ -346,10 +370,22 @@ task CalcuUpsetStat3 {
 
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"        
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+            }
 
             out = table(all_variant_sites[,c(10,7)])
             return(out)
@@ -460,10 +496,22 @@ task CalcuUpsetStat4 {
 
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"        
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+            }
 
             out = table(all_variant_sites[,c(10,7)])
             return(out)
@@ -542,10 +590,12 @@ task CalcuUpsetStat5 {
     command <<<
         set -euo pipefail
 
+        grep "Jiadong_integration" ~{vcf_list}  | grep "_query.vcf.gz" > vcf_list.tsv
+        
         while read path; do
             echo "Downloading ${path}"
             gsutil cp "${path}" ./
-        done < ~{vcf_list}
+        done < vcf_list.tsv
 
         Rscript -e '
           
@@ -572,10 +622,22 @@ task CalcuUpsetStat5 {
 
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"        
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+            }
 
             out = table(all_variant_sites[,c(10,7)])
             return(out)
@@ -654,10 +716,12 @@ task CalcuUpsetStat6 {
     command <<<
         set -euo pipefail
 
+        grep ".vs.hgsv_3" ~{vcf_list} | grep "_ref.vcf.gz" > vcf_list.tsv
+        
         while read path; do
             echo "Downloading ${path}"
             gsutil cp "${path}" ./
-        done < ~{vcf_list}
+        done < vcf_list.tsv
 
         Rscript -e '
           
@@ -684,10 +748,22 @@ task CalcuUpsetStat6 {
 
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"        
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+            }
 
             out = table(all_variant_sites[,c(10,7)])
             return(out)
@@ -766,6 +842,9 @@ task CalcuUpsetStat7 {
     command <<<
         set -euo pipefail
 
+        grep "~{sample}" ~{vcf_list} | grep "Jiadong_integration" | grep "_ref.vcf.gz" > vcf_list.tsv
+        grep "~{sample}" ~{vcf_list} | grep "hprc_y2_release" | grep "_query.vcf.gz" >> vcf_list.tsv
+
         while read path; do
             echo "Downloading ${path}"
             gsutil cp "${path}" ./
@@ -774,7 +853,7 @@ task CalcuUpsetStat7 {
         Rscript -e '
           
         #!/usr/bin/env Rscript
-              
+
 
         calcu_benchmark_stat<-function(dv_vs_pav.fp, dv_vs_pav.tp, dv_vs_mc_release.fp, dv_vs_mc_release.tp, dv_vs_mc_liftover.fp, dv_vs_mc_liftover.tp, benchmark_callset_1, benchmark_callset_2, benchmark_callset_3){
             all_variant_sites = unique(rbind(dv_vs_pav.fp[,c(1:3)],dv_vs_pav.tp[,c(1:3)],
@@ -796,10 +875,22 @@ task CalcuUpsetStat7 {
 
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"        
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+            }
 
             out = table(all_variant_sites[,c(10,7)])
             return(out)
@@ -875,6 +966,9 @@ task CalcuUpsetStat8 {
     command <<<
         set -euo pipefail
 
+        grep "~{sample}" ~{vcf_list} | grep ".vs.hprc_y2_mc_pangenie" | grep "_ref.vcf.gz" > vcf_list.tsv
+        grep "~{sample}" ~{vcf_list} | grep ".vs.hgsv_3" | grep "_query.vcf.gz" >> vcf_list.tsv
+
         while read path; do
             echo "Downloading ${path}"
             gsutil cp "${path}" ./
@@ -905,10 +999,22 @@ task CalcuUpsetStat8 {
 
             all_variant_sites[,ncol(all_variant_sites)+1] = "SNV"
             colnames(all_variant_sites)[ncol(all_variant_sites)] = "cate"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
-            all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
-            all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length<50,]$cate = "DEL_under50bp"        
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length<50,]$cate = "INS_under50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "DEL" & all_variant_sites$length>49,]$cate = "DEL_over50bp"
+            }
+
+            if(nrow(all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,])>0){
+                all_variant_sites[all_variant_sites$type == "INS" & all_variant_sites$length>49,]$cate = "INS_over50bp"
+            }
 
             out = table(all_variant_sites[,c(10,7)])
             return(out)
