@@ -33,7 +33,7 @@ workflow AnnotateAF {
     String? external_af_ref_prefix
     Array[String]? external_af_population
 
-    String sv_pipeline_docker
+    String annotate_af_docker
     String sv_base_mini_docker
     String gatk_docker
 
@@ -80,7 +80,7 @@ workflow AnnotateAF {
         population = external_af_population,
 
         gatk_docker = gatk_docker,
-        sv_pipeline_docker = sv_pipeline_docker,
+        sv_pipeline_docker = annotate_af_docker,
         sv_base_mini_docker = sv_base_mini_docker,
 
         runtime_attr_svannotate = runtime_attr_svannotate,
