@@ -6,7 +6,7 @@
   ],
   "generate_index": true,
   "max_shard_size": 500,
-  "mei_bed": "/inputs/tmp/hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz",
+  "mei_bed": "/inputs/hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz",
   "naive": false,
   "pe_exclude_list": "/inputs/tmp/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz",
   "precluster_distance": 50000000,
