@@ -201,3 +201,43 @@ awk -F'[,\t]' -v OFS='\t' \
   }' int.bed "${cluster_background_fail_lists}" \
   | sort -k1,1n \
   > "${UpdateBackgroundFail_updated_list}"
+
+
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+
+complex_resolve_vcfs_output_dir="${output_dir}/$(basename "${RenameVariants_renamed_vcf}")"
+mv "${RenameVariants_renamed_vcf}" "${complex_resolve_vcfs_output_dir}"
+mv "${RenameVariants_renamed_vcf}.tbi" "${complex_resolve_vcfs_output_dir}.tbi"
+
+complex_resolve_bothside_pass_list_output_dir="${output_dir}/$(basename "${UpdateBothsidePass_updated_list}")"
+mv "${UpdateBothsidePass_updated_list}" "${complex_resolve_bothside_pass_list_output_dir}"
+
+complex_resolve_background_fail_list_output_dir="${output_dir}/$(basename "${UpdateBackgroundFail_updated_list}")"
+mv "${UpdateBackgroundFail_updated_list}" "${complex_resolve_background_fail_list_output_dir}"
+
+breakpoint_overlap_dropped_record_vcfs_output_dir="${output_dir}/$(basename "${BreakpointOverlap_dropped_record_vcf}")"
+mv "${BreakpointOverlap_dropped_record_vcf}" "${breakpoint_overlap_dropped_record_vcfs_output_dir}"
+mv "${BreakpointOverlap_dropped_record_vcf}.tbi" "${breakpoint_overlap_dropped_record_vcfs_output_dir}.tbi"
+
+
+jq -n \
+  --arg complex_resolve_vcfs "${complex_resolve_vcfs_output_dir}" \
+  --arg complex_resolve_vcf_indexes "${complex_resolve_vcfs_output_dir}.tbi" \
+  --arg complex_resolve_bothside_pass_list "${complex_resolve_bothside_pass_list_output_dir}" \
+  --arg complex_resolve_background_fail_list "${complex_resolve_background_fail_list_output_dir}" \
+  --arg breakpoint_overlap_dropped_record_vcfs "${breakpoint_overlap_dropped_record_vcfs_output_dir}" \
+  --arg breakpoint_overlap_dropped_record_vcf_indexes "${breakpoint_overlap_dropped_record_vcfs_output_dir}.tbi" \
+  '{
+      "complex_resolve_vcfs": $complex_resolve_vcfs,
+      "complex_resolve_vcf_indexes": $complex_resolve_vcf_indexes,
+      "complex_resolve_bothside_pass_list": $complex_resolve_bothside_pass_list,
+      "complex_resolve_background_fail_list": $complex_resolve_background_fail_list,
+      "breakpoint_overlap_dropped_record_vcfs": $breakpoint_overlap_dropped_record_vcfs,
+      "breakpoint_overlap_dropped_record_vcf_indexes": $breakpoint_overlap_dropped_record_vcf_indexes
+  }' > "${output_json_filename}"
+
+echo "Successfully finished resolve complex variants, output json filename: ${output_json_filename}"

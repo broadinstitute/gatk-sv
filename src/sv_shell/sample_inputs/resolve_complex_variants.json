@@ -1,6 +1,5 @@
 {
   "cohort_name": "NA12878",
-  "merge_vcfs": false,
   "cluster_vcfs": "/inputs/NA12878.combine_batches.svtk_formatted.vcf.gz",
   "cluster_bothside_pass_lists": "/inputs/NA12878.combine_batches.bothsides_sr_support.txt",
   "cluster_background_fail_lists": "/inputs/NA12878.combine_batches.high_sr_background.txt",
