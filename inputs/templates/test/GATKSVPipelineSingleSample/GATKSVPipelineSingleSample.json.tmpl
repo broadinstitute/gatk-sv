@@ -14,7 +14,7 @@
 
   "GATKSVPipelineSingleSample.contig_ploidy_model_tar" : {{ ref_panel.contig_ploidy_model_tar | tojson }},
   "GATKSVPipelineSingleSample.ref_ped_file" : {{ ref_panel.ped_file | tojson }},
-  "GATKSVPipelineSingleSample.ref_panel_bincov_matrix": {{ ref_panel.merged_coverage_file | tojson }},
+  "GATKSVPipelineSingleSample.ref_panel_bincov_matrix": {{ ref_panel.merged_rd_file | tojson }},
   "GATKSVPipelineSingleSample.ref_panel_del_bed" : {{ ref_panel.del_bed | tojson }},
   "GATKSVPipelineSingleSample.ref_panel_dup_bed" : {{ ref_panel.dup_bed | tojson }},
   "GATKSVPipelineSingleSample.ref_panel_vcf" : {{ ref_panel.clean_vcf | tojson }},

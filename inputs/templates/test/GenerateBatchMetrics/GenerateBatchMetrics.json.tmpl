@@ -12,10 +12,10 @@
   "GenerateBatchMetrics.primary_contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
 
   "GenerateBatchMetrics.batch": {{ test_batch.name | tojson }},
-  "GenerateBatchMetrics.pe_file": {{ test_batch.merged_disc_file | tojson }},
+  "GenerateBatchMetrics.pe_file": {{ test_batch.merged_pe_file | tojson }},
   "GenerateBatchMetrics.baf_file": {{ test_batch.merged_baf_file | tojson }},
-  "GenerateBatchMetrics.rd_file": {{ test_batch.merged_coverage_file | tojson }},
-  "GenerateBatchMetrics.sr_file": {{ test_batch.merged_split_file | tojson }},
+  "GenerateBatchMetrics.rd_file": {{ test_batch.merged_rd_file | tojson }},
+  "GenerateBatchMetrics.sr_file": {{ test_batch.merged_sr_file | tojson }},
   "GenerateBatchMetrics.median_file": {{ test_batch.medianfile | tojson }},
   "GenerateBatchMetrics.ped_file": {{ test_batch.ped_file | tojson }},
 
