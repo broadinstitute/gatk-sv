@@ -48,7 +48,7 @@ scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/temp
   -a '{ "test_batch" : "hgdp" }'
 
 echo "########## Building NA19240 single-sample test ##########"
-scripts/inputs/build_inputs.py --log-info ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test/GATKSVPipelineSingleSample ${BASE_DIR}/inputs/build/NA19240/test \
+scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test/GATKSVPipelineSingleSample ${BASE_DIR}/inputs/build/NA19240/test \
   -a '{ "single_sample" : "test_single_sample_NA19240", "ref_panel" : "ref_panel_1kg" }'
 
 echo "########## Building NA12878 single-sample test ##########"
