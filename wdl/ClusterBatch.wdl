@@ -100,7 +100,7 @@ workflow ClusterBatch {
       runtime_attr_override=runtime_attr_ids_from_vcf_list
   }
 
-  # TODO : properly set allosome ploidy, which creates problems in RDTest for allosomes at the moment
+  # TODO : properly set allosome ploidy, which used to create problems in RDTest for allosomes. Removing female Y genotypes needs further testing.
   call tasks.CreatePloidyTableFromPed {
     input:
       ped_file=ped_file,
