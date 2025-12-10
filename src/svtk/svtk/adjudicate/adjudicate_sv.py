@@ -317,6 +317,7 @@ def adjudicate_SV(metrics):
     metrics.loc[:, 'is_outlier_specific'] = metrics.loc[:, 'is_outlier_specific'].astype(bool)
 
     # Fix carrier signal to 100% for common variants
+    # This metric is not reliable for common variants due to noisy raw calls
     CS_cols = ('SRCS', 'PECS', 'PESRCS')
     for col in CS_cols:
         metrics.loc[metrics['vf'] > 0.5, col] = 100.
