@@ -75,223 +75,169 @@ fi
 # ======================= Command =======================
 # -------------------------------------------------------
 
+# GetSeCutoff
+# Get SR count cutoff from RF metrics to use in single-ender rescan procedure
+# Get SE cutoff: first quartile of PE cutoff from SR random forest across all batches
+# Defaults to 4 if first quartile < 4
+# -------------------------------------------------------------------------------------------------------------------
+rf_cutoffs_files="rf_cutoffs_files"
+printf "%s\n" "${rf_cutoff_files[@]}" > "${rf_cutoffs_files}"
 
-# ShardVcfCpx
-# Shard vcf for complex resolution
-# ---------------------------------------------------------------------------------------------------------------------
-bcftools view -G "${vcf}" -Oz -o sites_only.vcf.gz
-svtk vcfcluster <(echo "sites_only.vcf.gz") "${prefix}.vcf" \
-  -d "${precluster_distance}" \
-  -f "${precluster_overlap_frac}" \
-  --single-end \
-  -p candidate_complex_clusters \
-  --svtypes DEL,DUP,INS,INV,BND \
-  --ignore-svtypes \
-  -o 0 \
-  --preserve-header \
-  --preserve-ids \
-  --skip-merge
-bgzip "${prefix}.vcf"
+while read FILE; do
+  /opt/sv-pipeline/04_variant_resolution/scripts/convert_poisson_p.py \
+    $( awk -F '\t' '{if ( $5=="PE_log_pval") print $2 }' "${FILE}" | head -n1 )
+done < "${rf_cutoffs_files}" \
+  | Rscript -e "cat(max(c(4,floor(quantile(as.numeric(scan('stdin',quiet=T)),probs=0.25)))),sep='\n')" \
+  > median_cutoff.txt
 
-ShardVcfCpx_out="${prefix}.vcf.gz"
+GetSeCutoff_median_PE_cutoff=$(< median_cutoff.txt)
 
 
-# ShardVidsForClustering
-# ---------------------------------------------------------------------------------------------------------------------
-# TODO: should move the following python file to a better directory
-python /shard_vids_for_clustering.py \
-  --clustered_vcf "${ShardVcfCpx_out}" \
-  --prefix "${prefix}" \
-  --records_per_shard "${max_shard_size}"
+# ResolvePrep
+# Prep files for svtk resolve using bucket streaming
+# -------------------------------------------------------------------------------------------------------------------
+# Use GATK to pull down the discfile chunks within ±2kb of all
+# INVERSION breakpoints, and bgzip / tabix
+echo "Forming regions.bed"
+svtk vcf2bed "${vcf}" input.bed --no-samples --no-header
+cat input.bed \
+  | (fgrep INV || printf "") \
+  | awk -v OFS="\t" -v buffer=2000 \
+    '{ print $1, $2-buffer, $2+buffer"\n"$1, $3-buffer, $3+buffer }' \
+  | awk -v OFS="\t" '{ if ($2<1) $2=1; print $1, $2, $3 }' \
+  | sort -Vk1,1 -k2,2n -k3,3n \
+  | bedtools merge -i - \
+  > regions.bed
 
-shopt -s nullglob
-ShardVidsForClustering_out=( "${prefix}.vids.shard_"*.list )
-shopt -u nullglob
+disc_files_list_filename="disc_files_list"
+printf "%s\n" "${disc_files[@]}" > "${disc_files_list_filename}"
 
+echo "Localizing all discfile shards..."
+DISC_FILE_NUM=0
+while read GS_PATH_TO_DISC_FILE; do
+  ((++DISC_FILE_NUM))
+  SLICE="disc"$DISC_FILE_NUM"shard"
 
-# ---------------------------------------------------------------------------------------------------------------------
-if [ "${#ShardVidsForClustering_out[@]}" > 0 ]; then
+  if [ -s regions.bed ]; then
+    java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar PrintSVEvidence \
+          --sequence-dictionary "${ref_dict}" \
+          --evidence-file $GS_PATH_TO_DISC_FILE \
+          -L regions.bed \
+          -O ${SLICE}.PE.txt
+  else
+    touch ${SLICE}.PE.txt
+  fi
 
-  # GetSeCutoff
-  # Get SR count cutoff from RF metrics to use in single-ender rescan procedure
-  # Get SE cutoff: first quartile of PE cutoff from SR random forest across all batches
-  # Defaults to 4 if first quartile < 4
-  # -------------------------------------------------------------------------------------------------------------------
-  rf_cutoffs_files="rf_cutoffs_files"
-  printf "%s\n" "${rf_cutoff_files[@]}" > "${rf_cutoffs_files}"
-
-  while read FILE; do
-    /opt/sv-pipeline/04_variant_resolution/scripts/convert_poisson_p.py \
-      $( awk -F '\t' '{if ( $5=="PE_log_pval") print $2 }' "${FILE}" | head -n1 )
-  done < "${rf_cutoffs_files}" \
-    | Rscript -e "cat(max(c(4,floor(quantile(as.numeric(scan('stdin',quiet=T)),probs=0.25)))),sep='\n')" \
-    > median_cutoff.txt
-
-  GetSeCutoff_median_PE_cutoff=$(< median_cutoff.txt)
-
-
-  # PullVcfShard
-  # -------------------------------------------------------------------------------------------------------------------
-  vids="${ShardVidsForClustering_out[0]}"
-  bcftools view --no-version --include ID=@"${vids}" "${vcf}" -O z -o "${prefix}.shard_0.vcf.gz"
-  tabix "${prefix}.shard_0.vcf.gz"
-  wc -l < "${vids}" > count.txt
-
-  PullVcfShard_out="${prefix}.shard_0.vcf.gz"
-  PullVcfShard_out_index="${prefix}.shard_0.vcf.gz.tbi"
-  PullVcfShard_count=$(< count.txt)
-
-
-  # ResolvePrep
-  # Prep files for svtk resolve using bucket streaming
-  # -------------------------------------------------------------------------------------------------------------------
-  # Use GATK to pull down the discfile chunks within ±2kb of all
-  # INVERSION breakpoints, and bgzip / tabix
-  echo "Forming regions.bed"
-  svtk vcf2bed "${vcf}" input.bed --no-samples --no-header
-  cat input.bed \
-    | (fgrep INV || printf "") \
-    | awk -v OFS="\t" -v buffer=2000 \
-      '{ print $1, $2-buffer, $2+buffer"\n"$1, $3-buffer, $3+buffer }' \
-    | awk -v OFS="\t" '{ if ($2<1) $2=1; print $1, $2, $3 }' \
-    | sort -Vk1,1 -k2,2n -k3,3n \
-    | bedtools merge -i - \
-    > regions.bed
-
-  disc_files_list_filename="disc_files_list"
-  printf "%s\n" "${disc_files[@]}" > "${disc_files_list_filename}"
-
-  echo "Localizing all discfile shards..."
-  DISC_FILE_NUM=0
-  while read GS_PATH_TO_DISC_FILE; do
-    ((++DISC_FILE_NUM))
-    SLICE="disc"$DISC_FILE_NUM"shard"
-
-    if [ -s regions.bed ]; then
-      java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar PrintSVEvidence \
-            --sequence-dictionary "${ref_dict}" \
-            --evidence-file $GS_PATH_TO_DISC_FILE \
-            -L regions.bed \
-            -O ${SLICE}.PE.txt
-    else
-      touch ${SLICE}.PE.txt
-    fi
-
-    cat ${SLICE}.PE.txt \
-      | awk '{ if ($1==$4 && $3==$6) print }' \
-      | bgzip -c \
-      > ${SLICE}.PE.txt.gz
-    rm ${SLICE}.PE.txt
-  done < "${disc_files_list_filename}"
-
-  # Merge PE files and add one artificial pair corresponding to the chromosome of interest
-  # This makes it so that svtk doesn't break downstream
-  echo "Merging PE files"
-  {
-    zcat disc*shard.PE.txt.gz;
-    # TODO: do I need the following two? it seems not, discussed with Mark
-    # TODO: the only diff between the file this task generates vs. wdl is the following two lines only
-    # echo -e "~{chrom}\t1\t+\t~{chrom}\t2\t+\tDUMMY_SAMPLE_IGNORE";
-    # echo -e "chr~{chrom}\t1\t+\t~{chrom}\t2\t+\tDUMMY_SAMPLE_IGNORE";
-  } \
-    | sort -Vk1,1 -k2,2n -k5,5n -k7,7 \
+  cat ${SLICE}.PE.txt \
+    | awk '{ if ($1==$4 && $3==$6) print }' \
     | bgzip -c \
-    > discfile.PE.txt.gz
+    > ${SLICE}.PE.txt.gz
+  rm ${SLICE}.PE.txt
+done < "${disc_files_list_filename}"
 
-  rm disc*shard.PE.txt.gz
+# Merge PE files and add one artificial pair corresponding to the chromosome of interest
+# This makes it so that svtk doesn't break downstream
+echo "Merging PE files"
+{
+  zcat disc*shard.PE.txt.gz;
+  # TODO: do I need the following two? it seems not, discussed with Mark
+  # TODO: the only diff between the file this task generates vs. wdl is the following two lines only
+  # echo -e "~{chrom}\t1\t+\t~{chrom}\t2\t+\tDUMMY_SAMPLE_IGNORE";
+  # echo -e "chr~{chrom}\t1\t+\t~{chrom}\t2\t+\tDUMMY_SAMPLE_IGNORE";
+} \
+  | sort -Vk1,1 -k2,2n -k5,5n -k7,7 \
+  | bgzip -c \
+  > discfile.PE.txt.gz
 
-  tabix -0 -s 1 -b 2 -e 2 -f discfile.PE.txt.gz
+rm disc*shard.PE.txt.gz
 
-  ResolvePrep_merged_discfile="$(realpath discfile.PE.txt.gz)"
-  ResolvePrep_merged_discfile_idx="$(realpath discfile.PE.txt.gz.tbi)"
+tabix -0 -s 1 -b 2 -e 2 -f discfile.PE.txt.gz
 
-
-  # SvtkResolve
-  # Run svtk resolve on variants after all-ref exclusion
-  # -------------------------------------------------------------------------------------------------------------------
-  SvtkResolve_resolved_vcf="${prefix}.svtk_resolve.shard_0.resolved.unmerged.vcf"
-  SvtkResolve_unresolved_vcf="${prefix}.svtk_resolve.shard_0.unresolved.unmerged.vcf"
-  mkdir tmp
-  svtk resolve \
-    "${vcf}" \
-    "${SvtkResolve_resolved_vcf}" \
-    -p "${variant_prefix}_shard_0_" \
-    -u "${SvtkResolve_unresolved_vcf}" \
-    -t ./tmp/ \
-    --discfile "${ResolvePrep_merged_discfile}" \
-    --mei-bed "${mei_bed}" \
-    --cytobands "${cytobands}" \
-    --min-rescan-pe-support ${GetSeCutoff_median_PE_cutoff} \
-    -x "${pe_exclude_list}"
-
-  bgzip "${SvtkResolve_resolved_vcf}"
-  bgzip "${SvtkResolve_unresolved_vcf}"
-
-  SvtkResolve_rs_vcf="$(realpath "${SvtkResolve_resolved_vcf}.gz")"
-  SvtkResolve_un_vcf="$(realpath "${SvtkResolve_unresolved_vcf}.gz")"
+ResolvePrep_merged_discfile="$(realpath discfile.PE.txt.gz)"
+ResolvePrep_merged_discfile_idx="$(realpath discfile.PE.txt.gz.tbi)"
 
 
-  # RestoreUnresolvedCnv
-  # -------------------------------------------------------------------------------------------------------------------
-  resolved_plus_cnv="${prefix}.restore_unresolved.shard_0.vcf.gz"
+# SvtkResolve
+# Run svtk resolve on variants after all-ref exclusion
+# -------------------------------------------------------------------------------------------------------------------
+SvtkResolve_resolved_vcf="${prefix}.svtk_resolve.shard_0.resolved.unmerged.vcf"
+SvtkResolve_unresolved_vcf="${prefix}.svtk_resolve.shard_0.unresolved.unmerged.vcf"
+mkdir tmp
+svtk resolve \
+  "${vcf}" \
+  "${SvtkResolve_resolved_vcf}" \
+  -p "${variant_prefix}_shard_0_" \
+  -u "${SvtkResolve_unresolved_vcf}" \
+  -t ./tmp/ \
+  --discfile "${ResolvePrep_merged_discfile}" \
+  --mei-bed "${mei_bed}" \
+  --cytobands "${cytobands}" \
+  --min-rescan-pe-support ${GetSeCutoff_median_PE_cutoff} \
+  -x "${pe_exclude_list}"
 
-  # get unresolved records
-  bcftools view --no-header "${SvtkResolve_un_vcf}" -Oz -o unresolved_records.vcf.gz
-  # rm "${SvtkResolve_un_vcf}"
+bgzip "${SvtkResolve_resolved_vcf}"
+bgzip "${SvtkResolve_unresolved_vcf}"
 
-  # avoid possible obliteration of input file during later processing by writing
-  # to temporary file (and postCPX_cleanup.py writing final result to output name)
-  cp "${SvtkResolve_rs_vcf}" "${resolved_plus_cnv}.tmp.gz"
+SvtkResolve_rs_vcf="$(realpath "${SvtkResolve_resolved_vcf}.gz")"
+SvtkResolve_un_vcf="$(realpath "${SvtkResolve_unresolved_vcf}.gz")"
 
-  # Add unresolved CNVs to resolved VCF and wipe unresolved status
-  zcat unresolved_records.vcf.gz \
-    | (fgrep -e "<DEL>" -e "<DUP>" -e "SVTYPE=DEL" -e "SVTYPE=DUP" -e "SVTYPE=CNV" -e "SVTYPE=MCNV" || printf "") \
-    | sed -r -e 's/;EVENT=[^;]*;/;/' -e 's/;UNRESOLVED[^;]*;/;/g' \
-    | sed -r -e 's/;UNRESOLVED_TYPE[^;]*;/;/g' -e 's/;UNRESOLVED_TYPE[^\t]*\t/\t/g' \
-    | bgzip \
-    >> "${resolved_plus_cnv}.tmp.gz"
 
-  # Add other unresolved variants & retain unresolved status (except for inversion single enders)
-  zcat unresolved_records.vcf.gz \
-    | (fgrep -v -e "<DEL>" -e "<DUP>" -e "SVTYPE=DEL" -e "SVTYPE=DUP" -e "SVTYPE=CNV" -e "SVTYPE=MCNV" \
-                -e "INVERSION_SINGLE_ENDER" || printf "") \
-    | bgzip \
-    >> "${resolved_plus_cnv}.tmp.gz"
+# RestoreUnresolvedCnv
+# -------------------------------------------------------------------------------------------------------------------
+resolved_plus_cnv="${prefix}.restore_unresolved.shard_0.vcf.gz"
 
-  #Add inversion single enders as SVTYPE=BND
-  zcat unresolved_records.vcf.gz \
-    | (fgrep -v -e "<DEL>" -e "<DUP>" -e "SVTYPE=DEL" -e "SVTYPE=DUP" -e "SVTYPE=CNV" -e "SVTYPE=MCNV" || printf "") \
-    | (fgrep -e "INVERSION_SINGLE_ENDER" || printf "") \
-    | sed -e 's/SVTYPE=INV/SVTYPE=BND/g' \
-    | sed -e 's/END=\([0-9]*\)/END=\1;END2=\1/' \
-    | bgzip \
-    >> "${resolved_plus_cnv}.tmp.gz"
-  rm unresolved_records.vcf.gz
+# get unresolved records
+bcftools view --no-header "${SvtkResolve_un_vcf}" -Oz -o unresolved_records.vcf.gz
+# rm "${SvtkResolve_un_vcf}"
 
-  #Sort, clean, and compress
-  zcat "${resolved_plus_cnv}.tmp.gz" \
-    | vcf-sort -c \
-    | /opt/sv-pipeline/04_variant_resolution/scripts/postCPX_cleanup.py \
-      /dev/stdin /dev/stdout \
-    | bgzip \
-    > "${resolved_plus_cnv}"
-  tabix "${resolved_plus_cnv}"
+# avoid possible obliteration of input file during later processing by writing
+# to temporary file (and postCPX_cleanup.py writing final result to output name)
+cp "${SvtkResolve_rs_vcf}" "${resolved_plus_cnv}.tmp.gz"
 
-  RestoreUnresolvedCnv_res="$(realpath "${resolved_plus_cnv}")"
-  RestoreUnresolvedCnv_res_idx="$(realpath "${resolved_plus_cnv}.tbi")"
+# Add unresolved CNVs to resolved VCF and wipe unresolved status
+zcat unresolved_records.vcf.gz \
+  | (fgrep -e "<DEL>" -e "<DUP>" -e "SVTYPE=DEL" -e "SVTYPE=DUP" -e "SVTYPE=CNV" -e "SVTYPE=MCNV" || printf "") \
+  | sed -r -e 's/;EVENT=[^;]*;/;/' -e 's/;UNRESOLVED[^;]*;/;/g' \
+  | sed -r -e 's/;UNRESOLVED_TYPE[^;]*;/;/g' -e 's/;UNRESOLVED_TYPE[^\t]*\t/\t/g' \
+  | bgzip \
+  >> "${resolved_plus_cnv}.tmp.gz"
 
-  # ConcatResolvedPerShard
-  # -------------------------------------------------------------------------------------------------------------------
-  cp "${RestoreUnresolvedCnv_res}" "${prefix}.resolved.vcf.gz"
-  cp "${RestoreUnresolvedCnv_res_idx}" "${prefix}.resolved.vcf.gz.tbi"
+# Add other unresolved variants & retain unresolved status (except for inversion single enders)
+zcat unresolved_records.vcf.gz \
+  | (fgrep -v -e "<DEL>" -e "<DUP>" -e "SVTYPE=DEL" -e "SVTYPE=DUP" -e "SVTYPE=CNV" -e "SVTYPE=MCNV" \
+              -e "INVERSION_SINGLE_ENDER" || printf "") \
+  | bgzip \
+  >> "${resolved_plus_cnv}.tmp.gz"
 
-  resolved_vcf_merged="$(realpath "${prefix}.resolved.vcf.gz")"
-  resolved_vcf_merged_idx="$(realpath "${prefix}.resolved.vcf.gz.tbi")"
+#Add inversion single enders as SVTYPE=BND
+zcat unresolved_records.vcf.gz \
+  | (fgrep -v -e "<DEL>" -e "<DUP>" -e "SVTYPE=DEL" -e "SVTYPE=DUP" -e "SVTYPE=CNV" -e "SVTYPE=MCNV" || printf "") \
+  | (fgrep -e "INVERSION_SINGLE_ENDER" || printf "") \
+  | sed -e 's/SVTYPE=INV/SVTYPE=BND/g' \
+  | sed -e 's/END=\([0-9]*\)/END=\1;END2=\1/' \
+  | bgzip \
+  >> "${resolved_plus_cnv}.tmp.gz"
+rm unresolved_records.vcf.gz
 
-else
-  resolved_vcf_merged="${vcf}"
-  resolved_vcf_merged_idx="${vcf_idx}"
-fi
+#Sort, clean, and compress
+zcat "${resolved_plus_cnv}.tmp.gz" \
+  | vcf-sort -c \
+  | /opt/sv-pipeline/04_variant_resolution/scripts/postCPX_cleanup.py \
+    /dev/stdin /dev/stdout \
+  | bgzip \
+  > "${resolved_plus_cnv}"
+tabix "${resolved_plus_cnv}"
+
+RestoreUnresolvedCnv_res="$(realpath "${resolved_plus_cnv}")"
+RestoreUnresolvedCnv_res_idx="$(realpath "${resolved_plus_cnv}.tbi")"
+
+# ConcatResolvedPerShard
+# -------------------------------------------------------------------------------------------------------------------
+cp "${RestoreUnresolvedCnv_res}" "${prefix}.resolved.vcf.gz"
+cp "${RestoreUnresolvedCnv_res_idx}" "${prefix}.resolved.vcf.gz.tbi"
+
+resolved_vcf_merged="$(realpath "${prefix}.resolved.vcf.gz")"
+resolved_vcf_merged_idx="$(realpath "${prefix}.resolved.vcf.gz.tbi")"
 
 
 # -------------------------------------------------------
