@@ -86,7 +86,6 @@ workflow TrainGCNV {
     String sv_base_mini_docker
     String linux_docker
     String gatk_docker
-    String condense_counts_docker
     String? sv_pipeline_docker # required if using n_samples_subsample or outlier_sample_ids to subset samples
 
     # Runtime configuration overrides
@@ -123,7 +122,7 @@ workflow TrainGCNV {
         sample = samples[i],
         min_interval_size = min_interval_size,
         max_interval_size = max_interval_size,
-        condense_counts_docker = condense_counts_docker,
+        gatk_docker = gatk_docker,
         runtime_attr_override=condense_counts_runtime_attr
     }
   }

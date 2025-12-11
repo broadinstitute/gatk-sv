@@ -44,39 +44,39 @@ An identifier for the batch. Should match the name used in [GatherBatchEvidence]
 #### `*_vcf`
 Clustered VCFs from [ClusterBatch](./cb#clustered__vcf).
 
-#### `baf_metrics`
+#### `baf_file`
 Merged BAF evidence file from [GatherBatchEvidence](./gbe#merged_baf).
 
-#### `discfile`
+#### `pe_file`
 Merged PE evidence file from [GatherBatchEvidence](./gbe#merged_pe).
 
-#### `coveragefile`
+#### `rd_file`
 Merged RD evidence file from [GatherBatchEvidence](./gbe#merged_bincov).
 
-#### `splitfile`
+#### `sr_file`
 Merged SR evidence file from [GatherBatchEvidence](./gbe#merged_sr).
 
-#### `medianfile`
+#### `median_file`
 Merged median coverage table from [GatherBatchEvidence](./gbe#median_cov).
-
-#### `*_split_size`
-Variants per shard for each evidence testing subworkflow. Reduce defaults to increase parallelism if the workflow is 
-too slow.
 
 #### `ped_file`
 Family structures and sex assignments determined in [EvidenceQC](./eqc). See [PED file format](/docs/gs/inputs#ped-format).
 
+#### `records_per_shard_agg`
+Variants per shard for evidence testing. Reduce defaults to increase parallelism if the workflow is too slow.
+
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `outlier_sample_ids`
 Provide a file containing sample IDs, delimited by new lines, to exclude from the generation of batch metrics - 
-this should can be based on outlier samples identified following [EvidenceQC](./eqc) that are still retained in 
+this should be based on outlier samples identified following [EvidenceQC](./eqc) that are still retained in 
 the cohort. If provided, the workflow discards any outlier samples from being considered as part of the called 
 samples when calculating metrics at a given site, as long as non-outlier samples are also called for that site. 
-It does the same for the set of background samples considered in the metric calculations for a given site. These outlier samples are *not* removed from joint calling in downstream modules.
+It does the same for the set of background samples considered in the metric calculations for a given site. These 
+outlier samples are *not* removed from joint calling in downstream modules.
 
 ## Outputs
 
 #### `metrics`
-TSV of variant metrics (excluding common variants).
+TSV of variant metrics
 
-#### `metrics_common`
-TSV of common variant metrics (>50% carrier frequency).
+#### `ploidy_table`
+TSV of contig ploidies for all samples, assuming diploid autosome and sex assignments from the [ped_file](#ped_file).

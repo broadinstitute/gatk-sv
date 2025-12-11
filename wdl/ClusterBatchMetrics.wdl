@@ -5,7 +5,7 @@ import "Utils.wdl" as util
 
 workflow ClusterBatchMetrics {
   input {
-    Array[String]? samples
+    File? sample_list
     String name
 
     File depth_vcf
@@ -37,7 +37,7 @@ workflow ClusterBatchMetrics {
     RuntimeAttr? runtime_attr_cat_metrics
   }
 
-  if (!defined(samples)) {
+  if (!defined(sample_list)) {
     call util.GetSampleIdsFromVcf {
       input:
         vcf = depth_vcf,
@@ -45,12 +45,13 @@ workflow ClusterBatchMetrics {
         runtime_attr_override = runtime_attr_sample_ids_from_vcf
     }
   }
+  Array[String] samples_array = read_lines(select_first([sample_list, GetSampleIdsFromVcf.out_file]))
 
   call tu.VCFMetrics as depth_metrics {
     input:
       vcf = depth_vcf,
       baseline_vcf = baseline_depth_vcf,
-      samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
+      samples = samples_array,
       prefix = "depth_clustered",
       types = "DEL,DUP",
       contig_list = contig_list,
@@ -62,7 +63,7 @@ workflow ClusterBatchMetrics {
       input:
         vcf = select_first([dragen_vcf]),
         baseline_vcf = baseline_dragen_vcf,
-        samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
+        samples = samples_array,
         prefix = "dragen_clustered",
         types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
@@ -75,7 +76,7 @@ workflow ClusterBatchMetrics {
       input:
         vcf = select_first([manta_vcf]),
         baseline_vcf = baseline_manta_vcf,
-        samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
+        samples = samples_array,
         prefix = "manta_clustered",
         types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
@@ -88,7 +89,7 @@ workflow ClusterBatchMetrics {
       input:
         vcf = select_first([melt_vcf]),
         baseline_vcf = baseline_melt_vcf,
-        samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
+        samples = samples_array,
         prefix = "melt_clustered",
         types = "INS",
         contig_list = contig_list,
@@ -101,7 +102,7 @@ workflow ClusterBatchMetrics {
       input:
         vcf = select_first([scramble_vcf]),
         baseline_vcf = baseline_scramble_vcf,
-        samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
+        samples = samples_array,
         prefix = "scramble_clustered",
         types = "INS",
         contig_list = contig_list,
@@ -114,7 +115,7 @@ workflow ClusterBatchMetrics {
       input:
         vcf = select_first([wham_vcf]),
         baseline_vcf = baseline_wham_vcf,
-        samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
+        samples = samples_array,
         prefix = "wham_clustered",
         types = "DEL,DUP",
         contig_list = contig_list,

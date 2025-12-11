@@ -17,9 +17,9 @@
   "GenotypeBatch.batch_depth_vcf": {{ test_batch.filtered_depth_vcf | tojson }},
   "GenotypeBatch.batch_pesr_vcf": {{ test_batch.filtered_pesr_vcf | tojson }},
   "GenotypeBatch.bin_exclude": {{ reference_resources.bin_exclude | tojson }},
-  "GenotypeBatch.discfile": {{ test_batch.merged_disc_file | tojson }},
-  "GenotypeBatch.coveragefile": {{ test_batch.merged_coverage_file | tojson }},
-  "GenotypeBatch.splitfile": {{ test_batch.merged_split_file | tojson }},
+  "GenotypeBatch.discfile": {{ test_batch.merged_pe_file | tojson }},
+  "GenotypeBatch.coveragefile": {{ test_batch.merged_rd_file | tojson }},
+  "GenotypeBatch.splitfile": {{ test_batch.merged_sr_file | tojson }},
   "GenotypeBatch.medianfile": {{ test_batch.medianfile | tojson }},
   "GenotypeBatch.cohort_depth_vcf": {{ test_batch.cohort_depth_vcf | tojson }},
   "GenotypeBatch.cohort_pesr_vcf": {{ test_batch.cohort_pesr_vcf | tojson }}

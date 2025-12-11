@@ -6,9 +6,10 @@ import "PloidyEstimation.wdl" as pe
 import "GatherBatchEvidence.wdl" as batchevidence
 import "DepthPreprocessing.wdl" as dpn
 import "ClusterBatch.wdl" as clusterbatch
+import "TasksClusterBatch.wdl" as tasks_cluster
 import "GenerateBatchMetrics.wdl" as batchmetrics
 import "StripyWorkflow.wdl" as stripy
-import "SRTest.wdl" as SRTest
+import "FormatVcfForGatk.wdl" as format
 import "FilterBatchSamples.wdl" as filterbatch
 import "GenotypeBatch.wdl" as genotypebatch
 import "MakeCohortVcf.wdl" as makecohortvcf
@@ -83,9 +84,6 @@ workflow GATKSVPipelineSingleSample {
     String cnmops_docker
     String gatk_docker
     String? gcnv_gatk_docker
-    String? gatk_docker_pesr_override
-    String gq_recalibrator_gatk_docker
-    String condense_counts_docker
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
     String cloud_sdk_docker
@@ -345,21 +343,16 @@ workflow GATKSVPipelineSingleSample {
     ## GenerateBatchMetrics/FilterBatch
     ############################################################
 
-    File rmsk
-    File segdups
-
     Int? min_large_pesr_call_size_for_filtering
     Float? min_large_pesr_depth_overlap_fraction
 
+    RuntimeAttr? runtime_attr_format
     RuntimeAttr? runtime_attr_filter_large_pesr
     RuntimeAttr? runtime_attr_srtest
-    RuntimeAttr? runtime_attr_split_vcf_srtest
-    RuntimeAttr? runtime_attr_merge_allo
     RuntimeAttr? runtime_attr_merge_stats
     RuntimeAttr? runtime_attr_rewritesrcoords
 
     RuntimeAttr? runtime_attr_merge_pesr_vcfs
-    RuntimeAttr? runtime_attr_get_male_only
 
     ############################################################
     ## GenotypeBatch
@@ -434,8 +427,8 @@ workflow GATKSVPipelineSingleSample {
     Int clean_vcf5_records_per_shard
     Int clean_vcf1b_records_per_shard
 
-    String? chr_x
-    String? chr_y
+    String chr_x
+    String chr_y
 
     Int? clean_vcf_random_seed
 
@@ -696,7 +689,6 @@ workflow GATKSVPipelineSingleSample {
         scramble_docker=scramble_docker_,
         wham_docker=wham_docker_,
         gatk_docker=gatk_docker,
-        gatk_docker_pesr_override = gatk_docker_pesr_override,
         genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
         samtools_cloud_docker=samtools_cloud_docker,
         cloud_sdk_docker = cloud_sdk_docker,
@@ -838,7 +830,6 @@ workflow GATKSVPipelineSingleSample {
       cnmops_docker=cnmops_docker,
       gatk_docker = gatk_docker,
       gcnv_gatk_docker=gcnv_gatk_docker,
-      condense_counts_docker = condense_counts_docker,
       median_cov_runtime_attr=median_cov_runtime_attr,
       median_cov_mem_gb_per_sample=median_cov_mem_gb_per_sample,
       evidence_merging_bincov_runtime_attr=evidence_merging_bincov_runtime_attr,
@@ -1094,69 +1085,68 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_override=runtime_attr_filter_large_pesr
   }
 
-  call batchmetrics.GetSampleLists as SamplesList {
+  call utils.GetSampleIdsFromVcf {
     input:
-      ped_file = combined_ped_file,
-      samples = flatten([[sample_id], ref_samples]),
-      sv_base_docker = sv_base_docker
-  }
-
-  call batchmetrics.GetMaleOnlyVariantIDs {
-    input:
-      vcf = ClusterBatch.clustered_depth_vcf,
-      female_samples = SamplesList.female_samples,
-      male_samples = SamplesList.male_samples,
-      contig = select_first([chr_x, "chrX"]),
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_get_male_only
-  }
-
-  call SRTest.SRTest as SRTest {
-    input:
-      splitfile = GatherBatchEvidence.merged_SR,
-      medianfile = GatherBatchEvidence.median_cov,
-      ped_file = combined_ped_file,
       vcf = FilterLargePESRCallsWithoutRawDepthSupport.out,
-      autosome_contigs = autosome_file,
-      ref_dict=reference_dict,
-      split_size = genotyping_n_per_split,
-      algorithm = "PESR",
-      allosome_contigs = allosome_file,
-      batch = batch,
-      samples = SamplesList.samples_file,
-      male_samples = SamplesList.male_samples,
-      female_samples = SamplesList.female_samples,
-      male_only_variant_ids = GetMaleOnlyVariantIDs.male_only_variant_ids,
-      run_common = false,
-      sv_base_mini_docker = sv_base_mini_docker,
-      linux_docker = linux_docker,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_srtest = runtime_attr_srtest,
-      runtime_attr_split_vcf = runtime_attr_split_vcf_srtest,
-      runtime_attr_merge_allo = runtime_attr_merge_allo,
-      runtime_attr_merge_stats = runtime_attr_merge_stats
+      sv_base_mini_docker = sv_base_mini_docker
   }
 
-  call batchmetrics.AggregateTests as AggregateTests {
+  call tasks_cluster.CreatePloidyTableFromPed {
+    input:
+      ped_file=combined_ped_file,
+      contig_list=primary_contigs_list,
+      retain_female_chr_y=false,
+      chr_x=chr_x,
+      chr_y=chr_y,
+      output_prefix="~{sample_id}.~{batch}.ploidy",
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_create_ploidy
+  }
+
+  call format.FormatVcf {
     input:
       vcf=FilterLargePESRCallsWithoutRawDepthSupport.out,
-      srtest=SRTest.srtest,
-      rmsk=rmsk,
-      segdups=segdups,
-      sv_pipeline_docker=sv_pipeline_docker
+      ploidy_table=CreatePloidyTableFromPed.out,
+      output_prefix="~{sample_id}.format_for_srtest",
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_format
   }
 
-  call SingleSampleFiltering.RewriteSRCoords as RewriteSRCoords {
+  call batchmetrics.AggregateSVEvidence {
+    input:
+      vcf = FormatVcf.out,
+      vcf_index = FormatVcf.out_index,
+      output_prefix = "~{sample_id}.aggregate_sr",
+      median_file = GatherBatchEvidence.median_cov,
+      ploidy_table=CreatePloidyTableFromPed.out,
+      sr_file = GatherBatchEvidence.merged_SR,
+      sr_file_index = GatherBatchEvidence.merged_SR_index,
+      chr_x = chr_x,
+      chr_y = chr_y,
+      gatk_docker = gatk_docker,
+      runtime_attr_override = runtime_attr_srtest
+  }
+
+  call batchmetrics.AggregateTests {
+    input:
+      vcf = AggregateSVEvidence.out,
+      vcf_index = AggregateSVEvidence.out_index,
+      prefix = "~{sample_id}.aggregate_tests",
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_merge_stats
+  }
+
+  call SingleSampleFiltering.RewriteSRCoords {
     input:
       vcf = FilterLargePESRCallsWithoutRawDepthSupport.out,
-      metrics = AggregateTests.metrics,
+      metrics = AggregateTests.out,
       cutoffs = cutoffs,
       prefix = batch,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_rewritesrcoords
   }
 
-  call genotypebatch.GenotypeBatch as GenotypeBatch {
+  call genotypebatch.GenotypeBatch {
     input:
       batch_pesr_vcf=RewriteSRCoords.annotated_vcf,
       batch_depth_vcf=FilterDepth.out,
@@ -1204,7 +1194,7 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_integrate_depth_gq=runtime_attr_integrate_depth_gq
   }
 
-  call SingleSampleFiltering.ConvertCNVsWithoutDepthSupportToBNDs as ConvertCNVsWithoutDepthSupportToBNDs {
+  call SingleSampleFiltering.ConvertCNVsWithoutDepthSupportToBNDs {
     input:
       genotyped_pesr_vcf=GenotypeBatch.genotyped_pesr_vcf,
       allosome_file=allosome_file,
@@ -1213,7 +1203,7 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker=sv_pipeline_docker
   }
 
-  call makecohortvcf.MakeCohortVcf as MakeCohortVcf {
+  call makecohortvcf.MakeCohortVcf {
     input:
       raw_sr_bothside_pass_files=[GenotypeBatch.sr_bothside_pass],
       raw_sr_background_fail_files=[GenotypeBatch.sr_background_fail],
@@ -1260,8 +1250,8 @@ workflow GATKSVPipelineSingleSample {
       clean_vcf5_records_per_shard=clean_vcf5_records_per_shard,
       clean_vcf1b_records_per_shard=clean_vcf1b_records_per_shard,
 
-      chr_x=select_first([chr_x, "chrX"]),
-      chr_y=select_first([chr_y, "chrY"]),
+      chr_x=chr_x,
+      chr_y=chr_y,
 
       random_seed=clean_vcf_random_seed,
 
@@ -1397,7 +1387,7 @@ workflow GATKSVPipelineSingleSample {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call SingleSampleFiltering.GetUniqueNonGenotypedDepthCalls as GetUniqueNonGenotypedDepthCalls {
+  call SingleSampleFiltering.GetUniqueNonGenotypedDepthCalls {
     input:
       vcf_gz=select_first([MakeCohortVcf.complex_genotype_vcf]),
       sample_id=sample_id,
@@ -1406,7 +1396,7 @@ workflow GATKSVPipelineSingleSample {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call SingleSampleFiltering.FilterVcfForCaseSampleGenotype as FilterVcfForCaseSampleGenotype {
+  call SingleSampleFiltering.FilterVcfForCaseSampleGenotype {
     input:
       vcf_gz=FilterVcfDepthLt5kb.out,
       sample_id=sample_id,
@@ -1419,7 +1409,7 @@ workflow GATKSVPipelineSingleSample {
       vcf=FilterVcfForCaseSampleGenotype.out,
       prefix=sample_id,
       batch_name_list=[sample_id],
-      batch_sample_lists=[SamplesList.samples_file],
+      batch_sample_lists=[GetSampleIdsFromVcf.out_file],
       PE_metrics=[GatherBatchEvidence.merged_PE],
       PE_metrics_indexes=[GatherBatchEvidence.merged_PE_index],
       Depth_DEL_beds=[MergeSetDel.out],
@@ -1479,7 +1469,7 @@ workflow GATKSVPipelineSingleSample {
       genome_tracks=genome_tracks,
       fmax_beta=fmax_beta,
       linux_docker=linux_docker,
-      gatk_docker=gq_recalibrator_gatk_docker,
+      gatk_docker=gatk_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker
   }

@@ -63,7 +63,6 @@ workflow IdentifyOutlierSamples {
 
   output {
     File outlier_samples_file = CatOutliers.outliers_file
-    Array[String] outlier_samples_list = CatOutliers.outliers_list
     File sv_counts_file = select_first([sv_counts, CountSVsPerSamplePerType.sv_counts])
   }
 }
@@ -183,7 +182,6 @@ task CatOutliers {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    Array[String] outliers_list = read_lines("${batch}.outliers.samples.list")
     File outliers_file = "${batch}.outliers.samples.list"
   }
   command <<<

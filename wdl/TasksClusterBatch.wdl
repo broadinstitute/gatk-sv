@@ -375,7 +375,7 @@ task CreatePloidyTableFromPed {
             ~{"--chr-x " + chr_x} \
             ~{"--chr-y " + chr_y}
 
-        # TODO : For now we retain female Y genotypes for metric generation
+        # TODO : For now we retain female Y genotypes for clustering
         if ~{retain_female_chr_y}; then
             sed -e 's/\t0/\t1/g' tmp.tsv > ~{output_file}
         else

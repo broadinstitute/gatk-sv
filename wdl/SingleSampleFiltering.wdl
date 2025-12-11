@@ -499,9 +499,7 @@ task RewriteSRCoords {
     set -euo pipefail
 
     /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py ~{vcf} ~{metrics} ~{cutoffs} stdout \
-      | vcf-sort -c \
-      | bgzip -c \
-      > ~{prefix}.corrected_coords.vcf.gz
+      | bcftools sort -Oz -o ~{prefix}.corrected_coords.vcf.gz
 
   >>>
   runtime {

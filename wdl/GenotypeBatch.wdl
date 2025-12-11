@@ -125,7 +125,6 @@ workflow GenotypeBatch {
       runtime_attr_override = runtime_attr_ids_from_vcf
   }
 
-
   if (!single_sample_mode) {
     call gp1.GenotypePESRPart1 as GenotypePESRPart1 {
       input:

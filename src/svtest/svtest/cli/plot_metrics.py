@@ -46,7 +46,8 @@ def main(argv):
     df_a = get_metrics(args.metrics_a)
     df_b = get_metrics(args.metrics_b)
     df = df_a.join(df_b, how='outer', lsuffix='_a', rsuffix='_b', sort=True)\
-        .rename(columns={"value_a": args.a_name, "value_b": args.b_name})
+        .rename(columns={"value_a": args.a_name, "value_b": args.b_name})\
+        .sort_values(by='name')
 
     # If sample ids are provided, consolidate sample-specific metrics
     if args.sample_list is not None:
