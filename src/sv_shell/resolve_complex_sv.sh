@@ -140,10 +140,6 @@ done < "${disc_files_list_filename}"
 echo "Merging PE files"
 {
   zcat disc*shard.PE.txt.gz;
-  # TODO: do I need the following two? it seems not, discussed with Mark
-  # TODO: the only diff between the file this task generates vs. wdl is the following two lines only
-  # echo -e "~{chrom}\t1\t+\t~{chrom}\t2\t+\tDUMMY_SAMPLE_IGNORE";
-  # echo -e "chr~{chrom}\t1\t+\t~{chrom}\t2\t+\tDUMMY_SAMPLE_IGNORE";
 } \
   | sort -Vk1,1 -k2,2n -k5,5n -k7,7 \
   | bgzip -c \
