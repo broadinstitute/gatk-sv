@@ -103,10 +103,6 @@ head -1 "${median_coverage_files}" | sed -e 's/\t/\n/g' > "${GetSampleIdsFromMed
 bed="${cohort_name}.complex_CNV_intervals_to_test.bed"
 gunzip -c "${GetCpxCnvIntervals_cpx_cnv_bed}" > "${bed}"
 
-
-#bincov_files="/inputs/tmp_rdgenotype/NA12878.RD.txt.gz"
-
-
 RdTestGenotype_prefix=$(basename "${bed}" .bed)
 
 grep -v "^#" "${bed}" | sort -k1,1V -k2,2n | bedtools merge -i stdin -d 1000000 > merged.bed
@@ -156,8 +152,6 @@ zcat "${RdTestGenotype_melted_genotypes}" \
   | bgzip -c \
   > "${cohort_name}.rd_genos.bed.gz"
 
-# TODO: this is temp, after you resolved the above scattering, decide where you get this, maybe `RdTestGenotype_melted_genotypes`
-#GenotypeBatch_genotypes="/inputs/tmp_rdgenotype/NA12878.rd_genos.bed.gz"
 GenotypeBatch_genotypes="$(realpath "${cohort_name}.rd_genos.bed.gz")"
 
 
@@ -173,10 +167,6 @@ zcat "${GenotypeBatch_genotypes}" \
 
 # ParseGenotypes
 # ---------------------------------------------------------------------------------------------------------------------
-
-# TODO TEMP
-#GetCpxCnvIntervals_cpx_cnv_bed="/inputs/tmp_parsegenotypes/NA12878.chr1.chr1.complex_CNV_intervals_to_test.bed.gz"
-
 python /opt/sv-pipeline/04_variant_resolution/scripts/process_posthoc_cpx_depth_regenotyping.py \
   --vcf "${complex_resolve_vcfs}" \
   --intervals "${GetCpxCnvIntervals_cpx_cnv_bed}" \
@@ -203,5 +193,20 @@ ParseGenotypes_reclassification_table="$(realpath "${cohort_name}.CPXregenotypin
 
 
 
-# TODO: if you end up not sharding above, basically this workflow is done here,
-#  you can produce output, because all other steps remaining are merging outputs of various shards
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+ParseGenotypes_cpx_depth_gt_resolved_vcf_output="${output_dir}/$(basename "${ParseGenotypes_cpx_depth_gt_resolved_vcf}")"
+mv "${ParseGenotypes_cpx_depth_gt_resolved_vcf}" "${ParseGenotypes_cpx_depth_gt_resolved_vcf_output}"
+mv "${ParseGenotypes_cpx_depth_gt_resolved_vcf}.tbi" "${ParseGenotypes_cpx_depth_gt_resolved_vcf_output}.tbi"
+
+jq -n \
+  --arg complex_genotype_merged_vcf "${ParseGenotypes_cpx_depth_gt_resolved_vcf_output}" \
+  --arg complex_genotype_vcf_indexes "${ParseGenotypes_cpx_depth_gt_resolved_vcf_output}.tbi" \
+  '{
+     "complex_genotype_merged_vcf": $complex_genotype_merged_vcf,
+     "complex_genotype_vcf_indexes": $complex_genotype_vcf_indexes
+   }' > "${output_json_filename}"
+
+echo "Finished genotype complex variants, output json filename: ${output_json_filename}"
