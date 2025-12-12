@@ -53,7 +53,7 @@ task CleanVCF {
     tabix -p vcf ~{prefix}.PASS_2.vcf.gz
 
 
-    bcftools concat \
+    bcftools concat -a \
       -Oz \
       -o ~{prefix}.PASS.vcf.gz \
       ~{prefix}.PASS_1.vcf.gz \
