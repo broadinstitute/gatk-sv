@@ -147,19 +147,11 @@ fi
 
 RdTestGenotype_melted_genotypes="$(realpath "rd.geno.cnv.bed.gz")"
 
-zcat "${RdTestGenotype_melted_genotypes}" \
-  | sort -Vk1,1 -k2,2n -k3,3n \
-  | bgzip -c \
-  > "${cohort_name}.rd_genos.bed.gz"
-
-GenotypeBatch_genotypes="$(realpath "${cohort_name}.rd_genos.bed.gz")"
-
-
 # ZcatCompressedFiles
 # ---------------------------------------------------------------------------------------------------------------------
 # the following is a far simplified version of the WDL implementation for a case where you have only one file
 ZcatCompressedFiles_outfile="${cohort_name}.CPX_intervals.merged_rd_genos.bed.gz"
-zcat "${GenotypeBatch_genotypes}" \
+zcat "${RdTestGenotype_melted_genotypes}" \
   | sort -Vk1,1 -k2,2n -k3,3n -k4,4V -k5,5V \
   | bgzip -c \
   > "${ZcatCompressedFiles_outfile}"
