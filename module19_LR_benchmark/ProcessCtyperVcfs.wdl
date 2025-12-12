@@ -1,3 +1,6 @@
+version 1.0
+import "Structs.wdl"
+
 workflow ProcessVCFs {
   input {
     Array[File] vcfs
