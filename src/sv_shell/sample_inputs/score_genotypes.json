@@ -1,0 +1,31 @@
+{
+  "args": null,
+  "contig": null,
+  "fmax_beta": 0.4,
+  "genome_tracks": [
+    "/inputs/hg38-RepeatMasker.bed.gz",
+    "/inputs/hg38-Segmental-Dups.bed.gz",
+    "/inputs/hg38-Simple-Repeats.bed.gz",
+    "/inputs/hg38_umap_s100.bed.gz",
+    "/inputs/hg38_umap_s24.bed.gz"
+  ],
+  "gq_recalibrator_model_file": "/inputs/gatk-sv-recalibrator.hgsvc_release3.v1.model",
+  "optimize_vcf_records_per_shard": 50000,
+  "output_prefix": "NA12878",
+  "recalibrate_gq_args": [
+    "--keep-homvar false",
+    "--keep-homref true",
+    "--keep-multiallelic true",
+    "--skip-genotype-filtering true",
+    "--min-samples-to-estimate-allele-frequency -1"
+  ],
+  "recalibrate_gq_mem_gb_java": 9,
+  "recalibrate_gq_mem_gb_overhead": 1.5,
+  "recalibrate_records_per_shard": null,
+  "runtime_attr_override": null,
+  "script": null,
+  "threads": 1,
+  "truth_json": null,
+  "vcf": "/inputs/NA12878.concordance.vcf.gz",
+  "vcf_index": null
+}

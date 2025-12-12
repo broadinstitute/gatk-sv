@@ -111,4 +111,32 @@ RUN mkdir -p /opt/R/4.1.3/lib/R/doc/html && \
     R -e 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/focal/latest")); BiocManager::install(c("cn.mops", "rtracklayer", "XML"), update=FALSE, ask=FALSE)'
 
 
+# Install GATK
+# note that gatk is installed in sv-base docker, which this docker image inherits.
+# however, the base images are currently being updated: https://github.com/broadinstitute/gatk-sv/pull/816
+# so as a temporary work-around we're re-installing gatk in this image using code in a specific branch.
+# setting SHELL to bash in the following is needed for the `source` command in the following RUN,
+# since the default sh does not support `source`.
+SHELL ["/bin/bash", "-c"]
+RUN apt-get -qqy install --no-upgrade --no-install-recommends git git-lfs openjdk-17-jdk openjdk-17-jre-headless libgomp1 && \
+    GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git && \
+    cd gatk && \
+    git checkout mw_gatk_sv && \
+    git checkout 1eac9db89b65f9493d2a91539e2b9274159a5b5c && \
+    mkdir -p /opt/gatk_miniconda3 && \
+    wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.10.0-1-Linux-x86_64.sh -O /opt/gatk_miniconda3/miniconda.sh && \
+    bash /opt/gatk_miniconda3/miniconda.sh -p /opt/gatk_miniconda3 -b -u && \
+    rm /opt/gatk_miniconda3/miniconda.sh && \
+    /opt/gatk_miniconda3/bin/conda config --append envs_dirs /opt/conda/envs && \
+    source /opt/gatk_miniconda3/bin/activate && \
+    conda config --set auto_update_conda false && \
+    conda config --set solver libmamba && \
+    ./gradlew localDevCondaEnv && \
+    ./gradlew localJar && \
+    cp ./build/libs/gatk.jar /opt/gatk.jar && \
+    cd .. && \
+    rm -rf gatk/ && \
+    ln -s /opt/gatk_miniconda3/bin/conda /usr/local/bin/conda
+
+
 WORKDIR /

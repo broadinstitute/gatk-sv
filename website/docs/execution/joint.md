@@ -80,7 +80,8 @@ cutoff for outlier filtration in `08-FilterBatchSamples`
 18. `16-RefineComplexVariants`: Complex variant filtering and refinement
 19. `17-JoinRawCalls`: Raw call aggregation
 20. `18-SVConcordance`: Annotate genotype concordance with raw calls
-21. `19-FilterGenotypes`: Genotype filtering
+21. `19-ScoreGenotypes`: Scores genotypes to optimize GQ recalibrator model
+21. `19-FilterGenotypes`: Apply genotype filtering using GQ recalibrator model
 22. `20-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
 AF annotation with external population callsets
 
