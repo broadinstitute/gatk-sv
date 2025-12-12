@@ -68,7 +68,7 @@ task CleanVCF {
  }
 
   runtime {
-    docker: "biocontainers/bcftools:v1.17-1-deb_cv1"
+    docker: sv_pipeline_base_docker
     cpu: 1
     memory: "4G"
     disks: "local-disk 20 HDD"
