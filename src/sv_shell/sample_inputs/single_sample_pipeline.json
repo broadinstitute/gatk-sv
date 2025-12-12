@@ -17,6 +17,7 @@
   "primary_contigs_list": "/inputs/primary_contigs.list",
   "MakeCohortVcf.HERVK_reference": "/inputs/HERVK.sorted.bed.gz",
   "bam_or_cram_file": "/inputs/NA12878.final.cram",
+  "bam_or_cram_index": "/inputs/NA12878.final.cram.crai",
   "ref_panel_dup_bed": "/inputs/all_samples.DUP.bed.gz",
   "genotyping_n_per_split": "1000",
   "stratification_config_part1": "/inputs/stratify_config.part_one.tsv",
@@ -126,5 +127,6 @@
   "ref_std_scramble_vcf_tar": "/inputs/all_samples.scramble_std.tar.gz",
   "depth_clustering_algorithm": "SINGLE_LINKAGE",
   "ref_panel_vcf": "/inputs/all_batches.cleaned.vcf.gz",
-  "noncoding_bed": "/inputs/noncoding.sort.hg38.bed"
+  "noncoding_bed": "/inputs/noncoding.sort.hg38.bed",
+  "run_sampleevidence_metrics": false
 }

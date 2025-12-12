@@ -26,6 +26,5 @@
   "run_wham": true,
   "collect_pesr": true,
   "scramble_alignment_score_cutoff": 90,
-  "run_module_metrics": true,
-  "min_size": 50
+  "run_module_metrics": true
 }

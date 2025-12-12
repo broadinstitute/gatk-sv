@@ -75,7 +75,7 @@ reference_bwa_ann=$(jq -r ".reference_bwa_ann" "${input_json}")
 reference_bwa_bwt=$(jq -r ".reference_bwa_bwt" "${input_json}")
 reference_bwa_pac=$(jq -r ".reference_bwa_pac" "${input_json}")
 reference_bwa_sa=$(jq -r ".reference_bwa_sa" "${input_json}")
-disabled_read_filters=$(jq -r ".disabled_read_filters" "${input_json}")
+disabled_read_filters=$(jq -r '.disabled_read_filters // "MappingQualityReadFilter"' "${input_json}")
 collect_coverage=$(jq -r ".collect_coverage" "${input_json}")
 run_scramble=$(jq -r ".run_scramble" "${input_json}")
 run_manta=$(jq -r ".run_manta" "${input_json}")
@@ -83,7 +83,6 @@ run_wham=$(jq -r ".run_wham" "${input_json}")
 collect_pesr=$(jq -r ".collect_pesr" "${input_json}")
 scramble_alignment_score_cutoff=$(jq -r ".scramble_alignment_score_cutoff" "${input_json}")
 run_module_metrics=$(jq -r ".run_module_metrics" "${input_json}")
-min_size=$(jq -r ".min_size" "${input_json}")
 
 
 gather_sample_evidence_stdout="${output_dir}/gather_sample_evidence_stdout.txt"
