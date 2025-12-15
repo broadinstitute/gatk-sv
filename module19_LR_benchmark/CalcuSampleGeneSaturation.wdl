@@ -142,7 +142,7 @@ task ProcessLOEUF {
   >>>
 
   output {
-    File output_gene = "~{output_gene_name+ge}"
+    File output_gene = "~{output_gene_name}"
   }
 
   runtime {
