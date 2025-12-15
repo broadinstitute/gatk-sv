@@ -32,7 +32,7 @@ cd "${working_dir}"
 echo "Refine complex variants working directory: ${working_dir}"
 
 prefix=$(jq -r ".prefix" "$input_json")
-batch_name_list=$(jq -r ".batch_name_list" "$input_json")
+batch_name=$(jq -r ".batch_name_list" "$input_json")
 batch_sample_lists=$(jq -r ".batch_sample_lists" "$input_json")
 PE_metrics=$(jq -r ".PE_metrics" "$input_json")
 vcf=$(jq -r ".vcf" "$input_json")
@@ -46,7 +46,7 @@ vcf=$(jq -r ".vcf" "$input_json")
 # ---------------------------------------------------------------------------------------------------------------------
 echo "${PE_metrics}" > batch_pe_files.txt
 python /opt/sv-pipeline/scripts/get_sample_batch_pe_map.py \
-  --batch-name-list "${batch_name_list}" \
+  --batch-name-list "${batch_name}" \
   --batch-sample-lists "${batch_sample_lists}" \
   --batch-pe-files batch_pe_files.txt \
   --prefix "${prefix}"
@@ -102,3 +102,16 @@ bgzip "${GenerateCnvSegmentFromCpx_prefix}.lg_CNV.bed"
 GenerateCnvSegmentFromCpx_cpx_lg_cnv="$(realpath "${GenerateCnvSegmentFromCpx_prefix}.lg_CNV.bed.gz")"
 
 # ExtractCpxLgCnvByBatch
+zcat "${GenerateCnvSegmentFromCpx_cpx_lg_cnv}" \
+  | awk -v batch="${batch_name}" '$4=="DEL" && $7==batch {print}' \
+  > "${batch_name}.lg_cnv.DEL.bed"
+
+zcat "${GenerateCnvSegmentFromCpx_cpx_lg_cnv}" \
+  | awk -v batch="${batch_name}" '$4=="DUP" && $7==batch {print}' \
+  > "${batch_name}.lg_cnv.DUP.bed"
+
+bgzip "${batch_name}.lg_cnv.DEL.bed"
+bgzip "${batch_name}.lg_cnv.DUP.bed"
+
+ExtractCpxLgCnvByBatch_lg_cnv_del="$(realpath "${batch_name}.lg_cnv.DEL.bed.gz")"
+ExtractCpxLgCnvByBatch_lg_cnv_dup="$(realpath "${batch_name}.lg_cnv.DUP.bed.gz")"
