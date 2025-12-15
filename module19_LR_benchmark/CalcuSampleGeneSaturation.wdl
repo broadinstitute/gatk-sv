@@ -38,6 +38,7 @@ workflow CalcuSampleGeneSaturation {
       input:
         sample_list = shard,
         input_bed_file = bed_file,
+        gene_loeuf = ProcessLOEUF.output_gene, 
         docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_process_shard
     }
@@ -51,7 +52,7 @@ workflow CalcuSampleGeneSaturation {
   }
 
   output {
-    File processed_gene_loeuf = ProcessLOEUF.output_gene_name
+    File processed_gene_loeuf = ProcessLOEUF.output_gene
     File combined_sample_gene = CombineShardOutputs.combined_output
   }
 }
@@ -136,19 +137,12 @@ task ProcessLOEUF {
     dat=dat[!is.na(dat$LOEUF),]
     dat=dat[order(dat$LOEUF),]
     dat$LOEUF_tile = as.integer((0:(nrow(dat)-1)) / nrow(dat) * 10)
-    write.table(
-      dat[,c('gene_name','LOEUF','LOEUF_tile')],
-      "~{output_gene_name}",
-      quote=FALSE,
-      sep="\t",
-      col.names=TRUE,
-      row.names=FALSE
-    )
+    write.table( dat[,c('gene_name','LOEUF','LOEUF_tile')], "~{output_gene_name}", quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE )
     EOF
   >>>
 
   output {
-    File output_gene_name
+    File output_gene = "~{output_gene_name+ge}"
   }
 
   runtime {
