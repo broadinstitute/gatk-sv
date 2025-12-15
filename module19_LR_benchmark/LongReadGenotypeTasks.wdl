@@ -205,6 +205,7 @@ task AddGenomicContextToVcfR {
   command <<<
     set -euxo pipefail
 
+    bcftools view -H ~{vcf_file} | bgzip > vcf_file.gz
     # use R script to add GC to the vcf
     Rscript -e '
 
@@ -213,7 +214,7 @@ task AddGenomicContextToVcfR {
 
       lines <- readLines(file_path, warn = FALSE)
       if(any(!grepl("^#", lines))){
-        return(read.table(file_path, header = FALSE, sep = "", stringsAsFactors = FALSE))
+        return(read.table(file_path, header = FALSE, sep = "", stringsAsFactors = FALSE, comment.char=""))
       } else{
         empty_df <- data.frame(matrix(ncol = 10, nrow = 0))
         colnames(empty_df) <- paste0("V", 1:10)
@@ -224,7 +225,7 @@ task AddGenomicContextToVcfR {
 
 
     svid_gc <- read.table("~{svid_annotation}", header = TRUE)
-    vcf_in <- read_or_empty("~{vcf_file}")
+    vcf_in <- read_or_empty("vcf_file.gz")
     colnames(vcf_in)[3] = "SVID"
     svid_gc = unique(svid_gc)
     vcf_out <- merge(vcf_in, svid_gc, by="SVID")
