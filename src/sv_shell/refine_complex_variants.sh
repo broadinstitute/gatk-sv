@@ -2,6 +2,28 @@
 
 set -Exeuo pipefail
 
+function SeekDepthSuppForCpx()
+{
+  local _cpx_lg_cnv=$1
+  local _raw_depth_bed=$2
+  local _prefix=$3
+
+  zcat "${_cpx_lg_cnv}" | awk '{print $6}' | sort | uniq > sample_list.tsv
+
+  echo -e '#chr\tpos\tend\tSVTYPE\tSVID\tsample\tbatch\tdepth_cov' > "${_prefix}.depth_supp.bed"
+
+  while read sample_name; do
+    zcat "${_cpx_lg_cnv}"    | awk -v sample="$sample_name" '{if ($6==sample) print}' > query.bed
+    zcat "${_raw_depth_bed}" | awk -v sample="$sample_name" '{if ($5==sample) print}' > ref.bed
+    bedtools coverage -a query.bed -b ref.bed \
+      | awk '{print $1,$2,$3,$4,$5,$6,$7,$NF}' \
+      | sed -e 's/ /\t/g' \
+      >> "${_prefix}.depth_supp.bed"
+  done < sample_list.tsv
+
+  bgzip "${_prefix}.depth_supp.bed"
+}
+
 # -------------------------------------------------------
 # ==================== Input & Setup ====================
 # -------------------------------------------------------
@@ -36,6 +58,8 @@ batch_name=$(jq -r ".batch_name_list" "$input_json")
 batch_sample_lists=$(jq -r ".batch_sample_lists" "$input_json")
 PE_metrics=$(jq -r ".PE_metrics" "$input_json")
 vcf=$(jq -r ".vcf" "$input_json")
+Depth_DEL_beds=$(jq -r ".Depth_DEL_beds" "$input_json")
+Depth_DUP_beds=$(jq -r ".Depth_DUP_beds" "$input_json")
 
 
 # -------------------------------------------------------
@@ -90,6 +114,7 @@ SplitCpxCtx_cpx_ctx_bed="$(realpath "${SplitCpxCtx_prefix}.cpx_ctx.bed.gz")"
 # ---------------------------------------------------------------------------------------------------------------------
 
 # GenerateCnvSegmentFromCpx
+# ---------------------------------------------------------------------------------------------------------------------
 GenerateCnvSegmentFromCpx_prefix=$(basename "${SplitCpxCtx_cpx_ctx_bed}" .bed.gz)
 
 python /opt/sv-pipeline/scripts/generate_cnv_segment_from_cpx.py \
@@ -102,6 +127,7 @@ bgzip "${GenerateCnvSegmentFromCpx_prefix}.lg_CNV.bed"
 GenerateCnvSegmentFromCpx_cpx_lg_cnv="$(realpath "${GenerateCnvSegmentFromCpx_prefix}.lg_CNV.bed.gz")"
 
 # ExtractCpxLgCnvByBatch
+# ---------------------------------------------------------------------------------------------------------------------
 zcat "${GenerateCnvSegmentFromCpx_cpx_lg_cnv}" \
   | awk -v batch="${batch_name}" '$4=="DEL" && $7==batch {print}' \
   > "${batch_name}.lg_cnv.DEL.bed"
@@ -115,3 +141,54 @@ bgzip "${batch_name}.lg_cnv.DUP.bed"
 
 ExtractCpxLgCnvByBatch_lg_cnv_del="$(realpath "${batch_name}.lg_cnv.DEL.bed.gz")"
 ExtractCpxLgCnvByBatch_lg_cnv_dup="$(realpath "${batch_name}.lg_cnv.DUP.bed.gz")"
+
+# SeekDepthSuppForCpx as seek_depth_supp_for_cpx_del
+# ---------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+wd_seek_depth_supp_for_cpx_del=$(mktemp -d /wd_seek_depth_supp_for_cpx_del_XXXXXXXX)
+wd_seek_depth_supp_for_cpx_del="$(realpath ${wd_seek_depth_supp_for_cpx_del})"
+cd "${wd_seek_depth_supp_for_cpx_del}"
+cpx_del_prefix="$(basename "${ExtractCpxLgCnvByBatch_lg_cnv_del}" .bed.gz)"
+
+SeekDepthSuppForCpx "${ExtractCpxLgCnvByBatch_lg_cnv_del}" "${Depth_DEL_beds}" "${cpx_del_prefix}"
+
+seek_depth_supp_for_cpx_del_cpx_cnv_depth_supp="$(realpath "${cpx_del_prefix}.depth_supp.bed.gz")"
+
+cd "${working_dir}"
+
+# SeekDepthSuppForCpx as seek_depth_supp_for_cpx_dup
+# ---------------------------------------------------------------------------------------------------------------------
+wd_seek_depth_supp_for_cpx_dup=$(mktemp -d /wd_seek_depth_supp_for_cpx_dup_XXXXXXXX)
+wd_seek_depth_supp_for_cpx_dup="$(realpath ${wd_seek_depth_supp_for_cpx_dup})"
+cd "${wd_seek_depth_supp_for_cpx_dup}"
+cpx_dup_prefix="$(basename "${ExtractCpxLgCnvByBatch_lg_cnv_dup}" .bed.gz)"
+
+SeekDepthSuppForCpx "${ExtractCpxLgCnvByBatch_lg_cnv_dup}" "${Depth_DUP_beds}" "${cpx_dup_prefix}"
+
+seek_depth_supp_for_cpx_dup_cpx_cnv_depth_supp="$(realpath "${cpx_dup_prefix}.depth_supp.bed.gz")"
+
+cd "${working_dir}"
+
+
+# ConcatBeds as concat_beds_svtype
+# ---------------------------------------------------------------------------------------------------------------------
+head -n1 < <(zcat "${seek_depth_supp_for_cpx_del_cpx_cnv_depth_supp}") > header.txt
+
+ConcatBeds_merged_bed_file="${batch_name}.lg_cnv.depth_supp.bed.gz"
+{
+  echo "${seek_depth_supp_for_cpx_del_cpx_cnv_depth_supp}"
+  echo "${seek_depth_supp_for_cpx_dup_cpx_cnv_depth_supp}"
+} > shard_bed_files.txt
+
+while read SPLIT; do
+  zcat $SPLIT
+done < shard_bed_files.txt \
+  | (grep -Ev "^#" || printf "") \
+  | sort -Vk1,1 -k2,2n -k3,3n \
+  | cat header.txt - \
+  | bgzip -c \
+  > "${ConcatBeds_merged_bed_file}"
+
+tabix -p bed "${ConcatBeds_merged_bed_file}"
+
+CollectLargeCNVSupportForCPX_lg_cnv_depth_supp="$(realpath "${ConcatBeds_merged_bed_file}")"
