@@ -169,6 +169,7 @@ task ProcessShard {
 
   input {
     File input_bed_file
+    File gene_loeuf
     File sample_list
     String docker_image
     RuntimeAttr? runtime_attr_override
@@ -191,6 +192,7 @@ task ProcessShard {
     Rscript - << 'EOF'
     dat=read.table("~{input_bed_file}", header=FALSE)
     aou_sample=read.table("~{sample_list}", header=TRUE)
+    loeuf = read.table("~{gene_loeuf}", header=T)
 
     sample_gene = data.frame(sample_id=aou_sample[,1], stringsAsFactors=FALSE)
 
@@ -203,14 +205,17 @@ task ProcessShard {
       length(unique(strsplit(x, ',')[[1]]))
     })
 
-    write.table(
-      sample_gene,
-      "sample_gene_per_shard.tsv",
-      quote=FALSE,
-      sep="\t",
-      col.names=FALSE,
-      row.names=FALSE
-    )
+    for(i in sort(unique(loeuf$LOEUF_tile))){
+
+        gene_list = loeuf[loeuf$LOEUF_tile==i,]$gene
+        sample_gene[,ncol(sample_gene)+1] = sapply(sample_gene[,2], function(x){paste(unique(gene_list[gene_list%in%strsplit(as.character(x),',')[[1]]]), collapse=',') })
+        colnames(sample_gene)[ncol(sample_gene)] = paste('gene_list.LOEUF_decile', i, sep='_')
+        sample_gene[,ncol(sample_gene)+1] = sapply(sample_gene[,2], function(x){length(unique(gene_list[gene_list%in%strsplit(as.character(x),',')[[1]]])) })
+        colnames(sample_gene)[ncol(sample_gene)] = paste('gene_count.LOEUF_decile', i, sep='_')
+    }
+
+    write.table(sample_gene, "sample_gene_per_shard.tsv", quote=FALSE, sep="\t", col.names=FALSE, row.names=FALSE )
+    
     EOF
   >>>
 

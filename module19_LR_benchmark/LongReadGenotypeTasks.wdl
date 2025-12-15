@@ -1,4 +1,4 @@
-spliversion 1.0
+version 1.0
 
 import "Structs.wdl"
 
@@ -2421,7 +2421,7 @@ task SplitMultiAllelicToBiAllelic{
         for record in vcf_in:
             # If bi-allelic, write directly
             if "INNER_REF" in record.info.keys(): continue
-            if record.alts == None: continue
+            elif record.alts == None: continue
             elif len(record.alts) == 1:
                 vcf_out.write(record)
                 continue
