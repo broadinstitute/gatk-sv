@@ -83,7 +83,7 @@ task SplitSamples {
   command <<<
     set -euo pipefail
 
-    tail -n +2 ~{sample_list} | split -l ~{shard_size} - shard_
+    cut -f1 ~{sample_list} | split -l ~{shard_size} - shard_
 
     for f in shard_*; do
       echo -e "sample_id\n$(cat $f)" > ${f}.tsv
