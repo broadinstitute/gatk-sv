@@ -2420,29 +2420,35 @@ task SplitMultiAllelicToBiAllelic{
         vcf_out = pysam.VariantFile(output_vcf, "w", header=vcf_in.header)
         for record in vcf_in:
             # If bi-allelic, write directly
-            if len(record.alts) == 1:
+            if "INNER_REF" in record.info.keys(): continue
+            if record.alts == None:
+                vcf_out.write(record)
+                continue
+            elif len(record.alts) == 1:
                 vcf_out.write(record)
                 continue
             # Multi-allelic: split into separate records
-            for i, alt in enumerate(record.alts, start=1):
-                new_rec = record.copy()
-                new_rec.alts = (alt,)
-                # Update ID: add suffix (_1, _2, ...)
-                if record.id:
-                    new_rec.id = f"{record.id}_{i}"
-                else:
-                    new_rec.id = f"._{i}"
-                # Adjust INFO fields that depend on allele count (if necessary)
-                for key, val in record.info.items():
-                    # INFO fields that are lists and length matches ALT count
-                    if isinstance(val, (list, tuple)) and len(val) == len(record.alts):
-                        new_rec.info[key] = val[i - 1]
-                # For FORMAT fields (genotypes, etc.), pysam cannot easily remap them
-                # unless the fields are biallelic-safe. Keep as-is for simplicity.
-                vcf_out.write(new_rec)
+            else:
+                for i, alt in enumerate(record.alts, start=1):
+                    new_rec = record.copy()
+                    new_rec.alts = (alt,)
+                    # Update ID: add suffix (_1, _2, ...)
+                    if record.id:
+                        new_rec.id = f"{record.id}_{i}"
+                    else:
+                        new_rec.id = f"._{i}"
+                    # Adjust INFO fields that depend on allele count (if necessary)
+                    for key, val in record.info.items():
+                        # INFO fields that are lists and length matches ALT count
+                        if isinstance(val, (list, tuple)) and len(val) == len(record.alts):
+                            new_rec.info[key] = val[i - 1]
+                    # For FORMAT fields (genotypes, etc.), pysam cannot easily remap them
+                    # unless the fields are biallelic-safe. Keep as-is for simplicity.
+                    vcf_out.write(new_rec)
         vcf_in.close()
         vcf_out.close()
         print(f"✅ Split VCF written to: {output_vcf}")
+
 
     input_vcf = "~{vcf_file}"
     output_vcf = "~{prefix}.bi_allelic.gz"
