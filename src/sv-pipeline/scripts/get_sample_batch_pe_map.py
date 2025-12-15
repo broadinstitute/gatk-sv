@@ -4,6 +4,7 @@ import os
 # Implementation note:
 # This code implements the same python code in the GetSampleBatchPEMap task without alterations.
 
+
 def main(batch_sample_lists, batch_name_list, batch_pe_files, prefix):
     _batch_pe_files = []
     with open(batch_pe_files, 'r') as pe:

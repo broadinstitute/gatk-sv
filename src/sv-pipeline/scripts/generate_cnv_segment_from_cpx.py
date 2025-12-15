@@ -1,5 +1,4 @@
 import os
-import sys
 import argparse
 
 # Implementation note:
@@ -28,7 +27,7 @@ def readin_cpx_cnv(bed_input, sample_to_batch, min_depth_size):
     for line in f_bed:
         pin = line.strip().split('\t')
         if pin[0][0] == '#':
-            pos_CPX_TYPE = pin.index('CPX_TYPE')
+            # pos_CPX_TYPE = pin.index('CPX_TYPE')
             pos_CPX_INTERVALS = pin.index('CPX_INTERVALS')
             pos_SOURCE = pin.index('SOURCE')
             pos_SAMPLES = pin.index('samples')
