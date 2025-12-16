@@ -74,8 +74,8 @@ task RunSampleGeneStats {
     }
 
     merge_sample_gene_stat.across_gnomad_aou<-function(sample_pop_gnomad, sample_pop_aou, sample_gene_gnomad, sample_gene_aou){
-      dat = read_in_gnomad_stat(sample_pop_gnomad, sample_gene_gnomad)
-      dat2 = read_in_aou_stat(sample_pop_aou, sample_gene_aou)
+      dat = read_in_stat(sample_pop_gnomad, sample_gene_gnomad)
+      dat2 = read_in_stat(sample_pop_aou, sample_gene_aou)
 
       dat[dat[,1]%in%dat2[,1],][,1] = paste(dat[dat[,1]%in%dat2[,1],][,1],'a', sep='_')
 
@@ -91,18 +91,24 @@ task RunSampleGeneStats {
     calcu_sample_gene_stat<-function(out, sample_count_range){
       library(dplyr)
       stat = data.frame(sample_count_range)
+      rec = 0
       for(i in sample_count_range){
-          tmp = out[1:(i*100),]
+          rec = rec+1
+          tmp = out[1:i,]
           print(c(i,nrow(tmp)))
           gene_list = merge_unique_items(c(tmp[,3]))
-          stat[i,2] = length(gene_list)
+          stat[rec,2] = length(gene_list)
       }
       return(stat)
     }
 
+
     i <- ~{shard_index}
 
-    out <- merge_sample_gene_stat.across_gnomad_aou( "~{sample_pop_gnomad}", "~{sample_pop_aou}", "~{sample_gene_gnomad}", "~{sample_gene_aou}")
+    out <- merge_sample_gene_stat.across_gnomad_aou( "~{sample_pop_gnomad}", 
+                                                      "~{sample_pop_aou}", 
+                                                      "~{sample_gene_gnomad}", 
+                                                      "~{sample_gene_aou}")
 
     stat <- calcu_sample_gene_stat( out[out[,4] > 0, ], c(((i - 1) * 100 + 1):(i * 100)) )
 
