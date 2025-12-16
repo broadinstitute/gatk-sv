@@ -85,19 +85,6 @@ def process_allosomes(record, chrX, chrY):
         return record
 
     is_y = (chromosome == chrY)
-    
-    # First, clear all genotype fields for females on chrY (ECN=0)
-    # This must be done for all variants on chrY, not just DEL/DUP
-    if is_y:
-        for sample in record.samples:
-            genotype = record.samples[sample]
-            ecn = genotype.get('ECN', None)
-            
-            # ECN=0 on chrY means female - clear all fields
-            if ecn == 0:
-                clear_genotype_fields(genotype)
-    
-    # Then process DEL/DUP variants for male genotype adjustment
     sv_type = record.info.get('SVTYPE', '')
     sv_len = record.info.get('SVLEN', 0)
 
@@ -107,17 +94,21 @@ def process_allosomes(record, chrX, chrY):
             for sample in record.samples:
                 genotype = record.samples[sample]
                 ecn = genotype.get('ECN', None)
-
-                if ecn == 1:  # Male (ECN=1 on sex chromosomes)
+                if ecn == 1:
                     adjust_male_genotype(genotype, sv_type)
+    
+    if is_y:
+        for sample in record.samples:
+            genotype = record.samples[sample]
+            ecn = genotype.get('ECN', None)
+            if ecn == 0:
+                clear_genotype_fields(genotype)
 
     return record
 
 
 def clear_genotype_fields(genotype):
-    """Clear all genotype fields for a sample (used for females on chrY)."""
     genotype['GT'] = (None, None)
-    # Clear optional fields that may be present
     optional_fields = ['EV', 'GQ', 'PE_GQ', 'PE_GT', 'RD_CN', 'RD_GQ', 'SR_GQ', 'SR_GT']
     for field in optional_fields:
         if field in genotype:
@@ -125,22 +116,9 @@ def clear_genotype_fields(genotype):
 
 
 def is_revisable_event(record, is_y):
-    """
-    Determine if a variant on a sex chromosome needs revision for males.
-    
-    For chrX: Males should have median RD_CN=1, females should have median RD_CN=2
-    For chrY: Males should have median RD_CN=1, females should have median RD_CN=0
-    
-    This identifies variants where the read-depth based copy number is consistent
-    with the expected haploid nature of male sex chromosomes.
-    
-    Note: We determine sex from ECN differently on chrX vs chrY:
-    - On chrY: ECN=0 means female, ECN=1 means male
-    - On chrX: ECN=2 means female, ECN=1 means male
-    """
     genotypes = record.samples.values()
-    male_counts = [0, 0, 0, 0]  # RD_CN counts for males (0, 1, 2, 3+)
-    female_counts = [0, 0, 0, 0]  # RD_CN counts for females
+    male_counts = [0, 0, 0, 0]
+    female_counts = [0, 0, 0, 0]
 
     for genotype in genotypes:
         sample_ecn = genotype.get('ECN', None)
@@ -151,53 +129,47 @@ def is_revisable_event(record, is_y):
             
         rd_cn_val = min(int(rd_cn), 3)
 
-        if sample_ecn == 1:  # Male (ECN=1 on sex chromosomes)
+        if sample_ecn == 1:
             male_counts[rd_cn_val] += 1
-        elif is_y and sample_ecn == 0:  # Female on chrY (ECN=0)
+        elif is_y and sample_ecn == 0:
             female_counts[rd_cn_val] += 1
-        elif not is_y and sample_ecn == 2:  # Female on chrX (ECN=2)
+        elif not is_y and sample_ecn == 2:
             female_counts[rd_cn_val] += 1
 
     male_median = calc_median_distribution(male_counts)
     female_median = calc_median_distribution(female_counts)
-
-    # For revision: males should have median RD_CN=1.0 (exact)
-    # For chrY: female median should be 0.0 (no Y chromosome)
-    # For chrX: female median should be 2.0 (diploid)
-    # Note: We use exact float comparison as in the original Java code
     return male_median == 1.0 and (female_median == 0.0 if is_y else female_median == 2.0)
 
 
 def adjust_male_genotype(genotype, sv_type):
+    """
+    Adjust male genotype on sex chromosomes for revisable events.
+    Increments RD_CN by 1 and sets GT based on the ORIGINAL RD_CN value.
+    """
     rd_cn = genotype.get('RD_CN', 0)
+    if rd_cn is None:
+        return
+    
+    # Increment RD_CN
     genotype['RD_CN'] = rd_cn + 1
-    ref_allele, alt_allele = genotype['alleles']
-
+    
+    # Set GT based on ORIGINAL RD_CN value (before increment)
+    # Use (0, 0) for ref/ref, (0, 1) for ref/alt, (1, 1) for alt/alt
     if sv_type == 'DEL':
         if rd_cn >= 1:
-            genotype['GT'] = (ref_allele, ref_allele)
+            genotype['GT'] = (0, 0)  # 0/0
         elif rd_cn == 0:
-            genotype['GT'] = (ref_allele, alt_allele)
+            genotype['GT'] = (0, 1)  # 0/1
     elif sv_type == 'DUP':
         if rd_cn <= 1:
-            genotype['GT'] = (ref_allele, ref_allele)
+            genotype['GT'] = (0, 0)  # 0/0
         elif rd_cn == 2:
-            genotype['GT'] = (ref_allele, alt_allele)
+            genotype['GT'] = (0, 1)  # 0/1
         else:
-            genotype['GT'] = (alt_allele, alt_allele)
+            genotype['GT'] = (1, 1)  # 1/1
 
 
 def calc_median_distribution(counts):
-    """
-    Calculate the median from a distribution of counts.
-    counts[i] represents the count of samples with RD_CN=i.
-    Returns the median RD_CN value as a float (to handle even counts), or -1 if no samples.
-    
-    This matches the logic from the original Java CleanVCFPart1.calcMedian():
-    - target = total / 2.0 (floating point)
-    - returns i + 0.5 if total == target exactly (even number split)
-    - returns i if total > target (odd number or first bucket to exceed)
-    """
     total = sum(counts)
     if total == 0:
         return -1
@@ -207,14 +179,13 @@ def calc_median_distribution(counts):
     for i, count in enumerate(counts):
         running_total += count
         if running_total == target:
-            return i + 0.5  # Even number of samples, median is between i and i+1
+            return i + 0.5
         elif running_total > target:
-            return float(i)  # Odd number or passed the midpoint
+            return float(i)
     return -1
 
 
 if __name__ == '__main__':
-    # Parse arguments
     parser = argparse.ArgumentParser(description='CleanVcf preprocessing.')
     parser.add_argument('-V', '--input', dest='input_vcf', required=True, help='Input VCF file')
     parser.add_argument('-O', '--output', dest='output_vcf', required=True, help='Output VCF file')
@@ -224,7 +195,6 @@ if __name__ == '__main__':
     parser.add_argument('--pass-list', required=True, help='File with variants passing both sides')
     args = parser.parse_args()
 
-    # Read input files
     chrX = args.chrX
     chrY = args.chrY
     fail_set = read_last_column(args.fail_list)
@@ -234,17 +204,14 @@ if __name__ == '__main__':
     else:
         vcf_in = pysam.VariantFile(args.input_vcf)
 
-    # Open output file
     if args.output_vcf.endswith('.gz'):
         vcf_out = pysam.VariantFile(args.output_vcf, 'wz', header=vcf_in.header)
     else:
         vcf_out = pysam.VariantFile(args.output_vcf, 'w', header=vcf_in.header.copy())
 
-    # Process records
     for record in vcf_in:
         record = process_record(record, chrX, chrY, fail_set, pass_set)
         vcf_out.write(record)
 
-    # Close files
     vcf_in.close()
     vcf_out.close()
