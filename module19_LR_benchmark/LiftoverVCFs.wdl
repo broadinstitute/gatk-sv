@@ -263,7 +263,7 @@ task UpdateVCF {
                         new_chr, new_pos = bed_dict[vid]
                         cols[0] = new_chr
                         cols[1] = new_pos
-                    fout.write("\t".join(cols) + "\n")
+                        fout.write("\t".join(cols) + "\n")
 
         vcf_file = "~{vcf}"
         bed_file = "~{bed}"
