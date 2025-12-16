@@ -14,7 +14,7 @@ HIGH_SR_BACKGROUND = 'HIGH_SR_BACKGROUND'
 BOTHSIDES_SUPPORT = 'BOTHSIDES_SUPPORT'
 REVISED_EVENT = 'REVISED_EVENT'
 EV_VALUES = ['SR', 'PE', 'SR,PE', 'RD', 'BAF', 'RD,BAF']
-MIN_ALLOSOME_EVENT_SIZE = 50
+MIN_ALLOSOME_EVENT_SIZE = 5000
 
 
 def read_last_column(file_path):
@@ -84,51 +84,88 @@ def process_allosomes(record, chrX, chrY):
     if chromosome not in (chrX, chrY):
         return record
 
-    updated_samples = []
+    is_y = (chromosome == chrY)
+    
+    # First, clear all genotype fields for females on chrY (ECN=0)
+    # This must be done for all variants on chrY, not just DEL/DUP
+    if is_y:
+        for sample in record.samples:
+            genotype = record.samples[sample]
+            ecn = genotype.get('ECN', None)
+            
+            # ECN=0 on chrY means female - clear all fields
+            if ecn == 0:
+                clear_genotype_fields(genotype)
+    
+    # Then process DEL/DUP variants for male genotype adjustment
     sv_type = record.info.get('SVTYPE', '')
     sv_len = record.info.get('SVLEN', 0)
 
     if sv_type in ('DEL', 'DUP') and sv_len >= MIN_ALLOSOME_EVENT_SIZE:
-        is_y = (chromosome == chrY)
+        if is_revisable_event(record, is_y):
+            record.info[REVISED_EVENT] = True
+            for sample in record.samples:
+                genotype = record.samples[sample]
+                ecn = genotype.get('ECN', None)
 
-        for sample in record.samples:
-            genotype = record.samples[sample]
-            sex = genotype.get('EXPECTED_COPY_NUMBER_FORMAT', None)
-
-            if sex == 1:  # Male
-                if is_revisable_event(record, is_y, sex):
-                    record.info[REVISED_EVENT] = True
+                if ecn == 1:  # Male (ECN=1 on sex chromosomes)
                     adjust_male_genotype(genotype, sv_type)
-            elif sex == 2 and is_y:  # Female - NO_CALL if chrY
-                genotype['GT'] = (None, None)
-            elif sex == 0:  # Unknown sex - NO_CALL
-                genotype['GT'] = (None, None)
-
-            updated_samples.append(sample)
 
     return record
 
 
-def is_revisable_event(record, is_y, sex):
+def clear_genotype_fields(genotype):
+    """Clear all genotype fields for a sample (used for females on chrY)."""
+    genotype['GT'] = (None, None)
+    # Clear optional fields that may be present
+    optional_fields = ['EV', 'GQ', 'PE_GQ', 'PE_GT', 'RD_CN', 'RD_GQ', 'SR_GQ', 'SR_GT']
+    for field in optional_fields:
+        if field in genotype:
+            genotype[field] = None
+
+
+def is_revisable_event(record, is_y):
+    """
+    Determine if a variant on a sex chromosome needs revision for males.
+    
+    For chrX: Males should have median RD_CN=1, females should have median RD_CN=2
+    For chrY: Males should have median RD_CN=1, females should have median RD_CN=0
+    
+    This identifies variants where the read-depth based copy number is consistent
+    with the expected haploid nature of male sex chromosomes.
+    
+    Note: We determine sex from ECN differently on chrX vs chrY:
+    - On chrY: ECN=0 means female, ECN=1 means male
+    - On chrX: ECN=2 means female, ECN=1 means male
+    """
     genotypes = record.samples.values()
-    male_counts = [0, 0, 0, 0]
-    female_counts = [0, 0, 0, 0]
+    male_counts = [0, 0, 0, 0]  # RD_CN counts for males (0, 1, 2, 3+)
+    female_counts = [0, 0, 0, 0]  # RD_CN counts for females
 
     for genotype in genotypes:
+        sample_ecn = genotype.get('ECN', None)
         rd_cn = genotype.get('RD_CN', -1)
-        rd_cn_val = min(rd_cn, 3) if rd_cn != -1 else -1
-        if rd_cn_val == -1:
+        
+        if rd_cn is None or rd_cn == -1:
             continue
+            
+        rd_cn_val = min(int(rd_cn), 3)
 
-        if sex == 1:  # Male
+        if sample_ecn == 1:  # Male (ECN=1 on sex chromosomes)
             male_counts[rd_cn_val] += 1
-        elif sex == 2:  # Female
+        elif is_y and sample_ecn == 0:  # Female on chrY (ECN=0)
+            female_counts[rd_cn_val] += 1
+        elif not is_y and sample_ecn == 2:  # Female on chrX (ECN=2)
             female_counts[rd_cn_val] += 1
 
     male_median = calc_median_distribution(male_counts)
     female_median = calc_median_distribution(female_counts)
 
-    return male_median == 1 and (female_median == 0 if is_y else female_median == 2)
+    # For revision: males should have median RD_CN=1.0 (exact)
+    # For chrY: female median should be 0.0 (no Y chromosome)
+    # For chrX: female median should be 2.0 (diploid)
+    # Note: We use exact float comparison as in the original Java code
+    return male_median == 1.0 and (female_median == 0.0 if is_y else female_median == 2.0)
 
 
 def adjust_male_genotype(genotype, sv_type):
@@ -151,16 +188,29 @@ def adjust_male_genotype(genotype, sv_type):
 
 
 def calc_median_distribution(counts):
+    """
+    Calculate the median from a distribution of counts.
+    counts[i] represents the count of samples with RD_CN=i.
+    Returns the median RD_CN value as a float (to handle even counts), or -1 if no samples.
+    
+    This matches the logic from the original Java CleanVCFPart1.calcMedian():
+    - target = total / 2.0 (floating point)
+    - returns i + 0.5 if total == target exactly (even number split)
+    - returns i if total > target (odd number or first bucket to exceed)
+    """
     total = sum(counts)
     if total == 0:
         return -1
 
-    target = total // 2
+    target = total / 2.0
     running_total = 0
     for i, count in enumerate(counts):
         running_total += count
-        if running_total >= target:
-            return i * 2 if running_total > target else i * 2 + 1
+        if running_total == target:
+            return i + 0.5  # Even number of samples, median is between i and i+1
+        elif running_total > target:
+            return float(i)  # Odd number or passed the midpoint
+    return -1
 
 
 if __name__ == '__main__':
