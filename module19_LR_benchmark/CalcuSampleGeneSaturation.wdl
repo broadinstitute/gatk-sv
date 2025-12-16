@@ -184,15 +184,32 @@ task ProcessShard {
     set -euo pipefail
 
     Rscript - << 'EOF'
+
+
+    library(dplyr)
+
+    merge_unique_items <- function(x) {
+      x %>%
+        strsplit(",") %>%          # split each element by comma
+        unlist() %>%               # flatten into one vector
+        trimws() %>%               # remove extra whitespace
+        unique()                   # keep only unique items
+    }
+
+    extract_gene_list<-function(sample_id, dat) {
+        dat[,ncol(dat)+1] = sapply(dat[,6], function(x){length(strsplit(x,',')[[1]][strsplit(x,',')[[1]]==sample_id])})
+        gene_list = merge_unique_items(dat[dat[,ncol(dat)]==1,8])
+        return(paste(gene_list, collapse=','))
+    }
+
+
     dat=read.table("~{input_bed_file}", header=FALSE)
     aou_sample=read.table("~{sample_list}", header=TRUE)
     loeuf = read.table("~{gene_loeuf}", header=T)
 
     sample_gene = data.frame(sample_id=aou_sample[,1], stringsAsFactors=FALSE)
 
-    sample_gene$genes = sapply(sample_gene$sample_id, function(x) {
-      paste(dat[grepl(x, dat[,6]),][,8], collapse=',')
-    })
+    sample_gene$genes = sapply(sample_gene$sample_id, function(x){extract_gene_list(x, dat)})
 
     sample_gene$gene_count = sapply(sample_gene$genes, function(x) {
       if (x == "") return(0)
