@@ -55,7 +55,7 @@ task RunSampleGeneStats {
   command <<<
     set -euo pipefail
 
-    Rscript <<'EOF'
+    Rscript -e '
 
     merge_unique_items <- function(x) {
       x %>%
@@ -112,13 +112,14 @@ task RunSampleGeneStats {
 
     stat <- calcu_sample_gene_stat( out[out[,4] > 0, ], c(((i - 1) * 500 + 1):(i * 500)) )
 
-    write.table( out, paste0("sample_vs_lof_genes.shard_", i, ".tsv"),
-      quote=FALSE, sep="\t", col.names=FALSE, row.names=FALSE )
+    write.table( out, paste0("sample_vs_lof_genes.shard_", i, ".tsv"), quote=FALSE, sep="\t", col.names=FALSE, row.names=FALSE )
 
-    write.table(stat, paste0("sample_vs_lof_genes.shard_", i, ".stat"), quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE )
+    write.table(stat, paste0("sample_vs_lof_genes.shard_", i, ".stat"), quote=FALSE, sep="\t", col.names=FALSE, row.names=FALSE )
 
     write.table( data.frame(table(out[,2])), "sample_vs_pop.stat", quote=FALSE, sep="\t", col.names=FALSE, row.names=FALSE )
-    EOF
+    
+    '
+
   >>>
 
   output {
