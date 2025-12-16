@@ -110,7 +110,7 @@ task RunSampleGeneStats {
                                                       "~{sample_gene_gnomad}", 
                                                       "~{sample_gene_aou}")
 
-    stat <- calcu_sample_gene_stat( out[out[,4] > 0, ], c(((i - 1) * 100 + 1):(i * 100)) )
+    stat <- calcu_sample_gene_stat( out[out[,4] > 0, ], c(((i - 1) * 500 + 1):(i * 500)) )
 
     write.table( out, paste0("sample_vs_lof_genes.shard_", i, ".tsv"),
       quote=FALSE, sep="\t", col.names=FALSE, row.names=FALSE )
