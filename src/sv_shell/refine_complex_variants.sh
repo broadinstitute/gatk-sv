@@ -80,11 +80,11 @@ GetSampleBatchPEMap_sample_batch_pe_map="$(realpath "${prefix}.sample_batch_pe_m
 
 # VcfToBed
 # ---------------------------------------------------------------------------------------------------------------------
-basename=$(basename "${vcf}" .vcf.gz)
-svtk vcf2bed "${vcf}" -i ALL --include-filters "${basename}.bed"
-bgzip "${basename}.bed"
+vcf_basename=$(basename "${vcf}" .vcf.gz)
+svtk vcf2bed "${vcf}" -i ALL --include-filters "${vcf_basename}.bed"
+bgzip "${vcf_basename}.bed"
 
-VcfToBed_bed_output="$(realpath "${basename}.bed.gz")"
+VcfToBed_bed_output="$(realpath "${vcf_basename}.bed.gz")"
 
 
 # SplitCpxCtx
@@ -98,7 +98,7 @@ SplitCpxCtx_prefix=$(basename "${VcfToBed_bed_output}" .bed.gz)
 head -1 < <(zcat "${VcfToBed_bed_output}") > ${SplitCpxCtx_prefix}.cpx_ctx.bed
 filterColumn=$(head -1 < <(zcat "${VcfToBed_bed_output}") | tr "\t" "\n" | awk '$1=="FILTER" {print NR}')
 
-zcat "${VcfToBed_bed_output}" | awk 'NR > 1' | { grep CPX || true; } | awk -v filter_column=${filterColumn} '$filter_column !~ /UNRESOLVED/' >> "${SplitCpxCtx_prefix}.cpx_ctx.bed"
+zcat "${VcfToBed_bed_output}" | awk 'NR > 1' | { grep CPX || true; } | awk -v filter_column="${filterColumn}" '$filter_column !~ /UNRESOLVED/' >> "${SplitCpxCtx_prefix}.cpx_ctx.bed"
 
 zcat "${VcfToBed_bed_output}" | awk 'NR > 1' | { grep CTX || true; } >> "${SplitCpxCtx_prefix}.cpx_ctx.bed"
 
@@ -192,3 +192,83 @@ done < shard_bed_files.txt \
 tabix -p bed "${ConcatBeds_merged_bed_file}"
 
 CollectLargeCNVSupportForCPX_lg_cnv_depth_supp="$(realpath "${ConcatBeds_merged_bed_file}")"
+
+
+# GenerateCpxReviewScript
+# ---------------------------------------------------------------------------------------------------------------------
+
+GenerateCpxReviewScript_prefix="$(basename "${ExtractCpxLgCnvByBatch_lg_cnv_dup}" .bed.gz)"
+
+cut -f1,3 "${GetSampleBatchPEMap_sample_batch_pe_map}" > sample_PE_metrics.tsv
+
+bgzip -cd "${SplitCpxCtx_cpx_ctx_bed}" \
+  | awk -F'\t' '/^#/{print; next} {$2++; print}' OFS='\t' - \
+  | bgzip -c > shifted.bed.gz
+
+python /opt/sv-pipeline/scripts/reformat_CPX_bed_and_generate_script.py \
+-i shifted.bed.gz \
+-s sample_PE_metrics.tsv \
+-p CPX_CTX_disINS.PASS.PE_evidences \
+-c collect_PE_evidences.CPX_CTX_disINS.PASS.sh \
+-r "${GenerateCpxReviewScript_prefix}.svelter" \
+-u "${GenerateCpxReviewScript_prefix}.unresolved_svids.txt"
+
+GenerateCpxReviewScript_pe_evidence_collection_script="$(realpath "collect_PE_evidences.CPX_CTX_disINS.PASS.sh")"
+GenerateCpxReviewScript_svelter="$(realpath "${GenerateCpxReviewScript_prefix}.svelter")"
+GenerateCpxReviewScript_unresolved_svids="$(realpath "${GenerateCpxReviewScript_prefix}.unresolved_svids.txt")"
+
+
+# CollectPEMetricsForCPX
+# ---------------------------------------------------------------------------------------------------------------------
+
+# CollectPEMetricsPerBatchCPX
+# ---------------------------------------------------------------------------------------------------------------------
+
+# SplitScripts
+# ---------------------------------------------------------------------------------------------------------------------
+# Note that in this implementation we're not splitting the files unlike the WDL implementation.
+PE_collect_script="${GenerateCpxReviewScript_pe_evidence_collection_script}"
+awk -v batch="${batch_name}" '$2 ~ batch {print}' "${PE_collect_script}" > collect_PE_evidences.sh
+
+SplitScripts_script_splits="$(realpath collect_PE_evidences.sh)"
+
+
+
+# CollectPEMetrics
+# ---------------------------------------------------------------------------------------------------------------------
+# Note that this step is a very long running step! (~1h on macbook)
+
+mkdir PE_metrics/
+
+# Note that the script generated above expects the PE file to be in the current working directory;
+# hence, without modifying the above script generation method, I'm creating a symlink to the PE file in
+# the current working directory. The WDL implementation re-localizes the file using gsutil, which is
+# not ideal given the file size.
+ln -s "${PE_metrics}" .
+ln -s "${PE_metrics}.tbi" .
+
+if [ $(wc -c < "${SplitScripts_script_splits}") -gt 0 ]; then
+  bash "${SplitScripts_script_splits}"
+fi
+
+touch "${batch_name}.evidence"
+touch "${batch_name}.0.PE_evidences"
+for peEvFile in *.PE_evidences
+do
+  cat ${peEvFile} >> "${batch_name}.evidence"
+done
+
+bgzip "${batch_name}.evidence"
+
+CollectPEMetrics_evidence="$(realpath "${batch_name}.evidence.gz")"
+
+CollectPEMetricsPerBatchCPX_evidence="${CollectPEMetrics_evidence}"
+
+
+# CalcuPEStat
+# ---------------------------------------------------------------------------------------------------------------------
+
+zcat "${CollectPEMetricsPerBatchCPX_evidence}" | cut -f3,6- | uniq -c > "${prefix}.evi_stat"
+bgzip "${prefix}.evi_stat"
+
+CalcuPEStat_evi_stat="$(realpath "${prefix}.evi_stat.gz")"
