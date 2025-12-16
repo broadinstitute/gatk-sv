@@ -142,31 +142,23 @@ def is_revisable_event(record, is_y):
 
 
 def adjust_male_genotype(genotype, sv_type):
-    """
-    Adjust male genotype on sex chromosomes for revisable events.
-    Increments RD_CN by 1 and sets GT based on the ORIGINAL RD_CN value.
-    """
     rd_cn = genotype.get('RD_CN', 0)
     if rd_cn is None:
         return
     
-    # Increment RD_CN
     genotype['RD_CN'] = rd_cn + 1
-    
-    # Set GT based on ORIGINAL RD_CN value (before increment)
-    # Use (0, 0) for ref/ref, (0, 1) for ref/alt, (1, 1) for alt/alt
     if sv_type == 'DEL':
         if rd_cn >= 1:
-            genotype['GT'] = (0, 0)  # 0/0
+            genotype['GT'] = (0, 0)
         elif rd_cn == 0:
-            genotype['GT'] = (0, 1)  # 0/1
+            genotype['GT'] = (0, 1)
     elif sv_type == 'DUP':
         if rd_cn <= 1:
-            genotype['GT'] = (0, 0)  # 0/0
+            genotype['GT'] = (0, 0)
         elif rd_cn == 2:
-            genotype['GT'] = (0, 1)  # 0/1
+            genotype['GT'] = (0, 1)
         else:
-            genotype['GT'] = (1, 1)  # 1/1
+            genotype['GT'] = (1, 1)
 
 
 def calc_median_distribution(counts):
