@@ -7,7 +7,6 @@ workflow CalcuSampleGeneStats {
     File sample_gene_aou
     File sample_pop_aou
     Array[Int] shard_indices
-    File r_script            # R script containing the required functions
     String sv_pipeline_base_docker
   }
 
@@ -19,7 +18,6 @@ workflow CalcuSampleGeneStats {
         sample_gene_aou    = sample_gene_aou,
         sample_pop_aou     = sample_pop_aou,
         shard_index        = i,
-        r_script           = r_script,
         docker_image       = sv_pipeline_base_docker
     }
   }
