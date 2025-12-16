@@ -67,9 +67,9 @@ task RunSampleGeneStats {
 
     read_in_stat<-function(sample_pop, sample_gene){
       d1=read.table(sample_pop)
-      d2=read.table(sample_gene, sep='\t')
+      d2=read.table(sample_gene, sep="\t")
       d2[,2] = toupper(d2[,2])
-      dat=merge(d1,d2, by='V1')
+      dat=merge(d1,d2, by="V1")
       return(dat)
     }
 
@@ -77,12 +77,12 @@ task RunSampleGeneStats {
       dat = read_in_stat(sample_pop_gnomad, sample_gene_gnomad)
       dat2 = read_in_stat(sample_pop_aou, sample_gene_aou)
 
-      dat[dat[,1]%in%dat2[,1],][,1] = paste(dat[dat[,1]%in%dat2[,1],][,1],'a', sep='_')
+      dat[dat[,1]%in%dat2[,1],][,1] = paste(dat[dat[,1]%in%dat2[,1],][,1],"a", sep="_")
 
       out=rbind(dat, dat2)
       out[,2] =toupper(out[,2])
-      out[out[,2]%in%c('ASJ','FIN','NFE') ,][,2] = 'EUR'
-      out[,2] = factor(out[,2], levels = c('EUR','AFR','AMR','EAS','SAS','AMI','MID','OTH'))
+      out[out[,2]%in%c("ASJ","FIN","NFE") ,][,2] = "EUR"
+      out[,2] = factor(out[,2], levels = c("EUR","AFR","AMR","EAS","SAS","AMI","MID","OTH"))
       out = out[order(out[,4], decreasing = T),]
       out = out[order(out[,2]),]
       return(out)
