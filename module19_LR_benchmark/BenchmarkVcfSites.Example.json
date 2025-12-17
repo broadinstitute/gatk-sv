@@ -1,0 +1,47 @@
+BenchmarkVcfSitesPerContig.truvari_params	null
+anno_script_bash	gs://fc-52ea2676-dad2-4357-b069-def39e8ebc1f/scripts/annotate_genomic_context.sh
+anno_script_helper_R	gs://fc-52ea2676-dad2-4357-b069-def39e8ebc1f/scripts/annotate_genomic_context_helper.R
+banchmark_script_helper_R	gs://fc-52ea2676-dad2-4357-b069-def39e8ebc1f/scripts/compare_callsets_helper.V2.R
+benchmark_script_bash	gs://fc-52ea2676-dad2-4357-b069-def39e8ebc1f/scripts/compare_callsets_V2.sh
+calcu_comp_stat.runtime_attr_override	null
+chromosomes	[ "chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX", "chrY" ]
+combine_vcfs_fp_query.merge_sort	false
+combine_vcfs_fp_query.remove_dup	true
+combine_vcfs_fp_query.runtime_attr_override	null
+combine_vcfs_fp_query.vcfs_idx	null
+combine_vcfs_fp_ref.merge_sort	false
+combine_vcfs_fp_ref.remove_dup	true
+combine_vcfs_fp_ref.runtime_attr_override	null
+combine_vcfs_fp_ref.vcfs_idx	null
+combine_vcfs_tp_query.merge_sort	false
+combine_vcfs_tp_query.remove_dup	true
+combine_vcfs_tp_query.runtime_attr_override	null
+combine_vcfs_tp_query.vcfs_idx	null
+combine_vcfs_tp_ref.merge_sort	false
+combine_vcfs_tp_ref.remove_dup	true
+combine_vcfs_tp_ref.runtime_attr_override	null
+combine_vcfs_tp_ref.vcfs_idx	null
+extract_chrom_variants_query.runtime_attr_override	null
+extract_chrom_variants_ref.runtime_attr_override	null
+plot_comp_results.runtime_attr_override	null
+query_vcf	gs://fc-52ea2676-dad2-4357-b069-def39e8ebc1f/submissions/75402726-be01-414f-b8e9-4c3ffb252ffe/ProcessVCFs/7e507b81-dc3d-4f03-897c-7f85ee8bad9c/call-CleanVCF/shard-0/cacheCopy/HG00096.final.cram.out.PASS.vcf.gz
+query_vcf_idx	gs://fc-52ea2676-dad2-4357-b069-def39e8ebc1f/submissions/75402726-be01-414f-b8e9-4c3ffb252ffe/ProcessVCFs/7e507b81-dc3d-4f03-897c-7f85ee8bad9c/call-CleanVCF/shard-0/cacheCopy/HG00096.final.cram.out.PASS.vcf.gz.tbi
+ref_dict	gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta
+ref_vcf	gs://fc-52ea2676-dad2-4357-b069-def39e8ebc1f/submissions/121a2f7f-b12a-44c1-95ac-874b8e19f9f8/ExtractPerSampleVCFs/6d56a6ff-9309-42fd-aaa8-db1347187bc2/call-ExtractSample/shard-0/HGSV_pav_hg38.HG00096.vcf.gz
+ref_vcf_idx	gs://fc-52ea2676-dad2-4357-b069-def39e8ebc1f/submissions/121a2f7f-b12a-44c1-95ac-874b8e19f9f8/ExtractPerSampleVCFs/6d56a6ff-9309-42fd-aaa8-db1347187bc2/call-ExtractSample/shard-0/HGSV_pav_hg38.HG00096.vcf.gz.tbi
+repeat_mask	gs://fc-52ea2676-dad2-4357-b069-def39e8ebc1f/hgsvc_reference/hg38.RM.sorted.merged.bed.gz
+runtime_attr_add_dummy_gt_query	null
+runtime_attr_add_dummy_gt_ref	{ "cpu_cores": null, "max_retries": null, "boot_disk_gb": null, "disk_gb": 200, "mem_gb": null, "preemptible_tries": null }
+runtime_attr_benchmark_SNVs	{ "cpu_cores": null, "max_retries": null, "boot_disk_gb": null, "disk_gb": 200, "mem_gb": 100, "preemptible_tries": null }
+runtime_attr_extract_variant_sites_query	null
+runtime_attr_extract_variant_sites_ref	{ "cpu_cores": null, "max_retries": null, "boot_disk_gb": null, "disk_gb": 200, "mem_gb": 200, "preemptible_tries": null }
+runtime_attr_split_query	null
+runtime_attr_split_ref	{ "cpu_cores": null, "max_retries": null, "boot_disk_gb": null, "disk_gb": 200, "mem_gb": null, "preemptible_tries": null }
+segmental_duplicates	gs://fc-52ea2676-dad2-4357-b069-def39e8ebc1f/hgsvc_reference/hg38.SD.sorted.merged.bed.gz
+short_read_benchmark	false
+simple_repeats	gs://fc-52ea2676-dad2-4357-b069-def39e8ebc1f/hgsvc_reference/hg38.SR.sorted.merged.bed.gz
+simplify_base_vcf_lt_20bp	false
+simplify_comp_vcf_lt_20bp	false
+sv_base_mini_docker	"us.gcr.io/broad-dsde-methods/vjalili/sv-base-mini:5994670"
+sv_pipeline_base_docker	"us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2023-09-13-v0.28.3-beta-af8362e3"
+truvari_params	null
