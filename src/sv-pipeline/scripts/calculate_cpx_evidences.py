@@ -49,7 +49,7 @@ def Depth_supp_readin(filein):
     return out
 
 
-def add_PE_supp(sample_svid, PE_supp):
+def add_PE_supp(sample_svid, PE_supp, min_pe_cpx):
     out = {}
     for svid in sample_svid.keys():
         out[svid] = {}
@@ -65,7 +65,7 @@ def add_PE_supp(sample_svid, PE_supp):
                         pe_supp = 'partial_PE'
                     if PE_supp[svid][sample][0][0] > 0 and PE_supp[svid][sample][1][0] > 0:
                         pe_supp = 'low_PE'
-                    if PE_supp[svid][sample][0][0] >= ~{min_pe_cpx} and PE_supp[svid][sample][1][0] >= ~{min_pe_cpx}:
+                    if PE_supp[svid][sample][0][0] >= min_pe_cpx and PE_supp[svid][sample][1][0] >= min_pe_cpx:
                         pe_supp = 'high_PE'
                     out[svid][sample] = [pe_supp]
                 else:
@@ -109,11 +109,11 @@ def write_pe_depth_supp(sample_svid_pe_depth, fileout):
     fo.close()
 
 
-def main(sample_svid, pe_supp, depth_supp, prefix):
+def main(sample_svid, pe_supp, depth_supp, prefix, min_pe_cpx):
     sample_svid = sample_svid_readin(sample_svid)
     PE_supp = PE_supp_readin(pe_supp)
     Depth_supp = Depth_supp_readin(depth_supp)
-    sample_svid_pe = add_PE_supp(sample_svid, PE_supp)
+    sample_svid_pe = add_PE_supp(sample_svid, PE_supp, min_pe_cpx)
     sample_svid_pe_depth = add_depth_supp(sample_svid_pe, Depth_supp)
     write_pe_depth_supp(sample_svid_pe_depth, f"{prefix}.manual_revise.CPX_results")
 
@@ -124,6 +124,7 @@ if __name__ == "__main__":
     parser.add_argument("--pe-supp", required=True)
     parser.add_argument("--depth-supp", required=True)
     parser.add_argument("--prefix", required=True)
+    parser.add_argument("--min-pe-cpx", type=int, required=True)
     args = parser.parse_args()
 
-    main(args.sample_svid, args.pe_supp, args.depth_supp, args.prefix)
+    main(args.sample_svid, args.pe_supp, args.depth_supp, args.prefix, args.min_pe_cpx)

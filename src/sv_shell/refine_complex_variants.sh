@@ -60,6 +60,7 @@ PE_metrics=$(jq -r ".PE_metrics" "$input_json")
 vcf=$(jq -r ".vcf" "$input_json")
 Depth_DEL_beds=$(jq -r ".Depth_DEL_beds" "$input_json")
 Depth_DUP_beds=$(jq -r ".Depth_DUP_beds" "$input_json")
+min_pe_cpx=$(jq -r ".min_pe_cpx" "$input_json")
 
 
 # -------------------------------------------------------
@@ -272,3 +273,19 @@ zcat "${CollectPEMetricsPerBatchCPX_evidence}" | cut -f3,6- | uniq -c > "${prefi
 bgzip "${prefix}.evi_stat"
 
 CalcuPEStat_evi_stat="$(realpath "${prefix}.evi_stat.gz")"
+
+CollectPEMetricsForCPX_evidence="${CollectPEMetricsPerBatchCPX_evidence}"
+CollectPEMetricsForCPX_evi_stat="${CalcuPEStat_evi_stat}"
+
+
+# CalculateCpxEvidences
+# ---------------------------------------------------------------------------------------------------------------------
+
+awk '{print $6, $(NF-3)}' "${PE_collect_script}" | { grep -v "_CTX_" || true; } | uniq > sample_SVID.tsv
+
+python /opt/sv-pipeline/scripts/calculate_cpx_evidences.py \
+  --sample-svid sample_SVID.tsv \
+  --pe-supp "${CollectPEMetricsForCPX_evi_stat}" \
+  --depth-supp "${CollectLargeCNVSupportForCPX_lg_cnv_depth_supp}" \
+  --prefix "${prefix}" \
+  --min-pe-cpx ${min_pe_cpx}
