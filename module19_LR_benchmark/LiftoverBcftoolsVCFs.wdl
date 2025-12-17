@@ -17,7 +17,7 @@ workflow BcftoolsLiftoverVCFs {
   }
 
   scatter(i in range(length(vcfs))) {
-    task LiftoverBcftools {
+    call LiftoverBcftools {
         input:
             vcf = vcfs[i],
             vcf_idx = vcf_idxs[i],
