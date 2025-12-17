@@ -27,7 +27,7 @@ workflow BcftoolsLiftoverVCFs {
             chain_file = chain_file,
             liftover_ref_version = liftover_ref_version,
 
-            docker_image = bcftools_liftover_docker
+            docker_image = bcftools_liftover_docker,
             runtime_attr_override = runtime_attr_liftover
     }
   }
