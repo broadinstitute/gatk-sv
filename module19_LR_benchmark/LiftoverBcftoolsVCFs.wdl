@@ -18,7 +18,7 @@ workflow BcftoolsLiftoverVCFs {
 
   scatter(i in range(length(vcfs))) {
     task LiftoverBcftools {
-        input {
+        input:
             vcf = vcfs[i],
             vcf_idx = vcf_idxs[i],
 
@@ -29,6 +29,7 @@ workflow BcftoolsLiftoverVCFs {
 
             docker_image = bcftools_liftover_docker
             runtime_attr_override = runtime_attr_liftover
+    }
   }
 
     output {
