@@ -51,7 +51,7 @@ task LiftoverBcftools {
         RuntimeAttr? runtime_attr_override
     }
 
-    String prefix = basename(bed, ".bed")
+    String prefix = basename(vcf, ".vcf.gz")
 
     command <<<
         set -euo pipefail
@@ -69,7 +69,7 @@ task LiftoverBcftools {
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
         mem_gb: 10,
-        disk_gb: 15 + ceil(size(bed, "GiB") *5),
+        disk_gb: 15 + ceil(size(vcf, "GiB") *5),
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
