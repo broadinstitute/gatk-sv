@@ -66,7 +66,7 @@ def revise_vcf(vcf_input, vcf_output, hash_CPX_manual, unresolved_svids, hash_CT
                     elif hash_CPX_manual[record.id][sample][0] == 'high_PE':
                         if hash_CPX_manual[record.id][sample][1] in ["lack_depth", "lack_depth,lack_depth", "lack_depth,depth", "depth,lack_depth"]:
                             record.samples[sample]['GT'] = [None, None]
-            if not unresolve_rec / len(hash_CPX_manual[record.id].keys())<.5:
+            if not unresolve_rec / len(hash_CPX_manual[record.id].keys()) < .5:
                 if 'PASS' in record.filter:
                     record.filter.clear()
                 record.filter.add('UNRESOLVED')
