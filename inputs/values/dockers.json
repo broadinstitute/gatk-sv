@@ -1,7 +1,7 @@
 {
   "name": "dockers",
   "cnmops_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/cnmops:2025-09-02-v1.0.5-f091af0b",
-  "gatk_docker": "us.gcr.io/broad-dsde-methods/markw/gatk:mw-gatk-sv-1eac9db",
+  "gatk_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/gatk:mw-gatk-sv-1eac9db",
   "genomes_in_the_cloud_docker": "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.3.2-1510681135",
   "linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "manta_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/manta:2023-09-14-v0.28.3-beta-3f22f94d",
@@ -21,7 +21,7 @@
   "samtools-cloud-virtual-env": "us.gcr.io/broad-dsde-methods/vjalili/samtools-cloud-virtual-env:5994670",
   "sv-utils-env": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-utils-env:2023-02-01-v0.26.8-beta-9b25c72d",
   "sv_utils_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-utils:2025-01-06-v1.0.1-e902bf4e",
-  "gq_recalibrator_docker": "us.gcr.io/broad-dsde-methods/markw/gatk:mw-gatk-sv-1eac9db",
+  "gq_recalibrator_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/gatk:mw-gatk-sv-1eac9db",
   "stripy_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/stripy:2025-11-14-v1.1-7b56c3ac",
   "str": "us.gcr.io/broad-dsde-methods/gatk-sv/str:2023-05-23-v0.27.3-beta-e537bdd6",
   "denovo": "us.gcr.io/broad-dsde-methods/gatk-sv/denovo:2025-11-15-v1.1-99ad3600",
