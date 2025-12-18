@@ -321,4 +321,23 @@ python /opt/sv-pipeline/scripts/calculate_ctx_evidences.py \
 
 CalculateCtxEvidences_manual_revise_CTX_results="$(realpath "${prefix}.manual_revise.CTX_results")"
 
+# ReviseVcf
+# ---------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+wd_ReviseVcf=$(mktemp -d /wd_ReviseVcf_XXXXXXXX)
+wd_ReviseVcf="$(realpath ${wd_ReviseVcf})"
+cd "${wd_ReviseVcf}"
+
+python /opt/sv-pipeline/scripts/resolve_cpx_variants_revise_vcf.py \
+  --unresolved-svids "${GenerateCpxReviewScript_unresolved_svids}" \
+  --CPX-manual "${CalculateCpxEvidences_manual_revise_CPX_results}" \
+  --CTX-manual "${CalculateCtxEvidences_manual_revise_CTX_results}" \
+  --vcf-file "${vcf}" \
+  --prefix "${prefix}"
+
+tabix "${prefix}.Manual_Revised.vcf.gz"
+
+ReviseVcf_revised_vcf="$(realpath "${prefix}.Manual_Revised.vcf.gz")"
+ReviseVcf_revised_vcf_idx="$(realpath "${prefix}.Manual_Revised.vcf.gz.tbi")"
+
 cd "${working_dir}"
