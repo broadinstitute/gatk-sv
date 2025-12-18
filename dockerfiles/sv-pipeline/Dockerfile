@@ -65,7 +65,6 @@ RUN plink2 || true
 # the command should be installed, but has no help mode, and outputs an error if not used on data
 #RUN king
 
-
 # Compile and test classes from sv-pipeline
 # -Compile StitchFragmentedCNVs Java program
 # -Compile StitchFragmentedCNVs unit tests
