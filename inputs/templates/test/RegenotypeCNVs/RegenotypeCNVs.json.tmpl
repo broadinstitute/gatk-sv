@@ -15,8 +15,8 @@
   "RegenotypeCNVs.batch_depth_vcfs": [{{ test_batch.filtered_depth_vcf | tojson }}],
 
   "RegenotypeCNVs.depth_vcfs": [{{ test_batch.genotyped_depth_vcf | tojson }}],
-  "RegenotypeCNVs.coveragefiles": [{{ test_batch.merged_coverage_file | tojson }}],
-  "RegenotypeCNVs.coveragefile_idxs": [{{ test_batch.merged_coverage_file_index| tojson }}],
+  "RegenotypeCNVs.coveragefiles": [{{ test_batch.merged_rd_file | tojson }}],
+  "RegenotypeCNVs.coveragefile_idxs": [{{ test_batch.merged_rd_file_index| tojson }}],
   "RegenotypeCNVs.medianfiles": [{{ test_batch.medianfile | tojson }}],
   "RegenotypeCNVs.batches": [{{ test_batch.name | tojson }}]
 }

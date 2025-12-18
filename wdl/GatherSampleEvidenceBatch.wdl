@@ -95,7 +95,6 @@ workflow GatherSampleEvidenceBatch {
     String? scramble_docker
     String? wham_docker
     String gatk_docker
-    String? gatk_docker_pesr_override
     String genomes_in_the_cloud_docker
     String cloud_sdk_docker
 
@@ -180,7 +179,6 @@ workflow GatherSampleEvidenceBatch {
         scramble_docker = scramble_docker,
         wham_docker = wham_docker,
         gatk_docker = gatk_docker,
-        gatk_docker_pesr_override = gatk_docker_pesr_override,
         genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
         cloud_sdk_docker = cloud_sdk_docker,
         runtime_attr_localize_reads = runtime_attr_localize_reads,

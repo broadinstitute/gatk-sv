@@ -4,8 +4,8 @@
 
   "RefineComplexVariants.batch_name_list": [{{ test_batch.name | tojson }}],
   "RefineComplexVariants.batch_sample_lists": [ {{ test_batch.final_sample_list | tojson }} ],
-  "RefineComplexVariants.PE_metrics": [ {{ test_batch.merged_disc_file | tojson }} ],
-  "RefineComplexVariants.PE_metrics_indexes": [ {{ test_batch.merged_disc_file_index | tojson }} ],
+  "RefineComplexVariants.PE_metrics": [ {{ test_batch.merged_pe_file | tojson }} ],
+  "RefineComplexVariants.PE_metrics_indexes": [ {{ test_batch.merged_pe_file_index | tojson }} ],
   "RefineComplexVariants.Depth_DEL_beds": [ {{ test_batch.del_bed | tojson }} ],
   "RefineComplexVariants.Depth_DUP_beds": [ {{ test_batch.dup_bed | tojson }} ],
 

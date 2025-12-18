@@ -144,7 +144,6 @@ workflow GatherBatchEvidence {
     String sv_pipeline_docker
     String sv_pipeline_qc_docker
     String linux_docker
-    String condense_counts_docker
     String gatk_docker
     String? gcnv_gatk_docker
     String cnmops_docker
@@ -316,7 +315,7 @@ workflow GatherBatchEvidence {
         sample = samples[i],
         min_interval_size = min_interval_size,
         max_interval_size = max_interval_size,
-        condense_counts_docker = condense_counts_docker,
+        gatk_docker = gatk_docker,
         runtime_attr_override=condense_counts_runtime_attr
     }
   }

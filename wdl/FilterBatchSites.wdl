@@ -13,7 +13,7 @@ workflow FilterBatchSites {
     File? scramble_vcf
     File? wham_vcf
     File evidence_metrics
-    File evidence_metrics_common
+
     String sv_pipeline_docker
 
     # Overrides for cutoffs and scores that can be used to skip the adjudication step
@@ -48,18 +48,6 @@ workflow FilterBatchSites {
     }
   }
 
-  if (!defined(adjudicate_cutoffs) || !defined(adjudicate_scores)) {
-    call RewriteScores {
-      input:
-        metrics = evidence_metrics_common,
-        cutoffs = select_first([adjudicate_cutoffs, AdjudicateSV.cutoffs]),
-        scores = select_first([adjudicate_scores, AdjudicateSV.scores]),
-        batch = batch,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_rewrite_scores
-    }
-  }
-
   scatter (i in range(num_algorithms)) {
     if (defined(vcfs_array[i])) {
       call FilterAnnotateVcf {
@@ -67,8 +55,8 @@ workflow FilterBatchSites {
           vcf = select_first([vcfs_array[i]]),
           metrics = evidence_metrics,
           prefix = "${batch}.${algorithms[i]}",
-          scores = select_first([adjudicate_scores, RewriteScores.updated_scores]),
-          cutoffs = select_first([adjudicate_cutoffs, AdjudicateSV.cutoffs]),
+          scores = select_first([AdjudicateSV.scores, adjudicate_scores]),
+          cutoffs = select_first([AdjudicateSV.cutoffs, adjudicate_cutoffs]),
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_filter_annotate_vcf
       }
@@ -94,7 +82,7 @@ workflow FilterBatchSites {
     File? sites_filtered_scramble_vcf = FilterAnnotateVcf.annotated_vcf[4]
     File? sites_filtered_wham_vcf = FilterAnnotateVcf.annotated_vcf[5]
     File cutoffs = select_first([adjudicate_cutoffs, AdjudicateSV.cutoffs])
-    File scores = select_first([adjudicate_scores, RewriteScores.updated_scores])
+    File scores = select_first([adjudicate_scores, AdjudicateSV.scores])
     File RF_intermediate_files = select_first([adjudicate_rf_files, AdjudicateSV.RF_intermediate_files])
     Array[File] sites_filtered_sv_counts = PlotSVCountsPerSample.sv_counts
     Array[File] sites_filtered_sv_count_plots = PlotSVCountsPerSample.sv_count_plots
@@ -149,50 +137,6 @@ task AdjudicateSV {
   }
 }
 
-task RewriteScores {
-  input {
-    File metrics
-    File cutoffs
-    File scores
-    String batch
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 3.75,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File updated_scores = "${batch}.updated_scores"
-  }
-  command <<<
-
-    set -euo pipefail
-    Rscript /opt/sv-pipeline/03_variant_filtering/scripts/modify_cutoffs.R \
-      -c ~{cutoffs} \
-      -m ~{metrics} \
-      -s ~{scores}  \
-      -o ~{batch}.updated_scores
-
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
 task FilterAnnotateVcf {
   input {
     File vcf
@@ -224,9 +168,7 @@ task FilterAnnotateVcf {
     <(sed -e '1d' ~{scores} | fgrep -e DEL -e DUP | awk '($3!="NA" && $3>=0.5)' | cut -f1 | fgrep -w -f - <(zcat ~{vcf})) \
     <(sed -e '1d' ~{scores} | fgrep -e INV -e BND -e INS | awk '($3!="NA" && $3>=0.5)' | cut -f1 | fgrep -w -f - <(zcat ~{vcf}) | sed -e 's/SVTYPE=DEL/SVTYPE=BND/' -e 's/SVTYPE=DUP/SVTYPE=BND/' -e 's/<DEL>/<BND>/' -e 's/<DUP>/<BND>/') \
       | cat <(sed -n -e '/^#/p' <(zcat ~{vcf})) - \
-      | vcf-sort -c \
-      | bgzip -c \
-      > filtered.vcf.gz
+      | bcftools sort -Oz -o filtered.vcf.gz
 
     python3 <<CODE
     import pysam
@@ -242,9 +184,7 @@ task FilterAnnotateVcf {
     CODE
 
     /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.updated_bnds.vcf.gz ~{metrics} ~{cutoffs} stdout \
-      | vcf-sort -c \
-      | bgzip -c \
-      > filtered.corrected_coords.vcf.gz
+      | bcftools sort -Oz -o filtered.corrected_coords.vcf.gz
 
     /opt/sv-pipeline/03_variant_filtering/scripts/annotate_RF_evidence.py filtered.corrected_coords.vcf.gz ~{scores} ~{prefix}.with_evidence.vcf
     bgzip ~{prefix}.with_evidence.vcf
