@@ -84,19 +84,21 @@ workflow CleanVcfChromosome {
       runtime_attr_override=runtime_attr_revise_large_cnvs
   }
 
-  call CleanVcfReviseAbnormalAllosomes {
-    input:
-      vcf=CleanVcfReviseMultiallelicCnvs.out,
-      vcf_idx=CleanVcfReviseMultiallelicCnvs.out_idx,
-      prefix="~{prefix}.revise_abnormal_allosomes",
-      gatk_docker=gatk_docker,
-      runtime_attr_override=runtime_attr_revise_abnormal_allosomes
+  if (contig == chr_x || contig == chr_y) {
+    call CleanVcfReviseAbnormalAllosomes {
+      input:
+        vcf=CleanVcfReviseMultiallelicCnvs.out,
+        vcf_idx=CleanVcfReviseMultiallelicCnvs.out_idx,
+        prefix="~{prefix}.revise_abnormal_allosomes",
+        gatk_docker=gatk_docker,
+        runtime_attr_override=runtime_attr_revise_abnormal_allosomes
+    }
   }
 
   call CleanVcfReviseOverlappingMultiallelics {
     input:
-      vcf=CleanVcfReviseAbnormalAllosomes.out,
-      vcf_idx=CleanVcfReviseAbnormalAllosomes.out_idx,
+      vcf=select_first([CleanVcfReviseAbnormalAllosomes.out, CleanVcfReviseMultiallelicCnvs.out]),
+      vcf_idx=select_first([CleanVcfReviseAbnormalAllosomes.out_idx, CleanVcfReviseMultiallelicCnvs.out_idx]),
       prefix="~{prefix}.revise_overlapping_multiallelics",
       gatk_docker=gatk_docker,
       runtime_attr_override=runtime_attr_revise_multiallelics
@@ -105,6 +107,7 @@ workflow CleanVcfChromosome {
   call CleanVcfPostprocess {
     input:
       vcf=CleanVcfReviseOverlappingMultiallelics.out,
+      vcf_idx=CleanVcfReviseOverlappingMultiallelics.out_idx,
       prefix="~{prefix}.postprocess",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_postprocess
@@ -223,10 +226,6 @@ task CleanVcfPreprocess {
 
   command <<<
     set -euo pipefail
-
-    if [ ! -f "~{vcf}.tbi" ]; then
-      tabix -p vcf ~{vcf}
-    fi
 
     python /opt/sv-pipeline/04_variant_resolution/scripts/replace_ev_numeric_code_with_string.py \
       ~{vcf} \
@@ -449,6 +448,7 @@ task CleanVcfReviseOverlappingMultiallelics {
 task CleanVcfPostprocess {
   input {
     File vcf
+    File vcf_idx
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override

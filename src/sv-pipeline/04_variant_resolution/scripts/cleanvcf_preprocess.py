@@ -17,27 +17,6 @@ EV_VALUES = ['SR', 'PE', 'SR,PE', 'RD', 'BAF', 'RD,BAF']
 MIN_ALLOSOME_EVENT_SIZE = 5000
 
 
-def read_last_column(file_path):
-    result_set = set()
-    with open(file_path, 'r') as f:
-        for line in f:
-            if line.strip():
-                columns = line.strip().split()
-                result_set.add(columns[-1])
-    return result_set
-
-
-def process_record(record, chrX, chrY, fail_set, pass_set):
-    record = process_varGQ(record)
-    record = process_multiallelic(record)
-    record = process_unresolved(record)
-    record = process_svtype(record)
-    record = process_noisy(record, fail_set)
-    record = process_bothsides_support(record, pass_set)
-    record = process_allosomes(record, chrX, chrY)
-    return record
-
-
 def process_varGQ(record):
     if VAR_GQ in record.info:
         var_gq = record.info[VAR_GQ]
@@ -175,6 +154,27 @@ def calc_median_distribution(counts):
         elif running_total > target:
             return float(i)
     return -1
+
+
+def read_last_column(file_path):
+    result_set = set()
+    with open(file_path, 'r') as f:
+        for line in f:
+            if line.strip():
+                columns = line.strip().split()
+                result_set.add(columns[-1])
+    return result_set
+
+
+def process_record(record, chrX, chrY, fail_set, pass_set):
+    record = process_varGQ(record)
+    record = process_multiallelic(record)
+    record = process_unresolved(record)
+    record = process_svtype(record)
+    record = process_noisy(record, fail_set)
+    record = process_bothsides_support(record, pass_set)
+    record = process_allosomes(record, chrX, chrY)
+    return record
 
 
 if __name__ == '__main__':

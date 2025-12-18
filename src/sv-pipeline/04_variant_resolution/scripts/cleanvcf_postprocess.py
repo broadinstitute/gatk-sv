@@ -9,16 +9,21 @@ from svtk.utils import get_called_samples
 DUP_SVTYPE = 'DUP'
 
 
-def process_record(record):
-    record = process_svtype(record)
+def process_svtype(record):
+    if record.info.get('SVTYPE') == DUP_SVTYPE:
+        record.alts = ('<' + record.info.get('SVTYPE') + '>',)
+    return record
+
+
+def process_uncalled_genotypes(record):
     if len(get_called_samples(record)) == 0:
         return None
     return record
 
 
-def process_svtype(record):
-    if record.info.get('SVTYPE') == DUP_SVTYPE:
-        record.alts = ('<' + record.info.get('SVTYPE') + '>',)
+def process_record(record):
+    record = process_svtype(record)
+    record = process_uncalled_genotypes(record)
     return record
 
 
@@ -40,9 +45,8 @@ if __name__ == '__main__':
 
     for record in vcf_in:
         processed = process_record(record)
-        if processed is None:
-            continue
-        vcf_out.write(processed)
+        if processed:
+            vcf_out.write(processed)
 
     vcf_in.close()
     vcf_out.close()
