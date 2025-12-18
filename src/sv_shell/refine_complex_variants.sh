@@ -61,6 +61,7 @@ vcf=$(jq -r ".vcf" "$input_json")
 Depth_DEL_beds=$(jq -r ".Depth_DEL_beds" "$input_json")
 Depth_DUP_beds=$(jq -r ".Depth_DUP_beds" "$input_json")
 min_pe_cpx=$(jq -r ".min_pe_cpx" "$input_json")
+min_pe_ctx=$(jq -r ".min_pe_ctx" "$input_json")
 
 
 # -------------------------------------------------------
@@ -280,8 +281,14 @@ CollectPEMetricsForCPX_evi_stat="${CalcuPEStat_evi_stat}"
 
 # CalculateCpxEvidences
 # ---------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+wd_CalculateCpxEvidences=$(mktemp -d /wd_CalculateCpxEvidences_XXXXXXXX)
+wd_CalculateCpxEvidences="$(realpath ${wd_CalculateCpxEvidences})"
+cd "${wd_CalculateCpxEvidences}"
 
-awk '{print $6, $(NF-3)}' "${PE_collect_script}" | { grep -v "_CTX_" || true; } | uniq > sample_SVID.tsv
+awk '{print $6, $(NF-3)}' "${GenerateCpxReviewScript_pe_evidence_collection_script}" \
+  | { grep -v "_CTX_" || true; } \
+  | uniq > sample_SVID.tsv
 
 python /opt/sv-pipeline/scripts/calculate_cpx_evidences.py \
   --sample-svid sample_SVID.tsv \
@@ -289,3 +296,29 @@ python /opt/sv-pipeline/scripts/calculate_cpx_evidences.py \
   --depth-supp "${CollectLargeCNVSupportForCPX_lg_cnv_depth_supp}" \
   --prefix "${prefix}" \
   --min-pe-cpx ${min_pe_cpx}
+
+CalculateCpxEvidences_manual_revise_CPX_results="$(realpath "${prefix}.manual_revise.CPX_results")"
+
+
+# CalculateCtxEvidences
+# ---------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+wd_CalculateCtxEvidences=$(mktemp -d /wd_CalculateCtxEvidences_XXXXXXXX)
+wd_CalculateCtxEvidences="$(realpath ${wd_CalculateCtxEvidences})"
+cd "${wd_CalculateCtxEvidences}"
+
+awk '{print $6, $(NF-3)}' "${GenerateCpxReviewScript_pe_evidence_collection_script}" \
+  | { grep "_CTX_" || true; } \
+  | uniq > sample_SVID.tsv
+
+zcat "${CollectPEMetricsForCPX_evi_stat}" | { grep "_CTX_" || true; } | uniq > PE_supp.tsv
+
+python /opt/sv-pipeline/scripts/calculate_ctx_evidences.py \
+  --sample-svid "sample_SVID.tsv" \
+  --pe-supp "PE_supp.tsv" \
+  --prefix "${prefix}" \
+  --min-pe-ctx ${min_pe_ctx}
+
+CalculateCtxEvidences_manual_revise_CTX_results="$(realpath "${prefix}.manual_revise.CTX_results")"
+
+cd "${working_dir}"
