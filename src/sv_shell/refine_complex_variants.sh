@@ -341,3 +341,27 @@ ReviseVcf_revised_vcf="$(realpath "${prefix}.Manual_Revised.vcf.gz")"
 ReviseVcf_revised_vcf_idx="$(realpath "${prefix}.Manual_Revised.vcf.gz.tbi")"
 
 cd "${working_dir}"
+
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+cpx_refined_vcf_output_dir="${output_dir}/$(basename "${ReviseVcf_revised_vcf}")"
+cp "${ReviseVcf_revised_vcf}" "${cpx_refined_vcf_output_dir}"
+cp "${ReviseVcf_revised_vcf}.tbi" "${cpx_refined_vcf_output_dir}.tbi"
+
+cpx_evidences_output_dir="${output_dir}/$(basename "${CalculateCpxEvidences_manual_revise_CPX_results}")"
+cp "${CalculateCpxEvidences_manual_revise_CPX_results}" "${cpx_evidences_output_dir}"
+
+jq -n \
+  --arg cpx_refined_vcf "${cpx_refined_vcf_output_dir}" \
+  --arg cpx_refined_vcf_index "${cpx_refined_vcf_output_dir}.tbi" \
+  --arg cpx_evidences "${cpx_evidences_output_dir}" \
+  '{
+      "cpx_refined_vcf": $cpx_refined_vcf,
+      "cpx_refined_vcf_index": $cpx_refined_vcf_index,
+      "cpx_evidences": $cpx_evidences
+  }' > "${output_json_filename}"
+
+echo "Successfully finished refine complex variants, output json filename: ${output_json_filename}"
