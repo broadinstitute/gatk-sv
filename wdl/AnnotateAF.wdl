@@ -111,6 +111,6 @@ workflow AnnotateAF {
 
   output {
     File af_annotated_vcf = ConcatVcfs.concat_vcf
-    File af_annotated_vcf_index = ConcatVcfs.concat_vcf_idx
+    File af_annotated_vcf_idx = ConcatVcfs.concat_vcf_idx
   }
 }
