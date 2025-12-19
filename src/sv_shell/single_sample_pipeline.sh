@@ -36,7 +36,6 @@ sample_id=$(jq -r ".sample_id" "$input_json")
 run_vcf_qc=$(jq -r ".run_vcf_qc" "$input_json")
 genome_file=$(jq -r ".genome_file" "$input_json")
 wgd_scoring_mask=$(jq -r ".wgd_scoring_mask" "$input_json")
-reference_dict=$(jq -r ".reference_dict" "$input_json")
 ref_panel_bincov_matrix=$(jq -r ".ref_panel_bincov_matrix" "$input_json")
 
 
@@ -48,10 +47,10 @@ ref_panel_bincov_matrix=$(jq -r ".ref_panel_bincov_matrix" "$input_json")
 # GatherSampleEvidence
 # ---------------------------------------------------------------------------------------------------------------------
 
-gather_sample_evidence_wd=$(mktemp -d "/wd_GatherSampleEvidence_XXXXXXXX")
-gather_sample_evidence_wd="$(realpath ${gather_sample_evidence_wd})"
-gather_sample_evidence_inputs_json="${gather_sample_evidence_wd}/inputs.json"
-gather_sample_evidence_outputs_json="${gather_sample_evidence_wd}/outputs.json"
+gather_sample_evidence_output_dir=$(mktemp -d "/output_GatherSampleEvidence_XXXXXXXX")
+gather_sample_evidence_output_dir="$(realpath ${gather_sample_evidence_output_dir})"
+gather_sample_evidence_inputs_json="${gather_sample_evidence_output_dir}/inputs.json"
+gather_sample_evidence_outputs_json="${gather_sample_evidence_output_dir}/outputs.json"
 
 jq -n \
   --slurpfile inputs "${input_json}" \
@@ -87,7 +86,8 @@ jq -n \
 
 bash /opt/sv_shell/gather_sample_evidence.sh \
   "${gather_sample_evidence_inputs_json}" \
-  "${gather_sample_evidence_outputs_json}"
+  "${gather_sample_evidence_outputs_json}" \
+  "${gather_sample_evidence_output_dir}"
 
 
 
@@ -109,29 +109,28 @@ coverage_counts="/inputs/NA12878.counts.tsv.gz"
 
 # EvidenceQC
 # ---------------------------------------------------------------------------------------------------------------------
-evidence_qc_inputs_json_filename="${output_dir}/evidence_qc_inputs.json"
-evidence_qc_outputs_json_filename="${output_dir}/evidence_qc_outputs.json"
+evidence_qc_output_dir=$(mktemp -d "/output_evidence_qc_XXXXXXXX")
+evidence_qc_output_dir="$(realpath ${evidence_qc_output_dir})"
+evidence_qc_inputs_json_filename="${evidence_qc_output_dir}/inputs.json"
+evidence_qc_outputs_json_filename="${evidence_qc_output_dir}/outputs.json"
 
 jq -n \
-  --arg batch "${batch}" \
+  --slurpfile inputs "${input_json}" \
   --arg samples "${sample_id}" \
-  --arg run_vcf_qc "${run_vcf_qc}" \
-  --arg genome_file "${genome_file}" \
   --arg count_files "${coverage_counts}" \
-  --arg run_ploidy false \
-  --arg wgd_scoring_mask "${wgd_scoring_mask}" \
-  --arg reference_dict "${reference_dict}" \
-  --arg bincov_matrix "${ref_panel_bincov_matrix}" \
   '{
-      batch: $batch,
+      batch: $inputs[0].batch,
       samples: [$samples],
-      run_vcf_qc: $run_vcf_qc,
-      genome_file: $genome_file,
+      run_vcf_qc: $inputs[0].run_vcf_qc,
+      genome_file: $inputs[0].genome_file,
       count_files: [$count_files],
-      run_ploidy: $run_ploidy,
-      wgd_scoring_mask: $wgd_scoring_mask,
-      reference_dict: $reference_dict,
-      bincov_matrix: $bincov_matrix
+      run_ploidy: false,
+      wgd_scoring_mask: $inputs[0].wgd_scoring_mask,
+      reference_dict: $inputs[0].reference_dict,
+      bincov_matrix: $inputs[0].ref_panel_bincov_matrix
   }' > "${evidence_qc_inputs_json_filename}"
 
-bash /opt/sv_shell/evidence_qc.sh "${evidence_qc_inputs_json_filename}" "${evidence_qc_outputs_json_filename}"
+bash /opt/sv_shell/evidence_qc.sh \
+  "${evidence_qc_inputs_json_filename}" \
+  "${evidence_qc_outputs_json_filename}" \
+  "${evidence_qc_output_dir}"
