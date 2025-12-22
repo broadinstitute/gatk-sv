@@ -184,7 +184,7 @@ jq -n \
       ped_file: $inputs[0].ref_ped_file,
       genome_file: $inputs[0].genome_file,
       primary_contigs_fai: $inputs[0].primary_contigs_fai,
-      ref_dict: $inputs[0].reference_dict,
+      reference_dict: $inputs[0].reference_dict,
       counts: [$gse_outputs[0].coverage_counts],
       ref_panel_bincov_matrix: $inputs[0].ref_panel_bincov_matrix,
       bincov_matrix: $eqc_outputs[0].bincov_matrix,
