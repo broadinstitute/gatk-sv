@@ -36,7 +36,7 @@ workflow UpdateVcfGenotypes {
 
   call ConcatPatchedVCFs{
     input:
-      vcfsvcfs = PatchGenotypes.out_vcf,
+      vcfs = PatchGenotypes.out_vcf,
       output_prefix = output_prefix, 
       docker_image = docker_image
   }
