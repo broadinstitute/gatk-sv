@@ -49,10 +49,18 @@ java -Xmx${command_mem_mb}m -jar /opt/gatk.jar CollectSVEvidence \
 
 split_out_filename="${output_dir}/${sample_id}.sr.txt.gz"
 split_out_index_filename="${output_dir}/${sample_id}.sr.txt.gz.tbi"
+mv "${sample_id}.sr.txt.gz" "${split_out_filename}"
+mv "${sample_id}.sr.txt.gz.tbi" "${split_out_index_filename}"
+
 disc_out_filename="${output_dir}/${sample_id}.pe.txt.gz"
 disc_out_index_filename="${output_dir}/${sample_id}.pe.txt.gz.tbi"
+mv "${sample_id}.pe.txt.gz" "${disc_out_filename}"
+mv "${sample_id}.pe.txt.gz.tbi" "${disc_out_index_filename}"
+
 sd_out_filename="${output_dir}/${sample_id}.sd.txt.gz"
 sd_out_index_filename="${output_dir}/${sample_id}.sd.txt.gz.tbi"
+mv "${sample_id}.sd.txt.gz" "${sd_out_filename}"
+mv "${sample_id}.sd.txt.gz.tbi" "${sd_out_filename}"
 
 outputs_filename="${output_dir}/outputs.json"
 outputs_json=$(jq -n \
