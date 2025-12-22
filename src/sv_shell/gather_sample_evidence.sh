@@ -304,9 +304,6 @@ fi
 # ======================= Output ========================
 # -------------------------------------------------------
 
-
-
-outputs_filename="${output_dir}/gather_sample_evidence_outputs.json"
 outputs_json=$(jq -n \
   --arg coverage_counts "$([ "${collect_coverage}" = "false" ] && echo "" || jq -r ".counts" "${collect_counts_outputs_json_filename}")" \
   --arg manta_vcf "$([ "${run_manta}" = "false" ] && echo "" || jq -r ".vcf" "${manta_outputs_json_filename}")" \
@@ -341,8 +338,8 @@ outputs_json=$(jq -n \
      "wham_index": $wham_index
    }' \
 )
-echo "${outputs_json}" > "${outputs_filename}"
+echo "${outputs_json}" > "${output_json_filename}"
 
 gather_sample_evidence_end_time=`date +%s`
 gather_sample_evidence_et=$((gather_sample_evidence_end_time-gather_sample_evidence_start_time))
-echo -e "${GREEN}Successfully finished running gather_sample_evidence in ${gather_sample_evidence_et} seconds. Outputs are serialized to: ${outputs_filename} ${NC}" | tee -a "${gather_sample_evidence_stdout}"
+echo -e "${GREEN}Successfully finished running gather_sample_evidence in ${gather_sample_evidence_et} seconds. Outputs are serialized to: ${output_json_filename} ${NC}" | tee -a "${gather_sample_evidence_stdout}"
