@@ -12,6 +12,11 @@ workflow UpdateVcfGenotypes {
     String output_prefix
     Array[String] contigs
     String docker_image
+
+    RuntimeAttr? runtime_attr_concat_vcfs
+    RuntimeAttr? runtime_attr_patch_genotypes
+    RuntimeAttr? runtime_attr_extract_contig_vcf
+
   }
 
   scatter (ctg in contigs) {
@@ -20,17 +25,19 @@ workflow UpdateVcfGenotypes {
         vcf = vcf_A,
         vcf_index = vcf_A_index,
         contig = ctg,
-        docker_image = docker_image
+        docker_image = docker_image,
+        runtime_attr_override = runtime_attr_extract_contig_vcf
     }
 
     call PatchGenotypes {
       input:
-        vcf_A_contig = ExtractContigVCF.out_vcf,
+        contig = ctg,
         vcf_B = vcf_B,
         vcf_B_index = vcf_B_index,
+        vcf_A_contig = ExtractContigVCF.out_vcf,
         patch_script = patch_script,
-        contig = ctg,
-        docker_image = docker_image
+        docker_image = docker_image,
+        runtime_attr_override = runtime_attr_patch_genotypes
     }
   }
 
@@ -38,7 +45,8 @@ workflow UpdateVcfGenotypes {
     input:
       vcfs = PatchGenotypes.out_vcf,
       output_prefix = output_prefix, 
-      docker_image = docker_image
+      docker_image = docker_image,
+      runtime_attr_override = runtime_attr_concat_vcfs
   }
 
   output {
@@ -53,6 +61,7 @@ task ExtractContigVCF {
     File vcf_index
     String contig
     String docker_image
+    RuntimeAttr? runtime_attr_override
   }
 
   command <<<
@@ -67,11 +76,25 @@ task ExtractContigVCF {
     File out_vcf_index = "~{contig}.A.vcf.gz.tbi"
   }
 
+  RuntimeAttr default_attr = object {
+      cpu_cores: 1,
+      mem_gb: 10,
+      disk_gb: 15 + ceil(size(vcf, "GiB") *3),
+      boot_disk_gb: 10,
+      preemptible_tries: 1,
+      max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
   runtime {
-    docker: docker_image
-    cpu: 1
-    memory: "4 GiB"
-    disks: "local-disk 20 HDD"
+      cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+      memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+      bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+      docker: docker_image
+      preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+      maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
@@ -83,6 +106,7 @@ task PatchGenotypes {
     File patch_script
     String contig
     String docker_image
+    RuntimeAttr? runtime_attr_override
   }
 
   command <<<
@@ -101,11 +125,25 @@ task PatchGenotypes {
     File out_vcf_index = "~{contig}.patched.vcf.gz.tbi"
   }
 
+  RuntimeAttr default_attr = object {
+      cpu_cores: 1,
+      mem_gb: 10,
+      disk_gb: 15 + ceil(size(vcf_B, "GiB") *2),
+      boot_disk_gb: 10,
+      preemptible_tries: 1,
+      max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
   runtime {
-    docker: docker_image
-    cpu: 1
-    memory: "6 GiB"
-    disks: "local-disk 30 HDD"
+      cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+      memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+      bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+      docker: docker_image
+      preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+      maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
@@ -114,6 +152,7 @@ task ConcatPatchedVCFs {
     Array[File] vcfs
     String output_prefix
     String docker_image
+    RuntimeAttr? runtime_attr_override
   }
 
   command <<<
@@ -135,11 +174,24 @@ task ConcatPatchedVCFs {
     File out_vcf_index = "~{output_prefix}.vcf.gz.tbi"
   }
 
+  RuntimeAttr default_attr = object {
+      cpu_cores: 1,
+      mem_gb: 10,
+      disk_gb: 15 + ceil(size(vcfs, "GiB") *3),
+      boot_disk_gb: 10,
+      preemptible_tries: 1,
+      max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
   runtime {
-    docker: docker_image
-    cpu: 1
-    memory: "8 GiB"
-    disks: "local-disk 50 HDD"
+      cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+      memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+      bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+      docker: docker_image
+      preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+      maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
