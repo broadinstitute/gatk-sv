@@ -1,10 +1,22 @@
 # This is the barebones image for the GATK SV pipeline that includes only
 # some basic bioinformatics utilities.
 ARG UBUNTU_RELEASE="22.04"
-ARG HTSLIB_VERSION="1.15.1"
+ARG HTSLIB_VERSION="1.21"
 ARG BEDTOOLS_VERSION="2.31.0"
 ARG VCFTOOLS_VERSION="0.1.16"
 ARG BWA_COMMIT="139f68fc4c3747813783a488aef2adc86626b01b"
+
+# You may speed up the compilation of htslib, bcftools, and vcftools by
+# parallelizing the build process. You may dynamically choose thread count
+# at runtime using: -j $(nproc --all)
+# However, that runs into uncommon error (maybe race condition) with the
+# following error message:
+# > collect2: error: ld returned 1 exit status
+#
+# While running with a single-thread is slower, but the process is more
+# reproducible and reliable. You may override the following argument
+# and be mindful of the above possible error.
+ARG THREAD_COUNT="1"
 
 ARG APT_REQUIRED_PACKAGES="/opt/apt-required-packages.list"
 
@@ -24,15 +36,17 @@ RUN wget -q https://github.com/samtools/samtools/releases/download/${HTSLIB_VERS
     tar xjf samtools-${HTSLIB_VERSION}.tar.bz2 && \
     cd samtools-${HTSLIB_VERSION} && \
     ./configure --quiet --enable-libcurl --prefix=/opt/samtools && \
-    make -s -j $(nproc --all) all all-htslib && \
+    make -s -j ${THREAD_COUNT} all all-htslib && \
     make -s install install-htslib
+
 # install bcftools
 RUN wget -q https://github.com/samtools/bcftools/releases/download/${HTSLIB_VERSION}/bcftools-${HTSLIB_VERSION}.tar.bz2 && \
     tar xjf bcftools-${HTSLIB_VERSION}.tar.bz2 && \
     cd bcftools-${HTSLIB_VERSION} && \
     ./configure --quiet --prefix=/opt/bcftools && \
-    make -s -j $(nproc --all) && \
+    make -s -j ${THREAD_COUNT} && \
     make -s install
+
 # install vcftools
 ARG VCFTOOLS_VERSION
 RUN wget -q https://github.com/vcftools/vcftools/releases/download/v$VCFTOOLS_VERSION/vcftools-${VCFTOOLS_VERSION}.tar.gz && \
@@ -40,7 +54,7 @@ RUN wget -q https://github.com/vcftools/vcftools/releases/download/v$VCFTOOLS_VE
     cd vcftools-${VCFTOOLS_VERSION} && \
     export PERL5LIB=$(pwd)/src/perl/ && \
     ./configure --quiet --prefix=/opt/vcftools && \
-    make -s -j $(nproc --all) && \
+    make -s -j ${THREAD_COUNT} && \
     make -s install
 
 # install bedtools
