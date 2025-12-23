@@ -5,9 +5,9 @@ import "Structs.wdl"
 workflow UpdateVcfGenotypes {
   input {
     File vcf_A
-    File vcf_A_index
+    File vcf_A_idx
     File vcf_B
-    File vcf_B_index
+    File vcf_B_idx
     File patch_script          # patch_vcf.py
     String output_prefix
     Array[String] contigs
@@ -16,6 +16,7 @@ workflow UpdateVcfGenotypes {
     RuntimeAttr? runtime_attr_concat_vcfs
     RuntimeAttr? runtime_attr_patch_genotypes
     RuntimeAttr? runtime_attr_extract_contig_vcf
+    RuntimeAttr? runtime_attr_extract_variant_sites
 
   }
 
@@ -23,18 +24,25 @@ workflow UpdateVcfGenotypes {
     call ExtractContigVCF {
       input:
         vcf = vcf_A,
-        vcf_index = vcf_A_index,
+        vcf_idx = vcf_A_idx,
         contig = ctg,
         docker_image = docker_image,
         runtime_attr_override = runtime_attr_extract_contig_vcf
+    }
+
+    call ExtractVariantSites {
+      input:
+        vcf = ExtractContigVCF.out_vcf,
+        docker_image = docker_image,
+        runtime_attr_override = runtime_attr_extract_variant_sites
     }
 
     call PatchGenotypes {
       input:
         contig = ctg,
         vcf_B = vcf_B,
-        vcf_B_index = vcf_B_index,
-        vcf_A_contig = ExtractContigVCF.out_vcf,
+        vcf_B_idx = vcf_B_idx,
+        vcf_A_contig = ExtractVariantSites.out_sites,
         patch_script = patch_script,
         docker_image = docker_image,
         runtime_attr_override = runtime_attr_patch_genotypes
@@ -51,14 +59,14 @@ workflow UpdateVcfGenotypes {
 
   output {
     File updated_vcf = ConcatPatchedVCFs.out_vcf
-    File updated_vcf_idx = ConcatPatchedVCFs.out_vcf_index
+    File updated_vcf_idx = ConcatPatchedVCFs.out_vcf_idx
   }
 }
 
 task ExtractContigVCF {
   input {
     File vcf
-    File vcf_index
+    File vcf_idx
     String contig
     String docker_image
     RuntimeAttr? runtime_attr_override
@@ -73,7 +81,7 @@ task ExtractContigVCF {
 
   output {
     File out_vcf = "~{contig}.A.vcf.gz"
-    File out_vcf_index = "~{contig}.A.vcf.gz.tbi"
+    File out_vcf_idx = "~{contig}.A.vcf.gz.tbi"
   }
 
   RuntimeAttr default_attr = object {
@@ -98,23 +106,71 @@ task ExtractContigVCF {
   }
 }
 
+task ExtractVariantSites {
+  input {
+    File vcf
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String prefix = basename(vcf, ".vcf.gz")
+  command <<<
+    set -euo pipefail
+
+    bcftools view ~{vcf} | cut -f1-8 | bgzip > ~{prefix}.sites.gz
+    tabix -p vcf ~{prefix}.sites.gz
+  >>>
+
+  output {
+    File out_sites = "~{prefix}.sites.gz"
+    File out_sites_idx = "~{prefix}.sites.gz.tbi"
+  }
+
+  RuntimeAttr default_attr = object {
+      cpu_cores: 1,
+      mem_gb: 10,
+      disk_gb: 15 + ceil(size(vcf, "GiB") *3),
+      boot_disk_gb: 10,
+      preemptible_tries: 1,
+      max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+      cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+      memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+      bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+      docker: docker_image
+      preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+      maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
 task PatchGenotypes {
   input {
     File vcf_A_contig
     File vcf_B
-    File vcf_B_index
+    File vcf_B_idx
     File patch_script
     String contig
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
 
+
+  String prefix = basename(vcf_B, ".vcf.gz")
   command <<<
     set -euo pipefail
 
+    bcftools view ~{vcf_B} ~{contig} |bgzip > "~{prefix}.~{contig}.target.vcf.gz"
+    tabix -p vcf "~{prefix}.~{contig}.target.vcf.gz"
+
     python3 ~{patch_script} \
       ~{vcf_A_contig} \
-      ~{vcf_B} \
+      "~{prefix}.~{contig}.target.vcf.gz" \
       ~{contig}.patched.vcf.gz
 
     tabix -p vcf ~{contig}.patched.vcf.gz
@@ -122,7 +178,7 @@ task PatchGenotypes {
 
   output {
     File out_vcf = "~{contig}.patched.vcf.gz"
-    File out_vcf_index = "~{contig}.patched.vcf.gz.tbi"
+    File out_vcf_idx = "~{contig}.patched.vcf.gz.tbi"
   }
 
   RuntimeAttr default_attr = object {
@@ -171,7 +227,7 @@ task ConcatPatchedVCFs {
 
   output {
     File out_vcf = "~{output_prefix}.vcf.gz"
-    File out_vcf_index = "~{output_prefix}.vcf.gz.tbi"
+    File out_vcf_idx = "~{output_prefix}.vcf.gz.tbi"
   }
 
   RuntimeAttr default_attr = object {
