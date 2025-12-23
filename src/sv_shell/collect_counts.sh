@@ -60,8 +60,11 @@ java -Xmx${command_mem_mb}m -jar /opt/gatk.jar CollectReadCounts \
 sed -ri "s/@RG\tID:GATKCopyNumber\tSM:.+/@RG\tID:GATKCopyNumber\tSM:${sample_id}/g" "${sample_id}.counts.tsv"
 bgzip --force "${sample_id}.counts.tsv"
 
+tabix -s 1 -b 2 -e 3 -c @ "${sample_id}.counts.tsv.gz"
+
 counts_filename="${output_dir}/${sample_id}.counts.tsv.gz"
 mv "${sample_id}.counts.tsv.gz" "${counts_filename}"
+mv "${sample_id}.counts.tsv.gz.tbi" "${counts_filename}.tbi"
 
 outputs_filename="${output_dir}/outputs.json"
 outputs_json=$(jq -n \

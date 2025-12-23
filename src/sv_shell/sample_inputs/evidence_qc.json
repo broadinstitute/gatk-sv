@@ -8,7 +8,7 @@
   ],
   "bincov_matrix": "/inputs/all_samples.RD.txt.gz",
   "reference_dict": "/inputs/Homo_sapiens_assembly38.dict",
-  "run_vcf_qc" : "true",
+  "run_vcf_qc": false,
   "wgd_scoring_mask": "/inputs/wgd_scoring_mask.hg38.gnomad_v3.bed",
   "genome_file": "/inputs/hg38.genome",
   "run_ploidy": false
