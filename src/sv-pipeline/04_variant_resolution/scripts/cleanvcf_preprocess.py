@@ -17,6 +17,20 @@ EV_VALUES = ['SR', 'PE', 'SR,PE', 'RD', 'BAF', 'RD,BAF']
 MIN_ALLOSOME_EVENT_SIZE = 5000
 
 
+def load_unknown_sex_samples(ped_path):
+    unknown_samples = set()
+    with open(ped_path, 'r') as ped:
+        for line in ped:
+            columns = line.strip().split()
+            if not columns:
+                continue
+            sample = columns[1]
+            sex = columns[4]
+            if sex not in ('1', '2'):
+                unknown_samples.add(sample)
+    return unknown_samples
+
+
 def process_varGQ(record):
     if VAR_GQ in record.info:
         var_gq = record.info[VAR_GQ]
@@ -58,7 +72,7 @@ def process_bothsides_support(record, pass_set):
     return record
 
 
-def process_allosomes(record, chrX, chrY):
+def process_allosomes(record, chrX, chrY, unknown_sex_samples):
     chromosome = record.chrom
     if chromosome not in (chrX, chrY):
         return record
@@ -68,19 +82,19 @@ def process_allosomes(record, chrX, chrY):
     sv_len = record.info.get('SVLEN', 0)
 
     if sv_type in ('DEL', 'DUP') and sv_len >= MIN_ALLOSOME_EVENT_SIZE:
-        if is_revisable_event(record, is_y):
+        if is_revisable_event(record, is_y, unknown_sex_samples):
             record.info[REVISED_EVENT] = True
-            for sample in record.samples:
-                genotype = record.samples[sample]
-                ecn = genotype.get('ECN', None)
-                if ecn == 1:
-                    adjust_male_genotype(genotype, sv_type)
-    
-    if is_y:
-        for sample in record.samples:
-            genotype = record.samples[sample]
-            ecn = genotype.get('ECN', None)
-            if ecn == 0:
+
+    for sample in record.samples:
+        genotype = record.samples[sample]
+        ecn = genotype.get('ECN')
+        if sample in unknown_sex_samples:
+            record.samples[sample]['GT'] = (None, None)
+        elif ecn == 1:
+            if record.info[REVISED_EVENT]:
+                adjust_male_genotype(genotype, sv_type)
+        elif ecn == 2: 
+            if is_y:
                 clear_genotype_fields(genotype)
 
     return record
@@ -88,27 +102,24 @@ def process_allosomes(record, chrX, chrY):
 
 def clear_genotype_fields(genotype):
     genotype['GT'] = (None, None)
-    optional_fields = ['EV', 'GQ', 'PE_GQ', 'PE_GT', 'RD_CN', 'RD_GQ', 'SR_GQ', 'SR_GT']
-    for field in optional_fields:
-        if field in genotype:
-            genotype[field] = None
+    for key in genotype.keys():
+        genotype[key] = None
 
 
-def is_revisable_event(record, is_y):
-    genotypes = record.samples.values()
+def is_revisable_event(record, is_y, unknown_sex_samples):
     male_counts = [0, 0, 0, 0]
     female_counts = [0, 0, 0, 0]
 
-    for genotype in genotypes:
-        sample_ecn = genotype.get('ECN', None)
-        rd_cn = genotype.get('RD_CN', -1)
-        
-        if rd_cn is None or rd_cn == -1:
+    for sample in record.samples:
+        sample_ecn = record.samples[sample]['ECN']
+        rd_cn = record.samples[sample]['RD_CN']
+        if rd_cn is None:
             continue
             
         rd_cn_val = min(int(rd_cn), 3)
-
-        if sample_ecn == 1:
+        if sample in unknown_sex_samples:
+            continue
+        elif sample_ecn == 1:
             male_counts[rd_cn_val] += 1
         elif is_y and sample_ecn == 0:
             female_counts[rd_cn_val] += 1
@@ -121,7 +132,7 @@ def is_revisable_event(record, is_y):
 
 
 def adjust_male_genotype(genotype, sv_type):
-    rd_cn = genotype.get('RD_CN', 0)
+    rd_cn = genotype.get('RD_CN')
     if rd_cn is None:
         return
     
@@ -166,14 +177,14 @@ def read_last_column(file_path):
     return result_set
 
 
-def process_record(record, chrX, chrY, fail_set, pass_set):
+def process_record(record, chrX, chrY, fail_set, pass_set, unknown_sex_samples):
     record = process_varGQ(record)
     record = process_multiallelic(record)
     record = process_unresolved(record)
     record = process_svtype(record)
     record = process_noisy(record, fail_set)
     record = process_bothsides_support(record, pass_set)
-    record = process_allosomes(record, chrX, chrY)
+    record = process_allosomes(record, chrX, chrY, unknown_sex_samples)
     return record
 
 
@@ -185,12 +196,15 @@ if __name__ == '__main__':
     parser.add_argument('--chrY', required=True, help='Chromosome Y representation in VCF')
     parser.add_argument('--fail-list', required=True, help='File with variants failing the background test')
     parser.add_argument('--pass-list', required=True, help='File with variants passing both sides')
+    parser.add_argument('--ped-file', required=True, help='PED file containing sample sex annotations')
     args = parser.parse_args()
 
     chrX = args.chrX
     chrY = args.chrY
     fail_set = read_last_column(args.fail_list)
     pass_set = read_last_column(args.pass_list)
+    unknown_sex_samples = load_unknown_sex_samples(args.ped_file)
+
     if args.input_vcf.endswith('.gz'):
         vcf_in = pysam.VariantFile(gzip.open(args.input_vcf, 'rt'))
     else:
@@ -202,7 +216,7 @@ if __name__ == '__main__':
         vcf_out = pysam.VariantFile(args.output_vcf, 'w', header=vcf_in.header.copy())
 
     for record in vcf_in:
-        record = process_record(record, chrX, chrY, fail_set, pass_set)
+        record = process_record(record, chrX, chrY, fail_set, pass_set, unknown_sex_samples)
         vcf_out.write(record)
 
     vcf_in.close()

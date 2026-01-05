@@ -31,7 +31,6 @@ workflow CleanVcfChromosome {
     RuntimeAttr? runtime_attr_preprocess
     RuntimeAttr? runtime_attr_revise_overlapping_cnvs
     RuntimeAttr? runtime_attr_revise_large_cnvs
-    RuntimeAttr? runtime_attr_revise_abnormal_allosomes
     RuntimeAttr? runtime_attr_revise_multiallelics
     RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_override_drop_redundant_cnvs
@@ -60,6 +59,7 @@ workflow CleanVcfChromosome {
       chr_y=chr_y,
       background_list=background_list,
       bothsides_pass_list=bothsides_pass_list,
+      ped_file=ped_file,
       prefix="~{prefix}.preprocess",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_preprocess
@@ -84,21 +84,10 @@ workflow CleanVcfChromosome {
       runtime_attr_override=runtime_attr_revise_large_cnvs
   }
 
-  if (contig == chr_x || contig == chr_y) {
-    call CleanVcfReviseAbnormalAllosomes {
-      input:
-        vcf=CleanVcfReviseMultiallelicCnvs.out,
-        vcf_idx=CleanVcfReviseMultiallelicCnvs.out_idx,
-        prefix="~{prefix}.revise_abnormal_allosomes",
-        gatk_docker=gatk_docker,
-        runtime_attr_override=runtime_attr_revise_abnormal_allosomes
-    }
-  }
-
   call CleanVcfReviseOverlappingMultiallelics {
     input:
-      vcf=select_first([CleanVcfReviseAbnormalAllosomes.out, CleanVcfReviseMultiallelicCnvs.out]),
-      vcf_idx=select_first([CleanVcfReviseAbnormalAllosomes.out_idx, CleanVcfReviseMultiallelicCnvs.out_idx]),
+      vcf=CleanVcfReviseMultiallelicCnvs.out,
+      vcf_idx=CleanVcfReviseMultiallelicCnvs.out_idx,
       prefix="~{prefix}.revise_overlapping_multiallelics",
       gatk_docker=gatk_docker,
       runtime_attr_override=runtime_attr_revise_multiallelics
@@ -108,6 +97,7 @@ workflow CleanVcfChromosome {
     input:
       vcf=CleanVcfReviseOverlappingMultiallelics.out,
       vcf_idx=CleanVcfReviseOverlappingMultiallelics.out_idx,
+      ped_file=ped_file,
       prefix="~{prefix}.postprocess",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_postprocess
@@ -197,6 +187,7 @@ task CleanVcfPreprocess {
     String chr_y
     File background_list
     File bothsides_pass_list
+    File ped_file
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -252,7 +243,8 @@ task CleanVcfPreprocess {
       --chrX ~{chr_x} \
       --chrY ~{chr_y} \
       --fail-list ~{background_list} \
-      --pass-list ~{bothsides_pass_list}
+      --pass-list ~{bothsides_pass_list} \
+      --ped-file ~{ped_file}
 
     tabix -p vcf ~{output_vcf}
   >>>
@@ -355,51 +347,6 @@ task CleanVcfReviseMultiallelicCnvs {
   }
 }
 
-task CleanVcfReviseAbnormalAllosomes {
-  input {
-    File vcf
-    File vcf_idx
-    String prefix
-    String gatk_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr runtime_default = object {
-    mem_gb: ceil(5.0 + size(vcf, "GB") * 1.5),
-    disk_gb: ceil(10.0 + size(vcf, "GB") * 3.0),
-    cpu_cores: 1,
-    preemptible_tries: 3,
-    max_retries: 1,
-    boot_disk_gb: 10
-  }						
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: gatk_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-  }
-
-  Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
-  String output_vcf = "~{prefix}.vcf.gz"
-
-  command <<<
-    set -euo pipefail
-      
-    gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseAbnormalAllosomes \
-      -V ~{vcf} \
-      -O ~{output_vcf}
-  >>>
-
-  output {
-    File out="~{output_vcf}"
-    File out_idx="~{output_vcf}.tbi"
-  }
-}
-
 task CleanVcfReviseOverlappingMultiallelics {
   input {
     File vcf
@@ -449,6 +396,7 @@ task CleanVcfPostprocess {
   input {
     File vcf
     File vcf_idx
+    File ped_file
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -485,7 +433,8 @@ task CleanVcfPostprocess {
 
     python /opt/sv-pipeline/04_variant_resolution/scripts/cleanvcf_postprocess.py \
       -V ~{vcf} \
-      -O processed.vcf.gz
+      -O processed.vcf.gz \
+      --ped-file ~{ped_file}
 
     bcftools annotate -x INFO/MULTIALLELIC,INFO/UNRESOLVED,INFO/EVENT,INFO/REVISED_EVENT,INFO/MULTI_CNV,INFO/varGQ processed.vcf.gz -o processed.annotated.vcf.gz -O z
 
