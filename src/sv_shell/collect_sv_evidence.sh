@@ -6,28 +6,53 @@
 
 set -Exeuo pipefail
 
-sample_id=${1}
-bam_or_cram_file=${2}
-bam_or_cram_index=${3}
-reference_fasta=${4}
-reference_index=${5}
-reference_dict=${6}
-sd_locs_vcf=${7}
-preprocessed_intervals=${8}
-outputs_json_filename=${9}
-site_depth_min_mapq=${10:-6}
-site_depth_min_baseq=${11:-10}
-primary_contigs_list="${12:-}"
-gatk_jar_override="${13:-/root/gatk.jar}"
-command_mem_mb=${14:-3250}
+# -------------------------------------------------------
+# ==================== Input & Setup ====================
+# -------------------------------------------------------
+
+input_json=${1}
+output_json_filename=${2-""}
+output_dir=${3:-""}
+
+input_json="$(realpath ${input_json})"
+
+if [ -z "${output_dir}" ]; then
+  output_dir=$(mktemp -d /output_collect_sv_evidence_XXXXXXXX)
+else
+  mkdir -p "${output_dir}"
+fi
+output_dir="$(realpath ${output_dir})"
+
+if [ -z "${output_json_filename}" ]; then
+  output_json_filename="${output_dir}/output.json"
+else
+  output_json_filename="$(realpath ${output_json_filename})"
+fi
 
 working_dir=$(mktemp -d /wd_collect_sv_evidence_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
-output_dir=$(mktemp -d /output_collect_sv_evidence_XXXXXXXX)
-output_dir="$(realpath ${output_dir})"
 cd "${working_dir}"
+echo "collect_sv_evidence working directory: ${working_dir}"
 
-export GATK_LOCAL_JAR="$gatk_jar_override"
+
+sample_id=$(jq -r ".sample_id" "$input_json")
+bam_or_cram_file=$(jq -r ".bam_or_cram_file" "$input_json")
+bam_or_cram_index=$(jq -r ".bam_or_cram_index" "$input_json")
+reference_fasta=$(jq -r ".reference_fasta" "$input_json")
+reference_index=$(jq -r ".reference_index" "$input_json")
+reference_dict=$(jq -r ".reference_dict" "$input_json")
+sd_locs_vcf=$(jq -r ".sd_locs_vcf" "$input_json")
+preprocessed_intervals=$(jq -r ".preprocessed_intervals" "$input_json")
+site_depth_min_mapq=$(jq -r ".site_depth_min_mapq // 6" "$input_json")
+site_depth_min_baseq=$(jq -r ".site_depth_min_baseq // 10" "$input_json")
+primary_contigs_list=$(jq -r '.primary_contigs_list // ""' "$input_json")
+command_mem_mb=$(jq -r '.command_mem_mb // 3250' "$input_json")
+
+
+# -------------------------------------------------------
+# ======================= Command =======================
+# -------------------------------------------------------
+
 
 primary_contigs_arg=""
 if [[ -n "$primary_contigs_list" ]]; then
@@ -35,41 +60,52 @@ if [[ -n "$primary_contigs_list" ]]; then
 fi
 
 java -Xmx${command_mem_mb}m -jar /opt/gatk.jar CollectSVEvidence \
-    -I "${bam_or_cram_file}" \
-    --sample-name "${sample_id}" \
-    -F "${sd_locs_vcf}" \
-    -SR "${sample_id}.sr.txt.gz" \
-    -PE "${sample_id}.pe.txt.gz" \
-    -SD "${sample_id}.sd.txt.gz" \
-    --site-depth-min-mapq "${site_depth_min_mapq}" \
-    --site-depth-min-baseq "${site_depth_min_baseq}" \
-    -R "${reference_fasta}" \
-    ${primary_contigs_arg} \
-    --read-filter NonZeroReferenceLengthAlignmentReadFilter
+  -I "${bam_or_cram_file}" \
+  --sample-name "${sample_id}" \
+  -F "${sd_locs_vcf}" \
+  -SR "${sample_id}.sr.txt.gz" \
+  -PE "${sample_id}.pe.txt.gz" \
+  -SD "${sample_id}.sd.txt.gz" \
+  --site-depth-min-mapq "${site_depth_min_mapq}" \
+  --site-depth-min-baseq "${site_depth_min_baseq}" \
+  -R "${reference_fasta}" \
+  ${primary_contigs_arg} \
+  --read-filter NonZeroReferenceLengthAlignmentReadFilter
+
+tabix -f -0 -s1 -b2 -e2 "${sample_id}.sr.txt.gz"
+tabix -f -0 -s1 -b2 -e2 "${sample_id}.pe.txt.gz"
+tabix -f -0 -s1 -b2 -e2 "${sample_id}.sd.txt.gz"
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
 
 split_out_filename="${output_dir}/${sample_id}.sr.txt.gz"
-split_out_index_filename="${output_dir}/${sample_id}.sr.txt.gz.tbi"
 mv "${sample_id}.sr.txt.gz" "${split_out_filename}"
-mv "${sample_id}.sr.txt.gz.tbi" "${split_out_index_filename}"
+mv "${sample_id}.sr.txt.gz.tbi" "${split_out_filename}.tbi"
 
 disc_out_filename="${output_dir}/${sample_id}.pe.txt.gz"
-disc_out_index_filename="${output_dir}/${sample_id}.pe.txt.gz.tbi"
 mv "${sample_id}.pe.txt.gz" "${disc_out_filename}"
-mv "${sample_id}.pe.txt.gz.tbi" "${disc_out_index_filename}"
+mv "${sample_id}.pe.txt.gz.tbi" "${disc_out_filename}.tbi"
 
 sd_out_filename="${output_dir}/${sample_id}.sd.txt.gz"
-sd_out_index_filename="${output_dir}/${sample_id}.sd.txt.gz.tbi"
 mv "${sample_id}.sd.txt.gz" "${sd_out_filename}"
-mv "${sample_id}.sd.txt.gz.tbi" "${sd_out_filename}"
+mv "${sample_id}.sd.txt.gz.tbi" "${sd_out_filename}.tbi"
 
-outputs_filename="${output_dir}/outputs.json"
-outputs_json=$(jq -n \
+jq -n \
   --arg split_out "${split_out_filename}" \
-  --arg split_out_index "${split_out_index_filename}" \
+  --arg split_out_index "${split_out_filename}.tbi" \
   --arg disc_out "${disc_out_filename}" \
-  --arg disc_out_index "${disc_out_index_filename}" \
+  --arg disc_out_index "${disc_out_filename}.tbi" \
   --arg sd_out "${sd_out_filename}" \
-  --arg sd_out_index "${sd_out_index_filename}" \
-  '{split_out: $split_out, split_out_index: $split_out_index, disc_out: $disc_out, disc_out_index: $disc_out_index, sd_out: $sd_out, sd_out_index: $sd_out_index}')
-echo "${outputs_json}" > "${outputs_filename}"
-cp "${outputs_filename}" "${outputs_json_filename}"
+  --arg sd_out_index "${sd_out_filename}.tbi" \
+  '{
+      "split_out": $split_out,
+      "split_out_index": $split_out_index,
+      "disc_out": $disc_out,
+      "disc_out_index": $disc_out_index,
+      "sd_out": $sd_out,
+      "sd_out_index": $sd_out_index
+  }' > "${output_json_filename}"
+
+echo "Successfully finished collect sv evidence, output json filename: ${output_json_filename}"
