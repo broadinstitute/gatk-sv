@@ -2,7 +2,6 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "HailMerge.wdl" as HailMerge
 import "Utils.wdl" as util
 import "AnnotateFunctionalConsequences.wdl" as func
 import "AnnotateExternalAFPerShard.wdl" as eaf
@@ -17,7 +16,7 @@ workflow ShardedAnnotateVcf {
     String prefix
     String contig
 
-    File protein_coding_gtf
+    File? protein_coding_gtf
     File? noncoding_bed
     Int? promoter_window
     Int? max_breakend_as_cnv_length
@@ -34,11 +33,7 @@ workflow ShardedAnnotateVcf {
     String? ref_prefix         # prefix name for external AF call set (required if ref_bed set)
     Array[String]? population  # populations to annotate external AF for (required if ref_bed set)
 
-    Boolean use_hail
-    String? gcs_project
-
     String sv_pipeline_docker
-    String? sv_pipeline_hail_docker
     String sv_base_mini_docker
     String gatk_docker
 
@@ -87,24 +82,26 @@ workflow ShardedAnnotateVcf {
       }
     }
 
-    call func.AnnotateFunctionalConsequences {
-      input:
-        vcf = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
-        vcf_index = SubsetVcfBySamplesList.vcf_subset_index,
-        prefix = shard_prefix,
-        protein_coding_gtf = protein_coding_gtf,
-        noncoding_bed = noncoding_bed,
-        promoter_window = promoter_window,
-        max_breakend_as_cnv_length = max_breakend_as_cnv_length,
-        additional_args = svannotate_additional_args,
-        gatk_docker = gatk_docker,
-        runtime_attr_svannotate = runtime_attr_svannotate
+    if (defined (protein_coding_gtf) || defined (noncoding_bed)) {
+      call func.AnnotateFunctionalConsequences {
+        input:
+          vcf = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
+          vcf_index = SubsetVcfBySamplesList.vcf_subset_index,
+          prefix = shard_prefix,
+          protein_coding_gtf = protein_coding_gtf,
+          noncoding_bed = noncoding_bed,
+          promoter_window = promoter_window,
+          max_breakend_as_cnv_length = max_breakend_as_cnv_length,
+          additional_args = svannotate_additional_args,
+          gatk_docker = gatk_docker,
+          runtime_attr_svannotate = runtime_attr_svannotate
+      }
     }
 
     # Compute AC, AN, and AF per population & sex combination
     call ComputeAFs {
       input:
-        vcf = AnnotateFunctionalConsequences.annotated_vcf,
+        vcf = select_first([AnnotateFunctionalConsequences.annotated_vcf, SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
         prefix = shard_prefix,
         sample_pop_assignments = sample_pop_assignments,
         ped_file = ped_file,
@@ -138,8 +135,8 @@ workflow ShardedAnnotateVcf {
   }
 
   output {
-    Array[File] sharded_annotated_vcf = select_first([select_all(AnnotateExternalAFPerShard.annotated_vcf), ComputeAFs.af_vcf])
-    Array[File] sharded_annotated_vcf_idx = select_first([select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi), ComputeAFs.af_vcf_idx])
+    Array[File] sharded_annotated_vcf = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf) else ComputeAFs.af_vcf
+    Array[File] sharded_annotated_vcf_idx = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi) else ComputeAFs.af_vcf_idx
   }
 }
 
@@ -169,7 +166,7 @@ task ComputeAFs {
     /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py "~{vcf}" stdout \
       ~{"-p " + sample_pop_assignments} \
       ~{"-f " + ped_file} \
-      ~{"-par " + par_bed} \
+      ~{"--par " + par_bed} \
       ~{"--allosomes-list " + allosomes_list} \
     | bgzip -c \
     > "~{prefix}.wAFs.vcf.gz"

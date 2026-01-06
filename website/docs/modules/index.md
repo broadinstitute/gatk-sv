@@ -4,35 +4,21 @@ description: Overview of the constituting components
 sidebar_position: 0
 ---
 
-The pipeline is written in [Workflow Description Language (WDL)](https://openwdl.org),
-consisting of multiple modules to be executed in the following order. 
+GATK-SV consists of multiple modules that need to be executed in a specific order. For joint calling,
+each module must be executed individually in sequence. While the single-sample mode invokes many of these modules, it is 
+implemented as a single runnable workflow.
 
-- **GatherSampleEvidence** SV evidence collection, including calls from a configurable set of 
-  algorithms (Manta, MELT, and Wham), read depth (RD), split read positions (SR), 
-  and discordant pair positions (PE).
+The following diagram illustrates the overall module ordering:
 
-- **EvidenceQC** Dosage bias scoring and ploidy estimation.
+<img alt="pipeline_diagram" title="Pipeline diagram" src="https://media.githubusercontent.com/media/broadinstitute/gatk-sv/v1.0/terra_pipeline_diagram.jpg" width="1000" />
 
-- **GatherBatchEvidence** Copy number variant calling using 
-  `cn.MOPS` and `GATK gCNV`; B-allele frequency (BAF) generation; 
-   call and evidence aggregation.
+Each module is implemented in the [Workflow Description Language (WDL)](https://openwdl.org). The Terra workspaces come 
+pre-configured with default values for all required parameters and set up to run the pipeline for most use cases. 
 
-- **ClusterBatch** Variant clustering
+The following sections supplement the Terra workspaces with documentation for each WDL, including an overview of its 
+function, key input parameters, and outputs. Not all parameters are documented here, as some WDLs contain dozens of 
+inputs. Descriptions of some common inputs can be found in the [Resource files](/docs/resources) and 
+[Runtime attributes](/docs/runtime_attr) sections. Users are encouraged to refer to the WDL source code for additional 
+clarification.
 
-- **GenerateBatchMetrics** Variant filtering metric generation
-
-- **FilterBatch** Variant filtering; outlier exclusion
-
-- **GenotypeBatch** Genotyping
-
-- **MakeCohortVcf** Cross-batch integration; complex variant resolution and re-genotyping; vcf cleanup
-
-- **Module 07 (in development)** Downstream filtering, including minGQ, batch effect check, 
-  outlier samples removal and final recalibration;
-
-- **AnnotateVCF** Annotations, including functional annotation, 
-  allele frequency (AF) annotation and AF annotation with external population callsets;
-
-- **Module 09 (in development)** Visualization, including scripts that generates IGV screenshots and rd plots.
-
-- Additional modules to be added: de novo and mosaic scripts
+For details on running GATK-SV on Terra, refer to the [Execution](/docs/execution/joint#instructions) section.

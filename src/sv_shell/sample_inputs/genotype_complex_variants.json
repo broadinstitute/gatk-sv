@@ -1,0 +1,20 @@
+{
+  "batches": "NA12878",
+  "bin_exclude": "/inputs/bin_exclude.hg38.gatkcov.bed.gz",
+  "bincov_files": "/inputs/NA12878.RD.txt.gz",
+  "cohort_name": "NA12878",
+  "complex_resolve_vcfs": "/inputs/NA12878.reshard_vcf.resharded.vcf.gz",
+  "complex_resolve_vcf_indexes": "/inputs/NA12878.reshard_vcf.resharded.vcf.gz.tbi",
+  "contig_list": "/inputs/contig.fa",
+  "depth_gt_rd_sep_files": "/inputs/all_samples.depth.depth_sepcutoff.txt",
+  "depth_vcfs": "/inputs/NA12878.genotyped_depth.vcf.gz",
+  "generate_index": true,
+  "median_coverage_files": "/inputs/NA12878_medianCov.transposed.bed",
+  "merge_vcfs": true,
+  "naive": false,
+  "ped_file": "/inputs/combined_ped_file.ped",
+  "records_per_shard": null,
+  "ref_dict": "/inputs/Homo_sapiens_assembly38.dict",
+  "sites_only": false,
+  "sort_vcf_list": false
+}

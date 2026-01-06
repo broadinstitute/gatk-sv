@@ -4,7 +4,6 @@ version 1.0
 
 import "GenotypeCpxCnvs.wdl" as GenotypeCpx
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "HailMerge.wdl" as HailMerge
 
 # Workflow to perform depth-based genotyping for a single vcf shard scattered 
 # across batches on predicted CPX CNVs
@@ -21,27 +20,21 @@ workflow ScatterCpxGenotyping {
     Int n_per_split_small
     Int n_per_split_large
     Int n_rd_test_bins
+    Int? min_ddup_thresh
     String prefix
     File ped_file
     String contig
     File ref_dict
 
-    Boolean use_hail
-    String? gcs_project
-
     String linux_docker
     String sv_base_mini_docker
-    String sv_pipeline_updates_docker
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
-    String sv_pipeline_rdtest_docker
 
     # overrides for MiniTasks
     RuntimeAttr? runtime_override_split_vcf_to_genotype
     RuntimeAttr? runtime_override_concat_cpx_cnv_vcfs
 
     RuntimeAttr? runtime_override_preconcat
-    RuntimeAttr? runtime_override_hail_merge
     RuntimeAttr? runtime_override_fix_header
 
     # overrides for GenotypeCpx
@@ -62,7 +55,7 @@ workflow ScatterCpxGenotyping {
       vcf=vcf,
       prefix=contig_prefix,
       records_per_shard=records_per_shard,
-      sv_pipeline_docker=sv_pipeline_updates_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_split_vcf_to_genotype
   }
 
@@ -81,6 +74,7 @@ workflow ScatterCpxGenotyping {
         n_per_split_large=n_per_split_large,
         n_per_split_small=n_per_split_small,
         n_rd_test_bins=n_rd_test_bins,
+        min_ddup_thresh=min_ddup_thresh,
         prefix=prefix,
         ped_file=ped_file,
         contig=contig,
@@ -88,7 +82,6 @@ workflow ScatterCpxGenotyping {
         linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
         runtime_override_ids_from_median=runtime_override_ids_from_median,
         runtime_override_get_cpx_cnv_intervals=runtime_override_get_cpx_cnv_intervals,
         runtime_override_parse_genotypes=runtime_override_parse_genotypes,
@@ -99,35 +92,19 @@ workflow ScatterCpxGenotyping {
     }
   }
 
-  if (use_hail) {
-    call HailMerge.HailMerge as ConcatCpxCnvVcfsHail {
-      input:
-        vcfs=GenotypeShard.cpx_depth_gt_resolved_vcf,
-        prefix="~{prefix}.regenotyped",
-        gcs_project=gcs_project,
-        sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
-        runtime_override_preconcat=runtime_override_preconcat,
-        runtime_override_hail_merge=runtime_override_hail_merge,
-        runtime_override_fix_header=runtime_override_fix_header
-    }
-  }
-  if (!use_hail) {
-    call MiniTasks.ConcatVcfs as ConcatCpxCnvVcfs {
-      input:
-        vcfs=GenotypeShard.cpx_depth_gt_resolved_vcf,
-        vcfs_idx=GenotypeShard.cpx_depth_gt_resolved_vcf_idx,
-        allow_overlaps=true,
-        outfile_prefix="~{prefix}.regenotyped",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_override_concat_cpx_cnv_vcfs
-    }
+  call MiniTasks.ConcatVcfs as ConcatCpxCnvVcfs {
+    input:
+      vcfs=GenotypeShard.cpx_depth_gt_resolved_vcf,
+      vcfs_idx=GenotypeShard.cpx_depth_gt_resolved_vcf_idx,
+      allow_overlaps=true,
+      outfile_prefix="~{prefix}.regenotyped",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_concat_cpx_cnv_vcfs
   }
 
   # Output merged VCF
   output {
-    File cpx_depth_gt_resolved_vcf = select_first([ConcatCpxCnvVcfs.concat_vcf, ConcatCpxCnvVcfsHail.merged_vcf])
-    File cpx_depth_gt_resolved_vcf_idx = select_first([ConcatCpxCnvVcfs.concat_vcf_idx, ConcatCpxCnvVcfsHail.merged_vcf_index])
+    File cpx_depth_gt_resolved_vcf = ConcatCpxCnvVcfs.concat_vcf
+    File cpx_depth_gt_resolved_vcf_idx = ConcatCpxCnvVcfs.concat_vcf_idx
   }
  }

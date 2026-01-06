@@ -2,8 +2,9 @@
 # some basic bioinformatics utilities.
 ARG UBUNTU_RELEASE="22.04"
 ARG HTSLIB_VERSION="1.15.1"
-ARG BEDTOOLS_VERSION="2.30.0"
+ARG BEDTOOLS_VERSION="2.31.0"
 ARG VCFTOOLS_VERSION="0.1.16"
+ARG BWA_COMMIT="139f68fc4c3747813783a488aef2adc86626b01b"
 
 ARG APT_REQUIRED_PACKAGES="/opt/apt-required-packages.list"
 
@@ -14,7 +15,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy dist-upgrade && \
     apt-get -qqy install --no-install-recommends \
-        ca-certificates autoconf automake bzip2 g++ make wget pkgconf python2 \
+        ca-certificates autoconf automake bzip2 g++ git make wget pkgconf python2 \
         libssl-dev libbz2-dev libcurl4-openssl-dev liblzma-dev libncurses-dev zlib1g-dev libdeflate-dev
 
 # install samtools
@@ -46,11 +47,24 @@ RUN wget -q https://github.com/vcftools/vcftools/releases/download/v$VCFTOOLS_VE
 #   during install, bedtools needs python2 to be callable as "python"
 RUN ln -s /usr/bin/python2 /usr/bin/python
 ARG BEDTOOLS_VERSION
-RUN wget -q https://github.com/arq5x/bedtools2/releases/download/v$BEDTOOLS_VERSION/bedtools.static.binary && \
+RUN wget -q https://github.com/arq5x/bedtools2/releases/download/v$BEDTOOLS_VERSION/bedtools.static && \
     mkdir -p /opt/bedtools/bin && \
-    mv bedtools.static.binary /opt/bedtools/bin/bedtools && \
+    mv bedtools.static /opt/bedtools/bin/bedtools && \
     chmod a+x /opt/bedtools/bin/bedtools
 
+# install bwa
+# must do from source because of compiler error in latest release (see https://github.com/lh3/bwa/issues/387)
+ARG BWA_COMMIT
+RUN cd /opt && \
+    git clone https://github.com/lh3/bwa.git && \
+    cd bwa && \
+    git checkout $BWA_COMMIT && \
+    make -s && \
+    cd .. && \
+    mkdir -p /opt/bin && \
+    mv /opt/bwa/bwa /opt/bin/ && \
+    rm -r bwa
+ENV PATH=/opt/bin:$PATH
 
 ############### stage 1: copy tools and install needed non-dev libraries
 FROM ubuntu:$UBUNTU_RELEASE
@@ -100,3 +114,4 @@ RUN tabix --version
 RUN bcftools --version
 RUN bedtools --version
 RUN vcftools --version
+RUN which bwa

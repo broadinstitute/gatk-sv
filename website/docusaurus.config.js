@@ -1,8 +1,7 @@
 // @ts-check
 // Note: type annotations allow type checking and IDEs autocompletion
 
-const lightCodeTheme = require('prism-react-renderer/themes/github');
-const darkCodeTheme = require('prism-react-renderer/themes/dracula');
+import {themes as prismThemes} from 'prism-react-renderer';
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -30,8 +29,6 @@ const config = {
       ({
         docs: {
           sidebarPath: require.resolve('./sidebars.js'),
-          // Please change this to your repo.
-          // Remove this to remove the "edit this page" links.
           editUrl:
             'https://github.com/broadinstitute/gatk-sv/tree/master/website',
         },
@@ -41,6 +38,10 @@ const config = {
         },*/
         theme: {
           customCss: require.resolve('./src/css/custom.css'),
+        },
+        gtag: {
+          trackingID: 'G-9DQEYKHD1M',
+          anonymizeIP: true,
         },
       }),
     ],
@@ -106,6 +107,14 @@ const config = {
               {
                 label: 'Talkowski lab',
                 to: 'https://talkowski.mgh.harvard.edu',
+              },
+              {
+                label: 'Broad Institute',
+                to: 'https://www.broadinstitute.org'
+              },
+              {
+                label: 'Center for Genomic Medicine',
+                to: 'https://www.massgeneral.org/research/cgm'
               }
             ],
           },
@@ -118,9 +127,12 @@ const config = {
         indexName: 'gatk-sv',
         contextualSearch: true
     },
-      prism: {
-        theme: lightCodeTheme,
-        darkTheme: darkCodeTheme,
+    prism: {
+        theme: prismThemes.github,
+        darkTheme: prismThemes.vsDark,
+        additionalLanguages: [
+            'bash', 'powershell', 'json', 'json5', 'r', 'awk', 'jq', 'diff',
+            'git', 'ignore', 'log', 'makefile', 'regex', 'docker']
       },
       docs: {
         sidebar: {

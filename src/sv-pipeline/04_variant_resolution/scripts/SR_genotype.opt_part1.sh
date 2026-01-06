@@ -18,7 +18,7 @@ pegenotypes=$8
 batch=$9
 
 sr_pval=$(awk -F'\t' 'NR==1{for(i=1;i<=NF;i++) col[$i]=i; next}
-          {if ( $col["metric"]=="SR_sum_log_pval") print $col["cutoff"]}' $RF_cutoffs | head -n 1)
+          {if ( $col["metric"]=="SRQ") print $col["cutoff"]}' $RF_cutoffs | head -n 1)
 sr_count=$(/opt/sv-pipeline/04_variant_resolution/scripts/convert_poisson_p.py $sr_pval)
 
 #Require both sides to have at least half of sr_count for training purposes
@@ -37,22 +37,25 @@ awk '{if ($NF~"SR") print $4}' int.bed> pass.srtest.txt
 echo "step1"
 
 # Join RD and SR genotypes and filter same as PE
-cat $petrainfile|fgrep -wf pass.srtest.txt > sr.train.include.txt
+cat $petrainfile \
+  |awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} ($1 in ids)' pass.srtest.txt - \
+  > sr.train.include.txt
 
-join -j 1  -a 1 -e "2" -o 1.2 1.3 1.4 2.2 \
+join -j 1 -a 1 -e "2" -o 1.2 1.3 1.4 2.2 \
     <(zcat ${SR_sum} \
-        | fgrep -wf sr.train.include.txt \
+        | awk 'ARGIND==1{ids[$1]; next} ($1 in ids)' sr.train.include.txt - \
         | awk '{print $1"@"$2 "\t" $0}' \
-        | fgrep -wf two.sided.pass.txt \
+        | awk 'ARGIND==1{ids[$1]; next} ($1 in ids)' two.sided.pass.txt - \
         | sort -k1,1 ) \
-    <(zcat $RD_melted_genotypes|fgrep -wf sr.train.include.txt \
+    <(zcat $RD_melted_genotypes \
+        | awk 'ARGIND==1{ids[$1]; next} ($4 in ids)' sr.train.include.txt - \
         | awk '{print $4"@"$5 "\t" $6}' \
-        | fgrep -wf two.sided.pass.txt \
+        | awk 'ARGIND==1{ids[$1]; next} ($1 in ids)' two.sided.pass.txt - \
         | sort -k1,1) \
   | tr ' ' '\t' \
-  > SR.RD.merged.txt 
+  > SR.RD.merged.txt
 
-# Get cutoffs to filter out incorrectly label hom in R and treat combine het (1 and 3) and hom (0 and 4) copy states 
+# Get cutoffs to filter out incorrectly label hom in R and treat combine het (1 and 3) and hom (0 and 4) copy states
 # throw out any copy state  calls that have reads less than with p=0.05 away from copy state 1 or 3
 
 het_cutoff=$(awk '{print $1"@"$2"\t" $3 "\t" $4}' SR.RD.merged.txt \
@@ -74,7 +77,7 @@ median_hom=$(awk '{if ($NF==0 || $NF==4) print $3}'  SR.RD.hetfilter.merged.txt 
                          -e 'median(d)' \
                | tr '\n' '\t' \
                | awk '{print $NF}')
-##get std from 1 && 3  for hom restriction###          
+##get std from 1 && 3  for hom restriction###
 sd_het=$(awk '{if ($NF==1 || $NF==3) print $3}'  SR.RD.hetfilter.merged.txt \
            | Rscript -e 'd<-scan("stdin", quiet=TRUE)' \
                      -e 'mad(d)' \
@@ -84,20 +87,20 @@ sd_het=$(awk '{if ($NF==1 || $NF==3) print $3}'  SR.RD.hetfilter.merged.txt \
 ##Genotype SR genotype (0-ref, then estimate copy state based on copy state that is 1 sd from sd_het  )##
 zcat ${SR_sum} \
   | awk '{print $0 "\t" $1"@"$2}' \
-  | fgrep -wf two.sided.pass.txt \
+  | awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} ($4 in ids)' two.sided.pass.txt - \
   | cut -f1-3 \
   | awk -v var=$sr_count -v var1=$median_hom -v var2=$sd_het '{if ($3<var) print $1,$2,$3,0;else if ($3<=var1-var2) print $1,$2,$3,1; else print $1,$2,$3,int($3/(var1/2)+0.5)}'  \
   > sr.geno.final.txt
 
 zcat ${SR_sum} \
   | awk '{print $0 "\t" $1"@"$2}' \
-  | fgrep -wvf two.sided.pass.txt \
+  | awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} (!($4 in ids))' two.sided.pass.txt - \
   | cut -f1-3 \
   | awk '{print $1,$2,$3,0}' \
   >> sr.geno.final.txt
 
 
-gzip sr.geno.final.txt
+gzip -f sr.geno.final.txt
 
 zcat ${SR_sum} \
   | awk '{print $0 "\t" $1"@"$2}' \
@@ -105,7 +108,7 @@ zcat ${SR_sum} \
   | awk -v var=$sr_count -v var1=$median_hom -v var2=$sd_het '{if ($3<var) print $1,$2,$3,0;else if ($3<=var1-var2) print $1,$2,$3,1; else print $1,$2,$3,int($3/(var1/2)+0.5)}' \
   | gzip \
   > sr.geno.final.oneside.txt.gz
-  
+
 echo "step3"
 ##filter by quality of site by looking at % of calls with ##
 ##Allow just one side##
@@ -140,15 +143,18 @@ echo "step4"
 ##pull out cnvs gt1kb and not located on x or y##
 zcat $RD_melted_genotypes|egrep -v "^X|^Y"|awk '{if ($3-$2>=1000) print $4}'|sort -u>idsgt1kb.txt
 
+awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} ($1 in ids)' <(cut -d '@' -f1 sr.final.ids.oneside.txt|sort -u) \
+  <(zcat $RD_melted_genotypes|awk -F'\t' -v OFS='\t' '{if ($6!=2) print $4,$5}') \
+  > nonref_rd.txt
 
 zcat $pegenotypes \
-  |fgrep -wf <(cut -d '@' -f1 sr.final.ids.oneside.txt|sort -u) \
-  |awk '{if ($NF>0) print $1"@"$2}' \
-  |cat - <(fgrep -wf <(cut -d '@' -f1 sr.final.ids.oneside.txt|sort -u) \
-  <(zcat $RD_melted_genotypes|awk '{if ($6!=2) print $4"@"$5}')) \
-  |fgrep -wf idsgt1kb.txt \
-  |fgrep -wf pass.srtest.txt \
+  |awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} ($1 in ids)' <(cut -d '@' -f1 sr.final.ids.oneside.txt|sort -u) - \
+  |awk -F'\t' -v OFS='\t' '{if ($NF>0) print $1,$2}' \
+  |cat - nonref_rd.txt \
+  |awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} ($1 in ids)' idsgt1kb.txt - \
+  |awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} ($1 in ids)' pass.srtest.txt - \
   |sort -u \
+  |tr '\t' '@' \
   >pass.pe_rd.txt
 
 ##look for optimal cutoffs for SR variants using a 1% freq cutoff##
@@ -159,28 +165,28 @@ cat recover.txt \
   |sort -k1,1 \
   |join -j 1 - <(zcat sr.geno.final.oneside.txt.gz|awk '{if ($NF>0) print $1 "\t" $1"@"$2 }'|sort -k1,1) \
   |tr ' ' '\t' \
-  |fgrep -wf pass.pe_rd.txt \
+  |awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} ($5 in ids)' pass.pe_rd.txt - \
   >recover.single.txt
 
 cat recover.bothsides.txt \
   |sort -k1,1 \
   |join -j 1 - <(zcat sr.geno.final.oneside.txt.gz|awk '{if ($NF>0) print $1 "\t" $1"@"$2 }'|sort -k1,1) \
   |tr ' ' '\t' \
-  |fgrep -wf pass.pe_rd.txt \
+  |awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} ($5 in ids)' pass.pe_rd.txt - \
   >recover.both.txt
 
 cat recover.txt \
   |sort -k1,1 \
   |join -j 1 - <(zcat sr.geno.final.oneside.txt.gz|awk '{if ($NF>0) print $1 "\t" $1"@"$2 }'|sort -k1,1) \
   |tr ' ' '\t' \
-  |fgrep -wvf pass.pe_rd.txt \
+  |awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} (!($5 in ids))' pass.pe_rd.txt - \
   >recover.single.fail.txt
 
 cat recover.bothsides.txt \
   |sort -k1,1 \
   |join -j 1 - <(zcat sr.geno.final.oneside.txt.gz|awk '{if ($NF>0) print $1 "\t" $1"@"$2 }'|sort -k1,1) \
   |tr ' ' '\t' \
-  |fgrep -wvf pass.pe_rd.txt \
+  |awk -F'\t' -v OFS='\t' 'ARGIND==1{ids[$1]; next} (!($5 in ids))' pass.pe_rd.txt - \
   >recover.both.fail.txt
 
 echo "step5"

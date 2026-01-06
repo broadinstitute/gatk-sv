@@ -13,6 +13,7 @@ workflow GenotypeComplexVariants {
 
     Boolean merge_vcfs = false
     Int? records_per_shard
+    Int? min_ddup_thresh
 
     Array[File] complex_resolve_vcfs
     Array[File] complex_resolve_vcf_indexes
@@ -26,15 +27,9 @@ workflow GenotypeComplexVariants {
     File contig_list
     File ref_dict
 
-    Boolean use_hail = false
-    String? gcs_project
-
     String linux_docker
     String sv_base_mini_docker
-    String sv_pipeline_updates_docker
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
-    String sv_pipeline_rdtest_docker
 
     # overrides for mini tasks
     RuntimeAttr? runtime_override_concat
@@ -52,7 +47,6 @@ workflow GenotypeComplexVariants {
     RuntimeAttr? runtime_attr_ids_from_vcf
     RuntimeAttr? runtime_attr_subset_ped
     RuntimeAttr? runtime_override_preconcat
-    RuntimeAttr? runtime_override_hail_merge
     RuntimeAttr? runtime_override_fix_header
   }
 
@@ -92,18 +86,14 @@ workflow GenotypeComplexVariants {
         n_per_split_small=2500,
         n_per_split_large=250,
         n_rd_test_bins=100000,
+        min_ddup_thresh=min_ddup_thresh,
         prefix="~{cohort_name}.~{contig}",
         contig=contig,
         ped_files=SubsetPedFile.ped_subset_file,
         ref_dict=ref_dict,
-        use_hail=use_hail,
-        gcs_project=gcs_project,
         linux_docker=linux_docker,
-        sv_pipeline_updates_docker=sv_pipeline_updates_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
-        sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
         runtime_override_ids_from_median=runtime_override_ids_from_median,
         runtime_override_split_vcf_to_genotype=runtime_override_split_vcf_to_genotype,
         runtime_override_concat_cpx_cnv_vcfs=runtime_override_concat_cpx_cnv_vcfs,
@@ -114,7 +104,6 @@ workflow GenotypeComplexVariants {
         runtime_override_rd_genotype=runtime_override_rd_genotype,
         runtime_override_concat_melted_genotypes=runtime_override_concat_melted_genotypes,
         runtime_override_preconcat=runtime_override_preconcat,
-        runtime_override_hail_merge=runtime_override_hail_merge,
         runtime_override_fix_header=runtime_override_fix_header
     }
   }

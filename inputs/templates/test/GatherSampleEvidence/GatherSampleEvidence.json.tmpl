@@ -4,6 +4,12 @@
 
   "GatherSampleEvidence.primary_contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
   "GatherSampleEvidence.primary_contigs_fai": {{ reference_resources.primary_contigs_fai | tojson }},
+  "GatherSampleEvidence.reference_bwa_alt": {{ reference_resources.reference_bwa_alt | tojson }},
+  "GatherSampleEvidence.reference_bwa_amb": {{ reference_resources.reference_bwa_amb | tojson }},
+  "GatherSampleEvidence.reference_bwa_ann": {{ reference_resources.reference_bwa_ann | tojson }},
+  "GatherSampleEvidence.reference_bwa_bwt": {{ reference_resources.reference_bwa_bwt | tojson }},
+  "GatherSampleEvidence.reference_bwa_pac": {{ reference_resources.reference_bwa_pac | tojson }},
+  "GatherSampleEvidence.reference_bwa_sa": {{ reference_resources.reference_bwa_sa | tojson }},
   "GatherSampleEvidence.reference_fasta": {{ reference_resources.reference_fasta | tojson }},
   "GatherSampleEvidence.reference_index": {{ reference_resources.reference_index | tojson }},
   "GatherSampleEvidence.reference_dict": {{ reference_resources.reference_dict | tojson }},
@@ -14,6 +20,8 @@
 
   "GatherSampleEvidence.preprocessed_intervals": {{ reference_resources.preprocessed_intervals | tojson }},
   "GatherSampleEvidence.manta_region_bed": {{ reference_resources.manta_region_bed | tojson }},
+  "GatherSampleEvidence.manta_region_bed_index": {{ reference_resources.manta_region_bed_index | tojson }},
+  "GatherSampleEvidence.mei_bed": {{ reference_resources.mei_bed | tojson }},
   "GatherSampleEvidence.sd_locs_vcf": {{ reference_resources.sd_locs_vcf | tojson }},
   "GatherSampleEvidence.melt_standard_vcf_header": {{ reference_resources.melt_std_vcf_header | tojson }},
   "GatherSampleEvidence.wham_include_list_bed_file": {{ reference_resources.wham_include_list_bed_file | tojson }},
@@ -21,13 +29,10 @@
   "GatherSampleEvidence.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
   "GatherSampleEvidence.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
   "GatherSampleEvidence.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
-  "GatherSampleEvidence.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
   "GatherSampleEvidence.manta_docker": {{ dockers.manta_docker | tojson }},
-  "GatherSampleEvidence.melt_docker" : {{ dockers.melt_docker | tojson }},
   "GatherSampleEvidence.scramble_docker" : {{ dockers.scramble_docker | tojson }},
   "GatherSampleEvidence.wham_docker": {{ dockers.wham_docker | tojson }},
   "GatherSampleEvidence.genomes_in_the_cloud_docker" : {{ dockers.genomes_in_the_cloud_docker | tojson }},
   "GatherSampleEvidence.gatk_docker": {{ dockers.gatk_docker | tojson }},
-  "GatherSampleEvidence.gatk_docker_pesr_override" : {{ dockers.gatk_docker | tojson }},
   "GatherSampleEvidence.cloud_sdk_docker": {{ dockers.cloud_sdk_docker | tojson }}
 }

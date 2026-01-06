@@ -153,7 +153,7 @@ task BenchmarkFilter {
         String benchmark_figure_filename = "quality-benchmark.pdf"
         Array[String] benchmark_args = []
         String sv_utils_docker
-        Int num_entries
+        Float num_entries
         Float pickled_files_size
     }
 

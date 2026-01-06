@@ -27,7 +27,7 @@ workflow SingleSampleMetrics {
 
     File contig_list
     String linux_docker
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
 
     RuntimeAttr? runtime_attr_sr_metrics
     RuntimeAttr? runtime_attr_pe_metrics
@@ -47,7 +47,7 @@ workflow SingleSampleMetrics {
       input:
         sr_file = select_first([sample_sr]),
         samples = [case_sample],
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_sr_metrics
     }
   }
@@ -57,7 +57,7 @@ workflow SingleSampleMetrics {
       input:
         pe_file = select_first([sample_pe]),
         samples = [case_sample],
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_pe_metrics
     }
   }
@@ -67,7 +67,7 @@ workflow SingleSampleMetrics {
       input:
         counts_file = select_first([sample_counts]),
         sample_id = case_sample,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_counts_metrics
     }
   }
@@ -81,7 +81,7 @@ workflow SingleSampleMetrics {
         prefix = "cleaned",
         types = "DEL,DUP,INS,INV,CTX,CNV,CPX,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_vcf_metrics
     }
   }
@@ -95,7 +95,7 @@ workflow SingleSampleMetrics {
         prefix = "final",
         types = "DEL,DUP,INS,INV,CTX,CNV,CPX,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_vcf_metrics
     }
   }
@@ -109,7 +109,7 @@ workflow SingleSampleMetrics {
         prefix = "genotyped_pesr",
         types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_pesr_metrics
     }
   }
@@ -121,9 +121,9 @@ workflow SingleSampleMetrics {
         baseline_vcf = baseline_genotyped_depth_vcf,
         samples = samples,
         prefix = "genotyped_depth",
-        types = "DEL,DUP",
+        types = "DEL,DUP,CNV",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_depth_metrics
     }
   }
@@ -137,7 +137,7 @@ workflow SingleSampleMetrics {
         prefix = "non_genotyped_uniq_depth",
         types = "DEL,DUP",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_unique_depth_metrics
     }
   }

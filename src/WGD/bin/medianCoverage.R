@@ -67,7 +67,7 @@ covPerSample <- function(cov,downsample=1000000,mad=F){
   }
   # Replace sample IDs if input matrix has header
   if(opts$header==T){
-    res$ID <- names(cov[,-c(1:3)])
+    res$ID <- names(cov[, -c(1:3), drop = FALSE])
   }
   # Return output df
   return(res)
@@ -122,6 +122,6 @@ if(opts$binwise==TRUE){
   write.table(res,args$args[2], sep="\t", col.names=T, row.names=F, quote=F)
 }else{
   res <- covPerSample(cov,mad=opts$mad)
-  names(res)[1] <- "#ID"
+  names(res)[1] <- "#sample_id"
   write.table(res,args$args[2], sep="\t", col.names=T, row.names=F, quote=F)
 }

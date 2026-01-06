@@ -18,7 +18,6 @@ workflow Regenotype {
     File samples_list
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_rdtest_docker
     Array[String] samples = read_lines(samples_list)
 
     RuntimeAttr? runtime_attr_add_batch_samples
@@ -74,7 +73,7 @@ workflow Regenotype {
         n_bins=n_RdTest_bins,
         prefix=basename(regeno, ".bed"),
         runtime_attr_override = runtime_attr_rd_test_gt_regeno,
-        sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker
+        sv_pipeline_docker=sv_pipeline_docker
     }
     call tasksgenotypebatch.IntegrateDepthGq as IntegrateGQRegeno {
       input:
@@ -159,7 +158,7 @@ task RdTestGenotypeRegeno {
     Int n_bins
     String prefix
     Boolean generate_melted_genotypes
-    String sv_pipeline_rdtest_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -206,7 +205,7 @@ task RdTestGenotypeRegeno {
       -r ~{gt_cutoffs} \
       -y /opt/RdTest/bin_exclude.bed.gz \
       -g TRUE;
-    if [ ~{generate_melted_genotypes} == "true" ]; then
+    if [ ~{generate_melted_genotypes} == "true" ] && [ -f "~{prefix}.geno" ] && [ -f "~{prefix}.gq" ]; then
       /opt/sv-pipeline/04_variant_resolution/scripts/merge_RdTest_genotypes.py ~{prefix}.geno ~{prefix}.gq rd.geno.cnv.bed;
       sort -k1,1V -k2,2n rd.geno.cnv.bed | uniq | bgzip -c > rd.geno.cnv.bed.gz
     else
@@ -219,7 +218,7 @@ task RdTestGenotypeRegeno {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_rdtest_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

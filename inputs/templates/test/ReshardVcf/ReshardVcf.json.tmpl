@@ -1,0 +1,6 @@
+{
+  "ReshardVcf.vcfs": {{ test_batch.complex_resolve_vcfs | tojson }},
+  "ReshardVcf.contig_list": {{ reference_resources.primary_contigs_list | tojson }},
+  "ReshardVcf.prefix": {{ test_batch.name | tojson }},
+  "ReshardVcf.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }}
+}

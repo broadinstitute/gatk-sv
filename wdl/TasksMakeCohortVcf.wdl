@@ -118,6 +118,57 @@ task CatUncompressedFiles {
   }
 }
 
+
+task ConcatHeaderedTextFiles {
+  input {
+    Array[File] text_files
+    Boolean gzipped = false
+    String output_filename
+    String linux_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 1,
+                               disk_gb: ceil(10 + 2 * size(text_files, "GB")),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 1,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  String cat_command = if gzipped then "zcat" else "cat"
+  String compress_command = if gzipped then "| gzip" else ""
+
+  output {
+    File out = "~{output_filename}"
+  }
+  command <<<
+    set -euo pipefail
+    OUT_FILE="~{output_filename}"
+    i=0
+    while read path; do
+      if [ $i == 0 ]; then
+        # Get header from first line of first file
+        ~{cat_command} $path | awk 'NR==1' ~{compress_command} > $OUT_FILE
+      fi
+      # Get data from each file, skipping header line
+      ~{cat_command} $path | awk 'NR>1' ~{compress_command} >> $OUT_FILE
+      i=$((i+1))
+    done < ~{write_lines(text_files)}
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: linux_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task SortVcf {
   input {
     File vcf

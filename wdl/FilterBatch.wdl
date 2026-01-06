@@ -9,13 +9,14 @@ import "FilterBatchMetrics.wdl" as metrics
 workflow FilterBatch {
   input {
     String batch
+    File? depth_vcf
+    File? dragen_vcf
     File? manta_vcf
-    File? wham_vcf
     File? melt_vcf
     File? scramble_vcf
-    File? depth_vcf
+    File? wham_vcf
+    
     File evidence_metrics
-    File evidence_metrics_common
 
     Int outlier_cutoff_nIQR
     File? outlier_cutoff_table
@@ -23,7 +24,6 @@ workflow FilterBatch {
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
-    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? primary_contigs_list  # required if run_module_metrics = true
     File? ped_file  # required if run_module_metrics = true
     File? baseline_filtered_depth_vcf  # baseline files are optional for metrics workflow
@@ -52,13 +52,13 @@ workflow FilterBatch {
   call filter_sites.FilterBatchSites {
     input:
       batch = batch,
+      depth_vcf = depth_vcf,
+      dragen_vcf = dragen_vcf,
       manta_vcf = manta_vcf,
       melt_vcf = melt_vcf,
       scramble_vcf = scramble_vcf,
-      depth_vcf = depth_vcf,
       wham_vcf = wham_vcf,
       evidence_metrics = evidence_metrics,
-      evidence_metrics_common = evidence_metrics_common,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_adjudicate = runtime_attr_adjudicate,
       runtime_attr_rewrite_scores = runtime_attr_rewrite_scores,
@@ -68,7 +68,7 @@ workflow FilterBatch {
   call sv_counts.PlotSVCountsPerSample {
     input:
       prefix = batch,
-      vcfs = [FilterBatchSites.sites_filtered_manta_vcf, FilterBatchSites.sites_filtered_wham_vcf, FilterBatchSites.sites_filtered_melt_vcf, FilterBatchSites.sites_filtered_scramble_vcf, FilterBatchSites.sites_filtered_depth_vcf],
+      vcfs = [FilterBatchSites.sites_filtered_depth_vcf, FilterBatchSites.sites_filtered_dragen_vcf, FilterBatchSites.sites_filtered_manta_vcf, FilterBatchSites.sites_filtered_melt_vcf, FilterBatchSites.sites_filtered_scramble_vcf, FilterBatchSites.sites_filtered_wham_vcf],
       N_IQR_cutoff = outlier_cutoff_nIQR,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_count_svs = runtime_attr_count_svs,
@@ -81,11 +81,12 @@ workflow FilterBatch {
       batch = batch,
       outlier_cutoff_table = outlier_cutoff_table,
       N_IQR_cutoff = outlier_cutoff_nIQR,
+      depth_vcf = FilterBatchSites.sites_filtered_depth_vcf,
+      dragen_vcf = FilterBatchSites.sites_filtered_dragen_vcf,
       manta_vcf = FilterBatchSites.sites_filtered_manta_vcf,
-      wham_vcf = FilterBatchSites.sites_filtered_wham_vcf,
       melt_vcf = FilterBatchSites.sites_filtered_melt_vcf,
       scramble_vcf = FilterBatchSites.sites_filtered_scramble_vcf,
-      depth_vcf = FilterBatchSites.sites_filtered_depth_vcf,
+      wham_vcf = FilterBatchSites.sites_filtered_wham_vcf,
       linux_docker = linux_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       sv_base_mini_docker = sv_base_mini_docker,
@@ -102,14 +103,14 @@ workflow FilterBatch {
   if (run_module_metrics_) {
     call util.GetSampleIdsFromVcf {
       input:
-        vcf = select_first([depth_vcf, wham_vcf, manta_vcf, melt_vcf, scramble_vcf]),
+        vcf = select_first([depth_vcf, dragen_vcf, manta_vcf, melt_vcf, scramble_vcf, wham_vcf]),
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_attr_ids_from_vcf
     }
     call metrics.FilterBatchMetrics {
       input:
         name = batch,
-        samples = GetSampleIdsFromVcf.out_array,
+        sample_list = GetSampleIdsFromVcf.out_file,
         filtered_pesr_vcf = select_first([FilterBatchSamples.outlier_filtered_pesr_vcf]),
         filtered_depth_vcf = select_first([FilterBatchSamples.outlier_filtered_depth_vcf]),
         cutoffs = FilterBatchSites.cutoffs,
@@ -120,32 +121,33 @@ workflow FilterBatch {
         baseline_filtered_depth_vcf = baseline_filtered_depth_vcf,
         contig_list = select_first([primary_contigs_list]),
         linux_docker = linux_docker,
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
+        sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker
     }
   }
 
   output {
+    File? filtered_depth_vcf = FilterBatchSamples.outlier_filtered_depth_vcf
+    File? filtered_dragen_vcf = FilterBatchSamples.outlier_filtered_dragen_vcf
     File? filtered_manta_vcf = FilterBatchSamples.outlier_filtered_manta_vcf
-    File? filtered_wham_vcf = FilterBatchSamples.outlier_filtered_wham_vcf
     File? filtered_melt_vcf = FilterBatchSamples.outlier_filtered_melt_vcf
     File? filtered_scramble_vcf = FilterBatchSamples.outlier_filtered_scramble_vcf
-    File? filtered_depth_vcf = FilterBatchSamples.outlier_filtered_depth_vcf
+    File? filtered_wham_vcf = FilterBatchSamples.outlier_filtered_wham_vcf
     File? filtered_pesr_vcf = FilterBatchSamples.outlier_filtered_pesr_vcf
     File cutoffs = FilterBatchSites.cutoffs
     File scores = FilterBatchSites.scores
     File RF_intermediate_files = FilterBatchSites.RF_intermediate_files
     Array[File] sv_counts = PlotSVCountsPerSample.sv_counts
     Array[File] sv_count_plots = PlotSVCountsPerSample.sv_count_plots
-    Array[String] outlier_samples_excluded = FilterBatchSamples.outlier_samples_excluded
-    Array[String] batch_samples_postOutlierExclusion = FilterBatchSamples.filtered_batch_samples_list
     File outlier_samples_excluded_file = FilterBatchSamples.outlier_samples_excluded_file
     File batch_samples_postOutlierExclusion_file = FilterBatchSamples.filtered_batch_samples_file
 
-    File? sites_filtered_manta_vcf = FilterBatchSites.sites_filtered_manta_vcf
-    File? sites_filtered_wham_vcf = FilterBatchSites.sites_filtered_wham_vcf
-    File? sites_filtered_melt_vcf = FilterBatchSites.sites_filtered_melt_vcf
     File? sites_filtered_depth_vcf = FilterBatchSites.sites_filtered_depth_vcf
+    File? sites_filtered_dragen_vcf = FilterBatchSites.sites_filtered_dragen_vcf
+    File? sites_filtered_manta_vcf = FilterBatchSites.sites_filtered_manta_vcf
+    File? sites_filtered_melt_vcf = FilterBatchSites.sites_filtered_melt_vcf
+    File? sites_filtered_scramble_vcf = FilterBatchSites.sites_filtered_scramble_vcf
+    File? sites_filtered_wham_vcf = FilterBatchSites.sites_filtered_wham_vcf
 
     File? metrics_file_filterbatch = FilterBatchMetrics.metrics_file
   }

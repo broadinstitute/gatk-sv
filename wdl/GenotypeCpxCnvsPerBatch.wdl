@@ -24,7 +24,7 @@ workflow GenotypeCpxCnvsPerBatch {
 
     String linux_docker
     String sv_base_mini_docker
-    String sv_pipeline_rdtest_docker
+    String sv_pipeline_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_ids_from_median
@@ -69,7 +69,7 @@ workflow GenotypeCpxCnvsPerBatch {
         n_bins=n_rd_test_bins,
         prefix=basename(split_bed_file, ".bed"),
         ref_dict = ref_dict,
-        sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
+        sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_rd_genotype
     }
   }
@@ -191,7 +191,7 @@ task RdTestGenotype {
     File ref_dict
     Int n_bins
     String prefix
-    String sv_pipeline_rdtest_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -230,7 +230,7 @@ task RdTestGenotype {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_rdtest_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
@@ -247,12 +247,14 @@ task RdTestGenotype {
         --evidence-file ~{coverage_file} \
         -L merged.bed \
         -O local.RD.txt.gz
+
+      tabix -f -0 -s1 -b2 -e3 local.RD.txt.gz
     else
       touch local.RD.txt
       bgzip local.RD.txt
+      tabix -p bed local.RD.txt.gz
     fi
 
-    tabix -p bed local.RD.txt.gz
     tabix -p bed ~{bin_exclude}
 
     Rscript /opt/RdTest/RdTest.R \

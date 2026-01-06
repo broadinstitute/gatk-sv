@@ -1,6 +1,4 @@
 {
-  "RegenotypeCNVs.sv_pipeline_rdtest_docker": {{ dockers.sv_pipeline_rdtest_docker | tojson }},
-  "RegenotypeCNVs.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
   "RegenotypeCNVs.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
   "RegenotypeCNVs.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
   "RegenotypeCNVs.n_RdTest_bins": "100000",
@@ -10,15 +8,15 @@
   "RegenotypeCNVs.contig_list": {{ reference_resources.primary_contigs_list | tojson }},
   "RegenotypeCNVs.regeno_coverage_medians": [{{ test_batch.regeno_coverage_medians | tojson }}],
 
-  "RegenotypeCNVs.RD_depth_sepcutoffs": [{{ test_batch.depth_gt_rd_sep_file | tojson }}],
+  "RegenotypeCNVs.RD_depth_sepcutoffs": [{{ test_batch.genotype_depth_depth_sepcutoff | tojson }}],
 
   "RegenotypeCNVs.cohort_depth_vcf": {{ test_batch.cohort_depth_vcf | tojson }},
 
   "RegenotypeCNVs.batch_depth_vcfs": [{{ test_batch.filtered_depth_vcf | tojson }}],
 
   "RegenotypeCNVs.depth_vcfs": [{{ test_batch.genotyped_depth_vcf | tojson }}],
-  "RegenotypeCNVs.coveragefiles": [{{ test_batch.merged_coverage_file | tojson }}],
-  "RegenotypeCNVs.coveragefile_idxs": [{{ test_batch.merged_coverage_file_index| tojson }}],
+  "RegenotypeCNVs.coveragefiles": [{{ test_batch.merged_rd_file | tojson }}],
+  "RegenotypeCNVs.coveragefile_idxs": [{{ test_batch.merged_rd_file_index| tojson }}],
   "RegenotypeCNVs.medianfiles": [{{ test_batch.medianfile | tojson }}],
   "RegenotypeCNVs.batches": [{{ test_batch.name | tojson }}]
 }

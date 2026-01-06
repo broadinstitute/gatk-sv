@@ -180,13 +180,14 @@ ${QCTMP}/genotype_counts_per_SV.txt
 #Get genotype counts per variant for multi-alleleic CNVs
 grep -v ^# ${QCTMP}/input.vcf | grep "<CNV>" | \
 awk -v FS="\t" -v OFS="\t" -v nsamp=${nsamp} '{
- unknown=0; homref=0; het=0; homalt=0; other=0; for(i=10;i<=NF;i++) {
-  split($i,a,":"); split(a[1],GT,"[/|]");
-    if (a[10]==2) {homref++}
-    else if (a[10]==0) {homalt++}
+ unknown=0; homref=0; het=0; homalt=0; other=0;
+ split($9,format,":"); for (f=1;f<=length(format);f++) { if (format[f] == "CN") CN=f };
+ for(i=10;i<=NF;i++) {
+  split($i,a,":");
+    if (a[CN]==2) {homref++}
+    else if (a[CN]==0 || a[CN]>=4) {homalt++}
     else {het++} };
-  if (other > 0 || (nsamp==other+unknown)) {AC="NA"; AN="NA"; AF="NA"}
-  else {AC=(2*homalt)+het; AN=2*(nsamp-(unknown+other)); AF=AC/AN};
+  AC=(2*homalt)+het; AN=2*(nsamp-(unknown+other)); AF=AC/AN;
   print $3, nsamp-unknown, homref, het, homalt, other, unknown, AC, AN, AF }' >> \
 ${QCTMP}/genotype_counts_per_SV.txt
 

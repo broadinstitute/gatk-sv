@@ -2,9 +2,9 @@
   "VisualizeCnvs.vcf_or_bed": {{ test_batch.clean_vcf | tojson }},
   "VisualizeCnvs.prefix": {{ test_batch.name | tojson }},
   "VisualizeCnvs.median_files": [{{ test_batch.medianfile | tojson }}],
-  "VisualizeCnvs.rd_files": [{{ test_batch.merged_coverage_file | tojson }}],
+  "VisualizeCnvs.rd_files": [{{ test_batch.merged_rd_file | tojson }}],
   "VisualizeCnvs.ped_file": {{ test_batch.ped_file | tojson }},
   "VisualizeCnvs.min_size": 50000,
-  "VisualizeCnvs.flags": "",
+  "VisualizeCnvs.flags": "--sizefilter 999999999 --padding 0.25",
   "VisualizeCnvs.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
 }

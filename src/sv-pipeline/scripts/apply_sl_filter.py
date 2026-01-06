@@ -4,6 +4,7 @@ import argparse
 import sys
 import pysam
 import math
+from numpy import median
 from typing import List, Text, Dict, Optional
 
 _gt_no_call_map = dict()
@@ -78,6 +79,24 @@ def _fails_filter(sl, gt_is_ref, cutoff):
     return sl < cutoff
 
 
+def recal_qual_score(record):
+    """
+    Recalibrate quality score for a single variant
+    """
+    quals = []
+    for s in [s for s in record.samples]:
+        gt = record.samples[s]['GT']
+        if _is_hom_ref(gt) or _is_no_call(gt):
+            continue
+        elif _is_hom_var(gt):
+            quals.append(99)
+        else:
+            quals.append(record.samples[s]['GQ'])
+
+    if len(quals) > 0:
+        return int(median(quals))
+
+
 def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref, ncr_threshold,
                   keep_gq, gq_scale_factor, upper_sl_cap, lower_sl_cap, sl_shift, max_gq):
     record.info['MINSL'] = sl_threshold
@@ -109,43 +128,49 @@ def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref, ncr_threshol
         gt['GT_FILTER'] = _gt_to_filter_status(gt['GT'], fails_filter)
         if fails_filter:
             gt['GT'] = _filter_gt(gt['GT'], allele)
+        if record.info['SVTYPE'] != 'CNV' and _is_no_call(gt['GT']):
             n_no_call += 1
     # Annotate metrics
     record.info['NCN'] = n_no_call
     record.info['NCR'] = n_no_call / n_samples if n_samples > 0 else None
     if ncr_threshold is not None and record.info['NCR'] is not None and record.info['NCR'] >= ncr_threshold:
         record.filter.add(_HIGH_NCR_FILTER)
+    if len(record.filter) == 0:
+        record.filter.add('PASS')
     n_sl = len(sl_list)
     record.info['SL_MEAN'] = sum(sl_list) / n_sl if n_sl > 0 else None
     record.info['SL_MAX'] = max(sl_list) if n_sl > 0 else None
+    record.qual = recal_qual_score(record)
     # Clean out AF metrics since they're no longer valid
     for field in ['AC', 'AF']:
         if field in record.info:
             del record.info[field]
 
 
-def get_threshold(record, sl_thresholds, med_size, large_size):
+def get_threshold(record, cutoff_rules):
     svtype = record.info['SVTYPE']
-    if svtype in _cnv_types:
-        svlen = record.info['SVLEN']
-        if svlen < med_size:
-            size_index = 0
-        elif svlen < large_size:
-            size_index = 1
-        else:
-            size_index = 2
-        return sl_thresholds[svtype][size_index]
-    else:
-        return sl_thresholds[svtype][0]
+    svlen = record.info.get('SVLEN', None)
+    for rule in cutoff_rules:
+        if rule['sv_type'] != svtype:
+            continue
+
+        if rule['min_size'] is not None and (svlen is None or svlen < rule['min_size']):
+            continue
+
+        if rule['max_size'] is not None and (svlen is None or svlen >= rule['max_size']):
+            continue
+
+        return rule['sl_cutoff']
+
+    return None
 
 
-def process(vcf, fout, ploidy_dict, thresholds, args):
+def process(vcf, fout, ploidy_dict, cutoff_rules, args):
     n_samples = float(len(fout.header.samples))
     if n_samples == 0:
         raise ValueError("This is a sites-only vcf")
     for record in vcf:
-        sl_threshold = get_threshold(record=record, sl_thresholds=thresholds, med_size=args.medium_size,
-                                     large_size=args.large_size)
+        sl_threshold = get_threshold(record=record, cutoff_rules=cutoff_rules)
         _apply_filter(record=record, sl_threshold=sl_threshold,
                       ploidy_dict=ploidy_dict, apply_hom_ref=args.apply_hom_ref,
                       ncr_threshold=args.ncr_threshold,
@@ -153,19 +178,6 @@ def process(vcf, fout, ploidy_dict, thresholds, args):
                       upper_sl_cap=args.upper_sl_cap, lower_sl_cap=args.lower_sl_cap, sl_shift=args.sl_shift,
                       max_gq=args.max_gq)
         fout.write(record)
-
-
-def _create_threshold_dict(args):
-    return {
-        'DEL': [args.small_del_threshold, args.medium_del_threshold, args.large_del_threshold],
-        'DUP': [args.small_dup_threshold, args.medium_dup_threshold, args.large_dup_threshold],
-        'INS': [args.ins_threshold],
-        'INV': [args.inv_threshold],
-        'BND': [args.bnd_threshold],
-        'CPX': [args.cpx_threshold],
-        'CTX': [args.ctx_threshold],
-        'CNV': [None]
-    }
 
 
 def _parse_ploidy_table(path: Text) -> Dict[Text, Dict[Text, int]]:
@@ -192,6 +204,35 @@ def _parse_ploidy_table(path: Text) -> Dict[Text, Dict[Text, int]]:
     return ploidy_dict
 
 
+def _parse_sl_cutoff_table(path: Text) -> List[Dict[Text, float]]:
+    """
+    Parses tsv of SL cutoff values.
+
+    Parameters
+    ----------
+    path: Text
+        table path with columns: sv_type, min_size, max_size, sl_cutoff
+
+    Returns
+    -------
+    List[Dict[Text, float]]
+        list of cutoff rules
+    """
+    cutoff_rules = []
+    with open(path, 'r') as f:
+        f.readline()
+        for line in f:
+            tokens = line.strip().split('\t')
+            rule = {
+                'sv_type': tokens[0],
+                'min_size': None if tokens[1] == '-1' else float(tokens[1]),
+                'max_size': None if tokens[2] == '-1' else float(tokens[2]),
+                'sl_cutoff': float(tokens[3])
+            }
+            cutoff_rules.append(rule)
+    return cutoff_rules
+
+
 def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(
@@ -201,6 +242,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--vcf', type=str, help='Input vcf (defaults to stdin)')
     parser.add_argument('--out', type=str, help='Output file (defaults to stdout)')
     parser.add_argument('--ploidy-table', type=str, required=True, help='Ploidy table tsv')
+    parser.add_argument('--sl-cutoff-table', type=str, help='TSV table with columns: sv_type, min_size, max_size, sl_cutoff')
 
     parser.add_argument('--apply-hom-ref', action='store_true',
                         help='Set filtered genotypes to hom-ref (0/0) instead of no-call (./.)')
@@ -222,32 +264,6 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="SL=SL+shift is applied for GQ calculations")
     parser.add_argument("--max-gq", type=int, default=99, help="GQ cap")
 
-    parser.add_argument("--medium-size", type=float, default=500,
-                        help="Min size for medium DEL/DUP")
-    parser.add_argument("--large-size", type=float, default=10000,
-                        help="Min size for large DEL/DUP")
-    parser.add_argument("--small-del-threshold", type=float,
-                        help="Threshold SL for small DELs")
-    parser.add_argument("--medium-del-threshold", type=float,
-                        help="Threshold SL for medium DELs")
-    parser.add_argument("--large-del-threshold", type=float,
-                        help="Threshold SL for large DELs")
-    parser.add_argument("--small-dup-threshold", type=float,
-                        help="Threshold SL for small DUPs")
-    parser.add_argument("--medium-dup-threshold", type=float,
-                        help="Threshold SL for medium DUPs")
-    parser.add_argument("--large-dup-threshold", type=float,
-                        help="Threshold SL for large DUPs")
-    parser.add_argument("--ins-threshold", type=float,
-                        help="Threshold SL for INS")
-    parser.add_argument("--inv-threshold", type=float,
-                        help="Threshold SL for INV")
-    parser.add_argument("--bnd-threshold", type=float,
-                        help="Threshold SL for BND")
-    parser.add_argument("--cpx-threshold", type=float,
-                        help="Threshold SL for CPX")
-    parser.add_argument("--ctx-threshold", type=float,
-                        help="Threshold SL for CTX")
     if len(argv) <= 1:
         parser.parse_args(["--help"])
         sys.exit(0)
@@ -278,8 +294,10 @@ def main(argv: Optional[List[Text]] = None):
         fout = pysam.VariantFile(args.out, 'w', header=header)
 
     ploidy_dict = _parse_ploidy_table(args.ploidy_table)
-    thresholds = _create_threshold_dict(args)
-    process(vcf, fout, ploidy_dict, thresholds, args)
+    cutoff_rules = []
+    if args.sl_cutoff_table:
+        cutoff_rules = _parse_sl_cutoff_table(args.sl_cutoff_table)
+    process(vcf, fout, ploidy_dict, cutoff_rules, args)
     fout.close()
 
 

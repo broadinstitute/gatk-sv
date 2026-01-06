@@ -15,12 +15,26 @@ workflow GatherSampleEvidenceBatch {
     Boolean collect_coverage = true
     Boolean collect_pesr = true
 
+    Boolean? is_dragen_3_7_8
+
+    # Localize reads parameters
+    # set to true on default, skips localize_reads if set to false
+    Boolean run_localize_reads = true
+
     # Common parameters
     File primary_contigs_list
     File reference_fasta
     File reference_index    # Index (.fai), must be in same dir as fasta
     File reference_dict     # Dictionary (.dict), must be in same dir as fasta
     String? reference_version   # Either "38" or "19"
+
+    # Reference bwa index files, only required for alignments with Dragen 3.7.8
+    File? reference_bwa_alt
+    File? reference_bwa_amb
+    File? reference_bwa_ann
+    File? reference_bwa_bwt
+    File? reference_bwa_pac
+    File? reference_bwa_sa
 
     # Coverage collection inputs
     File preprocessed_intervals
@@ -29,7 +43,7 @@ workflow GatherSampleEvidenceBatch {
 
     # Manta inputs
     File manta_region_bed
-    File? manta_region_bed_index
+    File manta_region_bed_index
     Float? manta_jobs_per_cpu
     Int? manta_mem_gb_per_job
 
@@ -47,6 +61,18 @@ workflow GatherSampleEvidenceBatch {
     Array[Float]? total_reads
     Array[Int]? pf_reads_improper_pairs
 
+    # Scramble inputs
+    File mei_bed
+    Int? scramble_alignment_score_cutoff
+    Int? scramble_percent_align_cutoff
+    Float? scramble_min_clipped_reads_fraction
+    Int? scramble_part2_threads
+    File? scramble_vcf_script
+
+    # Required if running Scramble but not running Manta
+    Array[File]? manta_vcf_input
+    Array[File]? manta_vcf_index_input
+
     # Wham inputs
     File wham_include_list_bed_file
 
@@ -54,7 +80,6 @@ workflow GatherSampleEvidenceBatch {
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
     String? batch  # required if run_module_metrics = true
-    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     String? linux_docker  # required if run_module_metrics = true
     File? baseline_manta_vcf # baseline files are optional for metrics workflow
     File? baseline_wham_vcf
@@ -70,7 +95,6 @@ workflow GatherSampleEvidenceBatch {
     String? scramble_docker
     String? wham_docker
     String gatk_docker
-    String? gatk_docker_pesr_override
     String genomes_in_the_cloud_docker
     String cloud_sdk_docker
 
@@ -80,7 +104,8 @@ workflow GatherSampleEvidenceBatch {
     RuntimeAttr? runtime_attr_melt_coverage
     RuntimeAttr? runtime_attr_melt_metrics
     RuntimeAttr? runtime_attr_melt
-    RuntimeAttr? runtime_attr_scramble
+    RuntimeAttr? runtime_attr_scramble_part1
+    RuntimeAttr? runtime_attr_scramble_part2
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
     RuntimeAttr? runtime_attr_cat_metrics
@@ -101,8 +126,15 @@ workflow GatherSampleEvidenceBatch {
         sample_id = sample_ids[i],
         collect_coverage = collect_coverage,
         collect_pesr = collect_pesr,
+        is_dragen_3_7_8 = is_dragen_3_7_8,
         primary_contigs_list = primary_contigs_list,
         primary_contigs_fai = primary_contigs_fai,
+        reference_bwa_alt=reference_bwa_alt,
+        reference_bwa_amb=reference_bwa_amb,
+        reference_bwa_ann=reference_bwa_ann,
+        reference_bwa_bwt=reference_bwa_bwt,
+        reference_bwa_pac=reference_bwa_pac,
+        reference_bwa_sa=reference_bwa_sa,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
         reference_dict = reference_dict,
@@ -124,13 +156,21 @@ workflow GatherSampleEvidenceBatch {
         pct_chimeras = if defined(pct_chimeras) then select_first([pct_chimeras])[i] else NONE_FLOAT_,
         total_reads = if defined(total_reads) then select_first([total_reads])[i] else NONE_FLOAT_,
         pf_reads_improper_pairs = if defined(pf_reads_improper_pairs) then select_first([pf_reads_improper_pairs])[i] else NONE_INT_,
+        mei_bed = mei_bed,
+        scramble_alignment_score_cutoff = scramble_alignment_score_cutoff,
+        scramble_percent_align_cutoff = scramble_percent_align_cutoff,
+        scramble_min_clipped_reads_fraction = scramble_min_clipped_reads_fraction,
+        scramble_part2_threads = scramble_part2_threads,
+        scramble_vcf_script = scramble_vcf_script,
+        manta_vcf_input = if defined(manta_vcf_input) then select_first([manta_vcf_input])[i] else NONE_FILE_,
+        manta_vcf_index_input = if defined(manta_vcf_index_input) then select_first([manta_vcf_index_input])[i] else NONE_FILE_,
         wham_include_list_bed_file = wham_include_list_bed_file,
         run_module_metrics = run_module_metrics_,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
         baseline_manta_vcf = baseline_manta_vcf,
         baseline_melt_vcf = baseline_melt_vcf,
         baseline_scramble_vcf = baseline_scramble_vcf,
         baseline_wham_vcf = baseline_wham_vcf,
+        run_localize_reads = run_localize_reads,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         samtools_cloud_docker = samtools_cloud_docker,
@@ -139,7 +179,6 @@ workflow GatherSampleEvidenceBatch {
         scramble_docker = scramble_docker,
         wham_docker = wham_docker,
         gatk_docker = gatk_docker,
-        gatk_docker_pesr_override = gatk_docker_pesr_override,
         genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
         cloud_sdk_docker = cloud_sdk_docker,
         runtime_attr_localize_reads = runtime_attr_localize_reads,
@@ -147,7 +186,8 @@ workflow GatherSampleEvidenceBatch {
         runtime_attr_melt_coverage = runtime_attr_melt_coverage,
         runtime_attr_melt_metrics = runtime_attr_melt_metrics,
         runtime_attr_melt = runtime_attr_melt,
-        runtime_attr_scramble = runtime_attr_scramble,
+        runtime_attr_scramble_part1 = runtime_attr_scramble_part1,
+        runtime_attr_scramble_part2 = runtime_attr_scramble_part2,
         runtime_attr_pesr = runtime_attr_pesr,
         runtime_attr_wham = runtime_attr_wham
     }

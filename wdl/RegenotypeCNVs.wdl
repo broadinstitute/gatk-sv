@@ -8,8 +8,6 @@ workflow RegenotypeCNVs {
   input {
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_base_docker
-    String sv_pipeline_rdtest_docker
     Array[File] depth_vcfs
     File cohort_depth_vcf
     Array[File] batch_depth_vcfs
@@ -182,7 +180,6 @@ workflow RegenotypeCNVs {
           samples_list=GetSampleIdsFromVcf.out_file[i],
           sv_pipeline_docker=sv_pipeline_docker,
           sv_base_mini_docker=sv_base_mini_docker,
-          sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
           runtime_attr_add_batch_samples = runtime_attr_add_batch_samples,
           runtime_attr_get_regeno_g2 = runtime_attr_get_regeno_g2,
           runtime_attr_split_beds = runtime_attr_split_beds,
@@ -203,7 +200,6 @@ workflow RegenotypeCNVs {
         min_var_per_sample_outlier_threshold = min_var_per_sample_outlier_threshold,
         regeno_sample_overlap = regeno_sample_overlap,
         sv_pipeline_docker = sv_pipeline_docker,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
         runtime_attr_merge_list_creassess = runtime_attr_merge_list_creassess,
         runtime_attr_vcf2bed = runtime_attr_vcf2bed
     }
@@ -624,7 +620,19 @@ task GetMedianSubset {
     python3 <<CODE
 
     from statistics import median
-    with open("~{medians}", 'r') as inp, open("~{batch}_to_regeno.bed", 'w') as outp:
+    import gzip
+
+    # Flexibly open .gz or uncompressed file to read
+    # Expect bgzipped BED file but should be able to handle legacy uncompressed files
+    # Output file is smaller and deleted as a workflow intermediate so can be uncompressed
+    def _open(filename):
+      if filename.endswith(".gz"):
+        return gzip.open(filename, 'rt')
+      else:
+        return open(filename, 'r')
+
+
+    with _open("~{medians}") as inp, open("~{batch}_to_regeno.bed", 'w') as outp:
       for line in inp:
         fields = line.strip().split('\t')
         # first 4 fields are variant info (chr, start, end, varID)

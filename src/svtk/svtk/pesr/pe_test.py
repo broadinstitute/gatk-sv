@@ -87,9 +87,11 @@ class PETest(PESRTest):
 
         strandA, strandB = record.info['STRANDS']
         startA, endA = _get_coords(record.pos, strandA)
-        startB, endB = _get_coords(record.stop, strandB)
+        end = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
+        startB, endB = _get_coords(end, strandB)
 
-        region = '{0}:{1}-{2}'.format(record.chrom, startA, endA)
+        # Add 1 because evidence is stored/indexed with 0-based coordinates
+        region = '{0}:{1}-{2}'.format(record.chrom, startA + 1, endA + 1)
 
         try:
             pairs = self.discfile.fetch(region=region, parser=pysam.asTuple())
@@ -127,17 +129,17 @@ class PETest(PESRTest):
 
 class PETestRunner(PESRTestRunner):
     def __init__(self, vcf, discfile, fout, n_background=160, common=False,
-                 window_in=50, window_out=500,
-                 whitelist=None, blacklist=None, medians=None, log=False):
+                 window_in=50, window_out=500, whitelist=None, blacklist=None,
+                 medians=None, log=False, outlier_sample_ids=None, seed=42):
         """
         vcf : pysam.VariantFile
         discfile : pysam.TabixFile
         """
-        self.petest = PETest(discfile, common, window_in,
-                             window_out, medians=medians)
+        self.petest = PETest(discfile, common=common, window_in=window_in,
+                             window_out=window_out, medians=medians)
         self.fout = fout
 
-        super().__init__(vcf, common, n_background, whitelist, blacklist, log)
+        super().__init__(vcf, common, n_background, whitelist, blacklist, log, outlier_sample_ids, seed)
 
     def test_record(self, record):
         if not self._strand_check(record):

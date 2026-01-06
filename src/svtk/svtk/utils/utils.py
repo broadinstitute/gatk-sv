@@ -116,8 +116,10 @@ def get_called_samples(record, include_null=False):
             samples.append(sample)
 
     if record.info.get('SVTYPE', None) == 'CNV':
-        for sample in record.samples.keys():
-            if record.samples[sample]['CN'] != 2:
+        for sample, gt in record.samples.items():
+            # Get CN, or RD_CN if it doesn't exist
+            cn = gt.get('CN', gt.get('RD_CN', None))
+            if cn is not None and cn != 2:
                 samples.append(sample)
 
     return sorted(samples)
@@ -260,7 +262,7 @@ def vcf2bedtool(vcf, split_bnd=True, include_samples=False,
                         chrom, end = parse_bnd_pos(record.alts[0])
                     else:
                         chrom = record.info.get('CHR2', None)
-                        end = record.stop
+                        end = record.info.get('END2', None)
                     start = max([0, int(end) - 1])
                     yield entry.format(**locals())
 

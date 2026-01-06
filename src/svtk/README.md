@@ -1,14 +1,13 @@
 # SVTK
 
-Utilities for consolidating, filtering, resolving, and annotating structural
-variants.
+Utilities for consolidating, filtering, resolving, and annotating structural variants.
 
 ## Installation
 
 ```
-$ git clone https://github.com/talkowski-lab/svtk.git
-$ cd svtk
-$ pip install -e .
+$ git clone https://github.com/broadinstitute/gatk-sv.git
+$ cd gatk-sv
+$ pip install -e ./src/svtk
 ```
 
 ## Available commands

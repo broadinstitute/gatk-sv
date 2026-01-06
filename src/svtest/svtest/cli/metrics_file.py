@@ -22,16 +22,9 @@ import svtest.utils.IOUtils as iou
 
 KEY_PREFIX = "metrics_"
 
-EXPECTED_COLUMNS = ["name", "chrom", "svtype", "svsize", "vf", "poor_region_cov", "rmsk", "is_outlier_specific",
-                    "PE_log_pval", "PE_called_median", "PE_bg_median", "PE_bg_frac", "SR_posA_log_pval",
-                    "SR_posB_log_pval", "SR_sum_log_pval", "SR_posA_called_median", "SR_posB_called_median",
-                    "SR_sum_called_median", "SR_posA_bg_median", "SR_posB_bg_median", "SR_sum_bg_median",
-                    "SR_posA_bg_frac", "SR_posB_bg_frac", "SR_sum_bg_frac", "SR_posA_pos", "SR_posB_pos",
-                    "PESR_log_pval", "PESR_called_median", "PESR_bg_median", "PESR_bg_frac", "RD_Median_Power",
-                    "RD_P", "RD_2ndMaxP", "RD_Model", "RD_Median_Rank", "RD_Median_Separation", "RD_log_pval",
-                    "RD_log_2ndMaxP", "BAF_delstat", "BAF_snp_ratio", "BAF_del_loglik", "BAF_dupstat", "BAF_KS_stat",
-                    "BAF_KS_log_pval", "BAF_total_case_snps", "BAF_total_snps", "BAF_n_nonROH_cases", "BAF_n_samples",
-                    "BAF_mean_control_snps", "BAF_n_nonROH_controls", "BAF_n_controls"]
+EXPECTED_COLUMNS = ["name", "chrom", "start", "end", "svtype", "svsize", "vf", "rmsk", "poor_region_cov", "SR1Q",
+                    "SR1CS", "SR2Q", "SR2CS", "SRQ", "SRCS", "SR1POS", "SR2POS", "PEQ", "PECS", "PESRQ", "PESRCS",
+                    "BAF_HET_RATIO", "BAF_KS_STAT", "BAF_KS_Q", "is_outlier_specific", "RDQ", "RD_P2", "RD_MEDIAN_SEPARATION"]
 
 EXPECTED_TYPES = ["DEL", "DUP", "INS", "INV", "BND"]
 
@@ -63,9 +56,8 @@ def main(argv):
 
     # Columns used as features for adjudication in module 03
     feature_cols = ["poor_region_cov", "is_outlier_specific",
-                    "BAF_snp_ratio", "BAF_del_loglik", "BAF_KS_stat", "BAF_KS_log_pval",
-                    "SR_sum_log_pval", "SR_sum_bg_frac", "RD_Median_Separation", "RD_log_pval",
-                    "RD_log_2ndMaxP", "PE_log_pval", "PE_bg_frac"]
+                    "SRQ", "SRCS", "PEQ", "PECS", "PESRQ", "PESRCS", "BAF_HET_RATIO", "BAF_KS_Q", "BAF_KS_STAT",
+                    "RDQ", "RD_P2", "RD_MEDIAN_SEPARATION"]
 
     # Read file
     df = pd.read_csv(args.metrics_file, sep='\t')

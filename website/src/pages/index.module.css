@@ -8,11 +8,24 @@
   text-align: center;
   position: relative;
   overflow: hidden;
+  background-image: url('/img/heroBackground.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+[data-theme='light'] .heroBanner {
+  color: white;
+}
+
+[data-theme='dark'] .heroBanner {
+  color: white;
 }
 
 @media screen and (max-width: 996px) {
   .heroBanner {
     padding: 2rem;
+    background-size: cover; /* this makes the background size responsive to the window size */
   }
 }
 
@@ -20,4 +33,5 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 20px;
 }

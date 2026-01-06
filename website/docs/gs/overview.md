@@ -6,9 +6,11 @@ sidebar_position: 0
 
 # Overview
 
-GATK-SV is a highly-scalable cloud-native pipeline for structural variation discovery 
-on Illumina short-read whole-genome sequencing (WGS) data.
-The pipeline genotypes structural variations using Docker-based tools, modularized in 
-different components, and orchestrated using Cromwell.
+This section provides guidance on how GATK-SV can be used, restrictions on input data, and where to get started 
+with generating call sets.
 
-The pipeline runs in two modes: [Cohort](/docs/execmodes/cohort) and [single-sample](/docs/execmodes/singlesample). 
+We highly recommend that users new to SV calling also review the [Best Practices Guide](/docs/best_practices).
+
+Most users should use the Terra platform for running GATK-SV and, after reading this section,
+should refer to the documentation in the [Execution section](/docs/execution/overview) for instructions on 
+how to run their own data.

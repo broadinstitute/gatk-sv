@@ -77,7 +77,7 @@ class PESRTest:
         counts = pd.merge(counts, self.medians, on='sample', how='left')
         counts['norm_count'] = counts['count'] * \
             target_cov / counts['median_cov']
-        counts['count'] = counts['norm_count'].round()
+        counts['count'] = counts['norm_count'].astype(float).round()
         counts.drop(['norm_count', 'median_cov'], axis=1, inplace=True)
 
         return counts
@@ -93,7 +93,7 @@ class PESRTest:
 
 class PESRTestRunner:
     def __init__(self, vcf, common=False, n_background=160, whitelist=None, blacklist=None,
-                 log=False):
+                 log=False, outlier_sample_ids=None, seed=42):
         self.vcf = vcf
 
         self.common = common
@@ -104,6 +104,14 @@ class PESRTestRunner:
         self.blacklist = blacklist if blacklist else []
 
         self.log = log
+
+        np.random.seed(seed)
+
+        outlier_samples = set()
+        if outlier_sample_ids:
+            with open(outlier_sample_ids, 'r') as f:
+                outlier_samples = set([line.strip() for line in f])
+        self.outlier_sample_ids = outlier_samples
 
     def run(self):
         if self.log:
@@ -135,6 +143,16 @@ class PESRTestRunner:
         # Select called and background samples
         called = svu.get_called_samples(record)
         background = [s for s in self.samples if s not in called]
+
+        # Create non-outlier sample lists
+        non_outlier_called = [s for s in called if s not in self.outlier_sample_ids]
+        non_outlier_background = [s for s in background if s not in self.outlier_sample_ids]
+
+        # Exclude outlier samples only if non-outlier samples exist
+        if len(non_outlier_called) > 0:
+            called = non_outlier_called
+        if len(non_outlier_background) > 0:
+            background = non_outlier_background
 
         # Permit override of specified white/blacklists
         whitelist = whitelist if whitelist is not None else self.whitelist

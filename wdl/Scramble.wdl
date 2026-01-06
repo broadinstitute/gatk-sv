@@ -2,7 +2,7 @@
 ## https://github.com/GeneDx/scramble
 ##
 ## Requirements/expectations :
-## - Human whole-genome pair-end sequencing data in mapped BAM format
+## - Human whole-genome pair-end sequencing data in mapped BAM or CRAM format
 
 version 1.0
 
@@ -12,161 +12,134 @@ workflow Scramble {
   input {
     File bam_or_cram_file
     File bam_or_cram_index
+    File original_bam_or_cram_file
+    File original_bam_or_cram_index
+    File counts_file
+    File input_vcf
     String sample_name
     File reference_fasta
-    Boolean detect_deletions
+    File reference_index
+    File regions_list
+
+    # Critical parameter for sensitivity/specificity
+    # Recommended values for aligners:
+    #   BWA-MEM: 90
+    #   DRAGEN-3.7.8: 60
+    Int alignment_score_cutoff
+
+    Float min_clipped_reads_fraction = 0.22
+    Int percent_align_cutoff = 70
+    File mei_bed
+    File? scramble_vcf_script
+    String? make_scramble_vcf_args
+    String sv_pipeline_docker
     String scramble_docker
-    RuntimeAttr? runtime_attr_scramble
+    Int? part2_threads
+    RuntimeAttr? runtime_attr_scramble_part1
+    RuntimeAttr? runtime_attr_scramble_part2
+    RuntimeAttr? runtime_attr_scramble_make_vcf
   }
-    
-  parameter_meta {
-    bam_or_cram_file: "A .bam or .cram file to search for SVs. crams are preferable because they localise faster and use less disk."
-    bam_or_cram_index: "Index for bam_or_cram_file."
-    sample_name: "A sample name. Outputs will be sample_name+'.scramble.insertions.vcf.gz' and sample_name+'.scramble.deletions.vcf.gz'."
-    reference_fasta: "A FASTA file with the reference used to align bam or cram file."
-    detect_deletions: "Run deletion detection as well as mobile element insertion."
-  }
-  
-  call RunScramble {
+
+  call ScramblePart1 {
     input:
       bam_or_cram_file = bam_or_cram_file,
       bam_or_cram_index = bam_or_cram_index,
+      counts_file = counts_file,
+      sample_name = sample_name,
+      regions_list = regions_list,
+      reference_fasta = reference_fasta,
+      reference_index = reference_index,
+      min_clipped_reads_fraction = min_clipped_reads_fraction,
+      scramble_docker = scramble_docker,
+      runtime_attr_override = runtime_attr_scramble_part1
+  }
+
+  call ScramblePart2 {
+    input:
+      clusters_file = ScramblePart1.clusters_file,
       sample_name = sample_name,
       reference_fasta = reference_fasta,
-      detect_deletions = detect_deletions,
+      percent_align_cutoff = percent_align_cutoff,
+      alignment_score_cutoff = alignment_score_cutoff,
+      min_clipped_reads = ScramblePart1.min_clipped_reads,
+      threads = part2_threads,
       scramble_docker = scramble_docker,
-      runtime_attr_override = runtime_attr_scramble
+      runtime_attr_override = runtime_attr_scramble_part2
+  }
+
+  call MakeScrambleVcf {
+    input:
+      scramble_table = ScramblePart2.table,
+      original_bam_or_cram_file = original_bam_or_cram_file,
+      original_bam_or_cram_index = original_bam_or_cram_index,
+      input_vcf = input_vcf,
+      sample_name = sample_name,
+      reference_fasta = reference_fasta,
+      reference_index = reference_index,
+      mei_bed = mei_bed,
+      scramble_vcf_script = scramble_vcf_script,
+      script_args = make_scramble_vcf_args,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_scramble_make_vcf
   }
 
   output {
-    File vcf = RunScramble.vcf
-    File index = RunScramble.index
+    File vcf = MakeScrambleVcf.vcf
+    File index = MakeScrambleVcf.vcf_index
+    File clusters = ScramblePart1.clusters_file
+    File table = ScramblePart2.table
   }
 }
 
-task RunScramble {
+task ScramblePart1 {
   input {
     File bam_or_cram_file
     File bam_or_cram_index
+    File counts_file
     String sample_name
+    File regions_list
     File reference_fasta
-    Boolean detect_deletions
+    File reference_index
+    Float min_clipped_reads_fraction
     String scramble_docker
     RuntimeAttr? runtime_attr_override
-    File? NOT_A_FILE
   }
 
-  Int mem_size_gb = if detect_deletions then 16 else 3
-  Int disk_size_gb = ceil(size(bam_or_cram_file,"GiB") + size(bam_or_cram_index,"GiB") + size(reference_fasta,"GiB") + 10)
+  Int disk_size_gb = ceil(size(bam_or_cram_file,"GiB") + size(reference_fasta,"GiB")*1.5 + 50)
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: mem_size_gb,
-    disk_gb: disk_size_gb,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
+                               cpu_cores: 1,
+                               mem_gb: 3.0,
+                               disk_gb: disk_size_gb,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File vcf = "~{sample_name}.scramble.vcf.gz"
-    File index = "~{sample_name}.scramble.vcf.gz.tbi"
+    File clusters_file = "~{sample_name}.scramble_clusters.tsv.gz"
+    Int min_clipped_reads = read_int("cutoff.txt")
   }
   command <<<
     set -euo pipefail
 
-    xDir=$PWD
-    clusterFile=$xDir/clusters
-    scrambleDir="/app"
-    meiRef=$scrambleDir/cluster_analysis/resources/MEI_consensus_seqs.fa
-
-    # create a blast db from the reference
-    cat ~{reference_fasta} | makeblastdb -in - -parse_seqids -title ref -dbtype nucl -out ref
+    # Calibrate clipped reads cutoff based on median coverage
+    zcat ~{counts_file} \
+      | awk '$0!~"@"' \
+      | sed 1d \
+      | awk 'NR % 100 == 0' \
+      | cut -f4 \
+      | Rscript -e "cat(round(~{min_clipped_reads_fraction}*median(data.matrix(read.csv(file(\"stdin\"))))))" \
+      > cutoff.txt
+    MIN_CLIPPED_READS=$(cat cutoff.txt)
+    echo "MIN_CLIPPED_READS: ${MIN_CLIPPED_READS}"
 
     # Identify clusters of split reads
-    $scrambleDir/cluster_identifier/src/build/cluster_identifier ~{bam_or_cram_file} > $clusterFile
-
-    # Produce ${clusterFile}_MEIs.txt
-    Rscript --vanilla $scrambleDir/cluster_analysis/bin/SCRAMble.R --out-name $clusterFile \
-            --cluster-file $clusterFile --install-dir $scrambleDir/cluster_analysis/bin \
-            --mei-refs $meiRef --ref $xDir/ref --no-vcf --eval-meis
-
-    # create a header for the output vcf
-    echo \
-    '##fileformat=VCFv4.3
-    ##reference=~{reference_fasta}
-    ##source=scramble' > tmp.vcf
-
-    grep '^>' $meiRef | awk \
-    '{mei=toupper(substr($0,2)); if (mei=="L1") mei="LINE1"
-      print "##ALT=<ID=INS:ME:" mei ",Description=\"" mei " element insertion\">"}' >> tmp.vcf
-
-    echo \
-    '##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">
-    ##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
-    ##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="Difference in length between REF and ALT alleles">
-    ##INFO=<ID=ALGORITHMS,Number=.,Type=String,Description="Source algorithms">
-    ##INFO=<ID=STRANDS,Number=1,Type=String,Description="Breakpoint strandedness [++,+-,-+,--]">
-    ##INFO=<ID=CHR2,Number=1,Type=String,Description="Chromosome for END coordinate">
-    ##INFO=<ID=MEI_START,Number=1,Type=Integer,Description="Start of alignment to canonical MEI sequence">
-    ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">' >> tmp.vcf
-
-    blastdbcmd -db ref -entry all -outfmt '##contig=<ID=%a,length=%l>' >> tmp.vcf
-    echo "#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	~{sample_name}" >> tmp.vcf
-
-    # use awk to write the first part of an awk script that initializes an awk associative array
-    # mapping MEI name onto its consensus sequence length
-    awk \
-    'BEGIN { FS=OFS="\t"; print "BEGIN{" }
-     /^>/  {if ( seq != "" ) print "seqLen[\"" seq "\"]=" len; seq = substr($0,2); len = 0}
-     !/^>/ {len += length($0)}
-     END   {if ( seq != "" ) print "seqLen[\"" seq "\"]=" len; print "}"}' $meiRef > awkScript.awk
-
-    # write the rest of the awk script that transforms the contents of the *_MEIs.txt files into a VCF
-    echo \
-    'BEGIN{ FS=OFS="\t" }
-    { if(FNR<2)next
-      split($1,loc,":")
-      start=loc[2]+1
-      end=start+1
-      len=seqLen[$2]-$10
-      mei=toupper($2); if (mei=="L1") mei="LINE1"
-      print loc[1],start,".","N","<INS:ME:" mei ">",int($6),"PASS",\
-            "END=" end ";SVTYPE=INS;SVLEN=" len ";MEI_START=" $10 ";STRANDS=+-;CHR2=" loc[1] ";ALGORITHMS=scramble",\
-            "GT","0/1" }' >> awkScript.awk
-
-    # transform the MEI descriptions into VCF lines
-    awk -f awkScript.awk ${clusterFile}_MEIs.txt >> tmp.vcf
-
-    # work on deletions, if requested
-    if [ ~{detect_deletions} == "true" ]
-    then
-      # split the file of clusters to keep memory bounded
-      # The awk script removes lines where field 4 (the left consensus) contains nothing but 'n's
-      #   because the deletion hunter in Scramble barfs on these.
-      awk '{left=$4; gsub(/n/,"",left); if ( length(left) > 0 ) print}' $clusterFile | split -a3 -l1500 - xyzzy
-
-      # produce a xyzzy???_PredictedDeletions.txt file for each split
-      for fil in xyzzy???
-      do Rscript --vanilla $scrambleDir/cluster_analysis/bin/SCRAMble.R --out-name $xDir/$fil \
-           --cluster-file $xDir/$fil --install-dir $scrambleDir/cluster_analysis/bin \
-           --mei-refs $meiRef --ref $xDir/ref --no-vcf --eval-dels
-      done
-
-      # transform the *_PredictedDeletions.txt files into VCF lines, and add them to the body
-      awk \
-      'BEGIN{ FS=OFS="\t" }
-      { if(FNR<2)next
-        Q= $11=="NA" ? ($15=="NA"?".":$15) : ($15=="NA"?$11:($11+$15)/2)
-        print $1,$2+1,".","N","<DEL>",Q=="."?".":int(Q),"PASS",\
-              "END=" $3+1 ";SVTYPE=DEL;SVLEN=" $5 ";STRANDS=+-;CHR2=" $1 ";ALGORITHMS=scramble",\
-              "GT","0/1" }' xyzzy???_PredictedDeletions.txt >> tmp.vcf
-    fi
-
-    # sort and index the output VCF
-    bcftools sort -Oz <tmp.vcf >"~{sample_name}.scramble.vcf.gz"
-    bcftools index -ft "~{sample_name}.scramble.vcf.gz"
+    while read region; do
+      time /app/scramble-gatk-sv/cluster_identifier/src/build/cluster_identifier -l -s ${MIN_CLIPPED_READS} -r "${region}" -t ~{reference_fasta} ~{bam_or_cram_file} \
+        | gzip >> ~{sample_name}.scramble_clusters.tsv.gz
+    done < ~{regions_list}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -177,5 +150,124 @@ task RunScramble {
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     noAddress: true
+  }
+}
+
+task ScramblePart2 {
+  input {
+    File clusters_file
+    String sample_name
+    File reference_fasta
+    Int min_clipped_reads
+    String scramble_docker
+    Int percent_align_cutoff
+    Int alignment_score_cutoff
+    Int threads = 7  # Number of threads
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Int disk_size_gb = ceil(10*size(clusters_file,"GiB") + size(reference_fasta,"GiB") + 10)
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 8,
+    mem_gb: 12.0,
+    disk_gb: disk_size_gb,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File table = "~{sample_name}.scramble.tsv.gz"
+  }
+  command <<<
+    set -euo pipefail
+
+    xDir=$PWD
+    clusterFile=$xDir/clusters
+    scrambleDir="/app/scramble-gatk-sv"
+    meiRef=$scrambleDir/cluster_analysis/resources/MEI_consensus_seqs.fa
+
+    # create a blast db from the reference
+    cat ~{reference_fasta} | makeblastdb -in - -parse_seqids -title ref -dbtype nucl -out ref
+
+    gunzip -c ~{clusters_file} > $clusterFile
+
+    # Produce ${clusterFile}_MEIs.txt
+    Rscript --vanilla $scrambleDir/cluster_analysis/bin/SCRAMble.R --out-name $clusterFile \
+            --cluster-file $clusterFile --install-dir $scrambleDir/cluster_analysis/bin \
+            --mei-refs $meiRef --ref $xDir/ref --no-vcf --eval-meis --cores ~{threads} \
+            --pct-align ~{percent_align_cutoff} -n ~{min_clipped_reads} --mei-score ~{alignment_score_cutoff}
+
+    # Save raw outputs
+    mv ${clusterFile}_MEIs.txt ~{sample_name}.scramble.tsv
+    gzip ~{sample_name}.scramble.tsv
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: scramble_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task MakeScrambleVcf {
+  input {
+    File scramble_table
+    File original_bam_or_cram_file
+    File original_bam_or_cram_index
+    File input_vcf
+    File reference_fasta
+    File reference_index
+    File mei_bed
+    String sample_name
+    File? scramble_vcf_script
+    String? script_args
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Int disk_size_gb = ceil(size(original_bam_or_cram_file, "GiB") + size(reference_fasta, "GiB") + 10)
+
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 4,
+                                  disk_gb: disk_size_gb,
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euxo pipefail
+    python ~{default="/opt/sv-pipeline/scripts/make_scramble_vcf.py" scramble_vcf_script} \
+      --table ~{scramble_table} \
+      --input-vcf ~{input_vcf} \
+      --alignments-file ~{original_bam_or_cram_file} \
+      --sample ~{sample_name} \
+      --reference ~{reference_fasta} \
+      --mei-bed ~{mei_bed} \
+      --out unsorted.vcf.gz \
+      ~{script_args}
+    bcftools sort unsorted.vcf.gz -Oz -o ~{sample_name}.scramble.vcf.gz
+    tabix ~{sample_name}.scramble.vcf.gz
+  >>>
+  output {
+    File vcf = "~{sample_name}.scramble.vcf.gz"
+    File vcf_index = "~{sample_name}.scramble.vcf.gz.tbi"
   }
 }

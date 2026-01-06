@@ -1,6 +1,9 @@
 {
   "CleanVcf.contig_list": {{ reference_resources.primary_contigs_fai | tojson }},
   "CleanVcf.allosome_fai": {{ reference_resources.allosome_file | tojson }},
+  "CleanVcf.HERVK_reference": {{ reference_resources.hervk_reference | tojson }},
+  "CleanVcf.LINE1_reference": {{ reference_resources.line1_reference | tojson }},
+  "CleanVcf.intron_reference": {{ reference_resources.intron_reference | tojson }},
   "CleanVcf.chr_x": {{ reference_resources.chr_x | tojson }},
   "CleanVcf.chr_y": {{ reference_resources.chr_y | tojson }},
 
@@ -11,17 +14,14 @@
   "CleanVcf.clean_vcf5_records_per_shard": 5000,
 
   "CleanVcf.primary_contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
-  "CleanVcf.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
 
   "CleanVcf.linux_docker": {{ dockers.linux_docker | tojson }},
   "CleanVcf.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
-  "CleanVcf.sv_pipeline_hail_docker": {{ dockers.sv_pipeline_hail_docker | tojson }},
-  "CleanVcf.sv_pipeline_updates_docker": {{ dockers.sv_pipeline_updates_docker | tojson }},
   "CleanVcf.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
 
   "CleanVcf.cohort_name": {{ test_batch.name | tojson }},
   "CleanVcf.ped_file": {{ test_batch.ped_file | tojson }},
   "CleanVcf.complex_genotype_vcfs": {{ test_batch.complex_genotype_vcfs | tojson }},
-  "CleanVcf.complex_resolve_bothside_pass_lists": {{ test_batch.complex_resolve_bothside_pass_lists | tojson }},
-  "CleanVcf.complex_resolve_background_fail_lists": {{ test_batch.complex_resolve_background_fail_lists | tojson }}
+  "CleanVcf.complex_resolve_bothside_pass_list": {{ test_batch.complex_resolve_bothside_pass_list | tojson }},
+  "CleanVcf.complex_resolve_background_fail_list": {{ test_batch.complex_resolve_background_fail_list | tojson }}
 }

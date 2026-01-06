@@ -10,13 +10,15 @@ import argparse
 import sys
 import pysam
 import pandas as pd
+import numpy as np
 
 
 def rewrite_SR_coords(record, metrics, pval_cutoff, bg_cutoff):
     row = metrics.loc[record.id]
-    if row.SR_sum_log_pval >= pval_cutoff and row.SR_sum_bg_frac >= bg_cutoff:
-        posA = int(row.SR_posA_pos)
-        posB = int(row.SR_posB_pos)
+    # Do not use bg_cutoff for common variants
+    if row.SRQ >= pval_cutoff and (row.SRCS >= bg_cutoff or row.vf > 0.5):
+        posA = int(row.SR1POS - 1) if row.SR1POS and not np.isnan(row.SR1POS) else record.pos
+        posB = int(row.SR2POS - 1) if row.SR2POS and not np.isnan(row.SR2POS) else record.stop
         if record.info['SVTYPE'] == 'INS':
             # posA is always (+) strand and posB (-) strand; need to set order so pos <= end
             if posB < posA:
@@ -29,6 +31,10 @@ def rewrite_SR_coords(record, metrics, pval_cutoff, bg_cutoff):
                 record.info['STRANDS'] = '+-'
         elif record.info['SVTYPE'] == 'INV':
             record.pos, record.stop = sorted([posA, posB])
+        elif record.info['SVTYPE'] == 'BND':
+            record.pos = int(posA)
+            record.stop = int(posA)
+            record.info['END2'] = int(posB)
         else:
             record.pos = posA
             record.stop = posB
@@ -64,14 +70,14 @@ def main():
     # Load cutoffs
     cutoffs = pd.read_table(args.cutoffs)
     pval_cutoff = cutoffs.loc[(cutoffs['test'] == 'SR1') &
-                              (cutoffs['metric'] == 'SR_sum_log_pval'), 'cutoff'].iloc[0]
+                              (cutoffs['metric'] == 'SRQ'), 'cutoff'].iloc[0]
     bg_cutoff = cutoffs.loc[(cutoffs['test'] == 'SR1') &
-                            (cutoffs['metric'] == 'SR_sum_bg_frac'), 'cutoff'].iloc[0]
+                            (cutoffs['metric'] == 'SRCS'), 'cutoff'].iloc[0]
 
     for record in records:
         rewrite_SR_coords(record, metrics, pval_cutoff, bg_cutoff)
         if record.info['SVTYPE'] in 'DEL DUP'.split():
-            if record.info['SVLEN'] < 50:
+            if 'SVLEN' not in record.info or record.info['SVLEN'] < 50:
                 continue
         fout.write(record)
 

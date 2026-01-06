@@ -28,22 +28,12 @@ task SplitVariants {
     Array[File] ins_beds = glob("ins.*")
   }
   command <<<
-
     set -euo pipefail
-    svtk vcf2bed ~{vcf} stdout \
-      | awk -v OFS="\t" '(($5=="DEL" || $5=="DUP") && $3-$2>=5000) {print $1, $2, $3, $4, $6, $5}' \
-      | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - gt5kb.
-    svtk vcf2bed ~{vcf} stdout \
-      | awk -v OFS="\t" '(($5=="DEL" || $5=="DUP") && $3-$2<5000) {print $1, $2, $3, $4, $6, $5}' \
-      | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - lt5kb.
-    if [ ~{generate_bca} == "true" ]; then
-      svtk vcf2bed ~{vcf} stdout \
-        | awk -v OFS="\t" '($5!="DEL" && $5!="DUP" && $5!="INS") {print $1, $2, $3, $4, $6, $5}' \
-        | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - bca.
-      svtk vcf2bed ~{vcf} stdout \
-        | awk -v OFS="\t" '($5=="INS") {print $1, $2, $3, $4, $6, $5}' \
-        | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - ins.
-    fi
+    svtk vcf2bed ~{vcf} bed_file.bed
+    python /opt/sv-pipeline/04_variant_resolution/scripts/split_variants.py \
+      --bed bed_file.bed \
+      ~{"--n " + n_per_split} \
+      ~{if generate_bca then "--bca" else ""}
 
   >>>
   runtime {
@@ -307,7 +297,7 @@ task RDTestGenotype {
     Int n_bins
     String prefix
     Boolean generate_melted_genotypes
-    String sv_pipeline_rdtest_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -351,12 +341,13 @@ task RDTestGenotype {
         --evidence-file ~{coveragefile} \
         -L ~{bed} \
         -O local.RD.txt.gz
+
+      tabix -f -0 -s1 -b2 -e3 local.RD.txt.gz
     else
       touch local.RD.txt
       bgzip local.RD.txt
+      tabix -p bed local.RD.txt.gz
     fi
-
-    tabix -p bed local.RD.txt.gz
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
@@ -369,6 +360,14 @@ task RDTestGenotype {
       -r ~{gt_cutoffs} \
       -y ~{bin_exclude} \
       -g TRUE
+
+    # In case of empty output, these files are not created
+    touch ~{prefix}.geno
+    touch ~{prefix}.median_geno
+    touch ~{prefix}.metrics
+    touch ~{prefix}.gq
+    touch ~{prefix}.vargq
+
     if [ ~{generate_melted_genotypes} == "true" ]; then
       /opt/sv-pipeline/04_variant_resolution/scripts/merge_RdTest_genotypes.py ~{prefix}.geno ~{prefix}.gq rd.geno.cnv.bed
       sort -k1,1V -k2,2n rd.geno.cnv.bed | uniq | bgzip -c > rd.geno.cnv.bed.gz
@@ -382,7 +381,7 @@ task RDTestGenotype {
     memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_rdtest_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -442,12 +441,14 @@ task CountPE {
         --evidence-file ~{discfile} \
         -L region.merged.bed \
         -O local.PE.txt.gz
+
+      tabix -f -0 -s1 -b2 -e2 local.PE.txt.gz
     else
       touch local.PE.txt
       bgzip local.PE.txt
+      tabix -0 -s1 -b2 -e2 local.PE.txt.gz
     fi
 
-    tabix -s1 -b2 -e2 local.PE.txt.gz
     svtk count-pe -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} local.PE.txt.gz ~{prefix}.pe_counts.txt
     gzip ~{prefix}.pe_counts.txt
 
@@ -518,12 +519,14 @@ task CountSR {
         --evidence-file ~{splitfile} \
         -L region.merged.bed \
         -O local.SR.txt.gz
+
+      tabix -f -0 -s1 -b2 -e2 local.SR.txt.gz
     else
       touch local.SR.txt
       bgzip local.SR.txt
+      tabix -0 -s1 -b2 -e2 local.SR.txt.gz
     fi
 
-    tabix -s1 -b2 -e2 local.SR.txt.gz
     svtk count-sr -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} local.SR.txt.gz ~{prefix}.sr_counts.txt
     /opt/sv-pipeline/04_variant_resolution/scripts/sum_SR.sh ~{prefix}.sr_counts.txt ~{prefix}.sr_sum.txt.gz
     gzip ~{prefix}.sr_counts.txt
@@ -608,6 +611,48 @@ task IntegrateDepthGq {
       ~{RD_melted_genotypes} \
       ~{RD_vargq}
   
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task ReformatGenotypedVcf {
+  input {
+    File vcf
+    File? script
+    String output_prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(10 + size(vcf, "GB") * 2),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File out = "~{output_prefix}.vcf.gz"
+    File out_index = "~{output_prefix}.vcf.gz.tbi"
+  }
+  command <<<
+    set -euo pipefail
+    python ~{default="/opt/sv-pipeline/04_variant_resolution/scripts/reformat_genotyped_vcf.py" script} --vcf ~{vcf} \
+      | bgzip \
+      > ~{output_prefix}.vcf.gz
+    tabix ~{output_prefix}.vcf.gz
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

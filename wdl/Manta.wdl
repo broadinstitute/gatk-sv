@@ -15,7 +15,7 @@ workflow Manta {
     File reference_fasta
     File? reference_index
     File region_bed
-    File? region_bed_index
+    File region_bed_index
     Float? jobs_per_cpu
     Int? mem_gb_per_job
     String manta_docker
@@ -28,8 +28,8 @@ workflow Manta {
     sample_id: "sample name. Outputs will be sample_name + 'manta.vcf.gz' and sample_name + 'manta.vcf.gz.tbi'"
     reference_fasta: ".fasta file with reference used to align bam or cram file"
     reference_index: "[optional] If omitted, the WDL will look for an index by appending .fai to the .fasta file"
-    region_bed: "[optional] gzipped bed file with included regions where manta should make SV calls."
-    region_bed_index: "[optional]If omitted, the WDL will look for an index by appending .tbi to the region_bed file"
+    region_bed: "gzipped bed file with included regions where manta should make SV calls."
+    region_bed_index: "A .tbi file for the region_bed file"
     jobs_per_cpu: "[optional] number of manta threads, i.e. num_jobs = round(num_cpu * jobs_per_cpu). If omitted, defaults to 1.3."
     mem_gb_per_job: "[optional] Memory to request for VM (in GB) = round(num_jobs * mem_gb_per_job). If omitted, defaults to 2."
   }
@@ -63,7 +63,7 @@ task RunManta {
     File reference_fasta
     File? reference_index
     File region_bed
-    File? region_bed_index
+    File region_bed_index
     Float? jobs_per_cpu
     Int? mem_gb_per_job
     String manta_docker
@@ -74,7 +74,6 @@ task RunManta {
   String bam_ext = if is_bam then ".bam" else ".cram"
   String index_ext = if is_bam then ".bai" else ".crai"
   File ref_index = select_first([reference_index, reference_fasta + ".fai"])
-  File bed_index = select_first([region_bed_index, region_bed + ".tbi"])
 
   # select number of cpus and jobs
   Int num_cpu_use = if defined(runtime_attr_override) then select_first([select_first([runtime_attr_override]).cpu_cores, 8]) else 8
@@ -83,13 +82,11 @@ task RunManta {
   Int num_jobs = round(num_cpu_use * jobs_per_cpu_use)
 
   # ensure there's sufficient memory.
-  # NOTE: according to issue #38, manta internally assumes roughly 2GB
-  # of RAM per job, although in practice it uses considerably less.
-  # 1.5GB is a safe amount
-  Float mem_size_gb = num_jobs * select_first([mem_gb_per_job, 1.5])
+  Float mem_size_gb = num_jobs * select_first([mem_gb_per_job, 0.4])
   # ALSO: manta will scale down number of jobs if less than 2GB per
   # job are reported, even if that memory is not needed. The memory
   # reported must be an integer
+  # Note: unsure if this applies to v1.6.0
   Int mem_reported_to_manta = 2 * num_jobs
   
   # ensure there's sufficient disk space

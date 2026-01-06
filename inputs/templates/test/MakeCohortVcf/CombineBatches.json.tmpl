@@ -1,24 +1,31 @@
 {
   "CombineBatches.contig_list": {{ reference_resources.primary_contigs_fai | tojson }},
-  "CombineBatches.pe_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
-  "CombineBatches.depth_exclude_list": {{ reference_resources.depth_exclude_list | tojson }},
-  "CombineBatches.empty_file" : {{ reference_resources.empty_file | tojson }},
+
+  "CombineBatches.clustering_config_part1" : {{ reference_resources.clustering_config_part1 | tojson }},
+  "CombineBatches.stratification_config_part1" : {{ reference_resources.clustering_config_part1 | tojson }},
+  "CombineBatches.clustering_config_part2" : {{ reference_resources.clustering_config_part2 | tojson }},
+  "CombineBatches.stratification_config_part2" : {{ reference_resources.stratification_config_part2 | tojson }},
+  "CombineBatches.track_bed_files": {{ reference_resources.clustering_tracks | tojson }},
+  "CombineBatches.track_names": {{ reference_resources.clustering_track_names | tojson }},
+
+  "CombineBatches.reference_fasta": {{ reference_resources.reference_fasta | tojson }},
+  "CombineBatches.reference_dict": {{ reference_resources.reference_dict | tojson }},
+  "CombineBatches.reference_fasta_fai": {{ reference_resources.reference_index | tojson }},
 
   "CombineBatches.min_sr_background_fail_batches": 0.5,
+  "CombineBatches.gatk_docker": {{ dockers.gatk_docker | tojson }},
   "CombineBatches.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
-  "CombineBatches.sv_pipeline_hail_docker": {{ dockers.sv_pipeline_hail_docker | tojson }},
   "CombineBatches.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
 
   "CombineBatches.cohort_name": {{ test_batch.name | tojson }},
+  "CombineBatches.ped_file": {{ test_batch.ped_file | tojson }},
   "CombineBatches.batches": [
     {{ test_batch.name | tojson }}
   ],
   "CombineBatches.pesr_vcfs": [
     {{ test_batch.genotyped_pesr_vcf| tojson }}
   ],
-  "CombineBatches.depth_vcfs": [
-    {{ test_batch.regenotyped_depth_vcf | tojson }}
-  ],
+  "CombineBatches.depth_vcfs": {{ test_batch.regenotyped_depth_vcf | tojson }},
   "CombineBatches.raw_sr_bothside_pass_files": [
     {{ test_batch.raw_sr_bothside_pass_file | tojson }}
   ],

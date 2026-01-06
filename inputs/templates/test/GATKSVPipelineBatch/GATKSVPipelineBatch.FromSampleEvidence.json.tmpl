@@ -1,9 +1,4 @@
 {
-  "GATKSVPipelineBatch.use_manta": "true",
-  "GATKSVPipelineBatch.use_wham": "true",
-  "GATKSVPipelineBatch.use_melt": "true",
-  "GATKSVPipelineBatch.use_scramble": "false",
-
   "GATKSVPipelineBatch.name": {{ test_batch.name | tojson }},
   "GATKSVPipelineBatch.ped_file": {{ test_batch.ped_file | tojson }},
   "GATKSVPipelineBatch.samples": {{ test_batch.samples | tojson }},
@@ -15,27 +10,20 @@
   "GATKSVPipelineBatch.sr_files_input": {{ test_batch.SR_files | tojson }},
   "GATKSVPipelineBatch.sd_files_input": {{ test_batch.SD_files | tojson }},
   "GATKSVPipelineBatch.manta_vcfs_input": {{ test_batch.manta_vcfs | tojson }},
-  "GATKSVPipelineBatch.melt_vcfs_input": {{ test_batch.melt_vcfs | tojson }},
+  "GATKSVPipelineBatch.scramble_vcfs_input": {{ test_batch.scramble_vcfs | tojson }},
   "GATKSVPipelineBatch.wham_vcfs_input": {{ test_batch.wham_vcfs | tojson }},
 
-  "GATKSVPipelineBatch.melt_docker" : {{ dockers.melt_docker | tojson }},
   "GATKSVPipelineBatch.scramble_docker" : {{ dockers.scramble_docker | tojson }},
   "GATKSVPipelineBatch.manta_docker": {{ dockers.manta_docker | tojson }},
   "GATKSVPipelineBatch.wham_docker": {{ dockers.wham_docker | tojson }},
   "GATKSVPipelineBatch.cnmops_docker": {{ dockers.cnmops_docker | tojson }},
   "GATKSVPipelineBatch.linux_docker" : {{ dockers.linux_docker | tojson }},
   "GATKSVPipelineBatch.gatk_docker": {{ dockers.gatk_docker | tojson }},
-  "GATKSVPipelineBatch.gatk_docker_pesr_override" : {{ dockers.gatk_docker | tojson }},
-  "GATKSVPipelineBatch.condense_counts_docker" : {{ dockers.condense_counts_docker | tojson }},
   "GATKSVPipelineBatch.genomes_in_the_cloud_docker" : {{ dockers.genomes_in_the_cloud_docker | tojson }},
   "GATKSVPipelineBatch.sv_base_docker": {{ dockers.sv_base_docker | tojson }},
-  "GATKSVPipelineBatch.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
   "GATKSVPipelineBatch.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
   "GATKSVPipelineBatch.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
-  "GATKSVPipelineBatch.sv_pipeline_hail_docker": {{ dockers.sv_pipeline_hail_docker | tojson }},
-  "GATKSVPipelineBatch.sv_pipeline_updates_docker": {{ dockers.sv_pipeline_updates_docker | tojson }},
   "GATKSVPipelineBatch.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
-  "GATKSVPipelineBatch.sv_pipeline_rdtest_docker": {{ dockers.sv_pipeline_rdtest_docker | tojson }},
   "GATKSVPipelineBatch.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
   "GATKSVPipelineBatch.cloud_sdk_docker": {{ dockers.cloud_sdk_docker | tojson }},
 
@@ -53,10 +41,19 @@
 
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_version": {{ reference_resources.reference_version | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.manta_region_bed": {{ reference_resources.manta_region_bed | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.manta_region_bed_index": {{ reference_resources.manta_region_bed_index | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.sd_locs_vcf": {{ reference_resources.sd_locs_vcf | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.melt_standard_vcf_header": {{ reference_resources.melt_std_vcf_header | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.wham_include_list_bed_file": {{ reference_resources.wham_include_list_bed_file | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.preprocessed_intervals": {{ reference_resources.preprocessed_intervals | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.mei_bed": {{ reference_resources.mei_bed | tojson }},
+
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_bwa_alt": {{ reference_resources.reference_bwa_alt | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_bwa_amb": {{ reference_resources.reference_bwa_amb | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_bwa_ann": {{ reference_resources.reference_bwa_ann | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_bwa_bwt": {{ reference_resources.reference_bwa_bwt | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_bwa_pac": {{ reference_resources.reference_bwa_pac | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_bwa_sa": {{ reference_resources.reference_bwa_sa | tojson }},
 
   "GATKSVPipelineBatch.EvidenceQC.wgd_scoring_mask": {{ reference_resources.wgd_scoring_mask | tojson }},
   "GATKSVPipelineBatch.EvidenceQC.run_vcf_qc": "false",
@@ -101,11 +98,6 @@
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_interval_overlap": "0.8",
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_clustering_algorithm": "SINGLE_LINKAGE",
 
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.BAF_split_size": "10000",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.RD_split_size": "10000",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.PE_split_size": "10000",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.SR_split_size": "1000",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.common_cnv_size_cutoff": "5000",
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.rmsk": {{ reference_resources.rmsk | tojson }},
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.segdups": {{ reference_resources.segdups | tojson }},
 
@@ -123,7 +115,6 @@
   "GATKSVPipelineBatch.RegenotypeCNVs.n_per_split": "5000",
 
   "GATKSVPipelineBatch.MakeCohortVcf.bin_exclude": {{ reference_resources.bin_exclude | tojson }},
-  "GATKSVPipelineBatch.MakeCohortVcf.empty_file" : {{ reference_resources.empty_file | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.site_level_comparison_datasets": [
     {{ reference_resources.ccdg_abel_site_level_benchmarking_dataset | tojson }},
     {{ reference_resources.gnomad_v2_collins_site_level_benchmarking_dataset | tojson }},
@@ -133,7 +124,9 @@
   "GATKSVPipelineBatch.MakeCohortVcf.cytobands": {{ reference_resources.cytobands | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.mei_bed": {{ reference_resources.mei_bed | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.pe_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
-  "GATKSVPipelineBatch.MakeCohortVcf.depth_exclude_list": {{ reference_resources.depth_exclude_list | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.HERVK_reference": {{ reference_resources.hervk_reference | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.LINE1_reference": {{ reference_resources.line1_reference | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.intron_reference": {{ reference_resources.intron_reference | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.min_sr_background_fail_batches": 0.5,
   "GATKSVPipelineBatch.MakeCohortVcf.max_shards_per_chrom_clean_vcf_step1": 200,
   "GATKSVPipelineBatch.MakeCohortVcf.min_records_per_shard_clean_vcf_step1": 5000,
@@ -141,5 +134,11 @@
   "GATKSVPipelineBatch.MakeCohortVcf.samples_per_clean_vcf_step2_shard": 100,
   "GATKSVPipelineBatch.MakeCohortVcf.clean_vcf5_records_per_shard": 5000,
   "GATKSVPipelineBatch.MakeCohortVcf.random_seed": 0,
-  "GATKSVPipelineBatch.MakeCohortVcf.max_shard_size_resolve": 500
+  "GATKSVPipelineBatch.MakeCohortVcf.max_shard_size_resolve": 500,
+  "GATKSVPipelineBatch.MakeCohortVcf.clustering_config_part1" : {{ reference_resources.clustering_config_part1 | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.stratification_config_part1" : {{ reference_resources.clustering_config_part1 | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.clustering_config_part2" : {{ reference_resources.clustering_config_part2 | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.stratification_config_part2" : {{ reference_resources.stratification_config_part2 | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.track_bed_files": {{ reference_resources.clustering_tracks | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.track_names": {{ reference_resources.clustering_track_names | tojson }}
 }

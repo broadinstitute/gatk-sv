@@ -1,12 +1,16 @@
 {
   "CombineBatches.contig_list": "${workspace.primary_contigs_fai}",
-  "CombineBatches.pe_exclude_list": "${workspace.pesr_exclude_list}",
-  "CombineBatches.depth_exclude_list": "${workspace.depth_exclude_list}",
-  "CombineBatches.empty_file" : "${workspace.empty_file}",
+
+  "CombineBatches.clustering_config_part1" : "${workspace.clustering_config_part1}",
+  "CombineBatches.stratification_config_part1" : "${workspace.stratification_config_part1}",
+  "CombineBatches.clustering_config_part2" : "${workspace.clustering_config_part2}",
+  "CombineBatches.stratification_config_part2" : "${workspace.stratification_config_part2}",
+  "CombineBatches.track_bed_files": {{ reference_resources.clustering_tracks | tojson }},
+  "CombineBatches.track_names": {{ reference_resources.clustering_track_names | tojson }},
 
   "CombineBatches.min_sr_background_fail_batches": 0.5,
+  "CombineBatches.gatk_docker": "${workspace.gatk_docker}",
   "CombineBatches.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
-  "CombineBatches.sv_pipeline_hail_docker": "${workspace.sv_pipeline_hail_docker}",
   "CombineBatches.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
 
   "CombineBatches.cohort_name": "${this.sample_set_set_id}",
@@ -14,6 +18,10 @@
   "CombineBatches.pesr_vcfs": "${this.sample_sets.genotyped_pesr_vcf}",
   "CombineBatches.depth_vcfs": "${this.regenotyped_depth_vcfs}",
   "CombineBatches.raw_sr_bothside_pass_files": "${this.sample_sets.sr_bothside_pass}",
-  "CombineBatches.raw_sr_background_fail_files": "${this.sample_sets.sr_background_fail}"
+  "CombineBatches.raw_sr_background_fail_files": "${this.sample_sets.sr_background_fail}",
+  "CombineBatches.ped_file": "${workspace.cohort_ped_file}",
 
+  "CombineBatches.reference_dict" : "${workspace.reference_dict}",
+  "CombineBatches.reference_fasta" : "${workspace.reference_fasta}",
+  "CombineBatches.reference_fasta_fai" : "${workspace.reference_index}"
 }

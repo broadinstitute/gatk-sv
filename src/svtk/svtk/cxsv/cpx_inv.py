@@ -30,27 +30,29 @@ def breakpoint_ordering(FF, RR, mh_buffer=10):
         SIMPLE/DEL, DUP5/INS3, DUP3/INS5, dupINVdup, or UNK.
     """
 
+    ff_end = FF.info['END2'] if FF.info['SVTYPE'] == 'BND' else FF.stop
+    rr_end = RR.info['END2'] if RR.info['SVTYPE'] == 'BND' else RR.stop
     # Check if breakpoints match simple/deletion ordering
     # (FF_start < RR_start < FF_end < RR_end)
     del_order = ((RR.pos > FF.pos - mh_buffer) and
-                 (FF.stop > RR.pos) and
-                 (RR.stop > FF.stop - mh_buffer))
+                 (ff_end > RR.pos) and
+                 (rr_end > ff_end - mh_buffer))
 
     # Check if breakpoints match 5' dup ordering
     # (RR_start < FF_start < FF_end < RR_end)
     dup5_order = ((RR.pos < FF.pos) and
-                  (FF.pos < FF.stop) and
-                  (FF.stop < RR.stop + mh_buffer))
+                  (FF.pos < ff_end) and
+                  (ff_end < rr_end + mh_buffer))
 
     # Check if breakpoints match 3' dup ordering
     # (FF_start < RR_start < RR_end < FF_end)
     dup3_order = ((FF.pos < RR.pos + mh_buffer) and
-                  (RR.pos < RR.stop) and
-                  (RR.stop < FF.stop))
+                  (RR.pos < rr_end) and
+                  (rr_end < ff_end))
 
     # Check if breakpoints match dupINVdup ordering
     # (RR_start < FF_start < RR_end < FF_end)
-    dupINVdup_order = (RR.pos < FF.pos < RR.stop < FF.stop)
+    dupINVdup_order = (RR.pos < FF.pos < rr_end < ff_end)
 
     if del_order:
         return 'SIMPLE/DEL'
@@ -125,14 +127,18 @@ def classify_2_cnv(FF, RR, cnvs, min_frac=0.5):
         interval5 = (FF.pos, RR.pos)
     else:
         interval5 = (RR.pos, FF.pos)
-    frac5 = svu.reciprocal_overlap(cnv5.pos, cnv5.stop, *interval5)
+    cnv5_end = cnv5.info['END2'] if cnv5.info['SVTYPE'] == 'BND' else cnv5.stop
+    frac5 = svu.reciprocal_overlap(cnv5.pos, cnv5_end, *interval5)
 
     # Check if 3' CNV matches breakpoints
+    ff_end = FF.info['END2'] if FF.info['SVTYPE'] == 'BND' else FF.stop
+    rr_end = RR.info['END2'] if RR.info['SVTYPE'] == 'BND' else RR.stop
     if cnv3.info['SVTYPE'] == 'DEL':
-        interval3 = (FF.stop, RR.stop)
+        interval3 = (ff_end, rr_end)
     else:
-        interval3 = (RR.stop, FF.stop)
-    frac3 = svu.reciprocal_overlap(cnv3.pos, cnv3.stop, *interval3)
+        interval3 = (rr_end, ff_end)
+    cnv3_end = cnv3.info['END2'] if cnv3.info['SVTYPE'] == 'BND' else cnv3.stop
+    frac3 = svu.reciprocal_overlap(cnv3.pos, cnv3_end, *interval3)
 
     # Report cxSV class based on whether CNVs matched intervals
     if frac5 >= min_frac and frac3 >= min_frac:
@@ -180,19 +186,22 @@ def classify_1_cnv(FF, RR, cnv, min_frac=0.5,
     cnv_type = cnv.info['SVTYPE'].lower()
 
     # Determine eligible 5'/3' CNV intervals defined by the breakpoints
+    ff_end = FF.info['END2'] if FF.info['SVTYPE'] == 'BND' else FF.stop
+    rr_end = RR.info['END2'] if RR.info['SVTYPE'] == 'BND' else RR.stop
     if cnv_type == 'del':
         interval5 = (FF.pos, RR.pos)
-        interval3 = (FF.stop, RR.stop)
+        interval3 = (ff_end, rr_end)
     else:
         interval5 = (RR.pos, FF.pos)
-        interval3 = (RR.stop, FF.stop)
+        interval3 = (rr_end, ff_end)
 
     # Check overlap of CNV against full inversion length
     start = min(FF.pos, RR.pos)
-    end = max(FF.stop, RR.stop)
-    total_frac = svu.reciprocal_overlap(cnv.pos, cnv.stop, start, end)
-    frac5 = svu.overlap_frac(*interval5, cnv.pos, cnv.stop)
-    frac3 = svu.overlap_frac(*interval3, cnv.pos, cnv.stop)
+    end = max(ff_end, rr_end)
+    cnv_end = cnv.info['END2'] if cnv.info['SVTYPE'] == 'BND' else cnv.stop
+    total_frac = svu.reciprocal_overlap(cnv.pos, cnv_end, start, end)
+    frac5 = svu.overlap_frac(*interval5, cnv.pos, cnv_end)
+    frac3 = svu.overlap_frac(*interval3, cnv.pos, cnv_end)
 
     # If one CNV spans the entire event, it likely represents two CNV merged
     # during preprocessing or clustering
@@ -201,14 +210,17 @@ def classify_1_cnv(FF, RR, cnv, min_frac=0.5,
         return svtype, [cnv]
 
     # Otherwise, check whether it's 5' or 3'
-    frac5 = svu.reciprocal_overlap(cnv.pos, cnv.stop, *interval5)
-    frac3 = svu.reciprocal_overlap(cnv.pos, cnv.stop, *interval3)
+    cnv_end = cnv.info['END2'] if cnv.info['SVTYPE'] == 'BND' else cnv.stop
+    frac5 = svu.reciprocal_overlap(cnv.pos, cnv_end, *interval5)
+    frac3 = svu.reciprocal_overlap(cnv.pos, cnv_end, *interval3)
 
     # 5' CNV; check 3' breakpoints for small flanking CNV
     if frac5 >= min_frac and frac3 < min_frac:
         svtype = cnv_type + 'INV'
 
-        dist3 = RR.stop - FF.stop
+        ff_end = FF.info['END2'] if FF.info['SVTYPE'] == 'BND' else FF.stop
+        rr_end = RR.info['END2'] if RR.info['SVTYPE'] == 'BND' else RR.stop
+        dist3 = rr_end - ff_end
         if min_bkpt_cnv_size <= dist3 < max_bkpt_cnv_size:
             svtype = svtype + 'del'
         elif min_bkpt_cnv_size <= -dist3 < max_bkpt_cnv_size:
@@ -254,20 +266,23 @@ def filter_multiple_cnvs(FF, RR, cnvs, min_frac=0.5):
     """
 
     # Identify eligible intervals for flanking CNV, defined by inv breakpoints
+    ff_end = FF.info['END2'] if FF.info['SVTYPE'] == 'BND' else FF.stop
+    rr_end = RR.info['END2'] if RR.info['SVTYPE'] == 'BND' else RR.stop
     del5 = (FF.pos, RR.pos)
-    del3 = (FF.stop, RR.stop)
+    del3 = (ff_end, rr_end)
     dup5 = (RR.pos, FF.pos)
-    dup3 = (RR.stop, FF.stop)
+    dup3 = (rr_end, ff_end)
 
     # Determine if CNV supports 5' CNV, 3' CNV, spans event, or fails overlap
     def _test_overlap(cnv):
         svtype = cnv.info['SVTYPE']
+        cnv_end = cnv.info['END2'] if cnv.info['SVTYPE'] == 'BND' else cnv.stop
         if svtype == 'DEL':
-            frac5 = svu.reciprocal_overlap(cnv.pos, cnv.stop, *del5)
-            frac3 = svu.reciprocal_overlap(cnv.pos, cnv.stop, *del3)
+            frac5 = svu.reciprocal_overlap(cnv.pos, cnv_end, *del5)
+            frac3 = svu.reciprocal_overlap(cnv.pos, cnv_end, *del3)
         else:
-            frac5 = svu.reciprocal_overlap(cnv.pos, cnv.stop, *dup5)
-            frac3 = svu.reciprocal_overlap(cnv.pos, cnv.stop, *dup3)
+            frac5 = svu.reciprocal_overlap(cnv.pos, cnv_end, *dup5)
+            frac3 = svu.reciprocal_overlap(cnv.pos, cnv_end, *dup3)
 
         if frac5 >= min_frac and frac3 >= min_frac:
             return svtype + '_53'
@@ -300,12 +315,14 @@ def filter_multiple_cnvs(FF, RR, cnvs, min_frac=0.5):
 
             # get coordinates
             start = int(np.median([c.pos for c in cnvlist]))
-            end = int(np.median([c.stop for c in cnvlist]))
+            end = int(np.median([c.info['END2'] if c.info['SVTYPE'] == 'BND' else c.stop for c in cnvlist]))
             name = '__'.join([c.id for c in cnvlist])
 
             merged_cnv.pos = start
-            merged_cnv.stop = end
+            merged_cnv.stop = start if merged_cnv.info['SVTYPE'] == 'BND' else end
             merged_cnv.id = name
+            if merged_cnv.info['SVTYPE'] == 'BND':
+                merged_cnv.info['END2'] = end
 
             cnvs.append(merged_cnv)
 
@@ -335,11 +352,14 @@ def classify_0_cnv(FF, RR, min_bkpt_cnv_size=300):
     # Identify breakpoint ordering
     order = breakpoint_ordering(FF, RR, mh_buffer=10)
 
+    # Get end coordinates
+    ff_end = FF.info['END2'] if FF.info['SVTYPE'] == 'BND' else FF.stop
+    rr_end = RR.info['END2'] if RR.info['SVTYPE'] == 'BND' else RR.stop
+
     # Check for flanking deletions around a "simple" inversion
     if order == 'SIMPLE/DEL':
         start_dist = RR.pos - FF.pos
-        end_dist = RR.stop - FF.stop
-
+        end_dist = rr_end - ff_end
         if start_dist < min_bkpt_cnv_size and end_dist < min_bkpt_cnv_size:
             svtype = 'INV'
         elif start_dist >= min_bkpt_cnv_size and end_dist < min_bkpt_cnv_size:
@@ -352,7 +372,7 @@ def classify_0_cnv(FF, RR, min_bkpt_cnv_size=300):
     # Check for flanking dups
     elif order == 'dupINVdup':
         start_dist = FF.pos - RR.pos
-        end_dist = FF.stop - RR.stop
+        end_dist = ff_end - rr_end
 
         if start_dist >= min_bkpt_cnv_size and end_dist >= min_bkpt_cnv_size:
             svtype = 'dupINVdup'

@@ -6,7 +6,6 @@
   "FilterBatch.outlier_cutoff_nIQR": "10000",
 
   "FilterBatch.primary_contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
-  "FilterBatch.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
   "FilterBatch.ped_file": {{ test_batch.ped_file | tojson }},
 
   "FilterBatch.batch": {{ test_batch.name | tojson }},
@@ -14,7 +13,6 @@
   "FilterBatch.depth_vcf" : {{ test_batch.merged_depth_vcf | tojson }},
   "FilterBatch.manta_vcf" : {{ test_batch.merged_manta_vcf | tojson }},
   "FilterBatch.wham_vcf" : {{ test_batch.merged_wham_vcf | tojson }},
-  "FilterBatch.melt_vcf" : {{ test_batch.merged_melt_vcf | tojson }},
-  "FilterBatch.evidence_metrics": {{ test_batch.evidence_metrics | tojson }},
-  "FilterBatch.evidence_metrics_common": {{ test_batch.evidence_metrics_common | tojson }}
+  "FilterBatch.scramble_vcf" : {{ test_batch.merged_scramble_vcf | tojson }},
+  "FilterBatch.evidence_metrics": {{ test_batch.evidence_metrics | tojson }}
 }

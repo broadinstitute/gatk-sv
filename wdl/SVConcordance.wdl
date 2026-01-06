@@ -13,15 +13,18 @@ workflow SVConcordance {
     File contig_list
     File reference_dict
 
+    # Stratification parameters
+    File? clustering_config
+    File? stratification_config
+    Array[String]? track_names
+    Array[File]? track_intervals
+
     String gatk_docker
     String sv_base_mini_docker
 
     Float? java_mem_fraction
 
-    RuntimeAttr? runtime_attr_format_eval
-    RuntimeAttr? runtime_attr_format_truth
     RuntimeAttr? runtime_attr_sv_concordance
-    RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_override_concat_shards
   }
 
@@ -32,6 +35,10 @@ workflow SVConcordance {
         truth_vcf=truth_vcf,
         output_prefix="~{output_prefix}.concordance.~{contig}",
         contig=contig,
+        clustering_config=clustering_config,
+        stratification_config=stratification_config,
+        track_names=track_names,
+        track_intervals=track_intervals,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
@@ -62,6 +69,10 @@ task SVConcordanceTask {
     String output_prefix
     File reference_dict
     String? contig
+    File? clustering_config
+    File? stratification_config
+    Array[String]? track_names
+    Array[File]? track_intervals
     String? additional_args
 
     Float? java_mem_fraction
@@ -81,7 +92,7 @@ task SVConcordanceTask {
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 16,
-                               disk_gb: ceil(10 + size(eval_vcf, "GB") * 2 + size(truth_vcf, "GB")),
+                               disk_gb: ceil(10 + size(eval_vcf, "GB") * 4 + size(truth_vcf, "GB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
                                max_retries: 1
@@ -114,6 +125,10 @@ task SVConcordanceTask {
       --eval ~{eval_vcf} \
       --truth ~{truth_vcf} \
       -O ~{output_prefix}.vcf.gz \
+      ~{if defined(clustering_config) then "--clustering-config " + clustering_config else ""} \
+      ~{if defined(stratification_config) then "--stratify-config "  + stratification_config else ""} \
+      ~{if length(select_first([track_names, []])) > 0 then "--track-name" else ""} ~{sep=" --track-name " select_first([track_names, []])} \
+      ~{if length(select_first([track_intervals, []])) > 0 then "--track-intervals" else ""} ~{sep=" --track-intervals " select_first([track_intervals, []])} \
       ~{additional_args}
   >>>
   runtime {

@@ -15,9 +15,9 @@ options(scipen=1000,stringsAsFactors=F)
 #####Helper function to load coverage matrix
 ############################################
 readMatrix <- function(INFILE){
-  dat <- read.table(INFILE,comment.char="",header=T)
+  dat <- read.table(INFILE,check.names=FALSE,comment.char="",header=T)
   colnames(dat)[1] <- "Chr"
-  dat[,-1] <- t(apply(dat[,-1],1,as.numeric))
+  dat[,-1] <- apply(dat[,-1],2,as.double)
   return(dat)
 }
 
@@ -360,7 +360,7 @@ WGD.bins <- merge(WGD.bins,cov[,1:3],by=1:3)
 scores <- scoreSamples(cov,WGD.bins)
 
 #Write scores to file
-colnames(scores)[1] <- "#ID"
+colnames(scores)[1] <- "sample_id"
 write.table(scores,
             paste(OUTDIR,"/WGD_scores.txt",sep=""),
             col.names=T,row.names=F,sep="\t",quote=F)

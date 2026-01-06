@@ -10,26 +10,41 @@ import TabItem from '@theme/TabItem';
 :::info
 This page provides a detailed explanation of Docker 
 images and their hierarchy. For information on the process 
-of building these images, please refer to [this section](/docs/advanced/docker/deploy).
+of building these images, please refer to the 
+[automated](/docs/advanced/docker/automated) or 
+[manual](/docs/advanced/docker/manual) builds sections.
 :::
 
 
-The tools, scripts, dependencies, and configurations utilized by the 
-GATK-SV pipeline, written in WDL, are organized into separate Docker 
-containers. This modular approach ensures that each container 
-contains only the necessary tools for its specific task, 
-resulting in smaller image sizes. This design choice simplifies 
-the definition of Dockerfiles and facilitates easier maintenance. 
-Moreover, the smaller image sizes contribute to reduced disk 
-usage and lower workflow execution costs.
+GATK-SV organizes the tools, scripts, and their dependencies and configurations 
+into multiple Docker images. Each Docker image is built for a specific purpose, 
+and images have a hierarchical dependency. 
+This modular design has the following key advantages.
+
+- It results in focused and more straightforward instructions in Dockerfiles, 
+facilitating their development, maintenance, and extensibility. 
+
+- It results in smaller Docker images, as each image contains only 
+the related tools and scripts. Smaller images reduce storage costs on container 
+registries and are transferred faster to virtual machines, resulting in shorter start-up. 
+
+- The modular design reduces duplication in Dockerfiles and ensures configuration 
+consistency across different Docker images.
+
+- This architecture significantly lowers the maintenance cost as it 
+necessitates updating only the affected Docker images throughout the development
+(discussed in details in the [following section](#incremental)). 
 
 
-The figure below illustrates the relationships between the GATK-SV Docker images.
+
+The following figure illustrates the hierarchical relationship between GATK-SV Docker images. 
+The arrows indicate the flow from a base to a derived image, where the derived image 
+extends or modifies the tools and configuration it inherits from the base image.
 
 
 ```mermaid
 flowchart TD
-    ubuntu22[Ubuntu 22.04] --> svbasemini[sv-base-mini] & samtoolsenv[samtools-cloud-virtual-env] & svbaseenv[sv-base-virtual-env]
+    ubuntu2204[Ubuntu 22.04] --> svbasemini[sv-base-mini] & samtoolsenv[samtools-cloud-virtual-env] & svbaseenv[sv-base-virtual-env]
     svbasemini & samtoolsenv & svbaseenv --> svpipelineenv[sv-pipeline-virtual-env]
     samtoolsenv --> samtoolscloud[samtools-cloud] & svutilsenv[sv-utils-env]
     svbasemini --> samtoolscloud
@@ -39,18 +54,11 @@ flowchart TD
     svbaseenv --> cnmopsenv[cnmpos-virtual-env]
     svbase & cnmopsenv --> cnmpos[cnmops]
 
-    ubuntu18[Ubuntu 18.04] --> manta[Manta] & melt[MELT] & wham[Wham]
+    ubuntu1804[Ubuntu 18.04] --> melt[MELT] & wham[Wham]
     samtoolscloud --> wham
     ubuntu2210[Ubuntu 22.10] --> str[STR]
+    ubuntu2204 --> scramble[Scramble] & manta[Manta]
 ```
-
-The image depicts the hierarchical relationship among GATK-SV 
-Docker images. Arrows indicate the flow from a base image 
-to a derived image. The base image, located at the arrow's 
-starting point, shares its content which is then expanded 
-upon and modified in the derived image. In simple terms, 
-the derived image inherits the same tools and configuration 
-as the base image, while incorporating additional settings and tools.
 
 
 The list of the Docker images and their latest builds 
@@ -58,63 +66,68 @@ are available in [`dockers.json`](https://github.com/broadinstitute/gatk-sv/blob
 and [`dockers_azure.json`](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/dockers_azure.json)
 for images hosted on Google Container Registry (GCR) and Azure Container Registry (ACR), respectively.
 
-## Docker Images List {#list}
 
-The table below lists the GATK-SV Docker images and their dependencies. 
+## Incremental publishing {#incremental}
 
-| Image                        | Code Dependencies                                                                                                                                                                       | Docker Dependencies                                                                                 |
-|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
-| `manta`                      | <ul><li>`dockerfiles/manta/*`</li></ul>                                                                                                                                                 |                                                                                                     |
-| `melt`                       | <ul><li>`dockerfiles/melt/*`</li></ul>                                                                                                                                                  | <ul><li>`sv-base`</li></ul>                                                                         |
- | `wham`                       | <ul><li>`dockerfiles/wham/*`</li></ul>                                                                                                                                                  | <ul><li>`samtools-cloud`</li></ul>                                                                  |
- | `str`                        | <ul><li>`dockerfiles/str/*`</li></ul>                                                                                                                                                   |                                                                                                     |
- | `sv-base-mini`               | <ul><li>`dockerfiles/sv-base-mini/*`</li></ul>                                                                                                                                          |                                                                                                     |
- | `samtools-cloud-virtual-env` | <ul><li>`dockerfiles/samtools-cloud-virtual-env/*`</li></ul>                                                                                                                            |                                                                                                     |
- | `samtools-cloud`             | <ul><li>`dockerfiles/samtools-cloud/*`</li></ul>                                                                                                                                        | <ul><li>`sv-base-mini`</li><li>`samtools-cloud-virtual-env`</li></ul>                               |
- | `sv-base-virtual-env`        | <ul><li>`dockerfiles/sv-base-virtual-env/*`</li></ul>                                                                                                                                   |                                                                                                     |
- | `sv-base`                    | <ul><li>`dockerfiles/sv-base/*`</li></ul>                                                                                                                                               | <ul><li>`samtools-cloud`</li><li>`sv-base-virtual-env`</li></ul>                                    |
- | `cnmops-virtual-env`         | <ul><li>`dockerfiles/cnmops-virtual-env/*`</li></ul>                                                                                                                                    | <ul><li>`sv-base-virtual-env`</li></ul>                                                             |
- | `cnmops`                     | <ul><li>`dockerfiles/cnmops/*`</li></ul>                                                                                                                                                | <ul><li>`sv-base`</li><li>`cnmops-virtual-env`</li></ul>                                            |
- | `sv-pipeline-virtual-env`    | <ul><li>`dockerfiles/sv-pipeline-virtual-env/*`</li></ul>                                                                                                                               | <ul><li>`sv-base-mini`</li><li>`sv-base-virtual-env`</li><li>`samtools-cloud-virtual-env`</li></ul> |
- | `sv-pipeline`                | <ul><li>`dockerfiles/sv-pipeline/*`</li><li> `src/RdTest/*`</li><li>`src/sv-pipeline/*`</li><li>`src/svqc/*`</li><li>`src/svtest/*`</li><li> `src/svtk/*`</li><li>`src/WGD/*`</li></ul> | <ul><li>`sv-base`</li><li>`sv-pipeline-virtual-env`</li></ul>                                       |
- | `sv-utils-env`               | <ul><li>`dockerfiles/sv-utils-env/*`</li></ul>                                                                                                                                          | <ul><li>`samtools-cloud-virtual-env`</li></ul>                                                      |
- | `sv-utils`                   | <ul><li>`dockerfiles/sv-utils/*`</li><li>`src/sv_utils/src/*`</li><li> `src/sv_utils/setup.py`</li></ul>                                                                                | <ul><li>`samtools-cloud`</li><li>`sv-utils-env`</li></ul>                                           |
+The hierarchical and modular architecture of GATK-SV Docker images has a significant advantage: 
+not every image is affected by every change to the codebase; 
+hence, not all Docker images need to be rebuilt and published with every pull request. 
+This strategy is particularly beneficial considering the build time and the size of Docker images. 
 
 
-## Advantages of Dividing Images by Functionality
+This strategy is implemented in the build_docker.py script, and it has two main steps as follows.
 
-The GATK-SV pipeline utilizes Docker images to encapsulate the necessary tools, 
-dependencies, and configurations. Instead of having a single monolithic image, 
-the pipeline is organized into multiple smaller images, each focusing on a specific task. 
-This approach offers several benefits.
+### Determining modified files
+
+The incremental build strategy relies on identifying the list of files changed between two 
+`git` commits and mapping it to the list of Docker images. The 
+[`build_docker`](https://github.com/broadinstitute/gatk-sv/blob/main/scripts/docker/build_docker.py) 
+extracts the list of changed files from the diff between two 
+[`git` commit SHAs](https://docs.github.com/en/pull-requests/committing-changes-to-your-project/creating-and-editing-commits/about-commits): 
+
+- `BASE_SHA`: the reference commit (e.g., `HEAD` of the `main` branch);
+- `HEAD_SHA`: the target commit (e.g., the latest commit on the feature branch).
+
+The user provides these commit SHAs (or references the images specifically)
+when building the images manually. 
+However, the automated CI/CD builds determine the commit SHAs automatically as the following example.
+
+```mermaid
+%%{init: { 
+            'logLevel': 'debug',
+            'gitGraph': {'rotateCommitLabel': false}, 
+            'themeVariables': { 'commitLabelFontSize': '22px' } 
+         } 
+   }%%
+gitGraph
+   commit id: "A"
+   commit id: "B"
+   branch feature
+   checkout feature
+   commit id: "X"
+   checkout main
+   commit id: "C"
+   checkout feature
+   commit id: "Y"
+   checkout main
+   commit id: "D"
+   checkout feature
+   commit id: "Z"
+   checkout main
+   merge feature id: "E"
+   commit id: "F"
+```
+
+In this example, `BASE_SHA=B`, `HEAD_SHA=Z`, and `E` is the merge commit.
 
 
-- **Modular and focused structure:** 
-Each image includes task-specific tools, simplifying the use and maintenance of 
-GATK-SV Docker images for users and developers, respectively.
+## Identifying Images Requiring Rebuilding from Changed Files
 
+The [`build_docker`](https://github.com/broadinstitute/gatk-sv/blob/main/scripts/docker/build_docker.py) 
+script determines the list of docker images 
+that need to be rebuilt based on the following conditions. 
 
-- **Reduced Docker image size:**
-Using task-specific Docker images reduces sizes, requiring less storage space 
-in container registries. It also enables faster image transfer 
-when creating virtual machines for task execution.
+1. It determines the list of directly impacted images by checking the 
+list of files each image depends on, and rebuilds the image if any of the files have changed.
 
-
-- **Enhanced maintenance and extensibility:**
-Maintainers can easily modify specific tools or configurations within 
-a single image without affecting others, improving maintainability and 
-facilitating seamless expansion by adding or replacing tools as required.
-
-
-- **Consistency and efficiency:**
-Building images on top of existing setups and tools promotes code 
-reuse and reduces duplication, ensuring consistent configurations 
-across pipeline stages. It simplifies dependency management by 
-allowing changes or updates at the appropriate level, cascading 
-down to dependent images.
-
-
-In summary, splitting tools into smaller, task-specific 
-Docker images optimizes storage, execution, maintenance, and extensibility. 
-It enhances consistency, code reuse, and dependency management, 
-ensuring efficient and scalable pipeline execution.
+2. It builds any image if its base image is rebuilt. 

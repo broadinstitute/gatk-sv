@@ -44,6 +44,7 @@ task SVCluster {
         File reference_dict
 
         Float? java_mem_fraction
+        String? additional_args
         String? variant_prefix
 
         String gatk_docker
@@ -71,7 +72,7 @@ task SVCluster {
         File out_index = "~{output_prefix}.vcf.gz.tbi"
     }
     command <<<
-        set -euo pipefail
+        set -euxo pipefail
 
         function getJavaMem() {
             # get JVM memory in MiB by getting total memory from /proc/meminfo
@@ -125,7 +126,8 @@ task SVCluster {
             ~{"--pesr-breakend-window " + pesr_breakend_window} \
             ~{"--insertion-length-summary-strategy " + insertion_length_summary_strategy} \
             ~{"--breakpoint-summary-strategy " + breakpoint_summary_strategy} \
-            ~{"--alt-allele-summary-strategy " + alt_allele_summary_strategy}
+            ~{"--alt-allele-summary-strategy " + alt_allele_summary_strategy} \
+            ~{additional_args}
     >>>
     runtime {
         cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -242,6 +244,7 @@ task GatkToSvtkVcf {
         File contig_list
         String? remove_infos
         String? remove_formats
+        Boolean set_pass = false
         String output_prefix
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
@@ -269,7 +272,8 @@ task GatkToSvtkVcf {
             --source ~{source} \
             --contigs ~{contig_list} \
             ~{"--remove-infos " + remove_infos} \
-            ~{"--remove-formats " + remove_formats}
+            ~{"--remove-formats " + remove_formats} \
+            ~{if set_pass then "--set-pass" else ""}
         tabix ~{output_prefix}.vcf.gz
     >>>
     runtime {
@@ -371,7 +375,7 @@ task CreatePloidyTableFromPed {
             ~{"--chr-x " + chr_x} \
             ~{"--chr-y " + chr_y}
 
-        # TODO : For now we retain female Y genotypes for metric generation
+        # TODO : For now we retain female Y genotypes for clustering
         if ~{retain_female_chr_y}; then
             sed -e 's/\t0/\t1/g' tmp.tsv > ~{output_file}
         else

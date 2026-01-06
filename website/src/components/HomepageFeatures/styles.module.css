@@ -3,9 +3,146 @@
   align-items: center;
   padding: 2rem 0;
   width: 100%;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.featuresAlt {
+  background: var(--ifm-background-color-alt);
+  color: var(--ifm-color-text);
+  align-content: stretch;
+  text-align: left;
+  position: relative;
+  padding: 2rem 0;
 }
 
 .featureSvg {
   height: 200px;
   width: 200px;
+}
+
+.heroBanner {
+  text-align: center;
+}
+
+.buttons {
+  margin-top: 2rem;
+}
+
+.featureContainer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  width: 100%;
+  padding: 1rem 0;
+}
+
+.featureContainer.alignLeft {
+  flex-direction: row;
+}
+
+.featureContainer.alignRight {
+  flex-direction: row-reverse;
+}
+
+.featureContainer.alignCenter {
+  justify-content: center;
+}
+
+.featureImage {
+  flex: 1;
+  text-align: center;
+}
+
+.featureImage.alignLeft {
+  text-align: left;
+}
+
+.featureImage.alignRight {
+  text-align: right;
+}
+
+.featureImage.alignCenter {
+  text-align: center;
+}
+
+.largeFeatureImage {
+  max-height: 150px;
+  width: auto;
+}
+
+.featureContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: left;
+}
+
+.featureContent.alignLeft {
+  text-align: left;
+}
+
+.featureContent.alignRight {
+  text-align: right;
+}
+
+.featureContent.alignCenter {
+  text-align: center;
+}
+
+
+.buttonContainer {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.buttonContainer.alignLeft {
+  justify-content: flex-start;
+}
+
+.buttonContainer.alignRight {
+  justify-content: flex-end;
+}
+
+.buttonContainer.alignCenter {
+  justify-content: center;
+}
+
+.featureGallery {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.header {
+  font-size: 2rem;
+  margin-bottom: 2rem;
+}
+
+.imageGallery {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin-bottom: 2rem;
+}
+
+.galleryImage {
+  max-height: 100px;
+  width: auto;
+  object-fit: cover;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+}
+
+.galleryImage:hover {
+  transform: scale(1.1);
+}
+
+.description {
+  font-size: 1.2rem;
+  color: #666;
+  margin-top: 1rem;
 }

@@ -117,15 +117,12 @@ def main():
     raw_input_bundles['test_batch_empty']['name'] = 'test_batch'
     raw_input_bundles['single_sample_none'] = {}
     raw_input_bundles['single_sample_none']['name'] = 'single_sample'
-    raw_input_bundles['cloud_env_none'] = {}
-    raw_input_bundles['cloud_env_none']['name'] = 'cloud_env'
 
     default_aliases = {'dockers': 'dockers',
                        'ref_panel': 'ref_panel_empty',
                        'reference_resources': 'resources_hg38',
                        'test_batch': 'test_batch_empty',
-                       'single_sample': 'single_sample_none',
-                       'cloud_env': 'cloud_env_none'}
+                       'single_sample': 'single_sample_none'}
 
     # prepare the input_dict using default, document default, and user-specified aliases
     input_dict = {}

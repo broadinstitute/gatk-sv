@@ -105,7 +105,7 @@ workflow ClusterDepth {
         algorithm=clustering_algorithm,
         depth_sample_overlap=0,
         depth_interval_overlap=depth_interval_overlap,
-        depth_breakend_window=0,
+        depth_breakend_window=10000000,
         reference_fasta=reference_fasta,
         reference_fasta_fai=reference_fasta_fai,
         reference_dict=reference_dict,

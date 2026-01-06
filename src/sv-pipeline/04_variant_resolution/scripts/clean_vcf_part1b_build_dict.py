@@ -34,7 +34,7 @@ class VCFReviser:
         self.sample_list = []
 
     def _update_rd_cn(self, variant, sample_indices):
-        self.rd_cn[variant.id] = {s: variant.samples[s][VariantFormatTypes.RD_CN] for s in sample_indices}
+        self.rd_cn[variant.id] = {s: variant.samples[s].get(VariantFormatTypes.RD_CN) for s in sample_indices}
 
     @staticmethod
     def get_wider(f):

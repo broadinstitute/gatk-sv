@@ -6,6 +6,7 @@
     "VaporBatch.ref_fasta" : {{ reference_resources.reference_fasta | tojson }},
     "VaporBatch.ref_fai" : {{ reference_resources.reference_index | tojson }},
     "VaporBatch.ref_dict": {{ reference_resources.reference_dict | tojson }},
+    "VaporBatch.save_plots": "false",
 
     "VaporBatch.samples": {{ test_batch.pacbio_samples | tojson }},
     "VaporBatch.bam_or_cram_files": {{ test_batch.pacbio_crams | tojson }},

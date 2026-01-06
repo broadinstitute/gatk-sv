@@ -512,7 +512,6 @@ task RunMELT {
 
     # these locations should be stable
     MELT_DIR="/MELT"
-    CROMWELL_ROOT="/cromwell_root"
 
     # these locations may vary based on MELT version number, so find them:
     MELT_ROOT=$(find "$MELT_DIR" -name "MELT.jar" | xargs -n1 dirname)
@@ -526,7 +525,6 @@ task RunMELT {
       ~{read_length} \
       ~{insert_size} \
       "$MELT_ROOT" \
-      "$CROMWELL_ROOT" \
       ~{reference_version}
 
     cat "~{melt_standard_vcf_header}" \

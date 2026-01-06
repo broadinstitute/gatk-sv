@@ -274,13 +274,27 @@ task FilterLargePESRCallsWithoutRawDepthSupport {
 
     cat large_dels_without_raw_depth_support.list large_dups_without_raw_depth_support.list > large_pesr_without_raw_depth_support.list
 
-    cat \
-        <(gzip -cd ~{pesr_vcf} | grep -v '^#' | grep -w -f large_pesr_without_raw_depth_support.list | sed -e 's/SVTYPE=DEL/SVTYPE=BND/' -e 's/SVTYPE=DUP/SVTYPE=BND/' -e 's/<DEL>/<BND>/' -e 's/<DUP>/<BND>/') \
-        <(gzip -cd ~{pesr_vcf} | grep -v '^#' | grep -v -w -f large_pesr_without_raw_depth_support.list) \
-       | cat <(sed -n -e '/^#/p' <(zcat ~{pesr_vcf})) - \
-       | vcf-sort -c \
-       | bgzip -c \
-       > ~{outfile}
+    gzip -cd ~{pesr_vcf} > uncompressed.vcf
+
+    python3 <<CODE
+    import pysam
+
+    with open("large_pesr_without_raw_depth_support.list", "r") as f:
+      ids_to_modify = set(line.strip() for line in f)
+
+    with pysam.VariantFile("uncompressed.vcf", "r") as vcf_in, pysam.VariantFile("modified.vcf", "w", header=vcf_in.header) as vcf_out:
+      for record in vcf_in:
+        if record.id in ids_to_modify:
+          original_end = record.stop
+          record.info['SVTYPE'] = 'BND'
+          record.info['CHR2'] = record.chrom
+          record.info['END2'] = original_end
+          record.alts = ('<BND>',)
+          record.stop = record.pos
+        vcf_out.write(record)
+    CODE
+
+    vcf-sort modified.vcf | bgzip -c > ~{outfile}
 
     tabix ~{outfile}
   >>>
@@ -408,13 +422,15 @@ task FilterVcfWithReferencePanelCalls {
   }
 }
 
-task UpdateBreakendRepresentation {
+task UpdateBreakendRepresentationAndRemoveFilters {
   input {
     File vcf
     File vcf_idx
     File ref_fasta
     File ref_fasta_idx
     String prefix
+
+    File? script_override
 
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -439,11 +455,9 @@ task UpdateBreakendRepresentation {
   command <<<
 
      set -euo pipefail
-
-     /opt/sv-pipeline/scripts/single_sample/update_variant_representations.py ~{vcf} ~{ref_fasta} \
-        | vcf-sort -c \
-        | bgzip -c > ~{outfile}
-
+    python ~{default="/opt/sv-pipeline/scripts/single_sample/update_variant_representations.py" script_override} ~{vcf} ~{ref_fasta} \
+        | bcftools sort \
+        | bcftools annotate --no-version -x "FILTER/HIGH_ALGORITHM_FDR" -Oz -o ~{outfile}
      tabix ~{outfile}
   >>>
   runtime {
@@ -485,9 +499,7 @@ task RewriteSRCoords {
     set -euo pipefail
 
     /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py ~{vcf} ~{metrics} ~{cutoffs} stdout \
-      | vcf-sort -c \
-      | bgzip -c \
-      > ~{prefix}.corrected_coords.vcf.gz
+      | bcftools sort -Oz -o ~{prefix}.corrected_coords.vcf.gz
 
   >>>
   runtime {
@@ -598,7 +610,7 @@ task SampleQC {
   input {
     File vcf
     File sample_filtering_qc_file
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -653,11 +665,56 @@ task SampleQC {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 
 }
 
+task MergeStripyVcf {
+  input {
+    File vcf
+    File stripy_vcf
+    String output_prefix
+    File? script
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
 
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 0.9,
+                               disk_gb: 10,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File out = "~{output_prefix}.vcf.gz"
+    File out_index = "~{output_prefix}.vcf.gz.tbi"
+  }
+  command <<<
+
+    set -euo pipefail
+    python ~{default="/opt/sv-pipeline/scripts/merge_stripy_single_sample.py" script} \
+      --main-vcf ~{vcf} \
+      --stripy-vcf ~{stripy_vcf} \
+      --out unsorted.vcf.gz
+    bcftools sort unsorted.vcf.gz -Oz -o ~{output_prefix}.vcf.gz
+    tabix ~{output_prefix}.vcf.gz
+
+  >>>
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}

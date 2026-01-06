@@ -35,7 +35,7 @@ workflow PickleVcfProperties {
     output {
         Int num_records = GetVcfSize.num_records
         Int num_samples = GetVcfSize.num_samples
-        Int num_entries = GetVcfSize.num_entries
+        Float num_entries = GetVcfSize.num_entries
         File pickled_properties = ReadAndPickleProperties.pickled_properties
     }
 }
@@ -43,7 +43,7 @@ workflow PickleVcfProperties {
 task GetNeededMemGB {
     input {
         Array[String] wanted_properties
-        Int num_entries
+        Float num_entries
     }
 
     Float mem_gb = "1.5"

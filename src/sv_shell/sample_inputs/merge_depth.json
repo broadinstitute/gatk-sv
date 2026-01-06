@@ -1,0 +1,18 @@
+{
+  "batch": "NA12878",
+  "contig_ploidy_calls": [
+    "/inputs/sample_000000.NA12878.contig_ploidy_calls.tar.gz"
+  ],
+  "defragment_max_dist": null,
+  "gcnv_qs_cutoff": 30,
+  "genotyped_segments_vcfs": [
+    "/inputs/genotyped-segments-NA12878.vcf.gz"
+  ],
+  "large_cnmops_del": "/inputs/NA12878.DEL.large.bed.gz",
+  "large_cnmops_dup": "/inputs/NA12878.DUP.large.bed.gz",
+  "samples": [
+    "NA12878"
+  ],
+  "std_cnmops_del": "/inputs/NA12878.DEL.header.bed.gz",
+  "std_cnmops_dup": "/inputs/NA12878.DUP.header.bed.gz"
+}

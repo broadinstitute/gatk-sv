@@ -1,0 +1,10 @@
+{
+  "VisualizeCnvs.vcf_or_bed": "${this.filtered_vcf}",
+  "VisualizeCnvs.prefix": "${this.sample_set_set_id}",
+  "VisualizeCnvs.median_files": "${this.sample_sets.median_cov}",
+  "VisualizeCnvs.rd_files": "${this.sample_sets.merged_bincov}",
+  "VisualizeCnvs.ped_file": "${workspace.cohort_ped_file}",
+  "VisualizeCnvs.min_size": 50000,
+  "VisualizeCnvs.flags": "--sizefilter 999999999 --padding 0.25",
+  "VisualizeCnvs.sv_pipeline_docker": "${workspace.sv_pipeline_docker}"
+}

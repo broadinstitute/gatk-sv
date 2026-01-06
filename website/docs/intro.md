@@ -4,29 +4,29 @@ description: GATK-SV
 sidebar_position: 1
 ---
 
-GATK-SV is a comprehensive, cloud-based ensemble pipeline to capture and annotate all 
-classes of structural variants (SV) from whole genome sequencing (WGS). It can detect 
+GATK-SV is a comprehensive, cloud-based ensemble pipeline for discovering and annotating all 
+classes of structural variants (SV) from short-read whole genome sequencing (WGS) data. It can detect 
 deletions, duplications, multi-allelic copy number variants, balanced inversions, 
 insertions, translocations, and a diverse spectrum of complex SV. Briefly, GATK-SV 
-maximizes the sensitivity of SV discovery by harmonizing output from five tools 
-(Manta, Wham, cnMOPS, GATK-gCNV, MELT). In order to reduce false positives, raw SV 
-are adjudicated and re-genotyped from read evidence considering all potential 
-sequencing evidence including anomalous paired-end (PE) reads, split reads (SR) crossing 
-a breakpoint, normalized read-depth (RD), and B-allele frequencies (BAF). It also 
-fully resolves 11 classes of complex SV based on their breakpoint signature. GATK-SV 
-has been designed to be deployed in the Google Cloud Platform via the cromwell 
-execution engine, which allows massively parallel scaling. Further details about 
-GATK--SV can be found in [Collins et al. 2020, Nature](https://www.nature.com/articles/s41586-020-2287-8).
+maximizes the sensitivity of SV discovery by harmonizing output from five tools: 
+Manta, Wham, Scramble, cn.MOPS, and GATK-gCNV. To minimize false positives, raw SVs 
+are adjudicated and re-genotyped, considering all potential 
+sequencing evidence including anomalous paired-end (PE) reads, split reads (SR), 
+read-depth (RD), and B-allele frequencies (BAF). It also fully resolves 11 classes of complex 
+SVs composed of multiple breakpoints. GATK-SV is intended for use on the [Terra](https://app.terra.bio/) 
+ platform.
 
+### Methods
 
-A high-level description of GATK-SV is available [here](https://gatk.broadinstitute.org/hc/en-us/articles/9022487952155-Structural-variant-SV-discovery).
+Further details about GATK-SV methods can be found in [Collins et al. 2020](https://www.nature.com/articles/s41586-020-2287-8).
 
-### Citation 
+### GATK Best Practices
 
-Please cite the following publication:
+Additional guidance on running GATK-SV is also available [here](https://gatk.broadinstitute.org/hc/en-us/articles/9022653744283-GATK-Best-Practices-for-Structural-Variation-Discovery-on-Single-Samples).
 
-- [Collins, Brand, et al. 2020. "A structural variation reference for medical and population genetics." Nature 581, 444-451.](https://doi.org/10.1038/s41586-020-2287-8)
+### Where to go from here
 
-Additional references: 
+This documentation includes instructions for running the pipeline, technical implementation details, troubleshooting 
+information, and guides for advanced users who wish to work with the source code or rebuild the project.
 
-- [Werling et al. 2018. "An analytical framework for whole-genome sequence association studies and its implications for autism spectrum disorder." Nature genetics 50.5, 727-736.](https://doi.org/10.1038/s41588-018-0107-y)
+We recommend new users continue to the [Getting Started overview](/docs/gs/overview.md).
