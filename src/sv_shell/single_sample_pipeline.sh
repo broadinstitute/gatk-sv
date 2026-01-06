@@ -279,3 +279,39 @@ CombineWhamStd_working_dir=$(mktemp -d /wd_CombineWhamStd_XXXXXXXX)
 tar xzf "${ref_std_wham_vcf_tar}" -C "${CombineWhamStd_working_dir}/"
 tar xzf "${std_wham_vcf_tar}" -C "${CombineWhamStd_working_dir}/"
 tar czf "${merged_wham_vcf_tar}" -C "${CombineWhamStd_working_dir}/" .
+
+
+# Merge depth
+# ----------------------------------------------------------------------------------------------------------------------
+# Note that the zcat command called in the following is implemented as a function in merge_depth.sh.
+# However, for simplicity (merge_depth is using syntax that simplifies passing local arrays within the bash script),
+# the pipe is copy-pasted here.
+#
+# MergeSetDel
+# -----------------------
+MergeSetDel_beds=(
+    "$(jq -r ".merged_dels" "$gather_batch_evidence_outputs_json_filename")"
+    "$(jq -r ".ref_panel_del_bed" "$input_json")"
+)
+
+zcat -f "${MergeSetDel_beds[@]}" \
+  | sort -k1,1V -k2,2n \
+  | awk -v OFS="\t" -v svtype="DEL" -v batch="${batch}" '{$4=batch"_"svtype"_"NR; print}' \
+  | cat <(echo -e "#chr\\tstart\\tend\\tname\\tsample\\tsvtype\\tsources") - \
+  | bgzip -c > "${batch}.DEL.bed.gz";
+tabix -p bed "${batch}.DEL.bed.gz"
+
+
+# MergeSetDup
+# -----------------------
+MergeSetDup_beds=(
+    "$(jq -r ".merged_dups" "$gather_batch_evidence_outputs_json_filename")"
+    "$(jq -r ".ref_panel_dup_bed" "$input_json")"
+)
+
+zcat -f "${MergeSetDup_beds[@]}" \
+  | sort -k1,1V -k2,2n \
+  | awk -v OFS="\t" -v svtype="DUP" -v batch="${batch}" '{$4=batch"_"svtype"_"NR; print}' \
+  | cat <(echo -e "#chr\\tstart\\tend\\tname\\tsample\\tsvtype\\tsources") - \
+  | bgzip -c > "${batch}.DUP.bed.gz";
+tabix -p bed "${batch}.DUP.bed.gz"
