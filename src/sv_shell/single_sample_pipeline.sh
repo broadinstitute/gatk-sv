@@ -286,7 +286,9 @@ tar czf "${merged_wham_vcf_tar}" -C "${CombineWhamStd_working_dir}/" .
 # Note that the zcat command called in the following is implemented as a function in merge_depth.sh.
 # However, for simplicity (merge_depth is using syntax that simplifies passing local arrays within the bash script),
 # the pipe is copy-pasted here.
-#
+
+cd "${working_dir}"
+
 # MergeSetDel
 # -----------------------
 MergeSetDel_beds=(
@@ -294,12 +296,14 @@ MergeSetDel_beds=(
     "$(jq -r ".ref_panel_del_bed" "$input_json")"
 )
 
+MergeSetDel_out="$(realpath "${batch}.DEL.bed.gz")"
+
 zcat -f "${MergeSetDel_beds[@]}" \
   | sort -k1,1V -k2,2n \
   | awk -v OFS="\t" -v svtype="DEL" -v batch="${batch}" '{$4=batch"_"svtype"_"NR; print}' \
   | cat <(echo -e "#chr\\tstart\\tend\\tname\\tsample\\tsvtype\\tsources") - \
-  | bgzip -c > "${batch}.DEL.bed.gz";
-tabix -p bed "${batch}.DEL.bed.gz"
+  | bgzip -c > "${MergeSetDel_out}";
+tabix -p bed "${MergeSetDel_out}"
 
 
 # MergeSetDup
@@ -309,9 +313,55 @@ MergeSetDup_beds=(
     "$(jq -r ".ref_panel_dup_bed" "$input_json")"
 )
 
+MergeSetDup_out="$(realpath "${batch}.DUP.bed.gz")"
+
 zcat -f "${MergeSetDup_beds[@]}" \
   | sort -k1,1V -k2,2n \
   | awk -v OFS="\t" -v svtype="DUP" -v batch="${batch}" '{$4=batch"_"svtype"_"NR; print}' \
   | cat <(echo -e "#chr\\tstart\\tend\\tname\\tsample\\tsvtype\\tsources") - \
-  | bgzip -c > "${batch}.DUP.bed.gz";
-tabix -p bed "${batch}.DUP.bed.gz"
+  | bgzip -c > "${MergeSetDup_out}";
+tabix -p bed "${MergeSetDup_out}"
+
+
+# ClusterBatch
+# ----------------------------------------------------------------------------------------------------------------------
+
+cluster_batch_output_dir=$(mktemp -d "/output_cluster_batch_XXXXXXXX")
+cluster_batch_output_dir="$(realpath ${cluster_batch_output_dir})"
+cluster_batch_inputs_json_filename="${cluster_batch_output_dir}/inputs.json"
+cluster_batch_outputs_json_filename="${cluster_batch_output_dir}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --slurpfile gbe "${gather_batch_evidence_outputs_json_filename}" \
+  --arg manta_vcf_tar "${merged_manta_vcf_tar}" \
+  --arg scramble_vcf_tar "${merged_scramble_vcf_tar}" \
+  --arg wham_vcf_tar "${merged_wham_vcf_tar}" \
+  --arg del_bed "${MergeSetDel_out}" \
+  --arg dup_bed "${MergeSetDup_out}" \
+  '{
+      manta_vcf_tar: $manta_vcf_tar,
+      scramble_vcf_tar: $scramble_vcf_tar,
+      wham_vcf_tar: $wham_vcf_tar,
+      del_bed: $del_bed,
+      dup_bed: $dup_bed,
+      batch: $inputs[0].batch,
+      ped_file: $gbe[0].combined_ped_file,
+      contig_list: $inputs[0].primary_contigs_list,
+      reference_fasta: $inputs[0].reference_fasta,
+      reference_fasta_fai: $inputs[0].reference_index,
+      reference_dict: $inputs[0].reference_dict,
+      depth_exclude_intervals: $inputs[0].depth_exclude_list,
+      depth_exclude_overlap_fraction: $inputs[0].depth_exclude_overlap_fraction,
+      depth_interval_overlap: $inputs[0].depth_interval_overlap,
+      depth_clustering_algorithm: $inputs[0].depth_clustering_algorithm,
+      pesr_exclude_intervals: $inputs[0].pesr_exclude_intervals,
+      pesr_interval_overlap: $inputs[0].pesr_interval_overlap,
+      pesr_breakend_window: $inputs[0].pesr_breakend_window,
+      pesr_clustering_algorithm: $inputs[0].pesr_clustering_algorithm
+  }' > "${cluster_batch_inputs_json_filename}"
+
+bash /opt/sv_shell/cluster_batch.sh \
+  "${cluster_batch_inputs_json_filename}" \
+  "${cluster_batch_outputs_json_filename}" \
+  "${cluster_batch_output_dir}"
