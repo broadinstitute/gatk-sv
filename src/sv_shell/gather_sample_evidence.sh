@@ -180,23 +180,36 @@ fi
 
 if [[ "${collect_pesr}" == true ]]; then
 
-  collect_pesr_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/collect_pesr_XXXXXX")
   collect_pesr_stdout=$(mktemp --suffix=.txt "${output_dir}/collect_pesr_stdout_XXXXXX")
   collect_pesr_stderr=$(mktemp --suffix=.txt "${output_dir}/collect_pesr_stderr_XXXXXX")
   echo -e "${CYAN}Running collect_sv_evidence.sh ... stdout:${collect_pesr_stdout} and stderr:${collect_pesr_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
   collect_pesr_start_time=`date +%s`
 
+  collect_pesr_output_dir=$(mktemp -d "/output_collect_pesr_XXXXXXXX")
+  collect_pesr_output_dir="$(realpath ${collect_pesr_output_dir})"
+  collect_pesr_inputs_json_filename="${collect_pesr_output_dir}/inputs.json"
+  collect_pesr_outputs_json_filename="${collect_pesr_output_dir}/outputs.json"
+  jq -n \
+    --slurpfile inputs "${input_json}" \
+    '{
+        sample_id: $inputs[0].sample_id,
+        bam_or_cram_file: $inputs[0].bam_or_cram_file,
+        bam_or_cram_index: $inputs[0].bam_or_cram_index,
+        preprocessed_intervals: $inputs[0].preprocessed_intervals,
+        primary_contigs_list: $inputs[0].primary_contigs_list,
+        reference_dict: $inputs[0].reference_dict,
+        reference_fasta: $inputs[0].reference_fasta,
+        reference_index: $inputs[0].reference_index,
+        sd_locs_vcf: $inputs[0].sd_locs_vcf,
+        site_depth_min_baseq: 10,
+        site_depth_min_mapq: 6
+    }' > "${collect_pesr_inputs_json_filename}"
+
   CURRENT_STDERR_FILE="${collect_pesr_stderr}"
   bash /opt/sv_shell/collect_sv_evidence.sh \
-    "${sample_id}" \
-    "${bam_or_cram_file}" \
-    "${bam_or_cram_index}" \
-    "${reference_fasta}" \
-    "${reference_index}" \
-    "${reference_dict}" \
-    "${sd_locs_vcf}" \
-    "${preprocessed_intervals}" \
-    "${collect_pesr_outputs_json_filename}" > "${collect_pesr_stdout}" 2> "${collect_pesr_stderr}"
+    "${collect_pesr_inputs_json_filename}" \
+    "${collect_pesr_outputs_json_filename}" \
+    "${collect_pesr_output_dir}" > "${collect_pesr_stdout}" 2> "${collect_pesr_stderr}"
 
   collect_pesr_end_time=`date +%s`
   collect_pesr_et=$((collect_pesr_end_time-collect_pesr_start_time))
