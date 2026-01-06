@@ -70,7 +70,7 @@ jq -n \
       count_files: ( $inputs[0].counts + [$inputs[0].ref_panel_bincov_matrix] ),
       reference_dict: $inputs[0].reference_dict,
       batch: $inputs[0].batch,
-      skip_bin_size_filter: true
+      skip_bin_size_filter: false
   }' > "${make_bin_cov_matrix_inputs_json}"
 
 bash /opt/sv_shell/make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "${make_bin_cov_matrix_outputs_json}"
