@@ -456,3 +456,44 @@ bcftools concat --no-version --allow-overlaps -Oz \
   --file-list "${MergePesrVcfs_list_txt}" \
   > "${MergePesrVcfs_concat_vcf}"
 tabix "${MergePesrVcfs_concat_vcf}"
+
+
+# FilterLargePESRCallsWithoutRawDepthSupport
+# ----------------------------------------------------------------------------------------------------------------------
+
+_x=$(basename "${MergePesrVcfs_concat_vcf}" .vcf.gz)
+FilterLargePESRCallsWithoutRawDepthSupport_out="$(realpath "${_x}.${sample_id}.filter_large_pesr_by_depth.vcf.gz")"
+raw_dels=$(jq -r ".merged_dels" "$gather_batch_evidence_outputs_json_filename")
+raw_dups=$(jq -r ".merged_dups" "$gather_batch_evidence_outputs_json_filename")
+
+svtk vcf2bed "${MergePesrVcfs_concat_vcf}" stdout | cut -f1-5 | awk '$3 - $2 > 1000000 && ($5 == "DEL")' \
+    | bedtools coverage -a stdin -b "${raw_dels}" | awk '$NF < "0.3" {print $4}' > large_dels_without_raw_depth_support.list
+
+svtk vcf2bed "${MergePesrVcfs_concat_vcf}" stdout | cut -f1-5 | awk '$3 - $2 > 1000000 && ($5 == "DUP")' \
+    | bedtools coverage -a stdin -b "${raw_dups}" | awk '$NF < "0.3" {print $4}' > large_dups_without_raw_depth_support.list
+
+cat large_dels_without_raw_depth_support.list large_dups_without_raw_depth_support.list > large_pesr_without_raw_depth_support.list
+
+gzip -cd "${MergePesrVcfs_concat_vcf}" > uncompressed.vcf
+
+python3 <<CODE
+import pysam
+
+with open("large_pesr_without_raw_depth_support.list", "r") as f:
+  ids_to_modify = set(line.strip() for line in f)
+
+with pysam.VariantFile("uncompressed.vcf", "r") as vcf_in, pysam.VariantFile("modified.vcf", "w", header=vcf_in.header) as vcf_out:
+  for record in vcf_in:
+    if record.id in ids_to_modify:
+      original_end = record.stop
+      record.info['SVTYPE'] = 'BND'
+      record.info['CHR2'] = record.chrom
+      record.info['END2'] = original_end
+      record.alts = ('<BND>',)
+      record.stop = record.pos
+    vcf_out.write(record)
+CODE
+
+vcf-sort modified.vcf | bgzip -c > "${FilterLargePESRCallsWithoutRawDepthSupport_out}"
+
+tabix "${FilterLargePESRCallsWithoutRawDepthSupport_out}"
