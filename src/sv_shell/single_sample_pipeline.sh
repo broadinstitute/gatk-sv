@@ -442,3 +442,17 @@ FilterWham_vcf=$(jq -r ".clustered_wham_vcf" "$cluster_batch_outputs_json_filena
 FilterWham_vcf_vcf_filebase=$(basename "${FilterWham_vcf}" .vcf.gz)
 FilterWham_outfile="$(realpath "${FilterWham_vcf_vcf_filebase}.${sample_id}.vcf.gz")"
 FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterWham_vcf}" "${sample_id}" "RD,PE,SR" "${FilterWham_outfile}"
+
+
+# MergePesrVcfs
+# ----------------------------------------------------------------------------------------------------------------------
+
+cd "${working_dir}"
+MergePesrVcfs_list_txt="MergePesrVcfs_vcfs_list.txt"
+echo -e "${FilterManta_outfile}\n${FilterScramble_outfile}\n${FilterWham_outfile}" > "${MergePesrVcfs_list_txt}"
+MergePesrVcfs_concat_vcf="${batch}.filtered_pesr_merged.vcf.gz"
+
+bcftools concat --no-version --allow-overlaps -Oz \
+  --file-list "${MergePesrVcfs_list_txt}" \
+  > "${MergePesrVcfs_concat_vcf}"
+tabix "${MergePesrVcfs_concat_vcf}"
