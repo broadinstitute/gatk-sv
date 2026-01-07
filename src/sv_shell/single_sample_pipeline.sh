@@ -2,6 +2,44 @@
 
 set -Exeuo pipefail
 
+
+function FilterVcfBySampleGenotypeAndAddEvidenceAnnotation() {
+  local _vcf_gz=$1
+  local _sample_id=$2
+  local _evidence=$3
+  local _outfile=$4
+
+  local sampleIndex
+  sampleIndex=$(gzip -cd "${_vcf_gz}" \
+    | grep '^#CHROM' \
+    | cut -f10- \
+    | tr "\t" "\n" \
+    | awk -v id="${_sample_id}" '$1 == id {found=1; print NR - 1; exit} END { if (!found) exit 1 }')
+
+  if [ $? -ne 0 ]; then
+      echo "Error: Sample '${_sample_id}' not found in VCF header." >&2
+      return 1
+  fi
+
+  echo '##INFO=<ID=EVIDENCE,Number=.,Type=String,Description="Classes of random forest support.">' > header_line.txt
+
+  bcftools annotate \
+      -i "GT[${sampleIndex}]=\"alt\"" \
+      -h header_line.txt \
+      -O v \
+      "${_vcf_gz}" \
+  | awk -v evidence="${_evidence}" \
+      '$0 ~ /^#/ { print $0; next; }
+      { for(i=1; i<8; ++i) printf "%s\t", $i;
+        printf "%s;EVIDENCE=%s", $8, evidence;
+        for(i=9; i<=NF; ++i) printf "\t%s", $i;
+        printf "\n"
+      }' \
+  | bgzip -c \
+  > "${_outfile}"
+  tabix "${_outfile}"
+}
+
 # -------------------------------------------------------
 # ==================== Input & Setup ====================
 # -------------------------------------------------------
@@ -365,3 +403,48 @@ bash /opt/sv_shell/cluster_batch.sh \
   "${cluster_batch_inputs_json_filename}" \
   "${cluster_batch_outputs_json_filename}" \
   "${cluster_batch_output_dir}"
+
+
+# FilterDepth
+# -----------------------
+cd "${working_dir}"
+FilterDepth_wd=$(mktemp -d /wd_FilterDepth_XXXXXXXX)
+FilterDepth_wd="$(realpath "${FilterDepth_wd}")"
+cd "${FilterDepth_wd}"
+FilterDepth_vcf=$(jq -r ".clustered_depth_vcf" "$cluster_batch_outputs_json_filename")
+FilterDepth_vcf_filebase=$(basename "${FilterDepth_vcf}" .vcf.gz)
+FilterDepth_outfile="${FilterDepth_vcf_filebase}.${sample_id}.vcf.gz"
+FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterDepth_vcf}" "${sample_id}" "RD" "${FilterDepth_outfile}"
+
+# FilterManta
+# -----------------------
+cd "${working_dir}"
+FilterManta_wd=$(mktemp -d /wd_FilterManta_XXXXXXXX)
+FilterManta_wd="$(realpath "${FilterManta_wd}")"
+cd "${FilterManta_wd}"
+FilterManta_vcf=$(jq -r ".clustered_manta_vcf" "$cluster_batch_outputs_json_filename")
+FilterManta_vcf_filebase=$(basename "${FilterManta_vcf}" .vcf.gz)
+FilterManta_outfile="${FilterManta_vcf_filebase}.${sample_id}.vcf.gz"
+FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterManta_vcf}" "${sample_id}" "RD,PE,SR" "${FilterManta_outfile}"
+
+# FilterScramble
+# -----------------------
+cd "${working_dir}"
+FilterScramble_wd=$(mktemp -d /wd_FilterScramble_XXXXXXXX)
+FilterScramble_wd="$(realpath "${FilterScramble_wd}")"
+cd "${FilterScramble_wd}"
+FilterScramble_vcf=$(jq -r ".clustered_scramble_vcf" "$cluster_batch_outputs_json_filename")
+FilterScramble_vcf_filebase=$(basename "${FilterScramble_vcf}" .vcf.gz)
+FilterScramble_outfile="${FilterScramble_vcf_filebase}.${sample_id}.vcf.gz"
+FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterScramble_vcf}" "${sample_id}" "RD,PE,SR" "${FilterScramble_outfile}"
+
+# FilterWham
+# -----------------------
+cd "${working_dir}"
+FilterWham_wd=$(mktemp -d /wd_FilterWham_XXXXXXXX)
+FilterWham_wd="$(realpath "${FilterWham_wd}")"
+cd "${FilterWham_wd}"
+FilterWham_vcf=$(jq -r ".clustered_wham_vcf" "$cluster_batch_outputs_json_filename")
+FilterWham_vcf_vcf_filebase=$(basename "${FilterWham_vcf}" .vcf.gz)
+FilterWham_outfile="${FilterWham_vcf_vcf_filebase}.${sample_id}.vcf.gz"
+FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterWham_vcf}" "${sample_id}" "RD,PE,SR" "${FilterWham_outfile}"
