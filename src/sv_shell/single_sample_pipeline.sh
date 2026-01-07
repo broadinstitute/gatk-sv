@@ -9,17 +9,11 @@ function FilterVcfBySampleGenotypeAndAddEvidenceAnnotation() {
   local _evidence=$3
   local _outfile=$4
 
-  local sampleIndex
   sampleIndex=$(gzip -cd "${_vcf_gz}" \
     | grep '^#CHROM' \
     | cut -f10- \
     | tr "\t" "\n" \
-    | awk -v id="${_sample_id}" '$1 == id {found=1; print NR - 1; exit} END { if (!found) exit 1 }')
-
-  if [ $? -ne 0 ]; then
-      echo "Error: Sample '${_sample_id}' not found in VCF header." >&2
-      return 1
-  fi
+    | awk -v id="${_sample_id}" '$1 == id {found=1; print NR - 1} END { if (found != 1) { print "sample not found"; exit 1; }}')
 
   echo '##INFO=<ID=EVIDENCE,Number=.,Type=String,Description="Classes of random forest support.">' > header_line.txt
 
@@ -413,7 +407,7 @@ FilterDepth_wd="$(realpath "${FilterDepth_wd}")"
 cd "${FilterDepth_wd}"
 FilterDepth_vcf=$(jq -r ".clustered_depth_vcf" "$cluster_batch_outputs_json_filename")
 FilterDepth_vcf_filebase=$(basename "${FilterDepth_vcf}" .vcf.gz)
-FilterDepth_outfile="${FilterDepth_vcf_filebase}.${sample_id}.vcf.gz"
+FilterDepth_outfile="$(realpath "${FilterDepth_vcf_filebase}.${sample_id}.vcf.gz")"
 FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterDepth_vcf}" "${sample_id}" "RD" "${FilterDepth_outfile}"
 
 # FilterManta
@@ -424,7 +418,7 @@ FilterManta_wd="$(realpath "${FilterManta_wd}")"
 cd "${FilterManta_wd}"
 FilterManta_vcf=$(jq -r ".clustered_manta_vcf" "$cluster_batch_outputs_json_filename")
 FilterManta_vcf_filebase=$(basename "${FilterManta_vcf}" .vcf.gz)
-FilterManta_outfile="${FilterManta_vcf_filebase}.${sample_id}.vcf.gz"
+FilterManta_outfile="$(realpath "${FilterManta_vcf_filebase}.${sample_id}.vcf.gz")"
 FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterManta_vcf}" "${sample_id}" "RD,PE,SR" "${FilterManta_outfile}"
 
 # FilterScramble
@@ -435,7 +429,7 @@ FilterScramble_wd="$(realpath "${FilterScramble_wd}")"
 cd "${FilterScramble_wd}"
 FilterScramble_vcf=$(jq -r ".clustered_scramble_vcf" "$cluster_batch_outputs_json_filename")
 FilterScramble_vcf_filebase=$(basename "${FilterScramble_vcf}" .vcf.gz)
-FilterScramble_outfile="${FilterScramble_vcf_filebase}.${sample_id}.vcf.gz"
+FilterScramble_outfile="$(realpath "${FilterScramble_vcf_filebase}.${sample_id}.vcf.gz")"
 FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterScramble_vcf}" "${sample_id}" "RD,PE,SR" "${FilterScramble_outfile}"
 
 # FilterWham
@@ -446,5 +440,5 @@ FilterWham_wd="$(realpath "${FilterWham_wd}")"
 cd "${FilterWham_wd}"
 FilterWham_vcf=$(jq -r ".clustered_wham_vcf" "$cluster_batch_outputs_json_filename")
 FilterWham_vcf_vcf_filebase=$(basename "${FilterWham_vcf}" .vcf.gz)
-FilterWham_outfile="${FilterWham_vcf_vcf_filebase}.${sample_id}.vcf.gz"
+FilterWham_outfile="$(realpath "${FilterWham_vcf_vcf_filebase}.${sample_id}.vcf.gz")"
 FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterWham_vcf}" "${sample_id}" "RD,PE,SR" "${FilterWham_outfile}"
