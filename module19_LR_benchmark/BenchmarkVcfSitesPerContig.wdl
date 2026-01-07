@@ -154,7 +154,7 @@ workflow BenchmarkVcfSitesPerContig{
           truth_vcf = split_ref.svs_gt_20_vcf,
           prefix = "~{chromosome}.gt_20bp",
           ref_dict = ref_dict, 
-          truvari_params = "-s 10 -S 10"
+          truvari_params = truvari_params
     }
   }
 

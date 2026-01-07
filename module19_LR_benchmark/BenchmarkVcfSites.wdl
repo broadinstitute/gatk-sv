@@ -90,6 +90,8 @@ workflow BenchmarkVcfSites{
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_base_docker = sv_pipeline_base_docker,
 
+                truvari_params = truvari_params,
+
                 runtime_attr_benchmark_SNVs = runtime_attr_benchmark_SNVs,
                 runtime_attr_split_ref = runtime_attr_split_ref,
                 runtime_attr_split_query = runtime_attr_split_query,
