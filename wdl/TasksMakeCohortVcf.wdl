@@ -42,7 +42,6 @@ task ZcatCompressedFiles {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command {
@@ -102,7 +101,6 @@ task CatUncompressedFiles {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command <<<
@@ -168,7 +166,6 @@ task ConcatHeaderedTextFiles {
     docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    noAddress: true
   }
 }
 
@@ -217,7 +214,6 @@ task SortVcf {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 }
 
@@ -255,7 +251,6 @@ task ConcatVcfs {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   String outfile_name = outfile_prefix + ".vcf.gz"
@@ -317,7 +312,6 @@ task ConcatBeds {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command <<<
@@ -385,7 +379,6 @@ task FilesToTarredFolder {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command <<<
@@ -436,7 +429,6 @@ task PasteFiles {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command <<<
@@ -486,7 +478,6 @@ task FilterVcf {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command <<<
@@ -538,7 +529,6 @@ task SplitUncompressed {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command <<<
@@ -615,7 +605,6 @@ task SplitVcf {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command <<<
@@ -717,7 +706,6 @@ task UpdateSrList {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command <<<
@@ -772,7 +760,6 @@ task ShardVidsForClustering {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command <<<
@@ -869,7 +856,6 @@ task MakeSitesOnlyVcf {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command <<<
@@ -912,7 +898,6 @@ task ReheaderVcf {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command <<<
@@ -954,7 +939,6 @@ task PullVcfShard {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command <<<
@@ -1001,7 +985,6 @@ task RenameVariantIds {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command <<<
@@ -1054,7 +1037,6 @@ task ScatterVcf {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    noAddress: true
   }
 
   command <<<
