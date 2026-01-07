@@ -91,7 +91,7 @@ jq -n \
   '{
       WGD_dist: $wgd_dist,
       WGD_matrix: $wgd_matrix,
-      WGD_scores:$wgd_scores
+      WGD_scores: $wgd_scores
   }' > "${output_json_filename}"
 
 echo "Finished WGD, output json filename: ${output_json_filename}"
