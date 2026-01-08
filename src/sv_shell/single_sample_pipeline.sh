@@ -515,3 +515,13 @@ python /opt/sv-pipeline/scripts/ploidy_table_from_ped.py \
   --chr-x "chrX" \
   --chr-y "chrY"
 
+
+# FormatVcf
+# ----------------------------------------------------------------------------------------------------------------------
+FormatVcf_out="$(realpath "${sample_id}.format_for_srtest.vcf.gz")"
+python /opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py \
+  --vcf "${FilterLargePESRCallsWithoutRawDepthSupport_out}" \
+  --out "${FormatVcf_out}" \
+  --ploidy-table "${CreatePloidyTableFromPed_out}"
+
+tabix "${FormatVcf_out}"
