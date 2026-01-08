@@ -90,20 +90,19 @@ def process_allosomes(record, chrX, chrY, unknown_sex_samples):
         ecn = genotype.get('ECN')
         if sample in unknown_sex_samples:
             record.samples[sample]['GT'] = (None, None)
+        elif ecn == 0: 
+            if is_y:
+                clear_genotype_fields(genotype)
         elif ecn == 1:
             if record.info[REVISED_EVENT]:
                 adjust_male_genotype(genotype, sv_type)
-        elif ecn == 2: 
-            if is_y:
-                clear_genotype_fields(genotype)
 
     return record
 
-
 def clear_genotype_fields(genotype):
-    genotype['GT'] = (None, None)
     for key in genotype.keys():
         genotype[key] = None
+    genotype['GT'] = (None, None)
 
 
 def is_revisable_event(record, is_y, unknown_sex_samples):
@@ -188,7 +187,7 @@ def process_record(record, chrX, chrY, fail_set, pass_set, unknown_sex_samples):
     return record
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':    
     parser = argparse.ArgumentParser(description='CleanVcf preprocessing.')
     parser.add_argument('-V', '--input', dest='input_vcf', required=True, help='Input VCF file')
     parser.add_argument('-O', '--output', dest='output_vcf', required=True, help='Output VCF file')

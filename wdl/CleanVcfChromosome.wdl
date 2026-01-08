@@ -196,7 +196,7 @@ task CleanVcfPreprocess {
   RuntimeAttr runtime_default = object {
     mem_gb: ceil(5.0 + size(vcf, "GB") * 1.5),
     disk_gb: ceil(10.0 + size(vcf, "GB") * 3.0),
-    cpu_cores: 1,
+    cpu_cores: 4,
     preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
@@ -267,7 +267,7 @@ task CleanVcfReviseOverlappingCnvs {
   RuntimeAttr runtime_default = object {
     mem_gb: ceil(5.0 + size(vcf, "GB") * 1.5),
     disk_gb: ceil(10.0 + size(vcf, "GB") * 3.0),
-    cpu_cores: 1,
+    cpu_cores: 4,
     preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
@@ -313,7 +313,7 @@ task CleanVcfReviseMultiallelicCnvs {
   RuntimeAttr runtime_default = object {
     mem_gb: ceil(5.0 + size(vcf, "GB") * 1.5),
     disk_gb: ceil(10.0 + size(vcf, "GB") * 3.0),
-    cpu_cores: 1,
+    cpu_cores: 4,
     preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
@@ -359,7 +359,7 @@ task CleanVcfReviseOverlappingMultiallelics {
   RuntimeAttr runtime_default = object {
     mem_gb: ceil(5.0 + size(vcf, "GB") * 1.5),
     disk_gb: ceil(10.0 + size(vcf, "GB") * 3.0),
-    cpu_cores: 1,
+    cpu_cores: 4,
     preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
@@ -405,7 +405,7 @@ task CleanVcfPostprocess {
   RuntimeAttr runtime_default = object {
     mem_gb: ceil(5.0 + size(vcf, "GB") * 1.5),
     disk_gb: ceil(10.0 + size(vcf, "GB") * 3.0),
-    cpu_cores: 1,
+    cpu_cores: 4,
     preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
@@ -470,8 +470,8 @@ task RescueMobileElementDeletions {
 
   RuntimeAttr runtime_default = object {
     mem_gb: ceil(5.0 + size(vcf, "GB") * 1.5),
-    disk_gb: ceil(100.0 + size(vcf, "GB") * 3.0),
-    cpu_cores: 1,
+    disk_gb: ceil(10.0 + size(vcf, "GB") * 3.0),
+    cpu_cores: 2,
     preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
@@ -562,8 +562,8 @@ task DropRedundantCnvs {
   }
 
   RuntimeAttr runtime_default = object {
-    mem_gb: ceil(5.0 + size(vcf, "GiB") * 1.5),
-    disk_gb: ceil(100.0 + size(vcf, "GiB") * 2.0),
+    mem_gb: ceil(5.0 + size(vcf, "GB") * 1.5),
+    disk_gb: ceil(10.0 + size(vcf, "GB") * 3.0),
     cpu_cores: 2,
     preemptible_tries: 3,
     max_retries: 1,
@@ -605,7 +605,7 @@ task StitchFragmentedCnvs {
   RuntimeAttr runtime_default = object {
     mem_gb: ceil(5.0 + size(vcf, "GB") * 1.5),
     disk_gb: ceil(10.0 + size(vcf, "GB") * 3.0),
-    cpu_cores: 1,
+    cpu_cores: 2,
     preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
@@ -653,7 +653,7 @@ task AddHighFDRFilters {
   RuntimeAttr runtime_default = object {
     mem_gb: ceil(5.0 + size(vcf, "GB") * 1.5),
     disk_gb: ceil(10.0 + size(vcf, "GB") * 3.0),
-    cpu_cores: 1,
+    cpu_cores: 2,
     preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
@@ -705,7 +705,7 @@ task AddRetroDelFilters {
   RuntimeAttr runtime_default = object {
     mem_gb: ceil(5.0 + size(vcf, "GB") * 1.5),
     disk_gb: ceil(10.0 + size(vcf, "GB") * 3.0),
-    cpu_cores: 1,
+    cpu_cores: 2,
     preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
@@ -750,7 +750,7 @@ task FinalCleanup {
   RuntimeAttr runtime_default = object {
     mem_gb: ceil(5.0 + size(vcf, "GB") * 1.5),
     disk_gb: ceil(10.0 + size(vcf, "GB") * 3.0),
-    cpu_cores: 1,
+    cpu_cores: 2,
     preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
