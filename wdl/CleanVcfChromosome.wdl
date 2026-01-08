@@ -17,7 +17,7 @@ workflow CleanVcfChromosome {
     String chr_x
     String chr_y
     String prefix
-    Int format_vcf_records_per_shard = 40000
+    Int format_vcf_records_per_shard = 5000
 
     File contig_list
     File allosome_fai
