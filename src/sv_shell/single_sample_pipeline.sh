@@ -529,3 +529,14 @@ CODE
 SamplesList_male_samples="$(realpath male.list)"
 SamplesList_female_samples="$(realpath female.list)"
 SamplesList_samples_file="$(realpath samples.list)"
+cd "${working_dir}"
+
+
+# GetMaleOnlyVariantIDs
+# ----------------------------------------------------------------------------------------------------------------------
+_vcf=$(jq -r ".clustered_depth_vcf" "$cluster_batch_outputs_json_filename")
+bcftools view -t "chrX" -S "${SamplesList_male_samples}" "${_vcf}" | bcftools view --min-ac 1 | bcftools query -f '%ID\n' > variant_ids_in_males.txt
+bcftools view -t "chrX" -S "${SamplesList_female_samples}" "${_vcf}" | bcftools view --min-ac 1 | bcftools query -f '%ID\n' > variant_ids_in_females.txt
+awk 'NR==FNR{a[$0];next} !($0 in a)' variant_ids_in_females.txt variant_ids_in_males.txt > male_only_variant_ids.txt
+
+GetMaleOnlyVariantIDs_male_only_variant_ids="$(realpath male_only_variant_ids.txt)"
