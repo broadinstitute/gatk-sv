@@ -6,7 +6,7 @@ import "Structs.wdl"
 
 workflow FilterBatchMetrics {
   input {
-    Array[String] samples
+    File sample_list
     String name
 
     File filtered_pesr_vcf
@@ -71,7 +71,7 @@ workflow FilterBatchMetrics {
       cutoffs = cutoffs,
       outlier_list = outlier_list,
       filtered_ped_file = SubsetPedFile.ped_subset_file,
-      samples = samples,
+      samples = sample_list,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_cutoff_outlier_metrics
   }

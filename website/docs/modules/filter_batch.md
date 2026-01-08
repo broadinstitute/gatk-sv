@@ -57,9 +57,6 @@ Clustered VCFs from [ClusterBatch](./cb#clustered__vcf)
 #### `evidence_metrics`
 Metrics table [GenerateBatchMetrics](./gbm#metrics)
 
-#### `evidence_metrics_common`
-Common variant metrics table [GenerateBatchMetrics](./gbm#metrics_common)
-
 #### `outlier_cutoff_nIQR`
 Defines outlier sample cutoffs based on variant counts. Samples deviating from the batch median count by more than 
 the given multiple of the interquartile range are hard filtered from the VCF. Recommended range is between `3` and `9`
@@ -102,14 +99,8 @@ a different SV caller.
 #### `sv_count_plots`
 Array of images plotting SV counts stratified by SV type. Each file corresponds to a different SV caller.
 
-#### `outlier_samples_excluded`
-Array of sample IDs excluded by outlier analysis.
-
 #### `outlier_samples_excluded_file`
 Text file of sample IDs excluded by outlier analysis.
 
-#### `batch_samples_postOutlierExclusion`
-Array of remaining sample IDs after outlier exclusion.
-
-#### `batch_samples_postOutlierExclusion_file`
+#### `filtered_batch_samples_file`
 Text file of remaining sample IDs after outlier exclusion.

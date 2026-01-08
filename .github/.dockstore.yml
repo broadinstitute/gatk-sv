@@ -240,7 +240,6 @@ workflows:
     filters:
       branches:
         - main
-        - mw_stripy
       tags:
         - /.*/
 
@@ -249,7 +248,7 @@ workflows:
     primaryDescriptorPath: /wdl/StripyWorkflow.wdl
     filters:
       branches:
-        - mw_stripy
+        - main
       tags:
         - /.*/
 

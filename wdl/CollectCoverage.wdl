@@ -85,7 +85,7 @@ task CondenseReadCounts {
     File? gatk4_jar_override
 
     # Runtime parameters
-    String condense_counts_docker
+    String gatk_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -119,7 +119,7 @@ task CondenseReadCounts {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: condense_counts_docker
+    docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
