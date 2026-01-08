@@ -12,22 +12,28 @@ workflow CleanVcfChromosome {
     File bothsides_pass_list
     File? outlier_samples_list
     File ped_file
-    File allosome_fai
+    File ploidy_table
+
+    String chr_x
+    String chr_y
     String prefix
+    Int format_vcf_records_per_shard = 40000
+
+    File contig_list
+    File allosome_fai
     
     File HERVK_reference
     File LINE1_reference
     File intron_reference
 
-    File ploidy_table
-    String chr_x
-    String chr_y
-
     String gatk_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
 
-    RuntimeAttr? runtime_attr_format_to_clean
+    RuntimeAttr? runtime_attr_format_to_clean_create_ploidy
+    RuntimeAttr? runtime_attr_format_to_clean_scatter
+    RuntimeAttr? runtime_attr_format_to_clean_format
+    RuntimeAttr? runtime_attr_format_to_clean_concat
     RuntimeAttr? runtime_attr_preprocess
     RuntimeAttr? runtime_attr_revise_overlapping_cnvs
     RuntimeAttr? runtime_attr_revise_large_cnvs
@@ -40,21 +46,34 @@ workflow CleanVcfChromosome {
     RuntimeAttr? runtime_attr_add_high_fp_rate_filters
     RuntimeAttr? runtime_attr_add_retro_del_filters
     RuntimeAttr? runtime_override_final_cleanup
-    RuntimeAttr? runtime_attr_format_to_output
+    RuntimeAttr? runtime_attr_format_to_output_create_ploidy
+    RuntimeAttr? runtime_attr_format_to_output_scatter
+    RuntimeAttr? runtime_attr_format_to_output_format
+    RuntimeAttr? runtime_attr_format_to_output_concat
   }
 
-  call fvcf.FormatVcf as FormatVcfToClean {
+  call fvcf.FormatVcfForGatk as FormatVcfToClean {
     input:
       vcf=vcf,
-      ploidy_table=ploidy_table,
-      output_prefix="~{prefix}.formatted",
+      prefix="~{prefix}.formatted",
+      ped_file=ped_file,
+      records_per_shard=format_vcf_records_per_shard,
+      contig_list=contig_list,
+      bothside_pass_list=bothsides_pass_list,
+      background_fail_list=background_list,
+      chr_x=chr_x,
+      chr_y=chr_y,
+      sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_format_to_clean
+      runtime_attr_create_ploidy=runtime_attr_format_to_clean_create_ploidy,
+      runtime_attr_scatter=runtime_attr_format_to_clean_scatter,
+      runtime_attr_format=runtime_attr_format_to_clean_format,
+      runtime_override_concat=runtime_attr_format_to_clean_concat
   }
 
   call CleanVcfPreprocess {
     input:
-      vcf=FormatVcfToClean.out,
+      vcf=FormatVcfToClean.gatk_formatted_vcf,
       chr_x=chr_x,
       chr_y=chr_y,
       background_list=background_list,
@@ -165,18 +184,28 @@ workflow CleanVcfChromosome {
       runtime_attr_override=runtime_override_final_cleanup
   }
 
-  call fvcf.FormatVcf as FormatVcfToOutput {
+  call fvcf.FormatVcfForGatk as FormatVcfToOutput {
     input:
       vcf=FinalCleanup.final_cleaned_shard,
-      ploidy_table=ploidy_table,
-      output_prefix="~{prefix}.final_format",
+      prefix="~{prefix}.final_format",
+      ped_file=ped_file,
+      records_per_shard=format_vcf_records_per_shard,
+      contig_list=contig_list,
+      bothside_pass_list=bothsides_pass_list,
+      background_fail_list=background_list,
+      chr_x=chr_x,
+      chr_y=chr_y,
+      sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_format_to_output
+      runtime_attr_create_ploidy=runtime_attr_format_to_output_create_ploidy,
+      runtime_attr_scatter=runtime_attr_format_to_output_scatter,
+      runtime_attr_format=runtime_attr_format_to_output_format,
+      runtime_override_concat=runtime_attr_format_to_output_concat
   }
     
   output {
-    File out = FormatVcfToOutput.out
-    File out_idx = FormatVcfToOutput.out_index
+    File out = FormatVcfToOutput.gatk_formatted_vcf
+    File out_idx = FormatVcfToOutput.gatk_formatted_vcf_index
   }
 }
 
