@@ -151,6 +151,40 @@ This file should have one line per sample, plus a header (first) line. The first
 [sample ID requirements](/docs/gs/inputs#sampleids). For an example sample set membership file, refer to
 [this one in the GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/templates/terra_workspaces/cohort_mode/sample_set_membership_1kgp.tsv.tmpl).
 
+### Managing storage
+
+To reduce the costly accumulation of data in the workspace, we recommend the following settings:
+
+* We recommend creating a Lifecycle Rule to delete objects in `submissions/intermediates` after 30 days.
+With this setting, intermediate files (those not present in the Terra data table, and not needed for any further 
+GATK-SV processing) will be deleted after 30 days (regardless of the submission's status). For successful 
+submissions, final workflow outputs will be retained in `submissions/final-outputs`.
+See [this article](https://support.terra.bio/hc/en-us/articles/31182203937179-Save-storage-costs-with-bucket-lifecycle-rules-Released-12-6-24) 
+for more information.
+* We recommend enabling automatic intermediate file deletion by checking the box labeled "Delete intermediate outputs" 
+at the top of the workflow launch page every time you start a workflow. With this option enabled, intermediate files 
+will be deleted automatically if the workflow succeeds. If the workflow fails, the outputs will be retained to enable 
+a re-run to pick up where it left off with call-caching. However, call-caching will not be possible for workflows that have 
+succeeded. For more information on this option, see 
+[this article](https://terra.bio/delete-intermediates-option-now-available-for-workflows-in-terra/). For guidance on 
+managing intermediate storage from failed workflows, or from workflows without the delete intermediates option enabled, 
+see the next bullet point.
+
+These two settings will help manage storage in the majority of situations. But if you need to manually manage storage,
+these strategies may be useful:
+
+ * One option is to manually delete large files, or directories containing failed workflow intermediates (after 
+re-running the workflow successfully to take advantage of call-caching) with the command 
+`gsutil -m rm gs://path/to/workflow/directory/**file_extension_to_delete` to delete all files with the given extension 
+for that workflow, or `gsutil -m rm -r gs://path/to/workflow/directory/` to delete an entire workflow directory 
+(only after you are done with all the files!). Note that this can take a very long time for larger workflows, which 
+may contain thousands of files.
+ * Another option is to use the `fiss mop` API call to delete all files that do not appear in one of the Terra data 
+tables (intermediate files). Always ensure that you are completely done with a step and you will not need to return 
+before using this option, as it will break call-caching. See 
+[this blog post](https://terra.bio/deleting-intermediate-workflow-outputs/) for more details. This can also be done 
+[via the command line](https://github.com/broadinstitute/fiss/wiki/MOP:-reducing-your-cloud-storage-footprint).
+
 ## Workflow instructions {#instructions}
 
 ### General recommendations
@@ -158,35 +192,13 @@ This file should have one line per sample, plus a header (first) line. The first
 * It is recommended to run each workflow first on one sample/batch to check that the method is properly configured 
 before you attempt to process all of your data.
 * We recommend enabling call-caching (on by default in each workflow configuration).
-* We recommend enabling automatic intermediate file deletion by checking the box labeled "Delete intermediate outputs" 
-at the top of the workflow launch page every time you start a workflow. With this option enabled, intermediate files 
-(those not present in the Terra data table, and not needed for any further GATK-SV processing) will be deleted 
-automatically if the workflow succeeds. If the workflow fails, the outputs will be retained to enable a re-run to 
-pick up where it left off with call-caching. However, call-caching will not be possible for workflows that have 
-succeeded. For more information on this option, see 
-[this article](https://terra.bio/delete-intermediates-option-now-available-for-workflows-in-terra/). For guidance on 
-managing intermediate storage from failed workflows, or from workflows without the delete intermediates option enabled, 
-see the next bullet point.
-* There are cases when you may need to manage storage in other ways: for workflows that failed (only delete files from 
-a failed workflow after a version has succeeded, to avoid disabling call-caching), for workflows without intermediate 
-file deletion enabled, or once you are done processing and want to delete files from earlier steps in the pipeline 
-that you no longer need.
-   * One option is to manually delete large files, or directories containing failed workflow intermediates (after 
-  re-running the workflow successfully to take advantage of call-caching) with the command 
-  `gsutil -m rm gs://path/to/workflow/directory/**file_extension_to_delete` to delete all files with the given extension 
-  for that workflow, or `gsutil -m rm -r gs://path/to/workflow/directory/` to delete an entire workflow directory 
-  (only after you are done with all the files!). Note that this can take a very long time for larger workflows, which 
-  may contain thousands of files.
-   * Another option is to use the `fiss mop` API call to delete all files that do not appear in one of the Terra data 
-  tables (intermediate files). Always ensure that you are completely done with a step and you will not need to return 
-  before using this option, as it will break call-caching. See 
-  [this blog post](https://terra.bio/deleting-intermediate-workflow-outputs/) for more details. This can also be done 
-  [via the command line](https://github.com/broadinstitute/fiss/wiki/MOP:-reducing-your-cloud-storage-footprint).
 * If your workflow fails, check the job manager for the error message. Most issues can be resolved by increasing the 
 memory or disk. Do not delete workflow log files until you are done troubleshooting. If call-caching is enabled, do not 
 delete any files from the failed workflow until you have run it successfully.
 * To display run costs, see [this article](https://support.terra.bio/hc/en-us/articles/360037862771#h_01EX5ED53HAZ59M29DRCG24CXY) 
 for one-time setup instructions for non-Broad users.
+* Consult the [Managing storage](#managing-storage) section before running any workflows.
+* For very large cohorts (more than a few thousand samples), refer to the documentation on [quotas](/docs/advanced/quotas).
 
 ### 01-GatherSampleEvidence
 
