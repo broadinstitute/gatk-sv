@@ -499,3 +499,19 @@ vcf-sort modified.vcf | bgzip -c > "${FilterLargePESRCallsWithoutRawDepthSupport
 tabix "${FilterLargePESRCallsWithoutRawDepthSupport_out}"
 
 
+# GetSampleIdsFromVcf
+# ----------------------------------------------------------------------------------------------------------------------
+GetSampleIdsFromVcf_out_file="$(realpath "$(basename "${FilterLargePESRCallsWithoutRawDepthSupport_out}" .vcf.gz).samples.txt")"
+bcftools query -l "${FilterLargePESRCallsWithoutRawDepthSupport_out}" > "${GetSampleIdsFromVcf_out_file}"
+
+
+# CreatePloidyTableFromPed
+# ----------------------------------------------------------------------------------------------------------------------
+CreatePloidyTableFromPed_out="$(realpath "${sample_id}.${batch}.ploidy.tsv")"
+python /opt/sv-pipeline/scripts/ploidy_table_from_ped.py \
+  --ped $(jq -r ".combined_ped_file" "$gather_batch_evidence_outputs_json_filename") \
+  --out "${CreatePloidyTableFromPed_out}" \
+  --contigs $(jq -r ".primary_contigs_list" "$input_json") \
+  --chr-x "chrX" \
+  --chr-y "chrY"
+
