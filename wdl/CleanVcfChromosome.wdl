@@ -80,6 +80,7 @@ workflow CleanVcfChromosome {
   call MiniTasks.ScatterVcf as ScatterPreprocess {
     input:
       vcf=FormatVcfToClean.gatk_formatted_vcf,
+      vcf_index=FormatVcfToClean.gatk_formatted_vcf_index,
       prefix="~{prefix}.preprocess.scatter",
       records_per_shard=preprocess_records_per_shard,
       contig=contig,
@@ -143,6 +144,7 @@ workflow CleanVcfChromosome {
   call MiniTasks.ScatterVcf as ScatterPostprocess {
     input:
       vcf=CleanVcfReviseOverlappingMultiallelics.out,
+      vcf_index=CleanVcfReviseOverlappingMultiallelics.out_idx,
       prefix="~{prefix}.postprocess.scatter",
       records_per_shard=postprocess_records_per_shard,
       contig=contig,
