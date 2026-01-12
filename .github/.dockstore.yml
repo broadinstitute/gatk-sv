@@ -24,7 +24,6 @@ workflows:
     filters:
       branches:
         - main
-        - noaddress
       tags:
         - /.*/
 
@@ -34,7 +33,6 @@ workflows:
     filters:
       branches:
         - main
-        - noaddress
       tags:
         - /.*/
 
