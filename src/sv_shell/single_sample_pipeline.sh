@@ -91,6 +91,22 @@ mapfile -t gcnv_model_tars < "${gcnv_model_tars_list}"
 gcnv_model_tars_json_array=$(printf '%s\n' "${gcnv_model_tars[@]}" | jq -R . | jq -s -c .)
 
 
+function getJavaMem() {
+  # get JVM memory in MiB by getting total memory from /proc/meminfo
+  # and multiplying by java_mem_fraction
+
+  local mem_fraction=${java_mem_fraction:=0.85}
+  cat /proc/meminfo | \
+    awk -v MEM_FIELD="$1" -v frac="${mem_fraction}" '{
+      f[substr($1, 1, length($1)-1)] = $2
+    } END {
+      printf "%dM", f[MEM_FIELD] * frac / 1024
+    }'
+}
+JVM_MAX_MEM=$(getJavaMem MemTotal)
+echo "JVM memory: $JVM_MAX_MEM"
+
+
 # -------------------------------------------------------
 # ======================= Command =======================
 # -------------------------------------------------------
@@ -525,3 +541,160 @@ python /opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py \
   --ploidy-table "${CreatePloidyTableFromPed_out}"
 
 tabix "${FormatVcf_out}"
+
+
+# AggregateSVEvidence
+# ----------------------------------------------------------------------------------------------------------------------
+AggregateSVEvidence_out="$(realpath "${sample_id}.aggregate_sr.vcf.gz")"
+java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar AggregateSVEvidence \
+  -V "${FormatVcf_out}" \
+  -O "${AggregateSVEvidence_out}" \
+  --median-coverage $(jq -r ".median_cov" "$gather_batch_evidence_outputs_json_filename") \
+  --ploidy-table "${CreatePloidyTableFromPed_out}" \
+  --x-chromosome-name "chrX" \
+  --y-chromosome-name "chrY" \
+  --split-reads-file $(jq -r ".merged_SR" "$gather_batch_evidence_outputs_json_filename")
+
+
+# AggregateTests
+# ----------------------------------------------------------------------------------------------------------------------
+AggregateTests_out="$(realpath "${sample_id}.aggregate_tests.metrics.tsv")"
+/opt/sv-pipeline/02_evidence_assessment/02e_metric_aggregation/scripts/aggregate.py \
+  -v "${AggregateSVEvidence_out}" \
+  "${AggregateTests_out}"
+
+
+# RewriteSRCoords
+# ----------------------------------------------------------------------------------------------------------------------
+RewriteSRCoords_annotated_vcf="$(realpath "${batch}.corrected_coords.vcf.gz")"
+/opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py \
+  "${FilterLargePESRCallsWithoutRawDepthSupport_out}" \
+  "${AggregateTests_out}" \
+   $(jq -r ".cutoffs" "$input_json") \
+  stdout \
+  | bcftools sort -Oz -o "${RewriteSRCoords_annotated_vcf}"
+
+
+# GenotypeBatch
+# ----------------------------------------------------------------------------------------------------------------------
+#
+# TODO: wait for Mark
+#
+# ConvertCNVsWithoutDepthSupportToBNDs
+# ----------------------------------------------------------------------------------------------------------------------
+#
+# TODO: wait for Mark
+#
+# MakeCohortVcf
+# ----------------------------------------------------------------------------------------------------------------------
+MakeCohortVcf_output_dir=$(mktemp -d "/output_MakeCohortVcf_XXXXXXXX")
+MakeCohortVcf_output_dir="$(realpath ${MakeCohortVcf_output_dir})"
+MakeCohortVcf_inputs_json_filename="${MakeCohortVcf_output_dir}/inputs.json"
+MakeCohortVcf_outputs_json_filename="${MakeCohortVcf_output_dir}/outputs.json"
+#
+# TODO: wait for Mark
+#
+
+
+# FilterVcfDepthLt5kb
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+_vcf=$(jq -r ".vcf" "$MakeCohortVcf_outputs_json_filename")
+FilterVcfDepthLt5kb_out="$(realpath "$(basename "${_vcf}" .vcf.gz).filter_depth_lt_5000.vcf.gz")"
+bcftools filter  "${_vcf}"\
+  -i 'INFO/SVLEN >= 5000 || INFO/ALGORITHMS[*] != "depth"' \
+  -s "DEPTH_LT_5KB" |
+     bgzip -c > "${FilterVcfDepthLt5kb_out}"
+
+tabix "${FilterVcfDepthLt5kb_out}"
+
+
+# GetUniqueNonGenotypedDepthCalls
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+GetUniqueNonGenotypedDepthCalls_wd=$(mktemp -d "/wd_GetUniqueNonGenotypedDepthCalls_XXXXXXXX")
+GetUniqueNonGenotypedDepthCalls_wd="$(realpath ${GetUniqueNonGenotypedDepthCalls_wd})"
+cd "${GetUniqueNonGenotypedDepthCalls_wd}"
+
+_vcf_gz=$(jq -r ".complex_genotype_vcf" "$MakeCohortVcf_outputs_json_filename")
+sampleIndex=$(gzip -cd "${_vcf_gz}" | \
+    grep '^#CHROM' | \
+    cut -f10- | \
+    tr '\t' '\n' | \
+    awk -v id="${sample_id}" '$1 == id {found=1; print NR - 1} END { if (found != 1) { print "sample not found"; exit 1; }}')
+
+bcftools filter \
+  -i "FILTER == \"PASS\" && \
+      GT[${sampleIndex}] != \"alt\" && \
+      INFO/ALGORITHMS[*] == \"depth\" && \
+      INFO/SVLEN >= 10000 && \
+      (INFO/SVTYPE == \"DEL\" || INFO/SVTYPE == \"DUP\")" \
+  "${_vcf_gz}" | \
+bgzip -c > pass_depth_not_alt.vcf.gz
+
+bgzip -cd pass_depth_not_alt.vcf.gz | grep '#' > header.txt
+
+zcat $(jq -r ".ref_panel_del_bed" "$input_json") $(jq -r ".ref_panel_dup_bed" "$input_json") | \
+  sort -k1,1V -k2,2n > ref_panel_depth_calls.bed
+bedtools intersect -a pass_depth_not_alt.vcf.gz -b ref_panel_depth_calls.bed -r -f .5 -v > unique_depth_records.txt
+
+GetUniqueNonGenotypedDepthCalls_out="$(realpath "$(basename "${_vcf_gz}" .vcf.gz).unique_${sample_id}_depth_non_alt_gt.vcf.gz")"
+cat header.txt unique_depth_records.txt | bgzip -c > "${GetUniqueNonGenotypedDepthCalls_out}"
+
+tabix "${GetUniqueNonGenotypedDepthCalls_out}"
+
+
+# FilterVcfForCaseSampleGenotype
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+sampleIndex=$(gzip -cd "${FilterVcfDepthLt5kb_out}" | \
+    grep '^#CHROM' | \
+    cut -f10- | \
+    tr '\t' '\n' | \
+    awk -v id="${sample_id}" '$1 == id {found=1; print NR - 1} END { if (found != 1) { print "sample not found"; exit 1; }}')
+
+FilterVcfForCaseSampleGenotype_out="$(realpath "$(basename "${FilterVcfDepthLt5kb_out}" .vcf.gz).filter_by_${sample_id}_gt.vcf.gz")"
+
+bcftools filter \
+    -i "FILTER ~ \"MULTIALLELIC\" || GT[${sampleIndex}]=\"alt\"" \
+    "${FilterVcfDepthLt5kb_out}" | bgzip -c > "${FilterVcfForCaseSampleGenotype_out}"
+
+tabix "${FilterVcfForCaseSampleGenotype_out}"
+
+
+# RefineComplexVariants
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+RefineComplexVariants_output_dir=$(mktemp -d "/output_RefineComplexVariants_XXXXXXXX")
+RefineComplexVariants_output_dir="$(realpath ${RefineComplexVariants_output_dir})"
+RefineComplexVariants_inputs_json="${RefineComplexVariants_output_dir}/inputs.json"
+RefineComplexVariants_outputs_json="${RefineComplexVariants_output_dir}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --slurpfile gbe "${gather_batch_evidence_outputs_json_filename}" \
+  --arg vcf "${FilterVcfForCaseSampleGenotype}" \
+  --arg batch_sample_lists "${GetSampleIdsFromVcf_out_file}" \
+  --arg depth_del_beds: "${MergeSetDel_out}" \
+  --arg depth_dup_beds: "${MergeSetDup_out}" \
+  '{
+    "vcf": $vcf,
+    "prefix": $inputs[0].sample_id,
+    "batch_name_list": $inputs[0].sample_id,
+    "batch_sample_lists": $batch_sample_lists,
+    "PE_metrics": $gbe[0].merged_PE,
+    "Depth_DEL_beds": $depth_del_beds,
+    "Depth_DUP_beds": $depth_dup_beds,
+    "min_pe_cpx": $inputs[0].min_pe_cpx,
+    "min_pe_ctx": $inputs[0].min_pe_ctx
+  }' > "${RefineComplexVariants_inputs_json}"
+
+bash /opt/sv_shell/refine_complex_variants.sh \
+  "${RefineComplexVariants_inputs_json}" \
+  "${RefineComplexVariants_outputs_json}" \
+  "${RefineComplexVariants_output_dir}"
+
+
+# JoinRawCalls
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
