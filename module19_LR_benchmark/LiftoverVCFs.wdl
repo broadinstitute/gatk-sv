@@ -112,7 +112,7 @@ task VCFToBED {
                         continue
                     chrom, pos, vid, ref, alts = fields[:5]
                     try:
-                        start = int(pos)
+                        start = int(pos)-1
                         end = start + len(ref) - 1
                     except ValueError:
                         continue
