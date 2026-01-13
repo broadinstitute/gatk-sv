@@ -166,11 +166,12 @@ task PatchGenotypes {
     set -euo pipefail
 
     bcftools view ~{vcf_B} ~{contig} |bgzip > "~{prefix}.~{contig}.target.vcf.gz"
-    tabix -p vcf "~{prefix}.~{contig}.target.vcf.gz"
+    bcftools sort "~{prefix}.~{contig}.target.vcf.gz" -Oz -o "~{prefix}.~{contig}.sorted.vcf.gz"
+    tabix -p vcf "~{prefix}.~{contig}.sorted.vcf.gz"
 
     python3 ~{patch_script} \
       ~{vcf_A_contig} \
-      "~{prefix}.~{contig}.target.vcf.gz" \
+      "~{prefix}.~{contig}.sorted.vcf.gz" \
       ~{contig}.patched.vcf.gz
 
     tabix -p vcf ~{contig}.patched.vcf.gz
