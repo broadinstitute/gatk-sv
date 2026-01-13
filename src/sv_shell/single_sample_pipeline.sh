@@ -698,3 +698,56 @@ bash /opt/sv_shell/refine_complex_variants.sh \
 # JoinRawCalls
 # ----------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
+JoinRawCalls_output_dir=$(mktemp -d "/output_JoinRawCalls_XXXXXXXX")
+JoinRawCalls_output_dir="$(realpath ${JoinRawCalls_output_dir})"
+JoinRawCalls_inputs_json="${JoinRawCalls_output_dir}/inputs.json"
+JoinRawCalls_outputs_json="${JoinRawCalls_output_dir}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --slurpfile cb "${cluster_batch_outputs_json_filename}" \
+  --slurpfile gbe "${gather_batch_evidence_outputs_json_filename}" \
+  '{
+    "prefix": $inputs[0].sample_id,
+    "clustered_depth_vcfs": $cb[0].clustered_depth_vcf,
+    "clustered_dragen_vcfs": $cb[0].clustered_dragen_vcf,
+    "clustered_manta_vcfs": $cb[0].clustered_manta_vcf,
+    "clustered_scramble_vcfs": $cb[0].clustered_scramble_vcf,
+    "clustered_wham_vcfs": $cb[0].clustered_wham_vcf,
+    "ped_file": $gbe[0].combined_ped_file,
+    "contig_list": $inputs[0].primary_contigs_list,
+    "reference_fasta": $inputs[0].reference_fasta,
+    "reference_fasta_fai": $inputs[0].reference_index,
+    "reference_dict": $inputs[0].reference_dict
+  }' > "${JoinRawCalls_inputs_json}"
+
+bash /opt/sv_shell/join_raw_calls.sh \
+  "${JoinRawCalls_inputs_json}" \
+  "${JoinRawCalls_outputs_json}" \
+  "${JoinRawCalls_output_dir}"
+
+
+# SVConcordance
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+SVConcordance_output_dir=$(mktemp -d "/output_SVConcordance_XXXXXXXX")
+SVConcordance_output_dir="$(realpath ${SVConcordance_output_dir})"
+SVConcordance_inputs_json="${SVConcordance_output_dir}/inputs.json"
+SVConcordance_outputs_json="${SVConcordance_output_dir}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --slurpfile rcpx "${RefineComplexVariants_outputs_json}" \
+  --slurpfile jraw "${JoinRawCalls_outputs_json}" \
+  '{
+    "eval_vcf": $rcpx[0].cpx_refined_vcf,
+    "truth_vcf": $jraw[0].joined_raw_calls_vcf,
+    "output_prefix": $inputs[0].sample_id,
+    "contig_list": $inputs[0].primary_contigs_list,
+    "reference_dict": $inputs[0].reference_dict
+  }' > "${SVConcordance_inputs_json}"
+
+bash /opt/sv_shell/sv_concordance.sh \
+  "${SVConcordance_inputs_json}" \
+  "${SVConcordance_outputs_json}" \
+  "${SVConcordance_output_dir}"
