@@ -751,3 +751,29 @@ bash /opt/sv_shell/sv_concordance.sh \
   "${SVConcordance_inputs_json}" \
   "${SVConcordance_outputs_json}" \
   "${SVConcordance_output_dir}"
+
+
+# ScoreGenotypes
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+ScoreGenotypes_output_dir=$(mktemp -d "/output_ScoreGenotypes_XXXXXXXX")
+ScoreGenotypes_output_dir="$(realpath ${ScoreGenotypes_output_dir})"
+ScoreGenotypes_inputs_json="${ScoreGenotypes_output_dir}/inputs.json"
+ScoreGenotypes_outputs_json="${ScoreGenotypes_output_dir}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  '{
+    "vcf": $svcon[0].concordance_vcf,
+    "output_prefix": $inputs[0].sample_id,
+    "truth_json": $inputs[0].truth_json,
+    "gq_recalibrator_model_file": $inputs[0].gq_recalibrator_model_file,
+    "recalibrate_gq_args": $inputs[0].recalibrate_gq_args,
+    "genome_tracks": $inputs[0].genome_tracks,
+    "fmax_beta": $inputs[0].fmax_beta
+  }' > "${ScoreGenotypes_inputs_json}"
+
+bash /opt/sv_shell/score_genotypes.sh \
+  "${ScoreGenotypes_inputs_json}" \
+  "${ScoreGenotypes_outputs_json}" \
+  "${ScoreGenotypes_output_dir}"
