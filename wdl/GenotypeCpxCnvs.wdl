@@ -13,7 +13,7 @@ workflow GenotypeCpxCnvs {
     File vcf
     Array[String] batches
     Array[File] coverage_files
-    Array[File] rd_depth_sep_cutoff_files
+    Array[File] genotyping_rd_tables
     Array[File] ped_files
     Array[File] median_coverage_files
     Int n_per_split_small
@@ -62,7 +62,7 @@ workflow GenotypeCpxCnvs {
         cpx_bed=GetCpxCnvIntervals.cpx_cnv_bed,
         batch=batches[i],
         coverage_file=coverage_files[i],
-        rd_depth_sep_cutoff=rd_depth_sep_cutoff_files[i],
+        genotyping_rd_table=genotyping_rd_tables[i],
         ped_file=ped_files[i],
         median_file=median_coverage_files[i],
         n_per_split_small=n_per_split_small,

@@ -7,22 +7,6 @@ import java.util.regex.Pattern;
 import org.broadinstitute.svpipeline.VCFParser.*;
 
 public class CleanVCFPart1 {
-    private static final ByteSequence[] EV_VALS = {
-            null,
-            new ByteSequence("RD"),
-            new ByteSequence("PE"),
-            new ByteSequence("RD,PE"),
-            new ByteSequence("SR"),
-            new ByteSequence("RD,SR"),
-            new ByteSequence("PE,SR"),
-            new ByteSequence("RD,PE,SR")
-    };
-    private static final ByteSequence FORMAT_LINE = new ByteSequence("FORMAT");
-    private static final ByteSequence ID_KEY = new ByteSequence("ID");
-    private static final ByteSequence EV_VALUE = new ByteSequence("EV");
-    private static final ByteSequence TYPE_KEY = new ByteSequence("Type");
-    private static final ByteSequence STRING_VALUE = new ByteSequence("String");
-    private static final ByteSequence NUMBER_KEY = new ByteSequence("Number");
     private static final ByteSequence SVTYPE_KEY = new ByteSequence("SVTYPE");
     private static final ByteSequence ME_VALUE = new ByteSequence(":ME");
     private static final ByteSequence LT_VALUE = new ByteSequence("<");
@@ -80,25 +64,6 @@ public class CleanVCFPart1 {
                     os.write(("##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description=\"Variant has " +
                             "read-level support for both sides of breakpoint\">\n")
                                 .getBytes(StandardCharsets.UTF_8));
-                } else if ( metadata instanceof KeyAttributesMetadata ) {
-                    final KeyAttributesMetadata keyAttrs = (KeyAttributesMetadata)metadata;
-                    if ( keyAttrs.getKey().equals(FORMAT_LINE) ) {
-                        final List<KeyValue> kvs = keyAttrs.getValue();
-                        final int nKVs = kvs.size();
-                        if ( nKVs > 2 ) {
-                            final KeyValue kv0 = kvs.get(0);
-                            final KeyValue kv1 = kvs.get(1);
-                            final KeyValue kv2 = kvs.get(2);
-                            if ( kv0.getKey().equals(ID_KEY) && kv0.getValue().equals(EV_VALUE) ) {
-                                if ( kv1.getKey().equals(NUMBER_KEY) ) {
-                                    kvs.set(1, new KeyValue(NUMBER_KEY, MISSING_VALUE));
-                                }
-                                if ( kv2.getKey().equals(TYPE_KEY) ) {
-                                    kvs.set(2, new KeyValue(TYPE_KEY, STRING_VALUE));
-                                }
-                            }
-                        }
-                    }
                 }
                 metadata.write(os);
             }
@@ -107,14 +72,6 @@ public class CleanVCFPart1 {
             }
             while ( parser.hasRecord() ) {
                 final Record record = parser.nextRecord();
-
-                // replace the numeric EV value with a text value
-                final int evIdx = record.getFormat().indexOf(EV_VALUE);
-                if ( evIdx >= 0 ) {
-                    for ( final CompoundField genotypeVals : record.getGenotypes() ) {
-                        genotypeVals.set(evIdx, EV_VALS[genotypeVals.get(evIdx).asInt()]);
-                    }
-                }
 
                 // move the SVTYPE to the ALT field (except for MEs and multi-allelic DUPs)
                 final InfoField info = record.getInfo();

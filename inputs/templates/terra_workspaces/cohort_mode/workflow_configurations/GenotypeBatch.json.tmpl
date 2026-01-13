@@ -1,26 +1,21 @@
 {
   "GenotypeBatch.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
   "GenotypeBatch.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
-  "GenotypeBatch.linux_docker" : "${workspace.linux_docker}",
+  "GenotypeBatch.gatk_docker" : "${workspace.gatk_docker}",
 
-  "GenotypeBatch.n_RD_genotype_bins": "100000", 
-  "GenotypeBatch.n_per_split": "5000", 
-  "GenotypeBatch.pesr_exclude_list": "${workspace.pesr_exclude_list}",
-  "GenotypeBatch.seed_cutoffs": "${workspace.seed_cutoffs}",
-  "GenotypeBatch.reference_build": "${workspace.reference_build}",
-  "GenotypeBatch.ref_dict": "${workspace.reference_dict}",
-
-  "GenotypeBatch.primary_contigs_list": "${workspace.primary_contigs_list}",
+  "GenotypeBatch.pesr_exclusion_intervals": "${workspace.pesr_exclude_list}",
+  "GenotypeBatch.reference_dict": "${workspace.reference_dict}",
+  "GenotypeBatch.contig_list": "${workspace.primary_contigs_list}",
 
   "GenotypeBatch.batch": "${this.sample_set_id}",
   "GenotypeBatch.rf_cutoffs": "${this.cutoffs}",
-  "GenotypeBatch.batch_depth_vcf": "${this.outlier_filtered_depth_vcf}",
-  "GenotypeBatch.batch_pesr_vcf": "${this.outlier_filtered_pesr_vcf}",
-  "GenotypeBatch.bin_exclude": "${workspace.bin_exclude}",
-  "GenotypeBatch.discfile": "${this.merged_PE}",
-  "GenotypeBatch.coveragefile": "${this.merged_bincov}",
-  "GenotypeBatch.splitfile": "${this.merged_SR}",
-  "GenotypeBatch.medianfile": "${this.median_cov}",
-  "GenotypeBatch.cohort_depth_vcf": "${workspace.cohort_depth_vcf}",
-  "GenotypeBatch.cohort_pesr_vcf": "${workspace.cohort_pesr_vcf}"
+  "GenotypeBatch.depth_exclusion_intervals": "${workspace.bin_exclude}",
+  "GenotypeBatch.pe_file": "${this.merged_PE}",
+  "GenotypeBatch.rd_file": "${this.merged_bincov}",
+  "GenotypeBatch.sr_file": "${this.merged_SR}",
+  "GenotypeBatch.median_coverage": "${this.median_cov}",
+  "GenotypeBatch.vcf": "${workspace.merge_batch_sites_vcf}",
+
+  "GenotypeBatch.training_intervals": "${workspace.depth_training_bed}",
+  "GenotypeBatch.ploidy_table": "${this.ploidy_table}"
 }

@@ -8,9 +8,10 @@
   "RegenotypeCNVs.contig_list": {{ reference_resources.primary_contigs_list | tojson }},
   "RegenotypeCNVs.regeno_coverage_medians": [{{ test_batch.regeno_coverage_medians | tojson }}],
 
-  "RegenotypeCNVs.RD_depth_sepcutoffs": [{{ test_batch.genotype_depth_depth_sepcutoff | tojson }}],
+  "RegenotypeCNVs.genotyping_rd_table": [{{ test_batch.genotyping_rd_table | tojson }}],
+  "RegenotypeCNVs.ploidy_tables": [{{ test_batch.ploidy_table | tojson }}],
 
-  "RegenotypeCNVs.cohort_depth_vcf": {{ test_batch.cohort_depth_vcf | tojson }},
+  "RegenotypeCNVs.merge_batch_sites_vcf": {{ test_batch.merge_batch_sites_vcf | tojson }},
 
   "RegenotypeCNVs.batch_depth_vcfs": [{{ test_batch.filtered_depth_vcf | tojson }}],
 

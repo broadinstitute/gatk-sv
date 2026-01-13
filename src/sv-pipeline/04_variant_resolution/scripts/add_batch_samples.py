@@ -36,7 +36,7 @@ def main():
 
     # Write out null records for dedupped variants
     for record in cohort_vcf:
-        base = '\t'.join(str(record).split('\t')[:9])
+        base = '\t'.join(str(record).strip().split('\t')[:9] + ['GT'])
         null_gts = '\t'.join(['0/0' for i in range(n_samples - 1)])
         args.fout.write(base + '\t0/1\t' + null_gts + '\n')
 
