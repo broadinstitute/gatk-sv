@@ -20,14 +20,23 @@ workflow LiftoverVCFs {
     RuntimeAttr? runtime_attr_update_vcf
     RuntimeAttr? runtime_attr_sort_index
     RuntimeAttr? runtime_attr_update_vcf_header
+    RuntimeAttr? runtime_attr_pre_process_vcfs
 
   }
 
   scatter(i in range(length(vcfs))) {
-    call VCFToBED {
+    call ReplaceVid{
       input:
         vcf = vcfs[i],
         vcf_idx = vcf_idxs[i],
+        docker_image = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_pre_process_vcfs
+    }
+
+    call VCFToBED {
+      input:
+        vcf = ReplaceVid.updated_vcf,
+        vcf_idx = ReplaceVid.updated_vcf_idx,
         docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_vcf_to_bed
     }
@@ -44,8 +53,8 @@ workflow LiftoverVCFs {
 
     call UpdateVCF {
       input:
-        vcf = vcfs[i],
-        vcf_idx = vcf_idxs[i],
+        vcf = ReplaceVid.updated_vcf,
+        vcf_idx = ReplaceVid.updated_vcf_idx,
         bed = Liftover.lifted_bed,
         docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_update_vcf
@@ -74,6 +83,80 @@ workflow LiftoverVCFs {
     }
 }
 
+
+task ReplaceVid {
+    input {
+        File vcf
+        File vcf_idx
+        String docker_image
+        RuntimeAttr? runtime_attr_override
+    }
+
+    String prefix = basename(vcf, ".vcf.gz")
+
+    command <<<
+        set -euo pipefail
+
+        python3 <<CODE
+
+        #!/usr/bin/env python3
+        import sys
+        import gzip
+        import pysam
+
+        def replace_vcf_id_with_info_id(in_vcf, out_vcf):
+            vcf_in = pysam.VariantFile(in_vcf)
+            vcf_out = pysam.VariantFile(out_vcf, "w", header=vcf_in.header)
+            for record in vcf_in:
+                # Replace record ID with INFO/ID if present
+                if "ID" in record.info:
+                    info_id = record.info["ID"]
+                    # INFO fields may be tuples; convert to string
+                    if isinstance(info_id, (tuple, list)):
+                        record.id = ",".join(map(str, info_id))
+                    else:
+                        record.id = str(info_id)
+                else:
+                    record.id = "."
+                vcf_out.write(record)
+            vcf_in.close()
+            vcf_out.close()
+
+
+        replace_vcf_id_with_info_id("~{vcf}", "~{prefix}.vid_updated.vcf")
+
+        CODE
+
+        bgzip "~{prefix}.vid_updated.vcf"
+        tabix -p vcf "~{prefix}.vid_updated.vcf.gz"
+    >>>
+
+    output {
+        File updated_vcf = "~{prefix}.vid_updated.vcf.gz"
+        File updated_vcf_idx = "~{prefix}.vid_updated.vcf.gz.tbi"
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1,
+        mem_gb: 10,
+        disk_gb: 15 + ceil(size(vcf, "GiB") *5),
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: docker_image
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+}
 
 
 task VCFToBED {
