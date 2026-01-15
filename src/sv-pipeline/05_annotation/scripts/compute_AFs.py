@@ -15,7 +15,7 @@ from collections import Counter
 import pybedtools as pbt
 
 
-ALLOWED_POPS = set(['afr', 'ami', 'amr', 'asj', 'eas','fin', 'mid','nfe','remaining','sas'])
+ALLOWED_POPS = set(['afr', 'ami', 'amr', 'asj', 'eas', 'fin', 'mid', 'nfe', 'sas', 'oth'])
 
 
 def create_pop_dict(popfile):

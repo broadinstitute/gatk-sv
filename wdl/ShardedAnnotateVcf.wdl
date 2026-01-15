@@ -6,8 +6,6 @@ import "Utils.wdl" as util
 import "AnnotateFunctionalConsequences.wdl" as func
 import "AnnotateExternalAFPerShard.wdl" as eaf
 
-# Perform annotation per contig
-
 workflow ShardedAnnotateVcf {
 
   input {
