@@ -20,12 +20,25 @@ opt = parse_args(opt_parser);
 	sd_ri=read.table(paste(opt$path,'il_inte.ri_bp.vs.SD', sep='/'))
 	rm_ri=read.table(paste(opt$path,'il_inte.ri_bp.vs.RM', sep='/'))
 	dat[,ncol(dat)+1] = 'US'
-	dat[dat[,4]%in%rm_le[,4],][,ncol(dat)]='RM'
-	dat[dat[,4]%in%rm_ri[,4],][,ncol(dat)]='RM'
-	dat[dat[,4]%in%sd_le[,4],][,ncol(dat)]='SD'
-	dat[dat[,4]%in%sd_ri[,4],][,ncol(dat)]='SD'
-	dat[dat[,4]%in%sr_le[,4],][,ncol(dat)]='SR'
-	dat[dat[,4]%in%sr_ri[,4],][,ncol(dat)]='SR'
+	if(nrow(rm_le)>0){
+			dat[dat[,4]%in%rm_le[,4],][,ncol(dat)]='RM'
+	}
+	if(nrow(rm_ri)>0){
+		dat[dat[,4]%in%rm_ri[,4],][,ncol(dat)]='RM'
+	}
+	if(nrow(sd_le)>0){
+		dat[dat[,4]%in%sd_le[,4],][,ncol(dat)]='SD'
+	}
+	if(nrow(sd_ri)>0){
+		dat[dat[,4]%in%sd_ri[,4],][,ncol(dat)]='SD'
+	}
+	if(nrow(sr_le)>0){
+		dat[dat[,4]%in%sr_le[,4],][,ncol(dat)]='SR'
+	}
+	if(nrow(sr_ri)>0){
+		dat[dat[,4]%in%sr_ri[,4],][,ncol(dat)]='SR'
+	}
+
 
 	colnames(dat)[ncol(dat)] = 'GC'
         colnames(dat)[4]='SVID'
@@ -38,13 +51,19 @@ opt = parse_args(opt_parser);
 		lg_cnv[,ncol(lg_cnv)+1] = 1-rowSums(lg_cnv[,c(2:4)])
 		colnames(lg_cnv)=c('SVID','SR','SD','RM','US')
 		lg_cnv[,ncol(lg_cnv)+1] = 'US'
-		lg_cnv[lg_cnv$RM>.5,][,ncol(lg_cnv)]='RM'
-		lg_cnv[lg_cnv$SD>.5,][,ncol(lg_cnv)]='SD'
-		lg_cnv[lg_cnv$SR>.5,][,ncol(lg_cnv)]='SR'
+		if(nrow(lg_cnv[lg_cnv$RM>.5,])>0){
+			lg_cnv[lg_cnv$RM>.5,][,ncol(lg_cnv)]='RM'
+		}
+		if(nrow(lg_cnv[lg_cnv$SD>.5,])>0){
+			lg_cnv[lg_cnv$SD>.5,][,ncol(lg_cnv)]='SD'
+		}
+		if(nrow(lg_cnv[lg_cnv$SR>.5,])>0){
+			lg_cnv[lg_cnv$SR>.5,][,ncol(lg_cnv)]='SR'
+		}
+
  
 		dat=merge(dat, lg_cnv[,c(1,6)], by='SVID',all=T)
 		dat[!is.na(dat[,ncol(dat)]),][,ncol(dat)-1] = dat[!is.na(dat[,ncol(dat)]),][,ncol(dat)] 
 	}
 	
 	write.table(dat[,c('SVID','GC')],opt$output, quote=F, sep='\t', col.names=T, row.names=F)
-
