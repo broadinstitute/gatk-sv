@@ -183,14 +183,14 @@ evidence_qc_outputs_json_filename="${evidence_qc_output_dir}/outputs.json"
 
 jq -n \
   --slurpfile inputs "${input_json}" \
+  --slurpfile gse "${gather_sample_evidence_outputs_json}" \
   --arg samples "${sample_id}" \
-  --arg count_files "${coverage_counts}" \
   '{
       batch: $inputs[0].batch,
       samples: [$samples],
       run_vcf_qc: $inputs[0].run_vcf_qc,
       genome_file: $inputs[0].genome_file,
-      count_files: [$count_files],
+      count_files: [$gse[0].coverage_counts],
       run_ploidy: false,
       wgd_scoring_mask: $inputs[0].wgd_scoring_mask,
       reference_dict: $inputs[0].reference_dict,
