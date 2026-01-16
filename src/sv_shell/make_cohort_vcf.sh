@@ -74,3 +74,33 @@ bash /opt/sv_shell/combine_batches.sh \
   "${CombineBatches_inputs_json_filename}" \
   "${CombineBatches_outputs_json_filename}" \
   "${CombineBatches_output_dir}"
+
+
+# ResolveComplexVariants
+# ---------------------------------------------------------------------------------------------------------------------
+ResolveComplexVariants_output_dir=$(realpath $(mktemp -d "/output_ResolveComplexVariants_XXXXXXXX"))
+ResolveComplexVariants_inputs_json_filename="${ResolveComplexVariants_output_dir}/inputs.json"
+ResolveComplexVariants_outputs_json_filename="${ResolveComplexVariants_output_dir}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --slurpfile cb "${CombineBatches_outputs_json_filename}" \
+  '{
+    "cohort_name": $inputs[0].cohort_name,
+    "cluster_vcfs": $cb[0].combined_vcfs,
+    "cluster_bothside_pass_lists": $cb[0].cluster_bothside_pass_lists,
+    "cluster_background_fail_lists": $cb[0].cluster_background_fail_lists,
+    "disc_files": $inputs[0].disc_files,
+    "rf_cutoff_files": $inputs[0].rf_cutoff_files,
+    "contig_list": $inputs[0].contig_list,
+    "cytobands": $inputs[0].cytobands,
+    "mei_bed": $inputs[0].mei_bed,
+    "pe_exclude_list": $inputs[0].pe_exclude_list,
+    "ref_dict": $inputs[0].reference_dict,
+    "max_shard_size": $inputs[0].max_shard_size_resolve
+  }' > "${ResolveComplexVariants_inputs_json_filename}"
+
+bash /opt/sv_shell/resolve_complex_variants.sh \
+  "${ResolveComplexVariants_inputs_json_filename}" \
+  "${ResolveComplexVariants_outputs_json_filename}" \
+  "${ResolveComplexVariants_output_dir}"
