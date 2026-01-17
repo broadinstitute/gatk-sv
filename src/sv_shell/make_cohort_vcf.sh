@@ -104,3 +104,34 @@ bash /opt/sv_shell/resolve_complex_variants.sh \
   "${ResolveComplexVariants_inputs_json_filename}" \
   "${ResolveComplexVariants_outputs_json_filename}" \
   "${ResolveComplexVariants_output_dir}"
+
+
+# GenotypeComplexVariants
+# ---------------------------------------------------------------------------------------------------------------------
+GenotypeComplexVariants_output_dir=$(realpath $(mktemp -d "/output_GenotypeComplexVariants_XXXXXXXX"))
+GenotypeComplexVariants_inputs_json_filename="${GenotypeComplexVariants_output_dir}/inputs.json"
+GenotypeComplexVariants_outputs_json_filename="${GenotypeComplexVariants_output_dir}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --slurpfile resolve_cpx "${ResolveComplexVariants_outputs_json_filename}" \
+  '{
+    "cohort_name": $inputs[0].cohort_name,
+    "batches": $inputs[0].batches,
+    "merge_vcfs": $inputs[0].merge_complex_genotype_vcfs,
+    "complex_resolve_vcfs": $resolve_cpx[0].complex_resolve_vcfs,
+    "complex_resolve_vcf_indexes": $resolve_cpx[0].complex_resolve_vcf_indexes,
+    "depth_vcfs": $inputs[0].depth_vcfs,
+    "ped_file": $inputs[0].ped_file,
+    "bincov_files": $inputs[0].bincov_files,
+    "depth_gt_rd_sep_files": $inputs[0].depth_gt_rd_sep_files,
+    "median_coverage_files": $inputs[0].median_coverage_files,
+    "bin_exclude": $inputs[0].bin_exclude,
+    "contig_list": $inputs[0].contig_list,
+    "ref_dict": $inputs[0].reference_dict
+  }' > "${GenotypeComplexVariants_inputs_json_filename}"
+
+bash /opt/sv_shell/genotype_complex_variants.sh \
+  "${GenotypeComplexVariants_inputs_json_filename}" \
+  "${GenotypeComplexVariants_outputs_json_filename}" \
+  "${GenotypeComplexVariants_output_dir}"

@@ -9,9 +9,7 @@
   "batches": "NA12878",
   "bcftools_preprocessing_options": null,
   "bin_exclude": "/inputs/bin_exclude.hg38.gatkcov.bed.gz",
-  "bincov_files": [
-    "/intermediates/NA12878.RD.txt.gz"
-  ],
+  "bincov_files": "/intermediates/NA12878.RD.txt.gz",
   "chr_x": "chrX",
   "chr_y": "chrY",
   "clean_vcf1b_records_per_shard": 10000,
@@ -22,9 +20,7 @@
   "cohort_name": "NA12878",
   "contig_list": "/inputs/contig.fai",
   "cytobands": "/inputs/cytobands_hg38.bed.gz",
-  "depth_gt_rd_sep_files": [
-    "/intermediates/all_samples.depth.depth_sepcutoff.txt"
-  ],
+  "depth_gt_rd_sep_files": "/intermediates/all_samples.depth.depth_sepcutoff.txt",
   "depth_vcfs": "/intermediates/NA12878.genotyped_depth.vcf.gz",
   "disc_files": [
     "/intermediates/NA12878.pe.txt.gz"
@@ -39,9 +35,7 @@
   "max_shard_size_resolve": 500,
   "max_shards_per_chrom_clean_vcf_step1": 200,
   "max_trios": 1000,
-  "median_coverage_files": [
-    "/intermediates/NA12878_medianCov.transposed.bed"
-  ],
+  "median_coverage_files": "/intermediates/NA12878_medianCov.transposed.bed",
   "mei_bed": "/inputs/hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz",
   "merge_cluster_vcfs": false,
   "merge_complex_genotype_vcfs": true,
