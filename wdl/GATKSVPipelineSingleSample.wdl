@@ -501,13 +501,19 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_fix_header_regeno
 
     # overrides for CleanVcf
-    RuntimeAttr? runtime_attr_format_to_clean
+    RuntimeAttr? runtime_attr_format_to_clean_create_ploidy
+    RuntimeAttr? runtime_attr_format_to_clean_scatter
+    RuntimeAttr? runtime_attr_format_to_clean_format
+    RuntimeAttr? runtime_attr_format_to_clean_concat
+    RuntimeAttr? runtime_attr_scatter_preprocess
     RuntimeAttr? runtime_attr_preprocess
+    RuntimeAttr? runtime_attr_concat_preprocess
     RuntimeAttr? runtime_attr_revise_overlapping_cnvs
     RuntimeAttr? runtime_attr_revise_large_cnvs
-    RuntimeAttr? runtime_attr_revise_abnormal_allosomes
     RuntimeAttr? runtime_attr_revise_multiallelics
+    RuntimeAttr? runtime_attr_scatter_postprocess
     RuntimeAttr? runtime_attr_postprocess
+    RuntimeAttr? runtime_attr_concat_postprocess
     RuntimeAttr? runtime_override_drop_redundant_cnvs
     RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
@@ -515,7 +521,10 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_add_high_fp_rate_filters
     RuntimeAttr? runtime_attr_add_retro_del_filters
     RuntimeAttr? runtime_override_final_cleanup
-    RuntimeAttr? runtime_attr_format_to_output
+    RuntimeAttr? runtime_attr_format_to_output_create_ploidy
+    RuntimeAttr? runtime_attr_format_to_output_scatter
+    RuntimeAttr? runtime_attr_format_to_output_format
+    RuntimeAttr? runtime_attr_format_to_output_concat
     RuntimeAttr? runtime_override_concat_cleaned_vcfs
     
     # overrides for VcfQc
@@ -1290,13 +1299,19 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_preconcat_regeno=runtime_override_preconcat_regeno,
       runtime_override_fix_header_regeno=runtime_override_fix_header_regeno,
 
-      runtime_attr_format_to_clean=runtime_attr_format_to_clean,
+      runtime_attr_format_to_clean_create_ploidy=runtime_attr_format_to_clean_create_ploidy,
+      runtime_attr_format_to_clean_scatter=runtime_attr_format_to_clean_scatter,
+      runtime_attr_format_to_clean_format=runtime_attr_format_to_clean_format,
+      runtime_attr_format_to_clean_concat=runtime_attr_format_to_clean_concat,
+      runtime_attr_scatter_preprocess=runtime_attr_scatter_preprocess,
       runtime_attr_preprocess=runtime_attr_preprocess,
+      runtime_attr_concat_preprocess=runtime_attr_concat_preprocess,
       runtime_attr_revise_overlapping_cnvs=runtime_attr_revise_overlapping_cnvs,
       runtime_attr_revise_large_cnvs=runtime_attr_revise_large_cnvs,
-      runtime_attr_revise_abnormal_allosomes=runtime_attr_revise_abnormal_allosomes,
       runtime_attr_revise_multiallelics=runtime_attr_revise_multiallelics,
+      runtime_attr_scatter_postprocess=runtime_attr_scatter_postprocess,
       runtime_attr_postprocess=runtime_attr_postprocess,
+      runtime_attr_concat_postprocess=runtime_attr_concat_postprocess,
       runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
       runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs,
       runtime_override_stitch_fragmented_cnvs=runtime_override_stitch_fragmented_cnvs,
@@ -1304,7 +1319,10 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_add_high_fp_rate_filters=runtime_attr_add_high_fp_rate_filters,
       runtime_attr_add_retro_del_filters=runtime_attr_add_retro_del_filters,
       runtime_override_final_cleanup=runtime_override_final_cleanup,
-      runtime_attr_format_to_output=runtime_attr_format_to_output,
+      runtime_attr_format_to_output_create_ploidy=runtime_attr_format_to_output_create_ploidy,
+      runtime_attr_format_to_output_scatter=runtime_attr_format_to_output_scatter,
+      runtime_attr_format_to_output_format=runtime_attr_format_to_output_format,
+      runtime_attr_format_to_output_concat=runtime_attr_format_to_output_concat,
       runtime_override_concat_cleaned_vcfs=runtime_override_concat_cleaned_vcfs,
 
       runtime_override_site_level_benchmark_plot=runtime_override_site_level_benchmark_plot,

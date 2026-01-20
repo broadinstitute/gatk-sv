@@ -141,7 +141,7 @@ workflows:
     filters:
       branches:
         - main
-        - kj_sv_cleanvcf
+        - kj_sv_cleanvcf_V2
       tags:
         - /.*/
 
@@ -242,6 +242,7 @@ workflows:
       branches:
         - main
         - mw_stripy
+        - kj_sv_cleanvcf_V2
       tags:
         - /.*/
 
