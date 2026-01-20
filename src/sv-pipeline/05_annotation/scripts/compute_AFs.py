@@ -29,35 +29,26 @@ def extract_info_id(info_line):
     return None
 
 
-def remove_existing_info_fields(vcf_header, info_ids_to_remove):
+def create_header_without_info_fields(vcf_header, info_ids_to_remove):
     """
-    Remove INFO fields from VCF header (case-insensitive)
+    Create a new VCF header without the specified INFO fields (case-insensitive)
     """
-    # Create lookup set
     info_ids_lower = set(id.lower() for id in info_ids_to_remove)
     
-    # Rebuild header by skipping unwanted INFO fields
-    lines_to_keep = []
+    new_header = pysam.VariantHeader()
+    
+    # Copy samples
+    for sample in vcf_header.samples:
+        new_header.add_sample(sample)
+    
+    # Copy header lines, skipping unwanted INFO fields
     for line in vcf_header.records:
         if line.key == 'INFO' and 'ID' in line.keys():
             if line['ID'].lower() in info_ids_lower:
                 continue
-        lines_to_keep.append(str(line))
+        new_header.add_line(str(line))
     
-    # Create new header with saved lines
-    samples = list(vcf_header.samples)
-    new_header = pysam.VariantHeader()
-    for sample in samples:
-        new_header.add_sample(sample)
-    for line in lines_to_keep:
-        new_header.add_line(line)
-    
-    # Copy the new header back
-    vcf_header.clear()
-    for sample in samples:
-        vcf_header.add_sample(sample)
-    for line in lines_to_keep:
-        vcf_header.add_line(line)
+    return new_header
 
 
 def remove_info_from_record(record, info_id):
@@ -549,18 +540,18 @@ def main():
         if info_id:
             info_ids_to_add.append(info_id)
     
-    # Remove any existing INFO fields with matching IDs (case-insensitive)
-    remove_existing_info_fields(vcf.header, info_ids_to_add)
+    # Create new header without existing INFO fields that we'll be adding
+    out_header = create_header_without_info_fields(vcf.header, info_ids_to_add)
     
-    # Add new INFO fields to header
+    # Add new INFO fields to output header
     for line in INFO_ADD:
-        vcf.header.add_line(line)
+        out_header.add_line(line)
 
     # Prep output VCF
     if args.fout in '- stdout'.split():
-        fout = pysam.VariantFile(sys.stdout, 'w', header=vcf.header)
+        fout = pysam.VariantFile(sys.stdout, 'w', header=out_header)
     else:
-        fout = pysam.VariantFile(args.fout, 'w', header=vcf.header)
+        fout = pysam.VariantFile(args.fout, 'w', header=out_header)
 
     # Get allele frequencies for each record & write to new VCF
     for r in vcf.fetch():
