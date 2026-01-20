@@ -25,6 +25,7 @@ workflow AnnotateAF {
     File? allosomes_list
     Int   sv_per_shard
 
+    Boolean skip_multiallelic = true
     Boolean annotate_external_af = true
     Boolean annotate_internal_af = true
     Boolean annotate_functional_consequences = true
@@ -74,6 +75,7 @@ workflow AnnotateAF {
         par_bed = par_bed,
         sv_per_shard = sv_per_shard,
         allosomes_list = allosomes_list,
+        skip_multiallelic = skip_multiallelic,
 
         ref_bed = external_af_ref_bed,
         ref_prefix = external_af_ref_prefix,

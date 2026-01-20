@@ -86,7 +86,7 @@ def update_sex_freqs(record, pop=None):
 
 
 def gather_allele_freqs(record, samples, males_set, females_set, parbt, pop_dict, pops,
-                        sex_chroms, no_combos=False):
+                        sex_chroms, no_combos=False, skip_multiallelic=False):
     """
     Wrapper to compute allele frequencies for all sex & population pairings
     """
@@ -102,14 +102,14 @@ def gather_allele_freqs(record, samples, males_set, females_set, parbt, pop_dict
         rec_in_par = False
 
     # Get allele frequencies for all populations
-    calc_allele_freq(record, samples)
+    calc_allele_freq(record, samples, skip_multiallelic=skip_multiallelic)
     if len(males_set) > 0:
         if record.chrom in sex_chroms and not rec_in_par:
-            calc_allele_freq(record, males_set, prefix='XY', hemi=True)
+            calc_allele_freq(record, males_set, prefix='XY', hemi=True, skip_multiallelic=skip_multiallelic)
         else:
-            calc_allele_freq(record, males_set, prefix='XY')
+            calc_allele_freq(record, males_set, prefix='XY', skip_multiallelic=skip_multiallelic)
     if len(females_set) > 0:
-        calc_allele_freq(record, females_set, prefix='XX')
+        calc_allele_freq(record, females_set, prefix='XX', skip_multiallelic=skip_multiallelic)
 
     # Adjust global allele frequencies on sex chromosomes, if famfile provided
     if record.chrom in sex_chroms and not rec_in_par \
@@ -121,17 +121,17 @@ def gather_allele_freqs(record, samples, males_set, females_set, parbt, pop_dict
         for pop in pops:
             pop_samps = [
                 s for s in samples if pop_dict.get(s, None) == pop]
-            calc_allele_freq(record, pop_samps, prefix=pop)
+            calc_allele_freq(record, pop_samps, prefix=pop, skip_multiallelic=skip_multiallelic)
             if len(males_set) > 0 and not no_combos:
                 if record.chrom in sex_chroms and not rec_in_par:
                     calc_allele_freq(record, list([s for s in pop_samps if s in males_set]),
-                                     prefix=pop + '_XY', hemi=True)
+                                     prefix=pop + '_XY', hemi=True, skip_multiallelic=skip_multiallelic)
                 else:
                     calc_allele_freq(record, list([s for s in pop_samps if s in males_set]),
-                                     prefix=pop + '_XY')
+                                     prefix=pop + '_XY', skip_multiallelic=skip_multiallelic)
             if len(females_set) > 0 and not no_combos:
                 calc_allele_freq(record, list([s for s in pop_samps if s in females_set]),
-                                 prefix=pop + '_XX')
+                                 prefix=pop + '_XX', skip_multiallelic=skip_multiallelic)
 
             # Adjust per-pop allele frequencies on sex chromosomes, if famfile provided
             if record.chrom in sex_chroms and not rec_in_par \
@@ -154,7 +154,7 @@ def gather_allele_freqs(record, samples, males_set, females_set, parbt, pop_dict
         return record
 
 
-def calc_allele_freq(record, samples, prefix=None, hemi=False):
+def calc_allele_freq(record, samples, prefix=None, hemi=False, skip_multiallelic=False):
     """
     Computes allele frequencies for a single record based on a list of samples
     """
@@ -233,45 +233,45 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False):
         record.info['freq_het'    + ('_' + prefix if prefix else '')] = freq_het
         record.info['freq_homalt' + ('_' + prefix if prefix else '')] = freq_homalt
 
-    # Multiallelic sites should reference FORMAT:CN rather than GT
-    # Compute CN_NUMBER, CN_NONREF_COUNT, CN_NONREF_FREQ, and CN_COUNT/CN_FREQ for each copy state
+    # Multiallelic sites should reference FMT/CN
+    # Compute CN_NUMBER, CN_NONREF_COUNT, CN_NONREF_FREQ, CN_COUNT and CN_FREQ for each copy state
     else:
+        if not skip_multiallelic:
+            # Get all sample CNs and remove Nones
+            CNs_wNones = [record.samples[s]['CN'] for s in samples]
+            CNs = [c for c in CNs_wNones if c is not None and c not in '. NA'.split()]
 
-        # Get all sample CNs and remove Nones
-        CNs_wNones = [record.samples[s]['CN'] for s in samples]
-        CNs = [c for c in CNs_wNones if c is not None and c not in '. NA'.split()]
-
-        if len(CNs) == 0:
-            nonnull_CNs, nonref_CN_count, nonref_CN_freq = [0] * 3
-            CN_dist = (0, )
-            CN_freqs = (0, )
-            CN_status = (0, )
-        else:
-            # Count number of samples per CN and total CNs observed
-            CN_counts = dict(Counter(CNs))
-            nonnull_CNs = len(CNs)
-
-            # Get max observed CN and enumerate counts/frequencies per CN as list starting from CN=0
-            max_CN = max([int(k) for k, v in CN_counts.items()])
-            CN_dist = [int(CN_counts.get(k, 0)) for k in range(max_CN + 1)]
-            CN_freqs = [round(v / nonnull_CNs, 6) for v in CN_dist]
-            CN_status = [s for s in range(max_CN + 1)]
-
-            # Get total non-reference CN counts and freq
-            if hemi:
-                ref_CN = 1
+            if len(CNs) == 0:
+                nonnull_CNs, nonref_CN_count, nonref_CN_freq = [0] * 3
+                CN_dist = (0, )
+                CN_freqs = (0, )
+                CN_status = (0, )
             else:
-                ref_CN = 2
-            nonref_CN_count = sum([int(CN_counts.get(k, 0)) for k in range(max_CN + 1) if k != ref_CN])
-            nonref_CN_freq = round(nonref_CN_count / nonnull_CNs, 6)
+                # Count number of samples per CN and total CNs observed
+                CN_counts = dict(Counter(CNs))
+                nonnull_CNs = len(CNs)
 
-        # Add values to INFO field
-        record.info['CN_number' + ('_' + prefix if prefix else '')] = nonnull_CNs
-        record.info['CN_count' + ('_' + prefix if prefix else '')] = tuple(CN_dist)
-        record.info['CN_freq' + ('_' + prefix if prefix else '')] = tuple(CN_freqs)
-        record.info['CN_status' + ('_' + prefix if prefix else '')] = tuple(CN_status)
-        record.info['CN_nnonref' + ('_' + prefix if prefix else '')] = nonref_CN_count
-        record.info['cn_freq_nonref' + ('_' + prefix if prefix else '')] = nonref_CN_freq
+                # Get max observed CN and enumerate counts/frequencies per CN as list starting from CN=0
+                max_CN = max([int(k) for k, v in CN_counts.items()])
+                CN_dist = [int(CN_counts.get(k, 0)) for k in range(max_CN + 1)]
+                CN_freqs = [round(v / nonnull_CNs, 6) for v in CN_dist]
+                CN_status = [s for s in range(max_CN + 1)]
+
+                # Get total non-reference CN counts and freq
+                if hemi:
+                    ref_CN = 1
+                else:
+                    ref_CN = 2
+                nonref_CN_count = sum([int(CN_counts.get(k, 0)) for k in range(max_CN + 1) if k != ref_CN])
+                nonref_CN_freq = round(nonref_CN_count / nonnull_CNs, 6)
+
+            # Add values to INFO field
+            record.info['CN_number' + ('_' + prefix if prefix else '')] = nonnull_CNs
+            record.info['CN_count' + ('_' + prefix if prefix else '')] = tuple(CN_dist)
+            record.info['CN_freq' + ('_' + prefix if prefix else '')] = tuple(CN_freqs)
+            record.info['CN_status' + ('_' + prefix if prefix else '')] = tuple(CN_status)
+            record.info['CN_nnonref' + ('_' + prefix if prefix else '')] = nonref_CN_count
+            record.info['cn_freq_nonref' + ('_' + prefix if prefix else '')] = nonref_CN_freq
 
     return record
 
@@ -292,6 +292,8 @@ def main():
                         'sex-specific AFs).', default=None)
     parser.add_argument('--par', help='BED file of pseudoautosomal regions (used ' +
                         'for sex-specific AFs).', default=None)
+    parser.add_argument('--skip-multiallelic', help='Skip multiallelic variant processing.',
+                        action='store_true', default=False)
     parser.add_argument(
         'fout', help='Output vcf. Also accepts "stdout" and "-".')
     args = parser.parse_args()
@@ -358,14 +360,17 @@ def main():
         '##INFO=<ID=nhomalt,Number=1,Type=Integer,Description="Number of samples with homozygous alternate genotypes (biallelic sites only).">',
         '##INFO=<ID=freq_homref,Number=1,Type=Float,Description="Homozygous reference genotype frequency (biallelic sites only).">',
         '##INFO=<ID=freq_het,Number=1,Type=Float,Description="Heterozygous genotype frequency (biallelic sites only).">',
-        '##INFO=<ID=freq_homalt,Number=1,Type=Float,Description="Homozygous alternate genotype frequency (biallelic sites only).">',
-        '##INFO=<ID=CN_number,Number=1,Type=Integer,Description="Total number of samples with estimated copy numbers (multiallelic CNVs only).">',
-        '##INFO=<ID=CN_count,Number=.,Type=Integer,Description="Number of samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">',
-        '##INFO=<ID=CN_status,Number=.,Type=Integer,Description="Copy states corresponding to CN_count, CN_freq: 0,1,...,maximum observed copy state (multiallelic CNVs only).">',
-        '##INFO=<ID=CN_freq,Number=.,Type=Float,Description="Frequency of samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">',
-        '##INFO=<ID=CN_nnonref,Number=1,Type=Integer,Description="Number of samples with non-reference copy states (multiallelic CNVs only).">',
-        '##INFO=<ID=CN_freq_nonref,Number=1,Type=Float,Description="Frequency of samples with non-reference copy states (multiallelic CNVs only).">'
+        '##INFO=<ID=freq_homalt,Number=1,Type=Float,Description="Homozygous alternate genotype frequency (biallelic sites only).">'
     ]
+    if not args.skip_multiallelic:
+        INFO_ADD.extend([
+            '##INFO=<ID=CN_number,Number=1,Type=Integer,Description="Total number of samples with estimated copy numbers (multiallelic CNVs only).">',
+            '##INFO=<ID=CN_count,Number=.,Type=Integer,Description="Number of samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">',
+            '##INFO=<ID=CN_status,Number=.,Type=Integer,Description="Copy states corresponding to CN_count, CN_freq: 0,1,...,maximum observed copy state (multiallelic CNVs only).">',
+            '##INFO=<ID=CN_freq,Number=.,Type=Float,Description="Frequency of samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">',
+            '##INFO=<ID=CN_nnonref,Number=1,Type=Integer,Description="Number of samples with non-reference copy states (multiallelic CNVs only).">',
+            '##INFO=<ID=CN_freq_nonref,Number=1,Type=Float,Description="Frequency of samples with non-reference copy states (multiallelic CNVs only).">'
+        ])
     if len(sexes) > 0:
         for sex in sexes:
             INFO_ADD.append('##INFO=<ID=AN_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped (biallelic sites only).">' % (sex, sex))
@@ -378,12 +383,13 @@ def main():
             INFO_ADD.append('##INFO=<ID=freq_homref_%s,Number=1,Type=Float,Description="%s homozygous reference genotype frequency (biallelic sites only).">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=freq_het_%s,Number=1,Type=Float,Description="%s heterozygous genotype frequency (biallelic sites only).">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=freq_homalt_%s,Number=1,Type=Float,Description="%s homozygous alternate genotype frequency (biallelic sites only).">' % (sex, sex))
-            INFO_ADD.append('##INFO=<ID=CN_number_%s,Number=1,Type=Integer,Description="Total number of %s samples with estimated copy numbers (multiallelic CNVs only).">' % (sex, sex))
-            INFO_ADD.append('##INFO=<ID=CN_count_%s,Number=.,Type=Integer,Description="Number of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % (sex, sex))
-            INFO_ADD.append('##INFO=<ID=CN_status_%s,Number=.,Type=Integer,Description="Copy states corresponding to CN_COUNT_%s, CN_FREQ_%s: 0,1,...,maximum observed copy state (multiallelic CNVs only).">' % (sex, sex, sex))
-            INFO_ADD.append('##INFO=<ID=CN_freq_%s,Number=.,Type=Float,Description="Frequency of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % (sex, sex))
-            INFO_ADD.append('##INFO=<ID=CN_nnonref_%s,Number=1,Type=Integer,Description="Number of %s samples with non-reference copy states (multiallelic CNVs only).">' % (sex, sex))
-            INFO_ADD.append('##INFO=<ID=CN_freq_nonref_%s,Number=1,Type=Float,Description="Frequency of %s samples with non-reference copy states (multiallelic CNVs only).">' % (sex, sex))
+            if not args.skip_multiallelic:
+                INFO_ADD.append('##INFO=<ID=CN_number_%s,Number=1,Type=Integer,Description="Total number of %s samples with estimated copy numbers (multiallelic CNVs only).">' % (sex, sex))
+                INFO_ADD.append('##INFO=<ID=CN_count_%s,Number=.,Type=Integer,Description="Number of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % (sex, sex))
+                INFO_ADD.append('##INFO=<ID=CN_status_%s,Number=.,Type=Integer,Description="Copy states corresponding to CN_COUNT_%s, CN_FREQ_%s: 0,1,...,maximum observed copy state (multiallelic CNVs only).">' % (sex, sex, sex))
+                INFO_ADD.append('##INFO=<ID=CN_freq_%s,Number=.,Type=Float,Description="Frequency of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % (sex, sex))
+                INFO_ADD.append('##INFO=<ID=CN_nnonref_%s,Number=1,Type=Integer,Description="Number of %s samples with non-reference copy states (multiallelic CNVs only).">' % (sex, sex))
+                INFO_ADD.append('##INFO=<ID=CN_freq_nonref_%s,Number=1,Type=Float,Description="Frequency of %s samples with non-reference copy states (multiallelic CNVs only).">' % (sex, sex))
             if sex == 'XY':
                 INFO_ADD.append('##INFO=<ID=nhemiref_%s,Number=1,Type=Integer,Description="Number of %s samples with hemizygous reference genotypes (biallelic sites only).">' % (sex, sex))
                 INFO_ADD.append('##INFO=<ID=nhemialt_%s,Number=1,Type=Integer,Description="Number of %s samples with hemizygous alternate genotypes (biallelic sites only).">' % (sex, sex))
@@ -408,12 +414,13 @@ def main():
             INFO_ADD.append('##INFO=<ID=freq_homref_%s,Number=1,Type=Float,Description="%s homozygous reference genotype frequency (biallelic sites only).">' % (pop, pop))
             INFO_ADD.append('##INFO=<ID=freq_het_%s,Number=1,Type=Float,Description="%s heterozygous genotype frequency (biallelic sites only).">' % (pop, pop))
             INFO_ADD.append('##INFO=<ID=freq_homalt_%s,Number=1,Type=Float,Description="%s homozygous alternate genotype frequency (biallelic sites only).">' % (pop, pop))
-            INFO_ADD.append('##INFO=<ID=CN_number_%s,Number=1,Type=Integer,Description="Total number of %s samples with estimated copy numbers (multiallelic CNVs only).">' % (pop, pop))
-            INFO_ADD.append('##INFO=<ID=CN_count_%s,Number=.,Type=Integer,Description="Number of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % (pop, pop))
-            INFO_ADD.append('##INFO=<ID=CN_status_%s,Number=.,Type=Integer,Description="Copy states corresponding to CN_COUNT_%s, CN_FREQ_%s: 0,1,...,maximum observed copy state (multiallelic CNVs only).">' % (pop, pop, pop))
-            INFO_ADD.append('##INFO=<ID=CN_freq_%s,Number=.,Type=Float,Description="Frequency of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % (pop, pop))
-            INFO_ADD.append('##INFO=<ID=CN_nnonref_%s,Number=1,Type=Integer,Description="Number of %s samples with non-reference copy states (multiallelic CNVs only).">' % (pop, pop))
-            INFO_ADD.append('##INFO=<ID=CN_freq_nonref_%s,Number=1,Type=Float,Description="Frequency of %s samples with non-reference copy states (multiallelic CNVs only).">' % (pop, pop))
+            if not args.skip_multiallelic:
+                INFO_ADD.append('##INFO=<ID=CN_number_%s,Number=1,Type=Integer,Description="Total number of %s samples with estimated copy numbers (multiallelic CNVs only).">' % (pop, pop))
+                INFO_ADD.append('##INFO=<ID=CN_count_%s,Number=.,Type=Integer,Description="Number of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % (pop, pop))
+                INFO_ADD.append('##INFO=<ID=CN_status_%s,Number=.,Type=Integer,Description="Copy states corresponding to CN_COUNT_%s, CN_FREQ_%s: 0,1,...,maximum observed copy state (multiallelic CNVs only).">' % (pop, pop, pop))
+                INFO_ADD.append('##INFO=<ID=CN_freq_%s,Number=.,Type=Float,Description="Frequency of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % (pop, pop))
+                INFO_ADD.append('##INFO=<ID=CN_nnonref_%s,Number=1,Type=Integer,Description="Number of %s samples with non-reference copy states (multiallelic CNVs only).">' % (pop, pop))
+                INFO_ADD.append('##INFO=<ID=CN_freq_nonref_%s,Number=1,Type=Float,Description="Frequency of %s samples with non-reference copy states (multiallelic CNVs only).">' % (pop, pop))
             if len(sexes) > 0 and not args.no_combos:
                 for sex in sexes:
                     INFO_ADD.append('##INFO=<ID=AN_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
@@ -426,12 +433,13 @@ def main():
                     INFO_ADD.append('##INFO=<ID=freq_homref_%s,Number=1,Type=Float,Description="%s homozygous reference genotype frequency (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=freq_het_%s,Number=1,Type=Float,Description="%s heterozygous genotype frequency (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=freq_homalt_%s,Number=1,Type=Float,Description="%s homozygous alternate genotype frequency (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
-                    INFO_ADD.append('##INFO=<ID=CN_number_%s,Number=1,Type=Integer,Description="Total number of %s samples with estimated copy numbers (multiallelic CNVs only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
-                    INFO_ADD.append('##INFO=<ID=CN_count_%s,Number=.,Type=Integer,Description="Number of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
-                    INFO_ADD.append('##INFO=<ID=CN_status_%s,Number=.,Type=Integer,Description="Copy states corresponding to CN_COUNT_%s, CN_FREQ_%s: 0,1,...,maximum observed copy state (multiallelic CNVs only).">' % ('_'.join((pop, sex)), '_'.join((pop, sex)), '_'.join((pop, sex))))
-                    INFO_ADD.append('##INFO=<ID=CN_freq_%s,Number=.,Type=Float,Description="Frequency of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
-                    INFO_ADD.append('##INFO=<ID=CN_nnonref_%s,Number=1,Type=Integer,Description="Number of %s samples with non-reference copy states (multiallelic CNVs only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
-                    INFO_ADD.append('##INFO=<ID=CN_freq_nonref_%s,Number=1,Type=Float,Description="Frequency of %s samples with non-reference copy states (multiallelic CNVs only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
+                    if not args.skip_multiallelic:
+                        INFO_ADD.append('##INFO=<ID=CN_number_%s,Number=1,Type=Integer,Description="Total number of %s samples with estimated copy numbers (multiallelic CNVs only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
+                        INFO_ADD.append('##INFO=<ID=CN_count_%s,Number=.,Type=Integer,Description="Number of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
+                        INFO_ADD.append('##INFO=<ID=CN_status_%s,Number=.,Type=Integer,Description="Copy states corresponding to CN_COUNT_%s, CN_FREQ_%s: 0,1,...,maximum observed copy state (multiallelic CNVs only).">' % ('_'.join((pop, sex)), '_'.join((pop, sex)), '_'.join((pop, sex))))
+                        INFO_ADD.append('##INFO=<ID=CN_freq_%s,Number=.,Type=Float,Description="Frequency of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
+                        INFO_ADD.append('##INFO=<ID=CN_nnonref_%s,Number=1,Type=Integer,Description="Number of %s samples with non-reference copy states (multiallelic CNVs only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
+                        INFO_ADD.append('##INFO=<ID=CN_freq_nonref_%s,Number=1,Type=Float,Description="Frequency of %s samples with non-reference copy states (multiallelic CNVs only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     if sex == 'XY':
                         INFO_ADD.append('##INFO=<ID=nhemiref_%s,Number=1,Type=Integer,Description="Number of %s samples with hemizygous reference genotypes (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                         INFO_ADD.append('##INFO=<ID=nhemialt_%s,Number=1,Type=Integer,Description="Number of %s samples with hemizygous alternate genotypes (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
@@ -450,7 +458,7 @@ def main():
     # Get allele frequencies for each record & write to new VCF
     for r in vcf.fetch():
         newrec = gather_allele_freqs(r, samples_list, males_set, females_set, parbt, pop_dict,
-                                     pops, sex_chroms, args.no_combos)
+                                     pops, sex_chroms, args.no_combos, args.skip_multiallelic)
         fout.write(newrec)
 
     fout.close()

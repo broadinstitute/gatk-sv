@@ -30,6 +30,7 @@ workflow ShardedAnnotateVcf {
     File? par_bed
     File? allosomes_list
     Int   sv_per_shard
+    Boolean skip_multiallelic
 
     File? ref_bed              # File with external allele frequencies
     String? ref_prefix         # prefix name for external AF call set (required if ref_bed set)
@@ -113,6 +114,7 @@ workflow ShardedAnnotateVcf {
           ped_file = ped_file,
           par_bed = par_bed,
           allosomes_list = allosomes_list,
+          skip_multiallelic = skip_multiallelic,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_compute_AFs
       }
@@ -160,6 +162,7 @@ task ComputeAFs {
     File? ped_file
     File? par_bed
     File? allosomes_list
+    Boolean skip_multiallelic
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -181,6 +184,7 @@ task ComputeAFs {
       ~{"-f " + ped_file} \
       ~{"--par " + par_bed} \
       ~{"--allosomes-list " + allosomes_list} \
+      ~{if skip_multiallelic then "--skip-multiallelic" else ""} \
     | bgzip -c \
     > "~{prefix}.wAFs.vcf.gz"
 
