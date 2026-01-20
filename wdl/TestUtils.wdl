@@ -508,12 +508,10 @@ task CutoffAndOutlierMetrics {
     File cutoffs
     File outlier_list
     File filtered_ped_file
-    Array[String] samples
+    File samples
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
-
-  File samples_list = write_lines(samples)
 
   RuntimeAttr runtime_default = object {
     mem_gb: 1.0,
@@ -532,7 +530,7 @@ task CutoffAndOutlierMetrics {
 
     set -euo pipefail
     svtest rf-cutoffs ~{cutoffs} > rf_cutoff.metrics.tsv
-    svtest sample-list --prefix rf_outliers --valid-sample-list ~{samples_list} ~{outlier_list} >> rf_cutoff.metrics.tsv
+    svtest sample-list --prefix rf_outliers --valid-sample-list ~{samples} ~{outlier_list} >> rf_cutoff.metrics.tsv
     svtest ped-file ~{filtered_ped_file} >> rf_cutoff.metrics.tsv
 
   >>>

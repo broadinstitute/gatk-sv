@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -Eeuo pipefail
+set -Exeuo pipefail
 
 # -------------------------------------------------------
 # ==================== Input & Setup ====================
@@ -13,7 +13,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d output_evidence_qc_XXXXXXXX)
+  output_dir=$(mktemp -d /output_evidence_qc_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -25,12 +25,11 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d wd_evidence_qc_XXXXXXXX)
+working_dir=$(mktemp -d /wd_evidence_qc_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
 batch=$(jq -r ".batch" "${input_json}")
-bincov_matrix=$(jq -r ".bincov_matrix" "${input_json}")
 run_ploidy=$(jq -r ".run_ploidy" "${input_json}")
 
 
@@ -45,14 +44,12 @@ jq '
     batch,
     samples,
     count_files,
-    bincov_matrix_samples,
-    bincov_matrix,
     reference_dict
   }
 ' "${input_json}" |
   jq '.' > "${make_bincov_matrix_input_json}"
 make_bincov_matrix_output_json="$(realpath "${output_dir}/make_bincov_matrix_output.json")"
-bash /make_bincov_matrix.sh "${make_bincov_matrix_input_json}" "${make_bincov_matrix_output_json}"
+bash /opt/sv_shell/make_bincov_matrix.sh "${make_bincov_matrix_input_json}" "${make_bincov_matrix_output_json}"
 merged_bincov=$(jq -r ".merged_bincov" "${make_bincov_matrix_output_json}")
 merged_bincov_idx=$(jq -r ".merged_bincov_idx" "${make_bincov_matrix_output_json}")
 
@@ -75,7 +72,7 @@ jq '
 ' "${input_json}" |
   jq '.' > "${wgd_input_json}"
 wgd_output_json="$(realpath "${output_dir}/wgd_output.json")"
-bash /wgd.sh "${wgd_input_json}" "${wgd_output_json}"
+bash /opt/sv_shell/wgd.sh "${wgd_input_json}" "${wgd_output_json}"
 
 WGD_scores=$(jq -r ".WGD_scores" "${wgd_output_json}")
 WGD_dist=$(jq -r ".WGD_dist" "${wgd_output_json}")
@@ -87,7 +84,7 @@ WGD_matrix=$(jq -r ".WGD_matrix" "${wgd_output_json}")
 # ======================= Output ========================
 # -------------------------------------------------------
 
-outputs_json=$(jq -n \
+jq -n \
   --arg WGD_dist "${WGD_dist}" \
   --arg WGD_matrix "${WGD_matrix}" \
   --arg WGD_scores "${WGD_scores}" \
@@ -101,6 +98,6 @@ outputs_json=$(jq -n \
      "bincov_matrix": $bincov_matrix,
      "bincov_matrix_index": $bincov_matrix_index,
      "bincov_median": $bincov_median
-   }' \
-)
-echo "${outputs_json}" > "${output_json_filename}"
+   }' > "${output_json_filename}"
+
+echo "Finished Evidence QC, output json filename: ${output_json_filename}"

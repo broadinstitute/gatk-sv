@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -Eeuo pipefail
+set -Exeuo pipefail
 
 # -------------------------------------------------------
 # ==================== Input & Setup ====================
@@ -13,7 +13,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d output_wgd_XXXXXXXX)
+  output_dir=$(mktemp -d /output_wgd_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -25,7 +25,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d wd_wgd_XXXXXXXX)
+working_dir=$(mktemp -d /wd_wgd_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
@@ -84,11 +84,14 @@ mv "${wgd_scores}" "${wgd_scores_output}"
 wgd_dist_output="${output_dir}/$(basename "${wgd_dist}")"
 mv "${wgd_dist}" "${wgd_dist_output}"
 
-outputs_json=$(jq -n \
+jq -n \
   --arg wgd_matrix "${wgd_matrix_output}" \
   --arg wgd_scores "${wgd_scores_output}" \
   --arg wgd_dist "${wgd_dist_output}" \
-  '{WGD_dist: $wgd_dist, WGD_matrix: $wgd_matrix, WGD_scores:$wgd_scores}' )
-echo "${outputs_json}" > "${output_json_filename}"
+  '{
+      WGD_dist: $wgd_dist,
+      WGD_matrix: $wgd_matrix,
+      WGD_scores:$wgd_scores
+  }' > "${output_json_filename}"
 
-echo "finished successfully"
+echo "Finished WGD, output json filename: ${output_json_filename}"

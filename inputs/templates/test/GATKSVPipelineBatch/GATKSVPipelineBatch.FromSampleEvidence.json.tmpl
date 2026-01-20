@@ -19,8 +19,6 @@
   "GATKSVPipelineBatch.cnmops_docker": {{ dockers.cnmops_docker | tojson }},
   "GATKSVPipelineBatch.linux_docker" : {{ dockers.linux_docker | tojson }},
   "GATKSVPipelineBatch.gatk_docker": {{ dockers.gatk_docker | tojson }},
-  "GATKSVPipelineBatch.gatk_docker_pesr_override" : {{ dockers.gatk_docker | tojson }},
-  "GATKSVPipelineBatch.condense_counts_docker" : {{ dockers.condense_counts_docker | tojson }},
   "GATKSVPipelineBatch.genomes_in_the_cloud_docker" : {{ dockers.genomes_in_the_cloud_docker | tojson }},
   "GATKSVPipelineBatch.sv_base_docker": {{ dockers.sv_base_docker | tojson }},
   "GATKSVPipelineBatch.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
@@ -100,11 +98,6 @@
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_interval_overlap": "0.8",
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_clustering_algorithm": "SINGLE_LINKAGE",
 
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.BAF_split_size": "10000",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.RD_split_size": "10000",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.PE_split_size": "10000",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.SR_split_size": "1000",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.common_cnv_size_cutoff": "5000",
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.rmsk": {{ reference_resources.rmsk | tojson }},
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.segdups": {{ reference_resources.segdups | tojson }},
 
@@ -133,6 +126,7 @@
   "GATKSVPipelineBatch.MakeCohortVcf.pe_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.HERVK_reference": {{ reference_resources.hervk_reference | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.LINE1_reference": {{ reference_resources.line1_reference | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.intron_reference": {{ reference_resources.intron_reference | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.min_sr_background_fail_batches": 0.5,
   "GATKSVPipelineBatch.MakeCohortVcf.max_shards_per_chrom_clean_vcf_step1": 200,
   "GATKSVPipelineBatch.MakeCohortVcf.min_records_per_shard_clean_vcf_step1": 5000,
