@@ -69,6 +69,7 @@ run_vcf_qc=$(jq -r ".run_vcf_qc" "$input_json")
 genome_file=$(jq -r ".genome_file" "$input_json")
 wgd_scoring_mask=$(jq -r ".wgd_scoring_mask" "$input_json")
 ref_panel_bincov_matrix=$(jq -r ".ref_panel_bincov_matrix" "$input_json")
+reference_dict=$(jq -r ".reference_dict" "$input_json")
 
 ref_samples_list=$(jq -r ".ref_samples_list" "$input_json")
 mapfile -t ref_samples < "${ref_samples_list}"
@@ -673,10 +674,10 @@ RefineComplexVariants_outputs_json="${RefineComplexVariants_output_dir}/outputs.
 jq -n \
   --slurpfile inputs "${input_json}" \
   --slurpfile gbe "${gather_batch_evidence_outputs_json_filename}" \
-  --arg vcf "${FilterVcfForCaseSampleGenotype}" \
+  --arg vcf "${FilterVcfForCaseSampleGenotype_out}" \
   --arg batch_sample_lists "${GetSampleIdsFromVcf_out_file}" \
-  --arg depth_del_beds: "${MergeSetDel_out}" \
-  --arg depth_dup_beds: "${MergeSetDup_out}" \
+  --arg depth_del_beds "${MergeSetDel_out}" \
+  --arg depth_dup_beds "${MergeSetDup_out}" \
   '{
     "vcf": $vcf,
     "prefix": $inputs[0].sample_id,
@@ -709,11 +710,11 @@ jq -n \
   --slurpfile gbe "${gather_batch_evidence_outputs_json_filename}" \
   '{
     "prefix": $inputs[0].sample_id,
-    "clustered_depth_vcfs": $cb[0].clustered_depth_vcf,
-    "clustered_dragen_vcfs": $cb[0].clustered_dragen_vcf,
-    "clustered_manta_vcfs": $cb[0].clustered_manta_vcf,
-    "clustered_scramble_vcfs": $cb[0].clustered_scramble_vcf,
-    "clustered_wham_vcfs": $cb[0].clustered_wham_vcf,
+    "clustered_depth_vcf": $cb[0].clustered_depth_vcf,
+    "clustered_dragen_vcf": $cb[0].clustered_dragen_vcf,
+    "clustered_manta_vcf": $cb[0].clustered_manta_vcf,
+    "clustered_scramble_vcf": $cb[0].clustered_scramble_vcf,
+    "clustered_wham_vcf": $cb[0].clustered_wham_vcf,
     "ped_file": $gbe[0].combined_ped_file,
     "contig_list": $inputs[0].primary_contigs_list,
     "reference_fasta": $inputs[0].reference_fasta,
@@ -763,8 +764,9 @@ ScoreGenotypes_outputs_json="${ScoreGenotypes_output_dir}/outputs.json"
 
 jq -n \
   --slurpfile inputs "${input_json}" \
+  --arg vcf "${SVConcordance_concordance_vcf}" \
   '{
-    "vcf": $svcon[0].concordance_vcf,
+    "vcf": $vcf,
     "output_prefix": $inputs[0].sample_id,
     "truth_json": $inputs[0].truth_json,
     "gq_recalibrator_model_file": $inputs[0].gq_recalibrator_model_file,
@@ -777,3 +779,31 @@ bash /opt/sv_shell/score_genotypes.sh \
   "${ScoreGenotypes_inputs_json}" \
   "${ScoreGenotypes_outputs_json}" \
   "${ScoreGenotypes_output_dir}"
+
+
+# FilterGenotypes
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+FilterGenotypes_output_dir=$(mktemp -d "/output_FilterGenotypes_XXXXXXXX")
+FilterGenotypes_output_dir="$(realpath ${FilterGenotypes_output_dir})"
+FilterGenotypes_inputs_json="${FilterGenotypes_output_dir}/inputs.json"
+FilterGenotypes_outputs_json="${FilterGenotypes_output_dir}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --slurpfile score "${ScoreGenotypes_outputs_json}" \
+  --slurpfile jraw "${JoinRawCalls_outputs_json}" \
+  '{
+    "vcf": $score[0].unfiltered_recalibrated_vcf,
+    "output_prefix": $inputs[0].sample_id,
+    "ploidy_table": $jraw[0].ploidy_table,
+    "no_call_rate_cutoff": $inputs[0].no_call_rate_cutoff,
+    "sl_cutoff_table": $inputs[0].sl_cutoff_table,
+    "optimized_sl_cutoff_table": $score[0].sl_cutoff_table,
+    "sl_filter_args": $inputs[0].sl_filter_args
+  }' > "${FilterGenotypes_inputs_json}"
+
+bash /opt/sv_shell/filter_genotypes.sh \
+  "${FilterGenotypes_inputs_json}" \
+  "${FilterGenotypes_outputs_json}" \
+  "${FilterGenotypes_output_dir}"
