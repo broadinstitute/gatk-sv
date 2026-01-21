@@ -546,6 +546,7 @@ def main():
     # Add new INFO fields to output header
     for line in INFO_ADD:
         out_header.add_line(line)
+        vcf.header.add_line(line)
 
     # Prep output VCF
     if args.fout in '- stdout'.split():
