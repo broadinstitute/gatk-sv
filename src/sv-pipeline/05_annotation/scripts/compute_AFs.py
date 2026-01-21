@@ -18,52 +18,6 @@ import pybedtools as pbt
 ALLOWED_POPS = set(['afr', 'ami', 'amr', 'asj', 'eas', 'fin', 'mid', 'nfe', 'sas', 'oth'])
 
 
-def extract_info_id(info_line):
-    """
-    Extract INFO field ID from VCF header line
-    """
-    if 'ID=' in info_line:
-        start = info_line.index('ID=') + 3
-        end = info_line.index(',', start) if ',' in info_line[start:] else info_line.index('>', start)
-        return info_line[start:end]
-    return None
-
-
-def create_header_without_info_fields(vcf_header, info_ids_to_remove):
-    """
-    Create a new VCF header without the specified INFO fields (case-insensitive)
-    """
-    info_ids_lower = set(id.lower() for id in info_ids_to_remove)
-    
-    new_header = pysam.VariantHeader()
-    
-    # Copy samples
-    for sample in vcf_header.samples:
-        new_header.add_sample(sample)
-    
-    # Copy header lines, skipping unwanted INFO fields
-    for line in vcf_header.records:
-        if line.key == 'INFO' and 'ID' in line.keys():
-            if line['ID'].lower() in info_ids_lower:
-                continue
-        new_header.add_line(str(line))
-    
-    return new_header
-
-
-def remove_info_from_record(record, info_id):
-    """
-    Remove an INFO field from a record if it exists (case-insensitive)
-    """
-    # Find matching INFO field
-    info_id_lower = info_id.lower()
-    keys_to_remove = [k for k in record.info.keys() if k.lower() == info_id_lower]
-    
-    # Remove all matching keys
-    for key in keys_to_remove:
-        del record.info[key]
-
-
 def create_pop_dict(popfile):
     """
     Makes dictionary of sample-population pairs
@@ -120,16 +74,10 @@ def update_sex_freqs(record, pop=None):
         adj_af = 0
 
     if pop is None:
-        remove_info_from_record(record, 'AN')
-        remove_info_from_record(record, 'AC')
-        remove_info_from_record(record, 'AF')
         record.info['AN'] = adj_an
         record.info['AC'] = (adj_ac, )
         record.info['AF'] = (adj_af, )
     else:
-        remove_info_from_record(record, 'AN_' + pop)
-        remove_info_from_record(record, 'AC_' + pop)
-        remove_info_from_record(record, 'AF_' + pop)
         record.info['AN_' + pop ] = adj_an
         record.info['AC_' + pop ] = (adj_ac, )
         record.info['AF_' + pop ] = (adj_af, )
@@ -147,7 +95,6 @@ def gather_allele_freqs(record, samples, males_set, females_set, parbt, pop_dict
     if record.chrom in sex_chroms and len(parbt) > 0:
         if in_par(record, parbt):
             rec_in_par = True
-            remove_info_from_record(record, 'par')
             record.info['par'] = True
         else:
             rec_in_par = False
@@ -195,23 +142,16 @@ def gather_allele_freqs(record, samples, males_set, females_set, parbt, pop_dict
         if svu.is_biallelic(record):
             AFs = [record.info['AF_{0}'.format(pop)][0] for pop in pops]
             grpmax = max(AFs)
-            
-            grp_label = pops[AFs.index(grpmax)]
-            
-            # Remove existing grpmax fields before setting new ones
-            remove_info_from_record(record, 'AF_grpmax')
-            remove_info_from_record(record, 'grpmax')
-            remove_info_from_record(record, 'AC_grpmax')
-            remove_info_from_record(record, 'AN_grpmax')
-            remove_info_from_record(record, 'nhomalt_grpmax')
-            
             record.info['AF_grpmax'] = grpmax
+
+            grp_label = pops[AFs.index(grpmax)]
             record.info['grpmax'] = grp_label
+
             record.info['AC_grpmax'] = int(record.info['AC_{0}'.format(grp_label)][0])
             record.info['AN_grpmax'] = int(record.info['AN_{0}'.format(grp_label)])
             record.info['nhomalt_grpmax'] = int(record.info['nhomalt_{0}'.format(grp_label)])
 
-    return record
+        return record
 
 
 def calc_allele_freq(record, samples, prefix=None, hemi=False, skip_multiallelic=False):
@@ -261,11 +201,6 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, skip_multiallelic
         else:
             AF = 0
 
-        # Remove existing fields before setting new ones
-        remove_info_from_record(record, 'AN' if prefix is None else 'AN_' + prefix)
-        remove_info_from_record(record, 'AC' if prefix is None else 'AC_' + prefix)
-        remove_info_from_record(record, 'AF' if prefix is None else 'AF_' + prefix)
-        
         # Add AN, AC, and AF to INFO field
         record.info[('AN' if prefix is None else 'AN_' + prefix)] = AN
         record.info[('AC' if prefix is None else 'AC_' + prefix)] = AC
@@ -284,20 +219,6 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, skip_multiallelic
         if hemi:
             freq_hemialt = freq_het + freq_homalt
 
-        # Remove existing genotype frequency fields before setting new ones
-        remove_info_from_record(record, 'n_bi_genos' + ('_' + prefix if prefix else ''))
-        remove_info_from_record(record, 'nhomref' + ('_' + prefix if prefix else ''))
-        remove_info_from_record(record, 'nhet' + ('_' + prefix if prefix else ''))
-        remove_info_from_record(record, 'nhomalt' + ('_' + prefix if prefix else ''))
-        remove_info_from_record(record, 'freq_homref' + ('_' + prefix if prefix else ''))
-        remove_info_from_record(record, 'freq_het' + ('_' + prefix if prefix else ''))
-        remove_info_from_record(record, 'freq_homalt' + ('_' + prefix if prefix else ''))
-        if hemi:
-            remove_info_from_record(record, 'nhemiref' + ('_' + prefix if prefix else ''))
-            remove_info_from_record(record, 'nhemialt' + ('_' + prefix if prefix else ''))
-            remove_info_from_record(record, 'freq_hemiref' + ('_' + prefix if prefix else ''))
-            remove_info_from_record(record, 'freq_hemialt' + ('_' + prefix if prefix else ''))
-        
         # Add n_bi_genos, n_homref, nhet, nhomalt, freq_homref, freq_het, and freq_homalt to INFO field
         record.info['n_bi_genos' + ('_' + prefix if prefix else '')] = n_bi_genos
         if hemi:
@@ -344,21 +265,13 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, skip_multiallelic
                 nonref_CN_count = sum([int(CN_counts.get(k, 0)) for k in range(max_CN + 1) if k != ref_CN])
                 nonref_CN_freq = round(nonref_CN_count / nonnull_CNs, 6)
 
-            # Remove existing CN fields before setting new ones
-            remove_info_from_record(record, 'CN_number' + ('_' + prefix if prefix else ''))
-            remove_info_from_record(record, 'CN_count' + ('_' + prefix if prefix else ''))
-            remove_info_from_record(record, 'CN_freq' + ('_' + prefix if prefix else ''))
-            remove_info_from_record(record, 'CN_status' + ('_' + prefix if prefix else ''))
-            remove_info_from_record(record, 'CN_nnonref' + ('_' + prefix if prefix else ''))
-            remove_info_from_record(record, 'CN_freq_nonref' + ('_' + prefix if prefix else ''))
-            
             # Add values to INFO field
             record.info['CN_number' + ('_' + prefix if prefix else '')] = nonnull_CNs
             record.info['CN_count' + ('_' + prefix if prefix else '')] = tuple(CN_dist)
             record.info['CN_freq' + ('_' + prefix if prefix else '')] = tuple(CN_freqs)
             record.info['CN_status' + ('_' + prefix if prefix else '')] = tuple(CN_status)
             record.info['CN_nnonref' + ('_' + prefix if prefix else '')] = nonref_CN_count
-            record.info['CN_freq_nonref' + ('_' + prefix if prefix else '')] = nonref_CN_freq
+            record.info['cn_freq_nonref' + ('_' + prefix if prefix else '')] = nonref_CN_freq
 
     return record
 
@@ -533,26 +446,14 @@ def main():
                         INFO_ADD.append('##INFO=<ID=freq_hemiref_%s,Number=1,Type=Float,Description="%s hemizygous reference genotype frequency (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                         INFO_ADD.append('##INFO=<ID=freq_hemialt_%s,Number=1,Type=Float,Description="%s hemizygous alternate genotype frequency (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
 
-    # Extract all INFO IDs that will be added
-    info_ids_to_add = []
     for line in INFO_ADD:
-        info_id = extract_info_id(line)
-        if info_id:
-            info_ids_to_add.append(info_id)
-    
-    # Create new header without existing INFO fields that we'll be adding
-    out_header = create_header_without_info_fields(vcf.header, info_ids_to_add)
-    
-    # Add new INFO fields to output header
-    for line in INFO_ADD:
-        out_header.add_line(line)
         vcf.header.add_line(line)
 
     # Prep output VCF
     if args.fout in '- stdout'.split():
-        fout = pysam.VariantFile(sys.stdout, 'w', header=out_header)
+        fout = pysam.VariantFile(sys.stdout, 'w', header=vcf.header)
     else:
-        fout = pysam.VariantFile(args.fout, 'w', header=out_header)
+        fout = pysam.VariantFile(args.fout, 'w', header=vcf.header)
 
     # Get allele frequencies for each record & write to new VCF
     for r in vcf.fetch():

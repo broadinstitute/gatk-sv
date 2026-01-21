@@ -25,7 +25,9 @@ workflow AnnotateAF {
     File? allosomes_list
     Int   sv_per_shard
 
+    Array[String]? strip_info_fields
     Boolean skip_multiallelic = true
+
     Boolean annotate_external_af = true
     Boolean annotate_internal_af = true
     Boolean annotate_functional_consequences = true
@@ -50,6 +52,7 @@ workflow AnnotateAF {
     RuntimeAttr? runtime_attr_concat
     RuntimeAttr? runtime_attr_preconcat
     RuntimeAttr? runtime_attr_fix_header
+    RuntimeAttr? runtime_attr_strip_info_fields
   }
 
   scatter (contig in contigs) {
@@ -65,6 +68,9 @@ workflow AnnotateAF {
         svannotate_additional_args = svannotate_additional_args,
         max_breakend_as_cnv_length = max_breakend_as_cnv_length,
 
+        skip_multiallelic = skip_multiallelic,
+        strip_info_fields = strip_info_fields,
+
         annotate_external_af = annotate_external_af,
         annotate_internal_af = annotate_internal_af,
         annotate_functional_consequences = annotate_functional_consequences,
@@ -75,7 +81,6 @@ workflow AnnotateAF {
         par_bed = par_bed,
         sv_per_shard = sv_per_shard,
         allosomes_list = allosomes_list,
-        skip_multiallelic = skip_multiallelic,
 
         ref_bed = external_af_ref_bed,
         ref_prefix = external_af_ref_prefix,
@@ -116,3 +121,27 @@ workflow AnnotateAF {
     File af_annotated_vcf_idx = ConcatVcfs.concat_vcf_idx
   }
 }
+
+task StripInfoFields {
+    input {
+      File vcf
+      File vcf_index
+      Array[String] info_fields
+      String bcftools_docker
+      RuntimeAttr? runtime_attr_override
+    }
+
+    command <<<
+      bcftools annotate -x INFO:$(IFS=","; echo "${info_fields[*]}") -O z -o stripped.vcf.gz "$vcf"
+      tabix -p vcf stripped.vcf.gz
+    >>>
+
+    output {
+      File out_vcf = "stripped.vcf.gz"
+      File out_vcf_idx = "stripped.vcf.gz.tbi"
+    }
+    runtime {
+      docker: bcftools_docker
+      runtime_attr_override: runtime_attr_override
+    }
+  }

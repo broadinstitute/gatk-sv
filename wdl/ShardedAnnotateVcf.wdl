@@ -20,6 +20,9 @@ workflow ShardedAnnotateVcf {
     Int? max_breakend_as_cnv_length
     String? svannotate_additional_args
 
+    Array[String]? strip_info_fields
+    Boolean skip_multiallelic
+
     Boolean annotate_external_af
     Boolean annotate_internal_af
     Boolean annotate_functional_consequences
@@ -30,7 +33,6 @@ workflow ShardedAnnotateVcf {
     File? par_bed
     File? allosomes_list
     Int   sv_per_shard
-    Boolean skip_multiallelic
 
     File? ref_bed              # File with external allele frequencies
     String? ref_prefix         # prefix name for external AF call set (required if ref_bed set)
@@ -85,8 +87,22 @@ workflow ShardedAnnotateVcf {
       }
     }
 
-    File vcf_for_chain = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]])
-    File vcf_idx_for_chain = select_first([SubsetVcfBySamplesList.vcf_subset_index, ScatterVcf.shards_index[i]])
+    File vcf_initial = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]])
+    File vcf_idx_initial = select_first([SubsetVcfBySamplesList.vcf_subset_index, ScatterVcf.shards_index[i]])
+    if (defined(strip_info_fields)) {
+      call StripInfoFields {
+        input:
+          vcf = vcf_initial,
+          vcf_index = vcf_idx_initial,
+          prefix = shard_prefix,
+          info_fields = select_first([strip_info_fields]),
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_attr_modify_vcf
+      }
+    }
+
+    File vcf_for_chain = select_first([StripInfoFields.out_vcf, vcf_initial])
+    File vcf_idx_for_chain = select_first([StripInfoFields.out_vcf_idx, vcf_idx_initial])
     if (annotate_functional_consequences) {
       call func.AnnotateFunctionalConsequences {
         input:
@@ -154,6 +170,52 @@ workflow ShardedAnnotateVcf {
   }
 }
 
+task StripInfoFields {
+    input {
+      File vcf
+      File vcf_index
+      String prefix
+      Array[String] info_fields
+      String sv_pipeline_docker
+      RuntimeAttr? runtime_attr_override
+    }
+
+    command <<<
+      set -euo pipefail
+
+      bcftools annotate \
+        -x INFO/~{sep=",INFO/" info_fields} \
+        -Oz -o ~{prefix}.stripped.vcf.gz \
+        ~{vcf}
+      
+      tabix -p vcf ~{prefix}.stripped.vcf.gz
+    >>>
+
+    output {
+      File out_vcf = "~{prefix}.stripped.vcf.gz"
+      File out_vcf_idx = "~{prefix}.stripped.vcf.gz.tbi"
+    }
+    
+    RuntimeAttr default_attr = object {
+      cpu_cores: 1,
+      mem_gb: 4,
+      disk_gb: 2 * ceil(size(vcf, "GB")) + 5,
+      boot_disk_gb: 10,
+      preemptible_tries: 3,
+      max_retries: 1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+    runtime {
+      cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+      memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GB"
+      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+      bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+      docker: sv_pipeline_docker
+      preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+      maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+  }
+
 task ComputeAFs {
   input {
     File vcf
@@ -166,15 +228,6 @@ task ComputeAFs {
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 1.5,
-    disk_gb: ceil(20 + size(vcf, "GB") * 2),
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
     set -euo pipefail
@@ -196,9 +249,18 @@ task ComputeAFs {
     File af_vcf_idx = "~{prefix}.wAFs.vcf.gz.tbi"
   }
 
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 4,
+    disk_gb: 2 * ceil(size(vcf, "GB")) + 5,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker
