@@ -130,5 +130,9 @@
   "noncoding_bed": "/inputs/noncoding.sort.hg38.bed",
   "run_sampleevidence_metrics": false,
   "sample_bincov_matrix": "/inputs/NA12878.RD.txt.gz",
-  "sample_bincov_matrix_idx": "/inputs/NA12878.RD.txt.gz.tbi"
+  "sample_bincov_matrix_idx": "/inputs/NA12878.RD.txt.gz.tbi",
+  "min_pe_cpx": 3,
+  "min_pe_ctx": 3,
+  "sl_cutoff_table": "/inputs/baseline_sl_cutoffs.tsv",
+  "no_call_rate_cutoff": 0.05
 }
