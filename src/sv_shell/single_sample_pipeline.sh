@@ -736,22 +736,14 @@ SVConcordance_output_dir="$(realpath ${SVConcordance_output_dir})"
 SVConcordance_inputs_json="${SVConcordance_output_dir}/inputs.json"
 SVConcordance_outputs_json="${SVConcordance_output_dir}/outputs.json"
 
-jq -n \
-  --slurpfile inputs "${input_json}" \
-  --slurpfile rcpx "${RefineComplexVariants_outputs_json}" \
-  --slurpfile jraw "${JoinRawCalls_outputs_json}" \
-  '{
-    "eval_vcf": $rcpx[0].cpx_refined_vcf,
-    "truth_vcf": $jraw[0].joined_raw_calls_vcf,
-    "output_prefix": $inputs[0].sample_id,
-    "contig_list": $inputs[0].primary_contigs_list,
-    "reference_dict": $inputs[0].reference_dict
-  }' > "${SVConcordance_inputs_json}"
+SVConcordance_concordance_vcf="$(realpath "${sample_id}.concordance.vcf.gz")"
+SVConcordance_concordance_vcf_index="${SVConcordance_concordance_vcf}.tbi"
 
-bash /opt/sv_shell/sv_concordance.sh \
-  "${SVConcordance_inputs_json}" \
-  "${SVConcordance_outputs_json}" \
-  "${SVConcordance_output_dir}"
+java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar SVConcordance \
+  --sequence-dictionary "${reference_dict}" \
+  --eval "$(jq -r ".cpx_refined_vcf" "$RefineComplexVariants_outputs_json")" \
+  --truth "$(jq -r ".joined_raw_calls_vcf" "$JoinRawCalls_outputs_json")" \
+  -O "${SVConcordance_concordance_vcf}"
 
 
 # ScoreGenotypes
@@ -807,3 +799,171 @@ bash /opt/sv_shell/filter_genotypes.sh \
   "${FilterGenotypes_inputs_json}" \
   "${FilterGenotypes_outputs_json}" \
   "${FilterGenotypes_output_dir}"
+
+
+# SampleFilterMetrics
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+SampleFilterMetrics_output_dir=$(realpath $(mktemp -d "/output_SampleFilterMetrics_XXXXXXXX"))
+SampleFilterMetrics_inputs_json="${SampleFilterMetrics_output_dir}/inputs.json"
+SampleFilterMetrics_outputs_json="${SampleFilterMetrics_output_dir}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --slurpfile eqc_outputs "${evidence_qc_outputs_json_filename}" \
+  --argjson ref_samples "${ref_samples_json_array}" \
+  '{
+    "name": $inputs[0].batch,
+    "ref_samples": $ref_samples,
+    "case_sample": $inputs[0].sample_id,
+    "wgd_scores": $eqc_outputs[0].WGD_scores,
+    "sample_counts": $inputs[0].case_counts_file,
+    "contig_list": $inputs[0].primary_contigs_list
+  }' > "${SampleFilterMetrics_inputs_json}"
+
+bash /opt/sv_shell/single_sample_metrics.sh \
+  "${SampleFilterMetrics_inputs_json}" \
+  "${SampleFilterMetrics_outputs_json}" \
+  "${SampleFilterMetrics_output_dir}"
+
+
+# SampleFilterQC
+# ----------------------------------------------------------------------------------------------------------------------
+SampleFilterQC_out="$(realpath "sv_qc.${batch}.tsv")"
+svqc "${CatMetrics_out}" "$(jq -r ".qc_definitions" "$inputs")" raw_qc.tsv
+grep -vw "NA" raw_qc.tsv > "${SampleFilterQC_out}"
+
+
+# FilterSample
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+FilterSample_wd=$(realpath $(mktemp -d "/wd_FilterSample_XXXXXXXX"))
+cd "${FilterSample_wd}"
+
+_vcf="$(jq -r ".filtered_vcf" "$FilterGenotypes_outputs_json")"
+FilterSample_out="$(realpath "${FilterSample_wd}/$(basename "${_vcf}" .vcf.gz).sample_qc.vcf.gz")"
+
+wgdPF=`cat "${SampleFilterQC_out}" | awk '$1 == "wgd_score_sample" {print $5}'`
+if [ $wgdPF = "FAIL" ]
+then
+  bcftools filter -e 'SVTYPE!="BND"' -m + -s SAMPLE_WGD_OUTLIER "${_vcf}" \
+    | sed 's/ID=SAMPLE_WGD_OUTLIER,Description=".*"/ID=SAMPLE_WGD_OUTLIER,Description="Case sample is an outlier for WGD dosage score compared to reference panel"/' \
+    | bgzip -c \
+    > wgd_filtered.vcf.gz
+else
+  cp "${_vcf}" wgd_filtered.vcf.gz
+fi
+
+coveragePF=`cat "${SampleFilterQC_out}" | awk '$1 == "rd_mean_sample" {print $5}'`
+if [ $coveragePF = "FAIL" ]
+then
+  bcftools filter -e 'SVTYPE!="BND"' -m + -s SAMPLE_COVERAGE_OUTLIER wgd_filtered.vcf.gz \
+    | sed 's/ID=SAMPLE_COVERAGE_OUTLIER,Description=".*"/ID=SAMPLE_COVERAGE_OUTLIER,Description="Case sample is an outlier for coverage compared to reference panel"/' \
+    | bgzip -c \
+  > "${FilterSample_out}"
+else
+  cp wgd_filtered.vcf.gz "${FilterSample_out}"
+fi
+
+tabix "${FilterSample_out}"
+
+
+
+# AnnotateVcf
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+AnnotateVcf_output_dir=$(realpath $(mktemp -d "/output_AnnotateVcf_XXXXXXXX"))
+AnnotateVcf_inputs_json="${AnnotateVcf_output_dir}/inputs.json"
+AnnotateVcf_outputs_json="${AnnotateVcf_output_dir}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --arg vcf "${FilterSample_out}" \
+  '{
+    "vcf": $inputs[0].batch,
+    "prefix": $inputs[0].batch,
+    "contig_list": $inputs[0].primary_contigs_list,
+    "protein_coding_gtf": $inputs[0].protein_coding_gtf,
+    "noncoding_bed": $inputs[0].noncoding_bed,
+    "promoter_window": $inputs[0].promoter_window,
+    "max_breakend_as_cnv_length": $inputs[0].max_breakend_as_cnv_length,
+    "external_af_ref_bed": $inputs[0].external_af_ref_bed,
+    "external_af_ref_prefix": $inputs[0].external_af_ref_bed_prefix,
+    "external_af_population": $inputs[0].external_af_population
+  }' > "${AnnotateVcf_inputs_json}"
+
+bash /opt/sv_shell/annotate_vcf.sh \
+  "${AnnotateVcf_inputs_json}" \
+  "${AnnotateVcf_outputs_json}" \
+  "${AnnotateVcf_output_dir}"
+
+
+# UpdateBreakendRepresentationAndRemoveFilters
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+_vcf="$(jq -r ".annotated_vcf" "$AnnotateVcf_outputs_json")"
+UpdateBreakendRepresentationAndRemoveFilters_out="$(realpath "$(basename "${_vcf}" .vcf.gz).final_cleanup.vcf.gz")"
+
+python /opt/sv-pipeline/scripts/single_sample/update_variant_representations.py \
+  "${_vcf}" \
+  "$(jq -r ".reference_fasta" "$input_json")" \
+  | bcftools sort \
+  | bcftools annotate --no-version -x "FILTER/HIGH_ALGORITHM_FDR" -Oz -o "${UpdateBreakendRepresentationAndRemoveFilters_out}"
+tabix "${UpdateBreakendRepresentationAndRemoveFilters_out}"
+
+
+# SingleSampleMetrics
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+SingleSampleMetrics_output_dir=$(realpath $(mktemp -d "/output_SingleSampleMetrics_XXXXXXXX"))
+SingleSampleMetrics_inputs_json="${SingleSampleMetrics_output_dir}/inputs.json"
+SingleSampleMetrics_outputs_json="${SingleSampleMetrics_output_dir}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --slurpfile eqc_outputs "${evidence_qc_outputs_json_filename}" \
+  --slurpfile gse "${gather_sample_evidence_outputs_json}" \
+  --argjson ref_samples "${ref_samples_json_array}" \
+  --arg cleaned_vcf "${FilterVcfForCaseSampleGenotype_out}" \
+  --arg final_vcf "${UpdateBreakendRepresentationAndRemoveFilters_out}" \
+  --arg genotyped_pesr_vcf "${ConvertCNVsWithoutDepthSupportToBNDs_out_vcf}" \
+  --arg genotyped_depth_vcf "${GenotypeBatch_genotyped_depth_vcf}" \
+  --arg non_genotyped_unique_depth_calls_vcf "${GetUniqueNonGenotypedDepthCalls_out}" \
+  '{
+    "name": $inputs[0].batch,
+    "ref_samples": $ref_samples,
+    "case_sample": $inputs[0].sample_id,
+    "wgd_scores": $eqc_outputs[0].WGD_scores,
+    "sample_pe": $gse[0].pesr_disc,
+    "sample_sr": $gse[0].pesr_split,
+    "sample_counts": $inputs[0].case_counts_file,
+    "cleaned_vcf": $cleaned_vcf,
+    "final_vcf": $final_vcf,
+    "genotyped_pesr_vcf": $genotyped_pesr_vcf,
+    "genotyped_depth_vcf": $genotyped_depth_vcf,
+    "non_genotyped_unique_depth_calls_vcf": $non_genotyped_unique_depth_calls_vcf,
+    "contig_list": $inputs[0].primary_contigs_list
+  }' > "${SingleSampleMetrics_inputs_json}"
+
+bash /opt/sv_shell/single_sample_metrics.sh \
+  "${SingleSampleMetrics_inputs_json}" \
+  "${SingleSampleMetrics_outputs_json}" \
+  "${SingleSampleMetrics_output_dir}"
+
+
+# SingleSampleQC
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+SingleSampleQC_out="$(realpath "sv_qc.${batch}.tsv")"
+
+svqc \
+  "$(jq -r ".metrics_file" "$SingleSampleMetrics_outputs_json")" \
+  "$(jq -r ".qc_definitions" "$input_json")" \
+  raw_qc.tsv
+
+grep -vw "NA" raw_qc.tsv > "${SingleSampleQC_out}"
+
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
