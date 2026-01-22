@@ -9,16 +9,27 @@ option_list = list(
 opt_parser = OptionParser(option_list=option_list);
 opt = parse_args(opt_parser);
 
+safe_read_table <- function(file, ...) {
+  if (!file.exists(file) || file.info(file)$size == 0) {
+    return(data.frame())
+  }
+  
+  if (length(readLines(file, warn = FALSE)) == 0) {
+    return(data.frame())
+  }
+  
+  read.table(file, ...)
+}
 
 #integrate GC of each breakpoints:
 	dat=read.table(opt$input,sep='\t')
-	sr_le=read.table(paste(opt$path,'il_inte.le_bp.vs.SR', sep='/'))
-	sd_le=read.table(paste(opt$path,'il_inte.le_bp.vs.SD', sep='/'))
-	rm_le=read.table(paste(opt$path,'il_inte.le_bp.vs.RM', sep='/'))
+	sr_le=safe_read_table(paste(opt$path,'il_inte.le_bp.vs.SR', sep='/'))
+	sd_le=safe_read_table(paste(opt$path,'il_inte.le_bp.vs.SD', sep='/'))
+	rm_le=safe_read_table(paste(opt$path,'il_inte.le_bp.vs.RM', sep='/'))
 
-	sr_ri=read.table(paste(opt$path,'il_inte.ri_bp.vs.SR', sep='/'))
-	sd_ri=read.table(paste(opt$path,'il_inte.ri_bp.vs.SD', sep='/'))
-	rm_ri=read.table(paste(opt$path,'il_inte.ri_bp.vs.RM', sep='/'))
+	sr_ri=safe_read_table(paste(opt$path,'il_inte.ri_bp.vs.SR', sep='/'))
+	sd_ri=safe_read_table(paste(opt$path,'il_inte.ri_bp.vs.SD', sep='/'))
+	rm_ri=safe_read_table(paste(opt$path,'il_inte.ri_bp.vs.RM', sep='/'))
 	dat[,ncol(dat)+1] = 'US'
 	if(nrow(rm_le)>0){
 			dat[dat[,4]%in%rm_le[,4],][,ncol(dat)]='RM'
