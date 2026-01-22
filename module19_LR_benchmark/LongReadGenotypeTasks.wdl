@@ -84,7 +84,7 @@ task AnnotateGenomicContext {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: ceil(size(variant_sites, "GiB"))*10,
+    mem_gb: 5+ceil(size(variant_sites, "GiB"))*10,
     disk_gb: 10 + ceil(size(variant_sites, "GiB"))*10,
     boot_disk_gb: 10,
     preemptible_tries: 1,
