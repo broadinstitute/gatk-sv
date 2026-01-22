@@ -223,13 +223,20 @@ task AddGenomicContextToVcfR {
       }
     }
 
+    process_X <- function(x) {
+      if (x[1] != ".") {
+        paste(x[1], paste("GC", x[2], sep = "="), sep = ";")
+      } else {
+        paste("GC", x[2], sep = "=")
+      }
+    }
 
     svid_gc <- read.table("~{svid_annotation}", header = TRUE)
     vcf_in <- read_or_empty("vcf_file.gz")
     colnames(vcf_in)[3] = "SVID"
     svid_gc = unique(svid_gc)
     vcf_out <- merge(vcf_in, svid_gc, by="SVID")
-    vcf_out[,8] = apply(vcf_out[,c("V8","GC")], 1, function(x){paste(x[1], paste("GC", x[2], sep="="), sep=";")})
+    vcf_out[,8] = apply(vcf_out[,c("V8","GC")], 1, function(x){process_X(x)})
     vcf_out_v2 = vcf_out[,c(2,3,1,4:(ncol(vcf_out)-1))]
 
     write.table(vcf_out_v2, file = "~{prefix}.GC_anno.vcf", quote = FALSE, sep = "\t", col.names = FALSE, row.names = FALSE)
