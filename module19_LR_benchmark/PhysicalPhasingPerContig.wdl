@@ -33,7 +33,7 @@ workflow PhysicalPhasingPerContig {
         input:
             vcf_gz = sv_vcf,
             vcf_idx = sv_vcf_idx,
-            ocus = region,
+            locus = region,
             docker_image = sv_pipeline_base_docker
     }
     call SubsetVCF as SubsetVcfShort { 
