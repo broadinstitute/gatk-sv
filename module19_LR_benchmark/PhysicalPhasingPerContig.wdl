@@ -1,5 +1,8 @@
 version 1.0
 
+import "Structs.wdl"
+import "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
+
 workflow PhysicalPhasingPerContig {
 
     input {
@@ -68,6 +71,14 @@ workflow PhysicalPhasingPerContig {
                 memory = hiphase_memory,
                 extra_args = hiphase_extra_args
         }
+        call LongReadGenotypeTasks.ConcatVcfs as Concat_vcfs_with_trgt{
+            input:
+                vcfs     = [HiphaseTrgt.phased_snp_vcf, HiphaseTrgt.phased_sv_vcf, HiphaseTrgt.phased_trgt_vcf],
+                vcfs_idx = [HiphaseTrgt.phased_snp_vcf_idx, HiphaseTrgt.phased_sv_vcf_idx, HiphaseTrgt.phased_trgt_vcf_idx],
+                outfile_prefix = "~{sample_id}.~{region}.hiphased",
+                sv_base_mini_docker = sv_base_mini_docker
+
+        }
     }
     if (! defined(trgt_vcf)) {
         call HiPhase { 
@@ -84,16 +95,20 @@ workflow PhysicalPhasingPerContig {
                 memory = hiphase_memory,
                 extra_args = hiphase_extra_args
         }
+        call LongReadGenotypeTasks.ConcatVcfs as Concat_vcfs_wo_trgt{
+            input:
+                vcfs     = [HiPhase.phased_snp_vcf, HiPhase.phased_sv_vcf],
+                vcfs_idx = [HiPhase.phased_snp_vcf_idx, HiPhase.phased_sv_vcf_idx],
+                outfile_prefix = "~{sample_id}.~{region}.hiphased",
+                sv_base_mini_docker = sv_base_mini_docker
+
+        }
+
     }
 
-
     output {
-        File hiphase_short_vcf = select_first([HiPhase.phased_snp_vcf, HiphaseTrgt.phased_snp_vcf])
-        File hiphase_short_idx = select_first([HiPhase.phased_snp_vcf_idx, HiphaseTrgt.phased_snp_vcf_idx]) 
-        File hiphase_sv_vcf = select_first([HiPhase.phased_sv_vcf, HiphaseTrgt.phased_sv_vcf])
-        File hiphase_sv_idx = select_first([HiPhase.phased_sv_vcf_idx, HiphaseTrgt.phased_sv_vcf_idx])
-        File? hiphase_trgt_vcf = HiphaseTrgt.phased_trgt_vcf
-        File? hiphase_trgt_idx = HiphaseTrgt.phased_trgt_vcf_idx
+        File hiphase_vcf = select_first([Concat_vcfs_with_trgt.concat_vcf, Concat_vcfs_wo_trgt.concat_vcf])
+        File hiphase_idx = select_first([Concat_vcfs_with_trgt.concat_vcf_idx, Concat_vcfs_wo_trgt.concat_vcf_idx])
     }
 }
 

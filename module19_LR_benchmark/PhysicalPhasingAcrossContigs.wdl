@@ -47,43 +47,18 @@ workflow PhysicalPhasingAcrossContigs {
             }
         }
 
-   call LongReadGenotypeTasks.ConcatVcfs as concat_small_vcf{
+   call LongReadGenotypeTasks.ConcatVcfs as concat_hiphase_vcf{
       input:
-        vcfs     = PhysicalPhasingPerContig.hiphase_short_vcf,
-        vcfs_idx = PhysicalPhasingPerContig.hiphase_short_idx,
-        outfile_prefix = "~{sample_id}.small_variants",
+        vcfs     = PhysicalPhasingPerContig.hiphase_vcf,
+        vcfs_idx = PhysicalPhasingPerContig.hiphase_idx,
+        outfile_prefix = "~{sample_id}.phased",
         sv_base_mini_docker = sv_base_mini_docker
     }
 
-    call LongReadGenotypeTasks.ConcatVcfs as concat_sv_vcf{
-      input:
-        vcfs     = PhysicalPhasingPerContig.hiphase_sv_vcf,
-        vcfs_idx = PhysicalPhasingPerContig.hiphase_sv_idx,
-        outfile_prefix = "~{sample_id}.SVs",
-        sv_base_mini_docker = sv_base_mini_docker
-    }   
-
-    if (defined(trgt_vcf)){
-        call LongReadGenotypeTasks.ConcatVcfs as concat_trgt_vcf{
-            input:
-                vcfs     = select_first([PhysicalPhasingPerContig.hiphase_trgt_vcf]),
-                vcfs_idx = select_first([PhysicalPhasingPerContig.hiphase_trgt_idx]),
-                outfile_prefix = "~{sample_id}.TRGT",
-                sv_base_mini_docker = sv_base_mini_docker
-        }
-    }
-
-    call LongReadGenotypeTasks.ConcatVcfs as concat_all_vcf{
-        input:
-            vcfs = [concat_small_vcf.concat_vcf, concat_sv_vcf.concat_vcf, select_first([concat_trgt_vcf.concat_vcf])],
-            vcfs_idx = [concat_small_vcf.concat_vcf_idx, concat_sv_vcf.concat_vcf_idx, select_first([concat_trgt_vcf.concat_vcf_idx])],
-            outfile_prefix = "~{sample_id}.phased",
-            sv_base_mini_docker = sv_base_mini_docker
-    }
 
     output {
-        File hiphase_vcf = concat_all_vcf.concat_vcf
-        File hiphase_idx = concat_all_vcf.concat_vcf_idx
+        File hiphase_vcf = concat_hiphase_vcf.concat_vcf
+        File hiphase_idx = concat_hiphase_vcf.concat_vcf_idx
     }
 }
 
