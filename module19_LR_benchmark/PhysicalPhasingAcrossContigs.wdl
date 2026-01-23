@@ -23,6 +23,7 @@ workflow PhysicalPhasingAcrossContigs {
         Array[String] region_list
 
         String sv_base_mini_docker
+        String sv_pipeline_base_docker
     }
 
     scatter (region in region_list){
@@ -32,16 +33,17 @@ workflow PhysicalPhasingAcrossContigs {
                 all_chr_bai = all_chr_bai,
                 reference_fasta = reference_fasta,
                 reference_fasta_fai = reference_fasta_fai,
-                small_vcf   = small_vcf,
-                small_vcf_idx   = small_vcf_idx,
-                sv_vcf  = sv_vcf,
-                sv_vcf_idx  = sv_vcf_idx,
-                trgt_vcf    = trgt_vcf,
-                trgt_vcf_idx    = trgt_vcf_idx,
-                hiphase_memory  = hiphase_memory,
-                hiphase_extra_args  = hiphase_extra_args,
-                sample_id   = sample_id,
-                region  = region        
+                small_vcf = small_vcf,
+                small_vcf_idx = small_vcf_idx,
+                sv_vcf = sv_vcf,
+                sv_vcf_idx = sv_vcf_idx,
+                trgt_vcf = trgt_vcf,
+                trgt_vcf_idx = trgt_vcf_idx,
+                hiphase_memory = hiphase_memory,
+                hiphase_extra_args = hiphase_extra_args,
+                sample_id = sample_id,
+                region = region,
+                sv_pipeline_base_docker = sv_pipeline_base_docker      
             }
         }
 

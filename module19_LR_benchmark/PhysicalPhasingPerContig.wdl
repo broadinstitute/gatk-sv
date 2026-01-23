@@ -17,56 +17,72 @@ workflow PhysicalPhasingPerContig {
         String hiphase_extra_args
         String sample_id
         String region
+
+        String sv_pipeline_base_docker
     }
 
-    call PreProcessVCF as PreProcessSVVCF { input:
-        vcf = sv_vcf,
-        vcf_idx = sv_vcf_idx,
-        prefix = sample_id + ".uppercased.unphased.subset.sv",
-        locus = region
-    }
+    #call PreProcessVCF as PreProcessSVVCF { 
+    #    input:
+    #        vcf = sv_vcf,
+    #        vcf_idx = sv_vcf_idx,
+    #        prefix = sample_id + ".uppercased.unphased.subset.sv",
+    #        locus = region
+    #}
 
-    call SubsetVCF as SubsetVcfShort { input:
-        vcf_gz = small_vcf,
-        vcf_idx = small_vcf_idx,
-        locus = region
+    call SubsetVCF as SubsetVcfSv{
+        input:
+            vcf_gz = sv_vcf,
+            vcf_idx = sv_vcf_idx,
+            ocus = region,
+            docker_image = sv_pipeline_base_docker
+    }
+    call SubsetVCF as SubsetVcfShort { 
+        input:
+            vcf_gz = small_vcf,
+            vcf_idx = small_vcf_idx,
+            locus = region,
+            docker_image = sv_pipeline_base_docker
     }
 
     if (defined(trgt_vcf) && defined(trgt_vcf_idx)) {
-        call SubsetVCF as SubsetVcfTRGT { input:
-            vcf_gz = select_first([trgt_vcf]),
-            vcf_idx = select_first([trgt_vcf_idx]),,
-            locus = region
+        call SubsetVCF as SubsetVcfTRGT { 
+            input:
+                vcf_gz = select_first([trgt_vcf]),
+                vcf_idx = select_first([trgt_vcf_idx]),,
+                locus = region,
+                docker_image = sv_pipeline_base_docker
         }
-        call HiPhaseTRGT as HiphaseTrgt { input:
-            bam = all_chr_bam,
-            bai = all_chr_bai,
-            unphased_snp_vcf = SubsetVcfShort.subset_vcf,
-            unphased_snp_idx = SubsetVcfShort.subset_idx,
-            unphased_sv_vcf = PreProcessSVVCF.subset_vcf,
-            unphased_sv_idx = PreProcessSVVCF.subset_idx,
-            unphased_trgt_vcf = SubsetVcfTRGT.subset_vcf,
-            unphased_trgt_idx = SubsetVcfTRGT.subset_idx,
-            ref_fasta = reference_fasta,
-            ref_fasta_fai = reference_fasta_fai,
-            samplename = sample_id,
-            memory = hiphase_memory,
-            extra_args = hiphase_extra_args
+        call HiPhaseTRGT as HiphaseTrgt { 
+            input:
+                bam = all_chr_bam,
+                bai = all_chr_bai,
+                unphased_sv_vcf = SubsetVcfSv.subset_vcf,
+                unphased_sv_idx = SubsetVcfSv.subset_idx,
+                unphased_snp_vcf = SubsetVcfShort.subset_vcf,
+                unphased_snp_idx = SubsetVcfShort.subset_idx,
+                unphased_trgt_vcf = SubsetVcfTRGT.subset_vcf,
+                unphased_trgt_idx = SubsetVcfTRGT.subset_idx,
+                ref_fasta = reference_fasta,
+                ref_fasta_fai = reference_fasta_fai,
+                samplename = sample_id,
+                memory = hiphase_memory,
+                extra_args = hiphase_extra_args
         }
     }
     if (! defined(trgt_vcf)) {
-        call HiPhase { input:
-            bam = all_chr_bam,
-            bai = all_chr_bai,
-            unphased_snp_vcf = SubsetVcfShort.subset_vcf,
-            unphased_snp_idx = SubsetVcfShort.subset_idx,
-            unphased_sv_vcf = PreProcessSVVCF.subset_vcf,
-            unphased_sv_idx = PreProcessSVVCF.subset_idx,
-            ref_fasta = reference_fasta,
-            ref_fasta_fai = reference_fasta_fai,
-            samplename = sample_id,
-            memory = hiphase_memory,
-            extra_args = hiphase_extra_args
+        call HiPhase { 
+            input:
+                bam = all_chr_bam,
+                bai = all_chr_bai,
+                unphased_sv_vcf = SubsetVcfSv.subset_vcf,
+                unphased_sv_idx = SubsetVcfSv.subset_idx,
+                unphased_snp_vcf = SubsetVcfShort.subset_vcf,
+                unphased_snp_idx = SubsetVcfShort.subset_idx,
+                ref_fasta = reference_fasta,
+                ref_fasta_fai = reference_fasta_fai,
+                samplename = sample_id,
+                memory = hiphase_memory,
+                extra_args = hiphase_extra_args
         }
     }
 
@@ -174,6 +190,7 @@ task SubsetVCF {
         File? vcf_idx
         String locus
         String prefix = "subset"
+        String docker_image
 
         RuntimeAttr? runtime_attr_override
     }
@@ -200,7 +217,7 @@ task SubsetVCF {
         boot_disk_gb:       10,
         preemptible_tries:  2,
         max_retries:        1,
-        docker:            "us.gcr.io/broad-dsp-lrma/lr-basic:0.1.2"
+        docker:             docker_image
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {
