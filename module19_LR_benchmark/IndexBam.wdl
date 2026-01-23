@@ -1,9 +1,40 @@
+
+
+version 1.0
+
+import "Structs.wdl" as tasks0506
+
+workflow IndexBams {
+  input {
+    Array[File] bam_files
+    File reference_fasta
+    File reference_index
+    String sv_pipeline_base_docker
+    RuntimeAttr? runtime_attr_index_bam
+  }
+
+  scatter (bam in bam_files) {
+    call index_bam {
+      input:
+        bam_file = bam,
+        reference_fasta = reference_fasta,
+        reference_index = reference_index,
+        docker_image = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_index_bam
+    }
+  }
+
+  output {
+    Array[File] bai_files = index_bam.bai
+  }
+}
+
 task IndexBam {
   input {
     File bam_file
     File reference_fasta
     File? reference_index
-    String samtools_cloud_docker
+    String docker_image
     RuntimeAttr? runtime_attr_override
   }
 
@@ -54,7 +85,7 @@ task IndexBam {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: samtools_cloud_docker
+    docker: docker_image
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
