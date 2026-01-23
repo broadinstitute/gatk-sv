@@ -14,7 +14,7 @@ workflow IndexBams {
   }
 
   scatter (bam in bam_files) {
-    call index_bam {
+    call IndexBam {
       input:
         bam_file = bam,
         reference_fasta = reference_fasta,
@@ -25,7 +25,7 @@ workflow IndexBams {
   }
 
   output {
-    Array[File] bai_files = index_bam.bai
+    Array[File] bai_files = IndexBam.bai
   }
 }
 
