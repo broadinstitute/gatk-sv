@@ -25,7 +25,7 @@ workflow IndexBams {
   }
 
   output {
-    Array[File] bai_files = IndexBam.bai
+    Array[File] bai_files = IndexBam.bam_index
   }
 }
 
