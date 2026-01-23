@@ -2,7 +2,7 @@ version 1.0
 
 import "Structs.wdl"
 import "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
-import PhysicalPhasingPerContig.wdl as PhysicalPhasingPerContig
+import "PhysicalPhasingPerContig.wdl" as PhysicalPhasingPerContig
 
 workflow PhysicalPhasingAcrossContigs {
 
