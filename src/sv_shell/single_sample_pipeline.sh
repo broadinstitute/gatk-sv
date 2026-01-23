@@ -829,8 +829,12 @@ bash /opt/sv_shell/single_sample_metrics.sh \
 
 # SampleFilterQC
 # ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
 SampleFilterQC_out="$(realpath "sv_qc.${batch}.tsv")"
-svqc "${CatMetrics_out}" "$(jq -r ".qc_definitions" "$inputs")" raw_qc.tsv
+svqc \
+  "$(jq -r ".metrics_file" "$SampleFilterMetrics_outputs_json")" \
+  "$(jq -r ".qc_definitions" "$input_json")" \
+  raw_qc.tsv
 grep -vw "NA" raw_qc.tsv > "${SampleFilterQC_out}"
 
 
@@ -880,7 +884,7 @@ jq -n \
   --slurpfile inputs "${input_json}" \
   --arg vcf "${FilterSample_out}" \
   '{
-    "vcf": $inputs[0].batch,
+    "vcf": $vcf,
     "prefix": $inputs[0].batch,
     "contig_list": $inputs[0].primary_contigs_list,
     "protein_coding_gtf": $inputs[0].protein_coding_gtf,
