@@ -48,7 +48,7 @@ workflow PhysicalPhasingPerContig {
         call SubsetVCF as SubsetVcfTRGT { 
             input:
                 vcf_gz = select_first([trgt_vcf]),
-                vcf_idx = select_first([trgt_vcf_idx]),,
+                vcf_idx = select_first([trgt_vcf_idx]),
                 locus = region,
                 docker_image = sv_pipeline_base_docker
         }
