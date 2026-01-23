@@ -21,6 +21,7 @@ workflow PhysicalPhasingPerContig {
         String sample_id
         String region
 
+        String sv_base_mini_docker
         String sv_pipeline_base_docker
     }
 

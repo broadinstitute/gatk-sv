@@ -43,6 +43,7 @@ workflow PhysicalPhasingAcrossContigs {
                 hiphase_extra_args = hiphase_extra_args,
                 sample_id = sample_id,
                 region = region,
+                sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_base_docker = sv_pipeline_base_docker      
             }
         }
