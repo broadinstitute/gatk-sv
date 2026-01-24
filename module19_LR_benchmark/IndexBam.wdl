@@ -78,7 +78,7 @@ task IndexBam {
         set -Eeuo pipefail
 
         # index bam file
-	gsutil cp ~{bam_file} ./
+        gsutil cp ~{bam_file} ./
         samtools index -@ ~{num_cpu} ~{bam_file_name}    
   >>>
   runtime {
