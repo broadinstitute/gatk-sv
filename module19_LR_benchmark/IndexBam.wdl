@@ -78,7 +78,8 @@ task IndexBam {
         set -Eeuo pipefail
 
         # index bam file
-        samtools index -@ ~{num_cpu} ~{bam_file}    
+	gsutil cp ~{bam_file} ./
+        samtools index -@ ~{num_cpu} ~{bam_file_name}    
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
