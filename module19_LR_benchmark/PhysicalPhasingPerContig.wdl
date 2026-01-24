@@ -25,21 +25,21 @@ workflow PhysicalPhasingPerContig {
         String sv_pipeline_base_docker
     }
 
-    #call PreProcessVCF as PreProcessSVVCF { 
-    #    input:
-    #        vcf = sv_vcf,
-    #        vcf_idx = sv_vcf_idx,
-    #        prefix = sample_id + ".uppercased.unphased.subset.sv",
-    #        locus = region
-    #}
-
-    call SubsetVCF as SubsetVcfSv{
+    call PreProcessVCF as PreProcessSVVCF { 
         input:
-            vcf_gz = sv_vcf,
+            vcf = sv_vcf,
             vcf_idx = sv_vcf_idx,
-            locus = region,
-            docker_image = sv_pipeline_base_docker
+            prefix = sample_id + ".uppercased.unphased.subset.sv",
+            locus = region
     }
+
+    #call SubsetVCF as SubsetVcfSv{
+    #    input:
+    #        vcf_gz = sv_vcf,
+    #        vcf_idx = sv_vcf_idx,
+    #        locus = region,
+    #        docker_image = sv_pipeline_base_docker
+    #}
     call SubsetVCF as SubsetVcfShort { 
         input:
             vcf_gz = small_vcf,
@@ -60,8 +60,8 @@ workflow PhysicalPhasingPerContig {
             input:
                 bam = all_chr_bam,
                 bai = all_chr_bai,
-                unphased_sv_vcf = SubsetVcfSv.subset_vcf,
-                unphased_sv_idx = SubsetVcfSv.subset_idx,
+                unphased_sv_vcf = PreProcessSVVCF.subset_vcf,
+                unphased_sv_idx = PreProcessSVVCF.subset_idx,
                 unphased_snp_vcf = SubsetVcfShort.subset_vcf,
                 unphased_snp_idx = SubsetVcfShort.subset_idx,
                 unphased_trgt_vcf = SubsetVcfTRGT.subset_vcf,
@@ -86,8 +86,8 @@ workflow PhysicalPhasingPerContig {
             input:
                 bam = all_chr_bam,
                 bai = all_chr_bai,
-                unphased_sv_vcf = SubsetVcfSv.subset_vcf,
-                unphased_sv_idx = SubsetVcfSv.subset_idx,
+                unphased_sv_vcf = PreProcessSVVCF.subset_vcf,
+                unphased_sv_idx = PreProcessSVVCF.subset_idx,
                 unphased_snp_vcf = SubsetVcfShort.subset_vcf,
                 unphased_snp_idx = SubsetVcfShort.subset_idx,
                 ref_fasta = reference_fasta,
