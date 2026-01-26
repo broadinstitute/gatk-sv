@@ -43,9 +43,7 @@ def is_biallelic(record):
     """
     Check if record is biallelic
     """
-    if 'MULTIALLELIC' not in record.filter \
-            and len(record.alleles) <= 2 \
-            and record.info['SVTYPE'] not in 'CNV MCNV'.split():
+    if len(record.alleles) <= 2:
         return True
     else:
         return False
