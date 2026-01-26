@@ -24,9 +24,7 @@ workflow AnnotateAF {
     File? par_bed
     File? allosomes_list
     Int   sv_per_shard
-
     Array[String]? strip_info_fields
-    Boolean skip_multiallelic = true
 
     Boolean annotate_external_af = true
     Boolean annotate_internal_af = true
@@ -67,8 +65,6 @@ workflow AnnotateAF {
         promoter_window = promoter_window,
         svannotate_additional_args = svannotate_additional_args,
         max_breakend_as_cnv_length = max_breakend_as_cnv_length,
-
-        skip_multiallelic = skip_multiallelic,
         strip_info_fields = strip_info_fields,
 
         annotate_external_af = annotate_external_af,
