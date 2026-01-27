@@ -361,7 +361,7 @@ def main():
         '##INFO=<ID=nhomalt,Number=1,Type=Integer,Description="Number of samples with homozygous alternate genotypes (biallelic sites only).">',
         '##INFO=<ID=freq_homref,Number=1,Type=Float,Description="Homozygous reference genotype frequency (biallelic sites only).">',
         '##INFO=<ID=freq_het,Number=1,Type=Float,Description="Heterozygous genotype frequency (biallelic sites only).">',
-        '##INFO=<ID=freq_homalt,Number=1,Type=Float,Description="Homozygous alternate genotype frequency (biallelic sites only).">'
+        '##INFO=<ID=freq_homalt,Number=1,Type=Float,Description="Homozygous alternate genotype frequency (biallelic sites only).">',
         '##INFO=<ID=GT_number,Number=1,Type=Integer,Description="Total number of alleles genotyped (multiallelic sites).">',
         '##INFO=<ID=GT_count,Number=.,Type=Integer,Description="Number of alleles observed for each index, starting from 0 (multiallelic sites).">',
         '##INFO=<ID=GT_status,Number=.,Type=Integer,Description="Allele indices corresponding to GT_count, GT_freq: 0,1,...,maximum observed index (multiallelic sites).">',
