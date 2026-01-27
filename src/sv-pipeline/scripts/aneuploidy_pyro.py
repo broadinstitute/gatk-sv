@@ -287,25 +287,41 @@ def filter_low_quality_bins(df: pd.DataFrame,
     return df_filtered
 
 # Find all matching files
-bins_pattern = "/Users/markw/Work/talkowski/sv-pipe-testing/mw_ploidy/cmg/data/m2_batch28_ploidy_plots/ploidy_est/binwise_estimated_copy_numbers.bed.gz"
+bins_pattern = "/Users/markw/Work/talkowski/sv-pipe-testing/mw_ploidy/cmg/data/m2_batch39_ploidy_plots/ploidy_est/binwise_estimated_copy_numbers.bed.gz"
+output_dir = "/Users/markw/Work/talkowski/sv-pipe-testing/mw_ploidy/cmg/aneuploidy_pyro_output"
+
+# Create output directory if it doesn't exist
+os.makedirs(output_dir, exist_ok=True)
+print(f"Output directory: {output_dir}")
+
+# Delete all existing combined_results_*.png files
+combined_results_pattern = os.path.join(output_dir, "combined_results_*.png")
+existing_files = glob.glob(combined_results_pattern)
+if existing_files:
+    print(f"Deleting {len(existing_files)} existing combined_results_*.png files...")
+    for file_path in existing_files:
+        os.remove(file_path)
+    print("Cleanup complete.")
 
 df = get_files(bins_pattern)
 # TODO filter bins
 #df = df[df['Chr'] == 'chrY']
-#df = df[df['Chr'].isin({'chrX', 'chrY', 'chr21', 'chr13', 'chr19'})]
-#df = df.loc[:, ['Chr', 'Start', 'End', 'source_file', '__wea_3054077_d1__a36154'] + [x for x in df.columns[2:32].values.tolist() if x != '__wea_3054077_d1__a36154']]
+df = df[df['Chr'].isin({'chrX', 'chrY'})]
+#df = df[df['Chr'].isin({'chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 'chr9', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22'})]
+#df = df.loc[:, ['Chr', 'Start', 'End', 'source_file', '__cdh1355__1a8a28'] + [x for x in df.columns[2:12].values.tolist() if x != '__cdh1355__1a8a28']]
+df = df.loc[:, ['Chr', 'Start', 'End', 'source_file'] + df.columns[2:12].values.tolist()]
 
 # Filter low quality bins
 df = filter_low_quality_bins(df,
                              autosome_median_min=1.75,
                              autosome_median_max=2.25,
-                             autosome_mad_max=0.5,
+                             autosome_mad_max=0.25,
                              chrX_median_min=0.75,
                              chrX_median_max=2.25,
                              chrX_mad_max=0.5,
                              chrY_median_min=0.0,
                              chrY_median_max=1.25,
-                             chrY_mad_max=0.5)
+                             chrY_mad_max=0.25)
 
 print(df)
 
@@ -410,7 +426,7 @@ class AneuploidyModel:
     
     def __init__(self,
                  n_states: int = 6,
-                 alpha_ref: float = 50.0,
+                 alpha_ref: float = 50.0, 
                  alpha_non_ref: float = 1.0,
                  var_bias_bin: float = 0.1,
                  var_sample: float = 0.2,
@@ -579,8 +595,6 @@ class AneuploidyModel:
         
         print(f"Training for {max_iter} iterations...")
         print(f"Data: {data.n_bins} bins x {data.n_samples} samples")
-        print("Note: First iteration may take longer due to compilation...")
-        print("Starting first epoch...")
         
         try:
             # Configure tqdm with mininterval to force updates
@@ -588,16 +602,12 @@ class AneuploidyModel:
                      mininterval=0.1, dynamic_ncols=True) as pbar:
                 for epoch in pbar:
                     # Train step
-                    if epoch == 0:
-                        print("Computing loss for first epoch (this may take several minutes)...")
                     epoch_loss = svi.step(depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples)
-                    if epoch == 0:
-                        print(f"First epoch complete! Loss: {epoch_loss:.4f}")
                     scheduler.step(epoch)
                     
                     # Record loss
                     self.loss_history['epoch'].append(epoch)
-                    self.loss_history['elbo'].append(-epoch_loss)
+                    self.loss_history['elbo'].append(epoch_loss)
                     
                     # Update progress bar with loss
                     pbar.set_postfix({'loss': f'{epoch_loss:.4f}'})
@@ -724,65 +734,6 @@ class AneuploidyModel:
         print("MAP estimates computed.")
         return map_estimates
     
-    def run_posterior_predictive(self, data, n_samples: int = 100):
-        """
-        Generate posterior predictive samples.
-        
-        Args:
-            data: AneuploidyData object
-            n_samples: Number of posterior samples
-            
-        Returns:
-            Dictionary with posterior predictive samples
-        """
-        print(f"Generating {n_samples} posterior predictive samples...")
-        
-        if self.inference_method == 'mcmc':
-            # For MCMC, use the stored samples
-            print("Using MCMC samples for posterior predictive...")
-            
-            # If we have more MCMC samples than requested, subsample
-            mcmc_n_samples = list(self.mcmc_samples.values())[0].shape[0]
-            if mcmc_n_samples > n_samples:
-                indices = np.random.choice(mcmc_n_samples, size=n_samples, replace=False)
-                posterior_samples = {
-                    key: self.mcmc_samples[key][indices].detach().cpu().numpy()
-                    for key in self.mcmc_samples.keys()
-                }
-            else:
-                posterior_samples = {
-                    key: self.mcmc_samples[key].detach().cpu().numpy()
-                    for key in self.mcmc_samples.keys()
-                }
-            
-            # Generate obs samples if not present
-            if 'obs' not in posterior_samples:
-                print("Generating 'obs' samples from MCMC posterior...")
-                # We need to run the model forward with MCMC samples
-                predictive = Predictive(self.model, posterior_samples=self.mcmc_samples,
-                                       num_samples=n_samples if mcmc_n_samples > n_samples else mcmc_n_samples)
-                samples = predictive(depth=None, n_bins=data.n_bins, n_samples=data.n_samples)
-                posterior_samples['obs'] = samples['obs'].detach().cpu().numpy()
-        else:
-            # SVI mode: use guide
-            predictive = Predictive(
-                self.model, 
-                guide=self.guide, 
-                num_samples=n_samples, 
-                return_sites=['obs', 'cn', 'bin_bias', 'sample_var', 'bin_var', 'cn_probs']
-            )
-            
-            samples = predictive(depth=None, n_bins=data.n_bins, n_samples=data.n_samples)
-            
-            # Convert to numpy
-            posterior_samples = {
-                key: samples[key].detach().cpu().numpy()
-                for key in samples.keys()
-            }
-        
-        print("Posterior predictive sampling complete.")
-        return posterior_samples
-    
     def run_discrete_inference(self, data, n_samples: int = 1000, log_freq: int = 100):
         """
         Run discrete inference to get posterior distribution over copy numbers.
@@ -835,8 +786,9 @@ def plot_training_loss(model: AneuploidyModel):
     ax.set_title('Training Loss')
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig('training_loss.png', dpi=150, bbox_inches='tight')
-    print("Saved plot: training_loss.png")
+    output_path = os.path.join(output_dir, 'training_loss.png')
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    print(f"Saved plot: {output_path}")
     plt.close()
 
 
@@ -865,7 +817,7 @@ def add_chromosome_labels(ax, chr_array):
     
     # Add vertical lines at chromosome boundaries
     for boundary in chr_changes:
-        ax.axvline(boundary, color='gray', linestyle='--', alpha=0.5, linewidth=0.5)
+        ax.axvline(boundary, color='gray', linestyle='--', alpha=1, linewidth=1)
     
     # Set x-axis labels
     ax.set_xticks(chr_positions)
@@ -873,20 +825,20 @@ def add_chromosome_labels(ax, chr_array):
     ax.set_xlabel('Chromosome')
 
 
-def plot_combined_results(data: AneuploidyData, map_estimates: dict, cn_posterior: dict, 
-                         posterior_samples: dict, sample_idx: int = 0, is_aneuploid: bool = False):
+def plot_combined_results(data: AneuploidyData, map_estimates: dict, cn_posterior: dict,
+                         sample_idx: int = 0, is_aneuploid: bool = False, aneuploid_chrs: list = None):
     """
-    Combined plot showing MAP estimates, CN posterior, and posterior predictive results.
+    Combined plot showing MAP estimates and CN posterior.
     
     Args:
         data: AneuploidyData object
         map_estimates: Dictionary with MAP estimates
         cn_posterior: Dictionary with 'cn_posterior' key
-        posterior_samples: Dictionary with posterior predictive samples (must contain 'obs')
         sample_idx: Index of sample to plot
         is_aneuploid: Whether this sample has high confidence aneuploidy
+        aneuploid_chrs: List of tuples (chr_name, cn, prob) for aneuploid chromosomes
     """
-    fig, axes = plt.subplots(6, 1, figsize=(16, 19))
+    fig, axes = plt.subplots(4, 1, figsize=(16, 16))
     
     # Extract data
     observed = data.depth[:, sample_idx].cpu().numpy()
@@ -897,31 +849,21 @@ def plot_combined_results(data: AneuploidyData, map_estimates: dict, cn_posterio
     sample_var_current = sample_var_all[sample_idx]  # Current sample's variance factor
     cn_probs = cn_posterior['cn_posterior'][:, sample_idx, :]  # (n_bins, n_states)
     
-    # Extract posterior samples of observed variable
-    obs_samples = posterior_samples['obs'][:, :, sample_idx]  # (n_samples, n_bins)
-    obs_mean = np.median(obs_samples, axis=0)
-    obs_lower = np.percentile(obs_samples, 2.5, axis=0)
-    obs_upper = np.percentile(obs_samples, 97.5, axis=0)
-    
-    # Extract bin_bias samples for standard deviation
-    bin_bias_samples = posterior_samples['bin_bias']  # (n_samples, n_bins, ...)
-    bin_bias_samples = bin_bias_samples.reshape(bin_bias_samples.shape[0], -1)  # (n_samples, n_bins)
-    bin_bias_std = np.std(bin_bias_samples, axis=0)
-    
-    # Extract bin_var samples for standard deviation
-    bin_var_samples = posterior_samples['bin_var']  # (n_samples, n_bins, ...)
-    bin_var_samples = bin_var_samples.reshape(bin_var_samples.shape[0], -1)  # (n_samples, n_bins)
-    bin_var_std = np.std(bin_var_samples, axis=0)
-    
     colors = ['red', 'orange', 'green', 'blue', 'purple', 'brown']
     x = np.arange(len(observed))
     
-    # Plot 1: Observed depth with posterior mean and CI
+    # Plot 1: Observed depth with MAP Copy number calls overlaid
     ax = axes[0]
+    # First plot MAP copy number calls
+    for state in range(6):
+        mask = cn == state
+        if np.any(mask):
+            indices = np.where(mask)[0]
+            ax.plot(indices, cn[mask], 'o-', alpha=0.5, markersize=4, linewidth=1,
+                   label=f'CN={state}', color=colors[state])
+    # Then plot observed depth on top so it's visible
     ax.plot(x, observed, 'k-', linewidth=0.8, alpha=0.7, label='Observed')
-    ax.plot(x, obs_mean, 'b-', linewidth=1.5, label='Posterior mean')
-    ax.fill_between(x, obs_lower, obs_upper, alpha=0.2, color='blue', label='95% CI')
-    ax.set_ylabel('Normalized depth')
+    ax.set_ylabel('Normalized depth / CN')
     ax.set_title(f'Sample: {data.sample_ids[sample_idx]}')
     ax.legend(loc='upper right')
     ax.grid(True, axis='y', alpha=1, linestyle='-', linewidth=1)
@@ -934,54 +876,55 @@ def plot_combined_results(data: AneuploidyData, map_estimates: dict, cn_posterio
     ax.set_ylabel('CN Probability')
     ax.legend(loc='upper right', ncol=6)
     
-    # Plot 3: MAP Copy number calls
+    # Plot 3: Bin bias
     ax = axes[2]
-    for state in range(6):
-        mask = cn == state
-        if np.any(mask):
-            indices = np.where(mask)[0]
-            ax.plot(indices, cn[mask], 'o-', alpha=0.7, markersize=4, linewidth=1,
-                   label=f'CN={state}', color=colors[state])
-    ax.set_ylabel('Copy Number (MAP)')
-    ax.set_ylim(-0.5, 5.5)
-    ax.legend(loc='upper right', ncol=6)
-    
-    # Plot 4: Bin bias
-    ax = axes[3]
-    ax.errorbar(x, bin_bias, yerr=bin_bias_std, fmt='o-', alpha=0.5, markersize=3, linewidth=0.5, 
-                elinewidth=0.5, capsize=2, color='black', label='Bin bias ± std')
+    ax.plot(x, bin_bias, 'o-', alpha=0.5, markersize=3, linewidth=0.5, color='black', label='Bin bias')
     ax.axhline(1.0, color='red', linestyle='--', alpha=0.5, label='No bias')
     ax.set_ylabel('Bin bias')
     ax.legend(loc='upper right')
     
-    # Plot 5: Bin variance
-    ax = axes[4]
-    ax.errorbar(x, bin_var, yerr=bin_var_std, fmt='o-', alpha=0.5, markersize=3, linewidth=0.5,
-                elinewidth=0.5, capsize=2, color='purple', label='Bin variance ± std')
-    ax.set_ylabel('Bin variance')
-    ax.legend(loc='upper right')
-    
-    # Plot 6: Sample variance distribution
-    ax = axes[5]
-    ax.hist(sample_var_all, bins=30, alpha=0.7, edgecolor='black', linewidth=0.5, color='teal')
-    ax.axvline(sample_var_current, color='red', linestyle='--', linewidth=2, 
+    # Plot 4: Sample variance distribution
+    ax = axes[3]
+    ax.hist(np.log10(sample_var_all), bins=30, alpha=0.7, edgecolor='black', linewidth=0.5, color='teal')
+    ax.axvline(np.log10(sample_var_current), color='red', linestyle='--', linewidth=2, 
               label=f'This sample: {sample_var_current:.3f}')
-    ax.set_xlabel('Sample variance factor')
+    ax.set_xlabel('Log10 sample variance factor')
     ax.set_ylabel('Count')
     ax.set_title('Distribution of sample variance across all samples')
+    ax.set_yscale('log')
     ax.legend(loc='upper right')
     ax.grid(True, alpha=0.3)
     
-    # Add chromosome labels to first 5 panels
-    for ax in axes[:5]:
+    # Highlight aneuploid chromosomes in first 3 panels if applicable
+    if is_aneuploid and aneuploid_chrs:
+        # Extract chromosome names from aneuploid_chrs
+        aneuploid_chr_names = set([chr_name for chr_name, _, _ in aneuploid_chrs])
+        
+        # Find bin ranges for each aneuploid chromosome
+        for chr_name in aneuploid_chr_names:
+            chr_mask = data.chr == chr_name
+            chr_indices = np.where(chr_mask)[0]
+            
+            if len(chr_indices) > 0:
+                chr_start = chr_indices[0]
+                chr_end = chr_indices[-1]
+                
+                # Add red transparent box to first 3 panels
+                for ax in axes[:2]:
+                    y_min, y_max = ax.get_ylim()
+                    ax.axvspan(chr_start, chr_end, alpha=0.15, color='red', zorder=0)
+    
+    # Add chromosome labels to first 3 panels
+    for ax in axes[:3]:
         add_chromosome_labels(ax, data.chr)
     
     plt.tight_layout()
     sample_name = data.sample_ids[sample_idx].replace('/', '_').replace(' ', '_')
     aneu_suffix = '_ANEU' if is_aneuploid else ''
     filename = f'combined_results_{sample_name}{aneu_suffix}.png'
-    plt.savefig(filename, dpi=150, bbox_inches='tight')
-    print(f"Saved plot: {filename}")
+    output_path = os.path.join(output_dir, filename)
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    print(f"Saved plot: {output_path}")
     plt.close()
 
 
@@ -1036,104 +979,24 @@ def plot_map_estimates(data: AneuploidyData, map_estimates: dict, sample_idx: in
         add_chromosome_labels(ax, data.chr)
     
     plt.tight_layout()
-    plt.savefig(f'map_estimates_sample_{sample_idx}.png', dpi=150, bbox_inches='tight')
-    print(f"Saved plot: map_estimates_sample_{sample_idx}.png")
+    output_path = os.path.join(output_dir, f'map_estimates_sample_{sample_idx}.png')
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    print(f"Saved plot: {output_path}")
     plt.close()
 
 
-def plot_posterior_predictive(data: AneuploidyData, posterior_samples: dict):
+def plot_cn_posterior(data: AneuploidyData, cn_posterior: dict, sample_idx: int = 0):
     """
-    Plot posterior predictive distribution vs observed data across all samples and bins.
-    
-    Args:
-        data: AneuploidyData object
-        posterior_samples: Dictionary with posterior samples
-    """
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-    
-    # Plot 1: Observed vs predicted for all bins and samples
-    ax = axes[0]
-    observed = data.depth.cpu().numpy().flatten()  # All observations
-    predicted = posterior_samples['obs']  # (n_post_samples, n_bins, n_samples)
-    
-    # Compute mean and std across posterior samples for each bin/sample
-    pred_mean = predicted.mean(axis=0).flatten()
-    pred_std = predicted.std(axis=0).flatten()
-    
-    # Subsample for visualization if too many points
-    n_points = len(observed)
-    max_points = 10000
-    if n_points > max_points:
-        indices = np.random.choice(n_points, size=max_points, replace=False)
-        observed_plot = observed[indices]
-        pred_mean_plot = pred_mean[indices]
-        pred_std_plot = pred_std[indices]
-    else:
-        observed_plot = observed
-        pred_mean_plot = pred_mean
-        pred_std_plot = pred_std
-    
-    ax.errorbar(observed_plot, pred_mean_plot, yerr=pred_std_plot, fmt='o', alpha=0.3, markersize=2, elinewidth=0.5)
-    ax.plot([observed.min(), observed.max()], [observed.min(), observed.max()], 
-           'r--', label='Perfect prediction', linewidth=2)
-    ax.set_xlabel('Observed depth')
-    ax.set_ylabel('Predicted depth (mean ± std)')
-    ax.set_title(f'All samples and bins ({n_points} points)')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    
-    # Plot 2: Distribution of residuals (observed - predicted)
-    ax = axes[1]
-    residuals = observed - pred_mean
-    
-    ax.hist(residuals, bins=100, alpha=0.7, density=True, edgecolor='black', linewidth=0.5)
-    ax.axvline(0, color='red', linestyle='--', linewidth=2, label='Perfect prediction')
-    ax.set_xlabel('Residual (observed - predicted)')
-    ax.set_ylabel('Density')
-    ax.set_title(f'Residual distribution (mean={residuals.mean():.4f}, std={residuals.std():.4f})')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    
-    # Plot 3: 1D histogram comparing observed and predicted distributions
-    ax = axes[2]
-    ax.hist(observed, bins=100, alpha=0.5, density=True, label='Observed', 
-            edgecolor='black', linewidth=0.5, color='blue')
-    ax.hist(pred_mean, bins=100, alpha=0.5, density=True, label='Predicted', 
-            edgecolor='black', linewidth=0.5, color='orange')
-    ax.set_xlabel('Normalized depth')
-    ax.set_ylabel('Density')
-    ax.set_title('Distribution comparison')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig('posterior_predictive.png', dpi=150, bbox_inches='tight')
-    print("Saved plot: posterior_predictive.png")
-    plt.close()
-
-
-def plot_cn_posterior(data: AneuploidyData, cn_posterior: dict, posterior_samples: dict, sample_idx: int = 0):
-    """
-    Plot copy number posterior probabilities and mean posterior depth with confidence intervals.
+    Plot copy number posterior probabilities and observed depth.
     
     Args:
         data: AneuploidyData object
         cn_posterior: Dictionary with 'cn_posterior' key
-        posterior_samples: Dictionary with posterior predictive samples (must contain 'obs')
         sample_idx: Index of sample to plot
     """
     cn_probs = cn_posterior['cn_posterior'][:, sample_idx, :]  # (n_bins, n_states)
     
-    # Extract observed depth samples for this sample
-    # posterior_samples['obs'] shape: (n_samples, n_bins, n_samples_in_data)
-    obs_samples = posterior_samples['obs'][:, :, sample_idx]  # (n_samples, n_bins)
-    
-    # Compute mean and 95% CI
-    obs_mean = np.mean(obs_samples, axis=0)  # (n_bins,)
-    obs_lower = np.percentile(obs_samples, 2.5, axis=0)  # (n_bins,)
-    obs_upper = np.percentile(obs_samples, 97.5, axis=0)  # (n_bins,)
-    
-    # Get actual observed depth
+    # Get observed depth
     obs_actual = data.depth[:, sample_idx].cpu().numpy()  # (n_bins,)
     
     fig, axes = plt.subplots(2, 1, figsize=(14, 8))
@@ -1150,11 +1013,9 @@ def plot_cn_posterior(data: AneuploidyData, cn_posterior: dict, posterior_sample
     ax.legend(loc='upper right')
     ax.grid(True, alpha=0.3)
     
-    # Plot 2: Mean posterior depth with 95% CI
+    # Plot 2: Observed depth
     ax = axes[1]
-    ax.plot(x, obs_actual, 'k.', markersize=1, alpha=0.5, label='Observed')
-    ax.plot(x, obs_mean, 'b-', linewidth=1, label='Posterior mean')
-    ax.fill_between(x, obs_lower, obs_upper, alpha=0.3, color='blue', label='95% CI')
+    ax.plot(x, obs_actual, 'k-', linewidth=0.8, alpha=0.7, label='Observed')
     ax.set_ylabel('Normalized read depth')
     ax.legend()
     ax.grid(True, alpha=0.3)
@@ -1164,81 +1025,9 @@ def plot_cn_posterior(data: AneuploidyData, cn_posterior: dict, posterior_sample
         add_chromosome_labels(ax, data.chr)
     
     plt.tight_layout()
-    plt.savefig(f'cn_posterior_sample_{sample_idx}.png', dpi=150, bbox_inches='tight')
-    print(f"Saved plot: cn_posterior_sample_{sample_idx}.png")
-    plt.close()
-
-
-def plot_posterior_distributions(posterior_samples: dict):
-    """
-    Plot posterior distributions of all latent variables as histograms.
-    
-    Args:
-        posterior_samples: Dictionary with posterior samples from run_posterior_predictive()
-    """
-    # Latent variables to plot (exclude observed data and discrete cn)
-    latent_vars = ['bin_bias', 'sample_var', 'bin_var', 'cn_probs']
-    
-    # Filter to only include variables present in posterior_samples
-    latent_vars = [var for var in latent_vars if var in posterior_samples]
-    
-    n_vars = len(latent_vars)
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    axes = axes.flatten()
-    
-    for i, var_name in enumerate(latent_vars):
-        ax = axes[i]
-        samples = posterior_samples[var_name]
-        
-        # Debug: print shape
-        print(f"{var_name} shape: {samples.shape}")
-        
-        # Flatten all dimensions except the first (sample dimension)
-        # samples shape is typically (n_samples, ...), flatten the rest
-        samples_flat = samples.reshape(samples.shape[0], -1)
-        
-        # Plot histogram for a subset of parameters (avoid overcrowding)
-        n_params = samples_flat.shape[1]
-        
-        if var_name == 'cn_probs':
-            # For cn_probs, plot each copy number state separately
-            # Handle different possible shapes
-            if samples.ndim == 3 and samples.shape[-1] > 1:
-                # Shape is (n_samples, n_bins, n_states)
-                for state in range(min(6, samples.shape[-1])):
-                    state_samples = samples[:, :, state].flatten()
-                    ax.hist(state_samples, bins=50, alpha=0.5, label=f'CN={state}', density=True)
-                ax.set_title('CN Probabilities')
-                ax.legend()
-            else:
-                # Fallback: just plot all values
-                all_samples = samples_flat.flatten()
-                ax.hist(all_samples, bins=50, alpha=0.7, edgecolor='black', density=True)
-                ax.set_title(f'{var_name} (shape: {samples.shape})')
-        else:
-            # For other variables, plot distribution of all values
-            all_samples = samples_flat.flatten()
-            ax.hist(all_samples, bins=50, alpha=0.7, edgecolor='black', density=True)
-            ax.set_title(f'{var_name}')
-            
-            # Add summary statistics
-            mean_val = np.mean(all_samples)
-            median_val = np.median(all_samples)
-            ax.axvline(mean_val, color='red', linestyle='--', linewidth=2, label=f'Mean: {mean_val:.3f}')
-            ax.axvline(median_val, color='blue', linestyle='--', linewidth=2, label=f'Median: {median_val:.3f}')
-            ax.legend()
-        
-        ax.set_xlabel('Value')
-        ax.set_ylabel('Density')
-        ax.grid(True, alpha=0.3)
-    
-    # Hide any unused subplots
-    for i in range(n_vars, len(axes)):
-        axes[i].axis('off')
-    
-    plt.tight_layout()
-    plt.savefig('posterior_distributions.png', dpi=150, bbox_inches='tight')
-    print("Saved plot: posterior_distributions.png")
+    output_path = os.path.join(output_dir, f'cn_posterior_sample_{sample_idx}.png')
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    print(f"Saved plot: {output_path}")
     plt.close()
 
 
@@ -1361,7 +1150,6 @@ def summary_statistics(data: AneuploidyData, map_estimates: dict, cn_posterior: 
         # Get CN and mean probability for both sex chromosomes
         chrX_cn, chrX_mean_prob, chrX_bins = get_chr_info('chrX', sample_idx)
         chrY_cn, chrY_mean_prob, chrY_bins = get_chr_info('chrY', sample_idx)
-        print("sample_name:", sample_name, "chrX_cn:", chrX_cn, "chrY_cn:", chrY_cn, "chrX_mean_prob:", chrX_mean_prob, "chrY_mean_prob:", chrY_mean_prob)
         
         # Skip if both chromosomes are missing
         if chrX_cn is None and chrY_cn is None:
@@ -1412,10 +1200,7 @@ def summary_statistics(data: AneuploidyData, map_estimates: dict, cn_posterior: 
     for sample_idx in range(data.n_samples):
         sample_name = data.sample_ids[sample_idx]
         aneuploid_chrs = aneuploid_samples[sample_idx]
-        
-        if len(aneuploid_chrs) == 0:
-            print(f"\n{sample_name}: EUPLOID (no chromosomal aneuploidies detected)")
-        else:
+        if len(aneuploid_chrs) > 1:
             print(f"\n{sample_name}: ANEUPLOID ({len(aneuploid_chrs)} chromosome(s))")
             for chr_name, cn, mean_prob in aneuploid_chrs:
                 print(f"  - {chr_name}: CN≈{cn} (P(CN={cn})={mean_prob:.2f})")
@@ -1441,11 +1226,11 @@ data = AneuploidyData(df_subset, device=device, dtype=dtype)
 # Initialize model
 model = AneuploidyModel(
     n_states=4,           # CN states: 0, 1, 2, 3
-    alpha_ref=10.0,       # Strong prior on CN=2
+    alpha_ref=1.0,       # Strong prior on CN=2; 100 for autosome, 1 for allosome
     alpha_non_ref=1.0,    # Weak prior on other states
-    var_bias_bin=0.1,     # Moderate bin-to-bin bias variation
-    var_sample=0.1,       # Moderate sample variance
-    var_bin=0.1,          # Moderate bin variance
+    var_bias_bin=0.01,     # Moderate bin-to-bin bias variation
+    var_sample=0.01,       # Moderate sample variance
+    var_bin=0.01,          # Moderate bin variance
     device=device,
     dtype=dtype
 )
@@ -1477,11 +1262,9 @@ plot_training_loss(model)
 # Get MAP estimates
 map_estimates = model.get_map_estimates(data)
 
-# Run posterior predictive sampling
-posterior_samples = model.run_posterior_predictive(data, n_samples=100)
-
 # Run discrete inference to get CN posterior probabilities
 cn_posterior = model.run_discrete_inference(data, n_samples=1000, log_freq=100)
+print("cn_posterior keys:", cn_posterior.keys())
 
 # Print summary statistics and get per-chromosome aneuploidy calls
 aneuploid_chromosomes = summary_statistics(data, map_estimates, cn_posterior)
@@ -1508,7 +1291,7 @@ print(f"\nGenerating plots for {n_normal_to_plot} normal samples...")
 for i, sample_idx in enumerate(normal_samples[:n_normal_to_plot]):
     sample_name = data.sample_ids[sample_idx]
     print(f"  {i+1}/{n_normal_to_plot}: {sample_name} (sample_idx={sample_idx})")
-    plot_combined_results(data, map_estimates, cn_posterior, posterior_samples, sample_idx=sample_idx, is_aneuploid=False)
+    plot_combined_results(data, map_estimates, cn_posterior, sample_idx=sample_idx, is_aneuploid=False, aneuploid_chrs=None)
 
 # Generate combined plots for up to 10 aneuploid samples
 n_aneuploid_to_plot = min(10, len(aneuploid_samples_list))
@@ -1518,14 +1301,9 @@ for i, sample_idx in enumerate(aneuploid_samples_list[:n_aneuploid_to_plot]):
     aneuploid_chrs = aneuploid_chromosomes[sample_idx]
     chr_list = ', '.join([f"{chr_name}(CN={cn})" for chr_name, cn, _ in aneuploid_chrs])
     print(f"  {i+1}/{n_aneuploid_to_plot}: {sample_name} (sample_idx={sample_idx}) - {chr_list}")
-    plot_combined_results(data, map_estimates, cn_posterior, posterior_samples, sample_idx=sample_idx, is_aneuploid=True)
+    plot_combined_results(data, map_estimates, cn_posterior, sample_idx=sample_idx, is_aneuploid=True, aneuploid_chrs=aneuploid_chrs)
 
 print(f"{'='*80}\n")
-
-# Plot posterior predictive vs observed
-plot_posterior_predictive(data, posterior_samples)
-
-plot_posterior_distributions(posterior_samples)
 
 # Create results dataframe with copy number calls and probabilities
 results = []
@@ -1558,7 +1336,7 @@ print(f"Results dataframe shape: {results_df.shape}")
 print(results_df.head(20))
 
 # Save results to TSV
-output_file = 'aneuploidy_results.tsv'
+output_file = os.path.join(output_dir, 'aneuploidy_results.tsv')
 results_df.to_csv(output_file, sep='\t', index=False)
 print(f"Results saved to {output_file}")
 
@@ -1589,7 +1367,7 @@ for sample_idx, aneuploid_chrs in aneuploid_chromosomes.items():
 if chromosome_aneuploidies:
     aneuploidy_df = pd.DataFrame(chromosome_aneuploidies)
     aneuploidy_df = aneuploidy_df.sort_values(['sample', 'chromosome'])
-    aneuploidy_output = 'high_confidence_aneuploidies.tsv'
+    aneuploidy_output = os.path.join(output_dir, 'high_confidence_aneuploidies.tsv')
     aneuploidy_df.to_csv(aneuploidy_output, sep='\t', index=False)
     print(f"High-confidence aneuploidy calls saved to {aneuploidy_output}")
     print(f"Total chromosomal aneuploidies: {len(aneuploidy_df)}")
