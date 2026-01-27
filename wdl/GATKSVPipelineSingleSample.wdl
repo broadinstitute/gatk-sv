@@ -1120,8 +1120,6 @@ workflow GATKSVPipelineSingleSample {
 
   call makecohortvcf.MakeCohortVcf {
     input:
-      raw_sr_bothside_pass_files=[GenotypeBatch.sr_bothside_pass],
-      raw_sr_background_fail_files=[GenotypeBatch.sr_background_fail],
       min_sr_background_fail_batches=clean_vcf_min_sr_background_fail_batches,
       ped_file=combined_ped_file,
       pesr_vcfs=[ConvertCNVsWithoutDepthSupportToBNDs.out_vcf],
@@ -1154,7 +1152,7 @@ workflow GATKSVPipelineSingleSample {
 
       rf_cutoff_files=[cutoffs],
       batches=[batch],
-      depth_gt_rd_sep_files=[genotype_depth_depth_sepcutoff],
+      genotyping_rd_tables=[genotyping_rd_table],
       median_coverage_files=[GatherBatchEvidence.median_cov],
 
       max_shard_size_resolve=max_shard_size_resolve,
@@ -1177,8 +1175,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_breakpoint_overlap_filter=runtime_override_breakpoint_overlap_filter,
       runtime_override_clean_background_fail=runtime_override_clean_background_fail,
       runtime_attr_create_ploidy=runtime_attr_create_ploidy,
-      runtime_attr_reformat_1=runtime_attr_reformat_1,
-      runtime_attr_reformat_2=runtime_attr_reformat_2,
       runtime_attr_join_vcfs=runtime_attr_join_vcfs,
       runtime_attr_cluster_sites=runtime_attr_cluster_sites,
       runtime_attr_recluster_part1=runtime_attr_recluster_part1,
@@ -1186,7 +1182,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_get_non_ref_vids=runtime_attr_get_non_ref_vids,
       runtime_attr_calculate_support_frac=runtime_attr_calculate_support_frac,
       runtime_attr_gatk_to_svtk_vcf=runtime_attr_gatk_to_svtk_vcf,
-      runtime_attr_extract_vids=runtime_attr_extract_vids,
       runtime_override_concat_combine_batches=runtime_override_concat_combine_batches,
       runtime_override_update_sr_list_pass=runtime_override_update_sr_list_pass,
       runtime_override_update_sr_list_fail=runtime_override_update_sr_list_fail,

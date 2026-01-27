@@ -245,6 +245,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_gatk_genotype
       tags:
         - /.*/
 

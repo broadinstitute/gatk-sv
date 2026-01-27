@@ -23,14 +23,11 @@ workflow MakeCohortVcf {
     Array[File] disc_files
     Array[File] bincov_files
 
-    Array[File] raw_sr_bothside_pass_files
-    Array[File] raw_sr_background_fail_files
-    Array[File] depth_gt_rd_sep_files
+    Array[File] genotyping_rd_tables
     Array[File] median_coverage_files
     Array[File] rf_cutoff_files
 
     # CombineBatches parameters
-    Boolean? legacy_vcfs
     File clustering_config_part1
     File stratification_config_part1
     File clustering_config_part2
@@ -91,8 +88,6 @@ workflow MakeCohortVcf {
 
     # overrides for CombineBatches
     RuntimeAttr? runtime_attr_create_ploidy
-    RuntimeAttr? runtime_attr_reformat_1
-    RuntimeAttr? runtime_attr_reformat_2
     RuntimeAttr? runtime_attr_join_vcfs
     RuntimeAttr? runtime_attr_cluster_sites
     RuntimeAttr? runtime_attr_recluster_part1
@@ -101,7 +96,8 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_attr_calculate_support_frac
     RuntimeAttr? runtime_override_clean_background_fail
     RuntimeAttr? runtime_attr_gatk_to_svtk_vcf
-    RuntimeAttr? runtime_attr_extract_vids
+    RuntimeAttr? runtime_attr_extract_vids_1
+    RuntimeAttr? runtime_attr_extract_vids_2
     RuntimeAttr? runtime_override_concat_combine_batches
 
     # overrides for ResolveComplexVariants
@@ -211,9 +207,6 @@ workflow MakeCohortVcf {
       ped_file=ped_file,
       pesr_vcfs=pesr_vcfs,
       depth_vcfs=depth_vcfs,
-      legacy_vcfs=legacy_vcfs,
-      raw_sr_bothside_pass_files=raw_sr_bothside_pass_files,
-      raw_sr_background_fail_files=raw_sr_background_fail_files,
       contig_list=contig_list,
       min_sr_background_fail_batches=min_sr_background_fail_batches,
       clustering_config_part1=clustering_config_part1,
@@ -232,8 +225,6 @@ workflow MakeCohortVcf {
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_create_ploidy=runtime_attr_create_ploidy,
-      runtime_attr_reformat_1=runtime_attr_reformat_1,
-      runtime_attr_reformat_2=runtime_attr_reformat_2,
       runtime_attr_join_vcfs=runtime_attr_join_vcfs,
       runtime_attr_cluster_sites=runtime_attr_cluster_sites,
       runtime_attr_recluster_part1=runtime_attr_recluster_part1,
@@ -242,7 +233,8 @@ workflow MakeCohortVcf {
       runtime_attr_calculate_support_frac=runtime_attr_calculate_support_frac,
       runtime_override_clean_background_fail=runtime_override_clean_background_fail,
       runtime_attr_gatk_to_svtk_vcf=runtime_attr_gatk_to_svtk_vcf,
-      runtime_attr_extract_vids=runtime_attr_extract_vids,
+      runtime_attr_extract_vids_1=runtime_attr_extract_vids_1,
+      runtime_attr_extract_vids_2=runtime_attr_extract_vids_2,
       runtime_override_concat=runtime_override_concat_combine_batches
   }
 
@@ -306,7 +298,7 @@ workflow MakeCohortVcf {
       depth_vcfs=depth_vcfs,
       ped_file=ped_file,
       bincov_files=bincov_files,
-      depth_gt_rd_sep_files=depth_gt_rd_sep_files,
+      genotyping_rd_tables=genotyping_rd_tables,
       median_coverage_files=median_coverage_files,
       bin_exclude=bin_exclude,
       contig_list=contig_list,

@@ -1548,9 +1548,9 @@
     "filtered_pesr_vcf": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/dcdf33f6-3448-4aa6-af5f-f7159d6adcfd/FilterBatchSamples/f48a1403-c817-47ee-9411-98e4724177ab/call-MergePesrVcfs/all_samples.filtered_pesr_merged.vcf.gz",
     "filtered_pesr_vcf_index": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/dcdf33f6-3448-4aa6-af5f-f7159d6adcfd/FilterBatchSamples/f48a1403-c817-47ee-9411-98e4724177ab/call-MergePesrVcfs/all_samples.filtered_pesr_merged.vcf.gz.tbi",
     "final_sample_list": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/dcdf33f6-3448-4aa6-af5f-f7159d6adcfd/FilterBatchSamples/f48a1403-c817-47ee-9411-98e4724177ab/call-FilterSampleList/all_samples.outliers_excluded.samples.list",
-    "genotyping_rd_table": "TODO",
-    "genotyping_pe_table": "TODO",
-    "genotyping_sr_table": "TODO",
+    "genotyping_rd_table": "//gatk-sv-ref-panel-1kg-v1-1/mw-gatk-genotype/all_samples.rd_geno_params.tsv",
+    "genotyping_pe_table": "gs://gatk-sv-ref-panel-1kg-v1-1/mw-gatk-genotype/all_samples.pe_geno_params.tsv",
+    "genotyping_sr_table": "//gatk-sv-ref-panel-1kg-v1-1/mw-gatk-genotype/all_samples.sr_geno_params.tsv",
     "gcnv_model_tars": [
         "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/f7fec70e-f614-41d1-abd5-deeb21e323a7/TrainGCNV/f0a64fc8-c42c-4406-9970-2fdfe8aba41e/call-CNVGermlineCohortWorkflow/CNVGermlineCohortWorkflow/42f6613f-559c-447b-8257-28f49a24894d/call-GermlineCNVCallerCohortMode/shard-0/all_samples-gcnv-model-shard-0.tar.gz",
         "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/f7fec70e-f614-41d1-abd5-deeb21e323a7/TrainGCNV/f0a64fc8-c42c-4406-9970-2fdfe8aba41e/call-CNVGermlineCohortWorkflow/CNVGermlineCohortWorkflow/42f6613f-559c-447b-8257-28f49a24894d/call-GermlineCNVCallerCohortMode/shard-1/all_samples-gcnv-model-shard-1.tar.gz",
@@ -2168,8 +2168,8 @@
         "gs://gatk-sv-ref-panel-1kg-v1-0-1/submissions/31b0ed60-91de-46ba-aa82-d267df9d6748/GatherSampleEvidence/18333e84-e98d-4519-9f7e-ec0f8d5ff7e5/call-Manta/Manta/04d152cc-b73a-4d8f-b5a7-d180c8141635/call-RunManta/NA21133.manta.vcf.gz.tbi"
     ],
     "medianfile": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/f23790d5-6237-41ce-bac1-5a39d4dcbafc/GatherBatchEvidence/9f88923c-dc89-41fe-80a5-3b135903d117/call-MedianCov/MedianCov/17f56ef7-3be3-4f6a-b78d-bd8dfa5f4c21/call-CalcMedCov/cacheCopy/all_samples_medianCov.transposed.bed",
-    "merge_batch_sites_vcf": "TODO",
-    "merge_batch_sites_vcf_index": "TODO",
+    "merge_batch_sites_vcf": "gs://gatk-sv-ref-panel-1kg-v1-1/mw-gatk-genotype/all_batches.merge_batch_sites.vcf.gz",
+    "merge_batch_sites_vcf_index": "gs://gatk-sv-ref-panel-1kg-v1-1/mw-gatk-genotype/all_batches.merge_batch_sites.vcf.gz.tbi",
     "merged_baf_file": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/f23790d5-6237-41ce-bac1-5a39d4dcbafc/GatherBatchEvidence/9f88923c-dc89-41fe-80a5-3b135903d117/call-BatchEvidenceMerging/BatchEvidenceMerging/2d12afe9-16a6-4cc0-9754-bec899da4a4a/call-SDtoBAF/cacheCopy/all_samples.baf.txt.gz",
     "merged_baf_file_index": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/f23790d5-6237-41ce-bac1-5a39d4dcbafc/GatherBatchEvidence/9f88923c-dc89-41fe-80a5-3b135903d117/call-BatchEvidenceMerging/BatchEvidenceMerging/2d12afe9-16a6-4cc0-9754-bec899da4a4a/call-SDtoBAF/cacheCopy/all_samples.baf.txt.gz.tbi",
     "merged_rd_file": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/f23790d5-6237-41ce-bac1-5a39d4dcbafc/GatherBatchEvidence/9f88923c-dc89-41fe-80a5-3b135903d117/call-MakeBincovMatrix/MakeBincovMatrix/e4ac72b6-d9f8-43c6-b907-0a7aa60b9e7b/call-ZPaste/all_samples.RD.txt.gz",
