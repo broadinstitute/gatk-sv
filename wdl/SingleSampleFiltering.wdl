@@ -492,15 +492,14 @@ task RewriteSRCoords {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File annotated_vcf = "${prefix}.corrected_coords.vcf.gz"
+    File out = "${prefix}.corrected_coords.vcf.gz"
+    File out_index = "${prefix}.corrected_coords.vcf.gz.tbi"
   }
   command <<<
-
     set -euo pipefail
-
     /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py ~{vcf} ~{metrics} ~{cutoffs} stdout \
       | bcftools sort -Oz -o ~{prefix}.corrected_coords.vcf.gz
-
+    tabix ~{prefix}.corrected_coords.vcf.gz
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
