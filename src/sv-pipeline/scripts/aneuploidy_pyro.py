@@ -1,0 +1,1597 @@
+#!/bin/python
+
+import json
+import glob
+import os
+import pysam
+import numpy as np
+import pandas as pd
+from pathlib import Path
+
+
+def get_files(pattern):
+    files = glob.glob(pattern, recursive=True)
+    
+    print(f"Found {len(files)} files matching pattern: {pattern}")
+    
+    # Load first file to establish the base dataframe
+    df_merged = None
+    
+    # Track successful and failed files
+    successful_files = []
+    failed_files = []
+    
+    # Load each file
+    for file_path in files:
+        print(f"Loading: {file_path}")
+        try:
+            # Read gzipped TSV file
+            df_file = pd.read_csv(file_path, sep='\t', compression='gzip')
+            
+            # Get source file identifier
+            source_file = str(Path(file_path).parent.parent.name)
+            
+            # Rename chromosome column if it exists
+            if '#Chr' in df_file.columns:
+                df_file['Chr'] = df_file['#Chr']
+                df_file = df_file.drop('#Chr', axis=1)
+            
+            # Create bin identifier
+            df_file['Bin'] = df_file['Chr'].astype(str) + ':' + df_file['Start'].astype(str) + '-' + df_file['End'].astype(str)
+            df_file = df_file.set_index('Bin')
+            
+            # Get sample columns (exclude metadata)
+            metadata_cols = ['Chr', 'Start', 'End']
+            sample_cols = [col for col in df_file.columns if col not in metadata_cols]
+            
+            if df_merged is None:
+                # First file: keep metadata + samples
+                df_merged = df_file.copy()
+                df_merged['source_file'] = source_file
+                print(f"  Initialized with {len(df_merged)} bins and {len(sample_cols)} samples")
+            else:
+                # Subsequent files: merge sample columns only
+                # Keep only sample columns from this file
+                df_samples = df_file[sample_cols].copy()
+                
+                # Check for duplicate sample columns and drop them
+                existing_sample_cols = [col for col in df_merged.columns if col not in ['Chr', 'Start', 'End', 'source_file']]
+                duplicate_samples = [col for col in sample_cols if col in existing_sample_cols]
+                
+                if duplicate_samples:
+                    print(f"  WARNING: Found {len(duplicate_samples)} duplicate sample(s) in {file_path}")
+                    print(f"  Dropping duplicate samples: {duplicate_samples[:5]}{'...' if len(duplicate_samples) > 5 else ''}")
+                    df_samples = df_samples.drop(columns=duplicate_samples)
+                    sample_cols = [col for col in sample_cols if col not in duplicate_samples]
+                
+                # Skip this file if no new samples remain after dropping duplicates
+                if len(sample_cols) == 0:
+                    print(f"  Skipping file - all samples already exist in merged dataframe")
+                    continue
+                
+                # Validate that bins match before merging
+                existing_bins = set(df_merged.index)
+                new_bins = set(df_samples.index)
+                
+                if existing_bins != new_bins:
+                    # Bins don't match - try coordinate adjustments before failing
+                    print(f"\n  WARNING: Bin mismatch detected for {file_path}")
+                    print(f"  Attempting coordinate adjustment...")
+                    
+                    # Try adding 1 to coordinates
+                    df_file_adjusted = df_file.copy()
+                    df_file_adjusted['Start'] = df_file_adjusted['Start'] + 1
+                    df_file_adjusted['End'] = df_file_adjusted['End'] + 1
+                    df_file_adjusted['Bin'] = (df_file_adjusted['Chr'].astype(str) + ':' + 
+                                               df_file_adjusted['Start'].astype(str) + '-' + 
+                                               df_file_adjusted['End'].astype(str))
+                    df_file_adjusted = df_file_adjusted.set_index('Bin')
+                    df_samples_adjusted = df_file_adjusted[sample_cols].copy()
+                    new_bins_adjusted = set(df_samples_adjusted.index)
+                    
+                    if existing_bins == new_bins_adjusted:
+                        print(f"  ✓ Success: Coordinates adjusted by +1")
+                        df_samples = df_samples_adjusted
+                    else:
+                        # Try subtracting 1 instead
+                        df_file_adjusted = df_file.copy()
+                        df_file_adjusted['Start'] = df_file_adjusted['Start'] - 1
+                        df_file_adjusted['End'] = df_file_adjusted['End'] - 1
+                        df_file_adjusted['Bin'] = (df_file_adjusted['Chr'].astype(str) + ':' + 
+                                                   df_file_adjusted['Start'].astype(str) + '-' + 
+                                                   df_file_adjusted['End'].astype(str))
+                        df_file_adjusted = df_file_adjusted.set_index('Bin')
+                        df_samples_adjusted = df_file_adjusted[sample_cols].copy()
+                        new_bins_adjusted = set(df_samples_adjusted.index)
+                        
+                        if existing_bins == new_bins_adjusted:
+                            print(f"  ✓ Success: Coordinates adjusted by -1")
+                            df_samples = df_samples_adjusted
+                        else:
+                            # Neither adjustment worked - show error and raise
+                            only_in_existing = existing_bins - new_bins
+                            only_in_new = new_bins - existing_bins
+                            
+                            print("\n" + "="*80)
+                            print("ERROR: Bin mismatch detected!")
+                            print("="*80)
+                            print(f"\nFile: {file_path}")
+                            print(f"Existing dataframe has {len(existing_bins)} bins")
+                            print(f"New file has {len(new_bins)} bins")
+                            print(f"Bins only in existing: {len(only_in_existing)}")
+                            print(f"Bins only in new file: {len(only_in_new)}")
+                            
+                            if only_in_existing:
+                                print(f"\nExample bins only in existing dataframe (first 5):")
+                                for bin_id in list(only_in_existing)[:5]:
+                                    print(f"  {bin_id}")
+                            
+                            if only_in_new:
+                                print(f"\nExample bins only in new file (first 5):")
+                                for bin_id in list(only_in_new)[:5]:
+                                    print(f"  {bin_id}")
+                            
+                            raise ValueError(
+                                f"Bin mismatch: Cannot merge {file_path} because bins don't align. "
+                                f"Expected {len(existing_bins)} bins, found {len(new_bins)} bins. "
+                                f"Coordinate adjustments (±1) did not resolve the mismatch."
+                            )
+                
+                # Merge with existing dataframe
+                df_merged = df_merged.join(df_samples, how='outer')
+                print(f"  Merged {len(sample_cols)} samples, total bins: {len(df_merged)}")
+            
+            # Mark as successful if we got here
+            successful_files.append(file_path)
+                
+        except Exception as e:
+            print(f"Error loading {file_path}: {e}")
+            failed_files.append((file_path, str(e)))
+    
+    if df_merged is not None:
+        # Remove duplicate bins (keep first occurrence)
+        df_merged = df_merged[~df_merged.index.duplicated(keep='first')]
+        
+        print(f"\nCombined dataframe shape: {df_merged.shape}")
+        print(f"Total bins: {len(df_merged)}")
+        print(f"Total columns: {len(df_merged.columns)}")
+        
+        # Count sample columns
+        metadata_cols = ['Chr', 'Start', 'End', 'source_file']
+        sample_count = len([col for col in df_merged.columns if col not in metadata_cols])
+        print(f"Sample columns: {sample_count}")
+    else:
+        print("No files were successfully loaded")
+        df_merged = pd.DataFrame()
+    
+    # Print consolidated file loading summary
+    print("\n" + "="*80)
+    print("FILE LOADING SUMMARY")
+    print("="*80)
+    print(f"Total files found: {len(files)}")
+    print(f"Successfully loaded: {len(successful_files)}")
+    print(f"Failed to load: {len(failed_files)}")
+    
+    if failed_files:
+        print("\nFailed files:")
+        for file_path, error in failed_files:
+            print(f"  - {file_path}")
+            print(f"    Error: {error}")
+    print("="*80 + "\n")
+    
+    return df_merged
+
+
+def filter_low_quality_bins(df: pd.DataFrame,
+                           autosome_median_min: float = 1.5,
+                           autosome_median_max: float = 2.5,
+                           autosome_mad_max: float = 0.5,
+                           chrX_median_min: float = 0.75,
+                           chrX_median_max: float = 2.5,
+                           chrX_mad_max: float = 0.5,
+                           chrY_median_min: float = 0.0,
+                           chrY_median_max: float = 2.0,
+                           chrY_mad_max: float = 0.5):
+    """
+    Filter out low quality bins based on median and MAD thresholds.
+    
+    Args:
+        df: DataFrame with bins as rows and samples as columns
+        autosome_median_min: Minimum median depth for autosomal bins
+        autosome_median_max: Maximum median depth for autosomal bins
+        autosome_mad_max: Maximum MAD for autosomal bins
+        chrX_median_min: Minimum median depth for chrX bins
+        chrX_median_max: Maximum median depth for chrX bins
+        chrX_mad_max: Maximum MAD for chrX bins
+        chrY_median_min: Minimum median depth for chrY bins
+        chrY_median_max: Maximum median depth for chrY bins
+        chrY_mad_max: Maximum MAD for chrY bins
+        
+    Returns:
+        Filtered DataFrame
+    """
+    # Get sample columns (exclude metadata)
+    metadata_cols = ['Chr', 'Start', 'End', 'source_file']
+    sample_cols = [col for col in df.columns if col not in metadata_cols]
+    
+    # Compute median and MAD for each bin across samples
+    depths = df[sample_cols].values
+    medians = np.median(depths, axis=1)
+    mads = np.median(np.abs(depths - medians[:, np.newaxis]), axis=1)
+    
+    print(f"\n{'='*80}")
+    print("FILTERING LOW QUALITY BINS")
+    print(f"{'='*80}")
+    print(f"Starting bins: {len(df)}")
+    
+    # Create filter masks for each chromosome type
+    autosome_mask = ~df['Chr'].isin(['chrX', 'chrY'])
+    chrX_mask = df['Chr'] == 'chrX'
+    chrY_mask = df['Chr'] == 'chrY'
+    
+    # Initialize keep mask (all True)
+    keep_mask = np.ones(len(df), dtype=bool)
+    
+    # Filter autosomes
+    if autosome_mask.any():
+        autosome_keep = (
+            (medians >= autosome_median_min) &
+            (medians <= autosome_median_max) &
+            (mads <= autosome_mad_max)
+        )
+        autosome_filtered = autosome_mask & ~autosome_keep
+        keep_mask[autosome_mask] = autosome_keep[autosome_mask]
+        print(f"\nAutosomes:")
+        print(f"  Thresholds: median [{autosome_median_min}, {autosome_median_max}], MAD <= {autosome_mad_max}")
+        print(f"  Bins before: {autosome_mask.sum()}")
+        print(f"  Bins filtered: {autosome_filtered.sum()}")
+        print(f"  Bins after: {(autosome_mask & keep_mask).sum()}")
+    
+    # Filter chrX
+    if chrX_mask.any():
+        chrX_keep = (
+            (medians >= chrX_median_min) &
+            (medians <= chrX_median_max) &
+            (mads <= chrX_mad_max)
+        )
+        chrX_filtered = chrX_mask & ~chrX_keep
+        keep_mask[chrX_mask] = chrX_keep[chrX_mask]
+        print(f"\nchrX:")
+        print(f"  Thresholds: median [{chrX_median_min}, {chrX_median_max}], MAD <= {chrX_mad_max}")
+        print(f"  Bins before: {chrX_mask.sum()}")
+        print(f"  Bins filtered: {chrX_filtered.sum()}")
+        print(f"  Bins after: {(chrX_mask & keep_mask).sum()}")
+    
+    # Filter chrY
+    if chrY_mask.any():
+        chrY_keep = (
+            (medians >= chrY_median_min) &
+            (medians <= chrY_median_max) &
+            (mads <= chrY_mad_max)
+        )
+        chrY_filtered = chrY_mask & ~chrY_keep
+        keep_mask[chrY_mask] = chrY_keep[chrY_mask]
+        print(f"\nchrY:")
+        print(f"  Thresholds: median [{chrY_median_min}, {chrY_median_max}], MAD <= {chrY_mad_max}")
+        print(f"  Bins before: {chrY_mask.sum()}")
+        print(f"  Bins filtered: {chrY_filtered.sum()}")
+        print(f"  Bins after: {(chrY_mask & keep_mask).sum()}")
+    
+    # Apply filter
+    df_filtered = df[keep_mask].copy()
+    
+    print(f"\nTotal bins after filtering: {len(df_filtered)}")
+    print(f"Total bins removed: {len(df) - len(df_filtered)}")
+    print(f"{'='*80}\n")
+    
+    return df_filtered
+
+# Find all matching files
+bins_pattern = "/Users/markw/Work/talkowski/sv-pipe-testing/mw_ploidy/cmg/data/m2_batch28_ploidy_plots/ploidy_est/binwise_estimated_copy_numbers.bed.gz"
+
+df = get_files(bins_pattern)
+# TODO filter bins
+#df = df[df['Chr'] == 'chrY']
+#df = df[df['Chr'].isin({'chrX', 'chrY', 'chr21', 'chr13', 'chr19'})]
+#df = df.loc[:, ['Chr', 'Start', 'End', 'source_file', '__wea_3054077_d1__a36154'] + [x for x in df.columns[2:32].values.tolist() if x != '__wea_3054077_d1__a36154']]
+
+# Filter low quality bins
+df = filter_low_quality_bins(df,
+                             autosome_median_min=1.75,
+                             autosome_median_max=2.25,
+                             autosome_mad_max=0.5,
+                             chrX_median_min=0.75,
+                             chrX_median_max=2.25,
+                             chrX_mad_max=0.5,
+                             chrY_median_min=0.0,
+                             chrY_median_max=1.25,
+                             chrY_mad_max=0.5)
+
+print(df)
+
+import torch
+import pyro
+import pyro.distributions as dist
+from pyro import poutine
+from pyro.ops.indexing import Vindex
+from pyro.infer import config_enumerate, infer_discrete
+from pyro.infer.predictive import Predictive
+from pyro.infer.autoguide import AutoDiagonalNormal
+from pyro.infer import JitTraceEnum_ELBO, TraceEnum_ELBO
+from pyro.infer.svi import SVI
+from pyro.infer import MCMC, NUTS, HMC
+import matplotlib.pyplot as plt
+import seaborn as sns
+from tqdm import tqdm
+
+# Set up Pyro
+pyro.enable_validation(True)
+pyro.distributions.enable_validation(True)
+pyro.set_rng_seed(42)
+torch.manual_seed(42)
+np.random.seed(42)
+
+class AneuploidyData:
+    """Data container for aneuploidy detection model"""
+    def __init__(self, df: pd.DataFrame, device: str = 'cpu', dtype: torch.dtype = torch.float32,
+                 subsample_bins: int = None, subsample_samples: int = None, seed: int = 42,
+                 clamp_threshold: float = 5.0):
+        """
+        Args:
+            df: DataFrame with bins as rows and samples as columns
+            device: torch device
+            dtype: torch data type
+            subsample_bins: If specified, randomly subsample this many bins
+            subsample_samples: If specified, randomly subsample this many samples
+            seed: Random seed for subsampling
+            clamp_threshold: Maximum value for depth; values above this are clamped
+        """
+        # Store original dataframe
+        self.original_df = df
+        
+        # Get sample columns (exclude metadata)
+        metadata_cols = ['Chr', 'Start', 'End', 'source_file']
+        sample_cols = [col for col in df.columns if col not in metadata_cols]
+        
+        # Subsample if requested
+        if subsample_bins is not None or subsample_samples is not None:
+            np.random.seed(seed)
+            
+            # Subsample bins (rows)
+            if subsample_bins is not None and subsample_bins < len(df):
+                print(f"Subsampling {subsample_bins} bins from {len(df)} total bins")
+                bin_indices = np.random.choice(len(df), size=subsample_bins, replace=False)
+                bin_indices = np.sort(bin_indices)  # Keep sorted for interpretability
+                df = df.iloc[bin_indices].copy()
+            
+            # Subsample samples (columns)
+            if subsample_samples is not None and subsample_samples < len(sample_cols):
+                print(f"Subsampling {subsample_samples} samples from {len(sample_cols)} total samples")
+                sample_indices = np.random.choice(len(sample_cols), size=subsample_samples, replace=False)
+                selected_samples = [sample_cols[i] for i in sample_indices]
+                sample_cols = selected_samples
+        
+        # Extract metadata
+        self.chr = df['Chr'].values
+        self.start = df['Start'].values
+        self.end = df['End'].values
+        self.sample_ids = sample_cols
+        
+        # Extract normalized read depth matrix (bins x samples)
+        depth_matrix = df[sample_cols].values
+        
+        # Clamp values above threshold
+        if clamp_threshold is not None:
+            n_clamped = np.sum(depth_matrix > clamp_threshold)
+            if n_clamped > 0:
+                print(f"Clamping {n_clamped} values above threshold {clamp_threshold}")
+                depth_matrix = np.clip(depth_matrix, None, clamp_threshold)
+        
+        # Convert to torch tensors
+        self.depth = torch.tensor(depth_matrix, dtype=dtype, device=device)
+        self.n_bins = self.depth.shape[0]
+        self.n_samples = self.depth.shape[1]
+        
+        print(f"Loaded data: {self.n_bins} bins x {self.n_samples} samples")
+        print(f"Depth range: [{self.depth.min():.3f}, {self.depth.max():.3f}]")
+        print(f"Depth mean: {self.depth.mean():.3f}, median: {self.depth.median():.3f}")
+
+class AneuploidyModel:
+    """
+    Hierarchical Bayesian model for aneuploidy detection from normalized read depth.
+    
+    Model structure:
+    - Copy number (CN): discrete latent variable [0,1,2,3,4,5] with prior favoring CN=2
+    - Per-bin mean bias: modulates expected depth at each bin
+    - Per-sample variance: controls noise in each sample
+    - Per-bin variance: controls noise at each bin
+    - Observed depth ~ Normal(CN * sample_mean * bin_bias, variance)
+    """
+    
+    def __init__(self,
+                 n_states: int = 6,
+                 alpha_ref: float = 50.0,
+                 alpha_non_ref: float = 1.0,
+                 var_bias_bin: float = 0.1,
+                 var_sample: float = 0.2,
+                 var_bin: float = 0.2,
+                 device: str = 'cpu',
+                 dtype: torch.dtype = torch.float32,
+                 debug: bool = False):
+        """
+        Args:
+            n_states: Number of copy number states (default: 6 for [0,1,2,3,4,5])
+            alpha_ref: Dirichlet concentration for reference state (CN=2)
+            alpha_non_ref: Dirichlet concentration for non-reference states
+            var_bias_bin: Variance for per-bin mean bias (log-normal)
+            var_sample: Variance for per-sample variance factor (log-normal)
+            var_bin: Variance for per-bin variance factor (log-normal)
+            device: torch device
+            dtype: torch data type
+            debug: Whether to print debug statements in model()
+        """
+        self.n_states = n_states
+        self.alpha_ref = alpha_ref
+        self.alpha_non_ref = alpha_non_ref
+        self.var_bias_bin = var_bias_bin
+        self.var_sample = var_sample
+        self.var_bin = var_bin
+        self.device = device
+        self.dtype = dtype
+        self.debug = debug
+        
+        # Training history
+        self.loss_history = {'epoch': [], 'elbo': []}
+        
+        # MCMC samples (if using MCMC)
+        self.mcmc_samples = None
+        self.inference_method = None  # 'svi' or 'mcmc'
+        
+        # Define which sites to expose to the guide (continuous latent variables)
+        self.latent_sites = ['bin_bias', 'sample_var', 'bin_var', 'cn_probs']
+        self.guide = AutoDiagonalNormal(poutine.block(self.model, expose=self.latent_sites))
+    
+    @config_enumerate(default="parallel")
+    def model(self, depth: torch.Tensor, n_bins: int = None, n_samples: int = None):
+        """
+        Probabilistic model for aneuploidy detection.
+        
+        Args:
+            depth: Observed normalized read depth (n_bins x n_samples)
+        """
+        
+        if self.debug:
+            print(f"\n=== MODEL DEBUG ===")
+            print(f"depth.shape: {depth.shape}")
+        
+        zero_t = torch.zeros(1, device=self.device, dtype=self.dtype)
+        one_t = torch.ones(1, device=self.device, dtype=self.dtype)
+        cn_states = torch.arange(0, self.n_states, device=self.device, dtype=self.dtype)
+        
+        # Plates for bins and samples
+        plate_bins = pyro.plate('bins', n_bins, dim=-2, device=self.device)
+        plate_samples = pyro.plate('samples', n_samples, dim=-1, device=self.device)
+        
+        # Per-sample variance factor (log-normal prior)
+        with plate_samples:
+            sample_var = pyro.sample('sample_var', dist.Exponential(1.0 / self.var_sample))
+        if self.debug:
+            print(f"sample_var.shape: {sample_var.shape}")
+        
+        # Per-bin latent variables
+        with plate_bins:
+            # Per-bin mean bias factor (log-normal prior, centered at 1.0)
+            bin_bias = pyro.sample('bin_bias', dist.LogNormal(zero_t, self.var_bias_bin))
+            if self.debug:
+                print(f"bin_bias.shape: {bin_bias.shape}")
+            
+            # Per-bin variance factor (log-normal prior)
+            bin_var = pyro.sample('bin_var', dist.Exponential(1.0 / self.var_bin))
+            if self.debug:
+                print(f"bin_var.shape: {bin_var.shape}")
+            
+            # Copy number prior (Dirichlet-Categorical)
+            # Heavily weight CN=2 (diploid)
+            alpha_cn = self.alpha_non_ref * one_t.expand(self.n_states)
+            alpha_cn[2] = self.alpha_ref  # Favor CN=2
+            cn_probs = pyro.sample('cn_probs', dist.Dirichlet(alpha_cn))
+        if self.debug:
+            print(f"cn_probs.shape: {cn_probs.shape}")
+        
+        # Per-bin, per-sample copy number and observation
+        with plate_bins, plate_samples:
+            # Sample copy number (discrete latent variable)
+            # Shape: (n_bins, n_samples)
+            cn = pyro.sample('cn', dist.Categorical(cn_probs))
+            if self.debug:
+                print(f"cn.shape: {cn.shape}")
+            
+            # Expected depth: CN * bin_bias
+            # For diploid (CN=2), expected depth should be ~2.0
+            # bin_bias modulates this expectation per bin
+            # CN=0 -> 0, CN=1 -> bin_bias, CN=2 -> 2*bin_bias, etc.
+            if self.debug:
+                print(f"bin_bias.shape: {bin_bias.shape}")
+            expected_depth = Vindex(cn_states)[cn] * bin_bias
+            if self.debug:
+                print(f"expected_depth.shape: {expected_depth.shape}")
+            
+            # Variance: combination of sample and bin variance
+            # Use summation to combine the two variance factors
+            if self.debug:
+                print(f"bin_var).shape: {bin_var.shape}")
+            variance = sample_var + bin_var
+            if self.debug:
+                print(f"variance.shape: {variance.shape}")
+            std = torch.sqrt(variance)
+            if self.debug:
+                print(f"std.shape: {std.shape}")
+            
+            # Observed depth
+            if self.debug:
+                print(f"About to sample obs with expected_depth.shape={expected_depth.shape}, std.shape={std.shape}, depth.shape={depth.shape}")
+            pyro.sample('obs', dist.Normal(expected_depth, std), obs=depth)
+        if self.debug:
+            print(f"=== END MODEL DEBUG ===\n")
+    
+    def train(self,
+              data,
+              max_iter: int = 1000,
+              lr_init: float = 0.01,
+              lr_min: float = 0.001,
+              lr_decay: float = 500,
+              adam_beta1: float = 0.9,
+              adam_beta2: float = 0.999,
+              log_freq: int = 50,
+              jit: bool = False):
+        """
+        Train the model using stochastic variational inference (SVI).
+        
+        Args:
+            data: AneuploidyData object
+            max_iter: Maximum number of training iterations
+            lr_init: Initial learning rate
+            lr_min: Minimum learning rate
+            lr_decay: Learning rate decay constant
+            adam_beta1: Adam optimizer beta1 parameter
+            adam_beta2: Adam optimizer beta2 parameter
+            log_freq: Frequency of logging (iterations)
+            jit: Whether to use JIT compilation
+        """
+        print("Initializing training...")
+        pyro.clear_param_store()
+        
+        # Create optimizer with learning rate schedule
+        scheduler = pyro.optim.LambdaLR({
+            'optimizer': torch.optim.Adam,
+            'optim_args': {'lr': 1., 'betas': (adam_beta1, adam_beta2)},
+            'lr_lambda': lambda k: lr_min + (lr_init - lr_min) * np.exp(-k / lr_decay)
+        })
+        
+        # Create ELBO loss
+        if jit:
+            loss = JitTraceEnum_ELBO()
+        else:
+            loss = TraceEnum_ELBO()
+        
+        # Create SVI object
+        svi = SVI(self.model, self.guide, optim=scheduler, loss=loss)
+        
+        print(f"Training for {max_iter} iterations...")
+        print(f"Data: {data.n_bins} bins x {data.n_samples} samples")
+        print("Note: First iteration may take longer due to compilation...")
+        print("Starting first epoch...")
+        
+        try:
+            # Configure tqdm with mininterval to force updates
+            with tqdm(range(max_iter), desc="Training", unit="epoch", 
+                     mininterval=0.1, dynamic_ncols=True) as pbar:
+                for epoch in pbar:
+                    # Train step
+                    if epoch == 0:
+                        print("Computing loss for first epoch (this may take several minutes)...")
+                    epoch_loss = svi.step(depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples)
+                    if epoch == 0:
+                        print(f"First epoch complete! Loss: {epoch_loss:.4f}")
+                    scheduler.step(epoch)
+                    
+                    # Record loss
+                    self.loss_history['epoch'].append(epoch)
+                    self.loss_history['elbo'].append(-epoch_loss)
+                    
+                    # Update progress bar with loss
+                    pbar.set_postfix({'loss': f'{epoch_loss:.4f}'})
+                    
+                    # Log progress
+                    if (epoch + 1) % log_freq == 0:
+                        tqdm.write(f"[epoch {epoch + 1:04d}]  loss: {epoch_loss:.4f}")
+            
+            print(f"\nTraining complete after {max_iter} epochs, final loss: {epoch_loss:.4f}")
+            
+        except KeyboardInterrupt:
+            print("\nTraining interrupted by user.")
+        
+        self.inference_method = 'svi'
+    
+    def train_mcmc(self,
+                   data,
+                   num_samples: int = 1000,
+                   warmup_steps: int = 200,
+                   num_chains: int = 1,
+                   step_size: float = 0.01,
+                   kernel: str = 'NUTS'):
+        """
+        Train the model using MCMC sampling.
+        
+        Args:
+            data: AneuploidyData object
+            num_samples: Number of MCMC samples to draw
+            warmup_steps: Number of warmup/burn-in steps
+            num_chains: Number of MCMC chains
+            step_size: Initial step size for HMC (ignored for NUTS)
+            kernel: MCMC kernel to use ('NUTS' or 'HMC')
+        """
+        print(f"Initializing MCMC with {kernel} kernel...")
+        print(f"  Warmup steps: {warmup_steps}")
+        print(f"  Sampling steps: {num_samples}")
+        print(f"  Chains: {num_chains}")
+        pyro.clear_param_store()
+        
+        # Create a model without discrete sites for MCMC
+        # We'll marginalize over CN using enumeration
+        def continuous_model(depth, n_bins, n_samples):
+            # This is a version of the model with CN marginalized out
+            # For now, we'll sample it as part of MCMC
+            return self.model(depth, n_bins, n_samples)
+        
+        # Choose kernel
+        if kernel == 'NUTS':
+            mcmc_kernel = NUTS(continuous_model, step_size=step_size, adapt_step_size=True,
+                              target_accept_prob=0.8)
+        elif kernel == 'HMC':
+            mcmc_kernel = HMC(continuous_model, step_size=step_size, num_steps=10)
+        else:
+            raise ValueError(f"Unknown kernel: {kernel}. Choose 'NUTS' or 'HMC'.")
+        
+        # Create MCMC object
+        mcmc = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=warmup_steps,
+                    num_chains=num_chains, disable_progbar=False)
+        
+        # Run MCMC
+        print("Running MCMC sampling...")
+        mcmc.run(depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples)
+        
+        # Store samples
+        self.mcmc_samples = mcmc.get_samples()
+        self.inference_method = 'mcmc'
+        
+        # Print diagnostics
+        print("\nMCMC Diagnostics:")
+        mcmc.summary(prob=0.95)
+        
+        print("\nMCMC sampling complete.")
+    
+    def get_map_estimates(self, data):
+        """
+        Get MAP (maximum a posteriori) estimates of all latent variables.
+        
+        Returns:
+            Dictionary with MAP estimates
+        """
+        print("Computing MAP estimates...")
+        
+        if self.inference_method == 'mcmc':
+            # For MCMC, use posterior mean as point estimate
+            print("Using posterior mean from MCMC samples...")
+            map_estimates = {}
+            
+            for key in ['bin_bias', 'sample_var', 'bin_var', 'cn_probs']:
+                if key in self.mcmc_samples:
+                    samples = self.mcmc_samples[key]
+                    map_estimates[key] = samples.mean(axis=0).detach().cpu().numpy()
+            
+            # For CN, use mode (most common value) across samples
+            if 'cn' in self.mcmc_samples:
+                cn_samples = self.mcmc_samples['cn'].detach().cpu().numpy()
+                # Compute mode along sample dimension (axis=0)
+                from scipy import stats
+                map_estimates['cn'] = stats.mode(cn_samples, axis=0, keepdims=False)[0]
+            
+        else:
+            # SVI mode: use guide parameters
+            # Get guide trace (contains MAP estimates of continuous variables)
+            guide_trace = poutine.trace(self.guide).get_trace(depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples)
+            
+            # Get model trace conditioned on guide
+            trained_model = poutine.replay(self.model, trace=guide_trace)
+            
+            # Get discrete MAP using infer_discrete
+            inferred_model = infer_discrete(trained_model, temperature=0, first_available_dim=-3)
+            trace = poutine.trace(inferred_model).get_trace(depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples)
+            
+            # Extract all latent variables
+            map_estimates = {}
+            
+            # Continuous variables from guide
+            map_estimates['bin_bias'] = guide_trace.nodes['bin_bias']['value'].detach().cpu().numpy()
+            map_estimates['sample_var'] = guide_trace.nodes['sample_var']['value'].detach().cpu().numpy()
+            map_estimates['bin_var'] = guide_trace.nodes['bin_var']['value'].detach().cpu().numpy()
+            map_estimates['cn_probs'] = guide_trace.nodes['cn_probs']['value'].detach().cpu().numpy()
+            
+            # Discrete variable (copy number)
+            map_estimates['cn'] = trace.nodes['cn']['value'].detach().cpu().numpy()
+        
+        print("MAP estimates computed.")
+        return map_estimates
+    
+    def run_posterior_predictive(self, data, n_samples: int = 100):
+        """
+        Generate posterior predictive samples.
+        
+        Args:
+            data: AneuploidyData object
+            n_samples: Number of posterior samples
+            
+        Returns:
+            Dictionary with posterior predictive samples
+        """
+        print(f"Generating {n_samples} posterior predictive samples...")
+        
+        if self.inference_method == 'mcmc':
+            # For MCMC, use the stored samples
+            print("Using MCMC samples for posterior predictive...")
+            
+            # If we have more MCMC samples than requested, subsample
+            mcmc_n_samples = list(self.mcmc_samples.values())[0].shape[0]
+            if mcmc_n_samples > n_samples:
+                indices = np.random.choice(mcmc_n_samples, size=n_samples, replace=False)
+                posterior_samples = {
+                    key: self.mcmc_samples[key][indices].detach().cpu().numpy()
+                    for key in self.mcmc_samples.keys()
+                }
+            else:
+                posterior_samples = {
+                    key: self.mcmc_samples[key].detach().cpu().numpy()
+                    for key in self.mcmc_samples.keys()
+                }
+            
+            # Generate obs samples if not present
+            if 'obs' not in posterior_samples:
+                print("Generating 'obs' samples from MCMC posterior...")
+                # We need to run the model forward with MCMC samples
+                predictive = Predictive(self.model, posterior_samples=self.mcmc_samples,
+                                       num_samples=n_samples if mcmc_n_samples > n_samples else mcmc_n_samples)
+                samples = predictive(depth=None, n_bins=data.n_bins, n_samples=data.n_samples)
+                posterior_samples['obs'] = samples['obs'].detach().cpu().numpy()
+        else:
+            # SVI mode: use guide
+            predictive = Predictive(
+                self.model, 
+                guide=self.guide, 
+                num_samples=n_samples, 
+                return_sites=['obs', 'cn', 'bin_bias', 'sample_var', 'bin_var', 'cn_probs']
+            )
+            
+            samples = predictive(depth=None, n_bins=data.n_bins, n_samples=data.n_samples)
+            
+            # Convert to numpy
+            posterior_samples = {
+                key: samples[key].detach().cpu().numpy()
+                for key in samples.keys()
+            }
+        
+        print("Posterior predictive sampling complete.")
+        return posterior_samples
+    
+    def run_discrete_inference(self, data, n_samples: int = 1000, log_freq: int = 100):
+        """
+        Run discrete inference to get posterior distribution over copy numbers.
+        
+        Args:
+            data: AneuploidyData object
+            n_samples: Number of samples for discrete inference
+            log_freq: Logging frequency
+            
+        Returns:
+            Dictionary with copy number posterior probabilities
+        """
+        print(f"Running discrete inference with {n_samples} samples...")
+        
+        # Get guide trace
+        guide_trace = poutine.trace(self.guide).get_trace(depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples)
+        trained_model = poutine.replay(self.model, trace=guide_trace)
+        
+        # Accumulate samples
+        cn_samples = []
+        
+        with torch.no_grad():
+            for i in range(n_samples):
+                inferred_model = infer_discrete(trained_model, temperature=1, first_available_dim=-3)
+                trace = poutine.trace(inferred_model).get_trace(depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples)
+                cn = trace.nodes['cn']['value'].detach().cpu().numpy()
+                cn_samples.append(cn)
+                
+                if (i + 1) % log_freq == 0:
+                    print(f"[sample {i + 1:04d}]")
+        
+        # Stack samples and compute frequencies
+        cn_samples = np.array(cn_samples)  # (n_samples, n_bins, n_samples)
+        
+        # Convert to one-hot encoding and compute frequencies
+        cn_freq = np.zeros((data.n_bins, data.n_samples, self.n_states))
+        for state in range(self.n_states):
+            cn_freq[..., state] = (cn_samples == state).mean(axis=0)
+        
+        print("Discrete inference complete.")
+        return {'cn_posterior': cn_freq}
+    
+
+def plot_training_loss(model: AneuploidyModel):
+    """Plot training loss over epochs"""
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(model.loss_history['epoch'], model.loss_history['elbo'])
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('ELBO')
+    ax.set_title('Training Loss')
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('training_loss.png', dpi=150, bbox_inches='tight')
+    print("Saved plot: training_loss.png")
+    plt.close()
+
+
+def add_chromosome_labels(ax, chr_array):
+    """
+    Add chromosome labels to x-axis of a plot.
+    
+    Args:
+        ax: matplotlib axis
+        chr_array: array of chromosome names for each bin
+    """
+    # Find chromosome boundaries
+    chr_changes = np.where(chr_array[:-1] != chr_array[1:])[0] + 1
+    chr_boundaries = np.concatenate([[0], chr_changes, [len(chr_array)]])
+    
+    # Calculate midpoint of each chromosome for labels
+    chr_labels = []
+    chr_positions = []
+    for i in range(len(chr_boundaries) - 1):
+        start = chr_boundaries[i]
+        end = chr_boundaries[i + 1]
+        mid = (start + end) / 2
+        chr_name = chr_array[start]
+        chr_labels.append(str(chr_name).replace('chr', ''))
+        chr_positions.append(mid)
+    
+    # Add vertical lines at chromosome boundaries
+    for boundary in chr_changes:
+        ax.axvline(boundary, color='gray', linestyle='--', alpha=0.5, linewidth=0.5)
+    
+    # Set x-axis labels
+    ax.set_xticks(chr_positions)
+    ax.set_xticklabels(chr_labels, rotation=0, ha='center')
+    ax.set_xlabel('Chromosome')
+
+
+def plot_combined_results(data: AneuploidyData, map_estimates: dict, cn_posterior: dict, 
+                         posterior_samples: dict, sample_idx: int = 0, is_aneuploid: bool = False):
+    """
+    Combined plot showing MAP estimates, CN posterior, and posterior predictive results.
+    
+    Args:
+        data: AneuploidyData object
+        map_estimates: Dictionary with MAP estimates
+        cn_posterior: Dictionary with 'cn_posterior' key
+        posterior_samples: Dictionary with posterior predictive samples (must contain 'obs')
+        sample_idx: Index of sample to plot
+        is_aneuploid: Whether this sample has high confidence aneuploidy
+    """
+    fig, axes = plt.subplots(6, 1, figsize=(16, 19))
+    
+    # Extract data
+    observed = data.depth[:, sample_idx].cpu().numpy()
+    cn = map_estimates['cn'][:, sample_idx]
+    bin_bias = map_estimates['bin_bias'].flatten()
+    bin_var = map_estimates['bin_var'].flatten()
+    sample_var_all = map_estimates['sample_var'].flatten()  # All samples' variance factors
+    sample_var_current = sample_var_all[sample_idx]  # Current sample's variance factor
+    cn_probs = cn_posterior['cn_posterior'][:, sample_idx, :]  # (n_bins, n_states)
+    
+    # Extract posterior samples of observed variable
+    obs_samples = posterior_samples['obs'][:, :, sample_idx]  # (n_samples, n_bins)
+    obs_mean = np.median(obs_samples, axis=0)
+    obs_lower = np.percentile(obs_samples, 2.5, axis=0)
+    obs_upper = np.percentile(obs_samples, 97.5, axis=0)
+    
+    # Extract bin_bias samples for standard deviation
+    bin_bias_samples = posterior_samples['bin_bias']  # (n_samples, n_bins, ...)
+    bin_bias_samples = bin_bias_samples.reshape(bin_bias_samples.shape[0], -1)  # (n_samples, n_bins)
+    bin_bias_std = np.std(bin_bias_samples, axis=0)
+    
+    # Extract bin_var samples for standard deviation
+    bin_var_samples = posterior_samples['bin_var']  # (n_samples, n_bins, ...)
+    bin_var_samples = bin_var_samples.reshape(bin_var_samples.shape[0], -1)  # (n_samples, n_bins)
+    bin_var_std = np.std(bin_var_samples, axis=0)
+    
+    colors = ['red', 'orange', 'green', 'blue', 'purple', 'brown']
+    x = np.arange(len(observed))
+    
+    # Plot 1: Observed depth with posterior mean and CI
+    ax = axes[0]
+    ax.plot(x, observed, 'k-', linewidth=0.8, alpha=0.7, label='Observed')
+    ax.plot(x, obs_mean, 'b-', linewidth=1.5, label='Posterior mean')
+    ax.fill_between(x, obs_lower, obs_upper, alpha=0.2, color='blue', label='95% CI')
+    ax.set_ylabel('Normalized depth')
+    ax.set_title(f'Sample: {data.sample_ids[sample_idx]}')
+    ax.legend(loc='upper right')
+    ax.grid(True, axis='y', alpha=1, linestyle='-', linewidth=1)
+    ax.set_ylim([-1, 5])
+    
+    # Plot 2: Stacked area plot of CN probabilities
+    ax = axes[1]
+    ax.stackplot(x, cn_probs.T, labels=[f'CN={i}' for i in range(6)], 
+                alpha=0.7, colors=colors)
+    ax.set_ylabel('CN Probability')
+    ax.legend(loc='upper right', ncol=6)
+    
+    # Plot 3: MAP Copy number calls
+    ax = axes[2]
+    for state in range(6):
+        mask = cn == state
+        if np.any(mask):
+            indices = np.where(mask)[0]
+            ax.plot(indices, cn[mask], 'o-', alpha=0.7, markersize=4, linewidth=1,
+                   label=f'CN={state}', color=colors[state])
+    ax.set_ylabel('Copy Number (MAP)')
+    ax.set_ylim(-0.5, 5.5)
+    ax.legend(loc='upper right', ncol=6)
+    
+    # Plot 4: Bin bias
+    ax = axes[3]
+    ax.errorbar(x, bin_bias, yerr=bin_bias_std, fmt='o-', alpha=0.5, markersize=3, linewidth=0.5, 
+                elinewidth=0.5, capsize=2, color='black', label='Bin bias ± std')
+    ax.axhline(1.0, color='red', linestyle='--', alpha=0.5, label='No bias')
+    ax.set_ylabel('Bin bias')
+    ax.legend(loc='upper right')
+    
+    # Plot 5: Bin variance
+    ax = axes[4]
+    ax.errorbar(x, bin_var, yerr=bin_var_std, fmt='o-', alpha=0.5, markersize=3, linewidth=0.5,
+                elinewidth=0.5, capsize=2, color='purple', label='Bin variance ± std')
+    ax.set_ylabel('Bin variance')
+    ax.legend(loc='upper right')
+    
+    # Plot 6: Sample variance distribution
+    ax = axes[5]
+    ax.hist(sample_var_all, bins=30, alpha=0.7, edgecolor='black', linewidth=0.5, color='teal')
+    ax.axvline(sample_var_current, color='red', linestyle='--', linewidth=2, 
+              label=f'This sample: {sample_var_current:.3f}')
+    ax.set_xlabel('Sample variance factor')
+    ax.set_ylabel('Count')
+    ax.set_title('Distribution of sample variance across all samples')
+    ax.legend(loc='upper right')
+    ax.grid(True, alpha=0.3)
+    
+    # Add chromosome labels to first 5 panels
+    for ax in axes[:5]:
+        add_chromosome_labels(ax, data.chr)
+    
+    plt.tight_layout()
+    sample_name = data.sample_ids[sample_idx].replace('/', '_').replace(' ', '_')
+    aneu_suffix = '_ANEU' if is_aneuploid else ''
+    filename = f'combined_results_{sample_name}{aneu_suffix}.png'
+    plt.savefig(filename, dpi=150, bbox_inches='tight')
+    print(f"Saved plot: {filename}")
+    plt.close()
+
+
+def plot_map_estimates(data: AneuploidyData, map_estimates: dict, sample_idx: int = 0):
+    """
+    Plot MAP estimates for a single sample.
+    
+    Args:
+        data: AneuploidyData object
+        map_estimates: Dictionary with MAP estimates
+        sample_idx: Index of sample to plot
+    """
+    fig, axes = plt.subplots(3, 1, figsize=(14, 10))
+    
+    # Extract data for this sample
+    observed = data.depth[:, sample_idx].cpu().numpy()
+    cn = map_estimates['cn'][:, sample_idx]
+    bin_bias = map_estimates['bin_bias']
+    
+    # Plot 1: Observed depth and copy number
+    ax = axes[0]
+    ax.plot(range(len(observed)), observed, 'o-', alpha=0.5, markersize=3, linewidth=0.5, label='Observed depth')
+    ax.set_ylabel('Normalized depth')
+    ax.set_title(f'Sample: {data.sample_ids[sample_idx]}')
+    ax.legend()
+    ax.grid(True, alpha=0.5)
+    
+    # Plot 2: Copy number calls
+    ax = axes[1]
+    colors = ['red', 'orange', 'green', 'blue', 'purple', 'brown']
+    for state in range(6):
+        mask = cn == state
+        if np.any(mask):
+            indices = np.where(mask)[0]
+            ax.plot(indices, cn[mask], 'o-', alpha=0.7, markersize=4, linewidth=1,
+                   label=f'CN={state}', color=colors[state])
+    ax.set_ylabel('Copy Number')
+    ax.set_ylim(-0.5, 5.5)
+    ax.legend()
+    ax.grid(True, alpha=0.5)
+    
+    # Plot 3: Bin bias
+    ax = axes[2]
+    ax.plot(range(len(bin_bias)), bin_bias, 'o-', alpha=0.5, markersize=3, linewidth=0.5, color='black', label='Bin bias')
+    ax.axhline(1.0, color='red', linestyle='--', alpha=0.5, label='No bias')
+    ax.set_ylabel('Bin bias')
+    ax.legend()
+    ax.grid(True, alpha=0.5)
+    
+    # Add chromosome labels to all panels
+    for ax in axes:
+        add_chromosome_labels(ax, data.chr)
+    
+    plt.tight_layout()
+    plt.savefig(f'map_estimates_sample_{sample_idx}.png', dpi=150, bbox_inches='tight')
+    print(f"Saved plot: map_estimates_sample_{sample_idx}.png")
+    plt.close()
+
+
+def plot_posterior_predictive(data: AneuploidyData, posterior_samples: dict):
+    """
+    Plot posterior predictive distribution vs observed data across all samples and bins.
+    
+    Args:
+        data: AneuploidyData object
+        posterior_samples: Dictionary with posterior samples
+    """
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    
+    # Plot 1: Observed vs predicted for all bins and samples
+    ax = axes[0]
+    observed = data.depth.cpu().numpy().flatten()  # All observations
+    predicted = posterior_samples['obs']  # (n_post_samples, n_bins, n_samples)
+    
+    # Compute mean and std across posterior samples for each bin/sample
+    pred_mean = predicted.mean(axis=0).flatten()
+    pred_std = predicted.std(axis=0).flatten()
+    
+    # Subsample for visualization if too many points
+    n_points = len(observed)
+    max_points = 10000
+    if n_points > max_points:
+        indices = np.random.choice(n_points, size=max_points, replace=False)
+        observed_plot = observed[indices]
+        pred_mean_plot = pred_mean[indices]
+        pred_std_plot = pred_std[indices]
+    else:
+        observed_plot = observed
+        pred_mean_plot = pred_mean
+        pred_std_plot = pred_std
+    
+    ax.errorbar(observed_plot, pred_mean_plot, yerr=pred_std_plot, fmt='o', alpha=0.3, markersize=2, elinewidth=0.5)
+    ax.plot([observed.min(), observed.max()], [observed.min(), observed.max()], 
+           'r--', label='Perfect prediction', linewidth=2)
+    ax.set_xlabel('Observed depth')
+    ax.set_ylabel('Predicted depth (mean ± std)')
+    ax.set_title(f'All samples and bins ({n_points} points)')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # Plot 2: Distribution of residuals (observed - predicted)
+    ax = axes[1]
+    residuals = observed - pred_mean
+    
+    ax.hist(residuals, bins=100, alpha=0.7, density=True, edgecolor='black', linewidth=0.5)
+    ax.axvline(0, color='red', linestyle='--', linewidth=2, label='Perfect prediction')
+    ax.set_xlabel('Residual (observed - predicted)')
+    ax.set_ylabel('Density')
+    ax.set_title(f'Residual distribution (mean={residuals.mean():.4f}, std={residuals.std():.4f})')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # Plot 3: 1D histogram comparing observed and predicted distributions
+    ax = axes[2]
+    ax.hist(observed, bins=100, alpha=0.5, density=True, label='Observed', 
+            edgecolor='black', linewidth=0.5, color='blue')
+    ax.hist(pred_mean, bins=100, alpha=0.5, density=True, label='Predicted', 
+            edgecolor='black', linewidth=0.5, color='orange')
+    ax.set_xlabel('Normalized depth')
+    ax.set_ylabel('Density')
+    ax.set_title('Distribution comparison')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig('posterior_predictive.png', dpi=150, bbox_inches='tight')
+    print("Saved plot: posterior_predictive.png")
+    plt.close()
+
+
+def plot_cn_posterior(data: AneuploidyData, cn_posterior: dict, posterior_samples: dict, sample_idx: int = 0):
+    """
+    Plot copy number posterior probabilities and mean posterior depth with confidence intervals.
+    
+    Args:
+        data: AneuploidyData object
+        cn_posterior: Dictionary with 'cn_posterior' key
+        posterior_samples: Dictionary with posterior predictive samples (must contain 'obs')
+        sample_idx: Index of sample to plot
+    """
+    cn_probs = cn_posterior['cn_posterior'][:, sample_idx, :]  # (n_bins, n_states)
+    
+    # Extract observed depth samples for this sample
+    # posterior_samples['obs'] shape: (n_samples, n_bins, n_samples_in_data)
+    obs_samples = posterior_samples['obs'][:, :, sample_idx]  # (n_samples, n_bins)
+    
+    # Compute mean and 95% CI
+    obs_mean = np.mean(obs_samples, axis=0)  # (n_bins,)
+    obs_lower = np.percentile(obs_samples, 2.5, axis=0)  # (n_bins,)
+    obs_upper = np.percentile(obs_samples, 97.5, axis=0)  # (n_bins,)
+    
+    # Get actual observed depth
+    obs_actual = data.depth[:, sample_idx].cpu().numpy()  # (n_bins,)
+    
+    fig, axes = plt.subplots(2, 1, figsize=(14, 8))
+    
+    # Plot 1: Stacked area plot of CN probabilities
+    ax = axes[0]
+    colors = ['red', 'orange', 'green', 'blue', 'purple', 'brown']
+    x = np.arange(cn_probs.shape[0])
+    
+    ax.stackplot(x, cn_probs.T, labels=[f'CN={i}' for i in range(6)], 
+                alpha=0.7, colors=colors)
+    ax.set_ylabel('Probability')
+    ax.set_title(f'Copy Number Posterior - Sample: {data.sample_ids[sample_idx]}')
+    ax.legend(loc='upper right')
+    ax.grid(True, alpha=0.3)
+    
+    # Plot 2: Mean posterior depth with 95% CI
+    ax = axes[1]
+    ax.plot(x, obs_actual, 'k.', markersize=1, alpha=0.5, label='Observed')
+    ax.plot(x, obs_mean, 'b-', linewidth=1, label='Posterior mean')
+    ax.fill_between(x, obs_lower, obs_upper, alpha=0.3, color='blue', label='95% CI')
+    ax.set_ylabel('Normalized read depth')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # Add chromosome labels to both panels
+    for ax in axes:
+        add_chromosome_labels(ax, data.chr)
+    
+    plt.tight_layout()
+    plt.savefig(f'cn_posterior_sample_{sample_idx}.png', dpi=150, bbox_inches='tight')
+    print(f"Saved plot: cn_posterior_sample_{sample_idx}.png")
+    plt.close()
+
+
+def plot_posterior_distributions(posterior_samples: dict):
+    """
+    Plot posterior distributions of all latent variables as histograms.
+    
+    Args:
+        posterior_samples: Dictionary with posterior samples from run_posterior_predictive()
+    """
+    # Latent variables to plot (exclude observed data and discrete cn)
+    latent_vars = ['bin_bias', 'sample_var', 'bin_var', 'cn_probs']
+    
+    # Filter to only include variables present in posterior_samples
+    latent_vars = [var for var in latent_vars if var in posterior_samples]
+    
+    n_vars = len(latent_vars)
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    axes = axes.flatten()
+    
+    for i, var_name in enumerate(latent_vars):
+        ax = axes[i]
+        samples = posterior_samples[var_name]
+        
+        # Debug: print shape
+        print(f"{var_name} shape: {samples.shape}")
+        
+        # Flatten all dimensions except the first (sample dimension)
+        # samples shape is typically (n_samples, ...), flatten the rest
+        samples_flat = samples.reshape(samples.shape[0], -1)
+        
+        # Plot histogram for a subset of parameters (avoid overcrowding)
+        n_params = samples_flat.shape[1]
+        
+        if var_name == 'cn_probs':
+            # For cn_probs, plot each copy number state separately
+            # Handle different possible shapes
+            if samples.ndim == 3 and samples.shape[-1] > 1:
+                # Shape is (n_samples, n_bins, n_states)
+                for state in range(min(6, samples.shape[-1])):
+                    state_samples = samples[:, :, state].flatten()
+                    ax.hist(state_samples, bins=50, alpha=0.5, label=f'CN={state}', density=True)
+                ax.set_title('CN Probabilities')
+                ax.legend()
+            else:
+                # Fallback: just plot all values
+                all_samples = samples_flat.flatten()
+                ax.hist(all_samples, bins=50, alpha=0.7, edgecolor='black', density=True)
+                ax.set_title(f'{var_name} (shape: {samples.shape})')
+        else:
+            # For other variables, plot distribution of all values
+            all_samples = samples_flat.flatten()
+            ax.hist(all_samples, bins=50, alpha=0.7, edgecolor='black', density=True)
+            ax.set_title(f'{var_name}')
+            
+            # Add summary statistics
+            mean_val = np.mean(all_samples)
+            median_val = np.median(all_samples)
+            ax.axvline(mean_val, color='red', linestyle='--', linewidth=2, label=f'Mean: {mean_val:.3f}')
+            ax.axvline(median_val, color='blue', linestyle='--', linewidth=2, label=f'Median: {median_val:.3f}')
+            ax.legend()
+        
+        ax.set_xlabel('Value')
+        ax.set_ylabel('Density')
+        ax.grid(True, alpha=0.3)
+    
+    # Hide any unused subplots
+    for i in range(n_vars, len(axes)):
+        axes[i].axis('off')
+    
+    plt.tight_layout()
+    plt.savefig('posterior_distributions.png', dpi=150, bbox_inches='tight')
+    print("Saved plot: posterior_distributions.png")
+    plt.close()
+
+
+def summary_statistics(data: AneuploidyData, map_estimates: dict, cn_posterior: dict, 
+                      min_fraction: float = 0.5, prob_threshold: float = 0.5):
+    """
+    Print summary statistics of the inference results.
+    
+    Args:
+        data: AneuploidyData object
+        map_estimates: Dictionary with MAP estimates
+        cn_posterior: Dictionary with copy number posterior
+        min_fraction: Minimum fraction of bins that must be abnormal to call chromosome aneuploid
+        prob_threshold: Probability threshold for high-confidence calls
+    """
+    print("="*80)
+    print("INFERENCE SUMMARY")
+    print("="*80)
+    
+    # Sample variance statistics
+    sample_var = map_estimates['sample_var']
+    print(f"\nSample variance factors:")
+    print(f"  Mean: {sample_var.mean():.4f}")
+    print(f"  Std:  {sample_var.std():.4f}")
+    print(f"  Min:  {sample_var.min():.4f}")
+    print(f"  Max:  {sample_var.max():.4f}")
+    
+    # Bin variance statistics
+    bin_var = map_estimates['bin_var']
+    print(f"\nBin variance factors:")
+    print(f"  Mean: {bin_var.mean():.4f}")
+    print(f"  Std:  {bin_var.std():.4f}")
+    print(f"  Min:  {bin_var.min():.4f}")
+    print(f"  Max:  {bin_var.max():.4f}")
+    
+    # Bin bias statistics
+    bin_bias = map_estimates['bin_bias']
+    print(f"\nBin bias factors:")
+    print(f"  Mean: {bin_bias.mean():.4f}")
+    print(f"  Std:  {bin_bias.std():.4f}")
+    print(f"  Min:  {bin_bias.min():.4f}")
+    print(f"  Max:  {bin_bias.max():.4f}")
+    
+    # Copy number statistics
+    cn = map_estimates['cn']
+    cn_probs = cn_posterior['cn_posterior']
+    
+    print(f"\nCopy number calls (MAP):")
+    for state in range(6):
+        count = (cn == state).sum()
+        pct = 100 * count / cn.size
+        print(f"  CN={state}: {count:6d} calls ({pct:5.2f}%)")
+    
+    # Per-chromosome aneuploidy detection
+    print(f"\n" + "="*80)
+    print(f"PER-CHROMOSOME ANEUPLOIDY DETECTION")
+    print(f"  Probability threshold: {prob_threshold}")
+    print("="*80)
+    
+    cn_probs = cn_posterior['cn_posterior']
+    
+    # Get unique chromosomes
+    unique_chrs = np.unique(data.chr)
+    
+    # Separate sex chromosomes from autosomes
+    sex_chrs = ['chrX', 'chrY']
+    autosomes = [chr_name for chr_name in unique_chrs if chr_name not in sex_chrs]
+    
+    # Track aneuploid chromosomes per sample
+    aneuploid_samples = {}
+    for sample_idx in range(data.n_samples):
+        aneuploid_samples[sample_idx] = []
+    
+    # Helper function to get chromosome CN and mean probability
+    def get_chr_info(chr_name, sample_idx):
+        chr_mask = data.chr == chr_name
+        chr_bins = np.sum(chr_mask)
+        if chr_bins == 0:
+            return None, 0, 0
+        
+        # Determine most common CN state
+        chr_cn = cn[chr_mask, sample_idx]
+        cn_counts = np.bincount(chr_cn, minlength=6)
+        most_common_cn = np.argmax(cn_counts)
+        
+        # Calculate mean probability of the called CN state across all bins
+        chr_cn_probs = cn_probs[chr_mask, sample_idx, most_common_cn]
+        mean_prob = chr_cn_probs.mean()
+        
+        return most_common_cn, mean_prob, chr_bins
+    
+    print(f"\nChromosome-level aneuploidy calls:")
+    
+    # Process autosomes
+    for chr_name in autosomes:
+        chr_mask = data.chr == chr_name
+        chr_bins = np.sum(chr_mask)
+        
+        print(f"\n  {chr_name} ({chr_bins} bins):")
+        
+        # Check each sample for this chromosome
+        for sample_idx in range(data.n_samples):
+            sample_name = data.sample_ids[sample_idx]
+            
+            # Get CN and mean probability for this chromosome
+            chr_cn_state, chr_mean_prob, _ = get_chr_info(chr_name, sample_idx)
+            
+            # For autosomes, call aneuploidy if CN != 2 and has high confidence
+            is_aneuploid = (chr_cn_state != 2) and (chr_mean_prob > prob_threshold)
+            
+            if is_aneuploid:
+                print(f"    {sample_name}: ANEUPLOID (CN≈{chr_cn_state}, P(CN={chr_cn_state})={chr_mean_prob:.2f})")
+                aneuploid_samples[sample_idx].append((chr_name, chr_cn_state, chr_mean_prob))
+    
+    # Process sex chromosomes jointly
+    print(f"\n  Sex chromosomes (chrX and chrY):")
+    for sample_idx in range(data.n_samples):
+        sample_name = data.sample_ids[sample_idx]
+        
+        # Get CN and mean probability for both sex chromosomes
+        chrX_cn, chrX_mean_prob, chrX_bins = get_chr_info('chrX', sample_idx)
+        chrY_cn, chrY_mean_prob, chrY_bins = get_chr_info('chrY', sample_idx)
+        print("sample_name:", sample_name, "chrX_cn:", chrX_cn, "chrY_cn:", chrY_cn, "chrX_mean_prob:", chrX_mean_prob, "chrY_mean_prob:", chrY_mean_prob)
+        
+        # Skip if both chromosomes are missing
+        if chrX_cn is None and chrY_cn is None:
+            continue
+        
+        # Handle case where one chromosome is missing
+        if chrX_cn is None:
+            chrX_cn, chrX_mean_prob, chrX_bins = 0, 0, 0
+        if chrY_cn is None:
+            chrY_cn, chrY_mean_prob, chrY_bins = 0, 0, 0
+        
+        # For sex chromosomes, check if we have high confidence in the CN call
+        chrX_high_conf = chrX_mean_prob > prob_threshold if chrX_bins > 0 else True
+        chrY_high_conf = chrY_mean_prob > prob_threshold if chrY_bins > 0 else True
+        
+        # Determine karyotype
+        # Normal: XX (chrX=2, chrY=0) or XY (chrX=1, chrY=1)
+        is_XX = (chrX_cn == 2 and chrY_cn == 0)
+        is_XY = (chrX_cn == 1 and chrY_cn == 1)
+        is_normal = is_XX or is_XY
+        
+        # Call sex chromosome aneuploidy if karyotype is abnormal and both have high confidence
+        if not is_normal and chrX_high_conf and chrY_high_conf:
+            karyotype = f"chrX={chrX_cn}, chrY={chrY_cn}"
+            prob_str = f"P(chrX={chrX_cn})={chrX_mean_prob:.2f}, P(chrY={chrY_cn})={chrY_mean_prob:.2f}"
+            print(f"    {sample_name}: SEX CHROMOSOME ANEUPLOIDY ({karyotype}, {prob_str})")
+            
+            # Add both chromosomes to the aneuploid list
+            if chrX_bins > 0:
+                aneuploid_samples[sample_idx].append(('chrX', chrX_cn, chrX_mean_prob))
+            if chrY_bins > 0:
+                aneuploid_samples[sample_idx].append(('chrY', chrY_cn, chrY_mean_prob))
+        elif is_normal:
+            prob_str = f"P={chrX_mean_prob:.2f}/{chrY_mean_prob:.2f}"
+            if is_XX:
+                print(f"    {sample_name}: Normal (XX, {prob_str})")
+            else:
+                print(f"    {sample_name}: Normal (XY, {prob_str})")
+        else:
+            # One or both chromosomes don't meet threshold - report but don't call aneuploidy
+            karyotype = f"chrX={chrX_cn} (P={chrX_mean_prob:.2f}), chrY={chrY_cn} (P={chrY_mean_prob:.2f})"
+            print(f"    {sample_name}: Uncertain ({karyotype})")
+    
+    # Summary per sample
+    print(f"\n" + "="*80)
+    print(f"ANEUPLOIDY SUMMARY BY SAMPLE")
+    print("="*80)
+    for sample_idx in range(data.n_samples):
+        sample_name = data.sample_ids[sample_idx]
+        aneuploid_chrs = aneuploid_samples[sample_idx]
+        
+        if len(aneuploid_chrs) == 0:
+            print(f"\n{sample_name}: EUPLOID (no chromosomal aneuploidies detected)")
+        else:
+            print(f"\n{sample_name}: ANEUPLOID ({len(aneuploid_chrs)} chromosome(s))")
+            for chr_name, cn, mean_prob in aneuploid_chrs:
+                print(f"  - {chr_name}: CN≈{cn} (P(CN={cn})={mean_prob:.2f})")
+    
+    print("="*80)
+    
+    return aneuploid_samples
+
+
+# Prepare data - optionally subset for faster testing
+# Uncomment the line below to test on chr X only
+# df_subset = df[df['Chr'] == 'chrX'].copy()
+# Or use all data:
+df_subset = df.copy()
+
+# Create data object
+device = 'cpu'  # Use 'cuda' if GPU available
+dtype = torch.float32
+inference_method = 'svi'
+
+data = AneuploidyData(df_subset, device=device, dtype=dtype)
+
+# Initialize model
+model = AneuploidyModel(
+    n_states=4,           # CN states: 0, 1, 2, 3
+    alpha_ref=10.0,       # Strong prior on CN=2
+    alpha_non_ref=1.0,    # Weak prior on other states
+    var_bias_bin=0.1,     # Moderate bin-to-bin bias variation
+    var_sample=0.1,       # Moderate sample variance
+    var_bin=0.1,          # Moderate bin variance
+    device=device,
+    dtype=dtype
+)
+
+# Train model
+if inference_method == 'svi':
+    model.train(
+        data=data,
+        max_iter=2000,         # Number of training iterations (increase for better convergence)
+        lr_init=0.01,         # Initial learning rate
+        lr_min=0.01,         # Minimum learning rate
+        lr_decay=10000,         # Learning rate decay constant
+        log_freq=50,          # Log every 50 iterations
+        jit=True             # Set to True for faster training (may have compatibility issues)
+    )
+else:
+    model.train_mcmc(
+        data=data,
+        warmup_steps=100,        # Number of warmup iterations
+        num_samples=200,       # Number of posterior samples to draw
+        num_chains=1,           # Number of MCMC chains
+        step_size=0.01,
+        kernel='NUTS'
+    )
+
+# Plot training loss
+plot_training_loss(model)
+
+# Get MAP estimates
+map_estimates = model.get_map_estimates(data)
+
+# Run posterior predictive sampling
+posterior_samples = model.run_posterior_predictive(data, n_samples=100)
+
+# Run discrete inference to get CN posterior probabilities
+cn_posterior = model.run_discrete_inference(data, n_samples=1000, log_freq=100)
+
+# Print summary statistics and get per-chromosome aneuploidy calls
+aneuploid_chromosomes = summary_statistics(data, map_estimates, cn_posterior)
+
+# Separate samples into normal and aneuploid groups
+normal_samples = []
+aneuploid_samples_list = []
+
+for sample_idx in range(data.n_samples):
+    if len(aneuploid_chromosomes[sample_idx]) == 0:
+        normal_samples.append(sample_idx)
+    else:
+        aneuploid_samples_list.append(sample_idx)
+
+print(f"\n{'='*80}")
+print("GENERATING COMBINED RESULTS PLOTS")
+print(f"{'='*80}")
+print(f"Normal samples: {len(normal_samples)}")
+print(f"Aneuploid samples: {len(aneuploid_samples_list)}")
+
+# Generate combined plots for up to 10 normal samples
+n_normal_to_plot = min(10, len(normal_samples))
+print(f"\nGenerating plots for {n_normal_to_plot} normal samples...")
+for i, sample_idx in enumerate(normal_samples[:n_normal_to_plot]):
+    sample_name = data.sample_ids[sample_idx]
+    print(f"  {i+1}/{n_normal_to_plot}: {sample_name} (sample_idx={sample_idx})")
+    plot_combined_results(data, map_estimates, cn_posterior, posterior_samples, sample_idx=sample_idx, is_aneuploid=False)
+
+# Generate combined plots for up to 10 aneuploid samples
+n_aneuploid_to_plot = min(10, len(aneuploid_samples_list))
+print(f"\nGenerating plots for {n_aneuploid_to_plot} aneuploid samples...")
+for i, sample_idx in enumerate(aneuploid_samples_list[:n_aneuploid_to_plot]):
+    sample_name = data.sample_ids[sample_idx]
+    aneuploid_chrs = aneuploid_chromosomes[sample_idx]
+    chr_list = ', '.join([f"{chr_name}(CN={cn})" for chr_name, cn, _ in aneuploid_chrs])
+    print(f"  {i+1}/{n_aneuploid_to_plot}: {sample_name} (sample_idx={sample_idx}) - {chr_list}")
+    plot_combined_results(data, map_estimates, cn_posterior, posterior_samples, sample_idx=sample_idx, is_aneuploid=True)
+
+print(f"{'='*80}\n")
+
+# Plot posterior predictive vs observed
+plot_posterior_predictive(data, posterior_samples)
+
+plot_posterior_distributions(posterior_samples)
+
+# Create results dataframe with copy number calls and probabilities
+results = []
+cn_probs = cn_posterior['cn_posterior']
+
+for i in range(data.n_bins):
+    for j in range(data.n_samples):
+        cn_map = map_estimates['cn'][i, j]
+        cn_prob = cn_probs[i, j, :]
+        
+        result = {
+            'chr': data.chr[i],
+            'start': data.start[i],
+            'end': data.end[i],
+            'sample': data.sample_ids[j],
+            'observed_depth': data.depth[i, j].cpu().numpy(),
+            'cn_map': int(cn_map),
+            'cn_prob_0': cn_prob[0],
+            'cn_prob_1': cn_prob[1],
+            'cn_prob_2': cn_prob[2],
+            'cn_prob_3': cn_prob[3],
+            'max_prob': cn_prob.max(),
+            'bin_bias': map_estimates['bin_bias'][i],
+            'bin_var': map_estimates['bin_var'][i],
+        }
+        results.append(result)
+
+results_df = pd.DataFrame(results)
+print(f"Results dataframe shape: {results_df.shape}")
+print(results_df.head(20))
+
+# Save results to TSV
+output_file = 'aneuploidy_results.tsv'
+results_df.to_csv(output_file, sep='\t', index=False)
+print(f"Results saved to {output_file}")
+
+# Save per-chromosome high-confidence aneuploidy calls
+chromosome_aneuploidies = []
+for sample_idx, aneuploid_chrs in aneuploid_chromosomes.items():
+    sample_name = data.sample_ids[sample_idx]
+    for chr_name, cn, mean_prob in aneuploid_chrs:
+        # Get chromosome bins for additional info
+        chr_mask = data.chr == chr_name
+        chr_bins_data = results_df[(results_df['chr'] == chr_name) & (results_df['sample'] == sample_name)]
+        
+        # Convert observed_depth arrays to scalars for statistics
+        depths = np.array([float(d) if hasattr(d, '__iter__') and not isinstance(d, str) else float(d) 
+                          for d in chr_bins_data['observed_depth']])
+        
+        chromosome_aneuploidies.append({
+            'sample': sample_name,
+            'chromosome': chr_name,
+            'copy_number': int(cn),
+            'mean_cn_probability': mean_prob,
+            'n_bins': chr_bins_data.shape[0],
+            'mean_depth': float(np.mean(depths)),
+            'median_depth': float(np.median(depths)),
+            'std_depth': float(np.std(depths)),
+        })
+
+if chromosome_aneuploidies:
+    aneuploidy_df = pd.DataFrame(chromosome_aneuploidies)
+    aneuploidy_df = aneuploidy_df.sort_values(['sample', 'chromosome'])
+    aneuploidy_output = 'high_confidence_aneuploidies.tsv'
+    aneuploidy_df.to_csv(aneuploidy_output, sep='\t', index=False)
+    print(f"High-confidence aneuploidy calls saved to {aneuploidy_output}")
+    print(f"Total chromosomal aneuploidies: {len(aneuploidy_df)}")
+else:
+    print("No high-confidence chromosomal aneuploidies detected")
