@@ -453,7 +453,7 @@ def main():
     # Get allele frequencies for each record & write to new VCF
     for r in vcf.fetch():
         newrec = gather_allele_freqs(r, samples_list, males_set, females_set, parbt, pop_dict,
-                                     pops, sex_chroms, args.no_combosc)
+                                     pops, sex_chroms, args.no_combos)
         fout.write(newrec)
 
     fout.close()
