@@ -26,6 +26,7 @@ workflow AnnotateAfForLrVcf {
   call MergeVcfs {
     input:
       vcfs = ProcessContig.out_vcf,
+      vcf_idxes = ProcessContig.out_vcf_idx,
       prefix = prefix,
       docker_image = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_merge_vcfs
@@ -66,64 +67,71 @@ task ProcessContig {
     gzip > ~{contig}.vcf.gz
 
     # Run AC/AN/AF Python script
-    python3 <<'PYTHON' ~{contig}.vcf.gz ~{contig}.out.vcf.gz
-import sys
-import gzip
+    # Run AC/AN/AF Python script
+    python3 <<CODE
 
-vcf_in = sys.argv[1]
-vcf_out = sys.argv[2]
+    import sys
+    import gzip
 
-def parse_gt(gt):
-    if gt in ('.', './.', '.|.'):
-        return None
-    sep = '/' if '/' in gt else '|'
-    alleles = gt.split(sep)
-    return [int(a) for a in alleles if a!="." ]
+    vcf_in = "~{contig}.vcf.gz"
+    vcf_out = "~{contig}.out.vcf.gz"
 
-with gzip.open(vcf_in, 'rt') as fin, gzip.open(vcf_out, 'wt') as fout:
-    for line in fin:
-        if line.startswith('##'):
-            fout.write(line)
-            continue
-        if line.startswith('#CHROM'):
-            fout.write('##INFO=<ID=AC,Number=A,Type=Integer,Description="Allele count">\n')
-            fout.write('##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles">\n')
-            fout.write('##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency">\n')
-            fout.write(line)
-            continue
-        fields = line.rstrip().split('\t')
-        ref, alts = fields[3], fields[4]
-        info = fields[7]
-        format_fields = fields[8].split(':')
-        samples = fields[9:]
-        alt_alleles = alts.split(',')
-        n_alt = len(alt_alleles)
-        AC = [0]*n_alt
-        AN = 0
-        gt_index = format_fields.index('GT')
-        for sample in samples:
-            sample_fields = sample.split(':')
-            gt = sample_fields[gt_index]
-            alleles = parse_gt(gt)
-            if alleles is None: continue
-            for a in alleles:
-                if a==0:
-                    AN += 1
-                elif 1 <= a <= n_alt:
-                    AN += 1
-                    AC[a-1] += 1
-        AF = [ac/AN if AN>0 else 0 for ac in AC]
-        info_items = [x for x in info.split(';') if not x.startswith(('AC=','AN=','AF='))]
-        info_items.append(f"AC={','.join(map(str,AC))}")
-        info_items.append(f"AN={AN}")
-        info_items.append(f"AF={','.join(f'{x:.6g}' for x in AF)}")
-        fields[7]=';'.join(info_items)
-        fout.write('\t'.join(fields)+'\n')
-PYTHON
+    def parse_gt(gt):
+        if gt in ('.', './.', '.|.'):
+            return None
+        sep = '/' if '/' in gt else '|'
+        alleles = gt.split(sep)
+        return [int(a) for a in alleles if a!="." ]
+
+    with gzip.open(vcf_in, 'rt') as fin, gzip.open(vcf_out, 'wt') as fout:
+        for line in fin:
+            if line.startswith('##'):
+                fout.write(line)
+                continue
+            if line.startswith('#CHROM'):
+                fout.write('##INFO=<ID=AC,Number=A,Type=Integer,Description="Allele count">\n')
+                fout.write('##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles">\n')
+                fout.write('##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency">\n')
+                fout.write(line)
+                continue
+            fields = line.rstrip().split('\t')
+            ref, alts = fields[3], fields[4]
+            info = fields[7]
+            format_fields = fields[8].split(':')
+            samples = fields[9:]
+            alt_alleles = alts.split(',')
+            n_alt = len(alt_alleles)
+            AC = [0]*n_alt
+            AN = 0
+            gt_index = format_fields.index('GT')
+            for sample in samples:
+                sample_fields = sample.split(':')
+                gt = sample_fields[gt_index]
+                alleles = parse_gt(gt)
+                if alleles is None: continue
+                for a in alleles:
+                    if a==0:
+                        AN += 1
+                    elif 1 <= a <= n_alt:
+                        AN += 1
+                        AC[a-1] += 1
+            AF = [ac/AN if AN>0 else 0 for ac in AC]
+            info_items = [x for x in info.split(';') if not x.startswith(('AC=','AN=','AF='))]
+            info_items.append(f"AC={','.join(map(str,AC))}")
+            info_items.append(f"AN={AN}")
+            info_items.append(f"AF={','.join(f'{x:.6g}' for x in AF)}")
+            fields[7]=';'.join(info_items)
+            fout.write('\t'.join(fields)+'\n')
+
+    CODE
+
+    tabix -p vcf "~{contig}.out.vcf.gz"
+
   >>>
 
   output {
     File out_vcf = "~{contig}.out.vcf.gz"
+    File out_vcf_idx = "~{contig}.out.vcf.gz.tbi"
   }
 
   runtime {
@@ -141,6 +149,7 @@ PYTHON
 task MergeVcfs {
   input {
     Array[File] vcfs
+    Array[File] vcf_idxes
     String prefix
     String docker_image
     RuntimeAttr? runtime_attr_override
