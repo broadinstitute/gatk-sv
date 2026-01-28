@@ -12,7 +12,6 @@ workflow AnnotateAfForLrVcf {
     RuntimeAttr? runtime_attr_merge_vcfs
   }
 
-  # Step 2: process each contig in parallel
   scatter (c in contig_list) {
     call ProcessContig {
       input:
@@ -23,7 +22,6 @@ workflow AnnotateAfForLrVcf {
     }
   }
 
-  # Step 3: merge all contig VCFs
   call MergeVcfs {
     input:
       vcfs = ProcessContig.out_vcf,
@@ -38,55 +36,6 @@ workflow AnnotateAfForLrVcf {
   }
 }
 
-# ----------------------
-# Task: Detect contigs
-# ----------------------
-task DetectContigs {
-  input {
-    File vcf_gz
-    String docker_image
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 15,
-    disk_gb: ceil(10 + size(vcf_gz, "GB") * 2),
-    boot_disk_gb: 10,
-    preemptible_tries: 0,
-    max_retries: 1
-  }
-
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  command <<<
-    set -euo pipefail
-    zcat ~{vcf_gz} | grep -v "^##" | grep "^#CHROM" > header_line.txt
-    # Extract all contigs in column 1 of VCF
-    zcat ~{vcf_gz} | awk '!/^#/ {print $1}' | sort | uniq > all_contigs.txt
-
-    # Restrict to canonical chromosomes
-    grep -E '^(1[0-9]|2[0-2]|[1-9]|X|Y|MT)$' all_contigs.txt > canonical_contigs.txt
-  >>>
-
-  output {
-    Array[String] canonical_contigs = read_lines("canonical_contigs.txt")
-  }
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: docker_image
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
-# ----------------------
-# Task: Process contig
-# ----------------------
 task ProcessContig {
   input {
     File vcf_gz
