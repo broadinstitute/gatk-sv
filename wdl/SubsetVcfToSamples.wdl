@@ -50,4 +50,9 @@ workflow SubsetVcfToSamples {
             sv_base_mini_docker = sv_base_mini_docker,
             runtime_attr_override = runtime_attr_concat_vcfs
     }
+
+    output {
+        File subset_vcf = ConcatVcfs.concat_vcf
+        File subset_vcf_idx = ConcatVcfs.concat_vcf_idx
+    }
 }
