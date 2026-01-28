@@ -6,6 +6,7 @@ workflow NormalizeBamContigsScatter {
   input {
     File input_bam
     File input_bai
+    String prefix
     String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_detect_contigs
     RuntimeAttr? runtime_attr_convert_contig
@@ -35,6 +36,7 @@ workflow NormalizeBamContigsScatter {
     call MergeBams {
       input:
         bams = ConvertOneContig.out_bam,
+        prefix = prefix,
         docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_merge_bams
     }
@@ -272,6 +274,7 @@ task NormalizeContigs {
 task MergeBams {
   input {
     Array[File] bams
+    String prefix
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
@@ -288,13 +291,13 @@ task MergeBams {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    samtools merge -f merged.bam ~{sep=' ' bams}
-    samtools index merged.bam
+    samtools merge -f "~{prefix}.bam" ~{sep=' ' bams}
+    samtools index  "~{prefix}.bam"
   >>>
 
   output {
-    File out_bam = "merged.bam"
-    File out_bai = "merged.bam.bai"
+    File out_bam = "~{prefix}.bam"
+    File out_bai = "~{prefix}.bam.bai"
   }
 
   runtime {
