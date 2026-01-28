@@ -139,4 +139,44 @@ RUN apt-get -qqy install --no-upgrade --no-install-recommends git git-lfs openjd
     ln -s /opt/gatk_miniconda3/bin/conda /usr/local/bin/conda
 
 
+# stripy docker
+# copied from the stripy docker, the diff includes installing a separate pip env for stripy
+# so to install pysam==0.19.1 that the tool needs but base image has pysam==0.15.4.
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# Install ExpansionHunter (core dependency for STR analysis)
+ARG EXPANSIONHUNTER_VERSION=5.0.0
+RUN wget https://github.com/Illumina/ExpansionHunter/releases/download/v${EXPANSIONHUNTER_VERSION}/ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64.tar.gz \
+    && tar -xzf ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64.tar.gz \
+    && mv ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64/bin/ExpansionHunter /usr/local/bin/ \
+    && rm -rf ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64*
+
+# Install REViewer (for read visualization in STR analysis)
+ARG REVIEWER_VERSION=0.2.7
+RUN wget https://github.com/Illumina/REViewer/releases/download/v${REVIEWER_VERSION}/REViewer-v${REVIEWER_VERSION}-linux_x86_64.gz \
+    && gunzip REViewer-v${REVIEWER_VERSION}-linux_x86_64.gz \
+    && chmod +x REViewer-v${REVIEWER_VERSION}-linux_x86_64 \
+    && mv REViewer-v${REVIEWER_VERSION}-linux_x86_64 /usr/local/bin/REViewer
+
+# Clone STRipy-pipeline repository
+RUN git clone https://gitlab.com/andreassh/stripy-pipeline.git /opt/stripy-pipeline
+
+# Set working directory
+WORKDIR /opt/stripy-pipeline
+
+RUN python3 -m venv /opt/stripy-env
+RUN /opt/stripy-env/bin/pip install --upgrade pip && \
+    if [ -f requirements.txt ]; then /opt/stripy-env/bin/pip install -r requirements.txt; fi && \
+    /opt/stripy-env/bin/pip install pyfaidx
+
+# Copy wrapper script, default config, and loci profiles
+COPY src/stripy/stripy /usr/local/bin/stripy
+COPY src/stripy/default-config.json /usr/local/bin/default-config.json
+COPY src/stripy/catalogs /opt/stripy-pipeline/scripts/catalogs
+COPY src/stripy/stripy_to_vcf.py /opt/stripy-pipeline/scripts/stripy_to_vcf.py
+
+# Make wrapper executable
+RUN chmod +x /usr/local/bin/stripy
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
 WORKDIR /
