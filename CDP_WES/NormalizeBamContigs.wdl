@@ -32,7 +32,7 @@ workflow NormalizeBamContigsScatter {
 
     call MergeBams {
       input:
-        bams = ConvertOneContig.out_bam
+        bams = ConvertOneContig.out_bam,
         docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_merge_bams
     }
