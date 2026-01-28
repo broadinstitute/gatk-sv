@@ -33,6 +33,7 @@ workflows:
     filters:
       branches:
         - main
+        - noaddress
       tags:
         - /.*/
 
