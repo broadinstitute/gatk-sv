@@ -260,3 +260,12 @@ workflows:
         - main
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: SubsetVcfToSamples
+    primaryDescriptorPath: /wdl/SubsetVcfToSamples.wdl
+    filters:
+      branches:
+        - kj_project_arpah
+      tags:
+        - /.*/
