@@ -1,5 +1,7 @@
 version 1.0
 
+import "Structs.wdl"
+
 workflow AnnotateAfForLrVcf {
   input {
     File vcf_gz
@@ -7,7 +9,6 @@ workflow AnnotateAfForLrVcf {
     Array[String] contig_list
     String docker_image
     String sv_pipeline_base_docker
-    RuntimeAttr? runtime_attr_detect_contigs
     RuntimeAttr? runtime_attr_process_contig
     RuntimeAttr? runtime_attr_merge_vcfs
   }
