@@ -62,6 +62,11 @@ GetSampleSex_out_string=$(cat "${GetSampleSex_out_file}")
 
 # RunStripy
 # ---------------------------------------------------------------------------------------------------------------------
+
+set +u
+source /opt/stripy-env/bin/activate
+set -u
+
 stripy_output_dir="STRipy_output"
 mkdir -p "${stripy_output_dir}"
 stripy \
@@ -78,6 +83,8 @@ stripy \
   --num-threads $(nproc) \
   --locus "${locus}" \
   --sex "${GetSampleSex_out_string}"
+
+deactivate
 
 ACTUAL_FILENAME=$(basename "${bam_or_cram_file}")
 ACTUAL_BASE=$(echo "${ACTUAL_FILENAME}" | sed 's/\.[^.]*$//')
