@@ -3,22 +3,17 @@ version 1.0
 workflow AnnotateAfForLrVcf {
   input {
     File vcf_gz
+    String prefix
+    Array[String] contig_list
     String docker_image
+    String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_detect_contigs
     RuntimeAttr? runtime_attr_process_contig
-    RuntimeAttr? runtime_attr_detect_contigs
-  }
-
-  # Step 1: extract canonical contigs
-  call DetectContigs {
-    input:
-      vcf_gz = vcf_gz,
-      docker_image = sv_pipeline_base_docker,
-      runtime_attr_override = runtime_attr_detect_contigs
+    RuntimeAttr? runtime_attr_merge_vcfs
   }
 
   # Step 2: process each contig in parallel
-  scatter (c in DetectContigs.canonical_contigs) {
+  scatter (c in contig_list) {
     call ProcessContig {
       input:
         vcf_gz = vcf_gz,
