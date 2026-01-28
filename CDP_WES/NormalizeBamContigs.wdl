@@ -5,6 +5,7 @@ import "Structs.wdl"
 workflow NormalizeBamContigsScatter {
   input {
     File input_bam
+    File input_bai
     String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_detect_contigs
     RuntimeAttr? runtime_attr_convert_contig
@@ -23,6 +24,7 @@ workflow NormalizeBamContigsScatter {
       call ConvertOneContig {
         input:
           bam = input_bam,
+          bai = input_bai,
           contig = c,
           docker_image = sv_pipeline_base_docker,
           runtime_attr_override = runtime_attr_convert_contig
@@ -101,6 +103,7 @@ task DetectContigs {
 task ConvertOneContig {
   input {
     File bam
+    File bai
     String contig
     String docker_image
     RuntimeAttr? runtime_attr_override
