@@ -1,329 +1,13 @@
 #!/bin/python
 
-import json
 import glob
 import os
-import pysam
-import numpy as np
-import pandas as pd
 from pathlib import Path
 
-
-def get_files(pattern):
-    files = glob.glob(pattern, recursive=True)
-    
-    print(f"Found {len(files)} files matching pattern: {pattern}")
-    
-    # Load first file to establish the base dataframe
-    df_merged = None
-    
-    # Track successful and failed files
-    successful_files = []
-    failed_files = []
-    
-    # Load each file
-    for file_path in files:
-        print(f"Loading: {file_path}")
-        try:
-            # Read gzipped TSV file
-            df_file = pd.read_csv(file_path, sep='\t', compression='gzip')
-            
-            # Get source file identifier
-            source_file = str(Path(file_path).parent.parent.name)
-            
-            # Rename chromosome column if it exists
-            if '#Chr' in df_file.columns:
-                df_file['Chr'] = df_file['#Chr']
-                df_file = df_file.drop('#Chr', axis=1)
-            
-            # Create bin identifier
-            df_file['Bin'] = df_file['Chr'].astype(str) + ':' + df_file['Start'].astype(str) + '-' + df_file['End'].astype(str)
-            df_file = df_file.set_index('Bin')
-            
-            # Get sample columns (exclude metadata)
-            metadata_cols = ['Chr', 'Start', 'End']
-            sample_cols = [col for col in df_file.columns if col not in metadata_cols]
-            
-            if df_merged is None:
-                # First file: keep metadata + samples
-                df_merged = df_file.copy()
-                df_merged['source_file'] = source_file
-                print(f"  Initialized with {len(df_merged)} bins and {len(sample_cols)} samples")
-            else:
-                # Subsequent files: merge sample columns only
-                # Keep only sample columns from this file
-                df_samples = df_file[sample_cols].copy()
-                
-                # Check for duplicate sample columns and drop them
-                existing_sample_cols = [col for col in df_merged.columns if col not in ['Chr', 'Start', 'End', 'source_file']]
-                duplicate_samples = [col for col in sample_cols if col in existing_sample_cols]
-                
-                if duplicate_samples:
-                    print(f"  WARNING: Found {len(duplicate_samples)} duplicate sample(s) in {file_path}")
-                    print(f"  Dropping duplicate samples: {duplicate_samples[:5]}{'...' if len(duplicate_samples) > 5 else ''}")
-                    df_samples = df_samples.drop(columns=duplicate_samples)
-                    sample_cols = [col for col in sample_cols if col not in duplicate_samples]
-                
-                # Skip this file if no new samples remain after dropping duplicates
-                if len(sample_cols) == 0:
-                    print(f"  Skipping file - all samples already exist in merged dataframe")
-                    continue
-                
-                # Validate that bins match before merging
-                existing_bins = set(df_merged.index)
-                new_bins = set(df_samples.index)
-                
-                if existing_bins != new_bins:
-                    # Bins don't match - try coordinate adjustments before failing
-                    print(f"\n  WARNING: Bin mismatch detected for {file_path}")
-                    print(f"  Attempting coordinate adjustment...")
-                    
-                    # Try adding 1 to coordinates
-                    df_file_adjusted = df_file.copy()
-                    df_file_adjusted['Start'] = df_file_adjusted['Start'] + 1
-                    df_file_adjusted['End'] = df_file_adjusted['End'] + 1
-                    df_file_adjusted['Bin'] = (df_file_adjusted['Chr'].astype(str) + ':' + 
-                                               df_file_adjusted['Start'].astype(str) + '-' + 
-                                               df_file_adjusted['End'].astype(str))
-                    df_file_adjusted = df_file_adjusted.set_index('Bin')
-                    df_samples_adjusted = df_file_adjusted[sample_cols].copy()
-                    new_bins_adjusted = set(df_samples_adjusted.index)
-                    
-                    if existing_bins == new_bins_adjusted:
-                        print(f"  ✓ Success: Coordinates adjusted by +1")
-                        df_samples = df_samples_adjusted
-                    else:
-                        # Try subtracting 1 instead
-                        df_file_adjusted = df_file.copy()
-                        df_file_adjusted['Start'] = df_file_adjusted['Start'] - 1
-                        df_file_adjusted['End'] = df_file_adjusted['End'] - 1
-                        df_file_adjusted['Bin'] = (df_file_adjusted['Chr'].astype(str) + ':' + 
-                                                   df_file_adjusted['Start'].astype(str) + '-' + 
-                                                   df_file_adjusted['End'].astype(str))
-                        df_file_adjusted = df_file_adjusted.set_index('Bin')
-                        df_samples_adjusted = df_file_adjusted[sample_cols].copy()
-                        new_bins_adjusted = set(df_samples_adjusted.index)
-                        
-                        if existing_bins == new_bins_adjusted:
-                            print(f"  ✓ Success: Coordinates adjusted by -1")
-                            df_samples = df_samples_adjusted
-                        else:
-                            # Neither adjustment worked - show error and raise
-                            only_in_existing = existing_bins - new_bins
-                            only_in_new = new_bins - existing_bins
-                            
-                            print("\n" + "="*80)
-                            print("ERROR: Bin mismatch detected!")
-                            print("="*80)
-                            print(f"\nFile: {file_path}")
-                            print(f"Existing dataframe has {len(existing_bins)} bins")
-                            print(f"New file has {len(new_bins)} bins")
-                            print(f"Bins only in existing: {len(only_in_existing)}")
-                            print(f"Bins only in new file: {len(only_in_new)}")
-                            
-                            if only_in_existing:
-                                print(f"\nExample bins only in existing dataframe (first 5):")
-                                for bin_id in list(only_in_existing)[:5]:
-                                    print(f"  {bin_id}")
-                            
-                            if only_in_new:
-                                print(f"\nExample bins only in new file (first 5):")
-                                for bin_id in list(only_in_new)[:5]:
-                                    print(f"  {bin_id}")
-                            
-                            raise ValueError(
-                                f"Bin mismatch: Cannot merge {file_path} because bins don't align. "
-                                f"Expected {len(existing_bins)} bins, found {len(new_bins)} bins. "
-                                f"Coordinate adjustments (±1) did not resolve the mismatch."
-                            )
-                
-                # Merge with existing dataframe
-                df_merged = df_merged.join(df_samples, how='outer')
-                print(f"  Merged {len(sample_cols)} samples, total bins: {len(df_merged)}")
-            
-            # Mark as successful if we got here
-            successful_files.append(file_path)
-                
-        except Exception as e:
-            print(f"Error loading {file_path}: {e}")
-            failed_files.append((file_path, str(e)))
-    
-    if df_merged is not None:
-        # Remove duplicate bins (keep first occurrence)
-        df_merged = df_merged[~df_merged.index.duplicated(keep='first')]
-        
-        print(f"\nCombined dataframe shape: {df_merged.shape}")
-        print(f"Total bins: {len(df_merged)}")
-        print(f"Total columns: {len(df_merged.columns)}")
-        
-        # Count sample columns
-        metadata_cols = ['Chr', 'Start', 'End', 'source_file']
-        sample_count = len([col for col in df_merged.columns if col not in metadata_cols])
-        print(f"Sample columns: {sample_count}")
-    else:
-        print("No files were successfully loaded")
-        df_merged = pd.DataFrame()
-    
-    # Print consolidated file loading summary
-    print("\n" + "="*80)
-    print("FILE LOADING SUMMARY")
-    print("="*80)
-    print(f"Total files found: {len(files)}")
-    print(f"Successfully loaded: {len(successful_files)}")
-    print(f"Failed to load: {len(failed_files)}")
-    
-    if failed_files:
-        print("\nFailed files:")
-        for file_path, error in failed_files:
-            print(f"  - {file_path}")
-            print(f"    Error: {error}")
-    print("="*80 + "\n")
-    
-    return df_merged
-
-
-def filter_low_quality_bins(df: pd.DataFrame,
-                           autosome_median_min: float = 1.5,
-                           autosome_median_max: float = 2.5,
-                           autosome_mad_max: float = 0.5,
-                           chrX_median_min: float = 0.75,
-                           chrX_median_max: float = 2.5,
-                           chrX_mad_max: float = 0.5,
-                           chrY_median_min: float = 0.0,
-                           chrY_median_max: float = 2.0,
-                           chrY_mad_max: float = 0.5):
-    """
-    Filter out low quality bins based on median and MAD thresholds.
-    
-    Args:
-        df: DataFrame with bins as rows and samples as columns
-        autosome_median_min: Minimum median depth for autosomal bins
-        autosome_median_max: Maximum median depth for autosomal bins
-        autosome_mad_max: Maximum MAD for autosomal bins
-        chrX_median_min: Minimum median depth for chrX bins
-        chrX_median_max: Maximum median depth for chrX bins
-        chrX_mad_max: Maximum MAD for chrX bins
-        chrY_median_min: Minimum median depth for chrY bins
-        chrY_median_max: Maximum median depth for chrY bins
-        chrY_mad_max: Maximum MAD for chrY bins
-        
-    Returns:
-        Filtered DataFrame
-    """
-    # Get sample columns (exclude metadata)
-    metadata_cols = ['Chr', 'Start', 'End', 'source_file']
-    sample_cols = [col for col in df.columns if col not in metadata_cols]
-    
-    # Compute median and MAD for each bin across samples
-    depths = df[sample_cols].values
-    medians = np.median(depths, axis=1)
-    mads = np.median(np.abs(depths - medians[:, np.newaxis]), axis=1)
-    
-    print(f"\n{'='*80}")
-    print("FILTERING LOW QUALITY BINS")
-    print(f"{'='*80}")
-    print(f"Starting bins: {len(df)}")
-    
-    # Create filter masks for each chromosome type
-    autosome_mask = ~df['Chr'].isin(['chrX', 'chrY'])
-    chrX_mask = df['Chr'] == 'chrX'
-    chrY_mask = df['Chr'] == 'chrY'
-    
-    # Initialize keep mask (all True)
-    keep_mask = np.ones(len(df), dtype=bool)
-    
-    # Filter autosomes
-    if autosome_mask.any():
-        autosome_keep = (
-            (medians >= autosome_median_min) &
-            (medians <= autosome_median_max) &
-            (mads <= autosome_mad_max)
-        )
-        autosome_filtered = autosome_mask & ~autosome_keep
-        keep_mask[autosome_mask] = autosome_keep[autosome_mask]
-        print(f"\nAutosomes:")
-        print(f"  Thresholds: median [{autosome_median_min}, {autosome_median_max}], MAD <= {autosome_mad_max}")
-        print(f"  Bins before: {autosome_mask.sum()}")
-        print(f"  Bins filtered: {autosome_filtered.sum()}")
-        print(f"  Bins after: {(autosome_mask & keep_mask).sum()}")
-    
-    # Filter chrX
-    if chrX_mask.any():
-        chrX_keep = (
-            (medians >= chrX_median_min) &
-            (medians <= chrX_median_max) &
-            (mads <= chrX_mad_max)
-        )
-        chrX_filtered = chrX_mask & ~chrX_keep
-        keep_mask[chrX_mask] = chrX_keep[chrX_mask]
-        print(f"\nchrX:")
-        print(f"  Thresholds: median [{chrX_median_min}, {chrX_median_max}], MAD <= {chrX_mad_max}")
-        print(f"  Bins before: {chrX_mask.sum()}")
-        print(f"  Bins filtered: {chrX_filtered.sum()}")
-        print(f"  Bins after: {(chrX_mask & keep_mask).sum()}")
-    
-    # Filter chrY
-    if chrY_mask.any():
-        chrY_keep = (
-            (medians >= chrY_median_min) &
-            (medians <= chrY_median_max) &
-            (mads <= chrY_mad_max)
-        )
-        chrY_filtered = chrY_mask & ~chrY_keep
-        keep_mask[chrY_mask] = chrY_keep[chrY_mask]
-        print(f"\nchrY:")
-        print(f"  Thresholds: median [{chrY_median_min}, {chrY_median_max}], MAD <= {chrY_mad_max}")
-        print(f"  Bins before: {chrY_mask.sum()}")
-        print(f"  Bins filtered: {chrY_filtered.sum()}")
-        print(f"  Bins after: {(chrY_mask & keep_mask).sum()}")
-    
-    # Apply filter
-    df_filtered = df[keep_mask].copy()
-    
-    print(f"\nTotal bins after filtering: {len(df_filtered)}")
-    print(f"Total bins removed: {len(df) - len(df_filtered)}")
-    print(f"{'='*80}\n")
-    
-    return df_filtered
-
-# Find all matching files
-bins_pattern = "/Users/markw/Work/talkowski/sv-pipe-testing/mw_ploidy/cmg/data/m2_batch39_ploidy_plots/ploidy_est/binwise_estimated_copy_numbers.bed.gz"
-output_dir = "/Users/markw/Work/talkowski/sv-pipe-testing/mw_ploidy/cmg/aneuploidy_pyro_output"
-
-# Create output directory if it doesn't exist
-os.makedirs(output_dir, exist_ok=True)
-print(f"Output directory: {output_dir}")
-
-# Delete all existing combined_results_*.png files
-combined_results_pattern = os.path.join(output_dir, "combined_results_*.png")
-existing_files = glob.glob(combined_results_pattern)
-if existing_files:
-    print(f"Deleting {len(existing_files)} existing combined_results_*.png files...")
-    for file_path in existing_files:
-        os.remove(file_path)
-    print("Cleanup complete.")
-
-df = get_files(bins_pattern)
-# TODO filter bins
-#df = df[df['Chr'] == 'chrY']
-df = df[df['Chr'].isin({'chrX', 'chrY'})]
-#df = df[df['Chr'].isin({'chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 'chr9', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22'})]
-#df = df.loc[:, ['Chr', 'Start', 'End', 'source_file', '__cdh1355__1a8a28'] + [x for x in df.columns[2:12].values.tolist() if x != '__cdh1355__1a8a28']]
-df = df.loc[:, ['Chr', 'Start', 'End', 'source_file'] + df.columns[2:12].values.tolist()]
-
-# Filter low quality bins
-df = filter_low_quality_bins(df,
-                             autosome_median_min=1.75,
-                             autosome_median_max=2.25,
-                             autosome_mad_max=0.25,
-                             chrX_median_min=0.75,
-                             chrX_median_max=2.25,
-                             chrX_mad_max=0.5,
-                             chrY_median_min=0.0,
-                             chrY_median_max=1.25,
-                             chrY_mad_max=0.25)
-
-print(df)
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 import torch
 import pyro
@@ -331,21 +15,11 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.ops.indexing import Vindex
 from pyro.infer import config_enumerate, infer_discrete
-from pyro.infer.predictive import Predictive
-from pyro.infer.autoguide import AutoDiagonalNormal
+from pyro.infer.autoguide import AutoDiagonalNormal, AutoDelta
 from pyro.infer import JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.infer.svi import SVI
 from pyro.infer import MCMC, NUTS, HMC
-import matplotlib.pyplot as plt
-import seaborn as sns
-from tqdm import tqdm
 
-# Set up Pyro
-pyro.enable_validation(True)
-pyro.distributions.enable_validation(True)
-pyro.set_rng_seed(42)
-torch.manual_seed(42)
-np.random.seed(42)
 
 class AneuploidyData:
     """Data container for aneuploidy detection model"""
@@ -412,6 +86,7 @@ class AneuploidyData:
         print(f"Depth range: [{self.depth.min():.3f}, {self.depth.max():.3f}]")
         print(f"Depth mean: {self.depth.mean():.3f}, median: {self.depth.median():.3f}")
 
+
 class AneuploidyModel:
     """
     Hierarchical Bayesian model for aneuploidy detection from normalized read depth.
@@ -433,7 +108,8 @@ class AneuploidyModel:
                  var_bin: float = 0.2,
                  device: str = 'cpu',
                  dtype: torch.dtype = torch.float32,
-                 debug: bool = False):
+                 debug: bool = False,
+                 guide_type: str = 'diagonal'):
         """
         Args:
             n_states: Number of copy number states (default: 6 for [0,1,2,3,4,5])
@@ -445,6 +121,7 @@ class AneuploidyModel:
             device: torch device
             dtype: torch data type
             debug: Whether to print debug statements in model()
+            guide_type: Type of variational guide ('diagonal' for AutoDiagonalNormal, 'delta' for AutoDelta)
         """
         self.n_states = n_states
         self.alpha_ref = alpha_ref
@@ -455,6 +132,7 @@ class AneuploidyModel:
         self.device = device
         self.dtype = dtype
         self.debug = debug
+        self.guide_type = guide_type
         
         # Training history
         self.loss_history = {'epoch': [], 'elbo': []}
@@ -465,7 +143,15 @@ class AneuploidyModel:
         
         # Define which sites to expose to the guide (continuous latent variables)
         self.latent_sites = ['bin_bias', 'sample_var', 'bin_var', 'cn_probs']
-        self.guide = AutoDiagonalNormal(poutine.block(self.model, expose=self.latent_sites))
+        
+        # Initialize guide based on type
+        blocked_model = poutine.block(self.model, expose=self.latent_sites)
+        if guide_type == 'delta':
+            self.guide = AutoDelta(blocked_model)
+        elif guide_type == 'diagonal':
+            self.guide = AutoDiagonalNormal(blocked_model)
+        else:
+            raise ValueError(f"Unknown guide_type: {guide_type}. Choose 'diagonal' or 'delta'.")
     
     @config_enumerate(default="parallel")
     def model(self, depth: torch.Tensor, n_bins: int = None, n_samples: int = None):
@@ -777,7 +463,7 @@ class AneuploidyModel:
         return {'cn_posterior': cn_freq}
     
 
-def plot_training_loss(model: AneuploidyModel):
+def plot_training_loss(model: AneuploidyModel, output_dir: str):
     """Plot training loss over epochs"""
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.plot(model.loss_history['epoch'], model.loss_history['elbo'])
@@ -792,13 +478,14 @@ def plot_training_loss(model: AneuploidyModel):
     plt.close()
 
 
-def add_chromosome_labels(ax, chr_array):
+def add_chromosome_labels(ax, chr_array, x_transformed=None):
     """
     Add chromosome labels to x-axis of a plot.
     
     Args:
         ax: matplotlib axis
         chr_array: array of chromosome names for each bin
+        x_transformed: optional array of transformed x coordinates (for equal-width chromosomes)
     """
     # Find chromosome boundaries
     chr_changes = np.where(chr_array[:-1] != chr_array[1:])[0] + 1
@@ -807,16 +494,29 @@ def add_chromosome_labels(ax, chr_array):
     # Calculate midpoint of each chromosome for labels
     chr_labels = []
     chr_positions = []
+    chr_boundary_positions = []
+    
     for i in range(len(chr_boundaries) - 1):
         start = chr_boundaries[i]
         end = chr_boundaries[i + 1]
-        mid = (start + end) / 2
+        
+        if x_transformed is not None:
+            # Use transformed coordinates - chromosome centers are at i+0.5
+            chr_positions.append(i + 0.5)
+            if i > 0:
+                chr_boundary_positions.append(i)
+        else:
+            # Use original bin indices
+            mid = (start + end) / 2
+            chr_positions.append(mid)
+            if start > 0:
+                chr_boundary_positions.append(start)
+        
         chr_name = chr_array[start]
         chr_labels.append(str(chr_name).replace('chr', ''))
-        chr_positions.append(mid)
     
     # Add vertical lines at chromosome boundaries
-    for boundary in chr_changes:
+    for boundary in chr_boundary_positions:
         ax.axvline(boundary, color='gray', linestyle='--', alpha=1, linewidth=1)
     
     # Set x-axis labels
@@ -825,7 +525,7 @@ def add_chromosome_labels(ax, chr_array):
     ax.set_xlabel('Chromosome')
 
 
-def plot_combined_results(data: AneuploidyData, map_estimates: dict, cn_posterior: dict,
+def plot_combined_results(data: AneuploidyData, map_estimates: dict, cn_posterior: dict, output_dir: str,
                          sample_idx: int = 0, is_aneuploid: bool = False, aneuploid_chrs: list = None):
     """
     Combined plot showing MAP estimates and CN posterior.
@@ -838,59 +538,62 @@ def plot_combined_results(data: AneuploidyData, map_estimates: dict, cn_posterio
         is_aneuploid: Whether this sample has high confidence aneuploidy
         aneuploid_chrs: List of tuples (chr_name, cn, prob) for aneuploid chromosomes
     """
-    fig, axes = plt.subplots(4, 1, figsize=(16, 16))
+    fig, axes = plt.subplots(3, 1, figsize=(16, 12))
     
     # Extract data
     observed = data.depth[:, sample_idx].cpu().numpy()
     cn = map_estimates['cn'][:, sample_idx]
-    bin_bias = map_estimates['bin_bias'].flatten()
-    bin_var = map_estimates['bin_var'].flatten()
     sample_var_all = map_estimates['sample_var'].flatten()  # All samples' variance factors
     sample_var_current = sample_var_all[sample_idx]  # Current sample's variance factor
     cn_probs = cn_posterior['cn_posterior'][:, sample_idx, :]  # (n_bins, n_states)
     
-    colors = ['red', 'orange', 'green', 'blue', 'purple', 'brown']
+    colors = [ '#004D40', '#FFC107',  '#1E88E5', '#D81B60', '#38006B']
     x = np.arange(len(observed))
+    
+    # Create normalized x-axis where each chromosome has equal width
+    # Get chromosome boundaries
+    chr_array = data.chr
+    chr_changes = np.where(chr_array[:-1] != chr_array[1:])[0] + 1
+    chr_boundaries = np.concatenate([[0], chr_changes, [len(chr_array)]])
+    
+    # Calculate transformed x positions (each chromosome gets unit width)
+    x_transformed = np.zeros(len(observed))
+    for i in range(len(chr_boundaries) - 1):
+        start_idx = chr_boundaries[i]
+        end_idx = chr_boundaries[i + 1]
+        n_bins_in_chr = end_idx - start_idx
+        # Map bins within this chromosome to interval [i, i+1]
+        x_transformed[start_idx:end_idx] = i + np.linspace(0, 1, n_bins_in_chr, endpoint=False)
     
     # Plot 1: Observed depth with MAP Copy number calls overlaid
     ax = axes[0]
     # First plot MAP copy number calls
-    for state in range(6):
-        mask = cn == state
-        if np.any(mask):
-            indices = np.where(mask)[0]
-            ax.plot(indices, cn[mask], 'o-', alpha=0.5, markersize=4, linewidth=1,
-                   label=f'CN={state}', color=colors[state])
+    ax.plot(x_transformed, cn, 'o', alpha=0.5, markersize=6,
+            label=f'MAP copy state', color='black')
     # Then plot observed depth on top so it's visible
-    ax.plot(x, observed, 'k-', linewidth=0.8, alpha=0.7, label='Observed')
-    ax.set_ylabel('Normalized depth / CN')
+    ax.plot(x_transformed, observed, 'r-', linewidth=0.8, alpha=0.7, label='Normalized read depth')
     ax.set_title(f'Sample: {data.sample_ids[sample_idx]}')
-    ax.legend(loc='upper right')
+    ax.legend(loc='lower left')
     ax.grid(True, axis='y', alpha=1, linestyle='-', linewidth=1)
-    ax.set_ylim([-1, 5])
+    ax.set_ylim([-0.5, 4.5])
+    ax.set_xlim([x_transformed.min(), x_transformed.max()])
     
     # Plot 2: Stacked area plot of CN probabilities
     ax = axes[1]
-    ax.stackplot(x, cn_probs.T, labels=[f'CN={i}' for i in range(6)], 
+    ax.stackplot(x_transformed, cn_probs.T, labels=[f'CN={i}' for i in range(6)], 
                 alpha=0.7, colors=colors)
-    ax.set_ylabel('CN Probability')
-    ax.legend(loc='upper right', ncol=6)
+    ax.set_ylabel('Copy Number Probability')
+    ax.legend(loc='upper left', ncol=6)
+    ax.set_ylim([0, 1])
+    ax.set_xlim([x_transformed.min(), x_transformed.max()])
     
-    # Plot 3: Bin bias
+    # Plot 3: Sample variance distribution
     ax = axes[2]
-    ax.plot(x, bin_bias, 'o-', alpha=0.5, markersize=3, linewidth=0.5, color='black', label='Bin bias')
-    ax.axhline(1.0, color='red', linestyle='--', alpha=0.5, label='No bias')
-    ax.set_ylabel('Bin bias')
-    ax.legend(loc='upper right')
-    
-    # Plot 4: Sample variance distribution
-    ax = axes[3]
-    ax.hist(np.log10(sample_var_all), bins=30, alpha=0.7, edgecolor='black', linewidth=0.5, color='teal')
-    ax.axvline(np.log10(sample_var_current), color='red', linestyle='--', linewidth=2, 
-              label=f'This sample: {sample_var_current:.3f}')
-    ax.set_xlabel('Log10 sample variance factor')
+    ax.hist(np.sqrt(sample_var_all), bins=30, alpha=0.7, edgecolor='black', linewidth=0.5, color='gray')
+    ax.axvline(np.sqrt(sample_var_current), color='red', linestyle='--', linewidth=2, 
+              label=f'This sample: {np.sqrt(sample_var_current):.3f}')
+    ax.set_xlabel('MAP sample std')
     ax.set_ylabel('Count')
-    ax.set_title('Distribution of sample variance across all samples')
     ax.set_yscale('log')
     ax.legend(loc='upper right')
     ax.grid(True, alpha=0.3)
@@ -906,22 +609,68 @@ def plot_combined_results(data: AneuploidyData, map_estimates: dict, cn_posterio
             chr_indices = np.where(chr_mask)[0]
             
             if len(chr_indices) > 0:
-                chr_start = chr_indices[0]
-                chr_end = chr_indices[-1]
+                chr_start_idx = chr_indices[0]
+                chr_end_idx = chr_indices[-1]
                 
-                # Add red transparent box to first 3 panels
+                # Get transformed coordinates for highlighting
+                chr_start_transformed = x_transformed[chr_start_idx]
+                chr_end_transformed = x_transformed[chr_end_idx]
+                
+                # Add red transparent box to first 2 panels
                 for ax in axes[:2]:
                     y_min, y_max = ax.get_ylim()
-                    ax.axvspan(chr_start, chr_end, alpha=0.15, color='red', zorder=0)
+                    ax.axvspan(chr_start_transformed, chr_end_transformed, alpha=0.15, color='red', zorder=0)
     
-    # Add chromosome labels to first 3 panels
-    for ax in axes[:3]:
-        add_chromosome_labels(ax, data.chr)
+    # Add chromosome labels to first 2 panels
+    for ax in axes[:2]:
+        add_chromosome_labels(ax, data.chr, x_transformed=x_transformed)
     
     plt.tight_layout()
     sample_name = data.sample_ids[sample_idx].replace('/', '_').replace(' ', '_')
     aneu_suffix = '_ANEU' if is_aneuploid else ''
     filename = f'combined_results_{sample_name}{aneu_suffix}.png'
+    output_path = os.path.join(output_dir, filename)
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    print(f"Saved plot: {output_path}")
+    plt.close()
+
+
+def plot_bin_variance_bias(data: AneuploidyData, map_estimates: dict, output_dir: str):
+    """
+    Plot bin bias and bin variance posteriors (global across all samples).
+    
+    Args:
+        data: AneuploidyData object
+        map_estimates: Dictionary with MAP estimates
+    """
+    fig, axes = plt.subplots(2, 1, figsize=(16, 8))
+    
+    # Extract data
+    bin_bias = map_estimates['bin_bias'].flatten()
+    bin_var = map_estimates['bin_var'].flatten()
+    
+    x = np.arange(len(bin_bias))
+    
+    # Plot 1: Bin bias
+    ax = axes[0]
+    ax.plot(x, bin_bias, 'o', alpha=0.5, markersize=3, color='black', label='Bin bias')
+    ax.axhline(1.0, color='red', linestyle='--', alpha=0.5, label='No bias')
+    ax.set_ylabel('Bin mean bias')
+    ax.set_title('Bin Posteriors')
+    ax.set_xlim([x.min(), x.max()])
+    
+    # Plot 2: Bin variance
+    ax = axes[1]
+    ax.plot(x, np.sqrt(bin_var), 'o', alpha=0.5, markersize=3, color='purple', label='Bin variance')
+    ax.set_ylabel('Bin std')
+    ax.set_xlim([x.min(), x.max()])
+    
+    # Add chromosome labels to both panels
+    for ax in axes:
+        add_chromosome_labels(ax, data.chr)
+    
+    plt.tight_layout()
+    filename = 'bin_posteriors.png'
     output_path = os.path.join(output_dir, filename)
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     print(f"Saved plot: {output_path}")
@@ -1182,13 +931,7 @@ def summary_statistics(data: AneuploidyData, map_estimates: dict, cn_posterior: 
                 aneuploid_samples[sample_idx].append(('chrX', chrX_cn, chrX_mean_prob))
             if chrY_bins > 0:
                 aneuploid_samples[sample_idx].append(('chrY', chrY_cn, chrY_mean_prob))
-        elif is_normal:
-            prob_str = f"P={chrX_mean_prob:.2f}/{chrY_mean_prob:.2f}"
-            if is_XX:
-                print(f"    {sample_name}: Normal (XX, {prob_str})")
-            else:
-                print(f"    {sample_name}: Normal (XY, {prob_str})")
-        else:
+        elif not is_normal:
             # One or both chromosomes don't meet threshold - report but don't call aneuploidy
             karyotype = f"chrX={chrX_cn} (P={chrX_mean_prob:.2f}), chrY={chrY_cn} (P={chrY_mean_prob:.2f})"
             print(f"    {sample_name}: Uncertain ({karyotype})")
@@ -1210,166 +953,508 @@ def summary_statistics(data: AneuploidyData, map_estimates: dict, cn_posterior: 
     return aneuploid_samples
 
 
-# Prepare data - optionally subset for faster testing
-# Uncomment the line below to test on chr X only
-# df_subset = df[df['Chr'] == 'chrX'].copy()
-# Or use all data:
-df_subset = df.copy()
-
-# Create data object
-device = 'cpu'  # Use 'cuda' if GPU available
-dtype = torch.float32
-inference_method = 'svi'
-
-data = AneuploidyData(df_subset, device=device, dtype=dtype)
-
-# Initialize model
-model = AneuploidyModel(
-    n_states=4,           # CN states: 0, 1, 2, 3
-    alpha_ref=1.0,       # Strong prior on CN=2; 100 for autosome, 1 for allosome
-    alpha_non_ref=1.0,    # Weak prior on other states
-    var_bias_bin=0.01,     # Moderate bin-to-bin bias variation
-    var_sample=0.01,       # Moderate sample variance
-    var_bin=0.01,          # Moderate bin variance
-    device=device,
-    dtype=dtype
-)
-
-# Train model
-if inference_method == 'svi':
-    model.train(
-        data=data,
-        max_iter=2000,         # Number of training iterations (increase for better convergence)
-        lr_init=0.01,         # Initial learning rate
-        lr_min=0.01,         # Minimum learning rate
-        lr_decay=10000,         # Learning rate decay constant
-        log_freq=50,          # Log every 50 iterations
-        jit=True             # Set to True for faster training (may have compatibility issues)
-    )
-else:
-    model.train_mcmc(
-        data=data,
-        warmup_steps=100,        # Number of warmup iterations
-        num_samples=200,       # Number of posterior samples to draw
-        num_chains=1,           # Number of MCMC chains
-        step_size=0.01,
-        kernel='NUTS'
-    )
-
-# Plot training loss
-plot_training_loss(model)
-
-# Get MAP estimates
-map_estimates = model.get_map_estimates(data)
-
-# Run discrete inference to get CN posterior probabilities
-cn_posterior = model.run_discrete_inference(data, n_samples=1000, log_freq=100)
-print("cn_posterior keys:", cn_posterior.keys())
-
-# Print summary statistics and get per-chromosome aneuploidy calls
-aneuploid_chromosomes = summary_statistics(data, map_estimates, cn_posterior)
-
-# Separate samples into normal and aneuploid groups
-normal_samples = []
-aneuploid_samples_list = []
-
-for sample_idx in range(data.n_samples):
-    if len(aneuploid_chromosomes[sample_idx]) == 0:
-        normal_samples.append(sample_idx)
+def read_data(pattern: str) -> pd.DataFrame:
+    files = glob.glob(pattern, recursive=True)
+    
+    print(f"Found {len(files)} files matching pattern: {pattern}")
+    
+    # Load first file to establish the base dataframe
+    df_merged = None
+    
+    # Track successful and failed files
+    successful_files = []
+    failed_files = []
+    
+    # Load each file
+    for file_path in files:
+        print(f"Loading: {file_path}")
+        try:
+            # Read gzipped TSV file
+            df_file = pd.read_csv(file_path, sep='\t', compression='gzip')
+            
+            # Get source file identifier
+            source_file = str(Path(file_path).parent.parent.name)
+            
+            # Rename chromosome column if it exists
+            if '#Chr' in df_file.columns:
+                df_file['Chr'] = df_file['#Chr']
+                df_file = df_file.drop('#Chr', axis=1)
+            
+            # Create bin identifier
+            df_file['Bin'] = df_file['Chr'].astype(str) + ':' + df_file['Start'].astype(str) + '-' + df_file['End'].astype(str)
+            df_file = df_file.set_index('Bin')
+            
+            # Get sample columns (exclude metadata)
+            metadata_cols = ['Chr', 'Start', 'End']
+            sample_cols = [col for col in df_file.columns if col not in metadata_cols]
+            
+            if df_merged is None:
+                # First file: keep metadata + samples
+                df_merged = df_file.copy()
+                df_merged['source_file'] = source_file
+                print(f"  Initialized with {len(df_merged)} bins and {len(sample_cols)} samples")
+            else:
+                # Subsequent files: merge sample columns only
+                # Keep only sample columns from this file
+                df_samples = df_file[sample_cols].copy()
+                
+                # Check for duplicate sample columns and drop them
+                existing_sample_cols = [col for col in df_merged.columns if col not in ['Chr', 'Start', 'End', 'source_file']]
+                duplicate_samples = [col for col in sample_cols if col in existing_sample_cols]
+                
+                if duplicate_samples:
+                    print(f"  WARNING: Found {len(duplicate_samples)} duplicate sample(s) in {file_path}")
+                    print(f"  Dropping duplicate samples: {duplicate_samples[:5]}{'...' if len(duplicate_samples) > 5 else ''}")
+                    df_samples = df_samples.drop(columns=duplicate_samples)
+                    sample_cols = [col for col in sample_cols if col not in duplicate_samples]
+                
+                # Skip this file if no new samples remain after dropping duplicates
+                if len(sample_cols) == 0:
+                    print(f"  Skipping file - all samples already exist in merged dataframe")
+                    continue
+                
+                # Validate that bins match before merging
+                existing_bins = set(df_merged.index)
+                new_bins = set(df_samples.index)
+                
+                if existing_bins != new_bins:
+                    # Bins don't match - try coordinate adjustments before failing
+                    print(f"\n  WARNING: Bin mismatch detected for {file_path}")
+                    print(f"  Attempting coordinate adjustment...")
+                    
+                    # Try adding 1 to coordinates
+                    df_file_adjusted = df_file.copy()
+                    df_file_adjusted['Start'] = df_file_adjusted['Start'] + 1
+                    df_file_adjusted['End'] = df_file_adjusted['End'] + 1
+                    df_file_adjusted['Bin'] = (df_file_adjusted['Chr'].astype(str) + ':' + 
+                                               df_file_adjusted['Start'].astype(str) + '-' + 
+                                               df_file_adjusted['End'].astype(str))
+                    df_file_adjusted = df_file_adjusted.set_index('Bin')
+                    df_samples_adjusted = df_file_adjusted[sample_cols].copy()
+                    new_bins_adjusted = set(df_samples_adjusted.index)
+                    
+                    if existing_bins == new_bins_adjusted:
+                        print(f"  ✓ Success: Coordinates adjusted by +1")
+                        df_samples = df_samples_adjusted
+                    else:
+                        # Try subtracting 1 instead
+                        df_file_adjusted = df_file.copy()
+                        df_file_adjusted['Start'] = df_file_adjusted['Start'] - 1
+                        df_file_adjusted['End'] = df_file_adjusted['End'] - 1
+                        df_file_adjusted['Bin'] = (df_file_adjusted['Chr'].astype(str) + ':' + 
+                                                   df_file_adjusted['Start'].astype(str) + '-' + 
+                                                   df_file_adjusted['End'].astype(str))
+                        df_file_adjusted = df_file_adjusted.set_index('Bin')
+                        df_samples_adjusted = df_file_adjusted[sample_cols].copy()
+                        new_bins_adjusted = set(df_samples_adjusted.index)
+                        
+                        if existing_bins == new_bins_adjusted:
+                            print(f"  ✓ Success: Coordinates adjusted by -1")
+                            df_samples = df_samples_adjusted
+                        else:
+                            # Neither adjustment worked - show error and raise
+                            only_in_existing = existing_bins - new_bins
+                            only_in_new = new_bins - existing_bins
+                            
+                            print("\n" + "="*80)
+                            print("ERROR: Bin mismatch detected!")
+                            print("="*80)
+                            print(f"\nFile: {file_path}")
+                            print(f"Existing dataframe has {len(existing_bins)} bins")
+                            print(f"New file has {len(new_bins)} bins")
+                            print(f"Bins only in existing: {len(only_in_existing)}")
+                            print(f"Bins only in new file: {len(only_in_new)}")
+                            
+                            if only_in_existing:
+                                print(f"\nExample bins only in existing dataframe (first 5):")
+                                for bin_id in list(only_in_existing)[:5]:
+                                    print(f"  {bin_id}")
+                            
+                            if only_in_new:
+                                print(f"\nExample bins only in new file (first 5):")
+                                for bin_id in list(only_in_new)[:5]:
+                                    print(f"  {bin_id}")
+                            
+                            raise ValueError(
+                                f"Bin mismatch: Cannot merge {file_path} because bins don't align. "
+                                f"Expected {len(existing_bins)} bins, found {len(new_bins)} bins. "
+                                f"Coordinate adjustments (±1) did not resolve the mismatch."
+                            )
+                
+                # Merge with existing dataframe
+                df_merged = df_merged.join(df_samples, how='outer')
+                print(f"  Merged {len(sample_cols)} samples, total bins: {len(df_merged)}")
+            
+            # Mark as successful if we got here
+            successful_files.append(file_path)
+                
+        except Exception as e:
+            print(f"Error loading {file_path}: {e}")
+            failed_files.append((file_path, str(e)))
+    
+    if df_merged is not None:
+        # Remove duplicate bins (keep first occurrence)
+        df_merged = df_merged[~df_merged.index.duplicated(keep='first')]
+        
+        print(f"\nCombined dataframe shape: {df_merged.shape}")
+        print(f"Total bins: {len(df_merged)}")
+        print(f"Total columns: {len(df_merged.columns)}")
+        
+        # Count sample columns
+        metadata_cols = ['Chr', 'Start', 'End', 'source_file']
+        sample_count = len([col for col in df_merged.columns if col not in metadata_cols])
+        print(f"Sample columns: {sample_count}")
     else:
-        aneuploid_samples_list.append(sample_idx)
+        print("No files were successfully loaded")
+        df_merged = pd.DataFrame()
+    
+    # Print consolidated file loading summary
+    print("\n" + "="*80)
+    print("FILE LOADING SUMMARY")
+    print("="*80)
+    print(f"Total files found: {len(files)}")
+    print(f"Successfully loaded: {len(successful_files)}")
+    print(f"Failed to load: {len(failed_files)}")
+    
+    if failed_files:
+        print("\nFailed files:")
+        for file_path, error in failed_files:
+            print(f"  - {file_path}")
+            print(f"    Error: {error}")
+    print("="*80 + "\n")
+    
+    return df_merged
 
-print(f"\n{'='*80}")
-print("GENERATING COMBINED RESULTS PLOTS")
-print(f"{'='*80}")
-print(f"Normal samples: {len(normal_samples)}")
-print(f"Aneuploid samples: {len(aneuploid_samples_list)}")
 
-# Generate combined plots for up to 10 normal samples
-n_normal_to_plot = min(10, len(normal_samples))
-print(f"\nGenerating plots for {n_normal_to_plot} normal samples...")
-for i, sample_idx in enumerate(normal_samples[:n_normal_to_plot]):
-    sample_name = data.sample_ids[sample_idx]
-    print(f"  {i+1}/{n_normal_to_plot}: {sample_name} (sample_idx={sample_idx})")
-    plot_combined_results(data, map_estimates, cn_posterior, sample_idx=sample_idx, is_aneuploid=False, aneuploid_chrs=None)
-
-# Generate combined plots for up to 10 aneuploid samples
-n_aneuploid_to_plot = min(10, len(aneuploid_samples_list))
-print(f"\nGenerating plots for {n_aneuploid_to_plot} aneuploid samples...")
-for i, sample_idx in enumerate(aneuploid_samples_list[:n_aneuploid_to_plot]):
-    sample_name = data.sample_ids[sample_idx]
-    aneuploid_chrs = aneuploid_chromosomes[sample_idx]
-    chr_list = ', '.join([f"{chr_name}(CN={cn})" for chr_name, cn, _ in aneuploid_chrs])
-    print(f"  {i+1}/{n_aneuploid_to_plot}: {sample_name} (sample_idx={sample_idx}) - {chr_list}")
-    plot_combined_results(data, map_estimates, cn_posterior, sample_idx=sample_idx, is_aneuploid=True, aneuploid_chrs=aneuploid_chrs)
-
-print(f"{'='*80}\n")
-
-# Create results dataframe with copy number calls and probabilities
-results = []
-cn_probs = cn_posterior['cn_posterior']
-
-for i in range(data.n_bins):
-    for j in range(data.n_samples):
-        cn_map = map_estimates['cn'][i, j]
-        cn_prob = cn_probs[i, j, :]
+def filter_low_quality_bins(df: pd.DataFrame,
+                           autosome_median_min: float = 1.5,
+                           autosome_median_max: float = 2.5,
+                           autosome_mad_max: float = 0.5,
+                           chrX_median_min: float = 0.75,
+                           chrX_median_max: float = 2.5,
+                           chrX_mad_max: float = 0.5,
+                           chrY_median_min: float = 0.0,
+                           chrY_median_max: float = 2.0,
+                           chrY_mad_max: float = 0.5):
+    """
+    Filter out low quality bins based on median and MAD thresholds.
+    
+    Args:
+        df: DataFrame with bins as rows and samples as columns
+        autosome_median_min: Minimum median depth for autosomal bins
+        autosome_median_max: Maximum median depth for autosomal bins
+        autosome_mad_max: Maximum MAD for autosomal bins
+        chrX_median_min: Minimum median depth for chrX bins
+        chrX_median_max: Maximum median depth for chrX bins
+        chrX_mad_max: Maximum MAD for chrX bins
+        chrY_median_min: Minimum median depth for chrY bins
+        chrY_median_max: Maximum median depth for chrY bins
+        chrY_mad_max: Maximum MAD for chrY bins
         
-        result = {
-            'chr': data.chr[i],
-            'start': data.start[i],
-            'end': data.end[i],
-            'sample': data.sample_ids[j],
-            'observed_depth': data.depth[i, j].cpu().numpy(),
-            'cn_map': int(cn_map),
-            'cn_prob_0': cn_prob[0],
-            'cn_prob_1': cn_prob[1],
-            'cn_prob_2': cn_prob[2],
-            'cn_prob_3': cn_prob[3],
-            'max_prob': cn_prob.max(),
-            'bin_bias': map_estimates['bin_bias'][i],
-            'bin_var': map_estimates['bin_var'][i],
-        }
-        results.append(result)
+    Returns:
+        Filtered DataFrame
+    """
+    # Get sample columns (exclude metadata)
+    metadata_cols = ['Chr', 'Start', 'End', 'source_file']
+    sample_cols = [col for col in df.columns if col not in metadata_cols]
+    
+    # Compute median and MAD for each bin across samples
+    depths = df[sample_cols].values
+    medians = np.median(depths, axis=1)
+    mads = np.median(np.abs(depths - medians[:, np.newaxis]), axis=1)
+    
+    print(f"\n{'='*80}")
+    print("FILTERING LOW QUALITY BINS")
+    print(f"{'='*80}")
+    print(f"Starting bins: {len(df)}")
+    
+    # Create filter masks for each chromosome type
+    autosome_mask = ~df['Chr'].isin(['chrX', 'chrY'])
+    chrX_mask = df['Chr'] == 'chrX'
+    chrY_mask = df['Chr'] == 'chrY'
+    
+    # Initialize keep mask (all True)
+    keep_mask = np.ones(len(df), dtype=bool)
+    
+    # Filter autosomes
+    if autosome_mask.any():
+        autosome_keep = (
+            (medians >= autosome_median_min) &
+            (medians <= autosome_median_max) &
+            (mads <= autosome_mad_max)
+        )
+        autosome_filtered = autosome_mask & ~autosome_keep
+        keep_mask[autosome_mask] = autosome_keep[autosome_mask]
+        print(f"\nAutosomes:")
+        print(f"  Thresholds: median [{autosome_median_min}, {autosome_median_max}], MAD <= {autosome_mad_max}")
+        print(f"  Bins before: {autosome_mask.sum()}")
+        print(f"  Bins filtered: {autosome_filtered.sum()}")
+        print(f"  Bins after: {(autosome_mask & keep_mask).sum()}")
+    
+    # Filter chrX
+    if chrX_mask.any():
+        chrX_keep = (
+            (medians >= chrX_median_min) &
+            (medians <= chrX_median_max) &
+            (mads <= chrX_mad_max)
+        )
+        chrX_filtered = chrX_mask & ~chrX_keep
+        keep_mask[chrX_mask] = chrX_keep[chrX_mask]
+        print(f"\nchrX:")
+        print(f"  Thresholds: median [{chrX_median_min}, {chrX_median_max}], MAD <= {chrX_mad_max}")
+        print(f"  Bins before: {chrX_mask.sum()}")
+        print(f"  Bins filtered: {chrX_filtered.sum()}")
+        print(f"  Bins after: {(chrX_mask & keep_mask).sum()}")
+    
+    # Filter chrY
+    if chrY_mask.any():
+        chrY_keep = (
+            (medians >= chrY_median_min) &
+            (medians <= chrY_median_max) &
+            (mads <= chrY_mad_max)
+        )
+        chrY_filtered = chrY_mask & ~chrY_keep
+        keep_mask[chrY_mask] = chrY_keep[chrY_mask]
+        print(f"\nchrY:")
+        print(f"  Thresholds: median [{chrY_median_min}, {chrY_median_max}], MAD <= {chrY_mad_max}")
+        print(f"  Bins before: {chrY_mask.sum()}")
+        print(f"  Bins filtered: {chrY_filtered.sum()}")
+        print(f"  Bins after: {(chrY_mask & keep_mask).sum()}")
+    
+    # Apply filter
+    df_filtered = df[keep_mask].copy()
+    
+    print(f"\nTotal bins after filtering: {len(df_filtered)}")
+    print(f"Total bins removed: {len(df) - len(df_filtered)}")
+    print(f"{'='*80}\n")
+    
+    return df_filtered
 
-results_df = pd.DataFrame(results)
-print(f"Results dataframe shape: {results_df.shape}")
-print(results_df.head(20))
 
-# Save results to TSV
-output_file = os.path.join(output_dir, 'aneuploidy_results.tsv')
-results_df.to_csv(output_file, sep='\t', index=False)
-print(f"Results saved to {output_file}")
+def main():
+    """
+    Main function to run aneuploidy detection pipeline.
+    """
+    # Find all matching files
+    bins_pattern = "/Users/markw/Work/talkowski/sv-pipe-testing/mw_ploidy/cmg/data/m2_batch32_ploidy_plots/ploidy_est/binwise_estimated_copy_numbers.bed.gz"
+    output_dir = "/Users/markw/Work/talkowski/sv-pipe-testing/mw_ploidy/cmg/aneuploidy_pyro_output"
 
-# Save per-chromosome high-confidence aneuploidy calls
-chromosome_aneuploidies = []
-for sample_idx, aneuploid_chrs in aneuploid_chromosomes.items():
-    sample_name = data.sample_ids[sample_idx]
-    for chr_name, cn, mean_prob in aneuploid_chrs:
-        # Get chromosome bins for additional info
-        chr_mask = data.chr == chr_name
-        chr_bins_data = results_df[(results_df['chr'] == chr_name) & (results_df['sample'] == sample_name)]
-        
-        # Convert observed_depth arrays to scalars for statistics
-        depths = np.array([float(d) if hasattr(d, '__iter__') and not isinstance(d, str) else float(d) 
-                          for d in chr_bins_data['observed_depth']])
-        
-        chromosome_aneuploidies.append({
-            'sample': sample_name,
-            'chromosome': chr_name,
-            'copy_number': int(cn),
-            'mean_cn_probability': mean_prob,
-            'n_bins': chr_bins_data.shape[0],
-            'mean_depth': float(np.mean(depths)),
-            'median_depth': float(np.median(depths)),
-            'std_depth': float(np.std(depths)),
-        })
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    print(f"Output directory: {output_dir}")
 
-if chromosome_aneuploidies:
-    aneuploidy_df = pd.DataFrame(chromosome_aneuploidies)
-    aneuploidy_df = aneuploidy_df.sort_values(['sample', 'chromosome'])
+    # Delete all existing combined_results_*.png files
+    combined_results_pattern = os.path.join(output_dir, "combined_results_*.png")
+    existing_files = glob.glob(combined_results_pattern)
+    if existing_files:
+        print(f"Deleting {len(existing_files)} existing combined_results_*.png files...")
+        for file_path in existing_files:
+            os.remove(file_path)
+        print("Cleanup complete.")
+
+    df = read_data(bins_pattern)
+    # TODO filter bins
+    #df = df[df['Chr'] == 'chrY']
+    #df = df[df['Chr'].isin({'chrX', 'chrY'})]
+    #df = df[df['Chr'].isin({'chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 'chr9', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22'})]
+    #df = df.loc[:, ['Chr', 'Start', 'End', 'source_file', '__cdh1355__1a8a28'] + [x for x in df.columns[2:12].values.tolist() if x != '__cdh1355__1a8a28']]
+    #df = df.loc[:, ['Chr', 'Start', 'End', 'source_file'] + df.columns[2:152].values.tolist()]
+
+    # Filter low quality bins
+    df = filter_low_quality_bins(df,
+                                autosome_median_min=1.75,
+                                autosome_median_max=2.25,
+                                autosome_mad_max=0.25,
+                                chrX_median_min=0.75,
+                                chrX_median_max=2.25,
+                                chrX_mad_max=0.5,
+                                chrY_median_min=0.0,
+                                chrY_median_max=1.25,
+                                chrY_mad_max=0.5)
+
+    print(df)
+
+    # Set up Pyro
+    pyro.enable_validation(True)
+    pyro.distributions.enable_validation(True)
+    pyro.set_rng_seed(42)
+    torch.manual_seed(42)
+    np.random.seed(42)
+
+
+    # Prepare data - optionally subset for faster testing
+    # Uncomment the line below to test on chr X only
+    # df_subset = df[df['Chr'] == 'chrX'].copy()
+    # Or use all data:
+    df_subset = df.copy()
+
+    # Create data object
+    device = 'cpu'  # Use 'cuda' if GPU available
+    dtype = torch.float32
+    inference_method = 'svi'
+
+    data = AneuploidyData(df_subset, device=device, dtype=dtype)
+
+    # Initialize model
+    model = AneuploidyModel(
+        n_states=4,           # CN states: 0, 1, 2, 3
+        alpha_ref=1.0,       # Strong prior on CN=2; 100 for autosome, 1 for allosome
+        alpha_non_ref=1.0,    # Weak prior on other states
+        var_bias_bin=0.01,     # Moderate bin-to-bin bias variation
+        var_sample=0.01,       # Moderate sample variance
+        var_bin=0.01,          # Moderate bin variance
+        device=device,
+        dtype=dtype,
+        guide_type='delta'      # MAP inference
+    )
+
+    # Train model
+    if inference_method == 'svi':
+        model.train(
+            data=data,
+            max_iter=1000,         # Number of training iterations (increase for better convergence)
+            lr_init=0.01,         # Initial learning rate
+            lr_min=0.01,         # Minimum learning rate
+            lr_decay=10000,         # Learning rate decay constant
+            log_freq=50,          # Log every 50 iterations
+            jit=True             # Set to True for faster training (may have compatibility issues)
+        )
+    else:
+        model.train_mcmc(
+            data=data,
+            warmup_steps=100,        # Number of warmup iterations
+            num_samples=200,       # Number of posterior samples to draw
+            num_chains=1,           # Number of MCMC chains
+            step_size=0.01,
+            kernel='NUTS'
+        )
+
+    # Plot training loss
+    plot_training_loss(model, output_dir=output_dir)
+
+    # Get MAP estimates
+    map_estimates = model.get_map_estimates(data)
+
+    # Run discrete inference to get CN posterior probabilities
+    cn_posterior = model.run_discrete_inference(data, n_samples=1000, log_freq=100)
+    print("cn_posterior keys:", cn_posterior.keys())
+
+    # Print summary statistics and get per-chromosome aneuploidy calls
+    aneuploid_chromosomes = summary_statistics(data, map_estimates, cn_posterior)
+
+    # Separate samples into normal and aneuploid groups
+    normal_samples = []
+    aneuploid_samples_list = []
+
+    for sample_idx in range(data.n_samples):
+        if len(aneuploid_chromosomes[sample_idx]) == 0:
+            normal_samples.append(sample_idx)
+        else:
+            aneuploid_samples_list.append(sample_idx)
+
+    print(f"\n{'='*80}")
+    print("GENERATING COMBINED RESULTS PLOTS")
+    print(f"{'='*80}")
+    print(f"Normal samples: {len(normal_samples)}")
+    print(f"Aneuploid samples: {len(aneuploid_samples_list)}")
+
+    # Generate bin variance/bias plot once (global across all samples)
+    print("\nGenerating global bin variance and bias plot...")
+    plot_bin_variance_bias(data, map_estimates, output_dir=output_dir)
+
+    # Generate combined plots for up to 10 normal samples
+    n_normal_to_plot = min(10, len(normal_samples))
+    print(f"\nGenerating plots for {n_normal_to_plot} normal samples...")
+    for i, sample_idx in enumerate(normal_samples[:n_normal_to_plot]):
+        sample_name = data.sample_ids[sample_idx]
+        print(f"  {i+1}/{n_normal_to_plot}: {sample_name} (sample_idx={sample_idx})")
+        plot_combined_results(data, map_estimates, cn_posterior, output_dir=output_dir, sample_idx=sample_idx, is_aneuploid=False, aneuploid_chrs=None)
+
+    # Generate combined plots for up to 10 aneuploid samples
+    n_aneuploid_to_plot = min(10, len(aneuploid_samples_list))
+    print(f"\nGenerating plots for {n_aneuploid_to_plot} aneuploid samples...")
+    for i, sample_idx in enumerate(aneuploid_samples_list[:n_aneuploid_to_plot]):
+        sample_name = data.sample_ids[sample_idx]
+        aneuploid_chrs = aneuploid_chromosomes[sample_idx]
+        chr_list = ', '.join([f"{chr_name}(CN={cn})" for chr_name, cn, _ in aneuploid_chrs])
+        print(f"  {i+1}/{n_aneuploid_to_plot}: {sample_name} (sample_idx={sample_idx}) - {chr_list}")
+        plot_combined_results(data, map_estimates, cn_posterior, output_dir=output_dir, sample_idx=sample_idx, is_aneuploid=True, aneuploid_chrs=aneuploid_chrs)
+
+    print(f"{'='*80}\n")
+
+    # Create results dataframe with copy number calls and probabilities
+    results = []
+    cn_probs = cn_posterior['cn_posterior']
+
+    for i in range(data.n_bins):
+        for j in range(data.n_samples):
+            cn_map = map_estimates['cn'][i, j]
+            cn_prob = cn_probs[i, j, :]
+            
+            result = {
+                'chr': data.chr[i],
+                'start': data.start[i],
+                'end': data.end[i],
+                'sample': data.sample_ids[j],
+                'observed_depth': data.depth[i, j].cpu().numpy(),
+                'cn_map': int(cn_map),
+                'cn_prob_0': cn_prob[0],
+                'cn_prob_1': cn_prob[1],
+                'cn_prob_2': cn_prob[2],
+                'cn_prob_3': cn_prob[3],
+                'max_prob': cn_prob.max(),
+                'bin_bias': map_estimates['bin_bias'][i],
+                'bin_var': map_estimates['bin_var'][i],
+            }
+            results.append(result)
+
+    results_df = pd.DataFrame(results)
+    print(f"Results dataframe shape: {results_df.shape}")
+    print(results_df.head(20))
+
+    # Save results to TSV
+    output_file = os.path.join(output_dir, 'aneuploidy_results.tsv')
+    results_df.to_csv(output_file, sep='\t', index=False)
+    print(f"Results saved to {output_file}")
+
+    # Save per-chromosome high-confidence aneuploidy calls
+    chromosome_aneuploidies = []
+    for sample_idx, aneuploid_chrs in aneuploid_chromosomes.items():
+        sample_name = data.sample_ids[sample_idx]
+        for chr_name, cn, mean_prob in aneuploid_chrs:
+            # Get chromosome bins for additional info
+            chr_mask = data.chr == chr_name
+            chr_bins_data = results_df[(results_df['chr'] == chr_name) & (results_df['sample'] == sample_name)]
+            
+            # Convert observed_depth arrays to scalars for statistics
+            depths = np.array([float(d) if hasattr(d, '__iter__') and not isinstance(d, str) else float(d) 
+                            for d in chr_bins_data['observed_depth']])
+            
+            chromosome_aneuploidies.append({
+                'sample': sample_name,
+                'chromosome': chr_name,
+                'copy_number': int(cn),
+                'mean_cn_probability': mean_prob,
+                'n_bins': chr_bins_data.shape[0],
+                'mean_depth': float(np.mean(depths)),
+                'median_depth': float(np.median(depths)),
+                'std_depth': float(np.std(depths)),
+            })
+
+    if chromosome_aneuploidies:
+        aneuploidy_df = pd.DataFrame(chromosome_aneuploidies)
+        aneuploidy_df = aneuploidy_df.sort_values(['sample', 'chromosome'])
+        print(f"Total chromosomal aneuploidies: {len(aneuploidy_df)}")
+    else:
+        print("No high-confidence chromosomal aneuploidies detected")
+        # Create empty dataframe with expected columns
+        aneuploidy_df = pd.DataFrame(columns=['sample', 'chromosome', 'copy_number', 'mean_cn_probability', 
+                                            'n_bins', 'mean_depth', 'median_depth', 'std_depth'])
+
     aneuploidy_output = os.path.join(output_dir, 'high_confidence_aneuploidies.tsv')
     aneuploidy_df.to_csv(aneuploidy_output, sep='\t', index=False)
     print(f"High-confidence aneuploidy calls saved to {aneuploidy_output}")
-    print(f"Total chromosomal aneuploidies: {len(aneuploidy_df)}")
-else:
-    print("No high-confidence chromosomal aneuploidies detected")
+
+
+if __name__ == "__main__":
+    main()
