@@ -6,11 +6,13 @@ workflow NormalizeBamContigsScatter {
   input {
     File input_bam
     File input_bai
+    File ref_fai
     String prefix
     String sv_pipeline_base_docker
+    RuntimeAttr? runtime_attr_merge_bams
     RuntimeAttr? runtime_attr_detect_contigs
     RuntimeAttr? runtime_attr_convert_contig
-    RuntimeAttr? runtime_attr_merge_bams
+    RuntimeAttr? runtime_attr_Reheader_Bam_With_Fai
   }
 
   call DetectContigs {
@@ -31,11 +33,20 @@ workflow NormalizeBamContigsScatter {
           runtime_attr_override = runtime_attr_convert_contig
 
       }
+
+      call ReheaderBamWithFai {
+        input:
+          input_bam = ConvertOneContig.out_bam,
+          input_bai = ConvertOneContig.out_bai,
+          ref_fai = ref_fai,
+          docker_image = sv_pipeline_base_docker,
+          runtime_attr_override = runtime_attr_Reheader_Bam_With_Fai
     }
 
     call MergeBams {
       input:
-        bams = ConvertOneContig.out_bam,
+        bams = ReheaderBamWithFai.reheadered_bam,
+        bais = ReheaderBamWithFai.reheadered_bai,
         prefix = prefix,
         docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_merge_bams
@@ -43,14 +54,8 @@ workflow NormalizeBamContigsScatter {
   }
 
   output {
-    File bam = select_first([
-      MergeBams.out_bam,
-      input_bam
-    ])
-    File bai = select_first([
-      MergeBams.out_bai,
-      input_bam + ".bai"
-    ])
+    File bam = select_first([MergeBams.out_bam, input_bam])
+    File bai = select_first([MergeBams.out_bai, input_bam + ".bai"])
   }
 }
 
@@ -169,6 +174,63 @@ task ConvertOneContig {
   }
 }
 
+task ReheaderBamWithFai {
+  input {
+    File input_bam
+    File input_bai
+    File ref_fai
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 15,
+    disk_gb: ceil(10 + size(bam, "GB") * 2),
+    boot_disk_gb: 10,
+    preemptible_tries: 0,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+
+  String prefix = basename(input_bam, ".bam")
+
+  command <<<
+    set -euo pipefail
+
+    # Extract non-SQ header lines
+    samtools view -H ~{input_bam} | grep -v '^@SQ' > header.nonSQ.txt
+
+    # Create ordered SQ lines from reference fai
+    cut -f1,2 ~{ref_fai} | \
+      awk '{print "@SQ\tSN:"$1"\tLN:"$2}' > header.SQ.txt
+
+    # Combine headers
+    cat header.nonSQ.txt header.SQ.txt > header.fixed.txt
+
+    # Reheader BAM
+    samtools reheader header.fixed.txt ~{input_bam} > ~{prefix}.reheadered.bam
+    samtools index ~{prefix}.reheadered.bam
+  >>>
+
+  output {
+    File reheadered_bam = "~{prefix}.reheadered.bam"
+    File reheadered_bai = "~{prefix}.reheadered.bam.bai"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task NormalizeContigs {
   input {
     File bam
@@ -274,6 +336,7 @@ task NormalizeContigs {
 task MergeBams {
   input {
     Array[File] bams
+    Array[File] bais
     String prefix
     String docker_image
     RuntimeAttr? runtime_attr_override
