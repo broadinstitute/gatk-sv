@@ -12,7 +12,7 @@ function ShardBedThenConvertToVcf()
   cd "${working_dir}"
 
   # Task: ScatterCompressedBedOmitHeaders
-  shard_bed_convert_vcf_working_dir=$(mktemp -d /wd_shard_bed_convert_vcf_XXXXXXXX)
+  shard_bed_convert_vcf_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_shard_bed_convert_vcf_XXXXXXXX)
   shard_bed_convert_vcf_working_dir="$(realpath ${shard_bed_convert_vcf_working_dir})"
   cd "${shard_bed_convert_vcf_working_dir}"
   n_digits=6
@@ -68,7 +68,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_cluster_depth_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_cluster_depth_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -80,7 +80,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_cluster_depth_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_cluster_depth_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
@@ -135,12 +135,12 @@ for contig in "${contigs[@]}"; do
   echo "Starting to cluster ${contig}."
 
   cd "${working_dir}"
-  cluster_contig_output_dir=$(mktemp -d "/output_cluster_contig_${contig}_XXXXXXXX")
+  cluster_contig_output_dir=$(mktemp -d "${SV_SHELL_BASE_DIR}/output_cluster_contig_${contig}_XXXXXXXX")
   cluster_contig_output_dir="$(realpath ${cluster_contig_output_dir})"
   contig_cluster_inputs_json="$(realpath "${cluster_contig_output_dir}/contig_cluster_inputs.json")"
   contig_cluster_output_json="$(realpath "${cluster_contig_output_dir}/contig_cluster_output.json")"
 
-  cluster_contig_wd_dir=$(mktemp -d "/wd_cluster_contig_${contig}_XXXXXXXX")
+  cluster_contig_wd_dir=$(mktemp -d "${SV_SHELL_BASE_DIR}/wd_cluster_contig_${contig}_XXXXXXXX")
   cluster_contig_wd_dir="$(realpath ${cluster_contig_wd_dir})"
 
   jq -n \
@@ -225,7 +225,7 @@ done
 # as it only includes the execution path/args used for this Depth clustering task.
 
 cd "${working_dir}"
-concat_vcf_working_dir=$(mktemp -d /wd_ConcatVcfs_XXXXXXXX)
+concat_vcf_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_ConcatVcfs_XXXXXXXX)
 concat_vcf_working_dir="$(realpath ${concat_vcf_working_dir})"
 cd "${concat_vcf_working_dir}"
 

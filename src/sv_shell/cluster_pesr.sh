@@ -36,7 +36,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_cluster_pesr_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_cluster_pesr_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -48,7 +48,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_cluster_pesr_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_cluster_pesr_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
@@ -121,7 +121,7 @@ for contig in "${contigs[@]}"; do
 
   # SVCluster
   # -------------------------------------------------------------------------------------------------------------------
-  sv_cluster_output_dir=$(mktemp -d /output_sv_cluster_XXXXXXXX)
+  sv_cluster_output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_sv_cluster_XXXXXXXX)
   sv_cluster_output_dir="$(realpath ${sv_cluster_output_dir})"
   sv_cluster_inputs_json="$(realpath "${sv_cluster_output_dir}/sv_cluster_inputs.json")"
   sv_cluster_outputs_json="$(realpath "${sv_cluster_output_dir}/sv_cluster_outputs.json")"
@@ -165,7 +165,7 @@ for contig in "${contigs[@]}"; do
   # ExcludeIntervalsByEndpoints
   # -------------------------------------------------------------------------------------------------------------------
   # Remove variants from VCF that overlap with regions in the exclude_intervals file.
-  working_dir=$(mktemp -d /wd_ExcludeIntervalsByEndpoints_XXXXXXXX)
+  working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_ExcludeIntervalsByEndpoints_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
   cd "${working_dir}"
   output_prefix="${batch}.cluster_batch.${caller}.${contig}.exclude_intervals"
@@ -179,7 +179,7 @@ for contig in "${contigs[@]}"; do
 
   # GatkToSvtkVcf
   # -------------------------------------------------------------------------------------------------------------------
-  working_dir=$(mktemp -d /wd_GatkToSvtkVcf_XXXXXXXX)
+  working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_GatkToSvtkVcf_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
   cd "${working_dir}"
   output_prefix="${batch}.cluster_batch.${caller}.${contig}.svtk_formatted"
@@ -200,7 +200,7 @@ done
 # Note the following is a simplified implementation than the WDL-based
 # as it only includes the execution path/args used for this PE/SR clustering task.
 
-working_dir=$(mktemp -d /wd_ConcatVcfs_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_ConcatVcfs_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 

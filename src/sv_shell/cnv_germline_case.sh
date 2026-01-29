@@ -14,7 +14,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_cnv_germline_case_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_cnv_germline_case_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -26,7 +26,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_cnv_germline_case_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_cnv_germline_case_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
@@ -69,7 +69,7 @@ set +u
 conda activate gatk
 set -u
 
-DetermineGermlineContigPloidyCaseMode_wd=$(mktemp -d /wd_DetermineGermlineContigPloidyCaseMode_XXXXXXXX)
+DetermineGermlineContigPloidyCaseMode_wd=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_DetermineGermlineContigPloidyCaseMode_XXXXXXXX)
 DetermineGermlineContigPloidyCaseMode_wd="$(realpath ${DetermineGermlineContigPloidyCaseMode_wd})"
 cd "${DetermineGermlineContigPloidyCaseMode_wd}"
 
@@ -116,7 +116,7 @@ gcnv_output_jsons=()
 
 for (( scatter_index=0; scatter_index<${#gcnv_model_tars[@]}; scatter_index++ )); do
 
-  gcnv_case_scatter_wd=$(mktemp -d "/wd_germline_cnv_caller_case_mode_scatter_${scatter_index}_XXXXXXXX")
+  gcnv_case_scatter_wd=$(mktemp -d "${SV_SHELL_BASE_DIR}/wd_germline_cnv_caller_case_mode_scatter_${scatter_index}_XXXXXXXX")
   gcnv_case_scatter_wd="$(realpath ${gcnv_case_scatter_wd})"
   gcnv_case_shard_inputs_json="${gcnv_case_scatter_wd}/inputs.json"
   gcnv_case_shard_outputs_json="${gcnv_case_scatter_wd}/outputs.json"
@@ -212,7 +212,7 @@ PostprocessGermlineCNVCalls_outputs_jsons=()
 num_samples=${#counts[@]}
 for (( sample_index=0; sample_index<num_samples; sample_index++ )); do
 
-  PostprocessGermlineCNVCalls_wd=$(mktemp -d "/wd_PostprocessGermlineCNVCalls_${sample_index}_XXXXXXXX")
+  PostprocessGermlineCNVCalls_wd=$(mktemp -d "${SV_SHELL_BASE_DIR}/wd_PostprocessGermlineCNVCalls_${sample_index}_XXXXXXXX")
   PostprocessGermlineCNVCalls_wd="$(realpath ${PostprocessGermlineCNVCalls_wd})"
   PostprocessGermlineCNVCalls_inputs_json="${PostprocessGermlineCNVCalls_wd}/inputs.json"
   PostprocessGermlineCNVCalls_outputs_json="${PostprocessGermlineCNVCalls_wd}/outputs.json"
