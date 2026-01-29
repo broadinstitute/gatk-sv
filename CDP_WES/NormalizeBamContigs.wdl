@@ -31,7 +31,6 @@ workflow NormalizeBamContigsScatter {
           contig = c,
           docker_image = sv_pipeline_base_docker,
           runtime_attr_override = runtime_attr_convert_contig
-
       }
 
       call ReheaderBamWithFai {
@@ -41,7 +40,9 @@ workflow NormalizeBamContigsScatter {
           ref_fai = ref_fai,
           docker_image = sv_pipeline_base_docker,
           runtime_attr_override = runtime_attr_Reheader_Bam_With_Fai
+      }
     }
+
 
     call MergeBams {
       input:
