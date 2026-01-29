@@ -125,6 +125,8 @@ task ProcessContig {
 
     CODE
 
+    gunzip "~{contig}.out.vcf.gz"
+    bgzip "~{contig}.out.vcf"
     tabix -p vcf "~{contig}.out.vcf.gz"
 
   >>>
