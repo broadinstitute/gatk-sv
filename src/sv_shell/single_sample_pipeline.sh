@@ -749,11 +749,6 @@ bash /opt/sv_shell/join_raw_calls.sh \
 # SVConcordance
 # ----------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-SVConcordance_output_dir=$(mktemp -d "/output_SVConcordance_XXXXXXXX")
-SVConcordance_output_dir="$(realpath ${SVConcordance_output_dir})"
-SVConcordance_inputs_json="${SVConcordance_output_dir}/inputs.json"
-SVConcordance_outputs_json="${SVConcordance_output_dir}/outputs.json"
-
 SVConcordance_concordance_vcf="$(realpath "${sample_id}.concordance.vcf.gz")"
 SVConcordance_concordance_vcf_index="${SVConcordance_concordance_vcf}.tbi"
 
@@ -930,6 +925,19 @@ python /opt/sv-pipeline/scripts/single_sample/update_variant_representations.py 
   | bcftools sort \
   | bcftools annotate --no-version -x "FILTER/HIGH_ALGORITHM_FDR" -Oz -o "${UpdateBreakendRepresentationAndRemoveFilters_out}"
 tabix "${UpdateBreakendRepresentationAndRemoveFilters_out}"
+
+
+# SingleSampleFiltering.MergeStripyVcf
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+python /opt/sv-pipeline/scripts/merge_stripy_single_sample.py \
+  --main-vcf "${UpdateBreakendRepresentationAndRemoveFilters_out}" \
+  --stripy-vcf "$(jq -r ".vcf_output" "$stripy_outputs_json")" \
+  --out unsorted.vcf.gz
+
+MergeStripyVcf_out="$(realpath "${sample_id}.gatk_sv.vcf.gz")"
+bcftools sort unsorted.vcf.gz -Oz -o "${MergeStripyVcf_out}"
+tabix "${MergeStripyVcf_out}"
 
 
 # SingleSampleMetrics
