@@ -559,7 +559,7 @@ def plot_sample(data: AneuploidyData, map_estimates: dict, cn_posterior: dict, o
     sample_var_current = sample_var_all[sample_idx]  # Current sample's variance factor
     cn_probs = cn_posterior['cn_posterior'][:, sample_idx, :]  # (n_bins, n_states)
     
-    colors = [ '#004D40', '#FFC107',  '#1E88E5', '#D81B60', '#38006B']
+    colors = [ '#004D40', '#FFC107',  '#1E88E5', '#D81B60', '#38006B', '#FF6D00']  # Colors for CN=0 to CN=5
     
     # Create normalized x-axis where each chromosome has equal width
     # Get chromosome boundaries
@@ -585,7 +585,7 @@ def plot_sample(data: AneuploidyData, map_estimates: dict, cn_posterior: dict, o
     ax.plot(x_transformed, observed, 'r-', linewidth=1, alpha=0.7, label='Normalized read depth')
     ax.legend(loc='lower right', bbox_to_anchor=(1.0, 1.02), ncol=2, borderaxespad=0)
     ax.grid(True, axis='y', alpha=1, linestyle='-', linewidth=1)
-    ax.set_ylim([-0.5, 4.5])
+    ax.set_ylim([-0.5, 5.5])
     ax.set_xlim([x_transformed.min(), x_transformed.max()])
     
     # Plot 2: Stacked area plot of CN probabilities
@@ -1120,9 +1120,9 @@ def parse_args():
                         help='Dirichlet concentration parameter for non-reference copy number states')
     parser.add_argument('--var-bias-bin', type=float, default=0.01,
                         help='Variance parameter for per-bin mean bias (log-normal prior)')
-    parser.add_argument('--var-sample', type=float, default=0.01,
+    parser.add_argument('--var-sample', type=float, default=0.001,
                         help='Variance parameter for per-sample variance factor')
-    parser.add_argument('--var-bin', type=float, default=0.01,
+    parser.add_argument('--var-bin', type=float, default=0.001,
                         help='Variance parameter for per-bin variance factor')
     parser.add_argument('--guide-type', type=str, default='delta', choices=['delta', 'diagonal'],
                         help='Type of variational guide (delta=MAP inference, diagonal=mean-field)')
@@ -1154,23 +1154,23 @@ def parse_args():
                         help='Skip bin quality filtering step')
     
     # Bin quality filtering parameters
-    parser.add_argument('--autosome-median-min', type=float, default=1.75,
+    parser.add_argument('--autosome-median-min', type=float, default=1,
                         help='Minimum median depth for autosomal bins')
-    parser.add_argument('--autosome-median-max', type=float, default=2.25,
+    parser.add_argument('--autosome-median-max', type=float, default=3,
                         help='Maximum median depth for autosomal bins')
-    parser.add_argument('--autosome-mad-max', type=float, default=0.25,
+    parser.add_argument('--autosome-mad-max', type=float, default=2,
                         help='Maximum MAD for autosomal bins')
-    parser.add_argument('--chrX-median-min', type=float, default=0.75,
+    parser.add_argument('--chrX-median-min', type=float, default=0,
                         help='Minimum median depth for chrX bins')
-    parser.add_argument('--chrX-median-max', type=float, default=2.25,
+    parser.add_argument('--chrX-median-max', type=float, default=3,
                         help='Maximum median depth for chrX bins')
-    parser.add_argument('--chrX-mad-max', type=float, default=0.5,
+    parser.add_argument('--chrX-mad-max', type=float, default=2,
                         help='Maximum MAD for chrX bins')
-    parser.add_argument('--chrY-median-min', type=float, default=0.0,
+    parser.add_argument('--chrY-median-min', type=float, default=0,
                         help='Minimum median depth for chrY bins')
-    parser.add_argument('--chrY-median-max', type=float, default=1.25,
+    parser.add_argument('--chrY-median-max', type=float, default=3,
                         help='Maximum median depth for chrY bins')
-    parser.add_argument('--chrY-mad-max', type=float, default=0.5,
+    parser.add_argument('--chrY-mad-max', type=float, default=2,
                         help='Maximum MAD for chrY bins')
     
     # Device
@@ -1228,6 +1228,22 @@ def main():
                                     chrY_median_min=args.chrY_median_min,
                                     chrY_median_max=args.chrY_median_max,
                                     chrY_mad_max=args.chrY_mad_max)
+        # After filtering, verify each chromosome has sufficient bins
+        chr_counts = df.groupby('Chr').size()
+        insufficient_chrs = chr_counts[chr_counts < 10]
+        if len(insufficient_chrs) > 0:
+            print(f"\n{'='*80}")
+            print("ERROR: INSUFFICIENT BINS AFTER FILTERING")
+            print(f"{'='*80}")
+            print("The following chromosomes have fewer than 10 bins after filtering:")
+            for chr_name, count in insufficient_chrs.items():
+                print(f"  {chr_name}: {count} bins (minimum required: 10)")
+            print("\nConsider:")
+            print("  - Using --skip-bin-filter to disable bin quality filtering")
+            print("  - Relaxing filter thresholds (e.g., increase --autosome-mad-max)")
+            print("  - Rebatching with fewer anomalies or higher quality data")
+            print(f"{'='*80}\n")
+            raise ValueError(f"Insufficient bins after filtering: {len(insufficient_chrs)} chromosome(s) have < 10 bins")
 
     print(df)
 
@@ -1254,7 +1270,7 @@ def main():
 
     # Initialize model
     model = AneuploidyModel(
-        n_states=4,                        # CN states (hard-coded to 0,1,2,3)
+        n_states=6,                        # CN states (hard-coded to 0,1,2,3,4,5)
         alpha_ref=args.alpha_ref,         # Prior on CN=2
         alpha_non_ref=args.alpha_non_ref,     # Prior on other states
         var_bias_bin=args.var_bias_bin,     # Bin-to-bin bias variation
@@ -1359,6 +1375,8 @@ def main():
                 'cn_prob_1': cn_prob[1],
                 'cn_prob_2': cn_prob[2],
                 'cn_prob_3': cn_prob[3],
+                'cn_prob_4': cn_prob[4],
+                'cn_prob_5': cn_prob[5],
                 'max_prob': cn_prob.max(),
                 'bin_bias': map_estimates['bin_bias'][i],
                 'bin_var': map_estimates['bin_var'][i],
