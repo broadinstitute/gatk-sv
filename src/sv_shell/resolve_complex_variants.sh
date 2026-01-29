@@ -13,7 +13,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_resolve_complex_variants_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_resolve_complex_variants_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -25,7 +25,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir="$(mktemp -d /wd_resolve_complex_variants_XXXXXXXX)"
+working_dir="$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_resolve_complex_variants_XXXXXXXX)"
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
@@ -53,7 +53,7 @@ SubsetInversions_filtered_vcf_idx="${SubsetInversions_filtered_vcf}.tbi"
 
 # ResolveCpxInv
 # ---------------------------------------------------------------------------------------------------------------------
-ResolveCpxInv_wd=$(mktemp -d "/wd_ResolveCpxInv_XXXXXXXX")
+ResolveCpxInv_wd=$(mktemp -d "${SV_SHELL_BASE_DIR}/wd_ResolveCpxInv_XXXXXXXX")
 ResolveCpxInv_wd="$(realpath ${ResolveCpxInv_wd})"
 ResolveCpxInv_inputs_json="${ResolveCpxInv_wd}/inputs.json"
 ResolveCpxInv_outputs_json="${ResolveCpxInv_wd}/outputs.json"
@@ -102,7 +102,7 @@ BreakpointOverlap_dropped_record_vcf_index="$(realpath "${BreakpointOverlap_pref
 
 # ResolveCpxAll
 # ---------------------------------------------------------------------------------------------------------------------
-ResolveCpxAll_wd=$(mktemp -d "/wd_ResolveCpxAll_XXXXXXXX")
+ResolveCpxAll_wd=$(mktemp -d "${SV_SHELL_BASE_DIR}/wd_ResolveCpxAll_XXXXXXXX")
 ResolveCpxAll_wd="$(realpath ${ResolveCpxAll_wd})"
 ResolveCpxAll_inputs_json="${ResolveCpxAll_wd}/inputs.json"
 ResolveCpxAll_outputs_json="${ResolveCpxAll_wd}/outputs.json"

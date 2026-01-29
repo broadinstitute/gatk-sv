@@ -36,7 +36,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_refine_complex_variants_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_refine_complex_variants_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -48,7 +48,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_refine_complex_variants_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_refine_complex_variants_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 echo "Refine complex variants working directory: ${working_dir}"
@@ -147,7 +147,7 @@ ExtractCpxLgCnvByBatch_lg_cnv_dup="$(realpath "${batch_name}.lg_cnv.DUP.bed.gz")
 # SeekDepthSuppForCpx as seek_depth_supp_for_cpx_del
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-wd_seek_depth_supp_for_cpx_del=$(mktemp -d /wd_seek_depth_supp_for_cpx_del_XXXXXXXX)
+wd_seek_depth_supp_for_cpx_del=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_seek_depth_supp_for_cpx_del_XXXXXXXX)
 wd_seek_depth_supp_for_cpx_del="$(realpath ${wd_seek_depth_supp_for_cpx_del})"
 cd "${wd_seek_depth_supp_for_cpx_del}"
 cpx_del_prefix="$(basename "${ExtractCpxLgCnvByBatch_lg_cnv_del}" .bed.gz)"
@@ -160,7 +160,7 @@ cd "${working_dir}"
 
 # SeekDepthSuppForCpx as seek_depth_supp_for_cpx_dup
 # ---------------------------------------------------------------------------------------------------------------------
-wd_seek_depth_supp_for_cpx_dup=$(mktemp -d /wd_seek_depth_supp_for_cpx_dup_XXXXXXXX)
+wd_seek_depth_supp_for_cpx_dup=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_seek_depth_supp_for_cpx_dup_XXXXXXXX)
 wd_seek_depth_supp_for_cpx_dup="$(realpath ${wd_seek_depth_supp_for_cpx_dup})"
 cd "${wd_seek_depth_supp_for_cpx_dup}"
 cpx_dup_prefix="$(basename "${ExtractCpxLgCnvByBatch_lg_cnv_dup}" .bed.gz)"
@@ -282,7 +282,7 @@ CollectPEMetricsForCPX_evi_stat="${CalcuPEStat_evi_stat}"
 # CalculateCpxEvidences
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-wd_CalculateCpxEvidences=$(mktemp -d /wd_CalculateCpxEvidences_XXXXXXXX)
+wd_CalculateCpxEvidences=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CalculateCpxEvidences_XXXXXXXX)
 wd_CalculateCpxEvidences="$(realpath ${wd_CalculateCpxEvidences})"
 cd "${wd_CalculateCpxEvidences}"
 
@@ -303,7 +303,7 @@ CalculateCpxEvidences_manual_revise_CPX_results="$(realpath "${prefix}.manual_re
 # CalculateCtxEvidences
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-wd_CalculateCtxEvidences=$(mktemp -d /wd_CalculateCtxEvidences_XXXXXXXX)
+wd_CalculateCtxEvidences=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CalculateCtxEvidences_XXXXXXXX)
 wd_CalculateCtxEvidences="$(realpath ${wd_CalculateCtxEvidences})"
 cd "${wd_CalculateCtxEvidences}"
 
@@ -324,7 +324,7 @@ CalculateCtxEvidences_manual_revise_CTX_results="$(realpath "${prefix}.manual_re
 # ReviseVcf
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-wd_ReviseVcf=$(mktemp -d /wd_ReviseVcf_XXXXXXXX)
+wd_ReviseVcf=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_ReviseVcf_XXXXXXXX)
 wd_ReviseVcf="$(realpath ${wd_ReviseVcf})"
 cd "${wd_ReviseVcf}"
 

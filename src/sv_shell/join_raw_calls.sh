@@ -14,7 +14,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_join_raw_calls_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_join_raw_calls_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -26,7 +26,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_join_raw_calls_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_join_raw_calls_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
@@ -115,12 +115,12 @@ tabix "${FormatVcfForGatk_gatk_formatted_vcf}"
 # SVCluster
 # ---------------------------------------------------------------------------------------------------------------------
 
-sv_cluster_output_dir=$(mktemp -d "/output_sv_cluster_XXXXXXXX")
+sv_cluster_output_dir=$(mktemp -d "${SV_SHELL_BASE_DIR}/output_sv_cluster_XXXXXXXX")
 sv_cluster_output_dir="$(realpath ${sv_cluster_output_dir})"
 sv_cluster_inputs_json="$(realpath "${sv_cluster_output_dir}/sv_cluster_inputs.json")"
 sv_cluster_output_json="$(realpath "${sv_cluster_output_dir}/sv_cluster_output.json")"
 
-sv_cluster_wd_dir=$(mktemp -d "/wd_sv_cluster_XXXXXXXX")
+sv_cluster_wd_dir=$(mktemp -d "${SV_SHELL_BASE_DIR}/wd_sv_cluster_XXXXXXXX")
 sv_cluster_wd_dir="$(realpath ${sv_cluster_wd_dir})"
 
 jq -n \
