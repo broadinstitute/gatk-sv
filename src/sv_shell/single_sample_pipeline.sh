@@ -402,9 +402,7 @@ tabix -p bed "${MergeSetDup_out}"
 
 # ClusterBatch
 # ----------------------------------------------------------------------------------------------------------------------
-
-cluster_batch_output_dir=$(mktemp -d "/output_cluster_batch_XXXXXXXX")
-cluster_batch_output_dir="$(realpath ${cluster_batch_output_dir})"
+cluster_batch_output_dir=$(realpath $(mktemp -d "/output_cluster_batch_XXXXXXXX"))
 cluster_batch_inputs_json_filename="${cluster_batch_output_dir}/inputs.json"
 cluster_batch_outputs_json_filename="${cluster_batch_output_dir}/outputs.json"
 
@@ -447,8 +445,7 @@ bash /opt/sv_shell/cluster_batch.sh \
 # FilterDepth
 # -----------------------
 cd "${working_dir}"
-FilterDepth_wd=$(mktemp -d /wd_FilterDepth_XXXXXXXX)
-FilterDepth_wd="$(realpath "${FilterDepth_wd}")"
+FilterDepth_wd=$(realpath $(mktemp -d "/wd_FilterDepth_XXXXXXXX"))
 cd "${FilterDepth_wd}"
 FilterDepth_vcf=$(jq -r ".clustered_depth_vcf" "$cluster_batch_outputs_json_filename")
 FilterDepth_vcf_filebase=$(basename "${FilterDepth_vcf}" .vcf.gz)
@@ -458,8 +455,7 @@ FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterDepth_vcf}" "${sample
 # FilterManta
 # -----------------------
 cd "${working_dir}"
-FilterManta_wd=$(mktemp -d /wd_FilterManta_XXXXXXXX)
-FilterManta_wd="$(realpath "${FilterManta_wd}")"
+FilterManta_wd=$(realpath $(mktemp -d "/wd_FilterManta_XXXXXXXX"))
 cd "${FilterManta_wd}"
 FilterManta_vcf=$(jq -r ".clustered_manta_vcf" "$cluster_batch_outputs_json_filename")
 FilterManta_vcf_filebase=$(basename "${FilterManta_vcf}" .vcf.gz)
@@ -469,8 +465,7 @@ FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterManta_vcf}" "${sample
 # FilterScramble
 # -----------------------
 cd "${working_dir}"
-FilterScramble_wd=$(mktemp -d /wd_FilterScramble_XXXXXXXX)
-FilterScramble_wd="$(realpath "${FilterScramble_wd}")"
+FilterScramble_wd=$(realpath $(mktemp -d "/wd_FilterScramble_XXXXXXXX"))
 cd "${FilterScramble_wd}"
 FilterScramble_vcf=$(jq -r ".clustered_scramble_vcf" "$cluster_batch_outputs_json_filename")
 FilterScramble_vcf_filebase=$(basename "${FilterScramble_vcf}" .vcf.gz)
@@ -480,8 +475,7 @@ FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterScramble_vcf}" "${sam
 # FilterWham
 # -----------------------
 cd "${working_dir}"
-FilterWham_wd=$(mktemp -d /wd_FilterWham_XXXXXXXX)
-FilterWham_wd="$(realpath "${FilterWham_wd}")"
+FilterWham_wd=$(realpath $(mktemp -d "/wd_FilterWham_XXXXXXXX"))
 cd "${FilterWham_wd}"
 FilterWham_vcf=$(jq -r ".clustered_wham_vcf" "$cluster_batch_outputs_json_filename")
 FilterWham_vcf_vcf_filebase=$(basename "${FilterWham_vcf}" .vcf.gz)
@@ -616,8 +610,7 @@ RewriteSRCoords_annotated_vcf="$(realpath "${batch}.corrected_coords.vcf.gz")"
 #
 # MakeCohortVcf
 # ----------------------------------------------------------------------------------------------------------------------
-MakeCohortVcf_output_dir=$(mktemp -d "/output_MakeCohortVcf_XXXXXXXX")
-MakeCohortVcf_output_dir="$(realpath ${MakeCohortVcf_output_dir})"
+MakeCohortVcf_output_dir=$(realpath $(mktemp -d "/output_MakeCohortVcf_XXXXXXXX"))
 MakeCohortVcf_inputs_json_filename="${MakeCohortVcf_output_dir}/inputs.json"
 MakeCohortVcf_outputs_json_filename="${MakeCohortVcf_output_dir}/outputs.json"
 #
@@ -641,8 +634,7 @@ tabix "${FilterVcfDepthLt5kb_out}"
 # GetUniqueNonGenotypedDepthCalls
 # ----------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-GetUniqueNonGenotypedDepthCalls_wd=$(mktemp -d "/wd_GetUniqueNonGenotypedDepthCalls_XXXXXXXX")
-GetUniqueNonGenotypedDepthCalls_wd="$(realpath ${GetUniqueNonGenotypedDepthCalls_wd})"
+GetUniqueNonGenotypedDepthCalls_wd=$(realpath $(mktemp -d "/wd_GetUniqueNonGenotypedDepthCalls_XXXXXXXX"))
 cd "${GetUniqueNonGenotypedDepthCalls_wd}"
 
 _vcf_gz=$(jq -r ".complex_genotype_vcf" "$MakeCohortVcf_outputs_json_filename")
@@ -694,8 +686,7 @@ tabix "${FilterVcfForCaseSampleGenotype_out}"
 # RefineComplexVariants
 # ----------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-RefineComplexVariants_output_dir=$(mktemp -d "/output_RefineComplexVariants_XXXXXXXX")
-RefineComplexVariants_output_dir="$(realpath ${RefineComplexVariants_output_dir})"
+RefineComplexVariants_output_dir=$(realpath $(mktemp -d "/output_RefineComplexVariants_XXXXXXXX"))
 RefineComplexVariants_inputs_json="${RefineComplexVariants_output_dir}/inputs.json"
 RefineComplexVariants_outputs_json="${RefineComplexVariants_output_dir}/outputs.json"
 
@@ -727,8 +718,7 @@ bash /opt/sv_shell/refine_complex_variants.sh \
 # JoinRawCalls
 # ----------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-JoinRawCalls_output_dir=$(mktemp -d "/output_JoinRawCalls_XXXXXXXX")
-JoinRawCalls_output_dir="$(realpath ${JoinRawCalls_output_dir})"
+JoinRawCalls_output_dir=$(realpath $(mktemp -d "/output_JoinRawCalls_XXXXXXXX"))
 JoinRawCalls_inputs_json="${JoinRawCalls_output_dir}/inputs.json"
 JoinRawCalls_outputs_json="${JoinRawCalls_output_dir}/outputs.json"
 
@@ -777,8 +767,7 @@ java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar SVConcordance \
 # ScoreGenotypes
 # ----------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-ScoreGenotypes_output_dir=$(mktemp -d "/output_ScoreGenotypes_XXXXXXXX")
-ScoreGenotypes_output_dir="$(realpath ${ScoreGenotypes_output_dir})"
+ScoreGenotypes_output_dir=$(realpath $(mktemp -d "/output_ScoreGenotypes_XXXXXXXX"))
 ScoreGenotypes_inputs_json="${ScoreGenotypes_output_dir}/inputs.json"
 ScoreGenotypes_outputs_json="${ScoreGenotypes_output_dir}/outputs.json"
 
@@ -804,8 +793,7 @@ bash /opt/sv_shell/score_genotypes.sh \
 # FilterGenotypes
 # ----------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-FilterGenotypes_output_dir=$(mktemp -d "/output_FilterGenotypes_XXXXXXXX")
-FilterGenotypes_output_dir="$(realpath ${FilterGenotypes_output_dir})"
+FilterGenotypes_output_dir=$(realpath $(mktemp -d "/output_FilterGenotypes_XXXXXXXX"))
 FilterGenotypes_inputs_json="${FilterGenotypes_output_dir}/inputs.json"
 FilterGenotypes_outputs_json="${FilterGenotypes_output_dir}/outputs.json"
 
