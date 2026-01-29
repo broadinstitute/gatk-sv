@@ -58,8 +58,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_single_sample_XXXXXXXX)
-working_dir="$(realpath ${working_dir})"
+working_dir=$(realpath $(mktemp -d "/wd_single_sample_XXXXXXXX"))
 cd "${working_dir}"
 echo "Single-Sample Working directory: ${working_dir}"
 
@@ -114,9 +113,7 @@ echo "JVM memory: $JVM_MAX_MEM"
 
 # GatherSampleEvidence
 # ---------------------------------------------------------------------------------------------------------------------
-
-gather_sample_evidence_output_dir=$(mktemp -d "/output_GatherSampleEvidence_XXXXXXXX")
-gather_sample_evidence_output_dir="$(realpath ${gather_sample_evidence_output_dir})"
+gather_sample_evidence_output_dir=$(realpath $(mktemp -d "/output_GatherSampleEvidence_XXXXXXXX"))
 gather_sample_evidence_inputs_json="${gather_sample_evidence_output_dir}/inputs.json"
 gather_sample_evidence_outputs_json="${gather_sample_evidence_output_dir}/outputs.json"
 
@@ -177,8 +174,7 @@ coverage_counts="/inputs/NA12878.counts.tsv.gz"
 
 # EvidenceQC
 # ---------------------------------------------------------------------------------------------------------------------
-evidence_qc_output_dir=$(mktemp -d "/output_evidence_qc_XXXXXXXX")
-evidence_qc_output_dir="$(realpath ${evidence_qc_output_dir})"
+evidence_qc_output_dir=$(realpath $(mktemp -d "/output_evidence_qc_XXXXXXXX"))
 evidence_qc_inputs_json_filename="${evidence_qc_output_dir}/inputs.json"
 evidence_qc_outputs_json_filename="${evidence_qc_output_dir}/outputs.json"
 
@@ -210,8 +206,7 @@ evidence_qc_outputs_json_filename="/output_evidence_qc_SAHS0zt3/output.json"
 
 # GatherBatchEvidence
 # ---------------------------------------------------------------------------------------------------------------------
-gather_batch_evidence_output_dir=$(mktemp -d "/output_gather_batch_evidence_XXXXXXXX")
-gather_batch_evidence_output_dir="$(realpath ${gather_batch_evidence_output_dir})"
+gather_batch_evidence_output_dir=$(realpath $(mktemp -d "/output_gather_batch_evidence_XXXXXXXX"))
 gather_batch_evidence_inputs_json_filename="${gather_batch_evidence_output_dir}/inputs.json"
 gather_batch_evidence_outputs_json_filename="${gather_batch_evidence_output_dir}/outputs.json"
 
@@ -301,6 +296,39 @@ bash /opt/sv_shell/gather_batch_evidence.sh \
   "${gather_batch_evidence_inputs_json_filename}" \
   "${gather_batch_evidence_outputs_json_filename}" \
   "${gather_batch_evidence_output_dir}"
+
+
+# stripy
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+stripy_output_dir=$(realpath $(mktemp -d "/output_stripy_XXXXXXXX"))
+stripy_inputs_json="${stripy_output_dir}/inputs.json"
+stripy_outputs_json="${stripy_output_dir}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --slurpfile gbe "${gather_batch_evidence_outputs_json_filename}" \
+  '{
+    "bam_or_cram_file": $inputs[0].bam_or_cram_file,
+    "sample_name": $inputs[0].sample_id,
+    "ped_file": $gbe[0].combined_ped_file,
+    "reference_fasta": $inputs[0].reference_fasta
+  }' > "${stripy_inputs_json}"
+
+bash /opt/sv_shell/stripy.sh \
+  "${stripy_inputs_json}" \
+  "${stripy_outputs_json}" \
+  "${stripy_output_dir}"
+
+# CombineTars
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+
+# CombineMantaStd
+# -----------------------
+ref_std_manta_vcf_tar=$(jq -r ".ref_std_manta_vcf_tar" "$input_json")
+std_manta_vcf_tar=$(jq -r ".std_manta_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
+merged_manta_vcf_tar="${working_dir}/$(basename "${std_manta_vcf_tar}")"
 
 CombineMantaStd_working_dir=$(mktemp -d /wd_CombineMantaStd_XXXXXXXX)
 tar xzf "${ref_std_manta_vcf_tar}" -C "${CombineMantaStd_working_dir}/"
