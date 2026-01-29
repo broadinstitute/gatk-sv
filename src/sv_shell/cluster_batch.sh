@@ -13,7 +13,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_cluster_batch_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_cluster_batch_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -25,7 +25,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_cluster_batch_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_cluster_batch_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
@@ -118,7 +118,7 @@ if [ -n "${dragen_vcf_tar}" ]; then
   echo "Running PE/SR clustering on Dragen VCF."
 
   cd "${working_dir}"
-  dragen_pesr_output_dir=$(mktemp -d "/output_dragen_pesr_XXXXXXXX")
+  dragen_pesr_output_dir=$(mktemp -d "${SV_SHELL_BASE_DIR}/output_dragen_pesr_XXXXXXXX")
   dragen_pesr_output_dir="$(realpath ${dragen_pesr_output_dir})"
   dragen_pesr_inputs_json="$(realpath "${dragen_pesr_output_dir}/dragen_pesr_inputs.json")"
   dragen_pesr_output_json="$(realpath "${dragen_pesr_output_dir}/dragen_pesr_output.json")"
@@ -177,7 +177,7 @@ if [ -n "${manta_vcf_tar}" ]; then
   echo "Running PE/SR clustering on Manta VCF."
 
   cd "${working_dir}"
-  manta_pesr_output_dir=$(mktemp -d "/output_manta_pesr_XXXXXXXX")
+  manta_pesr_output_dir=$(mktemp -d "${SV_SHELL_BASE_DIR}/output_manta_pesr_XXXXXXXX")
   manta_pesr_output_dir="$(realpath ${manta_pesr_output_dir})"
   manta_pesr_inputs_json="$(realpath "${manta_pesr_output_dir}/manta_pesr_inputs.json")"
   manta_pesr_output_json="$(realpath "${manta_pesr_output_dir}/manta_pesr_output.json")"
@@ -236,7 +236,7 @@ if [ -n "${wham_vcf_tar}" ]; then
   echo "Running PE/SR clustering on Wham VCF."
 
   cd "${working_dir}"
-  wham_pesr_output_dir=$(mktemp -d "/output_wham_pesr_XXXXXXXX")
+  wham_pesr_output_dir=$(mktemp -d "${SV_SHELL_BASE_DIR}/output_wham_pesr_XXXXXXXX")
   wham_pesr_output_dir="$(realpath ${wham_pesr_output_dir})"
   wham_pesr_inputs_json="$(realpath "${wham_pesr_output_dir}/wham_pesr_inputs.json")"
   wham_pesr_output_json="$(realpath "${wham_pesr_output_dir}/wham_pesr_output.json")"
@@ -295,7 +295,7 @@ if [ -n "${scramble_vcf_tar}" ]; then
   echo "Running PE/SR clustering on Scramble VCF."
 
   cd "${working_dir}"
-  scramble_pesr_output_dir=$(mktemp -d "/output_scramble_pesr_XXXXXXXX")
+  scramble_pesr_output_dir=$(mktemp -d "${SV_SHELL_BASE_DIR}/output_scramble_pesr_XXXXXXXX")
   scramble_pesr_output_dir="$(realpath ${scramble_pesr_output_dir})"
   scramble_pesr_inputs_json="$(realpath "${scramble_pesr_output_dir}/scramble_pesr_inputs.json")"
   scramble_pesr_output_json="$(realpath "${scramble_pesr_output_dir}/scramble_pesr_output.json")"
@@ -351,7 +351,7 @@ fi
 echo "Running cluster depth"
 
 cd "${working_dir}"
-cluster_depth_output_dir=$(mktemp -d "/output_cluster_depth_XXXXXXXX")
+cluster_depth_output_dir=$(mktemp -d "${SV_SHELL_BASE_DIR}/output_cluster_depth_XXXXXXXX")
 cluster_depth_output_dir="$(realpath ${cluster_depth_output_dir})"
 cluster_depth_inputs_json="$(realpath "${cluster_depth_output_dir}/cluster_depth_inputs.json")"
 cluster_depth_output_json="$(realpath "${cluster_depth_output_dir}/cluster_depth_output.json")"

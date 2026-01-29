@@ -13,7 +13,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_combine_batches_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_combine_batches_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -25,7 +25,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_combine_batches_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_combine_batches_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
@@ -131,7 +131,7 @@ reformatted_vcfs_idx_array=()
 for vcf in "${all_vcfs[@]}"; do
   cd "${working_dir}"
 
-  format_vcf_working_dir=$(mktemp -d /wd_format_vcf_XXXXXXXX)
+  format_vcf_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_format_vcf_XXXXXXXX)
   format_vcf_working_dir="$(realpath ${format_vcf_working_dir})"
   cd "${format_vcf_working_dir}"
 
@@ -158,7 +158,7 @@ done
 # ---------------------------------------------------------------------------------------------------------------------
 
 cd "${working_dir}"
-join_vcfs_output_dir=$(mktemp -d /output_join_vcfs_XXXXXXXX)
+join_vcfs_output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_join_vcfs_XXXXXXXX)
 join_vcfs_output_dir="$(realpath ${join_vcfs_output_dir})"
 join_vcfs_inputs_json="$(realpath "${join_vcfs_output_dir}/sv_cluster_inputs.json")"
 join_vcfs_outputs_json="$(realpath "${join_vcfs_output_dir}/sv_cluster_outputs.json")"
@@ -215,7 +215,7 @@ echo "Successfully finished Join VCFs clustering."
 # ---------------------------------------------------------------------------------------------------------------------
 
 cd "${working_dir}"
-cluster_sites_output_dir=$(mktemp -d /output_cluster_sites_XXXXXXXX)
+cluster_sites_output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_cluster_sites_XXXXXXXX)
 cluster_sites_output_dir="$(realpath ${cluster_sites_output_dir})"
 cluster_sites_inputs_json="$(realpath "${cluster_sites_output_dir}/sv_cluster_inputs.json")"
 cluster_sites_outputs_json="$(realpath "${cluster_sites_output_dir}/sv_cluster_outputs.json")"
@@ -288,7 +288,7 @@ done
 # ---------------------------------------------------------------------------------------------------------------------
 
 cd "${working_dir}"
-grouped_sv_cluster_p1_wd=$(mktemp -d /wd_grouped_sv_cluster_p1_XXXXXXXX)
+grouped_sv_cluster_p1_wd=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_grouped_sv_cluster_p1_XXXXXXXX)
 grouped_sv_cluster_p1_wd="$(realpath ${grouped_sv_cluster_p1_wd})"
 cd "${grouped_sv_cluster_p1_wd}"
 
@@ -319,7 +319,7 @@ echo "Successfully finished grouped SV cluster part 1."
 # ---------------------------------------------------------------------------------------------------------------------
 
 cd "${working_dir}"
-grouped_sv_cluster_p2_wd=$(mktemp -d /wd_grouped_sv_cluster_p2_XXXXXXXX)
+grouped_sv_cluster_p2_wd=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_grouped_sv_cluster_p2_XXXXXXXX)
 grouped_sv_cluster_p2_wd="$(realpath ${grouped_sv_cluster_p2_wd})"
 cd "${grouped_sv_cluster_p2_wd}"
 

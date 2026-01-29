@@ -41,6 +41,7 @@ task GetSampleIdsFromVcf {
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -85,6 +86,7 @@ task GetSampleIdsFromVcfArray {
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -126,6 +128,7 @@ task GetSampleIdsFromVcfTar {
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -163,6 +166,7 @@ task CountSamples {
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -206,6 +210,7 @@ task GetSampleIdsFromMedianCoverageFile {
     docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -238,6 +243,7 @@ task RunQC {
     docker: sv_pipeline_docker
     preemptible: preemptible_attempts
     maxRetries: 1
+    noAddress: true
   }
 }
 
@@ -305,6 +311,7 @@ task GetFilteredSubsampledIndices {
     docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -366,6 +373,7 @@ task RandomSubsampleStringArray {
     docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -418,6 +426,7 @@ task GetSubsampledIndices {
     docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -462,6 +471,7 @@ task SubsetPedFile {
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -503,6 +513,7 @@ task ValidatePedFile {
     docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -547,6 +558,7 @@ task LocalizeCloudFileWithCredentials {
     docker: cloud_sdk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -576,6 +588,7 @@ task GetVcfSize {
         max_retries: 1
         memory: "2 GiB"
         disks: "local-disk " + disk_gb + " HDD"
+        noAddress: true
     }
 
     command <<<
@@ -630,6 +643,7 @@ task MaxInts {
         max_retries: 1
         memory: "1 GiB"
         disks: "local-disk 10 HDD"
+        noAddress: true
     }
 }
 
@@ -656,6 +670,7 @@ task WriteLines {
     docker: linux_docker
     preemptible: 3
     maxRetries: 1
+    noAddress: true
   }
 }
 
@@ -694,6 +709,7 @@ task TarFiles {
     docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -735,6 +751,7 @@ task UntarFiles {
     docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -780,6 +797,7 @@ task CombineTars {
     docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -846,6 +864,7 @@ task SubsetVcfBySamplesList {
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -912,6 +931,7 @@ task SubsetVcfToSample {
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -957,6 +977,7 @@ task VcfToBed {
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
         docker: variant_interpretation_docker
+        noAddress: true
     }
 }
 
@@ -1005,5 +1026,6 @@ task GetSampleSex {
     docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }

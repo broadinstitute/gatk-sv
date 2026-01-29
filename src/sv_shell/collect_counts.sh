@@ -28,9 +28,9 @@ echo "ref_fasta_dict:        " "${ref_fasta_dict}"
 echo "gatk4_jar_override:    " "${gatk4_jar_override}"
 echo "disabled_read_filters: " "${disabled_read_filters}"
 
-working_dir=$(mktemp -d /wd_collect_counts_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_collect_counts_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
-output_dir=$(mktemp -d /output_collect_counts_XXXXXXXX)
+output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_collect_counts_XXXXXXXX)
 output_dir="$(realpath ${output_dir})"
 cd "${working_dir}"
 

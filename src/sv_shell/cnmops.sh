@@ -132,7 +132,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_batch_evidence_merging_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_batch_evidence_merging_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -144,7 +144,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_batch_evidence_merging_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_batch_evidence_merging_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 echo "cnMOPS Working directory: ${working_dir}"
@@ -173,14 +173,14 @@ male_r2_gff=()
 allos=($(awk '{print $1}' "${allo_file}"))
 for allo in "${allos[@]}"; do
   # Male R2
-  working_dir=$(mktemp -d /wd_cn_sample_normal_${allo}_${r2}_XXXXXXXX)
+  working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_cn_sample_normal_${allo}_${r2}_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
   cd "${working_dir}"
   CNSampleNormal "${allo}" "1" "${r2}"
   male_r2_gff+=("${working_dir}/calls/cnMOPS.cnMOPS.gff")
 
   # Male R1
-  working_dir=$(mktemp -d /wd_cn_sample_normal_${allo}_${r1}_XXXXXXXX)
+  working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_cn_sample_normal_${allo}_${r1}_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
   cd "${working_dir}"
   CNSampleNormal "${allo}" "1" "${r1}"
@@ -192,14 +192,14 @@ normal_r2_gff=()
 chroms=($(awk '{print $1}' "${chrom_file}"))
 for chrom in "${chroms[@]}"; do
   # Normal R2
-  working_dir=$(mktemp -d /wd_cn_sample_normal_${chrom}_${r2}_XXXXXXXX)
+  working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_cn_sample_normal_${chrom}_${r2}_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
   cd "${working_dir}"
   CNSampleNormal "${chrom}" "normal" "${r2}"
   normal_r2_gff+=("${working_dir}/calls/cnMOPS.cnMOPS.gff")
 
   # Normal R1
-  working_dir=$(mktemp -d /wd_cn_sample_normal_${chrom}_${r1}_XXXXXXXX)
+  working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_cn_sample_normal_${chrom}_${r1}_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
   cd "${working_dir}"
   CNSampleNormal "${chrom}" "normal" "${r1}"
@@ -208,14 +208,14 @@ done
 
 
 # Female R2
-working_dir=$(mktemp -d /wd_cn_sample_normal_chrX_${r2}_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_cn_sample_normal_chrX_${r2}_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 CNSampleNormal "chrX" "2" "${r2}"
 female_r2_gff=("${working_dir}/calls/cnMOPS.cnMOPS.gff")
 
 # Female R1
-working_dir=$(mktemp -d /wd_cn_sample_normal_chrX_${r1}_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_cn_sample_normal_chrX_${r1}_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 CNSampleNormal "chrX" "2" "${r1}"
@@ -223,7 +223,7 @@ female_r1_gff=("${working_dir}/calls/cnMOPS.cnMOPS.gff")
 
 
 # CleanCNMops
-working_dir=$(mktemp -d /wd_clean_cnmops_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_clean_cnmops_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
