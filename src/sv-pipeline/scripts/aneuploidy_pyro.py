@@ -1150,6 +1150,8 @@ def parse_args():
     # Data filtering
     parser.add_argument('--viable-only', action='store_true', default=False,
                         help='Subset data to viable trisomy chromosomes only (chr13, chr18, chr21, chrX, chrY)')
+    parser.add_argument('--skip-bin-filter', action='store_true', default=False,
+                        help='Skip bin quality filtering step')
     
     # Bin quality filtering parameters
     parser.add_argument('--autosome-median-min', type=float, default=1.75,
@@ -1212,17 +1214,20 @@ def main():
         print(f"Filtered to viable chromosomes only: {n_bins_before} -> {n_bins_after} bins")
         print(f"Chromosomes retained: {sorted(df['Chr'].unique())}")
 
-    # Filter low quality bins
-    df = filter_low_quality_bins(df,
-                                autosome_median_min=args.autosome_median_min,
-                                autosome_median_max=args.autosome_median_max,
-                                autosome_mad_max=args.autosome_mad_max,
-                                chrX_median_min=args.chrX_median_min,
-                                chrX_median_max=args.chrX_median_max,
-                                chrX_mad_max=args.chrX_mad_max,
-                                chrY_median_min=args.chrY_median_min,
-                                chrY_median_max=args.chrY_median_max,
-                                chrY_mad_max=args.chrY_mad_max)
+    # Filter low quality bins (unless skipped)
+    if args.skip_bin_filter:
+        print("\nSkipping bin quality filtering (--skip-bin-filter enabled)")
+    else:
+        df = filter_low_quality_bins(df,
+                                    autosome_median_min=args.autosome_median_min,
+                                    autosome_median_max=args.autosome_median_max,
+                                    autosome_mad_max=args.autosome_mad_max,
+                                    chrX_median_min=args.chrX_median_min,
+                                    chrX_median_max=args.chrX_median_max,
+                                    chrX_mad_max=args.chrX_mad_max,
+                                    chrY_median_min=args.chrY_median_min,
+                                    chrY_median_max=args.chrY_median_max,
+                                    chrY_mad_max=args.chrY_mad_max)
 
     print(df)
 
