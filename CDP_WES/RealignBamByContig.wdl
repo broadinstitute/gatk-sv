@@ -5,8 +5,8 @@ import "Structs.wdl"
 workflow RealignBamByContig {
   input {
     File input_bam
-    Array[String] contig_list
     File input_bai
+    Array[String] contig_list
     File reference_fasta
     File reference_fai
     String sv_pipeline_base_docker
@@ -20,20 +20,21 @@ workflow RealignBamByContig {
   }
 
   scatter (i in range(length(contig_list))){
-  	call BamToFastq{
-  		input:
-	        bam = input_bam,
-	        contig = DetectContigs.contigs[i],
-	        docker_image = sv_pipeline_base_docker
-  	}
+    call BamToFastq{
+      input:
+          bam = input_bam,
+          bai = input_bai,
+          contig = DetectContigs.contigs[i],
+          docker_image = sv_pipeline_base_docker
+    }
 
-  	call SplitRefToContig {
-  		input:
-  			contig = contig_list[i],
-	        reference_fasta = reference_fasta,
-	        reference_fai = reference_fai,
-	        docker_image = sv_pipeline_base_docker
-  	}
+    call SplitRefToContig {
+      input:
+          contig = contig_list[i],
+          reference_fasta = reference_fasta,
+          reference_fai = reference_fai,
+          docker_image = sv_pipeline_base_docker
+    }
 
     call RealignOneContig {
       input:
@@ -99,6 +100,7 @@ task DetectContigs {
 task BamToFastq {
   input {
     File bam
+    File bai
     String contig
     String docker_image
     RuntimeAttr? runtime_attr_override
@@ -178,8 +180,8 @@ task SplitRefToContig {
   >>>
 
   output {
-  	File ref_fa = "contig.fa"
-  	File ref_fai = "contig.fa.fai"
+    File ref_fa = "contig.fa"
+    File ref_fai = "contig.fa.fai"
   }
 
   runtime {
