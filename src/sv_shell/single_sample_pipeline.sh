@@ -167,12 +167,8 @@ bash /opt/sv_shell/gather_sample_evidence.sh \
   "${gather_sample_evidence_outputs_json}" \
   "${gather_sample_evidence_output_dir}"
 
-
-
 # TODO: TEMP --------- pipelining
-# these inputs you get from gather sample evidence.
-# WDL: # File case_counts_file_ = select_first([case_counts_file, GatherSampleEvidence.coverage_counts])
-coverage_counts="/inputs/NA12878.counts.tsv.gz"
+#gather_sample_evidence_outputs_json="/opt/sv_shell/sample_outputs/gather_sample_evidence.json"
 
 
 # ensure required file indexes are present
@@ -213,10 +209,10 @@ bash /opt/sv_shell/evidence_qc.sh \
   "${evidence_qc_outputs_json_filename}" \
   "${evidence_qc_output_dir}"
 
+# TODO: TEMP --------- pipelining
+#evidence_qc_outputs_json_filename="/opt/sv_shell/sample_outputs/evidence_qc.json"
 
-# TODO: temp pipelining
-gather_sample_evidence_outputs_json="/output_GatherSampleEvidence_mZnM8UoL/gather_sample_evidence_outputs.json"
-evidence_qc_outputs_json_filename="/output_evidence_qc_SAHS0zt3/output.json"
+
 
 # GatherBatchEvidence
 # ---------------------------------------------------------------------------------------------------------------------
