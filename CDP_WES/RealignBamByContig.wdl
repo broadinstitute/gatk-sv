@@ -25,7 +25,7 @@ workflow RealignBamByContig {
 	        docker_image = sv_pipeline_base_docker
   	}
 
-  	task SplitRefToContig {
+  	call SplitRefToContig {
   		input:
   			contig = contig_list[i],
 	        reference_fasta = reference_fasta,
