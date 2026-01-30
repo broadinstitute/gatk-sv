@@ -219,6 +219,7 @@ task RealignOneContig {
 
   command <<<
     set -euo pipefail
+    bwa index ~{contig_fa}
 
     # Align
     bwa mem ~{contig_fa} ~{fq_1} ~{fq_2} | \
