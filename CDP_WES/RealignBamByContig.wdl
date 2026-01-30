@@ -164,7 +164,7 @@ task ConcatAndBgzipFastq {
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 5,
-    disk_gb: ceil(1 + sum([size(f, "GB") for f in fastq_files])),
+    disk_gb: ceil(30 + size(fastq_files, "GB") * 2),
     boot_disk_gb: 10,
     preemptible_tries: 0,
     max_retries: 1
