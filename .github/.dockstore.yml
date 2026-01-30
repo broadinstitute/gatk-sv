@@ -241,7 +241,6 @@ workflows:
     filters:
       branches:
         - main
-        - mw_stripy
         - kj_sv_cleanvcf_V2
       tags:
         - /.*/
@@ -251,7 +250,7 @@ workflows:
     primaryDescriptorPath: /wdl/StripyWorkflow.wdl
     filters:
       branches:
-        - mw_stripy
+        - main
       tags:
         - /.*/
 

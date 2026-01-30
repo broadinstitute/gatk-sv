@@ -187,7 +187,7 @@ task GetSeCutoff {
 
     while read FILE; do
       /opt/sv-pipeline/04_variant_resolution/scripts/convert_poisson_p.py \
-        $( awk -F '\t' '{if ( $5=="PE_log_pval") print $2 }' $FILE | head -n1 )
+        $( awk -F '\t' '{if ( $5=="PEQ") print $2 }' $FILE | head -n1 )
     done < ~{write_lines(rf_cutoffs)} \
       | Rscript -e "cat(max(c(4,floor(quantile(as.numeric(scan('stdin',quiet=T)),probs=0.25)))),sep='\n')" \
       > median_cutoff.txt

@@ -137,7 +137,7 @@ awk '{if ($1!~"X" && $1!~"Y") print $4}' cnv.bed \
 
 # select training
 pe_pval=$(awk -F'\t' 'NR==1{for(i=1;i<=NF;i++) col[$i]=i; next}
-          {if ( $col["metric"]=="PE_log_pval") print $col["cutoff"]}' $RF_cutoffs)
+          {if ( $col["metric"]=="PEQ") print $col["cutoff"]}' $RF_cutoffs)
 pe_count=$(/opt/sv-pipeline/04_variant_resolution/scripts/convert_poisson_p.py $pe_pval)
 zcat ${PE_counts} \
   | awk -v var=$pe_count '{if ($3>=var) print}' \

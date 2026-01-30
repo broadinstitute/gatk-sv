@@ -22,9 +22,9 @@ class TrainingLabeler:
 
 class BAF1TrainingLabeler(TrainingLabeler):
     def label_row(self, row):
-        if 0 <= row.RD_Median_Separation < 0.15:
+        if 0 <= row.RD_MEDIAN_SEPARATION < 0.1:
             return 'Fail'
-        elif 0.4 <= row.RD_Median_Separation < 1.0:
+        elif 0.4 <= row.RD_MEDIAN_SEPARATION < 1.0:
             return 'Pass'
         else:
             return 'Unlabeled'
@@ -32,11 +32,11 @@ class BAF1TrainingLabeler(TrainingLabeler):
 
 class SR1TrainingLabeler(TrainingLabeler):
     def label_row(self, row):
-        if (row.RD_Median_Separation < 0.15 and
+        if (row.RD_MEDIAN_SEPARATION < 0.15 and
                 row.BAF1_prob < 0.4 and
-                row.PE_log_pval < -np.log10(0.05)):
+                row.PEQ < -10 * np.log10(0.05)):
             return 'Fail'
-        elif row.RD_Median_Separation >= 0.4 and row.BAF1_prob >= 0.9:
+        elif row.RD_MEDIAN_SEPARATION >= 0.4 and row.BAF1_prob >= 0.9:
             return 'Pass'
         else:
             return 'Unlabeled'

@@ -58,7 +58,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_preprocess_pesr_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_preprocess_pesr_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -70,7 +70,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_preprocess_pesr_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_preprocess_pesr_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 echo "Preprocess PE-SR Working directory: ${working_dir}"
@@ -98,7 +98,7 @@ dragen_out_output=""
 if (( "${#dragen_vcfs[@]}" > 0 )); then
   algorithm="dragen"
   prefix="${batch}.${algorithm}_std"
-  working_dir=$(mktemp -d /wd_preprocess_pesr_dragen_XXXXXXXX)
+  working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_preprocess_pesr_dragen_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
   cd "${working_dir}"
 
@@ -114,7 +114,7 @@ manta_out_output=""
 if (( "${#manta_vcfs[@]}" > 0 )); then
   algorithm="manta"
   prefix="${batch}.${algorithm}_std"
-  working_dir=$(mktemp -d /wd_preprocess_pesr_manta_XXXXXXXX)
+  working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_preprocess_pesr_manta_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
   cd "${working_dir}"
 
@@ -130,7 +130,7 @@ scramble_out_output=""
 if (( "${#manta_vcfs[@]}" > 0 )); then
   algorithm="scramble"
   prefix="${batch}.${algorithm}_std"
-  working_dir=$(mktemp -d /wd_preprocess_pesr_scramble_XXXXXXXX)
+  working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_preprocess_pesr_scramble_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
   cd "${working_dir}"
 
@@ -146,7 +146,7 @@ wham_out_output=""
 if (( "${#wham_vcfs[@]}" > 0 )); then
   algorithm="wham"
   prefix="${batch}.${algorithm}_std"
-  working_dir=$(mktemp -d /wd_preprocess_pesr_wham_XXXXXXXX)
+  working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_preprocess_pesr_wham_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
   cd "${working_dir}"
 

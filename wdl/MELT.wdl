@@ -206,6 +206,7 @@ task GetMultipleMetrics {
     docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
   Int java_mem_mb = round(1024 * (select_first([runtime_attr.mem_gb, default_attr.mem_gb]) - java_mem_pad_gb))
 
@@ -334,6 +335,7 @@ task GetWgsMetrics {
     docker: genomes_in_the_cloud_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 
   command <<<
@@ -545,5 +547,6 @@ task RunMELT {
     docker: melt_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }

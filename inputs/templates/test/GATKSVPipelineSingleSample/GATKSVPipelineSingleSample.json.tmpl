@@ -14,7 +14,7 @@
 
   "GATKSVPipelineSingleSample.contig_ploidy_model_tar" : {{ ref_panel.contig_ploidy_model_tar | tojson }},
   "GATKSVPipelineSingleSample.ref_ped_file" : {{ ref_panel.ped_file | tojson }},
-  "GATKSVPipelineSingleSample.ref_panel_bincov_matrix": {{ ref_panel.merged_coverage_file | tojson }},
+  "GATKSVPipelineSingleSample.ref_panel_bincov_matrix": {{ ref_panel.merged_rd_file | tojson }},
   "GATKSVPipelineSingleSample.ref_panel_del_bed" : {{ ref_panel.del_bed | tojson }},
   "GATKSVPipelineSingleSample.ref_panel_dup_bed" : {{ ref_panel.dup_bed | tojson }},
   "GATKSVPipelineSingleSample.ref_panel_vcf" : {{ ref_panel.clean_vcf | tojson }},
@@ -24,10 +24,7 @@
   "GATKSVPipelineSingleSample.bin_exclude": {{ reference_resources.bin_exclude | tojson }},
 
   "GATKSVPipelineSingleSample.cnmops_docker": {{ dockers.cnmops_docker | tojson }},
-  "GATKSVPipelineSingleSample.condense_counts_docker" : {{ dockers.condense_counts_docker | tojson }},
   "GATKSVPipelineSingleSample.gatk_docker": {{ dockers.gatk_docker | tojson }},
-  "GATKSVPipelineSingleSample.gatk_docker_pesr_override" : {{ dockers.gatk_docker | tojson }},
-  "GATKSVPipelineSingleSample.gq_recalibrator_gatk_docker" : {{ dockers.gq_recalibrator_docker | tojson }},
   "GATKSVPipelineSingleSample.genomes_in_the_cloud_docker" : {{ dockers.genomes_in_the_cloud_docker | tojson }},
 
   "GATKSVPipelineSingleSample.linux_docker" : {{ dockers.linux_docker | tojson }},
@@ -61,8 +58,6 @@
   "GATKSVPipelineSingleSample.reference_dict" : {{ reference_resources.reference_dict | tojson }},
   "GATKSVPipelineSingleSample.reference_fasta" : {{ reference_resources.reference_fasta | tojson }},
   "GATKSVPipelineSingleSample.reference_index" : {{ reference_resources.reference_index | tojson }},
-  "GATKSVPipelineSingleSample.rmsk": {{ reference_resources.rmsk | tojson }},
-  "GATKSVPipelineSingleSample.segdups": {{ reference_resources.segdups | tojson }},
   "GATKSVPipelineSingleSample.cytobands": {{ reference_resources.cytobands | tojson }},
   "GATKSVPipelineSingleSample.mei_bed": {{ reference_resources.mei_bed | tojson }},
   "GATKSVPipelineSingleSample.qc_definitions": {{ reference_resources.single_sample_qc_definitions | tojson }},

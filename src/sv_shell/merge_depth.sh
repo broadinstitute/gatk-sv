@@ -66,7 +66,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_merge_depth_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_merge_depth_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -78,7 +78,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_merge_depth_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_merge_depth_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 echo "Merge Depth Working directory: ${working_dir}"
@@ -99,7 +99,7 @@ defragment_max_dist=$(jq -r '.defragment_max_dist // ""' "$input_json")
 # Merge Sample DEL
 merged_del_beds=()
 for sample in "${samples[@]}"; do
-  working_dir=$(mktemp -d /wd_merge_sample_del_XXXXXXXX)
+  working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_merge_sample_del_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
   cd "${working_dir}"
 
@@ -111,7 +111,7 @@ done
 # Merge Sample DUP
 merged_dup_bed=()
 for sample in "${samples[@]}"; do
-  working_dir=$(mktemp -d /wd_merge_sample_dup_XXXXXXXX)
+  working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_merge_sample_dup_XXXXXXXX)
   working_dir="$(realpath ${working_dir})"
   cd "${working_dir}"
 
@@ -121,7 +121,7 @@ done
 
 
 # Merge DEL
-working_dir=$(mktemp -d /wd_merge_del_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_merge_del_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 # note that "merged_del_beds" in the following is passing the array, not a string.
@@ -131,7 +131,7 @@ merge_set_del_idx="${working_dir}/${batch}.DEL.bed.gz.tbi"
 
 
 # Merge DUP
-working_dir=$(mktemp -d /wd_merge_dup_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_merge_dup_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 # note that "merged_del_beds" in the following is passing the array, not a string.
