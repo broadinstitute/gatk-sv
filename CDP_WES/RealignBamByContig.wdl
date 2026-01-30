@@ -8,7 +8,7 @@ workflow RealignBamByContig {
     File reference_fasta
     File reference_fai
     String sv_pipeline_base_docker
-    String 
+    String bwa_docker
   }
 
   call DetectContigs {
