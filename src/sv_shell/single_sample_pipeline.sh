@@ -175,13 +175,14 @@ bash /opt/sv_shell/gather_sample_evidence.sh \
 coverage_counts="/inputs/NA12878.counts.tsv.gz"
 
 
-
-## TODO: the above file should be indexed.
-## check if the output of the gather sample evidence pipeline already indexes it or not
-## if not, then use the following solution
-## The only solution I found that works is the following, but not sure if it is the best.
-#SKIP_LINES=$(zcat "${coverage_counts}" | grep -c -E '^@|^CONTIG\s')
-#tabix -S $SKIP_LINES -s 1 -b 2 -e 3 "${coverage_counts}"
+# ensure required file indexes are present
+_file_need_index=$(jq -r ".coverage_counts" "$gather_sample_evidence_outputs_json")
+if [ ! -f "${_file_need_index}.tbi" ]; then
+  tabix -s 1 -b 2 -e 3 -c @ "${_file_need_index}"
+  # use the following if the above does not work
+  #SKIP_LINES=$(zcat "${coverage_counts}" | grep -c -E '^@|^CONTIG\s')
+  #tabix -S $SKIP_LINES -s 1 -b 2 -e 3 "${coverage_counts}"
+fi
 
 
 
