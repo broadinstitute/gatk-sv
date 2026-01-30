@@ -51,7 +51,7 @@ readarray -t count_files < <(jq -r '.count_files[]' "${input_json}")
 bin_size=$(jq -r ".bin_size // 100" "${input_json}")
 skip_bin_size_filter=$(jq -r ".skip_bin_size_filter // false" "${input_json}")
 
-# These files need to have the `.list` extension (gatk requirement)
+# These files need to have the '.list' extension (gatk requirement)
 evidence_files_list="$(realpath "evidence_files.list")"
 samples_filename="$(realpath "samples.list")"
 
