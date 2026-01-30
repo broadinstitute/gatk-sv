@@ -5,7 +5,7 @@ import "Structs.wdl"
 workflow RealignBamByContig {
   input {
     File input_bam
-    File contig_list
+    Array[String] contig_list
     File input_bai
     File reference_fasta
     File reference_fai
