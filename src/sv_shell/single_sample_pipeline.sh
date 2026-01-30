@@ -2,7 +2,7 @@
 
 set -Exeuo pipefail
 
-if [ -z "${SV_SHELL_BASE_DIR}" ]; then
+if [ -z "${SV_SHELL_BASE_DIR:-}" ]; then
   # it is not ideal to set a default value if the variable is not defined,
   # because the point of this variable is to ensure sv-shell is using a directory
   # that has enough storage, e.g., a mounted path mounted on an attached storage on a VM;
