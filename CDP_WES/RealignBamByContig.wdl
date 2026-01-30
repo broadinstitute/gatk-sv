@@ -55,8 +55,6 @@ workflow RealignBamByContig {
   }
 }
 
-
-
 task DetectContigs {
   input {
     File bam
@@ -95,7 +93,6 @@ task DetectContigs {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
 
 task BamToFastq {
   input {
@@ -208,7 +205,7 @@ task RealignOneContig {
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 15,
-    disk_gb: ceil(10 + size(vcfs, "GB") * 2),
+    disk_gb: ceil(20 + size(fq_1, "GB") * 5),
     boot_disk_gb: 10,
     preemptible_tries: 0,
     max_retries: 1
@@ -253,7 +250,7 @@ task MergeBams {
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 15,
-    disk_gb: ceil(10 + size(vcfs, "GB") * 2),
+    disk_gb: ceil(20 + size(bams, "GB") * 2),
     boot_disk_gb: 10,
     preemptible_tries: 0,
     max_retries: 1
