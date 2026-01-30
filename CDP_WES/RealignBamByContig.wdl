@@ -50,7 +50,7 @@ workflow RealignBamByContig {
         fq_2 = concat_r2.fastq_gz,
         contig_fa = reference_fasta,
         contig_fai = reference_fai,
-        docker = sv_base_mini_docker
+        docker_image = sv_base_mini_docker
    }
 
 
