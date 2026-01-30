@@ -46,7 +46,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_single_sample_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_single_sample_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi

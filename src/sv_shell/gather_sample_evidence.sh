@@ -185,7 +185,7 @@ if [[ "${collect_pesr}" == true ]]; then
   echo -e "${CYAN}Running collect_sv_evidence.sh ... stdout:${collect_pesr_stdout} and stderr:${collect_pesr_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
   collect_pesr_start_time=`date +%s`
 
-  collect_pesr_output_dir=$(mktemp -d "/output_collect_pesr_XXXXXXXX")
+  collect_pesr_output_dir=$(mktemp -d "${SV_SHELL_BASE_DIR}/output_collect_pesr_XXXXXXXX")
   collect_pesr_output_dir="$(realpath ${collect_pesr_output_dir})"
   collect_pesr_inputs_json_filename="${collect_pesr_output_dir}/inputs.json"
   collect_pesr_outputs_json_filename="${collect_pesr_output_dir}/outputs.json"
