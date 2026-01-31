@@ -58,7 +58,7 @@ Array of variant lists with low SR signal-to-noise ratio for all batches, genera
 #### `ped_file`
 Family structures and sex assignments determined in [EvidenceQC](./eqc). See [PED file format](/docs/gs/inputs#ped-format).
 
-#### `max_shards_per_chrom_step1`, `min_records_per_shard_step1`, `samples_per_step2_shard`, `max_samples_per_shard_step3`, `clean_vcf1b_records_per_shard`, `clean_vcf5_records_per_shard`
+#### `format_vcf_records_per_shard`, `preprocess_records_per_shard`, `postprocess_records_per_shard`
 These parameters control parallelism in scattered tasks. Please examine the 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/CleanVcf.wdl) to see how each is used.
 
