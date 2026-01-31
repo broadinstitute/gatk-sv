@@ -4,11 +4,12 @@ import "Structs.wdl"
 
 workflow RealignBamByContig {
   input {
+    String sample
     File input_bam
-    Array[String] contig_list
     File input_bai
     File reference_fasta
     File reference_fai
+    Array[String] contig_list
     String sv_pipeline_base_docker
     String bwa_docker
   }
@@ -37,6 +38,7 @@ workflow RealignBamByContig {
 
     call RealignOneContig {
       input:
+        sample = sample,
         fq_1 = BamToFastq.fq_1,
         fq_2 = BamToFastq.fq_2,
         contig_fa = SplitRefToContig.ref_fa,
@@ -47,6 +49,7 @@ workflow RealignBamByContig {
 
   call MergeBams {
     input:
+      sample = sample,
       bams = RealignOneContig.out_bam,
       docker_image = sv_pipeline_base_docker
   }
@@ -199,6 +202,7 @@ task RealignOneContig {
     File fq_2
     File contig_fa
     File contig_fai
+    String sample
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
@@ -219,11 +223,15 @@ task RealignOneContig {
     set -euo pipefail
 
     # Align
-    bwa mem ~{contig_fa} ~{fq_1} ~{fq_2} | \
+    bwa mem \
+    -R '@RG\tID:~{sample}\tLB:~{sample}\tPL:illumina\tSM:~{sample}\tPU:~{sample}\tCN:ATLAS' \
+    ~{contig_fa} ~{fq_1} ~{fq_2} | \
       samtools sort -o realigned.bam
 
     samtools index realigned.bam
   >>>
+
+
 
   output {
     File out_bam = "realigned.bam"
@@ -243,6 +251,7 @@ task RealignOneContig {
 
 task MergeBams {
   input {
+    String sample
     Array[File] bams
     String docker_image
     RuntimeAttr? runtime_attr_override
@@ -262,13 +271,13 @@ task MergeBams {
 
   command <<<
     set -euo pipefail
-    samtools merge merged.bam ~{sep=' ' bams}
-    samtools index merged.bam
+    samtools merge ~{sample}.bam ~{sep=' ' bams}
+    samtools index ~{sample}.bam
   >>>
 
   output {
-    File merged_bam = "merged.bam"
-    File merged_bai = "merged.bam.bai"
+    File merged_bam = "~{sample}.bam"
+    File merged_bai = "~{sample}.bam.bai"
   }
 
   runtime {
