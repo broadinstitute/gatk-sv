@@ -58,7 +58,6 @@ echo "JVM memory: $JVM_MAX_MEM"
 # ======================= Command =======================
 # -------------------------------------------------------
 
-tabix -f "${vcf}"
 
 base_name=${vcf%.vcf.gz}
 base_name=${base_name%.vcf}

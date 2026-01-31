@@ -479,4 +479,4 @@ outputs_json=$(jq -n \
   }' > "${output_json_filename}"
 )
 
-echo "Successfully finished Gather Batch Evidence, output json filename: ${output_json_filename}"
+echo "Successfully finished cluster batch, output json filename: ${output_json_filename}"
