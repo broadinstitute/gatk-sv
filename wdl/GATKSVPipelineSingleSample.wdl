@@ -1132,9 +1132,17 @@ workflow GATKSVPipelineSingleSample {
       gatk_docker = gatk_docker
   }
 
+  call genotypebatch.SeparateDepthPesr {
+    input:
+      vcf = GenotypeSVs.out,
+      vcf_index = GenotypeSVs.out_index,
+      prefix = batch + ".genotype_batch",
+      sv_base_mini_docker = sv_base_mini_docker
+  }
+
   call SingleSampleFiltering.ConvertCNVsWithoutDepthSupportToBNDs {
     input:
-      genotyped_pesr_vcf=GenotypeSVs.out,
+      genotyped_pesr_vcf=SeparateDepthPesr.pesr_vcf,
       allosome_file=allosome_file,
       merged_famfile=combined_ped_file,
       case_sample=sample_id,
@@ -1146,7 +1154,7 @@ workflow GATKSVPipelineSingleSample {
       min_sr_background_fail_batches=clean_vcf_min_sr_background_fail_batches,
       ped_file=combined_ped_file,
       pesr_vcfs=[ConvertCNVsWithoutDepthSupportToBNDs.out_vcf],
-      depth_vcfs=[FilterDepth.out],
+      depth_vcfs=[SeparateDepthPesr.depth_vcf],
       contig_list=primary_contigs_fai,
       allosome_fai=allosome_file,
 
