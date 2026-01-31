@@ -224,6 +224,7 @@ task RealignOneContig {
   command <<<
     set -euo pipefail
 
+    bwa index ~{contig_fa}
     # Align
     bwa mem \
     -R '@RG\tID:~{sample}\tLB:~{sample}\tPL:illumina\tSM:~{sample}\tPU:~{sample}\tCN:ATLAS' \
