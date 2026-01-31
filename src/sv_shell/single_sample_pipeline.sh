@@ -174,10 +174,10 @@ bash /opt/sv_shell/gather_sample_evidence.sh \
 # ensure required file indexes are present
 _file_need_index=$(jq -r ".coverage_counts" "$gather_sample_evidence_outputs_json")
 if [ ! -f "${_file_need_index}.tbi" ]; then
-  tabix -s 1 -b 2 -e 3 -c @ "${_file_need_index}"
+  #  tabix -s 1 -b 2 -e 3 -c @ "${_file_need_index}"
   # use the following if the above does not work
-  #SKIP_LINES=$(zcat "${coverage_counts}" | grep -c -E '^@|^CONTIG\s')
-  #tabix -S $SKIP_LINES -s 1 -b 2 -e 3 "${coverage_counts}"
+  SKIP_LINES=$(zcat "${_file_need_index}" | grep -c -E '^@|^CONTIG\s')
+  tabix -S $SKIP_LINES -s 1 -b 2 -e 3 "${_file_need_index}"
 fi
 
 
