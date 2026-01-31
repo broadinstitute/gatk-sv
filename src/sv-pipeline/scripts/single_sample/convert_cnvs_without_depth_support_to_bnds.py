@@ -50,6 +50,15 @@ def read_contigs_list(contigs_list):
     return contigs
 
 
+def convert_record_to_bnd(record):
+    record.info['SVTYPE'] = 'BND'
+    record.info['CHR2'] = record.chrom
+    record.info['END2'] = record.stop
+    record.info['SVLEN'] = record.stop - record.start
+    record.stop = record.pos
+    record.alts = ['<BND>']
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -98,13 +107,11 @@ def main():
                     continue
             if contig not in allosome_contigs:
                 if not has_depth_support_autosome(record, case_sample) and pesr_support:
-                    record.info['SVTYPE'] = 'BND'
-                    record.alts = ['<BND>']
+                    convert_record_to_bnd(record)
             else:
                 if not has_depth_support_allosome(record, case_sample, samples_by_sex[case_sample_sex]) \
                         and pesr_support:
-                    record.info['SVTYPE'] = 'BND'
-                    record.alts = ['<BND>']
+                    convert_record_to_bnd(record)
         fout.write(record)
 
 
