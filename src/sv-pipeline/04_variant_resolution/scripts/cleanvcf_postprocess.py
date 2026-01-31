@@ -36,7 +36,6 @@ def process_revised_allosomes(record, unknown_sex_samples):
     return record
 
 
-
 def process_svtype(record):
     if record.info.get('SVTYPE') == 'DUP':
         record.alts = ('<' + record.info.get('SVTYPE') + '>',)
