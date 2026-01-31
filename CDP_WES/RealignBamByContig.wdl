@@ -24,6 +24,7 @@ workflow RealignBamByContig {
     call BamToFastq{
       input:
           bam = input_bam,
+          bai = input_bai,
           contig = DetectContigs.contigs[i],
           docker_image = sv_pipeline_base_docker
     }
@@ -102,6 +103,7 @@ task DetectContigs {
 task BamToFastq {
   input {
     File bam
+    File bai
     String contig
     String docker_image
     RuntimeAttr? runtime_attr_override
