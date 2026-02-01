@@ -51,6 +51,10 @@ def read_contigs_list(contigs_list):
 
 
 def convert_record_to_bnd(record):
+    if record.info['SVTYPE'] == 'DEL':
+        record.info['STRANDS'] = '+-'
+    elif record.info['SVTYPE'] == 'DUP':
+        record.info['STRANDS'] = '-+'
     record.info['SVTYPE'] = 'BND'
     record.info['CHR2'] = record.chrom
     record.info['END2'] = record.stop
