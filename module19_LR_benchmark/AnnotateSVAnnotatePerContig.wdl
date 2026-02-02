@@ -1,6 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
+import "Helpers.wdl" as Helpers
 
 workflow AnnotateSVAnnotatePerContig {
     input {
