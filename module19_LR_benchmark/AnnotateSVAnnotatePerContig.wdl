@@ -34,7 +34,7 @@ workflow AnnotateSVAnnotatePerContig {
     if (reheader){
         call ReheaderVcf {
             input:
-                input_vcf = ~{vcf},
+                input_vcf = vcf,
                 new_header = new_header,
                 docker_image = sv_base_mini_docker
         }
