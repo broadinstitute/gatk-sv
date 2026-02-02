@@ -55,8 +55,8 @@ workflow AnnotateSVAnnotatePerContig {
 
     call Helpers.ConvertToSymbolic {
         input:
-            vcf = select_first([DropVcfFields.dropped_vcf, ReheaderVcf.output_vcf]),
-            vcf_idx = select_first([DropVcfFields.dropped_vcf_idx, ReheaderVcf.output_vcf_index]),
+            vcf = select_first([DropVcfFields.dropped_vcf, ReheaderVcf.output_vcf, vcf]),
+            vcf_idx = select_first([DropVcfFields.dropped_vcf_idx, ReheaderVcf.output_vcf_index, vcf_idx]),
             prefix = "~{prefix}.~{contig}.converted",
             docker = utils_docker,
             runtime_attr_override = runtime_attr_convert_symbolic
