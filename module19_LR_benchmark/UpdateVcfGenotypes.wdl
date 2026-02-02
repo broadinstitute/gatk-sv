@@ -174,12 +174,13 @@ task PatchGenotypes {
       "~{prefix}.~{contig}.sorted.vcf.gz" \
       ~{contig}.patched.vcf.gz
 
-    tabix -p vcf ~{contig}.patched.vcf.gz
+    bcftools sort "~{contig}.patched.vcf.gz" -Oz -o "~{contig}.patched.sorted.vcf.gz"
+    tabix -p vcf ~{contig}.patched.sorted.vcf.gz
   >>>
 
   output {
-    File out_vcf = "~{contig}.patched.vcf.gz"
-    File out_vcf_idx = "~{contig}.patched.vcf.gz.tbi"
+    File out_vcf = "~{contig}.patched.sorted.vcf.gz"
+    File out_vcf_idx = "~{contig}.patched.sorted.vcf.gz.tbi"
   }
 
   RuntimeAttr default_attr = object {
