@@ -94,26 +94,8 @@ workflow AnnotateSVAnnotatePerContig {
             docker = utils_docker
     }
 
-
-    call Helpers.ConcatTsvs as MergeTsvs {
-        input:
-            tsvs = ExtractAnnotations.annotations_tsv,
-            prefix = prefix + ".svannotate_annotations",
-            docker = utils_docker,
-            runtime_attr_override = runtime_attr_concat_annotated
-    }
-
-    call Helpers.MergeHeaderLines as MergeHeaders {
-        input:
-            header_files = ExtractAnnotations.annotations_header,
-            prefix = prefix,
-            docker = utils_docker,
-            runtime_attr_override = runtime_attr_merge
-    }
-
     output {
-        File annotations_tsv_svannotate = MergeTsvs.concatenated_tsv
-        File annotations_header_svannotate = MergeHeaders.merged_header
+        File annotations_tsv_svannotate = ExtractAnnotations.annotations_tsv
     }
 }
 
