@@ -77,8 +77,8 @@ workflow AnnotateSVAnnotatePerContig {
         input:
             annotated_vcf = AnnotateFunctionalConsequences.anno_vcf,
             annotated_vcf_idx = AnnotateFunctionalConsequences.anno_vcf_idx,
-            original_vcf = SubsetVcfAnnotated.subset_vcf,
-            original_vcf_idx = SubsetVcfAnnotated.subset_vcf_idx,
+            original_vcf = select_first([ReheaderVcf.output_vcf, vcf]),
+            original_vcf_idx = select_first([ReheaderVcf.output_vcf_index, vcf_idx]),
             prefix = "~{prefix}.~{contig}.reverted",
             docker = utils_docker,
             runtime_attr_override = runtime_attr_revert_symbolic
@@ -88,8 +88,8 @@ workflow AnnotateSVAnnotatePerContig {
         input:
             vcf = RevertSymbolicAlleles.reverted_vcf,
             vcf_idx = RevertSymbolicAlleles.reverted_vcf_idx,
-            original_vcf = SubsetVcfAnnotated.subset_vcf,
-            original_vcf_idx = SubsetVcfAnnotated.subset_vcf_idx,
+            original_vcf = select_first([ReheaderVcf.output_vcf, vcf]),
+            original_vcf_idx = select_first([ReheaderVcf.output_vcf_index, vcf_idx]),
             prefix = "~{prefix}.~{contig}",
             docker = utils_docker
     }
