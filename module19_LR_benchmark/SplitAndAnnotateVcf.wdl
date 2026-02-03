@@ -1,8 +1,7 @@
 version 1.0
 
-############################
-# Workflow
-############################
+import "Structs.wdl"
+
 
 workflow SplitAndAnnotateVcf {
   input {
@@ -54,22 +53,7 @@ workflow SplitAndAnnotateVcf {
   }
 }
 
-############################
-# Struct
-############################
 
-struct RuntimeAttr {
-  Int cpu_cores
-  Int mem_gb
-  Int disk_gb
-  Int boot_disk_gb
-  Int preemptible_tries
-  Int max_retries
-}
-
-############################
-# Tasks
-############################
 
 task ReadSampleList {
   input {
@@ -109,7 +93,6 @@ task ReadSampleList {
   }
 }
 
----
 
 task SplitNonRefSampleVcf {
   input {
@@ -159,7 +142,6 @@ task SplitNonRefSampleVcf {
   }
 }
 
----
 
 task AnnotateWithAnno1 {
   input {
@@ -228,7 +210,6 @@ PYTHON
   }
 }
 
----
 
 task AnnotateWithAnno2 {
   input {
