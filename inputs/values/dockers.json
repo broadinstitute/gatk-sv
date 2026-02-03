@@ -1,7 +1,7 @@
 {
   "name": "dockers",
   "cnmops_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/cnmops:2025-09-02-v1.0.5-f091af0b",
-  "gatk_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/gatk:kj-sv-cleanvcf-V2-f5f12b9",
+  "gatk_docker": "us.gcr.io/broad-dsde-methods/markw/gatk:mw-gatk-sv-672d85",
   "genomes_in_the_cloud_docker": "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.3.2-1510681135",
   "linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "manta_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/manta:2023-09-14-v0.28.3-beta-3f22f94d",
