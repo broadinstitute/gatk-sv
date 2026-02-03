@@ -1106,7 +1106,7 @@ workflow GATKSVPipelineSingleSample {
       rd_table = genotyping_rd_table,
       pe_table = genotyping_pe_table,
       sr_table = genotyping_sr_table,
-      gatk_docker = "us.gcr.io/broad-dsde-methods/markw/gatk:mw-gatk-sv-17b82d6" # TODO
+      gatk_docker = gatk_docker
   }
 
   call genotypebatch.SeparateDepthPesr {
