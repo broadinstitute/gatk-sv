@@ -1,5 +1,7 @@
 version 1.0
 
+import "Structs.wdl"
+
 workflow SampleVariantReport {
   input {
     File vcf_gz
