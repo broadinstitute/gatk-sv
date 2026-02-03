@@ -6,6 +6,8 @@ workflow VcfVariantSizeSummary {
   input {
     File vcf_gz
     File vcf_tbi
+
+    Array[String] contig_list
     String sv_pipeline_base_docker
 
     RuntimeAttr? runtime_attr_detect_contigs
@@ -13,15 +15,7 @@ workflow VcfVariantSizeSummary {
     RuntimeAttr? runtime_attr_merge
   }
 
-  call DetectContigs {
-    input:
-      vcf_gz = vcf_gz,
-      vcf_tbi = vcf_tbi,
-      docker_image = sv_pipeline_base_docker,
-      runtime_attr_override = runtime_attr_detect_contigs
-  }
-
-  scatter (c in DetectContigs.contigs) {
+  scatter (c in contig_list) {
     call CountVariantsPerContig {
       input:
         vcf_gz = vcf_gz,
