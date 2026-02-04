@@ -172,14 +172,13 @@ bash /opt/sv_shell/gather_sample_evidence.sh \
 
 
 # ensure required file indexes are present
-_file_need_index=$(jq -r ".coverage_counts" "$gather_sample_evidence_outputs_json")
-if [ ! -f "${_file_need_index}.tbi" ]; then
-  #  tabix -s 1 -b 2 -e 3 -c @ "${_file_need_index}"
-  # use the following if the above does not work
-  SKIP_LINES=$(zcat "${_file_need_index}" | grep -c -E '^@|^CONTIG\s')
-  tabix -S $SKIP_LINES -s 1 -b 2 -e 3 "${_file_need_index}"
-fi
-
+#_file_need_index=$(jq -r ".coverage_counts" "$gather_sample_evidence_outputs_json")
+#if [ ! -f "${_file_need_index}.tbi" ]; then
+#  #  tabix -s 1 -b 2 -e 3 -c @ "${_file_need_index}"
+#  # use the following if the above does not work
+#  SKIP_LINES=$(zcat "${_file_need_index}" | grep -c -E '^@|^CONTIG\s')
+#  tabix -S $SKIP_LINES -s 1 -b 2 -e 3 "${_file_need_index}"
+#fi
 
 
 # EvidenceQC
@@ -299,7 +298,9 @@ jq -n \
       cnmops_large_min_size: $inputs[0].cnmops_large_min_size,
       matrix_qc_distance: $inputs[0].matrix_qc_distance,
       run_module_metrics: $inputs[0].run_batchevidence_metrics,
-      median_cov_mem_gb_per_sample: $inputs[0].median_cov_mem_gb_per_sample
+      median_cov_mem_gb_per_sample: $inputs[0].median_cov_mem_gb_per_sample,
+      ref_panel_median_cov: $inputs[0].ref_panel_median_cov,
+      sample_median_cov: $eqc_outputs[0].bincov_median
   }' > "${gather_batch_evidence_inputs_json_filename}"
 
 bash /opt/sv_shell/gather_batch_evidence.sh \

@@ -134,5 +134,6 @@
   "min_pe_cpx": 3,
   "min_pe_ctx": 3,
   "sl_cutoff_table": "/inputs/baseline_sl_cutoffs.tsv",
-  "no_call_rate_cutoff": 0.05
+  "no_call_rate_cutoff": 0.05,
+  "ref_panel_median_cov": "/inputs/all_samples_medianCov.transposed.bed"
 }
