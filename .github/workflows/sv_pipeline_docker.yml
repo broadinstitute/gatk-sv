@@ -151,7 +151,6 @@ jobs:
       matrix:
         python-version: ['3.8']
     env:
-      DOCKERS_AZURE: "./inputs/values/dockers_azure.json"
       DOCKERS_GCP: "./inputs/values/dockers.json"
     steps:
       - name: Checkout code
@@ -166,13 +165,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Azure login
-        uses: azure/docker-login@v2
-        with:
-          login-server: ${{ secrets.AZ_CR }}
-          username: ${{ secrets.AZ_USERNAME }}
-          password: ${{ secrets.AZ_PASSWORD }}
 
       - name: GCP login
         uses: google-github-actions/auth@v2.0.0
@@ -213,7 +205,7 @@ jobs:
           sudo mv "$tmp" /etc/docker/daemon.json
           sudo systemctl restart docker.service
 
-      - name: Build and Publish Docker Images to ACR & GCR
+      - name: Build and Publish Docker Images to Google Artifact Registry
         id: build_and_publish
         run: |
           python ./scripts/docker/build_docker.py \
@@ -221,8 +213,8 @@ jobs:
             --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
             --docker-repo ${{ secrets.AZ_CR }} us.gcr.io/${{ secrets.GCP_PROJECT_ID }}/gatk-sv \
             --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
-            --input-json $DOCKERS_AZURE $DOCKERS_GCP \
-            --output-json $DOCKERS_AZURE $DOCKERS_GCP \
+            --input-json $DOCKERS_GCP \
+            --output-json $DOCKERS_GCP \
             --disable-git-protect \
             --prune-after-each-image
           
@@ -235,7 +227,7 @@ jobs:
           COMMIT_SHA=${{ needs.build_args_job.outputs.head_sha }}
           git config --global user.name 'gatk-sv-bot'
           git config --global user.email '101641599+gatk-sv-bot@users.noreply.github.com'
-          git commit $DOCKERS_AZURE $DOCKERS_GCP -m "Update docker images list, triggered by "${COMMIT_SHA::8}
+          git commit $DOCKERS_GCP -m "Update docker images list, triggered by "${COMMIT_SHA::8}
           git pull --rebase origin main
           
           # In the following, force-push is required when the above rebase updates the branch;
