@@ -309,7 +309,7 @@ task CleanVcfPreprocess {
 
     bcftools view --header-only ~{vcf} | grep '^#CHROM' >> header.txt
 
-    bcftools view ~{vcf} | bcftools reheader -h header.txt -Oz -o processed.reheader.vcf.gz
+    bcftools view ~{vcf} | bcftools reheader -h header.txt | bgzip -c > processed.reheader.vcf.gz
 
     rm header.txt
     
