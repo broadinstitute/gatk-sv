@@ -320,50 +320,73 @@ task SummarizeAnnotations {
             return "INS_1_49" if d <= 49 else "INS_GT49"
         return None
 
-    # class -> consequence -> set(variant_ids)
-    counts = defaultdict(lambda: defaultdict(set))
-    # class -> consequence -> set(genes)
-    genes = defaultdict(lambda: defaultdict(set))
+    # class -> consequence -> transcript -> set(variant_ids)
+    counts = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
+    # class -> consequence -> transcript -> set(genes)
+    genes = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
+    # transcript -> canonical flag
+    canonical_flag = {}
 
     with open_vcf(vcf) as f:
         for line in f:
             if line.startswith("#"):
                 continue
+
             fields = line.rstrip().split("\t")
             chrom, pos, vid, ref, alts, _, _, info = fields[:8]
             alts = alts.split(",")
+
             info_dict = {}
             for x in info.split(";"):
                 if "=" in x:
                     k, v = x.split("=", 1)
                     info_dict[k] = v
+
             if "vep" not in info_dict:
                 continue
+
             csq_entries = info_dict["vep"].split(",")
+
             for alt in alts:
                 vclass = variant_class(ref, alt)
                 if vclass is None:
                     continue
+
                 var_id = f"{chrom}:{pos}:{ref}:{alt}"
+
                 for csq in csq_entries:
                     parts = csq.split("|")
-                    if len(parts) < 4:
+                    if len(parts) < 25:
                         continue
+
                     consequence_field = parts[1]
                     gene = parts[3]
+                    transcript = parts[6]        # Feature (transcript ID)
+                    canonical = parts[26]         # CANONICAL field
+
+                    if transcript:
+                        canonical_flag[transcript] = canonical if canonical else "NO"
+
                     for consequence in consequence_field.split("&"):
-                        counts[vclass][consequence].add(var_id)
+                        counts[vclass][consequence][transcript].add(var_id)
                         if gene:
-                            genes[vclass][consequence].add(gene)
-    
+                            genes[vclass][consequence][transcript].add(gene)
+
     with open("~{prefix}.vep_consequence_summary.tsv", "w") as out:
-        out.write("VARIANT_CLASS\tCONSEQUENCE\tVARIANT_COUNT\tGENES\n")
+        out.write(
+            "VARIANT_CLASS\tCONSEQUENCE\tTRANSCRIPT_ID\tCANONICAL\tVARIANT_COUNT\tGENES\n"
+        )
+
         for vclass in sorted(counts):
             for cons in sorted(counts[vclass]):
-                n = len(counts[vclass][cons])
-                gene_list = ",".join(sorted(genes[vclass][cons]))
-                out.write(f"{vclass}\t{cons}\t{n}\t{gene_list}\n")
+                for transcript in sorted(counts[vclass][cons]):
+                    n = len(counts[vclass][cons][transcript])
+                    gene_list = ",".join(sorted(genes[vclass][cons][transcript]))
+                    canonical = canonical_flag.get(transcript, "NO")
 
+                    out.write(
+                        f"{vclass}\t{cons}\t{transcript}\t{canonical}\t{n}\t{gene_list}\n"
+                    )
     CODE
   >>>
 
