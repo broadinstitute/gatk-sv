@@ -21,8 +21,7 @@ workflow SampleVariantReport {
         input:
           vcf = vcf_gz,
           vcf_idx = vcf_idx,
-          docker_image = docker_image,
-          runtime_attr_override = runtime_attr_override
+          docker_image = docker_image
       }
 
   }
