@@ -56,7 +56,6 @@ workflow VcfVariantSizeSummary {
   output {
     File  concat_table = ConcatVariantSummaries.merged_summary
     File  summary_table = SumVariantStatsAcrossContigs.genome_wide_summary
-
   }
 }
 
@@ -159,7 +158,7 @@ task CountVariantsPerContig {
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 4,
-    disk_gb: ceil(10 + size(vcf, "GB") * 2),
+    disk_gb: ceil(10 + size(vcf_gz, "GB") * 2),
     boot_disk_gb: 10,
     preemptible_tries: 0,
     max_retries: 1
