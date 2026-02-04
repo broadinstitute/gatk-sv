@@ -6,7 +6,7 @@ workflow SampleVariantReport {
   input {
     File vcf_gz
     File vcf_idx
-    File sample_list
+    Array[String] sample_list
     String docker_image
 
     RuntimeAttr? runtime_attr_split
@@ -15,7 +15,7 @@ workflow SampleVariantReport {
     RuntimeAttr? runtime_attr_merge
   }
 
-  scatter (sample in read_lines(sample_list)) {
+  scatter (sample in sample_list) {
 
     call SplitSampleNonRef {
       input:
