@@ -4,6 +4,8 @@ import "Structs.wdl"
 
 workflow VcfVariantSizeSummary {
   input {
+    String prefix
+
     File vcf_gz
     File vcf_tbi
 
@@ -16,31 +18,96 @@ workflow VcfVariantSizeSummary {
   }
 
   scatter (c in contig_list) {
-    call CountVariantsPerContig {
+    call SplitVcfByContig {
       input:
         vcf_gz = vcf_gz,
         vcf_tbi = vcf_tbi,
         contig = c,
         docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_count_contig
+      }
+
+    call CountVariantsPerContig {
+      input:
+        vcf_gz = SplitVcfByContig.contig_vcf,
+        vcf_tbi = SplitVcfByContig.contig_vcf_tbi,
+        contig = c,
+        docker_image = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_count_contig
     }
   }
 
-  call MergeCounts {
+  call ConcatVariantSummaries {
     input:
-      count_tables = CountVariantsPerContig.count_table,
+      prefix = prefix, 
+      contig_summary_tables = CountVariantsPerContig.count_table,
       docker_image = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_merge
   }
 
+  call SumVariantStatsAcrossContigs {
+    input :
+      prefix = prefix, 
+      contig_summary_tables = CountVariantsPerContig.count_table,
+      docker_image = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_merge
+     }
+
   output {
-    File summary_table = MergeCounts.summary_table
+    File  concat_table = ConcatVariantSummaries.merged_summary
+    File  summary_table = SumVariantStatsAcrossContigs.genome_wide_summary
+
   }
 }
 
-# ======================
-# Detect contigs
-# ======================
+task SplitVcfByContig {
+  input {
+    File vcf_gz
+    File vcf_tbi
+    String contig
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 4,
+    disk_gb: ceil(10 + size(vcf_gz, "GB") * 2),
+    boot_disk_gb: 10,
+    preemptible_tries: 0,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    bcftools view \
+      -r ~{contig} \
+      -Oz \
+      -o ~{contig}.vcf.gz \
+      ~{vcf_gz}
+
+    tabix -p vcf ~{contig}.vcf.gz
+  >>>
+
+  output {
+    File contig_vcf = "~{contig}.vcf.gz"
+    File contig_vcf_tbi = "~{contig}.vcf.gz.tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task DetectContigs {
   input {
     File vcf_gz
@@ -80,9 +147,6 @@ task DetectContigs {
   }
 }
 
-# ======================
-# Count variants per contig
-# ======================
 task CountVariantsPerContig {
   input {
     File vcf_gz
@@ -95,7 +159,7 @@ task CountVariantsPerContig {
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 4,
-    disk_gb: ceil(10 + size(vcf_gz, "GB") * 2),
+    disk_gb: ceil(10 + size(vcf, "GB") * 2),
     boot_disk_gb: 10,
     preemptible_tries: 0,
     max_retries: 1
@@ -106,43 +170,67 @@ task CountVariantsPerContig {
   command <<<
     set -euo pipefail
 
-    bcftools view -r ~{contig} ~{vcf_gz} -Ov | \
-    awk -v c="~{contig}" '
-    BEGIN {
-      snv=0
-      del_1_49=0
-      ins_1_49=0
-      del_gt49=0
-      ins_gt49=0
-    }
-    !/^#/ {
-      ref=$4
-      alt=$5
-      split(alt, alts, ",")
-      for (i in alts) {
-        rlen=length(ref)
-        alen=length(alts[i])
+    python3 << 'EOF'
+    import sys
+    import gzip
+    from collections import defaultdict
 
-        if (rlen==1 && alen==1) {
-          snv++
-        } else if (rlen > alen) {
-          d = rlen - alen
-          if (d <= 49) del_1_49++
-          else del_gt49++
-        } else if (alen > rlen) {
-          d = alen - rlen
-          if (d <= 49) ins_1_49++
-          else ins_gt49++
-        }
-      }
-    }
-    END {
-      print c "\t" snv "\t" del_1_49 "\t" ins_1_49 "\t" del_gt49 "\t" ins_gt49
-    }' > ~{contig}.counts.tsv
+    vcf_file = "~{vcf_gz}"
+    contig = "~{contig}"
+
+    # counters
+    counts = defaultdict(int)
+    positions = defaultdict(set)
+
+    def open_vcf(path):
+        if path.endswith(".gz"):
+            return gzip.open(path, "rt")
+        return open(path, "r")
+
+    with open_vcf(vcf_file) as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+
+            fields = line.rstrip().split("\t")
+            chrom = fields[0]
+            pos = fields[1]
+            ref = fields[3]
+            alt = fields[4]
+
+            alts = alt.split(",")
+
+            for a in alts:
+                rlen = len(ref)
+                alen = len(a)
+
+                if rlen == 1 and alen == 1:
+                    cat = "SNV"
+                elif rlen > alen:
+                    d = rlen - alen
+                    cat = "DEL_1_49" if d <= 49 else "DEL_GT49"
+                elif alen > rlen:
+                    d = alen - rlen
+                    cat = "INS_1_49" if d <= 49 else "INS_GT49"
+                else:
+                    continue
+
+                counts[cat] += 1
+                positions[cat].add(f"{chrom}:{pos}")
+
+    categories = ["SNV", "DEL_1_49", "INS_1_49", "DEL_GT49", "INS_GT49"]
+
+    with open("variant_summary.tsv", "w") as out:
+        out.write("CONTIG\tCATEGORY\tVARIANT_COUNT\tUNIQUE_POS_COUNT\n")
+        for c in categories:
+            out.write(
+                f"{contig}\t{c}\t{counts[c]}\t{len(positions[c])}\n"
+            )
+    EOF
   >>>
 
   output {
-    File count_table = "~{contig}.counts.tsv"
+    File summary_table = "variant_summary.tsv"
   }
 
   runtime {
@@ -156,20 +244,18 @@ task CountVariantsPerContig {
   }
 }
 
-# ======================
-# Merge per-contig tables
-# ======================
-task MergeCounts {
+task ConcatVariantSummaries {
   input {
-    Array[File] count_tables
+    Array[File] contig_summary_tables
+    String prefix
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 4,
-    disk_gb: 20,
+    mem_gb: 2,
+    disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 0,
     max_retries: 1
@@ -180,12 +266,74 @@ task MergeCounts {
   command <<<
     set -euo pipefail
 
-    echo -e "CONTIG\tSNV\tDEL_1_49\tINS_1_49\tDEL_GT49\tINS_GT49" > summary.tsv
-    cat ~{sep=' ' count_tables} >> summary.tsv
+    # write header from first file
+    head -n 1 ~{contig_summary_tables[0]} > "~{prefix}.variant_summary.all_contigs.tsv"
+
+    # append data rows from all files (skip headers)
+    for f in ~{sep=' ' contig_summary_tables}; do
+      tail -n +2 "$f" >> "~{prefix}.variant_summary.all_contigs.tsv"
+    done
   >>>
 
   output {
-    File summary_table = "summary.tsv"
+    File merged_summary = "~{prefix}.variant_summary.all_contigs.tsv"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task SumVariantStatsAcrossContigs {
+  input {
+    String prefix
+    Array[File] contig_summary_tables
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 2,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 0,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    # Merge all tables and sum by CATEGORY
+    awk '
+      BEGIN {
+        OFS="\t"
+      }
+      NR==1 { next }  # skip header
+      {
+        category = $2
+        variant_count[category] += $3
+        unique_pos[category] += $4
+      }
+      END {
+        print "CATEGORY","TOTAL_VARIANTS","TOTAL_UNIQUE_POS"
+        for (c in variant_count) {
+          print c, variant_count[c], unique_pos[c]
+        }
+      }
+    ' ~{sep=' ' contig_summary_tables} > "~{prefix}.variant_summary.genome_wide.tsv"
+  >>>
+
+  output {
+    File genome_wide_summary = "~{prefix}.variant_summary.genome_wide.tsv"
   }
 
   runtime {
