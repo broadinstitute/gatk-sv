@@ -57,9 +57,7 @@ workflow SampleVariantReport {
   }
 }
 
-# =====================================================
 # Task 1: Split per-sample non-ref VCF
-# =====================================================
 task SplitSampleNonRef {
   input {
     File vcf_gz
@@ -102,9 +100,7 @@ task SplitSampleNonRef {
   }
 }
 
-# =====================================================
 # Task 2: Count variant size classes + PREDICTED_LOF
-# =====================================================
 task CountVariantClasses {
   input {
     File sample_vcf
@@ -123,60 +119,78 @@ task CountVariantClasses {
   }
 
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  String prefix = basename(sample_vcf , ".vcf.gz")
 
   command <<<
     set -euo pipefail
 
-    bcftools view ~{sample_vcf} -Ov | \
-    awk '
-    BEGIN {
-      FS=OFS="\t"
-    }
-    !/^#/ {
-      ref=$4
-      split($5, alts, ",")
-      info=$8
+    python3 <<CODE
 
-      lof=""
-      if (info ~ /PREDICTED_LOF=/) {
-        match(info,/PREDICTED_LOF=([^;]+)/,m)
-        lof=m[1]
-      }
+    import gzip
+    import re
+    from collections import defaultdict
 
-      for (i in alts) {
-        r=length(ref); a=length(alts[i])
+    vcf_file = "~{sample_vcf}"
+    out_file = "~{prefix}.SV_lof_summary.tsv"
 
-        if (r==1 && a==1) cat="SNV"
-        else if (r>a && r-a<=49) cat="DEL_1_49"
-        else if (a>r && a-r<=49) cat="INS_1_49"
-        else if (r>a) cat="DEL_GT49"
-        else if (a>r) cat="INS_GT49"
-        else continue
+    categories = [
+        "SNV",
+        "DEL_1_49",
+        "INS_1_49",
+        "DEL_GT49",
+        "INS_GT49"
+    ]
 
-        total[cat]++
+    total = defaultdict(int)
+    lof_count = defaultdict(int)
+    lof_genes = defaultdict(set)
 
-        if (lof!="") {
-          lof_count[cat]++
-          n=split(lof, g, ",")
-          for (j=1;j<=n;j++) lof_gene[cat,g[j]]=1
-        }
-      }
-    }
-    END {
-      print "CATEGORY\tTOTAL\tPREDICTED_LOF\tLOF_GENES"
-      for (c in total) {
-        genes=""
-        for (k in lof_gene) {
-          split(k,a,SUBSEP)
-          if (a[1]==c) genes=(genes==""?a[2]:genes","a[2])
-        }
-        print c,total[c]+0,lof_count[c]+0,genes
-      }
-    }' > ~{sample}.class_counts.tsv
+    lof_re = re.compile(r"PREDICTED_LOF=([^;]+)")
+
+    with gzip.open(vcf_file, "rt") as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            fields = line.rstrip().split("\t")
+            ref = fields[3]
+            alts = fields[4].split(",")
+            info = fields[7]
+            for alt in alts:
+                rlen = len(ref)
+                alen = len(alt)
+                if rlen == 1 and alen == 1:
+                    cat = "SNV"
+                elif rlen > alen:
+                    d = rlen - alen
+                    cat = "DEL_1_49" if d <= 49 else "DEL_GT49"
+                elif alen > rlen:
+                    d = alen - rlen
+                    cat = "INS_1_49" if d <= 49 else "INS_GT49"
+                else:
+                    continue
+                total[cat] += 1
+                m = lof_re.search(info)
+                if m:
+                    lof_count[cat] += 1
+                    genes = m.group(1).split(",")
+                    for g in genes:
+                        if g != "." and g != "":
+                            lof_genes[cat].add(g)
+
+    with open(out_file, "w") as out:
+        out.write("CATEGORY\tVARIANT_COUNT\tLOF_VARIANT_COUNT\tLOF_GENES\n")
+        for cat in categories:
+            genes = ",".join(sorted(lof_genes[cat]))
+            out.write(
+                f"{cat}\t{total[cat]}\t{lof_count[cat]}\t{genes}\n"
+            )
+
+    CODE
+
   >>>
 
   output {
-    File class_table = "~{sample}.class_counts.tsv"
+    File class_table = "~{prefix}.SV_lof_summary.tsv"
   }
 
   runtime {
@@ -190,9 +204,7 @@ task CountVariantClasses {
   }
 }
 
-# =====================================================
 # Task 3: VEP consequence + coding-disruptive genes
-# =====================================================
 task SummarizeAnnotations {
   input {
     File sample_vcf
@@ -211,41 +223,86 @@ task SummarizeAnnotations {
   }
 
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  String prefix = basename(sample_vcf , ".vcf.gz")
 
   command <<<
     set -euo pipefail
 
-    bcftools view ~{sample_vcf} -Ov | \
-    awk '
-    BEGIN { FS=OFS="\t" }
-    !/^#/ {
-      if ($8 ~ /vep=/) {
-        match($8,/vep=([^;]+)/,m)
-        n=split(m[1],csqs,",")
-        for (i=1;i<=n;i++) {
-          split(csqs[i],f,"|")
-          cons=f[2]; gene=f[4]
-          vep[cons]++
-          if (cons ~ /frameshift|stop_gained|splice_(acceptor|donor)|start_lost/)
-            gene_set[cons,gene]=1
-        }
-      }
-    }
-    END {
-      print "CONSEQUENCE\tCOUNT\tGENES"
-      for (k in vep) {
-        genes=""
-        for (g in gene_set) {
-          split(g,a,SUBSEP)
-          if (a[1]==k) genes=(genes==""?a[2]:genes","a[2])
-        }
-        print k,vep[k],genes
-      }
-    }' > ~{sample}.annotation.tsv
+    python3 <<CODE
+
+    import sys
+    import gzip
+    from collections import defaultdict
+
+    vcf = "~{vcf}"
+
+    def open_vcf(path):
+        if path.endswith(".gz"):
+            return gzip.open(path, "rt")
+        return open(path)
+
+    def variant_class(ref, alt):
+        r = len(ref)
+        a = len(alt)
+        if r == 1 and a == 1:
+            return "SNV"
+        if r > a:
+            d = r - a
+            return "DEL_1_49" if d <= 49 else "DEL_GT49"
+        if a > r:
+            d = a - r
+            return "INS_1_49" if d <= 49 else "INS_GT49"
+        return None
+
+    # class -> consequence -> set(variant_ids)
+    counts = defaultdict(lambda: defaultdict(set))
+    # class -> consequence -> set(genes)
+    genes = defaultdict(lambda: defaultdict(set))
+
+    with open_vcf(vcf) as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            fields = line.rstrip().split("\t")
+            chrom, pos, vid, ref, alts, _, _, info = fields[:8]
+            alts = alts.split(",")
+            info_dict = {}
+            for x in info.split(";"):
+                if "=" in x:
+                    k, v = x.split("=", 1)
+                    info_dict[k] = v
+            if "vep" not in info_dict:
+                continue
+            csq_entries = info_dict["vep"].split(",")
+            for alt in alts:
+                vclass = variant_class(ref, alt)
+                if vclass is None:
+                    continue
+                var_id = f"{chrom}:{pos}:{ref}:{alt}"
+                for csq in csq_entries:
+                    parts = csq.split("|")
+                    if len(parts) < 4:
+                        continue
+                    consequence_field = parts[1]
+                    gene = parts[3]
+                    for consequence in consequence_field.split("&"):
+                        counts[vclass][consequence].add(var_id)
+                        if gene:
+                            genes[vclass][consequence].add(gene)
+    
+    with open("~{prefix}.vep_consequence_summary.tsv", "w") as out:
+        out.write("VARIANT_CLASS\tCONSEQUENCE\tVARIANT_COUNT\tGENES\n")
+        for vclass in sorted(counts):
+            for cons in sorted(counts[vclass]):
+                n = len(counts[vclass][cons])
+                gene_list = ",".join(sorted(genes[vclass][cons]))
+                out.write(f"{vclass}\t{cons}\t{n}\t{gene_list}\n")
+
+    CODE
   >>>
 
   output {
-    File annotation_table = "~{sample}.annotation.tsv"
+    File annotation_table = "~{prefix}.vep_consequence_summary.tsv"
   }
 
   runtime {
@@ -259,9 +316,7 @@ task SummarizeAnnotations {
   }
 }
 
-# =====================================================
 # Task 4: Merge per-sample report
-# =====================================================
 task MergeSampleReport {
   input {
     File class_counts
