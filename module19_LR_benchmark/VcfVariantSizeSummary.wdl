@@ -48,13 +48,12 @@ workflow VcfVariantSizeSummary {
   call SumVariantStatsAcrossContigs {
     input :
       prefix = prefix, 
-      contig_summary_tables = CountVariantsPerContig.count_table,
+      contig_summary_table = ConcatVariantSummaries.merged_summary,
       docker_image = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_merge
      }
 
   output {
-    File  concat_table = ConcatVariantSummaries.merged_summary
     File  summary_table = SumVariantStatsAcrossContigs.genome_wide_summary
   }
 }
@@ -292,7 +291,7 @@ task ConcatVariantSummaries {
 task SumVariantStatsAcrossContigs {
   input {
     String prefix
-    Array[File] contig_summary_tables
+    File contig_summary_table
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
@@ -311,24 +310,55 @@ task SumVariantStatsAcrossContigs {
   command <<<
     set -euo pipefail
 
-    # Merge all tables and sum by CATEGORY
-    awk '
-      BEGIN {
-        OFS="\t"
-      }
-      NR==1 { next }  # skip header
-      {
-        category = $2
-        variant_count[category] += $3
-        unique_pos[category] += $4
-      }
-      END {
-        print "CATEGORY","TOTAL_VARIANTS","TOTAL_UNIQUE_POS"
-        for (c in variant_count) {
-          print c, variant_count[c], unique_pos[c]
-        }
-      }
-    ' ~{sep=' ' contig_summary_tables} > "~{prefix}.variant_summary.genome_wide.tsv"
+    python3 <<CODE
+    import pandas as pd
+
+    # Desired category order
+    category_order = [
+        "SNV",
+        "DEL_1_49",
+        "INS_1_49",
+        "DEL_GT49",
+        "INS_GT49"
+    ]
+
+    # Read input
+    df = pd.read_csv("~{contig_summary_table}", sep="\t")
+
+    # Pivot VARIANT_COUNT
+    vc = df.pivot(index="CONTIG",
+                  columns="CATEGORY",
+                  values="VARIANT_COUNT")
+
+    # Reindex to enforce order
+    vc = vc.reindex(columns=category_order, fill_value=0)
+    vc.columns = [f"{c}_all" for c in vc.columns]
+
+    # Pivot UNIQUE_POS_COUNT
+    up = df.pivot(index="CONTIG",
+                  columns="CATEGORY",
+                  values="UNIQUE_POS_COUNT")
+
+    # Reindex to enforce order
+    up = up.reindex(columns=category_order, fill_value=0)
+    up.columns = [f"{c}_unique" for c in up.columns]
+
+    # Merge wide tables
+    out = vc.join(up)
+
+    # ---- add summary row ----
+    summary = out.sum(axis=0)
+    summary.name = "all"
+    out = pd.concat([out, summary.to_frame().T])
+
+    # Reset index for output
+    out = out.reset_index().rename(columns={"index": "CONTIG"})
+
+    # Write output
+    out.to_csv("~{prefix}.variant_summary.genome_wide.tsv", sep="\t", index=False)
+
+    CODE
+
   >>>
 
   output {
