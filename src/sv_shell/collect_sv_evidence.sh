@@ -21,9 +21,9 @@ primary_contigs_list="${12:-}"
 gatk_jar_override="${13:-/root/gatk.jar}"
 command_mem_mb=${14:-3250}
 
-working_dir=$(mktemp -d /wd_collect_sv_evidence_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_collect_sv_evidence_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
-output_dir=$(mktemp -d /output_collect_sv_evidence_XXXXXXXX)
+output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_collect_sv_evidence_XXXXXXXX)
 output_dir="$(realpath ${output_dir})"
 cd "${working_dir}"
 

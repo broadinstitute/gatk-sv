@@ -430,6 +430,7 @@ task LocalizeReads {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: "ubuntu:18.04"
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 
   Int disk_size = ceil(50 + size(reads_path, "GB"))
@@ -515,6 +516,7 @@ task CheckAligner {
     docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -561,6 +563,7 @@ task RealignSoftClippedReads {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 
   output {

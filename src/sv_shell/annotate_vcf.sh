@@ -24,7 +24,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_annotate_vcf_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_annotate_vcf_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -36,7 +36,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_annotate_vcf_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_annotate_vcf_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 echo "Annotate VCF Working directory: ${working_dir}"
@@ -84,7 +84,7 @@ echo "JVM memory: $JVM_MAX_MEM"
 # ---------------------------------------------------------------------------------------------------------------------
 # TODO: assuming you always provide external_af_ref_bed, this is an optional input and is currently configured
 
-split_ref_bed_working_dir=$(mktemp -d /wd_split_ref_bed_XXXXXXXX)
+split_ref_bed_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_split_ref_bed_XXXXXXXX)
 split_ref_bed_working_dir="$(realpath ${split_ref_bed_working_dir})"
 cd "${split_ref_bed_working_dir}"
 

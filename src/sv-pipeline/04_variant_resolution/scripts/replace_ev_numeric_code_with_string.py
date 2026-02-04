@@ -61,7 +61,10 @@ def main():
     if args.fout in '- stdout'.split():
         fout = sys.stdout
     else:
-        fout = open(args.fout, 'w')
+        if args.fout.endswith(".gz"):
+            fout = gzip.open(args.fout, 'wt')
+        else:
+            fout = open(args.fout, 'w')
 
     while True:
         line = vcf.readline().rstrip()
