@@ -234,7 +234,7 @@ task SummarizeAnnotations {
     import gzip
     from collections import defaultdict
 
-    vcf = "~{vcf}"
+    vcf = "~{sample_vcf}"
 
     def open_vcf(path):
         if path.endswith(".gz"):
