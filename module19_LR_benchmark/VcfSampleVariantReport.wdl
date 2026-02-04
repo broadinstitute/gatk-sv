@@ -1,6 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
+import "VcfVariantSizeSummary.wdl" as VcfVariantSizeSummary
 
 workflow SampleVariantReport {
   input {
@@ -13,6 +14,7 @@ workflow SampleVariantReport {
     RuntimeAttr? runtime_attr_count
     RuntimeAttr? runtime_attr_annot
     RuntimeAttr? runtime_attr_merge
+    RuntimeAttr? runtime_attr_count_variant_per_sample
   }
 
 
@@ -37,6 +39,15 @@ workflow SampleVariantReport {
         sample = sample,
         docker_image = docker_image,
         runtime_attr_override = runtime_attr_split
+    }
+
+    call CountVariantsPerSample {
+      input:
+        vcf_gz = SplitSampleNonRef.sample_vcf,
+        vcf_tbi = SplitSampleNonRef.sample_vcf_tbi,
+        sample = sample,
+        docker_image = docker_image,
+        runtime_attr_override = runtime_attr_count_variant_per_sample
     }
 
     call CountVariantClasses {
@@ -141,6 +152,7 @@ task SplitSampleNonRef {
 
   output {
     File sample_vcf = "~{sample}.nonref.vcf.gz"
+    File sample_vcf_tbi = "~{sample}.nonref.vcf.gz.tbi"
   }
 
   runtime {
@@ -414,3 +426,104 @@ task MergeSampleReport {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+
+task CountVariantsPerSample {
+  input {
+    File vcf_gz
+    File vcf_tbi
+    String sample
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 4,
+    disk_gb: ceil(10 + size(vcf_gz, "GB") * 2),
+    boot_disk_gb: 10,
+    preemptible_tries: 0,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    python3 << 'EOF'
+    import sys
+    import gzip
+    from collections import defaultdict
+
+    vcf_file = "~{vcf_gz}"
+    sample = "~{sample}"
+
+    # counters
+    counts = defaultdict(int)
+    positions = defaultdict(set)
+
+    def open_vcf(path):
+        if path.endswith(".gz"):
+            return gzip.open(path, "rt")
+        return open(path, "r")
+
+    with open_vcf(vcf_file) as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+
+            fields = line.rstrip().split("\t")
+            chrom = fields[0]
+            pos = fields[1]
+            ref = fields[3]
+            alt = fields[4]
+
+            alts = alt.split(",")
+
+            for a in alts:
+                rlen = len(ref)
+                alen = len(a)
+
+                if rlen == 1 and alen == 1:
+                    cat = "SNV"
+                elif rlen > alen:
+                    d = rlen - alen
+                    cat = "DEL_1_49" if d <= 49 else "DEL_GT49"
+                elif alen > rlen:
+                    d = alen - rlen
+                    cat = "INS_1_49" if d <= 49 else "INS_GT49"
+                else:
+                    continue
+
+                counts[cat] += 1
+                positions[cat].add(f"{chrom}:{pos}")
+
+    categories = ["SNV", "DEL_1_49", "INS_1_49", "DEL_GT49", "INS_GT49"]
+
+    with open("~{sample}.variant_summary.tsv", "w") as out:
+        out.write("SAMPLE\tCATEGORY\tVARIANT_COUNT\tUNIQUE_POS_COUNT\n")
+        for c in categories:
+            out.write(
+                f"{sample}\t{c}\t{counts[c]}\t{len(positions[c])}\n"
+            )
+    EOF
+  >>>
+
+  output {
+    File count_table = "~{sample}.variant_summary.tsv"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+
