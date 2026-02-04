@@ -229,7 +229,7 @@ task CountVariantsPerContig {
   >>>
 
   output {
-    File summary_table = "variant_summary.tsv"
+    File count_table = "variant_summary.tsv"
   }
 
   runtime {
