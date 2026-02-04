@@ -118,7 +118,7 @@ RUN mkdir -p /opt/R/4.1.3/lib/R/doc/html && \
 # setting SHELL to bash in the following is needed for the `source` command in the following RUN,
 # since the default sh does not support `source`.
 SHELL ["/bin/bash", "-c"]
-RUN apt-get -qqy install --no-upgrade --no-install-recommends git git-lfs openjdk-17-jdk openjdk-17-jre-headless libgomp1 && \
+RUN apt-get update && apt-get -qqy install --no-upgrade --no-install-recommends --fix-missing git git-lfs openjdk-17-jdk openjdk-17-jre-headless libgomp1 && \
     GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git && \
     cd gatk && \
     git checkout mw_gatk_sv && \
