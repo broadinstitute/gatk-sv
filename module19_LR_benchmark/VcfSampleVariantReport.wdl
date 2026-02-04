@@ -26,9 +26,9 @@ workflow SampleVariantReport {
 
   }
 
-  Array[String] sample_list = select_first([ExtractSamplesFromVcf.samples, sample_list])
+  Array[String] sample_list_new = select_first([ExtractSamplesFromVcf.samples, sample_list])
 
-  scatter (sample in sample_list) {
+  scatter (sample in sample_list_new) {
 
     call SplitSampleNonRef {
       input:
