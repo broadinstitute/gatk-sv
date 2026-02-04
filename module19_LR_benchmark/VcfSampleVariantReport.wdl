@@ -6,7 +6,7 @@ workflow SampleVariantReport {
   input {
     File vcf_gz
     File vcf_idx
-    Array[String] sample_list
+    Array[String]? sample_list
     String docker_image
 
     RuntimeAttr? runtime_attr_split
@@ -14,6 +14,20 @@ workflow SampleVariantReport {
     RuntimeAttr? runtime_attr_annot
     RuntimeAttr? runtime_attr_merge
   }
+
+
+  if (!defined(sample_list)){
+      call ExtractSamplesFromVcf {
+        input:
+          vcf = vcf_gz,
+          vcf_idx = vcf_idx,
+          docker_image = docker_image,
+          runtime_attr_override = runtime_attr_override
+      }
+
+  }
+
+  Array[String] sample_list = select_first([ExtractSamplesFromVcf.samples, sample_list])
 
   scatter (sample in sample_list) {
 
@@ -54,6 +68,47 @@ workflow SampleVariantReport {
 
   output {
     Array[File] reports = MergeSampleReport.report
+  }
+}
+
+# Task 1: extract sample list
+task ExtractSamplesFromVcf {
+  input {
+    File vcf
+    File vcf_idx
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1,
+    disk_gb: 5,
+    boot_disk_gb: 10,
+    preemptible_tries: 0,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr =
+    select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+    bcftools query -l ~{vcf} > samples.txt
+  >>>
+
+  output {
+    Array[String] samples = read_lines("samples.txt")
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
