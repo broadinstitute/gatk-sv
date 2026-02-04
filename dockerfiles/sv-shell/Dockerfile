@@ -122,7 +122,7 @@ RUN apt-get -qqy install --no-upgrade --no-install-recommends git git-lfs openjd
     GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git && \
     cd gatk && \
     git checkout mw_gatk_sv && \
-    git checkout 1eac9db89b65f9493d2a91539e2b9274159a5b5c && \
+    git checkout 672d8557d82d17cefe972df5796ba719f0d7adbc && \
     mkdir -p /opt/gatk_miniconda3 && \
     wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.10.0-1-Linux-x86_64.sh -O /opt/gatk_miniconda3/miniconda.sh && \
     bash /opt/gatk_miniconda3/miniconda.sh -p /opt/gatk_miniconda3 -b -u && \
