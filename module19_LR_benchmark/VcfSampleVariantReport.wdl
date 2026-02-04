@@ -83,7 +83,7 @@ task ExtractSamplesFromVcf {
     cpu_cores: 1,
     mem_gb: 1,
     disk_gb: 5,
-    boot_disk_gb: ceil(10 + size(vcf, "GB") * 2),,
+    boot_disk_gb: ceil(10 + size(vcf, "GB") * 2),
     preemptible_tries: 0,
     max_retries: 1
   }
