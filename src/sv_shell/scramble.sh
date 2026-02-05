@@ -105,7 +105,7 @@ else
   MIN_CLIPPED_READS="${min_clipped_reads}"
 fi
 
-gzipped_clusters_file="${working_dir_p1}/${sample_name}_scramble_clusters.tsv.gz)"
+gzipped_clusters_file="${working_dir_p1}/${sample_name}_scramble_clusters.tsv.gz"
 gzipped_clusters_file="$(realpath ${gzipped_clusters_file})"
 
 # Identify clusters of split reads
@@ -189,3 +189,5 @@ outputs_json=$(jq -n \
   '{vcf: $vcf, index: $vcf_idx, clusters: $clusters, table: $table}')
 echo "${outputs_json}" > "${outputs_filename}"
 cp "${outputs_filename}" "${outputs_json_filename}"
+
+echo "Successfully finished Scramble."
