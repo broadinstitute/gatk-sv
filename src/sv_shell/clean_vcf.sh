@@ -304,11 +304,9 @@ CODE
 # ---------------------------------------------------------------------------------------------------------------------
 AddRetroDelFilters_out="${cohort_name}.retro_del_filtered.vcf.gz"
 
-# TODO: discuss this with Mark
 python /opt/sv-pipeline/04_variant_resolution/scripts/add_retro_del_filters.py \
   "${AddHighFDRFilters_out}" \
   "${intron_reference}" \
-  "chr1" \
   "${AddRetroDelFilters_out}"
 
 
@@ -317,9 +315,7 @@ python /opt/sv-pipeline/04_variant_resolution/scripts/add_retro_del_filters.py \
 _prefix="${cohort_name}.final_cleanup"
 FinalCleanup_final_cleaned_shard="${_prefix}.vcf.gz"
 
-# TODO: discuss this with Mark
 /opt/sv-pipeline/04_variant_resolution/scripts/rename_after_vcfcluster.py \
-  --chrom "chr1" \
   --prefix "${_prefix}" \
   "${AddRetroDelFilters_out}" stdout \
   | bcftools annotate --no-version -e 'SVTYPE=="CNV" && SVLEN<5000' -x INFO/MEMBERS -Oz -o "${FinalCleanup_final_cleaned_shard}"
