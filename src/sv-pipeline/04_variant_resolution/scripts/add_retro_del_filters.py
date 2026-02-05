@@ -17,7 +17,7 @@ def load_introns_for_contig(intron_file):
             fields = line.strip().split('\t')
             if len(fields) < 4:
                 continue
-            chrom, start, end = fields[0], int(float(fields[2])), int(float(fields[3]))
+            _, start, end = fields[0], int(float(fields[2])), int(float(fields[3]))
 
             if start > end:
                 start, end = end, start
