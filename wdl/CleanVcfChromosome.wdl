@@ -12,7 +12,6 @@ workflow CleanVcfChromosome {
     File bothsides_pass_list
     File? outlier_samples_list
     File ped_file
-    File ploidy_table
 
     String chr_x
     String chr_y
