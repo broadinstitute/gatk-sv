@@ -149,7 +149,7 @@ jq -n \
   --slurpfile gcpx "${GenotypeComplexVariants_outputs_json_filename}" \
   '{
     "cohort_name": $inputs[0].cohort_name,
-    "complex_genotype_vcf": $gcpx[0].complex_genotype_vcf,
+    "complex_genotype_vcf": $gcpx[0].complex_genotype_merged_vcf,
     "complex_resolve_bothside_pass_list": $rcpx[0].complex_resolve_bothside_pass_list,
     "complex_resolve_background_fail_list": $rcpx[0].complex_resolve_background_fail_list,
     "ped_file": $inputs[0].ped_file,
@@ -188,7 +188,7 @@ jq -n \
      "complex_genotype_vcf": $gcpx[0].complex_genotype_merged_vcf,
      "complex_genotype_vcf_index": $gcpx[0].complex_genotype_merged_vcf_index,
      "combined_vcfs": $cb[0].combined_vcfs,
-     "combined_vcfs_indexes": $cb[0].combined_vcfs_indexes,
+     "combined_vcf_indexes": $cb[0].combined_vcf_indexes,
      "cluster_bothside_pass_lists": $cb[0].cluster_bothside_pass_lists,
      "cluster_background_fail_lists": $cb[0].cluster_background_fail_lists,
      "complex_resolve_vcfs": $rcpx[0].complex_resolve_vcfs,
@@ -197,8 +197,8 @@ jq -n \
      "complex_resolve_background_fail_list": $rcpx[0].complex_resolve_background_fail_list,
      "breakpoint_overlap_dropped_record_vcfs": $rcpx[0].breakpoint_overlap_dropped_record_vcfs,
      "breakpoint_overlap_dropped_record_vcf_indexes": $rcpx[0].breakpoint_overlap_dropped_record_vcf_indexes,
-     "complex_genotype_vcfs": $gcpx[0].complex_genotype_vcfs,
-     "complex_genotype_vcf_indexes": $gcpx[0].complex_genotype_vcfs
+     "complex_genotype_vcfs": $gcpx[0].complex_genotype_merged_vcf,
+     "complex_genotype_vcf_indexes": $gcpx[0].complex_genotype_merged_vcf_index
    }' > "${output_json_filename}"
 
 echo "Finished make cohort VCF, output json filename: ${output_json_filename}"

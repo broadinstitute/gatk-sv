@@ -405,7 +405,9 @@ outputs_json=$(jq -n \
       "combined_vcfs": $combined_vcfs,
       "combined_vcf_indexes": $combined_vcf_indexes,
       "cluster_background_fail_lists": $cluster_background_fail_lists,
-      "cluster_bothside_pass_lists": $cluster_bothside_pass_lists
+      "cluster_bothside_pass_lists": $cluster_bothside_pass_lists,
+      "combine_batches_merged_vcf": $combined_vcfs,
+      "combine_batches_merged_vcf_index": $combined_vcf_indexes,
   }' > "${output_json_filename}"
 )
 

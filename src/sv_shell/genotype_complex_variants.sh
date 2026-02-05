@@ -198,7 +198,7 @@ jq -n \
   --arg complex_genotype_vcf_indexes "${ParseGenotypes_cpx_depth_gt_resolved_vcf_output}.tbi" \
   '{
      "complex_genotype_merged_vcf": $complex_genotype_merged_vcf,
-     "complex_genotype_vcf_indexes": $complex_genotype_vcf_indexes
+     "complex_genotype_merged_vcf_index": $complex_genotype_vcf_indexes,
    }' > "${output_json_filename}"
 
 echo "Finished genotype complex variants, output json filename: ${output_json_filename}"
