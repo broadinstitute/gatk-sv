@@ -100,12 +100,9 @@ FormatVcfToClean_gatk_formatted_vcf="${FormatVcf_out}"
 # CleanVcfPreprocess
 # ---------------------------------------------------------------------------------------------------------------------
 CleanVcfPreprocess_out="${cohort_name}.preprocess.vcf.gz"
+_vcf="${FormatVcfToClean_gatk_formatted_vcf}"
 
-python /opt/sv-pipeline/04_variant_resolution/scripts/replace_ev_numeric_code_with_string.py \
-  "${FormatVcfToClean_gatk_formatted_vcf}" \
-  processed.vcf.gz
-
-zgrep '^##' processed.vcf.gz > header.txt
+bcftools view --header-only "${_vcf}" | grep '^##' > header.txt
 
 cat <<EOF >> header.txt
 ##FILTER=<ID=UNRESOLVED,Description="Variant is unresolved">
@@ -114,11 +111,11 @@ cat <<EOF >> header.txt
 ##INFO=<ID=REVISED_EVENT,Number=0,Type=Flag,Description="Variant has been revised due to a copy number mismatch">
 EOF
 
-zgrep '^#CHROM' processed.vcf.gz >> header.txt
+bcftools view --header-only "${_vcf}" | grep '^#CHROM' >> header.txt
 
-bcftools view processed.vcf.gz | bcftools reheader -h header.txt | bgzip -c > processed.reheader.vcf.gz
+bcftools view "${_vcf}" | bcftools reheader -h header.txt | bgzip -c > processed.reheader.vcf.gz
 
-rm processed.vcf.gz header.txt
+rm header.txt
 
 python /opt/sv-pipeline/04_variant_resolution/scripts/cleanvcf_preprocess.py \
   -V processed.reheader.vcf.gz \
