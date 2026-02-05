@@ -135,3 +135,70 @@ bash /opt/sv_shell/genotype_complex_variants.sh \
   "${GenotypeComplexVariants_inputs_json_filename}" \
   "${GenotypeComplexVariants_outputs_json_filename}" \
   "${GenotypeComplexVariants_output_dir}"
+
+
+# CleanVcf
+# ---------------------------------------------------------------------------------------------------------------------
+CleanVcf_output_dir=$(realpath $(mktemp -d "/output_CleanVcf_XXXXXXXX"))
+CleanVcf_inputs_json_filename="${CleanVcf_output_dir}/inputs.json"
+CleanVcf_outputs_json_filename="${CleanVcf_output_dir}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --slurpfile rcpx "${ResolveComplexVariants_outputs_json_filename}" \
+  --slurpfile gcpx "${GenotypeComplexVariants_outputs_json_filename}" \
+  '{
+    "cohort_name": $inputs[0].cohort_name,
+    "complex_genotype_vcf": $gcpx[0].complex_genotype_vcf,
+    "complex_resolve_bothside_pass_list": $rcpx[0].complex_resolve_bothside_pass_list,
+    "complex_resolve_background_fail_list": $rcpx[0].complex_resolve_background_fail_list,
+    "ped_file": $inputs[0].ped_file,
+    "contig_list": $inputs[0].contig_list,
+    "allosome_fai": $inputs[0].allosome_fai,
+    "chr_x": $inputs[0].chr_x,
+    "chr_y": $inputs[0].chr_y,
+    "HERVK_reference": $inputs[0].HERVK_reference,
+    "LINE1_reference": $inputs[0].LINE1_reference,
+    "intron_reference": $inputs[0].intron_reference,
+    "outlier_samples_list": $inputs[0].outlier_samples_list,
+  }' > "${CleanVcf_inputs_json_filename}"
+
+bash /opt/sv_shell/clean_vcf.sh \
+  "${CleanVcf_inputs_json_filename}" \
+  "${CleanVcf_outputs_json_filename}" \
+  "${CleanVcf_output_dir}"
+
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+jq -n \
+  --slurpfile clean_vcf "${CleanVcf_outputs_json_filename}" \
+  --slurpfile cb "${CombineBatches_outputs_json_filename}" \
+  --slurpfile rcpx "${ResolveComplexVariants_outputs_json_filename}" \
+  --slurpfile gcpx "${GenotypeComplexVariants_outputs_json_filename}" \
+  '{
+     "vcf": $clean_vcf[0].cleaned_vcf,
+     "vcf_index": $clean_vcf[0].cleaned_vcf_index,
+     "cluster_vcf": $cb[0].combine_batches_merged_vcf,
+     "cluster_vcf_index": $cb[0].combine_batches_merged_vcf_index,
+     "complex_resolve_vcf": $rcpx[0].complex_resolve_merged_vcf,
+     "complex_resolve_vcf_index": $rcpx[0].complex_resolve_merged_vcf_index,
+     "complex_genotype_vcf": $gcpx[0].complex_genotype_merged_vcf,
+     "complex_genotype_vcf_index": $gcpx[0].complex_genotype_merged_vcf_index,
+     "combined_vcfs": $cb[0].combined_vcfs,
+     "combined_vcfs_indexes": $cb[0].combined_vcfs_indexes,
+     "cluster_bothside_pass_lists": $cb[0].cluster_bothside_pass_lists,
+     "cluster_background_fail_lists": $cb[0].cluster_background_fail_lists,
+     "complex_resolve_vcfs": $rcpx[0].complex_resolve_vcfs,
+     "complex_resolve_vcf_indexes": $rcpx[0].complex_resolve_vcf_indexes,
+     "complex_resolve_bothside_pass_list": $rcpx[0].complex_resolve_bothside_pass_list,
+     "complex_resolve_background_fail_list": $rcpx[0].complex_resolve_background_fail_list,
+     "breakpoint_overlap_dropped_record_vcfs": $rcpx[0].breakpoint_overlap_dropped_record_vcfs,
+     "breakpoint_overlap_dropped_record_vcf_indexes": $rcpx[0].breakpoint_overlap_dropped_record_vcf_indexes,
+     "complex_genotype_vcfs": $gcpx[0].complex_genotype_vcfs,
+     "complex_genotype_vcf_indexes": $gcpx[0].complex_genotype_vcfs
+   }' > "${output_json_filename}"
+
+echo "Finished make cohort VCF, output json filename: ${output_json_filename}"
