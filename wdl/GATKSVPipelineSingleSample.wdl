@@ -1085,10 +1085,19 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_override = runtime_attr_rewritesrcoords
   }
 
+  call tasks_makecohortvcf.ConcatVcfs as MergePesrDepthVcfs {
+    input:
+      vcfs = [RewriteSRCoords.out, FilterDepth.out],
+      vcfs_idx = [RewriteSRCoords.out + ".tbi", FilterDepth.out + ".tbi"],
+      allow_overlaps = true,
+      outfile_prefix = "~{sample_id}.merge_pesr_depth",
+      sv_base_mini_docker = sv_base_mini_docker
+  }
+
   call genotypebatch.GenotypeSVs {
     input:
-      vcf = RewriteSRCoords.out,
-      vcf_index = RewriteSRCoords.out + ".tbi",
+      vcf = MergePesrDepthVcfs.concat_vcf,
+      vcf_index = MergePesrDepthVcfs.concat_vcf_idx,
       output_prefix = batch + ".genotype_batch",
       median_coverage = GatherBatchEvidence.median_cov,
       rd_file = GatherBatchEvidence.merged_bincov,
