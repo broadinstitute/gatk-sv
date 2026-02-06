@@ -226,10 +226,11 @@ workflow GATKSVPipelineBatch {
       gcnv_gatk_docker=gcnv_gatk_docker
   }
 
+  Array[File] merge_vcfs_ = select_all([GATKSVPipelinePhase1.filtered_pesr_vcf, GATKSVPipelinePhase1.filtered_depth_vcf])
   call tasks_makecohortvcf.ConcatVcfs as MergePesrDepthVcfs {
     input:
-    vcfs = select_all([GATKSVPipelinePhase1.filtered_pesr_vcf, GATKSVPipelinePhase1.filtered_depth_vcf]),
-    vcfs_idx = select_all([GATKSVPipelinePhase1.filtered_pesr_vcf + ".tbi", GATKSVPipelinePhase1.filtered_depth_vcf + ".tbi"]),
+    vcfs = merge_vcfs_,
+    vcfs_idx = [merge_vcfs_[0] + ".tbi", merge_vcfs_[1] + ".tbi"],
     allow_overlaps = true,
     outfile_prefix = "~{name}.merge_pesr_depth",
     sv_base_mini_docker = sv_base_mini_docker
