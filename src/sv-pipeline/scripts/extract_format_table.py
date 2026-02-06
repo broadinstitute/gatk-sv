@@ -62,4 +62,3 @@ def main(argv: Optional[List[Text]] = None):
 
 if __name__ == "__main__":
     main()
-
