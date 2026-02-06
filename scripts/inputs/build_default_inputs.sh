@@ -36,7 +36,7 @@ fi
 bash scripts/inputs/clean_default_inputs.sh -d ${BASE_DIR}
 
 echo "########## Building ref_panel_1kg test ##########"
-scripts/inputs/build_inputs.py --log-info ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test ${BASE_DIR}/inputs/build/ref_panel_1kg/test \
+scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test ${BASE_DIR}/inputs/build/ref_panel_1kg/test \
   -a '{ "test_batch" : "ref_panel_1kg" }'
 
 echo "########## Building ref_panel_1kg cohort Terra workspace ##########"
@@ -48,13 +48,13 @@ scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/temp
   -a '{ "test_batch" : "hgdp" }'
 
 echo "########## Building NA19240 single-sample test ##########"
-scripts/inputs/build_inputs.py --log-info ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test/GATKSVPipelineSingleSample ${BASE_DIR}/inputs/build/NA19240/test \
+scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test/GATKSVPipelineSingleSample ${BASE_DIR}/inputs/build/NA19240/test \
   -a '{ "single_sample" : "test_single_sample_NA19240", "ref_panel" : "ref_panel_1kg" }'
 
 echo "########## Building NA12878 single-sample test ##########"
-scripts/inputs/build_inputs.py --log-info ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test/GATKSVPipelineSingleSample ${BASE_DIR}/inputs/build/NA12878/test \
+scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test/GATKSVPipelineSingleSample ${BASE_DIR}/inputs/build/NA12878/test \
   -a '{ "single_sample" : "test_single_sample_NA12878", "ref_panel" : "ref_panel_1kg" }'
 
 echo "########## Building NA12878 single-sample Terra workspace ##########"
-scripts/inputs/build_inputs.py --log-info ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/terra_workspaces/single_sample ${BASE_DIR}/inputs/build/NA12878/terra \
+scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/terra_workspaces/single_sample ${BASE_DIR}/inputs/build/NA12878/terra \
   -a '{ "single_sample" : "test_single_sample_NA12878", "ref_panel" : "ref_panel_1kg" }'
