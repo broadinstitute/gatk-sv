@@ -83,7 +83,7 @@ task SplitVcfByContig {
 
     bcftools view \
       -r ~{contig} \
-      -f "PASS,." \
+      -f "PASS,SMALL_SV,." \
       -Oz \
       -o ~{contig}.vcf.gz \
       ~{vcf_gz}
