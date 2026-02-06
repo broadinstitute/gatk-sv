@@ -807,7 +807,6 @@ task AddRetroDelFilters {
     python /opt/sv-pipeline/04_variant_resolution/scripts/add_retro_del_filters.py \
       ~{vcf} \
       ~{intron_reference} \
-      ~{contig} \
       ~{prefix}.vcf.gz
   >>>
 
@@ -850,7 +849,6 @@ task FinalCleanup {
     set -eu -o pipefail
     
     /opt/sv-pipeline/04_variant_resolution/scripts/rename_after_vcfcluster.py \
-      --chrom ~{contig} \
       --prefix ~{prefix} \
       ~{vcf} stdout \
       | bcftools annotate --no-version -e 'SVTYPE=="CNV" && SVLEN<5000' -x INFO/MEMBERS -Oz -o ~{prefix}.vcf.gz
