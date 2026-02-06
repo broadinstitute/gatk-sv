@@ -7,6 +7,8 @@ import "Structs.wdl"
 workflow GenotypeBatch {
   input {
     String batch
+    # TODO: this vcf is sites-only and all samples in rd_file/pe_file/sr_file will be genotyped at these sites,
+    # but we should add an option to subset to just retained samples in case of sample filtering
     File vcf
 
     File training_intervals
