@@ -1,7 +1,6 @@
 version 1.0
 
 import "CleanVcfChromosome.wdl" as CleanVcfChromosome
-import "TasksClusterBatch.wdl" as TasksCluster
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "MakeCohortVcfMetrics.wdl" as metrics
 
@@ -72,18 +71,6 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_concat_cleaned_vcfs
   }
 
-  call TasksCluster.CreatePloidyTableFromPed {
-    input:
-      ped_file=ped_file,
-      contig_list=contig_list,
-      retain_female_chr_y=false,
-      chr_x=chr_x,
-      chr_y=chr_y,
-      output_prefix="~{cohort_name}.ploidy",
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_create_ploidy
-  }
-
   #Scatter per chromosome
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter ( i in range(length(contigs)) ) {
@@ -96,7 +83,6 @@ workflow CleanVcf {
         bothsides_pass_list=complex_resolve_bothside_pass_list,
         outlier_samples_list=outlier_samples_list,
         ped_file=ped_file,
-        ploidy_table=CreatePloidyTableFromPed.out,
         chr_x=chr_x,
         chr_y=chr_y,
         prefix="~{cohort_name}.~{contig}",

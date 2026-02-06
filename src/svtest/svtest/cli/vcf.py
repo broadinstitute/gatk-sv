@@ -445,6 +445,8 @@ def get_distributions_by_type(records, variant_types, field, bins, exclude_types
     for record in records:
         type = vu.get_sv_type(record, types_set)
         if type not in exclude_types:
+            print(record.id, file=sys.stderr)
+            print(field, file=sys.stderr)
             val = vu.get_info_field(record, field, singularize=True)
             idx = get_distribution_index(val, bins, num_bins)
             counts[type][idx] += 1

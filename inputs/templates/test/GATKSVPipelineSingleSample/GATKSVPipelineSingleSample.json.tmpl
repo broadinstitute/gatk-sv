@@ -7,10 +7,9 @@
 
   "GATKSVPipelineSingleSample.cutoffs" : {{ ref_panel.cutoffs | tojson }},
 
-  "GATKSVPipelineSingleSample.genotype_pesr_pesr_sepcutoff" : {{ ref_panel.genotype_pesr_pesr_sepcutoff | tojson }},
-  "GATKSVPipelineSingleSample.genotype_pesr_depth_sepcutoff" : {{ ref_panel.genotype_pesr_depth_sepcutoff | tojson }},
-  "GATKSVPipelineSingleSample.genotype_depth_pesr_sepcutoff" : {{ ref_panel.genotype_depth_pesr_sepcutoff | tojson }},
-  "GATKSVPipelineSingleSample.genotype_depth_depth_sepcutoff" : {{ ref_panel.genotype_depth_depth_sepcutoff | tojson }},
+  "GATKSVPipelineSingleSample.genotyping_rd_table" : {{ ref_panel.genotyping_rd_table | tojson }},
+  "GATKSVPipelineSingleSample.genotyping_pe_table" : {{ ref_panel.genotyping_pe_table | tojson }},
+  "GATKSVPipelineSingleSample.genotyping_sr_table" : {{ ref_panel.genotyping_sr_table | tojson }},
 
   "GATKSVPipelineSingleSample.contig_ploidy_model_tar" : {{ ref_panel.contig_ploidy_model_tar | tojson }},
   "GATKSVPipelineSingleSample.ref_ped_file" : {{ ref_panel.ped_file | tojson }},
@@ -18,8 +17,6 @@
   "GATKSVPipelineSingleSample.ref_panel_del_bed" : {{ ref_panel.del_bed | tojson }},
   "GATKSVPipelineSingleSample.ref_panel_dup_bed" : {{ ref_panel.dup_bed | tojson }},
   "GATKSVPipelineSingleSample.ref_panel_vcf" : {{ ref_panel.clean_vcf | tojson }},
-  "GATKSVPipelineSingleSample.PE_metrics" : {{ ref_panel.PE_metrics | tojson }},
-  "GATKSVPipelineSingleSample.SR_metrics" : {{ ref_panel.SR_metrics | tojson }},
 
   "GATKSVPipelineSingleSample.bin_exclude": {{ reference_resources.bin_exclude | tojson }},
 
@@ -69,10 +66,8 @@
   "GATKSVPipelineSingleSample.preprocessed_intervals": {{ reference_resources.preprocessed_intervals | tojson }},
 
   "GATKSVPipelineSingleSample.gcnv_qs_cutoff" : 30,
-  "GATKSVPipelineSingleSample.genotyping_n_per_split" : 1000,
   "GATKSVPipelineSingleSample.matrix_qc_distance" : 1000000,
   "GATKSVPipelineSingleSample.min_svsize" : 50,
-  "GATKSVPipelineSingleSample.n_RD_genotype_bins" : 100000,
 
   "GATKSVPipelineSingleSample.chr_x": {{ reference_resources.chr_x | tojson }},
   "GATKSVPipelineSingleSample.chr_y": {{ reference_resources.chr_y | tojson }},

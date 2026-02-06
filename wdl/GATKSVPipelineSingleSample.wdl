@@ -357,50 +357,12 @@ workflow GATKSVPipelineSingleSample {
     ## GenotypeBatch
     ############################################################
 
-    Int genotyping_n_per_split
-    Int n_RD_genotype_bins  # number of RdTest bins
-
     File cutoffs
-
-    File genotype_pesr_pesr_sepcutoff
-    File genotype_pesr_depth_sepcutoff
-    File genotype_depth_pesr_sepcutoff
-    File genotype_depth_depth_sepcutoff
-
-    File SR_metrics
-    File PE_metrics
+    File genotyping_rd_table
+    File genotyping_pe_table
+    File genotyping_sr_table
 
     File bin_exclude
-
-    # Run GenotypeBatch metrics - default is off for single sample pipeline
-    Boolean? run_genotypebatch_metrics = false
-
-    # Common
-    RuntimeAttr? runtime_attr_merge_counts
-    RuntimeAttr? runtime_attr_split_variants
-    RuntimeAttr? runtime_attr_make_subset_vcf
-    RuntimeAttr? runtime_attr_rdtest_genotype
-    RuntimeAttr? runtime_attr_add_genotypes
-    RuntimeAttr? runtime_attr_genotype_depths_concat_vcfs
-    RuntimeAttr? runtime_attr_genotype_pesr_concat_vcfs
-    RuntimeAttr? runtime_attr_split_vcf_genotypebatch
-
-
-    # Master
-    RuntimeAttr? runtime_attr_add_batch
-    RuntimeAttr? runtime_attr_index_vcf
-
-    # PESR part 2
-    RuntimeAttr? runtime_attr_count_pe
-    RuntimeAttr? runtime_attr_genotype_pe
-    RuntimeAttr? runtime_attr_count_sr
-    RuntimeAttr? runtime_attr_genotype_sr
-    RuntimeAttr? runtime_attr_integrate_gq
-    RuntimeAttr? runtime_attr_integrate_pesr_gq
-    RuntimeAttr? runtime_attr_triple_stream_cat
-
-    # Depth part 2
-    RuntimeAttr? runtime_attr_integrate_depth_gq
 
     ############################################################
     ## MakeCohortVcf
@@ -1123,57 +1085,50 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_override = runtime_attr_rewritesrcoords
   }
 
-  call genotypebatch.GenotypeBatch {
+  call tasks_makecohortvcf.ConcatVcfs as MergePesrDepthVcfs {
     input:
-      batch_pesr_vcf=RewriteSRCoords.annotated_vcf,
-      batch_depth_vcf=FilterDepth.out,
-      cohort_pesr_vcf=RewriteSRCoords.annotated_vcf,
-      cohort_depth_vcf=FilterDepth.out,
-      batch=batch,
-      n_per_split=genotyping_n_per_split,
-      medianfile=GatherBatchEvidence.median_cov,
-      coveragefile=GatherBatchEvidence.merged_bincov,
-      coveragefile_index=GatherBatchEvidence.merged_bincov_index,
-      discfile=GatherBatchEvidence.merged_PE,
-      discfile_index=GatherBatchEvidence.merged_PE_index,
-      splitfile=GatherBatchEvidence.merged_SR,
-      splitfile_index=GatherBatchEvidence.merged_SR_index,
-      ref_dict=reference_dict,
-      n_RD_genotype_bins=n_RD_genotype_bins,
-      genotype_pesr_pesr_sepcutoff=genotype_pesr_pesr_sepcutoff,
-      genotype_pesr_depth_sepcutoff=genotype_pesr_depth_sepcutoff,
-      genotype_depth_pesr_sepcutoff=genotype_depth_pesr_sepcutoff,
-      genotype_depth_depth_sepcutoff=genotype_depth_depth_sepcutoff,
-      SR_metrics=SR_metrics,
-      PE_metrics=PE_metrics,
-      bin_exclude=bin_exclude,
-      run_module_metrics = run_genotypebatch_metrics,
-      sv_base_mini_docker=sv_base_mini_docker,
-      sv_pipeline_docker=sv_pipeline_docker,
-      linux_docker=linux_docker,
-      runtime_attr_split_vcf=runtime_attr_split_vcf_genotypebatch,
-      runtime_attr_merge_counts=runtime_attr_merge_counts,
-      runtime_attr_split_variants=runtime_attr_split_variants,
-      runtime_attr_make_subset_vcf=runtime_attr_make_subset_vcf,
-      runtime_attr_rdtest_genotype=runtime_attr_rdtest_genotype,
-      runtime_attr_add_genotypes=runtime_attr_add_genotypes,
-      runtime_attr_genotype_depths_concat_vcfs=runtime_attr_genotype_depths_concat_vcfs,
-      runtime_attr_genotype_pesr_concat_vcfs=runtime_attr_genotype_pesr_concat_vcfs,
-      runtime_attr_add_batch=runtime_attr_add_batch,
-      runtime_attr_index_vcf=runtime_attr_index_vcf,
-      runtime_attr_count_pe=runtime_attr_count_pe,
-      runtime_attr_genotype_pe=runtime_attr_genotype_pe,
-      runtime_attr_count_sr=runtime_attr_count_sr,
-      runtime_attr_genotype_sr=runtime_attr_genotype_sr,
-      runtime_attr_integrate_gq=runtime_attr_integrate_gq,
-      runtime_attr_integrate_pesr_gq=runtime_attr_integrate_pesr_gq,
-      runtime_attr_triple_stream_cat=runtime_attr_triple_stream_cat,
-      runtime_attr_integrate_depth_gq=runtime_attr_integrate_depth_gq
+      vcfs = [RewriteSRCoords.out, FilterDepth.out],
+      vcfs_idx = [RewriteSRCoords.out + ".tbi", FilterDepth.out + ".tbi"],
+      allow_overlaps = true,
+      outfile_prefix = "~{sample_id}.merge_pesr_depth",
+      sv_base_mini_docker = sv_base_mini_docker
+  }
+
+  call genotypebatch.GenotypeSVs {
+    input:
+      vcf = MergePesrDepthVcfs.concat_vcf,
+      vcf_index = MergePesrDepthVcfs.concat_vcf_idx,
+      output_prefix = batch + ".genotype_batch",
+      median_coverage = GatherBatchEvidence.median_cov,
+      rd_file = GatherBatchEvidence.merged_bincov,
+      rd_file_index = GatherBatchEvidence.merged_bincov + ".tbi",
+      pe_file = GatherBatchEvidence.merged_PE,
+      pe_file_index = GatherBatchEvidence.merged_PE_index,
+      sr_file = GatherBatchEvidence.merged_SR,
+      sr_file_index = GatherBatchEvidence.merged_SR_index,
+      reference_dict = reference_dict,
+      ploidy_table = CreatePloidyTableFromPed.out,
+      depth_exclusion_intervals = bin_exclude,
+      depth_exclusion_intervals_index = bin_exclude + ".tbi",
+      pesr_exclusion_intervals = pesr_exclude_intervals,
+      pesr_exclusion_intervals_index = pesr_exclude_intervals + ".tbi",
+      rd_table = genotyping_rd_table,
+      pe_table = genotyping_pe_table,
+      sr_table = genotyping_sr_table,
+      gatk_docker = gatk_docker
+  }
+
+  call genotypebatch.SeparateDepthPesr {
+    input:
+      vcf = GenotypeSVs.out,
+      vcf_index = GenotypeSVs.out_index,
+      prefix = batch + ".genotype_batch",
+      sv_base_mini_docker = sv_base_mini_docker
   }
 
   call SingleSampleFiltering.ConvertCNVsWithoutDepthSupportToBNDs {
     input:
-      genotyped_pesr_vcf=GenotypeBatch.genotyped_pesr_vcf,
+      genotyped_pesr_vcf=SeparateDepthPesr.pesr_vcf,
       allosome_file=allosome_file,
       merged_famfile=combined_ped_file,
       case_sample=sample_id,
@@ -1182,12 +1137,10 @@ workflow GATKSVPipelineSingleSample {
 
   call makecohortvcf.MakeCohortVcf {
     input:
-      raw_sr_bothside_pass_files=[GenotypeBatch.sr_bothside_pass],
-      raw_sr_background_fail_files=[GenotypeBatch.sr_background_fail],
       min_sr_background_fail_batches=clean_vcf_min_sr_background_fail_batches,
       ped_file=combined_ped_file,
       pesr_vcfs=[ConvertCNVsWithoutDepthSupportToBNDs.out_vcf],
-      depth_vcfs=[GenotypeBatch.genotyped_depth_vcf],
+      depth_vcfs=[SeparateDepthPesr.depth_vcf],
       contig_list=primary_contigs_fai,
       allosome_fai=allosome_file,
 
@@ -1216,7 +1169,7 @@ workflow GATKSVPipelineSingleSample {
 
       rf_cutoff_files=[cutoffs],
       batches=[batch],
-      depth_gt_rd_sep_files=[genotype_depth_depth_sepcutoff],
+      genotyping_rd_tables=[genotyping_rd_table],
       median_coverage_files=[GatherBatchEvidence.median_cov],
 
       max_shard_size_resolve=max_shard_size_resolve,
@@ -1239,8 +1192,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_breakpoint_overlap_filter=runtime_override_breakpoint_overlap_filter,
       runtime_override_clean_background_fail=runtime_override_clean_background_fail,
       runtime_attr_create_ploidy=runtime_attr_create_ploidy,
-      runtime_attr_reformat_1=runtime_attr_reformat_1,
-      runtime_attr_reformat_2=runtime_attr_reformat_2,
       runtime_attr_join_vcfs=runtime_attr_join_vcfs,
       runtime_attr_cluster_sites=runtime_attr_cluster_sites,
       runtime_attr_recluster_part1=runtime_attr_recluster_part1,
@@ -1248,7 +1199,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_get_non_ref_vids=runtime_attr_get_non_ref_vids,
       runtime_attr_calculate_support_frac=runtime_attr_calculate_support_frac,
       runtime_attr_gatk_to_svtk_vcf=runtime_attr_gatk_to_svtk_vcf,
-      runtime_attr_extract_vids=runtime_attr_extract_vids,
       runtime_override_concat_combine_batches=runtime_override_concat_combine_batches,
       runtime_override_update_sr_list_pass=runtime_override_update_sr_list_pass,
       runtime_override_update_sr_list_fail=runtime_override_update_sr_list_fail,
@@ -1527,7 +1477,7 @@ workflow GATKSVPipelineSingleSample {
       cleaned_vcf = FilterVcfForCaseSampleGenotype.out,
       final_vcf = UpdateBreakendRepresentationAndRemoveFilters.out,
       genotyped_pesr_vcf = ConvertCNVsWithoutDepthSupportToBNDs.out_vcf,
-      genotyped_depth_vcf = GenotypeBatch.genotyped_depth_vcf,
+      genotyped_depth_vcf = FilterDepth.out,
       non_genotyped_unique_depth_calls_vcf = GetUniqueNonGenotypedDepthCalls.out,
       contig_list = primary_contigs_list,
       linux_docker = linux_docker,

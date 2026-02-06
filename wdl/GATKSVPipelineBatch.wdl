@@ -6,6 +6,7 @@ import "GATKSVPipelinePhase1.wdl" as phase1
 import "GenotypeBatch.wdl" as genotypebatch
 import "RegenotypeCNVs.wdl" as regenocnvs
 import "MakeCohortVcf.wdl" as makecohortvcf
+import "TasksMakeCohortVcf.wdl" as tasks_makecohortvcf
 import "Utils.wdl" as utils
 import "Structs.wdl"
 import "TestUtils.wdl" as tu
@@ -225,40 +226,42 @@ workflow GATKSVPipelineBatch {
       gcnv_gatk_docker=gcnv_gatk_docker
   }
 
+  Array[File] merge_vcfs_ = select_all([GATKSVPipelinePhase1.filtered_pesr_vcf, GATKSVPipelinePhase1.filtered_depth_vcf])
+  call tasks_makecohortvcf.ConcatVcfs as MergePesrDepthVcfs {
+    input:
+    vcfs = merge_vcfs_,
+    vcfs_idx = [merge_vcfs_[0] + ".tbi", merge_vcfs_[1] + ".tbi"],
+    allow_overlaps = true,
+    outfile_prefix = "~{name}.merge_pesr_depth",
+    sv_base_mini_docker = sv_base_mini_docker
+  }
+
   call genotypebatch.GenotypeBatch as GenotypeBatch {
     input:
-      batch_pesr_vcf=select_first([GATKSVPipelinePhase1.filtered_pesr_vcf]),
-      batch_depth_vcf=select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
-      cohort_pesr_vcf=select_first([GATKSVPipelinePhase1.filtered_pesr_vcf]),
-      cohort_depth_vcf=select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
+      vcf=MergePesrDepthVcfs.concat_vcf,
       batch=name,
       rf_cutoffs=GATKSVPipelinePhase1.cutoffs,
-      medianfile=GATKSVPipelinePhase1.median_cov,
-      coveragefile=GATKSVPipelinePhase1.merged_bincov,
-      coveragefile_index=GATKSVPipelinePhase1.merged_bincov_index,
-      discfile=GATKSVPipelinePhase1.merged_PE,
-      discfile_index=GATKSVPipelinePhase1.merged_PE_index,
-      splitfile=GATKSVPipelinePhase1.merged_SR,
-      splitfile_index=GATKSVPipelinePhase1.merged_SR_index,
-      ref_dict=reference_dict,
-      run_module_metrics = run_genotypebatch_metrics,
-      primary_contigs_list = primary_contigs_list,
+      median_coverage=GATKSVPipelinePhase1.median_cov,
+      rd_file=GATKSVPipelinePhase1.merged_bincov,
+      pe_file=GATKSVPipelinePhase1.merged_PE,
+      sr_file=GATKSVPipelinePhase1.merged_SR,
+      reference_dict=reference_dict,
+      contig_list = primary_contigs_list,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      linux_docker=linux_docker
+      gatk_docker=gatk_docker
   }
 
   call regenocnvs.RegenotypeCNVs as RegenotypeCNVs {
     input:
       depth_vcfs=[GenotypeBatch.genotyped_depth_vcf],
       batch_depth_vcfs=[select_first([GATKSVPipelinePhase1.filtered_depth_vcf])],
-      cohort_depth_vcf=select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
       batches=[name],
       cohort=name,
       medianfiles=[GATKSVPipelinePhase1.median_cov],
       coveragefiles=[GATKSVPipelinePhase1.merged_bincov],
       coveragefile_idxs=[GATKSVPipelinePhase1.merged_bincov_index],
-      RD_depth_sepcutoffs=[select_first([GenotypeBatch.trained_genotype_depth_depth_sepcutoff])],
+      genotyping_rd_table=[select_first([GenotypeBatch.genotyping_rd_table])],
       contig_list=primary_contigs_list,
       regeno_coverage_medians=[GenotypeBatch.regeno_coverage_medians],
       sv_base_mini_docker=sv_base_mini_docker,
@@ -271,8 +274,6 @@ workflow GATKSVPipelineBatch {
       merge_cluster_vcfs = makecohortvcf_merge_cluster_vcfs,
       merge_complex_resolve_vcfs = makecohortvcf_merge_complex_resolve_vcfs,
       merge_complex_genotype_vcfs = makecohortvcf_merge_complex_genotype_vcfs,
-      raw_sr_bothside_pass_files=[GenotypeBatch.sr_bothside_pass],
-      raw_sr_background_fail_files=[GenotypeBatch.sr_background_fail],
       ped_file=ped_file,
       pesr_vcfs=[GenotypeBatch.genotyped_pesr_vcf],
       depth_vcfs=RegenotypeCNVs.regenotyped_depth_vcfs,
@@ -288,7 +289,7 @@ workflow GATKSVPipelineBatch {
       cohort_name=name,
       rf_cutoff_files=[GATKSVPipelinePhase1.cutoffs],
       batches=[name],
-      depth_gt_rd_sep_files=[select_first([GenotypeBatch.trained_genotype_depth_depth_sepcutoff])],
+      genotyping_rd_tables=[select_first([GenotypeBatch.genotyping_rd_table])],
       median_coverage_files=[GATKSVPipelinePhase1.median_cov],
       run_module_metrics = run_makecohortvcf_metrics,
       primary_contigs_list = primary_contigs_list,
@@ -302,7 +303,7 @@ workflow GATKSVPipelineBatch {
   call tu.CatMetrics as CatBatchMetrics {
       input:
         prefix = "batch_sv." + name,
-        metric_files = select_all([GatherSampleEvidenceBatch.metrics_file_sampleevidence, GATKSVPipelinePhase1.metrics_file_batchevidence, GATKSVPipelinePhase1.metrics_file_clusterbatch, GATKSVPipelinePhase1.metrics_file_batchmetrics, GATKSVPipelinePhase1.metrics_file_filterbatch, GenotypeBatch.metrics_file_genotypebatch, MakeCohortVcf.metrics_file_makecohortvcf]),
+        metric_files = select_all([GatherSampleEvidenceBatch.metrics_file_sampleevidence, GATKSVPipelinePhase1.metrics_file_batchevidence, GATKSVPipelinePhase1.metrics_file_clusterbatch, GATKSVPipelinePhase1.metrics_file_batchmetrics, GATKSVPipelinePhase1.metrics_file_filterbatch, MakeCohortVcf.metrics_file_makecohortvcf]),
         linux_docker = linux_docker,
         runtime_attr_override = runtime_attr_cat_metrics
     }
@@ -429,15 +430,9 @@ workflow GATKSVPipelineBatch {
     File regeno_coverage_medians = GenotypeBatch.regeno_coverage_medians
     File regenotyped_depth_vcf = RegenotypeCNVs.regenotyped_depth_vcfs[0]
 
-    File genotype_pesr_pesr_sepcutoff = select_first([GenotypeBatch.trained_genotype_pesr_pesr_sepcutoff])
-    File genotype_pesr_depth_sepcutoff = select_first([GenotypeBatch.trained_genotype_pesr_depth_sepcutoff])
-    File genotype_depth_pesr_sepcutoff = select_first([GenotypeBatch.trained_genotype_depth_pesr_sepcutoff])
-    File genotype_depth_depth_sepcutoff = select_first([GenotypeBatch.trained_genotype_depth_depth_sepcutoff])
-    File depth_gt_rd_sep_file = select_first([GenotypeBatch.trained_genotype_depth_depth_sepcutoff])
-    File PE_metrics = select_first([GenotypeBatch.trained_PE_metrics])
-    File SR_metrics = select_first([GenotypeBatch.trained_SR_metrics])
-    File raw_sr_bothside_pass_file = GenotypeBatch.sr_bothside_pass
-    File raw_sr_background_fail_file = GenotypeBatch.sr_background_fail
+    File genotyping_rd_table = GenotypeBatch.genotyping_rd_table
+    File genotyping_pe_table = GenotypeBatch.genotyping_pe_table
+    File genotyping_sr_table = GenotypeBatch.genotyping_sr_table
 
     # CombineBatches
     Array[File] combined_vcfs = MakeCohortVcf.combined_vcfs

@@ -8,12 +8,13 @@ task SVCluster {
         Array[File] vcfs = []  # Can't use optional because of write_lines() call
         File? vcfs_tar
 
-        File ploidy_table
+        File? ploidy_table
         String output_prefix
 
         String? contig
 
         Boolean? fast_mode
+        Boolean? sites_only
         Boolean? omit_members
         Boolean? enable_cnv
         Boolean? default_no_call
@@ -101,10 +102,11 @@ task SVCluster {
         gatk --java-options "-Xmx${JVM_MAX_MEM}" SVCluster \
             --arguments_file arguments.txt \
             --output ~{output_prefix}.vcf.gz \
-            --ploidy-table ~{ploidy_table} \
             --reference ~{reference_fasta} \
+            ~{"--ploidy-table " + ploidy_table} \
             ~{"-L " + contig} \
             ~{true="--fast-mode" false="" fast_mode} \
+            ~{true="--sites-only" false="" sites_only} \
             ~{true="--enable-cnv" false="" enable_cnv} \
             ~{true="--omit-members" false="" omit_members} \
             ~{true="--default-no-call" false="" default_no_call} \

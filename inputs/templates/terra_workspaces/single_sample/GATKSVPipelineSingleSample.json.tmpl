@@ -5,10 +5,9 @@
 
   "GATKSVPipelineSingleSample.cutoffs" : "${workspace.ref_panel_cutoffs}",
 
-  "GATKSVPipelineSingleSample.genotype_pesr_pesr_sepcutoff" : "${workspace.ref_panel_genotype_pesr_pesr_sepcutoff}",
-  "GATKSVPipelineSingleSample.genotype_pesr_depth_sepcutoff" : "${workspace.ref_panel_genotype_pesr_depth_sepcutoff}",
-  "GATKSVPipelineSingleSample.genotype_depth_pesr_sepcutoff" : "${workspace.ref_panel_genotype_depth_pesr_sepcutoff}",
-  "GATKSVPipelineSingleSample.genotype_depth_depth_sepcutoff" : "${workspace.ref_panel_genotype_depth_depth_sepcutoff}",
+  "GATKSVPipelineSingleSample.genotyping_rd_table" : "${workspace.ref_panel_genotyping_rd_table}",
+  "GATKSVPipelineSingleSample.genotyping_pe_table" : "${workspace.ref_panel_genotyping_pe_table}",
+  "GATKSVPipelineSingleSample.genotyping_sr_table" : "${workspace.ref_panel_genotyping_sr_table}",
 
   "GATKSVPipelineSingleSample.contig_ploidy_model_tar" : "${workspace.ref_panel_contig_ploidy_model_tar}",
   "GATKSVPipelineSingleSample.ref_ped_file" : "${workspace.ref_panel_ped_file}",
@@ -16,8 +15,6 @@
   "GATKSVPipelineSingleSample.ref_panel_del_bed" : "${workspace.ref_panel_del_bed}",
   "GATKSVPipelineSingleSample.ref_panel_dup_bed" : "${workspace.ref_panel_dup_bed}",
   "GATKSVPipelineSingleSample.ref_panel_vcf" : "${workspace.ref_panel_vcf}",
-  "GATKSVPipelineSingleSample.PE_metrics" : "${workspace.ref_panel_PE_metrics}",
-  "GATKSVPipelineSingleSample.SR_metrics" : "${workspace.ref_panel_SR_metrics}",
 
   "GATKSVPipelineSingleSample.bin_exclude": "${workspace.reference_bin_exclude}",
 
@@ -67,10 +64,8 @@
   "GATKSVPipelineSingleSample.preprocessed_intervals": "${workspace.reference_preprocessed_intervals}",
 
   "GATKSVPipelineSingleSample.gcnv_qs_cutoff" : 30,
-  "GATKSVPipelineSingleSample.genotyping_n_per_split" : 1000,
   "GATKSVPipelineSingleSample.matrix_qc_distance" : 1000000,
   "GATKSVPipelineSingleSample.min_svsize" : 50,
-  "GATKSVPipelineSingleSample.n_RD_genotype_bins" : 100000,
 
   "GATKSVPipelineSingleSample.chr_x": "${workspace.chr_x}",
   "GATKSVPipelineSingleSample.chr_y": "${workspace.chr_y}",

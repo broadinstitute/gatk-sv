@@ -12,7 +12,6 @@ workflow CleanVcfChromosome {
     File bothsides_pass_list
     File? outlier_samples_list
     File ped_file
-    File ploidy_table
 
     String chr_x
     String chr_y
@@ -296,13 +295,9 @@ task CleanVcfPreprocess {
   String output_vcf = "~{prefix}.vcf.gz"
 
   command <<<
-    set -euo pipefail
+    set -euxo pipefail
 
-    python /opt/sv-pipeline/04_variant_resolution/scripts/replace_ev_numeric_code_with_string.py \
-      ~{vcf} \
-      processed.vcf.gz
-
-    zgrep '^##' processed.vcf.gz > header.txt
+    bcftools view --header-only ~{vcf} | grep '^##' > header.txt
 
     cat <<EOF >> header.txt
     ##FILTER=<ID=UNRESOLVED,Description="Variant is unresolved">
@@ -311,11 +306,11 @@ task CleanVcfPreprocess {
     ##INFO=<ID=REVISED_EVENT,Number=0,Type=Flag,Description="Variant has been revised due to a copy number mismatch">
     EOF
 
-    zgrep '^#CHROM' processed.vcf.gz >> header.txt
+    bcftools view --header-only ~{vcf} | grep '^#CHROM' >> header.txt
 
-    bcftools view processed.vcf.gz | bcftools reheader -h header.txt | bgzip -c > processed.reheader.vcf.gz
+    bcftools view ~{vcf} | bcftools reheader -h header.txt | bgzip -c > processed.reheader.vcf.gz
 
-    rm processed.vcf.gz header.txt
+    rm header.txt
     
     python /opt/sv-pipeline/04_variant_resolution/scripts/cleanvcf_preprocess.py \
       -V processed.reheader.vcf.gz \

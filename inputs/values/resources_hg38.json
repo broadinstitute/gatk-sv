@@ -23,6 +23,7 @@
   "sd_locs_vcf" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
   "depth_exclude_list" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/depth_blacklist.sorted.bed.gz",
   "depth_exclude_list_index" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/depth_blacklist.sorted.bed.gz.tbi",
+  "depth_training_bed" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/train_hg38_reviewed_final.bed",
   "empty_file" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/empty.file",
   "exclude_intervals_for_gcnv_filter_intervals" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.wgs.blacklist.wPAR.bed",
   "external_af_population" : ["ALL", "AFR", "AMR", "EAS", "EUR", "MID", "FIN", "ASJ", "RMI", "SAS", "AMI"],
