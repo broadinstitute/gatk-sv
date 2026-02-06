@@ -145,7 +145,7 @@ task SplitSampleNonRef {
 
   command <<<
     set -euo pipefail
-    bcftools view -s ~{sample} -c 1 -Oz \
+    bcftools view -s ~{sample} -c 1 -f "PASS,." -Oz \
       -o ~{sample}.nonref.vcf.gz ~{vcf_gz}
     tabix -p vcf ~{sample}.nonref.vcf.gz
   >>>
