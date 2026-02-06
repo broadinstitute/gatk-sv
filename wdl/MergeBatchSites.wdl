@@ -93,7 +93,7 @@ workflow MergeBatchSites {
       mixed_sample_overlap=0,
       mixed_interval_overlap=1,
       mixed_size_similarity=1,
-      depth_breakend_window=0,
+      mixed_breakend_window=0,
       pesr_sample_overlap=0,
       pesr_interval_overlap=1,
       pesr_size_similarity=1,
