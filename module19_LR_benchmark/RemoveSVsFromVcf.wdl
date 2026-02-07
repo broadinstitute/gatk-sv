@@ -36,7 +36,7 @@ task RemoveSVTYPE {
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 10,
-    disk_gb: ceil(10 + size(vcf_gz, "GB") * 5),
+    disk_gb: ceil(10 + size(vcf, "GB") * 5),
     boot_disk_gb: 10,
     preemptible_tries: 0,
     max_retries: 1
