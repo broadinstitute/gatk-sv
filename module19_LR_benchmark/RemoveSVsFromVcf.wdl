@@ -15,7 +15,7 @@ workflow RemoveSVsFromVcf {
     call RemoveSVTYPE {
       input:
         vcf = vcf,
-        docker_image = runtime_attr_remove_SV,
+        docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_remove_SV
     }
   }
