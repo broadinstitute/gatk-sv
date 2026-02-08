@@ -18,17 +18,72 @@ import pybedtools as pbt
 ALLOWED_POPS = set(['afr', 'ami', 'amr', 'asj', 'eas', 'fin', 'mid', 'nfe', 'sas', 'oth'])
 
 
+def check_motifs_canonically_unique(motifs):
+    """
+    Check if motifs are canonically unique.
+    Two motifs are NOT canonically unique if they have the same character counts
+    and one can be created from the other by rotation.
+    """
+
+    for i in range(len(motifs)):
+        for j in range(i + 1, len(motifs)):
+            motif1 = motifs[i]
+            motif2 = motifs[j]
+            if len(motif1) != len(motif2):
+                continue
+            if Counter(motif1) != Counter(motif2):
+                continue
+            doubled = motif1 + motif1
+            if motif2 in doubled:
+                return False
+    return True
+
+
 def create_pop_dict(popfile):
     """
     Makes dictionary of sample-population pairs
     """
 
     pop_dict = {}
-
     for sample in popfile:
         pop_dict[sample.split('\t')[0]] = sample.split('\t')[1]
-
     return pop_dict
+
+
+def load_lps_dict(lpsfile):
+    """
+    Load LPS TSV file into a nested dictionary structure:
+    {variant_id: {sample_name: [val1, val2, ...]}}
+    """
+    lps_dict = {}
+    lines = [line.rstrip('\n').rstrip('\r') for line in open(lpsfile) if line.strip()]
+    
+    if len(lines) == 0:
+        return lps_dict
+    
+    header = lines[-1].split('\t')
+    sample_names = header[2:]
+    
+    for line in lines[:-1]:
+        fields = line.split('\t')
+        if len(fields) < 2:
+            continue
+        
+        variant_id = fields[0]
+        sample_values = fields[2:]
+        
+        lps_dict[variant_id] = {}
+        for i, sample_name in enumerate(sample_names):
+            if i < len(sample_values):
+                val_str = sample_values[i].strip()
+                if val_str == '.' or val_str == '':
+                    lps_dict[variant_id][sample_name] = None
+                else:
+                    lps_dict[variant_id][sample_name] = [int(v.strip()) for v in val_str.split(',')]
+            else:
+                lps_dict[variant_id][sample_name] = None
+    
+    return lps_dict
 
 
 def in_par(record, parbt):
@@ -36,7 +91,6 @@ def in_par(record, parbt):
     Check if variant overlaps pseudoautosomal region
     """
 
-    # Sort start & end to handle edge cases and ensure end > start for pbt functionality
     sstart, send = [str(x) for x in sorted([record.start, record.stop])]
     svbt_str = '\t'.join([record.chrom, sstart, send]) + '\n'
     svbt = pbt.BedTool(svbt_str, from_string=True)
@@ -86,7 +140,7 @@ def update_sex_freqs(record, pop=None):
 
 
 def gather_allele_freqs(record, samples, males_set, females_set, parbt, pop_dict, pops,
-                        sex_chroms, no_combos=False):
+                        sex_chroms, lps_dict, no_combos=False):
     """
     Wrapper to compute allele frequencies for all sex & population pairings
     """
@@ -102,14 +156,14 @@ def gather_allele_freqs(record, samples, males_set, females_set, parbt, pop_dict
         rec_in_par = False
 
     # Get allele frequencies for all populations
-    calc_allele_freq(record, samples)
+    calc_allele_freq(record, samples, lps_dict=lps_dict)
     if len(males_set) > 0:
         if record.chrom in sex_chroms and not rec_in_par:
-            calc_allele_freq(record, males_set, prefix='XY', hemi=True)
+            calc_allele_freq(record, males_set, prefix='XY', hemi=True, lps_dict=lps_dict)
         else:
-            calc_allele_freq(record, males_set, prefix='XY')
+            calc_allele_freq(record, males_set, prefix='XY', lps_dict=lps_dict)
     if len(females_set) > 0:
-        calc_allele_freq(record, females_set, prefix='XX')
+        calc_allele_freq(record, females_set, prefix='XX', lps_dict=lps_dict)
 
     # Adjust global allele frequencies on sex chromosomes, if famfile provided
     if record.chrom in sex_chroms and not rec_in_par \
@@ -121,17 +175,17 @@ def gather_allele_freqs(record, samples, males_set, females_set, parbt, pop_dict
         for pop in pops:
             pop_samps = [
                 s for s in samples if pop_dict.get(s, None) == pop]
-            calc_allele_freq(record, pop_samps, prefix=pop)
+            calc_allele_freq(record, pop_samps, prefix=pop, lps_dict=lps_dict)
             if len(males_set) > 0 and not no_combos:
                 if record.chrom in sex_chroms and not rec_in_par:
                     calc_allele_freq(record, list([s for s in pop_samps if s in males_set]),
-                                     prefix=pop + '_XY', hemi=True)
+                                     prefix=pop + '_XY', hemi=True, lps_dict=lps_dict)
                 else:
                     calc_allele_freq(record, list([s for s in pop_samps if s in males_set]),
-                                     prefix=pop + '_XY')
+                                     prefix=pop + '_XY', lps_dict=lps_dict)
             if len(females_set) > 0 and not no_combos:
                 calc_allele_freq(record, list([s for s in pop_samps if s in females_set]),
-                                 prefix=pop + '_XX')
+                                 prefix=pop + '_XX', lps_dict=lps_dict)
 
             # Adjust per-pop allele frequencies on sex chromosomes, if famfile provided
             if record.chrom in sex_chroms and not rec_in_par \
@@ -154,7 +208,7 @@ def gather_allele_freqs(record, samples, males_set, females_set, parbt, pop_dict
         return record
 
 
-def calc_allele_freq(record, samples, prefix=None, hemi=False):
+def calc_allele_freq(record, samples, prefix=None, hemi=False, lps_dict=None):
     """
     Computes allele frequencies for a single record based on a list of samples
     """
@@ -164,11 +218,9 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False):
     #  - For biallelic sites, count number of non-ref, non-no-call GTs
     #  - For multiallelic sites, compute allele counts & frequencies for all alleles
     if not record.alts or len(record.alts) == 0:
-        
         return record
 
     elif svu.is_biallelic(record):
-
         # Get all sample GTs
         GTs = [record.samples[s]['GT'] for s in samples]
 
@@ -241,40 +293,82 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False):
 
     else:
         # Get all sample GTs and filter out missing genotypes
-        GTs_raw = [record.samples[s]['GT'] for s in samples]
-        valid_GTs = [gt for gt in GTs_raw if gt is not None and any(a is not None for a in gt)]
+        GTs_raw = [(s, record.samples[s]['GT']) for s in samples]
+        valid_GTs = [(s, gt) for s, gt in GTs_raw if gt is not None and any(a is not None for a in gt)]
 
-        if len(valid_GTs) == 0:
-            gt_number, gt_nnonref, gt_freq_nonref = 0, 0, 0.0
-            gt_dist = (0, )
-            gt_freqs = (0.0, )
-            gt_status = (0, )
-        else:
-            # Flatten all alleles into a single list of indices
-            all_alleles = [int(a) for gt in valid_GTs for a in gt if a is not None and a != '.']
-            allele_counts = Counter(all_alleles)
-            
-            # gt_number mirrors AN (total genotyped alleles)
-            gt_number = len(all_alleles)
+        # Flatten all alleles into a single list of indices
+        all_alleles = [int(a) for s, gt in valid_GTs for a in gt if a is not None and a != '.']
+        allele_counts = Counter(all_alleles)
+        
+        # Calculate AN, AC and AF for each allele
+        AN = len(all_alleles)
+        num_alleles = len(record.alts) + 1
+        allele_indices = list(range(num_alleles))
+        ac_allele = [int(allele_counts.get(k, 0)) for k in allele_indices]
+        af_allele = [round(v / AN, 6) if AN > 0 else 0 for v in ac_allele]
 
-            # Get max observed allele index and enumerate counts/frequencies
-            max_allele = max(allele_counts.keys()) if allele_counts else 0
-            gt_status = list(range(max_allele + 1))
-            gt_dist = [int(allele_counts.get(k, 0)) for k in gt_status]
-            gt_freqs = [round(v / gt_number, 6) if gt_number > 0 else 0 for v in gt_dist]
-
-            # Total non-reference counts (sum of all indices > 0)
-            gt_nnonref = sum(gt_dist[1:]) if len(gt_dist) > 1 else 0
-            gt_freq_nonref = round(gt_nnonref / gt_number, 6) if gt_number > 0 else 0
-
-        # Add values to INFO field using the specified prefix
+        # Add AN, AC, and AF to INFO field
         s_suffix = ('_' + prefix if prefix else '')
-        record.info['GT_number' + s_suffix] = gt_number
-        record.info['GT_count' + s_suffix] = tuple(gt_dist)
-        record.info['GT_freq' + s_suffix] = tuple(gt_freqs)
-        record.info['GT_status' + s_suffix] = tuple(gt_status)
-        record.info['GT_nnonref' + s_suffix] = gt_nnonref
-        record.info['GT_freq_nonref' + s_suffix] = gt_freq_nonref
+        record.info[('AN' if prefix is None else 'AN_' + prefix)] = AN
+        record.info[('AC' if prefix is None else 'AC_' + prefix)] = tuple(ac_allele[1:])
+        record.info[('AF' if prefix is None else 'AF_' + prefix)] = tuple(af_allele[1:])
+        
+        # Compute AP_allele and MC_allele only for all samples
+        if prefix is None:
+            # Compute AP_allele
+            ap_allele = []
+            for allele_idx in allele_indices:
+                ap_val = None
+                for sample_name, gt in valid_GTs:
+                    if allele_idx in gt:
+                        gt_list = list(gt)
+                        if allele_idx in gt_list:
+                            pos_in_gt = gt_list.index(allele_idx)
+                            ap_field = record.samples[sample_name].get('AP')
+                            if ap_field is not None:
+                                ap_values = ap_field.split(',') if isinstance(ap_field, str) else ap_field
+                                if pos_in_gt < len(ap_values) and ap_values[pos_in_gt] is not None:
+                                    ap_val = float(ap_values[pos_in_gt])
+                            break
+                ap_allele.append(ap_val if ap_val is not None else 0)
+            record.info['AP_allele'] = tuple(ap_allele)
+            
+            # Compute MC_allele and LPS_allele for multiallelic sites with canonically unique motifs
+            motifs_field = record.info.get('MOTIFS')
+            motifs = list(motifs_field) if isinstance(motifs_field, tuple) or isinstance(motifs_field, list) else motifs_field.split(',')
+            if len(record.id.split(',')) == len(motifs) and check_motifs_canonically_unique(motifs):
+                mc_allele = []
+                for allele_idx in allele_indices:
+                    mc_val = None
+                    for sample_name, gt in valid_GTs:
+                        if allele_idx in gt:
+                            gt_list = list(gt)
+                            if allele_idx in gt_list:
+                                pos_in_gt = gt_list.index(allele_idx)
+                                mc_field = record.samples[sample_name].get('MC')
+                                if mc_field is not None:
+                                    mc_values = list(mc_field) if isinstance(mc_field, tuple) or isinstance(mc_field, list) else mc_field.split(',')
+                                    if pos_in_gt < len(mc_values) and mc_values[pos_in_gt] is not None:
+                                        mc_val = int(mc_values[pos_in_gt])
+                                break
+                    mc_allele.append(mc_val if mc_val is not None else 0)
+                record.info['MC_allele'] = tuple(mc_allele)
+                
+                if lps_dict is not None and record.id in lps_dict:
+                    lps_allele = []
+                    for allele_idx in allele_indices:
+                        lps_val = None
+                        for sample_name, gt in valid_GTs:
+                            if allele_idx in gt:
+                                gt_list = list(gt)
+                                if allele_idx in gt_list:
+                                    pos_in_gt = gt_list.index(allele_idx)
+                                    lps_field = lps_dict[record.id].get(sample_name)
+                                    if lps_field is not None and pos_in_gt < len(lps_field):
+                                        lps_val = lps_field[pos_in_gt]
+                                    break
+                        lps_allele.append(lps_val if lps_val is not None else 0)
+                    record.info['LPS_allele'] = tuple(lps_allele)
 
     return record
 
@@ -282,21 +376,16 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False):
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter)
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument('vcf', help='Input vcf. Also accepts "stdin" and "-".')
-    parser.add_argument('-p', '--popfile', help='Two-column file of samples & ' +
-                        'their population assignments. A "." denotes no assignment.',
-                        default=None)
-    parser.add_argument('-f', '--famfile', help='Input .fam file (used for sex-specific AFs).',
-                        default=None)
-    parser.add_argument('--no-combos', help='Do not compute combinations of populations ' +
-                        'and sexes.', action='store_true', default=False)
-    parser.add_argument('--allosomes-list', help='TSV of sex chromosomes (used for ' +
-                        'sex-specific AFs).', default=None)
-    parser.add_argument('--par', help='BED file of pseudoautosomal regions (used ' +
-                        'for sex-specific AFs).', default=None)
-    parser.add_argument(
-        'fout', help='Output vcf. Also accepts "stdout" and "-".')
+    parser.add_argument('fout', help='Output vcf. Also accepts "stdout" and "-".')
+    parser.add_argument('-p', '--popfile', help='Two-column file of samples & population assignments', default=None)
+    parser.add_argument('-f', '--famfile', help='Input .fam file (used for sex-specific AFs).', default=None)
+    parser.add_argument('-l', '--lpsfile', help='TSV file of LPS values per sample (for multiallelic sites).', default=None)
+    parser.add_argument('--no-combos', help='Do not compute combinations of populations and sexes.', action='store_true', default=False)
+    parser.add_argument('--allosomes-list', help='TSV of sex chromosomes (used for sex-specific AFs).', default=None)
+    parser.add_argument('--par', help='BED file of pseudoautosomal regions (used for sex-specific AFs).', default=None)
     args = parser.parse_args()
 
     # Open connections to input VCF
@@ -340,6 +429,12 @@ def main():
         pop_dict = {}
         pops = []
 
+    # Load LPS dictionary if provided
+    if args.lpsfile is not None:
+        lps_dict = load_lps_dict(args.lpsfile)
+    else:
+        lps_dict = None
+
 
     # Get list of sex chromosomes, if optioned
     if args.allosomes_list is not None:
@@ -350,11 +445,11 @@ def main():
     else:
         sex_chroms = 'X Y chrX chrY'.split()
 
-    # Add relevant fields to header
+    # Add base fields to header
     INFO_ADD = [
-        '##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles genotyped (biallelic sites only).">',
-        '##INFO=<ID=AC,Number=A,Type=Integer,Description="Number of non-reference alleles observed (biallelic sites only).">',
-        '##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency (biallelic sites only).">',
+        '##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles genotyped.">',
+        '##INFO=<ID=AC,Number=A,Type=Integer,Description="Number of alleles observed.">',
+        '##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency.">',
         '##INFO=<ID=n_bi_genos,Number=1,Type=Integer,Description="Total number of samples with complete genotypes (biallelic sites only).">',
         '##INFO=<ID=nhomref,Number=1,Type=Integer,Description="Number of samples with homozygous reference genotypes (biallelic sites only).">',
         '##INFO=<ID=nhet,Number=1,Type=Integer,Description="Number of samples with heterozygous genotypes (biallelic sites only).">',
@@ -362,18 +457,17 @@ def main():
         '##INFO=<ID=freq_homref,Number=1,Type=Float,Description="Homozygous reference genotype frequency (biallelic sites only).">',
         '##INFO=<ID=freq_het,Number=1,Type=Float,Description="Heterozygous genotype frequency (biallelic sites only).">',
         '##INFO=<ID=freq_homalt,Number=1,Type=Float,Description="Homozygous alternate genotype frequency (biallelic sites only).">',
-        '##INFO=<ID=GT_number,Number=1,Type=Integer,Description="Total number of alleles genotyped (multiallelic sites).">',
-        '##INFO=<ID=GT_count,Number=.,Type=Integer,Description="Number of alleles observed for each index, starting from 0 (multiallelic sites).">',
-        '##INFO=<ID=GT_status,Number=.,Type=Integer,Description="Allele indices corresponding to GT_count, GT_freq: 0,1,...,maximum observed index (multiallelic sites).">',
-        '##INFO=<ID=GT_freq,Number=.,Type=Float,Description="Frequency of each allele index, starting from 0 (multiallelic sites).">',
-        '##INFO=<ID=GT_nnonref,Number=1,Type=Integer,Description="Number of non-reference alleles observed (multiallelic sites).">',
-        '##INFO=<ID=GT_freq_nonref,Number=1,Type=Float,Description="Frequency of non-reference alleles (multiallelic sites).">'
+        '##INFO=<ID=AP_allele,Number=.,Type=Float,Description="Allele purity for each allele index (multiallelic sites only).">',
+        '##INFO=<ID=MC_allele,Number=.,Type=Integer,Description="Motif count for each allele index (multiallelic sites only).">',
+        '##INFO=<ID=LPS_allele,Number=.,Type=Integer,Description="Longest polymer sequence for each allele index (multiallelic sites only).">'
     ]
+
+    # Add sex fields to header
     if len(sexes) > 0:
         for sex in sexes:
-            INFO_ADD.append('##INFO=<ID=AN_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped (biallelic sites only).">' % (sex, sex))
-            INFO_ADD.append('##INFO=<ID=AC_%s,Number=A,Type=Integer,Description="Number of non-reference %s alleles observed (biallelic sites only).">' % (sex, sex))
-            INFO_ADD.append('##INFO=<ID=AF_%s,Number=A,Type=Float,Description="%s allele frequency (biallelic sites only).">' % (sex, sex))
+            INFO_ADD.append('##INFO=<ID=AN_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped.">' % (sex, sex))
+            INFO_ADD.append('##INFO=<ID=AC_%s,Number=A,Type=Integer,Description="Number of %s alleles observed.">' % (sex, sex))
+            INFO_ADD.append('##INFO=<ID=AF_%s,Number=A,Type=Float,Description="%s allele frequency.">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=n_bi_genos_%s,Number=1,Type=Integer,Description="Total number of %s samples with complete genotypes (biallelic sites only).">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=nhomref_%s,Number=1,Type=Integer,Description="Number of %s samples with homozygous reference genotypes (biallelic sites only).">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=nhet_%s,Number=1,Type=Integer,Description="Number of %s samples with heterozygous genotypes (biallelic sites only).">' % (sex, sex))
@@ -381,12 +475,6 @@ def main():
             INFO_ADD.append('##INFO=<ID=freq_homref_%s,Number=1,Type=Float,Description="%s homozygous reference genotype frequency (biallelic sites only).">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=freq_het_%s,Number=1,Type=Float,Description="%s heterozygous genotype frequency (biallelic sites only).">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=freq_homalt_%s,Number=1,Type=Float,Description="%s homozygous alternate genotype frequency (biallelic sites only).">' % (sex, sex))
-            INFO_ADD.append('##INFO=<ID=GT_number_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped (multiallelic sites).">' % (sex, sex))
-            INFO_ADD.append('##INFO=<ID=GT_count_%s,Number=.,Type=Integer,Description="Number of %s alleles observed for each index, starting from 0 (multiallelic sites).">' % (sex, sex))
-            INFO_ADD.append('##INFO=<ID=GT_status_%s,Number=.,Type=Integer,Description="Allele indices corresponding to GT_count_%s, GT_freq_%s: 0,1,...,maximum observed index (multiallelic sites).">' % (sex, sex, sex))
-            INFO_ADD.append('##INFO=<ID=GT_freq_%s,Number=.,Type=Float,Description="Frequency of each allele index for %s samples, starting from 0 (multiallelic sites).">' % (sex, sex))
-            INFO_ADD.append('##INFO=<ID=GT_nnonref_%s,Number=1,Type=Integer,Description="Number of %s non-reference alleles (multiallelic sites).">' % (sex, sex))
-            INFO_ADD.append('##INFO=<ID=GT_freq_nonref_%s,Number=1,Type=Float,Description="Frequency of %s non-reference alleles (multiallelic sites).">' % (sex, sex))
             if sex == 'XY':
                 INFO_ADD.append('##INFO=<ID=nhemiref_%s,Number=1,Type=Integer,Description="Number of %s samples with hemizygous reference genotypes (biallelic sites only).">' % (sex, sex))
                 INFO_ADD.append('##INFO=<ID=nhemialt_%s,Number=1,Type=Integer,Description="Number of %s samples with hemizygous alternate genotypes (biallelic sites only).">' % (sex, sex))
@@ -394,16 +482,18 @@ def main():
                 INFO_ADD.append('##INFO=<ID=freq_hemialt_%s,Number=1,Type=Float,Description="%s hemizygous alternate genotype frequency (biallelic sites only).">' % (sex, sex))
                 if len(parbt) > 0:
                     INFO_ADD.append('##INFO=<ID=par,Number=0,Type=Flag,Description="Variant overlaps pseudoautosomal region.">')
+    
+    # Add pop fields to header
     if len(pops) > 0:
-        INFO_ADD.append('##INFO=<ID=AF_grpmax,Number=1,Type=Float,Description="Maximum allele frequency across any population (biallelic sites only).">')
+        INFO_ADD.append('##INFO=<ID=AN_grpmax,Number=1,Type=Integer,Description="Allele number for the grpmax population (biallelic sites only.">')
+        INFO_ADD.append('##INFO=<ID=AC_grpmax,Number=1,Type=Integer,Description="Allele count for the grpmax population (biallelic sites only.">')
+        INFO_ADD.append('##INFO=<ID=AF_grpmax,Number=1,Type=Float,Description="Maximum allele frequency across any population (biallelic sites only.">')
         INFO_ADD.append('##INFO=<ID=grpmax,Number=1,Type=String,Description="Population label with maximum allele frequency (biallelic sites only).">')
-        INFO_ADD.append('##INFO=<ID=AC_grpmax,Number=1,Type=Integer,Description="Allele count for the grpmax population (biallelic sites only).">')
-        INFO_ADD.append('##INFO=<ID=AN_grpmax,Number=1,Type=Integer,Description="Allele number for the grpmax population (biallelic sites only).">')
         INFO_ADD.append('##INFO=<ID=nhomalt_grpmax,Number=1,Type=Integer,Description="Number of homozygous-alternate genotypes in the grpmax population (biallelic sites only).">')
         for pop in pops:
-            INFO_ADD.append('##INFO=<ID=AN_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped (biallelic sites only).">' % (pop, pop))
-            INFO_ADD.append('##INFO=<ID=AC_%s,Number=A,Type=Integer,Description="Number of non-reference %s alleles observed (biallelic sites only).">' % (pop, pop))
-            INFO_ADD.append('##INFO=<ID=AF_%s,Number=A,Type=Float,Description="%s allele frequency (biallelic sites only).">' % (pop, pop))
+            INFO_ADD.append('##INFO=<ID=AN_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped.">' % (pop, pop))
+            INFO_ADD.append('##INFO=<ID=AC_%s,Number=A,Type=Integer,Description="Number of non-reference %s alleles observed.">' % (pop, pop))
+            INFO_ADD.append('##INFO=<ID=AF_%s,Number=A,Type=Float,Description="%s allele frequency.">' % (pop, pop))
             INFO_ADD.append('##INFO=<ID=n_bi_genos_%s,Number=1,Type=Integer,Description="Total number of %s samples with complete genotypes (biallelic sites only).">' % (pop, pop))
             INFO_ADD.append('##INFO=<ID=nhomref_%s,Number=1,Type=Integer,Description="Number of %s samples with homozygous reference genotypes (biallelic sites only).">' % (pop, pop))
             INFO_ADD.append('##INFO=<ID=nhet_%s,Number=1,Type=Integer,Description="Number of %s samples with heterozygous genotypes (biallelic sites only).">' % (pop, pop))
@@ -411,17 +501,11 @@ def main():
             INFO_ADD.append('##INFO=<ID=freq_homref_%s,Number=1,Type=Float,Description="%s homozygous reference genotype frequency (biallelic sites only).">' % (pop, pop))
             INFO_ADD.append('##INFO=<ID=freq_het_%s,Number=1,Type=Float,Description="%s heterozygous genotype frequency (biallelic sites only).">' % (pop, pop))
             INFO_ADD.append('##INFO=<ID=freq_homalt_%s,Number=1,Type=Float,Description="%s homozygous alternate genotype frequency (biallelic sites only).">' % (pop, pop))
-            INFO_ADD.append('##INFO=<ID=GT_number_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped (multiallelic sites).">' % (pop, pop))
-            INFO_ADD.append('##INFO=<ID=GT_count_%s,Number=.,Type=Integer,Description="Number of %s alleles observed for each index, starting from 0 (multiallelic sites).">' % (pop, pop))
-            INFO_ADD.append('##INFO=<ID=GT_status_%s,Number=.,Type=Integer,Description="Allele indices corresponding to GT_count_%s, GT_freq_%s: 0,1,...,maximum observed index (multiallelic sites).">' % (pop, pop, pop))
-            INFO_ADD.append('##INFO=<ID=GT_freq_%s,Number=.,Type=Float,Description="Frequency of each allele index for %s samples, starting from 0 (multiallelic sites).">' % (pop, pop))
-            INFO_ADD.append('##INFO=<ID=GT_nnonref_%s,Number=1,Type=Integer,Description="Number of %s non-reference alleles (multiallelic sites).">' % (pop, pop))
-            INFO_ADD.append('##INFO=<ID=GT_freq_nonref_%s,Number=1,Type=Float,Description="Frequency of %s non-reference alleles (multiallelic sites).">' % (pop, pop))
             if len(sexes) > 0 and not args.no_combos:
                 for sex in sexes:
-                    INFO_ADD.append('##INFO=<ID=AN_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
-                    INFO_ADD.append('##INFO=<ID=AC_%s,Number=A,Type=Integer,Description="Number of non-reference %s alleles observed (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
-                    INFO_ADD.append('##INFO=<ID=AF_%s,Number=A,Type=Float,Description="%s allele frequency (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
+                    INFO_ADD.append('##INFO=<ID=AN_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped.">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
+                    INFO_ADD.append('##INFO=<ID=AC_%s,Number=A,Type=Integer,Description="Number of non-reference %s alleles observed.">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
+                    INFO_ADD.append('##INFO=<ID=AF_%s,Number=A,Type=Float,Description="%s allele frequency.">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=n_bi_genos_%s,Number=1,Type=Integer,Description="Total number of %s samples with complete genotypes (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=nhomref_%s,Number=1,Type=Integer,Description="Number of %s samples with homozygous reference genotypes (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=nhet_%s,Number=1,Type=Integer,Description="Number of %s samples with heterozygous genotypes (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
@@ -429,12 +513,6 @@ def main():
                     INFO_ADD.append('##INFO=<ID=freq_homref_%s,Number=1,Type=Float,Description="%s homozygous reference genotype frequency (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=freq_het_%s,Number=1,Type=Float,Description="%s heterozygous genotype frequency (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=freq_homalt_%s,Number=1,Type=Float,Description="%s homozygous alternate genotype frequency (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
-                    INFO_ADD.append('##INFO=<ID=GT_number_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped (multiallelic sites).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
-                    INFO_ADD.append('##INFO=<ID=GT_count_%s,Number=.,Type=Integer,Description="Number of %s alleles observed for each index, starting from 0 (multiallelic sites).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
-                    INFO_ADD.append('##INFO=<ID=GT_status_%s,Number=.,Type=Integer,Description="Copy states corresponding to GT_count_%s, GT_freq_%s: 0,1,...,maximum observed copy state (multiallelic sites).">' % ('_'.join((pop, sex)), '_'.join((pop, sex)), '_'.join((pop, sex))))
-                    INFO_ADD.append('##INFO=<ID=GT_freq_%s,Number=.,Type=Float,Description="Frequency of each allele index for %s samples, starting from 0 (multiallelic sites).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
-                    INFO_ADD.append('##INFO=<ID=GT_nnonref_%s,Number=1,Type=Integer,Description="Number of %s non-reference alleles (multiallelic sites).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
-                    INFO_ADD.append('##INFO=<ID=GT_freq_nonref_%s,Number=1,Type=Float,Description="Frequency of %s non-reference alleles (multiallelic sites).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     if sex == 'XY':
                         INFO_ADD.append('##INFO=<ID=nhemiref_%s,Number=1,Type=Integer,Description="Number of %s samples with hemizygous reference genotypes (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                         INFO_ADD.append('##INFO=<ID=nhemialt_%s,Number=1,Type=Integer,Description="Number of %s samples with hemizygous alternate genotypes (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
@@ -453,7 +531,7 @@ def main():
     # Get allele frequencies for each record & write to new VCF
     for r in vcf.fetch():
         newrec = gather_allele_freqs(r, samples_list, males_set, females_set, parbt, pop_dict,
-                                     pops, sex_chroms, args.no_combos)
+                                     pops, sex_chroms, lps_dict, args.no_combos)
         fout.write(newrec)
 
     fout.close()
