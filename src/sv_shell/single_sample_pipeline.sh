@@ -348,9 +348,10 @@ cd "${working_dir}"
 # -----------------------
 ref_std_manta_vcf_tar=$(jq -r ".ref_std_manta_vcf_tar" "$input_json")
 std_manta_vcf_tar=$(jq -r ".std_manta_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
-merged_manta_vcf_tar="${working_dir}/$(basename "${std_manta_vcf_tar}")"
+merged_manta_vcf_tar=""
 
 if [[ -f "${ref_std_manta_vcf_tar}" && -f "${std_manta_vcf_tar}" ]]; then
+  merged_manta_vcf_tar="${working_dir}/$(basename "${std_manta_vcf_tar}")"
   CombineMantaStd_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CombineMantaStd_XXXXXXXX)
   tar xzf "${ref_std_manta_vcf_tar}" -C "${CombineMantaStd_working_dir}/"
   tar xzf "${std_manta_vcf_tar}" -C "${CombineMantaStd_working_dir}/"
@@ -361,9 +362,10 @@ fi
 # -----------------------
 ref_std_scramble_vcf_tar=$(jq -r ".ref_std_scramble_vcf_tar" "$input_json")
 std_scramble_vcf_tar=$(jq -r ".std_scramble_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
-merged_scramble_vcf_tar="${working_dir}/$(basename "${std_scramble_vcf_tar}")"
+merged_scramble_vcf_tar=""
 
 if [[ -f "${ref_std_scramble_vcf_tar}" && -f "${std_scramble_vcf_tar}" ]]; then
+  merged_scramble_vcf_tar="${working_dir}/$(basename "${std_scramble_vcf_tar}")"
   CombineScrambleStd_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CombineScrambleStd_XXXXXXXX)
   tar xzf "${ref_std_scramble_vcf_tar}" -C "${CombineScrambleStd_working_dir}/"
   tar xzf "${std_scramble_vcf_tar}" -C "${CombineScrambleStd_working_dir}/"
@@ -374,9 +376,10 @@ fi
 # -----------------------
 ref_std_wham_vcf_tar=$(jq -r ".ref_std_wham_vcf_tar" "$input_json")
 std_wham_vcf_tar=$(jq -r ".std_wham_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
-merged_wham_vcf_tar="${working_dir}/$(basename "${std_wham_vcf_tar}")"
+merged_wham_vcf_tar=""
 
 if [[ -f "${ref_std_wham_vcf_tar}" && -f "${std_wham_vcf_tar}" ]]; then
+  merged_wham_vcf_tar="${working_dir}/$(basename "${std_wham_vcf_tar}")"
   CombineWhamStd_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CombineWhamStd_XXXXXXXX)
   tar xzf "${ref_std_wham_vcf_tar}" -C "${CombineWhamStd_working_dir}/"
   tar xzf "${std_wham_vcf_tar}" -C "${CombineWhamStd_working_dir}/"
