@@ -14,7 +14,6 @@ workflow AnnotateAF {
         File sample_pop_assignments
         File ped_file
         File par_bed
-        File allosomes_list
         File lps_tsv
         Array[String]? strip_info_fields
 
@@ -40,7 +39,6 @@ workflow AnnotateAF {
                 sample_pop_assignments = sample_pop_assignments,
                 ped_file = ped_file,
                 par_bed = par_bed,
-                allosomes_list = allosomes_list,
                 lps_tsv = lps_tsv,
                 strip_info_fields = strip_info_fields,
                 records_per_shard = records_per_shard,

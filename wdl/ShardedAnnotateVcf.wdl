@@ -15,7 +15,6 @@ workflow ShardedAnnotateVcf {
         File sample_pop_assignments
         File ped_file
         File par_bed
-        File allosomes_list
         Array[String]? strip_info_fields
 
         Int records_per_shard
@@ -61,7 +60,6 @@ workflow ShardedAnnotateVcf {
                 sample_pop_assignments = sample_pop_assignments,
                 ped_file = ped_file,
                 par_bed = par_bed,
-                allosomes_list = allosomes_list,
                 prefix = "~{prefix}.~{i}.AF",
                 docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_compute_AFs
@@ -126,7 +124,6 @@ task ComputeAFs {
         File sample_pop_assignments
         File ped_file
         File par_bed
-        File allosomes_list
         File lps_tsv
         String prefix
         String docker
@@ -140,7 +137,6 @@ task ComputeAFs {
             ~{"-p " + sample_pop_assignments} \
             ~{"-f " + ped_file} \
             ~{"--par " + par_bed} \
-            ~{"--allosomes-list " + allosomes_list} \
             ~{"-l " + lps_tsv} \
             | bgzip -c > "~{prefix}.vcf.gz"
 
