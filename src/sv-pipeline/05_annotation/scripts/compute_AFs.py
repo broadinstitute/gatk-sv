@@ -336,7 +336,7 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, lps_dict=None):
             # Compute MC_allele and LPS_allele for multiallelic sites with canonically unique motifs
             motifs_field = record.info.get('MOTIFS')
             motifs = list(motifs_field) if isinstance(motifs_field, tuple) or isinstance(motifs_field, list) else motifs_field.split(',')
-            if len(record.id.split(',')) == len(motifs) and check_motifs_canonically_unique(motifs):
+            if len(motifs) == 1 and check_motifs_canonically_unique(motifs):
                 mc_allele = []
                 for allele_idx in allele_indices:
                     mc_val = None
@@ -353,9 +353,9 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, lps_dict=None):
                                 break
                     mc_allele.append(mc_val if mc_val is not None else 0)
                 record.info['MC_allele'] = tuple(mc_allele)
-                
+
+                lps_allele = []
                 if lps_dict is not None and record.id in lps_dict:
-                    lps_allele = []
                     for allele_idx in allele_indices:
                         lps_val = None
                         for sample_name, gt in valid_GTs:
