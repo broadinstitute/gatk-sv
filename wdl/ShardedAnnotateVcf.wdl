@@ -50,12 +50,10 @@ workflow ShardedAnnotateVcf {
                     runtime_attr_override = runtime_attr_strip_info_fields
             }
         }
-
-        File compute_af_vcf = select_first([StripInfoFields.stripped_vcf, ScatterVcf.shards[i]])
-        File compute_af_vcf_idx = select_first([StripInfoFields.stripped_vcf_idx, ScatterVcf.shards_index[i]])
+        
         call ComputeAFs {
             input:
-                vcf = compute_af_vcf,
+                vcf = select_first([StripInfoFields.stripped_vcf, ScatterVcf.shards[i]]),
                 lps_tsv = lps_tsv,
                 sample_pop_assignments = sample_pop_assignments,
                 ped_file = ped_file,
@@ -67,8 +65,8 @@ workflow ShardedAnnotateVcf {
     }
 
     output {
-        Array[File] sharded_annotated_vcf = compute_af_vcf
-        Array[File] sharded_annotated_vcf_idx = compute_af_vcf_idx
+        Array[File] sharded_annotated_vcf = ComputeAFs.af_vcf
+        Array[File] sharded_annotated_vcf_idx = ComputeAFs.af_vcf_idx
     }
 }
 

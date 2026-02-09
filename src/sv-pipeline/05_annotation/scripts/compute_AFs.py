@@ -313,7 +313,7 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, lps_dict=None):
         record.info[('AC' if prefix is None else 'AC_' + prefix)] = tuple(ac_allele[1:])
         record.info[('AF' if prefix is None else 'AF_' + prefix)] = tuple(af_allele[1:])
         
-        # Compute AP_allele and MC_allele only for all samples
+        # Compute AP_allele, MC_allele and LPS_allele only for all samples
         if prefix is None:
             # Compute AP_allele
             ap_allele = []
@@ -333,7 +333,7 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, lps_dict=None):
                 ap_allele.append(ap_val if ap_val is not None else 0)
             record.info['AP_allele'] = tuple(ap_allele)
             
-            # Compute MC_allele and LPS_allele for multiallelic sites with canonically unique motifs
+            # Compute MC_allele and LPS_allele for single motif sites
             motifs_field = record.info.get('MOTIFS')
             motifs = list(motifs_field) if isinstance(motifs_field, tuple) or isinstance(motifs_field, list) else motifs_field.split(',')
             if len(motifs) == 1 and check_motifs_canonically_unique(motifs):
@@ -354,8 +354,8 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, lps_dict=None):
                     mc_allele.append(mc_val if mc_val is not None else 0)
                 record.info['MC_allele'] = tuple(mc_allele)
 
-                lps_allele = []
                 if lps_dict is not None and record.id in lps_dict:
+                    lps_allele = []
                     for allele_idx in allele_indices:
                         lps_val = None
                         for sample_name, gt in valid_GTs:
