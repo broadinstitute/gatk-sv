@@ -472,7 +472,7 @@ def main():
         '##INFO=<ID=AC,Number=A,Type=Integer,Description="Number of alleles observed.">',
         '##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency.">',
         '##INFO=<ID=NCR,Number=1,Type=Float,Description="No-call rate.">',
-        '##INFO=<ID=n_bi_genos,Number=1,Type=Integer,Description="Total number of samples with complete genotypes (biallelic sites only).">'
+        '##INFO=<ID=n_bi_genos,Number=1,Type=Integer,Description="Total number of samples with complete genotypes (biallelic sites only).">',
         '##INFO=<ID=nhomref,Number=1,Type=Integer,Description="Number of samples with homozygous reference genotypes (biallelic sites only).">',
         '##INFO=<ID=nhet,Number=1,Type=Integer,Description="Number of samples with heterozygous genotypes (biallelic sites only).">',
         '##INFO=<ID=nhomalt,Number=1,Type=Integer,Description="Number of samples with homozygous alternate genotypes (biallelic sites only).">',
