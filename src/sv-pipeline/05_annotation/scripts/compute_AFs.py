@@ -264,6 +264,18 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, lps_dict=None):
         record.info[('AC' if prefix is None else 'AC_' + prefix)] = (AC, )
         record.info[('AF' if prefix is None else 'AF_' + prefix)] = (AF, )
 
+        # Add NCR to INFO field
+        n_samples = len(samples)
+        if n_samples > 0:
+            if hemi:
+                ncr = 1 - (AN / n_samples)
+            else:
+                ncr = 1 - (AN / (2 * n_samples))
+            ncr = round(ncr, 6)
+        else:
+            ncr = 1.0
+        record.info[('NCR' if prefix is None else 'NCR_' + prefix)] = ncr
+
         # Calculate genotype frequencies
         n_bi_genos = n_alt_count_0 + n_alt_count_1 + n_alt_count_2
         if n_bi_genos > 0:
@@ -312,6 +324,15 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, lps_dict=None):
         record.info[('AN' if prefix is None else 'AN_' + prefix)] = AN
         record.info[('AC' if prefix is None else 'AC_' + prefix)] = tuple(ac_allele[1:])
         record.info[('AF' if prefix is None else 'AF_' + prefix)] = tuple(af_allele[1:])
+
+        # Add NCR to INFO field
+        n_samples = len(samples)
+        if n_samples > 0:
+            ncr = 1 - (AN / (2 * n_samples))
+            ncr = round(ncr, 6)
+        else:
+            ncr = 1.0
+        record.info[('NCR' if prefix is None else 'NCR_' + prefix)] = ncr
         
         # Compute AP_allele, MC_allele and LPS_allele only for all samples
         if prefix is None:
@@ -450,7 +471,8 @@ def main():
         '##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles genotyped.">',
         '##INFO=<ID=AC,Number=A,Type=Integer,Description="Number of alleles observed.">',
         '##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency.">',
-        '##INFO=<ID=n_bi_genos,Number=1,Type=Integer,Description="Total number of samples with complete genotypes (biallelic sites only).">',
+        '##INFO=<ID=NCR,Number=1,Type=Float,Description="No-call rate.">',
+        '##INFO=<ID=n_bi_genos,Number=1,Type=Integer,Description="Total number of samples with complete genotypes (biallelic sites only).">'
         '##INFO=<ID=nhomref,Number=1,Type=Integer,Description="Number of samples with homozygous reference genotypes (biallelic sites only).">',
         '##INFO=<ID=nhet,Number=1,Type=Integer,Description="Number of samples with heterozygous genotypes (biallelic sites only).">',
         '##INFO=<ID=nhomalt,Number=1,Type=Integer,Description="Number of samples with homozygous alternate genotypes (biallelic sites only).">',
@@ -468,6 +490,7 @@ def main():
             INFO_ADD.append('##INFO=<ID=AN_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped.">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=AC_%s,Number=A,Type=Integer,Description="Number of %s alleles observed.">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=AF_%s,Number=A,Type=Float,Description="%s allele frequency.">' % (sex, sex))
+            INFO_ADD.append('##INFO=<ID=NCR_%s,Number=1,Type=Float,Description="%s no-call rate.">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=n_bi_genos_%s,Number=1,Type=Integer,Description="Total number of %s samples with complete genotypes (biallelic sites only).">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=nhomref_%s,Number=1,Type=Integer,Description="Number of %s samples with homozygous reference genotypes (biallelic sites only).">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=nhet_%s,Number=1,Type=Integer,Description="Number of %s samples with heterozygous genotypes (biallelic sites only).">' % (sex, sex))
@@ -494,6 +517,7 @@ def main():
             INFO_ADD.append('##INFO=<ID=AN_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped.">' % (pop, pop))
             INFO_ADD.append('##INFO=<ID=AC_%s,Number=A,Type=Integer,Description="Number of non-reference %s alleles observed.">' % (pop, pop))
             INFO_ADD.append('##INFO=<ID=AF_%s,Number=A,Type=Float,Description="%s allele frequency.">' % (pop, pop))
+            INFO_ADD.append('##INFO=<ID=NCR_%s,Number=1,Type=Float,Description="%s no-call rate.">' % (pop, pop))
             INFO_ADD.append('##INFO=<ID=n_bi_genos_%s,Number=1,Type=Integer,Description="Total number of %s samples with complete genotypes (biallelic sites only).">' % (pop, pop))
             INFO_ADD.append('##INFO=<ID=nhomref_%s,Number=1,Type=Integer,Description="Number of %s samples with homozygous reference genotypes (biallelic sites only).">' % (pop, pop))
             INFO_ADD.append('##INFO=<ID=nhet_%s,Number=1,Type=Integer,Description="Number of %s samples with heterozygous genotypes (biallelic sites only).">' % (pop, pop))
@@ -506,6 +530,7 @@ def main():
                     INFO_ADD.append('##INFO=<ID=AN_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped.">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=AC_%s,Number=A,Type=Integer,Description="Number of non-reference %s alleles observed.">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=AF_%s,Number=A,Type=Float,Description="%s allele frequency.">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
+                    INFO_ADD.append('##INFO=<ID=NCR_%s,Number=1,Type=Float,Description="%s no-call rate.">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=n_bi_genos_%s,Number=1,Type=Integer,Description="Total number of %s samples with complete genotypes (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=nhomref_%s,Number=1,Type=Integer,Description="Number of %s samples with homozygous reference genotypes (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=nhet_%s,Number=1,Type=Integer,Description="Number of %s samples with heterozygous genotypes (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
