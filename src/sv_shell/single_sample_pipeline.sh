@@ -508,42 +508,53 @@ FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterDepth_vcf}" "${sample
 
 # FilterManta
 # -----------------------
-cd "${working_dir}"
-FilterManta_wd=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/wd_FilterManta_XXXXXXXX"))
-cd "${FilterManta_wd}"
-FilterManta_vcf=$(jq -r ".clustered_manta_vcf" "$cluster_batch_outputs_json_filename")
-FilterManta_vcf_filebase=$(basename "${FilterManta_vcf}" .vcf.gz)
-FilterManta_outfile="$(realpath "${FilterManta_vcf_filebase}.${sample_id}.vcf.gz")"
-FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterManta_vcf}" "${sample_id}" "RD,PE,SR" "${FilterManta_outfile}"
+FilterManta_outfile=""
+if $run_manta; then
+  cd "${working_dir}"
+  FilterManta_wd=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/wd_FilterManta_XXXXXXXX"))
+  cd "${FilterManta_wd}"
+  FilterManta_vcf=$(jq -r ".clustered_manta_vcf" "$cluster_batch_outputs_json_filename")
+  FilterManta_vcf_filebase=$(basename "${FilterManta_vcf}" .vcf.gz)
+  FilterManta_outfile="$(realpath "${FilterManta_vcf_filebase}.${sample_id}.vcf.gz")"
+  FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterManta_vcf}" "${sample_id}" "RD,PE,SR" "${FilterManta_outfile}"
+fi
 
 # FilterScramble
 # -----------------------
-cd "${working_dir}"
-FilterScramble_wd=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/wd_FilterScramble_XXXXXXXX"))
-cd "${FilterScramble_wd}"
-FilterScramble_vcf=$(jq -r ".clustered_scramble_vcf" "$cluster_batch_outputs_json_filename")
-FilterScramble_vcf_filebase=$(basename "${FilterScramble_vcf}" .vcf.gz)
-FilterScramble_outfile="$(realpath "${FilterScramble_vcf_filebase}.${sample_id}.vcf.gz")"
-FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterScramble_vcf}" "${sample_id}" "RD,PE,SR" "${FilterScramble_outfile}"
+FilterScramble_outfile=""
+if $run_scramble; then
+  cd "${working_dir}"
+  FilterScramble_wd=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/wd_FilterScramble_XXXXXXXX"))
+  cd "${FilterScramble_wd}"
+  FilterScramble_vcf=$(jq -r ".clustered_scramble_vcf" "$cluster_batch_outputs_json_filename")
+  FilterScramble_vcf_filebase=$(basename "${FilterScramble_vcf}" .vcf.gz)
+  FilterScramble_outfile="$(realpath "${FilterScramble_vcf_filebase}.${sample_id}.vcf.gz")"
+  FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterScramble_vcf}" "${sample_id}" "RD,PE,SR" "${FilterScramble_outfile}"
+fi
 
 # FilterWham
 # -----------------------
-cd "${working_dir}"
-FilterWham_wd=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/wd_FilterWham_XXXXXXXX"))
-cd "${FilterWham_wd}"
-FilterWham_vcf=$(jq -r ".clustered_wham_vcf" "$cluster_batch_outputs_json_filename")
-FilterWham_vcf_vcf_filebase=$(basename "${FilterWham_vcf}" .vcf.gz)
-FilterWham_outfile="$(realpath "${FilterWham_vcf_vcf_filebase}.${sample_id}.vcf.gz")"
-FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterWham_vcf}" "${sample_id}" "RD,PE,SR" "${FilterWham_outfile}"
-
+FilterWham_outfile=""
+if $run_wham; then
+  cd "${working_dir}"
+  FilterWham_wd=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/wd_FilterWham_XXXXXXXX"))
+  cd "${FilterWham_wd}"
+  FilterWham_vcf=$(jq -r ".clustered_wham_vcf" "$cluster_batch_outputs_json_filename")
+  FilterWham_vcf_vcf_filebase=$(basename "${FilterWham_vcf}" .vcf.gz)
+  FilterWham_outfile="$(realpath "${FilterWham_vcf_vcf_filebase}.${sample_id}.vcf.gz")"
+  FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterWham_vcf}" "${sample_id}" "RD,PE,SR" "${FilterWham_outfile}"
+fi
 
 # MergePesrVcfs
 # ----------------------------------------------------------------------------------------------------------------------
 
 cd "${working_dir}"
-MergePesrVcfs_list_txt="MergePesrVcfs_vcfs_list.txt"
-echo -e "${FilterManta_outfile}\n${FilterScramble_outfile}\n${FilterWham_outfile}" > "${MergePesrVcfs_list_txt}"
 MergePesrVcfs_concat_vcf="${batch}.filtered_pesr_merged.vcf.gz"
+MergePesrVcfs_list_txt="MergePesrVcfs_vcfs_list.txt"
+> "${MergePesrVcfs_list_txt}"
+[[ -n "$FilterManta_outfile" ]]    && echo "$FilterManta_outfile"    >> "${MergePesrVcfs_list_txt}"
+[[ -n "$FilterScramble_outfile" ]] && echo "$FilterScramble_outfile" >> "${MergePesrVcfs_list_txt}"
+[[ -n "$FilterWham_outfile" ]]     && echo "$FilterWham_outfile"     >> "${MergePesrVcfs_list_txt}"
 
 bcftools concat --no-version --allow-overlaps -Oz \
   --file-list "${MergePesrVcfs_list_txt}" \
