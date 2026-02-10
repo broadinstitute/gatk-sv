@@ -112,6 +112,27 @@ gcnv_model_tars_list=$(jq -r ".gcnv_model_tars_list" "$input_json")
 mapfile -t gcnv_model_tars < "${gcnv_model_tars_list}"
 gcnv_model_tars_json_array=$(printf '%s\n' "${gcnv_model_tars[@]}" | jq -R . | jq -s -c .)
 
+collect_coverage=true
+collect_pesr=true
+
+# '// empty' returns in an empty string if the key is null
+ref_std_scramble_vcf_tar=$(jq -r '.ref_std_scramble_vcf_tar // empty' "$input_json")
+run_scramble=false
+if [[ -n "${ref_std_scramble_vcf_tar}" && -f "${ref_std_scramble_vcf_tar}" ]]; then
+  run_scramble=true
+fi
+
+ref_std_manta_vcf_tar=$(jq -r '.ref_std_manta_vcf_tar // empty' "$input_json")
+run_manta=false
+if [[ -n "${ref_std_manta_vcf_tar}" && -f "${ref_std_manta_vcf_tar}" ]]; then
+  run_manta=true
+fi
+
+ref_std_wham_vcf_tar=$(jq -r '.ref_std_wham_vcf_tar // empty' "$input_json")
+run_wham=false
+if [[ -n "${ref_std_wham_vcf_tar}" && -f "${ref_std_wham_vcf_tar}" ]]; then
+  run_wham=true
+fi
 
 function getJavaMem() {
   # get JVM memory in MiB by getting total memory from /proc/meminfo
@@ -141,6 +162,11 @@ gather_sample_evidence_outputs_json="${gather_sample_evidence_output_dir}/output
 
 jq -n \
   --slurpfile inputs "${input_json}" \
+  --arg collect_coverage "${collect_coverage}" \
+  --arg run_scramble "${run_scramble}" \
+  --arg run_manta "${run_manta}" \
+  --arg run_wham "${run_wham}" \
+  --arg collect_pesr "${collect_pesr}" \
   '{
     "sample_id": $inputs[0].sample_id,
     "bam_or_cram_file": $inputs[0].bam_or_cram_file,
@@ -162,11 +188,11 @@ jq -n \
     "reference_bwa_bwt": $inputs[0].reference_bwa_bwt,
     "reference_bwa_pac": $inputs[0].reference_bwa_pac,
     "reference_bwa_sa": $inputs[0].reference_bwa_sa,
-    "collect_coverage": true,
-    "run_scramble": true,
-    "run_manta": true,
-    "run_wham": true,
-    "collect_pesr": true,
+    "collect_coverage": $collect_coverage,
+    "run_scramble": $run_scramble,
+    "run_manta": $run_manta,
+    "run_wham": $run_wham,
+    "collect_pesr": $collect_pesr,
     "scramble_alignment_score_cutoff": 90,
     "run_module_metrics": $inputs[0].run_sampleevidence_metrics
   }' > "${gather_sample_evidence_inputs_json}"
@@ -346,11 +372,11 @@ cd "${working_dir}"
 
 # CombineMantaStd
 # -----------------------
-ref_std_manta_vcf_tar=$(jq -r ".ref_std_manta_vcf_tar" "$input_json")
 std_manta_vcf_tar=$(jq -r ".std_manta_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
 merged_manta_vcf_tar=""
 
-if [[ -f "${ref_std_manta_vcf_tar}" && -f "${std_manta_vcf_tar}" ]]; then
+#if [[ -f "${ref_std_manta_vcf_tar}" && -f "${std_manta_vcf_tar}" ]]; then
+if $run_manta; then
   merged_manta_vcf_tar="${working_dir}/$(basename "${std_manta_vcf_tar}")"
   CombineMantaStd_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CombineMantaStd_XXXXXXXX)
   tar xzf "${ref_std_manta_vcf_tar}" -C "${CombineMantaStd_working_dir}/"
@@ -360,11 +386,11 @@ fi
 
 # CombineScrambleStd
 # -----------------------
-ref_std_scramble_vcf_tar=$(jq -r ".ref_std_scramble_vcf_tar" "$input_json")
 std_scramble_vcf_tar=$(jq -r ".std_scramble_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
 merged_scramble_vcf_tar=""
 
-if [[ -f "${ref_std_scramble_vcf_tar}" && -f "${std_scramble_vcf_tar}" ]]; then
+#if [[ -f "${ref_std_scramble_vcf_tar}" && -f "${std_scramble_vcf_tar}" ]]; then
+if $run_scramble; then
   merged_scramble_vcf_tar="${working_dir}/$(basename "${std_scramble_vcf_tar}")"
   CombineScrambleStd_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CombineScrambleStd_XXXXXXXX)
   tar xzf "${ref_std_scramble_vcf_tar}" -C "${CombineScrambleStd_working_dir}/"
@@ -374,11 +400,11 @@ fi
 
 # CombineWhamStd
 # -----------------------
-ref_std_wham_vcf_tar=$(jq -r ".ref_std_wham_vcf_tar" "$input_json")
 std_wham_vcf_tar=$(jq -r ".std_wham_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
 merged_wham_vcf_tar=""
 
-if [[ -f "${ref_std_wham_vcf_tar}" && -f "${std_wham_vcf_tar}" ]]; then
+#if [[ -f "${ref_std_wham_vcf_tar}" && -f "${std_wham_vcf_tar}" ]]; then
+if $run_wham; then
   merged_wham_vcf_tar="${working_dir}/$(basename "${std_wham_vcf_tar}")"
   CombineWhamStd_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CombineWhamStd_XXXXXXXX)
   tar xzf "${ref_std_wham_vcf_tar}" -C "${CombineWhamStd_working_dir}/"
