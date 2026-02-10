@@ -924,7 +924,7 @@ _vcf="$(jq -r ".filtered_vcf" "$FilterGenotypes_outputs_json")"
 FilterSample_out="$(realpath "${FilterSample_wd}/$(basename "${_vcf}" .vcf.gz).sample_qc.vcf.gz")"
 
 wgdPF=`cat "${SampleFilterQC_out}" | awk '$1 == "wgd_score_sample" {print $5}'`
-if [ $wgdPF = "FAIL" ]
+if [ "${wgdPF}" = "FAIL" ]
 then
   bcftools filter -e 'SVTYPE!="BND"' -m + -s SAMPLE_WGD_OUTLIER "${_vcf}" \
     | sed 's/ID=SAMPLE_WGD_OUTLIER,Description=".*"/ID=SAMPLE_WGD_OUTLIER,Description="Case sample is an outlier for WGD dosage score compared to reference panel"/' \
