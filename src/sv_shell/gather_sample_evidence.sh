@@ -280,7 +280,7 @@ if [[ "${run_scramble}" == true && "${run_manta}" == true ]]; then
       "${primary_contigs_list}" \
       "${scramble_alignment_score_cutoff}" \
       "${mei_bed}" \
-      "${scramble_p1_outputs_json_filename}"
+      "${scramble_p2_outputs_json_filename}"
   } > "${scramble_stdout}" 2> "${scramble_stderr}"
 
   scramble_end_time=`date +%s`
