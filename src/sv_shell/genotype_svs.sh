@@ -77,11 +77,11 @@ java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar GenotypeSVs \
   --split-reads-file local.sr.txt.gz \
   --sequence-dictionary "${reference_dict}" \
   --ploidy-table $(jq -r ".ploidy_table" "${input_json}") \
-  --pesr-exclusion-intervals $(jq -r ".ploidy_table" "${pesr_exclusion_intervals}") \
-  --depth-exclusion-intervals $(jq -r ".ploidy_table" "${depth_exclusion_intervals}") \
-  --rd-table $(jq -r ".ploidy_table" "${rd_table}") \
-  --pe-table $(jq -r ".ploidy_table" "${pe_table}") \
-  --sr-table $(jq -r ".ploidy_table" "${sr_table}")
+  --pesr-exclusion-intervals $(jq -r ".pesr_exclusion_intervals" "${input_json}") \
+  --depth-exclusion-intervals $(jq -r ".depth_exclusion_intervals" "${input_json}") \
+  --rd-table $(jq -r ".rd_table" "${input_json}") \
+  --pe-table $(jq -r ".pe_table" "${input_json}") \
+  --sr-table $(jq -r ".sr_table" "${input_json}")
 
 
 # -------------------------------------------------------
