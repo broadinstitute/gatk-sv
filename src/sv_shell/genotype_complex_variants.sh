@@ -41,7 +41,7 @@ median_coverage_files=$(jq -r ".median_coverage_files" "$input_json")
 bin_exclude=$(jq -r ".bin_exclude" "$input_json")
 ref_dict=$(jq -r ".ref_dict" "$input_json")
 bincov_files=$(jq -r ".bincov_files" "$input_json")
-depth_gt_rd_sep_files=$(jq -r ".depth_gt_rd_sep_files" "$input_json")
+genotyping_rd_tables=$(jq -r ".genotyping_rd_tables" "$input_json")
 
 n_rd_test_bins=100000
 
@@ -132,7 +132,7 @@ Rscript /opt/RdTest/RdTest.R \
   -n "${RdTestGenotype_prefix}" \
   -w "${GetSampleIdsFromMedianCoverageFile_out_file}" \
   -i ${n_rd_test_bins} \
-  -r "${depth_gt_rd_sep_files}" \
+  -r "${genotyping_rd_tables}" \
   -y "${bin_exclude}" \
   -g TRUE
 
