@@ -7,7 +7,7 @@ import gzip
 import pysam
 
 
-def load_introns_for_contig(intron_file, target_contig):
+def load_introns_for_contig(intron_file):
     introns = []
     is_gzipped = intron_file.endswith('.gz')
     opener = gzip.open if is_gzipped else open
@@ -17,10 +17,7 @@ def load_introns_for_contig(intron_file, target_contig):
             fields = line.strip().split('\t')
             if len(fields) < 4:
                 continue
-            chrom, start, end = fields[0], int(float(fields[2])), int(float(fields[3]))
-
-            if chrom != target_contig:
-                continue
+            _, start, end = fields[0], int(float(fields[2])), int(float(fields[3]))
 
             if start > end:
                 start, end = end, start
@@ -48,7 +45,6 @@ def main():
     )
     parser.add_argument('vcf', help='Input VCF file')
     parser.add_argument('intron_reference', help='Intron reference file (can be gzipped)')
-    parser.add_argument('contig', help='Contig/chromosome to process')
     parser.add_argument('output', help='Output VCF file (will be bgzipped)')
     parser.add_argument(
         '--max-distance',
@@ -59,7 +55,7 @@ def main():
 
     args = parser.parse_args()
 
-    introns = load_introns_for_contig(args.intron_reference, args.contig)
+    introns = load_introns_for_contig(args.intron_reference)
 
     with pysam.VariantFile(args.vcf, 'r') as fin:
         header = fin.header

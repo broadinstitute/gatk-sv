@@ -12,21 +12,7 @@ import pandas as pd
 import pysam
 
 
-def make_evidence_int(ev):
-    ev = ev.split(',')
-
-    evidence = 0
-    if 'RD' in ev:
-        evidence += 1
-    if 'PE' in ev:
-        evidence += 2
-    if 'SR' in ev:
-        evidence += 4
-
-    return evidence
-
-
-def add_genotypes(record, genotypes, varGQ):
+def add_genotypes(samples, record, genotypes, varGQ):
     """
     Update formats and add genotypes
     """
@@ -53,7 +39,7 @@ def add_genotypes(record, genotypes, varGQ):
     gt_matrix = genotypes.reset_index()[cols].to_numpy()
 
     # update genotype and other data for each sample
-    for j, sample in enumerate(record.samples):
+    for j, sample in enumerate(samples):
         #  data = genotypes.iloc[j]
         data = gt_matrix[j]
 
@@ -80,11 +66,11 @@ def add_genotypes(record, genotypes, varGQ):
             else:
                 record.samples[sample][fmt] = int(data[i + 3])
 
-        record.samples[sample]['EV'] = make_evidence_int(data[10])
+        record.samples[sample]['EV'] = data[10]
 
     # Bug in pysam - sometimes gets rid of the first EV field
     data = gt_matrix[0]
-    record.samples[0]['EV'] = make_evidence_int(data[10])
+    record.samples[0]['EV'] = data[10]
 
 
 def update_vcf_header(header):
@@ -115,7 +101,7 @@ def update_vcf_header(header):
     header.add_line(
         '##FORMAT=<ID=SR_GQ,Number=1,Type=Integer,Description="Split read genotype quality">')
     header.add_line(
-        '##FORMAT=<ID=EV,Number=1,Type=Integer,Description="Classes of evidence supporting final genotype">')
+        '##FORMAT=<ID=EV,Number=1,Type=String,Description="Classes of evidence supporting final genotype">')
 
     header.add_line(
         '##INFO=<ID=MULTIALLELIC,Number=0,Type=Flag,Description="Multiallelic site">')
@@ -187,7 +173,7 @@ def main():
             msg = 'Record {0} not present in varGQ file'.format(record.id)
             raise Exception(msg)
 
-        add_genotypes(record, gt, gq)
+        add_genotypes(samples, record, gt, gq)
         fout.write(str(record))
 
 

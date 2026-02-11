@@ -11,7 +11,7 @@ workflow Regenotype {
     File coveragefile_idx
     File medianfile
     File? famfile
-    File RD_depth_sepcutoff
+    File genotyping_rd_table
     Int n_per_split
     Int n_RdTest_bins
     String batch
@@ -69,7 +69,7 @@ workflow Regenotype {
         medianfile=medianfile,
         famfile=famfile,
         samples=samples,
-        gt_cutoffs=RD_depth_sepcutoff,
+        gt_cutoffs=genotyping_rd_table,
         n_bins=n_RdTest_bins,
         prefix=basename(regeno, ".bed"),
         runtime_attr_override = runtime_attr_rd_test_gt_regeno,
@@ -97,7 +97,9 @@ workflow Regenotype {
     input:
       batch=batch,
       depth_vcf=depth_vcf,
+      depth_vcf_index=depth_vcf + ".tbi",
       regeno_vcfs=AddGenotypesRegeno.genotyped_vcf,
+      regeno_vcf_indexes=AddGenotypesRegeno.genotyped_vcf_index,
       bed=regeno_bed,
       runtime_attr_override = runtime_attr_concat_regenotyped_vcfs_g2,
       sv_base_mini_docker=sv_base_mini_docker
@@ -267,7 +269,9 @@ task ConcatReGenotypedVcfs {
   input {
     String batch
     File depth_vcf
+    File depth_vcf_index
     Array[File] regeno_vcfs
+    Array[File] regeno_vcf_indexes
     File bed
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
@@ -276,7 +280,7 @@ task ConcatReGenotypedVcfs {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75,
-    disk_gb: 10,
+    disk_gb: ceil(10 + size(depth_vcf, "GB") * 2 + size(regeno_vcfs, "GB") * 2),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -289,15 +293,13 @@ task ConcatReGenotypedVcfs {
     File regenotyped_vcf="~{batch}.regeno.vcf.gz"
   }
   command <<<
-    set -euo pipefail
-    vcf-concat ~{sep=' ' regeno_vcfs}  \
-      | vcf-sort -c \
-      | bgzip -c > ~{batch}.regeno.vcf.gz
-    cut -f 4 ~{bed} |awk '{print $0"\t"}'> varlist.txt
-    zcat ~{depth_vcf} |fgrep -f varlist.txt -v |bgzip -c > no_variant.vcf.gz
-    vcf-concat ~{batch}.regeno.vcf.gz no_variant.vcf.gz \
-      | vcf-sort -c \
-      | bgzip -c > ~{batch}.depth.regeno.vcf.gz
+    set -euxo pipefail
+    bcftools concat -a ~{sep=' ' regeno_vcfs} -Oz -o ~{batch}.regeno.vcf.gz
+    tabix ~{batch}.regeno.vcf.gz
+    cut -f 4 ~{bed} > varlist.txt
+    bcftools view -e 'ID=@varlist.txt' ~{depth_vcf} -Oz -o no_variant.vcf.gz
+    tabix no_variant.vcf.gz
+    bcftools concat -a ~{batch}.regeno.vcf.gz no_variant.vcf.gz -Oz -o ~{batch}.depth.regeno.vcf.gz
     tabix ~{batch}.depth.regeno.vcf.gz
   
   >>>
