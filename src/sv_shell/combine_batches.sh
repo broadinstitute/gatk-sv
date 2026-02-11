@@ -142,36 +142,6 @@ python /opt/sv-pipeline/scripts/ploidy_table_from_ped.py \
 sed -e 's/\t0/\t1/g' tmp.tsv > "${CreatePloidyTableFromPed_out}"
 
 
-# GatkFormatting.FormatVcf
-#all_vcfs=("$pesr_vcfs" "$depth_vcfs")
-#reformatted_vcfs_array=()
-#reformatted_vcfs_idx_array=()
-#for vcf in "${all_vcfs[@]}"; do
-#  cd "${working_dir}"
-#
-#  format_vcf_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_format_vcf_XXXXXXXX)
-#  format_vcf_working_dir="$(realpath ${format_vcf_working_dir})"
-#  cd "${format_vcf_working_dir}"
-#
-#  # Convert format
-#  formatted_vcf_output="$(basename "$vcf" ".vcf.gz").reformat_gatk.vcf.gz"
-#  formatted_vcf_output="$(realpath "${formatted_vcf_output}")"
-#  python /opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py \
-#    --vcf "${vcf}" \
-#    --out "${formatted_vcf_output}" \
-#    --ploidy-table "${CreatePloidyTableFromPed_out}" \
-#    --bothside-pass-list "${CombineSRBothsidePass_output}" \
-#    --background-fail-list "${CombineBackgroundFail_out}" \
-#    --add-sr-pos --scale-down-gq
-#
-#  tabix "${formatted_vcf_output}"
-#
-#  reformatted_vcfs_array+=("${formatted_vcf_output}")
-#  reformatted_vcfs_idx_array+=("${formatted_vcf_output}.tbi")
-#done
-
-
-
 # JoinVcfs
 # ---------------------------------------------------------------------------------------------------------------------
 
