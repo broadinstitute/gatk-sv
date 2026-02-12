@@ -75,7 +75,6 @@
   "segdups": "/inputs/hg38.SD_gaps_Cen_Tel_Heter_Satellite_lumpy.blacklist.sorted.merged.bed.gz",
   "wgd_scoring_mask": "/inputs/wgd_scoring_mask.hg38.gnomad_v3.bed",
   "sl_filter_args": "--gq-scale-factor 1.012072 --upper-sl-cap 1500 --lower-sl-cap -1000 --sl-shift 300",
-  "chr_y": null,
   "gcnv_model_tars_list": "/inputs/ref_panel_1kg.gcnv_model_tars.list",
   "n_RD_genotype_bins": "100000",
   "primary_contigs_fai": "/inputs/contig.fai",
@@ -104,10 +103,10 @@
   "MakeCohortVcf.LINE1_reference": "/inputs/LINE1.sorted.bed.gz",
   "reference_fasta": "/inputs/Homo_sapiens_assembly38.fasta",
   "ref_panel_bincov_matrix": "/inputs/all_samples.RD.txt.gz",
-  "chr_x": null,
+  "chr_x": "chrX",
+  "chr_y": "chrY",
   "ref_std_wham_vcf_tar": "/inputs/all_samples.wham_std.tar.gz",
   "gq_recalibrator_model_file": "/inputs/gatk-sv-recalibrator.hgsvc_release3.v1.model",
-  "pesr_breakend_window": "300",
   "allosome_file": "/inputs/allosome.fai",
   "genotype_depth_pesr_sepcutoff": "/inputs/all_samples.depth.pesr_sepcutoff.txt",
   "contig_ploidy_model_tar": "/inputs/all_samples-contig-ploidy-model.tar.gz",
@@ -135,5 +134,8 @@
   "min_pe_ctx": 3,
   "sl_cutoff_table": "/inputs/baseline_sl_cutoffs.tsv",
   "no_call_rate_cutoff": 0.05,
-  "ref_panel_median_cov": "/inputs/all_samples_medianCov.transposed.bed"
+  "ref_panel_median_cov": "/inputs/all_samples_medianCov.transposed.bed",
+  "genotyping_rd_table": "/inputs/all_samples.rd_geno_params.tsv",
+  "genotyping_pe_table": "/inputs/all_samples.pe_geno_params.tsv",
+  "genotyping_sr_table": "/inputs/all_samples.sr_geno_params.tsv"
 }

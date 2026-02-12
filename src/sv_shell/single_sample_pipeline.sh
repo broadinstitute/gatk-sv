@@ -661,27 +661,138 @@ RewriteSRCoords_annotated_vcf="$(realpath "${batch}.corrected_coords.vcf.gz")"
    $(jq -r ".cutoffs" "$input_json") \
   stdout \
   | bcftools sort -Oz -o "${RewriteSRCoords_annotated_vcf}"
+tabix "${RewriteSRCoords_annotated_vcf}"
 
 
-# GenotypeBatch
+# MergePesrDepthVcfs
 # ----------------------------------------------------------------------------------------------------------------------
-#
-# TODO: wait for Mark
-#
+MergePesrDepthVcfs_vcfs=("${RewriteSRCoords_annotated_vcf}" "${FilterDepth_outfile}")
+MergePesrDepthVcfs_vcfs_file="MergePesrDepthVcfs_vcfs.txt"
+printf "%s\n" "${MergePesrDepthVcfs_vcfs[@]}" > "${MergePesrDepthVcfs_vcfs_file}"
+
+MergePesrDepthVcfs_concat_vcf="$(realpath "${sample_id}.merge_pesr_depth.vcf.gz")"
+bcftools concat --no-version --allow-overlaps -Oz --file-list "${MergePesrDepthVcfs_vcfs_file}" \
+  > "${MergePesrDepthVcfs_concat_vcf}"
+tabix "${MergePesrDepthVcfs_concat_vcf}"
+
+# GenotypeSVs
+# ----------------------------------------------------------------------------------------------------------------------
+# GenotypeBatch_genotyped_depth_vcf="/intermediates/GenotypeBatch_outputs/NA12878.genotyped_depth.vcf.gz"
+genotype_svs_output_dir="$(realpath "$(mktemp -d "${SV_SHELL_BASE_DIR}/output_genotype_svs_XXXXXXXX")")"
+genotype_svs_inputs_json_filename="${genotype_svs_output_dir}/inputs.json"
+genotype_svs_outputs_json_filename="${genotype_svs_output_dir}/outputs.json"
+
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --slurpfile gbe "${gather_batch_evidence_outputs_json_filename}" \
+  --arg vcf "${MergePesrDepthVcfs_concat_vcf}" \
+  --arg output_prefix "${batch}.genotype_batch" \
+  --arg ploidy "${CreatePloidyTableFromPed_out}" \
+  '{
+      "vcf": $vcf,
+      "output_prefix": $output_prefix,
+      "median_coverage": $gbe[0].median_cov,
+      "rd_file": $gbe[0].merged_bincov,
+      "pe_file": $gbe[0].merged_PE,
+      "sr_file": $gbe[0].merged_SR,
+      "reference_dict": $inputs[0].reference_dict,
+      "ploidy_table": $ploidy,
+      "depth_exclusion_intervals": $inputs[0].bin_exclude,
+      "pesr_exclusion_intervals": $inputs[0].pesr_exclude_intervals,
+      "rd_table": $inputs[0].genotyping_rd_table,
+      "pe_table": $inputs[0].genotyping_pe_table,
+      "sr_table": $inputs[0].genotyping_sr_table
+  }' > "${genotype_svs_inputs_json_filename}"
+
+bash /opt/sv_shell/genotype_svs.sh \
+  "${genotype_svs_inputs_json_filename}" \
+  "${genotype_svs_outputs_json_filename}" \
+  "${genotype_svs_output_dir}"
+
+GenotypeSVs_out="$(jq -r ".out" "$genotype_svs_outputs_json_filename")"
+
+# SeparateDepthPesr
+# ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+_pesr_prefix="${batch}.genotype_batch"
+SeparateDepthPesr_depth_vcf=$(realpath "${_pesr_prefix}.depth.vcf.gz")
+SeparateDepthPesr_pesr_vcf=$(realpath "${_pesr_prefix}.pesr.vcf.gz")
+bcftools view -i 'INFO/ALGORITHMS=="depth"' "${GenotypeSVs_out}" -Oz -o "${SeparateDepthPesr_depth_vcf}"
+tabix "${SeparateDepthPesr_depth_vcf}"
+bcftools view -i 'INFO/ALGORITHMS!="depth"' "${GenotypeSVs_out}" -Oz -o "${SeparateDepthPesr_pesr_vcf}"
+tabix "${SeparateDepthPesr_pesr_vcf}"
+
+
 # ConvertCNVsWithoutDepthSupportToBNDs
 # ----------------------------------------------------------------------------------------------------------------------
-#
-# TODO: wait for Mark
-#
+#ConvertCNVsWithoutDepthSupportToBNDs_out_vcf="/intermediates/ConvertCNVsWithoutDepthSupportToBNDs_outputs/NA12878.genotyped_pesr.convert_cnvs_to_bnd.vcf.gz"
+ConvertCNVsWithoutDepthSupportToBNDs_out_vcf="${working_dir}/$(basename "${SeparateDepthPesr_pesr_vcf}.vcf.gz").convert_cnvs_to_bnd.vcf.gz"
+cd "${working_dir}"
+/opt/sv-pipeline/scripts/single_sample/convert_cnvs_without_depth_support_to_bnds.py \
+  "${SeparateDepthPesr_pesr_vcf}" \
+  $(jq -r ".allosome_file" "$input_json") \
+  $(jq -r ".combined_ped_file" "$gather_batch_evidence_outputs_json_filename") \
+  "${sample_id}" \
+  1000 \
+  -o "${ConvertCNVsWithoutDepthSupportToBNDs_out_vcf}"
+
+tabix "${ConvertCNVsWithoutDepthSupportToBNDs_out_vcf}"
+
+
 # MakeCohortVcf
 # ----------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
 MakeCohortVcf_output_dir=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/output_MakeCohortVcf_XXXXXXXX"))
 MakeCohortVcf_inputs_json_filename="${MakeCohortVcf_output_dir}/inputs.json"
 MakeCohortVcf_outputs_json_filename="${MakeCohortVcf_output_dir}/outputs.json"
-#
-# TODO: wait for Mark
-#
 
+jq -n \
+  --slurpfile inputs "${input_json}" \
+  --slurpfile gbe "${gather_batch_evidence_outputs_json_filename}" \
+  --arg pesr_vcf "${ConvertCNVsWithoutDepthSupportToBNDs_out_vcf}" \
+  --arg depth_vcf "${SeparateDepthPesr_pesr_vcf}" \
+  '{
+    "min_sr_background_fail_batches": $inputs[0].clean_vcf_min_sr_background_fail_batches,
+    "ped_file": $inputs[0].combined_ped_file,
+    "pesr_vcfs": $pesr_vcf,
+    "depth_vcfs": $depth_vcf,
+    "contig_list": $inputs[0].primary_contigs_fai,
+    "allosome_fai": $inputs[0].allosome_file,
+    "merge_complex_genotype_vcfs" true,
+    "cytobands": $inputs[0].cytobands,
+    "bin_exclude": $inputs[0].bin_exclude,
+    "disc_files": [$gbe[0].merged_PE],
+    "bincov_files": [$gbe[0].merged_bincov],
+    "mei_bed": $inputs[0].mei_bed,
+    "pe_exclude_list": $inputs[0].pesr_exclude_intervals,
+    "clustering_config_part1": $inputs[0].clustering_config_part1,
+    "stratification_config_part1": $inputs[0].stratification_config_part1,
+    "clustering_config_part2": $inputs[0].clustering_config_part2,
+    "stratification_config_part2": $inputs[0].stratification_config_part2,
+    "track_names": $inputs[0].clustering_track_names,
+    "track_bed_files": $inputs[0].clustering_track_bed_files,
+    "reference_fasta": $inputs[0].reference_fasta,
+    "reference_fasta_fai": $inputs[0].reference_fasta_fai,
+    "reference_dict": $inputs[0].reference_dict,
+    "cohort_name": $inputs[0].batch,
+    "rf_cutoff_files": [$inputs[0].cutoffs],
+    "batches": $inputs[0].batch,
+    "genotyping_rd_tables": $inputs[0].genotyping_rd_table,
+    "median_coverage_files": $gbe[0].median_cov,
+    "max_shard_size_resolve": $inputs[0].max_shard_size_resolve,
+    "chr_x": $inputs[0].chr_x,
+    "chr_y": $inputs[0].chr_y,
+    "primary_contigs_list": $inputs[0].primary_contigs_list
+  }' > "${MakeCohortVcf_inputs_json_filename}"
+
+bash /opt/sv_shell/make_cohort_vcf.sh \
+  "${MakeCohortVcf_inputs_json_filename}" \
+  "${MakeCohortVcf_outputs_json_filename}" \
+  "${MakeCohortVcf_output_dir}" \
+
+
+# TODO tmp pipelining
+MakeCohortVcf_outputs_json_filename="/opt/sv_shell/sample_outputs/make_cohort_vcf.json"
 
 # FilterVcfDepthLt5kb
 # ----------------------------------------------------------------------------------------------------------------------
