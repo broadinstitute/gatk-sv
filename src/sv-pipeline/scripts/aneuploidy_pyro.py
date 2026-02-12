@@ -7,6 +7,7 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from scipy import stats
 import torch
 
 from pathlib import Path
@@ -20,6 +21,21 @@ from pyro.infer import config_enumerate, infer_discrete
 from pyro.infer.autoguide import AutoDiagonalNormal, AutoDelta
 from pyro.infer import JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.infer.svi import SVI
+
+
+def get_sample_columns(df: pd.DataFrame) -> list:
+    """
+    Extract sample column names from a DataFrame by excluding metadata columns.
+
+    Args:
+        df: DataFrame with bins as rows and samples as columns
+
+    Returns:
+        List of sample column names
+    """
+    metadata_cols = ["Chr", "Start", "End", "source_file"]
+    sample_cols = [col for col in df.columns if col not in metadata_cols]
+    return sample_cols
 
 
 class DepthData:
@@ -49,8 +65,7 @@ class DepthData:
         self.original_df = df
 
         # Get sample columns (exclude metadata)
-        metadata_cols = ["Chr", "Start", "End", "source_file"]
-        sample_cols = [col for col in df.columns if col not in metadata_cols]
+        sample_cols = get_sample_columns(df)
 
         # Subsample if requested
         if subsample_bins is not None or subsample_samples is not None:
@@ -487,20 +502,6 @@ class CNVModel:
         return {"cn_posterior": cn_freq}
 
 
-def plot_training_loss(model: CNVModel, output_dir: str):
-    """Plot training loss over epochs"""
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(model.loss_history["epoch"], model.loss_history["elbo"])
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("ELBO")
-    ax.set_title("Training Loss")
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
-    output_path = os.path.join(output_dir, "training_loss.png")
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
-    plt.close()
-
-
 def add_chromosome_labels(ax, chr_array, x_transformed=None):
     """
     Add chromosome labels to x-axis of a plot.
@@ -546,363 +547,6 @@ def add_chromosome_labels(ax, chr_array, x_transformed=None):
     ax.set_xticks(chr_positions)
     ax.set_xticklabels(chr_labels, rotation=0, ha="center")
     ax.set_xlabel("Chromosome")
-
-
-def plot_sample(
-    data: DepthData,
-    map_estimates: dict,
-    cn_posterior: dict,
-    output_dir: str,
-    sample_idx: int = 0,
-    is_aneuploid: bool = False,
-    aneuploid_chrs: list = None,
-):
-    """
-    Combined plot showing MAP estimates and CN posterior.
-
-    Args:
-        data: DepthData object
-        map_estimates: Dictionary with MAP estimates
-        cn_posterior: Dictionary with 'cn_posterior' key
-        sample_idx: Index of sample to plot
-        is_aneuploid: Whether this sample has high confidence aneuploidy
-        aneuploid_chrs: List of tuples (chr_name, cn, prob) for aneuploid chromosomes
-    """
-    fig, axes = plt.subplots(3, 1, figsize=(8, 8))
-
-    # Add sample name as figure title positioned at left edge
-    fig.text(
-        0.1 / 8,
-        0.98,
-        f"{data.sample_ids[sample_idx]}",
-        fontsize=12,
-        fontweight="bold",
-        va="top",
-        ha="left",
-    )
-
-    # Extract data
-    observed = data.depth[:, sample_idx].cpu().numpy()
-    cn = map_estimates["cn"][:, sample_idx]
-    sample_var_all = map_estimates[
-        "sample_var"
-    ].flatten()  # All samples' variance factors
-    sample_var_current = sample_var_all[sample_idx]  # Current sample's variance factor
-    cn_probs = cn_posterior["cn_posterior"][:, sample_idx, :]  # (n_bins, n_states)
-
-    colors = [
-        "#004D40",
-        "#FFC107",
-        "#1E88E5",
-        "#D81B60",
-        "#38006B",
-        "#FF6D00",
-    ]  # Colors for CN=0 to CN=5
-
-    # Create normalized x-axis where each chromosome has equal width
-    # Get chromosome boundaries
-    chr_array = data.chr
-    chr_changes = np.where(chr_array[:-1] != chr_array[1:])[0] + 1
-    chr_boundaries = np.concatenate([[0], chr_changes, [len(chr_array)]])
-
-    # Calculate transformed x positions (each chromosome gets unit width)
-    x_transformed = np.zeros(len(observed))
-    for i in range(len(chr_boundaries) - 1):
-        start_idx = chr_boundaries[i]
-        end_idx = chr_boundaries[i + 1]
-        n_bins_in_chr = end_idx - start_idx
-        # Map bins within this chromosome to interval [i, i+1]
-        x_transformed[start_idx:end_idx] = i + np.linspace(
-            0, 1, n_bins_in_chr, endpoint=False
-        )
-
-    # Plot 1: Observed depth with MAP Copy number calls overlaid
-    ax = axes[0]
-    # First plot MAP copy number calls
-    ax.plot(
-        x_transformed,
-        cn,
-        "o",
-        alpha=0.5,
-        markersize=4,
-        label="Predicted bin copy number",
-        color="black",
-    )
-    # Then plot observed depth on top so it's visible
-    ax.plot(
-        x_transformed,
-        observed,
-        "r-",
-        linewidth=1,
-        alpha=0.7,
-        label="Normalized read depth",
-    )
-    ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.02), ncol=2, borderaxespad=0)
-    ax.grid(True, axis="y", alpha=1, linestyle="-", linewidth=1)
-    ax.set_ylim([-0.5, 5.5])
-    ax.set_xlim([x_transformed.min(), x_transformed.max()])
-
-    # Plot 2: Stacked area plot of CN probabilities
-    ax = axes[1]
-    ax.stackplot(
-        x_transformed,
-        cn_probs.T,
-        labels=[f"CN={i}" for i in range(6)],
-        alpha=0.7,
-        colors=colors,
-    )
-    ax.set_ylabel("Copy Number Probability")
-    ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.02), ncol=6, borderaxespad=0)
-    ax.set_ylim([0, 1])
-    ax.set_xlim([x_transformed.min(), x_transformed.max()])
-
-    # Plot 3: Sample variance distribution
-    ax = axes[2]
-    ax.hist(
-        np.sqrt(sample_var_all),
-        bins=30,
-        alpha=0.7,
-        edgecolor="black",
-        linewidth=0.5,
-        color="gray",
-    )
-    ax.axvline(
-        np.sqrt(sample_var_current),
-        color="red",
-        linestyle="--",
-        linewidth=2,
-        label=f"This sample: {np.sqrt(sample_var_current):.3f}",
-    )
-    ax.set_xlabel("Sample stdev")
-    ax.set_ylabel("Count")
-    ax.set_yscale("log")
-    ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.02), borderaxespad=0)
-    ax.grid(True, alpha=0.3)
-
-    # Highlight aneuploid chromosomes in first 3 panels if applicable
-    if is_aneuploid and aneuploid_chrs:
-        # Extract chromosome names from aneuploid_chrs
-        aneuploid_chr_names = set([chr_name for chr_name, _, _ in aneuploid_chrs])
-
-        # Find bin ranges for each aneuploid chromosome
-        for chr_name in aneuploid_chr_names:
-            chr_mask = data.chr == chr_name
-            chr_indices = np.where(chr_mask)[0]
-
-            if len(chr_indices) > 0:
-                chr_start_idx = chr_indices[0]
-                chr_end_idx = chr_indices[-1]
-
-                # Get transformed coordinates for highlighting
-                chr_start_transformed = x_transformed[chr_start_idx]
-                chr_end_transformed = x_transformed[chr_end_idx]
-
-                # Add red transparent box to first 2 panels
-                for ax in axes[:2]:
-                    y_min, y_max = ax.get_ylim()
-                    ax.axvspan(
-                        chr_start_transformed,
-                        chr_end_transformed,
-                        alpha=0.15,
-                        color="red",
-                        zorder=0,
-                    )
-
-    # Add chromosome labels to first 2 panels
-    for ax in axes[:2]:
-        add_chromosome_labels(ax, data.chr, x_transformed=x_transformed)
-
-    plt.tight_layout()
-    sample_name = data.sample_ids[sample_idx].replace("/", "_").replace(" ", "_")
-    aneu_suffix = "ANEU" if is_aneuploid else "NORMAL"
-    filename = f"sample_{aneu_suffix}_{sample_name}.png"
-
-    # Create subdirectory based on aneuploidy status
-    subdir = "sample_plots"
-    subdir_path = os.path.join(output_dir, subdir)
-    os.makedirs(subdir_path, exist_ok=True)
-
-    output_path = os.path.join(subdir_path, filename)
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
-    plt.close()
-
-
-def plot_bin_variance_bias(data: DepthData, map_estimates: dict, output_dir: str):
-    """
-    Plot bin bias and bin variance posteriors (global across all samples).
-
-    Args:
-        data: DepthData object
-        map_estimates: Dictionary with MAP estimates
-    """
-    fig, axes = plt.subplots(2, 1, figsize=(16, 8))
-
-    # Extract data
-    bin_bias = map_estimates["bin_bias"].flatten()
-    bin_var = map_estimates["bin_var"].flatten()
-
-    x = np.arange(len(bin_bias))
-
-    # Plot 1: Bin bias
-    ax = axes[0]
-    ax.plot(x, bin_bias, "o", alpha=0.5, markersize=3, color="black", label="Bin bias")
-    ax.axhline(1.0, color="red", linestyle="--", alpha=0.5, label="No bias")
-    ax.set_ylabel("Bin mean bias")
-    ax.set_title("Bin Posteriors")
-    ax.set_xlim([x.min(), x.max()])
-
-    # Plot 2: Bin variance
-    ax = axes[1]
-    ax.plot(
-        x,
-        np.sqrt(bin_var),
-        "o",
-        alpha=0.5,
-        markersize=3,
-        color="purple",
-        label="Bin stdev",
-    )
-    ax.set_ylabel("Bin stdev")
-    ax.set_xlim([x.min(), x.max()])
-
-    # Add chromosome labels to both panels
-    for ax in axes:
-        add_chromosome_labels(ax, data.chr)
-
-    plt.tight_layout()
-    filename = "bin_posteriors.png"
-    output_path = os.path.join(output_dir, filename)
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
-    plt.close()
-
-
-def plot_map_estimates(data: DepthData, map_estimates: dict, output_dir: str, sample_idx: int = 0):
-    """
-    Plot MAP estimates for a single sample.
-
-    Args:
-        data: DepthData object
-        map_estimates: Dictionary with MAP estimates
-        output_dir: Output directory for plots
-        sample_idx: Index of sample to plot
-    """
-    fig, axes = plt.subplots(3, 1, figsize=(14, 10))
-
-    # Extract data for this sample
-    observed = data.depth[:, sample_idx].cpu().numpy()
-    cn = map_estimates["cn"][:, sample_idx]
-    bin_bias = map_estimates["bin_bias"]
-
-    # Plot 1: Observed depth and copy number
-    ax = axes[0]
-    ax.plot(
-        range(len(observed)),
-        observed,
-        "o-",
-        alpha=0.5,
-        markersize=3,
-        linewidth=0.5,
-        label="Observed depth",
-    )
-    ax.set_ylabel("Normalized depth")
-    ax.set_title(f"Sample: {data.sample_ids[sample_idx]}")
-    ax.legend()
-    ax.grid(True, alpha=0.5)
-
-    # Plot 2: Copy number calls
-    ax = axes[1]
-    colors = ["red", "orange", "green", "blue", "purple", "brown"]
-    for state in range(6):
-        mask = cn == state
-        if np.any(mask):
-            indices = np.where(mask)[0]
-            ax.plot(
-                indices,
-                cn[mask],
-                "o-",
-                alpha=0.7,
-                markersize=4,
-                linewidth=1,
-                label=f"CN={state}",
-                color=colors[state],
-            )
-    ax.set_ylabel("Copy Number")
-    ax.set_ylim(-0.5, 5.5)
-    ax.legend()
-    ax.grid(True, alpha=0.5)
-
-    # Plot 3: Bin bias
-    ax = axes[2]
-    ax.plot(
-        range(len(bin_bias)),
-        bin_bias,
-        "o-",
-        alpha=0.5,
-        markersize=3,
-        linewidth=0.5,
-        color="black",
-        label="Bin bias",
-    )
-    ax.axhline(1.0, color="red", linestyle="--", alpha=0.5, label="No bias")
-    ax.set_ylabel("Bin bias")
-    ax.legend()
-    ax.grid(True, alpha=0.5)
-
-    # Add chromosome labels to all panels
-    for ax in axes:
-        add_chromosome_labels(ax, data.chr)
-
-    plt.tight_layout()
-    output_path = os.path.join(output_dir, f"map_estimates_sample_{sample_idx}.png")
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
-    plt.close()
-
-
-def plot_cn_posterior(data: DepthData, cn_posterior: dict, output_dir: str, sample_idx: int = 0):
-    """
-    Plot copy number posterior probabilities and observed depth.
-
-    Args:
-        data: DepthData object
-        cn_posterior: Dictionary with 'cn_posterior' key
-        output_dir: Output directory for plots
-        sample_idx: Index of sample to plot
-    """
-    cn_probs = cn_posterior["cn_posterior"][:, sample_idx, :]  # (n_bins, n_states)
-
-    # Get observed depth
-    obs_actual = data.depth[:, sample_idx].cpu().numpy()  # (n_bins,)
-
-    fig, axes = plt.subplots(2, 1, figsize=(14, 8))
-
-    # Plot 1: Stacked area plot of CN probabilities
-    ax = axes[0]
-    colors = ["red", "orange", "green", "blue", "purple", "brown"]
-    x = np.arange(cn_probs.shape[0])
-
-    ax.stackplot(
-        x, cn_probs.T, labels=[f"CN={i}" for i in range(6)], alpha=0.7, colors=colors
-    )
-    ax.set_ylabel("Probability")
-    ax.set_title(f"Copy Number Posterior - Sample: {data.sample_ids[sample_idx]}")
-    ax.legend(loc="upper right")
-    ax.grid(True, alpha=0.3)
-
-    # Plot 2: Observed depth
-    ax = axes[1]
-    ax.plot(x, obs_actual, "k-", linewidth=0.8, alpha=0.7, label="Observed")
-    ax.set_ylabel("Normalized read depth")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-
-    # Add chromosome labels to both panels
-    for ax in axes:
-        add_chromosome_labels(ax, data.chr)
-
-    plt.tight_layout()
-    output_path = os.path.join(output_dir, f"cn_posterior_sample_{sample_idx}.png")
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
-    plt.close()
 
 
 def summary_statistics(
@@ -1162,8 +806,7 @@ def filter_low_quality_bins(
         Filtered DataFrame
     """
     # Get sample columns (exclude metadata)
-    metadata_cols = ["Chr", "Start", "End", "source_file"]
-    sample_cols = [col for col in df.columns if col not in metadata_cols]
+    sample_cols = get_sample_columns(df)
 
     # Compute median and MAD for each bin across samples
     depths = df[sample_cols].values
@@ -1480,6 +1123,17 @@ def main():
         )
         print(f"Chromosomes retained: {sorted(df['Chr'].unique())}")
 
+    # Normalize by sample median over autosomal bins
+    # Get sample columns (exclude metadata)
+    sample_cols = get_sample_columns(df)
+    # Create autosomal mask (exclude chrX and chrY)
+    autosome_mask = ~df["Chr"].isin(["chrX", "chrY"])
+    # Compute median over autosomal bins only
+    column_medians = np.median(df.loc[autosome_mask, sample_cols], axis=0)
+    print(f"Column medians (autosomal): min={column_medians.min():.3f}, max={column_medians.max():.3f}, mean={column_medians.mean():.3f}")
+    # Normalize all bins by autosomal median such that CN=2 corresponds to normalized depth of 2.0
+    df[sample_cols] = 2.0 * df[sample_cols] / column_medians[np.newaxis, :]
+
     # Filter low quality bins (unless skipped)
     if args.skip_bin_filter:
         print("\nSkipping bin quality filtering (--skip-bin-filter enabled)")
@@ -1561,8 +1215,14 @@ def main():
         min_delta=args.min_delta,  # Early stopping minimum delta
     )
 
-    # Plot training loss
-    plot_training_loss(model, output_dir=output_dir)
+    # Save training loss history
+    training_loss_output = os.path.join(output_dir, "training_loss.tsv")
+    loss_df = pd.DataFrame({
+        "epoch": model.loss_history["epoch"],
+        "elbo": model.loss_history["elbo"]
+    })
+    loss_df.to_csv(training_loss_output, sep="\t", index=False)
+    print(f"Training loss history saved to {training_loss_output}")
 
     # Get MAP estimates
     map_estimates = model.get_map_estimates(data)
@@ -1577,59 +1237,6 @@ def main():
     aneuploid_chromosomes = summary_statistics(
         data, map_estimates, cn_posterior, prob_threshold=args.prob_threshold
     )
-
-    # Separate samples into normal and aneuploid groups
-    normal_samples = []
-    aneuploid_samples_list = []
-
-    for sample_idx in range(data.n_samples):
-        if len(aneuploid_chromosomes[sample_idx]) == 0:
-            normal_samples.append(sample_idx)
-        else:
-            aneuploid_samples_list.append(sample_idx)
-
-    print(f"\n{'=' * 80}")
-    print("GENERATING COMBINED RESULTS PLOTS")
-    print(f"{'=' * 80}")
-    print(f"Normal samples: {len(normal_samples)}")
-    print(f"Aneuploid samples: {len(aneuploid_samples_list)}")
-
-    # Generate bin variance/bias plot once (global across all samples)
-    print("\nGenerating global bin variance and bias plot...")
-    plot_bin_variance_bias(data, map_estimates, output_dir=output_dir)
-
-    # Generate combined plots for aneuploid samples
-    n_aneuploid_to_plot = len(aneuploid_samples_list)
-    print(f"\nGenerating plots for {n_aneuploid_to_plot} aneuploid samples...")
-    for i, sample_idx in enumerate(aneuploid_samples_list[:n_aneuploid_to_plot]):
-        sample_name = data.sample_ids[sample_idx]
-        aneuploid_chrs = aneuploid_chromosomes[sample_idx]
-        plot_sample(
-            data,
-            map_estimates,
-            cn_posterior,
-            output_dir=output_dir,
-            sample_idx=sample_idx,
-            is_aneuploid=True,
-            aneuploid_chrs=aneuploid_chrs,
-        )
-
-    # Generate combined plots for normal samples
-    n_normal_to_plot = len(normal_samples)
-    print(f"\nGenerating plots for {n_normal_to_plot} normal samples...")
-    for i, sample_idx in enumerate(normal_samples[:n_normal_to_plot]):
-        sample_name = data.sample_ids[sample_idx]
-        plot_sample(
-            data,
-            map_estimates,
-            cn_posterior,
-            output_dir=output_dir,
-            sample_idx=sample_idx,
-            is_aneuploid=False,
-            aneuploid_chrs=None,
-        )
-
-    print(f"{'=' * 80}\n")
 
     # Create results dataframe with copy number calls and probabilities
     results = []
@@ -1654,9 +1261,9 @@ def main():
                 "cn_prob_4": cn_prob[4],
                 "cn_prob_5": cn_prob[5],
                 "max_prob": cn_prob.max(),
-                "bin_bias": map_estimates["bin_bias"][i],
-                "bin_var": map_estimates["bin_var"][i],
-                "sample_var": map_estimates["sample_var"][j],
+                "bin_bias": float(map_estimates["bin_bias"].flatten()[i]),
+                "bin_var": float(map_estimates["bin_var"].flatten()[i]),
+                "sample_var": float(map_estimates["sample_var"].flatten()[j]),
             }
             results.append(result)
 
@@ -1716,9 +1323,10 @@ def main():
                     "is_aneuploid": is_aneuploid,
                     "n_bins": int(chr_bins_count),
                     "mean_depth": float(np.mean(chr_depths)),
-                    "median_depth": float(np.median(chr_depths)),
                     "std_depth": float(np.std(chr_depths)),
-                    "sample_var": float(map_estimates["sample_var"][sample_idx]),
+                    "median_depth": float(np.median(chr_depths)),
+                    "mad_depth": float(stats.median_abs_deviation(chr_depths)),
+                    "sample_var_map": float(map_estimates["sample_var"][sample_idx]),
                 }
             )
 
