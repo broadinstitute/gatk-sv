@@ -44,7 +44,7 @@ workflow ExtractRegionFromBam {
                 docker_image = sv_pipeline_base_docker,
                 runtime_attr_override = runtime_attr_bam_to_fastq
          }
-
+    }
 
     output {
         Array[File] regional_bams = ExtractRegion.regional_bam
