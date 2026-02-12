@@ -9,6 +9,8 @@ workflow Ploidy {
     File reference_dict
     String batch
     String? plot_highlight_sample
+    String? model_args
+    String? plot_args
     String gatk_docker
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_score
@@ -30,6 +32,8 @@ workflow Ploidy {
       ploidy_matrix = CondenseDepthMatrix.out,
       batch = batch,
       plot_highlight_sample = plot_highlight_sample,
+      model_args = model_args,
+      plot_args = plot_args,
       sv_pipeline_qc_docker = sv_pipeline_qc_docker,
       runtime_attr_override = runtime_attr_score
   }
@@ -83,7 +87,7 @@ task CondenseDepthMatrix {
     echo "JVM memory: $JVM_MAX_MEM"
 
     gatk --java-options "-Xmx${JVM_MAX_MEM}" CondenseDepthEvidence -F ~{merged_depth_file} -O ~{prefix}.rd.txt.gz --sequence-dictionary ~{reference_dict} \
-      --max-interval-size ~{default=2000000 max_interval_size} --min-interval-size ~{default=1000000 min_interval_size}
+      --max-interval-size ~{default=1000000 max_interval_size} --min-interval-size ~{default=1000000 min_interval_size}
   >>>
 
   runtime {
@@ -108,6 +112,8 @@ task PloidyScore {
     File ploidy_matrix
     String batch
     String? plot_highlight_sample
+    String? model_args
+    String? plot_args
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -123,40 +129,32 @@ task PloidyScore {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   
   output {
-    File ploidy_plots = "${batch}_ploidy_plots.tar.gz"
+    File ploidy_plots = "~{batch}_ploidy.tar.gz"
   }
   
   command <<<
     set -euo pipefail
-    
-    mkdir ploidy_est
+
+    mkdir
+    mkdir "~{batch}_ploidy" "~{batch}_ploidy/model" "~{batch}_ploidy/results"
     
     # Run aneuploidy detection
     python /opt/sv-pipeline/scripts/aneuploidy_pyro.py \
       --input ~{ploidy_matrix} \
-      --output-dir ./ploidy_est \
-      --max-iter 5000 \
-      --early-stopping \
-      --patience 50
-    
-    # Create file list for aggregation
-    echo "./ploidy_est/chromosome_stats.tsv" > chromosome_stats_list.txt
+      --output-dir ./model \
+       ~{model_args}
     
     # Aggregate results
     python /opt/sv-pipeline/scripts/aggregate_ploidy_output.py \
-      --input chromosome_stats_list.txt \
-      --output-dir ./ploidy_est
-    
-    # Run CN denoising if bin_stats exists
-    python /opt/sv-pipeline/02_evidence_assessment/estimated_CN_denoising.py \
-      --binwise-copy-number ./ploidy_est/bin_stats.tsv.gz \
-      --estimated-copy-number ./ploidy_est/chromosome_stats.tsv \
-      --output-stats ./ploidy_est/cn_denoising_stats.tsv \
-      --output-pdf ./ploidy_est/cn_denoising_plots.pdf
-    
+      --chrom-stats ./model/chromosome_stats.tsv \
+      --bin-stats model/bin_stats.tsv.gz \
+      --training-loss model/training_loss.tsv \
+      --output-dir ./results \
+      ~{"--highlight-sample " + plot_highlight_sample} \
+      ~{plot_args}
+
     # Package all outputs
-    tar -zcf ./ploidy_est.tar.gz ./ploidy_est
-    mv ploidy_est.tar.gz ~{batch}_ploidy_plots.tar.gz
+    tar -zcf ~{batch}_ploidy.tar.gz ./~{batch}_ploidy/model ./~{batch}_ploidy/results
   >>>
   
   runtime {
