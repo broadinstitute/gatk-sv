@@ -1131,7 +1131,7 @@ jq -n \
   --arg cleaned_vcf "${FilterVcfForCaseSampleGenotype_out}" \
   --arg final_vcf "${UpdateBreakendRepresentationAndRemoveFilters_out}" \
   --arg genotyped_pesr_vcf "${ConvertCNVsWithoutDepthSupportToBNDs_out_vcf}" \
-  --arg genotyped_depth_vcf "${GenotypeBatch_genotyped_depth_vcf}" \
+  --arg genotyped_depth_vcf "${FilterDepth_outfile}" \
   --arg non_genotyped_unique_depth_calls_vcf "${GetUniqueNonGenotypedDepthCalls_out}" \
   '{
     "name": $inputs[0].batch,
