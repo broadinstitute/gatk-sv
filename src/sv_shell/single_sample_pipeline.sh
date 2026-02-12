@@ -1171,3 +1171,27 @@ grep -vw "NA" raw_qc.tsv > "${SingleSampleQC_out}"
 # -------------------------------------------------------
 # ======================= Output ========================
 # -------------------------------------------------------
+
+jq -n \
+  --slurpfile annotate_vcf "${AnnotateVcf_outputs_json}" \
+  --slurpfile stripy "${stripy_outputs_json}" \
+  --slurpfile metrics "${SingleSampleMetrics_outputs_json}" \
+  --slurpfile gbe "${gather_batch_evidence_outputs_json_filename}" \
+  --arg final_vcf "${MergeStripyVcf_out}" \
+  --arg qc_out "${SingleSampleQC_out}" \
+  --arg ng_unique_depth_calls "${GetUniqueNonGenotypedDepthCalls_out}" \
+  '{
+      "final_vcf": $final_vcf,
+      "pre_cleanup_vcf": $annotate_vcf[0].annotated_vcf,
+      "stripy_json_output": $stripy[0].json_output,
+      "stripy_tsv_output": $stripy[0].tsv_output,
+      "stripy_html_output": $stripy[0].html_output,
+      "stripy_vcf_output": $stripy[0].vcf_output,
+      "metrics_file": $metrics[0].metrics_file,
+      "qc_file": $qc_out,
+      "ploidy_matrix": $gbe[0].batch_ploidy_matrix,
+      "ploidy_plots": $gbe[0].batch_ploidy_plots,
+      "non_genotyped_unique_depth_calls": $ng_unique_depth_calls
+  }' > "${output_json_filename}"
+
+echo "Finished single-sample pipeline, output json filename: ${output_json_filename}"
