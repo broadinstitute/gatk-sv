@@ -613,9 +613,9 @@ bcftools query -l "${FilterLargePESRCallsWithoutRawDepthSupport_out}" > "${GetSa
 # ----------------------------------------------------------------------------------------------------------------------
 CreatePloidyTableFromPed_out="$(realpath "${sample_id}.${batch}.ploidy.tsv")"
 python /opt/sv-pipeline/scripts/ploidy_table_from_ped.py \
-  --ped $(jq -r ".combined_ped_file" "$gather_batch_evidence_outputs_json_filename") \
+  --ped "$(jq -r ".combined_ped_file" "$gather_batch_evidence_outputs_json_filename")" \
   --out "${CreatePloidyTableFromPed_out}" \
-  --contigs $(jq -r ".primary_contigs_list" "$input_json") \
+  --contigs "$(jq -r ".primary_contigs_list" "$input_json")" \
   --chr-x "chrX" \
   --chr-y "chrY"
 
@@ -637,7 +637,7 @@ AggregateSVEvidence_out="$(realpath "${sample_id}.aggregate_sr.vcf.gz")"
 java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar AggregateSVEvidence \
   -V "${FormatVcf_out}" \
   -O "${AggregateSVEvidence_out}" \
-  --median-coverage $(jq -r ".median_cov" "$gather_batch_evidence_outputs_json_filename") \
+  --median-coverage "$(jq -r ".median_cov" "$gather_batch_evidence_outputs_json_filename")" \
   --ploidy-table "${CreatePloidyTableFromPed_out}" \
   --x-chromosome-name "chrX" \
   --y-chromosome-name "chrY" \
@@ -753,7 +753,7 @@ jq -n \
   --arg depth_vcf "${SeparateDepthPesr_pesr_vcf}" \
   '{
     "min_sr_background_fail_batches": $inputs[0].clean_vcf_min_sr_background_fail_batches,
-    "ped_file": $inputs[0].combined_ped_file,
+    "ped_file": $gbe[0].combined_ped_file,
     "pesr_vcfs": $pesr_vcf,
     "depth_vcfs": $depth_vcf,
     "contig_list": $inputs[0].primary_contigs_fai,
