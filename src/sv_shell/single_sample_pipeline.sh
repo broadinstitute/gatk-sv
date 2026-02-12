@@ -758,7 +758,7 @@ jq -n \
     "depth_vcfs": $depth_vcf,
     "contig_list": $inputs[0].primary_contigs_fai,
     "allosome_fai": $inputs[0].allosome_file,
-    "merge_complex_genotype_vcfs" true,
+    "merge_complex_genotype_vcfs": true,
     "cytobands": $inputs[0].cytobands,
     "bin_exclude": $inputs[0].bin_exclude,
     "disc_files": [$gbe[0].merged_PE],
