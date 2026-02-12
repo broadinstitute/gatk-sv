@@ -1576,8 +1576,10 @@ def parse_args():
     )
 
     parser.add_argument(
-        "input",
-        help="Input TSV file with aneuploidy detection results",
+        "-c",
+        "--chrom-stats",
+        required=True,
+        help="Input chromosome_stats.tsv file",
     )
     parser.add_argument(
         "-o",
@@ -1646,8 +1648,8 @@ def main():
     print(f"Output directory: {output_dir}")
 
     # Read TSV file
-    print(f"Reading TSV file: {args.input}")
-    df = pd.read_csv(args.input, sep="\t")
+    print(f"Reading TSV file: {args.chrom_stats}...")
+    df = pd.read_csv(args.chrom_stats, sep="\t")
 
     # Display basic statistics
     print("\nData summary:")
