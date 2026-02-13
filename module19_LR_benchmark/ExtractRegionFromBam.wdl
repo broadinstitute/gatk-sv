@@ -154,7 +154,7 @@ task BamToFastq {
     set -euo pipefail
 
     # Convert BAM to FASTQ first
-    samtools fastq ~{bam} | gzip  > ~{output_prefix}.fastq.gz
+    samtools fastq ~{bam} | bgzip  > ~{output_prefix}.fastq.gz
 
   >>>
 
