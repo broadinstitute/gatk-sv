@@ -30,25 +30,18 @@ workflow ExtractRegionFromBam {
                 runtime_attr_override = runtime_attr_extract_region
         }
 
-        call TabixBam {
-            input:
-                bam = ExtractRegion.regional_bam, 
-                docker_image = sv_pipeline_base_docker,
-                runtime_attr_override = runtime_attr_tabix_bam
-            }
-         
         call BamToFastq {
             input:
                 bam = ExtractRegion.regional_bam,
-                bai = TabixBam.regional_bam_bai,
+                bai = ExtractRegion.regional_bai,
                 docker_image = sv_pipeline_base_docker,
                 runtime_attr_override = runtime_attr_bam_to_fastq
          }
     }
 
     output {
-        Array[File] regional_bams = TabixBam.regional_bam
-        Array[File] regional_bais = TabixBam.regional_bam_bai
+        Array[File] regional_bams = ExtractRegion.regional_bam
+        Array[File] regional_bais = ExtractRegion.regional_bai
         Array[File] regional_fastq = BamToFastq.fastq
     }
 }
