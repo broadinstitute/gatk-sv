@@ -497,6 +497,27 @@ def assign_sex_and_aneuploidy_types(df, truth_dict):
     return pd.DataFrame(sample_aneuploidy_types)
 
 
+def save_sex_assignments(aneuploidy_type_df, output_dir):
+    """
+    Save sex assignments table to gzipped text file.
+
+    Args:
+        aneuploidy_type_df: DataFrame with sex and aneuploidy predictions
+        output_dir: Directory to save outputs
+
+    Returns:
+        None
+    """
+    # Create sex assignments table
+    sex_assignments = aneuploidy_type_df[["sample", "chrX_CN", "chrY_CN", "sex"]].copy()
+    sex_assignments.columns = ["sample_id", "chrX.CN", "chrY.CN", "Assignment"]
+    
+    # Save to gzipped file
+    output_path = os.path.join(output_dir, "sex_assignments.txt.gz")
+    sex_assignments.to_csv(output_path, sep="\t", index=False, compression="gzip")
+    print(f"  Saved sex assignments to {output_path}")
+
+
 def calculate_metrics(aneuploidy_type_df, output_dir):
     """
     Calculate and report sensitivity, specificity, and precision metrics.
@@ -1683,6 +1704,9 @@ def main():
 
     print("\nAssigning sex and aneuploidy types...")
     aneuploidy_type_df = assign_sex_and_aneuploidy_types(df, truth_dict)
+    
+    # Save sex assignments
+    save_sex_assignments(aneuploidy_type_df, output_dir)
 
     if args.truth_json:
         print("Calculating prediction accuracy metrics...")

@@ -16,15 +16,35 @@ EMPTY_OUTLIERS = "EMPTY_ROWS_DROP"
 def read_ploidy(filename: str) -> pd.DataFrame:
     """
     Args:
-        filename: A tab-delimited file containing estimated copy numbers.
+        filename: A tab-delimited file containing estimated copy numbers in long format.
+                  Expected columns: sample, chromosome, median_depth, sample_var_map, etc.
     Returns:
         A pandas DataFrame containing the following columns:
-        [id, chr1_CopyNumber, ..., chr22_CopyNumber, chrX_CopyNumber, chrY_CopyNumber, chrX_CopyNumber_rounded].
+        [sample_id, chr1_CopyNumber, ..., chr22_CopyNumber, chrX_CopyNumber, chrY_CopyNumber, chrX_CopyNumber_rounded, sample_var_map].
     """
     df_ploidy = pd.read_csv(filename, sep="\t")
-    df_ploidy.loc[round(df_ploidy["chrX_CopyNumber"]) < 2, "chrX_CopyNumber_rounded"] = 1
-    df_ploidy.loc[round(df_ploidy["chrX_CopyNumber"]) >= 2, "chrX_CopyNumber_rounded"] = 2
-    return df_ploidy
+    
+    # Extract sample_var_map for each sample (same across all chromosomes)
+    sample_var_map = df_ploidy.groupby('sample')['sample_var_map'].first().reset_index()
+    
+    # Pivot from long format to wide format
+    df_wide = df_ploidy.pivot(index='sample', columns='chromosome', values='median_depth')
+    
+    # Rename columns to match expected format (e.g., 'chr1' -> 'chr1_CopyNumber')
+    df_wide.columns = [f"{col}_CopyNumber" for col in df_wide.columns]
+    
+    # Reset index to make 'sample' a regular column and rename to 'sample_id'
+    df_wide = df_wide.reset_index().rename(columns={'sample': ID_COL})
+    
+    # Merge sample_var_map back in
+    sample_var_map = sample_var_map.rename(columns={'sample': ID_COL})
+    df_wide = df_wide.merge(sample_var_map, on=ID_COL, how='left')
+    
+    # Add chrX_CopyNumber_rounded column
+    df_wide.loc[round(df_wide["chrX_CopyNumber"]) < 2, "chrX_CopyNumber_rounded"] = 1
+    df_wide.loc[round(df_wide["chrX_CopyNumber"]) >= 2, "chrX_CopyNumber_rounded"] = 2
+    
+    return df_wide
 
 
 def read_sex_assignments(filename: str) -> pd.DataFrame:
@@ -69,18 +89,27 @@ def read_wgd_scores(filename: str) -> pd.DataFrame:
 
 def read_non_diploid(filename: str) -> pd.DataFrame:
     """
-    EvidenceQC → untar → /ploidy_est/binwise_CNV_qValues.bed.gz →
-    count number of bins with q-value < 0.05 for each sample
+    EvidenceQC → untar → /batch_ploidy/model/bin_stats.tsv.gz →
+    count number of autosomal bins with cn_prob_2 < 0.05 for each sample
     Args:
-        filename: a tab-delimited file containing binwise CNV qValues.
+        filename: a tab-delimited file containing binwise copy number probabilities in long format.
+                  Expected columns: chr, start, end, sample, cn_prob_2, etc.
     Returns:
-        A pandas DataFrame containing the number of bins with q-value < 0.05 for each sample.
+        A pandas DataFrame containing the number of non-diploid autosomal bins for each sample.
     """
-    df_non_diploid = pd.read_csv(filename, sep="\t").T
-    df_non_diploid = df_non_diploid.T.iloc[0:, 3:]
-    nondiploid_counts = df_non_diploid[df_non_diploid < 0.05].count()
-    nondiploid_counts_df = pd.DataFrame(nondiploid_counts, columns=["nondiploid_bins"]).rename_axis(
+    df_non_diploid = pd.read_csv(filename, sep="\t")
+    
+    # Filter to autosomal chromosomes only (exclude chrX, chrY)
+    autosomal_mask = ~df_non_diploid['chr'].isin(['chrX', 'chrY'])
+    df_autosomal = df_non_diploid[autosomal_mask]
+    
+    # Count bins per sample where cn_prob_2 < 0.05 (low probability of diploid = non-diploid)
+    nondiploid_bins = df_autosomal[df_autosomal['cn_prob_2'] < 0.05].groupby('sample').size()
+    
+    # Convert to DataFrame with proper column names
+    nondiploid_counts_df = pd.DataFrame(nondiploid_bins, columns=["nondiploid_bins"]).rename_axis(
         ID_COL).reset_index()
+    
     return nondiploid_counts_df
 
 
@@ -209,7 +238,7 @@ def merge_evidence_qc_table(
         filename_sex_assignments: str,
         filename_mediancov: str,
         filename_wgd: str,
-        filename_cnv_qvalues: str,
+        filename_bin_stats: str,
         filename_high_manta: str,
         filename_high_melt: str,
         filename_high_wham: str,
@@ -235,7 +264,7 @@ def merge_evidence_qc_table(
     df_sex_assignments = read_sex_assignments(filename_sex_assignments)
     df_bincov_median = read_bincov_median(filename_mediancov)
     df_wgd_scores = read_wgd_scores(filename_wgd)
-    df_non_diploid = read_non_diploid(filename_cnv_qvalues)
+    df_non_diploid = read_non_diploid(filename_bin_stats)
     df_manta_high_outlier = read_outlier(filename_high_manta, get_col_name("manta", "high"))
     df_melt_high_outlier = read_outlier(filename_high_melt, get_col_name("melt", "high"))
     df_wham_high_outlier = read_outlier(filename_high_wham, get_col_name("wham", "high"))
@@ -296,7 +325,7 @@ def main():
         help="Sets the filename containing WGD scores.")
 
     parser.add_argument(
-        "-b", "--binwise-cnv-qvalues-filename",
+        "-b", "--ploidy-bin-stats-filename",
         help="Sets the filename containing bin-wise CNV q-values.")
 
     parser.add_argument(
@@ -378,7 +407,7 @@ def main():
         args.sex_assignments_filename,
         args.median_cov_filename,
         args.wgd_scores_filename,
-        args.binwise_cnv_qvalues_filename,
+        args.ploidy_bin_stats_filename,
         args.manta_qc_outlier_high_filename,
         args.melt_qc_outlier_high_filename,
         args.wham_qc_outlier_high_filename,
