@@ -133,28 +133,28 @@ task PloidyScore {
   }
   
   command <<<
-    set -euo pipefail
+    set -euxo pipefail
 
-    mkdir
-    mkdir "~{batch}_ploidy" "~{batch}_ploidy/model" "~{batch}_ploidy/results"
+    OUTDIR="./~{batch}_ploidy"
+    mkdir "${OUTDIR}" "${OUTDIR}/model" "${OUTDIR}/results"
     
     # Run aneuploidy detection
     python /opt/sv-pipeline/scripts/aneuploidy_pyro.py \
       --input ~{ploidy_matrix} \
-      --output-dir ./model \
+      --output-dir ./${OUTDIR}/model \
        ~{model_args}
     
     # Aggregate results
     python /opt/sv-pipeline/scripts/aggregate_ploidy_output.py \
-      --chrom-stats ./model/chromosome_stats.tsv \
-      --bin-stats model/bin_stats.tsv.gz \
-      --training-loss model/training_loss.tsv \
-      --output-dir ./results \
+      --chrom-stats ${OUTDIR}/model/chromosome_stats.tsv \
+      --bin-stats ${OUTDIR}/model/bin_stats.tsv.gz \
+      --training-loss ${OUTDIR}/model/training_loss.tsv \
+      --output-dir ${OUTDIR}/results \
       ~{"--highlight-sample " + plot_highlight_sample} \
       ~{plot_args}
 
     # Package all outputs
-    tar -zcf ~{batch}_ploidy.tar.gz ./~{batch}_ploidy/model ./~{batch}_ploidy/results
+    tar -zcf ~{batch}_ploidy.tar.gz "${OUTDIR}"
   >>>
   
   runtime {

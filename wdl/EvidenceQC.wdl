@@ -38,6 +38,7 @@ workflow EvidenceQC {
     File wgd_scoring_mask
 
     # Runtime parameters
+    String gatk_docker
     String sv_base_mini_docker
     String sv_base_docker
     String sv_pipeline_docker
@@ -94,7 +95,7 @@ workflow EvidenceQC {
       input:
         bincov_matrix = MakeBincovMatrix.merged_bincov,
         batch = batch,
-        sv_base_mini_docker = sv_base_mini_docker,
+        gatk_docker = gatk_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,
         runtime_attr_score = ploidy_score_runtime_attr,
         runtime_attr_build = ploidy_build_runtime_attr
@@ -187,7 +188,7 @@ workflow EvidenceQC {
         input:
           variant_count_files = variant_count_files,
           ploidy_plots_tarball = select_first([Ploidy.ploidy_plots]),
-          output_prefix = batch,
+          batch = batch,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_variant_count_plots
       }
@@ -264,7 +265,7 @@ task CreateVariantCountPlots {
   input {
     Array[File] variant_count_files
     File ploidy_plots_tarball
-    String output_prefix
+    String batch
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -281,7 +282,7 @@ task CreateVariantCountPlots {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_default])
 
   output {
-    File ploidy_plots = "${output_prefix}.ploidy_est.tar.gz"
+    File ploidy_plots = "${batch}.ploidy_est.tar.gz"
   }
 
   command <<<
@@ -289,20 +290,20 @@ task CreateVariantCountPlots {
 
     tar -xzf ~{ploidy_plots_tarball}
 
-    mkdir -p ./ploidy_est/variant_count_plots
+    mkdir -p ./~{batch}_ploidy/variant_count_plots
     
     for file in ~{sep=' ' variant_count_files}; do
       if [[ -f "$file" ]]; then
         caller=$(basename "$file" | cut -d'.' -f2)
         echo "Processing $caller variant counts from $file"
         
-        cd ./ploidy_est/variant_count_plots
+        cd ./~{batch}_ploidy/variant_count_plots
         Rscript /opt/sv-pipeline/scripts/plot_variant_counts.R "$file" "$caller"
         cd ../..
       fi
     done
 
-    tar -czf ~{output_prefix}.ploidy_est.tar.gz ./ploidy_est/
+    tar -czf ~{batch}.ploidy_est.tar.gz ./~{batch}_ploidy
   >>>
 
   runtime {
@@ -352,7 +353,7 @@ task MakeQcTable {
   }
 
   output {
-    File qc_table = "${output_prefix}.evidence_qc_table.tsv"
+    File qc_table = "~{output_prefix}.evidence_qc_table.tsv"
   }
 
   command <<<
@@ -364,13 +365,14 @@ task MakeQcTable {
     fi
 
     tar -xvf ~{ploidy_plots}
+    PLOIDY_DIR=$(basename ~{ploidy_plots} .tar.gz)
 
     python /opt/sv-pipeline/scripts/make_evidence_qc_table.py \
-      ~{"--estimated-copy-number-filename " + "./ploidy_est/estimated_copy_numbers.txt.gz"} \
-      ~{"--sex-assignments-filename " + "./ploidy_est/sample_sex_assignments.txt.gz"} \
+      --estimated-copy-number-filename ./${PLOIDY_DIR}/model/chromosome_stats.tsv \
+      --sex-assignments-filename ./${PLOIDY_DIR}/results/sex_assignments.txt.gz \
+      --ploidy-bin-stats-filename ./${PLOIDY_DIR}/model/bin_stats.tsv.gz \
       ~{"--median-cov-filename " + bincov_median} \
       ~{"--wgd-scores-filename " + WGD_scores} \
-      ~{"--binwise-cnv-qvalues-filename " + "./ploidy_est/binwise_CNV_qValues.bed.gz"} \
       ~{"--dragen-qc-outlier-high-filename " + dragen_qc_high} \
       ~{"--manta-qc-outlier-high-filename " + manta_qc_high} \
       ~{"--melt-qc-outlier-high-filename " + melt_qc_high} \
