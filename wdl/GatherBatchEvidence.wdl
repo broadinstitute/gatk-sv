@@ -101,6 +101,8 @@ workflow GatherBatchEvidence {
 
     Boolean run_ploidy = false
     String? ploidy_plot_highlight_sample  # for single-sample mode
+    String? ploidy_model_args
+    String? ploidy_plot_args
 
     # Option to add first sample to the ped file (for single sample mode); run_ploidy must be true
     Boolean append_first_sample_to_ped = false
@@ -208,7 +210,9 @@ workflow GatherBatchEvidence {
         bincov_matrix = merged_bincov_,
         batch = batch,
         plot_highlight_sample = ploidy_plot_highlight_sample,
-        sv_base_mini_docker = sv_base_mini_docker,
+        model_args = ploidy_model_args,
+        plot_args = ploidy_plot_args,
+        gatk_docker = gatk_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,
         runtime_attr_score = ploidy_score_runtime_attr,
         runtime_attr_build = ploidy_build_runtime_attr
