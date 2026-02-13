@@ -250,6 +250,7 @@ bash /opt/sv_shell/evidence_qc.sh \
 
 # GatherBatchEvidence
 # ---------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
 gather_batch_evidence_output_dir=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/output_gather_batch_evidence_XXXXXXXX"))
 gather_batch_evidence_inputs_json_filename="${gather_batch_evidence_output_dir}/inputs.json"
 gather_batch_evidence_outputs_json_filename="${gather_batch_evidence_output_dir}/outputs.json"
