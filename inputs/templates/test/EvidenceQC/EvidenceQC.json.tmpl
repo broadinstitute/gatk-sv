@@ -1,11 +1,13 @@
 {
   "EvidenceQC.run_vcf_qc" : "true",
+  "EvidenceQC.gatk_docker":{{ dockers.gatk_docker | tojson }},
   "EvidenceQC.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
   "EvidenceQC.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
   "EvidenceQC.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
   "EvidenceQC.sv_base_docker": {{ dockers.sv_base_docker | tojson }},
   "EvidenceQC.wgd_scoring_mask": {{ reference_resources.wgd_scoring_mask | tojson }},
   "EvidenceQC.genome_file": {{ reference_resources.genome_file | tojson }},
+  "EvidenceQC.reference_dict": {{ reference_resources.reference_dict | tojson }},
 
   "EvidenceQC.batch": {{ test_batch.name | tojson }},
   "EvidenceQC.counts": {{ test_batch.counts | tojson }},
