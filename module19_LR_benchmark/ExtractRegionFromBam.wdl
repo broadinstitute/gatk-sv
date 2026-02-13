@@ -47,7 +47,7 @@ workflow ExtractRegionFromBam {
     }
 
     output {
-        Array[File] regional_bams = ExtractRegion.regional_bam
+        Array[File] regional_bams = TabixBam.regional_bam
         Array[File] regional_bais = TabixBam.regional_bam_bai
         Array[File] regional_fastq = BamToFastq.fastq
     }
@@ -112,14 +112,17 @@ task TabixBam {
         RuntimeAttr? runtime_attr_override
     }
 
+    String prefix = basename(bam, ".bam")
     command <<<
         set -euo pipefail
-        samtools index ~{bam}
+        gsutil cp ~{bam} ./
+        samtools index ~{prefix}.bam
  
     >>>
 
     output {
-        File regional_bam_bai = "~{bam}.bai"
+        File regional_bam = "~{bam}.bam"
+        File regional_bam_bai = "~{bam}.bam.bai"
     }
 
   RuntimeAttr default_attr = object {
