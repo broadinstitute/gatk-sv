@@ -154,15 +154,12 @@ task BamToFastq {
     set -euo pipefail
 
     # Convert BAM to FASTQ first
-    gatk SamToFastq \
-      -I ~{bam} \
-      ~{if defined(bai) then "--read-index " + bai else ""} \
-      -F ~{output_prefix}.fastq
+    samtools fastq ~{bam} | gzip  > ~{output_prefix}.fastq.gz
 
   >>>
 
   output {
-    File fastq = "~{output_prefix}.fastq"
+    File fastq = "~{output_prefix}.fastq.gz"
   }
 
   RuntimeAttr default_attr = object {
