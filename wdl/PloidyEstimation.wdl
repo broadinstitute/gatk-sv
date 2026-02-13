@@ -5,7 +5,6 @@ import "Structs.wdl"
 workflow Ploidy {
   input {
     File merged_depth_file
-    File bincov_matrix
     File reference_dict
     String batch
     String? plot_highlight_sample

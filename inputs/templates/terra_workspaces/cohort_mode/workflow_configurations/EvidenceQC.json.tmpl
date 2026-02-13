@@ -1,11 +1,13 @@
 {
   "EvidenceQC.run_vcf_qc" : "true",
+  "EvidenceQC.gatk_docker": "${workspace.gatk_docker}",
   "EvidenceQC.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
   "EvidenceQC.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
   "EvidenceQC.sv_pipeline_qc_docker": "${workspace.sv_pipeline_qc_docker}",
   "EvidenceQC.sv_base_docker": "${workspace.sv_base_docker}",
   "EvidenceQC.wgd_scoring_mask": "${workspace.wgd_scoring_mask}",
   "EvidenceQC.genome_file": "${workspace.genome_file}",
+  "EvidenceQC.reference_dict": "${workspace.reference_dict}",
 
   "EvidenceQC.batch": "${this.sample_set_id}",
   "EvidenceQC.counts": "${this.samples.coverage_counts}",

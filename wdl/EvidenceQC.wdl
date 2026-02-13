@@ -23,6 +23,7 @@ workflow EvidenceQC {
 
     # Global files
     File genome_file
+    File reference_dict
 
     # Coverage files
     Array[File] counts
@@ -93,8 +94,9 @@ workflow EvidenceQC {
   if (run_ploidy) {
     call pe.Ploidy as Ploidy {
       input:
-        bincov_matrix = MakeBincovMatrix.merged_bincov,
+        merged_depth_file = MakeBincovMatrix.merged_bincov,
         batch = batch,
+        reference_dict = reference_dict,
         gatk_docker = gatk_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,
         runtime_attr_score = ploidy_score_runtime_attr,
