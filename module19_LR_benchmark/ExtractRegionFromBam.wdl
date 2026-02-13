@@ -159,9 +159,6 @@ task BamToFastq {
       ~{if defined(bai) then "--read-index " + bai else ""} \
       -F ~{output_prefix}.fastq
 
-    # Convert FASTQ to FASTA
-    awk 'NR%4==1{printf(">%s\n",substr($0,2));}
-         NR%4==2{print;}' ~{output_prefix}.fastq > ~{output_prefix}.fasta
   >>>
 
   output {
