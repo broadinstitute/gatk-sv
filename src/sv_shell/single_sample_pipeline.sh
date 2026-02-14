@@ -703,6 +703,7 @@ bash /opt/sv_shell/genotype_svs.sh \
   "${genotype_svs_inputs_json_filename}" \
   "${genotype_svs_outputs_json_filename}" \
   "${genotype_svs_output_dir}"
+#genotype_svs_outputs_json_filename="/wd/output_genotype_svs_7K4MLQwy/outputs.json"
 
 GenotypeSVs_out="$(jq -r ".out" "$genotype_svs_outputs_json_filename")"
 
@@ -791,7 +792,7 @@ bash /opt/sv_shell/make_cohort_vcf.sh \
 
 
 # TODO tmp pipelining
-MakeCohortVcf_outputs_json_filename="/opt/sv_shell/sample_outputs/make_cohort_vcf.json"
+#MakeCohortVcf_outputs_json_filename="/opt/sv_shell/sample_outputs/make_cohort_vcf.json"
 
 # FilterVcfDepthLt5kb
 # ----------------------------------------------------------------------------------------------------------------------
