@@ -763,7 +763,7 @@ jq -n \
     "cytobands": $inputs[0].cytobands,
     "bin_exclude": $inputs[0].bin_exclude,
     "disc_files": [$gbe[0].merged_PE],
-    "bincov_files": [$gbe[0].merged_bincov],
+    "bincov_files": $gbe[0].merged_bincov,
     "mei_bed": $inputs[0].mei_bed,
     "pe_exclude_list": $inputs[0].pesr_exclude_intervals,
     "clustering_config_part1": $inputs[0].clustering_config_part1,
