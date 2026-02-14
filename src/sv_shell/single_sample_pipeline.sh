@@ -783,7 +783,11 @@ jq -n \
     "max_shard_size_resolve": $inputs[0].max_shard_size_resolve,
     "chr_x": $inputs[0].chr_x,
     "chr_y": $inputs[0].chr_y,
-    "primary_contigs_list": $inputs[0].primary_contigs_list
+    "primary_contigs_list": $inputs[0].primary_contigs_list,
+    "HERVK_reference": $inputs[0].HERVK_reference,
+    "LINE1_reference": $inputs[0].LINE1_reference,
+    "intron_reference": $inputs[0].intron_reference,
+    "outlier_samples_list": $inputs[0].outlier_samples_list,
   }' > "${MakeCohortVcf_inputs_json_filename}"
 
 bash /opt/sv_shell/make_cohort_vcf.sh \
@@ -1081,7 +1085,8 @@ jq -n \
     "max_breakend_as_cnv_length": $inputs[0].max_breakend_as_cnv_length,
     "external_af_ref_bed": $inputs[0].external_af_ref_bed,
     "external_af_ref_prefix": $inputs[0].external_af_ref_bed_prefix,
-    "external_af_population": $inputs[0].external_af_population
+    "external_af_population": $inputs[0].external_af_population,
+    "par_bed": $inputs[0].par_bed
   }' > "${AnnotateVcf_inputs_json}"
 
 bash /opt/sv_shell/annotate_vcf.sh \

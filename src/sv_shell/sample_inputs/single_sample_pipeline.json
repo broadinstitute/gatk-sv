@@ -15,7 +15,7 @@
   "autosome_file": "/inputs/autosome.fai",
   "min_svsize": "50",
   "primary_contigs_list": "/inputs/primary_contigs.list",
-  "MakeCohortVcf.HERVK_reference": "/inputs/HERVK.sorted.bed.gz",
+  "HERVK_reference": "/inputs/HERVK.sorted.bed.gz",
   "bam_or_cram_file": "/inputs/NA12878.final.cram",
   "bam_or_cram_index": "/inputs/NA12878.final.cram.crai",
   "ref_panel_dup_bed": "/inputs/all_samples.DUP.bed.gz",
@@ -55,7 +55,7 @@
   "external_af_ref_bed": "/inputs/gnomad_v4_SV.Freq.tsv.gz",
   "clean_vcf5_records_per_shard": "5000",
   "clustering_config_part1": "/inputs/clustering_config.part_one.tsv",
-  "AnnotateVcf.par_bed": "/inputs/hg38.par.bed",
+  "par_bed": "/inputs/hg38.par.bed",
   "gcnv_qs_cutoff": "30",
   "genotype_pesr_depth_sepcutoff": "/inputs/all_samples.pesr.depth_sepcutoff.txt",
   "reference_index": "/inputs/Homo_sapiens_assembly38.fasta.fai",
@@ -100,7 +100,7 @@
   "ref_copy_number_autosomal_contigs": "2",
   "pesr_exclude_intervals": "/inputs/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz",
   "ref_panel_del_bed": "/inputs/all_samples.DEL.bed.gz",
-  "MakeCohortVcf.LINE1_reference": "/inputs/LINE1.sorted.bed.gz",
+  "LINE1_reference": "/inputs/LINE1.sorted.bed.gz",
   "reference_fasta": "/inputs/Homo_sapiens_assembly38.fasta",
   "ref_panel_bincov_matrix": "/inputs/all_samples.RD.txt.gz",
   "chr_x": "chrX",
@@ -137,5 +137,7 @@
   "ref_panel_median_cov": "/inputs/all_samples_medianCov.transposed.bed",
   "genotyping_rd_table": "/inputs/all_samples.rd_geno_params.tsv",
   "genotyping_pe_table": "/inputs/all_samples.pe_geno_params.tsv",
-  "genotyping_sr_table": "/inputs/all_samples.sr_geno_params.tsv"
+  "genotyping_sr_table": "/inputs/all_samples.sr_geno_params.tsv",
+  "intron_reference": "/inputs/gencode.v39.CDS.intron.tsv.gz",
+  "outlier_samples_list": null
 }

@@ -21,9 +21,5 @@
   "par_bed": "/inputs/hg38.par.bed",
   "prefix": "NA12878",
   "protein_coding_gtf": "/inputs/gencode.v47.basic.protein_coding.canonical.gtf",
-  "sample_keep_list": null,
-  "sites_only": false,
-  "sort_vcf_list": false,
-  "sv_per_shard": 5000,
   "vcf": "/inputs/NA12878.filter_genotypes.sanitized.sample_qc.vcf.gz"
 }
