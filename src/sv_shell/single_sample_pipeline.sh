@@ -197,23 +197,13 @@ jq -n \
     "run_module_metrics": $inputs[0].run_sampleevidence_metrics
   }' > "${gather_sample_evidence_inputs_json}"
 
-bash /opt/sv_shell/gather_sample_evidence.sh \
-  "${gather_sample_evidence_inputs_json}" \
-  "${gather_sample_evidence_outputs_json}" \
-  "${gather_sample_evidence_output_dir}"
-
+#bash /opt/sv_shell/gather_sample_evidence.sh \
+#  "${gather_sample_evidence_inputs_json}" \
+#  "${gather_sample_evidence_outputs_json}" \
+#  "${gather_sample_evidence_output_dir}"
 # TODO: TEMP --------- pipelining
 #gather_sample_evidence_outputs_json="/opt/sv_shell/sample_outputs/gather_sample_evidence.json"
-
-
-# ensure required file indexes are present
-#_file_need_index=$(jq -r ".coverage_counts" "$gather_sample_evidence_outputs_json")
-#if [ ! -f "${_file_need_index}.tbi" ]; then
-#  #  tabix -s 1 -b 2 -e 3 -c @ "${_file_need_index}"
-#  # use the following if the above does not work
-#  SKIP_LINES=$(zcat "${_file_need_index}" | grep -c -E '^@|^CONTIG\s')
-#  tabix -S $SKIP_LINES -s 1 -b 2 -e 3 "${_file_need_index}"
-#fi
+gather_sample_evidence_outputs_json="/wd/output_GatherSampleEvidence_LMXKgLWK/outputs.json"
 
 
 # EvidenceQC
@@ -238,13 +228,13 @@ jq -n \
       bincov_matrix: $inputs[0].ref_panel_bincov_matrix
   }' > "${evidence_qc_inputs_json_filename}"
 
-bash /opt/sv_shell/evidence_qc.sh \
-  "${evidence_qc_inputs_json_filename}" \
-  "${evidence_qc_outputs_json_filename}" \
-  "${evidence_qc_output_dir}"
-
+#bash /opt/sv_shell/evidence_qc.sh \
+#  "${evidence_qc_inputs_json_filename}" \
+#  "${evidence_qc_outputs_json_filename}" \
+#  "${evidence_qc_output_dir}"
 # TODO: TEMP --------- pipelining
 #evidence_qc_outputs_json_filename="/opt/sv_shell/sample_outputs/evidence_qc.json"
+evidence_qc_outputs_json_filename="/wd/output_evidence_qc_fsG4yFYH/outputs.json"
 
 
 
@@ -339,10 +329,14 @@ jq -n \
       sample_median_cov: $eqc_outputs[0].bincov_median
   }' > "${gather_batch_evidence_inputs_json_filename}"
 
-bash /opt/sv_shell/gather_batch_evidence.sh \
-  "${gather_batch_evidence_inputs_json_filename}" \
-  "${gather_batch_evidence_outputs_json_filename}" \
-  "${gather_batch_evidence_output_dir}"
+#bash /opt/sv_shell/gather_batch_evidence.sh \
+#  "${gather_batch_evidence_inputs_json_filename}" \
+#  "${gather_batch_evidence_outputs_json_filename}" \
+#  "${gather_batch_evidence_output_dir}"
+# TODO: TEMP --------- pipelining
+#gather_batch_evidence_outputs_json_filename="/opt/sv_shell/sample_outputs/gather_batch_evidence.json"
+gather_batch_evidence_outputs_json_filename="/wd/output_gather_batch_evidence_AY7n9Qpt/outputs.json"
+# TODO: chrY maybe missing from the output of this
 
 
 # stripy
