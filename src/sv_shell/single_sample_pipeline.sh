@@ -197,13 +197,13 @@ jq -n \
     "run_module_metrics": $inputs[0].run_sampleevidence_metrics
   }' > "${gather_sample_evidence_inputs_json}"
 
-#bash /opt/sv_shell/gather_sample_evidence.sh \
-#  "${gather_sample_evidence_inputs_json}" \
-#  "${gather_sample_evidence_outputs_json}" \
-#  "${gather_sample_evidence_output_dir}"
+bash /opt/sv_shell/gather_sample_evidence.sh \
+  "${gather_sample_evidence_inputs_json}" \
+  "${gather_sample_evidence_outputs_json}" \
+  "${gather_sample_evidence_output_dir}"
 # TODO: TEMP --------- pipelining
 #gather_sample_evidence_outputs_json="/opt/sv_shell/sample_outputs/gather_sample_evidence.json"
-gather_sample_evidence_outputs_json="/wd/output_GatherSampleEvidence_LMXKgLWK/outputs.json"
+#gather_sample_evidence_outputs_json="/wd/output_GatherSampleEvidence_LMXKgLWK/outputs.json"
 
 
 # EvidenceQC
@@ -228,13 +228,13 @@ jq -n \
       bincov_matrix: $inputs[0].ref_panel_bincov_matrix
   }' > "${evidence_qc_inputs_json_filename}"
 
-#bash /opt/sv_shell/evidence_qc.sh \
-#  "${evidence_qc_inputs_json_filename}" \
-#  "${evidence_qc_outputs_json_filename}" \
-#  "${evidence_qc_output_dir}"
+bash /opt/sv_shell/evidence_qc.sh \
+  "${evidence_qc_inputs_json_filename}" \
+  "${evidence_qc_outputs_json_filename}" \
+  "${evidence_qc_output_dir}"
 # TODO: TEMP --------- pipelining
 #evidence_qc_outputs_json_filename="/opt/sv_shell/sample_outputs/evidence_qc.json"
-evidence_qc_outputs_json_filename="/wd/output_evidence_qc_fsG4yFYH/outputs.json"
+#evidence_qc_outputs_json_filename="/wd/output_evidence_qc_fsG4yFYH/outputs.json"
 
 
 
@@ -329,13 +329,13 @@ jq -n \
       sample_median_cov: $eqc_outputs[0].bincov_median
   }' > "${gather_batch_evidence_inputs_json_filename}"
 
-#bash /opt/sv_shell/gather_batch_evidence.sh \
-#  "${gather_batch_evidence_inputs_json_filename}" \
-#  "${gather_batch_evidence_outputs_json_filename}" \
-#  "${gather_batch_evidence_output_dir}"
+bash /opt/sv_shell/gather_batch_evidence.sh \
+  "${gather_batch_evidence_inputs_json_filename}" \
+  "${gather_batch_evidence_outputs_json_filename}" \
+  "${gather_batch_evidence_output_dir}"
 # TODO: TEMP --------- pipelining
 #gather_batch_evidence_outputs_json_filename="/opt/sv_shell/sample_outputs/gather_batch_evidence.json"
-gather_batch_evidence_outputs_json_filename="/wd/output_gather_batch_evidence_AY7n9Qpt/outputs.json"
+#gather_batch_evidence_outputs_json_filename="/wd/output_gather_batch_evidence_AY7n9Qpt/outputs.json"
 # TODO: chrY maybe missing from the output of this
 
 
@@ -489,6 +489,9 @@ bash /opt/sv_shell/cluster_batch.sh \
   "${cluster_batch_inputs_json_filename}" \
   "${cluster_batch_outputs_json_filename}" \
   "${cluster_batch_output_dir}"
+# TODO: chrY is missing from the output generated in the above.
+# TODO: TEMP --------- pipelining
+#cluster_batch_outputs_json_filename="/opt/sv_shell/sample_outputs/cluster_batch.json"
 
 
 # FilterDepth
