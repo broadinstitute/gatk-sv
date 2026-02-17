@@ -179,4 +179,10 @@ RUN chmod +x /usr/local/bin/stripy
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 
+# SYSSTAT (SAR) configuration
+RUN apt-get update && apt-get install -y cron sysstat && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    sed -i 's/ENABLED="false"/ENABLED="true"/' /etc/default/sysstat && \
+    sed -i 's|^5-55/10|*/5|' /etc/cron.d/sysstat
+
 WORKDIR /
