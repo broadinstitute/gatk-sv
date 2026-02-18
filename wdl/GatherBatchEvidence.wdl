@@ -205,11 +205,12 @@ workflow GatherBatchEvidence {
   File merged_bincov_idx_ = select_first([MakeBincovMatrix.merged_bincov_idx, bincov_matrix_index])
 
   if (run_ploidy) {
-    call pe.Ploidy as Ploidy {
+    call pe.Ploidy {
       input:
-        bincov_matrix = merged_bincov_,
+        merged_depth_file = merged_bincov_,
         batch = batch,
         plot_highlight_sample = ploidy_plot_highlight_sample,
+        reference_dict = ref_dict,
         model_args = ploidy_model_args,
         plot_args = ploidy_plot_args,
         gatk_docker = gatk_docker,

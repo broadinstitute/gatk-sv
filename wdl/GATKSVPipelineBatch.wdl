@@ -176,10 +176,12 @@ workflow GATKSVPipelineBatch {
       genome_file=genome_file,
       counts=counts_files_,
       run_ploidy = false,
+      reference_dict = reference_dict,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
-      sv_base_docker=sv_base_docker
+      sv_base_docker=sv_base_docker,
+      gatk_docker=gatk_docker
   }
 
   call phase1.GATKSVPipelinePhase1 {
@@ -245,6 +247,7 @@ workflow GATKSVPipelineBatch {
       rd_file=GATKSVPipelinePhase1.merged_bincov,
       pe_file=GATKSVPipelinePhase1.merged_PE,
       sr_file=GATKSVPipelinePhase1.merged_SR,
+      ploidy_table = GATKSVPipelinePhase1.ploidy_table,
       reference_dict=reference_dict,
       contig_list = primary_contigs_list,
       sv_base_mini_docker=sv_base_mini_docker,
@@ -254,6 +257,7 @@ workflow GATKSVPipelineBatch {
 
   call regenocnvs.RegenotypeCNVs as RegenotypeCNVs {
     input:
+      merge_batch_sites_vcf=MergePesrDepthVcfs.concat_vcf,
       depth_vcfs=[GenotypeBatch.genotyped_depth_vcf],
       batch_depth_vcfs=[select_first([GATKSVPipelinePhase1.filtered_depth_vcf])],
       batches=[name],
@@ -262,6 +266,7 @@ workflow GATKSVPipelineBatch {
       coveragefiles=[GATKSVPipelinePhase1.merged_bincov],
       coveragefile_idxs=[GATKSVPipelinePhase1.merged_bincov_index],
       genotyping_rd_table=[select_first([GenotypeBatch.genotyping_rd_table])],
+      ploidy_tables=[GATKSVPipelinePhase1.ploidy_table],
       contig_list=primary_contigs_list,
       regeno_coverage_medians=[GenotypeBatch.regeno_coverage_medians],
       sv_base_mini_docker=sv_base_mini_docker,
