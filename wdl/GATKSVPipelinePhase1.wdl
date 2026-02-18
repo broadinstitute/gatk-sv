@@ -453,6 +453,7 @@ workflow GATKSVPipelinePhase1 {
     File merged_bincov_index = GatherBatchEvidence.merged_bincov_index
 
     File median_cov = GatherBatchEvidence.median_cov
+    File ploidy_table = GenerateBatchMetrics.ploidy_table
 
     File? PE_stats = GatherBatchEvidence.PE_stats
     File? RD_stats = GatherBatchEvidence.RD_stats
