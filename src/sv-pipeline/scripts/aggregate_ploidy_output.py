@@ -1035,8 +1035,7 @@ def plot_sample_with_variance_distribution(sample_data, all_sample_vars, output_
     
     plt.tight_layout()
     sample_name_clean = sample_name.replace("/", "_").replace(" ", "_")
-    aneu_suffix = "ANEU" if is_aneuploid else "NORMAL"
-    filename = f"sample_{aneu_suffix}_{sample_name_clean}.png"
+    filename = f"{sample_name_clean}.png"
     
     subdir = "sample_plots"
     subdir_path = os.path.join(output_dir, subdir)
@@ -1507,7 +1506,6 @@ def generate_estimatePloidy_plots(df, bin_stats_df, sex_df, output_dir, highligh
     Returns:
         None
     """
-    print("\nGenerating estimatePloidy.R-style plots...")
     
     # 1. Sex assignment scatter plot
     plot_sex_assignments(sex_df, output_dir, highlight_sample)
@@ -1543,11 +1541,9 @@ def generate_estimatePloidy_plots(df, bin_stats_df, sex_df, output_dir, highligh
         
         if "chrY" in bin_stats_df["chr"].unique():
             plot_cn_per_bin_chromosome(bin_stats_df, output_dir, "chrY", sex_subset=None, highlight_sample=highlight_sample)
-    
-    print("\nestimaPloidy.R-style plots complete!")
 
 
-def generate_aneuploidy_plots(df, bin_plot_data, training_loss_df, output_dir):
+def generate_aneuploidy_plots(df, bin_plot_data, training_loss_df, output_dir, skip_per_sample_plots=False):
     """
     Generate all aneuploidy detection plots.
     
@@ -1556,6 +1552,7 @@ def generate_aneuploidy_plots(df, bin_plot_data, training_loss_df, output_dir):
         bin_plot_data: DataFrame with bin-level data for plotting
         training_loss_df: DataFrame with training loss history
         output_dir: Directory to save plots
+        skip_per_sample_plots: Whether to skip generating individual sample plots
         
     Returns:
         None
@@ -1577,7 +1574,29 @@ def generate_aneuploidy_plots(df, bin_plot_data, training_loss_df, output_dir):
     aneuploid_samples = df[df["is_aneuploid"]]["sample"].unique()
     normal_samples = df[~df["sample"].isin(aneuploid_samples)]["sample"].unique()
     
-    print(f"  Skipping per-sample plots (found {len(aneuploid_samples)} aneuploid and {len(normal_samples)} normal samples)")
+    if skip_per_sample_plots:
+        print(f"  Skipping per-sample plots (found {len(aneuploid_samples)} aneuploid and {len(normal_samples)} normal samples)")
+    else:
+        print(f"  Generating per-sample plots for {len(aneuploid_samples)} aneuploid and {len(normal_samples)} normal samples...")
+        
+        # Generate plots for aneuploid samples
+        for sample_id in aneuploid_samples:
+            sample_data = bin_plot_data[bin_plot_data["sample"] == sample_id].copy()
+            
+            # Get aneuploid chromosomes for this sample
+            sample_chrom_data = df[df["sample"] == sample_id]
+            aneuploid_chrs = [
+                (row["chromosome"], row["copy_number"], row["mean_cn_probability"])
+                for _, row in sample_chrom_data[sample_chrom_data["is_aneuploid"]].iterrows()
+            ]
+            
+            plot_sample_with_variance_distribution(sample_data, all_sample_vars, output_dir, aneuploid_chrs=aneuploid_chrs)
+        
+        # Generate plots for normal samples
+        for sample_id in normal_samples:
+            sample_data = bin_plot_data[bin_plot_data["sample"] == sample_id].copy()
+            plot_sample_with_variance_distribution(sample_data, all_sample_vars, output_dir, aneuploid_chrs=None)
+    
     print("  Aneuploidy detection plots complete!")
 
 
@@ -1640,12 +1659,12 @@ def parse_args():
         "--highlight-sample",
         required=False,
         default="",
-        help="Optional sample ID to highlight in estimatePloidy.R-style plots",
+        help="Optional sample ID to highlight in plots",
     )
     parser.add_argument(
         "--skip-per-sample-plots",
         action="store_true",
-        help="Skip generating individual plots for each sample (speeds up analysis for large cohorts)",
+        help="Skip generating individual plots for each sample (speeds up for large cohorts)",
     )
 
     return parser.parse_args()
@@ -1688,7 +1707,7 @@ def main():
         print(f"  Loaded {len(truth_dict)} known truth cases")
     else:
         truth_dict = {}
-        print("  No truth JSON provided - all samples will be compared against NORMAL")
+        print("  No truth JSON provided - skipping truth-based predictions and metrics")
 
     # Exclude cases if provided
     if args.exclusion_list:
@@ -1723,24 +1742,21 @@ def main():
     # Generate median depth distribution plots
     generate_median_depth_distributions(df, output_dir, args.highlight_sample)
     
-    # Generate estimatePloidy.R-style plots if bin stats is provided
+    # Generate plots if bin stats is provided
     if args.bin_stats:
-        print("\nLoading bin statistics for estimatePloidy.R-style plots...")
+        print("\nLoading bin statistics for plots...")
         bin_stats_df = pd.read_csv(args.bin_stats, sep="\t", compression="gzip")
         generate_estimatePloidy_plots(df, bin_stats_df, aneuploidy_type_df, output_dir, args.highlight_sample)
     else:
-        print("\nGenerating estimatePloidy.R-style plots (chromosome-level only, no bin-level plots)...")
+        print("\nGenerating plots (chromosome-level only, no bin-level plots)...")
         generate_estimatePloidy_plots(df, None, aneuploidy_type_df, output_dir, args.highlight_sample)
     
     # Generate aneuploidy detection plots if bin stats is provided
     if args.bin_stats and args.training_loss:
-        if args.skip_per_sample_plots:
-            print("\nSkipping aneuploidy detection plots (--skip-per-sample-plots enabled)")
-        else:
-            print("\nLoading bin statistics and training loss for aneuploidy detection plots...")
-            bin_stats_df = pd.read_csv(args.bin_stats, sep="\t", compression="gzip")
-            training_loss_df = pd.read_csv(args.training_loss, sep="\t")
-            generate_aneuploidy_plots(df, bin_stats_df, training_loss_df, output_dir)
+        print("\nLoading bin statistics and training loss for aneuploidy detection plots...")
+        bin_stats_df = pd.read_csv(args.bin_stats, sep="\t", compression="gzip")
+        training_loss_df = pd.read_csv(args.training_loss, sep="\t")
+        generate_aneuploidy_plots(df, bin_stats_df, training_loss_df, output_dir, args.skip_per_sample_plots)
     elif args.bin_stats or args.training_loss:
         print("\nWarning: Both --bin-stats and --training-loss are required for aneuploidy detection plots")
         print("Skipping aneuploidy detection plots...")
