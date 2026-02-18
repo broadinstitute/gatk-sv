@@ -1,6 +1,6 @@
 ARG UBUNTU_RELEASE="22.04"
 # available R releases listed here:  https://cdn.rstudio.com/r/versions.json
-ARG R_RELEASE_VERSION="4.1.3"
+ARG R_RELEASE_VERSION="4.5.0"
 ARG R_INSTALL_PATH=/opt/R
 ARG APT_REQUIRED_PACKAGES="/opt/apt-required-packages.list"
 
