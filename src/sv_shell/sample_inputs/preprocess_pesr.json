@@ -3,16 +3,16 @@
   "contigs": "/inputs/contig.fai",
   "dragen_vcfs": [],
   "manta_vcfs": [
-    "/inputs/NA12878.manta.vcf.gz"
+    "/intermediates/GatherBatchEvidence_inputs/NA12878.manta.vcf.gz"
   ],
   "min_svsize": 50,
   "samples": [
     "NA12878"
   ],
   "scramble_vcfs": [
-    "/inputs/NA12878.scramble.vcf.gz"
+    ""
   ],
   "wham_vcfs": [
-    "/inputs/NA12878.wham.vcf.gz"
+    "/intermediates/GatherBatchEvidence_inputs/NA12878.wham.vcf.gz"
   ]
 }

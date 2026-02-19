@@ -33,7 +33,7 @@ MergeEvidence() {
   printf "%s\n" "${_samples[@]}" > "${samples_file}"
 
   # Note that this piece has a few differences with the version in WDL.
-  #  - It does not support renaming or sub-setting contings are they are not needed for the single-sample pipeline.
+  #  - It does not support renaming or sub-setting contings as they are not needed for the single-sample pipeline.
   #  - It only indexes files if the file is missing an index.
   awk '/txt\.gz$/' "${evidence_file}" | while read fil; do
     if [ ! -f "${fil}.tbi" ]; then

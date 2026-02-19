@@ -60,24 +60,17 @@ rename_samples=$(jq -r ".rename_samples" "${input_json}")
 # make binned coverage matrix
 # ---------------------------------------------------------------------------------------------------------------------
 echo -e "${MAGENTA}Running make binned coverage matrix.${NC}"
-counts_files=("${sample_bincov_matrix}")
 make_bin_cov_matrix_inputs_json="$(realpath "${output_dir}/make_bincov_matrix_inputs.json")"
 make_bin_cov_matrix_outputs_json="$(realpath "${output_dir}/make_bincov_matrix_outputs.json")"
+
 jq -n \
-  --argfile s <(jq '.ref_panel_samples + .samples' "${input_json}") \
-  --arg c "${counts_files[*]}" \
-  --argfile r <(jq '.ref_panel_samples' "${input_json}") \
-  --arg b "${ref_panel_bincov_matrix}" \
-  --arg p "${reference_dict}" \
-  --arg t "${batch}" \
+  --slurpfile inputs "${input_json}" \
   '{
-      "samples": $s,
-      "count_files": ($c | split(" ")),
-      "bincov_matrix_samples": $r,
-      "bincov_matrix": $b,
-      "reference_dict": $p,
-      "batch": $t,
-      "skip_bin_size_filter": true
+      samples: ($inputs[0].samples + $inputs[0].ref_panel_samples),
+      count_files: ( $inputs[0].counts + [$inputs[0].ref_panel_bincov_matrix] ),
+      reference_dict: $inputs[0].reference_dict,
+      batch: $inputs[0].batch,
+      skip_bin_size_filter: false
   }' > "${make_bin_cov_matrix_inputs_json}"
 
 bash /opt/sv_shell/make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "${make_bin_cov_matrix_outputs_json}"
@@ -90,6 +83,7 @@ echo -e "${GREEN}Successfully finished make binned coverage matrix.${NC}"
 
 # ploidy estimation
 # ---------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
 echo -e "${MAGENTA}Running ploidy estimation.${NC}"
 ploidy_estimation_inputs_json="$(realpath "${output_dir}/ploidy_estimation_inputs.json")"
 ploidy_estimation_outputs_json="$(realpath "${output_dir}/ploidy_estimation_outputs.json")"
@@ -115,6 +109,7 @@ printf "%s\n" "${samples_batch[@]}" > "${samples_batch_file}"
 
 # validate PED file
 # ---------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
 echo -e "${MAGENTA}Validating, subsetting, and adding sample to PED file.${NC}"
 python /opt/sv-pipeline/scripts/validate_ped.py -p "${ped_file}" -s "${samples_batch_file}"
 
@@ -146,6 +141,7 @@ echo -e "${GREEN}Successfully finished Validating, subsetting, and adding sample
 
 # Batch evidence merging
 # ---------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
 echo -e "${MAGENTA}Starting batch evidence merging.${NC}"
 batch_evidence_merging_inputs_json="$(realpath "${output_dir}/batch_evidence_merging_inputs.json")"
 batch_evidence_merging_outputs_json="$(realpath "${output_dir}/batch_evidence_merging_outputs.json")"
@@ -184,6 +180,7 @@ echo -e "${GREEN}Successfully finished batch evidence merging.${NC}"
 
 # CNMOPS
 # ---------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
 echo -e "${MAGENTA}Starting cnMOPS.${NC}"
 cnmops_inputs_json="$(realpath "${output_dir}/cnmops_inputs.json")"
 cnmops_outputs_json="$(realpath "${output_dir}/cnmops_outputs.json")"
@@ -226,6 +223,7 @@ echo -e "${GREEN}Successfully finished running cnMOPS.${NC}"
 
 # CNMOPS Large
 # ---------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
 echo -e "${MAGENTA}Starting cnMOPS Large.${NC}"
 cnmops_large_inputs_json="$(realpath "${output_dir}/cnmops_large_inputs.json")"
 cnmops_large_outputs_json="$(realpath "${output_dir}/cnmops_large_outputs.json")"
@@ -273,7 +271,7 @@ echo -e "${GREEN}Successfully finished running cnMOPS Large.${NC}"
 # Note that the WDL version implements this as a for loop over all the 'samples' in the input;
 # however, since in the single-sample mode the 'samples' list contains one sample only,
 # for simplicity, the in the sv-shell version we're not implementing the loop.
-
+cd "${working_dir}"
 echo -e "${MAGENTA}Starting Condense Read Counts.${NC}"
 condense_read_counts_inputs_json="$(realpath "${output_dir}/condense_read_counts_inputs.json")"
 condense_read_counts_outputs_json="$(realpath "${output_dir}/condense_read_counts_outputs.json")"
@@ -298,7 +296,7 @@ echo -e "${GREEN}Successfully finished running Condense Read Counts.${NC}"
 
 # Merge Depth
 # ---------------------------------------------------------------------------------------------------------------------
-
+cd "${working_dir}"
 echo -e "${MAGENTA}Starting Merge Depth.${NC}"
 merge_depth_inputs_json="$(realpath "${output_dir}/merge_depth_inputs.json")"
 merge_depth_outputs_json="$(realpath "${output_dir}/mergge_depth_outputs.json")"
@@ -334,31 +332,19 @@ echo -e "${GREEN}Successfully finished running Merge Depth.${NC}"
 
 # Median Cov
 # ---------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
 echo -e "${MAGENTA}Starting Median Cov.${NC}"
-merged_median_cov="$(realpath "${working_dir}/merged_median_cov.bed")"
 
-paste -d'\t' \
-  $(jq -r ".ref_panel_median_cov" "${input_json}") \
-  $(jq -r ".sample_median_cov" "${input_json}") \
-  > "${merged_median_cov}"
-
-## zcat "${merged_median_cov}" > "${batch}_fixed.bed"
-# since the file is already unzipped, so just cp it as following to keep original untouched,
-# use the above if the file was gzipped.
-cp "${merged_median_cov}" "${batch}_fixed.bed"
-
-Rscript /opt/WGD/bin/medianCoverage.R "${batch}_fixed.bed" -H "${batch}_medianCov.bed"
-Rscript -e "x <- read.table(\"${batch}_medianCov.bed\",check.names=FALSE); xtransposed <- t(x[,c(1,2)]); write.table(xtransposed,file=\"${batch}_medianCov.transposed.bed\",sep=\"\\t\",row.names=F,col.names=F,quote=F)"
-
-output_median_cov="$(realpath "${batch}_medianCov.transposed.bed")"
+output_median_cov="$(realpath "${working_dir}/${batch}_medianCov.transposed.bed")"
+_ref_median_cov_file="$(jq -r ".ref_panel_median_cov" "${input_json}")"
+_sample_median_cov_file="$(jq -r ".sample_median_cov" "${input_json}")"
+paste -d'\t' "${_sample_median_cov_file}" "${_ref_median_cov_file}" > "${output_median_cov}"
 
 echo -e "${GREEN}Successfully finished running Median Cov.${NC}"
 
-
-
 # Preprocess PE/SR
 # ---------------------------------------------------------------------------------------------------------------------
-
+cd "${working_dir}"
 echo -e "${MAGENTA}Starting Preprocess PE/SR.${NC}"
 preprocess_pesr_inputs_json="$(realpath "${output_dir}/preprocess_pesr_inputs.json")"
 preprocess_pesr_outputs_json="$(realpath "${output_dir}/preprocess_pesr_outputs.json")"
@@ -394,6 +380,7 @@ echo -e "${GREEN}Successfully finished running Preprocess PE/SR.${NC}"
 # ======================= Output ========================
 # -------------------------------------------------------
 
+cd "${working_dir}"
 merged_BAF_task_out=$(jq -r ".merged_BAF" "${batch_evidence_merging_outputs_json}")
 merged_BAF="${output_dir}/$(basename "${merged_BAF_task_out}")"
 mv "${merged_BAF_task_out}" "${merged_BAF}"

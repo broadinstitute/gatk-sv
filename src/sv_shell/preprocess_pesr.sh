@@ -23,7 +23,7 @@ function StandardizeVCFs() {
 
   #  vcfs=(~{sep=" " raw_vcfs})
   #  sample_ids=(~{sep=" " samples})
-  num_samples="${#_samples[@]}"
+  num_samples="${#_raw_vcfs[@]}"
 
   mkdir out
   for (( i=0; i<"${num_samples}"; i++ ));
@@ -127,7 +127,7 @@ fi
 
 
 scramble_out_output=""
-if (( "${#manta_vcfs[@]}" > 0 )); then
+if (( "${#scramble_vcfs[@]}" > 0 )); then
   algorithm="scramble"
   prefix="${batch}.${algorithm}_std"
   working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_preprocess_pesr_scramble_XXXXXXXX)
