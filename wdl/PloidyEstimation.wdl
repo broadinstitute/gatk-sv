@@ -119,7 +119,7 @@ task PloidyScore {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 7.5,
+    mem_gb: 15,
     disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
