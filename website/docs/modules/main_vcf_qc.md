@@ -1,7 +1,7 @@
 ---
 title: MainVcfQC
 description: VCF QC plotting
-sidebar_position: 22
+sidebar_position: 24
 slug: mvqc
 ---
 

@@ -1840,6 +1840,7 @@
         "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/f7fec70e-f614-41d1-abd5-deeb21e323a7/TrainGCNV/f0a64fc8-c42c-4406-9970-2fdfe8aba41e/call-CNVGermlineCohortWorkflow/CNVGermlineCohortWorkflow/42f6613f-559c-447b-8257-28f49a24894d/call-GermlineCNVCallerCohortMode/shard-285/all_samples-gcnv-model-shard-285.tar.gz"
     ],
     "gcnv_model_tars_list": "gs://gatk-sv-ref-panel-1kg-v1-1/lists/ref_panel_1kg.gcnv_model_tars.list",
+    "gd_output_tarball": "TODO",
     "genotype_filtered_qc_tarball": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/65eee830-844a-449c-b946-c20ec43cf1ff/FilterGenotypes/8145f548-281f-441b-a007-57a3468a4520/call-MainVcfQc/MainVcfQc/e92551f5-ca75-41e7-a1e9-6b297d84bec5/call-SanitizeOutputs/all_batches.filter_genotypes_SV_VCF_QC_output.tar.gz",
     "genotype_filtered_vcf": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/65eee830-844a-449c-b946-c20ec43cf1ff/FilterGenotypes/8145f548-281f-441b-a007-57a3468a4520/call-SanitizeHeader/all_batches.filter_genotypes.sanitized.vcf.gz",
     "genotype_filtered_vcf_index": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/65eee830-844a-449c-b946-c20ec43cf1ff/FilterGenotypes/8145f548-281f-441b-a007-57a3468a4520/call-SanitizeHeader/all_batches.filter_genotypes.sanitized.vcf.gz.tbi",
@@ -1849,6 +1850,8 @@
     "genotyped_pesr_vcf_index": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/27d47462-8e97-455f-bddd-e48c141da7ae/GenotypeBatch/5112d586-f3cc-4a93-b4fb-3a3052853046/call-GenotypePESRPart2/GenotypePESRPart2/43b95738-fb08-45a1-a2ad-18f88f37988e/call-ConcatVcfs/all_samples.genotyped_pesr.vcf.gz.tbi",
     "gq_filtered_vcf": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/65eee830-844a-449c-b946-c20ec43cf1ff/FilterGenotypes/8145f548-281f-441b-a007-57a3468a4520/call-RecalibrateGq/RecalibrateGq/c5bc6874-05ff-4a21-84ca-334fb3680f2d/call-ConcatVcfs/all_batches.concordance.gq_recalibrated.vcf.gz",
     "gq_filtered_vcf_index": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/65eee830-844a-449c-b946-c20ec43cf1ff/FilterGenotypes/8145f548-281f-441b-a007-57a3468a4520/call-RecalibrateGq/RecalibrateGq/c5bc6874-05ff-4a21-84ca-334fb3680f2d/call-ConcatVcfs/all_batches.concordance.gq_recalibrated.vcf.gz.tbi",
+    "integrate_gd_vcf": "TODO",
+    "integrate_gd_vcf_index": "TODO",
     "joined_raw_calls_vcf": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/2ed878f4-1779-4672-9990-929a71eef6d5/JoinRawCalls/80507730-c211-4e62-9bf8-e89904fee11b/call-ConcatVcfs/all_batches.join_raw_calls.vcf.gz",
     "joined_raw_calls_vcf_index": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/2ed878f4-1779-4672-9990-929a71eef6d5/JoinRawCalls/80507730-c211-4e62-9bf8-e89904fee11b/call-ConcatVcfs/all_batches.join_raw_calls.vcf.gz.tbi",
     "manta_vcfs": [

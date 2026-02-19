@@ -80,7 +80,9 @@ task CollectCounts {
 task CondenseReadCounts {
   input {
     File counts
-    String sample
+    String? sample
+    String? output_prefix
+    File? sequence_dictionary
     Int? max_interval_size
     Int? min_interval_size
     File? gatk4_jar_override
@@ -90,10 +92,14 @@ task CondenseReadCounts {
     RuntimeAttr? runtime_attr_override
   }
 
+  Boolean input_is_matrix = basename(counts, ".rd.txt.gz") != basename(counts)
+  String output_suffix = if input_is_matrix then ".rd.txt.gz" else ".tsv.gz"
+  String output_name = "condensed_counts." + select_first([output_prefix, sample, "matrix"]) + output_suffix
+
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 3.0,
-    disk_gb: 10,
+    disk_gb: ceil(50.0 +  size(counts, "GB") * 3),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -101,24 +107,115 @@ task CondenseReadCounts {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    set -euo pipefail
+    set -euxo pipefail
     export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk4_jar_override}
 
-    zcat ~{counts} | grep '^@' | grep -v '@RG' > ref.dict
-    zcat ~{counts} | grep -v '^@' | sed -e 1d | \
-        awk 'BEGIN{FS=OFS="\t";print "#Chr\tStart\tEnd\tNA21133"}{print $1,$2-1,$3,$4}' | bgzip > in.rd.txt.gz 
+    counts_first_line=$(zcat ~{counts} | head -n 1 || true)
+    sample_override="~{default="" sample}"
+    provided_dict="~{default="" sequence_dictionary}"
+    emit_picard=false
+    output_sample_id=""
+    input_sample_count=0
+
+    if [[ "${counts_first_line}" == @* ]]; then
+      input_format="picard"
+      input_sample_count=1
+
+      if [[ -n "${provided_dict}" ]]; then
+        cp "${provided_dict}" ref.dict
+      else
+        zcat ~{counts} | grep '^@' | grep -v '^@RG' > ref.dict
+        if [[ ! -s ref.dict ]]; then
+          echo "ERROR: Picard-style counts require a sequence dictionary, but none was found in the input header and none was provided." >&2
+          exit 1
+        fi
+      fi
+
+      existing_sample_id=$(zcat ~{counts} | awk -F "\t" '/^@RG/ {
+          for (i = 1; i <= NF; ++i) {
+            if ($i ~ /^SM:/) {
+              sub(/^SM:/, "", $i)
+              print $i
+              exit
+            }
+          }
+        }')
+
+      output_sample_id="${existing_sample_id}"
+      emit_picard=true
+      if [[ -n "${sample_override}" ]]; then
+        output_sample_id="${sample_override}"
+      fi
+
+      zcat ~{counts} | \
+        awk -v sample_name="${output_sample_id}" 'BEGIN{FS=OFS="\t"; print "#Chr\tStart\tEnd\t" sample_name}
+             /^@/ {next}
+             $1 == "CONTIG" {next}
+             {print $1, $2-1, $3, $4}' | bgzip > in.rd.txt.gz
+    else
+      input_format="rd_matrix"
+
+      if [[ -z "${provided_dict}" ]]; then
+        echo "ERROR: .rd.txt.gz inputs require sequence_dictionary to be provided to CondenseReadCounts." >&2
+        exit 1
+      fi
+      cp "${provided_dict}" ref.dict
+
+      rd_header=$(zcat ~{counts} | head -n 1 || true)
+      input_sample_count=$(printf '%s\n' "${rd_header}" | awk -F "\t" '{print NF - 3}')
+      if (( input_sample_count < 1 )); then
+        echo "ERROR: Unable to determine sample columns from .rd.txt.gz header: ${rd_header}" >&2
+        exit 1
+      fi
+
+      if [[ -n "${sample_override}" && ${input_sample_count} -eq 1 ]]; then
+        output_sample_id="${sample_override}"
+      fi
+
+      zcat ~{counts} | \
+        awk -v sample_override="${sample_override}" 'BEGIN{FS=OFS="\t"}
+             NR == 1 {
+               if ($1 != "#Chr" && $1 != "Chr" && $1 != "CONTIG") {
+                 printf("ERROR: Unsupported .rd.txt.gz header: %s\n", $0) > "/dev/stderr"
+                 exit 1
+               }
+               $1 = "#Chr"
+               $2 = "Start"
+               $3 = "End"
+               if (sample_override != "" && NF == 4) {
+                 $4 = sample_override
+               }
+               print
+               next
+             }
+             {print}' | bgzip > in.rd.txt.gz
+    fi
+
     tabix -0 -s1 -b2 -e3 in.rd.txt.gz 
     gatk --java-options -Xmx2g CondenseDepthEvidence -F in.rd.txt.gz -O out.rd.txt.gz --sequence-dictionary ref.dict \
         --max-interval-size ~{default=2000 max_interval_size} --min-interval-size ~{default=101 min_interval_size}
-    cat ref.dict <(zcat out.rd.txt.gz | \
-        awk 'BEGIN{FS=OFS="\t";print "@RG\tID:GATKCopyNumber\tSM:~{sample}\nCONTIG\tSTART\tEND\tCOUNT"}{if(NR>1)print $1,$2+1,$3,$4}') | \
-        bgzip > condensed_counts.~{sample}.tsv.gz
+
+    if [[ "${emit_picard}" == true ]]; then
+      {
+        cat ref.dict
+        printf '@RG\tID:GATKCopyNumber\tSM:%s\n' "${output_sample_id}"
+        printf 'CONTIG\tSTART\tEND\tCOUNT\n'
+        zcat out.rd.txt.gz | \
+            awk 'BEGIN{FS=OFS="\t"}{if(NR>1)print $1,$2+1,$3,$4}'
+      } | bgzip > ~{output_name}
+    else
+      zcat out.rd.txt.gz | \
+          awk 'BEGIN{FS=OFS="\t"}
+               NR==1 {$1="#Chr"; $2="Start"; $3="End"; print; next}
+               {print}' | \
+          bgzip > ~{output_name}
+    fi
   >>>
 
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
@@ -127,7 +224,64 @@ task CondenseReadCounts {
   }
 
   output {
-    File out = "condensed_counts.~{sample}.tsv.gz"
+    File out = output_name
+  }
+}
+
+task CondenseReadCountsMatrix {
+  input {
+    File counts
+    String output_prefix
+    File sequence_dictionary
+    Int? max_interval_size
+    Int? min_interval_size
+    File? gatk4_jar_override
+
+    # Runtime parameters
+    String gatk_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String output_name = "condensed_counts." + output_prefix + ".rd.txt.gz"
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 3.0,
+    disk_gb: ceil(50.0 + size(counts, "GB") * 2),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euxo pipefail
+    export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk4_jar_override}
+
+    tabix -0 -s1 -b2 -e3 in.rd.txt.gz
+    gatk --java-options -Xmx2g CondenseDepthEvidence \
+      -F ~{counts} \
+      -O ~{output_name} \
+      --sequence-dictionary ~{sequence_dictionary} \
+      --max-interval-size ~{default=2000 max_interval_size} \
+      --min-interval-size ~{default=101 min_interval_size}
+
+  >>>
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: gatk_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
+  }
+
+  output {
+    File out = output_name
+    File out_index = output_name + ".tbi"
   }
 }
 

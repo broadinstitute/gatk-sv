@@ -24,6 +24,8 @@ import "SVConcordance.wdl" as svc
 import "SingleSampleFiltering.wdl" as SingleSampleFiltering
 import "GATKSVPipelineSingleSampleMetrics.wdl" as SingleSampleMetrics
 import "Utils.wdl" as utils
+import "CallGenomicDisorderCNVs.wdl" as CallGenomicDisorderCNVs
+import "IntegrateGDVcf.wdl" as IntegrateGDVcf
 import "Structs.wdl"
 
 # GATK SV Pipeline single sample mode
@@ -200,6 +202,36 @@ workflow GATKSVPipelineSingleSample {
     File ref_pesr_disc_files_list
     File ref_pesr_split_files_list
     File ref_pesr_sd_files_list
+
+    # Reference panel BAF for GD calling
+    File ref_panel_baf
+    File ref_panel_baf_index
+
+    # GD reference resources
+    File gd_table
+    File segdup_bed
+    File centromere_bed
+    File acrocentric_arm_bed
+    File custom_mask_bed
+    File hard_inclusion_bed
+    Array[File]? flank_exclusion_intervals
+    File par_bed
+    File gaps_bed
+    File gtf
+    File? truth_table
+    Int rebinned_interval_size = 10000
+    String? gd_preprocess_args
+    String? gd_infer_args
+    String? gd_call_args
+    String? gd_eval_args
+    String? gd_plot_args
+
+    ############################################################
+    ## GD VCF Integration
+    ############################################################
+
+    String? integrate_gd_args             # Optional extra CLI arguments for gatk-sv-gd integrate
+    RuntimeAttr? runtime_attr_integrate_gd # Runtime overrides for the integration task
 
     File? gatk4_jar_override
     Float? gcnv_p_alt
@@ -648,6 +680,18 @@ workflow GATKSVPipelineSingleSample {
   File case_sr_file_ = select_first([case_sr_file, GatherSampleEvidence.pesr_split])
   File case_sd_file_ = select_first([case_sd_file, GatherSampleEvidence.pesr_sd])
 
+  call ConcatBaf as ConcatBafCase {
+    input:
+      case_sd = case_sd_file_,
+      case_sd_index = case_sd_file_ + ".tbi",
+      sd_locs_vcf = sd_locs_vcf,
+      ref_panel_baf = ref_panel_baf,
+      ref_panel_baf_index = ref_panel_baf_index,
+      sample_id = sample_id,
+      batch = batch,
+      sv_pipeline_docker = sv_pipeline_docker
+  }
+
   call evidenceqc.EvidenceQC as EvidenceQC {
     input:
       batch=batch,
@@ -791,6 +835,55 @@ workflow GATKSVPipelineSingleSample {
   }
 
   File combined_ped_file = select_first([GatherBatchEvidence.combined_ped_file])
+
+  # Call GenomicDisorderCNVs with case + reference panel data
+  call CallGenomicDisorderCNVs.CallGenomicDisorderCNVs as GD {
+    input:
+      batch = batch,
+      baf_matrix = ConcatBafCase.merged_baf,
+      high_res_rd_matrix = GatherBatchEvidence.merged_bincov,
+      reference_dict = reference_dict,
+      reference_fasta = reference_fasta,
+      gd_table = gd_table,
+      segdup_bed = segdup_bed,
+      centromere_bed = centromere_bed,
+      acrocentric_arm_bed = acrocentric_arm_bed,
+      custom_mask_bed = custom_mask_bed,
+      hard_inclusion_bed = hard_inclusion_bed,
+      flank_exclusion_intervals = select_first([flank_exclusion_intervals, [segdup_bed]]),
+      par_bed = par_bed,
+      gaps_bed = gaps_bed,
+      gtf = gtf,
+      truth_table = truth_table,
+      rebinned_interval_size = rebinned_interval_size,
+      sv_pipeline_docker = sv_pipeline_docker,
+      gatk_docker = gatk_docker,
+      preprocess_args = gd_preprocess_args,
+      infer_args = gd_infer_args,
+      call_args = gd_call_args,
+      eval_args = gd_eval_args,
+      plot_args = gd_plot_args
+  }
+
+  # Integrate GD calls into the filtered VCF
+  if (defined(GD.gd_output_tarball)) {
+    call IntegrateGDVcf.IntegrateGDVcf as GDIntegrate {
+      input:
+        vcf = FilterSample.out,
+        vcf_index = FilterSample.out + ".tbi",
+        prefix = sample_id,
+        gd_output_tarballs = [GD.gd_output_tarball],
+        ploidy_tables = [CreatePloidyTableFromPed.out],
+        gd_table = gd_table,
+        par_bed = par_bed,
+        contig_list = primary_contigs_list,
+        sv_pipeline_docker = sv_pipeline_docker,
+        sv_base_mini_docker = sv_base_mini_docker,
+        integrate_args = integrate_gd_args,
+        runtime_attr_override_prepare = runtime_attr_integrate_gd,
+        runtime_attr_override_integrate = runtime_attr_integrate_gd
+    }
+  }
 
   if (use_stripy && !defined(case_stripy_file)) {
     call stripy.StripyWorkflow {
@@ -1431,7 +1524,7 @@ workflow GATKSVPipelineSingleSample {
 
   call annotate.AnnotateVcf {
     input:
-      vcf = FilterSample.out,
+      vcf = select_first([GDIntegrate.integrate_gd_vcf, FilterSample.out]),
       prefix = batch,
       contig_list = primary_contigs_list,
       protein_coding_gtf = protein_coding_gtf,
@@ -1525,5 +1618,65 @@ workflow GATKSVPipelineSingleSample {
     # in the case sample and do not match a depth-based call from the reference panel.
     File non_genotyped_unique_depth_calls = GetUniqueNonGenotypedDepthCalls.out
     File non_genotyped_unique_depth_calls_idx = GetUniqueNonGenotypedDepthCalls.out_idx
+
+    # Genomic Disorder CNV output (tarball containing all GD results)
+    File gd_output_tarball = GD.gd_output_tarball
+  }
+}
+
+task ConcatBaf {
+  input {
+    File case_sd
+    File case_sd_index
+    File sd_locs_vcf
+    File ref_panel_baf
+    File ref_panel_baf_index
+    String sample_id
+    String batch
+    String sv_pipeline_docker
+  }
+
+  output {
+    File merged_baf = "~{batch}.baf.txt.gz"
+    File merged_baf_index = "~{batch}.baf.txt.gz.tbi"
+  }
+
+  command <<<
+    set -euo pipefail
+
+    # Step 1: Estimate BAF from case SD file
+    # Merge-joins the SD file with the dbSNP loci VCF (both position-sorted)
+    # to compute ALT fraction without loading the VCF into memory
+    python /opt/sv-pipeline/scripts/baf_from_sd.py \
+      --sd-file "~{case_sd}" \
+      --sd-loci-vcf "~{sd_locs_vcf}" \
+      --sample-name "~{sample_id}" \
+      | bgzip > "~{sample_id}.baf.txt.gz"
+
+    # Index the case BAF file
+    tabix -f -0 -s1 -b2 -e2 "~{sample_id}.baf.txt.gz"
+
+    # Step 2: Merge case BAF + ref panel BAF using PrintSVEvidence
+    echo "~{sample_id}.baf.txt.gz" > evidence.list
+    echo "~{ref_panel_baf}" >> evidence.list
+
+    echo "~{sample_id}" > samples.list
+
+    /gatk/gatk --java-options "-Xmx2g" PrintSVEvidence \
+      -F evidence.list \
+      --sample-names samples.list \
+      -O "~{batch}.baf.txt.gz"
+
+    tabix -f -0 -s1 -b2 -e2 "~{batch}.baf.txt.gz"
+  >>>
+
+  runtime {
+    docker: sv_pipeline_docker
+    memory: "4 GB"
+    cpu: 2
+    disks: "local-disk 50 HDD"
+    preemptible: 3
+    maxRetries: 1
+    noAddress: true
   }
 }

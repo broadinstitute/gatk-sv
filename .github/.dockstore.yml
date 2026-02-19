@@ -240,6 +240,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_gd_external
       tags:
         - /.*/
 
@@ -267,5 +268,23 @@ workflows:
     filters:
       branches:
         - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: CallGenomicDisorderCNVs
+    primaryDescriptorPath: /wdl/CallGenomicDisorderCNVs.wdl
+    filters:
+      branches:
+        - mw_gd_external
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: IntegrateGDVcf
+    primaryDescriptorPath: /wdl/IntegrateGDVcf.wdl
+    filters:
+      branches:
+        - mw_gd_external
       tags:
         - /.*/
