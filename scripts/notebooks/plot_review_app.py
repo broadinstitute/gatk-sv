@@ -29,11 +29,13 @@ def display_statistics(manifest_file):
     
     total_reviews = len(manifest)
     correct_count = sum(1 for r in manifest.values() if r['classification'] == 'correct')
-    incorrect_count = total_reviews - correct_count
+    incorrect_count = sum(1 for r in manifest.values() if r['classification'] == 'incorrect')
+    unsure_count = sum(1 for r in manifest.values() if r['classification'] == 'unsure')
     
     print(f"Total reviews: {total_reviews}")
     print(f"Correct: {correct_count} ({correct_count/total_reviews*100:.1f}%)")
     print(f"Incorrect: {incorrect_count} ({incorrect_count/total_reviews*100:.1f}%)")
+    print(f"Unsure: {unsure_count} ({unsure_count/total_reviews*100:.1f}%)")
     print()
     
     # Subtype breakdown
@@ -181,7 +183,7 @@ class PlotReviewApp:
         chr_col = self._find_first_column(gd_regions_df, ["chr", "chrom", "chromosome"])
         start_col = self._find_first_column(gd_regions_df, ["start_GRCh38", "start", "start_hg38"])
         end_col = self._find_first_column(gd_regions_df, ["end_GRCh38", "end", "end_hg38"])
-        # gd_id_col = self._find_first_column(gd_regions_df, ["GD_ID", "gd_id", "gdid"]) # Not using GD_ID for lookup key due to format mismatch
+        gd_id_col = self._find_first_column(gd_regions_df, ["GD_ID", "gd_id", "gdid"])
         svtype_col = self._find_first_column(gd_regions_df, ["svtype", "SVTYPE"])
 
         cluster_col = self._find_first_column(gd_regions_df, ["cluster", "cluster_ID", "cluster_id"])
@@ -198,13 +200,20 @@ class PlotReviewApp:
                 chrom = self._normalize_chr(row[chr_col])
                 start = int(row[start_col])
                 end = int(row[end_col])
-                # gd_id = str(row[gd_id_col])
+                gd_id = str(row[gd_id_col]) if gd_id_col is not None else None
                 svtype = str(row[svtype_col])
             except Exception:
                 continue
 
+            # Get cluster value, fallback to GD_ID if cluster is NaN/None
+            cluster_value = None if cluster_col is None else row.get(cluster_col)
+            # Check if cluster is NaN (pd.isna handles None, NaN, etc.)
+            import pandas as pd
+            if cluster_value is None or pd.isna(cluster_value):
+                cluster_value = gd_id
+
             meta = {
-                "cluster": None if cluster_col is None else row.get(cluster_col),
+                "cluster": cluster_value,
                 "terminal": None if terminal_col is None else row.get(terminal_col),
                 "NAHR": None if nahr_col is None else row.get(nahr_col),
                 "svtype": svtype,
@@ -311,9 +320,14 @@ class PlotReviewApp:
             for plot_file in filtered_files:
                 is_reviewed = plot_file in self.manifest
                 if review_status == "Reviewed" and is_reviewed:
-                    temp_files.append(plot_file)
+                    # Exclude unsure reviews from "Reviewed"
+                    if self.manifest[plot_file].get("classification") != "unsure":
+                        temp_files.append(plot_file)
                 elif review_status == "Not Reviewed" and not is_reviewed:
                     temp_files.append(plot_file)
+                elif review_status == "Unsure" and is_reviewed:
+                    if self.manifest[plot_file].get("classification") == "unsure":
+                        temp_files.append(plot_file)
             filtered_files = temp_files
 
         # Apply Classification filter (only meaningful for reviewed plots)
@@ -372,8 +386,8 @@ class PlotReviewApp:
         )
 
         self.review_status_dropdown = widgets.Dropdown(
-            options=["All", "Reviewed", "Not Reviewed"],
-            value="All",
+            options=["All", "Reviewed", "Not Reviewed", "Unsure"],
+            value="Not Reviewed",
             description="Review Status:",
             layout=widgets.Layout(width="400px"),
         )
@@ -392,7 +406,25 @@ class PlotReviewApp:
         nahr_col = self._find_first_column(df, ["NAHR", "nahr"]) if df is not None else None
         svtype_col = self._find_first_column(df, ["svtype", "SVTYPE"]) if df is not None else None
 
-        cluster_options = self._unique_str_options(df[cluster_col]) if (df is not None and cluster_col is not None) else ["All"]
+        # Build cluster options including GD_IDs for rows with NaN cluster
+        if df is not None and cluster_col is not None:
+            import pandas as pd
+            gd_id_col = self._find_first_column(df, ["GD_ID", "gd_id", "gdid"])
+            cluster_values = []
+            for _, row in df.iterrows():
+                cluster_val = row.get(cluster_col)
+                if cluster_val is None or pd.isna(cluster_val):
+                    # Use GD_ID as fallback
+                    if gd_id_col is not None:
+                        gd_id = str(row.get(gd_id_col))
+                        if gd_id:
+                            cluster_values.append(gd_id)
+                else:
+                    cluster_values.append(str(cluster_val).strip())
+            cluster_options = ["All"] + sorted(set(v for v in cluster_values if v))
+        else:
+            cluster_options = ["All"]
+        
         terminal_options = self._unique_str_options(df[terminal_col]) if (df is not None and terminal_col is not None) else ["All"]
         nahr_options = self._unique_str_options(df[nahr_col]) if (df is not None and nahr_col is not None) else ["All"]
         svtype_options = self._unique_str_options(df[svtype_col]) if (df is not None and svtype_col is not None) else ["All", "DEL", "DUP"]
@@ -459,34 +491,43 @@ class PlotReviewApp:
             icon="times",
             layout=widgets.Layout(width='auto', min_width='150px')
         )
+        self.quick_unsure_button = widgets.Button(
+            description="Unsure",
+            button_style="warning",
+            icon="question",
+            layout=widgets.Layout(width='auto', min_width='150px')
+        )
         self.correct_in_cluster_button = widgets.Button(
             description="Pick correct for sample cluster",
             button_style="primary",
             icon="check-circle",
             layout=widgets.Layout(width='auto', min_width='230px')
         )
-        self.filter_to_sample_button = widgets.Button(
+        self.filter_to_sample_button = widgets.ToggleButton(
             description="Filter to sample",
             button_style="warning",
             icon="filter",
+            value=False,
             layout=widgets.Layout(width='auto', min_width='200px')
         )
-        self.filter_to_region_button = widgets.Button(
+        self.filter_to_region_button = widgets.ToggleButton(
             description="Filter to region",
             button_style="warning",
             icon="filter",
+            value=False,
             layout=widgets.Layout(width='auto', min_width='200px')
         )
-        self.filter_to_cluster_button = widgets.Button(
+        self.filter_to_cluster_button = widgets.ToggleButton(
             description="Filter to cluster",
             button_style="warning",
             icon="filter",
+            value=False,
             layout=widgets.Layout(width='auto', min_width='200px')
         )
 
         # Classification controls
         self.classification_radio = widgets.RadioButtons(
-            options=["correct", "incorrect"],
+            options=["correct", "incorrect", "unsure"],
             description="Classification:",
             disabled=False,
         )
@@ -514,6 +555,15 @@ class PlotReviewApp:
             description="Next →",
             button_style="info",
         )
+        self.prev_unreviewed_button = widgets.Button(
+            description="← Previous Unreviewed",
+            button_style="",
+            disabled=True,
+        )
+        self.next_unreviewed_button = widgets.Button(
+            description="Next Unreviewed →",
+            button_style="",
+        )
         self.submit_button = widgets.Button(
             description="Submit Review",
             button_style="success",
@@ -531,13 +581,16 @@ class PlotReviewApp:
         # Event handlers
         self.prev_button.on_click(self.on_prev)
         self.next_button.on_click(self.on_next)
+        self.prev_unreviewed_button.on_click(self.on_prev_unreviewed)
+        self.next_unreviewed_button.on_click(self.on_next_unreviewed)
         self.submit_button.on_click(self.on_submit)
         self.clear_review_button.on_click(self.on_clear_review)
         self.quick_correct_typical_button.on_click(self.on_quick_correct_typical)
         self.quick_incorrect_button.on_click(self.on_quick_incorrect)
-        self.filter_to_sample_button.on_click(self.on_filter_to_sample)
-        self.filter_to_region_button.on_click(self.on_filter_to_region)
-        self.filter_to_cluster_button.on_click(self.on_filter_to_cluster)
+        self.quick_unsure_button.on_click(self.on_quick_unsure)
+        self.filter_to_sample_button.observe(self.on_filter_to_sample, names='value')
+        self.filter_to_region_button.observe(self.on_filter_to_region, names='value')
+        self.filter_to_cluster_button.observe(self.on_filter_to_cluster, names='value')
         self.correct_in_cluster_button.on_click(self.on_correct_in_cluster)
         self.classification_radio.observe(self.on_classification_change, names="value")
         self.apply_filter_button.on_click(self.apply_filters)
@@ -547,18 +600,19 @@ class PlotReviewApp:
         quick_box = widgets.VBox(
             [
                 widgets.HTML("<b>Quick review:</b>"),
-                widgets.HBox([self.quick_correct_typical_button, self.quick_incorrect_button, self.correct_in_cluster_button]),
-                widgets.HBox([self.filter_to_sample_button, self.filter_to_region_button, self.filter_to_cluster_button]),
+                widgets.HBox([self.quick_correct_typical_button, self.quick_incorrect_button, self.quick_unsure_button, self.correct_in_cluster_button]),
             ]
         )
 
         nav_buttons = widgets.HBox([self.prev_button, self.next_button])
+        nav_unreviewed_buttons = widgets.HBox([self.prev_unreviewed_button, self.next_unreviewed_button])
         action_buttons = widgets.HBox([self.submit_button, self.clear_review_button])
         
         # Review controls
         self.review_controls = widgets.VBox(
             [
                 nav_buttons,
+                nav_unreviewed_buttons,
                 quick_box,
                 self.classification_radio,
                 self.subtype_dropdown,
@@ -571,6 +625,9 @@ class PlotReviewApp:
         self.filter_box = widgets.VBox(
             [
                 widgets.HTML("<h3>Filters</h3>"),
+                widgets.HTML("<b>Quick filters:</b>"),
+                widgets.HBox([self.filter_to_sample_button, self.filter_to_region_button, self.filter_to_cluster_button]),
+                widgets.HTML("<b>Manual filters:</b>"),
                 self.gd_filter_dropdown,
                 self.sample_filter_text,
                 widgets.HTML("<b>Region (GD table)</b>"),
@@ -624,49 +681,77 @@ class PlotReviewApp:
         self.classification_radio.value = "incorrect"
         self.on_submit(b)
 
-    def on_filter_to_sample(self, b):
-        """Filter to current sample."""
+    def on_quick_unsure(self, b):
+        """One-click submit: unsure."""
         if not self.plot_files:
             return
-        
-        current_file = self.plot_files[self.current_index]
-        plot_info = parse_filename(os.path.basename(current_file))
-        
-        if plot_info and "sample_id" in plot_info:
-            self.sample_filter_text.value = plot_info["sample_id"]
-            self.apply_filters()
+        self.classification_radio.value = "unsure"
+        self.on_submit(b)
 
-    def on_filter_to_region(self, b):
-        """Filter to current region (GD_ID)."""
+    def on_filter_to_sample(self, change):
+        """Toggle filter to current sample."""
         if not self.plot_files:
             return
         
-        current_file = self.plot_files[self.current_index]
-        plot_info = parse_filename(os.path.basename(current_file))
-        
-        if plot_info and "gd_id" in plot_info:
-            self.gd_filter_dropdown.value = plot_info["gd_id"]
-            self.apply_filters()
-
-    def on_filter_to_cluster(self, b):
-        """Filter to current cluster."""
-        if not self.plot_files:
-            return
-        
-        current_file = self.plot_files[self.current_index]
-        plot_info = parse_filename(os.path.basename(current_file))
-        
-        if not plot_info:
-            return
-        
-        plot_key = self._make_plot_key(plot_info)
-        meta = self.gd_meta_by_key.get(plot_key)
-        
-        if meta and meta.get("cluster") is not None:
-            cluster_value = str(meta.get("cluster")).strip()
-            if cluster_value in self.cluster_filter_dropdown.options:
-                self.cluster_filter_dropdown.value = cluster_value
+        if change['new']:  # Toggled on
+            current_file = self.plot_files[self.current_index]
+            plot_info = parse_filename(os.path.basename(current_file))
+            
+            if plot_info and "sample_id" in plot_info:
+                self.sample_filter_text.value = plot_info["sample_id"]
                 self.apply_filters()
+            else:
+                self.filter_to_sample_button.value = False  # Can't filter, so un-toggle
+        else:  # Toggled off
+            self.sample_filter_text.value = ""
+            self.apply_filters()
+
+    def on_filter_to_region(self, change):
+        """Toggle filter to current region (GD_ID)."""
+        if not self.plot_files:
+            return
+        
+        if change['new']:  # Toggled on
+            current_file = self.plot_files[self.current_index]
+            plot_info = parse_filename(os.path.basename(current_file))
+            
+            if plot_info and "gd_id" in plot_info:
+                self.gd_filter_dropdown.value = plot_info["gd_id"]
+                self.apply_filters()
+            else:
+                self.filter_to_region_button.value = False  # Can't filter, so un-toggle
+        else:  # Toggled off
+            self.gd_filter_dropdown.value = "All"
+            self.apply_filters()
+
+    def on_filter_to_cluster(self, change):
+        """Toggle filter to current cluster."""
+        if not self.plot_files:
+            return
+        
+        if change['new']:  # Toggled on
+            current_file = self.plot_files[self.current_index]
+            plot_info = parse_filename(os.path.basename(current_file))
+            
+            if not plot_info:
+                self.filter_to_cluster_button.value = False
+                return
+            
+            plot_key = self._make_plot_key(plot_info)
+            meta = self.gd_meta_by_key.get(plot_key)
+            
+            if meta and meta.get("cluster") is not None:
+                cluster_value = str(meta.get("cluster")).strip()
+                if cluster_value in self.cluster_filter_dropdown.options:
+                    self.cluster_filter_dropdown.value = cluster_value
+                    self.apply_filters()
+                else:
+                    self.filter_to_cluster_button.value = False  # Can't filter, so un-toggle
+            else:
+                self.filter_to_cluster_button.value = False  # Can't filter, so un-toggle
+        else:  # Toggled off
+            self.cluster_filter_dropdown.value = "All"
+            self.apply_filters()
 
     def _apply_filters_with_override(self, override_filter=None, override_value=None):
         """Apply current filters with one filter overridden. Returns count of matching files."""
@@ -750,9 +835,14 @@ class PlotReviewApp:
             for plot_file in filtered_files:
                 is_reviewed = plot_file in self.manifest
                 if review_status == "Reviewed" and is_reviewed:
-                    temp_files.append(plot_file)
+                    # Exclude unsure reviews from "Reviewed"
+                    if self.manifest[plot_file].get("classification") != "unsure":
+                        temp_files.append(plot_file)
                 elif review_status == "Not Reviewed" and not is_reviewed:
                     temp_files.append(plot_file)
+                elif review_status == "Unsure" and is_reviewed:
+                    if self.manifest[plot_file].get("classification") == "unsure":
+                        temp_files.append(plot_file)
             filtered_files = temp_files
 
         # Apply Classification filter
@@ -899,7 +989,8 @@ class PlotReviewApp:
         if current_file in self.manifest:
             del self.manifest[current_file]
             save_manifest(self.manifest, self.manifest_file)
-            self.update_display()
+            # Re-apply filters to update the plot list based on new review status
+            self.apply_filters()
 
     def update_display(self):
         """Update the display with current plot."""
@@ -912,6 +1003,32 @@ class PlotReviewApp:
                 display(widgets.HTML("<h2 style='color: orange;'>No plots match current filters!</h2>"))
             # Hide review controls but keep filters visible
             self.review_controls.layout.display = 'none'
+            
+            # Check if any quick filters are active and need to be reset
+            needs_reapply = False
+            
+            # Reset toggle button states and corresponding filter fields when no plots
+            if self.sample_filter_text.value != "":
+                self.sample_filter_text.value = ""
+                needs_reapply = True
+            self.filter_to_sample_button.value = False
+            self.filter_to_sample_button.description = "Filter to sample"
+            
+            if self.gd_filter_dropdown.value != "All":
+                self.gd_filter_dropdown.value = "All"
+                needs_reapply = True
+            self.filter_to_region_button.value = False
+            self.filter_to_region_button.description = "Filter to region"
+            
+            if self.cluster_filter_dropdown.value != "All":
+                self.cluster_filter_dropdown.value = "All"
+                needs_reapply = True
+            self.filter_to_cluster_button.value = False
+            self.filter_to_cluster_button.description = "Filter to cluster"
+            
+            # Reapply filters if we changed any filter values
+            if needs_reapply:
+                self.apply_filters()
             return
         
         # Show all controls
@@ -971,10 +1088,18 @@ class PlotReviewApp:
         # Parse filename
         plot_info = parse_filename(os.path.basename(current_file))
         if plot_info:
+            # Get NAHR status from metadata
+            plot_key = self._make_plot_key(plot_info)
+            meta = self.gd_meta_by_key.get(plot_key)
+            nahr_status = "Unknown"
+            if meta and meta.get("NAHR") is not None:
+                nahr_status = str(meta.get("NAHR"))
+            
             self.info_widget.value = f"""
             <div style='background-color: #f0f0f0; padding: 10px; border-radius: 5px; margin: 10px 0;'>
                 <b>Sample ID:</b> {plot_info['sample_id']}<br>
                 <b>GD ID:</b> {plot_info['gd_id']}<br>
+                <b>NAHR:</b> {nahr_status}<br>
                 <b>Region:</b> {plot_info['chr']}:{plot_info['start']}-{plot_info['end']}<br>
                 <b>SV Type:</b> {plot_info['svtype']}<br>
                 <b>File:</b> {os.path.basename(current_file)}
@@ -1019,6 +1144,12 @@ class PlotReviewApp:
         self.prev_button.disabled = self.current_index == 0
         self.next_button.disabled = self.current_index >= len(self.plot_files) - 1
         
+        # Update unreviewed navigation button states
+        has_prev_unreviewed = any(self.plot_files[i] not in self.manifest for i in range(0, self.current_index))
+        has_next_unreviewed = any(self.plot_files[i] not in self.manifest for i in range(self.current_index + 1, len(self.plot_files)))
+        self.prev_unreviewed_button.disabled = not has_prev_unreviewed
+        self.next_unreviewed_button.disabled = not has_next_unreviewed
+        
         # Update correct_in_cluster_button state
         if plot_info:
             other_cluster_plots = self._get_other_plots_in_cluster(current_file, plot_info)
@@ -1026,15 +1157,44 @@ class PlotReviewApp:
         else:
             self.correct_in_cluster_button.disabled = True
         
-        # Update filter button descriptions with counts
+        # Update filter button descriptions with counts and toggle states
         if plot_info:
             filter_counts = self._calculate_filter_counts(plot_info)
+            
+            # Update sample filter button
+            sample_id = plot_info.get('sample_id')
+            if sample_id and self.sample_filter_text.value == sample_id:
+                self.filter_to_sample_button.value = True
+            else:
+                self.filter_to_sample_button.value = False
             self.filter_to_sample_button.description = f"Filter to sample ({filter_counts['sample']})"
+            
+            # Update region filter button
+            gd_id = plot_info.get('gd_id')
+            if gd_id and self.gd_filter_dropdown.value == gd_id:
+                self.filter_to_region_button.value = True
+            else:
+                self.filter_to_region_button.value = False
             self.filter_to_region_button.description = f"Filter to region ({filter_counts['region']})"
+            
+            # Update cluster filter button
+            plot_key = self._make_plot_key(plot_info)
+            meta = self.gd_meta_by_key.get(plot_key)
+            if meta and meta.get('cluster') is not None:
+                cluster_value = str(meta.get('cluster')).strip()
+                if self.cluster_filter_dropdown.value == cluster_value:
+                    self.filter_to_cluster_button.value = True
+                else:
+                    self.filter_to_cluster_button.value = False
+            else:
+                self.filter_to_cluster_button.value = False
             self.filter_to_cluster_button.description = f"Filter to cluster ({filter_counts['cluster']})"
         else:
+            self.filter_to_sample_button.value = False
             self.filter_to_sample_button.description = "Filter to sample"
+            self.filter_to_region_button.value = False
             self.filter_to_region_button.description = "Filter to region"
+            self.filter_to_cluster_button.value = False
             self.filter_to_cluster_button.description = "Filter to cluster"
 
     def on_prev(self, b):
@@ -1048,6 +1208,22 @@ class PlotReviewApp:
         if self.current_index < len(self.plot_files) - 1:
             self.current_index += 1
             self.update_display()
+
+    def on_prev_unreviewed(self, b):
+        """Navigate to previous unreviewed plot."""
+        for i in range(self.current_index - 1, -1, -1):
+            if self.plot_files[i] not in self.manifest:
+                self.current_index = i
+                self.update_display()
+                return
+
+    def on_next_unreviewed(self, b):
+        """Navigate to next unreviewed plot."""
+        for i in range(self.current_index + 1, len(self.plot_files)):
+            if self.plot_files[i] not in self.manifest:
+                self.current_index = i
+                self.update_display()
+                return
 
     def on_submit(self, b):
         """Submit current review."""
@@ -1067,6 +1243,9 @@ class PlotReviewApp:
 
         if self.classification_radio.value == "correct":
             review["subtype"] = self.subtype_dropdown.value
+        elif self.classification_radio.value == "unsure":
+            # For unsure, we don't require subtype
+            pass
 
         if plot_info:
             review.update(plot_info)
@@ -1075,18 +1254,9 @@ class PlotReviewApp:
         self.manifest[current_file] = review
         save_manifest(self.manifest, self.manifest_file)
 
-        # Move to next unreviewed plot
-        found_next = False
-        for i in range(self.current_index + 1, len(self.plot_files)):
-            if self.plot_files[i] not in self.manifest:
-                self.current_index = i
-                found_next = True
-                break
-
-        if not found_next and self.current_index < len(self.plot_files) - 1:
-            self.current_index += 1
-
-        self.update_display()
+        # Re-apply filters to update the plot list based on new review status
+        # This will also reset current_index to 0
+        self.apply_filters()
 
     def display(self):
         """Display the app."""
