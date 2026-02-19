@@ -379,7 +379,7 @@ workflow MakeCohortVcf {
 
   call VcfQc.MainVcfQc {
     input:
-      vcfs=[CleanVcf.cleaned_vcf],
+      vcfs = [CleanVcf.cleaned_vcf],
       ped_file=ped_file,
       prefix="~{cohort_name}.cleaned",
       sv_per_shard=2500,

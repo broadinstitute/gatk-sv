@@ -102,6 +102,7 @@ inputs beyond their defaults.
 |`File`|`non_genotyped_unique_depth_calls_idx`|Index file for `non_genotyped_unique_depth_calls`|
 |`File`|`pre_cleanup_vcf`|VCF output in a representation used internally in the pipeline. This file is less compliant with the VCF spec and is intended for debugging purposes.|
 |`File`|`pre_cleanup_vcf_idx`|Index file for `pre_cleanup_vcf`|
+|`File`|`gd_output_tarball`|Tarball containing Genomic Disorder CNV calling results (VCFs, plots, metrics). Contains results for all samples in the combined matrix; case-specific results can be extracted by filtering on the case sample name.|
 
 #### Example time and cost run on sample data
 
@@ -131,3 +132,8 @@ suggested acceptable ranges.
 If a metric exceeds the recommended range, all variants will be automatically flagged with 
 a non-passing `FILTER` status in the output VCF.
 :::
+### Genomic Disorder CNV calling
+
+The single-sample pipeline runs [CallGenomicDisorderCNVs](/docs/modules/gd) to detect CNVs at known genomic
+disorder loci. See that module page for full details on inputs, outputs, reference resources, and how to
+disable GD calling.

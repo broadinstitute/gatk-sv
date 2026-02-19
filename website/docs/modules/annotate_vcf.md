@@ -1,7 +1,7 @@
 ---
 title: AnnotateVcf
 description: Annotate VCF
-sidebar_position: 21
+sidebar_position: 23
 slug: av
 ---
 
