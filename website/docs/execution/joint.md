@@ -83,15 +83,18 @@ cutoff for outlier filtration in `08-FilterBatchSamples`
 21. `18-SVConcordance`: Annotate genotype concordance with raw calls
 22. `19-ScoreGenotypes`: Scores genotypes to optimize GQ recalibrator model
 23. `19-FilterGenotypes`: Apply genotype filtering using GQ recalibrator model
-24. `20-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
+24. `20-CallGenomicDisorderCNVs`: Collect per-batch GD CNV calls from the batch-level [CallGenomicDisorderCNVs](/docs/modules/gd) outputs. Note: the per-batch `CallGenomicDisorderCNVs` runs are submitted independently after `04-GatherBatchEvidence` completes for each batch; this step collects those results.
+25. `21-IntegrateGDVcf`: Integrate GD CNV calls into the cohort VCF. See [IntegrateGDVcf](/docs/modules/igdv) for details.
+26. `22-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
 AF annotation with external population callsets
 
 Extra workflows (Not part of canonical pipeline, but included for your convenience. May require manual configuration):
 * `MainVcfQc`: Generate detailed call set QC plots
-* `PlotSVCountsPerSample`: Plot SV counts per sample per SV type. Recommended to run before `FilterOutlierSamples` 
+* `PlotSVCountsPerSample`: Plot SV counts per sample per SV type. Recommended to run before `FilterOutlierSamples`
   (configured with the single VCF you want to filter) to enable IQR cutoff choice.
 * `FilterOutlierSamples`: Filter outlier samples (in terms of SV counts) from a single VCF.
 * `VisualizeCnvs`: Plot multi-sample depth profiles for CNVs
+
 
 For detailed instructions on running the pipeline in Terra, see [workflow instructions](#instructions) below.
 
