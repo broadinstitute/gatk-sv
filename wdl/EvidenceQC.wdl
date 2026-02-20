@@ -284,7 +284,7 @@ task CreateVariantCountPlots {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_default])
 
   output {
-    File ploidy_plots = "${batch}.ploidy_est.tar.gz"
+    File ploidy_plots = "~{batch}_ploidy.tar.gz"
   }
 
   command <<<
@@ -305,7 +305,7 @@ task CreateVariantCountPlots {
       fi
     done
 
-    tar -czf ~{batch}.ploidy_est.tar.gz ./~{batch}_ploidy
+    tar -czf ~{batch}_ploidy.tar.gz ./~{batch}_ploidy
   >>>
 
   runtime {
