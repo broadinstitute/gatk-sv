@@ -261,7 +261,7 @@ class ProjectBuilder:
         # )
     }
     non_public_images = frozenset({"melt"})
-    images_built_by_all = frozenset(dependencies.keys()).difference({"melt"})
+    images_built_by_all = frozenset(dependencies.keys()).difference({"melt", "str"})
     accepted_target_values = frozenset(dependencies.keys()).union({"all"})
     latest_tag = "latest"
     local_reg_name = "local"
