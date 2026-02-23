@@ -1305,6 +1305,9 @@ class LocusBinMapping:
     locus: GDLocus
     interval_name: str
     array_idx: int  # Index in the combined depth tensor
+    chrom: str  # Chromosome
+    start: int  # Bin start position
+    end: int  # Bin end position
 
 
 def collect_all_locus_bins(
@@ -1390,6 +1393,9 @@ def collect_all_locus_bins(
                 locus=locus,
                 interval_name=assigned_interval,
                 array_idx=current_idx,
+                chrom=bin_row["Chr"],
+                start=int(bin_row["Start"]),
+                end=int(bin_row["End"]),
             ))
             current_idx += 1
 
@@ -1435,6 +1441,144 @@ def get_locus_interval_bins(
             interval_bins[mapping.interval_name] = []
         interval_bins[mapping.interval_name].append(mapping.array_idx)
     return interval_bins
+
+
+def write_posterior_tables(
+    combined_data: "DepthData",
+    map_estimates: dict,
+    cn_posterior: dict,
+    mappings: List[LocusBinMapping],
+    output_dir: str,
+):
+    """
+    Write comprehensive posterior tables to disk.
+    
+    Args:
+        combined_data: DepthData object with all bins
+        map_estimates: Dictionary with MAP estimates from model
+        cn_posterior: Dictionary with CN posterior probabilities
+        mappings: List of LocusBinMapping objects
+        output_dir: Output directory for tables
+    """
+    print("\n" + "=" * 80)
+    print("WRITING POSTERIOR TABLES")
+    print("=" * 80)
+    
+    # 1. Copy state probabilities for all bins and samples
+    print("\nWriting copy state posteriors...")
+    cn_post = np.asarray(cn_posterior["cn_posterior"]).squeeze()  # shape: (n_bins, n_samples, n_states)
+    cn_map = np.asarray(map_estimates["cn"]).squeeze()  # shape: (n_bins, n_samples)
+    depth = np.asarray(combined_data.depth.cpu().numpy())  # shape: (n_bins, n_samples)
+    
+    # Ensure proper dimensions
+    if cn_post.ndim == 2:
+        cn_post = cn_post.reshape(cn_post.shape[0], cn_post.shape[1], 1)
+    if cn_map.ndim == 1:
+        cn_map = cn_map.reshape(-1, 1)
+    if depth.ndim == 1:
+        depth = depth.reshape(-1, 1)
+    
+    cn_rows = []
+    for bin_idx in range(combined_data.n_bins):
+        mapping = mappings[bin_idx]
+        
+        for sample_idx, sample_id in enumerate(combined_data.sample_ids):
+            row = {
+                "cluster": mapping.cluster,
+                "interval": mapping.interval_name,
+                "chr": mapping.chrom,
+                "start": mapping.start,
+                "end": mapping.end,
+                "sample": sample_id,
+                "depth": depth[bin_idx, sample_idx].tolist() if isinstance(depth[bin_idx, sample_idx], np.ndarray) else float(depth[bin_idx, sample_idx]),
+            }
+            
+            # Add probability for each CN state
+            for cn_state in range(cn_post.shape[2]):
+                prob_val = cn_post[bin_idx, sample_idx, cn_state]
+                row[f"prob_cn_{cn_state}"] = prob_val.tolist() if isinstance(prob_val, np.ndarray) else float(prob_val)
+            
+            # Add MAP estimate
+            map_val = cn_map[bin_idx, sample_idx]
+            row["cn_map"] = int(map_val.tolist() if isinstance(map_val, np.ndarray) else map_val)
+            
+            cn_rows.append(row)
+    
+    cn_df = pd.DataFrame(cn_rows)
+    cn_output = os.path.join(output_dir, "cn_posteriors.tsv.gz")
+    cn_df.to_csv(cn_output, sep="\t", index=False, compression="gzip")
+    print(f"  Saved: {cn_output}")
+    print(f"  Rows: {len(cn_df):,} ({combined_data.n_bins:,} bins × {combined_data.n_samples} samples)")
+    
+    # 2. Sample-specific variable posteriors
+    print("\nWriting sample-specific variable posteriors...")
+    sample_rows = []
+    
+    # Convert to numpy array and squeeze extra dimensions
+    sample_var = np.asarray(map_estimates["sample_var"]).squeeze()
+    
+    # Ensure it's at least 1D
+    if sample_var.ndim == 0:
+        sample_var = sample_var.reshape(1)
+    
+    for sample_idx, sample_id in enumerate(combined_data.sample_ids):
+        var_val = sample_var[sample_idx]
+        row = {
+            "sample": sample_id,
+            "sample_var_map": var_val.tolist() if isinstance(var_val, np.ndarray) else float(var_val),
+        }
+        sample_rows.append(row)
+    
+    sample_df = pd.DataFrame(sample_rows)
+    sample_output = os.path.join(output_dir, "sample_posteriors.tsv.gz")
+    sample_df.to_csv(sample_output, sep="\t", index=False, compression="gzip")
+    print(f"  Saved: {sample_output}")
+    print(f"  Rows: {len(sample_df):,} ({combined_data.n_samples} samples)")
+    
+    # 3. Bin-specific variable posteriors
+    print("\nWriting bin-specific variable posteriors...")
+    bin_rows = []
+    
+    # Convert to numpy arrays and ensure proper shape
+    bin_bias = np.asarray(map_estimates["bin_bias"]).squeeze()
+    bin_var = np.asarray(map_estimates["bin_var"]).squeeze()
+    cn_probs = np.asarray(map_estimates["cn_probs"]).squeeze()
+    
+    # Ensure we have the right number of dimensions
+    if bin_bias.ndim == 0:
+        bin_bias = bin_bias.reshape(1)
+    if bin_var.ndim == 0:
+        bin_var = bin_var.reshape(1)
+    if cn_probs.ndim == 1:
+        cn_probs = cn_probs.reshape(-1, 1)
+    
+    for bin_idx in range(combined_data.n_bins):
+        mapping = mappings[bin_idx]
+        
+        row = {
+            "cluster": mapping.cluster,
+            "interval": mapping.interval_name,
+            "chr": mapping.chrom,
+            "start": mapping.start,
+            "end": mapping.end,
+            "bin_bias_map": bin_bias[bin_idx].tolist() if isinstance(bin_bias[bin_idx], np.ndarray) else float(bin_bias[bin_idx]),
+            "bin_var_map": bin_var[bin_idx].tolist() if isinstance(bin_var[bin_idx], np.ndarray) else float(bin_var[bin_idx]),
+        }
+        
+        # Add CN probability priors (per-bin learned from data)
+        for cn_state in range(cn_probs.shape[1]):
+            prob_val = cn_probs[bin_idx, cn_state]
+            row[f"cn_prior_{cn_state}"] = prob_val.tolist() if isinstance(prob_val, np.ndarray) else float(prob_val)
+        
+        bin_rows.append(row)
+    
+    bin_df = pd.DataFrame(bin_rows)
+    bin_output = os.path.join(output_dir, "bin_posteriors.tsv.gz")
+    bin_df.to_csv(bin_output, sep="\t", index=False, compression="gzip")
+    print(f"  Saved: {bin_output}")
+    print(f"  Rows: {len(bin_df):,} ({combined_data.n_bins:,} bins)")
+    
+    print("\n" + "=" * 80)
 
 
 def run_gd_analysis(
@@ -1518,6 +1662,15 @@ def run_gd_analysis(
         combined_data,
         n_samples=args.n_discrete_samples,
         log_freq=args.log_freq,
+    )
+
+    # Write comprehensive posterior tables
+    write_posterior_tables(
+        combined_data,
+        map_estimates,
+        cn_posterior,
+        mappings,
+        args.output_dir,
     )
 
     # Now map results back to individual loci and make calls

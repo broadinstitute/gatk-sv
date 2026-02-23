@@ -402,7 +402,7 @@ def plot_locus_overview(
     Args:
         locus: GDLocus object
         calls_df: DataFrame with CNV calls for this locus
-        depth_df: DataFrame with depth data
+        depth_df: DataFrame with depth data (from cn_posteriors)
         gtf: Optional GTFParser for gene annotations
         segdup: Optional SegDupAnnotation for segdup regions
         output_dir: Directory to save plots
@@ -438,10 +438,20 @@ def plot_locus_overview(
         (calls_df["is_carrier"])
     ]["sample"].unique()
 
-    # Create figure
-    fig_height = 4 + 0.4 * min(n_samples, 20)  # Scale with number of samples
-    fig, axes = plt.subplots(3, 1, figsize=(14, fig_height), 
-                              gridspec_kw={"height_ratios": [1, 4, 1]})
+    # Separate carriers and non-carriers
+    carrier_cols = [s for s in sample_cols if s in carriers]
+    non_carrier_cols = [s for s in sample_cols if s not in carriers]
+    n_carriers = len(carrier_cols)
+    n_non_carriers = len(non_carrier_cols)
+
+    # Create figure with 4 panels: annotations, carriers heatmap, non-carriers heatmap, mean depth
+    # Height ratios: scale heatmap heights by number of samples (capped at 6 inches each)
+    carrier_height = min(6, max(1, n_carriers * 0.15)) if n_carriers > 0 else 0.5
+    non_carrier_height = min(6, max(1, n_non_carriers * 0.15)) if n_non_carriers > 0 else 0.5
+    fig_height = 4 + carrier_height + non_carrier_height
+    
+    fig, axes = plt.subplots(4, 1, figsize=(14, fig_height), 
+                              gridspec_kw={"height_ratios": [1, carrier_height, non_carrier_height, 1]})
 
     # X-axis: genomic position
     bin_mids = (region_df["Start"].values + region_df["End"].values) / 2
@@ -456,7 +466,8 @@ def plot_locus_overview(
     # Draw breakpoint ranges as shaded regions
     for i, (bp_start, bp_end) in enumerate(locus.breakpoints):
         ax.axvspan(bp_start, bp_end, ymin=0.85, ymax=1.0, alpha=0.4, color="red", zorder=10)
-        ax.text((bp_start + bp_end) / 2, 0.925, f"BP{i+1}", ha="center", va="center", 
+        bp_name = locus.breakpoint_names[i] if i < len(locus.breakpoint_names) else str(i+1)
+        ax.text((bp_start + bp_end) / 2, 0.925, f"BP{bp_name}", ha="center", va="center", 
                 fontsize=7, fontweight="bold", color="darkred")
 
     # Draw breakpoint intervals
@@ -492,74 +503,138 @@ def plot_locus_overview(
 
     ax.set_yticks([])
 
-    # Panel 2: Depth heatmap across samples
+    # Panel 2: Carriers heatmap
     ax = axes[1]
-
-    # Create depth matrix
-    depth_matrix = region_df[sample_cols].values.T  # samples x bins
-
-    # Sort samples: carriers first
-    carrier_mask = np.array([s in carriers for s in sample_cols])
-    sort_idx = np.argsort(~carrier_mask)  # Carriers first
-    depth_matrix = depth_matrix[sort_idx]
-
-    # Plot heatmap
-    im = ax.imshow(depth_matrix, aspect="auto", cmap="RdBu_r",
-                   vmin=0, vmax=4, interpolation="nearest",
-                   extent=[region_start, region_end, n_samples, 0])
-
-    # Mark carriers section with dividing line and bracket
-    n_carriers = carrier_mask.sum()
-    if n_carriers > 0 and n_carriers < n_samples:
-        # Draw thin horizontal line separating carriers from non-carriers
-        # ax.axhline(n_carriers, color="black", linewidth=1, linestyle="-", zorder=10)
+    if n_carriers > 0:
+        # Create a mapping from genomic position to bin index
+        bin_starts = region_df["Start"].values
+        bin_ends = region_df["End"].values
         
-        # Add bracket on the left to label carriers section
-        # Use axes coordinates for positioning outside the plot
-        # Since y=0 is at TOP and y=n_samples is at BOTTOM in data coordinates,
-        # and carriers occupy rows 0 to n_carriers-1 (top of heatmap)
-        bracket_y_top = 1.0  # Top of axes (y=0 in data)
-        bracket_y_bottom = 1.0 - (n_carriers / n_samples)  # Bottom of carriers section
+        # Create dense matrix with NaN for missing bins
+        # Use a fixed bin size for the visualization
+        viz_bin_size = int(np.median(bin_ends - bin_starts))
+        n_viz_bins = int((region_end - region_start) / viz_bin_size) + 1
+        viz_matrix = np.full((n_carriers, n_viz_bins), np.nan)
         
-        # Draw bracket (left facing) in axes coordinates
-        bracket_x = -0.02  # Position to the left of the y-axis
-        bracket_width = 0.01
+        # Fill in actual data at correct positions
+        carrier_data = region_df[carrier_cols].values  # bins x carriers
+        for i, (start, end) in enumerate(zip(bin_starts, bin_ends)):
+            viz_start_idx = int((start - region_start) / viz_bin_size)
+            viz_end_idx = int((end - region_start) / viz_bin_size) + 1
+            # Assign data to all visualization bins covered by this real bin
+            for viz_idx in range(viz_start_idx, min(viz_end_idx, n_viz_bins)):
+                viz_matrix[:, viz_idx] = carrier_data[i, :]
         
-        # Top horizontal
-        ax.plot([bracket_x, bracket_x - bracket_width], [bracket_y_top, bracket_y_top], 
-                'k-', linewidth=1.5, transform=ax.transAxes, clip_on=False)
-        # Vertical
-        ax.plot([bracket_x - bracket_width, bracket_x - bracket_width], [bracket_y_top, bracket_y_bottom], 
-                'k-', linewidth=1.5, transform=ax.transAxes, clip_on=False)
-        # Bottom horizontal
-        ax.plot([bracket_x - bracket_width, bracket_x], [bracket_y_bottom, bracket_y_bottom], 
-                'k-', linewidth=1.5, transform=ax.transAxes, clip_on=False)
+        # Create colormap with white for NaN values
+        cmap = plt.cm.RdBu_r.copy()
+        cmap.set_bad(color='white')
         
-        # Add label in axes coordinates
-        ax.text(bracket_x - bracket_width - 0.01, (bracket_y_top + bracket_y_bottom) / 2, 
-                f"Carriers\n(n={n_carriers})", 
-                rotation=90, va="center", ha="right", fontsize=8, fontweight="bold",
-                transform=ax.transAxes)
+        im1 = ax.imshow(viz_matrix, aspect="auto", cmap=cmap,
+                       vmin=0, vmax=4, interpolation="nearest",
+                       extent=[region_start, region_end, n_carriers, 0])
+        
+        # Draw breakpoint ranges
+        # for i, (bp_start, bp_end) in enumerate(locus.breakpoints):
+        #     ax.axvline(bp_start, color="red", linestyle="-", alpha=1, zorder=5)
+        #     ax.axvline(bp_end, color="red", linestyle="-", alpha=1, zorder=5)
+        
+        ax.set_ylabel(f"Carriers (n={n_carriers})")
+        ax.set_yticks([])
+        ax.set_xticks([])
+        ax.set_xlim(region_start, region_end)
+        ax.set_ylim(0, n_carriers)
+    else:
+        ax.axis('off')
+        ax.text(0.5, 0.5, 'No carriers', ha='center', va='center', transform=ax.transAxes)
 
-    # Draw breakpoint ranges
-    for i, (bp_start, bp_end) in enumerate(locus.breakpoints):
-        ax.axvspan(bp_start, bp_end, alpha=0.1, color="red", zorder=5)
-
-    ax.set_ylabel(f"Samples (n={n_samples})")
-    ax.set_yticks([])
-
-    # Add colorbar below the plot
-    cbar = plt.colorbar(im, ax=ax, orientation='horizontal', pad=0.08, aspect=40)
-    cbar.set_label("Copy Number")
-
-    # Panel 3: Mean depth profile with carrier/non-carrier separation
+    # Panel 3: Non-carriers heatmap
     ax = axes[2]
+    if n_non_carriers > 0:
+        # Create a mapping from genomic position to bin index
+        bin_starts = region_df["Start"].values
+        bin_ends = region_df["End"].values
+        
+        # Create dense matrix with NaN for missing bins
+        viz_bin_size = int(np.median(bin_ends - bin_starts))
+        n_viz_bins = int((region_end - region_start) / viz_bin_size) + 1
+        viz_matrix = np.full((n_non_carriers, n_viz_bins), np.nan)
+        
+        # Fill in actual data at correct positions
+        non_carrier_data = region_df[non_carrier_cols].values  # bins x non_carriers
+        for i, (start, end) in enumerate(zip(bin_starts, bin_ends)):
+            viz_start_idx = int((start - region_start) / viz_bin_size)
+            viz_end_idx = int((end - region_start) / viz_bin_size) + 1
+            # Assign data to all visualization bins covered by this real bin
+            for viz_idx in range(viz_start_idx, min(viz_end_idx, n_viz_bins)):
+                viz_matrix[:, viz_idx] = non_carrier_data[i, :]
+        
+        # Create colormap with white for NaN values
+        cmap = plt.cm.RdBu_r.copy()
+        cmap.set_bad(color='white')
+        
+        im2 = ax.imshow(viz_matrix, aspect="auto", cmap=cmap,
+                       vmin=0, vmax=4, interpolation="nearest",
+                       extent=[region_start, region_end, n_non_carriers, 0])
+        
+        # Draw breakpoint ranges
+        # for i, (bp_start, bp_end) in enumerate(locus.breakpoints):
+        #     ax.axvline(bp_start, color="red", linestyle="-", alpha=1, zorder=5)
+        #     ax.axvline(bp_end, color="red", linestyle="-", alpha=1, zorder=5)
+        
+        ax.set_ylabel(f"Non-carriers (n={n_non_carriers})")
+        ax.set_yticks([])
+        ax.set_xlim(region_start, region_end)
+        ax.set_ylim(0, n_non_carriers)
+        ax.set_xlabel(f"Position on {chrom}")
+        
+        # Add colorbar below non-carriers heatmap
+        cbar = plt.colorbar(im2, ax=ax, orientation='horizontal', pad=0.08, aspect=40)
+        cbar.set_label("Normalized read depth")
+    else:
+        ax.axis('off')
+        ax.text(0.5, 0.5, 'No non-carriers', ha='center', va='center', transform=ax.transAxes)
+
+    # Panel 4: Mean depth profile with carrier/non-carrier separation
+    ax = axes[3]
+    
+    # Detect gaps in bins and insert NaN to prevent interpolation
+    bin_starts = region_df["Start"].values
+    bin_ends = region_df["End"].values
+    
+    # Create arrays with NaN inserted at gaps
+    plot_positions = []
+    plot_depth_dict = {}  # Will store depth arrays for each group
+    
+    # Determine typical bin spacing
+    bin_spacing = np.median(bin_starts[1:] - bin_ends[:-1])
+    gap_threshold = 3 * bin_spacing  # Consider it a gap if spacing is 3x typical
+    
+    # Build position array with NaN markers at gaps
+    for i in range(len(bin_starts)):
+        plot_positions.append(bin_mids[i])
+        if i < len(bin_starts) - 1:
+            # Check if there's a gap before next bin
+            gap_size = bin_starts[i + 1] - bin_ends[i]
+            if gap_size > gap_threshold:
+                # Insert NaN marker
+                plot_positions.append(np.nan)
+    
+    plot_positions = np.array(plot_positions)
 
     # Calculate mean depth for carriers and non-carriers
     if n_carriers > 0 and n_carriers < n_samples:
-        # Plot non-carriers
-        non_carrier_depths = region_df[[s for s in sample_cols if s not in carriers]].mean(axis=1)
-        ax.plot(bin_mids, non_carrier_depths.values, "b-", linewidth=1, alpha=0.7,
+        # Plot non-carriers with gaps
+        non_carrier_depths = region_df[[s for s in sample_cols if s not in carriers]].mean(axis=1).values
+        plot_depths = []
+        j = 0
+        for pos in plot_positions:
+            if np.isnan(pos):
+                plot_depths.append(np.nan)
+            else:
+                plot_depths.append(non_carrier_depths[j])
+                j += 1
+        
+        ax.plot(plot_positions, plot_depths, "b-", linewidth=1, alpha=0.7,
                label=f"Non-carriers (n={n_samples - n_carriers})")
         
         # Group carriers by SV type and breakpoint combination
@@ -602,16 +677,26 @@ def plot_locus_overview(
             valid_samples = [s for s in group_samples if s in sample_cols]
             
             if len(valid_samples) > 0:
-                group_depths = region_df[valid_samples].mean(axis=1)
+                group_depths_raw = region_df[valid_samples].mean(axis=1).values
+                
+                # Insert NaN at gaps
+                plot_depths = []
+                j = 0
+                for pos in plot_positions:
+                    if np.isnan(pos):
+                        plot_depths.append(np.nan)
+                    else:
+                        plot_depths.append(group_depths_raw[j])
+                        j += 1
                 
                 # Only plot if there's actual data
-                if len(group_depths) > 0 and not group_depths.isna().all():
+                if len(plot_depths) > 0 and not all(np.isnan(plot_depths)):
                     # Choose color based on svtype
                     if svtype == "DEL":
                         color = del_colors[color_idx % len(del_colors)]
                     else:  # DUP
                         color = dup_colors[color_idx % len(dup_colors)]
-                    ax.plot(bin_mids, group_depths.values, "-", linewidth=1.5, alpha=0.8,
+                    ax.plot(plot_positions, plot_depths, "-", linewidth=1.5, alpha=0.8,
                            color=color, label=f"{svtype} {bp_interval} (n={len(valid_samples)})")
                     color_idx += 1
                     plotted_any = True
@@ -621,19 +706,32 @@ def plot_locus_overview(
             ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.35), 
                      ncol=6, fontsize=8, frameon=True, fancybox=True)
     else:
-        mean_depth = region_df[sample_cols].mean(axis=1)
-        ax.plot(bin_mids, mean_depth.values, "b-", linewidth=1.5)
+        mean_depth_raw = region_df[sample_cols].mean(axis=1).values
+        
+        # Insert NaN at gaps
+        plot_depths = []
+        j = 0
+        for pos in plot_positions:
+            if np.isnan(pos):
+                plot_depths.append(np.nan)
+            else:
+                plot_depths.append(mean_depth_raw[j])
+                j += 1
+        
+        ax.plot(plot_positions, plot_depths, "b-", linewidth=1.5)
 
     # Draw breakpoint ranges
     for i, (bp_start, bp_end) in enumerate(locus.breakpoints):
+        ax.axvline(bp_start, color="red", linestyle="-", alpha=1, zorder=5)
+        ax.axvline(bp_end, color="red", linestyle="-", alpha=1, zorder=5)
         ax.axvspan(bp_start, bp_end, alpha=0.1, color="red", zorder=0)
 
     ax.axhline(2.0, color="gray", linestyle=":", alpha=0.5)
     ax.set_xlim(region_start, region_end)
     ax.set_ylim(0, 4)
     ax.set_xlabel(f"Position on {chrom}")
-    ax.set_ylabel("Mean CN")
-    ax.grid(True, alpha=0.3)
+    ax.set_ylabel("Mean norm read depth")
+    ax.grid(True, alpha=0.3, axis='y')
 
     plt.tight_layout()
 
@@ -870,7 +968,7 @@ def create_carrier_pdf(
 
     Args:
         calls_df: DataFrame with CNV calls
-        depth_df: DataFrame with depth data
+        depth_df: DataFrame with depth data (from cn_posteriors)
         gd_table: GDTable with locus definitions
         gtf: Optional GTFParser
         segdup: Optional SegDupAnnotation
@@ -1044,9 +1142,9 @@ def parse_args():
         help="GD CNV calls file (gd_cnv_calls.tsv.gz)",
     )
     parser.add_argument(
-        "--depth-data", "-d",
+        "--cn-posteriors",
         required=True,
-        help="Binned read depth data (TSV)",
+        help="CN posteriors file (cn_posteriors.tsv.gz) with depth values",
     )
     parser.add_argument(
         "--gd-table", "-g",
@@ -1103,12 +1201,20 @@ def main():
     calls_df = pd.read_csv(args.calls, sep="\t", compression="infer")
     print(f"    {len(calls_df)} call records")
 
-    print(f"  Loading depth data: {args.depth_data}")
-    depth_df = pd.read_csv(args.depth_data, sep="\t", compression="infer")
-    if "#Chr" in depth_df.columns:
-        depth_df["Chr"] = depth_df["#Chr"]
-        depth_df = depth_df.drop("#Chr", axis=1)
-    print(f"    {len(depth_df)} bins")
+    print(f"  Loading CN posteriors: {args.cn_posteriors}")
+    cn_posteriors_df = pd.read_csv(args.cn_posteriors, sep="\t", compression="infer")
+    print(f"    {len(cn_posteriors_df)} bin-sample records")
+    
+    # Convert cn_posteriors to depth_df format (bins x samples matrix)
+    print("  Converting posteriors to depth matrix format...")
+    depth_df = cn_posteriors_df.pivot_table(
+        index=["chr", "start", "end"],
+        columns="sample",
+        values="depth",
+        aggfunc="first"
+    ).reset_index()
+    depth_df = depth_df.rename(columns={"chr": "Chr", "start": "Start", "end": "End"})
+    print(f"    {len(depth_df)} bins x {len([c for c in depth_df.columns if c not in ['Chr', 'Start', 'End']])} samples")
 
     print(f"  Loading GD table: {args.gd_table}")
     gd_table = GDTable(args.gd_table)
@@ -1124,16 +1230,6 @@ def main():
     if args.segdup_bed:
         print(f"  Loading segdup BED: {args.segdup_bed}")
         segdup = SegDupAnnotation(args.segdup_bed)
-
-    # Normalize depth data
-    print("\nNormalizing depth data...")
-    sample_cols = get_sample_columns(depth_df)
-    autosome_mask = ~depth_df["Chr"].isin(["chrX", "chrY"])
-    if autosome_mask.any():
-        column_medians = np.median(depth_df.loc[autosome_mask, sample_cols], axis=0)
-    else:
-        column_medians = np.median(depth_df[sample_cols], axis=0)
-    depth_df[sample_cols] = 2.0 * depth_df[sample_cols] / column_medians[np.newaxis, :]
 
     # Create summary plots
     print("\nCreating summary plots...")
