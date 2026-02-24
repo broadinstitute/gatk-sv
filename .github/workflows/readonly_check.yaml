@@ -20,7 +20,7 @@ jobs:
       id: changed-files
       run: |
         # xref: https://stackoverflow.com/a/74268200
-        if ${{ github.event_name == 'pull_request' }}; then
+        if [ "${{ github.event_name }}" == "pull_request" ]; then
           echo "changed_files=$(git diff --name-only -r HEAD^1 HEAD | xargs)" >> $GITHUB_OUTPUT
         else
           echo "changed_files=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | xargs)" >> $GITHUB_OUTPUT
