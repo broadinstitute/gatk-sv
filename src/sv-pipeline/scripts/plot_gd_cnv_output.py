@@ -24,7 +24,6 @@ import argparse
 import gzip
 import os
 import re
-from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -34,139 +33,13 @@ import matplotlib.patches as mpatches
 from matplotlib.backends.backend_pdf import PdfPages
 import seaborn as sns
 
+# Import GDLocus and GDTable from gd_cnv_pyro.py to avoid duplication
+from gd_cnv_pyro import GDLocus, GDTable
+
 
 # =============================================================================
 # Data Loading Classes
 # =============================================================================
-
-@dataclass
-class GDLocus:
-    """Represents a genomic disorder locus with its breakpoints."""
-    cluster: str
-    chrom: str
-    breakpoints: List[Tuple[int, int]]  # List of breakpoint ranges (start, end)
-    breakpoint_names: List[str]  # Names of breakpoints (e.g., ['1', '2', '3'] or ['A', 'B', 'C'])
-    gd_entries: List[dict]
-    is_nahr: bool
-    is_terminal: bool
-
-    @property
-    def start(self) -> int:
-        """Get overall start position (min of all breakpoint starts)."""
-        return min(bp[0] for bp in self.breakpoints)
-
-    @property
-    def end(self) -> int:
-        """Get overall end position (max of all breakpoint ends)."""
-        return max(bp[1] for bp in self.breakpoints)
-
-    def get_intervals(self) -> List[Tuple[int, int, str]]:
-        """Get all intervals between adjacent breakpoints."""
-        intervals = []
-        for i in range(len(self.breakpoints) - 1):
-            # Interval spans from end of BP_i to start of BP_{i+1}
-            start = self.breakpoints[i][1]  # End of current breakpoint
-            end = self.breakpoints[i + 1][0]  # Start of next breakpoint
-            # Use actual breakpoint names from the table
-            interval_name = f"{self.breakpoint_names[i]}-{self.breakpoint_names[i + 1]}"
-            intervals.append((start, end, interval_name))
-        return intervals
-
-
-class GDTable:
-    """Parser for GD locus definitions."""
-
-    def __init__(self, filepath: str):
-        self.df = pd.read_csv(filepath, sep="\t")
-        self._validate_columns()
-        self.loci = self._parse_loci()
-
-    def _validate_columns(self):
-        """Validate required columns exist."""
-        required_cols = ["chr", "start_GRCh38", "end_GRCh38", "GD_ID", "svtype",
-                         "NAHR", "terminal", "cluster", "BP1", "BP2"]
-        missing = set(required_cols) - set(self.df.columns)
-        if missing:
-            raise ValueError(f"Missing required columns in GD table: {missing}")
-
-    def _parse_loci(self) -> Dict[str, GDLocus]:
-        """Parse GD table into loci with breakpoint ranges using BP1 and BP2 columns."""
-        loci = {}
-        for _, row in self.df.iterrows():
-            cluster = row["cluster"]
-            
-            # Skip entries without a cluster (standalone regions)
-            if pd.isna(cluster) or cluster == "":
-                continue
-
-            if cluster not in loci:
-                loci[cluster] = {
-                    "chrom": row["chr"],
-                    "breakpoint_coords": {},  # Dict mapping BP name to list of coordinates
-                    "entries": [],
-                    "is_nahr": row["NAHR"] == "yes",
-                    "is_terminal": row["terminal"] != "no" if pd.notna(row["terminal"]) else False,
-                }
-
-            # Get breakpoint names from BP1 and BP2 columns
-            bp1 = row["BP1"]
-            bp2 = row["BP2"]
-            
-            # Skip if BP1 or BP2 is missing
-            if pd.isna(bp1) or pd.isna(bp2):
-                continue
-            
-            # Convert to strings for consistent handling
-            bp1 = str(bp1)
-            bp2 = str(bp2)
-            
-            # Track coordinates for each breakpoint
-            if bp1 not in loci[cluster]["breakpoint_coords"]:
-                loci[cluster]["breakpoint_coords"][bp1] = []
-            if bp2 not in loci[cluster]["breakpoint_coords"]:
-                loci[cluster]["breakpoint_coords"][bp2] = []
-            
-            loci[cluster]["breakpoint_coords"][bp1].append(row["start_GRCh38"])
-            loci[cluster]["breakpoint_coords"][bp2].append(row["end_GRCh38"])
-
-            loci[cluster]["entries"].append({
-                "GD_ID": row["GD_ID"],
-                "start_GRCh38": row["start_GRCh38"],
-                "end_GRCh38": row["end_GRCh38"],
-                "svtype": row["svtype"],
-                "BP1": bp1,
-                "BP2": bp2,
-            })
-
-        result = {}
-        for cluster, data in loci.items():
-            # Convert breakpoint coordinates to ranges
-            bp_ranges = []
-            
-            # Sort breakpoint names (numeric if possible, otherwise alphabetic)
-            def sort_key(bp_name):
-                try:
-                    return (0, int(bp_name))
-                except ValueError:
-                    return (1, bp_name)
-            
-            bp_names_sorted = sorted(data["breakpoint_coords"].keys(), key=sort_key)
-            
-            for bp_name in bp_names_sorted:
-                coords = data["breakpoint_coords"][bp_name]
-                bp_range = (min(coords), max(coords))
-                bp_ranges.append(bp_range)
-            
-            result[cluster] = GDLocus(
-                cluster=cluster,
-                chrom=data["chrom"],
-                breakpoints=bp_ranges,
-                breakpoint_names=bp_names_sorted,
-                gd_entries=data["entries"],
-                is_nahr=data["is_nahr"],
-                is_terminal=data["is_terminal"],
-            )
-        return result
 
 
 class GTFParser:
@@ -305,12 +178,461 @@ class SegDupAnnotation:
 
 
 # =============================================================================
+# CNV Calling Functions
+# =============================================================================
+
+def get_locus_interval_bins(
+    bin_mappings_df: pd.DataFrame,
+    cluster: str,
+) -> Dict[str, List[int]]:
+    """
+    Get bin indices for each interval in a specific locus.
+    
+    Args:
+        bin_mappings_df: DataFrame with bin-to-interval mappings
+        cluster: Cluster name to filter by
+    
+    Returns:
+        Dict mapping interval name to list of bin indices (array_idx from posteriors)
+    """
+    locus_bins = bin_mappings_df[bin_mappings_df["cluster"] == cluster]
+    interval_bins = {}
+    for interval_name, group in locus_bins.groupby("interval"):
+        # Use array_idx directly - this is the index in the posterior arrays
+        interval_bins[interval_name] = group.index.tolist()
+    return interval_bins
+
+
+def compute_interval_cn_stats(
+    cn_posteriors_df: pd.DataFrame,
+    interval_bins: Dict[str, List[int]],
+    sample_id: str,
+) -> Dict[str, dict]:
+    """
+    Compute copy number statistics for each interval for a specific sample.
+    
+    Args:
+        cn_posteriors_df: DataFrame with CN posterior probabilities (indexed by bin position)
+        interval_bins: Dict mapping interval name to bin row indices in posteriors DataFrame
+        sample_id: Sample identifier
+    
+    Returns:
+        Dict mapping interval name to CN statistics
+    """
+    result = {}
+    
+    # Filter posteriors to this sample
+    sample_posteriors = cn_posteriors_df[cn_posteriors_df["sample"] == sample_id]
+    
+    # Get probability columns (prob_cn_0, prob_cn_1, etc.)
+    prob_cols = [c for c in sample_posteriors.columns if c.startswith("prob_cn_")]
+    n_states = len(prob_cols)
+    
+    for interval_name, bin_indices in interval_bins.items():
+        # Get bins for this interval
+        interval_data = sample_posteriors.iloc[bin_indices]
+        
+        if len(interval_data) == 0:
+            result[interval_name] = {
+                "n_bins": 0,
+                "cn_probs": np.zeros(n_states),
+            }
+            continue
+        
+        # Average posterior probabilities across bins
+        mean_probs = interval_data[prob_cols].mean(axis=0).values
+        
+        result[interval_name] = {
+            "n_bins": len(interval_data),
+            "cn_probs": mean_probs,
+        }
+    
+    return result
+
+
+def call_gd_cnv(
+    locus: GDLocus,
+    interval_stats: Dict[str, dict],
+    log_prob_threshold: float = -0.5,
+    flanking_log_prob_threshold: float = -1.0,
+) -> List[dict]:
+    """
+    Call GD CNVs based on interval copy number statistics.
+    
+    For each GD entry in the locus (each DEL/DUP definition), check if the
+    copy number in the corresponding region supports a CNV call.
+    
+    Args:
+        locus: GDLocus object
+        interval_stats: Dict mapping interval name to CN statistics
+        log_prob_threshold: Minimum log probability score to call a CNV
+        flanking_log_prob_threshold: Minimum log probability score in flanking regions to classify as spanning
+    
+    Returns:
+        List of CNV call dictionaries
+    """
+    calls = []
+    
+    for entry in locus.gd_entries:
+        gd_id = entry["GD_ID"]
+        svtype = entry["svtype"]
+        gd_start = entry["start_GRCh38"]
+        gd_end = entry["end_GRCh38"]
+        bp1 = entry["BP1"]
+        bp2 = entry["BP2"]
+        
+        # Determine which intervals this entry spans using BP1 and BP2
+        all_intervals = locus.get_intervals()  # List of (start, end, name) tuples
+        
+        # Build breakpoint ordering from interval names
+        bp_order = []
+        for _, _, interval_name in all_intervals:
+            parts = interval_name.split("-")
+            if len(parts) == 2:
+                if parts[0] not in bp_order:
+                    bp_order.append(parts[0])
+                if parts[1] not in bp_order:
+                    bp_order.append(parts[1])
+        
+        # Find positions of BP1 and BP2 in the ordering
+        try:
+            pos1 = bp_order.index(bp1)
+            pos2 = bp_order.index(bp2)
+        except ValueError:
+            continue
+        
+        # Ensure pos1 < pos2
+        if pos1 > pos2:
+            pos1, pos2 = pos2, pos1
+        
+        # Collect all intervals between these breakpoints
+        covered_intervals = []
+        for _, _, interval_name in all_intervals:
+            parts = interval_name.split("-")
+            if len(parts) == 2:
+                try:
+                    start_pos = bp_order.index(parts[0])
+                    end_pos = bp_order.index(parts[1])
+                    if start_pos >= pos1 and end_pos <= pos2:
+                        covered_intervals.append(interval_name)
+                except ValueError:
+                    continue
+        
+        if len(covered_intervals) == 0:
+            continue
+        
+        # Compute weighted average log probability score
+        log_prob_score = 0.0
+        total_weight = 0.0
+        
+        if svtype == "DEL":
+            for interval in covered_intervals:
+                if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
+                    probs = interval_stats[interval]["cn_probs"]
+                    weight = interval_stats[interval]["n_bins"]
+                    p_del = max(probs[0] + probs[1], 1e-5)  # P(CN=0) + P(CN=1)
+                    if p_del > 0:
+                        log_prob_score += weight * np.log(p_del)
+                        total_weight += weight
+        
+        elif svtype == "DUP":
+            for interval in covered_intervals:
+                if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
+                    probs = interval_stats[interval]["cn_probs"]
+                    weight = interval_stats[interval]["n_bins"]
+                    p_dup = max(probs[3:].sum(), 1e-5)  # P(CN >= 3)
+                    if p_dup > 0:
+                        log_prob_score += weight * np.log(p_dup)
+                        total_weight += weight
+        
+        # Normalize by total weight
+        if total_weight > 0:
+            log_prob_score = log_prob_score / total_weight
+        else:
+            log_prob_score = np.nan
+        
+        # Determine if this is a CNV
+        is_cnv = log_prob_score > log_prob_threshold
+
+        # Check flanking regions for evidence of a large spanning CNV.
+        # A true GD only affects the region between its breakpoints; a spanning
+        # variant would also show copy number change in the flanking regions.
+        flanking_log_prob_score = np.nan
+        is_spanning = False
+        if is_cnv:
+            flank_score_sum = 0.0
+            flank_weight_total = 0.0
+            for _, _, flank_name in locus.get_flanking_regions():
+                if flank_name not in interval_stats:
+                    continue
+                flank_stat = interval_stats[flank_name]
+                if flank_stat["n_bins"] == 0:
+                    continue
+                flank_probs = flank_stat["cn_probs"]
+                flank_weight = flank_stat["n_bins"]
+                if svtype == "DEL":
+                    p_flank = max(flank_probs[0] + flank_probs[1], 1e-5)
+                elif svtype == "DUP":
+                    p_flank = max(flank_probs[3:].sum(), 1e-5)
+                else:
+                    continue
+                flank_score_sum += flank_weight * np.log(p_flank)
+                flank_weight_total += flank_weight
+
+            if flank_weight_total > 0:
+                flanking_log_prob_score = flank_score_sum / flank_weight_total
+                # If flanking regions also show a CN change, this is a spanning variant
+                if flanking_log_prob_score > flanking_log_prob_threshold:
+                    is_spanning = True
+                    is_cnv = False
+
+        # Count total bins
+        n_bins = sum(interval_stats[iv]["n_bins"] for iv in covered_intervals if iv in interval_stats)
+
+        calls.append({
+            "GD_ID": gd_id,
+            "cluster": locus.cluster,
+            "chrom": locus.chrom,
+            "start": gd_start,
+            "end": gd_end,
+            "svtype": svtype,
+            "is_nahr": locus.is_nahr,
+            "is_terminal": locus.is_terminal,
+            "log_prob_score": log_prob_score,
+            "flanking_log_prob_score": flanking_log_prob_score,
+            "is_carrier": is_cnv,
+            "is_spanning": is_spanning,
+            "intervals": covered_intervals,
+            "n_bins": n_bins,
+        })
+    
+    return calls
+
+
+def determine_best_breakpoints(
+    locus: GDLocus,
+    interval_stats: Dict[str, dict],
+    calls: List[dict],
+) -> Dict[str, Optional[str]]:
+    """
+    Determine the most likely breakpoint pair for a GD CNV, separately for DEL and DUP.
+    
+    For loci with multiple possible breakpoint configurations (e.g., BP1-2, BP1-3),
+    determine which best fits the observed data for each svtype.
+    
+    Args:
+        locus: GDLocus object
+        interval_stats: Dict mapping interval name to CN statistics
+        calls: List of CNV call dictionaries
+    
+    Returns:
+        Dict mapping svtype ("DEL", "DUP") to best matching GD_ID or None
+    """
+    best_by_svtype = {}
+    
+    # Get all interval names for this locus
+    all_intervals = set(name for _, _, name in locus.get_intervals())
+    
+    for svtype in ["DEL", "DUP"]:
+        # Filter to carrier calls of this svtype
+        carrier_calls = [c for c in calls if c["is_carrier"] and c["svtype"] == svtype]
+        
+        if len(carrier_calls) == 0:
+            best_by_svtype[svtype] = None
+            continue
+        
+        if len(carrier_calls) == 1:
+            best_by_svtype[svtype] = carrier_calls[0]["GD_ID"]
+            continue
+        
+        # Multiple carrier calls - score each
+        best_score = -np.inf
+        best_gd_id = None
+        
+        for call in carrier_calls:
+            covered_intervals = set(call["intervals"])
+            uncovered_intervals = all_intervals - covered_intervals
+            
+            score = 0.0
+            total_weight = 0.0
+            
+            if svtype == "DEL":
+                # Score affected intervals
+                for interval in covered_intervals:
+                    if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
+                        probs = interval_stats[interval]["cn_probs"]
+                        weight = 1.  # interval_stats[interval]["n_bins"]
+                        p_del = probs[0] + probs[1]
+                        if p_del > 0:
+                            score += weight * np.log(p_del)
+                            total_weight += weight
+                
+                # Score unaffected intervals
+                for interval in uncovered_intervals:
+                    if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
+                        probs = interval_stats[interval]["cn_probs"]
+                        weight = 1.  # iinterval_stats[interval]["n_bins"]
+                        p_normal = probs[2:].sum()
+                        if p_normal > 0:
+                            score += weight * np.log(p_normal)
+                            total_weight += weight
+            
+            else:  # DUP
+                # Score affected intervals
+                for interval in covered_intervals:
+                    if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
+                        probs = interval_stats[interval]["cn_probs"]
+                        weight = 1.  # iinterval_stats[interval]["n_bins"]
+                        p_dup = probs[3:].sum()
+                        if p_dup > 0:
+                            score += weight * np.log(p_dup)
+                            total_weight += weight
+                
+                # Score unaffected intervals
+                for interval in uncovered_intervals:
+                    if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
+                        probs = interval_stats[interval]["cn_probs"]
+                        weight = 1.  # interval_stats[interval]["n_bins"]
+                        p_normal = probs[:3].sum()
+                        if p_normal > 0:
+                            score += weight * np.log(p_normal)
+                            total_weight += weight
+            
+            # Normalize
+            if total_weight > 0:
+                score = score / total_weight
+            
+            if score > best_score:
+                best_score = score
+                best_gd_id = call["GD_ID"]
+        
+        best_by_svtype[svtype] = best_gd_id
+    
+    return best_by_svtype
+
+
+def call_cnvs_from_posteriors(
+    cn_posteriors_df: pd.DataFrame,
+    bin_mappings_df: pd.DataFrame,
+    gd_table: GDTable,
+    log_prob_threshold: float = -0.5,
+    flanking_log_prob_threshold: float = -1.0,
+) -> pd.DataFrame:
+    """
+    Call CNVs from posterior probabilities.
+    
+    Args:
+        cn_posteriors_df: DataFrame with CN posterior probabilities per bin/sample
+        bin_mappings_df: DataFrame with bin-to-interval mappings
+        gd_table: GDTable with locus definitions
+        log_prob_threshold: Minimum log probability score to call a CNV
+        flanking_log_prob_threshold: Minimum log probability score in flanking regions to classify as spanning
+    
+    Returns:
+        DataFrame with CNV calls for all samples and loci
+    """
+    print("\n" + "=" * 80)
+    print("CALLING CNVs FROM POSTERIORS")
+    print("=" * 80)
+    
+    all_results = []
+    sample_ids = cn_posteriors_df["sample"].unique()
+    
+    # Build mapping of bin position to row index for faster lookup
+    cn_posteriors_df = cn_posteriors_df.reset_index(drop=True)
+    bin_mappings_df = bin_mappings_df.reset_index(drop=True)
+    
+    # Pre-group posteriors by sample for faster lookups
+    print("  Organizing data for fast access...")
+    posteriors_by_sample = {}
+    for sample_id in sample_ids:
+        sample_data = cn_posteriors_df[cn_posteriors_df["sample"] == sample_id]
+        posteriors_by_sample[sample_id] = sample_data
+    
+    for cluster, locus in gd_table.loci.items():
+        print(f"\nCalling CNVs for locus: {cluster}")
+        
+        # Get interval bins for this locus
+        interval_bins = get_locus_interval_bins(bin_mappings_df, cluster)
+        
+        for interval_name, bins in interval_bins.items():
+            print(f"  {interval_name}: {len(bins)} bins")
+        
+        # Process each sample
+        for sample_id in sample_ids:
+            # Use pre-filtered sample data
+            sample_posteriors = posteriors_by_sample[sample_id]
+            
+            # Get probability columns once
+            prob_cols = [c for c in sample_posteriors.columns if c.startswith("prob_cn_")]
+            
+            # Compute interval statistics efficiently
+            interval_stats = {}
+            for interval_name, bin_indices in interval_bins.items():
+                if len(bin_indices) == 0:
+                    interval_stats[interval_name] = {
+                        "n_bins": 0,
+                        "cn_probs": np.zeros(len(prob_cols)),
+                    }
+                else:
+                    interval_data = sample_posteriors.iloc[bin_indices]
+                    mean_probs = interval_data[prob_cols].mean(axis=0).values
+                    interval_stats[interval_name] = {
+                        "n_bins": len(interval_data),
+                        "cn_probs": mean_probs,
+                    }
+            
+            # Call GD CNVs
+            calls = call_gd_cnv(locus, interval_stats, log_prob_threshold, flanking_log_prob_threshold)
+            
+            # Determine best breakpoints
+            best_by_svtype = determine_best_breakpoints(locus, interval_stats, calls)
+            
+            # Record results
+            for call in calls:
+                svtype = call["svtype"]
+                best_gd_for_svtype = best_by_svtype.get(svtype)
+                
+                # Compute mean depth over covered intervals efficiently
+                covered_bin_indices = []
+                for interval_name in call["intervals"]:
+                    if interval_name in interval_bins:
+                        covered_bin_indices.extend(interval_bins[interval_name])
+                
+                if len(covered_bin_indices) > 0:
+                    # Use iloc for fast indexing on pre-filtered data
+                    mean_depth = sample_posteriors.iloc[covered_bin_indices]["depth"].mean()
+                else:
+                    mean_depth = np.nan
+                
+                result = {
+                    "sample": sample_id,
+                    "cluster": cluster,
+                    "GD_ID": call["GD_ID"],
+                    "chrom": call["chrom"],
+                    "start": call["start"],
+                    "end": call["end"],
+                    "svtype": svtype,
+                    "is_nahr": call["is_nahr"],
+                    "is_terminal": call["is_terminal"],
+                    "n_bins": call["n_bins"],
+                    "mean_depth": mean_depth,
+                    "is_carrier": call["is_carrier"],
+                    "is_best_match": call["GD_ID"] == best_gd_for_svtype if best_gd_for_svtype else False,
+                    "log_prob_score": call["log_prob_score"],
+                }
+                all_results.append(result)
+    
+    return pd.DataFrame(all_results)
+
+
+# =============================================================================
 # Plotting Functions
 # =============================================================================
 
 def get_sample_columns(df: pd.DataFrame) -> list:
     """Extract sample column names from DataFrame."""
-    metadata_cols = ["Chr", "Start", "End", "source_file", "Bin"]
+    metadata_cols = ["Cluster", "Chr", "Start", "End", "source_file", "Bin"]
     return [col for col in df.columns if col not in metadata_cols]
 
 
@@ -337,54 +659,65 @@ def draw_annotations_panel(
         title: Panel title
         gtf: Optional GTFParser for gene annotations
         segdup: Optional SegDupAnnotation
-        show_gd_entries: Whether to show GD entry regions
+        show_gd_entries: Whether to show GD entry regions and breakpoint intervals
     """
     ax.set_xlim(region_start, region_end)
-    ax.set_ylim(0, 1)
+    ax.set_ylim(0, 0.25)
+    ax.set_ylabel("Annotations")
     ax.set_title(title)
 
-    # Draw GD entry regions if requested
+    # Shade flanking regions using the actual data-derived extents.
+    # region_start/region_end come from min/max of the bins present in depth_df,
+    # so these spans exactly match what is plotted — no geometric approximation.
+    flank_defs = []
+    if region_start < locus.start:
+        flank_defs.append((region_start, locus.start, "left flank"))
+    if locus.end < region_end:
+        flank_defs.append((locus.end, region_end, "right flank"))
+    for flank_start, flank_end, flank_name in flank_defs:
+        ax.axvspan(flank_start, flank_end, alpha=0.08, color="black", zorder=0)
+        ax.text((flank_start + flank_end) / 2, 0.225,
+                flank_name, ha="center", va="center",
+                fontsize=7, color="gray", style="italic")
+
+    # Draw breakpoint intervals (only if show_gd_entries is True)
     if show_gd_entries:
-        for entry in locus.gd_entries:
-            color = "red" if entry["svtype"] == "DEL" else "blue"
-            ax.axvspan(entry["start_GRCh38"], entry["end_GRCh38"],
-                      ymin=0.7, ymax=0.9, alpha=0.3, color=color,
-                      label=f"{entry['GD_ID']} ({entry['svtype']})")
+        intervals = locus.get_intervals()
+        colors = plt.cm.Set3(np.linspace(0, 1, len(intervals)))
+        for i, (start, end, name) in enumerate(intervals):
+            ax.axvspan(start, end, alpha=0.15, color=colors[i], label=name, zorder=0)
+            ax.text((start + end) / 2, 0.225, name, ha="center", va="center", fontsize=7)
 
-    # Draw breakpoint ranges
+    # Draw breakpoint ranges as shaded regions (back layer)
     for i, (bp_start, bp_end) in enumerate(locus.breakpoints):
-        y_min = 0.0 if show_gd_entries else 0.8
-        y_max = 1.0
-        ax.axvspan(bp_start, bp_end, ymin=y_min, ymax=y_max, alpha=0.2 if show_gd_entries else 0.3, color="red")
-        ax.text((bp_start + bp_end) / 2, 0.95 if show_gd_entries else 0.9, f"BP{i+1}", ha="center", va="top" if show_gd_entries else "center", 
-                fontsize=8, fontweight="bold", color="darkred")
+        ax.axvspan(bp_start, bp_end, ymin=0.04, ymax=0.15, alpha=0.3, color="red", zorder=1)
+        bp_name = locus.breakpoint_names[i] if i < len(locus.breakpoint_names) else str(i+1)
+        ax.text((bp_start + bp_end) / 2, 0.02, f"BP{bp_name}", ha="center", va="center", 
+                fontsize=7, fontweight="bold", color="darkred", zorder=10)
 
-    # Draw segdup regions
+    # Draw segdup regions (middle layer)
     if segdup:
         sd_regions = segdup.get_regions_in_range(chrom, region_start, region_end)
         for sd_start, sd_end in sd_regions:
             ax.axvspan(max(sd_start, region_start), min(sd_end, region_end),
-                      ymin=0.4 if show_gd_entries else 0.5, ymax=0.6 if show_gd_entries else 0.7, 
-                      alpha=0.5, color="orange")
+                      ymin=0.2, ymax=0.5, alpha=0.2, color="orange", zorder=2)
 
-    # Draw genes
+    # Draw genes (top layer)
     if gtf:
         genes = gtf.get_genes_in_region(chrom, region_start, region_end,
                                          gene_types=["protein_coding"])
+        y_pos = 0.2
         min_gene_size = 20000  # Minimum 20kb to show label
-        max_genes = 8
-        for gene in genes[:max_genes]:
+        for gene in genes[:10]:  # Limit to 10 genes
             gene_start = max(gene["start"], region_start)
             gene_end = min(gene["end"], region_end)
-            ax.hlines(0.2, gene_start, gene_end, colors="darkblue", linewidth=4)
+            ax.hlines(y_pos, gene_start, gene_end, colors="blue", linewidth=4, zorder=3)
             # Only label genes larger than minimum size
             if (gene_end - gene_start) >= min_gene_size:
-                ax.text((gene_start + gene_end) / 2, 0.18,
-                       gene["gene_name"], ha="center", va="top", fontsize=7, rotation=45)
+                ax.text((gene_start + gene_end) / 2, y_pos - 0.05,
+                       gene["gene_name"], ha="center", va="bottom", fontsize=7, zorder=3)
 
     ax.set_yticks([])
-    if not show_gd_entries:
-        ax.set_ylabel("Annotations")
 
 
 def plot_locus_overview(
@@ -414,20 +747,21 @@ def plot_locus_overview(
         return
     
     chrom = locus.chrom
-    region_start = locus.start - padding
-    region_end = locus.end + padding
-
-    # Get bins in this region
+    # Filter strictly to this locus's bins (by cluster name). Using position alone
+    # would pull in differently-rebinned bins from neighbouring/overlapping loci.
     mask = (
-        (depth_df["Chr"] == chrom) &
-        (depth_df["End"] > region_start) &
-        (depth_df["Start"] < region_end)
+        (depth_df["Cluster"] == locus.cluster) &
+        (depth_df["Chr"] == chrom)
     )
-    region_df = depth_df[mask].copy()
+    region_df = depth_df[mask].copy().sort_values("Start")
 
     if len(region_df) == 0:
-        print(f"  Warning: No bins found for locus {locus.cluster}")
+        print(f"  Warning: No depth data found for locus {locus.cluster} ({chrom}:{locus.start:,}-{locus.end:,}), skipping plot")
         return
+
+    # Bounds derived from actual data so flanks are always visible
+    region_start = int(region_df["Start"].min())
+    region_end = int(region_df["End"].max())
 
     sample_cols = get_sample_columns(region_df)
     n_samples = len(sample_cols)
@@ -450,7 +784,7 @@ def plot_locus_overview(
     non_carrier_height = min(6, max(1, n_non_carriers * 0.15)) if n_non_carriers > 0 else 0.5
     fig_height = 4 + carrier_height + non_carrier_height
     
-    fig, axes = plt.subplots(4, 1, figsize=(14, fig_height), 
+    fig, axes = plt.subplots(4, 1, figsize=(8, fig_height), 
                               gridspec_kw={"height_ratios": [1, carrier_height, non_carrier_height, 1]})
 
     # X-axis: genomic position
@@ -458,50 +792,11 @@ def plot_locus_overview(
 
     # Panel 1: Gene annotations and segdup regions
     ax = axes[0]
-    ax.set_xlim(region_start, region_end)
-    ax.set_ylim(0, 1)
-    ax.set_ylabel("Annotations")
-    ax.set_title(f"{locus.cluster} ({chrom}:{locus.start:,}-{locus.end:,})")
-
-    # Draw breakpoint ranges as shaded regions
-    for i, (bp_start, bp_end) in enumerate(locus.breakpoints):
-        ax.axvspan(bp_start, bp_end, ymin=0.85, ymax=1.0, alpha=0.4, color="red", zorder=10)
-        bp_name = locus.breakpoint_names[i] if i < len(locus.breakpoint_names) else str(i+1)
-        ax.text((bp_start + bp_end) / 2, 0.925, f"BP{bp_name}", ha="center", va="center", 
-                fontsize=7, fontweight="bold", color="darkred")
-
-    # Draw breakpoint intervals
-    intervals = locus.get_intervals()
-    colors = plt.cm.Set3(np.linspace(0, 1, len(intervals)))
-    for i, (start, end, name) in enumerate(intervals):
-        ax.axvspan(start, end, alpha=0.2, color=colors[i], label=name)
-        ax.text((start + end) / 2, 0.75, name, ha="center", va="top", fontsize=8)
-
-    # Draw segdup regions
-    if segdup:
-        sd_regions = segdup.get_regions_in_range(chrom, region_start, region_end)
-        for sd_start, sd_end in sd_regions:
-            ax.axvspan(max(sd_start, region_start), min(sd_end, region_end),
-                      ymin=0.45, ymax=0.65, alpha=0.5, color="orange")
-        if sd_regions:
-            ax.text(region_start + 1000, 0.55, "SegDup", fontsize=7, va="center")
-
-    # Draw genes
-    if gtf:
-        genes = gtf.get_genes_in_region(chrom, region_start, region_end,
-                                         gene_types=["protein_coding"])
-        y_pos = 0.3
-        min_gene_size = 20000  # Minimum 20kb to show label
-        for gene in genes[:10]:  # Limit to 10 genes
-            gene_start = max(gene["start"], region_start)
-            gene_end = min(gene["end"], region_end)
-            ax.hlines(y_pos, gene_start, gene_end, colors="blue", linewidth=3)
-            # Only label genes larger than minimum size
-            if (gene_end - gene_start) >= min_gene_size:
-                ax.text((gene_start + gene_end) / 2, y_pos - 0.05,
-                       gene["gene_name"], ha="center", va="top", fontsize=7)
-
-    ax.set_yticks([])
+    title = f"{locus.cluster} ({chrom}:{locus.start:,}-{locus.end:,})"
+    draw_annotations_panel(
+        ax, locus, region_start, region_end, chrom, title,
+        gtf=gtf, segdup=segdup, show_gd_entries=True
+    )
 
     # Panel 2: Carriers heatmap
     ax = axes[1]
@@ -603,7 +898,6 @@ def plot_locus_overview(
     
     # Create arrays with NaN inserted at gaps
     plot_positions = []
-    plot_depth_dict = {}  # Will store depth arrays for each group
     
     # Determine typical bin spacing
     bin_spacing = np.median(bin_starts[1:] - bin_ends[:-1])
@@ -730,7 +1024,7 @@ def plot_locus_overview(
     ax.set_xlim(region_start, region_end)
     ax.set_ylim(0, 4)
     ax.set_xlabel(f"Position on {chrom}")
-    ax.set_ylabel("Mean norm read depth")
+    ax.set_ylabel("Mean depth")
     ax.grid(True, alpha=0.3, axis='y')
 
     plt.tight_layout()
@@ -772,19 +1066,19 @@ def plot_sample_at_locus(
         return
     
     chrom = locus.chrom
-    region_start = locus.start - padding
-    region_end = locus.end + padding
-
-    # Get bins in this region
+    # Filter strictly to this locus's bins (by cluster name).
     mask = (
-        (depth_df["Chr"] == chrom) &
-        (depth_df["End"] > region_start) &
-        (depth_df["Start"] < region_end)
+        (depth_df["Cluster"] == locus.cluster) &
+        (depth_df["Chr"] == chrom)
     )
-    region_df = depth_df[mask].copy()
+    region_df = depth_df[mask].copy().sort_values("Start")
 
     if len(region_df) == 0 or sample_id not in region_df.columns:
         return
+
+    # Bounds derived from actual data so flanks are always visible
+    region_start = int(region_df["Start"].min())
+    region_end = int(region_df["End"].max())
 
     # Get sample calls for this locus
     sample_calls = calls_df[
@@ -884,7 +1178,7 @@ def plot_carrier_summary(calls_df: pd.DataFrame, output_dir: str):
         return
 
     # Summary by locus
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    fig, axes = plt.subplots(1, 2, figsize=(8, 4))
 
     # Plot 1: Carriers per locus
     ax = axes[0]
@@ -895,17 +1189,21 @@ def plot_carrier_summary(calls_df: pd.DataFrame, output_dir: str):
     ax.set_title("Carriers per GD Locus")
     ax.legend(title="SV Type")
 
-    # Plot 2: Mean CN distribution for carriers
+    # Plot 2: Log probability score for carriers by SV type
     ax = axes[1]
+    
+    # Create common bins based on full data range
+    all_scores = carriers["log_prob_score"].dropna()
+    bins = np.linspace(all_scores.min(), all_scores.max(), 21)
+    
     for svtype, color in [("DEL", "red"), ("DUP", "blue")]:
         sv_data = carriers[carriers["svtype"] == svtype]
         if len(sv_data) > 0:
-            ax.hist(sv_data["mean_cn"], bins=20, alpha=0.6, color=color, 
+            ax.hist(sv_data["log_prob_score"], bins=bins, alpha=0.6, color=color, 
                    label=f"{svtype} (n={len(sv_data)})", edgecolor="black")
-    ax.axvline(2.0, color="gray", linestyle="--", alpha=0.5, label="CN=2")
-    ax.set_xlabel("Mean Copy Number")
+    ax.set_xlabel("Log Probability Score")
     ax.set_ylabel("Count")
-    ax.set_title("Copy Number Distribution in Carriers")
+    ax.set_title("Log Probability Score Distribution in Carriers")
     ax.legend()
 
     plt.tight_layout()
@@ -922,31 +1220,43 @@ def plot_confidence_distribution(calls_df: pd.DataFrame, output_dir: str):
         calls_df: DataFrame with all CNV calls
         output_dir: Directory to save plots
     """
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(8, 4))
 
     # Plot 1: Confidence by carrier status
     ax = axes[0]
     carriers = calls_df[calls_df["is_carrier"]]
     non_carriers = calls_df[~calls_df["is_carrier"]]
-    ax.hist(non_carriers["confidence"], bins=30, alpha=0.6, label="Non-carriers", 
+    
+    # Create common bins based on full data range
+    all_scores = calls_df["log_prob_score"].dropna()
+    bins = np.linspace(all_scores.min(), all_scores.max(), 31)
+    
+    ax.hist(non_carriers["log_prob_score"], bins=bins, alpha=0.6, label="Non-carriers", 
             color="gray", edgecolor="black")
-    ax.hist(carriers["confidence"], bins=30, alpha=0.6, label="Carriers",
+    ax.hist(carriers["log_prob_score"], bins=bins, alpha=0.6, label="Carriers",
             color="green", edgecolor="black")
-    ax.set_xlabel("Confidence")
+    ax.set_xlabel("Log Probability Score")
     ax.set_ylabel("Count")
-    ax.set_title("Confidence Distribution")
+    ax.set_yscale("log")
     ax.legend()
 
-    # Plot 2: Confidence vs Mean CN
+    # Plot 2: Confidence vs Mean Depth
     ax = axes[1]
-    colors = calls_df["is_carrier"].map({True: "green", False: "gray"})
-    ax.scatter(calls_df["mean_cn"], calls_df["confidence"], c=colors, alpha=0.5, s=20)
-    ax.axvline(1.5, color="red", linestyle="--", alpha=0.5, label="DEL threshold")
-    ax.axvline(2.5, color="blue", linestyle="--", alpha=0.5, label="DUP threshold")
-    ax.set_xlabel("Mean Copy Number")
+    
+    # Plot non-carriers first (background)
+    non_carriers_mask = ~calls_df["is_carrier"]
+    ax.scatter(calls_df.loc[non_carriers_mask, "mean_depth"], 
+               calls_df.loc[non_carriers_mask, "log_prob_score"], 
+               c="gray", alpha=0.1, s=10, label="Non-carriers")
+    
+    # Plot carriers on top (more visible)
+    carriers_mask = calls_df["is_carrier"]
+    ax.scatter(calls_df.loc[carriers_mask, "mean_depth"], 
+               calls_df.loc[carriers_mask, "log_prob_score"], 
+               c="green", alpha=0.5, s=10, label="Carriers")
+    
+    ax.set_xlabel("Mean Depth (normalized)")
     ax.set_ylabel("Confidence")
-    ax.set_title("Confidence vs Copy Number")
-    ax.legend()
 
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "confidence_distribution.png"), dpi=150, bbox_inches="tight")
@@ -1002,18 +1312,19 @@ def create_carrier_pdf(
             for sample_id in sorted(cluster_carriers):
                 # Create the plot
                 chrom = locus.chrom
-                region_start = locus.start - padding
-                region_end = locus.end + padding
-
+                # Filter strictly to this locus's bins (by cluster name).
                 mask = (
-                    (depth_df["Chr"] == chrom) &
-                    (depth_df["End"] > region_start) &
-                    (depth_df["Start"] < region_end)
+                    (depth_df["Cluster"] == cluster) &
+                    (depth_df["Chr"] == chrom)
                 )
-                region_df = depth_df[mask]
+                region_df = depth_df[mask].sort_values("Start")
 
                 if len(region_df) == 0 or sample_id not in region_df.columns:
                     continue
+
+                # Bounds derived from actual data so flanks are always visible
+                region_start = int(region_df["Start"].min())
+                region_end = int(region_df["End"].max())
 
                 # Get sample calls
                 sample_calls = calls_df[
@@ -1022,7 +1333,7 @@ def create_carrier_pdf(
                 ]
 
                 # Create figure
-                fig, axes = plt.subplots(2, 1, figsize=(14, 8),
+                fig, axes = plt.subplots(2, 1, figsize=(12, 4),
                                           gridspec_kw={"height_ratios": [1, 2]})
 
                 bin_mids = (region_df["Start"].values + region_df["End"].values) / 2
@@ -1030,21 +1341,12 @@ def create_carrier_pdf(
 
                 # Panel 1: Annotations
                 carrier_call = sample_calls[sample_calls["is_carrier"]].iloc[0] if len(sample_calls[sample_calls["is_carrier"]]) > 0 else None
-                call_info = f" - {carrier_call['svtype']} CN={carrier_call['mean_cn']:.2f} confidence={carrier_call['confidence']:.2f}" if carrier_call is not None else ""
+                call_info = f" - {carrier_call['svtype']} confidence={carrier_call['log_prob_score']:.2f}" if carrier_call is not None else ""
                 title = f"{sample_id} at {cluster}{call_info}"
                 draw_annotations_panel(axes[0], locus, region_start, region_end, chrom, title, gtf, segdup, show_gd_entries=False)
 
                 # Panel 2: Depth
                 ax = axes[1]
-                
-                # First, draw background shading for called copy states
-                cn_colors = {
-                    0: "#8B0000",  # Dark red for CN=0
-                    1: "#FF6B6B",  # Light red for CN=1
-                    2: "#90EE90",  # Light green for CN=2 (reference)
-                    3: "#6B9BD1",  # Light blue for CN=3
-                    4: "#4169E1",  # Royal blue for CN=4+
-                }
                 
                 # Only plot the most likely non-reference breakpoint combination
                 # Filter for best match that is a carrier (non-reference)
@@ -1057,44 +1359,27 @@ def create_carrier_pdf(
                         if len(best_matches) > 0:
                             best_call = best_matches.iloc[0]
                         else:
-                            # If no best_match flag, use highest confidence carrier
-                            best_call = carrier_calls.loc[carrier_calls["confidence"].idxmax()]
+                            # If no best_match flag, use highest log probability score carrier
+                            best_call = carrier_calls.loc[carrier_calls["log_prob_score"].idxmax()]
                 
-                # Draw called CN as horizontal band for the best non-reference call only
+                # Highlight the region covered by the best call
                 if best_call is not None:
                     interval_start = best_call["start"]
                     interval_end = best_call["end"]
-                    mean_cn = best_call["mean_cn"]
+                    mean_depth = best_call["mean_depth"]
+                    svtype = best_call["svtype"]
                     
-                    # Determine most likely CN state from probabilities
-                    prob_cols = [col for col in best_call.index if col.startswith("prob_cn_")]
-                    if prob_cols:
-                        # Extract CN states and their probabilities
-                        cn_probs = {}
-                        for col in prob_cols:
-                            cn = int(col.replace("prob_cn_", ""))
-                            cn_probs[cn] = best_call[col]
-                        # Find CN with highest probability
-                        cn_state = max(cn_probs.items(), key=lambda x: x[1])[0]
-                    else:
-                        # Fallback: round mean CN
-                        cn_state = int(round(mean_cn))
+                    # Color by SV type
+                    color = "#FF6B6B" if svtype == "DEL" else "#6B9BD1"
                     
-                    cn_state = min(cn_state, 4)  # Cap at CN=4
+                    # Highlight the called region
+                    ax.axvspan(interval_start, interval_end, alpha=0.2, color=color, zorder=1,
+                              label=f"{svtype} region")
                     
-                    # Get color for this CN state
-                    color = cn_colors.get(cn_state, "#CCCCCC")
-                    
-                    # Draw horizontal band at the called CN level
-                    ax.axhspan(max(0, cn_state - 0.15), min(5, cn_state + 0.15),
-                              xmin=(interval_start - region_start) / (region_end - region_start),
-                              xmax=(interval_end - region_start) / (region_end - region_start),
-                              alpha=0.3, color=color, zorder=1)
-                    
-                    # Draw line at exact mean CN
-                    ax.hlines(mean_cn, interval_start, interval_end, 
+                    # Draw line at exact mean depth
+                    ax.hlines(mean_depth, interval_start, interval_end, 
                              colors="black", linewidth=2.5, alpha=0.8, zorder=2,
-                             label=f"Called CN={cn_state} (mean={mean_cn:.2f})")
+                             label=f"Mean depth={mean_depth:.2f}")
                 
                 # Plot depth as bars on top
                 bar_widths = region_df["End"].values - region_df["Start"].values
@@ -1108,8 +1393,8 @@ def create_carrier_pdf(
                 ax.axhline(3.0, color="purple", linestyle=":", alpha=0.4, linewidth=1, zorder=0)
 
                 # Breakpoint lines
-                for i, (bp_start, bp_end) in enumerate(locus.breakpoints):
-                    ax.axvspan(bp_start, bp_end, alpha=0.2, color="red", zorder=0)
+                # for i, (bp_start, bp_end) in enumerate(locus.breakpoints):
+                #     ax.axvspan(bp_start, bp_end, alpha=0.2, color="red", zorder=0)
 
                 ax.set_xlim(region_start, region_end)
                 ax.set_ylim(0, 5)
@@ -1132,19 +1417,24 @@ def create_carrier_pdf(
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Plot GD CNV detection results",
+        description="Call CNVs and plot GD CNV detection results",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     parser.add_argument(
         "--calls", "-c",
-        required=True,
-        help="GD CNV calls file (gd_cnv_calls.tsv.gz)",
+        required=False,
+        help="Pre-computed GD CNV calls file (gd_cnv_calls.tsv.gz). If not provided, calls will be made from posteriors.",
     )
     parser.add_argument(
         "--cn-posteriors",
         required=True,
         help="CN posteriors file (cn_posteriors.tsv.gz) with depth values",
+    )
+    parser.add_argument(
+        "--bin-mappings",
+        required=False,
+        help="Bin mappings file (bin_mappings.tsv.gz) from gd_cnv_pyro.py. Required if --calls not provided.",
     )
     parser.add_argument(
         "--gd-table", "-g",
@@ -1165,6 +1455,18 @@ def parse_args():
         "--output-dir", "-o",
         required=True,
         help="Output directory for plots",
+    )
+    parser.add_argument(
+        "--log-prob-threshold",
+        type=float,
+        default=-0.5,
+        help="Minimum log probability score to call a CNV (only used if calling from posteriors)",
+    )
+    parser.add_argument(
+        "--flanking-log-prob-threshold",
+        type=float,
+        default=-1.0,
+        help="Minimum log probability score in flanking regions to classify a call as spanning (only used if calling from posteriors)",
     )
     parser.add_argument(
         "--padding",
@@ -1197,33 +1499,58 @@ def main():
     # Load data
     print("\nLoading data...")
 
-    print(f"  Loading calls: {args.calls}")
-    calls_df = pd.read_csv(args.calls, sep="\t", compression="infer")
-    print(f"    {len(calls_df)} call records")
-
     print(f"  Loading CN posteriors: {args.cn_posteriors}")
     cn_posteriors_df = pd.read_csv(args.cn_posteriors, sep="\t", compression="infer")
     print(f"    {len(cn_posteriors_df)} bin-sample records")
     
+    print(f"  Loading GD table: {args.gd_table}")
+    gd_table = GDTable(args.gd_table)
+    print(f"    {len(gd_table.loci)} loci")
+    
+    # Call CNVs if not provided
+    if args.calls:
+        print(f"\n  Loading pre-computed calls: {args.calls}")
+        calls_df = pd.read_csv(args.calls, sep="\t", compression="infer")
+        print(f"    {len(calls_df)} call records")
+    else:
+        if not args.bin_mappings:
+            raise ValueError("--bin-mappings required when --calls not provided")
+        
+        print(f"\n  Loading bin mappings: {args.bin_mappings}")
+        bin_mappings_df = pd.read_csv(args.bin_mappings, sep="\t", compression="infer")
+        print(f"    {len(bin_mappings_df)} bin mappings")
+        
+        # Call CNVs from posteriors
+        calls_df = call_cnvs_from_posteriors(
+            cn_posteriors_df,
+            bin_mappings_df,
+            gd_table,
+            log_prob_threshold=args.log_prob_threshold,
+            flanking_log_prob_threshold=args.flanking_log_prob_threshold,
+        )
+        
+        # Save calls
+        output_file = os.path.join(args.output_dir, "gd_cnv_calls.tsv.gz")
+        calls_df.to_csv(output_file, sep="\t", index=False, compression="gzip")
+        print(f"\n  Saved calls to: {output_file}")
+        print(f"    {len(calls_df)} call records")
+    
     # Convert cn_posteriors to depth_df format (bins x samples matrix)
-    print("  Converting posteriors to depth matrix format...")
+    print("\n  Converting posteriors to depth matrix format...")
     depth_df = cn_posteriors_df.pivot_table(
-        index=["chr", "start", "end"],
+        index=["cluster", "chr", "start", "end"],
         columns="sample",
         values="depth",
         aggfunc="first"
     ).reset_index()
-    depth_df = depth_df.rename(columns={"chr": "Chr", "start": "Start", "end": "End"})
-    print(f"    {len(depth_df)} bins x {len([c for c in depth_df.columns if c not in ['Chr', 'Start', 'End']])} samples")
-
-    print(f"  Loading GD table: {args.gd_table}")
-    gd_table = GDTable(args.gd_table)
-    print(f"    {len(gd_table.loci)} loci")
+    depth_df = depth_df.rename(columns={"cluster": "Cluster", "chr": "Chr", "start": "Start", "end": "End"})
+    sample_cols_all = [c for c in depth_df.columns if c not in ["Cluster", "Chr", "Start", "End"]]
+    print(f"    {len(depth_df)} bin-rows x {len(sample_cols_all)} samples (across all loci)")
 
     # Optional annotations
     gtf = None
     if args.gtf:
-        print(f"  Loading GTF: {args.gtf}")
+        print(f"\n  Loading GTF: {args.gtf}")
         gtf = GTFParser(args.gtf)
 
     segdup = None
@@ -1255,6 +1582,7 @@ def main():
     # Create individual sample plots
     if args.plot_all_samples or args.sample:
         print("\nCreating individual sample plots...")
+        sample_cols = [c for c in depth_df.columns if c not in ['Chr', 'Start', 'End']]
         carriers = calls_df[calls_df["is_carrier"]]
         
         for cluster, locus in gd_table.loci.items():

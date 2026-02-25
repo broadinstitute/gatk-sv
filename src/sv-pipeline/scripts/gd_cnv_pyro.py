@@ -70,6 +70,16 @@ class GDLocus:
     def n_breakpoints(self) -> int:
         return len(self.breakpoints)
 
+    @property
+    def start(self) -> int:
+        """Get overall start position (min of all breakpoint starts)."""
+        return min(bp[0] for bp in self.breakpoints)
+
+    @property
+    def end(self) -> int:
+        """Get overall end position (max of all breakpoint ends)."""
+        return max(bp[1] for bp in self.breakpoints)
+
     def get_intervals(self) -> List[Tuple[int, int, str]]:
         """
         Get all intervals between adjacent breakpoints.
@@ -99,6 +109,38 @@ class GDLocus:
             entry["GD_ID"]: (entry["start_GRCh38"], entry["end_GRCh38"])
             for entry in self.gd_entries
         }
+
+    def get_flanking_regions(self) -> List[Tuple[int, int, str]]:
+        """
+        Get flanking regions on either side of the locus (100% of locus size each side).
+
+        These regions are used to detect large spanning CNVs that overlap the locus
+        incidentally but are not true GD events. A true GD only affects the region
+        between its breakpoints; a spanning variant would also show copy number change
+        in these flanking regions.
+
+        Note: The left flank is clipped to position 0 if the locus is near the
+        chromosome start. Flanks at the chromosome end will simply have no bins.
+
+        Returns:
+            List of (start, end, name) tuples. Contains 0, 1, or 2 elements
+            depending on chromosome proximity.
+        """
+        locus_size = self.end - self.start
+        flanks = []
+
+        # Left flank: extend left by 100% of locus size
+        left_start = max(0, self.start - locus_size)
+        left_end = self.start
+        if left_end > left_start:
+            flanks.append((left_start, left_end, "left_flank"))
+
+        # Right flank: extend right by 100% of locus size
+        right_start = self.end
+        right_end = self.end + locus_size
+        flanks.append((right_start, right_end, "right_flank"))
+
+        return flanks
 
     @property
     def del_entries(self) -> List[dict]:
@@ -155,9 +197,9 @@ class GDTable:
         for _, row in self.df.iterrows():
             cluster = row["cluster"]
             
-            # Skip entries without a cluster (standalone regions)
+            # For entries without a cluster (standalone regions), use GD_ID as cluster name
             if pd.isna(cluster) or cluster == "":
-                continue
+                cluster = row["GD_ID"]
 
             if cluster not in loci:
                 loci[cluster] = {
@@ -172,14 +214,14 @@ class GDTable:
             bp1 = row["BP1"]
             bp2 = row["BP2"]
             
-            # Skip if BP1 or BP2 is missing
+            # If BP1 or BP2 is missing, use default values "1" and "2"
             if pd.isna(bp1) or pd.isna(bp2):
-                print(f"  Warning: Missing BP1 or BP2 for {row['GD_ID']}, skipping")
-                continue
-            
-            # Convert to strings for consistent handling
-            bp1 = str(bp1)
-            bp2 = str(bp2)
+                bp1 = "1"
+                bp2 = "2"
+            else:
+                # Convert to strings for consistent handling
+                bp1 = str(bp1)
+                bp2 = str(bp2)
             
             # Track coordinates for each breakpoint
             if bp1 not in loci[cluster]["breakpoint_coords"]:
@@ -896,37 +938,235 @@ def extract_locus_bins(
     return locus_df
 
 
-def assign_bins_to_intervals(
+def compute_flank_regions_from_bins(
+    locus_df: pd.DataFrame,
+    locus: GDLocus,
+    target_size: int,
+) -> List[Tuple[int, int, str]]:
+    """
+    Compute flanking regions based on actual available (unfiltered) bins.
+
+    Accumulates bins outward from each side of the locus until the total covered
+    base pairs of unfiltered bins reaches target_size. This avoids the problem of
+    large segmental duplication deserts making a fixed-size geometric window empty.
+
+    Args:
+        locus_df: DataFrame of unfiltered bins available for this locus
+        locus: GDLocus object
+        target_size: Target cumulative bin coverage in bp for each flank
+
+    Returns:
+        List of (start, end, name) tuples for "left_flank" and/or "right_flank".
+        A flank is omitted if no bins exist on that side.
+    """
+    flanks = []
+    locus_start = locus.start
+    locus_end = locus.end
+
+    print(f"    [flanks] locus body: {locus_start:,}-{locus_end:,}  target_size: {target_size:,} bp")
+    print(f"    [flanks] input bins: {len(locus_df)}  "
+          f"range: {int(locus_df['Start'].min()):,}-{int(locus_df['End'].max()):,}" if len(locus_df) > 0
+          else f"    [flanks] input bins: 0")
+
+    # Use bin midpoints for candidacy — consistent with how bins are assigned
+    # throughout the rest of the codebase. Using strict End/Start comparisons
+    # misses bins that straddle the locus boundary (common with zero-width breakpoints).
+    bin_mids = (locus_df["Start"] + locus_df["End"]) / 2
+
+    # Left flank: bins whose midpoint is left of locus start, accumulated right-to-left
+    left_bins = locus_df[bin_mids < locus_start].sort_values("Start", ascending=False)
+    print(f"    [flanks] left candidate bins (mid < {locus_start:,}): {len(left_bins)}", end="")
+    if len(left_bins) > 0:
+        print(f"  span {int(left_bins['Start'].min()):,}-{int(left_bins['End'].max()):,}  "
+              f"total bp: {int((left_bins['End'] - left_bins['Start']).sum()):,}")
+        cumulative = 0
+        leftmost_start = locus_start  # will be updated as we walk left
+        for _, row in left_bins.iterrows():
+            cumulative += int(row["End"]) - int(row["Start"])
+            leftmost_start = int(row["Start"])
+            if cumulative >= target_size:
+                break
+        print(f"    [flanks] left_flank: {leftmost_start:,}-{locus_start:,}  "
+              f"accumulated {cumulative:,} bp (target {target_size:,})")
+        flanks.append((leftmost_start, locus_start, "left_flank"))
+    else:
+        print()  # newline after the count
+
+    # Right flank: bins whose midpoint is right of locus end, accumulated left-to-right
+    right_bins = locus_df[bin_mids >= locus_end].sort_values("Start")
+    print(f"    [flanks] right candidate bins (mid >= {locus_end:,}): {len(right_bins)}", end="")
+    if len(right_bins) > 0:
+        print(f"  span {int(right_bins['Start'].min()):,}-{int(right_bins['End'].max()):,}  "
+              f"total bp: {int((right_bins['End'] - right_bins['Start']).sum()):,}")
+        cumulative = 0
+        rightmost_end = locus_end  # will be updated as we walk right
+        for _, row in right_bins.iterrows():
+            cumulative += int(row["End"]) - int(row["Start"])
+            rightmost_end = int(row["End"])
+            if cumulative >= target_size:
+                break
+        print(f"    [flanks] right_flank: {locus_end:,}-{rightmost_end:,}  "
+              f"accumulated {cumulative:,} bp (target {target_size:,})")
+        flanks.append((locus_end, rightmost_end, "right_flank"))
+    else:
+        print()  # newline after the count
+
+    return flanks
+
+
+def rebin_locus_intervals(
     df: pd.DataFrame,
     locus: GDLocus,
-) -> Dict[str, List[int]]:
+    max_bins_per_interval: int = 10,
+    flank_regions: Optional[List[Tuple[int, int, str]]] = None,
+) -> pd.DataFrame:
     """
-    Assign bins to breakpoint intervals within a locus.
+    Reduce the number of bins by rebinning each interval and flanking region to have
+    at most max_bins_per_interval bins. Uses weighted averaging based on bin size.
+
+    Applies to:
+      - Intervals between adjacent breakpoints
+      - Left and right flanking regions (bin-derived if flank_regions is provided,
+        otherwise falls back to geometric 100%-of-locus-size windows)
+      - Each breakpoint range (SD blocks) independently
 
     Args:
         df: DataFrame with bins for this locus
         locus: GDLocus object
+        max_bins_per_interval: Maximum number of bins per interval (default: 10)
 
     Returns:
-        Dict mapping interval name to list of bin indices
+        DataFrame with rebinned data
     """
-    intervals = locus.get_intervals()
-    interval_bins = {name: [] for _, _, name in intervals}
+    if len(df) == 0:
+        return df
+
+    # Get sample columns
+    metadata_cols = ["Chr", "Start", "End", "source_file", "Bin"]
+    sample_cols = [col for col in df.columns if col not in metadata_cols]
+
+    def rebin_region(region_df: pd.DataFrame) -> List[dict]:
+        """Rebin a set of bins to at most max_bins_per_interval using weighted averaging."""
+        if len(region_df) <= max_bins_per_interval:
+            return region_df.to_dict("records")
+
+        n_new_bins = max_bins_per_interval
+        bins_per_group = len(region_df) / n_new_bins
+        region_df = region_df.sort_values("Start")
+        rows = []
+
+        for i in range(n_new_bins):
+            start_idx = int(i * bins_per_group)
+            end_idx = int((i + 1) * bins_per_group) if i < n_new_bins - 1 else len(region_df)
+            group = region_df.iloc[start_idx:end_idx]
+            if len(group) == 0:
+                continue
+
+            bin_sizes = (group["End"] - group["Start"]).values
+            weights = bin_sizes / bin_sizes.sum()
+            new_bin = {
+                "Chr": group.iloc[0]["Chr"],
+                "Start": int(group["Start"].min()),
+                "End": int(group["End"].max()),
+            }
+            for col in sample_cols:
+                new_bin[col] = (group[col].values * weights).sum()
+            if "source_file" in group.columns:
+                new_bin["source_file"] = group.iloc[0]["source_file"]
+            rows.append(new_bin)
+
+        return rows
+
+    # All rebinnable regions: between-breakpoint intervals + flanking regions
+    all_rebin_regions = locus.get_intervals() + (
+        flank_regions if flank_regions is not None else locus.get_flanking_regions()
+    )
+
+    rebinned_rows = []
+    processed_indices = set()
+
+    for region_start, region_end, _ in all_rebin_regions:
+        region_indices = []
+        for idx, row in df.iterrows():
+            bin_mid = (row["Start"] + row["End"]) / 2
+            if region_start <= bin_mid < region_end:
+                region_indices.append(idx)
+                processed_indices.add(idx)
+
+        if not region_indices:
+            continue
+
+        region_df = df.loc[region_indices].copy()
+        rebinned_rows.extend(rebin_region(region_df))
+
+    # Rebin bins inside each breakpoint range (SD blocks) independently
+    for bp_start, bp_end in locus.breakpoints:
+        bp_indices = []
+        for idx, row in df.iterrows():
+            if idx in processed_indices:
+                continue
+            bin_mid = (row["Start"] + row["End"]) / 2
+            if bp_start <= bin_mid < bp_end:
+                bp_indices.append(idx)
+                processed_indices.add(idx)
+
+        if bp_indices:
+            rebinned_rows.extend(rebin_region(df.loc[bp_indices].copy()))
+
+    # Pass through any remaining bins not covered by any region or breakpoint
+    for idx, row in df.iterrows():
+        if idx not in processed_indices:
+            rebinned_rows.append(row.to_dict())
+
+    if len(rebinned_rows) == 0:
+        return pd.DataFrame(columns=df.columns)
+
+    return pd.DataFrame(rebinned_rows)
+
+
+def assign_bins_to_intervals(
+    df: pd.DataFrame,
+    locus: GDLocus,
+    flank_regions: Optional[List[Tuple[int, int, str]]] = None,
+) -> Dict[str, List[int]]:
+    """
+    Assign bins to breakpoint intervals and flanking regions within a locus.
+
+    Args:
+        df: DataFrame with bins for this locus
+        locus: GDLocus object
+        flank_regions: Pre-computed bin-derived flank regions. If None, falls back
+            to geometric windows from locus.get_flanking_regions().
+
+    Returns:
+        Dict mapping region name to list of bin indices. Includes between-breakpoint
+        interval names (e.g. "1-2"), flanking names ("left_flank", "right_flank"),
+        and "breakpoint_ranges" for bins that fall inside the breakpoint SD blocks.
+    """
+    all_named_regions = locus.get_intervals() + (
+        flank_regions if flank_regions is not None else locus.get_flanking_regions()
+    )
+    interval_bins: Dict[str, List[int]] = {name: [] for _, _, name in all_named_regions}
+    interval_bins["breakpoint_ranges"] = []
 
     for idx, row in df.iterrows():
         bin_mid = (row["Start"] + row["End"]) / 2
 
-        for start, end, name in intervals:
+        matched = False
+        for start, end, name in all_named_regions:
             if start <= bin_mid < end:
                 interval_bins[name].append(idx)
+                matched = True
                 break
+
+        if not matched:
+            interval_bins["breakpoint_ranges"].append(idx)
 
     return interval_bins
 
 
 def compute_interval_cn_stats(
     cn_posterior: np.ndarray,
-    cn_map: np.ndarray,
     interval_bins: Dict[str, List[int]],
     sample_idx: int,
 ) -> Dict[str, dict]:
@@ -948,36 +1188,19 @@ def compute_interval_cn_stats(
         if len(bin_indices) == 0:
             result[interval_name] = {
                 "n_bins": 0,
-                "mean_cn": np.nan,
-                "median_cn": np.nan,
-                "mode_cn": np.nan,
                 "cn_probs": np.zeros(6),
-                "confidence": 0.0,
             }
             continue
 
         # Get CN values for this interval
-        interval_cn_map = cn_map[bin_indices, sample_idx]
         interval_cn_probs = cn_posterior[bin_indices, sample_idx, :]
-
-        # Compute statistics
-        mean_cn = interval_cn_map.mean()
-        median_cn = np.median(interval_cn_map)
-        # Compute mode using bincount for integer CN values
-        cn_counts = np.bincount(interval_cn_map.astype(int), minlength=6)
-        mode_cn = np.argmax(cn_counts)
-
+        
         # Average posterior probabilities across bins
         mean_probs = interval_cn_probs.mean(axis=0)
-        confidence = mean_probs.max()
 
         result[interval_name] = {
             "n_bins": len(bin_indices),
-            "mean_cn": mean_cn,
-            "median_cn": median_cn,
-            "mode_cn": mode_cn,
             "cn_probs": mean_probs,
-            "confidence": confidence,
         }
 
     return result
@@ -986,11 +1209,7 @@ def compute_interval_cn_stats(
 def call_gd_cnv(
     locus: GDLocus,
     interval_stats: Dict[str, dict],
-    del_threshold: float = 1.5,
-    dup_threshold: float = 2.5,
-    min_confidence: float = 0.5,
-    min_bins: int = 3,
-) -> List[dict]:
+    log_prob_threshold: float = -0.5) -> List[dict]:
     """
     Call GD CNVs based on interval copy number statistics.
 
@@ -1000,10 +1219,7 @@ def call_gd_cnv(
     Args:
         locus: GDLocus object
         interval_stats: Dict mapping interval name to CN statistics
-        del_threshold: Maximum mean CN to call a deletion
-        dup_threshold: Minimum mean CN to call a duplication
-        min_confidence: Minimum posterior confidence for a call
-        min_bins: Minimum number of bins required for a call
+        log_prob_threshold: Minimum log probability score to call a CNV
 
     Returns:
         List of CNV call dictionaries
@@ -1063,47 +1279,80 @@ def call_gd_cnv(
                         covered_intervals.append(interval_name)
                 except ValueError:
                     continue
-                    covered_intervals.append(name)
 
         if len(covered_intervals) == 0:
             continue
 
-        # Aggregate statistics across covered intervals
-        total_bins = 0
-        weighted_cn = 0.0
-        weighted_confidence = 0.0
-        all_probs = []
+        # Determine if this is a CNV using weighted average of log probabilities
+        # Weight by interval size (number of bins)
+        log_prob_score = 0.0
+        total_weight = 0.0
+        
+        if svtype == "DEL":
+            # For affected intervals: weighted average of log P(CN < 2)
+            for interval in covered_intervals:
+                if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
+                    probs = interval_stats[interval]["cn_probs"]
+                    weight = interval_stats[interval]["n_bins"]
+                    p_del = max(probs[0] + probs[1], 1e-3)  # P(CN=0) + P(CN=1)
+                    if p_del > 0:
+                        log_prob_score += weight * np.log(p_del)
+                        total_weight += weight
+        
+        elif svtype == "DUP":
+            # For affected intervals: weighted average of log P(CN > 2)
+            for interval in covered_intervals:
+                if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
+                    probs = interval_stats[interval]["cn_probs"]
+                    weight = interval_stats[interval]["n_bins"]
+                    p_dup = max(probs[3:].sum(), 1e-3)  # P(CN >= 3)
+                    if p_dup > 0:
+                        log_prob_score += weight * np.log(p_dup)
+                        total_weight += weight
+        
+        # Normalize by total weight to get weighted average
+        if total_weight > 0:
+            log_prob_score = log_prob_score / total_weight
+        else:
+            log_prob_score = np.nan  # No data to support call
+        
+        # Determine if this is a CNV based on log probability score
+        is_cnv = log_prob_score > log_prob_threshold
 
-        for interval in covered_intervals:
-            # Skip intervals that don't have bins (e.g., filtered by segdup masking)
-            if interval not in interval_stats:
-                continue
-            
-            interval_stat = interval_stats[interval]
-            n_bins = interval_stat["n_bins"]
-            if n_bins > 0:
-                total_bins += n_bins
-                weighted_cn += interval_stat["mean_cn"] * n_bins
-                weighted_confidence += interval_stat["confidence"] * n_bins
-                all_probs.append(interval_stat["cn_probs"] * n_bins)
+        # Check flanking regions for evidence of a large spanning CNV.
+        # A true GD only affects the region between its breakpoints; a spanning
+        # variant would also show copy number change in the flanking regions.
+        flanking_log_prob_score = np.nan
+        is_spanning = False
+        if is_cnv:
+            flank_score_sum = 0.0
+            flank_weight_total = 0.0
+            for _, _, flank_name in locus.get_flanking_regions():
+                if flank_name not in interval_stats:
+                    continue
+                flank_stat = interval_stats[flank_name]
+                if flank_stat["n_bins"] == 0:
+                    continue
+                flank_probs = flank_stat["cn_probs"]
+                flank_weight = flank_stat["n_bins"]
+                if svtype == "DEL":
+                    p_flank = max(flank_probs[0] + flank_probs[1], 1e-3)
+                elif svtype == "DUP":
+                    p_flank = max(flank_probs[3:].sum(), 1e-3)
+                else:
+                    continue
+                flank_score_sum += flank_weight * np.log(p_flank)
+                flank_weight_total += flank_weight
 
-        if total_bins < min_bins:
-            continue
+            if flank_weight_total > 0:
+                flanking_log_prob_score = flank_score_sum / flank_weight_total
+                # If flanking regions also show a CN change, this is a spanning variant
+                if flanking_log_prob_score > log_prob_threshold:
+                    is_spanning = True
+                    is_cnv = False
 
-        mean_cn = weighted_cn / total_bins
-        mean_confidence = weighted_confidence / total_bins
-        mean_probs = np.sum(all_probs, axis=0) / total_bins if all_probs else np.zeros(6)
-
-        # Determine if this is a CNV based on svtype
-        is_cnv = False
-        if svtype == "DEL" and mean_cn < del_threshold:
-            is_cnv = True
-        elif svtype == "DUP" and mean_cn > dup_threshold:
-            is_cnv = True
-
-        # Check confidence
-        if mean_confidence < min_confidence:
-            is_cnv = False
+        # Count total bins across covered intervals
+        n_bins = sum(interval_stats[iv]["n_bins"] for iv in covered_intervals if iv in interval_stats)
 
         calls.append({
             "GD_ID": gd_id,
@@ -1114,12 +1363,12 @@ def call_gd_cnv(
             "svtype": svtype,
             "is_nahr": locus.is_nahr,
             "is_terminal": locus.is_terminal,
-            "n_bins": total_bins,
-            "mean_cn": mean_cn,
-            "cn_probs": mean_probs,
-            "confidence": mean_confidence,
+            "log_prob_score": log_prob_score,
+            "flanking_log_prob_score": flanking_log_prob_score,
             "is_carrier": is_cnv,
+            "is_spanning": is_spanning,
             "intervals": covered_intervals,
+            "n_bins": n_bins
         })
 
     return calls
@@ -1173,42 +1422,55 @@ def determine_best_breakpoints(
             covered_intervals = set(call["intervals"])
             uncovered_intervals = all_intervals - covered_intervals
 
-            # Compute score based on svtype
+            # Compute weighted average score based on svtype
             score = 0.0
+            total_weight = 0.0
 
             if svtype == "DEL":
-                # For affected intervals: sum log P(CN < 2) = log P(CN=0) + log P(CN=1)
+                # For affected intervals: weighted average of log P(CN < 2)
                 for interval in covered_intervals:
                     if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
                         probs = interval_stats[interval]["cn_probs"]
+                        weight = interval_stats[interval]["n_bins"]
                         p_del = probs[0] + probs[1]  # P(CN=0) + P(CN=1)
                         if p_del > 0:
-                            score += np.log(p_del)
+                            score += weight * np.log(p_del)
+                            total_weight += weight
 
-                # For unaffected intervals: sum log P(CN >= 2)
+                # For unaffected intervals: weighted average of log P(CN >= 2)
                 for interval in uncovered_intervals:
                     if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
                         probs = interval_stats[interval]["cn_probs"]
+                        weight = interval_stats[interval]["n_bins"]
                         p_normal = probs[2:].sum()  # P(CN >= 2)
                         if p_normal > 0:
-                            score += np.log(p_normal)
+                            score += weight * np.log(p_normal)
+                            total_weight += weight
 
             else:  # DUP
-                # For affected intervals: sum log P(CN > 2)
+                # For affected intervals: weighted average of log P(CN > 2)
                 for interval in covered_intervals:
                     if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
                         probs = interval_stats[interval]["cn_probs"]
+                        weight = interval_stats[interval]["n_bins"]
                         p_dup = probs[3:].sum()  # P(CN >= 3)
                         if p_dup > 0:
-                            score += np.log(p_dup)
+                            score += weight * np.log(p_dup)
+                            total_weight += weight
 
-                # For unaffected intervals: sum log P(CN <= 2)
+                # For unaffected intervals: weighted average of log P(CN <= 2)
                 for interval in uncovered_intervals:
                     if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
                         probs = interval_stats[interval]["cn_probs"]
+                        weight = interval_stats[interval]["n_bins"]
                         p_normal = probs[:3].sum()  # P(CN <= 2)
                         if p_normal > 0:
-                            score += np.log(p_normal)
+                            score += weight * np.log(p_normal)
+                            total_weight += weight
+            
+            # Normalize by total weight
+            if total_weight > 0:
+                score = score / total_weight
 
             # Update best if this score is higher
             if score > best_score:
@@ -1317,6 +1579,7 @@ def collect_all_locus_bins(
     segdup_threshold: float = 0.5,
     locus_padding: int = 0,
     min_bins_per_locus: int = 5,
+    max_bins_per_interval: int = 10,
 ) -> Tuple[pd.DataFrame, List[LocusBinMapping], Dict[str, GDLocus]]:
     """
     Collect all bins across all GD loci into a single DataFrame.
@@ -1328,6 +1591,7 @@ def collect_all_locus_bins(
         segdup_threshold: Minimum overlap fraction with segdups to mask a bin
         locus_padding: Padding around locus boundaries
         min_bins_per_locus: Minimum bins required to include a locus
+        max_bins_per_interval: Maximum bins per interval after rebinning (0 = no rebinning)
 
     Returns:
         Tuple of:
@@ -1344,17 +1608,58 @@ def collect_all_locus_bins(
     print("COLLECTING BINS ACROSS ALL GD LOCI")
     print(f"{'=' * 80}")
 
+    # Pre-build a per-chromosome cache of filtered (segdup-masked) bins.
+    # Flank computation walks outward through these; using the full chromosome
+    # guarantees filtered bins are found even when multi-megabase segdup deserts
+    # surround the locus.
+    print("\nBuilding per-chromosome filtered bin cache...")
+    chrom_filtered: Dict[str, pd.DataFrame] = {}
+    for chrom, chrom_df in df.groupby("Chr"):
+        if segdup_mask is not None:
+            keep = []
+            for _, row in chrom_df.iterrows():
+                overlap = segdup_mask.get_overlap_fraction(chrom, row["Start"], row["End"])
+                keep.append(overlap < segdup_threshold)
+            chrom_filtered[chrom] = chrom_df[keep].copy()
+        else:
+            chrom_filtered[chrom] = chrom_df.copy()
+        print(f"  {chrom}: {len(chrom_filtered[chrom])} filtered bins "
+              f"(of {len(chrom_df)} total)")
+
     for cluster, locus in gd_table.get_all_loci().items():
         print(f"\nProcessing locus: {cluster}")
         print(f"  Chromosome: {locus.chrom}")
         print(f"  Breakpoints: {locus.breakpoints}")
         print(f"  GD entries: {len(locus.gd_entries)} ({', '.join(locus.svtypes)})")
 
-        # Extract bins for this locus
+        locus_size = locus.end - locus.start
+
+        # Compute flank coordinates from the full chromosome's filtered bins so
+        # that even multi-megabase segdup deserts don't prevent flank discovery.
+        chrom_bins = chrom_filtered.get(locus.chrom, pd.DataFrame())
+        flank_regions = compute_flank_regions_from_bins(chrom_bins, locus, locus_size)
+        if flank_regions:
+            for fs, fe, fn in flank_regions:
+                print(f"  {fn}: {fs:,}-{fe:,} (bin-derived)")
+        else:
+            print(f"  Warning: no flanking bins found for locus {cluster}")
+
+        # Determine extraction bounds: locus body + computed flank extents.
+        left_bound = locus.start
+        right_bound = locus.end
+        for fs, fe, fn in flank_regions:
+            if fn == "left_flank":
+                left_bound = fs
+            elif fn == "right_flank":
+                right_bound = fe
+
+        # Extract only the bins within the active region (locus + flanks),
+        # applying segdup masking. locus_padding still applies as a minimum.
+        active_padding = max(locus_padding, locus.start - left_bound, right_bound - locus.end)
         locus_df = extract_locus_bins(
             df, locus, segdup_mask,
             segdup_threshold=segdup_threshold,
-            padding=locus_padding,
+            padding=active_padding,
         )
 
         if len(locus_df) < min_bins_per_locus:
@@ -1363,35 +1668,60 @@ def collect_all_locus_bins(
 
         print(f"  Bins after filtering: {len(locus_df)}")
 
-        # Assign bins to intervals
-        interval_bins = assign_bins_to_intervals(locus_df, locus)
-        for interval_name, bins in interval_bins.items():
-            print(f"    {interval_name}: {len(bins)} bins")
+        # Trim to active region: drop any bins outside [left_bound, right_bound)
+        bin_mids = (locus_df["Start"] + locus_df["End"]) / 2
+        locus_df = locus_df[(bin_mids >= left_bound) & (bin_mids < right_bound)].copy()
+        print(f"  Bins after trimming to active region [{left_bound:,}, {right_bound:,}): {len(locus_df)}")
+
+        # Rebin to reduce number of bins per interval/flank if requested
+        if max_bins_per_interval > 0:
+            locus_df_orig = locus_df
+            locus_df = rebin_locus_intervals(locus_df, locus, max_bins_per_interval, flank_regions)
+            if len(locus_df) < len(locus_df_orig):
+                print(f"  Bins after rebinning: {len(locus_df)} (reduced from {len(locus_df_orig)})")
+
+        # Assign bins to intervals and flanking regions
+        interval_bins = assign_bins_to_intervals(locus_df, locus, flank_regions)
+        total_assigned = sum(len(v) for v in interval_bins.values())
+        for region_name, bins in interval_bins.items():
+            print(f"    {region_name}: {len(bins)} bins")
+        print(f"    total: {total_assigned} bins")
+
+        # Build a fast lookup: bin midpoint -> assigned region name
+        all_named_regions = locus.get_intervals() + flank_regions
 
         # Create mappings for each bin
         for idx in locus_df.index:
-            # Find which interval this bin belongs to
             bin_row = locus_df.loc[idx]
             bin_mid = (bin_row["Start"] + bin_row["End"]) / 2
 
+            # Check named regions (intervals + flanks) in order
             assigned_interval = None
-            for start, end, name in locus.get_intervals():
+            for start, end, name in all_named_regions:
                 if start <= bin_mid < end:
                     assigned_interval = name
                     break
 
+            # Bins inside breakpoint ranges: assign to the nearest between-breakpoint interval
             if assigned_interval is None:
-                # Bin is in padding region, assign to nearest interval
                 intervals = locus.get_intervals()
-                if bin_mid < intervals[0][0]:
-                    assigned_interval = intervals[0][2]
-                else:
-                    assigned_interval = intervals[-1][2]
+                if intervals:
+                    if bin_mid < intervals[0][0]:
+                        assigned_interval = intervals[0][2]
+                    elif bin_mid >= intervals[-1][1]:
+                        assigned_interval = intervals[-1][2]
+                    else:
+                        for i in range(len(intervals) - 1):
+                            if intervals[i][1] <= bin_mid < intervals[i + 1][0]:
+                                dist_left = bin_mid - intervals[i][1]
+                                dist_right = intervals[i + 1][0] - bin_mid
+                                assigned_interval = intervals[i][2] if dist_left <= dist_right else intervals[i + 1][2]
+                                break
 
             all_mappings.append(LocusBinMapping(
                 cluster=cluster,
                 locus=locus,
-                interval_name=assigned_interval,
+                interval_name=assigned_interval or (all_named_regions[0][2] if all_named_regions else "unknown"),
                 array_idx=current_idx,
                 chrom=bin_row["Chr"],
                 start=int(bin_row["Start"]),
@@ -1581,18 +1911,77 @@ def write_posterior_tables(
     print("\n" + "=" * 80)
 
 
+def write_locus_metadata(
+    included_loci: Dict[str, GDLocus],
+    mappings: List[LocusBinMapping],
+    output_dir: str,
+):
+    """
+    Write locus metadata and bin mappings for use by downstream scripts.
+    
+    Args:
+        included_loci: Dict of cluster -> GDLocus objects
+        mappings: List of LocusBinMapping objects
+        output_dir: Output directory
+    """
+    print("\nWriting locus metadata...")
+    
+    # 1. Write bin-to-interval mappings
+    bin_mapping_rows = []
+    for mapping in mappings:
+        bin_mapping_rows.append({
+            "cluster": mapping.cluster,
+            "interval": mapping.interval_name,
+            "chr": mapping.chrom,
+            "start": mapping.start,
+            "end": mapping.end,
+            "array_idx": mapping.array_idx,
+        })
+    
+    bin_mapping_df = pd.DataFrame(bin_mapping_rows)
+    bin_mapping_output = os.path.join(output_dir, "bin_mappings.tsv.gz")
+    bin_mapping_df.to_csv(bin_mapping_output, sep="\t", index=False, compression="gzip")
+    print(f"  Saved: {bin_mapping_output}")
+    print(f"  Rows: {len(bin_mapping_df):,} bins")
+    
+    # 2. Write locus definitions with interval coordinates
+    locus_rows = []
+    for cluster, locus in included_loci.items():
+        # Get intervals for this locus
+        for start, end, name in locus.get_intervals():
+            locus_rows.append({
+                "cluster": cluster,
+                "interval": name,
+                "chr": locus.chrom,
+                "start": start,
+                "end": end,
+            })
+    
+    locus_df = pd.DataFrame(locus_rows)
+    locus_output = os.path.join(output_dir, "locus_intervals.tsv.gz")
+    locus_df.to_csv(locus_output, sep="\t", index=False, compression="gzip")
+    print(f"  Saved: {locus_output}")
+    print(f"  Rows: {len(locus_df):,} intervals")
+
+
 def run_gd_analysis(
     df: pd.DataFrame,
     gd_table: GDTable,
     segdup_mask: Optional[SegDupMask],
     args: argparse.Namespace,
     device: str = "cpu",
-) -> pd.DataFrame:
+):
     """
     Run GD CNV analysis on all loci using a single unified model.
+    
+    This function performs model training and inference only.
+    CNV calling is handled by downstream scripts (plot_gd_cnv_output.py).
+    
+    This function performs model training and inference only.
+    CNV calling is handled by downstream scripts (plot_gd_cnv_output.py).
 
     This function collects bins from all GD loci, trains a single model on all
-    bins together, then maps results back to individual loci for CNV calling.
+    bins together, and writes out posterior probabilities and metadata.
 
     Args:
         df: DataFrame with normalized read depth
@@ -1600,9 +1989,6 @@ def run_gd_analysis(
         segdup_mask: Optional SegDupMask for filtering
         args: Command line arguments
         device: Torch device
-
-    Returns:
-        DataFrame with CNV calls for all samples and loci
     """
     # Collect all bins across all loci
     combined_df, mappings, included_loci = collect_all_locus_bins(
@@ -1610,6 +1996,7 @@ def run_gd_analysis(
         segdup_threshold=args.segdup_threshold,
         locus_padding=args.locus_padding,
         min_bins_per_locus=args.min_bins_per_locus,
+        max_bins_per_interval=args.max_bins_per_interval,
     )
 
     if len(combined_df) == 0:
@@ -1672,75 +2059,18 @@ def run_gd_analysis(
         mappings,
         args.output_dir,
     )
-
-    # Now map results back to individual loci and make calls
+    
+    # Write locus metadata for downstream calling/plotting
+    write_locus_metadata(
+        included_loci,
+        mappings,
+        args.output_dir,
+    )
+    
     print("\n" + "=" * 80)
-    print("CALLING CNVs PER LOCUS")
+    print("Model training and inference complete!")
+    print("Use plot_gd_cnv_output.py to call CNVs and generate plots.")
     print("=" * 80)
-
-    all_results = []
-
-    for cluster, locus in included_loci.items():
-        print(f"\nCalling CNVs for locus: {cluster}")
-
-        # Get interval bins for this locus (array indices)
-        interval_bins = get_locus_interval_bins(mappings, cluster)
-
-        for interval_name, bins in interval_bins.items():
-            print(f"  {interval_name}: {len(bins)} bins")
-
-        # Process each sample
-        for sample_idx, sample_id in enumerate(combined_data.sample_ids):
-            # Compute interval statistics using array indices directly
-            interval_stats = compute_interval_cn_stats(
-                cn_posterior["cn_posterior"],
-                map_estimates["cn"],
-                interval_bins,
-                sample_idx,
-            )
-
-            # Call GD CNVs
-            calls = call_gd_cnv(
-                locus,
-                interval_stats,
-                del_threshold=args.del_threshold,
-                dup_threshold=args.dup_threshold,
-                min_confidence=args.min_confidence,
-                min_bins=args.min_bins_per_call,
-            )
-
-            # Determine best breakpoints (separately for DEL and DUP)
-            best_by_svtype = determine_best_breakpoints(locus, interval_stats, calls)
-
-            # Record results
-            for call in calls:
-                svtype = call["svtype"]
-                best_gd_for_svtype = best_by_svtype.get(svtype)
-                result = {
-                    "sample": sample_id,
-                    "cluster": cluster,
-                    "GD_ID": call["GD_ID"],
-                    "chrom": call["chrom"],
-                    "start": call["start"],
-                    "end": call["end"],
-                    "svtype": svtype,
-                    "is_nahr": call["is_nahr"],
-                    "is_terminal": call["is_terminal"],
-                    "n_bins": call["n_bins"],
-                    "mean_cn": call["mean_cn"],
-                    "confidence": call["confidence"],
-                    "is_carrier": call["is_carrier"],
-                    "is_best_match": call["GD_ID"] == best_gd_for_svtype if best_gd_for_svtype else False,
-                    "cn_prob_0": call["cn_probs"][0],
-                    "cn_prob_1": call["cn_probs"][1],
-                    "cn_prob_2": call["cn_probs"][2],
-                    "cn_prob_3": call["cn_probs"][3],
-                    "cn_prob_4": call["cn_probs"][4],
-                    "cn_prob_5": call["cn_probs"][5],
-                }
-                all_results.append(result)
-
-    return pd.DataFrame(all_results)
 
 
 def parse_args():
@@ -1792,31 +2122,20 @@ def parse_args():
         help="Minimum bins required to analyze a locus",
     )
     parser.add_argument(
+        "--max-bins-per-interval",
+        type=int,
+        default=10,
+        help="Maximum bins per interval after rebinning (0 = no rebinning)",
+    )
+    parser.add_argument(
         "--min-bins-per-call",
         type=int,
         default=3,
         help="Minimum bins required for a CNV call",
     )
 
-    # CNV calling thresholds
-    parser.add_argument(
-        "--del-threshold",
-        type=float,
-        default=1.5,
-        help="Maximum mean CN to call a deletion",
-    )
-    parser.add_argument(
-        "--dup-threshold",
-        type=float,
-        default=2.5,
-        help="Minimum mean CN to call a duplication",
-    )
-    parser.add_argument(
-        "--min-confidence",
-        type=float,
-        default=0.5,
-        help="Minimum posterior confidence for a call",
-    )
+    # CNV calling is now handled by plot_gd_cnv_output.py
+    # Removed: --log-prob-threshold, --del-threshold, --dup-threshold, --min-confidence
 
     # Model parameters
     parser.add_argument(
@@ -2032,63 +2351,22 @@ def main():
     torch.manual_seed(42)
     np.random.seed(42)
 
-    # Run GD analysis
-    results_df = run_gd_analysis(
+    # Run GD analysis (training and inference only)
+    run_gd_analysis(
         df, gd_table, segdup_mask, args, device=args.device
     )
 
-    # Save results
-    output_file = os.path.join(args.output_dir, "gd_cnv_calls.tsv.gz")
-    results_df.to_csv(output_file, sep="\t", index=False, compression="gzip")
-    print(f"\nResults saved to {output_file}")
-
-    # Generate summary statistics
     print("\n" + "=" * 80)
-    print("GD CNV DETECTION SUMMARY")
+    print("ANALYSIS COMPLETE")
     print("=" * 80)
-
-    n_samples = results_df["sample"].nunique()
-    n_loci = results_df["cluster"].nunique()
-    n_carriers = results_df[results_df["is_carrier"]].groupby(["sample", "cluster"]).size().shape[0]
-
-    print(f"Total samples: {n_samples}")
-    print(f"Total loci analyzed: {n_loci}")
-    print(f"Total carrier calls: {n_carriers}")
-
-    # Per-locus summary, separated by svtype
-    print("\nPer-locus carrier summary (by svtype):")
-    carriers = results_df[results_df["is_carrier"]]
-
-    if len(carriers) > 0:
-        for cluster in sorted(carriers["cluster"].unique()):
-            cluster_carriers = carriers[carriers["cluster"] == cluster]
-            print(f"\n  {cluster}:")
-
-            for svtype in ["DEL", "DUP"]:
-                svtype_carriers = cluster_carriers[cluster_carriers["svtype"] == svtype]
-                if len(svtype_carriers) == 0:
-                    continue
-
-                n_samples = svtype_carriers["sample"].nunique()
-                print(f"    {svtype}: {n_samples} carrier(s)")
-
-                # Show breakdown by GD_ID (breakpoint configuration)
-                for gd_id in sorted(svtype_carriers["GD_ID"].unique()):
-                    gd_carriers = svtype_carriers[svtype_carriers["GD_ID"] == gd_id]
-                    n = gd_carriers["sample"].nunique()
-                    # Count how many are best match
-                    n_best = gd_carriers[gd_carriers["is_best_match"]]["sample"].nunique()
-                    print(f"      - {gd_id}: {n} ({n_best} best match)")
-    else:
-        print("  No carriers detected")
-
-    # Save carrier summary
-    carrier_output = os.path.join(args.output_dir, "gd_carrier_summary.tsv")
-    carrier_df = results_df[results_df["is_carrier"]][
-        ["sample", "cluster", "GD_ID", "svtype", "mean_cn", "confidence", "is_best_match"]
-    ].sort_values(["cluster", "sample"])
-    carrier_df.to_csv(carrier_output, sep="\t", index=False)
-    print(f"\nCarrier summary saved to {carrier_output}")
+    print("\nOutput files:")
+    print(f"  - cn_posteriors.tsv.gz")
+    print(f"  - sample_posteriors.tsv.gz")
+    print(f"  - bin_posteriors.tsv.gz")
+    print(f"  - bin_mappings.tsv.gz")
+    print(f"  - locus_intervals.tsv.gz")
+    print("\nNext step: Run plot_gd_cnv_output.py to call CNVs and generate plots.")
+    print("=" * 80)
 
     print("\n" + "=" * 80)
     print("Analysis complete!")
