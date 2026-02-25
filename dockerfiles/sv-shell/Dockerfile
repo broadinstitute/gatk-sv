@@ -179,10 +179,12 @@ RUN chmod +x /usr/local/bin/stripy
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 
-# SYSSTAT (SAR) configuration
+COPY src/sv_shell /opt/sv_shell
+
+# SYSSTAT (SAR) configuration. Collect stats every 30 seconds (two measurements in 1min)
 RUN apt-get update && apt-get install -y cron sysstat && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     sed -i 's/ENABLED="false"/ENABLED="true"/' /etc/default/sysstat && \
-    sed -i 's|^5-55/10|*/5|' /etc/cron.d/sysstat
+    sed -i 's|^5-55/10.*|* * * * * root command -v debian-sa1 > /dev/null \&\& debian-sa1 30 2|' /etc/cron.d/sysstat
 
 WORKDIR /
