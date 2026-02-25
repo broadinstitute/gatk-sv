@@ -20,6 +20,7 @@ Output:
 
 import argparse
 import os
+import sys
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -38,6 +39,52 @@ from pyro.infer import config_enumerate, infer_discrete
 from pyro.infer.autoguide import AutoDiagonalNormal, AutoDelta
 from pyro.infer import JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.infer.svi import SVI
+
+
+# =============================================================================
+# Logging
+# =============================================================================
+
+
+class TeeStream:
+    """Write to both the original stream and a log file."""
+
+    def __init__(self, original_stream, log_file):
+        self.original_stream = original_stream
+        self.log_file = log_file
+
+    def write(self, message: str):
+        self.original_stream.write(message)
+        self.log_file.write(message)
+
+    def flush(self):
+        self.original_stream.flush()
+        self.log_file.flush()
+
+    # Forward any other attribute lookups to the original stream so that
+    # callers relying on e.g. ``fileno()`` or ``isatty()`` still work.
+    def __getattr__(self, name):
+        return getattr(self.original_stream, name)
+
+
+def setup_logging(output_dir: str, filename: str = "log.txt"):
+    """Redirect stdout and stderr so output goes to both the console and a log file.
+
+    Call once at the beginning of ``main()``.  The log file is opened in
+    write mode so each run produces a fresh log.
+
+    Args:
+        output_dir: Directory where the log file will be created.
+        filename: Name of the log file (default ``log.txt``).
+
+    Returns:
+        The open file handle (kept so the caller can close it if desired).
+    """
+    log_path = os.path.join(output_dir, filename)
+    log_fh = open(log_path, "w")
+    sys.stdout = TeeStream(sys.__stdout__, log_fh)
+    sys.stderr = TeeStream(sys.__stderr__, log_fh)
+    return log_fh
 
 
 def get_sample_columns(df: pd.DataFrame) -> list:
@@ -219,9 +266,13 @@ class GDTable:
                 bp1 = "1"
                 bp2 = "2"
             else:
-                # Convert to strings for consistent handling
-                bp1 = str(bp1)
-                bp2 = str(bp2)
+                # Convert to strings for consistent handling.
+                # Pandas reads numeric columns with NaN gaps as float, so a
+                # TSV value of "2" arrives as 2.0.  Normalise to clean integer
+                # strings ("2", not "2.0") to avoid duplicate breakpoint names
+                # and broken interval matching downstream.
+                bp1 = str(int(bp1)) if isinstance(bp1, float) and bp1 == int(bp1) else str(bp1)
+                bp2 = str(int(bp2)) if isinstance(bp2, float) and bp2 == int(bp2) else str(bp2)
             
             # Track coordinates for each breakpoint
             if bp1 not in loci[cluster]["breakpoint_coords"]:
@@ -253,10 +304,9 @@ class GDTable:
             if data["breakpoint_coords"]:
                 # Sort breakpoint names (numeric if possible, otherwise alphabetic)
                 def sort_key(bp_name):
-                    # Try to convert to int for numeric breakpoints
                     try:
-                        return (0, int(bp_name))
-                    except ValueError:
+                        return (0, int(float(bp_name)))
+                    except (ValueError, OverflowError):
                         # Alphabetic breakpoints
                         return (1, bp_name)
                 
@@ -473,12 +523,12 @@ class DepthData:
                 selected_samples = [sample_cols[i] for i in sample_indices]
                 sample_cols = selected_samples
 
-        # Sort chromosomes in proper order (chr1-chr22, chrX, chrY)
-        chr_order = {f"chr{i}": i for i in range(1, 23)}
-        chr_order["chrX"] = 23
-        chr_order["chrY"] = 24
-        df["_chr_order"] = df["Chr"].map(chr_order)
-        df = df.sort_values(["_chr_order", "Start"]).drop("_chr_order", axis=1)
+        # NOTE: Do NOT sort the DataFrame here.  The caller
+        # (collect_all_locus_bins) builds a parallel `mappings` list whose
+        # order must stay aligned with the rows of this DataFrame.  Sorting
+        # would silently rearrange depth values relative to those mappings,
+        # causing every downstream table (cn_posteriors, bin_posteriors, etc.)
+        # to attribute values to the wrong genomic bins.
 
         # Extract metadata
         self.chr = df["Chr"].values
@@ -1964,6 +2014,68 @@ def write_locus_metadata(
     print(f"  Rows: {len(locus_df):,} intervals")
 
 
+def estimate_ploidy(
+    df: pd.DataFrame,
+    output_dir: str,
+) -> pd.DataFrame:
+    """
+    Estimate ploidy for each sample/contig pair from the filtered bin set.
+
+    Uses the median normalized depth across all filtered bins on each
+    chromosome for each sample. Since the data is normalized so that CN=2
+    corresponds to a depth of 2.0, the rounded median gives the ploidy.
+
+    Args:
+        df: Filtered DataFrame with bins as rows and samples as columns.
+            Expected to already be normalized so diploid depth ≈ 2.0.
+        output_dir: Directory to write the ploidy table.
+
+    Returns:
+        DataFrame with columns: sample, contig, median_depth, ploidy
+    """
+    sample_cols = get_sample_columns(df)
+
+    print(f"\n{'=' * 80}")
+    print("ESTIMATING PLOIDY PER SAMPLE / CONTIG")
+    print(f"{'=' * 80}")
+
+    rows = []
+    for contig, contig_df in df.groupby("Chr"):
+        depths = contig_df[sample_cols].values  # bins × samples
+        medians = np.median(depths, axis=0)     # per-sample median
+        for sample_id, med in zip(sample_cols, medians):
+            ploidy = int(np.round(med))
+            rows.append({
+                "sample": sample_id,
+                "contig": contig,
+                "median_depth": float(med),
+                "ploidy": ploidy,
+            })
+
+    ploidy_df = pd.DataFrame(rows)
+
+    # Summary
+    n_samples = len(sample_cols)
+    n_contigs = ploidy_df["contig"].nunique()
+    print(f"  Samples: {n_samples}")
+    print(f"  Contigs: {n_contigs}")
+    for contig in sorted(ploidy_df["contig"].unique(),
+                         key=lambda c: (0, int(c.replace('chr', ''))) if c.replace('chr', '').isdigit() else (1, c)):
+        sub = ploidy_df[ploidy_df["contig"] == contig]
+        counts = sub["ploidy"].value_counts().sort_index()
+        dist_str = ", ".join(f"ploidy {p}: {n}" for p, n in counts.items())
+        print(f"    {contig}: {dist_str}")
+
+    # Write to disk
+    output_path = os.path.join(output_dir, "ploidy_estimates.tsv")
+    ploidy_df.to_csv(output_path, sep="\t", index=False)
+    print(f"  Saved: {output_path}")
+    print(f"  Rows: {len(ploidy_df):,}")
+    print(f"{'=' * 80}\n")
+
+    return ploidy_df
+
+
 def run_gd_analysis(
     df: pd.DataFrame,
     gd_table: GDTable,
@@ -2130,7 +2242,7 @@ def parse_args():
     parser.add_argument(
         "--min-bins-per-call",
         type=int,
-        default=3,
+        default=1,
         help="Minimum bins required for a CNV call",
     )
 
@@ -2296,6 +2408,10 @@ def main():
 
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
+
+    # Mirror all stdout/stderr to a log file in the output directory
+    log_fh = setup_logging(args.output_dir)
+
     print(f"Output directory: {args.output_dir}")
 
     # Load GD table
@@ -2344,6 +2460,9 @@ def main():
             mad_max=args.mad_max,
         )
 
+    # Estimate ploidy per sample/contig from the filtered (genome-wide) bins
+    ploidy_df = estimate_ploidy(df, args.output_dir)
+
     # Set up Pyro
     pyro.enable_validation(True)
     pyro.distributions.enable_validation(True)
@@ -2360,6 +2479,7 @@ def main():
     print("ANALYSIS COMPLETE")
     print("=" * 80)
     print("\nOutput files:")
+    print(f"  - ploidy_estimates.tsv")
     print(f"  - cn_posteriors.tsv.gz")
     print(f"  - sample_posteriors.tsv.gz")
     print(f"  - bin_posteriors.tsv.gz")

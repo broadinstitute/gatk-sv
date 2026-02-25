@@ -24,6 +24,7 @@ import argparse
 import gzip
 import os
 import re
+import sys
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -35,6 +36,52 @@ import seaborn as sns
 
 # Import GDLocus and GDTable from gd_cnv_pyro.py to avoid duplication
 from gd_cnv_pyro import GDLocus, GDTable
+
+
+# =============================================================================
+# Logging
+# =============================================================================
+
+
+class TeeStream:
+    """Write to both the original stream and a log file."""
+
+    def __init__(self, original_stream, log_file):
+        self.original_stream = original_stream
+        self.log_file = log_file
+
+    def write(self, message: str):
+        self.original_stream.write(message)
+        self.log_file.write(message)
+
+    def flush(self):
+        self.original_stream.flush()
+        self.log_file.flush()
+
+    # Forward any other attribute lookups to the original stream so that
+    # callers relying on e.g. ``fileno()`` or ``isatty()`` still work.
+    def __getattr__(self, name):
+        return getattr(self.original_stream, name)
+
+
+def setup_logging(output_dir: str, filename: str = "log.txt"):
+    """Redirect stdout and stderr so output goes to both the console and a log file.
+
+    Call once at the beginning of ``main()``.  The log file is opened in
+    write mode so each run produces a fresh log.
+
+    Args:
+        output_dir: Directory where the log file will be created.
+        filename: Name of the log file (default ``log.txt``).
+
+    Returns:
+        The open file handle (kept so the caller can close it if desired).
+    """
+    log_path = os.path.join(output_dir, filename)
+    log_fh = open(log_path, "w")
+    sys.stdout = TeeStream(sys.__stdout__, log_fh)
+    sys.stderr = TeeStream(sys.__stderr__, log_fh)
+    return log_fh
 
 
 # =============================================================================
@@ -193,13 +240,16 @@ def get_locus_interval_bins(
         cluster: Cluster name to filter by
     
     Returns:
-        Dict mapping interval name to list of bin indices (array_idx from posteriors)
+        Dict mapping interval name to list of array_idx values
+            (positional indices into the per-sample posterior arrays)
     """
     locus_bins = bin_mappings_df[bin_mappings_df["cluster"] == cluster]
     interval_bins = {}
     for interval_name, group in locus_bins.groupby("interval"):
-        # Use array_idx directly - this is the index in the posterior arrays
-        interval_bins[interval_name] = group.index.tolist()
+        # Use the explicit array_idx column – this is the positional index
+        # into the per-sample posterior arrays, independent of DataFrame
+        # index state.
+        interval_bins[interval_name] = group["array_idx"].tolist()
     return interval_bins
 
 
@@ -212,8 +262,9 @@ def compute_interval_cn_stats(
     Compute copy number statistics for each interval for a specific sample.
     
     Args:
-        cn_posteriors_df: DataFrame with CN posterior probabilities (indexed by bin position)
-        interval_bins: Dict mapping interval name to bin row indices in posteriors DataFrame
+        cn_posteriors_df: DataFrame with CN posterior probabilities
+        interval_bins: Dict mapping interval name to list of array_idx values
+            (positional indices into the per-sample posterior rows)
         sample_id: Sample identifier
     
     Returns:
@@ -221,15 +272,19 @@ def compute_interval_cn_stats(
     """
     result = {}
     
-    # Filter posteriors to this sample
-    sample_posteriors = cn_posteriors_df[cn_posteriors_df["sample"] == sample_id]
+    # Filter posteriors to this sample and reset index so that
+    # .iloc[k] reliably gives the k-th bin (matching array_idx).
+    sample_posteriors = (
+        cn_posteriors_df[cn_posteriors_df["sample"] == sample_id]
+        .reset_index(drop=True)
+    )
     
     # Get probability columns (prob_cn_0, prob_cn_1, etc.)
     prob_cols = [c for c in sample_posteriors.columns if c.startswith("prob_cn_")]
     n_states = len(prob_cols)
     
     for interval_name, bin_indices in interval_bins.items():
-        # Get bins for this interval
+        # bin_indices are array_idx values – use .iloc for positional access
         interval_data = sample_posteriors.iloc[bin_indices]
         
         if len(interval_data) == 0:
@@ -255,6 +310,7 @@ def call_gd_cnv(
     interval_stats: Dict[str, dict],
     log_prob_threshold: float = -0.5,
     flanking_log_prob_threshold: float = -1.0,
+    ploidy: int = 2,
 ) -> List[dict]:
     """
     Call GD CNVs based on interval copy number statistics.
@@ -267,6 +323,7 @@ def call_gd_cnv(
         interval_stats: Dict mapping interval name to CN statistics
         log_prob_threshold: Minimum log probability score to call a CNV
         flanking_log_prob_threshold: Minimum log probability score in flanking regions to classify as spanning
+        ploidy: Expected copy number for this sample on this chromosome
     
     Returns:
         List of CNV call dictionaries
@@ -330,7 +387,7 @@ def call_gd_cnv(
                 if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
                     probs = interval_stats[interval]["cn_probs"]
                     weight = interval_stats[interval]["n_bins"]
-                    p_del = max(probs[0] + probs[1], 1e-5)  # P(CN=0) + P(CN=1)
+                    p_del = max(probs[:ploidy].sum(), 1e-5)  # P(CN < ploidy)
                     if p_del > 0:
                         log_prob_score += weight * np.log(p_del)
                         total_weight += weight
@@ -340,7 +397,7 @@ def call_gd_cnv(
                 if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
                     probs = interval_stats[interval]["cn_probs"]
                     weight = interval_stats[interval]["n_bins"]
-                    p_dup = max(probs[3:].sum(), 1e-5)  # P(CN >= 3)
+                    p_dup = max(probs[ploidy + 1:].sum(), 1e-5)  # P(CN > ploidy)
                     if p_dup > 0:
                         log_prob_score += weight * np.log(p_dup)
                         total_weight += weight
@@ -371,9 +428,9 @@ def call_gd_cnv(
                 flank_probs = flank_stat["cn_probs"]
                 flank_weight = flank_stat["n_bins"]
                 if svtype == "DEL":
-                    p_flank = max(flank_probs[0] + flank_probs[1], 1e-5)
+                    p_flank = max(flank_probs[:ploidy].sum(), 1e-5)
                 elif svtype == "DUP":
-                    p_flank = max(flank_probs[3:].sum(), 1e-5)
+                    p_flank = max(flank_probs[ploidy + 1:].sum(), 1e-5)
                 else:
                     continue
                 flank_score_sum += flank_weight * np.log(p_flank)
@@ -413,6 +470,7 @@ def determine_best_breakpoints(
     locus: GDLocus,
     interval_stats: Dict[str, dict],
     calls: List[dict],
+    ploidy: int = 2,
 ) -> Dict[str, Optional[str]]:
     """
     Determine the most likely breakpoint pair for a GD CNV, separately for DEL and DUP.
@@ -424,6 +482,7 @@ def determine_best_breakpoints(
         locus: GDLocus object
         interval_stats: Dict mapping interval name to CN statistics
         calls: List of CNV call dictionaries
+        ploidy: Expected copy number for this sample on this chromosome
     
     Returns:
         Dict mapping svtype ("DEL", "DUP") to best matching GD_ID or None
@@ -457,43 +516,43 @@ def determine_best_breakpoints(
             total_weight = 0.0
             
             if svtype == "DEL":
-                # Score affected intervals
+                # Score affected intervals: P(CN < ploidy)
                 for interval in covered_intervals:
                     if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
                         probs = interval_stats[interval]["cn_probs"]
                         weight = 1.  # interval_stats[interval]["n_bins"]
-                        p_del = probs[0] + probs[1]
+                        p_del = probs[:ploidy].sum()
                         if p_del > 0:
                             score += weight * np.log(p_del)
                             total_weight += weight
                 
-                # Score unaffected intervals
+                # Score unaffected intervals: P(CN >= ploidy)
                 for interval in uncovered_intervals:
                     if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
                         probs = interval_stats[interval]["cn_probs"]
-                        weight = 1.  # iinterval_stats[interval]["n_bins"]
-                        p_normal = probs[2:].sum()
+                        weight = 1.  # interval_stats[interval]["n_bins"]
+                        p_normal = probs[ploidy:].sum()
                         if p_normal > 0:
                             score += weight * np.log(p_normal)
                             total_weight += weight
             
             else:  # DUP
-                # Score affected intervals
+                # Score affected intervals: P(CN > ploidy)
                 for interval in covered_intervals:
                     if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
                         probs = interval_stats[interval]["cn_probs"]
-                        weight = 1.  # iinterval_stats[interval]["n_bins"]
-                        p_dup = probs[3:].sum()
+                        weight = 1.  # interval_stats[interval]["n_bins"]
+                        p_dup = probs[ploidy + 1:].sum()
                         if p_dup > 0:
                             score += weight * np.log(p_dup)
                             total_weight += weight
                 
-                # Score unaffected intervals
+                # Score unaffected intervals: P(CN <= ploidy)
                 for interval in uncovered_intervals:
                     if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
                         probs = interval_stats[interval]["cn_probs"]
                         weight = 1.  # interval_stats[interval]["n_bins"]
-                        p_normal = probs[:3].sum()
+                        p_normal = probs[:ploidy + 1].sum()
                         if p_normal > 0:
                             score += weight * np.log(p_normal)
                             total_weight += weight
@@ -517,6 +576,8 @@ def call_cnvs_from_posteriors(
     gd_table: GDTable,
     log_prob_threshold: float = -0.5,
     flanking_log_prob_threshold: float = -1.0,
+    ploidy_df: Optional[pd.DataFrame] = None,
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Call CNVs from posterior probabilities.
@@ -527,6 +588,10 @@ def call_cnvs_from_posteriors(
         gd_table: GDTable with locus definitions
         log_prob_threshold: Minimum log probability score to call a CNV
         flanking_log_prob_threshold: Minimum log probability score in flanking regions to classify as spanning
+        ploidy_df: Optional DataFrame with columns (sample, contig, ploidy).
+            If None, ploidy=2 is assumed for all sample/contig pairs.
+        verbose: If True, print per-sample log probability scores for every
+            GD entry at every locus, including flanking region scores.
     
     Returns:
         DataFrame with CNV calls for all samples and loci
@@ -538,15 +603,60 @@ def call_cnvs_from_posteriors(
     all_results = []
     sample_ids = cn_posteriors_df["sample"].unique()
     
-    # Build mapping of bin position to row index for faster lookup
-    cn_posteriors_df = cn_posteriors_df.reset_index(drop=True)
-    bin_mappings_df = bin_mappings_df.reset_index(drop=True)
+    # Build ploidy lookup: (sample, contig) -> ploidy, default 2
+    ploidy_lookup: Dict[Tuple[str, str], int] = {}
+    if ploidy_df is not None:
+        for _, row in ploidy_df.iterrows():
+            ploidy_lookup[(str(row["sample"]), str(row["contig"]))] = int(row["ploidy"])
+        print(f"  Loaded ploidy for {len(ploidy_lookup)} sample/contig pairs")
+    else:
+        print("  No ploidy table provided; assuming diploid (ploidy=2) everywhere")
     
-    # Pre-group posteriors by sample for faster lookups
+    # ---- Validate alignment between cn_posteriors and bin_mappings ----
+    n_bins = len(bin_mappings_df)
+    n_samples = len(sample_ids)
+    expected_rows = n_bins * n_samples
+    if len(cn_posteriors_df) != expected_rows:
+        print(f"  WARNING: cn_posteriors has {len(cn_posteriors_df)} rows, "
+              f"expected {expected_rows} ({n_bins} bins × {n_samples} samples)")
+
+    # Spot-check that the first sample's bin coordinates match bin_mappings
+    first_sample = sample_ids[0]
+    first_sample_rows = cn_posteriors_df[cn_posteriors_df["sample"] == first_sample]
+    if len(first_sample_rows) == n_bins:
+        post_coords = list(zip(
+            first_sample_rows["chr"].values,
+            first_sample_rows["start"].values,
+            first_sample_rows["end"].values,
+        ))
+        map_coords = list(zip(
+            bin_mappings_df["chr"].values,
+            bin_mappings_df["start"].values,
+            bin_mappings_df["end"].values,
+        ))
+        if post_coords != map_coords:
+            raise ValueError(
+                "Bin coordinates in cn_posteriors do not match bin_mappings. "
+                "The files may have been generated by different runs or with "
+                "a version that had a bin-ordering bug. Please re-run "
+                "gd_cnv_pyro.py to regenerate both files."
+            )
+        print(f"  Validated: bin coordinates match between posteriors and mappings ({n_bins} bins)")
+    else:
+        print(f"  WARNING: sample {first_sample} has {len(first_sample_rows)} bins, "
+              f"expected {n_bins}; skipping alignment check")
+
+    # Pre-group posteriors by sample for faster lookups.
+    # Reset each sample's index to 0..N-1 so that .iloc[k] reliably
+    # selects the k-th bin, matching the array_idx values from
+    # bin_mappings_df.
     print("  Organizing data for fast access...")
     posteriors_by_sample = {}
     for sample_id in sample_ids:
-        sample_data = cn_posteriors_df[cn_posteriors_df["sample"] == sample_id]
+        sample_data = (
+            cn_posteriors_df[cn_posteriors_df["sample"] == sample_id]
+            .reset_index(drop=True)
+        )
         posteriors_by_sample[sample_id] = sample_data
     
     for cluster, locus in gd_table.loci.items():
@@ -582,12 +692,37 @@ def call_cnvs_from_posteriors(
                         "cn_probs": mean_probs,
                     }
             
+            # Look up ploidy for this sample/chromosome
+            sample_ploidy = ploidy_lookup.get((str(sample_id), locus.chrom), 2)
+            
             # Call GD CNVs
-            calls = call_gd_cnv(locus, interval_stats, log_prob_threshold, flanking_log_prob_threshold)
+            calls = call_gd_cnv(locus, interval_stats, log_prob_threshold, flanking_log_prob_threshold, ploidy=sample_ploidy)
             
             # Determine best breakpoints
-            best_by_svtype = determine_best_breakpoints(locus, interval_stats, calls)
-            
+            best_by_svtype = determine_best_breakpoints(locus, interval_stats, calls, ploidy=sample_ploidy)
+
+            # ---- verbose per-sample logging ----
+            if verbose:
+                for call in calls:
+                    tag_parts = []
+                    if call["is_carrier"]:
+                        tag_parts.append("CARRIER")
+                    if call.get("is_spanning"):
+                        tag_parts.append("SPANNING")
+                    tag = " [" + ",".join(tag_parts) + "]" if tag_parts else ""
+                    flank_str = (
+                        f"{call['flanking_log_prob_score']:.4f}"
+                        if not np.isnan(call.get("flanking_log_prob_score", np.nan))
+                        else "NA"
+                    )
+                    print(
+                        f"    {sample_id:30s}  {call['GD_ID']:25s}  "
+                        f"{call['svtype']:4s}  ploidy={sample_ploidy}  "
+                        f"logP={call['log_prob_score']:+.4f}  "
+                        f"flank={flank_str}  "
+                        f"intervals={','.join(call['intervals'])}{tag}"
+                    )
+
             # Record results
             for call in calls:
                 svtype = call["svtype"]
@@ -720,6 +855,60 @@ def draw_annotations_panel(
     ax.set_yticks([])
 
 
+def _build_ploidy_lookup(
+    ploidy_df: Optional[pd.DataFrame],
+) -> Dict[Tuple[str, str], int]:
+    """Build (sample, contig) -> ploidy mapping from a ploidy DataFrame."""
+    lookup: Dict[Tuple[str, str], int] = {}
+    if ploidy_df is not None:
+        for _, row in ploidy_df.iterrows():
+            lookup[(str(row["sample"]), str(row["contig"]))] = int(row["ploidy"])
+    return lookup
+
+
+def _sort_samples_by_ploidy(
+    sample_cols: List[str],
+    chrom: str,
+    ploidy_lookup: Dict[Tuple[str, str], int],
+) -> List[str]:
+    """Return *sample_cols* sorted by ploidy (ascending), then by name."""
+    return sorted(sample_cols, key=lambda s: (ploidy_lookup.get((s, chrom), 2), s))
+
+
+def _build_gap_positions(
+    bin_mids: np.ndarray,
+    bin_starts: np.ndarray,
+    bin_ends: np.ndarray,
+) -> np.ndarray:
+    """Build a positions array with NaN sentinels at bin gaps."""
+    bin_spacing = np.median(bin_starts[1:] - bin_ends[:-1]) if len(bin_starts) > 1 else 0
+    gap_threshold = 3 * bin_spacing
+
+    positions: List[float] = []
+    for i in range(len(bin_starts)):
+        positions.append(bin_mids[i])
+        if i < len(bin_starts) - 1:
+            if bin_starts[i + 1] - bin_ends[i] > gap_threshold:
+                positions.append(np.nan)
+    return np.array(positions)
+
+
+def _depths_with_gaps(
+    raw_depths: np.ndarray,
+    plot_positions: np.ndarray,
+) -> List[float]:
+    """Map per-bin depths onto the gap-aware position array."""
+    result: List[float] = []
+    j = 0
+    for pos in plot_positions:
+        if np.isnan(pos):
+            result.append(np.nan)
+        else:
+            result.append(raw_depths[j])
+            j += 1
+    return result
+
+
 def plot_locus_overview(
     locus: GDLocus,
     calls_df: pd.DataFrame,
@@ -728,6 +917,7 @@ def plot_locus_overview(
     segdup: Optional[SegDupAnnotation],
     output_dir: str,
     padding: int = 50000,
+    ploidy_df: Optional[pd.DataFrame] = None,
 ):
     """
     Create overview plot for a GD locus showing all samples.
@@ -740,6 +930,8 @@ def plot_locus_overview(
         segdup: Optional SegDupAnnotation for segdup regions
         output_dir: Directory to save plots
         padding: Padding around locus boundaries
+        ploidy_df: Optional ploidy estimates (sample, contig, ploidy).
+            Used to sort heatmaps and split mean-depth panel by ploidy.
     """
     # Skip loci with no breakpoints
     if not locus.breakpoints:
@@ -766,26 +958,49 @@ def plot_locus_overview(
     sample_cols = get_sample_columns(region_df)
     n_samples = len(sample_cols)
 
+    # ---- ploidy helpers ----
+    ploidy_lookup = _build_ploidy_lookup(ploidy_df)
+
     # Get carriers for this locus
     carriers = calls_df[
         (calls_df["cluster"] == locus.cluster) &
         (calls_df["is_carrier"])
     ]["sample"].unique()
 
-    # Separate carriers and non-carriers
-    carrier_cols = [s for s in sample_cols if s in carriers]
-    non_carrier_cols = [s for s in sample_cols if s not in carriers]
+    # Separate carriers and non-carriers, sorted by ploidy
+    carrier_cols = _sort_samples_by_ploidy(
+        [s for s in sample_cols if s in carriers], chrom, ploidy_lookup)
+    non_carrier_cols = _sort_samples_by_ploidy(
+        [s for s in sample_cols if s not in carriers], chrom, ploidy_lookup)
     n_carriers = len(carrier_cols)
     n_non_carriers = len(non_carrier_cols)
 
-    # Create figure with 4 panels: annotations, carriers heatmap, non-carriers heatmap, mean depth
-    # Height ratios: scale heatmap heights by number of samples (capped at 6 inches each)
+    # Determine distinct ploidies present on this chromosome
+    all_ploidies = sorted(set(
+        ploidy_lookup.get((s, chrom), 2) for s in sample_cols
+    ))
+    n_ploidy_panels = len(all_ploidies)
+
+    # ---- figure layout ----
+    # Panels: annotation, carrier heatmap, non-carrier heatmap, then one
+    # mean-depth subplot per ploidy state.
     carrier_height = min(6, max(1, n_carriers * 0.15)) if n_carriers > 0 else 0.5
     non_carrier_height = min(6, max(1, n_non_carriers * 0.15)) if n_non_carriers > 0 else 0.5
-    fig_height = 4 + carrier_height + non_carrier_height
-    
-    fig, axes = plt.subplots(4, 1, figsize=(8, fig_height), 
-                              gridspec_kw={"height_ratios": [1, carrier_height, non_carrier_height, 1]})
+    depth_panel_height = 1.0  # per ploidy subplot
+    fig_height = 3 + carrier_height + non_carrier_height + n_ploidy_panels * depth_panel_height
+
+    height_ratios = (
+        [1, carrier_height, non_carrier_height]
+        + [depth_panel_height] * n_ploidy_panels
+    )
+    n_panels = 3 + n_ploidy_panels
+
+    fig, axes = plt.subplots(
+        n_panels, 1, figsize=(16, fig_height),
+        gridspec_kw={"height_ratios": height_ratios},
+    )
+    if n_panels == 1:
+        axes = [axes]
 
     # X-axis: genomic position
     bin_mids = (region_df["Start"].values + region_df["End"].values) / 2
@@ -798,7 +1013,7 @@ def plot_locus_overview(
         gtf=gtf, segdup=segdup, show_gd_entries=True
     )
 
-    # Panel 2: Carriers heatmap
+    # Panel 2: Carriers heatmap (sorted by ploidy)
     ax = axes[1]
     if n_carriers > 0:
         # Create a mapping from genomic position to bin index
@@ -828,11 +1043,6 @@ def plot_locus_overview(
                        vmin=0, vmax=4, interpolation="nearest",
                        extent=[region_start, region_end, n_carriers, 0])
         
-        # Draw breakpoint ranges
-        # for i, (bp_start, bp_end) in enumerate(locus.breakpoints):
-        #     ax.axvline(bp_start, color="red", linestyle="-", alpha=1, zorder=5)
-        #     ax.axvline(bp_end, color="red", linestyle="-", alpha=1, zorder=5)
-        
         ax.set_ylabel(f"Carriers (n={n_carriers})")
         ax.set_yticks([])
         ax.set_xticks([])
@@ -842,7 +1052,7 @@ def plot_locus_overview(
         ax.axis('off')
         ax.text(0.5, 0.5, 'No carriers', ha='center', va='center', transform=ax.transAxes)
 
-    # Panel 3: Non-carriers heatmap
+    # Panel 3: Non-carriers heatmap (sorted by ploidy)
     ax = axes[2]
     if n_non_carriers > 0:
         # Create a mapping from genomic position to bin index
@@ -871,11 +1081,6 @@ def plot_locus_overview(
                        vmin=0, vmax=4, interpolation="nearest",
                        extent=[region_start, region_end, n_non_carriers, 0])
         
-        # Draw breakpoint ranges
-        # for i, (bp_start, bp_end) in enumerate(locus.breakpoints):
-        #     ax.axvline(bp_start, color="red", linestyle="-", alpha=1, zorder=5)
-        #     ax.axvline(bp_end, color="red", linestyle="-", alpha=1, zorder=5)
-        
         ax.set_ylabel(f"Non-carriers (n={n_non_carriers})")
         ax.set_yticks([])
         ax.set_xlim(region_start, region_end)
@@ -889,143 +1094,95 @@ def plot_locus_overview(
         ax.axis('off')
         ax.text(0.5, 0.5, 'No non-carriers', ha='center', va='center', transform=ax.transAxes)
 
-    # Panel 4: Mean depth profile with carrier/non-carrier separation
-    ax = axes[3]
-    
-    # Detect gaps in bins and insert NaN to prevent interpolation
+    # ---- Mean depth panels: one per ploidy state ----
     bin_starts = region_df["Start"].values
     bin_ends = region_df["End"].values
-    
-    # Create arrays with NaN inserted at gaps
-    plot_positions = []
-    
-    # Determine typical bin spacing
-    bin_spacing = np.median(bin_starts[1:] - bin_ends[:-1])
-    gap_threshold = 3 * bin_spacing  # Consider it a gap if spacing is 3x typical
-    
-    # Build position array with NaN markers at gaps
-    for i in range(len(bin_starts)):
-        plot_positions.append(bin_mids[i])
-        if i < len(bin_starts) - 1:
-            # Check if there's a gap before next bin
-            gap_size = bin_starts[i + 1] - bin_ends[i]
-            if gap_size > gap_threshold:
-                # Insert NaN marker
-                plot_positions.append(np.nan)
-    
-    plot_positions = np.array(plot_positions)
+    plot_positions = _build_gap_positions(bin_mids, bin_starts, bin_ends)
 
-    # Calculate mean depth for carriers and non-carriers
-    if n_carriers > 0 and n_carriers < n_samples:
-        # Plot non-carriers with gaps
-        non_carrier_depths = region_df[[s for s in sample_cols if s not in carriers]].mean(axis=1).values
-        plot_depths = []
-        j = 0
-        for pos in plot_positions:
-            if np.isnan(pos):
-                plot_depths.append(np.nan)
-            else:
-                plot_depths.append(non_carrier_depths[j])
-                j += 1
-        
-        ax.plot(plot_positions, plot_depths, "b-", linewidth=1, alpha=0.7,
-               label=f"Non-carriers (n={n_samples - n_carriers})")
-        
-        # Group carriers by SV type and breakpoint combination
-        # Only include the best match call for each sample
-        carrier_calls = calls_df[
-            (calls_df["cluster"] == locus.cluster) &
-            (calls_df["is_carrier"]) &
-            (calls_df["is_best_match"]) &  # Only the best match for each sample
-            (calls_df["sample"].isin(sample_cols))  # Only samples with depth data in this region
-        ].copy()
-        
-        # Get BP1 and BP2 labels from GD table entries by matching coordinates
-        def get_bp_labels(row):
-            # Find matching GD entry by coordinates and svtype
-            for entry in locus.gd_entries:
-                if (entry["start_GRCh38"] == row["start"] and 
-                    entry["end_GRCh38"] == row["end"] and
-                    entry["svtype"] == row["svtype"]):
-                    return f"{entry['BP1']}-{entry['BP2']}"
-            # Fallback: try to match just coordinates
-            for entry in locus.gd_entries:
-                if entry["start_GRCh38"] == row["start"] and entry["end_GRCh38"] == row["end"]:
-                    return f"{entry['BP1']}-{entry['BP2']}"
-            return "unknown"
-        
-        carrier_calls['bp_interval'] = carrier_calls.apply(get_bp_labels, axis=1)
-        
-        # Define colors for different groups
-        del_colors = ['#FF6B6B', '#FF4757', '#EE5A6F', '#C23B4E']  # Reds for DEL
-        dup_colors = ['#6B9BD1', '#4169E1', '#5080D0', '#3A5BB8']  # Blues for DUP
-        
-        # Group by svtype and interval
-        grouped = carrier_calls.groupby(['svtype', 'bp_interval'])
-        color_idx = 0
-        plotted_any = False
-        
-        for (svtype, bp_interval), group in grouped:
-            group_samples = group['sample'].unique()
-            # Filter to samples that exist in this region's data
-            valid_samples = [s for s in group_samples if s in sample_cols]
-            
-            if len(valid_samples) > 0:
-                group_depths_raw = region_df[valid_samples].mean(axis=1).values
-                
-                # Insert NaN at gaps
-                plot_depths = []
-                j = 0
-                for pos in plot_positions:
-                    if np.isnan(pos):
-                        plot_depths.append(np.nan)
-                    else:
-                        plot_depths.append(group_depths_raw[j])
-                        j += 1
-                
-                # Only plot if there's actual data
-                if len(plot_depths) > 0 and not all(np.isnan(plot_depths)):
-                    # Choose color based on svtype
-                    if svtype == "DEL":
-                        color = del_colors[color_idx % len(del_colors)]
-                    else:  # DUP
-                        color = dup_colors[color_idx % len(dup_colors)]
-                    ax.plot(plot_positions, plot_depths, "-", linewidth=1.5, alpha=0.8,
-                           color=color, label=f"{svtype} {bp_interval} (n={len(valid_samples)})")
-                    color_idx += 1
-                    plotted_any = True
-        
-        # Only show legend if we actually plotted something
-        if plotted_any:
-            ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.35), 
-                     ncol=6, fontsize=8, frameon=True, fancybox=True)
-    else:
-        mean_depth_raw = region_df[sample_cols].mean(axis=1).values
-        
-        # Insert NaN at gaps
-        plot_depths = []
-        j = 0
-        for pos in plot_positions:
-            if np.isnan(pos):
-                plot_depths.append(np.nan)
-            else:
-                plot_depths.append(mean_depth_raw[j])
-                j += 1
-        
-        ax.plot(plot_positions, plot_depths, "b-", linewidth=1.5)
+    for panel_idx, ploidy_val in enumerate(all_ploidies):
+        ax = axes[3 + panel_idx]
 
-    # Draw breakpoint ranges
-    for i, (bp_start, bp_end) in enumerate(locus.breakpoints):
-        ax.axvline(bp_start, color="red", linestyle="-", alpha=1, zorder=5)
-        ax.axvline(bp_end, color="red", linestyle="-", alpha=1, zorder=5)
-        ax.axvspan(bp_start, bp_end, alpha=0.1, color="red", zorder=0)
+        # Samples at this ploidy
+        ploidy_samples = [s for s in sample_cols
+                          if ploidy_lookup.get((s, chrom), 2) == ploidy_val]
+        ploidy_carriers = [s for s in ploidy_samples if s in carriers]
+        ploidy_non_carriers = [s for s in ploidy_samples if s not in carriers]
 
-    ax.axhline(2.0, color="gray", linestyle=":", alpha=0.5)
-    ax.set_xlim(region_start, region_end)
-    ax.set_ylim(0, 4)
-    ax.set_xlabel(f"Position on {chrom}")
-    ax.set_ylabel("Mean depth")
-    ax.grid(True, alpha=0.3, axis='y')
+        if len(ploidy_carriers) > 0 and len(ploidy_non_carriers) > 0:
+            # Non-carriers line
+            nc_depths = _depths_with_gaps(
+                region_df[ploidy_non_carriers].mean(axis=1).values, plot_positions)
+            ax.plot(plot_positions, nc_depths, "b-", linewidth=1, alpha=0.7,
+                    label=f"Non-carriers (n={len(ploidy_non_carriers)})")
+
+            # Carrier lines grouped by svtype / breakpoint
+            carrier_calls = calls_df[
+                (calls_df["cluster"] == locus.cluster) &
+                (calls_df["is_carrier"]) &
+                (calls_df["is_best_match"]) &
+                (calls_df["sample"].isin(ploidy_carriers))
+            ].copy()
+
+            def get_bp_labels(row):
+                for entry in locus.gd_entries:
+                    if (entry["start_GRCh38"] == row["start"] and
+                            entry["end_GRCh38"] == row["end"] and
+                            entry["svtype"] == row["svtype"]):
+                        return f"{entry['BP1']}-{entry['BP2']}"
+                for entry in locus.gd_entries:
+                    if entry["start_GRCh38"] == row["start"] and entry["end_GRCh38"] == row["end"]:
+                        return f"{entry['BP1']}-{entry['BP2']}"
+                return "unknown"
+
+            if len(carrier_calls) > 0:
+                carrier_calls["bp_interval"] = carrier_calls.apply(get_bp_labels, axis=1)
+
+                del_colors = ['#FF6B6B', '#FF4757', '#EE5A6F', '#C23B4E']
+                dup_colors = ['#6B9BD1', '#4169E1', '#5080D0', '#3A5BB8']
+                color_idx = 0
+                plotted_any = False
+
+                for (svtype, bp_interval), group in carrier_calls.groupby(["svtype", "bp_interval"]):
+                    valid = [s for s in group["sample"].unique() if s in ploidy_carriers]
+                    if len(valid) > 0:
+                        gd = _depths_with_gaps(
+                            region_df[valid].mean(axis=1).values, plot_positions)
+                        if not all(np.isnan(gd)):
+                            color = (del_colors if svtype == "DEL" else dup_colors)[color_idx % 4]
+                            ax.plot(plot_positions, gd, "-", linewidth=1.5, alpha=0.8,
+                                    color=color, label=f"{svtype} {bp_interval} (n={len(valid)})")
+                            color_idx += 1
+                            plotted_any = True
+
+                if plotted_any:
+                    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.35),
+                              ncol=6, fontsize=7, frameon=True, fancybox=True)
+        else:
+            # All samples are in one bucket — just plot mean
+            if len(ploidy_samples) > 0:
+                md = _depths_with_gaps(
+                    region_df[ploidy_samples].mean(axis=1).values, plot_positions)
+                ax.plot(plot_positions, md, "b-", linewidth=1.5,
+                        label=f"All (n={len(ploidy_samples)})")
+                ax.legend(fontsize=7)
+
+        # Breakpoints + reference ploidy line
+        for bp_start, bp_end in locus.breakpoints:
+            ax.axvline(bp_start, color="red", linestyle="-", alpha=1, zorder=5)
+            ax.axvline(bp_end, color="red", linestyle="-", alpha=1, zorder=5)
+            ax.axvspan(bp_start, bp_end, alpha=0.1, color="red", zorder=0)
+
+        ax.axhline(float(ploidy_val), color="gray", linestyle=":", alpha=0.5)
+        ax.set_xlim(region_start, region_end)
+        ax.set_ylim(0, max(4, ploidy_val + 2))
+        ax.set_ylabel(f"Depth (P={ploidy_val})")
+        ax.grid(True, alpha=0.3, axis="y")
+
+        # Only show x-label on the last panel
+        if panel_idx == n_ploidy_panels - 1:
+            ax.set_xlabel(f"Position on {chrom}")
+        else:
+            ax.set_xticks([])
 
     plt.tight_layout()
 
@@ -1411,6 +1568,179 @@ def create_carrier_pdf(
 
 
 # =============================================================================
+# Truth Table Evaluation
+# =============================================================================
+
+
+def load_truth_table(filepath: str) -> pd.DataFrame:
+    """
+    Load a truth table of manually labelled GD carrier calls.
+
+    Expected columns:
+        chr, start, end, GD_ID, cluster_ID, SVTYPE, carriers, non_carriers
+
+    The *carriers* column is a comma-separated list of sample IDs.
+    *cluster_ID* may be blank.  *non_carriers* is ignored.
+
+    Args:
+        filepath: Path to TSV truth table.
+
+    Returns:
+        DataFrame with one row per GD site, carriers parsed into a set.
+    """
+    df = pd.read_csv(filepath, sep="\t", dtype=str)
+    # Normalise column names to lowercase for robustness
+    df.columns = [c.strip() for c in df.columns]
+    required = {"GD_ID", "carriers"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Truth table missing required columns: {missing}")
+
+    # Parse carriers into sets; treat empty / NaN as no carriers
+    def _parse_carriers(val):
+        if pd.isna(val) or str(val).strip() == "":
+            return set()
+        return set(s.strip() for s in str(val).split(",") if s.strip())
+
+    df["carrier_set"] = df["carriers"].apply(_parse_carriers)
+    return df
+
+
+def evaluate_against_truth(
+    calls_df: pd.DataFrame,
+    truth_df: pd.DataFrame,
+    output_dir: str,
+    batch_samples: Optional[set] = None,
+) -> pd.DataFrame:
+    """
+    Cross-reference predicted GD calls against a truth table and report
+    sensitivity and precision for every site with at least one truth or
+    predicted carrier.
+
+    Matching is performed by *GD_ID*.  For each GD_ID the set of predicted
+    carriers (samples where ``is_carrier == True``) is compared to the truth
+    carrier set.
+
+    Truth carrier sets are intersected with *batch_samples* (when provided)
+    so that sensitivity is not penalised for labelled carriers absent from
+    the current batch.
+
+    Args:
+        calls_df: Predicted calls DataFrame (from call_cnvs_from_posteriors
+            or loaded from ``--calls``).
+        truth_df: Truth table DataFrame produced by :func:`load_truth_table`.
+        output_dir: Directory to write the report TSV.
+        batch_samples: Optional set of sample IDs present in the current
+            batch.  If provided, truth carriers not in this set are removed
+            before scoring.
+
+    Returns:
+        Per-site report DataFrame.
+    """
+    print("\n" + "=" * 80)
+    print("EVALUATING PREDICTIONS AGAINST TRUTH TABLE")
+    print("=" * 80)
+
+    if batch_samples is not None:
+        print(f"  Batch contains {len(batch_samples)} samples; "
+              "truth carriers will be restricted to this set.")
+
+    # Build predicted carrier sets keyed by GD_ID
+    pred_by_gd: Dict[str, set] = {}
+    for gd_id, grp in calls_df.groupby("GD_ID"):
+        pred_by_gd[str(gd_id)] = set(
+            grp.loc[grp["is_carrier"] == True, "sample"].unique()  # noqa: E712
+        )
+
+    # Build truth carrier sets keyed by GD_ID
+    truth_by_gd: Dict[str, dict] = {}
+    for _, row in truth_df.iterrows():
+        gd_id = str(row["GD_ID"])
+        carrier_set = row["carrier_set"]
+        # Restrict truth carriers to samples in the current batch
+        if batch_samples is not None:
+            carrier_set = carrier_set & batch_samples
+        truth_by_gd[gd_id] = {
+            "carrier_set": carrier_set,
+            "chr": row.get("chr", ""),
+            "start": row.get("start", ""),
+            "end": row.get("end", ""),
+            "cluster_ID": row.get("cluster_ID", ""),
+            "SVTYPE": row.get("SVTYPE", ""),
+        }
+
+    # Union of all GD_IDs with at least one truth or predicted carrier
+    all_gd_ids = sorted(
+        {gd for gd, s in pred_by_gd.items() if len(s) > 0}
+        | {gd for gd, d in truth_by_gd.items() if len(d["carrier_set"]) > 0}
+    )
+
+    rows = []
+    total_tp = total_fp = total_fn = 0
+    for gd_id in all_gd_ids:
+        truth_set = truth_by_gd.get(gd_id, {}).get("carrier_set", set())
+        pred_set = pred_by_gd.get(gd_id, set())
+
+        tp = len(truth_set & pred_set)
+        fp = len(pred_set - truth_set)
+        fn = len(truth_set - pred_set)
+        sensitivity = tp / (tp + fn) if (tp + fn) > 0 else float("nan")
+        precision = tp / (tp + fp) if (tp + fp) > 0 else float("nan")
+
+        total_tp += tp
+        total_fp += fp
+        total_fn += fn
+
+        meta = truth_by_gd.get(gd_id, {})
+        rows.append({
+            "GD_ID": gd_id,
+            "chr": meta.get("chr", ""),
+            "start": meta.get("start", ""),
+            "end": meta.get("end", ""),
+            "cluster_ID": meta.get("cluster_ID", ""),
+            "SVTYPE": meta.get("SVTYPE", ""),
+            "n_truth_carriers": len(truth_set),
+            "n_pred_carriers": len(pred_set),
+            "TP": tp,
+            "FP": fp,
+            "FN": fn,
+            "sensitivity": round(sensitivity, 4) if not np.isnan(sensitivity) else "NA",
+            "precision": round(precision, 4) if not np.isnan(precision) else "NA",
+            "FP_samples": ",".join(sorted(pred_set - truth_set)) if fp > 0 else "",
+            "FN_samples": ",".join(sorted(truth_set - pred_set)) if fn > 0 else "",
+        })
+
+    report_df = pd.DataFrame(rows)
+
+    # Print summary
+    overall_sens = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else float("nan")
+    overall_prec = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else float("nan")
+    print(f"\n  Sites evaluated: {len(all_gd_ids)}")
+    print(f"  Overall TP={total_tp}  FP={total_fp}  FN={total_fn}")
+    print(f"  Overall sensitivity: {overall_sens:.4f}")
+    print(f"  Overall precision:   {overall_prec:.4f}")
+
+    # Per-site summary to stdout
+    print(f"\n  {'GD_ID':30s}  {'SVTYPE':6s}  truth  pred    TP    FP    FN   sens   prec")
+    print("  " + "-" * 100)
+    for r in rows:
+        sens_str = f"{r['sensitivity']:.2f}" if r["sensitivity"] != "NA" else "  NA"
+        prec_str = f"{r['precision']:.2f}" if r["precision"] != "NA" else "  NA"
+        print(f"  {r['GD_ID']:30s}  {str(r['SVTYPE']):6s}  "
+              f"{r['n_truth_carriers']:5d}  {r['n_pred_carriers']:4d}  "
+              f"{r['TP']:4d}  {r['FP']:4d}  {r['FN']:4d}  "
+              f"{sens_str:>5s}  {prec_str:>5s}")
+
+    # Write report
+    output_path = os.path.join(output_dir, "truth_evaluation_report.tsv")
+    report_df.to_csv(output_path, sep="\t", index=False)
+    print(f"\n  Saved report: {output_path}")
+    print("=" * 80 + "\n")
+
+    return report_df
+
+
+# =============================================================================
 # Main
 # =============================================================================
 
@@ -1435,6 +1765,13 @@ def parse_args():
         "--bin-mappings",
         required=False,
         help="Bin mappings file (bin_mappings.tsv.gz) from gd_cnv_pyro.py. Required if --calls not provided.",
+    )
+    parser.add_argument(
+        "--ploidy-table",
+        required=False,
+        help="Ploidy estimates TSV (ploidy_estimates.tsv) from gd_cnv_pyro.py. "
+             "Columns: sample, contig, median_depth, ploidy. "
+             "If not provided, ploidy=2 is assumed for all sample/contig pairs.",
     )
     parser.add_argument(
         "--gd-table", "-g",
@@ -1484,6 +1821,27 @@ def parse_args():
         type=str,
         help="Plot only this specific sample",
     )
+    parser.add_argument(
+        "--truth-table",
+        required=False,
+        help="Optional truth table TSV with manually labelled GD carriers. "
+             "Columns: chr, start, end, GD_ID, cluster_ID, SVTYPE, carriers, non_carriers. "
+             "If provided, a sensitivity/precision report is produced.",
+    )
+    parser.add_argument(
+        "--sample-posteriors",
+        required=False,
+        help="Sample posteriors table (TSV) with columns: sample, sample_var_map. "
+             "Used to identify the set of samples in the current batch. "
+             "When combined with --truth-table, truth carriers absent from "
+             "this sample set are excluded from sensitivity scoring.",
+    )
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Print detailed per-sample log probability scores for all GD "
+             "entries at every locus, including flanking region scores.",
+    )
 
     return parser.parse_args()
 
@@ -1494,6 +1852,10 @@ def main():
 
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
+
+    # Mirror all stdout/stderr to a log file in the output directory
+    log_fh = setup_logging(args.output_dir)
+
     print(f"Output directory: {args.output_dir}")
 
     # Load data
@@ -1506,6 +1868,13 @@ def main():
     print(f"  Loading GD table: {args.gd_table}")
     gd_table = GDTable(args.gd_table)
     print(f"    {len(gd_table.loci)} loci")
+    
+    # Load ploidy table if provided
+    ploidy_df = None
+    if args.ploidy_table:
+        print(f"  Loading ploidy table: {args.ploidy_table}")
+        ploidy_df = pd.read_csv(args.ploidy_table, sep="\t")
+        print(f"    {len(ploidy_df)} sample/contig ploidy records")
     
     # Call CNVs if not provided
     if args.calls:
@@ -1527,6 +1896,8 @@ def main():
             gd_table,
             log_prob_threshold=args.log_prob_threshold,
             flanking_log_prob_threshold=args.flanking_log_prob_threshold,
+            ploidy_df=ploidy_df,
+            verbose=args.verbose,
         )
         
         # Save calls
@@ -1569,7 +1940,8 @@ def main():
         print(f"  Processing {cluster}...")
         plot_locus_overview(
             locus, calls_df, depth_df, gtf, segdup,
-            args.output_dir, padding=args.padding
+            args.output_dir, padding=args.padding,
+            ploidy_df=ploidy_df,
         )
 
     # Create carrier PDF
@@ -1598,6 +1970,22 @@ def main():
                     sample_id, locus, calls_df, depth_df, gtf, segdup,
                     args.output_dir, padding=args.padding
                 )
+
+    # Load sample posteriors to identify batch samples (if provided)
+    batch_samples = None
+    if args.sample_posteriors:
+        print(f"\n  Loading sample posteriors: {args.sample_posteriors}")
+        sample_post_df = pd.read_csv(args.sample_posteriors, sep="\t")
+        batch_samples = set(sample_post_df["sample"].astype(str).unique())
+        print(f"    {len(batch_samples)} samples in batch")
+
+    # Evaluate against truth table if provided
+    if args.truth_table:
+        print("\nLoading truth table...")
+        truth_df = load_truth_table(args.truth_table)
+        print(f"  {len(truth_df)} truth entries from {args.truth_table}")
+        evaluate_against_truth(calls_df, truth_df, args.output_dir,
+                               batch_samples=batch_samples)
 
     print("\n" + "=" * 80)
     print("Plotting complete!")
