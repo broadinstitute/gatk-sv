@@ -27,9 +27,10 @@ jobs:
         fi
     - name: Enforce
       run: |
-        readonly_files=(".github/.dockstore.yml")
+        readonly_files=(".github/.dockstore.yml" "inputs/values/dockers.json")
+        changed_files="${{ steps.changed-files.outputs.changed_files }}"
         error=0
-        for file in ${{ steps.changed-files.outputs.changed_files }}; do
+        for file in $changed_files; do
           for readonly_file in "${readonly_files[@]}"; do
             if [[ "${file}" == "${readonly_file}" ]]; then
               echo "::error::Readonly file modified: $file"
