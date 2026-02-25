@@ -134,8 +134,8 @@ task ComputeAFs {
         /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py "~{vcf}" stdout \
             ~{"-p " + sample_pop_assignments} \
             ~{"-f " + ped_file} \
-            ~{"--par " + par_bed} \
             ~{"-l " + lps_tsv} \
+            ~{"--par " + par_bed} \
             | bgzip -c > "~{prefix}.vcf.gz"
 
         tabix -p vcf "~{prefix}.vcf.gz"
