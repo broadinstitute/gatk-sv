@@ -26,6 +26,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import pysam
 import torch
 
 from pathlib import Path
@@ -974,6 +975,7 @@ def extract_locus_bins(
     segdup_mask: Optional[SegDupMask] = None,
     segdup_threshold: float = 0.5,
     padding: int = 0,
+    segdup_bypass_regions: Optional[List[Tuple[int, int]]] = None,
 ) -> pd.DataFrame:
     """
     Extract bins overlapping a GD locus, optionally masking segmental duplications.
@@ -984,6 +986,9 @@ def extract_locus_bins(
         segdup_mask: Optional SegDupMask for filtering out segdup regions
         segdup_threshold: Minimum overlap fraction with segdups to mask a bin
         padding: Extend the region by this many base pairs on each side
+        segdup_bypass_regions: List of (start, end) genomic ranges where
+            segdup masking is skipped.  Bins whose midpoint falls in any
+            of these ranges are kept regardless of segdup overlap.
 
     Returns:
         DataFrame with bins for this locus
@@ -1006,16 +1011,27 @@ def extract_locus_bins(
 
     # Apply segdup masking if provided
     if segdup_mask is not None:
+        bypass = segdup_bypass_regions or []
         keep_mask = []
+        n_bypassed = 0
         for _, row in locus_df.iterrows():
-            overlap = segdup_mask.get_overlap_fraction(
-                row["Chr"], row["Start"], row["End"]
-            )
-            keep_mask.append(overlap < segdup_threshold)
+            bin_mid = (row["Start"] + row["End"]) / 2
+            # Skip masking for bins in bypass regions
+            in_bypass = any(bs <= bin_mid < be for bs, be in bypass)
+            if in_bypass:
+                keep_mask.append(True)
+                n_bypassed += 1
+            else:
+                overlap = segdup_mask.get_overlap_fraction(
+                    row["Chr"], row["Start"], row["End"]
+                )
+                keep_mask.append(overlap < segdup_threshold)
 
         n_masked = len(keep_mask) - sum(keep_mask)
         if n_masked > 0:
             print(f"  Masked {n_masked}/{len(locus_df)} bins due to segdup overlap")
+        if n_bypassed > 0:
+            print(f"  Bypassed segdup masking for {n_bypassed} bins in heavily-overlapped intervals")
 
         locus_df = locus_df[keep_mask]
 
@@ -1106,7 +1122,15 @@ def rebin_locus_intervals(
 ) -> pd.DataFrame:
     """
     Reduce the number of bins by rebinning each interval and flanking region to have
-    at most max_bins_per_interval bins. Uses weighted averaging based on bin size.
+    at most max_bins_per_interval bins.
+
+    For each region, the genomic range (first bin start → last bin end) is divided
+    into ``max_bins_per_interval`` evenly-spaced putative intervals.  Each putative
+    interval's depth is the overlap-weighted average of all original bins that
+    intersect it, where the weight is the number of base pairs of overlap.  This
+    guarantees uniform-width output bins regardless of the input bin size
+    distribution, avoiding the problem of a few tiny bins alongside one or two
+    very large ones.
 
     Applies to:
       - Intervals between adjacent breakpoints
@@ -1130,33 +1154,54 @@ def rebin_locus_intervals(
     sample_cols = [col for col in df.columns if col not in metadata_cols]
 
     def rebin_region(region_df: pd.DataFrame) -> List[dict]:
-        """Rebin a set of bins to at most max_bins_per_interval using weighted averaging."""
+        """Rebin bins into evenly-spaced putative intervals using overlap-weighted averaging.
+
+        The full genomic range of *region_df* is divided into
+        *max_bins_per_interval* equal-width putative intervals.  For each
+        putative interval the depth values are the overlap-weighted average
+        of every original bin that intersects it (weight = bp of overlap).
+        Putative intervals with zero overlap are omitted.
+        """
         if len(region_df) <= max_bins_per_interval:
             return region_df.to_dict("records")
 
         n_new_bins = max_bins_per_interval
-        bins_per_group = len(region_df) / n_new_bins
         region_df = region_df.sort_values("Start")
-        rows = []
 
+        # Evenly divide the full range into putative intervals
+        range_start = int(region_df["Start"].min())
+        range_end = int(region_df["End"].max())
+        putative_edges = np.linspace(range_start, range_end, n_new_bins + 1)
+
+        # Original bin coordinates as arrays for vectorised overlap computation
+        bin_starts = region_df["Start"].values.astype(float)
+        bin_ends = region_df["End"].values.astype(float)
+
+        rows = []
         for i in range(n_new_bins):
-            start_idx = int(i * bins_per_group)
-            end_idx = int((i + 1) * bins_per_group) if i < n_new_bins - 1 else len(region_df)
-            group = region_df.iloc[start_idx:end_idx]
-            if len(group) == 0:
+            p_start = putative_edges[i]
+            p_end = putative_edges[i + 1]
+
+            # Overlap of each original bin with this putative interval (bp)
+            overlap_starts = np.maximum(bin_starts, p_start)
+            overlap_ends = np.minimum(bin_ends, p_end)
+            overlaps = np.maximum(overlap_ends - overlap_starts, 0.0)
+
+            total_overlap = overlaps.sum()
+            if total_overlap == 0:
                 continue
 
-            bin_sizes = (group["End"] - group["Start"]).values
-            weights = bin_sizes / bin_sizes.sum()
+            weights = overlaps / total_overlap
+
             new_bin = {
-                "Chr": group.iloc[0]["Chr"],
-                "Start": int(group["Start"].min()),
-                "End": int(group["End"].max()),
+                "Chr": region_df.iloc[0]["Chr"],
+                "Start": int(round(p_start)),
+                "End": int(round(p_end)),
             }
             for col in sample_cols:
-                new_bin[col] = (group[col].values * weights).sum()
-            if "source_file" in group.columns:
-                new_bin["source_file"] = group.iloc[0]["source_file"]
+                new_bin[col] = (region_df[col].values * weights).sum()
+            if "source_file" in region_df.columns:
+                new_bin["source_file"] = region_df.iloc[0]["source_file"]
             rows.append(new_bin)
 
         return rows
@@ -1617,26 +1662,301 @@ class LocusBinMapping:
     end: int  # Bin end position
 
 
+# =============================================================================
+# High-Resolution Bin Helpers
+# =============================================================================
+
+
+def query_highres_bins(
+    highres_path: str,
+    chrom: str,
+    start: int,
+    end: int,
+    sample_cols: List[str],
+) -> pd.DataFrame:
+    """
+    Query a tabix-indexed read-count file for bins overlapping a region.
+
+    The file is expected to have a header line starting with ``#Chr`` (or
+    ``Chr``) followed by ``Start``, ``End``, and one column per sample with
+    raw (un-normalised) read counts.  Only the intersection of columns
+    present in the file *and* in *sample_cols* is returned so that the
+    result is compatible with the low-resolution DataFrame.
+
+    Args:
+        highres_path: Path to a bgzipped, tabix-indexed TSV (.tsv.gz + .tbi).
+        chrom: Chromosome name (e.g. ``"chr15"``).
+        start: Query start position (0-based, inclusive).
+        end: Query end position (0-based, exclusive).
+        sample_cols: Sample column names expected in the output.
+
+    Returns:
+        DataFrame with columns ``Chr``, ``Start``, ``End``, ``source_file``
+        and one column per sample, indexed by a ``Bin`` string.
+    """
+    tbx = pysam.TabixFile(highres_path)
+    try:
+        header_line = tbx.header[-1] if tbx.header else ""
+        header_cols = header_line.lstrip("#").split("\t")
+
+        rows: List[dict] = []
+        for line in tbx.fetch(chrom, max(0, start), end):
+            fields = line.split("\t")
+            row = dict(zip(header_cols, fields))
+            rows.append(row)
+    finally:
+        tbx.close()
+
+    if len(rows) == 0:
+        cols = ["Chr", "Start", "End", "source_file"] + list(sample_cols)
+        empty = pd.DataFrame(columns=cols)
+        empty["Bin"] = pd.Series(dtype=str)
+        return empty.set_index("Bin")
+
+    raw_df = pd.DataFrame(rows)
+
+    # Normalise column naming
+    if "#Chr" in raw_df.columns:
+        raw_df.rename(columns={"#Chr": "Chr"}, inplace=True)
+
+    raw_df["Start"] = raw_df["Start"].astype(int)
+    raw_df["End"] = raw_df["End"].astype(int)
+    raw_df["source_file"] = "highres"
+
+    # Keep only sample columns that exist in both files
+    common_samples = [s for s in sample_cols if s in raw_df.columns]
+    if len(common_samples) == 0:
+        raise ValueError(
+            "High-resolution counts file shares no sample columns with the "
+            "low-resolution file. Check that both files were generated from "
+            "the same sample set."
+        )
+    for s in common_samples:
+        raw_df[s] = pd.to_numeric(raw_df[s], errors="coerce")
+
+    # Pad with NaN for any samples absent from the high-res file —
+    # add all missing columns at once to avoid DataFrame fragmentation.
+    missing = [s for s in sample_cols if s not in raw_df.columns]
+    if missing:
+        raw_df = pd.concat(
+            [raw_df, pd.DataFrame(np.nan, index=raw_df.index, columns=missing)],
+            axis=1,
+        )
+
+    raw_df["Bin"] = (
+        raw_df["Chr"].astype(str) + ":"
+        + raw_df["Start"].astype(str) + "-"
+        + raw_df["End"].astype(str)
+    )
+    raw_df = raw_df.set_index("Bin")
+
+    keep_cols = ["Chr", "Start", "End", "source_file"] + list(sample_cols)
+    return raw_df[keep_cols]
+
+
+def normalize_highres_bins(
+    highres_df: pd.DataFrame,
+    sample_cols: List[str],
+    column_medians: np.ndarray,
+    lowres_median_bin_size: float,
+) -> pd.DataFrame:
+    """
+    Normalise high-resolution raw counts to the same CN-2 ≈ 2.0 scale used
+    for low-resolution bins.
+
+    The low-resolution pipeline normalises each sample by dividing by its
+    genome-wide autosomal median count (``column_medians``) and multiplying
+    by 2.  Those medians were estimated from bins of a specific size.  For
+    high-res bins that are smaller, we must account for the expected
+    proportional decrease in raw counts::
+
+        norm_depth = 2.0 * raw_count / (column_median * highres_bin_size / lowres_bin_size)
+
+    This is equivalent to first scaling ``column_medians`` by the bin-size
+    ratio, then applying the standard normalisation.
+
+    Args:
+        highres_df: DataFrame returned by :func:`query_highres_bins` with
+            **raw** (un-normalised) counts.
+        sample_cols: Sample column names.
+        column_medians: Per-sample autosomal median raw counts estimated
+            from the low-resolution file (1-D array, same order as
+            *sample_cols*).
+        lowres_median_bin_size: Median bin size (bp) in the low-resolution
+            file, used to scale the expected counts.
+
+    Returns:
+        A copy of *highres_df* with sample columns normalised in-place.
+    """
+    df = highres_df.copy()
+    highres_bin_sizes = (df["End"] - df["Start"]).values
+    highres_median_bin_size = float(np.median(highres_bin_sizes))
+
+    bin_size_ratio = highres_median_bin_size / lowres_median_bin_size
+    print(f"    [highres] low-res median bin size: {lowres_median_bin_size:,.0f} bp")
+    print(f"    [highres] high-res median bin size: {highres_median_bin_size:,.0f} bp")
+    print(f"    [highres] bin size ratio: {bin_size_ratio:.4f}")
+
+    # Scale column_medians by the bin-size ratio so the normalisation
+    # accounts for the smaller expected raw counts in high-res bins.
+    adjusted_medians = column_medians * bin_size_ratio  # shape (n_samples,)
+    df[sample_cols] = 2.0 * df[sample_cols].values / adjusted_medians[np.newaxis, :]
+
+    return df
+
+
+def _filter_and_prepare_locus_bins(
+    locus_df: pd.DataFrame,
+    locus: GDLocus,
+    flank_regions: List[Tuple[int, int, str]],
+    left_bound: int,
+    right_bound: int,
+    max_bins_per_interval: int,
+    segdup_mask: Optional[SegDupMask] = None,
+    segdup_threshold: float = 0.5,
+    filter_params: Optional[dict] = None,
+    segdup_bypass_regions: Optional[List[Tuple[int, int]]] = None,
+) -> Tuple[pd.DataFrame, Dict[str, List[int]]]:
+    """
+    Shared helper: apply segdup masking, quality filtering, trimming,
+    rebinning, and interval assignment to a locus DataFrame.
+
+    This centralises the per-locus post-extraction processing so the same
+    logic is used for both low-resolution and high-resolution bins.
+
+    Args:
+        locus_df: DataFrame of bins covering the locus (+ flanks).
+        locus: GDLocus definition.
+        flank_regions: Pre-computed flank region tuples.
+        left_bound: Left edge of active region for trimming.
+        right_bound: Right edge of active region for trimming.
+        max_bins_per_interval: Maximum bins per interval after rebinning.
+        segdup_mask: Optional SegDupMask for filtering.
+        segdup_threshold: Segdup overlap fraction threshold.
+        filter_params: If provided, a dict with keys ``median_min``,
+            ``median_max``, ``mad_max`` to apply
+            :func:`filter_low_quality_bins` to *locus_df* before any other
+            processing.  Skipped when *None*.
+        segdup_bypass_regions: Genomic ranges where segdup masking is
+            skipped (bins whose midpoint falls in a bypass range are kept).
+
+    Returns:
+        Tuple of (processed DataFrame, interval_bins dict).
+    """
+    if len(locus_df) == 0:
+        return locus_df, {}
+
+    # Optional segdup masking (high-res bins need this; low-res already filtered)
+    if segdup_mask is not None:
+        bypass = segdup_bypass_regions or []
+        keep_mask = []
+        n_bypassed = 0
+        for _, row in locus_df.iterrows():
+            bin_mid = (row["Start"] + row["End"]) / 2
+            in_bypass = any(bs <= bin_mid < be for bs, be in bypass)
+            if in_bypass:
+                keep_mask.append(True)
+                n_bypassed += 1
+            else:
+                overlap = segdup_mask.get_overlap_fraction(
+                    row["Chr"], row["Start"], row["End"]
+                )
+                keep_mask.append(overlap < segdup_threshold)
+        n_masked = len(keep_mask) - sum(keep_mask)
+        if n_masked > 0:
+            print(f"    Masked {n_masked}/{len(locus_df)} bins due to segdup overlap")
+        if n_bypassed > 0:
+            print(f"    Bypassed segdup masking for {n_bypassed} bins in heavily-overlapped intervals")
+        locus_df = locus_df[keep_mask].copy()
+
+    # Optional quality filtering (used for high-res bins)
+    if filter_params is not None and len(locus_df) > 0:
+        sample_cols = get_sample_columns(locus_df)
+        depths = locus_df[sample_cols].values
+        medians = np.median(depths, axis=1)
+        mads = np.median(np.abs(depths - medians[:, np.newaxis]), axis=1)
+        keep = (
+            (medians >= filter_params["median_min"])
+            & (medians <= filter_params["median_max"])
+            & (mads <= filter_params["mad_max"])
+        )
+        n_filt = int((~keep).sum())
+        if n_filt > 0:
+            print(f"    Quality-filtered {n_filt}/{len(locus_df)} bins")
+        locus_df = locus_df[keep].copy()
+
+    if len(locus_df) == 0:
+        return locus_df, {}
+
+    # Trim to active region
+    bin_mids = (locus_df["Start"] + locus_df["End"]) / 2
+    locus_df = locus_df[(bin_mids >= left_bound) & (bin_mids < right_bound)].copy()
+    print(f"    Bins after trimming to active region [{left_bound:,}, {right_bound:,}): {len(locus_df)}")
+
+    # Rebin
+    if max_bins_per_interval > 0 and len(locus_df) > 0:
+        n_before = len(locus_df)
+        locus_df = rebin_locus_intervals(locus_df, locus, max_bins_per_interval, flank_regions)
+        if len(locus_df) < n_before:
+            print(f"    Bins after rebinning: {len(locus_df)} (reduced from {n_before})")
+
+    # Assign to intervals
+    interval_bins = assign_bins_to_intervals(locus_df, locus, flank_regions) if len(locus_df) > 0 else {}
+    return locus_df, interval_bins
+
+
 def collect_all_locus_bins(
     df: pd.DataFrame,
     gd_table: GDTable,
     segdup_mask: Optional[SegDupMask],
     segdup_threshold: float = 0.5,
     locus_padding: int = 0,
-    min_bins_per_locus: int = 5,
+    min_bins_per_region: int = 3,
     max_bins_per_interval: int = 10,
+    highres_counts_path: Optional[str] = None,
+    column_medians: Optional[np.ndarray] = None,
+    lowres_median_bin_size: Optional[float] = None,
+    filter_params: Optional[dict] = None,
+    segdup_bypass_threshold: float = 0.9,
 ) -> Tuple[pd.DataFrame, List[LocusBinMapping], Dict[str, GDLocus]]:
     """
     Collect all bins across all GD loci into a single DataFrame.
 
+    Each body interval (region between adjacent breakpoints) should contain
+    at least *min_bins_per_region* bins after processing.  Intervals that
+    fall below this threshold trigger a warning.
+
+    When a body interval is ≥ *segdup_bypass_threshold* overlapped by
+    segmental duplications, segdup masking is skipped for bins in that
+    interval so that coverage is preserved despite the duplications.
+
+    When a high-resolution counts file is provided (``highres_counts_path``),
+    loci with any under-covered interval are automatically re-extracted
+    from the high-res file.
+
     Args:
-        df: DataFrame with all bins
-        gd_table: GDTable with locus definitions
-        segdup_mask: Optional SegDupMask for filtering
-        segdup_threshold: Minimum overlap fraction with segdups to mask a bin
-        locus_padding: Padding around locus boundaries
-        min_bins_per_locus: Minimum bins required to include a locus
-        max_bins_per_interval: Maximum bins per interval after rebinning (0 = no rebinning)
+        df: DataFrame with all (low-resolution, normalised) bins.
+        gd_table: GDTable with locus definitions.
+        segdup_mask: Optional SegDupMask for filtering.
+        segdup_threshold: Minimum overlap fraction with segdups to mask a bin.
+        locus_padding: Padding around locus boundaries.
+        min_bins_per_region: Minimum number of bins expected in each
+            body interval (region between adjacent breakpoints).  A warning
+            is printed if any interval has fewer bins after all processing.
+        max_bins_per_interval: Maximum bins per interval after rebinning
+            (0 = no rebinning).
+        highres_counts_path: Optional path to a bgzipped, tabix-indexed
+            high-resolution read-count file.  When set, loci with any
+            under-covered interval are re-queried at this resolution.
+        column_medians: Per-sample autosomal median *raw* counts from the
+            low-res file.  Required when *highres_counts_path* is set.
+        lowres_median_bin_size: Median bin size (bp) in the low-res file.
+            Required when *highres_counts_path* is set.
+        filter_params: Quality-filter thresholds dict (``median_min``,
+            ``median_max``, ``mad_max``) applied to high-res bins.
+        segdup_bypass_threshold: If a body interval is ≥ this fraction
+            overlapped by segmental duplications, segdup masking is
+            skipped for bins in that interval (default 0.9 = 90%).
 
     Returns:
         Tuple of:
@@ -1648,6 +1968,8 @@ def collect_all_locus_bins(
     all_mappings = []
     included_loci = {}
     current_idx = 0
+
+    sample_cols = get_sample_columns(df)
 
     print(f"\n{'=' * 80}")
     print("COLLECTING BINS ACROSS ALL GD LOCI")
@@ -1671,6 +1993,60 @@ def collect_all_locus_bins(
         print(f"  {chrom}: {len(chrom_filtered[chrom])} filtered bins "
               f"(of {len(chrom_df)} total)")
 
+    # ------------------------------------------------------------------
+    # Helper: create LocusBinMapping entries for a processed locus_df
+    # ------------------------------------------------------------------
+    def _build_mappings(
+        locus_df: pd.DataFrame,
+        locus: GDLocus,
+        cluster: str,
+        flank_regions: List[Tuple[int, int, str]],
+        start_idx: int,
+    ) -> Tuple[List[LocusBinMapping], int]:
+        """Return (mappings_list, next_idx)."""
+        all_named_regions = locus.get_intervals() + flank_regions
+        mappings: List[LocusBinMapping] = []
+        idx_counter = start_idx
+        for idx in locus_df.index:
+            bin_row = locus_df.loc[idx]
+            bin_mid = (bin_row["Start"] + bin_row["End"]) / 2
+
+            assigned_interval = None
+            for start, end, name in all_named_regions:
+                if start <= bin_mid < end:
+                    assigned_interval = name
+                    break
+
+            if assigned_interval is None:
+                intervals = locus.get_intervals()
+                if intervals:
+                    if bin_mid < intervals[0][0]:
+                        assigned_interval = intervals[0][2]
+                    elif bin_mid >= intervals[-1][1]:
+                        assigned_interval = intervals[-1][2]
+                    else:
+                        for i in range(len(intervals) - 1):
+                            if intervals[i][1] <= bin_mid < intervals[i + 1][0]:
+                                dist_left = bin_mid - intervals[i][1]
+                                dist_right = intervals[i + 1][0] - bin_mid
+                                assigned_interval = intervals[i][2] if dist_left <= dist_right else intervals[i + 1][2]
+                                break
+
+            mappings.append(LocusBinMapping(
+                cluster=cluster,
+                locus=locus,
+                interval_name=assigned_interval or (all_named_regions[0][2] if all_named_regions else "unknown"),
+                array_idx=idx_counter,
+                chrom=bin_row["Chr"],
+                start=int(bin_row["Start"]),
+                end=int(bin_row["End"]),
+            ))
+            idx_counter += 1
+        return mappings, idx_counter
+
+    # ------------------------------------------------------------------
+    # Per-locus processing
+    # ------------------------------------------------------------------
     for cluster, locus in gd_table.get_all_loci().items():
         print(f"\nProcessing locus: {cluster}")
         print(f"  Chromosome: {locus.chrom}")
@@ -1698,6 +2074,19 @@ def collect_all_locus_bins(
             elif fn == "right_flank":
                 right_bound = fe
 
+        # Compute which body intervals are so heavily overlapped by segdups
+        # that segdup masking should be bypassed for bins in those regions.
+        segdup_bypass_regions: List[Tuple[int, int]] = []
+        if segdup_mask is not None:
+            for iv_start, iv_end, iv_name in locus.get_intervals():
+                iv_overlap = segdup_mask.get_overlap_fraction(
+                    locus.chrom, iv_start, iv_end,
+                )
+                if iv_overlap >= segdup_bypass_threshold:
+                    print(f"  Interval '{iv_name}' is {iv_overlap:.0%} segdup-overlapped "
+                          f"(>= {segdup_bypass_threshold:.0%}); bypassing segdup masking")
+                    segdup_bypass_regions.append((iv_start, iv_end))
+
         # Extract only the bins within the active region (locus + flanks),
         # applying segdup masking. locus_padding still applies as a minimum.
         active_padding = max(locus_padding, locus.start - left_bound, right_bound - locus.end)
@@ -1705,12 +2094,8 @@ def collect_all_locus_bins(
             df, locus, segdup_mask,
             segdup_threshold=segdup_threshold,
             padding=active_padding,
+            segdup_bypass_regions=segdup_bypass_regions,
         )
-
-        if len(locus_df) < min_bins_per_locus:
-            raise ValueError(f"Locus {cluster} at coordinates {locus.chrom}:{locus.start:,}-{locus.end:,} "
-                             f"has only {len(locus_df)} bins after filtering, "
-                             f"which is below the minimum of {min_bins_per_locus}.")
 
         print(f"  Bins after filtering: {len(locus_df)}")
 
@@ -1733,47 +2118,114 @@ def collect_all_locus_bins(
             print(f"    {region_name}: {len(bins)} bins")
         print(f"    total: {total_assigned} bins")
 
-        # Build a fast lookup: bin midpoint -> assigned region name
-        all_named_regions = locus.get_intervals() + flank_regions
+        # ------------------------------------------------------------------
+        # Per-interval bin count check + optional high-res replacement
+        # ------------------------------------------------------------------
+        body_intervals = locus.get_intervals()  # [(start, end, name), ...]
+        body_interval_names = {name for _, _, name in body_intervals}
 
-        # Create mappings for each bin
-        for idx in locus_df.index:
-            bin_row = locus_df.loc[idx]
-            bin_mid = (bin_row["Start"] + bin_row["End"]) / 2
+        # Identify under-covered body intervals
+        def _undercovered_intervals(
+            ivbins: Dict[str, List[int]],
+        ) -> List[Tuple[str, int]]:
+            """Return list of (name, count) for body intervals below threshold."""
+            return [
+                (name, len(ivbins.get(name, [])))
+                for name in body_interval_names
+                if len(ivbins.get(name, [])) < min_bins_per_region
+            ]
 
-            # Check named regions (intervals + flanks) in order
-            assigned_interval = None
-            for start, end, name in all_named_regions:
-                if start <= bin_mid < end:
-                    assigned_interval = name
-                    break
+        undercovered = _undercovered_intervals(interval_bins)
 
-            # Bins inside breakpoint ranges: assign to the nearest between-breakpoint interval
-            if assigned_interval is None:
-                intervals = locus.get_intervals()
-                if intervals:
-                    if bin_mid < intervals[0][0]:
-                        assigned_interval = intervals[0][2]
-                    elif bin_mid >= intervals[-1][1]:
-                        assigned_interval = intervals[-1][2]
-                    else:
-                        for i in range(len(intervals) - 1):
-                            if intervals[i][1] <= bin_mid < intervals[i + 1][0]:
-                                dist_left = bin_mid - intervals[i][1]
-                                dist_right = intervals[i + 1][0] - bin_mid
-                                assigned_interval = intervals[i][2] if dist_left <= dist_right else intervals[i + 1][2]
-                                break
+        used_highres = False
+        if (
+            undercovered
+            and highres_counts_path is not None
+            and column_medians is not None
+            and lowres_median_bin_size is not None
+        ):
+            print(f"\n  *** {len(undercovered)} body interval(s) have fewer "
+                  f"than {min_bins_per_region} bins; switching to high-res ***")
+            for name, cnt in undercovered:
+                print(f"      {name}: {cnt} bins")
 
-            all_mappings.append(LocusBinMapping(
-                cluster=cluster,
-                locus=locus,
-                interval_name=assigned_interval or (all_named_regions[0][2] if all_named_regions else "unknown"),
-                array_idx=current_idx,
-                chrom=bin_row["Chr"],
-                start=int(bin_row["Start"]),
-                end=int(bin_row["End"]),
-            ))
-            current_idx += 1
+            # Query the tabix-indexed high-res file for the active region
+            hr_raw_df = query_highres_bins(
+                highres_counts_path,
+                locus.chrom,
+                left_bound,
+                right_bound,
+                sample_cols,
+            )
+            print(f"    [highres] queried {len(hr_raw_df)} raw bins "
+                  f"in {locus.chrom}:{left_bound:,}-{right_bound:,}")
+
+            if len(hr_raw_df) > 0:
+                # Normalise using the low-res calibration, scaled by bin size ratio
+                hr_norm_df = normalize_highres_bins(
+                    hr_raw_df, sample_cols, column_medians, lowres_median_bin_size,
+                )
+
+                # Apply the full filter-trim-rebin-assign pipeline
+                hr_locus_df, hr_interval_bins = _filter_and_prepare_locus_bins(
+                    hr_norm_df,
+                    locus,
+                    flank_regions,
+                    left_bound,
+                    right_bound,
+                    max_bins_per_interval,
+                    segdup_mask=segdup_mask,
+                    segdup_threshold=segdup_threshold,
+                    filter_params=filter_params,
+                    segdup_bypass_regions=segdup_bypass_regions,
+                )
+
+                hr_undercovered = _undercovered_intervals(hr_interval_bins)
+
+                # Accept the high-res data only if it reduced the number of
+                # under-covered intervals
+                if len(hr_undercovered) < len(undercovered):
+                    locus_df = hr_locus_df
+                    interval_bins = hr_interval_bins
+                    undercovered = hr_undercovered
+                    used_highres = True
+                    total_assigned = sum(len(v) for v in interval_bins.values())
+                    print(f"    [highres] ACCEPTED — replaced low-res bins")
+                    for region_name, bins in interval_bins.items():
+                        print(f"      {region_name}: {len(bins)} bins")
+                    print(f"      total: {total_assigned} bins")
+                else:
+                    print(f"    [highres] REJECTED — high-res did not "
+                          f"reduce under-covered intervals")
+            else:
+                print(f"    [highres] no bins returned from tabix query")
+
+        # Warn about under-covered body intervals.  Some GD loci have
+        # intervals dominated by segmental duplications so 0 surviving bins
+        # is possible even after bypass — downgrade to a warning.
+        if undercovered:
+            details = "\n".join(
+                f"    interval '{name}': {cnt} bins (need >= {min_bins_per_region})"
+                for name, cnt in undercovered
+            )
+            raise ValueError(
+                f"\n  WARNING: Locus {cluster} ({locus.chrom}:{locus.start:,}-"
+                f"{locus.end:,}) has {len(undercovered)} body interval(s) with "
+                f"fewer than --min-bins-per-region={min_bins_per_region} bins "
+                f"after all processing"
+                f"{' (including high-res replacement)' if used_highres else ''}:\n"
+                f"{details}\n"
+                f"  CNV calls spanning these intervals will have reduced "
+                f"statistical power."
+            )
+
+        # ------------------------------------------------------------------
+        # Create mappings
+        # ------------------------------------------------------------------
+        new_mappings, current_idx = _build_mappings(
+            locus_df, locus, cluster, flank_regions, current_idx,
+        )
+        all_mappings.extend(new_mappings)
 
         all_locus_dfs.append(locus_df)
         included_loci[cluster] = locus
@@ -2078,12 +2530,11 @@ def run_gd_analysis(
     segdup_mask: Optional[SegDupMask],
     args: argparse.Namespace,
     device: str = "cpu",
+    column_medians: Optional[np.ndarray] = None,
+    lowres_median_bin_size: Optional[float] = None,
 ):
     """
     Run GD CNV analysis on all loci using a single unified model.
-    
-    This function performs model training and inference only.
-    CNV calling is handled by downstream scripts (plot_gd_cnv_output.py).
     
     This function performs model training and inference only.
     CNV calling is handled by downstream scripts (plot_gd_cnv_output.py).
@@ -2097,14 +2548,33 @@ def run_gd_analysis(
         segdup_mask: Optional SegDupMask for filtering
         args: Command line arguments
         device: Torch device
+        column_medians: Per-sample autosomal median raw counts (before
+            normalisation).  Needed when ``args.high_res_counts`` is set.
+        lowres_median_bin_size: Median bin size (bp) of the low-res file.
+            Needed when ``args.high_res_counts`` is set.
     """
+    # Build quality-filter params dict for high-res bins (same thresholds)
+    filter_params: Optional[dict] = None
+    highres_path: Optional[str] = getattr(args, "high_res_counts", None)
+    if highres_path:
+        filter_params = {
+            "median_min": args.median_min,
+            "median_max": args.median_max,
+            "mad_max": args.mad_max,
+        }
+
     # Collect all bins across all loci
     combined_df, mappings, included_loci = collect_all_locus_bins(
         df, gd_table, segdup_mask,
         segdup_threshold=args.segdup_threshold,
         locus_padding=args.locus_padding,
-        min_bins_per_locus=args.min_bins_per_locus,
+        min_bins_per_region=args.min_bins_per_region,
         max_bins_per_interval=args.max_bins_per_interval,
+        highres_counts_path=highres_path,
+        column_medians=column_medians,
+        lowres_median_bin_size=lowres_median_bin_size,
+        filter_params=filter_params,
+        segdup_bypass_threshold=args.segdup_bypass_threshold,
     )
 
     if len(combined_df) == 0:
@@ -2209,6 +2679,16 @@ def parse_args():
         required=True,
         help="Output directory for results",
     )
+    parser.add_argument(
+        "--high-res-counts",
+        required=False,
+        help="Optional bgzipped, tabix-indexed high-resolution read count "
+             "file (.tsv.gz + .tbi).  When provided, loci with any body "
+             "interval below --min-bins-per-region bins are re-queried at "
+             "this finer resolution before the hard check is enforced.  "
+             "The file must have the same sample columns as the low-res "
+             "input and contain raw (un-normalised) counts.",
+    )
 
     # Locus processing
     parser.add_argument(
@@ -2224,26 +2704,31 @@ def parse_args():
         help="Minimum segdup overlap fraction to mask a bin",
     )
     parser.add_argument(
-        "--min-bins-per-locus",
+        "--segdup-bypass-threshold",
+        type=float,
+        default=0.6,
+        help="If a body interval (region between adjacent breakpoints) is "
+             "at least this fraction overlapped by segmental duplications, "
+             "segdup masking is skipped for bins in that interval.  This "
+             "prevents intervals that are entirely within segdups from "
+             "losing all their bins.  Set to 1.0 to disable bypass.",
+    )
+    parser.add_argument(
+        "--min-bins-per-region",
         type=int,
-        default=5,
-        help="Minimum bins required to analyze a locus",
+        default=10,
+        help="Minimum number of bins expected in each body interval "
+             "(region between adjacent breakpoints).  A warning is printed "
+             "if any interval has fewer bins after all processing.  "
+             "Under-covered intervals are also candidates for high-res "
+             "replacement when --high-res-counts is provided.",
     )
     parser.add_argument(
         "--max-bins-per-interval",
         type=int,
-        default=10,
+        default=12,
         help="Maximum bins per interval after rebinning (0 = no rebinning)",
     )
-    parser.add_argument(
-        "--min-bins-per-call",
-        type=int,
-        default=1,
-        help="Minimum bins required for a CNV call",
-    )
-
-    # CNV calling is now handled by plot_gd_cnv_output.py
-    # Removed: --log-prob-threshold, --del-threshold, --dup-threshold, --min-confidence
 
     # Model parameters
     parser.add_argument(
@@ -2444,6 +2929,11 @@ def main():
     print(f"Column medians: min={column_medians.min():.3f}, "
           f"max={column_medians.max():.3f}, mean={column_medians.mean():.3f}")
 
+    # Compute low-res median bin size (before normalization modifies df)
+    lowres_bin_sizes = (df["End"] - df["Start"]).values
+    lowres_median_bin_size = float(np.median(lowres_bin_sizes))
+    print(f"Low-res median bin size: {lowres_median_bin_size:,.0f} bp")
+
     # Normalize such that CN=2 corresponds to depth of 2.0
     df[sample_cols] = 2.0 * df[sample_cols] / column_medians[np.newaxis, :]
 
@@ -2466,9 +2956,17 @@ def main():
     torch.manual_seed(42)
     np.random.seed(42)
 
+    # Log high-res counts file if provided
+    if args.high_res_counts:
+        print(f"\nHigh-resolution counts file: {args.high_res_counts}")
+    else:
+        print("\nNo high-resolution counts file provided (--high-res-counts)")
+
     # Run GD analysis (training and inference only)
     run_gd_analysis(
-        df, gd_table, segdup_mask, args, device=args.device
+        df, gd_table, segdup_mask, args, device=args.device,
+        column_medians=column_medians,
+        lowres_median_bin_size=lowres_median_bin_size,
     )
 
     print("\n" + "=" * 80)

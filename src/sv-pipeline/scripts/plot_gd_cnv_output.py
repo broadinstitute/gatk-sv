@@ -891,6 +891,51 @@ def _depths_with_gaps(
     return result
 
 
+def _build_heatmap_matrix(
+    region_df: pd.DataFrame,
+    sample_cols: List[str],
+    region_start: int,
+    region_end: int,
+    n_viz_bins: int = 1000,
+) -> np.ndarray:
+    """Build a dense (n_samples, n_viz_bins) matrix for heatmap display.
+
+    The visualisation grid has a fixed number of pixels (*n_viz_bins*)
+    spanning ``[region_start, region_end)``.  Each real bin is painted
+    only at the pixel columns it truly covers, so gaps between bins
+    (e.g. breakpoint regions) naturally remain NaN (white).
+
+    Args:
+        region_df: DataFrame with ``Start``, ``End`` and sample depth columns.
+        sample_cols: Sample column names to include.
+        region_start: Left edge of the visualisation region.
+        region_end: Right edge of the visualisation region.
+        n_viz_bins: Number of pixel columns in the output matrix.
+
+    Returns:
+        2-D array of shape ``(len(sample_cols), n_viz_bins)``.
+    """
+    n_samples = len(sample_cols)
+    region_span = max(region_end - region_start, 1)
+    viz_matrix = np.full((n_samples, n_viz_bins), np.nan)
+
+    bin_starts = region_df["Start"].values
+    bin_ends = region_df["End"].values
+    data = region_df[sample_cols].values  # shape (n_bins, n_samples)
+
+    for i, (bs, be) in enumerate(zip(bin_starts, bin_ends)):
+        # Map genomic coords to pixel indices
+        idx_lo = int((bs - region_start) / region_span * n_viz_bins)
+        idx_hi = int((be - region_start) / region_span * n_viz_bins)
+        idx_lo = max(idx_lo, 0)
+        idx_hi = min(idx_hi, n_viz_bins)
+        if idx_hi <= idx_lo:
+            idx_hi = min(idx_lo + 1, n_viz_bins)
+        viz_matrix[:, idx_lo:idx_hi] = data[i, :, np.newaxis]
+
+    return viz_matrix
+
+
 def plot_locus_overview(
     locus: GDLocus,
     calls_df: pd.DataFrame,
@@ -1001,33 +1046,16 @@ def plot_locus_overview(
     # Panel 2: Carriers heatmap (sorted by ploidy)
     ax = axes[1]
     if n_carriers > 0:
-        # Create a mapping from genomic position to bin index
-        bin_starts = region_df["Start"].values
-        bin_ends = region_df["End"].values
-        
-        # Create dense matrix with NaN for missing bins
-        # Use a fixed bin size for the visualization
-        viz_bin_size = int(np.median(bin_ends - bin_starts))
-        n_viz_bins = int((region_end - region_start) / viz_bin_size) + 1
-        viz_matrix = np.full((n_carriers, n_viz_bins), np.nan)
-        
-        # Fill in actual data at correct positions
-        carrier_data = region_df[carrier_cols].values  # bins x carriers
-        for i, (start, end) in enumerate(zip(bin_starts, bin_ends)):
-            viz_start_idx = int((start - region_start) / viz_bin_size)
-            viz_end_idx = int((end - region_start) / viz_bin_size) + 1
-            # Assign data to all visualization bins covered by this real bin
-            for viz_idx in range(viz_start_idx, min(viz_end_idx, n_viz_bins)):
-                viz_matrix[:, viz_idx] = carrier_data[i, :]
-        
-        # Create colormap with white for NaN values
+        viz_matrix = _build_heatmap_matrix(
+            region_df, carrier_cols, region_start, region_end)
+
         cmap = plt.cm.RdBu_r.copy()
         cmap.set_bad(color='white')
-        
+
         im1 = ax.imshow(viz_matrix, aspect="auto", cmap=cmap,
                        vmin=0, vmax=4, interpolation="nearest",
                        extent=[region_start, region_end, n_carriers, 0])
-        
+
         ax.set_ylabel(f"Carriers (n={n_carriers})")
         ax.set_yticks([])
         ax.set_xticks([])
@@ -1040,39 +1068,22 @@ def plot_locus_overview(
     # Panel 3: Non-carriers heatmap (sorted by ploidy)
     ax = axes[2]
     if n_non_carriers > 0:
-        # Create a mapping from genomic position to bin index
-        bin_starts = region_df["Start"].values
-        bin_ends = region_df["End"].values
-        
-        # Create dense matrix with NaN for missing bins
-        viz_bin_size = int(np.median(bin_ends - bin_starts))
-        n_viz_bins = int((region_end - region_start) / viz_bin_size) + 1
-        viz_matrix = np.full((n_non_carriers, n_viz_bins), np.nan)
-        
-        # Fill in actual data at correct positions
-        non_carrier_data = region_df[non_carrier_cols].values  # bins x non_carriers
-        for i, (start, end) in enumerate(zip(bin_starts, bin_ends)):
-            viz_start_idx = int((start - region_start) / viz_bin_size)
-            viz_end_idx = int((end - region_start) / viz_bin_size) + 1
-            # Assign data to all visualization bins covered by this real bin
-            for viz_idx in range(viz_start_idx, min(viz_end_idx, n_viz_bins)):
-                viz_matrix[:, viz_idx] = non_carrier_data[i, :]
-        
-        # Create colormap with white for NaN values
+        viz_matrix = _build_heatmap_matrix(
+            region_df, non_carrier_cols, region_start, region_end)
+
         cmap = plt.cm.RdBu_r.copy()
         cmap.set_bad(color='white')
-        
+
         im2 = ax.imshow(viz_matrix, aspect="auto", cmap=cmap,
                        vmin=0, vmax=4, interpolation="nearest",
                        extent=[region_start, region_end, n_non_carriers, 0])
-        
+
         ax.set_ylabel(f"Non-carriers (n={n_non_carriers})")
         ax.set_yticks([])
         ax.set_xlim(region_start, region_end)
         ax.set_ylim(0, n_non_carriers)
         ax.set_xlabel(f"Position on {chrom}")
-        
-        # Add colorbar below non-carriers heatmap
+
         cbar = plt.colorbar(im2, ax=ax, orientation='horizontal', pad=0.08, aspect=40)
         cbar.set_label("Normalized read depth")
     else:
@@ -1636,11 +1647,19 @@ def evaluate_against_truth(
         print(f"  Batch contains {len(batch_samples)} samples; "
               "truth carriers will be restricted to this set.")
 
-    # Build predicted carrier sets keyed by GD_ID
+    # Build predicted carrier sets keyed by GD_ID.
+    # Only count samples whose call is both a carrier AND the best-match
+    # breakpoint configuration for its svtype.  Without the is_best_match
+    # filter, a sample carrying a BP1-3 DUP would also appear as a
+    # (spurious) carrier of BP1-2 and BP2-3, inflating false-positive
+    # counts for those sub-intervals.
     pred_by_gd: Dict[str, set] = {}
     for gd_id, grp in calls_df.groupby("GD_ID"):
+        carrier_mask = grp["is_carrier"] == True  # noqa: E712
+        if "is_best_match" in grp.columns:
+            carrier_mask = carrier_mask & (grp["is_best_match"] == True)  # noqa: E712
         pred_by_gd[str(gd_id)] = set(
-            grp.loc[grp["is_carrier"] == True, "sample"].unique()  # noqa: E712
+            grp.loc[carrier_mask, "sample"].unique()
         )
 
     # Build truth carrier sets keyed by GD_ID
