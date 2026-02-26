@@ -9,23 +9,18 @@ workflow ManuallyReviewBalancedSVs {
     String prefix
 
     Array[File] cohort_vcfs  # cohort vcf or vcfs sharded by contig
-    Array[File] batch_manta_tloc_vcfs
     Array[File] batch_pe_files
 
     Array[String] batches
     Array[File] samples_in_batches
+    File batch_membership
 
-    Int min_size
-
-    File cytobands
-    File cytobands_index
-
-    Boolean process_ctx
-    Boolean process_cpx
-    Boolean process_inv
+    String vid_include_cmd
+    File id_map
 
     File generate_pe_tabix_py_script # for development
     File calculate_pe_stats_script # for development
+    File plot_pe_script
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -38,246 +33,101 @@ workflow ManuallyReviewBalancedSVs {
     RuntimeAttr? runtime_attr_vcf2bed
     RuntimeAttr? runtime_attr_generate_script
     RuntimeAttr? runtime_attr_collect_pe
-    RuntimeAttr? runtime_attr_collect_pe_background
-    RuntimeAttr? runtime_attr_concat_ctx
-    RuntimeAttr? runtime_attr_concat_ctx_background
     RuntimeAttr? runtime_attr_concat_cpx
-    RuntimeAttr? runtime_attr_concat_inv
-    RuntimeAttr? runtime_attr_calculate_ctx_background
-    RuntimeAttr? runtime_attr_calculate_ctx_stats
     RuntimeAttr? runtime_attr_calculate_cpx_stats
-    RuntimeAttr? runtime_attr_calculate_inv_stats
+    RuntimeAttr? runtime_attr_plot_pe
+    RuntimeAttr? runtime_attr_get_batch_idxs
 
   }
 
   # select svs cohort-wide and merge across contigs
   # then select samples in batch in separate step
 
-  if (process_ctx) {
-    scatter (i in range(length(cohort_vcfs))) {
-      call SelectSVType as SelectCTX {
-        input:
-          vcf = cohort_vcfs[i],
-          svtype = "CTX",
-          prefix="~{prefix}.shard_~{i}",
-          sv_pipeline_docker=sv_pipeline_docker,
-          runtime_attr_override=runtime_attr_select_ctx
-      }
-    }
 
-    call tasks.ConcatVcfs as ConcatCTX {
+  scatter (i in range(length(cohort_vcfs))) {
+    call SelectSVType as SelectCPX {
       input:
-        vcfs = SelectCTX.svtype_vcf,
-        vcfs_idx = SelectCTX.svtype_vcf_index,
-        naive = true,
-        outfile_prefix = "~{prefix}.CTX",
-        sv_base_mini_docker = sv_base_mini_docker
-    }
-
-    call LabelArms {
-      input:
-        ctx_vcf = ConcatCTX.concat_vcf,
-        ctx_vcf_index = ConcatCTX.concat_vcf_idx,
-        prefix = prefix,
-        cytobands = cytobands,
-        cytobands_index = cytobands_index,
-        sv_pipeline_docker = sv_pipeline_docker
-    }
-
-    scatter (i in range(length(batches))) {
-      call batch_rev.ManuallyReviewBalancedSVsPerBatch as ManuallyReviewCTXPerBatch {
-        input:
-          batch = batches[i],
-          svtype = "CTX",
-          cohort_vcf = LabelArms.witharms_vcf,
-          cohort_vcf_index = LabelArms.witharms_vcf_index,
-          batch_pe_file = batch_pe_files[i],
-          batch_manta_tloc_vcf = batch_manta_tloc_vcfs[i],
-          collect_background_pe = true,
-          batch_samples = samples_in_batches[i],
-          generate_pe_tabix_py_script=generate_pe_tabix_py_script,
-          sv_pipeline_docker = sv_pipeline_docker,
-          sv_base_mini_docker = sv_base_mini_docker,
-          runtime_attr_subset_samples=runtime_attr_subset_samples,
-          runtime_attr_combine_tlocs=runtime_attr_combine_tlocs,
-          runtime_attr_vcf2bed=runtime_attr_vcf2bed,
-          runtime_attr_generate_script=runtime_attr_generate_script,
-          runtime_attr_collect_pe=runtime_attr_collect_pe,
-          runtime_attr_collect_pe_background=runtime_attr_collect_pe_background
-      }
-    }
-
-    # concatenate per-batch evidence files
-    call ConcatEvidences as ConcatCTXEvidences {
-      input:
-        prefix = "~{prefix}.CTX",
-        evidences = ManuallyReviewCTXPerBatch.batch_pe_evidence,
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_concat_ctx
-    }
-
-    # no overall file header so use different task
-    call tasks.ZcatCompressedFiles as ConcatCTXBackground {
-      input:
-        outfile_name = "~{prefix}.CTX.background_PE.tsv.gz",
-        shards = select_all(ManuallyReviewCTXPerBatch.batch_pe_background),
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_concat_ctx_background
-    }
-
-    # compute stats about PE evidence
-    call CalculatePEBackground as CalculateCTXBackground {
-      input:
-        prefix = "~{prefix}.CTX",
-        background_pe = ConcatCTXBackground.outfile,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_calculate_ctx_background
-    }
-
-    call CalculatePEStats as CalculateCTXStats {
-      input:
-        prefix = "~{prefix}.CTX",
-        evidence = ConcatCTXEvidences.concat_evidence,
-        background = CalculateCTXBackground.stats,
-        calculate_pe_stats_script = calculate_pe_stats_script,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_calculate_ctx_stats
-    }
-
-  }
-
-  if (process_cpx) {
-    scatter (i in range(length(cohort_vcfs))) {
-      call SelectSVType as SelectCPX {
-        input:
-          vcf = cohort_vcfs[i],
-          svtype = "CPX",
-          min_size=min_size,
-          prefix="~{prefix}.shard_~{i}",
-          sv_pipeline_docker=sv_pipeline_docker,
-          runtime_attr_override=runtime_attr_select_cpx
-      }
-    }
-
-    call tasks.ConcatVcfs as ConcatCPX {
-      input:
-        vcfs = SelectCPX.svtype_vcf,
-        vcfs_idx = SelectCPX.svtype_vcf_index,
-        naive = false,
-        outfile_prefix = "~{prefix}.CPX",
-        sv_base_mini_docker = sv_base_mini_docker
-    }
-
-    scatter (i in range(length(batches))) {
-      call batch_rev.ManuallyReviewBalancedSVsPerBatch as ManuallyReviewCPXPerBatch {
-        input:
-          batch = batches[i],
-          svtype = "CPX",
-          cohort_vcf = ConcatCPX.concat_vcf,
-          cohort_vcf_index = ConcatCPX.concat_vcf_idx,
-          batch_pe_file = batch_pe_files[i],
-          batch_samples = samples_in_batches[i],
-          generate_pe_tabix_py_script=generate_pe_tabix_py_script,
-          sv_pipeline_docker = sv_pipeline_docker,
-          sv_base_mini_docker = sv_base_mini_docker,
-          runtime_attr_subset_samples=runtime_attr_subset_samples,
-          runtime_attr_combine_tlocs=runtime_attr_combine_tlocs,
-          runtime_attr_vcf2bed=runtime_attr_vcf2bed,
-          runtime_attr_generate_script=runtime_attr_generate_script,
-          runtime_attr_collect_pe=runtime_attr_collect_pe
-      }
-    }
-
-    # concatenate per-batch evidence files
-    call ConcatEvidences as ConcatCPXEvidences {
-      input:
-        prefix = "~{prefix}.CPX",
-        evidences = ManuallyReviewCPXPerBatch.batch_pe_evidence,
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_concat_cpx
-    }
-
-    # compute stats about PE evidence
-    call CalculatePEStats as CalculateCPXStats {
-      input:
-        prefix = "~{prefix}.CPX",
-        evidence = ConcatCPXEvidences.concat_evidence,
-        calculate_pe_stats_script = calculate_pe_stats_script,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_calculate_cpx_stats
+        vcf = cohort_vcfs[i],
+        vid_include_cmd=vid_include_cmd,
+        id_map=id_map,
+        batch_membership=batch_membership,
+        prefix="~{prefix}.shard_~{i}",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_select_cpx
     }
   }
 
-  if (process_inv) {
-    scatter (i in range(length(cohort_vcfs))) {
-      call SelectSVType as SelectINV {
-        input:
-          vcf = cohort_vcfs[i],
-          svtype = "INV",
-          min_size=min_size,
-          prefix="~{prefix}.shard_~{i}",
-          sv_pipeline_docker=sv_pipeline_docker,
-          runtime_attr_override=runtime_attr_select_inv
-      }
-    }
+  call tasks.ConcatVcfs as ConcatCPX {
+    input:
+      vcfs = SelectCPX.svtype_vcf,
+      vcfs_idx = SelectCPX.svtype_vcf_index,
+      naive = false,
+      outfile_prefix = "~{prefix}.CPX",
+      sv_base_mini_docker = sv_base_mini_docker
+  }
 
-    call tasks.ConcatVcfs as ConcatINV {
+  call GetBatchIndexes {
+    input:
+      batches = batches,
+      carrier_batches = SelectCPX.carrier_batches,
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_get_batch_idxs
+  }
+
+  scatter (idx in range(length(GetBatchIndexes.batch_idxs))) {
+    Int i = GetBatchIndexes.batch_idxs[idx]
+    call batch_rev.ManuallyReviewBalancedSVsPerBatch as ManuallyReviewCPXPerBatch {
       input:
-        vcfs = SelectINV.svtype_vcf,
-        vcfs_idx = SelectINV.svtype_vcf_index,
-        naive = true,
-        outfile_prefix = "~{prefix}.INV",
-        sv_base_mini_docker = sv_base_mini_docker
-    }
-
-    scatter (i in range(length(batches))) {
-      call batch_rev.ManuallyReviewBalancedSVsPerBatch as ManuallyReviewINVPerBatch {
-        input:
-          batch = batches[i],
-          svtype = "INV",
-          cohort_vcf = ConcatINV.concat_vcf,
-          cohort_vcf_index = ConcatINV.concat_vcf_idx,
-          batch_pe_file = batch_pe_files[i],
-          batch_samples = samples_in_batches[i],
-          generate_pe_tabix_py_script=generate_pe_tabix_py_script,
-          sv_pipeline_docker = sv_pipeline_docker,
-          sv_base_mini_docker = sv_base_mini_docker,
-          runtime_attr_subset_samples=runtime_attr_subset_samples,
-          runtime_attr_combine_tlocs=runtime_attr_combine_tlocs,
-          runtime_attr_vcf2bed=runtime_attr_vcf2bed,
-          runtime_attr_generate_script=runtime_attr_generate_script,
-          runtime_attr_collect_pe=runtime_attr_collect_pe
-      }
-    }
-
-    # concatenate per-batch evidence files
-    call ConcatEvidences as ConcatINVEvidences {
-      input:
-        prefix = "~{prefix}.INV",
-        evidences = ManuallyReviewINVPerBatch.batch_pe_evidence,
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_concat_inv
-    }
-
-    # compute stats about PE evidence
-    call CalculatePEStats as CalculateINVStats {
-      input:
-        prefix = "~{prefix}.INV",
-        evidence = ConcatINVEvidences.concat_evidence,
-        calculate_pe_stats_script = calculate_pe_stats_script,
+        batch = batches[i],
+        svtype = "CPX",
+        cohort_vcf = ConcatCPX.concat_vcf,
+        cohort_vcf_index = ConcatCPX.concat_vcf_idx,
+        batch_pe_file = batch_pe_files[i],
+        batch_samples = samples_in_batches[i],
+        generate_pe_tabix_py_script=generate_pe_tabix_py_script,
         sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_calculate_inv_stats
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_subset_samples=runtime_attr_subset_samples,
+        runtime_attr_combine_tlocs=runtime_attr_combine_tlocs,
+        runtime_attr_vcf2bed=runtime_attr_vcf2bed,
+        runtime_attr_generate_script=runtime_attr_generate_script,
+        runtime_attr_collect_pe=runtime_attr_collect_pe
     }
   }
+
+  # concatenate per-batch evidence files
+  call ConcatEvidences as ConcatCPXEvidences {
+    input:
+      prefix = "~{prefix}.CPX",
+      evidences = ManuallyReviewCPXPerBatch.batch_pe_evidence,
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_concat_cpx
+  }
+
+  # compute stats about PE evidence
+  call CalculatePEStats as CalculateCPXStats {
+    input:
+      prefix = "~{prefix}.CPX",
+      evidence = ConcatCPXEvidences.concat_evidence,
+      calculate_pe_stats_script = calculate_pe_stats_script,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_calculate_cpx_stats
+  }
+
+  call PlotPEEvidence {
+    input:
+      prefix = "~{prefix}.CPX",
+      evidence = ConcatCPXEvidences.concat_evidence,
+      plot_pe_script = plot_pe_script,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_plot_pe
+  }
+
 
   output {
-    File? ctx_evidence = ConcatCTXEvidences.concat_evidence
-    File? cpx_evidence = ConcatCPXEvidences.concat_evidence
-    File? inv_evidence = ConcatINVEvidences.concat_evidence
-
-    File? ctx_stats = CalculateCTXStats.stats
-    File? cpx_stats = CalculateCPXStats.stats
-    File? inv_stats = CalculateINVStats.stats
+    File cpx_evidence = ConcatCPXEvidences.concat_evidence
+    File cpx_stats = CalculateCPXStats.stats
+    File pe_plots = PlotPEEvidence.plots
   }
 }
 
@@ -286,13 +136,12 @@ task SelectSVType {
   input {
     String prefix
     File vcf
-    String svtype
-    Int? min_size
+    File id_map
+    File batch_membership
+    String vid_include_cmd
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
-
-  String size_filter_cmd = if defined(min_size) then " && INFO/SVLEN>=~{min_size}" else ""
 
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
@@ -308,19 +157,54 @@ task SelectSVType {
     set -euo pipefail
 
     bcftools view \
-      -i "INFO/SVTYPE=='~{svtype}'~{size_filter_cmd}" \
+      -i "~{vid_include_cmd}" \
       ~{vcf} \
-      | bcftools +fill-tags \
       -O z \
-      -o "~{prefix}.~{svtype}.vcf.gz" \
-      -- -t AC,AN,AF
+      -o "~{prefix}.selected.vcf.gz"
 
-    tabix ~{prefix}.~{svtype}.vcf.gz
+    tabix ~{prefix}.selected.vcf.gz
+
+    python <<CODE
+carriers = set()
+with pysam.VariantFile("~{prefix}.selected.vcf.gz") as vcf:
+    for record in vcf:
+        counter = 0
+        for s,gt in record.samples.items():
+            if any([a is not None and a > 0 for a in gt['GT']]):
+                carriers.add(s)
+                counter += 1
+                if counter >= 3:
+                    break
+
+rsid_to_bbid = dict()
+with open("~{id_map}", 'r') as inp:
+    for line in inp:
+        bbid, rsid = line.strip("\n").split("\t")
+        rsid_to_bbid[rsid] = bbid
+
+carriers_bbids = {rsid_to_bbid[x] for x in carriers}
+
+samp_to_batch = dict()
+with open("~{batch_membership}", 'r') as inp:
+    for line in inp:
+        samp, batch = line.strip("\n").split("\t")
+        samp_to_batch[samp] = batch
+
+carrier_batches = {samp_to_batch[x] for x in carriers_bbids}
+
+with open("~{prefix}.batches.txt", 'w') as out:
+    for i in carrier_batches:
+        out.write(f"{i}\n")
+
+CODE
+
+
   >>>
 
   output {
-    File svtype_vcf = "~{prefix}.~{svtype}.vcf.gz"
-    File svtype_vcf_index = "~{prefix}.~{svtype}.vcf.gz.tbi"
+    File svtype_vcf = "~{prefix}.selected.vcf.gz"
+    File svtype_vcf_index = "~{prefix}.selected.vcf.gz.tbi"
+    File carrier_batches = "~{prefix}.batches.txt"
   }
 
   runtime {
@@ -335,13 +219,10 @@ task SelectSVType {
 }
 
 
-task LabelArms {
+task GetBatchIndexes {
   input {
-    String prefix
-    File ctx_vcf
-    File ctx_vcf_index
-    File cytobands
-    File cytobands_index
+    Array[String] batches
+    Array[File] carrier_batches
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -349,7 +230,7 @@ task LabelArms {
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 3.75,
-                               disk_gb: ceil(10 + 2 * size(ctx_vcf, "GB")),
+                               disk_gb: 10,
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
                                max_retries: 1
@@ -360,41 +241,23 @@ task LabelArms {
     set -euo pipefail
 
     python <<CODE
-import pysam
-import gzip
+carrier_batches = set()
+for f in ["~{sep='", "' carrier_batches}"]:
+    with open(f, 'r') as inp:
+        for line in inp:
+            carrier_batches.add(line.strip("\n"))
 
-def get_arms(record, cytobands):
-  regionA = '{0}:{1}-{1}'.format(record.chrom, record.pos)
-  regionB = '{0}:{1}-{1}'.format(record.info['CHR2'], record.info['END2'])
-
-  def _get_arm(region):
-    print(region)
-    arm = next(cytobands.fetch(region))
-    return arm.split()[3][0]
-
-  return _get_arm(regionA), _get_arm(regionB)
-
-cytobands = pysam.TabixFile("~{cytobands}")
-vcf = pysam.VariantFile("~{ctx_vcf}")
-vcf.header.add_line('##INFO=<ID=END2,Number=1,Type=Integer,Description="Second position">')
-outvcf = pysam.VariantFile("~{prefix}.CTX.witharms.vcf.gz", 'w', header=vcf.header)
-for record in vcf:
-  armA, armB = get_arms(record, cytobands)
-  # get CTX arm information
-  if armA == armB:
-    record.info['CPX_TYPE'] = "CTX_PP/QQ"
-  else:
-    record.info['CPX_TYPE'] = "CTX_PQ/QP"
-  outvcf.write(record)
-
+batch_idxs = [i for i, x in enumerate(["~{sep='", "' batches}"]) if x in carrier_batches]
+with open("batch_idxs.txt", 'w') as out:
+    for i in batch_idxs:
+        out.write(f"{i}\n")
 CODE
 
-    tabix ~{prefix}.CTX.witharms.vcf.gz
+
   >>>
 
   output {
-    File witharms_vcf = "~{prefix}.CTX.witharms.vcf.gz"
-    File witharms_vcf_index = "~{prefix}.CTX.witharms.vcf.gz.tbi"
+    Array[Int] batch_idxs = read_lines("batch_idxs.txt")
   }
 
   runtime {
@@ -450,6 +313,83 @@ task ConcatEvidences{
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+task PlotPEEvidence {
+  input {
+    String prefix
+    File evidence
+    File plot_pe_script
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(10 + 10 * size(evidence, "GB")),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    python <<CODE
+import gzip
+with gzip.open(pe_evidence, 'rt') as pe, open("filenames.txt", 'w') as fn:
+    first = True
+    curr_lines = None
+    curr_fname = None
+    for line in pe:
+        fields = line.strip().lstrip("#").split("\t")
+        if first:
+            first = False
+        elif line.startswith("#"):
+            if curr_lines is not None and len(curr_lines) > 0:
+                with open(curr_fname, 'w') as out:
+                    for l in curr_lines:
+                        out.write(l)
+                fn.write(curr_fname + '\n')
+            vid = fields[3]
+            samp = fields[13]
+            curr_fname = f"{vid}.{samp}.pe"
+            curr_lines = []
+        else:
+            if line not in curr_lines:
+                curr_lines.append(line)
+    # handle last variant
+    if len(curr_lines) > 0:
+        with open(curr_fname, 'w') as out:
+            for l in curr_lines:
+                out.write(l)
+        fn.write(curr_fname + '\n')
+CODE
+
+    mkdir plots
+    while read f; do
+      Rscript ~{plot_pe_script} $f "plots/$f.pdf"
+    done < filenames.txt
+
+    tar -czvf ~{prefix}.pe_plots.tar.gz plots/
+  >>>
+
+  output {
+    File plots = "~{prefix}.plots.tar.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
