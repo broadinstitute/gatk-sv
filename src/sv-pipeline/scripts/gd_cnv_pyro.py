@@ -29,6 +29,9 @@ import pandas as pd
 import pysam
 import torch
 
+# Module-level verbosity flag, set from --verbose in main().
+VERBOSE = False
+
 from pathlib import Path
 from tqdm import tqdm
 
@@ -1021,11 +1024,21 @@ def extract_locus_bins(
             if in_bypass:
                 keep_mask.append(True)
                 n_bypassed += 1
+                if VERBOSE:
+                    print(f"    [verbose] bin {row['Chr']}:{row['Start']}-{row['End']} "
+                          f"in segdup bypass region — kept")
             else:
                 overlap = segdup_mask.get_overlap_fraction(
                     row["Chr"], row["Start"], row["End"]
                 )
-                keep_mask.append(overlap < segdup_threshold)
+                kept = overlap < segdup_threshold
+                keep_mask.append(kept)
+                if VERBOSE and not kept:
+                    sample_cols = get_sample_columns(locus_df)
+                    med = np.median(row[sample_cols].values.astype(float))
+                    print(f"    [verbose] bin {row['Chr']}:{row['Start']}-{row['End']} "
+                          f"segdup overlap={overlap:.2f} >= {segdup_threshold} — MASKED "
+                          f"(median depth={med:.3f})")
 
         n_masked = len(keep_mask) - sum(keep_mask)
         if n_masked > 0:
@@ -1119,6 +1132,7 @@ def rebin_locus_intervals(
     locus: GDLocus,
     max_bins_per_interval: int = 10,
     flank_regions: Optional[List[Tuple[int, int, str]]] = None,
+    min_rebin_coverage: float = 0.5,
 ) -> pd.DataFrame:
     """
     Reduce the number of bins by rebinning each interval and flanking region to have
@@ -1132,6 +1146,10 @@ def rebin_locus_intervals(
     distribution, avoiding the problem of a few tiny bins alongside one or two
     very large ones.
 
+    Putative intervals where the fraction of the bin width covered by original
+    bins is less than *min_rebin_coverage* are discarded to avoid biased
+    estimates from tiny slivers of data.
+
     Applies to:
       - Intervals between adjacent breakpoints
       - Left and right flanking regions (bin-derived if flank_regions is provided,
@@ -1142,6 +1160,9 @@ def rebin_locus_intervals(
         df: DataFrame with bins for this locus
         locus: GDLocus object
         max_bins_per_interval: Maximum number of bins per interval (default: 10)
+        min_rebin_coverage: Minimum fraction of each new bin's width that must
+            be overlapped by original bins (default: 0.5).  Bins below this
+            threshold are dropped.
 
     Returns:
         DataFrame with rebinned data
@@ -1189,6 +1210,17 @@ def rebin_locus_intervals(
 
             total_overlap = overlaps.sum()
             if total_overlap == 0:
+                continue
+
+            # Require that a minimum fraction of the new bin is covered by
+            # original bins so that tiny slivers don't produce biased estimates.
+            bin_width = p_end - p_start
+            if bin_width > 0 and (total_overlap / bin_width) < min_rebin_coverage:
+                if VERBOSE:
+                    print(f"      [verbose] rebin: dropping putative bin "
+                          f"{int(round(p_start))}-{int(round(p_end))} "
+                          f"(coverage {total_overlap / bin_width:.1%} "
+                          f"< {min_rebin_coverage:.0%})")
                 continue
 
             weights = overlaps / total_overlap
@@ -1506,6 +1538,7 @@ def determine_best_breakpoints(
 
         # Multiple carrier calls of same svtype - score each based on CN probabilities
         best_score = -np.inf
+        best_size = -1
         best_gd_id = None
 
         for call in carrier_calls:
@@ -1562,9 +1595,11 @@ def determine_best_breakpoints(
             if total_weight > 0:
                 score = score / total_weight
 
-            # Update best if this score is higher
-            if score > best_score:
+            # Update best if this score is higher; tiebreaker: prefer larger variant
+            call_size = call["end"] - call["start"]
+            if score > best_score or (score == best_score and call_size > best_size):
                 best_score = score
+                best_size = call_size
                 best_gd_id = call["GD_ID"]
 
         best_by_svtype[svtype] = best_gd_id
@@ -1645,6 +1680,37 @@ def filter_low_quality_bins(
     print(f"Thresholds: median [{median_min}, {median_max}], MAD <= {mad_max}")
     print(f"Bins filtered: {n_filtered}")
     print(f"Bins remaining: {keep_mask.sum()}")
+
+    if VERBOSE:
+        # Break down why bins were filtered
+        fail_med_low = (medians < median_min).sum()
+        fail_med_high = (medians > median_max).sum()
+        fail_mad = (mads > mad_max).sum()
+        print(f"  [verbose] Filter breakdown:")
+        print(f"    median < {median_min}: {fail_med_low}")
+        print(f"    median > {median_max}: {fail_med_high}")
+        print(f"    MAD > {mad_max}: {fail_mad}")
+        # Distribution of filtered bin statistics
+        if n_filtered > 0:
+            filt_medians = medians[~keep_mask]
+            filt_mads = mads[~keep_mask]
+            print(f"    filtered bins median depth: "
+                  f"min={filt_medians.min():.3f}, max={filt_medians.max():.3f}, "
+                  f"mean={filt_medians.mean():.3f}")
+            print(f"    filtered bins MAD: "
+                  f"min={filt_mads.min():.3f}, max={filt_mads.max():.3f}, "
+                  f"mean={filt_mads.mean():.3f}")
+        # Surviving bin distribution
+        surv_medians = medians[keep_mask]
+        surv_mads = mads[keep_mask]
+        if len(surv_medians) > 0:
+            print(f"    surviving bins median depth: "
+                  f"min={surv_medians.min():.3f}, max={surv_medians.max():.3f}, "
+                  f"mean={surv_medians.mean():.3f}")
+            print(f"    surviving bins MAD: "
+                  f"min={surv_mads.min():.3f}, max={surv_mads.max():.3f}, "
+                  f"mean={surv_mads.mean():.3f}")
+
     print(f"{'=' * 80}\n")
 
     return df[keep_mask].copy()
@@ -1800,7 +1866,29 @@ def normalize_highres_bins(
     # Scale column_medians by the bin-size ratio so the normalisation
     # accounts for the smaller expected raw counts in high-res bins.
     adjusted_medians = column_medians * bin_size_ratio  # shape (n_samples,)
+
+    if VERBOSE:
+        raw_vals = df[sample_cols].values
+        print(f"    [verbose] high-res pre-normalisation: "
+              f"per-bin-median mean={np.nanmean(np.nanmedian(raw_vals, axis=1)):.3f}, "
+              f"adjusted_medians range=[{adjusted_medians.min():.3f}, {adjusted_medians.max():.3f}]")
+
     df[sample_cols] = 2.0 * df[sample_cols].values / adjusted_medians[np.newaxis, :]
+
+    if VERBOSE:
+        norm_vals = df[sample_cols].values
+        per_bin_medians = np.nanmedian(norm_vals, axis=1)
+        print(f"    [verbose] high-res post-normalisation: "
+              f"per-bin-median mean={per_bin_medians.mean():.3f}, "
+              f"min={per_bin_medians.min():.3f}, max={per_bin_medians.max():.3f}")
+        # Log first few bins for spot-checking
+        for i in range(min(5, len(df))):
+            row = df.iloc[i]
+            med = np.nanmedian(row[sample_cols].values.astype(float))
+            print(f"      bin {row['Chr']}:{row['Start']}-{row['End']}  "
+                  f"norm_median={med:.3f}")
+        if len(df) > 5:
+            print(f"      ... ({len(df) - 5} more bins)")
 
     return df
 
@@ -1816,6 +1904,7 @@ def _filter_and_prepare_locus_bins(
     segdup_threshold: float = 0.5,
     filter_params: Optional[dict] = None,
     segdup_bypass_regions: Optional[List[Tuple[int, int]]] = None,
+    min_rebin_coverage: float = 0.5,
 ) -> Tuple[pd.DataFrame, Dict[str, List[int]]]:
     """
     Shared helper: apply segdup masking, quality filtering, trimming,
@@ -1883,6 +1972,21 @@ def _filter_and_prepare_locus_bins(
         n_filt = int((~keep).sum())
         if n_filt > 0:
             print(f"    Quality-filtered {n_filt}/{len(locus_df)} bins")
+        if VERBOSE:
+            for j in range(len(locus_df)):
+                row = locus_df.iloc[j]
+                status = "kept" if keep[j] else "FILTERED"
+                reason_parts = []
+                if medians[j] < filter_params["median_min"]:
+                    reason_parts.append(f"median {medians[j]:.3f} < {filter_params['median_min']}")
+                if medians[j] > filter_params["median_max"]:
+                    reason_parts.append(f"median {medians[j]:.3f} > {filter_params['median_max']}")
+                if mads[j] > filter_params["mad_max"]:
+                    reason_parts.append(f"MAD {mads[j]:.3f} > {filter_params['mad_max']}")
+                reason = "; ".join(reason_parts) if reason_parts else ""
+                print(f"      [verbose] bin {row['Chr']}:{row['Start']}-{row['End']}  "
+                      f"median={medians[j]:.3f} MAD={mads[j]:.3f}  {status}"
+                      f"{' (' + reason + ')' if reason else ''}")
         locus_df = locus_df[keep].copy()
 
     if len(locus_df) == 0:
@@ -1896,7 +2000,8 @@ def _filter_and_prepare_locus_bins(
     # Rebin
     if max_bins_per_interval > 0 and len(locus_df) > 0:
         n_before = len(locus_df)
-        locus_df = rebin_locus_intervals(locus_df, locus, max_bins_per_interval, flank_regions)
+        locus_df = rebin_locus_intervals(locus_df, locus, max_bins_per_interval, flank_regions,
+                                         min_rebin_coverage=min_rebin_coverage)
         if len(locus_df) < n_before:
             print(f"    Bins after rebinning: {len(locus_df)} (reduced from {n_before})")
 
@@ -1918,6 +2023,7 @@ def collect_all_locus_bins(
     lowres_median_bin_size: Optional[float] = None,
     filter_params: Optional[dict] = None,
     segdup_bypass_threshold: float = 0.9,
+    min_rebin_coverage: float = 0.5,
 ) -> Tuple[pd.DataFrame, List[LocusBinMapping], Dict[str, GDLocus]]:
     """
     Collect all bins across all GD loci into a single DataFrame.
@@ -2107,9 +2213,28 @@ def collect_all_locus_bins(
         # Rebin to reduce number of bins per interval/flank if requested
         if max_bins_per_interval > 0:
             locus_df_orig = locus_df
-            locus_df = rebin_locus_intervals(locus_df, locus, max_bins_per_interval, flank_regions)
+            if VERBOSE:
+                _sc = get_sample_columns(locus_df_orig)
+                _meds = np.median(locus_df_orig[_sc].values, axis=1)
+                print(f"    [verbose] pre-rebin per-bin median depths ({len(locus_df_orig)} bins):")
+                for _j in range(len(locus_df_orig)):
+                    _r = locus_df_orig.iloc[_j]
+                    print(f"      {_r['Chr']}:{_r['Start']}-{_r['End']}  "
+                          f"median={_meds[_j]:.3f}")
+
+            locus_df = rebin_locus_intervals(locus_df, locus, max_bins_per_interval, flank_regions,
+                                             min_rebin_coverage=min_rebin_coverage)
             if len(locus_df) < len(locus_df_orig):
                 print(f"  Bins after rebinning: {len(locus_df)} (reduced from {len(locus_df_orig)})")
+
+            if VERBOSE:
+                _sc = get_sample_columns(locus_df)
+                _meds = np.median(locus_df[_sc].values, axis=1)
+                print(f"    [verbose] post-rebin per-bin median depths ({len(locus_df)} bins):")
+                for _j in range(len(locus_df)):
+                    _r = locus_df.iloc[_j]
+                    print(f"      {_r['Chr']}:{_r['Start']}-{_r['End']}  "
+                          f"median={_meds[_j]:.3f}")
 
         # Assign bins to intervals and flanking regions
         interval_bins = assign_bins_to_intervals(locus_df, locus, flank_regions)
@@ -2178,6 +2303,7 @@ def collect_all_locus_bins(
                     segdup_threshold=segdup_threshold,
                     filter_params=filter_params,
                     segdup_bypass_regions=segdup_bypass_regions,
+                    min_rebin_coverage=min_rebin_coverage,
                 )
 
                 hr_undercovered = _undercovered_intervals(hr_interval_bins)
@@ -2575,6 +2701,7 @@ def run_gd_analysis(
         lowres_median_bin_size=lowres_median_bin_size,
         filter_params=filter_params,
         segdup_bypass_threshold=args.segdup_bypass_threshold,
+        min_rebin_coverage=args.min_rebin_coverage,
     )
 
     if len(combined_df) == 0:
@@ -2700,7 +2827,7 @@ def parse_args():
     parser.add_argument(
         "--segdup-threshold",
         type=float,
-        default=0.5,
+        default=1.0,
         help="Minimum segdup overlap fraction to mask a bin",
     )
     parser.add_argument(
@@ -2726,8 +2853,16 @@ def parse_args():
     parser.add_argument(
         "--max-bins-per-interval",
         type=int,
-        default=12,
+        default=20,
         help="Maximum bins per interval after rebinning (0 = no rebinning)",
+    )
+    parser.add_argument(
+        "--min-rebin-coverage",
+        type=float,
+        default=0.5,
+        help="Minimum fraction of each new rebinned bin's width that must "
+             "be covered by original bins (0.0–1.0, default 0.5).  Putative "
+             "bins with less coverage are discarded to avoid biased estimates.",
     )
 
     # Model parameters
@@ -2880,12 +3015,26 @@ def parse_args():
         help="Device for computation",
     )
 
+    # Verbosity
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        default=False,
+        help="Enable detailed per-bin diagnostic logging for normalisation, "
+             "quality filtering, segdup masking, high-res replacement, and "
+             "rebinning.  Useful for investigating discrepancies between "
+             "raw and normalised depth signals.",
+    )
+
     return parser.parse_args()
 
 
 def main():
     """Main function to run GD CNV detection pipeline."""
     args = parse_args()
+
+    global VERBOSE
+    VERBOSE = args.verbose
 
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
@@ -2929,6 +3078,18 @@ def main():
     print(f"Column medians: min={column_medians.min():.3f}, "
           f"max={column_medians.max():.3f}, mean={column_medians.mean():.3f}")
 
+    if VERBOSE:
+        print("\n  [verbose] Per-sample autosomal median raw counts (used as normalisation denominator):")
+        for i, s in enumerate(sample_cols):
+            print(f"    {s}: {column_medians[i]:.3f}")
+        # Pre-normalisation depth summary
+        raw_depths = df[sample_cols].values
+        print(f"\n  [verbose] Pre-normalisation depth summary ({len(df)} bins x {len(sample_cols)} samples):")
+        print(f"    global mean = {np.nanmean(raw_depths):.4f}")
+        print(f"    global median = {np.nanmedian(raw_depths):.4f}")
+        print(f"    per-sample means: min={np.nanmean(raw_depths, axis=0).min():.4f}, "
+              f"max={np.nanmean(raw_depths, axis=0).max():.4f}")
+
     # Compute low-res median bin size (before normalization modifies df)
     lowres_bin_sizes = (df["End"] - df["Start"]).values
     lowres_median_bin_size = float(np.median(lowres_bin_sizes))
@@ -2936,6 +3097,14 @@ def main():
 
     # Normalize such that CN=2 corresponds to depth of 2.0
     df[sample_cols] = 2.0 * df[sample_cols] / column_medians[np.newaxis, :]
+
+    if VERBOSE:
+        norm_depths = df[sample_cols].values
+        print(f"\n  [verbose] Post-normalisation depth summary:")
+        print(f"    global mean = {np.nanmean(norm_depths):.4f}")
+        print(f"    global median = {np.nanmedian(norm_depths):.4f}")
+        print(f"    per-sample means: min={np.nanmean(norm_depths, axis=0).min():.4f}, "
+              f"max={np.nanmean(norm_depths, axis=0).max():.4f}")
 
     # Filter low quality bins
     if not args.skip_bin_filter:
