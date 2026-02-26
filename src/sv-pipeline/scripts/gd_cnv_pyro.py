@@ -145,6 +145,38 @@ class GDLocus:
             intervals.append((start, end, interval_name))
         return intervals
 
+    def get_intervals_between(self, bp1_name: str, bp2_name: str) -> List[Tuple[int, int, str]]:
+        """
+        Get the intervals covered between two named breakpoints.
+
+        Uses the authoritative breakpoint ordering (``breakpoint_names``)
+        rather than parsing interval name strings, so this is safe even if
+        BP names contain hyphens or other special characters.
+
+        Args:
+            bp1_name: Name of the first breakpoint (from GD table ``BP1`` column).
+            bp2_name: Name of the second breakpoint (from GD table ``BP2`` column).
+
+        Returns:
+            List of (start, end, interval_name) tuples for every interval
+            whose left BP is at or after *bp1_name* and whose right BP is
+            at or before *bp2_name* in the ordering.  Returns an empty
+            list if either name is not found.
+        """
+        try:
+            pos1 = self.breakpoint_names.index(bp1_name)
+            pos2 = self.breakpoint_names.index(bp2_name)
+        except ValueError:
+            return []
+        if pos1 > pos2:
+            pos1, pos2 = pos2, pos1
+        all_intervals = self.get_intervals()
+        return [
+            (start, end, name)
+            for idx, (start, end, name) in enumerate(all_intervals)
+            if idx >= pos1 and (idx + 1) <= pos2
+        ]
+
     def get_gd_intervals(self) -> Dict[str, Tuple[int, int]]:
         """
         Get intervals for each GD entry (each DEL/DUP defined in the table).
@@ -302,15 +334,16 @@ class GDTable:
             bp_ranges = []
             
             if data["breakpoint_coords"]:
-                # Sort breakpoint names (numeric if possible, otherwise alphabetic)
-                def sort_key(bp_name):
-                    try:
-                        return (0, int(float(bp_name)))
-                    except (ValueError, OverflowError):
-                        # Alphabetic breakpoints
-                        return (1, bp_name)
-                
-                bp_names_sorted = sorted(data["breakpoint_coords"].keys(), key=sort_key)
+                # Sort breakpoints by their genomic position (min coordinate)
+                # so that the ordering reflects physical location on the
+                # chromosome.  Name-based sorting fails when numeric and
+                # alphanumeric IDs are mixed (e.g. 1, 2, 3, 4, CHRNA7, 5, 6
+                # at the 15q11-13 locus — CHRNA7 sits between BP4 and BP5
+                # genomically but would sort after BP6 alphabetically).
+                bp_names_sorted = sorted(
+                    data["breakpoint_coords"].keys(),
+                    key=lambda bp_name: min(data["breakpoint_coords"][bp_name]),
+                )
                 
                 for bp_name in bp_names_sorted:
                     coords = data["breakpoint_coords"][bp_name]
@@ -336,7 +369,8 @@ class GDTable:
             print(f"  {cluster}: {len(bp_ranges)} breakpoints")
             for i, (start, end) in enumerate(bp_ranges):
                 width = end - start
-                print(f"    BP{i+1}: {start:,} - {end:,} (width: {width:,} bp)")
+                bp_label = bp_names_sorted[i]
+                print(f"    BP {bp_label}: {start:,} - {end:,} (width: {width:,} bp)")
 
         return result
 
@@ -1284,51 +1318,12 @@ def call_gd_cnv(
         bp1 = entry["BP1"]
         bp2 = entry["BP2"]
 
-        # Determine which intervals this entry spans using BP1 and BP2
-        # The breakpoint names in BP1 and BP2 define the start and end breakpoints
-        # We need to find all intervals between these two breakpoints
-        
-        # Get all interval names for this locus
-        all_intervals = locus.get_intervals()  # List of (start, end, name) tuples
-        
-        # Build a mapping of breakpoint names to their positions
-        # Interval names are like "BP1-2", "BP2-3", etc. or "A-B", "B-C", etc.
-        # Extract the breakpoint ordering from the interval names
-        bp_order = []
-        for _, _, interval_name in all_intervals:
-            parts = interval_name.split("-")
-            if len(parts) == 2:
-                if parts[0] not in bp_order:
-                    bp_order.append(parts[0])
-                if parts[1] not in bp_order:
-                    bp_order.append(parts[1])
-        
-        # Find positions of BP1 and BP2 in the ordering
-        try:
-            pos1 = bp_order.index(bp1)
-            pos2 = bp_order.index(bp2)
-        except ValueError:
-            # BP1 or BP2 not found in ordering - skip this entry
-            print(f"  Warning: Could not find {bp1} or {bp2} in breakpoint order for {gd_id}")
-            continue
-        
-        # Ensure pos1 < pos2
-        if pos1 > pos2:
-            pos1, pos2 = pos2, pos1
-        
-        # Collect all intervals between these breakpoints
-        covered_intervals = []
-        for _, _, interval_name in all_intervals:
-            parts = interval_name.split("-")
-            if len(parts) == 2:
-                try:
-                    start_pos = bp_order.index(parts[0])
-                    end_pos = bp_order.index(parts[1])
-                    # Include interval if it falls between pos1 and pos2
-                    if start_pos >= pos1 and end_pos <= pos2:
-                        covered_intervals.append(interval_name)
-                except ValueError:
-                    continue
+        # Determine which intervals this entry spans using BP1 and BP2.
+        # Use the locus's authoritative breakpoint ordering directly
+        # instead of reverse-engineering from interval name strings
+        # (which breaks when BP names contain hyphens).
+        covered_tuples = locus.get_intervals_between(bp1, bp2)
+        covered_intervals = [name for _, _, name in covered_tuples]
 
         if len(covered_intervals) == 0:
             continue
@@ -1713,8 +1708,9 @@ def collect_all_locus_bins(
         )
 
         if len(locus_df) < min_bins_per_locus:
-            print(f"  Skipping: only {len(locus_df)} bins (minimum {min_bins_per_locus})")
-            continue
+            raise ValueError(f"Locus {cluster} at coordinates {locus.chrom}:{locus.start:,}-{locus.end:,} "
+                             f"has only {len(locus_df)} bins after filtering, "
+                             f"which is below the minimum of {min_bins_per_locus}.")
 
         print(f"  Bins after filtering: {len(locus_df)}")
 

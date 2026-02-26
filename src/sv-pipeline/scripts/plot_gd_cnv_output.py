@@ -338,42 +338,12 @@ def call_gd_cnv(
         bp1 = entry["BP1"]
         bp2 = entry["BP2"]
         
-        # Determine which intervals this entry spans using BP1 and BP2
-        all_intervals = locus.get_intervals()  # List of (start, end, name) tuples
-        
-        # Build breakpoint ordering from interval names
-        bp_order = []
-        for _, _, interval_name in all_intervals:
-            parts = interval_name.split("-")
-            if len(parts) == 2:
-                if parts[0] not in bp_order:
-                    bp_order.append(parts[0])
-                if parts[1] not in bp_order:
-                    bp_order.append(parts[1])
-        
-        # Find positions of BP1 and BP2 in the ordering
-        try:
-            pos1 = bp_order.index(bp1)
-            pos2 = bp_order.index(bp2)
-        except ValueError:
-            continue
-        
-        # Ensure pos1 < pos2
-        if pos1 > pos2:
-            pos1, pos2 = pos2, pos1
-        
-        # Collect all intervals between these breakpoints
-        covered_intervals = []
-        for _, _, interval_name in all_intervals:
-            parts = interval_name.split("-")
-            if len(parts) == 2:
-                try:
-                    start_pos = bp_order.index(parts[0])
-                    end_pos = bp_order.index(parts[1])
-                    if start_pos >= pos1 and end_pos <= pos2:
-                        covered_intervals.append(interval_name)
-                except ValueError:
-                    continue
+        # Determine which intervals this entry spans using BP1 and BP2.
+        # Use the locus's authoritative breakpoint ordering directly
+        # instead of reverse-engineering from interval name strings
+        # (which breaks when BP names contain hyphens).
+        covered_tuples = locus.get_intervals_between(bp1, bp2)
+        covered_intervals = [name for _, _, name in covered_tuples]
         
         if len(covered_intervals) == 0:
             continue
@@ -453,6 +423,8 @@ def call_gd_cnv(
             "start": gd_start,
             "end": gd_end,
             "svtype": svtype,
+            "BP1": bp1,
+            "BP2": bp2,
             "is_nahr": locus.is_nahr,
             "is_terminal": locus.is_terminal,
             "log_prob_score": log_prob_score,
@@ -748,6 +720,8 @@ def call_cnvs_from_posteriors(
                     "start": call["start"],
                     "end": call["end"],
                     "svtype": svtype,
+                    "BP1": call["BP1"],
+                    "BP2": call["BP2"],
                     "is_nahr": call["is_nahr"],
                     "is_terminal": call["is_terminal"],
                     "n_bins": call["n_bins"],
@@ -781,6 +755,7 @@ def draw_annotations_panel(
     gtf: Optional[GTFParser] = None,
     segdup: Optional[SegDupAnnotation] = None,
     show_gd_entries: bool = True,
+    min_gene_label_spacing: float = 0.05,
 ):
     """
     Draw annotations panel with genes, segdups, and breakpoints.
@@ -795,6 +770,9 @@ def draw_annotations_panel(
         gtf: Optional GTFParser for gene annotations
         segdup: Optional SegDupAnnotation
         show_gd_entries: Whether to show GD entry regions and breakpoint intervals
+        min_gene_label_spacing: Minimum distance between gene label centres as a
+            fraction of the plot width.  Labels closer than this threshold are
+            suppressed to avoid overlap (lines are always drawn).
     """
     ax.set_xlim(region_start, region_end)
     ax.set_ylim(0, 0.25)
@@ -827,7 +805,7 @@ def draw_annotations_panel(
     for i, (bp_start, bp_end) in enumerate(locus.breakpoints):
         ax.axvspan(bp_start, bp_end, ymin=0.04, ymax=0.15, alpha=0.3, color="red", zorder=1)
         bp_name = locus.breakpoint_names[i] if i < len(locus.breakpoint_names) else str(i+1)
-        ax.text((bp_start + bp_end) / 2, 0.02, f"BP{bp_name}", ha="center", va="center", 
+        ax.text((bp_start + bp_end) / 2, 0.02, f"BP {bp_name}", ha="center", va="center", 
                 fontsize=7, fontweight="bold", color="darkred", zorder=10)
 
     # Draw segdup regions (middle layer)
@@ -842,15 +820,19 @@ def draw_annotations_panel(
         genes = gtf.get_genes_in_region(chrom, region_start, region_end,
                                          gene_types=["protein_coding"])
         y_pos = 0.2
-        min_gene_size = 20000  # Minimum 20kb to show label
-        for gene in genes[:10]:  # Limit to 10 genes
+        plot_width = region_end - region_start
+        min_spacing = min_gene_label_spacing * plot_width
+        last_labeled_center = -np.inf
+        for gene in genes:
             gene_start = max(gene["start"], region_start)
             gene_end = min(gene["end"], region_end)
+            gene_center = (gene_start + gene_end) / 2
             ax.hlines(y_pos, gene_start, gene_end, colors="blue", linewidth=4, zorder=3)
-            # Only label genes larger than minimum size
-            if (gene_end - gene_start) >= min_gene_size:
-                ax.text((gene_start + gene_end) / 2, y_pos - 0.05,
+            # Only label genes whose centre is far enough from the last labelled gene
+            if gene_center - last_labeled_center >= min_spacing:
+                ax.text(gene_center, y_pos - 0.05,
                        gene["gene_name"], ha="center", va="bottom", fontsize=7, zorder=3)
+                last_labeled_center = gene_center
 
     ax.set_yticks([])
 
@@ -918,6 +900,7 @@ def plot_locus_overview(
     output_dir: str,
     padding: int = 50000,
     ploidy_df: Optional[pd.DataFrame] = None,
+    min_gene_label_spacing: float = 0.05,
 ):
     """
     Create overview plot for a GD locus showing all samples.
@@ -932,6 +915,7 @@ def plot_locus_overview(
         padding: Padding around locus boundaries
         ploidy_df: Optional ploidy estimates (sample, contig, ploidy).
             Used to sort heatmaps and split mean-depth panel by ploidy.
+        min_gene_label_spacing: Forwarded to draw_annotations_panel.
     """
     # Skip loci with no breakpoints
     if not locus.breakpoints:
@@ -1010,7 +994,8 @@ def plot_locus_overview(
     title = f"{locus.cluster} ({chrom}:{locus.start:,}-{locus.end:,})"
     draw_annotations_panel(
         ax, locus, region_start, region_end, chrom, title,
-        gtf=gtf, segdup=segdup, show_gd_entries=True
+        gtf=gtf, segdup=segdup, show_gd_entries=True,
+        min_gene_label_spacing=min_gene_label_spacing,
     )
 
     # Panel 2: Carriers heatmap (sorted by ploidy)
@@ -1204,6 +1189,7 @@ def plot_sample_at_locus(
     segdup: Optional[SegDupAnnotation],
     output_dir: str,
     padding: int = 50000,
+    min_gene_label_spacing: float = 0.05,
 ):
     """
     Create detailed plot for a specific sample at a GD locus.
@@ -1217,6 +1203,7 @@ def plot_sample_at_locus(
         segdup: Optional SegDupAnnotation
         output_dir: Directory to save plots
         padding: Padding around locus boundaries
+        min_gene_label_spacing: Forwarded to draw_annotations_panel.
     """
     # Skip loci with no breakpoints
     if not locus.breakpoints:
@@ -1256,7 +1243,8 @@ def plot_sample_at_locus(
     is_carrier = sample_calls["is_carrier"].any() if len(sample_calls) > 0 else False
     carrier_str = " [CARRIER]" if is_carrier else ""
     title = f"{sample_id} at {locus.cluster}{carrier_str}"
-    draw_annotations_panel(axes[0], locus, region_start, region_end, chrom, title, gtf, segdup, show_gd_entries=True)
+    draw_annotations_panel(axes[0], locus, region_start, region_end, chrom, title, gtf, segdup,
+                           show_gd_entries=True, min_gene_label_spacing=min_gene_label_spacing)
     axes[0].set_ylabel("Annotations")
 
     # Panel 2: Depth profile
@@ -1429,6 +1417,7 @@ def create_carrier_pdf(
     segdup: Optional[SegDupAnnotation],
     output_dir: str,
     padding: int = 50000,
+    min_gene_label_spacing: float = 0.05,
 ):
     """
     Create a PDF with plots for all carrier samples.
@@ -1441,6 +1430,7 @@ def create_carrier_pdf(
         segdup: Optional SegDupAnnotation
         output_dir: Directory to save PDF
         padding: Padding around locus boundaries
+        min_gene_label_spacing: Forwarded to draw_annotations_panel.
     """
     carriers = calls_df[calls_df["is_carrier"]]
 
@@ -1500,7 +1490,8 @@ def create_carrier_pdf(
                 carrier_call = sample_calls[sample_calls["is_carrier"]].iloc[0] if len(sample_calls[sample_calls["is_carrier"]]) > 0 else None
                 call_info = f" - {carrier_call['svtype']} confidence={carrier_call['log_prob_score']:.2f}" if carrier_call is not None else ""
                 title = f"{sample_id} at {cluster}{call_info}"
-                draw_annotations_panel(axes[0], locus, region_start, region_end, chrom, title, gtf, segdup, show_gd_entries=False)
+                draw_annotations_panel(axes[0], locus, region_start, region_end, chrom, title, gtf, segdup,
+                                       show_gd_entries=False, min_gene_label_spacing=min_gene_label_spacing)
 
                 # Panel 2: Depth
                 ax = axes[1]
@@ -1842,6 +1833,14 @@ def parse_args():
         help="Print detailed per-sample log probability scores for all GD "
              "entries at every locus, including flanking region scores.",
     )
+    parser.add_argument(
+        "--min-gene-label-spacing",
+        type=float,
+        default=0.05,
+        help="Minimum distance between adjacent gene label centres as a fraction "
+             "of the plot width.  Gene lines are always drawn; labels are "
+             "suppressed when centres are closer than this threshold (default: 0.05 = 5%%).",
+    )
 
     return parser.parse_args()
 
@@ -1942,13 +1941,15 @@ def main():
             locus, calls_df, depth_df, gtf, segdup,
             args.output_dir, padding=args.padding,
             ploidy_df=ploidy_df,
+            min_gene_label_spacing=args.min_gene_label_spacing,
         )
 
     # Create carrier PDF
     print("\nCreating carrier PDF...")
     create_carrier_pdf(
         calls_df, depth_df, gd_table, gtf, segdup,
-        args.output_dir, padding=args.padding
+        args.output_dir, padding=args.padding,
+        min_gene_label_spacing=args.min_gene_label_spacing,
     )
 
     # Create individual sample plots
@@ -1968,7 +1969,8 @@ def main():
             for sample_id in samples_to_plot:
                 plot_sample_at_locus(
                     sample_id, locus, calls_df, depth_df, gtf, segdup,
-                    args.output_dir, padding=args.padding
+                    args.output_dir, padding=args.padding,
+                    min_gene_label_spacing=args.min_gene_label_spacing,
                 )
 
     # Load sample posteriors to identify batch samples (if provided)
