@@ -29,6 +29,8 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.backends.backend_pdf import PdfPages
@@ -102,6 +104,7 @@ class GTFParser:
         self.genes = []
         self.transcripts = []
         self._parse_gtf(filepath)
+        self._build_index()
         print(f"Loaded {len(self.genes)} genes and {len(self.transcripts)} transcripts")
 
     def _parse_gtf(self, filepath: str):
@@ -153,10 +156,41 @@ class GTFParser:
             attrs[key] = value
         return attrs
 
+    def _build_index(self):
+        """Build per-chromosome sorted arrays for fast region queries."""
+        from collections import defaultdict
+
+        genes_by_chrom = defaultdict(list)
+        for g in self.genes:
+            genes_by_chrom[g["chrom"]].append(g)
+        self._gene_index = {}
+        for chrom, genes in genes_by_chrom.items():
+            genes.sort(key=lambda x: x["start"])
+            self._gene_index[chrom] = (
+                np.array([g["start"] for g in genes]),
+                np.array([g["end"] for g in genes]),
+                genes,
+            )
+
+        tx_by_chrom = defaultdict(list)
+        for t in self.transcripts:
+            tx_by_chrom[t["chrom"]].append(t)
+        self._tx_index = {}
+        for chrom, txs in tx_by_chrom.items():
+            txs.sort(key=lambda x: x["start"])
+            self._tx_index[chrom] = (
+                np.array([t["start"] for t in txs]),
+                np.array([t["end"] for t in txs]),
+                txs,
+            )
+
     def get_genes_in_region(self, chrom: str, start: int, end: int,
                             gene_types: Optional[List[str]] = None) -> List[dict]:
         """
         Get genes overlapping a genomic region.
+
+        Uses per-chromosome sorted arrays with vectorised overlap testing
+        for O(N_chrom) performance instead of scanning all genes.
 
         Args:
             chrom: Chromosome name
@@ -167,30 +201,28 @@ class GTFParser:
         Returns:
             List of gene records
         """
-        result = []
-        for gene in self.genes:
-            if gene["chrom"] != chrom:
-                continue
-            if gene["end"] < start or gene["start"] > end:
-                continue
-            if gene_types and gene["gene_type"] not in gene_types:
-                continue
-            result.append(gene)
-        return result
+        if chrom not in self._gene_index:
+            return []
+        starts, ends, records = self._gene_index[chrom]
+        mask = (starts < end) & (ends > start)
+        indices = np.where(mask)[0]
+        if gene_types:
+            gene_types_set = set(gene_types)
+            return [records[i] for i in indices if records[i]["gene_type"] in gene_types_set]
+        return [records[i] for i in indices]
 
     def get_transcripts_in_region(self, chrom: str, start: int, end: int,
                                    transcript_types: Optional[List[str]] = None) -> List[dict]:
         """Get transcripts overlapping a genomic region."""
-        result = []
-        for tx in self.transcripts:
-            if tx["chrom"] != chrom:
-                continue
-            if tx["end"] < start or tx["start"] > end:
-                continue
-            if transcript_types and tx["transcript_type"] not in transcript_types:
-                continue
-            result.append(tx)
-        return result
+        if chrom not in self._tx_index:
+            return []
+        starts, ends, records = self._tx_index[chrom]
+        mask = (starts < end) & (ends > start)
+        indices = np.where(mask)[0]
+        if transcript_types:
+            tx_types_set = set(transcript_types)
+            return [records[i] for i in indices if records[i]["transcript_type"] in tx_types_set]
+        return [records[i] for i in indices]
 
 
 class SegDupAnnotation:
@@ -219,6 +251,45 @@ class SegDupAnnotation:
         if chrom not in self.by_chrom:
             return []
 
+        regions = self.by_chrom[chrom]
+        overlaps = (regions[:, 0] < end) & (regions[:, 1] > start)
+        return [(int(r[0]), int(r[1])) for r in regions[overlaps]]
+
+
+class GapsAnnotation:
+    """Handler for reference assembly gap annotations."""
+
+    def __init__(self, filepath: str):
+        """Load gap regions from a BED file (optionally gzipped).
+
+        The BED file must have at least three columns: chrom, start, end.
+        Additional columns are ignored.
+
+        Args:
+            filepath: Path to BED file.
+        """
+        self.df = pd.read_csv(
+            filepath,
+            sep="\t",
+            header=None,
+            usecols=[0, 1, 2],
+            names=["chr", "start", "end"],
+            comment="#",
+            compression="gzip" if filepath.endswith(".gz") else None,
+        )
+        self._build_index()
+        print(f"Loaded {len(self.df)} reference gap regions")
+
+    def _build_index(self):
+        """Build index by chromosome."""
+        self.by_chrom = {}
+        for chrom, group in self.df.groupby("chr"):
+            self.by_chrom[chrom] = group[["start", "end"]].values
+
+    def get_regions_in_range(self, chrom: str, start: int, end: int) -> List[Tuple[int, int]]:
+        """Get gap regions overlapping a genomic range."""
+        if chrom not in self.by_chrom:
+            return []
         regions = self.by_chrom[chrom]
         overlaps = (regions[:, 0] < end) & (regions[:, 1] > start)
         return [(int(r[0]), int(r[1])) for r in regions[overlaps]]
@@ -622,19 +693,21 @@ def call_cnvs_from_posteriors(
         print(f"  WARNING: sample {first_sample} has {len(first_sample_rows)} bins, "
               f"expected {n_bins}; skipping alignment check")
 
-    # Pre-group posteriors by sample for faster lookups.
-    # Reset each sample's index to 0..N-1 so that .iloc[k] reliably
-    # selects the k-th bin, matching the array_idx values from
-    # bin_mappings_df.
+    # Pre-extract numpy arrays for fast access.
+    # Shape: (n_samples, n_bins, n_states) for probabilities,
+    #        (n_samples, n_bins) for depth values.
     print("  Organizing data for fast access...")
-    posteriors_by_sample = {}
-    for sample_id in sample_ids:
-        sample_data = (
-            cn_posteriors_df[cn_posteriors_df["sample"] == sample_id]
-            .reset_index(drop=True)
-        )
-        posteriors_by_sample[sample_id] = sample_data
-    
+    prob_cols = sorted(c for c in cn_posteriors_df.columns if c.startswith("prob_cn_"))
+    n_states = len(prob_cols)
+    prob_3d = np.empty((n_samples, n_bins, n_states))
+    depth_2d = np.empty((n_samples, n_bins))
+    for s_idx, sample_id in enumerate(sample_ids):
+        mask = cn_posteriors_df["sample"] == sample_id
+        sample_rows = cn_posteriors_df.loc[mask]
+        prob_3d[s_idx] = sample_rows[prob_cols].values
+        depth_2d[s_idx] = sample_rows["depth"].values
+    print(f"    Extracted {n_samples} x {n_bins} x {n_states} probability array")
+
     for cluster, locus in gd_table.loci.items():
         print(f"\nCalling CNVs for locus: {cluster}")
         
@@ -643,28 +716,27 @@ def call_cnvs_from_posteriors(
         
         for interval_name, bins in interval_bins.items():
             print(f"  {interval_name}: {len(bins)} bins")
-        
+
+        # Pre-convert bin indices to numpy arrays once per locus
+        interval_bin_arrays = {
+            name: np.array(bins, dtype=int)
+            for name, bins in interval_bins.items()
+        }
+
         # Process each sample
-        for sample_id in sample_ids:
-            # Use pre-filtered sample data
-            sample_posteriors = posteriors_by_sample[sample_id]
-            
-            # Get probability columns once
-            prob_cols = [c for c in sample_posteriors.columns if c.startswith("prob_cn_")]
-            
-            # Compute interval statistics efficiently
+        for s_idx, sample_id in enumerate(sample_ids):
+            # Compute interval statistics using pre-extracted numpy arrays
             interval_stats = {}
-            for interval_name, bin_indices in interval_bins.items():
-                if len(bin_indices) == 0:
+            for interval_name, bin_idx in interval_bin_arrays.items():
+                if len(bin_idx) == 0:
                     interval_stats[interval_name] = {
                         "n_bins": 0,
-                        "cn_probs": np.zeros(len(prob_cols)),
+                        "cn_probs": np.zeros(n_states),
                     }
                 else:
-                    interval_data = sample_posteriors.iloc[bin_indices]
-                    mean_probs = interval_data[prob_cols].mean(axis=0).values
+                    mean_probs = prob_3d[s_idx, bin_idx].mean(axis=0)
                     interval_stats[interval_name] = {
-                        "n_bins": len(interval_data),
+                        "n_bins": len(bin_idx),
                         "cn_probs": mean_probs,
                     }
             
@@ -707,12 +779,11 @@ def call_cnvs_from_posteriors(
                 # Compute mean depth over covered intervals efficiently
                 covered_bin_indices = []
                 for interval_name in call["intervals"]:
-                    if interval_name in interval_bins:
-                        covered_bin_indices.extend(interval_bins[interval_name])
+                    if interval_name in interval_bin_arrays:
+                        covered_bin_indices.extend(interval_bin_arrays[interval_name])
                 
                 if len(covered_bin_indices) > 0:
-                    # Use iloc for fast indexing on pre-filtered data
-                    mean_depth = sample_posteriors.iloc[covered_bin_indices]["depth"].mean()
+                    mean_depth = float(depth_2d[s_idx, covered_bin_indices].mean())
                 else:
                     mean_depth = np.nan
                 
@@ -758,11 +829,12 @@ def draw_annotations_panel(
     title: str,
     gtf: Optional[GTFParser] = None,
     segdup: Optional[SegDupAnnotation] = None,
+    gaps: Optional[GapsAnnotation] = None,
     show_gd_entries: bool = True,
     min_gene_label_spacing: float = 0.05,
 ):
     """
-    Draw annotations panel with genes, segdups, and breakpoints.
+    Draw annotations panel with genes, segdups, reference gaps, and breakpoints.
     
     Args:
         ax: Matplotlib axis to draw on
@@ -773,6 +845,7 @@ def draw_annotations_panel(
         title: Panel title
         gtf: Optional GTFParser for gene annotations
         segdup: Optional SegDupAnnotation
+        gaps: Optional GapsAnnotation for reference assembly gaps
         show_gd_entries: Whether to show GD entry regions and breakpoint intervals
         min_gene_label_spacing: Minimum distance between gene label centres as a
             fraction of the plot width.  Labels closer than this threshold are
@@ -818,6 +891,16 @@ def draw_annotations_panel(
         for sd_start, sd_end in sd_regions:
             ax.axvspan(max(sd_start, region_start), min(sd_end, region_end),
                       ymin=0.2, ymax=0.5, alpha=0.2, color="orange", zorder=2)
+
+    # Draw reference gap regions (hatched, between segdup and gene layers)
+    if gaps:
+        gap_regions = gaps.get_regions_in_range(chrom, region_start, region_end)
+        for gap_start, gap_end in gap_regions:
+            ax.axvspan(
+                max(gap_start, region_start), min(gap_end, region_end),
+                alpha=0.25, color="lightgray", hatch="//", edgecolor="gray",
+                linewidth=0.5, zorder=2,
+            )
 
     # Draw genes (top layer)
     if gtf:
@@ -867,31 +950,32 @@ def _build_gap_positions(
     bin_ends: np.ndarray,
 ) -> np.ndarray:
     """Build a positions array with NaN sentinels at bin gaps."""
-    bin_spacing = np.median(bin_starts[1:] - bin_ends[:-1]) if len(bin_starts) > 1 else 0
+    n = len(bin_starts)
+    if n == 0:
+        return np.array([], dtype=float)
+    if n == 1:
+        return bin_mids.copy()
+    bin_spacing = np.median(bin_starts[1:] - bin_ends[:-1])
     gap_threshold = 3 * bin_spacing
-
-    positions: List[float] = []
-    for i in range(len(bin_starts)):
-        positions.append(bin_mids[i])
-        if i < len(bin_starts) - 1:
-            if bin_starts[i + 1] - bin_ends[i] > gap_threshold:
-                positions.append(np.nan)
-    return np.array(positions)
+    is_gap = (bin_starts[1:] - bin_ends[:-1]) > gap_threshold
+    n_gaps = int(is_gap.sum())
+    # Pre-allocate with NaN, then place bin_mids at correct offsets
+    result = np.full(n + n_gaps, np.nan)
+    cum_gaps = np.empty(n, dtype=int)
+    cum_gaps[0] = 0
+    cum_gaps[1:] = np.cumsum(is_gap)
+    result[np.arange(n) + cum_gaps] = bin_mids
+    return result
 
 
 def _depths_with_gaps(
     raw_depths: np.ndarray,
     plot_positions: np.ndarray,
-) -> List[float]:
+) -> np.ndarray:
     """Map per-bin depths onto the gap-aware position array."""
-    result: List[float] = []
-    j = 0
-    for pos in plot_positions:
-        if np.isnan(pos):
-            result.append(np.nan)
-        else:
-            result.append(raw_depths[j])
-            j += 1
+    result = np.full_like(plot_positions, np.nan)
+    non_nan = ~np.isnan(plot_positions)
+    result[non_nan] = raw_depths
     return result
 
 
@@ -927,15 +1011,16 @@ def _build_heatmap_matrix(
     bin_ends = region_df["End"].values
     data = region_df[sample_cols].values  # shape (n_bins, n_samples)
 
-    for i, (bs, be) in enumerate(zip(bin_starts, bin_ends)):
-        # Map genomic coords to pixel indices
-        idx_lo = int((bs - region_start) / region_span * n_viz_bins)
-        idx_hi = int((be - region_start) / region_span * n_viz_bins)
-        idx_lo = max(idx_lo, 0)
-        idx_hi = min(idx_hi, n_viz_bins)
-        if idx_hi <= idx_lo:
-            idx_hi = min(idx_lo + 1, n_viz_bins)
-        viz_matrix[:, idx_lo:idx_hi] = data[i, :, np.newaxis]
+    if len(bin_starts) > 0:
+        # Map each pixel column to its source data bin (vectorised)
+        pixel_centers = (
+            (np.arange(n_viz_bins) + 0.5) * (region_span / n_viz_bins)
+            + region_start
+        )
+        bin_idx = np.searchsorted(bin_starts, pixel_centers, side='right') - 1
+        safe_idx = np.clip(bin_idx, 0, len(bin_starts) - 1)
+        valid = (bin_idx >= 0) & (pixel_centers < bin_ends[safe_idx])
+        viz_matrix[:, valid] = data[bin_idx[valid], :].T
 
     return viz_matrix
 
@@ -958,6 +1043,7 @@ def _draw_overview_column(
     col_title: str,
     min_gene_label_spacing: float = 0.05,
     show_colorbar: bool = True,
+    gaps: Optional[GapsAnnotation] = None,
 ):
     """Draw annotation + carrier heatmap + non-carrier heatmap + mean-depth
     panels into a list of axes (one column of the overview figure).
@@ -977,6 +1063,7 @@ def _draw_overview_column(
         col_title: Title placed on the annotation panel.
         min_gene_label_spacing: Forwarded to draw_annotations_panel.
         show_colorbar: Whether to add a colorbar below the non-carrier heatmap.
+        gaps: Optional GapsAnnotation for reference assembly gaps.
     """
     chrom = locus.chrom
     n_carriers = len(carrier_cols)
@@ -987,7 +1074,7 @@ def _draw_overview_column(
     ax = axes_col[0]
     draw_annotations_panel(
         ax, locus, region_start, region_end, chrom, col_title,
-        gtf=gtf, segdup=segdup, show_gd_entries=True,
+        gtf=gtf, segdup=segdup, gaps=gaps, show_gd_entries=True,
         min_gene_label_spacing=min_gene_label_spacing,
     )
 
@@ -1137,6 +1224,7 @@ def plot_locus_overview(
     min_gene_label_spacing: float = 0.05,
     raw_counts_df: Optional[pd.DataFrame] = None,
     raw_sample_medians: Optional[Dict[str, float]] = None,
+    gaps: Optional[GapsAnnotation] = None,
 ):
     """
     Create overview plot for a GD locus showing all samples.
@@ -1279,6 +1367,7 @@ def plot_locus_overview(
             col_title=f"Raw normalised — {locus_label}",
             min_gene_label_spacing=min_gene_label_spacing,
             show_colorbar=False,
+            gaps=gaps,
         )
         # Right column: processed rebinned counts
         _draw_overview_column(
@@ -1291,6 +1380,7 @@ def plot_locus_overview(
             col_title=f"Processed — {locus_label}",
             min_gene_label_spacing=min_gene_label_spacing,
             show_colorbar=True,
+            gaps=gaps,
         )
     else:
         # Single column (backward-compatible)
@@ -1304,6 +1394,7 @@ def plot_locus_overview(
             col_title=locus_label,
             min_gene_label_spacing=min_gene_label_spacing,
             show_colorbar=True,
+            gaps=gaps,
         )
 
     plt.tight_layout()
@@ -1327,6 +1418,7 @@ def plot_sample_at_locus(
     output_dir: str,
     padding: int = 50000,
     min_gene_label_spacing: float = 0.05,
+    gaps: Optional[GapsAnnotation] = None,
 ):
     """
     Create detailed plot for a specific sample at a GD locus.
@@ -1341,6 +1433,7 @@ def plot_sample_at_locus(
         output_dir: Directory to save plots
         padding: Padding around locus boundaries
         min_gene_label_spacing: Forwarded to draw_annotations_panel.
+        gaps: Optional GapsAnnotation for reference assembly gaps.
     """
     # Skip loci with no breakpoints
     if not locus.breakpoints:
@@ -1381,7 +1474,7 @@ def plot_sample_at_locus(
     carrier_str = " [CARRIER]" if is_carrier else ""
     title = f"{sample_id} at {locus.cluster}{carrier_str}"
     draw_annotations_panel(axes[0], locus, region_start, region_end, chrom, title, gtf, segdup,
-                           show_gd_entries=True, min_gene_label_spacing=min_gene_label_spacing)
+                           gaps=gaps, show_gd_entries=True, min_gene_label_spacing=min_gene_label_spacing)
     axes[0].set_ylabel("Annotations")
 
     # Panel 2: Depth profile
@@ -1556,6 +1649,7 @@ def create_carrier_pdf(
     padding: int = 50000,
     min_gene_label_spacing: float = 0.05,
     raw_counts_df: Optional[pd.DataFrame] = None,
+    gaps: Optional[GapsAnnotation] = None,
 ):
     """
     Create a PDF with plots for all carrier samples.
@@ -1569,6 +1663,7 @@ def create_carrier_pdf(
         output_dir: Directory to save PDF
         padding: Padding around locus boundaries
         min_gene_label_spacing: Forwarded to draw_annotations_panel.
+        gaps: Optional GapsAnnotation for reference assembly gaps.
         raw_counts_df: Optional DataFrame with raw (un-normalised) read
             counts.  Columns: ``Chr``, ``Start``, ``End``, and one per
             sample.  When provided, the raw depth is normalised per-sample
@@ -1612,28 +1707,38 @@ def create_carrier_pdf(
             cluster_carriers = carriers[carriers["cluster"] == cluster]["sample"].unique()
             print(f"  Adding {len(cluster_carriers)} carriers for {cluster}")
 
-            for sample_id in sorted(cluster_carriers):
-                # Create the plot
-                chrom = locus.chrom
-                # Filter strictly to this locus's bins (by cluster name).
-                mask = (
-                    (depth_df["Cluster"] == cluster) &
-                    (depth_df["Chr"] == chrom)
-                )
-                region_df = depth_df[mask].sort_values("Start")
+            # Pre-compute per-locus data (same for all samples at this locus)
+            chrom = locus.chrom
+            locus_mask = (
+                (depth_df["Cluster"] == cluster) &
+                (depth_df["Chr"] == chrom)
+            )
+            region_df = depth_df[locus_mask].sort_values("Start")
+            if len(region_df) == 0:
+                continue
 
-                if len(region_df) == 0 or sample_id not in region_df.columns:
+            region_start = int(region_df["Start"].min())
+            region_end = int(region_df["End"].max())
+
+            # Pre-filter calls and raw counts for this locus
+            cluster_calls_df = calls_df[calls_df["cluster"] == cluster]
+            _raw_region = None
+            if raw_counts_df is not None:
+                _raw_mask = (
+                    (raw_counts_df["Chr"] == chrom)
+                    & (raw_counts_df["End"] > region_start)
+                    & (raw_counts_df["Start"] < region_end)
+                )
+                _rr = raw_counts_df[_raw_mask].sort_values("Start")
+                if len(_rr) > 0:
+                    _raw_region = _rr
+
+            for sample_id in sorted(cluster_carriers):
+                if sample_id not in region_df.columns:
                     continue
 
-                # Bounds derived from actual data so flanks are always visible
-                region_start = int(region_df["Start"].min())
-                region_end = int(region_df["End"].max())
-
                 # Get sample calls
-                sample_calls = calls_df[
-                    (calls_df["cluster"] == cluster) &
-                    (calls_df["sample"] == sample_id)
-                ]
+                sample_calls = cluster_calls_df[cluster_calls_df["sample"] == sample_id]
 
                 # Create figure
                 fig, axes = plt.subplots(2, 1, figsize=(12, 4),
@@ -1647,7 +1752,7 @@ def create_carrier_pdf(
                 call_info = f" - {carrier_call['svtype']} confidence={carrier_call['log_prob_score']:.2f}" if carrier_call is not None else ""
                 title = f"{sample_id} at {cluster}{call_info}"
                 draw_annotations_panel(axes[0], locus, region_start, region_end, chrom, title, gtf, segdup,
-                                       show_gd_entries=False, min_gene_label_spacing=min_gene_label_spacing)
+                                       gaps=gaps, show_gd_entries=False, min_gene_label_spacing=min_gene_label_spacing)
 
                 # Panel 2: Depth
                 ax = axes[1]
@@ -1691,15 +1796,10 @@ def create_carrier_pdf(
                        color="steelblue", edgecolor="none", zorder=3)
 
                 # Overlay raw depth trace if available
-                if raw_counts_df is not None and sample_id in raw_sample_medians:
-                    raw_region = raw_counts_df[
-                        (raw_counts_df["Chr"] == chrom)
-                        & (raw_counts_df["End"] > region_start)
-                        & (raw_counts_df["Start"] < region_end)
-                    ].sort_values("Start")
-                    if len(raw_region) > 0 and sample_id in raw_region.columns:
-                        raw_mids = (raw_region["Start"].values + raw_region["End"].values) / 2
-                        raw_depth = raw_region[sample_id].values.astype(float)
+                if _raw_region is not None and sample_id in raw_sample_medians:
+                    if sample_id in _raw_region.columns:
+                        raw_mids = (_raw_region["Start"].values + _raw_region["End"].values) / 2
+                        raw_depth = _raw_region[sample_id].values.astype(float)
                         # Normalise: depth / genome_median * 2  →  CN-2 ≈ 2.0
                         norm_raw = 2.0 * raw_depth / raw_sample_medians[sample_id]
                         ax.plot(raw_mids, norm_raw, color="darkorange", linewidth=0.6,
@@ -1738,25 +1838,59 @@ def load_truth_table(filepath: str) -> pd.DataFrame:
     """
     Load a truth table of manually labelled GD carrier calls.
 
-    Expected columns:
-        chr, start, end, GD_ID, cluster_ID, SVTYPE, carriers, non_carriers
+    Expected columns (tab-separated, header may start with ``#``)::
 
-    The *carriers* column is a comma-separated list of sample IDs.
-    *cluster_ID* may be blank.  *non_carriers* is ignored.
+        #chrom  start  end  name  svtype  samples  NAHR_GD  NAHR_GD_atypical
+
+    For rows where ``NAHR_GD`` is True the *name* column is treated as the
+    GD region ID.  Rows where ``NAHR_GD_atypical`` is True (atypical
+    breakpoints) are dropped.
+
+    The *samples* column is a comma-separated list of carrier sample IDs.
 
     Args:
         filepath: Path to TSV truth table.
 
     Returns:
         DataFrame with one row per GD site, carriers parsed into a set.
+        Columns are normalised to the internal schema used by
+        :func:`evaluate_against_truth` (``GD_ID``, ``chr``, ``start``,
+        ``end``, ``SVTYPE``, ``carrier_set``).
     """
-    df = pd.read_csv(filepath, sep="\t", dtype=str)
-    # Normalise column names to lowercase for robustness
-    df.columns = [c.strip() for c in df.columns]
-    required = {"GD_ID", "carriers"}
+    df = pd.read_csv(filepath, sep="\t", dtype=str, comment=None)
+    # Strip whitespace and normalise the leading '#' that BED-style
+    # headers sometimes carry (e.g. "#chrom" → "chrom").
+    df.columns = [c.strip().lstrip("#") for c in df.columns]
+
+    required = {"chrom", "start", "end", "name", "svtype", "samples",
+                "NAHR_GD", "NAHR_GD_atypical"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"Truth table missing required columns: {missing}")
+
+    # Parse boolean columns (accept True/False, true/false, TRUE/FALSE)
+    def _to_bool(val):
+        return str(val).strip().lower() == "true"
+
+    df["NAHR_GD"] = df["NAHR_GD"].apply(_to_bool)
+    df["NAHR_GD_atypical"] = df["NAHR_GD_atypical"].apply(_to_bool)
+
+    # Keep only canonical NAHR-mediated GD rows; drop atypical records
+    n_before = len(df)
+    df = df[df["NAHR_GD"] & ~df["NAHR_GD_atypical"]].copy()
+    n_dropped = n_before - len(df)
+    if n_dropped > 0:
+        print(f"  Dropped {n_dropped} non-NAHR / atypical rows from truth table")
+
+    # Map columns to internal schema
+    df.rename(columns={
+        "chrom": "chr",
+        "name": "GD_ID",
+        "svtype": "SVTYPE",
+        "samples": "carriers",
+    }, inplace=True)
+    # No cluster_ID in this format
+    df["cluster_ID"] = ""
 
     # Parse carriers into sets; treat empty / NaN as no carriers
     def _parse_carriers(val):
@@ -1975,6 +2109,13 @@ def parse_args():
         help="Segmental duplication BED file (can be gzipped)",
     )
     parser.add_argument(
+        "--gaps-bed",
+        required=False,
+        help="Reference assembly gaps BED file (can be gzipped).  Regions "
+             "are drawn as hatched gray spans on annotation panels to indicate "
+             "where no depth data is expected.",
+    )
+    parser.add_argument(
         "--raw-counts",
         required=False,
         help="Raw read-count matrix TSV (can be gzipped).  Same format as "
@@ -2020,8 +2161,11 @@ def parse_args():
         "--truth-table",
         required=False,
         help="Optional truth table TSV with manually labelled GD carriers. "
-             "Columns: chr, start, end, GD_ID, cluster_ID, SVTYPE, carriers, non_carriers. "
-             "If provided, a sensitivity/precision report is produced.",
+             "Columns: #chrom, start, end, name, svtype, samples, NAHR_GD, "
+             "NAHR_GD_atypical.  Only rows with NAHR_GD=True (and "
+             "NAHR_GD_atypical=False) are used; the 'name' column supplies "
+             "the GD region ID.  If provided, a sensitivity/precision report "
+             "is produced.",
     )
     parser.add_argument(
         "--sample-posteriors",
@@ -2111,11 +2255,10 @@ def main():
     
     # Convert cn_posteriors to depth_df format (bins x samples matrix)
     print("\n  Converting posteriors to depth matrix format...")
-    depth_df = cn_posteriors_df.pivot_table(
+    depth_df = cn_posteriors_df.pivot(
         index=["cluster", "chr", "start", "end"],
         columns="sample",
         values="depth",
-        aggfunc="first"
     ).reset_index()
     depth_df = depth_df.rename(columns={"cluster": "Cluster", "chr": "Chr", "start": "Start", "end": "End"})
     sample_cols_all = [c for c in depth_df.columns if c not in ["Cluster", "Chr", "Start", "End"]]
@@ -2131,6 +2274,11 @@ def main():
     if args.segdup_bed:
         print(f"  Loading segdup BED: {args.segdup_bed}")
         segdup = SegDupAnnotation(args.segdup_bed)
+
+    gaps = None
+    if args.gaps_bed:
+        print(f"  Loading gaps BED: {args.gaps_bed}")
+        gaps = GapsAnnotation(args.gaps_bed)
 
     # Load raw counts matrix if provided
     raw_counts_df = None
@@ -2170,6 +2318,7 @@ def main():
             min_gene_label_spacing=args.min_gene_label_spacing,
             raw_counts_df=raw_counts_df,
             raw_sample_medians=raw_sample_medians if raw_sample_medians else None,
+            gaps=gaps,
         )
 
     # Create individual sample plots
@@ -2191,6 +2340,7 @@ def main():
                     sample_id, locus, calls_df, depth_df, gtf, segdup,
                     args.output_dir, padding=args.padding,
                     min_gene_label_spacing=args.min_gene_label_spacing,
+                    gaps=gaps,
                 )
 
     # Load sample posteriors to identify batch samples (if provided)
@@ -2216,6 +2366,7 @@ def main():
         args.output_dir, padding=args.padding,
         min_gene_label_spacing=args.min_gene_label_spacing,
         raw_counts_df=raw_counts_df,
+        gaps=gaps,
     )
 
     print("\n" + "=" * 80)
