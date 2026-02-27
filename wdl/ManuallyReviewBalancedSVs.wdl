@@ -157,7 +157,7 @@ task SelectSVType {
     set -euo pipefail
 
     bcftools view \
-      -i "~{vid_include_cmd}" \
+      -i '~{vid_include_cmd}' \
       ~{vcf} \
       -O z \
       -o "~{prefix}.selected.vcf.gz"
