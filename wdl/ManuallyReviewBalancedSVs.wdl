@@ -16,7 +16,6 @@ workflow ManuallyReviewBalancedSVs {
     File batch_membership
 
     String vid_include_cmd
-    File id_map
 
     File generate_pe_tabix_py_script # for development
     File calculate_pe_stats_script # for development
@@ -49,7 +48,6 @@ workflow ManuallyReviewBalancedSVs {
       input:
         vcf = cohort_vcfs[i],
         vid_include_cmd=vid_include_cmd,
-        id_map=id_map,
         batch_membership=batch_membership,
         prefix="~{prefix}.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker,
@@ -136,7 +134,6 @@ task SelectSVType {
   input {
     String prefix
     File vcf
-    File id_map
     File batch_membership
     String vid_include_cmd
     String sv_pipeline_docker
@@ -177,21 +174,13 @@ with pysam.VariantFile("~{prefix}.selected.vcf.gz") as vcf:
                 if counter >= 3:
                     break
 
-rsid_to_bbid = dict()
-with open("~{id_map}", 'r') as inp:
-    for line in inp:
-        bbid, rsid = line.strip("\n").split("\t")
-        rsid_to_bbid[rsid] = bbid
-
-carriers_bbids = {rsid_to_bbid[x] for x in carriers}
-
 samp_to_batch = dict()
 with open("~{batch_membership}", 'r') as inp:
     for line in inp:
         samp, batch = line.strip("\n").split("\t")
         samp_to_batch[samp] = batch
 
-carrier_batches = {samp_to_batch[x] for x in carriers_bbids}
+carrier_batches = {samp_to_batch[x] for x in carriers}
 
 with open("~{prefix}.batches.txt", 'w') as out:
     for i in carrier_batches:
