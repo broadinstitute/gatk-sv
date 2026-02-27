@@ -1814,13 +1814,26 @@ def evaluate_against_truth(
     # (spurious) carrier of BP1-2 and BP2-3, inflating false-positive
     # counts for those sub-intervals.
     pred_by_gd: Dict[str, set] = {}
+    pred_meta_by_gd: Dict[str, dict] = {}  # fallback metadata from calls
     for gd_id, grp in calls_df.groupby("GD_ID"):
+        gd_id_str = str(gd_id)
         carrier_mask = grp["is_carrier"] == True  # noqa: E712
         if "is_best_match" in grp.columns:
             carrier_mask = carrier_mask & (grp["is_best_match"] == True)  # noqa: E712
-        pred_by_gd[str(gd_id)] = set(
+        pred_by_gd[gd_id_str] = set(
             grp.loc[carrier_mask, "sample"].unique()
         )
+        # Grab metadata from the first row of this GD_ID group so we can
+        # fill in chr/start/end/cluster/svtype when the truth table has no
+        # entry for this GD_ID.
+        first = grp.iloc[0]
+        pred_meta_by_gd[gd_id_str] = {
+            "chr": first.get("chrom", ""),
+            "start": first.get("start", ""),
+            "end": first.get("end", ""),
+            "cluster_ID": first.get("cluster", ""),
+            "SVTYPE": first.get("svtype", ""),
+        }
 
     # Build truth carrier sets keyed by GD_ID
     truth_by_gd: Dict[str, dict] = {}
@@ -1862,13 +1875,16 @@ def evaluate_against_truth(
         total_fn += fn
 
         meta = truth_by_gd.get(gd_id, {})
+        # Fall back to prediction metadata when the truth table has no
+        # entry for this GD_ID (e.g. a novel/unannotated site).
+        fallback = pred_meta_by_gd.get(gd_id, {})
         rows.append({
             "GD_ID": gd_id,
-            "chr": meta.get("chr", ""),
-            "start": meta.get("start", ""),
-            "end": meta.get("end", ""),
-            "cluster_ID": meta.get("cluster_ID", ""),
-            "SVTYPE": meta.get("SVTYPE", ""),
+            "chr": meta.get("chr", "") or fallback.get("chr", ""),
+            "start": meta.get("start", "") or fallback.get("start", ""),
+            "end": meta.get("end", "") or fallback.get("end", ""),
+            "cluster_ID": meta.get("cluster_ID", "") or fallback.get("cluster_ID", ""),
+            "SVTYPE": meta.get("SVTYPE", "") or fallback.get("SVTYPE", ""),
             "n_truth_carriers": len(truth_set),
             "n_pred_carriers": len(pred_set),
             "TP": tp,

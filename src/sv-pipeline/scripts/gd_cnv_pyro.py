@@ -423,11 +423,24 @@ class SegDupMask:
         """Build efficient interval index for overlap queries."""
         # Group by chromosome for efficient lookup
         self.intervals_by_chrom = {}
+        self.merged_by_chrom = {}  # Pre-merged non-overlapping intervals
         for chrom, group in self.df.groupby("chr"):
-            # Store as numpy arrays for fast operations
-            self.intervals_by_chrom[chrom] = {
-                "starts": group["start"].values,
-                "ends": group["end"].values,
+            starts = group["start"].values
+            ends = group["end"].values
+            self.intervals_by_chrom[chrom] = {"starts": starts, "ends": ends}
+            # Pre-merge overlapping intervals for O(log N) binary-search queries
+            idx = np.argsort(starts)
+            s, e = starts[idx], ends[idx]
+            ms, me = [int(s[0])], [int(e[0])]
+            for i in range(1, len(s)):
+                if int(s[i]) <= me[-1]:
+                    me[-1] = max(me[-1], int(e[i]))
+                else:
+                    ms.append(int(s[i]))
+                    me.append(int(e[i]))
+            self.merged_by_chrom[chrom] = {
+                "starts": np.array(ms),
+                "ends": np.array(me),
             }
 
     def get_overlap_fraction(self, chrom: str, start: int, end: int) -> float:
@@ -442,54 +455,59 @@ class SegDupMask:
         Returns:
             Fraction of region overlapping with segdups (0.0 to 1.0)
         """
-        if chrom not in self.intervals_by_chrom:
+        if chrom not in self.merged_by_chrom:
             return 0.0
-
-        intervals = self.intervals_by_chrom[chrom]
         region_length = end - start
-
         if region_length <= 0:
             return 0.0
-
-        # Find overlapping intervals
-        sd_starts = intervals["starts"]
-        sd_ends = intervals["ends"]
-
-        # Check for any overlap: sd_start < end AND sd_end > start
-        overlaps = (sd_starts < end) & (sd_ends > start)
-
-        if not overlaps.any():
+        merged = self.merged_by_chrom[chrom]
+        ms, me = merged["starts"], merged["ends"]
+        # Binary search: find merged intervals overlapping [start, end)
+        lo = int(np.searchsorted(me, start, side="right"))
+        hi = int(np.searchsorted(ms, end, side="left"))
+        if lo >= hi:
             return 0.0
+        ov_s = np.maximum(ms[lo:hi], start)
+        ov_e = np.minimum(me[lo:hi], end)
+        return min(float(np.sum(np.maximum(0, ov_e - ov_s))) / region_length, 1.0)
 
-        # Calculate total overlap length (handling overlapping segdups)
-        overlap_starts = np.maximum(sd_starts[overlaps], start)
-        overlap_ends = np.minimum(sd_ends[overlaps], end)
+    def get_overlap_fractions_batch(
+        self, chrom: str, starts: np.ndarray, ends: np.ndarray
+    ) -> np.ndarray:
+        """
+        Compute overlap fractions for multiple bins at once.
 
-        # Merge overlapping intervals to avoid double-counting
-        # Sort by start position
-        sorted_idx = np.argsort(overlap_starts)
-        overlap_starts = overlap_starts[sorted_idx]
-        overlap_ends = overlap_ends[sorted_idx]
+        Uses vectorized searchsorted to identify bins that overlap any segdup,
+        then only iterates over those bins (typically a small fraction).
 
-        # Merge overlapping intervals
-        merged_length = 0
-        current_start = overlap_starts[0]
-        current_end = overlap_ends[0]
+        Args:
+            chrom: Chromosome name
+            starts: Array of bin start positions
+            ends: Array of bin end positions
 
-        for i in range(1, len(overlap_starts)):
-            if overlap_starts[i] <= current_end:
-                # Overlapping or adjacent, extend current interval
-                current_end = max(current_end, overlap_ends[i])
-            else:
-                # Non-overlapping, add current interval and start new one
-                merged_length += current_end - current_start
-                current_start = overlap_starts[i]
-                current_end = overlap_ends[i]
-
-        # Add final interval
-        merged_length += current_end - current_start
-
-        return min(merged_length / region_length, 1.0)
+        Returns:
+            Array of overlap fractions (0.0 to 1.0) for each bin
+        """
+        n = len(starts)
+        if n == 0 or chrom not in self.merged_by_chrom:
+            return np.zeros(n)
+        merged = self.merged_by_chrom[chrom]
+        ms, me = merged["starts"], merged["ends"]
+        starts = np.asarray(starts)
+        ends = np.asarray(ends)
+        # Vectorized: find lo/hi bracket for each bin in one searchsorted call
+        lo_arr = np.searchsorted(me, starts, side="right")
+        hi_arr = np.searchsorted(ms, ends, side="left")
+        has_overlap = lo_arr < hi_arr
+        result = np.zeros(n)
+        # Only iterate over bins that actually overlap a segdup
+        for i in np.where(has_overlap)[0]:
+            s, e = starts[i], ends[i]
+            lo, hi = int(lo_arr[i]), int(hi_arr[i])
+            ov_s = np.maximum(ms[lo:hi], s)
+            ov_e = np.minimum(me[lo:hi], e)
+            result[i] = min(float(np.sum(np.maximum(0, ov_e - ov_s))) / (e - s), 1.0)
+        return result
 
     def is_masked(self, chrom: str, start: int, end: int,
                   threshold: float = 0.5) -> bool:
@@ -684,7 +702,7 @@ class CNVModel:
         # Per-sample variance factor (log-normal prior)
         with plate_samples:
             sample_var = pyro.sample(
-                "sample_var", dist.Exponential(1.0 / self.var_sample)
+                "sample_var", dist.Exponential(torch.tensor(1.0 / self.var_sample, device=self.device, dtype=self.dtype))
             )
         if self.debug:
             print(f"sample_var.shape: {sample_var.shape}")
@@ -693,20 +711,21 @@ class CNVModel:
         with plate_bins:
             # Per-bin mean bias factor (log-normal prior, centered at 1.0)
             bin_bias = pyro.sample(
-                "bin_bias", dist.LogNormal(zero_t, self.var_bias_bin)
+                "bin_bias", dist.LogNormal(zero_t, torch.tensor(self.var_bias_bin, device=self.device, dtype=self.dtype))
             )
             if self.debug:
                 print(f"bin_bias.shape: {bin_bias.shape}")
 
             # Per-bin variance factor (log-normal prior)
-            bin_var = pyro.sample("bin_var", dist.Exponential(1.0 / self.var_bin))
+            bin_var = pyro.sample("bin_var", dist.Exponential(torch.tensor(1.0 / self.var_bin, device=self.device, dtype=self.dtype)))
             if self.debug:
                 print(f"bin_var.shape: {bin_var.shape}")
 
             # Copy number prior (Dirichlet-Categorical)
             # Heavily weight CN=2 (diploid)
             alpha_cn = self.alpha_non_ref * one_t.expand(self.n_states)
-            alpha_cn[2] = self.alpha_ref  # Favor CN=2
+            alpha_cn = alpha_cn.clone()
+            alpha_cn[2] = torch.tensor(self.alpha_ref, device=self.device, dtype=self.dtype)
             cn_probs = pyro.sample("cn_probs", dist.Dirichlet(alpha_cn))
         if self.debug:
             print(f"cn_probs.shape: {cn_probs.shape}")
@@ -939,8 +958,9 @@ class CNVModel:
         )
         trained_model = poutine.replay(self.model, trace=guide_trace)
 
-        # Accumulate samples
-        cn_samples = []
+        # Accumulate counts directly instead of storing all samples, to avoid
+        # building an (n_samples x n_bins x n_samples) array in memory.
+        cn_counts = np.zeros((data.n_bins, data.n_samples, self.n_states), dtype=np.int32)
 
         with torch.no_grad():
             with tqdm(
@@ -957,16 +977,16 @@ class CNVModel:
                     trace = poutine.trace(inferred_model).get_trace(
                         depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples
                     )
-                    cn = trace.nodes["cn"]["value"].detach().cpu().numpy()
-                    cn_samples.append(cn)
+                    cn = trace.nodes["cn"]["value"].detach().cpu().numpy()  # (n_bins, n_samples)
+                    # Accumulate one-hot counts in-place — no sample list needed
+                    for state in range(self.n_states):
+                        cn_counts[..., state] += (cn == state).astype(np.int32)
 
-        # Stack samples and compute frequencies
-        cn_samples = np.array(cn_samples)  # (n_samples, n_bins, n_samples)
+                    # Periodically free GPU cache to prevent fragmentation
+                    if (i + 1) % 100 == 0 and self.device == "cuda":
+                        torch.cuda.empty_cache()
 
-        # Convert to one-hot encoding and compute frequencies
-        cn_freq = np.zeros((data.n_bins, data.n_samples, self.n_states))
-        for state in range(self.n_states):
-            cn_freq[..., state] = (cn_samples == state).mean(axis=0)
+        cn_freq = cn_counts / n_samples  # normalise to probabilities
 
         print("Discrete inference complete.")
         return {"cn_posterior": cn_freq}
@@ -1015,36 +1035,43 @@ def extract_locus_bins(
     # Apply segdup masking if provided
     if segdup_mask is not None:
         bypass = segdup_bypass_regions or []
-        keep_mask = []
-        n_bypassed = 0
-        for _, row in locus_df.iterrows():
-            bin_mid = (row["Start"] + row["End"]) / 2
-            # Skip masking for bins in bypass regions
-            in_bypass = any(bs <= bin_mid < be for bs, be in bypass)
-            if in_bypass:
-                keep_mask.append(True)
-                n_bypassed += 1
-                if VERBOSE:
-                    print(f"    [verbose] bin {row['Chr']}:{row['Start']}-{row['End']} "
-                          f"in segdup bypass region — kept")
-            else:
-                overlap = segdup_mask.get_overlap_fraction(
-                    row["Chr"], row["Start"], row["End"]
-                )
-                kept = overlap < segdup_threshold
-                keep_mask.append(kept)
-                if VERBOSE and not kept:
-                    sample_cols = get_sample_columns(locus_df)
-                    med = np.median(row[sample_cols].values.astype(float))
-                    print(f"    [verbose] bin {row['Chr']}:{row['Start']}-{row['End']} "
-                          f"segdup overlap={overlap:.2f} >= {segdup_threshold} — MASKED "
-                          f"(median depth={med:.3f})")
+        bin_mids = (locus_df["Start"].values + locus_df["End"].values) / 2
 
-        n_masked = len(keep_mask) - sum(keep_mask)
+        # Vectorized bypass check
+        in_bypass = np.zeros(len(locus_df), dtype=bool)
+        for bs, be in bypass:
+            in_bypass |= (bin_mids >= bs) & (bin_mids < be)
+
+        # Batch segdup overlap only for non-bypass bins
+        overlaps = np.zeros(len(locus_df))
+        non_bypass = ~in_bypass
+        if non_bypass.any():
+            overlaps[non_bypass] = segdup_mask.get_overlap_fractions_batch(
+                chrom,
+                locus_df["Start"].values[non_bypass],
+                locus_df["End"].values[non_bypass],
+            )
+
+        keep_mask = in_bypass | (overlaps < segdup_threshold)
+        n_bypassed = int(in_bypass.sum())
+        n_masked = int((~keep_mask).sum())
+
         if n_masked > 0:
             print(f"  Masked {n_masked}/{len(locus_df)} bins due to segdup overlap")
         if n_bypassed > 0:
             print(f"  Bypassed segdup masking for {n_bypassed} bins in heavily-overlapped intervals")
+
+        if VERBOSE:
+            for i, (_, row) in enumerate(locus_df.iterrows()):
+                if in_bypass[i]:
+                    print(f"    [verbose] bin {row['Chr']}:{row['Start']}-{row['End']} "
+                          f"in segdup bypass region — kept")
+                elif not keep_mask[i]:
+                    sample_cols = get_sample_columns(locus_df)
+                    med = np.median(row[sample_cols].values.astype(float))
+                    print(f"    [verbose] bin {row['Chr']}:{row['Start']}-{row['End']} "
+                          f"segdup overlap={overlaps[i]:.2f} >= {segdup_threshold} — MASKED "
+                          f"(median depth={med:.3f})")
 
         locus_df = locus_df[keep_mask]
 
@@ -1055,18 +1082,31 @@ def compute_flank_regions_from_bins(
     locus_df: pd.DataFrame,
     locus: GDLocus,
     target_size: int,
+    min_flank_bases: int = 50000,
+    min_flank_bins: int = 10,
 ) -> List[Tuple[int, int, str]]:
     """
     Compute flanking regions based on actual available (unfiltered) bins.
 
-    Accumulates bins outward from each side of the locus until the total covered
-    base pairs of unfiltered bins reaches target_size. This avoids the problem of
-    large segmental duplication deserts making a fixed-size geometric window empty.
+    Accumulates bins outward from each side of the locus until **all three**
+    stopping criteria are satisfied simultaneously:
+
+    1. Accumulated base pairs ≥ *target_size* (typically locus_size).
+    2. Accumulated base pairs ≥ *min_flank_bases* (absolute floor, default 50 kb).
+    3. Number of accumulated bins ≥ *min_flank_bins* (default 10).
+
+    This ensures small loci still receive adequately sized flanks for
+    establishing a reliable baseline, while large loci keep the existing
+    behaviour of matching the body size.
 
     Args:
         locus_df: DataFrame of unfiltered bins available for this locus
         locus: GDLocus object
         target_size: Target cumulative bin coverage in bp for each flank
+        min_flank_bases: Minimum cumulative bp each flank must cover
+            regardless of *target_size* (default 50 000).
+        min_flank_bins: Minimum number of bins each flank must contain
+            regardless of the base-pair thresholds (default 10).
 
     Returns:
         List of (start, end, name) tuples for "left_flank" and/or "right_flank".
@@ -1076,7 +1116,12 @@ def compute_flank_regions_from_bins(
     locus_start = locus.start
     locus_end = locus.end
 
-    print(f"    [flanks] locus body: {locus_start:,}-{locus_end:,}  target_size: {target_size:,} bp")
+    # Effective base-pair threshold is the larger of target_size and min_flank_bases
+    effective_bp_target = max(target_size, min_flank_bases)
+
+    print(f"    [flanks] locus body: {locus_start:,}-{locus_end:,}  "
+          f"target_size: {target_size:,} bp  min_flank_bases: {min_flank_bases:,} bp  "
+          f"min_flank_bins: {min_flank_bins}  effective_bp_target: {effective_bp_target:,} bp")
     print(f"    [flanks] input bins: {len(locus_df)}  "
           f"range: {int(locus_df['Start'].min()):,}-{int(locus_df['End'].max()):,}" if len(locus_df) > 0
           else f"    [flanks] input bins: 0")
@@ -1092,15 +1137,17 @@ def compute_flank_regions_from_bins(
     if len(left_bins) > 0:
         print(f"  span {int(left_bins['Start'].min()):,}-{int(left_bins['End'].max()):,}  "
               f"total bp: {int((left_bins['End'] - left_bins['Start']).sum()):,}")
-        cumulative = 0
-        leftmost_start = locus_start  # will be updated as we walk left
-        for _, row in left_bins.iterrows():
-            cumulative += int(row["End"]) - int(row["Start"])
-            leftmost_start = int(row["Start"])
-            if cumulative >= target_size:
-                break
+        sizes = (left_bins["End"].values - left_bins["Start"].values).astype(int)
+        cumsum_bp = np.cumsum(sizes)
+        n_bins_arr = np.arange(1, len(sizes) + 1)
+        done = (cumsum_bp >= effective_bp_target) & (n_bins_arr >= min_flank_bins)
+        idx = int(np.argmax(done)) if done.any() else len(sizes) - 1
+        cumulative = int(cumsum_bp[idx])
+        n_bins_accumulated = int(n_bins_arr[idx])
+        leftmost_start = int(left_bins.iloc[idx]["Start"])
         print(f"    [flanks] left_flank: {leftmost_start:,}-{locus_start:,}  "
-              f"accumulated {cumulative:,} bp (target {target_size:,})")
+              f"accumulated {cumulative:,} bp / {n_bins_accumulated} bins "
+              f"(targets: {effective_bp_target:,} bp, {min_flank_bins} bins)")
         flanks.append((leftmost_start, locus_start, "left_flank"))
     else:
         print()  # newline after the count
@@ -1111,15 +1158,17 @@ def compute_flank_regions_from_bins(
     if len(right_bins) > 0:
         print(f"  span {int(right_bins['Start'].min()):,}-{int(right_bins['End'].max()):,}  "
               f"total bp: {int((right_bins['End'] - right_bins['Start']).sum()):,}")
-        cumulative = 0
-        rightmost_end = locus_end  # will be updated as we walk right
-        for _, row in right_bins.iterrows():
-            cumulative += int(row["End"]) - int(row["Start"])
-            rightmost_end = int(row["End"])
-            if cumulative >= target_size:
-                break
+        sizes = (right_bins["End"].values - right_bins["Start"].values).astype(int)
+        cumsum_bp = np.cumsum(sizes)
+        n_bins_arr = np.arange(1, len(sizes) + 1)
+        done = (cumsum_bp >= effective_bp_target) & (n_bins_arr >= min_flank_bins)
+        idx = int(np.argmax(done)) if done.any() else len(sizes) - 1
+        cumulative = int(cumsum_bp[idx])
+        n_bins_accumulated = int(n_bins_arr[idx])
+        rightmost_end = int(right_bins.iloc[idx]["End"])
         print(f"    [flanks] right_flank: {locus_end:,}-{rightmost_end:,}  "
-              f"accumulated {cumulative:,} bp (target {target_size:,})")
+              f"accumulated {cumulative:,} bp / {n_bins_accumulated} bins "
+              f"(targets: {effective_bp_target:,} bp, {min_flank_bins} bins)")
         flanks.append((locus_end, rightmost_end, "right_flank"))
     else:
         print()  # newline after the count
@@ -1244,40 +1293,28 @@ def rebin_locus_intervals(
     )
 
     rebinned_rows = []
-    processed_indices = set()
+    bin_mids = (df["Start"].values + df["End"].values) / 2
+    processed_mask = np.zeros(len(df), dtype=bool)
 
     for region_start, region_end, _ in all_rebin_regions:
-        region_indices = []
-        for idx, row in df.iterrows():
-            bin_mid = (row["Start"] + row["End"]) / 2
-            if region_start <= bin_mid < region_end:
-                region_indices.append(idx)
-                processed_indices.add(idx)
-
-        if not region_indices:
+        mask = (bin_mids >= region_start) & (bin_mids < region_end)
+        if not mask.any():
             continue
-
-        region_df = df.loc[region_indices].copy()
-        rebinned_rows.extend(rebin_region(region_df))
+        processed_mask |= mask
+        rebinned_rows.extend(rebin_region(df[mask].copy()))
 
     # Rebin bins inside each breakpoint range (SD blocks) independently
     for bp_start, bp_end in locus.breakpoints:
-        bp_indices = []
-        for idx, row in df.iterrows():
-            if idx in processed_indices:
-                continue
-            bin_mid = (row["Start"] + row["End"]) / 2
-            if bp_start <= bin_mid < bp_end:
-                bp_indices.append(idx)
-                processed_indices.add(idx)
-
-        if bp_indices:
-            rebinned_rows.extend(rebin_region(df.loc[bp_indices].copy()))
+        mask = ~processed_mask & (bin_mids >= bp_start) & (bin_mids < bp_end)
+        if not mask.any():
+            continue
+        processed_mask |= mask
+        rebinned_rows.extend(rebin_region(df[mask].copy()))
 
     # Pass through any remaining bins not covered by any region or breakpoint
-    for idx, row in df.iterrows():
-        if idx not in processed_indices:
-            rebinned_rows.append(row.to_dict())
+    remaining = df[~processed_mask]
+    if len(remaining) > 0:
+        rebinned_rows.extend(remaining.to_dict("records"))
 
     if len(rebinned_rows) == 0:
         return pd.DataFrame(columns=df.columns)
@@ -2024,6 +2061,8 @@ def collect_all_locus_bins(
     filter_params: Optional[dict] = None,
     segdup_bypass_threshold: float = 0.9,
     min_rebin_coverage: float = 0.5,
+    min_flank_bases: int = 50000,
+    min_flank_bins: int = 10,
 ) -> Tuple[pd.DataFrame, List[LocusBinMapping], Dict[str, GDLocus]]:
     """
     Collect all bins across all GD loci into a single DataFrame.
@@ -2063,6 +2102,10 @@ def collect_all_locus_bins(
         segdup_bypass_threshold: If a body interval is ≥ this fraction
             overlapped by segmental duplications, segdup masking is
             skipped for bins in that interval (default 0.9 = 90%).
+        min_flank_bases: Minimum cumulative base pairs each flank must
+            cover regardless of locus size (default 50 000).
+        min_flank_bins: Minimum number of bins each flank must contain
+            regardless of base-pair thresholds (default 10).
 
     Returns:
         Tuple of:
@@ -2089,11 +2132,10 @@ def collect_all_locus_bins(
     chrom_filtered: Dict[str, pd.DataFrame] = {}
     for chrom, chrom_df in df.groupby("Chr"):
         if segdup_mask is not None:
-            keep = []
-            for _, row in chrom_df.iterrows():
-                overlap = segdup_mask.get_overlap_fraction(chrom, row["Start"], row["End"])
-                keep.append(overlap < segdup_threshold)
-            chrom_filtered[chrom] = chrom_df[keep].copy()
+            overlaps = segdup_mask.get_overlap_fractions_batch(
+                chrom, chrom_df["Start"].values, chrom_df["End"].values
+            )
+            chrom_filtered[chrom] = chrom_df[overlaps < segdup_threshold].copy()
         else:
             chrom_filtered[chrom] = chrom_df.copy()
         print(f"  {chrom}: {len(chrom_filtered[chrom])} filtered bins "
@@ -2164,7 +2206,11 @@ def collect_all_locus_bins(
         # Compute flank coordinates from the full chromosome's filtered bins so
         # that even multi-megabase segdup deserts don't prevent flank discovery.
         chrom_bins = chrom_filtered.get(locus.chrom, pd.DataFrame())
-        flank_regions = compute_flank_regions_from_bins(chrom_bins, locus, locus_size)
+        flank_regions = compute_flank_regions_from_bins(
+            chrom_bins, locus, locus_size,
+            min_flank_bases=min_flank_bases,
+            min_flank_bins=min_flank_bins,
+        )
         if flank_regions:
             for fs, fe, fn in flank_regions:
                 print(f"  {fn}: {fs:,}-{fe:,} (bin-derived)")
@@ -2263,6 +2309,10 @@ def collect_all_locus_bins(
         undercovered = _undercovered_intervals(interval_bins)
 
         used_highres = False
+        # Body intervals where even the raw high-res data doesn't have
+        # enough bins — the resolution is simply too coarse for this locus
+        # size, so we exempt them from the min-bins threshold later.
+        hr_physically_limited: set = set()
         if (
             undercovered
             and highres_counts_path is not None
@@ -2286,6 +2336,21 @@ def collect_all_locus_bins(
                   f"in {locus.chrom}:{left_bound:,}-{right_bound:,}")
 
             if len(hr_raw_df) > 0:
+                # Before any filtering, count how many raw hi-res bins
+                # fall in each body interval.  If a body interval cannot
+                # reach min_bins_per_region even with every raw bin, it is
+                # physically limited by the bin resolution and should be
+                # exempted from the threshold (provided it has > 0 bins
+                # after processing).
+                hr_raw_mids = (hr_raw_df["Start"] + hr_raw_df["End"]) / 2
+                for iv_start, iv_end, iv_name in body_intervals:
+                    raw_count = int(((hr_raw_mids >= iv_start) & (hr_raw_mids < iv_end)).sum())
+                    if raw_count < min_bins_per_region:
+                        hr_physically_limited.add(iv_name)
+                        print(f"    [highres] body interval '{iv_name}' has only "
+                              f"{raw_count} raw bins (< {min_bins_per_region}); "
+                              f"resolution-limited, will relax threshold")
+
                 # Normalise using the low-res calibration, scaled by bin size ratio
                 hr_norm_df = normalize_highres_bins(
                     hr_raw_df, sample_cols, column_medians, lowres_median_bin_size,
@@ -2308,9 +2373,22 @@ def collect_all_locus_bins(
 
                 hr_undercovered = _undercovered_intervals(hr_interval_bins)
 
-                # Accept the high-res data only if it reduced the number of
-                # under-covered intervals
-                if len(hr_undercovered) < len(undercovered):
+                # Accept the high-res data if it improved coverage:
+                # (a) fewer under-covered intervals, OR
+                # (b) same number of under-covered intervals but more bins
+                #     in those intervals (e.g. 5 bins vs 0 is a real
+                #     improvement even if both are still below threshold).
+                hr_uc_bins = sum(cnt for _, cnt in hr_undercovered)
+                orig_uc_bins = sum(cnt for _, cnt in undercovered)
+                accept_hr = (
+                    len(hr_undercovered) < len(undercovered)
+                    or (
+                        len(hr_undercovered) <= len(undercovered)
+                        and hr_uc_bins > orig_uc_bins
+                    )
+                )
+
+                if accept_hr:
                     locus_df = hr_locus_df
                     interval_bins = hr_interval_bins
                     undercovered = hr_undercovered
@@ -2329,21 +2407,43 @@ def collect_all_locus_bins(
         # Warn about under-covered body intervals.  Some GD loci have
         # intervals dominated by segmental duplications so 0 surviving bins
         # is possible even after bypass — downgrade to a warning.
+        #
+        # Intervals that are "physically limited" (the raw high-res data
+        # itself didn't have enough bins) are exempted from the threshold
+        # as long as they still have > 0 bins after processing — the bin
+        # resolution is simply too coarse for the locus size.
         if undercovered:
-            details = "\n".join(
-                f"    interval '{name}': {cnt} bins (need >= {min_bins_per_region})"
-                for name, cnt in undercovered
-            )
-            raise ValueError(
-                f"\n  WARNING: Locus {cluster} ({locus.chrom}:{locus.start:,}-"
-                f"{locus.end:,}) has {len(undercovered)} body interval(s) with "
-                f"fewer than --min-bins-per-region={min_bins_per_region} bins "
-                f"after all processing"
-                f"{' (including high-res replacement)' if used_highres else ''}:\n"
-                f"{details}\n"
-                f"  CNV calls spanning these intervals will have reduced "
-                f"statistical power."
-            )
+            # Partition into truly problematic vs resolution-limited
+            hard_failures = [
+                (name, cnt) for name, cnt in undercovered
+                if name not in hr_physically_limited or cnt == 0
+            ]
+            soft_warnings = [
+                (name, cnt) for name, cnt in undercovered
+                if name in hr_physically_limited and cnt > 0
+            ]
+
+            if soft_warnings:
+                for name, cnt in soft_warnings:
+                    print(f"  NOTE: body interval '{name}' has {cnt} bins "
+                          f"(< {min_bins_per_region}), but this is the maximum "
+                          f"the bin resolution can provide — proceeding anyway.")
+
+            if hard_failures:
+                details = "\n".join(
+                    f"    interval '{name}': {cnt} bins (need >= {min_bins_per_region})"
+                    for name, cnt in hard_failures
+                )
+                raise ValueError(
+                    f"\n  WARNING: Locus {cluster} ({locus.chrom}:{locus.start:,}-"
+                    f"{locus.end:,}) has {len(hard_failures)} body interval(s) with "
+                    f"fewer than --min-bins-per-region={min_bins_per_region} bins "
+                    f"after all processing"
+                    f"{' (including high-res replacement)' if used_highres else ''}:\n"
+                    f"{details}\n"
+                    f"  CNV calls spanning these intervals will have reduced "
+                    f"statistical power."
+                )
 
         # ------------------------------------------------------------------
         # Create mappings
@@ -2702,6 +2802,8 @@ def run_gd_analysis(
         filter_params=filter_params,
         segdup_bypass_threshold=args.segdup_bypass_threshold,
         min_rebin_coverage=args.min_rebin_coverage,
+        min_flank_bases=args.min_flank_bases,
+        min_flank_bins=args.min_flank_bins,
     )
 
     if len(combined_df) == 0:
@@ -2739,7 +2841,7 @@ def run_gd_analysis(
         lr_min=args.lr_min,
         lr_decay=args.lr_decay,
         log_freq=args.log_freq,
-        jit=args.jit,
+        jit=not args.disable_jit,
         early_stopping=args.early_stopping,
         patience=args.patience,
         min_delta=args.min_delta,
@@ -2864,6 +2966,24 @@ def parse_args():
              "be covered by original bins (0.0–1.0, default 0.5).  Putative "
              "bins with less coverage are discarded to avoid biased estimates.",
     )
+    parser.add_argument(
+        "--min-flank-bases",
+        type=int,
+        default=50000,
+        help="Minimum cumulative base pairs each flank must cover, "
+             "regardless of locus size.  For small loci (e.g. < 1 kb) this "
+             "ensures flanks are wide enough to establish a reliable "
+             "baseline depth.  Flanks keep growing outward until this AND "
+             "the locus-size target AND --min-flank-bins are all satisfied.",
+    )
+    parser.add_argument(
+        "--min-flank-bins",
+        type=int,
+        default=10,
+        help="Minimum number of bins each flank must contain, regardless "
+             "of the base-pair thresholds.  Flanks keep growing outward "
+             "until this AND the base-pair targets are all satisfied.",
+    )
 
     # Model parameters
     parser.add_argument(
@@ -2942,10 +3062,10 @@ def parse_args():
         help="Logging frequency (iterations)",
     )
     parser.add_argument(
-        "--jit",
+        "--disable-jit",
         action="store_true",
         default=False,
-        help="Enable JIT compilation",
+        help="Disable JIT compilation",
     )
     parser.add_argument(
         "--early-stopping",
