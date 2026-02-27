@@ -96,7 +96,6 @@ workflows:
     filters:
       branches:
         - main
-        - v-ssd-genotype-batch
       tags:
         - /.*/
 
