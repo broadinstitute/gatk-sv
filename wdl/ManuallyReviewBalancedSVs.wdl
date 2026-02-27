@@ -165,6 +165,7 @@ task SelectSVType {
     tabix ~{prefix}.selected.vcf.gz
 
     python <<CODE
+import pysam
 carriers = set()
 with pysam.VariantFile("~{prefix}.selected.vcf.gz") as vcf:
     for record in vcf:
