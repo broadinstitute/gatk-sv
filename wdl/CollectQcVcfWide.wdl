@@ -103,26 +103,6 @@ task PreprocessVcf {
     RuntimeAttr? runtime_attr_override
   }
 
-  Float input_size = size(vcf, "GiB")
-  RuntimeAttr runtime_default = object {
-    mem_gb: 2.0 + 2.0 * input_size,
-    disk_gb: ceil(10 + 2.0 * input_size),
-    cpu_cores: 1,
-    preemptible_tries: 3,
-    max_retries: 0,
-    boot_disk_gb: 10
-  }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-  }
-
   command <<<
     set -euo pipefail
 
@@ -172,6 +152,25 @@ EOF
   output {
     File outvcf = "~{prefix}.vcf.gz"
     File outvcf_index = "~{prefix}.vcf.gz.tbi"
+  }
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 8,
+    disk_gb: 5 * ceil(size(vcf, "GiB")) + 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 0,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
 
