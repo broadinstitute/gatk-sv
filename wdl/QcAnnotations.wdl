@@ -11,13 +11,14 @@ workflow QcAnnotations {
   input {
     Array[File] vcfs
     Array[File] vcf_idxs
+    Array[String] contigs
+    String prefix
 
     Boolean vcf_format_has_cn = true
     File? ped_file
     File? sample_renaming_tsv
     Int max_trios = 1000
 
-    String prefix
     Int sv_per_shard
     Int samples_per_shard
     Boolean do_per_sample_qc = true
@@ -28,7 +29,7 @@ workflow QcAnnotations {
     Int? max_gq
     Int? downsample_qc_per_sample
 
-    File primary_contigs_fai
+    
     File ref_fa
     File ref_fai
 
@@ -62,8 +63,6 @@ workflow QcAnnotations {
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
   }
-
-  Array[String] contigs = transpose(read_tsv(primary_contigs_fai))[0]
 
   scatter (contig in contigs) {
     call vcfwideqc.CollectQcVcfWide {
