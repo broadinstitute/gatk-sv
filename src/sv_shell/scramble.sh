@@ -61,7 +61,7 @@ echo "make_scramble_vcf_args:     " "${make_scramble_vcf_args}"
 
 
 initial_wd=$PWD
-output_dir=$(mktemp -d /output_scramble_XXXXXXXX)
+output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_scramble_XXXXXXXX)
 output_dir="$(realpath ${output_dir})"
 
 scramble_dir="/app/scramble-gatk-sv"
@@ -86,7 +86,7 @@ scramble_dir="/app/scramble-gatk-sv"
 # ScramblePart1
 # -------------
 
-working_dir_p1=$(mktemp -d /wd_scramble_p1_XXXXXXXX)
+working_dir_p1=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_scramble_p1_XXXXXXXX)
 working_dir_p1="$(realpath ${working_dir_p1})"
 cd "${working_dir_p1}"
 
@@ -105,7 +105,7 @@ else
   MIN_CLIPPED_READS="${min_clipped_reads}"
 fi
 
-gzipped_clusters_file="${working_dir_p1}/${sample_name}_scramble_clusters.tsv.gz)"
+gzipped_clusters_file="${working_dir_p1}/${sample_name}_scramble_clusters.tsv.gz"
 gzipped_clusters_file="$(realpath ${gzipped_clusters_file})"
 
 # Identify clusters of split reads
@@ -119,7 +119,7 @@ done < "${regions_list}"
 # -------------
 
 cd "${initial_wd}"
-working_dir_p2=$(mktemp -d /wd_scramble_p2_XXXXXXXX)
+working_dir_p2=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_scramble_p2_XXXXXXXX)
 working_dir_p2="$(realpath ${working_dir_p2})"
 cd "${working_dir_p2}"
 
@@ -154,7 +154,7 @@ scramble_table="$(realpath ${sample_name}.scramble.tsv.gz)"
 # ---------------
 
 cd "${initial_wd}"
-working_dir_make_vcf=$(mktemp -d /wd_scramble_make_vcf_XXXXXXXX)
+working_dir_make_vcf=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_scramble_make_vcf_XXXXXXXX)
 working_dir_make_vcf="$(realpath ${working_dir_make_vcf})"
 cd "${working_dir_make_vcf}"
 
@@ -189,3 +189,5 @@ outputs_json=$(jq -n \
   '{vcf: $vcf, index: $vcf_idx, clusters: $clusters, table: $table}')
 echo "${outputs_json}" > "${outputs_filename}"
 cp "${outputs_filename}" "${outputs_json_filename}"
+
+echo "Successfully finished Scramble."

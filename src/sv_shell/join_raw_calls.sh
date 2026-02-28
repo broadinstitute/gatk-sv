@@ -14,7 +14,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_join_raw_calls_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_join_raw_calls_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -26,7 +26,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_join_raw_calls_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_join_raw_calls_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
@@ -63,25 +63,18 @@ java_mem_fraction=$(jq -r '.java_mem_fraction // "null"' "${input_json}")
 # ConcatInputVcfs
 # ---------------------------------------------------------------------------------------------------------------------
 
-vcf_files=(
-  "${clustered_depth_vcf}"
-  "${clustered_dragen_vcf}"
-  "${clustered_manta_vcf}"
-  "${clustered_scramble_vcf}"
-  "${clustered_wham_vcf}"
-)
+vcf_files_list="$(realpath "vcfs_list.txt")"
 
-vcf_files_list="vcfs_list.txt"
-touch "${vcf_files_list}"
-for vcf_file_path in "${vcf_files[@]}"; do
-  if [[ -n "${vcf_file_path}" ]]; then
-    echo "${vcf_file_path}" >> "${vcf_files_list}"
-  fi
-done
+printf "%s\n" \
+  "${clustered_depth_vcf}" \
+  "${clustered_dragen_vcf}" \
+  "${clustered_manta_vcf}" \
+  "${clustered_scramble_vcf}" \
+  "${clustered_wham_vcf}" \
+| sed '/^$/d' > "${vcf_files_list}"
 
 concat_vcf="${prefix}.join_raw_calls.concat.vcf.gz"
 concat_vcf_idx="${prefix}.join_raw_calls.concat.vcf.gz.tbi"
-VCFS="~{write_lines(vcfs)}"
 
 bcftools concat --no-version --allow-overlaps -Oz --file-list "${vcf_files_list}" > "${concat_vcf}"
 
@@ -115,12 +108,12 @@ tabix "${FormatVcfForGatk_gatk_formatted_vcf}"
 # SVCluster
 # ---------------------------------------------------------------------------------------------------------------------
 
-sv_cluster_output_dir=$(mktemp -d "/output_sv_cluster_XXXXXXXX")
+sv_cluster_output_dir=$(mktemp -d "${SV_SHELL_BASE_DIR}/output_sv_cluster_XXXXXXXX")
 sv_cluster_output_dir="$(realpath ${sv_cluster_output_dir})"
 sv_cluster_inputs_json="$(realpath "${sv_cluster_output_dir}/sv_cluster_inputs.json")"
 sv_cluster_output_json="$(realpath "${sv_cluster_output_dir}/sv_cluster_output.json")"
 
-sv_cluster_wd_dir=$(mktemp -d "/wd_sv_cluster_XXXXXXXX")
+sv_cluster_wd_dir=$(mktemp -d "${SV_SHELL_BASE_DIR}/wd_sv_cluster_XXXXXXXX")
 sv_cluster_wd_dir="$(realpath ${sv_cluster_wd_dir})"
 
 jq -n \
@@ -172,7 +165,7 @@ mv "${sv_cluster_vcf_out}.tbi" "${joined_raw_calls_vcf_output_dir}.tbi"
 ploidy_table_output_dir="${output_dir}/$(basename "${CreatePloidyTableFromPed_out}")"
 mv "${CreatePloidyTableFromPed_out}" "${ploidy_table_output_dir}"
 
-outputs_json=$(jq -n \
+jq -n \
   --arg joined_raw_calls_vcf "${joined_raw_calls_vcf_output_dir}" \
   --arg joined_raw_calls_vcf_index "${joined_raw_calls_vcf_output_dir}.tbi" \
   --arg ploidy_table "${ploidy_table_output_dir}" \
@@ -180,8 +173,6 @@ outputs_json=$(jq -n \
      "joined_raw_calls_vcf": $joined_raw_calls_vcf,
      "joined_raw_calls_vcf_index": $joined_raw_calls_vcf_index,
      "ploidy_table": $ploidy_table
-   }' \
-)
-echo "${outputs_json}" > "${output_json_filename}"
+   }' > "${output_json_filename}"
 
 echo "Successfully finished Join Raw Calls, output json filename: ${output_json_filename}"

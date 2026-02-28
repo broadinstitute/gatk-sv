@@ -14,7 +14,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_genotype_complex_variants_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_genotype_complex_variants_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -26,7 +26,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_genotype_complex_variants_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_genotype_complex_variants_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 echo "Genotype complex variants working directory: ${working_dir}"
@@ -41,7 +41,7 @@ median_coverage_files=$(jq -r ".median_coverage_files" "$input_json")
 bin_exclude=$(jq -r ".bin_exclude" "$input_json")
 ref_dict=$(jq -r ".ref_dict" "$input_json")
 bincov_files=$(jq -r ".bincov_files" "$input_json")
-depth_gt_rd_sep_files=$(jq -r ".depth_gt_rd_sep_files" "$input_json")
+genotyping_rd_tables=$(jq -r ".genotyping_rd_tables" "$input_json")
 
 n_rd_test_bins=100000
 
@@ -132,7 +132,7 @@ Rscript /opt/RdTest/RdTest.R \
   -n "${RdTestGenotype_prefix}" \
   -w "${GetSampleIdsFromMedianCoverageFile_out_file}" \
   -i ${n_rd_test_bins} \
-  -r "${depth_gt_rd_sep_files}" \
+  -r "${genotyping_rd_tables}" \
   -y "${bin_exclude}" \
   -g TRUE
 
@@ -198,7 +198,7 @@ jq -n \
   --arg complex_genotype_vcf_indexes "${ParseGenotypes_cpx_depth_gt_resolved_vcf_output}.tbi" \
   '{
      "complex_genotype_merged_vcf": $complex_genotype_merged_vcf,
-     "complex_genotype_vcf_indexes": $complex_genotype_vcf_indexes
+     "complex_genotype_merged_vcf_index": $complex_genotype_vcf_indexes,
    }' > "${output_json_filename}"
 
 echo "Finished genotype complex variants, output json filename: ${output_json_filename}"

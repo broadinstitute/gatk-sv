@@ -16,11 +16,6 @@ workflow CombineBatches {
 
     Array[File] pesr_vcfs
     Array[File] depth_vcfs
-    # Set to true if using vcfs generated with a prior version, i.e. not ending in "_reformatted.vcf.gz"
-    Boolean legacy_vcfs = false
-
-    Array[File] raw_sr_bothside_pass_files
-    Array[File] raw_sr_background_fail_files
 
     File contig_list
     Float min_sr_background_fail_batches
@@ -48,8 +43,7 @@ workflow CombineBatches {
     String sv_pipeline_docker
 
     RuntimeAttr? runtime_attr_create_ploidy
-    RuntimeAttr? runtime_attr_reformat_1
-    RuntimeAttr? runtime_attr_reformat_2
+    RuntimeAttr? runtime_attr_set_sr_flags
     RuntimeAttr? runtime_attr_join_vcfs
     RuntimeAttr? runtime_attr_cluster_sites
     RuntimeAttr? runtime_attr_recluster_part1
@@ -58,15 +52,28 @@ workflow CombineBatches {
     RuntimeAttr? runtime_attr_calculate_support_frac
     RuntimeAttr? runtime_override_clean_background_fail
     RuntimeAttr? runtime_attr_gatk_to_svtk_vcf
-    RuntimeAttr? runtime_attr_extract_vids
+    RuntimeAttr? runtime_attr_extract_vids_1
+    RuntimeAttr? runtime_attr_extract_vids_2
     RuntimeAttr? runtime_override_concat
   }
 
-  # Preprocess some inputs
+  # Get SR evidence flags from input PESR VCFs
+  scatter (i in range(length(pesr_vcfs))) {
+    call ExtractSRVariantLists as ExtractBatchSrVariantLists {
+      input:
+        vcf=pesr_vcfs[i],
+        vcf_index=pesr_vcfs[i] + ".tbi",
+        output_prefix="~{cohort_name}.batch_~{i}",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_extract_vids_1
+    }
+  }
+
+  # Combine BOTHSIDES_SUPPORT flags across batches
   call CombineSRBothsidePassWorkflow.CombineSRBothsidePass {
     input:
       pesr_vcfs=pesr_vcfs,
-      raw_sr_bothside_pass_files=raw_sr_bothside_pass_files,
+      raw_sr_bothside_pass_files=ExtractBatchSrVariantLists.bothsides_sr_support,
       prefix="~{cohort_name}.sr_bothside_pass",
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -74,14 +81,28 @@ workflow CombineBatches {
       runtime_attr_calculate_support_frac=runtime_attr_calculate_support_frac
   }
 
-  Float min_background_fail_first_col = min_sr_background_fail_batches * length(raw_sr_background_fail_files)
+  # Combine HIGH_SR_BACKGROUND flags across batches
+  Float min_background_fail_first_col = min_sr_background_fail_batches * length(pesr_vcfs)
   call MiniTasks.CatUncompressedFiles as CombineBackgroundFail {
     input:
-      shards=raw_sr_background_fail_files,
+      shards=ExtractBatchSrVariantLists.high_sr_background_list,
       filter_command="sort | uniq -c | awk -v OFS='\\t' '{if($1 >= ~{min_background_fail_first_col}) print $2}'",
       outfile_name="~{cohort_name}.background_fail.txt",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_clean_background_fail
+  }
+
+  # Resets SR flags in input PESR VCFs based on cohort-level calculations
+  scatter (i in range(length(pesr_vcfs))) {
+    call SetSRVariantFlags {
+      input:
+        vcf=pesr_vcfs[i],
+        bothside_pass_list=CombineSRBothsidePass.out,
+        background_fail_list=CombineBackgroundFail.outfile,
+        output_prefix="~{cohort_name}.pesr.batch_~{i}.sr_flagged",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_set_sr_flags
+    }
   }
 
   call ClusterTasks.CreatePloidyTableFromPed {
@@ -96,31 +117,6 @@ workflow CombineBatches {
       runtime_attr_override=runtime_attr_create_ploidy
   }
 
-  Array[File] all_vcfs = flatten([pesr_vcfs, depth_vcfs])
-  scatter (vcf in all_vcfs) {
-    if (legacy_vcfs) {
-      call GenotypeTasks.ReformatGenotypedVcf {
-        input:
-          vcf = vcf,
-          output_prefix = basename(vcf, ".vcf.gz") + ".reformat_legacy",
-          sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_override = runtime_attr_reformat_1
-      }
-    }
-    File reformatted_vcf = select_first([ReformatGenotypedVcf.out, vcf])
-    call GatkFormatting.FormatVcf {
-      input:
-        vcf=reformatted_vcf,
-        ploidy_table=CreatePloidyTableFromPed.out,
-        args="--add-sr-pos --scale-down-gq",
-        output_prefix=basename(vcf, ".vcf.gz") + ".reformat_gatk",
-        bothside_pass_list=CombineSRBothsidePass.out,
-        background_fail_list=CombineBackgroundFail.outfile,
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_attr_reformat_2
-    }
-  }
-
   #Scatter per chromosome
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter ( contig in contigs ) {
@@ -128,7 +124,7 @@ workflow CombineBatches {
     # Naively join across batches
     call ClusterTasks.SVCluster as JoinVcfs {
       input:
-        vcfs=FormatVcf.out,
+        vcfs=flatten([SetSRVariantFlags.out, depth_vcfs]),
         ploidy_table=CreatePloidyTableFromPed.out,
         output_prefix="~{cohort_name}.combine_batches.~{contig}.join_vcfs",
         contig=contig,
@@ -222,7 +218,7 @@ workflow CombineBatches {
         output_prefix="~{cohort_name}.combine_batches.~{contig}.svtk_formatted",
         source="depth",
         contig_list=contig_list,
-        remove_formats="CN",
+        remove_formats="CN,RD_MCR",
         remove_infos="AC,AF,AN,HIGH_SR_BACKGROUND,BOTHSIDES_SUPPORT,SR1POS,SR2POS",
         set_pass=true,
         sv_pipeline_docker=sv_pipeline_docker,
@@ -235,7 +231,7 @@ workflow CombineBatches {
         vcf_index=GroupedSVClusterPart2.out_index,
         output_prefix="~{cohort_name}.combine_batches.~{contig}",
         sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_extract_vids
+        runtime_attr_override=runtime_attr_extract_vids_2
     }
   }
 
@@ -394,6 +390,50 @@ task GroupedSVClusterTask {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: gatk_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+# Set BOTHSIDES_SUPPORT and HIGH_SR_BACKGROUND INFO field flags in a VCF based on input vid lists
+task SetSRVariantFlags {
+  input {
+      File vcf
+      File bothside_pass_list
+      File background_fail_list
+      String output_prefix
+      String sv_pipeline_docker
+      RuntimeAttr? runtime_attr_override
+      }
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(50 + size(vcf, "GB") * 3),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+      File out = "~{output_prefix}.vcf.gz"
+      File out_index = "~{output_prefix}.vcf.gz.tbi"
+  }
+  command <<<
+      set -euo pipefail
+      python /opt/sv-pipeline/scripts/add_sr_info_flags.py \
+        --vcf ~{vcf} \
+        --out ~{output_prefix}.vcf.gz \
+        --bothsides-support-list ~{bothside_pass_list} \
+        --high-sr-background-list ~{background_fail_list}
+      tabix ~{output_prefix}.vcf.gz
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

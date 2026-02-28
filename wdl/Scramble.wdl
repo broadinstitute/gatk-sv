@@ -109,7 +109,7 @@ task ScramblePart1 {
 
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
-                               mem_gb: 3.0,
+                               mem_gb: 4.0,
                                disk_gb: disk_size_gb,
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
@@ -149,6 +149,7 @@ task ScramblePart1 {
     docker: scramble_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -211,6 +212,7 @@ task ScramblePart2 {
     docker: scramble_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -249,6 +251,7 @@ task MakeScrambleVcf {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 
   command <<<

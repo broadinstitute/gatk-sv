@@ -28,7 +28,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_make_bincov_matrix_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_make_bincov_matrix_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -40,7 +40,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_make_bincov_matrix_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_make_bincov_matrix_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
@@ -51,9 +51,9 @@ readarray -t count_files < <(jq -r '.count_files[]' "${input_json}")
 bin_size=$(jq -r ".bin_size // 100" "${input_json}")
 skip_bin_size_filter=$(jq -r ".skip_bin_size_filter // false" "${input_json}")
 
-# These files need to have the `.list` extension (gatk requirement)
-evidence_files_list="evidence_files.list"
-samples_filename="samples.list"
+# These files need to have the '.list' extension (gatk requirement)
+evidence_files_list="$(realpath "evidence_files.list")"
+samples_filename="$(realpath "samples.list")"
 
 reference_dict=$(jq -r ".reference_dict" "${input_json}")
 

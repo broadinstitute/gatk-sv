@@ -1,6 +1,12 @@
 {
+  "MergeBatchSites.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
   "MergeBatchSites.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
-  "MergeBatchSites.cohort": "${this.sample_set_set_id}",
+  "MergeBatchSites.gatk_docker": "${workspace.gatk_docker}",
+  "MergeBatchSites.reference_fasta": "${workspace.reference_fasta}",
+  "MergeBatchSites.reference_fasta_fai": "${workspace.reference_index}",
+  "MergeBatchSites.reference_dict": "${workspace.reference_dict}",
   "MergeBatchSites.pesr_vcfs": "${this.sample_sets.outlier_filtered_pesr_vcf}",
-  "MergeBatchSites.depth_vcfs": "${this.sample_sets.outlier_filtered_depth_vcf}"
+  "MergeBatchSites.depth_vcfs": "${this.sample_sets.outlier_filtered_depth_vcf}",
+  "MergeBatchSites.ploidy_tables": "${this.sample_sets.ploidy_table}",
+  "MergeBatchSites.cohort": "${this.sample_set_set_id}"
 }

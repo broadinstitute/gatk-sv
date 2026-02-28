@@ -28,9 +28,9 @@ echo "ref_fasta_dict:        " "${ref_fasta_dict}"
 echo "gatk4_jar_override:    " "${gatk4_jar_override}"
 echo "disabled_read_filters: " "${disabled_read_filters}"
 
-working_dir=$(mktemp -d /wd_collect_counts_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_collect_counts_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
-output_dir=$(mktemp -d /output_collect_counts_XXXXXXXX)
+output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_collect_counts_XXXXXXXX)
 output_dir="$(realpath ${output_dir})"
 cd "${working_dir}"
 
@@ -60,8 +60,16 @@ java -Xmx${command_mem_mb}m -jar /opt/gatk.jar CollectReadCounts \
 sed -ri "s/@RG\tID:GATKCopyNumber\tSM:.+/@RG\tID:GATKCopyNumber\tSM:${sample_id}/g" "${sample_id}.counts.tsv"
 bgzip --force "${sample_id}.counts.tsv"
 
+# tabix -s 1 -b 2 -e 3 -c @ "${sample_id}.counts.tsv.gz"
+# tabix -s 1 -b 2 -e 3 -c @ "${_file_need_index}"
+# SKIP_LINES=$(zcat "${_file_need_index}" | grep -c -E '^@|^CONTIG\s')
+# tabix -S $SKIP_LINES -s 1 -b 2 -e 3 "${_file_need_index}"
+# None of the above indexing methods are compatible with the gatk-sv related tools in gatk
+java -Xmx${command_mem_mb}m -jar /opt/gatk.jar IndexFeatureFile -I "${sample_id}.counts.tsv.gz"
+
 counts_filename="${output_dir}/${sample_id}.counts.tsv.gz"
 mv "${sample_id}.counts.tsv.gz" "${counts_filename}"
+mv "${sample_id}.counts.tsv.gz.tbi" "${counts_filename}.tbi"
 
 outputs_filename="${output_dir}/outputs.json"
 outputs_json=$(jq -n \

@@ -118,11 +118,11 @@ RUN mkdir -p /opt/R/4.1.3/lib/R/doc/html && \
 # setting SHELL to bash in the following is needed for the `source` command in the following RUN,
 # since the default sh does not support `source`.
 SHELL ["/bin/bash", "-c"]
-RUN apt-get -qqy install --no-upgrade --no-install-recommends git git-lfs openjdk-17-jdk openjdk-17-jre-headless libgomp1 && \
+RUN apt-get update && apt-get -qqy install --no-upgrade --no-install-recommends --fix-missing git git-lfs openjdk-17-jdk openjdk-17-jre-headless libgomp1 && \
     GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git && \
     cd gatk && \
     git checkout mw_gatk_sv && \
-    git checkout 1eac9db89b65f9493d2a91539e2b9274159a5b5c && \
+    git checkout 672d8557d82d17cefe972df5796ba719f0d7adbc && \
     mkdir -p /opt/gatk_miniconda3 && \
     wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.10.0-1-Linux-x86_64.sh -O /opt/gatk_miniconda3/miniconda.sh && \
     bash /opt/gatk_miniconda3/miniconda.sh -p /opt/gatk_miniconda3 -b -u && \
@@ -138,5 +138,53 @@ RUN apt-get -qqy install --no-upgrade --no-install-recommends git git-lfs openjd
     rm -rf gatk/ && \
     ln -s /opt/gatk_miniconda3/bin/conda /usr/local/bin/conda
 
+
+# stripy docker
+# copied from the stripy docker, the diff includes installing a separate pip env for stripy
+# so to install pysam==0.19.1 that the tool needs but base image has pysam==0.15.4.
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# Install ExpansionHunter (core dependency for STR analysis)
+ARG EXPANSIONHUNTER_VERSION=5.0.0
+RUN wget https://github.com/Illumina/ExpansionHunter/releases/download/v${EXPANSIONHUNTER_VERSION}/ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64.tar.gz \
+    && tar -xzf ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64.tar.gz \
+    && mv ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64/bin/ExpansionHunter /usr/local/bin/ \
+    && rm -rf ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64*
+
+# Install REViewer (for read visualization in STR analysis)
+ARG REVIEWER_VERSION=0.2.7
+RUN wget https://github.com/Illumina/REViewer/releases/download/v${REVIEWER_VERSION}/REViewer-v${REVIEWER_VERSION}-linux_x86_64.gz \
+    && gunzip REViewer-v${REVIEWER_VERSION}-linux_x86_64.gz \
+    && chmod +x REViewer-v${REVIEWER_VERSION}-linux_x86_64 \
+    && mv REViewer-v${REVIEWER_VERSION}-linux_x86_64 /usr/local/bin/REViewer
+
+# Clone STRipy-pipeline repository
+RUN git clone https://gitlab.com/andreassh/stripy-pipeline.git /opt/stripy-pipeline
+
+# Set working directory
+WORKDIR /opt/stripy-pipeline
+
+RUN python3 -m venv /opt/stripy-env
+RUN /opt/stripy-env/bin/pip install --upgrade pip && \
+    if [ -f requirements.txt ]; then /opt/stripy-env/bin/pip install -r requirements.txt; fi && \
+    /opt/stripy-env/bin/pip install pyfaidx
+
+# Copy wrapper script, default config, and loci profiles
+COPY src/stripy/stripy /usr/local/bin/stripy
+COPY src/stripy/default-config.json /usr/local/bin/default-config.json
+COPY src/stripy/catalogs /opt/stripy-pipeline/scripts/catalogs
+COPY src/stripy/stripy_to_vcf.py /opt/stripy-pipeline/scripts/stripy_to_vcf.py
+
+# Make wrapper executable
+RUN chmod +x /usr/local/bin/stripy
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+COPY src/sv_shell /opt/sv_shell
+
+# SYSSTAT (SAR) configuration. Collect stats every 30 seconds (two measurements in 1min)
+RUN apt-get update && apt-get install -y cron sysstat && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    sed -i 's/ENABLED="false"/ENABLED="true"/' /etc/default/sysstat && \
+    sed -i 's|^5-55/10.*|* * * * * root command -v debian-sa1 > /dev/null \&\& debian-sa1 30 2|' /etc/cron.d/sysstat
 
 WORKDIR /

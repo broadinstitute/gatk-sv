@@ -13,7 +13,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_combine_batches_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_combine_batches_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -25,7 +25,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_combine_batches_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_combine_batches_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
@@ -33,8 +33,6 @@ batches=$(jq -r ".batches" "${input_json}")
 cohort_name=$(jq -r ".cohort_name" "${input_json}")
 pesr_vcfs=$(jq -r ".pesr_vcfs" "${input_json}")
 depth_vcfs=$(jq -r ".depth_vcfs" "${input_json}")
-raw_sr_bothside_pass_files=($(jq -r ".raw_sr_bothside_pass_files[]" "${input_json}"))
-raw_sr_background_fail_files=($(jq -r ".raw_sr_background_fail_files[]" "${input_json}"))
 min_sr_background_fail_batches=$(jq -r ".min_sr_background_fail_batches" "${input_json}")
 ped_file=$(jq -r ".ped_file" "${input_json}")
 contig_list=$(jq -r ".contig_list" "${input_json}")
@@ -73,11 +71,21 @@ echo "JVM memory: $JVM_MAX_MEM"
 # -------------------------------------------------------
 
 
+# ExtractBatchSrVariantLists
+# ---------------------------------------------------------------------------------------------------------------------
+ExtractBatchSrVariantLists_high_sr_background_list="$(realpath "${cohort_name}.high_sr_background.txt")"
+ExtractBatchSrVariantLists_bothsides_sr_support="$(realpath "${cohort_name}.bothsides_sr_support.txt")"
+bcftools query -f '%ID\t%HIGH_SR_BACKGROUND\t%BOTHSIDES_SUPPORT\n' "${pesr_vcfs}" > flags.txt
+awk -F'\t' '($2 != "."){print $1}' flags.txt > "${ExtractBatchSrVariantLists_high_sr_background_list}"
+awk -F'\t' '($3 != "."){print $1}' flags.txt > "${ExtractBatchSrVariantLists_bothsides_sr_support}"
+
+
 # CombineSRBothsidePass
 # ---------------------------------------------------------------------------------------------------------------------
 
 combine_sr_both_side_pass_prefix="${cohort_name}.sr_bothside_pass"
-
+raw_sr_bothside_pass_files=("${ExtractBatchSrVariantLists_bothsides_sr_support}")
+raw_sr_background_fail_files=("${ExtractBatchSrVariantLists_high_sr_background_list}")
 
 # GetNonRefVariantLists
 non_ref_variants_list="$(realpath "${combine_sr_both_side_pass_prefix}.non_ref_vids.shard_0.list")"
@@ -111,6 +119,16 @@ done < raw_sr_background_fail_files.txt \
   > "${CombineBackgroundFail_out}"
 
 
+# SetSRVariantFlags
+SetSRVariantFlags_out="$(realpath "${cohort_name}.pesr.sr_flagged.vcf.gz")"
+python /opt/sv-pipeline/scripts/add_sr_info_flags.py \
+  --vcf "${pesr_vcfs}" \
+  --out "${SetSRVariantFlags_out}" \
+  --bothsides-support-list "${CombineSRBothsidePass_output}" \
+  --high-sr-background-list "${CombineBackgroundFail_out}"
+tabix "${SetSRVariantFlags_out}"
+
+
 # CreatePloidyTableFromPed
 CreatePloidyTableFromPed_out="$(realpath "${cohort_name}.ploidy.FEMALE_chrY_1.tsv")"
 python /opt/sv-pipeline/scripts/ploidy_table_from_ped.py \
@@ -124,45 +142,16 @@ python /opt/sv-pipeline/scripts/ploidy_table_from_ped.py \
 sed -e 's/\t0/\t1/g' tmp.tsv > "${CreatePloidyTableFromPed_out}"
 
 
-# GatkFormatting.FormatVcf
-all_vcfs=("$pesr_vcfs" "$depth_vcfs")
-reformatted_vcfs_array=()
-reformatted_vcfs_idx_array=()
-for vcf in "${all_vcfs[@]}"; do
-  cd "${working_dir}"
-
-  format_vcf_working_dir=$(mktemp -d /wd_format_vcf_XXXXXXXX)
-  format_vcf_working_dir="$(realpath ${format_vcf_working_dir})"
-  cd "${format_vcf_working_dir}"
-
-  # Convert format
-  formatted_vcf_output="$(basename "$vcf" ".vcf.gz").reformat_gatk.vcf.gz"
-  formatted_vcf_output="$(realpath "${formatted_vcf_output}")"
-  python /opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py \
-    --vcf "${vcf}" \
-    --out "${formatted_vcf_output}" \
-    --ploidy-table "${CreatePloidyTableFromPed_out}" \
-    --bothside-pass-list "${CombineSRBothsidePass_output}" \
-    --background-fail-list "${CombineBackgroundFail_out}" \
-    --add-sr-pos --scale-down-gq
-
-  tabix "${formatted_vcf_output}"
-
-  reformatted_vcfs_array+=("${formatted_vcf_output}")
-  reformatted_vcfs_idx_array+=("${formatted_vcf_output}.tbi")
-done
-
-
-
 # JoinVcfs
 # ---------------------------------------------------------------------------------------------------------------------
 
 cd "${working_dir}"
-join_vcfs_output_dir=$(mktemp -d /output_join_vcfs_XXXXXXXX)
+join_vcfs_output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_join_vcfs_XXXXXXXX)
 join_vcfs_output_dir="$(realpath ${join_vcfs_output_dir})"
 join_vcfs_inputs_json="$(realpath "${join_vcfs_output_dir}/sv_cluster_inputs.json")"
 join_vcfs_outputs_json="$(realpath "${join_vcfs_output_dir}/sv_cluster_outputs.json")"
 
+reformatted_vcfs_array=("${SetSRVariantFlags_out}" "${depth_vcfs}")
 vcf_json_array=$(printf "%s\n" "${reformatted_vcfs_array[@]}" | jq -nR '[inputs]')
 
 jq -n \
@@ -215,7 +204,7 @@ echo "Successfully finished Join VCFs clustering."
 # ---------------------------------------------------------------------------------------------------------------------
 
 cd "${working_dir}"
-cluster_sites_output_dir=$(mktemp -d /output_cluster_sites_XXXXXXXX)
+cluster_sites_output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_cluster_sites_XXXXXXXX)
 cluster_sites_output_dir="$(realpath ${cluster_sites_output_dir})"
 cluster_sites_inputs_json="$(realpath "${cluster_sites_output_dir}/sv_cluster_inputs.json")"
 cluster_sites_outputs_json="$(realpath "${cluster_sites_output_dir}/sv_cluster_outputs.json")"
@@ -288,7 +277,7 @@ done
 # ---------------------------------------------------------------------------------------------------------------------
 
 cd "${working_dir}"
-grouped_sv_cluster_p1_wd=$(mktemp -d /wd_grouped_sv_cluster_p1_XXXXXXXX)
+grouped_sv_cluster_p1_wd=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_grouped_sv_cluster_p1_XXXXXXXX)
 grouped_sv_cluster_p1_wd="$(realpath ${grouped_sv_cluster_p1_wd})"
 cd "${grouped_sv_cluster_p1_wd}"
 
@@ -319,7 +308,7 @@ echo "Successfully finished grouped SV cluster part 1."
 # ---------------------------------------------------------------------------------------------------------------------
 
 cd "${working_dir}"
-grouped_sv_cluster_p2_wd=$(mktemp -d /wd_grouped_sv_cluster_p2_XXXXXXXX)
+grouped_sv_cluster_p2_wd=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_grouped_sv_cluster_p2_XXXXXXXX)
 grouped_sv_cluster_p2_wd="$(realpath ${grouped_sv_cluster_p2_wd})"
 cd "${grouped_sv_cluster_p2_wd}"
 
@@ -359,7 +348,7 @@ python /opt/sv-pipeline/scripts/format_gatk_vcf_for_svtk.py \
   --source "depth" \
   --contigs "${contig_list}" \
   --remove-infos "AC,AF,AN,HIGH_SR_BACKGROUND,BOTHSIDES_SUPPORT,SR1POS,SR2POS" \
-  --remove-formats "CN" \
+  --remove-formats "CN,RD_MCR" \
   --set-pass
 tabix "${gatk_to_svtk_vcf_prefix}.vcf.gz"
 
@@ -405,7 +394,9 @@ outputs_json=$(jq -n \
       "combined_vcfs": $combined_vcfs,
       "combined_vcf_indexes": $combined_vcf_indexes,
       "cluster_background_fail_lists": $cluster_background_fail_lists,
-      "cluster_bothside_pass_lists": $cluster_bothside_pass_lists
+      "cluster_bothside_pass_lists": $cluster_bothside_pass_lists,
+      "combine_batches_merged_vcf": $combined_vcfs,
+      "combine_batches_merged_vcf_index": $combined_vcf_indexes,
   }' > "${output_json_filename}"
 )
 

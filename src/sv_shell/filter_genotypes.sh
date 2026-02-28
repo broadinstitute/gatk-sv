@@ -15,7 +15,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_filter_genotypes_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_filter_genotypes_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -27,7 +27,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_filter_genotypes_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_filter_genotypes_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 echo "Filter Genotypes working directory: ${working_dir}"
@@ -38,7 +38,7 @@ ploidy_table=$(jq -r ".ploidy_table" "$input_json")
 no_call_rate_cutoff=$(jq -r ".no_call_rate_cutoff" "$input_json")
 sl_cutoff_table=$(jq -r ".sl_cutoff_table" "$input_json")
 sl_filter_args=$(jq -r ".sl_filter_args" "$input_json")
-header_drop_fields=$(jq -r ".header_drop_fields" "$input_json")
+header_drop_fields=$(jq -r '.header_drop_fields // "FILTER/LOW_QUALITY,FORMAT/TRUTH_CN_EQUAL,FORMAT/GT_FILTER,FORMAT/CONC_ST,INFO/STATUS,INFO/TRUTH_AC,INFO/TRUTH_AN,INFO/TRUTH_AF,INFO/TRUTH_VID,INFO/CNV_CONCORDANCE,INFO/GENOTYPE_CONCORDANCE,INFO/HET_PPV,INFO/HET_SENSITIVITY,INFO/HOMVAR_PPV,INFO/HOMVAR_SENSITIVITY,INFO/MINSL,INFO/NON_REF_GENOTYPE_CONCORDANCE,INFO/SL_MAX,INFO/SL_MEAN,INFO/VAR_PPV,INFO/VAR_SENSITIVITY,INFO/VAR_SPECIFICITY"' "$input_json")
 
 
 # -------------------------------------------------------

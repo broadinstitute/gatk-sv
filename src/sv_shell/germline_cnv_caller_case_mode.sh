@@ -58,7 +58,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_germline_cnv_caller_case_mode_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_germline_cnv_caller_case_mode_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -70,7 +70,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_germline_cnv_caller_case_mode_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_germline_cnv_caller_case_mode_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 

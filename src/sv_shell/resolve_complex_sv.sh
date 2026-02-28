@@ -13,7 +13,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_resolve_complex_sv_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_resolve_complex_sv_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -25,7 +25,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir="$(mktemp -d /wd_resolve_complex_sv_XXXXXXXX)"
+working_dir="$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_resolve_complex_sv_XXXXXXXX)"
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
@@ -85,7 +85,7 @@ printf "%s\n" "${rf_cutoff_files[@]}" > "${rf_cutoffs_files}"
 
 while read FILE; do
   /opt/sv-pipeline/04_variant_resolution/scripts/convert_poisson_p.py \
-    $( awk -F '\t' '{if ( $5=="PE_log_pval") print $2 }' "${FILE}" | head -n1 )
+    $( awk -F '\t' '{if ( $5=="PEQ") print $2 }' "${FILE}" | head -n1 )
 done < "${rf_cutoffs_files}" \
   | Rscript -e "cat(max(c(4,floor(quantile(as.numeric(scan('stdin',quiet=T)),probs=0.25)))),sep='\n')" \
   > median_cutoff.txt

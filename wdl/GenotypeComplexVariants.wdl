@@ -20,7 +20,7 @@ workflow GenotypeComplexVariants {
 
     Array[File] bincov_files
 
-    Array[File] depth_gt_rd_sep_files
+    Array[File] genotyping_rd_tables
     Array[File] median_coverage_files
 
     File bin_exclude
@@ -80,7 +80,7 @@ workflow GenotypeComplexVariants {
         records_per_shard=select_first([records_per_shard, 50000]),
         batches=batches,
         coverage_files=bincov_files,
-        rd_depth_sep_cutoff_files=depth_gt_rd_sep_files,
+        genotyping_rd_tables=genotyping_rd_tables,
         ped_file=ped_file,
         median_coverage_files=median_coverage_files,
         n_per_split_small=2500,
