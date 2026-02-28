@@ -23,10 +23,14 @@ workflow QcAnnotations {
     Boolean do_per_sample_qc = true
     Array[Array[String]]? site_level_comparison_datasets
     Array[Array[String]]? sample_level_comparison_datasets
-    File primary_contigs_fai
+
     Int? random_seed
     Int? max_gq
     Int? downsample_qc_per_sample
+
+    File primary_contigs_fai
+    File ref_fa
+    File ref_fai
 
     String sv_base_mini_docker
     String gatk_sv_lr_docker
@@ -67,6 +71,8 @@ workflow QcAnnotations {
         vcfs=vcfs,
         contig=contig,
         sv_per_shard=sv_per_shard,
+        ref_fa=ref_fa,
+        ref_fai=ref_fai,
         prefix="~{prefix}.~{contig}",
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=gatk_sv_lr_docker,

@@ -10,6 +10,9 @@ workflow CollectQcVcfWide {
     Int sv_per_shard
     String prefix
 
+    File ref_fa
+    File ref_fai
+
     String sv_base_mini_docker
     String sv_pipeline_docker
 
@@ -41,6 +44,8 @@ workflow CollectQcVcfWide {
     call PreprocessVcf {
       input:
         vcf=vcf_shards[i],
+        ref_fa=ref_fa,
+        ref_fai=ref_fai,
         prefix="~{output_prefix}.preprocess.shard_~{i}",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_preprocess_vcf
@@ -91,6 +96,8 @@ workflow CollectQcVcfWide {
 task PreprocessVcf {
   input {
     File vcf
+    File ref_fa
+    File ref_fai
     String prefix
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
@@ -121,8 +128,12 @@ task PreprocessVcf {
 
     bcftools norm \
       -m -any \
-      -Oz -o split.vcf.gz \
-      ~{vcf}
+      -f ~{ref_fa} \
+      -Ou \
+      ~{vcf} \
+    | bcftools sort \
+      -Oz -o split.vcf.gz
+    
     tabix split.vcf.gz
 
     cat << 'EOF' > convert_to_symbolic.py
