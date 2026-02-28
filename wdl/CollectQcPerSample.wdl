@@ -2,7 +2,6 @@ version 1.0
 
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
-# Workflow to gather lists of variant IDs per sample from one or more SV VCFs
 workflow CollectQcPerSample {
   input {
     Array[File] vcfs
@@ -13,18 +12,14 @@ workflow CollectQcPerSample {
     String sv_base_mini_docker
     String sv_pipeline_docker
 
-    # overrides for local tasks
     RuntimeAttr? runtime_override_collect_vids_per_sample
-
-    # overrides for mini tasks
     RuntimeAttr? runtime_override_split_samples_list
     RuntimeAttr? runtime_override_merge_sharded_per_sample_vid_lists
   }
 
   String output_prefix = "~{prefix}.per_sample_qc"
 
-  # Collect VCF-wide summary stats per sample list per VCF
-  scatter ( vcf in vcfs ) {
+  scatter (vcf in vcfs) {
     call CollectVidsPerSample {
       input:
         vcf=vcf,
@@ -36,7 +31,6 @@ workflow CollectQcPerSample {
     }
   }
 
-  # Merge all VID lists into single output directory and tar it
   call MergeShardedPerSampleVidLists {
     input:
       tarballs=CollectVidsPerSample.vid_lists_tarball,
@@ -46,14 +40,11 @@ workflow CollectQcPerSample {
       runtime_attr_override=runtime_override_merge_sharded_per_sample_vid_lists
   }
 
-  # Final output
   output {
     File vid_lists = MergeShardedPerSampleVidLists.merged_tarball
   }
 }
 
-
-# Task to collect list of VIDs per sample
 task CollectVidsPerSample {
   input {
     File vcf
@@ -65,8 +56,6 @@ task CollectVidsPerSample {
   }
 
   String outdirprefix = "~{prefix}_perSample_VIDs"
-  
-  # Must scale disk proportionally to size of input VCF
   Float input_size = size([vcf, samples_list], "GiB")
   RuntimeAttr runtime_default = object {
     mem_gb: 1.5,
@@ -88,14 +77,10 @@ task CollectVidsPerSample {
   }
 
   command <<<
-
     set -eu -o pipefail
 
-    # Make output directory
     mkdir -p ~{outdirprefix}
 
-    # Filter VCF to list of samples of interest, split into list of genotypes per 
-    # sample, and write one .tsv file per sample to output directory
     if [ ~{vcf_format_has_cn} == "true" ]; then
       bcftools view -S ~{samples_list} ~{vcf} \
       | bcftools +fill-tags -- -t AC \
@@ -112,13 +97,11 @@ task CollectVidsPerSample {
       | awk -v outprefix="~{outdirprefix}" '$3 != "0/0" && $3 != "./." {OFS="\t"; print $2, $3, $4 >> outprefix"/"$1".VIDs_genotypes.txt" }'
     fi
 
-    # Gzip all output lists
     for FILE in ~{outdirprefix}/*.VIDs_genotypes.txt; do
       gzip -f "$FILE"
       rm -f "$FILE"
     done
 
-    # Bundle all files as a tarball (to make it easier on call caching for large cohorts)
     cd ~{outdirprefix} && \
     tar -czvf ../~{outdirprefix}.tar.gz *.VIDs_genotypes.txt.gz && \
     cd -
@@ -129,8 +112,6 @@ task CollectVidsPerSample {
   }
 }
 
-
-# Merge multiple tarballs of per-sample VID lists
 task MergeShardedPerSampleVidLists {
   input {
     Array[File] tarballs
@@ -161,17 +142,14 @@ task MergeShardedPerSampleVidLists {
   command <<<
     set -eu -o pipefail
 
-    # Create final output directory
     mkdir "~{prefix}_perSample_VID_lists"
 
-    # Extract each tarball into its own unique directory
     mkdir shards
     while read i tarball_path; do
       mkdir "shards/shard_$i"
       tar -xzvf "$tarball_path" --directory "shards/shard_$i"/
     done < <( awk -v OFS="\t" '{ print NR, $1 }' ~{write_lines(tarballs)} )
 
-    # Merge all shards per sample and write to final directory
     while read sample; do
       find shards/ -name "$sample.VIDs_genotypes.txt.gz" \
       | xargs -I {} zcat {} \
@@ -180,7 +158,6 @@ task MergeShardedPerSampleVidLists {
       > "~{prefix}_perSample_VID_lists/$sample.VIDs_genotypes.txt.gz"
     done < ~{samples_list}
 
-    # Compress final output directory
     tar -czvf "~{prefix}_perSample_VID_lists.tar.gz" "~{prefix}_perSample_VID_lists"
   >>>
 

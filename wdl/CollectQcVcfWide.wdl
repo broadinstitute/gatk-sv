@@ -1,6 +1,5 @@
 version 1.0
 
-# Workflow to gather SV VCF summary stats for one or more input VCFs
 
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
@@ -9,18 +8,14 @@ workflow CollectQcVcfWide {
     Array[File] vcfs
     String contig
     Int sv_per_shard
-    String? bcftools_preprocessing_options
     String prefix
 
     String sv_base_mini_docker
     String sv_pipeline_docker
 
-    # overrides for local tasks
     RuntimeAttr? runtime_override_preprocess_vcf
     RuntimeAttr? runtime_override_collect_sharded_vcf_stats
     RuntimeAttr? runtime_override_svtk_vcf_2_bed
-
-    # overrides for MiniTasks
     RuntimeAttr? runtime_override_scatter_vcf
     RuntimeAttr? runtime_override_merge_subvcf_stat_shards
     RuntimeAttr? runtime_override_merge_svtk_vcf_2_bed
@@ -28,7 +23,6 @@ workflow CollectQcVcfWide {
 
   String output_prefix = "~{prefix}.collect_qc_vcf_wide"
 
-  # Tabix each VCF to chromosome of interest, and shard input VCF for stats collection
   scatter ( vcf in vcfs ) {
     call MiniTasks.ScatterVcf {
       input:
@@ -43,41 +37,32 @@ workflow CollectQcVcfWide {
   }
   Array[File] vcf_shards = flatten(ScatterVcf.shards)
 
-  # Scatter over VCF shards
   scatter (i in range(length(vcf_shards))) {
-    # Preprocess VCF with bcftools, if optioned
-    if (defined(bcftools_preprocessing_options)) {
-      call PreprocessVcf {
-        input:
-          vcf=vcf_shards[i],
-          prefix="~{output_prefix}.preprocess.shard_~{i}",
-          bcftools_preprocessing_options=select_first([bcftools_preprocessing_options]),
-          sv_base_mini_docker=sv_base_mini_docker,
-          runtime_attr_override=runtime_override_preprocess_vcf
-      }
+    call PreprocessVcf {
+      input:
+        vcf=vcf_shards[i],
+        prefix="~{output_prefix}.preprocess.shard_~{i}",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_override_preprocess_vcf
     }
-    File filtered_vcf = select_first([PreprocessVcf.outvcf, vcf_shards[i]])
 
-    # Collect VCF-wide summary stats
     call CollectShardedVcfStats {
       input:
-        vcf=filtered_vcf,
+        vcf=PreprocessVcf.outvcf,
         prefix="~{output_prefix}.collect_stats.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_collect_sharded_vcf_stats
       }
 
-    # Run vcf2bed_subworkflow for record purposes
     call SvtkVcf2bed {
       input:
-        vcf=filtered_vcf,
+        vcf=PreprocessVcf.outvcf,
         prefix="~{output_prefix}.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_svtk_vcf_2_bed
       }
     }
 
-  # Merge shards into single VCF stats file
   call MiniTasks.ConcatBeds as MergeSubvcfStatShards {
     input:
       shard_bed_files=CollectShardedVcfStats.vcf_stats,
@@ -86,7 +71,6 @@ workflow CollectQcVcfWide {
       runtime_attr_override=runtime_override_merge_subvcf_stat_shards
   }
 
-  # Merge vcf2bed_subworkflow output
   call MiniTasks.ConcatBeds as MergeSvtkVcf2bed {
     input:
       shard_bed_files=SvtkVcf2bed.vcf2bed_subworkflow_out,
@@ -96,7 +80,6 @@ workflow CollectQcVcfWide {
       runtime_attr_override=runtime_override_merge_svtk_vcf_2_bed
   }
 
-  # Final output
   output {
     File vcf_stats=MergeSubvcfStatShards.merged_bed_file
     File vcf_stats_idx=MergeSubvcfStatShards.merged_bed_idx
@@ -105,12 +88,10 @@ workflow CollectQcVcfWide {
   }
 }
 
-# Task to preprocess VCF using bcftools
 task PreprocessVcf {
   input {
     File vcf
     String prefix
-    String bcftools_preprocessing_options = ""
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -138,12 +119,40 @@ task PreprocessVcf {
   command <<<
     set -euo pipefail
 
-    bcftools view \
-      --no-update \
-      ~{bcftools_preprocessing_options} \
-      -l 1 -O z \
-      -o ~{prefix}.vcf.gz \
+    bcftools norm \
+      -m -any \
+      -Oz -o split.vcf.gz \
       ~{vcf}
+    tabix split.vcf.gz
+
+    cat << 'EOF' > convert_to_symbolic.py
+import pysam
+import sys
+
+vcf_in = pysam.VariantFile("split.vcf.gz", "r")
+vcf_in.header.info.add("SVTYPE", 1, "String", "Type of variant.")
+vcf_in.header.info.add("SVLEN", 1, "Integer", "Length of variant.")
+vcf_in.header.info.add("END", 1, "Integer", "End position of variant.")
+
+vcf_out = pysam.VariantFile("~{prefix}.vcf.gz", "w", header=vcf_in.header)
+
+for rec in vcf_in:
+    allele_type = rec.info["allele_type"].upper()
+    allele_type = allele_type[0] if isinstance(allele_type, tuple) else allele_type
+    allele_length = abs(len(rec.alts[0]) - len(rec.ref))
+
+    rec.info["SVTYPE"] = allele_type
+    rec.info["SVLEN"] = allele_length
+    rec.info["END"] = rec.pos + len(ref_len) - 1
+    rec.alts = (f"<{svtype}>",)
+
+    vcf_out.write(rec)
+
+vcf_out.close()
+vcf_in.close()
+EOF
+
+    python convert_to_symbolic.py
     tabix ~{prefix}.vcf.gz
   >>>
 
@@ -153,7 +162,6 @@ task PreprocessVcf {
   }
 }
 
-# Task to collect VCF-wide QC stats
 task CollectShardedVcfStats {
   input {
     File vcf
@@ -162,8 +170,6 @@ task CollectShardedVcfStats {
     RuntimeAttr? runtime_attr_override
   }
 
-  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
-  # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size(vcf, "GiB")
   RuntimeAttr runtime_default = object {
     mem_gb: 1.5 + 2.0 * input_size,
@@ -185,15 +191,13 @@ task CollectShardedVcfStats {
   }
 
   command <<<
-    set -eu -o pipefail
+    set -euo pipefail
   
-    # Run QC script
     /opt/sv-pipeline/scripts/vcf_qc/collectQC.vcf_wide.sh \
       ~{vcf} \
       /opt/sv-pipeline/scripts/vcf_qc/SV_colors.txt \
       collectQC_vcfwide_output/
     
-    # Prep outputs
     cp collectQC_vcfwide_output/data/VCF_sites.stats.bed.gz \
       ~{prefix}.VCF_sites.stats.bed.gz
     cp collectQC_vcfwide_output/data/VCF_sites.stats.bed.gz.tbi \
@@ -212,8 +216,6 @@ task CollectShardedVcfStats {
   }
 }
 
-
-# Run vcf2bed_subworkflow on an input vcf
 task SvtkVcf2bed {
   input {
     File vcf
@@ -223,9 +225,6 @@ task SvtkVcf2bed {
   }
 
   String output_file = "~{prefix}.vcf2bed_subworkflow.bed.gz"
-  
-  # simple record-by-record processing, overhead should be O(1), with disk space usage increased because the operation
-  # is copying input into new format
   Float input_size = size(vcf, "GiB")
   RuntimeAttr runtime_default = object {
     mem_gb: 2.0,
@@ -247,7 +246,7 @@ task SvtkVcf2bed {
   }
 
   command <<<
-    set -eu -o pipefail
+    set -euo pipefail
     
     svtk vcf2bed --info ALL ~{vcf} stdout \
       | bgzip -c \

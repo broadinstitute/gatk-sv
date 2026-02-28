@@ -1,7 +1,5 @@
 version 1.0
 
-# Workflow to scatter site-level benchmarking vs. an external dataset by chromosome
-
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 workflow CollectSiteLevelBenchmarking {
@@ -13,13 +11,13 @@ workflow CollectSiteLevelBenchmarking {
     String benchmark_name
     String sv_pipeline_qc_docker
     String sv_base_mini_docker
+    
     RuntimeAttr? runtime_override_site_level_benchmark
     RuntimeAttr? runtime_override_merge_site_level_benchmark
   }
   String output_prefix = "~{prefix}_site_benchmark"
   String tarball_dir = "~{prefix}_collectQC_benchmarking_~{benchmark_name}_output"
 	
-  # Collect site-level external benchmarking data per chromosome
   scatter ( contig in contigs ) {
     call VcfExternalBenchmarkSingleChrom {
       input:
@@ -33,7 +31,6 @@ workflow CollectSiteLevelBenchmarking {
     }
   }
 
-  # Merge results across chromosomes
   call MergeContigBenchmarks {
     input:
       in_tarballs=VcfExternalBenchmarkSingleChrom.benchmarking_results_tarball,
@@ -49,8 +46,6 @@ workflow CollectSiteLevelBenchmarking {
   }
 }
 
-
-# Task to collect external benchmarking data for a single chromosome
 task VcfExternalBenchmarkSingleChrom {
   input {
     File vcf_stats
@@ -81,13 +76,11 @@ task VcfExternalBenchmarkSingleChrom {
   }
 
   command <<<
-    set -eu -o pipefail
+    set -euo pipefail
 
-    # Copy benchmarking BED files to local directory
     mkdir benchmarks
     gsutil -m cp ~{benchmark_url}/*.bed.gz benchmarks/
     
-    # Run benchmarking script
     echo ~{contig} > contigs.list
     /opt/sv-pipeline/scripts/vcf_qc/collectQC.external_benchmarking.sh \
       ~{vcf_stats} \
@@ -96,7 +89,6 @@ task VcfExternalBenchmarkSingleChrom {
       benchmarks \
       collectQC_benchmarking_~{benchmark_name}_~{contig}_output/
     
-    # Prep outputs
     tar -czvf ~{prefix}_collectQC_benchmarking_~{benchmark_name}_~{contig}_output.tar.gz \
       collectQC_benchmarking_~{benchmark_name}_~{contig}_output
   >>>
@@ -106,8 +98,6 @@ task VcfExternalBenchmarkSingleChrom {
   }
 }
 
-
-# Task to merge external benchmarking data across chromosomes
 task MergeContigBenchmarks {
   input {
     Array[File] in_tarballs
@@ -137,17 +127,16 @@ task MergeContigBenchmarks {
   }
 
   command <<<
-    # Untar all shards
+    set -euo pipefail
+
     mkdir sharded_results
     while read tarball_path; do
       tar -xzvf "$tarball_path" --directory sharded_results/
     done < ~{write_lines(in_tarballs)}
 
-    # Create final output directory
     mkdir ~{tarball_dir_name}
     mkdir ~{tarball_dir_name}/data
 
-    # Merge each unique BED
     find sharded_results/ -name "*.bed.gz" | xargs -I {} basename {} | sort -V | uniq > bed_filenames.list
     while read fname; do
       find sharded_results/ -name $fname > matching_beds.list
@@ -158,7 +147,6 @@ task MergeContigBenchmarks {
       tabix -f ~{tarball_dir_name}/data/$fname
     done < bed_filenames.list
 
-    # Compress final output directory
     tar -czvf \
       ~{tarball_dir_name}.tar.gz \
       ~{tarball_dir_name}

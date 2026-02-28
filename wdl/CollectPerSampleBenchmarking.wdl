@@ -2,7 +2,6 @@ version 1.0
 
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
-# Workflow to perform per-sample benchmarking from an SV VCF vs an external dataset
 workflow CollectPerSampleBenchmarking {
   input {
     File vcf_stats
@@ -20,10 +19,7 @@ workflow CollectPerSampleBenchmarking {
     String sv_pipeline_docker
     String sv_pipeline_qc_docker
 
-    # overrides for local tasks
     RuntimeAttr? runtime_override_benchmark_samples
-
-    # overrides for mini tasks
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
   }
@@ -31,7 +27,6 @@ workflow CollectPerSampleBenchmarking {
   String output_prefix = "~{prefix}.sample_benchmark"
 
   if(defined(sample_renaming_tsv)) {
-    # rename samples in external benchmarking data
     call RenameBenchmarkTarfileSamples {
       input:
         benchmark_tarfile=comparison_tarball,
@@ -52,7 +47,6 @@ workflow CollectPerSampleBenchmarking {
         runtime_attr_override=runtime_override_split_shuffled_list
     }
 
-  # Collect benchmarking results per sample list shard
   scatter (sublist in SplitShuffledList.shards) {
     call BenchmarkSamples {
       input:
@@ -76,27 +70,21 @@ workflow CollectPerSampleBenchmarking {
       runtime_attr_override=runtime_override_merge_and_tar_shard_benchmarks
   }
 
-  # Return tarball of results
   output {
     File benchmarking_results_tarball = MergeTarredResults.tarball
   }
 }
 
-
-# rename samples in comparison benchmark to match the cohort VCF
 task RenameBenchmarkTarfileSamples {
   input {
     File benchmark_tarfile
-    File sample_renaming_tsv  # TSV file with original sample IDs in 1st column, and desired sample IDs in 2nd column
+    File sample_renaming_tsv
     String sv_base_mini_docker
     String renamed_suffix = "renamed_samples"
     RuntimeAttr? runtime_attr_override
   }
 
   String benchmark_renamed_samples_filename = basename(benchmark_tarfile, ".tar.gz") + "_~{renamed_suffix}.tar.gz"
-
-  # Disk must be scaled proportionally to the size of the archive. Since the archive contains compressed files, the
-  # extracted files should be sized comparably to the archive
   Float input_size = size(benchmark_tarfile, "GiB")
   RuntimeAttr default_attr = object {
     mem_gb: 2.0,
@@ -110,12 +98,10 @@ task RenameBenchmarkTarfileSamples {
 
   command <<<
     set -euo pipefail
-    # find the folder the benchmark tarfile will extract to
+
     ARCHIVE_DIR=$(basename $(tar --list -f "~{benchmark_tarfile}" | head -n1))
-    # extrct archive
     tar -xf "~{benchmark_tarfile}"
 
-    # define function to rename the sample IDs
     function rename_file() {
       filename=$1
       original_id=$2
@@ -127,7 +113,6 @@ task RenameBenchmarkTarfileSamples {
     }
     export -f rename_file
 
-    # loop over sample IDs to rename and do the renaming
     cd "$ARCHIVE_DIR"
     while read ORIGINAL_SAMPLE_ID RENAMED_SAMPLE_ID; do
       find . -name "$ORIGINAL_SAMPLE_ID.*.bed.gz*" \
@@ -135,10 +120,8 @@ task RenameBenchmarkTarfileSamples {
     done < "~{sample_renaming_tsv}"
     cd ..
 
-    # archive the new files
     tar cz -f "~{benchmark_renamed_samples_filename}" "$ARCHIVE_DIR"
 
-    # remove the unarchived files (in case this is being run in local mode)
     rm -r "$ARCHIVE_DIR"
   >>>
 
@@ -157,8 +140,6 @@ task RenameBenchmarkTarfileSamples {
   }
 }
 
-
-# Task to collect per-sample benchmarking stats
 task BenchmarkSamples {
   input {
     File vcf_stats
@@ -173,8 +154,6 @@ task BenchmarkSamples {
   }
 
   String output_folder = "~{prefix}_~{comparison_set_name}_perSample_results"
-
-  # Scale disk dynamically w/r/t input size
   Float input_size = size([vcf_stats, samples_list, per_sample_tarball, comparison_tarball], "GiB")
   RuntimeAttr runtime_default = object {
     mem_gb: 3.75,
@@ -196,10 +175,10 @@ task BenchmarkSamples {
   }
 
   command <<<
-    set -eu -o pipefail
+    set -euo pipefail
     
-    # Run benchmarking script
     mkdir ~{output_folder}
+
     /opt/sv-pipeline/scripts/vcf_qc/collectQC.perSample_benchmarking.sh \
       -p ~{comparison_set_name} \
       ~{vcf_stats} \
@@ -209,7 +188,6 @@ task BenchmarkSamples {
       ~{comparison_tarball} \
       ~{output_folder}/
 
-    # Tar benchmarking results for easier caching of downstream steps
     tar -czvf ~{output_folder}.tar.gz ~{output_folder}
   >>>
 
@@ -218,8 +196,6 @@ task BenchmarkSamples {
   }
 }
 
-
-# Task to merge benchmarking results across shards
 task MergeTarballs {
   input {
     Array[File] in_tarballs
@@ -231,8 +207,6 @@ task MergeTarballs {
 
   String tar_folder_name = select_first([folder_name, "merged"])
   String outfile_name = select_first([tarball_prefix, tar_folder_name]) + ".tar.gz"
-
-  # Since the input files are often/always compressed themselves, assume compression factor for tarring is 1.0
   Float input_size = size(in_tarballs, "GB")
   RuntimeAttr runtime_default = object {
     mem_gb: 2.0,
@@ -254,14 +228,14 @@ task MergeTarballs {
   }
 
   command <<<
-    # Create final output directory
+    set -euo pipefail
+
     mkdir "~{tar_folder_name}"
 
     while read tarball_path; do
       tar -xzvf "$tarball_path" --directory ~{tar_folder_name}/
     done < ~{write_lines(in_tarballs)}
 
-    # Compress final output directory
     tar -czvf "~{outfile_name}" "~{tar_folder_name}"
   >>>
 

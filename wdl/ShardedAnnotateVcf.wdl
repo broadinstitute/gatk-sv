@@ -2,7 +2,6 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "Utils.wdl" as util
 
 workflow ShardedAnnotateVcf {
     input {
