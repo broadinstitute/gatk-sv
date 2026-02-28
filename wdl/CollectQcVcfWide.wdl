@@ -47,7 +47,7 @@ workflow CollectQcVcfWide {
         ref_fa=ref_fa,
         ref_fai=ref_fai,
         prefix="~{output_prefix}.preprocess.shard_~{i}",
-        sv_base_mini_docker=sv_base_mini_docker,
+        sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_preprocess_vcf
     }
 
@@ -99,7 +99,7 @@ task PreprocessVcf {
     File ref_fa
     File ref_fai
     String prefix
-    String sv_base_mini_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -109,7 +109,7 @@ task PreprocessVcf {
     disk_gb: ceil(10 + 2.0 * input_size),
     cpu_cores: 1,
     preemptible_tries: 3,
-    max_retries: 1,
+    max_retries: 0,
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
@@ -187,7 +187,7 @@ task CollectShardedVcfStats {
     disk_gb: ceil(10.0 + 2.0 * input_size),
     cpu_cores: 1,
     preemptible_tries: 3,
-    max_retries: 1,
+    max_retries: 0,
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
@@ -242,7 +242,7 @@ task SvtkVcf2bed {
     disk_gb: ceil(10.0 + input_size * 2.0),
     cpu_cores: 1,
     preemptible_tries: 3,
-    max_retries: 1,
+    max_retries: 0,
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])

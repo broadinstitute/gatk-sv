@@ -267,7 +267,7 @@ task PlotQcVcfWide {
     disk_gb: 20,
     cpu_cores: 1,
     preemptible_tries: 1,
-    max_retries: 1,
+    max_retries: 0,
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
@@ -317,7 +317,7 @@ task TarShardVidLists {
     disk_gb: ceil(10.0 + input_size * 2.0),
     cpu_cores: 1,
     preemptible_tries: 1,
-    max_retries: 1,
+    max_retries: 0,
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
@@ -361,7 +361,7 @@ task PlotSiteLevelBenchmarking {
     disk_gb: 20,
     cpu_cores: 1,
     preemptible_tries: 1,
-    max_retries: 1,
+    max_retries: 0,
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
@@ -408,7 +408,7 @@ task PlotQcPerSample {
     disk_gb: 50,
     cpu_cores: 1,
     preemptible_tries: 1,
-    max_retries: 1,
+    max_retries: 0,
     boot_disk_gb: 10
   }
 
@@ -472,7 +472,7 @@ task PlotQcPerFamily {
     disk_gb: 100,
     cpu_cores: 1,
     preemptible_tries: 1,
-    max_retries: 1,
+    max_retries: 0,
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
@@ -556,7 +556,7 @@ task PlotPerSampleBenchmarking {
     disk_gb: 50,
     cpu_cores: 1,
     preemptible_tries: 1,
-    max_retries: 1,
+    max_retries: 0,
     boot_disk_gb: 10
   }
 
@@ -643,7 +643,7 @@ task SanitizeOutputs {
     disk_gb: ceil(10.0 + input_size * 5.0),
     cpu_cores: 1,
     preemptible_tries: 1,
-    max_retries: 1,
+    max_retries: 0,
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])

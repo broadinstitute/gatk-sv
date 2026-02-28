@@ -15,6 +15,7 @@ workflow CollectSiteLevelBenchmarking {
     RuntimeAttr? runtime_override_site_level_benchmark
     RuntimeAttr? runtime_override_merge_site_level_benchmark
   }
+  
   String output_prefix = "~{prefix}_site_benchmark"
   String tarball_dir = "~{prefix}_collectQC_benchmarking_~{benchmark_name}_output"
 	
@@ -61,7 +62,7 @@ task VcfExternalBenchmarkSingleChrom {
     disk_gb: 40,
     cpu_cores: 1,
     preemptible_tries: 3,
-    max_retries: 1,
+    max_retries: 0,
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
@@ -112,7 +113,7 @@ task MergeContigBenchmarks {
     disk_gb: 40,
     cpu_cores: 1,
     preemptible_tries: 3,
-    max_retries: 1,
+    max_retries: 0,
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])

@@ -62,7 +62,7 @@ task CollectVidsPerSample {
     disk_gb: ceil(10.0 + input_size),
     cpu_cores: 1,
     preemptible_tries: 3,
-    max_retries: 1,
+    max_retries: 0,
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
@@ -125,7 +125,7 @@ task MergeShardedPerSampleVidLists {
     disk_gb: 20,
     cpu_cores: 1,
     preemptible_tries: 3,
-    max_retries: 1,
+    max_retries: 0,
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
