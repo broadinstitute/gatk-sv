@@ -155,7 +155,7 @@ while read ID; do
   if [ ! -z ${VIDlist} ] && [ -s ${VIDlist} ]; then
     echo $ID
     zcat ${VCFSTATS} | head -n1 > ${OVRTMP}/SET1_calls/${ID}.SET1.SV_calls.bed
-    zcat ${VIDlist} | cut -f1 | fgrep -wf - <( zcat ${VCFSTATS} ) >> ${OVRTMP}/SET1_calls/${ID}.SET1.SV_calls.bed
+    zcat ${VIDlist} | awk '$2 != "./." {print $1}' | fgrep -wf - <( zcat ${VCFSTATS} ) >> ${OVRTMP}/SET1_calls/${ID}.SET1.SV_calls.bed
     bgzip -f ${OVRTMP}/SET1_calls/${ID}.SET1.SV_calls.bed
     rm -f ${OVRTMP}/SET1_calls/${ID}.SET1.SV_calls.bed
     tabix -f ${OVRTMP}/SET1_calls/${ID}.SET1.SV_calls.bed.gz
