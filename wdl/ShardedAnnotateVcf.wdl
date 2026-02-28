@@ -19,7 +19,6 @@ workflow ShardedAnnotateVcf {
         Int records_per_shard
         String sv_pipeline_docker
         String sv_base_mini_docker
-        String gatk_docker
 
         RuntimeAttr? runtime_attr_scatter_vcf
         RuntimeAttr? runtime_attr_strip_info_fields

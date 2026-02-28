@@ -29,8 +29,7 @@ workflow QcAnnotations {
     Int? downsample_qc_per_sample
 
     String sv_base_mini_docker
-    String sv_pipeline_docker
-    String sv_pipeline_qc_docker
+    String gatk_sv_lr_docker
 
     RuntimeAttr? runtime_override_plot_qc_vcf_wide
     RuntimeAttr? runtime_override_site_level_benchmark_plot
@@ -70,7 +69,7 @@ workflow QcAnnotations {
         sv_per_shard=sv_per_shard,
         prefix="~{prefix}.~{contig}",
         sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_docker=gatk_sv_lr_docker,
         runtime_override_preprocess_vcf=runtime_override_preprocess_vcf,
         runtime_override_collect_sharded_vcf_stats=runtime_override_collect_sharded_vcf_stats,
         runtime_override_svtk_vcf_2_bed=runtime_override_svtk_vcf_2_bed,
@@ -102,7 +101,7 @@ workflow QcAnnotations {
       vcf_stats=MergeVcfWideStats.merged_bed_file,
       samples_list=CollectQcVcfWide.samples_list[0],
       prefix=prefix,
-      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+      sv_pipeline_qc_docker=gatk_sv_lr_docker,
       runtime_attr_override=runtime_override_plot_qc_vcf_wide
   }
 
@@ -115,7 +114,7 @@ workflow QcAnnotations {
           contigs=contigs,
           benchmark_url=comparison_dataset_info[1],
           benchmark_name=comparison_dataset_info[0],
-          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+          sv_pipeline_qc_docker=gatk_sv_lr_docker,
           sv_base_mini_docker=sv_base_mini_docker,
           runtime_override_site_level_benchmark=runtime_override_site_level_benchmark,
           runtime_override_merge_site_level_benchmark=runtime_override_merge_site_level_benchmark
@@ -126,7 +125,7 @@ workflow QcAnnotations {
           benchmarking_tarball=CollectSiteLevelBenchmarking.benchmarking_results_tarball,
           tarball_dir_name=CollectSiteLevelBenchmarking.tarball_dir_name,
           benchmark_name=comparison_dataset_info[0],
-          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+          sv_pipeline_qc_docker=gatk_sv_lr_docker,
           runtime_attr_override=runtime_override_site_level_benchmark_plot
       }
     }
@@ -138,7 +137,7 @@ workflow QcAnnotations {
         whole_file=CollectQcVcfWide.samples_list[0],
         lines_per_shard=samples_per_shard,
         shard_prefix="~{prefix}.list_shard.",
-        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_docker=gatk_sv_lr_docker,
         runtime_attr_override=runtime_override_split_samples_list
     }
 
@@ -150,7 +149,7 @@ workflow QcAnnotations {
           samples_list=shard,
           prefix=prefix,
           sv_base_mini_docker=sv_base_mini_docker,
-          sv_pipeline_docker=sv_pipeline_docker,
+          sv_pipeline_docker=gatk_sv_lr_docker,
           runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample,
           runtime_override_merge_sharded_per_sample_vid_lists=runtime_override_merge_sharded_per_sample_vid_lists
       }
@@ -174,7 +173,7 @@ workflow QcAnnotations {
         prefix=prefix,
         max_gq=max_gq_,
         downsample_qc_per_sample=downsample_qc_per_sample,
-        sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+        sv_pipeline_qc_docker=gatk_sv_lr_docker,
         runtime_attr_override=runtime_override_plot_qc_per_sample
     }
 
@@ -188,7 +187,7 @@ workflow QcAnnotations {
           per_sample_tarball=TarShardVidLists.vid_lists,
           prefix=prefix,
           max_gq=max_gq_,
-          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+          sv_pipeline_qc_docker=gatk_sv_lr_docker,
           runtime_attr_override=runtime_override_plot_qc_per_family
       }
     }
@@ -208,8 +207,8 @@ workflow QcAnnotations {
             samples_per_shard=samples_per_shard,
             random_seed=random_seed,
             sv_base_mini_docker=sv_base_mini_docker,
-            sv_pipeline_docker=sv_pipeline_docker,
-            sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+            sv_pipeline_docker=gatk_sv_lr_docker,
+            sv_pipeline_qc_docker=gatk_sv_lr_docker,
             runtime_override_benchmark_samples=runtime_override_benchmark_samples,
             runtime_override_split_shuffled_list=runtime_override_split_shuffled_list,
             runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks
@@ -221,30 +220,11 @@ workflow QcAnnotations {
             samples_list=CollectQcVcfWide.samples_list[0],
             comparison_set_name=comparison_dataset_info[0],
             prefix=prefix,
-            sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+            sv_pipeline_qc_docker=gatk_sv_lr_docker,
             runtime_attr_override=runtime_override_per_sample_benchmark_plot
         }
       }
     }
-  }
-
-  scatter(vcf in vcfs) {
-    call IdentifyDuplicates {
-      input:
-        prefix=prefix,
-        vcf=vcf,
-        sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-        runtime_attr_override=runtime_override_identify_duplicates
-    }
-  }
-
-  call MergeDuplicates {
-    input:
-      prefix=prefix,
-      tsv_records=IdentifyDuplicates.duplicate_records,
-      tsv_counts=IdentifyDuplicates.duplicate_counts,
-      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-      runtime_attr_override=runtime_override_merge_duplicates
   }
 
   call SanitizeOutputs {
@@ -266,8 +246,6 @@ workflow QcAnnotations {
   output {
     File sv_vcf_qc_output = SanitizeOutputs.vcf_qc_tarball
     File vcf2bed_output = MergeVcf2Bed.merged_bed_file
-    File duplicate_records_output = MergeDuplicates.duplicate_records
-    File duplicate_counts_output = MergeDuplicates.duplicate_counts
   }
 }
 

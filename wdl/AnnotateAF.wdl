@@ -18,9 +18,8 @@ workflow AnnotateAF {
         Array[String]? strip_info_fields
 
         Int records_per_shard
-        String annotate_af_docker
+        String gatk_sv_lr_docker
         String sv_base_mini_docker
-        String gatk_docker
 
         RuntimeAttr? runtime_attr_split_ref_bed
         RuntimeAttr? runtime_attr_scatter_vcf
@@ -42,8 +41,7 @@ workflow AnnotateAF {
                 lps_tsv = lps_tsv,
                 strip_info_fields = strip_info_fields,
                 records_per_shard = records_per_shard,
-                gatk_docker = gatk_docker,
-                sv_pipeline_docker = annotate_af_docker,
+                sv_pipeline_docker = gatk_sv_lr_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_scatter_vcf = runtime_attr_scatter_vcf,
                 runtime_attr_strip_info_fields = runtime_attr_strip_info_fields,
