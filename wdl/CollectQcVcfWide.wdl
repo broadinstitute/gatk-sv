@@ -129,10 +129,12 @@ task PreprocessVcf {
     bcftools norm \
       -m -any \
       -f ~{ref_fa} \
-      -Ou \
-      ~{vcf} \
-    | bcftools sort \
+      -Oz -o unsorted.vcf.gz \
+      ~{vcf}
+    
+    bcftools sort \
       -Oz -o split.vcf.gz
+      unsorted.vcf.gz
     
     tabix split.vcf.gz
 
