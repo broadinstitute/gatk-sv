@@ -28,7 +28,6 @@ workflow QcAnnotations {
     Int? random_seed
     Int? max_gq
     Int? downsample_qc_per_sample
-
     
     File ref_fa
     File ref_fai

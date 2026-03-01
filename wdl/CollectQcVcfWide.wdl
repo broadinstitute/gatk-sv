@@ -113,7 +113,7 @@ task PreprocessVcf {
       ~{vcf}
     
     bcftools sort \
-      -Oz -o split.vcf.gz
+      -Oz -o split.vcf.gz \
       unsorted.vcf.gz
     
     tabix split.vcf.gz
