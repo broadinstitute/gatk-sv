@@ -26,7 +26,7 @@ workflow CollectQcVcfWide {
 
   String output_prefix = "~{prefix}.collect_qc_vcf_wide"
 
-  scatter ( vcf in vcfs ) {
+  scatter (vcf in vcfs) {
     call MiniTasks.ScatterVcf {
       input:
         vcf=vcf,
@@ -157,12 +157,12 @@ EOF
   }
 
   RuntimeAttr runtime_default = object {
-    mem_gb: 8,
-    disk_gb: 5 * ceil(size(vcf, "GiB")) + 10,
     cpu_cores: 1,
-    preemptible_tries: 3,
-    max_retries: 0,
-    boot_disk_gb: 10
+    mem_gb: 4,
+    disk_gb: 5 * ceil(size(vcf, "GiB")) + 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 2,
+    max_retries: 0
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
