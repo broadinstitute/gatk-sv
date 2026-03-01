@@ -123,10 +123,12 @@ import pysam
 import sys
 
 vcf_in = pysam.VariantFile("split.vcf.gz", "r")
-vcf_in.header.info.add("SVTYPE", 1, "String", "Type of variant.")
-vcf_in.header.info.add("SVLEN", 1, "Integer", "Length of variant.")
-vcf_in.header.info.add("END", 1, "Integer", "End position of variant.")
-
+if "SVTYPE" not in vcf_in.header.info:
+    vcf_in.header.info.add("SVTYPE", 1, "String", "Type of variant.")
+if "SVLEN" not in vcf_in.header.info:
+    vcf_in.header.info.add("SVLEN", 1, "Integer", "Length of variant.")
+if "END" not in vcf_in.header.info:
+    vcf_in.header.info.add("END", 1, "Integer", "End position of variant.")
 vcf_out = pysam.VariantFile("~{prefix}.vcf.gz", "w", header=vcf_in.header)
 
 for rec in vcf_in:
@@ -136,8 +138,8 @@ for rec in vcf_in:
 
     rec.info["SVTYPE"] = allele_type
     rec.info["SVLEN"] = allele_length
-    rec.info["END"] = rec.pos + len(ref_len) - 1
-    rec.alts = (f"<{svtype}>",)
+    rec.stop = rec.pos + len(rec.ref) - 1
+    rec.alts = (f"<{allele_type}>",)
 
     vcf_out.write(rec)
 
