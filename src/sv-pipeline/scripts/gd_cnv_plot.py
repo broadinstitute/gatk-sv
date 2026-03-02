@@ -402,7 +402,7 @@ class FlankCompressor:
         ax.set_xticks(major_display)
         if label_x:
             major_labels = [f"{inv(d):,.0f}" for d in major_display]
-            ax.set_xticklabels(major_labels, fontsize=7, rotation=45, ha="right", color='red')
+            ax.set_xticklabels(major_labels, fontsize=7, rotation=45, ha="right")
         else:
             ax.set_xticklabels([])
         ax.tick_params(axis='x', which='major', length=5, width=1, color='red')
@@ -744,7 +744,7 @@ def _draw_overview_column(
     if n_non_carriers > 0:
         viz_matrix = _build_heatmap_matrix(
             region_df, non_carrier_cols, region_start, region_end, xform=xform)
-        cmap = plt.cm.RdBu_r.copy()
+        cmap = plt.cm.RdBu.copy()
         cmap.set_bad(color='white')
         im = ax.imshow(viz_matrix, aspect="auto", cmap=cmap,
                        vmin=0, vmax=4, interpolation="nearest",
@@ -837,7 +837,7 @@ def _draw_overview_column(
                             color_idx += 1
                             plotted_any = True
                 if plotted_any:
-                    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.35),
+                    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02),
                               ncol=6, fontsize=7, frameon=True, fancybox=True)
         else:
             if len(ploidy_samples) > 0:
@@ -1091,7 +1091,8 @@ def plot_locus_overview(
             xform=xform,
         )
 
-    plt.tight_layout()
+    plt.tight_layout(h_pad=0.3, w_pad=0.5)
+    fig.subplots_adjust(hspace=0.08)  # tighten inter-panel gap after tight_layout
 
     locus_dir = os.path.join(output_dir, "locus_plots")
     os.makedirs(locus_dir, exist_ok=True)
@@ -1181,7 +1182,7 @@ def plot_sample_at_locus(
     ax.set_xlim(0.0, xform.d_end)
     ax.set_ylim(0, 5)
     ax.set_ylabel("Normalized Depth")
-    ax.legend(loc="upper right")
+    # ax.legend(loc="upper right")  # Partially blocks heatmap panel, so skipping for now
     ax.grid(True, alpha=0.3, axis="y")
     xform.format_genomic_ticks(ax, locus.breakpoints)
 
