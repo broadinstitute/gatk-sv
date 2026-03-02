@@ -371,7 +371,7 @@ CODE
   >>>
 
   output {
-    File plots = "~{prefix}.plots.tar.gz"
+    File plots = "~{prefix}.pe_plots.tar.gz"
   }
 
   runtime {
