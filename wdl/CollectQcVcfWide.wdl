@@ -158,8 +158,8 @@ EOF
 
   RuntimeAttr runtime_default = object {
     cpu_cores: 1,
-    mem_gb: 4,
-    disk_gb: 5 * ceil(size(vcf, "GiB")) + 10,
+    mem_gb: 12,
+    disk_gb: 4 * ceil(size(vcf, "GiB")) + 10,
     boot_disk_gb: 10,
     preemptible_tries: 2,
     max_retries: 0
