@@ -333,7 +333,7 @@ task PlotPEEvidence {
 
     python <<CODE
 import gzip
-with gzip.open(pe_evidence, 'rt') as pe, open("filenames.txt", 'w') as fn:
+with gzip.open(~{evidence}, 'rt') as pe, open("filenames.txt", 'w') as fn:
     first = True
     curr_lines = None
     curr_fname = None
