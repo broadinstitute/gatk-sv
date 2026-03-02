@@ -405,7 +405,7 @@ class FlankCompressor:
             ax.set_xticklabels(major_labels, fontsize=7, rotation=45, ha="right", color='red')
         else:
             ax.set_xticklabels([])
-        ax.tick_params(axis='x', which='major', length=5, width=1, color='red', labelcolor='red')
+        ax.tick_params(axis='x', which='major', length=5, width=1, color='red')
 
         # -- Minor ticks: every 10 % of body width (genomic) across full
         #    display range so the compression is visible ----------------
@@ -535,7 +535,7 @@ def draw_annotations_panel(
             ax.axvspan(
                 xform(max(gap_start, region_start)),
                 xform(min(gap_end, region_end)),
-                alpha=0.25, color="lightgray", hatch="//", edgecolor="gray",
+                alpha=0.25, facecolor="lightgray", hatch="//", edgecolor="gray",
                 linewidth=0.5, zorder=2,
             )
 
@@ -568,9 +568,12 @@ def _build_ploidy_lookup(
 ) -> Dict[Tuple[str, str], int]:
     """Build (sample, contig) -> ploidy mapping from a ploidy DataFrame."""
     lookup: Dict[Tuple[str, str], int] = {}
-    if ploidy_df is not None:
-        for _, row in ploidy_df.iterrows():
-            lookup[(str(row["sample"]), str(row["contig"]))] = int(row["ploidy"])
+    if ploidy_df is not None and len(ploidy_df) > 0:
+        samples = ploidy_df["sample"].astype(str).values
+        contigs = ploidy_df["contig"].astype(str).values
+        ploidies = ploidy_df["ploidy"].astype(int).values
+        for s, c, p in zip(samples, contigs, ploidies):
+            lookup[(s, c)] = p
     return lookup
 
 
@@ -687,7 +690,15 @@ def _draw_overview_column(
     xform: Optional[FlankCompressor] = None,
 ):
     """Draw annotation + carrier heatmap + non-carrier heatmap + mean-depth
-    panels into a list of axes (one column of the overview figure)."""
+    + individual-depth panels into a list of axes (one column of the overview figure).
+
+    Row layout:
+      0          – annotations
+      1          – carrier heatmap
+      2          – non-carrier heatmap
+      3…3+P-1    – mean depth per ploidy state  (one each)
+      3+P        – all individual depth traces (non-carriers gray, DEL red, DUP blue)
+    """
     if xform is None:
         xform = FlankCompressor(region_start, region_end,
                                 locus.start, locus.end, flank_scale=None)
@@ -763,6 +774,16 @@ def _draw_overview_column(
     # Pre-transform breakpoint coords
     bp_display = [(xform(s), xform(e)) for s, e in locus.breakpoints]
 
+    # Pre-build breakpoint label lookup for vectorized get_bp_labels
+    _bp_label_exact: Dict[Tuple, str] = {}   # (start, end, svtype) -> "BP1-BP2"
+    _bp_label_pos: Dict[Tuple, str] = {}     # (start, end) -> "BP1-BP2"
+    for entry in locus.gd_entries:
+        label = f"{entry['BP1']}-{entry['BP2']}"
+        key3 = (entry["start_GRCh38"], entry["end_GRCh38"], entry["svtype"])
+        key2 = (entry["start_GRCh38"], entry["end_GRCh38"])
+        _bp_label_exact.setdefault(key3, label)
+        _bp_label_pos.setdefault(key2, label)
+
     for panel_idx, ploidy_val in enumerate(all_ploidies):
         ax = axes_col[3 + panel_idx]
 
@@ -774,7 +795,7 @@ def _draw_overview_column(
         if len(ploidy_carriers) > 0 and len(ploidy_non_carriers) > 0:
             nc_depths = _depths_with_gaps(
                 region_df[ploidy_non_carriers].mean(axis=1).values, plot_positions_genomic)
-            ax.plot(display_positions, nc_depths, "b-", linewidth=1, alpha=0.7,
+            ax.plot(display_positions, nc_depths, "-", linewidth=1, alpha=0.7, color="gray",
                     label=f"Non-carriers (n={len(ploidy_non_carriers)})")
 
             carrier_calls = calls_df[
@@ -784,20 +805,17 @@ def _draw_overview_column(
                 (calls_df["sample"].isin(ploidy_carriers))
             ].copy()
 
-            def get_bp_labels(row):
-                for entry in locus.gd_entries:
-                    if (entry["start_GRCh38"] == row["start"] and
-                            entry["end_GRCh38"] == row["end"] and
-                            entry["svtype"] == row["svtype"]):
-                        return f"{entry['BP1']}-{entry['BP2']}"
-                for entry in locus.gd_entries:
-                    if entry["start_GRCh38"] == row["start"] and entry["end_GRCh38"] == row["end"]:
-                        return f"{entry['BP1']}-{entry['BP2']}"
-                return "unknown"
-
             if len(carrier_calls) > 0:
-                carrier_calls["bp_interval"] = carrier_calls.apply(
-                    get_bp_labels, axis=1)
+                _starts = carrier_calls["start"].values
+                _ends = carrier_calls["end"].values
+                _svtypes = carrier_calls["svtype"].values
+                carrier_calls["bp_interval"] = [
+                    _bp_label_exact.get(
+                        (s, e, sv),
+                        _bp_label_pos.get((s, e), "unknown"),
+                    )
+                    for s, e, sv in zip(_starts, _ends, _svtypes)
+                ]
                 del_colors = ['#FF6B6B', '#FF4757', '#EE5A6F', '#C23B4E']
                 dup_colors = ['#6B9BD1', '#4169E1', '#5080D0', '#3A5BB8']
                 color_idx = 0
@@ -838,7 +856,7 @@ def _draw_overview_column(
         ax.axhline(float(ploidy_val), color="gray", linestyle=":", alpha=0.5)
         ax.set_xlim(d_start, d_end)
         ax.set_ylim(0, max(4, ploidy_val + 2))
-        ax.set_ylabel(f"Depth (P={ploidy_val})")
+        ax.set_ylabel(f"Mean depth (P={ploidy_val})")
         ax.grid(True, alpha=0.3, axis="y")
 
         if panel_idx == n_ploidy_panels - 1:
@@ -846,6 +864,58 @@ def _draw_overview_column(
             xform.format_genomic_ticks(ax, locus.breakpoints)
         else:
             ax.set_xticks([])
+
+    # ---- Individual depth traces panel (bottom) ----
+    ax = axes_col[3 + n_ploidy_panels]
+
+    # Non-carriers: gray, behind
+    for s in non_carrier_cols:
+        if s not in region_df.columns:
+            continue
+        trace = _depths_with_gaps(
+            region_df[s].values, plot_positions_genomic)
+        ax.plot(display_positions, trace, color="gray",
+                linewidth=0.5, alpha=0.5, zorder=1)
+
+    # Carriers: red (DEL) or blue (DUP), on top
+    carrier_call_map: Dict[str, str] = {}  # sample -> svtype (best match)
+    best_calls = calls_df[
+        (calls_df["cluster"] == locus.cluster) &
+        (calls_df["is_carrier"]) &
+        (calls_df["is_best_match"])
+    ]
+    for _, row in best_calls.iterrows():
+        carrier_call_map[row["sample"]] = row["svtype"]
+    # Fall back to any carrier call for samples without a best match
+    all_carrier_calls = calls_df[
+        (calls_df["cluster"] == locus.cluster) &
+        (calls_df["is_carrier"])
+    ]
+    for _, row in all_carrier_calls.iterrows():
+        if row["sample"] not in carrier_call_map:
+            carrier_call_map[row["sample"]] = row["svtype"]
+
+    for s in carrier_cols:
+        if s not in region_df.columns:
+            continue
+        svtype = carrier_call_map.get(s, "DUP")
+        color = "red" if svtype == "DEL" else "blue"
+        trace = _depths_with_gaps(
+            region_df[s].values, plot_positions_genomic)
+        ax.plot(display_positions, trace, color=color,
+                linewidth=0.7, alpha=0.5, zorder=2)
+
+    for d_bp_start, d_bp_end in bp_display:
+        ax.axvline(d_bp_start, color="red", linestyle="-", alpha=1, zorder=5)
+        ax.axvline(d_bp_end, color="red", linestyle="-", alpha=1, zorder=5)
+        ax.axvspan(d_bp_start, d_bp_end, alpha=0.1, color="red", zorder=0)
+
+    ax.set_xlim(d_start, d_end)
+    ax.set_ylim(0, max(4, max(all_ploidies, default=2) + 2))
+    ax.set_ylabel("All depths")
+    ax.grid(True, alpha=0.3, axis="y")
+    ax.set_xlabel(f"Position on {chrom}")
+    xform.format_genomic_ticks(ax, locus.breakpoints)
 
 
 # =============================================================================
@@ -862,6 +932,7 @@ def plot_locus_overview(
     output_dir: str,
     padding: int = 50000,
     ploidy_df: Optional[pd.DataFrame] = None,
+    ploidy_lookup: Optional[Dict[Tuple[str, str], int]] = None,
     min_gene_label_spacing: float = 0.05,
     raw_counts_df: Optional[pd.DataFrame] = None,
     raw_sample_medians: Optional[Dict[str, float]] = None,
@@ -899,12 +970,13 @@ def plot_locus_overview(
                             locus.start, locus.end, flank_scale=flank_scale)
 
     sample_cols = get_sample_columns(region_df)
-    ploidy_lookup = _build_ploidy_lookup(ploidy_df)
+    if ploidy_lookup is None:
+        ploidy_lookup = _build_ploidy_lookup(ploidy_df)
 
-    carriers = calls_df[
+    carriers = set(calls_df[
         (calls_df["cluster"] == locus.cluster) &
         (calls_df["is_carrier"])
-    ]["sample"].unique()
+    ]["sample"].unique())
 
     carrier_cols = _sort_samples_by_ploidy(
         [s for s in sample_cols if s in carriers], chrom, ploidy_lookup)
@@ -929,18 +1001,19 @@ def plot_locus_overview(
         )
         raw_region = raw_counts_df[raw_mask].copy().sort_values("Start")
         if len(raw_region) > 0:
-            raw_norm_data = {}
-            usable_samples = []
-            for s in sample_cols:
-                if s in raw_region.columns and s in raw_sample_medians:
-                    med = raw_sample_medians[s]
-                    if med > 0:
-                        raw_norm_data[s] = 2.0 * raw_region[s].values.astype(float) / med
-                        usable_samples.append(s)
+            raw_cols_set = set(raw_region.columns)
+            usable_samples = [s for s in sample_cols
+                              if s in raw_cols_set
+                              and s in raw_sample_medians
+                              and raw_sample_medians[s] > 0]
             if usable_samples:
+                medians = np.array([raw_sample_medians[s] for s in usable_samples])
+                normed = 2.0 * raw_region[usable_samples].values.astype(float) / medians
                 raw_region_df = pd.concat(
-                    [raw_region[["Chr", "Start", "End"]].reset_index(drop=True),
-                     pd.DataFrame(raw_norm_data, columns=usable_samples)],
+                    [
+                        raw_region[["Chr", "Start", "End"]].reset_index(drop=True),
+                        pd.DataFrame(normed, columns=usable_samples),
+                    ],
                     axis=1,
                 )
         if raw_region_df is None or len(raw_region_df) == 0:
@@ -948,21 +1021,26 @@ def plot_locus_overview(
             raw_region_df = None
 
     # ---- figure layout ----
+    figure_scale = 1.0  # overall figure size multiplier — change this to resize the whole image
     n_cols = 2 if have_raw else 1
     carrier_height = min(6, max(1, n_carriers * 0.15)) if n_carriers > 0 else 0.5
     non_carrier_height = min(6, max(1, n_non_carriers * 0.15)) if n_non_carriers > 0 else 0.5
-    depth_panel_height = 1.0
-    fig_height = 3 + carrier_height + non_carrier_height + n_ploidy_panels * depth_panel_height
+    depth_panel_height = 2.0
+    indiv_depth_panel_height = 2.0
+    fig_height = (3 + carrier_height + non_carrier_height
+                  + n_ploidy_panels * depth_panel_height
+                  + indiv_depth_panel_height)
 
     height_ratios = (
         [1, carrier_height, non_carrier_height]
         + [depth_panel_height] * n_ploidy_panels
+        + [indiv_depth_panel_height]
     )
-    n_rows = 3 + n_ploidy_panels
+    n_rows = 3 + n_ploidy_panels + 1
     fig_width = 16 * n_cols
 
     fig, axes = plt.subplots(
-        n_rows, n_cols, figsize=(fig_width, fig_height),
+        n_rows, n_cols, figsize=(fig_width * figure_scale, fig_height * figure_scale),
         gridspec_kw={"height_ratios": height_ratios},
         squeeze=False,
     )
@@ -1061,7 +1139,8 @@ def plot_sample_at_locus(
         (calls_df["sample"] == sample_id)
     ]
 
-    fig, axes = plt.subplots(3, 1, figsize=(14, 8),
+    figure_scale = 1.0  # overall figure size multiplier — change this to resize the whole image
+    fig, axes = plt.subplots(3, 1, figsize=(14 * figure_scale, 8 * figure_scale),
                              gridspec_kw={"height_ratios": [1, 2, 1]})
 
     bin_starts = region_df["Start"].values
@@ -1147,7 +1226,8 @@ def plot_carrier_summary(calls_df: pd.DataFrame, output_dir: str):
         print("No carriers to plot.")
         return
 
-    fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+    figure_scale = 1.0  # overall figure size multiplier — change this to resize the whole image
+    fig, axes = plt.subplots(1, 2, figsize=(8 * figure_scale, 4 * figure_scale))
 
     ax = axes[0]
     locus_counts = carriers.groupby(["cluster", "svtype"])["sample"].nunique().unstack(fill_value=0)
@@ -1178,7 +1258,8 @@ def plot_carrier_summary(calls_df: pd.DataFrame, output_dir: str):
 
 def plot_confidence_distribution(calls_df: pd.DataFrame, output_dir: str):
     """Plot distribution of confidence scores."""
-    fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+    figure_scale = 1.0  # overall figure size multiplier — change this to resize the whole image
+    fig, axes = plt.subplots(1, 2, figsize=(8 * figure_scale, 4 * figure_scale))
 
     ax = axes[0]
     carriers = calls_df[calls_df["is_carrier"]]
@@ -1296,7 +1377,8 @@ def create_carrier_pdf(
 
                 sample_calls = cluster_calls_df[cluster_calls_df["sample"] == sample_id]
 
-                fig, axes = plt.subplots(2, 1, figsize=(12, 4),
+                figure_scale = 1.0  # overall figure size multiplier — change this to resize the whole image
+                fig, axes = plt.subplots(2, 1, figsize=(12 * figure_scale, 4 * figure_scale),
                                          gridspec_kw={"height_ratios": [1, 2]})
 
                 bin_mids = (region_df["Start"].values + region_df["End"].values) / 2
@@ -1606,12 +1688,18 @@ def main():
 
     # Create locus overview plots
     print("\nCreating locus overview plots...")
+    ploidy_lookup = _build_ploidy_lookup(ploidy_df)
+    depth_by_cluster = {k: v for k, v in depth_df.groupby("Cluster")}
     for cluster, locus in loci_to_plot.items():
         print(f"  Processing {cluster}...")
+        cluster_depth = depth_by_cluster.get(cluster)
+        if cluster_depth is None:
+            print(f"  Warning: No depth data for {cluster}, skipping")
+            continue
         plot_locus_overview(
-            locus, calls_df, depth_df, gtf, segdup,
+            locus, calls_df, cluster_depth, gtf, segdup,
             args.output_dir, padding=args.padding,
-            ploidy_df=ploidy_df,
+            ploidy_lookup=ploidy_lookup,
             min_gene_label_spacing=args.min_gene_label_spacing,
             raw_counts_df=raw_counts_df,
             raw_sample_medians=raw_sample_medians if raw_sample_medians else None,
