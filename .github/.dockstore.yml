@@ -60,6 +60,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_fix_ends_filterbatchsites
       tags:
         - /.*/
 

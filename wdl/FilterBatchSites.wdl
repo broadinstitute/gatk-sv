@@ -2,6 +2,7 @@ version 1.0
 
 import "Structs.wdl"
 import "PlotSVCountsPerSample.wdl" as sv_counts
+import "FormatVcfForGatk.wdl" as format
 
 workflow FilterBatchSites {
   input {
@@ -13,6 +14,10 @@ workflow FilterBatchSites {
     File? scramble_vcf
     File? wham_vcf
     File evidence_metrics
+
+    File ploidy_table
+    File? svtk_to_gatk_script
+    String? format_vcf_args
 
     String sv_pipeline_docker
 
@@ -31,6 +36,7 @@ workflow FilterBatchSites {
     RuntimeAttr? runtime_attr_count_svs
     RuntimeAttr? runtime_attr_plot_svcounts
     RuntimeAttr? runtime_attr_cat_outliers_preview
+    RuntimeAttr? runtime_attr_format
 
   }
 
@@ -50,9 +56,19 @@ workflow FilterBatchSites {
 
   scatter (i in range(num_algorithms)) {
     if (defined(vcfs_array[i])) {
+      call format.FormatVcf {
+        input:
+          vcf=select_first([vcfs_array[i]]),
+          ploidy_table=ploidy_table,
+          output_prefix="~{batch}.~{algorithms[i]}.format",
+          args=format_vcf_args,
+          script=svtk_to_gatk_script,
+          sv_pipeline_docker=sv_pipeline_docker,
+          runtime_attr_override=runtime_attr_format
+      }
       call FilterAnnotateVcf {
         input:
-          vcf = select_first([vcfs_array[i]]),
+          vcf = FormatVcf.out,
           metrics = evidence_metrics,
           prefix = "${batch}.${algorithms[i]}",
           scores = select_first([AdjudicateSV.scores, adjudicate_scores]),
