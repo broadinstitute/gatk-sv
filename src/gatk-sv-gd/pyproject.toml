@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gatk-sv-gd"
+version = "0.1.0"
+description = "Genomic Disorder CNV detection from binned read counts"
+readme = "README.md"
+license = {text = "BSD-3-Clause"}
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "pandas",
+    "pysam",
+    "torch",
+    "pyro-ppl",
+    "tqdm",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "flake8",
+]
+
+[project.scripts]
+gatk-sv-gd = "gatk_sv_gd.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
