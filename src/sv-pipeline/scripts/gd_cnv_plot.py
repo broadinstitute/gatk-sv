@@ -724,7 +724,7 @@ def _draw_overview_column(
     if n_carriers > 0:
         viz_matrix = _build_heatmap_matrix(
             region_df, carrier_cols, region_start, region_end, xform=xform)
-        cmap = plt.cm.RdBu_r.copy()
+        cmap = plt.cm.RdBu.copy()
         cmap.set_bad(color='white')
         ax.imshow(viz_matrix, aspect="auto", cmap=cmap,
                   vmin=0, vmax=4, interpolation="nearest",
@@ -819,7 +819,7 @@ def _draw_overview_column(
                 del_colors = ['#FF6B6B', '#FF4757', '#EE5A6F', '#C23B4E']
                 dup_colors = ['#6B9BD1', '#4169E1', '#5080D0', '#3A5BB8']
                 color_idx = 0
-                plotted_any = False
+                # plotted_any = False
                 for (svtype, bp_interval), group in carrier_calls.groupby(
                         ["svtype", "bp_interval"]):
                     valid = [s for s in group["sample"].unique()
@@ -835,18 +835,18 @@ def _draw_overview_column(
                                     alpha=0.8, color=color,
                                     label=f"{svtype} {bp_interval} (n={len(valid)})")
                             color_idx += 1
-                            plotted_any = True
-                if plotted_any:
-                    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02),
-                              ncol=6, fontsize=7, frameon=True, fancybox=True)
+                            # plotted_any = True
+                # if plotted_any:
+                #    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02),
+                #              ncol=6, fontsize=7, frameon=True, fancybox=True)
         else:
             if len(ploidy_samples) > 0:
                 md = _depths_with_gaps(
                     region_df[ploidy_samples].mean(axis=1).values,
                     plot_positions_genomic)
-                ax.plot(display_positions, md, "b-", linewidth=1.5,
+                ax.plot(display_positions, md, "-", linewidth=1.5, color="gray",
                         label=f"All (n={len(ploidy_samples)})")
-                ax.legend(fontsize=7)
+                # ax.legend(fontsize=7)
 
         for d_bp_start, d_bp_end in bp_display:
             ax.axvline(d_bp_start, color="red", linestyle="-", alpha=1, zorder=5)
@@ -861,7 +861,7 @@ def _draw_overview_column(
 
         if panel_idx == n_ploidy_panels - 1:
             ax.set_xlabel(f"Position on {chrom}")
-            xform.format_genomic_ticks(ax, locus.breakpoints)
+            xform.format_genomic_ticks(ax, locus.breakpoints, label_x=False)
         else:
             ax.set_xticks([])
 
@@ -1182,7 +1182,7 @@ def plot_sample_at_locus(
     ax.set_xlim(0.0, xform.d_end)
     ax.set_ylim(0, 5)
     ax.set_ylabel("Normalized Depth")
-    # ax.legend(loc="upper right")  # Partially blocks heatmap panel, so skipping for now
+    ax.legend(loc="upper right")
     ax.grid(True, alpha=0.3, axis="y")
     xform.format_genomic_ticks(ax, locus.breakpoints)
 
