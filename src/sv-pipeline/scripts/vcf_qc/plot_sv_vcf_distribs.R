@@ -124,6 +124,12 @@ plotDotsSVperChrom <- function(dat,svtypes,title=NULL,ylab="Fraction of SV Type"
       return(rep(0, length(contigs)))
     }
   })
+
+  #Ensure mat is always a matrix (single-contig data collapses sapply to a vector)
+  if(!is.matrix(mat)){
+    mat <- matrix(mat, nrow=length(contigs), ncol=length(svtypes$svtype),
+                  dimnames=list(contigs, svtypes$svtype))
+  }
   
   #Prep plotting area
   par(bty="n",mar=c(3,4.5,2.5,0.5))

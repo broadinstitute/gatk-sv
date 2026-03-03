@@ -14,7 +14,7 @@ workflow QcAnnotations {
     Array[String] contigs
     String prefix
 
-    Boolean vcf_format_has_cn = true
+    Boolean vcf_format_has_cn
     File? ped_file
     File? sample_renaming_tsv
     Int max_trios = 1000
