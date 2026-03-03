@@ -167,6 +167,7 @@ def collect_all_locus_bins(
     locus_padding: int = 0,
     min_bins_per_region: int = 3,
     max_bins_per_interval: int = 10,
+    non_nahr_max_bins_per_interval: int = 100,
     highres_counts_path: Optional[str] = None,
     column_medians: Optional[np.ndarray] = None,
     lowres_median_bin_size: Optional[float] = None,
@@ -203,7 +204,10 @@ def collect_all_locus_bins(
             body interval (region between adjacent breakpoints).  A warning
             is printed if any interval has fewer bins after all processing.
         max_bins_per_interval: Maximum bins per interval after rebinning
-            (0 = no rebinning).
+            (0 = no rebinning).  Used for NAHR loci.
+        non_nahr_max_bins_per_interval: Maximum bins per interval for
+            non-NAHR loci (default 100).  Higher resolution is needed
+            because non-NAHR CNVs can span a small fraction of the region.
         highres_counts_path: Optional path to a bgzipped, tabix-indexed
             high-resolution read-count file.  When set, loci with any
             under-covered interval are re-queried at this resolution.
@@ -355,6 +359,9 @@ def collect_all_locus_bins(
         print(f"  GD entries: {len(locus.gd_entries)} ({', '.join(locus.svtypes)})")
 
         locus_size = locus.end - locus.start
+        effective_max_bins = max_bins_per_interval if locus.is_nahr else non_nahr_max_bins_per_interval
+        if not locus.is_nahr:
+            print(f"  Non-NAHR locus: using {effective_max_bins} bins/interval (higher resolution)")
 
         # Compute flank coordinates from the full chromosome's filtered bins so
         # that even multi-megabase exclusion deserts don't prevent flank discovery.
@@ -412,7 +419,7 @@ def collect_all_locus_bins(
         print(f"  Bins after trimming to active region [{left_bound:,}, {right_bound:,}): {len(locus_df)}")
 
         # Rebin to reduce number of bins per interval/flank if requested
-        if max_bins_per_interval > 0:
+        if effective_max_bins > 0:
             locus_df_orig = locus_df
             if _util.VERBOSE:
                 _sc = get_sample_columns(locus_df_orig)
@@ -423,7 +430,7 @@ def collect_all_locus_bins(
                     print(f"      {_r['Chr']}:{_r['Start']}-{_r['End']}  "
                           f"median={_meds[_j]:.3f}")
 
-            locus_df = rebin_locus_intervals(locus_df, locus, max_bins_per_interval, flank_regions,
+            locus_df = rebin_locus_intervals(locus_df, locus, effective_max_bins, flank_regions,
                                              min_rebin_coverage=min_rebin_coverage)
             if len(locus_df) < len(locus_df_orig):
                 print(f"  Bins after rebinning: {len(locus_df)} (reduced from {len(locus_df_orig)})")
@@ -526,7 +533,7 @@ def collect_all_locus_bins(
                     flank_regions,
                     left_bound,
                     right_bound,
-                    max_bins_per_interval,
+                    effective_max_bins,
                     exclusion_mask=exclusion_mask,
                     exclusion_threshold=exclusion_threshold,
                     filter_params=filter_params,
@@ -768,7 +775,9 @@ def parse_args():
     parser.add_argument("--min-bins-per-region", type=int, default=10,
                         help="Min bins expected per body interval")
     parser.add_argument("--max-bins-per-interval", type=int, default=20,
-                        help="Max bins per interval after rebinning (0 = no rebinning)")
+                        help="Max bins per interval after rebinning for NAHR loci (0 = no rebinning)")
+    parser.add_argument("--non-nahr-max-bins-per-interval", type=int, default=100,
+                        help="Max bins per interval for non-NAHR loci (higher resolution)")
     parser.add_argument("--min-rebin-coverage", type=float, default=0.5,
                         help="Min coverage fraction for rebinned bins")
     parser.add_argument("--min-flank-bases", type=int, default=50000,
@@ -874,6 +883,7 @@ def main():
         locus_padding=args.locus_padding,
         min_bins_per_region=args.min_bins_per_region,
         max_bins_per_interval=args.max_bins_per_interval,
+        non_nahr_max_bins_per_interval=args.non_nahr_max_bins_per_interval,
         highres_counts_path=highres_path,
         column_medians=column_medians,
         lowres_median_bin_size=lowres_median_bin_size,

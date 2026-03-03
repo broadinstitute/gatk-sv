@@ -6,6 +6,7 @@ to locus intervals. Also includes I/O helpers for reading depth data.
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np

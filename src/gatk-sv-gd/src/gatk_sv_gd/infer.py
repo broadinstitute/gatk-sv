@@ -92,6 +92,7 @@ def run_gd_analysis(
             locus_padding=args.locus_padding,
             min_bins_per_region=args.min_bins_per_region,
             max_bins_per_interval=args.max_bins_per_interval,
+            non_nahr_max_bins_per_interval=args.non_nahr_max_bins_per_interval,
             highres_counts_path=highres_path,
             column_medians=column_medians,
             lowres_median_bin_size=lowres_median_bin_size,
@@ -273,7 +274,14 @@ def parse_args():
         "--max-bins-per-interval",
         type=int,
         default=20,
-        help="Maximum bins per interval after rebinning (0 = no rebinning)",
+        help="Maximum bins per interval after rebinning for NAHR loci (0 = no rebinning)",
+    )
+    parser.add_argument(
+        "--non-nahr-max-bins-per-interval",
+        type=int,
+        default=100,
+        help="Maximum bins per interval for non-NAHR loci (higher resolution "
+             "needed because non-NAHR CNVs can span a small fraction of the region)",
     )
     parser.add_argument(
         "--min-rebin-coverage",
@@ -417,7 +425,7 @@ def parse_args():
     parser.add_argument(
         "--min-delta",
         type=float,
-        default=100.0,
+        default=1000.0,
         help="Minimum improvement for early stopping",
     )
 
@@ -425,7 +433,7 @@ def parse_args():
     parser.add_argument(
         "--n-discrete-samples",
         type=int,
-        default=500,
+        default=1000,
         help="Number of samples for discrete inference",
     )
 

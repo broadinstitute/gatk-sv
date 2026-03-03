@@ -42,6 +42,7 @@ from gatk_sv_gd.models import GDLocus, GDTable
 from gatk_sv_gd.viterbi import (
     load_transition_matrix,
     viterbi_call_gd_cnv,
+    viterbi_call_non_nahr_cnv,
 )
 
 
@@ -422,6 +423,8 @@ def call_cnvs_from_posteriors(
     viterbi_confidence_threshold: float = -1.0,
     viterbi_flank_coverage_threshold: float = 0.70,
     breakpoint_transition_matrix: Optional[np.ndarray] = None,
+    non_nahr_transition_matrix: Optional[np.ndarray] = None,
+    non_nahr_min_variant_fraction: float = 0.10,
 ) -> pd.DataFrame:
     """
     Call CNVs from posterior probabilities.
@@ -453,21 +456,36 @@ def call_cnvs_from_posteriors(
             end of each breakpoint's SD-block range) during Viterbi.  Should
             have lower diagonal values than *transition_matrix* to encourage
             CN state changes at those positions.  Viterbi strategy only.
+        non_nahr_transition_matrix: Optional (n_states, n_states) transition
+            matrix for non-NAHR loci.  When provided, non-NAHR loci use
+            Viterbi with this matrix.  When not provided, non-NAHR loci
+            fall back to *transition_matrix* (if set) or MLP.
+        non_nahr_min_variant_fraction: Minimum fraction of body bins that
+            must show variant CN to call a non-NAHR carrier (Viterbi only,
+            default 0.10).
 
     Returns:
         DataFrame with CNV calls for all samples and loci
     """
     use_viterbi = transition_matrix is not None
+    use_viterbi_non_nahr = non_nahr_transition_matrix is not None or use_viterbi
 
     print("\n" + "=" * 80)
     print("CALLING CNVs FROM POSTERIORS")
     if use_viterbi:
         bp_str = " + breakpoint matrix" if breakpoint_transition_matrix is not None else ""
-        print(f"  Strategy: Viterbi segmentation{bp_str}  "
+        print(f"  NAHR strategy: Viterbi segmentation{bp_str}  "
               f"(confidence threshold={viterbi_confidence_threshold}, "
               f"flank coverage threshold={viterbi_flank_coverage_threshold:.0%})")
     else:
-        print(f"  Strategy: Mean log-probability  "
+        print(f"  NAHR strategy: Mean log-probability  "
+              f"(threshold={log_prob_threshold})")
+    if use_viterbi_non_nahr:
+        nn_src = "non-NAHR matrix" if non_nahr_transition_matrix is not None else "shared matrix"
+        print(f"  Non-NAHR strategy: Viterbi ({nn_src}), "
+              f"min variant fraction={non_nahr_min_variant_fraction:.0%}")
+    else:
+        print(f"  Non-NAHR strategy: Mean log-probability  "
               f"(threshold={log_prob_threshold})")
     print("=" * 80)
 
@@ -564,11 +582,37 @@ def call_cnvs_from_posteriors(
             sample_ploidy = ploidy_lookup.get((str(sample_id), locus.chrom), 2)
 
             if verbose:
-                strategy = "VIT" if use_viterbi else "MLP"
+                locus_vit = (use_viterbi if locus.is_nahr else use_viterbi_non_nahr)
+                strategy = "VIT" if locus_vit else "MLP"
                 _util.vlog(f"\n  [{strategy}] Sample: {sample_id}  "
                            f"({locus.chrom}, ploidy={sample_ploidy})")
 
-            if use_viterbi:
+            if not locus.is_nahr and use_viterbi_non_nahr:
+                # ---- Non-NAHR Viterbi strategy ----
+                nn_tm = (non_nahr_transition_matrix
+                         if non_nahr_transition_matrix is not None
+                         else transition_matrix)
+                calls = viterbi_call_non_nahr_cnv(
+                    locus,
+                    prob_3d[s_idx],
+                    nn_tm,
+                    interval_bin_arrays,
+                    ploidy=sample_ploidy,
+                    confidence_threshold=viterbi_confidence_threshold,
+                    flank_coverage_threshold=viterbi_flank_coverage_threshold,
+                    min_variant_fraction=non_nahr_min_variant_fraction,
+                    verbose=verbose,
+                    sample_id=str(sample_id),
+                )
+                best_by_svtype = determine_best_breakpoints(
+                    locus,
+                    {name: {"n_bins": len(idx),
+                            "cn_probs": prob_3d[s_idx, idx].mean(axis=0)
+                            if len(idx) > 0 else np.zeros(n_states)}
+                     for name, idx in interval_bin_arrays.items()},
+                    calls, ploidy=sample_ploidy,
+                )
+            elif use_viterbi:
                 # ---- Viterbi strategy ----
                 calls = viterbi_call_gd_cnv(
                     locus,
@@ -619,7 +663,8 @@ def call_cnvs_from_posteriors(
                     locus, interval_stats, calls, ploidy=sample_ploidy)
 
             if verbose:
-                strategy = "VIT" if use_viterbi else "MLP"
+                locus_vit = (use_viterbi if locus.is_nahr else use_viterbi_non_nahr)
+                strategy = "VIT" if locus_vit else "MLP"
                 for call in calls:
                     tag_parts = []
                     if call["is_carrier"]:
@@ -633,10 +678,13 @@ def call_cnvs_from_posteriors(
                         else "NA"
                     )
                     extra = ""
-                    if use_viterbi:
+                    if locus_vit:
                         cov = "Y" if call.get("viterbi_covered_ok") else "N"
                         flk = "Y" if call.get("viterbi_flanks_ok") else "N"
                         extra = f"  cov={cov} flk={flk}"
+                        if not locus.is_nahr:
+                            vf = call.get("variant_fraction", 0)
+                            extra += f"  var_frac={vf:.0%}"
                     _util.vlog(
                         f"    [{strategy}] {sample_id:30s}  "
                         f"{call['GD_ID']:25s}  "
@@ -682,6 +730,7 @@ def call_cnvs_from_posteriors(
                         if best_gd_for_svtype else False
                     ),
                     "log_prob_score": call["log_prob_score"],
+                    "variant_fraction": call.get("variant_fraction", np.nan),
                 }
                 all_results.append(result)
 
@@ -778,6 +827,22 @@ def parse_args():
              "0.0 = disabled.  Default: 0.70.",
     )
     parser.add_argument(
+        "--non-nahr-transition-matrix",
+        required=False,
+        help="CN-state transition probability matrix (TSV) for non-NAHR loci. "
+             "When provided, non-NAHR loci use Viterbi with this matrix "
+             "(no breakpoint-specific matrix — breakpoints are variable). "
+             "If not set, non-NAHR loci use --transition-matrix or MLP.",
+    )
+    parser.add_argument(
+        "--non-nahr-min-variant-fraction",
+        type=float,
+        default=0.10,
+        help="Minimum fraction of body bins that must show variant CN "
+             "(DEL: < ploidy, DUP: > ploidy) to call a non-NAHR carrier "
+             "(Viterbi only).  Default: 0.10 (10%%).",
+    )
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Print detailed per-sample log probability scores for all GD "
@@ -835,6 +900,14 @@ def main():
             breakpoint_transition_matrix = load_transition_matrix(
                 args.breakpoint_transition_matrix)
 
+    # Load non-NAHR transition matrix if provided
+    non_nahr_transition_matrix = None
+    if args.non_nahr_transition_matrix:
+        print(f"  Loading non-NAHR transition matrix: "
+              f"{args.non_nahr_transition_matrix}")
+        non_nahr_transition_matrix = load_transition_matrix(
+            args.non_nahr_transition_matrix)
+
     # Call CNVs from posteriors
     calls_df = call_cnvs_from_posteriors(
         cn_posteriors_df,
@@ -848,6 +921,8 @@ def main():
         viterbi_confidence_threshold=args.viterbi_confidence_threshold,
         viterbi_flank_coverage_threshold=args.viterbi_flank_coverage_threshold,
         breakpoint_transition_matrix=breakpoint_transition_matrix,
+        non_nahr_transition_matrix=non_nahr_transition_matrix,
+        non_nahr_min_variant_fraction=args.non_nahr_min_variant_fraction,
     )
 
     # Save calls
