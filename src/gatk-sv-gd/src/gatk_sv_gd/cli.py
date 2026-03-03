@@ -8,6 +8,7 @@ import sys
 
 
 SUBCOMMANDS = {
+    "preprocess": "gatk_sv_gd.preprocess",
     "infer": "gatk_sv_gd.infer",
     "call": "gatk_sv_gd.call",
     "plot": "gatk_sv_gd.plot",
@@ -15,6 +16,7 @@ SUBCOMMANDS = {
 }
 
 DESCRIPTIONS = {
+    "preprocess": "Preprocess read-depth data for GD CNV inference",
     "infer": "Run Bayesian CNV inference at GD loci (Pyro model)",
     "call": "Call GD CNVs from model posterior probabilities",
     "plot": "Generate visualisation plots for GD CNV calls",

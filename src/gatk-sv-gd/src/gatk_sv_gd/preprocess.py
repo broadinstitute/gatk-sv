@@ -4,17 +4,22 @@ High-resolution bin processing and locus bin collection.
 Handles querying tabix-indexed high-resolution count files, normalising
 them to match the low-resolution scale, and assembling all bins across
 GD loci into a single combined DataFrame.
+
+Also serves as the CLI entry-point for the ``preprocess`` subcommand,
+which runs data loading, normalisation, quality filtering, ploidy
+estimation, and bin collection *without* model training, writing the
+results to disk for downstream consumption by ``infer``.
 """
 
-from pathlib import Path
+import argparse
+import os
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import pysam
 
 from gatk_sv_gd import _util
-from gatk_sv_gd._util import get_sample_columns
+from gatk_sv_gd._util import get_sample_columns, setup_logging
 from gatk_sv_gd.models import GDLocus, GDTable
 from gatk_sv_gd.depth import ExclusionMask
 from gatk_sv_gd.bins import (
@@ -23,168 +28,11 @@ from gatk_sv_gd.bins import (
     compute_flank_regions_from_bins,
     extract_locus_bins,
     filter_low_quality_bins,
+    read_data,
     rebin_locus_intervals,
 )
-
-def query_highres_bins(
-    highres_path: str,
-    chrom: str,
-    start: int,
-    end: int,
-    sample_cols: List[str],
-) -> pd.DataFrame:
-    """
-    Query a tabix-indexed read-count file for bins overlapping a region.
-
-    The file is expected to have a header line starting with ``#Chr`` (or
-    ``Chr``) followed by ``Start``, ``End``, and one column per sample with
-    raw (un-normalised) read counts.  Only the intersection of columns
-    present in the file *and* in *sample_cols* is returned so that the
-    result is compatible with the low-resolution DataFrame.
-
-    Args:
-        highres_path: Path to a bgzipped, tabix-indexed TSV (.tsv.gz + .tbi).
-        chrom: Chromosome name (e.g. ``"chr15"``).
-        start: Query start position (0-based, inclusive).
-        end: Query end position (0-based, exclusive).
-        sample_cols: Sample column names expected in the output.
-
-    Returns:
-        DataFrame with columns ``Chr``, ``Start``, ``End``, ``source_file``
-        and one column per sample, indexed by a ``Bin`` string.
-    """
-    tbx = pysam.TabixFile(highres_path)
-    try:
-        header_line = tbx.header[-1] if tbx.header else ""
-        header_cols = header_line.lstrip("#").split("\t")
-
-        rows: List[dict] = []
-        for line in tbx.fetch(chrom, max(0, start), end):
-            fields = line.split("\t")
-            row = dict(zip(header_cols, fields))
-            rows.append(row)
-    finally:
-        tbx.close()
-
-    if len(rows) == 0:
-        cols = ["Chr", "Start", "End", "source_file"] + list(sample_cols)
-        empty = pd.DataFrame(columns=cols)
-        empty["Bin"] = pd.Series(dtype=str)
-        return empty.set_index("Bin")
-
-    raw_df = pd.DataFrame(rows)
-
-    # Normalise column naming
-    if "#Chr" in raw_df.columns:
-        raw_df.rename(columns={"#Chr": "Chr"}, inplace=True)
-
-    raw_df["Start"] = raw_df["Start"].astype(int)
-    raw_df["End"] = raw_df["End"].astype(int)
-    raw_df["source_file"] = "highres"
-
-    # Keep only sample columns that exist in both files
-    common_samples = [s for s in sample_cols if s in raw_df.columns]
-    if len(common_samples) == 0:
-        raise ValueError(
-            "High-resolution counts file shares no sample columns with the "
-            "low-resolution file. Check that both files were generated from "
-            "the same sample set."
-        )
-    for s in common_samples:
-        raw_df[s] = pd.to_numeric(raw_df[s], errors="coerce")
-
-    # Pad with NaN for any samples absent from the high-res file —
-    # add all missing columns at once to avoid DataFrame fragmentation.
-    missing = [s for s in sample_cols if s not in raw_df.columns]
-    if missing:
-        raw_df = pd.concat(
-            [raw_df, pd.DataFrame(np.nan, index=raw_df.index, columns=missing)],
-            axis=1,
-        )
-
-    raw_df["Bin"] = (
-        raw_df["Chr"].astype(str) + ":"
-        + raw_df["Start"].astype(str) + "-"
-        + raw_df["End"].astype(str)
-    )
-    raw_df = raw_df.set_index("Bin")
-
-    keep_cols = ["Chr", "Start", "End", "source_file"] + list(sample_cols)
-    return raw_df[keep_cols]
-
-
-def normalize_highres_bins(
-    highres_df: pd.DataFrame,
-    sample_cols: List[str],
-    column_medians: np.ndarray,
-    lowres_median_bin_size: float,
-) -> pd.DataFrame:
-    """
-    Normalise high-resolution raw counts to the same CN-2 ≈ 2.0 scale used
-    for low-resolution bins.
-
-    The low-resolution pipeline normalises each sample by dividing by its
-    genome-wide autosomal median count (``column_medians``) and multiplying
-    by 2.  Those medians were estimated from bins of a specific size.  For
-    high-res bins that are smaller, we must account for the expected
-    proportional decrease in raw counts::
-
-        norm_depth = 2.0 * raw_count / (column_median * highres_bin_size / lowres_bin_size)
-
-    This is equivalent to first scaling ``column_medians`` by the bin-size
-    ratio, then applying the standard normalisation.
-
-    Args:
-        highres_df: DataFrame returned by :func:`query_highres_bins` with
-            **raw** (un-normalised) counts.
-        sample_cols: Sample column names.
-        column_medians: Per-sample autosomal median raw counts estimated
-            from the low-resolution file (1-D array, same order as
-            *sample_cols*).
-        lowres_median_bin_size: Median bin size (bp) in the low-resolution
-            file, used to scale the expected counts.
-
-    Returns:
-        A copy of *highres_df* with sample columns normalised in-place.
-    """
-    df = highres_df.copy()
-    highres_bin_sizes = (df["End"] - df["Start"]).values
-    highres_median_bin_size = float(np.median(highres_bin_sizes))
-
-    bin_size_ratio = highres_median_bin_size / lowres_median_bin_size
-    print(f"    [highres] low-res median bin size: {lowres_median_bin_size:,.0f} bp")
-    print(f"    [highres] high-res median bin size: {highres_median_bin_size:,.0f} bp")
-    print(f"    [highres] bin size ratio: {bin_size_ratio:.4f}")
-
-    # Scale column_medians by the bin-size ratio so the normalisation
-    # accounts for the smaller expected raw counts in high-res bins.
-    adjusted_medians = column_medians * bin_size_ratio  # shape (n_samples,)
-
-    if _util.VERBOSE:
-        raw_vals = df[sample_cols].values
-        print(f"    [verbose] high-res pre-normalisation: "
-              f"per-bin-median mean={np.nanmean(np.nanmedian(raw_vals, axis=1)):.3f}, "
-              f"adjusted_medians range=[{adjusted_medians.min():.3f}, {adjusted_medians.max():.3f}]")
-
-    df[sample_cols] = 2.0 * df[sample_cols].values / adjusted_medians[np.newaxis, :]
-
-    if _util.VERBOSE:
-        norm_vals = df[sample_cols].values
-        per_bin_medians = np.nanmedian(norm_vals, axis=1)
-        print(f"    [verbose] high-res post-normalisation: "
-              f"per-bin-median mean={per_bin_medians.mean():.3f}, "
-              f"min={per_bin_medians.min():.3f}, max={per_bin_medians.max():.3f}")
-        # Log first few bins for spot-checking
-        for i in range(min(5, len(df))):
-            row = df.iloc[i]
-            med = np.nanmedian(row[sample_cols].values.astype(float))
-            print(f"      bin {row['Chr']}:{row['Start']}-{row['End']}  "
-                  f"norm_median={med:.3f}")
-        if len(df) > 5:
-            print(f"      ... ({len(df) - 5} more bins)")
-
-    return df
-
+from gatk_sv_gd.highres import normalize_highres_bins, query_highres_bins
+from gatk_sv_gd.output import estimate_ploidy, write_locus_metadata
 
 def _filter_and_prepare_locus_bins(
     locus_df: pd.DataFrame,
@@ -810,5 +658,258 @@ def get_locus_interval_bins(
             interval_bins[mapping.interval_name] = []
         interval_bins[mapping.interval_name].append(mapping.array_idx)
     return interval_bins
+
+
+# =============================================================================
+# Preprocessed-data I/O
+# =============================================================================
+
+
+def write_preprocessed_bins(
+    combined_df: pd.DataFrame,
+    output_dir: str,
+) -> str:
+    """Write the preprocessed combined bin DataFrame to disk.
+
+    Returns:
+        Path to the written file.
+    """
+    output_path = os.path.join(output_dir, "preprocessed_bins.tsv.gz")
+    combined_df.to_csv(output_path, sep="\t", index=False, compression="gzip")
+    print(f"  Saved: {output_path}")
+    print(f"  Rows: {len(combined_df):,}")
+    return output_path
+
+
+def load_preprocessed_data(
+    preprocessed_dir: str,
+) -> Tuple[pd.DataFrame, List[LocusBinMapping]]:
+    """Load preprocessed bins and bin-to-interval mappings from disk.
+
+    This is the complement of :func:`write_preprocessed_bins` +
+    :func:`~gatk_sv_gd.output.write_locus_metadata`: it reads the files
+    produced by the ``preprocess`` subcommand and reconstructs the objects
+    needed by :func:`~gatk_sv_gd.infer.run_gd_analysis`.
+
+    Args:
+        preprocessed_dir: Directory written by the ``preprocess`` subcommand.
+
+    Returns:
+        Tuple of (combined_df, mappings).
+    """
+    bins_path = os.path.join(preprocessed_dir, "preprocessed_bins.tsv.gz")
+    mappings_path = os.path.join(preprocessed_dir, "bin_mappings.tsv.gz")
+
+    print(f"  Loading preprocessed bins: {bins_path}")
+    combined_df = pd.read_csv(bins_path, sep="\t", compression="infer")
+    print(f"    {len(combined_df)} bins")
+
+    print(f"  Loading bin mappings: {mappings_path}")
+    mappings_df = pd.read_csv(mappings_path, sep="\t", compression="infer")
+    print(f"    {len(mappings_df)} mapping records")
+
+    mappings: List[LocusBinMapping] = []
+    for _, row in mappings_df.iterrows():
+        mappings.append(LocusBinMapping(
+            cluster=row["cluster"],
+            locus=None,
+            interval_name=row["interval"],
+            array_idx=int(row["array_idx"]),
+            chrom=row["chr"],
+            start=int(row["start"]),
+            end=int(row["end"]),
+        ))
+
+    return combined_df, mappings
+
+
+# =============================================================================
+# CLI
+# =============================================================================
+
+
+def parse_args():
+    """Parse command-line arguments for the preprocess subcommand."""
+    parser = argparse.ArgumentParser(
+        description="Preprocess read-depth data for GD CNV inference",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    # Input/Output
+    parser.add_argument(
+        "-i", "--input", required=True,
+        help="Input TSV with normalised read depth (bins × samples)",
+    )
+    parser.add_argument(
+        "-g", "--gd-table", required=True,
+        help="GD locus definition table (TSV)",
+    )
+    parser.add_argument(
+        "-e", "--exclusion-intervals", nargs="*", default=[],
+        help="BED file(s) of regions to mask (segdups, centromeres, etc.)",
+    )
+    parser.add_argument(
+        "-o", "--output-dir", required=True,
+        help="Output directory for preprocessed files",
+    )
+    parser.add_argument(
+        "--high-res-counts", required=False,
+        help="Optional bgzipped tabix-indexed high-res count file "
+             "(.tsv.gz + .tbi) for under-covered intervals",
+    )
+
+    # Locus processing
+    parser.add_argument("--locus-padding", type=int, default=10000,
+                        help="Padding around locus boundaries (bp)")
+    parser.add_argument("--exclusion-threshold", type=float, default=1.0,
+                        help="Min overlap fraction with exclusion regions to mask a bin")
+    parser.add_argument("--exclusion-bypass-threshold", type=float, default=0.6,
+                        help="Body-interval overlap fraction above which masking is skipped")
+    parser.add_argument("--min-bins-per-region", type=int, default=10,
+                        help="Min bins expected per body interval")
+    parser.add_argument("--max-bins-per-interval", type=int, default=20,
+                        help="Max bins per interval after rebinning (0 = no rebinning)")
+    parser.add_argument("--min-rebin-coverage", type=float, default=0.5,
+                        help="Min coverage fraction for rebinned bins")
+    parser.add_argument("--min-flank-bases", type=int, default=50000,
+                        help="Min base pairs each flank must cover")
+    parser.add_argument("--min-flank-bins", type=int, default=10,
+                        help="Min bins each flank must contain")
+    parser.add_argument("--min-flank-coverage", type=float, default=0.5,
+                        help="Min fraction of flank bp target that must be covered")
+
+    # Data filtering
+    parser.add_argument("--skip-bin-filter", action="store_true", default=False,
+                        help="Skip bin quality filtering")
+    parser.add_argument("--median-min", type=float, default=1.0,
+                        help="Min median depth for bins")
+    parser.add_argument("--median-max", type=float, default=3.0,
+                        help="Max median depth for bins")
+    parser.add_argument("--mad-max", type=float, default=2.0,
+                        help="Max MAD for bins")
+
+    # Verbosity
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", default=False,
+        help="Enable detailed per-bin diagnostic logging",
+    )
+
+    return parser.parse_args()
+
+
+def main():
+    """Run the preprocessing pipeline (data loading through bin collection)."""
+    args = parse_args()
+    _util.VERBOSE = args.verbose
+
+    os.makedirs(args.output_dir, exist_ok=True)
+    setup_logging(args.output_dir, filename="preprocess_log.txt")
+    print(f"Output directory: {args.output_dir}")
+
+    # Load GD table
+    print(f"\nLoading GD table: {args.gd_table}")
+    gd_table = GDTable(args.gd_table)
+    print(f"Loaded {len(gd_table.loci)} loci")
+    for cluster, locus in gd_table.loci.items():
+        if locus.breakpoints:
+            bp_start = min(bp[0] for bp in locus.breakpoints)
+            bp_end = max(bp[1] for bp in locus.breakpoints)
+            print(f"  {cluster}: {locus.chrom}:{bp_start}-{bp_end} "
+                  f"({len(locus.gd_entries)} entries, {locus.n_breakpoints} breakpoints)")
+        else:
+            print(f"  {cluster}: {locus.chrom} - NO BREAKPOINTS DEFINED")
+
+    # Load exclusion mask
+    exclusion_mask = None
+    for bed_path in args.exclusion_intervals:
+        bed_label = os.path.basename(bed_path)
+        if exclusion_mask is None:
+            print(f"\nLoading exclusion mask: {bed_path}")
+            exclusion_mask = ExclusionMask(bed_path, label=bed_label)
+        else:
+            print(f"\nMerging exclusion intervals: {bed_path}")
+            exclusion_mask.merge(bed_path, label=bed_label)
+
+    # Load and normalise read depth data
+    df = read_data(args.input)
+    sample_cols = get_sample_columns(df)
+
+    autosome_mask = ~df["Chr"].isin(["chrX", "chrY"])
+    if autosome_mask.any():
+        column_medians = np.median(df.loc[autosome_mask, sample_cols], axis=0)
+    else:
+        column_medians = np.median(df[sample_cols], axis=0)
+    print(f"Column medians: min={column_medians.min():.3f}, "
+          f"max={column_medians.max():.3f}, mean={column_medians.mean():.3f}")
+
+    lowres_bin_sizes = (df["End"] - df["Start"]).values
+    lowres_median_bin_size = float(np.median(lowres_bin_sizes))
+    print(f"Low-res median bin size: {lowres_median_bin_size:,.0f} bp")
+
+    # Normalise: CN=2 corresponds to depth of 2.0
+    df[sample_cols] = 2.0 * df[sample_cols] / column_medians[np.newaxis, :]
+
+    # Filter low quality bins
+    if not args.skip_bin_filter:
+        df = filter_low_quality_bins(
+            df, median_min=args.median_min,
+            median_max=args.median_max, mad_max=args.mad_max,
+        )
+
+    # Estimate ploidy
+    estimate_ploidy(df, args.output_dir)
+
+    # Build quality-filter params
+    filter_params: dict = {
+        "median_min": args.median_min,
+        "median_max": args.median_max,
+        "mad_max": args.mad_max,
+    }
+    highres_path: Optional[str] = getattr(args, "high_res_counts", None)
+
+    # Collect all bins across all loci
+    combined_df, mappings, included_loci = collect_all_locus_bins(
+        df, gd_table, exclusion_mask,
+        exclusion_threshold=args.exclusion_threshold,
+        locus_padding=args.locus_padding,
+        min_bins_per_region=args.min_bins_per_region,
+        max_bins_per_interval=args.max_bins_per_interval,
+        highres_counts_path=highres_path,
+        column_medians=column_medians,
+        lowres_median_bin_size=lowres_median_bin_size,
+        filter_params=filter_params,
+        exclusion_bypass_threshold=args.exclusion_bypass_threshold,
+        min_rebin_coverage=args.min_rebin_coverage,
+        min_flank_bases=args.min_flank_bases,
+        min_flank_bins=args.min_flank_bins,
+        min_flank_coverage=args.min_flank_coverage,
+    )
+
+    if len(combined_df) == 0:
+        print("No bins to analyse after preprocessing!")
+        return
+
+    # Write preprocessed outputs
+    print("\n" + "=" * 80)
+    print("WRITING PREPROCESSED DATA")
+    print("=" * 80)
+    write_preprocessed_bins(combined_df, args.output_dir)
+    write_locus_metadata(included_loci, mappings, args.output_dir)
+
+    print("\n" + "=" * 80)
+    print("PREPROCESSING COMPLETE")
+    print("=" * 80)
+    print("\nOutput files:")
+    print("  - preprocessed_bins.tsv.gz")
+    print("  - bin_mappings.tsv.gz")
+    print("  - locus_intervals.tsv.gz")
+    print("  - gd_entry_intervals.tsv.gz")
+    print("  - ploidy_estimates.tsv")
+    print(f"\nNext: run 'gatk-sv-gd infer --preprocessed-dir {args.output_dir}'")
+    print("=" * 80)
+
+
+if __name__ == "__main__":
+    main()
 
 

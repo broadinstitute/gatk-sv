@@ -852,7 +852,7 @@ def filter_low_quality_bins(
 class LocusBinMapping:
     """Tracks mapping between array indices and locus/interval assignments."""
     cluster: str
-    locus: GDLocus
+    locus: Optional[GDLocus]
     interval_name: str
     array_idx: int  # Index in the combined depth tensor
     chrom: str  # Chromosome

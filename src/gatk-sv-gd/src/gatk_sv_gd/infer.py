@@ -31,7 +31,7 @@ from gatk_sv_gd.bins import filter_low_quality_bins, read_data
 from gatk_sv_gd.depth import CNVModel, DepthData, ExclusionMask
 from gatk_sv_gd.models import GDTable
 from gatk_sv_gd.output import estimate_ploidy, write_locus_metadata, write_posterior_tables
-from gatk_sv_gd.preprocess import collect_all_locus_bins
+from gatk_sv_gd.preprocess import collect_all_locus_bins, load_preprocessed_data
 
 
 def run_gd_analysis(
@@ -42,6 +42,8 @@ def run_gd_analysis(
     device: str = "cpu",
     column_medians: Optional[np.ndarray] = None,
     lowres_median_bin_size: Optional[float] = None,
+    preprocessed_bins: Optional[pd.DataFrame] = None,
+    preprocessed_mappings=None,
 ):
     """
     Run GD CNV analysis on all loci using a single unified model.
@@ -49,8 +51,9 @@ def run_gd_analysis(
     This function performs model training and inference only.
     CNV calling is handled by downstream scripts (plot_gd_cnv_output.py).
 
-    This function collects bins from all GD loci, trains a single model on all
-    bins together, and writes out posterior probabilities and metadata.
+    When *preprocessed_bins* and *preprocessed_mappings* are supplied (from
+    the ``preprocess`` subcommand), bin collection is skipped entirely and
+    the provided data is used directly.
 
     Args:
         df: DataFrame with normalized read depth
@@ -62,34 +65,43 @@ def run_gd_analysis(
             normalisation).  Needed when ``args.high_res_counts`` is set.
         lowres_median_bin_size: Median bin size (bp) of the low-res file.
             Needed when ``args.high_res_counts`` is set.
+        preprocessed_bins: Optional combined DataFrame from the
+            ``preprocess`` subcommand.  When set, *preprocessed_mappings*
+            must also be provided.
+        preprocessed_mappings: Optional list of LocusBinMapping objects
+            from the ``preprocess`` subcommand.
     """
-    # Build quality-filter params dict.  These thresholds are used both
-    # for high-res bin quality filtering and for quality-aware flank
-    # extension (ensuring only good bins count toward coverage targets).
-    filter_params: dict = {
-        "median_min": args.median_min,
-        "median_max": args.median_max,
-        "mad_max": args.mad_max,
-    }
-    highres_path: Optional[str] = getattr(args, "high_res_counts", None)
+    if preprocessed_bins is not None and preprocessed_mappings is not None:
+        # Use preprocessed data directly — skip bin collection
+        combined_df = preprocessed_bins
+        mappings = preprocessed_mappings
+        included_loci = None  # already written by preprocess
+    else:
+        # Build quality-filter params dict.
+        filter_params: dict = {
+            "median_min": args.median_min,
+            "median_max": args.median_max,
+            "mad_max": args.mad_max,
+        }
+        highres_path: Optional[str] = getattr(args, "high_res_counts", None)
 
-    # Collect all bins across all loci
-    combined_df, mappings, included_loci = collect_all_locus_bins(
-        df, gd_table, exclusion_mask,
-        exclusion_threshold=args.exclusion_threshold,
-        locus_padding=args.locus_padding,
-        min_bins_per_region=args.min_bins_per_region,
-        max_bins_per_interval=args.max_bins_per_interval,
-        highres_counts_path=highres_path,
-        column_medians=column_medians,
-        lowres_median_bin_size=lowres_median_bin_size,
-        filter_params=filter_params,
-        exclusion_bypass_threshold=args.exclusion_bypass_threshold,
-        min_rebin_coverage=args.min_rebin_coverage,
-        min_flank_bases=args.min_flank_bases,
-        min_flank_bins=args.min_flank_bins,
-        min_flank_coverage=args.min_flank_coverage,
-    )
+        # Collect all bins across all loci
+        combined_df, mappings, included_loci = collect_all_locus_bins(
+            df, gd_table, exclusion_mask,
+            exclusion_threshold=args.exclusion_threshold,
+            locus_padding=args.locus_padding,
+            min_bins_per_region=args.min_bins_per_region,
+            max_bins_per_interval=args.max_bins_per_interval,
+            highres_counts_path=highres_path,
+            column_medians=column_medians,
+            lowres_median_bin_size=lowres_median_bin_size,
+            filter_params=filter_params,
+            exclusion_bypass_threshold=args.exclusion_bypass_threshold,
+            min_rebin_coverage=args.min_rebin_coverage,
+            min_flank_bases=args.min_flank_bases,
+            min_flank_bins=args.min_flank_bins,
+            min_flank_coverage=args.min_flank_coverage,
+        )
 
     if len(combined_df) == 0:
         print("No bins to analyze!")
@@ -152,12 +164,14 @@ def run_gd_analysis(
         args.output_dir,
     )
 
-    # Write locus metadata for downstream calling/plotting
-    write_locus_metadata(
-        included_loci,
-        mappings,
-        args.output_dir,
-    )
+    # Write locus metadata for downstream calling/plotting (skip if
+    # preprocessed data was loaded — preprocess already wrote these files).
+    if included_loci is not None:
+        write_locus_metadata(
+            included_loci,
+            mappings,
+            args.output_dir,
+        )
 
     print("\n" + "=" * 80)
     print("Model training and inference complete!")
@@ -175,13 +189,15 @@ def parse_args():
     # Input/Output
     parser.add_argument(
         "-i", "--input",
-        required=True,
-        help="Input TSV file with normalized read depth (bins x samples)",
+        required=False,
+        help="Input TSV file with normalized read depth (bins x samples). "
+             "Not required when --preprocessed-dir is set.",
     )
     parser.add_argument(
         "-g", "--gd-table",
-        required=True,
-        help="GD locus definition table (TSV)",
+        required=False,
+        help="GD locus definition table (TSV). "
+             "Not required when --preprocessed-dir is set.",
     )
     parser.add_argument(
         "-e", "--exclusion-intervals",
@@ -208,6 +224,15 @@ def parse_args():
              "this finer resolution before the hard check is enforced.  "
              "The file must have the same sample columns as the low-res "
              "input and contain raw (un-normalised) counts.",
+    )
+    parser.add_argument(
+        "--preprocessed-dir",
+        required=False,
+        help="Directory produced by 'gatk-sv-gd preprocess'.  When set, "
+             "bins and mappings are loaded from preprocessed_bins.tsv.gz "
+             "and bin_mappings.tsv.gz instead of re-running preprocessing. "
+             "The -i/--input, -g/--gd-table and -e/--exclusion-intervals "
+             "flags are not required in this mode.",
     )
 
     # Locus processing
@@ -467,104 +492,134 @@ def main():
 
     print(f"Output directory: {args.output_dir}")
 
-    # Load GD table
-    print(f"\nLoading GD table: {args.gd_table}")
-    gd_table = GDTable(args.gd_table)
-    print(f"Loaded {len(gd_table.loci)} loci")
-    for cluster, locus in gd_table.loci.items():
-        # Get overall start and end from breakpoint ranges
-        if locus.breakpoints:
-            overall_start = min(bp[0] for bp in locus.breakpoints)
-            overall_end = max(bp[1] for bp in locus.breakpoints)
-            print(f"  {cluster}: {locus.chrom}:{overall_start}-{overall_end} "
-                  f"({len(locus.gd_entries)} entries, {locus.n_breakpoints} breakpoints)")
-        else:
-            print(f"  {cluster}: {locus.chrom} - NO BREAKPOINTS DEFINED")
-
-    # Load exclusion mask from any provided BED files
-    exclusion_mask = None
-    for bed_path in args.exclusion_intervals:
-        bed_label = os.path.basename(bed_path)
-        if exclusion_mask is None:
-            print(f"\nLoading exclusion mask: {bed_path}")
-            exclusion_mask = ExclusionMask(bed_path, label=bed_label)
-        else:
-            print(f"\nMerging exclusion intervals: {bed_path}")
-            exclusion_mask.merge(bed_path, label=bed_label)
-
-    # Load read depth data
-    df = read_data(args.input)
-
-    # Normalize by sample median over autosomal bins
-    sample_cols = get_sample_columns(df)
-    autosome_mask = ~df["Chr"].isin(["chrX", "chrY"])
-    if autosome_mask.any():
-        column_medians = np.median(df.loc[autosome_mask, sample_cols], axis=0)
-    else:
-        column_medians = np.median(df[sample_cols], axis=0)
-
-    print(f"Column medians: min={column_medians.min():.3f}, "
-          f"max={column_medians.max():.3f}, mean={column_medians.mean():.3f}")
-
-    if _util.VERBOSE:
-        print("\n  [verbose] Per-sample autosomal median raw counts (used as normalisation denominator):")
-        for i, s in enumerate(sample_cols):
-            print(f"    {s}: {column_medians[i]:.3f}")
-        # Pre-normalisation depth summary
-        raw_depths = df[sample_cols].values
-        print(f"\n  [verbose] Pre-normalisation depth summary ({len(df)} bins x {len(sample_cols)} samples):")
-        print(f"    global mean = {np.nanmean(raw_depths):.4f}")
-        print(f"    global median = {np.nanmedian(raw_depths):.4f}")
-        print(f"    per-sample means: min={np.nanmean(raw_depths, axis=0).min():.4f}, "
-              f"max={np.nanmean(raw_depths, axis=0).max():.4f}")
-
-    # Compute low-res median bin size (before normalization modifies df)
-    lowres_bin_sizes = (df["End"] - df["Start"]).values
-    lowres_median_bin_size = float(np.median(lowres_bin_sizes))
-    print(f"Low-res median bin size: {lowres_median_bin_size:,.0f} bp")
-
-    # Normalize such that CN=2 corresponds to depth of 2.0
-    df[sample_cols] = 2.0 * df[sample_cols] / column_medians[np.newaxis, :]
-
-    if _util.VERBOSE:
-        norm_depths = df[sample_cols].values
-        print(f"\n  [verbose] Post-normalisation depth summary:")
-        print(f"    global mean = {np.nanmean(norm_depths):.4f}")
-        print(f"    global median = {np.nanmedian(norm_depths):.4f}")
-        print(f"    per-sample means: min={np.nanmean(norm_depths, axis=0).min():.4f}, "
-              f"max={np.nanmean(norm_depths, axis=0).max():.4f}")
-
-    # Filter low quality bins
-    if not args.skip_bin_filter:
-        df = filter_low_quality_bins(
-            df,
-            median_min=args.median_min,
-            median_max=args.median_max,
-            mad_max=args.mad_max,
+    # ------------------------------------------------------------------
+    # Branch: load preprocessed data or run full preprocessing
+    # ------------------------------------------------------------------
+    if args.preprocessed_dir:
+        print(f"\nLoading preprocessed data from: {args.preprocessed_dir}")
+        preprocessed_bins, preprocessed_mappings = load_preprocessed_data(
+            args.preprocessed_dir
         )
 
-    # Estimate ploidy per sample/contig from the filtered (genome-wide) bins
-    ploidy_df = estimate_ploidy(df, args.output_dir)
+        # Set up Pyro
+        pyro.enable_validation(True)
+        pyro.distributions.enable_validation(True)
+        pyro.set_rng_seed(42)
+        torch.manual_seed(42)
+        np.random.seed(42)
 
-    # Set up Pyro
-    pyro.enable_validation(True)
-    pyro.distributions.enable_validation(True)
-    pyro.set_rng_seed(42)
-    torch.manual_seed(42)
-    np.random.seed(42)
-
-    # Log high-res counts file if provided
-    if args.high_res_counts:
-        print(f"\nHigh-resolution counts file: {args.high_res_counts}")
+        # Run GD analysis with preprocessed data (no bin collection)
+        run_gd_analysis(
+            pd.DataFrame(), GDTable.__new__(GDTable), None, args,
+            device=args.device,
+            preprocessed_bins=preprocessed_bins,
+            preprocessed_mappings=preprocessed_mappings,
+        )
     else:
-        print("\nNo high-resolution counts file provided (--high-res-counts)")
+        # Validate that required args are present
+        if not args.input:
+            print("Error: --input is required unless --preprocessed-dir is set.")
+            raise SystemExit(1)
+        if not args.gd_table:
+            print("Error: --gd-table is required unless --preprocessed-dir is set.")
+            raise SystemExit(1)
 
-    # Run GD analysis (training and inference only)
-    run_gd_analysis(
-        df, gd_table, exclusion_mask, args, device=args.device,
-        column_medians=column_medians,
-        lowres_median_bin_size=lowres_median_bin_size,
-    )
+        # Load GD table
+        print(f"\nLoading GD table: {args.gd_table}")
+        gd_table = GDTable(args.gd_table)
+        print(f"Loaded {len(gd_table.loci)} loci")
+        for cluster, locus in gd_table.loci.items():
+            if locus.breakpoints:
+                overall_start = min(bp[0] for bp in locus.breakpoints)
+                overall_end = max(bp[1] for bp in locus.breakpoints)
+                print(f"  {cluster}: {locus.chrom}:{overall_start}-{overall_end} "
+                      f"({len(locus.gd_entries)} entries, {locus.n_breakpoints} breakpoints)")
+            else:
+                print(f"  {cluster}: {locus.chrom} - NO BREAKPOINTS DEFINED")
+
+        # Load exclusion mask
+        exclusion_mask = None
+        for bed_path in args.exclusion_intervals:
+            bed_label = os.path.basename(bed_path)
+            if exclusion_mask is None:
+                print(f"\nLoading exclusion mask: {bed_path}")
+                exclusion_mask = ExclusionMask(bed_path, label=bed_label)
+            else:
+                print(f"\nMerging exclusion intervals: {bed_path}")
+                exclusion_mask.merge(bed_path, label=bed_label)
+
+        # Load read depth data
+        df = read_data(args.input)
+
+        # Normalize by sample median over autosomal bins
+        sample_cols = get_sample_columns(df)
+        autosome_mask = ~df["Chr"].isin(["chrX", "chrY"])
+        if autosome_mask.any():
+            column_medians = np.median(df.loc[autosome_mask, sample_cols], axis=0)
+        else:
+            column_medians = np.median(df[sample_cols], axis=0)
+
+        print(f"Column medians: min={column_medians.min():.3f}, "
+              f"max={column_medians.max():.3f}, mean={column_medians.mean():.3f}")
+
+        if _util.VERBOSE:
+            print("\n  [verbose] Per-sample autosomal median raw counts:")
+            for i, s in enumerate(sample_cols):
+                print(f"    {s}: {column_medians[i]:.3f}")
+            raw_depths = df[sample_cols].values
+            print(f"\n  [verbose] Pre-normalisation depth summary "
+                  f"({len(df)} bins x {len(sample_cols)} samples):")
+            print(f"    global mean = {np.nanmean(raw_depths):.4f}")
+            print(f"    global median = {np.nanmedian(raw_depths):.4f}")
+            print(f"    per-sample means: min={np.nanmean(raw_depths, axis=0).min():.4f}, "
+                  f"max={np.nanmean(raw_depths, axis=0).max():.4f}")
+
+        lowres_bin_sizes = (df["End"] - df["Start"]).values
+        lowres_median_bin_size = float(np.median(lowres_bin_sizes))
+        print(f"Low-res median bin size: {lowres_median_bin_size:,.0f} bp")
+
+        # Normalize such that CN=2 corresponds to depth of 2.0
+        df[sample_cols] = 2.0 * df[sample_cols] / column_medians[np.newaxis, :]
+
+        if _util.VERBOSE:
+            norm_depths = df[sample_cols].values
+            print(f"\n  [verbose] Post-normalisation depth summary:")
+            print(f"    global mean = {np.nanmean(norm_depths):.4f}")
+            print(f"    global median = {np.nanmedian(norm_depths):.4f}")
+            print(f"    per-sample means: min={np.nanmean(norm_depths, axis=0).min():.4f}, "
+                  f"max={np.nanmean(norm_depths, axis=0).max():.4f}")
+
+        # Filter low quality bins
+        if not args.skip_bin_filter:
+            df = filter_low_quality_bins(
+                df,
+                median_min=args.median_min,
+                median_max=args.median_max,
+                mad_max=args.mad_max,
+            )
+
+        # Estimate ploidy
+        ploidy_df = estimate_ploidy(df, args.output_dir)
+
+        # Set up Pyro
+        pyro.enable_validation(True)
+        pyro.distributions.enable_validation(True)
+        pyro.set_rng_seed(42)
+        torch.manual_seed(42)
+        np.random.seed(42)
+
+        # Log high-res counts file if provided
+        if args.high_res_counts:
+            print(f"\nHigh-resolution counts file: {args.high_res_counts}")
+        else:
+            print("\nNo high-resolution counts file provided (--high-res-counts)")
+
+        # Run GD analysis (training and inference only)
+        run_gd_analysis(
+            df, gd_table, exclusion_mask, args, device=args.device,
+            column_medians=column_medians,
+            lowres_median_bin_size=lowres_median_bin_size,
+        )
 
     print("\n" + "=" * 80)
     print("ANALYSIS COMPLETE")
