@@ -58,7 +58,7 @@ task CollectVidsPerSample {
   String outdirprefix = "~{prefix}_perSample_VIDs"
   Float input_size = size([vcf, samples_list], "GiB")
   RuntimeAttr runtime_default = object {
-    mem_gb: 1.5,
+    mem_gb: 8,
     disk_gb: ceil(10.0 + input_size),
     cpu_cores: 1,
     preemptible_tries: 3,

@@ -400,6 +400,13 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
     xlims <- range(sizes[which(!is.infinite(sizes))],na.rm=T)
     xlims[1] <- max(c(log10(min.size),xlims[1]))
     xlims[2] <- min(c(log10(max.size),xlims[2]))
+    if(!all(is.finite(xlims)) || xlims[1] >= xlims[2]){
+      par(bty="n",mar=c(3.5,3.5,3,0.5))
+      plot(x=c(0,1),y=c(0,1),type="n",xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
+      text(x=0.5,y=0.5,labels="No Data")
+      mtext(3,line=1.5,text=title,font=2,cex=text.cex)
+      return(invisible(NULL))
+    }
     breaks <- seq(xlims[1],xlims[2],by=(xlims[2]-xlims[1])/n.breaks)
     mids <- (breaks[1:(length(breaks)-1)]+breaks[2:length(breaks)])/2
     
@@ -541,9 +548,17 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
         return(sizes[which(dat$AF>max.AFs[i-1] & dat$AF<=max.AFs[i])])
       }
     })
-    xlims <- range(sizes[which(!is.infinite(unlist(sizes)))],na.rm=T)
+    finite_sizes <- unlist(sizes)[!is.infinite(unlist(sizes))]
+    xlims <- range(finite_sizes, na.rm=T)
     xlims[1] <- max(c(log10(min.size),xlims[1]))
     xlims[2] <- min(c(log10(max.size),xlims[2]))
+    if(!all(is.finite(xlims)) || xlims[1] >= xlims[2]){
+      par(bty="n",mar=c(3.5,3.5,3,0.5))
+      plot(x=c(0,1),y=c(0,1),type="n",xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
+      text(x=0.5,y=0.5,labels="No Data")
+      mtext(3,line=1.5,text=title,font=2,cex=lwd.cex)
+      return(invisible(NULL))
+    }
     breaks <- seq(xlims[1],xlims[2],by=(xlims[2]-xlims[1])/n.breaks)
     mids <- (breaks[1:(length(breaks)-1)]+breaks[2:length(breaks)])/2
     
