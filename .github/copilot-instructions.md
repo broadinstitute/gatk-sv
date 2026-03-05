@@ -73,6 +73,6 @@ Changes often span multiple layers of the codebase. Apply updates in this order,
 
 ## Key Patterns to Follow
 - All cloud resource paths use `gs://` URIs. Reference data is in `gs://gcp-public-data--broad-references/hg38/v0/` and `gs://gatk-sv-resources-public/`.
-- PRs are squash-and-merged to `main`.
+- PRs are squash-and-merged to `main`. NEVER commit directly to main or merge without review. Use feature branches named `xy-feature-description` (replace `xy` with your initials).
 - When adding a new WDL task, follow the existing RuntimeAttr override pattern in nearby tasks (see `Utils.wdl` for the `RuntimeAttr` struct definition).
 - When adding Python code to `sv-pipeline/scripts/`, it runs as a standalone script inside Docker—no package imports needed. For reusable utilities, add to `svtk` or `sv_utils`.
