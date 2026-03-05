@@ -158,7 +158,7 @@ eval REMOTE_DIR="$REMOTE_DIR"
 cd "$REMOTE_DIR"
 
 echo "  Cleaning untracked inputs/values/ files that would block checkout..."
-git clean -fd inputs/values/ 2>/dev/null || true
+git reset --hard inputs/values/dockers.json
 
 echo "  Updating main..."
 git checkout main && git pull --quiet
