@@ -158,7 +158,13 @@ eval REMOTE_DIR="$REMOTE_DIR"
 cd "$REMOTE_DIR"
 
 echo "  Cleaning untracked inputs/values/ files that would block checkout..."
-git reset --hard inputs/values/dockers.json
+git clean -fd inputs/values/ 2>/dev/null || true
+echo "  Checking for modified tracked inputs files..."
+# If the tracked dockers.json has local modifications, restore it to HEAD so checkout can proceed.
+if [[ -n "$(git status --porcelain -- inputs/values/dockers.json)" ]]; then
+  echo "  Warning: tracked changes in inputs/values/dockers.json will be discarded to allow checkout."
+  git checkout -- inputs/values/dockers.json || true
+fi
 
 echo "  Updating main..."
 git checkout main && git pull --quiet
