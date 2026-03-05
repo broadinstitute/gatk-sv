@@ -135,22 +135,15 @@ task PloidyScore {
     set -euxo pipefail
 
     OUTDIR="./~{batch}_ploidy"
-    mkdir "${OUTDIR}" "${OUTDIR}/model" "${OUTDIR}/results"
-    
-    # Run aneuploidy detection
-    python /opt/sv-pipeline/scripts/aneuploidy_pyro.py \
-      --input ~{ploidy_matrix} \
-      --output-dir ./${OUTDIR}/model \
-       ~{model_args}
-    
-    # Aggregate results
-    python /opt/sv-pipeline/scripts/aggregate_ploidy_output.py \
-      --chrom-stats ${OUTDIR}/model/chromosome_stats.tsv \
-      --bin-stats ${OUTDIR}/model/bin_stats.tsv.gz \
-      --training-loss ${OUTDIR}/model/training_loss.tsv \
-      --output-dir ${OUTDIR}/results \
-      ~{"--highlight-sample " + plot_highlight_sample} \
-      ~{plot_args}
+    mkdir -p "${OUTDIR}"
+
+    # Run packaged pipeline script which wraps the gatk-sv-ploidy subcommands
+    /opt/gatk-sv-ploidy/run_ploidy.sh \
+      --input-depth ~{ploidy_matrix} \
+      --work-dir ${OUTDIR} \
+      ~{"--model-args " + model_args} \
+      ~{"--plot-args " + plot_args} \
+      ~{"--highlight-sample " + plot_highlight_sample}
 
     # Package all outputs
     tar -zcf ~{batch}_ploidy.tar.gz "${OUTDIR}"
