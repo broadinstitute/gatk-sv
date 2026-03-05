@@ -24,6 +24,7 @@ ssh mw-dev-2.us-central1-b.broad-dsde-methods
 ```bash
 cd ~/gatk-sv
 git checkout main && git pull
+git fetch origin
 git checkout origin/<branch-name>
 ```
 
@@ -48,7 +49,7 @@ Once the build completes, commit and push that change from the VM:
 ```bash
 git add inputs/values/dockers.json
 git commit -m "Update docker tags after build"
-git push origin HEAD:<branch-name>
+git push origin HEAD:refs/heads/<branch-name>
 ```
 
 ### 6. Pull the updated branch locally
