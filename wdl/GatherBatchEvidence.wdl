@@ -243,6 +243,7 @@ workflow GatherBatchEvidence {
       input:
         ref_ped_file = SubsetPedFile.ped_subset_file,
         ploidy_plots = select_first([Ploidy.ploidy_plots]),
+        batch = batch,
         sample_id = samples[0],
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = add_sample_to_ped_runtime_attr
@@ -523,6 +524,7 @@ task AddCaseSampleToPed {
   input {
     File ref_ped_file
     File ploidy_plots
+    String batch
     String sample_id
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
@@ -547,11 +549,22 @@ task AddCaseSampleToPed {
     set -euo pipefail
 
     tar xzf ~{ploidy_plots} -C .
-    RECORD=$(gunzip -c ploidy_est/sample_sex_assignments.txt.gz | { grep -w "^~{sample_id}" || true; })
+
+    # Expect sex assignments at <batch>_ploidy/call/sex_assignments.txt.gz
+    SEX_FILE="~{batch}_ploidy/call/sex_assignments.txt.gz"
+    if [ ! -f "$SEX_FILE" ]; then
+      >&2 echo "Error: sex assignments file '$SEX_FILE' not found in ploidy tar"
+      exit 1
+    fi
+
+    # The file is expected to be gzipped; read with gunzip
+    RECORD=$(gunzip -c "$SEX_FILE" | { grep -w "^~{sample_id}" || true; })
+
     if [ -z "$RECORD" ]; then
       >&2 echo "Error: Sample ~{sample_id} not found in ploidy calls"
       exit 1
     fi
+
     SEX=$(echo "$RECORD" | cut -f2)
 
     awk -v sample=~{sample_id} '$2 == sample { print "ERROR: A sample with the name "sample" is already present in the ped file." > "/dev/stderr"; exit 1; }' < ~{ref_ped_file}
