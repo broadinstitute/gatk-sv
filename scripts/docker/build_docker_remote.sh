@@ -10,8 +10,8 @@
 set -euo pipefail
 
 # ── Defaults ─────────────────────────────────────────────────────────────────────
-DEFAULT_SSH_HOST="mw-dev-2.us-central1-b.broad-dsde-methods"
-DEFAULT_DOCKER_REPO="us.gcr.io/broad-dsde-methods/markw"
+DEFAULT_SSH_HOST="your_host_name"
+DEFAULT_DOCKER_REPO="us.gcr.io/your-repo-name"
 DEFAULT_REMOTE_REPO_DIR="~/gatk-sv"
 DEFAULT_BASE_GIT_COMMIT="origin/main"
 
