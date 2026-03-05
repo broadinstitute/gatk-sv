@@ -47,6 +47,166 @@ from gatk_sv_gd.annotations import (
     get_sample_columns,
 )
 from gatk_sv_gd.models import GDLocus, GDTable
+from gatk_sv_gd.highres import normalize_highres_bins, query_highres_bins
+
+
+# =============================================================================
+# Raw-depth helpers
+# =============================================================================
+
+
+def estimate_lowres_bin_size(df: pd.DataFrame) -> float:
+    """Return the median bin size (bp) across all rows of *df*."""
+    return float(np.median((df["End"] - df["Start"]).values))
+
+
+def _build_raw_region_df(
+    locus: GDLocus,
+    region_start: int,
+    region_end: int,
+    raw_counts_df: Optional[pd.DataFrame],
+    sample_cols: List[str],
+    raw_sample_medians: Dict[str, float],
+    lowres_median_bin_size: float,
+    highres_path: Optional[str] = None,
+    size_threshold_factor: float = 10.0,
+) -> Optional[pd.DataFrame]:
+    """
+    Build a normalised raw-depth DataFrame for a locus's visible region,
+    optionally substituting high-resolution bins for small intervals/flanks.
+
+    For each GD body interval and each flank, the region's genomic span is
+    compared against ``size_threshold_factor × lowres_median_bin_size``.
+    When the span is smaller than that threshold **and** *highres_path* is
+    provided, bins for that sub-region are queried on demand via pysam
+    (reusing :func:`~gatk_sv_gd.highres.query_highres_bins` and
+    :func:`~gatk_sv_gd.highres.normalize_highres_bins` from the preprocess
+    module), and the corresponding low-resolution bins are spliced out.
+    Larger regions – and small regions for which the high-res query returns
+    no data – retain their low-resolution bins.
+
+    All returned depths are normalised to the 2.0 = diploid reference scale
+    used by the processed ``depth_df``.
+
+    Args:
+        locus: GDLocus defining body intervals and chromosome.
+        region_start: Leftmost coordinate of the visible region (derived
+            from the processed depth_df bin extents).
+        region_end: Rightmost coordinate of the visible region.
+        raw_counts_df: Full low-resolution raw count matrix held in memory.
+            May be ``None`` when no low-res file was loaded.
+        sample_cols: Sample column names to include in the output.
+        raw_sample_medians: Per-sample autosomal median raw counts from the
+            low-resolution file, used to normalise both low-res and
+            high-res bins.
+        lowres_median_bin_size: Median bin size (bp) of the low-resolution
+            file; passed to
+            :func:`~gatk_sv_gd.highres.normalize_highres_bins` for
+            bin-size-ratio correction.
+        highres_path: Path to a bgzipped, tabix-indexed high-resolution
+            read-count file (.tsv.gz + .tbi).  ``None`` disables high-res
+            substitution entirely.
+        size_threshold_factor: Body intervals and flanks whose genomic span
+            is less than this multiple of *lowres_median_bin_size* are
+            served from the high-res file (default 10).
+
+    Returns:
+        Normalised DataFrame with columns ``Chr``, ``Start``, ``End`` and
+        one column per sample, sorted by ``Start``.  Returns ``None`` when
+        no usable data is available.
+    """
+    chrom = locus.chrom
+    threshold_bp = size_threshold_factor * lowres_median_bin_size
+
+    # Restrict to samples that have a valid per-sample median.
+    common_samples = [
+        s for s in sample_cols
+        if s in raw_sample_medians and raw_sample_medians[s] > 0
+    ]
+    if not common_samples:
+        return None
+
+    # Array form required by normalize_highres_bins.
+    column_medians_arr = np.array([raw_sample_medians[s] for s in common_samples])
+
+    # --- Step 1: normalised low-res base covering the full visible region ---
+    base_df = pd.DataFrame()
+    if raw_counts_df is not None:
+        mask = (
+            (raw_counts_df["Chr"] == chrom)
+            & (raw_counts_df["End"] > region_start)
+            & (raw_counts_df["Start"] < region_end)
+        )
+        raw_sub = raw_counts_df[mask].copy().sort_values("Start")
+        if len(raw_sub) > 0:
+            usable = [s for s in common_samples if s in raw_sub.columns]
+            if usable:
+                meds = np.array([raw_sample_medians[s] for s in usable])
+                normed_vals = 2.0 * raw_sub[usable].values.astype(float) / meds
+                base_df = pd.concat(
+                    [
+                        raw_sub[["Chr", "Start", "End"]].reset_index(drop=True),
+                        pd.DataFrame(normed_vals, columns=usable),
+                    ],
+                    axis=1,
+                )
+
+    if highres_path is None:
+        return base_df if len(base_df) > 0 else None
+
+    # --- Step 2: identify small regions to replace with high-res bins ---
+    regions_to_check: List[Tuple[int, int, str]] = list(locus.get_intervals())
+    if region_start < locus.start:
+        regions_to_check.append((region_start, locus.start, "left_flank"))
+    if region_end > locus.end:
+        regions_to_check.append((locus.end, region_end, "right_flank"))
+
+    highres_parts: List[pd.DataFrame] = []
+    excluded_ranges: List[Tuple[int, int]] = []
+
+    for r_start, r_end, r_name in regions_to_check:
+        region_size = r_end - r_start
+        if region_size >= threshold_bp:
+            continue  # large enough — low-res is adequate
+        hr_raw = query_highres_bins(
+            highres_path, chrom, r_start, r_end, common_samples,
+        )
+        if len(hr_raw) == 0:
+            print(f"    [high-res plot] {r_name}: no bins returned, keeping low-res")
+            continue
+        normed = normalize_highres_bins(
+            hr_raw, common_samples, column_medians_arr, lowres_median_bin_size,
+        )
+        keep_cols = ["Chr", "Start", "End"] + [
+            s for s in common_samples if s in normed.columns
+        ]
+        highres_parts.append(normed.reset_index()[keep_cols])
+        excluded_ranges.append((r_start, r_end))
+        print(
+            f"    [high-res plot] {r_name} ({region_size:,} bp "
+            f"< {threshold_bp:,.0f} bp threshold): {len(hr_raw)} high-res bins"
+        )
+
+    if not highres_parts:
+        return base_df if len(base_df) > 0 else None
+
+    # --- Step 3: splice out low-res bins covered by high-res regions ---
+    if len(base_df) > 0:
+        bin_mids = (base_df["Start"] + base_df["End"]) / 2
+        keep = pd.Series(True, index=base_df.index)
+        for ex_s, ex_e in excluded_ranges:
+            keep &= ~((bin_mids >= ex_s) & (bin_mids < ex_e))
+        base_df = base_df[keep]
+
+    pieces = ([base_df] if len(base_df) > 0 else []) + highres_parts
+    combined = pd.concat(pieces, axis=0, ignore_index=True)
+    combined = (
+        combined
+        .drop_duplicates(subset=["Chr", "Start", "End"])
+        .sort_values("Start")
+        .reset_index(drop=True)
+    )
+    return combined if len(combined) > 0 else None
 
 
 # =============================================================================
@@ -69,6 +229,8 @@ def plot_locus_overview(
     raw_sample_medians: Optional[Dict[str, float]] = None,
     gaps: Optional[GapsAnnotation] = None,
     flank_scale: float = 0.20,
+    lowres_median_bin_size: Optional[float] = None,
+    highres_path: Optional[str] = None,
 ):
     """
     Create overview plot for a GD locus showing all samples.
@@ -122,31 +284,18 @@ def plot_locus_overview(
     n_ploidy_panels = len(all_ploidies)
 
     # ---- Build raw-normalised DataFrame for the left column (if available) ----
-    have_raw = (raw_counts_df is not None and raw_sample_medians is not None)
+    have_raw = (
+        (raw_counts_df is not None or highres_path is not None)
+        and raw_sample_medians is not None
+        and lowres_median_bin_size is not None
+    )
     raw_region_df: Optional[pd.DataFrame] = None
     if have_raw:
-        raw_mask = (
-            (raw_counts_df["Chr"] == chrom)
-            & (raw_counts_df["End"] > region_start)
-            & (raw_counts_df["Start"] < region_end)
+        raw_region_df = _build_raw_region_df(
+            locus, region_start, region_end,
+            raw_counts_df, sample_cols, raw_sample_medians,
+            lowres_median_bin_size, highres_path=highres_path,
         )
-        raw_region = raw_counts_df[raw_mask].copy().sort_values("Start")
-        if len(raw_region) > 0:
-            raw_cols_set = set(raw_region.columns)
-            usable_samples = [s for s in sample_cols
-                              if s in raw_cols_set
-                              and s in raw_sample_medians
-                              and raw_sample_medians[s] > 0]
-            if usable_samples:
-                medians = np.array([raw_sample_medians[s] for s in usable_samples])
-                normed = 2.0 * raw_region[usable_samples].values.astype(float) / medians
-                raw_region_df = pd.concat(
-                    [
-                        raw_region[["Chr", "Start", "End"]].reset_index(drop=True),
-                        pd.DataFrame(normed, columns=usable_samples),
-                    ],
-                    axis=1,
-                )
         if raw_region_df is None or len(raw_region_df) == 0:
             have_raw = False
             raw_region_df = None
@@ -437,6 +586,8 @@ def create_carrier_pdf(
     raw_counts_df: Optional[pd.DataFrame] = None,
     gaps: Optional[GapsAnnotation] = None,
     flank_scale: float = 0.20,
+    lowres_median_bin_size: Optional[float] = None,
+    highres_path: Optional[str] = None,
 ):
     """Create a PDF with plots for all carrier samples."""
     carriers = calls_df[calls_df["is_carrier"]]
@@ -457,6 +608,9 @@ def create_carrier_pdf(
             if med > 0:
                 raw_sample_medians[s] = med
         print(f"  Computed raw autosomal medians for {len(raw_sample_medians)} samples")
+
+    if lowres_median_bin_size is None and raw_counts_df is not None:
+        lowres_median_bin_size = estimate_lowres_bin_size(raw_counts_df)
 
     pdf_path = os.path.join(output_dir, "carrier_plots.pdf")
     print(f"Creating carrier PDF: {pdf_path}")
@@ -493,15 +647,17 @@ def create_carrier_pdf(
 
             cluster_calls_df = calls_df[calls_df["cluster"] == cluster]
             _raw_region = None
-            if raw_counts_df is not None:
-                _raw_mask = (
-                    (raw_counts_df["Chr"] == chrom)
-                    & (raw_counts_df["End"] > region_start)
-                    & (raw_counts_df["Start"] < region_end)
+            if (
+                (raw_counts_df is not None or highres_path is not None)
+                and raw_sample_medians
+                and lowres_median_bin_size is not None
+            ):
+                _raw_region = _build_raw_region_df(
+                    locus, region_start, region_end,
+                    raw_counts_df, list(raw_sample_medians.keys()),
+                    raw_sample_medians, lowres_median_bin_size,
+                    highres_path=highres_path,
                 )
-                _rr = raw_counts_df[_raw_mask].sort_values("Start")
-                if len(_rr) > 0:
-                    _raw_region = _rr
 
             for sample_id in sorted(cluster_carriers):
                 if sample_id not in region_df.columns:
@@ -568,13 +724,11 @@ def create_carrier_pdf(
                        color="steelblue", edgecolor="none", zorder=3)
 
                 # Overlay raw depth trace if available
-                if _raw_region is not None and sample_id in raw_sample_medians:
-                    if sample_id in _raw_region.columns:
-                        raw_mids = (_raw_region["Start"].values + _raw_region["End"].values) / 2
-                        raw_depth = _raw_region[sample_id].values.astype(float)
-                        norm_raw = 2.0 * raw_depth / raw_sample_medians[sample_id]
-                        ax.plot(xform(raw_mids), norm_raw, color="darkorange", linewidth=0.6,
-                                alpha=0.7, zorder=4, label="Raw depth")
+                if _raw_region is not None and sample_id in _raw_region.columns:
+                    raw_mids = (_raw_region["Start"].values + _raw_region["End"].values) / 2
+                    norm_raw = _raw_region[sample_id].values.astype(float)
+                    ax.plot(xform(raw_mids), norm_raw, color="darkorange", linewidth=0.6,
+                            alpha=0.7, zorder=4, label="Raw depth")
 
                 ax.axhline(2.0, color="green", linestyle="-", alpha=0.4, linewidth=1.5,
                            label="Reference CN=2", zorder=0)
@@ -650,6 +804,15 @@ def parse_args():
         required=False,
         help="Raw read-count matrix TSV (can be gzipped).  When provided, "
              "the raw depth profile is superimposed on carrier plots.",
+    )
+    parser.add_argument(
+        "--high-res-counts",
+        required=False,
+        help="Bgzipped, tabix-indexed high-resolution read-count file "
+             "(.tsv.gz + .tbi).  Requires --raw-counts.  For each GD body "
+             "interval and flank whose genomic span is less than 10\u00d7 the "
+             "estimated low-resolution bin size, bins are queried on demand "
+             "via pysam rather than slicing the low-resolution matrix.",
     )
     parser.add_argument(
         "--output-dir", "-o",
@@ -784,6 +947,18 @@ def main():
                 raw_sample_medians[s] = med
         print(f"    Computed raw autosomal medians for {len(raw_sample_medians)} samples")
 
+    lowres_median_bin_size: Optional[float] = None
+    if raw_counts_df is not None:
+        lowres_median_bin_size = estimate_lowres_bin_size(raw_counts_df)
+        print(f"    Estimated low-res median bin size: {lowres_median_bin_size:,.0f} bp")
+
+    highres_path: Optional[str] = getattr(args, "high_res_counts", None)
+    if highres_path:
+        if not args.raw_counts:
+            print("ERROR: --high-res-counts requires --raw-counts for per-sample median estimation")
+            sys.exit(1)
+        print(f"  High-res counts: {highres_path}")
+
     # ---- Determine which loci to plot ----
     if args.loci:
         loci_to_plot = {}
@@ -837,6 +1012,8 @@ def main():
             raw_sample_medians=raw_sample_medians if raw_sample_medians else None,
             gaps=gaps,
             flank_scale=args.flank_scale,
+            lowres_median_bin_size=lowres_median_bin_size,
+            highres_path=highres_path,
         )
 
     # Create individual sample plots
@@ -871,6 +1048,8 @@ def main():
         raw_counts_df=raw_counts_df,
         gaps=gaps,
         flank_scale=args.flank_scale,
+        lowres_median_bin_size=lowres_median_bin_size,
+        highres_path=highres_path,
     )
 
     print("\n" + "=" * 80)
