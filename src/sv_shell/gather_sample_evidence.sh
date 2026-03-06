@@ -317,22 +317,84 @@ fi
 # ======================= Output ========================
 # -------------------------------------------------------
 
-outputs_json=$(jq -n \
-  --arg coverage_counts "$([ "${collect_coverage}" = "false" ] && echo "" || jq -r ".counts" "${collect_counts_outputs_json_filename}")" \
-  --arg manta_vcf "$([ "${run_manta}" = "false" ] && echo "" || jq -r ".vcf" "${manta_outputs_json_filename}")" \
-  --arg manta_index "$([ "${run_manta}" = "false" ] && echo "" || jq -r ".index" "${manta_outputs_json_filename}")" \
-  --arg scramble_vcf "$([ "${run_scramble}" = "false" ] && echo "" || jq -r ".vcf" "${scramble_p2_outputs_json_filename}")" \
-  --arg scramble_index "$([ "${run_scramble}" = "false" ] && echo "" || jq -r ".index" "${scramble_p2_outputs_json_filename}")" \
-  --arg scramble_clusters "$([ "${run_scramble}" = "false" ] && echo "" || jq -r ".clusters" "${scramble_p2_outputs_json_filename}")" \
-  --arg scramble_table "$([ "${run_scramble}" = "false" ] && echo "" || jq -r ".table" "${scramble_p2_outputs_json_filename}")" \
-  --arg pesr_disc "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".disc_out" "${collect_pesr_outputs_json_filename}")" \
-  --arg pesr_disc_index "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".disc_out_index" "${collect_pesr_outputs_json_filename}")" \
-  --arg pesr_split "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".split_out" "${collect_pesr_outputs_json_filename}")" \
-  --arg pesr_split_index "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".split_out_index" "${collect_pesr_outputs_json_filename}")" \
-  --arg pesr_sd "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".sd_out" "${collect_pesr_outputs_json_filename}")" \
-  --arg pesr_sd_index "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".sd_out_index" "${collect_pesr_outputs_json_filename}")" \
-  --arg wham_vcf "$([ "${run_wham}" = "false" ] && echo "" || jq -r ".vcf" "${wham_outputs_json_filename}")" \
-  --arg wham_index "$([ "${run_wham}" = "false" ] && echo "" || jq -r ".index" "${wham_outputs_json_filename}")" \
+collect_coverage_file=""
+if [ "${collect_coverage}" = "true" ]; then
+  _ccf=$(jq -r ".coverage_file" "${collect_counts_outputs_json_filename}")
+  collect_coverage_file="${output_dir}/$(basename "${_ccf}")"
+  mv "${_ccf}" "${collect_coverage_file}"
+fi
+
+manta_vcf=""
+if [ "${run_manta}" = "true" ]; then
+  _manta_vcf=$(jq -r ".vcf" "${manta_outputs_json_filename}")
+  manta_vcf="${output_dir}/$(basename "${_manta_vcf}")"
+  mv "${_manta_vcf}" "${manta_vcf}"
+  mv "${_manta_vcf}.tbi" "${manta_vcf}.tbi"
+fi
+
+scramble_vcf=""
+scramble_clusters=""
+scramble_table=""
+if [ "${run_scramble}" = "true" ]; then
+  _scramble_vcf=$(jq -r ".vcf" "${scramble_p2_outputs_json_filename}")
+  scramble_vcf="${output_dir}/$(basename "${_scramble_vcf}")"
+  mv "${_scramble_vcf}" "${scramble_vcf}"
+  mv "${_scramble_vcf}.tbi" "${scramble_vcf}.tbi"
+
+  _scramble_clusters=$(jq -r ".clusters" "${scramble_p2_outputs_json_filename}")
+  scramble_clusters="${output_dir}/$(basename "${_scramble_clusters}")"
+  mv "${_scramble_clusters}" "${scramble_clusters}"
+
+  _scramble_table=$(jq -r ".table" "${scramble_p2_outputs_json_filename}")
+  scramble_table="${output_dir}/$(basename "${_scramble_table}")"
+  mv "${_scramble_table}" "${scramble_table}"
+fi
+
+pesr_disc=""
+pesr_split=""
+pesr_sd=""
+pesr_sd_index=""
+if [ "${collect_pesr}" = "true" ]; then
+  _pesr_disc=$(jq -r ".disc_out" "${collect_pesr_outputs_json_filename}")
+  pesr_disc="${output_dir}/$(basename "${_pesr_disc}")"
+  mv "${_pesr_disc}" "${pesr_disc}"
+  mv "${_pesr_disc}.tbi" "${pesr_disc}.tbi"
+
+  _pesr_split=$(jq -r ".split_out" "${collect_pesr_outputs_json_filename}")
+  pesr_split="${output_dir}/$(basename "${_pesr_split}")"
+  mv "${_pesr_split}" "${pesr_split}"
+  mv "${_pesr_split}.tbi" "${pesr_split}.tbi"
+
+  _pesr_sd=$(jq -r ".sd_out" "${collect_pesr_outputs_json_filename}")
+  pesr_sd="${output_dir}/$(basename "${_pesr_sd}")"
+  mv "${_pesr_sd}" "${pesr_sd}"
+  mv "${_pesr_sd}.tbi" "${pesr_sd}.tbi"
+fi
+
+wham_vcf=""
+if [ "${run_wham}" = "true" ]; then
+  _wham_vcf=$(jq -r ".vcf" "${wham_outputs_json_filename}")
+  wham_vcf="${output_dir}/$(basename "${_wham_vcf}")"
+  mv "${_wham_vcf}" "${wham_vcf}"
+  mv "${_wham_vcf}.tbi" "${wham_vcf}.tbi"
+fi
+
+jq -n \
+  --arg coverage_counts "${collect_coverage_file}" \
+  --arg manta_vcf "${manta_vcf}" \
+  --arg manta_index "${manta_vcf}.tbi" \
+  --arg scramble_vcf "${scramble_vcf}" \
+  --arg scramble_index "${scramble_vcf}.tbi" \
+  --arg scramble_clusters "${scramble_clusters}" \
+  --arg scramble_table "${scramble_table}" \
+  --arg pesr_disc "${pesr_disc}" \
+  --arg pesr_disc_index "${pesr_disc}.tbi" \
+  --arg pesr_split "${pesr_split}" \
+  --arg pesr_split_index "${pesr_split}.tbi" \
+  --arg pesr_sd "${pesr_sd}" \
+  --arg pesr_sd_index "${pesr_sd}.tbi" \
+  --arg wham_vcf "${wham_vcf}" \
+  --arg wham_index "${wham_vcf}.tbi" \
   '{
      "coverage_counts": $coverage_counts,
      "manta_vcf": $manta_vcf,
@@ -349,9 +411,10 @@ outputs_json=$(jq -n \
      "pesr_sd_index": $pesr_sd_index,
      "wham_vcf": $wham_vcf,
      "wham_index": $wham_index
-   }' \
-)
-echo "${outputs_json}" > "${output_json_filename}"
+   }' > "${output_json_filename}"
+
+rm -rf "${collect_pesr_output_dir}"
+rm -rf "${working_dir}"
 
 gather_sample_evidence_end_time=`date +%s`
 gather_sample_evidence_et=$((gather_sample_evidence_end_time-gather_sample_evidence_start_time))
