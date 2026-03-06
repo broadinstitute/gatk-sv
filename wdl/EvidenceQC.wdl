@@ -370,9 +370,9 @@ task MakeQcTable {
     PLOIDY_DIR=$(basename ~{ploidy_plots} .tar.gz)
 
     python /opt/sv-pipeline/scripts/make_evidence_qc_table.py \
-      --estimated-copy-number-filename ./${PLOIDY_DIR}/model/chromosome_stats.tsv \
-      --sex-assignments-filename ./${PLOIDY_DIR}/results/sex_assignments.txt.gz \
-      --ploidy-bin-stats-filename ./${PLOIDY_DIR}/model/bin_stats.tsv.gz \
+      --estimated-copy-number-filename ./${PLOIDY_DIR}/infer/chromosome_stats.tsv \
+      --sex-assignments-filename ./${PLOIDY_DIR}/call/sex_assignments.txt.gz \
+      --ploidy-bin-stats-filename ./${PLOIDY_DIR}/infer/bin_stats.tsv.gz \
       ~{"--median-cov-filename " + bincov_median} \
       ~{"--wgd-scores-filename " + WGD_scores} \
       ~{"--dragen-qc-outlier-high-filename " + dragen_qc_high} \
