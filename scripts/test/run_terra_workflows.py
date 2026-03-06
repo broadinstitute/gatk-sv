@@ -868,8 +868,8 @@ def parse_args(argv=None):
         help="Module number to start the pipeline from (1-based).",
     )
     p.add_argument(
-        "--poll-interval", type=int, default=30,
-        help="Seconds between status polls (default: 30).",
+        "--poll-interval", type=int, default=300,
+        help="Seconds between status polls (default: 300).",
     )
     p.add_argument(
         "--repo-root", default=None,
