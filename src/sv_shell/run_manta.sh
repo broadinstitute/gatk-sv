@@ -68,11 +68,9 @@ output_vcf_filename="$(realpath ${output_dir}/$sample_id.manta.vcf.gz)"
 output_vcf_index_filename="$(realpath ${output_dir}/$sample_id.manta.vcf.gz.tbi)"
 mv "${working_dir}/$sample_id.manta.vcf.gz" "${output_vcf_filename}"
 mv "${working_dir}/${sample_id}.manta.vcf.gz.tbi" "${output_vcf_index_filename}"
+rm -rf "${working_dir}"
 
-outputs_filename="${output_dir}/outputs.json"
-outputs_json=$(jq -n \
+jq -n \
   --arg vcf "${output_vcf_filename}" \
   --arg vcf_idx "${output_vcf_index_filename}" \
-  '{vcf: $vcf, index: $vcf_idx}' )
-echo "${outputs_json}" > "${outputs_filename}"
-cp "${outputs_filename}" "${outputs_json_filename}"
+  '{vcf: $vcf, index: $vcf_idx}' > "${outputs_json_filename}"
