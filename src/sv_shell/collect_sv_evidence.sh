@@ -92,6 +92,8 @@ sd_out_filename="${output_dir}/${sample_id}.sd.txt.gz"
 mv "${sample_id}.sd.txt.gz" "${sd_out_filename}"
 mv "${sample_id}.sd.txt.gz.tbi" "${sd_out_filename}.tbi"
 
+rm -rf "${working_dir}"
+
 jq -n \
   --arg split_out "${split_out_filename}" \
   --arg split_out_index "${split_out_filename}.tbi" \
