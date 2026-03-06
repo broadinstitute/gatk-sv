@@ -1140,6 +1140,7 @@ workflow GATKSVPipelineSingleSample {
 
   call makecohortvcf.MakeCohortVcf {
     input:
+      run_vcf_qc=false,
       min_sr_background_fail_batches=clean_vcf_min_sr_background_fail_batches,
       ped_file=combined_ped_file,
       pesr_vcfs=[ConvertCNVsWithoutDepthSupportToBNDs.out_vcf],
