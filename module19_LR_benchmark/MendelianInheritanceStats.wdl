@@ -196,28 +196,6 @@ task NormalizeVCF {
     }
 }
 
-task NormalizeVCF {
-
-    input {
-        File vcf
-    }
-
-    command <<<
-        bcftools norm -m -any ~{vcf} -Oz -o norm.vcf.gz
-        bcftools index norm.vcf.gz
-    >>>
-
-    output {
-        File out_vcf = "norm.vcf.gz"
-        File out_index = "norm.vcf.gz.csi"
-    }
-
-    runtime {
-        cpu: 2
-        memory: "4G"
-    }
-}
-
 task AnnotateContext {
 
     input {
