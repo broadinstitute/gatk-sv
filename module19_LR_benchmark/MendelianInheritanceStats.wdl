@@ -329,33 +329,44 @@ task MendelianCounts {
         import pandas as pd
         from collections import defaultdict
 
-        vcf=pysam.VariantFile("~{vcf}")
-
-        families=[l.strip().split() for l in open("~{families}")]
-        rules=pd.read_csv("~{inheritance_table}",sep="\t")
-
         def norm(gt):
+            if gt is None:
+                return "./."
+            gt = str(gt).split(":")[0]   # remove FORMAT fields
+            gt = gt.replace("|", "/")    # remove phasing
+            alleles = gt.split("/")
+            if len(alleles) != 2:
+                return None
+            a, b = sorted(alleles)
+            return f"{a}/{b}"
+
+        def norm_individual_gt(gt):
             if gt is None:
                 return "./."
             return "/".join(map(str,sorted(gt)))
 
-        rules_dict={(norm(eval(r.fa)),norm(eval(r.mo)),norm(eval(r.pb))):r.category
-                    for _,r in rules.iterrows()}
+
+
+        families=[l.strip().split() for l in open("families.txt")]
+
+        rules = pd.read_csv("Inheritance_Table.tsv", sep="\t")
+
+        rules_dict = {
+            (norm(r.fa), norm(r.mo), norm(r.pb)): r.category
+            for _, r in rules.iterrows()
+        }
+
 
         counts=defaultdict(int)
 
+        vcf=pysam.VariantFile("classified.vcf.gz")
         for rec in vcf:
-
             vclass=rec.info["VARCLASS"]
-
             for fam,fa,mo,pb in families:
-
-                f=norm(rec.samples[fa]["GT"])
-                m=norm(rec.samples[mo]["GT"])
-                p=norm(rec.samples[pb]["GT"])
-
+                f = norm_individual_gt(rec.samples[fa]["GT"])
+                m = norm_individual_gt(rec.samples[mo]["GT"])
+                p = norm_individual_gt(rec.samples[pb]["GT"])
                 key=(f,m,p)
-
                 if key in rules_dict:
                     cat=rules_dict[key]
                     counts[(vclass,cat)]+=1
@@ -364,6 +375,8 @@ task MendelianCounts {
             out.write("variant_class\tcategory\tcount\n")
             for (v,c),n in counts.items():
                 out.write(f"{v}\t{c}\t{n}\n")
+
+
         EOF
     >>>
 
