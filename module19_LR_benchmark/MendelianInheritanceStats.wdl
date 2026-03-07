@@ -207,23 +207,10 @@ task ExtractFamilyNonRef {
     command <<<
         set -euo pipefail
 
-        while read fam fa mo pb
-        do
+        cut -f2- ~{families} | sed -e 's/\t/\n/g' > sample_list
 
-            samples="${fa},${mo},${pb}"
+        bcftools view -S sample_list -c 1 ~{vcf} -Oz -o family_nonref.vcf.gz
 
-            bcftools view \
-                -s ${samples} \
-                -c 1 \
-                ~{vcf} \
-                -Oz \
-                -o ${fam}.vcf.gz
-
-            bcftools index ${fam}.vcf.gz
-
-        done < ~{families}
-
-        bcftools concat -Oz -o family_nonref.vcf.gz *.vcf.gz
         bcftools index family_nonref.vcf.gz
     >>>
 
