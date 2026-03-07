@@ -369,12 +369,12 @@ task MendelianCounts {
                 key=(f,m,p)
                 if key in rules_dict:
                     cat=rules_dict[key]
-                    counts[(vclass,cat)]+=1
+                    counts[(vclass,cat,fam)]+=1
 
         with open("counts.tsv","w") as out:
-            out.write("variant_class\tcategory\tcount\n")
-            for (v,c),n in counts.items():
-                out.write(f"{v}\t{c}\t{n}\n")
+            out.write("variant_class\tcategory\tfamily\tcount\n")
+            for (v,c,f),n in counts.items():
+                out.write(f"{v}\t{c}\t{f}\t{n}\n")
 
 
         EOF
@@ -432,28 +432,35 @@ task MergeCounts {
         # keep only rows where count is a valid number
         df = df[df["count"].notna()]
 
-        # sum counts for each (variant_class, category)
-        summary = (
-            df.groupby(["variant_class", "category"], as_index=False)["count"]
-            .sum()
-        )
 
-        # calculate total count per variant_class
-        summary["total"] = summary.groupby("variant_class")["count"].transform("sum")
-        summary["prop"] = (summary["count"] / summary["total"]).round(3)
+        for fam, fam_df in df.groupby("family"):
 
-        # ---- pivot tables ----
+            # sum counts per (variant_class, category)
+            summary = (
+                fam_df.groupby(["variant_class", "category"], as_index=False)["count"]
+                .sum()
+            )
 
-        # count table
-        count_table = summary.pivot(index="variant_class",columns="category",values="count").fillna(0).astype(int)
+            # calculate proportion within variant_class
+            summary["total"] = summary.groupby("variant_class")["count"].transform("sum")
+            summary["prop"] = (summary["count"] / summary["total"]).round(3)
 
-        # proportion table
-        prop_table = summary.pivot(index="variant_class",columns="category",values="prop").fillna(0)
+            # pivot tables
+            count_table = summary.pivot(
+                index="variant_class",
+                columns="category",
+                values="count"
+            ).fillna(0).astype(int)
 
-        # ---- write output ----
-        count_table.to_csv(f"~{prefix}.count.tsv", sep="\t")
-        prop_table.to_csv(f"~{prefix}.prop.tsv", sep="\t")
+            prop_table = summary.pivot(
+                index="variant_class",
+                columns="category",
+                values="prop"
+            ).fillna(0)
 
+            # write outputs
+            count_table.to_csv(f"~{prefix}.{fam}.count.tsv", sep="\t")
+            prop_table.to_csv(f"~{prefix}.{fam}.prop.tsv", sep="\t")
 
         EOF
     >>>
