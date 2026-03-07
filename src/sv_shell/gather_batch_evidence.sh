@@ -186,6 +186,7 @@ cnmops_inputs_json="$(realpath "${output_dir}/cnmops_inputs.json")"
 cnmops_outputs_json="$(realpath "${output_dir}/cnmops_outputs.json")"
 
 jq -n \
+  --slurpfile inputs "${input_json}" \
   --arg r1 "3" \
   --arg r2 "10" \
   --arg batch "${batch}" \
@@ -213,7 +214,8 @@ jq -n \
       "allo_file": $allo_file,
       "ref_dict": $ref_dict,
       "prefix": $prefix,
-      "stitch_and_clean_large_events": $stitch_and_clean_large_events
+      "stitch_and_clean_large_events": $stitch_and_clean_large_events,
+      "cytobands": $inputs[0].cytobands
   }' > "${cnmops_inputs_json}"
 
 bash /opt/sv_shell/cnmops.sh "${cnmops_inputs_json}" "${cnmops_outputs_json}"

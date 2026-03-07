@@ -319,7 +319,8 @@ jq -n \
       run_module_metrics: $inputs[0].run_batchevidence_metrics,
       median_cov_mem_gb_per_sample: $inputs[0].median_cov_mem_gb_per_sample,
       ref_panel_median_cov: $inputs[0].ref_panel_median_cov,
-      sample_median_cov: $eqc_outputs[0].bincov_median
+      sample_median_cov: $eqc_outputs[0].bincov_median,
+      "cytobands": $inputs[0].cytobands,
   }' > "${gather_batch_evidence_inputs_json_filename}"
 
 bash /opt/sv_shell/gather_batch_evidence.sh \
