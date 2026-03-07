@@ -347,9 +347,9 @@ task MendelianCounts {
 
 
 
-        families=[l.strip().split() for l in open("families.txt")]
+        families=[l.strip().split() for l in open("~{families}")]
 
-        rules = pd.read_csv("Inheritance_Table.tsv", sep="\t")
+        rules = pd.read_csv("~{inheritance_table}", sep="\t")
 
         rules_dict = {
             (norm(r.fa), norm(r.mo), norm(r.pb)): r.category
@@ -359,7 +359,7 @@ task MendelianCounts {
 
         counts=defaultdict(int)
 
-        vcf=pysam.VariantFile("classified.vcf.gz")
+        vcf=pysam.VariantFile("~{vcf}")
         for rec in vcf:
             vclass=rec.info["VARCLASS"]
             for fam,fa,mo,pb in families:
