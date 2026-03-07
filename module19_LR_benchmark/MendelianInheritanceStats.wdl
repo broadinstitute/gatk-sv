@@ -15,7 +15,7 @@ workflow MendelianInheritanceStats {
         String sv_pipeline_base_docker
 
         File anno_script_bash
-        File anno_script_Rscript
+        File anno_script_helper_R
         File repeat_mask
         File simple_repeats 
         File segmental_duplicates
