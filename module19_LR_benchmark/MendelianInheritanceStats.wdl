@@ -10,7 +10,6 @@ workflow MendelianInheritanceStats {
         Array[File] vcfs
         File ped
         File inheritance_table   # fa mo pb category
-        File annotation_script   # user provided genomic context annotator
         String output_prefix 
         String sv_pipeline_base_docker
 
@@ -193,29 +192,6 @@ task NormalizeVCF {
         docker: docker_image
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    }
-}
-
-task AnnotateContext {
-
-    input {
-        File vcf
-        File annotation_script
-    }
-
-    command <<<
-        python ~{annotation_script} ~{vcf} annotated.vcf.gz
-        tabix -p vcf annotated.vcf.gz
-    >>>
-
-    output {
-        File annotated_vcf = "annotated.vcf.gz"
-        File annotated_index = "annotated.vcf.gz.tbi"
-    }
-
-    runtime {
-        cpu: 2
-        memory: "4G"
     }
 }
 
