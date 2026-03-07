@@ -406,7 +406,6 @@ task MendelianCounts {
     }
 }
 
-
 task MergeCounts {
 
     input {
@@ -420,22 +419,48 @@ task MergeCounts {
         cat ~{sep=" " count_tables} > all_counts.tmp
 
         python <<EOF
+
         import pandas as pd
+        import sys
 
-        df=pd.read_csv("all_counts.tmp",sep="\t")
+        # read table
+        df = pd.read_csv("all_counts.tmp", sep="\t")
 
-        counts=df.groupby(["variant_class","category"]).sum().reset_index()
-        counts.to_csv("~{prefix}.counts.tsv",sep="\t",index=False)
+        # convert count to numeric; non-numeric values become NaN
+        df["count"] = pd.to_numeric(df["count"], errors="coerce")
 
-        counts["prop"]=counts.groupby("variant_class")["count"].transform(lambda x:x/x.sum())
+        # keep only rows where count is a valid number
+        df = df[df["count"].notna()]
 
-        counts.to_csv("~{prefix}.proportions.tsv",sep="\t",index=False)
+        # sum counts for each (variant_class, category)
+        summary = (
+            df.groupby(["variant_class", "category"], as_index=False)["count"]
+            .sum()
+        )
+
+        # calculate total count per variant_class
+        summary["total"] = summary.groupby("variant_class")["count"].transform("sum")
+        summary["prop"] = (summary["count"] / summary["total"]).round(3)
+
+        # ---- pivot tables ----
+
+        # count table
+        count_table = summary.pivot(index="variant_class",columns="category",values="count").fillna(0).astype(int)
+
+        # proportion table
+        prop_table = summary.pivot(index="variant_class",columns="category",values="prop").fillna(0)
+
+        # ---- write output ----
+        count_table.to_csv(f"~{prefix}.count.tsv", sep="\t")
+        prop_table.to_csv(f"~{prefix}.prop.tsv", sep="\t")
+
+
         EOF
     >>>
 
     output {
         File counts = "~{prefix}.counts.tsv"
-        File proportions = "~{prefix}.proportions.tsv"
+        File proportions = "~{prefix}.prop.tsv"
     }
 
     RuntimeAttr default_attr = object {
