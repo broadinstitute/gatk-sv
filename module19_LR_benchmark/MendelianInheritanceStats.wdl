@@ -459,7 +459,7 @@ task MergeCounts {
     >>>
 
     output {
-        File counts = "~{prefix}.counts.tsv"
+        File counts = "~{prefix}.count.tsv"
         File proportions = "~{prefix}.prop.tsv"
     }
 
