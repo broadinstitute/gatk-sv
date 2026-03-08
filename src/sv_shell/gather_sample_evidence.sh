@@ -322,6 +322,7 @@ if [ "${collect_coverage}" = "true" ]; then
   _ccf=$(jq -r ".counts" "${collect_counts_outputs_json_filename}")
   collect_coverage_file="${output_dir}/$(basename "${_ccf}")"
   mv "${_ccf}" "${collect_coverage_file}"
+  mv "${_ccf}.tbi" "${collect_coverage_file}.tbi"
 fi
 
 manta_vcf=""
