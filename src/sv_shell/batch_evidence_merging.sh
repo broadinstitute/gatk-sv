@@ -68,7 +68,9 @@ SDtoBAF() {
   printf "%s\n" "${_samples[@]}" > "${samples_file}"
 
   awk '/txt\.gz$/' "${inputs_file}" | while read fil; do
-    tabix -f -s1 -b2 -e2 $fil
+    if [ ! -f "${fil}.tbi" ]; then
+      tabix -f -s1 -b2 -e2 $fil
+    fi
   done
 
   java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar SiteDepthtoBAF \
