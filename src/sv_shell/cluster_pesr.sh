@@ -121,8 +121,7 @@ for contig in "${contigs[@]}"; do
 
   # SVCluster
   # -------------------------------------------------------------------------------------------------------------------
-  sv_cluster_output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_sv_cluster_XXXXXXXX)
-  sv_cluster_output_dir="$(realpath ${sv_cluster_output_dir})"
+  sv_cluster_output_dir=$(realpath $(mktemp -d ${SV_SHELL_BASE_DIR}/output_sv_cluster_XXXXXXXX))
   sv_cluster_inputs_json="$(realpath "${sv_cluster_output_dir}/sv_cluster_inputs.json")"
   sv_cluster_outputs_json="$(realpath "${sv_cluster_output_dir}/sv_cluster_outputs.json")"
 
@@ -165,23 +164,21 @@ for contig in "${contigs[@]}"; do
   # ExcludeIntervalsByEndpoints
   # -------------------------------------------------------------------------------------------------------------------
   # Remove variants from VCF that overlap with regions in the exclude_intervals file.
-  working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_ExcludeIntervalsByEndpoints_XXXXXXXX)
-  working_dir="$(realpath ${working_dir})"
-  cd "${working_dir}"
+  ExcludeIntervals_wd=$(realpath $(mktemp -d ${SV_SHELL_BASE_DIR}/wd_ExcludeIntervalsByEndpoints_XXXXXXXX))
+  cd "${ExcludeIntervals_wd}"
   output_prefix="${batch}.cluster_batch.${caller}.${contig}.exclude_intervals"
   ExcludeIntervalsByEndpoints "${sv_cluster_out}" "${reference_fasta_fai}" "${exclude_intervals}" "${output_prefix}"
 
-  out_exclud_intervas_by_endpoint="${working_dir}/${output_prefix}.vcf.gz"
-  out_index_exclud_intervas_by_endpoint="${working_dir}/${output_prefix}.vcf.gz.tbi"
+  out_exclud_intervas_by_endpoint="${ExcludeIntervals_wd}/${output_prefix}.vcf.gz"
+  out_index_exclud_intervas_by_endpoint="${ExcludeIntervals_wd}/${output_prefix}.vcf.gz.tbi"
 
   echo "${out_exclud_intervas_by_endpoint}"
 
 
   # GatkToSvtkVcf
   # -------------------------------------------------------------------------------------------------------------------
-  working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_GatkToSvtkVcf_XXXXXXXX)
-  working_dir="$(realpath ${working_dir})"
-  cd "${working_dir}"
+  SvtkVcf_wd=$(realpath $(mktemp -d ${SV_SHELL_BASE_DIR}/wd_GatkToSvtkVcf_XXXXXXXX))
+  cd "${SvtkVcf_wd}"
   output_prefix="${batch}.cluster_batch.${caller}.${contig}.svtk_formatted"
   python /opt/sv-pipeline/scripts/format_gatk_vcf_for_svtk.py \
     --vcf "${out_exclud_intervas_by_endpoint}" \
@@ -190,8 +187,12 @@ for contig in "${contigs[@]}"; do
     --contigs "${contig_list}" \
     --remove-format CN
 
-  svtk_format_vcfs+=("${working_dir}/${output_prefix}.vcf.gz")
-  svtk_format_vcf_indexes+=("${working_dir}/${output_prefix}.vcf.gz.tbi")
+  svtk_format_vcfs+=("${SvtkVcf_wd}/${output_prefix}.vcf.gz")
+  svtk_format_vcf_indexes+=("${SvtkVcf_wd}/${output_prefix}.vcf.gz.tbi")
+
+  rm -rf "${sv_cluster_output_dir}"
+  rm -rf "${ExcludeIntervals_wd}"
+  rm -rf "${SvtkVcf_wd}"
 done
 
 
@@ -199,12 +200,10 @@ done
 # -------------------------------------------------------------------------------------------------------------------
 # Note the following is a simplified implementation than the WDL-based
 # as it only includes the execution path/args used for this PE/SR clustering task.
+ConcatVcfs_wd=$(realpath $(mktemp -d ${SV_SHELL_BASE_DIR}/wd_ConcatVcfs_XXXXXXXX))
+cd "${ConcatVcfs_wd}"
 
-working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_ConcatVcfs_XXXXXXXX)
-working_dir="$(realpath ${working_dir})"
-cd "${working_dir}"
-
-vcfs_filename="$(realpath ${working_dir}/vcfs.txt)"
+vcfs_filename="$(realpath ${ConcatVcfs_wd}/vcfs.txt)"
 printf "%s\n" "${svtk_format_vcfs[@]}" > "${vcfs_filename}"
 
 
@@ -234,5 +233,8 @@ outputs_json=$(jq -n \
   --arg idx "${concat_vcf_idx_output}" \
   '{clustered_vcf: $vcf, clustered_vcf_index: $idx}' )
 echo "${outputs_json}" > "${output_json_filename}"
+
+rm -rf "${ConcatVcfs_wd}"
+rm -rf "${working_dir}"
 
 echo "Finished Cluster PE/SR successfully, output json filename: ${output_json_filename}"
