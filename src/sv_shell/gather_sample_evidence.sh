@@ -319,7 +319,7 @@ fi
 
 collect_coverage_file=""
 if [ "${collect_coverage}" = "true" ]; then
-  _ccf=$(jq -r ".coverage_file" "${collect_counts_outputs_json_filename}")
+  _ccf=$(jq -r ".counts" "${collect_counts_outputs_json_filename}")
   collect_coverage_file="${output_dir}/$(basename "${_ccf}")"
   mv "${_ccf}" "${collect_coverage_file}"
 fi
