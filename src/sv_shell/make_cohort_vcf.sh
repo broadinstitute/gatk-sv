@@ -14,7 +14,7 @@ output_dir=${3:-""}
 input_json="$(realpath ${input_json})"
 
 if [ -z "${output_dir}" ]; then
-  output_dir=$(mktemp -d /output_make_cohort_vcf_XXXXXXXX)
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_make_cohort_vcf_XXXXXXXX)
 else
   mkdir -p "${output_dir}"
 fi
@@ -26,7 +26,7 @@ else
   output_json_filename="$(realpath ${output_json_filename})"
 fi
 
-working_dir=$(mktemp -d /wd_make_cohort_vcf_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_make_cohort_vcf_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 echo "Make cohort vcf Working directory: ${working_dir}"
@@ -41,7 +41,7 @@ cohort_id=($(jq -r '.cohort_id' "$input_json"))
 
 # CombineBatches
 # ---------------------------------------------------------------------------------------------------------------------
-CombineBatches_output_dir=$(realpath $(mktemp -d "/output_CombineBatches_XXXXXXXX"))
+CombineBatches_output_dir=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/output_CombineBatches_XXXXXXXX"))
 CombineBatches_inputs_json_filename="${CombineBatches_output_dir}/inputs.json"
 CombineBatches_outputs_json_filename="${CombineBatches_output_dir}/outputs.json"
 
@@ -76,7 +76,7 @@ bash /opt/sv_shell/combine_batches.sh \
 
 # ResolveComplexVariants
 # ---------------------------------------------------------------------------------------------------------------------
-ResolveComplexVariants_output_dir=$(realpath $(mktemp -d "/output_ResolveComplexVariants_XXXXXXXX"))
+ResolveComplexVariants_output_dir=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/output_ResolveComplexVariants_XXXXXXXX"))
 ResolveComplexVariants_inputs_json_filename="${ResolveComplexVariants_output_dir}/inputs.json"
 ResolveComplexVariants_outputs_json_filename="${ResolveComplexVariants_output_dir}/outputs.json"
 
@@ -106,7 +106,7 @@ bash /opt/sv_shell/resolve_complex_variants.sh \
 
 # GenotypeComplexVariants
 # ---------------------------------------------------------------------------------------------------------------------
-GenotypeComplexVariants_output_dir=$(realpath $(mktemp -d "/output_GenotypeComplexVariants_XXXXXXXX"))
+GenotypeComplexVariants_output_dir=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/output_GenotypeComplexVariants_XXXXXXXX"))
 GenotypeComplexVariants_inputs_json_filename="${GenotypeComplexVariants_output_dir}/inputs.json"
 GenotypeComplexVariants_outputs_json_filename="${GenotypeComplexVariants_output_dir}/outputs.json"
 
@@ -137,7 +137,7 @@ bash /opt/sv_shell/genotype_complex_variants.sh \
 
 # CleanVcf
 # ---------------------------------------------------------------------------------------------------------------------
-CleanVcf_output_dir=$(realpath $(mktemp -d "/output_CleanVcf_XXXXXXXX"))
+CleanVcf_output_dir=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/output_CleanVcf_XXXXXXXX"))
 CleanVcf_inputs_json_filename="${CleanVcf_output_dir}/inputs.json"
 CleanVcf_outputs_json_filename="${CleanVcf_output_dir}/outputs.json"
 
