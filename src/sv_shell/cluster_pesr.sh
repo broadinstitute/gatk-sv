@@ -110,6 +110,7 @@ prepare_pesr_vcf_out="$(realpath ${output_prefix}.tar.gz)"
 
 svtk_format_vcfs=()
 svtk_format_vcf_indexes=()
+wds_to_delete=()
 
 contigs_list="${contig_subset_list:-$contig_list}"
 contigs=()
@@ -190,9 +191,9 @@ for contig in "${contigs[@]}"; do
   svtk_format_vcfs+=("${SvtkVcf_wd}/${output_prefix}.vcf.gz")
   svtk_format_vcf_indexes+=("${SvtkVcf_wd}/${output_prefix}.vcf.gz.tbi")
 
-  rm -rf "${sv_cluster_output_dir}"
-  rm -rf "${ExcludeIntervals_wd}"
-  rm -rf "${SvtkVcf_wd}"
+  wds_to_delete+=("${sv_cluster_output_dir}")
+  wds_to_delete+=("${ExcludeIntervals_wd}")
+  wds_to_delete+=("${SvtkVcf_wd}")
 done
 
 
@@ -236,5 +237,9 @@ echo "${outputs_json}" > "${output_json_filename}"
 
 rm -rf "${ConcatVcfs_wd}"
 rm -rf "${working_dir}"
+
+for wd in "${wds_to_delete[@]}"; do
+  rm -rf "${wd}"
+done
 
 echo "Finished Cluster PE/SR successfully, output json filename: ${output_json_filename}"
