@@ -66,10 +66,6 @@ def query_highres_bins(
     if "#Chr" in raw_df.columns:
         raw_df.rename(columns={"#Chr": "Chr"}, inplace=True)
 
-    raw_df["Start"] = raw_df["Start"].astype(int)
-    raw_df["End"] = raw_df["End"].astype(int)
-    raw_df["source_file"] = "highres"
-
     # Keep only sample columns that exist in both files
     common_samples = [s for s in sample_cols if s in raw_df.columns]
     if len(common_samples) == 0:
@@ -78,27 +74,34 @@ def query_highres_bins(
             "low-resolution file. Check that both files were generated from "
             "the same sample set."
         )
-    for s in common_samples:
-        raw_df[s] = pd.to_numeric(raw_df[s], errors="coerce")
 
-    # Pad with NaN for any samples absent from the high-res file —
-    # add all missing columns at once to avoid DataFrame fragmentation.
-    missing = [s for s in sample_cols if s not in raw_df.columns]
-    if missing:
-        raw_df = pd.concat(
-            [raw_df, pd.DataFrame(np.nan, index=raw_df.index, columns=missing)],
-            axis=1,
-        )
+    # Build the output DataFrame in one concat to avoid repeated column
+    # insertions that fragment the internal block structure.
+    coord_df = pd.DataFrame({
+        "Chr": raw_df["Chr"],
+        "Start": raw_df["Start"].astype(int),
+        "End": raw_df["End"].astype(int),
+        "source_file": "highres",
+    })
 
-    raw_df["Bin"] = (
-        raw_df["Chr"].astype(str) + ":"
-        + raw_df["Start"].astype(str) + "-"
-        + raw_df["End"].astype(str)
+    # Convert all sample columns to numeric at once, then reindex to the full
+    # sample list (fills any absent samples with NaN in a single allocation).
+    sample_df = (
+        raw_df[common_samples]
+        .apply(pd.to_numeric, errors="coerce")
+        .reindex(columns=list(sample_cols))
     )
-    raw_df = raw_df.set_index("Bin")
 
-    keep_cols = ["Chr", "Start", "End", "source_file"] + list(sample_cols)
-    return raw_df[keep_cols]
+    result_df = pd.concat([coord_df, sample_df], axis=1)
+
+    result_df.index = (
+        result_df["Chr"].astype(str) + ":"
+        + result_df["Start"].astype(str) + "-"
+        + result_df["End"].astype(str)
+    )
+    result_df.index.name = "Bin"
+
+    return result_df
 
 
 def normalize_highres_bins(

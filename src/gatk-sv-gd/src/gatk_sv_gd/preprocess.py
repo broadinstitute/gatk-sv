@@ -34,6 +34,42 @@ from gatk_sv_gd.bins import (
 from gatk_sv_gd.highres import normalize_highres_bins, query_highres_bins
 from gatk_sv_gd.output import estimate_ploidy, write_locus_metadata
 
+
+# ── Region parsing helpers ───────────────────────────────────────────
+
+
+def _parse_region(region_str: str) -> Tuple[str, Optional[int], Optional[int]]:
+    """Parse a region string like ``chr1:3000-4000`` or ``chr1``.
+
+    Returns ``(chrom, start, end)`` where *start* and *end* are ``None``
+    when only a chromosome is specified.
+    """
+    if ":" in region_str:
+        chrom, coords = region_str.split(":", 1)
+        parts = coords.replace(",", "").split("-")
+        if len(parts) != 2:
+            raise ValueError(
+                f"Invalid region format '{region_str}': expected chrom:start-end"
+            )
+        return chrom, int(parts[0]), int(parts[1])
+    return region_str, None, None
+
+
+def _locus_overlaps_regions(
+    locus: GDLocus,
+    regions: List[Tuple[str, Optional[int], Optional[int]]],
+) -> bool:
+    """Return True if *locus* overlaps any of the parsed regions."""
+    for chrom, start, end in regions:
+        if locus.chrom != chrom:
+            continue
+        if start is None:
+            return True  # whole-chromosome match
+        if locus.start < end and locus.end > start:
+            return True
+    return False
+
+
 def _filter_and_prepare_locus_bins(
     locus_df: pd.DataFrame,
     locus: GDLocus,
@@ -177,6 +213,7 @@ def collect_all_locus_bins(
     min_flank_bases: int = 50000,
     min_flank_bins: int = 10,
     min_flank_coverage: float = 0.1,
+    regions: Optional[List[Tuple[str, Optional[int], Optional[int]]]] = None,
 ) -> Tuple[pd.DataFrame, List[LocusBinMapping], Dict[str, GDLocus]]:
     """
     Collect all bins across all GD loci into a single DataFrame.
@@ -227,6 +264,9 @@ def collect_all_locus_bins(
         min_flank_coverage: Minimum fraction of the effective bp target
             that a flank's accumulated bin coverage must reach.  Flanks
             below this threshold are rejected (default 0.1 = 10%).
+        regions: Optional list of parsed region tuples ``(chrom, start,
+            end)`` to restrict processing to.  Only loci overlapping at
+            least one region are included.  ``None`` means process all.
 
     Returns:
         Tuple of:
@@ -353,6 +393,10 @@ def collect_all_locus_bins(
     # Per-locus processing
     # ------------------------------------------------------------------
     for cluster, locus in gd_table.get_all_loci().items():
+        # Skip loci outside requested regions
+        if regions is not None and not _locus_overlaps_regions(locus, regions):
+            continue
+
         print(f"\nProcessing locus: {cluster}")
         print(f"  Chromosome: {locus.chrom}")
         print(f"  Breakpoints: {locus.breakpoints}")
@@ -787,6 +831,17 @@ def parse_args():
     parser.add_argument("--min-flank-coverage", type=float, default=0.5,
                         help="Min fraction of flank bp target that must be covered")
 
+    # Region restriction
+    parser.add_argument(
+        "--region", dest="regions", action="append", default=None,
+        metavar="REGION",
+        help=(
+            "Restrict processing to GD loci overlapping this region.  "
+            "Can be a chromosome (e.g. chr22) or an interval "
+            "(e.g. chr1:3000000-4000000).  May be specified multiple times."
+        ),
+    )
+
     # Data filtering
     parser.add_argument("--skip-bin-filter", action="store_true", default=False,
                         help="Skip bin quality filtering")
@@ -876,6 +931,17 @@ def main():
     }
     highres_path: Optional[str] = getattr(args, "high_res_counts", None)
 
+    # Parse --region arguments
+    parsed_regions = None
+    if args.regions:
+        parsed_regions = [_parse_region(r) for r in args.regions]
+        print(f"\nRestricting to {len(parsed_regions)} region(s):")
+        for chrom, start, end in parsed_regions:
+            if start is None:
+                print(f"  {chrom}")
+            else:
+                print(f"  {chrom}:{start:,}-{end:,}")
+
     # Collect all bins across all loci
     combined_df, mappings, included_loci = collect_all_locus_bins(
         df, gd_table, exclusion_mask,
@@ -893,6 +959,7 @@ def main():
         min_flank_bases=args.min_flank_bases,
         min_flank_bins=args.min_flank_bins,
         min_flank_coverage=args.min_flank_coverage,
+        regions=parsed_regions,
     )
 
     if len(combined_df) == 0:

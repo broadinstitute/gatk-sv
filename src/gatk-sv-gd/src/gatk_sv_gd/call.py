@@ -2,23 +2,13 @@
 GD CNV Calling from Model Posteriors
 
 Call genomic disorder (GD) copy-number variants from posterior probabilities
-produced by gd_cnv_pyro.py.
+produced by gd_cnv_pyro.py using the Viterbi segmentation strategy.
 
-Two calling strategies are available:
-
-1. **Mean log-probability** (original) – for each GD entry, averages the
-   posterior probability across bins in the affected interval and thresholds
-   on a log-probability score.
-
-2. **Viterbi segmentation** – runs the Viterbi algorithm on per-bin CN
-   posteriors using a user-supplied state transition matrix, then checks
-   whether the resulting copy-number segmentation exactly matches the
-   expected breakpoint pattern for each GD entry (including flanks).
-   A ``--viterbi-confidence-threshold`` filters on the Viterbi path
-   confidence.
-
-When ``--transition-matrix`` is provided the Viterbi strategy is used;
-otherwise the mean log-probability strategy is used.
+The Viterbi algorithm is run on per-bin CN posteriors using a user-supplied
+state transition matrix, then checks whether the resulting copy-number
+segmentation matches the expected breakpoint pattern for each GD entry
+(including flanks).  A ``--viterbi-confidence-threshold`` filters on the
+Viterbi path confidence.
 
 Usage:
     python gd_cnv_call.py \\
@@ -26,6 +16,7 @@ Usage:
         --bin-mappings bin_mappings.tsv.gz \\
         --gd-table gd_table.tsv \\
         --transition-matrix transition_probs.tsv \\
+        --non-nahr-transition-matrix non_nahr_transition_probs.tsv \\
         --output-dir results/
 """
 
@@ -66,7 +57,7 @@ def setup_logging(output_dir: str, filename: str = "call_log.txt"):
 
 
 # =============================================================================
-# CNV Calling Functions (Mean Log-Probability strategy)
+# CNV Calling Functions
 # =============================================================================
 
 
@@ -90,223 +81,6 @@ def get_locus_interval_bins(
     for interval_name, group in locus_bins.groupby("interval"):
         interval_bins[interval_name] = group["array_idx"].tolist()
     return interval_bins
-
-
-def compute_interval_cn_stats(
-    cn_posteriors_df: pd.DataFrame,
-    interval_bins: Dict[str, List[int]],
-    sample_id: str,
-) -> Dict[str, dict]:
-    """
-    Compute copy number statistics for each interval for a specific sample.
-
-    Args:
-        cn_posteriors_df: DataFrame with CN posterior probabilities
-        interval_bins: Dict mapping interval name to list of array_idx values
-            (positional indices into the per-sample posterior rows)
-        sample_id: Sample identifier
-
-    Returns:
-        Dict mapping interval name to CN statistics
-    """
-    result = {}
-
-    sample_posteriors = (
-        cn_posteriors_df[cn_posteriors_df["sample"] == sample_id]
-        .reset_index(drop=True)
-    )
-
-    prob_cols = [c for c in sample_posteriors.columns if c.startswith("prob_cn_")]
-    n_states = len(prob_cols)
-
-    for interval_name, bin_indices in interval_bins.items():
-        interval_data = sample_posteriors.iloc[bin_indices]
-
-        if len(interval_data) == 0:
-            result[interval_name] = {
-                "n_bins": 0,
-                "cn_probs": np.zeros(n_states),
-            }
-            continue
-
-        mean_probs = interval_data[prob_cols].mean(axis=0).values
-
-        result[interval_name] = {
-            "n_bins": len(interval_data),
-            "cn_probs": mean_probs,
-        }
-
-    return result
-
-
-def call_gd_cnv(
-    locus: GDLocus,
-    interval_stats: Dict[str, dict],
-    log_prob_threshold: float = -0.5,
-    flanking_log_prob_threshold: float = -1.0,
-    ploidy: int = 2,
-    verbose: bool = False,
-    sample_id: str = "",
-) -> List[dict]:
-    """
-    Call GD CNVs based on interval copy number statistics.
-
-    For each GD entry in the locus (each DEL/DUP definition), check if the
-    copy number in the corresponding region supports a CNV call.
-
-    Args:
-        locus: GDLocus object
-        interval_stats: Dict mapping interval name to CN statistics
-        log_prob_threshold: Minimum log probability score to call a CNV
-        flanking_log_prob_threshold: Minimum log probability score in flanking
-            regions to classify as spanning
-        ploidy: Expected copy number for this sample on this chromosome
-
-    Returns:
-        List of CNV call dictionaries
-    """
-    calls = []
-
-    for entry in locus.gd_entries:
-        gd_id = entry["GD_ID"]
-        svtype = entry["svtype"]
-        gd_start = entry["start_GRCh38"]
-        gd_end = entry["end_GRCh38"]
-        bp1 = entry["BP1"]
-        bp2 = entry["BP2"]
-
-        covered_tuples = locus.get_intervals_between(bp1, bp2)
-        covered_intervals = [name for _, _, name in covered_tuples]
-
-        if len(covered_intervals) == 0:
-            print(f"  WARNING [MLP]: {gd_id} ({svtype}) BP1={bp1}, BP2={bp2} "
-                  f"does not resolve to any interval in cluster '{locus.cluster}' "
-                  f"(breakpoints: {locus.breakpoint_names}) — entry skipped.")
-            continue
-
-        if verbose:
-            _util.vlog(f"  [MLP] {sample_id}  {locus.cluster}  {gd_id} "
-                       f"({svtype}  BP1={bp1}, BP2={bp2}  ploidy={ploidy}):")
-            _util.vlog(f"    Covered intervals: {sorted(covered_intervals)}")
-
-        # Compute weighted average log probability score
-        log_prob_score = 0.0
-        total_weight = 0.0
-
-        if svtype == "DEL":
-            for interval in covered_intervals:
-                if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
-                    probs = interval_stats[interval]["cn_probs"]
-                    weight = interval_stats[interval]["n_bins"]
-                    raw_p = probs[:ploidy].sum()
-                    p_del = max(raw_p, 1e-5)
-                    if p_del > 0:
-                        log_prob_score += weight * np.log(p_del)
-                        total_weight += weight
-                    if verbose:
-                        _util.vlog(f"      {interval}: {weight} bins  "
-                                   f"p_del={raw_p:.4f}  "
-                                   f"log(p_del)={np.log(p_del):+.4f}  "
-                                   f"weighted={weight * np.log(p_del):+.4f}")
-                elif verbose:
-                    n = interval_stats[interval]["n_bins"] if interval in interval_stats else 0
-                    _util.vlog(f"      {interval}: {n} bins -> skipped (no data)")
-
-        elif svtype == "DUP":
-            for interval in covered_intervals:
-                if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
-                    probs = interval_stats[interval]["cn_probs"]
-                    weight = interval_stats[interval]["n_bins"]
-                    raw_p = probs[ploidy + 1:].sum()
-                    p_dup = max(raw_p, 1e-5)
-                    if p_dup > 0:
-                        log_prob_score += weight * np.log(p_dup)
-                        total_weight += weight
-                    if verbose:
-                        _util.vlog(f"      {interval}: {weight} bins  "
-                                   f"p_dup={raw_p:.4f}  "
-                                   f"log(p_dup)={np.log(p_dup):+.4f}  "
-                                   f"weighted={weight * np.log(p_dup):+.4f}")
-                elif verbose:
-                    n = interval_stats[interval]["n_bins"] if interval in interval_stats else 0
-                    _util.vlog(f"      {interval}: {n} bins -> skipped (no data)")
-
-        if total_weight > 0:
-            log_prob_score = log_prob_score / total_weight
-        else:
-            log_prob_score = np.nan
-
-        if verbose:
-            score_str = f"{log_prob_score:+.4f}" if not np.isnan(log_prob_score) else "NaN"
-            if np.isnan(log_prob_score):
-                verdict = "FAIL (no data)"
-            elif log_prob_score > log_prob_threshold:
-                verdict = f"PASS (> {log_prob_threshold:+.4f})"
-            else:
-                verdict = f"FAIL (<= {log_prob_threshold:+.4f})"
-            _util.vlog(f"    Score: {score_str} -> {verdict}")
-
-        is_cnv = log_prob_score > log_prob_threshold
-
-        # Check flanking regions for evidence of a large spanning CNV
-        flanking_log_prob_score = np.nan
-        is_spanning = False
-        if is_cnv:
-            flank_score_sum = 0.0
-            flank_weight_total = 0.0
-            for _, _, flank_name in locus.get_flanking_regions():
-                if flank_name not in interval_stats:
-                    continue
-                flank_stat = interval_stats[flank_name]
-                if flank_stat["n_bins"] == 0:
-                    continue
-                flank_probs = flank_stat["cn_probs"]
-                flank_weight = flank_stat["n_bins"]
-                if svtype == "DEL":
-                    p_flank = max(flank_probs[:ploidy].sum(), 1e-5)
-                elif svtype == "DUP":
-                    p_flank = max(flank_probs[ploidy + 1:].sum(), 1e-5)
-                else:
-                    continue
-                flank_score_sum += flank_weight * np.log(p_flank)
-                flank_weight_total += flank_weight
-
-            if flank_weight_total > 0:
-                flanking_log_prob_score = flank_score_sum / flank_weight_total
-                if flanking_log_prob_score > flanking_log_prob_threshold:
-                    is_spanning = True
-                    is_cnv = False
-                    if verbose:
-                        _util.vlog(f"    Spanning: flank_score={flanking_log_prob_score:+.4f} > "
-                                   f"threshold={flanking_log_prob_threshold:+.4f} "
-                                   f"-> reclassified as SPANNING (not CARRIER)")
-
-        if verbose:
-            result = "CARRIER" if is_cnv else ("SPANNING" if is_spanning else "NOT_CARRIER")
-            _util.vlog(f"    -> {result}")
-
-        n_bins = sum(interval_stats[iv]["n_bins"] for iv in covered_intervals if iv in interval_stats)
-
-        calls.append({
-            "GD_ID": gd_id,
-            "cluster": locus.cluster,
-            "chrom": locus.chrom,
-            "start": gd_start,
-            "end": gd_end,
-            "svtype": svtype,
-            "BP1": bp1,
-            "BP2": bp2,
-            "is_nahr": locus.is_nahr,
-            "is_terminal": locus.is_terminal,
-            "log_prob_score": log_prob_score,
-            "flanking_log_prob_score": flanking_log_prob_score,
-            "is_carrier": is_cnv,
-            "is_spanning": is_spanning,
-            "intervals": covered_intervals,
-            "n_bins": n_bins,
-        })
-
-    return calls
 
 
 def determine_best_breakpoints(
@@ -415,78 +189,54 @@ def call_cnvs_from_posteriors(
     cn_posteriors_df: pd.DataFrame,
     bin_mappings_df: pd.DataFrame,
     gd_table: GDTable,
-    log_prob_threshold: float = -0.5,
-    flanking_log_prob_threshold: float = -1.0,
+    transition_matrix: np.ndarray,
+    non_nahr_transition_matrix: np.ndarray,
     ploidy_df: Optional[pd.DataFrame] = None,
     verbose: bool = False,
-    transition_matrix: Optional[np.ndarray] = None,
     viterbi_confidence_threshold: float = -1.0,
     viterbi_flank_coverage_threshold: float = 0.70,
     breakpoint_transition_matrix: Optional[np.ndarray] = None,
-    non_nahr_transition_matrix: Optional[np.ndarray] = None,
     non_nahr_min_variant_fraction: float = 0.10,
 ) -> pd.DataFrame:
     """
-    Call CNVs from posterior probabilities.
-
-    When *transition_matrix* is provided, the Viterbi segmentation strategy
-    is used.  Otherwise the original mean log-probability strategy is used.
+    Call CNVs from posterior probabilities using the Viterbi strategy.
 
     Args:
         cn_posteriors_df: DataFrame with CN posterior probabilities per bin/sample
         bin_mappings_df: DataFrame with bin-to-interval mappings
         gd_table: GDTable with locus definitions
-        log_prob_threshold: Minimum log probability score to call a CNV
-            (mean-log-prob strategy only)
-        flanking_log_prob_threshold: Minimum log probability score in flanking
-            regions to classify as spanning (mean-log-prob strategy only)
+        transition_matrix: (n_states, n_states) CN-state transition probability
+            matrix for NAHR loci.
+        non_nahr_transition_matrix: (n_states, n_states) CN-state transition
+            probability matrix for non-NAHR loci.
         ploidy_df: Optional DataFrame with columns (sample, contig, ploidy).
             If None, ploidy=2 is assumed for all sample/contig pairs.
         verbose: If True, print per-sample log probability scores for every
             GD entry at every locus, including flanking region scores.
-        transition_matrix: Optional (n_states, n_states) CN-state transition
-            probability matrix.  When provided, the Viterbi strategy is used.
         viterbi_confidence_threshold: Minimum mean per-bin log-posterior
-            along the Viterbi path to make a carrier call (Viterbi strategy only).
+            along the Viterbi path to make a carrier call.
         viterbi_flank_coverage_threshold: Fraction of bins in each flanking /
             uncovered interval that must be at the reference CN for the flank
-            check to pass (Viterbi strategy only).  Default 0.70.
+            check to pass.  Default 0.70.
         breakpoint_transition_matrix: Optional (n_states, n_states) transition
-            matrix applied at known recurrent breakpoint boundaries (start and
-            end of each breakpoint's SD-block range) during Viterbi.  Should
-            have lower diagonal values than *transition_matrix* to encourage
-            CN state changes at those positions.  Viterbi strategy only.
-        non_nahr_transition_matrix: Optional (n_states, n_states) transition
-            matrix for non-NAHR loci.  When provided, non-NAHR loci use
-            Viterbi with this matrix.  When not provided, non-NAHR loci
-            fall back to *transition_matrix* (if set) or MLP.
+            matrix applied at known recurrent breakpoint boundaries during
+            Viterbi.  Should have lower diagonal values than *transition_matrix*
+            to encourage CN state changes at those positions.
         non_nahr_min_variant_fraction: Minimum fraction of body bins that
-            must show variant CN to call a non-NAHR carrier (Viterbi only,
-            default 0.10).
+            must show variant CN to call a non-NAHR carrier (default 0.10).
 
     Returns:
         DataFrame with CNV calls for all samples and loci
     """
-    use_viterbi = transition_matrix is not None
-    use_viterbi_non_nahr = non_nahr_transition_matrix is not None or use_viterbi
-
     print("\n" + "=" * 80)
     print("CALLING CNVs FROM POSTERIORS")
-    if use_viterbi:
-        bp_str = " + breakpoint matrix" if breakpoint_transition_matrix is not None else ""
-        print(f"  NAHR strategy: Viterbi segmentation{bp_str}  "
-              f"(confidence threshold={viterbi_confidence_threshold}, "
-              f"flank coverage threshold={viterbi_flank_coverage_threshold:.0%})")
-    else:
-        print(f"  NAHR strategy: Mean log-probability  "
-              f"(threshold={log_prob_threshold})")
-    if use_viterbi_non_nahr:
-        nn_src = "non-NAHR matrix" if non_nahr_transition_matrix is not None else "shared matrix"
-        print(f"  Non-NAHR strategy: Viterbi ({nn_src}), "
-              f"min variant fraction={non_nahr_min_variant_fraction:.0%}")
-    else:
-        print(f"  Non-NAHR strategy: Mean log-probability  "
-              f"(threshold={log_prob_threshold})")
+    bp_str = " + breakpoint matrix" if breakpoint_transition_matrix is not None else ""
+    print(f"  NAHR strategy: Viterbi segmentation{bp_str}  "
+          f"(confidence threshold={viterbi_confidence_threshold}, "
+          f"flank coverage threshold={viterbi_flank_coverage_threshold:.0%})")
+    nn_src = "non-NAHR matrix"
+    print(f"  Non-NAHR strategy: Viterbi ({nn_src}), "
+          f"min variant fraction={non_nahr_min_variant_fraction:.0%}")
     print("=" * 80)
 
     all_results = []
@@ -570,6 +320,12 @@ def call_cnvs_from_posteriors(
         if bp_masked:
             print(f"  Masking {len(bp_masked)} breakpoint-range bin(s)")
 
+        # Skip loci that have no bins (e.g. excluded by --region during
+        # preprocessing).
+        if not interval_bins:
+            print(f"  Skipping — no bins in mappings for this locus")
+            continue
+
         for interval_name, bins in interval_bins.items():
             print(f"  {interval_name}: {len(bins)} bins")
 
@@ -582,20 +338,16 @@ def call_cnvs_from_posteriors(
             sample_ploidy = ploidy_lookup.get((str(sample_id), locus.chrom), 2)
 
             if verbose:
-                locus_vit = (use_viterbi if locus.is_nahr else use_viterbi_non_nahr)
-                strategy = "VIT" if locus_vit else "MLP"
+                strategy = "VIT"
                 _util.vlog(f"\n  [{strategy}] Sample: {sample_id}  "
                            f"({locus.chrom}, ploidy={sample_ploidy})")
 
-            if not locus.is_nahr and use_viterbi_non_nahr:
+            if not locus.is_nahr:
                 # ---- Non-NAHR Viterbi strategy ----
-                nn_tm = (non_nahr_transition_matrix
-                         if non_nahr_transition_matrix is not None
-                         else transition_matrix)
                 calls = viterbi_call_non_nahr_cnv(
                     locus,
                     prob_3d[s_idx],
-                    nn_tm,
+                    non_nahr_transition_matrix,
                     interval_bin_arrays,
                     ploidy=sample_ploidy,
                     confidence_threshold=viterbi_confidence_threshold,
@@ -612,8 +364,8 @@ def call_cnvs_from_posteriors(
                      for name, idx in interval_bin_arrays.items()},
                     calls, ploidy=sample_ploidy,
                 )
-            elif use_viterbi:
-                # ---- Viterbi strategy ----
+            else:
+                # ---- NAHR Viterbi strategy ----
                 calls = viterbi_call_gd_cnv(
                     locus,
                     prob_3d[s_idx],  # (n_bins, n_states)
@@ -629,42 +381,14 @@ def call_cnvs_from_posteriors(
                 )
                 best_by_svtype = determine_best_breakpoints(
                     locus,
-                    # Build interval_stats for best-breakpoint scoring
                     {name: {"n_bins": len(idx),
                             "cn_probs": prob_3d[s_idx, idx].mean(axis=0)
                             if len(idx) > 0 else np.zeros(n_states)}
                      for name, idx in interval_bin_arrays.items()},
                     calls, ploidy=sample_ploidy,
                 )
-            else:
-                # ---- Mean log-probability strategy ----
-                interval_stats = {}
-                for interval_name, bin_idx in interval_bin_arrays.items():
-                    if len(bin_idx) == 0:
-                        interval_stats[interval_name] = {
-                            "n_bins": 0,
-                            "cn_probs": np.zeros(n_states),
-                        }
-                    else:
-                        mean_probs = prob_3d[s_idx, bin_idx].mean(axis=0)
-                        interval_stats[interval_name] = {
-                            "n_bins": len(bin_idx),
-                            "cn_probs": mean_probs,
-                        }
-
-                calls = call_gd_cnv(
-                    locus, interval_stats, log_prob_threshold,
-                    flanking_log_prob_threshold,
-                    ploidy=sample_ploidy,
-                    verbose=verbose,
-                    sample_id=str(sample_id),
-                )
-                best_by_svtype = determine_best_breakpoints(
-                    locus, interval_stats, calls, ploidy=sample_ploidy)
 
             if verbose:
-                locus_vit = (use_viterbi if locus.is_nahr else use_viterbi_non_nahr)
-                strategy = "VIT" if locus_vit else "MLP"
                 for call in calls:
                     tag_parts = []
                     if call["is_carrier"]:
@@ -677,16 +401,14 @@ def call_cnvs_from_posteriors(
                         if not np.isnan(call.get("flanking_log_prob_score", np.nan))
                         else "NA"
                     )
-                    extra = ""
-                    if locus_vit:
-                        cov = "Y" if call.get("viterbi_covered_ok") else "N"
-                        flk = "Y" if call.get("viterbi_flanks_ok") else "N"
-                        extra = f"  cov={cov} flk={flk}"
-                        if not locus.is_nahr:
-                            vf = call.get("variant_fraction", 0)
-                            extra += f"  var_frac={vf:.0%}"
+                    cov = "Y" if call.get("viterbi_covered_ok") else "N"
+                    flk = "Y" if call.get("viterbi_flanks_ok") else "N"
+                    extra = f"  cov={cov} flk={flk}"
+                    if not locus.is_nahr:
+                        vf = call.get("variant_fraction", 0)
+                        extra += f"  var_frac={vf:.0%}"
                     _util.vlog(
-                        f"    [{strategy}] {sample_id:30s}  "
+                        f"    [VIT] {sample_id:30s}  "
                         f"{call['GD_ID']:25s}  "
                         f"{call['svtype']:4s}  ploidy={sample_ploidy}  "
                         f"score={call['log_prob_score']:+.4f}  "
@@ -776,25 +498,10 @@ def parse_args():
         help="Output directory for calls",
     )
     parser.add_argument(
-        "--log-prob-threshold",
-        type=float,
-        default=-0.3,
-        help="Minimum log probability score to call a CNV",
-    )
-    parser.add_argument(
-        "--flanking-log-prob-threshold",
-        type=float,
-        default=-1.0,
-        help="Minimum log probability score in flanking regions to classify "
-             "a call as spanning",
-    )
-    parser.add_argument(
         "--transition-matrix",
-        required=False,
-        help="CN-state transition probability matrix (TSV).  When provided, "
-             "the Viterbi segmentation strategy is used instead of the "
-             "mean log-probability strategy.  The file should be a square "
-             "K×K matrix where entry (i,j) is the probability of "
+        required=True,
+        help="CN-state transition probability matrix (TSV) for NAHR loci.  "
+             "Square K×K matrix where entry (i,j) is the probability of "
              "transitioning from CN state i to CN state j between adjacent "
              "bins.  Rows will be automatically normalized to sum to 1.",
     )
@@ -828,11 +535,9 @@ def parse_args():
     )
     parser.add_argument(
         "--non-nahr-transition-matrix",
-        required=False,
+        required=True,
         help="CN-state transition probability matrix (TSV) for non-NAHR loci. "
-             "When provided, non-NAHR loci use Viterbi with this matrix "
-             "(no breakpoint-specific matrix — breakpoints are variable). "
-             "If not set, non-NAHR loci use --transition-matrix or MLP.",
+             "Same format as --transition-matrix.",
     )
     parser.add_argument(
         "--non-nahr-min-variant-fraction",
@@ -882,46 +587,34 @@ def main():
         ploidy_df = pd.read_csv(args.ploidy_table, sep="\t")
         print(f"    {len(ploidy_df)} sample/contig ploidy records")
 
-    # Load transition matrix if provided
-    transition_matrix = None
-    if args.transition_matrix:
-        print(f"\n  Loading transition matrix: {args.transition_matrix}")
-        transition_matrix = load_transition_matrix(args.transition_matrix)
+    # Load transition matrix
+    print(f"\n  Loading transition matrix: {args.transition_matrix}")
+    transition_matrix = load_transition_matrix(args.transition_matrix)
 
     # Load breakpoint-specific transition matrix if provided
     breakpoint_transition_matrix = None
     if args.breakpoint_transition_matrix:
-        if transition_matrix is None:
-            print("  WARNING: --breakpoint-transition-matrix requires "
-                  "--transition-matrix to be set; ignoring")
-        else:
-            print(f"  Loading breakpoint transition matrix: "
-                  f"{args.breakpoint_transition_matrix}")
-            breakpoint_transition_matrix = load_transition_matrix(
-                args.breakpoint_transition_matrix)
+        print(f"  Loading breakpoint transition matrix: "
+              f"{args.breakpoint_transition_matrix}")
+        breakpoint_transition_matrix = load_transition_matrix(
+            args.breakpoint_transition_matrix)
 
-    # Load non-NAHR transition matrix if provided
-    non_nahr_transition_matrix = None
-    if args.non_nahr_transition_matrix:
-        print(f"  Loading non-NAHR transition matrix: "
-              f"{args.non_nahr_transition_matrix}")
-        non_nahr_transition_matrix = load_transition_matrix(
-            args.non_nahr_transition_matrix)
+    # Load non-NAHR transition matrix
+    print(f"  Loading non-NAHR transition matrix: {args.non_nahr_transition_matrix}")
+    non_nahr_transition_matrix = load_transition_matrix(args.non_nahr_transition_matrix)
 
     # Call CNVs from posteriors
     calls_df = call_cnvs_from_posteriors(
         cn_posteriors_df,
         bin_mappings_df,
         gd_table,
-        log_prob_threshold=args.log_prob_threshold,
-        flanking_log_prob_threshold=args.flanking_log_prob_threshold,
+        transition_matrix=transition_matrix,
+        non_nahr_transition_matrix=non_nahr_transition_matrix,
         ploidy_df=ploidy_df,
         verbose=args.verbose,
-        transition_matrix=transition_matrix,
         viterbi_confidence_threshold=args.viterbi_confidence_threshold,
         viterbi_flank_coverage_threshold=args.viterbi_flank_coverage_threshold,
         breakpoint_transition_matrix=breakpoint_transition_matrix,
-        non_nahr_transition_matrix=non_nahr_transition_matrix,
         non_nahr_min_variant_fraction=args.non_nahr_min_variant_fraction,
     )
 

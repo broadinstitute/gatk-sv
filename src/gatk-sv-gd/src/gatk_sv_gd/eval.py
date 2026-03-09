@@ -332,12 +332,12 @@ def parse_args():
              "NAHR_GD_atypical=False) are used.",
     )
     parser.add_argument(
-        "--sample-posteriors",
-        required=False,
-        help="Sample posteriors table (TSV) with columns: sample, sample_var_map. "
-             "Used to identify the set of samples in the current batch. "
-             "Truth carriers absent from this sample set are excluded from "
-             "sensitivity scoring.",
+        "--ploidy-table",
+        required=True,
+        help="Ploidy estimates table (TSV) produced by the preprocess step "
+             "(ploidy_estimates.tsv).  Used to identify the set of samples "
+             "in the current batch.  Truth carriers absent from this sample "
+             "set are excluded from sensitivity scoring.",
     )
     parser.add_argument(
         "--output-dir", "-o",
@@ -361,13 +361,11 @@ def main():
     calls_df = pd.read_csv(args.calls, sep="\t", compression="infer")
     print(f"    {len(calls_df)} call records")
 
-    # Load sample posteriors to identify batch samples (if provided)
-    batch_samples = None
-    if args.sample_posteriors:
-        print(f"\n  Loading sample posteriors: {args.sample_posteriors}")
-        sample_post_df = pd.read_csv(args.sample_posteriors, sep="\t")
-        batch_samples = set(sample_post_df["sample"].astype(str).unique())
-        print(f"    {len(batch_samples)} samples in batch")
+    # Load ploidy table to identify batch samples
+    print(f"\n  Loading ploidy table: {args.ploidy_table}")
+    ploidy_df = pd.read_csv(args.ploidy_table, sep="\t")
+    batch_samples = set(ploidy_df["sample"].astype(str).unique())
+    print(f"    {len(batch_samples)} samples in batch")
 
     # Load truth table
     print(f"\n  Loading truth table: {args.truth_table}")
