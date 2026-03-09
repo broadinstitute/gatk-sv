@@ -542,10 +542,10 @@ def parse_args():
     parser.add_argument(
         "--non-nahr-min-variant-fraction",
         type=float,
-        default=0.10,
+        default=0.01,
         help="Minimum fraction of body bins that must show variant CN "
              "(DEL: < ploidy, DUP: > ploidy) to call a non-NAHR carrier "
-             "(Viterbi only).  Default: 0.10 (10%%).",
+             "(Viterbi only).  Default: 0.01 (1%%).",
     )
     parser.add_argument(
         "--verbose", "-v",
@@ -625,10 +625,14 @@ def main():
     print(f"    {len(calls_df)} call records")
 
     # Print carrier summary
-    carriers = calls_df[calls_df["is_carrier"]]
-    n_carriers = carriers["sample"].nunique()
-    n_sites = carriers["GD_ID"].nunique()
-    print(f"\n  {n_carriers} carrier samples across {n_sites} GD sites")
+    if len(calls_df) > 0:
+        carriers = calls_df[calls_df["is_carrier"]]
+        n_carriers = carriers["sample"].nunique()
+        n_sites = carriers["GD_ID"].nunique()
+        print(f"\n  {n_carriers} carrier samples across {n_sites} GD sites")
+    else:
+        print("\n  No calls produced — check that the GD table, bin mappings, "
+              "and CN posteriors refer to the same loci.")
 
     print("\n" + "=" * 80)
     print("Calling complete!")

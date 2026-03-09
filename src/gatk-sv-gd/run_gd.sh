@@ -42,6 +42,7 @@ EVAL_DIR="${WORK_DIR}/eval"
 
 # ── Derived paths ──────────────────────────────────────────────────────────
 BIN_MAPPINGS="${PREPROCESS_DIR}/bin_mappings.tsv.gz"
+FILTERED_GD_TABLE="${PREPROCESS_DIR}/gd_table_filtered.tsv"
 CN_POSTERIORS="${INFER_DIR}/cn_posteriors.tsv.gz"
 GD_CALLS="${CALL_DIR}/gd_cnv_calls.tsv.gz"
 PLOIDY_TABLE="${PREPROCESS_DIR}/ploidy_estimates.tsv"
@@ -74,7 +75,7 @@ rm -r "${CALL_DIR}"
 gatk-sv-gd call \
     --cn-posteriors "${CN_POSTERIORS}" \
     --bin-mappings "${BIN_MAPPINGS}" \
-    -g "${GD_TABLE}" \
+    -g "${FILTERED_GD_TABLE}" \
     -o "${CALL_DIR}" \
     --ploidy-table "${PLOIDY_TABLE}" \
     --transition-matrix "${TRANSITION_MATRIX}" \
@@ -90,7 +91,7 @@ gatk-sv-gd plot \
     --cn-posteriors "${CN_POSTERIORS}" \
     --raw-counts "${INPUT_DEPTH}" \
     --high-res-counts "${HIGH_RESOLUTION_DEPTH}" \
-    -g "${GD_TABLE}" \
+    -g "${FILTERED_GD_TABLE}" \
     -o "${PLOT_DIR}" \
     --gaps-bed "${GAPS_BED}" \
     --gtf "${GTF}" \

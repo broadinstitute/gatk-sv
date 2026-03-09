@@ -214,6 +214,7 @@ def collect_all_locus_bins(
     min_flank_bins: int = 10,
     min_flank_coverage: float = 0.1,
     regions: Optional[List[Tuple[str, Optional[int], Optional[int]]]] = None,
+    min_non_nahr_size: int = 100000,
 ) -> Tuple[pd.DataFrame, List[LocusBinMapping], Dict[str, GDLocus]]:
     """
     Collect all bins across all GD loci into a single DataFrame.
@@ -267,6 +268,9 @@ def collect_all_locus_bins(
         regions: Optional list of parsed region tuples ``(chrom, start,
             end)`` to restrict processing to.  Only loci overlapping at
             least one region are included.  ``None`` means process all.
+        min_non_nahr_size: Minimum size (bp) for non-NAHR loci.  Non-NAHR
+            loci whose span (outermost breakpoints) is smaller than this
+            value are skipped.  Set to 0 to disable (default 100 000).
 
     Returns:
         Tuple of:
@@ -396,6 +400,15 @@ def collect_all_locus_bins(
         # Skip loci outside requested regions
         if regions is not None and not _locus_overlaps_regions(locus, regions):
             continue
+
+        # Skip non-NAHR loci below the minimum size threshold
+        if not locus.is_nahr and min_non_nahr_size > 0:
+            locus_span = locus.end - locus.start
+            if locus_span < min_non_nahr_size:
+                print(f"\nSkipping non-NAHR locus: {cluster}  "
+                      f"({locus.chrom}:{locus.start:,}-{locus.end:,}, "
+                      f"{locus_span:,} bp < {min_non_nahr_size:,} bp minimum)")
+                continue
 
         print(f"\nProcessing locus: {cluster}")
         print(f"  Chromosome: {locus.chrom}")
@@ -830,6 +843,9 @@ def parse_args():
                         help="Min bins each flank must contain")
     parser.add_argument("--min-flank-coverage", type=float, default=0.5,
                         help="Min fraction of flank bp target that must be covered")
+    parser.add_argument("--min-non-nahr-size", type=int, default=100000,
+                        help="Minimum size (bp) for non-NAHR loci; smaller loci are skipped "
+                             "(set to 0 to disable)")
 
     # Region restriction
     parser.add_argument(
@@ -960,11 +976,16 @@ def main():
         min_flank_bins=args.min_flank_bins,
         min_flank_coverage=args.min_flank_coverage,
         regions=parsed_regions,
+        min_non_nahr_size=args.min_non_nahr_size,
     )
 
     if len(combined_df) == 0:
-        print("No bins to analyse after preprocessing!")
-        return
+        raise RuntimeError(
+            "No loci survived preprocessing — the output would be empty. "
+            "Check that the GD table, --region filters, and "
+            "--min-non-nahr-size threshold leave at least one locus with "
+            "sufficient bins."
+        )
 
     # Write preprocessed outputs
     print("\n" + "=" * 80)
@@ -972,6 +993,17 @@ def main():
     print("=" * 80)
     write_preprocessed_bins(combined_df, args.output_dir)
     write_locus_metadata(included_loci, mappings, args.output_dir)
+
+    # Write a filtered GD table containing only the loci that survived
+    # region and size filtering, so downstream tools (call, plot, eval)
+    # operate on exactly the modeled set.
+    included_clusters = set(included_loci.keys())
+    filtered_gd_df = gd_table.df[gd_table.df["cluster"].isin(included_clusters)].copy()
+    filtered_gd_path = os.path.join(args.output_dir, "gd_table_filtered.tsv")
+    filtered_gd_df.to_csv(filtered_gd_path, sep="\t", index=False)
+    print(f"  Saved: {filtered_gd_path}")
+    print(f"  Rows: {len(filtered_gd_df):,} entries "
+          f"({len(included_clusters)} loci of {len(gd_table.loci)} total)")
 
     print("\n" + "=" * 80)
     print("PREPROCESSING COMPLETE")
@@ -982,7 +1014,9 @@ def main():
     print("  - locus_intervals.tsv.gz")
     print("  - gd_entry_intervals.tsv.gz")
     print("  - ploidy_estimates.tsv")
+    print("  - gd_table_filtered.tsv")
     print(f"\nNext: run 'gatk-sv-gd infer --preprocessed-dir {args.output_dir}'")
+    print(f"       Use --gd-table {args.output_dir}/gd_table_filtered.tsv for call/plot/eval")
     print("=" * 80)
 
 
