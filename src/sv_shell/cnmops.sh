@@ -52,17 +52,16 @@ function CNSampleNormalArm() {
   EMPTY_OUTPUT_ERROR="No CNV regions in result object. Rerun cn.mops with different parameters!"
   set +e
   echo "Starting to run cnMOPS_workflow"
-  bash /opt/WGD/bin/cnMOPS_workflow.sh -S "${exclude_list}" -x "${exclude_list}" -r "${_r}" -o . -M "${_chr}.${_mode}.RD.txt" </dev/null wor2>&1 | tee cnmops.out
+  bash /opt/WGD/bin/cnMOPS_workflow.sh -S "${exclude_list}" -x "${exclude_list}" -r "${_r}" -o . -M "${_chr}.${_mode}.RD.txt" </dev/null 2>&1 | tee cnmops.out
   echo "Finished running cnMOPS_workflow"
   RC=$?
   set -e
-  if [ ! $RC -eq 0 ]; then
-    if grep -q "$EMPTY_OUTPUT_ERROR" "cnmops.out"; then
-      touch calls/cnMOPS.cnMOPS.gff
-    else
-      echo "cnMOPS_workflow.sh returned a non-zero code that was not due to an empty call file."
-      exit $RC
-    fi
+  if grep -q "$EMPTY_OUTPUT_ERROR" "cnmops.out"; then
+    echo "No CNV regions detected, creating empty GFF."
+    touch calls/cnMOPS.cnMOPS.gff
+  elif [ ! $RC -eq 0 ]; then
+    echo "cnMOPS_workflow.sh returned a non-zero code that was not due to an empty call file."
+    exit $RC
   fi
 
   echo "----------- Finished CN Sample Normal -------------"
