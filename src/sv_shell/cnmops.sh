@@ -62,6 +62,9 @@ function CNSampleNormalArm() {
   elif [ ! $RC -eq 0 ]; then
     echo "cnMOPS_workflow.sh returned a non-zero code that was not due to an empty call file."
     exit $RC
+  elif [ ! -f calls/cnMOPS.cnMOPS.gff ]; then
+    echo "cnMOPS_workflow.sh succeeded but did not produce calls/cnMOPS.cnMOPS.gff. Creating empty file."
+    touch calls/cnMOPS.cnMOPS.gff
   fi
 
   echo "----------- Finished CN Sample Normal -------------"
