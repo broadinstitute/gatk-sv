@@ -260,3 +260,13 @@ workflows:
         - main
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: SVShell
+    primaryDescriptorPath: /wdl/SVShell.wdl
+    filters:
+      branches:
+        - main
+        - vj-sv-shell-wdl
+      tags:
+        - /.*/
