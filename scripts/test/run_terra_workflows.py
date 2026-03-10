@@ -47,6 +47,29 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+
+class BranchNotFoundError(RuntimeError):
+    """Raised when Terra/Dockstore cannot find the requested branch for a
+    workflow method.  Carry the workflow name and branch so callers can offer
+    a targeted fallback."""
+    def __init__(self, terra_name, branch, detail=""):
+        self.terra_name = terra_name
+        self.branch = branch
+        msg = (
+            f"Dockstore branch '{branch}' not found for workflow "
+            f"'{terra_name}'.\n"
+            f"  The branch may have been deleted or was never registered on "
+            f"Dockstore for this workflow.\n"
+            f"  Options:\n"
+            f"    • Use --fallback-branch <branch> to automatically retry "
+            f"with a different branch (e.g. 'main').\n"
+            f"    • Check .dockstore.yml to ensure the branch is listed for "
+            f"'{terra_name}'.\n"
+        )
+        if detail:
+            msg += f"  Raw error: {detail}\n"
+        super().__init__(msg)
+
 # Ordered list of pipeline modules.  The number prefix matches the Terra
 # workspace convention (e.g. "1-GatherSampleEvidence").  Each entry is
 # (step_number, workflow_name, entity_type).
@@ -120,6 +143,15 @@ def _terra_config_name(step_number, workflow_name):
 _NUMBER_RE = re.compile(r'^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$')
 
 
+def _normalize_number(s):
+    """Strip leading zeros from scientific-notation exponents.
+
+    Python's ``str()`` renders ``1e-6`` as ``'1e-06'``; Terra rejects the
+    zero-padded form, so normalise e.g. ``1e-06`` → ``1e-6``.
+    """
+    return re.sub(r'([eE][+-]?)0+(\d)', r'\1\2', s)
+
+
 def _stringify_values(d):
     """Convert a dict of workflow-config values to the string format Terra
     expects.
@@ -144,7 +176,7 @@ def _stringify_values(d):
         if isinstance(v, bool):
             result[k] = str(v).lower()  # True/False → "true"/"false"
         elif isinstance(v, (int, float)):
-            result[k] = str(v)
+            result[k] = _normalize_number(str(v))
         elif isinstance(v, (list, dict)):
             # Compact JSON: Terra accepts array/object literals directly.
             result[k] = json.dumps(v, separators=(',', ':'))
@@ -160,7 +192,7 @@ def _stringify_values(d):
             elif bare in ('true', 'false'):
                 result[k] = bare
             elif _NUMBER_RE.match(bare):
-                result[k] = bare
+                result[k] = _normalize_number(bare)
             elif (bare.startswith('"') and bare.endswith('"')) or \
                  bare.startswith('[') or bare.startswith('{'):
                 # Already a quoted string literal or JSON array/object – keep
@@ -494,6 +526,36 @@ def update_terra_workspace(repo_root, namespace, workspace, samples_tsv_name,
 # Step 5: point workflows at current branch via Dockstore
 # ---------------------------------------------------------------------------
 
+def _set_config_branch(namespace, workspace, cfg_namespace, terra_name, new_branch):
+    """Update a single Terra method-config to reference ``new_branch`` on
+    Dockstore, then verify the change persisted."""
+    r = fapi.get_workspace_config(namespace, workspace, cfg_namespace, terra_name)
+    _check_response(r, 200, f"get config {terra_name}")
+    config_body = r.json()
+
+    method_ref = config_body.setdefault("methodRepoMethod", {})
+    method_ref["methodVersion"] = new_branch
+    # Remove methodUri so Rawls regenerates it from methodPath + methodVersion;
+    # leaving a stale URI causes Rawls to silently keep the old version.
+    method_ref.pop("methodUri", None)
+    config_body["methodRepoMethod"] = method_ref
+
+    r = fapi.overwrite_workspace_config(
+        namespace, workspace, cfg_namespace, terra_name, config_body
+    )
+    _check_response(r, 200, f"update branch for {terra_name}")
+
+    r2 = fapi.get_workspace_config(namespace, workspace, cfg_namespace, terra_name)
+    _check_response(r2, 200, f"verify branch for {terra_name}")
+    actual = r2.json().get("methodRepoMethod", {}).get("methodVersion")
+    if actual != new_branch:
+        raise RuntimeError(
+            f"Failed to set branch on '{terra_name}': "
+            f"expected '{new_branch}', got '{actual}'"
+        )
+    log.info("Verified '%s' is now on branch '%s'", terra_name, new_branch)
+
+
 def configure_workflow_branch(namespace, workspace, method_namespace,
                               branch, branch_workflows):
     """For each workflow that this branch updates, ensure the Terra method
@@ -540,30 +602,9 @@ def configure_workflow_branch(namespace, workspace, method_namespace,
             "Changing '%s' from version '%s' to '%s'",
             terra_name, current_version, branch,
         )
-        method_ref["methodVersion"] = branch
-        # Remove methodUri so Rawls regenerates it from
-        # methodPath + methodVersion; leaving a stale URI causes
-        # Rawls to silently keep the old version.
-        method_ref.pop("methodUri", None)
-        config_body["methodRepoMethod"] = method_ref
-
-        r = fapi.overwrite_workspace_config(
-            namespace, workspace, cfg_namespace, terra_name, config_body
+        _set_config_branch(
+            namespace, workspace, cfg_namespace, terra_name, branch
         )
-        _check_response(r, 200, f"update branch for {terra_name}")
-
-        # Verify the change persisted
-        r2 = fapi.get_workspace_config(
-            namespace, workspace, cfg_namespace, terra_name
-        )
-        _check_response(r2, 200, f"verify branch for {terra_name}")
-        actual = r2.json().get("methodRepoMethod", {}).get("methodVersion")
-        if actual != branch:
-            raise RuntimeError(
-                f"Failed to set branch on '{terra_name}': "
-                f"expected '{branch}', got '{actual}'"
-            )
-        log.info("Verified '%s' is now on branch '%s'", terra_name, branch)
 
 
 # ---------------------------------------------------------------------------
@@ -704,6 +745,13 @@ def submit_workflow(namespace, workspace, config_namespace, terra_name,
         use_callcache=use_callcache,
     )
 
+    if r.status_code == 404 and "Cannot get dockstore://" in r.text:
+        # Extract the branch name from the Dockstore URL in the error message,
+        # e.g. "Cannot get dockstore://…/TrainGCNV/my-branch from method repo."
+        branch_match = re.search(r"Cannot get dockstore://[^/]+/([^/\s]+)\s+from", r.text)
+        missing_branch = branch_match.group(1) if branch_match else "<unknown>"
+        raise BranchNotFoundError(terra_name, missing_branch, detail=r.text)
+
     if r.status_code == 400 and "Extra inputs:" in r.text:
         m = re.search(r'Extra inputs:\s*([^"]+?)(?:[,.]\s*(?:Invalid|$)|\.?")', r.text)
         extra_keys = m.group(1).strip() if m else "(see error body above)"
@@ -750,9 +798,15 @@ def poll_submission(namespace, workspace, submission_id, poll_interval):
 
 def run_pipeline(namespace, workspace, method_namespace,
                  cohort_name, batches,
-                 start_module, poll_interval, branch_workflows):
+                 start_module, poll_interval, fallback_branch=None):
     """Run the pipeline sequentially from start_module, polling between
     modules.
+
+    All pipeline modules at or after ``start_module`` are submitted,
+    regardless of whether they were modified on the current branch.  This
+    ensures that unmodified intermediate workflows (e.g. TrainGCNV) are still
+    exercised when their inputs have changed because an upstream workflow was
+    updated.
 
     Entity routing per module type:
       ``sample``        – submitted against each batch as a sample_set with
@@ -763,14 +817,11 @@ def run_pipeline(namespace, workspace, method_namespace,
     modules_to_run = [
         (num, name, etype)
         for num, name, etype in PIPELINE_MODULES
-        if num >= start_module and name in branch_workflows
+        if num >= start_module
     ]
 
     if not modules_to_run:
-        log.warning(
-            "No modules to run from step %d with branch workflows: %s",
-            start_module, sorted(branch_workflows),
-        )
+        log.warning("No modules to run from step %d.", start_module)
         return
 
     log.info(
@@ -794,10 +845,27 @@ def run_pipeline(namespace, workspace, method_namespace,
         log.info("Submitting: %s (ns=%s)", label, config_namespace)
         log.info("=" * 70)
 
-        submission_id = submit_workflow(
-            namespace, workspace, config_namespace, terra_name,
-            entity_name, entity_type, expression=expression,
-        )
+        submission_id = None
+        try:
+            submission_id = submit_workflow(
+                namespace, workspace, config_namespace, terra_name,
+                entity_name, entity_type, expression=expression,
+            )
+        except BranchNotFoundError as exc:
+            if fallback_branch is None:
+                raise
+            log.warning(
+                "Branch not found for '%s'; switching to fallback branch '%s'",
+                terra_name, fallback_branch,
+            )
+            _set_config_branch(
+                namespace, workspace, config_namespace,
+                terra_name, fallback_branch,
+            )
+            submission_id = submit_workflow(
+                namespace, workspace, config_namespace, terra_name,
+                entity_name, entity_type, expression=expression,
+            )
         sub = poll_submission(namespace, workspace, submission_id, poll_interval)
         if not _submission_succeeded(sub):
             wf_statuses = sub.get("workflowStatuses", {})
@@ -897,7 +965,16 @@ def parse_args(argv=None):
     )
     p.add_argument(
         "--run-all-modules", action="store_true",
-        help="Run all modules from start-module, not just branch-modified ones.",
+        help=("Expand branch_workflows to all pipeline modules for the "
+              "config-upload and Dockstore-branch steps.  The run step "
+              "always executes every module from --start-module onwards "
+              "regardless of this flag."),
+    )
+    p.add_argument(
+        "--fallback-branch", default=None,
+        help=("Branch to fall back to if Terra cannot find the primary branch "
+              "on Dockstore for a workflow (e.g. 'main').  Without this flag, "
+              "a missing branch is a fatal error."),
     )
     return p.parse_args(argv)
 
@@ -994,7 +1071,8 @@ def main(argv=None):
         run_pipeline(
             namespace, workspace, method_namespace,
             cohort_name, batches,
-            args.start_module, args.poll_interval, branch_workflows,
+            args.start_module, args.poll_interval,
+            fallback_branch=args.fallback_branch,
         )
     else:
         log.info("Skipping pipeline run (--skip-run)")
