@@ -140,6 +140,12 @@ for rec in vcf_in:
     rec.info["SVTYPE"] = allele_type
     rec.info["SVLEN"] = allele_length
     rec.stop = rec.pos + len(rec.ref) - 1
+
+    if len(rec.alts) > 1:
+        for sample in rec.samples.values():
+            gt = sample["GT"]
+            sample["GT"] = tuple(0 if a == 0 else (1 if a is not None else None) for a in gt)
+
     rec.alts = (f"<{allele_type}>",)
 
     vcf_out.write(rec)
