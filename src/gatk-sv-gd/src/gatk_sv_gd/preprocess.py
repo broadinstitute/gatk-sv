@@ -201,7 +201,8 @@ def collect_all_locus_bins(
     exclusion_mask: Optional[ExclusionMask],
     exclusion_threshold: float = 0.5,
     locus_padding: int = 0,
-    min_bins_per_region: int = 3,
+    min_bins_per_interval: int = 3,
+    min_non_nahr_bins_per_interval: int = 100,
     max_bins_per_interval: int = 10,
     non_nahr_max_bins_per_interval: int = 100,
     highres_counts_path: Optional[str] = None,
@@ -219,9 +220,10 @@ def collect_all_locus_bins(
     """
     Collect all bins across all GD loci into a single DataFrame.
 
-    Each body interval (region between adjacent breakpoints) should contain
-    at least *min_bins_per_region* bins after processing.  Intervals that
-    fall below this threshold trigger a warning.
+    Each body interval (region between adjacent breakpoints) must contain
+    at least *min_bins_per_interval* bins after all processing (hard
+    failure).  Non-NAHR loci use the higher *min_non_nahr_bins_per_interval*
+    target to trigger high-res replacement when available.
 
     When a body interval is ≥ *exclusion_bypass_threshold* overlapped by
     the exclusion mask, masking is skipped
@@ -238,14 +240,19 @@ def collect_all_locus_bins(
         exclusion_threshold: Minimum overlap fraction with the mask to
             exclude a bin.
         locus_padding: Padding around locus boundaries.
-        min_bins_per_region: Minimum number of bins expected in each
-            body interval (region between adjacent breakpoints).  A warning
-            is printed if any interval has fewer bins after all processing.
+        min_bins_per_interval: Hard-failure minimum: each body interval
+            must have at least this many bins after all processing,
+            regardless of locus type (NAHR or non-NAHR).
+        min_non_nahr_bins_per_interval: Target bin count per body interval
+            for non-NAHR loci.  When any body interval of a non-NAHR locus
+            has fewer bins than this, high-res replacement is triggered
+            (if ``highres_counts_path`` is set).  Default 100.
         max_bins_per_interval: Maximum bins per interval after rebinning
-            (0 = no rebinning).  Used for NAHR loci.
-        non_nahr_max_bins_per_interval: Maximum bins per interval for
-            non-NAHR loci (default 100).  Higher resolution is needed
-            because non-NAHR CNVs can span a small fraction of the region.
+            for NAHR loci (0 = no rebinning).
+        non_nahr_max_bins_per_interval: Maximum bins per interval after
+            rebinning for non-NAHR loci (default 100).  Higher resolution
+            is needed because non-NAHR CNVs can span a small fraction of
+            the region.
         highres_counts_path: Optional path to a bgzipped, tabix-indexed
             high-resolution read-count file.  When set, loci with any
             under-covered interval are re-queried at this resolution.
@@ -522,23 +529,32 @@ def collect_all_locus_bins(
         body_intervals = locus.get_intervals()  # [(start, end, name), ...]
         body_interval_names = {name for _, _, name in body_intervals}
 
+        # Determine per-interval bin target for this locus type.
+        # Non-NAHR loci need finer resolution because the variant can
+        # span only a small fraction of the region.
+        effective_min_bins = (
+            min_non_nahr_bins_per_interval if not locus.is_nahr
+            else min_bins_per_interval
+        )
+
         # Identify under-covered body intervals
         def _undercovered_intervals(
             ivbins: Dict[str, List[int]],
+            threshold: int,
         ) -> List[Tuple[str, int]]:
-            """Return list of (name, count) for body intervals below threshold."""
+            """Return list of (name, count) for body intervals below *threshold*."""
             return [
                 (name, len(ivbins.get(name, [])))
                 for name in body_interval_names
-                if len(ivbins.get(name, [])) < min_bins_per_region
+                if len(ivbins.get(name, [])) < threshold
             ]
 
-        undercovered = _undercovered_intervals(interval_bins)
+        undercovered = _undercovered_intervals(interval_bins, effective_min_bins)
 
         used_highres = False
         # Body intervals where even the raw high-res data doesn't have
         # enough bins — the resolution is simply too coarse for this locus
-        # size, so we exempt them from the min-bins threshold later.
+        # size, so we exempt them from the hard-failure threshold later.
         hr_physically_limited: set = set()
         if (
             undercovered
@@ -547,7 +563,7 @@ def collect_all_locus_bins(
             and lowres_median_bin_size is not None
         ):
             print(f"\n  *** {len(undercovered)} body interval(s) have fewer "
-                  f"than {min_bins_per_region} bins; switching to high-res ***")
+                  f"than {effective_min_bins} bins; switching to high-res ***")
             for name, cnt in undercovered:
                 print(f"      {name}: {cnt} bins")
 
@@ -565,17 +581,17 @@ def collect_all_locus_bins(
             if len(hr_raw_df) > 0:
                 # Before any filtering, count how many raw hi-res bins
                 # fall in each body interval.  If a body interval cannot
-                # reach min_bins_per_region even with every raw bin, it is
-                # physically limited by the bin resolution and should be
-                # exempted from the threshold (provided it has > 0 bins
-                # after processing).
+                # reach min_bins_per_interval even with every raw bin, it
+                # is physically limited by the bin resolution and should
+                # be exempted from the hard-failure threshold (provided it
+                # has > 0 bins after processing).
                 hr_raw_mids = (hr_raw_df["Start"] + hr_raw_df["End"]) / 2
                 for iv_start, iv_end, iv_name in body_intervals:
                     raw_count = int(((hr_raw_mids >= iv_start) & (hr_raw_mids < iv_end)).sum())
-                    if raw_count < min_bins_per_region:
+                    if raw_count < min_bins_per_interval:
                         hr_physically_limited.add(iv_name)
                         print(f"    [highres] body interval '{iv_name}' has only "
-                              f"{raw_count} raw bins (< {min_bins_per_region}); "
+                              f"{raw_count} raw bins (< {min_bins_per_interval}); "
                               f"resolution-limited, will relax threshold")
 
                 # Normalise using the low-res calibration, scaled by bin size ratio
@@ -598,7 +614,7 @@ def collect_all_locus_bins(
                     min_rebin_coverage=min_rebin_coverage,
                 )
 
-                hr_undercovered = _undercovered_intervals(hr_interval_bins)
+                hr_undercovered = _undercovered_intervals(hr_interval_bins, effective_min_bins)
 
                 # Accept the high-res data if it improved coverage:
                 # (a) fewer under-covered intervals, OR
@@ -618,7 +634,6 @@ def collect_all_locus_bins(
                 if accept_hr:
                     locus_df = hr_locus_df
                     interval_bins = hr_interval_bins
-                    undercovered = hr_undercovered
                     used_highres = True
                     total_assigned = sum(len(v) for v in interval_bins.values())
                     print(f"    [highres] ACCEPTED — replaced low-res bins")
@@ -631,40 +646,41 @@ def collect_all_locus_bins(
             else:
                 print(f"    [highres] no bins returned from tabix query")
 
-        # Warn about under-covered body intervals.  Some GD loci have
-        # intervals dominated by exclusion regions so 0 surviving bins
-        # is possible even after bypass — downgrade to a warning.
+        # Hard-failure check: use the base threshold (min_bins_per_interval)
+        # which applies uniformly to all locus types.  Non-NAHR loci may
+        # have been checked against a higher target above to trigger
+        # high-res replacement, but as long as they meet the base minimum
+        # they are kept.
         #
         # Intervals that are "physically limited" (the raw high-res data
-        # itself didn't have enough bins) are exempted from the threshold
-        # as long as they still have > 0 bins after processing — the bin
-        # resolution is simply too coarse for the locus size.
-        if undercovered:
-            # Partition into truly problematic vs resolution-limited
+        # itself didn't have enough bins) are exempted as long as they
+        # have > 0 bins after processing.
+        hard_check = _undercovered_intervals(interval_bins, min_bins_per_interval)
+        if hard_check:
             hard_failures = [
-                (name, cnt) for name, cnt in undercovered
+                (name, cnt) for name, cnt in hard_check
                 if name not in hr_physically_limited or cnt == 0
             ]
             soft_warnings = [
-                (name, cnt) for name, cnt in undercovered
+                (name, cnt) for name, cnt in hard_check
                 if name in hr_physically_limited and cnt > 0
             ]
 
             if soft_warnings:
                 for name, cnt in soft_warnings:
                     print(f"  NOTE: body interval '{name}' has {cnt} bins "
-                          f"(< {min_bins_per_region}), but this is the maximum "
+                          f"(< {min_bins_per_interval}), but this is the maximum "
                           f"the bin resolution can provide — proceeding anyway.")
 
             if hard_failures:
                 details = "\n".join(
-                    f"    interval '{name}': {cnt} bins (need >= {min_bins_per_region})"
+                    f"    interval '{name}': {cnt} bins (need >= {min_bins_per_interval})"
                     for name, cnt in hard_failures
                 )
                 raise ValueError(
                     f"\n  WARNING: Locus {cluster} ({locus.chrom}:{locus.start:,}-"
                     f"{locus.end:,}) has {len(hard_failures)} body interval(s) with "
-                    f"fewer than --min-bins-per-region={min_bins_per_region} bins "
+                    f"fewer than --min-bins-per-interval={min_bins_per_interval} bins "
                     f"after all processing"
                     f"{' (including high-res replacement)' if used_highres else ''}:\n"
                     f"{details}\n"
@@ -829,12 +845,19 @@ def parse_args():
                         help="Min overlap fraction with exclusion regions to mask a bin")
     parser.add_argument("--exclusion-bypass-threshold", type=float, default=0.6,
                         help="Body-interval overlap fraction above which masking is skipped")
-    parser.add_argument("--min-bins-per-region", type=int, default=10,
-                        help="Min bins expected per body interval")
+    parser.add_argument("--min-bins-per-interval", type=int, default=10,
+                        help="Hard-failure minimum bins per body interval, applied "
+                             "uniformly to NAHR and non-NAHR loci")
+    parser.add_argument("--min-non-nahr-bins-per-interval", type=int, default=100,
+                        help="Target bins per body interval for non-NAHR loci; "
+                             "triggers high-res replacement when not met")
     parser.add_argument("--max-bins-per-interval", type=int, default=20,
-                        help="Max bins per interval after rebinning for NAHR loci (0 = no rebinning)")
+                        help="Maximum bins per body interval after rebinning for "
+                             "NAHR loci (0 = no rebinning)")
     parser.add_argument("--non-nahr-max-bins-per-interval", type=int, default=100,
-                        help="Max bins per interval for non-NAHR loci (higher resolution)")
+                        help="Maximum bins per body interval after rebinning for "
+                             "non-NAHR loci (higher resolution needed because "
+                             "non-NAHR CNVs can span a small fraction of the region)")
     parser.add_argument("--min-rebin-coverage", type=float, default=0.5,
                         help="Min coverage fraction for rebinned bins")
     parser.add_argument("--min-flank-bases", type=int, default=50000,
@@ -843,7 +866,7 @@ def parse_args():
                         help="Min bins each flank must contain")
     parser.add_argument("--min-flank-coverage", type=float, default=0.5,
                         help="Min fraction of flank bp target that must be covered")
-    parser.add_argument("--min-non-nahr-size", type=int, default=100000,
+    parser.add_argument("--min-non-nahr-size", type=int, default=1000000,
                         help="Minimum size (bp) for non-NAHR loci; smaller loci are skipped "
                              "(set to 0 to disable)")
 
@@ -963,7 +986,8 @@ def main():
         df, gd_table, exclusion_mask,
         exclusion_threshold=args.exclusion_threshold,
         locus_padding=args.locus_padding,
-        min_bins_per_region=args.min_bins_per_region,
+        min_bins_per_interval=args.min_bins_per_interval,
+        min_non_nahr_bins_per_interval=args.min_non_nahr_bins_per_interval,
         max_bins_per_interval=args.max_bins_per_interval,
         non_nahr_max_bins_per_interval=args.non_nahr_max_bins_per_interval,
         highres_counts_path=highres_path,
@@ -997,8 +1021,17 @@ def main():
     # Write a filtered GD table containing only the loci that survived
     # region and size filtering, so downstream tools (call, plot, eval)
     # operate on exactly the modeled set.
+    #
+    # _parse_loci() maps standalone entries (NaN / empty cluster column)
+    # to their GD_ID as the dict key, so we must apply the same mapping
+    # when filtering the raw DataFrame — otherwise standalone entries
+    # would be silently dropped from the output even though their
+    # intervals were processed.
     included_clusters = set(included_loci.keys())
-    filtered_gd_df = gd_table.df[gd_table.df["cluster"].isin(included_clusters)].copy()
+    effective_cluster = gd_table.df["cluster"].copy()
+    standalone_mask = effective_cluster.isna() | (effective_cluster == "")
+    effective_cluster[standalone_mask] = gd_table.df.loc[standalone_mask, "GD_ID"]
+    filtered_gd_df = gd_table.df[effective_cluster.isin(included_clusters)].copy()
     filtered_gd_path = os.path.join(args.output_dir, "gd_table_filtered.tsv")
     filtered_gd_df.to_csv(filtered_gd_path, sep="\t", index=False)
     print(f"  Saved: {filtered_gd_path}")

@@ -90,7 +90,8 @@ def run_gd_analysis(
             df, gd_table, exclusion_mask,
             exclusion_threshold=args.exclusion_threshold,
             locus_padding=args.locus_padding,
-            min_bins_per_region=args.min_bins_per_region,
+            min_bins_per_interval=args.min_bins_per_interval,
+            min_non_nahr_bins_per_interval=args.min_non_nahr_bins_per_interval,
             max_bins_per_interval=args.max_bins_per_interval,
             non_nahr_max_bins_per_interval=args.non_nahr_max_bins_per_interval,
             highres_counts_path=highres_path,
@@ -126,6 +127,7 @@ def run_gd_analysis(
         var_bias_bin=args.var_bias_bin,
         var_sample=args.var_sample,
         var_bin=args.var_bin,
+        bin_size_factor=args.bin_size_factor,
         device=device,
         dtype=torch.float32,
         guide_type=args.guide_type,
@@ -221,10 +223,11 @@ def parse_args():
         required=False,
         help="Optional bgzipped, tabix-indexed high-resolution read count "
              "file (.tsv.gz + .tbi).  When provided, loci with any body "
-             "interval below --min-bins-per-region bins are re-queried at "
-             "this finer resolution before the hard check is enforced.  "
-             "The file must have the same sample columns as the low-res "
-             "input and contain raw (un-normalised) counts.",
+             "interval below the target bin count (--min-bins-per-interval "
+             "for NAHR, --min-non-nahr-bins-per-interval for non-NAHR) are "
+             "re-queried at this finer resolution before the hard check "
+             "is enforced.  The file must have the same sample columns as "
+             "the low-res input and contain raw (un-normalised) counts.",
     )
     parser.add_argument(
         "--preprocessed-dir",
@@ -261,27 +264,36 @@ def parse_args():
              "disable bypass.",
     )
     parser.add_argument(
-        "--min-bins-per-region",
+        "--min-bins-per-interval",
         type=int,
         default=10,
-        help="Minimum number of bins expected in each body interval "
-             "(region between adjacent breakpoints).  A warning is printed "
-             "if any interval has fewer bins after all processing.  "
-             "Under-covered intervals are also candidates for high-res "
-             "replacement when --high-res-counts is provided.",
+        help="Hard-failure minimum bins per body interval, applied "
+             "uniformly to NAHR and non-NAHR loci.  Intervals below "
+             "this count after all processing cause a hard failure.",
+    )
+    parser.add_argument(
+        "--min-non-nahr-bins-per-interval",
+        type=int,
+        default=100,
+        help="Target bins per body interval for non-NAHR loci.  When "
+             "any body interval of a non-NAHR locus has fewer bins than "
+             "this, high-res replacement is triggered (if --high-res-counts "
+             "is provided).",
     )
     parser.add_argument(
         "--max-bins-per-interval",
         type=int,
         default=20,
-        help="Maximum bins per interval after rebinning for NAHR loci (0 = no rebinning)",
+        help="Maximum bins per body interval after rebinning for NAHR loci "
+             "(0 = no rebinning)",
     )
     parser.add_argument(
         "--non-nahr-max-bins-per-interval",
         type=int,
         default=100,
-        help="Maximum bins per interval for non-NAHR loci (higher resolution "
-             "needed because non-NAHR CNVs can span a small fraction of the region)",
+        help="Maximum bins per body interval after rebinning for non-NAHR "
+             "loci (higher resolution needed because non-NAHR CNVs can "
+             "span a small fraction of the region)",
     )
     parser.add_argument(
         "--min-rebin-coverage",
@@ -352,6 +364,17 @@ def parse_args():
         type=float,
         default=0.001,
         help="Variance for per-bin variance factor",
+    )
+    parser.add_argument(
+        "--bin-size-factor",
+        type=float,
+        default=10000.0,
+        help="Reference bin size (bp) for variance scaling.  The total "
+             "variance is multiplied by bin_size_factor / interval_size "
+             "so that smaller bins have proportionally higher variance.  "
+             "Note that this is redundant with the other scale factors "
+             "and is only exposed for debugging. Set to 0 to disable "
+             "bin-size variance scaling.",
     )
     parser.add_argument(
         "--guide-type",

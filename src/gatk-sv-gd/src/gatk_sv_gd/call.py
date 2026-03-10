@@ -197,6 +197,7 @@ def call_cnvs_from_posteriors(
     viterbi_flank_coverage_threshold: float = 0.70,
     breakpoint_transition_matrix: Optional[np.ndarray] = None,
     non_nahr_min_variant_fraction: float = 0.10,
+    non_nahr_min_event_size: int = 10000,
 ) -> pd.DataFrame:
     """
     Call CNVs from posterior probabilities using the Viterbi strategy.
@@ -224,6 +225,9 @@ def call_cnvs_from_posteriors(
             to encourage CN state changes at those positions.
         non_nahr_min_variant_fraction: Minimum fraction of body bins that
             must show variant CN to call a non-NAHR carrier (default 0.10).
+        non_nahr_min_event_size: Absolute minimum total variant segment size
+            in bp for non-NAHR calls.  Depth-only calls smaller than this
+            are unreliable.  Default 10 000.
 
     Returns:
         DataFrame with CNV calls for all samples and loci
@@ -236,7 +240,8 @@ def call_cnvs_from_posteriors(
           f"flank coverage threshold={viterbi_flank_coverage_threshold:.0%})")
     nn_src = "non-NAHR matrix"
     print(f"  Non-NAHR strategy: Viterbi ({nn_src}), "
-          f"min variant fraction={non_nahr_min_variant_fraction:.0%}")
+          f"min variant fraction={non_nahr_min_variant_fraction:.0%}, "
+          f"min event size={non_nahr_min_event_size:,} bp")
     print("=" * 80)
 
     all_results = []
@@ -353,8 +358,10 @@ def call_cnvs_from_posteriors(
                     confidence_threshold=viterbi_confidence_threshold,
                     flank_coverage_threshold=viterbi_flank_coverage_threshold,
                     min_variant_fraction=non_nahr_min_variant_fraction,
+                    min_event_size=non_nahr_min_event_size,
                     verbose=verbose,
                     sample_id=str(sample_id),
+                    bin_coords=bin_coords_by_idx,
                 )
                 best_by_svtype = determine_best_breakpoints(
                     locus,
@@ -453,6 +460,13 @@ def call_cnvs_from_posteriors(
                     ),
                     "log_prob_score": call["log_prob_score"],
                     "variant_fraction": call.get("variant_fraction", np.nan),
+                    "variant_intervals": ",".join(
+                        call.get("variant_intervals", call["intervals"])
+                    ),
+                    "variant_segments": ";".join(
+                        f"{s}-{e}"
+                        for s, e in call.get("variant_segments", [])
+                    ),
                 }
                 all_results.append(result)
 
@@ -548,6 +562,14 @@ def parse_args():
              "(Viterbi only).  Default: 0.01 (1%%).",
     )
     parser.add_argument(
+        "--non-nahr-min-event-size",
+        type=int,
+        default=10000,
+        help="Absolute minimum total variant segment size in bp for "
+             "non-NAHR calls.  Depth-only calls smaller than this are "
+             "unreliable.  Default: 10000.",
+    )
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Print detailed per-sample log probability scores for all GD "
@@ -616,6 +638,7 @@ def main():
         viterbi_flank_coverage_threshold=args.viterbi_flank_coverage_threshold,
         breakpoint_transition_matrix=breakpoint_transition_matrix,
         non_nahr_min_variant_fraction=args.non_nahr_min_variant_fraction,
+        non_nahr_min_event_size=args.non_nahr_min_event_size,
     )
 
     # Save calls

@@ -276,9 +276,17 @@ class DepthData:
         self.n_bins = self.depth.shape[0]
         self.n_samples = self.depth.shape[1]
 
+        # Compute interval sizes (bp) for each bin
+        interval_sizes = (self.end - self.start).astype(float)
+        self.interval_sizes = torch.tensor(
+            interval_sizes, dtype=dtype, device=device
+        ).unsqueeze(-1)  # (n_bins, 1) for broadcasting over samples
+
         print(f"Loaded data: {self.n_bins} bins x {self.n_samples} samples")
         print(f"Depth range: [{self.depth.min():.3f}, {self.depth.max():.3f}]")
         print(f"Depth mean: {self.depth.mean():.3f}, median: {self.depth.median():.3f}")
+        print(f"Interval sizes: [{interval_sizes.min():.0f}, {interval_sizes.max():.0f}] bp, "
+              f"median={np.median(interval_sizes):.0f} bp")
 
 
 class CNVModel:
@@ -301,6 +309,7 @@ class CNVModel:
         var_bias_bin: float = 0.1,
         var_sample: float = 0.2,
         var_bin: float = 0.2,
+        bin_size_factor: float = 10000.0,
         device: str = "cpu",
         dtype: torch.dtype = torch.float32,
         debug: bool = False,
@@ -314,6 +323,10 @@ class CNVModel:
             var_bias_bin: Variance for per-bin mean bias (log-normal)
             var_sample: Variance for per-sample variance factor (log-normal)
             var_bin: Variance for per-bin variance factor (log-normal)
+            bin_size_factor: Reference bin size (bp) for variance scaling.
+                The total variance is multiplied by
+                ``bin_size_factor / interval_size`` so that smaller bins
+                have proportionally higher variance.
             device: torch device
             dtype: torch data type
             debug: Whether to print debug statements in model()
@@ -325,6 +338,7 @@ class CNVModel:
         self.var_bias_bin = var_bias_bin
         self.var_sample = var_sample
         self.var_bin = var_bin
+        self.bin_size_factor = bin_size_factor
         self.device = device
         self.dtype = dtype
         self.debug = debug
@@ -348,12 +362,13 @@ class CNVModel:
             )
 
     @config_enumerate(default="parallel")
-    def model(self, depth: torch.Tensor, n_bins: int = None, n_samples: int = None):
+    def model(self, depth: torch.Tensor, interval_sizes: torch.Tensor, n_bins: int = None, n_samples: int = None):
         """
         Probabilistic model for CNV detection.
 
         Args:
             depth: Observed normalized read depth (n_bins x n_samples)
+            interval_sizes: Bin sizes in bp (n_bins x 1) for variance scaling
         """
 
         if self.debug:
@@ -417,11 +432,14 @@ class CNVModel:
             if self.debug:
                 print(f"expected_depth.shape: {expected_depth.shape}")
 
-            # Variance: combination of sample and bin variance
-            # Use summation to combine the two variance factors
+            # Variance: combination of sample and bin variance,
+            # scaled inversely by bin size so that smaller bins have
+            # proportionally higher variance.
             if self.debug:
                 print(f"bin_var).shape: {bin_var.shape}")
-            variance = sample_var + bin_var
+            base_variance = sample_var + bin_var
+            size_modifier = self.bin_size_factor / interval_sizes
+            variance = base_variance * size_modifier
             if self.debug:
                 print(f"variance.shape: {variance.shape}")
             std = torch.sqrt(variance)
@@ -513,7 +531,10 @@ class CNVModel:
                 for epoch in pbar:
                     # Train step
                     epoch_loss = svi.step(
-                        depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples
+                        depth=data.depth,
+                        interval_sizes=data.interval_sizes,
+                        n_bins=data.n_bins,
+                        n_samples=data.n_samples,
                     )
                     scheduler.step()
 
@@ -571,7 +592,10 @@ class CNVModel:
         # SVI mode: use guide parameters
         # Get guide trace (contains MAP estimates of continuous variables)
         guide_trace = poutine.trace(self.guide).get_trace(
-            depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples
+            depth=data.depth,
+            interval_sizes=data.interval_sizes,
+            n_bins=data.n_bins,
+            n_samples=data.n_samples,
         )
 
         # Get model trace conditioned on guide
@@ -582,7 +606,10 @@ class CNVModel:
             trained_model, temperature=0, first_available_dim=-3
         )
         trace = poutine.trace(inferred_model).get_trace(
-            depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples
+            depth=data.depth,
+            interval_sizes=data.interval_sizes,
+            n_bins=data.n_bins,
+            n_samples=data.n_samples,
         )
 
         # Extract all latent variables
@@ -607,57 +634,91 @@ class CNVModel:
 
         return map_estimates
 
-    def run_discrete_inference(self, data, n_samples: int = 1000, log_freq: int = 100):
+    def run_discrete_inference(self, data, **kwargs):
         """
-        Run discrete inference to get posterior distribution over copy numbers.
+        Compute exact posterior probabilities analytically using Bayes' rule.
+
+        Because the model uses a discrete Categorical hidden state with a
+        small state space (K=6) and a Gaussian observation likelihood, the
+        posterior can be computed exactly once the MAP estimates for the
+        continuous latent variables are available.  For each bin *b* and
+        sample *s*:
+
+        .. math::
+
+            P(CN_{b,s} = k \\mid x_{b,s})
+            = \\frac{P(x_{b,s} \\mid CN_{b,s}=k) \\cdot P(CN_b=k)}
+                    {\\sum_{j} P(x_{b,s} \\mid CN_{b,s}=j) \\cdot P(CN_b=j)}
+
+        This replaces the previous Monte Carlo sampling approach
+        (``infer_discrete`` with thousands of samples) and is both faster
+        and perfectly accurate.
 
         Args:
-            data: DepthData object
-            n_samples: Number of samples for discrete inference
-            log_freq: Logging frequency
+            data: DepthData object.
+            **kwargs: Accepted for backward compatibility (``n_samples``,
+                ``log_freq``) but ignored.
 
         Returns:
-            Dictionary with copy number posterior probabilities
+            Dictionary with key ``"cn_posterior"`` mapping to an array of
+            shape ``(n_bins, n_samples, n_states)``.
         """
-        print(f"Running discrete inference with {n_samples} samples...")
+        print("Computing exact discrete marginal posteriors analytically...")
 
-        # Get guide trace
-        guide_trace = poutine.trace(self.guide).get_trace(
-            depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples
+        # 1. Get MAP estimates of continuous variables
+        maps = self.get_map_estimates(data)
+        bin_bias = maps["bin_bias"]       # (n_bins,) or (n_bins, 1)
+        sample_var = maps["sample_var"]   # (n_samples,) or (1, n_samples)
+        bin_var = maps["bin_var"]         # (n_bins,) or (n_bins, 1)
+        cn_probs = maps["cn_probs"]       # (n_bins, n_states)
+
+        # Flatten to 1-D / 2-D where needed (guide may add singleton
+        # plate dimensions).
+        bin_bias = bin_bias.squeeze()
+        sample_var = sample_var.squeeze()
+        bin_var = bin_var.squeeze()
+        cn_probs = cn_probs.squeeze()   # (n_bins, n_states)
+
+        # 2. Prepare data matrices
+        obs = data.depth.detach().cpu().numpy()  # (n_bins, n_samples)
+        interval_sizes = data.interval_sizes.detach().cpu().numpy().squeeze()  # (n_bins,)
+
+        # Combined variance: (sample_var + bin_var) * bin_size_factor / interval_size
+        # → shape (n_bins, n_samples)
+        base_variance = sample_var[np.newaxis, :] + bin_var[:, np.newaxis]
+        size_modifier = self.bin_size_factor / interval_sizes[:, np.newaxis]
+        variance = base_variance * size_modifier
+        std = np.sqrt(variance)
+
+        # 3. Compute log-likelihoods for all states simultaneously
+        # states: (n_states, 1, 1);  bin_bias: (1, n_bins, 1)
+        states = np.arange(self.n_states).reshape(-1, 1, 1)
+        expected_depth = states * bin_bias[np.newaxis, :, np.newaxis]
+
+        # Broadcast obs and std to (1, n_bins, n_samples)
+        obs_b = obs[np.newaxis, :, :]
+        std_b = std[np.newaxis, :, :]
+
+        # Gaussian log-PDF
+        log_lik = (
+            -0.5 * np.log(2 * np.pi * std_b ** 2)
+            - ((obs_b - expected_depth) ** 2) / (2 * std_b ** 2)
         )
-        trained_model = poutine.replay(self.model, trace=guide_trace)
 
-        # Accumulate counts directly instead of storing all samples, to avoid
-        # building an (n_samples x n_bins x n_samples) array in memory.
-        cn_counts = np.zeros((data.n_bins, data.n_samples, self.n_states), dtype=np.int32)
+        # 4. Add log-prior
+        # cn_probs (n_bins, n_states) → (n_states, n_bins, 1)
+        log_prior = np.log(np.maximum(cn_probs.T[:, :, np.newaxis], 1e-10))
+        log_unnormalized = log_lik + log_prior
 
-        with torch.no_grad():
-            with tqdm(
-                range(n_samples),
-                desc="Discrete inference",
-                unit="sample",
-                mininterval=0.1,
-                dynamic_ncols=True,
-            ) as pbar:
-                for i in pbar:
-                    inferred_model = infer_discrete(
-                        trained_model, temperature=1, first_available_dim=-3
-                    )
-                    trace = poutine.trace(inferred_model).get_trace(
-                        depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples
-                    )
-                    cn = trace.nodes["cn"]["value"].detach().cpu().numpy()  # (n_bins, n_samples)
-                    # Accumulate one-hot counts in-place — no sample list needed
-                    for state in range(self.n_states):
-                        cn_counts[..., state] += (cn == state).astype(np.int32)
+        # 5. Log-sum-exp softmax across the state dimension (axis 0)
+        max_log = np.max(log_unnormalized, axis=0, keepdims=True)
+        exp_vals = np.exp(log_unnormalized - max_log)
+        posterior = exp_vals / np.sum(exp_vals, axis=0, keepdims=True)
 
-                    # Periodically free GPU cache to prevent fragmentation
-                    if (i + 1) % 100 == 0 and self.device == "cuda":
-                        torch.cuda.empty_cache()
+        # Transpose from (n_states, n_bins, n_samples) → (n_bins, n_samples, n_states)
+        posterior = np.transpose(posterior, (1, 2, 0))
 
-        cn_freq = cn_counts / n_samples  # normalise to probabilities
-
-        print("Discrete inference complete.")
-        return {"cn_posterior": cn_freq}
+        print("Exact analytical inference complete.")
+        return {"cn_posterior": posterior}
 
 

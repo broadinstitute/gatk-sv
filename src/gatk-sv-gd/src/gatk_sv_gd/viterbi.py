@@ -549,8 +549,10 @@ def viterbi_call_non_nahr_cnv(
     confidence_threshold: float = -1.0,
     flank_coverage_threshold: float = 0.70,
     min_variant_fraction: float = 0.10,
+    min_event_size: int = 10000,
     verbose: bool = False,
     sample_id: str = "",
+    bin_coords: Optional[Dict[int, Tuple[int, int]]] = None,
 ) -> List[dict]:
     """Call non-NAHR GD CNVs using Viterbi segmentation.
 
@@ -578,8 +580,13 @@ def viterbi_call_non_nahr_cnv(
         flank_coverage_threshold: Fraction of flank bins at reference CN.
         min_variant_fraction: Minimum fraction of body bins that must show
             variant CN (DEL: < ploidy, DUP: > ploidy) to call a carrier.
+        min_event_size: Absolute minimum total variant segment size in bp.
+            Depth-only calls smaller than this are unreliable.  Default 10 000.
         verbose: Print per-entry diagnostic info.
         sample_id: For logging.
+        bin_coords: Optional dict mapping bin array_idx to (start, end)
+            genomic coordinates.  When provided, contiguous variant
+            segments are computed and stored in the call dict.
 
     Returns:
         List of call dicts (one per GD entry).
@@ -633,21 +640,56 @@ def viterbi_call_non_nahr_cnv(
                   f"does not resolve to any interval — entry skipped.")
             continue
 
-        # Count variant fraction in covered body bins
+        # Count variant fraction in covered body bins and collect the
+        # array_idx of every variant-CN bin so we can compute the precise
+        # genomic coordinates of the affected region.
         n_variant = 0
         n_total = 0
         covered_cn_sum = 0.0
+        variant_intervals: List[str] = []
+        variant_bin_indices: List[int] = []
         for iv in covered:
-            states = interval_bin_states.get(iv, np.array([], dtype=int))
-            n_total += len(states)
-            covered_cn_sum += float(states.sum())
-            if svtype == "DEL":
-                n_variant += int(np.sum(states < ploidy))
-            elif svtype == "DUP":
-                n_variant += int(np.sum(states > ploidy))
+            bins = interval_bin_arrays.get(iv, np.array([], dtype=int))
+            n_total += len(bins)
+            iv_variant = 0
+            for b in bins:
+                b_int = int(b)
+                if b_int not in local_idx:
+                    continue
+                state = path[local_idx[b_int]]
+                covered_cn_sum += float(state)
+                if svtype == "DEL" and state < ploidy:
+                    iv_variant += 1
+                    variant_bin_indices.append(b_int)
+                elif svtype == "DUP" and state > ploidy:
+                    iv_variant += 1
+                    variant_bin_indices.append(b_int)
+            n_variant += iv_variant
+            if iv_variant > 0:
+                variant_intervals.append(iv)
 
         variant_fraction = n_variant / n_total if n_total > 0 else 0.0
+
+        # Build contiguous variant segments from bin coordinates.
+        variant_segments: List[Tuple[int, int]] = []
+        if variant_bin_indices and bin_coords is not None:
+            variant_bin_indices.sort()
+            seg_start = bin_coords[variant_bin_indices[0]][0]
+            seg_end = bin_coords[variant_bin_indices[0]][1]
+            for bi in variant_bin_indices[1:]:
+                b_start, b_end = bin_coords[bi]
+                if b_start <= seg_end:  # adjacent or overlapping
+                    seg_end = max(seg_end, b_end)
+                else:
+                    variant_segments.append((seg_start, seg_end))
+                    seg_start = b_start
+                    seg_end = b_end
+            variant_segments.append((seg_start, seg_end))
         covered_ok = variant_fraction >= min_variant_fraction and n_total > 0
+
+        # Absolute minimum event size check
+        event_size = sum(end - start for start, end in variant_segments)
+        size_ok = event_size >= min_event_size if variant_segments else False
 
         if verbose:
             frac_str = f"{variant_fraction:.1%}"
@@ -655,6 +697,9 @@ def viterbi_call_non_nahr_cnv(
             _util.vlog(f"    Entry {gd_id} ({svtype}, BP1={bp1}, BP2={bp2}):")
             _util.vlog(f"      Body bins: {n_variant}/{n_total} variant ({frac_str})  "
                        f"threshold={min_variant_fraction:.0%} -> {status}")
+            size_status = "PASS" if size_ok else "FAIL"
+            _util.vlog(f"      Event size: {event_size:,} bp  "
+                       f"threshold={min_event_size:,} bp -> {size_status}")
 
         # Check flanks + uncovered body intervals
         uncovered_body = body_names - covered
@@ -676,13 +721,14 @@ def viterbi_call_non_nahr_cnv(
                                f"< {flank_coverage_threshold:.0%} -> FAIL")
                 break
 
-        is_cnv = covered_ok and flanks_ok and confidence > confidence_threshold
+        is_cnv = covered_ok and size_ok and flanks_ok and confidence > confidence_threshold
         mean_cn = covered_cn_sum / n_total if n_total > 0 else float(ploidy)
         n_bins = sum(len(interval_bin_arrays.get(iv, [])) for iv in covered)
 
         if verbose:
             result_str = "CARRIER" if is_cnv else "NOT_CARRIER"
             _util.vlog(f"      -> covered={'PASS' if covered_ok else 'FAIL'}  "
+                       f"size={'PASS' if size_ok else 'FAIL'}  "
                        f"flanks={'PASS' if flanks_ok else 'FAIL'}  "
                        f"confidence={'PASS' if confidence > confidence_threshold else 'FAIL'}  "
                        f"[{result_str}]")
@@ -703,10 +749,14 @@ def viterbi_call_non_nahr_cnv(
             "is_carrier":              is_cnv,
             "is_spanning":             False,
             "intervals":               list(covered),
+            "variant_intervals":       variant_intervals,
+            "variant_segments":        variant_segments,
             "n_bins":                  n_bins,
             "mean_cn":                 mean_cn,
             "variant_fraction":        variant_fraction,
+            "event_size":              event_size,
             "viterbi_covered_ok":      covered_ok,
+            "viterbi_size_ok":         size_ok,
             "viterbi_flanks_ok":       flanks_ok,
             "flank_coverage_threshold": flank_coverage_threshold,
         })

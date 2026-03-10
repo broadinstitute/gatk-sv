@@ -332,6 +332,17 @@ def parse_args():
              "NAHR_GD_atypical=False) are used.",
     )
     parser.add_argument(
+        "--gd-table", "-g",
+        required=False, default=None,
+        help="Filtered GD table (gd_table_filtered.tsv) produced by the "
+             "preprocess step.  When provided, truth entries whose GD_ID "
+             "does not appear in this table are excluded from evaluation "
+             "so that loci removed by region or size filtering do not "
+             "produce spurious false negatives.  Recommended: use the "
+             "gd_table_filtered.tsv written to the preprocess output "
+             "directory.",
+    )
+    parser.add_argument(
         "--ploidy-table",
         required=True,
         help="Ploidy estimates table (TSV) produced by the preprocess step "
@@ -371,6 +382,44 @@ def main():
     print(f"\n  Loading truth table: {args.truth_table}")
     truth_df = load_truth_table(args.truth_table)
     print(f"    {len(truth_df)} truth entries")
+
+    # Restrict truth entries to loci present in the filtered GD table
+    # so that loci excluded by region/size filtering during preprocessing
+    # do not produce spurious false negatives.
+    #
+    # NAHR truth entries carry a GD_ID that matches the GD table directly.
+    # Non-NAHR truth entries carry a variant ID (not a GD_ID), so they
+    # must be matched by coordinate overlap against the modeled loci.
+    if args.gd_table is not None:
+        print(f"\n  Loading filtered GD table: {args.gd_table}")
+        gd_df = pd.read_csv(args.gd_table, sep="\t")
+        modeled_gd_ids = set(gd_df["GD_ID"].astype(str).unique())
+        print(f"    {len(modeled_gd_ids)} modeled GD_IDs")
+
+        n_before = len(truth_df)
+        keep = []
+        for idx, row in truth_df.iterrows():
+            if row.get("is_nahr", True):
+                # NAHR: direct GD_ID match
+                keep.append(str(row["GD_ID"]) in modeled_gd_ids)
+            else:
+                # Non-NAHR: coordinate overlap with any modeled locus
+                t_chr = str(row["chr"])
+                t_start = int(row["start"])
+                t_end = int(row["end"])
+                matched = False
+                for _, gd_row in gd_df[gd_df["chr"] == t_chr].iterrows():
+                    gd_start = int(gd_row["start_GRCh38"])
+                    gd_end = int(gd_row["end_GRCh38"])
+                    if t_start < gd_end and t_end > gd_start:
+                        matched = True
+                        break
+                keep.append(matched)
+        truth_df = truth_df[keep].copy()
+        n_dropped = n_before - len(truth_df)
+        if n_dropped > 0:
+            print(f"    Dropped {n_dropped} truth entries at unmodeled loci")
+        print(f"    {len(truth_df)} truth entries after filtering")
 
     # Evaluate
     evaluate_against_truth(
