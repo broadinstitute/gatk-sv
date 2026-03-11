@@ -162,14 +162,14 @@ cluster_out_in_output_dir="${output_dir}/$(basename "${cluster_out_in_wd}")"
 mv "${cluster_out_in_wd}" "${cluster_out_in_output_dir}"
 mv "${cluster_out_in_wd}.tbi" "${cluster_out_in_output_dir}.tbi"
 
-outputs_json=$(jq -n \
+rm -rf "${working_dir}"
+
+jq -n \
   --arg out "${cluster_out_in_output_dir}" \
   --arg out_index "${cluster_out_in_output_dir}.tbi" \
   '{
      "out": $out,
      "out_index": $out_index
-   }' \
-)
-echo "${outputs_json}" > "${output_json_filename}"
+   }' > "${output_json_filename}"
 
 echo "Successfully finished SVCluster, output json filename: ${output_json_filename}"

@@ -107,4 +107,6 @@ jq -n \
       unfiltered_recalibrated_vcf_index: $unfiltered_recalibrated_vcf_index
   }' > "${output_json_filename}"
 
+rm -rf "${working_dir}"
+
 echo "Finished Score Genotypes successfully, output json filename: ${output_json_filename}"
