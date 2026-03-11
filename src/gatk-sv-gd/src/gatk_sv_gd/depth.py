@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import torch
+from intervaltree import IntervalTree
 from tqdm import tqdm
 
 import pyro
@@ -28,6 +29,9 @@ from gatk_sv_gd._util import get_sample_columns
 class ExclusionMask:
     """
     Handles genomic exclusion regions for masking unreliable depth signal.
+
+    Uses :class:`intervaltree.IntervalTree` per chromosome for exact
+    interval-overlap queries (no midpoint heuristics).
 
     Exclusion regions can include segmental duplications, centromeres,
     satellite repeats, or any other intervals the user wishes to mask.
@@ -62,32 +66,36 @@ class ExclusionMask:
         print(f"Loaded {len(self.df)} {label} regions")
 
     def _build_interval_index(self):
-        """Build efficient interval index for overlap queries."""
-        # Group by chromosome for efficient lookup
-        self.intervals_by_chrom = {}
-        self.merged_by_chrom = {}  # Pre-merged non-overlapping intervals
+        """Build per-chromosome :class:`IntervalTree` instances.
+
+        Intervals are merged (via ``tree.merge_overlaps()``) so that
+        overlap-fraction queries can sum non-overlapping pieces directly.
+        """
+        self.trees: Dict[str, IntervalTree] = {}
         for chrom, group in self.df.groupby("chr"):
-            starts = group["start"].values
-            ends = group["end"].values
-            self.intervals_by_chrom[chrom] = {"starts": starts, "ends": ends}
-            # Pre-merge overlapping intervals for O(log N) binary-search queries
-            idx = np.argsort(starts)
-            s, e = starts[idx], ends[idx]
-            ms, me = [int(s[0])], [int(e[0])]
-            for i in range(1, len(s)):
-                if int(s[i]) <= me[-1]:
-                    me[-1] = max(me[-1], int(e[i]))
-                else:
-                    ms.append(int(s[i]))
-                    me.append(int(e[i]))
-            self.merged_by_chrom[chrom] = {
-                "starts": np.array(ms),
-                "ends": np.array(me),
-            }
+            tree = IntervalTree()
+            for s, e in zip(group["start"].values, group["end"].values):
+                s, e = int(s), int(e)
+                if e > s:
+                    tree.addi(s, e)
+            tree.merge_overlaps()
+            self.trees[chrom] = tree
+
+    def has_any_overlap(self, chrom: str, start: int, end: int) -> bool:
+        """Return *True* if ``[start, end)`` overlaps any exclusion interval.
+
+        This is a fast O(log N + k) query with no fraction computation.
+        """
+        if chrom not in self.trees:
+            return False
+        return bool(self.trees[chrom].overlap(start, end))
 
     def get_overlap_fraction(self, chrom: str, start: int, end: int) -> float:
         """
-        Calculate the fraction of a region that overlaps with exclusion intervals.
+        Calculate the fraction of ``[start, end)`` overlapping exclusion intervals.
+
+        The tree is pre-merged so every hit is non-overlapping; the total
+        overlap is the sum of per-interval intersections.
 
         Args:
             chrom: Chromosome name
@@ -97,31 +105,20 @@ class ExclusionMask:
         Returns:
             Fraction of region overlapping with exclusion intervals (0.0 to 1.0)
         """
-        if chrom not in self.merged_by_chrom:
-            return 0.0
         region_length = end - start
-        if region_length <= 0:
+        if region_length <= 0 or chrom not in self.trees:
             return 0.0
-        merged = self.merged_by_chrom[chrom]
-        ms, me = merged["starts"], merged["ends"]
-        # Binary search: find merged intervals overlapping [start, end)
-        lo = int(np.searchsorted(me, start, side="right"))
-        hi = int(np.searchsorted(ms, end, side="left"))
-        if lo >= hi:
+        hits = self.trees[chrom].overlap(start, end)
+        if not hits:
             return 0.0
-        ov_s = np.maximum(ms[lo:hi], start)
-        ov_e = np.minimum(me[lo:hi], end)
-        return min(float(np.sum(np.maximum(0, ov_e - ov_s))) / region_length, 1.0)
+        total = sum(min(iv.end, end) - max(iv.begin, start) for iv in hits)
+        return min(total / region_length, 1.0)
 
     def get_overlap_fractions_batch(
         self, chrom: str, starts: np.ndarray, ends: np.ndarray
     ) -> np.ndarray:
         """
         Compute overlap fractions for multiple bins at once.
-
-        Uses vectorized searchsorted to identify bins that overlap any
-        exclusion interval, then only iterates over those bins (typically
-        a small fraction).
 
         Args:
             chrom: Chromosome name
@@ -132,24 +129,21 @@ class ExclusionMask:
             Array of overlap fractions (0.0 to 1.0) for each bin
         """
         n = len(starts)
-        if n == 0 or chrom not in self.merged_by_chrom:
+        if n == 0 or chrom not in self.trees:
             return np.zeros(n)
-        merged = self.merged_by_chrom[chrom]
-        ms, me = merged["starts"], merged["ends"]
+        tree = self.trees[chrom]
         starts = np.asarray(starts)
         ends = np.asarray(ends)
-        # Vectorized: find lo/hi bracket for each bin in one searchsorted call
-        lo_arr = np.searchsorted(me, starts, side="right")
-        hi_arr = np.searchsorted(ms, ends, side="left")
-        has_overlap = lo_arr < hi_arr
         result = np.zeros(n)
-        # Only iterate over bins that actually overlap an exclusion interval
-        for i in np.where(has_overlap)[0]:
-            s, e = starts[i], ends[i]
-            lo, hi = int(lo_arr[i]), int(hi_arr[i])
-            ov_s = np.maximum(ms[lo:hi], s)
-            ov_e = np.minimum(me[lo:hi], e)
-            result[i] = min(float(np.sum(np.maximum(0, ov_e - ov_s))) / (e - s), 1.0)
+        for i in range(n):
+            s, e = int(starts[i]), int(ends[i])
+            length = e - s
+            if length <= 0:
+                continue
+            hits = tree.overlap(s, e)
+            if hits:
+                total = sum(min(iv.end, e) - max(iv.begin, s) for iv in hits)
+                result[i] = min(total / length, 1.0)
         return result
 
     def is_masked(self, chrom: str, start: int, end: int,

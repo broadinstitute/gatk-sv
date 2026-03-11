@@ -37,8 +37,8 @@ def extract_locus_bins(
             exclude a bin.
         padding: Extend the region by this many base pairs on each side.
         exclusion_bypass_regions: List of (start, end) genomic ranges where
-            masking is skipped.  Bins whose midpoint falls in any
-            of these ranges are kept regardless of mask overlap.
+            masking is skipped.  Bins that have any true interval overlap
+            with a bypass range are kept regardless of mask overlap.
 
     Returns:
         DataFrame with bins for this locus
@@ -62,12 +62,15 @@ def extract_locus_bins(
     # Apply exclusion masking if provided
     if exclusion_mask is not None:
         bypass = exclusion_bypass_regions or []
-        bin_mids = (locus_df["Start"].values + locus_df["End"].values) / 2
+        bin_starts = locus_df["Start"].values
+        bin_ends = locus_df["End"].values
 
-        # Vectorized bypass check
+        # True interval-overlap bypass check (no midpoint heuristic).
+        # A bin is "in bypass" if it has any real overlap with a bypass range:
+        #   bin_start < bypass_end  AND  bin_end > bypass_start
         in_bypass = np.zeros(len(locus_df), dtype=bool)
         for bs, be in bypass:
-            in_bypass |= (bin_mids >= bs) & (bin_mids < be)
+            in_bypass |= (bin_starts < be) & (bin_ends > bs)
 
         # Batch exclusion overlap only for non-bypass bins
         overlaps = np.zeros(len(locus_df))
@@ -75,8 +78,8 @@ def extract_locus_bins(
         if non_bypass.any():
             overlaps[non_bypass] = exclusion_mask.get_overlap_fractions_batch(
                 chrom,
-                locus_df["Start"].values[non_bypass],
-                locus_df["End"].values[non_bypass],
+                bin_starts[non_bypass],
+                bin_ends[non_bypass],
             )
 
         keep_mask = in_bypass | (overlaps < exclusion_threshold)
@@ -390,11 +393,14 @@ def rebin_locus_intervals(
     )
 
     rebinned_rows = []
-    bin_mids = (df["Start"].values + df["End"].values) / 2
+    bin_starts = df["Start"].values
+    bin_ends = df["End"].values
     processed_mask = np.zeros(len(df), dtype=bool)
 
     for region_start, region_end, _ in all_rebin_regions:
-        mask = (bin_mids >= region_start) & (bin_mids < region_end)
+        # True interval overlap: bin overlaps region if bin_start < region_end
+        # and bin_end > region_start
+        mask = (bin_starts < region_end) & (bin_ends > region_start)
         if not mask.any():
             continue
         processed_mask |= mask
@@ -412,7 +418,19 @@ def rebin_locus_intervals(
     if len(rebinned_rows) == 0:
         return pd.DataFrame(columns=df.columns)
 
-    return pd.DataFrame(rebinned_rows)
+    result_df = pd.DataFrame(rebinned_rows)
+
+    # A bin that straddles two adjacent regions (e.g. a body interval and a
+    # flank) is included in both calls to rebin_region().  When a region is
+    # small enough to skip rebinning, the original bin rows are returned
+    # as-is, producing exact duplicate (Chr, Start, End) rows.  Deduplicate
+    # here so that downstream code never sees the same genomic bin twice.
+    if len(result_df) > 0:
+        result_df = result_df.drop_duplicates(
+            subset=["Chr", "Start", "End"],
+        ).reset_index(drop=True)
+
+    return result_df
 
 
 def assign_bins_to_intervals(
@@ -422,6 +440,11 @@ def assign_bins_to_intervals(
 ) -> Dict[str, List[int]]:
     """
     Assign bins to breakpoint intervals and flanking regions within a locus.
+
+    Each bin is assigned to the named region with which it has the greatest
+    base-pair overlap (ties go to the first region in definition order).
+    Bins that do not overlap any named region are placed into
+    ``"breakpoint_ranges"``.
 
     Args:
         df: DataFrame with bins for this locus
@@ -444,16 +467,20 @@ def assign_bins_to_intervals(
     interval_bins["breakpoint_ranges"] = []
 
     for idx, row in df.iterrows():
-        bin_mid = (row["Start"] + row["End"]) / 2
+        bin_start, bin_end = row["Start"], row["End"]
 
-        matched = False
+        # Assign to the region with the greatest base-pair overlap
+        best_name = None
+        best_overlap = 0
         for start, end, name in all_named_regions:
-            if start <= bin_mid < end:
-                interval_bins[name].append(idx)
-                matched = True
-                break
+            ov = min(bin_end, end) - max(bin_start, start)
+            if ov > best_overlap:
+                best_overlap = ov
+                best_name = name
 
-        if not matched:
+        if best_name is not None:
+            interval_bins[best_name].append(idx)
+        else:
             interval_bins["breakpoint_ranges"].append(idx)
 
     return interval_bins
@@ -616,7 +643,6 @@ def call_gd_cnv(
             "start": gd_start,
             "end": gd_end,
             "svtype": svtype,
-            "is_nahr": locus.is_nahr,
             "is_terminal": locus.is_terminal,
             "log_prob_score": log_prob_score,
             "flanking_log_prob_score": flanking_log_prob_score,

@@ -91,9 +91,7 @@ def run_gd_analysis(
             exclusion_threshold=args.exclusion_threshold,
             locus_padding=args.locus_padding,
             min_bins_per_interval=args.min_bins_per_interval,
-            min_non_nahr_bins_per_interval=args.min_non_nahr_bins_per_interval,
             max_bins_per_interval=args.max_bins_per_interval,
-            non_nahr_max_bins_per_interval=args.non_nahr_max_bins_per_interval,
             highres_counts_path=highres_path,
             column_medians=column_medians,
             lowres_median_bin_size=lowres_median_bin_size,
@@ -223,9 +221,8 @@ def parse_args():
         required=False,
         help="Optional bgzipped, tabix-indexed high-resolution read count "
              "file (.tsv.gz + .tbi).  When provided, loci with any body "
-             "interval below the target bin count (--min-bins-per-interval "
-             "for NAHR, --min-non-nahr-bins-per-interval for non-NAHR) are "
-             "re-queried at this finer resolution before the hard check "
+             "interval below the target bin count (--min-bins-per-interval) "
+             "are re-queried at this finer resolution before the hard check "
              "is enforced.  The file must have the same sample columns as "
              "the low-res input and contain raw (un-normalised) counts.",
     )
@@ -249,7 +246,7 @@ def parse_args():
     parser.add_argument(
         "--exclusion-threshold",
         type=float,
-        default=1.0,
+        default=0.5,
         help="Minimum overlap fraction with exclusion regions to mask a bin",
     )
     parser.add_argument(
@@ -267,33 +264,15 @@ def parse_args():
         "--min-bins-per-interval",
         type=int,
         default=10,
-        help="Hard-failure minimum bins per body interval, applied "
-             "uniformly to NAHR and non-NAHR loci.  Intervals below "
-             "this count after all processing cause a hard failure.",
-    )
-    parser.add_argument(
-        "--min-non-nahr-bins-per-interval",
-        type=int,
-        default=100,
-        help="Target bins per body interval for non-NAHR loci.  When "
-             "any body interval of a non-NAHR locus has fewer bins than "
-             "this, high-res replacement is triggered (if --high-res-counts "
-             "is provided).",
+        help="Hard-failure minimum bins per body interval.  Intervals "
+             "below this count after all processing cause a hard failure.",
     )
     parser.add_argument(
         "--max-bins-per-interval",
         type=int,
         default=20,
-        help="Maximum bins per body interval after rebinning for NAHR loci "
+        help="Maximum bins per body interval after rebinning "
              "(0 = no rebinning)",
-    )
-    parser.add_argument(
-        "--non-nahr-max-bins-per-interval",
-        type=int,
-        default=100,
-        help="Maximum bins per body interval after rebinning for non-NAHR "
-             "loci (higher resolution needed because non-NAHR CNVs can "
-             "span a small fraction of the region)",
     )
     parser.add_argument(
         "--min-rebin-coverage",
@@ -394,7 +373,7 @@ def parse_args():
     parser.add_argument(
         "--max-iter",
         type=int,
-        default=2000,
+        default=5000,
         help="Maximum training iterations per locus",
     )
     parser.add_argument(

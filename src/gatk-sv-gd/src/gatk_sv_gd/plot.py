@@ -75,16 +75,10 @@ def _build_raw_region_df(
     Build a normalised raw-depth DataFrame for a locus's visible region,
     optionally substituting high-resolution bins for small intervals/flanks.
 
-    For NAHR loci, each GD body interval and flank is compared against
+    For each GD body interval and flank, the span is compared against
     ``size_threshold_factor × lowres_median_bin_size``.  When the span is
     smaller than that threshold **and** *highres_path* is provided, bins
     for that sub-region are queried on demand via pysam.
-
-    For non-NAHR loci, high-resolution bins are always queried for body
-    intervals regardless of size, matching the preprocess behaviour that
-    uses high-res bins for all non-NAHR intervals.  Flanking regions still
-    respect the size threshold since they are not modelled at high-res and
-    are displayed at compressed scale.
 
     All returned depths are normalised to the 2.0 = diploid reference scale
     used by the processed ``depth_df``.
@@ -107,10 +101,9 @@ def _build_raw_region_df(
         highres_path: Path to a bgzipped, tabix-indexed high-resolution
             read-count file (.tsv.gz + .tbi).  ``None`` disables high-res
             substitution entirely.
-        size_threshold_factor: For NAHR loci (and flanks of any locus),
-            regions whose genomic span is less than this multiple of
-            *lowres_median_bin_size* are served from the high-res file
-            (default 10).  Non-NAHR body intervals always use high-res.
+        size_threshold_factor: Regions whose genomic span is less than
+            this multiple of *lowres_median_bin_size* are served from
+            the high-res file (default 10).
 
     Returns:
         Normalised DataFrame with columns ``Chr``, ``Start``, ``End`` and
@@ -168,14 +161,7 @@ def _build_raw_region_df(
 
     for r_start, r_end, r_name in regions_to_check:
         region_size = r_end - r_start
-        is_flank = r_name in ("left_flank", "right_flank")
-        # For NAHR loci (and flanks of any locus), only substitute high-res
-        # when the region is smaller than *threshold_bp*.  For non-NAHR
-        # **body** intervals, always try high-res to match the preprocess
-        # resolution.  Flanks are compressed in display and never modelled
-        # at high-res, so querying thousands of 100-bp bins for them is
-        # wasteful.
-        if (locus.is_nahr or is_flank) and region_size >= threshold_bp:
+        if region_size >= threshold_bp:
             continue  # large enough — low-res is adequate
         hr_raw = query_highres_bins(
             highres_path, chrom, r_start, r_end, common_samples,
@@ -191,26 +177,21 @@ def _build_raw_region_df(
         ]
         highres_parts.append(normed.reset_index()[keep_cols])
         excluded_ranges.append((r_start, r_end))
-        if locus.is_nahr:
-            print(
-                f"    [high-res plot] {r_name} ({region_size:,} bp "
-                f"< {threshold_bp:,.0f} bp threshold): {len(hr_raw)} high-res bins"
-            )
-        else:
-            print(
-                f"    [high-res plot] {r_name} ({region_size:,} bp, "
-                f"non-NAHR): {len(hr_raw)} high-res bins"
-            )
+        print(
+            f"    [high-res plot] {r_name} ({region_size:,} bp "
+            f"< {threshold_bp:,.0f} bp threshold): {len(hr_raw)} high-res bins"
+        )
 
     if not highres_parts:
         return base_df if len(base_df) > 0 else None
 
     # --- Step 3: splice out low-res bins covered by high-res regions ---
     if len(base_df) > 0:
-        bin_mids = (base_df["Start"] + base_df["End"]) / 2
         keep = pd.Series(True, index=base_df.index)
         for ex_s, ex_e in excluded_ranges:
-            keep &= ~((bin_mids >= ex_s) & (bin_mids < ex_e))
+            # True interval overlap: drop low-res bins that overlap any
+            # high-res replacement region (no midpoint heuristic).
+            keep &= ~((base_df["Start"] < ex_e) & (base_df["End"] > ex_s))
         base_df = base_df[keep]
 
     pieces = ([base_df] if len(base_df) > 0 else []) + highres_parts
@@ -281,32 +262,6 @@ def _rebin_region_df(
     if not parts:
         return df
     return pd.concat(parts, ignore_index=True).sort_values("Start").reset_index(drop=True)
-
-
-# =============================================================================
-# Variant-segment helpers
-# =============================================================================
-
-
-def _parse_variant_segments(seg_str) -> List[Tuple[int, int]]:
-    """Parse a ``variant_segments`` string into a list of (start, end) tuples.
-
-    The format written by call.py is ``"start1-end1;start2-end2;..."``.
-    Returns an empty list for ``NaN``, empty strings, or unparseable values.
-    """
-    if not isinstance(seg_str, str) or not seg_str.strip():
-        return []
-    segments = []
-    for part in seg_str.split(";"):
-        part = part.strip()
-        if not part:
-            continue
-        try:
-            s, e = part.split("-", 1)
-            segments.append((int(s), int(e)))
-        except (ValueError, TypeError):
-            continue
-    return segments
 
 
 # =============================================================================
@@ -579,20 +534,8 @@ def plot_sample_at_locus(
             color = "red" if call["svtype"] == "DEL" else "blue"
             alpha = 0.8 if call["is_best_match"] else 0.4
 
-            is_nahr = call.get("is_nahr", True)
-            segments = _parse_variant_segments(
-                call.get("variant_segments", "")
-            )
-            if not is_nahr and segments:
-                for seg_s, seg_e in segments:
-                    ax.axvspan(xform(seg_s), xform(seg_e),
-                               alpha=alpha, color=color)
-                bbox_start = min(s for s, _ in segments)
-                bbox_end = max(e for _, e in segments)
-                ds, de = xform(bbox_start), xform(bbox_end)
-            else:
-                ds, de = xform(call["start"]), xform(call["end"])
-                ax.axvspan(ds, de, alpha=alpha, color=color)
+            ds, de = xform(call["start"]), xform(call["end"])
+            ax.axvspan(ds, de, alpha=alpha, color=color)
 
             label = f"{call['svtype']} CN={call['mean_cn']:.2f}"
             if call["is_best_match"]:
@@ -830,45 +773,14 @@ def create_carrier_pdf(
                     mean_depth = best_call["mean_depth"]
                     color = "#FF6B6B" if svtype == "DEL" else "#6B9BD1"
 
-                    # For non-NAHR calls, highlight the specific contiguous
-                    # variant segments (bin-level coordinates) rather than
-                    # the full GD entry span.
-                    is_nahr = best_call.get("is_nahr", True)
-                    segments = _parse_variant_segments(
-                        best_call.get("variant_segments", "")
-                    )
-                    if not is_nahr and segments:
-                        drawn = False
-                        for seg_s, seg_e in segments:
-                            d_is, d_ie = xform(seg_s), xform(seg_e)
-                            label = f"{svtype} region" if not drawn else None
-                            ax.axvspan(
-                                d_is, d_ie, alpha=0.2, color=color,
-                                zorder=1, label=label,
-                            )
-                            drawn = True
-                        # Mean-depth line spans the bounding box of all
-                        # variant segments.
-                        bbox_start = min(s for s, _ in segments)
-                        bbox_end = max(e for _, e in segments)
-                        ax.hlines(
-                            mean_depth,
-                            xform(bbox_start), xform(bbox_end),
-                            colors="black", linewidth=2.5, alpha=0.8,
-                            zorder=2,
-                            label=f"Mean depth={mean_depth:.2f}",
-                        )
-                    else:
-                        # NAHR (or legacy calls without variant_segments):
-                        # single span from start to end.
-                        interval_start = best_call["start"]
-                        interval_end = best_call["end"]
-                        d_is, d_ie = xform(interval_start), xform(interval_end)
-                        ax.axvspan(d_is, d_ie, alpha=0.2, color=color, zorder=1,
-                                   label=f"{svtype} region")
-                        ax.hlines(mean_depth, d_is, d_ie,
-                                  colors="black", linewidth=2.5, alpha=0.8, zorder=2,
-                                  label=f"Mean depth={mean_depth:.2f}")
+                    interval_start = best_call["start"]
+                    interval_end = best_call["end"]
+                    d_is, d_ie = xform(interval_start), xform(interval_end)
+                    ax.axvspan(d_is, d_ie, alpha=0.2, color=color, zorder=1,
+                               label=f"{svtype} region")
+                    ax.hlines(mean_depth, d_is, d_ie,
+                              colors="black", linewidth=2.5, alpha=0.8, zorder=2,
+                              label=f"Mean depth={mean_depth:.2f}")
 
                 ax.bar(d_bin_mids, sample_depth, width=d_bar_widths * 0.9, alpha=0.6,
                        color="steelblue", edgecolor="none", zorder=3)
@@ -1048,6 +960,16 @@ def main():
 
     # Convert cn_posteriors to depth_df format (bins x samples matrix)
     print("\n  Converting posteriors to depth matrix format...")
+
+    # Guard against duplicate (cluster, chr, start, end, sample) rows that
+    # can arise when a boundary bin is shared between adjacent intervals.
+    _dup_key = ["cluster", "chr", "start", "end", "sample"]
+    n_before = len(cn_posteriors_df)
+    cn_posteriors_df = cn_posteriors_df.drop_duplicates(subset=_dup_key)
+    n_dropped = n_before - len(cn_posteriors_df)
+    if n_dropped:
+        print(f"    NOTE: dropped {n_dropped} duplicate bin-sample rows before pivoting")
+
     depth_df = cn_posteriors_df.pivot(
         index=["cluster", "chr", "start", "end"],
         columns="sample",

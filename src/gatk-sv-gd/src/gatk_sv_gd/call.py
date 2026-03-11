@@ -16,7 +16,6 @@ Usage:
         --bin-mappings bin_mappings.tsv.gz \\
         --gd-table gd_table.tsv \\
         --transition-matrix transition_probs.tsv \\
-        --non-nahr-transition-matrix non_nahr_transition_probs.tsv \\
         --output-dir results/
 """
 
@@ -33,7 +32,6 @@ from gatk_sv_gd.models import GDLocus, GDTable
 from gatk_sv_gd.viterbi import (
     load_transition_matrix,
     viterbi_call_gd_cnv,
-    viterbi_call_non_nahr_cnv,
 )
 
 
@@ -190,14 +188,11 @@ def call_cnvs_from_posteriors(
     bin_mappings_df: pd.DataFrame,
     gd_table: GDTable,
     transition_matrix: np.ndarray,
-    non_nahr_transition_matrix: np.ndarray,
     ploidy_df: Optional[pd.DataFrame] = None,
     verbose: bool = False,
     viterbi_confidence_threshold: float = -1.0,
     viterbi_flank_coverage_threshold: float = 0.70,
     breakpoint_transition_matrix: Optional[np.ndarray] = None,
-    non_nahr_min_variant_fraction: float = 0.10,
-    non_nahr_min_event_size: int = 10000,
 ) -> pd.DataFrame:
     """
     Call CNVs from posterior probabilities using the Viterbi strategy.
@@ -207,9 +202,7 @@ def call_cnvs_from_posteriors(
         bin_mappings_df: DataFrame with bin-to-interval mappings
         gd_table: GDTable with locus definitions
         transition_matrix: (n_states, n_states) CN-state transition probability
-            matrix for NAHR loci.
-        non_nahr_transition_matrix: (n_states, n_states) CN-state transition
-            probability matrix for non-NAHR loci.
+            matrix.
         ploidy_df: Optional DataFrame with columns (sample, contig, ploidy).
             If None, ploidy=2 is assumed for all sample/contig pairs.
         verbose: If True, print per-sample log probability scores for every
@@ -223,11 +216,6 @@ def call_cnvs_from_posteriors(
             matrix applied at known recurrent breakpoint boundaries during
             Viterbi.  Should have lower diagonal values than *transition_matrix*
             to encourage CN state changes at those positions.
-        non_nahr_min_variant_fraction: Minimum fraction of body bins that
-            must show variant CN to call a non-NAHR carrier (default 0.10).
-        non_nahr_min_event_size: Absolute minimum total variant segment size
-            in bp for non-NAHR calls.  Depth-only calls smaller than this
-            are unreliable.  Default 10 000.
 
     Returns:
         DataFrame with CNV calls for all samples and loci
@@ -238,10 +226,6 @@ def call_cnvs_from_posteriors(
     print(f"  NAHR strategy: Viterbi segmentation{bp_str}  "
           f"(confidence threshold={viterbi_confidence_threshold}, "
           f"flank coverage threshold={viterbi_flank_coverage_threshold:.0%})")
-    nn_src = "non-NAHR matrix"
-    print(f"  Non-NAHR strategy: Viterbi ({nn_src}), "
-          f"min variant fraction={non_nahr_min_variant_fraction:.0%}, "
-          f"min event size={non_nahr_min_event_size:,} bp")
     print("=" * 80)
 
     all_results = []
@@ -347,53 +331,27 @@ def call_cnvs_from_posteriors(
                 _util.vlog(f"\n  [{strategy}] Sample: {sample_id}  "
                            f"({locus.chrom}, ploidy={sample_ploidy})")
 
-            if not locus.is_nahr:
-                # ---- Non-NAHR Viterbi strategy ----
-                calls = viterbi_call_non_nahr_cnv(
-                    locus,
-                    prob_3d[s_idx],
-                    non_nahr_transition_matrix,
-                    interval_bin_arrays,
-                    ploidy=sample_ploidy,
-                    confidence_threshold=viterbi_confidence_threshold,
-                    flank_coverage_threshold=viterbi_flank_coverage_threshold,
-                    min_variant_fraction=non_nahr_min_variant_fraction,
-                    min_event_size=non_nahr_min_event_size,
-                    verbose=verbose,
-                    sample_id=str(sample_id),
-                    bin_coords=bin_coords_by_idx,
-                )
-                best_by_svtype = determine_best_breakpoints(
-                    locus,
-                    {name: {"n_bins": len(idx),
-                            "cn_probs": prob_3d[s_idx, idx].mean(axis=0)
-                            if len(idx) > 0 else np.zeros(n_states)}
-                     for name, idx in interval_bin_arrays.items()},
-                    calls, ploidy=sample_ploidy,
-                )
-            else:
-                # ---- NAHR Viterbi strategy ----
-                calls = viterbi_call_gd_cnv(
-                    locus,
-                    prob_3d[s_idx],  # (n_bins, n_states)
-                    transition_matrix,
-                    interval_bin_arrays,
-                    ploidy=sample_ploidy,
-                    confidence_threshold=viterbi_confidence_threshold,
-                    flank_coverage_threshold=viterbi_flank_coverage_threshold,
-                    verbose=verbose,
-                    sample_id=str(sample_id),
-                    breakpoint_transition_matrix=breakpoint_transition_matrix,
-                    bin_coords=bin_coords_by_idx,
-                )
-                best_by_svtype = determine_best_breakpoints(
-                    locus,
-                    {name: {"n_bins": len(idx),
-                            "cn_probs": prob_3d[s_idx, idx].mean(axis=0)
-                            if len(idx) > 0 else np.zeros(n_states)}
-                     for name, idx in interval_bin_arrays.items()},
-                    calls, ploidy=sample_ploidy,
-                )
+            calls = viterbi_call_gd_cnv(
+                locus,
+                prob_3d[s_idx],  # (n_bins, n_states)
+                transition_matrix,
+                interval_bin_arrays,
+                ploidy=sample_ploidy,
+                confidence_threshold=viterbi_confidence_threshold,
+                flank_coverage_threshold=viterbi_flank_coverage_threshold,
+                verbose=verbose,
+                sample_id=str(sample_id),
+                breakpoint_transition_matrix=breakpoint_transition_matrix,
+                bin_coords=bin_coords_by_idx,
+            )
+            best_by_svtype = determine_best_breakpoints(
+                locus,
+                {name: {"n_bins": len(idx),
+                        "cn_probs": prob_3d[s_idx, idx].mean(axis=0)
+                        if len(idx) > 0 else np.zeros(n_states)}
+                 for name, idx in interval_bin_arrays.items()},
+                calls, ploidy=sample_ploidy,
+            )
 
             if verbose:
                 for call in calls:
@@ -411,9 +369,6 @@ def call_cnvs_from_posteriors(
                     cov = "Y" if call.get("viterbi_covered_ok") else "N"
                     flk = "Y" if call.get("viterbi_flanks_ok") else "N"
                     extra = f"  cov={cov} flk={flk}"
-                    if not locus.is_nahr:
-                        vf = call.get("variant_fraction", 0)
-                        extra += f"  var_frac={vf:.0%}"
                     _util.vlog(
                         f"    [VIT] {sample_id:30s}  "
                         f"{call['GD_ID']:25s}  "
@@ -448,7 +403,6 @@ def call_cnvs_from_posteriors(
                     "svtype": svtype,
                     "BP1": call["BP1"],
                     "BP2": call["BP2"],
-                    "is_nahr": call["is_nahr"],
                     "is_terminal": call["is_terminal"],
                     "n_bins": call["n_bins"],
                     "mean_depth": mean_depth,
@@ -459,14 +413,6 @@ def call_cnvs_from_posteriors(
                         if best_gd_for_svtype else False
                     ),
                     "log_prob_score": call["log_prob_score"],
-                    "variant_fraction": call.get("variant_fraction", np.nan),
-                    "variant_intervals": ",".join(
-                        call.get("variant_intervals", call["intervals"])
-                    ),
-                    "variant_segments": ";".join(
-                        f"{s}-{e}"
-                        for s, e in call.get("variant_segments", [])
-                    ),
                 }
                 all_results.append(result)
 
@@ -548,28 +494,6 @@ def parse_args():
              "0.0 = disabled.  Default: 0.70.",
     )
     parser.add_argument(
-        "--non-nahr-transition-matrix",
-        required=True,
-        help="CN-state transition probability matrix (TSV) for non-NAHR loci. "
-             "Same format as --transition-matrix.",
-    )
-    parser.add_argument(
-        "--non-nahr-min-variant-fraction",
-        type=float,
-        default=0.01,
-        help="Minimum fraction of body bins that must show variant CN "
-             "(DEL: < ploidy, DUP: > ploidy) to call a non-NAHR carrier "
-             "(Viterbi only).  Default: 0.01 (1%%).",
-    )
-    parser.add_argument(
-        "--non-nahr-min-event-size",
-        type=int,
-        default=10000,
-        help="Absolute minimum total variant segment size in bp for "
-             "non-NAHR calls.  Depth-only calls smaller than this are "
-             "unreliable.  Default: 10000.",
-    )
-    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Print detailed per-sample log probability scores for all GD "
@@ -621,24 +545,17 @@ def main():
         breakpoint_transition_matrix = load_transition_matrix(
             args.breakpoint_transition_matrix)
 
-    # Load non-NAHR transition matrix
-    print(f"  Loading non-NAHR transition matrix: {args.non_nahr_transition_matrix}")
-    non_nahr_transition_matrix = load_transition_matrix(args.non_nahr_transition_matrix)
-
     # Call CNVs from posteriors
     calls_df = call_cnvs_from_posteriors(
         cn_posteriors_df,
         bin_mappings_df,
         gd_table,
         transition_matrix=transition_matrix,
-        non_nahr_transition_matrix=non_nahr_transition_matrix,
         ploidy_df=ploidy_df,
         verbose=args.verbose,
         viterbi_confidence_threshold=args.viterbi_confidence_threshold,
         viterbi_flank_coverage_threshold=args.viterbi_flank_coverage_threshold,
         breakpoint_transition_matrix=breakpoint_transition_matrix,
-        non_nahr_min_variant_fraction=args.non_nahr_min_variant_fraction,
-        non_nahr_min_event_size=args.non_nahr_min_event_size,
     )
 
     # Save calls

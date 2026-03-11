@@ -28,46 +28,22 @@ from gatk_sv_gd._util import TeeStream, setup_logging
 # =============================================================================
 
 
-def load_truth_table(filepath: str) -> pd.DataFrame:
+def _load_truth_table_bed_format(df: pd.DataFrame) -> pd.DataFrame:
+    """Load the classic BED-style truth table (8-column format).
+
+    Expected columns (after ``#`` stripping)::
+
+        chrom  start  end  name  svtype  samples  NAHR_GD  NAHR_GD_atypical
+
+    Returns the internal schema: ``GD_ID``, ``chr``, ``start``, ``end``,
+    ``SVTYPE``, ``cluster_ID``, ``carrier_set``.
     """
-    Load a truth table of manually labelled GD carrier calls.
-
-    Expected columns (tab-separated, header may start with ``#``)::
-
-        #chrom  start  end  name  svtype  samples  NAHR_GD  NAHR_GD_atypical
-
-    Processing rules:
-
-    - **NAHR rows** (``NAHR_GD=True``, ``NAHR_GD_atypical=False``): the
-      *name* column is treated as the GD region ID for direct ID-based
-      matching against calls.
-    - **Non-NAHR rows** (``NAHR_GD=False``): kept and flagged with
-      ``is_nahr=False``.  The *name* column is a variant ID (not a GD_ID);
-      downstream matching uses coordinate overlap instead.
-    - Atypical rows (``NAHR_GD_atypical=True``) are always dropped.
-
-    The *samples* column is a comma-separated list of carrier sample IDs.
-
-    Args:
-        filepath: Path to TSV truth table.
-
-    Returns:
-        DataFrame with one row per truth site.  Columns are normalised to
-        ``GD_ID``, ``chr``, ``start``, ``end``, ``SVTYPE``, ``carrier_set``,
-        and ``is_nahr``.
-    """
-    df = pd.read_csv(filepath, sep="\t", dtype=str, comment=None)
-    # Strip whitespace and normalise the leading '#' that BED-style
-    # headers sometimes carry (e.g. "#chrom" → "chrom").
-    df.columns = [c.strip().lstrip("#") for c in df.columns]
-
     required = {"chrom", "start", "end", "name", "svtype", "samples",
                 "NAHR_GD", "NAHR_GD_atypical"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"Truth table missing required columns: {missing}")
 
-    # Parse boolean columns (accept True/False, true/false, TRUE/FALSE)
     def _to_bool(val):
         return str(val).strip().lower() == "true"
 
@@ -81,23 +57,22 @@ def load_truth_table(filepath: str) -> pd.DataFrame:
     if n_atypical > 0:
         print(f"  Dropped {n_atypical} atypical rows from truth table")
 
-    # Tag NAHR vs non-NAHR
-    df["is_nahr"] = df["NAHR_GD"]
-    n_nahr = int(df["is_nahr"].sum())
-    n_non_nahr = len(df) - n_nahr
-    print(f"  Truth table: {n_nahr} NAHR entries, {n_non_nahr} non-NAHR entries")
+    # Drop non-NAHR entries
+    n_before_nahr = len(df)
+    df = df[df["NAHR_GD"]].copy()
+    n_non_nahr = n_before_nahr - len(df)
+    if n_non_nahr > 0:
+        print(f"  Dropped {n_non_nahr} non-NAHR rows from truth table")
+    print(f"  Truth table: {len(df)} NAHR entries (BED format)")
 
-    # Map columns to internal schema
     df.rename(columns={
         "chrom": "chr",
         "name": "GD_ID",
         "svtype": "SVTYPE",
         "samples": "carriers",
     }, inplace=True)
-    # No cluster_ID in this format
     df["cluster_ID"] = ""
 
-    # Parse carriers into sets; treat empty / NaN as no carriers
     def _parse_carriers(val):
         if pd.isna(val) or str(val).strip() == "":
             return set()
@@ -105,6 +80,91 @@ def load_truth_table(filepath: str) -> pd.DataFrame:
 
     df["carrier_set"] = df["carriers"].apply(_parse_carriers)
     return df
+
+
+def _load_truth_table_synthesize_format(df: pd.DataFrame) -> pd.DataFrame:
+    """Load the two-column truth table produced by ``gatk-sv-gd synthesize``.
+
+    Expected columns::
+
+        sample_id  GD_ID
+
+    Each row represents a single sample carrying the given GD.  Rows are
+    grouped by ``GD_ID`` to produce one output row per GD with a
+    ``carrier_set``.
+
+    Returns the internal schema: ``GD_ID``, ``chr``, ``start``, ``end``,
+    ``SVTYPE``, ``cluster_ID``, ``carrier_set`` (genomic coordinate columns
+    are empty because the synthesize table does not carry them).
+    """
+    required = {"sample_id", "GD_ID"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(
+            f"Synthesize truth table missing required columns: {missing}"
+        )
+
+    rows = []
+    for gd_id, grp in df.groupby("GD_ID"):
+        carrier_set = set(grp["sample_id"].astype(str).str.strip())
+        rows.append({
+            "GD_ID": str(gd_id),
+            "chr": "",
+            "start": "",
+            "end": "",
+            "SVTYPE": "",
+            "cluster_ID": "",
+            "carrier_set": carrier_set,
+        })
+
+    result = pd.DataFrame(rows)
+    n_carriers = df["sample_id"].nunique()
+    print(f"  Truth table: {len(result)} GD entries, "
+          f"{n_carriers} total carriers (synthesize format)")
+    return result
+
+
+def load_truth_table(filepath: str) -> pd.DataFrame:
+    """
+    Load a truth table of GD carrier calls.
+
+    Two formats are accepted and auto-detected from the column names:
+
+    **BED-style format** (manually curated)::
+
+        #chrom  start  end  name  svtype  samples  NAHR_GD  NAHR_GD_atypical
+
+    - Only NAHR rows (``NAHR_GD=True``, ``NAHR_GD_atypical=False``) are kept.
+    - The *name* column is used as the GD region ID.
+    - The *samples* column is a comma-separated list of carrier sample IDs.
+
+    **Synthesize format** (produced by ``gatk-sv-gd synthesize``)::
+
+        sample_id  GD_ID
+
+    - Each row is one sample carrying the given GD.
+    - All rows are used as-is (no NAHR/atypical filtering).
+
+    Args:
+        filepath: Path to TSV truth table.
+
+    Returns:
+        DataFrame with one row per truth site.  Columns are normalised to
+        ``GD_ID``, ``chr``, ``start``, ``end``, ``SVTYPE``, ``cluster_ID``,
+        ``carrier_set``.
+    """
+    df = pd.read_csv(filepath, sep="\t", dtype=str, comment=None)
+    # Strip whitespace and normalise the leading '#' that BED-style
+    # headers sometimes carry (e.g. "#chrom" → "chrom").
+    df.columns = [c.strip().lstrip("#") for c in df.columns]
+
+    # Auto-detect format based on column names
+    if ("sample_id" in df.columns and "GD_ID" in df.columns
+            and "chrom" not in df.columns and "NAHR_GD" not in df.columns):
+        print("  Detected synthesize truth table format")
+        return _load_truth_table_synthesize_format(df)
+
+    return _load_truth_table_bed_format(df)
 
 
 # =============================================================================
@@ -123,13 +183,7 @@ def evaluate_against_truth(
     sensitivity and precision for every site with at least one truth or
     predicted carrier.
 
-    **NAHR** truth entries are matched to calls by ``GD_ID``.
-
-    **Non-NAHR** truth entries (``is_nahr == False`` in the truth table)
-    carry a variant ID rather than a GD_ID.  These are matched to calls by
-    coordinate overlap: for each non-NAHR truth entry the function finds
-    the call GD_ID with the best coordinate overlap on the same chromosome
-    and svtype, then evaluates carrier sets using that matched GD_ID.
+    Truth entries are matched to calls by ``GD_ID``.
 
     Truth carrier sets are intersected with *batch_samples* (when provided)
     so that sensitivity is not penalised for labelled carriers absent from
@@ -154,48 +208,6 @@ def evaluate_against_truth(
     if batch_samples is not None:
         print(f"  Batch contains {len(batch_samples)} samples; "
               "truth carriers will be restricted to this set.")
-
-    # ------------------------------------------------------------------
-    # Non-NAHR coordinate matching: reassign GD_ID in truth_df based on
-    # coordinate overlap with calls.
-    # ------------------------------------------------------------------
-    if "is_nahr" in truth_df.columns and not truth_df["is_nahr"].all():
-        non_nahr_mask = ~truth_df["is_nahr"]
-        n_nn = int(non_nahr_mask.sum())
-        has_nahr_col = "is_nahr" in calls_df.columns
-        nn_calls = calls_df[~calls_df["is_nahr"]] if has_nahr_col else pd.DataFrame()
-        n_matched = 0
-        if len(nn_calls) > 0:
-            # Build lookup of unique non-NAHR call regions by GD_ID
-            nn_regions: Dict[str, dict] = {}
-            for gd_id, grp in nn_calls.groupby("GD_ID"):
-                first = grp.iloc[0]
-                nn_regions[str(gd_id)] = {
-                    "chrom": str(first["chrom"]),
-                    "start": int(first["start"]),
-                    "end": int(first["end"]),
-                    "svtype": str(first["svtype"]),
-                }
-            for idx in truth_df.index[non_nahr_mask]:
-                row = truth_df.loc[idx]
-                t_chr = str(row["chr"])
-                t_start = int(row["start"])
-                t_end = int(row["end"])
-                t_svtype = str(row["SVTYPE"])
-                best_gd_id = None
-                best_overlap = 0
-                for gd_id, reg in nn_regions.items():
-                    if reg["chrom"] != t_chr or reg["svtype"] != t_svtype:
-                        continue
-                    ov = max(0, min(t_end, reg["end"]) - max(t_start, reg["start"]))
-                    if ov > best_overlap:
-                        best_overlap = ov
-                        best_gd_id = gd_id
-                if best_gd_id is not None:
-                    truth_df.at[idx, "GD_ID"] = best_gd_id
-                    n_matched += 1
-        print(f"  Non-NAHR coordinate matching: {n_matched}/{n_nn} truth "
-              f"entries matched to call GD_IDs")
 
     # Build predicted carrier sets keyed by GD_ID.
     # Only count samples whose call is both a carrier AND the best-match
@@ -326,10 +338,13 @@ def parse_args():
     parser.add_argument(
         "--truth-table", "-t",
         required=True,
-        help="Truth table TSV with manually labelled GD carriers. "
-             "Columns: #chrom, start, end, name, svtype, samples, NAHR_GD, "
-             "NAHR_GD_atypical.  Only rows with NAHR_GD=True (and "
-             "NAHR_GD_atypical=False) are used.",
+        help="Truth table TSV.  Two formats are accepted: "
+             "(1) BED-style manually curated table with columns: "
+             "#chrom, start, end, name, svtype, samples, NAHR_GD, "
+             "NAHR_GD_atypical (only NAHR_GD=True rows are used); "
+             "(2) two-column synthesize table produced by "
+             "'gatk-sv-gd synthesize' with columns: sample_id, GD_ID. "
+             "The format is auto-detected from the header.",
     )
     parser.add_argument(
         "--gd-table", "-g",
@@ -386,10 +401,6 @@ def main():
     # Restrict truth entries to loci present in the filtered GD table
     # so that loci excluded by region/size filtering during preprocessing
     # do not produce spurious false negatives.
-    #
-    # NAHR truth entries carry a GD_ID that matches the GD table directly.
-    # Non-NAHR truth entries carry a variant ID (not a GD_ID), so they
-    # must be matched by coordinate overlap against the modeled loci.
     if args.gd_table is not None:
         print(f"\n  Loading filtered GD table: {args.gd_table}")
         gd_df = pd.read_csv(args.gd_table, sep="\t")
@@ -397,25 +408,9 @@ def main():
         print(f"    {len(modeled_gd_ids)} modeled GD_IDs")
 
         n_before = len(truth_df)
-        keep = []
-        for idx, row in truth_df.iterrows():
-            if row.get("is_nahr", True):
-                # NAHR: direct GD_ID match
-                keep.append(str(row["GD_ID"]) in modeled_gd_ids)
-            else:
-                # Non-NAHR: coordinate overlap with any modeled locus
-                t_chr = str(row["chr"])
-                t_start = int(row["start"])
-                t_end = int(row["end"])
-                matched = False
-                for _, gd_row in gd_df[gd_df["chr"] == t_chr].iterrows():
-                    gd_start = int(gd_row["start_GRCh38"])
-                    gd_end = int(gd_row["end_GRCh38"])
-                    if t_start < gd_end and t_end > gd_start:
-                        matched = True
-                        break
-                keep.append(matched)
-        truth_df = truth_df[keep].copy()
+        truth_df = truth_df[
+            truth_df["GD_ID"].astype(str).isin(modeled_gd_ids)
+        ].copy()
         n_dropped = n_before - len(truth_df)
         if n_dropped > 0:
             print(f"    Dropped {n_dropped} truth entries at unmodeled loci")

@@ -104,7 +104,8 @@ def _filter_and_prepare_locus_bins(
             :func:`filter_low_quality_bins` to *locus_df* before any other
             processing.  Skipped when *None*.
         exclusion_bypass_regions: Genomic ranges where masking is
-            skipped (bins whose midpoint falls in a bypass range are kept).
+            skipped (bins with any true interval overlap with a bypass
+            range are kept regardless of mask overlap).
 
     Returns:
         Tuple of (processed DataFrame, interval_bins dict).
@@ -118,8 +119,11 @@ def _filter_and_prepare_locus_bins(
         keep_mask = []
         n_bypassed = 0
         for _, row in locus_df.iterrows():
-            bin_mid = (row["Start"] + row["End"]) / 2
-            in_bypass = any(bs <= bin_mid < be for bs, be in bypass)
+            bin_start, bin_end = row["Start"], row["End"]
+            # True interval-overlap bypass (no midpoint heuristic).
+            in_bypass = any(
+                bin_start < be and bin_end > bs for bs, be in bypass
+            )
             if in_bypass:
                 keep_mask.append(True)
                 n_bypassed += 1
@@ -169,9 +173,10 @@ def _filter_and_prepare_locus_bins(
     if len(locus_df) == 0:
         return locus_df, {}
 
-    # Trim to active region
-    bin_mids = (locus_df["Start"] + locus_df["End"]) / 2
-    locus_df = locus_df[(bin_mids >= left_bound) & (bin_mids < right_bound)].copy()
+    # Trim to active region (true interval overlap, no midpoint heuristic)
+    locus_df = locus_df[
+        (locus_df["End"] > left_bound) & (locus_df["Start"] < right_bound)
+    ].copy()
     print(f"    Bins after trimming to active region [{left_bound:,}, {right_bound:,}): {len(locus_df)}")
 
     # Rebin
@@ -181,6 +186,28 @@ def _filter_and_prepare_locus_bins(
                                          min_rebin_coverage=min_rebin_coverage)
         if len(locus_df) < n_before:
             print(f"    Bins after rebinning: {len(locus_df)} (reduced from {n_before})")
+
+    # Re-apply exclusion masking after rebinning.  Rebinned bins have new
+    # evenly-spaced coordinates that can extend into seg-dup regions where
+    # the originally excluded bins were removed.
+    if exclusion_mask is not None and len(locus_df) > 0:
+        bypass = exclusion_bypass_regions or []
+        _bs = locus_df["Start"].values
+        _be = locus_df["End"].values
+        _in_bp = np.zeros(len(locus_df), dtype=bool)
+        for bp_s, bp_e in bypass:
+            _in_bp |= (_bs < bp_e) & (_be > bp_s)
+        _ov = np.zeros(len(locus_df))
+        _non_bp = ~_in_bp
+        if _non_bp.any():
+            _ov[_non_bp] = exclusion_mask.get_overlap_fractions_batch(
+                locus.chrom, _bs[_non_bp], _be[_non_bp],
+            )
+        _keep = _in_bp | (_ov < exclusion_threshold)
+        _n_rem = int((~_keep).sum())
+        if _n_rem > 0:
+            print(f"    Re-masked {_n_rem} rebinned bins due to exclusion overlap")
+            locus_df = locus_df[_keep].copy()
 
     # Assign to intervals
     interval_bins = assign_bins_to_intervals(locus_df, locus, flank_regions) if len(locus_df) > 0 else {}
@@ -202,9 +229,7 @@ def collect_all_locus_bins(
     exclusion_threshold: float = 0.5,
     locus_padding: int = 0,
     min_bins_per_interval: int = 3,
-    min_non_nahr_bins_per_interval: int = 100,
     max_bins_per_interval: int = 10,
-    non_nahr_max_bins_per_interval: int = 100,
     highres_counts_path: Optional[str] = None,
     column_medians: Optional[np.ndarray] = None,
     lowres_median_bin_size: Optional[float] = None,
@@ -215,15 +240,14 @@ def collect_all_locus_bins(
     min_flank_bins: int = 10,
     min_flank_coverage: float = 0.1,
     regions: Optional[List[Tuple[str, Optional[int], Optional[int]]]] = None,
-    min_non_nahr_size: int = 100000,
 ) -> Tuple[pd.DataFrame, List[LocusBinMapping], Dict[str, GDLocus]]:
     """
     Collect all bins across all GD loci into a single DataFrame.
 
-    Each body interval (region between adjacent breakpoints) must contain
-    at least *min_bins_per_interval* bins after all processing (hard
-    failure).  Non-NAHR loci use the higher *min_non_nahr_bins_per_interval*
-    target to trigger high-res replacement when available.
+    Non-NAHR loci are automatically skipped (only NAHR loci are
+    processed).  Each body interval (region between adjacent breakpoints)
+    must contain at least *min_bins_per_interval* bins after all
+    processing (hard failure).
 
     When a body interval is ≥ *exclusion_bypass_threshold* overlapped by
     the exclusion mask, masking is skipped
@@ -241,18 +265,9 @@ def collect_all_locus_bins(
             exclude a bin.
         locus_padding: Padding around locus boundaries.
         min_bins_per_interval: Hard-failure minimum: each body interval
-            must have at least this many bins after all processing,
-            regardless of locus type (NAHR or non-NAHR).
-        min_non_nahr_bins_per_interval: Target bin count per body interval
-            for non-NAHR loci.  When any body interval of a non-NAHR locus
-            has fewer bins than this, high-res replacement is triggered
-            (if ``highres_counts_path`` is set).  Default 100.
+            must have at least this many bins after all processing.
         max_bins_per_interval: Maximum bins per interval after rebinning
-            for NAHR loci (0 = no rebinning).
-        non_nahr_max_bins_per_interval: Maximum bins per interval after
-            rebinning for non-NAHR loci (default 100).  Higher resolution
-            is needed because non-NAHR CNVs can span a small fraction of
-            the region.
+            (0 = no rebinning).
         highres_counts_path: Optional path to a bgzipped, tabix-indexed
             high-resolution read-count file.  When set, loci with any
             under-covered interval are re-queried at this resolution.
@@ -275,9 +290,6 @@ def collect_all_locus_bins(
         regions: Optional list of parsed region tuples ``(chrom, start,
             end)`` to restrict processing to.  Only loci overlapping at
             least one region are included.  ``None`` means process all.
-        min_non_nahr_size: Minimum size (bp) for non-NAHR loci.  Non-NAHR
-            loci whose span (outermost breakpoints) is smaller than this
-            value are skipped.  Set to 0 to disable (default 100 000).
 
     Returns:
         Tuple of:
@@ -371,13 +383,16 @@ def collect_all_locus_bins(
         idx_counter = start_idx
         for idx in locus_df.index:
             bin_row = locus_df.loc[idx]
-            bin_mid = (bin_row["Start"] + bin_row["End"]) / 2
+            bin_start, bin_end = bin_row["Start"], bin_row["End"]
 
+            # Assign to the region with the greatest base-pair overlap
             assigned_interval = None
+            best_overlap = 0
             for start, end, name in all_named_regions:
-                if start <= bin_mid < end:
+                ov = min(bin_end, end) - max(bin_start, start)
+                if ov > best_overlap:
+                    best_overlap = ov
                     assigned_interval = name
-                    break
 
             if assigned_interval is None:
                 # Breakpoint-range bins should have been masked upstream;
@@ -408,14 +423,11 @@ def collect_all_locus_bins(
         if regions is not None and not _locus_overlaps_regions(locus, regions):
             continue
 
-        # Skip non-NAHR loci below the minimum size threshold
-        if not locus.is_nahr and min_non_nahr_size > 0:
-            locus_span = locus.end - locus.start
-            if locus_span < min_non_nahr_size:
-                print(f"\nSkipping non-NAHR locus: {cluster}  "
-                      f"({locus.chrom}:{locus.start:,}-{locus.end:,}, "
-                      f"{locus_span:,} bp < {min_non_nahr_size:,} bp minimum)")
-                continue
+        # Only NAHR loci are analyzed
+        if not locus.is_nahr:
+            print(f"\nSkipping non-NAHR locus: {cluster}  "
+                  f"({locus.chrom}:{locus.start:,}-{locus.end:,})")
+            continue
 
         print(f"\nProcessing locus: {cluster}")
         print(f"  Chromosome: {locus.chrom}")
@@ -423,9 +435,6 @@ def collect_all_locus_bins(
         print(f"  GD entries: {len(locus.gd_entries)} ({', '.join(locus.svtypes)})")
 
         locus_size = locus.end - locus.start
-        effective_max_bins = max_bins_per_interval if locus.is_nahr else non_nahr_max_bins_per_interval
-        if not locus.is_nahr:
-            print(f"  Non-NAHR locus: using {effective_max_bins} bins/interval (higher resolution)")
 
         # Compute flank coordinates from the full chromosome's filtered bins so
         # that even multi-megabase exclusion deserts don't prevent flank discovery.
@@ -477,13 +486,15 @@ def collect_all_locus_bins(
 
         print(f"  Bins after filtering: {len(locus_df)}")
 
-        # Trim to active region: drop any bins outside [left_bound, right_bound)
-        bin_mids = (locus_df["Start"] + locus_df["End"]) / 2
-        locus_df = locus_df[(bin_mids >= left_bound) & (bin_mids < right_bound)].copy()
+        # Trim to active region: keep bins that have any overlap with
+        # [left_bound, right_bound) (no midpoint heuristic).
+        locus_df = locus_df[
+            (locus_df["End"] > left_bound) & (locus_df["Start"] < right_bound)
+        ].copy()
         print(f"  Bins after trimming to active region [{left_bound:,}, {right_bound:,}): {len(locus_df)}")
 
         # Rebin to reduce number of bins per interval/flank if requested
-        if effective_max_bins > 0:
+        if max_bins_per_interval > 0:
             locus_df_orig = locus_df
             if _util.VERBOSE:
                 _sc = get_sample_columns(locus_df_orig)
@@ -494,7 +505,7 @@ def collect_all_locus_bins(
                     print(f"      {_r['Chr']}:{_r['Start']}-{_r['End']}  "
                           f"median={_meds[_j]:.3f}")
 
-            locus_df = rebin_locus_intervals(locus_df, locus, effective_max_bins, flank_regions,
+            locus_df = rebin_locus_intervals(locus_df, locus, max_bins_per_interval, flank_regions,
                                              min_rebin_coverage=min_rebin_coverage)
             if len(locus_df) < len(locus_df_orig):
                 print(f"  Bins after rebinning: {len(locus_df)} (reduced from {len(locus_df_orig)})")
@@ -507,6 +518,27 @@ def collect_all_locus_bins(
                     _r = locus_df.iloc[_j]
                     print(f"      {_r['Chr']}:{_r['Start']}-{_r['End']}  "
                           f"median={_meds[_j]:.3f}")
+
+        # Re-apply exclusion masking after rebinning.  Rebinned bins have
+        # new evenly-spaced coordinates that can extend into seg-dup regions
+        # where the originally excluded bins were removed.
+        if exclusion_mask is not None and len(locus_df) > 0:
+            _bs = locus_df["Start"].values
+            _be = locus_df["End"].values
+            _in_bp = np.zeros(len(locus_df), dtype=bool)
+            for bp_s, bp_e in exclusion_bypass_regions:
+                _in_bp |= (_bs < bp_e) & (_be > bp_s)
+            _ov = np.zeros(len(locus_df))
+            _non_bp = ~_in_bp
+            if _non_bp.any():
+                _ov[_non_bp] = exclusion_mask.get_overlap_fractions_batch(
+                    locus.chrom, _bs[_non_bp], _be[_non_bp],
+                )
+            _keep = _in_bp | (_ov < exclusion_threshold)
+            _n_rem = int((~_keep).sum())
+            if _n_rem > 0:
+                print(f"  Re-masked {_n_rem} rebinned bins due to exclusion overlap")
+                locus_df = locus_df[_keep].copy()
 
         # Assign bins to intervals and flanking regions
         interval_bins = assign_bins_to_intervals(locus_df, locus, flank_regions)
@@ -529,13 +561,7 @@ def collect_all_locus_bins(
         body_intervals = locus.get_intervals()  # [(start, end, name), ...]
         body_interval_names = {name for _, _, name in body_intervals}
 
-        # Determine per-interval bin target for this locus type.
-        # Non-NAHR loci need finer resolution because the variant can
-        # span only a small fraction of the region.
-        effective_min_bins = (
-            min_non_nahr_bins_per_interval if not locus.is_nahr
-            else min_bins_per_interval
-        )
+        effective_min_bins = min_bins_per_interval
 
         # Identify under-covered body intervals
         def _undercovered_intervals(
@@ -606,7 +632,7 @@ def collect_all_locus_bins(
                     flank_regions,
                     left_bound,
                     right_bound,
-                    effective_max_bins,
+                    max_bins_per_interval,
                     exclusion_mask=exclusion_mask,
                     exclusion_threshold=exclusion_threshold,
                     filter_params=filter_params,
@@ -646,11 +672,8 @@ def collect_all_locus_bins(
             else:
                 print(f"    [highres] no bins returned from tabix query")
 
-        # Hard-failure check: use the base threshold (min_bins_per_interval)
-        # which applies uniformly to all locus types.  Non-NAHR loci may
-        # have been checked against a higher target above to trigger
-        # high-res replacement, but as long as they meet the base minimum
-        # they are kept.
+        # Hard-failure check: each body interval must have at least
+        # min_bins_per_interval bins after all processing.
         #
         # Intervals that are "physically limited" (the raw high-res data
         # itself didn't have enough bins) are exempted as long as they
@@ -841,23 +864,15 @@ def parse_args():
     # Locus processing
     parser.add_argument("--locus-padding", type=int, default=10000,
                         help="Padding around locus boundaries (bp)")
-    parser.add_argument("--exclusion-threshold", type=float, default=1.0,
+    parser.add_argument("--exclusion-threshold", type=float, default=0.5,
                         help="Min overlap fraction with exclusion regions to mask a bin")
     parser.add_argument("--exclusion-bypass-threshold", type=float, default=0.6,
                         help="Body-interval overlap fraction above which masking is skipped")
     parser.add_argument("--min-bins-per-interval", type=int, default=10,
-                        help="Hard-failure minimum bins per body interval, applied "
-                             "uniformly to NAHR and non-NAHR loci")
-    parser.add_argument("--min-non-nahr-bins-per-interval", type=int, default=100,
-                        help="Target bins per body interval for non-NAHR loci; "
-                             "triggers high-res replacement when not met")
+                        help="Hard-failure minimum bins per body interval")
     parser.add_argument("--max-bins-per-interval", type=int, default=20,
-                        help="Maximum bins per body interval after rebinning for "
-                             "NAHR loci (0 = no rebinning)")
-    parser.add_argument("--non-nahr-max-bins-per-interval", type=int, default=100,
-                        help="Maximum bins per body interval after rebinning for "
-                             "non-NAHR loci (higher resolution needed because "
-                             "non-NAHR CNVs can span a small fraction of the region)")
+                        help="Maximum bins per body interval after rebinning "
+                             "(0 = no rebinning)")
     parser.add_argument("--min-rebin-coverage", type=float, default=0.5,
                         help="Min coverage fraction for rebinned bins")
     parser.add_argument("--min-flank-bases", type=int, default=50000,
@@ -866,9 +881,6 @@ def parse_args():
                         help="Min bins each flank must contain")
     parser.add_argument("--min-flank-coverage", type=float, default=0.5,
                         help="Min fraction of flank bp target that must be covered")
-    parser.add_argument("--min-non-nahr-size", type=int, default=1000000,
-                        help="Minimum size (bp) for non-NAHR loci; smaller loci are skipped "
-                             "(set to 0 to disable)")
 
     # Region restriction
     parser.add_argument(
@@ -987,9 +999,7 @@ def main():
         exclusion_threshold=args.exclusion_threshold,
         locus_padding=args.locus_padding,
         min_bins_per_interval=args.min_bins_per_interval,
-        min_non_nahr_bins_per_interval=args.min_non_nahr_bins_per_interval,
         max_bins_per_interval=args.max_bins_per_interval,
-        non_nahr_max_bins_per_interval=args.non_nahr_max_bins_per_interval,
         highres_counts_path=highres_path,
         column_medians=column_medians,
         lowres_median_bin_size=lowres_median_bin_size,
@@ -1000,15 +1010,13 @@ def main():
         min_flank_bins=args.min_flank_bins,
         min_flank_coverage=args.min_flank_coverage,
         regions=parsed_regions,
-        min_non_nahr_size=args.min_non_nahr_size,
     )
 
     if len(combined_df) == 0:
         raise RuntimeError(
             "No loci survived preprocessing — the output would be empty. "
-            "Check that the GD table, --region filters, and "
-            "--min-non-nahr-size threshold leave at least one locus with "
-            "sufficient bins."
+            "Check that the GD table and --region filters leave at least "
+            "one NAHR locus with sufficient bins."
         )
 
     # Write preprocessed outputs

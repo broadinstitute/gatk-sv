@@ -1,7 +1,7 @@
 """
 CLI entry point for gatk-sv-gd.
 
-Dispatches to subcommands: preprocess, infer, call, plot, eval, extract.
+Dispatches to subcommands: preprocess, infer, call, plot, eval, extract, synthesize.
 """
 
 import sys
@@ -14,6 +14,7 @@ SUBCOMMANDS = {
     "plot": "gatk_sv_gd.plot",
     "eval": "gatk_sv_gd.eval",
     "extract": "gatk_sv_gd.extract",
+    "synthesize": "gatk_sv_gd.synthesize",
 }
 
 DESCRIPTIONS = {
@@ -23,6 +24,7 @@ DESCRIPTIONS = {
     "plot": "Generate visualisation plots for GD CNV calls",
     "eval": "Evaluate GD CNV calls against a truth table",
     "extract": "Extract putative GD events from VCF(s)",
+    "synthesize": "Spike synthetic GD CNVs into read-depth matrices",
 }
 
 
