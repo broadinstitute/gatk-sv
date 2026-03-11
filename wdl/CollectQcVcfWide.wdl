@@ -11,9 +11,6 @@ workflow CollectQcVcfWide {
 
         Int sv_per_shard
 
-        File ref_fa
-        File ref_fai
-
         String sv_base_mini_docker
         String sv_pipeline_docker
 
@@ -45,8 +42,6 @@ workflow CollectQcVcfWide {
         call PreprocessVcf {
             input:
                 vcf = vcf_shards[i],
-                ref_fa = ref_fa,
-                ref_fai = ref_fai,
                 prefix = "~{output_prefix}.preprocess.shard_~{i}",
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_override_preprocess_vcf
@@ -97,8 +92,6 @@ workflow CollectQcVcfWide {
 task PreprocessVcf {
     input {
         File vcf
-        File ref_fa
-        File ref_fai
         String prefix
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
@@ -107,23 +100,11 @@ task PreprocessVcf {
     command <<<
         set -euo pipefail
 
-        bcftools norm \
-        -m -any \
-        -f ~{ref_fa} \
-        -Oz -o unsorted.vcf.gz \
-        ~{vcf}
-        
-        bcftools sort \
-        -Oz -o split.vcf.gz \
-        unsorted.vcf.gz
-        
-        tabix split.vcf.gz
-
         cat << 'EOF' > convert_to_symbolic.py
 import pysam
 import sys
 
-vcf_in = pysam.VariantFile("split.vcf.gz", "r")
+vcf_in = pysam.VariantFile("~{vcf}", "r")
 if "SVTYPE" not in vcf_in.header.info:
     vcf_in.header.info.add("SVTYPE", 1, "String", "Type of variant.")
 if "SVLEN" not in vcf_in.header.info:

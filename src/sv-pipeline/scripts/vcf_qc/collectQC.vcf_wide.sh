@@ -171,6 +171,7 @@ awk -v FS="\t" -v OFS="\t" -v nsamp=${nsamp} '{
   else if (GT[1]==0 && GT[2]==0) {homref++}
   else if (GT[1]==1 && GT[2]==1) {homalt++}
   else if ((GT[1]==0 && GT[2]==1) || (GT[1]==1 && GT[2]==0)) {het++}
+  else if (GT[1]=="." || GT[2]==".") {het++}
   else {other++} };
   if (other > 0 || (nsamp==other+unknown)) {AC="NA"; AN="NA"; AF="NA"}
   else {AC=(2*homalt)+het; AN=2*(nsamp-(unknown+other)); AF=AC/AN};

@@ -14,8 +14,6 @@ workflow QcAnnotations {
         Array[String] contigs
         String prefix
 
-        File ref_fa
-        File ref_fai
         File ped_file
 
         Int sv_per_shard
@@ -62,8 +60,6 @@ workflow QcAnnotations {
                 vcfs = vcfs,
                 contig = contig,
                 sv_per_shard = sv_per_shard,
-                ref_fa = ref_fa,
-                ref_fai = ref_fai,
                 prefix = "~{prefix}.~{contig}",
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = gatk_sv_lr_docker,
