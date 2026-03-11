@@ -183,7 +183,7 @@ def main():
         logging.info(
             f"Found matches for {sample_metadata_lookup_counters['sample_ids_found']} out of "
             f"{sample_metadata_lookup_counters['total_sample_ids']} "
-            f"({100*sample_metadata_lookup_counters['sample_ids_found'] / sample_metadata_lookup_counters['total_sample_ids']:0.1f}%) "
+            f"({100 * sample_metadata_lookup_counters['sample_ids_found'] / sample_metadata_lookup_counters['total_sample_ids']:0.1f}%) "
             f"ExpansionHunter json sample ids in {args.sample_metadata}")
 
         if len(sample_metadata_lookup) != len(sample_metadata_df):
