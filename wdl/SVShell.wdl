@@ -345,8 +345,8 @@ task GenerateInputsJson {
       --arg stratification_config_part1 "~{stratification_config_part1}" \
       --arg clustering_config_part2 "~{clustering_config_part2}" \
       --arg stratification_config_part2 "~{stratification_config_part2}" \
-      --argjson clustering_track_names '$(printf '%s\n' "~{sep=' ' clustering_track_names}" | jq -R . | jq -s .)' \
-      --argjson clustering_track_bed_files '$(printf '%s\n' "~{sep=' ' clustering_track_bed_files}" | jq -R . | jq -s .)' \
+      --argjson clustering_track_names "$(printf '%s\n' "~{sep=' ' clustering_track_names}" | jq -R . | jq -s .)" \
+      --argjson clustering_track_bed_files "$(printf '%s\n' "~{sep=' ' clustering_track_bed_files}" | jq -R . | jq -s .)" \
       --arg cytobands "~{cytobands}" \
       --arg mei_bed "~{mei_bed}" \
       --argjson max_shard_size_resolve ~{max_shard_size_resolve} \
@@ -357,12 +357,12 @@ task GenerateInputsJson {
       --argjson annotation_sv_per_shard ~{annotation_sv_per_shard} \
       --arg external_af_ref_bed "~{select_first([external_af_ref_bed, ""])}" \
       --arg external_af_ref_bed_prefix "~{select_first([external_af_ref_bed_prefix, ""])}" \
-      --argjson external_af_population '$(printf '%s\n' "~{sep=' ' select_first([external_af_population, []])}" | jq -R . | jq -s .)' \
+      --argjson external_af_population "$(printf '%s\n' "~{sep=' ' select_first([external_af_population, []])}" | jq -R . | jq -s .)" \
       --argjson min_pe_cpx ~{min_pe_cpx} \
       --argjson min_pe_ctx ~{min_pe_ctx} \
       --arg gq_recalibrator_model_file "~{gq_recalibrator_model_file}" \
-      --argjson recalibrate_gq_args '$(printf '%s\n' "~{sep=' ' recalibrate_gq_args}" | jq -R . | jq -s .)' \
-      --argjson genome_tracks '$(printf '%s\n' "~{sep=' ' genome_tracks}" | jq -R . | jq -s .)' \
+      --argjson recalibrate_gq_args "$(printf '%s\n' "~{sep=' ' recalibrate_gq_args}" | jq -R . | jq -s .)" \
+      --argjson genome_tracks "$(printf '%s\n' "~{sep=' ' genome_tracks}" | jq -R . | jq -s .)" \
       --argjson no_call_rate_cutoff ~{no_call_rate_cutoff} \
       --arg sl_cutoff_table "~{sl_cutoff_table}" \
       --arg sl_filter_args "~{select_first([sl_filter_args, ""])}" \
