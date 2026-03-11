@@ -83,10 +83,9 @@ mv "${sample_id}.wham.vcf.gz" "${vcf_filename}"
 index_filename="${output_dir}/${sample_id}.wham.vcf.gz.tbi"
 mv "${sample_id}.wham.vcf.gz.tbi" "${index_filename}"
 
-outputs_filename="${output_dir}/outputs.json"
-outputs_json=$(jq -n \
+rm -rf "${working_dir}"
+
+jq -n \
   --arg vcf "${vcf_filename}" \
   --arg index "${index_filename}" \
-  '{vcf: $vcf, index: $index}' )
-echo "${outputs_json}" > "${outputs_filename}"
-cp "${outputs_filename}" "${outputs_json_filename}"
+  '{vcf: $vcf, index: $index}' > "${outputs_json_filename}"
