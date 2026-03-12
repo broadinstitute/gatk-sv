@@ -24,6 +24,7 @@ from gatk_sv_gd.models import GDLocus, GDTable
 from gatk_sv_gd.depth import ExclusionMask
 from gatk_sv_gd.bins import (
     LocusBinMapping,
+    _ploidy_adjust_depths_single_chrom,
     assign_bins_to_intervals,
     compute_flank_regions_from_bins,
     extract_locus_bins,
@@ -32,7 +33,7 @@ from gatk_sv_gd.bins import (
     rebin_locus_intervals,
 )
 from gatk_sv_gd.highres import normalize_highres_bins, query_highres_bins
-from gatk_sv_gd.output import estimate_ploidy, write_locus_metadata
+from gatk_sv_gd.output import build_ploidy_map, estimate_ploidy, write_locus_metadata
 
 
 # ── Region parsing helpers ───────────────────────────────────────────
@@ -82,6 +83,7 @@ def _filter_and_prepare_locus_bins(
     filter_params: Optional[dict] = None,
     exclusion_bypass_regions: Optional[List[Tuple[int, int]]] = None,
     min_rebin_coverage: float = 0.5,
+    ploidy_map: Optional[Dict[Tuple[str, str], int]] = None,
 ) -> Tuple[pd.DataFrame, Dict[str, List[int]]]:
     """
     Shared helper: apply mask filtering, quality filtering, trimming,
@@ -106,6 +108,10 @@ def _filter_and_prepare_locus_bins(
         exclusion_bypass_regions: Genomic ranges where masking is
             skipped (bins with any true interval overlap with a bypass
             range are kept regardless of mask overlap).
+        ploidy_map: Optional ``{(sample, chrom): ploidy}`` lookup used
+            to adjust per-sample depths to diploid-equivalent before
+            computing bin-level median/MAD statistics for quality
+            filtering.
 
     Returns:
         Tuple of (processed DataFrame, interval_bins dict).
@@ -143,6 +149,11 @@ def _filter_and_prepare_locus_bins(
     if filter_params is not None and len(locus_df) > 0:
         sample_cols = get_sample_columns(locus_df)
         depths = locus_df[sample_cols].values
+        # Ploidy-adjust so sex-chrom bins are evaluated fairly
+        if ploidy_map:
+            depths = _ploidy_adjust_depths_single_chrom(
+                depths, locus.chrom, sample_cols, ploidy_map,
+            )
         medians = np.median(depths, axis=1)
         mads = np.median(np.abs(depths - medians[:, np.newaxis]), axis=1)
         keep = (
@@ -219,6 +230,31 @@ def _filter_and_prepare_locus_bins(
         print(f"    Masking {len(bp_range_indices)} breakpoint-range bin(s)")
         locus_df = locus_df.drop(index=bp_range_indices)
 
+    # Strict zero-tolerance exclusion for flank bins.  Flanks establish
+    # the baseline (CN=2) depth and must be completely free of unreliable
+    # signal from exclusion regions (seg dups, satellites, etc.).
+    if exclusion_mask is not None:
+        for flank_name in ("left_flank", "right_flank"):
+            flank_idxs = interval_bins.get(flank_name, [])
+            if not flank_idxs:
+                continue
+            flank_rows = locus_df.loc[flank_idxs]
+            ov = exclusion_mask.get_overlap_fractions_batch(
+                locus.chrom,
+                flank_rows["Start"].values,
+                flank_rows["End"].values,
+            )
+            has_overlap = ov > 0
+            n_drop = int(has_overlap.sum())
+            if n_drop > 0:
+                drop_idxs = [idx for idx, d in zip(flank_idxs, has_overlap) if d]
+                interval_bins[flank_name] = [
+                    idx for idx, d in zip(flank_idxs, has_overlap) if not d
+                ]
+                locus_df = locus_df.drop(index=drop_idxs)
+                print(f"    Dropped {n_drop} {flank_name} bin(s) "
+                      f"with exclusion-region overlap")
+
     return locus_df, interval_bins
 
 
@@ -240,6 +276,7 @@ def collect_all_locus_bins(
     min_flank_bins: int = 10,
     min_flank_coverage: float = 0.1,
     regions: Optional[List[Tuple[str, Optional[int], Optional[int]]]] = None,
+    ploidy_map: Optional[Dict[Tuple[str, str], int]] = None,
 ) -> Tuple[pd.DataFrame, List[LocusBinMapping], Dict[str, GDLocus]]:
     """
     Collect all bins across all GD loci into a single DataFrame.
@@ -290,6 +327,10 @@ def collect_all_locus_bins(
         regions: Optional list of parsed region tuples ``(chrom, start,
             end)`` to restrict processing to.  Only loci overlapping at
             least one region are included.  ``None`` means process all.
+        ploidy_map: Optional ``{(sample, chrom): ploidy}`` lookup used
+            to adjust per-sample depths to diploid-equivalent before
+            computing bin-level median/MAD statistics for quality
+            filtering on sex chromosomes.
 
     Returns:
         Tuple of:
@@ -339,12 +380,21 @@ def collect_all_locus_bins(
             overlaps = exclusion_mask.get_overlap_fractions_batch(
                 chrom, chrom_df["Start"].values, chrom_df["End"].values
             )
-            exclusion_keep = overlaps < exclusion_threshold
+            # Strict zero-overlap filtering: the chrom_filtered cache is
+            # used exclusively for flank boundary computation.  Flanks
+            # establish baseline depth and must be free of any exclusion-
+            # region contamination, so only truly clean bins are kept.
+            exclusion_keep = overlaps == 0.0
             n_excluded = int((~exclusion_keep).sum())
             keep &= exclusion_keep
         if _flank_filter_params is not None:
             _sc = get_sample_columns(chrom_df)
             _depths = chrom_df[_sc].values
+            # Ploidy-adjust so sex-chrom bins are evaluated fairly
+            if ploidy_map:
+                _depths = _ploidy_adjust_depths_single_chrom(
+                    _depths, chrom, _sc, ploidy_map,
+                )
             _meds = np.median(_depths, axis=1)
             _mads = np.median(np.abs(_depths - _meds[:, np.newaxis]), axis=1)
             quality_keep = (
@@ -445,6 +495,7 @@ def collect_all_locus_bins(
             min_flank_bins=min_flank_bins,
             min_flank_coverage=min_flank_coverage,
             filter_params=_flank_filter_params,
+            ploidy_map=ploidy_map,
         )
         if flank_regions:
             for fs, fe, fn in flank_regions:
@@ -555,6 +606,31 @@ def collect_all_locus_bins(
             print(f"    Masking {len(bp_range_indices)} breakpoint-range bin(s)")
             locus_df = locus_df.drop(index=bp_range_indices)
 
+        # Strict zero-tolerance exclusion for flank bins.  Flanks establish
+        # the baseline (CN=2) depth and must be completely free of
+        # unreliable signal from exclusion regions (seg dups, etc.).
+        if exclusion_mask is not None:
+            for flank_name in ("left_flank", "right_flank"):
+                flank_idxs = interval_bins.get(flank_name, [])
+                if not flank_idxs:
+                    continue
+                flank_rows = locus_df.loc[flank_idxs]
+                ov = exclusion_mask.get_overlap_fractions_batch(
+                    locus.chrom,
+                    flank_rows["Start"].values,
+                    flank_rows["End"].values,
+                )
+                has_overlap = ov > 0
+                n_drop = int(has_overlap.sum())
+                if n_drop > 0:
+                    drop_idxs = [idx for idx, d in zip(flank_idxs, has_overlap) if d]
+                    interval_bins[flank_name] = [
+                        idx for idx, d in zip(flank_idxs, has_overlap) if not d
+                    ]
+                    locus_df = locus_df.drop(index=drop_idxs)
+                    print(f"    Dropped {n_drop} {flank_name} bin(s) "
+                          f"with exclusion-region overlap")
+
         # ------------------------------------------------------------------
         # Per-interval bin count check + optional high-res replacement
         # ------------------------------------------------------------------
@@ -638,6 +714,7 @@ def collect_all_locus_bins(
                     filter_params=filter_params,
                     exclusion_bypass_regions=exclusion_bypass_regions,
                     min_rebin_coverage=min_rebin_coverage,
+                    ploidy_map=ploidy_map,
                 )
 
                 hr_undercovered = _undercovered_intervals(hr_interval_bins, effective_min_bins)
@@ -900,7 +977,7 @@ def parse_args():
                         help="Min median depth for bins")
     parser.add_argument("--median-max", type=float, default=3.0,
                         help="Max median depth for bins")
-    parser.add_argument("--mad-max", type=float, default=2.0,
+    parser.add_argument("--mad-max", type=float, default=0.5,
                         help="Max MAD for bins")
 
     # Verbosity
@@ -934,16 +1011,17 @@ def main():
         else:
             print(f"  {cluster}: {locus.chrom} - NO BREAKPOINTS DEFINED")
 
-    # Load exclusion mask
+    # Load exclusion mask — all BED files are concatenated first so that
+    # cross-file overlapping intervals are merged before the index is built.
     exclusion_mask = None
-    for bed_path in args.exclusion_intervals:
-        bed_label = os.path.basename(bed_path)
-        if exclusion_mask is None:
-            print(f"\nLoading exclusion mask: {bed_path}")
-            exclusion_mask = ExclusionMask(bed_path, label=bed_label)
-        else:
-            print(f"\nMerging exclusion intervals: {bed_path}")
-            exclusion_mask.merge(bed_path, label=bed_label)
+    if args.exclusion_intervals:
+        print(f"\nLoading {len(args.exclusion_intervals)} exclusion interval file(s):")
+        for p in args.exclusion_intervals:
+            print(f"  {p}")
+        exclusion_mask = ExclusionMask(
+            args.exclusion_intervals,
+            label="exclusion regions",
+        )
 
     # Load and normalise read depth data
     df = read_data(args.input)
@@ -964,15 +1042,18 @@ def main():
     # Normalise: CN=2 corresponds to depth of 2.0
     df[sample_cols] = 2.0 * df[sample_cols] / column_medians[np.newaxis, :]
 
+    # Estimate ploidy (before quality filtering so the ploidy map is
+    # available for ploidy-adjusted median/MAD computation)
+    ploidy_df = estimate_ploidy(df, args.output_dir)
+    ploidy_map = build_ploidy_map(ploidy_df)
+
     # Filter low quality bins
     if not args.skip_bin_filter:
         df = filter_low_quality_bins(
             df, median_min=args.median_min,
             median_max=args.median_max, mad_max=args.mad_max,
+            ploidy_map=ploidy_map,
         )
-
-    # Estimate ploidy
-    estimate_ploidy(df, args.output_dir)
 
     # Build quality-filter params
     filter_params: dict = {
@@ -1010,6 +1091,7 @@ def main():
         min_flank_bins=args.min_flank_bins,
         min_flank_coverage=args.min_flank_coverage,
         regions=parsed_regions,
+        ploidy_map=ploidy_map,
     )
 
     if len(combined_df) == 0:

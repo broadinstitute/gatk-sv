@@ -207,6 +207,88 @@ def _extract_segments(
 
 
 # =============================================================================
+# Category-segment builder
+# =============================================================================
+
+
+def _build_category_segments(
+    path: np.ndarray,
+    all_bins: List[int],
+    bin_coords: Dict[int, Tuple[int, int]],
+    ploidy: int,
+) -> List[dict]:
+    """Partition the Viterbi path into contiguous genomic segments by CN
+    category relative to *ploidy*.
+
+    Categories:
+
+    - ``DEL``: CN < ploidy
+    - ``REF``: CN == ploidy
+    - ``DUP``: CN > ploidy
+
+    Adjacent bins with the same category are merged into a single segment
+    whose genomic span runs from the start of the first bin to the end of
+    the last.
+
+    Returns:
+        List of dicts with keys ``category``, ``start``, ``end``,
+        ``mean_cn``, ``n_bins``.
+    """
+    if len(path) == 0:
+        return []
+
+    def _cat(cn: int) -> str:
+        if cn < ploidy:
+            return "DEL"
+        elif cn > ploidy:
+            return "DUP"
+        return "REF"
+
+    segments: List[dict] = []
+    first_coords = bin_coords.get(all_bins[0])
+    if first_coords is None:
+        return []
+
+    seg_start = first_coords[0]
+    seg_end = first_coords[1]
+    seg_cat = _cat(int(path[0]))
+    seg_cn_sum = float(path[0])
+    seg_n = 1
+
+    for i in range(1, len(path)):
+        coords = bin_coords.get(all_bins[i])
+        if coords is None:
+            continue
+        cat = _cat(int(path[i]))
+        if cat == seg_cat:
+            seg_end = coords[1]
+            seg_cn_sum += float(path[i])
+            seg_n += 1
+        else:
+            segments.append({
+                "category": seg_cat,
+                "start": seg_start,
+                "end": seg_end,
+                "mean_cn": seg_cn_sum / seg_n,
+                "n_bins": seg_n,
+            })
+            seg_start = coords[0]
+            seg_end = coords[1]
+            seg_cat = cat
+            seg_cn_sum = float(path[i])
+            seg_n = 1
+
+    segments.append({
+        "category": seg_cat,
+        "start": seg_start,
+        "end": seg_end,
+        "mean_cn": seg_cn_sum / seg_n,
+        "n_bins": seg_n,
+    })
+    return segments
+
+
+# =============================================================================
 # Viterbi-based GD CNV calling
 # =============================================================================
 
@@ -217,37 +299,30 @@ def viterbi_call_gd_cnv(
     transition_matrix: np.ndarray,
     interval_bin_arrays: Dict[str, np.ndarray],
     ploidy: int = 2,
-    confidence_threshold: float = -1.0,
-    flank_coverage_threshold: float = 0.70,
+    reciprocal_overlap_threshold: float = 0.90,
     verbose: bool = False,
     sample_id: str = "",
     breakpoint_transition_matrix: Optional[np.ndarray] = None,
     bin_coords: Optional[Dict[int, Tuple[int, int]]] = None,
+    all_cluster_bins: Optional[List[int]] = None,
 ) -> List[dict]:
     """Call GD CNVs using Viterbi segmentation of CN posteriors.
 
-    The Pyro model posteriors p(CN=k | data) are used as per-bin priors on
-    the hidden CN state.  The transition matrix controls segmentation
-    stickiness — high diagonal values prevent single-bin state flips and
-    produce smooth copy-number segments.
+    The Viterbi algorithm is run **once** per locus/sample to produce a
+    smooth copy-number segmentation.  The resulting path is then
+    partitioned into contiguous regions of altered copy number relative to
+    *ploidy*:
 
-    The Viterbi path represents the most probable smooth copy-number
-    segmentation consistent with both the per-bin posteriors (from Pyro) and
-    the expected smoothness encoded in the transition matrix.
+    - **DEL** segments: CN < ploidy
+    - **DUP** segments: CN > ploidy
 
-    For each GD entry the segmentation is checked against the expected
-    breakpoint pattern:
+    Each altered-CN segment is tested for **reciprocal overlap** against
+    every GD entry of matching svtype.  A carrier call is made when
 
-    - **Covered intervals** (between BP1 and BP2):
-      - DEL: every bin's Viterbi state must be < ploidy.
-      - DUP: every bin's Viterbi state must be > ploidy.
-      Multi-step duplications (e.g. CN 3→4) are allowed.
+        min(overlap / segment_length, overlap / entry_length)
+            >= reciprocal_overlap_threshold
 
-    - **Flanking / uncovered intervals** are checked with a fractional
-      threshold: at least ``flank_coverage_threshold`` fraction of bins
-      must satisfy the reference-CN requirement.
-      - DEL: fraction of bins with state ≥ ploidy must be ≥ threshold.
-      - DUP: fraction of bins with state ≤ ploidy must be ≥ threshold.
+    Multiple calls per locus are possible (though uncommon).
 
     Args:
         locus: GDLocus object.
@@ -257,15 +332,13 @@ def viterbi_call_gd_cnv(
         transition_matrix: (n_states, n_states) transition matrix.  High
             diagonal = sticky segmentation.
         interval_bin_arrays: Dict mapping interval name to array of bin
-            array_idx values.
+            array_idx values.  Used for matching GD entries.
         ploidy: Expected reference copy number for this sample/chromosome.
-        confidence_threshold: Minimum mean per-bin log-prior along the
-            Viterbi path to make a carrier call.  More negative = more
-            permissive.
-        flank_coverage_threshold: Fraction of bins in each flanking /
-            uncovered interval that must be at the reference CN for the
-            flank check to pass.  1.0 = all bins must pass (strict);
-            0.0 = no bins need to pass (disabled).  Default 0.70.
+        reciprocal_overlap_threshold: Minimum reciprocal overlap between a
+            Viterbi segment and a GD entry to call a carrier.
+            Default 0.90 (90 %).
+        verbose: If True, emit diagnostic messages via ``_util.vlog``.
+        sample_id: Sample identifier for diagnostic logging.
         breakpoint_transition_matrix: Optional (n_states, n_states) transition
             matrix applied at known recurrent breakpoint boundaries (both the
             start and end coordinate of each breakpoint's SD-block range).
@@ -273,23 +346,53 @@ def viterbi_call_gd_cnv(
             CN-state changes are more favoured at these positions.  Requires
             *bin_coords* to locate boundaries.
         bin_coords: Mapping from array_idx (int) to (genomic_start, genomic_end)
-            for each bin.  Used to determine which bin-to-bin transitions cross
-            a known breakpoint boundary.  Required when
-            *breakpoint_transition_matrix* is set.
+            for each bin.  Required for computing reciprocal overlap with GD
+            entries and for the breakpoint mask.
+        all_cluster_bins: Optional pre-computed list of ALL bin array_idx
+            values for this cluster (excluding breakpoint-range bins).  When
+            provided, the Viterbi runs over this full set rather than only
+            the bins found in *interval_bin_arrays*, ensuring flanks are
+            always included even if they are not assigned to a named interval.
+            If *None*, falls back to the union of *interval_bin_arrays* values.
 
     Returns:
-        List of call dicts (one per GD entry).
+        Tuple of:
+          - List of call dicts (one per GD entry).
+          - List of (genomic_start, genomic_end, mean_cn, category) tuples,
+            one per contiguous CN-category segment (DEL/REF/DUP).  Empty
+            when *bin_coords* is None or no bins are available.
     """
-    # Collect all bin indices for this locus, sorted by array_idx
-    all_bins = []
-    for bin_idx in interval_bin_arrays.values():
-        all_bins.extend(int(b) for b in bin_idx)
-    all_bins = sorted(set(all_bins))
+    # Collect all bin indices for this locus.
+    # Prefer the caller-supplied complete set if available, since it
+    # guarantees flanks are included even when they are not assigned to a
+    # named interval in the bin-mappings file.
+    if all_cluster_bins is not None:
+        all_bins_set = set(int(b) for b in all_cluster_bins)
+    else:
+        all_bins_set = {int(b) for bins in interval_bin_arrays.values()
+                        for b in bins}
 
-    if len(all_bins) == 0:
+    if len(all_bins_set) == 0:
         if verbose:
             _util.vlog(f"  [VIT] {sample_id}  {locus.cluster}: no bins -> skip")
-        return []
+        return [], []
+
+    if bin_coords is None:
+        if verbose:
+            _util.vlog(f"  [VIT] {sample_id}  {locus.cluster}: "
+                       f"no bin_coords -> skip")
+        return [], []
+
+    # Sort bins by **genomic start coordinate** (not array_idx).
+    # Flank bins may have array_idx values that don't match their genomic
+    # position (e.g. left_flank is genomically first but has high array_idx).
+    # Sorting by coordinate ensures the Viterbi processes spatially adjacent
+    # bins sequentially, and that _build_category_segments produces segments
+    # in proper genomic order.
+    all_bins = sorted(
+        all_bins_set,
+        key=lambda idx: bin_coords.get(idx, (float("inf"), float("inf")))[0],
+    )
 
     n_states = sample_probs.shape[1]
 
@@ -309,7 +412,6 @@ def viterbi_call_gd_cnv(
     breakpoint_mask: Optional[np.ndarray] = None
     if (
         breakpoint_transition_matrix is not None
-        and bin_coords is not None
         and len(all_bins) > 1
     ):
         # Collect both the start and end coordinate of every breakpoint range.
@@ -370,29 +472,29 @@ def viterbi_call_gd_cnv(
         seg_str = " -> ".join(
             f"CN{state}x{end - start}" for start, end, state in segments
         )
-        conf_pass = "PASS" if confidence > confidence_threshold else "FAIL"
         _util.vlog(f"  [VIT] {sample_id}  {locus.cluster}  "
                    f"{len(all_bins)} bins  ploidy={ploidy}  "
-                   f"confidence={confidence:+.4f} "
-                   f"(threshold={confidence_threshold:+.4f}) [{conf_pass}]")
+                   f"confidence={confidence:+.4f}")
         _util.vlog(f"    Segments: {seg_str}")
 
-    # Map Viterbi path back to per-interval bin states
-    local_idx_for_bin = {b: i for i, b in enumerate(all_bins)}
-    interval_bin_states: Dict[str, np.ndarray] = {}
-    for interval_name, bin_idx in interval_bin_arrays.items():
-        local_indices = [local_idx_for_bin[int(b)] for b in bin_idx
-                         if int(b) in local_idx_for_bin]
-        if local_indices:
-            interval_bin_states[interval_name] = path[local_indices]
-        else:
-            interval_bin_states[interval_name] = np.array([], dtype=int)
+    # ----------------------------------------------------------------
+    # Build category segments (DEL / REF / DUP) in genomic coordinates
+    # ----------------------------------------------------------------
+    cat_segments = _build_category_segments(path, all_bins, bin_coords, ploidy)
 
-    all_interval_names = set(interval_bin_arrays.keys())
-    flank_names = {name for _, _, name in locus.get_flanking_regions()}
-    body_interval_names = all_interval_names - flank_names
+    if verbose:
+        for seg in cat_segments:
+            if seg["category"] != "REF":
+                _util.vlog(
+                    f"    {seg['category']} segment: "
+                    f"{seg['start']:,}-{seg['end']:,} "
+                    f"({seg['n_bins']} bins, mean CN={seg['mean_cn']:.2f})"
+                )
 
-    calls = []
+    # ----------------------------------------------------------------
+    # Match each GD entry against category segments by reciprocal overlap
+    # ----------------------------------------------------------------
+    calls: List[dict] = []
     for entry in locus.gd_entries:
         gd_id    = entry["GD_ID"]
         svtype   = entry["svtype"]
@@ -401,113 +503,43 @@ def viterbi_call_gd_cnv(
         bp1      = entry["BP1"]
         bp2      = entry["BP2"]
 
-        covered_tuples    = locus.get_intervals_between(bp1, bp2)
-        covered_intervals = set(name for _, _, name in covered_tuples)
-        if not covered_intervals:
-            print(f"  WARNING [Viterbi]: {gd_id} ({svtype}) BP1={bp1}, BP2={bp2} "
-                  f"does not resolve to any interval in cluster '{locus.cluster}' "
-                  f"(breakpoints: {locus.breakpoint_names}) — entry skipped.")
-            continue
+        covered_tuples = locus.get_intervals_between(bp1, bp2)
+        covered_intervals = [name for _, _, name in covered_tuples]
 
-        uncovered_body = body_interval_names - covered_intervals
+        entry_len = gd_end - gd_start
+        best_ro = 0.0
+        best_seg = None
+        if entry_len > 0:
+            for seg in cat_segments:
+                if seg["category"] != svtype:
+                    continue
+                seg_len = seg["end"] - seg["start"]
+                if seg_len == 0:
+                    continue
+                overlap = max(
+                    0, min(seg["end"], gd_end) - max(seg["start"], gd_start),
+                )
+                ro = min(overlap / seg_len, overlap / entry_len)
+                if ro > best_ro:
+                    best_ro = ro
+                    best_seg = seg
+
+        is_carrier = best_ro >= reciprocal_overlap_threshold
+        mean_cn = best_seg["mean_cn"] if best_seg else float(ploidy)
 
         if verbose:
-            _util.vlog(f"    Entry {gd_id} ({svtype}, BP1={bp1}, BP2={bp2}  ploidy={ploidy}):")
-            _util.vlog(f"      Covered ({len(covered_intervals)} interval(s)): "
-                       f"{sorted(covered_intervals)}")
+            tag = " [CARRIER]" if is_carrier else ""
+            _util.vlog(
+                f"    Entry {gd_id} ({svtype}, BP1={bp1}, BP2={bp2}  "
+                f"ploidy={ploidy}):  "
+                f"best_RO={best_ro:.2%}  "
+                f"(threshold={reciprocal_overlap_threshold:.0%}){tag}"
+            )
 
-        # --- Check covered intervals ---
-        covered_ok     = True
-        n_covered_bins = 0
-        covered_cn_sum = 0.0
-        for iv in covered_intervals:
-            states = interval_bin_states.get(iv, np.array([], dtype=int))
-            if len(states) == 0:
-                if verbose:
-                    _util.vlog(f"        {iv}: 0 bins -> FAIL (no bins found for this interval)")
-                covered_ok = False
-                break
-            n_covered_bins += len(states)
-            covered_cn_sum += float(states.sum())
-            if svtype == "DEL":
-                iv_pass = bool(np.all(states < ploidy))
-                if verbose:
-                    bad = states[states >= ploidy]
-                    status = ("PASS" if iv_pass else
-                              f"FAIL  ({len(bad)} bin(s) >= {ploidy}; "
-                              f"offending CN states: {np.unique(bad).tolist()})")
-                    _util.vlog(f"        {iv}: {len(states)} bins  "
-                               f"CN=[{int(states.min())},{int(states.max())}]  "
-                               f"all<{ploidy} -> {status}")
-                if not iv_pass:
-                    covered_ok = False
-                    break
-            if svtype == "DUP":
-                iv_pass = bool(np.all(states > ploidy))
-                if verbose:
-                    bad = states[states <= ploidy]
-                    status = ("PASS" if iv_pass else
-                              f"FAIL  ({len(bad)} bin(s) <= {ploidy}; "
-                              f"offending CN states: {np.unique(bad).tolist()})")
-                    _util.vlog(f"        {iv}: {len(states)} bins  "
-                               f"CN=[{int(states.min())},{int(states.max())}]  "
-                               f"all>{ploidy} -> {status}")
-                if not iv_pass:
-                    covered_ok = False
-                    break
-
-        # --- Check flanks and uncovered body intervals ---
-        # At least flank_coverage_threshold fraction of bins must be at the
-        # reference CN; remaining bins may be off (e.g. noise at boundaries).
-        flanks_ok = True
-        if verbose:
-            flanks_to_check = sorted(uncovered_body | flank_names)
-            _util.vlog(f"      Flanks / uncovered ({len(flanks_to_check)} region(s)): "
-                       f"{flanks_to_check}  (coverage threshold={flank_coverage_threshold:.0%})")
-        for iv in (uncovered_body | flank_names):
-            states = interval_bin_states.get(iv, np.array([], dtype=int))
-            if len(states) == 0:
-                if verbose:
-                    _util.vlog(f"        {iv}: 0 bins -> skip (missing flanks OK)")
-                continue  # missing flanks are OK
-            if svtype == "DEL":
-                ok_frac = float(np.sum(states >= ploidy)) / len(states)
-                iv_pass = ok_frac >= flank_coverage_threshold
-                if verbose:
-                    bad = states[states < ploidy]
-                    status = (f"PASS  ({ok_frac:.0%} >= {flank_coverage_threshold:.0%})" if iv_pass else
-                              f"FAIL  ({ok_frac:.0%} < {flank_coverage_threshold:.0%}; "
-                              f"{len(bad)} offending bin(s): CN {np.unique(bad).tolist()})")
-                    _util.vlog(f"        {iv}: {len(states)} bins  "
-                               f"CN=[{int(states.min())},{int(states.max())}]  "
-                               f">={ploidy} fraction={ok_frac:.0%} -> {status}")
-            elif svtype == "DUP":
-                ok_frac = float(np.sum(states <= ploidy)) / len(states)
-                iv_pass = ok_frac >= flank_coverage_threshold
-                if verbose:
-                    bad = states[states > ploidy]
-                    status = (f"PASS  ({ok_frac:.0%} >= {flank_coverage_threshold:.0%})" if iv_pass else
-                              f"FAIL  ({ok_frac:.0%} < {flank_coverage_threshold:.0%}; "
-                              f"{len(bad)} offending bin(s): CN {np.unique(bad).tolist()})")
-                    _util.vlog(f"        {iv}: {len(states)} bins  "
-                               f"CN=[{int(states.min())},{int(states.max())}]  "
-                               f"<={ploidy} fraction={ok_frac:.0%} -> {status}")
-            else:
-                continue
-            if not iv_pass:
-                flanks_ok = False
-                break
-
-        is_cnv  = covered_ok and flanks_ok and (confidence > confidence_threshold)
-        if verbose:
-            cov_str  = "PASS" if covered_ok else "FAIL"
-            flk_str  = "PASS" if flanks_ok else "FAIL"
-            conf_str = "PASS" if confidence > confidence_threshold else "FAIL"
-            result_str = "CARRIER" if is_cnv else "NOT_CARRIER"
-            _util.vlog(f"      -> covered={cov_str}  flanks={flk_str}  "
-                       f"confidence={conf_str}  [{result_str}]")
-        mean_cn = covered_cn_sum / n_covered_bins if n_covered_bins > 0 else float(ploidy)
-        n_bins  = sum(len(interval_bin_arrays.get(iv, [])) for iv in covered_intervals)
+        n_bins = sum(
+            len(interval_bin_arrays.get(iv, []))
+            for iv in covered_intervals
+        )
 
         calls.append({
             "GD_ID":                   gd_id,
@@ -520,15 +552,18 @@ def viterbi_call_gd_cnv(
             "BP2":                     bp2,
             "is_terminal":             locus.is_terminal,
             "log_prob_score":          confidence,
-            "flanking_log_prob_score": np.nan,
-            "is_carrier":              is_cnv,
-            "is_spanning":             False,
-            "intervals":               list(covered_intervals),
+            "is_carrier":              is_carrier,
+            "reciprocal_overlap":      best_ro,
+            "intervals":               covered_intervals,
             "n_bins":                  n_bins,
             "mean_cn":                 mean_cn,
-            "viterbi_covered_ok":         covered_ok,
-            "viterbi_flanks_ok":           flanks_ok,
-            "flank_coverage_threshold":    flank_coverage_threshold,
         })
 
-    return calls
+    # Return category segments (DEL/REF/DUP) for downstream use (e.g. plotting).
+    # Each entry is (genomic_start, genomic_end, mean_cn, category).
+    segment_records = [
+        (seg["start"], seg["end"], seg["mean_cn"], seg["category"])
+        for seg in cat_segments
+    ]
+
+    return calls, segment_records

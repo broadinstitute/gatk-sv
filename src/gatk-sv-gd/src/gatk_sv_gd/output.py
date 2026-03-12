@@ -6,7 +6,7 @@ to disk after model inference.
 """
 
 import os
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -316,3 +316,15 @@ def estimate_ploidy(
     print(f"{'=' * 80}\n")
 
     return ploidy_df
+
+
+def build_ploidy_map(ploidy_df: pd.DataFrame) -> Dict[Tuple[str, str], int]:
+    """Build a ``{(sample, chrom): ploidy}`` lookup from the ploidy table.
+
+    This is the format consumed by the quality-filtering helpers in
+    :mod:`gatk_sv_gd.bins` for ploidy-adjusted median/MAD computation.
+    """
+    return {
+        (str(row["sample"]), str(row["contig"])): int(row["ploidy"])
+        for _, row in ploidy_df.iterrows()
+    }

@@ -11,6 +11,7 @@ SEG_DUP_BED="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/input/hg3
 CENTROMERE_BED="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/input/hg38_centromeres.bed"
 ACROCENTRIC_ARM_BED="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/input/hg38_acrocentric_arms.bed"
 GAPS_BED="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/input/hg38_gap.bed"
+HOTFIX_BED="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/input/hg38_hotfixes.bed"
 GTF="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/input/gencode.v47.basic.protein_coding.canonical.gtf"
 
 TRANSITION_MATRIX="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/input/transition_matrix.tsv"
@@ -58,6 +59,7 @@ gatk-sv-gd preprocess \
     -e "${SEG_DUP_BED}" \
     -e "${CENTROMERE_BED}" \
     -e "${ACROCENTRIC_ARM_BED}" \
+    -e "${HOTFIX_BED}" \
     --verbose \
     ${PREPROCESS_ARGS}
 
@@ -96,7 +98,10 @@ gatk-sv-gd plot \
     --gaps-bed "${GAPS_BED}" \
     --gtf "${GTF}" \
     --segdup-bed "${SEG_DUP_BED}" \
-    --ploidy-table "${PLOIDY_TABLE}"
+    --ploidy-table "${PLOIDY_TABLE}" \
+    --transition-matrix "${TRANSITION_MATRIX}" \
+    --breakpoint-transition-matrix "${BREAKPOINT_TRANSITION_MATRIX}" \
+    --bin-mappings "${BIN_MAPPINGS}"
 
 # ── Step 5: eval (optional) ────────────────────────────────────────────────
 if [[ -n "${TRUTH_TABLE}" ]]; then

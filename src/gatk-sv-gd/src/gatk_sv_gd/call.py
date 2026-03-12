@@ -5,10 +5,12 @@ Call genomic disorder (GD) copy-number variants from posterior probabilities
 produced by gd_cnv_pyro.py using the Viterbi segmentation strategy.
 
 The Viterbi algorithm is run on per-bin CN posteriors using a user-supplied
-state transition matrix, then checks whether the resulting copy-number
-segmentation matches the expected breakpoint pattern for each GD entry
-(including flanks).  A ``--viterbi-confidence-threshold`` filters on the
-Viterbi path confidence.
+state transition matrix to produce a smooth copy-number segmentation.  The
+resulting path is partitioned into contiguous regions of altered copy number
+(DEL: CN < ploidy, DUP: CN > ploidy), and each such segment is tested for
+reciprocal overlap with every GD entry of matching svtype.  A carrier call
+is made when the reciprocal overlap meets or exceeds
+``--reciprocal-overlap-threshold`` (default 90 %).
 
 Usage:
     python gd_cnv_call.py \\
@@ -28,7 +30,7 @@ import numpy as np
 import pandas as pd
 
 from gatk_sv_gd import _util
-from gatk_sv_gd.models import GDLocus, GDTable
+from gatk_sv_gd.models import GDTable
 from gatk_sv_gd.viterbi import (
     load_transition_matrix,
     viterbi_call_gd_cnv,
@@ -82,99 +84,38 @@ def get_locus_interval_bins(
 
 
 def determine_best_breakpoints(
-    locus: GDLocus,
-    interval_stats: Dict[str, dict],
     calls: List[dict],
-    ploidy: int = 2,
 ) -> Dict[str, Optional[str]]:
-    """
-    Determine the most likely breakpoint pair for a GD CNV, separately for
-    DEL and DUP.
+    """Pick the best GD_ID per svtype among carrier calls.
+
+    When multiple GD entries of the same svtype are called as carriers,
+    the one with the highest reciprocal overlap is selected.  Ties are
+    broken by genomic span (larger wins).
 
     Args:
-        locus: GDLocus object
-        interval_stats: Dict mapping interval name to CN statistics
-        calls: List of CNV call dictionaries
-        ploidy: Expected copy number for this sample on this chromosome
+        calls: List of call dicts from ``viterbi_call_gd_cnv()``.
 
     Returns:
-        Dict mapping svtype ("DEL", "DUP") to best matching GD_ID or None
+        Dict mapping svtype ("DEL", "DUP") to best matching GD_ID or None.
     """
-    best_by_svtype = {}
-
-    all_intervals = set(name for _, _, name in locus.get_intervals())
-
+    best_by_svtype: Dict[str, Optional[str]] = {}
     for svtype in ["DEL", "DUP"]:
-        carrier_calls = [c for c in calls if c["is_carrier"] and c["svtype"] == svtype]
-
-        if len(carrier_calls) == 0:
+        carrier_calls = [
+            c for c in calls if c["is_carrier"] and c["svtype"] == svtype
+        ]
+        if not carrier_calls:
             best_by_svtype[svtype] = None
-            continue
-
-        if len(carrier_calls) == 1:
+        elif len(carrier_calls) == 1:
             best_by_svtype[svtype] = carrier_calls[0]["GD_ID"]
-            continue
-
-        best_score = -np.inf
-        best_size = -1
-        best_gd_id = None
-
-        for call in carrier_calls:
-            covered_intervals = set(call["intervals"])
-            uncovered_intervals = all_intervals - covered_intervals
-
-            score = 0.0
-            total_weight = 0.0
-
-            if svtype == "DEL":
-                for interval in covered_intervals:
-                    if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
-                        probs = interval_stats[interval]["cn_probs"]
-                        weight = 1.
-                        p_del = probs[:ploidy].sum()
-                        if p_del > 0:
-                            score += weight * np.log(p_del)
-                            total_weight += weight
-
-                for interval in uncovered_intervals:
-                    if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
-                        probs = interval_stats[interval]["cn_probs"]
-                        weight = 1.
-                        p_normal = probs[ploidy:].sum()
-                        if p_normal > 0:
-                            score += weight * np.log(p_normal)
-                            total_weight += weight
-
-            else:  # DUP
-                for interval in covered_intervals:
-                    if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
-                        probs = interval_stats[interval]["cn_probs"]
-                        weight = 1.
-                        p_dup = probs[ploidy + 1:].sum()
-                        if p_dup > 0:
-                            score += weight * np.log(p_dup)
-                            total_weight += weight
-
-                for interval in uncovered_intervals:
-                    if interval in interval_stats and interval_stats[interval]["n_bins"] > 0:
-                        probs = interval_stats[interval]["cn_probs"]
-                        weight = 1.
-                        p_normal = probs[:ploidy + 1].sum()
-                        if p_normal > 0:
-                            score += weight * np.log(p_normal)
-                            total_weight += weight
-
-            if total_weight > 0:
-                score = score / total_weight
-
-            call_size = call["end"] - call["start"]
-            if score > best_score or (score == best_score and call_size > best_size):
-                best_score = score
-                best_size = call_size
-                best_gd_id = call["GD_ID"]
-
-        best_by_svtype[svtype] = best_gd_id
-
+        else:
+            best = max(
+                carrier_calls,
+                key=lambda c: (
+                    c.get("reciprocal_overlap", 0),
+                    c["end"] - c["start"],
+                ),
+            )
+            best_by_svtype[svtype] = best["GD_ID"]
     return best_by_svtype
 
 
@@ -190,12 +131,16 @@ def call_cnvs_from_posteriors(
     transition_matrix: np.ndarray,
     ploidy_df: Optional[pd.DataFrame] = None,
     verbose: bool = False,
-    viterbi_confidence_threshold: float = -1.0,
-    viterbi_flank_coverage_threshold: float = 0.70,
+    reciprocal_overlap_threshold: float = 0.90,
     breakpoint_transition_matrix: Optional[np.ndarray] = None,
 ) -> pd.DataFrame:
     """
     Call CNVs from posterior probabilities using the Viterbi strategy.
+
+    The Viterbi algorithm is run once per sample per locus to produce a
+    smooth copy-number segmentation.  The resulting path is partitioned
+    into contiguous DEL / DUP segments and matched against GD entries by
+    reciprocal overlap.
 
     Args:
         cn_posteriors_df: DataFrame with CN posterior probabilities per bin/sample
@@ -206,29 +151,29 @@ def call_cnvs_from_posteriors(
         ploidy_df: Optional DataFrame with columns (sample, contig, ploidy).
             If None, ploidy=2 is assumed for all sample/contig pairs.
         verbose: If True, print per-sample log probability scores for every
-            GD entry at every locus, including flanking region scores.
-        viterbi_confidence_threshold: Minimum mean per-bin log-posterior
-            along the Viterbi path to make a carrier call.
-        viterbi_flank_coverage_threshold: Fraction of bins in each flanking /
-            uncovered interval that must be at the reference CN for the flank
-            check to pass.  Default 0.70.
+            GD entry at every locus.
+        reciprocal_overlap_threshold: Minimum reciprocal overlap between a
+            Viterbi segment and a GD entry to call a carrier.  Default 0.90.
         breakpoint_transition_matrix: Optional (n_states, n_states) transition
             matrix applied at known recurrent breakpoint boundaries during
             Viterbi.  Should have lower diagonal values than *transition_matrix*
             to encourage CN state changes at those positions.
 
     Returns:
-        DataFrame with CNV calls for all samples and loci
+        Tuple of:
+          - DataFrame with CNV calls for all samples and loci
+          - DataFrame with Viterbi category segments (sample, cluster,
+            start, end, mean_cn, category)
     """
     print("\n" + "=" * 80)
     print("CALLING CNVs FROM POSTERIORS")
     bp_str = " + breakpoint matrix" if breakpoint_transition_matrix is not None else ""
     print(f"  NAHR strategy: Viterbi segmentation{bp_str}  "
-          f"(confidence threshold={viterbi_confidence_threshold}, "
-          f"flank coverage threshold={viterbi_flank_coverage_threshold:.0%})")
+          f"(reciprocal overlap threshold={reciprocal_overlap_threshold:.0%})")
     print("=" * 80)
 
     all_results = []
+    all_path_records = []
     sample_ids = cn_posteriors_df["sample"].unique()
 
     # Build ploidy lookup: (sample, contig) -> ploidy, default 2
@@ -318,10 +263,28 @@ def call_cnvs_from_posteriors(
         for interval_name, bins in interval_bins.items():
             print(f"  {interval_name}: {len(bins)} bins")
 
+        # Warn when flanks are absent — the Viterbi trace will not cover
+        # the flanking region, which is usually a preprocessing issue.
+        for flank_name in ("left_flank", "right_flank"):
+            if flank_name not in interval_bins or len(interval_bins[flank_name]) == 0:
+                print(f"  WARNING: no {flank_name} bins for {cluster} — "
+                      f"Viterbi trace will not cover that flank")
+
         interval_bin_arrays = {
             name: np.array(bins, dtype=int)
             for name, bins in interval_bins.items()
         }
+
+        # Build the complete set of non-breakpoint bins for the cluster.
+        # This ensures the Viterbi runs over ALL bins (including flanks)
+        # even if some are not assigned to a named interval in bin_mappings.
+        all_cluster_idxs = set(
+            bin_mappings_df[
+                bin_mappings_df["cluster"] == cluster
+            ]["array_idx"].astype(int)
+        )
+        bp_set = set(int(b) for b in bp_masked)
+        all_cluster_bins = sorted(all_cluster_idxs - bp_set)
 
         for s_idx, sample_id in enumerate(sample_ids):
             sample_ploidy = ploidy_lookup.get((str(sample_id), locus.chrom), 2)
@@ -331,52 +294,42 @@ def call_cnvs_from_posteriors(
                 _util.vlog(f"\n  [{strategy}] Sample: {sample_id}  "
                            f"({locus.chrom}, ploidy={sample_ploidy})")
 
-            calls = viterbi_call_gd_cnv(
+            calls, path_records = viterbi_call_gd_cnv(
                 locus,
                 prob_3d[s_idx],  # (n_bins, n_states)
                 transition_matrix,
                 interval_bin_arrays,
                 ploidy=sample_ploidy,
-                confidence_threshold=viterbi_confidence_threshold,
-                flank_coverage_threshold=viterbi_flank_coverage_threshold,
+                reciprocal_overlap_threshold=reciprocal_overlap_threshold,
                 verbose=verbose,
                 sample_id=str(sample_id),
                 breakpoint_transition_matrix=breakpoint_transition_matrix,
                 bin_coords=bin_coords_by_idx,
+                all_cluster_bins=all_cluster_bins,
             )
-            best_by_svtype = determine_best_breakpoints(
-                locus,
-                {name: {"n_bins": len(idx),
-                        "cn_probs": prob_3d[s_idx, idx].mean(axis=0)
-                        if len(idx) > 0 else np.zeros(n_states)}
-                 for name, idx in interval_bin_arrays.items()},
-                calls, ploidy=sample_ploidy,
-            )
+            for start, end, mean_cn, category in path_records:
+                all_path_records.append({
+                    "sample": sample_id,
+                    "cluster": cluster,
+                    "start": start,
+                    "end": end,
+                    "mean_cn": mean_cn,
+                    "category": category,
+                })
+            best_by_svtype = determine_best_breakpoints(calls)
 
             if verbose:
                 for call in calls:
-                    tag_parts = []
-                    if call["is_carrier"]:
-                        tag_parts.append("CARRIER")
-                    if call.get("is_spanning"):
-                        tag_parts.append("SPANNING")
-                    tag = " [" + ",".join(tag_parts) + "]" if tag_parts else ""
-                    flank_str = (
-                        f"{call['flanking_log_prob_score']:.4f}"
-                        if not np.isnan(call.get("flanking_log_prob_score", np.nan))
-                        else "NA"
-                    )
-                    cov = "Y" if call.get("viterbi_covered_ok") else "N"
-                    flk = "Y" if call.get("viterbi_flanks_ok") else "N"
-                    extra = f"  cov={cov} flk={flk}"
+                    tag = " [CARRIER]" if call["is_carrier"] else ""
+                    ro = call.get("reciprocal_overlap", 0.0)
                     _util.vlog(
                         f"    [VIT] {sample_id:30s}  "
                         f"{call['GD_ID']:25s}  "
                         f"{call['svtype']:4s}  ploidy={sample_ploidy}  "
                         f"score={call['log_prob_score']:+.4f}  "
-                        f"flank={flank_str}  "
+                        f"RO={ro:.2%}  "
                         f"intervals={','.join(call['intervals'])}"
-                        f"{extra}{tag}"
+                        f"{tag}"
                     )
 
             for call in calls:
@@ -416,7 +369,8 @@ def call_cnvs_from_posteriors(
                 }
                 all_results.append(result)
 
-    return pd.DataFrame(all_results)
+    paths_df = pd.DataFrame(all_path_records)
+    return pd.DataFrame(all_results), paths_df
 
 
 # =============================================================================
@@ -477,21 +431,13 @@ def parse_args():
              "Only used when --transition-matrix is also set (Viterbi only).",
     )
     parser.add_argument(
-        "--viterbi-confidence-threshold",
+        "--reciprocal-overlap-threshold",
         type=float,
-        default=-1.0,
-        help="Minimum mean per-bin log-posterior along the Viterbi path to "
-             "call a carrier (Viterbi strategy only).  More negative values "
-             "are more permissive.",
-    )
-    parser.add_argument(
-        "--viterbi-flank-coverage-threshold",
-        type=float,
-        default=0.70,
-        help="Fraction of bins in each flanking / uncovered interval that must "
-             "be at the reference copy number for the flank check to pass "
-             "(Viterbi strategy only).  1.0 = all bins must pass (strict); "
-             "0.0 = disabled.  Default: 0.70.",
+        default=0.90,
+        help="Minimum reciprocal overlap between a Viterbi CN segment and a "
+             "GD entry to call a carrier.  Reciprocal overlap is "
+             "min(overlap/segment_length, overlap/entry_length).  "
+             "Default: 0.90 (90%%).",
     )
     parser.add_argument(
         "--verbose", "-v",
@@ -546,15 +492,14 @@ def main():
             args.breakpoint_transition_matrix)
 
     # Call CNVs from posteriors
-    calls_df = call_cnvs_from_posteriors(
+    calls_df, paths_df = call_cnvs_from_posteriors(
         cn_posteriors_df,
         bin_mappings_df,
         gd_table,
         transition_matrix=transition_matrix,
         ploidy_df=ploidy_df,
         verbose=args.verbose,
-        viterbi_confidence_threshold=args.viterbi_confidence_threshold,
-        viterbi_flank_coverage_threshold=args.viterbi_flank_coverage_threshold,
+        reciprocal_overlap_threshold=args.reciprocal_overlap_threshold,
         breakpoint_transition_matrix=breakpoint_transition_matrix,
     )
 
@@ -563,6 +508,12 @@ def main():
     calls_df.to_csv(output_file, sep="\t", index=False, compression="gzip")
     print(f"\n  Saved calls to: {output_file}")
     print(f"    {len(calls_df)} call records")
+
+    # Save Viterbi paths
+    paths_file = os.path.join(args.output_dir, "viterbi_paths.tsv.gz")
+    paths_df.to_csv(paths_file, sep="\t", index=False, compression="gzip")
+    print(f"  Saved Viterbi paths to: {paths_file}")
+    print(f"    {len(paths_df)} path records")
 
     # Print carrier summary
     if len(calls_df) > 0:

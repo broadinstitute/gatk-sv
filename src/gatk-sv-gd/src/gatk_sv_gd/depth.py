@@ -7,7 +7,7 @@ Contains:
     - CNVModel: hierarchical Bayesian CNV detection model
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -35,35 +35,54 @@ class ExclusionMask:
 
     Exclusion regions can include segmental duplications, centromeres,
     satellite repeats, or any other intervals the user wishes to mask.
-    Multiple BED files can be loaded and merged via :meth:`merge`.
+    Multiple BED files are accepted; all intervals are concatenated and
+    merged *once* before the index is built, ensuring cross-file overlaps
+    are collapsed properly.
 
     Any BED file with at least three columns (chr, start, end) is accepted.
     Additional columns are ignored.
     """
 
-    def __init__(self, filepath: str, label: str = "exclusion regions"):
+    def __init__(self, filepaths: Union[str, List[str]], label: str = "exclusion regions"):
         """
-        Load genomic regions from a BED file.
+        Load genomic regions from one or more BED files.
+
+        All files are read and concatenated first, then overlapping
+        intervals are merged across the combined set before the lookup
+        index is built.  This guarantees that cross-file overlaps are
+        collapsed correctly and the index is only constructed once.
 
         Only the first three columns (chr, start, end) are required.  Extra
         BED columns (name, score, strand, …) are automatically ignored.
 
         Args:
-            filepath: Path to BED file (plain or bgzipped .bed.gz).
-            label: Human-readable label used in log messages, e.g.
-                the basename of the input file.
+            filepaths: Path to a BED file (plain or bgzipped .bed.gz),
+                or a list of such paths.  All files are merged before
+                the index is built.
+            label: Human-readable label used in log messages.
         """
         self.label = label
-        self.df = pd.read_csv(
-            filepath,
-            sep="\t",
-            header=None,
-            usecols=[0, 1, 2],
-            names=["chr", "start", "end"],
-            compression="gzip" if filepath.endswith(".gz") else None,
+        if isinstance(filepaths, str):
+            filepaths = [filepaths]
+        dfs = []
+        for fp in filepaths:
+            df = pd.read_csv(
+                fp,
+                sep="\t",
+                header=None,
+                usecols=[0, 1, 2],
+                names=["chr", "start", "end"],
+                compression="gzip" if fp.endswith(".gz") else None,
+            )
+            print(f"  Loaded {len(df):,} regions from {fp}")
+            dfs.append(df)
+        self.df = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame(
+            columns=["chr", "start", "end"]
         )
         self._build_interval_index()
-        print(f"Loaded {len(self.df)} {label} regions")
+        print(f"Exclusion mask: {len(self.df):,} total {label} regions "
+              f"({len(filepaths)} file(s)) → "
+              f"{sum(len(t) for t in self.trees.values())} merged intervals")
 
     def _build_interval_index(self):
         """Build per-chromosome :class:`IntervalTree` instances.
@@ -162,31 +181,34 @@ class ExclusionMask:
         """
         return self.get_overlap_fraction(chrom, start, end) >= threshold
 
-    def merge(self, other_bed: str, label: str = "additional regions") -> None:
-        """Merge intervals from another BED file into this mask.
+    def add_beds(self, filepaths: Union[str, List[str]]) -> None:
+        """Add intervals from one or more additional BED files.
 
-        The intervals are appended to the existing set and the internal
-        index is rebuilt so that subsequent overlap queries cover both the
-        original and the newly added regions.
+        All new intervals are appended to the existing set and the
+        internal index is rebuilt once so that cross-file overlaps are
+        merged before any query is made.
 
         Args:
-            other_bed: Path to a BED file (plain or bgzipped).
-            label: Human-readable label for log messages describing the
-                regions being merged (e.g. the basename of the BED file).
+            filepaths: A single BED file path or a list of paths.
         """
-        other_df = pd.read_csv(
-            other_bed,
-            sep="\t",
-            header=None,
-            usecols=[0, 1, 2],
-            names=["chr", "start", "end"],
-            compression="gzip" if other_bed.endswith(".gz") else None,
-        )
-        n_before = len(self.df)
-        self.df = pd.concat([self.df, other_df], ignore_index=True)
+        if isinstance(filepaths, str):
+            filepaths = [filepaths]
+        dfs = [self.df]
+        for fp in filepaths:
+            df = pd.read_csv(
+                fp,
+                sep="\t",
+                header=None,
+                usecols=[0, 1, 2],
+                names=["chr", "start", "end"],
+                compression="gzip" if fp.endswith(".gz") else None,
+            )
+            print(f"  Adding {len(df):,} regions from {fp}")
+            dfs.append(df)
+        self.df = pd.concat(dfs, ignore_index=True)
         self._build_interval_index()
-        print(f"Merged {len(other_df)} {label} regions into mask "
-              f"({n_before} → {len(self.df)} total)")
+        print(f"Exclusion mask updated: {len(self.df):,} total regions → "
+              f"{sum(len(t) for t in self.trees.values())} merged intervals")
 
 
 class DepthData:

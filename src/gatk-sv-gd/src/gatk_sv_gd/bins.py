@@ -17,6 +17,73 @@ from gatk_sv_gd._util import get_sample_columns
 from gatk_sv_gd.models import GDLocus
 from gatk_sv_gd.depth import ExclusionMask
 
+
+def _ploidy_adjust_depths(
+    depths: np.ndarray,
+    df: pd.DataFrame,
+    sample_cols: List[str],
+    ploidy_map: Dict[Tuple[str, str], int],
+) -> np.ndarray:
+    """Scale per-sample depths to diploid-equivalent for quality filtering.
+
+    For each sample/chromosome combination, multiply the sample's depth by
+    ``2 / ploidy`` so that a haploid chromosome (ploidy=1, normal depth ≈ 1.0)
+    is rescaled to 2.0 — matching the diploid expectation that the
+    median/MAD thresholds assume.
+
+    Args:
+        depths: 2-D array (bins × samples).
+        df: DataFrame with a ``Chr`` column aligned to the rows of *depths*.
+        sample_cols: Ordered list of sample column names matching the
+            columns of *depths*.
+        ploidy_map: ``{(sample, chrom): ploidy}`` lookup built from
+            :func:`estimate_ploidy` output.
+
+    Returns:
+        A *copy* of *depths* with per-sample ploidy scaling applied.
+        Entries whose ploidy is 0 or missing are left unchanged.
+    """
+    adjusted = depths.copy().astype(float)
+    chroms = df["Chr"].values
+    # Build a per-chrom scale array for each sample (vectorised approach)
+    unique_chroms = np.unique(chroms)
+    for j, sample in enumerate(sample_cols):
+        for chrom in unique_chroms:
+            ploidy = ploidy_map.get((sample, chrom), 2)
+            if ploidy > 0 and ploidy != 2:
+                mask = chroms == chrom
+                adjusted[mask, j] *= 2.0 / ploidy
+    return adjusted
+
+
+def _ploidy_adjust_depths_single_chrom(
+    depths: np.ndarray,
+    chrom: str,
+    sample_cols: List[str],
+    ploidy_map: Dict[Tuple[str, str], int],
+) -> np.ndarray:
+    """Like :func:`_ploidy_adjust_depths` but for a single chromosome.
+
+    This avoids per-row chromosome lookups when all bins belong to the
+    same contig.
+
+    Args:
+        depths: 2-D array (bins × samples).
+        chrom: Chromosome name shared by all rows.
+        sample_cols: Ordered list of sample column names.
+        ploidy_map: ``{(sample, chrom): ploidy}`` lookup.
+
+    Returns:
+        A *copy* of *depths* with per-sample ploidy scaling applied.
+    """
+    adjusted = depths.copy().astype(float)
+    for j, sample in enumerate(sample_cols):
+        ploidy = ploidy_map.get((sample, chrom), 2)
+        if ploidy > 0 and ploidy != 2:
+            adjusted[:, j] *= 2.0 / ploidy
+    return adjusted
+
+
 def extract_locus_bins(
     df: pd.DataFrame,
     locus: GDLocus,
@@ -116,6 +183,7 @@ def compute_flank_regions_from_bins(
     min_flank_bins: int = 10,
     min_flank_coverage: float = 0.1,
     filter_params: Optional[dict] = None,
+    ploidy_map: Optional[Dict[Tuple[str, str], int]] = None,
 ) -> List[Tuple[int, int, str]]:
     """
     Compute flanking regions based on actual available (filtered) bins.
@@ -170,6 +238,10 @@ def compute_flank_regions_from_bins(
             these quality thresholds are excluded before accumulation
             so that the flank extends until enough *quality* bins are
             found.
+        ploidy_map: Optional ``{(sample, chrom): ploidy}`` lookup used
+            to adjust per-sample depths to diploid-equivalent before
+            computing bin-level median/MAD statistics for quality
+            filtering.
 
     Returns:
         List of (start, end, name) tuples for "left_flank" and/or "right_flank".
@@ -179,6 +251,11 @@ def compute_flank_regions_from_bins(
     if filter_params is not None and len(locus_df) > 0:
         sample_cols = get_sample_columns(locus_df)
         depths = locus_df[sample_cols].values
+        # Ploidy-adjust so sex-chrom bins are evaluated fairly
+        if ploidy_map:
+            depths = _ploidy_adjust_depths_single_chrom(
+                depths, locus.chrom, sample_cols, ploidy_map,
+            )
         medians = np.median(depths, axis=1)
         mads = np.median(np.abs(depths - medians[:, np.newaxis]), axis=1)
         quality_keep = (
@@ -802,15 +879,24 @@ def filter_low_quality_bins(
     median_min: float = 1.5,
     median_max: float = 2.5,
     mad_max: float = 0.5,
+    ploidy_map: Optional[Dict[Tuple[str, str], int]] = None,
 ):
     """
     Filter out low quality bins based on median and MAD thresholds.
+
+    When *ploidy_map* is provided, each sample's depth is rescaled to a
+    diploid-equivalent (``depth * 2 / ploidy``) before the per-bin median
+    and MAD are computed.  This prevents normal-depth bins on haploid
+    chromosomes (e.g. chrX in males, where depth ≈ 1.0) from being
+    incorrectly flagged as low quality.
 
     Args:
         df: DataFrame with bins as rows and samples as columns
         median_min: Minimum median depth for bins
         median_max: Maximum median depth for bins
         mad_max: Maximum MAD for bins
+        ploidy_map: Optional mapping of ``(sample, chrom) → ploidy``
+            used to adjust depths before computing statistics.
 
     Returns:
         Filtered DataFrame
@@ -820,6 +906,11 @@ def filter_low_quality_bins(
 
     # Compute median and MAD for each bin across samples
     depths = df[sample_cols].values
+
+    # Ploidy-adjust depths so sex-chromosome bins are evaluated fairly
+    if ploidy_map:
+        depths = _ploidy_adjust_depths(depths, df, sample_cols, ploidy_map)
+
     medians = np.median(depths, axis=1)
     mads = np.median(np.abs(depths - medians[:, np.newaxis]), axis=1)
 

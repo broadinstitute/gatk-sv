@@ -30,7 +30,7 @@ from gatk_sv_gd._util import get_sample_columns, setup_logging
 from gatk_sv_gd.bins import filter_low_quality_bins, read_data
 from gatk_sv_gd.depth import CNVModel, DepthData, ExclusionMask
 from gatk_sv_gd.models import GDTable
-from gatk_sv_gd.output import estimate_ploidy, write_locus_metadata, write_posterior_tables
+from gatk_sv_gd.output import build_ploidy_map, estimate_ploidy, write_locus_metadata, write_posterior_tables
 from gatk_sv_gd.preprocess import collect_all_locus_bins, load_preprocessed_data
 
 
@@ -44,6 +44,7 @@ def run_gd_analysis(
     lowres_median_bin_size: Optional[float] = None,
     preprocessed_bins: Optional[pd.DataFrame] = None,
     preprocessed_mappings=None,
+    ploidy_map: Optional[dict] = None,
 ):
     """
     Run GD CNV analysis on all loci using a single unified model.
@@ -70,6 +71,8 @@ def run_gd_analysis(
             must also be provided.
         preprocessed_mappings: Optional list of LocusBinMapping objects
             from the ``preprocess`` subcommand.
+        ploidy_map: Optional ``{(sample, chrom): ploidy}`` lookup used
+            for ploidy-adjusted quality filtering during bin collection.
     """
     if preprocessed_bins is not None and preprocessed_mappings is not None:
         # Use preprocessed data directly — skip bin collection
@@ -101,6 +104,7 @@ def run_gd_analysis(
             min_flank_bases=args.min_flank_bases,
             min_flank_bins=args.min_flank_bins,
             min_flank_coverage=args.min_flank_coverage,
+            ploidy_map=ploidy_map,
         )
 
     if len(combined_df) == 0:
@@ -524,7 +528,7 @@ def main():
             device=args.device,
             preprocessed_bins=preprocessed_bins,
             preprocessed_mappings=preprocessed_mappings,
-        )
+        )  # ploidy_map not needed — bins already collected
     else:
         # Validate that required args are present
         if not args.input:
@@ -547,16 +551,18 @@ def main():
             else:
                 print(f"  {cluster}: {locus.chrom} - NO BREAKPOINTS DEFINED")
 
-        # Load exclusion mask
+        # Load exclusion mask — all BED files are concatenated first so
+        # that cross-file overlapping intervals are merged before the
+        # index is built.
         exclusion_mask = None
-        for bed_path in args.exclusion_intervals:
-            bed_label = os.path.basename(bed_path)
-            if exclusion_mask is None:
-                print(f"\nLoading exclusion mask: {bed_path}")
-                exclusion_mask = ExclusionMask(bed_path, label=bed_label)
-            else:
-                print(f"\nMerging exclusion intervals: {bed_path}")
-                exclusion_mask.merge(bed_path, label=bed_label)
+        if args.exclusion_intervals:
+            print(f"\nLoading {len(args.exclusion_intervals)} exclusion interval file(s):")
+            for p in args.exclusion_intervals:
+                print(f"  {p}")
+            exclusion_mask = ExclusionMask(
+                args.exclusion_intervals,
+                label="exclusion regions",
+            )
 
         # Load read depth data
         df = read_data(args.input)
@@ -599,6 +605,11 @@ def main():
             print(f"    per-sample means: min={np.nanmean(norm_depths, axis=0).min():.4f}, "
                   f"max={np.nanmean(norm_depths, axis=0).max():.4f}")
 
+        # Estimate ploidy (before quality filtering so the ploidy map is
+        # available for ploidy-adjusted median/MAD computation)
+        ploidy_df = estimate_ploidy(df, args.output_dir)
+        ploidy_map = build_ploidy_map(ploidy_df)
+
         # Filter low quality bins
         if not args.skip_bin_filter:
             df = filter_low_quality_bins(
@@ -606,10 +617,8 @@ def main():
                 median_min=args.median_min,
                 median_max=args.median_max,
                 mad_max=args.mad_max,
+                ploidy_map=ploidy_map,
             )
-
-        # Estimate ploidy
-        ploidy_df = estimate_ploidy(df, args.output_dir)
 
         # Set up Pyro
         pyro.enable_validation(True)
@@ -629,6 +638,7 @@ def main():
             df, gd_table, exclusion_mask, args, device=args.device,
             column_medians=column_medians,
             lowres_median_bin_size=lowres_median_bin_size,
+            ploidy_map=ploidy_map,
         )
 
     print("\n" + "=" * 80)
