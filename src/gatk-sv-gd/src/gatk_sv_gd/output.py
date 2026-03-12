@@ -39,17 +39,60 @@ def write_posterior_tables(
 
     # 1. Copy state probabilities for all bins and samples
     print("\nWriting copy state posteriors...")
-    cn_post = np.asarray(cn_posterior["cn_posterior"]).squeeze()  # shape: (n_bins, n_samples, n_states)
+
+    def _normalize_state_tensor(array, n_bins: int, n_samples: int):
+        """Return state posteriors with shape (n_bins, n_samples, n_states)."""
+        arr = np.asarray(array).squeeze()
+        if arr.ndim == 2:
+            arr = arr.reshape(arr.shape[0], arr.shape[1], 1)
+        if arr.ndim != 3:
+            raise ValueError(f"Expected 3D state tensor, got shape {arr.shape}")
+
+        if arr.shape[0] == n_bins and arr.shape[1] == n_samples:
+            return arr
+        if arr.shape[0] == n_samples and arr.shape[1] == n_bins:
+            return np.transpose(arr, (1, 0, 2))
+        if arr.shape[1] == n_bins and arr.shape[2] == n_samples:
+            return np.transpose(arr, (1, 2, 0))
+
+        raise ValueError(
+            "State tensor shape does not match bins/samples: "
+            f"shape={arr.shape}, n_bins={n_bins}, n_samples={n_samples}"
+        )
+
+    cn_post = _normalize_state_tensor(
+        cn_posterior["cn_posterior"],
+        combined_data.n_bins,
+        combined_data.n_samples,
+    )
+    pair_post = cn_posterior.get("pair_state_posterior")
+    pair_state_labels = cn_posterior.get("pair_state_labels")
+    if pair_post is not None:
+        pair_post = _normalize_state_tensor(
+            pair_post,
+            combined_data.n_bins,
+            combined_data.n_samples,
+        )
     cn_map = np.asarray(map_estimates["cn"]).squeeze()  # shape: (n_bins, n_samples)
+    pair_map = map_estimates.get("pair_state")
+    if pair_map is not None:
+        pair_map = np.asarray(pair_map).squeeze()
     depth = np.asarray(combined_data.depth.cpu().numpy())  # shape: (n_bins, n_samples)
+    minor_baf = None
+    baf_var = None
+    baf_n_sites = None
+    if getattr(combined_data, "has_baf", False):
+        minor_baf = np.asarray(combined_data.minor_baf_median.cpu().numpy())
+        baf_var = np.asarray(combined_data.baf_variance.cpu().numpy())
+        baf_n_sites = np.asarray(combined_data.baf_n_sites.cpu().numpy())
 
     # Ensure proper dimensions
-    if cn_post.ndim == 2:
-        cn_post = cn_post.reshape(cn_post.shape[0], cn_post.shape[1], 1)
     if cn_map.ndim == 1:
         cn_map = cn_map.reshape(-1, 1)
     if depth.ndim == 1:
         depth = depth.reshape(-1, 1)
+    if pair_map is not None and pair_map.ndim == 1:
+        pair_map = pair_map.reshape(-1, 1)
 
     cn_rows = []
     for bin_idx in range(combined_data.n_bins):
@@ -74,6 +117,26 @@ def write_posterior_tables(
             # Add MAP estimate
             map_val = cn_map[bin_idx, sample_idx]
             row["cn_map"] = int(map_val.tolist() if isinstance(map_val, np.ndarray) else map_val)
+
+            if pair_map is not None and pair_state_labels is not None:
+                pair_idx = int(pair_map[bin_idx, sample_idx])
+                h1, h2 = pair_state_labels[pair_idx]
+                row["pair_state_map"] = pair_idx
+                row["pair_h1_map"] = h1
+                row["pair_h2_map"] = h2
+
+            if minor_baf is not None:
+                row["minor_baf_median"] = float(minor_baf[bin_idx, sample_idx])
+                row["baf_variance"] = float(baf_var[bin_idx, sample_idx])
+                row["baf_n_sites"] = int(baf_n_sites[bin_idx, sample_idx])
+
+            # Optional pair-state marginals (for future diploid model use)
+            if pair_post is not None and pair_state_labels is not None:
+                for pair_idx, pair_label in enumerate(pair_state_labels):
+                    prob_val = pair_post[bin_idx, sample_idx, pair_idx]
+                    row[f"prob_pair_{pair_label[0]}_{pair_label[1]}"] = (
+                        prob_val.tolist() if isinstance(prob_val, np.ndarray) else float(prob_val)
+                    )
 
             cn_rows.append(row)
 
@@ -116,6 +179,10 @@ def write_posterior_tables(
     bin_bias = np.asarray(map_estimates["bin_bias"]).squeeze()
     bin_var = np.asarray(map_estimates["bin_var"]).squeeze()
     cn_probs = np.asarray(map_estimates["cn_probs"]).squeeze()
+    pair_state_priors = map_estimates.get("pair_state_probs")
+    pair_state_labels = cn_posterior.get("pair_state_labels")
+    if pair_state_priors is not None:
+        pair_state_priors = np.asarray(pair_state_priors).squeeze()
 
     # Ensure we have the right number of dimensions
     if bin_bias.ndim == 0:
@@ -142,6 +209,13 @@ def write_posterior_tables(
         for cn_state in range(cn_probs.shape[1]):
             prob_val = cn_probs[bin_idx, cn_state]
             row[f"cn_prior_{cn_state}"] = prob_val.tolist() if isinstance(prob_val, np.ndarray) else float(prob_val)
+
+        if pair_state_priors is not None and pair_state_labels is not None:
+            for pair_idx, pair_label in enumerate(pair_state_labels):
+                prob_val = pair_state_priors[bin_idx, pair_idx]
+                row[f"pair_prior_{pair_label[0]}_{pair_label[1]}"] = (
+                    prob_val.tolist() if isinstance(prob_val, np.ndarray) else float(prob_val)
+                )
 
         bin_rows.append(row)
 

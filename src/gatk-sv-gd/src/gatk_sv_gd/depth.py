@@ -7,7 +7,7 @@ Contains:
     - CNVModel: hierarchical Bayesian CNV detection model
 """
 
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -25,6 +25,33 @@ from pyro.infer import JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.infer.svi import SVI
 
 from gatk_sv_gd._util import get_sample_columns
+
+
+def build_diploid_pair_states(max_hap_cn: int = 2) -> List[Tuple[int, int]]:
+    """Return canonical unordered diploid pair states with h1 <= h2."""
+    return [
+        (h1, h2)
+        for h1 in range(max_hap_cn + 1)
+        for h2 in range(h1, max_hap_cn + 1)
+    ]
+
+
+def pair_state_minor_baf(pair_states: List[Tuple[int, int]]) -> np.ndarray:
+    """Expected minor-allele BAF for each diploid pair state."""
+    values = []
+    for h1, h2 in pair_states:
+        total = h1 + h2
+        if total <= 0:
+            values.append(0.0)
+        else:
+            values.append(min(h1, h2) / total)
+    return np.asarray(values, dtype=np.float32)
+
+
+def pair_state_total_cn(pair_states: List[Tuple[int, int]]) -> np.ndarray:
+    """Total CN implied by each diploid pair state."""
+    return np.asarray([h1 + h2 for h1, h2 in pair_states], dtype=np.int64)
+
 
 class ExclusionMask:
     """
@@ -304,6 +331,58 @@ class DepthData:
         print(f"Interval sizes: [{interval_sizes.min():.0f}, {interval_sizes.max():.0f}] bp, "
               f"median={np.median(interval_sizes):.0f} bp")
 
+        # Optional SNP/BAF summaries can be attached later once the
+        # preprocess bin mappings are available.
+        self.baf_median = None
+        self.minor_baf_median = None
+        self.baf_variance = None
+        self.baf_n_sites = None
+        self.has_baf = False
+
+    def attach_baf_summary(self, baf_summary_df: pd.DataFrame, mappings) -> None:
+        """Attach per-bin, per-sample BAF summaries to this data object.
+
+        The summary table is expected to contain rows keyed by preprocess
+        ``array_idx`` and sample identifier, with columns such as
+        ``baf_median``, ``minor_baf_median``, ``baf_variance``, and
+        ``baf_n_sites``.  Only exact sample-id matches are attached.
+        """
+        if baf_summary_df is None or len(baf_summary_df) == 0:
+            return
+
+        sample_to_idx = {str(sample_id): idx for idx, sample_id in enumerate(self.sample_ids)}
+        n_bins = self.n_bins
+        n_samples = self.n_samples
+
+        baf_median = np.full((n_bins, n_samples), np.nan, dtype=np.float32)
+        minor_baf_median = np.full((n_bins, n_samples), np.nan, dtype=np.float32)
+        baf_variance = np.full((n_bins, n_samples), np.nan, dtype=np.float32)
+        baf_n_sites = np.zeros((n_bins, n_samples), dtype=np.int32)
+
+        n_attached = 0
+        for row in baf_summary_df.itertuples(index=False):
+            try:
+                bin_idx = int(row.array_idx)
+            except (TypeError, ValueError):
+                continue
+            sample_idx = sample_to_idx.get(str(row.sample))
+            if sample_idx is None or not (0 <= bin_idx < n_bins):
+                continue
+
+            baf_median[bin_idx, sample_idx] = float(row.baf_median)
+            minor_baf_median[bin_idx, sample_idx] = float(row.minor_baf_median)
+            baf_variance[bin_idx, sample_idx] = float(row.baf_variance)
+            baf_n_sites[bin_idx, sample_idx] = int(row.baf_n_sites)
+            n_attached += 1
+
+        self.baf_median = torch.tensor(baf_median, dtype=self.depth.dtype, device=self.depth.device)
+        self.minor_baf_median = torch.tensor(minor_baf_median, dtype=self.depth.dtype, device=self.depth.device)
+        self.baf_variance = torch.tensor(baf_variance, dtype=self.depth.dtype, device=self.depth.device)
+        self.baf_n_sites = torch.tensor(baf_n_sites, dtype=torch.int32, device=self.depth.device)
+        self.has_baf = n_attached > 0
+
+        print(f"Attached BAF summaries: {n_attached:,} matched bin × sample rows")
+
 
 class CNVModel:
     """
@@ -322,6 +401,7 @@ class CNVModel:
         n_states: int = 6,
         alpha_ref: float = 50.0,
         alpha_non_ref: float = 1.0,
+        state_prior_weight: float = 1.0,
         var_bias_bin: float = 0.1,
         var_sample: float = 0.2,
         var_bin: float = 0.2,
@@ -333,9 +413,14 @@ class CNVModel:
     ):
         """
         Args:
-            n_states: Number of copy number states (default: 6 for [0,1,2,3,4,5])
-            alpha_ref: Dirichlet concentration for reference state (CN=2)
+            n_states: Number of latent states. Default 6 corresponds to the
+                canonical unordered diploid pair states over per-haplotype CN
+                values [0, 1, 2]: (0,0), (0,1), (0,2), (1,1), (1,2), (2,2).
+            alpha_ref: Dirichlet concentration for reference state ((1,1))
             alpha_non_ref: Dirichlet concentration for non-reference states
+            state_prior_weight: Multiplicative weight applied to the learned
+                per-bin pair-state log-prior when reconstructing analytical
+                discrete posteriors. Values < 1.0 temper overly sharp priors.
             var_bias_bin: Variance for per-bin mean bias (log-normal)
             var_sample: Variance for per-sample variance factor (log-normal)
             var_bin: Variance for per-bin variance factor (log-normal)
@@ -351,6 +436,7 @@ class CNVModel:
         self.n_states = n_states
         self.alpha_ref = alpha_ref
         self.alpha_non_ref = alpha_non_ref
+        self.state_prior_weight = state_prior_weight
         self.var_bias_bin = var_bias_bin
         self.var_sample = var_sample
         self.var_bin = var_bin
@@ -359,12 +445,30 @@ class CNVModel:
         self.dtype = dtype
         self.debug = debug
         self.guide_type = guide_type
+        self.pair_states = build_diploid_pair_states(max_hap_cn=2)
+        if n_states != len(self.pair_states):
+            raise ValueError(
+                f"n_states={n_states} does not match diploid pair-state count "
+                f"{len(self.pair_states)}"
+            )
+        self.total_cn_by_state = torch.tensor(
+            pair_state_total_cn(self.pair_states),
+            device=self.device,
+            dtype=self.dtype,
+        )
+        self.minor_baf_by_state = torch.tensor(
+            pair_state_minor_baf(self.pair_states),
+            device=self.device,
+            dtype=self.dtype,
+        )
+        self.ref_state_idx = self.pair_states.index((1, 1))
+        self.max_total_cn = int(max(sum(p) for p in self.pair_states))
 
         # Training history
         self.loss_history = {"epoch": [], "elbo": []}
 
         # Define which sites to expose to the guide (continuous latent variables)
-        self.latent_sites = ["bin_bias", "sample_var", "bin_var", "cn_probs"]
+        self.latent_sites = ["bin_bias", "sample_var", "bin_var", "pair_state_probs"]
 
         # Initialize guide based on type
         blocked_model = poutine.block(self.model, expose=self.latent_sites)
@@ -393,7 +497,6 @@ class CNVModel:
 
         zero_t = torch.zeros(1, device=self.device, dtype=self.dtype)
         one_t = torch.ones(1, device=self.device, dtype=self.dtype)
-        cn_states = torch.arange(0, self.n_states, device=self.device, dtype=self.dtype)
 
         # Plates for bins and samples
         plate_bins = pyro.plate("bins", n_bins, dim=-2, device=self.device)
@@ -421,30 +524,30 @@ class CNVModel:
             if self.debug:
                 print(f"bin_var.shape: {bin_var.shape}")
 
-            # Copy number prior (Dirichlet-Categorical)
-            # Heavily weight CN=2 (diploid)
-            alpha_cn = self.alpha_non_ref * one_t.expand(self.n_states)
-            alpha_cn = alpha_cn.clone()
-            alpha_cn[2] = torch.tensor(self.alpha_ref, device=self.device, dtype=self.dtype)
-            cn_probs = pyro.sample("cn_probs", dist.Dirichlet(alpha_cn))
+            # Pair-state prior (Dirichlet-Categorical)
+            # Heavily weight the diploid reference state (1,1)
+            alpha_pair = self.alpha_non_ref * one_t.expand(self.n_states)
+            alpha_pair = alpha_pair.clone()
+            alpha_pair[self.ref_state_idx] = torch.tensor(
+                self.alpha_ref, device=self.device, dtype=self.dtype,
+            )
+            pair_state_probs = pyro.sample("pair_state_probs", dist.Dirichlet(alpha_pair))
         if self.debug:
-            print(f"cn_probs.shape: {cn_probs.shape}")
+            print(f"pair_state_probs.shape: {pair_state_probs.shape}")
 
-        # Per-bin, per-sample copy number and observation
+        # Per-bin, per-sample pair state and observation
         with plate_bins, plate_samples:
-            # Sample copy number (discrete latent variable)
+            # Sample pair state (discrete latent variable)
             # Shape: (n_bins, n_samples)
-            cn = pyro.sample("cn", dist.Categorical(cn_probs))
+            pair_state = pyro.sample("pair_state", dist.Categorical(pair_state_probs))
             if self.debug:
-                print(f"cn.shape: {cn.shape}")
+                print(f"pair_state.shape: {pair_state.shape}")
 
-            # Expected depth: CN * bin_bias
-            # For diploid (CN=2), expected depth should be ~2.0
-            # bin_bias modulates this expectation per bin
-            # CN=0 -> 0, CN=1 -> bin_bias, CN=2 -> 2*bin_bias, etc.
+            # Expected depth depends on total CN implied by the pair state.
             if self.debug:
                 print(f"bin_bias.shape: {bin_bias.shape}")
-            expected_depth = Vindex(cn_states)[cn] * bin_bias
+            expected_total_cn = Vindex(self.total_cn_by_state)[pair_state]
+            expected_depth = expected_total_cn * bin_bias
             if self.debug:
                 print(f"expected_depth.shape: {expected_depth.shape}")
 
@@ -468,6 +571,28 @@ class CNVModel:
                     f"About to sample obs with expected_depth.shape={expected_depth.shape}, std.shape={std.shape}, depth.shape={depth.shape}"
                 )
             pyro.sample("obs", dist.Normal(expected_depth, std), obs=depth)
+
+            # Optional BAF observation on the minor-allele fraction.
+            # The observed variance is estimated upstream from the number of
+            # SNP sites per bin, so bins with more sites contribute a tighter
+            # likelihood. Missing / unsupported bins are masked out.
+            if hasattr(self, "current_data") and getattr(self.current_data, "has_baf", False):
+                baf_obs = self.current_data.minor_baf_median
+                baf_var = self.current_data.baf_variance
+                baf_sites = self.current_data.baf_n_sites
+
+                valid_mask = (torch.isfinite(baf_obs) & torch.isfinite(baf_var) & (baf_sites > 0) & (baf_var > 0))
+                if torch.any(valid_mask):
+                    expected_minor_baf = Vindex(self.minor_baf_by_state)[pair_state]
+                    safe_baf_var = torch.where(valid_mask, baf_var, torch.ones_like(baf_var))
+                    baf_std = torch.sqrt(torch.clamp(safe_baf_var, min=1e-6))
+                    safe_baf_obs = torch.where(valid_mask, baf_obs, expected_minor_baf)
+                    with poutine.mask(mask=valid_mask):
+                        pyro.sample(
+                            "baf_obs",
+                            dist.Normal(expected_minor_baf, baf_std),
+                            obs=safe_baf_obs,
+                        )
         if self.debug:
             print("=== END MODEL DEBUG ===\n")
 
@@ -536,6 +661,7 @@ class CNVModel:
         stopped_early = False
 
         try:
+            self.current_data = data
             # Configure tqdm with mininterval to force updates
             with tqdm(
                 range(max_iter),
@@ -595,6 +721,8 @@ class CNVModel:
 
         except KeyboardInterrupt:
             print("\nTraining interrupted by user.")
+        finally:
+            self.current_data = None
 
     def get_map_estimates(self, data):
         """
@@ -641,12 +769,24 @@ class CNVModel:
         map_estimates["bin_var"] = (
             guide_trace.nodes["bin_var"]["value"].detach().cpu().numpy()
         )
-        map_estimates["cn_probs"] = (
-            guide_trace.nodes["cn_probs"]["value"].detach().cpu().numpy()
+        map_estimates["pair_state_probs"] = (
+            guide_trace.nodes["pair_state_probs"]["value"].detach().cpu().numpy()
         )
 
-        # Discrete variable (copy number)
-        map_estimates["cn"] = trace.nodes["cn"]["value"].detach().cpu().numpy()
+        # Discrete variable (pair state), plus compatibility total CN.
+        pair_state_idx = trace.nodes["pair_state"]["value"].detach().cpu().numpy().squeeze()
+        map_estimates["pair_state"] = pair_state_idx
+        total_cn_lookup = pair_state_total_cn(self.pair_states)
+        map_estimates["cn"] = total_cn_lookup[pair_state_idx]
+        map_estimates["pair_state_labels"] = self.pair_states
+
+        pair_state_probs = np.asarray(map_estimates["pair_state_probs"]).squeeze()
+        if pair_state_probs.ndim == 1:
+            pair_state_probs = pair_state_probs.reshape(1, -1)
+        cn_probs = np.zeros((pair_state_probs.shape[0], self.max_total_cn + 1), dtype=np.float32)
+        for pair_idx, total_cn in enumerate(total_cn_lookup):
+            cn_probs[:, total_cn] += pair_state_probs[:, pair_idx]
+        map_estimates["cn_probs"] = cn_probs
 
         return map_estimates
 
@@ -676,8 +816,8 @@ class CNVModel:
                 ``log_freq``) but ignored.
 
         Returns:
-            Dictionary with key ``"cn_posterior"`` mapping to an array of
-            shape ``(n_bins, n_samples, n_states)``.
+            Dictionary containing pair-state posteriors and total-CN
+            marginals.
         """
         print("Computing exact discrete marginal posteriors analytically...")
 
@@ -686,18 +826,20 @@ class CNVModel:
         bin_bias = maps["bin_bias"]       # (n_bins,) or (n_bins, 1)
         sample_var = maps["sample_var"]   # (n_samples,) or (1, n_samples)
         bin_var = maps["bin_var"]         # (n_bins,) or (n_bins, 1)
-        cn_probs = maps["cn_probs"]       # (n_bins, n_states)
+        pair_state_probs = maps["pair_state_probs"]
 
         # Flatten to 1-D / 2-D where needed (guide may add singleton
         # plate dimensions).
         bin_bias = bin_bias.squeeze()
         sample_var = sample_var.squeeze()
         bin_var = bin_var.squeeze()
-        cn_probs = cn_probs.squeeze()   # (n_bins, n_states)
+        pair_state_probs = pair_state_probs.squeeze()   # (n_bins, n_pair_states)
 
         # 2. Prepare data matrices
         obs = data.depth.detach().cpu().numpy()  # (n_bins, n_samples)
         interval_sizes = data.interval_sizes.detach().cpu().numpy().squeeze()  # (n_bins,)
+        pair_total_cn = pair_state_total_cn(self.pair_states)
+        pair_minor_baf = pair_state_minor_baf(self.pair_states)
 
         # Combined variance: (sample_var + bin_var) * bin_size_factor / interval_size
         # → shape (n_bins, n_samples)
@@ -708,23 +850,41 @@ class CNVModel:
 
         # 3. Compute log-likelihoods for all states simultaneously
         # states: (n_states, 1, 1);  bin_bias: (1, n_bins, 1)
-        states = np.arange(self.n_states).reshape(-1, 1, 1)
-        expected_depth = states * bin_bias[np.newaxis, :, np.newaxis]
+        states_total_cn = pair_total_cn.reshape(-1, 1, 1)
+        expected_depth = states_total_cn * bin_bias[np.newaxis, :, np.newaxis]
 
         # Broadcast obs and std to (1, n_bins, n_samples)
         obs_b = obs[np.newaxis, :, :]
         std_b = std[np.newaxis, :, :]
 
         # Gaussian log-PDF
-        log_lik = (
-            -0.5 * np.log(2 * np.pi * std_b ** 2)
-            - ((obs_b - expected_depth) ** 2) / (2 * std_b ** 2)
-        )
+        log_lik = -0.5 * np.log(2 * np.pi * std_b ** 2) - (
+            (obs_b - expected_depth) ** 2
+        ) / (2 * std_b ** 2)
 
-        # 4. Add log-prior
-        # cn_probs (n_bins, n_states) → (n_states, n_bins, 1)
-        log_prior = np.log(np.maximum(cn_probs.T[:, :, np.newaxis], 1e-10))
+        # 4. Add log-prior over pair states.
+        log_prior = np.log(np.maximum(pair_state_probs.T[:, :, np.newaxis], 1e-10))
+        if self.state_prior_weight != 1.0:
+            log_prior = self.state_prior_weight * log_prior
         log_unnormalized = log_lik + log_prior
+
+        # 4b. Optional BAF log-likelihood contribution.
+        if getattr(data, "has_baf", False):
+            minor_baf = data.minor_baf_median.detach().cpu().numpy()
+            baf_var = data.baf_variance.detach().cpu().numpy()
+            baf_sites = data.baf_n_sites.detach().cpu().numpy()
+
+            valid = (np.isfinite(minor_baf) & np.isfinite(baf_var) & (baf_sites > 0) &
+                     (baf_var > 0))
+            if np.any(valid):
+                exp_minor_baf = pair_minor_baf.reshape(-1, 1, 1)
+                baf_obs = minor_baf[np.newaxis, :, :]
+                baf_std = np.sqrt(np.maximum(baf_var[np.newaxis, :, :], 1e-6))
+                baf_log_lik = -0.5 * np.log(2 * np.pi * baf_std ** 2) - (
+                    (baf_obs - exp_minor_baf) ** 2
+                ) / (2 * baf_std ** 2)
+                baf_log_lik = np.where(valid[np.newaxis, :, :], baf_log_lik, 0.0)
+                log_unnormalized += baf_log_lik
 
         # 5. Log-sum-exp softmax across the state dimension (axis 0)
         max_log = np.max(log_unnormalized, axis=0, keepdims=True)
@@ -732,9 +892,20 @@ class CNVModel:
         posterior = exp_vals / np.sum(exp_vals, axis=0, keepdims=True)
 
         # Transpose from (n_states, n_bins, n_samples) → (n_bins, n_samples, n_states)
-        posterior = np.transpose(posterior, (1, 2, 0))
+        pair_posterior = np.transpose(posterior, (1, 2, 0))
+
+        cn_posterior = np.zeros(
+            (pair_posterior.shape[0], pair_posterior.shape[1], self.max_total_cn + 1),
+            dtype=np.float32,
+        )
+        for pair_idx, total_cn in enumerate(pair_total_cn):
+            cn_posterior[:, :, total_cn] += pair_posterior[:, :, pair_idx]
 
         print("Exact analytical inference complete.")
-        return {"cn_posterior": posterior}
+        return {
+            "cn_posterior": cn_posterior,
+            "pair_state_posterior": pair_posterior,
+            "pair_state_labels": self.pair_states,
+        }
 
 

@@ -23,6 +23,7 @@ Usage:
 
 import argparse
 import os
+import re
 import sys
 from typing import Dict, List, Optional, Tuple
 
@@ -117,6 +118,30 @@ def determine_best_breakpoints(
             )
             best_by_svtype[svtype] = best["GD_ID"]
     return best_by_svtype
+
+
+def get_pair_state_columns(
+    cn_posteriors_df: pd.DataFrame,
+) -> Tuple[List[str], List[Tuple[int, int]]]:
+    """Return pair-state posterior columns and their parsed labels."""
+    pair_cols = [
+        column for column in cn_posteriors_df.columns
+        if column.startswith("prob_pair_")
+    ]
+    if not pair_cols:
+        raise ValueError(
+            "cn_posteriors.tsv.gz is missing pair-state posterior columns "
+            "(expected columns like prob_pair_0_1). Re-run infer first."
+        )
+
+    pair_labels: List[Tuple[int, int]] = []
+    for column in pair_cols:
+        match = re.fullmatch(r"prob_pair_(\d+)_(\d+)", column)
+        if match is None:
+            raise ValueError(f"Unrecognized pair-state column name: {column}")
+        pair_labels.append((int(match.group(1)), int(match.group(2))))
+
+    return pair_cols, pair_labels
 
 
 # =============================================================================
@@ -220,16 +245,16 @@ def call_cnvs_from_posteriors(
 
     # Pre-extract numpy arrays for fast access.
     print("  Organizing data for fast access...")
-    prob_cols = sorted(c for c in cn_posteriors_df.columns if c.startswith("prob_cn_"))
-    n_states = len(prob_cols)
-    prob_3d = np.empty((n_samples, n_bins, n_states))
+    pair_prob_cols, pair_state_labels = get_pair_state_columns(cn_posteriors_df)
+    n_pair_states = len(pair_prob_cols)
+    pair_prob_3d = np.empty((n_samples, n_bins, n_pair_states))
     depth_2d = np.empty((n_samples, n_bins))
     for s_idx, sample_id in enumerate(sample_ids):
         mask = cn_posteriors_df["sample"] == sample_id
         sample_rows = cn_posteriors_df.loc[mask]
-        prob_3d[s_idx] = sample_rows[prob_cols].values
+        pair_prob_3d[s_idx] = sample_rows[pair_prob_cols].values
         depth_2d[s_idx] = sample_rows["depth"].values
-    print(f"    Extracted {n_samples} x {n_bins} x {n_states} probability array")
+    print(f"    Extracted {n_samples} x {n_bins} x {n_pair_states} pair-state probability array")
 
     # Build a per-bin coordinate lookup used by viterbi_call_gd_cnv to identify
     # which transitions cross known breakpoint boundaries.
@@ -257,7 +282,7 @@ def call_cnvs_from_posteriors(
         # Skip loci that have no bins (e.g. excluded by --region during
         # preprocessing).
         if not interval_bins:
-            print(f"  Skipping — no bins in mappings for this locus")
+            print("  Skipping — no bins in mappings for this locus")
             continue
 
         for interval_name, bins in interval_bins.items():
@@ -289,22 +314,15 @@ def call_cnvs_from_posteriors(
         for s_idx, sample_id in enumerate(sample_ids):
             sample_ploidy = ploidy_lookup.get((str(sample_id), locus.chrom), 2)
 
-            # Only ploidy 1 and 2 are supported by the Viterbi model.
-            if sample_ploidy > 2:
-                if verbose:
-                    _util.vlog(f"\n  [VIT] Sample: {sample_id}  "
-                               f"({locus.chrom}, ploidy={sample_ploidy}) "
-                               f"-- SKIPPED (ploidy > 2 not supported)")
-                continue
-
             if verbose:
-                strategy = "VIT"
+                strategy = "PAIR-VIT"
                 _util.vlog(f"\n  [{strategy}] Sample: {sample_id}  "
                            f"({locus.chrom}, ploidy={sample_ploidy})")
 
             calls, path_records = viterbi_call_gd_cnv(
                 locus,
-                prob_3d[s_idx],  # (n_bins, n_states)
+                pair_prob_3d[s_idx],
+                pair_state_labels,
                 transition_matrix,
                 interval_bin_arrays,
                 ploidy=sample_ploidy,
@@ -368,7 +386,13 @@ def call_cnvs_from_posteriors(
                     "is_terminal": call["is_terminal"],
                     "n_bins": call["n_bins"],
                     "mean_depth": mean_depth,
-                    "cn_state": call.get("cn_state", sample_ploidy),
+                    "sample_ploidy": call.get("sample_ploidy", sample_ploidy),
+                    "matched_haplotype": call.get("haplotype", np.nan),
+                    "hap_cn_state": call.get("hap_cn_state", np.nan),
+                    "matched_seg_start": call.get("matched_seg_start", np.nan),
+                    "matched_seg_end": call.get("matched_seg_end", np.nan),
+                    "matched_seg_n_bins": call.get("matched_seg_n_bins", 0),
+                    "reciprocal_overlap": call.get("reciprocal_overlap", np.nan),
                     "is_carrier": call["is_carrier"],
                     "is_best_match": (
                         call["GD_ID"] == best_gd_for_svtype
@@ -462,7 +486,7 @@ def main():
     args = parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
-    log_fh = setup_logging(args.output_dir)
+    setup_logging(args.output_dir)
 
     print(f"Output directory: {args.output_dir}")
 

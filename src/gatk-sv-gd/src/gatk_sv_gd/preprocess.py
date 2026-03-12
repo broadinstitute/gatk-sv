@@ -12,11 +12,15 @@ results to disk for downstream consumption by ``infer``.
 """
 
 import argparse
+import gzip
 import os
+from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import pysam
+from intervaltree import IntervalTree
 
 from gatk_sv_gd import _util
 from gatk_sv_gd._util import get_sample_columns, setup_logging
@@ -861,9 +865,192 @@ def write_preprocessed_bins(
     return output_path
 
 
+def _build_roi_intervals_from_mappings(
+    mappings: List[LocusBinMapping],
+) -> Dict[str, List[Tuple[int, int]]]:
+    """Build merged genomic ROI intervals from retained locus-bin mappings.
+
+    The returned intervals reflect the exact genomic footprint of the bins
+    that survived preprocessing, including flanks and any exclusion-driven
+    gaps. These are used to crop SNP/BAF rows to the same modeled regions.
+    """
+    intervals_by_chrom: Dict[str, List[Tuple[int, int]]] = {}
+    for mapping in mappings:
+        intervals_by_chrom.setdefault(mapping.chrom, []).append(
+            (int(mapping.start), int(mapping.end))
+        )
+
+    merged_by_chrom: Dict[str, List[Tuple[int, int]]] = {}
+    for chrom, intervals in intervals_by_chrom.items():
+        if not intervals:
+            merged_by_chrom[chrom] = []
+            continue
+        intervals = sorted(intervals)
+        merged: List[Tuple[int, int]] = []
+        cur_start, cur_end = intervals[0]
+        for start, end in intervals[1:]:
+            if start <= cur_end:
+                cur_end = max(cur_end, end)
+            else:
+                merged.append((cur_start, cur_end))
+                cur_start, cur_end = start, end
+        merged.append((cur_start, cur_end))
+        merged_by_chrom[chrom] = merged
+
+    return merged_by_chrom
+
+
+def _detect_baf_columns(filepath: str) -> Tuple[Optional[int], List[str]]:
+    """Detect whether a BAF file has a header and return its column names.
+
+    Expected logical columns are chromosome, position, BAF value, and sample.
+    The input produced by SiteDepthtoBAF is typically headerless, so we also
+    support that layout directly.
+    """
+    opener = gzip.open if filepath.endswith(".gz") else open
+    with opener(filepath, "rt") as handle:
+        first_line = handle.readline().strip()
+
+    if not first_line:
+        return None, ["Chr", "Pos", "BAF", "Sample"]
+
+    parts = first_line.split("\t")
+    if len(parts) < 4:
+        raise ValueError(
+            f"BAF table {filepath} must have at least 4 tab-delimited columns"
+        )
+
+    try:
+        int(parts[1])
+        float(parts[2])
+    except ValueError:
+        return 0, parts[:4]
+
+    return None, ["Chr", "Pos", "BAF", "Sample"]
+
+
+def write_preprocessed_baf(
+    baf_path: str,
+    mappings: List[LocusBinMapping],
+    output_dir: str,
+) -> str:
+    """Filter a genome-wide BAF table down to preprocessed GD regions.
+
+    Rows are retained when the SNP position falls within the genomic
+    footprint of the retained preprocessed bins.
+
+    The input BAF file must be bgzipped and tabix-indexed. Records are
+    fetched via genomic intervals using :class:`pysam.TabixFile`, so the
+    whole file is never loaded or scanned sequentially.
+    """
+    output_path = os.path.join(output_dir, "preprocessed_baf.tsv.gz")
+    summary_path = os.path.join(output_dir, "preprocessed_baf_summary.tsv.gz")
+    header, column_names = _detect_baf_columns(baf_path)
+    roi_intervals = _build_roi_intervals_from_mappings(mappings)
+    written_rows = 0
+
+    interval_trees: Dict[str, IntervalTree] = {}
+    mapping_by_idx = {int(m.array_idx): m for m in mappings}
+    for mapping in mappings:
+        tree = interval_trees.setdefault(mapping.chrom, IntervalTree())
+        tree.addi(int(mapping.start), int(mapping.end), int(mapping.array_idx))
+
+    baf_values_by_bin_sample: Dict[Tuple[int, str], List[float]] = defaultdict(list)
+
+    with gzip.open(output_path, "wt") as out_handle:
+        out_handle.write("Chr\tPos\tBAF\tSample\n")
+
+        tbx = pysam.TabixFile(baf_path)
+        try:
+            for chrom, intervals in sorted(roi_intervals.items()):
+                for start, end in intervals:
+                    try:
+                        records = tbx.fetch(chrom, max(0, start), end)
+                    except ValueError:
+                        continue
+
+                    for line in records:
+                        fields = line.rstrip("\n").split("\t")
+                        if len(fields) < 4:
+                            continue
+
+                        if header == 0 and fields[:4] == column_names[:4]:
+                            continue
+
+                        record = dict(zip(column_names, fields[:4]))
+                        try:
+                            pos = int(record["Pos"])
+                            baf = float(record["BAF"])
+                        except ValueError:
+                            continue
+                        if not (0.0 <= baf <= 1.0):
+                            continue
+
+                        out_handle.write(
+                            f"{record['Chr']}\t{record['Pos']}\t"
+                            f"{record['BAF']}\t{record['Sample']}\n"
+                        )
+                        written_rows += 1
+
+                        tree = interval_trees.get(record["Chr"])
+                        if tree is None:
+                            continue
+                        for hit in tree.at(pos):
+                            baf_values_by_bin_sample[(int(hit.data), str(record["Sample"]))].append(baf)
+        finally:
+            tbx.close()
+
+    summary_rows: List[dict] = []
+    prior_site_var = 0.01
+    for (array_idx, sample_id), baf_values in baf_values_by_bin_sample.items():
+        mapping = mapping_by_idx.get(array_idx)
+        if mapping is None:
+            continue
+        values = np.asarray(baf_values, dtype=float)
+        if values.size == 0:
+            continue
+        minor_values = np.minimum(values, 1.0 - values)
+        n_sites = int(values.size)
+        raw_median = float(np.median(values))
+        minor_median = float(np.median(minor_values))
+
+        empirical_var = float(np.var(minor_values, ddof=1)) if n_sites > 1 else np.nan
+        if np.isnan(empirical_var):
+            shrunken_site_var = prior_site_var
+        else:
+            shrunken_site_var = (
+                ((n_sites - 1) * empirical_var) + prior_site_var
+            ) / n_sites
+        median_variance = float((np.pi / (2.0 * n_sites)) * shrunken_site_var)
+
+        summary_rows.append({
+            "cluster": mapping.cluster,
+            "interval": mapping.interval_name,
+            "chr": mapping.chrom,
+            "start": mapping.start,
+            "end": mapping.end,
+            "array_idx": array_idx,
+            "sample": sample_id,
+            "baf_median": raw_median,
+            "minor_baf_median": minor_median,
+            "baf_variance": median_variance,
+            "baf_empirical_var": empirical_var,
+            "baf_n_sites": n_sites,
+        })
+
+    summary_df = pd.DataFrame(summary_rows)
+    summary_df.to_csv(summary_path, sep="\t", index=False, compression="gzip")
+
+    print(f"  Saved: {output_path}")
+    print(f"  Rows: {written_rows:,} ROI-filtered BAF rows retained")
+    print(f"  Saved: {summary_path}")
+    print(f"  Rows: {len(summary_df):,} bin × sample BAF summaries")
+    return output_path
+
+
 def load_preprocessed_data(
     preprocessed_dir: str,
-) -> Tuple[pd.DataFrame, List[LocusBinMapping]]:
+) -> Tuple[pd.DataFrame, List[LocusBinMapping], Optional[pd.DataFrame]]:
     """Load preprocessed bins and bin-to-interval mappings from disk.
 
     This is the complement of :func:`write_preprocessed_bins` +
@@ -875,10 +1062,12 @@ def load_preprocessed_data(
         preprocessed_dir: Directory written by the ``preprocess`` subcommand.
 
     Returns:
-        Tuple of (combined_df, mappings).
+        Tuple of ``(combined_df, mappings, baf_summary_df)`` where
+        ``baf_summary_df`` is ``None`` when no BAF summary file exists.
     """
     bins_path = os.path.join(preprocessed_dir, "preprocessed_bins.tsv.gz")
     mappings_path = os.path.join(preprocessed_dir, "bin_mappings.tsv.gz")
+    baf_summary_path = os.path.join(preprocessed_dir, "preprocessed_baf_summary.tsv.gz")
 
     print(f"  Loading preprocessed bins: {bins_path}")
     combined_df = pd.read_csv(bins_path, sep="\t", compression="infer")
@@ -900,7 +1089,13 @@ def load_preprocessed_data(
             end=int(row["end"]),
         ))
 
-    return combined_df, mappings
+    baf_summary_df: Optional[pd.DataFrame] = None
+    if os.path.exists(baf_summary_path):
+        print(f"  Loading BAF summaries: {baf_summary_path}")
+        baf_summary_df = pd.read_csv(baf_summary_path, sep="\t", compression="infer")
+        print(f"    {len(baf_summary_df)} BAF summary rows")
+
+    return combined_df, mappings, baf_summary_df
 
 
 # =============================================================================
@@ -936,6 +1131,12 @@ def parse_args():
         "--high-res-counts", required=False,
         help="Optional bgzipped tabix-indexed high-res count file "
              "(.tsv.gz + .tbi) for under-covered intervals",
+    )
+    parser.add_argument(
+        "--baf-table", required=False,
+        help="Optional BAF table from SiteDepthtoBAF (plain TSV or .gz). "
+             "When provided, preprocess writes preprocessed_baf.tsv.gz "
+             "filtered to the retained GD regions and analyzed samples.",
     )
 
     # Locus processing
@@ -1107,6 +1308,13 @@ def main():
     print("=" * 80)
     write_preprocessed_bins(combined_df, args.output_dir)
     write_locus_metadata(included_loci, mappings, args.output_dir)
+    if args.baf_table:
+        print("\nFiltering BAF table to retained GD regions...")
+        write_preprocessed_baf(
+            args.baf_table,
+            mappings,
+            args.output_dir,
+        )
 
     # Write a filtered GD table containing only the loci that survived
     # region and size filtering, so downstream tools (call, plot, eval)
@@ -1138,6 +1346,9 @@ def main():
     print("  - gd_entry_intervals.tsv.gz")
     print("  - ploidy_estimates.tsv")
     print("  - gd_table_filtered.tsv")
+    if args.baf_table:
+        print("  - preprocessed_baf.tsv.gz")
+        print("  - preprocessed_baf_summary.tsv.gz")
     print(f"\nNext: run 'gatk-sv-gd infer --preprocessed-dir {args.output_dir}'")
     print(f"       Use --gd-table {args.output_dir}/gd_table_filtered.tsv for call/plot/eval")
     print("=" * 80)

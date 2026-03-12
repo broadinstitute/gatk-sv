@@ -654,7 +654,11 @@ def plot_sample_at_locus(
             ds, de = xform(call["start"]), xform(call["end"])
             ax.axvspan(ds, de, alpha=alpha, color=color)
 
-            label = f"{call['svtype']} CN={call['mean_cn']:.2f}"
+            label = f"{call['svtype']}"
+            matched_haplotype = call.get("matched_haplotype")
+            hap_cn_state = call.get("hap_cn_state")
+            if pd.notna(matched_haplotype) and pd.notna(hap_cn_state):
+                label += f" H{int(matched_haplotype)} CN={int(hap_cn_state)}"
             if call["is_best_match"]:
                 label += " (best)"
             ax.text((ds + de) / 2, y_pos, label,
@@ -1117,7 +1121,7 @@ def main():
     args = parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
-    log_fh = setup_logging(args.output_dir)
+    setup_logging(args.output_dir)
 
     print(f"Output directory: {args.output_dir}")
     print(f"Flank scale: {args.flank_scale}")

@@ -44,6 +44,7 @@ def run_gd_analysis(
     lowres_median_bin_size: Optional[float] = None,
     preprocessed_bins: Optional[pd.DataFrame] = None,
     preprocessed_mappings=None,
+    preprocessed_baf_summary: Optional[pd.DataFrame] = None,
     ploidy_map: Optional[dict] = None,
 ):
     """
@@ -119,6 +120,8 @@ def run_gd_analysis(
         dtype=torch.float32,
         clamp_threshold=args.clamp_threshold,
     )
+    if preprocessed_baf_summary is not None:
+        combined_data.attach_baf_summary(preprocessed_baf_summary, mappings)
 
     # Initialize and train a single model on all bins
     print("\nInitializing unified CNV model...")
@@ -126,6 +129,7 @@ def run_gd_analysis(
         n_states=6,
         alpha_ref=args.alpha_ref,
         alpha_non_ref=args.alpha_non_ref,
+        state_prior_weight=args.state_prior_weight,
         var_bias_bin=args.var_bias_bin,
         var_sample=args.var_sample,
         var_bin=args.var_bin,
@@ -331,6 +335,14 @@ def parse_args():
         help="Dirichlet concentration for non-reference CN states",
     )
     parser.add_argument(
+        "--state-prior-weight",
+        type=float,
+        default=1.0,
+        help="Weight applied to the learned per-bin pair-state log-prior "
+             "when reconstructing analytical discrete posteriors. "
+             "Values below 1.0 temper overly sharp priors.",
+    )
+    parser.add_argument(
         "--var-bias-bin",
         type=float,
         default=0.01,
@@ -502,7 +514,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Mirror all stdout/stderr to a log file in the output directory
-    log_fh = setup_logging(args.output_dir)
+    setup_logging(args.output_dir)
 
     print(f"Output directory: {args.output_dir}")
 
@@ -511,7 +523,7 @@ def main():
     # ------------------------------------------------------------------
     if args.preprocessed_dir:
         print(f"\nLoading preprocessed data from: {args.preprocessed_dir}")
-        preprocessed_bins, preprocessed_mappings = load_preprocessed_data(
+        preprocessed_bins, preprocessed_mappings, preprocessed_baf_summary = load_preprocessed_data(
             args.preprocessed_dir
         )
 
@@ -528,6 +540,7 @@ def main():
             device=args.device,
             preprocessed_bins=preprocessed_bins,
             preprocessed_mappings=preprocessed_mappings,
+            preprocessed_baf_summary=preprocessed_baf_summary,
         )  # ploidy_map not needed — bins already collected
     else:
         # Validate that required args are present
@@ -599,7 +612,7 @@ def main():
 
         if _util.VERBOSE:
             norm_depths = df[sample_cols].values
-            print(f"\n  [verbose] Post-normalisation depth summary:")
+            print("\n  [verbose] Post-normalisation depth summary:")
             print(f"    global mean = {np.nanmean(norm_depths):.4f}")
             print(f"    global median = {np.nanmedian(norm_depths):.4f}")
             print(f"    per-sample means: min={np.nanmean(norm_depths, axis=0).min():.4f}, "
