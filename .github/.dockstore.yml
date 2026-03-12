@@ -10,6 +10,13 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: AnnotateBiallelicCNCounts
+    primaryDescriptorPath: /wdl/AnnotateBiallelicCNCounts.wdl
+    filters:
+      branches:
+        - eph_annotate_cn_count_bi_cnvs
+
+  - subclass: WDL
     name: EvidenceQC
     primaryDescriptorPath: /wdl/EvidenceQC.wdl
     filters:
