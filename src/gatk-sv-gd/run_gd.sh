@@ -5,7 +5,7 @@ set -euo pipefail
 # Required inputs — set these before running.
 INPUT_DEPTH="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/synthesize/output/lo_res_counts.synthesized.rd.txt.gz"
 HIGH_RESOLUTION_DEPTH="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/synthesize/output/hi_res_counts.synthesized.rd.txt.gz"
-BAF_TABLE="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gatk_agg_v2/baf/data/all_samples.baf.txt.gz"
+BAF_TABLE="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/synthesize/output/all_samples.synthesized.baf.txt.gz"
 GD_TABLE="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/input/GenomicDisorderRegions_hg38_2025-12-05.with_bp.tsv"
 
 SEG_DUP_BED="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/input/hg38_SD.bed.gz"
@@ -23,6 +23,7 @@ TRUTH_TABLE="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/synthesiz
 # Optional: additional arguments
 PREPROCESS_ARGS="--region chr22"
 INFER_ARGS="--state-prior-weight 0.0"
+CALL_ARGS="--reciprocal-overlap-threshold 0.85"
 
 # ── Usage ──────────────────────────────────────────────────────────────────
 usage() {
@@ -87,7 +88,8 @@ rm -rf "${CALL_DIR}"
     --ploidy-table "${PLOIDY_TABLE}" \
     --transition-matrix "${TRANSITION_MATRIX}" \
     --breakpoint-transition-matrix "${BREAKPOINT_TRANSITION_MATRIX}" \
-    --verbose
+    --verbose \
+    ${CALL_ARGS}
 
 # ── Step 4: plot ───────────────────────────────────────────────────────────
 echo "[4/5] plot"

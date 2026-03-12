@@ -35,7 +35,7 @@ import shutil
 import sys
 import tempfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import numpy as np
 import pysam
@@ -75,6 +75,117 @@ def _gd_entry_overlaps_regions(
         if entry["start_GRCh38"] < r_end and entry["end_GRCh38"] > r_start:
             return True
     return False
+
+
+def _open_textfile(filepath: str, mode: str = "rt"):
+    """Open plain-text or gzipped text files transparently."""
+    return gzip.open(filepath, mode) if filepath.endswith(".gz") else open(filepath, mode)
+
+
+def _detect_baf_columns(filepath: str) -> Tuple[Optional[int], List[str]]:
+    """Detect whether a BAF file has a header and return logical columns."""
+    with _open_textfile(filepath, "rt") as handle:
+        first_line = handle.readline().strip()
+
+    if not first_line:
+        return None, ["Chr", "Pos", "BAF", "Sample"]
+
+    parts = first_line.split("\t")
+    if len(parts) < 4:
+        raise ValueError(
+            f"BAF table {filepath} must have at least 4 tab-delimited columns"
+        )
+
+    try:
+        int(parts[1])
+        float(parts[2])
+    except ValueError:
+        return 0, parts[:4]
+
+    return None, ["Chr", "Pos", "BAF", "Sample"]
+
+
+def _read_count_sample_ids(filepath: str) -> List[str]:
+    """Read sample column names from a count matrix header."""
+    with _open_textfile(filepath, "rt") as handle:
+        header = handle.readline().rstrip("\n").split("\t")
+    meta_cols = {"#Chr", "Chr", "Start", "End", "source_file", "Bin"}
+    return [col for col in header if col not in meta_cols]
+
+
+def _build_gd_lookup(gd_table: GDTable) -> Dict[str, Tuple[str, dict]]:
+    """Map ``GD_ID`` to its source ``(chrom, entry)`` pair."""
+    lookup: Dict[str, Tuple[str, dict]] = {}
+    for locus in gd_table.get_all_loci().values():
+        for entry in locus.gd_entries:
+            gd_id = str(entry["GD_ID"])
+            if gd_id in lookup:
+                raise ValueError(f"Duplicate GD_ID in GD table: {gd_id}")
+            lookup[gd_id] = (locus.chrom, entry)
+    return lookup
+
+
+def _load_truth_assignments(
+    truth_table_path: str,
+    gd_lookup: Dict[str, Tuple[str, dict]],
+) -> Dict[str, Tuple[str, dict]]:
+    """Load synthesize-format truth assignments from an existing table."""
+    with _open_textfile(truth_table_path, "rt") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        required = {"sample_id", "GD_ID"}
+        if reader.fieldnames is None or not required.issubset(reader.fieldnames):
+            raise ValueError(
+                "Truth table must contain synthesize-format columns: sample_id, GD_ID"
+            )
+
+        assignments: Dict[str, Tuple[str, dict]] = {}
+        for row in reader:
+            sample_id = str(row["sample_id"]).strip()
+            gd_id = str(row["GD_ID"]).strip()
+            if not sample_id or not gd_id:
+                continue
+            if gd_id not in gd_lookup:
+                raise ValueError(f"GD_ID '{gd_id}' from truth table not found in GD table")
+            existing = assignments.get(sample_id)
+            if existing is not None and str(existing[1]["GD_ID"]) != gd_id:
+                raise ValueError(
+                    f"Sample '{sample_id}' has multiple GD assignments in truth table"
+                )
+            assignments[sample_id] = gd_lookup[gd_id]
+    return assignments
+
+
+def _read_baf_sample_ids(filepath: str) -> List[str]:
+    """Scan a BAF table and return the distinct sample IDs it contains."""
+    header, column_names = _detect_baf_columns(filepath)
+    sample_idx = column_names.index("Sample")
+    sample_ids: Set[str] = set()
+    with _open_textfile(filepath, "rt") as handle:
+        for line_no, line in enumerate(handle):
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) <= sample_idx:
+                continue
+            if header == 0 and line_no == 0:
+                continue
+            sample_id = str(fields[sample_idx]).strip()
+            if sample_id:
+                sample_ids.add(sample_id)
+    return sorted(sample_ids)
+
+
+def _discover_sample_ids(
+    lo_res_counts: Optional[str],
+    hi_res_counts: Optional[str],
+    baf_table: Optional[str],
+) -> List[str]:
+    """Discover the batch sample set from the first available input table."""
+    if lo_res_counts:
+        return _read_count_sample_ids(lo_res_counts)
+    if hi_res_counts:
+        return _read_count_sample_ids(hi_res_counts)
+    if baf_table:
+        return _read_baf_sample_ids(baf_table)
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +273,26 @@ def _ensure_tabix_index(path: str) -> None:
             path, seq_col=0, start_col=1, end_col=2,
             meta_char="#", zerobased=True, force=True,
         )
+
+
+def _ensure_baf_tabix_index(path: str) -> None:
+    """Create a tabix index for a point-based BAF table if needed."""
+    tbi = path + ".tbi"
+    if os.path.exists(tbi):
+        return
+
+    header, _ = _detect_baf_columns(path)
+    print(f"  Creating tabix index for {os.path.basename(path)} …")
+    pysam.tabix_index(
+        path,
+        seq_col=0,
+        start_col=1,
+        end_col=1,
+        meta_char="#",
+        zerobased=False,
+        line_skip=1 if header == 0 else 0,
+        force=True,
+    )
 
 
 def _resolve_intervals(
@@ -440,10 +571,7 @@ def _rewrite_counts_file(
                         pbar.update(1)
 
         # ── Concatenate BGZF parts in contig order ───────────────────
-        ordered_parts = (
-            [header_path]
-            + [tp for _, tp in contig_temp_paths]
-        )
+        ordered_parts = [header_path] + [tp for _, tp in contig_temp_paths]
         _concat_bgzf_parts(output_path, ordered_parts, label=label)
 
     # ── Create tabix index on the output ─────────────────────────────
@@ -451,6 +579,194 @@ def _rewrite_counts_file(
     pysam.tabix_index(
         output_path, seq_col=0, start_col=1, end_col=2,
         meta_char="#", zerobased=True, force=True,
+    )
+
+    print(f"  [{label}] Done: {total_rows:,} rows, {total_modified:,} modified")
+    return total_modified
+
+
+def _spike_baf_value(original_baf: float, svtype: str) -> float:
+    """Return a synthetic BAF value consistent with the spiked CN state."""
+    if svtype == "DEL":
+        return 1.0 if original_baf >= 0.5 else 0.0
+    if svtype == "DUP":
+        return (2.0 / 3.0) if original_baf >= 0.5 else (1.0 / 3.0)
+    return original_baf
+
+
+def _build_baf_interval_map(
+    assignments: Dict[str, Tuple[str, dict]],
+) -> Dict[str, List[Tuple[int, int, Dict[str, str]]]]:
+    """Build a chromosome-indexed lookup for BAF spike-ins."""
+    by_chrom: Dict[str, Dict[Tuple[int, int], Dict[str, str]]] = {}
+    for sample_id, (chrom, entry) in assignments.items():
+        interval_key = (int(entry["start_GRCh38"]), int(entry["end_GRCh38"]))
+        chrom_map = by_chrom.setdefault(chrom, {})
+        chrom_map.setdefault(interval_key, {})[sample_id] = str(entry["svtype"])
+
+    resolved: Dict[str, List[Tuple[int, int, Dict[str, str]]]] = {}
+    for chrom, interval_map in by_chrom.items():
+        resolved[chrom] = [
+            (start, end, sample_map)
+            for (start, end), sample_map in sorted(interval_map.items())
+        ]
+    return resolved
+
+
+def _process_baf_contig_group(
+    input_path: str,
+    contig_temp_pairs: List[Tuple[str, str]],
+    resolved: Dict[str, List[Tuple[int, int, Dict[str, str]]]],
+    pos_col: int,
+    baf_col: int,
+    sample_col: int,
+) -> Tuple[int, int]:
+    """Fetch point BAF records by contig, spike values, write BGZF parts."""
+    tbx = pysam.TabixFile(input_path)
+    total_rows = 0
+    total_modified = 0
+
+    for contig, temp_path in contig_temp_pairs:
+        chrom_intervals = resolved.get(contig)
+        with pysam.BGZFile(temp_path, "w") as fout:
+            try:
+                for row_str in tbx.fetch(contig):
+                    total_rows += 1
+                    if chrom_intervals is None:
+                        fout.write((row_str + "\n").encode())
+                        continue
+
+                    fields = row_str.split("\t")
+                    if len(fields) <= max(pos_col, baf_col, sample_col):
+                        fout.write((row_str + "\n").encode())
+                        continue
+
+                    try:
+                        pos = int(fields[pos_col])
+                        baf = float(fields[baf_col])
+                    except ValueError:
+                        fout.write((row_str + "\n").encode())
+                        continue
+
+                    sample_id = str(fields[sample_col]).strip()
+                    row_modified = False
+                    for gd_start, gd_end, sample_map in chrom_intervals:
+                        if pos < gd_start or pos >= gd_end:
+                            continue
+                        svtype = sample_map.get(sample_id)
+                        if svtype is None:
+                            continue
+                        fields[baf_col] = f"{_spike_baf_value(baf, svtype):.6f}"
+                        row_modified = True
+                        break
+
+                    if row_modified:
+                        total_modified += 1
+                        fout.write(("\t".join(fields) + "\n").encode())
+                    else:
+                        fout.write((row_str + "\n").encode())
+            except ValueError:
+                pass
+
+    tbx.close()
+    return total_rows, total_modified
+
+
+def _rewrite_baf_file(
+    input_path: str,
+    output_path: str,
+    assignments: Dict[str, Tuple[str, dict]],
+    label: str = "baf",
+    n_workers: int = 1,
+) -> int:
+    """Rewrite a tabix-indexed BAF table, spiking per-site BAF values."""
+    _ensure_baf_tabix_index(input_path)
+    header_flag, column_names = _detect_baf_columns(input_path)
+    pos_col = column_names.index("Pos")
+    baf_col = column_names.index("BAF")
+    sample_col = column_names.index("Sample")
+
+    file_size = os.path.getsize(input_path)
+    print(f"  [{label}] {input_path} ({file_size / 1e9:.2f} GB compressed)")
+
+    tbx = pysam.TabixFile(input_path)
+    contigs = list(tbx.contigs)
+    tabix_header_lines = list(tbx.header)
+    tbx.close()
+
+    explicit_header_line = None
+    with _open_textfile(input_path, "rt") as handle:
+        first_line = handle.readline().rstrip("\n")
+    if header_flag == 0:
+        explicit_header_line = first_line
+
+    resolved = _build_baf_interval_map(assignments)
+    effective_workers = max(1, min(n_workers, len(contigs)))
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        contig_temp_paths: List[Tuple[str, str]] = [
+            (ctg, os.path.join(tmpdir, f"contig_{i:04d}_{ctg}.bgzf"))
+            for i, ctg in enumerate(contigs)
+        ]
+
+        groups: List[List[Tuple[str, str]]] = [[] for _ in range(effective_workers)]
+        for i, ct_pair in enumerate(contig_temp_paths):
+            groups[i % effective_workers].append(ct_pair)
+        groups = [g for g in groups if g]
+        n_groups = len(groups)
+
+        print(f"  [{label}] {len(contigs)} contigs → {n_groups} worker groups ({effective_workers} workers)")
+
+        header_path = os.path.join(tmpdir, "header.bgzf")
+        with pysam.BGZFile(header_path, "w") as hf:
+            for header_line in tabix_header_lines:
+                hf.write((header_line + "\n").encode())
+            if explicit_header_line:
+                hf.write((explicit_header_line + "\n").encode())
+
+        total_rows = 0
+        total_modified = 0
+        if effective_workers <= 1:
+            for group in tqdm(groups, desc=f"  [{label}] Processing", unit=" groups", dynamic_ncols=True):
+                n_rows, n_mod = _process_baf_contig_group(
+                    input_path, group, resolved, pos_col, baf_col, sample_col,
+                )
+                total_rows += n_rows
+                total_modified += n_mod
+        else:
+            with ProcessPoolExecutor(max_workers=effective_workers) as pool:
+                futures = {
+                    pool.submit(
+                        _process_baf_contig_group,
+                        input_path,
+                        group,
+                        resolved,
+                        pos_col,
+                        baf_col,
+                        sample_col,
+                    ): i
+                    for i, group in enumerate(groups)
+                }
+                with tqdm(total=n_groups, desc=f"  [{label}] Processing", unit=" groups", dynamic_ncols=True) as pbar:
+                    for future in as_completed(futures):
+                        n_rows, n_mod = future.result()
+                        total_rows += n_rows
+                        total_modified += n_mod
+                        pbar.update(1)
+
+        ordered_parts = [header_path] + [tp for _, tp in contig_temp_paths]
+        _concat_bgzf_parts(output_path, ordered_parts, label=label)
+
+    print(f"  [{label}] Indexing {os.path.basename(output_path)} …")
+    pysam.tabix_index(
+        output_path,
+        seq_col=0,
+        start_col=1,
+        end_col=1,
+        meta_char="#",
+        zerobased=False,
+        line_skip=1 if explicit_header_line else 0,
+        force=True,
     )
 
     print(f"  [{label}] Done: {total_rows:,} rows, {total_modified:,} modified")
@@ -488,20 +804,23 @@ def parse_args():
     """Parse CLI arguments for the synthesize subcommand."""
     parser = argparse.ArgumentParser(
         description=(
-            "Spike synthetic GD CNVs into read-depth count matrices. "
-            "Writes modified high- and low-resolution depth tables and "
-            "a truth table of spiked-in events."
+            "Spike synthetic GD CNVs into optional read-depth and BAF tables. "
+            "Writes modified output tables plus a truth table of spiked-in events."
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     parser.add_argument(
-        "--lo-res-counts", required=True,
+        "--lo-res-counts", required=False,
         help="Low-resolution binned read-count table (.rd.txt.gz)",
     )
     parser.add_argument(
-        "--hi-res-counts", required=True,
+        "--hi-res-counts", required=False,
         help="High-resolution binned read-count table (.rd.txt.gz)",
+    )
+    parser.add_argument(
+        "--baf-table", required=False,
+        help="Optional bgzipped, tabix-indexed BAF table (.baf.txt.gz)",
     )
     parser.add_argument(
         "-g", "--gd-table", required=True,
@@ -518,6 +837,12 @@ def parse_args():
     parser.add_argument(
         "--seed", type=int, default=42,
         help="Random seed for reproducibility",
+    )
+    parser.add_argument(
+        "--truth-table", required=False,
+        help="Optional previously generated synthesize-format truth table. "
+             "When provided, existing sample→GD assignments are reused instead "
+             "of drawing new random events.",
     )
     parser.add_argument(
         "--region", dest="regions", action="append", default=None,
@@ -556,52 +881,112 @@ def main():
 
     os.makedirs(args.output_dir, exist_ok=True)
 
+    if not any([args.lo_res_counts, args.hi_res_counts, args.baf_table]):
+        print(
+            "ERROR: Provide at least one input table via --lo-res-counts, "
+            "--hi-res-counts, or --baf-table.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     # ── Load GD table ────────────────────────────────────────────────
     print(f"Loading GD table: {args.gd_table}")
     gd_table = GDTable(args.gd_table)
     print(f"  {len(gd_table.loci)} loci loaded")
+    gd_lookup = _build_gd_lookup(gd_table)
 
     # ── Collect eligible GD entries ──────────────────────────────────
-    parsed_regions = None
-    if args.regions:
-        parsed_regions = [_parse_region(r) for r in args.regions]
-        region_strs = []
-        for chrom, start, end in parsed_regions:
-            region_strs.append(
-                f"{chrom}" if start is None else f"{chrom}:{start:,}-{end:,}"
-            )
-        print(f"  Region filter: {', '.join(region_strs)}")
+    supported_gd_lookup = {
+        gd_id: assignment
+        for gd_id, assignment in gd_lookup.items()
+        if assignment[1]["NAHR"] == "yes"
+    }
+    n_non_nahr = len(gd_lookup) - len(supported_gd_lookup)
+    if n_non_nahr > 0:
+        print(f"  Restricting synthesis to {len(supported_gd_lookup)} NAHR GD entries; "
+              f"skipping {n_non_nahr} non-NAHR entries not modeled by preprocess")
 
     eligible_entries: List[Tuple[str, dict]] = []
-    for cluster, locus in gd_table.get_all_loci().items():
-        for entry in locus.gd_entries:
-            if parsed_regions and not _gd_entry_overlaps_regions(
-                entry, locus.chrom, parsed_regions
-            ):
+    if args.truth_table:
+        if args.regions:
+            print("  NOTE: --region is ignored when --truth-table is provided")
+    else:
+        parsed_regions = None
+        if args.regions:
+            parsed_regions = [_parse_region(r) for r in args.regions]
+            region_strs = []
+            for chrom, start, end in parsed_regions:
+                region_strs.append(
+                    f"{chrom}" if start is None else f"{chrom}:{start:,}-{end:,}"
+                )
+            print(f"  Region filter: {', '.join(region_strs)}")
+
+        for cluster, locus in gd_table.get_all_loci().items():
+            if not locus.is_nahr:
                 continue
-            eligible_entries.append((locus.chrom, entry))
+            for entry in locus.gd_entries:
+                if parsed_regions and not _gd_entry_overlaps_regions(
+                    entry, locus.chrom, parsed_regions
+                ):
+                    continue
+                eligible_entries.append((locus.chrom, entry))
 
-    if not eligible_entries:
-        print("ERROR: No eligible GD entries after region filtering.", file=sys.stderr)
-        sys.exit(1)
-    print(f"  {len(eligible_entries)} eligible GD entries "
-          f"({sum(1 for _, e in eligible_entries if e['svtype'] == 'DEL')} DEL, "
-          f"{sum(1 for _, e in eligible_entries if e['svtype'] == 'DUP')} DUP)")
+        if not eligible_entries:
+            print("ERROR: No eligible GD entries after region filtering.", file=sys.stderr)
+            sys.exit(1)
+        print(f"  {len(eligible_entries)} eligible GD entries "
+              f"({sum(1 for _, e in eligible_entries if e['svtype'] == 'DEL')} DEL, "
+              f"{sum(1 for _, e in eligible_entries if e['svtype'] == 'DUP')} DUP)")
 
-    # ── Discover sample columns from the lo-res header ───────────────
-    print(f"\nReading sample columns from: {args.lo_res_counts}")
-    with gzip.open(args.lo_res_counts, "rt") as f:
-        header = f.readline().rstrip("\n").split("\t")
-    meta_cols = {"#Chr", "Chr", "Start", "End", "source_file"}
-    sample_ids = [c for c in header if c not in meta_cols]
-    print(f"  {len(sample_ids)} samples")
-
-    # ── Assign GDs to samples ────────────────────────────────────────
-    rng = np.random.default_rng(args.seed)
-    assignments = assign_gd_to_samples(
-        sample_ids, eligible_entries, rng, args.gd_probability,
+    # ── Discover sample universe / assignments ───────────────────────
+    sample_ids = _discover_sample_ids(
+        args.lo_res_counts,
+        args.hi_res_counts,
+        args.baf_table,
     )
-    print(f"\nAssigned GD events to {len(assignments)}/{len(sample_ids)} samples")
+    if sample_ids:
+        print(f"\nDiscovered {len(sample_ids)} samples from input tables")
+    elif args.truth_table:
+        print("\nNo sample universe detected from inputs; proceeding with truth-table carriers only")
+    else:
+        print("ERROR: Unable to discover sample IDs from input tables", file=sys.stderr)
+        sys.exit(1)
+
+    if args.truth_table:
+        print(f"\nLoading existing truth assignments: {args.truth_table}")
+        assignments = _load_truth_assignments(args.truth_table, gd_lookup)
+        dropped_non_nahr = sorted(
+            sid for sid, (_, entry) in assignments.items()
+            if entry["NAHR"] != "yes"
+        )
+        if dropped_non_nahr:
+            print(f"  WARNING: dropping {len(dropped_non_nahr)} non-NAHR carrier assignments "
+                  "because preprocess skips those loci")
+            assignments = {
+                sid: assignment
+                for sid, assignment in assignments.items()
+                if assignment[1]["NAHR"] == "yes"
+            }
+        if sample_ids:
+            sample_set = set(sample_ids)
+            dropped_samples = sorted(set(assignments) - sample_set)
+            if dropped_samples:
+                print(
+                    f"  WARNING: dropping {len(dropped_samples)} truth-table carriers absent from input tables"
+                )
+                assignments = {
+                    sid: assignment
+                    for sid, assignment in assignments.items()
+                    if sid in sample_set
+                }
+        print(f"  Reused {len(assignments)} carrier assignments from truth table")
+    else:
+        rng = np.random.default_rng(args.seed)
+        assignments = assign_gd_to_samples(
+            sample_ids, eligible_entries, rng, args.gd_probability,
+        )
+        print(f"\nAssigned GD events to {len(assignments)}/{len(sample_ids)} samples")
+
     # Summary by GD_ID
     gd_counts: Dict[str, int] = {}
     for _, (_, entry) in assignments.items():
@@ -630,17 +1015,41 @@ def main():
                 else args.dup_multiplier)
         interval_map.setdefault(key, []).append((sid, mult))
 
-    # ── Rewrite lo-res counts ────────────────────────────────────────
-    lo_out = os.path.join(args.output_dir, "lo_res_counts.synthesized.rd.txt.gz")
-    print(f"\nRewriting low-res counts → {lo_out}")
-    _rewrite_counts_file(args.lo_res_counts, lo_out, interval_map,
-                         label="lo-res", n_workers=args.threads)
+    lo_out = None
+    if args.lo_res_counts:
+        lo_out = os.path.join(args.output_dir, "lo_res_counts.synthesized.rd.txt.gz")
+        print(f"\nRewriting low-res counts → {lo_out}")
+        _rewrite_counts_file(
+            args.lo_res_counts,
+            lo_out,
+            interval_map,
+            label="lo-res",
+            n_workers=args.threads,
+        )
 
-    # ── Rewrite hi-res counts ────────────────────────────────────────
-    hi_out = os.path.join(args.output_dir, "hi_res_counts.synthesized.rd.txt.gz")
-    print(f"\nRewriting high-res counts → {hi_out}")
-    _rewrite_counts_file(args.hi_res_counts, hi_out, interval_map,
-                         label="hi-res", n_workers=args.threads)
+    hi_out = None
+    if args.hi_res_counts:
+        hi_out = os.path.join(args.output_dir, "hi_res_counts.synthesized.rd.txt.gz")
+        print(f"\nRewriting high-res counts → {hi_out}")
+        _rewrite_counts_file(
+            args.hi_res_counts,
+            hi_out,
+            interval_map,
+            label="hi-res",
+            n_workers=args.threads,
+        )
+
+    baf_out = None
+    if args.baf_table:
+        baf_out = os.path.join(args.output_dir, "all_samples.synthesized.baf.txt.gz")
+        print(f"\nRewriting BAF table → {baf_out}")
+        _rewrite_baf_file(
+            args.baf_table,
+            baf_out,
+            assignments,
+            label="baf",
+            n_workers=args.threads,
+        )
 
     # ── Write truth table ────────────────────────────────────────────
     truth_path = os.path.join(args.output_dir, "truth_table.tsv")
@@ -651,10 +1060,17 @@ def main():
     print(f"\n{'=' * 60}")
     print("SYNTHESIS COMPLETE")
     print(f"{'=' * 60}")
-    print(f"  Low-res output:  {lo_out}")
-    print(f"  High-res output: {hi_out}")
+    if lo_out:
+        print(f"  Low-res output:  {lo_out}")
+    if hi_out:
+        print(f"  High-res output: {hi_out}")
+    if baf_out:
+        print(f"  BAF output:      {baf_out}")
     print(f"  Truth table:     {truth_path}")
-    print(f"  Carriers:        {len(assignments)}/{len(sample_ids)} samples")
+    if sample_ids:
+        print(f"  Carriers:        {len(assignments)}/{len(sample_ids)} samples")
+    else:
+        print(f"  Carriers:        {len(assignments)} samples")
     print(f"  Seed:            {args.seed}")
     print(f"  Threads:         {args.threads}")
     print(f"{'=' * 60}")

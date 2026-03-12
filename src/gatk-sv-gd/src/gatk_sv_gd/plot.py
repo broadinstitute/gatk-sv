@@ -177,6 +177,210 @@ def estimate_lowres_bin_size(df: pd.DataFrame) -> float:
     return float(np.median((df["End"] - df["Start"]).values))
 
 
+def _plot_depth_bars_with_baf(
+    ax,
+    x_positions: np.ndarray,
+    bar_widths: np.ndarray,
+    depth_values: np.ndarray,
+    minor_baf_values: Optional[np.ndarray] = None,
+    baf_site_counts: Optional[np.ndarray] = None,
+    zorder: int = 3,
+) -> None:
+    """Draw normalized-depth bars, optionally split by modeled minor BAF.
+
+    When BAF summaries are available for a bin/sample pair, the total depth bar
+    is split into minor- and major-allele components using the same minor AF
+    summary that the model consumes. Bins lacking usable BAF evidence fall back
+    to the legacy single-color depth bar.
+    """
+    bar_widths = np.asarray(bar_widths, dtype=float) * 0.9
+    depth_values = np.asarray(depth_values, dtype=float)
+
+    if minor_baf_values is None or baf_site_counts is None:
+        ax.bar(
+            x_positions,
+            depth_values,
+            width=bar_widths,
+            alpha=0.6,
+            color="steelblue",
+            edgecolor="none",
+            zorder=zorder,
+            label="Normalized depth",
+        )
+        return
+
+    minor_baf_values = np.asarray(minor_baf_values, dtype=float)
+    baf_site_counts = np.asarray(baf_site_counts)
+    valid_baf = np.logical_and.reduce([
+        np.isfinite(minor_baf_values),
+        np.isfinite(depth_values),
+        baf_site_counts > 0,
+    ])
+
+    if not np.any(valid_baf):
+        ax.bar(
+            x_positions,
+            depth_values,
+            width=bar_widths,
+            alpha=0.6,
+            color="steelblue",
+            edgecolor="none",
+            zorder=zorder,
+            label="Normalized depth",
+        )
+        return
+
+    clipped_minor_baf = np.clip(minor_baf_values, 0.0, 0.5)
+    minor_depth = np.where(valid_baf, depth_values * clipped_minor_baf, 0.0)
+    major_depth = np.where(valid_baf, depth_values - minor_depth, 0.0)
+
+    if np.any(~valid_baf):
+        ax.bar(
+            x_positions[~valid_baf],
+            depth_values[~valid_baf],
+            width=bar_widths[~valid_baf],
+            alpha=0.6,
+            color="gray",
+            edgecolor="none",
+            zorder=zorder,
+            label="Depth (no BAF)",
+        )
+
+    ax.bar(
+        x_positions[valid_baf],
+        minor_depth[valid_baf],
+        width=bar_widths[valid_baf],
+        alpha=0.75,
+        color="#F4A261",
+        edgecolor="none",
+        zorder=zorder,
+        label="Minor-allele depth",
+    )
+    ax.bar(
+        x_positions[valid_baf],
+        major_depth[valid_baf],
+        bottom=minor_depth[valid_baf],
+        width=bar_widths[valid_baf],
+        alpha=0.65,
+        color="#4C78A8",
+        edgecolor="none",
+        zorder=zorder,
+        label="Major-allele depth",
+    )
+
+
+def _extract_sample_baf_vectors(
+    region_df: pd.DataFrame,
+    minor_baf_df: Optional[pd.DataFrame],
+    baf_sites_df: Optional[pd.DataFrame],
+    sample_id: str,
+) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    """Align per-bin BAF summaries to a region/sample depth slice."""
+    if any([
+        minor_baf_df is None,
+        baf_sites_df is None,
+        sample_id not in minor_baf_df.columns if minor_baf_df is not None else True,
+        sample_id not in baf_sites_df.columns if baf_sites_df is not None else True,
+    ]):
+        return None, None
+
+    key_cols = ["Cluster", "Chr", "Start", "End"]
+    region_keys = region_df[key_cols]
+
+    baf_aligned = region_keys.merge(
+        minor_baf_df[key_cols + [sample_id]],
+        on=key_cols,
+        how="left",
+    )
+    baf_sites_aligned = region_keys.merge(
+        baf_sites_df[key_cols + [sample_id]],
+        on=key_cols,
+        how="left",
+    )
+    return (
+        baf_aligned[sample_id].to_numpy(dtype=float),
+        baf_sites_aligned[sample_id].to_numpy(),
+    )
+
+
+def _plot_baf_signal_panel(
+    ax,
+    x_positions: np.ndarray,
+    bar_widths: np.ndarray,
+    minor_baf_values: Optional[np.ndarray],
+    baf_site_counts: Optional[np.ndarray],
+    xform: FlankCompressor,
+    locus: GDLocus,
+    chrom: str,
+) -> None:
+    """Render the modeled per-bin minor-BAF signal for one sample."""
+    ax.set_xlim(0.0, xform.d_end)
+    ax.set_ylim(0.0, 1.0)
+
+    for y_value in (1.0 / 3.0, 0.5, 2.0 / 3.0):
+        ax.axhline(y_value, color="gray", linestyle=":", linewidth=0.8, alpha=0.25, zorder=0)
+
+    if minor_baf_values is None or baf_site_counts is None:
+        ax.text(
+            0.5,
+            0.5,
+            "No BAF signal available",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            color="dimgray",
+            fontsize=9,
+        )
+        ax.set_xlabel(f"Position on {chrom}")
+        ax.set_ylabel("Minor BAF")
+        xform.format_genomic_ticks(ax, locus.breakpoints)
+        return
+
+    minor_baf_values = np.asarray(minor_baf_values, dtype=float)
+    baf_site_counts = np.asarray(baf_site_counts)
+    bar_widths = np.asarray(bar_widths, dtype=float) * 0.85
+    valid_baf = np.logical_and.reduce([
+        np.isfinite(minor_baf_values),
+        baf_site_counts > 0,
+    ])
+
+    if np.any(valid_baf):
+        clipped_minor_baf = np.clip(minor_baf_values[valid_baf], 0.0, 1.0)
+        ax.bar(
+            x_positions[valid_baf],
+            clipped_minor_baf,
+            width=bar_widths[valid_baf],
+            color="#7B61A8",
+            alpha=0.25,
+            edgecolor="none",
+            zorder=1,
+        )
+        ax.scatter(
+            x_positions[valid_baf],
+            clipped_minor_baf,
+            s=10,
+            color="#5B3F8C",
+            alpha=0.8,
+            linewidths=0,
+            zorder=2,
+        )
+    else:
+        ax.text(
+            0.5,
+            0.5,
+            "No BAF-supported bins",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            color="dimgray",
+            fontsize=9,
+        )
+
+    ax.set_xlabel(f"Position on {chrom}")
+    ax.set_ylabel("Minor BAF")
+    xform.format_genomic_ticks(ax, locus.breakpoints)
+
+
 def _build_raw_region_df(
     locus: GDLocus,
     region_start: int,
@@ -761,6 +965,8 @@ def create_carrier_pdf(
     gtf: Optional[GTFParser],
     segdup: Optional[SegDupAnnotation],
     output_dir: str,
+    minor_baf_df: Optional[pd.DataFrame] = None,
+    baf_sites_df: Optional[pd.DataFrame] = None,
     padding: int = 50000,
     min_gene_label_spacing: float = 0.05,
     raw_counts_df: Optional[pd.DataFrame] = None,
@@ -782,8 +988,10 @@ def create_carrier_pdf(
     if raw_counts_df is not None:
         autosomal = [str(c) for c in range(1, 23)] + [f"chr{c}" for c in range(1, 23)]
         raw_auto = raw_counts_df[raw_counts_df["Chr"].isin(autosomal)]
-        raw_sample_cols = [c for c in raw_counts_df.columns
-                          if c not in ("Chr", "Start", "End", "source_file", "Bin")]
+        raw_sample_cols = [
+            c for c in raw_counts_df.columns
+            if c not in ("Chr", "Start", "End", "source_file", "Bin")
+        ]
         for s in raw_sample_cols:
             med = raw_auto[s].median()
             if med > 0:
@@ -815,6 +1023,12 @@ def create_carrier_pdf(
                 (depth_df["Chr"] == chrom)
             )
             region_df = depth_df[locus_mask].sort_values("Start")
+            baf_region_df = None
+            baf_sites_region_df = None
+            if minor_baf_df is not None:
+                baf_region_df = minor_baf_df[locus_mask].sort_values("Start")
+            if baf_sites_df is not None:
+                baf_sites_region_df = baf_sites_df[locus_mask].sort_values("Start")
             if len(region_df) == 0:
                 continue
 
@@ -828,11 +1042,11 @@ def create_carrier_pdf(
 
             cluster_calls_df = calls_df[calls_df["cluster"] == cluster]
             _raw_region = None
-            if (
-                (raw_counts_df is not None or highres_path is not None)
-                and raw_sample_medians
-                and lowres_median_bin_size is not None
-            ):
+            if all([
+                raw_counts_df is not None or highres_path is not None,
+                bool(raw_sample_medians),
+                lowres_median_bin_size is not None,
+            ]):
                 _raw_region = _build_raw_region_df(
                     locus, region_start, region_end,
                     raw_counts_df, list(raw_sample_medians.keys()),
@@ -849,11 +1063,21 @@ def create_carrier_pdf(
                 sample_calls = cluster_calls_df[cluster_calls_df["sample"] == sample_id]
 
                 figure_scale = 1.0
-                fig, axes = plt.subplots(2, 1, figsize=(12 * figure_scale, 4 * figure_scale),
-                                         gridspec_kw={"height_ratios": [1, 2]})
+                fig, axes = plt.subplots(
+                    3,
+                    1,
+                    figsize=(12 * figure_scale, 5.5 * figure_scale),
+                    gridspec_kw={"height_ratios": [1, 2, 1]},
+                )
 
                 bin_mids = (region_df["Start"].values + region_df["End"].values) / 2
                 sample_depth = region_df[sample_id].values
+                sample_minor_baf, sample_baf_sites = _extract_sample_baf_vectors(
+                    region_df,
+                    baf_region_df,
+                    baf_sites_region_df,
+                    sample_id,
+                )
 
                 # Transform bar geometry
                 d_bin_mids = xform(bin_mids)
@@ -904,8 +1128,15 @@ def create_carrier_pdf(
                               colors="black", linewidth=2.5, alpha=0.8, zorder=2,
                               label=f"Mean depth={mean_depth:.2f}")
 
-                ax.bar(d_bin_mids, sample_depth, width=d_bar_widths * 0.9, alpha=0.6,
-                       color="steelblue", edgecolor="none", zorder=3)
+                _plot_depth_bars_with_baf(
+                    ax,
+                    d_bin_mids,
+                    d_bar_widths,
+                    sample_depth,
+                    minor_baf_values=sample_minor_baf,
+                    baf_site_counts=sample_baf_sites,
+                    zorder=3,
+                )
 
                 # Overlay raw depth trace if available
                 if _raw_region is not None and sample_id in _raw_region.columns:
@@ -982,11 +1213,22 @@ def create_carrier_pdf(
 
                 ax.set_xlim(0.0, xform.d_end)
                 ax.set_ylim(0, 5)
-                ax.set_xlabel(f"Position on {chrom}")
                 ax.set_ylabel("Normalized Depth")
                 ax.grid(True, alpha=0.3, axis="y", zorder=0)
                 ax.legend(loc="upper right", fontsize=8)
-                xform.format_genomic_ticks(ax, locus.breakpoints)
+
+                # Panel 3: BAF signal
+                baf_ax = axes[2]
+                _plot_baf_signal_panel(
+                    baf_ax,
+                    d_bin_mids,
+                    d_bar_widths,
+                    sample_minor_baf,
+                    sample_baf_sites,
+                    xform,
+                    locus,
+                    chrom,
+                )
 
                 plt.tight_layout()
                 pdf.savefig(fig)
@@ -1172,6 +1414,27 @@ def main():
                        if c not in ["Cluster", "Chr", "Start", "End"]]
     print(f"    {len(depth_df)} bin-rows x {len(sample_cols_all)} samples (across all loci)")
 
+    minor_baf_df = None
+    baf_sites_df = None
+    if "minor_baf_median" in cn_posteriors_df.columns and "baf_n_sites" in cn_posteriors_df.columns:
+        minor_baf_df = cn_posteriors_df.pivot(
+            index=["cluster", "chr", "start", "end"],
+            columns="sample",
+            values="minor_baf_median",
+        ).reset_index()
+        minor_baf_df = minor_baf_df.rename(columns={
+            "cluster": "Cluster", "chr": "Chr", "start": "Start", "end": "End",
+        })
+        baf_sites_df = cn_posteriors_df.pivot(
+            index=["cluster", "chr", "start", "end"],
+            columns="sample",
+            values="baf_n_sites",
+        ).reset_index()
+        baf_sites_df = baf_sites_df.rename(columns={
+            "cluster": "Cluster", "chr": "Chr", "start": "Start", "end": "End",
+        })
+        print("    Built aligned minor-BAF matrices for carrier PDF bars")
+
     # Optional annotations
     gtf = None
     if args.gtf:
@@ -1201,8 +1464,10 @@ def main():
         print(f"    {len(raw_counts_df)} bins")
         autosomal = [str(c) for c in range(1, 23)] + [f"chr{c}" for c in range(1, 23)]
         raw_auto = raw_counts_df[raw_counts_df["Chr"].isin(autosomal)]
-        raw_sample_cols = [c for c in raw_counts_df.columns
-                          if c not in ("Chr", "Start", "End", "source_file", "Bin")]
+        raw_sample_cols = [
+            c for c in raw_counts_df.columns
+            if c not in ("Chr", "Start", "End", "source_file", "Bin")
+        ]
         for s in raw_sample_cols:
             med = raw_auto[s].median()
             if med > 0:
@@ -1315,7 +1580,10 @@ def main():
     print("\nCreating carrier PDF...")
     create_carrier_pdf(
         plot_calls_df, depth_df, filtered_gd_table, gtf, segdup,
-        args.output_dir, padding=args.padding,
+        args.output_dir,
+        minor_baf_df=minor_baf_df,
+        baf_sites_df=baf_sites_df,
+        padding=args.padding,
         min_gene_label_spacing=args.min_gene_label_spacing,
         raw_counts_df=raw_counts_df,
         gaps=gaps,
