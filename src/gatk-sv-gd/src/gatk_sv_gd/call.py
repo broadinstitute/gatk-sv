@@ -289,6 +289,14 @@ def call_cnvs_from_posteriors(
         for s_idx, sample_id in enumerate(sample_ids):
             sample_ploidy = ploidy_lookup.get((str(sample_id), locus.chrom), 2)
 
+            # Only ploidy 1 and 2 are supported by the Viterbi model.
+            if sample_ploidy > 2:
+                if verbose:
+                    _util.vlog(f"\n  [VIT] Sample: {sample_id}  "
+                               f"({locus.chrom}, ploidy={sample_ploidy}) "
+                               f"-- SKIPPED (ploidy > 2 not supported)")
+                continue
+
             if verbose:
                 strategy = "VIT"
                 _util.vlog(f"\n  [{strategy}] Sample: {sample_id}  "
@@ -307,14 +315,15 @@ def call_cnvs_from_posteriors(
                 bin_coords=bin_coords_by_idx,
                 all_cluster_bins=all_cluster_bins,
             )
-            for start, end, mean_cn, category in path_records:
+            for start, end, cn_state, category, haplotype in path_records:
                 all_path_records.append({
                     "sample": sample_id,
                     "cluster": cluster,
                     "start": start,
                     "end": end,
-                    "mean_cn": mean_cn,
+                    "cn_state": cn_state,
                     "category": category,
+                    "haplotype": haplotype,
                 })
             best_by_svtype = determine_best_breakpoints(calls)
 
@@ -359,7 +368,7 @@ def call_cnvs_from_posteriors(
                     "is_terminal": call["is_terminal"],
                     "n_bins": call["n_bins"],
                     "mean_depth": mean_depth,
-                    "mean_cn": call.get("mean_cn", np.nan),
+                    "cn_state": call.get("cn_state", sample_ploidy),
                     "is_carrier": call["is_carrier"],
                     "is_best_match": (
                         call["GD_ID"] == best_gd_for_svtype

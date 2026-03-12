@@ -5,6 +5,17 @@ Implements the Viterbi algorithm on per-bin CN posterior probabilities to
 produce smooth copy-number segmentations, then checks each GD entry's
 breakpoint pattern against the resulting path to call carriers.
 
+For **diploid** samples the hidden state is a *pair* of per-haplotype copy
+numbers ``(h1, h2)`` with ``h1 <= h2`` (canonical ordering).  The observed
+total CN posterior ``p(CN=k | data)`` acts as the prior on each pair whose
+``h1 + h2 == k``.  Transitions factorise as the product of independent
+per-haplotype transitions.  Any bias toward or against specific
+haplotype states should be encoded in the transition matrix itself.
+
+For **haploid** samples the algorithm is unchanged.
+
+Samples with **ploidy > 2** are skipped.
+
 This module is used by :mod:`gatk_sv_gd.call` when the ``--transition-matrix``
 option is provided.
 """
@@ -207,6 +218,235 @@ def _extract_segments(
 
 
 # =============================================================================
+# Diploid pair-state helpers
+# =============================================================================
+
+# Maximum per-haplotype copy number.  For a diploid sample the hidden state
+# is (h1, h2) with 0 <= h1 <= h2 <= _MAX_HAP_CN.  Total CN = h1 + h2.
+_MAX_HAP_CN = 3
+
+
+def _build_pair_states(max_hap_cn: int = _MAX_HAP_CN) -> List[Tuple[int, int]]:
+    """Return the canonical list of (h1, h2) pairs with h1 <= h2."""
+    return [
+        (h1, h2)
+        for h1 in range(max_hap_cn + 1)
+        for h2 in range(h1, max_hap_cn + 1)
+    ]
+
+
+def _build_diploid_obs_log_priors(
+    total_cn_log_priors: np.ndarray,
+    pair_states: List[Tuple[int, int]],
+) -> np.ndarray:
+    """Derive per-bin log priors for each (h1, h2) pair from total CN posteriors.
+
+    For each pair (h1, h2) with total = h1 + h2, the observation prior is
+    simply ``log p(total_CN = h1+h2 | data)``.  All pairs that sum to the
+    same total share the same observation prior — the transition matrix
+    alone determines which decomposition is preferred.
+
+    No degeneracy bonus is applied for heterozygous pairs (h1 != h2).
+    Although there are two physical orderings of such pairs, adding a
+    per-bin log(2) bonus would overwhelm the transition penalty after
+    only a few bins and systematically favour heterozygous states like
+    (0, 2) over the normal (1, 1).
+
+    Args:
+        total_cn_log_priors: (T, K_total) array of log p(CN=k | data) for
+            each of T bins.
+        pair_states: list of (h1, h2) pairs from ``_build_pair_states()``.
+
+    Returns:
+        (T, n_pairs) array of log observation priors for each pair state.
+    """
+    T, K_total = total_cn_log_priors.shape
+    n_pairs = len(pair_states)
+    obs = np.full((T, n_pairs), -1e30)
+
+    for p_idx, (h1, h2) in enumerate(pair_states):
+        total = h1 + h2
+        if total >= K_total:
+            continue  # total CN outside the model's state range
+        obs[:, p_idx] = total_cn_log_priors[:, total]
+
+    return obs
+
+
+def _equalize_hap_diagonals(hap_trans: np.ndarray) -> np.ndarray:
+    """Equalize diagonal (self-transition) entries of a per-haplotype matrix.
+
+    When independent per-haplotype transitions are combined into a diploid
+    pair-state matrix, rows with *lower* diagonal values produce less sticky
+    pair states.  This creates an artifact: state 1 (per-haplotype
+    reference) typically has the most off-diagonal weight — easy transitions
+    to CN 0, 2, 3, etc. — so its diagonal is lower after normalization.
+    The reference pair ``(1, 1)`` therefore becomes less sticky than
+    non-reference pairs like ``(0, 2)`` whose constituent states 0 and 2
+    each have fewer exit paths.
+
+    This function rescales each row so that **all diagonal entries equal the
+    maximum diagonal** in the matrix.  Relative off-diagonal ratios are
+    preserved::
+
+        new_off_diag[i, j] = old_off_diag[i, j] × (1 − d_max) / (1 − d_i)
+
+    where ``d_i`` is the original diagonal and ``d_max`` is the target.
+
+    Returns:
+        A copy of *hap_trans* with equalized diagonals.
+    """
+    n = hap_trans.shape[0]
+    diags = np.diag(hap_trans).copy()
+    d_max = diags.max()
+
+    result = hap_trans.copy()
+    for i in range(n):
+        if diags[i] >= d_max - 1e-12:
+            continue
+        off_diag_sum = 1.0 - diags[i]
+        new_off_diag_sum = 1.0 - d_max
+        if off_diag_sum > 1e-30:
+            scale = new_off_diag_sum / off_diag_sum
+            result[i] = hap_trans[i] * scale
+            result[i, i] = d_max
+    return result
+
+
+def _build_diploid_transition_matrix(
+    hap_trans: np.ndarray,
+    pair_states: List[Tuple[int, int]],
+) -> np.ndarray:
+    """Build a pair-state transition matrix from a per-haplotype matrix.
+
+    Before combining, the per-haplotype diagonals are equalized via
+    :func:`_equalize_hap_diagonals` so that no pair state is artificially
+    stickier than the reference pair ``(1, 1)``.
+
+    The two haplotypes then transition independently::
+
+        P((h1', h2') | (h1, h2)) = P_hap(h1' | h1) * P_hap(h2' | h2)
+
+    When (h1, h2) → (h1', h2') requires remapping to canonical order
+    (h1' <= h2'), we sum over both orderings.
+
+    Args:
+        hap_trans: (K_hap, K_hap) per-haplotype transition matrix.
+        pair_states: list of (h1, h2) canonical pairs.
+
+    Returns:
+        (n_pairs, n_pairs) transition matrix over pair states.
+    """
+    # Equalize per-haplotype diagonals so that the reference pair (1,1)
+    # is not disadvantaged relative to pairs like (0,2).
+    hap_trans = _equalize_hap_diagonals(hap_trans)
+
+    n_pairs = len(pair_states)
+    pair_idx = {pair: i for i, pair in enumerate(pair_states)}
+    trans = np.zeros((n_pairs, n_pairs))
+
+    max_cn = hap_trans.shape[0]
+    for i, (a1, a2) in enumerate(pair_states):
+        if a1 >= max_cn or a2 >= max_cn:
+            trans[i, i] = 1.0
+            continue
+        for b1 in range(max_cn):
+            for b2 in range(max_cn):
+                # Canonical ordering
+                lo, hi = (b1, b2) if b1 <= b2 else (b2, b1)
+                j = pair_idx.get((lo, hi))
+                if j is None:
+                    continue
+                prob = hap_trans[a1, b1] * hap_trans[a2, b2]
+                trans[i, j] += prob
+
+    # Normalize rows
+    row_sums = trans.sum(axis=1, keepdims=True)
+    row_sums = np.maximum(row_sums, 1e-30)
+    trans = trans / row_sums
+    return trans
+
+
+def _build_diploid_initial_log_probs(
+    pair_states: List[Tuple[int, int]],
+) -> np.ndarray:
+    """Initial log probabilities for pair states.
+
+    Strong prior on (1, 1) — the normal diploid state.  Small uniform
+    probability on all other pairs.
+    """
+    n_pairs = len(pair_states)
+    log_probs = np.full(n_pairs, np.log(1e-6))
+    for i, (h1, h2) in enumerate(pair_states):
+        if h1 == 1 and h2 == 1:
+            log_probs[i] = np.log(1.0 - 1e-6 * (n_pairs - 1))
+    return log_probs
+
+
+def _run_diploid_viterbi(
+    total_cn_log_priors: np.ndarray,
+    hap_transition_matrix: np.ndarray,
+    breakpoint_mask: Optional[np.ndarray],
+    hap_breakpoint_transition_matrix: Optional[np.ndarray],
+) -> Tuple[np.ndarray, np.ndarray, float, List[Tuple[int, int]]]:
+    """Run the Viterbi algorithm over diploid pair states.
+
+    Args:
+        total_cn_log_priors: (T, K_total) log posteriors from the Pyro model.
+        hap_transition_matrix: (K_hap, K_hap) per-haplotype transition matrix.
+        breakpoint_mask: optional (T-1,) boolean mask.
+        hap_breakpoint_transition_matrix: optional per-haplotype breakpoint
+            transition matrix.
+
+    Returns:
+        Tuple of:
+          - hap1_path: (T,) int array of haplotype-1 CN states.
+          - hap2_path: (T,) int array of haplotype-2 CN states.
+          - confidence: float mean per-bin log-prior along the path.
+          - pair_states: the list of (h1, h2) pairs used.
+    """
+    pair_states = _build_pair_states()
+
+    # Observation priors
+    obs = _build_diploid_obs_log_priors(
+        total_cn_log_priors, pair_states,
+    )
+
+    # Transition matrices
+    pair_trans = _build_diploid_transition_matrix(
+        hap_transition_matrix, pair_states,
+    )
+    pair_bp_trans = None
+    if hap_breakpoint_transition_matrix is not None:
+        pair_bp_trans = _build_diploid_transition_matrix(
+            hap_breakpoint_transition_matrix, pair_states,
+        )
+
+    # Initial probs
+    initial = _build_diploid_initial_log_probs(
+        pair_states,
+    )
+
+    # Run standard Viterbi on pair states
+    pair_path, confidence = run_viterbi(
+        obs, pair_trans, initial,
+        breakpoint_mask=breakpoint_mask,
+        breakpoint_transition_matrix=pair_bp_trans,
+    )
+
+    # Decompose into per-haplotype paths
+    T = len(pair_path)
+    hap1 = np.empty(T, dtype=int)
+    hap2 = np.empty(T, dtype=int)
+    for t in range(T):
+        h1, h2 = pair_states[pair_path[t]]
+        hap1[t] = h1
+        hap2[t] = h2
+
+    return hap1, hap2, confidence, pair_states
+
+
+# =============================================================================
 # Category-segment builder
 # =============================================================================
 
@@ -217,22 +457,20 @@ def _build_category_segments(
     bin_coords: Dict[int, Tuple[int, int]],
     ploidy: int,
 ) -> List[dict]:
-    """Partition the Viterbi path into contiguous genomic segments by CN
-    category relative to *ploidy*.
+    """Partition the Viterbi path into contiguous genomic segments by exact
+    CN state.
 
-    Categories:
+    Adjacent bins with the **same integer CN state** are merged into a
+    single segment.  Each segment is labelled with a category relative to
+    *ploidy*:
 
     - ``DEL``: CN < ploidy
     - ``REF``: CN == ploidy
     - ``DUP``: CN > ploidy
 
-    Adjacent bins with the same category are merged into a single segment
-    whose genomic span runs from the start of the first bin to the end of
-    the last.
-
     Returns:
         List of dicts with keys ``category``, ``start``, ``end``,
-        ``mean_cn``, ``n_bins``.
+        ``cn_state`` (int), ``n_bins``.
     """
     if len(path) == 0:
         return []
@@ -251,41 +489,100 @@ def _build_category_segments(
 
     seg_start = first_coords[0]
     seg_end = first_coords[1]
-    seg_cat = _cat(int(path[0]))
-    seg_cn_sum = float(path[0])
+    seg_cn = int(path[0])
     seg_n = 1
 
     for i in range(1, len(path)):
         coords = bin_coords.get(all_bins[i])
         if coords is None:
             continue
-        cat = _cat(int(path[i]))
-        if cat == seg_cat:
+        cn = int(path[i])
+        if cn == seg_cn:
             seg_end = coords[1]
-            seg_cn_sum += float(path[i])
             seg_n += 1
         else:
             segments.append({
-                "category": seg_cat,
+                "category": _cat(seg_cn),
                 "start": seg_start,
                 "end": seg_end,
-                "mean_cn": seg_cn_sum / seg_n,
+                "cn_state": seg_cn,
                 "n_bins": seg_n,
             })
             seg_start = coords[0]
             seg_end = coords[1]
-            seg_cat = cat
-            seg_cn_sum = float(path[i])
+            seg_cn = cn
             seg_n = 1
 
     segments.append({
-        "category": seg_cat,
+        "category": _cat(seg_cn),
         "start": seg_start,
         "end": seg_end,
-        "mean_cn": seg_cn_sum / seg_n,
+        "cn_state": seg_cn,
         "n_bins": seg_n,
     })
     return segments
+
+
+def _combine_hap_match_segments(
+    hap1_segs: List[dict],
+    hap2_segs: List[dict],
+) -> List[dict]:
+    """Merge per-haplotype non-REF segments for GD entry matching.
+
+    For diploid calling we want to match GD entries against per-haplotype
+    segments rather than total-CN segments, so that overlapping events on
+    different haplotypes don't cancel each other out.
+
+    The logic:
+      - Collect all DEL segments from either haplotype.
+      - Collect all DUP segments from either haplotype.
+      - Merge overlapping/adjacent segments of the same svtype.
+      - Return the merged list.  ``mean_cn`` is set to the per-haplotype
+        value (relative to ploidy=1 per haplotype).
+
+    This lets e.g. a DUP spanning A→E on haplotype 1 be matched even when
+    haplotype 2 has a DEL in the D-E region that lowers total CN.
+    """
+    combined: List[dict] = []
+    for svtype in ("DEL", "DUP"):
+        segs = sorted(
+            [s for s in hap1_segs + hap2_segs if s["category"] == svtype],
+            key=lambda s: s["start"],
+        )
+        if not segs:
+            continue
+        # Merge overlapping/adjacent
+        merged_start = segs[0]["start"]
+        merged_end = segs[0]["end"]
+        merged_cn = segs[0]["cn_state"]
+        merged_n = segs[0]["n_bins"]
+        for s in segs[1:]:
+            if s["start"] <= merged_end:
+                merged_end = max(merged_end, s["end"])
+                # Keep the cn_state from whichever segment has more bins
+                if s["n_bins"] > merged_n:
+                    merged_cn = s["cn_state"]
+                merged_n += s["n_bins"]
+            else:
+                combined.append({
+                    "category": svtype,
+                    "start": merged_start,
+                    "end": merged_end,
+                    "cn_state": merged_cn,
+                    "n_bins": merged_n,
+                })
+                merged_start = s["start"]
+                merged_end = s["end"]
+                merged_cn = s["cn_state"]
+                merged_n = s["n_bins"]
+        combined.append({
+            "category": svtype,
+            "start": merged_start,
+            "end": merged_end,
+            "cn_state": merged_cn,
+            "n_bins": merged_n,
+        })
+    return combined
 
 
 # =============================================================================
@@ -358,8 +655,8 @@ def viterbi_call_gd_cnv(
     Returns:
         Tuple of:
           - List of call dicts (one per GD entry).
-          - List of (genomic_start, genomic_end, mean_cn, category) tuples,
-            one per contiguous CN-category segment (DEL/REF/DUP).  Empty
+          - List of (genomic_start, genomic_end, cn_state, category,
+            haplotype) tuples, one per contiguous CN-state segment.  Empty
             when *bin_coords* is None or no bins are available.
     """
     # Collect all bin indices for this locus.
@@ -450,50 +747,110 @@ def viterbi_call_gd_cnv(
                     f"{bp_steps[:5]}{'...' if len(bp_steps) > 5 else ''})"
                 )
 
-    # Initial hidden-state prior: strong prior on reference CN (ploidy)
-    initial_log_probs = np.full(n_states, np.log(1e-6))
-    if ploidy < n_states:
-        initial_log_probs[ploidy] = np.log(1.0 - 1e-6 * (n_states - 1))
-
     # Subset breakpoint matrix to n_states if provided
     bp_tm = (
         breakpoint_transition_matrix[:n_states, :n_states]
         if breakpoint_transition_matrix is not None else None
     )
 
-    path, confidence = run_viterbi(
-        state_log_priors, tm, initial_log_probs,
-        breakpoint_mask=breakpoint_mask,
-        breakpoint_transition_matrix=bp_tm,
-    )
-
-    if verbose:
-        segments = _extract_segments(path)
-        seg_str = " -> ".join(
-            f"CN{state}x{end - start}" for start, end, state in segments
+    # ==========================================================================
+    # Dispatch: diploid pair-state model  vs  haploid (unchanged)
+    # ==========================================================================
+    if ploidy == 2:
+        # ----- Diploid: run Viterbi on (h1, h2) pair states -----
+        hap1_path, hap2_path, confidence, pair_states = _run_diploid_viterbi(
+            state_log_priors,
+            tm,
+            breakpoint_mask,
+            bp_tm,
         )
-        _util.vlog(f"  [VIT] {sample_id}  {locus.cluster}  "
-                   f"{len(all_bins)} bins  ploidy={ploidy}  "
-                   f"confidence={confidence:+.4f}")
-        _util.vlog(f"    Segments: {seg_str}")
+        total_path = hap1_path + hap2_path  # total CN per bin
 
-    # ----------------------------------------------------------------
-    # Build category segments (DEL / REF / DUP) in genomic coordinates
-    # ----------------------------------------------------------------
-    cat_segments = _build_category_segments(path, all_bins, bin_coords, ploidy)
+        if verbose:
+            # Log pair-state segments
+            pair_segs = _extract_segments(total_path)
+            seg_str = " -> ".join(
+                f"CN{state}x{end - start}" for start, end, state in pair_segs
+            )
+            _util.vlog(f"  [VIT-DIP] {sample_id}  {locus.cluster}  "
+                       f"{len(all_bins)} bins  ploidy={ploidy}  "
+                       f"confidence={confidence:+.4f}")
+            _util.vlog(f"    Total CN segments: {seg_str}")
+            h1_segs = _extract_segments(hap1_path)
+            h2_segs = _extract_segments(hap2_path)
+            _util.vlog(f"    Hap1: {' -> '.join(f'CN{s}x{e-b}' for b,e,s in h1_segs)}")
+            _util.vlog(f"    Hap2: {' -> '.join(f'CN{s}x{e-b}' for b,e,s in h2_segs)}")
+
+        # Build per-haplotype category segments (ploidy_per_hap = 1)
+        hap1_cat_segs = _build_category_segments(
+            hap1_path, all_bins, bin_coords, ploidy=1,
+        )
+        hap2_cat_segs = _build_category_segments(
+            hap2_path, all_bins, bin_coords, ploidy=1,
+        )
+        # Also build total-CN category segments for GD entry matching
+        total_cat_segs = _build_category_segments(
+            total_path, all_bins, bin_coords, ploidy=ploidy,
+        )
+
+    elif ploidy == 1:
+        # ----- Haploid: unchanged single-chain Viterbi -----
+        initial_log_probs = np.full(n_states, np.log(1e-6))
+        if ploidy < n_states:
+            initial_log_probs[ploidy] = np.log(1.0 - 1e-6 * (n_states - 1))
+
+        path, confidence = run_viterbi(
+            state_log_priors, tm, initial_log_probs,
+            breakpoint_mask=breakpoint_mask,
+            breakpoint_transition_matrix=bp_tm,
+        )
+
+        if verbose:
+            segments = _extract_segments(path)
+            seg_str = " -> ".join(
+                f"CN{state}x{end - start}" for start, end, state in segments
+            )
+            _util.vlog(f"  [VIT] {sample_id}  {locus.cluster}  "
+                       f"{len(all_bins)} bins  ploidy={ploidy}  "
+                       f"confidence={confidence:+.4f}")
+            _util.vlog(f"    Segments: {seg_str}")
+
+        total_path = path
+        hap1_path = path
+        hap2_path = None
+        hap1_cat_segs = _build_category_segments(path, all_bins, bin_coords, ploidy)
+        hap2_cat_segs = []
+        total_cat_segs = hap1_cat_segs
+
+    else:
+        # Ploidy > 2 is not supported — return empty results.
+        if verbose:
+            _util.vlog(f"  [VIT] {sample_id}  {locus.cluster}: "
+                       f"ploidy={ploidy} > 2, skipping")
+        return [], []
 
     if verbose:
-        for seg in cat_segments:
+        for seg in total_cat_segs:
             if seg["category"] != "REF":
                 _util.vlog(
                     f"    {seg['category']} segment: "
                     f"{seg['start']:,}-{seg['end']:,} "
-                    f"({seg['n_bins']} bins, mean CN={seg['mean_cn']:.2f})"
+                    f"({seg['n_bins']} bins, CN={seg['cn_state']})"
                 )
 
     # ----------------------------------------------------------------
-    # Match each GD entry against category segments by reciprocal overlap
+    # Match each GD entry against category segments by reciprocal overlap.
+    # For diploid we match per-haplotype segments: a DEL is any haplotype
+    # dropping below reference (CN=1) and a DUP is any haplotype rising
+    # above reference.
     # ----------------------------------------------------------------
+
+    # Combine per-haplotype non-REF segments for matching.  For haploid
+    # this is identical to total_cat_segs.
+    match_segments = total_cat_segs if ploidy != 2 else _combine_hap_match_segments(
+        hap1_cat_segs, hap2_cat_segs,
+    )
+
     calls: List[dict] = []
     for entry in locus.gd_entries:
         gd_id    = entry["GD_ID"]
@@ -510,7 +867,7 @@ def viterbi_call_gd_cnv(
         best_ro = 0.0
         best_seg = None
         if entry_len > 0:
-            for seg in cat_segments:
+            for seg in match_segments:
                 if seg["category"] != svtype:
                     continue
                 seg_len = seg["end"] - seg["start"]
@@ -525,7 +882,7 @@ def viterbi_call_gd_cnv(
                     best_seg = seg
 
         is_carrier = best_ro >= reciprocal_overlap_threshold
-        mean_cn = best_seg["mean_cn"] if best_seg else float(ploidy)
+        cn_state = best_seg["cn_state"] if best_seg else ploidy
 
         if verbose:
             tag = " [CARRIER]" if is_carrier else ""
@@ -556,14 +913,29 @@ def viterbi_call_gd_cnv(
             "reciprocal_overlap":      best_ro,
             "intervals":               covered_intervals,
             "n_bins":                  n_bins,
-            "mean_cn":                 mean_cn,
+            "cn_state":                cn_state,
         })
 
-    # Return category segments (DEL/REF/DUP) for downstream use (e.g. plotting).
-    # Each entry is (genomic_start, genomic_end, mean_cn, category).
-    segment_records = [
-        (seg["start"], seg["end"], seg["mean_cn"], seg["category"])
-        for seg in cat_segments
-    ]
+    # ----------------------------------------------------------------
+    # Build segment records for downstream use (plotting).
+    # For diploid, emit per-haplotype records tagged with haplotype=1/2
+    # as well as a total-CN record (haplotype=0).
+    # For haploid, emit haplotype=0 only.
+    # Each entry is (genomic_start, genomic_end, cn_state, category, haplotype).
+    # ----------------------------------------------------------------
+    segment_records: List[Tuple[int, int, int, str, int]] = []
+    for seg in total_cat_segs:
+        segment_records.append(
+            (seg["start"], seg["end"], seg["cn_state"], seg["category"], 0)
+        )
+    if ploidy == 2:
+        for seg in hap1_cat_segs:
+            segment_records.append(
+                (seg["start"], seg["end"], seg["cn_state"], seg["category"], 1)
+            )
+        for seg in hap2_cat_segs:
+            segment_records.append(
+                (seg["start"], seg["end"], seg["cn_state"], seg["category"], 2)
+            )
 
     return calls, segment_records
