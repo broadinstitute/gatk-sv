@@ -395,7 +395,7 @@ task GenerateInputsJson {
     mem_gb: 32,
     disk_gb: 500,
     boot_disk_gb: 30,
-    preemptible_tries: 3,
+    preemptible_tries: 0,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
