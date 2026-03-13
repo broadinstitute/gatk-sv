@@ -167,6 +167,15 @@ def load_truth_table(filepath: str) -> pd.DataFrame:
     return _load_truth_table_bed_format(df)
 
 
+def _get_confidence_column(calls_df: pd.DataFrame) -> Optional[str]:
+    """Return the preferred confidence column present in the calls file."""
+    if "confidence_score" in calls_df.columns:
+        return "confidence_score"
+    if "log_prob_score" in calls_df.columns:
+        return "log_prob_score"
+    return None
+
+
 # =============================================================================
 # Evaluation
 # =============================================================================
@@ -198,9 +207,10 @@ def evaluate_against_truth(
         batch_samples: Optional set of sample IDs present in the current
             batch.  If provided, truth carriers not in this set are removed
             before scoring.
-        min_confidence: Optional minimum ``log_prob_score`` required for a
-            predicted carrier call to count during evaluation. If ``None``,
-            no confidence filter is applied.
+        min_confidence: Optional minimum confidence required for a predicted
+            carrier call to count during evaluation. Uses
+            ``confidence_score`` when present, otherwise falls back to
+            ``log_prob_score``. If ``None``, no confidence filter is applied.
 
     Returns:
         Per-site report DataFrame.
@@ -212,8 +222,18 @@ def evaluate_against_truth(
     if batch_samples is not None:
         print(f"  Batch contains {len(batch_samples)} samples; "
               "truth carriers will be restricted to this set.")
+    score_column = None
     if min_confidence is not None:
-        print(f"  Enforcing call confidence threshold: log_prob_score >= {min_confidence:.3f}")
+        score_column = _get_confidence_column(calls_df)
+        if score_column is None:
+            raise ValueError(
+                "--min-confidence requires a calls file with either "
+                "confidence_score or log_prob_score column"
+            )
+        print(
+            f"  Enforcing call confidence threshold: "
+            f"{score_column} >= {min_confidence:.3f}"
+        )
 
     # Build predicted carrier sets keyed by GD_ID.
     # Only count samples whose call is both a carrier AND the best-match
@@ -226,11 +246,7 @@ def evaluate_against_truth(
         if "is_best_match" in grp.columns:
             carrier_mask = carrier_mask & (grp["is_best_match"] == True)  # noqa: E712
         if min_confidence is not None:
-            if "log_prob_score" not in grp.columns:
-                raise ValueError(
-                    "--min-confidence requires a calls file with a log_prob_score column"
-                )
-            carrier_mask = carrier_mask & (grp["log_prob_score"] >= min_confidence)
+            carrier_mask = carrier_mask & (grp[score_column] >= min_confidence)
         pred_by_gd[gd_id_str] = set(
             grp.loc[carrier_mask, "sample"].unique()
         )
@@ -389,9 +405,11 @@ def parse_args():
         const=-0.3,
         default=None,
         type=float,
-        help="Optional minimum log_prob_score required for a predicted carrier "
-             "to count in evaluation. If the flag is provided without a value, "
-             "uses -0.3. If omitted entirely, no confidence threshold is enforced.",
+        help="Optional minimum confidence required for a predicted carrier to "
+             "count in evaluation. Uses confidence_score when present, "
+             "otherwise falls back to log_prob_score. If the flag is provided "
+             "without a value, uses -0.3. If omitted entirely, no confidence "
+             "threshold is enforced.",
     )
     return parser.parse_args()
 

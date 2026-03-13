@@ -167,6 +167,31 @@ class ViterbiOverlayData:
         )
 
 
+def _get_confidence_column(calls_df: pd.DataFrame) -> str:
+    """Return the preferred confidence column present in the calls table."""
+    if "confidence_score" in calls_df.columns:
+        return "confidence_score"
+    if "log_prob_score" in calls_df.columns:
+        return "log_prob_score"
+    raise ValueError(
+        "Calls table is missing both 'confidence_score' and 'log_prob_score'."
+    )
+
+
+def _get_confidence_label(confidence_column: str) -> str:
+    """Return a human-readable axis label for the confidence column."""
+    return "Confidence Score" if confidence_column == "confidence_score" else "Log Probability Score"
+
+
+def _get_event_probability_column(svtype: str) -> str:
+    """Return the event-marginal column matching one SV type."""
+    if svtype == "DEL":
+        return "prob_del_event"
+    if svtype == "DUP":
+        return "prob_dup_event"
+    raise ValueError(f"Unsupported svtype: {svtype}")
+
+
 def _sorted_viterbi_segments(segments: Optional[List[dict]]) -> List[dict]:
     """Return Viterbi segments sorted left-to-right with stable tie breaks."""
     if not segments:
@@ -406,6 +431,7 @@ def _plot_baf_signal_panel(
     xform: FlankCompressor,
     locus: GDLocus,
     chrom: str,
+    show_xlabel: bool = True,
 ) -> None:
     """Render the modeled per-bin minor-BAF signal for one sample."""
     ax.set_xlim(0.0, xform.d_end)
@@ -425,7 +451,8 @@ def _plot_baf_signal_panel(
             color="dimgray",
             fontsize=9,
         )
-        ax.set_xlabel(f"Position on {chrom}")
+        if show_xlabel:
+            ax.set_xlabel(f"Position on {chrom}")
         ax.set_ylabel("Minor BAF")
         xform.format_genomic_ticks(ax, locus.breakpoints)
         return
@@ -470,8 +497,108 @@ def _plot_baf_signal_panel(
             fontsize=9,
         )
 
-    ax.set_xlabel(f"Position on {chrom}")
+    if show_xlabel:
+        ax.set_xlabel(f"Position on {chrom}")
     ax.set_ylabel("Minor BAF")
+    xform.format_genomic_ticks(ax, locus.breakpoints)
+
+
+def _extract_sample_event_probabilities(
+    region_df: pd.DataFrame,
+    event_marginals_df: Optional[pd.DataFrame],
+    sample_id: str,
+    svtype: str,
+) -> Optional[np.ndarray]:
+    """Align per-bin event marginals to a region/sample depth slice."""
+    if event_marginals_df is None:
+        return None
+
+    event_column = _get_event_probability_column(svtype)
+    if sample_id not in event_marginals_df["sample"].astype(str).values:
+        return None
+
+    key_cols = ["Cluster", "Chr", "Start", "End"]
+    region_keys = region_df[key_cols]
+    sample_event_df = event_marginals_df[event_marginals_df["sample"] == sample_id]
+    if len(sample_event_df) == 0:
+        return None
+
+    aligned = region_keys.merge(
+        sample_event_df[key_cols + [event_column]],
+        on=key_cols,
+        how="left",
+    )
+    return aligned[event_column].to_numpy(dtype=float)
+
+
+def _plot_event_marginal_panel(
+    ax,
+    x_positions: np.ndarray,
+    bar_widths: np.ndarray,
+    event_probabilities: Optional[np.ndarray],
+    xform: FlankCompressor,
+    locus: GDLocus,
+    chrom: str,
+    svtype: Optional[str],
+) -> None:
+    """Render per-bin event marginal probabilities for one sample."""
+    ax.set_xlim(0.0, xform.d_end)
+    ax.set_ylim(0.0, 1.0)
+    ax.axhline(0.5, color="gray", linestyle=":", linewidth=0.8, alpha=0.25, zorder=0)
+
+    if event_probabilities is None or svtype is None:
+        ax.text(
+            0.5,
+            0.5,
+            "No event marginals available",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            color="dimgray",
+            fontsize=9,
+        )
+        ax.set_xlabel(f"Position on {chrom}")
+        ax.set_ylabel("Event Prob.")
+        xform.format_genomic_ticks(ax, locus.breakpoints)
+        return
+
+    event_probabilities = np.asarray(event_probabilities, dtype=float)
+    valid = np.isfinite(event_probabilities)
+    color = "#C23B22" if svtype == "DEL" else "#2A6FBB"
+
+    if np.any(valid):
+        clipped = np.clip(event_probabilities[valid], 0.0, 1.0)
+        ax.bar(
+            x_positions[valid],
+            clipped,
+            width=np.asarray(bar_widths, dtype=float)[valid] * 0.85,
+            color=color,
+            alpha=0.25,
+            edgecolor="none",
+            zorder=1,
+        )
+        ax.plot(
+            x_positions[valid],
+            clipped,
+            color=color,
+            linewidth=1.2,
+            alpha=0.9,
+            zorder=2,
+        )
+    else:
+        ax.text(
+            0.5,
+            0.5,
+            "No finite event marginals",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            color="dimgray",
+            fontsize=9,
+        )
+
+    ax.set_xlabel(f"Position on {chrom}")
+    ax.set_ylabel(f"P({svtype} on ≥1 hap)")
     xform.format_genomic_ticks(ax, locus.breakpoints)
 
 
@@ -980,6 +1107,8 @@ def plot_sample_at_locus(
 def plot_carrier_summary(calls_df: pd.DataFrame, output_dir: str):
     """Create summary plots of carrier calls across all loci."""
     carriers = calls_df[calls_df["is_carrier"]].copy()
+    confidence_column = _get_confidence_column(calls_df)
+    confidence_label = _get_confidence_label(confidence_column)
 
     if len(carriers) == 0:
         print("No carriers to plot.")
@@ -997,16 +1126,16 @@ def plot_carrier_summary(calls_df: pd.DataFrame, output_dir: str):
     ax.legend(title="SV Type")
 
     ax = axes[1]
-    all_scores = carriers["log_prob_score"].dropna()
+    all_scores = carriers[confidence_column].dropna()
     bins = np.linspace(all_scores.min(), all_scores.max(), 21)
     for svtype, color in [("DEL", "red"), ("DUP", "blue")]:
         sv_data = carriers[carriers["svtype"] == svtype]
         if len(sv_data) > 0:
-            ax.hist(sv_data["log_prob_score"], bins=bins, alpha=0.6, color=color,
+            ax.hist(sv_data[confidence_column], bins=bins, alpha=0.6, color=color,
                     label=f"{svtype} (n={len(sv_data)})", edgecolor="black")
-    ax.set_xlabel("Log Probability Score")
+    ax.set_xlabel(confidence_label)
     ax.set_ylabel("Count")
-    ax.set_title("Log Probability Score Distribution in Carriers")
+    ax.set_title(f"{confidence_label} Distribution in Carriers")
     ax.legend()
 
     plt.tight_layout()
@@ -1017,19 +1146,21 @@ def plot_carrier_summary(calls_df: pd.DataFrame, output_dir: str):
 
 def plot_confidence_distribution(calls_df: pd.DataFrame, output_dir: str):
     """Plot distribution of confidence scores."""
+    confidence_column = _get_confidence_column(calls_df)
+    confidence_label = _get_confidence_label(confidence_column)
     figure_scale = 1.0
     fig, axes = plt.subplots(1, 2, figsize=(8 * figure_scale, 4 * figure_scale))
 
     ax = axes[0]
     carriers = calls_df[calls_df["is_carrier"]]
     non_carriers = calls_df[~calls_df["is_carrier"]]
-    all_scores = calls_df["log_prob_score"].dropna()
+    all_scores = calls_df[confidence_column].dropna()
     bins = np.linspace(all_scores.min(), all_scores.max(), 31)
-    ax.hist(non_carriers["log_prob_score"], bins=bins, alpha=0.6, label="Non-carriers",
+    ax.hist(non_carriers[confidence_column], bins=bins, alpha=0.6, label="Non-carriers",
             color="gray", edgecolor="black")
-    ax.hist(carriers["log_prob_score"], bins=bins, alpha=0.6, label="Carriers",
+    ax.hist(carriers[confidence_column], bins=bins, alpha=0.6, label="Carriers",
             color="green", edgecolor="black")
-    ax.set_xlabel("Log Probability Score")
+    ax.set_xlabel(confidence_label)
     ax.set_ylabel("Count")
     ax.set_yscale("log")
     ax.legend()
@@ -1037,14 +1168,14 @@ def plot_confidence_distribution(calls_df: pd.DataFrame, output_dir: str):
     ax = axes[1]
     non_carriers_mask = ~calls_df["is_carrier"]
     ax.scatter(calls_df.loc[non_carriers_mask, "mean_depth"],
-               calls_df.loc[non_carriers_mask, "log_prob_score"],
+               calls_df.loc[non_carriers_mask, confidence_column],
                c="gray", alpha=0.1, s=10, label="Non-carriers")
     carriers_mask = calls_df["is_carrier"]
     ax.scatter(calls_df.loc[carriers_mask, "mean_depth"],
-               calls_df.loc[carriers_mask, "log_prob_score"],
+               calls_df.loc[carriers_mask, confidence_column],
                c="green", alpha=0.5, s=10, label="Carriers")
     ax.set_xlabel("Mean Depth (normalized)")
-    ax.set_ylabel("Confidence")
+    ax.set_ylabel(confidence_label)
 
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "confidence_distribution.png"), dpi=150, bbox_inches="tight")
@@ -1059,6 +1190,7 @@ def create_carrier_pdf(
     gtf: Optional[GTFParser],
     segdup: Optional[SegDupAnnotation],
     output_dir: str,
+    event_marginals_df: Optional[pd.DataFrame] = None,
     minor_baf_df: Optional[pd.DataFrame] = None,
     baf_sites_df: Optional[pd.DataFrame] = None,
     padding: int = 50000,
@@ -1069,12 +1201,17 @@ def create_carrier_pdf(
     lowres_median_bin_size: Optional[float] = None,
     highres_path: Optional[str] = None,
     viterbi_data: Optional[ViterbiOverlayData] = None,
+    confidence_threshold: float = 0.5,
 ):
-    """Create a PDF with plots for all carrier samples."""
-    carriers = calls_df[calls_df["is_carrier"]]
+    """Create a PDF with plots for calls above the confidence threshold."""
+    confidence_column = _get_confidence_column(calls_df)
+    carriers = calls_df[calls_df[confidence_column] >= confidence_threshold].copy()
 
     if len(carriers) == 0:
-        print("No carriers to include in PDF.")
+        print(
+            "No calls at or above the carrier PDF confidence threshold "
+            f"({confidence_threshold:.2f})."
+        )
         return
 
     # Precompute per-sample genome-wide autosomal median raw counts
@@ -1109,7 +1246,10 @@ def create_carrier_pdf(
                 continue
 
             cluster_carriers = carriers[carriers["cluster"] == cluster]["sample"].unique()
-            print(f"  Adding {len(cluster_carriers)} carriers for {cluster}")
+            print(
+                f"  Adding {len(cluster_carriers)} high-confidence sample(s) for {cluster} "
+                f"(threshold={confidence_threshold:.2f})"
+            )
 
             chrom = locus.chrom
             locus_mask = (
@@ -1155,13 +1295,16 @@ def create_carrier_pdf(
                     continue
 
                 sample_calls = cluster_calls_df[cluster_calls_df["sample"] == sample_id]
+                pdf_calls = sample_calls[sample_calls[confidence_column] >= confidence_threshold]
+                if len(pdf_calls) == 0:
+                    continue
 
                 figure_scale = 1.0
                 fig, axes = plt.subplots(
-                    3,
+                    4,
                     1,
-                    figsize=(12 * figure_scale, 5.5 * figure_scale),
-                    gridspec_kw={"height_ratios": [1, 2, 1]},
+                    figsize=(12 * figure_scale, 7.5 * figure_scale),
+                    gridspec_kw={"height_ratios": [1, 2, 1, 1]},
                 )
 
                 bin_mids = (region_df["Start"].values + region_df["End"].values) / 2
@@ -1178,13 +1321,17 @@ def create_carrier_pdf(
                 d_bar_widths = xform(region_df["End"].values) - xform(region_df["Start"].values)
 
                 # Panel 1: Annotations
-                carrier_call = (
-                    sample_calls[sample_calls["is_carrier"]].iloc[0]
-                    if len(sample_calls[sample_calls["is_carrier"]]) > 0
-                    else None
-                )
+                carrier_call = None
+                if len(pdf_calls) > 0:
+                    best_matches = pdf_calls[pdf_calls["is_best_match"]]
+                    if len(best_matches) > 0:
+                        carrier_call = best_matches.loc[
+                            best_matches[confidence_column].idxmax()
+                        ]
+                    else:
+                        carrier_call = pdf_calls.loc[pdf_calls[confidence_column].idxmax()]
                 call_info = (
-                    f" - {carrier_call['svtype']} confidence={carrier_call['log_prob_score']:.2f}"
+                    f" - {carrier_call['svtype']} confidence={carrier_call[confidence_column]:.2f}"
                     if carrier_call is not None else ""
                 )
                 title = f"{sample_id} at {cluster}{call_info}"
@@ -1198,15 +1345,16 @@ def create_carrier_pdf(
                 ax = axes[1]
 
                 best_call = None
-                if len(sample_calls) > 0:
-                    carrier_calls_local = sample_calls[sample_calls["is_carrier"]]
-                    if len(carrier_calls_local) > 0:
-                        best_matches = carrier_calls_local[carrier_calls_local["is_best_match"]]
+                if len(pdf_calls) > 0:
+                    if len(pdf_calls) > 0:
+                        best_matches = pdf_calls[pdf_calls["is_best_match"]]
                         if len(best_matches) > 0:
-                            best_call = best_matches.iloc[0]
+                            best_call = best_matches.loc[
+                                best_matches[confidence_column].idxmax()
+                            ]
                         else:
-                            best_call = carrier_calls_local.loc[
-                                carrier_calls_local["log_prob_score"].idxmax()]
+                            best_call = pdf_calls.loc[
+                                pdf_calls[confidence_column].idxmax()]
 
                 if best_call is not None:
                     svtype = best_call["svtype"]
@@ -1297,6 +1445,29 @@ def create_carrier_pdf(
                     xform,
                     locus,
                     chrom,
+                    show_xlabel=False,
+                )
+
+                event_ax = axes[3]
+                event_probs = None
+                event_svtype = None
+                if best_call is not None:
+                    event_svtype = str(best_call["svtype"])
+                    event_probs = _extract_sample_event_probabilities(
+                        region_df,
+                        event_marginals_df,
+                        sample_id,
+                        event_svtype,
+                    )
+                _plot_event_marginal_panel(
+                    event_ax,
+                    d_bin_mids,
+                    d_bar_widths,
+                    event_probs,
+                    xform,
+                    locus,
+                    chrom,
+                    event_svtype,
                 )
 
                 plt.tight_layout()
@@ -1423,6 +1594,19 @@ def parse_args():
         help="Viterbi paths file (viterbi_paths.tsv.gz) produced by "
              "gd_cnv_call.py.  When provided, the Viterbi CN segmentation "
              "is overlaid on carrier depth plots.",
+    )
+    parser.add_argument(
+        "--event-marginals",
+        required=False,
+        help="Per-bin event marginal file (event_marginals.tsv.gz) produced by "
+             "gd_cnv_call.py. When omitted, plot.py will look for a sibling "
+             "file next to --calls.",
+    )
+    parser.add_argument(
+        "--carrier-confidence-threshold",
+        type=float,
+        default=0.6,
+        help="Minimum confidence required for a call to appear in carrier_plots.pdf.",
     )
     return parser.parse_args()
 
@@ -1589,6 +1773,33 @@ def main():
         viterbi_data = ViterbiOverlayData(paths_df)
         print(f"  {len(paths_df)} path records loaded")
 
+    event_marginals_df: Optional[pd.DataFrame] = None
+    event_marginals_path = args.event_marginals
+    if event_marginals_path is None:
+        sibling_event_marginals = os.path.join(
+            os.path.dirname(args.calls),
+            "event_marginals.tsv.gz",
+        )
+        if os.path.exists(sibling_event_marginals):
+            event_marginals_path = sibling_event_marginals
+
+    if event_marginals_path:
+        print(f"\nLoading event marginals: {event_marginals_path}")
+        event_marginals_df = pd.read_csv(
+            event_marginals_path,
+            sep="\t",
+            compression="infer",
+        )
+        event_marginals_df = event_marginals_df.rename(columns={
+            "cluster": "Cluster",
+            "chrom": "Chr",
+            "start": "Start",
+            "end": "End",
+        })
+        print(f"  {len(event_marginals_df)} event-marginal records loaded")
+    else:
+        print("\nNo event marginals provided; event panel will show a placeholder.")
+
     # Create summary plots
     print("\nCreating summary plots...")
     plot_carrier_summary(plot_calls_df, args.output_dir)
@@ -1644,6 +1855,7 @@ def main():
     create_carrier_pdf(
         plot_calls_df, depth_df, loci_to_plot, gtf, segdup,
         args.output_dir,
+        event_marginals_df=event_marginals_df,
         minor_baf_df=minor_baf_df,
         baf_sites_df=baf_sites_df,
         padding=args.padding,
@@ -1654,6 +1866,7 @@ def main():
         lowres_median_bin_size=lowres_median_bin_size,
         highres_path=highres_path,
         viterbi_data=viterbi_data,
+        confidence_threshold=args.carrier_confidence_threshold,
     )
 
     print("\n" + "=" * 80)
