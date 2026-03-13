@@ -350,6 +350,21 @@ class DepthData:
         if baf_summary_df is None or len(baf_summary_df) == 0:
             return
 
+        required_columns = {
+            "array_idx",
+            "sample",
+            "baf_median",
+            "minor_baf_median",
+            "baf_variance",
+            "baf_n_sites",
+        }
+        missing_columns = required_columns.difference(baf_summary_df.columns)
+        if missing_columns:
+            raise ValueError(
+                "BAF summary is missing required columns for inference: "
+                f"{sorted(missing_columns)}"
+            )
+
         sample_to_idx = {str(sample_id): idx for idx, sample_id in enumerate(self.sample_ids)}
         n_bins = self.n_bins
         n_samples = self.n_samples
@@ -402,6 +417,7 @@ class CNVModel:
         alpha_ref: float = 50.0,
         alpha_non_ref: float = 1.0,
         state_prior_weight: float = 1.0,
+        baf_variance_scale: float = 1.0,
         var_bias_bin: float = 0.1,
         var_sample: float = 0.2,
         var_bin: float = 0.2,
@@ -421,6 +437,9 @@ class CNVModel:
             state_prior_weight: Multiplicative weight applied to the learned
                 per-bin pair-state log-prior when reconstructing analytical
                 discrete posteriors. Values < 1.0 temper overly sharp priors.
+            baf_variance_scale: Multiplicative scale applied to per-bin BAF
+                variance before evaluating the BAF likelihood. Values > 1.0
+                downweight BAF evidence.
             var_bias_bin: Variance for per-bin mean bias (log-normal)
             var_sample: Variance for per-sample variance factor (log-normal)
             var_bin: Variance for per-bin variance factor (log-normal)
@@ -437,6 +456,7 @@ class CNVModel:
         self.alpha_ref = alpha_ref
         self.alpha_non_ref = alpha_non_ref
         self.state_prior_weight = state_prior_weight
+        self.baf_variance_scale = baf_variance_scale
         self.var_bias_bin = var_bias_bin
         self.var_sample = var_sample
         self.var_bin = var_bin
@@ -581,10 +601,14 @@ class CNVModel:
                 baf_var = self.current_data.baf_variance
                 baf_sites = self.current_data.baf_n_sites
 
-                valid_mask = (torch.isfinite(baf_obs) & torch.isfinite(baf_var) & (baf_sites > 0) & (baf_var > 0))
+                valid_mask = ((torch.isfinite(baf_obs)) &
+                              (torch.isfinite(baf_var)) &
+                              (baf_sites > 0) &
+                              (baf_var > 0))
                 if torch.any(valid_mask):
                     expected_minor_baf = Vindex(self.minor_baf_by_state)[pair_state]
-                    safe_baf_var = torch.where(valid_mask, baf_var, torch.ones_like(baf_var))
+                    scaled_baf_var = baf_var * self.baf_variance_scale
+                    safe_baf_var = torch.where(valid_mask, scaled_baf_var, torch.ones_like(scaled_baf_var))
                     baf_std = torch.sqrt(torch.clamp(safe_baf_var, min=1e-6))
                     safe_baf_obs = torch.where(valid_mask, baf_obs, expected_minor_baf)
                     with poutine.mask(mask=valid_mask):
@@ -874,12 +898,15 @@ class CNVModel:
             baf_var = data.baf_variance.detach().cpu().numpy()
             baf_sites = data.baf_n_sites.detach().cpu().numpy()
 
-            valid = (np.isfinite(minor_baf) & np.isfinite(baf_var) & (baf_sites > 0) &
+            valid = ((np.isfinite(minor_baf)) &
+                     (np.isfinite(baf_var)) &
+                     (baf_sites > 0) &
                      (baf_var > 0))
             if np.any(valid):
                 exp_minor_baf = pair_minor_baf.reshape(-1, 1, 1)
                 baf_obs = minor_baf[np.newaxis, :, :]
-                baf_std = np.sqrt(np.maximum(baf_var[np.newaxis, :, :], 1e-6))
+                scaled_baf_var = self.baf_variance_scale * baf_var[np.newaxis, :, :]
+                baf_std = np.sqrt(np.maximum(scaled_baf_var, 1e-6))
                 baf_log_lik = -0.5 * np.log(2 * np.pi * baf_std ** 2) - (
                     (baf_obs - exp_minor_baf) ** 2
                 ) / (2 * baf_std ** 2)

@@ -1178,7 +1178,7 @@ def parse_args():
                         help="Min median depth for bins")
     parser.add_argument("--median-max", type=float, default=3.0,
                         help="Max median depth for bins")
-    parser.add_argument("--mad-max", type=float, default=0.5,
+    parser.add_argument("--mad-max", type=float, default=1.0,
                         help="Max MAD for bins")
 
     # Verbosity

@@ -398,23 +398,27 @@ def main():
     truth_df = load_truth_table(args.truth_table)
     print(f"    {len(truth_df)} truth entries")
 
-    # Restrict truth entries to loci present in the filtered GD table
-    # so that loci excluded by region/size filtering during preprocessing
-    # do not produce spurious false negatives.
-    if args.gd_table is not None:
-        print(f"\n  Loading filtered GD table: {args.gd_table}")
-        gd_df = pd.read_csv(args.gd_table, sep="\t")
-        modeled_gd_ids = set(gd_df["GD_ID"].astype(str).unique())
-        print(f"    {len(modeled_gd_ids)} modeled GD_IDs")
+    # Restrict truth entries to loci that were actually modeled in this run.
+    # The calls file contains one row per modeled GD_ID (not just carriers),
+    # so it is the safest default scope even when --gd-table is omitted.
+    modeled_gd_ids = set(calls_df["GD_ID"].astype(str).unique())
+    print(f"\n  Derived {len(modeled_gd_ids)} modeled GD_IDs from calls file")
 
-        n_before = len(truth_df)
-        truth_df = truth_df[
-            truth_df["GD_ID"].astype(str).isin(modeled_gd_ids)
-        ].copy()
-        n_dropped = n_before - len(truth_df)
-        if n_dropped > 0:
-            print(f"    Dropped {n_dropped} truth entries at unmodeled loci")
-        print(f"    {len(truth_df)} truth entries after filtering")
+    if args.gd_table is not None:
+        print(f"  Loading filtered GD table: {args.gd_table}")
+        gd_df = pd.read_csv(args.gd_table, sep="\t")
+        gd_table_ids = set(gd_df["GD_ID"].astype(str).unique())
+        print(f"    {len(gd_table_ids)} modeled GD_IDs in filtered table")
+        modeled_gd_ids &= gd_table_ids
+
+    n_before = len(truth_df)
+    truth_df = truth_df[
+        truth_df["GD_ID"].astype(str).isin(modeled_gd_ids)
+    ].copy()
+    n_dropped = n_before - len(truth_df)
+    if n_dropped > 0:
+        print(f"    Dropped {n_dropped} truth entries at unmodeled loci")
+    print(f"    {len(truth_df)} truth entries after filtering")
 
     # Evaluate
     evaluate_against_truth(

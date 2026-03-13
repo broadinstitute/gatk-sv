@@ -149,6 +149,14 @@ class GDLocus:
 class GDTable:
     """Parser and container for GD locus definitions."""
 
+    @staticmethod
+    def _standalone_locus_key(row: pd.Series) -> str:
+        """Return a stable locus key for GD rows without a cluster label."""
+        chrom = str(row["chr"])
+        start = int(row["start_GRCh38"])
+        end = int(row["end_GRCh38"])
+        return f"{chrom}:{start}-{end}"
+
     def __init__(self, filepath: str):
         """
         Load GD table from TSV file.
@@ -174,6 +182,9 @@ class GDTable:
     def _parse_loci(self) -> Dict[str, GDLocus]:
         """
         Parse GD table into loci grouped by cluster.
+
+        Rows without a cluster label are grouped by genomic coordinates so
+        standalone DEL/DUP definitions for the same interval share one bin set.
         Breakpoints are extracted from BP1 and BP2 columns.
 
         Returns:
@@ -185,9 +196,11 @@ class GDTable:
         for _, row in self.df.iterrows():
             cluster = row["cluster"]
             
-            # For entries without a cluster (standalone regions), use GD_ID as cluster name
+            # For entries without a cluster (standalone regions), use the
+            # genomic interval as the locus key so DEL/DUP rows at the same
+            # coordinates share one modeled locus and one bin set.
             if pd.isna(cluster) or cluster == "":
-                cluster = row["GD_ID"]
+                cluster = self._standalone_locus_key(row)
 
             if cluster not in loci:
                 loci[cluster] = {

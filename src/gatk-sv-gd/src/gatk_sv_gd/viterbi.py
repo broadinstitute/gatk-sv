@@ -845,7 +845,7 @@ def _build_category_segments(
 # large event into two smaller segments.  Bridging short gaps during the
 # matching step allows these fragments to be reconnected without altering
 # the Viterbi path itself.
-_MAX_MATCH_GAP_BP: int = 500_000
+_MAX_MATCH_GAP_BP: int = 0
 
 
 def _combine_hap_match_segments(
@@ -942,6 +942,254 @@ def _build_haplotype_match_segments(
     return merged_segments
 
 
+def _covered_bp_by_segments(
+    segments: List[dict],
+    region_start: int,
+    region_end: int,
+    svtype: str,
+) -> int:
+    """Return the union bp covered in a region by same-svtype segments."""
+    if region_end <= region_start:
+        return 0
+
+    overlaps: List[Tuple[int, int]] = []
+    for seg in segments:
+        if seg["category"] != svtype:
+            continue
+        ov_start = max(int(seg["start"]), region_start)
+        ov_end = min(int(seg["end"]), region_end)
+        if ov_end > ov_start:
+            overlaps.append((ov_start, ov_end))
+
+    if not overlaps:
+        return 0
+
+    overlaps.sort()
+    merged_start, merged_end = overlaps[0]
+    covered_bp = 0
+    for ov_start, ov_end in overlaps[1:]:
+        if ov_start <= merged_end:
+            merged_end = max(merged_end, ov_end)
+        else:
+            covered_bp += merged_end - merged_start
+            merged_start, merged_end = ov_start, ov_end
+    covered_bp += merged_end - merged_start
+    return covered_bp
+
+
+def _region_extent_from_bins(
+    interval_bin_arrays: Dict[str, np.ndarray],
+    bin_coords: Dict[int, Tuple[int, int]],
+    region_name: str,
+) -> Optional[Tuple[int, int]]:
+    """Return the genomic extent covered by one named interval or flank."""
+    region_bins = interval_bin_arrays.get(region_name)
+    if region_bins is None or len(region_bins) == 0:
+        return None
+
+    coords = [bin_coords[int(idx)] for idx in region_bins if int(idx) in bin_coords]
+    if not coords:
+        return None
+    starts = [start for start, _ in coords]
+    ends = [end for _, end in coords]
+    return min(starts), max(ends)
+
+
+def _summarize_interval_set_match(
+    match_segments: List[dict],
+    covered_tuples: List[Tuple[int, int, str]],
+    svtype: str,
+    first_entry_interval_name: Optional[str],
+    last_entry_interval_name: Optional[str],
+    left_boundary_extent: Optional[Tuple[int, int]],
+    right_boundary_extent: Optional[Tuple[int, int]],
+    min_interval_coverage: float,
+) -> dict:
+    """Score one GD entry by its best qualifying contiguous interval run."""
+    if not covered_tuples:
+        return {
+            "interval_coverage": 0.0,
+            "matched_interval_bp": 0,
+            "covered_bp_total": 0,
+            "matched_seg_start": np.nan,
+            "matched_seg_end": np.nan,
+            "matched_seg_n_bins": 0,
+            "haplotype": np.nan,
+            "hap_cn_state": np.nan,
+            "left_flank_coverage": np.nan,
+            "right_flank_coverage": np.nan,
+            "flank_pass": False,
+        }
+
+    interval_metrics: List[dict] = []
+    best_run = None
+    current_run = None
+    for interval_start, interval_end, interval_name in covered_tuples:
+        interval_len = max(interval_end - interval_start, 0)
+        covered_bp = _covered_bp_by_segments(
+            match_segments,
+            interval_start,
+            interval_end,
+            svtype,
+        )
+        frac = (covered_bp / interval_len) if interval_len > 0 else 0.0
+        metric = {
+            "start": interval_start,
+            "end": interval_end,
+            "name": interval_name,
+            "length": interval_len,
+            "covered_bp": covered_bp,
+            "fraction": frac,
+        }
+        interval_metrics.append(metric)
+
+        if frac >= min_interval_coverage:
+            if current_run is None:
+                current_run = {
+                    "intervals": [metric],
+                    "matched_interval_bp": interval_len,
+                    "covered_bp_total": covered_bp,
+                    "interval_coverage": frac,
+                }
+            else:
+                current_run["intervals"].append(metric)
+                current_run["matched_interval_bp"] += interval_len
+                current_run["covered_bp_total"] += covered_bp
+                current_run["interval_coverage"] = float(np.mean([
+                    item["fraction"] for item in current_run["intervals"]
+                ]))
+        else:
+            if current_run is not None:
+                if best_run is None or (
+                    current_run["matched_interval_bp"],
+                    current_run["covered_bp_total"],
+                    current_run["interval_coverage"],
+                ) > (
+                    best_run["matched_interval_bp"],
+                    best_run["covered_bp_total"],
+                    best_run["interval_coverage"],
+                ):
+                    best_run = current_run
+                current_run = None
+
+    if current_run is not None:
+        if best_run is None or (
+            current_run["matched_interval_bp"],
+            current_run["covered_bp_total"],
+            current_run["interval_coverage"],
+        ) > (
+            best_run["matched_interval_bp"],
+            best_run["covered_bp_total"],
+            best_run["interval_coverage"],
+        ):
+            best_run = current_run
+
+    if best_run is None:
+        return {
+            "interval_coverage": 0.0,
+            "matched_interval_bp": 0,
+            "covered_bp_total": 0,
+            "matched_seg_start": np.nan,
+            "matched_seg_end": np.nan,
+            "matched_seg_n_bins": 0,
+            "haplotype": np.nan,
+            "hap_cn_state": np.nan,
+            "left_flank_coverage": np.nan,
+            "right_flank_coverage": np.nan,
+            "flank_pass": False,
+        }
+
+    selected_intervals = best_run["intervals"]
+    relevant_segments: List[Tuple[dict, int]] = []
+    for seg in match_segments:
+        if seg["category"] != svtype:
+            continue
+        overlap_bp = 0
+        for interval in selected_intervals:
+            overlap_bp += max(
+                0,
+                min(int(seg["end"]), interval["end"]) - max(int(seg["start"]), interval["start"]),
+            )
+        if overlap_bp > 0:
+            relevant_segments.append((seg, overlap_bp))
+
+    representative_seg: Optional[dict] = None
+    if relevant_segments:
+        representative_seg = max(
+            relevant_segments,
+            key=lambda item: (item[1], item[0]["n_bins"], item[0]["end"] - item[0]["start"]),
+        )[0]
+
+    if relevant_segments:
+        matched_seg_start = min(int(seg["start"]) for seg, _ in relevant_segments)
+        matched_seg_end = max(int(seg["end"]) for seg, _ in relevant_segments)
+        matched_seg_n_bins = sum(int(seg["n_bins"]) for seg, _ in relevant_segments)
+        haplotypes = {seg.get("haplotype") for seg, _ in relevant_segments if "haplotype" in seg}
+        haplotypes.discard(None)
+        matched_haplotype = haplotypes.pop() if len(haplotypes) == 1 else np.nan
+    else:
+        matched_seg_start = np.nan
+        matched_seg_end = np.nan
+        matched_seg_n_bins = 0
+        matched_haplotype = np.nan
+
+    selected_names = [interval["name"] for interval in selected_intervals]
+    touches_left_boundary = (
+        bool(selected_names) and
+        first_entry_interval_name is not None and
+        selected_names[0] == first_entry_interval_name
+    )
+    touches_right_boundary = (
+        bool(selected_names) and
+        last_entry_interval_name is not None and
+        selected_names[-1] == last_entry_interval_name
+    )
+
+    left_flank_coverage = np.nan
+    right_flank_coverage = np.nan
+    flank_pass = True
+    if touches_left_boundary:
+        if left_boundary_extent is None:
+            flank_pass = False
+        else:
+            left_bp = _covered_bp_by_segments(
+                match_segments,
+                left_boundary_extent[0],
+                left_boundary_extent[1],
+                svtype,
+            )
+            left_len = max(left_boundary_extent[1] - left_boundary_extent[0], 0)
+            left_flank_coverage = (left_bp / left_len) if left_len > 0 else 0.0
+            flank_pass &= left_flank_coverage <= 0.5
+    if touches_right_boundary:
+        if right_boundary_extent is None:
+            flank_pass = False
+        else:
+            right_bp = _covered_bp_by_segments(
+                match_segments,
+                right_boundary_extent[0],
+                right_boundary_extent[1],
+                svtype,
+            )
+            right_len = max(right_boundary_extent[1] - right_boundary_extent[0], 0)
+            right_flank_coverage = (right_bp / right_len) if right_len > 0 else 0.0
+            flank_pass &= right_flank_coverage <= 0.5
+
+    return {
+        "interval_coverage": best_run["interval_coverage"],
+        "matched_interval_bp": best_run["matched_interval_bp"],
+        "covered_bp_total": best_run["covered_bp_total"],
+        "matched_seg_start": matched_seg_start,
+        "matched_seg_end": matched_seg_end,
+        "matched_seg_n_bins": matched_seg_n_bins,
+        "haplotype": matched_haplotype,
+        "hap_cn_state": representative_seg["cn_state"] if representative_seg is not None else np.nan,
+        "left_flank_coverage": left_flank_coverage,
+        "right_flank_coverage": right_flank_coverage,
+        "flank_pass": flank_pass,
+    }
+
+
 # =============================================================================
 # Viterbi-based GD CNV calling
 # =============================================================================
@@ -954,7 +1202,7 @@ def viterbi_call_gd_cnv(
     transition_matrix: np.ndarray,
     interval_bin_arrays: Dict[str, np.ndarray],
     ploidy: int = 2,
-    reciprocal_overlap_threshold: float = 0.90,
+    min_mean_coverage: float = 0.90,
     verbose: bool = False,
     sample_id: str = "",
     breakpoint_transition_matrix: Optional[np.ndarray] = None,
@@ -971,11 +1219,11 @@ def viterbi_call_gd_cnv(
     - **DEL** segments: CN < ploidy
     - **DUP** segments: CN > ploidy
 
-    Each altered-CN segment is tested for **reciprocal overlap** against
-    every GD entry of matching svtype.  A carrier call is made when
-
-        min(overlap / segment_length, overlap / entry_length)
-            >= reciprocal_overlap_threshold
+    Each GD entry is scored by its longest contiguous run of adjacent
+    breakpoint intervals (e.g. 1-2, 2-3, 3-4) where every interval reaches
+    at least ``min_mean_coverage`` coverage from same-svtype Viterbi
+    segments. When the selected run touches an outer flank, the bordering
+    flank must be at least 50% free of the same svtype.
 
     Multiple calls per locus are possible (though uncommon).
 
@@ -990,9 +1238,9 @@ def viterbi_call_gd_cnv(
         interval_bin_arrays: Dict mapping interval name to array of bin
             array_idx values.  Used for matching GD entries.
         ploidy: Expected reference copy number for this sample/chromosome.
-        reciprocal_overlap_threshold: Minimum reciprocal overlap between a
-            Viterbi segment and a GD entry to call a carrier.
-            Default 0.90 (90 %).
+        min_mean_coverage: Minimum per-interval coverage required for an
+            adjacent breakpoint interval to qualify for the selected
+            contiguous run. Default 0.90 (90 %).
         verbose: If True, emit diagnostic messages via ``_util.vlog``.
         sample_id: Sample identifier for diagnostic logging.
         breakpoint_transition_matrix: Optional (n_states, n_states) transition
@@ -1002,8 +1250,8 @@ def viterbi_call_gd_cnv(
             CN-state changes are more favoured at these positions.  Requires
             *bin_coords* to locate boundaries.
         bin_coords: Mapping from array_idx (int) to (genomic_start, genomic_end)
-            for each bin.  Required for computing reciprocal overlap with GD
-            entries and for the breakpoint mask.
+            for each bin. Required for interval coverage scoring and for the
+            breakpoint mask.
         all_cluster_bins: Optional pre-computed list of ALL bin array_idx
             values for this cluster (excluding breakpoint-range bins).  When
             provided, the Viterbi runs over this full set rather than only
@@ -1159,16 +1407,22 @@ def viterbi_call_gd_cnv(
                 )
 
     # ----------------------------------------------------------------
-    # Match each GD entry against category segments by reciprocal overlap.
-    # For diploid, try ALL near-tied candidate decompositions and take the
-    # best reciprocal overlap across all of them.  This handles cases where
-    # the best-scoring path has a reference bounce that splits an event,
-    # but an equally-likely alternative path has a contiguous event that
-    # matches the GD entry better.
+    # Match each GD entry against category segments by longest qualifying
+    # contiguous interval run.
+    # For diploid, try ALL near-tied candidate decompositions and keep the
+    # strongest qualifying interval run across all of them. This handles
+    # cases where the best-scoring path has a reference bounce that splits
+    # an event, but an equally-likely alternative path has a cleaner
+    # contiguous run that matches the GD entry better.
     # For haploid, use a single set of match segments.
     # ----------------------------------------------------------------
 
     match_segments_list = all_candidate_match_segs
+
+    body_intervals = locus.get_intervals()
+    interval_name_to_index = {
+        interval_name: idx for idx, (_, _, interval_name) in enumerate(body_intervals)
+    }
 
     entry_results: List[dict] = []
     for entry in locus.gd_entries:
@@ -1181,65 +1435,100 @@ def viterbi_call_gd_cnv(
 
         covered_tuples = locus.get_intervals_between(bp1, bp2)
         covered_intervals = [name for _, _, name in covered_tuples]
+        first_entry_interval_name = covered_intervals[0] if covered_intervals else None
+        last_entry_interval_name = covered_intervals[-1] if covered_intervals else None
 
-        entry_len = gd_end - gd_start
-        best_ro = 0.0
-        best_seg = None
-        if entry_len > 0:
-            # First pass: check the best path's match segments.
-            best_path_segs = match_segments_list[0] if match_segments_list else []
-            for seg in best_path_segs:
-                if seg["category"] != svtype:
-                    continue
-                seg_len = seg["end"] - seg["start"]
-                if seg_len == 0:
-                    continue
-                overlap = max(
-                    0, min(seg["end"], gd_end) - max(seg["start"], gd_start),
-                )
-                ro = min(overlap / seg_len, overlap / entry_len)
-                if ro > best_ro:
-                    best_ro = ro
-                    best_seg = seg
+        left_boundary_region_name = None
+        right_boundary_region_name = None
+        if first_entry_interval_name is not None:
+            first_idx = interval_name_to_index.get(first_entry_interval_name)
+            if first_idx is not None:
+                if first_idx == 0:
+                    left_boundary_region_name = "left_flank"
+                else:
+                    left_boundary_region_name = body_intervals[first_idx - 1][2]
+        if last_entry_interval_name is not None:
+            last_idx = interval_name_to_index.get(last_entry_interval_name)
+            if last_idx is not None:
+                if last_idx == len(body_intervals) - 1:
+                    right_boundary_region_name = "right_flank"
+                else:
+                    right_boundary_region_name = body_intervals[last_idx + 1][2]
 
-            # Second pass: for DEL entries, also inspect alternative
-            # near-tied pair-state decompositions even when the top path
-            # has no overlap signal. In practice, the best-scoring path can
-            # stay reference-like through a shallow deletion while an
-            # equally likely alternative carries a contiguous haploid DEL.
-            # Keep the stricter gating for DUP entries to avoid inflating
-            # spurious duplication matches from phantom decompositions.
-            should_try_alternatives = (
-                len(match_segments_list) > 1 and (best_ro > 0 or svtype == "DEL")
+        left_boundary_extent = (
+            _region_extent_from_bins(interval_bin_arrays, bin_coords, left_boundary_region_name)
+            if left_boundary_region_name is not None else None
+        )
+        right_boundary_extent = (
+            _region_extent_from_bins(interval_bin_arrays, bin_coords, right_boundary_region_name)
+            if right_boundary_region_name is not None else None
+        )
+
+        best_summary = {
+            "interval_coverage": 0.0,
+            "matched_interval_bp": 0,
+            "covered_bp_total": 0,
+            "matched_seg_start": np.nan,
+            "matched_seg_end": np.nan,
+            "matched_seg_n_bins": 0,
+            "haplotype": np.nan,
+            "hap_cn_state": np.nan,
+            "left_flank_coverage": np.nan,
+            "right_flank_coverage": np.nan,
+            "flank_pass": False,
+        }
+        best_passing_summary = None
+        for match_segments in match_segments_list:
+            summary = _summarize_interval_set_match(
+                match_segments,
+                covered_tuples,
+                svtype,
+                first_entry_interval_name,
+                last_entry_interval_name,
+                left_boundary_extent,
+                right_boundary_extent,
+                min_mean_coverage,
             )
-            if should_try_alternatives:
-                for match_segments in match_segments_list[1:]:
-                    for seg in match_segments:
-                        if seg["category"] != svtype:
-                            continue
-                        seg_len = seg["end"] - seg["start"]
-                        if seg_len == 0:
-                            continue
-                        overlap = max(
-                            0,
-                            min(seg["end"], gd_end) - max(seg["start"], gd_start),
-                        )
-                        ro = min(overlap / seg_len, overlap / entry_len)
-                        if ro > best_ro:
-                            best_ro = ro
-                            best_seg = seg
+            summary_key = (
+                summary["matched_interval_bp"],
+                summary["covered_bp_total"],
+                summary["interval_coverage"],
+                summary["matched_seg_n_bins"],
+            )
+            best_key = (
+                best_summary["matched_interval_bp"],
+                best_summary["covered_bp_total"],
+                best_summary["interval_coverage"],
+                best_summary["matched_seg_n_bins"],
+            )
+            if summary_key > best_key:
+                best_summary = summary
+
+            if summary["flank_pass"]:
+                if best_passing_summary is None:
+                    best_passing_summary = summary
+                else:
+                    passing_key = (
+                        summary["matched_interval_bp"],
+                        summary["covered_bp_total"],
+                        summary["interval_coverage"],
+                        summary["matched_seg_n_bins"],
+                    )
+                    best_passing_key = (
+                        best_passing_summary["matched_interval_bp"],
+                        best_passing_summary["covered_bp_total"],
+                        best_passing_summary["interval_coverage"],
+                        best_passing_summary["matched_seg_n_bins"],
+                    )
+                    if passing_key > best_passing_key:
+                        best_passing_summary = summary
+
+        chosen_summary = best_passing_summary or best_summary
 
         n_bins = sum(
             len(interval_bin_arrays.get(iv, []))
             for iv in covered_intervals
         )
-
-        overlap_bp = 0
-        if best_seg is not None:
-            overlap_bp = max(
-                0,
-                min(best_seg["end"], gd_end) - max(best_seg["start"], gd_start),
-            )
 
         entry_results.append({
             "GD_ID": gd_id,
@@ -1253,27 +1542,31 @@ def viterbi_call_gd_cnv(
             "is_terminal": locus.is_terminal,
             "log_prob_score": confidence,
             "is_carrier": False,
-            "reciprocal_overlap": best_ro,
+            "interval_coverage": chosen_summary["interval_coverage"],
+            "reciprocal_overlap": chosen_summary["interval_coverage"],
+            "matched_interval_bp": chosen_summary["matched_interval_bp"],
             "intervals": covered_intervals,
             "n_bins": n_bins,
             "sample_ploidy": ploidy,
-            "haplotype": best_seg["haplotype"] if best_seg else np.nan,
-            "hap_cn_state": best_seg["cn_state"] if best_seg else np.nan,
-            "matched_seg_start": best_seg["start"] if best_seg else np.nan,
-            "matched_seg_end": best_seg["end"] if best_seg else np.nan,
-            "matched_seg_n_bins": best_seg["n_bins"] if best_seg else 0,
-            "entry_len": gd_end - gd_start,
-            "overlap_bp": overlap_bp,
+            "haplotype": chosen_summary["haplotype"],
+            "hap_cn_state": chosen_summary["hap_cn_state"],
+            "matched_seg_start": chosen_summary["matched_seg_start"],
+            "matched_seg_end": chosen_summary["matched_seg_end"],
+            "matched_seg_n_bins": chosen_summary["matched_seg_n_bins"],
+            "covered_bp_total": chosen_summary["covered_bp_total"],
+            "left_flank_coverage": chosen_summary["left_flank_coverage"],
+            "right_flank_coverage": chosen_summary["right_flank_coverage"],
+            "flank_pass": chosen_summary["flank_pass"],
         })
 
-    # Keep only the best carrier per svtype for this locus.  This avoids
-    # emitting multiple nested GD calls for the same underlying event when
-    # alternative near-tied diploid decompositions can explain several
-    # overlapping entries.  Rank by reciprocal overlap first, then overlap
-    # length, then GD span length so that larger events win close ties.
+    # Keep only the best carrier per svtype for this locus using interval
+    # run length scoring. Calls touching outer flanks must also satisfy the
+    # flank clearance rule before they are eligible.
     best_carrier_idx_by_svtype: Dict[str, int] = {}
     for idx, call in enumerate(entry_results):
-        if call["reciprocal_overlap"] < reciprocal_overlap_threshold:
+        if not call["flank_pass"]:
+            continue
+        if call["matched_interval_bp"] <= 0:
             continue
         svtype = call["svtype"]
         prev_idx = best_carrier_idx_by_svtype.get(svtype)
@@ -1281,11 +1574,17 @@ def viterbi_call_gd_cnv(
             best_carrier_idx_by_svtype[svtype] = idx
             continue
         prev = entry_results[prev_idx]
-        key = (call["reciprocal_overlap"], call["overlap_bp"], call["entry_len"])
+        key = (
+            call["matched_interval_bp"],
+            call["covered_bp_total"],
+            call["interval_coverage"],
+            call["matched_seg_n_bins"],
+        )
         prev_key = (
-            prev["reciprocal_overlap"],
-            prev["overlap_bp"],
-            prev["entry_len"],
+            prev["matched_interval_bp"],
+            prev["covered_bp_total"],
+            prev["interval_coverage"],
+            prev["matched_seg_n_bins"],
         )
         if key > prev_key:
             best_carrier_idx_by_svtype[svtype] = idx
@@ -1299,12 +1598,15 @@ def viterbi_call_gd_cnv(
             _util.vlog(
                 f"    Entry {call['GD_ID']} ({call['svtype']}, BP1={call['BP1']}, "
                 f"BP2={call['BP2']}  ploidy={ploidy}):  "
-                f"best_RO={call['reciprocal_overlap']:.2%}  "
-                f"(threshold={reciprocal_overlap_threshold:.0%}){tag}"
+                f"coverage={call['interval_coverage']:.2%}  "
+                f"left_flank={call['left_flank_coverage'] if not np.isnan(call['left_flank_coverage']) else float('nan'):.2%}  "
+                f"right_flank={call['right_flank_coverage'] if not np.isnan(call['right_flank_coverage']) else float('nan'):.2%}  "
+                f"flank_pass={call['flank_pass']}  "
+                f"min_interval={min_mean_coverage:.0%}  "
+                f"matched_bp={call['matched_interval_bp']}{tag}"
             )
 
-        del call["entry_len"]
-        del call["overlap_bp"]
+        del call["covered_bp_total"]
         calls.append(call)
 
     # ----------------------------------------------------------------

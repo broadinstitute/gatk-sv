@@ -23,7 +23,7 @@ TRUTH_TABLE="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/synthesiz
 # Optional: additional arguments
 PREPROCESS_ARGS="--region chr22"
 INFER_ARGS="--state-prior-weight 0.0"
-CALL_ARGS="--reciprocal-overlap-threshold 0.85"
+CALL_ARGS="--min-mean-coverage 0.50"
 
 # ── Usage ──────────────────────────────────────────────────────────────────
 usage() {
@@ -114,6 +114,7 @@ if [[ -n "${TRUTH_TABLE}" ]]; then
     "${GD_CMD[@]}" eval \
         --calls "${GD_CALLS}" \
         --truth-table "${TRUTH_TABLE}" \
+        --gd-table "${FILTERED_GD_TABLE}" \
         --ploidy-table "${PLOIDY_TABLE}" \
         -o "${EVAL_DIR}"
 else

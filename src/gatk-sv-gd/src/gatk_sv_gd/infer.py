@@ -130,6 +130,7 @@ def run_gd_analysis(
         alpha_ref=args.alpha_ref,
         alpha_non_ref=args.alpha_non_ref,
         state_prior_weight=args.state_prior_weight,
+        baf_variance_scale=args.baf_variance_scale,
         var_bias_bin=args.var_bias_bin,
         var_sample=args.var_sample,
         var_bin=args.var_bin,
@@ -341,6 +342,13 @@ def parse_args():
         help="Weight applied to the learned per-bin pair-state log-prior "
              "when reconstructing analytical discrete posteriors. "
              "Values below 1.0 temper overly sharp priors.",
+    )
+    parser.add_argument(
+        "--baf-variance-scale",
+        type=float,
+        default=32.0,
+        help="Multiply per-bin BAF variance by this factor before scoring "
+             "the BAF likelihood. Values above 1.0 downweight BAF evidence.",
     )
     parser.add_argument(
         "--var-bias-bin",

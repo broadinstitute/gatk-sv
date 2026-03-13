@@ -167,6 +167,100 @@ class ViterbiOverlayData:
         )
 
 
+def _sorted_viterbi_segments(segments: Optional[List[dict]]) -> List[dict]:
+    """Return Viterbi segments sorted left-to-right with stable tie breaks."""
+    if not segments:
+        return []
+    return sorted(
+        segments,
+        key=lambda seg: (
+            int(seg["start"]),
+            int(seg["end"]),
+            int(seg["cn_state"]),
+        ),
+    )
+
+
+def _build_viterbi_trace_coords(
+    segments: Optional[List[dict]],
+    xform,
+    vertical_offset: float = 0.0,
+) -> Tuple[List[float], List[float]]:
+    """Build a monotonic step trace for Viterbi segments.
+
+    Adjacent segments are drawn as clean vertical steps. Any genomic gaps
+    between segments are bridged horizontally using the previous state so the
+    trace stays visually continuous across masked bins.
+    """
+    sorted_segments = _sorted_viterbi_segments(segments)
+    if not sorted_segments:
+        return [], []
+
+    trace_x: List[float] = []
+    trace_y: List[float] = []
+    prev_end: Optional[int] = None
+    prev_cn: Optional[float] = None
+
+    for seg in sorted_segments:
+        seg_start = int(seg["start"])
+        seg_end = int(seg["end"])
+        seg_cn = float(seg["cn_state"]) + vertical_offset
+        start_x = xform(seg_start)
+        end_x = xform(seg_end)
+
+        if not trace_x:
+            trace_x.extend([start_x, end_x])
+            trace_y.extend([seg_cn, seg_cn])
+        else:
+            if prev_end is not None and seg_start > prev_end:
+                trace_x.append(start_x)
+                trace_y.append(prev_cn)
+
+            if prev_cn != seg_cn:
+                trace_x.append(start_x)
+                trace_y.append(seg_cn)
+
+            trace_x.append(end_x)
+            trace_y.append(seg_cn)
+
+        prev_end = seg_end
+        prev_cn = seg_cn
+
+    return trace_x, trace_y
+
+
+def _plot_viterbi_trace(
+    ax,
+    segments: Optional[List[dict]],
+    xform,
+    color: str,
+    label: str,
+    linewidth: float,
+    alpha: float,
+    zorder: int,
+    vertical_offset: float = 0.0,
+) -> None:
+    """Plot one Viterbi step trace using the shared carrier-plot code path."""
+    trace_x, trace_y = _build_viterbi_trace_coords(
+        segments,
+        xform,
+        vertical_offset=vertical_offset,
+    )
+    if not trace_x:
+        return
+    ax.plot(
+        trace_x,
+        trace_y,
+        color=color,
+        linewidth=linewidth,
+        alpha=alpha,
+        zorder=zorder,
+        label=label,
+        solid_joinstyle="round",
+        solid_capstyle="round",
+    )
+
+
 # =============================================================================
 # Raw-depth helpers
 # =============================================================================
@@ -961,7 +1055,7 @@ def plot_confidence_distribution(calls_df: pd.DataFrame, output_dir: str):
 def create_carrier_pdf(
     calls_df: pd.DataFrame,
     depth_df: pd.DataFrame,
-    gd_table: GDTable,
+    loci_by_cluster: Dict[str, GDLocus],
     gtf: Optional[GTFParser],
     segdup: Optional[SegDupAnnotation],
     output_dir: str,
@@ -1006,7 +1100,7 @@ def create_carrier_pdf(
 
     with PdfPages(pdf_path) as pdf:
         for cluster in sorted(carriers["cluster"].unique()):
-            locus = gd_table.loci.get(cluster)
+            locus = loci_by_cluster.get(cluster)
             if locus is None:
                 continue
 
@@ -1148,62 +1242,37 @@ def create_carrier_pdf(
                 # Overlay Viterbi segmentation as a connected step trace
                 if viterbi_data is not None:
                     vit_segs = viterbi_data.get_path(sample_id, cluster)
-                    if vit_segs:
-                        # Sort by start coordinate to guarantee left-to-right
-                        # ordering (the merge step already sorts, but be safe).
-                        vit_segs = sorted(vit_segs, key=lambda s: s["start"])
-
-                        # Build piecewise-constant coordinates.  Adjacent
-                        # segments with matching boundaries produce clean
-                        # vertical steps; gaps (from excluded breakpoint bins)
-                        # get a nan break so no diagonal line is drawn.
-                        vit_x: List[float] = []
-                        vit_y: List[float] = []
-                        for i, seg in enumerate(vit_segs):
-                            if i > 0:
-                                prev_end = vit_segs[i - 1]["end"]
-                                # Gap between segments → break the line
-                                if seg["start"] > prev_end:
-                                    vit_x.append(float("nan"))
-                                    vit_y.append(float("nan"))
-                            vit_x.extend([xform(seg["start"]),
-                                          xform(seg["end"])])
-                            vit_y.extend([seg["cn_state"], seg["cn_state"]])
-                        ax.plot(vit_x, vit_y,
-                                color="magenta", linewidth=2.0, alpha=0.85,
-                                zorder=5, label="Viterbi CN")
+                    _plot_viterbi_trace(
+                        ax,
+                        vit_segs,
+                        xform,
+                        color="magenta",
+                        label="Viterbi CN",
+                        linewidth=2.0,
+                        alpha=0.85,
+                        zorder=5,
+                    )
 
                     # Per-haplotype traces (diploid model only)
                     if viterbi_data.has_haplotype_paths(sample_id, cluster):
                         _hap_styles = [
-                            (1, "red", "Hap 1"),
-                            (2, "blue", "Hap 2"),
+                            (1, "red", "Hap 1", -0.04),
+                            (2, "blue", "Hap 2", 0.04),
                         ]
-                        for hap_id, hap_color, hap_label in _hap_styles:
+                        for hap_id, hap_color, hap_label, hap_offset in _hap_styles:
                             hap_segs = viterbi_data.get_path(
                                 sample_id, cluster, hap_id,
                             )
-                            if not hap_segs:
-                                continue
-                            hap_segs = sorted(
-                                hap_segs, key=lambda s: s["start"],
-                            )
-                            hx: List[float] = []
-                            hy: List[float] = []
-                            for i, seg in enumerate(hap_segs):
-                                if i > 0:
-                                    prev_end = hap_segs[i - 1]["end"]
-                                    if seg["start"] > prev_end:
-                                        hx.append(float("nan"))
-                                        hy.append(float("nan"))
-                                hx.extend([xform(seg["start"]),
-                                           xform(seg["end"])])
-                                hy.extend([seg["cn_state"], seg["cn_state"]])
-                            ax.plot(
-                                hx, hy,
-                                color=hap_color, linewidth=1.4,
-                                alpha=0.7, linestyle="--",
-                                zorder=6, label=hap_label,
+                            _plot_viterbi_trace(
+                                ax,
+                                hap_segs,
+                                xform,
+                                color=hap_color,
+                                label=hap_label,
+                                linewidth=1.6,
+                                alpha=0.8,
+                                zorder=6,
+                                vertical_offset=hap_offset,
                             )
 
                 ax.axhline(2.0, color="green", linestyle="-", alpha=0.4, linewidth=1.5,
@@ -1508,12 +1577,6 @@ def main():
     else:
         plot_calls_df = calls_df
 
-    # Build a filtered GDTable-like object for create_carrier_pdf
-    class _FilteredGDTable:
-        def __init__(self, loci_dict):
-            self.loci = loci_dict
-
-    filtered_gd_table = _FilteredGDTable(loci_to_plot)
     ploidy_lookup = _build_ploidy_lookup(ploidy_df)
 
     # Load Viterbi overlay data if paths file provided
@@ -1579,7 +1642,7 @@ def main():
     # Create carrier PDF
     print("\nCreating carrier PDF...")
     create_carrier_pdf(
-        plot_calls_df, depth_df, filtered_gd_table, gtf, segdup,
+        plot_calls_df, depth_df, loci_to_plot, gtf, segdup,
         args.output_dir,
         minor_baf_df=minor_baf_df,
         baf_sites_df=baf_sites_df,

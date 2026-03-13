@@ -78,10 +78,12 @@ def write_posterior_tables(
     if pair_map is not None:
         pair_map = np.asarray(pair_map).squeeze()
     depth = np.asarray(combined_data.depth.cpu().numpy())  # shape: (n_bins, n_samples)
+    baf_median = None
     minor_baf = None
     baf_var = None
     baf_n_sites = None
     if getattr(combined_data, "has_baf", False):
+        baf_median = np.asarray(combined_data.baf_median.cpu().numpy())
         minor_baf = np.asarray(combined_data.minor_baf_median.cpu().numpy())
         baf_var = np.asarray(combined_data.baf_variance.cpu().numpy())
         baf_n_sites = np.asarray(combined_data.baf_n_sites.cpu().numpy())
@@ -126,6 +128,7 @@ def write_posterior_tables(
                 row["pair_h2_map"] = h2
 
             if minor_baf is not None:
+                row["baf_median"] = float(baf_median[bin_idx, sample_idx])
                 row["minor_baf_median"] = float(minor_baf[bin_idx, sample_idx])
                 row["baf_variance"] = float(baf_var[bin_idx, sample_idx])
                 row["baf_n_sites"] = int(baf_n_sites[bin_idx, sample_idx])

@@ -7,10 +7,9 @@ produced by gd_cnv_pyro.py using the Viterbi segmentation strategy.
 The Viterbi algorithm is run on per-bin CN posteriors using a user-supplied
 state transition matrix to produce a smooth copy-number segmentation.  The
 resulting path is partitioned into contiguous regions of altered copy number
-(DEL: CN < ploidy, DUP: CN > ploidy), and each such segment is tested for
-reciprocal overlap with every GD entry of matching svtype.  A carrier call
-is made when the reciprocal overlap meets or exceeds
-``--reciprocal-overlap-threshold`` (default 90 %).
+(DEL: CN < ploidy, DUP: CN > ploidy), and each GD entry is scored by mean
+adjacent-interval coverage from same-svtype segments. A carrier call is made
+when the score meets or exceeds ``--min-mean-coverage`` (default 90 %).
 
 Usage:
     python gd_cnv_call.py \\
@@ -90,7 +89,7 @@ def determine_best_breakpoints(
     """Pick the best GD_ID per svtype among carrier calls.
 
     When multiple GD entries of the same svtype are called as carriers,
-    the one with the highest reciprocal overlap is selected.  Ties are
+    the one with the highest mean interval coverage is selected. Ties are
     broken by genomic span (larger wins).
 
     Args:
@@ -112,7 +111,8 @@ def determine_best_breakpoints(
             best = max(
                 carrier_calls,
                 key=lambda c: (
-                    c.get("reciprocal_overlap", 0),
+                    c.get("matched_interval_bp", 0),
+                    c.get("interval_coverage", c.get("reciprocal_overlap", 0)),
                     c["end"] - c["start"],
                 ),
             )
@@ -156,7 +156,7 @@ def call_cnvs_from_posteriors(
     transition_matrix: np.ndarray,
     ploidy_df: Optional[pd.DataFrame] = None,
     verbose: bool = False,
-    reciprocal_overlap_threshold: float = 0.90,
+    min_mean_coverage: float = 0.90,
     breakpoint_transition_matrix: Optional[np.ndarray] = None,
 ) -> pd.DataFrame:
     """
@@ -165,7 +165,8 @@ def call_cnvs_from_posteriors(
     The Viterbi algorithm is run once per sample per locus to produce a
     smooth copy-number segmentation.  The resulting path is partitioned
     into contiguous DEL / DUP segments and matched against GD entries by
-    reciprocal overlap.
+    the longest contiguous breakpoint-interval run whose per-interval
+    coverage clears the minimum threshold.
 
     Args:
         cn_posteriors_df: DataFrame with CN posterior probabilities per bin/sample
@@ -177,8 +178,9 @@ def call_cnvs_from_posteriors(
             If None, ploidy=2 is assumed for all sample/contig pairs.
         verbose: If True, print per-sample log probability scores for every
             GD entry at every locus.
-        reciprocal_overlap_threshold: Minimum reciprocal overlap between a
-            Viterbi segment and a GD entry to call a carrier.  Default 0.90.
+        min_mean_coverage: Minimum per-interval coverage required for an
+            interval to participate in the selected contiguous run.
+            Default 0.90.
         breakpoint_transition_matrix: Optional (n_states, n_states) transition
             matrix applied at known recurrent breakpoint boundaries during
             Viterbi.  Should have lower diagonal values than *transition_matrix*
@@ -193,8 +195,10 @@ def call_cnvs_from_posteriors(
     print("\n" + "=" * 80)
     print("CALLING CNVs FROM POSTERIORS")
     bp_str = " + breakpoint matrix" if breakpoint_transition_matrix is not None else ""
-    print(f"  NAHR strategy: Viterbi segmentation{bp_str}  "
-          f"(reciprocal overlap threshold={reciprocal_overlap_threshold:.0%})")
+    print(
+        f"  NAHR strategy: Viterbi segmentation{bp_str}  "
+        f"(minimum per-interval coverage={min_mean_coverage:.0%})"
+    )
     print("=" * 80)
 
     all_results = []
@@ -326,7 +330,7 @@ def call_cnvs_from_posteriors(
                 transition_matrix,
                 interval_bin_arrays,
                 ploidy=sample_ploidy,
-                reciprocal_overlap_threshold=reciprocal_overlap_threshold,
+                min_mean_coverage=min_mean_coverage,
                 verbose=verbose,
                 sample_id=str(sample_id),
                 breakpoint_transition_matrix=breakpoint_transition_matrix,
@@ -348,13 +352,16 @@ def call_cnvs_from_posteriors(
             if verbose:
                 for call in calls:
                     tag = " [CARRIER]" if call["is_carrier"] else ""
-                    ro = call.get("reciprocal_overlap", 0.0)
+                    coverage = call.get(
+                        "interval_coverage",
+                        call.get("reciprocal_overlap", 0.0),
+                    )
                     _util.vlog(
                         f"    [VIT] {sample_id:30s}  "
                         f"{call['GD_ID']:25s}  "
                         f"{call['svtype']:4s}  ploidy={sample_ploidy}  "
                         f"score={call['log_prob_score']:+.4f}  "
-                        f"RO={ro:.2%}  "
+                        f"coverage={coverage:.2%}  "
                         f"intervals={','.join(call['intervals'])}"
                         f"{tag}"
                     )
@@ -392,6 +399,8 @@ def call_cnvs_from_posteriors(
                     "matched_seg_start": call.get("matched_seg_start", np.nan),
                     "matched_seg_end": call.get("matched_seg_end", np.nan),
                     "matched_seg_n_bins": call.get("matched_seg_n_bins", 0),
+                    "matched_interval_bp": call.get("matched_interval_bp", 0),
+                    "interval_coverage": call.get("interval_coverage", np.nan),
                     "reciprocal_overlap": call.get("reciprocal_overlap", np.nan),
                     "is_carrier": call["is_carrier"],
                     "is_best_match": (
@@ -464,13 +473,12 @@ def parse_args():
              "Only used when --transition-matrix is also set (Viterbi only).",
     )
     parser.add_argument(
-        "--reciprocal-overlap-threshold",
+        "--min-mean-coverage",
         type=float,
-        default=0.90,
-        help="Minimum reciprocal overlap between a Viterbi CN segment and a "
-             "GD entry to call a carrier.  Reciprocal overlap is "
-             "min(overlap/segment_length, overlap/entry_length).  "
-             "Default: 0.90 (90%%).",
+        default=0.50,
+        help="Minimum per-interval coverage required for a breakpoint pair "
+             "to participate in the selected contiguous run. Default: 0.50 "
+             "(50%%).",
     )
     parser.add_argument(
         "--verbose", "-v",
@@ -532,7 +540,7 @@ def main():
         transition_matrix=transition_matrix,
         ploidy_df=ploidy_df,
         verbose=args.verbose,
-        reciprocal_overlap_threshold=args.reciprocal_overlap_threshold,
+        min_mean_coverage=args.min_mean_coverage,
         breakpoint_transition_matrix=breakpoint_transition_matrix,
     )
 
