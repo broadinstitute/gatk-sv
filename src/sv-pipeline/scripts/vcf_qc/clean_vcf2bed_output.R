@@ -110,7 +110,7 @@ if(length(zeroes)>0){
 }
 #Relabel multiallelic DELs/DUPs and MCNVs, if optioned
 if(labelMCNV==T){
-  mCNV.to.label <- which(dat$svtype %in% c("DEL","DUP") & dat$other_gts>0)
+  mCNV.to.label <- which(dat$svtype %in% c("DEL","DEL_SHORT","DEL_SV","DUP") & dat$other_gts>0)
   if(length(mCNV.to.label)>0){
     cat(paste("WARNING: ",prettyNum(length(mCNV.to.label),big.mark=","),"/",
               prettyNum(nrow(dat),big.mark=",")," (",

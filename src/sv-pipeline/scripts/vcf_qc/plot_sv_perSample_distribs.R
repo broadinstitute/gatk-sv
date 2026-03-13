@@ -9,10 +9,10 @@ rare.max.freq <- 0.01
 uncommon.max.freq <- 0.1
 common.max.freq <- 0.5
 major.max.freq <- 1
-tiny.max.size <- 100
-small.max.size <- 500
-medium.max.size <- 2500
-medlarge.max.size <- 10000
+tiny.max.size <- 50
+small.max.size <- 100
+medium.max.size <- 500
+medlarge.max.size <- 5000
 large.max.size <- 50000
 huge.max.size <- 300000000
 
@@ -580,47 +580,47 @@ wrapperVariantCountViolins <- function(count="variants"){
   png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.tiny_sv.png",sep=""),
       height=1200,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.tiny,
-              colors=svtypes$color,log=F,
+              colors=svtypes.merged$color,log=F,
               xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
-              title=paste(label.prefix," per Genome [< 100bp]",sep=""))
+              title=paste(label.prefix," per Genome [< 50bp]",sep=""))
   dev.off()
   #Small
   png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.small_sv.png",sep=""),
       height=1200,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.small,
-              colors=svtypes$color,log=F,
+              colors=svtypes.merged$color,log=F,
               xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
-              title=paste(label.prefix," per Genome [100-500bp]",sep=""))
+              title=paste(label.prefix," per Genome [50-100bp]",sep=""))
   dev.off()
   #Medium
   png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.medium_sv.png",sep=""),
       height=1200,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.medium,
-              colors=svtypes$color,log=F,
+              colors=svtypes.merged$color,log=F,
               xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
-              title=paste(label.prefix," per Genome [500bp-2.5kb]",sep=""))
+              title=paste(label.prefix," per Genome [100bp-500bp]",sep=""))
   dev.off()
   #Medium-large
   png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.medlarge_sv.png",sep=""),
       height=1200,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.medlarge,
-              colors=svtypes$color,log=F,
+              colors=svtypes.merged$color,log=F,
               xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
-              title=paste(label.prefix," per Genome [2.5-10kb]",sep=""))
+              title=paste(label.prefix," per Genome [500bp-5kb]",sep=""))
   dev.off()
   #Large
   png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.large_sv.png",sep=""),
       height=1200,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.large,
-              colors=svtypes$color,log=F,
+              colors=svtypes.merged$color,log=F,
               xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
-              title=paste(label.prefix," per Genome [10-50kb]",sep=""))
+              title=paste(label.prefix," per Genome [5-50kb]",sep=""))
   dev.off()
   #Huge
   png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.huge_sv.png",sep=""),
       height=1200,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.huge,
-              colors=svtypes$color,log=F,
+              colors=svtypes.merged$color,log=F,
               xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
               title=paste(label.prefix," per Genome [>50kb]",sep=""))
   dev.off()
@@ -684,7 +684,7 @@ wrapperVariantCountBarplots <- function(count="variants"){
   png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.raw_barplots_by_size.png",sep=""),
       height=1200,width=1200,res=300)
   plotStackedBars(mat=t(plot.data.sub$median.size)[-1,],
-                  colors=svtypes$color,scaled=F,
+                  colors=svtypes.merged$color,scaled=F,
                   xlabel="SV Size",ylabel="Count per Genome",
                   title=paste(label.prefix," vs. Size",sep=""),
                   subtitle=paste("Median of ",prettyNum(length(samples),big.mark=",")," Samples",sep=""))
@@ -694,7 +694,7 @@ wrapperVariantCountBarplots <- function(count="variants"){
   png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.scaled_barplots_by_size.png",sep=""),
       height=1200,width=1200,res=300)
   plotStackedBars(mat=t(plot.data.sub$median.size)[-1,],
-                  colors=svtypes$color,scaled=T,
+                  colors=svtypes.merged$color,scaled=T,
                   xlabel="SV Size",ylabel="Pct. per Genome",
                   title=paste("Pct. of ",label.prefix," vs. Size",sep=""),
                   subtitle=paste("Median of ",prettyNum(length(samples),big.mark=",")," Samples",sep=""))
@@ -758,7 +758,7 @@ wrapperVariantCountHeats <- function(count="variants"){
   pdf(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.heatmap_by_size.pdf",sep=""),
       height=5,width=5)
   plotHeatmap(mat=plot.data.sub$median.size,
-              base.cols=c("gray15",svtypes$color),
+              base.cols=c("gray15",svtypes.merged$color),
               x.title="SV Classes",y.title="SV Size",
               title=paste(label.prefix," per Genome, by Size",sep=""))
   dev.off()
@@ -808,7 +808,7 @@ masterWrapperSummaryPlot <- function(){
   
   #Heatmap of SV sites per sample by size
   plotHeatmap(mat=plot.data$variants$median.size,
-              base.cols=c("gray15",svtypes$color),
+              base.cols=c("gray15",svtypes.merged$color),
               x.title="SV Classes",y.title="SV Size",
               title="Sites per Genome, by Size",lab.cex=0.75)
   
@@ -840,7 +840,7 @@ masterWrapperSummaryPlot <- function(){
   
   #Heatmap of SV alleles per sample by size
   plotHeatmap(mat=plot.data$alleles$median.size,
-              base.cols=c("gray15",svtypes$color),
+              base.cols=c("gray15",svtypes.merged$color),
               x.title="SV Classes",y.title="SV Size",
               title="Alleles per Genome by Size",lab.cex=0.75)
   
@@ -944,6 +944,16 @@ if(!is.null(svtypes.file)){
   svtypes <- data.frame("svtype"=svtypes.v,
                         "color"=svtypes.c)
 }
+
+# Merged svtypes and dat for size-stratified plots (DEL_SHORT+DEL_SV → DEL, INS_SHORT+INS_SV → INS)
+svtypes.merged <- data.frame(
+  svtype = c("DEL","INS",svtypes$svtype[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV")]),
+  color = c(svtypes$color[svtypes$svtype=="DEL_SHORT"],
+            svtypes$color[svtypes$svtype=="INS_SHORT"],
+            svtypes$color[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV")]))
+dat.merged <- dat
+dat.merged$svtype[dat.merged$svtype %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
+dat.merged$svtype[dat.merged$svtype %in% c("INS_SHORT","INS_SV")] <- "INS"
 #Create output directory structure, if necessary
 if(!dir.exists(OUTDIR)){
   dir.create(OUTDIR)
@@ -970,18 +980,21 @@ plot.data <- lapply(list("variants","alleles"),function(count){
   
   #Counts per sample
   count.all <- countVarsMulti(dat=dat,samples=samples,count=count)
-  count.tiny <- countVarsMulti(dat=dat[which(dat$length<=tiny.max.size),],
+  # Size-stratified counts use merged DEL/INS
+  svtypes.orig <- svtypes; svtypes <<- svtypes.merged
+  count.tiny <- countVarsMulti(dat=dat.merged[which(dat.merged$length<=tiny.max.size),],
                                samples=samples,count=count)
-  count.small <- countVarsMulti(dat=dat[which(dat$length>tiny.max.size & dat$length<=small.max.size),],
+  count.small <- countVarsMulti(dat=dat.merged[which(dat.merged$length>tiny.max.size & dat.merged$length<=small.max.size),],
                                 samples=samples,count=count)
-  count.medium <- countVarsMulti(dat=dat[which(dat$length>small.max.size & dat$length<=medium.max.size),],
+  count.medium <- countVarsMulti(dat=dat.merged[which(dat.merged$length>small.max.size & dat.merged$length<=medium.max.size),],
                                  samples=samples,count=count)
-  count.medlarge <- countVarsMulti(dat=dat[which(dat$length>medium.max.size & dat$length<=medlarge.max.size),],
+  count.medlarge <- countVarsMulti(dat=dat.merged[which(dat.merged$length>medium.max.size & dat.merged$length<=medlarge.max.size),],
                                    samples=samples,count=count)
-  count.large <- countVarsMulti(dat=dat[which(dat$length>medlarge.max.size & dat$length<=large.max.size),],
+  count.large <- countVarsMulti(dat=dat.merged[which(dat.merged$length>medlarge.max.size & dat.merged$length<=large.max.size),],
                                 samples=samples,count=count)
-  count.huge <- countVarsMulti(dat=dat[which(dat$length>large.max.size),],
+  count.huge <- countVarsMulti(dat=dat.merged[which(dat.merged$length>large.max.size),],
                                samples=samples,count=count)
+  svtypes <<- svtypes.orig
   count.singleton <- countVarsMulti(dat=dat[which(dat$AC==1),],
                                     samples=samples,count=count)
   count.rare <- countVarsMulti(dat=dat[which(dat$AC>1 & dat[,freq.idx]<=rare.max.freq),],
@@ -996,11 +1009,13 @@ plot.data <- lapply(list("variants","alleles"),function(count){
   #Medians per sample
   stepgq <- ceiling(maxgq / 10)
   median.GQ <- t(mediansByGQ(dat=dat,samples=samples,count=count,min.GQs=seq(0,stepgq*9,stepgq)))
-  median.size <- mediansBySize(dat=dat,samples=samples,count=count,
+  svtypes <<- svtypes.merged
+  median.size <- mediansBySize(dat=dat.merged,samples=samples,count=count,
                                max.sizes=c(tiny.max.size,small.max.size,medium.max.size,
                                            medlarge.max.size,large.max.size,huge.max.size),
-                               size.labs=c("<100bp","100-\n500bp","500bp-\n2.5kb",
-                                           "2.5-10kb","10kb-50kb",">50kb"))
+                               size.labs=c("<50bp","50-\n100bp","100bp-\n500bp",
+                                           "500bp-\n5kb","5-50kb",">50kb"))
+  svtypes <<- svtypes.orig
   median.freq <- mediansByFreq(dat=dat,samples=samples,count=count,
                                max.freqs=c(1.1/nsamp,rare.max.freq,uncommon.max.freq,
                                            common.max.freq,major.max.freq),

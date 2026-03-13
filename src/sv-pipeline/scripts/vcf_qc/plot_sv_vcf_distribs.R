@@ -9,10 +9,10 @@ rare.max.freq <- 0.01
 uncommon.max.freq <- 0.1
 common.max.freq <- 0.5
 major.max.freq <- 1
-tiny.max.size <- 100
-small.max.size <- 500
-medium.max.size <- 2500
-medlarge.max.size <- 10000
+tiny.max.size <- 50
+small.max.size <- 100
+medium.max.size <- 500
+medlarge.max.size <- 5000
 large.max.size <- 50000
 huge.max.size <- 300000000
 sex.chroms <- c(1:22, paste("chr", 1:22, sep=""))
@@ -207,38 +207,38 @@ wrapperPlotAllCountBars <- function(){
   dev.off()
   #Tiny
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/sv_count.tiny_sv.pdf",sep=""),
-      height=4,width=2+(nrow(svtypes)/3))
-  plotSVCountBars(dat=dat[which(dat$length<tiny.max.size),],svtypes=svtypes,
-                  title="Variant Count (< 100bp)")
+      height=4,width=2+(nrow(svtypes.merged)/3))
+  plotSVCountBars(dat=dat.merged[which(dat.merged$length<tiny.max.size),],svtypes=svtypes.merged,
+                  title="Variant Count (< 50bp)")
   dev.off()
   #Small
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/sv_count.small_sv.pdf",sep=""),
-      height=4,width=2+(nrow(svtypes)/3))
-  plotSVCountBars(dat=dat[which(dat$length>=tiny.max.size & dat$length<small.max.size),],svtypes=svtypes,
-                  title="Variant Count (100 - 500bp)")
+      height=4,width=2+(nrow(svtypes.merged)/3))
+  plotSVCountBars(dat=dat.merged[which(dat.merged$length>=tiny.max.size & dat.merged$length<small.max.size),],svtypes=svtypes.merged,
+                  title="Variant Count (50 - 100bp)")
   dev.off()
   #Medium
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/sv_count.medium_sv.pdf",sep=""),
-      height=4,width=2+(nrow(svtypes)/3))
-  plotSVCountBars(dat=dat[which(dat$length>=small.max.size & dat$length<medium.max.size),],svtypes=svtypes,
-                  title="Variant Count (500bp - 2.5kb)")
+      height=4,width=2+(nrow(svtypes.merged)/3))
+  plotSVCountBars(dat=dat.merged[which(dat.merged$length>=small.max.size & dat.merged$length<medium.max.size),],svtypes=svtypes.merged,
+                  title="Variant Count (100bp - 500bp)")
   dev.off()
   #Medium-Large
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/sv_count.medlarge_sv.pdf",sep=""),
-      height=4,width=2+(nrow(svtypes)/3))
-  plotSVCountBars(dat=dat[which(dat$length>=medium.max.size & dat$length<medlarge.max.size),],svtypes=svtypes,
-                  title="Variant Count (2.5 - 10kb)")
+      height=4,width=2+(nrow(svtypes.merged)/3))
+  plotSVCountBars(dat=dat.merged[which(dat.merged$length>=medium.max.size & dat.merged$length<medlarge.max.size),],svtypes=svtypes.merged,
+                  title="Variant Count (500bp - 5kb)")
   dev.off()
   #Large
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/sv_count.large_sv.pdf",sep=""),
-      height=4,width=2+(nrow(svtypes)/3))
-  plotSVCountBars(dat=dat[which(dat$length>=medlarge.max.size & dat$length<large.max.size),],svtypes=svtypes,
-                  title="Variant Count (10 - 50kb)")
+      height=4,width=2+(nrow(svtypes.merged)/3))
+  plotSVCountBars(dat=dat.merged[which(dat.merged$length>=medlarge.max.size & dat.merged$length<large.max.size),],svtypes=svtypes.merged,
+                  title="Variant Count (5 - 50kb)")
   dev.off()
   #Huge
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/sv_count.huge_sv.pdf",sep=""),
-      height=4,width=2+(nrow(svtypes)/3))
-  plotSVCountBars(dat=dat[which(dat$length>=large.max.size & dat$length<huge.max.size),],svtypes=svtypes,
+      height=4,width=2+(nrow(svtypes.merged)/3))
+  plotSVCountBars(dat=dat.merged[which(dat.merged$length>=large.max.size & dat.merged$length<huge.max.size),],svtypes=svtypes.merged,
                   title="Variant Count (> 50kb)")
   dev.off()
   #Dotplot per chromosome
@@ -255,8 +255,8 @@ wrapperPlotAllCountBars <- function(){
                                 "10-50%",">50%"),
                       "max"=c(1.1/(2*nsamp),rare.max.freq,uncommon.max.freq,
                               common.max.freq,major.max.freq))
-  size.df <- data.frame("label"=c("<100bp","100bp-\n500bp","500bp-\n2.5kb",
-                                  "2.5-10kb","10-50kb",">50kb"),
+  size.df <- data.frame("label"=c("<50bp","50-\n100bp","100bp-\n500bp",
+                                  "500bp-\n5kb","5-50kb",">50kb"),
                         "max"=c(tiny.max.size,small.max.size,medium.max.size,
                                 medlarge.max.size,large.max.size,huge.max.size))
   #Prepare layout
@@ -270,8 +270,8 @@ wrapperPlotAllCountBars <- function(){
       min.size <- max(0,size.df[max(c(0,c-1)),2])
       max.size <- min(c(size.df[c,2],300000000))
       #Get data subset
-      plotset <- dat[which(dat$AF>min.AF & dat$AF<=max.AF & 
-                             dat$length>min.size & dat$length<=max.size),]
+      plotset <- dat.merged[which(dat.merged$AF>min.AF & dat.merged$AF<=max.AF & 
+                                    dat.merged$length>min.size & dat.merged$length<=max.size),]
       #Set titles
       if(r==0){
         title <- gsub("\n","",c("ALL",size.df[,1])[c+1],fixed=T)
@@ -289,7 +289,7 @@ wrapperPlotAllCountBars <- function(){
         plot(x=c(0,1),y=c(0,1),type="n",xaxt="n",xlab="",yaxt="n",ylab="")
         text(x=0.5,y=0.5,labels="n=0")
       }else{
-        plotSVCountBars(dat=plotset,svtypes=svtypes,
+        plotSVCountBars(dat=plotset,svtypes=svtypes.merged,
                         title=title,ylab=NULL)
         mtext(2,line=3,font=2,text=ylab)
       }
@@ -382,7 +382,7 @@ wrapperPlotAllCountBars <- function(){
 ###############
 #Plot single size distribution
 plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
-                            min.size=50, max.size=1000000,
+                            min.size=1, max.size=1000000,
                             autosomal=F, biallelic=F,
                             title=NULL, legend=F, lwd.cex=1, text.cex=1){
   #Filter/process sizes & compute range + breaks
@@ -527,7 +527,7 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
 
 #Plot comparative size distributions for a series of AC & AF restrictions
 plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
-                                  n.breaks=100, min.size=50, max.size=1000000,
+                                  n.breaks=100, min.size=1, max.size=1000000,
                                   autosomal=F, biallelic=T, title=NULL, lwd.cex=1){
   #Process sizes & compute range + breaks
   filter.legend <- NULL
@@ -941,43 +941,43 @@ wrapperPlotAllFreqDistribs <- function(){
                   legend=T)
   dev.off()
   
-  #Tiny (<100bp)
+  #Tiny (<50bp)
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.tiny_sv.pdf",sep=""),
       height=4,width=4)
   plotFreqDistrib(dat=dat[which(dat$length<tiny.max.size),],svtypes=svtypes,
-                  title="AF Distribution (< 100bp)",
+                  title="AF Distribution (< 50bp)",
                   legend=T)
   dev.off()
   
-  #Small (>100bp & <500bp)
+  #Small (50-100bp)
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.small_sv.pdf",sep=""),
       height=4,width=4)
   plotFreqDistrib(dat=dat[which(dat$length>=tiny.max.size & dat$length<small.max.size),],svtypes=svtypes,
+                  title="AF Distribution (50 - 100bp)",
+                  legend=T)
+  dev.off()
+  
+  #Medium (100-500bp)
+  pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.medium_sv.pdf",sep=""),
+      height=4,width=4)
+  plotFreqDistrib(dat=dat[which(dat$length>=small.max.size & dat$length<medium.max.size),],svtypes=svtypes,
                   title="AF Distribution (100bp - 500bp)",
                   legend=T)
   dev.off()
   
-  #Medium (>500bp & <2.5kb)
-  pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.medium_sv.pdf",sep=""),
-      height=4,width=4)
-  plotFreqDistrib(dat=dat[which(dat$length>=small.max.size & dat$length<medium.max.size),],svtypes=svtypes,
-                  title="AF Distribution (500bp - 2.5kb)",
-                  legend=T)
-  dev.off()
-  
-  #Med-Large (>2.5kb & <10kb)
+  #Med-Large (500bp-5kb)
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.medlarge_sv.pdf",sep=""),
       height=4,width=4)
   plotFreqDistrib(dat=dat[which(dat$length>=medium.max.size & dat$length<medlarge.max.size),],svtypes=svtypes,
-                  title="AF Distribution (2.5kb - 10kb)",
+                  title="AF Distribution (500bp - 5kb)",
                   legend=T)
   dev.off()
   
-  #Large (>10kb & <50kb)
+  #Large (5-50kb)
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.large_sv.pdf",sep=""),
       height=4,width=4)
   plotFreqDistrib(dat=dat[which(dat$length>=medlarge.max.size & dat$length<large.max.size),],svtypes=svtypes,
-                  title="AF Distribution (10kb - 50kb)",
+                  title="AF Distribution (5 - 50kb)",
                   legend=T)
   dev.off()
   
@@ -995,8 +995,8 @@ wrapperPlotAllFreqDistribs <- function(){
   plotFreqDistribSeries(dat=dat,svtypes=svtypes,
                         max.sizes=c(tiny.max.size,small.max.size,medium.max.size,
                                     medlarge.max.size,large.max.size,huge.max.size),
-                        legend.labs=c("<100bp","100-\n500bp","500bp-\n2.5kb",
-                                      "2.5-10kb","10kb-50kb",">50kb"),
+                        legend.labs=c("<50bp","50-\n100bp","100bp-\n500bp",
+                                      "500bp-\n5kb","5-50kb",">50kb"),
                         title="AF Distributions by SV Size")
   dev.off()
   
@@ -1196,31 +1196,31 @@ wrapperPlotAllHWDistribs <- function(){
   png(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/gt_distribution.tiny_sv.png",sep=""),
       res=300,height=1800,width=1800)
   plotHWSingle(dat=dat[which(dat$length<tiny.max.size),],svtypes=svtypes,
-               title="Genotype Distribution (< 100bp)")
+               title="Genotype Distribution (< 50bp)")
   dev.off()
   #Small
   png(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/gt_distribution.small_sv.png",sep=""),
       res=300,height=1800,width=1800)
   plotHWSingle(dat=dat[which(dat$length>=tiny.max.size & dat$length<small.max.size),],svtypes=svtypes,
-               title="Genotype Distribution (100 - 500bp)")
+               title="Genotype Distribution (50 - 100bp)")
   dev.off()
   #Medium
   png(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/gt_distribution.medium_sv.png",sep=""),
       res=300,height=1800,width=1800)
   plotHWSingle(dat=dat[which(dat$length>=small.max.size & dat$length<medium.max.size),],svtypes=svtypes,
-               title="Genotype Distribution (500bp - 2.5kb)")
+               title="Genotype Distribution (100bp - 500bp)")
   dev.off()
   #Med-Large
   png(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/gt_distribution.medlarge_sv.png",sep=""),
       res=300,height=1800,width=1800)
   plotHWSingle(dat=dat[which(dat$length>=medium.max.size & dat$length<medlarge.max.size),],svtypes=svtypes,
-               title="Genotype Distribution (2.5 - 10kb)")
+               title="Genotype Distribution (500bp - 5kb)")
   dev.off()
   #Large
   png(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/gt_distribution.large_sv.png",sep=""),
       res=300,height=1800,width=1800)
   plotHWSingle(dat=dat[which(dat$length>=medlarge.max.size & dat$length<large.max.size),],svtypes=svtypes,
-               title="Genotype Distribution (10 - 50kb)")
+               title="Genotype Distribution (5 - 50kb)")
   dev.off()
   #Huge
   png(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/gt_distribution.huge_sv.png",sep=""),
@@ -1244,15 +1244,15 @@ wrapperPlotAllHWDistribs <- function(){
   plotHWSingle(dat=dat,svtypes=svtypes,
                title="Genotype Distribution (All SV)")
   plotHWSingle(dat=dat[which(dat$length<tiny.max.size),],svtypes=svtypes,
-               title="< 100bp",full.legend=F,lab.cex=0.7)
+               title="< 50bp",full.legend=F,lab.cex=0.7)
   plotHWSingle(dat=dat[which(dat$length>=tiny.max.size & dat$length<small.max.size),],svtypes=svtypes,
-               title="100 - 500bp",full.legend=F,lab.cex=0.7)
+               title="50 - 100bp",full.legend=F,lab.cex=0.7)
   plotHWSingle(dat=dat[which(dat$length>=small.max.size & dat$length<medium.max.size),],svtypes=svtypes,
-               title="500bp - 2.5kb",full.legend=F,lab.cex=0.7)
+               title="100bp - 500bp",full.legend=F,lab.cex=0.7)
   plotHWSingle(dat=dat[which(dat$length>=medium.max.size & dat$length<medlarge.max.size),],svtypes=svtypes,
-               title="2.5 - 10kb",full.legend=F,lab.cex=0.7)
+               title="500bp - 5kb",full.legend=F,lab.cex=0.7)
   plotHWSingle(dat=dat[which(dat$length>=medlarge.max.size & dat$length<large.max.size),],svtypes=svtypes,
-               title="10 - 50kb",full.legend=F,lab.cex=0.7)
+               title="5 - 50kb",full.legend=F,lab.cex=0.7)
   plotHWSingle(dat=dat[which(dat$length>=large.max.size & dat$length<huge.max.size),],svtypes=svtypes,
                title="> 50kb",full.legend=F,lab.cex=0.7)
   dev.off()
@@ -1323,6 +1323,16 @@ if(!is.null(svtypes.file)){
   svtypes <- data.frame("svtype"=svtypes.v,
                         "color"=svtypes.c)
 }
+
+# Merged svtypes and dat for size-stratified plots (DEL_SHORT+DEL_SV → DEL, INS_SHORT+INS_SV → INS)
+svtypes.merged <- data.frame(
+  svtype = c("DEL","INS",svtypes$svtype[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV")]),
+  color = c(svtypes$color[svtypes$svtype=="DEL_SHORT"],
+            svtypes$color[svtypes$svtype=="INS_SHORT"],
+            svtypes$color[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV")]))
+dat.merged <- dat
+dat.merged$svtype[dat.merged$svtype %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
+dat.merged$svtype[dat.merged$svtype %in% c("INS_SHORT","INS_SV")] <- "INS"
 
 ###Plotting block
 #SV counts

@@ -118,7 +118,13 @@ for rec in vcf_in:
     allele_type = allele_type[0] if isinstance(allele_type, tuple) else allele_type
     allele_length = abs(len(rec.alts[0]) - len(rec.ref))
 
-    rec.info["SVTYPE"] = allele_type
+    if allele_type == "DEL":
+        svtype = "DEL_SHORT" if allele_length < 50 else "DEL_SV"
+    elif allele_type == "INS":
+        svtype = "INS_SHORT" if allele_length < 50 else "INS_SV"
+    else:
+        svtype = allele_type
+    rec.info["SVTYPE"] = svtype
     rec.info["SVLEN"] = allele_length
     rec.stop = rec.pos + len(rec.ref) - 1
 
