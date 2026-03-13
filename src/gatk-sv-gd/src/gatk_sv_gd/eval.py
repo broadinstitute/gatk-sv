@@ -177,6 +177,7 @@ def evaluate_against_truth(
     truth_df: pd.DataFrame,
     output_dir: str,
     batch_samples: Optional[set] = None,
+    min_confidence: Optional[float] = None,
 ) -> pd.DataFrame:
     """
     Cross-reference predicted GD calls against a truth table and report
@@ -197,6 +198,9 @@ def evaluate_against_truth(
         batch_samples: Optional set of sample IDs present in the current
             batch.  If provided, truth carriers not in this set are removed
             before scoring.
+        min_confidence: Optional minimum ``log_prob_score`` required for a
+            predicted carrier call to count during evaluation. If ``None``,
+            no confidence filter is applied.
 
     Returns:
         Per-site report DataFrame.
@@ -208,6 +212,8 @@ def evaluate_against_truth(
     if batch_samples is not None:
         print(f"  Batch contains {len(batch_samples)} samples; "
               "truth carriers will be restricted to this set.")
+    if min_confidence is not None:
+        print(f"  Enforcing call confidence threshold: log_prob_score >= {min_confidence:.3f}")
 
     # Build predicted carrier sets keyed by GD_ID.
     # Only count samples whose call is both a carrier AND the best-match
@@ -219,6 +225,12 @@ def evaluate_against_truth(
         carrier_mask = grp["is_carrier"] == True  # noqa: E712
         if "is_best_match" in grp.columns:
             carrier_mask = carrier_mask & (grp["is_best_match"] == True)  # noqa: E712
+        if min_confidence is not None:
+            if "log_prob_score" not in grp.columns:
+                raise ValueError(
+                    "--min-confidence requires a calls file with a log_prob_score column"
+                )
+            carrier_mask = carrier_mask & (grp["log_prob_score"] >= min_confidence)
         pred_by_gd[gd_id_str] = set(
             grp.loc[carrier_mask, "sample"].unique()
         )
@@ -248,9 +260,10 @@ def evaluate_against_truth(
         }
 
     # Union of all GD_IDs with at least one truth or predicted carrier
+    pred_gd_ids = {gd for gd, s in pred_by_gd.items() if len(s) > 0}
+    truth_gd_ids = {gd for gd, d in truth_by_gd.items() if len(d["carrier_set"]) > 0}
     all_gd_ids = sorted(
-        {gd for gd, s in pred_by_gd.items() if len(s) > 0}
-        | {gd for gd, d in truth_by_gd.items() if len(d["carrier_set"]) > 0}
+        pred_gd_ids | truth_gd_ids
     )
 
     rows = []
@@ -370,6 +383,16 @@ def parse_args():
         required=True,
         help="Output directory for evaluation report",
     )
+    parser.add_argument(
+        "--min-confidence",
+        nargs="?",
+        const=-0.3,
+        default=None,
+        type=float,
+        help="Optional minimum log_prob_score required for a predicted carrier "
+             "to count in evaluation. If the flag is provided without a value, "
+             "uses -0.3. If omitted entirely, no confidence threshold is enforced.",
+    )
     return parser.parse_args()
 
 
@@ -378,7 +401,7 @@ def main():
     args = parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
-    log_fh = setup_logging(args.output_dir, filename="eval_log.txt")
+    setup_logging(args.output_dir, filename="eval_log.txt")
 
     print(f"Output directory: {args.output_dir}")
 
@@ -424,6 +447,7 @@ def main():
     evaluate_against_truth(
         calls_df, truth_df, args.output_dir,
         batch_samples=batch_samples,
+        min_confidence=args.min_confidence,
     )
 
     print("\n" + "=" * 80)
