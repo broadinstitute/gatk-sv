@@ -382,7 +382,7 @@ def parse_args():
     parser.add_argument(
         "--guide-type",
         type=str,
-        default="delta",
+        default="diagonal",
         choices=["delta", "diagonal"],
         help="Type of variational guide",
     )
