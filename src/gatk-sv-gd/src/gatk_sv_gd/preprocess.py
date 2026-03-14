@@ -266,26 +266,60 @@ def _drop_flank_candidate_bins_by_mask(
     label: str,
     indent: str = "",
 ) -> pd.DataFrame:
-    """Drop bins that behave as flank candidates and overlap a mask."""
+    """Drop flank-candidate bins, unless that would erase an entire flank."""
     if len(locus_df) == 0:
         return locus_df
 
     mids = (locus_df["Start"].values + locus_df["End"].values) / 2.0
-    flank_candidate = (mids < locus.start) | (mids >= locus.end)
-    if not flank_candidate.any():
-        return locus_df
+    keep = np.ones(len(locus_df), dtype=bool)
 
-    overlaps = np.zeros(len(locus_df))
-    overlaps[flank_candidate] = exclusion_mask.get_overlap_fractions_batch(
-        locus.chrom,
-        locus_df.loc[flank_candidate, "Start"].values,
-        locus_df.loc[flank_candidate, "End"].values,
-    )
-    keep = (~flank_candidate) | (overlaps == 0.0)
-    n_drop = int((~keep).sum())
-    if n_drop > 0:
-        print(f"{indent}Dropped {n_drop} flank-candidate bin(s) with {label} overlap")
+    for flank_name, flank_candidate in (
+        ("left_flank", mids < locus.start),
+        ("right_flank", mids >= locus.end),
+    ):
+        if not flank_candidate.any():
+            continue
+
+        flank_starts = locus_df.loc[flank_candidate, "Start"].values
+        flank_ends = locus_df.loc[flank_candidate, "End"].values
+        overlaps = exclusion_mask.get_overlap_fractions_batch(
+            locus.chrom,
+            flank_starts,
+            flank_ends,
+        )
+        flank_keep = overlaps == 0.0
+        n_drop = int((~flank_keep).sum())
+        if n_drop == 0:
+            continue
+
+        if not flank_keep.any():
+            print(f"{indent}Kept {flank_name} unfiltered: {label} would remove all {n_drop} candidate bin(s)")
+            continue
+
+        keep[np.flatnonzero(flank_candidate)] = flank_keep
+        print(f"{indent}Dropped {n_drop} {flank_name} candidate bin(s) with {label} overlap")
+
     return locus_df[keep].copy()
+
+
+def _merge_flank_regions_with_fallback(
+    unfiltered_flank_regions: List[Tuple[int, int, str]],
+    filtered_flank_regions: List[Tuple[int, int, str]],
+    indent: str = "",
+) -> List[Tuple[int, int, str]]:
+    """Prefer filtered flank regions, but fall back per side if absent."""
+    selected: List[Tuple[int, int, str]] = []
+    unfiltered_by_name = {name: (start, end, name) for start, end, name in unfiltered_flank_regions}
+    filtered_by_name = {name: (start, end, name) for start, end, name in filtered_flank_regions}
+
+    for flank_name in ("left_flank", "right_flank"):
+        if flank_name in filtered_by_name:
+            selected.append(filtered_by_name[flank_name])
+        elif flank_name in unfiltered_by_name:
+            print(f"{indent}Falling back to unfiltered {flank_name}: flank-exclusion prevented flank selection")
+            selected.append(unfiltered_by_name[flank_name])
+
+    return selected
 
 
 def _drop_masked_flank_bins(
@@ -453,7 +487,6 @@ def collect_all_locus_bins(
     for chrom, chrom_df in df.groupby("Chr"):
         keep = np.ones(len(chrom_df), dtype=bool)
         n_excluded = 0
-        n_flank_excluded = 0
         n_quality = 0
         if exclusion_mask is not None:
             overlaps = exclusion_mask.get_overlap_fractions_batch(
@@ -466,13 +499,6 @@ def collect_all_locus_bins(
             exclusion_keep = overlaps == 0.0
             n_excluded = int((~exclusion_keep).sum())
             keep &= exclusion_keep
-        if flank_exclusion_mask is not None:
-            flank_overlaps = flank_exclusion_mask.get_overlap_fractions_batch(
-                chrom, chrom_df["Start"].values, chrom_df["End"].values
-            )
-            flank_keep = flank_overlaps == 0.0
-            n_flank_excluded = int((~flank_keep).sum())
-            keep &= flank_keep
         if _flank_filter_params is not None:
             _sc = get_sample_columns(chrom_df)
             _depths = chrom_df[_sc].values
@@ -494,8 +520,6 @@ def collect_all_locus_bins(
         parts = [f"{len(chrom_filtered[chrom])} filtered bins (of {len(chrom_df)} total)"]
         if n_excluded > 0:
             parts.append(f"{n_excluded} exclusion-masked")
-        if n_flank_excluded > 0:
-            parts.append(f"{n_flank_excluded} flank-exclusion-masked")
         if n_quality > 0:
             parts.append(f"{n_quality} quality-filtered")
         print(f"  {chrom}: {', '.join(parts)}")
@@ -577,7 +601,7 @@ def collect_all_locus_bins(
         # Compute flank coordinates from the full chromosome's filtered bins so
         # that even multi-megabase exclusion deserts don't prevent flank discovery.
         chrom_bins = chrom_filtered.get(locus.chrom, pd.DataFrame())
-        flank_regions = compute_flank_regions_from_bins(
+        flank_regions_unfiltered = compute_flank_regions_from_bins(
             chrom_bins, locus, locus_size,
             min_flank_bases=min_flank_bases,
             min_flank_bins=min_flank_bins,
@@ -585,6 +609,28 @@ def collect_all_locus_bins(
             filter_params=_flank_filter_params,
             ploidy_map=ploidy_map,
         )
+        flank_regions = flank_regions_unfiltered
+        if flank_exclusion_mask is not None and len(chrom_bins) > 0:
+            filtered_chrom_bins = _drop_flank_candidate_bins_by_mask(
+                chrom_bins,
+                locus,
+                flank_exclusion_mask,
+                label="flank-exclusion",
+                indent="  ",
+            )
+            flank_regions_filtered = compute_flank_regions_from_bins(
+                filtered_chrom_bins, locus, locus_size,
+                min_flank_bases=min_flank_bases,
+                min_flank_bins=min_flank_bins,
+                min_flank_coverage=min_flank_coverage,
+                filter_params=_flank_filter_params,
+                ploidy_map=ploidy_map,
+            )
+            flank_regions = _merge_flank_regions_with_fallback(
+                flank_regions_unfiltered,
+                flank_regions_filtered,
+                indent="  ",
+            )
         if flank_regions:
             for fs, fe, fn in flank_regions:
                 print(f"  {fn}: {fs:,}-{fe:,} (bin-derived)")
