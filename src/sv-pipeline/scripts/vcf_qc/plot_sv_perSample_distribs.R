@@ -560,109 +560,109 @@ wrapperVariantCountViolins <- function(count="variants"){
   
   #Set plotting label & prefix
   if(count=="variants"){
-    label.prefix <- "SV Sites"
+    label.prefix <- "Sites"
     freq.idx <- which(colnames(dat)=="carrierFreq")
   }else{
-    label.prefix <- "SV Alleles"
+    label.prefix <- "Alleles"
     freq.idx <- which(colnames(dat)=="AF")
   }
   
   #All variants
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.all_sv.png",sep=""),
-      height=1200,width=1500,res=300)
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.all.png",sep=""),
+      height=1800,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.all,
               colors=svtypes$color,log=F,
-              xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
-              title=paste(label.prefix," per Genome [All SV]",sep=""))
+              xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
+              title=paste(label.prefix," per Genome",sep=""))
   dev.off()
   
   #Tiny
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.tiny_sv.png",sep=""),
-      height=1200,width=1500,res=300)
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.tiny.png",sep=""),
+      height=1800,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.tiny,
               colors=svtypes.merged$color,log=F,
-              xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
+              xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
               title=paste(label.prefix," per Genome [< 50bp]",sep=""))
   dev.off()
   #Small
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.small_sv.png",sep=""),
-      height=1200,width=1500,res=300)
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.small.png",sep=""),
+      height=1800,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.small,
               colors=svtypes.merged$color,log=F,
-              xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
+              xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
               title=paste(label.prefix," per Genome [50-100bp]",sep=""))
   dev.off()
   #Medium
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.medium_sv.png",sep=""),
-      height=1200,width=1500,res=300)
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.medium.png",sep=""),
+      height=1800,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.medium,
               colors=svtypes.merged$color,log=F,
-              xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
+              xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
               title=paste(label.prefix," per Genome [100bp-500bp]",sep=""))
   dev.off()
   #Medium-large
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.medlarge_sv.png",sep=""),
-      height=1200,width=1500,res=300)
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.medlarge.png",sep=""),
+      height=1800,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.medlarge,
               colors=svtypes.merged$color,log=F,
-              xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
+              xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
               title=paste(label.prefix," per Genome [500bp-5kb]",sep=""))
   dev.off()
   #Large
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.large_sv.png",sep=""),
-      height=1200,width=1500,res=300)
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.large.png",sep=""),
+      height=1800,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.large,
               colors=svtypes.merged$color,log=F,
-              xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
+              xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
               title=paste(label.prefix," per Genome [5-50kb]",sep=""))
   dev.off()
   #Huge
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.huge_sv.png",sep=""),
-      height=1200,width=1500,res=300)
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.huge.png",sep=""),
+      height=1800,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.huge,
               colors=svtypes.merged$color,log=F,
-              xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
+              xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
               title=paste(label.prefix," per Genome [>50kb]",sep=""))
   dev.off()
   
   #Singleton
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.singleton_sv.png",sep=""),
-      height=1200,width=1500,res=300)
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.singleton.png",sep=""),
+      height=1800,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.singleton,
               colors=svtypes$color,log=F,
-              xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
+              xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
               title=paste(label.prefix," per Genome [AC=1]",sep=""))
   dev.off()
   #Rare
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.rare_sv.png",sep=""),
-      height=1200,width=1500,res=300)
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.rare.png",sep=""),
+      height=1800,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.rare,
               colors=svtypes$color,log=F,
-              xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
+              xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
               title=paste(label.prefix," per Genome [AC>1 & Freq. <1%]",sep=""))
   dev.off()
   #Uncommon
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.uncommon_sv.png",sep=""),
-      height=1200,width=1500,res=300)
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.uncommon.png",sep=""),
+      height=1800,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.uncommon,
               colors=svtypes$color,log=F,
-              xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
+              xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
               title=paste(label.prefix," per Genome [Freq. 1-10%]",sep=""))
   dev.off()
   #Common
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.common_sv.png",sep=""),
-      height=1200,width=1500,res=300)
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.common.png",sep=""),
+      height=1800,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.common,
               colors=svtypes$color,log=F,
-              xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
+              xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
               title=paste(label.prefix," per Genome [Freq. 10-50%]",sep=""))
   dev.off()
   #Major
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.major_sv.png",sep=""),
-      height=1200,width=1500,res=300)
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.major.png",sep=""),
+      height=1800,width=1500,res=300)
   plotViolins(mat=plot.data.sub$count.major,
               colors=svtypes$color,log=F,
-              xlab="SV Classes",ylab=paste(label.prefix," per Genome",sep=""),
+              xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
               title=paste(label.prefix," per Genome [Freq. >50%]",sep=""))
   dev.off()
 }
@@ -673,35 +673,35 @@ wrapperVariantCountBarplots <- function(count="variants"){
   
   #Set plotting label & prefix
   if(count=="variants"){
-    label.prefix <- "SV Sites per Genome"
+    label.prefix <- "Sites per Genome"
     freq.lab <- "Carrier Frequency"
   }else{
-    label.prefix <- "SV Alleles per Genome"
+    label.prefix <- "Alleles per Genome"
     freq.lab <- "Allele Frequency"
   }
   
   #Raw counts vs size
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.raw_barplots_by_size.png",sep=""),
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.raw_barplots_by_size.png",sep=""),
       height=1200,width=1200,res=300)
   plotStackedBars(mat=t(plot.data.sub$median.size)[-1,],
                   colors=svtypes.merged$color,scaled=F,
-                  xlabel="SV Size",ylabel="Count per Genome",
+                  xlabel="Size",ylabel="Count per Genome",
                   title=paste(label.prefix," vs. Size",sep=""),
                   subtitle=paste("Median of ",prettyNum(length(samples),big.mark=",")," Samples",sep=""))
   dev.off()
   
   #Scaled counts vs size
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.scaled_barplots_by_size.png",sep=""),
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.scaled_barplots_by_size.png",sep=""),
       height=1200,width=1200,res=300)
   plotStackedBars(mat=t(plot.data.sub$median.size)[-1,],
                   colors=svtypes.merged$color,scaled=T,
-                  xlabel="SV Size",ylabel="Pct. per Genome",
+                  xlabel="Size",ylabel="Pct. per Genome",
                   title=paste("Pct. of ",label.prefix," vs. Size",sep=""),
                   subtitle=paste("Median of ",prettyNum(length(samples),big.mark=",")," Samples",sep=""))
   dev.off()
   
   #Raw counts vs freq
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.raw_barplots_by_freq.png",sep=""),
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.raw_barplots_by_freq.png",sep=""),
       height=1200,width=1200,res=300)
   plotStackedBars(mat=t(plot.data.sub$median.freq)[-1,],
                   colors=svtypes$color,scaled=F,
@@ -711,7 +711,7 @@ wrapperVariantCountBarplots <- function(count="variants"){
   dev.off()
   
   #Scaled counts vs freq
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.scaled_barplots_by_freq.png",sep=""),
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.scaled_barplots_by_freq.png",sep=""),
       height=1200,width=1200,res=300)
   plotStackedBars(mat=t(plot.data.sub$median.freq)[-1,],
                   colors=svtypes$color,scaled=T,
@@ -721,7 +721,7 @@ wrapperVariantCountBarplots <- function(count="variants"){
   dev.off()
   
   #Raw counts vs GQ
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.raw_barplots_by_GQ.png",sep=""),
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.raw_barplots_by_GQ.png",sep=""),
       height=1200,width=1200,res=300)
   plotStackedBars(mat=plot.data.sub$median.GQ[-1,],
                   colors=svtypes$color,scaled=F,
@@ -731,7 +731,7 @@ wrapperVariantCountBarplots <- function(count="variants"){
   dev.off()
   
   #Scaled counts vs GQ
-  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.scaled_barplots_by_GQ.png",sep=""),
+  png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.scaled_barplots_by_GQ.png",sep=""),
       height=1200,width=1200,res=300)
   plotStackedBars(mat=plot.data.sub$median.GQ[-1,],
                   colors=svtypes$color,scaled=T,
@@ -747,28 +747,28 @@ wrapperVariantCountHeats <- function(count="variants"){
   
   #Set plotting label & prefix
   if(count=="variants"){
-    label.prefix <- "Median SV Sites"
+    label.prefix <- "Median Sites"
     ylab.prefix <- "Carrier"
   }else{
-    label.prefix <- "Median SV Alleles"
+    label.prefix <- "Median Alleles"
     ylab.prefix <- "Allele"
   }
   
   #SV count by size
-  pdf(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.heatmap_by_size.pdf",sep=""),
+  pdf(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.heatmap_by_size.pdf",sep=""),
       height=5,width=5)
   plotHeatmap(mat=plot.data.sub$median.size,
               base.cols=c("gray15",svtypes.merged$color),
-              x.title="SV Classes",y.title="SV Size",
+              x.title="Classes",y.title="Size",
               title=paste(label.prefix," per Genome, by Size",sep=""))
   dev.off()
   
   #SV count by frequency
-  pdf(paste(OUTDIR,"/supporting_plots/per_sample_plots/sv_counts.",count,"_per_genome.heatmap_by_freq.pdf",sep=""),
+  pdf(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.heatmap_by_freq.pdf",sep=""),
       height=5,width=5)
   plotHeatmap(mat=plot.data.sub$median.freq,
               base.cols=c("gray15",svtypes$color),
-              x.title="SV Classes",y.title=paste(ylab.prefix," Freq.",sep=""),
+              x.title="Classes",y.title=paste(ylab.prefix," Freq.",sep=""),
               title=paste(label.prefix," per Genome, by Freq.",sep=""))
   dev.off()
 }
@@ -780,7 +780,7 @@ wrapperVariantCountHeats <- function(count="variants"){
 #Master wrapper for final top-level plot
 masterWrapperSummaryPlot <- function(){
   #Prep plot area
-  png(paste(OUTDIR,"/main_plots/VCF_QC.SV_per_genome.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/VCF_QC.per_genome.png",sep=""),
       height=5*300,width=11*300,res=300)
   layout(matrix(c(1,2,3,4,5,
                   6,7,8,9,10),nrow=2,byrow=T),
@@ -789,8 +789,8 @@ masterWrapperSummaryPlot <- function(){
   #Violin plot of SV sites per sample
   plotViolins(mat=plot.data$variants$count.all,
               colors=svtypes$color,log=F,
-              xlab="SV Classes",ylab=paste("Sites",sep=""),
-              title="SV Sites per Genome",lab.cex=0.75)
+              xlab="Classes",ylab=paste("Sites",sep=""),
+              title="Sites per Genome",lab.cex=0.75)
   
   #Raw counts of sites vs. GQ
   plotStackedBars(mat=plot.data$variants$median.GQ[-1,],
@@ -809,20 +809,20 @@ masterWrapperSummaryPlot <- function(){
   #Heatmap of SV sites per sample by size
   plotHeatmap(mat=plot.data$variants$median.size,
               base.cols=c("gray15",svtypes.merged$color),
-              x.title="SV Classes",y.title="SV Size",
+              x.title="Classes",y.title="Size",
               title="Sites per Genome, by Size",lab.cex=0.75)
   
   #Heatmap of SV sites per sample by frequency
   plotHeatmap(mat=plot.data$variants$median.freq,
               base.cols=c("gray15",svtypes$color),
-              x.title="SV Classes",y.title="Carrier Frequency",
+              x.title="Classes",y.title="Carrier Frequency",
               title="Sites per Genome, by Freq.",lab.cex=0.75)
   
   #Violin plot of SV alleles per sample
   plotViolins(mat=plot.data$alleles$count.all,
               colors=svtypes$color,log=F,
-              xlab="SV Classes",ylab=paste("Alleles",sep=""),
-              title="SV Alleles per Genome",lab.cex=0.75)
+              xlab="Classes",ylab=paste("Alleles",sep=""),
+              title="Alleles per Genome",lab.cex=0.75)
   
   #Raw counts of sites vs. GQ
   plotStackedBars(mat=plot.data$alleles$median.GQ[-1,],
@@ -841,13 +841,13 @@ masterWrapperSummaryPlot <- function(){
   #Heatmap of SV alleles per sample by size
   plotHeatmap(mat=plot.data$alleles$median.size,
               base.cols=c("gray15",svtypes.merged$color),
-              x.title="SV Classes",y.title="SV Size",
+              x.title="Classes",y.title="Size",
               title="Alleles per Genome by Size",lab.cex=0.75)
   
   #Heatmap of SV alleles per sample by frequency
   plotHeatmap(mat=plot.data$alleles$median.freq,
               base.cols=c("gray15",svtypes$color),
-              x.title="SV Classes",y.title="Allele Frequency",
+              x.title="Classes",y.title="Allele Frequency",
               title="Alleles per Genome, by Freq.",lab.cex=0.75)
   
   #Close device
