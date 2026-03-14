@@ -740,13 +740,15 @@ def _draw_overview_column(
                           if ploidy_lookup.get((s, chrom), 2) == ploidy_val]
         ploidy_carriers = [s for s in ploidy_samples if s in carriers]
         ploidy_non_carriers = [s for s in ploidy_samples if s not in carriers]
+        plotted_carrier_groups = False
 
-        if len(ploidy_carriers) > 0 and len(ploidy_non_carriers) > 0:
+        if len(ploidy_non_carriers) > 0:
             nc_depths = _depths_with_gaps(
                 region_df[ploidy_non_carriers].mean(axis=1).values, plot_positions_genomic)
             ax.plot(display_positions, nc_depths, "-", linewidth=1, alpha=0.7, color="gray",
                     label=f"Non-carriers (n={len(ploidy_non_carriers)})")
 
+        if len(ploidy_carriers) > 0:
             carrier_calls = calls_df[
                 (calls_df["cluster"] == locus.cluster) &
                 (calls_df["is_carrier"]) &
@@ -783,13 +785,22 @@ def _draw_overview_column(
                                     alpha=0.8, color=color,
                                     label=f"{svtype} {bp_interval} (n={len(valid)})")
                             color_idx += 1
-        else:
+                            plotted_carrier_groups = True
+        if len(ploidy_carriers) == 0 and len(ploidy_non_carriers) == 0:
+            continue
+        if len(ploidy_carriers) == 0 or (
+            len(ploidy_non_carriers) == 0 and not plotted_carrier_groups
+        ):
             if len(ploidy_samples) > 0:
                 md = _depths_with_gaps(
                     region_df[ploidy_samples].mean(axis=1).values,
                     plot_positions_genomic)
                 ax.plot(display_positions, md, "-", linewidth=1.5, color="gray",
-                        label=f"All (n={len(ploidy_samples)})")
+                        label=(
+                            f"Carrier group only (n={len(ploidy_samples)})"
+                            if len(ploidy_carriers) > 0 and len(ploidy_non_carriers) == 0
+                            else f"All (n={len(ploidy_samples)})"
+                        ))
 
         for d_bp_start, d_bp_end in bp_display:
             ax.axvline(d_bp_start, color="red", linestyle="-", alpha=1, zorder=5)

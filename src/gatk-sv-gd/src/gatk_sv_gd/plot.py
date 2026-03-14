@@ -49,6 +49,40 @@ from gatk_sv_gd.annotations import (
 from gatk_sv_gd.models import GDLocus, GDTable
 from gatk_sv_gd.highres import normalize_highres_bins, query_highres_bins
 
+
+EMPTY_CALLS_COLUMNS = [
+    "sample",
+    "cluster",
+    "GD_ID",
+    "chrom",
+    "start",
+    "end",
+    "svtype",
+    "BP1",
+    "BP2",
+    "is_terminal",
+    "n_bins",
+    "mean_depth",
+    "sample_ploidy",
+    "matched_haplotype",
+    "hap_cn_state",
+    "matched_seg_start",
+    "matched_seg_end",
+    "matched_seg_n_bins",
+    "matched_interval_bp",
+    "interval_coverage",
+    "reciprocal_overlap",
+    "min_interval_confidence",
+    "left_flank_non_event_median",
+    "right_flank_non_event_median",
+    "min_flank_non_event_confidence",
+    "is_carrier",
+    "is_best_match",
+    "log_prob_score",
+    "confidence_score",
+    "calling_method",
+]
+
 # =============================================================================
 # Viterbi overlay data container
 # =============================================================================
@@ -181,6 +215,326 @@ def _get_confidence_column(calls_df: pd.DataFrame) -> str:
 def _get_confidence_label(confidence_column: str) -> str:
     """Return a human-readable axis label for the confidence column."""
     return "Confidence Score" if confidence_column == "confidence_score" else "Log Probability Score"
+
+
+def _sanitize_plot_label(label: str) -> str:
+    """Return a filesystem-safe plot label for locus and sample outputs."""
+    sanitized = str(label)
+    for char in ("/", "-", ":"):
+        sanitized = sanitized.replace(char, "_")
+    return sanitized
+
+
+def _build_carrier_best_match_mask(calls_df: pd.DataFrame) -> pd.Series:
+    """Return the mask used to identify selected carrier calls."""
+    mask = calls_df["is_carrier"] == True  # noqa: E712
+    if "is_best_match" in calls_df.columns:
+        mask = mask & (calls_df["is_best_match"] == True)  # noqa: E712
+    return mask
+
+
+def _compute_raw_sample_medians(
+    raw_counts_df: Optional[pd.DataFrame],
+) -> Dict[str, float]:
+    """Compute per-sample autosomal raw-depth medians for plot overlays."""
+    raw_sample_medians: Dict[str, float] = {}
+    if raw_counts_df is None:
+        return raw_sample_medians
+
+    autosomal = [str(c) for c in range(1, 23)] + [f"chr{c}" for c in range(1, 23)]
+    raw_auto = raw_counts_df[raw_counts_df["Chr"].isin(autosomal)]
+    raw_sample_cols = [
+        c for c in raw_counts_df.columns
+        if c not in ("Chr", "Start", "End", "source_file", "Bin")
+    ]
+    for sample_id in raw_sample_cols:
+        med = raw_auto[sample_id].median()
+        if med > 0:
+            raw_sample_medians[sample_id] = med
+    return raw_sample_medians
+
+
+def _parse_eval_sample_list(value: object) -> List[str]:
+    """Parse a comma-delimited eval report sample field into sample IDs."""
+    if pd.isna(value):
+        return []
+    text = str(value).strip()
+    if not text:
+        return []
+    return [sample.strip() for sample in text.split(",") if sample.strip()]
+
+
+def _build_gd_to_cluster_map(
+    loci_by_cluster: Dict[str, GDLocus],
+) -> Dict[str, str]:
+    """Map each GD_ID to its containing cluster."""
+    gd_to_cluster: Dict[str, str] = {}
+    for cluster, locus in loci_by_cluster.items():
+        for entry in locus.gd_entries:
+            gd_to_cluster[str(entry["GD_ID"])] = str(cluster)
+    return gd_to_cluster
+
+
+def _build_eval_pdf_specs(
+    eval_report_df: pd.DataFrame,
+    calls_df: pd.DataFrame,
+    loci_by_cluster: Dict[str, GDLocus],
+    confidence_threshold: float,
+) -> Dict[str, List[dict]]:
+    """Build TP/FP/FN page specs from an eval report and calls table."""
+    confidence_column = _get_confidence_column(calls_df)
+    carrier_mask = _build_carrier_best_match_mask(calls_df)
+    selected_calls = calls_df[
+        carrier_mask & (calls_df[confidence_column] >= confidence_threshold)
+    ].copy()
+    predicted_by_gd = {
+        str(gd_id): set(group["sample"].astype(str).unique())
+        for gd_id, group in selected_calls.groupby("GD_ID")
+    }
+    gd_to_cluster = _build_gd_to_cluster_map(loci_by_cluster)
+
+    specs: Dict[str, List[dict]] = {
+        "true_positives": [],
+        "false_positives": [],
+        "false_negatives": [],
+    }
+    category_labels = {
+        "true_positives": "True positive",
+        "false_positives": "False positive",
+        "false_negatives": "False negative",
+    }
+
+    for _, row in eval_report_df.iterrows():
+        gd_id = str(row["GD_ID"])
+        cluster = gd_to_cluster.get(gd_id)
+        if cluster is None:
+            continue
+
+        fp_samples = set(_parse_eval_sample_list(row.get("FP_samples", "")))
+        fn_samples = set(_parse_eval_sample_list(row.get("FN_samples", "")))
+        tp_samples = sorted(predicted_by_gd.get(gd_id, set()) - fp_samples)
+
+        expected_tp = int(row.get("TP", len(tp_samples)))
+        if expected_tp != len(tp_samples):
+            print(
+                f"  WARNING: derived TP count for {gd_id} is {len(tp_samples)} "
+                f"but eval report says {expected_tp}. "
+                "Make sure the carrier confidence threshold matches the eval run."
+            )
+
+        for category_name, sample_ids in (
+            ("true_positives", tp_samples),
+            ("false_positives", sorted(fp_samples)),
+            ("false_negatives", sorted(fn_samples)),
+        ):
+            for sample_id in sample_ids:
+                specs[category_name].append(
+                    {
+                        "cluster": cluster,
+                        "sample": str(sample_id),
+                        "gd_id": gd_id,
+                        "title_suffix": f"{category_labels[category_name]}: {gd_id}",
+                    }
+                )
+
+    return specs
+
+
+def _render_pdf_sample_page(
+    pdf: PdfPages,
+    sample_id: str,
+    cluster: str,
+    locus: GDLocus,
+    region_df: pd.DataFrame,
+    cluster_calls_df: pd.DataFrame,
+    confidence_column: str,
+    confidence_threshold: float,
+    gtf: Optional[GTFParser],
+    segdup: Optional[SegDupAnnotation],
+    min_gene_label_spacing: float,
+    xform: FlankCompressor,
+    raw_region_df: Optional[pd.DataFrame],
+    minor_baf_region_df: Optional[pd.DataFrame],
+    baf_sites_region_df: Optional[pd.DataFrame],
+    event_marginals_df: Optional[pd.DataFrame],
+    gaps: Optional[GapsAnnotation],
+    viterbi_data: Optional[ViterbiOverlayData],
+    title_suffix: Optional[str] = None,
+) -> bool:
+    """Render one carrier-style review page into an output PDF."""
+    if sample_id not in region_df.columns:
+        return False
+
+    sample_calls = cluster_calls_df[cluster_calls_df["sample"] == sample_id]
+    pdf_calls = sample_calls[sample_calls[confidence_column] >= confidence_threshold]
+
+    region_start = int(region_df["Start"].min())
+    region_end = int(region_df["End"].max())
+    chrom = locus.chrom
+
+    figure_scale = 1.0
+    fig, axes = plt.subplots(
+        4,
+        1,
+        figsize=(12 * figure_scale, 7.5 * figure_scale),
+        gridspec_kw={"height_ratios": [1, 2, 1, 1]},
+    )
+
+    bin_mids = (region_df["Start"].values + region_df["End"].values) / 2
+    sample_depth = region_df[sample_id].values
+    sample_minor_baf, sample_baf_sites = _extract_sample_baf_vectors(
+        region_df,
+        minor_baf_region_df,
+        baf_sites_region_df,
+        sample_id,
+    )
+
+    d_bin_mids = xform(bin_mids)
+    d_bar_widths = xform(region_df["End"].values) - xform(region_df["Start"].values)
+
+    carrier_call = None
+    if len(pdf_calls) > 0:
+        best_matches = pdf_calls[pdf_calls["is_best_match"]]
+        if len(best_matches) > 0:
+            carrier_call = best_matches.loc[best_matches[confidence_column].idxmax()]
+        else:
+            carrier_call = pdf_calls.loc[pdf_calls[confidence_column].idxmax()]
+
+    call_info = (
+        f" - {carrier_call['svtype']} confidence={carrier_call[confidence_column]:.2f}"
+        if carrier_call is not None else ""
+    )
+    title = f"{sample_id} at {cluster}{call_info}"
+    if title_suffix:
+        title = f"{title} [{title_suffix}]"
+    draw_annotations_panel(
+        axes[0],
+        locus,
+        region_start,
+        region_end,
+        chrom,
+        title,
+        gtf,
+        segdup,
+        gaps=gaps,
+        show_gd_entries=False,
+        min_gene_label_spacing=min_gene_label_spacing,
+        xform=xform,
+    )
+
+    ax = axes[1]
+    best_call = carrier_call
+    if best_call is not None:
+        svtype = best_call["svtype"]
+        mean_depth = best_call["mean_depth"]
+        color = "#FF6B6B" if svtype == "DEL" else "#6B9BD1"
+
+        interval_start = best_call["start"]
+        interval_end = best_call["end"]
+        d_is, d_ie = xform(interval_start), xform(interval_end)
+        ax.axvspan(d_is, d_ie, alpha=0.2, color=color, zorder=1,
+                   label=f"{svtype} region")
+        ax.hlines(mean_depth, d_is, d_ie,
+                  colors="black", linewidth=2.5, alpha=0.8, zorder=2,
+                  label=f"Mean depth={mean_depth:.2f}")
+
+    _plot_depth_bars_with_baf(
+        ax,
+        d_bin_mids,
+        d_bar_widths,
+        sample_depth,
+        minor_baf_values=sample_minor_baf,
+        baf_site_counts=sample_baf_sites,
+        zorder=3,
+    )
+
+    if raw_region_df is not None and sample_id in raw_region_df.columns:
+        raw_mids = (raw_region_df["Start"].values + raw_region_df["End"].values) / 2
+        norm_raw = raw_region_df[sample_id].values.astype(float)
+        ax.plot(xform(raw_mids), norm_raw, color="darkorange", linewidth=0.6,
+                alpha=0.7, zorder=4, label="Raw depth")
+
+    if viterbi_data is not None:
+        vit_segs = viterbi_data.get_path(sample_id, cluster)
+        _plot_viterbi_trace(
+            ax,
+            vit_segs,
+            xform,
+            color="magenta",
+            label="Viterbi CN",
+            linewidth=2.0,
+            alpha=0.85,
+            zorder=5,
+        )
+
+        if viterbi_data.has_haplotype_paths(sample_id, cluster):
+            hap_styles = [
+                (1, "red", "Hap 1", -0.04),
+                (2, "blue", "Hap 2", 0.04),
+            ]
+            for hap_id, hap_color, hap_label, hap_offset in hap_styles:
+                hap_segs = viterbi_data.get_path(sample_id, cluster, hap_id)
+                _plot_viterbi_trace(
+                    ax,
+                    hap_segs,
+                    xform,
+                    color=hap_color,
+                    label=hap_label,
+                    linewidth=1.6,
+                    alpha=0.8,
+                    zorder=6,
+                    vertical_offset=hap_offset,
+                )
+
+    ax.axhline(2.0, color="green", linestyle="-", alpha=0.4, linewidth=1.5,
+               label="Reference CN=2", zorder=0)
+    ax.axhline(1.0, color="orange", linestyle=":", alpha=0.4, linewidth=1, zorder=0)
+    ax.axhline(3.0, color="purple", linestyle=":", alpha=0.4, linewidth=1, zorder=0)
+    ax.set_xlim(0.0, xform.d_end)
+    ax.set_ylim(0, 5)
+    ax.set_ylabel("Normalized Depth")
+    ax.grid(True, alpha=0.3, axis="y", zorder=0)
+    ax.legend(loc="upper right", fontsize=8)
+
+    baf_ax = axes[2]
+    _plot_baf_signal_panel(
+        baf_ax,
+        d_bin_mids,
+        d_bar_widths,
+        sample_minor_baf,
+        sample_baf_sites,
+        xform,
+        locus,
+        chrom,
+        show_xlabel=False,
+    )
+
+    event_ax = axes[3]
+    event_probs = None
+    event_svtype = None
+    if best_call is not None:
+        event_svtype = str(best_call["svtype"])
+        event_probs = _extract_sample_event_probabilities(
+            region_df,
+            event_marginals_df,
+            sample_id,
+            event_svtype,
+        )
+    _plot_event_marginal_panel(
+        event_ax,
+        d_bin_mids,
+        d_bar_widths,
+        event_probs,
+        xform,
+        locus,
+        chrom,
+        event_svtype,
+    )
+
+    plt.tight_layout()
+    pdf.savefig(fig)
+    plt.close()
+    return True
 
 
 def _get_event_probability_column(svtype: str) -> str:
@@ -975,7 +1329,7 @@ def plot_locus_overview(
 
     locus_dir = os.path.join(output_dir, "locus_plots")
     os.makedirs(locus_dir, exist_ok=True)
-    filename = f"{locus.cluster.replace('/', '_')}_overview.png"
+    filename = f"{_sanitize_plot_label(locus.cluster)}_overview.png"
     plt.savefig(os.path.join(locus_dir, filename), dpi=150, bbox_inches="tight")
     plt.close()
     print(f"  Created: locus_plots/{filename}")
@@ -1097,9 +1451,9 @@ def plot_sample_at_locus(
 
     plt.tight_layout()
 
-    sample_dir = os.path.join(output_dir, "sample_plots", locus.cluster.replace("/", "_"))
+    sample_dir = os.path.join(output_dir, "sample_plots", _sanitize_plot_label(locus.cluster))
     os.makedirs(sample_dir, exist_ok=True)
-    filename = f"{sample_id.replace('/', '_')}.png"
+    filename = f"{_sanitize_plot_label(sample_id)}.png"
     plt.savefig(os.path.join(sample_dir, filename), dpi=150, bbox_inches="tight")
     plt.close()
 
@@ -1146,6 +1500,10 @@ def plot_carrier_summary(calls_df: pd.DataFrame, output_dir: str):
 
 def plot_confidence_distribution(calls_df: pd.DataFrame, output_dir: str):
     """Plot distribution of confidence scores."""
+    if len(calls_df) == 0:
+        print("No calls to plot confidence distribution.")
+        return
+
     confidence_column = _get_confidence_column(calls_df)
     confidence_label = _get_confidence_label(confidence_column)
     figure_scale = 1.0
@@ -1205,7 +1563,10 @@ def create_carrier_pdf(
 ):
     """Create a PDF with plots for calls above the confidence threshold."""
     confidence_column = _get_confidence_column(calls_df)
-    carriers = calls_df[calls_df[confidence_column] >= confidence_threshold].copy()
+    carriers_mask = _build_carrier_best_match_mask(calls_df)
+    carriers = calls_df[
+        carriers_mask & (calls_df[confidence_column] >= confidence_threshold)
+    ].copy()
 
     if len(carriers) == 0:
         print(
@@ -1214,19 +1575,8 @@ def create_carrier_pdf(
         )
         return
 
-    # Precompute per-sample genome-wide autosomal median raw counts
-    raw_sample_medians: Dict[str, float] = {}
-    if raw_counts_df is not None:
-        autosomal = [str(c) for c in range(1, 23)] + [f"chr{c}" for c in range(1, 23)]
-        raw_auto = raw_counts_df[raw_counts_df["Chr"].isin(autosomal)]
-        raw_sample_cols = [
-            c for c in raw_counts_df.columns
-            if c not in ("Chr", "Start", "End", "source_file", "Bin")
-        ]
-        for s in raw_sample_cols:
-            med = raw_auto[s].median()
-            if med > 0:
-                raw_sample_medians[s] = med
+    raw_sample_medians = _compute_raw_sample_medians(raw_counts_df)
+    if raw_sample_medians:
         print(f"  Computed raw autosomal medians for {len(raw_sample_medians)} samples")
 
     if lowres_median_bin_size is None and raw_counts_df is not None:
@@ -1291,190 +1641,167 @@ def create_carrier_pdf(
                     _raw_region = _rebin_region_df(_raw_region, locus)
 
             for sample_id in sorted(cluster_carriers):
-                if sample_id not in region_df.columns:
-                    continue
-
-                sample_calls = cluster_calls_df[cluster_calls_df["sample"] == sample_id]
-                pdf_calls = sample_calls[sample_calls[confidence_column] >= confidence_threshold]
-                if len(pdf_calls) == 0:
-                    continue
-
-                figure_scale = 1.0
-                fig, axes = plt.subplots(
-                    4,
-                    1,
-                    figsize=(12 * figure_scale, 7.5 * figure_scale),
-                    gridspec_kw={"height_ratios": [1, 2, 1, 1]},
-                )
-
-                bin_mids = (region_df["Start"].values + region_df["End"].values) / 2
-                sample_depth = region_df[sample_id].values
-                sample_minor_baf, sample_baf_sites = _extract_sample_baf_vectors(
+                rendered = _render_pdf_sample_page(
+                    pdf,
+                    str(sample_id),
+                    cluster,
+                    locus,
                     region_df,
+                    cluster_calls_df,
+                    confidence_column,
+                    confidence_threshold,
+                    gtf,
+                    segdup,
+                    min_gene_label_spacing,
+                    xform,
+                    _raw_region,
                     baf_region_df,
                     baf_sites_region_df,
-                    sample_id,
+                    event_marginals_df,
+                    gaps,
+                    viterbi_data,
                 )
-
-                # Transform bar geometry
-                d_bin_mids = xform(bin_mids)
-                d_bar_widths = xform(region_df["End"].values) - xform(region_df["Start"].values)
-
-                # Panel 1: Annotations
-                carrier_call = None
-                if len(pdf_calls) > 0:
-                    best_matches = pdf_calls[pdf_calls["is_best_match"]]
-                    if len(best_matches) > 0:
-                        carrier_call = best_matches.loc[
-                            best_matches[confidence_column].idxmax()
-                        ]
-                    else:
-                        carrier_call = pdf_calls.loc[pdf_calls[confidence_column].idxmax()]
-                call_info = (
-                    f" - {carrier_call['svtype']} confidence={carrier_call[confidence_column]:.2f}"
-                    if carrier_call is not None else ""
-                )
-                title = f"{sample_id} at {cluster}{call_info}"
-                draw_annotations_panel(
-                    axes[0], locus, region_start, region_end, chrom, title,
-                    gtf, segdup, gaps=gaps, show_gd_entries=False,
-                    min_gene_label_spacing=min_gene_label_spacing, xform=xform,
-                )
-
-                # Panel 2: Depth
-                ax = axes[1]
-
-                best_call = None
-                if len(pdf_calls) > 0:
-                    if len(pdf_calls) > 0:
-                        best_matches = pdf_calls[pdf_calls["is_best_match"]]
-                        if len(best_matches) > 0:
-                            best_call = best_matches.loc[
-                                best_matches[confidence_column].idxmax()
-                            ]
-                        else:
-                            best_call = pdf_calls.loc[
-                                pdf_calls[confidence_column].idxmax()]
-
-                if best_call is not None:
-                    svtype = best_call["svtype"]
-                    mean_depth = best_call["mean_depth"]
-                    color = "#FF6B6B" if svtype == "DEL" else "#6B9BD1"
-
-                    interval_start = best_call["start"]
-                    interval_end = best_call["end"]
-                    d_is, d_ie = xform(interval_start), xform(interval_end)
-                    ax.axvspan(d_is, d_ie, alpha=0.2, color=color, zorder=1,
-                               label=f"{svtype} region")
-                    ax.hlines(mean_depth, d_is, d_ie,
-                              colors="black", linewidth=2.5, alpha=0.8, zorder=2,
-                              label=f"Mean depth={mean_depth:.2f}")
-
-                _plot_depth_bars_with_baf(
-                    ax,
-                    d_bin_mids,
-                    d_bar_widths,
-                    sample_depth,
-                    minor_baf_values=sample_minor_baf,
-                    baf_site_counts=sample_baf_sites,
-                    zorder=3,
-                )
-
-                # Overlay raw depth trace if available
-                if _raw_region is not None and sample_id in _raw_region.columns:
-                    raw_mids = (_raw_region["Start"].values + _raw_region["End"].values) / 2
-                    norm_raw = _raw_region[sample_id].values.astype(float)
-                    ax.plot(xform(raw_mids), norm_raw, color="darkorange", linewidth=0.6,
-                            alpha=0.7, zorder=4, label="Raw depth")
-
-                # Overlay Viterbi segmentation as a connected step trace
-                if viterbi_data is not None:
-                    vit_segs = viterbi_data.get_path(sample_id, cluster)
-                    _plot_viterbi_trace(
-                        ax,
-                        vit_segs,
-                        xform,
-                        color="magenta",
-                        label="Viterbi CN",
-                        linewidth=2.0,
-                        alpha=0.85,
-                        zorder=5,
-                    )
-
-                    # Per-haplotype traces (diploid model only)
-                    if viterbi_data.has_haplotype_paths(sample_id, cluster):
-                        _hap_styles = [
-                            (1, "red", "Hap 1", -0.04),
-                            (2, "blue", "Hap 2", 0.04),
-                        ]
-                        for hap_id, hap_color, hap_label, hap_offset in _hap_styles:
-                            hap_segs = viterbi_data.get_path(
-                                sample_id, cluster, hap_id,
-                            )
-                            _plot_viterbi_trace(
-                                ax,
-                                hap_segs,
-                                xform,
-                                color=hap_color,
-                                label=hap_label,
-                                linewidth=1.6,
-                                alpha=0.8,
-                                zorder=6,
-                                vertical_offset=hap_offset,
-                            )
-
-                ax.axhline(2.0, color="green", linestyle="-", alpha=0.4, linewidth=1.5,
-                           label="Reference CN=2", zorder=0)
-                ax.axhline(1.0, color="orange", linestyle=":", alpha=0.4, linewidth=1, zorder=0)
-                ax.axhline(3.0, color="purple", linestyle=":", alpha=0.4, linewidth=1, zorder=0)
-
-                ax.set_xlim(0.0, xform.d_end)
-                ax.set_ylim(0, 5)
-                ax.set_ylabel("Normalized Depth")
-                ax.grid(True, alpha=0.3, axis="y", zorder=0)
-                ax.legend(loc="upper right", fontsize=8)
-
-                # Panel 3: BAF signal
-                baf_ax = axes[2]
-                _plot_baf_signal_panel(
-                    baf_ax,
-                    d_bin_mids,
-                    d_bar_widths,
-                    sample_minor_baf,
-                    sample_baf_sites,
-                    xform,
-                    locus,
-                    chrom,
-                    show_xlabel=False,
-                )
-
-                event_ax = axes[3]
-                event_probs = None
-                event_svtype = None
-                if best_call is not None:
-                    event_svtype = str(best_call["svtype"])
-                    event_probs = _extract_sample_event_probabilities(
-                        region_df,
-                        event_marginals_df,
-                        sample_id,
-                        event_svtype,
-                    )
-                _plot_event_marginal_panel(
-                    event_ax,
-                    d_bin_mids,
-                    d_bar_widths,
-                    event_probs,
-                    xform,
-                    locus,
-                    chrom,
-                    event_svtype,
-                )
-
-                plt.tight_layout()
-                pdf.savefig(fig)
-                plt.close()
+                if not rendered:
+                    continue
 
     print(f"  Saved carrier PDF: {pdf_path}")
+
+
+def create_eval_category_pdfs(
+    eval_report_df: pd.DataFrame,
+    calls_df: pd.DataFrame,
+    depth_df: pd.DataFrame,
+    loci_by_cluster: Dict[str, GDLocus],
+    gtf: Optional[GTFParser],
+    segdup: Optional[SegDupAnnotation],
+    output_dir: str,
+    event_marginals_df: Optional[pd.DataFrame] = None,
+    minor_baf_df: Optional[pd.DataFrame] = None,
+    baf_sites_df: Optional[pd.DataFrame] = None,
+    padding: int = 50000,
+    min_gene_label_spacing: float = 0.05,
+    raw_counts_df: Optional[pd.DataFrame] = None,
+    gaps: Optional[GapsAnnotation] = None,
+    flank_scale: float = 0.20,
+    lowres_median_bin_size: Optional[float] = None,
+    highres_path: Optional[str] = None,
+    viterbi_data: Optional[ViterbiOverlayData] = None,
+    confidence_threshold: float = 0.5,
+):
+    """Create TP/FP/FN review PDFs when an eval report is provided."""
+    confidence_column = _get_confidence_column(calls_df)
+    raw_sample_medians = _compute_raw_sample_medians(raw_counts_df)
+    if raw_sample_medians:
+        print(f"  Computed raw autosomal medians for {len(raw_sample_medians)} samples")
+
+    if lowres_median_bin_size is None and raw_counts_df is not None:
+        lowres_median_bin_size = estimate_lowres_bin_size(raw_counts_df)
+
+    specs_by_category = _build_eval_pdf_specs(
+        eval_report_df,
+        calls_df,
+        loci_by_cluster,
+        confidence_threshold,
+    )
+    output_paths = {
+        "true_positives": os.path.join(output_dir, "true_positives.pdf"),
+        "false_positives": os.path.join(output_dir, "false_positives.pdf"),
+        "false_negatives": os.path.join(output_dir, "false_negatives.pdf"),
+    }
+
+    for category_name, pdf_path in output_paths.items():
+        page_specs = specs_by_category.get(category_name, [])
+        if not page_specs:
+            print(f"No pages for {os.path.basename(pdf_path)}")
+            continue
+
+        print(f"Creating PDF: {pdf_path}")
+        with PdfPages(pdf_path) as pdf:
+            pages_by_cluster: Dict[str, List[dict]] = {}
+            for spec in page_specs:
+                pages_by_cluster.setdefault(str(spec["cluster"]), []).append(spec)
+
+            for cluster in sorted(pages_by_cluster):
+                locus = loci_by_cluster.get(cluster)
+                if locus is None or not locus.breakpoints:
+                    print(f"  Warning: No breakpoints for {cluster}, skipping")
+                    continue
+
+                chrom = locus.chrom
+                locus_mask = (
+                    (depth_df["Cluster"] == cluster) &
+                    (depth_df["Chr"] == chrom)
+                )
+                region_df = depth_df[locus_mask].sort_values("Start")
+                if len(region_df) == 0:
+                    continue
+
+                baf_region_df = None
+                baf_sites_region_df = None
+                if minor_baf_df is not None:
+                    baf_region_df = minor_baf_df[locus_mask].sort_values("Start")
+                if baf_sites_df is not None:
+                    baf_sites_region_df = baf_sites_df[locus_mask].sort_values("Start")
+
+                region_start = int(region_df["Start"].min())
+                region_end = int(region_df["End"].max())
+                xform = FlankCompressor(
+                    region_start,
+                    region_end,
+                    locus.start,
+                    locus.end,
+                    flank_scale=flank_scale,
+                )
+
+                cluster_calls_df = calls_df[calls_df["cluster"] == cluster]
+                raw_region_df = None
+                if all([
+                    raw_counts_df is not None or highres_path is not None,
+                    bool(raw_sample_medians),
+                    lowres_median_bin_size is not None,
+                ]):
+                    raw_region_df = _build_raw_region_df(
+                        locus,
+                        region_start,
+                        region_end,
+                        raw_counts_df,
+                        list(raw_sample_medians.keys()),
+                        raw_sample_medians,
+                        lowres_median_bin_size,
+                        highres_path=highres_path,
+                    )
+                    if raw_region_df is not None:
+                        raw_region_df = _rebin_region_df(raw_region_df, locus)
+
+                cluster_specs = sorted(
+                    pages_by_cluster[cluster],
+                    key=lambda spec: (str(spec["sample"]), str(spec.get("gd_id", ""))),
+                )
+                print(f"  Adding {len(cluster_specs)} page(s) for {cluster}")
+                for spec in cluster_specs:
+                    _render_pdf_sample_page(
+                        pdf,
+                        str(spec["sample"]),
+                        cluster,
+                        locus,
+                        region_df,
+                        cluster_calls_df,
+                        confidence_column,
+                        confidence_threshold,
+                        gtf,
+                        segdup,
+                        min_gene_label_spacing,
+                        xform,
+                        raw_region_df,
+                        baf_region_df,
+                        baf_sites_region_df,
+                        event_marginals_df,
+                        gaps,
+                        viterbi_data,
+                        title_suffix=spec.get("title_suffix"),
+                    )
+
+        print(f"  Saved PDF: {pdf_path}")
 
 
 # =============================================================================
@@ -1603,6 +1930,13 @@ def parse_args():
              "file next to --calls.",
     )
     parser.add_argument(
+        "--eval-report",
+        required=False,
+        help="truth_evaluation_report.tsv produced by the eval tool. When provided, "
+             "plot.py writes true_positives.pdf, false_positives.pdf, and "
+             "false_negatives.pdf instead of carrier_plots.pdf.",
+    )
+    parser.add_argument(
         "--carrier-confidence-threshold",
         type=float,
         default=0.6,
@@ -1625,7 +1959,11 @@ def main():
     print("\nLoading data...")
 
     print(f"  Loading calls: {args.calls}")
-    calls_df = pd.read_csv(args.calls, sep="\t", compression="infer")
+    try:
+        calls_df = pd.read_csv(args.calls, sep="\t", compression="infer")
+    except pd.errors.EmptyDataError:
+        print("    Calls file is empty; continuing with a no-calls DataFrame")
+        calls_df = pd.DataFrame(columns=EMPTY_CALLS_COLUMNS)
     print(f"    {len(calls_df)} call records")
 
     print(f"  Loading CN posteriors: {args.cn_posteriors}")
@@ -1800,6 +2138,12 @@ def main():
     else:
         print("\nNo event marginals provided; event panel will show a placeholder.")
 
+    eval_report_df: Optional[pd.DataFrame] = None
+    if args.eval_report:
+        print(f"\nLoading eval report: {args.eval_report}")
+        eval_report_df = pd.read_csv(args.eval_report, sep="\t")
+        print(f"  {len(eval_report_df)} eval report rows loaded")
+
     # Create summary plots
     print("\nCreating summary plots...")
     plot_carrier_summary(plot_calls_df, args.output_dir)
@@ -1850,24 +2194,47 @@ def main():
                     flank_scale=args.flank_scale,
                 )
 
-    # Create carrier PDF
-    print("\nCreating carrier PDF...")
-    create_carrier_pdf(
-        plot_calls_df, depth_df, loci_to_plot, gtf, segdup,
-        args.output_dir,
-        event_marginals_df=event_marginals_df,
-        minor_baf_df=minor_baf_df,
-        baf_sites_df=baf_sites_df,
-        padding=args.padding,
-        min_gene_label_spacing=args.min_gene_label_spacing,
-        raw_counts_df=raw_counts_df,
-        gaps=gaps,
-        flank_scale=args.flank_scale,
-        lowres_median_bin_size=lowres_median_bin_size,
-        highres_path=highres_path,
-        viterbi_data=viterbi_data,
-        confidence_threshold=args.carrier_confidence_threshold,
-    )
+    if eval_report_df is not None:
+        print("\nCreating eval-category PDFs...")
+        create_eval_category_pdfs(
+            eval_report_df,
+            plot_calls_df,
+            depth_df,
+            loci_to_plot,
+            gtf,
+            segdup,
+            args.output_dir,
+            event_marginals_df=event_marginals_df,
+            minor_baf_df=minor_baf_df,
+            baf_sites_df=baf_sites_df,
+            padding=args.padding,
+            min_gene_label_spacing=args.min_gene_label_spacing,
+            raw_counts_df=raw_counts_df,
+            gaps=gaps,
+            flank_scale=args.flank_scale,
+            lowres_median_bin_size=lowres_median_bin_size,
+            highres_path=highres_path,
+            viterbi_data=viterbi_data,
+            confidence_threshold=args.carrier_confidence_threshold,
+        )
+    else:
+        print("\nCreating carrier PDF...")
+        create_carrier_pdf(
+            plot_calls_df, depth_df, loci_to_plot, gtf, segdup,
+            args.output_dir,
+            event_marginals_df=event_marginals_df,
+            minor_baf_df=minor_baf_df,
+            baf_sites_df=baf_sites_df,
+            padding=args.padding,
+            min_gene_label_spacing=args.min_gene_label_spacing,
+            raw_counts_df=raw_counts_df,
+            gaps=gaps,
+            flank_scale=args.flank_scale,
+            lowres_median_bin_size=lowres_median_bin_size,
+            highres_path=highres_path,
+            viterbi_data=viterbi_data,
+            confidence_threshold=args.carrier_confidence_threshold,
+        )
 
     print("\n" + "=" * 80)
     print("Plotting complete!")

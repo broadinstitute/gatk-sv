@@ -184,12 +184,19 @@ def get_pair_state_columns(
 def build_event_pair_mask(
     pair_states: List[Tuple[int, int]],
     svtype: str,
+    sample_ploidy: int,
 ) -> np.ndarray:
     """Return a boolean mask of pair states supporting the event class."""
     if svtype == "DEL":
-        return np.array([h1 == 0 for h1, _ in pair_states], dtype=bool)
+        return np.array(
+            [(h1 + h2) < sample_ploidy for h1, h2 in pair_states],
+            dtype=bool,
+        )
     if svtype == "DUP":
-        return np.array([h2 > 1 for _, h2 in pair_states], dtype=bool)
+        return np.array(
+            [(h1 + h2) > sample_ploidy for h1, h2 in pair_states],
+            dtype=bool,
+        )
     raise ValueError(f"Unsupported svtype: {svtype}")
 
 
@@ -200,7 +207,10 @@ def build_flank_non_event_pair_mask(
 ) -> np.ndarray:
     """Return a boolean mask of pair states consistent with no event in a flank."""
     if svtype == "DEL":
-        return np.array([h1 > 0 for h1, _ in pair_states], dtype=bool)
+        return np.array(
+            [(h1 + h2) >= sample_ploidy for h1, h2 in pair_states],
+            dtype=bool,
+        )
     if svtype == "DUP":
         return np.array(
             [(h1 + h2) <= sample_ploidy for h1, h2 in pair_states],
@@ -212,11 +222,12 @@ def build_flank_non_event_pair_mask(
 def compute_event_marginal_probabilities(
     pair_prob_matrix: np.ndarray,
     pair_states: List[Tuple[int, int]],
+    sample_ploidy: int,
 ) -> Dict[str, np.ndarray]:
     """Return per-bin event marginal probabilities for DEL and DUP."""
     event_probs: Dict[str, np.ndarray] = {}
     for svtype in ("DEL", "DUP"):
-        event_mask = build_event_pair_mask(pair_states, svtype)
+        event_mask = build_event_pair_mask(pair_states, svtype, sample_ploidy)
         if pair_prob_matrix.size == 0 or not np.any(event_mask):
             event_probs[svtype] = np.zeros(pair_prob_matrix.shape[0], dtype=float)
             continue
@@ -247,7 +258,7 @@ def score_call_from_posterior_marginals(
     for _, _, interval_name in covered_tuples:
         covered_bin_indices.extend(interval_bin_arrays.get(interval_name, np.array([], dtype=int)).tolist())
 
-    event_mask = build_event_pair_mask(pair_states, svtype)
+    event_mask = build_event_pair_mask(pair_states, svtype, sample_ploidy)
     flank_non_event_mask = build_flank_non_event_pair_mask(
         pair_states,
         svtype,
@@ -502,6 +513,7 @@ def call_cnvs_from_posteriors(
             cluster_event_probs = compute_event_marginal_probabilities(
                 cluster_pair_probs,
                 pair_state_labels,
+                sample_ploidy,
             )
             for (_, bin_row), del_prob, dup_prob in zip(
                 cluster_bin_rows.iterrows(),
@@ -677,7 +689,41 @@ def call_cnvs_from_posteriors(
                 }
                 all_results.append(result)
 
-    calls_df = pd.DataFrame(all_results)
+    calls_df = pd.DataFrame(
+        all_results,
+        columns=[
+            "sample",
+            "cluster",
+            "GD_ID",
+            "chrom",
+            "start",
+            "end",
+            "svtype",
+            "BP1",
+            "BP2",
+            "is_terminal",
+            "n_bins",
+            "mean_depth",
+            "sample_ploidy",
+            "matched_haplotype",
+            "hap_cn_state",
+            "matched_seg_start",
+            "matched_seg_end",
+            "matched_seg_n_bins",
+            "matched_interval_bp",
+            "interval_coverage",
+            "reciprocal_overlap",
+            "min_interval_confidence",
+            "left_flank_non_event_median",
+            "right_flank_non_event_median",
+            "min_flank_non_event_confidence",
+            "is_carrier",
+            "is_best_match",
+            "log_prob_score",
+            "confidence_score",
+            "calling_method",
+        ],
+    )
     paths_df = pd.DataFrame(
         all_path_records,
         columns=[

@@ -83,6 +83,7 @@ def _filter_and_prepare_locus_bins(
     right_bound: int,
     max_bins_per_interval: int,
     exclusion_mask: Optional[ExclusionMask] = None,
+    flank_exclusion_mask: Optional[ExclusionMask] = None,
     exclusion_threshold: float = 0.5,
     filter_params: Optional[dict] = None,
     exclusion_bypass_regions: Optional[List[Tuple[int, int]]] = None,
@@ -104,6 +105,8 @@ def _filter_and_prepare_locus_bins(
         right_bound: Right edge of active region for trimming.
         max_bins_per_interval: Maximum bins per interval after rebinning.
         exclusion_mask: Optional ExclusionMask for filtering.
+        flank_exclusion_mask: Optional ExclusionMask applied only to
+            left/right flank bins, not GD body intervals.
         exclusion_threshold: Overlap fraction threshold for masking.
         filter_params: If provided, a dict with keys ``median_min``,
             ``median_max``, ``mad_max`` to apply
@@ -194,6 +197,15 @@ def _filter_and_prepare_locus_bins(
     ].copy()
     print(f"    Bins after trimming to active region [{left_bound:,}, {right_bound:,}): {len(locus_df)}")
 
+    if flank_exclusion_mask is not None and len(locus_df) > 0:
+        locus_df = _drop_flank_candidate_bins_by_mask(
+            locus_df,
+            locus,
+            flank_exclusion_mask,
+            label="flank-exclusion",
+            indent="    ",
+        )
+
     # Rebin
     if max_bins_per_interval > 0 and len(locus_df) > 0:
         n_before = len(locus_df)
@@ -234,30 +246,89 @@ def _filter_and_prepare_locus_bins(
         print(f"    Masking {len(bp_range_indices)} breakpoint-range bin(s)")
         locus_df = locus_df.drop(index=bp_range_indices)
 
-    # Strict zero-tolerance exclusion for flank bins.  Flanks establish
-    # the baseline (CN=2) depth and must be completely free of unreliable
-    # signal from exclusion regions (seg dups, satellites, etc.).
+    # Strict zero-tolerance masking for flank bins. Flanks establish the
+    # baseline (CN=2) depth and must be free of both global exclusion
+    # regions and any flank-only exclusion intervals.
+    locus_df, interval_bins = _drop_masked_flank_bins(
+        locus_df,
+        interval_bins,
+        locus.chrom,
+        exclusion_mask=exclusion_mask,
+    )
+
+    return locus_df, interval_bins
+
+
+def _drop_flank_candidate_bins_by_mask(
+    locus_df: pd.DataFrame,
+    locus: GDLocus,
+    exclusion_mask: ExclusionMask,
+    label: str,
+    indent: str = "",
+) -> pd.DataFrame:
+    """Drop bins that behave as flank candidates and overlap a mask."""
+    if len(locus_df) == 0:
+        return locus_df
+
+    mids = (locus_df["Start"].values + locus_df["End"].values) / 2.0
+    flank_candidate = (mids < locus.start) | (mids >= locus.end)
+    if not flank_candidate.any():
+        return locus_df
+
+    overlaps = np.zeros(len(locus_df))
+    overlaps[flank_candidate] = exclusion_mask.get_overlap_fractions_batch(
+        locus.chrom,
+        locus_df.loc[flank_candidate, "Start"].values,
+        locus_df.loc[flank_candidate, "End"].values,
+    )
+    keep = (~flank_candidate) | (overlaps == 0.0)
+    n_drop = int((~keep).sum())
+    if n_drop > 0:
+        print(f"{indent}Dropped {n_drop} flank-candidate bin(s) with {label} overlap")
+    return locus_df[keep].copy()
+
+
+def _drop_masked_flank_bins(
+    locus_df: pd.DataFrame,
+    interval_bins: Dict[str, List[int]],
+    chrom: str,
+    exclusion_mask: Optional[ExclusionMask] = None,
+) -> Tuple[pd.DataFrame, Dict[str, List[int]]]:
+    """Drop flank bins that overlap any flank-applicable exclusion mask."""
+    flank_masks = []
     if exclusion_mask is not None:
-        for flank_name in ("left_flank", "right_flank"):
-            flank_idxs = interval_bins.get(flank_name, [])
-            if not flank_idxs:
-                continue
-            flank_rows = locus_df.loc[flank_idxs]
-            ov = exclusion_mask.get_overlap_fractions_batch(
-                locus.chrom,
+        flank_masks.append(("exclusion-region", exclusion_mask))
+
+    if not flank_masks or len(locus_df) == 0:
+        return locus_df, interval_bins
+
+    for flank_name in ("left_flank", "right_flank"):
+        flank_idxs = interval_bins.get(flank_name, [])
+        if not flank_idxs:
+            continue
+        flank_rows = locus_df.loc[flank_idxs]
+        if len(flank_rows) == 0:
+            continue
+
+        drop_mask = np.zeros(len(flank_rows), dtype=bool)
+        for mask_label, mask in flank_masks:
+            overlap = mask.get_overlap_fractions_batch(
+                chrom,
                 flank_rows["Start"].values,
                 flank_rows["End"].values,
             )
-            has_overlap = ov > 0
-            n_drop = int(has_overlap.sum())
+            has_overlap = overlap > 0
+            n_drop = int((has_overlap & ~drop_mask).sum())
             if n_drop > 0:
-                drop_idxs = [idx for idx, d in zip(flank_idxs, has_overlap) if d]
-                interval_bins[flank_name] = [
-                    idx for idx, d in zip(flank_idxs, has_overlap) if not d
-                ]
-                locus_df = locus_df.drop(index=drop_idxs)
-                print(f"    Dropped {n_drop} {flank_name} bin(s) "
-                      f"with exclusion-region overlap")
+                print(f"    Dropped {n_drop} {flank_name} bin(s) with {mask_label} overlap")
+            drop_mask |= has_overlap
+
+        if drop_mask.any():
+            drop_idxs = [idx for idx, drop in zip(flank_idxs, drop_mask) if drop]
+            interval_bins[flank_name] = [
+                idx for idx, drop in zip(flank_idxs, drop_mask) if not drop
+            ]
+            locus_df = locus_df.drop(index=drop_idxs)
 
     return locus_df, interval_bins
 
@@ -266,6 +337,7 @@ def collect_all_locus_bins(
     df: pd.DataFrame,
     gd_table: GDTable,
     exclusion_mask: Optional[ExclusionMask],
+    flank_exclusion_mask: Optional[ExclusionMask] = None,
     exclusion_threshold: float = 0.5,
     locus_padding: int = 0,
     min_bins_per_interval: int = 3,
@@ -302,6 +374,8 @@ def collect_all_locus_bins(
         df: DataFrame with all (low-resolution, normalised) bins.
         gd_table: GDTable with locus definitions.
         exclusion_mask: Optional ExclusionMask for filtering.
+        flank_exclusion_mask: Optional ExclusionMask applied only to
+            left/right flanks, not GD body intervals.
         exclusion_threshold: Minimum overlap fraction with the mask to
             exclude a bin.
         locus_padding: Padding around locus boundaries.
@@ -379,6 +453,7 @@ def collect_all_locus_bins(
     for chrom, chrom_df in df.groupby("Chr"):
         keep = np.ones(len(chrom_df), dtype=bool)
         n_excluded = 0
+        n_flank_excluded = 0
         n_quality = 0
         if exclusion_mask is not None:
             overlaps = exclusion_mask.get_overlap_fractions_batch(
@@ -391,6 +466,13 @@ def collect_all_locus_bins(
             exclusion_keep = overlaps == 0.0
             n_excluded = int((~exclusion_keep).sum())
             keep &= exclusion_keep
+        if flank_exclusion_mask is not None:
+            flank_overlaps = flank_exclusion_mask.get_overlap_fractions_batch(
+                chrom, chrom_df["Start"].values, chrom_df["End"].values
+            )
+            flank_keep = flank_overlaps == 0.0
+            n_flank_excluded = int((~flank_keep).sum())
+            keep &= flank_keep
         if _flank_filter_params is not None:
             _sc = get_sample_columns(chrom_df)
             _depths = chrom_df[_sc].values
@@ -412,6 +494,8 @@ def collect_all_locus_bins(
         parts = [f"{len(chrom_filtered[chrom])} filtered bins (of {len(chrom_df)} total)"]
         if n_excluded > 0:
             parts.append(f"{n_excluded} exclusion-masked")
+        if n_flank_excluded > 0:
+            parts.append(f"{n_flank_excluded} flank-exclusion-masked")
         if n_quality > 0:
             parts.append(f"{n_quality} quality-filtered")
         print(f"  {chrom}: {', '.join(parts)}")
@@ -548,6 +632,15 @@ def collect_all_locus_bins(
         ].copy()
         print(f"  Bins after trimming to active region [{left_bound:,}, {right_bound:,}): {len(locus_df)}")
 
+        if flank_exclusion_mask is not None and len(locus_df) > 0:
+            locus_df = _drop_flank_candidate_bins_by_mask(
+                locus_df,
+                locus,
+                flank_exclusion_mask,
+                label="flank-exclusion",
+                indent="  ",
+            )
+
         # Rebin to reduce number of bins per interval/flank if requested
         if max_bins_per_interval > 0:
             locus_df_orig = locus_df
@@ -610,30 +703,15 @@ def collect_all_locus_bins(
             print(f"    Masking {len(bp_range_indices)} breakpoint-range bin(s)")
             locus_df = locus_df.drop(index=bp_range_indices)
 
-        # Strict zero-tolerance exclusion for flank bins.  Flanks establish
-        # the baseline (CN=2) depth and must be completely free of
-        # unreliable signal from exclusion regions (seg dups, etc.).
-        if exclusion_mask is not None:
-            for flank_name in ("left_flank", "right_flank"):
-                flank_idxs = interval_bins.get(flank_name, [])
-                if not flank_idxs:
-                    continue
-                flank_rows = locus_df.loc[flank_idxs]
-                ov = exclusion_mask.get_overlap_fractions_batch(
-                    locus.chrom,
-                    flank_rows["Start"].values,
-                    flank_rows["End"].values,
-                )
-                has_overlap = ov > 0
-                n_drop = int(has_overlap.sum())
-                if n_drop > 0:
-                    drop_idxs = [idx for idx, d in zip(flank_idxs, has_overlap) if d]
-                    interval_bins[flank_name] = [
-                        idx for idx, d in zip(flank_idxs, has_overlap) if not d
-                    ]
-                    locus_df = locus_df.drop(index=drop_idxs)
-                    print(f"    Dropped {n_drop} {flank_name} bin(s) "
-                          f"with exclusion-region overlap")
+        # Strict zero-tolerance masking for flank bins. Flanks establish
+        # the baseline (CN=2) depth and must be free of both global and
+        # flank-only exclusion intervals.
+        locus_df, interval_bins = _drop_masked_flank_bins(
+            locus_df,
+            interval_bins,
+            locus.chrom,
+            exclusion_mask=exclusion_mask,
+        )
 
         # ------------------------------------------------------------------
         # Per-interval bin count check + optional high-res replacement
@@ -714,6 +792,7 @@ def collect_all_locus_bins(
                     right_bound,
                     max_bins_per_interval,
                     exclusion_mask=exclusion_mask,
+                    flank_exclusion_mask=flank_exclusion_mask,
                     exclusion_threshold=exclusion_threshold,
                     filter_params=filter_params,
                     exclusion_bypass_regions=exclusion_bypass_regions,
@@ -1124,6 +1203,10 @@ def parse_args():
         help="BED file(s) of regions to mask (segdups, centromeres, etc.)",
     )
     parser.add_argument(
+        "--flank-exclusion-intervals", nargs="*", default=[],
+        help="BED file(s) of regions to mask only in flanking regions, not GD body intervals",
+    )
+    parser.add_argument(
         "-o", "--output-dir", required=True,
         help="Output directory for preprocessed files",
     )
@@ -1224,6 +1307,16 @@ def main():
             label="exclusion regions",
         )
 
+    flank_exclusion_mask = None
+    if args.flank_exclusion_intervals:
+        print(f"\nLoading {len(args.flank_exclusion_intervals)} flank exclusion interval file(s):")
+        for p in args.flank_exclusion_intervals:
+            print(f"  {p}")
+        flank_exclusion_mask = ExclusionMask(
+            args.flank_exclusion_intervals,
+            label="flank exclusion regions",
+        )
+
     # Load and normalise read depth data
     df = read_data(args.input)
     sample_cols = get_sample_columns(df)
@@ -1278,6 +1371,7 @@ def main():
     # Collect all bins across all loci
     combined_df, mappings, included_loci = collect_all_locus_bins(
         df, gd_table, exclusion_mask,
+        flank_exclusion_mask=flank_exclusion_mask,
         exclusion_threshold=args.exclusion_threshold,
         locus_padding=args.locus_padding,
         min_bins_per_interval=args.min_bins_per_interval,
@@ -1321,14 +1415,17 @@ def main():
     # operate on exactly the modeled set.
     #
     # _parse_loci() maps standalone entries (NaN / empty cluster column)
-    # to their GD_ID as the dict key, so we must apply the same mapping
+    # to their coordinate-derived standalone locus key, so we must apply
+    # the same mapping
     # when filtering the raw DataFrame — otherwise standalone entries
     # would be silently dropped from the output even though their
     # intervals were processed.
     included_clusters = set(included_loci.keys())
     effective_cluster = gd_table.df["cluster"].copy()
     standalone_mask = effective_cluster.isna() | (effective_cluster == "")
-    effective_cluster[standalone_mask] = gd_table.df.loc[standalone_mask, "GD_ID"]
+    effective_cluster.loc[standalone_mask] = gd_table.df.loc[
+        standalone_mask
+    ].apply(GDTable._standalone_locus_key, axis=1)
     filtered_gd_df = gd_table.df[effective_cluster.isin(included_clusters)].copy()
     filtered_gd_path = os.path.join(args.output_dir, "gd_table_filtered.tsv")
     filtered_gd_df.to_csv(filtered_gd_path, sep="\t", index=False)

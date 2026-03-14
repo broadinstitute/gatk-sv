@@ -24,6 +24,7 @@ TRUTH_TABLE="/Users/markw/Work/talkowski/sv-pipe-testing/mw_gd/gd_pyro/synthesiz
 PREPROCESS_ARGS="--region chr22"
 INFER_ARGS="--state-prior-weight 0.0"
 CALL_ARGS="--min-mean-coverage 0.50"
+EVAL_ARGS="--min-confidence 0.95"
 
 # ── Usage ──────────────────────────────────────────────────────────────────
 usage() {
@@ -52,6 +53,7 @@ GD_CALLS="${CALL_DIR}/gd_cnv_calls.tsv.gz"
 VITERBI_PATHS="${CALL_DIR}/viterbi_paths.tsv.gz"
 PLOIDY_TABLE="${PREPROCESS_DIR}/ploidy_estimates.tsv"
 PREPROCESSED_BAF="${PREPROCESS_DIR}/preprocessed_baf.tsv.gz"
+EVAL_REPORT="${EVAL_DIR}/truth_evaluation_report.tsv"
 
 # ── Step 1: preprocess ─────────────────────────────────────────────────────
 echo "[1/5] preprocess"
@@ -65,6 +67,7 @@ rm -rf "${PREPROCESS_DIR}"
     -e "${SEG_DUP_BED}" \
     -e "${CENTROMERE_BED}" \
     -e "${ACROCENTRIC_ARM_BED}" \
+    --flank-exclusion-intervals ${SEG_DUP_BED} \
     --verbose \
     ${PREPROCESS_ARGS}
 
@@ -91,32 +94,51 @@ rm -rf "${CALL_DIR}"
     --verbose \
     ${CALL_ARGS}
 
-# ── Step 4: plot ───────────────────────────────────────────────────────────
-echo "[4/5] plot"
-rm -rf "${PLOT_DIR}"
-"${GD_CMD[@]}" plot \
-    --calls "${GD_CALLS}" \
-    --cn-posteriors "${CN_POSTERIORS}" \
-    --raw-counts "${INPUT_DEPTH}" \
-    --high-res-counts "${HIGH_RESOLUTION_DEPTH}" \
-    -g "${FILTERED_GD_TABLE}" \
-    -o "${PLOT_DIR}" \
-    --gaps-bed "${GAPS_BED}" \
-    --gtf "${GTF}" \
-    --segdup-bed "${SEG_DUP_BED}" \
-    --ploidy-table "${PLOIDY_TABLE}" \
-    --viterbi-paths "${VITERBI_PATHS}"
-
-# ── Step 5: eval (optional) ────────────────────────────────────────────────
+# ── Step 4: eval (optional) ────────────────────────────────────────────────
 if [[ -n "${TRUTH_TABLE}" ]]; then
-    echo "[5/5] eval"
+    echo "[4/5] eval"
     rm -rf "${EVAL_DIR}"
     "${GD_CMD[@]}" eval \
         --calls "${GD_CALLS}" \
         --truth-table "${TRUTH_TABLE}" \
         --gd-table "${FILTERED_GD_TABLE}" \
         --ploidy-table "${PLOIDY_TABLE}" \
-        -o "${EVAL_DIR}"
+        -o "${EVAL_DIR}" \
+        ${EVAL_ARGS}
 else
-    echo "[5/5] eval  (skipped — TRUTH_TABLE not set)"
+    echo "[4/5] eval  (skipped — TRUTH_TABLE not set)"
 fi
+
+# ── Step 5: plot ───────────────────────────────────────────────────────────
+echo "[5/5] plot"
+rm -rf "${PLOT_DIR}"
+
+PLOT_CMD=(
+    "${GD_CMD[@]}"
+    plot
+    --calls "${GD_CALLS}"
+    --cn-posteriors "${CN_POSTERIORS}"
+    --raw-counts "${INPUT_DEPTH}"
+    --high-res-counts "${HIGH_RESOLUTION_DEPTH}"
+    -g "${FILTERED_GD_TABLE}"
+    -o "${PLOT_DIR}"
+    --gaps-bed "${GAPS_BED}"
+    --gtf "${GTF}"
+    --segdup-bed "${SEG_DUP_BED}"
+    --ploidy-table "${PLOIDY_TABLE}"
+    --viterbi-paths "${VITERBI_PATHS}"
+)
+
+if [[ -n "${TRUTH_TABLE}" ]]; then
+    PLOT_CMD+=(--eval-report "${EVAL_REPORT}")
+fi
+
+"${PLOT_CMD[@]}"
+
+echo
+if [[ -n "${TRUTH_TABLE}" ]]; then
+    echo "Eval report: ${EVAL_REPORT}"
+else
+    echo "Eval report: skipped (TRUTH_TABLE not set)"
+fi
+echo "Plot directory: ${PLOT_DIR}"
