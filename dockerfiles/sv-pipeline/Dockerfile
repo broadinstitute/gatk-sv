@@ -34,6 +34,7 @@ COPY src/RdTest /opt/RdTest
 COPY src/svtk /opt/svtk
 COPY src/svtest /opt/svtest
 COPY src/svqc /opt/svqc
+COPY src/gatk-sv-gd /opt/gatk-sv-gd
 ENV PATH=/opt/WGD/bin:/opt/bin:$PATH
 
 # install any missing support libraries, along with libraries needed for build
@@ -47,6 +48,7 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
     pip install -e /opt/svtk && \
     pip install -e /opt/svtest && \
     pip install -e /opt/svqc && \
+    pip install -e /opt/gatk-sv-gd && \
     apt-get -qqy remove --purge $APT_TRANSIENT_PACKAGES && \
     apt-get -qqy autoremove --purge && \
     apt-get -qqy clean && \
@@ -61,6 +63,7 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
 RUN svtk -h
 RUN svtest -h
 RUN svqc -h
+RUN gatk-sv-gd -h
 RUN plink2 || true
 # the command should be installed, but has no help mode, and outputs an error if not used on data
 #RUN king

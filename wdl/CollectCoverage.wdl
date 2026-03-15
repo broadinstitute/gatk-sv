@@ -80,7 +80,9 @@ task CollectCounts {
 task CondenseReadCounts {
   input {
     File counts
-    String sample
+    String? sample
+    String? output_prefix
+    File? sequence_dictionary
     Int? max_interval_size
     Int? min_interval_size
     File? gatk4_jar_override
@@ -89,6 +91,8 @@ task CondenseReadCounts {
     String gatk_docker
     RuntimeAttr? runtime_attr_override
   }
+
+  String output_name = "condensed_counts." + select_first([output_prefix, sample, "matrix"]) + ".tsv.gz"
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
@@ -104,15 +108,59 @@ task CondenseReadCounts {
     set -euo pipefail
     export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk4_jar_override}
 
-    zcat ~{counts} | grep '^@' | grep -v '@RG' > ref.dict
-    zcat ~{counts} | grep -v '^@' | sed -e 1d | \
-        awk 'BEGIN{FS=OFS="\t";print "#Chr\tStart\tEnd\tNA21133"}{print $1,$2-1,$3,$4}' | bgzip > in.rd.txt.gz 
+    if [[ -n "~{default="" sequence_dictionary}" ]]; then
+      cp ~{default="" sequence_dictionary} ref.dict
+    elif [[ -n "~{default="" sample}" ]]; then
+      zcat ~{counts} | grep '^@' | grep -v '@RG' > ref.dict
+    fi
+
+    if [[ -n "~{default="" sample}" ]]; then
+      zcat ~{counts} | grep -v '^@' | sed -e 1d | \
+          awk 'BEGIN{FS=OFS="\t";print "#Chr\tStart\tEnd\tNA21133"}{print $1,$2-1,$3,$4}' | bgzip > in.rd.txt.gz
+    else
+      if [[ ! -s ref.dict ]] && zcat ~{counts} | grep -q '^@'; then
+        zcat ~{counts} | grep '^@' | grep -v '@RG' > ref.dict
+      elif [[ ! -s ref.dict ]]; then
+        : > ref.dict
+      fi
+
+      zcat ~{counts} | \
+        awk 'BEGIN{FS=OFS="\t"}
+             /^@/ {next}
+             NR==1 {
+               if ($1 == "CONTIG") {
+                 $1 = "#Chr";
+                 $2 = "Start";
+                 $3 = "End";
+                 print;
+                 next;
+               }
+               if ($1 == "#Chr" || $1 == "Chr") {
+                 $1 = "#Chr";
+                 print;
+                 next;
+               }
+             }
+             {
+               print;
+             }' | bgzip > in.rd.txt.gz
+    fi
+
     tabix -0 -s1 -b2 -e3 in.rd.txt.gz 
     gatk --java-options -Xmx2g CondenseDepthEvidence -F in.rd.txt.gz -O out.rd.txt.gz --sequence-dictionary ref.dict \
         --max-interval-size ~{default=2000 max_interval_size} --min-interval-size ~{default=101 min_interval_size}
-    cat ref.dict <(zcat out.rd.txt.gz | \
-        awk 'BEGIN{FS=OFS="\t";print "@RG\tID:GATKCopyNumber\tSM:~{sample}\nCONTIG\tSTART\tEND\tCOUNT"}{if(NR>1)print $1,$2+1,$3,$4}') | \
-        bgzip > condensed_counts.~{sample}.tsv.gz
+
+    if [[ -n "~{default="" sample}" ]]; then
+      cat ref.dict <(zcat out.rd.txt.gz | \
+          awk 'BEGIN{FS=OFS="\t";print "@RG\tID:GATKCopyNumber\tSM:~{default="" sample}\nCONTIG\tSTART\tEND\tCOUNT"}{if(NR>1)print $1,$2+1,$3,$4}') | \
+          bgzip > ~{output_name}
+    else
+      cat ref.dict <(zcat out.rd.txt.gz | \
+          awk 'BEGIN{FS=OFS="\t"}
+               NR==1 {$1="#Chr"; $2="Start"; $3="End"; print; next}
+               {print}') | \
+          bgzip > ~{output_name}
+    fi
   >>>
 
   runtime {
@@ -127,7 +175,7 @@ task CondenseReadCounts {
   }
 
   output {
-    File out = "condensed_counts.~{sample}.tsv.gz"
+    File out = output_name
   }
 }
 
