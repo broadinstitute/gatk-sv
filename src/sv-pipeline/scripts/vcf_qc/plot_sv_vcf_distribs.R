@@ -80,28 +80,32 @@ plotSVCountBars <- function(dat,svtypes,title=NULL,ylab="Count"){
   })))
   counts[,2] <- as.numeric(counts[,2])
   
-  #Prep plotting area
+  #Prep plotting area with log-scale y-axis
   par(bty="n",mar=c(6,4.5,2.5,0.5))
-  plot(x=c(0,nrow(counts)),y=c(0,1.15*max(counts[,2])),type="n",
-       xaxt="n",yaxt="n",xlab="",ylab="",xaxs="i",yaxs="i")
+  pos.counts <- counts[counts[,2]>0, 2]
+  min.y <- if(length(pos.counts)>0) max(0.5, min(pos.counts)*0.5) else 0.5
+  max.y <- max(counts[,2], 1, na.rm=T) * 2
+  plot(x=c(0,nrow(counts)),y=c(min.y,max.y),type="n",
+       xaxt="n",yaxt="n",xlab="",ylab="",xaxs="i",yaxs="i",log="y")
   
   #Add y-axis and title
-  axis(2,at=axTicks(2),labels=NA)
-  axis(2,at=axTicks(2),las=2,tick=F,line=-0.4,cex.axis=0.7,
-       labels=prettyNum(axTicks(2),big.mark=","))
+  log.ticks <- 10^(floor(log10(min.y)):ceiling(log10(max.y)))
+  axis(2,at=log.ticks,labels=NA)
+  axis(2,at=log.ticks,las=2,tick=F,line=-0.4,cex.axis=0.7,
+       labels=prettyNum(log.ticks,big.mark=","))
   mtext(2,text=ylab,line=3)
   mtext(3,line=0.5,text=title,font=2)
   
   #Plot per-svtype information
   sapply(1:nrow(counts),function(i){
-    #Bars
-    rect(xleft=i-0.85,xright=i-0.15,
-         ybottom=0,ytop=counts[i,2],
-         lwd=0.7,col=counts[i,3])
-    #Counts
-    text(x=i-0.5,y=counts[i,2],pos=3,col=counts[i,3],
-         labels=prettyNum(counts[i,2],big.mark=","),cex=0.7)
-    #Labels
+    cnt <- counts[i,2]
+    if(cnt > 0){
+      rect(xleft=i-0.85,xright=i-0.15,
+           ybottom=min.y,ytop=cnt,
+           lwd=0.7,col=counts[i,3])
+      text(x=i-0.5,y=cnt*1.3,col=counts[i,3],
+           labels=prettyNum(cnt,big.mark=","),cex=0.7)
+    }
     axis(1,at=i-0.5,line=-0.8,tick=F,las=2,cex.axis=0.8,
          labels=counts[i,1],col.axis=counts[i,3])
   })
@@ -312,14 +316,14 @@ wrapperPlotAllCountBars <- function(){
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/counts.by_frequency_scaled.pdf",sep=""),
       height=4,width=4)
   plotStackedBars(mat=AF.mat,colors=svtypes$color,scale=T,
-                  title="Count by Allele Frequency (Scaled)")
+                  title="Count by AF (Scaled)")
   abline(v=1,lty=2,col="gray50")
   axis(1,at=1,labels=NA,col="gray75",tck=-0.22)
   dev.off()  
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/counts.by_frequency_raw.pdf",sep=""),
       height=4,width=4)
   plotStackedBars(mat=AF.mat,colors=svtypes$color,scale=F,
-                  title="Count by Allele Frequency")
+                  title="Count by AF")
   abline(v=1,lty=2,col="gray50")
   axis(1,at=1,labels=NA,col="gray75",tck=-0.22)
   dev.off()
@@ -350,29 +354,50 @@ wrapperPlotAllCountBars <- function(){
   abline(v=1,lty=2,col="gray50")
   axis(1,at=1,labels=NA,col="gray75",tck=-0.22)
   dev.off()
+  #Build REGION matrix if column exists
+  if("REGION" %in% colnames(dat)){
+    regions <- sort(unique(dat$REGION[!is.na(dat$REGION)]))
+    region.mat <- as.data.frame(sapply(c("ALL",regions), function(reg){
+      plotset <- if(reg=="ALL") dat else dat[which(dat$REGION==reg),]
+      sapply(svtypes$svtype, function(svtype) length(which(plotset$svtype==svtype)))
+    }))
+    colnames(region.mat) <- c("ALL",regions)
+  }
   pdf(paste(OUTDIR,"/main_plots/VCF_QC.counts.merged.pdf",sep=""),
-      height=7,width=9)
+      height=7,width=11)
   #Merged
-  layout(matrix(c(1,2,3,1,4,5),byrow=T,nrow=2),
-         widths=c(3,2,2))
+  layout(matrix(c(1,2,3,4,1,5,6,7),byrow=T,nrow=2),
+         widths=c(3,2,2,2))
   plotSVCountBars(dat=dat,svtypes=svtypes,
                   title="Variant Count")
   plotStackedBars(mat=AF.mat,colors=svtypes$color,scale=F,
                   title="Count by AF")
   abline(v=1,lty=2,col="gray50")
   axis(1,at=1,labels=NA,col="gray75",tck=-0.22)
-  plotStackedBars(mat=AF.mat,colors=svtypes$color,scale=T,
-                  title="Count by AF (Scaled)")
-  abline(v=1,lty=2,col="gray50")
-  axis(1,at=1,labels=NA,col="gray75",tck=-0.22)
   plotStackedBars(mat=size.mat,colors=svtypes$color,scale=F,
                   title="Count by Size")
+  abline(v=1,lty=2,col="gray50")
+  axis(1,at=1,labels=NA,col="gray75",tck=-0.22)
+  if("REGION" %in% colnames(dat)){
+    plotStackedBars(mat=region.mat,colors=svtypes$color,scale=F,
+                    title="Count by Region")
+    abline(v=1,lty=2,col="gray50")
+    axis(1,at=1,labels=NA,col="gray75",tck=-0.22)
+  }else{ plot.new() }
+  plotStackedBars(mat=AF.mat,colors=svtypes$color,scale=T,
+                  title="Count by AF (Scaled)")
   abline(v=1,lty=2,col="gray50")
   axis(1,at=1,labels=NA,col="gray75",tck=-0.22)
   plotStackedBars(mat=size.mat,colors=svtypes$color,scale=T,
                   title="Count by Size (Scaled)")
   abline(v=1,lty=2,col="gray50")
   axis(1,at=1,labels=NA,col="gray75",tck=-0.22)
+  if("REGION" %in% colnames(dat)){
+    plotStackedBars(mat=region.mat,colors=svtypes$color,scale=T,
+                    title="Count by Region (Scaled)")
+    abline(v=1,lty=2,col="gray50")
+    axis(1,at=1,labels=NA,col="gray75",tck=-0.22)
+  }else{ plot.new() }
   dev.off()
 }
 
@@ -699,7 +724,7 @@ wrapperPlotAllSizeDistribs <- function(){
                         max.AFs=c(1.1/(2*nsamp),rare.max.freq,uncommon.max.freq,
                                   common.max.freq,major.max.freq),
                         legend.labs=c("Singleton","<1%","1-10%","10-50%",">50%"),
-                        title="Size Distributions by Allele Frequency")
+                        title="Size Distributions by AF")
   dev.off()
   
   #Merged
@@ -714,7 +739,7 @@ wrapperPlotAllSizeDistribs <- function(){
                         max.AFs=c(1.1/(2*nsamp),rare.max.freq,uncommon.max.freq,
                                   common.max.freq,major.max.freq),
                         legend.labs=c("Singleton","<1%","1-10%","10-50%",">50%"),
-                        title="Size Distributions by Allele Frequency",
+                        title="Size Distributions by AF",
                         lwd.cex=2)
   plotSizeDistrib(dat=dat[which(dat$AC==1),],svtypes=svtypes,
                   autosomal=F, biallelic=T, title="AC = 1", text.cex=0.75)
@@ -787,7 +812,7 @@ plotFreqDistrib <- function(dat, svtypes,
     axis(1,at=logscale.major,tck=-0.03,labels=NA)
     axis(1,at=logscale.minor,tick=F,cex.axis=0.8,line=-0.4,las=2,
          labels=logscale.minor.labs)
-    mtext(1,text="Allele Frequency",line=3,cex=lwd.cex)
+    mtext(1,text="AF",line=3,cex=lwd.cex)
     axis(2,at=axTicks(2),tck=-0.025,labels=NA)
     axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
          labels=paste(round(100*axTicks(2),1),"%",sep=""))
@@ -894,7 +919,7 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
     axis(1,at=logscale.major,tck=-0.03,labels=NA)
     axis(1,at=logscale.minor,tick=F,cex.axis=0.8,line=-0.4,las=2,
          labels=logscale.minor.labs)
-    mtext(1,text="Allele Frequency",line=3)
+    mtext(1,text="AF",line=3)
     axis(2,at=axTicks(2),tck=-0.025,labels=NA)
     axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
          labels=paste(round(100*axTicks(2),1),"%",sep=""))
@@ -1013,19 +1038,19 @@ wrapperPlotAllFreqDistribs <- function(){
   plotFreqDistribSeries(dat=dat,svtypes=svtypes,
                         max.sizes=c(tiny.max.size,small.max.size,medium.max.size,
                                     medlarge.max.size,large.max.size,huge.max.size),
-                        legend.labs=c("<100bp","100bp-\n500bp","500bp-\n2.5kb",
-                                      "2.5-10kb","10kb-50kb",">50kb"),
+                        legend.labs=c("<50bp","50-\n100bp","100bp-\n500bp",
+                                      "500bp-\n5kb","5-50kb",">50kb"),
                         title="AF Distributions by Size")
   plotFreqDistrib(dat=dat[which(dat$length<tiny.max.size),],svtypes=svtypes,
-                  title="< 100bp",lwd.cex=0.7)
+                  title="< 50bp",lwd.cex=0.7)
   plotFreqDistrib(dat=dat[which(dat$length>=tiny.max.size & dat$length<small.max.size),],svtypes=svtypes,
-                  title="100bp - 500bp",lwd.cex=0.7)
+                  title="50 - 100bp",lwd.cex=0.7)
   plotFreqDistrib(dat=dat[which(dat$length>=small.max.size & dat$length<medium.max.size),],svtypes=svtypes,
-                  title="500bp - 2.5kb",lwd.cex=0.7)
+                  title="100bp - 500bp",lwd.cex=0.7)
   plotFreqDistrib(dat=dat[which(dat$length>=medium.max.size & dat$length<medlarge.max.size),],svtypes=svtypes,
-                  title="2.5kb - 10kb",lwd.cex=0.7)
+                  title="500bp - 5kb",lwd.cex=0.7)
   plotFreqDistrib(dat=dat[which(dat$length>=medlarge.max.size & dat$length<large.max.size),],svtypes=svtypes,
-                  title="10kb - 50kb",lwd.cex=0.7)
+                  title="5 - 50kb",lwd.cex=0.7)
   plotFreqDistrib(dat=dat[which(dat$length>=large.max.size),],svtypes=svtypes,
                   title="> 50kb",lwd.cex=0.7)
   dev.off()
@@ -1054,6 +1079,17 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
     HW.cols[which(HW.p<0.05)] <- "#81F850"
     HW.cols[which(HW.p<0.05/length(HW.p))] <- "#AC26A1"
     
+    #Subsample points if plot is too dense
+    max.plot.pts <- 5000
+    if(nrow(HW.mat) > max.plot.pts){
+      sub.idx <- sort(sample(1:nrow(HW.mat), max.plot.pts))
+      HW.mat.plot <- HW.mat[sub.idx,]
+      HW.cols.plot <- HW.cols[sub.idx]
+    }else{
+      HW.mat.plot <- HW.mat
+      HW.cols.plot <- HW.cols
+    }
+    
     #Generate HW plot frame
     par(mar=c(1,3.5,3,0.5),bty="n")
     plot(x=1.15*c(-1/sqrt(3),1/sqrt(3)),y=c(-0.15,1.15),type="n",
@@ -1061,7 +1097,7 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
     segments(x0=c(-1/sqrt(3),0,1/sqrt(3)),
              x1=c(0,1/sqrt(3),-1/sqrt(3)),
              y0=c(0,1,0),y1=c(1,0,0))
-    HWTernaryPlot(X=HW.mat,n=nsamp,newframe=F,
+    HWTernaryPlot(X=HW.mat.plot,n=nsamp,newframe=F,
                   vbounds=F,mafbounds=F,
                   region=1,vertexlab=NA,
                   alpha=0.05,
@@ -1077,13 +1113,13 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
     mtext(2,text="Fraction of Genotypes",line=2.5,cex=lab.cex)
     
     #Finish HW plot
-    HWTernaryPlot(X=HW.mat,n=nsamp,newframe=F,
+    HWTernaryPlot(X=HW.mat.plot,n=nsamp,newframe=F,
                   vbounds=F,mafbounds=F,
                   region=1,vertexlab=NA,
                   alpha=0.05/nrow(HW.mat),
                   curvecols=c("#4DAC26","#AC26A1",NA,NA),
-                  pch=21,cex=0.5,signifcolour=F,markercol=HW.cols,
-                  markerbgcol=adjustcolor(HW.cols,alpha=0.25))
+                  pch=21,cex=0.5,signifcolour=F,markercol=HW.cols.plot,
+                  markerbgcol=adjustcolor(HW.cols.plot,alpha=0.25))
     
     #Add legend
     n.pass <- length(which(HW.p>=0.05))
@@ -1163,7 +1199,7 @@ plotAlleleCarrierCorrelation <- function(dat,autosomal=T,biallelic=T,
   axis(2,at=seq(0,1,0.2),labels=NA)
   axis(2,at=seq(0,1,0.2),tick=F,line=-0.4,cex.axis=0.8,las=2,
        labels=paste(seq(0,100,20),"%",sep=""))
-  mtext(2,text="Allele Frequency",line=2.5)
+  mtext(2,text="AF",line=2.5)
   mtext(3,text=title,line=0.5,font=2)
   axis(4,at=c(0.5,1),las=2,line=-0.8,tick=F,col.axis="gray50",cex.axis=0.7,
        labels=c("All\nHet.","All\nHom."))

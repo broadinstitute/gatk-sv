@@ -45,9 +45,8 @@ readDatPerSample <- function(ID){
             #Check for multiallelic ./N notation, and compute # of alleles as divergence from diploid
             if(length(grep(".",as.character(gt),fixed=T))>0){
               abs(2-sum(as.numeric(gsub(".","",unlist(strsplit(as.character(gt),split="/")),fixed=T)),na.rm=T))
-            #Otherwise, sum number of alleles
             }else{
-              sum(as.numeric(gsub(".","",unlist(strsplit(as.character(gt),split="/")),fixed=T)))
+              sum(as.numeric(gsub(".","",unlist(strsplit(as.character(gt),split="/")),fixed=T)) > 0)
             }
           }
         })
@@ -210,6 +209,18 @@ mediansByGQ <- function(dat,samples,svtypes,min.GQs,count="variants",biallelic=F
   rownames(median.mat) <- paste(">",min.GQs,sep="")
   return(median.mat)
 }
+#Gather median count of variants per sample per REGION annotation
+mediansByRegion <- function(dat, samples, svtypes, count="variants") {
+  if(!"REGION" %in% colnames(dat)) return(NULL)
+  regions <- sort(unique(dat$REGION[!is.na(dat$REGION)]))
+  if(length(regions) == 0) return(NULL)
+  median.mat <- t(sapply(regions, function(reg) {
+    mat.sub <- countVarsMulti(dat=dat[which(dat$REGION==reg),], samples=samples, count=count)
+    apply(mat.sub, 2, median, na.rm=T)
+  }))
+  rownames(median.mat) <- regions
+  return(median.mat)
+}
 
 
 ############################
@@ -260,7 +271,7 @@ plotViolins <- function(mat,colors=NULL,log=F,ylims=NULL,
   #Prep plotting area
   right.sep <- 3
   text.buffer <- 0.4
-  par(mar=c(4.5,4,2,1),bty="n")
+  par(mar=c(6,4,2,1),bty="n")
   plot(x=c(-0.15-right.sep,ncol(mat)-1+text.buffer),y=ylims,type="n",
        xaxt="n",xaxs="i",yaxt="n",xlab="",ylab="")
   
@@ -273,7 +284,7 @@ plotViolins <- function(mat,colors=NULL,log=F,ylims=NULL,
        border=NA,col="white")
   
   #Add shared axes & labels
-  mtext(1,line=3-max(c(0,(1-lab.cex))),text=xlab,cex=lab.cex)
+  mtext(1,line=4.5,text=xlab,cex=lab.cex)
   mtext(3,line=0,cex=0.7*lab.cex,
         text=paste("N=",prettyNum(nrow(mat),big.mark=",")," Samples",sep=""))
   mtext(3,line=0.8,text=paste(title,y.suffix,sep=""),font=2,cex=lab.cex)
@@ -343,7 +354,7 @@ plotViolins <- function(mat,colors=NULL,log=F,ylims=NULL,
     #Add category label on x-axis
     axis(1,at=i-right.sep-0.5,
          labels=paste(colnames(mat)[i],"\n",sep=""),
-         tick=F,las=2,line=-0.8,cex.axis=0.8,
+         tick=F,las=2,line=-0.8,cex.axis=0.65,
          col.axis=colors[i],font=2)
   }
   
@@ -398,7 +409,7 @@ plotViolins <- function(mat,colors=NULL,log=F,ylims=NULL,
     #Add category label on x-axis
     axis(1,at=i-0.5,
          labels=paste(colnames(mat)[i+1],"\n",sep=""),
-         tick=F,las=2,line=-0.8,cex.axis=0.8,
+         tick=F,las=2,line=-0.8,cex.axis=0.65,
          col.axis=colors[i+1],font=2)
   })
   
@@ -677,7 +688,7 @@ wrapperVariantCountBarplots <- function(count="variants"){
     freq.lab <- "Carrier Frequency"
   }else{
     label.prefix <- "Alleles per Genome"
-    freq.lab <- "Allele Frequency"
+    freq.lab <- "AF"
   }
   
   #Raw counts vs size
@@ -781,14 +792,14 @@ wrapperVariantCountHeats <- function(count="variants"){
 masterWrapperSummaryPlot <- function(){
   #Prep plot area
   png(paste(OUTDIR,"/main_plots/VCF_QC.per_genome.png",sep=""),
-      height=5*300,width=11*300,res=300)
-  layout(matrix(c(1,2,3,4,5,
-                  6,7,8,9,10),nrow=2,byrow=T),
-         widths=c(4,1.5,1.5,3,3))
+      height=5*300,width=14*300,res=300)
+  layout(matrix(c(1,2,3,4,5,11,
+                  6,7,8,9,10,12),nrow=2,byrow=T),
+         widths=c(4,1.5,1.5,3,3,3))
   
   #Violin plot of SV sites per sample
   plotViolins(mat=plot.data$variants$count.all,
-              colors=svtypes$color,log=F,
+              colors=svtypes$color,log=T,
               xlab="Classes",ylab=paste("Sites",sep=""),
               title="Sites per Genome",lab.cex=0.75)
   
@@ -815,12 +826,12 @@ masterWrapperSummaryPlot <- function(){
   #Heatmap of SV sites per sample by frequency
   plotHeatmap(mat=plot.data$variants$median.freq,
               base.cols=c("gray15",svtypes$color),
-              x.title="Classes",y.title="Carrier Frequency",
+              x.title="Classes",y.title="CF",
               title="Sites per Genome, by Freq.",lab.cex=0.75)
   
   #Violin plot of SV alleles per sample
   plotViolins(mat=plot.data$alleles$count.all,
-              colors=svtypes$color,log=F,
+              colors=svtypes$color,log=T,
               xlab="Classes",ylab=paste("Alleles",sep=""),
               title="Alleles per Genome",lab.cex=0.75)
   
@@ -847,8 +858,28 @@ masterWrapperSummaryPlot <- function(){
   #Heatmap of SV alleles per sample by frequency
   plotHeatmap(mat=plot.data$alleles$median.freq,
               base.cols=c("gray15",svtypes$color),
-              x.title="Classes",y.title="Allele Frequency",
+              x.title="Classes",y.title="AF",
               title="Alleles per Genome, by Freq.",lab.cex=0.75)
+  
+  #Heatmap of SV sites per sample by REGION
+  if(!is.null(plot.data$variants$median.region)){
+    plotHeatmap(mat=plot.data$variants$median.region,
+                base.cols=c("gray15",svtypes$color),
+                x.title="Classes",y.title="Region",
+                title="Sites per Genome, by Region",lab.cex=0.75)
+  }else{
+    par(bty="n"); plot.new(); text(0.5,0.5,"No REGION data",cex=0.8)
+  }
+  
+  #Heatmap of SV alleles per sample by REGION
+  if(!is.null(plot.data$alleles$median.region)){
+    plotHeatmap(mat=plot.data$alleles$median.region,
+                base.cols=c("gray15",svtypes$color),
+                x.title="Classes",y.title="Region",
+                title="Alleles per Genome, by Region",lab.cex=0.75)
+  }else{
+    par(bty="n"); plot.new(); text(0.5,0.5,"No REGION data",cex=0.8)
+  }
   
   #Close device
   dev.off()
@@ -1020,6 +1051,7 @@ plot.data <- lapply(list("variants","alleles"),function(count){
                                max.freqs=c(1.1/nsamp,rare.max.freq,uncommon.max.freq,
                                            common.max.freq,major.max.freq),
                                freq.labs=c("AC=1","AC>1 &\nCF<1%","1-10%","10-50%",">50%"))
+  median.region <- mediansByRegion(dat=dat, samples=samples, svtypes=svtypes, count=count)
   
   #Format master list output
   out.list <- list("count.all"=count.all,
@@ -1036,7 +1068,8 @@ plot.data <- lapply(list("variants","alleles"),function(count){
                    "count.major"=count.major,
                    "median.GQ"=median.GQ,
                    "median.size"=median.size,
-                   "median.freq"=median.freq)
+                   "median.freq"=median.freq,
+                   "median.region"=median.region)
   return(out.list)
 })
 names(plot.data) <- c("variants","alleles")
