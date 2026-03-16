@@ -82,6 +82,7 @@ if(any(dat$frequency > 1)){
   stop("Incorrect number of samples supplied; some carrier frequencies > 1")
 }
 #Subset to relevant columns
+region.col <- if("REGION" %in% colnames(dat)) dat$REGION else NULL
 dat <- data.frame("chr"=dat$chr,
                   "start"=dat$start,
                   "end"=dat$end,
@@ -99,6 +100,7 @@ dat <- data.frame("chr"=dat$chr,
                   "AN"=dat$AN,
                   "AC"=dat$AC,
                   "AF"=dat$AF)
+if(!is.null(region.col)) dat$REGION <- region.col
 #Exclude all sites where no carriers or alleles are observed
 zeroes <- which(dat$AC==0 | dat$carriers==0)
 if(length(zeroes)>0){

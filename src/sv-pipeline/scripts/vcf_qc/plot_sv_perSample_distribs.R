@@ -799,7 +799,7 @@ masterWrapperSummaryPlot <- function(){
   
   #Violin plot of SV sites per sample
   plotViolins(mat=plot.data$variants$count.all,
-              colors=svtypes$color,log=T,
+              colors=svtypes$color,log=F,
               xlab="Classes",ylab=paste("Sites",sep=""),
               title="Sites per Genome",lab.cex=0.75)
   
@@ -827,11 +827,11 @@ masterWrapperSummaryPlot <- function(){
   plotHeatmap(mat=plot.data$variants$median.freq,
               base.cols=c("gray15",svtypes$color),
               x.title="Classes",y.title="CF",
-              title="Sites per Genome, by Freq.",lab.cex=0.75)
+              title="Sites per Genome, by AF",lab.cex=0.75)
   
   #Violin plot of SV alleles per sample
   plotViolins(mat=plot.data$alleles$count.all,
-              colors=svtypes$color,log=T,
+              colors=svtypes$color,log=F,
               xlab="Classes",ylab=paste("Alleles",sep=""),
               title="Alleles per Genome",lab.cex=0.75)
   
@@ -859,7 +859,7 @@ masterWrapperSummaryPlot <- function(){
   plotHeatmap(mat=plot.data$alleles$median.freq,
               base.cols=c("gray15",svtypes$color),
               x.title="Classes",y.title="AF",
-              title="Alleles per Genome, by Freq.",lab.cex=0.75)
+              title="Alleles per Genome, by AF",lab.cex=0.75)
   
   #Heatmap of SV sites per sample by REGION
   if(!is.null(plot.data$variants$median.region)){

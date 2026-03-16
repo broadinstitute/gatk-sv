@@ -1080,7 +1080,7 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
     HW.cols[which(HW.p<0.05/length(HW.p))] <- "#AC26A1"
     
     #Subsample points if plot is too dense
-    max.plot.pts <- 5000
+    max.plot.pts <- 25000
     if(nrow(HW.mat) > max.plot.pts){
       sub.idx <- sort(sample(1:nrow(HW.mat), max.plot.pts))
       HW.mat.plot <- HW.mat[sub.idx,]
@@ -1166,7 +1166,7 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
 }
 #Correlation of carrier frequency & AF
 plotAlleleCarrierCorrelation <- function(dat,autosomal=T,biallelic=T,
-                                         title="Carrier Freq. vs. Allele Freq."){
+                                         title="Carrier Frequency vs. AF"){
   #Process freqs
   filter.legend <- NULL
   if(autosomal==T){
