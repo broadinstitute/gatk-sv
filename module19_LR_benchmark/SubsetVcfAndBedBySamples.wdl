@@ -65,7 +65,7 @@ task subset_vcf_by_samples {
       ~{vcf_gz}
 
     # Index output
-    bcftools index ~{output_prefix}.~{mid_fix}.vcf.gz
+    tabix -p vcf ~{output_prefix}.~{mid_fix}.vcf.gz
   >>>
 
   output {
