@@ -144,7 +144,7 @@ mediansBySize <- function(dat,samples,svtypes,max.sizes,size.labs,count="variant
     max.size <- max.sizes[i]
     
     #Get matrix of variants per sample
-    mat.sub <- countVarsMulti(dat=dat[which(dat$length>min.size & dat$length<=max.size),],
+    mat.sub <- countVarsMulti(dat=dat[which(dat$length>=min.size & dat$length<=max.size),],
                               samples=samples,count=count,biallelic=biallelic)
     
     #Get median per sample
@@ -827,7 +827,17 @@ masterWrapperSummaryPlot <- function(){
   plotHeatmap(mat=plot.data$variants$median.freq,
               base.cols=c("gray15",svtypes$color),
               x.title="Classes",y.title="CF",
-              title="Sites per Genome, by AF",lab.cex=0.75)
+              title="Sites per Genome by AF",lab.cex=0.75)
+
+  #Heatmap of SV sites per sample by region
+  if(!is.null(plot.data$variants$median.region)){
+    plotHeatmap(mat=plot.data$variants$median.region,
+                base.cols=c("gray15",svtypes$color),
+                x.title="Classes",y.title="Region",
+                title="Sites per Genome by Region",lab.cex=0.75)
+  }else{
+    par(bty="n"); plot.new(); text(0.5,0.5,"No REGION data",cex=0.8)
+  }
   
   #Violin plot of SV alleles per sample
   plotViolins(mat=plot.data$alleles$count.all,
@@ -859,24 +869,14 @@ masterWrapperSummaryPlot <- function(){
   plotHeatmap(mat=plot.data$alleles$median.freq,
               base.cols=c("gray15",svtypes$color),
               x.title="Classes",y.title="AF",
-              title="Alleles per Genome, by AF",lab.cex=0.75)
+              title="Alleles per Genome by AF",lab.cex=0.75)
   
-  #Heatmap of SV sites per sample by REGION
-  if(!is.null(plot.data$variants$median.region)){
-    plotHeatmap(mat=plot.data$variants$median.region,
-                base.cols=c("gray15",svtypes$color),
-                x.title="Classes",y.title="Region",
-                title="Sites per Genome, by Region",lab.cex=0.75)
-  }else{
-    par(bty="n"); plot.new(); text(0.5,0.5,"No REGION data",cex=0.8)
-  }
-  
-  #Heatmap of SV alleles per sample by REGION
+  #Heatmap of SV alleles per sample by region
   if(!is.null(plot.data$alleles$median.region)){
     plotHeatmap(mat=plot.data$alleles$median.region,
                 base.cols=c("gray15",svtypes$color),
                 x.title="Classes",y.title="Region",
-                title="Alleles per Genome, by Region",lab.cex=0.75)
+                title="Alleles per Genome by Region",lab.cex=0.75)
   }else{
     par(bty="n"); plot.new(); text(0.5,0.5,"No REGION data",cex=0.8)
   }

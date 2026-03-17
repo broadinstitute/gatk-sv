@@ -275,7 +275,7 @@ wrapperPlotAllCountBars <- function(){
       max.size <- min(c(size.df[c,2],300000000))
       #Get data subset
       plotset <- dat.merged[which(dat.merged$AF>min.AF & dat.merged$AF<=max.AF & 
-                                    dat.merged$length>min.size & dat.merged$length<=max.size),]
+                                    dat.merged$length>=min.size & dat.merged$length<=max.size),]
       #Set titles
       if(r==0){
         title <- gsub("\n","",c("ALL",size.df[,1])[c+1],fixed=T)
@@ -333,7 +333,7 @@ wrapperPlotAllCountBars <- function(){
     min.size <- max(c(0,size.df[max(c(0,i-1)),2]))
     max.size <- min(c(size.df[i,2],300000000))
     #Get data subset
-    plotset <- dat[which(dat$length>min.size & dat$length<=max.size),]
+    plotset <- dat[which(dat$length>=min.size & dat$length<=max.size),]
     #Tabulate counts per cutoff
     sapply(svtypes$svtype,function(svtype){
       length(which(plotset$svtype==svtype))
@@ -728,7 +728,7 @@ wrapperPlotAllSizeDistribs <- function(){
   dev.off()
   
   #Merged
-  pdf(paste(OUTDIR,"/main_plots/VCF_QC.size_distributions.merged.pdf",sep=""),
+  pdf(paste(OUTDIR,"/main_plots/VCF_QC.size_distributions.pdf",sep=""),
       height=6,width=10)
   layout(matrix(c(1,1,1,2,2,3,4,5,6,7),byrow=T,nrow=2),
          heights=c(4,2))
@@ -1026,7 +1026,7 @@ wrapperPlotAllFreqDistribs <- function(){
   dev.off()
   
   #Merged
-  pdf(paste(OUTDIR,"/main_plots/VCF_QC.freq_distributions.merged.pdf",sep=""),
+  pdf(paste(OUTDIR,"/main_plots/VCF_QC.freq_distributions.pdf",sep=""),
       height=6,width=10)
   layout(matrix(c(1,1,1,2,2,2,
                   3,4,5,6,7,8),
@@ -1053,6 +1053,383 @@ wrapperPlotAllFreqDistribs <- function(){
                   title="5 - 50kb",lwd.cex=0.7)
   plotFreqDistrib(dat=dat[which(dat$length>=large.max.size),],svtypes=svtypes,
                   title="> 50kb",lwd.cex=0.7)
+  dev.off()
+}
+
+
+######################################
+#####Transition/Transversion Ti/Tv plot
+######################################
+# Returns Ti:Tv ratio for a data.frame with REF and ALT columns (SNV rows only)
+calcTiTv <- function(d){
+  transitions <- c("AG","GA","CT","TC")
+  is.snv <- !is.na(d$REF) & !is.na(d$ALT) &
+             nchar(as.character(d$REF))==1 & nchar(as.character(d$ALT))==1
+  d <- d[is.snv,]
+  pair <- paste(toupper(as.character(d$REF)), toupper(as.character(d$ALT)), sep="")
+  n.ti <- sum(pair %in% transitions, na.rm=T)
+  n.tv <- sum(!pair %in% transitions, na.rm=T)
+  if(n.tv == 0) return(NA)
+  return(n.ti / n.tv)
+}
+
+# Heatmap of Ti:Tv ratio with REGION on x-axis and AF bucket on y-axis
+plotTiTvHeatmap <- function(snv.dat, af.labels, af.mins, af.maxs, regions, title="Ti:Tv by Region & AF"){
+  mat <- sapply(regions, function(reg){
+    sapply(seq_along(af.labels), function(i){
+      sub <- snv.dat[which(!is.na(snv.dat$REGION) & snv.dat$REGION==reg &
+                             snv.dat$AF>af.mins[i] & snv.dat$AF<=af.maxs[i]),]
+      calcTiTv(sub)
+    })
+  })
+  rownames(mat) <- af.labels
+  colnames(mat) <- regions
+  if(all(is.na(mat))){ plot.new(); mtext(3,text=title,font=2); return(invisible(NULL)) }
+  col.pal <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(101)
+  zlim <- range(mat, na.rm=T)
+  par(mar=c(5,5,3,4), bty="n")
+  image(x=1:ncol(mat), y=1:nrow(mat), z=t(mat), col=col.pal,
+        xaxt="n", yaxt="n", xlab="", ylab="", zlim=zlim)
+  axis(1, at=1:ncol(mat), labels=colnames(mat), las=2, cex.axis=0.75, tick=F, line=-0.5)
+  axis(2, at=1:nrow(mat), labels=rownames(mat), las=2, cex.axis=0.75, tick=F, line=-0.5)
+  mtext(1, text="Region", line=3.5, cex=0.85)
+  mtext(2, text="AF Bucket", line=3.5, cex=0.85)
+  mtext(3, text=title, font=2, line=1)
+  # Color bar
+  par.orig <- par(no.readonly=T)
+  usr <- par("usr"); pin <- par("pin"); plt <- par("plt")
+  color.bar.x <- usr[2] + (usr[2]-usr[1])*0.03
+  color.bar.w <- (usr[2]-usr[1])*0.04
+  color.bar.y <- seq(usr[3], usr[4], length.out=102)
+  rect(xleft=color.bar.x, xright=color.bar.x+color.bar.w,
+       ybottom=color.bar.y[-length(color.bar.y)], ytop=color.bar.y[-1],
+       col=col.pal, border=NA, xpd=T)
+  axis(4, at=seq(usr[3],usr[4],length.out=5), tick=F, las=2, cex.axis=0.6, line=-2.2,
+       labels=round(seq(zlim[1],zlim[2],length.out=5),2), xpd=T)
+}
+
+wrapperPlotTiTv <- function(){
+  if(!all(c("REF","ALT") %in% colnames(dat))) return(invisible(NULL))
+  snv.dat <- dat[which(dat$svtype=="SNV"),]
+  if(nrow(snv.dat)==0) return(invisible(NULL))
+
+  af.labels <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
+  af.mins <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
+  af.maxs <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
+  size.labels <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
+  size.mins <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
+  size.maxs <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
+
+  has.region <- "REGION" %in% colnames(snv.dat) && any(!is.na(snv.dat$REGION))
+  regions <- if(has.region) sort(unique(snv.dat$REGION[!is.na(snv.dat$REGION)])) else character(0)
+
+  # Number of columns: AF panel + Size panel + optional heatmap
+  n.panels <- 2 + as.integer(has.region && length(regions)>0)
+  png(paste(OUTDIR,"/main_plots/VCF_QC.transition_to_transversion_distribution.png",sep=""),
+      res=300, height=1800, width=n.panels*1800)
+  layout(matrix(1:n.panels, nrow=1))
+
+  # Panel 1: Ti:Tv by AF bucket
+  titv.af <- sapply(seq_along(af.labels), function(i){
+    sub <- snv.dat[which(snv.dat$AF>af.mins[i] & snv.dat$AF<=af.maxs[i]),]
+    calcTiTv(sub)
+  })
+  titv.af.all <- calcTiTv(snv.dat)
+  par(mar=c(7,4.5,3,0.5), bty="n")
+  plot(x=c(0,length(af.labels)+1), y=c(0, max(titv.af,titv.af.all,na.rm=T)*1.15),
+       type="n", xaxt="n", yaxt="n", xlab="", ylab="", xaxs="i", yaxs="i")
+  col.af <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(length(af.labels))
+  rect(xleft=1:length(af.labels)-0.35, xright=1:length(af.labels)+0.35,
+       ybottom=0, ytop=titv.af, col=col.af, border=NA)
+  abline(h=titv.af.all, lty=2, col="gray40", lwd=1.5)
+  axis(1, at=1:length(af.labels), labels=af.labels, las=2, cex.axis=0.8, tick=F, line=0.5)
+  axis(2, at=axTicks(2), labels=NA); axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4)
+  mtext(1, text="AF Bucket", line=5.5, cex=0.9)
+  mtext(2, text="Ti:Tv Ratio", line=2.5, cex=0.9)
+  mtext(3, text="Ti:Tv by AF", font=2, line=0.5)
+  legend("topright", lty=2, col="gray40", legend="Overall Ti:Tv", bty="n", cex=0.75)
+
+  # Panel 2: Ti:Tv by REGION (or show "No REGION data")
+  if(has.region && length(regions)>0){
+    titv.reg <- sapply(regions, function(reg){
+      sub <- snv.dat[which(!is.na(snv.dat$REGION) & snv.dat$REGION==reg),]
+      calcTiTv(sub)
+    })
+    col.reg <- colorRampPalette(c("#1B9E77","#D95F02","#7570B3","#E7298A","#66A61E","#E6AB02"))(length(regions))
+    par(mar=c(7,4.5,3,0.5), bty="n")
+    plot(x=c(0,length(regions)+1), y=c(0, max(titv.reg,titv.af.all,na.rm=T)*1.15),
+         type="n", xaxt="n", yaxt="n", xlab="", ylab="", xaxs="i", yaxs="i")
+    rect(xleft=1:length(regions)-0.35, xright=1:length(regions)+0.35,
+         ybottom=0, ytop=titv.reg, col=col.reg, border=NA)
+    abline(h=titv.af.all, lty=2, col="gray40", lwd=1.5)
+    axis(1, at=1:length(regions), labels=regions, las=2, cex.axis=0.8, tick=F, line=0.5)
+    axis(2, at=axTicks(2), labels=NA); axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4)
+    mtext(1, text="Region", line=5.5, cex=0.9)
+    mtext(2, text="Ti:Tv Ratio", line=2.5, cex=0.9)
+    mtext(3, text="Ti:Tv by Region", font=2, line=0.5)
+    legend("topright", lty=2, col="gray40", legend="Overall Ti:Tv", bty="n", cex=0.75)
+
+    # Panel 3: Ti:Tv heatmap (Region x AF)
+    plotTiTvHeatmap(snv.dat=snv.dat, af.labels=af.labels, af.mins=af.mins, af.maxs=af.maxs,
+                    regions=regions, title="Ti:Tv by Region & AF")
+  }else{
+    par(mar=c(7,4.5,3,0.5), bty="n")
+    plot(x=c(0,1),y=c(0,1),type="n",xaxt="n",yaxt="n",xlab="",ylab="")
+    text(x=0.5,y=0.5,labels="No REGION data")
+    mtext(3,text="Ti:Tv by Region",font=2,line=0.5)
+  }
+  dev.off()
+}
+
+
+######################################
+#####Quality score distribution plot
+######################################
+plotDistribOverlaid <- function(sub.list, sub.labels, sub.colors, main.val=NULL,
+                                xlab="QUAL", main.label="All Variants",
+                                title=NULL, xlim=NULL, alpha=0.5){
+  # Combine all values to get x range
+  all.vals <- unlist(lapply(sub.list, function(x) x[!is.na(x) & is.finite(x)]))
+  if(length(all.vals)==0){ par(bty="n",mar=c(4.5,4,3,1)); plot.new(); mtext(3,text=title,font=2,line=1); return(invisible(NULL)) }
+  if(is.null(xlim)) xlim <- range(all.vals, na.rm=T)
+  breaks <- seq(xlim[1], xlim[2], length.out=51)
+
+  # Compute densities
+  dens.list <- lapply(sub.list, function(vals){
+    vals <- vals[!is.na(vals) & is.finite(vals) & vals>=xlim[1] & vals<=xlim[2]]
+    if(length(vals)<2) return(NULL)
+    h <- hist(vals, breaks=breaks, plot=F)
+    h$density
+  })
+  main.dens <- NULL
+  if(!is.null(main.val)){
+    mv <- main.val[!is.na(main.val) & is.finite(main.val) & main.val>=xlim[1] & main.val<=xlim[2]]
+    if(length(mv)>=2) main.dens <- hist(mv, breaks=breaks, plot=F)$density
+  }
+  ylim <- c(0, max(unlist(c(lapply(dens.list,max), list(max(main.dens,na.rm=T)))), na.rm=T)*1.1)
+  mids <- (breaks[-length(breaks)] + breaks[-1])/2
+
+  par(bty="n", mar=c(4.5,4,3,1))
+  plot(x=xlim, y=ylim, type="n", xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i")
+  axis(1, at=pretty(xlim), labels=NA); axis(1, at=pretty(xlim), tick=F, line=-0.4, cex.axis=0.8)
+  axis(2, at=axTicks(2), labels=NA); axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4)
+  mtext(1, text=xlab, line=3, cex=0.9); mtext(2, text="Density", line=2.5, cex=0.9)
+  mtext(3, text=title, font=2, line=1)
+
+  # Draw main (all variants) density first as dark line
+  if(!is.null(main.dens)){
+    polygon(x=c(mids[1],mids,mids[length(mids)]), y=c(0,main.dens,0),
+            col=adjustcolor("gray25",alpha.f=0.3), border="gray25", lwd=1.5)
+  }
+  # Draw stratified overlays
+  for(i in seq_along(sub.list)){
+    if(is.null(dens.list[[i]])) next
+    polygon(x=c(mids[1],mids,mids[length(mids)]), y=c(0,dens.list[[i]],0),
+            col=adjustcolor(sub.colors[i],alpha.f=alpha), border=sub.colors[i], lwd=1.2)
+  }
+  legend("topright", bty="n", cex=0.7, lwd=2,
+         col=c("gray25",sub.colors),
+         legend=c(main.label, sub.labels))
+}
+
+wrapperPlotQualDistrib <- function(){
+  if(!"QUAL" %in% colnames(dat)) return(invisible(NULL))
+  qual.vals <- dat$QUAL[!is.na(dat$QUAL)]
+  if(length(qual.vals)==0) return(invisible(NULL))
+
+  has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
+  regions <- if(has.region) sort(unique(dat$REGION[!is.na(dat$REGION)])) else character(0)
+  af.labels <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
+  af.mins <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
+  af.maxs <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
+  size.labels <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
+  size.mins <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
+  size.maxs <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
+
+  col.svtype <- svtypes$color[match(svtypes$svtype, svtypes$svtype)]
+  col.af <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(length(af.labels))
+  col.size <- colorRampPalette(c("#1B9E77","#D95F02","#7570B3","#E7298A","#66A61E","#E6AB02"))(length(size.labels))
+  col.reg <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
+
+  n.panels <- 4
+  png(paste(OUTDIR,"/main_plots/VCF_QC.quality_distribution.png",sep=""),
+      res=300, height=1800, width=n.panels*1800)
+  layout(matrix(1:n.panels, nrow=1))
+
+  # Panel 1: All variants
+  par(bty="n", mar=c(4.5,4,3,1))
+  q.all <- dat$QUAL[!is.na(dat$QUAL) & is.finite(dat$QUAL)]
+  xlim <- range(q.all, na.rm=T)
+  breaks <- seq(xlim[1],xlim[2],length.out=51)
+  h <- hist(q.all, breaks=breaks, plot=F)
+  plot(x=xlim, y=c(0,max(h$density)*1.1), type="n", xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i")
+  polygon(c(h$mids[1],h$mids,h$mids[length(h$mids)]), c(0,h$density,0), col="#4393C3", border="#2166AC")
+  axis(1,at=pretty(xlim),labels=NA); axis(1,at=pretty(xlim),tick=F,line=-0.4,cex.axis=0.8)
+  axis(2,at=axTicks(2),labels=NA); axis(2,at=axTicks(2),tick=F,las=2,cex.axis=0.8,line=-0.4)
+  mtext(1,text="QUAL",line=3,cex=0.9); mtext(2,text="Density",line=2.5,cex=0.9)
+  mtext(3,text="QUAL Distribution",font=2,line=1)
+  axis(3,at=mean(xlim),tick=F,line=-0.9,labels=paste("n=",prettyNum(length(q.all),big.mark=","),sep=""))
+
+  # Panel 2: By region
+  reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) dat$QUAL[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$QUAL)]) else list()
+  plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
+                      main.val=dat$QUAL, xlab="QUAL", main.label="All",
+                      title="QUAL by Region", xlim=xlim)
+
+  # Panel 3: By size bucket
+  size.vals <- lapply(seq_along(size.labels), function(i) dat$QUAL[!is.na(dat$QUAL) & dat$length>=size.mins[i] & dat$length<=size.maxs[i]])
+  plotDistribOverlaid(sub.list=size.vals, sub.labels=size.labels, sub.colors=col.size,
+                      main.val=dat$QUAL, xlab="QUAL", main.label="All",
+                      title="QUAL by Size", xlim=xlim)
+
+  # Panel 4: By AF bucket
+  af.vals <- lapply(seq_along(af.labels), function(i) dat$QUAL[!is.na(dat$QUAL) & dat$AF>af.mins[i] & dat$AF<=af.maxs[i]])
+  plotDistribOverlaid(sub.list=af.vals, sub.labels=af.labels, sub.colors=col.af,
+                      main.val=dat$QUAL, xlab="QUAL", main.label="All",
+                      title="QUAL by AF", xlim=xlim)
+  dev.off()
+}
+
+
+######################################
+#####NCR distribution plot
+######################################
+wrapperPlotNcrDistrib <- function(){
+  if(!"NCR" %in% colnames(dat)) return(invisible(NULL))
+  ncr.vals <- dat$NCR[!is.na(dat$NCR)]
+  if(length(ncr.vals)==0) return(invisible(NULL))
+
+  has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
+  regions <- if(has.region) sort(unique(dat$REGION[!is.na(dat$REGION)])) else character(0)
+  af.labels <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
+  af.mins <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
+  af.maxs <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
+  size.labels <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
+  size.mins <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
+  size.maxs <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
+
+  col.af <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(length(af.labels))
+  col.size <- colorRampPalette(c("#1B9E77","#D95F02","#7570B3","#E7298A","#66A61E","#E6AB02"))(length(size.labels))
+  col.reg <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
+  xlim <- c(0,1)
+
+  n.panels <- 4
+  png(paste(OUTDIR,"/main_plots/VCF_QC.ncr_distribution.png",sep=""),
+      res=300, height=1800, width=n.panels*1800)
+  layout(matrix(1:n.panels, nrow=1))
+
+  # Panel 1: All variants
+  par(bty="n", mar=c(4.5,4,3,1))
+  n.all <- dat$NCR[!is.na(dat$NCR)]
+  breaks <- seq(0,1,by=0.02)
+  h <- hist(n.all, breaks=breaks, plot=F)
+  plot(x=xlim, y=c(0,max(h$density)*1.1), type="n", xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i")
+  polygon(c(h$mids[1],h$mids,h$mids[length(h$mids)]), c(0,h$density,0), col="#4393C3", border="#2166AC")
+  axis(1,at=seq(0,1,0.2),labels=NA); axis(1,at=seq(0,1,0.2),tick=F,line=-0.4,cex.axis=0.8,
+       labels=paste(seq(0,100,20),"%",sep=""))
+  axis(2,at=axTicks(2),labels=NA); axis(2,at=axTicks(2),tick=F,las=2,cex.axis=0.8,line=-0.4)
+  mtext(1,text="NCR",line=3,cex=0.9); mtext(2,text="Density",line=2.5,cex=0.9)
+  mtext(3,text="NCR Distribution",font=2,line=1)
+  axis(3,at=0.5,tick=F,line=-0.9,labels=paste("n=",prettyNum(length(n.all),big.mark=","),sep=""))
+
+  # Panel 2: By region
+  reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) dat$NCR[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$NCR)]) else list()
+  plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
+                      main.val=dat$NCR, xlab="NCR", main.label="All",
+                      title="NCR by Region", xlim=xlim)
+
+  # Panel 3: By size bucket
+  size.vals <- lapply(seq_along(size.labels), function(i) dat$NCR[!is.na(dat$NCR) & dat$length>=size.mins[i] & dat$length<=size.maxs[i]])
+  plotDistribOverlaid(sub.list=size.vals, sub.labels=size.labels, sub.colors=col.size,
+                      main.val=dat$NCR, xlab="NCR", main.label="All",
+                      title="NCR by Size", xlim=xlim)
+
+  # Panel 4: By AF bucket
+  af.vals <- lapply(seq_along(af.labels), function(i) dat$NCR[!is.na(dat$NCR) & dat$AF>af.mins[i] & dat$AF<=af.maxs[i]])
+  plotDistribOverlaid(sub.list=af.vals, sub.labels=af.labels, sub.colors=col.af,
+                      main.val=dat$NCR, xlab="NCR", main.label="All",
+                      title="NCR by AF", xlim=xlim)
+  dev.off()
+}
+
+
+######################################
+#####gnomAD match rate distribution plot
+######################################
+# Returns gnomAD match rate (proportion of variants with non-empty gnomAD_V4_match_ID)
+calcGnomadMatchRate <- function(d){
+  gm <- d$gnomAD_V4_match_ID
+  if(length(gm)==0) return(NA)
+  n.match <- sum(!is.na(gm) & gm != "" & gm != ".", na.rm=T)
+  n.total <- length(gm)
+  if(n.total==0) return(NA)
+  return(n.match/n.total)
+}
+
+wrapperPlotGnomadMatchDistrib <- function(){
+  if(!"gnomAD_V4_match_ID" %in% colnames(dat)) return(invisible(NULL))
+
+  has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
+  regions <- if(has.region) sort(unique(dat$REGION[!is.na(dat$REGION)])) else character(0)
+  af.labels <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
+  af.mins <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
+  af.maxs <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
+  size.labels <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
+  size.mins <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
+  size.maxs <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
+
+  col.af <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(length(af.labels))
+  col.size <- colorRampPalette(c("#1B9E77","#D95F02","#7570B3","#E7298A","#66A61E","#E6AB02"))(length(size.labels))
+  col.reg <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
+
+  overall.rate <- calcGnomadMatchRate(dat)
+
+  plotMatchRateBars <- function(vals, labs, cols, xlabel, main.rate, title){
+    vals[is.nan(vals)] <- NA
+    ylim <- c(0, max(vals, main.rate, na.rm=T)*1.15)
+    par(bty="n", mar=c(7,4.5,3,0.5))
+    plot(x=c(0,length(labs)+1), y=ylim, type="n", xaxt="n", yaxt="n",
+         xlab="", ylab="", xaxs="i", yaxs="i")
+    rect(xleft=1:length(labs)-0.35, xright=1:length(labs)+0.35,
+         ybottom=0, ytop=vals, col=cols, border=NA)
+    abline(h=main.rate, lty=2, col="gray40", lwd=1.5)
+    axis(1,at=1:length(labs),labels=labs,las=2,cex.axis=0.8,tick=F,line=0.5)
+    axis(2,at=axTicks(2),labels=NA); axis(2,at=axTicks(2),tick=F,las=2,cex.axis=0.8,line=-0.4,
+         labels=paste(round(100*axTicks(2),1),"%",sep=""))
+    mtext(1,text=xlabel,line=5.5,cex=0.9); mtext(2,text="gnomAD Match Rate",line=3,cex=0.9)
+    mtext(3,text=title,font=2,line=0.5)
+    legend("topright",lty=2,col="gray40",legend="Overall Rate",bty="n",cex=0.75)
+  }
+
+  # Determine number of panels
+  n.panels <- 1 + as.integer(has.region && length(regions)>0) + 2  # overall + region(optional) + size + AF
+  if(!has.region || length(regions)==0) n.panels <- 3
+  png(paste(OUTDIR,"/main_plots/VCF_QC.gnomad_match_distribution.png",sep=""),
+      res=300, height=1800, width=n.panels*1800)
+  layout(matrix(1:n.panels, nrow=1))
+
+  # Panel 1: By svtype (overall bars)
+  svtype.rates <- sapply(svtypes$svtype, function(st) calcGnomadMatchRate(dat[dat$svtype==st,]))
+  plotMatchRateBars(vals=svtype.rates, labs=svtypes$svtype, cols=svtypes$color,
+                    xlabel="SV Type", main.rate=overall.rate, title="gnomAD Match Rate by SV Type")
+
+  # Optional Panel 2: By region
+  if(has.region && length(regions)>0){
+    reg.rates <- sapply(regions, function(r) calcGnomadMatchRate(dat[!is.na(dat$REGION) & dat$REGION==r,]))
+    plotMatchRateBars(vals=reg.rates, labs=regions, cols=col.reg,
+                      xlabel="Region", main.rate=overall.rate, title="gnomAD Match Rate by Region")
+  }
+
+  # Panel: By size bucket
+  size.rates <- sapply(seq_along(size.labels), function(i) calcGnomadMatchRate(dat[!is.na(dat$length) & dat$length>=size.mins[i] & dat$length<=size.maxs[i],]))
+  plotMatchRateBars(vals=size.rates, labs=size.labels, cols=col.size,
+                    xlabel="Size Bucket", main.rate=overall.rate, title="gnomAD Match Rate by Size")
+
+  # Panel: By AF bucket
+  af.rates <- sapply(seq_along(af.labels), function(i) calcGnomadMatchRate(dat[!is.na(dat$AF) & dat$AF>af.mins[i] & dat$AF<=af.maxs[i],]))
+  plotMatchRateBars(vals=af.rates, labs=af.labels, cols=col.af,
+                    xlabel="AF Bucket", main.rate=overall.rate, title="gnomAD Match Rate by AF")
+
   dev.off()
 }
 
@@ -1382,4 +1759,16 @@ wrapperPlotAllFreqDistribs()
 
 #Genotype frequencies
 wrapperPlotAllHWDistribs()
+
+#Transition/Transversion distribution
+wrapperPlotTiTv()
+
+#QUAL distribution
+wrapperPlotQualDistrib()
+
+#NCR distribution
+wrapperPlotNcrDistrib()
+
+#gnomAD match rate distribution
+wrapperPlotGnomadMatchDistrib()
 

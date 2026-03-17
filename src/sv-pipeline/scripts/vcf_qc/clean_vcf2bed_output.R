@@ -82,7 +82,14 @@ if(any(dat$frequency > 1)){
   stop("Incorrect number of samples supplied; some carrier frequencies > 1")
 }
 #Subset to relevant columns
+# Columns from bed (svtk vcf2bed -i ALL captures all INFO fields)
 region.col <- if("REGION" %in% colnames(dat)) dat$REGION else NULL
+ncr.col <- if("NCR" %in% colnames(dat)) dat$NCR else NULL
+gmatch.col <- if("gnomAD_V4_match_ID" %in% colnames(dat)) dat$gnomAD_V4_match_ID else NULL
+# Columns from genotype counts merge (QUAL/REF/ALT added to that file)
+qual.col <- if("QUAL" %in% colnames(dat)) dat$QUAL else NULL
+ref.col <- if("REF" %in% colnames(dat)) dat$REF else NULL
+alt.col <- if("ALT" %in% colnames(dat)) dat$ALT else NULL
 dat <- data.frame("chr"=dat$chr,
                   "start"=dat$start,
                   "end"=dat$end,
@@ -101,6 +108,11 @@ dat <- data.frame("chr"=dat$chr,
                   "AC"=dat$AC,
                   "AF"=dat$AF)
 if(!is.null(region.col)) dat$REGION <- region.col
+if(!is.null(qual.col)) dat$QUAL <- as.numeric(as.character(qual.col))
+if(!is.null(ref.col)) dat$REF <- as.character(ref.col)
+if(!is.null(alt.col)) dat$ALT <- as.character(alt.col)
+if(!is.null(ncr.col)) { ncr.v <- as.character(ncr.col); ncr.v[ncr.v=="."] <- NA; dat$NCR <- as.numeric(ncr.v) }
+if(!is.null(gmatch.col)) dat$gnomAD_V4_match_ID <- as.character(gmatch.col)
 #Exclude all sites where no carriers or alleles are observed
 zeroes <- which(dat$AC==0 | dat$carriers==0)
 if(length(zeroes)>0){

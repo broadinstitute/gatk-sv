@@ -160,7 +160,7 @@ svtk vcf2bed -i ALL \
 ${QCTMP}/input.vcf ${QCTMP}/vcf2bed_unsorted_unfiltered.bed
 
 #Get genotype counts per variant for all types of SVs except for multi-alleleic CNVs
-echo -e "VID\tnsamp_gt\thomref\thet\thomalt\tother\tunknown\tAC\tAN\tAF" > \
+echo -e "VID\tnsamp_gt\thomref\thet\thomalt\tother\tunknown\tAC\tAN\tAF\tQUAL\tREF\tALT" > \
 ${QCTMP}/genotype_counts_per_SV.txt
 
 grep -v ^# ${QCTMP}/input.vcf | grep -v "<CNV>" | \
@@ -175,7 +175,7 @@ awk -v FS="\t" -v OFS="\t" -v nsamp=${nsamp} '{
   else {other++} };
   if (other > 0 || (nsamp==other+unknown)) {AC="NA"; AN="NA"; AF="NA"}
   else {AC=(2*homalt)+het; AN=2*(nsamp-(unknown+other)); AF=AC/AN};
-  print $3, nsamp-unknown, homref, het, homalt, other, unknown, AC, AN, AF }' >> \
+  print $3, nsamp-unknown, homref, het, homalt, other, unknown, AC, AN, AF, $6, $4, $5 }' >> \
 ${QCTMP}/genotype_counts_per_SV.txt
 
 #Get genotype counts per variant for multi-alleleic CNVs
@@ -189,7 +189,7 @@ awk -v FS="\t" -v OFS="\t" -v nsamp=${nsamp} '{
     else if (a[CN]==0 || a[CN]>=4) {homalt++}
     else {het++} };
   AC=(2*homalt)+het; AN=2*(nsamp-(unknown+other)); AF=AC/AN;
-  print $3, nsamp-unknown, homref, het, homalt, other, unknown, AC, AN, AF }' >> \
+  print $3, nsamp-unknown, homref, het, homalt, other, unknown, AC, AN, AF, $6, $4, $5 }' >> \
 ${QCTMP}/genotype_counts_per_SV.txt
 
 
@@ -201,6 +201,7 @@ fgrep -wf ${QCTMP}/analysis_samples.list \
 ${QCTMP}/vcf2bed_unsorted_unfiltered.bed | \
 sort -Vk1,1 -k2,2n -k3,3n >> \
 ${QCTMP}/vcf2bed_cleaned.bed
+
 #Run Rscript to clean VCF stats
 ${BIN}/clean_vcf2bed_output.R \
   -N ${nsamp} \
