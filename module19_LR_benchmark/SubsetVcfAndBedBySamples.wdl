@@ -23,7 +23,7 @@ workflow SubsetVcfAndBedBySamples {
       runtime_attr_override = runtime_attr_subset_vcf_by_samples
   }
 
-  task vcf2bed {
+  call vcf2bed {
     input: 
       vcf_gz  = subset_vcf_by_samples.subset_vcf,
       vcf_index = subset_vcf_by_samples.subset_vcf_index, 
