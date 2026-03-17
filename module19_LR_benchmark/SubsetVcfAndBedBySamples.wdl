@@ -11,7 +11,7 @@ workflow SubsetVcfAndBedBySamples {
     String mid_fix  
     String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_subset_vcf_by_samples
-    RuntimeAttr? runtime_attr_vcf_to_bed
+    RuntimeAttr? runtime_attr_vcf2bed
   }
 
   call subset_vcf_by_samples {
