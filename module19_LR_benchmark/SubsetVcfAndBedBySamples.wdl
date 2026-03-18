@@ -6,7 +6,7 @@ workflow SubsetVcfAndBedBySamples {
   input {
     File vcf_gz
     File vcf_index
-    File sample_list
+    File sample_annotation
     String output_prefix
     String mid_fix  
     String sv_pipeline_base_docker
@@ -18,7 +18,7 @@ workflow SubsetVcfAndBedBySamples {
     input:
       vcf_gz = vcf_gz,
       vcf_index = vcf_index,
-      sample_list = sample_list,
+      sample_annotation = sample_annotation,
       output_prefix = output_prefix,
       mid_fix = mid_fix,
       docker_image = sv_pipeline_base_docker,
@@ -46,25 +46,32 @@ task subset_vcf_by_samples {
   input {
     File vcf_gz          # Input VCF (bgzipped)
     File vcf_index       # .tbi index
-    File sample_list     # Text file: one sample ID per line
+    File sample_annotation     # Text file: one sample ID per line
     String output_prefix # Output prefix
     String mid_fix 
     String docker_image
     RuntimeAttr? runtime_attr_override
   }
 
+  String prefix = basename(vcf_gz, ".vcf.gz")
   command <<<
     set -euo pipefail
 
     # Subset VCF
-    bcftools view \
-      --samples-file ~{sample_list} \
-      --output-type z \
-      -c 1 \
-      --output-file ~{output_prefix}.~{mid_fix}.vcf.gz \
-      ~{vcf_gz}
+    bcftools view -f PASS \
+    -S <(cut -f1 ~{sample_annotation} | tail -n+2 ) \
+    ~{vcf_gz} \
+    -Oz -o ~{prefix}.subset.vcf.gz
 
-    # Index output
+    tabix -p vcf  ~{prefix}.subset.vcf.gz
+
+
+    #replace sample name
+    bcftools reheader \
+    -s <(tail -n+2 ~{sample_annotation}) \
+    -o ~{output_prefix}.~{mid_fix}.vcf.gz \
+    ~{prefix}.subset.vcf.gz
+
     tabix -p vcf ~{output_prefix}.~{mid_fix}.vcf.gz
   >>>
 
