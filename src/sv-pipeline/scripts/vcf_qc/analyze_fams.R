@@ -625,7 +625,7 @@ plotInhStats <- function(inh.stats, count="variants", title=NULL, cex.lab=1){
 }
 
 #Generate size distribution frame with log10 scaling
-prepSizePlot <- function(xlims=c(1, 1000000), cex.lab=1){
+prepSizePlot <- function(xlims=c(50, 1000000), cex.lab=1){
   #Prep plot area
   plot(x=log10(xlims), y=c(0, 1), type="n",
        xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i")
@@ -964,7 +964,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
   }
  
   #All variants
-  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_inheritance.",
+  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/inheritance.",
             fam.type, "s.", count, ".all_sv.pdf", sep=""),
       height=3.75, width=4.5)
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
@@ -976,7 +976,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
  
   #Variants by class
   sapply(svtypes$svtype, function(svtype){
-    pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_inheritance.",
+    pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/inheritance.",
               fam.type, "s.", count, ".", svtype, ".pdf", sep=""),
         height=3.75, width=4.5)
     plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
@@ -988,7 +988,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
   })
  
   #Tiny
-  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_inheritance.",
+  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/inheritance.",
             fam.type, "s.", count, ".tiny_sv.pdf", sep=""),
       height=3.75, width=4.5)
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
@@ -997,7 +997,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
                count=count)
   dev.off()
   #Small
-  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_inheritance.",
+  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/inheritance.",
             fam.type, "s.", count, ".small_sv.pdf", sep=""),
       height=3.75, width=4.5)
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
@@ -1007,7 +1007,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
                count=count)
   dev.off()
   #Medium
-  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_inheritance.",
+  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/inheritance.",
             fam.type, "s.", count, ".medium_sv.pdf", sep=""),
       height=3.75, width=4.5)
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
@@ -1018,7 +1018,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
                count=count)
   dev.off()
   #Med-large
-  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_inheritance.",
+  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/inheritance.",
             fam.type, "s.", count, ".medlarge_sv.pdf", sep=""),
       height=3.75, width=4.5)
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
@@ -1029,7 +1029,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
                count=count)
   dev.off()
   #Large
-  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_inheritance.",
+  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/inheritance.",
             fam.type, "s.", count, ".large_sv.pdf", sep=""),
       height=3.75, width=4.5)
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
@@ -1039,7 +1039,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
                count=count)
   dev.off()
   #Huge
-  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_inheritance.",
+  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/inheritance.",
             fam.type, "s.", count, ".huge_sv.pdf", sep=""),
       height=3.75, width=4.5)
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
@@ -1049,7 +1049,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
   dev.off()
  
   #Rare
-  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_inheritance.",
+  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/inheritance.",
             fam.type, "s.", count, ".rare_sv.pdf", sep=""),
       height=3.75, width=4.5)
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
@@ -1059,7 +1059,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
                count=count)
   dev.off()
   #Uncommon
-  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_inheritance.",
+  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/inheritance.",
             fam.type, "s.", count, ".uncommon_sv.pdf", sep=""),
       height=3.75, width=4.5)
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
@@ -1070,7 +1070,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
                count=count)
   dev.off()
   #Common
-  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_inheritance.",
+  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/inheritance.",
             fam.type, "s.", count, ".common_sv.pdf", sep=""),
       height=3.75, width=4.5)
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
@@ -1081,7 +1081,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
                count=count)
   dev.off()
   #Major
-  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_inheritance.",
+  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/inheritance.",
             fam.type, "s.", count, ".major_sv.pdf", sep=""),
       height=3.75, width=4.5)
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
@@ -1104,7 +1104,7 @@ wrapperDeNovoRateLines <- function(fam.dat.list, fam.type, count="variants",
  
   #DNR by Size
   size.dat <- deNovoRateBySize(trio.dat.list=fam.dat.list, size.bins=40, count=count)
-  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_de_novo_rate.",
+  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/de_novo_rate.",
             fam.type, "s.", count, ".by_size.pdf", sep=""),
       height=4, width=5)
   plotDNRvsSize(DNRs=size.dat$DNRs, bins=size.dat$bins, k=4, nfams=length(fam.dat.list),
@@ -1114,7 +1114,7 @@ wrapperDeNovoRateLines <- function(fam.dat.list, fam.type, count="variants",
  
   #DNR by Freq
   freq.dat <- deNovoRateByFreq(trio.dat.list=fam.dat.list, freq.bins=40, count=count)
-  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_de_novo_rate.",
+  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/de_novo_rate.",
             fam.type, "s.", count, ".by_frequency.pdf", sep=""),
       height=4, width=5)
   plotDNRvsFreq(DNRs=freq.dat$DNRs, bins=freq.dat$bins, k=4,
@@ -1127,7 +1127,7 @@ wrapperDeNovoRateLines <- function(fam.dat.list, fam.type, count="variants",
   if(gq) {
     GQ.dat <- deNovoRateByProGQ(trio.dat.list=fam.dat.list, GQ.bins=50,
                                 count=count, max.GQ=max.GQ)
-    pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_de_novo_rate.",
+    pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/de_novo_rate.",
               fam.type, "s.", count, ".by_proband_GQ.pdf", sep=""),
         height=4, width=5)
     plotDNRvsGQ(DNRs=GQ.dat$DNRs, bins=GQ.dat$bins, k=4, nfams=length(fam.dat.list),
@@ -1158,7 +1158,7 @@ wrapperDeNovoRateHeats <- function(fam.dat.list, fam.type, count="variants"){
                                   freq.labs=c("<1%", "1-5%", "5-10%", "10-50%", ">50%"))
  
   #Plot one heatmap for all variants
-  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_de_novo_rate.",
+  pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/de_novo_rate.",
             fam.type, "s.", count, ".size_vs_freq.all_sv.pdf", sep=""),
       height=5, width=5)
   plotHeatmap(mat=DNR.dat$ALL, nfams=length(fam.dat.list), fam.type=fam.type,
@@ -1167,7 +1167,7 @@ wrapperDeNovoRateHeats <- function(fam.dat.list, fam.type, count="variants"){
  
   #Plot one heatmap per variant class
   sapply(svtypes$svtype, function(svtype){
-    pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/sv_de_novo_rate.",
+    pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/de_novo_rate.",
               fam.type, "s.", count, ".size_vs_freq.", svtype, ".pdf", sep=""),
         height=5, width=5)
     plotHeatmap(mat=DNR.dat[[which(names(DNR.dat)==svtype)]],
@@ -1199,7 +1199,7 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
  
   #Prepare plot area
   width <- ifelse(gq, 12, 10)
-  pdf(paste(OUTDIR, "/main_plots/VCF_QC.SV_", fam.type, "_inheritance.pdf", sep=""),
+  pdf(paste(OUTDIR, "/main_plots/SV_", fam.type, "_inheritance.pdf", sep=""),
       height=5, width=width)
   if(gq) {
     layout(matrix(c(1, 2, 3, 4, 5,

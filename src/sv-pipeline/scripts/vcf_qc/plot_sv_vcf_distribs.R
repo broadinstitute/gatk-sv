@@ -34,13 +34,15 @@ plotStackedBars <- function(mat,colors,scaled=T,log.y=FALSE,title=NULL){
   ymax <- max(apply(mat,2,sum,na.rm=T),na.rm=T)
   ymin <- if(log.y) 0.5 else 0
   log.arg <- if(log.y) "y" else ""
+  ymax.plot <- if(log.y) 10^ceiling(log10(ymax)) else 1.02*ymax
   par(mar=c(4,4,2,1),bty="n")
-  plot(x=c(0,ncol(mat)),y=c(ymin,1.02*ymax),type="n",
+  plot(x=c(0,ncol(mat)),y=c(ymin,ymax.plot),type="n",
        xaxt="n",yaxt="n",xaxs="i",yaxs="i",xlab="",ylab="",log=log.arg)
   
   #Add axes & title
   if(log.y){
-    log.ticks <- 10^seq(floor(log10(ymin+0.1)), ceiling(log10(ymax+1)))
+    ymax.plot <- 10^ceiling(log10(ymax))
+    log.ticks <- 10^seq(floor(log10(ymin+0.1)), ceiling(log10(ymax)))
     axis(2,at=log.ticks,labels=NA)
     axis(2,at=log.ticks,tick=F,labels=prettyNum(log.ticks,big.mark=","),las=2,cex.axis=0.8,line=-0.4)
   }else{
@@ -375,7 +377,7 @@ wrapperPlotAllCountBars <- function(){
     }))
     colnames(region.mat) <- c("ALL",regions)
   }
-  pdf(paste(OUTDIR,"/main_plots/VCF_QC.counts.merged.pdf",sep=""),
+  pdf(paste(OUTDIR,"/main_plots/counts.merged.pdf",sep=""),
       height=7,width=11)
   #Merged
   layout(matrix(c(1,2,3,4,1,5,6,7),byrow=T,nrow=2),
@@ -740,7 +742,7 @@ wrapperPlotAllSizeDistribs <- function(){
   dev.off()
   
   #Merged
-  pdf(paste(OUTDIR,"/main_plots/VCF_QC.size_distributions.pdf",sep=""),
+  pdf(paste(OUTDIR,"/main_plots/size_distributions.pdf",sep=""),
       height=6,width=10)
   layout(matrix(c(1,1,1,2,2,3,4,5,6,7),byrow=T,nrow=2),
          heights=c(4,2))
@@ -1038,7 +1040,7 @@ wrapperPlotAllFreqDistribs <- function(){
   dev.off()
   
   #Merged
-  pdf(paste(OUTDIR,"/main_plots/VCF_QC.freq_distributions.pdf",sep=""),
+  pdf(paste(OUTDIR,"/main_plots/freq_distributions.pdf",sep=""),
       height=6,width=10)
   layout(matrix(c(1,1,1,2,2,2,
                   3,4,5,6,7,8),
@@ -1097,10 +1099,11 @@ plotTiTvHeatmap <- function(snv.dat, af.labels, af.mins, af.maxs, regions, title
   rownames(mat) <- af.labels
   colnames(mat) <- regions
   if(all(is.na(mat))){ plot.new(); mtext(3,text=title,font=2); return(invisible(NULL)) }
+  zlim <- c(1.5, 2.5)
   col.pal <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(101)
-  zlim <- range(mat, na.rm=T)
-  par(mar=c(5,5,3,4), bty="n")
-  image(x=1:ncol(mat), y=1:nrow(mat), z=t(mat), col=col.pal,
+  mat.capped <- pmin(pmax(mat, zlim[1]), zlim[2])
+  par(mar=c(5,5,3,8), bty="n")
+  image(x=1:ncol(mat), y=1:nrow(mat), z=t(mat.capped), col=col.pal,
         xaxt="n", yaxt="n", xlab="", ylab="", zlim=zlim)
   axis(1, at=1:ncol(mat), labels=colnames(mat), las=2, cex.axis=0.75, tick=F, line=-0.5)
   axis(2, at=1:nrow(mat), labels=rownames(mat), las=2, cex.axis=0.75, tick=F, line=-0.5)
@@ -1108,15 +1111,14 @@ plotTiTvHeatmap <- function(snv.dat, af.labels, af.mins, af.maxs, regions, title
   mtext(2, text="AF Bucket", line=3.5, cex=0.85)
   mtext(3, text=title, font=2, line=1)
   # Color bar
-  par.orig <- par(no.readonly=T)
-  usr <- par("usr"); pin <- par("pin"); plt <- par("plt")
-  color.bar.x <- usr[2] + (usr[2]-usr[1])*0.03
-  color.bar.w <- (usr[2]-usr[1])*0.04
+  usr <- par("usr")
+  color.bar.x <- usr[2] + (usr[2]-usr[1])*0.10
+  color.bar.w <- (usr[2]-usr[1])*0.06
   color.bar.y <- seq(usr[3], usr[4], length.out=102)
   rect(xleft=color.bar.x, xright=color.bar.x+color.bar.w,
        ybottom=color.bar.y[-length(color.bar.y)], ytop=color.bar.y[-1],
        col=col.pal, border=NA, xpd=T)
-  axis(4, at=seq(usr[3],usr[4],length.out=5), tick=F, las=2, cex.axis=0.6, line=-2.2,
+  axis(4, at=seq(usr[3],usr[4],length.out=5), tick=F, las=2, cex.axis=0.65, line=3.5,
        labels=round(seq(zlim[1],zlim[2],length.out=5),2), xpd=T)
 }
 
@@ -1137,7 +1139,7 @@ wrapperPlotTiTv <- function(){
 
   # Number of columns: AF panel + Size panel + optional heatmap
   n.panels <- 2 + as.integer(has.region && length(regions)>0)
-  png(paste(OUTDIR,"/main_plots/VCF_QC.transition_to_transversion_distribution.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/ti_tv_distribution.png",sep=""),
       res=300, height=1800, width=n.panels*1800)
   layout(matrix(1:n.panels, nrow=1))
 
@@ -1146,20 +1148,17 @@ wrapperPlotTiTv <- function(){
     sub <- snv.dat[which(snv.dat$AF>af.mins[i] & snv.dat$AF<=af.maxs[i]),]
     calcTiTv(sub)
   })
-  titv.af.all <- calcTiTv(snv.dat)
   par(mar=c(7,4.5,3,0.5), bty="n")
-  plot(x=c(0,length(af.labels)+1), y=c(0, max(titv.af,titv.af.all,na.rm=T)*1.15),
+  plot(x=c(0,length(af.labels)+1), y=c(0, max(titv.af,na.rm=T)*1.15),
        type="n", xaxt="n", yaxt="n", xlab="", ylab="", xaxs="i", yaxs="i")
   col.af <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(length(af.labels))
   rect(xleft=1:length(af.labels)-0.35, xright=1:length(af.labels)+0.35,
        ybottom=0, ytop=titv.af, col=col.af, border=NA)
-  abline(h=titv.af.all, lty=2, col="gray40", lwd=1.5)
   axis(1, at=1:length(af.labels), labels=af.labels, las=2, cex.axis=0.8, tick=F, line=0.5)
   axis(2, at=axTicks(2), labels=NA); axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4)
   mtext(1, text="AF Bucket", line=5.5, cex=0.9)
   mtext(2, text="Ti:Tv Ratio", line=2.5, cex=0.9)
   mtext(3, text="Ti:Tv by AF", font=2, line=0.5)
-  legend("topright", lty=2, col="gray40", legend="Overall Ti:Tv", bty="n", cex=0.75)
 
   # Panel 2: Ti:Tv by REGION (or show "No REGION data")
   if(has.region && length(regions)>0){
@@ -1169,17 +1168,15 @@ wrapperPlotTiTv <- function(){
     })
     col.reg <- colorRampPalette(c("#1B9E77","#D95F02","#7570B3","#E7298A","#66A61E","#E6AB02"))(length(regions))
     par(mar=c(7,4.5,3,0.5), bty="n")
-    plot(x=c(0,length(regions)+1), y=c(0, max(titv.reg,titv.af.all,na.rm=T)*1.15),
+    plot(x=c(0,length(regions)+1), y=c(0, max(titv.reg,na.rm=T)*1.15),
          type="n", xaxt="n", yaxt="n", xlab="", ylab="", xaxs="i", yaxs="i")
     rect(xleft=1:length(regions)-0.35, xright=1:length(regions)+0.35,
          ybottom=0, ytop=titv.reg, col=col.reg, border=NA)
-    abline(h=titv.af.all, lty=2, col="gray40", lwd=1.5)
     axis(1, at=1:length(regions), labels=regions, las=2, cex.axis=0.8, tick=F, line=0.5)
     axis(2, at=axTicks(2), labels=NA); axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4)
     mtext(1, text="Region", line=5.5, cex=0.9)
     mtext(2, text="Ti:Tv Ratio", line=2.5, cex=0.9)
     mtext(3, text="Ti:Tv by Region", font=2, line=0.5)
-    legend("topright", lty=2, col="gray40", legend="Overall Ti:Tv", bty="n", cex=0.75)
 
     # Panel 3: Ti:Tv heatmap (Region x AF)
     plotTiTvHeatmap(snv.dat=snv.dat, af.labels=af.labels, af.mins=af.mins, af.maxs=af.maxs,
@@ -1264,7 +1261,7 @@ wrapperPlotQualDistrib <- function(){
   col.reg <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
 
   n.panels <- 4
-  png(paste(OUTDIR,"/main_plots/VCF_QC.quality_distribution.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/quality_distribution.png",sep=""),
       res=300, height=1800, width=n.panels*1800)
   layout(matrix(1:n.panels, nrow=1))
 
@@ -1326,7 +1323,7 @@ wrapperPlotNcrDistrib <- function(){
   xlim <- c(0,1)
 
   n.panels <- 4
-  png(paste(OUTDIR,"/main_plots/VCF_QC.ncr_distribution.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/ncr_distribution.png",sep=""),
       res=300, height=1800, width=n.panels*1800)
   layout(matrix(1:n.panels, nrow=1))
 
@@ -1412,7 +1409,7 @@ wrapperPlotGnomadMatchDistrib <- function(){
   # Determine number of panels
   n.panels <- 1 + as.integer(has.region && length(regions)>0) + 2  # overall + region(optional) + size + AF
   if(!has.region || length(regions)==0) n.panels <- 3
-  png(paste(OUTDIR,"/main_plots/VCF_QC.gnomad_match_distribution.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/gnomad_match_distribution.png",sep=""),
       res=300, height=1800, width=n.panels*1800)
   layout(matrix(1:n.panels, nrow=1))
 
@@ -1546,7 +1543,7 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
   #Add filter labels
   if(full.legend==T){
     legend("right",bg=NA,bty="n",pch=NA,cex=0.7,
-           legend=c("Biallelic SV only","Autosomal SV only"))
+           legend=c("Biallelic variants only","Autosomal variants only"))
   }
 }
 #Correlation of carrier frequency & AF
@@ -1655,7 +1652,7 @@ wrapperPlotAllHWDistribs <- function(){
   plotAlleleCarrierCorrelation(dat=dat)
   dev.off()
   #Merged
-  png(paste(OUTDIR,"main_plots/VCF_QC.genotype_distributions.png",sep=""),res=300,
+  png(paste(OUTDIR,"main_plots/genotype_distributions.png",sep=""),res=300,
       height=1200,width=3.5*1200)
   layout(matrix(c(1,2,3,4,5,
                   1,2,6,7,8),
