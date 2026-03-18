@@ -21,6 +21,12 @@ sex.chroms <- c(1:22, paste("chr", 1:22, sep=""))
 ###################
 ###HELPER FUNCTIONS
 ###################
+# Order REGION labels in canonical order (US, RM, SD, SR, then others alphabetically)
+orderRegions <- function(regions){
+  canonical <- c("US","RM","SD","SR")
+  c(canonical[canonical %in% regions], sort(regions[!regions %in% canonical]))
+}
+
 #General function to plot stacked bars from a matrix
 plotStackedBars <- function(mat,colors,scaled=T,log.y=FALSE,title=NULL){
   #Scale columns, if options
@@ -370,7 +376,7 @@ wrapperPlotAllCountBars <- function(){
   dev.off()
   #Build REGION matrix if column exists
   if("REGION" %in% colnames(dat)){
-    regions <- sort(unique(dat$REGION[!is.na(dat$REGION)]))
+    regions <- orderRegions(unique(dat$REGION[!is.na(dat$REGION)]))
     region.mat <- as.data.frame(sapply(c("ALL",regions), function(reg){
       plotset <- if(reg=="ALL") dat else dat[which(dat$REGION==reg),]
       sapply(svtypes$svtype, function(svtype) length(which(plotset$svtype==svtype)))
@@ -677,6 +683,7 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
 
 #Wrapper to plot all size distributions
 wrapperPlotAllSizeDistribs <- function(){
+  dat <- dat.merged; svtypes <- svtypes.merged
   
   #All SV
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/size_distribution.all.pdf",sep=""),
@@ -972,6 +979,7 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
 
 #Wrapper to plot all AF distributions
 wrapperPlotAllFreqDistribs <- function(){
+  dat <- dat.merged; svtypes <- svtypes.merged
   #All SV
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.all.pdf",sep=""),
       height=4,width=4)
@@ -1112,14 +1120,17 @@ plotTiTvHeatmap <- function(snv.dat, af.labels, af.mins, af.maxs, regions, title
   mtext(3, text=title, font=2, line=1)
   # Color bar
   usr <- par("usr")
-  color.bar.x <- usr[2] + (usr[2]-usr[1])*0.10
+  color.bar.x <- usr[2] + (usr[2]-usr[1])*0.12
   color.bar.w <- (usr[2]-usr[1])*0.06
   color.bar.y <- seq(usr[3], usr[4], length.out=102)
   rect(xleft=color.bar.x, xright=color.bar.x+color.bar.w,
        ybottom=color.bar.y[-length(color.bar.y)], ytop=color.bar.y[-1],
        col=col.pal, border=NA, xpd=T)
-  axis(4, at=seq(usr[3],usr[4],length.out=5), tick=F, las=2, cex.axis=0.65, line=3.5,
-       labels=round(seq(zlim[1],zlim[2],length.out=5),2), xpd=T)
+  # Legend labels placed to the right of the color bar
+  label.vals <- round(seq(zlim[1],zlim[2],length.out=5),2)
+  label.y    <- seq(usr[3],usr[4],length.out=5)
+  label.x    <- color.bar.x + color.bar.w + (usr[2]-usr[1])*0.03
+  text(x=label.x, y=label.y, labels=label.vals, xpd=TRUE, cex=0.65, adj=0)
 }
 
 wrapperPlotTiTv <- function(){
@@ -1135,7 +1146,7 @@ wrapperPlotTiTv <- function(){
   size.maxs <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
 
   has.region <- "REGION" %in% colnames(snv.dat) && any(!is.na(snv.dat$REGION))
-  regions <- if(has.region) sort(unique(snv.dat$REGION[!is.na(snv.dat$REGION)])) else character(0)
+  regions <- if(has.region) orderRegions(unique(snv.dat$REGION[!is.na(snv.dat$REGION)])) else character(0)
 
   # Number of columns: AF panel + Size panel + optional heatmap
   n.panels <- 2 + as.integer(has.region && length(regions)>0)
@@ -1151,6 +1162,7 @@ wrapperPlotTiTv <- function(){
   par(mar=c(7,4.5,3,0.5), bty="n")
   plot(x=c(0,length(af.labels)+1), y=c(0, max(titv.af,na.rm=T)*1.15),
        type="n", xaxt="n", yaxt="n", xlab="", ylab="", xaxs="i", yaxs="i")
+  abline(h=axTicks(2), col="gray85", lwd=0.5)
   col.af <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(length(af.labels))
   rect(xleft=1:length(af.labels)-0.35, xright=1:length(af.labels)+0.35,
        ybottom=0, ytop=titv.af, col=col.af, border=NA)
@@ -1170,9 +1182,13 @@ wrapperPlotTiTv <- function(){
     par(mar=c(7,4.5,3,0.5), bty="n")
     plot(x=c(0,length(regions)+1), y=c(0, max(titv.reg,na.rm=T)*1.15),
          type="n", xaxt="n", yaxt="n", xlab="", ylab="", xaxs="i", yaxs="i")
-    rect(xleft=1:length(regions)-0.35, xright=1:length(regions)+0.35,
-         ybottom=0, ytop=titv.reg, col=col.reg, border=NA)
-    axis(1, at=1:length(regions), labels=regions, las=2, cex.axis=0.8, tick=F, line=0.5)
+    abline(h=axTicks(2), col="gray85", lwd=0.5)
+    regions.ordered <- orderRegions(regions)
+    titv.reg <- titv.reg[regions.ordered]
+    col.reg.ord <- col.reg[match(regions.ordered, regions)]
+    rect(xleft=1:length(regions.ordered)-0.35, xright=1:length(regions.ordered)+0.35,
+         ybottom=0, ytop=titv.reg, col=col.reg.ord, border=NA)
+    axis(1, at=1:length(regions.ordered), labels=regions.ordered, las=2, cex.axis=0.8, tick=F, line=0.5)
     axis(2, at=axTicks(2), labels=NA); axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4)
     mtext(1, text="Region", line=5.5, cex=0.9)
     mtext(2, text="Ti:Tv Ratio", line=2.5, cex=0.9)
@@ -1196,7 +1212,7 @@ wrapperPlotTiTv <- function(){
 ######################################
 plotDistribOverlaid <- function(sub.list, sub.labels, sub.colors, main.val=NULL,
                                 xlab="QUAL", main.label="All Variants",
-                                title=NULL, xlim=NULL, alpha=0.5){
+                                title=NULL, xlim=NULL, alpha=0.5, log.y=FALSE){
   # Combine all values to get x range
   all.vals <- unlist(lapply(sub.list, function(x) x[!is.na(x) & is.finite(x)]))
   if(length(all.vals)==0){ par(bty="n",mar=c(4.5,4,3,1)); plot.new(); mtext(3,text=title,font=2,line=1); return(invisible(NULL)) }
@@ -1215,25 +1231,43 @@ plotDistribOverlaid <- function(sub.list, sub.labels, sub.colors, main.val=NULL,
     mv <- main.val[!is.na(main.val) & is.finite(main.val) & main.val>=xlim[1] & main.val<=xlim[2]]
     if(length(mv)>=2) main.dens <- hist(mv, breaks=breaks, plot=F)$density
   }
-  ylim <- c(0, max(unlist(c(lapply(dens.list,max), list(max(main.dens,na.rm=T)))), na.rm=T)*1.1)
+  all.dens <- unlist(c(lapply(dens.list, function(d) if(!is.null(d)) d else NULL), list(main.dens)))
+  all.dens.pos <- all.dens[!is.na(all.dens) & all.dens > 0]
+  ymin.lin <- 0
+  ymax.top <- max(all.dens, na.rm=T)*1.1
+  if(log.y){
+    ymin.lin <- if(length(all.dens.pos)>0) max(min(all.dens.pos)*0.1, 1e-9) else 1e-9
+    ymax.top <- max(all.dens, na.rm=T)*3
+  }
+  ylim <- c(ymin.lin, ymax.top)
   mids <- (breaks[-length(breaks)] + breaks[-1])/2
 
   par(bty="n", mar=c(4.5,4,3,1))
-  plot(x=xlim, y=ylim, type="n", xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i")
+  log.arg <- if(log.y) "y" else ""
+  plot(x=xlim, y=ylim, type="n", xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i", log=log.arg)
+  abline(v=pretty(xlim), col="gray85", lwd=0.5)
+  if(log.y){
+    log.ticks <- 10^seq(floor(log10(ymin.lin)), ceiling(log10(ymax.top)))
+    axis(2, at=log.ticks, labels=NA)
+    axis(2, at=log.ticks, tick=F, las=2, cex.axis=0.8, line=-0.4)
+  }else{
+    axis(2, at=axTicks(2), labels=NA); axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4)
+  }
   axis(1, at=pretty(xlim), labels=NA); axis(1, at=pretty(xlim), tick=F, line=-0.4, cex.axis=0.8)
-  axis(2, at=axTicks(2), labels=NA); axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4)
   mtext(1, text=xlab, line=3, cex=0.9); mtext(2, text="Density", line=2.5, cex=0.9)
   mtext(3, text=title, font=2, line=1)
 
   # Draw main (all variants) density first as dark line
   if(!is.null(main.dens)){
-    polygon(x=c(mids[1],mids,mids[length(mids)]), y=c(0,main.dens,0),
+    poly.y <- if(log.y) pmax(c(0,main.dens,0), ymin.lin) else c(0,main.dens,0)
+    polygon(x=c(mids[1],mids,mids[length(mids)]), y=poly.y,
             col=adjustcolor("gray25",alpha.f=0.3), border="gray25", lwd=1.5)
   }
   # Draw stratified overlays
   for(i in seq_along(sub.list)){
     if(is.null(dens.list[[i]])) next
-    polygon(x=c(mids[1],mids,mids[length(mids)]), y=c(0,dens.list[[i]],0),
+    poly.y <- if(log.y) pmax(c(0,dens.list[[i]],0), ymin.lin) else c(0,dens.list[[i]],0)
+    polygon(x=c(mids[1],mids,mids[length(mids)]), y=poly.y,
             col=adjustcolor(sub.colors[i],alpha.f=alpha), border=sub.colors[i], lwd=1.2)
   }
   legend("topright", bty="n", cex=0.7, lwd=2,
@@ -1247,7 +1281,7 @@ wrapperPlotQualDistrib <- function(){
   if(length(qual.vals)==0) return(invisible(NULL))
 
   has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
-  regions <- if(has.region) sort(unique(dat$REGION[!is.na(dat$REGION)])) else character(0)
+  regions <- if(has.region) orderRegions(unique(dat$REGION[!is.na(dat$REGION)])) else character(0)
   af.labels <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
   af.mins <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
   af.maxs <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
@@ -1272,6 +1306,7 @@ wrapperPlotQualDistrib <- function(){
   breaks <- seq(xlim[1],xlim[2],length.out=51)
   h <- hist(q.all, breaks=breaks, plot=F)
   plot(x=xlim, y=c(0,max(h$density)*1.1), type="n", xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i")
+  abline(v=pretty(xlim), col="gray85", lwd=0.5)
   polygon(c(h$mids[1],h$mids,h$mids[length(h$mids)]), c(0,h$density,0), col="#4393C3", border="#2166AC")
   axis(1,at=pretty(xlim),labels=NA); axis(1,at=pretty(xlim),tick=F,line=-0.4,cex.axis=0.8)
   axis(2,at=axTicks(2),labels=NA); axis(2,at=axTicks(2),tick=F,las=2,cex.axis=0.8,line=-0.4)
@@ -1309,7 +1344,7 @@ wrapperPlotNcrDistrib <- function(){
   if(length(ncr.vals)==0) return(invisible(NULL))
 
   has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
-  regions <- if(has.region) sort(unique(dat$REGION[!is.na(dat$REGION)])) else character(0)
+  regions <- if(has.region) orderRegions(unique(dat$REGION[!is.na(dat$REGION)])) else character(0)
   af.labels <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
   af.mins <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
   af.maxs <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
@@ -1332,11 +1367,16 @@ wrapperPlotNcrDistrib <- function(){
   n.all <- dat$NCR[!is.na(dat$NCR)]
   breaks <- seq(0,1,by=0.02)
   h <- hist(n.all, breaks=breaks, plot=F)
-  plot(x=xlim, y=c(0,max(h$density)*1.1), type="n", xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i")
-  polygon(c(h$mids[1],h$mids,h$mids[length(h$mids)]), c(0,h$density,0), col="#4393C3", border="#2166AC")
+  pos.dens <- h$density[h$density > 0]
+  ymin.ncr <- if(length(pos.dens)>0) max(min(pos.dens)*0.1, 1e-9) else 1e-9
+  ymax.ncr <- max(h$density)*3
+  plot(x=xlim, y=c(ymin.ncr,ymax.ncr), type="n", xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i", log="y")
+  abline(v=seq(0,1,0.2), col="gray85", lwd=0.5)
+  polygon(c(h$mids[1],h$mids,h$mids[length(h$mids)]), pmax(c(0,h$density,0),ymin.ncr), col="#4393C3", border="#2166AC")
   axis(1,at=seq(0,1,0.2),labels=NA); axis(1,at=seq(0,1,0.2),tick=F,line=-0.4,cex.axis=0.8,
        labels=paste(seq(0,100,20),"%",sep=""))
-  axis(2,at=axTicks(2),labels=NA); axis(2,at=axTicks(2),tick=F,las=2,cex.axis=0.8,line=-0.4)
+  log.ticks.ncr <- 10^seq(floor(log10(ymin.ncr)), ceiling(log10(ymax.ncr)))
+  axis(2,at=log.ticks.ncr,labels=NA); axis(2,at=log.ticks.ncr,tick=F,las=2,cex.axis=0.8,line=-0.4)
   mtext(1,text="NCR",line=3,cex=0.9); mtext(2,text="Density",line=2.5,cex=0.9)
   mtext(3,text="NCR Distribution",font=2,line=1)
   axis(3,at=0.5,tick=F,line=-0.9,labels=paste("n=",prettyNum(length(n.all),big.mark=","),sep=""))
@@ -1345,19 +1385,19 @@ wrapperPlotNcrDistrib <- function(){
   reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) dat$NCR[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$NCR)]) else list()
   plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
                       main.val=dat$NCR, xlab="NCR", main.label="All",
-                      title="NCR by Region", xlim=xlim)
+                      title="NCR by Region", xlim=xlim, log.y=TRUE)
 
   # Panel 3: By size bucket
   size.vals <- lapply(seq_along(size.labels), function(i) dat$NCR[!is.na(dat$NCR) & dat$length>=size.mins[i] & dat$length<=size.maxs[i]])
   plotDistribOverlaid(sub.list=size.vals, sub.labels=size.labels, sub.colors=col.size,
                       main.val=dat$NCR, xlab="NCR", main.label="All",
-                      title="NCR by Size", xlim=xlim)
+                      title="NCR by Size", xlim=xlim, log.y=TRUE)
 
   # Panel 4: By AF bucket
   af.vals <- lapply(seq_along(af.labels), function(i) dat$NCR[!is.na(dat$NCR) & dat$AF>af.mins[i] & dat$AF<=af.maxs[i]])
   plotDistribOverlaid(sub.list=af.vals, sub.labels=af.labels, sub.colors=col.af,
                       main.val=dat$NCR, xlab="NCR", main.label="All",
-                      title="NCR by AF", xlim=xlim)
+                      title="NCR by AF", xlim=xlim, log.y=TRUE)
   dev.off()
 }
 
@@ -1379,7 +1419,7 @@ wrapperPlotGnomadMatchDistrib <- function(){
   if(!"gnomAD_V4_match_ID" %in% colnames(dat)) return(invisible(NULL))
 
   has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
-  regions <- if(has.region) sort(unique(dat$REGION[!is.na(dat$REGION)])) else character(0)
+  regions <- if(has.region) orderRegions(unique(dat$REGION[!is.na(dat$REGION)])) else character(0)
   af.labels <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
   af.mins <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
   af.maxs <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
@@ -1397,6 +1437,8 @@ wrapperPlotGnomadMatchDistrib <- function(){
     par(bty="n", mar=c(7,4.5,3,0.5))
     plot(x=c(0,length(labs)+1), y=ylim, type="n", xaxt="n", yaxt="n",
          xlab="", ylab="", xaxs="i", yaxs="i")
+    abline(h=seq(0.2, 1.0, by=0.2), col="gray85")
+    abline(h=seq(0.1, 0.9, by=0.2), col="gray92", lwd=0.5)
     rect(xleft=1:length(labs)-0.35, xright=1:length(labs)+0.35,
          ybottom=0, ytop=vals, col=cols, border=NA)
     axis(1,at=1:length(labs),labels=labs,las=2,cex.axis=0.8,tick=F,line=0.5)
@@ -1652,27 +1694,27 @@ wrapperPlotAllHWDistribs <- function(){
   plotAlleleCarrierCorrelation(dat=dat)
   dev.off()
   #Merged
+  n.sv <- nrow(svtypes)
+  n.sv.cols <- ceiling(n.sv / 2)
+  # Layout: col 1 = main HW (row1) + carrier freq (row2); cols 2..n.sv.cols+1 = SV type grid
+  mat.gt <- matrix(NA, nrow=2, ncol=1+n.sv.cols)
+  mat.gt[1,1] <- 1; mat.gt[2,1] <- 2
+  for(i in seq_len(n.sv)){
+    mat.gt[((i-1)%%2)+1, ceiling(i/2)+1] <- i+2
+  }
+  mat.gt[is.na(mat.gt)] <- n.sv+3  # empty panel
   png(paste(OUTDIR,"main_plots/genotype_distributions.png",sep=""),res=300,
-      height=1200,width=3.5*1200)
-  layout(matrix(c(1,2,3,4,5,
-                  1,2,6,7,8),
-                byrow=T,nrow=2),
-         widths=c(2,2,1,1,1))
-  plotAlleleCarrierCorrelation(dat=dat)
+      height=1200*2, width=(2.5+n.sv.cols*1.2)*1200)
+  layout(mat.gt, widths=c(2.5, rep(1.2, n.sv.cols)))
   plotHWSingle(dat=dat,svtypes=svtypes,
                title="Genotype Distribution")
-  plotHWSingle(dat=dat[which(dat$length<tiny.max.size),],svtypes=svtypes,
-               title="< 50bp",full.legend=F,lab.cex=0.7)
-  plotHWSingle(dat=dat[which(dat$length>=tiny.max.size & dat$length<small.max.size),],svtypes=svtypes,
-               title="50 - 100bp",full.legend=F,lab.cex=0.7)
-  plotHWSingle(dat=dat[which(dat$length>=small.max.size & dat$length<medium.max.size),],svtypes=svtypes,
-               title="100bp - 500bp",full.legend=F,lab.cex=0.7)
-  plotHWSingle(dat=dat[which(dat$length>=medium.max.size & dat$length<medlarge.max.size),],svtypes=svtypes,
-               title="500bp - 5kb",full.legend=F,lab.cex=0.7)
-  plotHWSingle(dat=dat[which(dat$length>=medlarge.max.size & dat$length<large.max.size),],svtypes=svtypes,
-               title="5 - 50kb",full.legend=F,lab.cex=0.7)
-  plotHWSingle(dat=dat[which(dat$length>=large.max.size & dat$length<huge.max.size),],svtypes=svtypes,
-               title="> 50kb",full.legend=F,lab.cex=0.7)
+  plotAlleleCarrierCorrelation(dat=dat)
+  sapply(seq_len(n.sv), function(i){
+    st <- svtypes$svtype[i]
+    plotHWSingle(dat=dat[which(dat$svtype==st),],svtypes=svtypes,
+                 title=st, full.legend=F, lab.cex=0.75)
+  })
+  plot.new()  # empty cell if n.sv is odd
   dev.off()
 }
 
@@ -1742,17 +1784,30 @@ if(!is.null(svtypes.file)){
                         "color"=svtypes.c)
 }
 
-# Merged svtypes and dat for size-stratified plots (DEL_SHORT+DEL_SV → DEL, INS_SHORT+INS_SV → INS, DUP+DUP_SV → DUP)
+# Merged svtypes and dat (DEL_SHORT+DEL_SV→DEL, INS_SHORT+INS_SV→INS, DUP+DUP_SV→DUP, TRV+TRV_SV→TRV)
+.mg.del  <- c("DEL_SHORT","DEL_SV")
+.mg.ins  <- c("INS_SHORT","INS_SV")
+.mg.dup  <- c("DUP","DUP_SV")
+.mg.trv  <- c("TRV","TRV_SV")
+.del.col <- svtypes$color[match(intersect(c("DEL_SHORT","DEL"), svtypes$svtype)[1], svtypes$svtype)]
+.ins.col <- svtypes$color[match(intersect(c("INS_SHORT","INS"), svtypes$svtype)[1], svtypes$svtype)]
+.dup.col <- svtypes$color[match("DUP", svtypes$svtype)]
+.trv.present <- intersect(.mg.trv, svtypes$svtype)
+.trv.col <- if(length(.trv.present)>0) svtypes$color[match(.trv.present[1], svtypes$svtype)] else NULL
+.other.types <- svtypes$svtype[!svtypes$svtype %in% c(.mg.del,.mg.ins,.mg.dup,.mg.trv)]
 svtypes.merged <- data.frame(
-  svtype = c("DEL","INS","DUP",svtypes$svtype[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV","DUP","DUP_SV")]),
-  color = c(svtypes$color[svtypes$svtype=="DEL_SHORT"],
-            svtypes$color[svtypes$svtype=="INS_SHORT"],
-            svtypes$color[svtypes$svtype=="DUP"],
-            svtypes$color[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV","DUP","DUP_SV")]))
+  svtype = c("DEL","INS","DUP",
+             if(!is.null(.trv.col)) "TRV" else NULL,
+             .other.types),
+  color = c(.del.col, .ins.col, .dup.col,
+            if(!is.null(.trv.col)) .trv.col else NULL,
+            svtypes$color[match(.other.types, svtypes$svtype)]),
+  stringsAsFactors=FALSE)
 dat.merged <- dat
-dat.merged$svtype[dat.merged$svtype %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
-dat.merged$svtype[dat.merged$svtype %in% c("INS_SHORT","INS_SV")] <- "INS"
-dat.merged$svtype[dat.merged$svtype %in% c("DUP","DUP_SV")] <- "DUP"
+dat.merged$svtype[dat.merged$svtype %in% .mg.del] <- "DEL"
+dat.merged$svtype[dat.merged$svtype %in% .mg.ins] <- "INS"
+dat.merged$svtype[dat.merged$svtype %in% .mg.dup] <- "DUP"
+dat.merged$svtype[dat.merged$svtype %in% .mg.trv] <- "TRV"
 
 ######################################
 #####VEP consequence distribution plot
@@ -1771,9 +1826,22 @@ wrapperPlotVepDistrib <- function(){
   }))
   if(is.null(dat.exp) || nrow(dat.exp) == 0) return(invisible(NULL))
 
-  all.csqs <- names(sort(table(dat.exp$consequence), decreasing=TRUE))
+  # Filter to non-zero consequences, cap at 9 + 'All other'
+  all.csqs.raw <- names(sort(table(dat.exp$consequence), decreasing=TRUE))
+  all.csqs.raw <- all.csqs.raw[sapply(all.csqs.raw, function(csq) sum(dat.exp$consequence==csq))>0]
+  max.show <- 9
+  other.col <- "#AAAAAA"
+  if(length(all.csqs.raw) > max.show){
+    top.csqs <- all.csqs.raw[seq_len(max.show)]
+    dat.exp$consequence[!dat.exp$consequence %in% top.csqs] <- "All other"
+    all.csqs <- c(top.csqs, "All other")
+    col.csq.base <- setNames(colorRampPalette(c("#440154","#31688E","#35B779","#FDE725"))(max.show), top.csqs)
+    col.csq <- c(col.csq.base, "All other"=other.col)
+  } else {
+    all.csqs <- all.csqs.raw
+    col.csq <- setNames(colorRampPalette(c("#440154","#31688E","#35B779","#FDE725"))(length(all.csqs)), all.csqs)
+  }
   n.csq <- length(all.csqs)
-  col.csq <- setNames(colorRampPalette(c("#440154","#31688E","#35B779","#FDE725"))(n.csq), all.csqs)
 
   has.region <- "REGION" %in% colnames(dat.exp) && any(!is.na(dat.exp$REGION))
 
@@ -1782,6 +1850,7 @@ wrapperPlotVepDistrib <- function(){
   dat.exp$svtype_m[dat.exp$svtype_m %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
   dat.exp$svtype_m[dat.exp$svtype_m %in% c("INS_SHORT","INS_SV")] <- "INS"
   dat.exp$svtype_m[dat.exp$svtype_m %in% c("DUP","DUP_SV")] <- "DUP"
+  dat.exp$svtype_m[dat.exp$svtype_m %in% c("TRV","TRV_SV")] <- "TRV"
 
   # Build consequence × stratum matrix
   makeConseqMat <- function(grp.vals, grp.labs){
@@ -1799,21 +1868,21 @@ wrapperPlotVepDistrib <- function(){
     breaks=c(-Inf, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, Inf),
     labels=c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb"), include.lowest=TRUE))
 
-  panel.w <- max(3600, n.csq * 120)
+  panel.w <- max(3600, n.csq * 150)
   png(paste(OUTDIR, "/main_plots/vep_distributions.png", sep=""),
       res=300, height=2*1800, width=2*panel.w)
   layout(matrix(1:4, nrow=2, byrow=TRUE))
 
   # Panel 1: All variants — x=consequence, y=count
   counts.all <- sapply(all.csqs, function(csq) sum(dat.exp$consequence == csq))
-  par(bty="n", mar=c(12, 4.5, 3, 0.5))
+  par(bty="n", mar=c(12, 4.5, 4.5, 0.5))
   bp <- barplot(counts.all, names.arg=rep("", n.csq), col=col.csq[all.csqs],
                 border=NA, ylim=c(0, max(counts.all)*1.15), yaxt="n")
   axis(2, at=axTicks(2), labels=NA)
   axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4, labels=prettyNum(axTicks(2), big.mark=","))
   mtext(2, text="Count", line=3, cex=0.9)
-  mtext(3, text="VEP Consequences (All Variants)", font=2, line=0.5)
-  axis(3, at=mean(bp), tick=F, line=-0.9, labels=paste("n=", prettyNum(nrow(dat.exp), big.mark=",")))
+  mtext(3, text="VEP Consequences (All Variants)", font=2, line=2.0)
+  mtext(3, text=paste("n=", prettyNum(nrow(dat.exp), big.mark=","), sep=""), line=0.6, cex=0.75)
   text(x=bp, y=par("usr")[3] - diff(par("usr")[3:4])*0.025,
        labels=all.csqs, srt=45, adj=1, xpd=TRUE, cex=0.7)
 
@@ -1834,7 +1903,7 @@ wrapperPlotVepDistrib <- function(){
 
   # Panel 4: by region (if present) or size
   if(has.region && length(unique(dat.exp$REGION[!is.na(dat.exp$REGION)])) > 1){
-    reg.labs <- sort(unique(dat.exp$REGION[!is.na(dat.exp$REGION)]))
+    reg.labs <- orderRegions(unique(dat.exp$REGION[!is.na(dat.exp$REGION)]))
     mat.reg <- makeConseqMat(dat.exp$REGION[!is.na(dat.exp$REGION)], reg.labs)
     plotStackedBars(mat=mat.reg, colors=col.csq[all.csqs], scaled=F,
                     title="VEP Consequences by Region")
@@ -1859,11 +1928,33 @@ wrapperPlotSvAnnotateDistrib <- function(){
   has.pred <- rowSums(as.data.frame(lapply(pred.cols, function(p) as.integer(dat[[p]]))), na.rm=TRUE) > 0
   if(sum(has.pred) == 0) return(invisible(NULL))
 
-  pred.labels <- sub("^PREDICTED_", "", pred.cols)
+  # Filter to non-zero PREDICTED_ cols, cap at 9 + 'All other'
+  counts.raw <- sapply(pred.cols, function(p) sum(as.logical(dat[[p]]), na.rm=TRUE))
+  nonzero.pred <- pred.cols[counts.raw > 0]
+  if(length(nonzero.pred) == 0) return(invisible(NULL))
+  max.show.pred <- 9
+  other.pred.col <- "#AAAAAA"
+  if(length(nonzero.pred) > max.show.pred){
+    top.preds <- nonzero.pred[seq_len(max.show.pred)]
+    other.preds <- nonzero.pred[-(seq_len(max.show.pred))]
+    # Add an "All other" boolean column: TRUE if any of other.preds is TRUE
+    dat[["PRED_OTHER"]] <- rowSums(as.data.frame(lapply(other.preds, function(p) as.integer(dat[[p]]))), na.rm=TRUE) > 0
+    pred.cols.use <- c(top.preds, "PRED_OTHER")
+    pred.labels.use <- c(sub("^PREDICTED_","",top.preds), "All other")
+    col.pred.base <- setNames(colorRampPalette(c("#A50026","#F46D43","#FEE090",
+                                                 "#74ADD1","#4575B4","#762A83",
+                                                 "#1B7837","#5AAE61","#F7F7F7"))(max.show.pred), top.preds)
+    col.pred <- c(col.pred.base, "PRED_OTHER"=other.pred.col)
+  } else {
+    pred.cols.use <- nonzero.pred
+    pred.labels.use <- sub("^PREDICTED_","",nonzero.pred)
+    col.pred <- setNames(colorRampPalette(c("#A50026","#F46D43","#FEE090",
+                                            "#74ADD1","#4575B4","#762A83",
+                                            "#1B7837","#5AAE61","#F7F7F7"))(length(nonzero.pred)), nonzero.pred)
+  }
+  pred.cols <- pred.cols.use
+  pred.labels <- pred.labels.use
   n.pred <- length(pred.cols)
-  col.pred <- setNames(colorRampPalette(c("#A50026","#F46D43","#FEE090",
-                                          "#74ADD1","#4575B4","#762A83",
-                                          "#1B7837","#5AAE61","#F7F7F7"))(n.pred), pred.cols)
 
   has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
 
@@ -1871,6 +1962,7 @@ wrapperPlotSvAnnotateDistrib <- function(){
   svtype_m[svtype_m %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
   svtype_m[svtype_m %in% c("INS_SHORT","INS_SV")] <- "INS"
   svtype_m[svtype_m %in% c("DUP","DUP_SV")] <- "DUP"
+  svtype_m[svtype_m %in% c("TRV","TRV_SV")] <- "TRV"
 
   af.cuts   <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
   af.breaks <- c(-Inf, 1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
@@ -1885,21 +1977,21 @@ wrapperPlotSvAnnotateDistrib <- function(){
     matrix(mat, nrow=n.pred, ncol=length(grp.labs), dimnames=list(pred.labels, grp.labs))
   }
 
-  panel.w <- max(3600, n.pred * 140)
+  panel.w <- max(3600, n.pred * 150)
   png(paste(OUTDIR, "/main_plots/svannotate_distributions.png", sep=""),
       res=300, height=2*1800, width=2*panel.w)
   layout(matrix(1:4, nrow=2, byrow=TRUE))
 
   # Panel 1: All variants — x=PREDICTED_ category, y=count
   counts.all <- sapply(pred.cols, function(p) sum(as.logical(dat[[p]]), na.rm=T))
-  par(bty="n", mar=c(12, 4.5, 3, 0.5))
+  par(bty="n", mar=c(12, 4.5, 4.5, 0.5))
   bp <- barplot(counts.all, names.arg=rep("", n.pred), col=col.pred[pred.cols],
                 border=NA, ylim=c(0, max(counts.all)*1.15), yaxt="n")
   axis(2, at=axTicks(2), labels=NA)
   axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4, labels=prettyNum(axTicks(2), big.mark=","))
   mtext(2, text="Count", line=3, cex=0.9)
-  mtext(3, text="SVAnnotate Predictions (All Variants)", font=2, line=0.5)
-  axis(3, at=mean(bp), tick=F, line=-0.9, labels=paste("n=", prettyNum(sum(has.pred), big.mark=",")))
+  mtext(3, text="SVAnnotate Predictions (All Variants)", font=2, line=2.0)
+  mtext(3, text=paste("n=", prettyNum(sum(has.pred), big.mark=","), sep=""), line=0.6, cex=0.75)
   text(x=bp, y=par("usr")[3] - diff(par("usr")[3:4])*0.025,
        labels=pred.labels, srt=45, adj=1, xpd=TRUE, cex=0.7)
 
@@ -1920,7 +2012,7 @@ wrapperPlotSvAnnotateDistrib <- function(){
 
   # Panel 4: by region (if present) or size
   if(has.region && length(unique(dat$REGION[!is.na(dat$REGION)])) > 1){
-    reg.labs <- sort(unique(dat$REGION[!is.na(dat$REGION)]))
+    reg.labs <- orderRegions(unique(dat$REGION[!is.na(dat$REGION)]))
     mat.reg <- makePredMat(dat$REGION[!is.na(dat$REGION)], reg.labs)
     plotStackedBars(mat=mat.reg, colors=col.pred[pred.cols], scaled=F,
                     title="SVAnnotate Predictions by Region")
@@ -1932,6 +2024,141 @@ wrapperPlotSvAnnotateDistrib <- function(){
     plotStackedBars(mat=mat.sz, colors=col.pred[pred.cols], scaled=F,
                     title="SVAnnotate Predictions by Size")
   }
+  dev.off()
+}
+
+
+######################################
+#####TRV-specific distribution plots
+######################################
+# TRV size bins (distinct from main SV size bins, tuned for TR allele length range)
+trv.size.breaks <- c(-Inf, 5, 10, 50, 100, Inf)
+trv.size.labels <- c("<6bp","6-10bp","11-50bp","51-100bp",">100bp")
+trv.motif.breaks <- c(-Inf, 2, 4, 10, Inf)
+trv.motif.labels <- c("1-2bp","3-4bp","5-10bp",">10bp")
+
+# Renders 4 panels: All, by TRV size, by REGION, by motif length.
+# PNG must be opened before calling and closed afterwards.
+plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
+                                  title.all, title.size, title.region, title.motif){
+  has.region <- "REGION" %in% colnames(trv.dat) && any(!is.na(trv.dat$REGION))
+  regions    <- if(has.region) orderRegions(unique(trv.dat$REGION[!is.na(trv.dat$REGION)])) else character(0)
+  has.motif  <- "max_motif_length" %in% colnames(trv.dat) && any(!is.na(trv.dat$max_motif_length))
+
+  col.size <- colorRampPalette(c("#4575B4","#91BFDB","#FEE090","#FC8D59","#D73027"))(length(trv.size.labels))
+  col.reg  <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
+  col.mot  <- colorRampPalette(c("#41B6C4","#1D91C0","#225EA8","#0C2C84"))(length(trv.motif.labels))
+
+  if(is.null(xlim)){
+    v.f <- vals[!is.na(vals) & is.finite(vals)]
+    xlim <- if(length(v.f) > 0) range(v.f) else c(0,1)
+  }
+  breaks.all <- seq(xlim[1], xlim[2], length.out=51)
+
+  # Panel 1: All TRV
+  v.all <- vals[!is.na(vals) & is.finite(vals) & vals >= xlim[1] & vals <= xlim[2]]
+  par(bty="n", mar=c(4.5,4,3,1))
+  if(length(v.all) >= 2){
+    h <- hist(v.all, breaks=breaks.all, plot=F)
+    plot(x=xlim, y=c(0, max(h$density)*1.15), type="n", xaxt="n", yaxt="n",
+         xlab="", ylab="", yaxs="i")
+    abline(v=pretty(xlim), col="gray85", lwd=0.5)
+    polygon(c(h$mids[1],h$mids,h$mids[length(h$mids)]), c(0,h$density,0),
+            col="#4393C3", border="#2166AC")
+    axis(1,at=pretty(xlim),labels=NA); axis(1,at=pretty(xlim),tick=F,line=-0.4,cex.axis=0.8)
+    axis(2,at=axTicks(2),labels=NA); axis(2,at=axTicks(2),tick=F,las=2,cex.axis=0.8,line=-0.4)
+    mtext(1,text=xlab,line=3,cex=0.9); mtext(2,text="Density",line=2.5,cex=0.9)
+    mtext(3,text=title.all,font=2,line=1)
+    axis(3,at=mean(xlim),tick=F,line=-0.9,labels=paste("n=",prettyNum(length(v.all),big.mark=","),sep=""))
+  } else {
+    plot.new(); mtext(3,text=title.all,font=2,line=1)
+  }
+
+  # Panel 2: By TRV size bucket
+  size.vals <- lapply(seq_along(trv.size.labels), function(i){
+    lo <- trv.size.breaks[i]; hi <- trv.size.breaks[i+1]
+    v <- vals[!is.na(vals) & is.finite(vals) & !is.na(trv.dat$length) & trv.dat$length > lo & trv.dat$length <= hi]
+    v[v >= xlim[1] & v <= xlim[2]]
+  })
+  plotDistribOverlaid(sub.list=size.vals, sub.labels=trv.size.labels, sub.colors=col.size,
+                      main.val=vals, xlab=xlab, main.label="All TRV",
+                      title=title.size, xlim=xlim)
+
+  # Panel 3: By REGION
+  if(has.region && length(regions) > 0){
+    reg.vals <- lapply(regions, function(r){
+      v <- vals[!is.na(trv.dat$REGION) & trv.dat$REGION==r & !is.na(vals) & is.finite(vals)]
+      v[v >= xlim[1] & v <= xlim[2]]
+    })
+    plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
+                        main.val=vals, xlab=xlab, main.label="All TRV",
+                        title=title.region, xlim=xlim)
+  } else {
+    par(bty="n",mar=c(4.5,4,3,1)); plot.new(); mtext(3,text=title.region,font=2,line=1)
+  }
+
+  # Panel 4: By motif length bucket
+  if(has.motif){
+    mot.vals <- lapply(seq_along(trv.motif.labels), function(i){
+      lo <- trv.motif.breaks[i]; hi <- trv.motif.breaks[i+1]
+      ml <- trv.dat$max_motif_length
+      v <- vals[!is.na(vals) & is.finite(vals) & !is.na(ml) & ml > lo & ml <= hi]
+      v[v >= xlim[1] & v <= xlim[2]]
+    })
+    plotDistribOverlaid(sub.list=mot.vals, sub.labels=trv.motif.labels, sub.colors=col.mot,
+                        main.val=vals, xlab=xlab, main.label="All TRV",
+                        title=title.motif, xlim=xlim)
+  } else {
+    par(bty="n",mar=c(4.5,4,3,1)); plot.new(); mtext(3,text=title.motif,font=2,line=1)
+  }
+}
+
+wrapperPlotTrvAlleleCount <- function(){
+  trv.dat <- dat[dat$svtype %in% c("TRV","TRV_SV") & !is.na(dat$AC) & dat$AC > 0, ]
+  if(nrow(trv.dat) == 0) return(invisible(NULL))
+  vals <- trv.dat$AC
+  xlim <- c(1, quantile(vals, 0.99))
+  png(paste(OUTDIR,"/main_plots/trv_allele_count_distribution.png",sep=""),
+      res=300, height=1800, width=4*1800)
+  layout(matrix(1:4, nrow=1))
+  plotTrvDistribPanels(trv.dat=trv.dat, vals=vals, xlab="Non-Ref Allele Count", xlim=xlim,
+                       title.all="TRV Allele Count (All)",
+                       title.size="TRV Allele Count by Size",
+                       title.region="TRV Allele Count by Region",
+                       title.motif="TRV Allele Count by Motif Length")
+  dev.off()
+}
+
+wrapperPlotTrvSampleCount <- function(){
+  trv.dat <- dat[dat$svtype %in% c("TRV","TRV_SV") & !is.na(dat$carriers) & dat$carriers > 0, ]
+  if(nrow(trv.dat) == 0) return(invisible(NULL))
+  vals <- trv.dat$carriers
+  xlim <- c(1, quantile(vals, 0.99))
+  png(paste(OUTDIR,"/main_plots/trv_sample_count_distribution.png",sep=""),
+      res=300, height=1800, width=4*1800)
+  layout(matrix(1:4, nrow=1))
+  plotTrvDistribPanels(trv.dat=trv.dat, vals=vals, xlab="Variant Sample Count", xlim=xlim,
+                       title.all="TRV Sample Count (All)",
+                       title.size="TRV Sample Count by Size",
+                       title.region="TRV Sample Count by Region",
+                       title.motif="TRV Sample Count by Motif Length")
+  dev.off()
+}
+
+wrapperPlotTrvExpansionRatio <- function(){
+  if(!"TRV_EXPANSION_RATIO" %in% colnames(dat)) return(invisible(NULL))
+  trv.dat <- dat[dat$svtype %in% c("TRV","TRV_SV") & !is.na(dat$TRV_EXPANSION_RATIO), ]
+  if(nrow(trv.dat) == 0) return(invisible(NULL))
+  vals <- trv.dat$TRV_EXPANSION_RATIO
+  xlim <- c(0, 1)
+  png(paste(OUTDIR,"/main_plots/trv_expansion_ratio_distribution.png",sep=""),
+      res=300, height=1800, width=4*1800)
+  layout(matrix(1:4, nrow=1))
+  plotTrvDistribPanels(trv.dat=trv.dat, vals=vals, xlab="Expansion Ratio", xlim=xlim,
+                       title.all="TRV Expansion Ratio (All)",
+                       title.size="TRV Expansion Ratio by Size",
+                       title.region="TRV Expansion Ratio by Region",
+                       title.motif="TRV Expansion Ratio by Motif Length")
   dev.off()
 }
 
@@ -1966,3 +2193,12 @@ wrapperPlotVepDistrib()
 
 #SVAnnotate prediction distribution
 wrapperPlotSvAnnotateDistrib()
+
+#TRV allele count distribution
+wrapperPlotTrvAlleleCount()
+
+#TRV sample count distribution
+wrapperPlotTrvSampleCount()
+
+#TRV expansion ratio distribution
+wrapperPlotTrvExpansionRatio()

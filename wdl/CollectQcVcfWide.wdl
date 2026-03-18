@@ -113,6 +113,8 @@ if "END" not in vcf_in.header.info:
     vcf_in.header.info.add("END", 1, "Integer", "End position of variant.")
 if "ORIG_ALT" not in vcf_in.header.info:
     vcf_in.header.info.add("ORIG_ALT", 1, "String", "Original ALT nucleotide for SNVs before symbolic conversion.")
+if "TRV_EXPANSION_RATIO" not in vcf_in.header.info:
+    vcf_in.header.info.add("TRV_EXPANSION_RATIO", 1, "Float", "Proportion of non-ref alleles called as expansions (alt allele length > ref allele length) among non-neutral alleles for TRV variants.")
 vcf_out = pysam.VariantFile("~{prefix}.vcf.gz", "w", header=vcf_in.header)
 
 for rec in vcf_in:
@@ -133,6 +135,39 @@ for rec in vcf_in:
     rec.info["SVTYPE"] = svtype
     rec.info["SVLEN"] = allele_length
     rec.stop = rec.pos + allele_length - 1
+
+    # For TRV: compute expansion ratio from AL FORMAT field before GT collapsing
+    if allele_type.lower() == "trv":
+        expansions = 0
+        contractions = 0
+        for sample in rec.samples.values():
+            gt = sample.get("GT", (None,))
+            al_raw = sample.get("AL", None)
+            if al_raw is None or gt is None:
+                continue
+            al = list(al_raw)
+            try:
+                ref_len = al[0]
+            except (IndexError, TypeError):
+                continue
+            if ref_len is None:
+                continue
+            for allele_idx in gt:
+                if allele_idx is None or allele_idx == 0:
+                    continue
+                try:
+                    alt_len = al[allele_idx]
+                except (IndexError, TypeError):
+                    continue
+                if alt_len is None:
+                    continue
+                if alt_len > ref_len:
+                    expansions += 1
+                elif alt_len < ref_len:
+                    contractions += 1
+        total = expansions + contractions
+        if total > 0:
+            rec.info["TRV_EXPANSION_RATIO"] = float(expansions) / total
 
     if len(rec.alts) > 1:
         for sample in rec.samples.values():

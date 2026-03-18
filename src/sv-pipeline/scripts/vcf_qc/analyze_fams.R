@@ -9,10 +9,10 @@ rare.max.freq <- 0.01
 uncommon.max.freq <- 0.1
 common.max.freq <- 0.5
 major.max.freq <- 1
-tiny.max.size <- 100
-small.max.size <- 500
-medium.max.size <- 2500
-medlarge.max.size <- 10000
+tiny.max.size <- 50
+small.max.size <- 100
+medium.max.size <- 500
+medlarge.max.size <- 5000
 large.max.size <- 50000
 huge.max.size <- 300000000
 nocall.placeholder <- 9999
@@ -993,7 +993,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
       height=3.75, width=4.5)
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
                                                  VIDs=dat$VID[which(dat$length<=tiny.max.size)]),
-               title=paste(title.prefix, "Inheritance [<100bp] ", title.suffix, sep=""),
+               title=paste(title.prefix, "Inheritance [<50bp] ", title.suffix, sep=""),
                count=count)
   dev.off()
   #Small
@@ -1003,7 +1003,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
                                                  VIDs=dat$VID[which(dat$length>tiny.max.size
                                                                     & dat$length<=small.max.size)]),
-               title=paste(title.prefix, "Inheritance [100-500bp] ", title.suffix, sep=""),
+               title=paste(title.prefix, "Inheritance [50-100bp] ", title.suffix, sep=""),
                count=count)
   dev.off()
   #Medium
@@ -1013,7 +1013,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
                                                  VIDs=dat$VID[which(dat$length>small.max.size
                                                                     & dat$length<=medium.max.size)]),
-               title=paste(title.prefix, "Inheritance [500bp-2.5kb] ",
+               title=paste(title.prefix, "Inheritance [100bp-500bp] ",
                            title.suffix, sep=""),
                count=count)
   dev.off()
@@ -1024,7 +1024,7 @@ wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list,
                                                  VIDs=dat$VID[which(dat$length>medium.max.size
                                                                     & dat$length<=medlarge.max.size)]),
-               title=paste(title.prefix, "Inheritance [2.5-10kb] ",
+               title=paste(title.prefix, "Inheritance [500bp-5kb] ",
                            title.suffix, sep=""),
                count=count)
   dev.off()
@@ -1152,8 +1152,8 @@ wrapperDeNovoRateHeats <- function(fam.dat.list, fam.type, count="variants"){
                                   max.sizes=c(tiny.max.size, small.max.size,
                                               medium.max.size, medlarge.max.size,
                                               large.max.size),
-                                  size.labs=c("<100bp", "100-\n500bp", "500bp-\n2.5kb",
-                                              "2.5-10kb", "10kb-50kb", ">50kb"),
+                                  size.labs=c("<50bp", "50-\n100bp", "100bp-\n500bp",
+                                              "500bp-\n5kb", "5-50kb", ">50kb"),
                                   max.freqs=c(0.01, 0.05, 0.10, 0.50),
                                   freq.labs=c("<1%", "1-5%", "5-10%", "10-50%", ">50%"))
  
@@ -1162,7 +1162,7 @@ wrapperDeNovoRateHeats <- function(fam.dat.list, fam.type, count="variants"){
             fam.type, "s.", count, ".size_vs_freq.all_sv.pdf", sep=""),
       height=5, width=5)
   plotHeatmap(mat=DNR.dat$ALL, nfams=length(fam.dat.list), fam.type=fam.type,
-              title=paste(title.prefix, "De Novo Rate, Size vs. Freq. [All SV]", sep=""))
+              title=paste(title.prefix, "De Novo Rate, Size vs. AF [All SV]", sep=""))
   dev.off()
  
   #Plot one heatmap per variant class
@@ -1172,7 +1172,7 @@ wrapperDeNovoRateHeats <- function(fam.dat.list, fam.type, count="variants"){
         height=5, width=5)
     plotHeatmap(mat=DNR.dat[[which(names(DNR.dat)==svtype)]],
                 nfams=length(fam.dat.list), fam.type=fam.type,
-                title=paste(title.prefix, "De Novo Rate, Size vs. Freq. [",
+                title=paste(title.prefix, "De Novo Rate, Size vs. AF [",
                             svtype, "]", sep=""))
     dev.off()
   })
@@ -1199,7 +1199,7 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
  
   #Prepare plot area
   width <- ifelse(gq, 12, 10)
-  pdf(paste(OUTDIR, "/main_plots/SV_", fam.type, "_inheritance.pdf", sep=""),
+  pdf(paste(OUTDIR, "/main_plots/", fam.type, "_inheritance.pdf", sep=""),
       height=5, width=width)
   if(gq) {
     layout(matrix(c(1, 2, 3, 4, 5,
@@ -1251,13 +1251,13 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
                                     max.sizes=c(tiny.max.size, small.max.size,
                                                 medium.max.size, medlarge.max.size,
                                                 large.max.size),
-                                    size.labs=c("<100bp", "100-\n500bp", "500bp-\n2.5kb",
-                                                "2.5-10kb", "10kb-50kb", ">50kb"),
+                                    size.labs=c("<50bp", "50-\n100bp", "100bp-\n500bp",
+                                                "500bp-\n5kb", "5-50kb", ">50kb"),
                                     max.freqs=c(0.01, 0.05, 0.10, 0.50),
                                     freq.labs=c("<1%", "1-5%", "5-\n10%",
                                                 "10-\n50%", ">50%"))
   plotHeatmap(mat=DNR.dat.v$ALL, nfams=length(fam.dat.list), fam.type=fam.type,
-              title=paste("Site De Novo Rate, Size vs. Freq.", sep=""),
+              title=paste("Site De Novo Rate, Size vs. AF", sep=""),
               cex.lab=cex.lab)
  
   ###Bottom row: SV alleles
@@ -1296,13 +1296,13 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
                                     max.sizes=c(tiny.max.size, small.max.size,
                                                 medium.max.size, medlarge.max.size,
                                                 large.max.size),
-                                    size.labs=c("<100bp", "100-\n500bp", "500bp-\n2.5kb",
-                                                "2.5-10kb", "10kb-50kb", ">50kb"),
+                                    size.labs=c("<50bp", "50-\n100bp", "100bp-\n500bp",
+                                                "500bp-\n5kb", "5-50kb", ">50kb"),
                                     max.freqs=c(0.01, 0.05, 0.10, 0.50),
                                     freq.labs=c("<1%", "1-5%", "5-\n10%",
                                                 "10-\n50%", ">50%"))
   plotHeatmap(mat=DNR.dat.a$ALL, nfams=length(fam.dat.list), fam.type=fam.type,
-              title=paste("Allele De Novo Rate, Size vs. Freq.", sep=""),
+              title=paste("Allele De Novo Rate, Size vs. AF", sep=""),
               cex.lab=cex.lab)
  
   #Close device

@@ -90,6 +90,15 @@ gmatch.col <- if("gnomAD_V4_match_ID" %in% colnames(dat)) dat$gnomAD_V4_match_ID
 qual.col <- if("QUAL" %in% colnames(dat)) dat$QUAL else NULL
 ref.col <- if("REF" %in% colnames(dat)) dat$REF else NULL
 alt.col <- if("ALT" %in% colnames(dat)) dat$ALT else NULL
+# Max motif length from MOTIFS INFO field (for TRV stratification)
+motifs.raw <- if("MOTIFS" %in% colnames(dat)) as.character(dat$MOTIFS) else NULL
+max.motif.len <- if(!is.null(motifs.raw)) sapply(motifs.raw, function(m){
+  if(is.na(m) || m == ".") return(NA_integer_)
+  mots <- strsplit(m, ",", fixed=TRUE)[[1]]
+  max(nchar(mots), na.rm=TRUE)
+}) else NULL
+# TRV expansion ratio
+trv.exp.col <- if("TRV_EXPANSION_RATIO" %in% colnames(dat)) as.numeric(as.character(dat$TRV_EXPANSION_RATIO)) else NULL
 # VEP Consequence field (pipe-field index 1 per comma-chained annotation, semicolon-joined unique values)
 vep.col <- if("vep" %in% colnames(dat)) {
   sapply(as.character(dat$vep), function(v){
@@ -135,7 +144,8 @@ if(!is.null(ncr.col)) { ncr.v <- as.character(ncr.col); ncr.v[ncr.v=="."] <- NA;
 if(!is.null(gmatch.col)) dat$gnomAD_V4_match_ID <- as.character(gmatch.col)
 if(!is.null(vep.col)) dat$VEP_consequences <- vep.col
 for(pname in names(predicted.presence)) dat[[pname]] <- predicted.presence[[pname]]
-#Exclude all sites where no carriers or alleles are observed
+if(!is.null(max.motif.len)) dat$max_motif_length <- as.integer(max.motif.len)
+if(!is.null(trv.exp.col)) dat$TRV_EXPANSION_RATIO <- trv.exp.col
 zeroes <- which(dat$AC==0 | dat$carriers==0)
 if(length(zeroes)>0){
   cat(paste("WARNING: ",prettyNum(length(zeroes),big.mark=","),"/",
@@ -156,6 +166,10 @@ if(labelMCNV==T){
     dat[mCNV.to.label,]$svtype <- "MCNV"
   }
 }
+#Split TRV into TRV (small) and TRV_SV (large) by size threshold
+trv.idx <- which(dat$svtype == "TRV" & !is.na(dat$length) & dat$length > 50)
+if(length(trv.idx) > 0) dat$svtype[trv.idx] <- "TRV_SV"
+
 #Set length of all BNDs to NA, if optioned
 if(keepBNDsize==F){
   if(any(dat$svtype=="BND")){
