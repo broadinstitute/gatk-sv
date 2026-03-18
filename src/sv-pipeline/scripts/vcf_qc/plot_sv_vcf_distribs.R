@@ -377,7 +377,7 @@ wrapperPlotAllCountBars <- function(){
     }))
     colnames(region.mat) <- c("ALL",regions)
   }
-  pdf(paste(OUTDIR,"/main_plots/counts.merged.pdf",sep=""),
+  pdf(paste(OUTDIR,"/main_plots/counts_distributions.pdf",sep=""),
       height=7,width=11)
   #Merged
   layout(matrix(c(1,2,3,4,1,5,6,7),byrow=T,nrow=2),
@@ -1040,7 +1040,7 @@ wrapperPlotAllFreqDistribs <- function(){
   dev.off()
   
   #Merged
-  pdf(paste(OUTDIR,"/main_plots/freq_distributions.pdf",sep=""),
+  pdf(paste(OUTDIR,"/main_plots/af_distributions.pdf",sep=""),
       height=6,width=10)
   layout(matrix(c(1,1,1,2,2,2,
                   3,4,5,6,7,8),
@@ -1139,7 +1139,7 @@ wrapperPlotTiTv <- function(){
 
   # Number of columns: AF panel + Size panel + optional heatmap
   n.panels <- 2 + as.integer(has.region && length(regions)>0)
-  png(paste(OUTDIR,"/main_plots/ti_tv_distribution.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/ti_tv_distributions.png",sep=""),
       res=300, height=1800, width=n.panels*1800)
   layout(matrix(1:n.panels, nrow=1))
 
@@ -1261,7 +1261,7 @@ wrapperPlotQualDistrib <- function(){
   col.reg <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
 
   n.panels <- 4
-  png(paste(OUTDIR,"/main_plots/quality_distribution.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/qual_distributions.png",sep=""),
       res=300, height=1800, width=n.panels*1800)
   layout(matrix(1:n.panels, nrow=1))
 
@@ -1323,7 +1323,7 @@ wrapperPlotNcrDistrib <- function(){
   xlim <- c(0,1)
 
   n.panels <- 4
-  png(paste(OUTDIR,"/main_plots/ncr_distribution.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/ncr_distributions.png",sep=""),
       res=300, height=1800, width=n.panels*1800)
   layout(matrix(1:n.panels, nrow=1))
 
@@ -1409,7 +1409,7 @@ wrapperPlotGnomadMatchDistrib <- function(){
   # Determine number of panels
   n.panels <- 1 + as.integer(has.region && length(regions)>0) + 2  # overall + region(optional) + size + AF
   if(!has.region || length(regions)==0) n.panels <- 3
-  png(paste(OUTDIR,"/main_plots/gnomad_match_distribution.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/gnomad_match_distributions.png",sep=""),
       res=300, height=1800, width=n.panels*1800)
   layout(matrix(1:n.panels, nrow=1))
 
@@ -1754,6 +1754,188 @@ dat.merged$svtype[dat.merged$svtype %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
 dat.merged$svtype[dat.merged$svtype %in% c("INS_SHORT","INS_SV")] <- "INS"
 dat.merged$svtype[dat.merged$svtype %in% c("DUP","DUP_SV")] <- "DUP"
 
+######################################
+#####VEP consequence distribution plot
+######################################
+wrapperPlotVepDistrib <- function(){
+  if(!"VEP_consequences" %in% colnames(dat)) return(invisible(NULL))
+
+  # Expand: one row per (variant × consequence)
+  exp.cols <- intersect(c("svtype","length","AF","REGION"), colnames(dat))
+  dat.exp <- do.call(rbind, lapply(seq_len(nrow(dat)), function(i){
+    v <- dat$VEP_consequences[i]
+    if(is.na(v) || v == "") return(NULL)
+    csqs <- strsplit(v, ";", fixed=TRUE)[[1]]
+    cbind(dat[rep(i, length(csqs)), exp.cols, drop=FALSE],
+          consequence=csqs, stringsAsFactors=FALSE)
+  }))
+  if(is.null(dat.exp) || nrow(dat.exp) == 0) return(invisible(NULL))
+
+  all.csqs <- names(sort(table(dat.exp$consequence), decreasing=TRUE))
+  n.csq <- length(all.csqs)
+  col.csq <- setNames(colorRampPalette(c("#440154","#31688E","#35B779","#FDE725"))(n.csq), all.csqs)
+
+  has.region <- "REGION" %in% colnames(dat.exp) && any(!is.na(dat.exp$REGION))
+
+  # Merge svtypes in expanded data
+  dat.exp$svtype_m <- dat.exp$svtype
+  dat.exp$svtype_m[dat.exp$svtype_m %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
+  dat.exp$svtype_m[dat.exp$svtype_m %in% c("INS_SHORT","INS_SV")] <- "INS"
+  dat.exp$svtype_m[dat.exp$svtype_m %in% c("DUP","DUP_SV")] <- "DUP"
+
+  # Build consequence × stratum matrix
+  makeConseqMat <- function(grp.vals, grp.labs){
+    mat <- sapply(grp.labs, function(g){
+      idx <- which(grp.vals == g)
+      sapply(all.csqs, function(csq) sum(dat.exp$consequence[idx] == csq, na.rm=T))
+    })
+    matrix(mat, nrow=n.csq, ncol=length(grp.labs), dimnames=list(all.csqs, grp.labs))
+  }
+
+  af.cuts  <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
+  af.breaks <- c(-Inf, 1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
+  dat.exp$af_grp   <- as.character(cut(dat.exp$AF, breaks=af.breaks, labels=af.cuts, include.lowest=TRUE))
+  dat.exp$size_grp <- as.character(cut(dat.exp$length,
+    breaks=c(-Inf, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, Inf),
+    labels=c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb"), include.lowest=TRUE))
+
+  panel.w <- max(3600, n.csq * 120)
+  png(paste(OUTDIR, "/main_plots/vep_distributions.png", sep=""),
+      res=300, height=2*1800, width=2*panel.w)
+  layout(matrix(1:4, nrow=2, byrow=TRUE))
+
+  # Panel 1: All variants — x=consequence, y=count
+  counts.all <- sapply(all.csqs, function(csq) sum(dat.exp$consequence == csq))
+  par(bty="n", mar=c(12, 4.5, 3, 0.5))
+  bp <- barplot(counts.all, names.arg=rep("", n.csq), col=col.csq[all.csqs],
+                border=NA, ylim=c(0, max(counts.all)*1.15), yaxt="n")
+  axis(2, at=axTicks(2), labels=NA)
+  axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4, labels=prettyNum(axTicks(2), big.mark=","))
+  mtext(2, text="Count", line=3, cex=0.9)
+  mtext(3, text="VEP Consequences (All Variants)", font=2, line=0.5)
+  axis(3, at=mean(bp), tick=F, line=-0.9, labels=paste("n=", prettyNum(nrow(dat.exp), big.mark=",")))
+  text(x=bp, y=par("usr")[3] - diff(par("usr")[3:4])*0.025,
+       labels=all.csqs, srt=45, adj=1, xpd=TRUE, cex=0.7)
+
+  # Panel 2: by variant type — x=svtype, stacked by consequence
+  st.labs <- svtypes.merged$svtype
+  st.labs <- st.labs[st.labs %in% dat.exp$svtype_m]
+  mat.st <- makeConseqMat(dat.exp$svtype_m, st.labs)
+  plotStackedBars(mat=mat.st, colors=col.csq[all.csqs], scaled=F,
+                  title="VEP Consequences by Variant Type")
+
+  # Panel 3: by AF bucket — x=AF, stacked by consequence
+  mat.af <- makeConseqMat(dat.exp$af_grp[!is.na(dat.exp$af_grp)],
+                          af.cuts[af.cuts %in% dat.exp$af_grp])
+  if(ncol(mat.af) > 0)
+    plotStackedBars(mat=mat.af, colors=col.csq[all.csqs], scaled=F,
+                    title="VEP Consequences by AF")
+  else plot.new()
+
+  # Panel 4: by region (if present) or size
+  if(has.region && length(unique(dat.exp$REGION[!is.na(dat.exp$REGION)])) > 1){
+    reg.labs <- sort(unique(dat.exp$REGION[!is.na(dat.exp$REGION)]))
+    mat.reg <- makeConseqMat(dat.exp$REGION[!is.na(dat.exp$REGION)], reg.labs)
+    plotStackedBars(mat=mat.reg, colors=col.csq[all.csqs], scaled=F,
+                    title="VEP Consequences by Region")
+  } else {
+    sz.labs <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
+    mat.sz <- makeConseqMat(dat.exp$size_grp[!is.na(dat.exp$size_grp)],
+                            sz.labs[sz.labs %in% dat.exp$size_grp])
+    plotStackedBars(mat=mat.sz, colors=col.csq[all.csqs], scaled=F,
+                    title="VEP Consequences by Size")
+  }
+  dev.off()
+}
+
+
+######################################
+#####SVAnnotate prediction distribution plot
+######################################
+wrapperPlotSvAnnotateDistrib <- function(){
+  pred.cols <- grep("^PREDICTED_", colnames(dat), value=TRUE)
+  if(length(pred.cols) == 0) return(invisible(NULL))
+
+  has.pred <- rowSums(as.data.frame(lapply(pred.cols, function(p) as.integer(dat[[p]]))), na.rm=TRUE) > 0
+  if(sum(has.pred) == 0) return(invisible(NULL))
+
+  pred.labels <- sub("^PREDICTED_", "", pred.cols)
+  n.pred <- length(pred.cols)
+  col.pred <- setNames(colorRampPalette(c("#A50026","#F46D43","#FEE090",
+                                          "#74ADD1","#4575B4","#762A83",
+                                          "#1B7837","#5AAE61","#F7F7F7"))(n.pred), pred.cols)
+
+  has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
+
+  svtype_m <- dat$svtype
+  svtype_m[svtype_m %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
+  svtype_m[svtype_m %in% c("INS_SHORT","INS_SV")] <- "INS"
+  svtype_m[svtype_m %in% c("DUP","DUP_SV")] <- "DUP"
+
+  af.cuts   <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
+  af.breaks <- c(-Inf, 1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
+  af_grp    <- as.character(cut(dat$AF, breaks=af.breaks, labels=af.cuts, include.lowest=TRUE))
+
+  # Build prediction × stratum matrix
+  makePredMat <- function(grp.vals, grp.labs){
+    mat <- sapply(grp.labs, function(g){
+      idx <- which(grp.vals == g)
+      sapply(pred.cols, function(p) sum(as.logical(dat[[p]][idx]), na.rm=T))
+    })
+    matrix(mat, nrow=n.pred, ncol=length(grp.labs), dimnames=list(pred.labels, grp.labs))
+  }
+
+  panel.w <- max(3600, n.pred * 140)
+  png(paste(OUTDIR, "/main_plots/svannotate_distributions.png", sep=""),
+      res=300, height=2*1800, width=2*panel.w)
+  layout(matrix(1:4, nrow=2, byrow=TRUE))
+
+  # Panel 1: All variants — x=PREDICTED_ category, y=count
+  counts.all <- sapply(pred.cols, function(p) sum(as.logical(dat[[p]]), na.rm=T))
+  par(bty="n", mar=c(12, 4.5, 3, 0.5))
+  bp <- barplot(counts.all, names.arg=rep("", n.pred), col=col.pred[pred.cols],
+                border=NA, ylim=c(0, max(counts.all)*1.15), yaxt="n")
+  axis(2, at=axTicks(2), labels=NA)
+  axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4, labels=prettyNum(axTicks(2), big.mark=","))
+  mtext(2, text="Count", line=3, cex=0.9)
+  mtext(3, text="SVAnnotate Predictions (All Variants)", font=2, line=0.5)
+  axis(3, at=mean(bp), tick=F, line=-0.9, labels=paste("n=", prettyNum(sum(has.pred), big.mark=",")))
+  text(x=bp, y=par("usr")[3] - diff(par("usr")[3:4])*0.025,
+       labels=pred.labels, srt=45, adj=1, xpd=TRUE, cex=0.7)
+
+  # Panel 2: by variant type — x=svtype, stacked by PREDICTED_
+  st.labs <- svtypes.merged$svtype
+  st.labs <- st.labs[st.labs %in% svtype_m]
+  mat.st <- makePredMat(svtype_m, st.labs)
+  plotStackedBars(mat=mat.st, colors=col.pred[pred.cols], scaled=F,
+                  title="SVAnnotate Predictions by Variant Type")
+
+  # Panel 3: by AF bucket
+  af.present <- af.cuts[af.cuts %in% af_grp]
+  mat.af <- makePredMat(af_grp[!is.na(af_grp)], af.present)
+  if(ncol(mat.af) > 0)
+    plotStackedBars(mat=mat.af, colors=col.pred[pred.cols], scaled=F,
+                    title="SVAnnotate Predictions by AF")
+  else plot.new()
+
+  # Panel 4: by region (if present) or size
+  if(has.region && length(unique(dat$REGION[!is.na(dat$REGION)])) > 1){
+    reg.labs <- sort(unique(dat$REGION[!is.na(dat$REGION)]))
+    mat.reg <- makePredMat(dat$REGION[!is.na(dat$REGION)], reg.labs)
+    plotStackedBars(mat=mat.reg, colors=col.pred[pred.cols], scaled=F,
+                    title="SVAnnotate Predictions by Region")
+  } else {
+    sz.labs   <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
+    sz.breaks <- c(-Inf, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, Inf)
+    sz_grp    <- as.character(cut(dat$length, breaks=sz.breaks, labels=sz.labs, include.lowest=TRUE))
+    mat.sz    <- makePredMat(sz_grp[!is.na(sz_grp)], sz.labs[sz.labs %in% sz_grp])
+    plotStackedBars(mat=mat.sz, colors=col.pred[pred.cols], scaled=F,
+                    title="SVAnnotate Predictions by Size")
+  }
+  dev.off()
+}
+
+
 ###Plotting block
 #SV counts
 wrapperPlotAllCountBars()
@@ -1779,3 +1961,8 @@ wrapperPlotNcrDistrib()
 #gnomAD match rate distribution
 wrapperPlotGnomadMatchDistrib()
 
+#VEP consequence distribution
+wrapperPlotVepDistrib()
+
+#SVAnnotate prediction distribution
+wrapperPlotSvAnnotateDistrib()

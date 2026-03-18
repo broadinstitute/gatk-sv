@@ -90,6 +90,26 @@ gmatch.col <- if("gnomAD_V4_match_ID" %in% colnames(dat)) dat$gnomAD_V4_match_ID
 qual.col <- if("QUAL" %in% colnames(dat)) dat$QUAL else NULL
 ref.col <- if("REF" %in% colnames(dat)) dat$REF else NULL
 alt.col <- if("ALT" %in% colnames(dat)) dat$ALT else NULL
+# VEP Consequence field (pipe-field index 1 per comma-chained annotation, semicolon-joined unique values)
+vep.col <- if("vep" %in% colnames(dat)) {
+  sapply(as.character(dat$vep), function(v){
+    if(is.na(v) || v == "." || nchar(v) == 0) return(NA_character_)
+    annots <- strsplit(v, ",", fixed=TRUE)[[1]]
+    csqs <- unique(vapply(annots, function(a){
+      parts <- strsplit(a, "|", fixed=TRUE)[[1]]
+      if(length(parts) >= 2 && nchar(parts[2]) > 0) parts[2] else NA_character_
+    }, character(1)))
+    csqs <- csqs[!is.na(csqs)]
+    if(length(csqs) == 0) return(NA_character_)
+    paste(sort(csqs), collapse=";")
+  })
+} else NULL
+# PREDICTED_* fields from SVAnnotate (TRUE if present and non-empty)
+predicted.names <- grep("^PREDICTED_", colnames(dat), value=TRUE)
+predicted.presence <- setNames(lapply(predicted.names, function(pname){
+  v <- as.character(dat[[pname]])
+  !is.na(v) & v != "." & v != "" & toupper(v) != "FALSE" & v != "0"
+}), predicted.names)
 dat <- data.frame("chr"=dat$chr,
                   "start"=dat$start,
                   "end"=dat$end,
@@ -113,6 +133,8 @@ if(!is.null(ref.col)) dat$REF <- as.character(ref.col)
 if(!is.null(alt.col)) dat$ALT <- as.character(alt.col)
 if(!is.null(ncr.col)) { ncr.v <- as.character(ncr.col); ncr.v[ncr.v=="."] <- NA; dat$NCR <- as.numeric(ncr.v) }
 if(!is.null(gmatch.col)) dat$gnomAD_V4_match_ID <- as.character(gmatch.col)
+if(!is.null(vep.col)) dat$VEP_consequences <- vep.col
+for(pname in names(predicted.presence)) dat[[pname]] <- predicted.presence[[pname]]
 #Exclude all sites where no carriers or alleles are observed
 zeroes <- which(dat$AC==0 | dat$carriers==0)
 if(length(zeroes)>0){

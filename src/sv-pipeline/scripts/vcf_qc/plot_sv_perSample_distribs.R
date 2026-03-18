@@ -791,7 +791,7 @@ wrapperVariantCountHeats <- function(count="variants"){
 #Master wrapper for final top-level plot
 masterWrapperSummaryPlot <- function(){
   #Prep plot area
-  png(paste(OUTDIR,"/main_plots/per_genome.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/per_genome_distributions.png",sep=""),
       height=5*300,width=14*300,res=300)
   layout(matrix(c(1,2,3,4,5,11,
                   6,7,8,9,10,12),nrow=2,byrow=T),
