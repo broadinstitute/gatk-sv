@@ -758,7 +758,7 @@ wrapperViolinPlots <- function(plotDat,compset.prefix,ylab=NULL){
   plotViolins(mat=plotDat$datByFreq.mat,
               colors=rev(colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(ncol(plotDat$datByFreq.mat)-1)),
               xlab="SV Frequency",ylab=ylab,
-              title=paste(ylab," by Freq. vs. ",compset.prefix,sep=""))
+              title=paste(ylab," by AF vs. ",compset.prefix,sep=""))
   dev.off()
 }
 #Wrapper for all lineplots
@@ -780,7 +780,7 @@ wrapperLinePlots <- function(plotDat,compset.prefix,ylab=NULL,nsamp){
   plotLinesByClass(means=plotDat$datByFreqClass.mat$mean,
                    ci_adj=plotDat$datByFreqClass.mat$ci_adj,
                    nsamp=nsamp,xlab="SV Frequency",ylab=ylab,
-                   title=paste("Mean ",ylab," by Freq. vs. ",compset.prefix,sep=""))
+                   title=paste("Mean ",ylab," by AF vs. ",compset.prefix,sep=""))
   dev.off()
   
   #HEATMAP of Size x class
@@ -824,7 +824,7 @@ masterWrapper <- function(plotDat.all,compset.prefix){
   plotLinesByClass(means=plotDat$datByFreqClass.mat$mean,
                    ci_adj=plotDat$datByFreqClass.mat$ci_adj,
                    nsamp=nsamp,xlab="SV Frequency",ylab=ylab,lab.cex=lab.cex,
-                   title=paste("Mean ",ylab," by Freq. ",sep=""),legend=F)
+                   title=paste("Mean ",ylab," by AF ",sep=""),legend=F)
   #Heatmap of size v freq
   plotHeatmap(mat=plotDat$datBySizeFreq.mat$mean,x.title="SV Size",y.title="SV Freq.",
               title=paste("Mean ",ylab," by Size x Freq.",sep=""),lab.cex=lab.cex,nsamp=nsamp)
@@ -846,7 +846,7 @@ masterWrapper <- function(plotDat.all,compset.prefix){
   plotLinesByClass(means=plotDat$datByFreqClass.mat$mean,
                    ci_adj=plotDat$datByFreqClass.mat$ci_adj,
                    nsamp=nsamp,xlab="SV Frequency",ylab=ylab,lab.cex=lab.cex,
-                   title=paste("Mean ",ylab," by Freq. ",sep=""),legend=F)
+                   title=paste("Mean ",ylab," by AF ",sep=""),legend=F)
   #Heatmap of size v freq
   plotHeatmap(mat=plotDat$datBySizeFreq.mat$mean,x.title="SV Size",y.title="SV Freq.",
               title=paste("Mean ",ylab," by Size x Freq.",sep=""),lab.cex=lab.cex,nsamp=nsamp)

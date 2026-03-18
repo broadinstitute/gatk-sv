@@ -111,28 +111,34 @@ if "SVLEN" not in vcf_in.header.info:
     vcf_in.header.info.add("SVLEN", 1, "Integer", "Length of variant.")
 if "END" not in vcf_in.header.info:
     vcf_in.header.info.add("END", 1, "Integer", "End position of variant.")
+if "ORIG_ALT" not in vcf_in.header.info:
+    vcf_in.header.info.add("ORIG_ALT", 1, "String", "Original ALT nucleotide for SNVs before symbolic conversion.")
 vcf_out = pysam.VariantFile("~{prefix}.vcf.gz", "w", header=vcf_in.header)
 
 for rec in vcf_in:
     allele_type = rec.info["allele_type"].upper()
-    allele_type = allele_type[0] if isinstance(allele_type, tuple) else allele_type
-    allele_length = abs(len(rec.alts[0]) - len(rec.ref))
+    allele_length = abs(rec.info["allele_length"]) if "allele_length" in rec.info else len(rec.ref)
 
-    if allele_type == "DEL":
+    if "DEL" in allele_type:
         svtype = "DEL_SHORT" if allele_length < 50 else "DEL_SV"
-    elif allele_type == "INS":
+    elif "INS" in allele_type:
         svtype = "INS_SHORT" if allele_length < 50 else "INS_SV"
+    elif "DUP" in allele_type:
+        svtype = "DUP" if allele_length < 50 else "DUP_SV"
     else:
         svtype = allele_type
+    
+    if allele_type == "SNV" and len(rec.alts) == 1 and len(rec.alts[0]) == 1:
+        rec.info["ORIG_ALT"] = rec.alts[0]
     rec.info["SVTYPE"] = svtype
     rec.info["SVLEN"] = allele_length
-    rec.stop = rec.pos + len(rec.ref) - 1
+    rec.stop = rec.pos + allele_length - 1
 
     if len(rec.alts) > 1:
         for sample in rec.samples.values():
             gt = sample["GT"]
             sample["GT"] = tuple(0 if a == 0 else (1 if a is not None else None) for a in gt)
-
+    
     rec.alts = (f"<{allele_type}>",)
 
     vcf_out.write(rec)

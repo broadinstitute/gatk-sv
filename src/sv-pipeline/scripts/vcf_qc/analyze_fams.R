@@ -625,7 +625,7 @@ plotInhStats <- function(inh.stats, count="variants", title=NULL, cex.lab=1){
 }
 
 #Generate size distribution frame with log10 scaling
-prepSizePlot <- function(xlims=c(50, 1000000), cex.lab=1){
+prepSizePlot <- function(xlims=c(1, 1000000), cex.lab=1){
   #Prep plot area
   plot(x=log10(xlims), y=c(0, 1), type="n",
        xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i")
@@ -1119,7 +1119,7 @@ wrapperDeNovoRateLines <- function(fam.dat.list, fam.type, count="variants",
       height=4, width=5)
   plotDNRvsFreq(DNRs=freq.dat$DNRs, bins=freq.dat$bins, k=4,
                 nfams=length(fam.dat.list),
-                title=paste(title.prefix, "De Novo Rate by Freq.", sep=""),
+                title=paste(title.prefix, "De Novo Rate by AF", sep=""),
                 count=count, fam.type=fam.type, legend=T)
   dev.off()
  
@@ -1234,7 +1234,7 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
                                  freq.bins=40, count="variants")
   plotDNRvsFreq(DNRs=freq.dat.v$DNRs, bins=freq.dat.v$bins, k=4,
                 nfams=length(fam.dat.list),
-                title=paste("Site De Novo Rate by Freq.", sep=""),
+                title=paste("Site De Novo Rate by AF", sep=""),
                 count="variants", fam.type=fam.type, legend=F, cex.lab=cex.lab)
   #DNR vs min proband GQ
   if(gq) {
@@ -1279,7 +1279,7 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
                                  freq.bins=40, count="alleles")
   plotDNRvsFreq(DNRs=freq.dat.a$DNRs, bins=freq.dat.a$bins, k=4,
                 nfams=length(fam.dat.list),
-                title=paste("Allele De Novo Rate by Freq.", sep=""),
+                title=paste("Allele De Novo Rate by AF", sep=""),
                 count="alleles", fam.type=fam.type, legend=F, cex.lab=cex.lab)
   #DNR vs min proband GQ
   if(gq){

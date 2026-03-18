@@ -175,7 +175,9 @@ awk -v FS="\t" -v OFS="\t" -v nsamp=${nsamp} '{
   else {other++} };
   if (other > 0 || (nsamp==other+unknown)) {AC="NA"; AN="NA"; AF="NA"}
   else {AC=(2*homalt)+het; AN=2*(nsamp-(unknown+other)); AF=AC/AN};
-  print $3, nsamp-unknown, homref, het, homalt, other, unknown, AC, AN, AF, $6, $4, $5 }' >> \
+  orig_alt="."; n=split($8,info,";");
+  for(j=1;j<=n;j++){if(info[j]~"^ORIG_ALT="){split(info[j],kv,"="); orig_alt=kv[2]}}
+  print $3, nsamp-unknown, homref, het, homalt, other, unknown, AC, AN, AF, $6, $4, orig_alt }' >> \
 ${QCTMP}/genotype_counts_per_SV.txt
 
 #Get genotype counts per variant for multi-alleleic CNVs
@@ -189,7 +191,7 @@ awk -v FS="\t" -v OFS="\t" -v nsamp=${nsamp} '{
     else if (a[CN]==0 || a[CN]>=4) {homalt++}
     else {het++} };
   AC=(2*homalt)+het; AN=2*(nsamp-(unknown+other)); AF=AC/AN;
-  print $3, nsamp-unknown, homref, het, homalt, other, unknown, AC, AN, AF, $6, $4, $5 }' >> \
+  print $3, nsamp-unknown, homref, het, homalt, other, unknown, AC, AN, AF, $6, $4, "." }' >> \
 ${QCTMP}/genotype_counts_per_SV.txt
 
 

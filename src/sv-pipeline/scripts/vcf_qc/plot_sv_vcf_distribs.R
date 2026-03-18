@@ -22,7 +22,7 @@ sex.chroms <- c(1:22, paste("chr", 1:22, sep=""))
 ###HELPER FUNCTIONS
 ###################
 #General function to plot stacked bars from a matrix
-plotStackedBars <- function(mat,colors,scaled=T,title=NULL){
+plotStackedBars <- function(mat,colors,scaled=T,log.y=FALSE,title=NULL){
   #Scale columns, if options
   if(scaled==T){
     mat <- apply(mat,2,function(vals){
@@ -32,18 +32,26 @@ plotStackedBars <- function(mat,colors,scaled=T,title=NULL){
   
   #Prepare plot area
   ymax <- max(apply(mat,2,sum,na.rm=T),na.rm=T)
+  ymin <- if(log.y) 0.5 else 0
+  log.arg <- if(log.y) "y" else ""
   par(mar=c(4,4,2,1),bty="n")
-  plot(x=c(0,ncol(mat)),y=c(0,1.02*ymax),type="n",
-       xaxt="n",yaxt="n",xaxs="i",yaxs="i",xlab="",ylab="")
+  plot(x=c(0,ncol(mat)),y=c(ymin,1.02*ymax),type="n",
+       xaxt="n",yaxt="n",xaxs="i",yaxs="i",xlab="",ylab="",log=log.arg)
   
   #Add axes & title
-  axis(2,at=axTicks(2),labels=NA)
-  if(scaled==T){
-    ylabs <- paste(round(100*axTicks(2),1),"%",sep="")
+  if(log.y){
+    log.ticks <- 10^seq(floor(log10(ymin+0.1)), ceiling(log10(ymax+1)))
+    axis(2,at=log.ticks,labels=NA)
+    axis(2,at=log.ticks,tick=F,labels=prettyNum(log.ticks,big.mark=","),las=2,cex.axis=0.8,line=-0.4)
   }else{
-    ylabs <- prettyNum(axTicks(2),big.mark=",")
+    axis(2,at=axTicks(2),labels=NA)
+    if(scaled==T){
+      ylabs <- paste(round(100*axTicks(2),1),"%",sep="")
+    }else{
+      ylabs <- prettyNum(axTicks(2),big.mark=",")
+    }
+    axis(2,at=axTicks(2),tick=F,labels=ylabs,las=2,cex.axis=0.8,line=-0.4)
   }
-  axis(2,at=axTicks(2),tick=F,labels=ylabs,las=2,cex.axis=0.8,line=-0.4)
   mtext(3,line=0.5,text=title,font=2)
   
   #Iterate and plot bars
@@ -52,6 +60,10 @@ plotStackedBars <- function(mat,colors,scaled=T,title=NULL){
     vals <- mat[,i]
     starts <- as.numeric(cumsum(c(0,vals[-length(vals)])))
     ends <- as.numeric(cumsum(vals))
+    if(log.y){
+      starts <- pmax(starts, 0.5)
+      ends <- pmax(ends, 0.5)
+    }
     
     #Plot bars
     rect(xleft=i-0.85,xright=i-0.15,ybottom=starts,ytop=ends,
@@ -370,16 +382,16 @@ wrapperPlotAllCountBars <- function(){
          widths=c(3,2,2,2))
   plotSVCountBars(dat=dat,svtypes=svtypes,
                   title="Variant Count")
-  plotStackedBars(mat=AF.mat,colors=svtypes$color,scale=F,
+  plotStackedBars(mat=AF.mat,colors=svtypes$color,scale=F,log.y=T,
                   title="Count by AF")
   abline(v=1,lty=2,col="gray50")
   axis(1,at=1,labels=NA,col="gray75",tck=-0.22)
-  plotStackedBars(mat=size.mat,colors=svtypes$color,scale=F,
+  plotStackedBars(mat=size.mat,colors=svtypes$color,scale=F,log.y=T,
                   title="Count by Size")
   abline(v=1,lty=2,col="gray50")
   axis(1,at=1,labels=NA,col="gray75",tck=-0.22)
   if("REGION" %in% colnames(dat)){
-    plotStackedBars(mat=region.mat,colors=svtypes$color,scale=F,
+    plotStackedBars(mat=region.mat,colors=svtypes$color,scale=F,log.y=T,
                     title="Count by Region")
     abline(v=1,lty=2,col="gray50")
     axis(1,at=1,labels=NA,col="gray75",tck=-0.22)
@@ -414,16 +426,16 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
   filter.legend <- NULL
   if(autosomal==T){
     dat <- dat[which(dat$chr %in% sex.chroms),]
-    filter.legend <- c(filter.legend,"Autosomal SV only")
+    filter.legend <- c(filter.legend,"Autosomal variants only")
   }
   if(biallelic==T){
     dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
-    filter.legend <- c(filter.legend,"Biallelic SV only")
+    filter.legend <- c(filter.legend,"Biallelic variants only")
   }
   sizes <- log10(dat$length)
   if(length(sizes)>0){
     xlims <- range(sizes[which(!is.infinite(sizes))],na.rm=T)
-    xlims[1] <- max(c(log10(min.size),xlims[1]))
+    xlims[1] <- log10(min.size)
     xlims[2] <- min(c(log10(max.size),xlims[2]))
     if(!all(is.finite(xlims)) || xlims[1] >= xlims[2]){
       par(bty="n",mar=c(3.5,3.5,3,0.5))
@@ -478,7 +490,7 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
     axis(2,at=axTicks(2),tck=-0.025,labels=NA)
     axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
          labels=paste(round(100*axTicks(2),1),"%",sep=""))
-    mtext(2,text="Fraction of SV",line=2,cex=text.cex)
+    mtext(2,text="Fraction of Variants",line=2,cex=text.cex)
     sapply(1:2,function(i){
       axis(3,at=log10(c(300,6000))[i],labels=NA,tck=-0.01)
       axis(3,at=log10(c(300,6000))[i],tick=F,line=-0.9,cex.axis=0.8,
@@ -558,11 +570,11 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
   filter.legend <- NULL
   if(autosomal==T){
     dat <- dat[which(dat$chr %in% sex.chroms),]
-    filter.legend <- c(filter.legend,"Autosomal SV only")
+    filter.legend <- c(filter.legend,"Autosomal variants only")
   }
   if(biallelic==T){
     dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
-    filter.legend <- c(filter.legend,"Biallelic SV only")
+    filter.legend <- c(filter.legend,"Biallelic variants only")
   }
   sizes <- log10(dat$length)
   if(length(sizes) > 0){
@@ -625,7 +637,7 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
     axis(2,at=axTicks(2),tck=-0.025,labels=NA)
     axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
          labels=paste(round(100*axTicks(2),1),"%",sep=""))
-    mtext(2,text="Fraction of SV",line=2)
+    mtext(2,text="Fraction of Variants",line=2)
     sapply(1:2,function(i){
       axis(3,at=log10(c(300,6000))[i],labels=NA,tck=-0.01)
       axis(3,at=log10(c(300,6000))[i],tick=F,line=-0.9,cex.axis=0.8,
@@ -766,11 +778,11 @@ plotFreqDistrib <- function(dat, svtypes,
   filter.legend <- NULL
   if(autosomal==T){
     dat <- dat[which(dat$chr %in% sex.chroms),]
-    filter.legend <- c(filter.legend,"Autosomal SV only")
+    filter.legend <- c(filter.legend,"Autosomal variants only")
   }
   if(biallelic==T){
     dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
-    filter.legend <- c(filter.legend,"Biallelic SV only")
+    filter.legend <- c(filter.legend,"Biallelic variants only")
   }
   freqs <- log10(dat$AF)
   if(length(freqs)>0){
@@ -816,7 +828,7 @@ plotFreqDistrib <- function(dat, svtypes,
     axis(2,at=axTicks(2),tck=-0.025,labels=NA)
     axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
          labels=paste(round(100*axTicks(2),1),"%",sep=""))
-    mtext(2,text="Fraction of SV",line=2.2,cex=lwd.cex)
+    mtext(2,text="Fraction of Variants",line=2.2,cex=lwd.cex)
     mtext(3,line=1.5,text=title,font=2,cex=lwd.cex)
     
     #Add dots & smoothed lines per SV type
@@ -871,11 +883,11 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
   filter.legend <- NULL
   if(autosomal==T){
     dat <- dat[which(dat$chr %in% sex.chroms),]
-    filter.legend <- c(filter.legend,"Autosomal SV only")
+    filter.legend <- c(filter.legend,"Autosomal variants only")
   }
   if(biallelic==T){
     dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
-    filter.legend <- c(filter.legend,"Biallelic SV only")
+    filter.legend <- c(filter.legend,"Biallelic variants only")
   }
   freqs <- log10(dat$AF)
   if(length(freqs) > 0){
@@ -923,7 +935,7 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
     axis(2,at=axTicks(2),tck=-0.025,labels=NA)
     axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
          labels=paste(round(100*axTicks(2),1),"%",sep=""))
-    mtext(2,text="Fraction of SV",line=2.2)
+    mtext(2,text="Fraction of Variants",line=2.2)
     mtext(3,line=1.5,text=title,font=2)
     
     #Add points & rolling mean lines per size tranche
@@ -1258,8 +1270,8 @@ wrapperPlotQualDistrib <- function(){
 
   # Panel 1: All variants
   par(bty="n", mar=c(4.5,4,3,1))
-  q.all <- dat$QUAL[!is.na(dat$QUAL) & is.finite(dat$QUAL)]
-  xlim <- range(q.all, na.rm=T)
+  q.all <- pmin(dat$QUAL[!is.na(dat$QUAL) & is.finite(dat$QUAL)], 99)
+  xlim <- c(min(q.all, na.rm=T), 99)
   breaks <- seq(xlim[1],xlim[2],length.out=51)
   h <- hist(q.all, breaks=breaks, plot=F)
   plot(x=xlim, y=c(0,max(h$density)*1.1), type="n", xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i")
@@ -1271,21 +1283,21 @@ wrapperPlotQualDistrib <- function(){
   axis(3,at=mean(xlim),tick=F,line=-0.9,labels=paste("n=",prettyNum(length(q.all),big.mark=","),sep=""))
 
   # Panel 2: By region
-  reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) dat$QUAL[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$QUAL)]) else list()
+  reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) pmin(dat$QUAL[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$QUAL)], 99)) else list()
   plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
-                      main.val=dat$QUAL, xlab="QUAL", main.label="All",
+                      main.val=q.all, xlab="QUAL", main.label="All",
                       title="QUAL by Region", xlim=xlim)
 
   # Panel 3: By size bucket
-  size.vals <- lapply(seq_along(size.labels), function(i) dat$QUAL[!is.na(dat$QUAL) & dat$length>=size.mins[i] & dat$length<=size.maxs[i]])
+  size.vals <- lapply(seq_along(size.labels), function(i) pmin(dat$QUAL[!is.na(dat$QUAL) & dat$length>=size.mins[i] & dat$length<=size.maxs[i]], 99))
   plotDistribOverlaid(sub.list=size.vals, sub.labels=size.labels, sub.colors=col.size,
-                      main.val=dat$QUAL, xlab="QUAL", main.label="All",
+                      main.val=q.all, xlab="QUAL", main.label="All",
                       title="QUAL by Size", xlim=xlim)
 
   # Panel 4: By AF bucket
-  af.vals <- lapply(seq_along(af.labels), function(i) dat$QUAL[!is.na(dat$QUAL) & dat$AF>af.mins[i] & dat$AF<=af.maxs[i]])
+  af.vals <- lapply(seq_along(af.labels), function(i) pmin(dat$QUAL[!is.na(dat$QUAL) & dat$AF>af.mins[i] & dat$AF<=af.maxs[i]], 99))
   plotDistribOverlaid(sub.list=af.vals, sub.labels=af.labels, sub.colors=col.af,
-                      main.val=dat$QUAL, xlab="QUAL", main.label="All",
+                      main.val=q.all, xlab="QUAL", main.label="All",
                       title="QUAL by AF", xlim=xlim)
   dev.off()
 }
@@ -1382,23 +1394,19 @@ wrapperPlotGnomadMatchDistrib <- function(){
   col.size <- colorRampPalette(c("#1B9E77","#D95F02","#7570B3","#E7298A","#66A61E","#E6AB02"))(length(size.labels))
   col.reg <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
 
-  overall.rate <- calcGnomadMatchRate(dat)
-
-  plotMatchRateBars <- function(vals, labs, cols, xlabel, main.rate, title){
+  plotMatchRateBars <- function(vals, labs, cols, xlabel, title){
     vals[is.nan(vals)] <- NA
-    ylim <- c(0, max(vals, main.rate, na.rm=T)*1.15)
+    ylim <- c(0, max(vals, na.rm=T)*1.15)
     par(bty="n", mar=c(7,4.5,3,0.5))
     plot(x=c(0,length(labs)+1), y=ylim, type="n", xaxt="n", yaxt="n",
          xlab="", ylab="", xaxs="i", yaxs="i")
     rect(xleft=1:length(labs)-0.35, xright=1:length(labs)+0.35,
          ybottom=0, ytop=vals, col=cols, border=NA)
-    abline(h=main.rate, lty=2, col="gray40", lwd=1.5)
     axis(1,at=1:length(labs),labels=labs,las=2,cex.axis=0.8,tick=F,line=0.5)
     axis(2,at=axTicks(2),labels=NA); axis(2,at=axTicks(2),tick=F,las=2,cex.axis=0.8,line=-0.4,
          labels=paste(round(100*axTicks(2),1),"%",sep=""))
     mtext(1,text=xlabel,line=5.5,cex=0.9); mtext(2,text="gnomAD Match Rate",line=3,cex=0.9)
     mtext(3,text=title,font=2,line=0.5)
-    legend("topright",lty=2,col="gray40",legend="Overall Rate",bty="n",cex=0.75)
   }
 
   # Determine number of panels
@@ -1411,24 +1419,24 @@ wrapperPlotGnomadMatchDistrib <- function(){
   # Panel 1: By svtype (overall bars)
   svtype.rates <- sapply(svtypes$svtype, function(st) calcGnomadMatchRate(dat[dat$svtype==st,]))
   plotMatchRateBars(vals=svtype.rates, labs=svtypes$svtype, cols=svtypes$color,
-                    xlabel="SV Type", main.rate=overall.rate, title="gnomAD Match Rate by SV Type")
+                    xlabel="Variant Type", title="gnomAD Match Rate by Variant Type")
 
   # Optional Panel 2: By region
   if(has.region && length(regions)>0){
     reg.rates <- sapply(regions, function(r) calcGnomadMatchRate(dat[!is.na(dat$REGION) & dat$REGION==r,]))
     plotMatchRateBars(vals=reg.rates, labs=regions, cols=col.reg,
-                      xlabel="Region", main.rate=overall.rate, title="gnomAD Match Rate by Region")
+                      xlabel="Region", title="gnomAD Match Rate by Region")
   }
 
   # Panel: By size bucket
   size.rates <- sapply(seq_along(size.labels), function(i) calcGnomadMatchRate(dat[!is.na(dat$length) & dat$length>=size.mins[i] & dat$length<=size.maxs[i],]))
   plotMatchRateBars(vals=size.rates, labs=size.labels, cols=col.size,
-                    xlabel="Size Bucket", main.rate=overall.rate, title="gnomAD Match Rate by Size")
+                    xlabel="Size Bucket", title="gnomAD Match Rate by Size")
 
   # Panel: By AF bucket
   af.rates <- sapply(seq_along(af.labels), function(i) calcGnomadMatchRate(dat[!is.na(dat$AF) & dat$AF>af.mins[i] & dat$AF<=af.maxs[i],]))
   plotMatchRateBars(vals=af.rates, labs=af.labels, cols=col.af,
-                    xlabel="AF Bucket", main.rate=overall.rate, title="gnomAD Match Rate by AF")
+                    xlabel="AF Bucket", title="gnomAD Match Rate by AF")
 
   dev.off()
 }
@@ -1457,7 +1465,7 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
     HW.cols[which(HW.p<0.05/length(HW.p))] <- "#AC26A1"
     
     #Subsample points if plot is too dense
-    max.plot.pts <- 25000
+    max.plot.pts <- 50000
     if(nrow(HW.mat) > max.plot.pts){
       sub.idx <- sort(sample(1:nrow(HW.mat), max.plot.pts))
       HW.mat.plot <- HW.mat[sub.idx,]
@@ -1737,15 +1745,17 @@ if(!is.null(svtypes.file)){
                         "color"=svtypes.c)
 }
 
-# Merged svtypes and dat for size-stratified plots (DEL_SHORT+DEL_SV → DEL, INS_SHORT+INS_SV → INS)
+# Merged svtypes and dat for size-stratified plots (DEL_SHORT+DEL_SV → DEL, INS_SHORT+INS_SV → INS, DUP+DUP_SV → DUP)
 svtypes.merged <- data.frame(
-  svtype = c("DEL","INS",svtypes$svtype[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV")]),
+  svtype = c("DEL","INS","DUP",svtypes$svtype[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV","DUP","DUP_SV")]),
   color = c(svtypes$color[svtypes$svtype=="DEL_SHORT"],
             svtypes$color[svtypes$svtype=="INS_SHORT"],
-            svtypes$color[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV")]))
+            svtypes$color[svtypes$svtype=="DUP"],
+            svtypes$color[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV","DUP","DUP_SV")]))
 dat.merged <- dat
 dat.merged$svtype[dat.merged$svtype %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
 dat.merged$svtype[dat.merged$svtype %in% c("INS_SHORT","INS_SV")] <- "INS"
+dat.merged$svtype[dat.merged$svtype %in% c("DUP","DUP_SV")] <- "DUP"
 
 ###Plotting block
 #SV counts

@@ -650,7 +650,7 @@ wrapperVariantCountViolins <- function(count="variants"){
   plotViolins(mat=plot.data.sub$count.rare,
               colors=svtypes$color,log=F,
               xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
-              title=paste(label.prefix," per Genome [AC>1 & Freq. <1%]",sep=""))
+              title=paste(label.prefix," per Genome [AC>1 & AF<1%]",sep=""))
   dev.off()
   #Uncommon
   png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.uncommon.png",sep=""),
@@ -658,7 +658,7 @@ wrapperVariantCountViolins <- function(count="variants"){
   plotViolins(mat=plot.data.sub$count.uncommon,
               colors=svtypes$color,log=F,
               xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
-              title=paste(label.prefix," per Genome [Freq. 1-10%]",sep=""))
+              title=paste(label.prefix," per Genome [AF 1-10%]",sep=""))
   dev.off()
   #Common
   png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.common.png",sep=""),
@@ -666,7 +666,7 @@ wrapperVariantCountViolins <- function(count="variants"){
   plotViolins(mat=plot.data.sub$count.common,
               colors=svtypes$color,log=F,
               xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
-              title=paste(label.prefix," per Genome [Freq. 10-50%]",sep=""))
+              title=paste(label.prefix," per Genome [AF 10-50%]",sep=""))
   dev.off()
   #Major
   png(paste(OUTDIR,"/supporting_plots/per_sample_plots/counts.",count,"_per_genome.major.png",sep=""),
@@ -674,7 +674,7 @@ wrapperVariantCountViolins <- function(count="variants"){
   plotViolins(mat=plot.data.sub$count.major,
               colors=svtypes$color,log=F,
               xlab="Classes",ylab=paste(label.prefix," per Genome",sep=""),
-              title=paste(label.prefix," per Genome [Freq. >50%]",sep=""))
+              title=paste(label.prefix," per Genome [AF>50%]",sep=""))
   dev.off()
 }
 #Master wrapper for all variant/allele count barplots
@@ -717,7 +717,7 @@ wrapperVariantCountBarplots <- function(count="variants"){
   plotStackedBars(mat=t(plot.data.sub$median.freq)[-1,],
                   colors=svtypes$color,scaled=F,
                   xlabel=freq.lab,ylabel="Count per Genome",
-                  title=paste(label.prefix," vs. Freq.",sep=""),
+                  title=paste(label.prefix," vs. AF",sep=""),
                   subtitle=paste("Median of ",prettyNum(length(samples),big.mark=",")," Samples",sep=""))
   dev.off()
   
@@ -727,7 +727,7 @@ wrapperVariantCountBarplots <- function(count="variants"){
   plotStackedBars(mat=t(plot.data.sub$median.freq)[-1,],
                   colors=svtypes$color,scaled=T,
                   xlabel=freq.lab,ylabel="Pct. per Genome",
-                  title=paste("Pct. of ",label.prefix," vs. Freq.",sep=""),
+                  title=paste("Pct. of ",label.prefix," vs. AF",sep=""),
                   subtitle=paste("Median of ",prettyNum(length(samples),big.mark=",")," Samples",sep=""))
   dev.off()
   
@@ -771,7 +771,7 @@ wrapperVariantCountHeats <- function(count="variants"){
   plotHeatmap(mat=plot.data.sub$median.size,
               base.cols=c("gray15",svtypes.merged$color),
               x.title="Classes",y.title="Size",
-              title=paste(label.prefix," per Genome, by Size",sep=""))
+              title=paste(label.prefix," per Genome by Size",sep=""))
   dev.off()
   
   #SV count by frequency
@@ -780,7 +780,7 @@ wrapperVariantCountHeats <- function(count="variants"){
   plotHeatmap(mat=plot.data.sub$median.freq,
               base.cols=c("gray15",svtypes$color),
               x.title="Classes",y.title=paste(ylab.prefix," Freq.",sep=""),
-              title=paste(label.prefix," per Genome, by Freq.",sep=""))
+              title=paste(label.prefix," per Genome by AF",sep=""))
   dev.off()
 }
 
@@ -821,23 +821,13 @@ masterWrapperSummaryPlot <- function(){
   plotHeatmap(mat=plot.data$variants$median.size,
               base.cols=c("gray15",svtypes.merged$color),
               x.title="Classes",y.title="Size",
-              title="Sites per Genome, by Size",lab.cex=0.75)
+              title="Sites per Genome by Size",lab.cex=0.75)
   
   #Heatmap of SV sites per sample by frequency
   plotHeatmap(mat=plot.data$variants$median.freq,
               base.cols=c("gray15",svtypes$color),
               x.title="Classes",y.title="CF",
               title="Sites per Genome by AF",lab.cex=0.75)
-
-  #Heatmap of SV sites per sample by region
-  if(!is.null(plot.data$variants$median.region)){
-    plotHeatmap(mat=plot.data$variants$median.region,
-                base.cols=c("gray15",svtypes$color),
-                x.title="Classes",y.title="Region",
-                title="Sites per Genome by Region",lab.cex=0.75)
-  }else{
-    par(bty="n"); plot.new(); text(0.5,0.5,"No REGION data",cex=0.8)
-  }
   
   #Violin plot of SV alleles per sample
   plotViolins(mat=plot.data$alleles$count.all,
@@ -870,6 +860,16 @@ masterWrapperSummaryPlot <- function(){
               base.cols=c("gray15",svtypes$color),
               x.title="Classes",y.title="AF",
               title="Alleles per Genome by AF",lab.cex=0.75)
+
+  #Heatmap of SV sites per sample by region
+  if(!is.null(plot.data$variants$median.region)){
+    plotHeatmap(mat=plot.data$variants$median.region,
+                base.cols=c("gray15",svtypes$color),
+                x.title="Classes",y.title="Region",
+                title="Sites per Genome by Region",lab.cex=0.75)
+  }else{
+    par(bty="n"); plot.new(); text(0.5,0.5,"No region data",cex=0.8)
+  }
   
   #Heatmap of SV alleles per sample by region
   if(!is.null(plot.data$alleles$median.region)){
@@ -878,7 +878,7 @@ masterWrapperSummaryPlot <- function(){
                 x.title="Classes",y.title="Region",
                 title="Alleles per Genome by Region",lab.cex=0.75)
   }else{
-    par(bty="n"); plot.new(); text(0.5,0.5,"No REGION data",cex=0.8)
+    par(bty="n"); plot.new(); text(0.5,0.5,"No region data",cex=0.8)
   }
   
   #Close device
@@ -976,15 +976,17 @@ if(!is.null(svtypes.file)){
                         "color"=svtypes.c)
 }
 
-# Merged svtypes and dat for size-stratified plots (DEL_SHORT+DEL_SV → DEL, INS_SHORT+INS_SV → INS)
+# Merged svtypes and dat for size-stratified plots (DEL_SHORT+DEL_SV → DEL, INS_SHORT+INS_SV → INS, DUP+DUP_SV → DUP)
 svtypes.merged <- data.frame(
-  svtype = c("DEL","INS",svtypes$svtype[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV")]),
+  svtype = c("DEL","INS","DUP",svtypes$svtype[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV","DUP","DUP_SV")]),
   color = c(svtypes$color[svtypes$svtype=="DEL_SHORT"],
             svtypes$color[svtypes$svtype=="INS_SHORT"],
-            svtypes$color[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV")]))
+            svtypes$color[svtypes$svtype=="DUP"],
+            svtypes$color[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV","DUP","DUP_SV")]))
 dat.merged <- dat
 dat.merged$svtype[dat.merged$svtype %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
 dat.merged$svtype[dat.merged$svtype %in% c("INS_SHORT","INS_SV")] <- "INS"
+dat.merged$svtype[dat.merged$svtype %in% c("DUP","DUP_SV")] <- "DUP"
 #Create output directory structure, if necessary
 if(!dir.exists(OUTDIR)){
   dir.create(OUTDIR)
