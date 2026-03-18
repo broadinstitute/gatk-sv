@@ -113,7 +113,7 @@ task vcf2bed {
   String prefix = basename(vcf_gz, ".vcf.gz")
   command <<<
     set -euo pipefail
-    bcftools view -c 1 ~{vcf_gz} ~{prefix}.non_ref.vcf.gz
+    bcftools view -c 1 ~{vcf_gz} -Oz -o ~{prefix}.non_ref.vcf.gz
     tabix -p vcf ~{prefix}.non_ref.vcf.gz 
     svtk vcf2bed -i SVTYPE -i SVLEN -i AC -i AN --include-filters ~{prefix}.non_ref.vcf.gz ~{prefix}.bed
     bgzip ~{prefix}.bed
