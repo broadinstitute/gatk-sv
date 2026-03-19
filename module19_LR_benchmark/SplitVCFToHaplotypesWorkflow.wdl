@@ -121,12 +121,12 @@ task SplitVCFToHaplotypes {
 
     python3 split_vcf_haplotypes.py \
         -i ~{input_vcf} \
-        -o ~{output_prefix}.vcf~{if output_type == "z" then ".gz" else ""} \
+        -o ~{output_prefix}.vcf.gz \
         --output-type ~{output_type}
   >>>
 
   output {
-    File output_vcf = "~{output_prefix}.vcf~{if output_type == \"z\" then \".gz\" else \"\"}"
+    File output_vcf = "~{output_prefix}.vcf.gz"
   }
 
     RuntimeAttr default_attr = object {
