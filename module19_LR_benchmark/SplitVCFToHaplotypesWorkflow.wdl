@@ -8,7 +8,6 @@ workflow SplitVCFToHaplotypesWorkflow {
     File input_vcf_idx
     File input_gtf  
     String output_prefix
-    String output_midfix
 
     String sv_pipeline_base_docker
 
@@ -21,7 +20,7 @@ workflow SplitVCFToHaplotypesWorkflow {
       input_vcf = input_vcf,
       input_vcf_idx = input_vcf_idx,
       input_gtf = input_gtf,
-      output_prefix = "~{output_prefix}.~{output_midfix}.with_gene_anno",
+      output_prefix = "~{output_prefix}.with_gene_anno",
       docker_image = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_annotate_vcf_with_genes
   }
@@ -30,7 +29,7 @@ workflow SplitVCFToHaplotypesWorkflow {
     input:
       input_vcf = AnnotateVCFWithGenes.annotated_vcf,
       input_vcf_idx = AnnotateVCFWithGenes.annotated_vcf_idx,
-      output_prefix = "~{output_prefix}.~{output_midfix}.with_gene_anno.haplotypes",
+      output_prefix = "~{output_prefix}.with_gene_anno.haplotypes",
       docker_image = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_split_vcf_to_haplotypes
   }
