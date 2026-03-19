@@ -79,7 +79,7 @@ plotStackedBars <- function(mat,colors,scaled=T,log.y=FALSE,title=NULL){
     rect(xleft=i-0.85,xright=i-0.15,
          ybottom=min(starts,na.rm=T),
          ytop=max(ends,na.rm=T),
-         col=NA)
+         col=NA, border=NA)
     
     #Add label
     axis(1,at=i-0.5,las=2,line=-0.8,labels=colnames(mat)[i],cex.axis=0.8,tick=F)
@@ -1150,9 +1150,11 @@ wrapperPlotTiTv <- function(){
 
   # Number of columns: AF panel + Size panel + optional heatmap
   n.panels <- 2 + as.integer(has.region && length(regions)>0)
+  has.heatmap <- has.region && length(regions)>0
   png(paste(OUTDIR,"/main_plots/ti_tv_distributions.png",sep=""),
-      res=300, height=1800, width=n.panels*1800)
-  layout(matrix(1:n.panels, nrow=1))
+      res=300, height=1800, width=n.panels*1800 + if(has.heatmap) 600 else 0)
+  layout(matrix(1:n.panels, nrow=1),
+         widths=c(rep(1, n.panels - as.integer(has.heatmap)), if(has.heatmap) 1.35 else 1))
 
   # Panel 1: Ti:Tv by AF bucket
   titv.af <- sapply(seq_along(af.labels), function(i){
@@ -1212,16 +1214,25 @@ wrapperPlotTiTv <- function(){
 ######################################
 plotDistribOverlaid <- function(sub.list, sub.labels, sub.colors, main.val=NULL,
                                 xlab="QUAL", main.label="All Variants",
-                                title=NULL, xlim=NULL, alpha=0.5, log.y=FALSE){
+                                title=NULL, xlim=NULL, alpha=0.5, log.y=FALSE, log.x=FALSE){
   # Combine all values to get x range
   all.vals <- unlist(lapply(sub.list, function(x) x[!is.na(x) & is.finite(x)]))
   if(length(all.vals)==0){ par(bty="n",mar=c(4.5,4,3,1)); plot.new(); mtext(3,text=title,font=2,line=1); return(invisible(NULL)) }
   if(is.null(xlim)) xlim <- range(all.vals, na.rm=T)
-  breaks <- seq(xlim[1], xlim[2], length.out=51)
+  if(log.x && xlim[1] <= 0){
+    pos.vals <- all.vals[all.vals > 0]
+    xlim[1] <- if(length(pos.vals)>0) min(pos.vals) else 0.001
+  }
+  if(log.x){
+    breaks <- 10^seq(log10(xlim[1]), log10(xlim[2]), length.out=51)
+  } else {
+    breaks <- seq(xlim[1], xlim[2], length.out=51)
+  }
 
   # Compute densities
   dens.list <- lapply(sub.list, function(vals){
     vals <- vals[!is.na(vals) & is.finite(vals) & vals>=xlim[1] & vals<=xlim[2]]
+    if(log.x) vals <- vals[vals > 0]
     if(length(vals)<2) return(NULL)
     h <- hist(vals, breaks=breaks, plot=F)
     h$density
@@ -1229,6 +1240,7 @@ plotDistribOverlaid <- function(sub.list, sub.labels, sub.colors, main.val=NULL,
   main.dens <- NULL
   if(!is.null(main.val)){
     mv <- main.val[!is.na(main.val) & is.finite(main.val) & main.val>=xlim[1] & main.val<=xlim[2]]
+    if(log.x) mv <- mv[mv > 0]
     if(length(mv)>=2) main.dens <- hist(mv, breaks=breaks, plot=F)$density
   }
   all.dens <- unlist(c(lapply(dens.list, function(d) if(!is.null(d)) d else NULL), list(main.dens)))
@@ -1243,9 +1255,19 @@ plotDistribOverlaid <- function(sub.list, sub.labels, sub.colors, main.val=NULL,
   mids <- (breaks[-length(breaks)] + breaks[-1])/2
 
   par(bty="n", mar=c(4.5,4,3,1))
-  log.arg <- if(log.y) "y" else ""
+  log.arg <- paste(c(if(log.x) "x" else "", if(log.y) "y" else ""), collapse="")
   plot(x=xlim, y=ylim, type="n", xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i", log=log.arg)
-  abline(v=pretty(xlim), col="gray85", lwd=0.5)
+  if(log.x){
+    x.grid <- 10^seq(floor(log10(xlim[1])), ceiling(log10(xlim[2])))
+    abline(v=x.grid, col="gray85", lwd=0.5)
+    x.ticks <- x.grid
+    axis(1, at=x.ticks, labels=NA)
+    axis(1, at=x.ticks, tick=F, line=-0.4, cex.axis=0.8,
+         labels=paste0(x.ticks*100, "%"))
+  } else {
+    abline(v=pretty(xlim), col="gray85", lwd=0.5)
+    axis(1, at=pretty(xlim), labels=NA); axis(1, at=pretty(xlim), tick=F, line=-0.4, cex.axis=0.8)
+  }
   if(log.y){
     log.ticks <- 10^seq(floor(log10(ymin.lin)), ceiling(log10(ymax.top)))
     axis(2, at=log.ticks, labels=NA)
@@ -1253,7 +1275,6 @@ plotDistribOverlaid <- function(sub.list, sub.labels, sub.colors, main.val=NULL,
   }else{
     axis(2, at=axTicks(2), labels=NA); axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4)
   }
-  axis(1, at=pretty(xlim), labels=NA); axis(1, at=pretty(xlim), tick=F, line=-0.4, cex.axis=0.8)
   mtext(1, text=xlab, line=3, cex=0.9); mtext(2, text="Density", line=2.5, cex=0.9)
   mtext(3, text=title, font=2, line=1)
 
@@ -1362,42 +1383,43 @@ wrapperPlotNcrDistrib <- function(){
       res=300, height=1800, width=n.panels*1800)
   layout(matrix(1:n.panels, nrow=1))
 
-  # Panel 1: All variants
+  # Panel 1: All variants - log x-axis
   par(bty="n", mar=c(4.5,4,3,1))
   n.all <- dat$NCR[!is.na(dat$NCR)]
-  breaks <- seq(0,1,by=0.02)
-  h <- hist(n.all, breaks=breaks, plot=F)
-  pos.dens <- h$density[h$density > 0]
-  ymin.ncr <- if(length(pos.dens)>0) max(min(pos.dens)*0.1, 1e-9) else 1e-9
-  ymax.ncr <- max(h$density)*3
-  plot(x=xlim, y=c(ymin.ncr,ymax.ncr), type="n", xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i", log="y")
-  abline(v=seq(0,1,0.2), col="gray85", lwd=0.5)
-  polygon(c(h$mids[1],h$mids,h$mids[length(h$mids)]), pmax(c(0,h$density,0),ymin.ncr), col="#4393C3", border="#2166AC")
-  axis(1,at=seq(0,1,0.2),labels=NA); axis(1,at=seq(0,1,0.2),tick=F,line=-0.4,cex.axis=0.8,
-       labels=paste(seq(0,100,20),"%",sep=""))
-  log.ticks.ncr <- 10^seq(floor(log10(ymin.ncr)), ceiling(log10(ymax.ncr)))
-  axis(2,at=log.ticks.ncr,labels=NA); axis(2,at=log.ticks.ncr,tick=F,las=2,cex.axis=0.8,line=-0.4)
+  ncr.floor <- 0.001
+  n.clipped <- pmax(n.all[n.all > 0], ncr.floor)
+  breaks.log <- 10^seq(log10(ncr.floor), 0, length.out=51)
+  h <- hist(n.clipped, breaks=breaks.log, plot=F)
+  plot(x=c(ncr.floor, 1), y=c(0, max(h$density)*1.15), type="n", xaxt="n", yaxt="n",
+       xlab="", ylab="", yaxs="i", log="x")
+  abline(v=10^seq(-3, 0), col="gray85", lwd=0.5)
+  polygon(c(h$mids[1],h$mids,h$mids[length(h$mids)]), c(0,h$density,0),
+          col="#4393C3", border="#2166AC")
+  x.ticks.ncr <- 10^seq(-3, 0)
+  axis(1,at=x.ticks.ncr,labels=NA)
+  axis(1,at=x.ticks.ncr,tick=F,line=-0.4,cex.axis=0.8,labels=paste0(x.ticks.ncr*100,"%"))
+  axis(2,at=axTicks(2),labels=NA); axis(2,at=axTicks(2),tick=F,las=2,cex.axis=0.8,line=-0.4)
   mtext(1,text="NCR",line=3,cex=0.9); mtext(2,text="Density",line=2.5,cex=0.9)
   mtext(3,text="NCR Distribution",font=2,line=1)
-  axis(3,at=0.5,tick=F,line=-0.9,labels=paste("n=",prettyNum(length(n.all),big.mark=","),sep=""))
+  axis(3,at=0.01,tick=F,line=-0.9,labels=paste("n=",prettyNum(length(n.all),big.mark=","),sep=""))
 
   # Panel 2: By region
   reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) dat$NCR[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$NCR)]) else list()
   plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
                       main.val=dat$NCR, xlab="NCR", main.label="All",
-                      title="NCR by Region", xlim=xlim, log.y=TRUE)
+                      title="NCR by Region", xlim=c(0.001,1), log.x=TRUE)
 
   # Panel 3: By size bucket
   size.vals <- lapply(seq_along(size.labels), function(i) dat$NCR[!is.na(dat$NCR) & dat$length>=size.mins[i] & dat$length<=size.maxs[i]])
   plotDistribOverlaid(sub.list=size.vals, sub.labels=size.labels, sub.colors=col.size,
                       main.val=dat$NCR, xlab="NCR", main.label="All",
-                      title="NCR by Size", xlim=xlim, log.y=TRUE)
+                      title="NCR by Size", xlim=c(0.001,1), log.x=TRUE)
 
   # Panel 4: By AF bucket
   af.vals <- lapply(seq_along(af.labels), function(i) dat$NCR[!is.na(dat$NCR) & dat$AF>af.mins[i] & dat$AF<=af.maxs[i]])
   plotDistribOverlaid(sub.list=af.vals, sub.labels=af.labels, sub.colors=col.af,
                       main.val=dat$NCR, xlab="NCR", main.label="All",
-                      title="NCR by AF", xlim=xlim, log.y=TRUE)
+                      title="NCR by AF", xlim=c(0.001,1), log.x=TRUE)
   dev.off()
 }
 
@@ -1714,7 +1736,7 @@ wrapperPlotAllHWDistribs <- function(){
     plotHWSingle(dat=dat[which(dat$svtype==st),],svtypes=svtypes,
                  title=st, full.legend=F, lab.cex=0.75)
   })
-  plot.new()  # empty cell if n.sv is odd
+  if(n.sv %% 2 != 0) plot.new()  # empty cell if n.sv is odd
   dev.off()
 }
 
@@ -2045,7 +2067,7 @@ plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
   regions    <- if(has.region) orderRegions(unique(trv.dat$REGION[!is.na(trv.dat$REGION)])) else character(0)
   has.motif  <- "max_motif_length" %in% colnames(trv.dat) && any(!is.na(trv.dat$max_motif_length))
 
-  col.size <- colorRampPalette(c("#4575B4","#91BFDB","#FEE090","#FC8D59","#D73027"))(length(trv.size.labels))
+  col.size <- colorRampPalette(c("#1B9E77","#D95F02","#7570B3","#E7298A","#66A61E","#E6AB02"))(length(trv.size.labels))
   col.reg  <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
   col.mot  <- colorRampPalette(c("#41B6C4","#1D91C0","#225EA8","#0C2C84"))(length(trv.motif.labels))
 

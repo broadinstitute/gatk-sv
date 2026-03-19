@@ -20,6 +20,10 @@ huge.max.size <- 300000000
 ###########################
 ###GENERIC HELPER FUNCTIONS
 ###########################
+orderRegions <- function(regions){
+  canonical <- c("US","RM","SD","SR")
+  c(canonical[canonical %in% regions], sort(regions[!regions %in% canonical]))
+}
 #Read & clean list of variant IDs & genotypes per sample
 readDatPerSample <- function(ID){
   #Set path
@@ -212,7 +216,7 @@ mediansByGQ <- function(dat,samples,svtypes,min.GQs,count="variants",biallelic=F
 #Gather median count of variants per sample per REGION annotation
 mediansByRegion <- function(dat, samples, svtypes, count="variants") {
   if(!"REGION" %in% colnames(dat)) return(NULL)
-  regions <- sort(unique(dat$REGION[!is.na(dat$REGION)]))
+  regions <- orderRegions(sort(unique(dat$REGION[!is.na(dat$REGION)])))
   if(length(regions) == 0) return(NULL)
   median.mat <- t(sapply(regions, function(reg) {
     mat.sub <- countVarsMulti(dat=dat[which(dat$REGION==reg),], samples=samples, count=count)
@@ -792,10 +796,10 @@ wrapperVariantCountHeats <- function(count="variants"){
 masterWrapperSummaryPlot <- function(){
   #Prep plot area
   png(paste(OUTDIR,"/main_plots/per_genome_distributions.png",sep=""),
-      height=5*300,width=14*300,res=300)
+      height=5*300,width=17*300,res=300)
   layout(matrix(c(1,2,3,4,5,11,
                   6,7,8,9,10,12),nrow=2,byrow=T),
-         widths=c(4,1.5,1.5,3,3,3))
+         widths=c(5,2,2,4,4,4))
   
   #Violin plot of SV sites per sample
   plotViolins(mat=plot.data$variants$count.all,

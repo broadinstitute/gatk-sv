@@ -283,27 +283,29 @@ computeInheritanceMulti <- function(trio.dat.list, VIDs=NULL){
 }
 
 #Collect de novo rate per SV class
-deNovoRateByClass <- function(trio.dat.list, VIDs=NULL){
+deNovoRateByClass <- function(trio.dat.list, VIDs=NULL, svtypes.use=NULL, dat.use=NULL){
+  if(is.null(svtypes.use)) svtypes.use <- svtypes
+  if(is.null(dat.use)) dat.use <- dat
   #Collect median DNR across all classes
   all.dat <- computeInheritanceMulti(trio.dat.list=trio.dat.list, VIDs=VIDs)
   all.dnrs <- c(median(all.dat$pro.site.denovorate, na.rm=T),
                 median(all.dat$pro.allele.denovorate, na.rm=T))
  
   #Iterate over classes and return DNRs
-  res <- sapply(svtypes$svtype, function(svtype){
+  res <- sapply(svtypes.use$svtype, function(svtype){
     if(is.null(VIDs)){
-      VIDs <- dat$VID
+      VIDs <- dat.use$VID
     }
     sub.dat <- computeInheritanceMulti(trio.dat.list=trio.dat.list,
-                                       VIDs=dat$VID[which(dat$VID %in% VIDs
-                                                          & dat$svtype==svtype)])
+                                       VIDs=dat.use$VID[which(dat.use$VID %in% VIDs
+                                                          & dat.use$svtype==svtype)])
     sub.dnrs <- c(median(sub.dat$pro.site.denovorate, na.rm=T),
                   median(sub.dat$pro.allele.denovorate, na.rm=T))
   })
  
   #Format & return results
   res <- as.data.frame(cbind(all.dnrs, res))
-  colnames(res) <- c("ALL", svtypes$svtype)
+  colnames(res) <- c("ALL", svtypes.use$svtype)
   rownames(res) <- c("variants", "alleles")
   return(res)
 }
@@ -437,7 +439,10 @@ deNovoRateBySizeFreq <- function(trio.dat.list, VIDs=NULL, count="variants",
 }
 
 #Collect matrix of de novo rates by class by size
-deNovoRateBySize <- function(trio.dat.list, size.bins=40, count="variants"){
+deNovoRateBySize <- function(trio.dat.list, size.bins=40, count="variants",
+                             svtypes.use=NULL, dat.use=NULL){
+  if(is.null(svtypes.use)) svtypes.use <- svtypes
+  if(is.null(dat.use)) dat.use <- dat
   #Create evenly spaced size bins on log10-scale
   logsize.min <- log10(50)
   logsize.max <- log10(1000000)
@@ -451,15 +456,16 @@ deNovoRateBySize <- function(trio.dat.list, size.bins=40, count="variants"){
   #Iterate over sizeuency bins and gather de novo rates
   DNRs <- apply(size.df, 1, function(bounds){
     dnrs <- deNovoRateByClass(trio.dat.list=trio.dat.list,
-                              VIDs=dat$VID[which(dat$length>bounds[1]
-                                                 & dat$length<=bounds[2])])
+                              VIDs=dat.use$VID[which(dat.use$length>bounds[1]
+                                                 & dat.use$length<=bounds[2])],
+                              svtypes.use=svtypes.use, dat.use=dat.use)
     return(as.numeric(dnrs[which(rownames(dnrs)==count), ]))
   })
  
   #Format & return DNRs & size.df
   DNRs <- as.data.frame(DNRs)
   DNRs <- apply(DNRs, 2, as.numeric)
-  rownames(DNRs) <- c("ALL", svtypes$svtype)
+  rownames(DNRs) <- c("ALL", svtypes.use$svtype)
   return(list("DNRs"=DNRs, "bins"=size.df))
 }
 
@@ -660,7 +666,7 @@ prepSizePlot <- function(xlims=c(50, 1000000), cex.lab=1){
 
 #Plot DNRs vs size for all classes
 plotDNRvsSize <- function(DNRs, bins, k=4, title=NULL, legend=T,
-                          fam.type="families", nfams, cex.lab=1){
+                          fam.type="families", nfams, cex.lab=1, svtypes.use=NULL){
   #Prep plot area
   par(mar=c(3.5, 3.5, 2.5, 1))
   prepSizePlot(cex.lab=cex.lab)
@@ -671,8 +677,9 @@ plotDNRvsSize <- function(DNRs, bins, k=4, title=NULL, legend=T,
                   bins[nrow(bins), 1]))
  
   #Set type colors
-  colors <- c("gray15", svtypes$color)
-  lwds <- c(3, rep(2, times=nrow(svtypes)))
+  if(is.null(svtypes.use)) svtypes.use <- svtypes
+  colors <- c("gray15", svtypes.use$color)
+  lwds <- c(3, rep(2, times=nrow(svtypes.use)))
  
   #Iterate over DNRs and plot per class
   sapply(nrow(DNRs):1, function(i){
@@ -1224,11 +1231,12 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
                count="variants", cex.lab=cex.lab)
   #DNR vs size
   size.dat.v <- deNovoRateBySize(trio.dat.list=fam.dat.list,
-                                 size.bins=40, count="variants")
+                                 size.bins=40, count="variants",
+                                 svtypes.use=svtypes.merged, dat.use=dat.merged)
   plotDNRvsSize(DNRs=size.dat.v$DNRs, bins=size.dat.v$bins, k=4,
                 nfams=length(fam.dat.list),
                 title=paste("Site De Novo Rate by Size", sep=""),
-                fam.type=fam.type, legend=T, cex.lab=cex.lab)
+                fam.type=fam.type, legend=T, cex.lab=cex.lab, svtypes.use=svtypes.merged)
   #DNR vs frequency
   freq.dat.v <- deNovoRateByFreq(trio.dat.list=fam.dat.list,
                                  freq.bins=40, count="variants")
@@ -1269,11 +1277,12 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
                count="alleles", cex.lab=cex.lab)
   #DNR vs size
   size.dat.a <- deNovoRateBySize(trio.dat.list=fam.dat.list,
-                                 size.bins=40, count="alleles")
+                                 size.bins=40, count="alleles",
+                                 svtypes.use=svtypes.merged, dat.use=dat.merged)
   plotDNRvsSize(DNRs=size.dat.a$DNRs, bins=size.dat.a$bins, k=4,
                 nfams=length(fam.dat.list),
                 title=paste("Allele De Novo Rate by Size", sep=""),
-                fam.type=fam.type, legend=F, cex.lab=cex.lab)
+                fam.type=fam.type, legend=F, cex.lab=cex.lab, svtypes.use=svtypes.merged)
   #DNR vs frequency
   freq.dat.a <- deNovoRateByFreq(trio.dat.list=fam.dat.list,
                                  freq.bins=40, count="alleles")
@@ -1403,6 +1412,14 @@ if(!is.null(svtypes.file)){
   svtypes <- data.frame("svtype"=svtypes.v,
                         "color"=svtypes.c)
 }
+
+#Create merged svtypes and data (combine X and X_SV into one X class)
+sv.merge.map <- c("DEL_SV"="DEL","INS_SV"="INS","DUP_SV"="DUP","TRV_SV"="TRV")
+dat.merged <- dat
+for(sv.from in names(sv.merge.map)){
+  dat.merged$svtype[dat.merged$svtype == sv.from] <- sv.merge.map[sv.from]
+}
+svtypes.merged <- svtypes[!grepl("_SV$", svtypes$svtype), ]
 
 #Create output directory structure, if necessary
 if(!dir.exists(OUTDIR)){
