@@ -450,8 +450,6 @@ task GeneGTPattern {
   command <<<
     set -euo pipefail
 
-    echo "Running gene-level genotype pattern script..."
-
     cat << 'EOF' > calcu_gene_GT_patterns.py
 #!/usr/bin/env python3
 
@@ -558,7 +556,8 @@ pattern_out.close()
 summary_out.close()
 EOF
 
-    python3 calcu_gene_GT_patterns \
+
+    python3 calcu_gene_GT_patterns.py \
       --input_vcf ~{input_vcf} \
       --input_gtf ~{input_gtf} \
       --out_prefix ~{output_prefix}
