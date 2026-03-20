@@ -1118,24 +1118,20 @@ plotTiTvHeatmap <- function(snv.dat, af.labels, af.mins, af.maxs, regions, title
   mtext(1, text="Region", line=3.5, cex=0.85)
   mtext(2, text="AF Bucket", line=3.5, cex=0.85)
   mtext(3, text=title, font=2, line=1)
-  # Color bar drawn in right margin using normalized device coordinates
+  # Color bar in right margin, positioned in user coords extended with xpd=NA
   usr <- par("usr")
-  plt <- par("plt")  # c(x1,x2,y1,y2) in NDC
-  # Place color bar starting at 1 line beyond right edge of plot
-  bar.left.ndc  <- plt[2] + (1-plt[2])*0.25
-  bar.right.ndc <- bar.left.ndc + (1-plt[2])*0.25
-  bar.bot.ndc   <- plt[3]
-  bar.top.ndc   <- plt[4]
-  bar.y.ndc <- seq(bar.bot.ndc, bar.top.ndc, length.out=102)
-  rect(xleft=bar.left.ndc, xright=bar.right.ndc,
-       ybottom=bar.y.ndc[-length(bar.y.ndc)], ytop=bar.y.ndc[-1],
+  xw  <- usr[2] - usr[1]
+  yw  <- usr[4] - usr[3]
+  cb.xl <- usr[2] + xw * 0.18
+  cb.xr <- usr[2] + xw * 0.30
+  cb.y  <- seq(usr[3], usr[4], length.out=102)
+  rect(xleft=cb.xl, xright=cb.xr, ybottom=cb.y[-length(cb.y)], ytop=cb.y[-1],
        col=col.pal, border=NA, xpd=NA)
-  rect(xleft=bar.left.ndc, xright=bar.right.ndc,
-       ybottom=bar.bot.ndc, ytop=bar.top.ndc, col=NA, border="gray50", xpd=NA)
+  rect(xleft=cb.xl, xright=cb.xr, ybottom=usr[3], ytop=usr[4],
+       col=NA, border="gray50", xpd=NA)
   label.vals <- round(seq(zlim[1],zlim[2],length.out=5),2)
-  label.y.ndc <- seq(bar.bot.ndc, bar.top.ndc, length.out=5)
-  text(x=bar.right.ndc + (1-plt[2])*0.05, y=label.y.ndc,
-       labels=label.vals, xpd=NA, cex=0.65, adj=0)
+  label.y    <- seq(usr[3],usr[4],length.out=5)
+  text(x=cb.xr + xw*0.04, y=label.y, labels=label.vals, xpd=NA, cex=0.75, adj=0)
 }
 
 wrapperPlotTiTv <- function(){
@@ -1406,7 +1402,7 @@ wrapperPlotNcrDistrib <- function(){
   axis(2,at=axTicks(2),labels=NA); axis(2,at=axTicks(2),tick=F,las=2,cex.axis=0.8,line=-0.4)
   mtext(1,text="NCR",line=3,cex=0.9); mtext(2,text="Density",line=2.5,cex=0.9)
   mtext(3,text="NCR Distribution",font=2,line=1)
-  axis(3,at=0.01,tick=F,line=-0.9,labels=paste("n=",prettyNum(length(n.all),big.mark=","),sep=""))
+  mtext(3,text=paste("n=",prettyNum(length(n.all),big.mark=","),sep=""),line=-0.1,cex=0.8)
 
   # Panel 2: By region
   reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) dat$NCR[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$NCR)]) else list()
@@ -1711,27 +1707,27 @@ wrapperPlotAllHWDistribs <- function(){
   if(n.sv %% 2 != 0) plot.new()
   dev.off()
 
-  # Plot 2: carrier freq vs AF (large, col 1) + per-AF-bucket HWE grid (cols 2+)
-  af.labels.hwe <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
-  af.mins.hwe   <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
-  af.maxs.hwe   <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
-  n.af      <- length(af.labels.hwe)
-  n.af.cols <- ceiling(n.af / 2)
-  mat2 <- matrix(NA, nrow=2, ncol=1+n.af.cols)
+  # Plot 2: carrier freq vs AF (large, col 1) + per-size-bucket HWE grid (cols 2+)
+  sz.labels.hwe <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
+  sz.mins.hwe   <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
+  sz.maxs.hwe   <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
+  n.sz      <- length(sz.labels.hwe)
+  n.sz.cols <- ceiling(n.sz / 2)
+  mat2 <- matrix(NA, nrow=2, ncol=1+n.sz.cols)
   mat2[1:2, 1] <- 1
-  for(i in seq_len(n.af)){
+  for(i in seq_len(n.sz)){
     mat2[((i-1)%%2)+1, ceiling(i/2)+1] <- i+1
   }
-  mat2[is.na(mat2)] <- n.af+2
+  mat2[is.na(mat2)] <- n.sz+2
   png(paste(OUTDIR,"main_plots/genotype_distributions_2.png",sep=""),
-      res=300, height=2*cell.px, width=(2+n.af.cols)*cell.px)
-  layout(mat2, widths=c(2, rep(1, n.af.cols)))
+      res=300, height=2*cell.px, width=(2+n.sz.cols)*cell.px)
+  layout(mat2, widths=c(2, rep(1, n.sz.cols)))
   plotAlleleCarrierCorrelation(dat=dat)
-  sapply(seq_len(n.af), function(i){
-    sub <- dat[which(dat$AF > af.mins.hwe[i] & dat$AF <= af.maxs.hwe[i]),]
-    plotHWSingle(dat=sub, svtypes=svtypes, title=af.labels.hwe[i], full.legend=F, lab.cex=0.75)
+  sapply(seq_len(n.sz), function(i){
+    sub <- dat[which(dat$length >= sz.mins.hwe[i] & dat$length < sz.maxs.hwe[i]),]
+    plotHWSingle(dat=sub, svtypes=svtypes, title=sz.labels.hwe[i], full.legend=F, lab.cex=0.75)
   })
-  if(n.af %% 2 != 0) plot.new()
+  if(n.sz %% 2 != 0) plot.new()
   dev.off()
 }
 
