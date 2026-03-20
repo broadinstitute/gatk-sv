@@ -41,7 +41,7 @@ workflow SplitVCFToHaplotypesWorkflow {
         docker_image = sv_pipeline_base_docker
   }
 
-  task GeneGTPattern {
+  call GeneGTPattern {
     input:
         input_vcf = SplitVCFToHaplotypes.output_vcf,
         input_gtf = PrepareAndIndexGTF.sorted_gtf_gz, 
