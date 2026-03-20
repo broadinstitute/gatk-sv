@@ -1110,7 +1110,7 @@ plotTiTvHeatmap <- function(snv.dat, af.labels, af.mins, af.maxs, regions, title
   zlim <- c(1.5, 2.5)
   col.pal <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(101)
   mat.capped <- pmin(pmax(mat, zlim[1]), zlim[2])
-  par(mar=c(5,5,3,8), bty="n")
+  par(mar=c(5,5,3,10), bty="n")
   image(x=1:ncol(mat), y=1:nrow(mat), z=t(mat.capped), col=col.pal,
         xaxt="n", yaxt="n", xlab="", ylab="", zlim=zlim)
   axis(1, at=1:ncol(mat), labels=colnames(mat), las=2, cex.axis=0.75, tick=F, line=-0.5)
@@ -1118,19 +1118,24 @@ plotTiTvHeatmap <- function(snv.dat, af.labels, af.mins, af.maxs, regions, title
   mtext(1, text="Region", line=3.5, cex=0.85)
   mtext(2, text="AF Bucket", line=3.5, cex=0.85)
   mtext(3, text=title, font=2, line=1)
-  # Color bar
+  # Color bar drawn in right margin using normalized device coordinates
   usr <- par("usr")
-  color.bar.x <- usr[2] + (usr[2]-usr[1])*0.12
-  color.bar.w <- (usr[2]-usr[1])*0.06
-  color.bar.y <- seq(usr[3], usr[4], length.out=102)
-  rect(xleft=color.bar.x, xright=color.bar.x+color.bar.w,
-       ybottom=color.bar.y[-length(color.bar.y)], ytop=color.bar.y[-1],
-       col=col.pal, border=NA, xpd=T)
-  # Legend labels placed to the right of the color bar
+  plt <- par("plt")  # c(x1,x2,y1,y2) in NDC
+  # Place color bar starting at 1 line beyond right edge of plot
+  bar.left.ndc  <- plt[2] + (1-plt[2])*0.25
+  bar.right.ndc <- bar.left.ndc + (1-plt[2])*0.25
+  bar.bot.ndc   <- plt[3]
+  bar.top.ndc   <- plt[4]
+  bar.y.ndc <- seq(bar.bot.ndc, bar.top.ndc, length.out=102)
+  rect(xleft=bar.left.ndc, xright=bar.right.ndc,
+       ybottom=bar.y.ndc[-length(bar.y.ndc)], ytop=bar.y.ndc[-1],
+       col=col.pal, border=NA, xpd=NA)
+  rect(xleft=bar.left.ndc, xright=bar.right.ndc,
+       ybottom=bar.bot.ndc, ytop=bar.top.ndc, col=NA, border="gray50", xpd=NA)
   label.vals <- round(seq(zlim[1],zlim[2],length.out=5),2)
-  label.y    <- seq(usr[3],usr[4],length.out=5)
-  label.x    <- color.bar.x + color.bar.w + (usr[2]-usr[1])*0.03
-  text(x=label.x, y=label.y, labels=label.vals, xpd=TRUE, cex=0.65, adj=0)
+  label.y.ndc <- seq(bar.bot.ndc, bar.top.ndc, length.out=5)
+  text(x=bar.right.ndc + (1-plt[2])*0.05, y=label.y.ndc,
+       labels=label.vals, xpd=NA, cex=0.65, adj=0)
 }
 
 wrapperPlotTiTv <- function(){
@@ -1406,20 +1411,17 @@ wrapperPlotNcrDistrib <- function(){
   # Panel 2: By region
   reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) dat$NCR[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$NCR)]) else list()
   plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
-                      main.val=dat$NCR, xlab="NCR", main.label="All",
-                      title="NCR by Region", xlim=c(0.001,1), log.x=TRUE)
+                      xlab="NCR", title="NCR by Region", xlim=c(0.001,1), log.x=TRUE)
 
   # Panel 3: By size bucket
   size.vals <- lapply(seq_along(size.labels), function(i) dat$NCR[!is.na(dat$NCR) & dat$length>=size.mins[i] & dat$length<=size.maxs[i]])
   plotDistribOverlaid(sub.list=size.vals, sub.labels=size.labels, sub.colors=col.size,
-                      main.val=dat$NCR, xlab="NCR", main.label="All",
-                      title="NCR by Size", xlim=c(0.001,1), log.x=TRUE)
+                      xlab="NCR", title="NCR by Size", xlim=c(0.001,1), log.x=TRUE)
 
   # Panel 4: By AF bucket
   af.vals <- lapply(seq_along(af.labels), function(i) dat$NCR[!is.na(dat$NCR) & dat$AF>af.mins[i] & dat$AF<=af.maxs[i]])
   plotDistribOverlaid(sub.list=af.vals, sub.labels=af.labels, sub.colors=col.af,
-                      main.val=dat$NCR, xlab="NCR", main.label="All",
-                      title="NCR by AF", xlim=c(0.001,1), log.x=TRUE)
+                      xlab="NCR", title="NCR by AF", xlim=c(0.001,1), log.x=TRUE)
   dev.off()
 }
 
@@ -1668,75 +1670,68 @@ plotAlleleCarrierCorrelation <- function(dat,autosomal=T,biallelic=T,
 
 #Wrapper to plot all HW distributions
 wrapperPlotAllHWDistribs <- function(){
-  #All SV
-  png(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/gt_distribution.all.png",sep=""),
-      res=300,height=1800,width=1800)
-  plotHWSingle(dat=dat,svtypes=svtypes,
-               title="Genotype Distribution")
-  dev.off()
-  #Tiny
-  png(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/gt_distribution.tiny.png",sep=""),
-      res=300,height=1800,width=1800)
-  plotHWSingle(dat=dat[which(dat$length<tiny.max.size),],svtypes=svtypes,
-               title="Genotype Distribution (< 50bp)")
-  dev.off()
-  #Small
-  png(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/gt_distribution.small.png",sep=""),
-      res=300,height=1800,width=1800)
-  plotHWSingle(dat=dat[which(dat$length>=tiny.max.size & dat$length<small.max.size),],svtypes=svtypes,
-               title="Genotype Distribution (50 - 100bp)")
-  dev.off()
-  #Medium
-  png(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/gt_distribution.medium.png",sep=""),
-      res=300,height=1800,width=1800)
-  plotHWSingle(dat=dat[which(dat$length>=small.max.size & dat$length<medium.max.size),],svtypes=svtypes,
-               title="Genotype Distribution (100bp - 500bp)")
-  dev.off()
-  #Med-Large
-  png(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/gt_distribution.medlarge.png",sep=""),
-      res=300,height=1800,width=1800)
-  plotHWSingle(dat=dat[which(dat$length>=medium.max.size & dat$length<medlarge.max.size),],svtypes=svtypes,
-               title="Genotype Distribution (500bp - 5kb)")
-  dev.off()
-  #Large
-  png(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/gt_distribution.large.png",sep=""),
-      res=300,height=1800,width=1800)
-  plotHWSingle(dat=dat[which(dat$length>=medlarge.max.size & dat$length<large.max.size),],svtypes=svtypes,
-               title="Genotype Distribution (5 - 50kb)")
-  dev.off()
-  #Huge
-  png(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/gt_distribution.huge.png",sep=""),
-      res=300,height=1800,width=1800)
-  plotHWSingle(dat=dat[which(dat$length>=large.max.size & dat$length<huge.max.size),],svtypes=svtypes,
-               title="Genotype Distribution (> 50kb)")
-  dev.off()
-  #AF vs carrier frequency
-  png(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/carrier_freq_vs_allele_freq.png",sep=""),res=300,
-      height=1200,width=1200)
-  plotAlleleCarrierCorrelation(dat=dat)
-  dev.off()
-  #Merged
-  n.sv <- nrow(svtypes)
-  n.sv.cols <- ceiling(n.sv / 2)
-  # Layout: col 1 = main HW (row1) + carrier freq (row2); cols 2..n.sv.cols+1 = SV type grid
-  mat.gt <- matrix(NA, nrow=2, ncol=1+n.sv.cols)
-  mat.gt[1,1] <- 1; mat.gt[2,1] <- 2
-  for(i in seq_len(n.sv)){
-    mat.gt[((i-1)%%2)+1, ceiling(i/2)+1] <- i+2
+  # Supporting individual plots by size
+  supp.dir <- paste(OUTDIR,"/supporting_plots/vcf_summary_plots/",sep="")
+  for(item in list(
+    list(f="gt_distribution.all.png",     d=dat,                                                                           t="Genotype Distribution"),
+    list(f="gt_distribution.tiny.png",    d=dat[which(dat$length<tiny.max.size),],                                          t="Genotype Distribution (< 50bp)"),
+    list(f="gt_distribution.small.png",   d=dat[which(dat$length>=tiny.max.size & dat$length<small.max.size),],              t="Genotype Distribution (50 - 100bp)"),
+    list(f="gt_distribution.medium.png",  d=dat[which(dat$length>=small.max.size & dat$length<medium.max.size),],            t="Genotype Distribution (100bp - 500bp)"),
+    list(f="gt_distribution.medlarge.png",d=dat[which(dat$length>=medium.max.size & dat$length<medlarge.max.size),],         t="Genotype Distribution (500bp - 5kb)"),
+    list(f="gt_distribution.large.png",   d=dat[which(dat$length>=medlarge.max.size & dat$length<large.max.size),],          t="Genotype Distribution (5 - 50kb)"),
+    list(f="gt_distribution.huge.png",    d=dat[which(dat$length>=large.max.size & dat$length<huge.max.size),],              t="Genotype Distribution (> 50kb)")
+  )){
+    png(paste(supp.dir,item$f,sep=""), res=300, height=1800, width=1800)
+    plotHWSingle(dat=item$d, svtypes=svtypes, title=item$t)
+    dev.off()
   }
-  mat.gt[is.na(mat.gt)] <- n.sv+3  # empty panel
-  png(paste(OUTDIR,"main_plots/genotype_distributions.png",sep=""),res=300,
-      height=1200*2, width=(2.5+n.sv.cols*1.2)*1200)
-  layout(mat.gt, widths=c(2.5, rep(1.2, n.sv.cols)))
-  plotHWSingle(dat=dat,svtypes=svtypes,
-               title="Genotype Distribution")
+  png(paste(supp.dir,"carrier_freq_vs_allele_freq.png",sep=""), res=300, height=1200, width=1200)
   plotAlleleCarrierCorrelation(dat=dat)
+  dev.off()
+
+  # Plot 1: overall HWE (large, col 1) + per-class HWE grid (cols 2+)
+  n.sv      <- nrow(svtypes)
+  n.sv.cols <- ceiling(n.sv / 2)
+  cell.px   <- 1200
+  mat1 <- matrix(NA, nrow=2, ncol=1+n.sv.cols)
+  mat1[1:2, 1] <- 1
+  for(i in seq_len(n.sv)){
+    mat1[((i-1)%%2)+1, ceiling(i/2)+1] <- i+1
+  }
+  mat1[is.na(mat1)] <- n.sv+2
+  png(paste(OUTDIR,"main_plots/genotype_distributions_1.png",sep=""),
+      res=300, height=2*cell.px, width=(2+n.sv.cols)*cell.px)
+  layout(mat1, widths=c(2, rep(1, n.sv.cols)))
+  plotHWSingle(dat=dat, svtypes=svtypes, title="Genotype Distribution")
   sapply(seq_len(n.sv), function(i){
     st <- svtypes$svtype[i]
-    plotHWSingle(dat=dat[which(dat$svtype==st),],svtypes=svtypes,
+    plotHWSingle(dat=dat[which(dat$svtype==st),], svtypes=svtypes,
                  title=st, full.legend=F, lab.cex=0.75)
   })
-  if(n.sv %% 2 != 0) plot.new()  # empty cell if n.sv is odd
+  if(n.sv %% 2 != 0) plot.new()
+  dev.off()
+
+  # Plot 2: carrier freq vs AF (large, col 1) + per-AF-bucket HWE grid (cols 2+)
+  af.labels.hwe <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
+  af.mins.hwe   <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
+  af.maxs.hwe   <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
+  n.af      <- length(af.labels.hwe)
+  n.af.cols <- ceiling(n.af / 2)
+  mat2 <- matrix(NA, nrow=2, ncol=1+n.af.cols)
+  mat2[1:2, 1] <- 1
+  for(i in seq_len(n.af)){
+    mat2[((i-1)%%2)+1, ceiling(i/2)+1] <- i+1
+  }
+  mat2[is.na(mat2)] <- n.af+2
+  png(paste(OUTDIR,"main_plots/genotype_distributions_2.png",sep=""),
+      res=300, height=2*cell.px, width=(2+n.af.cols)*cell.px)
+  layout(mat2, widths=c(2, rep(1, n.af.cols)))
+  plotAlleleCarrierCorrelation(dat=dat)
+  sapply(seq_len(n.af), function(i){
+    sub <- dat[which(dat$AF > af.mins.hwe[i] & dat$AF <= af.maxs.hwe[i]),]
+    plotHWSingle(dat=sub, svtypes=svtypes, title=af.labels.hwe[i], full.legend=F, lab.cex=0.75)
+  })
+  if(n.af %% 2 != 0) plot.new()
   dev.off()
 }
 
@@ -2068,8 +2063,8 @@ plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
   has.motif  <- "max_motif_length" %in% colnames(trv.dat) && any(!is.na(trv.dat$max_motif_length))
 
   col.size <- colorRampPalette(c("#1B9E77","#D95F02","#7570B3","#E7298A","#66A61E","#E6AB02"))(length(trv.size.labels))
-  col.reg  <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
-  col.mot  <- colorRampPalette(c("#41B6C4","#1D91C0","#225EA8","#0C2C84"))(length(trv.motif.labels))
+  col.reg  <- colorRampPalette(c("#1B9E77","#D95F02","#7570B3","#E7298A","#66A61E","#E6AB02"))(length(regions))
+  col.mot  <- c("#E41A1C","#377EB8","#4DAF4A","#984EA3")[seq_along(trv.motif.labels)]
 
   if(is.null(xlim)){
     v.f <- vals[!is.na(vals) & is.finite(vals)]
@@ -2103,8 +2098,7 @@ plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
     v[v >= xlim[1] & v <= xlim[2]]
   })
   plotDistribOverlaid(sub.list=size.vals, sub.labels=trv.size.labels, sub.colors=col.size,
-                      main.val=vals, xlab=xlab, main.label="All TRV",
-                      title=title.size, xlim=xlim)
+                      xlab=xlab, title=title.size, xlim=xlim)
 
   # Panel 3: By REGION
   if(has.region && length(regions) > 0){
@@ -2113,8 +2107,7 @@ plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
       v[v >= xlim[1] & v <= xlim[2]]
     })
     plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
-                        main.val=vals, xlab=xlab, main.label="All TRV",
-                        title=title.region, xlim=xlim)
+                        xlab=xlab, title=title.region, xlim=xlim)
   } else {
     par(bty="n",mar=c(4.5,4,3,1)); plot.new(); mtext(3,text=title.region,font=2,line=1)
   }
@@ -2128,8 +2121,7 @@ plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
       v[v >= xlim[1] & v <= xlim[2]]
     })
     plotDistribOverlaid(sub.list=mot.vals, sub.labels=trv.motif.labels, sub.colors=col.mot,
-                        main.val=vals, xlab=xlab, main.label="All TRV",
-                        title=title.motif, xlim=xlim)
+                        xlab=xlab, title=title.motif, xlim=xlim)
   } else {
     par(bty="n",mar=c(4.5,4,3,1)); plot.new(); mtext(3,text=title.motif,font=2,line=1)
   }
@@ -2140,14 +2132,14 @@ wrapperPlotTrvAlleleCount <- function(){
   if(nrow(trv.dat) == 0) return(invisible(NULL))
   vals <- trv.dat$AC
   xlim <- c(1, quantile(vals, 0.99))
-  png(paste(OUTDIR,"/main_plots/trv_allele_count_distribution.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/tr_allele_count_distribution.png",sep=""),
       res=300, height=1800, width=4*1800)
   layout(matrix(1:4, nrow=1))
   plotTrvDistribPanels(trv.dat=trv.dat, vals=vals, xlab="Non-Ref Allele Count", xlim=xlim,
-                       title.all="TRV Allele Count (All)",
-                       title.size="TRV Allele Count by Size",
-                       title.region="TRV Allele Count by Region",
-                       title.motif="TRV Allele Count by Motif Length")
+                       title.all="TR Allele Count",
+                       title.size="TR Allele Count by Size",
+                       title.region="TR Allele Count by Region",
+                       title.motif="TR Allele Count by Motif Length")
   dev.off()
 }
 
@@ -2156,14 +2148,14 @@ wrapperPlotTrvSampleCount <- function(){
   if(nrow(trv.dat) == 0) return(invisible(NULL))
   vals <- trv.dat$carriers
   xlim <- c(1, quantile(vals, 0.99))
-  png(paste(OUTDIR,"/main_plots/trv_sample_count_distribution.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/tr_sample_count_distribution.png",sep=""),
       res=300, height=1800, width=4*1800)
   layout(matrix(1:4, nrow=1))
   plotTrvDistribPanels(trv.dat=trv.dat, vals=vals, xlab="Variant Sample Count", xlim=xlim,
-                       title.all="TRV Sample Count (All)",
-                       title.size="TRV Sample Count by Size",
-                       title.region="TRV Sample Count by Region",
-                       title.motif="TRV Sample Count by Motif Length")
+                       title.all="TR Sample Count",
+                       title.size="TR Sample Count by Size",
+                       title.region="TR Sample Count by Region",
+                       title.motif="TR Sample Count by Motif Length")
   dev.off()
 }
 
@@ -2173,14 +2165,14 @@ wrapperPlotTrvExpansionRatio <- function(){
   if(nrow(trv.dat) == 0) return(invisible(NULL))
   vals <- trv.dat$TRV_EXPANSION_RATIO
   xlim <- c(0, 1)
-  png(paste(OUTDIR,"/main_plots/trv_expansion_ratio_distribution.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/tr_expansion_ratio_distribution.png",sep=""),
       res=300, height=1800, width=4*1800)
   layout(matrix(1:4, nrow=1))
   plotTrvDistribPanels(trv.dat=trv.dat, vals=vals, xlab="Expansion Ratio", xlim=xlim,
-                       title.all="TRV Expansion Ratio (All)",
-                       title.size="TRV Expansion Ratio by Size",
-                       title.region="TRV Expansion Ratio by Region",
-                       title.motif="TRV Expansion Ratio by Motif Length")
+                       title.all="TR Expansion Ratio",
+                       title.size="TR Expansion Ratio by Size",
+                       title.region="TR Expansion Ratio by Region",
+                       title.motif="TR Expansion Ratio by Motif Length")
   dev.off()
 }
 

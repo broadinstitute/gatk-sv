@@ -1413,13 +1413,18 @@ if(!is.null(svtypes.file)){
                         "color"=svtypes.c)
 }
 
-#Create merged svtypes and data (combine X and X_SV into one X class)
-sv.merge.map <- c("DEL_SV"="DEL","INS_SV"="INS","DUP_SV"="DUP","TRV_SV"="TRV")
+#Create merged svtypes and data (combine X_SHORT and X_SV into base X class)
+sv.merge.map <- c("DEL_SHORT"="DEL","DEL_SV"="DEL","INS_SHORT"="INS","INS_SV"="INS","DUP_SV"="DUP","TRV_SV"="TRV")
 dat.merged <- dat
 for(sv.from in names(sv.merge.map)){
   dat.merged$svtype[dat.merged$svtype == sv.from] <- sv.merge.map[sv.from]
 }
-svtypes.merged <- svtypes[!grepl("_SV$", svtypes$svtype), ]
+# Build merged color table: first occurrence of each merged base type
+svtypes.merged <- do.call(rbind, lapply(unique(svtypes$svtype), function(st){
+  bt <- if(st %in% names(sv.merge.map)) sv.merge.map[[st]] else st
+  data.frame(svtype=bt, color=svtypes$color[svtypes$svtype==st][1], stringsAsFactors=FALSE)
+}))
+svtypes.merged <- svtypes.merged[!duplicated(svtypes.merged$svtype), ]
 
 #Create output directory structure, if necessary
 if(!dir.exists(OUTDIR)){
