@@ -13,6 +13,7 @@ workflow SplitVCFToHaplotypesWorkflow {
 
     RuntimeAttr? runtime_attr_annotate_vcf_with_genes
     RuntimeAttr? runtime_attr_split_vcf_to_haplotypes
+    RuntimeAttr? runtime_attr_gene_gt_pattern
   }
 
   call AnnotateVCFWithGenes{
@@ -34,10 +35,80 @@ workflow SplitVCFToHaplotypesWorkflow {
       runtime_attr_override = runtime_attr_split_vcf_to_haplotypes
   }
 
+  call PrepareAndIndexGTF {
+    input:
+        input_gtf_gz = input_gtf,
+        docker_image = sv_pipeline_base_docker
+  }
+
+  task GeneGTPattern {
+    input:
+        input_vcf = SplitVCFToHaplotypes.output_vcf,
+        input_gtf = PrepareAndIndexGTF.sorted_gtf_gz, 
+        docker_image = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_gene_gt_pattern
+  }
+
+
   output {
     File hap_vcf = SplitVCFToHaplotypes.output_vcf
+    File gene_pattern_table = GeneGTPattern.pattern_table
+    File gene_pattern_summary = GeneGTPattern.gene_summary
   }
 }
+
+
+task PrepareAndIndexGTF {
+    input {
+        File input_gtf_gz
+        String docker_image
+        RuntimeAttr? runtime_attr_override
+    }
+
+    String prefix = basename(input_gtf_gz, ".gtf.gz")
+    command <<<
+        set -euo pipefail
+
+        echo "Decompressing GTF..."
+        gunzip -c ~{input_gtf_gz} > ~{prefix}.gtf
+
+        echo "Sorting GTF..."
+        sort -k1,1 -k4,4n ~{prefix}.gtf | bgzip > ~{prefix}.sorted.gtf.gz
+
+        echo "Indexing with tabix..."
+        tabix -p gff ~{prefix}.sorted.gtf.gz
+
+        echo "Done."
+    >>>
+
+    output {
+        File sorted_gtf_gz = "~{prefix}.sorted.gtf.gz"
+        File sorted_gtf_tbi = "~{prefix}.sorted.gtf.gz.tbi"
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 4,
+        mem_gb: 16 + ceil(size(input_gtf_gz,"GiB"))*2,
+        disk_gb: 20 + ceil(size(input_gtf_gz,"GiB"))*2,
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: docker_image
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+}
+
+
 
 task SplitVCFToHaplotypes {
   input {
@@ -360,4 +431,165 @@ EOF
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 }
+
+
+task GeneGTPattern {
+  input {
+    # Inputs
+    File input_vcf           # bgzipped VCF (.vcf.gz)
+    File input_gtf           # bgzipped GTF (.gtf.gz, tabix-indexed)
+
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+    # Optional runtime resources
+    Int cpu = 2
+    Int memory_gb = 8
+  }
+
+  String output_prefix = basename(input_vcf, ".vcf.gz")
+  command <<<
+    set -euo pipefail
+
+    echo "Running gene-level genotype pattern script..."
+
+    cat << 'EOF' > calcu_gene_GT_patterns.py
+#!/usr/bin/env python3
+
+import pysam
+import argparse
+from collections import defaultdict, Counter
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--input_vcf", required=True)
+parser.add_argument("--input_gtf", required=True)
+parser.add_argument("--out_prefix", required=True)
+args = parser.parse_args()
+
+# ----------------------------
+# GTF parsing
+# ----------------------------
+gene_size = {}
+exon_count = defaultdict(int)
+
+gtf_file = args.input_gtf
+if gtf_file.endswith(".gz"):
+    gtf = pysam.TabixFile(gtf_file)
+    iterator = (line for chrom in gtf.contigs for line in gtf.fetch(chrom))
+else:
+    iterator = open(gtf_file)
+
+for line in iterator:
+    if line.startswith("#"): continue
+    fields = line.strip().split("\t")
+    feature, start, end, attr = fields[2], int(fields[3]), int(fields[4]), fields[8]
+    gene = None
+    for item in attr.split(";"):
+        if "gene_name" in item:
+            gene = item.split('"')[1]; break
+    if gene is None: continue
+    if feature=="gene": gene_size[gene] = end-start+1
+    elif feature=="exon": exon_count[gene] += 1
+
+# ----------------------------
+# Stream VCF
+# ----------------------------
+vcf = pysam.VariantFile(args.input_vcf)
+samples = list(vcf.header.samples)
+
+gene_gt = defaultdict(lambda: defaultdict(list))
+gene_variant_count = defaultdict(int)
+
+for rec in vcf:
+    gene = rec.info.get("GENE")
+    if gene is None: continue
+    genes = gene if isinstance(gene, tuple) else [gene]
+
+    gt_cache = {}
+    for s in samples:
+        gt = rec.samples[s].get("GT")
+        val = 0 if gt is None or gt[0] is None else int(gt[0])
+        gt_cache[s] = val
+
+    for g in genes:
+        gene_variant_count[g] += 1
+        for s in samples:
+            gene_gt[g][s].append(str(gt_cache[s]))
+
+# ----------------------------
+# Compute patterns & summary
+# ----------------------------
+pattern_out = open(f"{args.out_prefix}.patterns.tsv","w")
+pattern_out.write("gene\tgenotype_combination\tAC\n")
+
+summary_out = open(f"{args.out_prefix}.summary.tsv","w")
+summary_out.write(
+    "gene\tgene_size\tn_exons\tn_variants\tmax_pattern_ac\t"
+    "n_patterns\tsingletons\tdoubletons\tcommon_patterns\n"
+)
+
+for gene, sample_dict in gene_gt.items():
+    combos = [";".join(sample_dict[s]) for s in samples]
+    counts = Counter(combos)
+    max_pattern_ac = max(counts.values()) if counts else 0
+
+    # write pattern table
+    for combo, ac in counts.items():
+        pattern_out.write(f"{gene}\t{combo}\t{ac}\n")
+
+    # summary stats
+    n_patterns = len(counts)
+    singletons = sum(1 for x in counts.values() if x==1)
+    doubletons = sum(1 for x in counts.values() if x==2)
+    common = sum(1 for x in counts.values() if x>10)
+
+    summary_out.write(
+        f"{gene}\t"
+        f"{gene_size.get(gene,'NA')}\t"
+        f"{exon_count.get(gene,'NA')}\t"
+        f"{gene_variant_count.get(gene,0)}\t"
+        f"{max_pattern_ac}\t"
+        f"{n_patterns}\t"
+        f"{singletons}\t"
+        f"{doubletons}\t"
+        f"{common}\n"
+    )
+
+pattern_out.close()
+summary_out.close()
+EOF
+
+    python3 calcu_gene_GT_patterns \
+      --input_vcf ~{input_vcf} \
+      --input_gtf ~{input_gtf} \
+      --out_prefix ~{output_prefix}
+
+  >>>
+
+  output {
+    File pattern_table = "~{output_prefix}.patterns.tsv"
+    File gene_summary = "~{output_prefix}.summary.tsv"
+  }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 4,
+        mem_gb: 16 + ceil(size(input_vcf,"GiB"))*2,
+        disk_gb: 20 + ceil(size(input_vcf,"GiB"))*2,
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: docker_image
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+}
+
 
