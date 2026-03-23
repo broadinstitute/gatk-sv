@@ -338,7 +338,7 @@ def parse_args():
     parser.add_argument(
         "--state-prior-weight",
         type=float,
-        default=1.0,
+        default=0.0,
         help="Weight applied to the learned per-bin pair-state log-prior "
              "when reconstructing analytical discrete posteriors. "
              "Values below 1.0 temper overly sharp priors.",

@@ -402,13 +402,13 @@ def parse_args():
     parser.add_argument(
         "--min-confidence",
         nargs="?",
-        const=-0.3,
+        const=0.95,
         default=None,
         type=float,
         help="Optional minimum confidence required for a predicted carrier to "
              "count in evaluation. Uses confidence_score when present, "
              "otherwise falls back to log_prob_score. If the flag is provided "
-             "without a value, uses -0.3. If omitted entirely, no confidence "
+             "without a value, uses 0.95. If omitted entirely, no confidence "
              "threshold is enforced.",
     )
     return parser.parse_args()
