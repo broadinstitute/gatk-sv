@@ -787,6 +787,7 @@ plotFreqDistrib <- function(dat, svtypes,
     dat <- dat[which(dat$chr %in% sex.chroms),]
     filter.legend <- c(filter.legend,"Autosomal variants only")
   }
+  n.pre.filter <- nrow(dat)
   if(biallelic==T){
     dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
   }
