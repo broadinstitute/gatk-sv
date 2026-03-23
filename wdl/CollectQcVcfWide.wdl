@@ -5,7 +5,7 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 workflow CollectQcVcfWide {
     input {
-        Array[File] vcfs
+        File vcf
         String contig
         String prefix
 
@@ -24,19 +24,17 @@ workflow CollectQcVcfWide {
 
     String output_prefix = "~{prefix}.collect_qc_vcf_wide"
 
-    scatter (vcf in vcfs) {
-        call MiniTasks.ScatterVcf {
-            input:
-                vcf = vcf,
-                vcf_index = vcf + ".tbi",
-                contig = contig,
-                records_per_shard = sv_per_shard,
-                prefix = "~{output_prefix}.scatter_vcf",
-                sv_pipeline_docker = sv_pipeline_docker,
-                runtime_attr_override = runtime_override_scatter_vcf
-        }
+    call MiniTasks.ScatterVcf {
+        input:
+            vcf = vcf,
+            vcf_index = vcf + ".tbi",
+            contig = contig,
+            records_per_shard = sv_per_shard,
+            prefix = "~{output_prefix}.scatter_vcf",
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_override_scatter_vcf
     }
-    Array[File] vcf_shards = flatten(ScatterVcf.shards)
+    Array[File] vcf_shards = ScatterVcf.shards
 
     scatter (i in range(length(vcf_shards))) {
         call PreprocessVcf {

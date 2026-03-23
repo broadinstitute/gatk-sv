@@ -438,7 +438,6 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
   }
   if(biallelic==T){
     dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
-    filter.legend <- c(filter.legend,"Biallelic variants only")
   }
   sizes <- log10(dat$length)
   if(length(sizes)>0){
@@ -582,7 +581,6 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
   }
   if(biallelic==T){
     dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
-    filter.legend <- c(filter.legend,"Biallelic variants only")
   }
   sizes <- log10(dat$length)
   if(length(sizes) > 0){
@@ -782,7 +780,7 @@ wrapperPlotAllSizeDistribs <- function(){
 #Plot single AF spectrum
 plotFreqDistrib <- function(dat, svtypes,
                             autosomal=F, biallelic=T,
-                            title=NULL, lwd.cex=1, legend=F){
+                            title=NULL, lwd.cex=1, legend=F, show.dropped=F){
   #Process freqs & compute range + breaks
   filter.legend <- NULL
   if(autosomal==T){
@@ -791,7 +789,6 @@ plotFreqDistrib <- function(dat, svtypes,
   }
   if(biallelic==T){
     dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
-    filter.legend <- c(filter.legend,"Biallelic variants only")
   }
   freqs <- log10(dat$AF)
   if(length(freqs)>0){
@@ -878,7 +875,14 @@ plotFreqDistrib <- function(dat, svtypes,
   #Add number of SV to plot
   axis(3,at=mean(par("usr")[1:2]),line=-0.9,tick=F,
        labels=paste("n=",prettyNum(length(freqs),big.mark=","),sep=""))
-  
+  if(show.dropped && biallelic){
+    n.dropped <- n.pre.filter - nrow(dat)
+    if(n.dropped > 0){
+      axis(3,at=mean(par("usr")[1:2]),line=-1.9,tick=F,cex.axis=0.75,
+           labels=paste0("(",prettyNum(n.dropped,big.mark=",")," dropped - multi-allelic sites)"))
+    }
+  }
+
   #Add filter labels
   if(!is.null(filter.legend)){
     legend("topright",bg=NA,bty="n",pch=NA,legend=filter.legend,cex=lwd.cex*0.8)
@@ -896,7 +900,6 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
   }
   if(biallelic==T){
     dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
-    filter.legend <- c(filter.legend,"Biallelic variants only")
   }
   freqs <- log10(dat$AF)
   if(length(freqs) > 0){
@@ -1056,7 +1059,7 @@ wrapperPlotAllFreqDistribs <- function(){
          heights=c(4,2))
   plotFreqDistrib(dat=dat,svtypes=svtypes,
                   title="AF Distribution",
-                  legend=T)
+                  legend=T, show.dropped=T)
   plotFreqDistribSeries(dat=dat,svtypes=svtypes,
                         max.sizes=c(tiny.max.size,small.max.size,medium.max.size,
                                     medlarge.max.size,large.max.size,huge.max.size),
@@ -1107,10 +1110,12 @@ plotTiTvHeatmap <- function(snv.dat, af.labels, af.mins, af.maxs, regions, title
   rownames(mat) <- af.labels
   colnames(mat) <- regions
   if(all(is.na(mat))){ plot.new(); mtext(3,text=title,font=2); return(invisible(NULL)) }
-  zlim <- c(1.5, 2.5)
+  mat.valid <- mat[is.finite(mat) & !is.na(mat)]
+  zlim <- c(min(1.5, if(length(mat.valid)>0) min(mat.valid) else 1.5),
+            max(2.5, if(length(mat.valid)>0) max(mat.valid) else 2.5))
   col.pal <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(101)
   mat.capped <- pmin(pmax(mat, zlim[1]), zlim[2])
-  par(mar=c(5,5,3,10), bty="n")
+  par(mar=c(5,5,3,14), bty="n")
   image(x=1:ncol(mat), y=1:nrow(mat), z=t(mat.capped), col=col.pal,
         xaxt="n", yaxt="n", xlab="", ylab="", zlim=zlim)
   axis(1, at=1:ncol(mat), labels=colnames(mat), las=2, cex.axis=0.75, tick=F, line=-0.5)
@@ -1118,20 +1123,20 @@ plotTiTvHeatmap <- function(snv.dat, af.labels, af.mins, af.maxs, regions, title
   mtext(1, text="Region", line=3.5, cex=0.85)
   mtext(2, text="AF Bucket", line=3.5, cex=0.85)
   mtext(3, text=title, font=2, line=1)
-  # Color bar in right margin, positioned in user coords extended with xpd=NA
+  # Color bar in right margin using par(xpd=NA) globally to ensure labels are not clipped
+  old.xpd <- par(xpd=NA)
   usr <- par("usr")
   xw  <- usr[2] - usr[1]
-  yw  <- usr[4] - usr[3]
-  cb.xl <- usr[2] + xw * 0.18
-  cb.xr <- usr[2] + xw * 0.30
+  cb.xl <- usr[2] + xw * 0.15
+  cb.xr <- usr[2] + xw * 0.25
   cb.y  <- seq(usr[3], usr[4], length.out=102)
-  rect(xleft=cb.xl, xright=cb.xr, ybottom=cb.y[-length(cb.y)], ytop=cb.y[-1],
-       col=col.pal, border=NA, xpd=NA)
-  rect(xleft=cb.xl, xright=cb.xr, ybottom=usr[3], ytop=usr[4],
-       col=NA, border="gray50", xpd=NA)
+  rect(xleft=cb.xl, xright=cb.xr, ybottom=cb.y[-length(cb.y)], ytop=cb.y[-1], col=col.pal, border=NA)
+  rect(xleft=cb.xl, xright=cb.xr, ybottom=usr[3], ytop=usr[4], col=NA, border="gray50")
   label.vals <- round(seq(zlim[1],zlim[2],length.out=5),2)
   label.y    <- seq(usr[3],usr[4],length.out=5)
-  text(x=cb.xr + xw*0.04, y=label.y, labels=label.vals, xpd=NA, cex=0.75, adj=0)
+  segments(x0=cb.xr, x1=cb.xr + xw*0.025, y0=label.y, y1=label.y, lwd=0.8)
+  text(x=cb.xr + xw*0.045, y=label.y, labels=sprintf("%.2f", label.vals), cex=0.75, adj=0)
+  par(old.xpd)
 }
 
 wrapperPlotTiTv <- function(){
@@ -1153,7 +1158,7 @@ wrapperPlotTiTv <- function(){
   n.panels <- 2 + as.integer(has.region && length(regions)>0)
   has.heatmap <- has.region && length(regions)>0
   png(paste(OUTDIR,"/main_plots/ti_tv_distributions.png",sep=""),
-      res=300, height=1800, width=n.panels*1800 + if(has.heatmap) 600 else 0)
+      res=300, height=1800, width=n.panels*1800 + if(has.heatmap) 900 else 0)
   layout(matrix(1:n.panels, nrow=1),
          widths=c(rep(1, n.panels - as.integer(has.heatmap)), if(has.heatmap) 1.35 else 1))
 
@@ -1335,6 +1340,11 @@ wrapperPlotQualDistrib <- function(){
   mtext(1,text="QUAL",line=3,cex=0.9); mtext(2,text="Density",line=2.5,cex=0.9)
   mtext(3,text="QUAL Distribution",font=2,line=1)
   axis(3,at=mean(xlim),tick=F,line=-0.9,labels=paste("n=",prettyNum(length(q.all),big.mark=","),sep=""))
+  n.qual.dropped <- nrow(dat) - length(dat$QUAL[!is.na(dat$QUAL) & is.finite(dat$QUAL)])
+  if(n.qual.dropped > 0){
+    axis(3,at=mean(xlim),tick=F,line=-1.9,cex.axis=0.75,
+         labels=paste0("(",prettyNum(n.qual.dropped,big.mark=",")," dropped - missing QUAL score)"))
+  }
 
   # Panel 2: By region
   reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) pmin(dat$QUAL[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$QUAL)], 99)) else list()
@@ -1403,6 +1413,10 @@ wrapperPlotNcrDistrib <- function(){
   mtext(1,text="NCR",line=3,cex=0.9); mtext(2,text="Density",line=2.5,cex=0.9)
   mtext(3,text="NCR Distribution",font=2,line=1)
   mtext(3,text=paste("n=",prettyNum(length(n.all),big.mark=","),sep=""),line=-0.1,cex=0.8)
+  n.ncr.dropped <- nrow(dat) - length(n.all)
+  if(n.ncr.dropped > 0){
+    mtext(3,text=paste0("(",prettyNum(n.ncr.dropped,big.mark=",")," dropped - missing NCR value)"),line=-1.1,cex=0.7)
+  }
 
   # Panel 2: By region
   reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) dat$NCR[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$NCR)]) else list()
@@ -1605,7 +1619,7 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
   #Add filter labels
   if(full.legend==T){
     legend("right",bg=NA,bty="n",pch=NA,cex=0.7,
-           legend=c("Biallelic variants only","Autosomal variants only"))
+           legend=c("Autosomal variants only"))
   }
 }
 #Correlation of carrier frequency & AF
@@ -1615,11 +1629,10 @@ plotAlleleCarrierCorrelation <- function(dat,autosomal=T,biallelic=T,
   filter.legend <- NULL
   if(autosomal==T){
     dat <- dat[which(dat$chr %in% sex.chroms),]
-    filter.legend <- c(filter.legend,"Autosomal SV only")
+    filter.legend <- c(filter.legend,"Autosomal variants only")
   }
   if(biallelic==T){
     dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
-    filter.legend <- c(filter.legend,"Biallelic SV only")
   }
   CF <- sort(dat$carrierFreq)
   AF <- dat$AF[order(dat$carrierFreq)]
@@ -2003,7 +2016,7 @@ wrapperPlotSvAnnotateDistrib <- function(){
   axis(2, at=axTicks(2), labels=NA)
   axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4, labels=prettyNum(axTicks(2), big.mark=","))
   mtext(2, text="Count", line=3, cex=0.9)
-  mtext(3, text="SVAnnotate Predictions (All Variants)", font=2, line=2.0)
+  mtext(3, text="SVAnnotate Consequences (All Variants)", font=2, line=2.0)
   mtext(3, text=paste("n=", prettyNum(sum(has.pred), big.mark=","), sep=""), line=0.6, cex=0.75)
   text(x=bp, y=par("usr")[3] - diff(par("usr")[3:4])*0.025,
        labels=pred.labels, srt=45, adj=1, xpd=TRUE, cex=0.7)
@@ -2013,14 +2026,14 @@ wrapperPlotSvAnnotateDistrib <- function(){
   st.labs <- st.labs[st.labs %in% svtype_m]
   mat.st <- makePredMat(svtype_m, st.labs)
   plotStackedBars(mat=mat.st, colors=col.pred[pred.cols], scaled=F,
-                  title="SVAnnotate Predictions by Variant Type")
+                  title="SVAnnotate Consequences by Variant Type")
 
   # Panel 3: by AF bucket
   af.present <- af.cuts[af.cuts %in% af_grp]
   mat.af <- makePredMat(af_grp[!is.na(af_grp)], af.present)
   if(ncol(mat.af) > 0)
     plotStackedBars(mat=mat.af, colors=col.pred[pred.cols], scaled=F,
-                    title="SVAnnotate Predictions by AF")
+                    title="SVAnnotate Consequences by AF")
   else plot.new()
 
   # Panel 4: by region (if present) or size
@@ -2028,14 +2041,14 @@ wrapperPlotSvAnnotateDistrib <- function(){
     reg.labs <- orderRegions(unique(dat$REGION[!is.na(dat$REGION)]))
     mat.reg <- makePredMat(dat$REGION[!is.na(dat$REGION)], reg.labs)
     plotStackedBars(mat=mat.reg, colors=col.pred[pred.cols], scaled=F,
-                    title="SVAnnotate Predictions by Region")
+                    title="SVAnnotate Consequences by Region")
   } else {
     sz.labs   <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
     sz.breaks <- c(-Inf, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, Inf)
     sz_grp    <- as.character(cut(dat$length, breaks=sz.breaks, labels=sz.labs, include.lowest=TRUE))
     mat.sz    <- makePredMat(sz_grp[!is.na(sz_grp)], sz.labs[sz.labs %in% sz_grp])
     plotStackedBars(mat=mat.sz, colors=col.pred[pred.cols], scaled=F,
-                    title="SVAnnotate Predictions by Size")
+                    title="SVAnnotate Consequences by Size")
   }
   dev.off()
 }
@@ -2053,7 +2066,8 @@ trv.motif.labels <- c("1-2bp","3-4bp","5-10bp",">10bp")
 # Renders 4 panels: All, by TRV size, by REGION, by motif length.
 # PNG must be opened before calling and closed afterwards.
 plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
-                                  title.all, title.size, title.region, title.motif){
+                                  title.all, title.size, title.region, title.motif,
+                                  drop.text=NULL){
   has.region <- "REGION" %in% colnames(trv.dat) && any(!is.na(trv.dat$REGION))
   regions    <- if(has.region) orderRegions(unique(trv.dat$REGION[!is.na(trv.dat$REGION)])) else character(0)
   has.motif  <- "max_motif_length" %in% colnames(trv.dat) && any(!is.na(trv.dat$max_motif_length))
@@ -2083,6 +2097,9 @@ plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
     mtext(1,text=xlab,line=3,cex=0.9); mtext(2,text="Density",line=2.5,cex=0.9)
     mtext(3,text=title.all,font=2,line=1)
     axis(3,at=mean(xlim),tick=F,line=-0.9,labels=paste("n=",prettyNum(length(v.all),big.mark=","),sep=""))
+    if(!is.null(drop.text)){
+      axis(3,at=mean(xlim),tick=F,line=-1.9,cex.axis=0.75,labels=drop.text)
+    }
   } else {
     plot.new(); mtext(3,text=title.all,font=2,line=1)
   }
@@ -2159,6 +2176,9 @@ wrapperPlotTrvExpansionRatio <- function(){
   if(!"TRV_EXPANSION_RATIO" %in% colnames(dat)) return(invisible(NULL))
   trv.dat <- dat[dat$svtype %in% c("TRV","TRV_SV") & !is.na(dat$TRV_EXPANSION_RATIO), ]
   if(nrow(trv.dat) == 0) return(invisible(NULL))
+  n.trv.total <- sum(dat$svtype %in% c("TRV","TRV_SV"))
+  n.trv.dropped <- n.trv.total - nrow(trv.dat)
+  trv.drop.text <- if(n.trv.dropped > 0) paste0("(",prettyNum(n.trv.dropped,big.mark=",")," dropped - no alternate allele of distinct size)") else NULL
   vals <- trv.dat$TRV_EXPANSION_RATIO
   xlim <- c(0, 1)
   png(paste(OUTDIR,"/main_plots/tr_expansion_ratio_distribution.png",sep=""),
@@ -2168,7 +2188,8 @@ wrapperPlotTrvExpansionRatio <- function(){
                        title.all="TR Expansion Ratio",
                        title.size="TR Expansion Ratio by Size",
                        title.region="TR Expansion Ratio by Region",
-                       title.motif="TR Expansion Ratio by Motif Length")
+                       title.motif="TR Expansion Ratio by Motif Length",
+                       drop.text=trv.drop.text)
   dev.off()
 }
 

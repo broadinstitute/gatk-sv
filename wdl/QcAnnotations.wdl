@@ -9,10 +9,12 @@ import "Utils.wdl" as Utils
 
 workflow QcAnnotations {
     input {
-        Array[File] vcfs
-        Array[File] vcf_idxs
+        File vcf
+        File vcf_idx
         Array[String] contigs
         String prefix
+
+        String? subset_vcf_string
 
         File ped_file
 
@@ -54,10 +56,21 @@ workflow QcAnnotations {
         RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
     }
 
+    if (defined(subset_vcf_string)) {
+        call MiniTasks.SubsetVcf {
+            input:
+                vcf = vcf,
+                outfile_prefix = prefix + ".subset",
+                subset_flags = select_first([subset_vcf_string]),
+                sv_base_mini_docker = sv_base_mini_docker
+        }
+    }
+    File use_vcf = select_first([SubsetVcf.filtered_vcf, vcf])
+
     scatter (contig in contigs) {
         call vcfwideqc.CollectQcVcfWide {
             input:
-                vcfs = vcfs,
+                vcf = use_vcf,
                 contig = contig,
                 sv_per_shard = sv_per_shard,
                 prefix = "~{prefix}.~{contig}",
@@ -136,7 +149,7 @@ workflow QcAnnotations {
     scatter (shard in SplitSamplesList.shards) {
         call persample.CollectQcPerSample {
             input:
-                vcfs = vcfs,
+                vcf = use_vcf,
                 samples_list = shard,
                 prefix = prefix,
                 sv_base_mini_docker = sv_base_mini_docker,

@@ -4,7 +4,7 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 workflow CollectQcPerSample {
     input {
-        Array[File] vcfs
+        File vcf
         String prefix
 
         File samples_list
@@ -13,26 +13,23 @@ workflow CollectQcPerSample {
         String sv_pipeline_docker
 
         RuntimeAttr? runtime_override_collect_vids_per_sample
-        RuntimeAttr? runtime_override_split_samples_list
         RuntimeAttr? runtime_override_merge_sharded_per_sample_vid_lists
     }
 
     String output_prefix = "~{prefix}.per_sample_qc"
 
-    scatter (vcf in vcfs) {
-        call CollectVidsPerSample {
-            input:
-                vcf = vcf,
-                samples_list = samples_list,
-                prefix = output_prefix,
-                sv_pipeline_docker = sv_pipeline_docker,
-                runtime_attr_override = runtime_override_collect_vids_per_sample
-        }
+    call CollectVidsPerSample {
+        input:
+            vcf = vcf,
+            samples_list = samples_list,
+            prefix = output_prefix,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_override_collect_vids_per_sample
     }
 
     call MergeShardedPerSampleVidLists {
         input:
-            tarballs = CollectVidsPerSample.vid_lists_tarball,
+            tarballs = [CollectVidsPerSample.vid_lists_tarball],
             samples_list = samples_list,
             prefix = output_prefix,
             sv_base_mini_docker = sv_base_mini_docker,

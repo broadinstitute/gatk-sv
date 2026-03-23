@@ -492,6 +492,51 @@ task FilterVcf {
   }
 }
 
+# subset_flags must be the full bcftools view expression string including -i or -e flag
+task SubsetVcf {
+  input {
+    File vcf
+    String outfile_prefix
+    String subset_flags
+    Boolean? use_ssd
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String outfile_name = outfile_prefix + ".vcf.gz"
+  String disk_type = if (defined(use_ssd) && select_first([use_ssd])) then "SSD" else "HDD"
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 2.0,
+    disk_gb: ceil(10.0 + size(vcf, "GB") * 2),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " " + disk_type
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -eu
+    bcftools view --no-version ~{subset_flags} -O z -o ~{outfile_name} ~{vcf}
+    tabix ~{outfile_name}
+  >>>
+
+  output {
+    File filtered_vcf = outfile_name
+    File filtered_vcf_idx = outfile_name + ".tbi"
+  }
+}
+
 # evenly split text file into even chunks
 #   if shuffle_file is set to true, shuffle the file before splitting (default = false)
 task SplitUncompressed {
