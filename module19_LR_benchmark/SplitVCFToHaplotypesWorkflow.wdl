@@ -45,6 +45,7 @@ workflow SplitVCFToHaplotypesWorkflow {
     input:
         input_vcf = SplitVCFToHaplotypes.output_vcf,
         input_gtf = PrepareAndIndexGTF.sorted_gtf_gz, 
+        input_gtf_idx = PrepareAndIndexGTF.sorted_gtf_tbi, 
         docker_image = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_gene_gt_pattern
   }
@@ -438,6 +439,7 @@ task GeneGTPattern {
     # Inputs
     File input_vcf           # bgzipped VCF (.vcf.gz)
     File input_gtf           # bgzipped GTF (.gtf.gz, tabix-indexed)
+    File input_gtf_idx
 
     String docker_image
     RuntimeAttr? runtime_attr_override
