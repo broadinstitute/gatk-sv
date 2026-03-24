@@ -79,13 +79,10 @@ task FilterVcfByAF {
         File input_vcf_idx
         Float min_af
         String output_prefix
-        String output_type = "z"  # v, z, or b
 
         String docker_image
         RuntimeAttr? runtime_attr_override
     }
-
-    String out_ext = if output_type == "v" then "vcf" else if output_type == "b" then "bcf" else "vcf.gz"
 
     command <<<
         set -euo pipefail
@@ -93,20 +90,17 @@ task FilterVcfByAF {
         # Keep variants where max alternate AF across alleles is greater than min_af.
         bcftools view \
             -i 'MAX(INFO/AF) > ~{min_af}' \
-            -O ~{output_type} \
-            -o ~{output_prefix}.~{out_ext} \
+            -O z \
+            -o ~{output_prefix}.vcf.gz \
             ~{input_vcf}
 
-        if [[ "~{output_type}" == "z" ]]; then
-            tabix -f -p vcf ~{output_prefix}.vcf.gz
-        elif [[ "~{output_type}" == "b" ]]; then
-            bcftools index -f ~{output_prefix}.bcf
-        fi
+        
+        tabix -p vcf ~{output_prefix}.vcf.gz
     >>>
 
     output {
-        File output_vcf = "~{output_prefix}.~{out_ext}"
-        File? output_vcf_idx = if output_type == "z" then "~{output_prefix}.vcf.gz.tbi" else if output_type == "b" then "~{output_prefix}.bcf.csi" else None
+        File output_vcf = "~{output_prefix}.vcf.gz"
+        File output_vcf_idx = "~{output_prefix}.vcf.gz.tbi"
     }
 
     RuntimeAttr default_attr = object {
