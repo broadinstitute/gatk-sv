@@ -3,59 +3,132 @@ version 1.0
 import "Structs.wdl"
 
 workflow SplitVCFToHaplotypesWorkflow {
-  input {
+    input {
     File input_vcf
     File input_vcf_idx
     File input_gtf  
     String output_prefix
+    Float? min_af
 
     String sv_pipeline_base_docker
 
     RuntimeAttr? runtime_attr_annotate_vcf_with_genes
+    RuntimeAttr? runtime_attr_filter_vcf_by_af
     RuntimeAttr? runtime_attr_split_vcf_to_haplotypes
     RuntimeAttr? runtime_attr_gene_gt_pattern
   }
 
-  call AnnotateVCFWithGenes{
-    input:
-      input_vcf = input_vcf,
-      input_vcf_idx = input_vcf_idx,
-      input_gtf = input_gtf,
-      output_prefix = "~{output_prefix}.with_gene_anno",
-      docker_image = sv_pipeline_base_docker,
-      runtime_attr_override = runtime_attr_annotate_vcf_with_genes
-  }
+    if defined(min_af) {
+        call FilterVcfByAF {
+            input:
+                input_vcf = input_vcf,
+                input_vcf_idx = input_vcf_idx,
+                min_af = select_first([min_af]),
+                output_prefix = "~{output_prefix}.af_gt_~{min_af}",
+                docker_image = sv_pipeline_base_docker,
+                runtime_attr_override = runtime_attr_filter_vcf_by_af
+        }
+    }
 
-  call SplitVCFToHaplotypes {
-    input:
-      input_vcf = AnnotateVCFWithGenes.annotated_vcf,
-      input_vcf_idx = AnnotateVCFWithGenes.annotated_vcf_idx,
-      output_prefix = "~{output_prefix}.with_gene_anno.haplotypes",
-      docker_image = sv_pipeline_base_docker,
-      runtime_attr_override = runtime_attr_split_vcf_to_haplotypes
-  }
+    call AnnotateVCFWithGenes {
+        input:
+            input_vcf = select_first([FilterVcfByAF.output_vcf, input_vcf]),
+            input_vcf_idx = select_first([FilterVcfByAF.output_vcf_idx, input_vcf_idx]),
+            input_gtf = input_gtf,
+            output_prefix = "~{output_prefix}.with_gene_anno",
+            docker_image = sv_pipeline_base_docker,
+            runtime_attr_override = runtime_attr_annotate_vcf_with_genes
+        }
 
-  call PrepareAndIndexGTF {
-    input:
-        input_gtf_gz = input_gtf,
-        docker_image = sv_pipeline_base_docker
-  }
+    call SplitVCFToHaplotypes {
+        input:
+            input_vcf = AnnotateVCFWithGenes.annotated_vcf,
+            input_vcf_idx = AnnotateVCFWithGenes.annotated_vcf_idx,
+            output_prefix = "~{output_prefix}.with_gene_anno.haplotypes",
+            docker_image = sv_pipeline_base_docker,
+            runtime_attr_override = runtime_attr_split_vcf_to_haplotypes
+    }
 
-  call GeneGTPattern {
-    input:
-        input_vcf = SplitVCFToHaplotypes.output_vcf,
-        input_gtf = PrepareAndIndexGTF.sorted_gtf_gz, 
-        input_gtf_idx = PrepareAndIndexGTF.sorted_gtf_tbi, 
-        docker_image = sv_pipeline_base_docker,
-        runtime_attr_override = runtime_attr_gene_gt_pattern
-  }
+    call PrepareAndIndexGTF {
+        input:
+            input_gtf_gz = input_gtf,
+            docker_image = sv_pipeline_base_docker
+    }
+
+    call GeneGTPattern {
+        input:
+            input_vcf = SplitVCFToHaplotypes.output_vcf,
+            input_gtf = PrepareAndIndexGTF.sorted_gtf_gz, 
+            input_gtf_idx = PrepareAndIndexGTF.sorted_gtf_tbi, 
+            docker_image = sv_pipeline_base_docker,
+            runtime_attr_override = runtime_attr_gene_gt_pattern
+    }
 
 
-  output {
-    File hap_vcf = SplitVCFToHaplotypes.output_vcf
-    File gene_pattern_table = GeneGTPattern.pattern_table
-    File gene_pattern_summary = GeneGTPattern.gene_summary
-  }
+    output {
+        File hap_vcf = SplitVCFToHaplotypes.output_vcf
+        File gene_pattern_table = GeneGTPattern.pattern_table
+        File gene_pattern_summary = GeneGTPattern.gene_summary
+    }
+}
+
+
+task FilterVcfByAF {
+    input {
+        File input_vcf
+        File input_vcf_idx
+        Float min_af
+        String output_prefix
+        String output_type = "z"  # v, z, or b
+
+        String docker_image
+        RuntimeAttr? runtime_attr_override
+    }
+
+    String out_ext = if output_type == "v" then "vcf" else if output_type == "b" then "bcf" else "vcf.gz"
+
+    command <<<
+        set -euo pipefail
+
+        # Keep variants where max alternate AF across alleles is greater than min_af.
+        bcftools view \
+            -i 'MAX(INFO/AF) > ~{min_af}' \
+            -O ~{output_type} \
+            -o ~{output_prefix}.~{out_ext} \
+            ~{input_vcf}
+
+        if [[ "~{output_type}" == "z" ]]; then
+            tabix -f -p vcf ~{output_prefix}.vcf.gz
+        elif [[ "~{output_type}" == "b" ]]; then
+            bcftools index -f ~{output_prefix}.bcf
+        fi
+    >>>
+
+    output {
+        File output_vcf = "~{output_prefix}.~{out_ext}"
+        File? output_vcf_idx = if output_type == "z" then "~{output_prefix}.vcf.gz.tbi" else if output_type == "b" then "~{output_prefix}.bcf.csi" else None
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 4,
+        mem_gb: 16 + ceil(size(input_vcf,"GiB"))*2,
+        disk_gb: 20 + ceil(size(input_vcf,"GiB"))*2,
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: docker_image
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
 }
 
 
