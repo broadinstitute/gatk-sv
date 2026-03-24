@@ -278,12 +278,15 @@ task GenerateInputsJson {
   command <<<
     set -Exeuo pipefail
 
-    # Setup directories
     mkdir -p "${PWD}"/opt/sv_shell/wd/tmp
     export SV_SHELL_BASE_DIR="${PWD}/opt/sv_shell/wd"
     export TMPDIR="${PWD}/opt/sv_shell/wd/tmp"
 
-    # Generate the input JSON
+    pwd
+    df -h
+
+    echo "-------------------------------------------"
+
     jq -n \
       --arg batch "~{batch}" \
       --arg sample_id "~{sample_id}" \
@@ -369,7 +372,7 @@ task GenerateInputsJson {
       --arg qc_definitions "~{qc_definitions}" \
       '$ARGS.named | with_entries(select(.value != "" and .value != null))' > "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json"
 
-    bash /opt/sv_shell/single_sample_pipeline.sh "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" > pipeline_outputs_manifest.json
+#    bash /opt/sv_shell/single_sample_pipeline.sh "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" > pipeline_outputs_manifest.json
   >>>
 
   output {
