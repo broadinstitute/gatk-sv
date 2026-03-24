@@ -7,11 +7,12 @@ workflow SVShell {
   call RunSVShell { }
 
   output {
-    File final_vcf = RunSVShell.final_vcf
-    File pre_cleanup_vcf = RunSVShell.pre_cleanup_vcf
-    File stripy_json_output = RunSVShell.stripy_json_output
-    File metrics_file = RunSVShell.metrics_file
-    File ploidy_matrix = RunSVShell.ploidy_matrix
+    File test = RunSVShell.test
+#    File final_vcf = RunSVShell.final_vcf
+#    File pre_cleanup_vcf = RunSVShell.pre_cleanup_vcf
+#    File stripy_json_output = RunSVShell.stripy_json_output
+#    File metrics_file = RunSVShell.metrics_file
+#    File ploidy_matrix = RunSVShell.ploidy_matrix
   }
 }
 
