@@ -1,0 +1,22 @@
+{
+  "CallGenomicDisorderCNVs.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
+  "CallGenomicDisorderCNVs.gatk_docker": "${workspace.gatk_docker}",
+
+  "CallGenomicDisorderCNVs.batch": "${this.sample_set_id}",
+  "CallGenomicDisorderCNVs.baf_matrix": "${this.merged_BAF}",
+  "CallGenomicDisorderCNVs.baf_matrix_index": "${this.merged_BAF_index}",
+  "CallGenomicDisorderCNVs.high_res_rd_matrix": "${this.merged_bincov}",
+  "CallGenomicDisorderCNVs.high_res_rd_matrix_index": "${this.merged_bincov_idx}",
+  "CallGenomicDisorderCNVs.reference_dict": "${workspace.reference_dict}",
+
+  "CallGenomicDisorderCNVs.gd_table": "${workspace.gd_table}",
+  "CallGenomicDisorderCNVs.segdup_bed": "${workspace.gd_segdup_bed}",
+  "CallGenomicDisorderCNVs.centromere_bed": "${workspace.gd_centromere_bed}",
+  "CallGenomicDisorderCNVs.acrocentric_arm_bed": "${workspace.gd_acrocentric_arm_bed}",
+  "CallGenomicDisorderCNVs.gaps_bed": "${workspace.gd_gaps_bed}",
+  "CallGenomicDisorderCNVs.gtf": "${workspace.gd_gtf}",
+  "CallGenomicDisorderCNVs.transition_matrix": "${workspace.gd_transition_matrix}",
+  "CallGenomicDisorderCNVs.breakpoint_transition_matrix": "${workspace.gd_breakpoint_transition_matrix}",
+
+  "CallGenomicDisorderCNVs.rebinned_interval_size": 100000
+}
