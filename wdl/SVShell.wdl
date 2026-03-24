@@ -104,7 +104,7 @@ task RunSVShell {
     RuntimeAttr? runtime_attr_override
   }
 
-  Array[File] ref_samples = read_lines(ref_samples_list)
+  Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
 
   command <<<
     set -Exeuo pipefail
@@ -118,7 +118,7 @@ task RunSVShell {
     jq -n \
       --arg batch "~{batch}" \
       --arg sample_id "~{sample_id}" \
-      --arg ref_samples_list "~{write_lines(ref_samples)}" \
+      --arg ref_samples_list "~{ref_samples_list}" \
       --arg ref_ped_file "~{ref_ped_file}" \
       --arg genome_file "~{genome_file}" \
       --arg primary_contigs_list "~{primary_contigs_list}" \
@@ -145,7 +145,7 @@ task RunSVShell {
       --arg wgd_scoring_mask "~{wgd_scoring_mask}" \
       --argjson min_svsize ~{min_svsize} \
       --arg contig_ploidy_model_tar "~{contig_ploidy_model_tar}" \
-      --arg gcnv_model_tars_list "~{gcnv_model_tars_list}" \
+      --arg gcnv_model_tars_list "~{write_lines(gcnv_model_tars)}" \
       --arg ref_panel_bincov_matrix "~{ref_panel_bincov_matrix}" \
       --arg ref_pesr_disc_files_list "~{ref_pesr_disc_files_list}" \
       --arg ref_pesr_split_files_list "~{ref_pesr_split_files_list}" \
