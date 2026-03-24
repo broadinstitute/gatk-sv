@@ -1,7 +1,7 @@
 {
   "SVShell.RunSVShell.batch": "NA12878",
   "SVShell.RunSVShell.sample_id": "NA12878",
-  "SVShell.RunSVShell.ref_samples_list": "gs://broad-dsde-methods-vj/sv-shell-inputs/ref_panel_1kg.samples.list",
+  "SVShell.ref_samples_list": "gs://broad-dsde-methods-vj/sv-shell-inputs/ref_panel_1kg.samples.list",
   "SVShell.RunSVShell.ref_ped_file": "gs://broad-dsde-methods-vj/sv-shell-inputs/1kg_ref_panel_v1.ped",
   "SVShell.RunSVShell.genome_file": "gs://broad-dsde-methods-vj/sv-shell-inputs/hg38.genome",
   "SVShell.RunSVShell.primary_contigs_list": "gs://broad-dsde-methods-vj/sv-shell-inputs/primary_contigs.list",

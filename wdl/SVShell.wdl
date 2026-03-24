@@ -4,7 +4,16 @@ import "Structs.wdl"
 
 workflow SVShell {
 
-  call RunSVShell
+  input {
+    File ref_samples_list
+  }
+
+  Array[File] ref_samples = read_lines(ref_samples_list)
+
+  call RunSVShell {
+    input:
+      ref_samples_list = ref_samples
+  }
 
   output {
     File test = RunSVShell.test
@@ -20,7 +29,7 @@ task RunSVShell {
   input {
     String batch
     String sample_id
-    File ref_samples_list
+    Array[File] ref_samples_list
     File ref_ped_file
     File genome_file
     File primary_contigs_list
@@ -116,7 +125,7 @@ task RunSVShell {
     jq -n \
       --arg batch "~{batch}" \
       --arg sample_id "~{sample_id}" \
-      --arg ref_samples_list "~{ref_samples_list}" \
+      --arg ref_samples_list "~{write_lines(ref_samples_list)}" \
       --arg ref_ped_file "~{ref_ped_file}" \
       --arg genome_file "~{genome_file}" \
       --arg primary_contigs_list "~{primary_contigs_list}" \
@@ -207,13 +216,6 @@ task RunSVShell {
     cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" .
     ls
 
-#    mkdir -p /final_outputs
-#    final_vcf=$(jq -r '.final_vcf' "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${final_vcf}" "${SV_SHELL_BASE_DIR}/final_outputs"
-
-#    mkdir xyz
-#    jq
-#    mv file xyz/file
   >>>
 
   output {
