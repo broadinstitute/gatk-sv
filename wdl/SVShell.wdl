@@ -4,16 +4,7 @@ import "Structs.wdl"
 
 workflow SVShell {
 
-  input {
-    File ref_samples_list
-  }
-
-  Array[File] ref_samples = read_lines(ref_samples_list)
-
-  call RunSVShell {
-    input:
-      ref_samples_list = ref_samples
-  }
+  call RunSVShell
 
   output {
     File test = RunSVShell.test
@@ -29,7 +20,7 @@ task RunSVShell {
   input {
     String batch
     String sample_id
-    Array[File] ref_samples_list
+    File ref_samples_list
     File ref_ped_file
     File genome_file
     File primary_contigs_list
@@ -113,6 +104,8 @@ task RunSVShell {
     RuntimeAttr? runtime_attr_override
   }
 
+  Array[File] ref_samples = read_lines(ref_samples_list)
+
   command <<<
     set -Exeuo pipefail
 
@@ -125,7 +118,7 @@ task RunSVShell {
     jq -n \
       --arg batch "~{batch}" \
       --arg sample_id "~{sample_id}" \
-      --arg ref_samples_list "~{write_lines(ref_samples_list)}" \
+      --arg ref_samples_list "~{write_lines(ref_samples)}" \
       --arg ref_ped_file "~{ref_ped_file}" \
       --arg genome_file "~{genome_file}" \
       --arg primary_contigs_list "~{primary_contigs_list}" \
