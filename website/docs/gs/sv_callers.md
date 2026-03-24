@@ -18,12 +18,12 @@ Depth-based calling of copy number variants (CNVs) is performed by two tools:
 - [cn.MOPS](https://bioconductor.org/packages/release/bioc/html/cn.mops.html)
 
 While it is possible to omit individual tools from the pipeline, it is strongly recommended to use the default 
-configuration that runs all of them.
+public configuration, which runs Manta, Wham, Scramble, GATK-gCNV, and cn.MOPS.
 
 :::note
-As of 2024, most published joint call sets generated with GATK-SV used the tool MELT, a state-of-the-art mobile element 
-insertion (MEI) detector, instead of Scramble. Due to licensing restrictions, we cannot provide a public docker image 
-or reference panel VCFs for this algorithm. The version of the pipeline configured in the Terra workspaces does not run 
-MELT or include MELT calls for the reference panel. However, the Scramble tool has replaced MELT as an MEI caller and 
-should provide similar performance.
+Historically, many published GATK-SV call sets used MELT, a state-of-the-art mobile element 
+insertion (MEI) detector, instead of Scramble. Due to licensing restrictions, we cannot provide the public Docker image, 
+reference-panel assets, or Terra workspace defaults needed to run MELT out of the box. The repository still contains 
+optional MELT plumbing for advanced users who can supply their own MELT resources, but the public Terra workspaces and 
+distributed reference panel use Scramble as the supported MEI caller.
 :::

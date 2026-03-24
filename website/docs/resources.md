@@ -58,7 +58,7 @@ Block-compressed bed file of intervals to call with Manta.
 Block-compressed bed file of mobile element insertions in the reference genome.
 
 #### melt_std_vcf_header
-Text file containing the VCF header for raw MELT calls.
+Text file containing the VCF header for raw MELT calls. Only needed if you explicitly enable the optional MELT code path.
 
 #### noncoding_bed
 Plain text bed file of non-coding elements in the reference genome.

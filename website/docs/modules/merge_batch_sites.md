@@ -24,7 +24,7 @@ a single batch.
 
 :::info
 Terra users must configure a "sample_set_set" in their data table before running this module. See the [Execution 
-section on MergeBatchSites](/docs/execution/joint#09-mergebatchsites) for futher instructions.
+section on MergeBatchSites](/docs/execution/joint#09-mergebatchsites) for further instructions.
 :::
 
 The following diagram illustrates the recommended invocation order:

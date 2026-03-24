@@ -9,12 +9,12 @@ import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/GatherSampleEvidence.wdl)
 
-Runs raw evidence collection (PE/SR/RD/SD) on each sample and performs SV discovery with the following callers: 
-Manta, Wham, and Scramble. For guidance on pre-filtering prior to GatherSampleEvidence, refer to the 
+Runs raw evidence collection (PE/SR/RD/SD) on each sample and performs SV discovery with the following callers by default: 
+Manta, Wham, and Scramble. The WDL also retains optional MELT support. For guidance on pre-filtering prior to GatherSampleEvidence, refer to the 
 [Input data](/docs/gs/inputs) section.
 
 :::note
-MELT is no longer supported as a raw caller. Please see [SV/CNV callers](/docs/gs/sv_callers) for more information.
+Public Terra workspaces and distributed reference resources do not configure MELT. If you provide your own MELT image and inputs, the source WDL can still run it. Please see [SV/CNV callers](/docs/gs/sv_callers) for details.
 :::
 
 :::note
@@ -51,7 +51,7 @@ Identifier string for the sample. Refer to the [sample ID requirements](/docs/gs
 for specifications of allowable sample IDs. IDs that do not meet these requirements may lead to errors.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `is_dragen_3_7_8`
-Default: detect automtically from BAM/CRAM header. The header check can be skippped by setting this parameter when it 
+Default: detect automatically from BAM/CRAM header. The header check can be skipped by setting this parameter when it 
 is known whether the BAM/CRAM is aligned with Dragen v3.7.8. If this is true and Scramble is configured to run then 
 soft-clipped reads at sites called by Scramble in the original alignments will be realigned with BWA for re-calling with 
 Scramble.
@@ -93,11 +93,12 @@ as a fraction of average read depth. Can be overridden to tune sensitivity.
 ### Advanced parameters
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `run_localize_reads`
-Default: `false`. Copy input alignment files to the execution bucket before localizing to subsequent tasks. This 
-may be desirable when BAM/CRAM files are stored in a requester-pays bucket or in another region to avoid egress charges.
+Default: `true`. Localize input alignment files with the workflow's helper task before downstream processing. This is 
+recommended for GCP and Azure object storage, especially when BAM/CRAM files are stored in requester-pays buckets or in 
+another region.
 
 :::warning
-Enabling `run_localize_reads` can incur high storage costs. If using, make sure to clean up execution directories after 
+Enabling `run_localize_reads` can incur high storage costs. If using localized copies, make sure to clean up execution directories after 
 the workflow finishes running.
 :::
 

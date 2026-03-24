@@ -8,8 +8,10 @@ GATK-SV is a comprehensive, cloud-based ensemble pipeline for discovering and an
 classes of structural variants (SV) from short-read whole genome sequencing (WGS) data. It can detect 
 deletions, duplications, multi-allelic copy number variants, balanced inversions, 
 insertions, translocations, and a diverse spectrum of complex SV. Briefly, GATK-SV 
-maximizes the sensitivity of SV discovery by harmonizing output from five tools: 
-Manta, Wham, Scramble, cn.MOPS, and GATK-gCNV. To minimize false positives, raw SVs 
+maximizes the sensitivity of SV discovery by harmonizing output from Manta, Wham, Scramble, 
+cn.MOPS, and GATK-gCNV. The source code also retains optional MELT support for users who provide 
+their own licensed assets, but the public Terra workspaces and distributed reference resources use 
+Scramble instead. To minimize false positives, raw SVs 
 are adjudicated and re-genotyped, considering all potential 
 sequencing evidence including anomalous paired-end (PE) reads, split reads (SR), 
 read-depth (RD), and B-allele frequencies (BAF). It also fully resolves 11 classes of complex 
@@ -29,4 +31,4 @@ Additional guidance on running GATK-SV is also available [here](https://gatk.bro
 This documentation includes instructions for running the pipeline, technical implementation details, troubleshooting 
 information, and guides for advanced users who wish to work with the source code or rebuild the project.
 
-We recommend new users continue to the [Getting Started overview](/docs/gs/overview.md).
+We recommend new users continue to the [Getting Started overview](/docs/gs/overview).

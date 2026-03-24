@@ -33,7 +33,7 @@ consistency across different Docker images.
 
 - This architecture significantly lowers the maintenance cost as it 
 necessitates updating only the affected Docker images throughout the development
-(discussed in details in the [following section](#incremental)). 
+(discussed in detail in the [following section](#incremental)). 
 
 
 
@@ -51,8 +51,8 @@ flowchart TD
     svutilsenv --> svutils[sv-utils]
     samtoolscloud --> svutils & svbase[sv-base]
     svpipelineenv & svbase --> svpipeline[sv-pipeline]
-    svbaseenv --> cnmopsenv[cnmpos-virtual-env]
-    svbase & cnmopsenv --> cnmpos[cnmops]
+   svbaseenv --> cnmopsenv[cnmops-virtual-env]
+   svbase & cnmopsenv --> cnmops[cnmops]
 
     ubuntu1804[Ubuntu 18.04] --> melt[MELT] & wham[Wham]
     samtoolscloud --> wham

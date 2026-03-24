@@ -40,8 +40,12 @@ The following cohort-level or batch-level inputs are also required:
 
 ### Pipeline outputs
 
-The following are the main pipeline outputs. For more information on the outputs of each module, refer to the 
+The following are the main outputs users typically review after completing the modular Terra workflow sequence. For more information on the outputs of each module, refer to the 
 [Modules section](/docs/category/modules).
+
+:::note
+If you run the consolidated repository workflow `GATKSVPipelineBatch.wdl` instead of the Terra workspace's stepwise configuration, the top-level output names differ. In that workflow, the primary final outputs are named `clean_vcf`, `master_vcf_qc`, `qc_file`, and related support files.
+:::
 
 |Output Type|Output Name|Description|
 |---------|--------|--------------|
@@ -81,8 +85,8 @@ cutoff for outlier filtration in `08-FilterBatchSamples`
 19. `17-JoinRawCalls`: Raw call aggregation
 20. `18-SVConcordance`: Annotate genotype concordance with raw calls
 21. `19-ScoreGenotypes`: Scores genotypes to optimize GQ recalibrator model
-21. `19-FilterGenotypes`: Apply genotype filtering using GQ recalibrator model
-22. `20-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
+22. `19-FilterGenotypes`: Apply genotype filtering using GQ recalibrator model
+23. `20-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
 AF annotation with external population callsets
 
 Extra workflows (Not part of canonical pipeline, but included for your convenience. May require manual configuration):

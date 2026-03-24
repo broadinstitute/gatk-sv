@@ -9,7 +9,7 @@ The GATK-SV pipeline consists of workflows implemented in the Workflow Descripti
 ([WDL](https://openwdl.org/)) and is built for use on the Google Cloud Platform ([GCP](https://cloud.google.com/)). 
 
 ### Terra (recommended)
-To facilitate easy-of-use, security, and collaboration, GATK-SV is available on the [Terra](https://app.terra.bio/) 
+To facilitate ease of use, security, and collaboration, GATK-SV is available on the [Terra](https://app.terra.bio/) 
 platform. Users should clone pre-configured Terra workspaces as a starting point for running GATK-SV:
 
 - [Single-sample workspace](https://app.terra.bio/#workspaces/help-gatk/GATK-Structural-Variants-Single-Sample)

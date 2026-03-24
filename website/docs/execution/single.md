@@ -60,7 +60,7 @@ The pipeline uses a number of resource and data files computed for the hg38 refe
 
 ### What does it do?
 
-The workflow `gatk-sv-single-sample` calls structural variations on a single input CRAM by running the GATK-SV Single Sample Pipeline end-to-end.
+The workflow `GATKSVPipelineSingleSample` calls structural variations on a single input CRAM or BAM by running the GATK-SV single-sample pipeline end-to-end.
 
 #### What does it require as input?
 
