@@ -4,21 +4,21 @@ import "Structs.wdl"
 
 workflow SplitVCFToHaplotypesWorkflow {
     input {
-    File input_vcf
-    File input_vcf_idx
-    File input_gtf  
-    String output_prefix
-    Float? min_af
+        File input_vcf
+        File input_vcf_idx
+        File input_gtf  
+        String output_prefix
+        Float? min_af
 
-    String sv_pipeline_base_docker
+        String sv_pipeline_base_docker
 
-    RuntimeAttr? runtime_attr_annotate_vcf_with_genes
-    RuntimeAttr? runtime_attr_filter_vcf_by_af
-    RuntimeAttr? runtime_attr_split_vcf_to_haplotypes
-    RuntimeAttr? runtime_attr_gene_gt_pattern
-  }
+        RuntimeAttr? runtime_attr_annotate_vcf_with_genes
+        RuntimeAttr? runtime_attr_filter_vcf_by_af
+        RuntimeAttr? runtime_attr_split_vcf_to_haplotypes
+        RuntimeAttr? runtime_attr_gene_gt_pattern
+        }
 
-    if defined(min_af) {
+    if (defined(min_af)) {
         call FilterVcfByAF {
             input:
                 input_vcf = input_vcf,
