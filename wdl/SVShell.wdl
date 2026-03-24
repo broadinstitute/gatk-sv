@@ -4,7 +4,7 @@ import "Structs.wdl"
 
 workflow SVShell {
 
-  call RunSVShell { }
+  call RunSVShell
 
   output {
     File test = RunSVShell.test
