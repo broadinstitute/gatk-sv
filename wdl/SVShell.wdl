@@ -204,7 +204,7 @@ task RunSVShell {
       --arg qc_definitions "~{qc_definitions}" \
       '$ARGS.named | with_entries(select(.value != "" and .value != null))' > "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json"
 
-    bash single_sample_pipeline.sh \
+    bash /opt/sv_shell/single_sample_pipeline.sh \
       "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" \
       "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json"
 
