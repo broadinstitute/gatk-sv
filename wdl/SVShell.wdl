@@ -105,6 +105,9 @@ task RunSVShell {
   }
 
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
+  Array[File] ref_pesr_disc_files = read_lines(ref_pesr_disc_files_list)
+  Array[File] ref_pesr_split_files = read_lines(ref_pesr_split_files_list)
+  Array[File] ref_pesr_sd_files = read_lines(ref_pesr_sd_files_list)
 
   command <<<
     set -Exeuo pipefail
@@ -147,9 +150,9 @@ task RunSVShell {
       --arg contig_ploidy_model_tar "~{contig_ploidy_model_tar}" \
       --arg gcnv_model_tars_list "~{write_lines(gcnv_model_tars)}" \
       --arg ref_panel_bincov_matrix "~{ref_panel_bincov_matrix}" \
-      --arg ref_pesr_disc_files_list "~{ref_pesr_disc_files_list}" \
-      --arg ref_pesr_split_files_list "~{ref_pesr_split_files_list}" \
-      --arg ref_pesr_sd_files_list "~{ref_pesr_sd_files_list}" \
+      --arg ref_pesr_disc_files_list "~{write_lines(ref_pesr_disc_files)}" \
+      --arg ref_pesr_split_files_list "~{write_lines(ref_pesr_split_files)}" \
+      --arg ref_pesr_sd_files_list "~{write_lines(ref_pesr_sd_files_list)}" \
       --argjson ref_copy_number_autosomal_contigs ~{ref_copy_number_autosomal_contigs} \
       --argjson gcnv_qs_cutoff ~{gcnv_qs_cutoff} \
       --arg cnmops_exclude_list "~{cnmops_exclude_list}" \
