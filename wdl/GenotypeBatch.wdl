@@ -24,6 +24,9 @@ workflow GenotypeBatch {
 
     File contig_list
 
+    String? training_args
+    String? genotype_args
+
     String gatk_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -54,6 +57,7 @@ workflow GenotypeBatch {
       pesr_exclusion_intervals = pesr_exclusion_intervals,
       pesr_exclusion_intervals_index = pesr_exclusion_intervals + ".tbi",
       rf_cutoffs = rf_cutoffs,
+      training_args = training_args,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_train
   }
@@ -82,6 +86,7 @@ workflow GenotypeBatch {
         rd_table = TrainSVGenotyping.rd_table,
         pe_table = TrainSVGenotyping.pe_table,
         sr_table = TrainSVGenotyping.sr_table,
+        genotype_args = genotype_args,
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_genotype
     }
@@ -148,6 +153,7 @@ task TrainSVGenotyping {
     File rf_cutoffs
 
     String gatk_docker
+    String? training_args
     Float? java_mem_fraction
     RuntimeAttr? runtime_attr_override
   }
@@ -193,7 +199,8 @@ task TrainSVGenotyping {
       --pe-quality ${PEQ} \
       --sr-quality ${SRQ} \
       --output-dir ./ \
-      --output-name ~{output_name}
+      --output-name ~{output_name} \
+      ~{training_args}
   >>>
 
   output {
@@ -237,6 +244,7 @@ task GenotypeSVs {
     File sr_table
 
     String gatk_docker
+    String? genotype_args
     Float? java_mem_fraction
     RuntimeAttr? runtime_attr_override
   }
@@ -307,7 +315,8 @@ task GenotypeSVs {
       --depth-exclusion-intervals ~{depth_exclusion_intervals} \
       --rd-table ~{rd_table} \
       --pe-table ~{pe_table} \
-      --sr-table ~{sr_table}
+      --sr-table ~{sr_table} \
+      ~{genotype_args}
   >>>
 
   output {
