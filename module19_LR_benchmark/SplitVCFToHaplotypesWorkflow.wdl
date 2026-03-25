@@ -16,6 +16,7 @@ workflow SplitVCFToHaplotypesWorkflow {
         RuntimeAttr? runtime_attr_filter_vcf_by_af
         RuntimeAttr? runtime_attr_split_vcf_to_haplotypes
         RuntimeAttr? runtime_attr_gene_gt_pattern
+        RuntimeAttr? runtime_attr_generate_gene_haplotype_table
         }
 
     if (defined(min_af)) {
@@ -64,11 +65,23 @@ workflow SplitVCFToHaplotypesWorkflow {
             runtime_attr_override = runtime_attr_gene_gt_pattern
     }
 
+    call GenerateGeneHaplotypeTable {
+        input:
+            input_vcf     = SplitVCFToHaplotypes.output_vcf,
+            input_vcf_idx = SplitVCFToHaplotypes.output_vcf_idx,
+            input_gtf     = PrepareAndIndexGTF.sorted_gtf_gz,
+            input_gtf_idx = PrepareAndIndexGTF.sorted_gtf_tbi,
+            output_prefix = "~{output_prefix}.with_gene_anno.haplotypes",
+            docker_image  = sv_pipeline_base_docker,
+            runtime_attr_override = runtime_attr_generate_gene_haplotype_table
+    }
+
 
     output {
         File hap_vcf = SplitVCFToHaplotypes.output_vcf
         File gene_pattern_table = GeneGTPattern.pattern_table
         File gene_pattern_summary = GeneGTPattern.gene_summary
+        File gene_haplotype_table = GenerateGeneHaplotypeTable.gene_haplotype_table
     }
 }
 
@@ -657,6 +670,188 @@ EOF
         docker: docker_image
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+}
+
+
+task GenerateGeneHaplotypeTable {
+    input {
+        File input_vcf
+        File input_vcf_idx
+        File input_gtf        # sorted, bgzipped, tabix-indexed GTF
+        File input_gtf_idx
+        String output_prefix
+
+        String docker_image
+        RuntimeAttr? runtime_attr_override
+    }
+
+    String out_file = "~{output_prefix}.gene_haplotype_table.tsv"
+
+    command <<<
+        set -euo pipefail
+
+        cat << 'EOF' > gene_haplotype_table.py
+#!/usr/bin/env python3
+"""
+Generate a per-gene haplotype pattern table from a haplotype-split, gene-annotated VCF.
+
+Columns:
+  1. gene_name          - from GTF gene_name attribute
+  2. gene_id            - from GTF gene_id attribute
+  3. gene_location      - chrom:start-end (1-based, from GTF)
+  4. variant_ids        - comma-separated variant IDs ordered by position
+  5. haplotype_patterns - comma-separated unique GT patterns (most- to least-frequent);
+                          each pattern is allele calls joined by '-' in positional order
+                          (0 = ref, 1 = alt)
+  6. pattern_AF         - allele frequency of each pattern (same order as col 5)
+  7. pattern_AC         - allele count of each pattern (same order as col 5)
+"""
+
+import argparse
+import pysam
+from collections import defaultdict, Counter
+
+def parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--input_vcf",  required=True)
+    p.add_argument("--input_gtf",  required=True)
+    p.add_argument("--out_prefix", required=True)
+    return p.parse_args()
+
+def parse_gtf_attrs(attr_str):
+    attrs = {}
+    for item in attr_str.strip().split(";"):
+        item = item.strip()
+        if not item:
+            continue
+        parts = item.split(" ", 1)
+        if len(parts) == 2:
+            attrs[parts[0]] = parts[1].replace('"', "").strip()
+    return attrs
+
+def load_gene_info(gtf_file):
+    """Return dict: gene_name -> {gene_id, chrom, start, end}"""
+    info = {}
+    tbx = pysam.TabixFile(gtf_file)
+    for chrom in tbx.contigs:
+        for line in tbx.fetch(chrom):
+            if line.startswith("#"):
+                continue
+            fields = line.strip().split("\t")
+            if fields[2] != "gene":
+                continue
+            attrs     = parse_gtf_attrs(fields[8])
+            gene_name = attrs.get("gene_name", attrs.get("gene_id", "UNKNOWN"))
+            gene_id   = attrs.get("gene_id", "UNKNOWN")
+            info[gene_name] = {
+                "gene_id": gene_id,
+                "chrom":   fields[0],
+                "start":   fields[3],   # 1-based string from GTF
+                "end":     fields[4],
+            }
+    return info
+
+def main():
+    args = parse_args()
+
+    gene_info = load_gene_info(args.input_gtf)
+
+    vcf      = pysam.VariantFile(args.input_vcf)
+    samples  = list(vcf.header.samples)
+    n_haps   = len(samples)
+
+    # gene_name -> list of (pos, variant_id, {sample: gt_int})
+    gene_variants = defaultdict(list)
+
+    for rec in vcf:
+        gene_field = rec.info.get("GENE")
+        if gene_field is None:
+            continue
+        genes = list(gene_field) if isinstance(gene_field, tuple) else [gene_field]
+
+        var_id = (rec.id if rec.id and rec.id != "."
+                  else f"{rec.contig}:{rec.pos}:{rec.ref}:{rec.alts[0] if rec.alts else '.'}")
+
+        gt_dict = {}
+        for s in samples:
+            gt = rec.samples[s].get("GT")
+            gt_dict[s] = 0 if (gt is None or gt[0] is None) else int(gt[0])
+
+        for g in genes:
+            gene_variants[g].append((rec.pos, var_id, gt_dict))
+
+    vcf.close()
+
+    out_path = f"{args.out_prefix}.gene_haplotype_table.tsv"
+    with open(out_path, "w") as out:
+        out.write("\t".join([
+            "gene_name", "gene_id", "gene_location",
+            "variant_ids", "haplotype_patterns", "pattern_AF", "pattern_AC"
+        ]) + "\n")
+
+        for gene_name in sorted(gene_variants.keys()):
+            variants = sorted(gene_variants[gene_name], key=lambda x: x[0])
+
+            ginfo    = gene_info.get(gene_name, {})
+            gene_id  = ginfo.get("gene_id", "NA")
+            chrom    = ginfo.get("chrom",   "NA")
+            start    = ginfo.get("start",   "NA")
+            end      = ginfo.get("end",     "NA")
+            gene_loc = f"{chrom}:{start}-{end}"
+
+            var_ids = ",".join(v[1] for v in variants)
+
+            # one pattern string per haplotype sample
+            patterns = [
+                "-".join(str(v[2].get(s, 0)) for v in variants)
+                for s in samples
+            ]
+
+            counts          = Counter(patterns)
+            sorted_patterns = counts.most_common()  # [(pattern, count), ...]
+
+            pat_list = ",".join(p                   for p, _  in sorted_patterns)
+            af_list  = ",".join(f"{c/n_haps:.6f}"   for _, c  in sorted_patterns)
+            ac_list  = ",".join(str(c)              for _, c  in sorted_patterns)
+
+            out.write("\t".join([
+                gene_name, gene_id, gene_loc, var_ids, pat_list, af_list, ac_list
+            ]) + "\n")
+
+if __name__ == "__main__":
+    main()
+EOF
+
+        python3 gene_haplotype_table.py \
+            --input_vcf  ~{input_vcf} \
+            --input_gtf  ~{input_gtf} \
+            --out_prefix ~{output_prefix}
+    >>>
+
+    output {
+        File gene_haplotype_table = out_file
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores:         4,
+        mem_gb:            32 + ceil(size(input_vcf, "GiB")) * 2,
+        disk_gb:           20 + ceil(size(input_vcf, "GiB")) * 2,
+        boot_disk_gb:      10,
+        preemptible_tries: 1,
+        max_retries:       1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    runtime {
+        cpu:            select_first([runtime_attr.cpu_cores,          default_attr.cpu_cores])
+        memory:         select_first([runtime_attr.mem_gb,             default_attr.mem_gb]) + " GiB"
+        disks:          "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb,       default_attr.boot_disk_gb])
+        docker:         docker_image
+        preemptible:    select_first([runtime_attr.preemptible_tries,  default_attr.preemptible_tries])
+        maxRetries:     select_first([runtime_attr.max_retries,        default_attr.max_retries])
     }
 }
 
