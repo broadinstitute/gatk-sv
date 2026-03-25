@@ -209,7 +209,7 @@ if [[ "${collect_pesr}" == true ]]; then
   bash /opt/sv_shell/collect_sv_evidence.sh \
     "${collect_pesr_inputs_json_filename}" \
     "${collect_pesr_outputs_json_filename}" \
-    "${collect_pesr_output_dir}" > (tee "${collect_pesr_stdout}") 2> >(tee "${collect_pesr_stderr}" >&2)
+    "${collect_pesr_output_dir}" > >(tee "${collect_pesr_stdout}") 2> >(tee "${collect_pesr_stderr}" >&2)
 
   collect_pesr_end_time=`date +%s`
   collect_pesr_et=$((collect_pesr_end_time-collect_pesr_start_time))
@@ -281,7 +281,7 @@ if [[ "${run_scramble}" == true && "${run_manta}" == true ]]; then
       "${scramble_alignment_score_cutoff}" \
       "${mei_bed}" \
       "${scramble_p2_outputs_json_filename}"
-  } > (tee "${scramble_stdout}") 2> >(tee "${scramble_stderr}" >&2)
+  } > >(tee "${scramble_stdout}") 2> >(tee "${scramble_stderr}" >&2)
 
   scramble_end_time=`date +%s`
   scramble_et=$((scramble_end_time-scramble_start_time))
@@ -305,7 +305,7 @@ if [[ "${run_wham}" == true ]]; then
     "${reference_index}" \
     "${include_bed_file}" \
     "${primary_contigs_list}" \
-    "${wham_outputs_json_filename}" > (tee "${wham_stdout}") 2> >("${wham_stderr}" >&2)
+    "${wham_outputs_json_filename}" > >(tee "${wham_stdout}") 2> >(tee "${wham_stderr}" >&2)
 
   wham_end_time=`date +%s`
   wham_et=$((wham_end_time-wham_start_time))
