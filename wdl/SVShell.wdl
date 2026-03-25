@@ -8,6 +8,7 @@ workflow SVShell {
 
   output {
     File test = RunSVShell.test
+    File test2 = RunSVShell.test2
 #    File final_vcf = RunSVShell.final_vcf
 #    File pre_cleanup_vcf = RunSVShell.pre_cleanup_vcf
 #    File stripy_json_output = RunSVShell.stripy_json_output
@@ -203,19 +204,21 @@ task RunSVShell {
       --arg qc_definitions "~{qc_definitions}" \
       '$ARGS.named | with_entries(select(.value != "" and .value != null))' > "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json"
 
-#    bash single_sample_pipeline.sh \
-#      "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" \
-#      "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json"
+    bash single_sample_pipeline.sh \
+      "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" \
+      "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json"
 
     echo "----------------------"
     echo "${PWD}"
     cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" .
+    cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json" .
     ls
 
   >>>
 
   output {
     File test = "single_sample_pipeline_inputs.json"
+    File test2 = "single_sample_pipeline_outputs.json"
 #    Map[String, String] manifest = read_json("pipeline_outputs_manifest.json")
 #
 #    File final_vcf = manifest["final_vcf"]
