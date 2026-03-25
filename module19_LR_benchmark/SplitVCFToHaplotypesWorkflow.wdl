@@ -17,24 +17,39 @@ workflow SplitVCFToHaplotypesWorkflow {
         RuntimeAttr? runtime_attr_split_vcf_to_haplotypes
         RuntimeAttr? runtime_attr_gene_gt_pattern
         RuntimeAttr? runtime_attr_generate_gene_haplotype_table
+        RuntimeAttr? runtime_attr_remove_samples_and_update_stats
+
+        File? samples_to_remove
         }
+
+    if (defined(samples_to_remove)) {
+        call RemoveSamplesAndUpdateStats {
+            input:
+                input_vcf         = input_vcf,
+                input_vcf_idx     = input_vcf_idx,
+                samples_to_remove = select_first([samples_to_remove]),
+                output_prefix     = "~{output_prefix}.samples_removed",
+                docker_image      = sv_pipeline_base_docker,
+                runtime_attr_override = runtime_attr_remove_samples_and_update_stats
+        }
+    }
 
     if (defined(min_af)) {
         call FilterVcfByAF {
             input:
-                input_vcf = input_vcf,
-                input_vcf_idx = input_vcf_idx,
-                min_af = select_first([min_af]),
+                input_vcf     = select_first([RemoveSamplesAndUpdateStats.output_vcf, input_vcf]),
+                input_vcf_idx = select_first([RemoveSamplesAndUpdateStats.output_vcf_idx, input_vcf_idx]),
+                min_af        = select_first([min_af]),
                 output_prefix = "~{output_prefix}.af_gt_~{min_af}",
-                docker_image = sv_pipeline_base_docker,
+                docker_image  = sv_pipeline_base_docker,
                 runtime_attr_override = runtime_attr_filter_vcf_by_af
         }
     }
 
     call AnnotateVCFWithGenes {
         input:
-            input_vcf = select_first([FilterVcfByAF.output_vcf, input_vcf]),
-            input_vcf_idx = select_first([FilterVcfByAF.output_vcf_idx, input_vcf_idx]),
+            input_vcf     = select_first([FilterVcfByAF.output_vcf, RemoveSamplesAndUpdateStats.output_vcf, input_vcf]),
+            input_vcf_idx = select_first([FilterVcfByAF.output_vcf_idx, RemoveSamplesAndUpdateStats.output_vcf_idx, input_vcf_idx]),
             input_gtf = input_gtf,
             output_prefix = "~{output_prefix}.with_gene_anno",
             docker_image = sv_pipeline_base_docker,
@@ -836,6 +851,185 @@ EOF
     RuntimeAttr default_attr = object {
         cpu_cores:         4,
         mem_gb:            32 + ceil(size(input_vcf, "GiB")) * 2,
+        disk_gb:           20 + ceil(size(input_vcf, "GiB")) * 2,
+        boot_disk_gb:      10,
+        preemptible_tries: 1,
+        max_retries:       1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    runtime {
+        cpu:            select_first([runtime_attr.cpu_cores,          default_attr.cpu_cores])
+        memory:         select_first([runtime_attr.mem_gb,             default_attr.mem_gb]) + " GiB"
+        disks:          "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb,       default_attr.boot_disk_gb])
+        docker:         docker_image
+        preemptible:    select_first([runtime_attr.preemptible_tries,  default_attr.preemptible_tries])
+        maxRetries:     select_first([runtime_attr.max_retries,        default_attr.max_retries])
+    }
+}
+
+
+task RemoveSamplesAndUpdateStats {
+    input {
+        File input_vcf
+        File input_vcf_idx
+        File samples_to_remove   # one sample ID per line
+        String output_prefix
+        String output_type = "z"  # v, z, or b
+
+        String docker_image
+        RuntimeAttr? runtime_attr_override
+    }
+
+    String out_ext = if output_type == "v" then "vcf" else if output_type == "b" then "bcf" else "vcf.gz"
+
+    command <<<
+        set -euo pipefail
+
+        cat << 'EOF' > remove_samples_update_stats.py
+#!/usr/bin/env python3
+"""
+Remove a list of samples from a VCF, then for every variant:
+  - Recalculate AC, AN, AF from the remaining samples
+  - Compute NCR (no-call rate) = fraction of remaining samples with a
+    fully-missing genotype (all alleles are '.') and add it to INFO
+"""
+
+import argparse
+import pysam
+
+def parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--input_vcf",         required=True)
+    p.add_argument("--samples_to_remove",  required=True)
+    p.add_argument("--output",             required=True)
+    p.add_argument("--output-type", choices=["v", "z", "b"], default="z")
+    return p.parse_args()
+
+def main():
+    args = parse_args()
+
+    with open(args.samples_to_remove) as fh:
+        remove_set = {line.strip() for line in fh if line.strip()}
+
+    vcf_in      = pysam.VariantFile(args.input_vcf)
+    all_samples = list(vcf_in.header.samples)
+    keep        = [s for s in all_samples if s not in remove_set]
+    n_keep      = len(keep)
+
+    print(f"Total samples: {len(all_samples)}, removing: {len(remove_set)}, keeping: {n_keep}")
+
+    # Build a fresh header so only kept samples appear
+    new_header = pysam.VariantHeader()
+    for rec in vcf_in.header.records:
+        if rec.key == "SAMPLE":
+            continue
+        new_header.add_record(rec)
+
+    # Ensure required INFO fields exist
+    for tag, number, typ, desc in [
+        ("AC",  "A", "Integer", "Allele count in retained samples, for each ALT allele"),
+        ("AN",  1,   "Integer", "Total number of alleles in retained samples"),
+        ("AF",  "A", "Float",   "Allele frequency in retained samples, for each ALT allele"),
+        ("NCR", 1,   "Float",   "No-call rate: fraction of retained samples with fully missing genotype"),
+    ]:
+        if tag not in new_header.info:
+            new_header.info.add(tag, number=number, type=typ, description=desc)
+
+    for s in keep:
+        new_header.add_sample(s)
+
+    mode_map = {"v": "w", "z": "wz", "b": "wb"}
+    vcf_out = pysam.VariantFile(args.output, mode_map[args.output_type], header=new_header)
+
+    for rec in vcf_in.fetch():
+        n_alts = len(rec.alts) if rec.alts else 0
+        ac     = [0] * n_alts
+        an     = 0
+        no_call_samples = 0
+
+        for s in keep:
+            gt = rec.samples[s].get("GT")
+            if gt is None or all(a is None for a in gt):
+                no_call_samples += 1
+                continue
+            for allele in gt:
+                if allele is None:
+                    continue
+                an += 1
+                if 0 < allele <= n_alts:
+                    ac[allele - 1] += 1
+
+        af  = [round(a / an, 8) if an > 0 else 0.0 for a in ac]
+        ncr = round(no_call_samples / n_keep, 8) if n_keep > 0 else 1.0
+
+        new_rec = vcf_out.new_record(
+            contig=rec.contig,
+            start=rec.start,
+            stop=rec.stop,
+            alleles=rec.alleles,
+            id=rec.id,
+            qual=rec.qual,
+            filter=rec.filter.keys(),
+        )
+
+        # Copy all INFO fields except those we recompute
+        for k in rec.info:
+            if k in ("AC", "AN", "AF", "NCR"):
+                continue
+            try:
+                new_rec.info[k] = rec.info[k]
+            except Exception:
+                pass
+
+        if n_alts > 0:
+            new_rec.info["AC"] = tuple(ac)
+            new_rec.info["AF"] = tuple(af)
+        new_rec.info["AN"]  = an
+        new_rec.info["NCR"] = ncr
+
+        # Copy genotypes for kept samples
+        for s in keep:
+            gt = rec.samples[s].get("GT")
+            if gt is None or all(a is None for a in gt):
+                new_rec.samples[s]["GT"] = (None,) * (len(gt) if gt else 2)
+            else:
+                new_rec.samples[s]["GT"] = tuple(gt)
+
+        vcf_out.write(new_rec)
+
+    vcf_in.close()
+    vcf_out.close()
+
+if __name__ == "__main__":
+    main()
+EOF
+
+        python3 remove_samples_update_stats.py \
+            --input_vcf        ~{input_vcf} \
+            --samples_to_remove ~{samples_to_remove} \
+            --output           ~{output_prefix}.~{out_ext} \
+            --output-type      ~{output_type}
+
+        if [[ "~{output_type}" == "z" ]]; then
+            tabix -f -p vcf ~{output_prefix}.vcf.gz
+        elif [[ "~{output_type}" == "b" ]]; then
+            bcftools index -f ~{output_prefix}.bcf
+        fi
+    >>>
+
+    output {
+        File output_vcf     = "~{output_prefix}.~{out_ext}"
+        File output_vcf_idx = if output_type == "z" then "~{output_prefix}.vcf.gz.tbi"
+                              else if output_type == "b" then "~{output_prefix}.bcf.csi"
+                              else "~{output_prefix}.vcf"
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores:         4,
+        mem_gb:            16 + ceil(size(input_vcf, "GiB")) * 2,
         disk_gb:           20 + ceil(size(input_vcf, "GiB")) * 2,
         boot_disk_gb:      10,
         preemptible_tries: 1,
