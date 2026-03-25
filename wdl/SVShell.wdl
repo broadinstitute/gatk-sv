@@ -204,6 +204,9 @@ task RunSVShell {
       --arg qc_definitions "~{qc_definitions}" \
       '$ARGS.named | with_entries(select(.value != "" and .value != null))' > "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json"
 
+    df -h
+    echo "---------------------------------------"
+
     bash /opt/sv_shell/single_sample_pipeline.sh \
       "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" \
       "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json"
@@ -235,7 +238,7 @@ task RunSVShell {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 4,
+    cpu_cores: 8,
     mem_gb: 32,
     disk_gb: 500,
     boot_disk_gb: 30,
