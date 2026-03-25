@@ -2,7 +2,7 @@
 Infer subcommand — train model and run copy-number inference.
 
 Loads preprocessed depth data, trains the Pyro CNV model, obtains MAP
-estimates and discrete posterior samples, then writes per-bin and
+estimates and exact discrete posteriors, then writes per-bin and
 per-chromosome summary statistics.
 """
 
@@ -262,7 +262,6 @@ def parse_args() -> argparse.Namespace:
 
     # Inference
     g = p.add_argument_group("discrete inference")
-    g.add_argument("--n-discrete-samples", type=int, default=1000)
     g.add_argument("--prob-threshold", type=float, default=0.5,
                    help="Min mean CN probability for aneuploidy call")
 
@@ -324,10 +323,11 @@ def main() -> None:
     loss_df.to_csv(loss_path, sep="\t", index=False)
     logger.info("Training loss saved to %s", loss_path)
 
-    # ── MAP + discrete inference ────────────────────────────────────────
+    # ── MAP + exact discrete inference ──────────────────────────────────
     map_est = model.get_map_estimates(data)
     cn_post = model.run_discrete_inference(
-        data, n_samples=args.n_discrete_samples
+        data,
+        map_estimates=map_est,
     )
 
     # ── detect aneuploidies ─────────────────────────────────────────────

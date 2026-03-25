@@ -2,8 +2,8 @@
 Hierarchical Bayesian model for copy-number inference (Pyro).
 
 Provides :class:`CNVModel` which wraps the probabilistic model, the
-variational guide, training via SVI, MAP estimation, and discrete posterior
-inference over copy-number states.
+variational guide, training via SVI, MAP estimation, and exact discrete
+posterior inference over copy-number states.
 """
 
 from __future__ import annotations
@@ -194,8 +194,9 @@ class CNVModel:
             {
                 "optimizer": torch.optim.Adam,
                 "optim_args": {"lr": 1.0, "betas": (adam_beta1, adam_beta2)},
-                "lr_lambda": lambda k: lr_min
-                + (lr_init - lr_min) * np.exp(-k / lr_decay),
+                "lr_lambda": lambda k: (
+                    lr_min + (lr_init - lr_min) * np.exp(-k / lr_decay)
+                ),
             }
         )
 
@@ -270,43 +271,60 @@ class CNVModel:
     def run_discrete_inference(
         self,
         data: DepthData,
-        n_samples: int = 1000,
+        map_estimates: Dict[str, np.ndarray] | None = None,
     ) -> Dict[str, np.ndarray]:
-        """Sample discrete CN posterior by repeated forward passes.
+        """Compute exact discrete CN posteriors analytically.
+
+        Once the continuous latents are fixed at their MAP estimates, the
+        hidden copy-number state for each bin / sample pair has a small,
+        finite state space and a Gaussian likelihood.  That means the
+        posterior can be computed directly with Bayes' rule instead of via
+        repeated Monte Carlo calls to :func:`infer_discrete`.
 
         Args:
             data: :class:`DepthData` instance.
-            n_samples: Number of posterior samples.
+            map_estimates: Optional precomputed output from
+                :meth:`get_map_estimates` to avoid recomputation.
 
         Returns:
             Dictionary with key ``'cn_posterior'`` mapping to an array of shape
-            ``(n_bins, n_data_samples, n_states)`` containing per-state
-            frequencies.
+            ``(n_bins, n_data_samples, n_states)`` containing exact per-state
+            posterior probabilities.
         """
-        logger.info("Running discrete inference (%d samples) …", n_samples)
+        logger.info("Running exact analytical discrete inference …")
 
-        guide_trace = poutine.trace(self.guide).get_trace(
-            depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples
-        )
-        replayed = poutine.replay(self.model, trace=guide_trace)
+        maps = map_estimates if map_estimates is not None else self.get_map_estimates(data)
 
-        cn_draws: list[np.ndarray] = []
-        with torch.no_grad():
-            for _ in tqdm(range(n_samples), desc="Discrete inference", unit="sample"):
-                inferred = infer_discrete(
-                    replayed, temperature=1, first_available_dim=-3
-                )
-                trace = poutine.trace(inferred).get_trace(
-                    depth=data.depth,
-                    n_bins=data.n_bins,
-                    n_samples=data.n_samples,
-                )
-                cn_draws.append(trace.nodes["cn"]["value"].detach().cpu().numpy())
+        bin_bias = np.asarray(maps["bin_bias"]).squeeze()
+        sample_var = np.asarray(maps["sample_var"]).squeeze()
+        bin_var = np.asarray(maps["bin_var"]).squeeze()
+        cn_probs = np.asarray(maps["cn_probs"]).squeeze()
 
-        cn_stack = np.array(cn_draws)  # (n_samples, n_bins, n_data_samples)
-        cn_freq = np.zeros((data.n_bins, data.n_samples, self.n_states))
-        for state in range(self.n_states):
-            cn_freq[..., state] = (cn_stack == state).mean(axis=0)
+        if cn_probs.ndim == 1:
+            cn_probs = cn_probs.reshape(1, -1)
 
-        logger.info("Discrete inference complete.")
-        return {"cn_posterior": cn_freq}
+        obs = data.depth.detach().cpu().numpy()
+
+        variance = sample_var[np.newaxis, :] + bin_var[:, np.newaxis]
+        std = np.sqrt(np.maximum(variance, 1e-10))
+
+        cn_states = np.arange(self.n_states, dtype=obs.dtype).reshape(-1, 1, 1)
+        expected_depth = cn_states * bin_bias[np.newaxis, :, np.newaxis]
+
+        obs_b = obs[np.newaxis, :, :]
+        std_b = std[np.newaxis, :, :]
+
+        log_lik = -0.5 * np.log(2 * np.pi * std_b ** 2) - (
+            (obs_b - expected_depth) ** 2
+        ) / (2 * std_b ** 2)
+
+        log_prior = np.log(np.maximum(cn_probs.T[:, :, np.newaxis], 1e-10))
+        log_unnormalized = log_lik + log_prior
+
+        max_log = np.max(log_unnormalized, axis=0, keepdims=True)
+        exp_vals = np.exp(log_unnormalized - max_log)
+        posterior = exp_vals / np.sum(exp_vals, axis=0, keepdims=True)
+        cn_posterior = np.transpose(posterior, (1, 2, 0)).astype(np.float32, copy=False)
+
+        logger.info("Exact analytical discrete inference complete.")
+        return {"cn_posterior": cn_posterior}

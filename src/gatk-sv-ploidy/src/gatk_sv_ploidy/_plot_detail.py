@@ -152,8 +152,16 @@ def plot_cn_per_contig_boxplot(
     else:
         suffix = "all_samples"
 
+    if plot_df.empty:
+        logger.info("Skipping contig boxplot for %s: no samples after filtering", suffix)
+        return
+
     chr_order = [f"chr{i}" for i in range(1, 23)] + ["chrX", "chrY"]
     chr_order = [c for c in chr_order if c in plot_df["chromosome"].unique()]
+
+    if not chr_order:
+        logger.info("Skipping contig boxplot for %s: no chromosomes available", suffix)
+        return
 
     wide = plot_df.pivot(index="sample", columns="chromosome", values="median_depth")
     wide = wide.reindex(columns=chr_order)
@@ -161,7 +169,9 @@ def plot_cn_per_contig_boxplot(
     cn_wide = cn_wide.reindex(columns=chr_order)
 
     fig, ax = plt.subplots(figsize=(12, 6))
-    y_max = max(4, plot_df["median_depth"].max())
+    finite_depths = plot_df["median_depth"].to_numpy(dtype=float)
+    finite_depths = finite_depths[np.isfinite(finite_depths)]
+    y_max = max(4, float(finite_depths.max())) if len(finite_depths) > 0 else 4
     ax.set_ylim(0, y_max)
 
     # Alternating chromosome shading
@@ -184,10 +194,19 @@ def plot_cn_per_contig_boxplot(
 
     # Jittered scatter with gain/loss colouring
     rng = np.random.RandomState(0)
+    bp_data = []
+    bp_positions = []
     for i, chrom in enumerate(chr_order):
         cdf = plot_df[plot_df["chromosome"] == chrom]
-        vals = cdf["median_depth"].values
-        cns = cdf["copy_number"].values
+        vals = cdf["median_depth"].to_numpy(dtype=float)
+        cns = cdf["copy_number"].to_numpy()
+        valid = np.isfinite(vals)
+        vals = vals[valid]
+        cns = cns[valid]
+
+        if len(vals) == 0:
+            continue
+
         jx = rng.normal(i, 0.1, size=len(vals))
 
         exp_lo, exp_hi = _expected_cn_range(chrom)
@@ -196,18 +215,18 @@ def plot_cn_per_contig_boxplot(
             for cn in cns
         ]
         ax.scatter(jx, vals, s=10, alpha=0.5, c=colours, zorder=4)
+        bp_data.append(vals)
+        bp_positions.append(i)
 
-    # Boxplots
-    bp_data = [plot_df[plot_df["chromosome"] == c]["median_depth"].values
-               for c in chr_order]
-    ax.boxplot(
-        bp_data, positions=np.arange(len(chr_order)), widths=0.6,
-        patch_artist=False, showcaps=True, showfliers=False,
-        boxprops=dict(linewidth=1.5, color="black"),
-        whiskerprops=dict(linewidth=1.5, color="black"),
-        medianprops=dict(linewidth=1.5, color="black"),
-        capprops=dict(linewidth=0), zorder=5,
-    )
+    if bp_data:
+        ax.boxplot(
+            bp_data, positions=bp_positions, widths=0.6,
+            patch_artist=False, showcaps=True, showfliers=False,
+            boxprops=dict(linewidth=1.5, color="black"),
+            whiskerprops=dict(linewidth=1.5, color="black"),
+            medianprops=dict(linewidth=1.5, color="black"),
+            capprops=dict(linewidth=0), zorder=5,
+        )
 
     if highlight_sample and highlight_sample in wide.index:
         ax.plot(np.arange(len(chr_order)), wide.loc[highlight_sample].values,
