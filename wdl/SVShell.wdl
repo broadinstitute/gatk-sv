@@ -152,7 +152,7 @@ task RunSVShell {
       --arg ref_panel_bincov_matrix "~{ref_panel_bincov_matrix}" \
       --arg ref_pesr_disc_files_list "~{write_lines(ref_pesr_disc_files)}" \
       --arg ref_pesr_split_files_list "~{write_lines(ref_pesr_split_files)}" \
-      --arg ref_pesr_sd_files_list "~{write_lines(ref_pesr_sd_files_list)}" \
+      --arg ref_pesr_sd_files_list "~{write_lines(ref_pesr_sd_files)}" \
       --argjson ref_copy_number_autosomal_contigs ~{ref_copy_number_autosomal_contigs} \
       --argjson gcnv_qs_cutoff ~{gcnv_qs_cutoff} \
       --arg cnmops_exclude_list "~{cnmops_exclude_list}" \
