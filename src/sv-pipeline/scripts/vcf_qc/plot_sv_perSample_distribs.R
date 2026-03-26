@@ -979,18 +979,32 @@ if(!is.null(svtypes.file)){
   svtypes <- data.frame("svtype"=svtypes.v,
                         "color"=svtypes.c)
 }
+# Enforce canonical class ordering
+.svtype.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV","TR","VNTR")
+.order.idx <- c(match(.svtype.order[.svtype.order %in% svtypes$svtype], svtypes$svtype),
+                which(!svtypes$svtype %in% .svtype.order))
+svtypes <- svtypes[.order.idx, ]
 
-# Merged svtypes and dat for size-stratified plots (DEL_SHORT+DEL_SV → DEL, INS_SHORT+INS_SV → INS, DUP+DUP_SV → DUP)
+# Merged svtypes and dat for size-stratified plots (DEL_SHORT+DEL_SV → DEL, INS_SHORT+INS_SV → INS, DUP_SHORT+DUP_SV → DUP; TR and VNTR remain distinct)
+.mg.del <- c("DEL_SHORT","DEL_SV")
+.mg.ins <- c("INS_SHORT","INS_SV")
+.mg.dup <- c("DUP_SHORT","DUP_SV")
+.other.ps <- svtypes$svtype[!svtypes$svtype %in% c(.mg.del,.mg.ins,.mg.dup)]
 svtypes.merged <- data.frame(
-  svtype = c("DEL","INS","DUP",svtypes$svtype[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV","DUP","DUP_SV")]),
+  svtype = c("DEL","INS","DUP", .other.ps),
   color = c(svtypes$color[svtypes$svtype=="DEL_SHORT"],
             svtypes$color[svtypes$svtype=="INS_SHORT"],
-            svtypes$color[svtypes$svtype=="DUP"],
-            svtypes$color[!svtypes$svtype %in% c("DEL_SHORT","DEL_SV","INS_SHORT","INS_SV","DUP","DUP_SV")]))
+            svtypes$color[match(intersect(c("DUP_SHORT","DUP"),svtypes$svtype)[1],svtypes$svtype)],
+            svtypes$color[match(.other.ps, svtypes$svtype)]),
+  stringsAsFactors=FALSE)
+.merged.order <- c("SNV","INS","DEL","DUP","TR","VNTR")
+.merged.idx <- c(match(.merged.order[.merged.order %in% svtypes.merged$svtype], svtypes.merged$svtype),
+                 which(!svtypes.merged$svtype %in% .merged.order))
+svtypes.merged <- svtypes.merged[.merged.idx, ]
 dat.merged <- dat
-dat.merged$svtype[dat.merged$svtype %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
-dat.merged$svtype[dat.merged$svtype %in% c("INS_SHORT","INS_SV")] <- "INS"
-dat.merged$svtype[dat.merged$svtype %in% c("DUP","DUP_SV")] <- "DUP"
+dat.merged$svtype[dat.merged$svtype %in% .mg.del] <- "DEL"
+dat.merged$svtype[dat.merged$svtype %in% .mg.ins] <- "INS"
+dat.merged$svtype[dat.merged$svtype %in% .mg.dup] <- "DUP"
 #Create output directory structure, if necessary
 if(!dir.exists(OUTDIR)){
   dir.create(OUTDIR)

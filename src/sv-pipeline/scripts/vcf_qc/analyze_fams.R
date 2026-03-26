@@ -1412,9 +1412,14 @@ if(!is.null(svtypes.file)){
   svtypes <- data.frame("svtype"=svtypes.v,
                         "color"=svtypes.c)
 }
+# Enforce canonical class ordering
+.svtype.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV","TR","VNTR")
+.order.idx <- c(match(.svtype.order[.svtype.order %in% svtypes$svtype], svtypes$svtype),
+                which(!svtypes$svtype %in% .svtype.order))
+svtypes <- svtypes[.order.idx, ]
 
-#Create merged svtypes and data (combine X_SHORT and X_SV into base X class)
-sv.merge.map <- c("DEL_SHORT"="DEL","DEL_SV"="DEL","INS_SHORT"="INS","INS_SV"="INS","DUP_SV"="DUP","TRV_SV"="TRV")
+#Create merged svtypes and data (combine X_SHORT and X_SV into base X class; merge VNTR into TR)
+sv.merge.map <- c("DEL_SHORT"="DEL","DEL_SV"="DEL","INS_SHORT"="INS","INS_SV"="INS","DUP_SHORT"="DUP","DUP_SV"="DUP","VNTR"="TR")
 dat.merged <- dat
 for(sv.from in names(sv.merge.map)){
   dat.merged$svtype[dat.merged$svtype == sv.from] <- sv.merge.map[sv.from]

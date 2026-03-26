@@ -124,7 +124,15 @@ for rec in vcf_in:
     elif "INS" in allele_type:
         svtype = "INS_SHORT" if allele_length < 50 else "INS_SV"
     elif "DUP" in allele_type:
-        svtype = "DUP" if allele_length < 50 else "DUP_SV"
+        svtype = "DUP_SHORT" if allele_length < 50 else "DUP_SV"
+    elif allele_type == "TRV":
+        motifs = rec.info.get("MOTIFS", None)
+        if motifs:
+            motif_list = list(motifs) if isinstance(motifs, (list, tuple)) else [str(motifs)]
+            min_motif_len = min(len(str(m)) for m in motif_list)
+        else:
+            min_motif_len = 0
+        svtype = "TR" if min_motif_len <= 6 else "VNTR"
     else:
         svtype = allele_type
     

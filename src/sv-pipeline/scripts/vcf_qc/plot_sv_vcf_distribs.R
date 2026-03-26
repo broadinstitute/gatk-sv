@@ -91,7 +91,7 @@ plotStackedBars <- function(mat,colors,scaled=T,log.y=FALSE,title=NULL){
 #####SV count plots
 ###################
 #Plot single set of bars of total count of SV
-plotSVCountBars <- function(dat,svtypes,title=NULL,ylab="Count"){
+plotSVCountBars <- function(dat,svtypes,title=NULL,ylab="Count",tr.env.dat=NULL){
   #Compute table
   counts <- as.data.frame(t(sapply(svtypes$svtype,function(svtype){
     c(svtype,
@@ -116,14 +116,36 @@ plotSVCountBars <- function(dat,svtypes,title=NULL,ylab="Count"){
   mtext(2,text=ylab,line=3)
   mtext(3,line=0.5,text=title,font=2)
   
+  #Compute TR_ENVELOPED overlay counts per svtype (excluded for TR/VNTR classes)
+  tr.types <- c("TR","VNTR")
+  te.counts <- if(!is.null(tr.env.dat)){
+    setNames(sapply(svtypes$svtype, function(svtype){
+      if(svtype %in% tr.types) return(NA_real_)
+      as.numeric(length(which(tr.env.dat$svtype==svtype)))
+    }), svtypes$svtype)
+  } else NULL
+  
   #Plot per-svtype information
   sapply(1:nrow(counts),function(i){
     cnt <- counts[i,2]
+    bar.col <- counts[i,3]
     if(cnt > 0){
       rect(xleft=i-0.85,xright=i-0.15,
            ybottom=min.y,ytop=cnt,
-           lwd=0.7,col=counts[i,3])
-      text(x=i-0.5,y=cnt*1.3,col=counts[i,3],
+           lwd=0.7,col=bar.col)
+      # TR_ENVELOPED shaded overlay with percentage label
+      if(!is.null(te.counts) && !is.na(te.counts[i]) && te.counts[i] > 0){
+        te.cnt <- max(te.counts[i], min.y)
+        rect(xleft=i-0.85,xright=i-0.15,
+             ybottom=min.y,ytop=te.cnt,
+             lwd=0,col=adjustcolor("gray20",alpha=0.4),border=NA)
+        te.pct <- round(100 * te.counts[i] / cnt)
+        lum <- sum(col2rgb(bar.col)/255 * c(0.299,0.587,0.114))
+        txt.col <- if(lum > 0.55) "gray20" else "white"
+        text(x=i-0.5,y=te.cnt*1.4,cex=0.6,
+             labels=paste0(te.pct,"%"),col=txt.col)
+      }
+      text(x=i-0.5,y=cnt*1.3,col=bar.col,
            labels=prettyNum(cnt,big.mark=","),cex=0.7)
     }
     axis(1,at=i-0.5,line=-0.8,tick=F,las=2,cex.axis=0.8,
@@ -385,11 +407,16 @@ wrapperPlotAllCountBars <- function(){
   }
   pdf(paste(OUTDIR,"/main_plots/counts_distributions.pdf",sep=""),
       height=7,width=11)
+  # Compute TR_ENVELOPED overlay data for leftmost count bar
+  te.dat <- if("TR_ENVELOPED" %in% colnames(dat)){
+    te.flag <- dat$TR_ENVELOPED
+    dat[!is.na(te.flag) & te.flag %in% c("TRUE","1",TRUE,1,"true","T","t"), ]
+  } else NULL
   #Merged
   layout(matrix(c(1,2,3,4,1,5,6,7),byrow=T,nrow=2),
          widths=c(3,2,2,2))
   plotSVCountBars(dat=dat,svtypes=svtypes,
-                  title="Variant Count")
+                  title="Variant Count",tr.env.dat=te.dat)
   plotStackedBars(mat=AF.mat,colors=svtypes$color,scale=F,log.y=T,
                   title="Count by AF")
   abline(v=1,lty=2,col="gray50")
@@ -1116,7 +1143,7 @@ plotTiTvHeatmap <- function(snv.dat, af.labels, af.mins, af.maxs, regions, title
             max(2.5, if(length(mat.valid)>0) max(mat.valid) else 2.5))
   col.pal <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(101)
   mat.capped <- pmin(pmax(mat, zlim[1]), zlim[2])
-  par(mar=c(5,5,3,14), bty="n")
+  par(mar=c(5,5,3,20), bty="n")
   image(x=1:ncol(mat), y=1:nrow(mat), z=t(mat.capped), col=col.pal,
         xaxt="n", yaxt="n", xlab="", ylab="", zlim=zlim)
   axis(1, at=1:ncol(mat), labels=colnames(mat), las=2, cex.axis=0.75, tick=F, line=-0.5)
@@ -1159,9 +1186,9 @@ wrapperPlotTiTv <- function(){
   n.panels <- 2 + as.integer(has.region && length(regions)>0)
   has.heatmap <- has.region && length(regions)>0
   png(paste(OUTDIR,"/main_plots/ti_tv_distributions.png",sep=""),
-      res=300, height=1800, width=n.panels*1800 + if(has.heatmap) 900 else 0)
+      res=300, height=1800, width=n.panels*1800 + if(has.heatmap) 1800 else 0)
   layout(matrix(1:n.panels, nrow=1),
-         widths=c(rep(1, n.panels - as.integer(has.heatmap)), if(has.heatmap) 1.35 else 1))
+         widths=c(rep(1, n.panels - as.integer(has.heatmap)), if(has.heatmap) 1.6 else 1))
 
   # Panel 1: Ti:Tv by AF bucket
   titv.af <- sapply(seq_along(af.labels), function(i){
@@ -1810,31 +1837,33 @@ if(!is.null(svtypes.file)){
   svtypes <- data.frame("svtype"=svtypes.v,
                         "color"=svtypes.c)
 }
+# Enforce canonical class ordering
+.svtype.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV","TR","VNTR")
+.order.idx <- c(match(.svtype.order[.svtype.order %in% svtypes$svtype], svtypes$svtype),
+                which(!svtypes$svtype %in% .svtype.order))
+svtypes <- svtypes[.order.idx, ]
 
-# Merged svtypes and dat (DEL_SHORT+DEL_SV→DEL, INS_SHORT+INS_SV→INS, DUP+DUP_SV→DUP, TRV+TRV_SV→TRV)
+# Merged svtypes and dat (DEL_SHORT+DEL_SV→DEL, INS_SHORT+INS_SV→INS, DUP_SHORT+DUP_SV→DUP; TR and VNTR remain distinct)
 .mg.del  <- c("DEL_SHORT","DEL_SV")
 .mg.ins  <- c("INS_SHORT","INS_SV")
-.mg.dup  <- c("DUP","DUP_SV")
-.mg.trv  <- c("TRV","TRV_SV")
+.mg.dup  <- c("DUP_SHORT","DUP_SV")
 .del.col <- svtypes$color[match(intersect(c("DEL_SHORT","DEL"), svtypes$svtype)[1], svtypes$svtype)]
 .ins.col <- svtypes$color[match(intersect(c("INS_SHORT","INS"), svtypes$svtype)[1], svtypes$svtype)]
-.dup.col <- svtypes$color[match("DUP", svtypes$svtype)]
-.trv.present <- intersect(.mg.trv, svtypes$svtype)
-.trv.col <- if(length(.trv.present)>0) svtypes$color[match(.trv.present[1], svtypes$svtype)] else NULL
-.other.types <- svtypes$svtype[!svtypes$svtype %in% c(.mg.del,.mg.ins,.mg.dup,.mg.trv)]
+.dup.col <- svtypes$color[match(intersect(c("DUP_SHORT","DUP"), svtypes$svtype)[1], svtypes$svtype)]
+.other.types <- svtypes$svtype[!svtypes$svtype %in% c(.mg.del,.mg.ins,.mg.dup)]
 svtypes.merged <- data.frame(
-  svtype = c("DEL","INS","DUP",
-             if(!is.null(.trv.col)) "TRV" else NULL,
-             .other.types),
+  svtype = c("DEL","INS","DUP", .other.types),
   color = c(.del.col, .ins.col, .dup.col,
-            if(!is.null(.trv.col)) .trv.col else NULL,
             svtypes$color[match(.other.types, svtypes$svtype)]),
   stringsAsFactors=FALSE)
+.merged.order <- c("SNV","INS","DEL","DUP","TR","VNTR")
+.merged.idx <- c(match(.merged.order[.merged.order %in% svtypes.merged$svtype], svtypes.merged$svtype),
+                 which(!svtypes.merged$svtype %in% .merged.order))
+svtypes.merged <- svtypes.merged[.merged.idx, ]
 dat.merged <- dat
 dat.merged$svtype[dat.merged$svtype %in% .mg.del] <- "DEL"
 dat.merged$svtype[dat.merged$svtype %in% .mg.ins] <- "INS"
 dat.merged$svtype[dat.merged$svtype %in% .mg.dup] <- "DUP"
-dat.merged$svtype[dat.merged$svtype %in% .mg.trv] <- "TRV"
 
 ######################################
 #####VEP consequence distribution plot
@@ -1876,8 +1905,8 @@ wrapperPlotVepDistrib <- function(){
   dat.exp$svtype_m <- dat.exp$svtype
   dat.exp$svtype_m[dat.exp$svtype_m %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
   dat.exp$svtype_m[dat.exp$svtype_m %in% c("INS_SHORT","INS_SV")] <- "INS"
-  dat.exp$svtype_m[dat.exp$svtype_m %in% c("DUP","DUP_SV")] <- "DUP"
-  dat.exp$svtype_m[dat.exp$svtype_m %in% c("TRV","TRV_SV")] <- "TRV"
+  dat.exp$svtype_m[dat.exp$svtype_m %in% c("DUP_SHORT","DUP_SV")] <- "DUP"
+  dat.exp$svtype_m[dat.exp$svtype_m %in% c("TR","VNTR")] <- "TR"
 
   # Build consequence × stratum matrix
   makeConseqMat <- function(grp.vals, grp.labs){
@@ -1988,8 +2017,8 @@ wrapperPlotSvAnnotateDistrib <- function(){
   svtype_m <- dat$svtype
   svtype_m[svtype_m %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
   svtype_m[svtype_m %in% c("INS_SHORT","INS_SV")] <- "INS"
-  svtype_m[svtype_m %in% c("DUP","DUP_SV")] <- "DUP"
-  svtype_m[svtype_m %in% c("TRV","TRV_SV")] <- "TRV"
+  svtype_m[svtype_m %in% c("DUP_SHORT","DUP_SV")] <- "DUP"
+  svtype_m[svtype_m %in% c("TR","VNTR")] <- "TR"
 
   af.cuts   <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
   af.breaks <- c(-Inf, 1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
@@ -2142,7 +2171,7 @@ plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
 }
 
 wrapperPlotTrvAlleleCount <- function(){
-  trv.dat <- dat[dat$svtype %in% c("TRV","TRV_SV") & !is.na(dat$AC) & dat$AC > 0, ]
+  trv.dat <- dat[dat$svtype %in% c("TR","VNTR") & !is.na(dat$AC) & dat$AC > 0, ]
   if(nrow(trv.dat) == 0) return(invisible(NULL))
   vals <- trv.dat$AC
   xlim <- c(1, quantile(vals, 0.99))
@@ -2158,7 +2187,7 @@ wrapperPlotTrvAlleleCount <- function(){
 }
 
 wrapperPlotTrvSampleCount <- function(){
-  trv.dat <- dat[dat$svtype %in% c("TRV","TRV_SV") & !is.na(dat$carriers) & dat$carriers > 0, ]
+  trv.dat <- dat[dat$svtype %in% c("TR","VNTR") & !is.na(dat$carriers) & dat$carriers > 0, ]
   if(nrow(trv.dat) == 0) return(invisible(NULL))
   vals <- trv.dat$carriers
   xlim <- c(1, quantile(vals, 0.99))
@@ -2175,9 +2204,9 @@ wrapperPlotTrvSampleCount <- function(){
 
 wrapperPlotTrvExpansionRatio <- function(){
   if(!"TRV_EXPANSION_RATIO" %in% colnames(dat)) return(invisible(NULL))
-  trv.dat <- dat[dat$svtype %in% c("TRV","TRV_SV") & !is.na(dat$TRV_EXPANSION_RATIO), ]
+  trv.dat <- dat[dat$svtype %in% c("TR","VNTR") & !is.na(dat$TRV_EXPANSION_RATIO), ]
   if(nrow(trv.dat) == 0) return(invisible(NULL))
-  n.trv.total <- sum(dat$svtype %in% c("TRV","TRV_SV"))
+  n.trv.total <- sum(dat$svtype %in% c("TR","VNTR"))
   n.trv.dropped <- n.trv.total - nrow(trv.dat)
   trv.drop.text <- if(n.trv.dropped > 0) paste0("(",prettyNum(n.trv.dropped,big.mark=",")," dropped - no alternate allele of distinct size)") else NULL
   vals <- trv.dat$TRV_EXPANSION_RATIO
