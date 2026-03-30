@@ -74,6 +74,7 @@ workflow SVShell {
       bin_exclude_index = bin_exclude_index,
       cytobands = cytobands,
       cytobands_index = cytobands_index,
+      depth_exclude_list = depth_exclude_list,
       depth_exclude_list_index = depth_exclude_list_index,
       mei_bed = mei_bed,
       mei_bed_index = mei_bed_index,
