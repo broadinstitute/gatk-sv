@@ -104,6 +104,10 @@ def _classify_sex(x_cn: int, y_cn: int) -> str:
         (3, 0): "TRIPLE_X",
         (2, 1): "KLINEFELTER",
         (1, 2): "JACOBS",
+        # Tetraploid patterns
+        (4, 0): "TETRAPLOID_FEMALE",   # XXXX
+        (2, 2): "TETRAPLOID_MALE",     # XXYY
+        (3, 1): "TRIPLE_X_Y",          # XXXY
     }
     return _SEX_TABLE.get((x_cn, y_cn), "OTHER")
 
@@ -123,6 +127,14 @@ def _classify_aneuploidy(
     sex_aneu = [c for c in aneuploid_chrs if c in ("chrX", "chrY")]
     auto_aneu = [c for c in aneuploid_chrs if c not in ("chrX", "chrY")]
 
+    # Check for genome-wide tetraploidy: ≥80% of autosomes at CN=4
+    autosome_cns = {
+        c: cn_map.get(c, 2) for c in cn_map if c not in ("chrX", "chrY")
+    }
+    n_tetra_auto = sum(1 for cn in autosome_cns.values() if cn == 4)
+    if autosome_cns and n_tetra_auto >= len(autosome_cns) * 0.8:
+        return "TETRAPLOID"
+
     # Multiple autosomal or mixed → MULTIPLE
     if len(auto_aneu) > 1 or (auto_aneu and sex_aneu):
         return "MULTIPLE"
@@ -134,6 +146,9 @@ def _classify_aneuploidy(
             (3, 0): "TRIPLE_X",
             (1, 0): "TURNER",
             (1, 2): "JACOBS",
+            (4, 0): "TETRAPLOID_FEMALE",
+            (2, 2): "TETRAPLOID_MALE",
+            (3, 1): "TRIPLE_X_Y",
         }
         return _sex_type.get((x_cn, y_cn), "OTHER")
 
@@ -145,6 +160,9 @@ def _classify_aneuploidy(
             ("chr13", 3): "TRISOMY_13",
             ("chr18", 3): "TRISOMY_18",
             ("chr21", 3): "TRISOMY_21",
+            ("chr13", 4): "TETRASOMY_13",
+            ("chr18", 4): "TETRASOMY_18",
+            ("chr21", 4): "TETRASOMY_21",
         }
         return _auto_type.get((chrom, cn), "OTHER")
 

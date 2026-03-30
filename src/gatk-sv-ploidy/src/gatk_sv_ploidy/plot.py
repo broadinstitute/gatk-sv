@@ -31,6 +31,7 @@ from gatk_sv_ploidy._plot_detail import (
     plot_sample_with_variance,
     plot_sex_assignments,
 )
+from gatk_sv_ploidy.data import load_site_data
 
 logger = logging.getLogger(__name__)
 
@@ -326,6 +327,8 @@ def _run_aneuploidy_plots(
     loss_df: pd.DataFrame,
     output_dir: str,
     skip_per_sample: bool = False,
+    site_data: Optional[dict] = None,
+    min_het_alt: int = 3,
 ) -> None:
     """Generate aneuploidy-detection diagnostic plots."""
     plot_training_loss(loss_df, output_dir)
@@ -343,6 +346,13 @@ def _run_aneuploidy_plots(
     logger.info("Generating per-sample plots (%d aneuploid, %d normal) …",
                 len(aneuploid_samples), len(normal_samples))
 
+    # Build a sample-name → index mapping for site data lookups
+    sample_idx_map: Optional[dict] = None
+    if site_data is not None and "sample_ids" in site_data:
+        sample_idx_map = {
+            str(s): i for i, s in enumerate(site_data["sample_ids"])
+        }
+
     for sid in aneuploid_samples:
         sdata = bin_df[bin_df["sample"] == sid].copy()
         sdf = df[df["sample"] == sid]
@@ -350,11 +360,22 @@ def _run_aneuploidy_plots(
             (r["chromosome"], r["copy_number"], r["mean_cn_probability"])
             for _, r in sdf[sdf["is_aneuploid"]].iterrows()
         ]
-        plot_sample_with_variance(sdata, all_vars, output_dir, aneuploid_chrs=aneu_chrs)
+        plot_sample_with_variance(
+            sdata, all_vars, output_dir,
+            aneuploid_chrs=aneu_chrs,
+            site_data=site_data,
+            sample_idx_map=sample_idx_map,
+            min_het_alt=min_het_alt,
+        )
 
     for sid in normal_samples:
         sdata = bin_df[bin_df["sample"] == sid].copy()
-        plot_sample_with_variance(sdata, all_vars, output_dir)
+        plot_sample_with_variance(
+            sdata, all_vars, output_dir,
+            site_data=site_data,
+            sample_idx_map=sample_idx_map,
+            min_het_alt=min_het_alt,
+        )
 
 
 # ── CLI ─────────────────────────────────────────────────────────────────────
@@ -375,6 +396,10 @@ def parse_args() -> argparse.Namespace:
                    help="training_loss.tsv (from 'infer')")
     p.add_argument("-s", "--sex-assignments", default=None,
                    help="aneuploidy_type_predictions.tsv (from 'call')")
+    p.add_argument("--site-data", default=None,
+                   help="site_data.npz (from 'preprocess') for per-site AF scatter")
+    p.add_argument("--min-het-alt", type=int, default=3,
+                   help="Minimum alt-allele read count to show a site in the AF scatter")
     p.add_argument("--highlight-sample", default="",
                    help="Sample ID to highlight in plots")
     p.add_argument("--skip-per-sample-plots", action="store_true",
@@ -412,10 +437,16 @@ def main() -> None:
     _run_ploidy_plots(df, bin_df, sex_df, args.output_dir, args.highlight_sample)
 
     # ── aneuploidy detection plots ──────────────────────────────────────
+    site_data = None
+    if args.site_data:
+        site_data = load_site_data(args.site_data)
+
     if args.bin_stats and args.training_loss:
         loss_df = pd.read_csv(args.training_loss, sep="\t")
         _run_aneuploidy_plots(df, bin_df, loss_df, args.output_dir,
-                              args.skip_per_sample_plots)
+                              args.skip_per_sample_plots,
+                              site_data=site_data,
+                              min_het_alt=args.min_het_alt)
     elif args.bin_stats or args.training_loss:
         logger.warning("Both --bin-stats and --training-loss required for "
                        "aneuploidy detection plots — skipping")

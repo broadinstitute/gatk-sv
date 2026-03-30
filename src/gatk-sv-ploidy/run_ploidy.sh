@@ -18,12 +18,14 @@ DRY_RUN="false"
 MODEL_ARGS=""
 PLOT_ARGS=""
 HIGHLIGHT_SAMPLE=""
+SITE_DEPTH_LIST=""
 
 usage() {
-    echo "Usage: $0 --input-depth PATH --work-dir DIR [--truth-json PATH]" >&2
-    echo "  --input-depth PATH   Raw bins×samples depth TSV (may be gzipped)" >&2
-    echo "  --work-dir DIR       Root directory for all pipeline outputs" >&2
-    echo "  --truth-json PATH    Optional truth JSON to enable evaluation" >&2
+    echo "Usage: $0 --input-depth PATH --work-dir DIR [--truth-json PATH] [--site-depth-list PATH]" >&2
+    echo "  --input-depth PATH       Raw bins×samples depth TSV (may be gzipped)" >&2
+    echo "  --work-dir DIR           Root directory for all pipeline outputs" >&2
+    echo "  --truth-json PATH        Optional truth JSON to enable evaluation" >&2
+    echo "  --site-depth-list PATH   Optional file listing per-sample SD file paths (one per line)" >&2
     exit 1
 }
 
@@ -53,6 +55,10 @@ while [[ $# -gt 0 ]]; do
             HIGHLIGHT_SAMPLE="$2"; shift 2;;
         --highlight-sample=*)
             HIGHLIGHT_SAMPLE="${1#*=}"; shift;;
+        --site-depth-list)
+            SITE_DEPTH_LIST="$2"; shift 2;;
+        --site-depth-list=*)
+            SITE_DEPTH_LIST="${1#*=}"; shift;;
         --dry-run)
             DRY_RUN="true"; shift;;
         --dry-run=*)
@@ -91,34 +97,46 @@ EVAL_DIR="${WORK_DIR}/eval"
 
 # ── derived paths (outputs of earlier steps used as inputs to later steps) ───
 PREPROCESSED_DEPTH="${PREPROCESS_DIR}/preprocessed_depth.tsv"
+SITE_DATA="${PREPROCESS_DIR}/site_data.npz"
 CHROM_STATS="${INFER_DIR}/chromosome_stats.tsv"
 BIN_STATS="${INFER_DIR}/bin_stats.tsv.gz"
 TRAINING_LOSS="${INFER_DIR}/training_loss.tsv"
 PREDICTIONS="${CALL_DIR}/aneuploidy_type_predictions.tsv"
 
 echo "=== gatk-sv-ploidy pipeline ==="
-echo "  Input depth : ${INPUT_DEPTH}"
-echo "  Work dir    : ${WORK_DIR}"
+echo "  Input depth      : ${INPUT_DEPTH}"
+echo "  Site depth list  : ${SITE_DEPTH_LIST:-<none>}"
+echo "  Work dir         : ${WORK_DIR}"
 echo ""
 
 # ── step 1: preprocess ───────────────────────────────────────────────────────
 echo "[1/5] preprocess"
+SD_ARGS=""
+if [[ -n "${SITE_DEPTH_LIST}" ]]; then
+    SD_ARGS="--site-depth-list ${SITE_DEPTH_LIST}"
+fi
 if [[ "${DRY_RUN}" == "true" ]]; then
-    echo "DRY-RUN: gatk-sv-ploidy preprocess -i \"${INPUT_DEPTH}\" -o \"${PREPROCESS_DIR}\""
+    echo "DRY-RUN: gatk-sv-ploidy preprocess -i \"${INPUT_DEPTH}\" -o \"${PREPROCESS_DIR}\" ${SD_ARGS}"
 else
     gatk-sv-ploidy preprocess \
         -i "${INPUT_DEPTH}" \
-        -o "${PREPROCESS_DIR}"
+        -o "${PREPROCESS_DIR}" \
+        $SD_ARGS
 fi
 
 # ── step 2: infer ────────────────────────────────────────────────────────────
 echo "[2/5] infer"
+AF_ARGS=""
+if [[ -f "${SITE_DATA}" ]]; then
+    AF_ARGS="--site-data ${SITE_DATA}"
+fi
 if [[ "${DRY_RUN}" == "true" ]]; then
-    echo "DRY-RUN: gatk-sv-ploidy infer -i \"${PREPROCESSED_DEPTH}\" -o \"${INFER_DIR}\""
+    echo "DRY-RUN: gatk-sv-ploidy infer -i \"${PREPROCESSED_DEPTH}\" -o \"${INFER_DIR}\" ${AF_ARGS}"
 else
     gatk-sv-ploidy infer \
         -i "${PREPROCESSED_DEPTH}" \
         -o "${INFER_DIR}" \
+        $AF_ARGS \
         $MODEL_ARGS
 fi
 

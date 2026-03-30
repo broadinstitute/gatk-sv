@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -40,6 +40,9 @@ class DepthData:
         Random seed used when subsampling.
     clamp_threshold : float, optional
         Values above this are clamped.  Set to ``None`` to disable.
+    site_data : dict, optional
+        Per-site allele count data from :func:`load_site_data`.  Keys are
+        ``site_alt``, ``site_total``, ``site_pop_af``, ``site_mask``.
     """
 
     def __init__(
@@ -51,6 +54,7 @@ class DepthData:
         subsample_samples: Optional[int] = None,
         seed: int = 42,
         clamp_threshold: float = 5.0,
+        site_data: Optional[Dict[str, np.ndarray]] = None,
     ) -> None:
         self.original_df = df.copy()
         sample_cols = get_sample_columns(df)
@@ -62,6 +66,13 @@ class DepthData:
                 logger.info("Subsampling %d / %d bins", subsample_bins, len(df))
                 idx = np.sort(rng.choice(len(df), subsample_bins, replace=False))
                 df = df.iloc[idx].copy()
+                if site_data is not None:
+                    site_data = {
+                        "site_alt": site_data["site_alt"][idx],
+                        "site_total": site_data["site_total"][idx],
+                        "site_pop_af": site_data["site_pop_af"][idx],
+                        "site_mask": site_data["site_mask"][idx],
+                    }
             if subsample_samples is not None and subsample_samples < len(sample_cols):
                 logger.info(
                     "Subsampling %d / %d samples",
@@ -70,11 +81,19 @@ class DepthData:
                 )
                 sel = rng.choice(len(sample_cols), subsample_samples, replace=False)
                 sample_cols = [sample_cols[i] for i in sel]
+                if site_data is not None:
+                    site_data = {
+                        "site_alt": site_data["site_alt"][:, :, sel],
+                        "site_total": site_data["site_total"][:, :, sel],
+                        "site_pop_af": site_data["site_pop_af"],
+                        "site_mask": site_data["site_mask"][:, :, sel],
+                    }
 
         # ── sort rows by chromosome order ───────────────────────────────
         df = df.copy()
         df["_order"] = df["Chr"].map(CHR_ORDER)
-        df = df.sort_values(["_order", "Start"]).drop("_order", axis=1)
+        df = df.sort_values(["_order", "Start"])
+        df = df.drop("_order", axis=1)
 
         # ── store metadata arrays ───────────────────────────────────────
         self.chr: np.ndarray = df["Chr"].values
@@ -104,6 +123,39 @@ class DepthData:
             self.depth.max().item(),
             self.depth.mean().item(),
         )
+
+        # ── optional per-site allele data ───────────────────────────────
+        if site_data is not None:
+            sa = site_data["site_alt"]     # (n_bins, max_sites, n_samples)
+            st = site_data["site_total"]   # (n_bins, max_sites, n_samples)
+            sp = site_data["site_pop_af"]  # (n_bins, max_sites)
+            sm = site_data["site_mask"]    # (n_bins, max_sites, n_samples)
+
+            self.site_alt = torch.tensor(
+                sa.astype(np.float32), dtype=dtype, device=device,
+            )
+            self.site_total = torch.tensor(
+                st.astype(np.float32), dtype=dtype, device=device,
+            )
+            self.site_pop_af = torch.tensor(
+                sp.astype(np.float32), dtype=dtype, device=device,
+            )
+            self.site_mask = torch.tensor(sm, dtype=torch.bool, device=device)
+            self.max_sites: int = sa.shape[1]
+
+            n_informative = int(self.site_mask.any(dim=1).any(dim=1).sum().item())
+            total_sites = int(self.site_mask.any(dim=2).sum().item())
+            logger.info(
+                "Per-site allele data: %d bins with data, %d total sites, "
+                "max %d sites/bin",
+                n_informative, total_sites, self.max_sites,
+            )
+        else:
+            self.site_alt: Optional[torch.Tensor] = None
+            self.site_total: Optional[torch.Tensor] = None
+            self.site_pop_af: Optional[torch.Tensor] = None
+            self.site_mask: Optional[torch.Tensor] = None
+            self.max_sites: int = 0
 
 
 # ── reading / writing helpers ───────────────────────────────────────────────
@@ -143,3 +195,33 @@ def read_depth_tsv(path: str) -> pd.DataFrame:
     df = df.set_index("Bin")
     df["source_file"] = str(Path(path).parent.parent.name)
     return df
+
+
+def load_site_data(path: str) -> Dict[str, np.ndarray]:
+    """Load per-site allele data from an ``.npz`` archive.
+
+    The archive is expected to contain the keys ``site_alt``, ``site_total``,
+    ``site_pop_af``, ``site_mask`` (as produced by
+    :func:`~gatk_sv_ploidy.preprocess.build_per_site_data`).
+
+    Args:
+        path: Path to the ``.npz`` file.
+
+    Returns:
+        Dictionary with NumPy arrays ready for :class:`DepthData`.
+    """
+    logger.info("Loading per-site allele data: %s", path)
+    npz = np.load(path, allow_pickle=True)
+    result = {
+        "site_alt": npz["site_alt"],
+        "site_total": npz["site_total"],
+        "site_pop_af": npz["site_pop_af"],
+        "site_mask": npz["site_mask"],
+    }
+    logger.info(
+        "  shape: bins=%d, max_sites=%d, samples=%d",
+        result["site_alt"].shape[0],
+        result["site_alt"].shape[1],
+        result["site_alt"].shape[2],
+    )
+    return result

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -38,13 +38,93 @@ def _equal_width_x(chr_array: np.ndarray, n: int) -> np.ndarray:
     return x
 
 
+def _draw_site_af_scatter(
+    ax: plt.Axes,
+    sample_data: pd.DataFrame,
+    x: np.ndarray,
+    site_data: Dict[str, np.ndarray],
+    sample_idx: int,
+    min_het_alt: int = 3,
+) -> None:
+    """Draw individual site AFs as a scatter on *ax*.
+
+    Each valid site in each bin is plotted as a translucent dot at the bin's
+    x-coordinate (with small horizontal jitter).  This shows the raw per-site
+    data that the model uses, revealing the bimodal AF distribution
+    (homozygous-reference near 0 and heterozygous near 0.5).
+    """
+    # Build lookup: (chr, start, end) -> npz bin index
+    bin_chr = site_data["bin_chr"]
+    bin_start = site_data["bin_start"]
+    bin_end = site_data["bin_end"]
+    bin_lookup: Dict[tuple, int] = {}
+    for bi in range(len(bin_chr)):
+        bin_lookup[(str(bin_chr[bi]), int(bin_start[bi]), int(bin_end[bi]))] = bi
+
+    sa = site_data["site_alt"]     # (n_bins, max_sites, n_samples)
+    st = site_data["site_total"]   # (n_bins, max_sites, n_samples)
+    sm = site_data["site_mask"]    # (n_bins, max_sites, n_samples)
+
+    # Determine per-bin x-spacing for jitter scale
+    if len(x) > 1:
+        # median gap between consecutive bins
+        dx = np.median(np.diff(x[x > 0])) if np.any(x > 0) else 0.01
+    else:
+        dx = 0.01
+    jitter_half = dx * 0.3
+
+    rng = np.random.RandomState(42)
+    scatter_x: list = []
+    scatter_af: list = []
+
+    for row_i, (_, row) in enumerate(sample_data.iterrows()):
+        key = (str(row["chr"]), int(row["start"]), int(row["end"]))
+        bi = bin_lookup.get(key)
+        if bi is None:
+            continue
+
+        mask = sm[bi, :, sample_idx]
+        if not np.any(mask):
+            continue
+
+        alt = sa[bi, mask, sample_idx]
+        total = st[bi, mask, sample_idx]
+        valid = (total > 0) & (alt >= min_het_alt)
+        if not np.any(valid):
+            continue
+
+        af = alt[valid] / total[valid]
+        n_pts = len(af)
+        jitter = rng.uniform(-jitter_half, jitter_half, size=n_pts)
+        scatter_x.extend(x[row_i] + jitter)
+        scatter_af.extend(af)
+
+    if scatter_x:
+        ax.scatter(
+            scatter_x, scatter_af,
+            s=1, alpha=0.15, color="#00897B",
+            rasterized=True, zorder=2, linewidths=0,
+        )
+        logger.info("  AF scatter: %d site points for %s",
+                     len(scatter_x), sample_data["sample"].iloc[0])
+
+
 def plot_sample_with_variance(
     sample_data: pd.DataFrame,
     all_sample_vars: np.ndarray,
     output_dir: str,
     aneuploid_chrs: Optional[List[Tuple[str, int, float]]] = None,
+    site_data: Optional[Dict[str, np.ndarray]] = None,
+    sample_idx_map: Optional[Dict[str, int]] = None,
+    min_het_alt: int = 3,
 ) -> None:
-    """Three-panel plot: depth + CN, CN posterior stack, sample-var histogram.
+    """Multi-panel plot: depth + CN, optional AF scatter, CN posterior, sample-var histogram.
+
+    When *site_data* is provided (the ``.npz`` from preprocessing), each
+    individual SNP allele fraction is drawn as a translucent dot, giving a
+    faithful view of the per-site data the model actually uses.  Falls back
+    to a stem plot of per-bin mean het AF when only bin-level columns are
+    available.
 
     Args:
         sample_data: Bin-level rows for a single sample.
@@ -52,9 +132,28 @@ def plot_sample_with_variance(
         output_dir: Base output directory.
         aneuploid_chrs: Optional list of ``(chr, cn, prob)`` tuples for the
             aneuploid chromosomes to highlight.
+        site_data: Optional dict from ``site_data.npz`` with keys
+            ``site_alt``, ``site_total``, ``site_mask``, ``bin_chr``,
+            ``bin_start``, ``bin_end``, ``sample_ids``.
+        sample_idx_map: Optional mapping of sample name to column index in
+            the site-data arrays.
     """
     name = sample_data["sample"].iloc[0]
     is_aneu = aneuploid_chrs is not None and len(aneuploid_chrs) > 0
+
+    # Determine what AF data is available
+    has_site_scatter = False
+    _si: Optional[int] = None
+    if site_data is not None and sample_idx_map is not None:
+        _si = sample_idx_map.get(name)
+        if _si is not None:
+            has_site_scatter = True
+
+    has_af = has_site_scatter or (
+        "mean_het_af" in sample_data.columns
+        and "n_het_sites" in sample_data.columns
+        and sample_data["n_het_sites"].sum() > 0
+    )
 
     obs = sample_data["observed_depth"].values
     cn_map = sample_data["cn_map"].values
@@ -65,11 +164,27 @@ def plot_sample_with_variance(
     svar = sample_data["sample_var"].iloc[0]
 
     x = _equal_width_x(chrs, len(obs))
-    fig, axes = plt.subplots(3, 1, figsize=(8, 8))
+
+    # Layout: tall depth panel, optional tall AF panel, half-height CN-prob
+    # and stdev panels.
+    if has_af:
+        fig, axes = plt.subplots(
+            4, 1, figsize=(8, 9),
+            gridspec_kw={"height_ratios": [2, 2, 1, 1]},
+        )
+        ax_depth, ax_af, ax_cn_prob, ax_hist = axes
+    else:
+        fig, axes = plt.subplots(
+            3, 1, figsize=(8, 6),
+            gridspec_kw={"height_ratios": [2, 1, 1]},
+        )
+        ax_depth, ax_cn_prob, ax_hist = axes
+        ax_af = None
+
     fig.text(0.1 / 8, 0.98, name, fontsize=12, fontweight="bold", va="top", ha="left")
 
     # Panel 1 — depth + MAP CN
-    ax = axes[0]
+    ax = ax_depth
     ax.plot(x, cn_map, "o", alpha=0.5, markersize=4, color="black",
             label="Predicted bin copy number")
     ax.plot(x, obs, "r-", linewidth=1, alpha=0.7, label="Normalised read depth")
@@ -78,8 +193,36 @@ def plot_sample_with_variance(
     ax.set_ylim([-0.5, 5.5])
     ax.set_xlim([x.min(), x.max()])
 
-    # Panel 2 — CN posterior stackplot
-    ax = axes[1]
+    # Panel 2 — AF (per-site scatter when available, else bin-mean stems)
+    if ax_af is not None:
+        ax = ax_af
+        if has_site_scatter:
+            _draw_site_af_scatter(
+                ax, sample_data, x, site_data, _si,
+                min_het_alt=min_het_alt,
+            )
+        else:
+            # Fallback: bin-level mean het AF stems
+            af_vals = sample_data["mean_het_af"].values
+            n_sites_vals = sample_data["n_het_sites"].values
+            af_valid = (n_sites_vals > 0) & ~np.isnan(af_vals)
+            if af_valid.any():
+                markers, stems, base = ax.stem(
+                    x[af_valid], af_vals[af_valid],
+                )
+                plt.setp(stems, linewidth=0.8, alpha=0.2, color="#00897B")
+                plt.setp(markers, markersize=2, alpha=0.1, color="#00897B")
+                plt.setp(base, linewidth=0.5)
+        ax.axhline(0.5, color="red", linestyle="--", alpha=0.1,
+                   linewidth=1, label="Expected het AF (0.5)")
+        ax.set_ylabel("Allele Fraction")
+        ax.set_ylim([-0.05, 1.05])
+        ax.set_xlim([x.min(), x.max()])
+        ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.02), borderaxespad=0)
+        ax.grid(True, axis="y", alpha=0.3)
+
+    # CN posterior stackplot (half height)
+    ax = ax_cn_prob
     ax.stackplot(x, probs.T, labels=[f"CN={i}" for i in range(6)],
                  alpha=0.7, colors=_CN_COLORS)
     ax.set_ylabel("Copy Number Probability")
@@ -87,8 +230,8 @@ def plot_sample_with_variance(
     ax.set_ylim([0, 1])
     ax.set_xlim([x.min(), x.max()])
 
-    # Panel 3 — sample variance histogram
-    ax = axes[2]
+    # Sample variance histogram (half height)
+    ax = ax_hist
     ax.hist(np.sqrt(all_sample_vars), bins=30, alpha=0.7, edgecolor="black",
             linewidth=0.5, color="gray")
     ax.axvline(np.sqrt(svar), color="red", linestyle="--", linewidth=2,
@@ -99,16 +242,21 @@ def plot_sample_with_variance(
     ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.02), borderaxespad=0)
     ax.grid(True, alpha=0.3)
 
-    # Highlight aneuploid chromosomes
+    # Highlight aneuploid chromosomes on spatial panels
+    spatial_axes = [ax_depth]
+    if ax_af is not None:
+        spatial_axes.append(ax_af)
+    spatial_axes.append(ax_cn_prob)
+
     if is_aneu:
         aneu_names = {c for c, _, _ in aneuploid_chrs}
         for cname in aneu_names:
             idx = np.where(chrs == cname)[0]
             if len(idx) > 0:
-                for a in axes[:2]:
+                for a in spatial_axes:
                     a.axvspan(x[idx[0]], x[idx[-1]], alpha=0.15, color="red", zorder=0)
 
-    for a in axes[:2]:
+    for a in spatial_axes:
         add_chromosome_labels(a, chrs, x_transformed=x)
 
     plt.tight_layout()

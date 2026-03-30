@@ -4,12 +4,16 @@ Hierarchical Bayesian model for copy-number inference (Pyro).
 Provides :class:`CNVModel` which wraps the probabilistic model, the
 variational guide, training via SVI, MAP estimation, and exact discrete
 posterior inference over copy-number states.
+
+The allele-fraction likelihood analytically marginalises over SNP genotype
+states at every site in each bin, avoiding the circular-reasoning problem
+of pre-filtering sites by observed allele fraction.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import numpy as np
 import torch
@@ -27,9 +31,228 @@ from pyro.infer import (
 from pyro.infer.autoguide import AutoDelta, AutoDiagonalNormal
 from tqdm import tqdm
 
+from gatk_sv_ploidy._util import DEFAULT_AF_CONCENTRATION, DEFAULT_AF_WEIGHT
 from gatk_sv_ploidy.data import DepthData
 
 logger = logging.getLogger(__name__)
+
+
+# ── marginalized allele-fraction likelihood ─────────────────────────────────
+
+
+def _marginalized_af_log_lik(
+    site_alt: torch.Tensor,
+    site_total: torch.Tensor,
+    site_pop_af: torch.Tensor,
+    site_mask: torch.Tensor,
+    cn: torch.Tensor,
+    n_states: int,
+    concentration: float,
+) -> torch.Tensor:
+    """Compute per-bin AF log-likelihood marginalised over genotype states.
+
+    For each SNP site *s* inside a bin with copy number *c*, the genotype
+    (number of alt alleles) *k* ranges from 0 to *c*.  We marginalise:
+
+    .. math::
+
+        P(a_s | c, p_s, n_s) = \\sum_{k=0}^{c}
+            \\mathrm{Binom}(k | c, p_s) \\cdot
+            \\mathrm{BetaBinom}(a_s | \\alpha_k, \\beta_k, n_s)
+
+    where *p_s* is the population alt-allele frequency, *a_s* / *n_s* are the
+    observed alt / total counts, and ``α_k = conc * (k/c) + ε``,
+    ``β_k = conc * (1 − k/c) + ε``.
+
+    This is injected into the model via :func:`pyro.factor`.
+
+    Args:
+        site_alt: ``(n_bins, max_sites, n_samples)`` observed alt counts.
+        site_total: ``(n_bins, max_sites, n_samples)`` observed total counts.
+        site_pop_af: ``(n_bins, max_sites)`` population alt-allele frequencies.
+        site_mask: ``(n_bins, max_sites, n_samples)`` boolean validity mask.
+        cn: ``(n_bins, n_samples)`` integer copy-number state per bin/sample
+            (may have extra leading enumeration dimensions from Pyro).
+        n_states: Maximum CN state (6 for CN 0–5).
+        concentration: Beta-Binomial concentration parameter.
+
+    Returns:
+        Scalar log-likelihood summed over all valid sites.
+    """
+    eps = 1e-6
+
+    # cn may have enumeration dims from config_enumerate: (..., n_bins, n_samples)
+    # Insert a sites dim so it broadcasts: (..., n_bins, 1, n_samples)
+    cn_e = cn.unsqueeze(-2)
+    cn_f = cn_e.float()
+
+    site_total_safe = torch.clamp(site_total, min=1)
+    pop_af = site_pop_af.unsqueeze(-1)  # (n_bins, max_sites, 1)
+    pop_af_safe = torch.clamp(pop_af, min=eps, max=1.0 - eps)
+
+    # Iterate over genotype states k = 0 .. n_states-1
+    log_terms = []
+    for k in range(n_states):
+        k_f = float(k)
+
+        # Genotype prior: Binom(k | c, p_s)
+        valid_geno = (cn_e >= k) & (cn_f > 0)
+
+        # Manual log Binom(k | c, p) to avoid distribution validation issues
+        # and explicit expand calls — rely on broadcasting throughout.
+        cn_safe = cn_f.clamp(min=1)
+        log_comb = (
+            torch.lgamma(cn_safe + 1)
+            - torch.lgamma(torch.tensor(k_f + 1, device=cn_f.device))
+            - torch.lgamma(cn_safe - k_f + 1)
+        )
+        log_p = (
+            k_f * torch.log(pop_af_safe)
+            + (cn_safe - k_f) * torch.log(1.0 - pop_af_safe)
+        )
+        log_binom = log_comb + log_p
+
+        log_binom_prior = torch.where(
+            valid_geno,
+            log_binom,
+            torch.where(
+                (cn_e == 0) & (k == 0),
+                torch.zeros_like(cn_f),  # log(1) = 0 for k=0, c=0
+                torch.full_like(cn_f, -1e10),
+            ),
+        )
+
+        # Allele-fraction likelihood: BetaBinom(a_s | alpha, beta, n_s)
+        # Expected allele fraction for genotype k at copy number c: k/c
+        # For c=0: uninformative (flat); clamp to [0,1] for k > cn safety
+        eaf = torch.where(
+            cn_f > 0,
+            (torch.tensor(k_f, device=cn_f.device) / cn_safe).clamp(0.0, 1.0),
+            torch.tensor(0.5, device=cn_f.device),
+        )
+        alpha = concentration * eaf + eps
+        beta = concentration * (1.0 - eaf) + eps
+
+        log_bb = dist.BetaBinomial(
+            alpha, beta, site_total_safe, validate_args=False,
+        ).log_prob(site_alt)
+
+        log_terms.append(log_binom_prior + log_bb)
+
+    # logsumexp over genotype states
+    log_stack = torch.stack(log_terms, dim=0)  # (n_states, ..., n_bins, max_sites, n_samples)
+    log_marginal = torch.logsumexp(log_stack, dim=0)  # (..., n_bins, max_sites, n_samples)
+
+    # Mask out invalid sites and sum
+    log_marginal = torch.where(site_mask, log_marginal, torch.zeros_like(log_marginal))
+    return log_marginal.sum(dim=-2)  # (..., n_bins, n_samples) — sum over sites
+
+
+def _marginalized_af_log_lik_numpy(
+    site_alt: np.ndarray,
+    site_total: np.ndarray,
+    site_pop_af: np.ndarray,
+    site_mask: np.ndarray,
+    cn_state: int,
+    n_states: int,
+    concentration: float,
+) -> np.ndarray:
+    """NumPy version for analytical discrete inference.
+
+    Computes the per-bin AF log-likelihood for a single CN state, marginalised
+    over genotypes.
+
+    Args:
+        site_alt: ``(n_bins, max_sites, n_samples)``
+        site_total: ``(n_bins, max_sites, n_samples)``
+        site_pop_af: ``(n_bins, max_sites)``
+        site_mask: ``(n_bins, max_sites, n_samples)``
+        cn_state: The CN value (integer).
+        n_states: Max CN.
+        concentration: Beta-Binomial concentration.
+
+    Returns:
+        ``(n_bins, n_samples)`` log-likelihood summed over sites within each bin.
+    """
+    from scipy.stats import betabinom as betabinom_scipy
+    from scipy.stats import binom as binom_scipy
+
+    eps = 1e-6
+    site_total_safe = np.maximum(site_total, 1)
+    pop_af = site_pop_af[:, :, np.newaxis]   # (n_bins, max_sites, 1)
+    pop_af_safe = np.clip(pop_af, eps, 1.0 - eps)
+
+    log_terms = []
+    for k in range(cn_state + 1):
+        # Genotype prior: Binom(k | cn_state, pop_af)
+        if cn_state > 0:
+            log_bp = binom_scipy.logpmf(k, cn_state, pop_af_safe)
+        else:
+            # cn=0: only k=0 is valid
+            log_bp = np.where(k == 0, 0.0, -1e10) * np.ones_like(site_alt, dtype=np.float64)
+
+        # BetaBinomial likelihood
+        eaf = k / max(cn_state, 1)
+        alpha = concentration * eaf + eps
+        beta = concentration * (1.0 - eaf) + eps
+        log_bb = betabinom_scipy.logpmf(site_alt, site_total_safe, alpha, beta)
+        log_bb = np.nan_to_num(log_bb, nan=0.0, posinf=0.0, neginf=-100.0)
+
+        log_terms.append(log_bp + log_bb)
+
+    # logsumexp over genotype states
+    log_stack = np.stack(log_terms, axis=0)  # (n_geno, n_bins, max_sites, n_samples)
+    max_val = np.max(log_stack, axis=0, keepdims=True)
+    log_marginal = max_val.squeeze(0) + np.log(
+        np.sum(np.exp(log_stack - max_val), axis=0) + 1e-30
+    )
+
+    # Mask and sum over sites
+    log_marginal = np.where(site_mask, log_marginal, 0.0)
+    return log_marginal.sum(axis=1)  # (n_bins, n_samples)
+
+
+def _precompute_af_table(
+    site_alt: torch.Tensor,
+    site_total: torch.Tensor,
+    site_pop_af: torch.Tensor,
+    site_mask: torch.Tensor,
+    n_states: int,
+    concentration: float,
+) -> torch.Tensor:
+    """Precompute AF log-likelihood for every CN state.
+
+    The result is constant across SVI iterations (it depends only on observed
+    data and the discrete CN state, not on any continuous latent variables),
+    so computing it once and reusing it via a simple table lookup eliminates
+    the dominant per-step cost.
+
+    Args:
+        site_alt: ``(n_bins, max_sites, n_samples)``
+        site_total: ``(n_bins, max_sites, n_samples)``
+        site_pop_af: ``(n_bins, max_sites)``
+        site_mask: ``(n_bins, max_sites, n_samples)``
+        n_states: Number of CN states.
+        concentration: Beta-Binomial concentration.
+
+    Returns:
+        Tensor of shape ``(n_states, n_bins, n_samples)`` where entry
+        ``[c, b, s]`` is the marginalized AF log-likelihood for CN state *c*
+        at bin *b* and sample *s*.
+    """
+    n_bins = site_alt.shape[0]
+    n_samples = site_alt.shape[2]
+    table = torch.empty(n_states, n_bins, n_samples,
+                        device=site_alt.device, dtype=site_alt.dtype)
+    for c in range(n_states):
+        cn_c = torch.full((n_bins, n_samples), c, dtype=torch.long,
+                          device=site_alt.device)
+        table[c] = _marginalized_af_log_lik(
+            site_alt, site_total, site_pop_af, site_mask,
+            cn=cn_c, n_states=n_states, concentration=concentration,
+        )
+    logger.info("Precomputed AF table: shape %s", list(table.shape))
+    return table
 
 
 class CNVModel:
@@ -39,6 +262,11 @@ class CNVModel:
     (0–5), per-bin bias and variance, and per-sample variance.  Observed
     normalised depth is drawn from a Normal likelihood whose mean is
     ``CN × bin_bias`` and whose variance is ``bin_var + sample_var``.
+
+    When per-site allele data is provided, the model additionally includes
+    a marginalized allele-fraction likelihood that jointly considers all
+    possible genotype states at each SNP site, weighted by population
+    allele frequencies.
 
     Parameters
     ----------
@@ -59,6 +287,10 @@ class CNVModel:
     guide_type : str
         ``'delta'`` for :class:`AutoDelta` or ``'diagonal'`` for
         :class:`AutoDiagonalNormal`.
+    af_concentration : float
+        Beta-Binomial concentration for the allele-fraction model.
+    af_weight : float
+        Relative weight of the allele-fraction likelihood (0 to disable).
     """
 
     # The list of continuous latent sites exposed to the guide.
@@ -75,6 +307,8 @@ class CNVModel:
         device: str = "cpu",
         dtype: torch.dtype = torch.float32,
         guide_type: str = "diagonal",
+        af_concentration: float = DEFAULT_AF_CONCENTRATION,
+        af_weight: float = DEFAULT_AF_WEIGHT,
     ) -> None:
         self.n_states = n_states
         self.alpha_ref = alpha_ref
@@ -85,6 +319,8 @@ class CNVModel:
         self.device = device
         self.dtype = dtype
         self.guide_type = guide_type
+        self.af_concentration = af_concentration
+        self.af_weight = af_weight
 
         self.loss_history: Dict[str, List[float]] = {"epoch": [], "elbo": []}
 
@@ -107,6 +343,11 @@ class CNVModel:
         depth: torch.Tensor,
         n_bins: int = None,
         n_samples: int = None,
+        site_alt: Optional[torch.Tensor] = None,
+        site_total: Optional[torch.Tensor] = None,
+        site_pop_af: Optional[torch.Tensor] = None,
+        site_mask: Optional[torch.Tensor] = None,
+        af_table: Optional[torch.Tensor] = None,
     ) -> None:
         """Pyro generative model.
 
@@ -114,6 +355,17 @@ class CNVModel:
             depth: Observed normalised depth tensor (n_bins × n_samples).
             n_bins: Number of genomic bins.
             n_samples: Number of samples.
+            site_alt: Per-site alt counts (n_bins, max_sites, n_samples).
+                Only used when *af_table* is ``None`` (falls back to
+                on-the-fly computation).
+            site_total: Per-site total counts (n_bins, max_sites, n_samples).
+            site_pop_af: Per-site population AFs (n_bins, max_sites).
+            site_mask: Per-site validity mask (n_bins, max_sites, n_samples).
+            af_table: Precomputed AF log-likelihood table
+                ``(n_states, n_bins, n_samples)`` from
+                :func:`_precompute_af_table`.  When provided, the model
+                performs a cheap table lookup instead of recomputing
+                BetaBinomial log-probs at every SVI step.
         """
         zero = torch.zeros(1, device=self.device, dtype=self.dtype)
         one = torch.ones(1, device=self.device, dtype=self.dtype)
@@ -151,7 +403,51 @@ class CNVModel:
             variance = sample_var + bin_var
             pyro.sample("obs", dist.Normal(expected, variance.sqrt()), obs=depth)
 
+            # ── marginalized allele-fraction likelihood ───────────────────
+            if af_table is not None and self.af_weight > 0:
+                # Fast path: precomputed table lookup.
+                # af_table shape: (n_states, n_bins, n_samples).
+                # cn has enumeration dims: (..., 1, 1) with values 0..n_states-1.
+                # Select the row matching each enumerated cn state via torch.where.
+                af_log_lik = torch.tensor(0.0, device=self.device)
+                for c in range(self.n_states):
+                    af_log_lik = af_log_lik + torch.where(
+                        cn == c, af_table[c], zero,
+                    )
+                pyro.factor("af_lik", self.af_weight * af_log_lik)
+            elif (site_alt is not None and site_total is not None
+                    and self.af_weight > 0):
+                # Slow fallback: compute BetaBinomial on the fly.
+                af_log_lik = _marginalized_af_log_lik(
+                    site_alt, site_total, site_pop_af, site_mask,
+                    cn=cn, n_states=self.n_states,
+                    concentration=self.af_concentration,
+                )
+                pyro.factor("af_lik", self.af_weight * af_log_lik)
+
     # ── training ────────────────────────────────────────────────────────
+
+    def _model_kwargs(self, data: DepthData) -> dict:
+        """Build keyword arguments dict for model/guide calls.
+
+        When per-site allele data is present and ``af_weight > 0``, the
+        expensive BetaBinomial marginalisation is done **once** here and
+        passed to the model as a precomputed lookup table (``af_table``).
+        """
+        kw: dict = {
+            "depth": data.depth,
+            "n_bins": data.n_bins,
+            "n_samples": data.n_samples,
+        }
+        if data.site_alt is not None and self.af_weight > 0:
+            with torch.no_grad():
+                kw["af_table"] = _precompute_af_table(
+                    data.site_alt, data.site_total,
+                    data.site_pop_af, data.site_mask,
+                    n_states=self.n_states,
+                    concentration=self.af_concentration,
+                )
+        return kw
 
     def train(
         self,
@@ -208,11 +504,11 @@ class CNVModel:
         best_loss = float("inf")
         patience_ctr = 0
 
+        model_kw = self._model_kwargs(data)
+
         with tqdm(range(max_iter), desc="Training", unit="epoch") as pbar:
             for epoch in pbar:
-                loss = svi.step(
-                    depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples
-                )
+                loss = svi.step(**model_kw)
                 scheduler.step()
 
                 self.loss_history["epoch"].append(epoch)
@@ -250,15 +546,12 @@ class CNVModel:
             Dictionary mapping site names to numpy arrays.
         """
         logger.info("Computing MAP estimates …")
+        model_kw = self._model_kwargs(data)
 
-        guide_trace = poutine.trace(self.guide).get_trace(
-            depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples
-        )
+        guide_trace = poutine.trace(self.guide).get_trace(**model_kw)
         replayed = poutine.replay(self.model, trace=guide_trace)
         inferred = infer_discrete(replayed, temperature=0, first_available_dim=-3)
-        trace = poutine.trace(inferred).get_trace(
-            depth=data.depth, n_bins=data.n_bins, n_samples=data.n_samples
-        )
+        trace = poutine.trace(inferred).get_trace(**model_kw)
 
         estimates: Dict[str, np.ndarray] = {}
         for site in ("bin_bias", "sample_var", "bin_var", "cn_probs"):
@@ -280,6 +573,9 @@ class CNVModel:
         finite state space and a Gaussian likelihood.  That means the
         posterior can be computed directly with Bayes' rule instead of via
         repeated Monte Carlo calls to :func:`infer_discrete`.
+
+        When per-site allele data is available, the marginalized genotype
+        likelihood for each CN state is added to the log-posterior.
 
         Args:
             data: :class:`DepthData` instance.
@@ -320,6 +616,28 @@ class CNVModel:
 
         log_prior = np.log(np.maximum(cn_probs.T[:, :, np.newaxis], 1e-10))
         log_unnormalized = log_lik + log_prior
+
+        # ── marginalized allele-fraction likelihood ──────────────────────
+        if data.site_alt is not None and self.af_weight > 0:
+            site_alt_np = data.site_alt.detach().cpu().numpy()
+            site_total_np = data.site_total.detach().cpu().numpy()
+            site_pop_af_np = data.site_pop_af.detach().cpu().numpy()
+            site_mask_np = data.site_mask.detach().cpu().numpy()
+
+            for c in range(self.n_states):
+                af_ll = _marginalized_af_log_lik_numpy(
+                    site_alt_np, site_total_np, site_pop_af_np, site_mask_np,
+                    cn_state=c, n_states=self.n_states,
+                    concentration=self.af_concentration,
+                )
+                # af_ll shape: (n_bins, n_samples)
+                log_unnormalized[c] += self.af_weight * af_ll
+
+            n_sites = int(site_mask_np.any(axis=2).sum())
+            logger.info(
+                "AF marginalised likelihood: %d total sites (weight=%.2f)",
+                n_sites, self.af_weight,
+            )
 
         max_log = np.max(log_unnormalized, axis=0, keepdims=True)
         exp_vals = np.exp(log_unnormalized - max_log)

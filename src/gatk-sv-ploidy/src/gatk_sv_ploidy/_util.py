@@ -28,6 +28,15 @@ CHR_ORDER["chrY"] = 24
 AUTOSOME_NAMES = [f"chr{i}" for i in range(1, 23)]
 SEX_CHR_NAMES = ["chrX", "chrY"]
 
+MAX_GENOTYPE_STATES = 6
+"""Maximum number of CN states modelled (CN 0 … 5)."""
+
+DEFAULT_AF_CONCENTRATION = 50.0
+"""Default Beta-Binomial concentration for the per-site allele model."""
+
+DEFAULT_AF_WEIGHT = 1.0
+"""Default relative weight of the allele-fraction likelihood term."""
+
 
 # ── dataframe helpers ───────────────────────────────────────────────────────
 
