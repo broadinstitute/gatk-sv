@@ -122,8 +122,8 @@ with pysam.VariantFile("~{vcf}") as vcf_in:
                 par = False
                 if record.chrom == "chrX" or record.chrom == "chrY":
                     for start, end in PAR[record.chrom]:
-                        if float(max(record.stop, end) - max(record.pos, start))/(record.stop - record.pos) > 0.5:
-                            par = True
+                        if float(min(record.stop, end) - max(record.pos, start))/(record.stop - record.pos) > 0.5:
+                            par = True  # if variant is >50% in PAR
                 for sample in record.samples:
                     rd_cn = record.samples[sample].get("RD_CN", None)
                     ecn = PLOIDY[sample][record.chrom]
