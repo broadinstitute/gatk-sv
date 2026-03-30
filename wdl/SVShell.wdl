@@ -62,6 +62,7 @@ workflow SVShell {
       ref_pesr_split_files_indices = ref_pesr_split_file_indices,
       ref_pesr_disc_files_indices = ref_pesr_disc_file_indices,
       ref_pesr_sd_files_indices = ref_pesr_sd_file_indices,
+      genome_tracks = genome_tracks,
       genome_tracks_indices = genome_tracks_indices,
       pesr_exclude_intervals = pesr_exclude_intervals,
       pesr_exclude_intervals_index = pesr_exclude_intervals_index,
@@ -74,8 +75,10 @@ workflow SVShell {
       cytobands = cytobands,
       cytobands_index = cytobands_index,
       depth_exclude_list_index = depth_exclude_list_index,
+      mei_bed = mei_bed,
       mei_bed_index = mei_bed_index,
-      manta_region_bed_index = manta_region_bed_index
+      manta_region_bed = manta_region_bed,
+      manta_region_bed_index = manta_region_bed_index,
   }
 
 
