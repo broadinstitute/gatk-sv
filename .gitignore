@@ -1,8 +1,6 @@
-.copilot-instructions.local.md
 .DS_Store
 .idea/
 gatk-sv.iml
-terra_credentials.json
 *.pyc
 **.egg-info/
 **__py_cache/
