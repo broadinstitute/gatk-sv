@@ -301,6 +301,10 @@ task RunSVShell {
     cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json" .
     ls
 
+    final_vcf=$(jq -r '.final_vcf' "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${final_vcf}" "${SV_SHELL_BASE_DIR}/final_vcf.vcf.gz"
+    mv "${final_vcf}.tbi" "${SV_SHELL_BASE_DIR}/final_vcf.vcf.gz.tbi"
+
   >>>
 
   output {
@@ -308,7 +312,8 @@ task RunSVShell {
     File test2 = "single_sample_pipeline_outputs.json"
 #    Map[String, String] manifest = read_json("pipeline_outputs_manifest.json")
 #
-#    File final_vcf = manifest["final_vcf"]
+    File final_vcf = "final_vcf.vcf.gz"
+    File final_vcf_idx = "final_vcf.vcf.gz.tbi"
 #    File pre_cleanup_vcf = manifest["pre_cleanup_vcf"]
 #    File stripy_json_output = manifest["stripy_json_output"]
 #    File stripy_tsv_output = manifest["stripy_tsv_output"]
@@ -337,7 +342,6 @@ task RunSVShell {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_shell_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     noAddress: true
   }
