@@ -1,0 +1,43 @@
+from __future__ import annotations
+
+import pysam
+
+from gatk_sv_compare.vcf_format import PipelineStage, check_record, detect_pipeline_stage
+
+
+def test_detect_pipeline_stage_final_annotated(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="final.vcf",
+        final_annotated=True,
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=50;N_BI_GENOS=2;N_HOMREF=1;N_HET=1;N_HOMALT=0;gnomad_v4.1_sv_AF=0.1\tGT:GQ:ECN:OGQ:SL\t0/1:60:2:55:1.0\t0/0:50:2:49:1.2",
+        ],
+    )
+    with pysam.VariantFile(str(vcf_path)) as vcf:
+        assert detect_pipeline_stage(vcf) is PipelineStage.FINAL_ANNOTATED
+
+
+def test_check_record_reports_ins_end_mismatch(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="ins_mismatch.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<INS>\t.\tPASS\tSVTYPE=INS;SVLEN=10;END=150\tGT:GQ:ECN\t0/1:40:2\t0/0:35:2",
+        ],
+    )
+    with pysam.VariantFile(str(vcf_path)) as vcf:
+        record = next(iter(vcf))
+    issues = check_record(record, contig_length=1_000_000)
+    assert any(issue.check_id == "INS_END_MISMATCH" for issue in issues)
+
+
+def test_check_record_flags_multiallelic_non_cnv(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="multi.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<CN0>,<CN1>,<CN2>,<CN3>\t.\tPASS\tSVTYPE=DUP;SVLEN=10\tGT:GQ:ECN\t0/1:40:2\t0/0:35:2",
+        ],
+    )
+    with pysam.VariantFile(str(vcf_path)) as vcf:
+        record = next(iter(vcf))
+    issues = check_record(record)
+    assert any(issue.check_id == "MULTI_ALLELIC_NON_CNV" for issue in issues)
