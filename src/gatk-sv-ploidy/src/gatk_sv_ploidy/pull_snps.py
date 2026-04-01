@@ -144,10 +144,14 @@ def pull_snps(
     filter_expr = hl.all(lambda c: c, [*common_filters, af_filter])
     ht = ht.filter(filter_expr)
 
+    # Re-derive AF from the filtered table (Hail requires all
+    # expressions in a select to come from the same table object).
+    filtered_af = ht.freq[adj_index].AF
+
     # Keep only AF in the INFO field
     ht = ht.select(
         filters=ht.filters,
-        info=hl.struct(AF=[hl.float64(af)]),
+        info=hl.struct(AF=[hl.float64(filtered_af)]),
     )
 
     metadata = {
