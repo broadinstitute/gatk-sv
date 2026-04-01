@@ -91,7 +91,7 @@ def main() -> None:
     filter_expr = hl.all(
         lambda condition: condition,
         [
-            ht.locus.in_autosome(),
+            (ht.locus.in_autosome() | ht.locus.in_x_nonpar() | ht.locus.in_y_nonpar()),
             hl.len(ht.alleles) == 2,
             hl.is_snp(ht.alleles[0], ht.alleles[1]),
             hl.len(ht.filters) == 0,

@@ -212,7 +212,7 @@ workflow GatherBatchEvidence {
       input:
         merged_depth_file = merged_bincov_,
         batch = batch,
-        sd_files = all_sparse_SD_files,
+        sparse_sd_files = all_sparse_SD_files,
         plot_highlight_sample = ploidy_plot_highlight_sample,
         reference_dict = ref_dict,
         model_args = ploidy_model_args,

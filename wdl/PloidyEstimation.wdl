@@ -7,7 +7,7 @@ workflow Ploidy {
     File merged_depth_file
     File reference_dict
     String batch
-    Array[File] sd_files = []
+    Array[File] sparse_sd_files
     String? plot_highlight_sample
     String? model_args
     String? plot_args
@@ -31,7 +31,7 @@ workflow Ploidy {
     input:
       ploidy_matrix = CondenseDepthMatrix.out,
       batch = batch,
-      sd_files = sd_files,
+      sparse_sd_files = sparse_sd_files,
       plot_highlight_sample = plot_highlight_sample,
       model_args = model_args,
       plot_args = plot_args,
@@ -112,7 +112,7 @@ task PloidyScore {
   input {
     File ploidy_matrix
     String batch
-    Array[File] sd_files = []
+    Array[File] sparse_sd_files
     String? plot_highlight_sample
     String? model_args
     String? plot_args
@@ -142,9 +142,9 @@ task PloidyScore {
 
     # Build site-depth list if SD files were provided
     SD_ARGS=""
-    if [[ ~{length(sd_files)} -gt 0 ]]; then
-      SD_LIST="sd_files.list"
-      for f in ~{sep=' ' sd_files}; do
+    if [[ ~{length(sparse_sd_files)} -gt 0 ]]; then
+      SD_LIST="sparse_sd_files.list"
+      for f in ~{sep=' ' sparse_sd_files}; do
         echo "$f" >> "${SD_LIST}"
       done
       SD_ARGS="--site-depth-list ${SD_LIST}"
