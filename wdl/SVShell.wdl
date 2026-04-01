@@ -84,8 +84,8 @@ workflow SVShell {
 
 
   output {
-    File test = RunSVShell.test
-    File test2 = RunSVShell.test2
+    File inputs_json = RunSVShell.inputs_json
+    File outputs_json = RunSVShell.outputs_json
     File final_vcf = RunSVShell.final_vcf
     File final_vcf_idx = RunSVShell.final_vcf_idx
     File pre_cleanup_vcf = RunSVShell.pre_cleanup_vcf
@@ -202,7 +202,7 @@ task RunSVShell {
     RuntimeAttr? runtime_attr_override
   }
 
-  String final_vcf_filename = sample_id + ".gatk_sv.vcf.gz"
+  String final_vcf_filename = sample_id + ".vcf.gz"
   String final_vcf_idx_filename = final_vcf_filename + ".tbi"
   String pre_cleanup_vcf_filename = batch + ".annotated.vcf.gz"
   String pre_cleanup_vcf_idx_filename = pre_cleanup_vcf_filename + ".tbi"
