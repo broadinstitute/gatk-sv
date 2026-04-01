@@ -6,6 +6,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_ploidy
       tags:
         - /.*/
 
