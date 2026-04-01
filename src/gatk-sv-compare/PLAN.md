@@ -15,6 +15,17 @@ The tool has two subcommands:
 2. **`analyze`** — Streams the annotated VCFs and produces all tables, plots, and summary
    statistics.
 
+This is intentionally a **new tool**, not a line-by-line or metric-by-metric reproduction
+of the legacy R/bash/WDL outputs. The implementation should preserve the core biological
+and QC intent while favoring a cleaner architecture, clearer invariants, and better
+scalability over exact historical parity.
+
+Two scope decisions are fixed throughout this document:
+
+- **`preprocess` is a first deliverable**, not a later integration add-on.
+- **`--pass-only` means “filtered-pass view”**: include records with `FILTER=PASS` and CNV
+  records with `FILTER=MULTIALLELIC`, because final annotated CNVs are represented that way.
+
 > **This document is the build plan.** Each section is designed to be implemented and tested
 > independently, in order. Later sections depend on earlier ones, but within a section the
 > modules are independent of each other.
@@ -47,8 +58,9 @@ resolved in the plan body — this section is retained as an audit trail.
    `requires_gq`, `requires_concordance`, `requires_genotype_pass`. The aggregator
    inspects enabled modules to collect only what is needed.
 
-6. ✅ **Memory model fixed.** Per-contig workers return DataFrames; aggregator uses
-   `pd.concat()` (see §8.3).
+6. ✅ **Memory model fixed.** Per-contig workers emit typed site-table shards; the
+  coordinator concatenates only compact site tables and builds a canonical pair table
+  (see §8.3).
 
 7. ✅ **Composite figures relocated.** Moved from `plot_utils.py` to respective
    analysis modules (see §10.3 note).
@@ -58,7 +70,7 @@ resolved in the plan body — this section is retained as an audit trail.
 8. ✅ **Line estimates corrected.** `family_analysis` → 750, `plot_utils` → 500,
    `counts_per_genome` → 280 (see §13).
 
-9. ✅ **`plot_utils` moved to Phase 2** (step 2.4, see §13).
+9. ✅ **`plot_utils` moved into the core data/analysis path** (step 3.4, see §13).
 
 ### Risk Gaps
 
@@ -76,8 +88,11 @@ resolved in the plan body — this section is retained as an audit trail.
 ### 2.1 Modularity
 Every analysis module is a self-contained unit with a single public entry function
 `run(data: AggregatedData, config: AnalysisConfig, output_dir: Path) -> None`. Modules share
-no mutable state. All shared logic lives in utility layers (`dimensions`, `vcf_reader`,
-`plot_utils`).
+no mutable state. The shared object passed between modules is a **lightweight analysis
+context** (still named `AggregatedData` below for continuity), containing compact typed
+site tables, a canonical matched-pair table, and sample metadata — **not** full
+variant × sample matrices. All shared logic lives in utility layers (`dimensions`,
+`vcf_reader`, `plot_utils`).
 
 ### 2.2 DRY / Single Source of Truth
 - Bucketing logic (AF bins, size bins, SV type classification, genomic context mapping) is
@@ -90,6 +105,8 @@ no mutable state. All shared logic lives in utility layers (`dimensions`, `vcf_r
 ### 2.3 Streaming & Memory Discipline
 - Never load an entire VCF into memory. Stream with pysam `VariantFile`, one chromosome at a
   time.
+- Materialize only **compact site-level tables** in memory/disk. Do not retain raw genotype
+  or GQ matrices across the whole callset.
 - Build DataFrames from pre-allocated lists of dicts, then construct the DataFrame in one call.
   Never use `DataFrame.append()` or `pd.concat()` in a loop.
 - For genotype-level operations on large cohorts (100K samples), extract only the fields needed
@@ -99,16 +116,17 @@ no mutable state. All shared logic lives in utility layers (`dimensions`, `vcf_r
 ### 2.4 Parallelism
 - Chromosome-level parallelism via `multiprocessing.Pool` (or `concurrent.futures.ProcessPoolExecutor`)
   for the aggregation pass.
-- Module-level parallelism: analysis modules are independent and can run concurrently.
-- Plotting: each figure is independent; parallelize figure generation with a thread pool (matplotlib
-  is GIL-bound for rendering but I/O-bound for writing PNGs).
+- Record-count sharding is allowed as an implementation detail for very large contigs; contig-only
+  scatter is not assumed to be sufficient at cohort scale.
+- **No nested parallelism in the MVP.** The first implementation should parallelize the main VCF
+  passes and run modules serially to avoid oversubscribing CPUs and multiplying peak memory.
 
 ### 2.5 Testing
 - Every module gets a companion `test_<module>.py`.
 - Use small synthetic VCFs (5 variants, 3 samples) for unit tests — generated
   programmatically with pysam, not checked-in files.
 - Integration tests use a small real-ish VCF fixture (50 variants, 10 samples).
-- Pytest fixtures for `AggregatedData` objects with known expected outputs.
+- Pytest fixtures for compact `AggregatedData` objects with known expected outputs.
 
 ### 2.6 Type Safety
 - All public functions have full type annotations.
@@ -306,7 +324,7 @@ src/gatk-sv-compare/
 │       ├── preprocess.py            # SVConcordance + SVRegionOverlap orchestration
 │       │
 │       ├── # ── Layer 3: Aggregation ──
-│       ├── aggregate.py             # AggregatedData dataclass, parallel chrom aggregation
+│       ├── aggregate.py             # compact site tables + matched-pair construction
 │       │
 │       ├── # ── Layer 4: Analysis Modules ──
 │       ├── modules/
@@ -328,7 +346,7 @@ src/gatk-sv-compare/
 │       └── plot_utils.py            # colors, styles, stacked bars, scatter, ternary, heatmap
 │
 └── tests/
-    ├── conftest.py                  # shared fixtures (synthetic VCFs, AggregatedData)
+    ├── conftest.py                  # shared fixtures (synthetic VCFs, compact AggregatedData)
     ├── test_dimensions.py
     ├── test_vcf_format.py
     ├── test_validate.py
@@ -396,10 +414,17 @@ GENOMIC_CONTEXTS = ["segdup", "simple_repeat", "repeatmasker", "none"]
 # Observed FILTER values in final annotated VCF:
 #   PASS (53690), UNRESOLVED (9092), HIGH_NCR (2416), HIGH_ALGORITHM_FDR (879),
 #   MULTIALLELIC (375), HIGH_ALGORITHM_FDR;HIGH_NCR (315), HIGH_NCR;UNRESOLVED (4)
-# Default: analyze ALL variants. --pass-only flag restricts to PASS-only.
-# CNV sites always have FILTER=MULTIALLELIC.
+# Default: analyze ALL variants. --pass-only restricts to the filtered-pass view:
+# records with PASS plus final annotated CNV records with MULTIALLELIC.
 FILTER_PASS = "PASS"
 FILTER_MULTIALLELIC = "MULTIALLELIC"
+
+def is_filtered_pass(filter_values: set[str]) -> bool:
+  """Return True for records included by --pass-only.
+
+  PASS is included directly. Final annotated CNV sites use FILTER=MULTIALLELIC and are
+  also included in the filtered-pass view.
+  """
 
 # --- SVConcordance STATUS values ---
 STATUS_MATCHED = "MATCHED"
@@ -463,9 +488,10 @@ class AnalysisConfig:
     output_dir: Path
     reference_dict: Path
     contigs: list[str]          # from reference dict or contig list
+  contig_lengths: dict[str, int]  # parsed once from reference dict; reused by size_signatures
     n_workers: int              # for multiprocessing
     modules: list[str] | None   # None = all; or subset of module names
-    pass_only: bool             # if True, restrict to FILTER=PASS variants
+    pass_only: bool             # if True, restrict to filtered-pass view (PASS + MULTIALLELIC CNV)
     per_chrom: bool             # if True, produce per-contig stratified plots
     # Optional inputs
     ped_file: Path | None       # pedigree file (.ped/.fam format) for family analysis
@@ -624,9 +650,9 @@ timeout. Each GATK invocation is wrapped in a helper that:
 > per VCF size), GATK version skew (SVConcordance argument names change between releases),
 > and Java stacktraces that are opaque to Python callers. The `preprocess` subcommand
 > should expose `--java-options` as a pass-through argument (default `-Xmx4g`) and
-> should log the GATK version at startup. If this proves too fragile in practice,
-> `preprocess` can be replaced by a WDL/shell wrapper while keeping `analyze` as the
-> Python tool.
+> should log the GATK version at startup. Because `preprocess` is a first deliverable,
+> the MVP must ship with a directly supported Python orchestration path rather than
+> treating preprocessing as an external prerequisite.
 
 ### 7.3 Contig-Level Scatter
 
@@ -660,39 +686,40 @@ Index with tabix.
 
 ### 8.1 Overview
 
-A single parallel pass over the two annotated VCFs that extracts all per-variant features
-into chromosome-level DataFrames, then concatenates them.
+A staged pipeline that extracts compact per-site tables, writes per-contig artifacts,
+builds a canonical matched-pair table, and leaves genotype-heavy work to streaming,
+module-specific accumulators.
 
 ### 8.2 `AggregatedData`
 
 ```python
 @dataclass
 class AggregatedData:
-    """The output of the aggregation pass. Input to all analysis modules."""
+    """Lightweight analysis context returned by the aggregation stage."""
 
-    # Per-variant site-level data for each VCF
-    # Columns: variant_id, contig, pos, svtype, svlen, af, ac, an, filter,
-    #          status, truth_vid, genomic_context, size_bucket, af_bucket,
-    #          n_hom_ref, n_het, n_hom_alt, n_no_call, is_cnv,
-    #          cn_nonref_freq (NaN for non-CNV)
-    # NOTE: For CNV sites (is_cnv=True), af is populated from cn_nonref_freq
-    # rather than AC/AN, and n_hom_ref/n_het/n_hom_alt are NaN.
-    # The --pass-only filter is applied here during aggregation (rows with
-    # FILTER != PASS are dropped before DataFrame construction).
+    # Compact typed per-site tables for each VCF.
+    # Columns: variant_id, contig, pos, end, svtype, svlen, alt_allele, filter,
+    #          in_filtered_pass_view, af, ac, an, n_bi_genos, n_hom_ref, n_het,
+    #          n_hom_alt, n_no_call, is_cnv, cn_nonref_freq, status, truth_vid,
+    #          genomic_context, size_bucket, af_bucket.
+    # NOTE: For CNV sites (is_cnv=True), af is populated from cn_nonref_freq rather
+    # than AC/AN, and in_filtered_pass_view=True when FILTER=MULTIALLELIC.
     sites_a: pd.DataFrame
     sites_b: pd.DataFrame
 
-    # Per-variant GQ summaries (optional, only if GQ modules requested)
-    # Stored as a dict of contig → numpy array (n_variants × n_samples)
-    # to avoid materializing a giant DataFrame
-    gq_a: dict[str, np.ndarray] | None
-    gq_b: dict[str, np.ndarray] | None
+    # Canonical one-row-per-pair matched site table.
+    # Columns: pair_id, variant_id_a, variant_id_b, contig_a, contig_b,
+    #          svtype_a, svtype_b, af_a, af_b, status_a, status_b.
+    # This is the authoritative join key for pairwise analyses.
+    matched_pairs: pd.DataFrame
 
-    # Per-variant concordance metrics (optional, only if concordance modules requested)
-    concordance_a: pd.DataFrame | None
-    concordance_b: pd.DataFrame | None
+    # Optional artifact manifests written during aggregation / genotype pass.
+    site_table_dir: Path
+    genotype_artifacts_dir: Path | None
 
-    # Overlapping sample info
+    # Sample metadata
+    sample_names_a: list[str]
+    sample_names_b: list[str]
     shared_samples: list[str]
     sample_indices_a: np.ndarray | None  # indices of shared samples in VCF A
     sample_indices_b: np.ndarray | None
@@ -708,50 +735,52 @@ class AggregatedData:
 def aggregate(config: AnalysisConfig) -> AggregatedData:
     """
     Parallel aggregation over both VCFs.
-    Returns AggregatedData ready for analysis modules.
+    Returns compact site tables plus canonical matched-pair metadata.
     """
     # 1. Open both VCFs to read headers (sample lists, contigs)
     # 2. Determine shared samples
-    # 3. Inspect enabled modules' requires_* properties to determine extractions
-    # 4. Parallel map: for each contig, extract SiteRecords → per-contig DataFrame
-    # 5. Concatenate per-contig lists → single DataFrame per VCF
-    # 6. Add derived columns (size_bucket, af_bucket) via dimensions.categorize_variant
-    # 7. Return AggregatedData
+    # 3. Parallel map: for each contig/shard, extract SiteRecords → typed per-contig DataFrame
+    # 4. Write per-contig site tables to Parquet under output_dir / "aggregate/"
+    # 5. Concatenate only the compact site tables for sites_a / sites_b
+    # 6. Build canonical matched_pairs table from A.truth_vid ↔ B.variant_id symmetry
+    # 7. Add derived columns (size_bucket, af_bucket, in_filtered_pass_view)
+    # 8. Return AggregatedData
     ...
 ```
 
 **Per-contig worker:**
 
-Each worker returns a **per-contig DataFrame** (not a list of dicts). This bounds peak
-memory to the largest single chromosome rather than accumulating all 10M variants in
-Python dicts before DataFrame construction.
+Each worker returns or writes a **typed per-contig site table**. This bounds peak memory
+to the largest single contig/shard rather than accumulating all variants or genotype arrays
+in one coordinator process.
 
 ```python
 def _extract_contig(
-    vcf_path: Path, contig: str, extract_gq: bool, extract_concordance: bool,
-    sample_indices: np.ndarray | None,
-) -> tuple[pd.DataFrame, np.ndarray | None]:
-    """Returns (per-contig DataFrame, optional GQ matrix) for one contig."""
+    vcf_path: Path,
+    contig: str,
+    shard: tuple[int, int] | None,
+    output_dir: Path,
+) -> Path:
+    """Extract one typed site-table shard and write it to Parquet."""
     rows = []
-    gq_arrays = []
-    for site in iter_contig(vcf_path, contig, extract_gq, extract_concordance, sample_indices):
+    for site in iter_contig(vcf_path, contig):
         rows.append(site.to_dict())  # lightweight dict, not dataclass copy
-        if extract_gq:
-            gq_arrays.append(site.gq_array)
     df = pd.DataFrame(rows) if rows else pd.DataFrame()
-    gq_matrix = np.stack(gq_arrays) if gq_arrays else None
-    return df, gq_matrix
+    shard_path = output_dir / f"{vcf_path.stem}.{contig}.parquet"
+    df.to_parquet(shard_path, index=False)
+    return shard_path
 ```
 
-The aggregator concatenates per-contig DataFrames:
+The coordinator concatenates only the compact site tables and then derives the
+canonical matched-pair table:
 
 ```python
-# GOOD: concat pre-built per-contig DataFrames (peak mem = largest chrom)
-df = pd.concat(contig_dfs, ignore_index=True)
+# GOOD: concat compact site tables, then build pair table once
+df = pd.concat((pd.read_parquet(path) for path in shard_paths), ignore_index=True)
 
-# BAD: accumulate all variants into one global list of dicts first
-# rows = []; for contig in contigs: rows.extend(contig_rows)  # ~4 GB for 10M variants
-# df = pd.DataFrame(rows)
+matched_pairs = build_matched_pairs(sites_a=df_a, sites_b=df_b)
+
+# BAD: retain raw GT/GQ matrices or whole-callset Python dict lists in memory
 ```
 
 ### 8.4 Genotype Pass (Second VCF Pass)
@@ -1041,7 +1070,8 @@ heatmaps. Cell color on a sequential colormap (e.g. YlGn).
 **Purpose:** For matched sites, scatter plot of AF in VCF A vs. AF in VCF B.
 
 **Methodology** (matching `plot_callset_comparison.R` lines 305–400):
-1. Join sites_a and sites_b on `(variant_id, truth_vid)` — matched pairs.
+1. Join through `data.matched_pairs` — the canonical matched-pair table built during
+  aggregation. Do **not** independently re-derive matches inside the module.
 2. Scatter plot with:
    - Points colored by density.
    - Linear regression line (red).
@@ -1073,8 +1103,9 @@ AF difference.
 
 **Tables:** Mean, median, Q25, Q75 GQ for each (svtype × size × AF × context) cell.
 
-**Performance:** GQ arrays are large (n_variants × n_samples). Process per-contig, accumulate
-histogram bin counts (not raw values). Use `np.histogram()` with fixed bins [0, 5, 10, ..., 95, 99].
+**Performance:** Do not retain GQ arrays in `AggregatedData`. Instead, stream GQ values during
+the genotype pass and accumulate histogram bin counts / quantile sketches per stratum. Use
+`np.histogram()` with fixed bins [0, 5, 10, ..., 95, 99].
 
 ---
 
@@ -1311,7 +1342,7 @@ class FamilyAnalysisModule(AnalysisModule):
         if config.ped_file is None:
             logger.info("Skipping family_analysis: no --ped file provided")
             return
-        trios = parse_ped_file(config.ped_file, data.samples_a)
+      trios = parse_ped_file(config.ped_file, set(data.sample_names_a))
         if not trios:
             logger.warning("No complete trios/duos found in VCF; skipping family_analysis")
             return
@@ -1566,7 +1597,7 @@ gatk-sv-compare analyze \
   --label-b "Callset B" \
   --output-dir /path/to/output \
   [--modules binned_counts,site_overlap,...] \
-  [--pass-only]              # restrict to FILTER=PASS variants only \
+  [--pass-only]              # restrict to filtered-pass view (PASS + MULTIALLELIC CNV) \
   [--per-chrom]              # additionally stratify all plots by contig \
   [--ped pedigree.fam]       # pedigree file for family_analysis module \
   [--num-workers 4]
@@ -1588,7 +1619,7 @@ gatk-sv-compare run \
   [--gatk-path /path/to/gatk] \
   [--java-options '-Xmx4g']   # JVM options for GATK subprocesses \
   [--modules binned_counts,site_overlap,...] \
-  [--pass-only]              # restrict to FILTER=PASS variants only \
+  [--pass-only]              # restrict to filtered-pass view (PASS + MULTIALLELIC CNV) \
   [--per-chrom]              # additionally stratify all plots by contig \
   [--ped pedigree.fam]       # pedigree file for family_analysis module \
   [--num-workers 4]
@@ -1611,6 +1642,14 @@ output_dir/
 │   ├── annotated_a.vcf.gz.tbi
 │   ├── annotated_b.vcf.gz
 │   └── annotated_b.vcf.gz.tbi
+│
+├── aggregate/
+│   ├── sites_a.chr1.parquet              # compact typed site-table shards
+│   ├── sites_b.chr1.parquet
+│   ├── ...
+│   ├── sites_a.all.parquet               # optional concatenated site table
+│   ├── sites_b.all.parquet
+│   └── matched_pairs.parquet             # canonical pair table for pairwise analyses
 │
 ├── main_plots/                           # composite multi-panel PNGs
 │   ├── overlap_summary.{label_a}.png
@@ -1720,7 +1759,7 @@ output_dir/
 ---
 ## 13. Build Order & Implementation Phases
 
-### Phase 1: Foundation (no GATK dependency needed for testing)
+### Phase 1: Foundation
 
 | Step | Module | Est. Lines | Depends On | Test With |
 |------|--------|------------|------------|-----------|
@@ -1729,47 +1768,46 @@ output_dir/
 | 1.3 | `config.py` | 60 | 1.2 | unit tests |
 | 1.4 | `vcf_format.py` | 150 | 1.2 | synthetic pysam records |
 | 1.5 | `validate.py` | 200 | 1.4 | synthetic VCFs |
-| 1.6 | `cli.py` (skeleton) | 100 | 1.2, 1.3 | `--help` smoke test |
+| 1.6 | `cli.py` (validate + preprocess skeleton) | 100 | 1.2, 1.3 | `--help` smoke test |
 
-### Phase 2: Data Pipeline
-
-| Step | Module | Est. Lines | Depends On | Test With |
-|------|--------|------------|------------|-----------|
-| 2.1 | `vcf_reader.py` | 250 | 1.2, 1.4 | synthetic VCFs |
-| 2.2 | `aggregate.py` | 200 | 2.1 | synthetic VCFs |
-| 2.3 | `modules/base.py` | 40 | 1.3 | — |
-| 2.4 | `plot_utils.py` | 500 | 1.2 | visual spot checks (alongside first module in Phase 3) |
-
-### Phase 3: Site-Level Modules (independent of each other)
+### Phase 2: First Deliverable — Preprocess
 
 | Step | Module | Est. Lines | Depends On | Test With |
 |------|--------|------------|------------|-----------|
-| 3.1 | `binned_counts.py` | 80 | 2.2, 2.3 | synthetic AggregatedData |
-| 3.2 | `overall_counts.py` | 150 | 2.2, 2.4 | synthetic AggregatedData |
-| 3.3 | `site_overlap.py` | 250 | 2.2, 2.4 | synthetic AggregatedData |
-| 3.4 | `allele_freq.py` | 180 | 2.2, 2.4 | synthetic AggregatedData |
-| 3.5 | `genotype_dist.py` | 250 | 2.2, 2.4 | synthetic AggregatedData (incl. carrier freq) |
-| 3.6 | `genotype_quality.py` | 120 | 2.2, 2.4 | synthetic AggregatedData |
-| 3.7 | `counts_per_genome.py` | 280 | 2.2, 2.4 | synthetic AggregatedData |
-| 3.8 | `size_signatures.py` | 200 | 2.2, 2.4 | synthetic AggregatedData + injected peaks |
+| 2.1 | `preprocess.py` | 250 | 1.3, 1.6 | mock subprocess + real GATK integration test |
+| 2.2 | `cli.py` (`preprocess` wiring) | 120 | 2.1 | end-to-end on small test VCFs |
 
-### Phase 4: Genotype-Level Modules (require shared samples)
+### Phase 3: Data Pipeline
 
 | Step | Module | Est. Lines | Depends On | Test With |
 |------|--------|------------|------------|-----------|
-| 4.1 | `genotype_exact_match.py` | 200 | 2.2, 2.4 | synthetic matched VCFs |
-| 4.2 | `genotype_concordance.py` | 150 | 2.2, 2.4 | synthetic concordance data |
-| 4.3 | `family_analysis.py` | 750 | 2.1, 2.2, 2.4 | synthetic trio VCF + known inheritance |
+| 3.1 | `vcf_reader.py` | 250 | 1.2, 1.4 | synthetic VCFs |
+| 3.2 | `aggregate.py` | 240 | 3.1 | synthetic VCFs + matched-pair construction |
+| 3.3 | `modules/base.py` | 40 | 1.3 | — |
+| 3.4 | `plot_utils.py` | 500 | 1.2 | visual spot checks (alongside first module in Phase 4) |
 
-### Phase 5: Preprocessing & Integration
+### Phase 4: Site-Level Modules (independent of each other)
 
 | Step | Module | Est. Lines | Depends On | Test With |
 |------|--------|------------|------------|-----------|
-| 5.1 | `preprocess.py` | 250 | 1.3 | mock subprocess + real GATK integration test |
-| 5.2 | `cli.py` (full wiring) | 200 | all | end-to-end on test VCFs |
-| 5.3 | Composite figure functions | 150 | 3.x, 4.x | visual review (in respective modules, not plot_utils) |
+| 4.1 | `binned_counts.py` | 80 | 3.2, 3.3 | synthetic AggregatedData |
+| 4.2 | `overall_counts.py` | 150 | 3.2, 3.4 | synthetic AggregatedData |
+| 4.3 | `site_overlap.py` | 250 | 3.2, 3.4 | synthetic AggregatedData |
+| 4.4 | `allele_freq.py` | 180 | 3.2, 3.4 | synthetic AggregatedData |
+| 4.5 | `genotype_dist.py` | 250 | 3.2, 3.4 | synthetic AggregatedData (incl. carrier freq) |
+| 4.6 | `genotype_quality.py` | 120 | 3.2, 3.4 | synthetic AggregatedData |
+| 4.7 | `counts_per_genome.py` | 280 | 3.2, 3.4 | synthetic AggregatedData |
+| 4.8 | `size_signatures.py` | 200 | 3.2, 3.4 | synthetic AggregatedData + injected peaks |
 
-### Phase 6: Polish
+### Phase 5: Genotype-Level Modules (require shared samples)
+
+| Step | Module | Est. Lines | Depends On | Test With |
+|------|--------|------------|------------|-----------|
+| 5.1 | `genotype_exact_match.py` | 200 | 3.2, 3.4 | synthetic matched VCFs |
+| 5.2 | `genotype_concordance.py` | 150 | 3.2, 3.4 | synthetic concordance data |
+| 5.3 | `family_analysis.py` | 750 | 3.1, 3.2, 3.4 | synthetic trio VCF + known inheritance |
+
+### Phase 6: Integration & Polish
 
 | Step | Task | Notes |
 |------|------|-------|
@@ -1778,7 +1816,9 @@ output_dir/
 | 6.3 | Performance profiling | cProfile on a medium VCF (~10K variants, 1K samples) |
 | 6.4 | README / docstrings | User-facing documentation |
 | 6.5 | CI | pytest + mypy + ruff in GitHub Actions |
-| 6.6 | `validate --fix` | Deferred from Phase 1; implement VCF correction mode if needed |
+| 6.6 | `cli.py` (full wiring) | end-to-end `run` workflow after site/genotype modules land |
+| 6.7 | Composite figure functions | live in respective modules, not `plot_utils` |
+| 6.8 | `validate --fix` | Deferred from Phase 1; implement VCF correction mode if needed |
 
 
 ---
@@ -1796,6 +1836,7 @@ dependencies = [
     "pandas>=2.0",
     "numpy>=1.24",
     "matplotlib>=3.7",
+    "pyarrow>=15.0",        # Parquet site-table shards
     "scipy>=1.10",          # for chi-squared HWE test
 ]
 
@@ -1822,10 +1863,10 @@ scikit-learn, or any GATK Python bindings (subprocess calls only).
 | Risk | Impact | Mitigation |
 |------|--------|------------|
 | VCF format heterogeneity | Crashes or wrong results | `validate` subcommand as gate; `vcf_format.py` defensive checks; test with known-bad VCFs |
-| Memory blowup on 100K-sample VCFs | OOM | Stream genotypes as numpy arrays; accumulate histogram bins, not raw values; GQ stored per-contig not globally |
+| Memory blowup on 100K-sample VCFs | OOM | Keep only compact site tables in memory; stream genotypes/GQ into module accumulators; never retain full variant × sample matrices |
 | SVConcordance STATUS field missing or unexpected values | Wrong overlap counts | Validate presence in `vcf_reader.py`; fall back gracefully with warning |
 | Matplotlib ternary rendering correctness | Wrong HWE plots | Unit test ternary projection against known (AA=1,AB=0,BB=0) → vertex coordinates; compare against R `HWTernaryPlot` reference outputs |
-| GATK not on PATH or wrong version | `preprocess` fails | Check at startup; log GATK version; clear error with install instructions. Expose `--java-options` for JVM tuning. Parse stderr for OOM / version-mismatch patterns and surface actionable messages. If subprocess approach proves fragile, fall back to WDL/shell wrapper for `preprocess`. |
+| GATK not on PATH or wrong version | `preprocess` fails | Check at startup; log GATK version; clear error with install instructions. Expose `--java-options` for JVM tuning. Parse stderr for OOM / version-mismatch patterns and surface actionable messages. |
 | GATK JVM OutOfMemoryError | `preprocess` hangs or crashes | Default `-Xmx4g`; document per-contig memory requirements; expose `--java-options` pass-through |
 | Multiprocessing pickle failures | Crash | All pool-mapped functions are top-level (not lambdas/closures); test with `n_workers=1` and `n_workers=4` |
 | BND/CTX with no SVLEN | Division by zero or wrong bucketing | BND/CTX always assigned `size_bucket = "N/A"` in `dimensions.py` |
@@ -1855,7 +1896,7 @@ scikit-learn, or any GATK Python bindings (subprocess calls only).
 | **SVConcordance** | GATK tool that annotates an eval VCF with match status against a truth VCF. Adds `STATUS` (MATCHED/UNMATCHED), `TRUTH_VID`, and concordance metrics to INFO. |
 | **SVRegionOverlap** | GATK tool that annotates variants with genomic context (seg dup, simple repeat, repeatmasker overlap). |
 | **STATUS** | INFO field added by SVConcordance. Values: `MATCHED` (eval variant has a concordant truth variant), `UNMATCHED` (no match found). |
-| **AggregatedData** | The central data structure: per-variant DataFrames for both VCFs plus optional GQ/concordance data. All analysis modules read from this. |
+| **AggregatedData** | The central analysis context: compact typed site tables for both VCFs, a canonical matched-pair table, sample metadata, and artifact paths for streaming genotype-pass outputs. |
 | **VariantCategory** | A frozen dataclass of (svtype, size_bucket, af_bucket, genomic_context) — the 4D bucketing key. || **De novo rate (DNR)** | Fraction of proband SV alleles/sites not attributable to either parent. Used as a proxy for genotyping false-positive rate. A well-filtered call set targets aggregate DNR < 5%. |
 | **Trio** | A family unit of proband + father + mother. The primary unit for Mendelian inheritance analysis. A duo is proband + one parent. |
 | **Pedigree file** | Standard PLINK-style `.ped`/`.fam` format: 6 tab-separated columns (`#FAM_ID`, `PROBAND`, `FATHER`, `MOTHER`, `SEX`, `PHENOTYPE`). Father/Mother = `0` means unknown. |
