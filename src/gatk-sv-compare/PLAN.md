@@ -182,6 +182,7 @@ gatk-sv-compare validate --vcf input.vcf.gz [--fix --out fixed.vcf.gz]
 | `MULTIALLELIC_INFO_FLAG` | INFO | `MULTIALLELIC` is an INFO flag rather than FILTER value (regenotyped-stage pattern) |
 | `MISSING_PRECOMPUTED_COUNTS` | INFO | Pre-computed genotype count fields (`N_BI_GENOS`, `N_HOMREF`, etc.) absent — will fall back to GT-based counting (slower) |
 | `CNV_NO_GT` | INFO | CNV record has `GT=.` — expected for final annotated CNVs, will use `CN_NONREF_FREQ` for frequency |
+| `IMPLAUSIBLE_SVLEN` | WARN | SVLEN exceeds 10% of chromosome length — almost certainly artifactual |
 
 **`--fix` mode** (with `--out`): apply automatic corrections where possible:
 - `SVLEN_SIGN`: take absolute value.
@@ -268,7 +269,9 @@ src/gatk-sv-compare/
 │       │   ├── carrier_freq.py
 │       │   ├── genotype_quality.py
 │       │   ├── genotype_exact_match.py
-│       │   └── genotype_concordance.py
+│       │   ├── genotype_concordance.py
+│       │   ├── family_analysis.py
+│       │   └── size_signatures.py
 │       │
 │       ├── # ── Layer 5: Plotting Utilities ──
 │       └── plot_utils.py            # colors, styles, stacked bars, scatter, ternary, heatmap
@@ -285,6 +288,8 @@ src/gatk-sv-compare/
         ├── test_binned_counts.py
         ├── test_overall_counts.py
         ├── ...
+        ├── test_family_analysis.py
+        ├── test_size_signatures.py
         └── test_genotype_concordance.py
 ```
 
@@ -407,6 +412,7 @@ class AnalysisConfig:
     pass_only: bool             # if True, restrict to FILTER=PASS variants
     per_chrom: bool             # if True, produce per-contig stratified plots
     # Optional inputs
+    ped_file: Path | None       # pedigree file (.ped/.fam format) for family analysis
     seg_dup_track: Path | None
     simple_repeat_track: Path | None
     repeatmasker_track: Path | None
@@ -725,6 +731,8 @@ ALL_MODULES: list[type[AnalysisModule]] = [
     GenotypeQualityModule,
     GenotypeExactMatchModule,
     GenotypeConcordanceModule,
+    FamilyAnalysisModule,
+    SizeSignaturesModule,
 ]
 ```
 
@@ -983,6 +991,315 @@ stratification as a separate panel row).
 
 **Tables:** Mean/median per cell.
 
+---
+
+### 9.13 `family_analysis` — Mendelian Inheritance & De Novo Rates
+
+**Requires:** `--ped` pedigree file provided. At least one complete trio or parent-child
+duo must be present in the VCF sample list.
+
+> **Reference implementation:** `src/sv-pipeline/scripts/vcf_qc/analyze_fams.R` (~1,460
+> lines of R). This module is a faithful Python reimplementation of that script, with the
+> same analytical methodology and output structure, extended to compare family statistics
+> across both input VCFs.
+
+**Purpose:** Family-based validation of genotype quality. In a correctly genotyped call
+set, the vast majority of proband SV alleles should be inherited from parents. The
+*de novo rate* (fraction of proband alleles not present in either parent) serves as
+a proxy for the false-positive / false-negative error rate of the genotyper — elevated
+de novo rates indicate systematic genotyping errors, not true *de novo* mutations.
+
+#### Input & Pedigree Handling
+
+```python
+@dataclass
+class Trio:
+    family_id: str
+    proband: str        # sample ID
+    father: str | None  # sample ID, or None for duos
+    mother: str | None  # sample ID, or None for duos
+
+def parse_ped_file(ped_path: Path, vcf_samples: set[str]) -> list[Trio]:
+    """Parse .ped/.fam file, filter to samples present in VCF, classify as trio/duo.
+
+    Expects standard PLINK-style 6-column format:
+      #FAM_ID  PROBAND  FATHER  MOTHER  SEX  PHENOTYPE
+    Father/Mother = '0' means unknown (duo).
+    Skips families where proband is not in VCF.
+    """
+```
+
+**Restriction to autosomes & biallelic sites:** Matching the R implementation, family
+analysis restricts to **autosomal, biallelic** sites only. CNV/MCNV sites and sex
+chromosome sites are excluded from transmission calculations (sex-chromosome transmission
+requires ploidy-aware logic — see below).
+
+#### Core Computation: Transmission Inference
+
+For each trio, at each variant site, the module infers transmission status from parental
+and proband allele counts (0, 1, or 2 alt alleles):
+
+```python
+@dataclass
+class TransmissionRecord:
+    vid: str
+    pro_alleles: int        # proband alt allele count (0/1/2)
+    pro_inherited: int      # alleles attributable to parents
+    pro_denovo: int         # alleles NOT in either parent: max(0, pro - (fa + mo))
+    fa_alleles: int         # father alt allele count
+    fa_transmitted: int     # father alleles transmitted to proband
+    fa_untransmitted: int   # father alleles NOT transmitted
+    mo_alleles: int         # mother alt allele count
+    mo_transmitted: int
+    mo_untransmitted: int
+    pro_gq: int | None
+    fa_gq: int | None
+    mo_gq: int | None
+```
+
+**Transmission logic** (matching R `getFamDat` lines 153–175):
+1. `pro_denovo = max(0, pro_alleles - (fa_alleles + mo_alleles))`
+2. `pro_inherited = pro_alleles - pro_denovo`
+3. Credit for inherited alleles is divided between parents proportionally:
+   `fa_transmitted = pro_inherited × (fa_alleles / (fa_alleles + mo_alleles))`
+4. Sites where **any** family member has a no-call genotype (`./."`) are **excluded**.
+
+#### Inheritance Statistics (per trio)
+
+Two parallel counting modes, matching the R `computeInheritance()` function:
+
+| Metric | Site-based (variant) | Allele-based |
+|---|---|---|
+| Proband total | # sites with ≥1 alt allele | sum of alt allele counts |
+| Proband inherited | # sites with ≥1 inherited allele | sum of inherited allele counts |
+| Proband de novo | # sites where inherited == 0 | sum of de novo allele counts |
+| Inheritance rate | inherited / total | inherited / total |
+| De novo rate | de novo / total | de novo / total |
+| Father transmission rate | transmitted / father total | transmitted / father total |
+| Mother transmission rate | transmitted / mother total | transmitted / mother total |
+| Paternal fraction | father-transmitted / proband-inherited | same, allele-based |
+| Maternal fraction | mother-transmitted / proband-inherited | same, allele-based |
+| Pat:Mat ratio | pat / (pat + mat) | same, allele-based |
+
+These 36 metrics (18 site-based + 18 allele-based) are computed per trio and aggregated
+across all trios via median.
+
+#### De Novo Rate Stratifications
+
+The module computes de novo rates stratified across multiple dimensions, matching the R
+implementation's full set of stratifications:
+
+1. **By SV class** — median DNR per SVTYPE across all trios.
+2. **By frequency** — 40 log10-spaced frequency bins, DNR per bin per class. Supports
+   both carrier frequency (`n_carriers / n_samples`) and allele frequency (`AF`).
+3. **By size** — 40 log10-spaced size bins (50bp to 1Mb), DNR per bin per class.
+4. **By proband minimum GQ** — 50 evenly-spaced GQ thresholds (0 to max_gq), showing
+   how DNR decreases as the minimum GQ filter becomes more stringent. This is the key
+   QC diagnostic: a well-calibrated GQ score should produce a monotonically decreasing
+   DNR curve.
+5. **By size × frequency** — cross-tabulated heatmap using the standard size bins
+   (<100bp, 100–500bp, 500bp–2.5kb, 2.5–10kb, 10–50kb, >50kb) and frequency bins
+   (<1%, 1–5%, 5–10%, 10–50%, >50%). Computed overall and per SV class.
+
+All stratifications are computed for **both** site-based and allele-based counting.
+
+#### Sex Chromosome Handling
+
+The R implementation restricts to autosomes only. The Python module should additionally
+support **optional sex-chromosome analysis** (gated by a flag) using ploidy-aware logic:
+- For chrX non-PAR in males: expected ploidy = 1, so valid genotypes are 0 or 1 (not 0/0
+  or 0/1). Father → son X transmission is invalid; mother → son is hemizygous.
+- For chrY non-PAR: father → son only.
+- Requires the `SEX` column from the pedigree file and PAR coordinates from the reference.
+
+**Default behavior:** autosome-only (matching R). Sex-chrom analysis is a stretch goal.
+
+#### Plots
+
+**Master composite panel** (matching R `masterInhWrapper`, 2 × 5 layout):
+- Top row (site-based): inheritance beeswarm | DNR vs size | DNR vs freq | DNR vs GQ | DNR size×freq heatmap
+- Bottom row (allele-based): same 5 panels
+
+**Individual supporting plots** (matching R `wrapperInheritancePlots`):
+- Inheritance beeswarm: all SV, per class, per size bucket, per frequency bucket.
+  Each panel shows 8 categories (proband inheritance rate, paternal/maternal fractions,
+  pat:mat ratio, de novo rate, parental/paternal/maternal transmission rates) as
+  horizontal beeswarm strips with mean line and median annotation.
+
+**DNR line plots** (matching R `wrapperDeNovoRateLines`):
+- DNR vs size: 40-bin log10 x-axis, one line per SVTYPE + ALL, rolling mean smoothed (k=4).
+- DNR vs frequency: same structure, log10 frequency x-axis.
+- DNR vs min proband GQ: linear x-axis, one line per SVTYPE + ALL.
+
+**DNR heatmaps** (matching R `wrapperDeNovoRateHeats`):
+- Size × frequency heatmap: overall + per SV class. Color ramp from white (0%) through
+  yellow/orange/red to black (100%).
+
+**Comparison mode:** When analyzing two VCFs, produce side-by-side panels or overlay
+curves from VCF A and VCF B to visually compare inheritance quality.
+
+**Plot colors:** Paternal = `#00B0CF`, Maternal = `#F064A5`, De novo = `#F13D15`,
+Other = `gray35`. SV type colors from `plot_utils.SVTYPE_COLORS`.
+
+#### Tables
+
+- `inheritance_stats.{trios|duos}.tsv` — one row per family, 36 columns of inheritance metrics.
+- `denovo_rate_by_class.tsv` — median DNR per SVTYPE (site + allele rows).
+- `denovo_rate_by_size.tsv` — DNR per size bin per class.
+- `denovo_rate_by_freq.tsv` — DNR per frequency bin per class.
+- `denovo_rate_by_gq.tsv` — DNR per min-GQ threshold per class.
+- `denovo_rate_size_x_freq.{all|DEL|DUP|...}.tsv` — cross-tabulated heatmap data.
+
+#### Performance
+
+- **Genotype extraction:** Requires per-sample GT and GQ for trio members only (not all
+  samples). Use `sample_indices` in `vcf_reader.iter_contig()` to extract only the trio
+  member columns, avoiding O(n_all_samples) per variant.
+- **Pre-computed fields:** For site-level metrics (AF, carrier freq, svtype, size), use
+  the `sites_a` / `sites_b` DataFrames from `AggregatedData`. Only the per-sample
+  genotype extraction requires a second VCF pass over trio member columns.
+- **Parallelism:** The second pass can be parallelized per-contig like the main aggregation.
+
+#### Implementation Notes
+
+```python
+class FamilyAnalysisModule(AnalysisModule):
+    name = "family_analysis"
+
+    @property
+    def requires_ped_file(self) -> bool:
+        return True
+
+    def run(self, data: AggregatedData, config: AnalysisConfig) -> None:
+        if config.ped_file is None:
+            logger.info("Skipping family_analysis: no --ped file provided")
+            return
+        trios = parse_ped_file(config.ped_file, data.samples_a)
+        if not trios:
+            logger.warning("No complete trios/duos found in VCF; skipping family_analysis")
+            return
+        # ... extraction, computation, plotting
+```
+
+**Test:** Synthetic VCF with 3-sample trio. Known genotypes at 20 sites: 15 inherited
+(10 paternal, 5 maternal), 3 de novo, 2 no-call excluded. Assert exact DNR = 3/18.
+
+---
+
+### 9.14 `size_signatures` — Retrotransposon Peak Detection & Implausible Variant Flagging
+
+**Purpose:** Validate biological plausibility of the SV size distribution by detecting
+the characteristic retrotransposon insertion peaks and flagging implausibly large variants.
+These are intrinsic quality signals that do not require a truth set or family data.
+
+> **Motivation (from benchmarking literature):** A high-quality human SV call set must
+> exhibit two prominent peaks in the insertion size distribution: the **Alu element peak**
+> at ~300 bp and the **LINE-1 (L1) element peak** at ~6 kb. These reflect the ongoing
+> activity of retrotransposons that have shaped ~45% of the human genome. Absence or
+> blunting of these peaks indicates failures in mobile element detection (e.g., MELT
+> caller issues) or over-aggressive size filtering.
+
+#### Analyses
+
+**1. Retrotransposon Peak Quantification:**
+
+For each VCF, compute a high-resolution size histogram of **insertion** variants (INS +
+INS:MEI) using log10-spaced bins (200 bins from 50 bp to 100 kb):
+
+```python
+def quantify_retrotransposon_peaks(
+    ins_svlens: np.ndarray,
+) -> dict:
+    """Quantify Alu and LINE-1 peaks in the insertion size distribution.
+
+    Returns:
+        peak_metrics: dict with keys:
+            alu_peak_detected: bool
+            alu_peak_center: float  (bp, expected ~280-320)
+            alu_peak_prominence: float  (ratio of peak height to local background)
+            l1_peak_detected: bool
+            l1_peak_center: float  (bp, expected ~5800-6200)
+            l1_peak_prominence: float
+            sva_peak_detected: bool  (optional: SVA ~2 kb peak)
+            sva_peak_center: float
+    """
+```
+
+Peak detection uses `scipy.signal.find_peaks()` on the log10-binned histogram with:
+- Minimum prominence threshold (tunable, default 2× local background).
+- Expected peak windows: Alu [200, 400] bp, SVA [1500, 3000] bp, LINE-1 [5000, 7000] bp.
+
+**2. MEI Subtype Breakdown:**
+
+For VCFs with `<INS:ME:ALU>`, `<INS:ME:LINE1>`, `<INS:ME:SVA>` annotations, produce
+a breakdown of MEI counts by subtype, confirming that the labeled subtypes align with
+the expected size peaks:
+- `<INS:ME:ALU>`: median SVLEN should be ~280–320 bp.
+- `<INS:ME:LINE1>`: median SVLEN should be ~5800–6200 bp (full-length) with a tail of
+  5'-truncated elements down to ~500 bp.
+- `<INS:ME:SVA>`: median SVLEN should be ~1500–2500 bp.
+
+**3. Implausible Variant Flagging:**
+
+Flag variants whose SVLEN exceeds a configurable fraction of the chromosome length
+(default: 10% of chromosome). These are almost certainly artifacts:
+
+```python
+def flag_implausible_variants(
+    sites: pd.DataFrame,
+    contig_lengths: dict[str, int],
+    max_chrom_fraction: float = 0.10,
+) -> pd.DataFrame:
+    """Return DataFrame of implausibly large variants with diagnostic info."""
+```
+
+Additionally flag:
+- Samples with an unusually high burden of mega-scale SVs (>1 Mb).
+- Homozygous deletions spanning >50% of a chromosome arm (biologically lethal).
+
+**4. Size Distribution Comparison:**
+
+When comparing two VCFs, overlay their insertion size distributions to detect systematic
+shifts. Compute a two-sample Kolmogorov-Smirnov test on the INS SVLEN distributions to
+quantify whether the size profiles are statistically distinguishable.
+
+#### Plots
+
+- **Retrotransposon peak plot:** Log10-scaled insertion size histogram with Alu, SVA,
+  and LINE-1 peak regions highlighted. Vertical dashed lines at expected peak centers.
+  Side-by-side for VCF A and VCF B.
+- **MEI subtype size distributions:** Per-subtype histograms (Alu, LINE1, SVA, other INS)
+  overlaid or faceted.
+- **Implausible variant report:** Scatter plot of SVLEN vs. chromosome, with implausible
+  variants highlighted in red. Table of flagged variants.
+- **Size distribution overlay:** VCF A vs VCF B insertion size distributions on same axes,
+  with KS test p-value annotated.
+
+#### Tables
+
+- `retrotransposon_peaks.tsv` — peak detection results (center, prominence, detected flag).
+- `mei_subtype_summary.tsv` — count, median SVLEN, IQR per MEI subtype.
+- `implausible_variants.tsv` — flagged variants with VID, contig, SVLEN, chrom fraction.
+- `size_distribution_comparison.tsv` — KS statistic and p-value per SV type.
+
+#### Implementation
+
+```python
+class SizeSignaturesModule(AnalysisModule):
+    name = "size_signatures"
+
+    def run(self, data: AggregatedData, config: AnalysisConfig) -> None:
+        for label, sites in [("a", data.sites_a), ("b", data.sites_b)]:
+            ins_sites = sites[sites.svtype.isin(["INS", "INS:MEI"])]
+            peaks = quantify_retrotransposon_peaks(ins_sites.svlen.values)
+            implausible = flag_implausible_variants(sites, config.contig_lengths)
+            # ... plotting and table output
+```
+
+**Test:** Synthetic SVLEN array with injected Alu peak (100 values at 300±20 bp) and
+LINE-1 peak (50 values at 6000±200 bp) over uniform background. Assert both peaks
+detected with prominence > 2.
+
 
 ---
 ## 10. Layer 5: Plotting Utilities (`plot_utils.py`)
@@ -1030,6 +1347,9 @@ def plot_ternary(ax, aa, ab, bb, colors, draw_hwe_curve=True, alpha=0.05): ...
 def plot_heatmap_annotated(ax, matrix, row_labels, col_labels, fmt="{n}/{total}\n({pct}%)"): ...
 def plot_histogram(ax, values, bins, color, label): ...
 def plot_boxplot_grouped(ax, data_dict, colors): ...
+def plot_beeswarm_horizontal(ax, values_list, colors, labels, show_mean=True): ...
+def plot_dnr_vs_continuous(ax, bins, dnr_matrix, svtype_colors, k_smooth=4, log_x=True): ...
+def plot_peak_histogram(ax, values, bins, peak_regions=None, log_x=True): ...
 def save_figure(fig, path: Path, dpi=FIGURE_DPI): ...
 ```
 
@@ -1050,6 +1370,12 @@ def composite_genotype_panel(data: AggregatedData, config: AnalysisConfig, outpu
 
 def composite_per_genome_panel(data: AggregatedData, config: AnalysisConfig, output_path: Path):
     """Sites/alleles per genome: boxplots + GQ curves + heatmaps."""
+    ...
+
+def composite_family_panel(data: AggregatedData, config: AnalysisConfig, output_path: Path):
+    """2×5 panel: top=site-based, bottom=allele-based.
+    Columns: inheritance beeswarm | DNR vs size | DNR vs freq | DNR vs GQ | DNR size×freq heatmap.
+    Matching R masterInhWrapper layout."""
     ...
 ```
 
@@ -1100,6 +1426,7 @@ gatk-sv-compare analyze \
   [--modules binned_counts,site_overlap_plots,...] \
   [--pass-only]              # restrict to FILTER=PASS variants only \
   [--per-chrom]              # additionally stratify all plots by contig \
+  [--ped pedigree.fam]       # pedigree file for family_analysis module \
   [--num-workers 4]
 ```
 
@@ -1120,6 +1447,7 @@ gatk-sv-compare run \
   [--modules binned_counts,site_overlap_plots,...] \
   [--pass-only]              # restrict to FILTER=PASS variants only \
   [--per-chrom]              # additionally stratify all plots by contig \
+  [--ped pedigree.fam]       # pedigree file for family_analysis module \
   [--num-workers 4]
 ```
 
@@ -1148,6 +1476,7 @@ output_dir/
 │   ├── genotype_distributions.{label_b}.png
 │   ├── per_genome_summary.{label_a}.png
 │   ├── per_genome_summary.{label_b}.png
+│   ├── family_inheritance.{trios|duos}.png  # if --ped provided
 │   ├── af_correlation.png
 │   └── overlap_heatmaps.png
 │
@@ -1212,6 +1541,40 @@ output_dir/
     ├── ...
     └── tables/
         └── concordance_metrics.tsv
+├── family_analysis/                  # only if --ped provided
+│   ├── inheritance.trios.all_sv.png
+│   ├── inheritance.trios.{svtype}.png
+│   ├── inheritance.trios.{size_bucket}.png
+│   ├── inheritance.trios.{freq_bucket}.png
+│   ├── dnr_vs_size.trios.variants.png
+│   ├── dnr_vs_size.trios.alleles.png
+│   ├── dnr_vs_freq.trios.variants.png
+│   ├── dnr_vs_freq.trios.alleles.png
+│   ├── dnr_vs_gq.trios.variants.png
+│   ├── dnr_vs_gq.trios.alleles.png
+│   ├── dnr_heatmap.trios.variants.all_sv.png
+│   ├── dnr_heatmap.trios.variants.{svtype}.png
+│   ├── ...
+│   └── tables/
+│       ├── inheritance_stats.trios.tsv
+│       ├── denovo_rate_by_class.tsv
+│       ├── denovo_rate_by_size.tsv
+│       ├── denovo_rate_by_freq.tsv
+│       ├── denovo_rate_by_gq.tsv
+│       └── denovo_rate_size_x_freq.{all|svtype}.tsv
+└── size_signatures/
+    ├── retrotransposon_peaks.{label_a}.png
+    ├── retrotransposon_peaks.{label_b}.png
+    ├── mei_subtype_sizes.{label_a}.png
+    ├── mei_subtype_sizes.{label_b}.png
+    ├── ins_size_overlay.png
+    ├── implausible_variants.{label_a}.png
+    ├── ...
+    └── tables/
+        ├── retrotransposon_peaks.tsv
+        ├── mei_subtype_summary.tsv
+        ├── implausible_variants.tsv
+        └── size_distribution_comparison.tsv
 ```
 
 
@@ -1252,6 +1615,7 @@ output_dir/
 | 3.8 | `genotype_dist.py` | 200 | 2.2, 1.6 | synthetic AggregatedData |
 | 3.9 | `genotype_quality.py` | 120 | 2.2, 1.6 | synthetic AggregatedData |
 | 3.10 | `counts_per_genome.py` | 180 | 2.2, 1.6 | synthetic AggregatedData |
+| 3.11 | `size_signatures.py` | 200 | 2.2, 1.6 | synthetic AggregatedData + injected peaks |
 
 ### Phase 4: Genotype-Level Modules (require shared samples)
 
@@ -1259,6 +1623,7 @@ output_dir/
 |------|--------|------------|------------|-----------|
 | 4.1 | `genotype_exact_match.py` | 200 | 2.2, 1.6 | synthetic matched VCFs |
 | 4.2 | `genotype_concordance.py` | 150 | 2.2, 1.6 | synthetic concordance data |
+| 4.3 | `family_analysis.py` | 400 | 2.1, 2.2, 1.6 | synthetic trio VCF + known inheritance |
 
 ### Phase 5: Preprocessing & Integration
 
@@ -1335,6 +1700,11 @@ scikit-learn, or any GATK Python bindings (subprocess calls only).
 | dDUP CPX with END==POS | Incorrect size calculation from END-POS | For CPX, use SVLEN for size (not END-POS), since dDUP has END==POS but SVLEN carries the real length |
 | FILTER combinations (`HIGH_ALGORITHM_FDR;HIGH_NCR`) | Unexpected FILTER string | Parse FILTER as a set (pysam returns tuple); check membership, don't string-compare |
 | Empty VCF or VCF with no variants on a contig | Index errors | Guard all aggregation with `if len(rows) == 0: return empty_dataframe()` |
+| Pedigree file mismatch | family_analysis skipped or wrong trios | Validate sample IDs against VCF header; warn on missing members; skip incomplete families |
+| All trio members are no-call at a site | Inflated de novo rate | Exclude sites where any trio member has `GT = ./.` (matching R implementation) |
+| Sex chromosome transmission logic | Wrong inheritance calls on chrX/chrY | Default to autosome-only; sex-chrom analysis gated behind explicit flag requiring PAR coordinates |
+| Retrotransposon peak detection on small VCFs | False negatives (peaks not prominent) | Require minimum INS count (e.g., 500) before reporting peak absence as a QC concern |
+| `scipy.signal.find_peaks` sensitivity | Missed or spurious peaks | Constrain search to expected size windows; tune prominence threshold; validate on known-good VCF |
 
 
 ---
@@ -1348,4 +1718,101 @@ scikit-learn, or any GATK Python bindings (subprocess calls only).
 | **SVRegionOverlap** | GATK tool that annotates variants with genomic context (seg dup, simple repeat, repeatmasker overlap). |
 | **STATUS** | INFO field added by SVConcordance. Values: `MATCHED` (eval variant has a concordant truth variant), `UNMATCHED` (no match found). |
 | **AggregatedData** | The central data structure: per-variant DataFrames for both VCFs plus optional GQ/concordance data. All analysis modules read from this. |
-| **VariantCategory** | A frozen dataclass of (svtype, size_bucket, af_bucket, genomic_context) — the 4D bucketing key. |
+| **VariantCategory** | A frozen dataclass of (svtype, size_bucket, af_bucket, genomic_context) — the 4D bucketing key. || **De novo rate (DNR)** | Fraction of proband SV alleles/sites not attributable to either parent. Used as a proxy for genotyping false-positive rate. A well-filtered call set targets aggregate DNR < 5%. |
+| **Trio** | A family unit of proband + father + mother. The primary unit for Mendelian inheritance analysis. A duo is proband + one parent. |
+| **Pedigree file** | Standard PLINK-style `.ped`/`.fam` format: 6 tab-separated columns (`#FAM_ID`, `PROBAND`, `FATHER`, `MOTHER`, `SEX`, `PHENOTYPE`). Father/Mother = `0` means unknown. |
+| **Mendelian violation** | A genotype configuration in a trio that is incompatible with Mendelian inheritance (e.g., both parents hom-ref but child het). |
+| **Retrotransposon** | Mobile genetic element that propagates via an RNA intermediate. Alu (~300 bp), SVA (~2 kb), and LINE-1 (~6 kb) are the active families in the human genome, producing characteristic peaks in the SV size distribution. |
+| **Carrier frequency** | Fraction of samples carrying ≥1 alt allele at a site: `(n_het + n_hom_alt) / (n_het + n_hom_alt + n_hom_ref)`. Distinct from allele frequency. |
+| **Reciprocal overlap** | For two genomic intervals, the length of their intersection divided by the length of their union (or max span). Standard threshold for SV matching: 50–80%. |
+| **GIAB** | Genome in a Bottle Consortium (NIST). Produces benchmark truth sets for variant calling validation. Key SV benchmarks: HG002 (Ashkenazi trio), CMRG (challenging medically relevant genes). |
+| **LOEUF** | Loss-of-function Observed/Expected Upper bound Fraction. Continuous gene constraint metric from gnomAD. Lower values indicate stronger intolerance to LoF mutations. |
+
+
+---
+## 17. Future Directions
+
+The following analyses are recognized as valuable for comprehensive SV call set evaluation
+but are **out of scope for the initial release**. They are documented here as extension
+points for future development.
+
+### 17.1 External Truth Set Benchmarking (Truvari-Style)
+
+**Motivation:** Comparing a call set against GIAB high-confidence SV benchmarks (HG002,
+CMRG) provides ground-truth precision/recall metrics. This requires fuzzy matching logic
+(reference distance, reciprocal overlap, size similarity, sequence similarity) rather
+than exact coordinate matching.
+
+**Approach:** Integrate with or wrap [Truvari](https://github.com/ACEnglish/truvari) as
+an optional external dependency. Alternatively, implement a lightweight matching engine
+using the same multi-parameter thresholds:
+- Reference distance: configurable (default 500 bp).
+- Reciprocal overlap: ≥ 50% for DEL/DUP/INV.
+- Size similarity: ≥ 50%.
+- Sequence similarity (for INS): ≥ 70% edit distance ratio.
+- SVTYPE match required.
+
+**Output:** Stratified precision/recall/F1 by SV type, size bucket, frequency bucket,
+and genomic context (segdup, simple repeat, low mappability, coding exons). PR curves
+across GQ thresholds.
+
+**Why deferred:** Requires truth VCF + high-confidence BED as additional inputs;
+substantially different workflow from two-callset comparison.
+
+### 17.2 Linkage Disequilibrium Concordance with SNVs
+
+**Motivation:** True ancestral SVs should exhibit LD decay with physically proximal SNPs.
+SVs that show zero LD with any nearby SNPs despite high MAF are suspect artifacts.
+
+**Approach:**
+1. Ingest an orthogonal SNP VCF (e.g., GATK HaplotypeCaller output) for the same cohort.
+2. For each SV, compute r² with SNPs within a configurable window (default 500 kb).
+3. Adjust for population stratification by regressing out top PCs of the genotype matrix
+   before computing LD (correlation of residuals, not raw genotypes).
+4. Flag SVs with high MAF (> 1%) but no LD signal (max r² < 0.05).
+
+**Why deferred:** Requires a separate SNP VCF and population PC loadings as inputs;
+computationally expensive (O(n_sv × n_snps_in_window × n_samples)).
+
+### 17.3 Evolutionary Constraint & Functional Annotation
+
+**Motivation:** A well-filtered call set should show significant depletion of large
+deletions and disrupting SVs in highly constrained genes (low LOEUF / high pLI). An
+excess of homozygous LoF SVs in essential genes indicates false positives.
+
+**Approach:**
+1. Ingest gene constraint table (gnomAD pLI/LOEUF scores) and gene model (GTF/GFF).
+2. Intersect SV breakpoints/spans with gene annotations.
+3. Compute SV burden per constraint decile: expected pattern is monotonically decreasing
+   LoF SV count as constraint increases.
+4. Flag homozygous deletions in LOEUF < 0.35 genes in putatively healthy samples.
+
+**Why deferred:** Requires gene model + constraint annotations; intersects with
+`AnnotateFunctionalConsequences.wdl` which already exists in the pipeline.
+
+### 17.4 Batch Effect Detection & PCA of Variant Features
+
+**Motivation:** In large cohorts processed across multiple sequencing centers or batches,
+systematic technical artifacts can dominate biological signal. PCA on variant-level
+feature matrices (GQ, depth, AAF) can reveal batch-driven clustering.
+
+**Approach:**
+1. Construct sample × variant feature matrices (mean GQ, mean depth, SV count per type).
+2. PCA on the feature matrix; color by known batch labels.
+3. If PC1/PC2 separate by batch rather than ancestry → severe batch effect.
+4. Cross-batch χ² tests on per-variant allele frequencies to flag batch-specific variants.
+
+**Why deferred:** Requires batch metadata; primarily relevant for very large cohorts
+(n > 1000) where batch effects are most impactful.
+
+### 17.5 Sequence-Resolved Insertion Comparison
+
+**Motivation:** For insertions, coordinate overlap is meaningless (reference span is
+zero). Accurate matching requires comparing the actual inserted alternate sequences.
+
+**Approach:** Use `edlib` (fast C-based edit distance) or `parasail` to compute pairwise
+sequence similarity between insertion ALT sequences in the two call sets.
+
+**Why deferred:** Many GATK-SV insertions are not fully sequence-resolved (symbolic
+`<INS>` alleles without explicit ALT sequence). This analysis is only meaningful for
+sequence-resolved call sets (e.g., from long-read assemblers).
