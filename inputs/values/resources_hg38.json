@@ -21,6 +21,7 @@
   "cytobands" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz",
   "cytobands_index" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz.tbi",
   "sd_locs_vcf" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
+  "sparse_sd_locs_vcf" : "PLACEHOLDER — replace with path to sparse SNP sites VCF for ploidy estimation",
   "depth_exclude_list" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/depth_blacklist.sorted.bed.gz",
   "depth_exclude_list_index" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/depth_blacklist.sorted.bed.gz.tbi",
   "depth_training_bed" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/train_hg38_reviewed_final.bed",

@@ -63,6 +63,7 @@ workflow GATKSVPipelineSingleSample {
     File? case_pe_file
     File? case_sr_file
     File? case_sd_file
+    File? case_sparse_sd_file
 
     # Global files
     File ref_ped_file
@@ -118,6 +119,7 @@ workflow GATKSVPipelineSingleSample {
 
     # PESR inputs
     File sd_locs_vcf
+    File? sparse_sd_locs_vcf
 
     # Melt inputs
     File? melt_standard_vcf_header # required if use_melt True
@@ -200,6 +202,7 @@ workflow GATKSVPipelineSingleSample {
     File ref_pesr_disc_files_list
     File ref_pesr_split_files_list
     File ref_pesr_sd_files_list
+    File? ref_pesr_sparse_sd_files_list
 
     File? gatk4_jar_override
     Float? gcnv_p_alt
@@ -602,6 +605,7 @@ workflow GATKSVPipelineSingleSample {
         manta_jobs_per_cpu=manta_jobs_per_cpu,
         manta_mem_gb_per_job=manta_mem_gb_per_job,
         sd_locs_vcf=sd_locs_vcf,
+        sparse_sd_locs_vcf=sparse_sd_locs_vcf,
         melt_standard_vcf_header=melt_standard_vcf_header,
         melt_metrics_intervals=melt_metrics_intervals,
         insert_size=insert_size,
@@ -647,6 +651,7 @@ workflow GATKSVPipelineSingleSample {
   File case_pe_file_ = select_first([case_pe_file, GatherSampleEvidence.pesr_disc])
   File case_sr_file_ = select_first([case_sr_file, GatherSampleEvidence.pesr_split])
   File case_sd_file_ = select_first([case_sd_file, GatherSampleEvidence.pesr_sd])
+  File? case_sparse_sd_file_ = if defined(case_sparse_sd_file) then case_sparse_sd_file else GatherSampleEvidence.pesr_sparse_sd
 
   call evidenceqc.EvidenceQC as EvidenceQC {
     input:
@@ -691,6 +696,7 @@ workflow GATKSVPipelineSingleSample {
   Array[File] ref_pesr_disc_files = read_lines(ref_pesr_disc_files_list)
   Array[File] ref_pesr_split_files = read_lines(ref_pesr_split_files_list)
   Array[File] ref_pesr_sd_files = read_lines(ref_pesr_sd_files_list)
+  Array[File] ref_pesr_sparse_sd_files = if defined(ref_pesr_sparse_sd_files_list) then read_lines(select_first([ref_pesr_sparse_sd_files_list])) else []
 
   call batchevidence.GatherBatchEvidence as GatherBatchEvidence {
     input:
@@ -714,6 +720,8 @@ workflow GATKSVPipelineSingleSample {
       ref_panel_SR_files=ref_pesr_split_files,
       SD_files=[case_sd_file_],
       ref_panel_SD_files=ref_pesr_sd_files,
+      sparse_SD_files=if defined(case_sparse_sd_file_) then [select_first([case_sparse_sd_file_])] else [],
+      ref_panel_sparse_SD_files=ref_pesr_sparse_sd_files,
       sd_locs_vcf=sd_locs_vcf,
       contig_ploidy_model_tar = contig_ploidy_model_tar,
       gcnv_model_tars = gcnv_model_tars,

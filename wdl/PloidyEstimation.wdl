@@ -7,6 +7,7 @@ workflow Ploidy {
     File merged_depth_file
     File reference_dict
     String batch
+    Array[File] sd_files = []
     String? plot_highlight_sample
     String? model_args
     String? plot_args
@@ -30,6 +31,7 @@ workflow Ploidy {
     input:
       ploidy_matrix = CondenseDepthMatrix.out,
       batch = batch,
+      sd_files = sd_files,
       plot_highlight_sample = plot_highlight_sample,
       model_args = model_args,
       plot_args = plot_args,
@@ -110,6 +112,7 @@ task PloidyScore {
   input {
     File ploidy_matrix
     String batch
+    Array[File] sd_files = []
     String? plot_highlight_sample
     String? model_args
     String? plot_args
@@ -137,10 +140,21 @@ task PloidyScore {
     OUTDIR="./~{batch}_ploidy"
     mkdir -p "${OUTDIR}"
 
+    # Build site-depth list if SD files were provided
+    SD_ARGS=""
+    if [[ ~{length(sd_files)} -gt 0 ]]; then
+      SD_LIST="sd_files.list"
+      for f in ~{sep=' ' sd_files}; do
+        echo "$f" >> "${SD_LIST}"
+      done
+      SD_ARGS="--site-depth-list ${SD_LIST}"
+    fi
+
     # Run packaged pipeline script which wraps the gatk-sv-ploidy subcommands
     /opt/gatk-sv-ploidy/run_ploidy.sh \
       --input-depth ~{ploidy_matrix} \
       --work-dir ${OUTDIR} \
+      ${SD_ARGS} \
       ~{"--model-args " + model_args} \
       ~{"--plot-args " + plot_args} \
       ~{"--highlight-sample " + plot_highlight_sample}

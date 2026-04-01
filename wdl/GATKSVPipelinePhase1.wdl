@@ -47,6 +47,7 @@ workflow GATKSVPipelinePhase1 {
     Array[File] PE_files
     Array[File] SR_files
     Array[File]? SD_files
+    Array[File]? sparse_SD_files
     File? sd_locs_vcf
     Array[File] counts
     File? bincov_matrix
@@ -243,6 +244,7 @@ workflow GATKSVPipelinePhase1 {
       PE_files = PE_files,
       SR_files = SR_files,
       SD_files = SD_files,
+      sparse_SD_files = sparse_SD_files,
       sd_locs_vcf = sd_locs_vcf,
       ref_dict = reference_dict,
       cytoband = cytoband,

@@ -53,6 +53,8 @@ workflow GatherBatchEvidence {
     Array[File]? ref_panel_SR_files
     Array[File]? SD_files	# required unless BAF_files or ref_panel_SD_files is supplied
     Array[File]? ref_panel_SD_files	# required unless BAF_files or SD_files is supplied
+    Array[File]? sparse_SD_files	# optional sparse SD for ploidy estimation
+    Array[File]? ref_panel_sparse_SD_files	# optional ref panel sparse SD for ploidy estimation
     File? sd_locs_vcf	# must be same sd_locs_vcf that was presented to GatherSampleEvidence
 
     # Condense read counts
@@ -186,6 +188,7 @@ workflow GatherBatchEvidence {
   Array[File] all_PE_files = flatten(select_all([PE_files, ref_panel_PE_files]))
   Array[File] all_SR_files = flatten(select_all([SR_files, ref_panel_SR_files]))
   Array[File] all_SD_files = flatten(select_all([SD_files, ref_panel_SD_files]))
+  Array[File] all_sparse_SD_files = flatten(select_all([sparse_SD_files, ref_panel_sparse_SD_files]))
 
   if(defined(ref_panel_bincov_matrix)
      || !(defined(bincov_matrix) && defined(bincov_matrix_index))) {
@@ -209,6 +212,7 @@ workflow GatherBatchEvidence {
       input:
         merged_depth_file = merged_bincov_,
         batch = batch,
+        sd_files = all_sparse_SD_files,
         plot_highlight_sample = ploidy_plot_highlight_sample,
         reference_dict = ref_dict,
         model_args = ploidy_model_args,

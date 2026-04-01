@@ -49,6 +49,9 @@ workflow EvidenceQC {
 
     Boolean run_ploidy = true
 
+    # Optional sparse SD files for ploidy estimation
+    Array[File] sd_files = []
+
     Array[Float]? melt_insert_size
 
     RuntimeAttr? runtime_attr_qc
@@ -96,6 +99,7 @@ workflow EvidenceQC {
       input:
         merged_depth_file = MakeBincovMatrix.merged_bincov,
         batch = batch,
+        sd_files = sd_files,
         reference_dict = reference_dict,
         gatk_docker = gatk_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,

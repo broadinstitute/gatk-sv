@@ -12,6 +12,7 @@ workflow CollectSVEvidence {
     File reference_index
     File reference_dict
     File sd_locs_vcf
+    File? sparse_sd_locs_vcf
     File preprocessed_intervals
     File? primary_contigs_list
     File? gatk_jar_override
@@ -28,6 +29,7 @@ workflow CollectSVEvidence {
       reference_index = reference_index,
       reference_dict = reference_dict,
       sd_locs_vcf = sd_locs_vcf,
+      sparse_sd_locs_vcf = sparse_sd_locs_vcf,
       preprocessed_intervals = preprocessed_intervals,
       primary_contigs_list = primary_contigs_list,
       gatk_jar_override = gatk_jar_override,
@@ -42,6 +44,8 @@ workflow CollectSVEvidence {
     File split_out_index = RunCollectSVEvidence.split_out_index
     File sd_out = RunCollectSVEvidence.sd_out
     File sd_out_index = RunCollectSVEvidence.sd_out_index
+    File? sparse_sd_out = RunCollectSVEvidence.sparse_sd_out
+    File? sparse_sd_out_index = RunCollectSVEvidence.sparse_sd_out_index
   }
 }
 
@@ -55,6 +59,7 @@ task RunCollectSVEvidence {
     File reference_index
     File reference_dict
     File sd_locs_vcf
+    File? sparse_sd_locs_vcf
     Int site_depth_min_mapq = 6
     Int site_depth_min_baseq = 10
     File preprocessed_intervals
@@ -96,6 +101,8 @@ task RunCollectSVEvidence {
     File disc_out_index = "${sample_id}.pe.txt.gz.tbi"
     File sd_out = "${sample_id}.sd.txt.gz"
     File sd_out_index = "${sample_id}.sd.txt.gz.tbi"
+    File? sparse_sd_out = "${sample_id}.sparse.sd.txt.gz"
+    File? sparse_sd_out_index = "${sample_id}.sparse.sd.txt.gz.tbi"
   }
   command <<<
 
@@ -119,6 +126,22 @@ task RunCollectSVEvidence {
     tabix -f -0 -s1 -b2 -e2 "~{sample_id}.sr.txt.gz"
     tabix -f -0 -s1 -b2 -e2 "~{sample_id}.pe.txt.gz"
     tabix -f -0 -s1 -b2 -e2 "~{sample_id}.sd.txt.gz"
+
+    # Collect sparse site-depth for ploidy estimation (smaller site list)
+    if [[ -n "~{default='' sparse_sd_locs_vcf}" ]]; then
+      /gatk/gatk --java-options "-Xmx~{command_mem_mb}m" CollectSVEvidence \
+          -I "~{bam_or_cram_file}" \
+          --sample-name "~{sample_id}" \
+          -F "~{sparse_sd_locs_vcf}" \
+          -SD "~{sample_id}.sparse.sd.txt.gz" \
+          --site-depth-min-mapq "~{site_depth_min_mapq}" \
+          --site-depth-min-baseq "~{site_depth_min_baseq}" \
+          ~{"-R " + reference_fasta} \
+          ~{"-L " + primary_contigs_list} \
+          --read-filter NonZeroReferenceLengthAlignmentReadFilter
+
+      tabix -f -0 -s1 -b2 -e2 "~{sample_id}.sparse.sd.txt.gz"
+    fi
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

@@ -68,6 +68,7 @@ workflow GatherSampleEvidence {
 
     # PESR inputs
     File sd_locs_vcf
+    File? sparse_sd_locs_vcf
 
     # Melt inputs
     File? melt_standard_vcf_header # required if run_melt True
@@ -207,6 +208,7 @@ workflow GatherSampleEvidence {
         reference_index = reference_index,
         reference_dict = reference_dict,
         sd_locs_vcf = sd_locs_vcf,
+        sparse_sd_locs_vcf = sparse_sd_locs_vcf,
         primary_contigs_list = primary_contigs_list,
         preprocessed_intervals = preprocessed_intervals,
         gatk_docker = gatk_docker,
@@ -395,6 +397,8 @@ workflow GatherSampleEvidence {
     File? pesr_split_index = CollectSVEvidence.split_out_index
     File? pesr_sd = CollectSVEvidence.sd_out
     File? pesr_sd_index = CollectSVEvidence.sd_out_index
+    File? pesr_sparse_sd = CollectSVEvidence.sparse_sd_out
+    File? pesr_sparse_sd_index = CollectSVEvidence.sparse_sd_out_index
 
     File? wham_vcf = Whamg.vcf
     File? wham_index = Whamg.index
