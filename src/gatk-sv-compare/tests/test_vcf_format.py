@@ -41,3 +41,16 @@ def test_check_record_flags_multiallelic_non_cnv(make_vcf) -> None:
         record = next(iter(vcf))
     issues = check_record(record)
     assert any(issue.check_id == "MULTI_ALLELIC_NON_CNV" for issue in issues)
+
+
+def test_check_record_does_not_emit_cnv_no_gt_info(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="cnv.vcf",
+        records=[
+            "chr1\t100\tcnv1\tN\t<CNV>\t.\tMULTIALLELIC\tSVTYPE=CNV;SVLEN=1000\tGT:GQ:ECN\t./.:40:2\t./.:35:2",
+        ],
+    )
+    with pysam.VariantFile(str(vcf_path)) as vcf:
+        record = next(iter(vcf))
+    issues = check_record(record)
+    assert all(issue.check_id != "CNV_NO_GT" for issue in issues)

@@ -27,6 +27,8 @@ class AnalysisConfig:
     seg_dup_track: Optional[Path] = None
     simple_repeat_track: Optional[Path] = None
     repeatmasker_track: Optional[Path] = None
+    clustering_config: Optional[Path] = None
+    stratification_config: Optional[Path] = None
     gatk_path: str = "gatk"
     java_options: str = "-Xmx4g"
 

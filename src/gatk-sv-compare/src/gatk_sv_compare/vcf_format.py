@@ -8,7 +8,7 @@ from typing import Iterable, List, Optional, Set
 
 import pysam
 
-from .dimensions import FILTER_MULTIALLELIC, SVTYPES_CORE
+from .dimensions import SVTYPES_CORE
 
 _ALLOWED_SVTYPES = set(SVTYPES_CORE)
 
@@ -128,7 +128,7 @@ def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = Non
         if svlen_value < 0:
             issues.append(FormatIssue("SVLEN_SIGN", "WARN", record_id, "SVLEN is negative"))
         if contig_length is not None and abs(svlen_value) > contig_length * 0.10:
-            issues.append(FormatIssue("IMPLAUSIBLE_SVLEN", "WARN", record_id, "SVLEN exceeds 10% of chromosome length"))
+            issues.append(FormatIssue("IMPLAUSIBLE_SVLEN", "WARN", record_id, "SVLEN exceeds 10% of chromosome length and may be artifactual"))
 
     end = record.stop
     if svtype_text == "INS" and end != record.pos:
@@ -153,7 +153,4 @@ def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = Non
         issues.append(FormatIssue("VARGQ_PRESENT", "INFO", record_id, "varGQ INFO field is present"))
     if "MULTIALLELIC" in record.info:
         issues.append(FormatIssue("MULTIALLELIC_INFO_FLAG", "INFO", record_id, "MULTIALLELIC is encoded as INFO rather than FILTER"))
-    if svtype_text == "CNV" and FILTER_MULTIALLELIC in filters:
-        issues.append(FormatIssue("CNV_NO_GT", "INFO", record_id, "CNV final-call semantics expected; frequency derived from CN_NONREF_FREQ"))
-
     return issues
