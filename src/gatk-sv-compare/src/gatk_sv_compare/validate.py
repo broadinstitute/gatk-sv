@@ -6,6 +6,7 @@ from collections import Counter
 from dataclasses import dataclass
 import gzip
 from pathlib import Path
+import re
 from typing import Dict, List, Optional, Tuple
 
 import pysam
@@ -14,17 +15,15 @@ from .config import ValidateConfig
 from .vcf_format import FormatIssue, PipelineStage, check_header, check_record, detect_pipeline_stage, has_precomputed_counts
 
 _FIXABLE_CHECK_IDS = {
-    "SVLEN_SIGN",
-    "SVLEN_NUMBER_DOT",
-    "GQ_RANGE",
-    "EMPTY_FILTER",
+    "MISSING_SVTYPE",
     "BREAKEND_NOTATION",
-    "BND_END_MISMATCH",
-    "INS_END_MISMATCH",
-    "CPX_DDDUP_END",
-    "MULTI_ALLELIC_NON_CNV",
-    "CHR2_ON_NON_BND",
 }
+_BND_MATE_PATTERN = re.compile(r"[\[\]]([^:\[\]]+):(\d+)[\[\]]")
+_SYMBOLIC_ALT_PATTERN = re.compile(r"^<([^>]+)>$")
+_CN_ALT_PATTERN = re.compile(r"^<CN\d+>$")
+_ORIGINAL_ALT_INFO_HEADER = '##INFO=<ID=ORIGINAL_ALT,Number=1,Type=String,Description="Original ALT allele before validate --fix canonicalization">'
+_CHR2_INFO_HEADER = '##INFO=<ID=CHR2,Number=1,Type=String,Description="Partner chromosome">'
+_END2_INFO_HEADER = '##INFO=<ID=END2,Number=1,Type=Integer,Description="Partner end">'
 
 
 @dataclass
@@ -62,6 +61,10 @@ class ValidationFixResult:
         if self.fixed_summary is not None:
             return self.fixed_summary.has_errors
         return self.original_summary.has_errors
+
+    def unresolved_error_counts(self) -> Counter[str]:
+        summary = self.fixed_summary if self.fixed_summary is not None else self.original_summary
+        return Counter(issue.check_id for issue in summary.issues if issue.severity == "ERROR")
 
 
 def validate_vcf(config: ValidateConfig) -> ValidationSummary:
@@ -159,33 +162,39 @@ def _remove_info_key(fields: List[Tuple[str, Optional[str]]], key: str) -> List[
     return [(field_key, field_value) for field_key, field_value in fields if field_key != key]
 
 
-def _rewrite_gt_for_dup_multiallelic(gt_value: str, alt_values: List[str]) -> str:
-    if gt_value in {".", "./.", ".|."}:
-        return gt_value
-    separator = "/"
-    if "|" in gt_value:
-        separator = "|"
-    alleles = gt_value.replace("|", "/").split("/")
-    rewritten: List[str] = []
-    for allele in alleles:
-        if allele == ".":
-            rewritten.append(".")
-            continue
-        allele_index = int(allele)
-        if allele_index == 0:
-            rewritten.append("0")
-            continue
-        alt_index = allele_index - 1
-        cn_label = alt_values[alt_index] if 0 <= alt_index < len(alt_values) else ""
-        if cn_label.startswith("<CN") and cn_label.endswith(">"):
-            try:
-                cn_value = int(cn_label[3:-1])
-            except ValueError:
-                cn_value = 2
-            rewritten.append("1" if cn_value > 2 else "0")
-        else:
-            rewritten.append("1")
-    return separator.join(rewritten)
+def _parse_breakend_alt(alt: str) -> Optional[Tuple[str, str]]:
+    match = _BND_MATE_PATTERN.search(alt)
+    if match is None:
+        return None
+    mate_chrom, mate_pos = match.groups()
+    return mate_chrom, mate_pos
+
+
+def _infer_svtype(chrom: str, alt_values: List[str]) -> Optional[str]:
+    if not alt_values:
+        return None
+    if len(alt_values) > 1 and all(_CN_ALT_PATTERN.fullmatch(alt_value) for alt_value in alt_values):
+        return "CNV"
+    if len(alt_values) != 1:
+        return None
+    alt_value = alt_values[0]
+    if "[" in alt_value or "]" in alt_value:
+        mate = _parse_breakend_alt(alt_value)
+        if mate is None:
+            return None
+        mate_chrom, _ = mate
+        return "CTX" if mate_chrom != chrom else "BND"
+    symbolic_match = _SYMBOLIC_ALT_PATTERN.fullmatch(alt_value)
+    if symbolic_match is None:
+        return None
+    symbolic_type = symbolic_match.group(1)
+    if symbolic_type in {"DEL", "DUP", "INS", "INV", "BND", "CTX", "CPX", "CNV"}:
+        return symbolic_type
+    if symbolic_type.startswith("INS:"):
+        return "INS"
+    if symbolic_type.startswith("CN") and symbolic_type[2:].isdigit():
+        return "CNV"
+    return None
 
 
 def _fix_record_line(line: str) -> str:
@@ -193,97 +202,68 @@ def _fix_record_line(line: str) -> str:
     if len(columns) < 8:
         return line
     chrom, pos, record_id, ref, alt, qual, filt, info_text = columns[:8]
-    format_text = columns[8] if len(columns) > 8 else None
-    sample_texts = columns[9:] if len(columns) > 9 else []
-
     alt_values = alt.split(",") if alt not in {"", "."} else []
     info_fields = _parse_info(info_text)
     info_values = _info_dict(info_fields)
     svtype = info_values.get("SVTYPE")
-    end_value = info_values.get("END")
-    cpx_type = info_values.get("CPX_TYPE")
 
-    if filt == ".":
-        filt = "PASS"
-
-    if any(bracket in alt for bracket in ("[", "]")):
-        alt = "<BND>"
-
-    if svtype == "DUP" and alt_values == ["<CN0>", "<CN1>", "<CN2>", "<CN3>"]:
-        alt = "<DUP>"
-        if format_text is not None:
-            format_keys = format_text.split(":")
-            if "GT" in format_keys:
-                gt_index = format_keys.index("GT")
-                rewritten_samples = []
-                for sample_text in sample_texts:
-                    sample_values = sample_text.split(":")
-                    if gt_index < len(sample_values):
-                        sample_values[gt_index] = _rewrite_gt_for_dup_multiallelic(sample_values[gt_index], alt_values)
-                    rewritten_samples.append(":".join(sample_values))
-                sample_texts = rewritten_samples
-
-    svlen_text = info_values.get("SVLEN")
-    if svlen_text not in (None, "."):
-        try:
-            svlen_value = int(svlen_text.split(",", 1)[0])
-        except ValueError:
-            svlen_value = None
-        if svlen_value is not None and svlen_value < 0:
-            info_fields = _set_info_value(info_fields, "SVLEN", str(abs(svlen_value)))
+    if svtype in (None, "."):
+        inferred_svtype = _infer_svtype(chrom, alt_values)
+        if inferred_svtype is not None:
+            info_fields = _set_info_value(info_fields, "SVTYPE", inferred_svtype)
             info_values = _info_dict(info_fields)
+            svtype = inferred_svtype
 
-    if svtype == "INS" and end_value not in (None, pos):
-        info_fields = _set_info_value(info_fields, "END", pos)
-        info_values = _info_dict(info_fields)
-        end_value = pos
-
-    if svtype in {"BND", "CTX"} and end_value not in (None, pos) and info_values.get("END2") in (None, "."):
-        info_fields = _set_info_value(info_fields, "END2", str(end_value))
-        info_fields = _set_info_value(info_fields, "END", pos)
-        info_values = _info_dict(info_fields)
-
-    if svtype == "CPX" and cpx_type in {"dDUP", "dDUP_iDEL"} and end_value not in (None, pos):
-        info_fields = _set_info_value(info_fields, "END", pos)
-        info_values = _info_dict(info_fields)
-
-    if svtype not in {"BND", "CTX"} and "CHR2" in info_values:
-        info_fields = _remove_info_key(info_fields, "CHR2")
-        info_values = _info_dict(info_fields)
-
-    if format_text is not None:
-        format_keys = format_text.split(":")
-        if "GQ" in format_keys:
-            gq_index = format_keys.index("GQ")
-            rewritten_samples = []
-            for sample_text in sample_texts:
-                sample_values = sample_text.split(":")
-                if gq_index < len(sample_values) and sample_values[gq_index] not in {".", ""}:
-                    try:
-                        sample_values[gq_index] = str(int(int(sample_values[gq_index]) / 10)) if int(sample_values[gq_index]) > 99 else sample_values[gq_index]
-                    except ValueError:
-                        pass
-                rewritten_samples.append(":".join(sample_values))
-            sample_texts = rewritten_samples
+    if len(alt_values) == 1 and any(bracket in alt for bracket in ("[", "]")):
+        breakend_alt = alt_values[0]
+        mate = _parse_breakend_alt(breakend_alt)
+        if mate is not None:
+            mate_chrom, mate_pos = mate
+            breakend_svtype = svtype if svtype in {"BND", "CTX"} else ("CTX" if mate_chrom != chrom else "BND")
+            info_fields = _set_info_value(info_fields, "SVTYPE", breakend_svtype)
+            info_fields = _set_info_value(info_fields, "END", pos)
+            info_fields = _set_info_value(info_fields, "CHR2", mate_chrom)
+            info_fields = _set_info_value(info_fields, "END2", mate_pos)
+            info_fields = _set_info_value(info_fields, "ORIGINAL_ALT", breakend_alt)
+            info_values = _info_dict(info_fields)
+            alt = f"<{breakend_svtype}>"
 
     columns[4] = alt
-    columns[6] = filt
     columns[7] = _format_info(info_fields)
-    if format_text is not None and sample_texts:
-        columns[9:] = sample_texts
     return "\t".join(columns) + "\n"
+
+
+def _write_augmented_header(header_lines: List[str], handle_out) -> None:
+    has_chr2 = any(line.startswith("##INFO=<ID=CHR2,") for line in header_lines)
+    has_end2 = any(line.startswith("##INFO=<ID=END2,") for line in header_lines)
+    has_original_alt = any(line.startswith("##INFO=<ID=ORIGINAL_ALT,") for line in header_lines)
+
+    for line in header_lines[:-1]:
+        if line.startswith("##INFO=<ID=SVLEN,") and "Number=." in line:
+            handle_out.write(line.replace("Number=.", "Number=1"))
+        else:
+            handle_out.write(line)
+    if not has_chr2:
+        handle_out.write(_CHR2_INFO_HEADER + "\n")
+    if not has_end2:
+        handle_out.write(_END2_INFO_HEADER + "\n")
+    if not has_original_alt:
+        handle_out.write(_ORIGINAL_ALT_INFO_HEADER + "\n")
+    handle_out.write(header_lines[-1])
 
 
 def apply_fixes(vcf_path: Path, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     temp_output_path = out_path.with_suffix("") if _is_bgzip_output(out_path) else out_path
     with _open_text(vcf_path, "r") as handle_in, temp_output_path.open("w", encoding="utf-8") as handle_out:
+        header_lines: List[str] = []
         for line in handle_in:
-            if line.startswith("##INFO=<ID=SVLEN,") and "Number=." in line:
-                handle_out.write(line.replace("Number=.", "Number=1"))
+            if line.startswith("##"):
+                header_lines.append(line)
                 continue
             if line.startswith("#"):
-                handle_out.write(line)
+                header_lines.append(line)
+                _write_augmented_header(header_lines, handle_out)
                 continue
             handle_out.write(_fix_record_line(line))
     if _is_bgzip_output(out_path):
@@ -302,6 +282,10 @@ def validate_and_fix(vcf_path: Path, out_path: Path) -> ValidationFixResult:
         return ValidationFixResult(original_summary=original_summary, fixed_summary=None, out_path=None, wrote_output=False)
     apply_fixes(vcf_path, resolved_out_path)
     fixed_summary = validate_vcf(ValidateConfig(vcf_path=resolved_out_path))
+    if fixed_summary.has_errors:
+        resolved_out_path.unlink(missing_ok=True)
+        Path(str(resolved_out_path) + ".tbi").unlink(missing_ok=True)
+        return ValidationFixResult(original_summary=original_summary, fixed_summary=fixed_summary, out_path=None, wrote_output=False)
     return ValidationFixResult(original_summary=original_summary, fixed_summary=fixed_summary, out_path=resolved_out_path, wrote_output=True)
 
 
@@ -335,7 +319,15 @@ def render_summary(summary: ValidationSummary) -> str:
 def render_fix_result(result: ValidationFixResult) -> str:
     lines = ["Original:", render_summary(result.original_summary)]
     if not result.wrote_output:
-        lines.append("Fix mode aborted: unfixable validation errors remain.")
+        unresolved_errors = result.unresolved_error_counts()
+        if unresolved_errors:
+            offending_checks = ", ".join(
+                f"{check_id} ({count})" if count > 1 else check_id
+                for check_id, count in sorted(unresolved_errors.items())
+            )
+            lines.append(f"Fix mode aborted: unresolved critical checks remain: {offending_checks}")
+        else:
+            lines.append("Fix mode aborted: unresolved critical checks remain.")
         return "\n".join(lines)
     lines.append(f"Wrote fixed VCF: {result.out_path}")
     if result.fixed_summary is not None:

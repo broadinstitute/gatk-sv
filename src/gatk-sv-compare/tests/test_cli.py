@@ -34,7 +34,7 @@ def test_cli_validate_fix_writes_output(make_vcf, tmp_path, capsys) -> None:
     vcf_path = make_vcf(
         file_name="fixable.vcf",
         records=[
-            "chr1\t100\tvar1\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=-25;END=150\tGT:GQ:ECN\t0/1:120:2\t0/0:50:2",
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVLEN=25\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
         ],
     )
     requested_out_path = tmp_path / "fixed.vcf"
@@ -53,7 +53,7 @@ def test_cli_validate_fix_writes_bgzip_output_and_index(make_vcf, tmp_path, caps
     vcf_path = make_vcf(
         file_name="fixable_bgzip.vcf",
         records=[
-            "chr1\t100\tvar1\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=-25;END=150\tGT:GQ:ECN\t0/1:120:2\t0/0:50:2",
+            "chr1\t100\tvar1\tN\t<INS:ME:ALU>\t.\tPASS\tSVLEN=25\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
         ],
     )
     out_path = tmp_path / "fixed.vcf.gz"
@@ -71,7 +71,7 @@ def test_cli_validate_fix_defaults_output_path_for_vcf(make_vcf, capsys) -> None
     vcf_path = make_vcf(
         file_name="autofix.vcf",
         records=[
-            "chr1\t100\tvar1\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=-25;END=150\tGT:GQ:ECN\t0/1:120:2\t0/0:50:2",
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVLEN=25\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
         ],
     )
     expected_out = vcf_path.with_name("autofix.fixed.vcf.gz")
@@ -89,7 +89,7 @@ def test_cli_validate_fix_defaults_output_path_for_vcfgz(make_vcf, capsys) -> No
     vcf_path = make_vcf(
         file_name="autofix_source.vcf",
         records=[
-            "chr1\t100\tvar1\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=-25;END=150\tGT:GQ:ECN\t0/1:120:2\t0/0:50:2",
+            "chr1\t100\tvar1\tN\tN]chr2:200]\t.\tPASS\t.\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
         ],
     )
     gz_path = vcf_path.with_suffix(".vcf.gz")
@@ -104,6 +104,22 @@ def test_cli_validate_fix_defaults_output_path_for_vcfgz(make_vcf, capsys) -> No
     assert f"Wrote fixed VCF: {expected_out}" in out
     assert expected_out.exists()
     assert expected_out.with_name(expected_out.name + ".tbi").exists()
+
+
+def test_cli_validate_fix_reports_blocking_check(make_vcf, tmp_path, capsys) -> None:
+    vcf_path = make_vcf(
+        file_name="unfixable_cli.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=25\tECN\t2\t2",
+        ],
+    )
+
+    exit_code = main(["validate", "--vcf", str(vcf_path), "--fix"])
+
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert "Fix mode aborted:" in out
+    assert "MISSING_GT" in out
 
 
 def test_cli_preprocess_builds_config(tmp_path, monkeypatch, capsys) -> None:
