@@ -35,6 +35,26 @@ def test_validate_vcf_reports_errors(make_vcf) -> None:
     assert "BREAKEND_NOTATION" not in check_ids
 
 
+def test_render_summary_deduplicates_detail_lines_and_reports_counts(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="repeated_issues.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=250000\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+            "chr1\t200\tvar2\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=250001\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+        ],
+    )
+
+    summary = validate_vcf(ValidateConfig(vcf_path=vcf_path))
+    rendered = render_summary(summary)
+
+    assert rendered.count("IMPLAUSIBLE_SVLEN") == 2
+    assert rendered.count("WARN IMPLAUSIBLE_SVLEN") == 2
+    assert "- WARN IMPLAUSIBLE_SVLEN [var1]: SVLEN exceeds 20% of chromosome length and may be artifactual" in rendered
+    assert "[var2]: SVLEN exceeds 20% of chromosome length and may be artifactual" not in rendered
+    assert "Issue counts:" in rendered
+    assert "- WARN IMPLAUSIBLE_SVLEN: 2" in rendered
+
+
 def test_validate_and_fix_rewrites_fixable_issues(make_vcf, tmp_path) -> None:
     vcf_path = make_vcf(
         file_name="fixable.vcf",

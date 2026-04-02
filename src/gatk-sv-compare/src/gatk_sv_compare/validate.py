@@ -44,6 +44,9 @@ class ValidationSummary:
     def severity_counts(self) -> Counter[str]:
         return Counter(issue.severity for issue in self.issues)
 
+    def issue_type_counts(self) -> Counter[str]:
+        return Counter(issue.check_id for issue in self.issues)
+
 
 @dataclass
 class ValidationFixResult:
@@ -303,10 +306,18 @@ def render_summary(summary: ValidationSummary) -> str:
         f"Issues: errors={counts.get('ERROR', 0)}, warnings={counts.get('WARN', 0)}, info={counts.get('INFO', 0)}",
     ]
     if summary.issues:
-        lines.append("Details:")
+        issue_type_counts = summary.issue_type_counts()
+        exemplar_issues: Dict[str, FormatIssue] = {}
         for issue in summary.issues:
+            exemplar_issues.setdefault(issue.check_id, issue)
+        lines.append("Details:")
+        for issue in exemplar_issues.values():
             where = f" [{issue.record_id}]" if issue.record_id else ""
             lines.append(f"- {issue.severity} {issue.check_id}{where}: {issue.message}")
+        lines.append("Issue counts:")
+        for check_id, count in sorted(issue_type_counts.items()):
+            exemplar = exemplar_issues[check_id]
+            lines.append(f"- {exemplar.severity} {check_id}: {count}")
     else:
         lines.append("No issues found.")
     return "\n".join(lines)
