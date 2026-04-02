@@ -711,6 +711,7 @@ task Task7_IntegrateOverlaps {
 
         Rscript ~{r_script} \
             -p ~{sv_gtf_prefix} \
+            -a ~{seed_suffix} \
             -o ~{output_file_name}
     >>>
 
