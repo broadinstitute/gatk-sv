@@ -15,7 +15,7 @@ opt = parse_args(opt_parser);
 
 d1=read.table(opt$CDS)
 gene_id=read.table(opt$sv_gene)
-colnames(d1)[c(4,5,10,12)] = c('SVID','SVTYPE','gene_id','gene_name')
+colnames(d1)[c(4,5,10,11)] = c('SVID','SVTYPE','gene_id','gene_name')
 colnames(gene_id) = c('SVID','SVTYPE','gene_id','gene_name')
 
 dat = merge(d1, gene_id, by=c('SVID','SVTYPE','gene_id','gene_name'))
