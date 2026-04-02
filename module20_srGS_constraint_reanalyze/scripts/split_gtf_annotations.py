@@ -13,7 +13,7 @@ Definitions (all merged per gene across all transcripts):
   utr_5            : 5' UTR (strand-aware; UTR midpoint upstream of CDS)
   utr_3            : 3' UTR (strand-aware; UTR midpoint downstream of CDS)
 
-Output BED columns: chr, start(0-based), end, strand, gene_id, gene_type, gene_name
+Output BED columns: chr, start(0-based), end, strand, gene_id, gene_name
 
 Usage:
     python3 split_gtf_annotations.py <input.gtf[.gz]> <output_prefix>
@@ -71,7 +71,8 @@ def chrom_sort_key(row):
 def write_bed(rows, path):
     rows_sorted = sorted(rows, key=chrom_sort_key)
     with open(path, 'w') as fh:
-        fh.write('#chr\tstart\tend\tstrand\tgene_id\tgene_type\tgene_name\n')
+        fh.write('#chr	start	end	strand	gene_id	gene_name
+')
         for r in rows_sorted:
             fh.write('\t'.join(str(x) for x in r) + '\n')
     return len(rows_sorted)
@@ -134,7 +135,7 @@ def main():
         gene_name = info['gene_name']
         g_start   = info['start']   # 1-based
         g_end     = info['end']     # 1-based inclusive
-        meta      = (strand, gene_id, gene_type, gene_name)
+        meta      = (strand, gene_id, gene_name)
 
         # ── transcript: full gene body ────────────────────────────────────────
         out['transcript'].append((chrom, g_start - 1, g_end, *meta))
