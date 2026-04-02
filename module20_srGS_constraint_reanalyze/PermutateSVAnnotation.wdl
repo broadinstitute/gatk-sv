@@ -133,7 +133,7 @@ workflow PermutateSVAnnotation {
     }
 
     # ── Task 6: Reorganize SVID vs gene — one call per overlap type (R) ────
-    call Task6_ReorganizeSVIDGene as Task6_ReorgWholeTranscript {
+    call Task6_ReorganizeSVIDGene as Task6_Reorg_WholeTranscript {
         input:
             transcript_bed        = Task2_SplitGTF.transcript_bed,
             overlap_file          = Task4_ExtractOverlaps.whole_transcript_overlap,
@@ -142,7 +142,7 @@ workflow PermutateSVAnnotation {
             docker                = r_docker,
             runtime_attr_override = runtime_attr_reorganize_svid
     }
-    call Task6_ReorganizeSVIDGene as Task6_ReorgUtr3 {
+    call Task6_ReorganizeSVIDGene as Task6_Reorg_Utr3 {
         input:
             transcript_bed        = Task2_SplitGTF.transcript_bed,
             overlap_file          = Task4_ExtractOverlaps.utr3_overlap,
@@ -151,7 +151,7 @@ workflow PermutateSVAnnotation {
             docker                = r_docker,
             runtime_attr_override = runtime_attr_reorganize_svid
     }
-    call Task6_ReorganizeSVIDGene as Task6_ReorgUtr5 {
+    call Task6_ReorganizeSVIDGene as Task6_Reorg_Utr5 {
         input:
             transcript_bed        = Task2_SplitGTF.transcript_bed,
             overlap_file          = Task4_ExtractOverlaps.utr5_overlap,
@@ -160,7 +160,7 @@ workflow PermutateSVAnnotation {
             docker                = r_docker,
             runtime_attr_override = runtime_attr_reorganize_svid
     }
-    call Task6_ReorganizeSVIDGene as Task6_ReorgIntactExon {
+    call Task6_ReorganizeSVIDGene as Task6_Reorg_IntactExon {
         input:
             transcript_bed        = Task2_SplitGTF.transcript_bed,
             overlap_file          = Task5_CategorizeExonOverlap.intact_exon_overlap,
@@ -169,7 +169,7 @@ workflow PermutateSVAnnotation {
             docker                = r_docker,
             runtime_attr_override = runtime_attr_reorganize_svid
     }
-    call Task6_ReorganizeSVIDGene as Task6_ReorgPartialExon {
+    call Task6_ReorganizeSVIDGene as Task6_Reorg_PartialExon {
         input:
             transcript_bed        = Task2_SplitGTF.transcript_bed,
             overlap_file          = Task5_CategorizeExonOverlap.partial_exon_overlap,
@@ -178,7 +178,7 @@ workflow PermutateSVAnnotation {
             docker                = r_docker,
             runtime_attr_override = runtime_attr_reorganize_svid
     }
-    call Task6_ReorganizeSVIDGene as Task6_ReorgTssTranscripts {
+    call Task6_ReorganizeSVIDGene as Task6_Reorg_TssTranscripts {
         input:
             transcript_bed        = Task2_SplitGTF.transcript_bed,
             overlap_file          = Task4_ExtractOverlaps.tss_transcripts_overlap,
@@ -187,7 +187,7 @@ workflow PermutateSVAnnotation {
             docker                = r_docker,
             runtime_attr_override = runtime_attr_reorganize_svid
     }
-    call Task6_ReorganizeSVIDGene as Task6_ReorgPartialTranscripts {
+    call Task6_ReorganizeSVIDGene as Task6_Reorg_PartialTranscripts {
         input:
             transcript_bed        = Task2_SplitGTF.transcript_bed,
             overlap_file          = Task4_ExtractOverlaps.partial_transcripts_overlap,
@@ -196,7 +196,7 @@ workflow PermutateSVAnnotation {
             docker                = r_docker,
             runtime_attr_override = runtime_attr_reorganize_svid
     }
-    call Task6_ReorganizeSVIDGene as Task6_ReorgInsideExons {
+    call Task6_ReorganizeSVIDGene as Task6_Reorg_InsideExons {
         input:
             transcript_bed        = Task2_SplitGTF.transcript_bed,
             overlap_file          = Task4_ExtractOverlaps.inside_exons,
@@ -205,7 +205,7 @@ workflow PermutateSVAnnotation {
             docker                = r_docker,
             runtime_attr_override = runtime_attr_reorganize_svid
     }
-    call Task6_ReorganizeSVIDGene as Task6_ReorgInsideIntrons {
+    call Task6_ReorganizeSVIDGene as Task6_Reorg_InsideIntrons {
         input:
             transcript_bed        = Task2_SplitGTF.transcript_bed,
             overlap_file          = Task4_ExtractOverlaps.inside_introns,
@@ -214,7 +214,7 @@ workflow PermutateSVAnnotation {
             docker                = r_docker,
             runtime_attr_override = runtime_attr_reorganize_svid
     }
-    call Task6_ReorganizeSVIDGene as Task6_ReorgPromoter {
+    call Task6_ReorganizeSVIDGene as Task6_Reorg_Promoter {
         input:
             transcript_bed        = Task2_SplitGTF.transcript_bed,
             overlap_file          = Task4_ExtractOverlaps.promoter_overlap,
