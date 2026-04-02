@@ -1,0 +1,213 @@
+"""Shared-sample genotype exact-match diagnostics for matched sites."""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from pathlib import Path
+from typing import Dict, Optional
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import pysam
+
+from ..aggregate import AggregatedData
+from ..config import AnalysisConfig
+from ..plot_utils import save_figure
+from .base import AnalysisModule
+
+
+_GT_LABELS = {0: "hom_ref", 1: "het", 2: "hom_alt"}
+
+
+def _record_identifier(record: pysam.VariantRecord) -> str:
+    return record.id or f"{record.contig}:{record.pos}"
+
+
+def _iter_records_for_contig(vcf: pysam.VariantFile, contig: str):
+    try:
+        yield from vcf.fetch(contig)
+    except ValueError:
+        for record in vcf:
+            if record.contig == contig:
+                yield record
+
+
+def _gt_code(sample: pysam.libcbcf.VariantRecordSample, svtype: str) -> Optional[int]:
+    if svtype == "CNV":
+        cn = sample.get("CN")
+        ecn = sample.get("ECN")
+        if cn in (None, ".") or ecn in (None, "."):
+            return None
+        return int(cn) - int(ecn)
+    gt = sample.get("GT")
+    if not gt or any(allele is None for allele in gt):
+        return None
+    return int(sum(1 for allele in gt if allele and allele > 0))
+
+
+def _extract_genotype_vectors(
+    vcf_path: Path,
+    target_ids_by_contig: Dict[str, set[str]],
+    sample_indices: np.ndarray,
+    svtype_by_vid: Dict[str, str],
+) -> Dict[str, np.ndarray]:
+    vectors: Dict[str, np.ndarray] = {}
+    with pysam.VariantFile(str(vcf_path)) as vcf:
+        for contig, target_ids in target_ids_by_contig.items():
+            for record in _iter_records_for_contig(vcf, contig):
+                variant_id = _record_identifier(record)
+                if variant_id not in target_ids:
+                    continue
+                svtype = svtype_by_vid.get(variant_id, "UNKNOWN")
+                sample_values = list(record.samples.values())
+                codes = [_gt_code(sample_values[int(index)], svtype) for index in sample_indices]
+                vectors[variant_id] = np.asarray([np.nan if code is None else float(code) for code in codes], dtype=float)
+    return vectors
+
+
+def build_exact_match_table(data: AggregatedData, config: AnalysisConfig) -> pd.DataFrame:
+    columns = [
+        "pair_id",
+        "variant_id_a",
+        "variant_id_b",
+        "svtype",
+        "size_bucket",
+        "af_bucket",
+        "genomic_context",
+        "n_compared",
+        "exact_match_rate",
+        "homref_to_het_rate",
+        "het_to_homref_rate",
+        "homref_to_homalt_rate",
+        "homalt_to_homref_rate",
+        "het_to_homalt_rate",
+        "homalt_to_het_rate",
+    ]
+    if data.matched_pairs.empty or not data.shared_samples or data.sample_indices_a is None or data.sample_indices_b is None:
+        return pd.DataFrame(columns=columns)
+
+    target_ids_a: Dict[str, set[str]] = defaultdict(set)
+    target_ids_b: Dict[str, set[str]] = defaultdict(set)
+    svtype_by_vid: Dict[str, str] = {}
+    site_meta = data.sites_a.set_index("variant_id")[["svtype", "size_bucket", "af_bucket", "genomic_context"]]
+    for row in data.matched_pairs.itertuples(index=False):
+        target_ids_a[str(row.contig_a)].add(str(row.variant_id_a))
+        target_ids_b[str(row.contig_b)].add(str(row.variant_id_b))
+        svtype_by_vid[str(row.variant_id_a)] = str(row.svtype_a)
+        svtype_by_vid[str(row.variant_id_b)] = str(row.svtype_b)
+
+    vectors_a = _extract_genotype_vectors(config.vcf_a_path, target_ids_a, data.sample_indices_a, svtype_by_vid)
+    vectors_b = _extract_genotype_vectors(config.vcf_b_path, target_ids_b, data.sample_indices_b, svtype_by_vid)
+
+    rows = []
+    for row in data.matched_pairs.itertuples(index=False):
+        vector_a = vectors_a.get(str(row.variant_id_a))
+        vector_b = vectors_b.get(str(row.variant_id_b))
+        if vector_a is None or vector_b is None:
+            continue
+        valid = ~np.isnan(vector_a) & ~np.isnan(vector_b)
+        n_compared = int(valid.sum())
+        if n_compared == 0:
+            continue
+        left = vector_a[valid].astype(int)
+        right = vector_b[valid].astype(int)
+        meta = site_meta.loc[str(row.variant_id_a)]
+        rows.append(
+            {
+                "pair_id": row.pair_id,
+                "variant_id_a": row.variant_id_a,
+                "variant_id_b": row.variant_id_b,
+                "svtype": meta["svtype"],
+                "size_bucket": meta["size_bucket"],
+                "af_bucket": meta["af_bucket"],
+                "genomic_context": meta["genomic_context"],
+                "n_compared": n_compared,
+                "exact_match_rate": float((left == right).mean()),
+                "homref_to_het_rate": float(((left == 0) & (right == 1)).mean()),
+                "het_to_homref_rate": float(((left == 1) & (right == 0)).mean()),
+                "homref_to_homalt_rate": float(((left == 0) & (right == 2)).mean()),
+                "homalt_to_homref_rate": float(((left == 2) & (right == 0)).mean()),
+                "het_to_homalt_rate": float(((left == 1) & (right == 2)).mean()),
+                "homalt_to_het_rate": float(((left == 2) & (right == 1)).mean()),
+            }
+        )
+    return pd.DataFrame(rows, columns=columns)
+
+
+def summarize_exact_match(per_site: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "svtype",
+        "size_bucket",
+        "af_bucket",
+        "genomic_context",
+        "n_sites",
+        "mean_exact_match_rate",
+        "median_exact_match_rate",
+        "mean_homref_to_het_rate",
+        "mean_het_to_homref_rate",
+        "mean_homref_to_homalt_rate",
+        "mean_homalt_to_homref_rate",
+        "mean_het_to_homalt_rate",
+        "mean_homalt_to_het_rate",
+    ]
+    if per_site.empty:
+        return pd.DataFrame(columns=columns)
+    summary = per_site.groupby(["svtype", "size_bucket", "af_bucket", "genomic_context"], dropna=False).agg(
+        n_sites=("pair_id", "count"),
+        mean_exact_match_rate=("exact_match_rate", "mean"),
+        median_exact_match_rate=("exact_match_rate", "median"),
+        mean_homref_to_het_rate=("homref_to_het_rate", "mean"),
+        mean_het_to_homref_rate=("het_to_homref_rate", "mean"),
+        mean_homref_to_homalt_rate=("homref_to_homalt_rate", "mean"),
+        mean_homalt_to_homref_rate=("homalt_to_homref_rate", "mean"),
+        mean_het_to_homalt_rate=("het_to_homalt_rate", "mean"),
+        mean_homalt_to_het_rate=("homalt_to_het_rate", "mean"),
+    ).reset_index()
+    return summary[columns]
+
+
+def _plot_grouped_metric(per_site: pd.DataFrame, group_field: str, metric: str, output_path: Path) -> None:
+    fig, ax = plt.subplots(figsize=(8, 4))
+    if per_site.empty:
+        ax.text(0.5, 0.5, "No matched shared-sample sites", ha="center", va="center")
+        ax.set_axis_off()
+        save_figure(fig, output_path)
+        return
+    grouped = per_site.groupby(group_field, dropna=False)[metric].median().sort_index()
+    ax.bar(grouped.index.astype(str), grouped.values, color="#4C72B0")
+    ax.set_ylim(0.0, 1.0)
+    ax.set_ylabel(metric.replace("_", " "))
+    ax.set_xlabel(group_field.replace("_", " "))
+    ax.set_title(f"{metric.replace('_', ' ')} by {group_field.replace('_', ' ')}")
+    ax.tick_params(axis="x", rotation=30)
+    save_figure(fig, output_path)
+
+
+class GenotypeExactMatchModule(AnalysisModule):
+    @property
+    def name(self) -> str:
+        return "genotype_exact_match"
+
+    @property
+    def requires_shared_samples(self) -> bool:
+        return True
+
+    @property
+    def requires_genotype_pass(self) -> bool:
+        return True
+
+    def run(self, data: AggregatedData, config: AnalysisConfig) -> None:
+        output_dir = self.output_dir(config)
+        tables_dir = output_dir / "tables"
+        tables_dir.mkdir(parents=True, exist_ok=True)
+
+        per_site = build_exact_match_table(data, config)
+        summary = summarize_exact_match(per_site)
+        per_site.to_csv(tables_dir / "genotype_match_rates.per_site.tsv", sep="\t", index=False)
+        summary.to_csv(tables_dir / "genotype_match_rates.tsv", sep="\t", index=False)
+
+        _plot_grouped_metric(per_site, "svtype", "exact_match_rate", output_dir / "exact_match.by_type.png")
+        _plot_grouped_metric(per_site, "size_bucket", "exact_match_rate", output_dir / "exact_match.by_size.png")
+        _plot_grouped_metric(per_site, "af_bucket", "exact_match_rate", output_dir / "exact_match.by_af.png")
+        _plot_grouped_metric(per_site, "genomic_context", "exact_match_rate", output_dir / "exact_match.by_context.png")
