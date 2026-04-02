@@ -12,7 +12,7 @@ workflow CollectSVEvidence {
     File reference_index
     File reference_dict
     File sd_locs_vcf
-    File? sparse_sd_locs_vcf
+    File sparse_sd_locs_vcf
     File preprocessed_intervals
     File? primary_contigs_list
     File? gatk_jar_override
@@ -30,6 +30,7 @@ workflow CollectSVEvidence {
       reference_dict = reference_dict,
       sd_locs_vcf = sd_locs_vcf,
       sparse_sd_locs_vcf = sparse_sd_locs_vcf,
+      sparse_sd_locs_vcf_index = sparse_sd_locs_vcf + ".tbi",
       preprocessed_intervals = preprocessed_intervals,
       primary_contigs_list = primary_contigs_list,
       gatk_jar_override = gatk_jar_override,
@@ -59,7 +60,8 @@ task RunCollectSVEvidence {
     File reference_index
     File reference_dict
     File sd_locs_vcf
-    File? sparse_sd_locs_vcf
+    File sparse_sd_locs_vcf
+    File sparse_sd_locs_vcf_index
     Int site_depth_min_mapq = 6
     Int site_depth_min_baseq = 10
     File preprocessed_intervals
@@ -67,15 +69,6 @@ task RunCollectSVEvidence {
     File? gatk_jar_override
     String gatk_docker
     RuntimeAttr? runtime_attr_override
-  }
-
-  parameter_meta {
-      bam_or_cram_file: {
-        localization_optional: true
-      }
-      bam_or_cram_index: {
-        localization_optional: true
-      }
   }
 
   Float bam_or_cram_size = size(bam_or_cram_file, "GiB")

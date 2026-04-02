@@ -62,7 +62,7 @@ workflow GATKSVPipelineBatch {
     String chr_y
 
     # Sparse site-depth for ploidy estimation
-    File? sparse_sd_locs_vcf
+    File sparse_sd_locs_vcf
 
     # gCNV
     File contig_ploidy_model_tar

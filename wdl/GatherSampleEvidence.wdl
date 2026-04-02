@@ -68,7 +68,7 @@ workflow GatherSampleEvidence {
 
     # PESR inputs
     File sd_locs_vcf
-    File? sparse_sd_locs_vcf
+    File sparse_sd_locs_vcf
 
     # Melt inputs
     File? melt_standard_vcf_header # required if run_melt True
