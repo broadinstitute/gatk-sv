@@ -161,6 +161,7 @@ workflow PermutateSVAnnotation {
             r_script        = integrate_r_script,
             sv_gtf_prefix   = sv_gtf_prefix,
             seed_suffix     = seed_suffix,
+            output_file_name = sv_gtf_prefix + "." + seed_suffix + ".integrated",
             docker          = r_docker,
             runtime_attr_override = runtime_attr_integrate_overlaps
     }
@@ -168,7 +169,7 @@ workflow PermutateSVAnnotation {
     # ── Task 8: Calculate per-gene SV data (R) ────────────────────────────
     call Task8_CalcuGeneData {
         input:
-            integrated_files = Task7_IntegrateOverlaps.integrated_files,
+            integrated_file  = Task7_IntegrateOverlaps.integrated_file,
             r_script         = calcu_r_script,
             seed_suffix      = seed_suffix,
             output_file_name = output_file_name,
@@ -182,7 +183,7 @@ workflow PermutateSVAnnotation {
         Array[File] intersection_beds   = Task3_BedtoolsIntersect.all_isec
         Array[File] overlap_tables      = Task4_ExtractOverlaps.all_overlaps
         Array[File] reorganized         = Task6_ReorganizeSVIDGene.all_reorganized
-        Array[File] integrated          = Task7_IntegrateOverlaps.integrated_files
+        File        integrated          = Task7_IntegrateOverlaps.integrated_file
         File        result              = Task8_CalcuGeneData.result
     }
 }
@@ -695,6 +696,7 @@ task Task7_IntegrateOverlaps {
         File        r_script
         String      sv_gtf_prefix
         String      seed_suffix
+        String      output_file_name
         String      docker
         RuntimeAttr? runtime_attr_override
     }
@@ -709,11 +711,11 @@ task Task7_IntegrateOverlaps {
 
         Rscript ~{r_script} \
             -p ~{sv_gtf_prefix} \
-            -a ~{seed_suffix}
+            -o ~{output_file_name}
     >>>
 
     output {
-        Array[File] integrated_files = glob(sv_gtf_prefix + ".*." + seed_suffix + "*")
+        File integrated_file = output_file_name
     }
 
     RuntimeAttr default_attr = object {
@@ -742,7 +744,7 @@ task Task7_IntegrateOverlaps {
 # ======================================================================
 task Task8_CalcuGeneData {
     input {
-        Array[File] integrated_files
+        File        integrated_file
         File        r_script
         String      seed_suffix
         String      output_file_name
@@ -753,10 +755,7 @@ task Task8_CalcuGeneData {
     command <<<
         set -euo pipefail
 
-        # Symlink integrated files into working dir
-        for f in ~{sep=' ' integrated_files}; do
-            ln -sf "$f" "$(basename $f)"
-        done
+        ln -sf ~{integrated_file} "$(basename ~{integrated_file})"
 
         Rscript ~{r_script} \
             -p ~{seed_suffix} \

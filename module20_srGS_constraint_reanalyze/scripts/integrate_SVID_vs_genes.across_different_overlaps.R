@@ -4,7 +4,8 @@
 library("optparse")
 
 option_list = list(
-        make_option(c('-p', "--prefix"), type="character", default=NULL, help="prefix of input and output files", metavar="character")
+        make_option(c('-p', "--prefix"), type="character", default=NULL, help="prefix of input and output files", metavar="character"),
+        make_option(c('-o', "--output"), type="character", default=NULL, help="output file name", metavar="character")
  );
 
 opt_parser = OptionParser(option_list=option_list);
@@ -61,7 +62,7 @@ dat[!is.na(dat$promoter_overlap),]$promoter_overlap = apply(dat[!is.na(dat$promo
 
 dat[dat==""] = NA
 
-write.table(dat, paste(opt$prefix,'.integrated', sep=''), sep='\t', quote=F, col.names=T, row.names=F)
+write.table(dat, opt$output, sep='\t', quote=F, col.names=T, row.names=F)
 
 
 
