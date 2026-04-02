@@ -19,6 +19,8 @@ workflow MatchSVs {
     File reference_dict
 
     Float? java_mem_fraction
+    String? additional_args
+
     String gatk_docker
     String sv_base_mini_docker
   }
@@ -33,6 +35,7 @@ workflow MatchSVs {
       stratification_config=stratification_config,
       track_names=track_names,
       track_intervals=track_intervals,
+      additional_args=additional_args,
       contig_list=contig_list,
       reference_dict=reference_dict,
       java_mem_fraction=java_mem_fraction,
@@ -50,6 +53,7 @@ workflow MatchSVs {
       stratification_config=stratification_config,
       track_names=track_names,
       track_intervals=track_intervals,
+      additional_args=additional_args,
       contig_list=contig_list,
       reference_dict=reference_dict,
       java_mem_fraction=java_mem_fraction,

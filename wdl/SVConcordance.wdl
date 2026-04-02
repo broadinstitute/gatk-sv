@@ -25,6 +25,7 @@ workflow SVConcordance {
     String sv_base_mini_docker
 
     Float? java_mem_fraction
+    String? additional_args
 
     RuntimeAttr? runtime_attr_sv_concordance
     RuntimeAttr? runtime_override_concat_shards
@@ -43,6 +44,7 @@ workflow SVConcordance {
         track_names=track_names,
         track_intervals=track_intervals,
         reference_dict=reference_dict,
+        additional_args=additional_args,
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_sv_concordance
