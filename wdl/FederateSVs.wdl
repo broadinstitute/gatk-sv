@@ -177,7 +177,7 @@ task SplitComplexIntervals {
     set -euo pipefail
     python ~{default="/opt/sv-pipeline/scripts/split_cpx_intervals.py" script} \
       --vcf ~{vcf} \
-      --output ~{prefix}.splitcpx.vcf.gz
+      --out ~{prefix}.splitcpx.vcf.gz
 
     bcftools sort ~{prefix}.splitcpx.vcf.gz -O z -o ~{prefix}.splitcpx.sorted.vcf.gz
     tabix ~{prefix}.splitcpx.sorted.vcf.gz
@@ -223,11 +223,11 @@ task ScoreMatches {
   command <<<
     set -euo pipefail
     python ~{default="/opt/sv-pipeline/scripts/score_sv_matches.py" script} \
-      --match-atob ~{match_vcf_atob} \
-      --match-btoa ~{match_vcf_btoa} \
-      --match-atob-cpx ~{match_vcf_atob_cpx} \
-      --match-btoa-cpx ~{match_vcf_btoa_cpx} \
-      --output ~{prefix}.scores.tsv
+      --a-to-b ~{match_vcf_atob} \
+      --b-to-a ~{match_vcf_btoa} \
+      --a-to-b-cpx ~{match_vcf_atob_cpx} \
+      --b-to-a-cpx ~{match_vcf_btoa_cpx} \
+      --out ~{prefix}.scores.tsv
   >>>
 
   runtime {
