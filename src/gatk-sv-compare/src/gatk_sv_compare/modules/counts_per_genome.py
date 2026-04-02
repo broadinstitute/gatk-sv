@@ -6,13 +6,14 @@ from pathlib import Path
 from typing import Dict
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pysam
 
 from ..config import AnalysisConfig
 from ..dimensions import normalize_svtype
 from ..vcf_format import filter_values
-from .base import AnalysisModule
+from .base import AnalysisModule, write_tsv_gz
 
 
 def collect_per_sample_counts(vcf_path: Path, pass_only: bool = False) -> pd.DataFrame:
@@ -52,6 +53,53 @@ def collect_per_sample_counts(vcf_path: Path, pass_only: bool = False) -> pd.Dat
         return pd.DataFrame(rows)
 
 
+def _plot_side_by_side_boxplots(
+    counts_a: pd.DataFrame,
+    counts_b: pd.DataFrame,
+    value_column: str,
+    output_path: Path,
+    y_label: str,
+    label_a: str,
+    label_b: str,
+) -> None:
+    svtypes = sorted(set(counts_a["svtype"]).union(set(counts_b["svtype"])))
+    fig, ax = plt.subplots(figsize=(max(8, 1.4 * len(svtypes)), 5))
+    if not svtypes:
+        ax.text(0.5, 0.5, "No sample counts", ha="center", va="center")
+        ax.set_axis_off()
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        return
+    width = 0.32
+    base_positions = np.arange(len(svtypes), dtype=float)
+    box_data = []
+    positions = []
+    colors = []
+    for index, svtype in enumerate(svtypes):
+        values_a = counts_a.loc[counts_a["svtype"] == svtype, value_column].to_numpy(dtype=float)
+        values_b = counts_b.loc[counts_b["svtype"] == svtype, value_column].to_numpy(dtype=float)
+        box_data.extend([values_a if values_a.size else np.array([np.nan]), values_b if values_b.size else np.array([np.nan])])
+        positions.extend([base_positions[index] - width / 2, base_positions[index] + width / 2])
+        colors.extend(["#4C72B0", "#DD8452"])
+    boxplot = ax.boxplot(box_data, positions=positions, widths=width * 0.85, patch_artist=True, manage_ticks=False)
+    for patch, color in zip(boxplot["boxes"], colors):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.75)
+    ax.set_xticks(base_positions)
+    ax.set_xticklabels(svtypes)
+    ax.set_ylabel(y_label)
+    ax.set_xlabel("SV type")
+    ax.legend(
+        handles=[
+            plt.Line2D([0], [0], color="#4C72B0", lw=8, label=label_a),
+            plt.Line2D([0], [0], color="#DD8452", lw=8, label=label_b),
+        ],
+        fontsize=8,
+    )
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+
 class CountsPerGenomeModule(AnalysisModule):
     @property
     def name(self) -> str:
@@ -66,27 +114,32 @@ class CountsPerGenomeModule(AnalysisModule):
         output_dir = self.output_dir(config)
         tables_dir = output_dir / "tables"
         tables_dir.mkdir(parents=True, exist_ok=True)
+        counts_by_label: Dict[str, pd.DataFrame] = {}
         for label, vcf_path in ((config.vcf_a_label, config.vcf_a_path), (config.vcf_b_label, config.vcf_b_path)):
             if vcf_path is None:
                 continue
             counts = collect_per_sample_counts(vcf_path, pass_only=config.pass_only)
-            counts.to_csv(tables_dir / f"per_sample_counts.{label}.tsv", sep="\t", index=False)
-            if counts.empty:
-                continue
-            site_matrix = [group["sites"].values for _, group in counts.groupby("svtype")]
-            allele_matrix = [group["alleles"].values for _, group in counts.groupby("svtype")]
-            labels = list(counts.groupby("svtype").groups.keys())
+            counts_by_label[label] = counts
+            if config.per_sample_counts_table:
+                write_tsv_gz(counts, tables_dir / f"per_sample_counts.{label}.tsv")
 
-            fig, ax = plt.subplots(figsize=(8, 4))
-            ax.boxplot(site_matrix, tick_labels=labels)
-            ax.set_ylabel("Sites per sample")
-            ax.set_title(f"Sites per genome by type: {label}")
-            fig.savefig(output_dir / f"sites_per_genome.by_type.{label}.png", dpi=300, bbox_inches="tight")
-            plt.close(fig)
-
-            fig, ax = plt.subplots(figsize=(8, 4))
-            ax.boxplot(allele_matrix, tick_labels=labels)
-            ax.set_ylabel("Alleles per sample")
-            ax.set_title(f"Alleles per genome by type: {label}")
-            fig.savefig(output_dir / f"alleles_per_genome.by_type.{label}.png", dpi=300, bbox_inches="tight")
-            plt.close(fig)
+        counts_a = counts_by_label.get(config.vcf_a_label, pd.DataFrame(columns=["sample", "svtype", "sites", "alleles"]))
+        counts_b = counts_by_label.get(config.vcf_b_label, pd.DataFrame(columns=["sample", "svtype", "sites", "alleles"]))
+        _plot_side_by_side_boxplots(
+            counts_a,
+            counts_b,
+            "sites",
+            output_dir / "sites_per_genome.by_type.png",
+            "Sites per sample",
+            config.vcf_a_label,
+            config.vcf_b_label,
+        )
+        _plot_side_by_side_boxplots(
+            counts_a,
+            counts_b,
+            "alleles",
+            output_dir / "alleles_per_genome.by_type.png",
+            "Alleles per sample",
+            config.vcf_a_label,
+            config.vcf_b_label,
+        )

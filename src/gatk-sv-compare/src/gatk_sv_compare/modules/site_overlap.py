@@ -10,9 +10,8 @@ import pandas as pd
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import STATUS_MATCHED
 from ..plot_utils import OVERLAP_COLORS, plot_heatmap_annotated, save_figure
-from .base import AnalysisModule
+from .base import AnalysisModule, matched_site_mask, relabel_vcf_columns, write_tsv_gz
 
 
 def _filtered_sites(sites: pd.DataFrame, pass_only: bool) -> pd.DataFrame:
@@ -22,10 +21,12 @@ def _filtered_sites(sites: pd.DataFrame, pass_only: bool) -> pd.DataFrame:
 
 
 def _overlap_metrics(sites: pd.DataFrame, suffix: str) -> pd.DataFrame:
+    matched = matched_site_mask(sites)
+    annotated = sites.assign(_matched=matched.astype(int))
     grouped = sites.groupby(["svtype", "size_bucket", "af_bucket", "genomic_context"], dropna=False)
     metrics = grouped.agg(
         **{f"n_total_{suffix}": ("variant_id", "count")},
-        **{f"n_matched_{suffix}": ("status", lambda values: int((values == STATUS_MATCHED).sum()))},
+        **{f"n_matched_{suffix}": ("variant_id", lambda ids: int(annotated.loc[ids.index, "_matched"].sum()))},
     ).reset_index()
     metrics[f"pct_matched_{suffix}"] = np.where(
         metrics[f"n_total_{suffix}"] > 0,
@@ -42,14 +43,16 @@ def build_overlap_metrics(sites_a: pd.DataFrame, sites_b: pd.DataFrame, pass_onl
 
 
 def _plot_overlap_bar(sites: pd.DataFrame, field: str, output_path: Path) -> None:
-    grouped = sites.groupby(field, dropna=False).agg(
-        matched=("status", lambda values: int((values == STATUS_MATCHED).sum())),
-        total=("variant_id", "count"),
-    )
+    matched = matched_site_mask(sites)
+    grouped = sites.assign(_matched=matched.astype(int)).groupby(field, dropna=False).agg(matched=("_matched", "sum"), total=("variant_id", "count"))
     unmatched = grouped["total"] - grouped["matched"]
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.bar(grouped.index.astype(str), grouped["matched"], color=OVERLAP_COLORS["matched"], label="matched")
-    ax.bar(grouped.index.astype(str), unmatched, bottom=grouped["matched"], color=OVERLAP_COLORS["unmatched"], label="unmatched")
+    x_labels = grouped.index.astype(str)
+    ax.bar(x_labels, grouped["matched"], color=OVERLAP_COLORS["matched"], label="matched", edgecolor="#E5E5E5", linewidth=0.8)
+    ax.bar(x_labels, unmatched, bottom=grouped["matched"], color=OVERLAP_COLORS["unmatched"], label="unmatched", edgecolor="#E5E5E5", linewidth=0.8)
+    for idx, (matched_count, total_count) in enumerate(zip(grouped["matched"], grouped["total"])):
+        pct = 100.0 * matched_count / total_count if total_count else 0.0
+        ax.text(idx, total_count + max(total_count * 0.02, 0.1), f"{pct:.1f}%", ha="center", va="bottom", fontsize=8)
     ax.set_ylabel("Variant count")
     ax.legend(fontsize=8)
     ax.set_title(f"Overlap by {field}")
@@ -57,10 +60,8 @@ def _plot_overlap_bar(sites: pd.DataFrame, field: str, output_path: Path) -> Non
 
 
 def _plot_heatmap(sites: pd.DataFrame, row_field: str, col_field: str, output_path: Path) -> None:
-    grouped = sites.groupby([row_field, col_field], dropna=False).agg(
-        matched=("status", lambda values: int((values == STATUS_MATCHED).sum())),
-        total=("variant_id", "count"),
-    ).reset_index()
+    matched = matched_site_mask(sites)
+    grouped = sites.assign(_matched=matched.astype(int)).groupby([row_field, col_field], dropna=False).agg(matched=("_matched", "sum"), total=("variant_id", "count")).reset_index()
     grouped["pct"] = np.where(grouped["total"] > 0, grouped["matched"] / grouped["total"], 0.0)
     matrix = grouped.pivot(index=row_field, columns=col_field, values="pct").fillna(0.0)
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -83,8 +84,8 @@ class SiteOverlapModule(AnalysisModule):
         output_dir = self.output_dir(config)
         tables_dir = output_dir / "tables"
         tables_dir.mkdir(parents=True, exist_ok=True)
-        metrics = build_overlap_metrics(data.sites_a, data.sites_b, pass_only=config.pass_only)
-        metrics.to_csv(tables_dir / "overlap_metrics.tsv", sep="\t", index=False)
+        metrics = relabel_vcf_columns(build_overlap_metrics(data.sites_a, data.sites_b, pass_only=config.pass_only), data.label_a, data.label_b)
+        write_tsv_gz(metrics, tables_dir / "overlap_metrics.tsv")
         metrics.to_parquet(tables_dir / "overlap_metrics.parquet", index=False)
 
         for label, sites in ((data.label_a, data.sites_a), (data.label_b, data.sites_b)):

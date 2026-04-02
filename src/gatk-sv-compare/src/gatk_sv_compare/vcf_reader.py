@@ -12,6 +12,17 @@ import pysam
 from .dimensions import GENOMIC_CONTEXTS, normalize_svtype
 from .vcf_format import filter_values, has_precomputed_counts
 
+_GENOMIC_CONTEXT_ALIASES = {
+    "segdup": ("segdup", "SEG_DUP", "SEGDUP", "segmental_duplication", "segmentalduplication"),
+    "simple_repeat": ("simple_repeat", "SIMPLE_REPEAT", "simplerepeat", "tandem_repeat", "trf"),
+    "repeatmasker": ("repeatmasker", "REPEATMASKER", "repeat_masker", "rmsk"),
+}
+_GENOMIC_CONTEXT_SUBSTRINGS = {
+    "segdup": ("segdup", "segdup", "segmentaldup", "seg_dup"),
+    "simple_repeat": ("simplerepeat", "simple_repeat", "tandemrepeat", "trf"),
+    "repeatmasker": ("repeatmasker", "repeat_masker", "rmsk"),
+}
+
 _CONCORDANCE_FIELDS = (
     "VAR_SENSITIVITY",
     "VAR_PPV",
@@ -148,13 +159,21 @@ def _extract_concordance_metrics(record: pysam.VariantRecord) -> Optional[Dict[s
 
 
 def _genomic_context(record: pysam.VariantRecord) -> str:
+    available_keys = {str(key).lower().replace("_", "").replace("-", ""): str(key) for key in record.info.keys()}
     for context in GENOMIC_CONTEXTS:
         if context == "none":
             continue
-        value = _info_value(record, context)
-        if value in (None, False, 0, "."):
-            continue
-        return context
+        for alias in _GENOMIC_CONTEXT_ALIASES.get(context, (context,)):
+            key = available_keys.get(alias.lower().replace("_", "").replace("-", ""), alias)
+            value = _info_value(record, key)
+            if value in (None, False, 0, "."):
+                continue
+            return context
+        for normalized_key, raw_key in available_keys.items():
+            if any(fragment in normalized_key for fragment in _GENOMIC_CONTEXT_SUBSTRINGS.get(context, ())):
+                value = _info_value(record, raw_key)
+                if value not in (None, False, 0, "."):
+                    return context
     return "none"
 
 

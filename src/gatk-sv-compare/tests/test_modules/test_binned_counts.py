@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from gatk_sv_compare.modules.binned_counts import BinnedCountsModule, summarize_binned_counts
+from gatk_sv_compare.modules.binned_counts import BinnedCountsModule, build_combined_binned_counts, summarize_binned_counts
 
 
 def test_summarize_binned_counts_respects_pass_view(module_test_context) -> None:
@@ -22,9 +22,14 @@ def test_binned_counts_module_writes_outputs(module_test_context) -> None:
     module.run(module_test_context.data, module_test_context.config)
 
     output_dir = module_test_context.config.output_dir / "binned_counts"
-    counts_a = pd.read_csv(output_dir / "counts_a.tsv", sep="\t")
-    counts_b = pd.read_csv(output_dir / "counts_b.tsv", sep="\t")
-    assert (output_dir / "counts_a.parquet").exists()
-    assert (output_dir / "counts_b.parquet").exists()
-    assert not counts_a.empty
-    assert not counts_b.empty
+    counts = pd.read_csv(output_dir / "counts.tsv.gz", sep="\t")
+    assert (output_dir / "counts.parquet").exists()
+    assert not counts.empty
+    assert {"n_variants_CallsetA", "n_matched_CallsetA", "n_unmatched_CallsetA", "n_variants_CallsetB", "n_matched_CallsetB", "n_unmatched_CallsetB"}.issubset(counts.columns)
+
+
+def test_build_combined_binned_counts_merges_both_callsets(module_test_context) -> None:
+    counts = build_combined_binned_counts(module_test_context.data.sites_a, module_test_context.data.sites_b, "CallsetA", "CallsetB")
+
+    assert not counts.empty
+    assert int(counts["n_variants_CallsetA"].sum()) == len(module_test_context.data.sites_a)

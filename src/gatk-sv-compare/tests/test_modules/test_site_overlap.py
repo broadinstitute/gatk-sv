@@ -21,7 +21,7 @@ def test_site_overlap_module_writes_tables_and_plots(module_test_context) -> Non
     module.run(module_test_context.data, module_test_context.config)
 
     output_dir = module_test_context.config.output_dir / "site_overlap"
-    table = pd.read_csv(output_dir / "tables" / "overlap_metrics.tsv", sep="\t")
+    table = pd.read_csv(output_dir / "tables" / "overlap_metrics.tsv.gz", sep="\t")
     assert not table.empty
     assert (output_dir / "tables" / "overlap_metrics.parquet").exists()
     assert (output_dir / "overlap.by_class.CallsetA.png").exists()

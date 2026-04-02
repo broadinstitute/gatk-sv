@@ -4,6 +4,7 @@ import os
 from types import SimpleNamespace
 
 import pandas as pd
+import pysam
 import pytest
 
 from gatk_sv_compare.cli import AnalysisConfig, build_parser, main
@@ -27,6 +28,79 @@ def test_cli_validate_returns_zero_for_clean_vcf(make_vcf, capsys) -> None:
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "VCF:" in out
+
+
+def test_cli_validate_fix_writes_output(make_vcf, tmp_path, capsys) -> None:
+    vcf_path = make_vcf(
+        file_name="fixable.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=-25;END=150\tGT:GQ:ECN\t0/1:120:2\t0/0:50:2",
+        ],
+    )
+    out_path = tmp_path / "fixed.vcf"
+
+    exit_code = main(["validate", "--vcf", str(vcf_path), "--fix", "--out", str(out_path)])
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "Wrote fixed VCF:" in out
+    assert out_path.exists()
+
+
+def test_cli_validate_fix_writes_bgzip_output_and_index(make_vcf, tmp_path, capsys) -> None:
+    vcf_path = make_vcf(
+        file_name="fixable_bgzip.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=-25;END=150\tGT:GQ:ECN\t0/1:120:2\t0/0:50:2",
+        ],
+    )
+    out_path = tmp_path / "fixed.vcf.gz"
+
+    exit_code = main(["validate", "--vcf", str(vcf_path), "--fix", "--out", str(out_path)])
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "Wrote fixed VCF:" in out
+    assert out_path.exists()
+    assert (tmp_path / "fixed.vcf.gz.tbi").exists()
+
+
+def test_cli_validate_fix_defaults_output_path_for_vcf(make_vcf, capsys) -> None:
+    vcf_path = make_vcf(
+        file_name="autofix.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=-25;END=150\tGT:GQ:ECN\t0/1:120:2\t0/0:50:2",
+        ],
+    )
+    expected_out = vcf_path.with_name("autofix.fixed.vcf")
+
+    exit_code = main(["validate", "--vcf", str(vcf_path), "--fix"])
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert f"Wrote fixed VCF: {expected_out}" in out
+    assert expected_out.exists()
+
+
+def test_cli_validate_fix_defaults_output_path_for_vcfgz(make_vcf, capsys) -> None:
+    vcf_path = make_vcf(
+        file_name="autofix_source.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=-25;END=150\tGT:GQ:ECN\t0/1:120:2\t0/0:50:2",
+        ],
+    )
+    gz_path = vcf_path.with_suffix(".vcf.gz")
+    pysam.tabix_compress(str(vcf_path), str(gz_path), force=True)
+    vcf_path.unlink()
+    expected_out = gz_path.with_name("autofix_source.fixed.vcf.gz")
+
+    exit_code = main(["validate", "--vcf", str(gz_path), "--fix"])
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert f"Wrote fixed VCF: {expected_out}" in out
+    assert expected_out.exists()
+    assert expected_out.with_name(expected_out.name + ".tbi").exists()
 
 
 def test_cli_preprocess_builds_config(tmp_path, monkeypatch, capsys) -> None:
@@ -192,6 +266,8 @@ def test_cli_analyze_runs_selected_modules_and_skips_unmet_requirements(make_vcf
         "--output-dir",
         str(tmp_path / "out"),
         "--pass-only",
+        "--enable-site-match-table",
+        "--per-sample-counts-table",
     ])
 
     captured_io = capsys.readouterr()
@@ -208,6 +284,8 @@ def test_cli_analyze_runs_selected_modules_and_skips_unmet_requirements(make_vcf
     assert captured["config"].modules == ["demo", "shared_demo", "ped_demo"]
     assert captured["config"].contigs == ["chr1"]
     assert captured["config"].pass_only is True
+    assert captured["config"].enable_site_match_table is True
+    assert captured["config"].per_sample_counts_table is True
 
 
 def test_cli_analyze_rejects_unknown_modules(make_vcf, tmp_path) -> None:

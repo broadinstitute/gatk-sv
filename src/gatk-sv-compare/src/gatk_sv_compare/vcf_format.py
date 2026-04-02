@@ -95,6 +95,21 @@ def detect_pipeline_stage(vcf: pysam.VariantFile) -> PipelineStage:
     return PipelineStage.UNKNOWN
 
 
+def check_header(vcf: pysam.VariantFile) -> List[FormatIssue]:
+    """Inspect VCF header-level format issues."""
+    issues: list[FormatIssue] = []
+    if "SVLEN" in vcf.header.info and vcf.header.info["SVLEN"].number != 1:
+        issues.append(
+            FormatIssue(
+                "SVLEN_NUMBER_DOT",
+                "WARN",
+                "",
+                "SVLEN header Number is not 1",
+            )
+        )
+    return issues
+
+
 def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = None) -> List[FormatIssue]:
     """Inspect a single record and return any format issues."""
     issues: list[FormatIssue] = []
@@ -143,6 +158,12 @@ def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = Non
         issues.append(FormatIssue("MISSING_GT", "ERROR", record_id, "GT FORMAT field is missing"))
     if "ECN" not in record.format:
         issues.append(FormatIssue("MISSING_ECN", "WARN", record_id, "ECN FORMAT field is missing"))
+    if "GQ" in record.format:
+        for sample in record.samples.values():
+            gq = sample.get("GQ")
+            if gq not in (None, ".") and int(gq) > 99:
+                issues.append(FormatIssue("GQ_RANGE", "WARN", record_id, "GQ exceeds expected 0-99 range"))
+                break
     if not filters:
         issues.append(FormatIssue("EMPTY_FILTER", "WARN", record_id, "FILTER is empty"))
     if "CHR2" in record.info and svtype_text not in {"BND", "CTX"}:

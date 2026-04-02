@@ -12,7 +12,7 @@ import pysam
 from ..config import AnalysisConfig
 from ..dimensions import normalize_svtype
 from ..vcf_format import filter_values
-from .base import AnalysisModule
+from .base import AnalysisModule, write_tsv_gz
 
 
 def _iter_alt_gq_rows(vcf_path: Path, pass_only: bool) -> List[dict]:
@@ -72,7 +72,7 @@ class GenotypeQualityModule(AnalysisModule):
             if vcf_path is None:
                 continue
             summary = summarize_gq(vcf_path, pass_only=config.pass_only)
-            summary.to_csv(tables_dir / f"gq_summary.{label}.tsv", sep="\t", index=False)
+            write_tsv_gz(summary, tables_dir / f"gq_summary.{label}.tsv")
 
             rows = _iter_alt_gq_rows(vcf_path, config.pass_only)
             fig, ax = plt.subplots(figsize=(6, 4))

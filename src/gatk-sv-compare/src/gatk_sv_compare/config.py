@@ -13,8 +13,8 @@ class AnalysisConfig:
 
     vcf_a_path: Optional[Path] = None
     vcf_b_path: Optional[Path] = None
-    vcf_a_label: str = "VCF A"
-    vcf_b_label: str = "VCF B"
+    vcf_a_label: str = "VCF_A"
+    vcf_b_label: str = "VCF_B"
     output_dir: Path = Path(".")
     reference_dict: Optional[Path] = None
     contigs: List[str] = field(default_factory=list)
@@ -23,6 +23,8 @@ class AnalysisConfig:
     modules: Optional[List[str]] = None
     pass_only: bool = False
     per_chrom: bool = False
+    enable_site_match_table: bool = False
+    per_sample_counts_table: bool = False
     ped_file: Optional[Path] = None
     seg_dup_track: Optional[Path] = None
     simple_repeat_track: Optional[Path] = None
@@ -39,3 +41,5 @@ class ValidateConfig:
 
     vcf_path: Path
     max_records_for_gq_scan: int = 10000
+    fix: bool = False
+    out_path: Optional[Path] = None

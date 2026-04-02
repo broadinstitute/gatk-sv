@@ -14,15 +14,18 @@ def test_extract_concordance_rows_reads_available_info_metrics(module_test_conte
         module_test_context.config.vcf_a_path,
         module_test_context.data.sites_a,
         module_test_context.data.label_a,
+        "a",
     )
 
     assert not rows.empty
     assert "var_ppv" in rows.columns
     assert set(rows["label"]) == {"CallsetA"}
+    assert set(rows["source"]) == {"a"}
 
     summary = summarize_concordance_metrics(rows)
     assert not summary.empty
     assert "var_ppv" in set(summary["metric"])
+    assert "mean_value_a" in summary.columns
 
 
 def test_genotype_concordance_module_writes_outputs(module_test_context) -> None:
@@ -31,7 +34,7 @@ def test_genotype_concordance_module_writes_outputs(module_test_context) -> None
     module.run(module_test_context.data, module_test_context.config)
 
     output_dir = module_test_context.config.output_dir / "genotype_concordance"
-    table = pd.read_csv(output_dir / "tables" / "concordance_metrics.tsv", sep="\t")
+    table = pd.read_csv(output_dir / "tables" / "concordance_metrics.tsv.gz", sep="\t")
     assert not table.empty
-    assert (output_dir / "var_ppv.by_type.CallsetA.png").exists()
-    assert (output_dir / "genotype_concordance.by_type.CallsetB.png").exists()
+    assert (output_dir / "concordance_metrics.by_type.png").exists()
+    assert {"n_sites_CallsetA", "mean_value_CallsetA", "median_value_CallsetA", "n_sites_CallsetB", "mean_value_CallsetB", "median_value_CallsetB"}.issubset(table.columns)

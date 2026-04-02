@@ -14,7 +14,7 @@ import pysam
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
 from ..plot_utils import save_figure
-from .base import AnalysisModule
+from .base import AnalysisModule, relabel_vcf_columns, write_tsv_gz
 
 
 _GT_LABELS = {0: "hom_ref", 1: "het", 2: "hom_alt"}
@@ -68,13 +68,16 @@ def _extract_genotype_vectors(
 
 def build_exact_match_table(data: AggregatedData, config: AnalysisConfig) -> pd.DataFrame:
     columns = [
-        "pair_id",
         "variant_id_a",
         "variant_id_b",
-        "svtype",
-        "size_bucket",
-        "af_bucket",
-        "genomic_context",
+        "svtype_a",
+        "size_bucket_a",
+        "af_bucket_a",
+        "genomic_context_a",
+        "svtype_b",
+        "size_bucket_b",
+        "af_bucket_b",
+        "genomic_context_b",
         "n_compared",
         "exact_match_rate",
         "homref_to_het_rate",
@@ -90,7 +93,8 @@ def build_exact_match_table(data: AggregatedData, config: AnalysisConfig) -> pd.
     target_ids_a: Dict[str, set[str]] = defaultdict(set)
     target_ids_b: Dict[str, set[str]] = defaultdict(set)
     svtype_by_vid: Dict[str, str] = {}
-    site_meta = data.sites_a.set_index("variant_id")[["svtype", "size_bucket", "af_bucket", "genomic_context"]]
+    site_meta_a = data.sites_a.set_index("variant_id")[["svtype", "size_bucket", "af_bucket", "genomic_context"]]
+    site_meta_b = data.sites_b.set_index("variant_id")[["svtype", "size_bucket", "af_bucket", "genomic_context"]]
     for row in data.matched_pairs.itertuples(index=False):
         target_ids_a[str(row.contig_a)].add(str(row.variant_id_a))
         target_ids_b[str(row.contig_b)].add(str(row.variant_id_b))
@@ -112,16 +116,20 @@ def build_exact_match_table(data: AggregatedData, config: AnalysisConfig) -> pd.
             continue
         left = vector_a[valid].astype(int)
         right = vector_b[valid].astype(int)
-        meta = site_meta.loc[str(row.variant_id_a)]
+        meta_a = site_meta_a.loc[str(row.variant_id_a)]
+        meta_b = site_meta_b.loc[str(row.variant_id_b)]
         rows.append(
             {
-                "pair_id": row.pair_id,
                 "variant_id_a": row.variant_id_a,
                 "variant_id_b": row.variant_id_b,
-                "svtype": meta["svtype"],
-                "size_bucket": meta["size_bucket"],
-                "af_bucket": meta["af_bucket"],
-                "genomic_context": meta["genomic_context"],
+                "svtype_a": meta_a["svtype"],
+                "size_bucket_a": meta_a["size_bucket"],
+                "af_bucket_a": meta_a["af_bucket"],
+                "genomic_context_a": meta_a["genomic_context"],
+                "svtype_b": meta_b["svtype"],
+                "size_bucket_b": meta_b["size_bucket"],
+                "af_bucket_b": meta_b["af_bucket"],
+                "genomic_context_b": meta_b["genomic_context"],
                 "n_compared": n_compared,
                 "exact_match_rate": float((left == right).mean()),
                 "homref_to_het_rate": float(((left == 0) & (right == 1)).mean()),
@@ -137,10 +145,14 @@ def build_exact_match_table(data: AggregatedData, config: AnalysisConfig) -> pd.
 
 def summarize_exact_match(per_site: pd.DataFrame) -> pd.DataFrame:
     columns = [
-        "svtype",
-        "size_bucket",
-        "af_bucket",
-        "genomic_context",
+        "svtype_a",
+        "size_bucket_a",
+        "af_bucket_a",
+        "genomic_context_a",
+        "svtype_b",
+        "size_bucket_b",
+        "af_bucket_b",
+        "genomic_context_b",
         "n_sites",
         "mean_exact_match_rate",
         "median_exact_match_rate",
@@ -153,8 +165,8 @@ def summarize_exact_match(per_site: pd.DataFrame) -> pd.DataFrame:
     ]
     if per_site.empty:
         return pd.DataFrame(columns=columns)
-    summary = per_site.groupby(["svtype", "size_bucket", "af_bucket", "genomic_context"], dropna=False).agg(
-        n_sites=("pair_id", "count"),
+    summary = per_site.groupby(["svtype_a", "size_bucket_a", "af_bucket_a", "genomic_context_a", "svtype_b", "size_bucket_b", "af_bucket_b", "genomic_context_b"], dropna=False).agg(
+        n_sites=("variant_id_a", "count"),
         mean_exact_match_rate=("exact_match_rate", "mean"),
         median_exact_match_rate=("exact_match_rate", "median"),
         mean_homref_to_het_rate=("homref_to_het_rate", "mean"),
@@ -204,10 +216,13 @@ class GenotypeExactMatchModule(AnalysisModule):
 
         per_site = build_exact_match_table(data, config)
         summary = summarize_exact_match(per_site)
-        per_site.to_csv(tables_dir / "genotype_match_rates.per_site.tsv", sep="\t", index=False)
-        summary.to_csv(tables_dir / "genotype_match_rates.tsv", sep="\t", index=False)
+        per_site_output = relabel_vcf_columns(per_site, data.label_a, data.label_b)
+        summary_output = relabel_vcf_columns(summary, data.label_a, data.label_b)
+        if config.enable_site_match_table:
+            write_tsv_gz(per_site_output, tables_dir / "genotype_match_rates.per_site.tsv")
+        write_tsv_gz(summary_output, tables_dir / "genotype_match_rates.tsv")
 
-        _plot_grouped_metric(per_site, "svtype", "exact_match_rate", output_dir / "exact_match.by_type.png")
-        _plot_grouped_metric(per_site, "size_bucket", "exact_match_rate", output_dir / "exact_match.by_size.png")
-        _plot_grouped_metric(per_site, "af_bucket", "exact_match_rate", output_dir / "exact_match.by_af.png")
-        _plot_grouped_metric(per_site, "genomic_context", "exact_match_rate", output_dir / "exact_match.by_context.png")
+        _plot_grouped_metric(per_site.rename(columns={"svtype_a": "svtype"}), "svtype", "exact_match_rate", output_dir / "exact_match.by_type.png")
+        _plot_grouped_metric(per_site.rename(columns={"size_bucket_a": "size_bucket"}), "size_bucket", "exact_match_rate", output_dir / "exact_match.by_size.png")
+        _plot_grouped_metric(per_site.rename(columns={"af_bucket_a": "af_bucket"}), "af_bucket", "exact_match_rate", output_dir / "exact_match.by_af.png")
+        _plot_grouped_metric(per_site.rename(columns={"genomic_context_a": "genomic_context"}), "genomic_context", "exact_match_rate", output_dir / "exact_match.by_context.png")

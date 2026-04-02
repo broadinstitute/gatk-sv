@@ -20,8 +20,8 @@ def test_genotype_quality_module_writes_outputs(module_test_context) -> None:
     module.run(module_test_context.data, module_test_context.config)
 
     output_dir = module_test_context.config.output_dir / "genotype_quality"
-    summary_a = pd.read_csv(output_dir / "tables" / "gq_summary.CallsetA.tsv", sep="\t")
-    summary_b = pd.read_csv(output_dir / "tables" / "gq_summary.CallsetB.tsv", sep="\t")
+    summary_a = pd.read_csv(output_dir / "tables" / "gq_summary.CallsetA.tsv.gz", sep="\t")
+    summary_b = pd.read_csv(output_dir / "tables" / "gq_summary.CallsetB.tsv.gz", sep="\t")
     assert not summary_a.empty
     assert not summary_b.empty
     assert (output_dir / "gq_histogram.overall.CallsetA.png").exists()

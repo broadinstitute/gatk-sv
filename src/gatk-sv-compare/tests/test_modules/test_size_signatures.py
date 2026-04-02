@@ -27,11 +27,10 @@ def test_size_signatures_module_writes_outputs(module_test_context) -> None:
     module.run(module_test_context.data, module_test_context.config)
 
     output_dir = module_test_context.config.output_dir / "size_signatures"
-    peaks = pd.read_csv(output_dir / "tables" / "retrotransposon_peaks.tsv", sep="\t")
-    ks_table = pd.read_csv(output_dir / "tables" / "size_distribution_comparison.tsv", sep="\t")
+    peaks = pd.read_csv(output_dir / "tables" / "retrotransposon_peaks.tsv.gz", sep="\t")
     assert set(peaks["label"]) == {"CallsetA", "CallsetB"}
-    assert ks_table.loc[0, "svtype"] == "INS+INS:MEI"
-    assert (output_dir / "tables" / "implausible_variants.CallsetA.tsv").exists()
-    assert (output_dir / "tables" / "mei_subtype_summary.CallsetB.tsv").exists()
+    assert (output_dir / "tables" / "implausible_variants.CallsetA.tsv.gz").exists()
+    assert (output_dir / "tables" / "mei_subtype_summary.CallsetB.tsv.gz").exists()
+    assert not (output_dir / "tables" / "size_distribution_comparison.tsv.gz").exists()
     assert (output_dir / "retrotransposon_peaks.CallsetA.png").exists()
     assert (output_dir / "ins_size_overlay.png").exists()

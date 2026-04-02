@@ -74,8 +74,8 @@ def test_family_analysis_module_computes_expected_denovo_rate(tmp_path, make_vcf
     module.run(data, config)
 
     output_dir = config.output_dir / "family_analysis"
-    inheritance_table = pd.read_csv(output_dir / "tables" / "inheritance_stats.trios.tsv", sep="\t")
-    by_class = pd.read_csv(output_dir / "tables" / "denovo_rate_by_class.tsv", sep="\t")
+    inheritance_table = pd.read_csv(output_dir / "tables" / "inheritance_stats.trios.tsv.gz", sep="\t")
+    by_class = pd.read_csv(output_dir / "tables" / "denovo_rate_by_class.tsv.gz", sep="\t")
     assert not inheritance_table.empty
     assert not by_class.empty
     assert (output_dir / "inheritance.trios.all_sv.png").exists()

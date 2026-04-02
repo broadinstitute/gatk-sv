@@ -14,7 +14,7 @@ from .aggregate import aggregate
 from .config import AnalysisConfig
 from .modules import ALL_MODULES, AnalysisModule
 from .preprocess import parse_reference_dict, read_contig_list, run_preprocess
-from .validate import validate_and_render
+from .validate import fix_and_render, validate_and_render
 
 
 def _configure_logging() -> None:
@@ -26,6 +26,14 @@ def _resolve_num_workers(requested_workers: Optional[int], contig_count: int) ->
     if requested_workers is None:
         return max(1, min(contig_count, cpu_count, 4))
     return max(1, min(requested_workers, contig_count))
+
+
+def _default_fix_output_path(vcf_path: Path) -> Path:
+    if vcf_path.name.endswith(".vcf.gz"):
+        return vcf_path.with_name(vcf_path.name[:-7] + ".fixed.vcf.gz")
+    if vcf_path.suffix == ".vcf":
+        return vcf_path.with_name(vcf_path.stem + ".fixed.vcf")
+    return vcf_path.with_name(vcf_path.name + ".fixed.vcf")
 
 
 def _parse_module_names(raw_value: Optional[str]) -> Optional[List[str]]:
@@ -81,6 +89,8 @@ def _build_analysis_config(
     module_names: Optional[List[str]],
     pass_only: bool,
     per_chrom: bool,
+    enable_site_match_table: bool,
+    per_sample_counts_table: bool,
     ped_file: Optional[Path],
     requested_workers: Optional[int],
     contigs: Optional[List[str]] = None,
@@ -103,6 +113,8 @@ def _build_analysis_config(
         modules=module_names,
         pass_only=pass_only,
         per_chrom=per_chrom,
+        enable_site_match_table=enable_site_match_table,
+        per_sample_counts_table=per_sample_counts_table,
         ped_file=ped_file,
     )
 
@@ -165,6 +177,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate_parser = subparsers.add_parser("validate", help="Check VCF format")
     validate_parser.add_argument("--vcf", required=True, type=Path, help="Path to the input VCF")
+    validate_parser.add_argument("--fix", action="store_true", help="Write an automatically corrected VCF when only fixable issues are present")
+    validate_parser.add_argument("--out", type=Path, help="Output VCF path for --fix mode")
     validate_parser.set_defaults(handler=_handle_validate)
 
     preprocess_parser = subparsers.add_parser("preprocess", help="Run SVConcordance + SVRegionOverlap")
@@ -189,12 +203,14 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser = subparsers.add_parser("analyze", help="Run analysis modules on preprocessed VCFs")
     analyze_parser.add_argument("--vcf-a", required=True, type=Path)
     analyze_parser.add_argument("--vcf-b", required=True, type=Path)
-    analyze_parser.add_argument("--label-a", default="VCF A")
-    analyze_parser.add_argument("--label-b", default="VCF B")
+    analyze_parser.add_argument("--label-a", default="VCF_A")
+    analyze_parser.add_argument("--label-b", default="VCF_B")
     analyze_parser.add_argument("--output-dir", required=True, type=Path)
     analyze_parser.add_argument("--modules", help="Comma-separated module list to run")
     analyze_parser.add_argument("--pass-only", action="store_true")
     analyze_parser.add_argument("--per-chrom", action="store_true")
+    analyze_parser.add_argument("--enable-site-match-table", action="store_true")
+    analyze_parser.add_argument("--per-sample-counts-table", action="store_true")
     analyze_parser.add_argument("--ped", dest="ped_file", type=Path)
     analyze_parser.add_argument(
         "--num-workers",
@@ -207,8 +223,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run", help="Run preprocess + analyze end-to-end")
     run_parser.add_argument("--vcf-a", required=True, type=Path)
     run_parser.add_argument("--vcf-b", required=True, type=Path)
-    run_parser.add_argument("--label-a", default="VCF A")
-    run_parser.add_argument("--label-b", default="VCF B")
+    run_parser.add_argument("--label-a", default="VCF_A")
+    run_parser.add_argument("--label-b", default="VCF_B")
     run_parser.add_argument("--reference-dict", required=True, type=Path)
     run_parser.add_argument("--contig-list", required=True, type=Path)
     run_parser.add_argument("--output-dir", required=True, type=Path)
@@ -220,6 +236,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--modules", help="Comma-separated module list to run")
     run_parser.add_argument("--pass-only", action="store_true")
     run_parser.add_argument("--per-chrom", action="store_true")
+    run_parser.add_argument("--enable-site-match-table", action="store_true")
+    run_parser.add_argument("--per-sample-counts-table", action="store_true")
     run_parser.add_argument("--ped", dest="ped_file", type=Path)
     run_parser.add_argument(
         "--num-workers",
@@ -233,6 +251,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _handle_validate(args: argparse.Namespace) -> int:
+    if args.fix:
+        out_path = args.out or _default_fix_output_path(args.vcf)
+        result, output = fix_and_render(args.vcf, out_path)
+        print(output)
+        return 1 if result.has_errors else 0
     summary, output = validate_and_render(args.vcf)
     print(output)
     return 1 if summary.has_errors else 0
@@ -280,6 +303,8 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         module_names=_parse_module_names(args.modules),
         pass_only=bool(args.pass_only),
         per_chrom=bool(args.per_chrom),
+        enable_site_match_table=bool(args.enable_site_match_table),
+        per_sample_counts_table=bool(args.per_sample_counts_table),
         ped_file=args.ped_file,
         requested_workers=args.num_workers,
     )
@@ -323,6 +348,8 @@ def _handle_run(args: argparse.Namespace) -> int:
         module_names=_parse_module_names(args.modules),
         pass_only=bool(args.pass_only),
         per_chrom=bool(args.per_chrom),
+        enable_site_match_table=bool(args.enable_site_match_table),
+        per_sample_counts_table=bool(args.per_sample_counts_table),
         ped_file=args.ped_file,
         requested_workers=resolved_workers,
         contigs=contigs,

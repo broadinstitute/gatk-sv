@@ -20,7 +20,8 @@ def test_allele_freq_module_writes_outputs(module_test_context) -> None:
     module.run(module_test_context.data, module_test_context.config)
 
     output_dir = module_test_context.config.output_dir / "allele_freq"
-    stats = pd.read_csv(output_dir / "tables" / "af_correlation_stats.tsv", sep="\t")
+    stats = pd.read_csv(output_dir / "tables" / "af_correlation_stats.tsv.gz", sep="\t")
     assert set(stats["group"]) >= {"overall", "DEL", "INS:MEI"}
+    assert {"pearson_r", "pearson_p", "spearman_rho", "spearman_p"}.issubset(stats.columns)
     assert (output_dir / "af_correlation.overall.png").exists()
     assert (output_dir / "af_correlation.by_type.png").exists()

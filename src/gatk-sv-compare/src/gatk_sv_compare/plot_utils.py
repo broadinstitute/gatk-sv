@@ -55,14 +55,14 @@ def plot_scatter_af(ax, x, y, label_x, label_y, show_lm=True, show_rolling=True)
     if show_lm and x_values.size > 1 and y_values.size > 1:
         slope, intercept = np.polyfit(x_values, y_values, 1)
         fit_x = np.linspace(min_val, max_val, num=100)
-        ax.plot(fit_x, slope * fit_x + intercept, color="red", linewidth=1.5)
+        ax.plot(fit_x, slope * fit_x + intercept, color="red", linewidth=0.8, alpha=0.5)
     if show_rolling and x_values.size > 4:
         order = np.argsort(x_values)
         sorted_x = x_values[order]
         sorted_y = y_values[order]
         kernel = np.ones(5) / 5.0
         smooth_y = np.convolve(sorted_y, kernel, mode="same")
-        ax.plot(sorted_x, smooth_y, color="darkred", linewidth=1.2)
+        ax.plot(sorted_x, smooth_y, color="darkred", linewidth=0.8, alpha=0.5)
     ax.set_xlabel(label_x)
     ax.set_ylabel(label_y)
     return ax
@@ -102,7 +102,7 @@ def plot_heatmap_annotated(ax, matrix, row_labels, col_labels, fmt="{value}"):
 
 
 def plot_histogram(ax, values, bins, color, label):
-    ax.hist(values, bins=bins, color=color, label=label, alpha=0.7)
+    ax.hist(values, bins=bins, color=color, label=label, alpha=0.7, edgecolor="#E5E5E5", linewidth=0.6)
     if label:
         ax.legend()
     return ax
@@ -143,7 +143,7 @@ def plot_dnr_vs_continuous(ax, bins, dnr_matrix, svtype_colors, k_smooth=4, log_
 
 
 def plot_peak_histogram(ax, values, bins, peak_regions=None, log_x=True):
-    ax.hist(values, bins=bins, color="#4C72B0", alpha=0.7)
+    ax.hist(values, bins=bins, color="#4C72B0", alpha=0.7, edgecolor="#E5E5E5", linewidth=0.6)
     if peak_regions:
         for start, end, color in peak_regions:
             ax.axvspan(start, end, color=color, alpha=0.15)

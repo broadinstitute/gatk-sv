@@ -8,18 +8,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.signal import find_peaks
-from scipy.stats import ks_2samp
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
 from ..plot_utils import plot_peak_histogram, save_figure
-from .base import AnalysisModule
+from .base import AnalysisModule, write_tsv_gz
 
 _PEAK_WINDOWS = {
     "alu": (200.0, 400.0),
     "sva": (1500.0, 3000.0),
     "l1": (5000.0, 7000.0),
 }
+_INSERTION_BIN_EDGES = np.logspace(0, 4, 101)
 
 
 def quantify_retrotransposon_peaks(ins_svlens: np.ndarray) -> Dict[str, object]:
@@ -111,51 +111,43 @@ class SizeSignaturesModule(AnalysisModule):
 
             fig, ax = plt.subplots(figsize=(7, 4))
             if ins_svlens.size:
+                clipped = np.clip(ins_svlens, 1.0, 1.0e4)
                 plot_peak_histogram(
                     ax,
-                    ins_svlens,
-                    np.logspace(np.log10(max(50.0, ins_svlens.min())), np.log10(max(100000.0, ins_svlens.max())), num=40),
+                    clipped,
+                    _INSERTION_BIN_EDGES,
                     peak_regions=[(200, 400, "#FFD54F"), (1500, 3000, "#FFB74D"), (5000, 7000, "#EF5350")],
                 )
             else:
                 ax.text(0.5, 0.5, "No insertions", ha="center", va="center")
+            ax.set_xlim(50.0, 1.0e4)
             ax.set_title(f"Insertion size distribution: {label}")
             save_figure(fig, output_dir / f"retrotransposon_peaks.{label}.png")
 
             implausible = flag_implausible_variants(filtered, config.contig_lengths)
-            implausible.to_csv(tables_dir / f"implausible_variants.{label}.tsv", sep="\t", index=False)
-            fig, ax = plt.subplots(figsize=(7, 4))
-            if not implausible.empty:
-                ax.scatter(implausible["variant_id"], implausible["svlen"], color="red")
-                ax.tick_params(axis="x", rotation=45)
-            else:
-                ax.text(0.5, 0.5, "No implausible variants", ha="center", va="center")
-            ax.set_ylabel("SVLEN")
-            ax.set_title(f"Implausible variants: {label}")
-            save_figure(fig, output_dir / f"implausible_variants.{label}.png")
+            write_tsv_gz(implausible, tables_dir / f"implausible_variants.{label}.tsv")
 
             mei_summary = summarize_mei_subtypes(filtered)
-            mei_summary.to_csv(tables_dir / f"mei_subtype_summary.{label}.tsv", sep="\t", index=False)
+            write_tsv_gz(mei_summary, tables_dir / f"mei_subtype_summary.{label}.tsv")
 
         peak_table = pd.DataFrame(peak_rows)
-        peak_table.to_csv(tables_dir / "retrotransposon_peaks.tsv", sep="\t", index=False)
+        write_tsv_gz(peak_table, tables_dir / "retrotransposon_peaks.tsv")
 
         ins_a = data.sites_a.loc[data.sites_a["svtype"].isin(["INS", "INS:MEI"]), "svlen"].dropna().astype(float)
         ins_b = data.sites_b.loc[data.sites_b["svtype"].isin(["INS", "INS:MEI"]), "svlen"].dropna().astype(float)
-        if len(ins_a) and len(ins_b):
-            ks_statistic, ks_pvalue = ks_2samp(ins_a, ins_b)
-        else:
-            ks_statistic, ks_pvalue = np.nan, np.nan
-        pd.DataFrame([
-            {"svtype": "INS+INS:MEI", "ks_statistic": ks_statistic, "p_value": ks_pvalue}
-        ]).to_csv(tables_dir / "size_distribution_comparison.tsv", sep="\t", index=False)
-
         fig, ax = plt.subplots(figsize=(7, 4))
         if len(ins_a):
-            ax.hist(ins_a, bins=20, alpha=0.5, label=data.label_a)
+            clipped_a = np.clip(ins_a.to_numpy(dtype=float), 50.0, 1.0e4)
+            counts_a, edges = np.histogram(clipped_a, bins=_INSERTION_BIN_EDGES)
+            centers = np.sqrt(edges[:-1] * edges[1:])
+            ax.plot(centers, counts_a, alpha=0.8, linewidth=1.5, label=data.label_a)
         if len(ins_b):
-            ax.hist(ins_b, bins=20, alpha=0.5, label=data.label_b)
+            clipped_b = np.clip(ins_b.to_numpy(dtype=float), 50.0, 1.0e4)
+            counts_b, edges = np.histogram(clipped_b, bins=_INSERTION_BIN_EDGES)
+            centers = np.sqrt(edges[:-1] * edges[1:])
+            ax.plot(centers, counts_b, alpha=0.8, linewidth=1.5, label=data.label_b)
         ax.set_xscale("log")
+        ax.set_xlim(50.0, 1.0e4)
         ax.legend()
         ax.set_title("Insertion size overlay")
         save_figure(fig, output_dir / "ins_size_overlay.png")
