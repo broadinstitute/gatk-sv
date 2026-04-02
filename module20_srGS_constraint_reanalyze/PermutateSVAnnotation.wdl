@@ -161,7 +161,6 @@ workflow PermutateSVAnnotation {
             r_script        = integrate_r_script,
             sv_gtf_prefix   = sv_gtf_prefix,
             seed_suffix     = seed_suffix,
-            output_file_name = sv_gtf_prefix + "." + seed_suffix + ".integrated",
             docker          = r_docker,
             runtime_attr_override = runtime_attr_integrate_overlaps
     }
@@ -696,10 +695,11 @@ task Task7_IntegrateOverlaps {
         File        r_script
         String      sv_gtf_prefix
         String      seed_suffix
-        String      output_file_name
         String      docker
         RuntimeAttr? runtime_attr_override
     }
+
+    String out_file = sv_gtf_prefix + "." + seed_suffix + ".integrated"
 
     command <<<
         set -euo pipefail
@@ -712,11 +712,11 @@ task Task7_IntegrateOverlaps {
         Rscript ~{r_script} \
             -p ~{sv_gtf_prefix} \
             -a ~{seed_suffix} \
-            -o ~{output_file_name}
+            -o ~{out_file}
     >>>
 
     output {
-        File integrated_file = output_file_name
+        File integrated_file = out_file
     }
 
     RuntimeAttr default_attr = object {
