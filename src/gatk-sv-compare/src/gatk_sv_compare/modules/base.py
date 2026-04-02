@@ -22,6 +22,10 @@ class AnalysisModule(ABC):
         return False
 
     @property
+    def requires_ped_file(self) -> bool:
+        return False
+
+    @property
     def requires_gq(self) -> bool:
         return False
 

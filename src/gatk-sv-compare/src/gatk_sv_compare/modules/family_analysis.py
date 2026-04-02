@@ -373,6 +373,10 @@ class FamilyAnalysisModule(AnalysisModule):
         return "family_analysis"
 
     @property
+    def requires_ped_file(self) -> bool:
+        return True
+
+    @property
     def requires_genotype_pass(self) -> bool:
         return True
 

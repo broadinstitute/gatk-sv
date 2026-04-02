@@ -6,9 +6,13 @@ import argparse
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Type
 
+import pysam
+
+from .aggregate import aggregate
 from .config import AnalysisConfig
+from .modules import ALL_MODULES, AnalysisModule
 from .preprocess import parse_reference_dict, read_contig_list, run_preprocess
 from .validate import validate_and_render
 
@@ -22,6 +26,136 @@ def _resolve_num_workers(requested_workers: Optional[int], contig_count: int) ->
     if requested_workers is None:
         return max(1, min(contig_count, cpu_count, 4))
     return max(1, min(requested_workers, contig_count))
+
+
+def _parse_module_names(raw_value: Optional[str]) -> Optional[List[str]]:
+    if raw_value is None:
+        return None
+    module_names = [item.strip() for item in raw_value.split(",") if item.strip()]
+    return list(dict.fromkeys(module_names))
+
+
+def _module_registry() -> Dict[str, Type[AnalysisModule]]:
+    return {module_type().name: module_type for module_type in ALL_MODULES}
+
+
+def _resolve_module_types(requested_names: Optional[Iterable[str]]) -> List[Type[AnalysisModule]]:
+    registry = _module_registry()
+    if requested_names is None:
+        return list(ALL_MODULES)
+    requested_names_list = list(requested_names)
+    unknown = [name for name in requested_names_list if name not in registry]
+    if unknown:
+        available = ", ".join(sorted(registry))
+        raise ValueError(f"Unknown module(s): {', '.join(unknown)}. Available modules: {available}")
+    return [registry[name] for name in requested_names_list]
+
+
+def _read_vcf_contigs(vcf_path: Path) -> Tuple[List[str], Dict[str, int]]:
+    with pysam.VariantFile(str(vcf_path)) as vcf:
+        contigs = list(vcf.header.contigs)
+        lengths = {name: int(vcf.header.contigs[name].length or 0) for name in contigs}
+    return contigs, lengths
+
+
+def _infer_common_contigs(vcf_a_path: Path, vcf_b_path: Path) -> Tuple[List[str], Dict[str, int]]:
+    contigs_a, lengths_a = _read_vcf_contigs(vcf_a_path)
+    contigs_b, lengths_b = _read_vcf_contigs(vcf_b_path)
+    contigs_b_set = set(contigs_b)
+    common_contigs = [contig for contig in contigs_a if contig in contigs_b_set]
+    if not common_contigs:
+        raise ValueError(f"No shared contigs found between {vcf_a_path} and {vcf_b_path}")
+    contig_lengths = {
+        contig: lengths_a.get(contig) or lengths_b.get(contig) or 0 for contig in common_contigs
+    }
+    return common_contigs, contig_lengths
+
+
+def _build_analysis_config(
+    *,
+    vcf_a_path: Path,
+    vcf_b_path: Path,
+    output_dir: Path,
+    label_a: str,
+    label_b: str,
+    module_names: Optional[List[str]],
+    pass_only: bool,
+    per_chrom: bool,
+    ped_file: Optional[Path],
+    requested_workers: Optional[int],
+    contigs: Optional[List[str]] = None,
+    contig_lengths: Optional[Dict[str, int]] = None,
+) -> AnalysisConfig:
+    resolved_contigs = list(contigs) if contigs is not None else None
+    resolved_lengths = dict(contig_lengths) if contig_lengths is not None else None
+    if resolved_contigs is None or resolved_lengths is None:
+        resolved_contigs, resolved_lengths = _infer_common_contigs(vcf_a_path, vcf_b_path)
+    resolved_workers = _resolve_num_workers(requested_workers, len(resolved_contigs))
+    return AnalysisConfig(
+        vcf_a_path=vcf_a_path,
+        vcf_b_path=vcf_b_path,
+        vcf_a_label=label_a,
+        vcf_b_label=label_b,
+        output_dir=output_dir,
+        contigs=resolved_contigs,
+        contig_lengths=resolved_lengths,
+        n_workers=resolved_workers,
+        modules=module_names,
+        pass_only=pass_only,
+        per_chrom=per_chrom,
+        ped_file=ped_file,
+    )
+
+
+def _skip_reason(module: AnalysisModule, data, config: AnalysisConfig) -> Optional[str]:
+    if module.requires_shared_samples and not data.shared_samples:
+        return "no shared samples"
+    if module.requires_ped_file and config.ped_file is None:
+        return "no --ped provided"
+    return None
+
+
+def _run_analysis(config: AnalysisConfig) -> int:
+    logger = logging.getLogger(__name__)
+    module_types = _resolve_module_types(config.modules)
+    logger.info(
+        "Starting analysis: %s vs %s across %s contig(s) with %s worker(s)",
+        config.vcf_a_label,
+        config.vcf_b_label,
+        len(config.contigs),
+        config.n_workers,
+    )
+    logger.info("Selected modules: %s", ", ".join(module_type().name for module_type in module_types))
+    data = aggregate(config)
+    logger.info(
+        "Aggregation complete: %s sites in %s, %s sites in %s, %s matched pair(s), %s shared sample(s)",
+        len(data.sites_a),
+        data.label_a,
+        len(data.sites_b),
+        data.label_b,
+        len(data.matched_pairs),
+        len(data.shared_samples),
+    )
+
+    ran_modules: List[str] = []
+    skipped_modules: List[str] = []
+    for module_type in module_types:
+        module = module_type()
+        reason = _skip_reason(module, data, config)
+        if reason is not None:
+            logger.info("Skipping module %s: %s", module.name, reason)
+            skipped_modules.append(module.name)
+            continue
+        logger.info("Running module %s", module.name)
+        module.run(data, config)
+        logger.info("Completed module %s", module.name)
+        ran_modules.append(module.name)
+
+    print(f"analysis_output_dir={config.output_dir}")
+    print(f"modules_ran={','.join(ran_modules)}")
+    if skipped_modules:
+        print(f"modules_skipped={','.join(skipped_modules)}")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -55,16 +189,45 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser = subparsers.add_parser("analyze", help="Run analysis modules on preprocessed VCFs")
     analyze_parser.add_argument("--vcf-a", required=True, type=Path)
     analyze_parser.add_argument("--vcf-b", required=True, type=Path)
+    analyze_parser.add_argument("--label-a", default="VCF A")
+    analyze_parser.add_argument("--label-b", default="VCF B")
     analyze_parser.add_argument("--output-dir", required=True, type=Path)
-    analyze_parser.set_defaults(handler=_handle_not_implemented)
+    analyze_parser.add_argument("--modules", help="Comma-separated module list to run")
+    analyze_parser.add_argument("--pass-only", action="store_true")
+    analyze_parser.add_argument("--per-chrom", action="store_true")
+    analyze_parser.add_argument("--ped", dest="ped_file", type=Path)
+    analyze_parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=None,
+        help="Number of contigs to aggregate in parallel (default: auto, capped at 4 and the contig count)",
+    )
+    analyze_parser.set_defaults(handler=_handle_analyze)
 
     run_parser = subparsers.add_parser("run", help="Run preprocess + analyze end-to-end")
     run_parser.add_argument("--vcf-a", required=True, type=Path)
     run_parser.add_argument("--vcf-b", required=True, type=Path)
+    run_parser.add_argument("--label-a", default="VCF A")
+    run_parser.add_argument("--label-b", default="VCF B")
     run_parser.add_argument("--reference-dict", required=True, type=Path)
     run_parser.add_argument("--contig-list", required=True, type=Path)
     run_parser.add_argument("--output-dir", required=True, type=Path)
-    run_parser.set_defaults(handler=_handle_not_implemented)
+    run_parser.add_argument("--seg-dup-track", type=Path)
+    run_parser.add_argument("--simple-repeat-track", type=Path)
+    run_parser.add_argument("--repeatmasker-track", type=Path)
+    run_parser.add_argument("--gatk-path", default="gatk")
+    run_parser.add_argument("--java-options", default="-Xmx4g")
+    run_parser.add_argument("--modules", help="Comma-separated module list to run")
+    run_parser.add_argument("--pass-only", action="store_true")
+    run_parser.add_argument("--per-chrom", action="store_true")
+    run_parser.add_argument("--ped", dest="ped_file", type=Path)
+    run_parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=None,
+        help="Number of contigs to process in parallel (default: auto, capped at 4 and the contig count)",
+    )
+    run_parser.set_defaults(handler=_handle_run)
 
     return parser
 
@@ -106,8 +269,66 @@ def _handle_preprocess(args: argparse.Namespace) -> int:
     return 0
 
 
-def _handle_not_implemented(_: argparse.Namespace) -> int:
-    raise NotImplementedError("This Phase 1 CLI command is scaffolded but not implemented yet.")
+def _handle_analyze(args: argparse.Namespace) -> int:
+    _configure_logging()
+    config = _build_analysis_config(
+        vcf_a_path=args.vcf_a,
+        vcf_b_path=args.vcf_b,
+        output_dir=args.output_dir,
+        label_a=args.label_a,
+        label_b=args.label_b,
+        module_names=_parse_module_names(args.modules),
+        pass_only=bool(args.pass_only),
+        per_chrom=bool(args.per_chrom),
+        ped_file=args.ped_file,
+        requested_workers=args.num_workers,
+    )
+    return _run_analysis(config)
+
+
+def _handle_run(args: argparse.Namespace) -> int:
+    _configure_logging()
+    contigs = read_contig_list(args.contig_list)
+    contig_lengths = parse_reference_dict(args.reference_dict)
+    resolved_workers = _resolve_num_workers(args.num_workers, len(contigs))
+    logging.getLogger(__name__).info(
+        "Starting end-to-end run with %s contig(s) and %s worker(s)",
+        len(contigs),
+        resolved_workers,
+    )
+    preprocess_config = AnalysisConfig(
+        vcf_a_path=args.vcf_a,
+        vcf_b_path=args.vcf_b,
+        output_dir=args.output_dir,
+        reference_dict=args.reference_dict,
+        contigs=contigs,
+        contig_lengths=contig_lengths,
+        n_workers=resolved_workers,
+        seg_dup_track=args.seg_dup_track,
+        simple_repeat_track=args.simple_repeat_track,
+        repeatmasker_track=args.repeatmasker_track,
+        gatk_path=args.gatk_path,
+        java_options=args.java_options,
+    )
+    annotated_a, annotated_b = run_preprocess(preprocess_config)
+    print(f"annotated_a={annotated_a}")
+    print(f"annotated_b={annotated_b}")
+
+    analyze_config = _build_analysis_config(
+        vcf_a_path=annotated_a,
+        vcf_b_path=annotated_b,
+        output_dir=args.output_dir,
+        label_a=args.label_a,
+        label_b=args.label_b,
+        module_names=_parse_module_names(args.modules),
+        pass_only=bool(args.pass_only),
+        per_chrom=bool(args.per_chrom),
+        ped_file=args.ped_file,
+        requested_workers=resolved_workers,
+        contigs=contigs,
+        contig_lengths=contig_lengths,
+    )
+    return _run_analysis(analyze_config)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
