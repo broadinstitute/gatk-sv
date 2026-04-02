@@ -249,7 +249,7 @@ gatk-sv-compare validate --vcf input.vcf.gz
 | `VARGQ_PRESENT` | INFO | `varGQ` INFO field present (indicates pre-FilterGenotypes intermediate) |
 | `MULTIALLELIC_INFO_FLAG` | INFO | `MULTIALLELIC` is an INFO flag rather than FILTER value (regenotyped-stage pattern) |
 | `MISSING_PRECOMPUTED_COUNTS` | INFO | Pre-computed genotype count fields (`N_BI_GENOS`, `N_HOMREF`, etc.) absent — will fall back to GT-based counting (slower) |
-| `IMPLAUSIBLE_SVLEN` | WARN | SVLEN exceeds 10% of chromosome length — may be artifactual |
+| `IMPLAUSIBLE_SVLEN` | WARN | SVLEN exceeds 20% of chromosome length — may be artifactual |
 
 > **⚠ DEFERRED (see §1.1, item 1).** The `--fix` mode is a VCF format conversion tool
 > that duplicates existing `format_*_vcf_for_*.py` logic. Implement read-only `validate`
@@ -1409,13 +1409,13 @@ the expected size peaks:
 **3. Implausible Variant Flagging:**
 
 Flag variants whose SVLEN exceeds a configurable fraction of the chromosome length
-(default: 10% of chromosome). These are almost certainly artifacts:
+(default: 20% of chromosome). These may be artifacts:
 
 ```python
 def flag_implausible_variants(
     sites: pd.DataFrame,
     contig_lengths: dict[str, int],
-    max_chrom_fraction: float = 0.10,
+    max_chrom_fraction: float = 0.20,
 ) -> pd.DataFrame:
     """Return DataFrame of implausibly large variants with diagnostic info."""
 ```
@@ -1584,7 +1584,7 @@ gatk-sv-compare preprocess \
   [--repeatmasker-track repeatmasker.bed] \
   [--gatk-path /path/to/gatk] \
   [--java-options '-Xmx4g']   # JVM options for GATK subprocesses \
-  [--num-workers 4]
+  [--num-workers 4]           # default: auto, capped by contig count and 4 workers
 ```
 
 ### `analyze`

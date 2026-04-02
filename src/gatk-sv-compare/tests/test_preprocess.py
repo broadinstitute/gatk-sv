@@ -113,3 +113,45 @@ def test_run_preprocess_without_tracks(tmp_path, monkeypatch) -> None:
     assert annotated_b.exists()
     assert (tmp_path / "out" / "preprocess" / "concordance_a.vcf.gz").exists()
     assert len(calls) == 4
+
+
+def test_run_preprocess_logs_stage_progress(tmp_path, monkeypatch, caplog) -> None:
+    def fake_get_gatk_version(_: str) -> str:
+        return "4.6.0.0"
+
+    def fake_run_command(command, timeout_seconds=3600):
+        del timeout_seconds
+        output_path = Path(command[command.index("-O") + 1])
+        contig = command[command.index("-L") + 1] if "-L" in command else "chr1"
+        _write_bgzipped_vcf(output_path, contig=contig, variant_id=output_path.stem)
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return Result()
+
+    monkeypatch.setattr("gatk_sv_compare.preprocess.get_gatk_version", fake_get_gatk_version)
+    monkeypatch.setattr("gatk_sv_compare.preprocess.run_command", fake_run_command)
+
+    reference_dict = tmp_path / "ref.dict"
+    reference_dict.write_text("@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:1000\n@SQ\tSN:chr2\tLN:2000\n")
+    config = AnalysisConfig(
+        vcf_a_path=tmp_path / "a.vcf.gz",
+        vcf_b_path=tmp_path / "b.vcf.gz",
+        output_dir=tmp_path / "out",
+        reference_dict=reference_dict,
+        contigs=["chr1", "chr2"],
+        contig_lengths={"chr1": 1000, "chr2": 2000},
+        n_workers=2,
+    )
+
+    caplog.set_level("INFO")
+    run_preprocess(config)
+
+    assert "Starting preprocess into" in caplog.text
+    assert "Starting SVConcordance scatter for 2 contigs" in caplog.text
+    assert "Completed SVConcordance shard 2/2" in caplog.text
+    assert "Copying concordance outputs to annotated outputs" in caplog.text
+    assert "Preprocess complete:" in caplog.text

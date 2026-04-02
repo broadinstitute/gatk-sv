@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -257,9 +257,16 @@ def _scatter_concordance(
     """Run SVConcordance across contigs."""
     output_dir.mkdir(parents=True, exist_ok=True)
     max_workers = max(1, n_workers)
+    total = len(contigs)
+    logger.info(
+        "Starting SVConcordance scatter for %s contigs: %s vs %s",
+        total,
+        eval_vcf.name,
+        truth_vcf.name,
+    )
     results: List[Path] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [
+        futures = {
             executor.submit(
                 _run_sv_concordance_contig,
                 eval_vcf=eval_vcf,
@@ -273,11 +280,13 @@ def _scatter_concordance(
                 stratification_config=stratification_config,
                 track_names=track_names,
                 track_intervals=track_intervals,
-            )
+            ): contig
             for contig in contigs
-        ]
-        for future in futures:
+        }
+        for completed, future in enumerate(as_completed(futures), start=1):
+            contig = futures[future]
             results.append(future.result())
+            logger.info("Completed SVConcordance shard %s/%s: %s", completed, total, contig)
     return results
 
 
@@ -294,9 +303,11 @@ def _scatter_region_overlap(
     """Run SVRegionOverlap across per-contig concordance shards."""
     output_dir.mkdir(parents=True, exist_ok=True)
     max_workers = max(1, n_workers)
+    total = len(vcfs)
+    logger.info("Starting SVRegionOverlap scatter for %s contig shards", total)
     results: List[Path] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [
+        futures = {
             executor.submit(
                 _run_sv_region_overlap_contig,
                 vcf=vcf,
@@ -305,11 +316,13 @@ def _scatter_region_overlap(
                 gatk_path=gatk_path,
                 java_options=java_options,
                 tracks=tracks,
-            )
+            ): vcf.name
             for vcf in vcfs
-        ]
-        for future in futures:
+        }
+        for completed, future in enumerate(as_completed(futures), start=1):
+            shard_name = futures[future]
             results.append(future.result())
+            logger.info("Completed SVRegionOverlap shard %s/%s: %s", completed, total, shard_name)
     return results
 
 
@@ -325,13 +338,27 @@ def run_preprocess(config: AnalysisConfig) -> Tuple[Path, Path]:
     preprocess_dir = config.output_dir / "preprocess"
     preprocess_dir.mkdir(parents=True, exist_ok=True)
 
+    logger.info("Starting preprocess into %s", preprocess_dir)
+    logger.info(
+        "Inputs: vcf_a=%s, vcf_b=%s, contigs=%s, workers=%s",
+        config.vcf_a_path,
+        config.vcf_b_path,
+        len(config.contigs),
+        max(1, config.n_workers),
+    )
+
     version = get_gatk_version(config.gatk_path)
     logger.info("Using GATK: %s", version)
 
     tracks = get_tracks(config)
     track_names = list(tracks.keys()) if tracks else None
     track_intervals = list(tracks.values()) if tracks else None
+    if tracks:
+        logger.info("Region-overlap tracks enabled: %s", ", ".join(track_names or []))
+    else:
+        logger.info("No region-overlap tracks configured; annotated outputs will mirror concordance outputs")
 
+    logger.info("Running concordance with VCF A as eval and VCF B as truth")
     concordance_a_shards = _scatter_concordance(
         eval_vcf=config.vcf_a_path,
         truth_vcf=config.vcf_b_path,
@@ -346,6 +373,7 @@ def run_preprocess(config: AnalysisConfig) -> Tuple[Path, Path]:
         track_names=track_names,
         track_intervals=track_intervals,
     )
+    logger.info("Running concordance with VCF B as eval and VCF A as truth")
     concordance_b_shards = _scatter_concordance(
         eval_vcf=config.vcf_b_path,
         truth_vcf=config.vcf_a_path,
@@ -361,9 +389,11 @@ def run_preprocess(config: AnalysisConfig) -> Tuple[Path, Path]:
         track_intervals=track_intervals,
     )
 
+    logger.info("Concatenating %s concordance shards into %s", len(concordance_a_shards), preprocess_dir / "concordance_a.vcf.gz")
     concordance_a = concatenate_vcfs(
         sorted(concordance_a_shards), preprocess_dir / "concordance_a.vcf.gz"
     )
+    logger.info("Concatenating %s concordance shards into %s", len(concordance_b_shards), preprocess_dir / "concordance_b.vcf.gz")
     concordance_b = concatenate_vcfs(
         sorted(concordance_b_shards), preprocess_dir / "concordance_b.vcf.gz"
     )
@@ -371,6 +401,7 @@ def run_preprocess(config: AnalysisConfig) -> Tuple[Path, Path]:
     annotated_a = preprocess_dir / "annotated_a.vcf.gz"
     annotated_b = preprocess_dir / "annotated_b.vcf.gz"
     if tracks:
+        logger.info("Running region-overlap annotation for annotated_a")
         annotated_a_shards = _scatter_region_overlap(
             vcfs=sorted(concordance_a_shards),
             reference_dict=config.reference_dict,
@@ -380,6 +411,7 @@ def run_preprocess(config: AnalysisConfig) -> Tuple[Path, Path]:
             n_workers=config.n_workers,
             tracks=tracks,
         )
+        logger.info("Running region-overlap annotation for annotated_b")
         annotated_b_shards = _scatter_region_overlap(
             vcfs=sorted(concordance_b_shards),
             reference_dict=config.reference_dict,
@@ -389,10 +421,14 @@ def run_preprocess(config: AnalysisConfig) -> Tuple[Path, Path]:
             n_workers=config.n_workers,
             tracks=tracks,
         )
+        logger.info("Concatenating %s annotated shards into %s", len(annotated_a_shards), annotated_a)
         concatenate_vcfs(sorted(annotated_a_shards), annotated_a)
+        logger.info("Concatenating %s annotated shards into %s", len(annotated_b_shards), annotated_b)
         concatenate_vcfs(sorted(annotated_b_shards), annotated_b)
     else:
+        logger.info("Copying concordance outputs to annotated outputs (no region-overlap stage)")
         _copy_with_index(concordance_a, annotated_a)
         _copy_with_index(concordance_b, annotated_b)
 
+    logger.info("Preprocess complete: annotated_a=%s annotated_b=%s", annotated_a, annotated_b)
     return annotated_a, annotated_b

@@ -3,12 +3,25 @@
 from __future__ import annotations
 
 import argparse
+import logging
+import os
 from pathlib import Path
 from typing import Optional, Sequence
 
 from .config import AnalysisConfig
 from .preprocess import parse_reference_dict, read_contig_list, run_preprocess
 from .validate import validate_and_render
+
+
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", force=True)
+
+
+def _resolve_num_workers(requested_workers: Optional[int], contig_count: int) -> int:
+    cpu_count = os.cpu_count() or 1
+    if requested_workers is None:
+        return max(1, min(contig_count, cpu_count, 4))
+    return max(1, min(requested_workers, contig_count))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,7 +44,12 @@ def build_parser() -> argparse.ArgumentParser:
     preprocess_parser.add_argument("--repeatmasker-track", type=Path)
     preprocess_parser.add_argument("--gatk-path", default="gatk")
     preprocess_parser.add_argument("--java-options", default="-Xmx4g")
-    preprocess_parser.add_argument("--num-workers", type=int, default=1)
+    preprocess_parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=None,
+        help="Number of contig shards to run in parallel (default: auto, capped at 4 and the contig count)",
+    )
     preprocess_parser.set_defaults(handler=_handle_preprocess)
 
     analyze_parser = subparsers.add_parser("analyze", help="Run analysis modules on preprocessed VCFs")
@@ -58,8 +76,16 @@ def _handle_validate(args: argparse.Namespace) -> int:
 
 
 def _handle_preprocess(args: argparse.Namespace) -> int:
+    _configure_logging()
     contigs = read_contig_list(args.contig_list)
     contig_lengths = parse_reference_dict(args.reference_dict)
+    resolved_workers = _resolve_num_workers(args.num_workers, len(contigs))
+    logging.getLogger(__name__).info(
+        "Loaded preprocess inputs: %s contigs from %s; using %s worker(s)",
+        len(contigs),
+        args.contig_list,
+        resolved_workers,
+    )
     config = AnalysisConfig(
         vcf_a_path=args.vcf_a,
         vcf_b_path=args.vcf_b,
@@ -67,7 +93,7 @@ def _handle_preprocess(args: argparse.Namespace) -> int:
         reference_dict=args.reference_dict,
         contigs=contigs,
         contig_lengths=contig_lengths,
-        n_workers=args.num_workers,
+        n_workers=resolved_workers,
         seg_dup_track=args.seg_dup_track,
         simple_repeat_track=args.simple_repeat_track,
         repeatmasker_track=args.repeatmasker_track,

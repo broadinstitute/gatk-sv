@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from gatk_sv_compare.cli import AnalysisConfig, build_parser, main
 
 
@@ -52,10 +54,53 @@ def test_cli_preprocess_builds_config(tmp_path, monkeypatch, capsys) -> None:
         "2",
     ])
 
-    out = capsys.readouterr().out
+    captured_io = capsys.readouterr()
+    out = captured_io.out
+    err = captured_io.err
     assert exit_code == 0
     assert "annotated_a=" in out
+    assert "Loaded preprocess inputs: 2 contigs" in err
+    assert "using 2 worker(s)" in err
     assert captured["config"].contigs == ["chr1", "chr2"]
     assert captured["config"].contig_lengths == {"chr1": 1000, "chr2": 2000}
     assert captured["config"].n_workers == 2
+
+
+def test_cli_preprocess_defaults_to_auto_parallel_workers(tmp_path, monkeypatch, capsys) -> None:
+    captured = {}
+
+    def fake_run_preprocess(config: AnalysisConfig):
+        captured["config"] = config
+        return tmp_path / "annotated_a.vcf.gz", tmp_path / "annotated_b.vcf.gz"
+
+    contig_list = tmp_path / "contigs.list"
+    contig_list.write_text("chr1\nchr2\nchr3\nchr4\nchr5\n")
+    reference_dict = tmp_path / "ref.dict"
+    reference_dict.write_text(
+        "@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:1000\n@SQ\tSN:chr2\tLN:2000\n@SQ\tSN:chr3\tLN:3000\n@SQ\tSN:chr4\tLN:4000\n@SQ\tSN:chr5\tLN:5000\n"
+    )
+
+    monkeypatch.setattr("gatk_sv_compare.cli.run_preprocess", fake_run_preprocess)
+
+    exit_code = main([
+        "preprocess",
+        "--vcf-a",
+        str(tmp_path / "a.vcf.gz"),
+        "--vcf-b",
+        str(tmp_path / "b.vcf.gz"),
+        "--reference-dict",
+        str(reference_dict),
+        "--contig-list",
+        str(contig_list),
+        "--output-dir",
+        str(tmp_path / "out"),
+    ])
+
+    captured_io = capsys.readouterr()
+    err = captured_io.err
+    expected_workers = min(5, os.cpu_count() or 1, 4)
+
+    assert exit_code == 0
+    assert f"using {expected_workers} worker(s)" in err
+    assert captured["config"].n_workers == expected_workers
 

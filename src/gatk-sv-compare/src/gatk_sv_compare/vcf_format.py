@@ -127,8 +127,8 @@ def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = Non
             svlen_value = int(svlen)
         if svlen_value < 0:
             issues.append(FormatIssue("SVLEN_SIGN", "WARN", record_id, "SVLEN is negative"))
-        if contig_length is not None and abs(svlen_value) > contig_length * 0.10:
-            issues.append(FormatIssue("IMPLAUSIBLE_SVLEN", "WARN", record_id, "SVLEN exceeds 10% of chromosome length and may be artifactual"))
+        if contig_length is not None and abs(svlen_value) > contig_length * 0.20:
+            issues.append(FormatIssue("IMPLAUSIBLE_SVLEN", "WARN", record_id, "SVLEN exceeds 20% of chromosome length and may be artifactual"))
 
     end = record.stop
     if svtype_text == "INS" and end != record.pos:

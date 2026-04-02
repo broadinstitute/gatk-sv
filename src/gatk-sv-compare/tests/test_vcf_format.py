@@ -54,3 +54,27 @@ def test_check_record_does_not_emit_cnv_no_gt_info(make_vcf) -> None:
         record = next(iter(vcf))
     issues = check_record(record)
     assert all(issue.check_id != "CNV_NO_GT" for issue in issues)
+
+
+def test_check_record_uses_20_percent_svlen_threshold(make_vcf) -> None:
+    below_threshold_path = make_vcf(
+        file_name="below_threshold.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=200000\tGT:GQ:ECN\t0/1:40:2\t0/0:35:2",
+        ],
+    )
+    with pysam.VariantFile(str(below_threshold_path)) as vcf:
+        below_record = next(iter(vcf))
+    below_issues = check_record(below_record, contig_length=1_000_000)
+    assert all(issue.check_id != "IMPLAUSIBLE_SVLEN" for issue in below_issues)
+
+    above_threshold_path = make_vcf(
+        file_name="above_threshold.vcf",
+        records=[
+            "chr1\t100\tvar2\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=200001\tGT:GQ:ECN\t0/1:40:2\t0/0:35:2",
+        ],
+    )
+    with pysam.VariantFile(str(above_threshold_path)) as vcf:
+        above_record = next(iter(vcf))
+    above_issues = check_record(above_record, contig_length=1_000_000)
+    assert any(issue.check_id == "IMPLAUSIBLE_SVLEN" for issue in above_issues)
