@@ -11,7 +11,7 @@ from scipy.stats import chisquare
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import af_bucket_sort_key, genomic_context_sort_key, size_bucket_sort_key, svtype_sort_key
+from ..dimensions import af_bucket_sort_key, complete_genomic_context_buckets, genomic_context_sort_key, size_bucket_sort_key, svtype_sort_key
 from ..plot_utils import HWE_COLORS, SUMMARY_COLORS, plot_scatter_af, plot_ternary, save_figure, single_column_figsize
 from .base import AnalysisModule, column_safe_label, write_tsv_gz
 
@@ -86,15 +86,21 @@ def summarize_hwe_by_bucket(table: pd.DataFrame, label: str) -> pd.DataFrame:
         mean_carrier_freq=("carrier_freq", "mean"),
         mean_af=("af", "mean"),
     ).reset_index()
-    return grouped.rename(columns={
+    grouped = complete_genomic_context_buckets(
+        grouped,
+        ["svtype", "size_bucket", "af_bucket", "genomic_context"],
+        fill_values={"n_variants": 0},
+    )
+    grouped["n_variants"] = grouped["n_variants"].astype(int)
+    renamed = grouped.rename(columns={
         "n_variants": f"n_variants_{token}",
         "frac_pass": f"frac_pass_{token}",
         "frac_nominal": f"frac_nominal_{token}",
         "frac_bonferroni": f"frac_bonferroni_{token}",
         "mean_carrier_freq": f"mean_carrier_freq_{token}",
         "mean_af": f"mean_af_{token}",
-    })[columns]
-    return grouped.sort_values(
+    })
+    return renamed[columns].sort_values(
         by=["svtype", "size_bucket", "af_bucket", "genomic_context"],
         key=lambda series: series.map(
             lambda value: (

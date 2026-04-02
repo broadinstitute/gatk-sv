@@ -370,7 +370,8 @@ def _plot_dnr_heatmap(table: pd.DataFrame, output_path: Path, title: str, value_
     matrix = table.pivot(index="size_bucket", columns="af_bucket", values=value_field).fillna(0.0)
     matrix = matrix.reindex(index=ordered_size_buckets(matrix.index), columns=ordered_af_buckets(matrix.columns), fill_value=0.0)
     image = plot_heatmap_annotated(ax, matrix.values, list(matrix.index), list(matrix.columns), fmt="{value:.2f}")
-    fig.colorbar(image, ax=ax)
+    colorbar = fig.colorbar(image, ax=ax)
+    colorbar.set_label("De novo rate")
     ax.set_title(title)
     save_figure(fig, output_path)
 

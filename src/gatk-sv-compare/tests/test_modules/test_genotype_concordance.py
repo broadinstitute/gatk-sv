@@ -41,6 +41,7 @@ def test_genotype_concordance_module_writes_outputs(module_test_context) -> None
     assert (output_dir / "exact_match.by_type.png").exists()
     assert (output_dir / "exact_match.by_context.png").exists()
     assert {"n_sites_CallsetA", "mean_value_CallsetA", "median_value_CallsetA", "n_sites_CallsetB", "mean_value_CallsetB", "median_value_CallsetB"}.issubset(table.columns)
+    assert "none" in set(table["genomic_context"])
 
 
 def test_summarize_concordance_metrics_uses_cnv_concordance_for_cnv() -> None:
@@ -64,7 +65,10 @@ def test_summarize_concordance_metrics_uses_cnv_concordance_for_cnv() -> None:
     )
 
     summary = summarize_concordance_metrics(metrics)
-    row = summary.loc[(summary["metric"] == "genotype_concordance") & (summary["svtype"] == "CNV")].iloc[0]
+    row_mask = summary["metric"] == "genotype_concordance"
+    row_mask &= summary["svtype"] == "CNV"
+    row_mask &= summary["genomic_context"] == "none"
+    row = summary.loc[row_mask].iloc[0]
 
     assert row["mean_value_a"] == pytest.approx(0.42)
     assert not ((summary["svtype"] == "CNV") & (summary["metric"] == "var_ppv")).any()

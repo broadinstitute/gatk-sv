@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gatk_sv_compare.dimensions import categorize_variant, is_filtered_pass, normalize_svtype
+from gatk_sv_compare.dimensions import categorize_variant, is_filtered_pass, normalize_svtype, ordered_contexts
 
 
 def test_normalize_svtype_maps_mei_insertions() -> None:
@@ -30,3 +30,7 @@ def test_categorize_variant_uses_cnv_frequency_and_context() -> None:
     assert category.af_bucket == "1-10%"
     assert category.size_bucket == "2.5-10kb"
     assert category.genomic_context == "segdup"
+
+
+def test_ordered_contexts_always_includes_none_bucket() -> None:
+    assert ordered_contexts(["segdup"]) == ["simple_repeat", "segdup", "repeatmasker", "none"]

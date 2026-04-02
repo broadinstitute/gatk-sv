@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 from gatk_sv_compare.modules.site_overlap import SiteOverlapModule, _plot_heatmap, build_overlap_metrics
 
@@ -43,4 +44,27 @@ def test_plot_heatmap_excludes_bnd_and_ctx_columns(tmp_path) -> None:
     _plot_heatmap(sites, "size_bucket", "svtype", tmp_path / "heatmap.png", "CallsetA")
 
     assert (tmp_path / "heatmap.png").exists()
+    plt.close("all")
+
+
+def test_plot_heatmap_labels_colorbar(tmp_path, monkeypatch) -> None:
+    sites = pd.DataFrame(
+        [
+            {"variant_id": "a", "size_bucket": "<100bp", "af_bucket": "AC=1", "svtype": "DEL", "truth_vid": "b", "status": "MATCHED"},
+            {"variant_id": "b", "size_bucket": "<100bp", "af_bucket": "AC=1", "svtype": "DEL", "truth_vid": None, "status": "UNMATCHED"},
+        ]
+    )
+    captured = {}
+    original_colorbar = Figure.colorbar
+
+    def spy_colorbar(self, *args, **kwargs):
+        colorbar = original_colorbar(self, *args, **kwargs)
+        captured["colorbar"] = colorbar
+        return colorbar
+
+    monkeypatch.setattr(Figure, "colorbar", spy_colorbar)
+
+    _plot_heatmap(sites, "size_bucket", "svtype", tmp_path / "heatmap_labeled.png", "CallsetA")
+
+    assert captured["colorbar"].ax.get_ylabel() == "Matched fraction"
     plt.close("all")

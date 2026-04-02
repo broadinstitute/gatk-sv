@@ -10,7 +10,7 @@ import pandas as pd
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import af_bucket_sort_key, ordered_af_buckets, ordered_size_buckets, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
+from ..dimensions import af_bucket_sort_key, complete_genomic_context_buckets, ordered_af_buckets, ordered_size_buckets, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
 from ..plot_utils import OVERLAP_COLORS, SUMMARY_COLORS, double_column_figsize, save_figure, plot_heatmap_annotated
 from .base import AnalysisModule, matched_site_mask, relabel_vcf_columns, write_tsv_gz
 
@@ -29,10 +29,16 @@ def _overlap_metrics(sites: pd.DataFrame, suffix: str) -> pd.DataFrame:
         **{f"n_total_{suffix}": ("variant_id", "count")},
         **{f"n_matched_{suffix}": ("variant_id", lambda ids: int(annotated.loc[ids.index, "_matched"].sum()))},
     ).reset_index()
+    metrics = complete_genomic_context_buckets(
+        metrics,
+        ["svtype", "size_bucket", "af_bucket", "genomic_context"],
+        fill_values={f"n_total_{suffix}": 0, f"n_matched_{suffix}": 0},
+    )
+    metrics[[f"n_total_{suffix}", f"n_matched_{suffix}"]] = metrics[[f"n_total_{suffix}", f"n_matched_{suffix}"]].astype(int)
     metrics[f"pct_matched_{suffix}"] = np.where(
         metrics[f"n_total_{suffix}"] > 0,
         metrics[f"n_matched_{suffix}"] / metrics[f"n_total_{suffix}"],
-        np.nan,
+        0.0,
     )
     return metrics
 
@@ -92,7 +98,8 @@ def _plot_heatmap(sites: pd.DataFrame, row_field: str, col_field: str, output_pa
         matrix = matrix.loc[:, keep_columns]
     fig, ax = plt.subplots(figsize=double_column_figsize(3.6))
     image = plot_heatmap_annotated(ax, matrix.values, list(matrix.index), list(matrix.columns), fmt="{value:.2f}")
-    fig.colorbar(image, ax=ax)
+    colorbar = fig.colorbar(image, ax=ax)
+    colorbar.set_label("Matched fraction")
     ax.set_title(title)
     save_figure(fig, output_path)
 

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
+from matplotlib.figure import Figure
 
 from gatk_sv_compare.aggregate import aggregate
 from gatk_sv_compare.config import AnalysisConfig
 from gatk_sv_compare.modules.family_analysis import (
     FamilyAnalysisModule,
+    _plot_dnr_heatmap,
     build_transmission_table,
     parse_ped_file,
     summarize_inheritance_stats,
@@ -81,3 +83,25 @@ def test_family_analysis_module_computes_expected_denovo_rate(tmp_path, make_vcf
     assert (output_dir / "inheritance.trios.all_sv.png").exists()
     assert (output_dir / "dnr_vs_gq.trios.variants.png").exists()
     assert (output_dir / "dnr_heatmap.trios.variants.all_sv.png").exists()
+
+
+def test_plot_dnr_heatmap_labels_colorbar(tmp_path, monkeypatch) -> None:
+    table = pd.DataFrame(
+        [
+            {"size_bucket": "<100bp", "af_bucket": "AC=1", "site_denovo_rate": 0.25},
+            {"size_bucket": "100bp-1kb", "af_bucket": "AC=2-5", "site_denovo_rate": 0.50},
+        ]
+    )
+    captured = {}
+    original_colorbar = Figure.colorbar
+
+    def spy_colorbar(self, *args, **kwargs):
+        colorbar = original_colorbar(self, *args, **kwargs)
+        captured["colorbar"] = colorbar
+        return colorbar
+
+    monkeypatch.setattr(Figure, "colorbar", spy_colorbar)
+
+    _plot_dnr_heatmap(table, tmp_path / "dnr_heatmap.png", "De novo heatmap", "site_denovo_rate")
+
+    assert captured["colorbar"].ax.get_ylabel() == "De novo rate"

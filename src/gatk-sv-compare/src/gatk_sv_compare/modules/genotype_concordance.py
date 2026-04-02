@@ -13,7 +13,7 @@ import pysam
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import af_bucket_sort_key, genomic_context_sort_key, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
+from ..dimensions import af_bucket_sort_key, complete_genomic_context_buckets, genomic_context_sort_key, ordered_contexts, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
 from ..plot_utils import CALLSET_COLORS, SUMMARY_COLORS, double_column_figsize, save_figure
 from ..vcf_format import safe_info_get
 from ..vcf_reader import _CONCORDANCE_FIELDS
@@ -97,6 +97,12 @@ def summarize_concordance_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
         mean_value=("value", "mean"),
         median_value=("value", "median"),
     ).reset_index()
+    summary = complete_genomic_context_buckets(
+        summary,
+        ["source", "metric", "svtype", "size_bucket", "af_bucket", "genomic_context"],
+        fill_values={"n_sites": 0},
+    )
+    summary["n_sites"] = summary["n_sites"].astype(int)
     pivoted = summary.pivot_table(
         index=["metric", "svtype", "size_bucket", "af_bucket", "genomic_context"],
         columns="source",
@@ -206,8 +212,8 @@ def _plot_grouped_concordance(metrics: pd.DataFrame, group_field: str, output_pa
     elif group_field == "af_bucket":
         ordered_index = sorted(grouped.index.astype(str), key=af_bucket_sort_key)
     else:
-        ordered_index = sorted(grouped.index.astype(str), key=genomic_context_sort_key)
-    grouped = grouped.reindex(ordered_index)
+        ordered_index = ordered_contexts(grouped.index.astype(str))
+    grouped = grouped.reindex(ordered_index).fillna(0.0)
     grouped = grouped.loc[grouped.index.astype(str) != "N/A"]
     ax.bar(grouped.index.astype(str), grouped.values, color=SUMMARY_COLORS["primary"], edgecolor=SUMMARY_COLORS["edge"], linewidth=0.8)
     for x_pos, value in enumerate(grouped.values):

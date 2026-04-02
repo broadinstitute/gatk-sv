@@ -6,7 +6,7 @@ import pandas as pd
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import af_bucket_sort_key, genomic_context_sort_key, size_bucket_sort_key, svtype_sort_key
+from ..dimensions import af_bucket_sort_key, complete_genomic_context_buckets, genomic_context_sort_key, size_bucket_sort_key, svtype_sort_key
 from .base import AnalysisModule, column_safe_label, write_tsv_gz, matched_site_mask
 
 
@@ -29,6 +29,12 @@ def summarize_binned_counts(sites: pd.DataFrame, pass_only: bool = False) -> pd.
         n_matched=("_matched", "sum"),
         n_unmatched=("_unmatched", "sum"),
     ).reset_index()
+    summary = complete_genomic_context_buckets(
+        summary,
+        ["svtype", "size_bucket", "af_bucket", "genomic_context"],
+        fill_values={"n_variants": 0, "n_matched": 0, "n_unmatched": 0},
+    )
+    summary[["n_variants", "n_matched", "n_unmatched"]] = summary[["n_variants", "n_matched", "n_unmatched"]].astype(int)
     return summary[columns].sort_values(
         by=["svtype", "size_bucket", "af_bucket", "genomic_context"],
         key=lambda series: series.map(

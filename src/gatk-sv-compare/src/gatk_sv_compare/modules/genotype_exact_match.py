@@ -12,6 +12,7 @@ import pysam
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
+from ..dimensions import complete_genomic_context_buckets
 from .base import AnalysisModule, relabel_vcf_columns, write_tsv_gz
 
 
@@ -174,6 +175,12 @@ def summarize_exact_match(per_site: pd.DataFrame) -> pd.DataFrame:
         mean_het_to_homalt_rate=("het_to_homalt_rate", "mean"),
         mean_homalt_to_het_rate=("homalt_to_het_rate", "mean"),
     ).reset_index()
+    summary = complete_genomic_context_buckets(
+        summary,
+        ["svtype_a", "size_bucket_a", "af_bucket_a", "genomic_context_a", "svtype_b", "size_bucket_b", "af_bucket_b", "genomic_context_b"],
+        fill_values={"n_sites": 0},
+    )
+    summary["n_sites"] = summary["n_sites"].astype(int)
     return summary[columns]
 
 

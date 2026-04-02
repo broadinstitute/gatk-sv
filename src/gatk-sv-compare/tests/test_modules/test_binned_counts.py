@@ -33,3 +33,8 @@ def test_build_combined_binned_counts_merges_both_callsets(module_test_context) 
 
     assert not counts.empty
     assert int(counts["n_variants_CallsetA"].sum()) == len(module_test_context.data.sites_a)
+    none_mask = counts["svtype"] == "CNV"
+    none_mask &= counts["size_bucket"] == "2.5-10kb"
+    none_mask &= counts["af_bucket"] == "10-50%"
+    none_mask &= counts["genomic_context"] == "none"
+    assert none_mask.any()

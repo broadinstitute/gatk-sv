@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import FrozenSet, Iterable, Mapping, Optional, Set, Union
+from typing import FrozenSet, Iterable, Mapping, Optional, Sequence, Set, Union
+
+import pandas as pd
 
 SVTYPE_ORDER = ["DEL", "DUP", "CNV", "INS", "INS:MEI", "INV", "CPX", "CTX", "BND"]
 SVTYPES_CORE = ["DEL", "DUP", "INS", "INV", "BND", "CPX", "CTX", "CNV"]
@@ -149,7 +151,38 @@ def ordered_af_buckets(values: Iterable[object]) -> list[str]:
 
 
 def ordered_contexts(values: Iterable[object]) -> list[str]:
-    return [str(value) for value in sorted({str(value) for value in values if value is not None}, key=genomic_context_sort_key)]
+    observed = {str(value) for value in values if value is not None}
+    extras = [value for value in sorted(observed, key=genomic_context_sort_key) if value not in GENOMIC_CONTEXTS]
+    return list(GENOMIC_CONTEXTS) + extras
+
+
+def complete_genomic_context_buckets(
+    frame: pd.DataFrame,
+    group_columns: Sequence[str],
+    fill_values: Optional[Mapping[str, object]] = None,
+) -> pd.DataFrame:
+    context_columns = [column for column in group_columns if "genomic_context" in column]
+    if frame.empty or not context_columns:
+        return frame.copy()
+
+    non_context_columns = [column for column in group_columns if column not in context_columns]
+    if non_context_columns:
+        expanded = frame[non_context_columns].drop_duplicates().reset_index(drop=True)
+    else:
+        expanded = pd.DataFrame({"_placeholder": [0]})
+
+    for context_column in context_columns:
+        expanded = expanded.merge(pd.DataFrame({context_column: list(GENOMIC_CONTEXTS)}), how="cross")
+
+    if "_placeholder" in expanded.columns:
+        expanded = expanded.drop(columns=["_placeholder"])
+
+    completed = expanded.merge(frame, on=list(group_columns), how="left")
+    if fill_values is not None:
+        for column, value in fill_values.items():
+            if column in completed.columns:
+                completed[column] = completed[column].fillna(value)
+    return completed
 
 
 def categorize_variant(record_info: Mapping[str, object]) -> VariantCategory:
