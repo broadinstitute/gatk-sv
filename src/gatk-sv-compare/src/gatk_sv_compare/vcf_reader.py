@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Sequence
+from typing import Dict, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pysam
@@ -12,16 +12,13 @@ import pysam
 from .dimensions import GENOMIC_CONTEXTS, normalize_svtype
 from .vcf_format import filter_values, has_precomputed_counts, safe_info_get
 
-_GENOMIC_CONTEXT_ALIASES = {
-    "segdup": ("segdup", "SEG_DUP", "SEGDUP", "segmental_duplication", "segmentalduplication"),
-    "simple_repeat": ("simple_repeat", "SIMPLE_REPEAT", "simplerepeat", "tandem_repeat", "trf"),
-    "repeatmasker": ("repeatmasker", "REPEATMASKER", "repeat_masker", "rmsk"),
-}
-_GENOMIC_CONTEXT_SUBSTRINGS = {
-    "segdup": ("segdup", "segdup", "segmentaldup", "seg_dup"),
+_GENOMIC_CONTEXT_TOKENS = {
+    "segdup": ("segdup", "segmentaldup", "segmentalduplication", "segduplication"),
     "simple_repeat": ("simplerepeat", "simple_repeat", "tandemrepeat", "trf"),
     "repeatmasker": ("repeatmasker", "repeat_masker", "rmsk"),
 }
+# TODO: some CPX subtypes are not span-based
+_SPAN_BASED_CONTEXT_SVTYPES = frozenset({"DEL", "DUP", "CNV", "CPX", "INV"})
 
 _CONCORDANCE_FIELDS = (
     "VAR_SENSITIVITY",
@@ -92,6 +89,64 @@ def _float_or_none(value: object) -> Optional[float]:
     return float(value)
 
 
+def _normalize_info_key(key: str) -> str:
+    return key.lower().replace("_", "").replace("-", "")
+
+
+def _context_metrics(
+    record: pysam.VariantRecord,
+    normalized_keys: Dict[str, str],
+    context: str,
+) -> Tuple[Optional[float], Optional[int], bool]:
+    tokens = _GENOMIC_CONTEXT_TOKENS.get(context, (_normalize_info_key(context),))
+    overlap_fraction: Optional[float] = None
+    end_overlap_count: Optional[int] = None
+    legacy_match = False
+
+    for normalized_key, raw_key in normalized_keys.items():
+        if not any(token in normalized_key for token in tokens):
+            continue
+        if "overlapfrac" in normalized_key:
+            value = _float_or_none(_info_value(record, raw_key))
+            if value is not None:
+                overlap_fraction = value if overlap_fraction is None else max(overlap_fraction, value)
+            continue
+        if "numendoverlaps" in normalized_key:
+            value = _int_or_none(_info_value(record, raw_key))
+            if value is not None:
+                end_overlap_count = value if end_overlap_count is None else max(end_overlap_count, value)
+            continue
+
+    if overlap_fraction is None and end_overlap_count is None:
+        for token in tokens:
+            raw_key = normalized_keys.get(token)
+            if raw_key is None:
+                continue
+            value = _info_value(record, raw_key)
+            if value not in (None, False, 0, "."):
+                legacy_match = True
+                break
+
+    return overlap_fraction, end_overlap_count, legacy_match
+
+
+def _context_passes(
+    *,
+    svtype: str,
+    overlap_fraction: Optional[float],
+    end_overlap_count: Optional[int],
+    legacy_match: bool,
+    context_overlap: float,
+) -> bool:
+    if svtype in _SPAN_BASED_CONTEXT_SVTYPES:
+        return overlap_fraction is not None and overlap_fraction >= context_overlap
+    if overlap_fraction is not None and overlap_fraction > 0:
+        return True
+    if end_overlap_count is not None and end_overlap_count > 0:
+        return True
+    return legacy_match
+
+
 def _alt_allele(record: pysam.VariantRecord) -> str:
     alts = tuple(record.alts or ())
     return ",".join(alts) if alts else ""
@@ -155,23 +210,33 @@ def _extract_concordance_metrics(record: pysam.VariantRecord) -> Optional[Dict[s
     return metrics or None
 
 
-def _genomic_context(record: pysam.VariantRecord) -> str:
-    available_keys = {str(key).lower().replace("_", "").replace("-", ""): str(key) for key in record.info.keys()}
-    for context in GENOMIC_CONTEXTS:
+def _genomic_context(record: pysam.VariantRecord, svtype: str, context_overlap: float = 0.5) -> str:
+    normalized_keys = {_normalize_info_key(str(key)): str(key) for key in record.info.keys()}
+    candidates: List[Tuple[float, int, int, str]] = []
+    for context_index, context in enumerate(GENOMIC_CONTEXTS):
         if context == "none":
             continue
-        for alias in _GENOMIC_CONTEXT_ALIASES.get(context, (context,)):
-            key = available_keys.get(alias.lower().replace("_", "").replace("-", ""), alias)
-            value = _info_value(record, key)
-            if value in (None, False, 0, "."):
-                continue
-            return context
-        for normalized_key, raw_key in available_keys.items():
-            if any(fragment in normalized_key for fragment in _GENOMIC_CONTEXT_SUBSTRINGS.get(context, ())):
-                value = _info_value(record, raw_key)
-                if value not in (None, False, 0, "."):
-                    return context
-    return "none"
+        overlap_fraction, end_overlap_count, legacy_match = _context_metrics(record, normalized_keys, context)
+        if not _context_passes(
+            svtype=svtype,
+            overlap_fraction=overlap_fraction,
+            end_overlap_count=end_overlap_count,
+            legacy_match=legacy_match,
+            context_overlap=context_overlap,
+        ):
+            continue
+        candidates.append(
+            (
+                overlap_fraction if overlap_fraction is not None else -1.0,
+                end_overlap_count if end_overlap_count is not None else -1,
+                -context_index,
+                context,
+            )
+        )
+    if not candidates:
+        return "none"
+    candidates.sort(reverse=True)
+    return candidates[0][3]
 
 
 def _iter_records_for_contig(vcf: pysam.VariantFile, contig: str) -> Iterator[pysam.VariantRecord]:
@@ -189,6 +254,7 @@ def iter_contig(
     extract_gq: bool = False,
     extract_concordance: bool = False,
     sample_indices: Optional[np.ndarray] = None,
+    context_overlap: float = 0.5,
 ) -> Iterator[SiteRecord]:
     """Yield SiteRecord values for one contig."""
     with pysam.VariantFile(str(vcf_path)) as vcf:
@@ -243,7 +309,7 @@ def iter_contig(
                 cn_nonref_freq=cn_nonref_freq,
                 status=str(_info_value(record, "STATUS")) if _info_value(record, "STATUS") not in (None, ".") else None,
                 truth_vid=str(_info_value(record, "TRUTH_VID")) if _info_value(record, "TRUTH_VID") not in (None, ".") else None,
-                genomic_context=_genomic_context(record),
+                genomic_context=_genomic_context(record, svtype, context_overlap=context_overlap),
                 gq_array=_extract_gq_array(record, sample_indices) if extract_gq else None,
                 concordance_metrics=_extract_concordance_metrics(record) if extract_concordance else None,
             )

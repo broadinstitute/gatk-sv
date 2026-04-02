@@ -42,14 +42,14 @@ def test_aggregate_builds_site_tables_and_matched_pairs(tmp_path, make_vcf) -> N
     extra_headers = [
         "##INFO=<ID=STATUS,Number=1,Type=String,Description=\"Match status\">",
         "##INFO=<ID=TRUTH_VID,Number=1,Type=String,Description=\"Truth variant id\">",
-        "##INFO=<ID=segdup,Number=0,Type=Flag,Description=\"Segmental duplication overlap\">",
+        "##INFO=<ID=OVERLAP_FRAC_SEGDUP,Number=1,Type=Float,Description=\"Segmental duplication overlap fraction\">",
     ]
     vcf_a = make_vcf(
         file_name="a.vcf",
         sample_names=["S1", "S2", "S3"],
         extra_header_lines=extra_headers,
         records=[
-            "chr1\t100\ta1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100;STATUS=MATCHED;TRUTH_VID=b1;segdup\tGT:GQ:ECN\t0/0:10:2\t0/1:20:2\t1/1:30:2",
+            "chr1\t100\ta1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100;STATUS=MATCHED;TRUTH_VID=b1;OVERLAP_FRAC_SEGDUP=0.8\tGT:GQ:ECN\t0/0:10:2\t0/1:20:2\t1/1:30:2",
             "chr1\t200\ta2\tN\t<CNV>\t.\tMULTIALLELIC\tSVTYPE=CNV;SVLEN=1000\tGT:GQ:ECN\t./.:40:2\t./.:35:2\t./.:25:2",
         ],
     )

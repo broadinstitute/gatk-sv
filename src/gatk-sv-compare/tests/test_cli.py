@@ -204,6 +204,68 @@ def test_cli_preprocess_builds_config(tmp_path, monkeypatch, capsys) -> None:
     assert captured["config"].n_workers == 2
 
 
+def test_cli_preprocess_restricts_to_single_contig(tmp_path, monkeypatch, capsys) -> None:
+    captured = {}
+
+    def fake_run_preprocess(config: AnalysisConfig):
+        captured["config"] = config
+        return tmp_path / "annotated_a.vcf.gz", tmp_path / "annotated_b.vcf.gz"
+
+    contig_list = tmp_path / "contigs.list"
+    contig_list.write_text("chr1\nchr22\n")
+    reference_dict = tmp_path / "ref.dict"
+    reference_dict.write_text("@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:1000\n@SQ\tSN:chr22\tLN:2000\n")
+
+    monkeypatch.setattr("gatk_sv_compare.cli.run_preprocess", fake_run_preprocess)
+
+    exit_code = main([
+        "preprocess",
+        "--vcf-a",
+        str(tmp_path / "a.vcf.gz"),
+        "--vcf-b",
+        str(tmp_path / "b.vcf.gz"),
+        "--reference-dict",
+        str(reference_dict),
+        "--contig-list",
+        str(contig_list),
+        "--contig",
+        "chr22",
+        "--output-dir",
+        str(tmp_path / "out"),
+    ])
+
+    captured_io = capsys.readouterr()
+    err = captured_io.err
+    assert exit_code == 0
+    assert "Loaded preprocess inputs: 1 contigs" in err
+    assert captured["config"].contigs == ["chr22"]
+    assert captured["config"].contig_lengths == {"chr22": 2000}
+
+
+def test_cli_preprocess_rejects_unknown_requested_contig(tmp_path) -> None:
+    contig_list = tmp_path / "contigs.list"
+    contig_list.write_text("chr1\nchr2\n")
+    reference_dict = tmp_path / "ref.dict"
+    reference_dict.write_text("@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:1000\n@SQ\tSN:chr2\tLN:2000\n")
+
+    with pytest.raises(ValueError, match="Requested contig chr22"):
+        main([
+            "preprocess",
+            "--vcf-a",
+            str(tmp_path / "a.vcf.gz"),
+            "--vcf-b",
+            str(tmp_path / "b.vcf.gz"),
+            "--reference-dict",
+            str(reference_dict),
+            "--contig-list",
+            str(contig_list),
+            "--contig",
+            "chr22",
+            "--output-dir",
+            str(tmp_path / "out"),
+        ])
+
+
 def test_cli_preprocess_defaults_to_auto_parallel_workers(tmp_path, monkeypatch, capsys) -> None:
     captured = {}
 
@@ -325,6 +387,8 @@ def test_cli_analyze_runs_selected_modules_and_skips_unmet_requirements(make_vcf
         "--output-dir",
         str(tmp_path / "out"),
         "--pass-only",
+        "--context-overlap",
+        "0.75",
         "--enable-site-match-table",
         "--per-sample-counts-table",
     ])
@@ -343,6 +407,7 @@ def test_cli_analyze_runs_selected_modules_and_skips_unmet_requirements(make_vcf
     assert captured["config"].modules == ["demo", "shared_demo", "ped_demo"]
     assert captured["config"].contigs == ["chr1"]
     assert captured["config"].pass_only is True
+    assert captured["config"].context_overlap == pytest.approx(0.75)
     assert captured["config"].enable_site_match_table is True
     assert captured["config"].per_sample_counts_table is True
 
@@ -409,6 +474,8 @@ def test_cli_run_executes_preprocess_then_analyze(tmp_path, monkeypatch, capsys)
         str(contig_list),
         "--output-dir",
         str(tmp_path / "out"),
+        "--context-overlap",
+        "0.25",
         "--modules",
         "demo",
     ])
@@ -425,4 +492,5 @@ def test_cli_run_executes_preprocess_then_analyze(tmp_path, monkeypatch, capsys)
     assert captured["analyze_config"].vcf_a_path == tmp_path / "annotated_a.vcf.gz"
     assert captured["analyze_config"].vcf_b_path == tmp_path / "annotated_b.vcf.gz"
     assert captured["analyze_config"].contig_lengths == {"chr1": 1000, "chr2": 2000}
+    assert captured["analyze_config"].context_overlap == pytest.approx(0.25)
 

@@ -28,6 +28,13 @@ def _resolve_num_workers(requested_workers: Optional[int], contig_count: int) ->
     return max(1, min(requested_workers, contig_count))
 
 
+def _context_overlap_value(raw_value: str) -> float:
+    value = float(raw_value)
+    if not 0.0 <= value <= 1.0:
+        raise argparse.ArgumentTypeError("--context-overlap must be between 0 and 1")
+    return value
+
+
 def _default_fix_output_path(vcf_path: Path) -> Path:
     if vcf_path.name.endswith(".vcf.gz"):
         return vcf_path.with_name(vcf_path.name[:-7] + ".fixed.vcf.gz")
@@ -79,6 +86,22 @@ def _infer_common_contigs(vcf_a_path: Path, vcf_b_path: Path) -> Tuple[List[str]
     return common_contigs, contig_lengths
 
 
+def _resolve_requested_preprocess_contigs(
+    contig_list_path: Path,
+    reference_dict_path: Path,
+    requested_contig: Optional[str] = None,
+) -> Tuple[List[str], Dict[str, int]]:
+    contigs = read_contig_list(contig_list_path)
+    contig_lengths = parse_reference_dict(reference_dict_path)
+    if requested_contig is None:
+        return contigs, contig_lengths
+    if requested_contig not in contigs:
+        raise ValueError(f"Requested contig {requested_contig} is not present in {contig_list_path}")
+    if requested_contig not in contig_lengths:
+        raise ValueError(f"Requested contig {requested_contig} is not present in {reference_dict_path}")
+    return [requested_contig], {requested_contig: contig_lengths[requested_contig]}
+
+
 def _build_analysis_config(
     *,
     vcf_a_path: Path,
@@ -88,6 +111,7 @@ def _build_analysis_config(
     label_b: str,
     module_names: Optional[List[str]],
     pass_only: bool,
+    context_overlap: float,
     per_chrom: bool,
     enable_site_match_table: bool,
     per_sample_counts_table: bool,
@@ -112,6 +136,7 @@ def _build_analysis_config(
         n_workers=resolved_workers,
         modules=module_names,
         pass_only=pass_only,
+        context_overlap=context_overlap,
         per_chrom=per_chrom,
         enable_site_match_table=enable_site_match_table,
         per_sample_counts_table=per_sample_counts_table,
@@ -187,6 +212,7 @@ def build_parser() -> argparse.ArgumentParser:
     preprocess_parser.add_argument("--vcf-b", required=True, type=Path)
     preprocess_parser.add_argument("--reference-dict", required=True, type=Path)
     preprocess_parser.add_argument("--contig-list", required=True, type=Path)
+    preprocess_parser.add_argument("--contig", help="Restrict preprocessing to a single contig from --contig-list")
     preprocess_parser.add_argument("--output-dir", required=True, type=Path)
     preprocess_parser.add_argument("--seg-dup-track", type=Path)
     preprocess_parser.add_argument("--simple-repeat-track", type=Path)
@@ -209,6 +235,12 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument("--output-dir", required=True, type=Path)
     analyze_parser.add_argument("--modules", help="Comma-separated module list to run")
     analyze_parser.add_argument("--pass-only", action="store_true")
+    analyze_parser.add_argument(
+        "--context-overlap",
+        type=_context_overlap_value,
+        default=0.5,
+        help="Minimum overlap fraction required to assign span-based genomic contexts (default: 0.5)",
+    )
     analyze_parser.add_argument("--per-chrom", action="store_true")
     analyze_parser.add_argument("--enable-site-match-table", action="store_true")
     analyze_parser.add_argument("--per-sample-counts-table", action="store_true")
@@ -236,6 +268,12 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--java-options", default="-Xmx4g")
     run_parser.add_argument("--modules", help="Comma-separated module list to run")
     run_parser.add_argument("--pass-only", action="store_true")
+    run_parser.add_argument(
+        "--context-overlap",
+        type=_context_overlap_value,
+        default=0.5,
+        help="Minimum overlap fraction required to assign span-based genomic contexts (default: 0.5)",
+    )
     run_parser.add_argument("--per-chrom", action="store_true")
     run_parser.add_argument("--enable-site-match-table", action="store_true")
     run_parser.add_argument("--per-sample-counts-table", action="store_true")
@@ -264,8 +302,11 @@ def _handle_validate(args: argparse.Namespace) -> int:
 
 def _handle_preprocess(args: argparse.Namespace) -> int:
     _configure_logging()
-    contigs = read_contig_list(args.contig_list)
-    contig_lengths = parse_reference_dict(args.reference_dict)
+    contigs, contig_lengths = _resolve_requested_preprocess_contigs(
+        args.contig_list,
+        args.reference_dict,
+        requested_contig=args.contig,
+    )
     resolved_workers = _resolve_num_workers(args.num_workers, len(contigs))
     logging.getLogger(__name__).info(
         "Loaded preprocess inputs: %s contigs from %s; using %s worker(s)",
@@ -303,6 +344,7 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         label_b=args.label_b,
         module_names=_parse_module_names(args.modules),
         pass_only=bool(args.pass_only),
+        context_overlap=float(args.context_overlap),
         per_chrom=bool(args.per_chrom),
         enable_site_match_table=bool(args.enable_site_match_table),
         per_sample_counts_table=bool(args.per_sample_counts_table),
@@ -348,6 +390,7 @@ def _handle_run(args: argparse.Namespace) -> int:
         label_b=args.label_b,
         module_names=_parse_module_names(args.modules),
         pass_only=bool(args.pass_only),
+        context_overlap=float(args.context_overlap),
         per_chrom=bool(args.per_chrom),
         enable_site_match_table=bool(args.enable_site_match_table),
         per_sample_counts_table=bool(args.per_sample_counts_table),

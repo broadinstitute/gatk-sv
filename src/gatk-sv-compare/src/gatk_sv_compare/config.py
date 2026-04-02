@@ -22,6 +22,7 @@ class AnalysisConfig:
     n_workers: int = 1
     modules: Optional[List[str]] = None
     pass_only: bool = False
+    context_overlap: float = 0.5
     per_chrom: bool = False
     enable_site_match_table: bool = False
     per_sample_counts_table: bool = False

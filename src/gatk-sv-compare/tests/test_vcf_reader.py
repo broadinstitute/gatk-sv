@@ -13,11 +13,12 @@ def test_iter_contig_uses_precomputed_counts_and_concordance(make_vcf) -> None:
         extra_header_lines=[
             "##INFO=<ID=STATUS,Number=1,Type=String,Description=\"Match status\">",
             "##INFO=<ID=TRUTH_VID,Number=1,Type=String,Description=\"Truth variant id\">",
-            "##INFO=<ID=segdup,Number=0,Type=Flag,Description=\"Segmental duplication overlap\">",
+            "##INFO=<ID=OVERLAP_FRAC_SEGDUP,Number=1,Type=Float,Description=\"Segmental duplication overlap fraction\">",
+            "##INFO=<ID=NUM_END_OVERLAPS_SEGDUP,Number=1,Type=Integer,Description=\"Segmental duplication end overlap count\">",
             "##INFO=<ID=VAR_PPV,Number=1,Type=Float,Description=\"Variant PPV\">",
         ],
         records=[
-            "chr1\t100\tvar1\tN\t<INS:ME:ALU>\t.\tPASS\tSVTYPE=INS;SVLEN=310;N_BI_GENOS=2;N_HOMREF=1;N_HET=1;N_HOMALT=0;STATUS=MATCHED;TRUTH_VID=truth1;segdup;VAR_PPV=0.95;gnomad_v4.1_sv_AF=0.1\tGT:GQ:ECN:OGQ:SL\t0/1:60:2:55:1.0\t0/0:50:2:49:1.2",
+            "chr1\t100\tvar1\tN\t<INS:ME:ALU>\t.\tPASS\tSVTYPE=INS;SVLEN=310;N_BI_GENOS=2;N_HOMREF=1;N_HET=1;N_HOMALT=0;STATUS=MATCHED;TRUTH_VID=truth1;OVERLAP_FRAC_SEGDUP=0.1;NUM_END_OVERLAPS_SEGDUP=1;VAR_PPV=0.95;gnomad_v4.1_sv_AF=0.1\tGT:GQ:ECN:OGQ:SL\t0/1:60:2:55:1.0\t0/0:50:2:49:1.2",
         ],
     )
 
@@ -75,19 +76,40 @@ def test_iter_contig_handles_cnv_frequency(make_vcf) -> None:
     assert record.n_bi_genos == 2
 
 
-def test_iter_contig_prefers_simple_repeat_over_segdup(make_vcf) -> None:
+def test_iter_contig_selects_highest_qualifying_context_overlap(make_vcf) -> None:
     vcf_path = make_vcf(
         file_name="contexts.vcf",
         extra_header_lines=[
-            "##INFO=<ID=segdup,Number=0,Type=Flag,Description=\"Segmental duplication overlap\">",
-            "##INFO=<ID=simple_repeat,Number=0,Type=Flag,Description=\"Simple repeat overlap\">",
+            "##INFO=<ID=OVERLAP_FRAC_SEGDUP,Number=1,Type=Float,Description=\"Segmental duplication overlap fraction\">",
+            "##INFO=<ID=OVERLAP_FRAC_SIMPLE_REPEAT,Number=1,Type=Float,Description=\"Simple repeat overlap fraction\">",
+            "##INFO=<ID=NUM_END_OVERLAPS_SEGDUP,Number=1,Type=Integer,Description=\"Segmental duplication end overlap count\">",
+            "##INFO=<ID=NUM_END_OVERLAPS_SIMPLE_REPEAT,Number=1,Type=Integer,Description=\"Simple repeat end overlap count\">",
         ],
         records=[
-            "chr1\t100\tctx1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100;segdup;simple_repeat\tGT:GQ:ECN\t0/1:40:2\t0/0:35:2",
+            "chr1\t100\tctx1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100;OVERLAP_FRAC_SEGDUP=0.8;OVERLAP_FRAC_SIMPLE_REPEAT=0.6;NUM_END_OVERLAPS_SEGDUP=2;NUM_END_OVERLAPS_SIMPLE_REPEAT=2\tGT:GQ:ECN\t0/1:40:2\t0/0:35:2",
         ],
     )
 
     records = list(iter_contig(vcf_path, "chr1"))
 
     assert len(records) == 1
-    assert records[0].genomic_context == "simple_repeat"
+    assert records[0].genomic_context == "segdup"
+
+
+def test_iter_contig_applies_context_overlap_threshold_for_span_variants(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="thresholds.vcf",
+        extra_header_lines=[
+            "##INFO=<ID=OVERLAP_FRAC_SEGDUP,Number=1,Type=Float,Description=\"Segmental duplication overlap fraction\">",
+            "##INFO=<ID=NUM_END_OVERLAPS_SEGDUP,Number=1,Type=Integer,Description=\"Segmental duplication end overlap count\">",
+        ],
+        records=[
+            "chr1\t100\tctx2\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100;OVERLAP_FRAC_SEGDUP=0.4;NUM_END_OVERLAPS_SEGDUP=2\tGT:GQ:ECN\t0/1:40:2\t0/0:35:2",
+        ],
+    )
+
+    default_records = list(iter_contig(vcf_path, "chr1"))
+    relaxed_records = list(iter_contig(vcf_path, "chr1", context_overlap=0.4))
+
+    assert default_records[0].genomic_context == "none"
+    assert relaxed_records[0].genomic_context == "segdup"

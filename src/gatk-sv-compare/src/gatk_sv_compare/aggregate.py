@@ -94,8 +94,8 @@ def _site_row(site: SiteRecord) -> dict:
     }
 
 
-def _extract_contig(vcf_path: Path, contig: str, output_path: Path) -> Path:
-    rows = [_site_row(site) for site in iter_contig(vcf_path, contig)]
+def _extract_contig(vcf_path: Path, contig: str, output_path: Path, context_overlap: float) -> Path:
+    rows = [_site_row(site) for site in iter_contig(vcf_path, contig, context_overlap=context_overlap)]
     dataframe = pd.DataFrame(rows, columns=_SITE_TABLE_COLUMNS) if rows else _empty_site_table()
     dataframe.to_parquet(output_path, index=False)
     return output_path
@@ -116,12 +116,27 @@ def _shared_samples(sample_names_a: Sequence[str], sample_names_b: Sequence[str]
     return shared, indices_a, indices_b
 
 
-def _extract_site_tables(vcf_path: Path, contigs: Sequence[str], output_dir: Path, prefix: str, n_workers: int) -> List[Path]:
+def _extract_site_tables(
+    vcf_path: Path,
+    contigs: Sequence[str],
+    output_dir: Path,
+    prefix: str,
+    n_workers: int,
+    context_overlap: float,
+) -> List[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     max_workers = max(1, n_workers)
     shard_paths = [output_dir / f"{prefix}.{contig}.parquet" for contig in contigs]
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        return list(executor.map(_extract_contig, [vcf_path] * len(contigs), list(contigs), shard_paths))
+        return list(
+            executor.map(
+                _extract_contig,
+                [vcf_path] * len(contigs),
+                list(contigs),
+                shard_paths,
+                [context_overlap] * len(contigs),
+            )
+        )
 
 
 def _read_site_tables(paths: Sequence[Path]) -> pd.DataFrame:
@@ -206,8 +221,22 @@ def aggregate(config: AnalysisConfig) -> AggregatedData:
     sample_names_b = _sample_names(config.vcf_b_path)
     shared_samples, sample_indices_a, sample_indices_b = _shared_samples(sample_names_a, sample_names_b)
 
-    site_paths_a = _extract_site_tables(config.vcf_a_path, config.contigs, aggregate_dir, "sites_a", config.n_workers)
-    site_paths_b = _extract_site_tables(config.vcf_b_path, config.contigs, aggregate_dir, "sites_b", config.n_workers)
+    site_paths_a = _extract_site_tables(
+        config.vcf_a_path,
+        config.contigs,
+        aggregate_dir,
+        "sites_a",
+        config.n_workers,
+        config.context_overlap,
+    )
+    site_paths_b = _extract_site_tables(
+        config.vcf_b_path,
+        config.contigs,
+        aggregate_dir,
+        "sites_b",
+        config.n_workers,
+        config.context_overlap,
+    )
 
     sites_a = _read_site_tables(site_paths_a)
     sites_b = _read_site_tables(site_paths_b)
