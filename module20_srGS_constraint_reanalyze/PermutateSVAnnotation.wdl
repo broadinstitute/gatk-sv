@@ -1,5 +1,7 @@
 version 1.0
 
+import "Structs.wdl"
+
 # ============================================================
 # PermutateSVAnnotation.wdl
 #
@@ -44,9 +46,19 @@ workflow PermutateSVAnnotation {
         String output_file_name
 
         # Docker images (override as needed)
-        String python_docker  = "python:3.11-slim"
+        String python_docker   = "python:3.11-slim"
         String bedtools_docker = "quay.io/biocontainers/bedtools:2.31.1--h63f29b4_0"
-        String r_docker       = "r-base:4.3.0"
+        String r_docker        = "r-base:4.3.0"
+
+        # Runtime attribute overrides per task
+        RuntimeAttr? runtime_attr_permute_gtf
+        RuntimeAttr? runtime_attr_split_gtf
+        RuntimeAttr? runtime_attr_bedtools_intersect
+        RuntimeAttr? runtime_attr_extract_overlaps
+        RuntimeAttr? runtime_attr_categorize_exon
+        RuntimeAttr? runtime_attr_reorganize_svid
+        RuntimeAttr? runtime_attr_integrate_overlaps
+        RuntimeAttr? runtime_attr_calcu_gene_data
     }
 
     String seed_suffix   = "permuted_seed" + permu_number
@@ -55,23 +67,25 @@ workflow PermutateSVAnnotation {
     # ── Task 1: Permute GTF ────────────────────────────────────────────────
     call Task1_PermuteGTF {
         input:
-            gtf_file       = gtf_file,
-            permu_number   = permu_number,
-            tel_cen_bed    = tel_cen_bed,
-            permute_script = permute_gtf_script,
-            gtf_label      = gtf_label,
-            seed_suffix    = seed_suffix,
-            docker         = python_docker
+            gtf_file              = gtf_file,
+            permu_number          = permu_number,
+            tel_cen_bed           = tel_cen_bed,
+            permute_script        = permute_gtf_script,
+            gtf_label             = gtf_label,
+            seed_suffix           = seed_suffix,
+            docker                = python_docker,
+            runtime_attr_override = runtime_attr_permute_gtf
     }
 
     # ── Task 2: Split permuted GTF into 7 annotation BED files ───────────
     call Task2_SplitGTF {
         input:
-            permuted_gtf = Task1_PermuteGTF.permuted_gtf,
-            split_script = split_gtf_script,
-            gtf_label    = gtf_label,
-            seed_suffix  = seed_suffix,
-            docker       = python_docker
+            permuted_gtf          = Task1_PermuteGTF.permuted_gtf,
+            split_script          = split_gtf_script,
+            gtf_label             = gtf_label,
+            seed_suffix           = seed_suffix,
+            docker                = python_docker,
+            runtime_attr_override = runtime_attr_split_gtf
     }
 
     # ── Task 3: Bedtools intersect SV vs each annotation BED ─────────────
@@ -87,7 +101,8 @@ workflow PermutateSVAnnotation {
             coding_transcript_bed = Task2_SplitGTF.coding_transcript_bed,
             sv_gtf_prefix         = sv_gtf_prefix,
             seed_suffix           = seed_suffix,
-            docker                = bedtools_docker
+            docker                = bedtools_docker,
+            runtime_attr_override = runtime_attr_bedtools_intersect
     }
 
     # ── Task 4: Extract overlap categories via awk/cut ────────────────────
@@ -102,7 +117,8 @@ workflow PermutateSVAnnotation {
             coding_transcript_isec = Task3_BedtoolsIntersect.coding_transcript_isec,
             sv_gtf_prefix          = sv_gtf_prefix,
             seed_suffix            = seed_suffix,
-            docker                 = bedtools_docker
+            docker                 = bedtools_docker,
+            runtime_attr_override  = runtime_attr_extract_overlaps
     }
 
     # ── Task 5: Categorize intact vs partial exon overlap (R) ────────────
@@ -113,7 +129,8 @@ workflow PermutateSVAnnotation {
             r_script               = categorize_r_script,
             sv_gtf_prefix          = sv_gtf_prefix,
             seed_suffix            = seed_suffix,
-            docker                 = r_docker
+            docker                 = r_docker,
+            runtime_attr_override  = runtime_attr_categorize_exon
     }
 
     # ── Task 6: Reorganize SVID vs gene for each overlap type (R) ─────────
@@ -133,7 +150,8 @@ workflow PermutateSVAnnotation {
             r_script                    = reorganize_r_script,
             sv_gtf_prefix               = sv_gtf_prefix,
             seed_suffix                 = seed_suffix,
-            docker                      = r_docker
+            docker                      = r_docker,
+            runtime_attr_override       = runtime_attr_reorganize_svid
     }
 
     # ── Task 7: Integrate all reorganized overlaps (R) ────────────────────
@@ -143,7 +161,8 @@ workflow PermutateSVAnnotation {
             r_script        = integrate_r_script,
             sv_gtf_prefix   = sv_gtf_prefix,
             seed_suffix     = seed_suffix,
-            docker          = r_docker
+            docker          = r_docker,
+            runtime_attr_override = runtime_attr_integrate_overlaps
     }
 
     # ── Task 8: Calculate per-gene SV data (R) ────────────────────────────
@@ -153,7 +172,8 @@ workflow PermutateSVAnnotation {
             r_script         = calcu_r_script,
             seed_suffix      = seed_suffix,
             output_file_name = output_file_name,
-            docker           = r_docker
+            docker           = r_docker,
+            runtime_attr_override = runtime_attr_calcu_gene_data
     }
 
     output {
@@ -179,6 +199,7 @@ task Task1_PermuteGTF {
         String gtf_label
         String seed_suffix
         String docker
+        RuntimeAttr? runtime_attr_override
     }
 
     String out_gtf = gtf_label + "." + seed_suffix + ".gtf.gz"
@@ -195,11 +216,24 @@ task Task1_PermuteGTF {
         File permuted_gtf = out_gtf
     }
 
+    RuntimeAttr default_attr = object {
+        cpu_cores:         4,
+        mem_gb:            8,
+        disk_gb:           50,
+        boot_disk_gb:      10,
+        preemptible_tries: 3,
+        max_retries:       1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     runtime {
-        docker: docker
-        memory: "8 GB"
-        cpu:    4
-        disks:  "local-disk 50 HDD"
+        cpu:            select_first([runtime_attr.cpu_cores,         default_attr.cpu_cores])
+        memory:         select_first([runtime_attr.mem_gb,            default_attr.mem_gb]) + " GiB"
+        disks:          "local-disk " + select_first([runtime_attr.disk_gb,           default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb,     default_attr.boot_disk_gb])
+        docker:         docker
+        preemptible:    select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries:     select_first([runtime_attr.max_retries,       default_attr.max_retries])
     }
 }
 
@@ -213,6 +247,7 @@ task Task2_SplitGTF {
         String gtf_label
         String seed_suffix
         String docker
+        RuntimeAttr? runtime_attr_override
     }
 
     String prefix = gtf_label + "." + seed_suffix
@@ -240,11 +275,24 @@ task Task2_SplitGTF {
         ]
     }
 
+    RuntimeAttr default_attr = object {
+        cpu_cores:         2,
+        mem_gb:            8,
+        disk_gb:           50,
+        boot_disk_gb:      10,
+        preemptible_tries: 3,
+        max_retries:       1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     runtime {
-        docker: docker
-        memory: "8 GB"
-        cpu:    2
-        disks:  "local-disk 50 HDD"
+        cpu:            select_first([runtime_attr.cpu_cores,         default_attr.cpu_cores])
+        memory:         select_first([runtime_attr.mem_gb,            default_attr.mem_gb]) + " GiB"
+        disks:          "local-disk " + select_first([runtime_attr.disk_gb,           default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb,     default_attr.boot_disk_gb])
+        docker:         docker
+        preemptible:    select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries:     select_first([runtime_attr.max_retries,       default_attr.max_retries])
     }
 }
 
@@ -264,6 +312,7 @@ task Task3_BedtoolsIntersect {
         String sv_gtf_prefix
         String seed_suffix
         String docker
+        RuntimeAttr? runtime_attr_override
     }
 
     command <<<
@@ -321,11 +370,24 @@ task Task3_BedtoolsIntersect {
         ]
     }
 
+    RuntimeAttr default_attr = object {
+        cpu_cores:         4,
+        mem_gb:            16,
+        disk_gb:           100,
+        boot_disk_gb:      10,
+        preemptible_tries: 3,
+        max_retries:       1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     runtime {
-        docker: docker
-        memory: "16 GB"
-        cpu:    4
-        disks:  "local-disk 100 HDD"
+        cpu:            select_first([runtime_attr.cpu_cores,         default_attr.cpu_cores])
+        memory:         select_first([runtime_attr.mem_gb,            default_attr.mem_gb]) + " GiB"
+        disks:          "local-disk " + select_first([runtime_attr.disk_gb,           default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb,     default_attr.boot_disk_gb])
+        docker:         docker
+        preemptible:    select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries:     select_first([runtime_attr.max_retries,       default_attr.max_retries])
     }
 }
 
@@ -348,6 +410,7 @@ task Task4_ExtractOverlaps {
         String sv_gtf_prefix
         String seed_suffix
         String docker
+        RuntimeAttr? runtime_attr_override
     }
 
     String p = sv_gtf_prefix  # shorthand
@@ -466,11 +529,24 @@ task Task4_ExtractOverlaps {
         ]
     }
 
+    RuntimeAttr default_attr = object {
+        cpu_cores:         2,
+        mem_gb:            8,
+        disk_gb:           50,
+        boot_disk_gb:      10,
+        preemptible_tries: 3,
+        max_retries:       1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     runtime {
-        docker: docker
-        memory: "8 GB"
-        cpu:    2
-        disks:  "local-disk 50 HDD"
+        cpu:            select_first([runtime_attr.cpu_cores,         default_attr.cpu_cores])
+        memory:         select_first([runtime_attr.mem_gb,            default_attr.mem_gb]) + " GiB"
+        disks:          "local-disk " + select_first([runtime_attr.disk_gb,           default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb,     default_attr.boot_disk_gb])
+        docker:         docker
+        preemptible:    select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries:     select_first([runtime_attr.max_retries,       default_attr.max_retries])
     }
 }
 
@@ -485,6 +561,7 @@ task Task5_CategorizeExonOverlap {
         String sv_gtf_prefix
         String seed_suffix
         String docker
+        RuntimeAttr? runtime_attr_override
     }
 
     command <<<
@@ -499,11 +576,24 @@ task Task5_CategorizeExonOverlap {
         File partial_exon_overlap = sv_gtf_prefix + ".partial_exon_overlap." + seed_suffix
     }
 
+    RuntimeAttr default_attr = object {
+        cpu_cores:         2,
+        mem_gb:            16,
+        disk_gb:           50,
+        boot_disk_gb:      10,
+        preemptible_tries: 3,
+        max_retries:       1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     runtime {
-        docker: docker
-        memory: "16 GB"
-        cpu:    2
-        disks:  "local-disk 50 HDD"
+        cpu:            select_first([runtime_attr.cpu_cores,         default_attr.cpu_cores])
+        memory:         select_first([runtime_attr.mem_gb,            default_attr.mem_gb]) + " GiB"
+        disks:          "local-disk " + select_first([runtime_attr.disk_gb,           default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb,     default_attr.boot_disk_gb])
+        docker:         docker
+        preemptible:    select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries:     select_first([runtime_attr.max_retries,       default_attr.max_retries])
     }
 }
 
@@ -527,6 +617,7 @@ task Task6_ReorganizeSVIDGene {
         String sv_gtf_prefix
         String seed_suffix
         String docker
+        RuntimeAttr? runtime_attr_override
     }
 
     String p = sv_gtf_prefix
@@ -572,11 +663,24 @@ task Task6_ReorganizeSVIDGene {
         ]
     }
 
+    RuntimeAttr default_attr = object {
+        cpu_cores:         2,
+        mem_gb:            16,
+        disk_gb:           50,
+        boot_disk_gb:      10,
+        preemptible_tries: 3,
+        max_retries:       1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     runtime {
-        docker: docker
-        memory: "16 GB"
-        cpu:    2
-        disks:  "local-disk 50 HDD"
+        cpu:            select_first([runtime_attr.cpu_cores,         default_attr.cpu_cores])
+        memory:         select_first([runtime_attr.mem_gb,            default_attr.mem_gb]) + " GiB"
+        disks:          "local-disk " + select_first([runtime_attr.disk_gb,           default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb,     default_attr.boot_disk_gb])
+        docker:         docker
+        preemptible:    select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries:     select_first([runtime_attr.max_retries,       default_attr.max_retries])
     }
 }
 
@@ -592,6 +696,7 @@ task Task7_IntegrateOverlaps {
         String      sv_gtf_prefix
         String      seed_suffix
         String      docker
+        RuntimeAttr? runtime_attr_override
     }
 
     command <<<
@@ -611,11 +716,24 @@ task Task7_IntegrateOverlaps {
         Array[File] integrated_files = glob(sv_gtf_prefix + ".*." + seed_suffix + "*")
     }
 
+    RuntimeAttr default_attr = object {
+        cpu_cores:         2,
+        mem_gb:            16,
+        disk_gb:           50,
+        boot_disk_gb:      10,
+        preemptible_tries: 3,
+        max_retries:       1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     runtime {
-        docker: docker
-        memory: "16 GB"
-        cpu:    2
-        disks:  "local-disk 50 HDD"
+        cpu:            select_first([runtime_attr.cpu_cores,         default_attr.cpu_cores])
+        memory:         select_first([runtime_attr.mem_gb,            default_attr.mem_gb]) + " GiB"
+        disks:          "local-disk " + select_first([runtime_attr.disk_gb,           default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb,     default_attr.boot_disk_gb])
+        docker:         docker
+        preemptible:    select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries:     select_first([runtime_attr.max_retries,       default_attr.max_retries])
     }
 }
 
@@ -629,6 +747,7 @@ task Task8_CalcuGeneData {
         String      seed_suffix
         String      output_file_name
         String      docker
+        RuntimeAttr? runtime_attr_override
     }
 
     command <<<
@@ -648,10 +767,23 @@ task Task8_CalcuGeneData {
         File result = output_file_name
     }
 
+    RuntimeAttr default_attr = object {
+        cpu_cores:         2,
+        mem_gb:            16,
+        disk_gb:           50,
+        boot_disk_gb:      10,
+        preemptible_tries: 3,
+        max_retries:       1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     runtime {
-        docker: docker
-        memory: "16 GB"
-        cpu:    2
-        disks:  "local-disk 50 HDD"
+        cpu:            select_first([runtime_attr.cpu_cores,         default_attr.cpu_cores])
+        memory:         select_first([runtime_attr.mem_gb,            default_attr.mem_gb]) + " GiB"
+        disks:          "local-disk " + select_first([runtime_attr.disk_gb,           default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb,     default_attr.boot_disk_gb])
+        docker:         docker
+        preemptible:    select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries:     select_first([runtime_attr.max_retries,       default_attr.max_retries])
     }
 }
