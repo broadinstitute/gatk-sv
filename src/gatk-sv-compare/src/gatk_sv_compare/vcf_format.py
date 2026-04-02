@@ -150,8 +150,30 @@ def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = Non
     if svtype_text not in _ALLOWED_SVTYPES:
         issues.append(FormatIssue("UNKNOWN_SVTYPE", "WARN", record_id, f"Unexpected SVTYPE: {svtype_text}"))
 
-    if any("]" in alt or "[" in alt for alt in alts):
+    has_bracket_alt = any("]" in alt or "[" in alt for alt in alts)
+    if has_bracket_alt:
         issues.append(FormatIssue("BREAKEND_NOTATION", "ERROR", record_id, "Breakend notation ALT allele is not supported"))
+
+    has_chr2 = "CHR2" in record.info
+    has_end2 = "END2" in record.info
+    if svtype_text == "BND" and not has_bracket_alt and (not has_chr2 or not has_end2):
+        issues.append(
+            FormatIssue(
+                "MISSING_BND_COORDS",
+                "ERROR",
+                record_id,
+                "BND record requires CHR2 and END2 unless ALT uses bracket notation",
+            )
+        )
+    if svtype_text == "CTX" and (not has_chr2 or not has_end2):
+        issues.append(
+            FormatIssue(
+                "MISSING_CTX_COORDS",
+                "ERROR",
+                record_id,
+                "CTX record requires CHR2 and END2",
+            )
+        )
 
     svlen = safe_info_get(record, "SVLEN")
     if svtype_text in {"DEL", "DUP", "INS", "INV", "CPX"} and svlen in (None, "."):

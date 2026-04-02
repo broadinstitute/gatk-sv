@@ -119,6 +119,76 @@ def test_validate_and_fix_canonicalizes_breakend_non_lossily(make_vcf, tmp_path)
         assert str(record.info["ORIGINAL_ALT"]) == "N]chr2:200]"
 
 
+def test_validate_and_fix_blocks_symbolic_bnd_missing_mate_coords(make_vcf, tmp_path) -> None:
+    vcf_path = make_vcf(
+        file_name="bad_bnd.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<BND>\t.\tPASS\tSVTYPE=BND\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+        ],
+    )
+
+    result = validate_and_fix(vcf_path, tmp_path / "bad_bnd.fixed.vcf.gz")
+
+    assert result.wrote_output is False
+    rendered = render_fix_result(result)
+    assert "MISSING_BND_COORDS" in rendered
+    assert "--drop-bad-bnd" in rendered
+
+
+def test_validate_and_fix_drops_symbolic_bnd_missing_mate_coords_when_requested(make_vcf, tmp_path) -> None:
+    vcf_path = make_vcf(
+        file_name="drop_bad_bnd.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<BND>\t.\tPASS\tSVTYPE=BND\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+            "chr1\t200\tvar2\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=25\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+        ],
+    )
+    out_path = tmp_path / "drop_bad_bnd.fixed.vcf.gz"
+
+    result = validate_and_fix(vcf_path, out_path, drop_bad_bnd=True)
+
+    assert result.wrote_output is True
+    with pysam.VariantFile(str(out_path)) as vcf:
+        records = list(vcf)
+        assert len(records) == 1
+        assert records[0].id == "var2"
+
+
+def test_validate_and_fix_blocks_bad_ctx_missing_mate_coords(make_vcf, tmp_path) -> None:
+    vcf_path = make_vcf(
+        file_name="bad_ctx.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<CTX>\t.\tPASS\tSVTYPE=CTX\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+        ],
+    )
+
+    result = validate_and_fix(vcf_path, tmp_path / "bad_ctx.fixed.vcf.gz")
+
+    assert result.wrote_output is False
+    rendered = render_fix_result(result)
+    assert "MISSING_CTX_COORDS" in rendered
+    assert "--drop-bad-ctx" in rendered
+
+
+def test_validate_and_fix_drops_bad_ctx_missing_mate_coords_when_requested(make_vcf, tmp_path) -> None:
+    vcf_path = make_vcf(
+        file_name="drop_bad_ctx.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<CTX>\t.\tPASS\tSVTYPE=CTX\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+            "chr1\t200\tvar2\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=25\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+        ],
+    )
+    out_path = tmp_path / "drop_bad_ctx.fixed.vcf.gz"
+
+    result = validate_and_fix(vcf_path, out_path, drop_bad_ctx=True)
+
+    assert result.wrote_output is True
+    with pysam.VariantFile(str(out_path)) as vcf:
+        records = list(vcf)
+        assert len(records) == 1
+        assert records[0].id == "var2"
+
+
 def test_validate_and_fix_blocks_unfixable_errors(make_vcf, tmp_path) -> None:
     vcf_path = make_vcf(
         file_name="unfixable.vcf",

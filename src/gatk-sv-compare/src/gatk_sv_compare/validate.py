@@ -242,7 +242,21 @@ def _clear_sample_gt(sample_text: str, format_keys: List[str]) -> str:
     return ":".join(sample_values)
 
 
-def _fix_record_line(line: str, ploidy_dict: Optional[Dict[str, Dict[str, int]]] = None, sample_names: Optional[List[str]] = None) -> str:
+def _has_bracket_alt(alt_values: List[str]) -> bool:
+    return len(alt_values) == 1 and any(bracket in alt_values[0] for bracket in ("[", "]"))
+
+
+def _missing_mate_coords(info_values: Dict[str, Optional[str]]) -> bool:
+    return info_values.get("CHR2") in (None, ".") or info_values.get("END2") in (None, ".")
+
+
+def _fix_record_line(
+    line: str,
+    ploidy_dict: Optional[Dict[str, Dict[str, int]]] = None,
+    sample_names: Optional[List[str]] = None,
+    drop_bad_bnd: bool = False,
+    drop_bad_ctx: bool = False,
+) -> Optional[str]:
     columns = line.rstrip("\n").split("\t")
     if len(columns) < 8:
         return line
@@ -270,7 +284,15 @@ def _fix_record_line(line: str, ploidy_dict: Optional[Dict[str, Dict[str, int]]]
             format_keys = format_text.split(":")
             sample_texts = [_clear_sample_gt(sample_text, format_keys) for sample_text in sample_texts]
 
-    if len(alt_values) == 1 and any(bracket in alt for bracket in ("[", "]")):
+    if svtype == "BND" and not _has_bracket_alt(alt_values) and _missing_mate_coords(info_values):
+        if drop_bad_bnd:
+            return None
+
+    if svtype == "CTX" and _missing_mate_coords(info_values):
+        if drop_bad_ctx:
+            return None
+
+    if _has_bracket_alt(alt_values):
         breakend_alt = alt_values[0]
         mate = _parse_breakend_alt(breakend_alt)
         if mate is not None:
@@ -331,7 +353,13 @@ def _write_augmented_header(header_lines: List[str], handle_out) -> None:
     handle_out.write(header_lines[-1])
 
 
-def apply_fixes(vcf_path: Path, out_path: Path, ploidy_table_path: Optional[Path] = None) -> None:
+def apply_fixes(
+    vcf_path: Path,
+    out_path: Path,
+    ploidy_table_path: Optional[Path] = None,
+    drop_bad_bnd: bool = False,
+    drop_bad_ctx: bool = False,
+) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     temp_output_path = out_path.with_suffix("") if _is_bgzip_output(out_path) else out_path
     ploidy_dict = _parse_ploidy_table(ploidy_table_path) if ploidy_table_path is not None else None
@@ -347,28 +375,60 @@ def apply_fixes(vcf_path: Path, out_path: Path, ploidy_table_path: Optional[Path
                 sample_names = line.rstrip("\n").split("\t")[9:]
                 _write_augmented_header(header_lines, handle_out)
                 continue
-            handle_out.write(_fix_record_line(line, ploidy_dict=ploidy_dict, sample_names=sample_names))
+            fixed_line = _fix_record_line(
+                line,
+                ploidy_dict=ploidy_dict,
+                sample_names=sample_names,
+                drop_bad_bnd=drop_bad_bnd,
+                drop_bad_ctx=drop_bad_ctx,
+            )
+            if fixed_line is None:
+                continue
+            handle_out.write(fixed_line)
     if _is_bgzip_output(out_path):
         pysam.tabix_compress(str(temp_output_path), str(out_path), force=True)
         pysam.tabix_index(str(out_path), preset="vcf", force=True)
         temp_output_path.unlink()
 
 
-def _is_fixable_error(issue: FormatIssue, ploidy_table_path: Optional[Path]) -> bool:
+def _is_fixable_error(
+    issue: FormatIssue,
+    ploidy_table_path: Optional[Path],
+    drop_bad_bnd: bool,
+    drop_bad_ctx: bool,
+) -> bool:
     if issue.check_id == "MISSING_ECN":
         return ploidy_table_path is not None
+    if issue.check_id == "MISSING_BND_COORDS":
+        return drop_bad_bnd
+    if issue.check_id == "MISSING_CTX_COORDS":
+        return drop_bad_ctx
     return issue.check_id in _FIXABLE_CHECK_IDS
 
 
-def validate_and_fix(vcf_path: Path, out_path: Path, ploidy_table_path: Optional[Path] = None) -> ValidationFixResult:
+def validate_and_fix(
+    vcf_path: Path,
+    out_path: Path,
+    ploidy_table_path: Optional[Path] = None,
+    drop_bad_bnd: bool = False,
+    drop_bad_ctx: bool = False,
+) -> ValidationFixResult:
     resolved_out_path = _normalize_bgzip_output_path(out_path)
     original_summary = validate_vcf(ValidateConfig(vcf_path=vcf_path))
     unfixable_errors = [
-        issue for issue in original_summary.issues if issue.severity == "ERROR" and not _is_fixable_error(issue, ploidy_table_path)
+        issue
+        for issue in original_summary.issues
+        if issue.severity == "ERROR" and not _is_fixable_error(issue, ploidy_table_path, drop_bad_bnd, drop_bad_ctx)
     ]
     if unfixable_errors:
         return ValidationFixResult(original_summary=original_summary, fixed_summary=None, out_path=None, wrote_output=False, unfixable_errors=unfixable_errors)
-    apply_fixes(vcf_path, resolved_out_path, ploidy_table_path=ploidy_table_path)
+    apply_fixes(
+        vcf_path,
+        resolved_out_path,
+        ploidy_table_path=ploidy_table_path,
+        drop_bad_bnd=drop_bad_bnd,
+        drop_bad_ctx=drop_bad_ctx,
+    )
     fixed_summary = validate_vcf(ValidateConfig(vcf_path=resolved_out_path))
     if fixed_summary.has_errors:
         resolved_out_path.unlink(missing_ok=True)
@@ -416,6 +476,10 @@ def render_fix_result(result: ValidationFixResult) -> str:
             lines.append(f"Fix mode aborted: unresolved critical checks remain: {offending_checks}")
             if "MISSING_ECN" in unresolved_errors:
                 lines.append("Hint: rerun with --ploidy-table to repair missing ECN fields.")
+            if "MISSING_BND_COORDS" in unresolved_errors:
+                lines.append("Hint: rerun with --drop-bad-bnd to omit unrescuable BND records lacking CHR2/END2.")
+            if "MISSING_CTX_COORDS" in unresolved_errors:
+                lines.append("Hint: rerun with --drop-bad-ctx to omit CTX records lacking CHR2/END2.")
             exemplar_errors: Dict[str, FormatIssue] = {}
             for issue in result.unresolved_errors():
                 exemplar_errors.setdefault(issue.check_id, issue)
@@ -439,7 +503,19 @@ def validate_and_render(vcf_path: Path) -> tuple[ValidationSummary, str]:
     return summary, render_summary(summary)
 
 
-def fix_and_render(vcf_path: Path, out_path: Path, ploidy_table_path: Optional[Path] = None) -> tuple[ValidationFixResult, str]:
+def fix_and_render(
+    vcf_path: Path,
+    out_path: Path,
+    ploidy_table_path: Optional[Path] = None,
+    drop_bad_bnd: bool = False,
+    drop_bad_ctx: bool = False,
+) -> tuple[ValidationFixResult, str]:
     """Convenience wrapper used by the CLI for validate --fix."""
-    result = validate_and_fix(vcf_path, out_path, ploidy_table_path=ploidy_table_path)
+    result = validate_and_fix(
+        vcf_path,
+        out_path,
+        ploidy_table_path=ploidy_table_path,
+        drop_bad_bnd=drop_bad_bnd,
+        drop_bad_ctx=drop_bad_ctx,
+    )
     return result, render_fix_result(result)

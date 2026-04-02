@@ -140,6 +140,59 @@ def test_cli_validate_fix_suggests_ploidy_table_for_missing_ecn(make_vcf, tmp_pa
     assert "--ploidy-table" in out
 
 
+def test_cli_validate_fix_suggests_drop_bad_bnd(make_vcf, capsys) -> None:
+    vcf_path = make_vcf(
+        file_name="bad_bnd_cli.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<BND>\t.\tPASS\tSVTYPE=BND\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+        ],
+    )
+
+    exit_code = main(["validate", "--vcf", str(vcf_path), "--fix"])
+
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert "MISSING_BND_COORDS" in out
+    assert "--drop-bad-bnd" in out
+
+
+def test_cli_validate_fix_drops_bad_bnd_when_requested(make_vcf, tmp_path, capsys) -> None:
+    vcf_path = make_vcf(
+        file_name="drop_bad_bnd_cli.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<BND>\t.\tPASS\tSVTYPE=BND\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+            "chr1\t200\tvar2\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=25\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+        ],
+    )
+    out_path = tmp_path / "drop_bad_bnd_cli.fixed.vcf.gz"
+
+    exit_code = main(["validate", "--vcf", str(vcf_path), "--fix", "--drop-bad-bnd", "--out", str(out_path)])
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert f"Wrote fixed VCF: {out_path}" in out
+    with pysam.VariantFile(str(out_path)) as vcf:
+        records = list(vcf)
+        assert len(records) == 1
+        assert records[0].id == "var2"
+
+
+def test_cli_validate_fix_suggests_drop_bad_ctx(make_vcf, capsys) -> None:
+    vcf_path = make_vcf(
+        file_name="bad_ctx_cli.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<CTX>\t.\tPASS\tSVTYPE=CTX\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+        ],
+    )
+
+    exit_code = main(["validate", "--vcf", str(vcf_path), "--fix"])
+
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert "MISSING_CTX_COORDS" in out
+    assert "--drop-bad-ctx" in out
+
+
 def test_cli_validate_fix_repairs_missing_ecn_with_ploidy_table(make_vcf, tmp_path, capsys) -> None:
     vcf_path = make_vcf(
         file_name="missing_ecn_cli.vcf",
