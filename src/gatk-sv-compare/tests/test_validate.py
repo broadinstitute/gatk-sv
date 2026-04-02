@@ -173,7 +173,9 @@ def test_validate_and_fix_reports_missing_ecn_without_ploidy_table(make_vcf, tmp
 
     assert result.wrote_output is False
     assert result.fixed_summary is None
-    assert "MISSING_ECN" in render_fix_result(result)
+    rendered = render_fix_result(result)
+    assert "MISSING_ECN" in rendered
+    assert "--ploidy-table" in rendered
 
 
 def test_validate_and_fix_converts_cn_multiallelic_record_to_cnv(make_vcf, tmp_path) -> None:

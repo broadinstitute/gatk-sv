@@ -414,6 +414,8 @@ def render_fix_result(result: ValidationFixResult) -> str:
                 for check_id, count in sorted(unresolved_errors.items())
             )
             lines.append(f"Fix mode aborted: unresolved critical checks remain: {offending_checks}")
+            if "MISSING_ECN" in unresolved_errors:
+                lines.append("Hint: rerun with --ploidy-table to repair missing ECN fields.")
             exemplar_errors: Dict[str, FormatIssue] = {}
             for issue in result.unresolved_errors():
                 exemplar_errors.setdefault(issue.check_id, issue)

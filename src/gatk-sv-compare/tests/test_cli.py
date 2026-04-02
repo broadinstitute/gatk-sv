@@ -124,6 +124,22 @@ def test_cli_validate_fix_reports_blocking_check(make_vcf, tmp_path, capsys) -> 
     assert "[var1]" in out
 
 
+def test_cli_validate_fix_suggests_ploidy_table_for_missing_ecn(make_vcf, tmp_path, capsys) -> None:
+    vcf_path = make_vcf(
+        file_name="missing_ecn_hint.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=25\tGT:GQ\t0/1:60\t0/0:50",
+        ],
+    )
+
+    exit_code = main(["validate", "--vcf", str(vcf_path), "--fix"])
+
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert "MISSING_ECN" in out
+    assert "--ploidy-table" in out
+
+
 def test_cli_validate_fix_repairs_missing_ecn_with_ploidy_table(make_vcf, tmp_path, capsys) -> None:
     vcf_path = make_vcf(
         file_name="missing_ecn_cli.vcf",
