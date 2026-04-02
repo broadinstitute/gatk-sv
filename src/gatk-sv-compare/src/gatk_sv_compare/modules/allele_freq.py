@@ -11,7 +11,7 @@ from scipy.stats import pearsonr, spearmanr
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import ordered_svtypes
+from ..dimensions import ordered_af_buckets, ordered_contexts, ordered_size_buckets, ordered_svtypes
 from ..plot_utils import double_column_figsize, plot_scatter_af, save_figure, single_column_figsize
 from .base import AnalysisModule, write_tsv_gz
 
@@ -74,6 +74,75 @@ def build_af_correlation_table(data: AggregatedData) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _matched_pairs_with_categories(data: AggregatedData) -> pd.DataFrame:
+    matched = data.matched_pairs.copy()
+    if matched.empty:
+        return matched
+    site_meta = data.sites_a[["variant_id", "size_bucket", "af_bucket", "genomic_context"]].rename(
+        columns={
+            "variant_id": "variant_id_a",
+            "size_bucket": "size_bucket_a",
+            "af_bucket": "af_bucket_a",
+            "genomic_context": "genomic_context_a",
+        }
+    )
+    return matched.merge(site_meta, on="variant_id_a", how="left")
+
+
+def _ordered_group_values(frame: pd.DataFrame, group_field: str) -> list[str]:
+    values = frame[group_field].dropna().astype(str).unique()
+    if group_field == "svtype_a":
+        return [value for value in ordered_svtypes(values) if value != "CTX"]
+    if group_field == "size_bucket_a":
+        return [value for value in ordered_size_buckets(values) if value != "N/A"]
+    if group_field == "af_bucket_a":
+        return ordered_af_buckets(values)
+    if group_field == "genomic_context_a":
+        return ordered_contexts(values)
+    return sorted(values)
+
+
+def _plot_grouped_af_correlation(
+    matched_pairs: pd.DataFrame,
+    group_field: str,
+    output_path,
+    label_a: str,
+    label_b: str,
+) -> None:
+    group_values = _ordered_group_values(matched_pairs, group_field)
+    panel_count = max(len(group_values), 1)
+    ncols = 3
+    nrows = int(np.ceil(panel_count / ncols))
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=double_column_figsize(max(3.6, 2.1 * nrows)),
+        squeeze=False,
+        sharex=True,
+        sharey=True,
+        constrained_layout=True,
+    )
+    flat_axes = axes.flatten()
+    for index, (axis, group_value) in enumerate(zip(flat_axes, group_values)):
+        frame = matched_pairs.loc[matched_pairs[group_field].astype(str) == str(group_value), ["af_a", "af_b"]].dropna()
+        if not frame.empty:
+            plot_scatter_af(axis, frame["af_a"], frame["af_b"], label_a, label_b)
+            axis.set_xlim(0.0, 1.0)
+            axis.set_ylim(0.0, 1.0)
+            pearson_r, _, _, _ = _compute_correlation_stats(frame["af_a"], frame["af_b"])
+            _annotate_r_squared(axis, pearson_r)
+        else:
+            axis.text(0.5, 0.5, "No AF data", ha="center", va="center")
+        axis.set_title(str(group_value))
+        if index // ncols < nrows - 1:
+            axis.set_xlabel("")
+        if index % ncols != 0:
+            axis.set_ylabel("")
+    for axis in flat_axes[len(group_values):]:
+        axis.set_axis_off()
+    save_figure(fig, output_path)
+
+
 class AlleleFreqModule(AnalysisModule):
     @property
     def name(self) -> str:
@@ -86,7 +155,7 @@ class AlleleFreqModule(AnalysisModule):
         stats = build_af_correlation_table(data)
         write_tsv_gz(stats, tables_dir / "af_correlation_stats.tsv")
 
-        overall = data.matched_pairs.copy()
+        overall = _matched_pairs_with_categories(data)
         fig, ax = plt.subplots(figsize=single_column_figsize(3.2))
         overall_valid = overall[["af_a", "af_b"]].dropna() if not overall.empty else pd.DataFrame()
         if not overall_valid.empty:
@@ -102,35 +171,7 @@ class AlleleFreqModule(AnalysisModule):
         save_figure(fig, output_dir / "af_correlation.overall.png")
 
         if not overall.empty:
-            svtypes = [svtype for svtype in ordered_svtypes(overall["svtype_a"].dropna().unique()) if svtype != "CTX"]
-            panel_count = max(len(svtypes), 1)
-            ncols = 3
-            nrows = int(np.ceil(panel_count / ncols))
-            fig, axes = plt.subplots(
-                nrows,
-                ncols,
-                figsize=double_column_figsize(max(3.6, 2.1 * nrows)),
-                squeeze=False,
-                sharex=True,
-                sharey=True,
-                constrained_layout=True,
-            )
-            flat_axes = axes.flatten()
-            for index, (axis, svtype) in enumerate(zip(flat_axes, svtypes)):
-                frame = overall.loc[overall["svtype_a"] == svtype, ["af_a", "af_b"]].dropna()
-                if not frame.empty:
-                    plot_scatter_af(axis, frame["af_a"], frame["af_b"], data.label_a, data.label_b)
-                    axis.set_xlim(0.0, 1.0)
-                    axis.set_ylim(0.0, 1.0)
-                    pearson_r, _, _, _ = _compute_correlation_stats(frame["af_a"], frame["af_b"])
-                    _annotate_r_squared(axis, pearson_r)
-                else:
-                    axis.text(0.5, 0.5, "No AF data", ha="center", va="center")
-                axis.set_title(str(svtype))
-                if index // ncols < nrows - 1:
-                    axis.set_xlabel("")
-                if index % ncols != 0:
-                    axis.set_ylabel("")
-            for axis in flat_axes[len(svtypes):]:
-                axis.set_axis_off()
-            save_figure(fig, output_dir / "af_correlation.by_type.png")
+            _plot_grouped_af_correlation(overall, "svtype_a", output_dir / "af_correlation.by_type.png", data.label_a, data.label_b)
+            _plot_grouped_af_correlation(overall, "size_bucket_a", output_dir / "af_correlation.by_size.png", data.label_a, data.label_b)
+            _plot_grouped_af_correlation(overall, "af_bucket_a", output_dir / "af_correlation.by_af.png", data.label_a, data.label_b)
+            _plot_grouped_af_correlation(overall, "genomic_context_a", output_dir / "af_correlation.by_context.png", data.label_a, data.label_b)

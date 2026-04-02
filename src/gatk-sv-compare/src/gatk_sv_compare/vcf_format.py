@@ -188,7 +188,7 @@ def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = Non
 
     end = record.stop
     if svtype_text == "INS" and end != record.pos:
-        issues.append(FormatIssue("INS_END_MISMATCH", "WARN", record_id, "INS END does not equal POS"))
+        issues.append(FormatIssue("INS_END_MISMATCH", "INFO", record_id, "INS END does not equal POS"))
     if svtype_text in {"BND", "CTX"} and end != record.pos and "END2" not in record.info:
         issues.append(FormatIssue("BND_END_MISMATCH", "WARN", record_id, "BND/CTX END does not equal POS and END2 is missing"))
     cpx_type = str(safe_info_get(record, "CPX_TYPE", ""))

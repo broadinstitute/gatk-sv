@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import matplotlib.pyplot as plt
 import pandas as pd
 
 from gatk_sv_compare.modules.genotype_dist import GenotypeDistModule, build_hwe_table, summarize_hwe_by_bucket
+from gatk_sv_compare.plot_utils import plot_ternary
 
 
 def test_build_hwe_table_returns_expected_rows(module_test_context) -> None:
@@ -32,3 +34,13 @@ def test_summarize_hwe_by_bucket_writes_label_specific_columns(module_test_conte
 
     assert not summary.empty
     assert {"n_variants_CallsetA", "frac_pass_CallsetA", "mean_af_CallsetA"}.issubset(summary.columns)
+
+
+def test_plot_ternary_labels_corners() -> None:
+    fig, ax = plt.subplots()
+
+    plot_ternary(ax, [0.5], [0.25], [0.25], ["#000000"])
+
+    labels = {text.get_text() for text in ax.texts}
+    assert {"REF", "HET", "HOMVAR"}.issubset(labels)
+    plt.close(fig)

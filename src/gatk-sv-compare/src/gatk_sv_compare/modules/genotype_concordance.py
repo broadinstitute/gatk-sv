@@ -13,8 +13,8 @@ import pysam
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import af_bucket_sort_key, complete_genomic_context_buckets, genomic_context_sort_key, ordered_contexts, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
-from ..plot_utils import CALLSET_COLORS, SUMMARY_COLORS, double_column_figsize, save_figure
+from ..dimensions import af_bucket_sort_key, complete_genomic_context_buckets, genomic_context_sort_key, ordered_af_buckets, ordered_contexts, ordered_size_buckets, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
+from ..plot_utils import double_column_figsize, plot_heatmap_annotated, save_figure
 from ..vcf_format import safe_info_get
 from ..vcf_reader import _CONCORDANCE_FIELDS
 from .base import AnalysisModule, relabel_vcf_columns, write_tsv_gz
@@ -131,99 +131,78 @@ def summarize_concordance_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
-def _plot_metric_panels(metrics: pd.DataFrame, label_a: str, label_b: str, output_path: Path) -> None:
-    metric_names = ["genotype_concordance", "non_ref_genotype_concordance", "var_ppv", "var_sensitivity"]
-    titles = {
-        "genotype_concordance": "Genotype concordance",
-        "non_ref_genotype_concordance": "Non-ref genotype concordance",
-        "var_ppv": "Variant PPV",
-        "var_sensitivity": "Variant sensitivity",
-    }
-    fig, axes = plt.subplots(2, 2, figsize=double_column_figsize(5.2), squeeze=False)
-    flat_axes = axes.flatten()
-    for ax, metric in zip(flat_axes, metric_names):
-        if metrics.empty or metric not in metrics.columns:
-            ax.text(0.5, 0.5, "No concordance metrics", ha="center", va="center")
-            ax.set_axis_off()
-            continue
-        metric_frame = metrics.copy()
-        if metric == "genotype_concordance" and "cnv_concordance" in metric_frame.columns:
-            cnv_mask = metric_frame["svtype"].astype(str) == "CNV"
-            metric_frame.loc[cnv_mask, metric] = metric_frame.loc[cnv_mask, "cnv_concordance"]
-        if metric != "genotype_concordance":
-            metric_frame = metric_frame.loc[metric_frame["svtype"].astype(str) != "CNV"]
-        metric_frame = metric_frame.loc[metric_frame["size_bucket"].astype(str) != "N/A"]
-        grouped_a = metric_frame.loc[metric_frame["source"] == "a"].groupby("svtype", dropna=False)[metric].median()
-        grouped_b = metric_frame.loc[metric_frame["source"] == "b"].groupby("svtype", dropna=False)[metric].median()
-        svtypes = ordered_svtypes(set(grouped_a.index.astype(str)).union(set(grouped_b.index.astype(str))))
-        if not svtypes:
-            ax.text(0.5, 0.5, "No concordance metrics", ha="center", va="center")
-            ax.set_axis_off()
-            continue
-        x_positions = np.arange(len(svtypes), dtype=float)
-        values_a = [float(grouped_a.get(svtype, np.nan)) for svtype in svtypes]
-        values_b = [float(grouped_b.get(svtype, np.nan)) for svtype in svtypes]
-        width = 0.36
-        ax.bar(x_positions - width / 2, values_a, width=width, color=CALLSET_COLORS["a"], label=label_a, edgecolor=SUMMARY_COLORS["edge"], linewidth=0.8)
-        ax.bar(x_positions + width / 2, values_b, width=width, color=CALLSET_COLORS["b"], label=label_b, edgecolor=SUMMARY_COLORS["edge"], linewidth=0.8)
-        for x_pos, value in zip(x_positions - width / 2, values_a):
-            if np.isfinite(value):
-                ax.text(x_pos, value / 2.0, f"{value:.0%}", ha="center", va="center", fontsize=5.5)
-        for x_pos, value in zip(x_positions + width / 2, values_b):
-            if np.isfinite(value):
-                ax.text(x_pos, value / 2.0, f"{value:.0%}", ha="center", va="center", fontsize=5.5)
-        ax.set_xticks(x_positions)
-        ax.set_xticklabels(svtypes, rotation=30)
-        ax.set_ylim(0.0, 1.0)
-        ax.set_ylabel("Median concordance")
-        ax.set_xlabel("SV type")
-        ax.set_title(titles[metric])
-    handles, labels = flat_axes[0].get_legend_handles_labels()
-    if handles:
-        flat_axes[0].legend(handles, labels, fontsize=8, frameon=False, loc="upper left", bbox_to_anchor=(0.0, -0.32), ncol=2)
-    fig.subplots_adjust(bottom=0.18, hspace=0.35, wspace=0.25)
-    save_figure(fig, output_path)
-
-
 def _concordance_series(metrics: pd.DataFrame, metric: str) -> pd.DataFrame:
     if metrics.empty or metric not in metrics.columns:
-        return pd.DataFrame(columns=["svtype", "size_bucket", "af_bucket", "genomic_context", metric])
+        return pd.DataFrame(columns=["source", "svtype", "size_bucket", "af_bucket", "genomic_context", metric])
     metric_frame = metrics.copy()
     if metric == "genotype_concordance" and "cnv_concordance" in metric_frame.columns:
         cnv_mask = metric_frame["svtype"].astype(str) == "CNV"
         metric_frame.loc[cnv_mask, metric] = metric_frame.loc[cnv_mask, "cnv_concordance"]
     metric_frame = metric_frame.loc[metric_frame["size_bucket"].astype(str) != "N/A"]
-    return metric_frame[["svtype", "size_bucket", "af_bucket", "genomic_context", metric]].dropna(subset=[metric])
+    if metric != "genotype_concordance":
+        metric_frame = metric_frame.loc[metric_frame["svtype"].astype(str) != "CNV"]
+    return metric_frame[["source", "svtype", "size_bucket", "af_bucket", "genomic_context", metric]].dropna(subset=[metric])
 
 
-def _plot_grouped_concordance(metrics: pd.DataFrame, group_field: str, output_path: Path) -> None:
-    fig, ax = plt.subplots(figsize=double_column_figsize(3.0))
-    concordance = _concordance_series(metrics, "genotype_concordance")
-    if concordance.empty:
-        ax.text(0.5, 0.5, "No concordance metrics", ha="center", va="center")
-        ax.set_axis_off()
-        save_figure(fig, output_path)
-        return
-    grouped = concordance.groupby(group_field, dropna=False)["genotype_concordance"].mean()
-    if group_field == "svtype":
-        ordered_index = ordered_svtypes(grouped.index.astype(str))
-    elif group_field == "size_bucket":
-        ordered_index = sorted(grouped.index.astype(str), key=size_bucket_sort_key)
-    elif group_field == "af_bucket":
-        ordered_index = sorted(grouped.index.astype(str), key=af_bucket_sort_key)
-    else:
-        ordered_index = ordered_contexts(grouped.index.astype(str))
-    grouped = grouped.reindex(ordered_index).fillna(0.0)
-    grouped = grouped.loc[grouped.index.astype(str) != "N/A"]
-    ax.bar(grouped.index.astype(str), grouped.values, color=SUMMARY_COLORS["primary"], edgecolor=SUMMARY_COLORS["edge"], linewidth=0.8)
-    for x_pos, value in enumerate(grouped.values):
-        if np.isfinite(value):
-            ax.text(x_pos, value / 2.0, f"{value:.0%}", ha="center", va="center", fontsize=5.5)
-    ax.set_ylim(0.0, 1.0)
-    ax.set_ylabel("Mean genotype concordance")
-    ax.set_xlabel(group_field.replace("_", " "))
-    ax.set_title(f"Genotype concordance by {group_field.replace('_', ' ')}")
-    ax.tick_params(axis="x", rotation=30)
+def _ordered_heatmap_rows(row_field: str, values: pd.Index) -> list[str]:
+    if row_field == "af_bucket":
+        return ordered_af_buckets(values)
+    if row_field == "size_bucket":
+        return [value for value in ordered_size_buckets(values) if str(value) != "N/A"]
+    if row_field == "genomic_context":
+        return ordered_contexts(values)
+    return [str(value) for value in values]
+
+
+def _metric_title(metric: str) -> str:
+    return {
+        "genotype_concordance": "Genotype concordance",
+        "non_ref_genotype_concordance": "Non-ref genotype concordance",
+        "var_ppv": "Variant PPV",
+        "var_sensitivity": "Variant sensitivity",
+    }[metric]
+
+
+def _metric_stem(metric: str) -> str:
+    return {
+        "genotype_concordance": "genotype_concordance",
+        "non_ref_genotype_concordance": "non_ref_genotype_concordance",
+        "var_ppv": "variant_ppv",
+        "var_sensitivity": "variant_sensitivity",
+    }[metric]
+
+
+def _plot_metric_heatmap(
+    metrics: pd.DataFrame,
+    metric: str,
+    row_field: str,
+    output_path: Path,
+    label_a: str,
+    label_b: str,
+) -> None:
+    metric_frame = _concordance_series(metrics, metric)
+    fig, axes = plt.subplots(1, 2, figsize=double_column_figsize(3.2), squeeze=False)
+    flat_axes = axes.flatten()
+    image = None
+    for ax, source, label in zip(flat_axes, ["a", "b"], [label_a, label_b]):
+        source_frame = metric_frame.loc[metric_frame["source"] == source]
+        if source_frame.empty:
+            ax.text(0.5, 0.5, "No concordance metrics", ha="center", va="center")
+            ax.set_axis_off()
+            continue
+        grouped = source_frame.groupby([row_field, "svtype"], dropna=False)[metric].median().reset_index()
+        matrix = grouped.pivot(index=row_field, columns="svtype", values=metric)
+        matrix = matrix.reindex(index=_ordered_heatmap_rows(row_field, matrix.index), columns=ordered_svtypes(matrix.columns))
+        matrix = matrix.fillna(0.0)
+        image = plot_heatmap_annotated(ax, matrix.values, list(matrix.index), list(matrix.columns), fmt="{value:.2f}")
+        ax.set_title(label)
+        ax.set_xlabel("SV type")
+        if ax is flat_axes[0]:
+            ax.set_ylabel(row_field.replace("_", " "))
+    if image is not None:
+        colorbar = fig.colorbar(image, ax=flat_axes.tolist())
+        colorbar.set_label(_metric_title(metric))
+    fig.suptitle(f"{_metric_title(metric)}: {row_field.replace('_', ' ')} × SV type", y=0.98)
     save_figure(fig, output_path)
 
 
@@ -249,8 +228,8 @@ class GenotypeConcordanceModule(AnalysisModule):
         metrics = pd.concat([metrics_a, metrics_b], ignore_index=True) if not metrics_a.empty or not metrics_b.empty else pd.DataFrame()
         summary = relabel_vcf_columns(summarize_concordance_metrics(metrics), data.label_a, data.label_b)
         write_tsv_gz(summary, tables_dir / "concordance_metrics.tsv")
-        _plot_metric_panels(metrics, data.label_a, data.label_b, output_dir / "concordance_metrics.by_type.png")
-        _plot_grouped_concordance(metrics, "svtype", output_dir / "exact_match.by_type.png")
-        _plot_grouped_concordance(metrics, "size_bucket", output_dir / "exact_match.by_size.png")
-        _plot_grouped_concordance(metrics, "af_bucket", output_dir / "exact_match.by_af.png")
-        _plot_grouped_concordance(metrics, "genomic_context", output_dir / "exact_match.by_context.png")
+        for metric in ["genotype_concordance", "non_ref_genotype_concordance", "var_ppv", "var_sensitivity"]:
+            stem = _metric_stem(metric)
+            _plot_metric_heatmap(metrics, metric, "af_bucket", output_dir / f"{stem}.af_bucket_x_svtype.png", data.label_a, data.label_b)
+            _plot_metric_heatmap(metrics, metric, "size_bucket", output_dir / f"{stem}.size_bucket_x_svtype.png", data.label_a, data.label_b)
+            _plot_metric_heatmap(metrics, metric, "genomic_context", output_dir / f"{stem}.genomic_context_x_svtype.png", data.label_a, data.label_b)

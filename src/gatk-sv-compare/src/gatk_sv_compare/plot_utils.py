@@ -214,6 +214,9 @@ def plot_ternary(ax, aa, ab, bb, colors, draw_hwe_curve=True, alpha=0.05):
         curve_x = 0.5 * (2 * bb_curve + ab_curve)
         curve_y = (sqrt(3) / 2.0) * ab_curve
         ax.plot(curve_x, curve_y, color="gray", linestyle="--", linewidth=1)
+    ax.text(0.0, -0.045, "REF", ha="left", va="top")
+    ax.text(0.5, (sqrt(3) / 2.0) + 0.035, "HET", ha="center", va="bottom")
+    ax.text(1.0, -0.045, "HOMVAR", ha="right", va="top")
     ax.set_axis_off()
     return ax
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from gatk_sv_compare.modules.overall_counts import OverallCountsModule, _af_bin_edges
+from gatk_sv_compare.modules.overall_counts import OverallCountsModule, _af_bin_edges, _normalized_histogram
 
 
 def test_af_bin_edges_use_discrete_low_ac_bins() -> None:
@@ -48,3 +48,10 @@ def test_overall_counts_module_writes_expected_plots(module_test_context) -> Non
     ]
     for name in expected:
         assert (output_dir / name).exists()
+
+
+def test_normalized_histogram_returns_proportions() -> None:
+    counts, edges = _normalized_histogram(np.asarray([0.1, 0.1, 0.3, 0.7], dtype=float), np.asarray([0.0, 0.2, 0.5, 1.0], dtype=float))
+
+    np.testing.assert_allclose(counts, np.asarray([0.5, 0.25, 0.25]))
+    np.testing.assert_allclose(edges, np.asarray([0.0, 0.2, 0.5, 1.0]))

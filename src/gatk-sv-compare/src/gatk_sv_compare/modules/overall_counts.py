@@ -119,16 +119,24 @@ def _plot_af_distribution(sites: pd.DataFrame, output_path: Path, title: str) ->
     for svtype in ordered_svtypes(valid_sites["svtype"].unique()):
         frame = valid_sites.loc[valid_sites["svtype"] == svtype]
         values = np.clip(frame["af"].astype(float).to_numpy(), min_af, 1.0)
-        counts, edges = np.histogram(values, bins=af_bin_edges)
+        counts, edges = _normalized_histogram(values, af_bin_edges)
         centers = np.sqrt(edges[:-1] * edges[1:])
         ax.plot(centers, counts, linewidth=1.5, label=svtype, color=SVTYPE_COLORS.get(svtype, SUMMARY_COLORS["neutral"]))
     ax.set_xscale("log")
     ax.set_xlim(min_af, 1.0)
     ax.set_xlabel("Allele frequency")
-    ax.set_ylabel("Count")
+    ax.set_ylabel("Proportion of SV type")
     ax.legend(fontsize=8)
     ax.set_title(title)
     save_figure(fig, output_path)
+
+
+def _normalized_histogram(values: np.ndarray, bins: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    counts, edges = np.histogram(values, bins=bins)
+    total = int(counts.sum())
+    if total == 0:
+        return counts.astype(float), edges
+    return counts.astype(float) / float(total), edges
 
 
 def _plot_context_by_type(sites: pd.DataFrame, output_path: Path, title: str) -> None:

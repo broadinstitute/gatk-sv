@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pysam
 from matplotlib.gridspec import GridSpec
+from matplotlib.transforms import offset_copy
 
 from ..config import AnalysisConfig
 from ..dimensions import normalize_svtype, ordered_svtypes
@@ -73,6 +74,7 @@ def _draw_swarm_with_summary(
     rng: np.random.Generator,
     median_label_dx: float = 0.05,
     median_label_dy_fraction: float = 0.035,
+    median_label_dx_pixels: float = 10.0,
 ) -> None:
     if values.size == 0:
         return
@@ -83,10 +85,12 @@ def _draw_swarm_with_summary(
     ax.vlines(x_center, q1, q3, colors="black", linewidth=1.2, zorder=3)
     ax.hlines([q1, q3], x_center - 0.045, x_center + 0.045, colors="black", linewidth=1.0, zorder=3)
     ax.hlines(median, x_center - 0.07, x_center + 0.07, colors="black", linewidth=1.8, zorder=4)
+    label_transform = offset_copy(ax.transData, fig=ax.figure, x=median_label_dx_pixels, y=0.0, units="dots")
     ax.text(
         x_center + median_label_dx,
         median - y_span * median_label_dy_fraction,
         f"{median:,.0f}",
+        transform=label_transform,
         color="black",
         fontsize=8,
         va="center",

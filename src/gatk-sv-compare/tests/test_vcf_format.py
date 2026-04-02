@@ -27,7 +27,7 @@ def test_check_record_reports_ins_end_mismatch(make_vcf) -> None:
     with pysam.VariantFile(str(vcf_path)) as vcf:
         record = next(iter(vcf))
     issues = check_record(record, contig_length=1_000_000)
-    assert any(issue.check_id == "INS_END_MISMATCH" for issue in issues)
+    assert any(issue.check_id == "INS_END_MISMATCH" and issue.severity == "INFO" for issue in issues)
 
 
 def test_check_record_flags_multiallelic_non_cnv(make_vcf) -> None:

@@ -37,9 +37,13 @@ def test_genotype_concordance_module_writes_outputs(module_test_context) -> None
     output_dir = module_test_context.config.output_dir / "genotype_concordance"
     table = pd.read_csv(output_dir / "tables" / "concordance_metrics.tsv.gz", sep="\t")
     assert not table.empty
-    assert (output_dir / "concordance_metrics.by_type.png").exists()
-    assert (output_dir / "exact_match.by_type.png").exists()
-    assert (output_dir / "exact_match.by_context.png").exists()
+    assert (output_dir / "genotype_concordance.af_bucket_x_svtype.png").exists()
+    assert (output_dir / "genotype_concordance.size_bucket_x_svtype.png").exists()
+    assert (output_dir / "genotype_concordance.genomic_context_x_svtype.png").exists()
+    assert (output_dir / "non_ref_genotype_concordance.af_bucket_x_svtype.png").exists()
+    assert (output_dir / "variant_ppv.size_bucket_x_svtype.png").exists()
+    assert (output_dir / "variant_sensitivity.genomic_context_x_svtype.png").exists()
+    assert not (output_dir / "exact_match.by_type.png").exists()
     assert {"n_sites_CallsetA", "mean_value_CallsetA", "median_value_CallsetA", "n_sites_CallsetB", "mean_value_CallsetB", "median_value_CallsetB"}.issubset(table.columns)
     assert "none" in set(table["genomic_context"])
 

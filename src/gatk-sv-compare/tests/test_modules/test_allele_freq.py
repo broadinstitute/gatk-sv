@@ -28,6 +28,9 @@ def test_allele_freq_module_writes_outputs(module_test_context) -> None:
     assert {"pearson_r", "pearson_p", "spearman_rho", "spearman_p"}.issubset(stats.columns)
     assert (output_dir / "af_correlation.overall.png").exists()
     assert (output_dir / "af_correlation.by_type.png").exists()
+    assert (output_dir / "af_correlation.by_size.png").exists()
+    assert (output_dir / "af_correlation.by_af.png").exists()
+    assert (output_dir / "af_correlation.by_context.png").exists()
 
 
 def test_plot_scatter_af_trend_stays_on_diagonal_for_perfect_data() -> None:
