@@ -63,18 +63,22 @@ def test_validate_and_fix_rewrites_fixable_issues(make_vcf, tmp_path) -> None:
             "chr1\t100\tvar1\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=-25;END=150;CHR2=chr2\tGT:GQ:ECN\t0/1:120:2\t0/0:50:2",
         ],
     )
-    out_path = tmp_path / "fixed.vcf"
+    requested_out_path = tmp_path / "fixed.vcf"
+    out_path = tmp_path / "fixed.vcf.gz"
 
-    result = validate_and_fix(vcf_path, out_path)
+    result = validate_and_fix(vcf_path, requested_out_path)
 
     assert result.wrote_output is True
     assert result.fixed_summary is not None
+    assert result.out_path == out_path
     fixed_check_ids = {issue.check_id for issue in result.fixed_summary.issues}
     assert "SVLEN_SIGN" not in fixed_check_ids
     assert "INS_END_MISMATCH" not in fixed_check_ids
     assert "EMPTY_FILTER" not in fixed_check_ids
     assert "GQ_RANGE" not in fixed_check_ids
     assert "CHR2_ON_NON_BND" not in fixed_check_ids
+    assert out_path.exists()
+    assert (tmp_path / "fixed.vcf.gz.tbi").exists()
     with pysam.VariantFile(str(out_path)) as vcf:
         record = next(iter(vcf))
         assert set(record.filter.keys()) == {"PASS"}
@@ -98,6 +102,7 @@ def test_validate_and_fix_blocks_unfixable_errors(make_vcf, tmp_path) -> None:
     assert result.wrote_output is False
     assert result.fixed_summary is None
     assert out_path.exists() is False
+    assert (tmp_path / "blocked.vcf.gz").exists() is False
 
 
 def test_validate_and_fix_writes_bgzip_and_tabix_for_gz_output(make_vcf, tmp_path) -> None:

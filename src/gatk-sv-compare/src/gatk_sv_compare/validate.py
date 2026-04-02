@@ -106,6 +106,14 @@ def _is_bgzip_output(path: Path) -> bool:
     return path.suffix == ".gz"
 
 
+def _normalize_bgzip_output_path(path: Path) -> Path:
+    if path.name.endswith(".vcf.gz"):
+        return path
+    if path.suffix == ".vcf":
+        return path.with_name(path.name + ".gz")
+    return path.with_name(path.name + ".vcf.gz")
+
+
 def _parse_info(info_text: str) -> List[Tuple[str, Optional[str]]]:
     if info_text in {"", "."}:
         return []
@@ -285,15 +293,16 @@ def apply_fixes(vcf_path: Path, out_path: Path) -> None:
 
 
 def validate_and_fix(vcf_path: Path, out_path: Path) -> ValidationFixResult:
+    resolved_out_path = _normalize_bgzip_output_path(out_path)
     original_summary = validate_vcf(ValidateConfig(vcf_path=vcf_path))
     unfixable_errors = [
         issue for issue in original_summary.issues if issue.severity == "ERROR" and issue.check_id not in _FIXABLE_CHECK_IDS
     ]
     if unfixable_errors:
         return ValidationFixResult(original_summary=original_summary, fixed_summary=None, out_path=None, wrote_output=False)
-    apply_fixes(vcf_path, out_path)
-    fixed_summary = validate_vcf(ValidateConfig(vcf_path=out_path))
-    return ValidationFixResult(original_summary=original_summary, fixed_summary=fixed_summary, out_path=out_path, wrote_output=True)
+    apply_fixes(vcf_path, resolved_out_path)
+    fixed_summary = validate_vcf(ValidateConfig(vcf_path=resolved_out_path))
+    return ValidationFixResult(original_summary=original_summary, fixed_summary=fixed_summary, out_path=resolved_out_path, wrote_output=True)
 
 
 def render_summary(summary: ValidationSummary) -> str:

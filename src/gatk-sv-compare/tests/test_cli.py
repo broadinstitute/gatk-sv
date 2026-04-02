@@ -37,14 +37,16 @@ def test_cli_validate_fix_writes_output(make_vcf, tmp_path, capsys) -> None:
             "chr1\t100\tvar1\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=-25;END=150\tGT:GQ:ECN\t0/1:120:2\t0/0:50:2",
         ],
     )
-    out_path = tmp_path / "fixed.vcf"
+    requested_out_path = tmp_path / "fixed.vcf"
+    out_path = tmp_path / "fixed.vcf.gz"
 
-    exit_code = main(["validate", "--vcf", str(vcf_path), "--fix", "--out", str(out_path)])
+    exit_code = main(["validate", "--vcf", str(vcf_path), "--fix", "--out", str(requested_out_path)])
 
     out = capsys.readouterr().out
     assert exit_code == 0
-    assert "Wrote fixed VCF:" in out
+    assert f"Wrote fixed VCF: {out_path}" in out
     assert out_path.exists()
+    assert (tmp_path / "fixed.vcf.gz.tbi").exists()
 
 
 def test_cli_validate_fix_writes_bgzip_output_and_index(make_vcf, tmp_path, capsys) -> None:
@@ -72,7 +74,7 @@ def test_cli_validate_fix_defaults_output_path_for_vcf(make_vcf, capsys) -> None
             "chr1\t100\tvar1\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=-25;END=150\tGT:GQ:ECN\t0/1:120:2\t0/0:50:2",
         ],
     )
-    expected_out = vcf_path.with_name("autofix.fixed.vcf")
+    expected_out = vcf_path.with_name("autofix.fixed.vcf.gz")
 
     exit_code = main(["validate", "--vcf", str(vcf_path), "--fix"])
 
@@ -80,6 +82,7 @@ def test_cli_validate_fix_defaults_output_path_for_vcf(make_vcf, capsys) -> None
     assert exit_code == 0
     assert f"Wrote fixed VCF: {expected_out}" in out
     assert expected_out.exists()
+    assert expected_out.with_name(expected_out.name + ".tbi").exists()
 
 
 def test_cli_validate_fix_defaults_output_path_for_vcfgz(make_vcf, capsys) -> None:
