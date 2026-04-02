@@ -176,6 +176,43 @@ def test_validate_and_fix_reports_missing_ecn_without_ploidy_table(make_vcf, tmp
     assert "MISSING_ECN" in render_fix_result(result)
 
 
+def test_validate_and_fix_converts_cn_multiallelic_record_to_cnv(make_vcf, tmp_path) -> None:
+    vcf_path = make_vcf(
+        file_name="cn_multiallelic_fixable.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<CN0>,<CN1>,<CN2>,<CN3>\t.\tPASS\tSVTYPE=DUP;SVLEN=10\tGT:GQ:ECN\t0/1:40:2\t0/0:35:2",
+        ],
+    )
+    out_path = tmp_path / "cnv_fixed.vcf.gz"
+
+    result = validate_and_fix(vcf_path, out_path)
+
+    assert result.wrote_output is True
+    assert result.fixed_summary is not None
+    assert result.fixed_summary.has_errors is False
+    with pysam.VariantFile(str(out_path)) as vcf:
+        record = next(iter(vcf))
+        assert record.alts == ("<CNV>",)
+        assert str(record.info["SVTYPE"]) == "CNV"
+        assert record.samples["S1"]["GT"] == (None, None)
+        assert record.samples["S2"]["GT"] == (None, None)
+
+
+def test_validate_and_fix_still_blocks_non_cn_multiallelic_record(make_vcf, tmp_path) -> None:
+    vcf_path = make_vcf(
+        file_name="non_cn_multiallelic_unfixable.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>,<DUP>\t.\tPASS\tSVTYPE=DUP;SVLEN=10\tGT:GQ:ECN\t0/1:40:2\t0/0:35:2",
+        ],
+    )
+    out_path = tmp_path / "non_cn_multiallelic_fixed.vcf.gz"
+
+    result = validate_and_fix(vcf_path, out_path)
+
+    assert result.wrote_output is False
+    assert "MULTI_ALLELIC_NON_CNV" in render_fix_result(result)
+
+
 def test_validate_and_fix_writes_bgzip_and_tabix_for_gz_output(make_vcf, tmp_path) -> None:
     vcf_path = make_vcf(
         file_name="fixable_for_bgzip.vcf",

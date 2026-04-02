@@ -18,6 +18,7 @@ _FIXABLE_CHECK_IDS = {
     "MISSING_SVTYPE",
     "BREAKEND_NOTATION",
     "MISSING_ECN",
+    "MULTI_ALLELIC_NON_CNV",
 }
 _BND_MATE_PATTERN = re.compile(r"[\[\]]([^:\[\]]+):(\d+)[\[\]]")
 _SYMBOLIC_ALT_PATTERN = re.compile(r"^<([^>]+)>$")
@@ -212,6 +213,22 @@ def _infer_svtype(chrom: str, alt_values: List[str]) -> Optional[str]:
     return None
 
 
+def _is_cn_alt_list(alt_values: List[str]) -> bool:
+    return len(alt_values) > 1 and all(_CN_ALT_PATTERN.fullmatch(alt_value) for alt_value in alt_values)
+
+
+def _clear_sample_gt(sample_text: str, format_keys: List[str]) -> str:
+    if not format_keys:
+        return sample_text
+    sample_values = sample_text.split(":") if sample_text else []
+    while len(sample_values) < len(format_keys):
+        sample_values.append(".")
+    gt_index = format_keys.index("GT") if "GT" in format_keys else None
+    if gt_index is not None:
+        sample_values[gt_index] = "./."
+    return ":".join(sample_values)
+
+
 def _fix_record_line(line: str, ploidy_dict: Optional[Dict[str, Dict[str, int]]] = None, sample_names: Optional[List[str]] = None) -> str:
     columns = line.rstrip("\n").split("\t")
     if len(columns) < 8:
@@ -230,6 +247,15 @@ def _fix_record_line(line: str, ploidy_dict: Optional[Dict[str, Dict[str, int]]]
             info_fields = _set_info_value(info_fields, "SVTYPE", inferred_svtype)
             info_values = _info_dict(info_fields)
             svtype = inferred_svtype
+
+    if _is_cn_alt_list(alt_values):
+        alt = "<CNV>"
+        info_fields = _set_info_value(info_fields, "SVTYPE", "CNV")
+        info_values = _info_dict(info_fields)
+        svtype = "CNV"
+        if format_text is not None and sample_texts:
+            format_keys = format_text.split(":")
+            sample_texts = [_clear_sample_gt(sample_text, format_keys) for sample_text in sample_texts]
 
     if len(alt_values) == 1 and any(bracket in alt for bracket in ("[", "]")):
         breakend_alt = alt_values[0]
