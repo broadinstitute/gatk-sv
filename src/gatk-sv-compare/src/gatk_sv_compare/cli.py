@@ -179,6 +179,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("--vcf", required=True, type=Path, help="Path to the input VCF")
     validate_parser.add_argument("--fix", action="store_true", help="Write an automatically corrected VCF when only fixable issues are present")
     validate_parser.add_argument("--out", type=Path, help="Output VCF path for --fix mode")
+    validate_parser.add_argument("--ploidy-table", type=Path, help="Tab-delimited sample ploidy table used to repair missing ECN fields in --fix mode")
     validate_parser.set_defaults(handler=_handle_validate)
 
     preprocess_parser = subparsers.add_parser("preprocess", help="Run SVConcordance + SVRegionOverlap")
@@ -253,7 +254,7 @@ def build_parser() -> argparse.ArgumentParser:
 def _handle_validate(args: argparse.Namespace) -> int:
     if args.fix:
         out_path = args.out or _default_fix_output_path(args.vcf)
-        result, output = fix_and_render(args.vcf, out_path)
+        result, output = fix_and_render(args.vcf, out_path, ploidy_table_path=args.ploidy_table)
         print(output)
         return 1 if result.has_errors else 0
     summary, output = validate_and_render(args.vcf)

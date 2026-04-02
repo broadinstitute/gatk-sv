@@ -35,6 +35,20 @@ def test_validate_vcf_reports_errors(make_vcf) -> None:
     assert "BREAKEND_NOTATION" not in check_ids
 
 
+def test_validate_vcf_reports_missing_ecn_as_error(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="missing_ecn_error.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=25\tGT:GQ\t0/1:60\t0/0:50",
+        ],
+    )
+
+    summary = validate_vcf(ValidateConfig(vcf_path=vcf_path))
+
+    check_ids = {issue.check_id for issue in summary.issues if issue.severity == "ERROR"}
+    assert "MISSING_ECN" in check_ids
+
+
 def test_render_summary_deduplicates_detail_lines_and_reports_counts(make_vcf) -> None:
     vcf_path = make_vcf(
         file_name="repeated_issues.vcf",
@@ -121,6 +135,45 @@ def test_validate_and_fix_blocks_unfixable_errors(make_vcf, tmp_path) -> None:
     assert out_path.exists() is False
     assert (tmp_path / "blocked.vcf.gz").exists() is False
     assert "MISSING_GT" in render_fix_result(result)
+
+
+def test_validate_and_fix_repairs_missing_ecn_with_ploidy_table(make_vcf, tmp_path) -> None:
+    vcf_path = make_vcf(
+        file_name="missing_ecn_fixable.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=25\tGT:GQ\t0/1:60\t0/0:50",
+        ],
+    )
+    ploidy_table = tmp_path / "ploidy.tsv"
+    ploidy_table.write_text("SAMPLE\tchr1\nS1\t2\nS2\t1\n")
+    out_path = tmp_path / "fixed_ecn.vcf.gz"
+
+    result = validate_and_fix(vcf_path, out_path, ploidy_table_path=ploidy_table)
+
+    assert result.wrote_output is True
+    assert result.fixed_summary is not None
+    assert result.fixed_summary.has_errors is False
+    with pysam.VariantFile(str(out_path)) as vcf:
+        record = next(iter(vcf))
+        assert "ECN" in record.format
+        assert record.samples["S1"]["ECN"] == 2
+        assert record.samples["S2"]["ECN"] == 1
+
+
+def test_validate_and_fix_reports_missing_ecn_without_ploidy_table(make_vcf, tmp_path) -> None:
+    vcf_path = make_vcf(
+        file_name="missing_ecn_unfixable.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=25\tGT:GQ\t0/1:60\t0/0:50",
+        ],
+    )
+    out_path = tmp_path / "blocked_ecn.vcf"
+
+    result = validate_and_fix(vcf_path, out_path)
+
+    assert result.wrote_output is False
+    assert result.fixed_summary is None
+    assert "MISSING_ECN" in render_fix_result(result)
 
 
 def test_validate_and_fix_writes_bgzip_and_tabix_for_gz_output(make_vcf, tmp_path) -> None:

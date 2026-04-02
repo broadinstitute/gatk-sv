@@ -176,7 +176,7 @@ def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = Non
     if "GT" not in record.format:
         issues.append(FormatIssue("MISSING_GT", "ERROR", record_id, "GT FORMAT field is missing"))
     if "ECN" not in record.format:
-        issues.append(FormatIssue("MISSING_ECN", "WARN", record_id, "ECN FORMAT field is missing"))
+        issues.append(FormatIssue("MISSING_ECN", "ERROR", record_id, "ECN FORMAT field is missing"))
     if "GQ" in record.format:
         for sample in record.samples.values():
             gq = sample.get("GQ")

@@ -122,6 +122,28 @@ def test_cli_validate_fix_reports_blocking_check(make_vcf, tmp_path, capsys) -> 
     assert "MISSING_GT" in out
 
 
+def test_cli_validate_fix_repairs_missing_ecn_with_ploidy_table(make_vcf, tmp_path, capsys) -> None:
+    vcf_path = make_vcf(
+        file_name="missing_ecn_cli.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=25\tGT:GQ\t0/1:60\t0/0:50",
+        ],
+    )
+    ploidy_table = tmp_path / "ploidy.tsv"
+    ploidy_table.write_text("SAMPLE\tchr1\nS1\t2\nS2\t2\n")
+    out_path = tmp_path / "missing_ecn_fixed.vcf.gz"
+
+    exit_code = main(["validate", "--vcf", str(vcf_path), "--fix", "--ploidy-table", str(ploidy_table), "--out", str(out_path)])
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert f"Wrote fixed VCF: {out_path}" in out
+    with pysam.VariantFile(str(out_path)) as vcf:
+        record = next(iter(vcf))
+        assert record.samples["S1"]["ECN"] == 2
+        assert record.samples["S2"]["ECN"] == 2
+
+
 def test_cli_preprocess_builds_config(tmp_path, monkeypatch, capsys) -> None:
     captured = {}
 

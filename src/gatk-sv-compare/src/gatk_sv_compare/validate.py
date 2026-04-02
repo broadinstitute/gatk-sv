@@ -17,11 +17,13 @@ from .vcf_format import FormatIssue, PipelineStage, check_header, check_record, 
 _FIXABLE_CHECK_IDS = {
     "MISSING_SVTYPE",
     "BREAKEND_NOTATION",
+    "MISSING_ECN",
 }
 _BND_MATE_PATTERN = re.compile(r"[\[\]]([^:\[\]]+):(\d+)[\[\]]")
 _SYMBOLIC_ALT_PATTERN = re.compile(r"^<([^>]+)>$")
 _CN_ALT_PATTERN = re.compile(r"^<CN\d+>$")
 _ORIGINAL_ALT_INFO_HEADER = '##INFO=<ID=ORIGINAL_ALT,Number=1,Type=String,Description="Original ALT allele before validate --fix canonicalization">'
+_ECN_FORMAT_HEADER = '##FORMAT=<ID=ECN,Number=1,Type=Integer,Description="Expected copy number">'
 _CHR2_INFO_HEADER = '##INFO=<ID=CHR2,Number=1,Type=String,Description="Partner chromosome">'
 _END2_INFO_HEADER = '##INFO=<ID=END2,Number=1,Type=Integer,Description="Partner end">'
 
@@ -117,6 +119,19 @@ def _normalize_bgzip_output_path(path: Path) -> Path:
     return path.with_name(path.name + ".vcf.gz")
 
 
+def _parse_ploidy_table(path: Path) -> Dict[str, Dict[str, int]]:
+    ploidy_dict: Dict[str, Dict[str, int]] = {}
+    with path.open("r", encoding="utf-8") as handle:
+        header = handle.readline().strip().split("\t")
+        for line in handle:
+            tokens = line.strip().split("\t")
+            if not tokens or len(tokens) < 2:
+                continue
+            sample = tokens[0]
+            ploidy_dict[sample] = {header[index]: int(tokens[index]) for index in range(1, len(header))}
+    return ploidy_dict
+
+
 def _parse_info(info_text: str) -> List[Tuple[str, Optional[str]]]:
     if info_text in {"", "."}:
         return []
@@ -197,11 +212,13 @@ def _infer_svtype(chrom: str, alt_values: List[str]) -> Optional[str]:
     return None
 
 
-def _fix_record_line(line: str) -> str:
+def _fix_record_line(line: str, ploidy_dict: Optional[Dict[str, Dict[str, int]]] = None, sample_names: Optional[List[str]] = None) -> str:
     columns = line.rstrip("\n").split("\t")
     if len(columns) < 8:
         return line
     chrom, pos, record_id, ref, alt, qual, filt, info_text = columns[:8]
+    format_text = columns[8] if len(columns) > 8 else None
+    sample_texts = columns[9:] if len(columns) > 9 else []
     alt_values = alt.split(",") if alt not in {"", "."} else []
     info_fields = _parse_info(info_text)
     info_values = _info_dict(info_fields)
@@ -228,8 +245,28 @@ def _fix_record_line(line: str) -> str:
             info_values = _info_dict(info_fields)
             alt = f"<{breakend_svtype}>"
 
+    if ploidy_dict is not None and format_text is not None and "ECN" not in format_text.split(":"):
+        if sample_names is None or len(sample_names) != len(sample_texts):
+            raise ValueError("Cannot repair ECN without aligned sample names")
+        format_keys = format_text.split(":") if format_text else []
+        format_keys.append("ECN")
+        rewritten_samples: List[str] = []
+        for sample_name, sample_text in zip(sample_names, sample_texts):
+            contig_ploidies = ploidy_dict.get(sample_name)
+            if contig_ploidies is None or chrom not in contig_ploidies:
+                raise ValueError(f"Missing ploidy entry for sample {sample_name} on contig {chrom}")
+            sample_values = sample_text.split(":") if sample_text else []
+            sample_values.append(str(contig_ploidies[chrom]))
+            rewritten_samples.append(":".join(sample_values))
+        format_text = ":".join(format_keys)
+        sample_texts = rewritten_samples
+
     columns[4] = alt
     columns[7] = _format_info(info_fields)
+    if format_text is not None:
+        columns[8] = format_text
+    if sample_texts:
+        columns[9:] = sample_texts
     return "\t".join(columns) + "\n"
 
 
@@ -237,6 +274,7 @@ def _write_augmented_header(header_lines: List[str], handle_out) -> None:
     has_chr2 = any(line.startswith("##INFO=<ID=CHR2,") for line in header_lines)
     has_end2 = any(line.startswith("##INFO=<ID=END2,") for line in header_lines)
     has_original_alt = any(line.startswith("##INFO=<ID=ORIGINAL_ALT,") for line in header_lines)
+    has_ecn = any(line.startswith("##FORMAT=<ID=ECN,") for line in header_lines)
 
     for line in header_lines[:-1]:
         if line.startswith("##INFO=<ID=SVLEN,") and "Number=." in line:
@@ -249,12 +287,16 @@ def _write_augmented_header(header_lines: List[str], handle_out) -> None:
         handle_out.write(_END2_INFO_HEADER + "\n")
     if not has_original_alt:
         handle_out.write(_ORIGINAL_ALT_INFO_HEADER + "\n")
+    if not has_ecn:
+        handle_out.write(_ECN_FORMAT_HEADER + "\n")
     handle_out.write(header_lines[-1])
 
 
-def apply_fixes(vcf_path: Path, out_path: Path) -> None:
+def apply_fixes(vcf_path: Path, out_path: Path, ploidy_table_path: Optional[Path] = None) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     temp_output_path = out_path.with_suffix("") if _is_bgzip_output(out_path) else out_path
+    ploidy_dict = _parse_ploidy_table(ploidy_table_path) if ploidy_table_path is not None else None
+    sample_names: List[str] | None = None
     with _open_text(vcf_path, "r") as handle_in, temp_output_path.open("w", encoding="utf-8") as handle_out:
         header_lines: List[str] = []
         for line in handle_in:
@@ -263,24 +305,31 @@ def apply_fixes(vcf_path: Path, out_path: Path) -> None:
                 continue
             if line.startswith("#"):
                 header_lines.append(line)
+                sample_names = line.rstrip("\n").split("\t")[9:]
                 _write_augmented_header(header_lines, handle_out)
                 continue
-            handle_out.write(_fix_record_line(line))
+            handle_out.write(_fix_record_line(line, ploidy_dict=ploidy_dict, sample_names=sample_names))
     if _is_bgzip_output(out_path):
         pysam.tabix_compress(str(temp_output_path), str(out_path), force=True)
         pysam.tabix_index(str(out_path), preset="vcf", force=True)
         temp_output_path.unlink()
 
 
-def validate_and_fix(vcf_path: Path, out_path: Path) -> ValidationFixResult:
+def _is_fixable_error(issue: FormatIssue, ploidy_table_path: Optional[Path]) -> bool:
+    if issue.check_id == "MISSING_ECN":
+        return ploidy_table_path is not None
+    return issue.check_id in _FIXABLE_CHECK_IDS
+
+
+def validate_and_fix(vcf_path: Path, out_path: Path, ploidy_table_path: Optional[Path] = None) -> ValidationFixResult:
     resolved_out_path = _normalize_bgzip_output_path(out_path)
     original_summary = validate_vcf(ValidateConfig(vcf_path=vcf_path))
     unfixable_errors = [
-        issue for issue in original_summary.issues if issue.severity == "ERROR" and issue.check_id not in _FIXABLE_CHECK_IDS
+        issue for issue in original_summary.issues if issue.severity == "ERROR" and not _is_fixable_error(issue, ploidy_table_path)
     ]
     if unfixable_errors:
         return ValidationFixResult(original_summary=original_summary, fixed_summary=None, out_path=None, wrote_output=False)
-    apply_fixes(vcf_path, resolved_out_path)
+    apply_fixes(vcf_path, resolved_out_path, ploidy_table_path=ploidy_table_path)
     fixed_summary = validate_vcf(ValidateConfig(vcf_path=resolved_out_path))
     if fixed_summary.has_errors:
         resolved_out_path.unlink(missing_ok=True)
@@ -342,7 +391,7 @@ def validate_and_render(vcf_path: Path) -> tuple[ValidationSummary, str]:
     return summary, render_summary(summary)
 
 
-def fix_and_render(vcf_path: Path, out_path: Path) -> tuple[ValidationFixResult, str]:
+def fix_and_render(vcf_path: Path, out_path: Path, ploidy_table_path: Optional[Path] = None) -> tuple[ValidationFixResult, str]:
     """Convenience wrapper used by the CLI for validate --fix."""
-    result = validate_and_fix(vcf_path, out_path)
+    result = validate_and_fix(vcf_path, out_path, ploidy_table_path=ploidy_table_path)
     return result, render_fix_result(result)
