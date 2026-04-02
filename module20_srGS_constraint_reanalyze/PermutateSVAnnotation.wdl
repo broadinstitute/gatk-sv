@@ -624,23 +624,26 @@ task Task6_ReorganizeSVIDGene {
     command <<<
         set -euo pipefail
 
-        run_reorg() {
-            Rscript ~{r_script} \
-                -g ~{transcript_bed} \
-                -i "$1" \
-                -o "$2"
-        }
-
-        run_reorg ~{whole_transcript_overlap}    ~{p}.whole_transcript_overlap.~{seed_suffix}.reorganized
-        run_reorg ~{utr3_overlap}                ~{p}.3_prime_utr.~{seed_suffix}.reorganized
-        run_reorg ~{utr5_overlap}                ~{p}.5_prime_utr.~{seed_suffix}.reorganized
-        run_reorg ~{intact_exon_overlap}         ~{p}.intact_exon_overlap.~{seed_suffix}.reorganized
-        run_reorg ~{partial_exon_overlap}        ~{p}.partial_exon_overlap.~{seed_suffix}.reorganized
-        run_reorg ~{tss_transcripts_overlap}     ~{p}.tss_transcripts_overlap.~{seed_suffix}.reorganized
-        run_reorg ~{partial_transcripts_overlap} ~{p}.partial_transcripts_overlap.~{seed_suffix}.reorganized
-        run_reorg ~{inside_exons}                ~{p}.inside_exons.~{seed_suffix}.reorganized
-        run_reorg ~{inside_introns}              ~{p}.inside_introns.~{seed_suffix}.reorganized
-        run_reorg ~{promoter_overlap}            ~{p}.promoter_overlap.~{seed_suffix}.reorganized
+        echo "Processing whole_transcript_overlap ..."
+        Rscript ~{r_script} -g ~{transcript_bed} -i ~{whole_transcript_overlap} -o ~{whole_transcript_overlap}.reorganized
+        echo "Processing utr3_overlap ..."
+        Rscript ~{r_script} -g ~{transcript_bed} -i ~{utr3_overlap} -o ~{utr3_overlap}.reorganized
+        echo "Processing utr5_overlap ..."
+        Rscript ~{r_script} -g ~{transcript_bed} -i ~{utr5_overlap} -o ~{utr5_overlap}.reorganized
+        echo "Processing intact_exon_overlap ..."
+        Rscript ~{r_script} -g ~{transcript_bed} -i ~{intact_exon_overlap} -o ~{intact_exon_overlap}.reorganized
+        echo "Processing partial_exon_overlap ..."
+        Rscript ~{r_script} -g ~{transcript_bed} -i ~{partial_exon_overlap} -o ~{partial_exon_overlap}.reorganized
+        echo "Processing tss_transcripts_overlap ..."
+        Rscript ~{r_script} -g ~{transcript_bed} -i ~{tss_transcripts_overlap} -o ~{tss_transcripts_overlap}.reorganized
+        echo "Processing partial_transcripts_overlap ..."
+        Rscript ~{r_script} -g ~{transcript_bed} -i ~{partial_transcripts_overlap} -o ~{partial_transcripts_overlap}.reorganized
+        echo "Processing inside_exons ..."
+        Rscript ~{r_script} -g ~{transcript_bed} -i ~{inside_exons} -o ~{inside_exons}.reorganized
+        echo "Processing inside_introns ..."
+        Rscript ~{r_script} -g ~{transcript_bed} -i ~{inside_introns} -o ~{inside_introns}.reorganized
+        echo "Processing promoter_overlap ..."
+        Rscript ~{r_script} -g ~{transcript_bed} -i ~{promoter_overlap} -o ~{promoter_overlap}.reorganized
     >>>
 
     output {
