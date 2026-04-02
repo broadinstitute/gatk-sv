@@ -78,3 +78,21 @@ def test_check_record_uses_20_percent_svlen_threshold(make_vcf) -> None:
         above_record = next(iter(vcf))
     above_issues = check_record(above_record, contig_length=1_000_000)
     assert any(issue.check_id == "IMPLAUSIBLE_SVLEN" for issue in above_issues)
+
+
+def test_check_record_handles_missing_cpx_type_header(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="cpx_missing_header.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<CPX>\t.\tPASS\tSVTYPE=CPX;SVLEN=10;END=150;CPX_TYPE=dDUP\tGT:GQ:ECN\t0/1:40:2\t0/0:35:2",
+        ],
+    )
+    text = vcf_path.read_text()
+    vcf_path.write_text(text.replace('##INFO=<ID=CPX_TYPE,Number=1,Type=String,Description="Complex subtype">\n', ''))
+
+    with pysam.VariantFile(str(vcf_path)) as vcf:
+        record = next(iter(vcf))
+
+    issues = check_record(record)
+
+    assert isinstance(issues, list)

@@ -15,6 +15,7 @@ from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
 from ..dimensions import af_bucket_sort_key, genomic_context_sort_key, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
 from ..plot_utils import CALLSET_COLORS, SUMMARY_COLORS, double_column_figsize, save_figure
+from ..vcf_format import safe_info_get
 from ..vcf_reader import _CONCORDANCE_FIELDS
 from .base import AnalysisModule, relabel_vcf_columns, write_tsv_gz
 
@@ -33,10 +34,7 @@ def _iter_records_for_contig(vcf: pysam.VariantFile, contig: str):
 
 
 def _safe_info_value(record: pysam.VariantRecord, key: str):
-    try:
-        value = record.info.get(key)
-    except ValueError:
-        return None
+    value = safe_info_get(record, key)
     if isinstance(value, tuple):
         return value[0] if value else None
     return value

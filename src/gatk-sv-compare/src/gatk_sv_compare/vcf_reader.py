@@ -10,7 +10,7 @@ import numpy as np
 import pysam
 
 from .dimensions import GENOMIC_CONTEXTS, normalize_svtype
-from .vcf_format import filter_values, has_precomputed_counts
+from .vcf_format import filter_values, has_precomputed_counts, safe_info_get
 
 _GENOMIC_CONTEXT_ALIASES = {
     "segdup": ("segdup", "SEG_DUP", "SEGDUP", "segmental_duplication", "segmentalduplication"),
@@ -74,10 +74,7 @@ def _record_identifier(record: pysam.VariantRecord) -> str:
 
 
 def _info_value(record: pysam.VariantRecord, key: str) -> object:
-    try:
-        value = record.info.get(key)
-    except ValueError:
-        return None
+    value = safe_info_get(record, key)
     if isinstance(value, tuple):
         return value[0] if value else None
     return value

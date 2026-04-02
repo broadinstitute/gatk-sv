@@ -12,7 +12,7 @@ import pysam
 from ..config import AnalysisConfig
 from ..dimensions import normalize_svtype, ordered_svtypes
 from ..plot_utils import SUMMARY_COLORS, SVTYPE_COLORS, save_figure, single_column_figsize
-from ..vcf_format import filter_values
+from ..vcf_format import filter_values, safe_info_get
 from .base import AnalysisModule, write_tsv_gz
 
 
@@ -23,7 +23,7 @@ def _iter_alt_gq_rows(vcf_path: Path, pass_only: bool) -> List[dict]:
             filters = filter_values(record)
             if pass_only and not ({"PASS", "MULTIALLELIC"} & filters):
                 continue
-            svtype = normalize_svtype(str(record.info.get("SVTYPE", "UNKNOWN")), ",".join(record.alts or ()))
+            svtype = normalize_svtype(str(safe_info_get(record, "SVTYPE", "UNKNOWN")), ",".join(record.alts or ()))
             for sample in record.samples.values():
                 gt = sample.get("GT")
                 gq = sample.get("GQ")

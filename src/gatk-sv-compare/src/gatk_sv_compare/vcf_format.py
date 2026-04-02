@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Iterable, List, Optional, Set
+from typing import Iterable, List, Optional, Set, TypeVar, overload
 
 import pysam
 
 from .dimensions import SVTYPES_CORE
 
 _ALLOWED_SVTYPES = set(SVTYPES_CORE)
+_DefaultT = TypeVar("_DefaultT")
 
 
 @dataclass(frozen=True)
@@ -51,12 +52,32 @@ def _iter_alt_alleles(record: pysam.VariantRecord) -> Iterable[str]:
     return tuple(record.alts or ())
 
 
+@overload
+def safe_info_get(record: pysam.VariantRecord, key: str) -> object | None:
+    ...
+
+
+@overload
+def safe_info_get(record: pysam.VariantRecord, key: str, default: _DefaultT) -> object | _DefaultT:
+    ...
+
+
+def safe_info_get(record: pysam.VariantRecord, key: str, default: _DefaultT | None = None) -> object | _DefaultT | None:
+    """Safely retrieve an INFO value even when the field is absent from the header."""
+    if key not in record.header.info:
+        return default
+    try:
+        return record.info.get(key, default)
+    except ValueError:
+        return default
+
+
 def is_mei(alt_allele: str) -> bool:
     return "<INS:ME:" in alt_allele or alt_allele == "<INS:ME>"
 
 
 def is_cnv(record: pysam.VariantRecord) -> bool:
-    return str(record.info.get("SVTYPE", "")) == "CNV"
+    return str(safe_info_get(record, "SVTYPE", "")) == "CNV"
 
 
 def has_precomputed_counts(vcf: pysam.VariantFile) -> bool:
@@ -114,7 +135,7 @@ def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = Non
     """Inspect a single record and return any format issues."""
     issues: list[FormatIssue] = []
     record_id = _record_identifier(record)
-    svtype = record.info.get("SVTYPE")
+    svtype = safe_info_get(record, "SVTYPE")
     alts = tuple(_iter_alt_alleles(record))
     filters = filter_values(record)
 
@@ -132,7 +153,7 @@ def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = Non
     if any("]" in alt or "[" in alt for alt in alts):
         issues.append(FormatIssue("BREAKEND_NOTATION", "ERROR", record_id, "Breakend notation ALT allele is not supported"))
 
-    svlen = record.info.get("SVLEN")
+    svlen = safe_info_get(record, "SVLEN")
     if svtype_text in {"DEL", "DUP", "INS", "INV", "CPX"} and svlen in (None, "."):
         issues.append(FormatIssue("MISSING_SVLEN", "WARN", record_id, f"SVLEN missing for {svtype_text}"))
     if svlen not in (None, "."):
@@ -150,7 +171,7 @@ def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = Non
         issues.append(FormatIssue("INS_END_MISMATCH", "WARN", record_id, "INS END does not equal POS"))
     if svtype_text in {"BND", "CTX"} and end != record.pos and "END2" not in record.info:
         issues.append(FormatIssue("BND_END_MISMATCH", "WARN", record_id, "BND/CTX END does not equal POS and END2 is missing"))
-    cpx_type = str(record.info.get("CPX_TYPE", ""))
+    cpx_type = str(safe_info_get(record, "CPX_TYPE", ""))
     if svtype_text == "CPX" and cpx_type in {"dDUP", "dDUP_iDEL"} and end != record.pos:
         issues.append(FormatIssue("CPX_DDDUP_END", "WARN", record_id, "Dispersed duplication CPX END does not equal POS"))
 
