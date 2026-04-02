@@ -132,31 +132,113 @@ workflow PermutateSVAnnotation {
             runtime_attr_override  = runtime_attr_categorize_exon
     }
 
-    # ── Task 6: Reorganize SVID vs gene for each overlap type (R) ─────────
-    call Task6_ReorganizeSVIDGene {
+    # ── Task 6: Reorganize SVID vs gene — one call per overlap type (R) ────
+    call Task6_ReorganizeSVIDGene as Task6_ReorgWholeTranscript {
         input:
-            transcript_bed              = Task2_SplitGTF.transcript_bed,
-            whole_transcript_overlap    = Task4_ExtractOverlaps.whole_transcript_overlap,
-            utr3_overlap                = Task4_ExtractOverlaps.utr3_overlap,
-            utr5_overlap                = Task4_ExtractOverlaps.utr5_overlap,
-            intact_exon_overlap         = Task5_CategorizeExonOverlap.intact_exon_overlap,
-            partial_exon_overlap        = Task5_CategorizeExonOverlap.partial_exon_overlap,
-            tss_transcripts_overlap     = Task4_ExtractOverlaps.tss_transcripts_overlap,
-            partial_transcripts_overlap = Task4_ExtractOverlaps.partial_transcripts_overlap,
-            inside_exons                = Task4_ExtractOverlaps.inside_exons,
-            inside_introns              = Task4_ExtractOverlaps.inside_introns,
-            promoter_overlap            = Task4_ExtractOverlaps.promoter_overlap,
-            r_script                    = reorganize_r_script,
-            sv_gtf_prefix               = sv_gtf_prefix,
-            seed_suffix                 = seed_suffix,
-            docker                      = r_docker,
-            runtime_attr_override       = runtime_attr_reorganize_svid
+            transcript_bed        = Task2_SplitGTF.transcript_bed,
+            overlap_file          = Task4_ExtractOverlaps.whole_transcript_overlap,
+            output_name           = sv_gtf_prefix + ".whole_transcript_overlap." + seed_suffix + ".reorganized",
+            r_script              = reorganize_r_script,
+            docker                = r_docker,
+            runtime_attr_override = runtime_attr_reorganize_svid
+    }
+    call Task6_ReorganizeSVIDGene as Task6_ReorgUtr3 {
+        input:
+            transcript_bed        = Task2_SplitGTF.transcript_bed,
+            overlap_file          = Task4_ExtractOverlaps.utr3_overlap,
+            output_name           = sv_gtf_prefix + ".3_prime_utr." + seed_suffix + ".reorganized",
+            r_script              = reorganize_r_script,
+            docker                = r_docker,
+            runtime_attr_override = runtime_attr_reorganize_svid
+    }
+    call Task6_ReorganizeSVIDGene as Task6_ReorgUtr5 {
+        input:
+            transcript_bed        = Task2_SplitGTF.transcript_bed,
+            overlap_file          = Task4_ExtractOverlaps.utr5_overlap,
+            output_name           = sv_gtf_prefix + ".5_prime_utr." + seed_suffix + ".reorganized",
+            r_script              = reorganize_r_script,
+            docker                = r_docker,
+            runtime_attr_override = runtime_attr_reorganize_svid
+    }
+    call Task6_ReorganizeSVIDGene as Task6_ReorgIntactExon {
+        input:
+            transcript_bed        = Task2_SplitGTF.transcript_bed,
+            overlap_file          = Task5_CategorizeExonOverlap.intact_exon_overlap,
+            output_name           = sv_gtf_prefix + ".intact_exon_overlap." + seed_suffix + ".reorganized",
+            r_script              = reorganize_r_script,
+            docker                = r_docker,
+            runtime_attr_override = runtime_attr_reorganize_svid
+    }
+    call Task6_ReorganizeSVIDGene as Task6_ReorgPartialExon {
+        input:
+            transcript_bed        = Task2_SplitGTF.transcript_bed,
+            overlap_file          = Task5_CategorizeExonOverlap.partial_exon_overlap,
+            output_name           = sv_gtf_prefix + ".partial_exon_overlap." + seed_suffix + ".reorganized",
+            r_script              = reorganize_r_script,
+            docker                = r_docker,
+            runtime_attr_override = runtime_attr_reorganize_svid
+    }
+    call Task6_ReorganizeSVIDGene as Task6_ReorgTssTranscripts {
+        input:
+            transcript_bed        = Task2_SplitGTF.transcript_bed,
+            overlap_file          = Task4_ExtractOverlaps.tss_transcripts_overlap,
+            output_name           = sv_gtf_prefix + ".tss_transcripts_overlap." + seed_suffix + ".reorganized",
+            r_script              = reorganize_r_script,
+            docker                = r_docker,
+            runtime_attr_override = runtime_attr_reorganize_svid
+    }
+    call Task6_ReorganizeSVIDGene as Task6_ReorgPartialTranscripts {
+        input:
+            transcript_bed        = Task2_SplitGTF.transcript_bed,
+            overlap_file          = Task4_ExtractOverlaps.partial_transcripts_overlap,
+            output_name           = sv_gtf_prefix + ".partial_transcripts_overlap." + seed_suffix + ".reorganized",
+            r_script              = reorganize_r_script,
+            docker                = r_docker,
+            runtime_attr_override = runtime_attr_reorganize_svid
+    }
+    call Task6_ReorganizeSVIDGene as Task6_ReorgInsideExons {
+        input:
+            transcript_bed        = Task2_SplitGTF.transcript_bed,
+            overlap_file          = Task4_ExtractOverlaps.inside_exons,
+            output_name           = sv_gtf_prefix + ".inside_exons." + seed_suffix + ".reorganized",
+            r_script              = reorganize_r_script,
+            docker                = r_docker,
+            runtime_attr_override = runtime_attr_reorganize_svid
+    }
+    call Task6_ReorganizeSVIDGene as Task6_ReorgInsideIntrons {
+        input:
+            transcript_bed        = Task2_SplitGTF.transcript_bed,
+            overlap_file          = Task4_ExtractOverlaps.inside_introns,
+            output_name           = sv_gtf_prefix + ".inside_introns." + seed_suffix + ".reorganized",
+            r_script              = reorganize_r_script,
+            docker                = r_docker,
+            runtime_attr_override = runtime_attr_reorganize_svid
+    }
+    call Task6_ReorganizeSVIDGene as Task6_ReorgPromoter {
+        input:
+            transcript_bed        = Task2_SplitGTF.transcript_bed,
+            overlap_file          = Task4_ExtractOverlaps.promoter_overlap,
+            output_name           = sv_gtf_prefix + ".promoter_overlap." + seed_suffix + ".reorganized",
+            r_script              = reorganize_r_script,
+            docker                = r_docker,
+            runtime_attr_override = runtime_attr_reorganize_svid
     }
 
     # ── Task 7: Integrate all reorganized overlaps (R) ────────────────────
     call Task7_IntegrateOverlaps {
         input:
-            all_reorganized = Task6_ReorganizeSVIDGene.all_reorganized,
+            all_reorganized = [
+                Task6_ReorgWholeTranscript.reorganized,
+                Task6_ReorgUtr3.reorganized,
+                Task6_ReorgUtr5.reorganized,
+                Task6_ReorgIntactExon.reorganized,
+                Task6_ReorgPartialExon.reorganized,
+                Task6_ReorgTssTranscripts.reorganized,
+                Task6_ReorgPartialTranscripts.reorganized,
+                Task6_ReorgInsideExons.reorganized,
+                Task6_ReorgInsideIntrons.reorganized,
+                Task6_ReorgPromoter.reorganized
+            ],
             r_script        = integrate_r_script,
             sv_gtf_prefix   = sv_gtf_prefix,
             seed_suffix     = seed_suffix,
@@ -180,7 +262,18 @@ workflow PermutateSVAnnotation {
         Array[File] split_beds          = Task2_SplitGTF.all_beds
         Array[File] intersection_beds   = Task3_BedtoolsIntersect.all_isec
         Array[File] overlap_tables      = Task4_ExtractOverlaps.all_overlaps
-        Array[File] reorganized         = Task6_ReorganizeSVIDGene.all_reorganized
+        Array[File] reorganized         = [
+            Task6_ReorgWholeTranscript.reorganized,
+            Task6_ReorgUtr3.reorganized,
+            Task6_ReorgUtr5.reorganized,
+            Task6_ReorgIntactExon.reorganized,
+            Task6_ReorgPartialExon.reorganized,
+            Task6_ReorgTssTranscripts.reorganized,
+            Task6_ReorgPartialTranscripts.reorganized,
+            Task6_ReorgInsideExons.reorganized,
+            Task6_ReorgInsideIntrons.reorganized,
+            Task6_ReorgPromoter.reorganized
+        ]
         File        integrated          = Task7_IntegrateOverlaps.integrated_file
         File        result              = Task8_CalcuGeneData.result
     }
@@ -597,72 +690,28 @@ task Task5_CategorizeExonOverlap {
 }
 
 # ======================================================================
-# TASK 6 — Reorganize SVID vs gene for each overlap type (R)
+# TASK 6 — Reorganize SVID vs gene for a single overlap file (R)
 # ======================================================================
 task Task6_ReorganizeSVIDGene {
     input {
         File   transcript_bed
-        File   whole_transcript_overlap
-        File   utr3_overlap
-        File   utr5_overlap
-        File   intact_exon_overlap
-        File   partial_exon_overlap
-        File   tss_transcripts_overlap
-        File   partial_transcripts_overlap
-        File   inside_exons
-        File   inside_introns
-        File   promoter_overlap
+        File   overlap_file
+        String output_name
         File   r_script
-        String sv_gtf_prefix
-        String seed_suffix
         String docker
         RuntimeAttr? runtime_attr_override
     }
 
-    String p = sv_gtf_prefix
-
     command <<<
         set -euo pipefail
-
-        echo "Processing whole_transcript_overlap ..."
-        Rscript ~{r_script} -g ~{transcript_bed} -i ~{whole_transcript_overlap} -o ~{whole_transcript_overlap}.reorganized
-        echo "Processing utr3_overlap ..."
-        Rscript ~{r_script} -g ~{transcript_bed} -i ~{utr3_overlap} -o ~{utr3_overlap}.reorganized
-        echo "Processing utr5_overlap ..."
-        Rscript ~{r_script} -g ~{transcript_bed} -i ~{utr5_overlap} -o ~{utr5_overlap}.reorganized
-        echo "Processing intact_exon_overlap ..."
-        Rscript ~{r_script} -g ~{transcript_bed} -i ~{intact_exon_overlap} -o ~{intact_exon_overlap}.reorganized
-        echo "Processing partial_exon_overlap ..."
-        Rscript ~{r_script} -g ~{transcript_bed} -i ~{partial_exon_overlap} -o ~{partial_exon_overlap}.reorganized
-        echo "Processing tss_transcripts_overlap ..."
-        Rscript ~{r_script} -g ~{transcript_bed} -i ~{tss_transcripts_overlap} -o ~{tss_transcripts_overlap}.reorganized
-        echo "Processing partial_transcripts_overlap ..."
-        Rscript ~{r_script} -g ~{transcript_bed} -i ~{partial_transcripts_overlap} -o ~{partial_transcripts_overlap}.reorganized
-        echo "Processing inside_exons ..."
-        Rscript ~{r_script} -g ~{transcript_bed} -i ~{inside_exons} -o ~{inside_exons}.reorganized
-        echo "Processing inside_introns ..."
-        Rscript ~{r_script} -g ~{transcript_bed} -i ~{inside_introns} -o ~{inside_introns}.reorganized
-        echo "Processing promoter_overlap ..."
-        Rscript ~{r_script} -g ~{transcript_bed} -i ~{promoter_overlap} -o ~{promoter_overlap}.reorganized
+        Rscript ~{r_script} \
+            -g ~{transcript_bed} \
+            -i ~{overlap_file} \
+            -o ~{output_name}
     >>>
 
     output {
-        File reorg_whole_transcript    = p + ".whole_transcript_overlap."    + seed_suffix + ".reorganized"
-        File reorg_utr3                = p + ".3_prime_utr."                 + seed_suffix + ".reorganized"
-        File reorg_utr5                = p + ".5_prime_utr."                 + seed_suffix + ".reorganized"
-        File reorg_intact_exon         = p + ".intact_exon_overlap."         + seed_suffix + ".reorganized"
-        File reorg_partial_exon        = p + ".partial_exon_overlap."        + seed_suffix + ".reorganized"
-        File reorg_tss_transcripts     = p + ".tss_transcripts_overlap."     + seed_suffix + ".reorganized"
-        File reorg_partial_transcripts = p + ".partial_transcripts_overlap." + seed_suffix + ".reorganized"
-        File reorg_inside_exons        = p + ".inside_exons."                + seed_suffix + ".reorganized"
-        File reorg_inside_introns      = p + ".inside_introns."              + seed_suffix + ".reorganized"
-        File reorg_promoter            = p + ".promoter_overlap."            + seed_suffix + ".reorganized"
-        Array[File] all_reorganized = [
-            reorg_whole_transcript, reorg_utr3, reorg_utr5,
-            reorg_intact_exon, reorg_partial_exon,
-            reorg_tss_transcripts, reorg_partial_transcripts,
-            reorg_inside_exons, reorg_inside_introns, reorg_promoter
-        ]
+        File reorganized = output_name
     }
 
     RuntimeAttr default_attr = object {
