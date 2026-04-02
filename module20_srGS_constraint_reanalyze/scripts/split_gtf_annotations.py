@@ -71,8 +71,7 @@ def chrom_sort_key(row):
 def write_bed(rows, path):
     rows_sorted = sorted(rows, key=chrom_sort_key)
     with open(path, 'w') as fh:
-        fh.write('#chr	start	end	strand	gene_id	gene_name
-')
+        fh.write('#chr\tstart\tend\tstrand\tgene_id\tgene_name\n')
         for r in rows_sorted:
             fh.write('\t'.join(str(x) for x in r) + '\n')
     return len(rows_sorted)
