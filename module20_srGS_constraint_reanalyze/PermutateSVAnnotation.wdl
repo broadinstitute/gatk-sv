@@ -228,16 +228,16 @@ workflow PermutateSVAnnotation {
     call Task7_IntegrateOverlaps {
         input:
             all_reorganized = [
-                Task6_ReorgWholeTranscript.reorganized,
-                Task6_ReorgUtr3.reorganized,
-                Task6_ReorgUtr5.reorganized,
-                Task6_ReorgIntactExon.reorganized,
-                Task6_ReorgPartialExon.reorganized,
-                Task6_ReorgTssTranscripts.reorganized,
-                Task6_ReorgPartialTranscripts.reorganized,
-                Task6_ReorgInsideExons.reorganized,
-                Task6_ReorgInsideIntrons.reorganized,
-                Task6_ReorgPromoter.reorganized
+                Task6_Reorg_WholeTranscript.reorganized,
+                Task6_Reorg_Utr3.reorganized,
+                Task6_Reorg_Utr5.reorganized,
+                Task6_Reorg_IntactExon.reorganized,
+                Task6_Reorg_PartialExon.reorganized,
+                Task6_Reorg_TssTranscripts.reorganized,
+                Task6_Reorg_PartialTranscripts.reorganized,
+                Task6_Reorg_InsideExons.reorganized,
+                Task6_Reorg_InsideIntrons.reorganized,
+                Task6_Reorg_Promoter.reorganized
             ],
             r_script        = integrate_r_script,
             sv_gtf_prefix   = sv_gtf_prefix,
@@ -263,16 +263,16 @@ workflow PermutateSVAnnotation {
         Array[File] intersection_beds   = Task3_BedtoolsIntersect.all_isec
         Array[File] overlap_tables      = Task4_ExtractOverlaps.all_overlaps
         Array[File] reorganized         = [
-            Task6_ReorgWholeTranscript.reorganized,
-            Task6_ReorgUtr3.reorganized,
-            Task6_ReorgUtr5.reorganized,
-            Task6_ReorgIntactExon.reorganized,
-            Task6_ReorgPartialExon.reorganized,
-            Task6_ReorgTssTranscripts.reorganized,
-            Task6_ReorgPartialTranscripts.reorganized,
-            Task6_ReorgInsideExons.reorganized,
-            Task6_ReorgInsideIntrons.reorganized,
-            Task6_ReorgPromoter.reorganized
+            Task6_Reorg_WholeTranscript.reorganized,
+            Task6_Reorg_Utr3.reorganized,
+            Task6_Reorg_Utr5.reorganized,
+            Task6_Reorg_IntactExon.reorganized,
+            Task6_Reorg_PartialExon.reorganized,
+            Task6_Reorg_TssTranscripts.reorganized,
+            Task6_Reorg_PartialTranscripts.reorganized,
+            Task6_Reorg_InsideExons.reorganized,
+            Task6_Reorg_InsideIntrons.reorganized,
+            Task6_Reorg_Promoter.reorganized
         ]
         File        integrated          = Task7_IntegrateOverlaps.integrated_file
         File        result              = Task8_CalcuGeneData.result
