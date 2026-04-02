@@ -571,8 +571,8 @@ task Task5_CategorizeExonOverlap {
     >>>
 
     output {
-        File intact_exon_overlap  = sv_gtf_prefix + ".intact_exon_overlap."  + seed_suffix
-        File partial_exon_overlap = sv_gtf_prefix + ".partial_exon_overlap." + seed_suffix
+        File intact_exon_overlap  = "~{sv_gtf_prefix}.~{seed_suffix}.intact_exon_overlap"
+        File partial_exon_overlap = "~{sv_gtf_prefix}.~{seed_suffix}.partial_exon_overlap"
     }
 
     RuntimeAttr default_attr = object {
