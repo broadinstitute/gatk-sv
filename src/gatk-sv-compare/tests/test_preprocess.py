@@ -39,7 +39,7 @@ def test_read_contig_list_and_parse_reference_dict(tmp_path) -> None:
     assert parse_reference_dict(reference_dict) == {"chr1": 1000, "chr2": 2000}
 
 
-def test_build_svconcordance_command_includes_tracks() -> None:
+def test_build_svconcordance_command_omits_tracks() -> None:
     command = build_svconcordance_command(
         eval_vcf=Path("eval.vcf.gz"),
         truth_vcf=Path("truth.vcf.gz"),
@@ -48,14 +48,11 @@ def test_build_svconcordance_command_includes_tracks() -> None:
         output_path=Path("out.vcf.gz"),
         gatk_path="gatk",
         java_options="-Xmx4g",
-        track_names=["segdup"],
-        track_intervals=[Path("segdup.bed")],
     )
     assert command[:4] == ["gatk", "--java-options", "-Xmx4g", "SVConcordance"]
     assert ["-L", "chr1"] == command[4:6]
-    assert "--track-name" in command
-    assert "segdup" in command
-    assert "--track-intervals" in command
+    assert "--track-name" not in command
+    assert "--track-intervals" not in command
 
 
 def test_build_svregionoverlap_command_includes_tracks() -> None:

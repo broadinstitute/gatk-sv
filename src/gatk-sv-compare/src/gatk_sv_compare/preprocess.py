@@ -66,8 +66,6 @@ def build_svconcordance_command(
     java_options: str,
     clustering_config: Optional[Path] = None,
     stratification_config: Optional[Path] = None,
-    track_names: Optional[Sequence[str]] = None,
-    track_intervals: Optional[Sequence[Path]] = None,
 ) -> List[str]:
     """Build a GATK SVConcordance command."""
     command = [
@@ -90,10 +88,6 @@ def build_svconcordance_command(
         command.extend(["--clustering-config", str(clustering_config)])
     if stratification_config is not None:
         command.extend(["--stratify-config", str(stratification_config)])
-    for track_name in track_names or ():
-        command.extend(["--track-name", track_name])
-    for track_interval in track_intervals or ():
-        command.extend(["--track-intervals", str(track_interval)])
     return command
 
 
@@ -168,8 +162,6 @@ def _run_sv_concordance_contig(
     java_options: str,
     clustering_config: Optional[Path],
     stratification_config: Optional[Path],
-    track_names: Optional[Sequence[str]],
-    track_intervals: Optional[Sequence[Path]],
 ) -> Path:
     """Run SVConcordance for one contig."""
     command = build_svconcordance_command(
@@ -182,8 +174,6 @@ def _run_sv_concordance_contig(
         java_options=java_options,
         clustering_config=clustering_config,
         stratification_config=stratification_config,
-        track_names=track_names,
-        track_intervals=track_intervals,
     )
     run_command(command)
     return output_path
@@ -251,8 +241,6 @@ def _scatter_concordance(
     n_workers: int,
     clustering_config: Optional[Path],
     stratification_config: Optional[Path],
-    track_names: Optional[Sequence[str]],
-    track_intervals: Optional[Sequence[Path]],
 ) -> List[Path]:
     """Run SVConcordance across contigs."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -278,8 +266,6 @@ def _scatter_concordance(
                 java_options=java_options,
                 clustering_config=clustering_config,
                 stratification_config=stratification_config,
-                track_names=track_names,
-                track_intervals=track_intervals,
             ): contig
             for contig in contigs
         }
@@ -351,10 +337,8 @@ def run_preprocess(config: AnalysisConfig) -> Tuple[Path, Path]:
     logger.info("Using GATK: %s", version)
 
     tracks = get_tracks(config)
-    track_names = list(tracks.keys()) if tracks else None
-    track_intervals = list(tracks.values()) if tracks else None
     if tracks:
-        logger.info("Region-overlap tracks enabled: %s", ", ".join(track_names or []))
+        logger.info("Region-overlap tracks enabled: %s", ", ".join(tracks.keys()))
     else:
         logger.info("No region-overlap tracks configured; annotated outputs will mirror concordance outputs")
 
@@ -370,8 +354,6 @@ def run_preprocess(config: AnalysisConfig) -> Tuple[Path, Path]:
         n_workers=config.n_workers,
         clustering_config=config.clustering_config,
         stratification_config=config.stratification_config,
-        track_names=track_names,
-        track_intervals=track_intervals,
     )
     logger.info("Running concordance with VCF B as eval and VCF A as truth")
     concordance_b_shards = _scatter_concordance(
@@ -385,8 +367,6 @@ def run_preprocess(config: AnalysisConfig) -> Tuple[Path, Path]:
         n_workers=config.n_workers,
         clustering_config=config.clustering_config,
         stratification_config=config.stratification_config,
-        track_names=track_names,
-        track_intervals=track_intervals,
     )
 
     logger.info("Concatenating %s concordance shards into %s", len(concordance_a_shards), preprocess_dir / "concordance_a.vcf.gz")
