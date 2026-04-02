@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import gzip
 from pathlib import Path
 import re
@@ -58,6 +58,9 @@ class ValidationFixResult:
     fixed_summary: Optional[ValidationSummary]
     out_path: Optional[Path]
     wrote_output: bool
+    # Errors that were truly unfixable and caused an early abort (fixed_summary=None).
+    # When present, only these are reported as blocking — not all original errors.
+    unfixable_errors: List[FormatIssue] = field(default_factory=list)
 
     @property
     def has_errors(self) -> bool:
@@ -66,12 +69,18 @@ class ValidationFixResult:
         return self.original_summary.has_errors
 
     def unresolved_error_counts(self) -> Counter[str]:
-        summary = self.fixed_summary if self.fixed_summary is not None else self.original_summary
-        return Counter(issue.check_id for issue in summary.issues if issue.severity == "ERROR")
+        if self.fixed_summary is not None:
+            return Counter(issue.check_id for issue in self.fixed_summary.issues if issue.severity == "ERROR")
+        if self.unfixable_errors:
+            return Counter(issue.check_id for issue in self.unfixable_errors)
+        return Counter(issue.check_id for issue in self.original_summary.issues if issue.severity == "ERROR")
 
     def unresolved_errors(self) -> List[FormatIssue]:
-        summary = self.fixed_summary if self.fixed_summary is not None else self.original_summary
-        return [issue for issue in summary.issues if issue.severity == "ERROR"]
+        if self.fixed_summary is not None:
+            return [issue for issue in self.fixed_summary.issues if issue.severity == "ERROR"]
+        if self.unfixable_errors:
+            return list(self.unfixable_errors)
+        return [issue for issue in self.original_summary.issues if issue.severity == "ERROR"]
 
 
 def validate_vcf(config: ValidateConfig) -> ValidationSummary:
@@ -358,7 +367,7 @@ def validate_and_fix(vcf_path: Path, out_path: Path, ploidy_table_path: Optional
         issue for issue in original_summary.issues if issue.severity == "ERROR" and not _is_fixable_error(issue, ploidy_table_path)
     ]
     if unfixable_errors:
-        return ValidationFixResult(original_summary=original_summary, fixed_summary=None, out_path=None, wrote_output=False)
+        return ValidationFixResult(original_summary=original_summary, fixed_summary=None, out_path=None, wrote_output=False, unfixable_errors=unfixable_errors)
     apply_fixes(vcf_path, resolved_out_path, ploidy_table_path=ploidy_table_path)
     fixed_summary = validate_vcf(ValidateConfig(vcf_path=resolved_out_path))
     if fixed_summary.has_errors:

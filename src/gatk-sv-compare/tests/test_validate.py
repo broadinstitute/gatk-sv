@@ -220,6 +220,31 @@ def test_validate_and_fix_converts_sparse_cn_multiallelic_record_to_cnv(make_vcf
         assert record.samples["S2"]["GT"] == (None, None)
 
 
+def test_validate_and_fix_missing_ecn_does_not_surface_cn_multiallelic_as_blocking(make_vcf, tmp_path) -> None:
+    """MULTI_ALLELIC_NON_CNV (fixable) must not appear in the blocking-error list
+    when MISSING_ECN is the actual reason the fix was aborted."""
+    vcf_path = make_vcf(
+        file_name="cn_multiallelic_missing_ecn.vcf",
+        records=[
+            # <CN0>,<CN2>,<CN3> alts are fixable; GT:GQ without ECN is the real blocker
+            "chr1\t100\tvar1\tN\t<CN0>,<CN2>,<CN3>\t.\tPASS\tSVTYPE=DUP;SVLEN=10\tGT:GQ\t0/1:40\t0/0:35",
+        ],
+    )
+    out_path = tmp_path / "blocked_cn_ecn.vcf.gz"
+
+    result = validate_and_fix(vcf_path, out_path)
+
+    assert result.wrote_output is False
+    assert result.fixed_summary is None
+    rendered = render_fix_result(result)
+    # MISSING_ECN is the actual blocker and must appear in the "Fix mode aborted" line
+    assert "Fix mode aborted: unresolved critical checks remain: MISSING_ECN" in rendered
+    # MULTI_ALLELIC_NON_CNV is fixable; it must not appear in the Examples / blocking section
+    blocking_section = rendered.split("Fix mode aborted:")[-1]
+    assert "MULTI_ALLELIC_NON_CNV" not in blocking_section
+    assert result.unresolved_error_counts().get("MULTI_ALLELIC_NON_CNV", 0) == 0
+
+
 def test_validate_and_fix_still_blocks_non_cn_multiallelic_record(make_vcf, tmp_path) -> None:
     vcf_path = make_vcf(
         file_name="non_cn_multiallelic_unfixable.vcf",
