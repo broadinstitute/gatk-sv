@@ -43,7 +43,6 @@ workflow PermutateSVAnnotation {
 
         String gtf_label                # e.g. "r3.gencode.v39.ensembl.105"
         String sv_label                 # e.g. "gnomAD_SV_v3"
-        String output_file_name
 
         # Docker images (override as needed)
         String python_docker   = "python:3.11-slim"
@@ -171,7 +170,7 @@ workflow PermutateSVAnnotation {
             integrated_file  = Task7_IntegrateOverlaps.integrated_file,
             r_script         = calcu_r_script,
             seed_suffix      = seed_suffix,
-            output_file_name = output_file_name,
+            output_file_name = "~{sv_label}.gene_SV_data.permu_~{permu_number}.rData",
             docker           = r_docker,
             runtime_attr_override = runtime_attr_calcu_gene_data
     }
