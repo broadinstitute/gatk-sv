@@ -706,7 +706,7 @@ task Task6_ReorganizeSVIDGene {
         set -euo pipefail
         Rscript ~{r_script} \
             -g ~{transcript_bed} \
-            -i ~{overlap_file} \
+            -i <(cut -f1-4 ~{overlap_file}) \
             -o ~{output_name}
     >>>
 
