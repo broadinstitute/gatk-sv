@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
 
-from gatk_sv_compare.modules.genotype_quality import GenotypeQualityModule, summarize_gq
+from gatk_sv_compare.modules.genotype_quality import GenotypeQualityModule, _gq_histogram_bins, summarize_gq
 
 
 def test_summarize_gq_collects_alt_genotype_statistics(module_test_context) -> None:
@@ -26,3 +27,11 @@ def test_genotype_quality_module_writes_outputs(module_test_context) -> None:
     assert not summary_b.empty
     assert (output_dir / "gq_histogram.overall.CallsetA.png").exists()
     assert (output_dir / "gq_histogram.overall.CallsetB.png").exists()
+
+
+def test_gq_histogram_bins_expand_for_high_gq_values() -> None:
+    bins = _gq_histogram_bins([10.0, 50.0, 500.0, 999.0])
+
+    assert bins[0] == pytest.approx(0.0)
+    assert bins[-1] == pytest.approx(1000.0)
+    assert np.diff(bins).tolist() == [50.0] * (len(bins) - 1)

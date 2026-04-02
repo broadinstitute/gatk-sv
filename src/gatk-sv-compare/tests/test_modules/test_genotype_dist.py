@@ -25,6 +25,10 @@ def test_genotype_dist_module_writes_outputs(module_test_context) -> None:
     assert not table.empty
     assert {"n_variants_CallsetA", "frac_pass_CallsetA", "frac_nominal_CallsetA", "frac_bonferroni_CallsetA", "n_variants_CallsetB", "frac_pass_CallsetB", "frac_nominal_CallsetB", "frac_bonferroni_CallsetB"}.issubset(table.columns)
     assert (output_dir / "ternary.all.CallsetA.png").exists()
+    assert (output_dir / "ternary.by_svtype.CallsetA.png").exists()
+    assert (output_dir / "ternary.by_af_bucket.CallsetA.png").exists()
+    assert (output_dir / "ternary.by_size_bucket.CallsetA.png").exists()
+    assert (output_dir / "ternary.by_genomic_context.CallsetA.png").exists()
     assert (output_dir / "carrier_freq_vs_af.CallsetB.png").exists()
 
 

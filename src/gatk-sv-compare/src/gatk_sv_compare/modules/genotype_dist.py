@@ -11,8 +11,8 @@ from scipy.stats import chisquare
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import af_bucket_sort_key, complete_genomic_context_buckets, genomic_context_sort_key, size_bucket_sort_key, svtype_sort_key
-from ..plot_utils import HWE_COLORS, SUMMARY_COLORS, plot_scatter_af, plot_ternary, save_figure, single_column_figsize
+from ..dimensions import af_bucket_sort_key, complete_genomic_context_buckets, genomic_context_sort_key, ordered_contexts, ordered_plot_af_buckets, ordered_plot_size_buckets, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
+from ..plot_utils import HWE_COLORS, SUMMARY_COLORS, double_column_figsize, plot_scatter_af, plot_ternary, save_figure, single_column_figsize
 from .base import AnalysisModule, column_safe_label, write_tsv_gz
 
 
@@ -130,6 +130,48 @@ def _annotate_hwe_summary(ax: plt.Axes, table: pd.DataFrame) -> None:
     )
 
 
+def _ordered_group_values(table: pd.DataFrame, group_field: str) -> list[str]:
+    values = table[group_field].dropna().astype(str).unique()
+    if group_field == "svtype":
+        return ordered_svtypes(values)
+    if group_field == "size_bucket":
+        return ordered_plot_size_buckets(values)
+    if group_field == "af_bucket":
+        return ordered_plot_af_buckets(values)
+    if group_field == "genomic_context":
+        return ordered_contexts(values)
+    return sorted(values)
+
+
+def _plot_grouped_ternary(table: pd.DataFrame, group_field: str, output_path: Path, label: str) -> None:
+    group_values = _ordered_group_values(table, group_field)
+    panel_count = max(len(group_values), 1)
+    ncols = min(3, panel_count)
+    nrows = int(np.ceil(panel_count / ncols))
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=double_column_figsize(max(3.2, 2.4 * nrows)),
+        squeeze=False,
+        constrained_layout=True,
+    )
+    flat_axes = axes.flatten()
+    for axis, group_value in zip(flat_axes, group_values):
+        subset = table.loc[table[group_field].astype(str) == str(group_value)].copy()
+        if subset.empty:
+            axis.text(0.5, 0.5, "No eligible variants", ha="center", va="center")
+            axis.set_axis_off()
+            continue
+        colors = [HWE_COLORS.get(value, SUMMARY_COLORS["neutral"]) for value in subset["hwe_class"]]
+        plot_ternary(axis, subset["aa"], subset["ab"], subset["bb"], colors)
+        _annotate_hwe_summary(axis, subset)
+        axis.set_title(str(group_value))
+    for axis in flat_axes[len(group_values):]:
+        axis.set_axis_off()
+    fig.suptitle(f"HWE ternary by {group_field.replace('_', ' ')}: {label}", fontsize=12, fontweight="bold", y=1.02)
+    save_figure(fig, output_path)
+
+
 class GenotypeDistModule(AnalysisModule):
     @property
     def name(self) -> str:
@@ -147,6 +189,11 @@ class GenotypeDistModule(AnalysisModule):
             ax.text(0.5, 0.5, "No eligible variants", ha="center", va="center")
         ax.set_title(label)
         save_figure(fig, output_dir / f"ternary.all.{label}.png")
+
+        _plot_grouped_ternary(table, "svtype", output_dir / f"ternary.by_svtype.{label}.png", label)
+        _plot_grouped_ternary(table, "af_bucket", output_dir / f"ternary.by_af_bucket.{label}.png", label)
+        _plot_grouped_ternary(table, "size_bucket", output_dir / f"ternary.by_size_bucket.{label}.png", label)
+        _plot_grouped_ternary(table, "genomic_context", output_dir / f"ternary.by_genomic_context.{label}.png", label)
 
         fig, ax = plt.subplots(figsize=single_column_figsize(3.0))
         if not table.empty:

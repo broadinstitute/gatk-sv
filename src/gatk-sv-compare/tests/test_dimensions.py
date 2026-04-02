@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gatk_sv_compare.dimensions import categorize_variant, is_filtered_pass, normalize_svtype, ordered_contexts
+from gatk_sv_compare.dimensions import categorize_variant, is_filtered_pass, normalize_svtype, ordered_contexts, ordered_plot_af_buckets, ordered_plot_size_buckets
 
 
 def test_normalize_svtype_maps_mei_insertions() -> None:
@@ -34,3 +34,11 @@ def test_categorize_variant_uses_cnv_frequency_and_context() -> None:
 
 def test_ordered_contexts_always_includes_none_bucket() -> None:
     assert ordered_contexts(["segdup"]) == ["simple_repeat", "segdup", "repeatmasker", "none"]
+
+
+def test_ordered_plot_af_buckets_excludes_unknown() -> None:
+    assert ordered_plot_af_buckets(["1-10%", "unknown", "AC=1"]) == ["AC=1", "1-10%"]
+
+
+def test_ordered_plot_size_buckets_excludes_unknown_and_na() -> None:
+    assert ordered_plot_size_buckets(["2.5-10kb", "unknown", "N/A", "<100bp"]) == ["<100bp", "2.5-10kb"]

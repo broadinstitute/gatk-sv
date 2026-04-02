@@ -11,7 +11,7 @@ from scipy.stats import pearsonr, spearmanr
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import ordered_af_buckets, ordered_contexts, ordered_size_buckets, ordered_svtypes
+from ..dimensions import ordered_contexts, ordered_plot_af_buckets, ordered_plot_size_buckets, ordered_svtypes
 from ..plot_utils import double_column_figsize, plot_scatter_af, save_figure, single_column_figsize
 from .base import AnalysisModule, write_tsv_gz
 
@@ -94,9 +94,9 @@ def _ordered_group_values(frame: pd.DataFrame, group_field: str) -> list[str]:
     if group_field == "svtype_a":
         return [value for value in ordered_svtypes(values) if value != "CTX"]
     if group_field == "size_bucket_a":
-        return [value for value in ordered_size_buckets(values) if value != "N/A"]
+        return ordered_plot_size_buckets(values)
     if group_field == "af_bucket_a":
-        return ordered_af_buckets(values)
+        return ordered_plot_af_buckets(values)
     if group_field == "genomic_context_a":
         return ordered_contexts(values)
     return sorted(values)

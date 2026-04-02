@@ -10,7 +10,7 @@ import pandas as pd
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import af_bucket_sort_key, complete_genomic_context_buckets, ordered_af_buckets, ordered_size_buckets, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
+from ..dimensions import af_bucket_sort_key, complete_genomic_context_buckets, ordered_plot_af_buckets, ordered_plot_size_buckets, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
 from ..plot_utils import OVERLAP_COLORS, SUMMARY_COLORS, double_column_figsize, save_figure, plot_heatmap_annotated
 from .base import AnalysisModule, matched_site_mask, relabel_vcf_columns, write_tsv_gz
 
@@ -66,7 +66,9 @@ def _plot_overlap_bar(sites: pd.DataFrame, field: str, output_path: Path, title:
     if field == "svtype":
         grouped = grouped.reindex(ordered_svtypes(grouped.index), fill_value=0)
     elif field == "size_bucket":
-        grouped = grouped.reindex(ordered_size_buckets(grouped.index), fill_value=0)
+        grouped = grouped.reindex(ordered_plot_size_buckets(grouped.index), fill_value=0)
+    elif field == "af_bucket":
+        grouped = grouped.reindex(ordered_plot_af_buckets(grouped.index), fill_value=0)
     unmatched = grouped["total"] - grouped["matched"]
     fig, ax = plt.subplots(figsize=double_column_figsize(3.0))
     x_labels = grouped.index.astype(str)
@@ -89,10 +91,9 @@ def _plot_heatmap(sites: pd.DataFrame, row_field: str, col_field: str, output_pa
     grouped["pct"] = np.where(grouped["total"] > 0, grouped["matched"] / grouped["total"], 0.0)
     matrix = grouped.pivot(index=row_field, columns=col_field, values="pct").fillna(0.0)
     if row_field == "size_bucket":
-        keep_rows = [row for row in ordered_size_buckets(matrix.index) if str(row) != "N/A"]
-        matrix = matrix.reindex(index=keep_rows)
+        matrix = matrix.reindex(index=ordered_plot_size_buckets(matrix.index))
     elif row_field == "af_bucket":
-        matrix = matrix.reindex(index=ordered_af_buckets(matrix.index))
+        matrix = matrix.reindex(index=ordered_plot_af_buckets(matrix.index))
     if col_field == "svtype":
         keep_columns = [column for column in ordered_svtypes(matrix.columns) if str(column) not in {"BND", "CTX"}]
         matrix = matrix.loc[:, keep_columns]

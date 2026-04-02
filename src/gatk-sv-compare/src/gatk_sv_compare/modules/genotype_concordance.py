@@ -13,7 +13,7 @@ import pysam
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import af_bucket_sort_key, complete_genomic_context_buckets, genomic_context_sort_key, ordered_af_buckets, ordered_contexts, ordered_size_buckets, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
+from ..dimensions import af_bucket_sort_key, complete_genomic_context_buckets, genomic_context_sort_key, ordered_contexts, ordered_plot_af_buckets, ordered_plot_size_buckets, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
 from ..plot_utils import double_column_figsize, plot_heatmap_annotated, save_figure
 from ..vcf_format import safe_info_get
 from ..vcf_reader import _CONCORDANCE_FIELDS
@@ -146,9 +146,9 @@ def _concordance_series(metrics: pd.DataFrame, metric: str) -> pd.DataFrame:
 
 def _ordered_heatmap_rows(row_field: str, values: pd.Index) -> list[str]:
     if row_field == "af_bucket":
-        return ordered_af_buckets(values)
+        return ordered_plot_af_buckets(values)
     if row_field == "size_bucket":
-        return [value for value in ordered_size_buckets(values) if str(value) != "N/A"]
+        return ordered_plot_size_buckets(values)
     if row_field == "genomic_context":
         return ordered_contexts(values)
     return [str(value) for value in values]

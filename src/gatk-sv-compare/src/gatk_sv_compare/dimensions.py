@@ -150,6 +150,14 @@ def ordered_af_buckets(values: Iterable[object]) -> list[str]:
     return [str(value) for value in sorted({str(value) for value in values if value is not None}, key=af_bucket_sort_key)]
 
 
+def ordered_plot_size_buckets(values: Iterable[object]) -> list[str]:
+    return [value for value in ordered_size_buckets(values) if value not in {"unknown", "N/A"}]
+
+
+def ordered_plot_af_buckets(values: Iterable[object]) -> list[str]:
+    return [value for value in ordered_af_buckets(values) if value != "unknown"]
+
+
 def ordered_contexts(values: Iterable[object]) -> list[str]:
     observed = {str(value) for value in values if value is not None}
     extras = [value for value in sorted(observed, key=genomic_context_sort_key) if value not in GENOMIC_CONTEXTS]

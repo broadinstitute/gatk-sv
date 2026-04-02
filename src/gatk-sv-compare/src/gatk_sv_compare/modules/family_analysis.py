@@ -13,7 +13,7 @@ import pysam
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import ordered_af_buckets, ordered_size_buckets, ordered_svtypes
+from ..dimensions import ordered_plot_af_buckets, ordered_plot_size_buckets, ordered_svtypes
 from ..plot_utils import SUMMARY_COLORS, SVTYPE_COLORS, double_column_figsize, single_column_figsize, plot_beeswarm_horizontal, plot_heatmap_annotated, save_figure
 from .base import AnalysisModule, write_tsv_gz
 
@@ -334,9 +334,9 @@ def _plot_dnr_curve(table: pd.DataFrame, x_field: str, y_field: str, family_type
         save_figure(fig, output_path)
         return
     if x_field == "size_bucket":
-        x_values = ordered_size_buckets(subset[x_field].tolist())
+        x_values = ordered_plot_size_buckets(subset[x_field].tolist())
     elif x_field == "af_bucket":
-        x_values = ordered_af_buckets(subset[x_field].tolist())
+        x_values = ordered_plot_af_buckets(subset[x_field].tolist())
     else:
         x_values = list(dict.fromkeys(subset.sort_values(x_field)[x_field].tolist()))
     if all(isinstance(value, (int, float, np.number)) for value in x_values):
@@ -368,7 +368,7 @@ def _plot_dnr_heatmap(table: pd.DataFrame, output_path: Path, title: str, value_
         save_figure(fig, output_path)
         return
     matrix = table.pivot(index="size_bucket", columns="af_bucket", values=value_field).fillna(0.0)
-    matrix = matrix.reindex(index=ordered_size_buckets(matrix.index), columns=ordered_af_buckets(matrix.columns), fill_value=0.0)
+    matrix = matrix.reindex(index=ordered_plot_size_buckets(matrix.index), columns=ordered_plot_af_buckets(matrix.columns), fill_value=0.0)
     image = plot_heatmap_annotated(ax, matrix.values, list(matrix.index), list(matrix.columns), fmt="{value:.2f}")
     colorbar = fig.colorbar(image, ax=ax)
     colorbar.set_label("De novo rate")
