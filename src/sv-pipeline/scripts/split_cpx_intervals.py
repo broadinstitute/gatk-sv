@@ -52,10 +52,9 @@ def process(vcf_in, vcf_out):
                         record.alts = ("<INS>",)
 
                         if record.info['CPX_TYPE'] in ['dDUP_iDEL', 'INS_iDEL']:
-                            svlen = record.info['SVLEN']
-                            deletion = [x for x in record.info['CPX_INTERVALS'] if x.startswith("DEL_")][0].split(":")[1].split("-")
-                            del_len = int(deletion[1]) - int(deletion[0])
-                            record.info['SVLEN'] = svlen - del_len  # SVLEN for iDELs is source + deletion length
+                            source_type = 'DUP' if record.info['CPX_TYPE'] == 'dDUP_iDEL' else 'INS'
+                            source = [x for x in record.info['CPX_INTERVALS'] if x.startswith(source_type)][0].split(":")[1].split("-")
+                            record.info['SVLEN'] = int(source[1]) - int(source[0])  # make sure SVLEN for INS is just SOURCE len - inconsistent across callsets
                         out.write(record)
                         counter += 1
 
