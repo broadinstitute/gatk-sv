@@ -6,14 +6,12 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Optional
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pysam
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..plot_utils import save_figure
 from .base import AnalysisModule, relabel_vcf_columns, write_tsv_gz
 
 
@@ -179,23 +177,6 @@ def summarize_exact_match(per_site: pd.DataFrame) -> pd.DataFrame:
     return summary[columns]
 
 
-def _plot_grouped_metric(per_site: pd.DataFrame, group_field: str, metric: str, output_path: Path) -> None:
-    fig, ax = plt.subplots(figsize=(8, 4))
-    if per_site.empty:
-        ax.text(0.5, 0.5, "No matched shared-sample sites", ha="center", va="center")
-        ax.set_axis_off()
-        save_figure(fig, output_path)
-        return
-    grouped = per_site.groupby(group_field, dropna=False)[metric].median().sort_index()
-    ax.bar(grouped.index.astype(str), grouped.values, color="#4C72B0")
-    ax.set_ylim(0.0, 1.0)
-    ax.set_ylabel(metric.replace("_", " "))
-    ax.set_xlabel(group_field.replace("_", " "))
-    ax.set_title(f"{metric.replace('_', ' ')} by {group_field.replace('_', ' ')}")
-    ax.tick_params(axis="x", rotation=30)
-    save_figure(fig, output_path)
-
-
 class GenotypeExactMatchModule(AnalysisModule):
     @property
     def name(self) -> str:
@@ -221,8 +202,3 @@ class GenotypeExactMatchModule(AnalysisModule):
         if config.enable_site_match_table:
             write_tsv_gz(per_site_output, tables_dir / "genotype_match_rates.per_site.tsv")
         write_tsv_gz(summary_output, tables_dir / "genotype_match_rates.tsv")
-
-        _plot_grouped_metric(per_site.rename(columns={"svtype_a": "svtype"}), "svtype", "exact_match_rate", output_dir / "exact_match.by_type.png")
-        _plot_grouped_metric(per_site.rename(columns={"size_bucket_a": "size_bucket"}), "size_bucket", "exact_match_rate", output_dir / "exact_match.by_size.png")
-        _plot_grouped_metric(per_site.rename(columns={"af_bucket_a": "af_bucket"}), "af_bucket", "exact_match_rate", output_dir / "exact_match.by_af.png")
-        _plot_grouped_metric(per_site.rename(columns={"genomic_context_a": "genomic_context"}), "genomic_context", "exact_match_rate", output_dir / "exact_match.by_context.png")

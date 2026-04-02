@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import FrozenSet, Mapping, Optional, Set, Union
+from typing import FrozenSet, Iterable, Mapping, Optional, Set, Union
 
+SVTYPE_ORDER = ["DEL", "DUP", "CNV", "INS", "INS:MEI", "INV", "CPX", "CTX", "BND"]
 SVTYPES_CORE = ["DEL", "DUP", "INS", "INV", "BND", "CPX", "CTX", "CNV"]
 SVTYPE_INS_MEI = "INS:MEI"
 MEI_ALT_PATTERNS = frozenset({"<INS:ME:", "<INS:ME>"})
@@ -27,7 +28,9 @@ SIZE_BUCKETS = [
     (">50kb", (50000, float("inf"))),
 ]
 
-GENOMIC_CONTEXTS = ["segdup", "simple_repeat", "repeatmasker", "none"]
+GENOMIC_CONTEXTS = ["simple_repeat", "segdup", "repeatmasker", "none"]
+_AF_BUCKET_ORDER = [label for label, _ in AF_BUCKETS] + ["unknown"]
+_SIZE_BUCKET_ORDER = [label for label, _ in SIZE_BUCKETS] + ["unknown", "N/A"]
 
 FILTER_PASS = "PASS"
 FILTER_MULTIALLELIC = "MULTIALLELIC"
@@ -99,6 +102,54 @@ def normalize_context(genomic_context: Optional[str]) -> str:
     if genomic_context in GENOMIC_CONTEXTS:
         return genomic_context
     return "none"
+
+
+def svtype_sort_key(value: object) -> tuple[int, str]:
+    normalized = str(value)
+    try:
+        return (SVTYPE_ORDER.index(normalized), normalized)
+    except ValueError:
+        return (len(SVTYPE_ORDER), normalized)
+
+
+def size_bucket_sort_key(value: object) -> tuple[int, str]:
+    normalized = str(value)
+    try:
+        return (_SIZE_BUCKET_ORDER.index(normalized), normalized)
+    except ValueError:
+        return (len(_SIZE_BUCKET_ORDER), normalized)
+
+
+def af_bucket_sort_key(value: object) -> tuple[int, str]:
+    normalized = str(value)
+    try:
+        return (_AF_BUCKET_ORDER.index(normalized), normalized)
+    except ValueError:
+        return (len(_AF_BUCKET_ORDER), normalized)
+
+
+def genomic_context_sort_key(value: object) -> tuple[int, str]:
+    normalized = str(value)
+    try:
+        return (GENOMIC_CONTEXTS.index(normalized), normalized)
+    except ValueError:
+        return (len(GENOMIC_CONTEXTS), normalized)
+
+
+def ordered_svtypes(values: Iterable[object]) -> list[str]:
+    return [str(value) for value in sorted({str(value) for value in values if value is not None}, key=svtype_sort_key)]
+
+
+def ordered_size_buckets(values: Iterable[object]) -> list[str]:
+    return [str(value) for value in sorted({str(value) for value in values if value is not None}, key=size_bucket_sort_key)]
+
+
+def ordered_af_buckets(values: Iterable[object]) -> list[str]:
+    return [str(value) for value in sorted({str(value) for value in values if value is not None}, key=af_bucket_sort_key)]
+
+
+def ordered_contexts(values: Iterable[object]) -> list[str]:
+    return [str(value) for value in sorted({str(value) for value in values if value is not None}, key=genomic_context_sort_key)]
 
 
 def categorize_variant(record_info: Mapping[str, object]) -> VariantCategory:

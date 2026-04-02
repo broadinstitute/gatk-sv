@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 
 from gatk_sv_compare.modules.size_signatures import (
     SizeSignaturesModule,
@@ -27,10 +26,10 @@ def test_size_signatures_module_writes_outputs(module_test_context) -> None:
     module.run(module_test_context.data, module_test_context.config)
 
     output_dir = module_test_context.config.output_dir / "size_signatures"
-    peaks = pd.read_csv(output_dir / "tables" / "retrotransposon_peaks.tsv.gz", sep="\t")
-    assert set(peaks["label"]) == {"CallsetA", "CallsetB"}
-    assert (output_dir / "tables" / "implausible_variants.CallsetA.tsv.gz").exists()
-    assert (output_dir / "tables" / "mei_subtype_summary.CallsetB.tsv.gz").exists()
-    assert not (output_dir / "tables" / "size_distribution_comparison.tsv.gz").exists()
-    assert (output_dir / "retrotransposon_peaks.CallsetA.png").exists()
-    assert (output_dir / "ins_size_overlay.png").exists()
+    assert (output_dir / "implausible_variants.CallsetA.tsv.gz").exists()
+    assert (output_dir / "mei_subtype_summary.CallsetB.tsv.gz").exists()
+    assert not (output_dir / "tables").exists()
+    assert not (output_dir / "retrotransposon_peaks.tsv.gz").exists()
+    assert not (output_dir / "size_distribution_comparison.tsv.gz").exists()
+    assert not (output_dir / "retrotransposon_peaks.CallsetA.png").exists()
+    assert not (output_dir / "ins_size_overlay.png").exists()

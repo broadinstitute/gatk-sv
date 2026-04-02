@@ -9,9 +9,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pysam
+from matplotlib.gridspec import GridSpec
 
 from ..config import AnalysisConfig
-from ..dimensions import normalize_svtype
+from ..dimensions import normalize_svtype, ordered_svtypes
+from ..plot_utils import CALLSET_COLORS, double_column_figsize, save_figure
 from ..vcf_format import filter_values
 from .base import AnalysisModule, write_tsv_gz
 
@@ -53,7 +55,47 @@ def collect_per_sample_counts(vcf_path: Path, pass_only: bool = False) -> pd.Dat
         return pd.DataFrame(rows)
 
 
-def _plot_side_by_side_boxplots(
+def _sample_distribution(counts: pd.DataFrame, value_column: str, svtype: str | None = None) -> np.ndarray:
+    if counts.empty:
+        return np.asarray([], dtype=float)
+    if svtype is None:
+        grouped = counts.groupby("sample", dropna=False)[value_column].sum()
+    else:
+        grouped = counts.loc[counts["svtype"] == svtype].groupby("sample", dropna=False)[value_column].sum()
+    return grouped.to_numpy(dtype=float)
+
+
+def _draw_swarm_with_summary(
+    ax: plt.Axes,
+    values: np.ndarray,
+    x_center: float,
+    color: str,
+    rng: np.random.Generator,
+    median_label_dx: float = 0.05,
+    median_label_dy_fraction: float = 0.035,
+) -> None:
+    if values.size == 0:
+        return
+    jitter = rng.uniform(-0.045, 0.045, size=values.size)
+    ax.scatter(np.full(values.size, x_center) + jitter, values, s=12, alpha=0.8, color=color, edgecolors="none", zorder=2)
+    q1, median, q3 = np.quantile(values, [0.25, 0.5, 0.75])
+    y_span = max(float(np.max(values) - np.min(values)), 1.0)
+    ax.vlines(x_center, q1, q3, colors="black", linewidth=1.2, zorder=3)
+    ax.hlines([q1, q3], x_center - 0.045, x_center + 0.045, colors="black", linewidth=1.0, zorder=3)
+    ax.hlines(median, x_center - 0.07, x_center + 0.07, colors="black", linewidth=1.8, zorder=4)
+    ax.text(
+        x_center + median_label_dx,
+        median - y_span * median_label_dy_fraction,
+        f"{median:,.0f}",
+        color="black",
+        fontsize=8,
+        va="center",
+        ha="left",
+        fontweight="bold",
+    )
+
+
+def _plot_side_by_side_swarms(
     counts_a: pd.DataFrame,
     counts_b: pd.DataFrame,
     value_column: str,
@@ -62,42 +104,54 @@ def _plot_side_by_side_boxplots(
     label_a: str,
     label_b: str,
 ) -> None:
-    svtypes = sorted(set(counts_a["svtype"]).union(set(counts_b["svtype"])))
-    fig, ax = plt.subplots(figsize=(max(8, 1.4 * len(svtypes)), 5))
+    svtypes = ordered_svtypes(set(counts_a["svtype"]).union(set(counts_b["svtype"])))
+    fig = plt.figure(figsize=double_column_figsize(3.8))
+    grid = GridSpec(1, 2, figure=fig, width_ratios=[1.35, max(4.8, len(svtypes))], wspace=0.24)
+    ax_all = fig.add_subplot(grid[0, 0])
+    ax_types = fig.add_subplot(grid[0, 1])
     if not svtypes:
-        ax.text(0.5, 0.5, "No sample counts", ha="center", va="center")
-        ax.set_axis_off()
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
-        plt.close(fig)
+        ax_types.text(0.5, 0.5, "No sample counts", ha="center", va="center")
+        ax_all.set_axis_off()
+        ax_types.set_axis_off()
+        save_figure(fig, output_path)
         return
-    width = 0.32
+    rng = np.random.default_rng(0)
+    width = 0.18
+
+    overall_a = _sample_distribution(counts_a, value_column)
+    overall_b = _sample_distribution(counts_b, value_column)
+    _draw_swarm_with_summary(ax_all, overall_a, -width, CALLSET_COLORS["a"], rng, median_label_dx=0.07)
+    _draw_swarm_with_summary(ax_all, overall_b, width, CALLSET_COLORS["b"], rng, median_label_dx=0.07)
+    ax_all.set_xlim(-0.45, 0.45)
+    ax_all.set_xticks([0.0])
+    ax_all.set_xticklabels(["ALL"], rotation=90)
+    ax_all.set_ylabel(y_label)
+    ax_all.grid(axis="y", alpha=0.25)
+
     base_positions = np.arange(len(svtypes), dtype=float)
-    box_data = []
-    positions = []
-    colors = []
     for index, svtype in enumerate(svtypes):
-        values_a = counts_a.loc[counts_a["svtype"] == svtype, value_column].to_numpy(dtype=float)
-        values_b = counts_b.loc[counts_b["svtype"] == svtype, value_column].to_numpy(dtype=float)
-        box_data.extend([values_a if values_a.size else np.array([np.nan]), values_b if values_b.size else np.array([np.nan])])
-        positions.extend([base_positions[index] - width / 2, base_positions[index] + width / 2])
-        colors.extend(["#4C72B0", "#DD8452"])
-    boxplot = ax.boxplot(box_data, positions=positions, widths=width * 0.85, patch_artist=True, manage_ticks=False)
-    for patch, color in zip(boxplot["boxes"], colors):
-        patch.set_facecolor(color)
-        patch.set_alpha(0.75)
-    ax.set_xticks(base_positions)
-    ax.set_xticklabels(svtypes)
-    ax.set_ylabel(y_label)
-    ax.set_xlabel("SV type")
-    ax.legend(
+        values_a = _sample_distribution(counts_a, value_column, svtype)
+        values_b = _sample_distribution(counts_b, value_column, svtype)
+        _draw_swarm_with_summary(ax_types, values_a, base_positions[index] - width, CALLSET_COLORS["a"], rng, median_label_dx=0.045)
+        _draw_swarm_with_summary(ax_types, values_b, base_positions[index] + width, CALLSET_COLORS["b"], rng, median_label_dx=0.045)
+    ax_types.set_xticks(base_positions)
+    ax_types.set_xticklabels(svtypes, rotation=90)
+    ax_types.set_xlabel("SV type")
+    ax_types.grid(axis="y", alpha=0.25)
+    ax_types.set_ylabel(y_label)
+    ax_types.legend(
         handles=[
-            plt.Line2D([0], [0], color="#4C72B0", lw=8, label=label_a),
-            plt.Line2D([0], [0], color="#DD8452", lw=8, label=label_b),
+            plt.Line2D([0], [0], marker="o", linestyle="None", color=CALLSET_COLORS["a"], label=label_a, markersize=6),
+            plt.Line2D([0], [0], marker="o", linestyle="None", color=CALLSET_COLORS["b"], label=label_b, markersize=6),
         ],
+        loc="upper right",
         fontsize=8,
     )
-    fig.savefig(output_path, dpi=300, bbox_inches="tight")
-    plt.close(fig)
+    title_prefix = "SV Sites per Genome" if value_column == "sites" else "SV Alleles per Genome"
+    sample_count = max(len(set(counts_a.get("sample", pd.Series(dtype=object)))), len(set(counts_b.get("sample", pd.Series(dtype=object)))))
+    fig.suptitle(title_prefix, fontsize=16, fontweight="bold", y=0.98)
+    ax_types.set_title(f"N={sample_count} Samples", fontsize=12, pad=6)
+    save_figure(fig, output_path)
 
 
 class CountsPerGenomeModule(AnalysisModule):
@@ -125,7 +179,7 @@ class CountsPerGenomeModule(AnalysisModule):
 
         counts_a = counts_by_label.get(config.vcf_a_label, pd.DataFrame(columns=["sample", "svtype", "sites", "alleles"]))
         counts_b = counts_by_label.get(config.vcf_b_label, pd.DataFrame(columns=["sample", "svtype", "sites", "alleles"]))
-        _plot_side_by_side_boxplots(
+        _plot_side_by_side_swarms(
             counts_a,
             counts_b,
             "sites",
@@ -134,7 +188,7 @@ class CountsPerGenomeModule(AnalysisModule):
             config.vcf_a_label,
             config.vcf_b_label,
         )
-        _plot_side_by_side_boxplots(
+        _plot_side_by_side_swarms(
             counts_a,
             counts_b,
             "alleles",

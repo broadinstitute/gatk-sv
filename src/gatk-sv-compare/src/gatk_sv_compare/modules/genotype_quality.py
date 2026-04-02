@@ -10,7 +10,8 @@ import pandas as pd
 import pysam
 
 from ..config import AnalysisConfig
-from ..dimensions import normalize_svtype
+from ..dimensions import normalize_svtype, ordered_svtypes
+from ..plot_utils import SUMMARY_COLORS, SVTYPE_COLORS, save_figure, single_column_figsize
 from ..vcf_format import filter_values
 from .base import AnalysisModule, write_tsv_gz
 
@@ -40,7 +41,7 @@ def summarize_gq(vcf_path: Path, pass_only: bool = False) -> pd.DataFrame:
         return pd.DataFrame(columns=["group", "n", "mean_gq", "median_gq", "q25_gq", "q75_gq"])
     frame = pd.DataFrame(rows)
     summaries = []
-    for group_name, group in [("overall", frame)] + [(svtype, group) for svtype, group in frame.groupby("svtype")]:
+    for group_name, group in [("overall", frame)] + [(svtype, frame.loc[frame["svtype"] == svtype]) for svtype in ordered_svtypes(frame["svtype"].unique())]:
         summaries.append(
             {
                 "group": group_name,
@@ -75,14 +76,27 @@ class GenotypeQualityModule(AnalysisModule):
             write_tsv_gz(summary, tables_dir / f"gq_summary.{label}.tsv")
 
             rows = _iter_alt_gq_rows(vcf_path, config.pass_only)
-            fig, ax = plt.subplots(figsize=(6, 4))
+            fig, ax = plt.subplots(figsize=single_column_figsize(2.8))
             if rows:
                 frame = pd.DataFrame(rows)
-                ax.hist(frame["gq"], bins=list(range(0, 105, 5)), color="#4C72B0", alpha=0.8)
+                svtypes = ordered_svtypes(frame["svtype"].dropna().unique())
+                values = [frame.loc[frame["svtype"] == svtype, "gq"].to_numpy(dtype=float) for svtype in svtypes]
+                colors = [SVTYPE_COLORS.get(str(svtype), SUMMARY_COLORS["neutral"]) for svtype in svtypes]
+                ax.hist(
+                    values,
+                    bins=list(range(0, 105, 5)),
+                    stacked=True,
+                    color=colors,
+                    alpha=0.85,
+                    edgecolor=SUMMARY_COLORS["edge"],
+                    linewidth=0.6,
+                    label=[str(svtype) for svtype in svtypes],
+                )
+                if svtypes:
+                    ax.legend(fontsize=8)
             else:
                 ax.text(0.5, 0.5, "No alt genotypes", ha="center", va="center")
             ax.set_xlabel("GQ")
             ax.set_ylabel("Count")
-            ax.set_title(f"GQ histogram: {label}")
-            fig.savefig(output_dir / f"gq_histogram.overall.{label}.png", dpi=300, bbox_inches="tight")
-            plt.close(fig)
+            ax.set_title(label)
+            save_figure(fig, output_dir / f"gq_histogram.overall.{label}.png")

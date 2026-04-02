@@ -6,6 +6,7 @@ import pandas as pd
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
+from ..dimensions import af_bucket_sort_key, genomic_context_sort_key, size_bucket_sort_key, svtype_sort_key
 from .base import AnalysisModule, column_safe_label, write_tsv_gz, matched_site_mask
 
 
@@ -28,7 +29,17 @@ def summarize_binned_counts(sites: pd.DataFrame, pass_only: bool = False) -> pd.
         n_matched=("_matched", "sum"),
         n_unmatched=("_unmatched", "sum"),
     ).reset_index()
-    return summary[columns].sort_values(["svtype", "size_bucket", "af_bucket", "genomic_context"]).reset_index(drop=True)
+    return summary[columns].sort_values(
+        by=["svtype", "size_bucket", "af_bucket", "genomic_context"],
+        key=lambda series: series.map(
+            lambda value: (
+                svtype_sort_key(value) if series.name == "svtype" else
+                size_bucket_sort_key(value) if series.name == "size_bucket" else
+                af_bucket_sort_key(value) if series.name == "af_bucket" else
+                genomic_context_sort_key(value)
+            )
+        ),
+    ).reset_index(drop=True)
 
 
 def build_combined_binned_counts(sites_a: pd.DataFrame, sites_b: pd.DataFrame, label_a: str, label_b: str, pass_only: bool = False) -> pd.DataFrame:
@@ -51,7 +62,17 @@ def build_combined_binned_counts(sites_a: pd.DataFrame, sites_b: pd.DataFrame, l
     merged = counts_a.merge(counts_b, on=["svtype", "size_bucket", "af_bucket", "genomic_context"], how="outer")
     numeric_columns = [column for column in merged.columns if column.startswith("n_")]
     merged[numeric_columns] = merged[numeric_columns].fillna(0).astype(int)
-    return merged.sort_values(["svtype", "size_bucket", "af_bucket", "genomic_context"]).reset_index(drop=True)
+    return merged.sort_values(
+        by=["svtype", "size_bucket", "af_bucket", "genomic_context"],
+        key=lambda series: series.map(
+            lambda value: (
+                svtype_sort_key(value) if series.name == "svtype" else
+                size_bucket_sort_key(value) if series.name == "size_bucket" else
+                af_bucket_sort_key(value) if series.name == "af_bucket" else
+                genomic_context_sort_key(value)
+            )
+        ),
+    ).reset_index(drop=True)
 
 
 class BinnedCountsModule(AnalysisModule):

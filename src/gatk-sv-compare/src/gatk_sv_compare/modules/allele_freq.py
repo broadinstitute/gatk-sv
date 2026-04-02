@@ -11,7 +11,8 @@ from scipy.stats import pearsonr, spearmanr
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..plot_utils import plot_scatter_af, save_figure
+from ..dimensions import ordered_svtypes
+from ..plot_utils import double_column_figsize, plot_scatter_af, save_figure, single_column_figsize
 from .base import AnalysisModule, write_tsv_gz
 
 
@@ -86,7 +87,7 @@ class AlleleFreqModule(AnalysisModule):
         write_tsv_gz(stats, tables_dir / "af_correlation_stats.tsv")
 
         overall = data.matched_pairs.copy()
-        fig, ax = plt.subplots(figsize=(6, 6))
+        fig, ax = plt.subplots(figsize=single_column_figsize(3.2))
         overall_valid = overall[["af_a", "af_b"]].dropna() if not overall.empty else pd.DataFrame()
         if not overall_valid.empty:
             plot_scatter_af(ax, overall_valid["af_a"], overall_valid["af_b"], data.label_a, data.label_b)
@@ -101,10 +102,21 @@ class AlleleFreqModule(AnalysisModule):
         save_figure(fig, output_dir / "af_correlation.overall.png")
 
         if not overall.empty:
-            svtypes = sorted(str(value) for value in overall["svtype_a"].dropna().unique())
-            fig, axes = plt.subplots(3, 3, figsize=(13, 13), squeeze=False)
+            svtypes = [svtype for svtype in ordered_svtypes(overall["svtype_a"].dropna().unique()) if svtype != "CTX"]
+            panel_count = max(len(svtypes), 1)
+            ncols = 3
+            nrows = int(np.ceil(panel_count / ncols))
+            fig, axes = plt.subplots(
+                nrows,
+                ncols,
+                figsize=double_column_figsize(max(3.6, 2.1 * nrows)),
+                squeeze=False,
+                sharex=True,
+                sharey=True,
+                constrained_layout=True,
+            )
             flat_axes = axes.flatten()
-            for axis, svtype in zip(flat_axes, svtypes):
+            for index, (axis, svtype) in enumerate(zip(flat_axes, svtypes)):
                 frame = overall.loc[overall["svtype_a"] == svtype, ["af_a", "af_b"]].dropna()
                 if not frame.empty:
                     plot_scatter_af(axis, frame["af_a"], frame["af_b"], data.label_a, data.label_b)
@@ -115,6 +127,10 @@ class AlleleFreqModule(AnalysisModule):
                 else:
                     axis.text(0.5, 0.5, "No AF data", ha="center", va="center")
                 axis.set_title(str(svtype))
+                if index // ncols < nrows - 1:
+                    axis.set_xlabel("")
+                if index % ncols != 0:
+                    axis.set_ylabel("")
             for axis in flat_axes[len(svtypes):]:
                 axis.set_axis_off()
             save_figure(fig, output_dir / "af_correlation.by_type.png")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from gatk_sv_compare.modules.genotype_concordance import (
     GenotypeConcordanceModule,
@@ -37,4 +38,33 @@ def test_genotype_concordance_module_writes_outputs(module_test_context) -> None
     table = pd.read_csv(output_dir / "tables" / "concordance_metrics.tsv.gz", sep="\t")
     assert not table.empty
     assert (output_dir / "concordance_metrics.by_type.png").exists()
+    assert (output_dir / "exact_match.by_type.png").exists()
+    assert (output_dir / "exact_match.by_context.png").exists()
     assert {"n_sites_CallsetA", "mean_value_CallsetA", "median_value_CallsetA", "n_sites_CallsetB", "mean_value_CallsetB", "median_value_CallsetB"}.issubset(table.columns)
+
+
+def test_summarize_concordance_metrics_uses_cnv_concordance_for_cnv() -> None:
+    metrics = pd.DataFrame(
+        [
+            {
+                "source": "a",
+                "label": "CallsetA",
+                "variant_id": "cnv1",
+                "svtype": "CNV",
+                "size_bucket": "2.5-10kb",
+                "af_bucket": "1-10%",
+                "genomic_context": "none",
+                "genotype_concordance": 1.0,
+                "non_ref_genotype_concordance": 1.0,
+                "var_ppv": 1.0,
+                "var_sensitivity": 1.0,
+                "cnv_concordance": 0.42,
+            }
+        ]
+    )
+
+    summary = summarize_concordance_metrics(metrics)
+    row = summary.loc[(summary["metric"] == "genotype_concordance") & (summary["svtype"] == "CNV")].iloc[0]
+
+    assert row["mean_value_a"] == pytest.approx(0.42)
+    assert not ((summary["svtype"] == "CNV") & (summary["metric"] == "var_ppv")).any()

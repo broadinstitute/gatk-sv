@@ -11,7 +11,8 @@ from scipy.stats import chisquare
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..plot_utils import HWE_COLORS, plot_scatter_af, plot_ternary, save_figure
+from ..dimensions import af_bucket_sort_key, genomic_context_sort_key, size_bucket_sort_key, svtype_sort_key
+from ..plot_utils import HWE_COLORS, SUMMARY_COLORS, plot_scatter_af, plot_ternary, save_figure, single_column_figsize
 from .base import AnalysisModule, column_safe_label, write_tsv_gz
 
 
@@ -93,23 +94,33 @@ def summarize_hwe_by_bucket(table: pd.DataFrame, label: str) -> pd.DataFrame:
         "mean_carrier_freq": f"mean_carrier_freq_{token}",
         "mean_af": f"mean_af_{token}",
     })[columns]
+    return grouped.sort_values(
+        by=["svtype", "size_bucket", "af_bucket", "genomic_context"],
+        key=lambda series: series.map(
+            lambda value: (
+                svtype_sort_key(value) if series.name == "svtype" else
+                size_bucket_sort_key(value) if series.name == "size_bucket" else
+                af_bucket_sort_key(value) if series.name == "af_bucket" else
+                genomic_context_sort_key(value)
+            )
+        ),
+    ).reset_index(drop=True)
 
 
 def _annotate_hwe_summary(ax: plt.Axes, table: pd.DataFrame) -> None:
     if table.empty:
         return
-    pass_fraction = float((table["hwe_class"] == "pass").mean())
-    nominal_fraction = float((table["hwe_p"] < 0.05).mean())
-    bonf_fraction = float((table["hwe_class"] == "bonferroni").mean())
+    nominal_in_hwe_fraction = float((table["hwe_p"] >= 0.05).mean())
+    bonf_in_hwe_fraction = float((table["hwe_class"] != "bonferroni").mean())
     ax.text(
         0.02,
-        0.98,
-        f"HWE={pass_fraction:.1%}\np<0.05={nominal_fraction:.1%}\nBonf={bonf_fraction:.1%}",
+        1.04,
+        f"Nom. HWE={nominal_in_hwe_fraction:.1%}\nBonf. HWE={bonf_in_hwe_fraction:.1%}",
         transform=ax.transAxes,
         ha="left",
-        va="top",
-        fontsize=9,
-        bbox={"facecolor": "white", "alpha": 0.8, "edgecolor": "none"},
+        va="bottom",
+        fontsize=6,
+        clip_on=False,
     )
 
 
@@ -121,22 +132,22 @@ class GenotypeDistModule(AnalysisModule):
     def _run_one(self, sites: pd.DataFrame, label: str, config: AnalysisConfig, output_dir: Path) -> pd.DataFrame:
         table = build_hwe_table(sites, pass_only=config.pass_only)
 
-        fig, ax = plt.subplots(figsize=(6, 5))
+        fig, ax = plt.subplots(figsize=single_column_figsize(3.0))
         if not table.empty:
-            colors = [HWE_COLORS.get(value, "#999999") for value in table["hwe_class"]]
+            colors = [HWE_COLORS.get(value, SUMMARY_COLORS["neutral"]) for value in table["hwe_class"]]
             plot_ternary(ax, table["aa"], table["ab"], table["bb"], colors)
             _annotate_hwe_summary(ax, table)
         else:
             ax.text(0.5, 0.5, "No eligible variants", ha="center", va="center")
-        ax.set_title(f"Genotype ternary: {label}")
+        ax.set_title(label)
         save_figure(fig, output_dir / f"ternary.all.{label}.png")
 
-        fig, ax = plt.subplots(figsize=(6, 5))
+        fig, ax = plt.subplots(figsize=single_column_figsize(3.0))
         if not table.empty:
             plot_scatter_af(ax, table["carrier_freq"], table["af"].fillna(0.0), "Carrier frequency", "Allele frequency")
         else:
             ax.text(0.5, 0.5, "No eligible variants", ha="center", va="center")
-        ax.set_title(f"Carrier frequency vs AF: {label}")
+        ax.set_title(label)
         save_figure(fig, output_dir / f"carrier_freq_vs_af.{label}.png")
         return table.assign(label=label)
 

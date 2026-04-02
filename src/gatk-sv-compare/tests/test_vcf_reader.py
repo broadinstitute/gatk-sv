@@ -73,3 +73,21 @@ def test_iter_contig_handles_cnv_frequency(make_vcf) -> None:
     assert record.af == 0.25
     assert record.cn_nonref_freq == 0.25
     assert record.n_bi_genos == 2
+
+
+def test_iter_contig_prefers_simple_repeat_over_segdup(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="contexts.vcf",
+        extra_header_lines=[
+            "##INFO=<ID=segdup,Number=0,Type=Flag,Description=\"Segmental duplication overlap\">",
+            "##INFO=<ID=simple_repeat,Number=0,Type=Flag,Description=\"Simple repeat overlap\">",
+        ],
+        records=[
+            "chr1\t100\tctx1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100;segdup;simple_repeat\tGT:GQ:ECN\t0/1:40:2\t0/0:35:2",
+        ],
+    )
+
+    records = list(iter_contig(vcf_path, "chr1"))
+
+    assert len(records) == 1
+    assert records[0].genomic_context == "simple_repeat"

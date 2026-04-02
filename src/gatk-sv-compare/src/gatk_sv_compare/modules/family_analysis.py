@@ -13,7 +13,8 @@ import pysam
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..plot_utils import SVTYPE_COLORS, plot_beeswarm_horizontal, plot_heatmap_annotated, save_figure
+from ..dimensions import ordered_af_buckets, ordered_size_buckets, ordered_svtypes
+from ..plot_utils import SUMMARY_COLORS, SVTYPE_COLORS, double_column_figsize, single_column_figsize, plot_beeswarm_horizontal, plot_heatmap_annotated, save_figure
 from .base import AnalysisModule, write_tsv_gz
 
 
@@ -289,7 +290,7 @@ def summarize_denovo_by_gq(records: pd.DataFrame, thresholds: Sequence[int]) -> 
 
 def summarize_size_x_freq(records: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     outputs: Dict[str, pd.DataFrame] = {}
-    for svtype, group in [("all", records)] + [(str(key), frame) for key, frame in records.groupby("svtype")]:
+    for svtype, group in [("all", records)] + [(svtype, records.loc[records["svtype"] == svtype]) for svtype in ordered_svtypes(records["svtype"].unique())]:
         if group.empty:
             outputs[svtype] = pd.DataFrame(columns=["size_bucket", "af_bucket", "site_denovo_rate", "allele_denovo_rate", "n_records"])
             continue
@@ -303,7 +304,7 @@ def summarize_size_x_freq(records: pd.DataFrame) -> Dict[str, pd.DataFrame]:
 
 
 def _plot_inheritance_beeswarm(stats: pd.DataFrame, family_type: str, output_path: Path) -> None:
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=double_column_figsize(3.0))
     subset = stats.loc[stats["family_type"] == family_type]
     if subset.empty:
         ax.text(0.5, 0.5, "No family data", ha="center", va="center")
@@ -315,7 +316,7 @@ def _plot_inheritance_beeswarm(stats: pd.DataFrame, family_type: str, output_pat
             subset["allele_inheritance_rate"].dropna().tolist(),
             subset["allele_de_novo_rate"].dropna().tolist(),
         ]
-        colors = ["#4DAC26", "#F13D15", "#00B0CF", "#F064A5"]
+        colors = [SUMMARY_COLORS["tertiary"], SUMMARY_COLORS["quaternary"], SUMMARY_COLORS["primary"], SUMMARY_COLORS["secondary"]]
         labels = ["site inherited", "site de novo", "allele inherited", "allele de novo"]
         plot_beeswarm_horizontal(ax, values_list, colors, labels)
         ax.set_xlim(0.0, 1.0)
@@ -325,14 +326,19 @@ def _plot_inheritance_beeswarm(stats: pd.DataFrame, family_type: str, output_pat
 
 
 def _plot_dnr_curve(table: pd.DataFrame, x_field: str, y_field: str, family_type: str, output_path: Path, log_x: bool) -> None:
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=double_column_figsize(3.0))
     subset = table.loc[table["family_type"] == family_type].copy()
     if subset.empty:
         ax.text(0.5, 0.5, "No family data", ha="center", va="center")
         ax.set_axis_off()
         save_figure(fig, output_path)
         return
-    x_values = list(dict.fromkeys(subset.sort_values(x_field)[x_field].tolist()))
+    if x_field == "size_bucket":
+        x_values = ordered_size_buckets(subset[x_field].tolist())
+    elif x_field == "af_bucket":
+        x_values = ordered_af_buckets(subset[x_field].tolist())
+    else:
+        x_values = list(dict.fromkeys(subset.sort_values(x_field)[x_field].tolist()))
     if all(isinstance(value, (int, float, np.number)) for value in x_values):
         plot_positions = [float(value) for value in x_values]
         if log_x and all(float(value) > 0 for value in x_values):
@@ -343,10 +349,11 @@ def _plot_dnr_curve(table: pd.DataFrame, x_field: str, y_field: str, family_type
         ax.set_xticklabels([str(value) for value in x_values], rotation=30)
         ax.set_xscale("linear")
 
-    for svtype, group in subset.groupby("svtype"):
+    for svtype in ordered_svtypes(subset["svtype"].unique()):
+        group = subset.loc[subset["svtype"] == svtype]
         ordered = group.groupby(x_field, dropna=False)[y_field].median()
         series = [float(ordered.get(value, np.nan)) for value in x_values]
-        ax.plot(plot_positions, series, label=str(svtype), color=SVTYPE_COLORS.get(str(svtype), "#999999"))
+        ax.plot(plot_positions, series, label=str(svtype), color=SVTYPE_COLORS.get(str(svtype), SUMMARY_COLORS["neutral"]))
     ax.legend()
     ax.set_ylabel(y_field.replace("_", " "))
     ax.set_title(f"{y_field.replace('_', ' ')} vs {x_field.replace('_', ' ')}: {family_type}")
@@ -354,13 +361,14 @@ def _plot_dnr_curve(table: pd.DataFrame, x_field: str, y_field: str, family_type
 
 
 def _plot_dnr_heatmap(table: pd.DataFrame, output_path: Path, title: str, value_field: str) -> None:
-    fig, ax = plt.subplots(figsize=(6, 5))
+    fig, ax = plt.subplots(figsize=single_column_figsize(3.2))
     if table.empty:
         ax.text(0.5, 0.5, "No family data", ha="center", va="center")
         ax.set_axis_off()
         save_figure(fig, output_path)
         return
     matrix = table.pivot(index="size_bucket", columns="af_bucket", values=value_field).fillna(0.0)
+    matrix = matrix.reindex(index=ordered_size_buckets(matrix.index), columns=ordered_af_buckets(matrix.columns), fill_value=0.0)
     image = plot_heatmap_annotated(ax, matrix.values, list(matrix.index), list(matrix.columns), fmt="{value:.2f}")
     fig.colorbar(image, ax=ax)
     ax.set_title(title)
