@@ -120,6 +120,8 @@ def test_cli_validate_fix_reports_blocking_check(make_vcf, tmp_path, capsys) -> 
     assert exit_code == 1
     assert "Fix mode aborted:" in out
     assert "MISSING_GT" in out
+    assert "Examples:" in out
+    assert "[var1]" in out
 
 
 def test_cli_validate_fix_repairs_missing_ecn_with_ploidy_table(make_vcf, tmp_path, capsys) -> None:

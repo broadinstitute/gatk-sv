@@ -69,6 +69,10 @@ class ValidationFixResult:
         summary = self.fixed_summary if self.fixed_summary is not None else self.original_summary
         return Counter(issue.check_id for issue in summary.issues if issue.severity == "ERROR")
 
+    def unresolved_errors(self) -> List[FormatIssue]:
+        summary = self.fixed_summary if self.fixed_summary is not None else self.original_summary
+        return [issue for issue in summary.issues if issue.severity == "ERROR"]
+
 
 def validate_vcf(config: ValidateConfig) -> ValidationSummary:
     """Validate a VCF and return structured results."""
@@ -401,6 +405,13 @@ def render_fix_result(result: ValidationFixResult) -> str:
                 for check_id, count in sorted(unresolved_errors.items())
             )
             lines.append(f"Fix mode aborted: unresolved critical checks remain: {offending_checks}")
+            exemplar_errors: Dict[str, FormatIssue] = {}
+            for issue in result.unresolved_errors():
+                exemplar_errors.setdefault(issue.check_id, issue)
+            lines.append("Examples:")
+            for check_id, issue in sorted(exemplar_errors.items()):
+                where = f" [{issue.record_id}]" if issue.record_id else ""
+                lines.append(f"- {check_id}{where}: {issue.message}")
         else:
             lines.append("Fix mode aborted: unresolved critical checks remain.")
         return "\n".join(lines)

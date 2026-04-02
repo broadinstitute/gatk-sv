@@ -232,7 +232,10 @@ def test_validate_and_fix_still_blocks_non_cn_multiallelic_record(make_vcf, tmp_
     result = validate_and_fix(vcf_path, out_path)
 
     assert result.wrote_output is False
-    assert "MULTI_ALLELIC_NON_CNV" in render_fix_result(result)
+    rendered = render_fix_result(result)
+    assert "MULTI_ALLELIC_NON_CNV" in rendered
+    assert "Examples:" in rendered
+    assert "[var1]" in rendered
 
 
 def test_validate_and_fix_writes_bgzip_and_tabix_for_gz_output(make_vcf, tmp_path) -> None:
