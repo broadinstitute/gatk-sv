@@ -249,10 +249,11 @@ workflow PermutateSVAnnotation {
     # ── Task 8: Calculate per-gene SV data (R) ────────────────────────────
     call Task8_CalcuGeneData {
         input:
-            integrated_file  = Task7_IntegrateOverlaps.integrated_file,
             r_script         = calcu_r_script,
             seed_suffix      = seed_suffix,
-            output_file_name = "~{sv_label}.gene_SV_data.permu_~{permu_number}.rData",
+            integrated_file  = Task7_IntegrateOverlaps.integrated_file,
+            sv_info = sv_info,
+            gene_info  = gene_info, 
             docker           = r_docker,
             runtime_attr_override = runtime_attr_calcu_gene_data
     }
@@ -796,26 +797,29 @@ task Task7_IntegrateOverlaps {
 # ======================================================================
 task Task8_CalcuGeneData {
     input {
-        File        integrated_file
-        File        r_script
-        String      seed_suffix
-        String      output_file_name
-        String      docker
+        File r_script
+        String seed_suffix
+        File integrated_file
+        File sv_info
+        File gene_info
+        String docker
         RuntimeAttr? runtime_attr_override
     }
 
+    String prefix = basename(integrated_file, ".integrated")
     command <<<
         set -euo pipefail
 
-        ln -sf ~{integrated_file} "$(basename ~{integrated_file})"
-
         Rscript ~{r_script} \
-            -p ~{seed_suffix} \
-            -o ~{output_file_name}
+        -p ~{seed_suffix} \
+        --sv_info ~{sv_info} \
+        --gene_info ~{gene_info} \
+        --reanno_file ~{integrated_file} \
+        -o ~{prefix}.rData
     >>>
 
     output {
-        File result = output_file_name
+        File result = ~{prefix}.rData
     }
 
     RuntimeAttr default_attr = object {

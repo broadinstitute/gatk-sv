@@ -270,7 +270,6 @@ getSVdat.reannotated.permutate <-function(dat,re_anno_svtype, genes, prefix=NULL
   return(res)
 }
 
-
 getSVdat.all.reannotated.permutate <- function(dat, re_anno_svtype, snv.data, include.cpx=T, require.SR=F){
   #Gather data
   genes <- sort(unique(as.character(snv.data$gene)))
@@ -321,39 +320,61 @@ merge_loeuf_phaplo_ptriplo<-function(snv.data, phaplo_ptriplo){
   return(snv.data.2)
 }
 
+
+# ...existing code...
+
 #!R 
 
 library("optparse")
 
 option_list = list(
-  make_option(c('-p', "--permutate"), type="character", default=NULL, help="permutation round", metavar="character")
-);
+  make_option(c('-p', "--permutate"), type="character", default=NULL, help="permutation round label, e.g. permi_1", metavar="character"),
+  make_option(c("--sv_info_file"), type="character", default=NULL, help="SV info table (tsv/tsv.gz)", metavar="character"),
+  make_option(c("--gene_info"), type="character", default=NULL, help="Gene info table (tsv/tsv.gz)", metavar="character"),
+  make_option(c("--reanno_file"), type="character", default=NULL, help="Re-annotated SV-vs-gene file (e.g. gnomAD_SV_v3.vs.hg38_gencode_v39.permuted_seed1.integrated)", metavar="character"),
+  make_option(c("-o", "--output_rdata"), type="character", default=NULL, help="Output .RData path", metavar="character")
+)
 
-opt_parser = OptionParser(option_list=option_list);
-opt = parse_args(opt_parser);
-permu = opt$permutate
+opt_parser = OptionParser(option_list=option_list)
+opt = parse_args(opt_parser)
+
+# required args check
+required_args <- c("sv_info_file", "gene_info", "reanno_file", "output_rdata", "permutate")
+missing_args <- required_args[sapply(required_args, function(x) is.null(opt[[x]]) || opt[[x]] == "")]
+if (length(missing_args) > 0) {
+  stop(paste("Missing required arguments:", paste(missing_args, collapse = ", ")))
+}
+
 
 print('reading in sv info ...')
-sv_info_file = '/data/talkowski/xuefang/data/gnomad_V3/module08/step16_reannotate/gnomAD_SV_v3.PASS.key_info.gz'
-sv_info=read.table(sv_info_file, header = T, comment.char = "", sep = '\t')
-sm_depth_only_dup = sv_info[sv_info$SVTYPE=="DUP" & sv_info$ALGORITHMS=="depth" & sv_info$SVLEN<20000, ]
-sv_info = sv_info[!sv_info$name%in%sm_depth_only_dup$name,]
-sv_info = sv_info[sv_info$SVLEN<1000000 , ]
+sv_info_file <- opt$sv_info_file
+sv_info <- read.table(sv_info_file, header = T, comment.char = "", sep = '\t')
+sm_depth_only_dup <- sv_info[sv_info$SVTYPE=="DUP" & sv_info$ALGORITHMS=="depth" & sv_info$SVLEN<20000, ]
+sv_info <- sv_info[!sv_info$name%in%sm_depth_only_dup$name,]
+sv_info <- sv_info[sv_info$SVLEN<1000000 , ]
 
 print('reading in gene info ...')
-snv.data <- read.snvdata("/data/talkowski/xuefang/data/gnomad_V3/module08/step16_reannotate/gene_annotation/loeuf.csv", 
-                         "/data/talkowski/xuefang/data/gnomad_V3/module08/step16_reannotate/gene_annotation/gene_features.bed.gz",
-                         '/data/talkowski/xuefang/data/gnomad_V3/module08/step16_reannotate/gene_annotation/genes_grch38_annotated_4_mapped_gencode_v39.CDS.UTR.tsv.gz',
-                         '/data/talkowski/xuefang/data/gnomad_V3/module08/step16_reannotate/gene_annotation/gene_information_loeuf_pHaplo_pTriplo_pLI_4.5.txt.gz')
+permu <- opt$permutate
+gene_info <- opt$gene_info
+snv.data.permu <- read.table(gene_info, header = T, sep='\t', comment.char="")
+snv.data.permu$gene <- paste(snv.data.permu$gene, permu, sep='.')
 
 print('reading in sv vs. genes ...')
-re_anno_svtype.permutate = readin.re_anno_svtype(paste('gnomAD_SV_v3.vs.gencode.v39.ensembl.105.integrated.permu_',permu,'.gz', sep=''), sv_info)
-re_anno_svtype.permutate = re_anno_svtype.permutate[!re_anno_svtype.permutate$name%in%sm_depth_only_dup$name,]
-re_anno_svtype.permutate = merge(re_anno_svtype.permutate, sv_info[,c("name", "SVLEN", "AF",'AC')])
+re_anno_file <- opt$reanno_file
+re_anno_svtype.permutate <- readin.re_anno_svtype(re_anno_file, sv_info)
+re_anno_svtype.permutate <- re_anno_svtype.permutate[!re_anno_svtype.permutate$name%in%sm_depth_only_dup$name,]
+re_anno_svtype.permutate <- merge(re_anno_svtype.permutate, sv_info[,c("name", "SVLEN", "AF",'AC')])
 
 print('organize sv vs. genes ...')
-snv.data.permu = snv.data
-snv.data.permu$gene = paste(snv.data.permu$gene, '.permu_', permu, sep = '')
-gene.data.reanno.permu <- getSVdat.all.reannotated.permutate(dat=sv_info, re_anno_svtype = re_anno_svtype.permutate, snv.data=snv.data.permu)
-save(gene.data.reanno.permu, file = paste('gnomad_v3_SV.gene_SV_data.reannotated.permu_',permu,'.rData', sep = ''))
+# fixed: snv.data was undefined; dat is the loaded gene-level table
+gene.data.reanno.permu <- getSVdat.all.reannotated.permutate(
+  dat = sv_info,
+  re_anno_svtype = re_anno_svtype.permutate,
+  snv.data = snv.data.permu
+)
+
+save(gene.data.reanno.permu, file = opt$output_rdata)
+
+# ...existing code...
+
 
