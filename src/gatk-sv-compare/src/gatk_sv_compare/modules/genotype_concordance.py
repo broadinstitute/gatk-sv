@@ -194,7 +194,14 @@ def _plot_metric_heatmap(
         matrix = grouped.pivot(index=row_field, columns="svtype", values=metric)
         matrix = matrix.reindex(index=_ordered_heatmap_rows(row_field, matrix.index), columns=ordered_svtypes(matrix.columns))
         matrix = matrix.fillna(0.0)
-        image = plot_heatmap_annotated(ax, matrix.values, list(matrix.index), list(matrix.columns), fmt="{value:.2f}")
+        image = plot_heatmap_annotated(
+            ax,
+            matrix.values,
+            list(matrix.index),
+            list(matrix.columns),
+            fmt="{value:.2f}",
+            value_range=(0.0, 1.0),
+        )
         ax.set_title(label)
         ax.set_xlabel("SV type")
         if ax is flat_axes[0]:

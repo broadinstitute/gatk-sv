@@ -221,9 +221,11 @@ def plot_ternary(ax, aa, ab, bb, colors, draw_hwe_curve=True, alpha=0.05):
     return ax
 
 
-def plot_heatmap_annotated(ax, matrix, row_labels, col_labels, fmt="{value}"):
+def plot_heatmap_annotated(ax, matrix, row_labels, col_labels, fmt="{value}", value_range: tuple[float, float] | None = None):
     values = np.asarray(matrix)
-    image = ax.imshow(values, aspect="auto", cmap="viridis")
+    vmin = None if value_range is None else value_range[0]
+    vmax = None if value_range is None else value_range[1]
+    image = ax.imshow(values, aspect="auto", cmap="viridis", vmin=vmin, vmax=vmax)
     ax.set_xticks(np.arange(len(col_labels)))
     ax.set_xticklabels(col_labels)
     ax.set_yticks(np.arange(len(row_labels)))

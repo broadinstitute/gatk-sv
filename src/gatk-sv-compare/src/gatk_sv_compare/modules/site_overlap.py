@@ -98,7 +98,14 @@ def _plot_heatmap(sites: pd.DataFrame, row_field: str, col_field: str, output_pa
         keep_columns = [column for column in ordered_svtypes(matrix.columns) if str(column) not in {"BND", "CTX"}]
         matrix = matrix.loc[:, keep_columns]
     fig, ax = plt.subplots(figsize=double_column_figsize(3.6))
-    image = plot_heatmap_annotated(ax, matrix.values, list(matrix.index), list(matrix.columns), fmt="{value:.2f}")
+    image = plot_heatmap_annotated(
+        ax,
+        matrix.values,
+        list(matrix.index),
+        list(matrix.columns),
+        fmt="{value:.2f}",
+        value_range=(0.0, 1.0),
+    )
     colorbar = fig.colorbar(image, ax=ax)
     colorbar.set_label("Matched fraction")
     ax.set_title(title)
