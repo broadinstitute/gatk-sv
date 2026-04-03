@@ -17,6 +17,21 @@ workflow SVShell {
     Array[File] genome_tracks
     File mei_bed
     File manta_region_bed
+    File HERVK_reference
+    File LINE1_reference
+    File intron_reference
+    File? outlier_samples_list
+    File? par_bed
+    File sample_bincov_matrix
+    File sample_bincov_matrix_idx
+    File PE_metrics
+    File SR_metrics
+    File rmsk
+    File segdups
+    File genotype_pesr_depth_sepcutoff
+    File genotype_pesr_pesr_sepcutoff
+    File genotype_depth_depth_sepcutoff
+    File genotype_depth_pesr_sepcutoff
   }
 
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
@@ -80,6 +95,21 @@ workflow SVShell {
       mei_bed_index = mei_bed_index,
       manta_region_bed = manta_region_bed,
       manta_region_bed_index = manta_region_bed_index,
+      HERVK_reference = HERVK_reference,
+      LINE1_reference = LINE1_reference,
+      intron_reference = intron_reference,
+      outlier_samples_list = outlier_samples_list,
+      par_bed = par_bed,
+      sample_bincov_matrix = sample_bincov_matrix,
+      sample_bincov_matrix_idx = sample_bincov_matrix_idx,
+      PE_metrics = PE_metrics,
+      SR_metrics = SR_metrics,
+      rmsk = rmsk,
+      segdups = segdups,
+      genotype_pesr_depth_sepcutoff = genotype_pesr_depth_sepcutoff,
+      genotype_pesr_pesr_sepcutoff = genotype_pesr_pesr_sepcutoff,
+      genotype_depth_depth_sepcutoff = genotype_depth_depth_sepcutoff,
+      genotype_depth_pesr_sepcutoff = genotype_depth_pesr_sepcutoff,
   }
 
 
@@ -198,6 +228,32 @@ task RunSVShell {
     File sl_cutoff_table
     String? sl_filter_args
     File qc_definitions
+    File ref_panel_median_cov
+    File HERVK_reference
+    File LINE1_reference
+    File intron_reference
+    File? outlier_samples_list
+    File? par_bed
+    Boolean run_sampleevidence_metrics
+    File sample_bincov_matrix
+    File sample_bincov_matrix_idx
+    File PE_metrics
+    File SR_metrics
+    File rmsk
+    File segdups
+    File genotype_pesr_depth_sepcutoff
+    File genotype_pesr_pesr_sepcutoff
+    File genotype_depth_depth_sepcutoff
+    File genotype_depth_pesr_sepcutoff
+    Int genotyping_n_per_split
+    Int n_RD_genotype_bins
+    Int clean_vcf1b_records_per_shard
+    Int clean_vcf5_records_per_shard
+    Int clean_vcf_max_shards_per_chrom_clean_vcf_step1
+    Int clean_vcf_min_records_per_shard_clean_vcf_step1
+    Int clean_vcf_random_seed
+    Int clean_vcf_samples_per_clean_vcf_step2_shard
+    Int refine_complex_variants_n_per_split
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -309,6 +365,33 @@ task RunSVShell {
       --arg sl_cutoff_table "~{sl_cutoff_table}" \
       --arg sl_filter_args "~{select_first([sl_filter_args, ""])}" \
       --arg qc_definitions "~{qc_definitions}" \
+      --arg ref_panel_median_cov "~{ref_panel_median_cov}" \
+      --arg manta_region_bed_index "~{manta_region_bed_index}" \
+      --arg HERVK_reference "~{HERVK_reference}" \
+      --arg LINE1_reference "~{LINE1_reference}" \
+      --arg intron_reference "~{intron_reference}" \
+      --arg outlier_samples_list "~{outlier_samples_list}" \
+      --arg par_bed "~{par_bed}" \
+      --argjson run_sampleevidence_metrics ~{run_sampleevidence_metrics} \
+      --arg sample_bincov_matrix "~{sample_bincov_matrix}" \
+      --arg sample_bincov_matrix_idx "~{sample_bincov_matrix_idx}" \
+      --arg PE_metrics "~{PE_metrics}" \
+      --arg SR_metrics "~{SR_metrics}" \
+      --arg rmsk "~{rmsk}" \
+      --arg segdups "~{segdups}" \
+      --arg genotype_pesr_depth_sepcutoff "~{genotype_pesr_depth_sepcutoff}" \
+      --arg genotype_pesr_pesr_sepcutoff "~{genotype_pesr_pesr_sepcutoff}" \
+      --arg genotype_depth_depth_sepcutoff "~{genotype_depth_depth_sepcutoff}" \
+      --arg genotype_depth_pesr_sepcutoff "~{genotype_depth_pesr_sepcutoff}" \
+      --argjson genotyping_n_per_split ~{genotyping_n_per_split} \
+      --argjson n_RD_genotype_bins ~{n_RD_genotype_bins} \
+      --argjson clean_vcf1b_records_per_shard ~{clean_vcf1b_records_per_shard} \
+      --argjson clean_vcf5_records_per_shard ~{clean_vcf5_records_per_shard} \
+      --argjson clean_vcf_max_shards_per_chrom_clean_vcf_step1 ~{clean_vcf_max_shards_per_chrom_clean_vcf_step1} \
+      --argjson clean_vcf_min_records_per_shard_clean_vcf_step1 ~{clean_vcf_min_records_per_shard_clean_vcf_step1} \
+      --argjson clean_vcf_random_seed ~{clean_vcf_random_seed} \
+      --argjson clean_vcf_samples_per_clean_vcf_step2_shard ~{clean_vcf_samples_per_clean_vcf_step2_shard} \
+      --argjson "RefineComplexVariants.n_per_split" ~{refine_complex_variants_n_per_split} \
       '$ARGS.named | with_entries(select(.value != "" and .value != null))' > "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json"
 
     df -h
@@ -379,9 +462,9 @@ task RunSVShell {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 8,
-    mem_gb: 32,
-    disk_gb: 500,
+    cpu_cores: 4,
+    mem_gb: 24,
+    disk_gb: 400,
     boot_disk_gb: 30,
     preemptible_tries: 0,
     max_retries: 0
