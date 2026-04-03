@@ -30,7 +30,6 @@ workflow PermutateSVAnnotation {
         Int    permu_number
         File   sv_bed
         File   tel_cen_bed
-        File   sv_info
         File   gene_info
 
         # Python scripts
@@ -254,7 +253,7 @@ workflow PermutateSVAnnotation {
             r_script         = calcu_r_script,
             seed_suffix      = seed_suffix,
             integrated_file  = Task7_IntegrateOverlaps.integrated_file,
-            sv_info = sv_info,
+            sv_info = sv_bed,
             gene_info  = gene_info, 
             docker           = r_docker,
             runtime_attr_override = runtime_attr_calcu_gene_data
