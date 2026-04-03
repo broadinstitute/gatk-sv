@@ -577,7 +577,7 @@ task Task4_ExtractOverlaps {
         # ── promoter overlap (all overlapping rows) ───────────────────────
         zcat ~{promoter_isec} \
             | cut -f4,5,10,11 \
-            > ~{p}.promoter_overlap.~{seed_suffix}
+            > ~{p}.promoter.~{seed_suffix}
 
         # ── TSS overlap for coding transcripts ────────────────────────────
         zcat ~{coding_transcript_isec} \
@@ -609,14 +609,14 @@ task Task4_ExtractOverlaps {
         File utr3_overlap                      = p + ".3_prime_utr."                       + seed_suffix
         File inside_exons                      = p + ".inside_exons."                      + seed_suffix
         File inside_introns                    = p + ".inside_introns."                    + seed_suffix
-        File promoter_overlap                  = p + ".promoter_overlap."                  + seed_suffix
+        File promoter                  = p + ".promoter."                  + seed_suffix
         File tss_coding_transcripts_overlap    = p + ".tss_coding_transcripts_overlap."   + seed_suffix
         File partial_coding_transcripts_overlap = p + ".partial_coding_transcripts_overlap." + seed_suffix
         Array[File] all_overlaps = [
             whole_transcript_overlap, svs_inside_transcripts,
             tss_transcripts_overlap, partial_transcripts_overlap,
             utr5_overlap, utr3_overlap, inside_exons, inside_introns,
-            promoter_overlap, tss_coding_transcripts_overlap,
+            promoter, tss_coding_transcripts_overlap,
             partial_coding_transcripts_overlap
         ]
     }
