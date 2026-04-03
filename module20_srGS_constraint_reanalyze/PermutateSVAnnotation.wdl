@@ -815,7 +815,7 @@ task Task8_CalcuGeneData {
 
         Rscript ~{r_script} \
         -p ~{seed_suffix} \
-        --sv_info ~{sv_info} \
+        --sv_info_file ~{sv_info} \
         --gene_info ~{gene_info} \
         --reanno_file ~{integrated_file} \
         -o ~{prefix}.rData
