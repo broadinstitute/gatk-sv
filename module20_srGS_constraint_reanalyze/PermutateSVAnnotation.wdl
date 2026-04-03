@@ -30,6 +30,8 @@ workflow PermutateSVAnnotation {
         Int    permu_number
         File   sv_bed
         File   tel_cen_bed
+        File   sv_info
+        File   gene_info
 
         # Python scripts
         File   permute_gtf_script       # permute_gtf.py
