@@ -809,6 +809,7 @@ task Task8_CalcuGeneData {
     }
 
     String prefix = basename(integrated_file, ".integrated")
+
     command <<<
         set -euo pipefail
 
@@ -821,7 +822,7 @@ task Task8_CalcuGeneData {
     >>>
 
     output {
-        File result = ~{prefix}.rData
+        File result = "~{prefix}.rData"
     }
 
     RuntimeAttr default_attr = object {
