@@ -11,7 +11,7 @@ from scipy.stats import chisquare
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import af_bucket_sort_key, complete_genomic_context_buckets, genomic_context_sort_key, ordered_contexts, ordered_plot_af_buckets, ordered_plot_size_buckets, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
+from ..dimensions import af_bucket_sort_key, algorithm_sort_key, complete_genomic_context_buckets, explode_algorithm_buckets, genomic_context_sort_key, ordered_algorithms, ordered_contexts, ordered_plot_af_buckets, ordered_plot_size_buckets, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
 from ..plot_utils import HWE_COLORS, SUMMARY_COLORS, double_column_figsize, plot_scatter_af, plot_ternary, save_figure, single_column_figsize
 from .base import AnalysisModule, column_safe_label, write_tsv_gz
 
@@ -46,9 +46,9 @@ def _hwe_p_value(row: pd.Series) -> float:
 def build_hwe_table(sites: pd.DataFrame, pass_only: bool = False) -> pd.DataFrame:
     filtered = _filtered_sites(sites, pass_only)
     if filtered.empty:
-        return pd.DataFrame(columns=["variant_id", "svtype", "size_bucket", "af_bucket", "genomic_context", "aa", "ab", "bb", "carrier_freq", "af", "hwe_p", "hwe_class"])
+        return pd.DataFrame(columns=["variant_id", "svtype", "size_bucket", "af_bucket", "genomic_context", "algorithms", "aa", "ab", "bb", "carrier_freq", "af", "hwe_p", "hwe_class"])
     bonferroni_threshold = 0.05 / max(len(filtered), 1)
-    table = filtered[["variant_id", "svtype", "size_bucket", "af_bucket", "genomic_context", "af", "n_bi_genos", "n_hom_ref", "n_het", "n_hom_alt"]].copy()
+    table = filtered[["variant_id", "svtype", "size_bucket", "af_bucket", "genomic_context", "algorithms", "af", "n_bi_genos", "n_hom_ref", "n_het", "n_hom_alt"]].copy()
     table["aa"] = table["n_hom_ref"] / table["n_bi_genos"]
     table["ab"] = table["n_het"] / table["n_bi_genos"]
     table["bb"] = table["n_hom_alt"] / table["n_bi_genos"]
@@ -59,7 +59,7 @@ def build_hwe_table(sites: pd.DataFrame, pass_only: bool = False) -> pd.DataFram
         "bonferroni",
         np.where(table["hwe_p"] < 0.05, "nominal", "pass"),
     )
-    return table[["variant_id", "svtype", "size_bucket", "af_bucket", "genomic_context", "aa", "ab", "bb", "carrier_freq", "af", "hwe_p", "hwe_class"]]
+    return table[["variant_id", "svtype", "size_bucket", "af_bucket", "genomic_context", "algorithms", "aa", "ab", "bb", "carrier_freq", "af", "hwe_p", "hwe_class"]]
 
 
 def summarize_hwe_by_bucket(table: pd.DataFrame, label: str) -> pd.DataFrame:
@@ -69,6 +69,7 @@ def summarize_hwe_by_bucket(table: pd.DataFrame, label: str) -> pd.DataFrame:
         "size_bucket",
         "af_bucket",
         "genomic_context",
+        "algorithm",
         f"n_variants_{token}",
         f"frac_pass_{token}",
         f"frac_nominal_{token}",
@@ -78,7 +79,8 @@ def summarize_hwe_by_bucket(table: pd.DataFrame, label: str) -> pd.DataFrame:
     ]
     if table.empty:
         return pd.DataFrame(columns=columns)
-    grouped = table.groupby(["svtype", "size_bucket", "af_bucket", "genomic_context"], dropna=False).agg(
+    table = explode_algorithm_buckets(table)
+    grouped = table.groupby(["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"], dropna=False).agg(
         n_variants=("variant_id", "count"),
         frac_pass=("hwe_class", lambda values: float((values == "pass").mean())),
         frac_nominal=("hwe_class", lambda values: float((values == "nominal").mean())),
@@ -88,7 +90,7 @@ def summarize_hwe_by_bucket(table: pd.DataFrame, label: str) -> pd.DataFrame:
     ).reset_index()
     grouped = complete_genomic_context_buckets(
         grouped,
-        ["svtype", "size_bucket", "af_bucket", "genomic_context"],
+        ["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"],
         fill_values={"n_variants": 0},
     )
     grouped["n_variants"] = grouped["n_variants"].astype(int)
@@ -101,13 +103,14 @@ def summarize_hwe_by_bucket(table: pd.DataFrame, label: str) -> pd.DataFrame:
         "mean_af": f"mean_af_{token}",
     })
     return renamed[columns].sort_values(
-        by=["svtype", "size_bucket", "af_bucket", "genomic_context"],
+        by=["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"],
         key=lambda series: series.map(
             lambda value: (
                 svtype_sort_key(value) if series.name == "svtype" else
                 size_bucket_sort_key(value) if series.name == "size_bucket" else
                 af_bucket_sort_key(value) if series.name == "af_bucket" else
-                genomic_context_sort_key(value)
+                genomic_context_sort_key(value) if series.name == "genomic_context" else
+                algorithm_sort_key(value)
             )
         ),
     ).reset_index(drop=True)
@@ -134,6 +137,8 @@ def _ordered_group_values(table: pd.DataFrame, group_field: str) -> list[str]:
     values = table[group_field].dropna().astype(str).unique()
     if group_field == "svtype":
         return ordered_svtypes(values)
+    if group_field == "algorithm":
+        return ordered_algorithms(values)
     if group_field == "size_bucket":
         return ordered_plot_size_buckets(values)
     if group_field == "af_bucket":
@@ -144,6 +149,8 @@ def _ordered_group_values(table: pd.DataFrame, group_field: str) -> list[str]:
 
 
 def _plot_grouped_ternary(table: pd.DataFrame, group_field: str, output_path: Path, label: str) -> None:
+    if group_field == "algorithm":
+        table = explode_algorithm_buckets(table)
     group_values = _ordered_group_values(table, group_field)
     panel_count = max(len(group_values), 1)
     ncols = min(3, panel_count)
@@ -191,6 +198,7 @@ class GenotypeDistModule(AnalysisModule):
         save_figure(fig, output_dir / f"ternary.all.{label}.png")
 
         _plot_grouped_ternary(table, "svtype", output_dir / f"ternary.by_svtype.{label}.png", label)
+        _plot_grouped_ternary(table, "algorithm", output_dir / f"ternary.by_algorithm.{label}.png", label)
         _plot_grouped_ternary(table, "af_bucket", output_dir / f"ternary.by_af_bucket.{label}.png", label)
         _plot_grouped_ternary(table, "size_bucket", output_dir / f"ternary.by_size_bucket.{label}.png", label)
         _plot_grouped_ternary(table, "genomic_context", output_dir / f"ternary.by_genomic_context.{label}.png", label)
@@ -212,5 +220,5 @@ class GenotypeDistModule(AnalysisModule):
         table_b = self._run_one(data.sites_b, data.label_b, config, output_dir)
         summary_a = summarize_hwe_by_bucket(table_a, data.label_a)
         summary_b = summarize_hwe_by_bucket(table_b, data.label_b)
-        combined = summary_a.merge(summary_b, on=["svtype", "size_bucket", "af_bucket", "genomic_context"], how="outer")
+        combined = summary_a.merge(summary_b, on=["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"], how="outer")
         write_tsv_gz(combined, tables_dir / "hwe_stats.tsv")

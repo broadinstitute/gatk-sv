@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from gatk_sv_compare.dimensions import categorize_variant, is_filtered_pass, normalize_svtype, ordered_contexts, ordered_plot_af_buckets, ordered_plot_size_buckets
+import pandas as pd
+
+from gatk_sv_compare.dimensions import categorize_variant, explode_algorithm_buckets, is_filtered_pass, normalize_algorithms, normalize_svtype, ordered_algorithms, ordered_contexts, ordered_plot_af_buckets, ordered_plot_size_buckets
 
 
 def test_normalize_svtype_maps_mei_insertions() -> None:
@@ -8,9 +10,10 @@ def test_normalize_svtype_maps_mei_insertions() -> None:
     assert normalize_svtype("INS", "<INS>") == "INS"
 
 
-def test_is_filtered_pass_includes_multiallelic() -> None:
+def test_is_filtered_pass_accepts_pass_or_empty_filter() -> None:
     assert is_filtered_pass({"PASS"}) is True
-    assert is_filtered_pass({"MULTIALLELIC"}) is True
+    assert is_filtered_pass(set()) is True
+    assert is_filtered_pass({"MULTIALLELIC"}) is False
     assert is_filtered_pass({"HIGH_NCR"}) is False
 
 
@@ -42,3 +45,17 @@ def test_ordered_plot_af_buckets_excludes_unknown() -> None:
 
 def test_ordered_plot_size_buckets_excludes_unknown_and_na() -> None:
     assert ordered_plot_size_buckets(["2.5-10kb", "unknown", "N/A", "<100bp"]) == ["<100bp", "2.5-10kb"]
+
+
+def test_normalize_algorithms_and_ordered_algorithms_handle_multi_value_inputs() -> None:
+    assert normalize_algorithms(("manta", "wham", "manta")) == ("manta", "wham")
+    assert ordered_algorithms(["wham", "unknown", "manta"]) == ["manta", "wham", "unknown"]
+
+
+def test_explode_algorithm_buckets_duplicates_multi_algorithm_rows() -> None:
+    frame = pd.DataFrame([{"variant_id": "v1", "algorithms": "manta,wham"}, {"variant_id": "v2", "algorithms": "melt"}])
+
+    expanded = explode_algorithm_buckets(frame)
+
+    assert expanded["variant_id"].tolist() == ["v1", "v1", "v2"]
+    assert expanded["algorithm"].tolist() == ["manta", "wham", "melt"]

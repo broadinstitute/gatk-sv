@@ -80,7 +80,9 @@ def test_family_analysis_module_computes_expected_denovo_rate(tmp_path, make_vcf
     by_class = pd.read_csv(output_dir / "tables" / "denovo_rate_by_class.tsv.gz", sep="\t")
     assert not inheritance_table.empty
     assert not by_class.empty
+    assert (output_dir / "tables" / "denovo_rate_by_algorithm.tsv.gz").exists()
     assert (output_dir / "inheritance.trios.all_sv.png").exists()
+    assert (output_dir / "dnr_vs_algorithm.trios.variants.png").exists()
     assert (output_dir / "dnr_vs_gq.trios.variants.png").exists()
     assert (output_dir / "dnr_heatmap.trios.variants.all_sv.png").exists()
 

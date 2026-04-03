@@ -222,10 +222,13 @@ def plot_ternary(ax, aa, ab, bb, colors, draw_hwe_curve=True, alpha=0.05):
 
 
 def plot_heatmap_annotated(ax, matrix, row_labels, col_labels, fmt="{value}", value_range: tuple[float, float] | None = None):
-    values = np.asarray(matrix)
+    values = np.asarray(matrix, dtype=float)
+    masked_values = np.ma.masked_invalid(values)
     vmin = None if value_range is None else value_range[0]
     vmax = None if value_range is None else value_range[1]
-    image = ax.imshow(values, aspect="auto", cmap="viridis", vmin=vmin, vmax=vmax)
+    cmap = plt.get_cmap("viridis").copy()
+    cmap.set_bad(color="#BDBDBD")
+    image = ax.imshow(masked_values, aspect="auto", cmap=cmap, vmin=vmin, vmax=vmax)
     ax.set_xticks(np.arange(len(col_labels)))
     ax.set_xticklabels(col_labels)
     ax.set_yticks(np.arange(len(row_labels)))
@@ -236,7 +239,7 @@ def plot_heatmap_annotated(ax, matrix, row_labels, col_labels, fmt="{value}", va
             ax.text(
                 col_idx,
                 row_idx,
-                fmt.format(value=value),
+                "N/A" if not np.isfinite(value) else fmt.format(value=value),
                 ha="center",
                 va="center",
                 fontsize=TICK_FONTSIZE,

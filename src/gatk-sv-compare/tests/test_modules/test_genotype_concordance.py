@@ -27,6 +27,7 @@ def test_extract_concordance_rows_reads_available_info_metrics(module_test_conte
     assert not summary.empty
     assert "var_ppv" in set(summary["metric"])
     assert "mean_value_a" in summary.columns
+    assert "algorithm" in summary.columns
 
 
 def test_genotype_concordance_module_writes_outputs(module_test_context) -> None:
@@ -40,6 +41,7 @@ def test_genotype_concordance_module_writes_outputs(module_test_context) -> None
     assert (output_dir / "genotype_concordance.af_bucket_x_svtype.png").exists()
     assert (output_dir / "genotype_concordance.size_bucket_x_svtype.png").exists()
     assert (output_dir / "genotype_concordance.genomic_context_x_svtype.png").exists()
+    assert (output_dir / "genotype_concordance.algorithm_x_svtype.png").exists()
     assert (output_dir / "non_ref_genotype_concordance.af_bucket_x_svtype.png").exists()
     assert (output_dir / "variant_ppv.size_bucket_x_svtype.png").exists()
     assert (output_dir / "variant_sensitivity.genomic_context_x_svtype.png").exists()

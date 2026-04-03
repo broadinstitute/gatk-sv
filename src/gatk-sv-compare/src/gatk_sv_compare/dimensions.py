@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import FrozenSet, Iterable, Mapping, Optional, Sequence, Set, Union
 
@@ -31,6 +32,7 @@ SIZE_BUCKETS = [
 ]
 
 GENOMIC_CONTEXTS = ["simple_repeat", "segdup", "repeatmasker", "none"]
+ALGORITHM_UNKNOWN = "unknown"
 _AF_BUCKET_ORDER = [label for label, _ in AF_BUCKETS] + ["unknown"]
 _SIZE_BUCKET_ORDER = [label for label, _ in SIZE_BUCKETS] + ["unknown", "N/A"]
 
@@ -69,7 +71,7 @@ def normalize_svtype(svtype: Optional[str], alt_allele: Optional[str] = None) ->
 
 def is_filtered_pass(filter_values: Union[Set[str], FrozenSet[str]]) -> bool:
     """Return True when a record belongs to the filtered-pass analysis view."""
-    return FILTER_PASS in filter_values or FILTER_MULTIALLELIC in filter_values
+    return not filter_values or FILTER_PASS in filter_values
 
 
 def bucket_size(svtype: str, svlen: Optional[int]) -> str:
@@ -106,6 +108,37 @@ def normalize_context(genomic_context: Optional[str]) -> str:
     return "none"
 
 
+def normalize_algorithm(value: object) -> str:
+    normalized = str(value).strip() if value not in (None, ".") else ""
+    return normalized or ALGORITHM_UNKNOWN
+
+
+def normalize_algorithms(value: object) -> tuple[str, ...]:
+    if isinstance(value, (tuple, list, set, frozenset)):
+        raw_values = [normalize_algorithm(item) for item in value]
+    elif value in (None, "."):
+        raw_values = [ALGORITHM_UNKNOWN]
+    else:
+        text = str(value).strip()
+        if not text or text == ".":
+            raw_values = [ALGORITHM_UNKNOWN]
+        else:
+            raw_values = [normalize_algorithm(item) for item in re.split(r"[;,]", text)]
+
+    ordered_unique: list[str] = []
+    seen: set[str] = set()
+    for raw_value in raw_values:
+        if raw_value in seen:
+            continue
+        seen.add(raw_value)
+        ordered_unique.append(raw_value)
+    return tuple(ordered_unique or [ALGORITHM_UNKNOWN])
+
+
+def algorithms_to_text(value: object) -> str:
+    return ",".join(normalize_algorithms(value))
+
+
 def svtype_sort_key(value: object) -> tuple[int, str]:
     normalized = str(value)
     try:
@@ -138,6 +171,13 @@ def genomic_context_sort_key(value: object) -> tuple[int, str]:
         return (len(GENOMIC_CONTEXTS), normalized)
 
 
+def algorithm_sort_key(value: object) -> tuple[int, str]:
+    normalized = normalize_algorithm(value)
+    if normalized == ALGORITHM_UNKNOWN:
+        return (1, normalized)
+    return (0, normalized)
+
+
 def ordered_svtypes(values: Iterable[object]) -> list[str]:
     return [str(value) for value in sorted({str(value) for value in values if value is not None}, key=svtype_sort_key)]
 
@@ -162,6 +202,31 @@ def ordered_contexts(values: Iterable[object]) -> list[str]:
     observed = {str(value) for value in values if value is not None}
     extras = [value for value in sorted(observed, key=genomic_context_sort_key) if value not in GENOMIC_CONTEXTS]
     return list(GENOMIC_CONTEXTS) + extras
+
+
+def ordered_algorithms(values: Iterable[object]) -> list[str]:
+    observed = {normalize_algorithm(value) for value in values if value is not None}
+    if not observed:
+        observed = {ALGORITHM_UNKNOWN}
+    return sorted(observed, key=algorithm_sort_key)
+
+
+def explode_algorithm_buckets(
+    frame: pd.DataFrame,
+    algorithms_column: str = "algorithms",
+    bucket_column: str = "algorithm",
+) -> pd.DataFrame:
+    expanded = frame.copy()
+    if expanded.empty:
+        expanded[bucket_column] = pd.Series(dtype=object)
+        return expanded
+    if algorithms_column not in expanded.columns:
+        expanded[bucket_column] = ALGORITHM_UNKNOWN
+        return expanded
+    expanded[bucket_column] = expanded[algorithms_column].map(normalize_algorithms)
+    expanded = expanded.explode(bucket_column, ignore_index=True)
+    expanded[bucket_column] = expanded[bucket_column].map(normalize_algorithm)
+    return expanded
 
 
 def complete_genomic_context_buckets(

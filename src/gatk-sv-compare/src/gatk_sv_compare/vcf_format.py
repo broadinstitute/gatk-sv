@@ -40,11 +40,7 @@ def _record_identifier(record: pysam.VariantRecord) -> str:
 
 def filter_values(record: pysam.VariantRecord) -> Set[str]:
     """Return the FILTER values for a record as a normalized set."""
-    values = set(record.filter.keys())
-    if not values and record.filter is not None:
-        raw = str(record.filter)
-        if raw and raw != ".":
-            values.add(raw)
+    values = {value for value in record.filter.keys() if value and value != "."}
     return values
 
 

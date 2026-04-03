@@ -9,7 +9,7 @@ from typing import Dict, Iterator, List, Optional, Sequence, Tuple
 import numpy as np
 import pysam
 
-from .dimensions import GENOMIC_CONTEXTS, normalize_svtype
+from .dimensions import GENOMIC_CONTEXTS, normalize_algorithms, normalize_svtype
 from .vcf_format import filter_values, has_precomputed_counts, safe_info_get
 
 _GENOMIC_CONTEXT_TOKENS = {
@@ -58,6 +58,7 @@ class SiteRecord:
     status: Optional[str]
     truth_vid: Optional[str]
     genomic_context: str
+    algorithms: tuple[str, ...]
     gq_array: Optional[np.ndarray]
     concordance_metrics: Optional[Dict[str, float]]
 
@@ -75,6 +76,10 @@ def _info_value(record: pysam.VariantRecord, key: str) -> object:
     if isinstance(value, tuple):
         return value[0] if value else None
     return value
+
+
+def _algorithms(record: pysam.VariantRecord) -> tuple[str, ...]:
+    return normalize_algorithms(safe_info_get(record, "ALGORITHMS"))
 
 
 def _int_or_none(value: object) -> Optional[int]:
@@ -310,6 +315,7 @@ def iter_contig(
                 status=str(_info_value(record, "STATUS")) if _info_value(record, "STATUS") not in (None, ".") else None,
                 truth_vid=str(_info_value(record, "TRUTH_VID")) if _info_value(record, "TRUTH_VID") not in (None, ".") else None,
                 genomic_context=_genomic_context(record, svtype, context_overlap=context_overlap),
+                algorithms=_algorithms(record),
                 gq_array=_extract_gq_array(record, sample_indices) if extract_gq else None,
                 concordance_metrics=_extract_concordance_metrics(record) if extract_concordance else None,
             )

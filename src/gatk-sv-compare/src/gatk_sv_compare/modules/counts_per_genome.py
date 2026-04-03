@@ -13,7 +13,7 @@ from matplotlib.gridspec import GridSpec
 from matplotlib.transforms import offset_copy
 
 from ..config import AnalysisConfig
-from ..dimensions import normalize_svtype, ordered_svtypes
+from ..dimensions import is_filtered_pass, normalize_svtype, ordered_svtypes
 from ..plot_utils import CALLSET_COLORS, double_column_figsize, save_figure
 from ..vcf_format import filter_values, safe_info_get
 from .base import AnalysisModule, write_tsv_gz
@@ -25,7 +25,7 @@ def collect_per_sample_counts(vcf_path: Path, pass_only: bool = False) -> pd.Dat
         per_sample: Dict[tuple, Dict[str, int]] = {}
         for record in vcf:
             filters = filter_values(record)
-            if pass_only and not ({"PASS", "MULTIALLELIC"} & filters):
+            if pass_only and not is_filtered_pass(filters):
                 continue
             svtype = normalize_svtype(str(safe_info_get(record, "SVTYPE", "UNKNOWN")), ",".join(record.alts or ()))
             for sample_name in sample_names:

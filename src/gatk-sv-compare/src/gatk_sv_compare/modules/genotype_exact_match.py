@@ -12,7 +12,7 @@ import pysam
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import complete_genomic_context_buckets
+from ..dimensions import complete_genomic_context_buckets, explode_algorithm_buckets
 from .base import AnalysisModule, relabel_vcf_columns, write_tsv_gz
 
 
@@ -73,10 +73,12 @@ def build_exact_match_table(data: AggregatedData, config: AnalysisConfig) -> pd.
         "size_bucket_a",
         "af_bucket_a",
         "genomic_context_a",
+        "algorithms_a",
         "svtype_b",
         "size_bucket_b",
         "af_bucket_b",
         "genomic_context_b",
+        "algorithms_b",
         "n_compared",
         "exact_match_rate",
         "homref_to_het_rate",
@@ -92,8 +94,8 @@ def build_exact_match_table(data: AggregatedData, config: AnalysisConfig) -> pd.
     target_ids_a: Dict[str, set[str]] = defaultdict(set)
     target_ids_b: Dict[str, set[str]] = defaultdict(set)
     svtype_by_vid: Dict[str, str] = {}
-    site_meta_a = data.sites_a.set_index("variant_id")[["svtype", "size_bucket", "af_bucket", "genomic_context"]]
-    site_meta_b = data.sites_b.set_index("variant_id")[["svtype", "size_bucket", "af_bucket", "genomic_context"]]
+    site_meta_a = data.sites_a.set_index("variant_id")[["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithms"]]
+    site_meta_b = data.sites_b.set_index("variant_id")[["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithms"]]
     for row in data.matched_pairs.itertuples(index=False):
         target_ids_a[str(row.contig_a)].add(str(row.variant_id_a))
         target_ids_b[str(row.contig_b)].add(str(row.variant_id_b))
@@ -125,10 +127,12 @@ def build_exact_match_table(data: AggregatedData, config: AnalysisConfig) -> pd.
                 "size_bucket_a": meta_a["size_bucket"],
                 "af_bucket_a": meta_a["af_bucket"],
                 "genomic_context_a": meta_a["genomic_context"],
+                "algorithms_a": meta_a["algorithms"],
                 "svtype_b": meta_b["svtype"],
                 "size_bucket_b": meta_b["size_bucket"],
                 "af_bucket_b": meta_b["af_bucket"],
                 "genomic_context_b": meta_b["genomic_context"],
+                "algorithms_b": meta_b["algorithms"],
                 "n_compared": n_compared,
                 "exact_match_rate": float((left == right).mean()),
                 "homref_to_het_rate": float(((left == 0) & (right == 1)).mean()),
@@ -148,10 +152,12 @@ def summarize_exact_match(per_site: pd.DataFrame) -> pd.DataFrame:
         "size_bucket_a",
         "af_bucket_a",
         "genomic_context_a",
+        "algorithm_a",
         "svtype_b",
         "size_bucket_b",
         "af_bucket_b",
         "genomic_context_b",
+        "algorithm_b",
         "n_sites",
         "mean_exact_match_rate",
         "median_exact_match_rate",
@@ -164,7 +170,9 @@ def summarize_exact_match(per_site: pd.DataFrame) -> pd.DataFrame:
     ]
     if per_site.empty:
         return pd.DataFrame(columns=columns)
-    summary = per_site.groupby(["svtype_a", "size_bucket_a", "af_bucket_a", "genomic_context_a", "svtype_b", "size_bucket_b", "af_bucket_b", "genomic_context_b"], dropna=False).agg(
+    summary_input = explode_algorithm_buckets(per_site, algorithms_column="algorithms_a", bucket_column="algorithm_a")
+    summary_input = explode_algorithm_buckets(summary_input, algorithms_column="algorithms_b", bucket_column="algorithm_b")
+    summary = summary_input.groupby(["svtype_a", "size_bucket_a", "af_bucket_a", "genomic_context_a", "algorithm_a", "svtype_b", "size_bucket_b", "af_bucket_b", "genomic_context_b", "algorithm_b"], dropna=False).agg(
         n_sites=("variant_id_a", "count"),
         mean_exact_match_rate=("exact_match_rate", "mean"),
         median_exact_match_rate=("exact_match_rate", "median"),
@@ -177,7 +185,7 @@ def summarize_exact_match(per_site: pd.DataFrame) -> pd.DataFrame:
     ).reset_index()
     summary = complete_genomic_context_buckets(
         summary,
-        ["svtype_a", "size_bucket_a", "af_bucket_a", "genomic_context_a", "svtype_b", "size_bucket_b", "af_bucket_b", "genomic_context_b"],
+        ["svtype_a", "size_bucket_a", "af_bucket_a", "genomic_context_a", "algorithm_a", "svtype_b", "size_bucket_b", "af_bucket_b", "genomic_context_b", "algorithm_b"],
         fill_values={"n_sites": 0},
     )
     summary["n_sites"] = summary["n_sites"].astype(int)

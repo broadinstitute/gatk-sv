@@ -11,21 +11,16 @@ def test_af_bin_edges_use_discrete_low_ac_bins() -> None:
         {
             "af": [0.01, 0.02, 0.03, 0.2, 0.5],
             "ac": [1, 2, 3, 21, 50],
+            "an": [100, 100, 100, 100, 100],
             "svtype": ["DEL", "DEL", "DUP", "DEL", "DUP"],
         }
     )
 
     edges = _af_bin_edges(sites, low_ac_max=20, high_bin_count=4)
 
-    expected_prefix = np.array(
-        [
-            0.01 / np.sqrt(2.0),
-            np.sqrt(0.01 * 0.02),
-            np.sqrt(0.02 * 0.03),
-            np.sqrt(0.03 * 0.2),
-        ]
-    )
-    np.testing.assert_allclose(edges[:4], expected_prefix)
+    expected_prefix = np.asarray([0.005, 0.015, 0.025, 0.035, 0.045], dtype=float)
+    np.testing.assert_allclose(edges[:5], expected_prefix)
+    np.testing.assert_allclose(edges[19:22], np.asarray([0.195, 0.205, 0.40375], dtype=float))
     assert np.all(np.diff(edges) > 0)
     assert edges[-1] == 1.0
 
@@ -39,12 +34,20 @@ def test_overall_counts_module_writes_expected_plots(module_test_context) -> Non
     expected = [
         "sv_count_by_type.CallsetA.png",
         "sv_count_by_type.CallsetB.png",
+        "sv_count_by_algorithm.CallsetA.png",
+        "sv_count_by_algorithm.CallsetB.png",
         "size_distribution.CallsetA.png",
         "size_distribution.CallsetB.png",
+        "size_distribution.by_algorithm.CallsetA.png",
+        "size_distribution.by_algorithm.CallsetB.png",
         "af_distribution.CallsetA.png",
         "af_distribution.CallsetB.png",
+        "af_distribution.by_algorithm.CallsetA.png",
+        "af_distribution.by_algorithm.CallsetB.png",
         "genomic_context_by_type.CallsetA.png",
         "genomic_context_by_type.CallsetB.png",
+        "genomic_context_by_algorithm.CallsetA.png",
+        "genomic_context_by_algorithm.CallsetB.png",
     ]
     for name in expected:
         assert (output_dir / name).exists()

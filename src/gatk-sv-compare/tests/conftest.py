@@ -82,6 +82,7 @@ def module_test_context(tmp_path, make_vcf) -> ModuleTestContext:
         "##INFO=<ID=AC,Number=1,Type=Integer,Description=\"Allele count\">",
         "##INFO=<ID=AF,Number=1,Type=Float,Description=\"Allele frequency\">",
         "##INFO=<ID=AN,Number=1,Type=Integer,Description=\"Allele number\">",
+        "##INFO=<ID=ALGORITHMS,Number=.,Type=String,Description=\"Calling algorithms\">",
         "##INFO=<ID=STATUS,Number=1,Type=String,Description=\"Match status\">",
         "##INFO=<ID=TRUTH_VID,Number=1,Type=String,Description=\"Truth variant id\">",
         "##INFO=<ID=segdup,Number=0,Type=Flag,Description=\"Segmental duplication overlap\">",
@@ -99,10 +100,10 @@ def module_test_context(tmp_path, make_vcf) -> ModuleTestContext:
         sample_names=sample_names,
         extra_header_lines=extra_headers,
         records=[
-            "chr1\t100\ta_del\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=150;AC=3;AF=0.5;AN=6;N_BI_GENOS=3;N_HOMREF=1;N_HET=1;N_HOMALT=1;STATUS=MATCHED;TRUTH_VID=b_del;segdup;VAR_PPV=0.9;gnomad_v4.1_sv_AF=0.1\tGT:GQ:ECN:OGQ:SL\t0/0:30:2:28:1.0\t0/1:50:2:45:1.0\t1/1:70:2:60:1.0",
-            "chr1\t300\ta_ins\tN\t<INS:ME:ALU>\t.\tPASS\tSVTYPE=INS;SVLEN=305;AC=1;AF=0.1667;AN=6;N_BI_GENOS=3;N_HOMREF=2;N_HET=1;N_HOMALT=0;STATUS=MATCHED;TRUTH_VID=b_ins;simple_repeat;VAR_PPV=0.95;gnomad_v4.1_sv_AF=0.02\tGT:GQ:ECN:OGQ:SL\t0/0:25:2:20:1.0\t0/1:65:2:55:1.0\t0/0:35:2:30:1.0",
-            "chr1\t500\ta_dup\tN\t<DUP>\t.\tUNRESOLVED\tSVTYPE=DUP;SVLEN=1200;AC=2;AF=0.3333;AN=6;N_BI_GENOS=3;N_HOMREF=1;N_HET=2;N_HOMALT=0;STATUS=UNMATCHED;repeatmasker;VAR_PPV=0.4;gnomad_v4.1_sv_AF=0.15\tGT:GQ:ECN:OGQ:SL\t0/1:40:2:35:1.0\t0/1:45:2:40:1.0\t0/0:35:2:30:1.0",
-            "chr1\t800\ta_cnv\tN\t<CNV>\t.\tMULTIALLELIC\tSVTYPE=CNV;SVLEN=5000;CN_NONREF_FREQ=0.3333;CN_NUMBER=3;N_BI_GENOS=3;N_HOMREF=0;N_HET=0;N_HOMALT=0;STATUS=UNMATCHED;gnomad_v4.1_sv_AF=0.0\tGT:GQ:ECN:OGQ:SL\t./.:20:2:18:1.0\t./.:22:2:19:1.0\t./.:24:2:20:1.0",
+            "chr1\t100\ta_del\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=150;AC=3;AF=0.5;AN=6;ALGORITHMS=manta,wham;N_BI_GENOS=3;N_HOMREF=1;N_HET=1;N_HOMALT=1;STATUS=MATCHED;TRUTH_VID=b_del;segdup;VAR_PPV=0.9;gnomad_v4.1_sv_AF=0.1\tGT:GQ:ECN:OGQ:SL\t0/0:30:2:28:1.0\t0/1:50:2:45:1.0\t1/1:70:2:60:1.0",
+            "chr1\t300\ta_ins\tN\t<INS:ME:ALU>\t.\tPASS\tSVTYPE=INS;SVLEN=305;AC=1;AF=0.1667;AN=6;ALGORITHMS=melt;N_BI_GENOS=3;N_HOMREF=2;N_HET=1;N_HOMALT=0;STATUS=MATCHED;TRUTH_VID=b_ins;simple_repeat;VAR_PPV=0.95;gnomad_v4.1_sv_AF=0.02\tGT:GQ:ECN:OGQ:SL\t0/0:25:2:20:1.0\t0/1:65:2:55:1.0\t0/0:35:2:30:1.0",
+            "chr1\t500\ta_dup\tN\t<DUP>\t.\tUNRESOLVED\tSVTYPE=DUP;SVLEN=1200;AC=2;AF=0.3333;AN=6;ALGORITHMS=depth;N_BI_GENOS=3;N_HOMREF=1;N_HET=2;N_HOMALT=0;STATUS=UNMATCHED;repeatmasker;VAR_PPV=0.4;gnomad_v4.1_sv_AF=0.15\tGT:GQ:ECN:OGQ:SL\t0/1:40:2:35:1.0\t0/1:45:2:40:1.0\t0/0:35:2:30:1.0",
+            "chr1\t800\ta_cnv\tN\t<CNV>\t.\tMULTIALLELIC\tSVTYPE=CNV;SVLEN=5000;ALGORITHMS=cnmops,depth;CN_NONREF_FREQ=0.3333;CN_NUMBER=3;N_BI_GENOS=3;N_HOMREF=0;N_HET=0;N_HOMALT=0;STATUS=UNMATCHED;gnomad_v4.1_sv_AF=0.0\tGT:GQ:ECN:OGQ:SL\t./.:20:2:18:1.0\t./.:22:2:19:1.0\t./.:24:2:20:1.0",
         ],
     )
     vcf_b = make_vcf(
@@ -111,9 +112,9 @@ def module_test_context(tmp_path, make_vcf) -> ModuleTestContext:
         sample_names=sample_names,
         extra_header_lines=extra_headers,
         records=[
-            "chr1\t120\tb_del\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=160;AC=2;AF=0.3333;AN=6;N_BI_GENOS=3;N_HOMREF=1;N_HET=2;N_HOMALT=0;STATUS=MATCHED;TRUTH_VID=a_del;segdup;VAR_PPV=0.88;gnomad_v4.1_sv_AF=0.12\tGT:GQ:ECN:OGQ:SL\t0/1:55:2:45:1.0\t0/1:52:2:44:1.0\t0/0:33:2:28:1.0",
-            "chr1\t320\tb_ins\tN\t<INS:ME:ALU>\t.\tPASS\tSVTYPE=INS;SVLEN=295;AC=1;AF=0.1667;AN=6;N_BI_GENOS=3;N_HOMREF=2;N_HET=1;N_HOMALT=0;STATUS=MATCHED;TRUTH_VID=a_ins;simple_repeat;VAR_PPV=0.98;gnomad_v4.1_sv_AF=0.01\tGT:GQ:ECN:OGQ:SL\t0/0:20:2:18:1.0\t0/1:62:2:55:1.0\t0/0:40:2:32:1.0",
-            "chr1\t650\tb_inv\tN\t<INV>\t.\tPASS\tSVTYPE=INV;SVLEN=2000;AC=1;AF=0.1667;AN=6;N_BI_GENOS=3;N_HOMREF=2;N_HET=1;N_HOMALT=0;STATUS=UNMATCHED;repeatmasker;VAR_PPV=0.7;gnomad_v4.1_sv_AF=0.05\tGT:GQ:ECN:OGQ:SL\t0/0:42:2:38:1.0\t0/0:39:2:32:1.0\t0/1:60:2:50:1.0",
+            "chr1\t120\tb_del\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=160;AC=2;AF=0.3333;AN=6;ALGORITHMS=manta;N_BI_GENOS=3;N_HOMREF=1;N_HET=2;N_HOMALT=0;STATUS=MATCHED;TRUTH_VID=a_del;segdup;VAR_PPV=0.88;gnomad_v4.1_sv_AF=0.12\tGT:GQ:ECN:OGQ:SL\t0/1:55:2:45:1.0\t0/1:52:2:44:1.0\t0/0:33:2:28:1.0",
+            "chr1\t320\tb_ins\tN\t<INS:ME:ALU>\t.\tPASS\tSVTYPE=INS;SVLEN=295;AC=1;AF=0.1667;AN=6;ALGORITHMS=melt,wham;N_BI_GENOS=3;N_HOMREF=2;N_HET=1;N_HOMALT=0;STATUS=MATCHED;TRUTH_VID=a_ins;simple_repeat;VAR_PPV=0.98;gnomad_v4.1_sv_AF=0.01\tGT:GQ:ECN:OGQ:SL\t0/0:20:2:18:1.0\t0/1:62:2:55:1.0\t0/0:40:2:32:1.0",
+            "chr1\t650\tb_inv\tN\t<INV>\t.\tPASS\tSVTYPE=INV;SVLEN=2000;AC=1;AF=0.1667;AN=6;ALGORITHMS=depth;N_BI_GENOS=3;N_HOMREF=2;N_HET=1;N_HOMALT=0;STATUS=UNMATCHED;repeatmasker;VAR_PPV=0.7;gnomad_v4.1_sv_AF=0.05\tGT:GQ:ECN:OGQ:SL\t0/0:42:2:38:1.0\t0/0:39:2:32:1.0\t0/1:60:2:50:1.0",
         ],
     )
 

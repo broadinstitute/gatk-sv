@@ -13,6 +13,7 @@ def test_summarize_gq_collects_alt_genotype_statistics(module_test_context) -> N
     overall = summary.loc[summary["group"] == "overall"].iloc[0]
     assert int(overall["n"]) == 3
     assert overall["median_gq"] == pytest.approx(65.0)
+    assert "CNV" not in summary["group"].tolist()
 
 
 def test_genotype_quality_module_writes_outputs(module_test_context) -> None:

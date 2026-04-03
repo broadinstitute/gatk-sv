@@ -10,7 +10,7 @@ from gatk_sv_compare.modules.site_overlap import SiteOverlapModule, _plot_heatma
 def test_build_overlap_metrics_counts_matches_for_both_callsets(module_test_context) -> None:
     metrics = build_overlap_metrics(module_test_context.data.sites_a, module_test_context.data.sites_b, pass_only=True)
 
-    del_row = metrics.loc[metrics["svtype"] == "DEL"].iloc[0]
+    del_row = metrics.loc[(metrics["svtype"] == "DEL") & (metrics["algorithm"] == "manta")].iloc[0]
     assert int(del_row["n_total_a"]) == 1
     assert int(del_row["n_matched_a"]) == 1
     assert int(del_row["n_total_b"]) == 1
@@ -27,9 +27,12 @@ def test_site_overlap_module_writes_tables_and_plots(module_test_context) -> Non
     assert not table.empty
     assert (output_dir / "tables" / "overlap_metrics.parquet").exists()
     assert (output_dir / "overlap.by_class.CallsetA.png").exists()
+    assert (output_dir / "overlap.by_algorithm.CallsetA.png").exists()
     assert (output_dir / "overlap.by_size.CallsetB.png").exists()
     assert (output_dir / "heatmap.size_x_class.CallsetA.png").exists()
     assert (output_dir / "heatmap.freq_x_class.CallsetB.png").exists()
+    assert (output_dir / "heatmap.size_x_algorithm.CallsetA.png").exists()
+    assert (output_dir / "heatmap.freq_x_algorithm.CallsetB.png").exists()
 
 
 def test_plot_heatmap_excludes_bnd_and_ctx_columns(tmp_path) -> None:

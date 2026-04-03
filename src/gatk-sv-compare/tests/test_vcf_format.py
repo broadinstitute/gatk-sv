@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pysam
 
-from gatk_sv_compare.vcf_format import PipelineStage, check_record, detect_pipeline_stage
+from gatk_sv_compare.vcf_format import PipelineStage, check_record, detect_pipeline_stage, filter_values
 
 
 def test_detect_pipeline_stage_final_annotated(make_vcf) -> None:
@@ -54,6 +54,19 @@ def test_check_record_does_not_emit_cnv_no_gt_info(make_vcf) -> None:
         record = next(iter(vcf))
     issues = check_record(record)
     assert all(issue.check_id != "CNV_NO_GT" for issue in issues)
+
+
+def test_filter_values_treats_empty_filter_as_empty_set(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="empty_filter.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\t.\tSVTYPE=DEL;SVLEN=10\tGT:GQ:ECN\t0/1:40:2\t0/0:35:2",
+        ],
+    )
+    with pysam.VariantFile(str(vcf_path)) as vcf:
+        record = next(iter(vcf))
+
+    assert filter_values(record) == set()
 
 
 def test_check_record_handles_missing_cpx_type_header(make_vcf) -> None:
