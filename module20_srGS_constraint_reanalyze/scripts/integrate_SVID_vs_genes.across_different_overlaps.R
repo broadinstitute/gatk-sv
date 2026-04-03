@@ -47,8 +47,8 @@ d8=read.table(paste(opt$prefix, '.inside_introns.',            opt$appendix, '.r
 colnames(d8)[4] = 'inside_introns'
 dat=merge(dat, d8[,c(1,2,4)], by=c('SVID','svtype'), all=T)
 
-d9=read.table(paste(opt$prefix, '.promoter.',                  opt$appendix, '.reorganized', sep=''), header=T)
-colnames(d9)[4] = 'promoter'
+d9=read.table(paste(opt$prefix, '.promoter_overlap.',                  opt$appendix, '.reorganized', sep=''), header=T)
+colnames(d9)[4] = 'promoter_overlap'
 dat=merge(dat, d9[,c(1,2,4)], by=c('SVID','svtype'), all=T)
 
 for(i in c(3:ncol(dat))){dat[,i] = as.character(dat[,i])}
