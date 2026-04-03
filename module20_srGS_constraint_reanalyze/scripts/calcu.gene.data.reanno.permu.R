@@ -334,13 +334,13 @@ option_list <- list(
               help = "Gene info table (tsv/tsv.gz)", metavar = "character"),
   make_option(c("-r", "--reanno"), type = "character", default = NULL,
               help = "Re-annotated SV-vs-gene file (e.g. gnomAD_SV_v3.vs.hg38_gencode_v39.permuted_seed1.integrated)", metavar = "character"),
-  make_option(c("-o", "--output-rdata"), type = "character", default = NULL,
+  make_option(c("-o", "--output"), type = "character", default = NULL,
               help = "Output .RData path", metavar = "character")
 )
 
 opt <- parse_args(OptionParser(option_list = option_list))
 
-required_args <- c("sv", "gene", "reanno", "output_rdata", "permutate")
+required_args <- c("sv", "gene", "reanno", "output", "permutate")
 missing_args  <- required_args[sapply(required_args, function(x) is.null(opt[[x]]) || opt[[x]] == "")]
 if (length(missing_args) > 0) {
   stop(paste("Missing required arguments:", paste(paste0("-", substr(missing_args, 1, 1)), collapse = ", ")))
@@ -370,5 +370,5 @@ gene.data.reanno.permu <- getSVdat.all.reannotated.permutate(
   snv.data       = snv.data.permu
 )
 
-save(gene.data.reanno.permu, file = opt$output_rdata)
+save(gene.data.reanno.permu, file = opt$output)
 
