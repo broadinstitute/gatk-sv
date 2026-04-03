@@ -463,7 +463,7 @@ task RunSVShell {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 4,
-    mem_gb: 24,
+    mem_gb: 32,
     disk_gb: 400,
     boot_disk_gb: 30,
     preemptible_tries: 0,
