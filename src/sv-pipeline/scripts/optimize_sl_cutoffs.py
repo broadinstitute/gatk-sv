@@ -66,9 +66,9 @@ def generate_qc_plots(df, out_dir, out_name):
     n_true = df[df['LABEL'] == 1].shape[0]
     n_false = df[df['LABEL'] == 0].shape[0]
     n_unl = df[df['LABEL'] == -1].shape[0]
-    print(f"True: {n_true} ({100*n_true/float(n_total)}%)")
-    print(f"False: {n_false} ({100*n_false/float(n_total)}%)")
-    print(f"Unlabeled: {n_unl} ({100*n_unl/float(n_total)}%)")
+    print(f"True: {n_true} ({100 * n_true / float(n_total)}%)")
+    print(f"False: {n_false} ({100 * n_false / float(n_total)}%)")
+    print(f"Unlabeled: {n_unl} ({100 * n_unl / float(n_total)}%)")
     print(f"Total: {n_total}")
 
     # Plot
