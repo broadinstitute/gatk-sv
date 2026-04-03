@@ -217,8 +217,8 @@ workflow PermutateSVAnnotation {
     call Task6_ReorganizeSVIDGene as Task6_Reorg_Promoter {
         input:
             transcript_bed        = Task2_SplitGTF.transcript_bed,
-            overlap_file          = Task4_ExtractOverlaps.promoter_overlap,
-            output_name           = sv_gtf_prefix + ".promoter_overlap." + seed_suffix + ".reorganized",
+            overlap_file          = Task4_ExtractOverlaps.promoter,
+            output_name           = sv_gtf_prefix + ".promoter." + seed_suffix + ".reorganized",
             r_script              = reorganize_r_script,
             docker                = r_docker,
             runtime_attr_override = runtime_attr_reorganize_svid
