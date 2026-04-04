@@ -273,7 +273,7 @@ getSVdat.reannotated.permutate <-function(dat,re_anno_svtype, genes, prefix=NULL
 
 getSVdat.all.reannotated.permutate <- function(dat, re_anno_svtype, snv.data, include.cpx=T, require.SR=F){
   #Gather data
-  genes <- sort(unique(as.character(snv.data$gene)))
+  genes <- sort(unique(as.character(snv.data$gene_name)))
   if(include.cpx==F){
     dat <- dat[which(dat$SVTYPE != "CPX"), ]
   }
