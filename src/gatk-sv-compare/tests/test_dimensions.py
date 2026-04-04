@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from gatk_sv_compare.dimensions import categorize_variant, explode_algorithm_buckets, is_filtered_pass, normalize_algorithms, normalize_svtype, ordered_algorithms, ordered_contexts, ordered_plot_af_buckets, ordered_plot_size_buckets
+from gatk_sv_compare.dimensions import categorize_variant, explode_algorithm_buckets, is_filtered_pass, normalize_algorithms, normalize_evidence_bucket, normalize_svtype, ordered_algorithms, ordered_contexts, ordered_evidence_buckets, ordered_plot_af_buckets, ordered_plot_evidence_buckets, ordered_plot_size_buckets
 
 
 def test_normalize_svtype_maps_mei_insertions() -> None:
@@ -59,3 +59,10 @@ def test_explode_algorithm_buckets_duplicates_multi_algorithm_rows() -> None:
 
     assert expanded["variant_id"].tolist() == ["v1", "v1", "v2"]
     assert expanded["algorithm"].tolist() == ["manta", "wham", "melt"]
+
+
+def test_normalize_and_order_evidence_buckets_ignore_unrecognized_tokens() -> None:
+    assert normalize_evidence_bucket(("SR", "RD", "BAF", "PE")) == "RD,PE,SR"
+    assert normalize_evidence_bucket("BAF,SR") == "SR"
+    assert ordered_evidence_buckets(["unknown", "PE,SR", "RD", "RD,PE"]) == ["RD", "RD,PE", "PE,SR", "unknown"]
+    assert ordered_plot_evidence_buckets(["unknown", "PE,SR", "RD"]) == ["RD", "PE,SR"]

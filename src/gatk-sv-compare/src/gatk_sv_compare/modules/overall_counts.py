@@ -10,7 +10,7 @@ import pandas as pd
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import explode_algorithm_buckets, ordered_algorithms, ordered_contexts, ordered_svtypes
+from ..dimensions import explode_algorithm_buckets, ordered_algorithms, ordered_contexts, ordered_evidence_buckets, ordered_svtypes
 from ..plot_utils import MEI_PEAK_COLORS, SUMMARY_COLORS, SVTYPE_COLORS, double_column_figsize, save_figure
 from .base import AnalysisModule
 
@@ -22,6 +22,10 @@ _MEI_PEAK_LABELS = [("Alu", 200, 400), ("SVA", 1500, 3000), ("LINE1", 5000, 7000
 def _ordered_categories(values, field: str) -> list[str]:
     if field == "algorithm":
         return ordered_algorithms(values)
+    if field == "evidence_bucket":
+        return ordered_evidence_buckets(values)
+    if field == "genomic_context":
+        return ordered_contexts(values)
     return ordered_svtypes(values)
 
 
@@ -217,9 +221,16 @@ class OverallCountsModule(AnalysisModule):
             filtered = _filtered_sites(sites, config.pass_only)
             _plot_type_counts(filtered, output_dir / f"sv_count_by_type.{label}.png", label)
             _plot_type_counts(filtered, output_dir / f"sv_count_by_algorithm.{label}.png", label, field="algorithm", xlabel="Algorithm")
+            _plot_type_counts(filtered, output_dir / f"sv_count_by_evidence.{label}.png", label, field="evidence_bucket", xlabel="Evidence")
+            _plot_type_counts(filtered, output_dir / f"sv_count_by_context.{label}.png", label, field="genomic_context", xlabel="Genomic context")
             _plot_size_distribution(filtered, output_dir / f"size_distribution.{label}.png", label)
             _plot_size_distribution(filtered, output_dir / f"size_distribution.by_algorithm.{label}.png", label, group_field="algorithm")
+            _plot_size_distribution(filtered, output_dir / f"size_distribution.by_evidence.{label}.png", label, group_field="evidence_bucket")
+            _plot_size_distribution(filtered, output_dir / f"size_distribution.by_context.{label}.png", label, group_field="genomic_context")
             _plot_af_distribution(filtered, output_dir / f"af_distribution.{label}.png", label)
             _plot_af_distribution(filtered, output_dir / f"af_distribution.by_algorithm.{label}.png", label, group_field="algorithm")
+            _plot_af_distribution(filtered, output_dir / f"af_distribution.by_evidence.{label}.png", label, group_field="evidence_bucket")
+            _plot_af_distribution(filtered, output_dir / f"af_distribution.by_context.{label}.png", label, group_field="genomic_context")
             _plot_context_by_type(filtered, output_dir / f"genomic_context_by_type.{label}.png", label)
             _plot_context_by_type(filtered, output_dir / f"genomic_context_by_algorithm.{label}.png", label, group_field="algorithm", xlabel="Algorithm")
+            _plot_context_by_type(filtered, output_dir / f"genomic_context_by_evidence.{label}.png", label, group_field="evidence_bucket", xlabel="Evidence")

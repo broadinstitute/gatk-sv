@@ -10,7 +10,7 @@ import pandas as pd
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import af_bucket_sort_key, algorithm_sort_key, complete_genomic_context_buckets, explode_algorithm_buckets, ordered_algorithms, ordered_plot_af_buckets, ordered_plot_size_buckets, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
+from ..dimensions import af_bucket_sort_key, algorithm_sort_key, complete_genomic_context_buckets, evidence_bucket_sort_key, explode_algorithm_buckets, genomic_context_sort_key, ordered_algorithms, ordered_contexts, ordered_plot_af_buckets, ordered_plot_evidence_buckets, ordered_plot_size_buckets, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
 from ..plot_utils import OVERLAP_COLORS, SUMMARY_COLORS, double_column_figsize, save_figure, plot_heatmap_annotated
 from .base import AnalysisModule, matched_site_mask, relabel_vcf_columns, write_tsv_gz
 
@@ -25,14 +25,14 @@ def _overlap_metrics(sites: pd.DataFrame, suffix: str) -> pd.DataFrame:
     sites = explode_algorithm_buckets(sites)
     matched = matched_site_mask(sites)
     annotated = sites.assign(_matched=matched.astype(int))
-    grouped = sites.groupby(["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"], dropna=False)
+    grouped = sites.groupby(["svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm"], dropna=False)
     metrics = grouped.agg(
         **{f"n_total_{suffix}": ("variant_id", "count")},
         **{f"n_matched_{suffix}": ("variant_id", lambda ids: int(annotated.loc[ids.index, "_matched"].sum()))},
     ).reset_index()
     metrics = complete_genomic_context_buckets(
         metrics,
-        ["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"],
+        ["svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm"],
         fill_values={f"n_total_{suffix}": 0, f"n_matched_{suffix}": 0},
     )
     metrics[[f"n_total_{suffix}", f"n_matched_{suffix}"]] = metrics[[f"n_total_{suffix}", f"n_matched_{suffix}"]].astype(int)
@@ -47,14 +47,16 @@ def _overlap_metrics(sites: pd.DataFrame, suffix: str) -> pd.DataFrame:
 def build_overlap_metrics(sites_a: pd.DataFrame, sites_b: pd.DataFrame, pass_only: bool = False) -> pd.DataFrame:
     metrics_a = _overlap_metrics(_filtered_sites(sites_a, pass_only), "a")
     metrics_b = _overlap_metrics(_filtered_sites(sites_b, pass_only), "b")
-    merged = metrics_a.merge(metrics_b, on=["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"], how="outer").fillna(0)
+    merged = metrics_a.merge(metrics_b, on=["svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm"], how="outer").fillna(0)
     return merged.sort_values(
-        by=["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"],
+        by=["svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm"],
         key=lambda series: series.map(
             lambda value: (
                 svtype_sort_key(value) if series.name == "svtype" else
                 size_bucket_sort_key(value) if series.name == "size_bucket" else
                 af_bucket_sort_key(value) if series.name == "af_bucket" else
+                evidence_bucket_sort_key(value) if series.name == "evidence_bucket" else
+                genomic_context_sort_key(value) if series.name == "genomic_context" else
                 algorithm_sort_key(value) if series.name == "algorithm" else
                 str(value)
             )
@@ -75,6 +77,10 @@ def _plot_overlap_bar(sites: pd.DataFrame, field: str, output_path: Path, title:
         grouped = grouped.reindex(ordered_plot_size_buckets(grouped.index), fill_value=0)
     elif field == "af_bucket":
         grouped = grouped.reindex(ordered_plot_af_buckets(grouped.index), fill_value=0)
+    elif field == "evidence_bucket":
+        grouped = grouped.reindex(ordered_plot_evidence_buckets(grouped.index), fill_value=0)
+    elif field == "genomic_context":
+        grouped = grouped.reindex(ordered_contexts(grouped.index), fill_value=0)
     unmatched = grouped["total"] - grouped["matched"]
     fig, ax = plt.subplots(figsize=double_column_figsize(3.0))
     x_labels = grouped.index.astype(str)
@@ -98,17 +104,35 @@ def _plot_heatmap(sites: pd.DataFrame, row_field: str, col_field: str, output_pa
     grouped = sites.assign(_matched=matched.astype(int)).groupby([row_field, col_field], dropna=False).agg(matched=("_matched", "sum"), total=("variant_id", "count")).reset_index()
     grouped["pct"] = np.where(grouped["total"] > 0, grouped["matched"] / grouped["total"], 0.0)
     matrix = grouped.pivot(index=row_field, columns=col_field, values="pct")
+    count_matrix = grouped.pivot(index=row_field, columns=col_field, values="total")
     if row_field == "algorithm":
         matrix = matrix.reindex(index=ordered_algorithms(matrix.index))
+        count_matrix = count_matrix.reindex(index=matrix.index)
     elif row_field == "size_bucket":
         matrix = matrix.reindex(index=ordered_plot_size_buckets(matrix.index))
+        count_matrix = count_matrix.reindex(index=matrix.index)
     elif row_field == "af_bucket":
         matrix = matrix.reindex(index=ordered_plot_af_buckets(matrix.index))
+        count_matrix = count_matrix.reindex(index=matrix.index)
+    elif row_field == "evidence_bucket":
+        matrix = matrix.reindex(index=ordered_plot_evidence_buckets(matrix.index))
+        count_matrix = count_matrix.reindex(index=matrix.index)
+    elif row_field == "genomic_context":
+        matrix = matrix.reindex(index=ordered_contexts(matrix.index))
+        count_matrix = count_matrix.reindex(index=matrix.index)
     if col_field == "algorithm":
         matrix = matrix.reindex(columns=ordered_algorithms(matrix.columns))
+        count_matrix = count_matrix.reindex(columns=matrix.columns)
+    elif col_field == "evidence_bucket":
+        matrix = matrix.reindex(columns=ordered_plot_evidence_buckets(matrix.columns))
+        count_matrix = count_matrix.reindex(columns=matrix.columns)
+    elif col_field == "genomic_context":
+        matrix = matrix.reindex(columns=ordered_contexts(matrix.columns))
+        count_matrix = count_matrix.reindex(columns=matrix.columns)
     elif col_field == "svtype":
         keep_columns = [column for column in ordered_svtypes(matrix.columns) if str(column) not in {"BND", "CTX"}]
         matrix = matrix.loc[:, keep_columns]
+        count_matrix = count_matrix.reindex(columns=keep_columns)
     fig, ax = plt.subplots(figsize=double_column_figsize(3.6))
     image = plot_heatmap_annotated(
         ax,
@@ -117,6 +141,7 @@ def _plot_heatmap(sites: pd.DataFrame, row_field: str, col_field: str, output_pa
         list(matrix.columns),
         fmt="{value:.2f}",
         value_range=(0.0, 1.0),
+        count_matrix=count_matrix.fillna(0.0).values,
     )
     colorbar = fig.colorbar(image, ax=ax)
     colorbar.set_label("Matched fraction")
@@ -145,8 +170,14 @@ class SiteOverlapModule(AnalysisModule):
             filtered = _filtered_sites(sites, config.pass_only)
             _plot_overlap_bar(filtered, "svtype", output_dir / f"overlap.by_class.{label}.png", label)
             _plot_overlap_bar(filtered, "algorithm", output_dir / f"overlap.by_algorithm.{label}.png", label)
+            _plot_overlap_bar(filtered, "evidence_bucket", output_dir / f"overlap.by_evidence.{label}.png", label)
+            _plot_overlap_bar(filtered, "genomic_context", output_dir / f"overlap.by_context.{label}.png", label)
             _plot_overlap_bar(filtered, "size_bucket", output_dir / f"overlap.by_size.{label}.png", label)
             _plot_heatmap(filtered, "size_bucket", "svtype", output_dir / f"heatmap.size_x_class.{label}.png", label)
             _plot_heatmap(filtered, "af_bucket", "svtype", output_dir / f"heatmap.freq_x_class.{label}.png", label)
             _plot_heatmap(filtered, "size_bucket", "algorithm", output_dir / f"heatmap.size_x_algorithm.{label}.png", label)
             _plot_heatmap(filtered, "af_bucket", "algorithm", output_dir / f"heatmap.freq_x_algorithm.{label}.png", label)
+            _plot_heatmap(filtered, "size_bucket", "evidence_bucket", output_dir / f"heatmap.size_x_evidence.{label}.png", label)
+            _plot_heatmap(filtered, "af_bucket", "evidence_bucket", output_dir / f"heatmap.freq_x_evidence.{label}.png", label)
+            _plot_heatmap(filtered, "size_bucket", "genomic_context", output_dir / f"heatmap.size_x_context.{label}.png", label)
+            _plot_heatmap(filtered, "af_bucket", "genomic_context", output_dir / f"heatmap.freq_x_context.{label}.png", label)

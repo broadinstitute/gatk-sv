@@ -56,32 +56,21 @@ def summarize_gq(vcf_path: Path, pass_only: bool = False) -> pd.DataFrame:
     return pd.DataFrame(summaries)
 
 
-def _nice_histogram_step(max_value: float, target_bins: int = 20) -> float:
-    if not np.isfinite(max_value) or max_value <= 0:
-        return 5.0
-    rough_step = max_value / max(target_bins, 1)
-    magnitude = 10 ** np.floor(np.log10(max(rough_step, 1.0)))
-    normalized = rough_step / magnitude
-    if normalized <= 1.0:
-        multiplier = 1.0
-    elif normalized <= 2.0:
-        multiplier = 2.0
-    elif normalized <= 5.0:
-        multiplier = 5.0
-    else:
-        multiplier = 10.0
-    return float(multiplier * magnitude)
+def _gq_histogram_bins(values: np.ndarray, n_bins: int = 30) -> np.ndarray:
+    """Return *n_bins* evenly-spaced bin edges spanning the observed GQ range.
 
-
-def _gq_histogram_bins(values: np.ndarray) -> np.ndarray:
+    The bins always start at 0 and extend to the observed maximum so that
+    the full GQ range (e.g. 0-99 *or* 0-999) is represented without any
+    rescaling of the underlying values.
+    """
     finite_values = np.asarray(values, dtype=float)
     finite_values = finite_values[np.isfinite(finite_values)]
     if finite_values.size == 0:
-        return np.asarray([0.0, 5.0], dtype=float)
+        return np.linspace(0.0, 100.0, n_bins + 1)
     max_value = float(finite_values.max())
-    step = _nice_histogram_step(max_value)
-    upper = max(step, np.ceil(max_value / step) * step)
-    return np.arange(0.0, upper + step, step, dtype=float)
+    if max_value <= 0:
+        max_value = 100.0
+    return np.linspace(0.0, max_value, n_bins + 1)
 
 
 class GenotypeQualityModule(AnalysisModule):

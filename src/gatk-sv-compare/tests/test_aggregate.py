@@ -41,6 +41,7 @@ def test_build_matched_pairs_uses_truth_vid_symmetry() -> None:
 def test_aggregate_builds_site_tables_and_matched_pairs(tmp_path, make_vcf) -> None:
     extra_headers = [
         "##INFO=<ID=ALGORITHMS,Number=.,Type=String,Description=\"Calling algorithms\">",
+        "##INFO=<ID=EVIDENCE,Number=.,Type=String,Description=\"Evidence types\">",
         "##INFO=<ID=STATUS,Number=1,Type=String,Description=\"Match status\">",
         "##INFO=<ID=TRUTH_VID,Number=1,Type=String,Description=\"Truth variant id\">",
         "##INFO=<ID=OVERLAP_FRAC_SEGDUP,Number=1,Type=Float,Description=\"Segmental duplication overlap fraction\">",
@@ -50,8 +51,8 @@ def test_aggregate_builds_site_tables_and_matched_pairs(tmp_path, make_vcf) -> N
         sample_names=["S1", "S2", "S3"],
         extra_header_lines=extra_headers,
         records=[
-            "chr1\t100\ta1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100;ALGORITHMS=manta,wham;STATUS=MATCHED;TRUTH_VID=b1;OVERLAP_FRAC_SEGDUP=0.8\tGT:GQ:ECN\t0/0:10:2\t0/1:20:2\t1/1:30:2",
-            "chr1\t200\ta2\tN\t<CNV>\t.\tMULTIALLELIC\tSVTYPE=CNV;SVLEN=1000;ALGORITHMS=cnmops\tGT:GQ:ECN\t./.:40:2\t./.:35:2\t./.:25:2",
+            "chr1\t100\ta1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100;ALGORITHMS=manta,wham;EVIDENCE=RD,PE;STATUS=MATCHED;TRUTH_VID=b1;OVERLAP_FRAC_SEGDUP=0.8\tGT:GQ:ECN\t0/0:10:2\t0/1:20:2\t1/1:30:2",
+            "chr1\t200\ta2\tN\t<CNV>\t.\tMULTIALLELIC\tSVTYPE=CNV;SVLEN=1000;ALGORITHMS=cnmops;EVIDENCE=RD,PE,SR,BAF\tGT:GQ:ECN\t./.:40:2\t./.:35:2\t./.:25:2",
         ],
     )
     vcf_b = make_vcf(
@@ -59,7 +60,7 @@ def test_aggregate_builds_site_tables_and_matched_pairs(tmp_path, make_vcf) -> N
         sample_names=["S2", "S3", "S4"],
         extra_header_lines=extra_headers,
         records=[
-            "chr1\t110\tb1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=110;ALGORITHMS=manta;STATUS=MATCHED;TRUTH_VID=a1\tGT:GQ:ECN\t0/1:18:2\t0/1:22:2\t0/0:40:2",
+            "chr1\t110\tb1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=110;ALGORITHMS=manta;EVIDENCE=RD,PE;STATUS=MATCHED;TRUTH_VID=a1\tGT:GQ:ECN\t0/1:18:2\t0/1:22:2\t0/0:40:2",
         ],
     )
     config = AnalysisConfig(
@@ -83,5 +84,7 @@ def test_aggregate_builds_site_tables_and_matched_pairs(tmp_path, make_vcf) -> N
     assert bool(data.sites_a.loc[data.sites_a["variant_id"] == "a2", "in_filtered_pass_view"].iloc[0]) is False
     assert data.sites_a.loc[data.sites_a["variant_id"] == "a1", "genomic_context"].iloc[0] == "segdup"
     assert data.sites_a.loc[data.sites_a["variant_id"] == "a1", "algorithms"].iloc[0] == "manta,wham"
+    assert data.sites_a.loc[data.sites_a["variant_id"] == "a1", "evidence_bucket"].iloc[0] == "RD,PE"
+    assert data.sites_a.loc[data.sites_a["variant_id"] == "a2", "evidence_bucket"].iloc[0] == "RD,PE,SR"
     assert (tmp_path / "out" / "aggregate" / "sites_a.chr1.parquet").exists()
     assert (tmp_path / "out" / "aggregate" / "matched_pairs.parquet").exists()

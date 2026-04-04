@@ -13,7 +13,7 @@ import pysam
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import af_bucket_sort_key, algorithm_sort_key, complete_genomic_context_buckets, explode_algorithm_buckets, genomic_context_sort_key, ordered_algorithms, ordered_contexts, ordered_plot_af_buckets, ordered_plot_size_buckets, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
+from ..dimensions import af_bucket_sort_key, algorithm_sort_key, complete_genomic_context_buckets, evidence_bucket_sort_key, explode_algorithm_buckets, genomic_context_sort_key, ordered_algorithms, ordered_contexts, ordered_plot_af_buckets, ordered_plot_evidence_buckets, ordered_plot_size_buckets, ordered_svtypes, size_bucket_sort_key, svtype_sort_key
 from ..plot_utils import double_column_figsize, plot_heatmap_annotated, save_figure
 from ..vcf_format import safe_info_get
 from ..vcf_reader import _CONCORDANCE_FIELDS
@@ -45,7 +45,7 @@ def _extract_concordance_rows(vcf_path: Path, sites: pd.DataFrame, label: str, s
     for row in sites[["variant_id", "contig"]].drop_duplicates().itertuples(index=False):
         target_ids_by_contig[str(row.contig)].add(str(row.variant_id))
 
-    site_meta = sites.set_index("variant_id")[["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithms"]]
+    site_meta = sites.set_index("variant_id")[["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithms", "evidence_bucket"]]
     rows = []
     with pysam.VariantFile(str(vcf_path)) as vcf:
         for contig, target_ids in target_ids_by_contig.items():
@@ -70,6 +70,7 @@ def _extract_concordance_rows(vcf_path: Path, sites: pd.DataFrame, label: str, s
                     "af_bucket": meta["af_bucket"],
                     "genomic_context": meta["genomic_context"],
                     "algorithms": meta["algorithms"],
+                    "evidence_bucket": meta["evidence_bucket"],
                     **{key: float(value) for key, value in metrics.items()},
                 })
     return pd.DataFrame(rows)
@@ -77,14 +78,14 @@ def _extract_concordance_rows(vcf_path: Path, sites: pd.DataFrame, label: str, s
 
 def summarize_concordance_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
     if metrics.empty:
-        return pd.DataFrame(columns=["metric", "svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm", "n_sites_a", "mean_value_a", "median_value_a", "n_sites_b", "mean_value_b", "median_value_b"])
+        return pd.DataFrame(columns=["metric", "svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm", "n_sites_a", "mean_value_a", "median_value_a", "n_sites_b", "mean_value_b", "median_value_b"])
     metric_columns = [column for column in metrics.columns if column in {field.lower() for field in _CONCORDANCE_FIELDS}]
     metrics = explode_algorithm_buckets(metrics)
     cnv_mask = metrics["svtype"].astype(str) == "CNV"
     if "cnv_concordance" in metrics.columns:
         metrics.loc[cnv_mask, "genotype_concordance"] = metrics.loc[cnv_mask, "cnv_concordance"]
     long_frame = metrics.melt(
-        id_vars=["source", "label", "variant_id", "svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"],
+        id_vars=["source", "label", "variant_id", "svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm"],
         value_vars=metric_columns,
         var_name="metric",
         value_name="value",
@@ -93,39 +94,40 @@ def summarize_concordance_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
     non_cnv_metric_mask = (long_frame["svtype"].astype(str) != "CNV") & (long_frame["metric"] == "cnv_concordance")
     exclude_mask = cnv_metric_mask | non_cnv_metric_mask
     long_frame = long_frame.loc[~exclude_mask]
-    summary = long_frame.groupby(["source", "metric", "svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"], dropna=False).agg(
+    summary = long_frame.groupby(["source", "metric", "svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm"], dropna=False).agg(
         n_sites=("variant_id", "count"),
         mean_value=("value", "mean"),
         median_value=("value", "median"),
     ).reset_index()
     summary = complete_genomic_context_buckets(
         summary,
-        ["source", "metric", "svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"],
+        ["source", "metric", "svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm"],
         fill_values={"n_sites": 0},
     )
     summary["n_sites"] = summary["n_sites"].astype(int)
     pivoted = summary.pivot_table(
-        index=["metric", "svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"],
+        index=["metric", "svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm"],
         columns="source",
         values=["n_sites", "mean_value", "median_value"],
         aggfunc="first",
     )
     if pivoted.empty:
-        return pd.DataFrame(columns=["metric", "svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm", "n_sites_a", "mean_value_a", "median_value_a", "n_sites_b", "mean_value_b", "median_value_b"])
+        return pd.DataFrame(columns=["metric", "svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm", "n_sites_a", "mean_value_a", "median_value_a", "n_sites_b", "mean_value_b", "median_value_b"])
     pivoted.columns = [f"{value}_{source}" for value, source in pivoted.columns]
     result = pivoted.reset_index()
     for column in ["n_sites_a", "mean_value_a", "median_value_a", "n_sites_b", "mean_value_b", "median_value_b"]:
         if column not in result.columns:
             result[column] = np.nan
-    result = result[["metric", "svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm", "n_sites_a", "mean_value_a", "median_value_a", "n_sites_b", "mean_value_b", "median_value_b"]]
+    result = result[["metric", "svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm", "n_sites_a", "mean_value_a", "median_value_a", "n_sites_b", "mean_value_b", "median_value_b"]]
     return result.sort_values(
-        by=["metric", "svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"],
+        by=["metric", "svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm"],
         key=lambda series: series.map(
             lambda value: (
                 svtype_sort_key(value) if series.name == "svtype" else
                 size_bucket_sort_key(value) if series.name == "size_bucket" else
                 af_bucket_sort_key(value) if series.name == "af_bucket" else
                 genomic_context_sort_key(value) if series.name == "genomic_context" else
+                evidence_bucket_sort_key(value) if series.name == "evidence_bucket" else
                 algorithm_sort_key(value) if series.name == "algorithm" else
                 str(value)
             )
@@ -135,7 +137,7 @@ def summarize_concordance_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
 
 def _concordance_series(metrics: pd.DataFrame, metric: str) -> pd.DataFrame:
     if metrics.empty or metric not in metrics.columns:
-        return pd.DataFrame(columns=["source", "svtype", "size_bucket", "af_bucket", "genomic_context", "algorithms", metric])
+        return pd.DataFrame(columns=["source", "svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithms", metric])
     metric_frame = metrics.copy()
     if metric == "genotype_concordance" and "cnv_concordance" in metric_frame.columns:
         cnv_mask = metric_frame["svtype"].astype(str) == "CNV"
@@ -143,7 +145,7 @@ def _concordance_series(metrics: pd.DataFrame, metric: str) -> pd.DataFrame:
     metric_frame = metric_frame.loc[metric_frame["size_bucket"].astype(str) != "N/A"]
     if metric != "genotype_concordance":
         metric_frame = metric_frame.loc[metric_frame["svtype"].astype(str) != "CNV"]
-    return metric_frame[["source", "svtype", "size_bucket", "af_bucket", "genomic_context", "algorithms", metric]].dropna(subset=[metric])
+    return metric_frame[["source", "svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithms", metric]].dropna(subset=[metric])
 
 
 def _ordered_heatmap_rows(row_field: str, values: pd.Index) -> list[str]:
@@ -151,6 +153,8 @@ def _ordered_heatmap_rows(row_field: str, values: pd.Index) -> list[str]:
         return ordered_plot_af_buckets(values)
     if row_field == "algorithm":
         return ordered_algorithms(values)
+    if row_field == "evidence_bucket":
+        return ordered_plot_evidence_buckets(values)
     if row_field == "size_bucket":
         return ordered_plot_size_buckets(values)
     if row_field == "genomic_context":
@@ -165,6 +169,10 @@ def _metric_title(metric: str) -> str:
         "var_ppv": "Variant PPV",
         "var_sensitivity": "Variant sensitivity",
     }[metric]
+
+
+def _metric_colorbar_label(metric: str) -> str:
+    return f"{_metric_title(metric)} (mean)"
 
 
 def _metric_stem(metric: str) -> str:
@@ -196,9 +204,14 @@ def _plot_metric_heatmap(
             ax.text(0.5, 0.5, "No concordance metrics", ha="center", va="center")
             ax.set_axis_off()
             continue
-        grouped = source_frame.groupby([row_field, "svtype"], dropna=False)[metric].median().reset_index()
-        matrix = grouped.pivot(index=row_field, columns="svtype", values=metric)
+        grouped = source_frame.groupby([row_field, "svtype"], dropna=False).agg(
+            value=(metric, "mean"),
+            n_points=(metric, "count"),
+        ).reset_index()
+        matrix = grouped.pivot(index=row_field, columns="svtype", values="value")
+        count_matrix = grouped.pivot(index=row_field, columns="svtype", values="n_points")
         matrix = matrix.reindex(index=_ordered_heatmap_rows(row_field, matrix.index), columns=ordered_svtypes(matrix.columns))
+        count_matrix = count_matrix.reindex(index=matrix.index, columns=matrix.columns)
         image = plot_heatmap_annotated(
             ax,
             matrix.values,
@@ -206,6 +219,7 @@ def _plot_metric_heatmap(
             list(matrix.columns),
             fmt="{value:.2f}",
             value_range=(0.0, 1.0),
+            count_matrix=count_matrix.fillna(0.0).values,
         )
         ax.set_title(label)
         ax.set_xlabel("SV type")
@@ -213,7 +227,7 @@ def _plot_metric_heatmap(
             ax.set_ylabel(row_field.replace("_", " "))
     if image is not None:
         colorbar = fig.colorbar(image, ax=flat_axes.tolist())
-        colorbar.set_label(_metric_title(metric))
+        colorbar.set_label(_metric_colorbar_label(metric))
     fig.suptitle(f"{_metric_title(metric)}: {row_field.replace('_', ' ')} × SV type", y=0.98)
     save_figure(fig, output_path)
 
@@ -245,4 +259,5 @@ class GenotypeConcordanceModule(AnalysisModule):
             _plot_metric_heatmap(metrics, metric, "af_bucket", output_dir / f"{stem}.af_bucket_x_svtype.png", data.label_a, data.label_b)
             _plot_metric_heatmap(metrics, metric, "size_bucket", output_dir / f"{stem}.size_bucket_x_svtype.png", data.label_a, data.label_b)
             _plot_metric_heatmap(metrics, metric, "genomic_context", output_dir / f"{stem}.genomic_context_x_svtype.png", data.label_a, data.label_b)
+            _plot_metric_heatmap(metrics, metric, "evidence_bucket", output_dir / f"{stem}.evidence_bucket_x_svtype.png", data.label_a, data.label_b)
             _plot_metric_heatmap(metrics, metric, "algorithm", output_dir / f"{stem}.algorithm_x_svtype.png", data.label_a, data.label_b)

@@ -34,7 +34,7 @@ def test_genotype_exact_match_module_writes_outputs(module_test_context) -> None
     assert not per_site.empty
     assert not summary.empty
     assert "pair_id" not in per_site.columns
-    assert {"svtype_CallsetA", "size_bucket_CallsetA", "af_bucket_CallsetA", "svtype_CallsetB", "size_bucket_CallsetB", "af_bucket_CallsetB"}.issubset(per_site.columns)
+    assert {"svtype_CallsetA", "size_bucket_CallsetA", "af_bucket_CallsetA", "evidence_bucket_CallsetA", "svtype_CallsetB", "size_bucket_CallsetB", "af_bucket_CallsetB", "evidence_bucket_CallsetB"}.issubset(per_site.columns)
     assert not (output_dir / "exact_match.by_type.png").exists()
     assert not (output_dir / "exact_match.by_context.png").exists()
 

@@ -11,7 +11,7 @@ from scipy.stats import pearsonr, spearmanr
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import AF_BUCKETS, explode_algorithm_buckets, ordered_algorithms, ordered_contexts, ordered_plot_af_buckets, ordered_plot_size_buckets, ordered_svtypes
+from ..dimensions import explode_algorithm_buckets, ordered_algorithms, ordered_contexts, ordered_evidence_buckets, ordered_plot_size_buckets, ordered_svtypes
 from ..plot_utils import double_column_figsize, plot_scatter_af, save_figure, single_column_figsize
 from .base import AnalysisModule, write_tsv_gz
 
@@ -48,14 +48,15 @@ def _annotate_r_squared(ax: plt.Axes, pearson_r: float) -> None:
     )
 
 
-def build_af_correlation_table(data: AggregatedData) -> pd.DataFrame:
-    matched = _matched_pairs_with_categories(data)
+def build_af_correlation_table(data: AggregatedData, pass_only: bool = False) -> pd.DataFrame:
+    matched = _matched_pairs_with_categories(data, pass_only=pass_only)
     if matched.empty:
         return pd.DataFrame(columns=["group", "n_matched", "pearson_r", "pearson_p", "spearman_rho", "spearman_p", "mean_abs_diff"])
     rows = []
     grouped_frames = [("overall", matched)] + [(svtype, group) for svtype, group in matched.groupby("svtype_a")]
     exploded = explode_algorithm_buckets(matched, algorithms_column="algorithms_a", bucket_column="algorithm_a")
     grouped_frames += [(f"algorithm:{algorithm}", group) for algorithm, group in exploded.groupby("algorithm_a")]
+    grouped_frames += [(f"evidence:{bucket}", group) for bucket, group in matched.groupby("evidence_bucket_a")]
     for group_name, frame in grouped_frames:
         if frame.empty:
             continue
@@ -77,20 +78,35 @@ def build_af_correlation_table(data: AggregatedData) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _matched_pairs_with_categories(data: AggregatedData) -> pd.DataFrame:
+def _matched_pairs_with_categories(data: AggregatedData, pass_only: bool = False) -> pd.DataFrame:
     matched = data.matched_pairs.copy()
     if matched.empty:
         return matched
-    site_meta = data.sites_a[["variant_id", "size_bucket", "af_bucket", "genomic_context", "algorithms"]].rename(
+    site_meta_a = data.sites_a[["variant_id", "size_bucket", "af_bucket", "genomic_context", "algorithms", "evidence_bucket", "in_filtered_pass_view"]].rename(
         columns={
             "variant_id": "variant_id_a",
             "size_bucket": "size_bucket_a",
             "af_bucket": "af_bucket_a",
             "genomic_context": "genomic_context_a",
             "algorithms": "algorithms_a",
+            "evidence_bucket": "evidence_bucket_a",
+            "in_filtered_pass_view": "in_filtered_pass_view_a",
         }
     )
-    return matched.merge(site_meta, on="variant_id_a", how="left")
+    site_meta_b = data.sites_b[["variant_id", "in_filtered_pass_view"]].rename(
+        columns={
+            "variant_id": "variant_id_b",
+            "in_filtered_pass_view": "in_filtered_pass_view_b",
+        }
+    )
+    matched = matched.merge(site_meta_a, on="variant_id_a", how="left")
+    matched = matched.merge(site_meta_b, on="variant_id_b", how="left")
+    if pass_only:
+        matched = matched.loc[
+            matched["in_filtered_pass_view_a"].fillna(False).astype(bool) &
+            matched["in_filtered_pass_view_b"].fillna(False).astype(bool)
+        ].copy()
+    return matched
 
 
 def _ordered_group_values(frame: pd.DataFrame, group_field: str) -> list[str]:
@@ -99,44 +115,13 @@ def _ordered_group_values(frame: pd.DataFrame, group_field: str) -> list[str]:
         return [value for value in ordered_svtypes(values) if value != "CTX"]
     if group_field == "size_bucket_a":
         return ordered_plot_size_buckets(values)
-    if group_field == "af_bucket_a":
-        return ordered_plot_af_buckets(values)
     if group_field == "genomic_context_a":
         return ordered_contexts(values)
+    if group_field == "evidence_bucket_a":
+        return ordered_evidence_buckets(values)
     if group_field == "algorithm_a":
         return ordered_algorithms(values)
     return sorted(values)
-
-
-def _af_bucket_axis_limits(group_value: str, frame: pd.DataFrame) -> tuple[float, float]:
-    for label, bounds in AF_BUCKETS:
-        if label != str(group_value):
-            continue
-        if bounds is not None:
-            lower, upper = bounds
-            return float(lower), float(upper)
-        break
-
-    valid = frame[["af_a", "af_b"]].astype(float).to_numpy().ravel()
-    valid = valid[np.isfinite(valid)]
-    if valid.size == 0:
-        return 0.0, 1.0
-
-    lower = max(0.0, float(valid.min()))
-    upper = min(1.0, float(valid.max()))
-    if upper <= lower:
-        delta = max(0.005, lower * 0.1, np.nextafter(0.0, 1.0))
-        lower = max(0.0, lower - delta)
-        upper = min(1.0, upper + delta)
-    return lower, upper
-
-
-def _af_bucket_axis_ticks(lower: float, upper: float) -> np.ndarray:
-    if not np.isfinite(lower) or not np.isfinite(upper):
-        return np.asarray([0.0, 0.5, 1.0], dtype=float)
-    if upper <= lower:
-        return np.asarray([lower], dtype=float)
-    return np.linspace(lower, upper, num=3, dtype=float)
 
 
 def _plot_grouped_af_correlation(
@@ -152,14 +137,13 @@ def _plot_grouped_af_correlation(
     panel_count = max(len(group_values), 1)
     ncols = 3
     nrows = int(np.ceil(panel_count / ncols))
-    share_axes = group_field != "af_bucket_a"
     fig, axes = plt.subplots(
         nrows,
         ncols,
         figsize=double_column_figsize(max(3.6, 2.1 * nrows)),
         squeeze=False,
-        sharex=share_axes,
-        sharey=share_axes,
+        sharex=True,
+        sharey=True,
         constrained_layout=True,
     )
     flat_axes = axes.flatten()
@@ -167,26 +151,17 @@ def _plot_grouped_af_correlation(
         frame = matched_pairs.loc[matched_pairs[group_field].astype(str) == str(group_value), ["af_a", "af_b"]].dropna()
         if not frame.empty:
             plot_scatter_af(axis, frame["af_a"], frame["af_b"], label_a, label_b)
-            if group_field == "af_bucket_a":
-                lower, upper = _af_bucket_axis_limits(str(group_value), frame)
-                ticks = _af_bucket_axis_ticks(lower, upper)
-            else:
-                lower, upper = 0.0, 1.0
-                ticks = None
+            lower, upper = 0.0, 1.0
             axis.set_xlim(lower, upper)
             axis.set_ylim(lower, upper)
-            if ticks is not None:
-                axis.set_xticks(ticks)
-                axis.set_yticks(ticks)
-                axis.tick_params(axis="both", labelbottom=True, labelleft=True)
             pearson_r, _, _, _ = _compute_correlation_stats(frame["af_a"], frame["af_b"])
             _annotate_r_squared(axis, pearson_r)
         else:
             axis.text(0.5, 0.5, "No AF data", ha="center", va="center")
         axis.set_title(str(group_value))
-        if group_field != "af_bucket_a" and index // ncols < nrows - 1:
+        if index // ncols < nrows - 1:
             axis.set_xlabel("")
-        if group_field != "af_bucket_a" and index % ncols != 0:
+        if index % ncols != 0:
             axis.set_ylabel("")
     for axis in flat_axes[len(group_values):]:
         axis.set_axis_off()
@@ -202,10 +177,10 @@ class AlleleFreqModule(AnalysisModule):
         output_dir = self.output_dir(config)
         tables_dir = output_dir / "tables"
         tables_dir.mkdir(parents=True, exist_ok=True)
-        stats = build_af_correlation_table(data)
+        stats = build_af_correlation_table(data, pass_only=config.pass_only)
         write_tsv_gz(stats, tables_dir / "af_correlation_stats.tsv")
 
-        overall = _matched_pairs_with_categories(data)
+        overall = _matched_pairs_with_categories(data, pass_only=config.pass_only)
         fig, ax = plt.subplots(figsize=single_column_figsize(3.2))
         overall_valid = overall[["af_a", "af_b"]].dropna() if not overall.empty else pd.DataFrame()
         if not overall_valid.empty:
@@ -223,6 +198,6 @@ class AlleleFreqModule(AnalysisModule):
         if not overall.empty:
             _plot_grouped_af_correlation(overall, "svtype_a", output_dir / "af_correlation.by_type.png", data.label_a, data.label_b)
             _plot_grouped_af_correlation(overall, "size_bucket_a", output_dir / "af_correlation.by_size.png", data.label_a, data.label_b)
-            _plot_grouped_af_correlation(overall, "af_bucket_a", output_dir / "af_correlation.by_af.png", data.label_a, data.label_b)
             _plot_grouped_af_correlation(overall, "genomic_context_a", output_dir / "af_correlation.by_context.png", data.label_a, data.label_b)
+            _plot_grouped_af_correlation(overall, "evidence_bucket_a", output_dir / "af_correlation.by_evidence.png", data.label_a, data.label_b)
             _plot_grouped_af_correlation(overall, "algorithm_a", output_dir / "af_correlation.by_algorithm.png", data.label_a, data.label_b)

@@ -6,7 +6,7 @@ import pandas as pd
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import af_bucket_sort_key, algorithm_sort_key, complete_genomic_context_buckets, explode_algorithm_buckets, genomic_context_sort_key, size_bucket_sort_key, svtype_sort_key
+from ..dimensions import af_bucket_sort_key, algorithm_sort_key, complete_genomic_context_buckets, evidence_bucket_sort_key, explode_algorithm_buckets, genomic_context_sort_key, size_bucket_sort_key, svtype_sort_key
 from .base import AnalysisModule, column_safe_label, write_tsv_gz, matched_site_mask
 
 
@@ -18,13 +18,13 @@ def _filtered_sites(sites: pd.DataFrame, pass_only: bool) -> pd.DataFrame:
 
 def summarize_binned_counts(sites: pd.DataFrame, pass_only: bool = False) -> pd.DataFrame:
     filtered = _filtered_sites(sites, pass_only)
-    columns = ["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm", "n_variants", "n_matched", "n_unmatched"]
+    columns = ["svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm", "n_variants", "n_matched", "n_unmatched"]
     if filtered.empty:
         return pd.DataFrame(columns=columns)
     filtered = explode_algorithm_buckets(filtered)
     matched = matched_site_mask(filtered)
     filtered = filtered.assign(_matched=matched.astype(int), _unmatched=(~matched).astype(int))
-    grouped = filtered.groupby(["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"], dropna=False)
+    grouped = filtered.groupby(["svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm"], dropna=False)
     summary = grouped.agg(
         n_variants=("variant_id", "count"),
         n_matched=("_matched", "sum"),
@@ -32,17 +32,18 @@ def summarize_binned_counts(sites: pd.DataFrame, pass_only: bool = False) -> pd.
     ).reset_index()
     summary = complete_genomic_context_buckets(
         summary,
-        ["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"],
+        ["svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm"],
         fill_values={"n_variants": 0, "n_matched": 0, "n_unmatched": 0},
     )
     summary[["n_variants", "n_matched", "n_unmatched"]] = summary[["n_variants", "n_matched", "n_unmatched"]].astype(int)
     return summary[columns].sort_values(
-        by=["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"],
+        by=["svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm"],
         key=lambda series: series.map(
             lambda value: (
                 svtype_sort_key(value) if series.name == "svtype" else
                 size_bucket_sort_key(value) if series.name == "size_bucket" else
                 af_bucket_sort_key(value) if series.name == "af_bucket" else
+                evidence_bucket_sort_key(value) if series.name == "evidence_bucket" else
                 genomic_context_sort_key(value) if series.name == "genomic_context" else
                 algorithm_sort_key(value)
             )
@@ -67,16 +68,17 @@ def build_combined_binned_counts(sites_a: pd.DataFrame, sites_b: pd.DataFrame, l
             "n_unmatched": f"n_unmatched_{token_b}",
         }
     )
-    merged = counts_a.merge(counts_b, on=["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"], how="outer")
+    merged = counts_a.merge(counts_b, on=["svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm"], how="outer")
     numeric_columns = [column for column in merged.columns if column.startswith("n_")]
     merged[numeric_columns] = merged[numeric_columns].fillna(0).astype(int)
     return merged.sort_values(
-        by=["svtype", "size_bucket", "af_bucket", "genomic_context", "algorithm"],
+        by=["svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithm"],
         key=lambda series: series.map(
             lambda value: (
                 svtype_sort_key(value) if series.name == "svtype" else
                 size_bucket_sort_key(value) if series.name == "size_bucket" else
                 af_bucket_sort_key(value) if series.name == "af_bucket" else
+                evidence_bucket_sort_key(value) if series.name == "evidence_bucket" else
                 genomic_context_sort_key(value) if series.name == "genomic_context" else
                 algorithm_sort_key(value)
             )

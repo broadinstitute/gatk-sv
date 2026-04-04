@@ -12,6 +12,7 @@ def test_build_hwe_table_returns_expected_rows(module_test_context) -> None:
 
     assert set(table["variant_id"]) == {"a_del", "a_ins"}
     assert "algorithms" in table.columns
+    assert "evidence_bucket" in table.columns
     assert set(table["hwe_class"]).issubset({"pass", "nominal", "bonferroni"})
     assert (table[["aa", "ab", "bb"]].sum(axis=1).round(6) == 1.0).all()
 
@@ -28,6 +29,7 @@ def test_genotype_dist_module_writes_outputs(module_test_context) -> None:
     assert (output_dir / "ternary.all.CallsetA.png").exists()
     assert (output_dir / "ternary.by_svtype.CallsetA.png").exists()
     assert (output_dir / "ternary.by_algorithm.CallsetA.png").exists()
+    assert (output_dir / "ternary.by_evidence_bucket.CallsetA.png").exists()
     assert (output_dir / "ternary.by_af_bucket.CallsetA.png").exists()
     assert (output_dir / "ternary.by_size_bucket.CallsetA.png").exists()
     assert (output_dir / "ternary.by_genomic_context.CallsetA.png").exists()
@@ -40,6 +42,7 @@ def test_summarize_hwe_by_bucket_writes_label_specific_columns(module_test_conte
 
     assert not summary.empty
     assert "algorithm" in summary.columns
+    assert "evidence_bucket" in summary.columns
     assert {"n_variants_CallsetA", "frac_pass_CallsetA", "mean_af_CallsetA"}.issubset(summary.columns)
 
 

@@ -13,7 +13,7 @@ import pysam
 
 from ..aggregate import AggregatedData
 from ..config import AnalysisConfig
-from ..dimensions import explode_algorithm_buckets, ordered_algorithms, ordered_plot_af_buckets, ordered_plot_size_buckets, ordered_svtypes
+from ..dimensions import explode_algorithm_buckets, ordered_algorithms, ordered_evidence_buckets, ordered_plot_af_buckets, ordered_plot_size_buckets, ordered_svtypes
 from ..plot_utils import SUMMARY_COLORS, SVTYPE_COLORS, double_column_figsize, single_column_figsize, plot_beeswarm_horizontal, plot_heatmap_annotated, save_figure
 from .base import AnalysisModule, write_tsv_gz
 
@@ -40,6 +40,7 @@ class TransmissionRecord:
     size_bucket: str
     af_bucket: str
     algorithms: str
+    evidence_bucket: str
     contig: str
     proband_alt: int
     proband_inherited: float
@@ -144,7 +145,7 @@ def build_transmission_table(
     if filtered_sites.empty:
         return pd.DataFrame(columns=[field for field in TransmissionRecord.__dataclass_fields__.keys()])
 
-    site_meta = filtered_sites.set_index("variant_id")[["svtype", "size_bucket", "af_bucket", "algorithms", "contig"]]
+    site_meta = filtered_sites.set_index("variant_id")[["svtype", "size_bucket", "af_bucket", "algorithms", "evidence_bucket", "contig"]]
     target_ids_by_contig: Dict[str, set[str]] = {}
     for contig, frame in filtered_sites.groupby("contig"):
         target_ids_by_contig[str(contig)] = set(frame["variant_id"].astype(str))
@@ -183,6 +184,7 @@ def build_transmission_table(
                             size_bucket=str(meta["size_bucket"]),
                             af_bucket=str(meta["af_bucket"]),
                             algorithms=str(meta["algorithms"]),
+                            evidence_bucket=str(meta["evidence_bucket"]),
                             contig=str(meta["contig"]),
                             proband_alt=int(proband_alt),
                             proband_inherited=float(transmission["proband_inherited"]),
@@ -343,6 +345,8 @@ def _plot_dnr_curve(table: pd.DataFrame, x_field: str, y_field: str, family_type
         x_values = ordered_plot_af_buckets(subset[x_field].tolist())
     elif x_field == "algorithm":
         x_values = ordered_algorithms(subset[x_field].tolist())
+    elif x_field == "evidence_bucket":
+        x_values = ordered_evidence_buckets(subset[x_field].tolist())
     else:
         x_values = list(dict.fromkeys(subset.sort_values(x_field)[x_field].tolist()))
     if all(isinstance(value, (int, float, np.number)) for value in x_values):
@@ -375,6 +379,10 @@ def _plot_dnr_heatmap(table: pd.DataFrame, output_path: Path, title: str, value_
         return
     matrix = table.pivot(index="size_bucket", columns="af_bucket", values=value_field)
     matrix = matrix.reindex(index=ordered_plot_size_buckets(matrix.index), columns=ordered_plot_af_buckets(matrix.columns))
+    count_matrix = None
+    if "n_records" in table.columns:
+        count_matrix = table.pivot(index="size_bucket", columns="af_bucket", values="n_records")
+        count_matrix = count_matrix.reindex(index=matrix.index, columns=matrix.columns)
     image = plot_heatmap_annotated(
         ax,
         matrix.values,
@@ -382,6 +390,7 @@ def _plot_dnr_heatmap(table: pd.DataFrame, output_path: Path, title: str, value_
         list(matrix.columns),
         fmt="{value:.2f}",
         value_range=(0.0, 1.0),
+        count_matrix=None if count_matrix is None else count_matrix.fillna(0.0).values,
     )
     colorbar = fig.colorbar(image, ax=ax)
     colorbar.set_label("De novo rate")
@@ -424,6 +433,7 @@ class FamilyAnalysisModule(AnalysisModule):
 
         by_class = summarize_denovo_by_dimension(records, "svtype")
         by_algorithm = summarize_denovo_by_dimension(records, "algorithm")
+        by_evidence = summarize_denovo_by_dimension(records, "evidence_bucket")
         by_size = summarize_denovo_by_dimension(records, "size_bucket")
         by_freq = summarize_denovo_by_dimension(records, "af_bucket")
         max_gq = int(records["proband_gq"].fillna(0).max()) if not records.empty else 0
@@ -431,6 +441,7 @@ class FamilyAnalysisModule(AnalysisModule):
         by_gq = summarize_denovo_by_gq(records, thresholds)
         write_tsv_gz(by_class, tables_dir / "denovo_rate_by_class.tsv")
         write_tsv_gz(by_algorithm, tables_dir / "denovo_rate_by_algorithm.tsv")
+        write_tsv_gz(by_evidence, tables_dir / "denovo_rate_by_evidence.tsv")
         write_tsv_gz(by_size, tables_dir / "denovo_rate_by_size.tsv")
         write_tsv_gz(by_freq, tables_dir / "denovo_rate_by_freq.tsv")
         write_tsv_gz(by_gq, tables_dir / "denovo_rate_by_gq.tsv")
@@ -444,6 +455,8 @@ class FamilyAnalysisModule(AnalysisModule):
             _plot_dnr_curve(by_size, "size_bucket", "allele_denovo_rate", family_type, output_dir / f"dnr_vs_size.{family_type}.alleles.png", log_x=False)
             _plot_dnr_curve(by_algorithm, "algorithm", "site_denovo_rate", family_type, output_dir / f"dnr_vs_algorithm.{family_type}.variants.png", log_x=False)
             _plot_dnr_curve(by_algorithm, "algorithm", "allele_denovo_rate", family_type, output_dir / f"dnr_vs_algorithm.{family_type}.alleles.png", log_x=False)
+            _plot_dnr_curve(by_evidence, "evidence_bucket", "site_denovo_rate", family_type, output_dir / f"dnr_vs_evidence.{family_type}.variants.png", log_x=False)
+            _plot_dnr_curve(by_evidence, "evidence_bucket", "allele_denovo_rate", family_type, output_dir / f"dnr_vs_evidence.{family_type}.alleles.png", log_x=False)
             _plot_dnr_curve(by_freq, "af_bucket", "site_denovo_rate", family_type, output_dir / f"dnr_vs_freq.{family_type}.variants.png", log_x=False)
             _plot_dnr_curve(by_freq, "af_bucket", "allele_denovo_rate", family_type, output_dir / f"dnr_vs_freq.{family_type}.alleles.png", log_x=False)
             _plot_dnr_curve(by_gq, "min_gq", "site_denovo_rate", family_type, output_dir / f"dnr_vs_gq.{family_type}.variants.png", log_x=False)

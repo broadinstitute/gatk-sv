@@ -221,8 +221,19 @@ def plot_ternary(ax, aa, ab, bb, colors, draw_hwe_curve=True, alpha=0.05):
     return ax
 
 
-def plot_heatmap_annotated(ax, matrix, row_labels, col_labels, fmt="{value}", value_range: tuple[float, float] | None = None):
+def plot_heatmap_annotated(
+    ax,
+    matrix,
+    row_labels,
+    col_labels,
+    fmt="{value}",
+    value_range: tuple[float, float] | None = None,
+    count_matrix=None,
+):
     values = np.asarray(matrix, dtype=float)
+    counts = None if count_matrix is None else np.asarray(count_matrix, dtype=float)
+    if counts is not None and counts.shape != values.shape:
+        raise ValueError("count_matrix must match matrix shape")
     masked_values = np.ma.masked_invalid(values)
     vmin = None if value_range is None else value_range[0]
     vmax = None if value_range is None else value_range[1]
@@ -236,15 +247,27 @@ def plot_heatmap_annotated(ax, matrix, row_labels, col_labels, fmt="{value}", va
     for row_idx in range(values.shape[0]):
         for col_idx in range(values.shape[1]):
             value = values[row_idx, col_idx]
+            count_value = None if counts is None else counts[row_idx, col_idx]
             ax.text(
                 col_idx,
-                row_idx,
+                row_idx - (0.13 if counts is not None else 0.0),
                 "N/A" if not np.isfinite(value) else fmt.format(value=value),
                 ha="center",
                 va="center",
                 fontsize=TICK_FONTSIZE,
                 color="black",
             )
+            if counts is not None:
+                count_text = "n=0" if not np.isfinite(count_value) else f"n={int(round(float(count_value))):,}"
+                ax.text(
+                    col_idx,
+                    row_idx + 0.20,
+                    count_text,
+                    ha="center",
+                    va="center",
+                    fontsize=max(TICK_FONTSIZE - 1.0, 4.0),
+                    color="black",
+                )
     return image
 
 

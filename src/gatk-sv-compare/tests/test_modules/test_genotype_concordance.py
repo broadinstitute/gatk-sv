@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
+from matplotlib.figure import Figure
 
 from gatk_sv_compare.modules.genotype_concordance import (
     GenotypeConcordanceModule,
+    _plot_metric_heatmap,
     summarize_concordance_metrics,
     _extract_concordance_rows,
 )
@@ -28,6 +30,7 @@ def test_extract_concordance_rows_reads_available_info_metrics(module_test_conte
     assert "var_ppv" in set(summary["metric"])
     assert "mean_value_a" in summary.columns
     assert "algorithm" in summary.columns
+    assert "evidence_bucket" in summary.columns
 
 
 def test_genotype_concordance_module_writes_outputs(module_test_context) -> None:
@@ -41,6 +44,7 @@ def test_genotype_concordance_module_writes_outputs(module_test_context) -> None
     assert (output_dir / "genotype_concordance.af_bucket_x_svtype.png").exists()
     assert (output_dir / "genotype_concordance.size_bucket_x_svtype.png").exists()
     assert (output_dir / "genotype_concordance.genomic_context_x_svtype.png").exists()
+    assert (output_dir / "genotype_concordance.evidence_bucket_x_svtype.png").exists()
     assert (output_dir / "genotype_concordance.algorithm_x_svtype.png").exists()
     assert (output_dir / "non_ref_genotype_concordance.af_bucket_x_svtype.png").exists()
     assert (output_dir / "variant_ppv.size_bucket_x_svtype.png").exists()
@@ -61,6 +65,7 @@ def test_summarize_concordance_metrics_uses_cnv_concordance_for_cnv() -> None:
                 "size_bucket": "2.5-10kb",
                 "af_bucket": "1-10%",
                 "genomic_context": "none",
+                "evidence_bucket": "RD,PE",
                 "genotype_concordance": 1.0,
                 "non_ref_genotype_concordance": 1.0,
                 "var_ppv": 1.0,
@@ -78,3 +83,54 @@ def test_summarize_concordance_metrics_uses_cnv_concordance_for_cnv() -> None:
 
     assert row["mean_value_a"] == pytest.approx(0.42)
     assert not ((summary["svtype"] == "CNV") & (summary["metric"] == "var_ppv")).any()
+
+
+def test_plot_metric_heatmap_uses_mean_and_labels_colorbar(tmp_path, monkeypatch) -> None:
+    metrics = pd.DataFrame(
+        [
+            {
+                "source": "a",
+                "label": "CallsetA",
+                "variant_id": "v1",
+                "svtype": "DEL",
+                "size_bucket": "100-500bp",
+                "af_bucket": "1-10%",
+                "genomic_context": "none",
+                "algorithms": "manta",
+                "evidence_bucket": "RD,PE",
+                "genotype_concordance": 0.2,
+            },
+            {
+                "source": "a",
+                "label": "CallsetA",
+                "variant_id": "v2",
+                "svtype": "DEL",
+                "size_bucket": "100-500bp",
+                "af_bucket": "1-10%",
+                "genomic_context": "none",
+                "algorithms": "manta",
+                "evidence_bucket": "RD,PE",
+                "genotype_concordance": 0.8,
+            },
+        ]
+    )
+    captured = {}
+    original_colorbar = Figure.colorbar
+    original_savefig = Figure.savefig
+
+    def spy_colorbar(self, *args, **kwargs):
+        colorbar = original_colorbar(self, *args, **kwargs)
+        captured["colorbar"] = colorbar
+        return colorbar
+
+    def spy_savefig(self, *args, **kwargs):
+        captured["texts"] = [text.get_text() for axis in self.axes for text in axis.texts]
+        return original_savefig(self, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "colorbar", spy_colorbar)
+    monkeypatch.setattr(Figure, "savefig", spy_savefig)
+
+    _plot_metric_heatmap(metrics, "genotype_concordance", "af_bucket", tmp_path / "metric_heatmap.png", "CallsetA", "CallsetB")
+
+    assert captured["colorbar"].ax.get_ylabel() == "Genotype concordance (mean)"
+    assert "0.50" in captured["texts"]

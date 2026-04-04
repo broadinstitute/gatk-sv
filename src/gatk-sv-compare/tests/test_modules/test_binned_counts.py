@@ -12,6 +12,7 @@ def test_summarize_binned_counts_respects_pass_view(module_test_context) -> None
 
     assert set(summary["svtype"]) == {"DEL", "INS:MEI"}
     assert "algorithm" in summary.columns
+    assert "evidence_bucket" in summary.columns
     assert int(summary["n_variants"].sum()) == 3
     assert int(summary["n_matched"].sum()) == 3
     assert int(summary["n_unmatched"].sum()) == 0
@@ -26,7 +27,7 @@ def test_binned_counts_module_writes_outputs(module_test_context) -> None:
     counts = pd.read_csv(output_dir / "counts.tsv.gz", sep="\t")
     assert (output_dir / "counts.parquet").exists()
     assert not counts.empty
-    assert {"algorithm", "n_variants_CallsetA", "n_matched_CallsetA", "n_unmatched_CallsetA", "n_variants_CallsetB", "n_matched_CallsetB", "n_unmatched_CallsetB"}.issubset(counts.columns)
+    assert {"algorithm", "evidence_bucket", "n_variants_CallsetA", "n_matched_CallsetA", "n_unmatched_CallsetA", "n_variants_CallsetB", "n_matched_CallsetB", "n_unmatched_CallsetB"}.issubset(counts.columns)
 
 
 def test_build_combined_binned_counts_merges_both_callsets(module_test_context) -> None:
@@ -38,5 +39,6 @@ def test_build_combined_binned_counts_merges_both_callsets(module_test_context) 
     none_mask &= counts["size_bucket"] == "2.5-10kb"
     none_mask &= counts["af_bucket"] == "10-50%"
     none_mask &= counts["genomic_context"] == "none"
+    none_mask &= counts["evidence_bucket"] == "RD,PE,SR"
     none_mask &= counts["algorithm"] == "cnmops"
     assert none_mask.any()

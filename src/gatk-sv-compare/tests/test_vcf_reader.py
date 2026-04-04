@@ -12,6 +12,7 @@ def test_iter_contig_uses_precomputed_counts_and_concordance(make_vcf) -> None:
         final_annotated=True,
         extra_header_lines=[
             "##INFO=<ID=ALGORITHMS,Number=.,Type=String,Description=\"Calling algorithms\">",
+            "##INFO=<ID=EVIDENCE,Number=.,Type=String,Description=\"Evidence types\">",
             "##INFO=<ID=STATUS,Number=1,Type=String,Description=\"Match status\">",
             "##INFO=<ID=TRUTH_VID,Number=1,Type=String,Description=\"Truth variant id\">",
             "##INFO=<ID=OVERLAP_FRAC_SEGDUP,Number=1,Type=Float,Description=\"Segmental duplication overlap fraction\">",
@@ -19,7 +20,7 @@ def test_iter_contig_uses_precomputed_counts_and_concordance(make_vcf) -> None:
             "##INFO=<ID=VAR_PPV,Number=1,Type=Float,Description=\"Variant PPV\">",
         ],
         records=[
-            "chr1\t100\tvar1\tN\t<INS:ME:ALU>\t.\tPASS\tSVTYPE=INS;SVLEN=310;ALGORITHMS=melt,wham;N_BI_GENOS=2;N_HOMREF=1;N_HET=1;N_HOMALT=0;STATUS=MATCHED;TRUTH_VID=truth1;OVERLAP_FRAC_SEGDUP=0.1;NUM_END_OVERLAPS_SEGDUP=1;VAR_PPV=0.95;gnomad_v4.1_sv_AF=0.1\tGT:GQ:ECN:OGQ:SL\t0/1:60:2:55:1.0\t0/0:50:2:49:1.2",
+            "chr1\t100\tvar1\tN\t<INS:ME:ALU>\t.\tPASS\tSVTYPE=INS;SVLEN=310;ALGORITHMS=melt,wham;EVIDENCE=SR,BAF;N_BI_GENOS=2;N_HOMREF=1;N_HET=1;N_HOMALT=0;STATUS=MATCHED;TRUTH_VID=truth1;OVERLAP_FRAC_SEGDUP=0.1;NUM_END_OVERLAPS_SEGDUP=1;VAR_PPV=0.95;gnomad_v4.1_sv_AF=0.1\tGT:GQ:ECN:OGQ:SL\t0/1:60:2:55:1.0\t0/0:50:2:49:1.2",
         ],
     )
 
@@ -33,6 +34,7 @@ def test_iter_contig_uses_precomputed_counts_and_concordance(make_vcf) -> None:
     assert record.truth_vid == "truth1"
     assert record.genomic_context == "segdup"
     assert record.algorithms == ("melt", "wham")
+    assert record.evidence_bucket == "SR"
     assert record.concordance_metrics is not None
     assert record.concordance_metrics["VAR_PPV"] == pytest.approx(0.95)
 

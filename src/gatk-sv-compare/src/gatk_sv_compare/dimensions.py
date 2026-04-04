@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from itertools import combinations
 from dataclasses import dataclass
 from typing import FrozenSet, Iterable, Mapping, Optional, Sequence, Set, Union
 
@@ -33,6 +34,14 @@ SIZE_BUCKETS = [
 
 GENOMIC_CONTEXTS = ["simple_repeat", "segdup", "repeatmasker", "none"]
 ALGORITHM_UNKNOWN = "unknown"
+EVIDENCE_UNKNOWN = "unknown"
+EVIDENCE_COMPONENT_ORDER = ("RD", "PE", "SR")
+_EVIDENCE_COMPONENTS = frozenset(EVIDENCE_COMPONENT_ORDER)
+_EVIDENCE_BUCKET_ORDER = [
+    ",".join(combo)
+    for size in range(1, len(EVIDENCE_COMPONENT_ORDER) + 1)
+    for combo in combinations(EVIDENCE_COMPONENT_ORDER, size)
+] + [EVIDENCE_UNKNOWN]
 _AF_BUCKET_ORDER = [label for label, _ in AF_BUCKETS] + ["unknown"]
 _SIZE_BUCKET_ORDER = [label for label, _ in SIZE_BUCKETS] + ["unknown", "N/A"]
 
@@ -139,6 +148,20 @@ def algorithms_to_text(value: object) -> str:
     return ",".join(normalize_algorithms(value))
 
 
+def normalize_evidence_bucket(value: object) -> str:
+    if isinstance(value, (tuple, list, set, frozenset)):
+        raw_values = [str(item).strip().upper() for item in value if item not in (None, ".")]
+    elif value in (None, "."):
+        raw_values = []
+    else:
+        text = str(value).strip()
+        raw_values = [] if not text or text == "." else [item.strip().upper() for item in re.split(r"[;,]", text)]
+
+    observed = {component for component in raw_values if component in _EVIDENCE_COMPONENTS}
+    ordered = [component for component in EVIDENCE_COMPONENT_ORDER if component in observed]
+    return ",".join(ordered) if ordered else EVIDENCE_UNKNOWN
+
+
 def svtype_sort_key(value: object) -> tuple[int, str]:
     normalized = str(value)
     try:
@@ -178,6 +201,14 @@ def algorithm_sort_key(value: object) -> tuple[int, str]:
     return (0, normalized)
 
 
+def evidence_bucket_sort_key(value: object) -> tuple[int, str]:
+    normalized = normalize_evidence_bucket(value)
+    try:
+        return (_EVIDENCE_BUCKET_ORDER.index(normalized), normalized)
+    except ValueError:
+        return (len(_EVIDENCE_BUCKET_ORDER), normalized)
+
+
 def ordered_svtypes(values: Iterable[object]) -> list[str]:
     return [str(value) for value in sorted({str(value) for value in values if value is not None}, key=svtype_sort_key)]
 
@@ -209,6 +240,17 @@ def ordered_algorithms(values: Iterable[object]) -> list[str]:
     if not observed:
         observed = {ALGORITHM_UNKNOWN}
     return sorted(observed, key=algorithm_sort_key)
+
+
+def ordered_evidence_buckets(values: Iterable[object]) -> list[str]:
+    observed = {normalize_evidence_bucket(value) for value in values if value is not None}
+    if not observed:
+        observed = {EVIDENCE_UNKNOWN}
+    return sorted(observed, key=evidence_bucket_sort_key)
+
+
+def ordered_plot_evidence_buckets(values: Iterable[object]) -> list[str]:
+    return [value for value in ordered_evidence_buckets(values) if value != EVIDENCE_UNKNOWN]
 
 
 def explode_algorithm_buckets(

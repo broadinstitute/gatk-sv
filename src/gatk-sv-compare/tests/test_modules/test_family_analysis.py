@@ -69,6 +69,7 @@ def test_family_analysis_module_computes_expected_denovo_rate(tmp_path, make_vcf
     transmission = build_transmission_table(config.vcf_a_path, data.sites_a, config.vcf_a_label, families)
     inheritance = summarize_inheritance_stats(transmission)
     row = inheritance.loc[inheritance["label"] == "CallsetA"].iloc[0]
+    assert "evidence_bucket" in transmission.columns
     assert row["site_de_novo_rate"] == pytest.approx(1.0 / 3.0)
     assert row["allele_de_novo_rate"] == pytest.approx(1.0 / 3.0)
 
@@ -81,8 +82,10 @@ def test_family_analysis_module_computes_expected_denovo_rate(tmp_path, make_vcf
     assert not inheritance_table.empty
     assert not by_class.empty
     assert (output_dir / "tables" / "denovo_rate_by_algorithm.tsv.gz").exists()
+    assert (output_dir / "tables" / "denovo_rate_by_evidence.tsv.gz").exists()
     assert (output_dir / "inheritance.trios.all_sv.png").exists()
     assert (output_dir / "dnr_vs_algorithm.trios.variants.png").exists()
+    assert (output_dir / "dnr_vs_evidence.trios.variants.png").exists()
     assert (output_dir / "dnr_vs_gq.trios.variants.png").exists()
     assert (output_dir / "dnr_heatmap.trios.variants.all_sv.png").exists()
 
@@ -90,8 +93,8 @@ def test_family_analysis_module_computes_expected_denovo_rate(tmp_path, make_vcf
 def test_plot_dnr_heatmap_labels_colorbar(tmp_path, monkeypatch) -> None:
     table = pd.DataFrame(
         [
-            {"size_bucket": "<100bp", "af_bucket": "AC=1", "site_denovo_rate": 0.25},
-            {"size_bucket": "100bp-1kb", "af_bucket": "AC=2-5", "site_denovo_rate": 0.50},
+            {"size_bucket": "<100bp", "af_bucket": "AC=1", "site_denovo_rate": 0.25, "n_records": 4},
+            {"size_bucket": "100bp-1kb", "af_bucket": "AC=2-5", "site_denovo_rate": 0.50, "n_records": 2},
         ]
     )
     captured = {}
@@ -107,3 +110,23 @@ def test_plot_dnr_heatmap_labels_colorbar(tmp_path, monkeypatch) -> None:
     _plot_dnr_heatmap(table, tmp_path / "dnr_heatmap.png", "De novo heatmap", "site_denovo_rate")
 
     assert captured["colorbar"].ax.get_ylabel() == "De novo rate"
+
+
+def test_plot_dnr_heatmap_includes_count_labels(tmp_path, monkeypatch) -> None:
+    table = pd.DataFrame(
+        [
+            {"size_bucket": "<100bp", "af_bucket": "AC=1", "site_denovo_rate": 0.25, "n_records": 4},
+        ]
+    )
+    captured = {}
+    original_savefig = Figure.savefig
+
+    def spy_savefig(self, *args, **kwargs):
+        captured["texts"] = [text.get_text() for axis in self.axes for text in axis.texts]
+        return original_savefig(self, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", spy_savefig)
+
+    _plot_dnr_heatmap(table, tmp_path / "dnr_heatmap_counts.png", "De novo heatmap", "site_denovo_rate")
+
+    assert "n=4" in captured["texts"]
