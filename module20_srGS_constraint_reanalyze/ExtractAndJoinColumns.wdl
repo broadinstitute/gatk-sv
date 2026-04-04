@@ -14,6 +14,7 @@ workflow ExtractAndJoinColumns {
     Int           first_col  = 37  # first SV feature column (1-based), inclusive
     Int           last_col   = 101 # last SV feature column (1-based), inclusive
     Int           key_cols   = 25  # number of leading key columns (1-based: 1..key_cols)
+    String        gene_col_suffix_sep = ".permu"  # separator used to strip seed suffix from col 1
     RuntimeAttr?  runtime_attr_override
   }
 
@@ -29,6 +30,7 @@ workflow ExtractAndJoinColumns {
         column_labels         = column_labels,
         col_num               = col_num,
         key_cols              = key_cols,
+        gene_col_suffix_sep   = gene_col_suffix_sep,
         docker                = docker,
         runtime_attr_override = runtime_attr_override
     }
@@ -53,6 +55,7 @@ task ExtractAndJoin {
     Array[String] column_labels
     Int           col_num       # 1-based column to extract from each file
     Int           key_cols      # number of leading key columns (1-based: 1..key_cols)
+    String        gene_col_suffix_sep  # separator to strip seed suffix from col 1 (e.g. ".permu")
     String        docker
     RuntimeAttr?  runtime_attr_override
   }
@@ -67,14 +70,20 @@ import gzip
 import sys
 from collections import OrderedDict
 
-tsv_files   = "~{sep=',' tsv_gz_files}".split(',')
-col_labels  = "~{sep=',' column_labels}".split(',')
-col_num     = ~{col_num}   # 1-based
-key_cols    = ~{key_cols}  # number of key columns (1-based 1..key_cols)
-out_file    = "~{out_file}"
+tsv_files         = "~{sep=',' tsv_gz_files}".split(',')
+col_labels        = "~{sep=',' column_labels}".split(',')
+col_num           = ~{col_num}   # 1-based
+key_cols          = ~{key_cols}  # number of key columns (1-based 1..key_cols)
+out_file          = "~{out_file}"
+gene_suffix_sep   = "~{gene_col_suffix_sep}"  # strip this + everything after from col 1
 
 col_idx     = col_num - 1             # 0-based index for the SV feature column
 key_indices = list(range(key_cols))   # 0-based indices for key columns
+
+def strip_gene_suffix(val, sep):
+    """Strip seed suffix from gene name col: 'OR5T2.permu_1' -> 'OR5T2'"""
+    idx = val.find(sep)
+    return val[:idx] if idx >= 0 else val
 
 if len(tsv_files) != len(col_labels):
     sys.exit(f"ERROR: {len(tsv_files)} files but {len(col_labels)} labels")
@@ -93,13 +102,16 @@ for fi, (fpath, label) in enumerate(zip(tsv_files, col_labels)):
             sys.exit(f"ERROR: file {fpath} has only {len(header)} columns; "
                      f"cannot extract column {col_num} (0-based {col_idx})")
         if key_col_names is None:
-            key_col_names = [header[k] for k in key_indices]
+            # Use 'gene' for col 0 (stripped), original names for cols 1..key_cols-1
+            key_col_names = ['gene'] + [header[k] for k in key_indices[1:]]
         sv_col_name = header[col_idx]
         for line in fh:
             fields = line.rstrip('\n').split('\t')
             if len(fields) <= col_idx:
                 continue
-            key = tuple(fields[k] for k in key_indices)
+            # Strip seed suffix from col 0 (gene name), keep others as-is
+            clean_gene = strip_gene_suffix(fields[0], gene_suffix_sep)
+            key = tuple([clean_gene] + [fields[k] for k in key_indices[1:]])
             d[key] = fields[col_idx]
     data.append((label, d))
 
