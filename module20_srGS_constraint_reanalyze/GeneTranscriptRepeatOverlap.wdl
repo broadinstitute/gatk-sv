@@ -1,20 +1,25 @@
 version 1.0
 
 import "Structs.wdl"
+import "RDataToTsv.wdl" as RDataToTsv
 
 # Workflow: for a list of GTFs, compute per-gene proportion covered by
 # segmental duplications (SD) and simple repeats (SR), and produce
 # integrated gene x sample tables.
 workflow GeneTranscriptRepeatOverlap {
   input {
-    Array[File]   gtf_files           # one GTF per sample/annotation
-    Array[String] column_labels       # one label per GTF (becomes column name)
+    Array[File]   gtf_files           # one GTF per sample/annotation (same order as rdata_files)
+    Array[File]   rdata_files         # one .rData per sample, same order as gtf_files
+    String?        rdata_obj_name = "gene.data.reanno.permu"  # R object name inside each .rData file
+    Array[String] column_labels       # one label per GTF/rData (becomes column name)
     File          sd_file             # segmental duplications BED
     File          sr_file             # simple repeats BED
     String        docker              # docker with bedtools + python3
+    String        r_docker            # docker with R installed (for RData conversion)
     RuntimeAttr?  runtime_attr_gtf_to_bed
     RuntimeAttr?  runtime_attr_calc_overlap
     RuntimeAttr?  runtime_attr_integrate
+    RuntimeAttr?  runtime_attr_rdata_to_tsv
   }
 
   scatter (i in range(length(gtf_files))) {
@@ -37,6 +42,15 @@ workflow GeneTranscriptRepeatOverlap {
         repeat_type           = "SD",
         docker                = docker,
         runtime_attr_override = runtime_attr_calc_overlap
+    }
+
+    # Task 1b: convert rData to TSV.gz (same index as GTF)
+    call RDataToTsv.ConvertRDataToTsv {
+      input:
+        rdata_file            = rdata_files[i],
+        rdata_obj_name        = rdata_obj_name,
+        r_docker              = r_docker,
+        runtime_attr_override = runtime_attr_rdata_to_tsv
     }
 
     # Task 2b: proportion of each gene covered by SR
@@ -73,6 +87,7 @@ workflow GeneTranscriptRepeatOverlap {
 
   output {
     Array[File] transcript_beds     = GTFTranscriptsToBed.transcript_bed
+    Array[File] rdata_tsv_gz        = ConvertRDataToTsv.tsv_gz
     Array[File] sd_overlap_tsvs     = CalcSD.overlap_tsv
     Array[File] sr_overlap_tsvs     = CalcSR.overlap_tsv
     File        sd_integrated_table = IntegrateSD.integrated_table
