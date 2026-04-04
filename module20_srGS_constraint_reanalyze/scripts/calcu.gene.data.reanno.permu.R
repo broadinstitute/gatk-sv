@@ -300,8 +300,6 @@ getSVdat.all.reannotated.permutate <- function(dat, re_anno_svtype, snv.data, in
   merged <- merge(x=merged, y=ultra_rare.counts, by="gene", all.x=T, sort=F)
   merged <- merge(x=merged, y=singleton.counts, by="gene", all.x=T, sort=F)
   merged <- merge(x=merged, y=rare.large.counts, by="gene", all.x=T, sort=F)
-
-  merged[, -c(which(colnames(merged) %in% c("gene", "gene_gencodeV33", "gene_id", "chromosome", "X.chr")))] <- apply(merged[, -c(which(colnames(merged) %in% c("gene", "gene_gencodeV33", "gene_id", "chromosome", "X.chr")))], 2, as.numeric)
   
   return(merged)
 }
@@ -356,7 +354,7 @@ sv_info <- sv_info[sv_info$SVLEN < 1000000, ]
 
 print('reading in gene info ...')
 snv.data.permu <- read.table(opt$gene, header = TRUE, sep = '\t', comment.char = "")
-snv.data.permu$gene <- paste(snv.data.permu$gene, '.permu_', permu, sep = '')
+snv.data.permu$gene <- paste(snv.data.permu$gene_name,  permu, sep = '.')
 
 print('reading in sv vs. genes ...')
 re_anno_svtype.permutate <- readin.re_anno_svtype(opt$reanno, sv_info)
