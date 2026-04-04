@@ -279,6 +279,7 @@ workflow PermutateSVAnnotation {
         ]
         File        integrated          = Task7_IntegrateOverlaps.integrated_file
         File        result              = Task8_CalcuGeneData.result
+        File        result_tsv_gz       = Task8_CalcuGeneData.result_tsv_gz
     }
 }
 
@@ -822,7 +823,8 @@ task Task8_CalcuGeneData {
     >>>
 
     output {
-        File result = "~{prefix}.rData"
+        File result        = "~{prefix}.rData"
+        File result_tsv_gz = "~{prefix}.tsv.gz"
     }
 
     RuntimeAttr default_attr = object {
