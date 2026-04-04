@@ -2,6 +2,7 @@
 #!R
 library("optparse")
 
+
 unify_SVID_gene_list<-function(d1, gene){
     d1[,1] = paste(d1[,1],d1[,2],sep=',')
     d1 = d1[,-2]
@@ -13,11 +14,11 @@ unify_SVID_gene_list<-function(d1, gene){
     colnames(uni) = c('key', 'gene_id', 'gene_symbol')
     for(i in unique(stat[,2])){
             print(i)
-            if(i>3){
+            if(i>1){
 				# Instead of growing inside the loop:
                 svid_list = stat[stat[,2]==i,][,1]
 				new_rows <- lapply(svid_list, function(svid) {
-				  tmp <- d1[d1[,1] == svid, ]
+				  tmp <- d1[d1[,1] == svid, c(2,3)]
 				  # ... merge and order ...
 				  data.frame(key = svid,
 				             gene_id     = paste(tmp[,1], collapse = ","),
@@ -31,6 +32,7 @@ unify_SVID_gene_list<-function(d1, gene){
     uni = uni[,c(4,5,2,3)]
     return(uni)
 }
+
 
 
 option_list = list(
