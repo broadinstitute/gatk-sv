@@ -370,3 +370,11 @@ gene.data.reanno.permu <- getSVdat.all.reannotated.permutate(
 
 save(gene.data.reanno.permu, file = opt$output)
 
+print('writing tsv.gz output ...')
+tsv_gz_output <- sub("(\\.rData|\\.RData|\\.rdata)$", ".tsv.gz", opt$output)
+if (tsv_gz_output == opt$output) tsv_gz_output <- paste0(opt$output, ".tsv.gz")
+con <- gzcon(file(tsv_gz_output, open = "wb"))
+write.table(gene.data.reanno.permu, con, sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
+close(con)
+cat(sprintf("Written %d rows x %d cols -> %s\n", nrow(gene.data.reanno.permu), ncol(gene.data.reanno.permu), tsv_gz_output))
+
