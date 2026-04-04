@@ -99,7 +99,7 @@ task GTFTranscriptsToBed {
 
 
     zcat  ~{gtf} \
-     awk '{if ($3=="transcript") print}' \
+     | awk '{if ($3=="transcript") print}' \
      | cut -f1,4,5,9 \
      | awk '{print $1,$2,$3,$5, $9}' \
      | sed -e 's/"//g' | sed -e 's/;//g' | sed -e 's/ /\t/g' \
