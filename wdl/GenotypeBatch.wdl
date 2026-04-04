@@ -83,7 +83,8 @@ workflow GenotypeBatch {
         depth_exclusion_intervals_index = depth_exclusion_intervals + ".tbi",
         pesr_exclusion_intervals = pesr_exclusion_intervals,
         pesr_exclusion_intervals_index = pesr_exclusion_intervals + ".tbi",
-        rd_table = TrainSVGenotyping.rd_table,
+        rd_depth_table = TrainSVGenotyping.rd_depth_table,
+        rd_pesr_table = TrainSVGenotyping.rd_pesr_table,
         pe_table = TrainSVGenotyping.pe_table,
         sr_table = TrainSVGenotyping.sr_table,
         genotype_args = genotype_args,
@@ -123,7 +124,8 @@ workflow GenotypeBatch {
     File genotyped_depth_vcf_index = SeparateDepthPesr.depth_vcf_index
     File genotyped_pesr_vcf = SeparateDepthPesr.pesr_vcf
     File genotyped_pesr_vcf_index = SeparateDepthPesr.pesr_vcf_index
-    File genotyping_rd_table = TrainSVGenotyping.rd_table
+    File genotyping_rd_depth_table = TrainSVGenotyping.rd_depth_table
+    File genotyping_rd_pesr_table = TrainSVGenotyping.rd_pesr_table
     File genotyping_pe_table = TrainSVGenotyping.pe_table
     File genotyping_sr_table = TrainSVGenotyping.sr_table
     File regeno_coverage_medians = GenerateRegenoCoverageMedians.out
@@ -174,6 +176,16 @@ task TrainSVGenotyping {
     PEQ=$(awk -F '\t' '{if ( $5=="PEQ") print $2 }' ~{rf_cutoffs})
     SRQ=$(awk -F '\t' '{if ( $5=="SRQ") print $2 }' ~{rf_cutoffs})
 
+    PESR_SEP=$(awk -F'\t' 'NR==1 {for(i=1;i<=NF;i++) col[$i]=i; next}
+                           {if ($col["algtype"]=="PESR" && $col["min_svsize"]==1000 && $col["metric"]=="RD_Median_Separation")
+                               print $col["cutoff"]}' \
+                  ~{rf_cutoffs})
+    DEPTH_SEP=$(awk -F'\t' 'NR==1 {for(i=1;i<=NF;i++) col[$i]=i; next}
+                            {if ($col["algtype"]=="Depth" && $col["metric"]=="RD_Median_Separation")
+                               print $col["cutoff"]}' \
+                   ~{rf_cutoffs} \
+               | sort -nr | head -n 1)
+
     function getJavaMem() {
       cat /proc/meminfo | awk -v MEM_FIELD="$1" '{
         f[substr($1, 1, length($1)-1)] = $2
@@ -198,13 +210,16 @@ task TrainSVGenotyping {
       --pesr-exclusion-intervals ~{pesr_exclusion_intervals} \
       --pe-quality ${PEQ} \
       --sr-quality ${SRQ} \
+      --rd-depth-min-separation ${DEPTH_SEP} \
+      --rd-pesr-min-separation ${PESR_SEP} \
       --output-dir ./ \
       --output-name ~{output_name} \
       ~{training_args}
   >>>
 
   output {
-    File rd_table = "~{output_name}.rd_geno_params.tsv"
+    File rd_depth_table = "~{output_name}.rd_depth_geno_params.tsv"
+    File rd_pesr_table = "~{output_name}.rd_pesr_geno_params.tsv"
     File pe_table = "~{output_name}.pe_geno_params.tsv"
     File sr_table = "~{output_name}.sr_geno_params.tsv"
   }
@@ -239,7 +254,8 @@ task GenotypeSVs {
     File pesr_exclusion_intervals_index
     File depth_exclusion_intervals
     File depth_exclusion_intervals_index
-    File rd_table
+    File rd_depth_table
+    File rd_pesr_table
     File pe_table
     File sr_table
 
@@ -313,7 +329,8 @@ task GenotypeSVs {
       --ploidy-table ~{ploidy_table} \
       --pesr-exclusion-intervals ~{pesr_exclusion_intervals} \
       --depth-exclusion-intervals ~{depth_exclusion_intervals} \
-      --rd-table ~{rd_table} \
+      --rd-depth-table ~{rd_depth_table} \
+      --rd-pesr-table ~{rd_pesr_table} \
       --pe-table ~{pe_table} \
       --sr-table ~{sr_table} \
       ~{genotype_args}

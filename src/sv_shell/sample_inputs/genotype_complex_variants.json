@@ -9,7 +9,7 @@
   "depth_gt_rd_sep_files": "/inputs/all_samples.depth.depth_sepcutoff.txt",
   "depth_vcfs": "/intermediates/MakeCohortVcf_inputs/NA12878.genotype_batch.depth.vcf.gz",
   "generate_index": true,
-  "genotyping_rd_tables": "/inputs/all_samples.rd_geno_params.tsv",
+  "genotyping_rd_tables": "/inputs/all_samples.rd_depth_geno_params.tsv",
   "median_coverage_files": "/intermediates/MakeCohortVcf_inputs/NA12878_medianCov.transposed.bed",
   "merge_vcfs": true,
   "naive": false,

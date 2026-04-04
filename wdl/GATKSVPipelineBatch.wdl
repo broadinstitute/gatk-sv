@@ -261,7 +261,7 @@ workflow GATKSVPipelineBatch {
       medianfiles=[GATKSVPipelinePhase1.median_cov],
       coveragefiles=[GATKSVPipelinePhase1.merged_bincov],
       coveragefile_idxs=[GATKSVPipelinePhase1.merged_bincov_index],
-      genotyping_rd_table=[select_first([GenotypeBatch.genotyping_rd_table])],
+      genotyping_rd_table=[select_first([GenotypeBatch.genotyping_rd_depth_table])],
       contig_list=primary_contigs_list,
       regeno_coverage_medians=[GenotypeBatch.regeno_coverage_medians],
       sv_base_mini_docker=sv_base_mini_docker,
@@ -289,7 +289,7 @@ workflow GATKSVPipelineBatch {
       cohort_name=name,
       rf_cutoff_files=[GATKSVPipelinePhase1.cutoffs],
       batches=[name],
-      genotyping_rd_tables=[select_first([GenotypeBatch.genotyping_rd_table])],
+      genotyping_rd_tables=[select_first([GenotypeBatch.genotyping_rd_depth_table])],
       median_coverage_files=[GATKSVPipelinePhase1.median_cov],
       run_module_metrics = run_makecohortvcf_metrics,
       primary_contigs_list = primary_contigs_list,
@@ -430,7 +430,8 @@ workflow GATKSVPipelineBatch {
     File regeno_coverage_medians = GenotypeBatch.regeno_coverage_medians
     File regenotyped_depth_vcf = RegenotypeCNVs.regenotyped_depth_vcfs[0]
 
-    File genotyping_rd_table = GenotypeBatch.genotyping_rd_table
+    File genotyping_rd_depth_table = GenotypeBatch.genotyping_rd_depth_table
+    File genotyping_rd_pesr_table = GenotypeBatch.genotyping_rd_pesr_table
     File genotyping_pe_table = GenotypeBatch.genotyping_pe_table
     File genotyping_sr_table = GenotypeBatch.genotyping_sr_table
 
