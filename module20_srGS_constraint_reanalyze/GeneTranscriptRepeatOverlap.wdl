@@ -94,100 +94,20 @@ task GTFTranscriptsToBed {
     RuntimeAttr? runtime_attr_override
   }
 
-  String out_bed = label + ".transcripts.bed"
-
   command <<<
     set -euo pipefail
 
-    python3 <<'PYEOF'
-import gzip
-import sys
-from collections import defaultdict
 
-gtf_file = "~{gtf}"
-out_file = "~{out_bed}"
-
-opener = gzip.open if gtf_file.endswith('.gz') else open
-
-records = []
-
-# First pass: collect 'transcript' feature rows
-with opener(gtf_file, 'rt') as fin:
-    for line in fin:
-        if line.startswith('#'):
-            continue
-        fields = line.rstrip('\n').split('\t')
-        if len(fields) < 9 or fields[2] != 'transcript':
-            continue
-        chrom     = fields[0]
-        start     = int(fields[3]) - 1   # GTF is 1-based closed; BED is 0-based half-open
-        end       = int(fields[4])
-        strand    = fields[6]
-        attr_str  = fields[8]
-
-        gene_name = ''
-        tid       = ''
-        for attr in attr_str.split(';'):
-            attr = attr.strip()
-            if attr.startswith('gene_name'):
-                parts = attr.split('"')
-                if len(parts) >= 2:
-                    gene_name = parts[1]
-            elif attr.startswith('transcript_id'):
-                parts = attr.split('"')
-                if len(parts) >= 2:
-                    tid = parts[1]
-        if gene_name and tid:
-            records.append((chrom, start, end, gene_name, tid, strand))
-
-# Fallback: derive transcript bounding boxes from exon entries
-if not records:
-    sys.stderr.write("Warning: no 'transcript' features found in GTF; inferring from exons.\n")
-    bounds = {}  # tid -> [chrom, min_start, max_end, gene_name, strand]
-    with opener(gtf_file, 'rt') as fin:
-        for line in fin:
-            if line.startswith('#'):
-                continue
-            fields = line.rstrip('\n').split('\t')
-            if len(fields) < 9 or fields[2] != 'exon':
-                continue
-            chrom    = fields[0]
-            start    = int(fields[3]) - 1
-            end      = int(fields[4])
-            strand   = fields[6]
-            attr_str = fields[8]
-            gene_name = ''
-            tid       = ''
-            for attr in attr_str.split(';'):
-                attr = attr.strip()
-                if attr.startswith('gene_name'):
-                    parts = attr.split('"')
-                    if len(parts) >= 2:
-                        gene_name = parts[1]
-                elif attr.startswith('transcript_id'):
-                    parts = attr.split('"')
-                    if len(parts) >= 2:
-                        tid = parts[1]
-            if gene_name and tid:
-                if tid not in bounds:
-                    bounds[tid] = [chrom, start, end, gene_name, strand]
-                else:
-                    bounds[tid][1] = min(bounds[tid][1], start)
-                    bounds[tid][2] = max(bounds[tid][2], end)
-    for tid, (chrom, s, e, gene, strand) in bounds.items():
-        records.append((chrom, s, e, gene, tid, strand))
-
-# Sort by chrom then start
-records.sort(key=lambda r: (r[0], r[1]))
-
-with open(out_file, 'w') as fout:
-    for chrom, start, end, gene_name, tid, strand in records:
-        fout.write(f"{chrom}\t{start}\t{end}\t{gene_name}\t{tid}\t{strand}\n")
-PYEOF
+    zcat  ~{gtf} \
+     awk '{if ($3=="transcript") print}' \
+     | cut -f1,4,5,9 \
+     | awk '{print $1,$2,$3,$5, $9}' \
+     | sed -e 's/"//g' | sed -e 's/;//g' | sed -e 's/ /\t/g' \
+     > "~{label}.transcripts.bed"
   >>>
 
   output {
-    File transcript_bed = out_bed
+    File transcript_bed = "~{label}.transcripts.bed"
   }
 
   RuntimeAttr default_attr = object {
