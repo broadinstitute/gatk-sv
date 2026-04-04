@@ -148,8 +148,6 @@ task CalcRepeatOverlap {
     RuntimeAttr? runtime_attr_override
   }
 
-  String out_tsv = label + "." + repeat_type + ".overlap.tsv"
-
   command <<<
     set -euo pipefail
 
@@ -164,38 +162,11 @@ task CalcRepeatOverlap {
       -b repeat_merged.bed \
       > coverage_raw.tsv
 
-    python3 <<'PYEOF'
-from collections import defaultdict
-
-gene_covered = defaultdict(int)
-gene_total   = defaultdict(int)
-
-with open('coverage_raw.tsv') as f:
-    for line in f:
-        fields = line.rstrip('\n').split('\t')
-        if len(fields) < 10:
-            continue
-        gene_name     = fields[3]
-        covered_bases = int(fields[7])
-        total_length  = int(fields[8])
-        gene_covered[gene_name] += covered_bases
-        gene_total[gene_name]   += total_length
-
-label   = "~{label}"
-out_tsv = "~{out_tsv}"
-
-with open(out_tsv, 'w') as out:
-    out.write(f"gene\t{label}\n")
-    for gene in sorted(gene_covered):
-        covered = gene_covered[gene]
-        total   = gene_total[gene]
-        prop    = covered / total if total > 0 else 0.0
-        out.write(f"{gene}\t{prop:.6f}\n")
-PYEOF
+    awk '{print $5,$NF}' coverage_raw.tsv | sed -e 's/ /\t/g' >  "~{label}.~{repeat_type}.overlap.tsv"
   >>>
 
   output {
-    File overlap_tsv = out_tsv
+    File overlap_tsv = "~{label}.~{repeat_type}.overlap.tsv"
   }
 
   RuntimeAttr default_attr = object {
