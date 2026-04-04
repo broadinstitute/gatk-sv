@@ -29,6 +29,7 @@ workflow PermutateSVAnnotation {
         File   gtf_file
         Int    permu_number
         File   sv_bed
+        File   sv_info
         File   tel_cen_bed
         File   gene_info
 
@@ -253,7 +254,7 @@ workflow PermutateSVAnnotation {
             r_script         = calcu_r_script,
             seed_suffix      = seed_suffix,
             integrated_file  = Task7_IntegrateOverlaps.integrated_file,
-            sv_info = sv_bed,
+            sv_info = sv_info,
             gene_info  = gene_info, 
             docker           = r_docker,
             runtime_attr_override = runtime_attr_calcu_gene_data
