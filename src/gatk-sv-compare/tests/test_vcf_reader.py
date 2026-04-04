@@ -59,6 +59,23 @@ def test_iter_contig_falls_back_to_gt_counts_and_subsets_gq(make_vcf) -> None:
     assert record.gq_array.tolist() == [10.0, 30.0]
 
 
+def test_iter_contig_keeps_raw_999_scale_gq_values(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="scaled_gq.vcf",
+        sample_names=["S1", "S2", "S3"],
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100\tGT:GQ:ECN\t0/0:100:2\t0/1:200:2\t1/1:300:2",
+        ],
+    )
+
+    records = list(iter_contig(vcf_path, "chr1", extract_gq=True, sample_indices=np.asarray([0, 2], dtype=int)))
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.gq_array is not None
+    assert record.gq_array.tolist() == [100.0, 300.0]
+
+
 def test_iter_contig_handles_cnv_frequency(make_vcf) -> None:
     vcf_path = make_vcf(
         file_name="cnv.vcf",

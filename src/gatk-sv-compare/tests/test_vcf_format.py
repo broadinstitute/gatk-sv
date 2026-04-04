@@ -85,3 +85,18 @@ def test_check_record_handles_missing_cpx_type_header(make_vcf) -> None:
     issues = check_record(record)
 
     assert isinstance(issues, list)
+
+
+def test_check_record_allows_999_scale_gq(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="gq_999.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=50\tGT:GQ:ECN\t0/1:600:2\t0/0:300:2",
+        ],
+    )
+    with pysam.VariantFile(str(vcf_path)) as vcf:
+        record = next(iter(vcf))
+
+    issues = check_record(record)
+
+    assert any(issue.check_id == "GQ_RANGE" and issue.severity == "WARN" for issue in issues)

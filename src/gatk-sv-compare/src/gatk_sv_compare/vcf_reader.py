@@ -195,7 +195,10 @@ def _compute_gt_counts(record: pysam.VariantRecord) -> Dict[str, int]:
     }
 
 
-def _extract_gq_array(record: pysam.VariantRecord, sample_indices: Optional[np.ndarray]) -> Optional[np.ndarray]:
+def _extract_gq_array(
+    record: pysam.VariantRecord,
+    sample_indices: Optional[np.ndarray],
+) -> Optional[np.ndarray]:
     if "GQ" not in record.format:
         return None
     sample_values = list(record.samples.values())

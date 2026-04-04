@@ -95,6 +95,37 @@ def test_validate_and_fix_rewrites_fixable_issues(make_vcf, tmp_path) -> None:
         assert int(record.info["SVLEN"]) == 25
 
 
+def test_validate_vcf_warns_on_999_scale_gq(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="warn_gq_scale.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=25\tGT:GQ:ECN\t0/1:600:2\t0/0:500:2",
+        ],
+    )
+
+    summary = validate_vcf(ValidateConfig(vcf_path=vcf_path))
+
+    assert any(issue.check_id == "GQ_RANGE" and issue.severity == "WARN" for issue in summary.issues)
+
+
+def test_validate_and_fix_scales_999_gq_to_99(make_vcf, tmp_path) -> None:
+    vcf_path = make_vcf(
+        file_name="fix_gq_scale.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=25\tGT:GQ:ECN\t0/1:600:2\t0/0:999:2",
+        ],
+    )
+    out_path = tmp_path / "fixed_gq_scale.vcf.gz"
+
+    result = validate_and_fix(vcf_path, out_path)
+
+    assert result.wrote_output is True
+    with pysam.VariantFile(str(out_path)) as vcf:
+        record = next(iter(vcf))
+        assert record.samples["S1"]["GQ"] == 60
+        assert record.samples["S2"]["GQ"] == 99
+
+
 def test_validate_and_fix_canonicalizes_breakend_non_lossily(make_vcf, tmp_path) -> None:
     vcf_path = make_vcf(
         file_name="breakend_fixable.vcf",

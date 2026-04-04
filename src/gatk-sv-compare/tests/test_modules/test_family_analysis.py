@@ -90,6 +90,45 @@ def test_family_analysis_module_computes_expected_denovo_rate(tmp_path, make_vcf
     assert (output_dir / "dnr_heatmap.trios.variants.all_sv.png").exists()
 
 
+def test_build_transmission_table_keeps_raw_999_gqs(tmp_path, make_vcf) -> None:
+    extra_headers = [
+        "##INFO=<ID=AC,Number=1,Type=Integer,Description=\"Allele count\">",
+        "##INFO=<ID=AF,Number=1,Type=Float,Description=\"Allele frequency\">",
+        "##INFO=<ID=AN,Number=1,Type=Integer,Description=\"Allele number\">",
+    ]
+    vcf_path = make_vcf(
+        file_name="family_scaled_gq.vcf",
+        sample_names=["PRO", "DAD", "MOM"],
+        extra_header_lines=extra_headers,
+        records=[
+            "chr1\t100\tv1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100;AC=2;AF=0.3333;AN=6\tGT:GQ:ECN\t0/1:600:2\t0/0:300:2\t0/1:800:2",
+        ],
+    )
+    ped = tmp_path / "family.fam"
+    ped.write_text("F1\tPRO\tDAD\tMOM\t1\t1\n")
+
+    config = AnalysisConfig(
+        vcf_a_path=vcf_path,
+        vcf_b_path=vcf_path,
+        vcf_a_label="CallsetA",
+        vcf_b_label="CallsetB",
+        output_dir=tmp_path / "outputs",
+        contigs=["chr1"],
+        contig_lengths={"chr1": 1_000_000},
+        n_workers=1,
+        ped_file=ped,
+    )
+    data = aggregate(config)
+    families = parse_ped_file(ped, set(data.sample_names_a))
+
+    transmission = build_transmission_table(config.vcf_a_path, data.sites_a, config.vcf_a_label, families)
+
+    row = transmission.iloc[0]
+    assert row["proband_gq"] == pytest.approx(600.0)
+    assert row["father_gq"] == pytest.approx(300.0)
+    assert row["mother_gq"] == pytest.approx(800.0)
+
+
 def test_plot_dnr_heatmap_labels_colorbar(tmp_path, monkeypatch) -> None:
     table = pd.DataFrame(
         [

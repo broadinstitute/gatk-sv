@@ -198,9 +198,14 @@ def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = Non
     if "GQ" in record.format:
         for sample in record.samples.values():
             gq = sample.get("GQ")
-            if gq not in (None, ".") and int(gq) > 99:
-                issues.append(FormatIssue("GQ_RANGE", "WARN", record_id, "GQ exceeds expected 0-99 range"))
-                break
+            if gq not in (None, "."):
+                gq_value = int(gq)
+                if gq_value > 999:
+                    issues.append(FormatIssue("GQ_RANGE", "WARN", record_id, "GQ exceeds supported 0-99 or 0-999 range"))
+                    break
+                if gq_value > 99:
+                    issues.append(FormatIssue("GQ_RANGE", "WARN", record_id, "GQ uses 0-999 scale; run validate --fix to normalize to 0-99"))
+                    break
     if not filters:
         issues.append(FormatIssue("EMPTY_FILTER", "WARN", record_id, "FILTER is empty"))
     if "CHR2" in record.info and svtype_text not in {"BND", "CTX"}:

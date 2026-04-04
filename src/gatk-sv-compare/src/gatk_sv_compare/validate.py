@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 import pysam
 
 from .config import ValidateConfig
+from .gq_utils import detect_gq_scale_factor
 from .vcf_format import FormatIssue, PipelineStage, check_header, check_record, detect_pipeline_stage, has_precomputed_counts
 
 _FIXABLE_CHECK_IDS = {
@@ -242,6 +243,20 @@ def _clear_sample_gt(sample_text: str, format_keys: List[str]) -> str:
     return ":".join(sample_values)
 
 
+def _normalize_sample_gq(sample_text: str, format_keys: List[str], gq_scale_factor: float) -> str:
+    if gq_scale_factor == 1.0 or not format_keys or "GQ" not in format_keys:
+        return sample_text
+    sample_values = sample_text.split(":") if sample_text else []
+    while len(sample_values) < len(format_keys):
+        sample_values.append(".")
+    gq_index = format_keys.index("GQ")
+    gq_value = sample_values[gq_index]
+    if gq_value not in {"", "."}:
+        scaled = min(99, int(float(gq_value) / gq_scale_factor))
+        sample_values[gq_index] = str(scaled)
+    return ":".join(sample_values)
+
+
 def _has_bracket_alt(alt_values: List[str]) -> bool:
     return len(alt_values) == 1 and any(bracket in alt_values[0] for bracket in ("[", "]"))
 
@@ -256,6 +271,7 @@ def _fix_record_line(
     sample_names: Optional[List[str]] = None,
     drop_bad_bnd: bool = False,
     drop_bad_ctx: bool = False,
+    gq_scale_factor: float = 1.0,
 ) -> Optional[str]:
     columns = line.rstrip("\n").split("\t")
     if len(columns) < 8:
@@ -322,6 +338,10 @@ def _fix_record_line(
         format_text = ":".join(format_keys)
         sample_texts = rewritten_samples
 
+    if format_text is not None and sample_texts:
+        format_keys = format_text.split(":")
+        sample_texts = [_normalize_sample_gq(sample_text, format_keys, gq_scale_factor) for sample_text in sample_texts]
+
     columns[4] = alt
     columns[7] = _format_info(info_fields)
     if format_text is not None:
@@ -363,6 +383,7 @@ def apply_fixes(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     temp_output_path = out_path.with_suffix("") if _is_bgzip_output(out_path) else out_path
     ploidy_dict = _parse_ploidy_table(ploidy_table_path) if ploidy_table_path is not None else None
+    gq_scale_factor = detect_gq_scale_factor(vcf_path)
     sample_names: List[str] | None = None
     with _open_text(vcf_path, "r") as handle_in, temp_output_path.open("w", encoding="utf-8") as handle_out:
         header_lines: List[str] = []
@@ -381,6 +402,7 @@ def apply_fixes(
                 sample_names=sample_names,
                 drop_bad_bnd=drop_bad_bnd,
                 drop_bad_ctx=drop_bad_ctx,
+                gq_scale_factor=gq_scale_factor,
             )
             if fixed_line is None:
                 continue
