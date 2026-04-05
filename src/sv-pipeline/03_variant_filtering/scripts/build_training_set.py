@@ -19,16 +19,16 @@ def build_baf_training_set(metrics):
 
     # Remove BAF failures (variants where BAF can not be assessed due to
     # insufficient informative SNPs or a ROH)
-    del_cols = 'BAF_snp_ratio BAF_del_loglik'.split()
+    del_cols = 'BAF_HET_RATIO BAF_DEL_LOGLIK'.split()
     del_mask = ((metrics.svtype == 'DEL') &
                 (~metrics[del_cols].isnull().any(axis=1)))
 
-    dup_cols = 'BAF_KS_stat BAF_KS_log_pval'.split()
+    dup_cols = 'BAF_KS_STAT BAF_KS_Q'.split()
     dup_mask = ((metrics.svtype == 'DUP') &
                 (~metrics[dup_cols].isnull().any(axis=1)))
 
     # Restrict BAF testing to variants >5 kb
-    size_mask = (metrics['size'] >= MIN_SIZE)
+    size_mask = (metrics['svsize'] >= MIN_SIZE)
 
     # Filter to all variants eligible for classification
     all_metrics = metrics[(del_mask | dup_mask) & size_mask].copy()
@@ -36,16 +36,16 @@ def build_baf_training_set(metrics):
     # Training variants must have <30% blacklist coverage and
     # be below 15% or above 40% separation
     cov_mask = (metrics['poor_region_cov'] < MAX_BLACKLIST_COV)
-    sep_mask = ((metrics['RD_Median_Separation'] < MAX_FAIL_SEP) |
-                (metrics['RD_Median_Separation'] >= MIN_PASS_SEP))
+    sep_mask = ((metrics['RD_MEDIAN_SEPARATION'] < MAX_FAIL_SEP) |
+                (metrics['RD_MEDIAN_SEPARATION'] >= MIN_PASS_SEP))
 
     # Filter to training set
     train = metrics[(del_mask | dup_mask) & size_mask &
                     sep_mask & cov_mask].copy()
 
     # Label training classes based on separation
-    train.loc[train.RD_Median_Separation >= MIN_PASS_SEP, 'Status'] = 'Pass'
-    train.loc[train.RD_Median_Separation < MAX_FAIL_SEP, 'Status'] = 'Fail'
+    train.loc[train.RD_MEDIAN_SEPARATION >= MIN_PASS_SEP, 'Status'] = 'Pass'
+    train.loc[train.RD_MEDIAN_SEPARATION < MAX_FAIL_SEP, 'Status'] = 'Fail'
 
     # TEMPORARY: write to file directly
     os.makedirs('baf_rf', exist_ok=True)
