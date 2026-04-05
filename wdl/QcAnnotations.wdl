@@ -18,7 +18,7 @@ workflow QcAnnotations {
 
         File ped_file
 
-        Int sv_per_shard
+        Int variants_per_shard
         Int samples_per_shard
 
         Int? random_seed
@@ -72,7 +72,7 @@ workflow QcAnnotations {
             input:
                 vcf = use_vcf,
                 contig = contig,
-                sv_per_shard = sv_per_shard,
+                variants_per_shard = variants_per_shard,
                 prefix = "~{prefix}.~{contig}",
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = gatk_sv_lr_docker,

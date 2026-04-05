@@ -9,7 +9,7 @@ workflow CollectQcVcfWide {
         String contig
         String prefix
 
-        Int sv_per_shard
+        Int variants_per_shard
 
         String sv_base_mini_docker
         String sv_pipeline_docker
@@ -29,7 +29,7 @@ workflow CollectQcVcfWide {
             vcf = vcf,
             vcf_index = vcf + ".tbi",
             contig = contig,
-            records_per_shard = sv_per_shard,
+            records_per_shard = variants_per_shard,
             prefix = "~{output_prefix}.scatter_vcf",
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_override_scatter_vcf
