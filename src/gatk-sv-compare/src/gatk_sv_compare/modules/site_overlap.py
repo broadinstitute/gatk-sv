@@ -130,7 +130,7 @@ def _plot_heatmap(sites: pd.DataFrame, row_field: str, col_field: str, output_pa
         matrix = matrix.reindex(columns=ordered_contexts(matrix.columns))
         count_matrix = count_matrix.reindex(columns=matrix.columns)
     elif col_field == "svtype":
-        keep_columns = [column for column in ordered_svtypes(matrix.columns) if str(column) not in {"BND", "CTX"}]
+        keep_columns = [column for column in ordered_svtypes(matrix.columns) if str(column) != "CTX"]
         matrix = matrix.loc[:, keep_columns]
         count_matrix = count_matrix.reindex(columns=keep_columns)
     fig, ax = plt.subplots(figsize=double_column_figsize(3.6))

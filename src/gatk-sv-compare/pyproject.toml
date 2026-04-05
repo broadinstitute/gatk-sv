@@ -15,6 +15,7 @@ dependencies = [
     "matplotlib>=3.7",
     "pyarrow>=15.0",
     "scipy>=1.10",
+    "upsetplot>=0.9",
 ]
 
 [project.optional-dependencies]

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import gzip
 from pathlib import Path
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple
 
 import pysam
 
@@ -84,8 +84,81 @@ class ValidationFixResult:
         return [issue for issue in self.original_summary.issues if issue.severity == "ERROR"]
 
 
-def validate_vcf(config: ValidateConfig) -> ValidationSummary:
-    """Validate a VCF and return structured results."""
+@dataclass(frozen=True)
+class MateCoordinateRepair:
+    """Repair values for legacy BND/CTX mate-coordinate encoding."""
+
+    chr2: str
+    end2: int
+
+
+@dataclass
+class ValidationScanResult:
+    """Validation results plus fix metadata collected during the same scan."""
+
+    summary: ValidationSummary
+    record_svtypes: Dict[str, Optional[str]] = field(default_factory=dict)
+    mate_coordinate_repairs: Dict[str, MateCoordinateRepair] = field(default_factory=dict)
+
+
+def _record_key(chrom: str, pos: str | int, record_id: str) -> str:
+    if record_id and record_id != ".":
+        return record_id
+    return f"{chrom}:{pos}"
+
+
+def _iter_record_lines(vcf_path: Path) -> Iterator[str]:
+    with _open_text(vcf_path, "r") as handle:
+        for line in handle:
+            if line.startswith("#"):
+                continue
+            yield line
+
+
+def _resolve_record_svtype(record: pysam.VariantRecord) -> Optional[str]:
+    svtype = record.info.get("SVTYPE") if "SVTYPE" in record.info else None
+    if svtype not in (None, "."):
+        return str(svtype)
+    alt_values = [str(alt) for alt in (record.alts or ())]
+    return _infer_svtype(record.contig, alt_values)
+
+
+def _extract_mate_coordinate_repair(record: pysam.VariantRecord, raw_line: str, svtype: Optional[str]) -> Optional[MateCoordinateRepair]:
+    if svtype not in {"BND", "CTX"}:
+        return None
+    columns = raw_line.rstrip("\n").split("\t")
+    if len(columns) < 8:
+        return None
+    raw_pos = columns[1]
+    raw_info_values = _info_dict(_parse_info(columns[7]))
+
+    current_chr2 = record.info.get("CHR2") if "CHR2" in record.info else None
+    current_end2 = record.info.get("END2") if "END2" in record.info else None
+    missing_chr2 = current_chr2 in (None, ".")
+    missing_end2 = current_end2 in (None, ".")
+    if not missing_chr2 and not missing_end2:
+        return None
+
+    resolved_chr2 = str(current_chr2) if not missing_chr2 else raw_info_values.get("CHR2")
+    if resolved_chr2 in (None, "."):
+        return None
+
+    if not missing_end2:
+        resolved_end2 = int(current_end2)
+    else:
+        raw_end = raw_info_values.get("END")
+        if raw_end in (None, "."):
+            resolved_end2 = int(raw_pos)
+        else:
+            try:
+                resolved_end2 = int(raw_end)
+            except ValueError:
+                return None
+    return MateCoordinateRepair(chr2=str(resolved_chr2), end2=resolved_end2)
+
+
+def _scan_vcf(config: ValidateConfig, *, collect_fix_metadata: bool = False) -> ValidationScanResult:
+    """Validate a VCF and optionally collect repair metadata during the same record scan."""
     with pysam.VariantFile(str(config.vcf_path)) as vcf:
         stage = detect_pipeline_stage(vcf)
         precomputed = has_precomputed_counts(vcf)
@@ -93,11 +166,22 @@ def validate_vcf(config: ValidateConfig) -> ValidationSummary:
 
     issues: List[FormatIssue] = list(header_issues)
     record_count = 0
+    record_svtypes: Dict[str, Optional[str]] = {}
+    mate_coordinate_repairs: Dict[str, MateCoordinateRepair] = {}
+    record_lines = _iter_record_lines(config.vcf_path) if collect_fix_metadata else None
     with pysam.VariantFile(str(config.vcf_path)) as vcf:
         contig_lengths = {name: int(contig.length) for name, contig in vcf.header.contigs.items() if contig.length is not None}
         for record in vcf:
+            raw_line = next(record_lines) if record_lines is not None else None
             record_count += 1
             issues.extend(check_record(record, contig_length=contig_lengths.get(record.contig)))
+            if collect_fix_metadata and raw_line is not None:
+                record_key = _record_key(record.contig, record.pos, record.id)
+                svtype = _resolve_record_svtype(record)
+                record_svtypes[record_key] = svtype
+                mate_coordinate_repair = _extract_mate_coordinate_repair(record, raw_line, svtype)
+                if mate_coordinate_repair is not None:
+                    mate_coordinate_repairs[record_key] = mate_coordinate_repair
             if record_count == 1 and not precomputed:
                 issues.append(
                     FormatIssue(
@@ -107,13 +191,22 @@ def validate_vcf(config: ValidateConfig) -> ValidationSummary:
                         "Pre-computed genotype count fields are absent; validation will allow GT-based fallback",
                     )
                 )
-    return ValidationSummary(
-        vcf_path=config.vcf_path,
-        stage=stage,
-        issues=issues,
-        record_count=record_count,
-        precomputed_counts_available=precomputed,
+    return ValidationScanResult(
+        summary=ValidationSummary(
+            vcf_path=config.vcf_path,
+            stage=stage,
+            issues=issues,
+            record_count=record_count,
+            precomputed_counts_available=precomputed,
+        ),
+        record_svtypes=record_svtypes,
+        mate_coordinate_repairs=mate_coordinate_repairs,
     )
+
+
+def validate_vcf(config: ValidateConfig) -> ValidationSummary:
+    """Validate a VCF and return structured results."""
+    return _scan_vcf(config).summary
 
 
 def _open_text(path: Path, mode: str):
@@ -269,8 +362,9 @@ def _fix_record_line(
     line: str,
     ploidy_dict: Optional[Dict[str, Dict[str, int]]] = None,
     sample_names: Optional[List[str]] = None,
-    drop_bad_bnd: bool = False,
-    drop_bad_ctx: bool = False,
+    drop_bnd: bool = False,
+    drop_ctx: bool = False,
+    mate_coordinate_repairs: Optional[Dict[str, MateCoordinateRepair]] = None,
     gq_scale_factor: float = 1.0,
 ) -> Optional[str]:
     columns = line.rstrip("\n").split("\t")
@@ -283,6 +377,7 @@ def _fix_record_line(
     info_fields = _parse_info(info_text)
     info_values = _info_dict(info_fields)
     svtype = info_values.get("SVTYPE")
+    record_key = _record_key(chrom, pos, record_id)
 
     if svtype in (None, "."):
         inferred_svtype = _infer_svtype(chrom, alt_values)
@@ -290,6 +385,25 @@ def _fix_record_line(
             info_fields = _set_info_value(info_fields, "SVTYPE", inferred_svtype)
             info_values = _info_dict(info_fields)
             svtype = inferred_svtype
+
+    applied_legacy_mate_repair = False
+    mate_coordinate_repair = mate_coordinate_repairs.get(record_key) if mate_coordinate_repairs is not None else None
+    if svtype in {"BND", "CTX"} and mate_coordinate_repair is not None:
+        if info_values.get("CHR2") in (None, "."):
+            info_fields = _set_info_value(info_fields, "CHR2", mate_coordinate_repair.chr2)
+            applied_legacy_mate_repair = True
+        if info_values.get("END2") in (None, "."):
+            info_fields = _set_info_value(info_fields, "END2", str(mate_coordinate_repair.end2))
+            applied_legacy_mate_repair = True
+        if applied_legacy_mate_repair:
+            info_fields = _set_info_value(info_fields, "END", pos)
+            info_values = _info_dict(info_fields)
+
+    if svtype == "BND" and drop_bnd:
+        return None
+
+    if svtype == "CTX" and drop_ctx:
+        return None
 
     if _is_cn_alt_list(alt_values):
         alt = "<CNV>"
@@ -300,12 +414,8 @@ def _fix_record_line(
             format_keys = format_text.split(":")
             sample_texts = [_clear_sample_gt(sample_text, format_keys) for sample_text in sample_texts]
 
-    if svtype == "BND" and not _has_bracket_alt(alt_values) and _missing_mate_coords(info_values):
-        if drop_bad_bnd:
-            return None
-
     if svtype == "CTX" and _missing_mate_coords(info_values):
-        if drop_bad_ctx:
+        if drop_ctx:
             return None
 
     if _has_bracket_alt(alt_values):
@@ -377,8 +487,9 @@ def apply_fixes(
     vcf_path: Path,
     out_path: Path,
     ploidy_table_path: Optional[Path] = None,
-    drop_bad_bnd: bool = False,
-    drop_bad_ctx: bool = False,
+    drop_bnd: bool = False,
+    drop_ctx: bool = False,
+    mate_coordinate_repairs: Optional[Dict[str, MateCoordinateRepair]] = None,
 ) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     temp_output_path = out_path.with_suffix("") if _is_bgzip_output(out_path) else out_path
@@ -400,8 +511,9 @@ def apply_fixes(
                 line,
                 ploidy_dict=ploidy_dict,
                 sample_names=sample_names,
-                drop_bad_bnd=drop_bad_bnd,
-                drop_bad_ctx=drop_bad_ctx,
+                drop_bnd=drop_bnd,
+                drop_ctx=drop_ctx,
+                mate_coordinate_repairs=mate_coordinate_repairs,
                 gq_scale_factor=gq_scale_factor,
             )
             if fixed_line is None:
@@ -416,15 +528,16 @@ def apply_fixes(
 def _is_fixable_error(
     issue: FormatIssue,
     ploidy_table_path: Optional[Path],
-    drop_bad_bnd: bool,
-    drop_bad_ctx: bool,
+    drop_bnd: bool,
+    drop_ctx: bool,
+    mate_coordinate_repairs: Optional[Dict[str, MateCoordinateRepair]] = None,
 ) -> bool:
     if issue.check_id == "MISSING_ECN":
         return ploidy_table_path is not None
     if issue.check_id == "MISSING_BND_COORDS":
-        return drop_bad_bnd
+        return drop_bnd or (issue.record_id in (mate_coordinate_repairs or {}))
     if issue.check_id == "MISSING_CTX_COORDS":
-        return drop_bad_ctx
+        return drop_ctx or (issue.record_id in (mate_coordinate_repairs or {}))
     return issue.check_id in _FIXABLE_CHECK_IDS
 
 
@@ -432,24 +545,41 @@ def validate_and_fix(
     vcf_path: Path,
     out_path: Path,
     ploidy_table_path: Optional[Path] = None,
-    drop_bad_bnd: bool = False,
-    drop_bad_ctx: bool = False,
+    drop_bnd: bool = False,
+    drop_ctx: bool = False,
 ) -> ValidationFixResult:
     resolved_out_path = _normalize_bgzip_output_path(out_path)
-    original_summary = validate_vcf(ValidateConfig(vcf_path=vcf_path))
-    unfixable_errors = [
-        issue
-        for issue in original_summary.issues
-        if issue.severity == "ERROR" and not _is_fixable_error(issue, ploidy_table_path, drop_bad_bnd, drop_bad_ctx)
-    ]
+    scan_result = _scan_vcf(ValidateConfig(vcf_path=vcf_path), collect_fix_metadata=True)
+    original_summary = scan_result.summary
+    dropped_record_ids = {
+        record_id
+        for record_id, svtype in scan_result.record_svtypes.items()
+        if (drop_bnd and svtype == "BND") or (drop_ctx and svtype == "CTX")
+    }
+    unfixable_errors = []
+    for issue in original_summary.issues:
+        if issue.severity != "ERROR":
+            continue
+        if issue.record_id and issue.record_id in dropped_record_ids:
+            continue
+        if _is_fixable_error(
+            issue,
+            ploidy_table_path,
+            drop_bnd,
+            drop_ctx,
+            mate_coordinate_repairs=scan_result.mate_coordinate_repairs,
+        ):
+            continue
+        unfixable_errors.append(issue)
     if unfixable_errors:
         return ValidationFixResult(original_summary=original_summary, fixed_summary=None, out_path=None, wrote_output=False, unfixable_errors=unfixable_errors)
     apply_fixes(
         vcf_path,
         resolved_out_path,
         ploidy_table_path=ploidy_table_path,
-        drop_bad_bnd=drop_bad_bnd,
-        drop_bad_ctx=drop_bad_ctx,
+        drop_bnd=drop_bnd,
+        drop_ctx=drop_ctx,
+        mate_coordinate_repairs=scan_result.mate_coordinate_repairs,
     )
     fixed_summary = validate_vcf(ValidateConfig(vcf_path=resolved_out_path))
     if fixed_summary.has_errors:
@@ -499,9 +629,9 @@ def render_fix_result(result: ValidationFixResult) -> str:
             if "MISSING_ECN" in unresolved_errors:
                 lines.append("Hint: rerun with --ploidy-table to repair missing ECN fields.")
             if "MISSING_BND_COORDS" in unresolved_errors:
-                lines.append("Hint: rerun with --drop-bad-bnd to omit unrescuable BND records lacking CHR2/END2.")
+                lines.append("Hint: rerun with --drop-bnd to omit all BND records from the comparison.")
             if "MISSING_CTX_COORDS" in unresolved_errors:
-                lines.append("Hint: rerun with --drop-bad-ctx to omit CTX records lacking CHR2/END2.")
+                lines.append("Hint: rerun with --drop-ctx to omit all CTX records from the comparison.")
             exemplar_errors: Dict[str, FormatIssue] = {}
             for issue in result.unresolved_errors():
                 exemplar_errors.setdefault(issue.check_id, issue)
@@ -529,15 +659,15 @@ def fix_and_render(
     vcf_path: Path,
     out_path: Path,
     ploidy_table_path: Optional[Path] = None,
-    drop_bad_bnd: bool = False,
-    drop_bad_ctx: bool = False,
+    drop_bnd: bool = False,
+    drop_ctx: bool = False,
 ) -> tuple[ValidationFixResult, str]:
     """Convenience wrapper used by the CLI for validate --fix."""
     result = validate_and_fix(
         vcf_path,
         out_path,
         ploidy_table_path=ploidy_table_path,
-        drop_bad_bnd=drop_bad_bnd,
-        drop_bad_ctx=drop_bad_ctx,
+        drop_bnd=drop_bnd,
+        drop_ctx=drop_ctx,
     )
     return result, render_fix_result(result)

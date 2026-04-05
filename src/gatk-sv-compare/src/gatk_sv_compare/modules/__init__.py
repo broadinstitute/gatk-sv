@@ -12,6 +12,7 @@ from .genotype_quality import GenotypeQualityModule
 from .overall_counts import OverallCountsModule
 from .site_overlap import SiteOverlapModule
 from .size_signatures import SizeSignaturesModule
+from .upset import UpSetModule
 
 SITE_LEVEL_MODULES = [
     BinnedCountsModule,
@@ -22,6 +23,7 @@ SITE_LEVEL_MODULES = [
     GenotypeQualityModule,
     CountsPerGenomeModule,
     SizeSignaturesModule,
+    UpSetModule,
 ]
 
 GENOTYPE_LEVEL_MODULES = [
@@ -48,5 +50,6 @@ __all__ = [
     "OverallCountsModule",
     "SiteOverlapModule",
     "SizeSignaturesModule",
+    "UpSetModule",
 ]
 

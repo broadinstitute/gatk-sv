@@ -205,8 +205,8 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("--fix", action="store_true", help="Write an automatically corrected VCF when only fixable issues are present")
     validate_parser.add_argument("--out", type=Path, help="Output VCF path for --fix mode")
     validate_parser.add_argument("--ploidy-table", type=Path, help="Tab-delimited sample ploidy table used to repair missing ECN fields in --fix mode")
-    validate_parser.add_argument("--drop-bad-bnd", action="store_true", help="In --fix mode, drop BND records that lack CHR2/END2 and cannot be rescued from bracket ALT notation")
-    validate_parser.add_argument("--drop-bad-ctx", action="store_true", help="In --fix mode, drop CTX records that lack CHR2/END2")
+    validate_parser.add_argument("--drop-bnd", action="store_true", help="In --fix mode, drop all BND records from the VCF")
+    validate_parser.add_argument("--drop-ctx", action="store_true", help="In --fix mode, drop all CTX records from the VCF")
     validate_parser.set_defaults(handler=_handle_validate)
 
     preprocess_parser = subparsers.add_parser("preprocess", help="Run SVConcordance + SVRegionOverlap")
@@ -298,8 +298,8 @@ def _handle_validate(args: argparse.Namespace) -> int:
             args.vcf,
             out_path,
             ploidy_table_path=args.ploidy_table,
-            drop_bad_bnd=bool(args.drop_bad_bnd),
-            drop_bad_ctx=bool(args.drop_bad_ctx),
+            drop_bnd=bool(args.drop_bnd),
+            drop_ctx=bool(args.drop_ctx),
         )
         print(output)
         return 1 if result.has_errors else 0

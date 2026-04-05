@@ -17,7 +17,7 @@ from .base import AnalysisModule, column_safe_label, write_tsv_gz
 
 
 def _filtered_sites(sites: pd.DataFrame, pass_only: bool) -> pd.DataFrame:
-    filtered = sites.loc[sites["svtype"].isin(["DEL", "DUP", "INS", "INS:MEI", "INV"])].copy()
+    filtered = sites.loc[sites["svtype"].isin(["DEL", "DUP", "INS", "INS:MEI", "INV", "BND"])].copy()
     filtered = filtered.loc[filtered["n_bi_genos"] > 0]
     if pass_only:
         filtered = filtered.loc[filtered["in_filtered_pass_view"]]

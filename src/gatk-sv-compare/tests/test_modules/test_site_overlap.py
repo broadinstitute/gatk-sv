@@ -41,7 +41,7 @@ def test_site_overlap_module_writes_tables_and_plots(module_test_context) -> Non
     assert (output_dir / "heatmap.freq_x_context.CallsetA.png").exists()
 
 
-def test_plot_heatmap_excludes_bnd_and_ctx_columns(tmp_path) -> None:
+def test_plot_heatmap_includes_bnd_and_excludes_ctx_columns(tmp_path, monkeypatch) -> None:
     sites = pd.DataFrame(
         [
             {"variant_id": "a", "size_bucket": "<100bp", "af_bucket": "AC=1", "svtype": "DEL", "truth_vid": "b", "status": "MATCHED"},
@@ -49,10 +49,20 @@ def test_plot_heatmap_excludes_bnd_and_ctx_columns(tmp_path) -> None:
             {"variant_id": "c", "size_bucket": "<100bp", "af_bucket": "AC=1", "svtype": "CTX", "truth_vid": "d", "status": "MATCHED"},
         ]
     )
+    captured = {}
+    original_savefig = Figure.savefig
+
+    def spy_savefig(self, *args, **kwargs):
+        captured["xlabels"] = [tick.get_text() for tick in self.axes[0].get_xticklabels()]
+        return original_savefig(self, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", spy_savefig)
 
     _plot_heatmap(sites, "size_bucket", "svtype", tmp_path / "heatmap.png", "CallsetA")
 
     assert (tmp_path / "heatmap.png").exists()
+    assert "BND" in captured["xlabels"]
+    assert "CTX" not in captured["xlabels"]
     plt.close("all")
 
 

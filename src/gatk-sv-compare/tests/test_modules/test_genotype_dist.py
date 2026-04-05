@@ -17,6 +17,20 @@ def test_build_hwe_table_returns_expected_rows(module_test_context) -> None:
     assert (table[["aa", "ab", "bb"]].sum(axis=1).round(6) == 1.0).all()
 
 
+def test_build_hwe_table_includes_bnd_rows(module_test_context) -> None:
+    sites = module_test_context.data.sites_a.copy()
+    bnd_row = sites.loc[sites["variant_id"] == "a_del"].copy()
+    bnd_row.loc[:, "variant_id"] = "a_bnd"
+    bnd_row.loc[:, "svtype"] = "BND"
+    bnd_row.loc[:, "size_bucket"] = "N/A"
+    sites = pd.concat([sites, bnd_row], ignore_index=True)
+
+    table = build_hwe_table(sites, pass_only=True)
+
+    assert "a_bnd" in set(table["variant_id"])
+    assert "BND" in set(table["svtype"])
+
+
 def test_genotype_dist_module_writes_outputs(module_test_context) -> None:
     module = GenotypeDistModule()
 
