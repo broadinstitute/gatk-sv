@@ -294,12 +294,19 @@ getSVdat.all.reannotated.permutate <- function(dat, re_anno_svtype, snv.data, in
   print("processing large rare SVs ...")
   rare.large.counts <- getSVdat.reannotated.permutate(dat[which(dat$AF<0.01 & dat$SVLEN>100000), ], re_anno_svtype, genes, prefix="rare_large")
   #Merge data
-  merged <- merge(x=snv.data, y=all.counts,  by="gene", all.x=T, sort=F)
-  merged <- merge(x=merged, y=common.counts, by="gene", all.x=T, sort=F)
-  merged <- merge(x=merged, y=rare.counts, by="gene", all.x=T, sort=F)
-  merged <- merge(x=merged, y=ultra_rare.counts, by="gene", all.x=T, sort=F)
-  merged <- merge(x=merged, y=singleton.counts, by="gene", all.x=T, sort=F)
-  merged <- merge(x=merged, y=rare.large.counts, by="gene", all.x=T, sort=F)
+
+  colnames(all.counts)[1] = 'gene_name'
+  merged <- merge(x=snv.data, y=all.counts,  by="gene_name", all.x=T, sort=F)
+  colnames(common.counts)[1] = 'gene_name'
+  merged <- merge(x=merged, y=common.counts, by="gene_name", all.x=T, sort=F)
+  colnames(rare.counts)[1] = 'gene_name'
+  merged <- merge(x=merged, y=rare.counts, by="gene_name", all.x=T, sort=F)
+  colnames(ultra_rare.counts)[1] = 'gene_name'
+  merged <- merge(x=merged, y=ultra_rare.counts, by="gene_name", all.x=T, sort=F)
+  colnames(singleton.counts)[1] = 'gene_name'
+  merged <- merge(x=merged, y=singleton.counts, by="gene_name", all.x=T, sort=F)
+  colnames(rare.large.counts)[1] = 'gene_name'
+  merged <- merge(x=merged, y=rare.large.counts, by="gene_name", all.x=T, sort=F)
   
   return(merged)
 }
@@ -344,20 +351,20 @@ if (length(missing_args) > 0) {
   stop(paste("Missing required arguments:", paste(paste0("-", substr(missing_args, 1, 1)), collapse = ", ")))
 }
 
-permu <- opt$permutate
+permu <- permutate
 
 print('reading in sv info ...')
-sv_info <- read.table(opt$sv, header = TRUE, comment.char = "", sep = '\t')
+sv_info <- read.table(sv, header = TRUE, comment.char = "", sep = '\t')
 sm_depth_only_dup <- sv_info[sv_info$SVTYPE == "DUP" & sv_info$ALGORITHMS == "depth" & sv_info$SVLEN < 20000, ]
 sv_info <- sv_info[!sv_info$name %in% sm_depth_only_dup$name, ]
 sv_info <- sv_info[sv_info$SVLEN < 1000000, ]
 
 print('reading in gene info ...')
-snv.data.permu <- read.table(opt$gene, header = TRUE, sep = '\t', comment.char = "")
+snv.data.permu <- read.table(gene, header = TRUE, sep = '\t', comment.char = "")
 snv.data.permu$gene <- paste(snv.data.permu$gene_name,  permu, sep = '.')
 
 print('reading in sv vs. genes ...')
-re_anno_svtype.permutate <- readin.re_anno_svtype(opt$reanno, sv_info)
+re_anno_svtype.permutate <- readin.re_anno_svtype(reanno, sv_info)
 re_anno_svtype.permutate <- re_anno_svtype.permutate[!re_anno_svtype.permutate$name %in% sm_depth_only_dup$name, ]
 re_anno_svtype.permutate <- merge(re_anno_svtype.permutate, sv_info[, c("name", "SVLEN", "AF", "AC")])
 
@@ -368,11 +375,11 @@ gene.data.reanno.permu <- getSVdat.all.reannotated.permutate(
   snv.data       = snv.data.permu
 )
 
-save(gene.data.reanno.permu, file = opt$output)
+save(gene.data.reanno.permu, file = output)
 
 print('writing tsv.gz output ...')
-tsv_gz_output <- sub("(\\.rData|\\.RData|\\.rdata)$", ".tsv.gz", opt$output)
-if (tsv_gz_output == opt$output) tsv_gz_output <- paste0(opt$output, ".tsv.gz")
+tsv_gz_output <- sub("(\\.rData|\\.RData|\\.rdata)$", ".tsv.gz", output)
+if (tsv_gz_output == output) tsv_gz_output <- paste0(output, ".tsv.gz")
 con <- gzcon(file(tsv_gz_output, open = "wb"))
 write.table(gene.data.reanno.permu, con, sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 close(con)
