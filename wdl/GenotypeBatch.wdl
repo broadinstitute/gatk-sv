@@ -173,18 +173,37 @@ task TrainSVGenotyping {
   command <<<
     set -euo pipefail
 
-    PEQ=$(awk -F '\t' '{if ( $5=="PEQ") print $2 }' ~{rf_cutoffs})
-    SRQ=$(awk -F '\t' '{if ( $5=="SRQ") print $2 }' ~{rf_cutoffs})
+    PEQ=$(awk -F '\t' 'NR==1 {for(i=1;i<=NF;i++) col[$i]=i; next}
+               {if ($col["metric"]=="PEQ") print $col["cutoff"]}' \
+          ~{rf_cutoffs} | head -n 1)
+    SRQ=$(awk -F '\t' 'NR==1 {for(i=1;i<=NF;i++) col[$i]=i; next}
+               {if ($col["metric"]=="SRQ") print $col["cutoff"]}' \
+          ~{rf_cutoffs} | head -n 1)
 
     PESR_SEP=$(awk -F'\t' 'NR==1 {for(i=1;i<=NF;i++) col[$i]=i; next}
-                           {if ($col["algtype"]=="PESR" && $col["min_svsize"]==1000 && $col["metric"]=="RD_Median_Separation")
-                               print $col["cutoff"]}' \
-                  ~{rf_cutoffs})
+                 {
+                   if (toupper($col["algtype"])=="PESR" &&
+                     ($col["min_svsize"] + 0)==1000 &&
+                     toupper($col["metric"])=="RD_MEDIAN_SEPARATION") {
+                     print $col["cutoff"]
+                   }
+                 }' \
+            ~{rf_cutoffs} | sort -nr | head -n 1)
     DEPTH_SEP=$(awk -F'\t' 'NR==1 {for(i=1;i<=NF;i++) col[$i]=i; next}
-                            {if ($col["algtype"]=="Depth" && $col["metric"]=="RD_Median_Separation")
-                               print $col["cutoff"]}' \
-                   ~{rf_cutoffs} \
-               | sort -nr | head -n 1)
+                {
+                  if (toupper($col["algtype"])=="DEPTH" &&
+                    toupper($col["metric"])=="RD_MEDIAN_SEPARATION") {
+                    print $col["cutoff"]
+                  }
+                }' \
+             ~{rf_cutoffs} | sort -nr | head -n 1)
+
+    for required_var in PEQ SRQ PESR_SEP DEPTH_SEP; do
+      if [[ -z "${!required_var}" ]]; then
+      echo "Failed to extract required cutoff ${required_var} from ~{rf_cutoffs}" >&2
+      exit 1
+      fi
+    done
 
     function getJavaMem() {
       cat /proc/meminfo | awk -v MEM_FIELD="$1" '{
