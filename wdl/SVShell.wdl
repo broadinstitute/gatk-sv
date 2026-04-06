@@ -37,27 +37,27 @@ workflow SVShell {
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
 
   Array[File] ref_pesr_split_files = read_lines(ref_pesr_split_files_list)
-  scatter (ref_pesr_split_file in ref_pesr_split_files) {
-    File ref_pesr_split_file_index = ref_pesr_split_file + ".tbi"
-  }
-  Array[File] ref_pesr_split_file_indices = ref_pesr_split_file_index
+#  scatter (ref_pesr_split_file in ref_pesr_split_files) {
+#    File ref_pesr_split_file_index = ref_pesr_split_file + ".tbi"
+#  }
+#  Array[File] ref_pesr_split_file_indices = ref_pesr_split_file_index
 
   Array[File] ref_pesr_disc_files = read_lines(ref_pesr_disc_files_list)
-  scatter (ref_pesr_disc_file in ref_pesr_disc_files) {
-    File ref_pesr_disc_file_index = ref_pesr_disc_file + ".tbi"
-  }
-  Array[File] ref_pesr_disc_file_indices = ref_pesr_disc_file_index
+#  scatter (ref_pesr_disc_file in ref_pesr_disc_files) {
+#    File ref_pesr_disc_file_index = ref_pesr_disc_file + ".tbi"
+#  }
+#  Array[File] ref_pesr_disc_file_indices = ref_pesr_disc_file_index
 
   Array[File] ref_pesr_sd_files = read_lines(ref_pesr_sd_files_list)
-  scatter (ref_pesr_sd_file in ref_pesr_sd_files) {
-    File ref_pesr_sd_file_index = ref_pesr_sd_file + ".tbi"
-  }
-  Array[File] ref_pesr_sd_file_indices = ref_pesr_sd_file_index
+#  scatter (ref_pesr_sd_file in ref_pesr_sd_files) {
+#    File ref_pesr_sd_file_index = ref_pesr_sd_file + ".tbi"
+#  }
+#  Array[File] ref_pesr_sd_file_indices = ref_pesr_sd_file_index
 
-  scatter (genome_track in genome_tracks) {
-    File genome_track_index = genome_track + ".tbi"
-  }
-  Array[File] genome_tracks_indices = genome_track_index
+#  scatter (genome_track in genome_tracks) {
+#    File genome_track_index = genome_track + ".tbi"
+#  }
+#  Array[File] genome_tracks_indices = genome_track_index
 
   File pesr_exclude_intervals_index = pesr_exclude_intervals + ".tbi"
   File ref_panel_vcf_index = ref_panel_vcf + ".tbi"
@@ -74,11 +74,11 @@ workflow SVShell {
       ref_pesr_split_files = ref_pesr_split_files,
       ref_pesr_disc_files = ref_pesr_disc_files,
       ref_pesr_sd_files = ref_pesr_sd_files,
-      ref_pesr_split_files_indices = ref_pesr_split_file_indices,
-      ref_pesr_disc_files_indices = ref_pesr_disc_file_indices,
-      ref_pesr_sd_files_indices = ref_pesr_sd_file_indices,
+#      ref_pesr_split_files_indices = ref_pesr_split_file_indices,
+#      ref_pesr_disc_files_indices = ref_pesr_disc_file_indices,
+#      ref_pesr_sd_files_indices = ref_pesr_sd_file_indices,
       genome_tracks = genome_tracks,
-      genome_tracks_indices = genome_tracks_indices,
+#      genome_tracks_indices = genome_tracks_indices,
       pesr_exclude_intervals = pesr_exclude_intervals,
       pesr_exclude_intervals_index = pesr_exclude_intervals_index,
       ref_panel_vcf = ref_panel_vcf,
@@ -169,10 +169,10 @@ task RunSVShell {
     Array[File] ref_pesr_disc_files
     Array[File] ref_pesr_split_files
     Array[File] ref_pesr_sd_files
-    Array[File] ref_pesr_split_files_indices
-    Array[File] ref_pesr_disc_files_indices
-    Array[File] ref_pesr_sd_files_indices
-    Array[File] genome_tracks_indices
+#    Array[File] ref_pesr_split_files_indices
+#    Array[File] ref_pesr_disc_files_indices
+#    Array[File] ref_pesr_sd_files_indices
+#    Array[File] genome_tracks_indices
     File pesr_exclude_intervals_index
     File ref_panel_vcf_index
     File ref_panel_bincov_matrix_index
@@ -475,6 +475,5 @@ task RunSVShell {
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_shell_docker
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    noAddress: true
   }
 }
