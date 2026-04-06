@@ -32,15 +32,14 @@ readDatPerSample <- function(ID, perSampDir, nocall.placeholder=9999){
     x <- read.table(path, header=F, check.names=F)
     x <- x[!duplicated(x), ]
  
-    #Convert genotypes to number of alleles
+    #Convert genotypes to number of alleles (handle both phased | and unphased / delimiters)
     x[, 2] <- sapply(x[, 2], function(gt){
-      #Return nocall.placeholder for no-calls
-      if(gt=="./."){
+      if(gt %in% c("./.", ".|.")){
         return(nocall.placeholder)
       }else{
-        sum(as.numeric(gsub(".", "",
-                            unlist(strsplit(as.character(gt), split="/")),
-                            fixed=T)))
+        alleles <- unlist(strsplit(as.character(gt), split="[/|]"))
+        alleles <- gsub(".", "", alleles, fixed=T)
+        sum(as.numeric(alleles), na.rm=T)
       }
     })
  
@@ -311,16 +310,19 @@ deNovoRateByClass <- function(trio.dat.list, VIDs=NULL, svtypes.use=NULL, dat.us
 }
 
 #Collect matrix of de novo rates by class by freq
-deNovoRateByFreq <- function(trio.dat.list, freq.bins=40, count="variants"){
+deNovoRateByFreq <- function(trio.dat.list, freq.bins=40, count="variants",
+                             svtypes.use=NULL, dat.use=NULL){
+  if(is.null(svtypes.use)) svtypes.use <- svtypes
+  if(is.null(dat.use)) dat.use <- dat
   #Get frequency index
   if(count=="variants"){
-    freq.idx <- which(colnames(dat)=="carrierFreq")
+    freq.idx <- which(colnames(dat.use)=="carrierFreq")
   }else{
-    freq.idx <- which(colnames(dat)=="AF")
+    freq.idx <- which(colnames(dat.use)=="AF")
   }
  
   #Create evenly spaced freq bins on log10-scale
-  logfreq.min <- log10(min(dat[, freq.idx]))
+  logfreq.min <- log10(min(dat.use[, freq.idx]))
   logfreq.max <- log10(1)
   logfreq.steps <- seq(logfreq.min, logfreq.max, by=(logfreq.max-logfreq.min)/(freq.bins-1))
   freq.df <- data.frame("min.freq"=c(0, 10^logfreq.steps[-length(logfreq.steps)]),
@@ -331,43 +333,17 @@ deNovoRateByFreq <- function(trio.dat.list, freq.bins=40, count="variants"){
   #Iterate over frequency bins and gather de novo rates
   DNRs <- apply(freq.df, 1, function(bounds){
     dnrs <- deNovoRateByClass(trio.dat.list=trio.dat.list,
-                              VIDs=dat$VID[which(dat[, freq.idx]>bounds[1]
-                                                 & dat[, freq.idx]<=bounds[2])])
+                              VIDs=dat.use$VID[which(dat.use[, freq.idx]>bounds[1]
+                                                 & dat.use[, freq.idx]<=bounds[2])],
+                              svtypes.use=svtypes.use, dat.use=dat.use)
     return(as.numeric(dnrs[which(rownames(dnrs)==count), ]))
   })
  
   #Format & return DNRs & freq.df
   DNRs <- as.data.frame(DNRs)
   DNRs <- apply(DNRs, 2, as.numeric)
-  rownames(DNRs) <- c("ALL", svtypes$svtype)
+  rownames(DNRs) <- c("ALL", svtypes.use$svtype)
   return(list("DNRs"=DNRs, "bins"=freq.df))
-}
-
-#Collect matrix of de novo rates by class by size
-deNovoRateBySize <- function(trio.dat.list, size.bins=40, count="variants"){
-  #Create evenly spaced size bins on log10-scale
-  logsize.min <- log10(50)
-  logsize.max <- log10(1000000)
-  logsize.steps <- seq(logsize.min, logsize.max,
-                       by=(logsize.max-logsize.min)/(size.bins-2))
-  size.df <- data.frame("min.size"=c(0, 10^logsize.steps),
-                        "max.size"=c(10^logsize.steps, 300000000))
-  rownames(size.df) <- paste("10^", round(log10(size.df[, 1]), 1),
-                             "-", round(log10(size.df[, 2]), 1), sep="")
- 
-  #Iterate over sizeuency bins and gather de novo rates
-  DNRs <- apply(size.df, 1, function(bounds){
-    dnrs <- deNovoRateByClass(trio.dat.list=trio.dat.list,
-                              VIDs=dat$VID[which(dat$length>bounds[1]
-                                                 & dat$length<=bounds[2])])
-    return(as.numeric(dnrs[which(rownames(dnrs)==count), ]))
-  })
- 
-  #Format & return DNRs & size.df
-  DNRs <- as.data.frame(DNRs)
-  DNRs <- apply(DNRs, 2, as.numeric)
-  rownames(DNRs) <- c("ALL", svtypes$svtype)
-  return(list("DNRs"=DNRs, "bins"=size.df))
 }
 
 #Collect matrix of de novo rates by size & freq combination
@@ -471,7 +447,10 @@ deNovoRateBySize <- function(trio.dat.list, size.bins=40, count="variants",
 
 #Collect matrix of de novo rates by class by minimum proband GQ
 deNovoRateByProGQ <- function(trio.dat.list, GQ.bins=50,
-                              count="variants", max.GQ=99){
+                              count="variants", max.GQ=99,
+                              svtypes.use=NULL, dat.use=NULL){
+  if(is.null(svtypes.use)) svtypes.use <- svtypes
+  if(is.null(dat.use)) dat.use <- dat
   #Create evenly spaced GQ bins
   GQ.steps <- seq(0, max.GQ+1, by=(max.GQ+1)/GQ.bins)
  
@@ -480,14 +459,15 @@ deNovoRateByProGQ <- function(trio.dat.list, GQ.bins=50,
     tdl.tmp <- lapply(trio.dat.list, function(df){
       return(df[which(df$pro.GQ>=min.GQ), ])
     })
-    dnrs <- deNovoRateByClass(trio.dat.list=tdl.tmp)
+    dnrs <- deNovoRateByClass(trio.dat.list=tdl.tmp,
+                              svtypes.use=svtypes.use, dat.use=dat.use)
     return(as.numeric(dnrs[which(rownames(dnrs)==count), ]))
   })
  
   #Format & return DNRs & GQ.df
   DNRs <- as.data.frame(DNRs)
   DNRs <- apply(DNRs, 2, as.numeric)
-  rownames(DNRs) <- c("ALL", svtypes$svtype)
+  rownames(DNRs) <- c("ALL", svtypes.use$svtype)
   colnames(DNRs) <- paste("gt", GQ.steps, sep="")
   return(list("DNRs"=DNRs, "bins"=GQ.steps))
 }
@@ -1110,17 +1090,19 @@ wrapperDeNovoRateLines <- function(fam.dat.list, fam.type, count="variants",
   }
  
   #DNR by Size
-  size.dat <- deNovoRateBySize(trio.dat.list=fam.dat.list, size.bins=40, count=count)
+  size.dat <- deNovoRateBySize(trio.dat.list=fam.dat.list, size.bins=40, count=count,
+                               svtypes.use=svtypes.merged, dat.use=dat.merged)
   pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/de_novo_rate.",
             fam.type, "s.", count, ".by_size.pdf", sep=""),
       height=4, width=5)
   plotDNRvsSize(DNRs=size.dat$DNRs, bins=size.dat$bins, k=4, nfams=length(fam.dat.list),
                 title=paste(title.prefix, "De Novo Rate by Size", sep=""),
-                fam.type=fam.type, legend=T)
+                fam.type=fam.type, legend=T, svtypes.use=svtypes.merged)
   dev.off()
  
   #DNR by Freq
-  freq.dat <- deNovoRateByFreq(trio.dat.list=fam.dat.list, freq.bins=40, count=count)
+  freq.dat <- deNovoRateByFreq(trio.dat.list=fam.dat.list, freq.bins=40, count=count,
+                               svtypes.use=svtypes.merged, dat.use=dat.merged)
   pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/de_novo_rate.",
             fam.type, "s.", count, ".by_frequency.pdf", sep=""),
       height=4, width=5)
@@ -1133,7 +1115,8 @@ wrapperDeNovoRateLines <- function(fam.dat.list, fam.type, count="variants",
   #DNR by Proband GQ
   if(gq) {
     GQ.dat <- deNovoRateByProGQ(trio.dat.list=fam.dat.list, GQ.bins=50,
-                                count=count, max.GQ=max.GQ)
+                                count=count, max.GQ=max.GQ,
+                                svtypes.use=svtypes.merged, dat.use=dat.merged)
     pdf(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/de_novo_rate.",
               fam.type, "s.", count, ".by_proband_GQ.pdf", sep=""),
         height=4, width=5)
@@ -1239,15 +1222,17 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
                 fam.type=fam.type, legend=T, cex.lab=cex.lab, svtypes.use=svtypes.merged)
   #DNR vs frequency
   freq.dat.v <- deNovoRateByFreq(trio.dat.list=fam.dat.list,
-                                 freq.bins=40, count="variants")
+                                 freq.bins=40, count="variants",
+                                 svtypes.use=svtypes.merged, dat.use=dat.merged)
   plotDNRvsFreq(DNRs=freq.dat.v$DNRs, bins=freq.dat.v$bins, k=4,
                 nfams=length(fam.dat.list),
                 title=paste("Site De Novo Rate by AF", sep=""),
-                count="variants", fam.type=fam.type, legend=F, cex.lab=cex.lab)
+                count="variants", fam.type=fam.type, legend=T, cex.lab=cex.lab)
   #DNR vs min proband GQ
   if(gq) {
     GQ.dat.v <- deNovoRateByProGQ(trio.dat.list=fam.dat.list, GQ.bins=50,
-                                  count="variants", max.GQ=max.GQ)
+                                  count="variants", max.GQ=max.GQ,
+                                  svtypes.use=svtypes.merged, dat.use=dat.merged)
     plotDNRvsGQ(DNRs=GQ.dat.v$DNRs, bins=GQ.dat.v$bins, k=4,
                 nfams=length(fam.dat.list),
                 title=paste("Site De Novo Rate by GQ", sep=""),
@@ -1285,7 +1270,8 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
                 fam.type=fam.type, legend=F, cex.lab=cex.lab, svtypes.use=svtypes.merged)
   #DNR vs frequency
   freq.dat.a <- deNovoRateByFreq(trio.dat.list=fam.dat.list,
-                                 freq.bins=40, count="alleles")
+                                 freq.bins=40, count="alleles",
+                                 svtypes.use=svtypes.merged, dat.use=dat.merged)
   plotDNRvsFreq(DNRs=freq.dat.a$DNRs, bins=freq.dat.a$bins, k=4,
                 nfams=length(fam.dat.list),
                 title=paste("Allele De Novo Rate by AF", sep=""),
@@ -1293,7 +1279,8 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
   #DNR vs min proband GQ
   if(gq){
     GQ.dat.a <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,
-                                  GQ.bins=50, count="alleles", max.GQ=max.GQ)
+                                  GQ.bins=50, count="alleles", max.GQ=max.GQ,
+                                  svtypes.use=svtypes.merged, dat.use=dat.merged)
     plotDNRvsGQ(DNRs=GQ.dat.a$DNRs, bins=GQ.dat.a$bins, k=4,
                 nfams=length(fam.dat.list),
                 title=paste("Allele De Novo Rate by GQ", sep=""),

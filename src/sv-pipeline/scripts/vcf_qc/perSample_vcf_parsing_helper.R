@@ -39,7 +39,7 @@ sapply(samples,function(ID){
 	tmp = vcf[vcf[,5]!='<CNV>',c(3,idx)]
 	tmp[,3]=apply(tmp,1,function(x){strsplit(as.character(x[2]),':')[[1]][1]})
 	tmp[,4]=apply(tmp,1,function(x){strsplit(as.character(x[2]),':')[[1]][2]})
-	keep_1 = tmp[!tmp[,3] %in% c('0/0'),c(1,3,4)]
+	keep_1 = tmp[!tmp[,3] %in% c('0/0','0|0'),c(1,3,4)]
 	colnames(keep_1)=c('SVID','GT','GQ')
 
 	keep_2 <- NULL
