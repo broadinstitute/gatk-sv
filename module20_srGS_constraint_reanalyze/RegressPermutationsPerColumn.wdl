@@ -19,7 +19,7 @@ workflow RegressPermutationsPerColumn {
     File         sr_table              # gene x seed columns: SR overlap proportions
 
     Int    first_col     = 37          # 1-based first SV feature column
-    Int    last_col      = 436         # 1-based last SV feature column
+    Int    last_col      = 426         # 1-based last SV feature column
     Int    key_cols      = 1           # number of leading key columns (gene id = col 1)
     String gene_sep      = ".permu"    # strip this suffix from gene names in col 1
     String predict_col   = "0"         # column name in sd_table / sr_table for predict seed
