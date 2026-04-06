@@ -59,14 +59,14 @@ workflow SVShell {
 #  }
 #  Array[File] genome_tracks_indices = genome_track_index
 
-#  File pesr_exclude_intervals_index = pesr_exclude_intervals + ".tbi"
-#  File ref_panel_vcf_index = ref_panel_vcf + ".tbi"
-#  File ref_panel_bincov_matrix_index = ref_panel_bincov_matrix + ".tbi"
-#  File bin_exclude_index = bin_exclude + ".tbi"
-#  File cytobands_index = cytobands + ".tbi"
-#  File depth_exclude_list_index = depth_exclude_list + ".tbi"
-#  File mei_bed_index = mei_bed + ".tbi"
-#  File manta_region_bed_index = manta_region_bed + ".tbi"
+  File pesr_exclude_intervals_index = pesr_exclude_intervals + ".tbi"
+  File ref_panel_vcf_index = ref_panel_vcf + ".tbi"
+  File ref_panel_bincov_matrix_index = ref_panel_bincov_matrix + ".tbi"
+  File bin_exclude_index = bin_exclude + ".tbi"
+  File cytobands_index = cytobands + ".tbi"
+  File depth_exclude_list_index = depth_exclude_list + ".tbi"
+  File mei_bed_index = mei_bed + ".tbi"
+  File manta_region_bed_index = manta_region_bed + ".tbi"
 
   call RunSVShell {
     input:
@@ -80,21 +80,21 @@ workflow SVShell {
       genome_tracks = genome_tracks,
 #      genome_tracks_indices = genome_tracks_indices,
       pesr_exclude_intervals = pesr_exclude_intervals,
-#      pesr_exclude_intervals_index = pesr_exclude_intervals_index,
+      pesr_exclude_intervals_index = pesr_exclude_intervals_index,
       ref_panel_vcf = ref_panel_vcf,
-#      ref_panel_vcf_index = ref_panel_vcf_index,
+      ref_panel_vcf_index = ref_panel_vcf_index,
       ref_panel_bincov_matrix = ref_panel_bincov_matrix,
-#      ref_panel_bincov_matrix_index = ref_panel_bincov_matrix_index,
+      ref_panel_bincov_matrix_index = ref_panel_bincov_matrix_index,
       bin_exclude = bin_exclude,
-#      bin_exclude_index = bin_exclude_index,
+      bin_exclude_index = bin_exclude_index,
       cytobands = cytobands,
-#      cytobands_index = cytobands_index,
+      cytobands_index = cytobands_index,
       depth_exclude_list = depth_exclude_list,
-#      depth_exclude_list_index = depth_exclude_list_index,
+      depth_exclude_list_index = depth_exclude_list_index,
       mei_bed = mei_bed,
-#      mei_bed_index = mei_bed_index,
+      mei_bed_index = mei_bed_index,
       manta_region_bed = manta_region_bed,
-#      manta_region_bed_index = manta_region_bed_index,
+      manta_region_bed_index = manta_region_bed_index,
       HERVK_reference = HERVK_reference,
       LINE1_reference = LINE1_reference,
       intron_reference = intron_reference,
