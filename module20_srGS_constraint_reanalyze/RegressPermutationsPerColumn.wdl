@@ -126,10 +126,6 @@ task RegressOneColumn {
     set -euo pipefail
 
     Rscript - <<'REOF'
-    suppressPackageStartupMessages({
-      library(data.table)
-    })
-
     col_idx   <- ~{col_1based}
     key_cols  <- ~{key_cols}
     gene_sep  <- "~{gene_sep}"
@@ -143,8 +139,8 @@ task RegressOneColumn {
     }
 
     read_gz <- function(path) {
-      fread(cmd = paste("zcat", shQuote(path)), sep = "\t",
-            header = TRUE, data.table = FALSE, check.names = FALSE)
+      read.table(gzfile(path), header = TRUE, sep = "\t",
+                 comment.char = "", check.names = FALSE, quote = "")
     }
 
     # ── inputs ───────────────────────────────────────────────────────────────
