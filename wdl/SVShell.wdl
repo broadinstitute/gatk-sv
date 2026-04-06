@@ -258,8 +258,8 @@ task RunSVShell {
     RuntimeAttr? runtime_attr_override
   }
 
-  String final_vcf_filename = sample_id + ".vcf.gz"
-  String final_vcf_idx_filename = final_vcf_filename + ".tbi"
+#  String final_vcf_filename = sample_id + ".vcf.gz"
+#  String final_vcf_idx_filename = final_vcf_filename + ".tbi"
   String pre_cleanup_vcf_filename = batch + ".annotated.vcf.gz"
   String pre_cleanup_vcf_idx_filename = pre_cleanup_vcf_filename + ".tbi"
   String stripy_json_filename = sample_id + ".stripy.json"
