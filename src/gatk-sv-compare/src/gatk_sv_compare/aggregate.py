@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,8 @@ import pysam
 from .config import AnalysisConfig
 from .dimensions import categorize_variant, is_filtered_pass
 from .vcf_reader import SiteRecord, iter_contig
+
+_logger = logging.getLogger(__name__)
 
 _SITE_TABLE_COLUMNS = [
     "variant_id",
@@ -152,6 +155,21 @@ def _read_site_tables(paths: Sequence[Path]) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True) if frames else _empty_site_table()
 
 
+def _apply_min_size_filter(sites: pd.DataFrame, min_size: int) -> pd.DataFrame:
+    """Remove variants whose assigned SVLEN is below *min_size*.
+
+    Variants without an assigned size (``svlen`` is NA / None) are kept.
+    """
+    if sites.empty:
+        return sites
+    has_size = sites["svlen"].notna()
+    below_threshold = has_size & (sites["svlen"] < min_size)
+    n_removed = int(below_threshold.sum())
+    if n_removed:
+        _logger.info("--min-size %d: removed %d variant(s) with svlen < %d", min_size, n_removed, min_size)
+    return sites.loc[~below_threshold].reset_index(drop=True)
+
+
 def build_matched_pairs(sites_a: pd.DataFrame, sites_b: pd.DataFrame) -> pd.DataFrame:
     """Build the canonical matched-pair table from truth_vid links."""
     columns = [
@@ -244,6 +262,11 @@ def aggregate(config: AnalysisConfig) -> AggregatedData:
 
     sites_a = _read_site_tables(site_paths_a)
     sites_b = _read_site_tables(site_paths_b)
+
+    if config.min_size is not None:
+        sites_a = _apply_min_size_filter(sites_a, config.min_size)
+        sites_b = _apply_min_size_filter(sites_b, config.min_size)
+
     if not sites_a.empty:
         sites_a.to_parquet(aggregate_dir / "sites_a.all.parquet", index=False)
     if not sites_b.empty:

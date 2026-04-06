@@ -111,6 +111,7 @@ def _build_analysis_config(
     label_b: str,
     module_names: Optional[List[str]],
     pass_only: bool,
+    min_size: Optional[int],
     context_overlap: float,
     per_chrom: bool,
     enable_site_match_table: bool,
@@ -136,6 +137,7 @@ def _build_analysis_config(
         n_workers=resolved_workers,
         modules=module_names,
         pass_only=pass_only,
+        min_size=min_size,
         context_overlap=context_overlap,
         per_chrom=per_chrom,
         enable_site_match_table=enable_site_match_table,
@@ -238,6 +240,12 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument("--modules", help="Comma-separated module list to run")
     analyze_parser.add_argument("--pass-only", action="store_true")
     analyze_parser.add_argument(
+        "--min-size",
+        type=int,
+        default=None,
+        help="Exclude variants with an assigned SVLEN below this threshold (variants without a size are kept)",
+    )
+    analyze_parser.add_argument(
         "--context-overlap",
         type=_context_overlap_value,
         default=0.5,
@@ -270,6 +278,12 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--java-options", default="-Xmx4g")
     run_parser.add_argument("--modules", help="Comma-separated module list to run")
     run_parser.add_argument("--pass-only", action="store_true")
+    run_parser.add_argument(
+        "--min-size",
+        type=int,
+        default=None,
+        help="Exclude variants with an assigned SVLEN below this threshold (variants without a size are kept)",
+    )
     run_parser.add_argument(
         "--context-overlap",
         type=_context_overlap_value,
@@ -352,6 +366,7 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         label_b=args.label_b,
         module_names=_parse_module_names(args.modules),
         pass_only=bool(args.pass_only),
+        min_size=args.min_size,
         context_overlap=float(args.context_overlap),
         per_chrom=bool(args.per_chrom),
         enable_site_match_table=bool(args.enable_site_match_table),
@@ -398,6 +413,7 @@ def _handle_run(args: argparse.Namespace) -> int:
         label_b=args.label_b,
         module_names=_parse_module_names(args.modules),
         pass_only=bool(args.pass_only),
+        min_size=args.min_size,
         context_overlap=float(args.context_overlap),
         per_chrom=bool(args.per_chrom),
         enable_site_match_table=bool(args.enable_site_match_table),

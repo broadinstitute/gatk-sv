@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from gatk_sv_compare.aggregate import aggregate, build_matched_pairs
+from gatk_sv_compare.aggregate import aggregate, build_matched_pairs, _apply_min_size_filter
 from gatk_sv_compare.config import AnalysisConfig
 
 
@@ -88,3 +88,61 @@ def test_aggregate_builds_site_tables_and_matched_pairs(tmp_path, make_vcf) -> N
     assert data.sites_a.loc[data.sites_a["variant_id"] == "a2", "evidence_bucket"].iloc[0] == "RD,PE,SR"
     assert (tmp_path / "out" / "aggregate" / "sites_a.chr1.parquet").exists()
     assert (tmp_path / "out" / "aggregate" / "matched_pairs.parquet").exists()
+
+
+def test_apply_min_size_filter_removes_small_keeps_none() -> None:
+    sites = pd.DataFrame({
+        "variant_id": ["small_del", "big_del", "no_size_bnd"],
+        "svlen": [500, 6000, None],
+    })
+    result = _apply_min_size_filter(sites, min_size=5000)
+    assert list(result["variant_id"]) == ["big_del", "no_size_bnd"]
+
+
+def test_apply_min_size_filter_empty_dataframe() -> None:
+    sites = pd.DataFrame(columns=["variant_id", "svlen"])
+    result = _apply_min_size_filter(sites, min_size=5000)
+    assert result.empty
+
+
+def test_aggregate_with_min_size_filters_before_matching(tmp_path, make_vcf) -> None:
+    extra_headers = [
+        "##INFO=<ID=ALGORITHMS,Number=.,Type=String,Description=\"Calling algorithms\">",
+        "##INFO=<ID=EVIDENCE,Number=.,Type=String,Description=\"Evidence types\">",
+        "##INFO=<ID=STATUS,Number=1,Type=String,Description=\"Match status\">",
+        "##INFO=<ID=TRUTH_VID,Number=1,Type=String,Description=\"Truth variant id\">",
+    ]
+    # a1 (SVLEN=100) should be filtered; a2 (SVLEN=6000) should remain
+    vcf_a = make_vcf(
+        file_name="a.vcf",
+        sample_names=["S1", "S2"],
+        extra_header_lines=extra_headers,
+        records=[
+            "chr1\t100\ta1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100;ALGORITHMS=manta;EVIDENCE=RD;STATUS=MATCHED;TRUTH_VID=b1\tGT:GQ:ECN\t0/1:10:2\t0/0:20:2",
+            "chr1\t500\ta2\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=6000;ALGORITHMS=depth;EVIDENCE=RD;STATUS=UNMATCHED\tGT:GQ:ECN\t0/1:30:2\t0/0:40:2",
+        ],
+    )
+    vcf_b = make_vcf(
+        file_name="b.vcf",
+        sample_names=["S1", "S2"],
+        extra_header_lines=extra_headers,
+        records=[
+            "chr1\t110\tb1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=110;ALGORITHMS=manta;EVIDENCE=RD;STATUS=MATCHED;TRUTH_VID=a1\tGT:GQ:ECN\t0/1:15:2\t0/0:25:2",
+        ],
+    )
+    config = AnalysisConfig(
+        vcf_a_path=vcf_a,
+        vcf_b_path=vcf_b,
+        output_dir=tmp_path / "out",
+        contigs=["chr1"],
+        n_workers=1,
+        min_size=5000,
+    )
+    data = aggregate(config)
+    # a1 (svlen=100) should have been filtered out
+    assert data.sites_a.shape[0] == 1
+    assert data.sites_a["variant_id"].iloc[0] == "a2"
+    # b1 (svlen=110) should also be filtered
+    assert data.sites_b.shape[0] == 0
+    # No matches possible after filtering
+    assert data.matched_pairs.shape[0] == 0

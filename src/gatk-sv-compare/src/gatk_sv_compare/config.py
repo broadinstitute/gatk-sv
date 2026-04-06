@@ -23,6 +23,7 @@ class AnalysisConfig:
     modules: Optional[List[str]] = None
     pass_only: bool = False
     context_overlap: float = 0.5
+    min_size: Optional[int] = None
     per_chrom: bool = False
     enable_site_match_table: bool = False
     per_sample_counts_table: bool = False
