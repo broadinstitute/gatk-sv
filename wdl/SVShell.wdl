@@ -59,14 +59,14 @@ workflow SVShell {
 #  }
 #  Array[File] genome_tracks_indices = genome_track_index
 
-  File pesr_exclude_intervals_index = pesr_exclude_intervals + ".tbi"
-  File ref_panel_vcf_index = ref_panel_vcf + ".tbi"
-  File ref_panel_bincov_matrix_index = ref_panel_bincov_matrix + ".tbi"
-  File bin_exclude_index = bin_exclude + ".tbi"
-  File cytobands_index = cytobands + ".tbi"
-  File depth_exclude_list_index = depth_exclude_list + ".tbi"
-  File mei_bed_index = mei_bed + ".tbi"
-  File manta_region_bed_index = manta_region_bed + ".tbi"
+#  File pesr_exclude_intervals_index = pesr_exclude_intervals + ".tbi"
+#  File ref_panel_vcf_index = ref_panel_vcf + ".tbi"
+#  File ref_panel_bincov_matrix_index = ref_panel_bincov_matrix + ".tbi"
+#  File bin_exclude_index = bin_exclude + ".tbi"
+#  File cytobands_index = cytobands + ".tbi"
+#  File depth_exclude_list_index = depth_exclude_list + ".tbi"
+#  File mei_bed_index = mei_bed + ".tbi"
+#  File manta_region_bed_index = manta_region_bed + ".tbi"
 
   call RunSVShell {
     input:
@@ -80,21 +80,21 @@ workflow SVShell {
       genome_tracks = genome_tracks,
 #      genome_tracks_indices = genome_tracks_indices,
       pesr_exclude_intervals = pesr_exclude_intervals,
-      pesr_exclude_intervals_index = pesr_exclude_intervals_index,
+#      pesr_exclude_intervals_index = pesr_exclude_intervals_index,
       ref_panel_vcf = ref_panel_vcf,
-      ref_panel_vcf_index = ref_panel_vcf_index,
+#      ref_panel_vcf_index = ref_panel_vcf_index,
       ref_panel_bincov_matrix = ref_panel_bincov_matrix,
-      ref_panel_bincov_matrix_index = ref_panel_bincov_matrix_index,
+#      ref_panel_bincov_matrix_index = ref_panel_bincov_matrix_index,
       bin_exclude = bin_exclude,
-      bin_exclude_index = bin_exclude_index,
+#      bin_exclude_index = bin_exclude_index,
       cytobands = cytobands,
-      cytobands_index = cytobands_index,
+#      cytobands_index = cytobands_index,
       depth_exclude_list = depth_exclude_list,
-      depth_exclude_list_index = depth_exclude_list_index,
+#      depth_exclude_list_index = depth_exclude_list_index,
       mei_bed = mei_bed,
-      mei_bed_index = mei_bed_index,
+#      mei_bed_index = mei_bed_index,
       manta_region_bed = manta_region_bed,
-      manta_region_bed_index = manta_region_bed_index,
+#      manta_region_bed_index = manta_region_bed_index,
       HERVK_reference = HERVK_reference,
       LINE1_reference = LINE1_reference,
       intron_reference = intron_reference,
@@ -114,21 +114,21 @@ workflow SVShell {
 
 
   output {
-    File inputs_json = RunSVShell.inputs_json
-    File outputs_json = RunSVShell.outputs_json
-    File final_vcf = RunSVShell.final_vcf
-    File final_vcf_idx = RunSVShell.final_vcf_idx
-    File pre_cleanup_vcf = RunSVShell.pre_cleanup_vcf
-    File pre_cleanup_vcf_idx = RunSVShell.pre_cleanup_vcf_idx
-    File stripy_json_output = RunSVShell.stripy_json_output
-    File stripy_tsv_output = RunSVShell.stripy_tsv_output
-    File stripy_html_output = RunSVShell.stripy_html_output
-    File stripy_vcf_output = RunSVShell.stripy_vcf_output
-    File metrics_file = RunSVShell.metrics_file
-    File qc_file = RunSVShell.qc_file
-    File ploidy_matrix = RunSVShell.ploidy_matrix
-    File ploidy_plots = RunSVShell.ploidy_plots
-    File non_genotyped_unique_depth_calls = RunSVShell.non_genotyped_unique_depth_calls
+#    File inputs_json = RunSVShell.inputs_json
+#    File outputs_json = RunSVShell.outputs_json
+#    File final_vcf = RunSVShell.final_vcf
+#    File final_vcf_idx = RunSVShell.final_vcf_idx
+#    File pre_cleanup_vcf = RunSVShell.pre_cleanup_vcf
+#    File pre_cleanup_vcf_idx = RunSVShell.pre_cleanup_vcf_idx
+#    File stripy_json_output = RunSVShell.stripy_json_output
+#    File stripy_tsv_output = RunSVShell.stripy_tsv_output
+#    File stripy_html_output = RunSVShell.stripy_html_output
+#    File stripy_vcf_output = RunSVShell.stripy_vcf_output
+#    File metrics_file = RunSVShell.metrics_file
+#    File qc_file = RunSVShell.qc_file
+#    File ploidy_matrix = RunSVShell.ploidy_matrix
+#    File ploidy_plots = RunSVShell.ploidy_plots
+#    File non_genotyped_unique_depth_calls = RunSVShell.non_genotyped_unique_depth_calls
   }
 }
 
@@ -398,64 +398,64 @@ task RunSVShell {
 #      "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" \
 #      "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json"
 
-    echo "----------------------"
-    echo "${PWD}"
-    cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" "${BASE_DIR}/"
-    cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json" "${BASE_DIR}/"
-    ls
-
-    final_vcf_path=$(jq -r '.final_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-    mv "${final_vcf_path}" "${BASE_DIR}/~{final_vcf_filename}"
-    mv "${final_vcf_path}.tbi" "${BASE_DIR}/~{final_vcf_idx_filename}"
-
-    pre_cleanup_vcf_path=$(jq -r '.pre_cleanup_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-    mv "${pre_cleanup_vcf_path}" "${BASE_DIR}/~{pre_cleanup_vcf_filename}"
-    mv "${pre_cleanup_vcf_path}.tbi" "${BASE_DIR}/~{pre_cleanup_vcf_idx_filename}"
-
-    stripy_json_path=$(jq -r '.stripy_json_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-    mv "${stripy_json_path}" "${BASE_DIR}/~{stripy_json_filename}"
-
-    stripy_tsv_path=$(jq -r '.stripy_tsv_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-    mv "${stripy_tsv_path}" "${BASE_DIR}/~{stripy_tsv_filename}"
-
-    stripy_html_path=$(jq -r '.stripy_html_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-    mv "${stripy_html_path}" "${BASE_DIR}/~{stripy_html_filename}"
-
-    stripy_vcf_path=$(jq -r '.stripy_vcf_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-    mv "${stripy_vcf_path}" "${BASE_DIR}/~{stripy_vcf_filename}"
-
-    metrics_path=$(jq -r '.metrics_file' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-    mv "${metrics_path}" "${BASE_DIR}/~{metrics_filename}"
-
-    qc_path=$(jq -r '.qc_file' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-    mv "${qc_path}" "${BASE_DIR}/~{qc_filename}"
-
-    ploidy_matrix_path=$(jq -r '.ploidy_matrix' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-    mv "${ploidy_matrix_path}" "${BASE_DIR}/~{ploidy_matrix_filename}"
-
-    ploidy_plots_path=$(jq -r '.ploidy_plots' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-    mv "${ploidy_plots_path}" "${BASE_DIR}/~{ploidy_plots_filename}"
-
-    non_genotyped_path=$(jq -r '.non_genotyped_unique_depth_calls' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-    mv "${non_genotyped_path}" "${BASE_DIR}/~{non_genotyped_unique_depth_calls_filename}"
+#    echo "----------------------"
+#    echo "${PWD}"
+#    cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" "${BASE_DIR}/"
+#    cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json" "${BASE_DIR}/"
+#    ls
+#
+#    final_vcf_path=$(jq -r '.final_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+#    mv "${final_vcf_path}" "${BASE_DIR}/~{final_vcf_filename}"
+#    mv "${final_vcf_path}.tbi" "${BASE_DIR}/~{final_vcf_idx_filename}"
+#
+#    pre_cleanup_vcf_path=$(jq -r '.pre_cleanup_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+#    mv "${pre_cleanup_vcf_path}" "${BASE_DIR}/~{pre_cleanup_vcf_filename}"
+#    mv "${pre_cleanup_vcf_path}.tbi" "${BASE_DIR}/~{pre_cleanup_vcf_idx_filename}"
+#
+#    stripy_json_path=$(jq -r '.stripy_json_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+#    mv "${stripy_json_path}" "${BASE_DIR}/~{stripy_json_filename}"
+#
+#    stripy_tsv_path=$(jq -r '.stripy_tsv_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+#    mv "${stripy_tsv_path}" "${BASE_DIR}/~{stripy_tsv_filename}"
+#
+#    stripy_html_path=$(jq -r '.stripy_html_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+#    mv "${stripy_html_path}" "${BASE_DIR}/~{stripy_html_filename}"
+#
+#    stripy_vcf_path=$(jq -r '.stripy_vcf_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+#    mv "${stripy_vcf_path}" "${BASE_DIR}/~{stripy_vcf_filename}"
+#
+#    metrics_path=$(jq -r '.metrics_file' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+#    mv "${metrics_path}" "${BASE_DIR}/~{metrics_filename}"
+#
+#    qc_path=$(jq -r '.qc_file' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+#    mv "${qc_path}" "${BASE_DIR}/~{qc_filename}"
+#
+#    ploidy_matrix_path=$(jq -r '.ploidy_matrix' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+#    mv "${ploidy_matrix_path}" "${BASE_DIR}/~{ploidy_matrix_filename}"
+#
+#    ploidy_plots_path=$(jq -r '.ploidy_plots' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+#    mv "${ploidy_plots_path}" "${BASE_DIR}/~{ploidy_plots_filename}"
+#
+#    non_genotyped_path=$(jq -r '.non_genotyped_unique_depth_calls' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+#    mv "${non_genotyped_path}" "${BASE_DIR}/~{non_genotyped_unique_depth_calls_filename}"
   >>>
 
   output {
-    File inputs_json = "single_sample_pipeline_inputs.json"
-    File outputs_json = "single_sample_pipeline_outputs.json"
-    File final_vcf = final_vcf_filename
-    File final_vcf_idx = final_vcf_idx_filename
-    File pre_cleanup_vcf = pre_cleanup_vcf_filename
-    File pre_cleanup_vcf_idx = pre_cleanup_vcf_idx_filename
-    File stripy_json_output = stripy_json_filename
-    File stripy_tsv_output = stripy_tsv_filename
-    File stripy_html_output = stripy_html_filename
-    File stripy_vcf_output = stripy_vcf_filename
-    File metrics_file = metrics_filename
-    File qc_file = qc_filename
-    File ploidy_matrix = ploidy_matrix_filename
-    File ploidy_plots = ploidy_plots_filename
-    File non_genotyped_unique_depth_calls = non_genotyped_unique_depth_calls_filename
+#    File inputs_json = "single_sample_pipeline_inputs.json"
+#    File outputs_json = "single_sample_pipeline_outputs.json"
+#    File final_vcf = final_vcf_filename
+#    File final_vcf_idx = final_vcf_idx_filename
+#    File pre_cleanup_vcf = pre_cleanup_vcf_filename
+#    File pre_cleanup_vcf_idx = pre_cleanup_vcf_idx_filename
+#    File stripy_json_output = stripy_json_filename
+#    File stripy_tsv_output = stripy_tsv_filename
+#    File stripy_html_output = stripy_html_filename
+#    File stripy_vcf_output = stripy_vcf_filename
+#    File metrics_file = metrics_filename
+#    File qc_file = qc_filename
+#    File ploidy_matrix = ploidy_matrix_filename
+#    File ploidy_plots = ploidy_plots_filename
+#    File non_genotyped_unique_depth_calls = non_genotyped_unique_depth_calls_filename
   }
 
   RuntimeAttr default_attr = object {
