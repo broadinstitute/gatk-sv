@@ -174,6 +174,14 @@ def build_membership_count_table(sites: pd.DataFrame, field_name: str, pass_only
     return result.sort_values(["n_variants", "n_categories", "combination"], ascending=[False, False, True]).reset_index(drop=True)
 
 
+def _ensure_boolean_multiindex(series: pd.Series) -> pd.Series:
+    if isinstance(series.index, pd.MultiIndex):
+        return series
+    index_name = series.index.name if series.index.name is not None else "membership"
+    multiindex = pd.MultiIndex.from_arrays([series.index.to_numpy(dtype=bool, copy=False)], names=[index_name])
+    return pd.Series(series.to_numpy(copy=False), index=multiindex, name=series.name)
+
+
 def _build_upset_series(sites: pd.DataFrame, field: MembershipField, pass_only: bool = False) -> pd.Series | None:
     _require_upsetplot()
     filtered = _filtered_sites(sites, pass_only)
@@ -182,11 +190,36 @@ def _build_upset_series(sites: pd.DataFrame, field: MembershipField, pass_only: 
     counts = Counter(_parse_membership(value, field) for value in filtered[field.source_column])
     memberships = [list(membership) for membership in counts]
     values = [counts[tuple(membership)] for membership in counts]
-    series = from_memberships(memberships, data=values)
+    series = _ensure_boolean_multiindex(from_memberships(memberships, data=values))
     desired_order = [item for item in _membership_category_order(counts.keys(), field) if item in series.index.names]
     if desired_order and list(series.index.names) != desired_order:
         series = series.reorder_levels(desired_order)
     return series.sort_values(ascending=False)
+
+
+def _plot_single_category_upset(fig: plt.Figure, series: pd.Series) -> None:
+    fig.clear()
+    ax_bar, ax_matrix = fig.subplots(2, 1, gridspec_kw={"height_ratios": [3.0, 1.0], "hspace": 0.05})
+
+    category = str(series.index.names[0] if series.index.names and series.index.names[0] is not None else "membership")
+    total = float(series.sum())
+
+    ax_bar.bar([0], [total], color="#4C78A8", edgecolor="black", linewidth=0.8, width=0.6)
+    ax_bar.set_ylabel("Variants")
+    ax_bar.set_xticks([])
+    ax_bar.spines["top"].set_visible(False)
+    ax_bar.spines["right"].set_visible(False)
+
+    ax_matrix.scatter([0], [0], s=160, color="black", zorder=10)
+    ax_matrix.set_yticks([0])
+    ax_matrix.set_yticklabels([category])
+    ax_matrix.set_xticks([])
+    ax_matrix.tick_params(axis="y", length=0)
+    for spine in ax_matrix.spines.values():
+        spine.set_visible(False)
+    ax_matrix.set_xlim(-0.5, 0.5)
+    ax_matrix.set_ylim(-0.5, 0.5)
+    ax_matrix.grid(False)
 
 
 def _plot_upset(sites: pd.DataFrame, field: MembershipField, output_path, label: str, pass_only: bool = False) -> None:
@@ -196,6 +229,11 @@ def _plot_upset(sites: pd.DataFrame, field: MembershipField, output_path, label:
         ax = fig.add_subplot(111)
         ax.text(0.5, 0.5, "No variants", ha="center", va="center")
         ax.set_axis_off()
+        save_figure(fig, output_path)
+        return
+    if series.index.nlevels == 1:
+        _plot_single_category_upset(fig, series)
+        fig.suptitle(f"{field.title} observed combinations (all non-empty subsets): {label}", y=0.98)
         save_figure(fig, output_path)
         return
     upset = CompatibleUpSet(
@@ -209,7 +247,7 @@ def _plot_upset(sites: pd.DataFrame, field: MembershipField, output_path, label:
         include_empty_subsets=False,
     )
     upset.plot(fig=fig)
-    fig.suptitle(f"{field.title} observed combinations: {label}", y=0.98)
+    fig.suptitle(f"{field.title} observed combinations (all non-empty subsets): {label}", y=0.98)
     save_figure(fig, output_path)
 
 
