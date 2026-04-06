@@ -282,124 +282,121 @@ task RunSVShell {
 
     df -h
 
-    jq -n \
-      --arg batch "~{batch}" \
-      --arg sample_id "~{sample_id}" \
-      --arg ref_samples_list "~{ref_samples_list}" \
-      --arg ref_ped_file "~{ref_ped_file}" \
-      --arg genome_file "~{genome_file}" \
-      --arg primary_contigs_list "~{primary_contigs_list}" \
-      --arg primary_contigs_fai "~{primary_contigs_fai}" \
-      --arg reference_fasta "~{reference_fasta}" \
-      --arg reference_index "~{reference_index}" \
-      --arg reference_dict "~{reference_dict}" \
-      --arg ref_panel_vcf "~{ref_panel_vcf}" \
-      --arg autosome_file "~{autosome_file}" \
-      --arg allosome_file "~{allosome_file}" \
-      --arg bam_or_cram_file "~{bam_or_cram_file}" \
-      --arg bam_or_cram_index "~{bam_or_cram_index}" \
-      --arg preprocessed_intervals "~{preprocessed_intervals}" \
-      --arg manta_region_bed "~{manta_region_bed}" \
-      --arg sd_locs_vcf "~{sd_locs_vcf}" \
-      --arg wham_include_list_bed_file "~{wham_include_list_bed_file}" \
-      --arg reference_bwa_alt "~{reference_bwa_alt}" \
-      --arg reference_bwa_amb "~{reference_bwa_amb}" \
-      --arg reference_bwa_ann "~{reference_bwa_ann}" \
-      --arg reference_bwa_bwt "~{reference_bwa_bwt}" \
-      --arg reference_bwa_pac "~{reference_bwa_pac}" \
-      --arg reference_bwa_sa "~{reference_bwa_sa}" \
-      --argjson run_vcf_qc ~{run_vcf_qc} \
-      --arg wgd_scoring_mask "~{wgd_scoring_mask}" \
-      --argjson min_svsize ~{min_svsize} \
-      --arg contig_ploidy_model_tar "~{contig_ploidy_model_tar}" \
-      --arg gcnv_model_tars_list "~{write_lines(gcnv_model_tars)}" \
-      --arg ref_panel_bincov_matrix "~{ref_panel_bincov_matrix}" \
-      --arg ref_pesr_disc_files_list "~{write_lines(ref_pesr_disc_files)}" \
-      --arg ref_pesr_split_files_list "~{write_lines(ref_pesr_split_files)}" \
-      --arg ref_pesr_sd_files_list "~{write_lines(ref_pesr_sd_files)}" \
-      --argjson ref_copy_number_autosomal_contigs ~{ref_copy_number_autosomal_contigs} \
-      --argjson gcnv_qs_cutoff ~{gcnv_qs_cutoff} \
-      --arg cnmops_exclude_list "~{cnmops_exclude_list}" \
-      --argjson matrix_qc_distance ~{matrix_qc_distance} \
-      --arg ref_std_manta_vcf_tar "~{ref_std_manta_vcf_tar}" \
-      --arg ref_std_scramble_vcf_tar "~{ref_std_scramble_vcf_tar}" \
-      --arg ref_std_wham_vcf_tar "~{ref_std_wham_vcf_tar}" \
-      --arg ref_panel_del_bed "~{ref_panel_del_bed}" \
-      --arg ref_panel_dup_bed "~{ref_panel_dup_bed}" \
-      --arg depth_exclude_list "~{depth_exclude_list}" \
-      --argjson depth_exclude_overlap_fraction ~{depth_exclude_overlap_fraction} \
-      --argjson depth_interval_overlap ~{depth_interval_overlap} \
-      --arg depth_clustering_algorithm "~{select_first([depth_clustering_algorithm, ""])}" \
-      --arg pesr_exclude_intervals "~{pesr_exclude_intervals}" \
-      --argjson pesr_interval_overlap ~{pesr_interval_overlap} \
-      --arg pesr_clustering_algorithm "~{select_first([pesr_clustering_algorithm, ""])}" \
-      --arg cutoffs "~{cutoffs}" \
-      --arg genotyping_rd_table "~{genotyping_rd_table}" \
-      --arg genotyping_pe_table "~{genotyping_pe_table}" \
-      --arg genotyping_sr_table "~{genotyping_sr_table}" \
-      --arg bin_exclude "~{bin_exclude}" \
-      --argjson clean_vcf_min_sr_background_fail_batches ~{clean_vcf_min_sr_background_fail_batches} \
-      --arg clustering_config_part1 "~{clustering_config_part1}" \
-      --arg stratification_config_part1 "~{stratification_config_part1}" \
-      --arg clustering_config_part2 "~{clustering_config_part2}" \
-      --arg stratification_config_part2 "~{stratification_config_part2}" \
-      --argjson clustering_track_names "$(jq -R . < ~{write_lines(clustering_track_names)} | jq -s .)" \
-      --argjson clustering_track_bed_files "$(jq -R . < ~{write_lines(clustering_track_bed_files)} | jq -s .)" \
-      --arg cytobands "~{cytobands}" \
-      --arg mei_bed "~{mei_bed}" \
-      --argjson max_shard_size_resolve ~{max_shard_size_resolve} \
-      --arg chr_x "~{chr_x}" \
-      --arg chr_y "~{chr_y}" \
-      --arg protein_coding_gtf "~{protein_coding_gtf}" \
-      --arg noncoding_bed "~{noncoding_bed}" \
-      --argjson annotation_sv_per_shard ~{annotation_sv_per_shard} \
-      --arg external_af_ref_bed "~{select_first([external_af_ref_bed, ""])}" \
-      --arg external_af_ref_bed_prefix "~{select_first([external_af_ref_bed_prefix, ""])}" \
-      --argjson external_af_population "$(jq -R . < ~{write_lines(select_first([external_af_population, []]))} | jq -s .)" \
-      --argjson min_pe_cpx ~{min_pe_cpx} \
-      --argjson min_pe_ctx ~{min_pe_ctx} \
-      --arg gq_recalibrator_model_file "~{gq_recalibrator_model_file}" \
-      --argjson recalibrate_gq_args "$(jq -R . < ~{write_lines(recalibrate_gq_args)} | jq -s .)" \
-      --argjson genome_tracks "$(jq -R . < ~{write_lines(genome_tracks)} | jq -s .)" \
-      --argjson no_call_rate_cutoff ~{no_call_rate_cutoff} \
-      --arg sl_cutoff_table "~{sl_cutoff_table}" \
-      --arg sl_filter_args "~{select_first([sl_filter_args, ""])}" \
-      --arg qc_definitions "~{qc_definitions}" \
-      --arg ref_panel_median_cov "~{ref_panel_median_cov}" \
-      --arg manta_region_bed_index "~{manta_region_bed_index}" \
-      --arg HERVK_reference "~{HERVK_reference}" \
-      --arg LINE1_reference "~{LINE1_reference}" \
-      --arg intron_reference "~{intron_reference}" \
-      --arg outlier_samples_list "~{outlier_samples_list}" \
-      --arg par_bed "~{par_bed}" \
-      --argjson run_sampleevidence_metrics ~{run_sampleevidence_metrics} \
-      --arg sample_bincov_matrix "~{sample_bincov_matrix}" \
-      --arg sample_bincov_matrix_idx "~{sample_bincov_matrix_idx}" \
-      --arg PE_metrics "~{PE_metrics}" \
-      --arg SR_metrics "~{SR_metrics}" \
-      --arg rmsk "~{rmsk}" \
-      --arg segdups "~{segdups}" \
-      --arg genotype_pesr_depth_sepcutoff "~{genotype_pesr_depth_sepcutoff}" \
-      --arg genotype_pesr_pesr_sepcutoff "~{genotype_pesr_pesr_sepcutoff}" \
-      --arg genotype_depth_depth_sepcutoff "~{genotype_depth_depth_sepcutoff}" \
-      --arg genotype_depth_pesr_sepcutoff "~{genotype_depth_pesr_sepcutoff}" \
-      --argjson genotyping_n_per_split ~{genotyping_n_per_split} \
-      --argjson n_RD_genotype_bins ~{n_RD_genotype_bins} \
-      --argjson clean_vcf1b_records_per_shard ~{clean_vcf1b_records_per_shard} \
-      --argjson clean_vcf5_records_per_shard ~{clean_vcf5_records_per_shard} \
-      --argjson clean_vcf_max_shards_per_chrom_clean_vcf_step1 ~{clean_vcf_max_shards_per_chrom_clean_vcf_step1} \
-      --argjson clean_vcf_min_records_per_shard_clean_vcf_step1 ~{clean_vcf_min_records_per_shard_clean_vcf_step1} \
-      --argjson clean_vcf_random_seed ~{clean_vcf_random_seed} \
-      --argjson clean_vcf_samples_per_clean_vcf_step2_shard ~{clean_vcf_samples_per_clean_vcf_step2_shard} \
-      --argjson "RefineComplexVariants.n_per_split" ~{refine_complex_variants_n_per_split} \
-      '$ARGS.named | with_entries(select(.value != "" and .value != null))' > "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json"
-
-    df -h
-    echo "---------------------------------------"
-
-    bash /opt/sv_shell/single_sample_pipeline.sh \
-      "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" \
-      "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json"
+#    jq -n \
+#      --arg batch "~{batch}" \
+#      --arg sample_id "~{sample_id}" \
+#      --arg ref_samples_list "~{ref_samples_list}" \
+#      --arg ref_ped_file "~{ref_ped_file}" \
+#      --arg genome_file "~{genome_file}" \
+#      --arg primary_contigs_list "~{primary_contigs_list}" \
+#      --arg primary_contigs_fai "~{primary_contigs_fai}" \
+#      --arg reference_fasta "~{reference_fasta}" \
+#      --arg reference_index "~{reference_index}" \
+#      --arg reference_dict "~{reference_dict}" \
+#      --arg ref_panel_vcf "~{ref_panel_vcf}" \
+#      --arg autosome_file "~{autosome_file}" \
+#      --arg allosome_file "~{allosome_file}" \
+#      --arg bam_or_cram_file "~{bam_or_cram_file}" \
+#      --arg bam_or_cram_index "~{bam_or_cram_index}" \
+#      --arg preprocessed_intervals "~{preprocessed_intervals}" \
+#      --arg manta_region_bed "~{manta_region_bed}" \
+#      --arg sd_locs_vcf "~{sd_locs_vcf}" \
+#      --arg wham_include_list_bed_file "~{wham_include_list_bed_file}" \
+#      --arg reference_bwa_alt "~{reference_bwa_alt}" \
+#      --arg reference_bwa_amb "~{reference_bwa_amb}" \
+#      --arg reference_bwa_ann "~{reference_bwa_ann}" \
+#      --arg reference_bwa_bwt "~{reference_bwa_bwt}" \
+#      --arg reference_bwa_pac "~{reference_bwa_pac}" \
+#      --arg reference_bwa_sa "~{reference_bwa_sa}" \
+#      --argjson run_vcf_qc ~{run_vcf_qc} \
+#      --arg wgd_scoring_mask "~{wgd_scoring_mask}" \
+#      --argjson min_svsize ~{min_svsize} \
+#      --arg contig_ploidy_model_tar "~{contig_ploidy_model_tar}" \
+#      --arg gcnv_model_tars_list "~{write_lines(gcnv_model_tars)}" \
+#      --arg ref_panel_bincov_matrix "~{ref_panel_bincov_matrix}" \
+#      --arg ref_pesr_disc_files_list "~{write_lines(ref_pesr_disc_files)}" \
+#      --arg ref_pesr_split_files_list "~{write_lines(ref_pesr_split_files)}" \
+#      --arg ref_pesr_sd_files_list "~{write_lines(ref_pesr_sd_files)}" \
+#      --argjson ref_copy_number_autosomal_contigs ~{ref_copy_number_autosomal_contigs} \
+#      --argjson gcnv_qs_cutoff ~{gcnv_qs_cutoff} \
+#      --arg cnmops_exclude_list "~{cnmops_exclude_list}" \
+#      --argjson matrix_qc_distance ~{matrix_qc_distance} \
+#      --arg ref_std_manta_vcf_tar "~{ref_std_manta_vcf_tar}" \
+#      --arg ref_std_scramble_vcf_tar "~{ref_std_scramble_vcf_tar}" \
+#      --arg ref_std_wham_vcf_tar "~{ref_std_wham_vcf_tar}" \
+#      --arg ref_panel_del_bed "~{ref_panel_del_bed}" \
+#      --arg ref_panel_dup_bed "~{ref_panel_dup_bed}" \
+#      --arg depth_exclude_list "~{depth_exclude_list}" \
+#      --argjson depth_exclude_overlap_fraction ~{depth_exclude_overlap_fraction} \
+#      --argjson depth_interval_overlap ~{depth_interval_overlap} \
+#      --arg depth_clustering_algorithm "~{select_first([depth_clustering_algorithm, ""])}" \
+#      --arg pesr_exclude_intervals "~{pesr_exclude_intervals}" \
+#      --argjson pesr_interval_overlap ~{pesr_interval_overlap} \
+#      --arg pesr_clustering_algorithm "~{select_first([pesr_clustering_algorithm, ""])}" \
+#      --arg cutoffs "~{cutoffs}" \
+#      --arg genotyping_rd_table "~{genotyping_rd_table}" \
+#      --arg genotyping_pe_table "~{genotyping_pe_table}" \
+#      --arg genotyping_sr_table "~{genotyping_sr_table}" \
+#      --arg bin_exclude "~{bin_exclude}" \
+#      --argjson clean_vcf_min_sr_background_fail_batches ~{clean_vcf_min_sr_background_fail_batches} \
+#      --arg clustering_config_part1 "~{clustering_config_part1}" \
+#      --arg stratification_config_part1 "~{stratification_config_part1}" \
+#      --arg clustering_config_part2 "~{clustering_config_part2}" \
+#      --arg stratification_config_part2 "~{stratification_config_part2}" \
+#      --argjson clustering_track_names "$(jq -R . < ~{write_lines(clustering_track_names)} | jq -s .)" \
+#      --argjson clustering_track_bed_files "$(jq -R . < ~{write_lines(clustering_track_bed_files)} | jq -s .)" \
+#      --arg cytobands "~{cytobands}" \
+#      --arg mei_bed "~{mei_bed}" \
+#      --argjson max_shard_size_resolve ~{max_shard_size_resolve} \
+#      --arg chr_x "~{chr_x}" \
+#      --arg chr_y "~{chr_y}" \
+#      --arg protein_coding_gtf "~{protein_coding_gtf}" \
+#      --arg noncoding_bed "~{noncoding_bed}" \
+#      --argjson annotation_sv_per_shard ~{annotation_sv_per_shard} \
+#      --arg external_af_ref_bed "~{select_first([external_af_ref_bed, ""])}" \
+#      --arg external_af_ref_bed_prefix "~{select_first([external_af_ref_bed_prefix, ""])}" \
+#      --argjson external_af_population "$(jq -R . < ~{write_lines(select_first([external_af_population, []]))} | jq -s .)" \
+#      --argjson min_pe_cpx ~{min_pe_cpx} \
+#      --argjson min_pe_ctx ~{min_pe_ctx} \
+#      --arg gq_recalibrator_model_file "~{gq_recalibrator_model_file}" \
+#      --argjson recalibrate_gq_args "$(jq -R . < ~{write_lines(recalibrate_gq_args)} | jq -s .)" \
+#      --argjson genome_tracks "$(jq -R . < ~{write_lines(genome_tracks)} | jq -s .)" \
+#      --argjson no_call_rate_cutoff ~{no_call_rate_cutoff} \
+#      --arg sl_cutoff_table "~{sl_cutoff_table}" \
+#      --arg sl_filter_args "~{select_first([sl_filter_args, ""])}" \
+#      --arg qc_definitions "~{qc_definitions}" \
+#      --arg ref_panel_median_cov "~{ref_panel_median_cov}" \
+#      --arg manta_region_bed_index "~{manta_region_bed_index}" \
+#      --arg HERVK_reference "~{HERVK_reference}" \
+#      --arg LINE1_reference "~{LINE1_reference}" \
+#      --arg intron_reference "~{intron_reference}" \
+#      --arg outlier_samples_list "~{outlier_samples_list}" \
+#      --arg par_bed "~{par_bed}" \
+#      --argjson run_sampleevidence_metrics ~{run_sampleevidence_metrics} \
+#      --arg sample_bincov_matrix "~{sample_bincov_matrix}" \
+#      --arg sample_bincov_matrix_idx "~{sample_bincov_matrix_idx}" \
+#      --arg PE_metrics "~{PE_metrics}" \
+#      --arg SR_metrics "~{SR_metrics}" \
+#      --arg rmsk "~{rmsk}" \
+#      --arg segdups "~{segdups}" \
+#      --arg genotype_pesr_depth_sepcutoff "~{genotype_pesr_depth_sepcutoff}" \
+#      --arg genotype_pesr_pesr_sepcutoff "~{genotype_pesr_pesr_sepcutoff}" \
+#      --arg genotype_depth_depth_sepcutoff "~{genotype_depth_depth_sepcutoff}" \
+#      --arg genotype_depth_pesr_sepcutoff "~{genotype_depth_pesr_sepcutoff}" \
+#      --argjson genotyping_n_per_split ~{genotyping_n_per_split} \
+#      --argjson n_RD_genotype_bins ~{n_RD_genotype_bins} \
+#      --argjson clean_vcf1b_records_per_shard ~{clean_vcf1b_records_per_shard} \
+#      --argjson clean_vcf5_records_per_shard ~{clean_vcf5_records_per_shard} \
+#      --argjson clean_vcf_max_shards_per_chrom_clean_vcf_step1 ~{clean_vcf_max_shards_per_chrom_clean_vcf_step1} \
+#      --argjson clean_vcf_min_records_per_shard_clean_vcf_step1 ~{clean_vcf_min_records_per_shard_clean_vcf_step1} \
+#      --argjson clean_vcf_random_seed ~{clean_vcf_random_seed} \
+#      --argjson clean_vcf_samples_per_clean_vcf_step2_shard ~{clean_vcf_samples_per_clean_vcf_step2_shard} \
+#      --argjson "RefineComplexVariants.n_per_split" ~{refine_complex_variants_n_per_split} \
+#      '$ARGS.named | with_entries(select(.value != "" and .value != null))' > "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json"
+#
+#    bash /opt/sv_shell/single_sample_pipeline.sh \
+#      "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" \
+#      "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json"
 
     echo "----------------------"
     echo "${PWD}"
