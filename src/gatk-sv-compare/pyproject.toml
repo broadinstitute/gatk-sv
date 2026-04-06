@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gatk-sv-compare"
+version = "0.1.0"
+description = "Compare two GATK-SV VCF callsets"
+readme = "PLAN.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pysam>=0.21",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "matplotlib>=3.7",
+    "pyarrow>=15.0",
+    "scipy>=1.10",
+    "upsetplot>=0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "mypy>=1.0",
+    "ruff>=0.1",
+    "tqdm",
+]
+
+[project.scripts]
+gatk-sv-compare = "gatk_sv_compare.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
