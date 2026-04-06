@@ -258,19 +258,19 @@ task RunSVShell {
     RuntimeAttr? runtime_attr_override
   }
 
-#  String final_vcf_filename = sample_id + ".vcf.gz"
-#  String final_vcf_idx_filename = final_vcf_filename + ".tbi"
-#  String pre_cleanup_vcf_filename = batch + ".annotated.vcf.gz"
-#  String pre_cleanup_vcf_idx_filename = pre_cleanup_vcf_filename + ".tbi"
-#  String stripy_json_filename = sample_id + ".stripy.json"
-#  String stripy_tsv_filename = sample_id + ".stripy.tsv"
-#  String stripy_html_filename = sample_id + ".stripy.html"
-#  String stripy_vcf_filename = sample_id + ".stripy.vcf"
-#  String metrics_filename = "single_sample." + batch + ".metrics.tsv"
-#  String qc_filename = "sv_qc." + batch + ".tsv"
-#  String ploidy_matrix_filename = batch + "_ploidy_matrix.bed.gz"
-#  String ploidy_plots_filename = batch + "_ploidy_plots.tar.gz"
-#  String non_genotyped_unique_depth_calls_filename = batch + ".non_genotyped_unique_depth_calls.vcf.gz"
+  String final_vcf_filename = sample_id + ".vcf.gz"
+  String final_vcf_idx_filename = final_vcf_filename + ".tbi"
+  String pre_cleanup_vcf_filename = batch + ".annotated.vcf.gz"
+  String pre_cleanup_vcf_idx_filename = pre_cleanup_vcf_filename + ".tbi"
+  String stripy_json_filename = sample_id + ".stripy.json"
+  String stripy_tsv_filename = sample_id + ".stripy.tsv"
+  String stripy_html_filename = sample_id + ".stripy.html"
+  String stripy_vcf_filename = sample_id + ".stripy.vcf"
+  String metrics_filename = "single_sample." + batch + ".metrics.tsv"
+  String qc_filename = "sv_qc." + batch + ".tsv"
+  String ploidy_matrix_filename = batch + "_ploidy_matrix.bed.gz"
+  String ploidy_plots_filename = batch + "_ploidy_plots.tar.gz"
+  String non_genotyped_unique_depth_calls_filename = batch + ".non_genotyped_unique_depth_calls.vcf.gz"
 
   command <<<
     set -Exeuo pipefail
