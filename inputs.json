@@ -104,7 +104,7 @@
   "SVShell.intron_reference": "gs://broad-dsde-methods-vj/sv-shell-inputs/gencode.v39.CDS.intron.tsv.gz",
   "SVShell.par_bed": "gs://broad-dsde-methods-vj/sv-shell-inputs/hg38.par.bed",
   "SVShell.sample_bincov_matrix": "TODO_MAYBE_NOT_NEEEDED",
-  "SVShell.sample_bincov_matrix_idx": "gs://broad-dsde-methods-vj/sv-shell-inputs/NA12878.RD.txt.gz.tbi",
+  "SVShell.sample_bincov_matrix_idx": "TODO: delete this one too",
   "SVShell.PE_metrics": "gs://broad-dsde-methods-vj/sv-shell-inputs/all_samples.pe_metric_file.txt",
   "SVShell.SR_metrics": "gs://broad-dsde-methods-vj/sv-shell-inputs/all_samples.sr_metric_file.txt",
   "SVShell.rmsk": "gs://broad-dsde-methods-vj/sv-shell-inputs/hg38.randomForest_blacklist.withRepMask.bed.gz",
