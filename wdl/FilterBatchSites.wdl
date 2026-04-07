@@ -179,7 +179,7 @@ import pysam
 # pysam silently clamps END to POS when END < POS, which happens for
 # interchromosomal BNDs where END is on a different contig.
 ###################
-# TODO : the END field correction is to support legacy VCFs; this should be removed before merging to main
+# TODO : the END field correction is to support legacy VCFs temporarily; this should be removed before running on non-legacy files
 ###################
 bnd_end_dict = dict()
 with gzip.open("filtered.vcf.gz", 'rt') as f:
