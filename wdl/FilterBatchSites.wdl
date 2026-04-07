@@ -215,8 +215,12 @@ with pysam.VariantFile("filtered.vcf.gz", 'r') as vcf_in:
     /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.updated_bnds.vcf.gz ~{metrics} ~{cutoffs} stdout \
       | bcftools sort -Oz -o filtered.corrected_coords.vcf.gz
 
-    /opt/sv-pipeline/03_variant_filtering/scripts/annotate_RF_evidence.py filtered.corrected_coords.vcf.gz ~{scores} ~{prefix}.with_evidence.vcf
-    bgzip ~{prefix}.with_evidence.vcf
+    /opt/sv-pipeline/03_variant_filtering/scripts/annotate_RF_evidence.py filtered.corrected_coords.vcf.gz ~{scores} ~{prefix}.raw.with_evidence.vcf
+    bgzip ~{prefix}.raw.with_evidence.vcf
+
+    # Filter WHAM deletions, which are needed for adjudication but are usually enriched for false positives
+    bcftools view -e 'ALGORITHMS=="wham" && SVTYPE=="DEL"' ~{prefix}.raw.with_evidence.vcf.gz -Oz -o ~{prefix}.with_evidence.vcf.gz
+    tabix ~{prefix}.with_evidence.vcf.gz
 
   >>>
   runtime {

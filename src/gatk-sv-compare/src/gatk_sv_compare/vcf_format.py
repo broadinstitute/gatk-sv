@@ -127,8 +127,12 @@ def check_header(vcf: pysam.VariantFile) -> List[FormatIssue]:
     return issues
 
 
-def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = None) -> List[FormatIssue]:
-    """Inspect a single record and return any format issues."""
+def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = None, sites_only: bool = False) -> List[FormatIssue]:
+    """Inspect a single record and return any format issues.
+
+    When *sites_only* is ``True``, sample-level checks (GT, ECN, GQ) are
+    skipped because no sample columns are present.
+    """
     issues: list[FormatIssue] = []
     record_id = _record_identifier(record)
     svtype = safe_info_get(record, "SVTYPE")
@@ -191,21 +195,22 @@ def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = Non
     if svtype_text == "CPX" and cpx_type in {"dDUP", "dDUP_iDEL"} and end != record.pos:
         issues.append(FormatIssue("CPX_DDDUP_END", "WARN", record_id, "Dispersed duplication CPX END does not equal POS"))
 
-    if "GT" not in record.format:
-        issues.append(FormatIssue("MISSING_GT", "ERROR", record_id, "GT FORMAT field is missing"))
-    if "ECN" not in record.format:
-        issues.append(FormatIssue("MISSING_ECN", "ERROR", record_id, "ECN FORMAT field is missing"))
-    if "GQ" in record.format:
-        for sample in record.samples.values():
-            gq = sample.get("GQ")
-            if gq not in (None, "."):
-                gq_value = int(gq)
-                if gq_value > 999:
-                    issues.append(FormatIssue("GQ_RANGE", "WARN", record_id, "GQ exceeds supported 0-99 or 0-999 range"))
-                    break
-                if gq_value > 99:
-                    issues.append(FormatIssue("GQ_RANGE", "WARN", record_id, "GQ uses 0-999 scale; run validate --fix to normalize to 0-99"))
-                    break
+    if not sites_only:
+        if "GT" not in record.format:
+            issues.append(FormatIssue("MISSING_GT", "ERROR", record_id, "GT FORMAT field is missing"))
+        if "ECN" not in record.format:
+            issues.append(FormatIssue("MISSING_ECN", "ERROR", record_id, "ECN FORMAT field is missing"))
+        if "GQ" in record.format:
+            for sample in record.samples.values():
+                gq = sample.get("GQ")
+                if gq not in (None, "."):
+                    gq_value = int(gq)
+                    if gq_value > 999:
+                        issues.append(FormatIssue("GQ_RANGE", "WARN", record_id, "GQ exceeds supported 0-99 or 0-999 range"))
+                        break
+                    if gq_value > 99:
+                        issues.append(FormatIssue("GQ_RANGE", "WARN", record_id, "GQ uses 0-999 scale; run validate --fix to normalize to 0-99"))
+                        break
     if not filters:
         issues.append(FormatIssue("EMPTY_FILTER", "WARN", record_id, "FILTER is empty"))
     if "CHR2" in record.info and svtype_text not in {"BND", "CTX"}:

@@ -79,6 +79,10 @@ class GenotypeQualityModule(AnalysisModule):
         return "genotype_quality"
 
     @property
+    def requires_samples(self) -> bool:
+        return True
+
+    @property
     def requires_gq(self) -> bool:
         return True
 

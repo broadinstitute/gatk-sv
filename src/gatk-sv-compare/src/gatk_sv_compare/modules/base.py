@@ -22,6 +22,11 @@ class AnalysisModule(ABC):
         """Directory name for outputs."""
 
     @property
+    def requires_samples(self) -> bool:
+        """True when the module reads sample-level FORMAT fields (GT, GQ, ECN)."""
+        return False
+
+    @property
     def requires_shared_samples(self) -> bool:
         return False
 

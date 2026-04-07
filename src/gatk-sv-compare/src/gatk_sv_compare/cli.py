@@ -146,7 +146,15 @@ def _build_analysis_config(
     )
 
 
+def _is_sites_only_vcf(vcf_path: Path) -> bool:
+    """Return True when the VCF has no sample columns."""
+    with pysam.VariantFile(str(vcf_path)) as vcf:
+        return len(vcf.header.samples) == 0
+
+
 def _skip_reason(module: AnalysisModule, data, config: AnalysisConfig) -> Optional[str]:
+    if module.requires_samples and not data.sample_names_a and not data.sample_names_b:
+        return "sites-only VCF (no sample columns)"
     if module.requires_shared_samples and not data.shared_samples:
         return "no shared samples"
     if module.requires_ped_file and config.ped_file is None:

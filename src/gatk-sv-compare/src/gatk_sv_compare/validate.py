@@ -39,6 +39,7 @@ class ValidationSummary:
     issues: List[FormatIssue]
     record_count: int
     precomputed_counts_available: bool
+    sites_only: bool = False
 
     @property
     def has_errors(self) -> bool:
@@ -163,8 +164,18 @@ def _scan_vcf(config: ValidateConfig, *, collect_fix_metadata: bool = False) -> 
         stage = detect_pipeline_stage(vcf)
         precomputed = has_precomputed_counts(vcf)
         header_issues = check_header(vcf)
+        sites_only = len(vcf.header.samples) == 0
 
     issues: List[FormatIssue] = list(header_issues)
+    if sites_only:
+        issues.append(
+            FormatIssue(
+                "SITES_ONLY",
+                "INFO",
+                "",
+                "VCF is sites-only (no sample columns); sample-level checks are skipped",
+            )
+        )
     record_count = 0
     record_svtypes: Dict[str, Optional[str]] = {}
     mate_coordinate_repairs: Dict[str, MateCoordinateRepair] = {}
@@ -174,7 +185,7 @@ def _scan_vcf(config: ValidateConfig, *, collect_fix_metadata: bool = False) -> 
         for record in vcf:
             raw_line = next(record_lines) if record_lines is not None else None
             record_count += 1
-            issues.extend(check_record(record, contig_length=contig_lengths.get(record.contig)))
+            issues.extend(check_record(record, contig_length=contig_lengths.get(record.contig), sites_only=sites_only))
             if collect_fix_metadata and raw_line is not None:
                 record_key = _record_key(record.contig, record.pos, record.id)
                 svtype = _resolve_record_svtype(record)
@@ -198,6 +209,7 @@ def _scan_vcf(config: ValidateConfig, *, collect_fix_metadata: bool = False) -> 
             issues=issues,
             record_count=record_count,
             precomputed_counts_available=precomputed,
+            sites_only=sites_only,
         ),
         record_svtypes=record_svtypes,
         mate_coordinate_repairs=mate_coordinate_repairs,
@@ -494,7 +506,9 @@ def apply_fixes(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     temp_output_path = out_path.with_suffix("") if _is_bgzip_output(out_path) else out_path
     ploidy_dict = _parse_ploidy_table(ploidy_table_path) if ploidy_table_path is not None else None
-    gq_scale_factor = detect_gq_scale_factor(vcf_path)
+    with pysam.VariantFile(str(vcf_path)) as _vcf:
+        _sites_only = len(_vcf.header.samples) == 0
+    gq_scale_factor = 1.0 if _sites_only else detect_gq_scale_factor(vcf_path)
     sample_names: List[str] | None = None
     with _open_text(vcf_path, "r") as handle_in, temp_output_path.open("w", encoding="utf-8") as handle_out:
         header_lines: List[str] = []
@@ -596,6 +610,7 @@ def render_summary(summary: ValidationSummary) -> str:
         f"VCF: {summary.vcf_path}",
         f"Stage: {summary.stage.value}",
         f"Records: {summary.record_count}",
+        f"Sites-only: {summary.sites_only}",
         f"Issues: errors={counts.get('ERROR', 0)}, warnings={counts.get('WARN', 0)}, info={counts.get('INFO', 0)}",
     ]
     if summary.issues:

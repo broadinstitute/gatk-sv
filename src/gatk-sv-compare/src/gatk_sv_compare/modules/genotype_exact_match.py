@@ -204,6 +204,10 @@ class GenotypeExactMatchModule(AnalysisModule):
         return "genotype_exact_match"
 
     @property
+    def requires_samples(self) -> bool:
+        return True
+
+    @property
     def requires_shared_samples(self) -> bool:
         return True
 

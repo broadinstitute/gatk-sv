@@ -188,6 +188,10 @@ class GenotypeDistModule(AnalysisModule):
     def name(self) -> str:
         return "genotype_dist"
 
+    @property
+    def requires_samples(self) -> bool:
+        return True
+
     def _run_one(self, sites: pd.DataFrame, label: str, config: AnalysisConfig, output_dir: Path) -> pd.DataFrame:
         table = build_hwe_table(sites, pass_only=config.pass_only)
 

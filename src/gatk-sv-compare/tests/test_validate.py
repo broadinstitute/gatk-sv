@@ -465,3 +465,71 @@ def test_validate_and_fix_writes_bgzip_and_tabix_for_gz_output(make_vcf, tmp_pat
     with pysam.VariantFile(str(out_path)) as vcf:
         record = next(iter(vcf))
         assert str(record.info["SVTYPE"]) == "INS"
+
+
+def test_validate_sites_only_vcf_skips_sample_checks(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="sites_only.vcf",
+        sites_only=True,
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100",
+            "chr1\t500\tvar2\tN\t<INS>\t.\tPASS\tSVTYPE=INS;SVLEN=300",
+        ],
+    )
+    summary = validate_vcf(ValidateConfig(vcf_path=vcf_path))
+
+    assert summary.sites_only is True
+    assert summary.record_count == 2
+    assert summary.has_errors is False
+
+    check_ids = {issue.check_id for issue in summary.issues}
+    assert "MISSING_GT" not in check_ids
+    assert "MISSING_ECN" not in check_ids
+    assert "SITES_ONLY" in check_ids
+
+
+def test_validate_sites_only_vcf_still_reports_site_level_errors(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="sites_only_bad.vcf",
+        sites_only=True,
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\t.\tSVLEN=100",
+        ],
+    )
+    summary = validate_vcf(ValidateConfig(vcf_path=vcf_path))
+
+    assert summary.sites_only is True
+    assert summary.has_errors is True
+    check_ids = {issue.check_id for issue in summary.issues if issue.severity == "ERROR"}
+    assert "MISSING_SVTYPE" in check_ids
+    assert "MISSING_GT" not in check_ids
+    assert "MISSING_ECN" not in check_ids
+
+
+def test_render_summary_shows_sites_only_flag(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="sites_only_render.vcf",
+        sites_only=True,
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100",
+        ],
+    )
+    summary = validate_vcf(ValidateConfig(vcf_path=vcf_path))
+    rendered = render_summary(summary)
+    assert "Sites-only: True" in rendered
+
+
+def test_validate_and_fix_sites_only_vcf(make_vcf, tmp_path) -> None:
+    vcf_path = make_vcf(
+        file_name="sites_only_fixable.vcf",
+        sites_only=True,
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVLEN=100",
+        ],
+    )
+    out_path = tmp_path / "fixed.vcf.gz"
+
+    result = validate_and_fix(vcf_path, out_path)
+
+    assert result.wrote_output is True
+    assert result.has_errors is False

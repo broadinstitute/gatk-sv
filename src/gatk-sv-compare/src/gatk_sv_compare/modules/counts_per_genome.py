@@ -164,6 +164,10 @@ class CountsPerGenomeModule(AnalysisModule):
         return "counts_per_genome"
 
     @property
+    def requires_samples(self) -> bool:
+        return True
+
+    @property
     def requires_genotype_pass(self) -> bool:
         return True
 

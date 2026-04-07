@@ -33,6 +33,7 @@ def make_vcf(tmp_path):
         include_vargq: bool = False,
         extra_header_lines: Optional[List[str]] = None,
         sample_names: Optional[List[str]] = None,
+        sites_only: bool = False,
     ) -> Path:
         path = tmp_path / file_name
         resolved_sample_names = sample_names or ["S1", "S2"]
@@ -69,7 +70,10 @@ def make_vcf(tmp_path):
         if extra_header_lines:
             header_lines.extend(extra_header_lines)
         header = "\n".join(header_lines)
-        sample_header = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t" + "\t".join(resolved_sample_names) + "\n"
+        if sites_only:
+            sample_header = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        else:
+            sample_header = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t" + "\t".join(resolved_sample_names) + "\n"
         path.write_text(header + "\n" + sample_header + "\n".join(records) + "\n")
         return path
 
