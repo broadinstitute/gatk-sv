@@ -22,8 +22,8 @@ workflow SVShell {
     File intron_reference
     File? outlier_samples_list
     File? par_bed
-    File sample_bincov_matrix
-    File sample_bincov_matrix_idx
+#    File sample_bincov_matrix
+#    File sample_bincov_matrix_idx
     File PE_metrics
     File SR_metrics
     File rmsk
@@ -100,8 +100,8 @@ workflow SVShell {
       intron_reference = intron_reference,
       outlier_samples_list = outlier_samples_list,
       par_bed = par_bed,
-      sample_bincov_matrix = sample_bincov_matrix,
-      sample_bincov_matrix_idx = sample_bincov_matrix_idx,
+#      sample_bincov_matrix = sample_bincov_matrix,
+#      sample_bincov_matrix_idx = sample_bincov_matrix_idx,
       PE_metrics = PE_metrics,
       SR_metrics = SR_metrics,
       rmsk = rmsk,
@@ -235,8 +235,8 @@ task RunSVShell {
     File? outlier_samples_list
     File? par_bed
     Boolean run_sampleevidence_metrics
-    File sample_bincov_matrix
-    File sample_bincov_matrix_idx
+#    File sample_bincov_matrix
+#    File sample_bincov_matrix_idx
     File PE_metrics
     File SR_metrics
     File rmsk
