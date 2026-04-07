@@ -152,6 +152,9 @@ task RegressOneColumn {
     # ── load SD / SR tables ────────────────────────────────────────────────
     sd_tab <- read_gz(sd_path); rownames(sd_tab) <- sd_tab[[1]]
     sr_tab <- read_gz(sr_path); rownames(sr_tab) <- sr_tab[[1]]
+    sd_tab = sd_tab[,-1]
+    sr_tab = sr_tab[,-1]
+
 
     if (!pred_col %in% colnames(sd_tab)) stop("'", pred_col, "' not in SD table")
     if (!pred_col %in% colnames(sr_tab)) stop("'", pred_col, "' not in SR table")
