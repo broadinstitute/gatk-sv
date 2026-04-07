@@ -115,6 +115,33 @@ def detect_pipeline_stage(vcf: pysam.VariantFile) -> PipelineStage:
 def check_header(vcf: pysam.VariantFile) -> List[FormatIssue]:
     """Inspect VCF header-level format issues."""
     issues: list[FormatIssue] = []
+    if "END" not in vcf.header.info:
+        issues.append(
+            FormatIssue(
+                "MISSING_END_HEADER",
+                "WARN",
+                "",
+                "END INFO header line is missing; required by downstream GATK tools",
+            )
+        )
+    if "SVTYPE" not in vcf.header.info:
+        issues.append(
+            FormatIssue(
+                "MISSING_SVTYPE_HEADER",
+                "WARN",
+                "",
+                "SVTYPE INFO header line is missing",
+            )
+        )
+    if "SVLEN" not in vcf.header.info:
+        issues.append(
+            FormatIssue(
+                "MISSING_SVLEN_HEADER",
+                "WARN",
+                "",
+                "SVLEN INFO header line is missing",
+            )
+        )
     if "SVLEN" in vcf.header.info and vcf.header.info["SVLEN"].number != 1:
         issues.append(
             FormatIssue(
@@ -221,4 +248,6 @@ def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = Non
         issues.append(FormatIssue("VARGQ_PRESENT", "INFO", record_id, "varGQ INFO field is present"))
     if "MULTIALLELIC" in record.info:
         issues.append(FormatIssue("MULTIALLELIC_INFO_FLAG", "INFO", record_id, "MULTIALLELIC is encoded as INFO rather than FILTER"))
+    if safe_info_get(record, "ALGORITHMS") in (None, "."):
+        issues.append(FormatIssue("MISSING_ALGORITHMS", "WARN", record_id, "ALGORITHMS INFO field is missing; required by SVConcordance"))
     return issues

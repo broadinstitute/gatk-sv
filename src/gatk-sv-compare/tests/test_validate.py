@@ -533,3 +533,131 @@ def test_validate_and_fix_sites_only_vcf(make_vcf, tmp_path) -> None:
 
     assert result.wrote_output is True
     assert result.has_errors is False
+
+
+def test_validate_vcf_warns_on_missing_algorithms(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="missing_algorithms.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+        ],
+    )
+    summary = validate_vcf(ValidateConfig(vcf_path=vcf_path))
+
+    check_ids = {issue.check_id for issue in summary.issues if issue.severity == "WARN"}
+    assert "MISSING_ALGORITHMS" in check_ids
+
+
+def test_validate_vcf_no_algorithms_warning_when_present(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="has_algorithms.vcf",
+        extra_header_lines=[
+            '##INFO=<ID=ALGORITHMS,Number=.,Type=String,Description="Source algorithms">',
+        ],
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100;ALGORITHMS=manta\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+        ],
+    )
+    summary = validate_vcf(ValidateConfig(vcf_path=vcf_path))
+
+    check_ids = {issue.check_id for issue in summary.issues}
+    assert "MISSING_ALGORITHMS" not in check_ids
+
+
+def test_validate_and_fix_adds_algorithms_to_missing_records(make_vcf, tmp_path) -> None:
+    vcf_path = make_vcf(
+        file_name="missing_algorithms_fix.vcf",
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+        ],
+    )
+    out_path = tmp_path / "fixed.vcf.gz"
+
+    result = validate_and_fix(vcf_path, out_path)
+
+    assert result.wrote_output is True
+    assert result.has_errors is False
+
+    fixed_check_ids = {issue.check_id for issue in result.fixed_summary.issues}
+    assert "MISSING_ALGORITHMS" not in fixed_check_ids
+
+    with pysam.VariantFile(str(out_path)) as vcf:
+        assert "ALGORITHMS" in vcf.header.info
+        record = next(iter(vcf))
+        algorithms = record.info.get("ALGORITHMS")
+        assert algorithms is not None
+        assert "UNKNOWN" in (tuple(algorithms) if isinstance(algorithms, (tuple, list)) else (str(algorithms),))
+
+
+def test_validate_and_fix_preserves_existing_algorithms(make_vcf, tmp_path) -> None:
+    vcf_path = make_vcf(
+        file_name="existing_algorithms_fix.vcf",
+        extra_header_lines=[
+            '##INFO=<ID=ALGORITHMS,Number=.,Type=String,Description="Source algorithms">',
+        ],
+        records=[
+            "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100;ALGORITHMS=manta,wham\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+        ],
+    )
+    out_path = tmp_path / "fixed.vcf.gz"
+
+    result = validate_and_fix(vcf_path, out_path)
+
+    assert result.wrote_output is True
+    with pysam.VariantFile(str(out_path)) as vcf:
+        record = next(iter(vcf))
+        algorithms = record.info.get("ALGORITHMS")
+        algo_values = tuple(algorithms) if isinstance(algorithms, (tuple, list)) else (str(algorithms),)
+        assert "manta" in algo_values
+        assert "wham" in algo_values
+        assert "UNKNOWN" not in algo_values
+
+
+def test_validate_warns_on_missing_end_header(tmp_path) -> None:
+    """A VCF that lacks ##INFO=<ID=END,...> should raise MISSING_END_HEADER."""
+    vcf_path = tmp_path / "no_end_header.vcf"
+    vcf_path.write_text(
+        "##fileformat=VCFv4.2\n"
+        "##contig=<ID=chr1,length=1000000>\n"
+        '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="SV type">\n'
+        '##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="SV length">\n'
+        '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n'
+        '##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">\n'
+        '##FORMAT=<ID=ECN,Number=1,Type=Integer,Description="Expected copy number">\n'
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\n"
+        "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100;ALGORITHMS=manta\tGT:GQ:ECN\t0/1:60:2\n"
+    )
+    summary = validate_vcf(ValidateConfig(vcf_path=vcf_path))
+
+    check_ids = {issue.check_id for issue in summary.issues}
+    assert "MISSING_END_HEADER" in check_ids
+    assert summary.has_errors is False
+
+
+def test_validate_and_fix_adds_missing_end_header(tmp_path) -> None:
+    """--fix should add the END header line when it is absent."""
+    vcf_path = tmp_path / "no_end_header_fix.vcf"
+    vcf_path.write_text(
+        "##fileformat=VCFv4.2\n"
+        "##contig=<ID=chr1,length=1000000>\n"
+        '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="SV type">\n'
+        '##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="SV length">\n'
+        '##INFO=<ID=ALGORITHMS,Number=.,Type=String,Description="Source algorithms">\n'
+        '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n'
+        '##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">\n'
+        '##FORMAT=<ID=ECN,Number=1,Type=Integer,Description="Expected copy number">\n'
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\n"
+        "chr1\t100\tvar1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;SVLEN=100;ALGORITHMS=manta\tGT:GQ:ECN\t0/1:60:2\n"
+    )
+    out_path = tmp_path / "fixed.vcf.gz"
+
+    result = validate_and_fix(vcf_path, out_path)
+
+    assert result.wrote_output is True
+    assert result.has_errors is False
+
+    fixed_check_ids = {issue.check_id for issue in result.fixed_summary.issues}
+    assert "MISSING_END_HEADER" not in fixed_check_ids
+
+    with pysam.VariantFile(str(out_path)) as vcf:
+        assert "END" in vcf.header.info

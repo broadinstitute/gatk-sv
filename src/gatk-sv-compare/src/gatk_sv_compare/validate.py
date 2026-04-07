@@ -20,6 +20,10 @@ _FIXABLE_CHECK_IDS = {
     "BREAKEND_NOTATION",
     "MISSING_ECN",
     "MULTI_ALLELIC_NON_CNV",
+    "MISSING_ALGORITHMS",
+    "MISSING_END_HEADER",
+    "MISSING_SVTYPE_HEADER",
+    "MISSING_SVLEN_HEADER",
 }
 _BND_MATE_PATTERN = re.compile(r"[\[\]]([^:\[\]]+):(\d+)[\[\]]")
 _SYMBOLIC_ALT_PATTERN = re.compile(r"^<([^>]+)>$")
@@ -28,6 +32,10 @@ _ORIGINAL_ALT_INFO_HEADER = '##INFO=<ID=ORIGINAL_ALT,Number=1,Type=String,Descri
 _ECN_FORMAT_HEADER = '##FORMAT=<ID=ECN,Number=1,Type=Integer,Description="Expected copy number">'
 _CHR2_INFO_HEADER = '##INFO=<ID=CHR2,Number=1,Type=String,Description="Partner chromosome">'
 _END2_INFO_HEADER = '##INFO=<ID=END2,Number=1,Type=Integer,Description="Partner end">'
+_ALGORITHMS_INFO_HEADER = '##INFO=<ID=ALGORITHMS,Number=.,Type=String,Description="Source algorithms">'
+_END_INFO_HEADER = '##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant">'
+_SVTYPE_INFO_HEADER = '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">'
+_SVLEN_INFO_HEADER = '##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="Difference in length between REF and ALT alleles">'
 
 
 @dataclass
@@ -398,6 +406,10 @@ def _fix_record_line(
             info_values = _info_dict(info_fields)
             svtype = inferred_svtype
 
+    if info_values.get("ALGORITHMS") in (None, "."):
+        info_fields = _set_info_value(info_fields, "ALGORITHMS", "UNKNOWN")
+        info_values = _info_dict(info_fields)
+
     applied_legacy_mate_repair = False
     mate_coordinate_repair = mate_coordinate_repairs.get(record_key) if mate_coordinate_repairs is not None else None
     if svtype in {"BND", "CTX"} and mate_coordinate_repair is not None:
@@ -474,16 +486,26 @@ def _fix_record_line(
 
 
 def _write_augmented_header(header_lines: List[str], handle_out) -> None:
+    has_end = any(line.startswith("##INFO=<ID=END,") for line in header_lines)
+    has_svtype = any(line.startswith("##INFO=<ID=SVTYPE,") for line in header_lines)
+    has_svlen = any(line.startswith("##INFO=<ID=SVLEN,") for line in header_lines)
     has_chr2 = any(line.startswith("##INFO=<ID=CHR2,") for line in header_lines)
     has_end2 = any(line.startswith("##INFO=<ID=END2,") for line in header_lines)
     has_original_alt = any(line.startswith("##INFO=<ID=ORIGINAL_ALT,") for line in header_lines)
     has_ecn = any(line.startswith("##FORMAT=<ID=ECN,") for line in header_lines)
+    has_algorithms = any(line.startswith("##INFO=<ID=ALGORITHMS,") for line in header_lines)
 
     for line in header_lines[:-1]:
         if line.startswith("##INFO=<ID=SVLEN,") and "Number=." in line:
             handle_out.write(line.replace("Number=.", "Number=1"))
         else:
             handle_out.write(line)
+    if not has_end:
+        handle_out.write(_END_INFO_HEADER + "\n")
+    if not has_svtype:
+        handle_out.write(_SVTYPE_INFO_HEADER + "\n")
+    if not has_svlen:
+        handle_out.write(_SVLEN_INFO_HEADER + "\n")
     if not has_chr2:
         handle_out.write(_CHR2_INFO_HEADER + "\n")
     if not has_end2:
@@ -492,6 +514,8 @@ def _write_augmented_header(header_lines: List[str], handle_out) -> None:
         handle_out.write(_ORIGINAL_ALT_INFO_HEADER + "\n")
     if not has_ecn:
         handle_out.write(_ECN_FORMAT_HEADER + "\n")
+    if not has_algorithms:
+        handle_out.write(_ALGORITHMS_INFO_HEADER + "\n")
     handle_out.write(header_lines[-1])
 
 
