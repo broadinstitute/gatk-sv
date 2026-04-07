@@ -172,7 +172,27 @@ task FilterAnnotateVcf {
     tabix -p vcf filtered.vcf.gz
 
     python3 <<CODE
+import gzip
 import pysam
+
+# First pass: parse true END values for BND/CTX from the raw VCF text.
+# pysam silently clamps END to POS when END < POS, which happens for
+# interchromosomal BNDs where END is on a different contig.
+###################
+# TODO : the END field correction is to support legacy VCFs; this should be removed before merging to main
+###################
+bnd_end_dict = dict()
+with gzip.open("filtered.vcf.gz", 'rt') as f:
+    for line in f:
+        if line.startswith('#'):
+            continue
+        cols = line.split('\t', 8)
+        info = cols[7]
+        if 'SVTYPE=BND' not in info and 'SVTYPE=CTX' not in info:
+            continue
+        vid = cols[2]
+        end_fields = [x for x in info.split(';') if x.startswith('END=')]
+        bnd_end_dict[vid] = int(end_fields[0].replace('END=', '')) if end_fields else int(cols[1])
 
 with pysam.VariantFile("filtered.vcf.gz", 'r') as vcf_in:
     header = vcf_in.header.copy()
@@ -183,9 +203,9 @@ with pysam.VariantFile("filtered.vcf.gz", 'r') as vcf_in:
 
     with pysam.VariantFile("filtered.updated_bnds.vcf.gz", 'w', header=header) as vcf_out:
         for record in vcf_in:
-        record.translate(header)
+            record.translate(header)
             if record.info.get('SVTYPE') == 'BND' and 'END2' not in record.info:
-                record.info['END2'] = record.stop
+                record.info['END2'] = bnd_end_dict.get(record.id, record.stop)
                 record.stop = record.pos
             if record.info.get('SVTYPE') == 'BND' and 'CHR2' not in record.info:
                 record.info['CHR2'] = record.chrom
