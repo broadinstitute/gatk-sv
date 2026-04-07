@@ -35,7 +35,7 @@ SIZE_BUCKETS = [
 GENOMIC_CONTEXTS = ["simple_repeat", "segdup", "repeatmasker", "none"]
 ALGORITHM_UNKNOWN = "unknown"
 EVIDENCE_UNKNOWN = "unknown"
-EVIDENCE_COMPONENT_ORDER = ("RD", "PE", "SR")
+EVIDENCE_COMPONENT_ORDER = ("RD", "BAF", "PE", "SR")
 _EVIDENCE_COMPONENTS = frozenset(EVIDENCE_COMPONENT_ORDER)
 _EVIDENCE_BUCKET_ORDER = [
     ",".join(combo)

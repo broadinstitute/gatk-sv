@@ -85,7 +85,7 @@ def test_aggregate_builds_site_tables_and_matched_pairs(tmp_path, make_vcf) -> N
     assert data.sites_a.loc[data.sites_a["variant_id"] == "a1", "genomic_context"].iloc[0] == "segdup"
     assert data.sites_a.loc[data.sites_a["variant_id"] == "a1", "algorithms"].iloc[0] == "manta,wham"
     assert data.sites_a.loc[data.sites_a["variant_id"] == "a1", "evidence_bucket"].iloc[0] == "RD,PE"
-    assert data.sites_a.loc[data.sites_a["variant_id"] == "a2", "evidence_bucket"].iloc[0] == "RD,PE,SR"
+    assert data.sites_a.loc[data.sites_a["variant_id"] == "a2", "evidence_bucket"].iloc[0] == "RD,BAF,PE,SR"
     assert (tmp_path / "out" / "aggregate" / "sites_a.chr1.parquet").exists()
     assert (tmp_path / "out" / "aggregate" / "matched_pairs.parquet").exists()
 

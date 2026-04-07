@@ -34,7 +34,7 @@ def test_iter_contig_uses_precomputed_counts_and_concordance(make_vcf) -> None:
     assert record.truth_vid == "truth1"
     assert record.genomic_context == "segdup"
     assert record.algorithms == ("melt", "wham")
-    assert record.evidence_bucket == "SR"
+    assert record.evidence_bucket == "BAF,SR"
     assert record.concordance_metrics is not None
     assert record.concordance_metrics["VAR_PPV"] == pytest.approx(0.95)
 

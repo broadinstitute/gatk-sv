@@ -22,7 +22,7 @@ class TrainingLabeler:
 
 class BAF1TrainingLabeler(TrainingLabeler):
     def label_row(self, row):
-        if 0 <= row.RD_MEDIAN_SEPARATION < 0.15:
+        if 0 <= row.RD_MEDIAN_SEPARATION < 0.10:
             return 'Fail'
         elif 0.4 <= row.RD_MEDIAN_SEPARATION < 1.0:
             return 'Pass'
