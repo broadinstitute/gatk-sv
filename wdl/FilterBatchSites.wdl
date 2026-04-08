@@ -210,7 +210,7 @@ with pysam.VariantFile("filtered.vcf.gz", 'r') as vcf_in:
             if record.info.get('SVTYPE') == 'BND' and 'CHR2' not in record.info:
                 record.info['CHR2'] = record.chrom
             vcf_out.write(record)
-    CODE
+CODE
 
     /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.updated_bnds.vcf.gz ~{metrics} ~{cutoffs} stdout \
       | bcftools sort -Oz -o filtered.corrected_coords.vcf.gz
