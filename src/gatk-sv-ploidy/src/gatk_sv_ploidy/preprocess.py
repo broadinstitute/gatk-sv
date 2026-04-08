@@ -668,7 +668,7 @@ def parse_args() -> argparse.Namespace:
                    help="Minimum total depth at a site to include")
     a.add_argument("--max-sites-per-bin", type=int, default=50,
                    help="Maximum sites per bin (pad/subsample to this)")
-    a.add_argument("--sd-stride", type=int, default=100,
+    a.add_argument("--sd-stride", type=int, default=1,
                    help="Keep every Nth row from SD files (100 = 100x "
                         "downsample).  Ignored when --known-sites is given.")
 

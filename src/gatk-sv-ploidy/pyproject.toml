@@ -12,6 +12,7 @@ requires-python = ">=3.9"
 dependencies = [
     "numpy",
     "pandas",
+    "pysam",
     "torch",
     "pyro-ppl",
     "tqdm",

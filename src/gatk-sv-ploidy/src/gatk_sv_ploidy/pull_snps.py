@@ -22,6 +22,7 @@ The result is exported as a block-gzipped VCF.
 import argparse
 import os
 import shutil
+import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -41,7 +42,7 @@ DEFAULT_AF_CUTOFF_Y = 0.01
 def _require_hail():
     """Import hail lazily so the rest of the package never depends on it."""
     try:
-        import hail as hl  # noqa: F811
+        import hail as hl  # type: ignore[import-not-found]  # noqa: F811
         return hl
     except ImportError:
         raise SystemExit(
@@ -51,6 +52,20 @@ def _require_hail():
             "not inside workflow Docker containers.\n\n"
             "Install it with:\n"
             "    pip install hail\n"
+        )
+
+
+def _require_pysam():
+    """Import pysam lazily for BGZF compression and tabix indexing."""
+    try:
+        import pysam  # type: ignore[import-not-found]
+        return pysam
+    except ImportError:
+        raise SystemExit(
+            "The 'pull-snps' subcommand requires `pysam` to produce a real BGZF "
+            "VCF and tabix index.\n"
+            "Install it with:\n"
+            "    pip install pysam\n"
         )
 
 
@@ -92,6 +107,13 @@ def _get_adj_freq_index(hl, ht) -> int:
     raise ValueError(
         "Could not find the plain adj frequency entry in ht.freq_meta"
     )
+
+
+def _bgzip_and_index_vcf(input_vcf: str, output_vcf: str) -> None:
+    """Compress a plain-text VCF with BGZF and create a tabix index."""
+    pysam = _require_pysam()
+    pysam.tabix_compress(input_vcf, output_vcf, force=True)
+    pysam.tabix_index(output_vcf, preset="vcf", force=True)
 
 
 # ---------------------------------------------------------------------------
@@ -163,8 +185,14 @@ def pull_snps(
             }
         }
     }
-    hl.export_vcf(ht, output_path, metadata=metadata)
+    output_path = str(Path(output_path))
+    with tempfile.TemporaryDirectory(prefix="pull_snps_") as tmpdir:
+        temp_vcf = str(Path(tmpdir) / "sites.vcf")
+        hl.export_vcf(ht, temp_vcf, metadata=metadata)
+        _bgzip_and_index_vcf(temp_vcf, output_path)
+
     print(f"Wrote {output_path}")
+    print(f"Wrote {output_path}.tbi")
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +206,7 @@ def _parse_args():
             "NOTE: This subcommand requires 'hail' which is NOT included in\n"
             "the standard package dependencies (it needs Spark/Java and is\n"
             "only intended for local machines, not workflow Docker containers).\n"
-            "Install it separately:  pip install hail"
+            "Install local-only extras separately:  pip install hail pysam"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -193,7 +221,7 @@ def _parse_args():
     parser.add_argument(
         "-o", "--output",
         required=True,
-        help="Output VCF file name (written in the current working directory)",
+        help="Output BGZF-compressed VCF file name; a tabix index is written automatically",
     )
     parser.add_argument(
         "--af-cutoff",
