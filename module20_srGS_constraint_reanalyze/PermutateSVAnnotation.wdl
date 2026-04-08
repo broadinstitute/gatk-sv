@@ -317,7 +317,7 @@ task Task1_PermuteGTF {
         mem_gb:            8,
         disk_gb:           50,
         boot_disk_gb:      10,
-        preemptible_tries: 3,
+        preemptible_tries: 1,
         max_retries:       1
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -376,7 +376,7 @@ task Task2_SplitGTF {
         mem_gb:            8,
         disk_gb:           50,
         boot_disk_gb:      10,
-        preemptible_tries: 3,
+        preemptible_tries: 1,
         max_retries:       1
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -471,7 +471,7 @@ task Task3_BedtoolsIntersect {
         mem_gb:            16,
         disk_gb:           100,
         boot_disk_gb:      10,
-        preemptible_tries: 3,
+        preemptible_tries: 1,
         max_retries:       1
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -630,7 +630,7 @@ task Task4_ExtractOverlaps {
         mem_gb:            8,
         disk_gb:           50,
         boot_disk_gb:      10,
-        preemptible_tries: 3,
+        preemptible_tries: 1,
         max_retries:       1
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -677,7 +677,7 @@ task Task5_CategorizeExonOverlap {
         mem_gb:            16,
         disk_gb:           50,
         boot_disk_gb:      10,
-        preemptible_tries: 3,
+        preemptible_tries: 1,
         max_retries:       1
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -723,7 +723,7 @@ task Task6_ReorganizeSVIDGene {
         mem_gb:            16,
         disk_gb:           50,
         boot_disk_gb:      10,
-        preemptible_tries: 3,
+        preemptible_tries: 1,
         max_retries:       1
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -779,7 +779,7 @@ task Task7_IntegrateOverlaps {
         mem_gb:            16,
         disk_gb:           50,
         boot_disk_gb:      10,
-        preemptible_tries: 3,
+        preemptible_tries: 1,
         max_retries:       1
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -832,7 +832,7 @@ task Task8_CalcuGeneData {
         mem_gb:            16,
         disk_gb:           50,
         boot_disk_gb:      10,
-        preemptible_tries: 3,
+        preemptible_tries: 1,
         max_retries:       1
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
