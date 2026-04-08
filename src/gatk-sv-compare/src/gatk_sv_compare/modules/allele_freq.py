@@ -112,7 +112,7 @@ def _matched_pairs_with_categories(data: AggregatedData, pass_only: bool = False
 def _ordered_group_values(frame: pd.DataFrame, group_field: str) -> list[str]:
     values = frame[group_field].dropna().astype(str).unique()
     if group_field == "svtype_a":
-        return [value for value in ordered_svtypes(values) if value != "CTX"]
+        return ordered_svtypes(values)
     if group_field == "size_bucket_a":
         return ordered_plot_size_buckets(values)
     if group_field == "genomic_context_a":
