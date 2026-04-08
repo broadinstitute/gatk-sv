@@ -60,8 +60,8 @@ def normalise_depth(df: pd.DataFrame) -> pd.DataFrame:
 def filter_low_quality_bins(
     df: pd.DataFrame,
     *,
-    autosome_median_min: float = 1.0,
-    autosome_median_max: float = 3.0,
+    autosome_median_min: float = 1.5,
+    autosome_median_max: float = 2.5,
     autosome_mad_max: float = 2.0,
     chrX_median_min: float = 0.0,
     chrX_median_max: float = 3.0,
@@ -69,12 +69,21 @@ def filter_low_quality_bins(
     chrY_median_min: float = 0.0,
     chrY_median_max: float = 3.0,
     chrY_mad_max: float = 2.0,
+    cohort_deviation_threshold: float = 0.3,
+    cohort_deviation_fraction_max: float = 0.75,
     min_bins_per_chr: int = 10,
 ) -> pd.DataFrame:
     """Filter bins whose cross-sample statistics fall outside thresholds.
 
     Thresholds are applied separately for autosomes, chrX, and chrY because
     expected depth distributions differ across chromosome types.
+
+    In addition to per-bin median/MAD thresholds, a **cohort deviation
+    fraction** filter removes bins where more than
+    *cohort_deviation_fraction_max* of samples have depth deviating from
+    the expected ploidy by more than *cohort_deviation_threshold*.  This
+    catches systematic mapping biases that shift all samples uniformly,
+    which can be misinterpreted as real CNVs.
 
     Args:
         df: Normalised depth DataFrame.
@@ -84,6 +93,10 @@ def filter_low_quality_bins(
         chrX_mad_max: Maximum MAD for chrX bins.
         chrY_median_min/max: Median depth range for chrY bins.
         chrY_mad_max: Maximum MAD for chrY bins.
+        cohort_deviation_threshold: Per-sample depth deviation from the
+            expected ploidy that counts as "deviant" (default 0.3).
+        cohort_deviation_fraction_max: Maximum fraction of samples that
+            may deviate before the bin is removed (default 0.75).
         min_bins_per_chr: Raise if any chromosome has fewer bins after
             filtering.
 
@@ -141,8 +154,42 @@ def filter_low_quality_bins(
             n_before,
         )
 
+    n_median_mad = int((~keep).sum())
+
+    # -- cohort deviation fraction filter --
+    # For each bin, compute the expected ploidy (2.0 for autosomes) and
+    # reject bins where most samples deviate from it uniformly.
+    if cohort_deviation_threshold > 0 and cohort_deviation_fraction_max < 1.0:
+        is_auto = ~df["Chr"].isin(["chrX", "chrY"]).values
+        # Expected diploid depth for autosomes; sex chromosomes are
+        # not tested because the expected depth depends on the unknown
+        # sex composition of the cohort.
+        auto_deviations = np.abs(depths - 2.0)  # (n_bins, n_samples)
+        deviant_frac = (
+            auto_deviations > cohort_deviation_threshold
+        ).mean(axis=1)
+        cohort_bad = is_auto & (deviant_frac > cohort_deviation_fraction_max)
+        n_cohort = int(cohort_bad.sum())
+        # Only remove bins that weren't already removed
+        newly_removed = int((cohort_bad & keep).sum())
+        keep &= ~cohort_bad
+        logger.info(
+            "Cohort deviation filter (|depth−expected|>%.2f in >%.0f%% "
+            "of samples): flagged %d bins (%d new)",
+            cohort_deviation_threshold,
+            cohort_deviation_fraction_max * 100,
+            n_cohort,
+            newly_removed,
+        )
+
     df_out = df[keep].copy()
-    logger.info("Bins after filtering: %d (removed %d)", len(df_out), len(df) - len(df_out))
+    logger.info(
+        "Bins after filtering: %d (removed %d: %d median/MAD, %d cohort)",
+        len(df_out),
+        len(df) - len(df_out),
+        n_median_mad,
+        len(df) - len(df_out) - n_median_mad,
+    )
 
     # Verify sufficient bins per chromosome
     counts = df_out.groupby("Chr").size()
@@ -350,7 +397,7 @@ def build_per_site_data(
     *,
     min_site_depth: int = 10,
     max_sites_per_bin: int = 50,
-    sd_stride: int = 100,
+    sd_stride: int = 1,
     seed: int = 42,
 ) -> dict:
     """Build per-site allele-count arrays for the joint genotype/CN model.
@@ -370,7 +417,9 @@ def build_per_site_data(
         known_sites_df: DataFrame with ``contig``, ``position`` (0-based),
             ``ref``, ``pop_af`` (from :func:`read_known_sites`).  If ``None``,
             every observed position is used with ``pop_af = 0.5``.
-        min_site_depth: Minimum total depth at a site to include.
+        min_site_depth: Minimum total depth at a site to include in fallback
+            mode when *known_sites_df* is ``None``. In known-sites mode,
+            matched loci are retained even at zero/near-zero depth.
         max_sites_per_bin: Pad/subsample to this many sites per bin.
         sd_stride: Keep every *sd_stride*-th row when reading SD files
             (1 = keep all, 100 = 100× downsample).  Ignored when
@@ -384,7 +433,7 @@ def build_per_site_data(
         - ``site_alt``: ``int32 (n_bins, max_sites, n_samples)`` alt counts
         - ``site_total``: ``int32 (n_bins, max_sites, n_samples)`` total counts
         - ``site_pop_af``: ``float32 (n_bins, max_sites)`` population AFs
-        - ``site_mask``: ``bool (n_bins, max_sites, n_samples)`` valid entries
+        - ``site_mask``: ``bool (n_bins, max_sites, n_samples)`` observed entries
         - ``sample_ids``: ``str (n_samples,)``
         - ``bin_chr``: ``str (n_bins,)``
         - ``bin_start``: ``int64 (n_bins,)``
@@ -477,32 +526,32 @@ def build_per_site_data(
                 c_t = s_t[cmask]
 
                 # ── Assign sites to bins (vectorised) ──
+                # Sites that fall inside a bin are assigned to that bin.
+                # Sites that fall in gaps between bins or beyond the last
+                # bin are assigned to the *nearest* bin on the same
+                # chromosome so they still contribute to the AF model.
                 bi = np.searchsorted(starts, c_pos, side="right") - 1
                 bi_safe = np.clip(bi, 0, len(starts) - 1)
-                in_bin = (
-                    (bi >= 0) & (bi < len(starts))
-                    & (c_pos < ends[bi_safe])
-                )
-                c_pos, c_a, c_c, c_g, c_t = (
-                    c_pos[in_bin], c_a[in_bin], c_c[in_bin],
-                    c_g[in_bin], c_t[in_bin],
-                )
-                g_bi_arr = chrom_bin_idx[bi[in_bin]]
+                in_bin = ((bi >= 0) & (bi < len(starts)) & (c_pos < ends[bi_safe]))
+
+                # For out-of-bin sites, find the nearest bin by distance
+                # to the closest bin boundary.
+                not_in_bin = ~in_bin
+                if not_in_bin.any():
+                    oob_pos = c_pos[not_in_bin]
+                    # Distance to each bin: max(start - pos, 0) + max(pos - end, 0)
+                    # Vectorised: (n_oob, n_bins_chrom)
+                    d_left = np.maximum(starts[np.newaxis, :] - oob_pos[:, np.newaxis], 0)
+                    d_right = np.maximum(oob_pos[:, np.newaxis] - ends[np.newaxis, :], 0)
+                    dist = d_left + d_right  # 0 inside bin, >0 outside
+                    nearest = np.argmin(dist, axis=1)
+                    bi_safe[not_in_bin] = nearest
+
+                g_bi_arr = chrom_bin_idx[bi_safe]
                 if len(c_pos) == 0:
                     continue
 
-                # ── Vectorised depth filter ──
                 totals = (c_a + c_c + c_g + c_t).astype(np.int64)
-                depth_ok = totals >= min_site_depth
-                c_pos = c_pos[depth_ok]
-                c_a, c_c, c_g, c_t = (
-                    c_a[depth_ok], c_c[depth_ok],
-                    c_g[depth_ok], c_t[depth_ok],
-                )
-                g_bi_arr = g_bi_arr[depth_ok]
-                totals = totals[depth_ok]
-                if len(c_pos) == 0:
-                    continue
 
                 # ── Known-sites filter / alt-count computation (vectorised) ──
                 if have_known:
@@ -532,12 +581,26 @@ def build_per_site_data(
                                  np.where(ref_bases == "G", c_g, c_t)),
                     )
                     alts = totals - ref_counts
+                    observed = np.ones(len(c_pos), dtype=bool)
                 else:
+                    # Fallback mode: retain only sufficiently covered sites.
+                    depth_ok = totals >= min_site_depth
+                    c_pos = c_pos[depth_ok]
+                    c_a, c_c, c_g, c_t = (
+                        c_a[depth_ok], c_c[depth_ok],
+                        c_g[depth_ok], c_t[depth_ok],
+                    )
+                    g_bi_arr = g_bi_arr[depth_ok]
+                    totals = totals[depth_ok]
+                    if len(c_pos) == 0:
+                        continue
+
                     major = np.maximum(
                         np.maximum(c_a, c_c), np.maximum(c_g, c_t),
                     )
                     alts = totals - major
                     pop_afs = np.full(len(c_pos), 0.5, dtype=np.float32)
+                    observed = np.ones(len(c_pos), dtype=bool)
 
                 if len(c_pos) == 0:
                     continue
@@ -554,9 +617,11 @@ def build_per_site_data(
                             "pop_af": float(pop_afs[i]),
                             "alt": np.zeros(n_samples, dtype=np.int32),
                             "total": np.zeros(n_samples, dtype=np.int32),
+                            "observed": np.zeros(n_samples, dtype=bool),
                         }
                     entry[pos]["alt"][si] = int(alts[i])
                     entry[pos]["total"][si] = int(totals[i])
+                    entry[pos]["observed"][si] = bool(observed[i])
 
                 if n_sites_chrom > 0:
                     logger.debug(
@@ -592,13 +657,26 @@ def build_per_site_data(
             site_alt[g_bi, slot, :] = e["alt"]
             site_total[g_bi, slot, :] = e["total"]
             site_pop_af[g_bi, slot] = e["pop_af"]
-            site_mask[g_bi, slot, :] = e["total"] > 0
+            site_mask[g_bi, slot, :] = e["observed"]
 
     logger.info(
         "Per-site data: %d total site-sample entries, %d / %d bins with data, "
         "padded to %d sites/bin",
         total_sites_used, bins_with_data, n_bins, max_sites_per_bin,
     )
+
+    # Per-chromosome summary for diagnostics
+    chr_labels = bins_df["Chr"].values
+    for chrom in sorted(set(chr_labels)):
+        chrom_mask_arr = chr_labels == chrom
+        n_chrom_bins = int(chrom_mask_arr.sum())
+        chrom_sites = site_mask[chrom_mask_arr].any(axis=2).sum()
+        n_unique = sum(len(site_data[i]) for i in np.where(chrom_mask_arr)[0])
+        logger.info(
+            "  %s: %d bins, %d unique positions, %d retained (max %d/bin)",
+            chrom, n_chrom_bins, n_unique, int(chrom_sites),
+            max_sites_per_bin,
+        )
 
     return {
         "site_alt": site_alt,
@@ -639,8 +717,8 @@ def parse_args() -> argparse.Namespace:
 
     # Filter thresholds
     g = p.add_argument_group("bin-filter thresholds")
-    g.add_argument("--autosome-median-min", type=float, default=1.0)
-    g.add_argument("--autosome-median-max", type=float, default=3.0)
+    g.add_argument("--autosome-median-min", type=float, default=1.5)
+    g.add_argument("--autosome-median-max", type=float, default=2.5)
     g.add_argument("--autosome-mad-max", type=float, default=2.0)
     g.add_argument("--chrX-median-min", type=float, default=0.0)
     g.add_argument("--chrX-median-max", type=float, default=3.0)
@@ -648,6 +726,16 @@ def parse_args() -> argparse.Namespace:
     g.add_argument("--chrY-median-min", type=float, default=0.0)
     g.add_argument("--chrY-median-max", type=float, default=3.0)
     g.add_argument("--chrY-mad-max", type=float, default=2.0)
+    g.add_argument(
+        "--cohort-deviation-threshold", type=float, default=0.3,
+        help="Per-sample depth deviation from expected ploidy that "
+             "counts as deviant (default 0.3)",
+    )
+    g.add_argument(
+        "--cohort-deviation-fraction-max", type=float, default=0.75,
+        help="Max fraction of samples that may deviate before the bin "
+             "is removed (default 0.75)",
+    )
 
     # Allele fraction arguments
     a = p.add_argument_group("allele fraction (site depth)")
@@ -664,8 +752,8 @@ def parse_args() -> argparse.Namespace:
         help="VCF or TSV of known SNP sites with population AFs.  "
              "If omitted, all observed positions are used with pop_af=0.5",
     )
-    a.add_argument("--min-site-depth", type=int, default=10,
-                   help="Minimum total depth at a site to include")
+    a.add_argument("--min-site-depth", type=int, default=3,
+                   help="Minimum total depth at a site to include in fallback mode when --known-sites is omitted")
     a.add_argument("--max-sites-per-bin", type=int, default=50,
                    help="Maximum sites per bin (pad/subsample to this)")
     a.add_argument("--sd-stride", type=int, default=1,
@@ -714,6 +802,8 @@ def main() -> None:
             chrY_median_min=args.chrY_median_min,
             chrY_median_max=args.chrY_median_max,
             chrY_mad_max=args.chrY_mad_max,
+            cohort_deviation_threshold=args.cohort_deviation_threshold,
+            cohort_deviation_fraction_max=args.cohort_deviation_fraction_max,
         )
 
     # 5. Write preprocessed depth

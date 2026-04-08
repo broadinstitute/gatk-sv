@@ -19,6 +19,7 @@ import pyro
 import torch
 from scipy import stats
 
+from gatk_sv_ploidy._util import DEFAULT_AF_WEIGHT
 from gatk_sv_ploidy.data import DepthData, load_site_data
 from gatk_sv_ploidy.models import CNVModel, _precompute_af_table
 
@@ -306,8 +307,8 @@ def parse_args() -> argparse.Namespace:
 
     # Model priors
     g = p.add_argument_group("model priors")
-    g.add_argument("--alpha-ref", type=float, default=1.0,
-                   help="Dirichlet concentration for CN=2")
+    g.add_argument("--alpha-ref", type=float, default=50.0,
+                   help="Dirichlet concentration for CN=2 on autosomes")
     g.add_argument("--alpha-non-ref", type=float, default=1.0,
                    help="Dirichlet concentration for other CN states")
     g.add_argument("--var-bias-bin", type=float, default=0.01,
@@ -319,14 +320,30 @@ def parse_args() -> argparse.Namespace:
     g.add_argument("--guide-type", choices=["delta", "diagonal"], default="delta",
                    help="Variational guide type")
 
+    # Sex chromosome priors
+    g = p.add_argument_group("sex chromosome priors")
+    g.add_argument("--alpha-sex-ref", type=float, default=1.0,
+                   help="Dirichlet concentration for CN=2 on sex chromosomes "
+                        "(flat by default; sex-CN coupling handles "
+                        "sex-dependent CN)")
+    g.add_argument("--alpha-sex-non-ref", type=float, default=1.0,
+                   help="Dirichlet concentration for other CN states on "
+                        "sex chromosomes")
+    g.add_argument("--sex-cn-weight", type=float, default=5.0,
+                   help="Weight of the sex-CN coupling factor "
+                        "(0 to disable)")
+    g.add_argument("--sex-prior", type=float, nargs=2,
+                   default=[0.5, 0.5], metavar=("P_XX", "P_XY"),
+                   help="Prior probabilities for XX and XY karyotypes")
+
     # Allele fraction (per-site model)
     g = p.add_argument_group("allele fraction")
     g.add_argument("--site-data", default=None,
                    help="Per-site allele data .npz (output of 'preprocess')")
     g.add_argument("--af-concentration", type=float, default=50.0,
                    help="BetaBinomial concentration for allele fraction model")
-    g.add_argument("--af-weight", type=float, default=1.0,
-                   help="Relative weight of allele fraction likelihood (0 to disable)")
+    g.add_argument("--af-weight", type=float, default=DEFAULT_AF_WEIGHT,
+                   help="Relative weight of per-bin site-count-normalized allele fraction likelihood (0 to disable; lower values favor depth more strongly)")
     g.add_argument("--min-het-alt", type=int, default=3,
                    help="Minimum alt-allele read count to classify a site as "
                         "heterozygous in summary statistics")
@@ -384,6 +401,13 @@ def main() -> None:
         site_data=sd,
     )
 
+    if data.site_alt is not None:
+        logger.info(
+            "Allele-fraction evidence enabled (af_weight=%.2f, af_concentration=%.1f, normalized by observed sites/bin)",
+            args.af_weight,
+            args.af_concentration,
+        )
+
     # ── build & train model ─────────────────────────────────────────────
     model = CNVModel(
         n_states=6,
@@ -397,6 +421,10 @@ def main() -> None:
         guide_type=args.guide_type,
         af_concentration=args.af_concentration,
         af_weight=args.af_weight if data.site_alt is not None else 0.0,
+        alpha_sex_ref=args.alpha_sex_ref,
+        alpha_sex_non_ref=args.alpha_sex_non_ref,
+        sex_prior=tuple(args.sex_prior),
+        sex_cn_weight=args.sex_cn_weight,
     )
 
     model.train(
@@ -424,6 +452,22 @@ def main() -> None:
         data,
         map_estimates=map_est,
     )
+
+    # ── log sex karyotype results ───────────────────────────────────────
+    if "sex_posterior" in cn_post:
+        sex_post = cn_post["sex_posterior"]  # (n_samples, 2)
+        n_xx = int((sex_post[:, 0] > 0.5).sum())
+        n_xy = int((sex_post[:, 1] > 0.5).sum())
+        logger.info(
+            "Sex karyotype assignment: %d XX, %d XY (of %d samples)",
+            n_xx, n_xy, data.n_samples,
+        )
+    if "sex_karyotype" in map_est:
+        sk = map_est["sex_karyotype"]
+        logger.info(
+            "MAP sex karyotype: %d XX, %d XY",
+            int((sk == 0).sum()), int((sk == 1).sum()),
+        )
 
     # ── detect aneuploidies ─────────────────────────────────────────────
     aneuploid_map = detect_aneuploidies(

@@ -52,6 +52,11 @@ def _draw_site_af_scatter(
     x-coordinate (with small horizontal jitter).  This shows the raw per-site
     data that the model uses, revealing the bimodal AF distribution
     (homozygous-reference near 0 and heterozygous near 0.5).
+
+    Bins that have site data but *no* sites meeting the *min_het_alt*
+    threshold (likely runs of homozygosity) are marked with a small gray
+    triangle at y = 0 to distinguish them from bins that have no data at
+    all.
     """
     # Build lookup: (chr, start, end) -> npz bin index
     bin_chr = site_data["bin_chr"]
@@ -76,6 +81,7 @@ def _draw_site_af_scatter(
     rng = np.random.RandomState(42)
     scatter_x: list = []
     scatter_af: list = []
+    roh_x: list = []  # bins with data but no het sites
 
     for row_i, (_, row) in enumerate(sample_data.iterrows()):
         key = (str(row["chr"]), int(row["start"]), int(row["end"]))
@@ -91,6 +97,8 @@ def _draw_site_af_scatter(
         total = st[bi, mask, sample_idx]
         valid = (total > 0) & (alt >= min_het_alt)
         if not np.any(valid):
+            # Sites exist but are all homozygous → likely ROH
+            roh_x.append(x[row_i])
             continue
 
         af = alt[valid] / total[valid]
@@ -98,6 +106,15 @@ def _draw_site_af_scatter(
         jitter = rng.uniform(-jitter_half, jitter_half, size=n_pts)
         scatter_x.extend(x[row_i] + jitter)
         scatter_af.extend(af)
+
+    # Draw ROH indicators first (behind the scatter)
+    if roh_x:
+        ax.scatter(
+            roh_x, [0.0] * len(roh_x),
+            s=6, alpha=0.25, color="#9E9E9E",
+            marker="^", rasterized=True, zorder=1, linewidths=0,
+            label="Hom. (no het sites)",
+        )
 
     if scatter_x:
         ax.scatter(
@@ -107,6 +124,10 @@ def _draw_site_af_scatter(
         )
         logger.info("  AF scatter: %d site points for %s",
                      len(scatter_x), sample_data["sample"].iloc[0])
+
+    if roh_x:
+        logger.info("  AF scatter: %d homozygous bins for %s",
+                     len(roh_x), sample_data["sample"].iloc[0])
 
 
 def plot_sample_with_variance(

@@ -77,7 +77,7 @@ def _marginalized_af_log_lik(
         concentration: Beta-Binomial concentration parameter.
 
     Returns:
-        Scalar log-likelihood summed over all valid sites.
+        Per-bin, per-sample log-likelihood averaged over valid sites.
     """
     eps = 1e-6
 
@@ -101,14 +101,13 @@ def _marginalized_af_log_lik(
         # Manual log Binom(k | c, p) to avoid distribution validation issues
         # and explicit expand calls — rely on broadcasting throughout.
         cn_safe = cn_f.clamp(min=1)
-        log_comb = (
-            torch.lgamma(cn_safe + 1)
-            - torch.lgamma(torch.tensor(k_f + 1, device=cn_f.device))
-            - torch.lgamma(cn_safe - k_f + 1)
+        log_comb = torch.lgamma(cn_safe + 1)
+        log_comb = log_comb - torch.lgamma(
+            torch.tensor(k_f + 1, device=cn_f.device),
         )
-        log_p = (
-            k_f * torch.log(pop_af_safe)
-            + (cn_safe - k_f) * torch.log(1.0 - pop_af_safe)
+        log_comb = log_comb - torch.lgamma(cn_safe - k_f + 1)
+        log_p = k_f * torch.log(pop_af_safe) + (cn_safe - k_f) * torch.log(
+            1.0 - pop_af_safe,
         )
         log_binom = log_comb + log_p
 
@@ -143,9 +142,12 @@ def _marginalized_af_log_lik(
     log_stack = torch.stack(log_terms, dim=0)  # (n_states, ..., n_bins, max_sites, n_samples)
     log_marginal = torch.logsumexp(log_stack, dim=0)  # (..., n_bins, max_sites, n_samples)
 
-    # Mask out invalid sites and sum
+    # Mask out invalid sites and average over observed sites so bins with more
+    # retained loci do not automatically outweigh bins with fewer loci.
     log_marginal = torch.where(site_mask, log_marginal, torch.zeros_like(log_marginal))
-    return log_marginal.sum(dim=-2)  # (..., n_bins, n_samples) — sum over sites
+    site_counts = site_mask.to(log_marginal.dtype).sum(dim=-2)
+    site_counts_safe = torch.clamp(site_counts, min=1.0)
+    return log_marginal.sum(dim=-2) / site_counts_safe
 
 
 def _marginalized_af_log_lik_numpy(
@@ -172,7 +174,8 @@ def _marginalized_af_log_lik_numpy(
         concentration: Beta-Binomial concentration.
 
     Returns:
-        ``(n_bins, n_samples)`` log-likelihood summed over sites within each bin.
+        ``(n_bins, n_samples)`` log-likelihood averaged over observed sites
+        within each bin.
     """
     from scipy.stats import betabinom as betabinom_scipy
     from scipy.stats import binom as binom_scipy
@@ -207,9 +210,12 @@ def _marginalized_af_log_lik_numpy(
         np.sum(np.exp(log_stack - max_val), axis=0) + 1e-30
     )
 
-    # Mask and sum over sites
+    # Mask and average over observed sites so AF contribution is not a direct
+    # function of how many loci were retained in each bin.
     log_marginal = np.where(site_mask, log_marginal, 0.0)
-    return log_marginal.sum(axis=1)  # (n_bins, n_samples)
+    site_counts = site_mask.sum(axis=1, dtype=np.float64)
+    site_counts_safe = np.maximum(site_counts, 1.0)
+    return log_marginal.sum(axis=1) / site_counts_safe
 
 
 def _precompute_af_table(
@@ -238,7 +244,7 @@ def _precompute_af_table(
     Returns:
         Tensor of shape ``(n_states, n_bins, n_samples)`` where entry
         ``[c, b, s]`` is the marginalized AF log-likelihood for CN state *c*
-        at bin *b* and sample *s*.
+        at bin *b* and sample *s*, normalized by observed site count.
     """
     n_bins = site_alt.shape[0]
     n_samples = site_alt.shape[2]
@@ -266,7 +272,7 @@ class CNVModel:
     When per-site allele data is provided, the model additionally includes
     a marginalized allele-fraction likelihood that jointly considers all
     possible genotype states at each SNP site, weighted by population
-    allele frequencies.
+    allele frequencies and normalized by observed site count per bin.
 
     Parameters
     ----------
@@ -290,7 +296,21 @@ class CNVModel:
     af_concentration : float
         Beta-Binomial concentration for the allele-fraction model.
     af_weight : float
-        Relative weight of the allele-fraction likelihood (0 to disable).
+        Relative weight of the per-bin, site-count-normalized allele-fraction
+        likelihood (0 to disable).
+    alpha_sex_ref : float
+        Dirichlet concentration for CN = 2 on sex chromosomes (default 1.0,
+        flat).  The sex–CN coupling factor provides the main sex-dependent
+        prior, so this can remain uninformative.
+    alpha_sex_non_ref : float
+        Dirichlet concentration for non-reference states on sex chromosomes.
+    sex_prior : tuple
+        Prior probabilities ``(P(XX), P(XY))`` for the per-sample sex
+        karyotype latent variable.
+    sex_cn_weight : float
+        Weight of the per-bin sex–CN coupling factor.  Normalised by
+        chromosome-type bin count so the total coupling per chromosome equals
+        this value.  Set to 0 to disable the sex karyotype latent entirely.
     """
 
     # The list of continuous latent sites exposed to the guide.
@@ -309,6 +329,10 @@ class CNVModel:
         guide_type: str = "diagonal",
         af_concentration: float = DEFAULT_AF_CONCENTRATION,
         af_weight: float = DEFAULT_AF_WEIGHT,
+        alpha_sex_ref: float = 1.0,
+        alpha_sex_non_ref: float = 1.0,
+        sex_prior: tuple = (0.5, 0.5),
+        sex_cn_weight: float = 5.0,
     ) -> None:
         self.n_states = n_states
         self.alpha_ref = alpha_ref
@@ -321,6 +345,39 @@ class CNVModel:
         self.guide_type = guide_type
         self.af_concentration = af_concentration
         self.af_weight = af_weight
+        self.alpha_sex_ref = alpha_sex_ref
+        self.alpha_sex_non_ref = alpha_sex_non_ref
+        self.sex_prior = sex_prior
+        self.sex_cn_weight = sex_cn_weight
+
+        # Per-chromosome-type Dirichlet alpha table: (3, n_states)
+        # Row 0: autosomes — strong CN=2 prior
+        # Row 1: chrX — flat prior (sex_cn coupling handles sex-dependent CN)
+        # Row 2: chrY — flat prior
+        alpha_auto = [alpha_non_ref] * n_states
+        alpha_auto[2] = alpha_ref
+        alpha_sex = [alpha_sex_non_ref] * n_states
+        alpha_sex[2] = alpha_sex_ref
+        self.alpha_table = torch.tensor(
+            [alpha_auto, alpha_sex, alpha_sex], dtype=dtype, device=device,
+        )
+
+        # Sex-CN coupling score table: (2, 3, n_states)
+        # Indexed by [sex_state, chr_type, cn_state].
+        # 0 for the expected CN state; -1 penalty for unexpected states.
+        # Autosome (chr_type=0): all zeros — no sex effect.
+        sex_cn_score = torch.zeros(2, 3, n_states, dtype=dtype, device=device)
+        # chrX (type 1): XX→CN 2, XY→CN 1
+        sex_cn_score[0, 1, :] = -1.0
+        sex_cn_score[0, 1, 2] = 0.0
+        sex_cn_score[1, 1, :] = -1.0
+        sex_cn_score[1, 1, 1] = 0.0
+        # chrY (type 2): XX→CN 0, XY→CN 1
+        sex_cn_score[0, 2, :] = -1.0
+        sex_cn_score[0, 2, 0] = 0.0
+        sex_cn_score[1, 2, :] = -1.0
+        sex_cn_score[1, 2, 1] = 0.0
+        self.sex_cn_score = sex_cn_score
 
         self.loss_history: Dict[str, List[float]] = {"epoch": [], "elbo": []}
 
@@ -343,6 +400,8 @@ class CNVModel:
         depth: torch.Tensor,
         n_bins: int = None,
         n_samples: int = None,
+        chr_type: Optional[torch.Tensor] = None,
+        sex_cn_weight_per_bin: Optional[torch.Tensor] = None,
         site_alt: Optional[torch.Tensor] = None,
         site_total: Optional[torch.Tensor] = None,
         site_pop_af: Optional[torch.Tensor] = None,
@@ -355,6 +414,8 @@ class CNVModel:
             depth: Observed normalised depth tensor (n_bins × n_samples).
             n_bins: Number of genomic bins.
             n_samples: Number of samples.
+            chr_type: Per-bin chromosome type (0=autosome, 1=chrX, 2=chrY).
+            sex_cn_weight_per_bin: Per-bin normalised sex–CN coupling weight.
             site_alt: Per-site alt counts (n_bins, max_sites, n_samples).
                 Only used when *af_table* is ``None`` (falls back to
                 on-the-fly computation).
@@ -376,11 +437,18 @@ class CNVModel:
         plate_bins = pyro.plate("bins", n_bins, dim=-2, device=self.device)
         plate_samples = pyro.plate("samples", n_samples, dim=-1, device=self.device)
 
-        # Per-sample variance
+        # Per-sample variance and sex karyotype
         with plate_samples:
             sample_var = pyro.sample(
                 "sample_var", dist.Exponential(1.0 / self.var_sample)
             )
+            if self.sex_cn_weight > 0 and chr_type is not None:
+                sex_prior = torch.tensor(
+                    self.sex_prior, device=self.device, dtype=self.dtype,
+                )
+                sex_karyotype = pyro.sample(
+                    "sex_karyotype", dist.Categorical(sex_prior),
+                )
 
         # Per-bin latent variables
         with plate_bins:
@@ -391,9 +459,12 @@ class CNVModel:
                 "bin_var", dist.Exponential(1.0 / self.var_bin)
             )
 
-            # Dirichlet-Categorical CN prior (heavily weights CN = 2)
-            alpha = self.alpha_non_ref * one.expand(self.n_states)
-            alpha[2] = self.alpha_ref
+            # Dirichlet-Categorical CN prior — per-chromosome-type alphas
+            if chr_type is not None:
+                alpha = self.alpha_table[chr_type]  # (n_bins, n_states)
+            else:
+                alpha = self.alpha_non_ref * one.expand(self.n_states)
+                alpha[2] = self.alpha_ref
             cn_probs = pyro.sample("cn_probs", dist.Dirichlet(alpha))
 
         # Per-bin, per-sample observations
@@ -402,6 +473,16 @@ class CNVModel:
             expected = Vindex(cn_states)[cn] * bin_bias
             variance = sample_var + bin_var
             pyro.sample("obs", dist.Normal(expected, variance.sqrt()), obs=depth)
+
+            # ── sex–CN coupling factor ────────────────────────────────────────
+            if self.sex_cn_weight > 0 and chr_type is not None:
+                chr_type_exp = chr_type.unsqueeze(-1)       # (n_bins, 1)
+                score = Vindex(self.sex_cn_score)[
+                    sex_karyotype, chr_type_exp, cn,
+                ]
+                pyro.factor(
+                    "sex_cn_prior", sex_cn_weight_per_bin * score,
+                )
 
             # ── marginalized allele-fraction likelihood ───────────────────
             if af_table is not None and self.af_weight > 0:
@@ -415,8 +496,7 @@ class CNVModel:
                         cn == c, af_table[c], zero,
                     )
                 pyro.factor("af_lik", self.af_weight * af_log_lik)
-            elif (site_alt is not None and site_total is not None
-                    and self.af_weight > 0):
+            elif site_alt is not None and site_total is not None and self.af_weight > 0:
                 # Slow fallback: compute BetaBinomial on the fly.
                 af_log_lik = _marginalized_af_log_lik(
                     site_alt, site_total, site_pop_af, site_mask,
@@ -433,12 +513,26 @@ class CNVModel:
         When per-site allele data is present and ``af_weight > 0``, the
         expensive BetaBinomial marginalisation is done **once** here and
         passed to the model as a precomputed lookup table (``af_table``).
+        The stored AF term is normalized by observed site count within each
+        bin/sample so changing ``max_sites_per_bin`` does not require a
+        compensating change to ``af_weight``.
         """
         kw: dict = {
             "depth": data.depth,
             "n_bins": data.n_bins,
             "n_samples": data.n_samples,
         }
+        # Chromosome-type tensor and per-bin sex-CN coupling weight
+        if hasattr(data, "chr_type") and data.chr_type is not None:
+            kw["chr_type"] = data.chr_type
+            if self.sex_cn_weight > 0:
+                ct = data.chr_type
+                counts = torch.zeros(3, device=ct.device, dtype=self.dtype)
+                for t in range(3):
+                    counts[t] = (ct == t).sum().float().clamp(min=1)
+                kw["sex_cn_weight_per_bin"] = (
+                    self.sex_cn_weight / counts[ct]
+                ).unsqueeze(-1)  # (n_bins, 1)
         if data.site_alt is not None and self.af_weight > 0:
             with torch.no_grad():
                 kw["af_table"] = _precompute_af_table(
@@ -548,9 +642,18 @@ class CNVModel:
         logger.info("Computing MAP estimates …")
         model_kw = self._model_kwargs(data)
 
+        has_sex = (
+            self.sex_cn_weight > 0
+            and "chr_type" in model_kw
+            and model_kw["chr_type"] is not None
+        )
+        first_dim = -4 if has_sex else -3
+
         guide_trace = poutine.trace(self.guide).get_trace(**model_kw)
         replayed = poutine.replay(self.model, trace=guide_trace)
-        inferred = infer_discrete(replayed, temperature=0, first_available_dim=-3)
+        inferred = infer_discrete(
+            replayed, temperature=0, first_available_dim=first_dim,
+        )
         trace = poutine.trace(inferred).get_trace(**model_kw)
 
         estimates: Dict[str, np.ndarray] = {}
@@ -559,6 +662,10 @@ class CNVModel:
                 guide_trace.nodes[site]["value"].detach().cpu().numpy()
             )
         estimates["cn"] = trace.nodes["cn"]["value"].detach().cpu().numpy()
+        if has_sex and "sex_karyotype" in trace.nodes:
+            estimates["sex_karyotype"] = (
+                trace.nodes["sex_karyotype"]["value"].detach().cpu().numpy()
+            )
         return estimates
 
     def run_discrete_inference(
@@ -583,9 +690,10 @@ class CNVModel:
                 :meth:`get_map_estimates` to avoid recomputation.
 
         Returns:
-            Dictionary with key ``'cn_posterior'`` mapping to an array of shape
-            ``(n_bins, n_data_samples, n_states)`` containing exact per-state
-            posterior probabilities.
+            Dictionary with ``'cn_posterior'`` of shape
+            ``(n_bins, n_samples, n_states)`` and, when sex–CN coupling is
+            active, ``'sex_posterior'`` of shape ``(n_samples, 2)`` giving
+            ``[P(XX), P(XY)]`` per sample.
         """
         logger.info("Running exact analytical discrete inference …")
 
@@ -615,7 +723,7 @@ class CNVModel:
         ) / (2 * std_b ** 2)
 
         log_prior = np.log(np.maximum(cn_probs.T[:, :, np.newaxis], 1e-10))
-        log_unnormalized = log_lik + log_prior
+        base_log_unnorm = log_lik + log_prior  # (n_states, n_bins, n_samples)
 
         # ── marginalized allele-fraction likelihood ──────────────────────
         if data.site_alt is not None and self.af_weight > 0:
@@ -630,19 +738,91 @@ class CNVModel:
                     cn_state=c, n_states=self.n_states,
                     concentration=self.af_concentration,
                 )
-                # af_ll shape: (n_bins, n_samples)
-                log_unnormalized[c] += self.af_weight * af_ll
+                base_log_unnorm[c] += self.af_weight * af_ll
 
             n_sites = int(site_mask_np.any(axis=2).sum())
             logger.info(
-                "AF marginalised likelihood: %d total sites (weight=%.2f)",
+                "AF marginalised likelihood: %d total sites, normalized "
+                "per bin/sample (weight=%.2f)",
                 n_sites, self.af_weight,
             )
 
-        max_log = np.max(log_unnormalized, axis=0, keepdims=True)
-        exp_vals = np.exp(log_unnormalized - max_log)
+        # ── sex-aware marginalisation ────────────────────────────────
+        has_sex = (
+            self.sex_cn_weight > 0
+            and hasattr(data, "chr_type")
+            and data.chr_type is not None
+        )
+        if has_sex:
+            chr_type_np = data.chr_type.cpu().numpy()
+            sex_cn_np = self.sex_cn_score.cpu().numpy()  # (2, 3, n_states)
+            sex_prior_np = np.array(self.sex_prior, dtype=np.float64)
+
+            # Per-bin weight normalised by chr-type bin count
+            ct_counts = np.array(
+                [max(int((chr_type_np == t).sum()), 1) for t in range(3)],
+                dtype=np.float64,
+            )
+            w_per_bin = self.sex_cn_weight / ct_counts[chr_type_np]
+
+            n_bins, n_samp = data.n_bins, data.n_samples
+            log_evidence = np.zeros((2, n_samp))
+            cn_post_given_sex = np.zeros(
+                (2, self.n_states, n_bins, n_samp),
+            )
+
+            for s in range(2):
+                penalty = np.zeros((self.n_states, n_bins, 1))
+                for c in range(self.n_states):
+                    penalty[c, :, 0] = (
+                        w_per_bin * sex_cn_np[s, chr_type_np, c]
+                    )
+                log_unnorm_s = base_log_unnorm + penalty
+
+                mx = np.max(log_unnorm_s, axis=0, keepdims=True)
+                ev = np.exp(log_unnorm_s - mx)
+                log_Z_bin = mx.squeeze(0) + np.log(ev.sum(axis=0) + 1e-30)
+
+                log_evidence[s] = log_Z_bin.sum(axis=0)
+                cn_post_given_sex[s] = ev / ev.sum(axis=0, keepdims=True)
+
+            # Posterior over sex per sample
+            log_sex = (
+                np.log(np.maximum(sex_prior_np, 1e-10))[:, np.newaxis]
+                + log_evidence
+            )
+            mx_s = np.max(log_sex, axis=0, keepdims=True)
+            sex_post = np.exp(log_sex - mx_s)
+            sex_post /= sex_post.sum(axis=0, keepdims=True)
+
+            # Marginal CN posterior: weighted sum over sex states
+            cn_marginal = np.zeros((self.n_states, n_bins, n_samp))
+            for s in range(2):
+                cn_marginal += (
+                    sex_post[s][np.newaxis, np.newaxis, :]
+                    * cn_post_given_sex[s]
+                )
+
+            cn_posterior = np.transpose(cn_marginal, (1, 2, 0)).astype(
+                np.float32, copy=False,
+            )
+            logger.info(
+                "Sex posterior (mean): P(XX)=%.3f  P(XY)=%.3f",
+                sex_post[0].mean(), sex_post[1].mean(),
+            )
+            logger.info("Exact analytical discrete inference complete.")
+            return {
+                "cn_posterior": cn_posterior,
+                "sex_posterior": sex_post.T.astype(np.float32, copy=False),
+            }
+
+        # ── fallback: no sex coupling ────────────────────────────────
+        max_log = np.max(base_log_unnorm, axis=0, keepdims=True)
+        exp_vals = np.exp(base_log_unnorm - max_log)
         posterior = exp_vals / np.sum(exp_vals, axis=0, keepdims=True)
-        cn_posterior = np.transpose(posterior, (1, 2, 0)).astype(np.float32, copy=False)
+        cn_posterior = np.transpose(posterior, (1, 2, 0)).astype(
+            np.float32, copy=False,
+        )
 
         logger.info("Exact analytical discrete inference complete.")
         return {"cn_posterior": cn_posterior}

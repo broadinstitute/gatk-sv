@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from gatk_sv_ploidy._util import CHR_ORDER, get_sample_columns
+from gatk_sv_ploidy._util import AUTOSOME_NAMES, CHR_ORDER, get_sample_columns
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +100,17 @@ class DepthData:
         self.start: np.ndarray = df["Start"].values
         self.end: np.ndarray = df["End"].values
         self.sample_ids: List[str] = sample_cols
+
+        # ── chromosome type tensor (0=autosome, 1=chrX, 2=chrY) ────────
+        _chr_type_map = {c: 0 for c in AUTOSOME_NAMES}
+        _chr_type_map["chrX"] = 1
+        _chr_type_map["chrY"] = 2
+        self.chr_type: torch.Tensor = torch.tensor(
+            np.array(
+                [_chr_type_map.get(c, 0) for c in self.chr], dtype=np.int64,
+            ),
+            device=device,
+        )
 
         # ── build depth tensor ──────────────────────────────────────────
         depth_matrix = df[sample_cols].values.astype(np.float32)
