@@ -32,7 +32,6 @@ workflow SVShell {
     File genome_track_index = genome_track + ".tbi"
   }
 
-
   call RunSVShell {
     input:
       gcnv_model_tars = gcnv_model_tars,
