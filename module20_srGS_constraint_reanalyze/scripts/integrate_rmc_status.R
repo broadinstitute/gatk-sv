@@ -93,7 +93,14 @@ n_na      <- sum(is.na(rmc_status))
 cat(sprintf("rmc_status assigned: PASS=%d, outlier=%d, NA=%d\n",
             n_pass, n_outlier, n_na))
 
+# rmc_filter: "pass" only for PASS transcripts; "fail" for outlier or not found
+rmc_filter <- ifelse(rmc_status == "PASS" & !is.na(rmc_status), "pass", "fail")
+
+cat(sprintf("rmc_filter: pass=%d, fail=%d\n",
+            sum(rmc_filter == "pass"), sum(rmc_filter == "fail")))
+
 dat$rmc_status <- rmc_status
+dat$rmc_filter <- rmc_filter
 
 # ── write output ──────────────────────────────────────────────────────────────
 cat("Writing:", opt$output, "\n")
