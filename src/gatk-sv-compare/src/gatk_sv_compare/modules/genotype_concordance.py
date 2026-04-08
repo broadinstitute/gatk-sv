@@ -142,7 +142,6 @@ def _concordance_series(metrics: pd.DataFrame, metric: str) -> pd.DataFrame:
     if metric == "genotype_concordance" and "cnv_concordance" in metric_frame.columns:
         cnv_mask = metric_frame["svtype"].astype(str) == "CNV"
         metric_frame.loc[cnv_mask, metric] = metric_frame.loc[cnv_mask, "cnv_concordance"]
-    metric_frame = metric_frame.loc[metric_frame["size_bucket"].astype(str) != "N/A"]
     if metric != "genotype_concordance":
         metric_frame = metric_frame.loc[metric_frame["svtype"].astype(str) != "CNV"]
     return metric_frame[["source", "svtype", "size_bucket", "af_bucket", "genomic_context", "evidence_bucket", "algorithms", metric]].dropna(subset=[metric])

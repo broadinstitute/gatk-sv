@@ -134,3 +134,46 @@ def test_plot_metric_heatmap_uses_mean_and_labels_colorbar(tmp_path, monkeypatch
 
     assert captured["colorbar"].ax.get_ylabel() == "Genotype concordance (mean)"
     assert "0.50" in captured["texts"]
+
+
+def test_plot_metric_heatmap_includes_bnd_column_for_non_size_views(tmp_path, monkeypatch) -> None:
+    metrics = pd.DataFrame(
+        [
+            {
+                "source": "a",
+                "label": "CallsetA",
+                "variant_id": "bnd1",
+                "svtype": "BND",
+                "size_bucket": "N/A",
+                "af_bucket": "AC=1",
+                "genomic_context": "none",
+                "algorithms": "manta",
+                "evidence_bucket": "PE,SR",
+                "genotype_concordance": 0.75,
+            },
+            {
+                "source": "b",
+                "label": "CallsetB",
+                "variant_id": "bnd2",
+                "svtype": "BND",
+                "size_bucket": "N/A",
+                "af_bucket": "AC=1",
+                "genomic_context": "none",
+                "algorithms": "manta",
+                "evidence_bucket": "PE,SR",
+                "genotype_concordance": 0.65,
+            },
+        ]
+    )
+    captured = {}
+    original_savefig = Figure.savefig
+
+    def spy_savefig(self, *args, **kwargs):
+        captured["xlabels"] = [tick.get_text() for axis in self.axes for tick in axis.get_xticklabels()]
+        return original_savefig(self, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", spy_savefig)
+
+    _plot_metric_heatmap(metrics, "genotype_concordance", "af_bucket", tmp_path / "bnd_heatmap.png", "CallsetA", "CallsetB")
+
+    assert "BND" in captured["xlabels"]

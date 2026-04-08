@@ -5,8 +5,9 @@ from dataclasses import replace
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
+from matplotlib.figure import Figure
 
-from gatk_sv_compare.modules.allele_freq import AlleleFreqModule, build_af_correlation_table
+from gatk_sv_compare.modules.allele_freq import AlleleFreqModule, _plot_grouped_af_correlation, build_af_correlation_table
 from gatk_sv_compare.plot_utils import plot_scatter_af
 
 
@@ -66,3 +67,40 @@ def test_plot_scatter_af_trend_stays_on_diagonal_for_perfect_data() -> None:
     trend_line = ax.lines[-1]
     assert trend_line.get_xdata() == pytest.approx(trend_line.get_ydata(), abs=1e-6)
     plt.close(fig)
+
+
+def test_plot_grouped_af_correlation_includes_ctx_svtype(tmp_path, monkeypatch) -> None:
+    matched_pairs = pd.DataFrame(
+        [
+            {
+                "svtype_a": "CTX",
+                "af_a": 0.10,
+                "af_b": 0.15,
+                "size_bucket_a": "N/A",
+                "genomic_context_a": "none",
+                "evidence_bucket_a": "PE,SR",
+                "algorithms_a": "manta",
+            },
+            {
+                "svtype_a": "DEL",
+                "af_a": 0.20,
+                "af_b": 0.18,
+                "size_bucket_a": "100-500bp",
+                "genomic_context_a": "none",
+                "evidence_bucket_a": "RD,PE",
+                "algorithms_a": "manta",
+            },
+        ]
+    )
+    captured = {}
+    original_savefig = Figure.savefig
+
+    def spy_savefig(self, *args, **kwargs):
+        captured["titles"] = [axis.get_title() for axis in self.axes]
+        return original_savefig(self, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", spy_savefig)
+
+    _plot_grouped_af_correlation(matched_pairs, "svtype_a", tmp_path / "af_by_type.png", "CallsetA", "CallsetB")
+
+    assert "CTX" in captured["titles"]

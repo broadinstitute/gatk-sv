@@ -205,7 +205,7 @@ task TrainSVGenotyping {
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
@@ -248,9 +248,6 @@ task GenotypeSVs {
     pe_file: {
                 localization_optional: true
               }
-    sr_file: {
-                localization_optional: true
-             }
   }
 
   RuntimeAttr default_attr = object {
@@ -275,6 +272,7 @@ task GenotypeSVs {
     }
     JVM_MAX_MEM=$(getJavaMem MemTotal)
 
+    # Localize RD and PE, but not SR due to interchromosomal BNDs that require access to all contigs' SR evidence
     gatk --java-options "-Xmx${JVM_MAX_MEM}" PrintSVEvidence \
       --sequence-dictionary ~{reference_dict} \
       --evidence-file ~{rd_file} \
@@ -287,12 +285,6 @@ task GenotypeSVs {
       ~{"-L " + contig} \
       -O local.pe.txt.gz
 
-    gatk --java-options "-Xmx${JVM_MAX_MEM}" PrintSVEvidence \
-      --sequence-dictionary ~{reference_dict} \
-      --evidence-file ~{sr_file} \
-      ~{"-L " + contig} \
-      -O local.sr.txt.gz
-
     gatk --java-options "-Xmx${JVM_MAX_MEM}" GenotypeSVs \
       -V ~{vcf} \
       -O ~{output_prefix}.vcf.gz \
@@ -300,7 +292,7 @@ task GenotypeSVs {
       --median-coverage ~{median_coverage} \
       --rd-file local.rd.txt.gz \
       --discordant-pairs-file local.pe.txt.gz \
-      --split-reads-file local.sr.txt.gz \
+      --split-reads-file ~{sr_file} \
       --sequence-dictionary ~{reference_dict} \
       --ploidy-table ~{ploidy_table} \
       --pesr-exclusion-intervals ~{pesr_exclusion_intervals} \
@@ -318,7 +310,7 @@ task GenotypeSVs {
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
