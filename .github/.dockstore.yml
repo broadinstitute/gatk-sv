@@ -264,3 +264,12 @@ workflows:
         - main
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: SparsifySD
+    primaryDescriptorPath: /wdl/SparsifySD.wdl
+    filters:
+      branches:
+        - mw_ploidy
+      tags:
+        - /.*/
