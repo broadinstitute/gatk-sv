@@ -6,6 +6,7 @@ workflow SVShell {
   input {
     File gcnv_model_tars_list
     File ref_pesr_split_files_list
+    File ref_pesr_disc_files_list
   }
 
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
@@ -14,14 +15,20 @@ workflow SVShell {
   scatter (ref_pesr_split_file in ref_pesr_split_files) {
     File ref_pesr_split_file_index = ref_pesr_split_file + ".tbi"
   }
-#  Array[File] ref_pesr_split_file_indices = ref_pesr_split_file_index
+
+  Array[File] ref_pesr_disc_files = read_lines(ref_pesr_disc_files_list)
+  scatter (ref_pesr_disc_file in ref_pesr_disc_files) {
+    File ref_pesr_disc_file_index = ref_pesr_disc_file + ".tbi"
+  }
 
 
   call RunSVShell {
     input:
       gcnv_model_tars = gcnv_model_tars,
       ref_pesr_split_files = ref_pesr_split_files,
-      ref_pesr_split_files_indices = ref_pesr_split_file_index
+      ref_pesr_split_files_indices = ref_pesr_split_file_index,
+      ref_pesr_disc_files = ref_pesr_disc_files,
+      ref_pesr_disc_files_indices = ref_pesr_disc_file_index,
   }
 
 
@@ -36,6 +43,8 @@ task RunSVShell {
     Array[File] gcnv_model_tars
     Array[File] ref_pesr_split_files
     Array[File] ref_pesr_split_files_indices
+    Array[File] ref_pesr_disc_files
+    Array[File] ref_pesr_disc_files_indices
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
