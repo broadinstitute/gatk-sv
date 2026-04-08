@@ -8,6 +8,7 @@ workflow SVShell {
     File ref_pesr_split_files_list
     File ref_pesr_disc_files_list
     File ref_pesr_sd_files_list
+    Array[File] genome_tracks
   }
 
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
@@ -27,6 +28,10 @@ workflow SVShell {
     File ref_pesr_sd_file_index = ref_pesr_sd_file + ".tbi"
   }
 
+  scatter (genome_track in genome_tracks) {
+    File genome_track_index = genome_track + ".tbi"
+  }
+
 
   call RunSVShell {
     input:
@@ -37,6 +42,8 @@ workflow SVShell {
       ref_pesr_disc_files_indices = ref_pesr_disc_file_index,
       ref_pesr_sd_files = ref_pesr_sd_files,
       ref_pesr_sd_files_indices = ref_pesr_sd_file_index,
+      genome_tracks = genome_tracks,
+      genome_tracks_indices = genome_track_index,
   }
 
 
@@ -55,6 +62,8 @@ task RunSVShell {
     Array[File] ref_pesr_disc_files_indices
     Array[File] ref_pesr_sd_files
     Array[File] ref_pesr_sd_files_indices
+    Array[File] genome_tracks
+    Array[File] genome_tracks_indices
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
