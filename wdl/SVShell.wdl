@@ -9,6 +9,7 @@ workflow SVShell {
     File ref_pesr_disc_files_list
     File ref_pesr_sd_files_list
     Array[File] genome_tracks
+    File pesr_exclude_intervals
   }
 
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
@@ -43,6 +44,7 @@ workflow SVShell {
       ref_pesr_sd_files_indices = ref_pesr_sd_file_index,
       genome_tracks = genome_tracks,
       genome_tracks_indices = genome_track_index,
+      pesr_exclude_intervals = pesr_exclude_intervals,
   }
 
 
@@ -63,6 +65,7 @@ task RunSVShell {
     Array[File] ref_pesr_sd_files_indices
     Array[File] genome_tracks
     Array[File] genome_tracks_indices
+    File pesr_exclude_intervals
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
