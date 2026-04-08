@@ -33,6 +33,9 @@ workflow SVShell {
     File genome_track_index = genome_track + ".tbi"
   }
 
+  File pesr_exclude_intervals_index = pesr_exclude_intervals + ".tbi"
+
+
   call RunSVShell {
     input:
       gcnv_model_tars = gcnv_model_tars,
@@ -45,6 +48,7 @@ workflow SVShell {
       genome_tracks = genome_tracks,
       genome_tracks_indices = genome_track_index,
       pesr_exclude_intervals = pesr_exclude_intervals,
+      pesr_exclude_intervals_index = pesr_exclude_intervals_index,
   }
 
 
@@ -66,6 +70,7 @@ task RunSVShell {
     Array[File] genome_tracks
     Array[File] genome_tracks_indices
     File pesr_exclude_intervals
+    File pesr_exclude_intervals_index
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
