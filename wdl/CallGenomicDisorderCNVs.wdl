@@ -104,22 +104,10 @@ task RunGenomicDisorderCNVs {
   }
 
   String output_tarball_name = batch + ".gatk_sv_gd.tar.gz"
-  String flank_exclusion_args = if defined(flank_exclusion_intervals)
-    then "--flank-exclusion-intervals " + sep(" ", select_first([flank_exclusion_intervals]))
-    else ""
-
   Int disk_gb = ceil(50 + size([
     low_res_counts,
     baf_matrix,
     high_res_counts,
-    gd_table,
-    segdup_bed,
-    centromere_bed,
-    acrocentric_arm_bed,
-    gaps_bed,
-    gtf,
-    transition_matrix,
-    breakpoint_transition_matrix,
   ], "GiB"))
 
   RuntimeAttr default_attr = object {
@@ -145,7 +133,7 @@ task RunGenomicDisorderCNVs {
       --segdup-bed ~{segdup_bed} \
       --centromere-bed ~{centromere_bed} \
       --acrocentric-arm-bed ~{acrocentric_arm_bed} \
-      ~{flank_exclusion_args} \
+      ~{if length(select_first([flank_exclusion_intervals, []])) > 0 then "--flank-exclusion-intervals" else ""} ~{sep=" " select_first([flank_exclusion_intervals, []])} \
       --gaps-bed ~{gaps_bed} \
       --gtf ~{gtf} \
       --transition-matrix ~{transition_matrix} \
