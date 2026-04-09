@@ -97,7 +97,7 @@ task CondenseReadCounts {
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 3.0,
-    disk_gb: 10,
+    disk_gb: ceil(50.0 +  size(counts, "GB") * 3),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
