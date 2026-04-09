@@ -579,7 +579,7 @@ class CNVModel:
         Returns:
             List of per-epoch ELBO losses.
         """
-        logger.info("Initialising training …")
+        logger.info("Initialising training ...")
         pyro.clear_param_store()
 
         scheduler = pyro.optim.LambdaLR(
@@ -595,7 +595,7 @@ class CNVModel:
         elbo = JitTraceEnum_ELBO() if jit else TraceEnum_ELBO()
         svi = SVI(self.model, self.guide, optim=scheduler, loss=elbo)
 
-        logger.info("Training for up to %d iterations …", max_iter)
+        logger.info("Training for up to %d iterations ...", max_iter)
 
         best_loss = float("inf")
         patience_ctr = 0
@@ -641,7 +641,7 @@ class CNVModel:
         Returns:
             Dictionary mapping site names to numpy arrays.
         """
-        logger.info("Computing MAP estimates …")
+        logger.info("Computing MAP estimates ...")
         model_kw = self._model_kwargs(data)
 
         has_sex = (
@@ -697,7 +697,7 @@ class CNVModel:
             active, ``'sex_posterior'`` of shape ``(n_samples, 2)`` giving
             ``[P(XX), P(XY)]`` per sample.
         """
-        logger.info("Running exact analytical discrete inference …")
+        logger.info("Running discrete inference ...")
 
         maps = map_estimates if map_estimates is not None else self.get_map_estimates(data)
 

@@ -1,7 +1,7 @@
 """
 CLI entry point for gatk-sv-ploidy.
 
-Dispatches to subcommands: preprocess, infer, call, plot, eval, pull-snps.
+Dispatches to subcommands: preprocess, infer, ppd, call, plot, eval, pull-snps.
 """
 
 import sys
@@ -10,6 +10,7 @@ import sys
 SUBCOMMANDS = {
     "preprocess": "gatk_sv_ploidy.preprocess",
     "infer": "gatk_sv_ploidy.infer",
+    "ppd": "gatk_sv_ploidy.ppd",
     "call": "gatk_sv_ploidy.call",
     "plot": "gatk_sv_ploidy.plot",
     "eval": "gatk_sv_ploidy.eval",
@@ -19,6 +20,7 @@ SUBCOMMANDS = {
 DESCRIPTIONS = {
     "preprocess": "Normalise and filter depth data for aneuploidy inference",
     "infer": "Train Bayesian model and run discrete CN inference",
+    "ppd": "Posterior predictive check: compare model predictions to data",
     "call": "Assign sex karyotype and aneuploidy type per sample",
     "plot": "Generate diagnostic and summary plots",
     "eval": "Evaluate predictions against a truth set",

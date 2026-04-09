@@ -92,8 +92,48 @@ class DepthData:
         # ── sort rows by chromosome order ───────────────────────────────
         df = df.copy()
         df["_order"] = df["Chr"].map(CHR_ORDER)
+        df["_orig_pos"] = np.arange(len(df))
         df = df.sort_values(["_order", "Start"])
-        df = df.drop("_order", axis=1)
+        sort_perm = df["_orig_pos"].values
+        df = df.drop(["_order", "_orig_pos"], axis=1)
+
+        # Reindex site_data to match the sorted row order
+        if site_data is not None:
+            reindex_keys = {
+                "site_alt", "site_total", "site_pop_af", "site_mask",
+                "bin_chr", "bin_start", "bin_end",
+            }
+            site_data = {
+                k: site_data[k][sort_perm] if k in reindex_keys
+                else site_data[k]
+                for k in site_data
+            }
+
+            # Cross-check bin coordinates when NPZ includes metadata
+            if "bin_chr" in site_data:
+                npz_chr = site_data["bin_chr"]
+                npz_start = site_data["bin_start"]
+                if not np.array_equal(npz_chr, df["Chr"].values):
+                    mismatches = np.where(npz_chr != df["Chr"].values)[0]
+                    raise ValueError(
+                        f"site_data bin_chr does not match depth Chr "
+                        f"after sort ({len(mismatches)} mismatches, "
+                        f"first at index {mismatches[0]}). "
+                        "Regenerate site_data.npz."
+                    )
+                if not np.array_equal(npz_start, df["Start"].values):
+                    mismatches = np.where(
+                        npz_start != df["Start"].values
+                    )[0]
+                    raise ValueError(
+                        f"site_data bin_start does not match depth Start "
+                        f"after sort ({len(mismatches)} mismatches, "
+                        f"first at index {mismatches[0]}). "
+                        "Regenerate site_data.npz."
+                    )
+                logger.info(
+                    "Site-data bin coordinates validated against depth bins."
+                )
 
         # ── store metadata arrays ───────────────────────────────────────
         self.chr: np.ndarray = df["Chr"].values
@@ -141,6 +181,22 @@ class DepthData:
             st = site_data["site_total"]   # (n_bins, max_sites, n_samples)
             sp = site_data["site_pop_af"]  # (n_bins, max_sites)
             sm = site_data["site_mask"]    # (n_bins, max_sites, n_samples)
+
+            # ── validate dimensions ─────────────────────────────────────
+            if sa.shape[0] != self.n_bins:
+                raise ValueError(
+                    f"site_data bin count ({sa.shape[0]}) does not match "
+                    f"depth bin count ({self.n_bins}). "
+                    "Regenerate site_data.npz from the same preprocessed "
+                    "depth file."
+                )
+            if sa.shape[2] != self.n_samples:
+                raise ValueError(
+                    f"site_data sample count ({sa.shape[2]}) does not match "
+                    f"depth sample count ({self.n_samples}). "
+                    "Regenerate site_data.npz from the same preprocessed "
+                    "depth file."
+                )
 
             self.site_alt = torch.tensor(
                 sa.astype(np.float32), dtype=dtype, device=device,
@@ -213,7 +269,10 @@ def load_site_data(path: str) -> Dict[str, np.ndarray]:
 
     The archive is expected to contain the keys ``site_alt``, ``site_total``,
     ``site_pop_af``, ``site_mask`` (as produced by
-    :func:`~gatk_sv_ploidy.preprocess.build_per_site_data`).
+    :func:`~gatk_sv_ploidy.preprocess.build_per_site_data`).  Bin-coordinate
+    metadata (``bin_chr``, ``bin_start``, ``bin_end``) is also loaded when
+    present; :class:`DepthData` uses these to validate alignment after
+    sorting.
 
     Args:
         path: Path to the ``.npz`` file.
@@ -229,6 +288,11 @@ def load_site_data(path: str) -> Dict[str, np.ndarray]:
         "site_pop_af": npz["site_pop_af"],
         "site_mask": npz["site_mask"],
     }
+    # Include bin coordinate metadata when available (for alignment
+    # validation inside DepthData).
+    for key in ("bin_chr", "bin_start", "bin_end"):
+        if key in npz:
+            result[key] = npz[key]
     logger.info(
         "  shape: bins=%d, max_sites=%d, samples=%d",
         result["site_alt"].shape[0],

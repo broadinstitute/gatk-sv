@@ -31,6 +31,7 @@ from gatk_sv_ploidy._plot_detail import (
     plot_sample_with_variance,
     plot_sex_assignments,
 )
+from gatk_sv_ploidy._plot_ppd import run_ppd_plots
 from gatk_sv_ploidy.data import load_site_data
 
 logger = logging.getLogger(__name__)
@@ -294,6 +295,197 @@ def plot_bin_variance_bias(bin_df: pd.DataFrame, output_dir: str) -> None:
     save_and_close_plot(output_dir, "bin_posteriors.png")
 
 
+# ── CN posterior entropy ────────────────────────────────────────────────────
+
+
+def plot_cn_posterior_entropy(bin_df: pd.DataFrame, output_dir: str) -> None:
+    """Genome-wide plot of per-bin CN posterior Shannon entropy.
+
+    Low-confidence bins (multiple plausible CN states) have high entropy;
+    confident bins approach zero.  Systematically elevated entropy in a
+    region signals poor model fit.
+
+    Args:
+        bin_df: ``bin_stats.tsv.gz`` DataFrame.
+        output_dir: Base output directory.
+    """
+    prob_cols = [f"cn_prob_{i}" for i in range(6)]
+    probs = bin_df.groupby(["chr", "start", "end"])[prob_cols].mean().reset_index()
+    probs = probs.sort_values(["chr", "start"])
+
+    p = probs[prob_cols].values
+    p = np.clip(p, 1e-10, 1.0)
+    entropy = -np.sum(p * np.log2(p), axis=1)
+
+    chrs = probs["chr"].values
+    x = np.arange(len(probs))
+
+    fig, ax = plt.subplots(figsize=(16, 4))
+    ax.scatter(x, entropy, s=3, alpha=0.5, color="darkred", rasterized=True)
+    ax.set_ylabel("Shannon Entropy (bits)")
+    ax.set_title("CN Posterior Entropy per Bin (averaged across samples)")
+    ax.set_xlim([x.min(), x.max()])
+    ax.grid(True, alpha=0.3, axis="y")
+    add_chromosome_labels(ax, chrs)
+    save_and_close_plot(output_dir, "cn_posterior_entropy.png")
+
+
+# ── chromosome CN heatmap ──────────────────────────────────────────────────
+
+
+def plot_chromosome_cn_heatmap(
+    df: pd.DataFrame, output_dir: str
+) -> None:
+    """Heatmap of dominant CN per sample × chromosome.
+
+    Colour intensity encodes the CN probability. Useful for spotting
+    sample-wide or chromosome-wide patterns.
+
+    Args:
+        df: ``chromosome_stats.tsv`` DataFrame.
+        output_dir: Base output directory.
+    """
+    chr_order = [f"chr{i}" for i in range(1, 23)] + ["chrX", "chrY"]
+    chr_order = [c for c in chr_order if c in df["chromosome"].unique()]
+
+    cn_pivot = df.pivot(index="sample", columns="chromosome", values="copy_number")
+    cn_pivot = cn_pivot.reindex(columns=chr_order)
+    prob_pivot = df.pivot(
+        index="sample", columns="chromosome", values="mean_cn_probability",
+    )
+    prob_pivot = prob_pivot.reindex(columns=chr_order)
+
+    # Sort samples: first by chrX CN, then by overall mean CN
+    cn_pivot["_sort"] = cn_pivot.mean(axis=1)
+    cn_pivot = cn_pivot.sort_values("_sort")
+    cn_pivot = cn_pivot.drop("_sort", axis=1)
+    prob_pivot = prob_pivot.reindex(cn_pivot.index)
+
+    n_samples = len(cn_pivot)
+    show_labels = n_samples <= 60
+
+    fig, ax = plt.subplots(figsize=(14, max(4, 0.25 * n_samples)))
+    im = ax.imshow(cn_pivot.values, aspect="auto", cmap="YlOrRd",
+                   vmin=0, vmax=5, interpolation="nearest")
+    ax.set_xticks(np.arange(len(chr_order)))
+    ax.set_xticklabels([c.replace("chr", "") for c in chr_order], rotation=45)
+    if show_labels:
+        ax.set_yticks(np.arange(n_samples))
+        ax.set_yticklabels(cn_pivot.index, fontsize=5)
+    else:
+        ax.set_yticks([])
+    ax.set_xlabel("Chromosome")
+    ax.set_ylabel("Sample")
+    ax.set_title("Dominant Copy Number per Sample × Chromosome")
+    plt.colorbar(im, ax=ax, label="Copy Number")
+    plt.tight_layout()
+    save_and_close_plot(output_dir, "chromosome_cn_heatmap.png")
+
+
+# ── ELBO convergence gradient ──────────────────────────────────────────────
+
+
+def plot_training_loss_with_gradient(
+    loss_df: pd.DataFrame, output_dir: str, window: int = 50,
+) -> None:
+    """Two-panel training diagnostic: ELBO loss + rolling gradient.
+
+    The gradient panel helps assess whether training converged (gradient
+    near zero) or is still improving.
+
+    Args:
+        loss_df: DataFrame with ``epoch`` and ``elbo`` columns.
+        output_dir: Base output directory.
+        window: Rolling window size for the gradient estimate.
+    """
+    epochs = loss_df["epoch"].values
+    elbo = loss_df["elbo"].values
+
+    fig, axes = plt.subplots(2, 1, figsize=(12, 7), sharex=True,
+                             gridspec_kw={"height_ratios": [2, 1]})
+
+    # Panel 1: ELBO loss
+    ax = axes[0]
+    ax.plot(epochs, elbo, color="steelblue", linewidth=1)
+    ax.set_ylabel("ELBO")
+    ax.set_title("Training Loss & Convergence Diagnostic")
+    ax.grid(True, alpha=0.3)
+
+    # Panel 2: Rolling gradient (finite differences)
+    ax = axes[1]
+    if len(elbo) > window:
+        gradient = np.convolve(np.diff(elbo), np.ones(window) / window, mode="valid")
+        grad_x = epochs[1:len(gradient) + 1]
+        ax.plot(grad_x, gradient, color="darkred", linewidth=1)
+        ax.axhline(0, color="gray", linestyle="--", alpha=0.5)
+    else:
+        grad = np.diff(elbo)
+        ax.plot(epochs[1:], grad, color="darkred", linewidth=1)
+        ax.axhline(0, color="gray", linestyle="--", alpha=0.5)
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel(f"∂ELBO/∂epoch (rolling {window})")
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    save_and_close_plot(output_dir, "training_loss_gradient.png")
+
+
+# ── parameter correlation / distribution ───────────────────────────────────
+
+
+def plot_parameter_diagnostics(bin_df: pd.DataFrame, output_dir: str) -> None:
+    """Parameter distribution and correlation diagnostics.
+
+    Three panels:
+    1. Bin bias vs bin stdev scatter — correlated values may indicate
+       model degeneracy.
+    2. Sample variance distribution histogram.
+    3. Bin bias distribution histogram.
+
+    Args:
+        bin_df: ``bin_stats.tsv.gz`` DataFrame.
+        output_dir: Base output directory.
+    """
+    unique_bins = bin_df.groupby(["chr", "start", "end"]).first().reset_index()
+    unique_bins = unique_bins.sort_values(["chr", "start"])
+    all_svars = bin_df.groupby("sample")["sample_var"].first().values
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+    # Panel 1: bin_bias vs bin_stdev scatter
+    ax = axes[0]
+    bb = unique_bins["bin_bias"].values
+    bs = np.sqrt(unique_bins["bin_var"].values)
+    ax.scatter(bb, bs, s=5, alpha=0.4, color="steelblue", rasterized=True)
+    ax.set_xlabel("Bin Bias")
+    ax.set_ylabel("Bin Stdev")
+    ax.set_title("Bin Bias vs Stdev")
+    ax.grid(True, alpha=0.3)
+
+    # Panel 2: sample variance histogram
+    ax = axes[1]
+    ax.hist(np.sqrt(all_svars), bins=30, alpha=0.7, edgecolor="black",
+            linewidth=0.5, color="teal")
+    ax.set_xlabel("Sample Stdev (√variance)")
+    ax.set_ylabel("Count")
+    ax.set_title("Sample Variance Distribution")
+    ax.grid(True, alpha=0.3)
+
+    # Panel 3: bin bias histogram
+    ax = axes[2]
+    ax.hist(bb, bins=50, alpha=0.7, edgecolor="black", linewidth=0.5,
+            color="coral")
+    ax.axvline(1.0, color="red", linestyle="--", alpha=0.6, label="No bias (1.0)")
+    ax.set_xlabel("Bin Bias")
+    ax.set_ylabel("Count")
+    ax.set_title("Bin Bias Distribution")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    save_and_close_plot(output_dir, "parameter_diagnostics.png")
+
+
 # ── orchestrators ──────────────────────────────────────────────────────────
 
 
@@ -332,7 +524,11 @@ def _run_aneuploidy_plots(
 ) -> None:
     """Generate aneuploidy-detection diagnostic plots."""
     plot_training_loss(loss_df, output_dir)
+    plot_training_loss_with_gradient(loss_df, output_dir)
     plot_bin_variance_bias(bin_df, output_dir)
+    plot_cn_posterior_entropy(bin_df, output_dir)
+    plot_chromosome_cn_heatmap(df, output_dir)
+    plot_parameter_diagnostics(bin_df, output_dir)
 
     all_vars = bin_df.groupby("sample")["sample_var"].first().values
     aneuploid_samples = df[df["is_aneuploid"]]["sample"].unique()
@@ -404,6 +600,10 @@ def parse_args() -> argparse.Namespace:
                    help="Sample ID to highlight in plots")
     p.add_argument("--skip-per-sample-plots", action="store_true",
                    help="Skip individual sample CN plots")
+    p.add_argument("--ppd-bin-summary", default=None,
+                   help="ppd_bin_summary.tsv.gz (from 'ppd')")
+    p.add_argument("--ppd-chr-summary", default=None,
+                   help="ppd_chromosome_summary.tsv (from 'ppd')")
     return p.parse_args()
 
 
@@ -450,6 +650,17 @@ def main() -> None:
     elif args.bin_stats or args.training_loss:
         logger.warning("Both --bin-stats and --training-loss required for "
                        "aneuploidy detection plots — skipping")
+
+    # ── posterior predictive check plots ─────────────────────────────────
+    if args.ppd_bin_summary and args.ppd_chr_summary:
+        ppd_bin_df = pd.read_csv(args.ppd_bin_summary, sep="\t",
+                                 compression="gzip")
+        ppd_chr_df = pd.read_csv(args.ppd_chr_summary, sep="\t")
+        run_ppd_plots(ppd_bin_df, ppd_chr_df, args.output_dir,
+                      args.highlight_sample)
+    elif args.ppd_bin_summary or args.ppd_chr_summary:
+        logger.warning("Both --ppd-bin-summary and --ppd-chr-summary "
+                       "required for PPD plots — skipping")
 
     logger.info("Done.")
 

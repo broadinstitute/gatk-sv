@@ -23,6 +23,152 @@ from gatk_sv_ploidy.data import read_depth_tsv
 logger = logging.getLogger(__name__)
 
 
+def read_bed_intervals(path: str) -> pd.DataFrame:
+    """Read a BED-like interval file with at least 3 columns.
+
+    Args:
+        path: Path to BED file containing ``chrom``, ``start``, ``end``.
+
+    Returns:
+        DataFrame with columns ``Chr``, ``Start``, ``End`` sorted by
+        chromosome and start coordinate.
+
+    Raises:
+        ValueError: If any interval has invalid coordinates.
+    """
+    df = pd.read_csv(
+        path,
+        sep="\t",
+        comment="#",
+        header=None,
+        usecols=[0, 1, 2],
+        names=["Chr", "Start", "End"],
+        dtype={"Chr": str, "Start": np.int64, "End": np.int64},
+    )
+    df = df.dropna(subset=["Chr", "Start", "End"]).copy()
+
+    bad = df["End"] <= df["Start"]
+    if bad.any():
+        first_bad = df.loc[bad].iloc[0]
+        raise ValueError(
+            "Invalid poor-region interval with end <= start: "
+            f"{first_bad['Chr']}:{int(first_bad['Start'])}-{int(first_bad['End'])}"
+        )
+
+    df = df.sort_values(["Chr", "Start", "End"]).reset_index(drop=True)
+    logger.info(
+        "Loaded poor regions: %d intervals across %d chromosome(s) from %s",
+        len(df),
+        df["Chr"].nunique(),
+        path,
+    )
+    return df
+
+
+def _merge_intervals_by_chr(
+    intervals: pd.DataFrame,
+) -> dict[str, list[tuple[int, int]]]:
+    """Merge overlapping/adjacent intervals by chromosome."""
+    merged: dict[str, list[tuple[int, int]]] = {}
+
+    for chrom, chrom_df in intervals.groupby("Chr", sort=False):
+        merged_intervals: list[tuple[int, int]] = []
+        for start, end in chrom_df[["Start", "End"]].itertuples(index=False):
+            start_i = int(start)
+            end_i = int(end)
+            if not merged_intervals or start_i > merged_intervals[-1][1]:
+                merged_intervals.append((start_i, end_i))
+            else:
+                prev_start, prev_end = merged_intervals[-1]
+                merged_intervals[-1] = (prev_start, max(prev_end, end_i))
+        merged[chrom] = merged_intervals
+
+    return merged
+
+
+def filter_poor_region_bins(
+    df: pd.DataFrame,
+    poor_regions: pd.DataFrame,
+    *,
+    min_poor_region_coverage: float = 0.5,
+) -> pd.DataFrame:
+    """Filter bins substantially covered by poor genomic regions.
+
+    A bin is removed when the fraction of its length overlapped by the union
+    of poor-region intervals on the same chromosome is at least
+    *min_poor_region_coverage*.
+
+    Args:
+        df: Depth DataFrame with ``Chr``, ``Start``, and ``End`` columns.
+        poor_regions: BED-like DataFrame of poor intervals.
+        min_poor_region_coverage: Minimum overlap fraction required to
+            remove a bin.
+
+    Returns:
+        Filtered DataFrame.
+    """
+    if not 0.0 <= min_poor_region_coverage <= 1.0:
+        raise ValueError("min_poor_region_coverage must be between 0 and 1")
+
+    if len(df) == 0 or len(poor_regions) == 0:
+        logger.info(
+            "Poor-region filter: no intervals or no bins to filter; kept %d bins",
+            len(df),
+        )
+        return df.copy()
+
+    merged_by_chr = _merge_intervals_by_chr(poor_regions)
+    chr_values = df["Chr"].to_numpy()
+    starts_all = df["Start"].to_numpy(dtype=np.int64)
+    ends_all = df["End"].to_numpy(dtype=np.int64)
+    overlap_fraction = np.zeros(len(df), dtype=np.float64)
+
+    for chrom, merged_intervals in merged_by_chr.items():
+        chrom_pos = np.flatnonzero(chr_values == chrom)
+        if len(chrom_pos) == 0:
+            continue
+
+        chrom_starts = starts_all[chrom_pos]
+        order = np.argsort(chrom_starts, kind="mergesort")
+        sorted_pos = chrom_pos[order]
+
+        interval_idx = 0
+        n_intervals = len(merged_intervals)
+
+        for row_pos in sorted_pos:
+            bin_start = int(starts_all[row_pos])
+            bin_end = int(ends_all[row_pos])
+            bin_len = max(bin_end - bin_start, 1)
+
+            while interval_idx < n_intervals and merged_intervals[interval_idx][1] <= bin_start:
+                interval_idx += 1
+
+            overlap_bp = 0
+            scan_idx = interval_idx
+            while scan_idx < n_intervals and merged_intervals[scan_idx][0] < bin_end:
+                overlap_start = max(bin_start, merged_intervals[scan_idx][0])
+                overlap_end = min(bin_end, merged_intervals[scan_idx][1])
+                if overlap_end > overlap_start:
+                    overlap_bp += overlap_end - overlap_start
+                if merged_intervals[scan_idx][1] >= bin_end:
+                    break
+                scan_idx += 1
+
+            overlap_fraction[row_pos] = overlap_bp / bin_len
+
+    poor_bad = overlap_fraction >= min_poor_region_coverage
+    n_flagged = int(poor_bad.sum())
+    df_out = df.loc[~poor_bad].copy()
+    logger.info(
+        "Poor-region filter (coverage ≥ %.0f%%): removed %d / %d bins; %d remain",
+        min_poor_region_coverage * 100,
+        n_flagged,
+        len(df),
+        len(df_out),
+    )
+    return df_out
+
+
 # ── normalisation ───────────────────────────────────────────────────────────
 
 
@@ -390,6 +536,147 @@ def read_known_sites(path: str) -> pd.DataFrame:
     return df
 
 
+def _process_sd_file(
+    sd_path: str,
+    sample_to_idx: dict[str, int],
+    bin_lookup: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]],
+    known_arrays: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]],
+    *,
+    have_known: bool,
+    effective_stride: int,
+    min_site_depth: int,
+) -> tuple[str, int, dict[int, dict[int, dict[str, object]]]]:
+    """Process one SD file into sparse per-bin site records."""
+    if have_known:
+        sd_df = read_site_depth_tsv(sd_path, stride=1)
+    else:
+        sd_df = read_site_depth_tsv(sd_path, position_stride=effective_stride)
+
+    file_site_data: dict[int, dict[int, dict[str, object]]] = {}
+    total_sites_used = 0
+
+    for sample_id in sd_df["sample"].unique():
+        if sample_id not in sample_to_idx:
+            logger.warning(
+                "Sample %s in SD file not in depth data, skipping",
+                sample_id,
+            )
+            continue
+
+        si = sample_to_idx[sample_id]
+        smask = sd_df["sample"].values == sample_id
+        s_contigs = sd_df["contig"].values[smask]
+        s_positions = sd_df["position"].values[smask].astype(np.int64)
+        s_a = sd_df["A"].values[smask]
+        s_c = sd_df["C"].values[smask]
+        s_g = sd_df["G"].values[smask]
+        s_t = sd_df["T"].values[smask]
+
+        for chrom, (chrom_bin_idx, starts, ends) in bin_lookup.items():
+            cmask = s_contigs == chrom
+            if not cmask.any():
+                continue
+
+            c_pos = s_positions[cmask]
+            c_a = s_a[cmask]
+            c_c = s_c[cmask]
+            c_g = s_g[cmask]
+            c_t = s_t[cmask]
+
+            bi = np.searchsorted(starts, c_pos, side="right") - 1
+            bi_safe = np.clip(bi, 0, len(starts) - 1)
+            in_bin = ((bi >= 0) & (bi < len(starts)) & (c_pos < ends[bi_safe]))
+
+            # Drop sites that don't fall inside any surviving bin.
+            if not in_bin.all():
+                n_dropped = int((~in_bin).sum())
+                logger.debug(
+                    "  %s %s: dropping %d sites outside bin boundaries",
+                    sample_id, chrom, n_dropped,
+                )
+                c_pos = c_pos[in_bin]
+                c_a = c_a[in_bin]
+                c_c = c_c[in_bin]
+                c_g = c_g[in_bin]
+                c_t = c_t[in_bin]
+                bi_safe = bi_safe[in_bin]
+
+            g_bi_arr = chrom_bin_idx[bi_safe]
+            if len(c_pos) == 0:
+                continue
+
+            totals = (c_a + c_c + c_g + c_t).astype(np.int64)
+
+            if have_known:
+                kp, kr, kaf = known_arrays.get(
+                    chrom, (np.empty(0, np.int64), np.empty(0, dtype="U1"), np.empty(0, np.float32)),
+                )
+                if len(kp) == 0:
+                    continue
+                ins = np.searchsorted(kp, c_pos)
+                ins_safe = np.clip(ins, 0, max(len(kp) - 1, 0))
+                match = kp[ins_safe] == c_pos
+
+                c_pos = c_pos[match]
+                c_a, c_c, c_g, c_t = (
+                    c_a[match], c_c[match], c_g[match], c_t[match],
+                )
+                g_bi_arr = g_bi_arr[match]
+                totals = totals[match]
+                ref_bases = kr[ins_safe[match]]
+                pop_afs = kaf[ins_safe[match]]
+
+                ref_counts = np.where(
+                    ref_bases == "A", c_a,
+                    np.where(ref_bases == "C", c_c,
+                             np.where(ref_bases == "G", c_g, c_t)),
+                )
+                alts = totals - ref_counts
+                observed = np.ones(len(c_pos), dtype=bool)
+            else:
+                depth_ok = totals >= min_site_depth
+                c_pos = c_pos[depth_ok]
+                c_a, c_c, c_g, c_t = (
+                    c_a[depth_ok], c_c[depth_ok], c_g[depth_ok], c_t[depth_ok],
+                )
+                g_bi_arr = g_bi_arr[depth_ok]
+                totals = totals[depth_ok]
+                if len(c_pos) == 0:
+                    continue
+
+                major = np.maximum(
+                    np.maximum(c_a, c_c), np.maximum(c_g, c_t),
+                )
+                alts = totals - major
+                pop_afs = np.full(len(c_pos), 0.5, dtype=np.float32)
+                observed = np.ones(len(c_pos), dtype=bool)
+
+            if len(c_pos) == 0:
+                continue
+
+            n_sites_chrom = len(c_pos)
+            total_sites_used += n_sites_chrom
+            for i in range(n_sites_chrom):
+                pos = int(c_pos[i])
+                g_bi = int(g_bi_arr[i])
+                bin_entry = file_site_data.setdefault(g_bi, {})
+                site_entry = bin_entry.setdefault(
+                    pos,
+                    {"pop_af": float(pop_afs[i]), "values": []},
+                )
+                site_entry["values"].append(
+                    (si, int(alts[i]), int(totals[i]), bool(observed[i]))
+                )
+
+            if n_sites_chrom > 0:
+                logger.debug(
+                    "  %s %s: %d sites accumulated",
+                    sample_id, chrom, n_sites_chrom,
+                )
+
+    return sd_path, total_sites_used, file_site_data
+
+
 def build_per_site_data(
     sd_paths: List[str],
     bins_df: pd.DataFrame,
@@ -483,151 +770,41 @@ def build_per_site_data(
     # When known sites are provided the searchsorted filter is fast
     # enough; only downsample in fallback (no known sites) mode.
     effective_stride = 1 if have_known else sd_stride
+    logger.info("Loading %d SD file(s)", len(sd_paths))
+    worker_results = [
+        _process_sd_file(
+            sd_path,
+            sample_to_idx,
+            bin_lookup,
+            known_arrays,
+            have_known=have_known,
+            effective_stride=effective_stride,
+            min_site_depth=min_site_depth,
+        )
+        for sd_path in sd_paths
+    ]
 
-    for sd_path in sd_paths:
-        if have_known:
-            # Known-sites mode: read at full resolution (fast searchsorted
-            # filter handles the reduction).
-            sd_df = read_site_depth_tsv(sd_path, stride=1)
-        else:
-            # No known sites: use position-based striding so that every
-            # sample keeps the same set of genomic positions.  This is
-            # slower than file-row stride but critical for multi-sample
-            # allele-fraction analysis where disjoint positions produce
-            # meaningless results.
-            sd_df = read_site_depth_tsv(sd_path, position_stride=effective_stride)
-
-        for sample_id in sd_df["sample"].unique():
-            if sample_id not in sample_to_idx:
-                logger.warning(
-                    "Sample %s in SD file not in depth data, skipping",
-                    sample_id,
-                )
-                continue
-
-            si = sample_to_idx[sample_id]
-            smask = sd_df["sample"].values == sample_id
-            s_contigs = sd_df["contig"].values[smask]
-            s_positions = sd_df["position"].values[smask].astype(np.int64)
-            s_a = sd_df["A"].values[smask]
-            s_c = sd_df["C"].values[smask]
-            s_g = sd_df["G"].values[smask]
-            s_t = sd_df["T"].values[smask]
-
-            for chrom, (chrom_bin_idx, starts, ends) in bin_lookup.items():
-                cmask = s_contigs == chrom
-                if not cmask.any():
-                    continue
-
-                c_pos = s_positions[cmask]
-                c_a = s_a[cmask]
-                c_c = s_c[cmask]
-                c_g = s_g[cmask]
-                c_t = s_t[cmask]
-
-                # ── Assign sites to bins (vectorised) ──
-                # Sites that fall inside a bin are assigned to that bin.
-                # Sites that fall in gaps between bins or beyond the last
-                # bin are assigned to the *nearest* bin on the same
-                # chromosome so they still contribute to the AF model.
-                bi = np.searchsorted(starts, c_pos, side="right") - 1
-                bi_safe = np.clip(bi, 0, len(starts) - 1)
-                in_bin = ((bi >= 0) & (bi < len(starts)) & (c_pos < ends[bi_safe]))
-
-                # For out-of-bin sites, find the nearest bin by distance
-                # to the closest bin boundary.
-                not_in_bin = ~in_bin
-                if not_in_bin.any():
-                    oob_pos = c_pos[not_in_bin]
-                    # Distance to each bin: max(start - pos, 0) + max(pos - end, 0)
-                    # Vectorised: (n_oob, n_bins_chrom)
-                    d_left = np.maximum(starts[np.newaxis, :] - oob_pos[:, np.newaxis], 0)
-                    d_right = np.maximum(oob_pos[:, np.newaxis] - ends[np.newaxis, :], 0)
-                    dist = d_left + d_right  # 0 inside bin, >0 outside
-                    nearest = np.argmin(dist, axis=1)
-                    bi_safe[not_in_bin] = nearest
-
-                g_bi_arr = chrom_bin_idx[bi_safe]
-                if len(c_pos) == 0:
-                    continue
-
-                totals = (c_a + c_c + c_g + c_t).astype(np.int64)
-
-                # ── Known-sites filter / alt-count computation (vectorised) ──
-                if have_known:
-                    kp, kr, kaf = known_arrays.get(
-                        chrom, (np.empty(0, np.int64),
-                                np.empty(0, dtype="U1"),
-                                np.empty(0, np.float32)),
-                    )
-                    if len(kp) == 0:
-                        continue
-                    ins = np.searchsorted(kp, c_pos)
-                    ins_safe = np.clip(ins, 0, max(len(kp) - 1, 0))
-                    match = kp[ins_safe] == c_pos
-
-                    c_pos = c_pos[match]
-                    c_a, c_c, c_g, c_t = (
-                        c_a[match], c_c[match], c_g[match], c_t[match],
-                    )
-                    g_bi_arr = g_bi_arr[match]
-                    totals = totals[match]
-                    ref_bases = kr[ins_safe[match]]
-                    pop_afs = kaf[ins_safe[match]]
-
-                    ref_counts = np.where(
-                        ref_bases == "A", c_a,
-                        np.where(ref_bases == "C", c_c,
-                                 np.where(ref_bases == "G", c_g, c_t)),
-                    )
-                    alts = totals - ref_counts
-                    observed = np.ones(len(c_pos), dtype=bool)
-                else:
-                    # Fallback mode: retain only sufficiently covered sites.
-                    depth_ok = totals >= min_site_depth
-                    c_pos = c_pos[depth_ok]
-                    c_a, c_c, c_g, c_t = (
-                        c_a[depth_ok], c_c[depth_ok],
-                        c_g[depth_ok], c_t[depth_ok],
-                    )
-                    g_bi_arr = g_bi_arr[depth_ok]
-                    totals = totals[depth_ok]
-                    if len(c_pos) == 0:
-                        continue
-
-                    major = np.maximum(
-                        np.maximum(c_a, c_c), np.maximum(c_g, c_t),
-                    )
-                    alts = totals - major
-                    pop_afs = np.full(len(c_pos), 0.5, dtype=np.float32)
-                    observed = np.ones(len(c_pos), dtype=bool)
-
-                if len(c_pos) == 0:
-                    continue
-
-                # ── Accumulate into per-bin dicts ──
-                n_sites_chrom = len(c_pos)
-                total_sites_used += n_sites_chrom
-                for i in range(n_sites_chrom):
-                    pos = int(c_pos[i])
-                    g_bi = int(g_bi_arr[i])
-                    entry = site_data[g_bi]
-                    if pos not in entry:
-                        entry[pos] = {
-                            "pop_af": float(pop_afs[i]),
-                            "alt": np.zeros(n_samples, dtype=np.int32),
-                            "total": np.zeros(n_samples, dtype=np.int32),
-                            "observed": np.zeros(n_samples, dtype=bool),
-                        }
-                    entry[pos]["alt"][si] = int(alts[i])
-                    entry[pos]["total"][si] = int(totals[i])
-                    entry[pos]["observed"][si] = bool(observed[i])
-
-                if n_sites_chrom > 0:
-                    logger.debug(
-                        "  %s %s: %d sites accumulated",
-                        sample_id, chrom, n_sites_chrom,
-                    )
+    for sd_path, file_total_sites, file_site_data in worker_results:
+        total_sites_used += file_total_sites
+        logger.info(
+            "Completed site depth ingestion for %s: %d retained site-sample entries",
+            os.path.basename(sd_path),
+            file_total_sites,
+        )
+        for g_bi, bin_sites in file_site_data.items():
+            entry = site_data[g_bi]
+            for pos, site_record in bin_sites.items():
+                if pos not in entry:
+                    entry[pos] = {
+                        "pop_af": float(site_record["pop_af"]),
+                        "alt": np.zeros(n_samples, dtype=np.int32),
+                        "total": np.zeros(n_samples, dtype=np.int32),
+                        "observed": np.zeros(n_samples, dtype=bool),
+                    }
+                for si, alt, total, observed in site_record["values"]:
+                    entry[pos]["alt"][si] = alt
+                    entry[pos]["total"][si] = total
+                    entry[pos]["observed"][si] = observed
 
     # ── pack into padded arrays ──────────────────────────────────────────
     site_alt = np.zeros((n_bins, max_sites_per_bin, n_samples), dtype=np.int32)
@@ -714,6 +891,16 @@ def parse_args() -> argparse.Namespace:
         "--skip-bin-filter", action="store_true", default=False,
         help="Skip bin quality filtering",
     )
+    p.add_argument(
+        "--poor-regions", default=None,
+        help="BED file of poor regions (for example segmental duplications); "
+             "bins with sufficient overlap are removed",
+    )
+    p.add_argument(
+        "--min-poor-region-coverage", type=float, default=0.5,
+        help="Minimum fraction of bin length overlapped by poor regions to "
+             "remove the bin",
+    )
 
     # Filter thresholds
     g = p.add_argument_group("bin-filter thresholds")
@@ -759,7 +946,6 @@ def parse_args() -> argparse.Namespace:
     a.add_argument("--sd-stride", type=int, default=1,
                    help="Keep every Nth row from SD files (100 = 100x "
                         "downsample).  Ignored when --known-sites is given.")
-
     return p.parse_args()
 
 
@@ -771,6 +957,11 @@ def main() -> None:
 
     # 1. Read
     df = read_depth_tsv(args.input)
+    n_input_bins = len(df)
+
+    poor_regions_df = None
+    if args.poor_regions:
+        poor_regions_df = read_bed_intervals(args.poor_regions)
 
     # 2. Optionally subset to viable trisomy chromosomes
     if args.viable_only:
@@ -805,6 +996,19 @@ def main() -> None:
             cohort_deviation_threshold=args.cohort_deviation_threshold,
             cohort_deviation_fraction_max=args.cohort_deviation_fraction_max,
         )
+
+    if poor_regions_df is not None:
+        df = filter_poor_region_bins(
+            df,
+            poor_regions_df,
+            min_poor_region_coverage=args.min_poor_region_coverage,
+        )
+
+    logger.info(
+        "Total bins retained after preprocess filters: %d / %d",
+        len(df),
+        n_input_bins,
+    )
 
     # 5. Write preprocessed depth
     out_path = os.path.join(args.output_dir, "preprocessed_depth.tsv")

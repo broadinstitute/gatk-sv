@@ -26,6 +26,32 @@ from gatk_sv_ploidy.models import CNVModel, _precompute_af_table
 logger = logging.getLogger(__name__)
 
 
+# ── artifact I/O ────────────────────────────────────────────────────────────
+
+
+def load_inference_artifacts(
+    path: str,
+) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+    """Load MAP estimates and CN posterior from a saved ``.npz`` archive.
+
+    Args:
+        path: Path to ``inference_artifacts.npz`` (produced by ``infer``).
+
+    Returns:
+        Tuple of ``(map_estimates, cn_posterior)`` dictionaries with
+        NumPy arrays.
+    """
+    npz = np.load(path, allow_pickle=True)
+    map_estimates: Dict[str, np.ndarray] = {}
+    cn_posterior: Dict[str, np.ndarray] = {}
+    for key in npz.files:
+        if key.startswith("cn_post_"):
+            cn_posterior[key[len("cn_post_"):]] = npz[key]
+        else:
+            map_estimates[key] = npz[key]
+    return map_estimates, cn_posterior
+
+
 # ── summary statistics ──────────────────────────────────────────────────────
 
 
@@ -496,6 +522,14 @@ def main() -> None:
             "MAP sex karyotype: %d XX, %d XY",
             int((sk == 0).sum()), int((sk == 1).sum()),
         )
+
+    # ── save inference artifacts for downstream tools (ppd, plot) ──────
+    artifacts_path = os.path.join(args.output_dir, "inference_artifacts.npz")
+    artifact_dict = {k: v for k, v in map_est.items()}
+    for k, v in cn_post.items():
+        artifact_dict[f"cn_post_{k}"] = v
+    np.savez_compressed(artifacts_path, **artifact_dict)
+    logger.info("Inference artifacts saved to %s", artifacts_path)
 
     # ── detect aneuploidies ─────────────────────────────────────────────
     aneuploid_map = detect_aneuploidies(
