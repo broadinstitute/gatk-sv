@@ -182,6 +182,13 @@ for rec in vcf_in:
     
     rec.alts = (f"<{allele_type}>",)
 
+    # Strip phasing from all sample genotypes so 1|0 and 0|1 are treated as 0/1
+    for s_name in rec.samples:
+        try:
+            rec.samples[s_name].phased = False
+        except (AttributeError, TypeError):
+            pass
+
     vcf_out.write(rec)
 
 vcf_out.close()

@@ -133,20 +133,20 @@ plotSVCountBars <- function(dat,svtypes,title=NULL,ylab="Count",tr.env.dat=NULL)
       rect(xleft=i-0.85,xright=i-0.15,
            ybottom=min.y,ytop=cnt,
            lwd=0.7,col=bar.col)
-      # TR_ENVELOPED shaded overlay with percentage label
+      # TR_ENVELOPED hatched overlay with count label in brackets
       if(!is.null(te.counts) && !is.na(te.counts[i]) && te.counts[i] > 0){
         te.cnt <- max(te.counts[i], min.y)
         rect(xleft=i-0.85,xright=i-0.15,
              ybottom=min.y,ytop=te.cnt,
-             lwd=0,col=adjustcolor("gray20",alpha=0.4),border=NA)
-        te.pct <- round(100 * te.counts[i] / cnt)
-        lum <- sum(col2rgb(bar.col)/255 * c(0.299,0.587,0.114))
-        txt.col <- if(lum > 0.55) "gray20" else "white"
-        text(x=i-0.5,y=te.cnt*1.4,cex=0.6,
-             labels=paste0(te.pct,"%"),col=txt.col)
+             density=15, angle=45, col="gray40", border=NA)
       }
+      # Count label: main count, then bracketed TR_ENVELOPED count below
       text(x=i-0.5,y=cnt*1.3,col=bar.col,
            labels=prettyNum(cnt,big.mark=","),cex=0.7)
+      if(!is.null(te.counts) && !is.na(te.counts[i]) && te.counts[i] > 0){
+        text(x=i-0.5,y=cnt*1.1,col=bar.col,cex=0.6,
+             labels=paste0("(",prettyNum(te.counts[i],big.mark=","),")"))
+      }
     }
     axis(1,at=i-0.5,line=-0.8,tick=F,las=2,cex.axis=0.8,
          labels=counts[i,1],col.axis=counts[i,3])
@@ -1143,7 +1143,7 @@ plotTiTvHeatmap <- function(snv.dat, af.labels, af.mins, af.maxs, regions, title
             max(2.5, if(length(mat.valid)>0) max(mat.valid) else 2.5))
   col.pal <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(101)
   mat.capped <- pmin(pmax(mat, zlim[1]), zlim[2])
-  par(mar=c(5,5,3,20), bty="n")
+  par(mar=c(5,5,3,28), bty="n")
   image(x=1:ncol(mat), y=1:nrow(mat), z=t(mat.capped), col=col.pal,
         xaxt="n", yaxt="n", xlab="", ylab="", zlim=zlim)
   axis(1, at=1:ncol(mat), labels=colnames(mat), las=2, cex.axis=0.75, tick=F, line=-0.5)
@@ -1155,15 +1155,15 @@ plotTiTvHeatmap <- function(snv.dat, af.labels, af.mins, af.maxs, regions, title
   old.xpd <- par(xpd=NA)
   usr <- par("usr")
   xw  <- usr[2] - usr[1]
-  cb.xl <- usr[2] + xw * 0.15
-  cb.xr <- usr[2] + xw * 0.25
+  cb.xl <- usr[2] + xw * 0.20
+  cb.xr <- usr[2] + xw * 0.33
   cb.y  <- seq(usr[3], usr[4], length.out=102)
   rect(xleft=cb.xl, xright=cb.xr, ybottom=cb.y[-length(cb.y)], ytop=cb.y[-1], col=col.pal, border=NA)
   rect(xleft=cb.xl, xright=cb.xr, ybottom=usr[3], ytop=usr[4], col=NA, border="gray50")
   label.vals <- round(seq(zlim[1],zlim[2],length.out=5),2)
   label.y    <- seq(usr[3],usr[4],length.out=5)
-  segments(x0=cb.xr, x1=cb.xr + xw*0.025, y0=label.y, y1=label.y, lwd=0.8)
-  text(x=cb.xr + xw*0.045, y=label.y, labels=sprintf("%.2f", label.vals), cex=0.75, adj=0)
+  segments(x0=cb.xr, x1=cb.xr + xw*0.05, y0=label.y, y1=label.y, lwd=0.8)
+  text(x=cb.xr + xw*0.07, y=label.y, labels=sprintf("%.2f", label.vals), cex=0.75, adj=0)
   par(old.xpd)
 }
 
@@ -1349,7 +1349,7 @@ wrapperPlotQualDistrib <- function(){
   col.size <- colorRampPalette(c("#1B9E77","#D95F02","#7570B3","#E7298A","#66A61E","#E6AB02"))(length(size.labels))
   col.reg <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
 
-  n.panels <- 4
+  n.panels <- 5
   png(paste(OUTDIR,"/main_plots/qual_distributions.png",sep=""),
       res=300, height=1800, width=n.panels*1800)
   layout(matrix(1:n.panels, nrow=1))
@@ -1374,11 +1374,11 @@ wrapperPlotQualDistrib <- function(){
          labels=paste0("(",prettyNum(n.qual.dropped,big.mark=",")," dropped - missing QUAL score)"))
   }
 
-  # Panel 2: By region
-  reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) pmin(dat$QUAL[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$QUAL)], 99)) else list()
-  plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
+  # Panel 2: By svtype
+  type.vals <- lapply(svtypes$svtype, function(st) pmin(dat$QUAL[!is.na(dat$QUAL) & dat$svtype==st], 99))
+  plotDistribOverlaid(sub.list=type.vals, sub.labels=svtypes$svtype, sub.colors=col.svtype,
                       main.val=q.all, xlab="QUAL", main.label="All",
-                      title="QUAL by Region", xlim=xlim)
+                      title="QUAL by Type", xlim=xlim)
 
   # Panel 3: By size bucket
   size.vals <- lapply(seq_along(size.labels), function(i) pmin(dat$QUAL[!is.na(dat$QUAL) & dat$length>=size.mins[i] & dat$length<=size.maxs[i]], 99))
@@ -1391,6 +1391,12 @@ wrapperPlotQualDistrib <- function(){
   plotDistribOverlaid(sub.list=af.vals, sub.labels=af.labels, sub.colors=col.af,
                       main.val=q.all, xlab="QUAL", main.label="All",
                       title="QUAL by AF", xlim=xlim)
+
+  # Panel 5: By region
+  reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) pmin(dat$QUAL[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$QUAL)], 99)) else list()
+  plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
+                      main.val=q.all, xlab="QUAL", main.label="All",
+                      title="QUAL by Region", xlim=xlim)
   dev.off()
 }
 
@@ -1726,20 +1732,25 @@ wrapperPlotAllHWDistribs <- function(){
   plotAlleleCarrierCorrelation(dat=dat)
   dev.off()
 
-  # Plot 1: overall HWE (large, col 1) + per-class HWE grid (cols 2+)
+  cell.px <- 1200
+
+  # gt_distributions_overall.png: overall HWE + carrier freq vs AF
+  png(paste(OUTDIR,"main_plots/gt_distributions_overall.png",sep=""),
+      res=300, height=cell.px, width=2*cell.px)
+  layout(matrix(1:2, nrow=1))
+  plotHWSingle(dat=dat, svtypes=svtypes, title="Genotype Distribution")
+  plotAlleleCarrierCorrelation(dat=dat)
+  dev.off()
+
+  # gt_distributions_type.png: per-svtype HWE grid (2 rows)
   n.sv      <- nrow(svtypes)
   n.sv.cols <- ceiling(n.sv / 2)
-  cell.px   <- 1200
-  mat1 <- matrix(NA, nrow=2, ncol=1+n.sv.cols)
-  mat1[1:2, 1] <- 1
-  for(i in seq_len(n.sv)){
-    mat1[((i-1)%%2)+1, ceiling(i/2)+1] <- i+1
-  }
-  mat1[is.na(mat1)] <- n.sv+2
-  png(paste(OUTDIR,"main_plots/genotype_distributions_1.png",sep=""),
-      res=300, height=2*cell.px, width=(2+n.sv.cols)*cell.px)
-  layout(mat1, widths=c(2, rep(1, n.sv.cols)))
-  plotHWSingle(dat=dat, svtypes=svtypes, title="Genotype Distribution")
+  mat.type  <- matrix(NA, nrow=2, ncol=n.sv.cols)
+  for(i in seq_len(n.sv)) mat.type[((i-1)%%2)+1, ceiling(i/2)] <- i
+  mat.type[is.na(mat.type)] <- n.sv+1
+  png(paste(OUTDIR,"main_plots/gt_distributions_type.png",sep=""),
+      res=300, height=2*cell.px, width=n.sv.cols*cell.px)
+  layout(mat.type)
   sapply(seq_len(n.sv), function(i){
     st <- svtypes$svtype[i]
     plotHWSingle(dat=dat[which(dat$svtype==st),], svtypes=svtypes,
@@ -1748,28 +1759,44 @@ wrapperPlotAllHWDistribs <- function(){
   if(n.sv %% 2 != 0) plot.new()
   dev.off()
 
-  # Plot 2: carrier freq vs AF (large, col 1) + per-size-bucket HWE grid (cols 2+)
+  # gt_distributions_size.png: per-size-bucket HWE grid (2 rows)
   sz.labels.hwe <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
   sz.mins.hwe   <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
   sz.maxs.hwe   <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
   n.sz      <- length(sz.labels.hwe)
   n.sz.cols <- ceiling(n.sz / 2)
-  mat2 <- matrix(NA, nrow=2, ncol=1+n.sz.cols)
-  mat2[1:2, 1] <- 1
-  for(i in seq_len(n.sz)){
-    mat2[((i-1)%%2)+1, ceiling(i/2)+1] <- i+1
-  }
-  mat2[is.na(mat2)] <- n.sz+2
-  png(paste(OUTDIR,"main_plots/genotype_distributions_2.png",sep=""),
-      res=300, height=2*cell.px, width=(2+n.sz.cols)*cell.px)
-  layout(mat2, widths=c(2, rep(1, n.sz.cols)))
-  plotAlleleCarrierCorrelation(dat=dat)
+  mat.sz    <- matrix(NA, nrow=2, ncol=n.sz.cols)
+  for(i in seq_len(n.sz)) mat.sz[((i-1)%%2)+1, ceiling(i/2)] <- i
+  mat.sz[is.na(mat.sz)] <- n.sz+1
+  png(paste(OUTDIR,"main_plots/gt_distributions_size.png",sep=""),
+      res=300, height=2*cell.px, width=n.sz.cols*cell.px)
+  layout(mat.sz)
   sapply(seq_len(n.sz), function(i){
     sub <- dat[which(dat$length >= sz.mins.hwe[i] & dat$length < sz.maxs.hwe[i]),]
     plotHWSingle(dat=sub, svtypes=svtypes, title=sz.labels.hwe[i], full.legend=F, lab.cex=0.75)
   })
   if(n.sz %% 2 != 0) plot.new()
   dev.off()
+
+  # gt_distributions_region.png: per-region HWE grid (only if REGION column present)
+  has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
+  if(has.region){
+    regions <- orderRegions(unique(dat$REGION[!is.na(dat$REGION)]))
+    n.reg      <- length(regions)
+    n.reg.cols <- ceiling(n.reg / 2)
+    mat.reg    <- matrix(NA, nrow=2, ncol=n.reg.cols)
+    for(i in seq_len(n.reg)) mat.reg[((i-1)%%2)+1, ceiling(i/2)] <- i
+    mat.reg[is.na(mat.reg)] <- n.reg+1
+    png(paste(OUTDIR,"main_plots/gt_distributions_region.png",sep=""),
+        res=300, height=2*cell.px, width=n.reg.cols*cell.px)
+    layout(mat.reg)
+    sapply(seq_len(n.reg), function(i){
+      sub <- dat[which(!is.na(dat$REGION) & dat$REGION==regions[i]),]
+      plotHWSingle(dat=sub, svtypes=svtypes, title=regions[i], full.legend=F, lab.cex=0.75)
+    })
+    if(n.reg %% 2 != 0) plot.new()
+    dev.off()
+  }
 }
 
 
@@ -2097,7 +2124,7 @@ trv.motif.labels <- c("1-2bp","3-4bp","5-10bp",">10bp")
 # PNG must be opened before calling and closed afterwards.
 plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
                                   title.all, title.size, title.region, title.motif,
-                                  drop.text=NULL){
+                                  drop.text=NULL, log.y=FALSE){
   has.region <- "REGION" %in% colnames(trv.dat) && any(!is.na(trv.dat$REGION))
   regions    <- if(has.region) orderRegions(unique(trv.dat$REGION[!is.na(trv.dat$REGION)])) else character(0)
   has.motif  <- "max_motif_length" %in% colnames(trv.dat) && any(!is.na(trv.dat$max_motif_length))
@@ -2117,13 +2144,23 @@ plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
   par(bty="n", mar=c(4.5,4,3,1))
   if(length(v.all) >= 2){
     h <- hist(v.all, breaks=breaks.all, plot=F)
-    plot(x=xlim, y=c(0, max(h$density)*1.15), type="n", xaxt="n", yaxt="n",
-         xlab="", ylab="", yaxs="i")
+    dens.pos <- h$density[h$density > 0]
+    ymax <- max(h$density)*1.15
+    ymin <- if(log.y && length(dens.pos)>0) max(min(dens.pos)*0.1, 1e-9) else 0
+    log.arg <- if(log.y) "y" else ""
+    plot(x=xlim, y=c(ymin, if(log.y) ymax*3 else ymax), type="n", xaxt="n", yaxt="n",
+         xlab="", ylab="", yaxs="i", log=log.arg)
     abline(v=pretty(xlim), col="gray85", lwd=0.5)
-    polygon(c(h$mids[1],h$mids,h$mids[length(h$mids)]), c(0,h$density,0),
+    poly.y <- if(log.y) pmax(c(0,h$density,0), ymin) else c(0,h$density,0)
+    polygon(c(h$mids[1],h$mids,h$mids[length(h$mids)]), poly.y,
             col="#4393C3", border="#2166AC")
     axis(1,at=pretty(xlim),labels=NA); axis(1,at=pretty(xlim),tick=F,line=-0.4,cex.axis=0.8)
-    axis(2,at=axTicks(2),labels=NA); axis(2,at=axTicks(2),tick=F,las=2,cex.axis=0.8,line=-0.4)
+    if(log.y){
+      log.ticks <- 10^seq(floor(log10(ymin)), ceiling(log10(ymax)))
+      axis(2,at=log.ticks,labels=NA); axis(2,at=log.ticks,tick=F,las=2,cex.axis=0.8,line=-0.4)
+    } else {
+      axis(2,at=axTicks(2),labels=NA); axis(2,at=axTicks(2),tick=F,las=2,cex.axis=0.8,line=-0.4)
+    }
     mtext(1,text=xlab,line=3,cex=0.9); mtext(2,text="Density",line=2.5,cex=0.9)
     mtext(3,text=title.all,font=2,line=1)
     axis(3,at=mean(xlim),tick=F,line=-0.9,labels=paste("n=",prettyNum(length(v.all),big.mark=","),sep=""))
@@ -2141,7 +2178,7 @@ plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
     v[v >= xlim[1] & v <= xlim[2]]
   })
   plotDistribOverlaid(sub.list=size.vals, sub.labels=trv.size.labels, sub.colors=col.size,
-                      xlab=xlab, title=title.size, xlim=xlim)
+                      xlab=xlab, title=title.size, xlim=xlim, log.y=log.y)
 
   # Panel 3: By REGION
   if(has.region && length(regions) > 0){
@@ -2150,7 +2187,7 @@ plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
       v[v >= xlim[1] & v <= xlim[2]]
     })
     plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
-                        xlab=xlab, title=title.region, xlim=xlim)
+                        xlab=xlab, title=title.region, xlim=xlim, log.y=log.y)
   } else {
     par(bty="n",mar=c(4.5,4,3,1)); plot.new(); mtext(3,text=title.region,font=2,line=1)
   }
@@ -2164,7 +2201,7 @@ plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
       v[v >= xlim[1] & v <= xlim[2]]
     })
     plotDistribOverlaid(sub.list=mot.vals, sub.labels=trv.motif.labels, sub.colors=col.mot,
-                        xlab=xlab, title=title.motif, xlim=xlim)
+                        xlab=xlab, title=title.motif, xlim=xlim, log.y=log.y)
   } else {
     par(bty="n",mar=c(4.5,4,3,1)); plot.new(); mtext(3,text=title.motif,font=2,line=1)
   }
@@ -2182,7 +2219,8 @@ wrapperPlotTrvAlleleCount <- function(){
                        title.all="TR Allele Count",
                        title.size="TR Allele Count by Size",
                        title.region="TR Allele Count by Region",
-                       title.motif="TR Allele Count by Motif Length")
+                       title.motif="TR Allele Count by Motif Length",
+                       log.y=TRUE)
   dev.off()
 }
 
@@ -2198,7 +2236,8 @@ wrapperPlotTrvSampleCount <- function(){
                        title.all="TR Sample Count",
                        title.size="TR Sample Count by Size",
                        title.region="TR Sample Count by Region",
-                       title.motif="TR Sample Count by Motif Length")
+                       title.motif="TR Sample Count by Motif Length",
+                       log.y=TRUE)
   dev.off()
 }
 
@@ -2219,7 +2258,7 @@ wrapperPlotTrvExpansionRatio <- function(){
                        title.size="TR Expansion Ratio by Size",
                        title.region="TR Expansion Ratio by Region",
                        title.motif="TR Expansion Ratio by Motif Length",
-                       drop.text=trv.drop.text)
+                       drop.text=trv.drop.text, log.y=TRUE)
   dev.off()
 }
 

@@ -726,7 +726,8 @@ prepFreqPlot <- function(xlims=c(1/10000, 1), xlabel="Frequency", cex.lab=1){
 #Plot DNRs vs freq for all classes
 plotDNRvsFreq <- function(DNRs, bins, k=4, title=NULL, legend=T,
                           fam.type="families", nfams, count="variants",
-                          cex.lab=1){
+                          cex.lab=1, svtypes.use=NULL){
+  if(is.null(svtypes.use)) svtypes.use <- svtypes
   #Get frequency index & x axis title
   if(count=="variants"){
     freq.idx <- which(colnames(dat)=="carrierFreq")
@@ -744,9 +745,9 @@ plotDNRvsFreq <- function(DNRs, bins, k=4, title=NULL, legend=T,
   #Get midpoints for lines
   mids <- log10(c(bins[1, 2], (bins[-nrow(bins), 1]+bins[-1, 2])/2))
  
-  #Set type colors
-  colors <- c("gray15", svtypes$color)
-  lwds <- c(3, rep(2, times=nrow(svtypes)))
+  #Set type colors using svtypes.use for consistency with size plot
+  colors <- c("gray15", svtypes.use$color)
+  lwds <- c(3, rep(2, times=nrow(svtypes.use)))
  
   #Iterate over DNRs and plot per class
   sapply(nrow(DNRs):1, function(i){
@@ -781,7 +782,8 @@ plotDNRvsFreq <- function(DNRs, bins, k=4, title=NULL, legend=T,
 #Plot DNRs vs GQ for all classes
 plotDNRvsGQ <- function(DNRs, bins, k=4, title=NULL, xlabel="Mininum GQ",
                         legend=T, fam.type="families", nfams,
-                        count="variants", cex.lab=1, max.GQ=99){
+                        count="variants", cex.lab=1, max.GQ=99, svtypes.use=NULL){
+  if(is.null(svtypes.use)) svtypes.use <- svtypes
   #Get x axis title
   if(count=="variants"){
     x.label <- "Carrier Frequency"
@@ -808,9 +810,9 @@ plotDNRvsGQ <- function(DNRs, bins, k=4, title=NULL, xlabel="Mininum GQ",
        labels=paste(seq(0, 100, 20), "%", sep=""))
   mtext(2, text="De Novo Rate", line=2.2, cex=cex.lab)
  
-  #Set type colors
-  colors <- c("gray15", svtypes$color)
-  lwds <- c(3, rep(2, times=nrow(svtypes)))
+  #Set type colors using svtypes.use for consistency
+  colors <- c("gray15", svtypes.use$color)
+  lwds <- c(3, rep(2, times=nrow(svtypes.use)))
  
   #Iterate over DNRs and plot per class
   sapply(nrow(DNRs):1, function(i){
@@ -915,6 +917,48 @@ plotHeatmap <- function(mat, nfams, fam.type,
   })
  
   #Clean up box
+  box()
+}
+
+
+# Horizontal beeswarm plot of per-family de novo rate stratified by a variable
+plotDNRByStrat <- function(strat.inh.list, strat.labs, count="variants",
+                            title=NULL, cex.lab=1, nfams, fam.type="families"){
+  dnr.col <- if(count=="variants") "pro.site.denovorate" else "pro.allele.denovorate"
+  n.strat <- length(strat.labs)
+  all.vals <- unlist(lapply(strat.inh.list, function(d) as.numeric(d[[dnr.col]])))
+  all.vals <- all.vals[is.finite(all.vals)]
+  xmax <- max(c(all.vals, 0.05), na.rm=T) * 1.2
+  xlim <- c(0, xmax)
+  par(bty="n", mar=c(3.5, 5.5, 2.5, 0.5))
+  plot(x=xlim, y=c(-n.strat+0.1, 0.6), type="n",
+       xaxt="n", yaxt="n", xlab="", ylab="", xaxs="i", yaxs="i")
+  abline(v=axTicks(1), col="gray85", lwd=0.5)
+  x.ticks <- axTicks(1)
+  axis(1, at=x.ticks, labels=NA, tck=-0.02)
+  axis(1, at=x.ticks, tick=F, line=-0.4, cex.axis=0.65*cex.lab,
+       labels=paste0(round(x.ticks*100, 1), "%"))
+  mtext(1, text="De Novo Rate", line=2.25, cex=cex.lab)
+  mtext(3, line=0.2, cex=0.7*cex.lab,
+        text=paste("n=", prettyNum(nfams, big.mark=","), " ", fam.type, "s", sep=""))
+  mtext(3, line=1, text=title, font=2, cex=cex.lab)
+  sapply(seq_len(n.strat), function(i){
+    y.at <- -(i-1) + 0.2
+    axis(2, at=y.at, tick=F, las=2, labels=strat.labs[i],
+         cex.axis=0.7*cex.lab, line=-0.5)
+    vals <- as.numeric(strat.inh.list[[i]][[dnr.col]])
+    vals <- vals[is.finite(vals)]
+    if(length(vals) == 0) return(invisible(NULL))
+    rect(xleft=0, xright=par("usr")[2], ybottom=y.at-0.25, ytop=y.at+0.15,
+         bty="n", border=NA, col=adjustcolor("#4393C3", alpha=0.08))
+    beeswarm(vals, add=T, horizontal=T, at=y.at, pch=21, cex=0.45,
+             bg="#4393C3", pt.lwd=0.1, corral="wrap", corralWidth=0.22)
+    dnr.mean <- mean(vals, na.rm=T)
+    segments(x0=dnr.mean, x1=dnr.mean, y0=y.at-0.25, y1=y.at+0.15,
+             lend="round", lwd=3, col="#1A5F9B")
+    text(x=dnr.mean, y=y.at+0.1, pos=3, cex=0.5*cex.lab,
+         labels=paste0(round(100*dnr.mean, 1), "%"))
+  })
   box()
 }
 
@@ -1109,7 +1153,7 @@ wrapperDeNovoRateLines <- function(fam.dat.list, fam.type, count="variants",
   plotDNRvsFreq(DNRs=freq.dat$DNRs, bins=freq.dat$bins, k=4,
                 nfams=length(fam.dat.list),
                 title=paste(title.prefix, "De Novo Rate by AF", sep=""),
-                count=count, fam.type=fam.type, legend=T)
+                count=count, fam.type=fam.type, legend=T, svtypes.use=svtypes.merged)
   dev.off()
  
   #DNR by Proband GQ
@@ -1123,7 +1167,7 @@ wrapperDeNovoRateLines <- function(fam.dat.list, fam.type, count="variants",
     plotDNRvsGQ(DNRs=GQ.dat$DNRs, bins=GQ.dat$bins, k=4, nfams=length(fam.dat.list),
                 title=paste(title.prefix, "De Novo Rate by Min. Proband GQ", sep=""),
                 count=count, fam.type=fam.type, legend=T,
-                xlab="Min. Proband GQ", max.GQ=max.GQ)
+                xlab="Min. Proband GQ", max.GQ=max.GQ, svtypes.use=svtypes.merged)
     dev.off()
   }
 }
@@ -1170,138 +1214,144 @@ wrapperDeNovoRateHeats <- function(fam.dat.list, fam.type, count="variants"){
 
 #Wrapper for master summary panel
 masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
-  #Set title suffix
-  if(fam.type=="trio"){
-    title.suffix <- paste("(Trios; n=",
-                          prettyNum(length(fam.dat.list), big.mark=","),
-                          ")", sep="")
-  }else{
-    if(fam.type=="duo"){
-      title.suffix <- paste("(Duos; n=",
-                            prettyNum(length(fam.dat.list), big.mark=","),
-                            ")", sep="")
-    }else{
-      title.suffix <- paste("(Families; n=",
-                            prettyNum(length(fam.dat.list), big.mark=","),
-                            ")", sep="")
-    }
-  }
- 
-  #Prepare plot area
-  width <- ifelse(gq, 12, 10)
-  pdf(paste(OUTDIR, "/main_plots/", fam.type, "_inheritance.pdf", sep=""),
-      height=5, width=width)
-  if(gq) {
-    layout(matrix(c(1, 2, 3, 4, 5,
-                    6, 7, 8, 9, 10),
-                  byrow=T, nrow=2))
-  } else {
-    layout(matrix(c(1, 2, 3, 4,
-                    5, 6, 7, 8),
-                  byrow=T, nrow=2))
-  }
- 
- 
-  #Set global cex.lab
   cex.lab <- 0.75
- 
-  ###Top row: SV sites
-  #Master inheritance plot
+  nfams   <- length(fam.dat.list)
+
+  has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
+  regions <- if(has.region) orderRegions(unique(dat$REGION[!is.na(dat$REGION)])) else character(0)
+
+  #Precompute strata for overall PDF
+  sz.labs <- c("All","<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
+  sz.vids <- list(
+    dat.merged$VID,
+    dat.merged$VID[dat.merged$length < tiny.max.size],
+    dat.merged$VID[dat.merged$length >= tiny.max.size & dat.merged$length < small.max.size],
+    dat.merged$VID[dat.merged$length >= small.max.size & dat.merged$length < medium.max.size],
+    dat.merged$VID[dat.merged$length >= medium.max.size & dat.merged$length < medlarge.max.size],
+    dat.merged$VID[dat.merged$length >= medlarge.max.size & dat.merged$length < large.max.size],
+    dat.merged$VID[dat.merged$length >= large.max.size])
+  sz.inh <- lapply(sz.vids, function(vids) computeInheritanceMulti(trio.dat.list=fam.dat.list, VIDs=vids))
+
+  type.labs <- c("ALL", svtypes.merged$svtype)
+  type.inh  <- c(
+    list(computeInheritanceMulti(trio.dat.list=fam.dat.list, VIDs=dat.merged$VID)),
+    lapply(svtypes.merged$svtype, function(st)
+      computeInheritanceMulti(trio.dat.list=fam.dat.list,
+                              VIDs=dat.merged$VID[dat.merged$svtype==st])))
+
+  has.reg.strat <- has.region && length(regions) > 0
+  reg.labs <- if(has.reg.strat) c("ALL", regions) else NULL
+  reg.inh  <- if(has.reg.strat) c(
+    list(computeInheritanceMulti(trio.dat.list=fam.dat.list, VIDs=dat$VID)),
+    lapply(regions, function(r)
+      computeInheritanceMulti(trio.dat.list=fam.dat.list,
+                              VIDs=dat$VID[!is.na(dat$REGION) & dat$REGION==r]))
+  ) else NULL
+
+  #PDF 1: overall inheritance + stratified DNR beeswarm plots
+  n.cols.ov <- 3 + as.integer(has.reg.strat)
+  pdf(paste(OUTDIR, "/main_plots/", fam.type, "_inheritance_overall.pdf", sep=""),
+      height=5, width=4.5 + n.cols.ov * 4)
+  layout(matrix(seq_len(n.cols.ov * 2), nrow=2, byrow=T))
+
+  #Top row: SV sites
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list),
-               title=paste("SV Site Inheritance (n=",
-                           prettyNum(length(fam.dat.list), big.mark=","),
+               title=paste("SV Site Inheritance (n=", prettyNum(nfams, big.mark=","),
                            " ", fam.type, "s)", sep=""),
                count="variants", cex.lab=cex.lab)
-  #DNR vs size
-  size.dat.v <- deNovoRateBySize(trio.dat.list=fam.dat.list,
-                                 size.bins=40, count="variants",
+  plotDNRByStrat(sz.inh, sz.labs, count="variants",
+                 title="Site De Novo Rate by Size", cex.lab=cex.lab,
+                 nfams=nfams, fam.type=fam.type)
+  plotDNRByStrat(type.inh, type.labs, count="variants",
+                 title="Site De Novo Rate by Type", cex.lab=cex.lab,
+                 nfams=nfams, fam.type=fam.type)
+  if(has.reg.strat) plotDNRByStrat(reg.inh, reg.labs, count="variants",
+                                   title="Site De Novo Rate by Region", cex.lab=cex.lab,
+                                   nfams=nfams, fam.type=fam.type)
+
+  #Bottom row: SV alleles
+  plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list),
+               title=paste("SV Allele Inheritance (n=", prettyNum(nfams, big.mark=","),
+                           " ", fam.type, "s)", sep=""),
+               count="alleles", cex.lab=cex.lab)
+  plotDNRByStrat(sz.inh, sz.labs, count="alleles",
+                 title="Allele De Novo Rate by Size", cex.lab=cex.lab,
+                 nfams=nfams, fam.type=fam.type)
+  plotDNRByStrat(type.inh, type.labs, count="alleles",
+                 title="Allele De Novo Rate by Type", cex.lab=cex.lab,
+                 nfams=nfams, fam.type=fam.type)
+  if(has.reg.strat) plotDNRByStrat(reg.inh, reg.labs, count="alleles",
+                                   title="Allele De Novo Rate by Region", cex.lab=cex.lab,
+                                   nfams=nfams, fam.type=fam.type)
+  dev.off()
+
+  #PDF 2: DNR line plots and heatmaps
+  n.cols.de <- 3 + as.integer(gq)
+  pdf(paste(OUTDIR, "/main_plots/", fam.type, "_inheritance_denovo.pdf", sep=""),
+      height=5, width=n.cols.de * 5)
+  layout(matrix(seq_len(n.cols.de * 2), nrow=2, byrow=T))
+
+  #Top row: SV sites
+  size.dat.v <- deNovoRateBySize(trio.dat.list=fam.dat.list, size.bins=40, count="variants",
                                  svtypes.use=svtypes.merged, dat.use=dat.merged)
-  plotDNRvsSize(DNRs=size.dat.v$DNRs, bins=size.dat.v$bins, k=4,
-                nfams=length(fam.dat.list),
-                title=paste("Site De Novo Rate by Size", sep=""),
+  plotDNRvsSize(DNRs=size.dat.v$DNRs, bins=size.dat.v$bins, k=4, nfams=nfams,
+                title="Site De Novo Rate by Size", fam.type=fam.type,
+                legend=T, cex.lab=cex.lab, svtypes.use=svtypes.merged)
+  freq.dat.v <- deNovoRateByFreq(trio.dat.list=fam.dat.list, freq.bins=40, count="variants",
+                                 svtypes.use=svtypes.merged, dat.use=dat.merged)
+  plotDNRvsFreq(DNRs=freq.dat.v$DNRs, bins=freq.dat.v$bins, k=4, nfams=nfams,
+                title="Site De Novo Rate by AF", count="variants",
                 fam.type=fam.type, legend=T, cex.lab=cex.lab, svtypes.use=svtypes.merged)
-  #DNR vs frequency
-  freq.dat.v <- deNovoRateByFreq(trio.dat.list=fam.dat.list,
-                                 freq.bins=40, count="variants",
-                                 svtypes.use=svtypes.merged, dat.use=dat.merged)
-  plotDNRvsFreq(DNRs=freq.dat.v$DNRs, bins=freq.dat.v$bins, k=4,
-                nfams=length(fam.dat.list),
-                title=paste("Site De Novo Rate by AF", sep=""),
-                count="variants", fam.type=fam.type, legend=T, cex.lab=cex.lab)
-  #DNR vs min proband GQ
-  if(gq) {
+  if(gq){
     GQ.dat.v <- deNovoRateByProGQ(trio.dat.list=fam.dat.list, GQ.bins=50,
                                   count="variants", max.GQ=max.GQ,
                                   svtypes.use=svtypes.merged, dat.use=dat.merged)
-    plotDNRvsGQ(DNRs=GQ.dat.v$DNRs, bins=GQ.dat.v$bins, k=4,
-                nfams=length(fam.dat.list),
-                title=paste("Site De Novo Rate by GQ", sep=""),
-                count="variants", fam.type=fam.type, legend=F,
-                cex.lab=cex.lab, xlab="Min. Proband GQ", max.GQ=max.GQ)
+    plotDNRvsGQ(DNRs=GQ.dat.v$DNRs, bins=GQ.dat.v$bins, k=4, nfams=nfams,
+                title="Site De Novo Rate by GQ", count="variants",
+                fam.type=fam.type, legend=F, cex.lab=cex.lab,
+                xlabel="Min. Proband GQ", max.GQ=max.GQ, svtypes.use=svtypes.merged)
   }
-  #DNR heatmap (size vs freq.)
   DNR.dat.v <- deNovoRateBySizeFreq(trio.dat.list=fam.dat.list, count="variants",
                                     max.sizes=c(tiny.max.size, small.max.size,
                                                 medium.max.size, medlarge.max.size,
                                                 large.max.size),
-                                    size.labs=c("<50bp", "50-\n100bp", "100bp-\n500bp",
-                                                "500bp-\n5kb", "5-50kb", ">50kb"),
+                                    size.labs=c("<50bp","50-\n100bp","100bp-\n500bp",
+                                                "500bp-\n5kb","5-50kb",">50kb"),
                                     max.freqs=c(0.01, 0.05, 0.10, 0.50),
-                                    freq.labs=c("<1%", "1-5%", "5-\n10%",
-                                                "10-\n50%", ">50%"))
-  plotHeatmap(mat=DNR.dat.v$ALL, nfams=length(fam.dat.list), fam.type=fam.type,
-              title=paste("Site De Novo Rate, Size vs. AF", sep=""),
-              cex.lab=cex.lab)
- 
-  ###Bottom row: SV alleles
-  #Master inheritance plot
-  plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list),
-               title=paste("SV Allele Inheritance (n=",
-                           prettyNum(length(fam.dat.list), big.mark=","),
-                           " ", fam.type, "s)", sep=""),
-               count="alleles", cex.lab=cex.lab)
-  #DNR vs size
-  size.dat.a <- deNovoRateBySize(trio.dat.list=fam.dat.list,
-                                 size.bins=40, count="alleles",
+                                    freq.labs=c("<1%","1-5%","5-\n10%","10-\n50%",">50%"))
+  plotHeatmap(mat=DNR.dat.v$ALL, nfams=nfams, fam.type=fam.type,
+              title="Site De Novo Rate, Size vs. AF", cex.lab=cex.lab)
+
+  #Bottom row: SV alleles
+  size.dat.a <- deNovoRateBySize(trio.dat.list=fam.dat.list, size.bins=40, count="alleles",
                                  svtypes.use=svtypes.merged, dat.use=dat.merged)
-  plotDNRvsSize(DNRs=size.dat.a$DNRs, bins=size.dat.a$bins, k=4,
-                nfams=length(fam.dat.list),
-                title=paste("Allele De Novo Rate by Size", sep=""),
+  plotDNRvsSize(DNRs=size.dat.a$DNRs, bins=size.dat.a$bins, k=4, nfams=nfams,
+                title="Allele De Novo Rate by Size", fam.type=fam.type,
+                legend=F, cex.lab=cex.lab, svtypes.use=svtypes.merged)
+  freq.dat.a <- deNovoRateByFreq(trio.dat.list=fam.dat.list, freq.bins=40, count="alleles",
+                                 svtypes.use=svtypes.merged, dat.use=dat.merged)
+  plotDNRvsFreq(DNRs=freq.dat.a$DNRs, bins=freq.dat.a$bins, k=4, nfams=nfams,
+                title="Allele De Novo Rate by AF", count="alleles",
                 fam.type=fam.type, legend=F, cex.lab=cex.lab, svtypes.use=svtypes.merged)
-  #DNR vs frequency
-  freq.dat.a <- deNovoRateByFreq(trio.dat.list=fam.dat.list,
-                                 freq.bins=40, count="alleles",
-                                 svtypes.use=svtypes.merged, dat.use=dat.merged)
-  plotDNRvsFreq(DNRs=freq.dat.a$DNRs, bins=freq.dat.a$bins, k=4,
-                nfams=length(fam.dat.list),
-                title=paste("Allele De Novo Rate by AF", sep=""),
-                count="alleles", fam.type=fam.type, legend=F, cex.lab=cex.lab)
-  #DNR vs min proband GQ
   if(gq){
-    GQ.dat.a <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,
-                                  GQ.bins=50, count="alleles", max.GQ=max.GQ,
+    GQ.dat.a <- deNovoRateByProGQ(trio.dat.list=fam.dat.list, GQ.bins=50,
+                                  count="alleles", max.GQ=max.GQ,
                                   svtypes.use=svtypes.merged, dat.use=dat.merged)
-    plotDNRvsGQ(DNRs=GQ.dat.a$DNRs, bins=GQ.dat.a$bins, k=4,
-                nfams=length(fam.dat.list),
-                title=paste("Allele De Novo Rate by GQ", sep=""),
-                count="alleles", fam.type=fam.type, legend=F, cex.lab=cex.lab,
-                xlabel="Min. Proband GQ", max.GQ=max.GQ)
+    plotDNRvsGQ(DNRs=GQ.dat.a$DNRs, bins=GQ.dat.a$bins, k=4, nfams=nfams,
+                title="Allele De Novo Rate by GQ", count="alleles",
+                fam.type=fam.type, legend=F, cex.lab=cex.lab,
+                xlabel="Min. Proband GQ", max.GQ=max.GQ, svtypes.use=svtypes.merged)
   }
-  #DNR heatmap (size vs freq.)
   DNR.dat.a <- deNovoRateBySizeFreq(trio.dat.list=fam.dat.list, count="alleles",
                                     max.sizes=c(tiny.max.size, small.max.size,
                                                 medium.max.size, medlarge.max.size,
                                                 large.max.size),
-                                    size.labs=c("<50bp", "50-\n100bp", "100bp-\n500bp",
-                                                "500bp-\n5kb", "5-50kb", ">50kb"),
+                                    size.labs=c("<50bp","50-\n100bp","100bp-\n500bp",
+                                                "500bp-\n5kb","5-50kb",">50kb"),
                                     max.freqs=c(0.01, 0.05, 0.10, 0.50),
-                                    freq.labs=c("<1%", "1-5%", "5-\n10%",
-                                                "10-\n50%", ">50%"))
-  plotHeatmap(mat=DNR.dat.a$ALL, nfams=length(fam.dat.list), fam.type=fam.type,
-              title=paste("Allele De Novo Rate, Size vs. AF", sep=""),
-              cex.lab=cex.lab)
- 
-  #Close device
+                                    freq.labs=c("<1%","1-5%","5-\n10%","10-\n50%",">50%"))
+  plotHeatmap(mat=DNR.dat.a$ALL, nfams=nfams, fam.type=fam.type,
+              title="Allele De Novo Rate, Size vs. AF", cex.lab=cex.lab)
   dev.off()
 }
 
