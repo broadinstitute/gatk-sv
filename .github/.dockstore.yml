@@ -273,3 +273,12 @@ workflows:
         - mw_ploidy
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: CollectSparseSD
+    primaryDescriptorPath: /wdl/CollectSparseSD.wdl
+    filters:
+      branches:
+        - mw_ploidy
+      tags:
+        - /.*/
