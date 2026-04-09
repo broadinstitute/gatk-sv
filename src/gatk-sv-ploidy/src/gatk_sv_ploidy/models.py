@@ -461,7 +461,9 @@ class CNVModel:
 
             # Dirichlet-Categorical CN prior — per-chromosome-type alphas
             if chr_type is not None:
-                alpha = self.alpha_table[chr_type]  # (n_bins, n_states)
+                # (n_bins, n_states) → (n_bins, 1, n_states) so the bins
+                # dimension sits at batch dim -2, matching plate_bins.
+                alpha = self.alpha_table[chr_type].unsqueeze(-2)
             else:
                 alpha = self.alpha_non_ref * one.expand(self.n_states)
                 alpha[2] = self.alpha_ref
