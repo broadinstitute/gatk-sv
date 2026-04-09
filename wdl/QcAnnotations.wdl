@@ -66,11 +66,13 @@ workflow QcAnnotations {
         }
     }
     File use_vcf = select_first([SubsetVcf.filtered_vcf, vcf])
+    File use_vcf_idx = select_first([SubsetVcf.filtered_vcf_idx, vcf_idx])
 
     scatter (contig in contigs) {
         call vcfwideqc.CollectQcVcfWide {
             input:
                 vcf = use_vcf,
+                vcf_idx = use_vcf_idx,
                 contig = contig,
                 variants_per_shard = variants_per_shard,
                 prefix = "~{prefix}.~{contig}",

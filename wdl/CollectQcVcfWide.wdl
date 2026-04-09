@@ -1,11 +1,11 @@
 version 1.0
 
-
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 workflow CollectQcVcfWide {
     input {
         File vcf
+        File? vcf_idx
         String contig
         String prefix
 
@@ -27,7 +27,7 @@ workflow CollectQcVcfWide {
     call MiniTasks.ScatterVcf {
         input:
             vcf = vcf,
-            vcf_index = vcf + ".tbi",
+            vcf_index = vcf_idx,
             contig = contig,
             records_per_shard = variants_per_shard,
             prefix = "~{output_prefix}.scatter_vcf",
