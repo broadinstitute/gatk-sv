@@ -31,7 +31,6 @@ logger = logging.getLogger(__name__)
 
 def _get_chr_info(
     data: DepthData,
-    cn: np.ndarray,
     cn_probs: np.ndarray,
     chr_name: str,
     sample_idx: int,
@@ -42,7 +41,8 @@ def _get_chr_info(
     n_bins = int(mask.sum())
     if n_bins == 0:
         return 0, 0.0, 0
-    chr_cn = cn[mask, sample_idx]
+    # Derive per-bin MAP CN from the analytical posterior (not infer_discrete)
+    chr_cn = np.argmax(cn_probs[mask, sample_idx, :], axis=-1)
     counts = np.bincount(chr_cn, minlength=n_states)
     best_cn = int(np.argmax(counts))
     mean_prob = float(cn_probs[mask, sample_idx, best_cn].mean())
@@ -67,7 +67,6 @@ def detect_aneuploidies(
         Dictionary mapping sample index → list of
         ``(chr_name, cn_state, mean_prob)`` tuples for aneuploid chromosomes.
     """
-    cn = map_estimates["cn"]
     cn_probs = cn_posterior["cn_posterior"]
     unique_chrs = np.unique(data.chr)
 
@@ -81,14 +80,14 @@ def detect_aneuploidies(
     # Autosomes: aneuploidy when CN ≠ 2 and high confidence
     for chr_name in autosomes:
         for si in range(data.n_samples):
-            best_cn, mean_prob, _ = _get_chr_info(data, cn, cn_probs, chr_name, si)
+            best_cn, mean_prob, _ = _get_chr_info(data, cn_probs, chr_name, si)
             if best_cn != 2 and mean_prob > prob_threshold:
                 aneuploid[si].append((chr_name, best_cn, mean_prob))
 
     # Sex chromosomes: aneuploidy when karyotype is not XX or XY
     for si in range(data.n_samples):
-        x_cn, x_prob, x_bins = _get_chr_info(data, cn, cn_probs, "chrX", si)
-        y_cn, y_prob, y_bins = _get_chr_info(data, cn, cn_probs, "chrY", si)
+        x_cn, x_prob, x_bins = _get_chr_info(data, cn_probs, "chrX", si)
+        y_cn, y_prob, y_bins = _get_chr_info(data, cn_probs, "chrY", si)
 
         if x_cn is None and y_cn is None:
             continue
@@ -116,6 +115,8 @@ def build_bin_stats(
     cn_posterior: Dict[str, np.ndarray],
     af_table: Optional[np.ndarray] = None,
     min_het_alt: int = 3,
+    min_het_af: float = 0.2,
+    max_het_af: float = 0.8,
 ) -> pd.DataFrame:
     """Build a per-bin, per-sample results DataFrame.
 
@@ -126,6 +127,10 @@ def build_bin_stats(
         af_table: Optional precomputed AF log-likelihood table of shape
             ``(n_states, n_bins, n_samples)``.
         min_het_alt: Minimum alt-allele read count to call a site heterozygous.
+        min_het_af: Minimum allele fraction to classify a site as
+            heterozygous (default 0.2).
+        max_het_af: Maximum allele fraction to classify a site as
+            heterozygous (default 0.8).
 
     Returns:
         DataFrame with columns for chr, start, end, sample, observed depth,
@@ -147,8 +152,13 @@ def build_bin_stats(
         mean_af_arr = np.where(
             n_sites_arr > 0, af_sum_arr / n_sites_arr, np.nan,
         )
-        # Het-only stats (alt count >= threshold and site is valid)
-        het_mask = sm & (sa >= min_het_alt)
+        # Het-only stats: alt count above threshold AND AF in het range
+        het_mask = (
+            sm
+            & (sa >= min_het_alt)
+            & (site_af >= min_het_af)
+            & (site_af <= max_het_af)
+        )
         n_het_arr = het_mask.sum(axis=1).astype(int)
         het_af_sum = (site_af * het_mask).sum(axis=1)
         mean_het_af_arr = np.where(
@@ -160,13 +170,14 @@ def build_bin_stats(
     for i in range(data.n_bins):
         for j in range(data.n_samples):
             prob = cn_probs[i, j, :]
+            cn_map_val = int(np.argmax(prob))
             row = {
                 "chr": data.chr[i],
                 "start": int(data.start[i]),
                 "end": int(data.end[i]),
                 "sample": data.sample_ids[j],
                 "observed_depth": float(data.depth[i, j].cpu().numpy()),
-                "cn_map": int(map_estimates["cn"][i, j]),
+                "cn_map": cn_map_val,
                 "cn_prob_0": prob[0],
                 "cn_prob_1": prob[1],
                 "cn_prob_2": prob[2],
@@ -184,8 +195,7 @@ def build_bin_stats(
                 row["n_het_sites"] = int(n_het_arr[i, j])
                 row["mean_het_af"] = float(mean_het_af_arr[i, j])
             if af_table is not None:
-                cn_val = int(map_estimates["cn"][i, j])
-                row["af_log_lik"] = float(af_table[cn_val, i, j])
+                row["af_log_lik"] = float(af_table[cn_map_val, i, j])
             rows.append(row)
 
     return pd.DataFrame(rows)
@@ -198,6 +208,8 @@ def build_chromosome_stats(
     aneuploid_map: Dict[int, List[Tuple[str, int, float]]],
     af_table: Optional[np.ndarray] = None,
     min_het_alt: int = 3,
+    min_het_af: float = 0.2,
+    max_het_af: float = 0.8,
 ) -> pd.DataFrame:
     """Build per-chromosome, per-sample summary statistics.
 
@@ -209,12 +221,17 @@ def build_chromosome_stats(
         af_table: Optional precomputed AF log-likelihood table of shape
             ``(n_states, n_bins, n_samples)``.
         min_het_alt: Minimum alt-allele read count to call a site heterozygous.
+        min_het_af: Minimum allele fraction to classify a site as
+            heterozygous (default 0.2).
+        max_het_af: Maximum allele fraction to classify a site as
+            heterozygous (default 0.8).
 
     Returns:
         DataFrame with one row per (sample, chromosome).
     """
-    cn = map_estimates["cn"]
     cn_probs = cn_posterior["cn_posterior"]
+    # Derive per-bin MAP CN from the analytical posterior
+    cn = np.argmax(cn_probs, axis=-1)  # (n_bins, n_samples)
     unique_chrs = np.unique(data.chr)
 
     # Precompute per-bin AF summaries if site data available
@@ -226,7 +243,12 @@ def build_chromosome_stats(
         site_af = sa / np.maximum(st, 1)
         n_sites_per_bin = sm.sum(axis=1).astype(int)   # (n_bins, n_samples)
         af_sum_per_bin = (site_af * sm).sum(axis=1)    # (n_bins, n_samples)
-        het_mask = sm & (sa >= min_het_alt)
+        het_mask = (
+            sm
+            & (sa >= min_het_alt)
+            & (site_af >= min_het_af)
+            & (site_af <= max_het_af)
+        )
         n_het_per_bin = het_mask.sum(axis=1).astype(int)
         het_af_sum_per_bin = (site_af * het_mask).sum(axis=1)
 
@@ -346,6 +368,12 @@ def parse_args() -> argparse.Namespace:
                    help="Relative weight of per-bin site-count-normalized allele fraction likelihood (0 to disable; lower values favor depth more strongly)")
     g.add_argument("--min-het-alt", type=int, default=3,
                    help="Minimum alt-allele read count to classify a site as "
+                        "heterozygous in summary statistics")
+    g.add_argument("--min-het-af", type=float, default=0.2,
+                   help="Minimum allele fraction to classify a site as "
+                        "heterozygous in summary statistics")
+    g.add_argument("--max-het-af", type=float, default=0.8,
+                   help="Maximum allele fraction to classify a site as "
                         "heterozygous in summary statistics")
 
     # Training
@@ -491,6 +519,8 @@ def main() -> None:
         data, map_est, cn_post,
         af_table=af_table_np,
         min_het_alt=args.min_het_alt,
+        min_het_af=args.min_het_af,
+        max_het_af=args.max_het_af,
     )
     bin_path = os.path.join(args.output_dir, "bin_stats.tsv.gz")
     bin_df.to_csv(bin_path, sep="\t", index=False, compression="gzip")
@@ -501,6 +531,8 @@ def main() -> None:
         data, map_est, cn_post, aneuploid_map,
         af_table=af_table_np,
         min_het_alt=args.min_het_alt,
+        min_het_af=args.min_het_af,
+        max_het_af=args.max_het_af,
     )
     chr_path = os.path.join(args.output_dir, "chromosome_stats.tsv")
     chr_df.to_csv(chr_path, sep="\t", index=False)
