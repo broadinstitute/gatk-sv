@@ -260,3 +260,12 @@ workflows:
         - main
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: CallGenomicDisorderCNVs
+    primaryDescriptorPath: /wdl/CallGenomicDisorderCNVs.wdl
+    filters:
+      branches:
+        - mw_gd
+      tags:
+        - /.*/
