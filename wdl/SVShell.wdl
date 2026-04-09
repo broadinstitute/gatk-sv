@@ -13,6 +13,7 @@ workflow SVShell {
     File ref_panel_vcf
     File ref_panel_bincov_matrix
     File bin_exclude
+    File cytobands
   }
 
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
@@ -40,6 +41,7 @@ workflow SVShell {
   File ref_panel_vcf_index = ref_panel_vcf + ".tbi"
   File ref_panel_bincov_matrix_index = ref_panel_bincov_matrix + ".tbi"
   File bin_exclude_index = bin_exclude + ".tbi"
+  File cytobands_index = cytobands + ".tbi"
 
 
   call RunSVShell {
@@ -61,6 +63,8 @@ workflow SVShell {
       ref_panel_bincov_matrix_index = ref_panel_bincov_matrix_index,
       bin_exclude = bin_exclude,
       bin_exclude_index = bin_exclude_index,
+      cytobands = cytobands,
+      cytobands_index = cytobands_index,
   }
 
 
@@ -89,6 +93,8 @@ task RunSVShell {
     File ref_panel_bincov_matrix_index
     File bin_exclude
     File bin_exclude_index
+    File cytobands
+    File cytobands_index
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
