@@ -17,6 +17,9 @@ workflow SVShell {
     File depth_exclude_list
     File mei_bed
     File manta_region_bed
+    File HERVK_reference
+    File LINE1_reference
+    File intron_reference
   }
 
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
@@ -77,6 +80,9 @@ workflow SVShell {
       mei_bed_index = mei_bed_index,
       manta_region_bed = manta_region_bed,
       manta_region_bed_index = manta_region_bed_index,
+      HERVK_reference = HERVK_reference,
+      LINE1_reference = LINE1_reference,
+      intron_reference = intron_reference,
   }
 
 
@@ -113,6 +119,9 @@ task RunSVShell {
     File mei_bed_index
     File manta_region_bed
     File manta_region_bed_index
+    File HERVK_reference
+    File LINE1_reference
+    File intron_reference
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
