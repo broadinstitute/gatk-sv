@@ -8,9 +8,7 @@ workflow CallGenomicDisorderCNVs {
     String batch
 
     File baf_matrix
-    File baf_matrix_index
     File high_res_rd_matrix
-    File high_res_rd_matrix_index
     File reference_dict
 
     File gd_table
@@ -51,9 +49,9 @@ workflow CallGenomicDisorderCNVs {
       batch = batch,
       low_res_counts = CondenseReadCounts.out,
       baf_matrix = baf_matrix,
-      baf_matrix_index = baf_matrix_index,
+      baf_matrix_index = baf_matrix + ".tbi",
       high_res_counts = high_res_rd_matrix,
-      high_res_counts_index = high_res_rd_matrix_index,
+      high_res_counts_index = high_res_rd_matrix + ".tbi",
       gd_table = gd_table,
       segdup_bed = segdup_bed,
       centromere_bed = centromere_bed,
