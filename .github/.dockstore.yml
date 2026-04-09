@@ -244,6 +244,15 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: PreprocessForFederation
+    primaryDescriptorPath: /wdl/PreprocessForFederation.wdl
+    filters:
+      branches:
+        - eph_preprocess_for_federation
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: StripyWorkflow
     primaryDescriptorPath: /wdl/StripyWorkflow.wdl
     filters:

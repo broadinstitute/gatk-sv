@@ -16,6 +16,8 @@ workflow ShardedAnnotateVcf {
     String prefix
     String contig
 
+    File ploidy_table
+
     File? protein_coding_gtf
     File? noncoding_bed
     Int? promoter_window
@@ -24,8 +26,9 @@ workflow ShardedAnnotateVcf {
 
     File? sample_pop_assignments  # Two-column file with sample ID & pop assignment. "." for pop will ignore sample
     File? sample_keep_list
+    File? sample_id_rename_map
     File? ped_file                # Used for M/F AF calculations
-    File? par_bed
+    File par_bed
     File? allosomes_list
     Int   sv_per_shard
 
@@ -46,6 +49,8 @@ workflow ShardedAnnotateVcf {
     RuntimeAttr? runtime_attr_bedtools_closest
     RuntimeAttr? runtime_attr_select_matched_svs
     RuntimeAttr? runtime_attr_scatter_vcf
+    RuntimeAttr? runtime_attr_estimate_rd_cn_af
+    RuntimeAttr? runtime_attr_rename_samples
   }
 
   if (defined(ref_bed)) {
@@ -82,11 +87,24 @@ workflow ShardedAnnotateVcf {
       }
     }
 
+    if (defined(sample_id_rename_map)) {
+      call RenameVcfSamplesTask {
+        input:
+          vcf = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
+          vcf_idx = SubsetVcfBySamplesList.vcf_subset_index,
+          sample_id_rename_map = select_first([sample_id_rename_map]),
+          prefix = shard_prefix,
+          check_rename_all_samples = false,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_attr_rename_samples
+      }
+    }
+
     if (defined (protein_coding_gtf) || defined (noncoding_bed)) {
       call func.AnnotateFunctionalConsequences {
         input:
-          vcf = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
-          vcf_index = SubsetVcfBySamplesList.vcf_subset_index,
+          vcf = select_first([RenameVcfSamplesTask.out, SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
+          vcf_index = select_first([RenameVcfSamplesTask.out_index, SubsetVcfBySamplesList.vcf_subset_index]),
           prefix = shard_prefix,
           protein_coding_gtf = protein_coding_gtf,
           noncoding_bed = noncoding_bed,
@@ -101,7 +119,7 @@ workflow ShardedAnnotateVcf {
     # Compute AC, AN, and AF per population & sex combination
     call ComputeAFs {
       input:
-        vcf = select_first([AnnotateFunctionalConsequences.annotated_vcf, SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
+        vcf = select_first([AnnotateFunctionalConsequences.annotated_vcf, RenameVcfSamplesTask.out, SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
         prefix = shard_prefix,
         sample_pop_assignments = sample_pop_assignments,
         ped_file = ped_file,
@@ -109,6 +127,16 @@ workflow ShardedAnnotateVcf {
         allosomes_list = allosomes_list,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_compute_AFs
+    }
+
+    call EstimateRdCnFrequency {
+      input:
+        vcf = ComputeAFs.af_vcf,
+        vcf_idx = ComputeAFs.af_vcf_idx,
+        ploidy_table = ploidy_table,
+        par_bed = par_bed,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_estimate_rd_cn_af
     }
 
     if (defined(ref_bed)) {
@@ -135,10 +163,176 @@ workflow ShardedAnnotateVcf {
   }
 
   output {
-    Array[File] sharded_annotated_vcf = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf) else ComputeAFs.af_vcf
-    Array[File] sharded_annotated_vcf_idx = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi) else ComputeAFs.af_vcf_idx
+    Array[File] sharded_annotated_vcf = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf) else EstimateRdCnFrequency.rd_cn_freq_vcf
+    Array[File] sharded_annotated_vcf_idx = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi) else EstimateRdCnFrequency.rd_cn_freq_vcf
   }
 }
+
+
+task RenameVcfSamplesTask {
+  input {
+    File vcf
+    File? vcf_idx
+    File sample_id_rename_map
+    String prefix
+    Boolean? check_rename_all_samples = true
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 1.0,
+    disk_gb: ceil(10 + size(vcf, "GiB") * 2.0),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+    if ~{check_rename_all_samples}; then
+      bcftools query -l ~{vcf} | sort > samples.list
+      python <<CODE
+with open("~{sample_id_rename_map}", 'r') as rename, open("samples.list", 'r') as header:
+  all_to_rename = set()
+  for line in rename:
+    all_to_rename.add(line.strip("\n").split("\t")[0])  # create set of sample IDs to rename
+  for line in header:
+    sample = line.strip("\n")
+    if sample not in all_to_rename:
+      raise ValueError(f"Sample {sample} is in the VCF header but not in the renaming map")
+CODE
+    fi
+    bcftools reheader --samples ~{sample_id_rename_map} -o ~{prefix}.vcf.gz ~{vcf}
+    tabix ~{prefix}.vcf.gz
+  >>>
+
+  output {
+    File out = "~{prefix}.vcf.gz"
+    File out_index = "~{prefix}.vcf.gz.tbi"
+  }
+}
+
+
+task EstimateRdCnFrequency {
+  input {
+    File vcf
+    File? vcf_idx
+    File par_bed
+    File ploidy_table
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String output_file = basename(vcf, ".vcf.gz") + ".rd_cn_freq.vcf.gz"
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: ceil(10.0 + size(vcf, "GB") * 2.0),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_default])
+
+  runtime {
+    memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+
+    python3 <<CODE
+import pysam
+from collections import defaultdict
+
+
+PLOIDY = dict()
+PAR = defaultdict(list)
+
+
+with open("~{par_bed}", 'r') as inp:
+    for line in inp:
+        chrom, start, end, label = line.strip("\n").split("\t")
+        PAR[chrom].append((int(start), int(end)))  # PAR[chrom] = [(start1, end1), (start2, end2)]
+
+
+with open("~{ploidy_table}", 'r') as inp:
+    first = True
+    header = []
+    for line in inp:
+        fields = line.strip("\n").split("\t")
+        if first:
+            header = fields
+            first = False
+            continue
+        PLOIDY[fields[0]] = dict()  # first column = sample
+        for i in range(1, len(fields)):
+            PLOIDY[fields[0]][header[i]] = int(fields[i])  # PLOIDY[sample][contig] = ploidy
+
+
+with pysam.VariantFile("~{vcf}") as vcf_in:
+    out_header = vcf_in.header
+    out_header.add_line('##INFO=<ID=RD_CN_ESTIMATED_AF,Number=1,Type=Float,Description="Estimated AF from RD_CN for CNVs">')
+    with pysam.VariantFile("~{output_file}", 'w', header=out_header) as vcf_out:
+        for record in vcf_in:
+            svtype = record.info.get("SVTYPE", None)
+            if svtype in ("DEL", "DUP", "CNV"):
+                ac = 0
+                an = 0
+                par = False
+                if record.chrom == "chrX" or record.chrom == "chrY":
+                    for start, end in PAR[record.chrom]:
+                        if float(min(record.stop, end) - max(record.pos, start))/(record.stop - record.pos) > 0.5:
+                            par = True  # if variant is >50% in PAR
+                for sample in record.samples:
+                    rd_cn = record.samples[sample].get("RD_CN", None)
+                    ecn = PLOIDY[sample][record.chrom]
+                    if par and ecn == 1:
+                        ecn = 2  # males expected CN in PAR on chrX = 2; no variants contained within par on chrY in gnomAD
+                    if rd_cn is None:
+                        continue
+                    else:
+                        an += ecn
+                    if rd_cn == ecn - 1 or rd_cn == ecn + 1:
+                        ac += 1
+                    elif rd_cn < ecn - 1 or rd_cn > ecn + 1:
+                        ac += ecn
+
+                if an > 0:
+                    record.info["RD_CN_ESTIMATED_AF"] = float(ac)/float(an)
+            vcf_out.write(record)
+
+
+CODE
+
+    tabix -p vcf "~{output_file}"
+  >>>
+
+  output {
+    File rd_cn_freq_vcf = output_file
+    File rd_cn_freq_vcf_idx = output_file + ".tbi"
+  }
+}
+
 
 task ComputeAFs {
   input {
