@@ -16,6 +16,7 @@ workflow SVShell {
     File cytobands
     File depth_exclude_list
     File mei_bed
+    File manta_region_bed
   }
 
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
@@ -46,6 +47,7 @@ workflow SVShell {
   File cytobands_index = cytobands + ".tbi"
   File depth_exclude_list_index = depth_exclude_list + ".tbi"
   File mei_bed_index = mei_bed + ".tbi"
+  File manta_region_bed_index = manta_region_bed + ".tbi"
 
 
   call RunSVShell {
@@ -73,6 +75,8 @@ workflow SVShell {
       depth_exclude_list_index = depth_exclude_list_index,
       mei_bed = mei_bed,
       mei_bed_index = mei_bed_index,
+      manta_region_bed = manta_region_bed,
+      manta_region_bed_index = manta_region_bed_index,
   }
 
 
@@ -107,6 +111,8 @@ task RunSVShell {
     File depth_exclude_list_index
     File mei_bed
     File mei_bed_index
+    File manta_region_bed
+    File manta_region_bed_index
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
