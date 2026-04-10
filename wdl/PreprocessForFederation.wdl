@@ -42,6 +42,7 @@ workflow PreprocessForFederation {
         par_bed = par_bed,
         ped_file = ped_file,
         ploidy_table = ploidy_table,
+        sv_per_shard = sv_per_shard,
         sample_keep_list = sample_keep_list,
         sample_id_rename_map = sample_id_rename_map,
         sample_pop_assignments=sample_pop_assignments
