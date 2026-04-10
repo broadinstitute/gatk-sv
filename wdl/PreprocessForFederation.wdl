@@ -3,6 +3,7 @@ version 1.0
 import "Structs.wdl"
 import "ShardedAnnotateVcf.wdl" as sharded_annotate_vcf
 import "TasksMakeCohortVcf.wdl" as MiniTasks
+import "FilterGenotypes.wdl" as filter
 
 
 workflow PreprocessForFederation {
@@ -22,6 +23,8 @@ workflow PreprocessForFederation {
 
     Boolean is_gnomad
     Boolean is_aou
+
+    String header_drop_fields
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -84,10 +87,19 @@ workflow PreprocessForFederation {
     }
   }
 
+  call filter.SanitizeHeader {
+    input:
+      vcf = select_first([MoveMultiallelic.multiallelic_info_vcf, FixEnds.fix_ends_vcf, ConcatVcfs.concat_vcf]),
+      vcf_index = select_first([MoveMultiallelic.multiallelic_info_vcf_idx, FixEnds.fix_ends_vcf_idx, ConcatVcfs.concat_vcf_idx]),
+      drop_fields = header_drop_fields,
+      prefix = "~{prefix}.sanitized",
+      sv_pipeline_docker = sv_pipeline_docker
+  }
+
 
   output {
-    File preprocessed_vcf = select_first([MoveMultiallelic.multiallelic_info_vcf, FixEnds.fix_ends_vcf, ConcatVcfs.concat_vcf])
-    File preprocessed_vcf_idx = select_first([MoveMultiallelic.multiallelic_info_vcf_idx, FixEnds.fix_ends_vcf_idx, ConcatVcfs.concat_vcf_idx])
+    File preprocessed_vcf = SanitizeHeader.out
+    File preprocessed_vcf_idx = SanitizeHeader.out_index
   }
 }
 

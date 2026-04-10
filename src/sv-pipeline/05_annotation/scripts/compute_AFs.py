@@ -49,11 +49,11 @@ def update_sex_freqs(record, pop=None):
     """
 
     if pop is not None:
-        m_prefix = '_'.join([pop, 'MALE'])
-        f_prefix = '_'.join([pop, 'FEMALE'])
+        m_prefix = '_'.join([pop, 'XY'])
+        f_prefix = '_'.join([pop, 'XX'])
     else:
-        m_prefix = 'MALE'
-        f_prefix = 'FEMALE'
+        m_prefix = 'XY'
+        f_prefix = 'XX'
 
     m_an = record.info.get('AN_' + m_prefix, 0)
     m_ac = sum(record.info.get('AC_' + m_prefix, 0))
@@ -102,11 +102,11 @@ def gather_allele_freqs(record, samples, males_set, females_set, parbt, pop_dict
     calc_allele_freq(record, samples)
     if len(males_set) > 0:
         if record.chrom in sex_chroms and not rec_in_par:
-            calc_allele_freq(record, males_set, prefix='MALE', hemi=True)
+            calc_allele_freq(record, males_set, prefix='XY', hemi=True)
         else:
-            calc_allele_freq(record, males_set, prefix='MALE')
+            calc_allele_freq(record, males_set, prefix='XY')
     if len(females_set) > 0:
-        calc_allele_freq(record, females_set, prefix='FEMALE')
+        calc_allele_freq(record, females_set, prefix='XX')
 
     # Adjust global allele frequencies on sex chromosomes, if famfile provided
     if record.chrom in sex_chroms and not rec_in_par \
@@ -122,13 +122,13 @@ def gather_allele_freqs(record, samples, males_set, females_set, parbt, pop_dict
             if len(males_set) > 0 and not no_combos:
                 if record.chrom in sex_chroms and not rec_in_par:
                     calc_allele_freq(record, list([s for s in pop_samps if s in males_set]),
-                                     prefix=pop + '_MALE', hemi=True)
+                                     prefix=pop + '_XY', hemi=True)
                 else:
                     calc_allele_freq(record, list([s for s in pop_samps if s in males_set]),
-                                     prefix=pop + '_MALE')
+                                     prefix=pop + '_XY')
             if len(females_set) > 0 and not no_combos:
                 calc_allele_freq(record, list([s for s in pop_samps if s in females_set]),
-                                 prefix=pop + '_FEMALE')
+                                 prefix=pop + '_XX')
 
             # Adjust per-pop allele frequencies on sex chromosomes, if famfile provided
             if record.chrom in sex_chroms and not rec_in_par \
@@ -305,7 +305,7 @@ def main():
         females_set = set([line.split('\t')[1]
                    for line in famfile if line.split('\t')[4] == '2'])
         females_set = set(s for s in samples_list if s in females_set)
-        sexes = 'MALE FEMALE'.split()
+        sexes = 'XY XX'.split()
         if args.par is not None:
             parbt = pbt.BedTool(args.par)
 
@@ -387,7 +387,7 @@ def main():
                 '##INFO=<ID=CN_NONREF_COUNT_%s,Number=1,Type=Integer,Description="Number of %s samples with non-reference copy states (multiallelic CNVs only).">' % (sex, sex))
             INFO_ADD.append(
                 '##INFO=<ID=CN_NONREF_FREQ_%s,Number=1,Type=Float,Description="Frequency of %s samples with non-reference copy states (multiallelic CNVs only).">' % (sex, sex))
-            if sex == 'MALE':
+            if sex == 'XY':
                 INFO_ADD.append(
                     '##INFO=<ID=N_HEMIREF_%s,Number=1,Type=Integer,Description="Number of %s samples with hemizygous reference genotypes (biallelic sites only).">' % (sex, sex))
                 INFO_ADD.append(
@@ -469,7 +469,7 @@ def main():
                         '_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=CN_NONREF_FREQ_%s,Number=1,Type=Float,Description="Frequency of %s samples with non-reference copy states (multiallelic CNVs only).">' % (
                         '_'.join((pop, sex)), ' '.join((pop, sex))))
-                    if sex == 'MALE':
+                    if sex == 'XY':
                         INFO_ADD.append('##INFO=<ID=N_HEMIREF_%s,Number=1,Type=Integer,Description="Number of %s samples with hemizygous reference genotypes (biallelic sites only).">' % (
                             '_'.join((pop, sex)), ' '.join((pop, sex))))
                         INFO_ADD.append('##INFO=<ID=N_HEMIALT_%s,Number=1,Type=Integer,Description="Number of %s samples with hemizygous alternate genotypes (biallelic sites only).">' % (

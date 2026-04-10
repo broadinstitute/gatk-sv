@@ -17,6 +17,8 @@ workflow ShardedAnnotateVcf {
     String contig
 
     File ploidy_table
+    File? apply_filters_script
+    Float? no_call_rate_cutoff
 
     File? protein_coding_gtf
     File? noncoding_bed
@@ -30,6 +32,7 @@ workflow ShardedAnnotateVcf {
     File? ped_file                # Used for M/F AF calculations
     File par_bed
     File? allosomes_list
+    File? compute_afs_script
     Int   sv_per_shard
 
     File? ref_bed              # File with external allele frequencies
@@ -51,6 +54,7 @@ workflow ShardedAnnotateVcf {
     RuntimeAttr? runtime_attr_scatter_vcf
     RuntimeAttr? runtime_attr_estimate_rd_cn_af
     RuntimeAttr? runtime_attr_rename_samples
+    RuntimeAttr? runtime_attr_apply_filters
   }
 
   if (defined(ref_bed)) {
@@ -116,15 +120,29 @@ workflow ShardedAnnotateVcf {
       }
     }
 
+    call ApplyFilters {
+      input:
+        vcf = select_first([AnnotateFunctionalConsequences.annotated_vcf, RenameVcfSamplesTask.out, SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
+        prefix = shard_prefix,
+        no_call_rate_cutoff = no_call_rate_cutoff,
+        ploidy_table = ploidy_table,
+        filter_reference_artifacts = true,
+        remove_zero_carrier_sites = true,
+        apply_filters_script = apply_filters_script,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_apply_filters
+    }
+
     # Compute AC, AN, and AF per population & sex combination
     call ComputeAFs {
       input:
-        vcf = select_first([AnnotateFunctionalConsequences.annotated_vcf, RenameVcfSamplesTask.out, SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
+        vcf = ApplyFilters.filtered_vcf,
         prefix = shard_prefix,
         sample_pop_assignments = sample_pop_assignments,
         ped_file = ped_file,
         par_bed = par_bed,
         allosomes_list = allosomes_list,
+        script = compute_afs_script,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_compute_AFs
     }
@@ -165,6 +183,65 @@ workflow ShardedAnnotateVcf {
   output {
     Array[File] sharded_annotated_vcf = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf) else EstimateRdCnFrequency.rd_cn_freq_vcf
     Array[File] sharded_annotated_vcf_idx = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi) else EstimateRdCnFrequency.rd_cn_freq_vcf
+  }
+}
+
+
+task ApplyFilters {
+  input {
+    File vcf
+    String prefix
+    File ploidy_table
+    String? cohort_id
+    Int? shard_index
+    Float? no_call_rate_cutoff
+    Boolean filter_reference_artifacts
+    Boolean remove_zero_carrier_sites
+    File? apply_filters_script
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 5,
+    disk_gb: ceil(10.0 + 2 * size(vcf, "GiB")),
+    boot_disk_gb: 30,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    python ~{select_first([apply_filters_script, "/opt/sv-pipeline/scripts/apply_ncr_and_ref_artifact_filters.py"])} \
+      --vcf ~{vcf} \
+      --out ~{prefix}.vcf.gz \
+      --ploidy-table ~{ploidy_table} \
+      --ncr-threshold ~{no_call_rate_cutoff} \
+      ~{"--cohort-id " + cohort_id} \
+      ~{"--shard-index " + shard_index} \
+      ~{if (filter_reference_artifacts) then "--filter-reference-artifacts" else ""} \
+      ~{if (remove_zero_carrier_sites) then "--remove-zero-carrier-sites" else ""}
+
+    touch ~{cohort_id}.vid_map.tsv
+
+  >>>
+
+  output {
+    File filtered_vcf = "~{prefix}.vcf.gz"
+    File id_rename_map = "~{cohort_id}.vid_map.tsv"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
@@ -342,6 +419,7 @@ task ComputeAFs {
     File? ped_file
     File? par_bed
     File? allosomes_list
+    File? script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -357,7 +435,7 @@ task ComputeAFs {
 
   command <<<
     set -euo pipefail
-    /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py "~{vcf}" stdout \
+    ~{default="/opt/sv-pipeline/05_annotation/scripts/compute_AFs.py" script} "~{vcf}" stdout \
       ~{"-p " + sample_pop_assignments} \
       ~{"-f " + ped_file} \
       ~{"--par " + par_bed} \
