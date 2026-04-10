@@ -1086,9 +1086,12 @@ task ScatterVcf {
 
   command <<<
     set -euo pipefail
-    # in case the file is empty create an empty shard
-    bcftools view -h ~{vcf} | bgzip -c > "~{prefix}.0.vcf.gz"
-    bcftools +scatter ~{vcf} -o . -O z -p "~{prefix}". --threads ~{threads} -n ~{records_per_shard} ~{"-r " + contig}
+
+    ln -s "~{vcf}" local_input.vcf.gz
+    ~{if defined(vcf_index) then 'ln -s "' + select_first([vcf_index]) + '" local_input.vcf.gz.tbi' else 'tabix local_input.vcf.gz'}
+
+    bcftools view -h local_input.vcf.gz | bgzip -c > "~{prefix}.0.vcf.gz"
+    bcftools +scatter local_input.vcf.gz -o . -O z -p "~{prefix}". --threads ~{threads} -n ~{records_per_shard} ~{"-r " + contig}
 
     ls "~{prefix}".*.vcf.gz | sort -k1,1V > vcfs.list
     i=0
