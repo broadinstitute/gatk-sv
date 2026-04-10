@@ -145,25 +145,25 @@ echo "  Work dir         : ${WORK_DIR}"
 echo ""
 
 # ── step 1: preprocess ───────────────────────────────────────────────────────
-# echo "[1/5] preprocess"
-# SD_ARGS=""
-# if [[ -n "${SITE_DEPTH_LIST}" ]]; then
-#     SD_ARGS="--site-depth-list ${SITE_DEPTH_LIST}"
-# fi
-# PR_ARGS=""
-# if [[ -n "${POOR_REGIONS}" ]]; then
-#     PR_ARGS="--poor-regions ${POOR_REGIONS} --min-poor-region-coverage ${MIN_POOR_REGION_COVERAGE}"
-# fi
-# if [[ "${DRY_RUN}" == "true" ]]; then
-#     echo "DRY-RUN: gatk-sv-ploidy preprocess -i \"${INPUT_DEPTH}\" -o \"${PREPROCESS_DIR}\" ${SD_ARGS} ${PR_ARGS}"
-# else
-#     gatk-sv-ploidy preprocess \
-#         -i "${INPUT_DEPTH}" \
-#         -o "${PREPROCESS_DIR}" \
-#         $SD_ARGS \
-#         $PR_ARGS \
-#         $PREPROCESS_ARGS
-# fi
+echo "[1/5] preprocess"
+SD_ARGS=""
+if [[ -n "${SITE_DEPTH_LIST}" ]]; then
+    SD_ARGS="--site-depth-list ${SITE_DEPTH_LIST}"
+fi
+PR_ARGS=""
+if [[ -n "${POOR_REGIONS}" ]]; then
+    PR_ARGS="--poor-regions ${POOR_REGIONS} --min-poor-region-coverage ${MIN_POOR_REGION_COVERAGE}"
+fi
+if [[ "${DRY_RUN}" == "true" ]]; then
+    echo "DRY-RUN: gatk-sv-ploidy preprocess -i \"${INPUT_DEPTH}\" -o \"${PREPROCESS_DIR}\" ${SD_ARGS} ${PR_ARGS}"
+else
+    gatk-sv-ploidy preprocess \
+        -i "${INPUT_DEPTH}" \
+        -o "${PREPROCESS_DIR}" \
+        $SD_ARGS \
+        $PR_ARGS \
+        $PREPROCESS_ARGS
+fi
 
 # ── step 2: infer ────────────────────────────────────────────────────────────
 echo "[2/${TOTAL_STEPS}] infer"
