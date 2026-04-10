@@ -13,7 +13,7 @@ workflow PreprocessForFederation {
     String prefix
 
     File sample_keep_list
-    File sample_id_rename_map
+    File? sample_id_rename_map
 
     File par_bed
     File sample_pop_assignments
