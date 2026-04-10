@@ -45,7 +45,9 @@ workflow PreprocessForFederation {
         sv_per_shard = sv_per_shard,
         sample_keep_list = sample_keep_list,
         sample_id_rename_map = sample_id_rename_map,
-        sample_pop_assignments=sample_pop_assignments
+        sample_pop_assignments=sample_pop_assignments,
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_base_mini_docker=sv_base_mini_docker
       }
   }
 
