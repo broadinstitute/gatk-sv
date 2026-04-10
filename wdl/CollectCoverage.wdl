@@ -108,54 +108,98 @@ task CondenseReadCounts {
     set -euo pipefail
     export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk4_jar_override}
 
-    if [[ -n "~{default="" sequence_dictionary}" ]]; then
-      cp ~{default="" sequence_dictionary} ref.dict
-    elif [[ -n "~{default="" sample}" ]]; then
-      zcat ~{counts} | grep '^@' | grep -v '@RG' > ref.dict
-    fi
+    counts_first_line=$(zcat ~{counts} | head -n 1)
+    sample_override="~{default="" sample}"
+    provided_dict="~{default="" sequence_dictionary}"
+    emit_picard=false
+    output_sample_id=""
+    input_sample_count=0
 
-    if [[ -n "~{default="" sample}" ]]; then
-      zcat ~{counts} | grep -v '^@' | sed -e 1d | \
-          awk 'BEGIN{FS=OFS="\t";print "#Chr\tStart\tEnd\tNA21133"}{print $1,$2-1,$3,$4}' | bgzip > in.rd.txt.gz
-    else
-      if [[ ! -s ref.dict ]] && zcat ~{counts} | grep -q '^@'; then
-        zcat ~{counts} | grep '^@' | grep -v '@RG' > ref.dict
-      elif [[ ! -s ref.dict ]]; then
-        : > ref.dict
+    if [[ "${counts_first_line}" == @* ]]; then
+      input_format="picard"
+      input_sample_count=1
+
+      if [[ -n "${provided_dict}" ]]; then
+        cp "${provided_dict}" ref.dict
+      else
+        zcat ~{counts} | grep '^@' | grep -v '^@RG' > ref.dict
+        if [[ ! -s ref.dict ]]; then
+          echo "ERROR: Picard-style counts require a sequence dictionary, but none was found in the input header and none was provided." >&2
+          exit 1
+        fi
+      fi
+
+      existing_sample_id=$(zcat ~{counts} | awk -F "\t" '/^@RG/ {
+          for (i = 1; i <= NF; ++i) {
+            if ($i ~ /^SM:/) {
+              sub(/^SM:/, "", $i)
+              print $i
+              exit
+            }
+          }
+        }')
+
+      output_sample_id="${existing_sample_id}"
+      if [[ -n "${sample_override}" ]]; then
+        output_sample_id="${sample_override}"
+        emit_picard=true
       fi
 
       zcat ~{counts} | \
-        awk 'BEGIN{FS=OFS="\t"}
+        awk -v sample_name="${output_sample_id}" 'BEGIN{FS=OFS="\t"; print "#Chr\tStart\tEnd\t" sample_name}
              /^@/ {next}
-             NR==1 {
-               if ($1 == "CONTIG") {
-                 $1 = "#Chr";
-                 $2 = "Start";
-                 $3 = "End";
-                 print;
-                 next;
+             $1 == "CONTIG" {next}
+             {print $1, $2-1, $3, $4}' | bgzip > in.rd.txt.gz
+    else
+      input_format="rd_matrix"
+
+      if [[ -z "${provided_dict}" ]]; then
+        echo "ERROR: .rd.txt.gz inputs require sequence_dictionary to be provided to CondenseReadCounts." >&2
+        exit 1
+      fi
+      cp "${provided_dict}" ref.dict
+
+      rd_header=$(zcat ~{counts} | head -n 1)
+      input_sample_count=$(printf '%s\n' "${rd_header}" | awk -F "\t" '{print NF - 3}')
+      if (( input_sample_count < 1 )); then
+        echo "ERROR: Unable to determine sample columns from .rd.txt.gz header: ${rd_header}" >&2
+        exit 1
+      fi
+
+      if [[ -n "${sample_override}" && ${input_sample_count} -eq 1 ]]; then
+        output_sample_id="${sample_override}"
+        emit_picard=true
+      fi
+
+      zcat ~{counts} | \
+        awk -v sample_override="${sample_override}" 'BEGIN{FS=OFS="\t"}
+             NR == 1 {
+               if ($1 != "#Chr" && $1 != "Chr" && $1 != "CONTIG") {
+                 printf("ERROR: Unsupported .rd.txt.gz header: %s\n", $0) > "/dev/stderr"
+                 exit 1
                }
-               if ($1 == "#Chr" || $1 == "Chr") {
-                 $1 = "#Chr";
-                 print;
-                 next;
+               $1 = "#Chr"
+               $2 = "Start"
+               $3 = "End"
+               if (sample_override != "" && NF == 4) {
+                 $4 = sample_override
                }
+               print
+               next
              }
-             {
-               print;
-             }' | bgzip > in.rd.txt.gz
+             {print}' | bgzip > in.rd.txt.gz
     fi
 
     tabix -0 -s1 -b2 -e3 in.rd.txt.gz 
     gatk --java-options -Xmx2g CondenseDepthEvidence -F in.rd.txt.gz -O out.rd.txt.gz --sequence-dictionary ref.dict \
         --max-interval-size ~{default=2000 max_interval_size} --min-interval-size ~{default=101 min_interval_size}
 
-    if [[ -n "~{default="" sample}" ]]; then
+    if [[ "${emit_picard}" == true ]]; then
       cat ref.dict <(zcat out.rd.txt.gz | \
-          awk 'BEGIN{FS=OFS="\t";print "@RG\tID:GATKCopyNumber\tSM:~{default="" sample}\nCONTIG\tSTART\tEND\tCOUNT"}{if(NR>1)print $1,$2+1,$3,$4}') | \
+          awk -v sample_name="${output_sample_id}" 'BEGIN{FS=OFS="\t";print "@RG\tID:GATKCopyNumber\tSM:" sample_name "\nCONTIG\tSTART\tEND\tCOUNT"}{if(NR>1)print $1,$2+1,$3,$4}') | \
           bgzip > ~{output_name}
     else
-      cat ref.dict <(zcat out.rd.txt.gz | \
+      zcat out.rd.txt.gz | \
           awk 'BEGIN{FS=OFS="\t"}
                NR==1 {$1="#Chr"; $2="Start"; $3="End"; print; next}
                {print}') | \
