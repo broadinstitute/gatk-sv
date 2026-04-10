@@ -125,6 +125,7 @@ task RunSVShell {
     File LINE1_reference
     File intron_reference
     File? par_bed
+    File PE_metrics
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
