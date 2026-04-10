@@ -146,7 +146,6 @@ task TrainSVGenotyping {
     String output_name
 
     File rf_cutoffs
-    File PE_metrics
 
     String gatk_docker
     Float? java_mem_fraction
