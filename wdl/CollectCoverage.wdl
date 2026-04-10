@@ -195,9 +195,13 @@ task CondenseReadCounts {
         --max-interval-size ~{default=2000 max_interval_size} --min-interval-size ~{default=101 min_interval_size}
 
     if [[ "${emit_picard}" == true ]]; then
-      cat ref.dict <(zcat out.rd.txt.gz | \
-          awk -v sample_name="${output_sample_id}" 'BEGIN{FS=OFS="\t";print "@RG\tID:GATKCopyNumber\tSM:" sample_name "\nCONTIG\tSTART\tEND\tCOUNT"}{if(NR>1)print $1,$2+1,$3,$4}') | \
-          bgzip > ~{output_name}
+      {
+        cat ref.dict
+        printf '@RG\tID:GATKCopyNumber\tSM:%s\n' "${output_sample_id}"
+        printf 'CONTIG\tSTART\tEND\tCOUNT\n'
+        zcat out.rd.txt.gz | \
+            awk 'BEGIN{FS=OFS="\t"}{if(NR>1)print $1,$2+1,$3,$4}'
+      } | bgzip > ~{output_name}
     else
       zcat out.rd.txt.gz | \
           awk 'BEGIN{FS=OFS="\t"}
