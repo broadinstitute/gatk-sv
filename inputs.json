@@ -105,7 +105,7 @@
   "SVShell.par_bed": "gs://broad-dsde-methods-vj/sv-shell-inputs/hg38.par.bed",
   "SVShell.sample_bincov_matrix": "TODO_MAYBE_NOT_NEEEDED",
   "SVShell.sample_bincov_matrix_idx": "TODO: delete this one too",
-  "SVShell.PE_metrics": "gs://broad-dsde-methods-vj/sv-shell-inputs/all_samples.pe_metric_file.txt",
+  "SVShell.RunSVShell.PE_metrics": "gs://broad-dsde-methods-vj/sv-shell-inputs/all_samples.pe_metric_file.txt",
   "SVShell.SR_metrics": "gs://broad-dsde-methods-vj/sv-shell-inputs/all_samples.sr_metric_file.txt",
   "SVShell.rmsk": "gs://broad-dsde-methods-vj/sv-shell-inputs/hg38.randomForest_blacklist.withRepMask.bed.gz",
   "SVShell.segdups": "gs://broad-dsde-methods-vj/sv-shell-inputs/hg38.SD_gaps_Cen_Tel_Heter_Satellite_lumpy.blacklist.sorted.merged.bed.gz",
