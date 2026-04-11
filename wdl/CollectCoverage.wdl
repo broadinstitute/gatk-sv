@@ -206,7 +206,7 @@ task CondenseReadCounts {
       zcat out.rd.txt.gz | \
           awk 'BEGIN{FS=OFS="\t"}
                NR==1 {$1="#Chr"; $2="Start"; $3="End"; print; next}
-               {print}') | \
+               {print}' | \
           bgzip > ~{output_name}
     fi
   >>>
