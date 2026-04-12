@@ -435,7 +435,7 @@ task ComputeAFs {
 
   command <<<
     set -euo pipefail
-    ~{default="/opt/sv-pipeline/05_annotation/scripts/compute_AFs.py" script} "~{vcf}" stdout \
+    python ~{default="/opt/sv-pipeline/05_annotation/scripts/compute_AFs.py" script} "~{vcf}" stdout \
       ~{"-p " + sample_pop_assignments} \
       ~{"-f " + ped_file} \
       ~{"--par " + par_bed} \
