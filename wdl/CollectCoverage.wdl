@@ -92,7 +92,9 @@ task CondenseReadCounts {
     RuntimeAttr? runtime_attr_override
   }
 
-  String output_name = "condensed_counts." + select_first([output_prefix, sample, "matrix"]) + ".tsv.gz"
+  Boolean input_is_matrix = basename(counts, ".rd.txt.gz") != basename(counts)
+  String output_suffix = if input_is_matrix then ".rd.txt.gz" else ".tsv.gz"
+  String output_name = "condensed_counts." + select_first([output_prefix, sample, "matrix"]) + output_suffix
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
@@ -140,9 +142,9 @@ task CondenseReadCounts {
         }')
 
       output_sample_id="${existing_sample_id}"
+      emit_picard=true
       if [[ -n "${sample_override}" ]]; then
         output_sample_id="${sample_override}"
-        emit_picard=true
       fi
 
       zcat ~{counts} | \
@@ -168,7 +170,6 @@ task CondenseReadCounts {
 
       if [[ -n "${sample_override}" && ${input_sample_count} -eq 1 ]]; then
         output_sample_id="${sample_override}"
-        emit_picard=true
       fi
 
       zcat ~{counts} | \
