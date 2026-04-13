@@ -143,10 +143,10 @@ task MoveMultiallelic {
     python3 <<CODE
 import pysam
 
-with pysam.VariantFile(~{vcf}, 'r') as vcf:
+with pysam.VariantFile("~{vcf}", 'r') as vcf:
   header = vcf.header
   header.add_line("##INFO=<ID=MULTIALLELIC,Number=0,Type=Flag,Description=\"Multiallelic site\">")
-  with pysam.VariantFile(~{output_file}, 'w', header=header) as out:
+  with pysam.VariantFile("~{output_file}", 'w', header=header) as out:
     for record in vcf:
       if 'MULTIALLELIC' in record.filter:
         filters = [x for x in record.filter if x != "MULTIALLELIC"]
@@ -245,8 +245,8 @@ def _parse_bnd_ends(vcf_path):
 
 
 bnd_end_dict = _parse_bnd_ends(~{vcf})
-with pysam.VariantFile(~{vcf}, 'r') as inp:
-  with pysam.VariantFile(~{output_file}, 'w', header=inp.header) as out:
+with pysam.VariantFile("~{vcf}", 'r') as inp:
+  with pysam.VariantFile("~{output_file}", 'w', header=inp.header) as out:
     for record in inp:
 
       if record.info['SVTYPE'] in ['BND', 'CTX'] and 'END2' not in record.info:
@@ -311,8 +311,8 @@ task MoveInsToIntervals {
 
     python3 <<CODE
 import pysam
-with pysam.VariantFile(~{vcf}, 'r') as vcf:
-  with pysam.VariantFile(~{output_file}, 'w', header=vcf.header) as out:
+with pysam.VariantFile("~{vcf}", 'r') as vcf:
+  with pysam.VariantFile("~{output_file}", 'w', header=vcf.header) as out:
     for record in vcf:
       if 'CPX_TYPE' in record.info and record.info['CPX_TYPE'] == 'INS_iDEL':
         lst_intervals = list(record.info['CPX_INTERVALS'])
