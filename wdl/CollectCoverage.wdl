@@ -107,10 +107,10 @@ task CondenseReadCounts {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    set -euo pipefail
+    set -euxo pipefail
     export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk4_jar_override}
 
-    counts_first_line=$(zcat ~{counts} | head -n 1)
+    counts_first_line=$(zcat ~{counts} | head -n 1 || true)
     sample_override="~{default="" sample}"
     provided_dict="~{default="" sequence_dictionary}"
     emit_picard=false
@@ -161,7 +161,7 @@ task CondenseReadCounts {
       fi
       cp "${provided_dict}" ref.dict
 
-      rd_header=$(zcat ~{counts} | head -n 1)
+      rd_header=$(zcat ~{counts} | head -n 1 || true)
       input_sample_count=$(printf '%s\n' "${rd_header}" | awk -F "\t" '{print NF - 3}')
       if (( input_sample_count < 1 )); then
         echo "ERROR: Unable to determine sample columns from .rd.txt.gz header: ${rd_header}" >&2
