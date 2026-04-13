@@ -17,12 +17,6 @@ workflow SVShell {
     File depth_exclude_list
     File mei_bed
     File manta_region_bed
-    File HERVK_reference
-    File LINE1_reference
-    File intron_reference
-    File? par_bed
-    File rmsk
-    File segdups
   }
 
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
@@ -82,18 +76,26 @@ workflow SVShell {
       mei_bed = mei_bed,
       mei_bed_index = mei_bed_index,
       manta_region_bed = manta_region_bed,
-      manta_region_bed_index = manta_region_bed_index,
-      HERVK_reference = HERVK_reference,
-      LINE1_reference = LINE1_reference,
-      intron_reference = intron_reference,
-      par_bed = par_bed,
-      rmsk = rmsk,
-      segdups = segdups,
+      manta_region_bed_index = manta_region_bed_index
   }
 
 
   output {
     File inputs_json = RunSVShell.inputs_json
+    File outputs_json = RunSVShell.outputs_json
+    File final_vcf = RunSVShell.final_vcf
+    File final_vcf_idx = RunSVShell.final_vcf_idx
+    File pre_cleanup_vcf = RunSVShell.pre_cleanup_vcf
+    File pre_cleanup_vcf_idx = RunSVShell.pre_cleanup_vcf_idx
+    File stripy_json_output = RunSVShell.stripy_json_output
+    File stripy_tsv_output = RunSVShell.stripy_tsv_output
+    File stripy_html_output = RunSVShell.stripy_html_output
+    File stripy_vcf_output = RunSVShell.stripy_vcf_output
+    File metrics_file = RunSVShell.metrics_file
+    File qc_file = RunSVShell.qc_file
+    File ploidy_matrix = RunSVShell.ploidy_matrix
+    File ploidy_plots = RunSVShell.ploidy_plots
+    File non_genotyped_unique_depth_calls = RunSVShell.non_genotyped_unique_depth_calls
   }
 }
 
@@ -218,6 +220,20 @@ task RunSVShell {
     RuntimeAttr? runtime_attr_override
   }
 
+  String final_vcf_filename = sample_id + ".vcf.gz"
+  String final_vcf_idx_filename = final_vcf_filename + ".tbi"
+  String pre_cleanup_vcf_filename = batch + ".annotated.vcf.gz"
+  String pre_cleanup_vcf_idx_filename = pre_cleanup_vcf_filename + ".tbi"
+  String stripy_json_filename = sample_id + ".stripy.json"
+  String stripy_tsv_filename = sample_id + ".stripy.tsv"
+  String stripy_html_filename = sample_id + ".stripy.html"
+  String stripy_vcf_filename = sample_id + ".stripy.vcf"
+  String metrics_filename = "single_sample." + batch + ".metrics.tsv"
+  String qc_filename = "sv_qc." + batch + ".tsv"
+  String ploidy_matrix_filename = batch + "_ploidy_matrix.bed.gz"
+  String ploidy_plots_filename = batch + "_ploidy_plots.tar.gz"
+  String non_genotyped_unique_depth_calls_filename = batch + ".non_genotyped_unique_depth_calls.vcf.gz"
+
   command <<<
     set -Exeuo pipefail
 
@@ -227,10 +243,38 @@ task RunSVShell {
     mkdir -p "${PWD}/wd/tmp"
 
     touch single_sample_pipeline_inputs.json
+    touch single_sample_pipeline_outputs.json
+    touch "~{final_vcf_filename}"
+    touch "~{final_vcf_idx_filename}"
+    touch "~{pre_cleanup_vcf_filename}"
+    touch "~{pre_cleanup_vcf_idx_filename}"
+    touch "~{stripy_json_filename}"
+    touch "~{stripy_tsv_filename}"
+    touch "~{stripy_html_filename}"
+    touch "~{stripy_vcf_filename}"
+    touch "~{metrics_filename}"
+    touch "~{qc_filename}"
+    touch "~{ploidy_matrix_filename}"
+    touch "~{ploidy_plots_filename}"
+    touch "~{non_genotyped_unique_depth_calls_filename}"
   >>>
 
   output {
     File inputs_json = "single_sample_pipeline_inputs.json"
+    File outputs_json = "single_sample_pipeline_outputs.json"
+    File final_vcf = final_vcf_filename
+    File final_vcf_idx = final_vcf_idx_filename
+    File pre_cleanup_vcf = pre_cleanup_vcf_filename
+    File pre_cleanup_vcf_idx = pre_cleanup_vcf_idx_filename
+    File stripy_json_output = stripy_json_filename
+    File stripy_tsv_output = stripy_tsv_filename
+    File stripy_html_output = stripy_html_filename
+    File stripy_vcf_output = stripy_vcf_filename
+    File metrics_file = metrics_filename
+    File qc_file = qc_filename
+    File ploidy_matrix = ploidy_matrix_filename
+    File ploidy_plots = ploidy_plots_filename
+    File non_genotyped_unique_depth_calls = non_genotyped_unique_depth_calls_filename
   }
 
   RuntimeAttr default_attr = object {
