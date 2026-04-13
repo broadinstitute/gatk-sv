@@ -37,10 +37,18 @@ workflow GenotypeBatch {
     RuntimeAttr? runtime_attr_regeno_coverage_medians
   }
 
-  call TrainSVGenotyping {
+  call FilterWhamDeletions {
     input:
       vcf = vcf,
       vcf_index = vcf + ".tbi",
+      prefix = batch + ".wham_del_filtered",
+      sv_base_mini_docker = sv_base_mini_docker
+  }
+
+  call TrainSVGenotyping {
+    input:
+      vcf = FilterWhamDeletions.filtered_vcf,
+      vcf_index = FilterWhamDeletions.filtered_vcf_index,
       output_name = batch,
       training_intervals = training_intervals,
       median_coverage = median_coverage,
@@ -66,8 +74,8 @@ workflow GenotypeBatch {
   scatter (contig in read_lines(contig_list)) {
     call GenotypeSVs {
       input:
-        vcf = vcf,
-        vcf_index = vcf + ".tbi",
+        vcf = FilterWhamDeletions.filtered_vcf,
+        vcf_index = FilterWhamDeletions.filtered_vcf_index,
         output_prefix = "~{batch}.genotype_batch.~{contig}",
         contig = contig,
         median_coverage = median_coverage,
@@ -129,6 +137,53 @@ workflow GenotypeBatch {
     File genotyping_pe_table = TrainSVGenotyping.pe_table
     File genotyping_sr_table = TrainSVGenotyping.sr_table
     File regeno_coverage_medians = GenerateRegenoCoverageMedians.out
+  }
+}
+
+task FilterWhamDeletions {
+  input {
+    File vcf
+    File vcf_index
+    String prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(50 + size(vcf, "GB") * 2),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    bcftools view \
+      -e 'INFO/SVTYPE="DEL" && COUNT(INFO/ALGORITHMS)=1 && INFO/ALGORITHMS[0]="wham"' \
+      ~{vcf} \
+      -Oz \
+      -o ~{prefix}.vcf.gz
+
+    tabix -p vcf ~{prefix}.vcf.gz
+  >>>
+
+  output {
+    File filtered_vcf = "~{prefix}.vcf.gz"
+    File filtered_vcf_index = "~{prefix}.vcf.gz.tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
