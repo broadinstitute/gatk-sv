@@ -22,6 +22,7 @@ workflow SVShell {
     File intron_reference
     File? par_bed
     File rmsk
+    File segdups
   }
 
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
@@ -87,6 +88,7 @@ workflow SVShell {
       intron_reference = intron_reference,
       par_bed = par_bed,
       rmsk = rmsk,
+      segdups = segdups,
   }
 
 
@@ -98,6 +100,32 @@ workflow SVShell {
 task RunSVShell {
   input {
     String batch
+    String sample_id
+    File ref_samples_list
+    File ref_ped_file
+    File genome_file
+    File primary_contigs_list
+    File primary_contigs_fai
+    File reference_fasta
+    File reference_index
+    File reference_dict
+    File autosome_file
+    File allosome_file
+    File bam_or_cram_file
+    File bam_or_cram_index
+    File preprocessed_intervals
+    File sd_locs_vcf
+    File wham_include_list_bed_file
+    File reference_bwa_alt
+    File reference_bwa_amb
+    File reference_bwa_ann
+    File reference_bwa_bwt
+    File reference_bwa_pac
+    File reference_bwa_sa
+    Boolean run_vcf_qc
+    File wgd_scoring_mask
+    Int min_svsize
+    File contig_ploidy_model_tar
     Array[File] gcnv_model_tars
     Array[File] ref_pesr_split_files
     Array[File] ref_pesr_split_files_indices
@@ -128,6 +156,7 @@ task RunSVShell {
     File intron_reference
     File? par_bed
     File rmsk
+    File segdups
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
