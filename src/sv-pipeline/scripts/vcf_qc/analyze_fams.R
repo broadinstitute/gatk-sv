@@ -1251,7 +1251,7 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
   #PDF 1: overall inheritance + stratified DNR beeswarm plots
   n.cols.ov <- 3 + as.integer(has.reg.strat)
   pdf(paste(OUTDIR, "/main_plots/", fam.type, "_inheritance_overall.pdf", sep=""),
-      height=5, width=4.5 + n.cols.ov * 4)
+      height=5, width=3 + n.cols.ov * 3)
   layout(matrix(seq_len(n.cols.ov * 2), nrow=2, byrow=T))
 
   #Top row: SV sites
@@ -1268,6 +1268,11 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
   if(has.reg.strat) plotDNRByStrat(reg.inh, reg.labs, count="variants",
                                    title="Site De Novo Rate by Region", cex.lab=cex.lab,
                                    nfams=nfams, fam.type=fam.type)
+  else {
+    par(bty="n"); plot(x=c(0,1),y=c(0,1),type="n",xaxt="n",yaxt="n",xlab="",ylab="",bty="n")
+    text(x=0.5,y=0.5,labels="No region data.")
+    mtext(3,line=1,text="Site De Novo Rate by Region",font=2,cex=cex.lab)
+  }
 
   #Bottom row: SV alleles
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list),
@@ -1283,12 +1288,17 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
   if(has.reg.strat) plotDNRByStrat(reg.inh, reg.labs, count="alleles",
                                    title="Allele De Novo Rate by Region", cex.lab=cex.lab,
                                    nfams=nfams, fam.type=fam.type)
+  else {
+    par(bty="n"); plot(x=c(0,1),y=c(0,1),type="n",xaxt="n",yaxt="n",xlab="",ylab="",bty="n")
+    text(x=0.5,y=0.5,labels="No region data.")
+    mtext(3,line=1,text="Allele De Novo Rate by Region",font=2,cex=cex.lab)
+  }
   dev.off()
 
   #PDF 2: DNR line plots and heatmaps
   n.cols.de <- 3 + as.integer(gq)
   pdf(paste(OUTDIR, "/main_plots/", fam.type, "_inheritance_denovo.pdf", sep=""),
-      height=5, width=n.cols.de * 5)
+      height=5, width=n.cols.de * 3.5)
   layout(matrix(seq_len(n.cols.de * 2), nrow=2, byrow=T))
 
   #Top row: SV sites

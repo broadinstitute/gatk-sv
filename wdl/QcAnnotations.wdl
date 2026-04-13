@@ -9,8 +9,8 @@ import "Utils.wdl" as Utils
 
 workflow QcAnnotations {
     input {
-        File vcf
-        File vcf_idx
+        Array[File] vcfs
+        Array[File] vcfs_idx
         Array[String] contigs
         String prefix
 
@@ -54,19 +54,34 @@ workflow QcAnnotations {
         RuntimeAttr? runtime_override_benchmark_samples
         RuntimeAttr? runtime_override_split_shuffled_list
         RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
+        RuntimeAttr? runtime_override_concat_vcfs
     }
+
+    # Merge multiple input VCFs into one if needed
+    if (length(vcfs) > 1) {
+        call MiniTasks.ConcatVcfs as MergeInputVcfs {
+            input:
+                vcfs = vcfs,
+                vcfs_idx = vcfs_idx,
+                outfile_prefix = prefix + ".merged",
+                sv_base_mini_docker = sv_base_mini_docker,
+                runtime_attr_override = runtime_override_concat_vcfs
+        }
+    }
+    File merged_vcf = select_first([MergeInputVcfs.concat_vcf, vcfs[0]])
+    File merged_vcf_idx = select_first([MergeInputVcfs.concat_vcf_idx, vcfs_idx[0]])
 
     if (defined(subset_vcf_string)) {
         call MiniTasks.SubsetVcf {
             input:
-                vcf = vcf,
+                vcf = merged_vcf,
                 outfile_prefix = prefix + ".subset",
                 subset_flags = select_first([subset_vcf_string]),
                 sv_base_mini_docker = sv_base_mini_docker
         }
     }
-    File use_vcf = select_first([SubsetVcf.filtered_vcf, vcf])
-    File use_vcf_idx = select_first([SubsetVcf.filtered_vcf_idx, vcf_idx])
+    File use_vcf = select_first([SubsetVcf.filtered_vcf, merged_vcf])
+    File use_vcf_idx = select_first([SubsetVcf.filtered_vcf_idx, merged_vcf_idx])
 
     scatter (contig in contigs) {
         call vcfwideqc.CollectQcVcfWide {

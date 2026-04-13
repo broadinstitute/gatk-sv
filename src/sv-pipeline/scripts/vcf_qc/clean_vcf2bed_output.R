@@ -97,6 +97,11 @@ max.motif.len <- if(!is.null(motifs.raw)) sapply(motifs.raw, function(m){
   mots <- strsplit(m, ",", fixed=TRUE)[[1]]
   max(nchar(mots), na.rm=TRUE)
 }) else NULL
+# TR_ENVELOPED flag (TRUE for SV sites fully enveloped by a TR/VNTR locus)
+tr.env.col <- if("TR_ENVELOPED" %in% colnames(dat)) {
+  v <- as.character(dat$TR_ENVELOPED)
+  !is.na(v) & toupper(v) %in% c("TRUE","1","YES")
+} else NULL
 # TRV expansion ratio
 trv.exp.col <- if("TRV_EXPANSION_RATIO" %in% colnames(dat)) as.numeric(as.character(dat$TRV_EXPANSION_RATIO)) else NULL
 # VEP Consequence field (pipe-field index 1 per comma-chained annotation, semicolon-joined unique values)
@@ -146,6 +151,7 @@ if(!is.null(vep.col)) dat$VEP_consequences <- vep.col
 for(pname in names(predicted.presence)) dat[[pname]] <- predicted.presence[[pname]]
 if(!is.null(max.motif.len)) dat$max_motif_length <- as.integer(max.motif.len)
 if(!is.null(trv.exp.col)) dat$TRV_EXPANSION_RATIO <- trv.exp.col
+if(!is.null(tr.env.col)) dat$TR_ENVELOPED <- tr.env.col
 zeroes <- which(dat$AC==0 | dat$carriers==0)
 if(length(zeroes)>0){
   cat(paste("WARNING: ",prettyNum(length(zeroes),big.mark=","),"/",

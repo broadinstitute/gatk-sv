@@ -1208,7 +1208,7 @@ wrapperPlotTiTv <- function(){
   mtext(2, text="Ti:Tv Ratio", line=2.5, cex=0.9)
   mtext(3, text="Ti:Tv by AF", font=2, line=0.5)
 
-  # Panel 2: Ti:Tv by REGION (or show "No REGION data")
+  # Panel 2: Ti:Tv by REGION (or show "No region data.")
   if(has.region && length(regions)>0){
     titv.reg <- sapply(regions, function(reg){
       sub <- snv.dat[which(!is.na(snv.dat$REGION) & snv.dat$REGION==reg),]
@@ -1236,7 +1236,7 @@ wrapperPlotTiTv <- function(){
   }else{
     par(mar=c(7,4.5,3,0.5), bty="n")
     plot(x=c(0,1),y=c(0,1),type="n",xaxt="n",yaxt="n",xlab="",ylab="")
-    text(x=0.5,y=0.5,labels="No REGION data")
+    text(x=0.5,y=0.5,labels="No region data.")
     mtext(3,text="Ti:Tv by Region",font=2,line=0.5)
   }
   dev.off()
@@ -1251,7 +1251,13 @@ plotDistribOverlaid <- function(sub.list, sub.labels, sub.colors, main.val=NULL,
                                 title=NULL, xlim=NULL, alpha=0.5, log.y=FALSE, log.x=FALSE){
   # Combine all values to get x range
   all.vals <- unlist(lapply(sub.list, function(x) x[!is.na(x) & is.finite(x)]))
-  if(length(all.vals)==0){ par(bty="n",mar=c(4.5,4,3,1)); plot.new(); mtext(3,text=title,font=2,line=1); return(invisible(NULL)) }
+  if(length(all.vals)==0){
+    par(bty="n",mar=c(4.5,4,3,1))
+    plot(x=c(0,1),y=c(0,1),type="n",xaxt="n",yaxt="n",xlab="",ylab="",bty="n")
+    text(x=0.5,y=0.5,labels="No region data.")
+    mtext(3,text=title,font=2,line=1)
+    return(invisible(NULL))
+  }
   if(is.null(xlim)) xlim <- range(all.vals, na.rm=T)
   if(log.x && xlim[1] <= 0){
     pos.vals <- all.vals[all.vals > 0]
@@ -1628,7 +1634,7 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
                       paste("Not in H-W equilibrium\n(Bonferroni; n=",
                             prettyNum(n.bonf,big.mark=","),"; ",
                             round(100*(n.bonf/nrow(HW.mat)),2),"%)\n",sep="")),
-             bty="n",bg=NA,cex=0.7)
+             bty="n",bg=NA,cex=0.45)
     }else{
       legend("topright",pch=19,col=c("#4DAC26","#81F850","#AC26A1"),pt.cex=2,
              legend=c(paste(round(100*(n.pass/nrow(HW.mat)),0),"%",sep=""),
@@ -1652,7 +1658,7 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
   
   #Add filter labels
   if(full.legend==T){
-    legend("right",bg=NA,bty="n",pch=NA,cex=0.7,
+    legend("right",bg=NA,bty="n",pch=NA,cex=0.45,
            legend=c("Autosomal variants only"))
   }
 }
@@ -1707,7 +1713,7 @@ plotAlleleCarrierCorrelation <- function(dat,autosomal=T,biallelic=T,
   
   #Add filter labels
   if(!is.null(filter.legend)){
-    legend("topleft",bg=NA,bty="n",pch=NA,legend=filter.legend,cex=0.8)
+    legend("topleft",bg=NA,bty="n",pch=NA,legend=filter.legend,cex=0.55)
   }
 }
 
@@ -1778,7 +1784,7 @@ wrapperPlotAllHWDistribs <- function(){
   if(n.sz %% 2 != 0) plot.new()
   dev.off()
 
-  # gt_distributions_region.png: per-region HWE grid (only if REGION column present)
+  # gt_distributions_region.png: always produced; per-region HWE grid if REGION column present
   has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
   if(has.region){
     regions <- orderRegions(unique(dat$REGION[!is.na(dat$REGION)]))
@@ -1795,6 +1801,12 @@ wrapperPlotAllHWDistribs <- function(){
       plotHWSingle(dat=sub, svtypes=svtypes, title=regions[i], full.legend=F, lab.cex=0.75)
     })
     if(n.reg %% 2 != 0) plot.new()
+    dev.off()
+  } else {
+    png(paste(OUTDIR,"main_plots/gt_distributions_region.png",sep=""),
+        res=300, height=cell.px, width=cell.px)
+    plot(x=c(0,1),y=c(0,1),type="n",xaxt="n",yaxt="n",xlab="",ylab="",bty="n")
+    text(x=0.5,y=0.5,labels="No region data.",cex=1.5)
     dev.off()
   }
 }
@@ -2180,19 +2192,7 @@ plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
   plotDistribOverlaid(sub.list=size.vals, sub.labels=trv.size.labels, sub.colors=col.size,
                       xlab=xlab, title=title.size, xlim=xlim, log.y=log.y)
 
-  # Panel 3: By REGION
-  if(has.region && length(regions) > 0){
-    reg.vals <- lapply(regions, function(r){
-      v <- vals[!is.na(trv.dat$REGION) & trv.dat$REGION==r & !is.na(vals) & is.finite(vals)]
-      v[v >= xlim[1] & v <= xlim[2]]
-    })
-    plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
-                        xlab=xlab, title=title.region, xlim=xlim, log.y=log.y)
-  } else {
-    par(bty="n",mar=c(4.5,4,3,1)); plot.new(); mtext(3,text=title.region,font=2,line=1)
-  }
-
-  # Panel 4: By motif length bucket
+  # Panel 3: By motif length bucket
   if(has.motif){
     mot.vals <- lapply(seq_along(trv.motif.labels), function(i){
       lo <- trv.motif.breaks[i]; hi <- trv.motif.breaks[i+1]
@@ -2204,6 +2204,21 @@ plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
                         xlab=xlab, title=title.motif, xlim=xlim, log.y=log.y)
   } else {
     par(bty="n",mar=c(4.5,4,3,1)); plot.new(); mtext(3,text=title.motif,font=2,line=1)
+  }
+
+  # Panel 4: By REGION (far right)
+  if(has.region && length(regions) > 0){
+    reg.vals <- lapply(regions, function(r){
+      v <- vals[!is.na(trv.dat$REGION) & trv.dat$REGION==r & !is.na(vals) & is.finite(vals)]
+      v[v >= xlim[1] & v <= xlim[2]]
+    })
+    plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
+                        xlab=xlab, title=title.region, xlim=xlim, log.y=log.y)
+  } else {
+    par(bty="n",mar=c(4.5,4,3,1))
+    plot(x=c(0,1),y=c(0,1),type="n",xaxt="n",yaxt="n",xlab="",ylab="",bty="n")
+    text(x=0.5,y=0.5,labels="No region data.")
+    mtext(3,text=title.region,font=2,line=1)
   }
 }
 
@@ -2218,9 +2233,8 @@ wrapperPlotTrvAlleleCount <- function(){
   plotTrvDistribPanels(trv.dat=trv.dat, vals=vals, xlab="Non-Ref Allele Count", xlim=xlim,
                        title.all="TR Allele Count",
                        title.size="TR Allele Count by Size",
-                       title.region="TR Allele Count by Region",
                        title.motif="TR Allele Count by Motif Length",
-                       log.y=TRUE)
+                       title.region="TR Allele Count by Region")
   dev.off()
 }
 
@@ -2235,9 +2249,8 @@ wrapperPlotTrvSampleCount <- function(){
   plotTrvDistribPanels(trv.dat=trv.dat, vals=vals, xlab="Variant Sample Count", xlim=xlim,
                        title.all="TR Sample Count",
                        title.size="TR Sample Count by Size",
-                       title.region="TR Sample Count by Region",
                        title.motif="TR Sample Count by Motif Length",
-                       log.y=TRUE)
+                       title.region="TR Sample Count by Region")
   dev.off()
 }
 
@@ -2256,9 +2269,9 @@ wrapperPlotTrvExpansionRatio <- function(){
   plotTrvDistribPanels(trv.dat=trv.dat, vals=vals, xlab="Expansion Ratio", xlim=xlim,
                        title.all="TR Expansion Ratio",
                        title.size="TR Expansion Ratio by Size",
-                       title.region="TR Expansion Ratio by Region",
                        title.motif="TR Expansion Ratio by Motif Length",
-                       drop.text=trv.drop.text, log.y=TRUE)
+                       title.region="TR Expansion Ratio by Region",
+                       drop.text=trv.drop.text)
   dev.off()
 }
 
