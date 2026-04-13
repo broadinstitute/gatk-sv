@@ -157,6 +157,62 @@ task RunSVShell {
     File? par_bed
     File rmsk
     File segdups
+    Int gcnv_qs_cutoff
+    Int ref_copy_number_autosomal_contigs
+    File cnmops_exclude_list
+    Int matrix_qc_distance
+    File? ref_std_manta_vcf_tar
+    File? ref_std_scramble_vcf_tar
+    File? ref_std_wham_vcf_tar
+    File ref_panel_del_bed
+    File ref_panel_dup_bed
+    Float depth_exclude_overlap_fraction
+    Float depth_interval_overlap
+    String? depth_clustering_algorithm
+    Float pesr_interval_overlap
+    String? pesr_clustering_algorithm
+    File cutoffs
+    File genotyping_rd_table
+    File genotyping_pe_table
+    File genotyping_sr_table
+    Float clean_vcf_min_sr_background_fail_batches
+    File clustering_config_part1
+    File stratification_config_part1
+    File clustering_config_part2
+    File stratification_config_part2
+    Array[String] clustering_track_names
+    Array[File] clustering_track_bed_files
+    Int max_shard_size_resolve
+    String chr_x
+    String chr_y
+    File protein_coding_gtf
+    File noncoding_bed
+    Int annotation_sv_per_shard
+    File? external_af_ref_bed
+    String? external_af_ref_bed_prefix
+    Array[String]? external_af_population
+    Int min_pe_cpx
+    Int min_pe_ctx
+    File gq_recalibrator_model_file
+    Array[String] recalibrate_gq_args
+    Float no_call_rate_cutoff
+    File sl_cutoff_table
+    String? sl_filter_args
+    File qc_definitions
+    File ref_panel_median_cov
+    File? outlier_samples_list
+    Boolean run_sampleevidence_metrics
+    Int genotyping_n_per_split
+    Int n_RD_genotype_bins
+    Int clean_vcf1b_records_per_shard
+    Int clean_vcf5_records_per_shard
+    Int clean_vcf_max_shards_per_chrom_clean_vcf_step1
+    Int clean_vcf_min_records_per_shard_clean_vcf_step1
+    Int clean_vcf_random_seed
+    Int clean_vcf_samples_per_clean_vcf_step2_shard
+    Int refine_complex_variants_n_per_split
+    String sv_shell_docker
+    RuntimeAttr? runtime_attr_override
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
