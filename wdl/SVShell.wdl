@@ -21,6 +21,7 @@ workflow SVShell {
     File LINE1_reference
     File intron_reference
     File? par_bed
+    File rmsk
   }
 
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
@@ -85,6 +86,7 @@ workflow SVShell {
       LINE1_reference = LINE1_reference,
       intron_reference = intron_reference,
       par_bed = par_bed,
+      rmsk = rmsk,
   }
 
 
@@ -125,7 +127,7 @@ task RunSVShell {
     File LINE1_reference
     File intron_reference
     File? par_bed
-    File PE_metrics
+    File rmsk
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
