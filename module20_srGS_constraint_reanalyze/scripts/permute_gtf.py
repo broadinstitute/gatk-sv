@@ -6,13 +6,17 @@ chromosome, avoiding telomere/centromere regions.  All sub-features of the gene
 (transcript, exon, CDS, UTR, etc.) are shifted by the same offset so internal
 gene structure is preserved exactly.
 
+Genes whose original coordinates overlap any interval in the blacklist BED are
+not permuted and are written to the output at their original positions.
+
 Usage:
-    python3 permute_gtf.py <seed> <input.gtf.gz> <tel_cen.bed> <output.gtf.gz>
+    python3 permute_gtf.py <seed> <input.gtf.gz> <tel_cen.bed> <blacklist.bed[.gz]> <output.gtf.gz>
 
 Example:
-    python3 permute_gtf.py 1 \
-        genes_grch38_annotated_4_mapped_gencode_v39.CDS.gtf.gz \
-        hg38_tel_cen.bed \
+    python3 permute_gtf.py 1 \\
+        genes_grch38_annotated_4_mapped_gencode_v39.CDS.gtf.gz \\
+        hg38_tel_cen.bed \\
+        merged_blacklist_GATKSV.bed.gz \\
         genes_grch38_annotated_4_mapped_gencode_v39.CDS.permuted_seed1.gtf.gz
 """
 
@@ -34,9 +38,10 @@ HG38_CHROM_SIZES = {
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def load_exclusions(bed_path):
-    """Return dict chrom -> list of (start, end) 0-based half-open excluded intervals."""
+    """Return dict chrom -> sorted list of (start, end) 0-based half-open excluded intervals.
+    Supports plain text or gzip-compressed BED files."""
     excl = defaultdict(list)
-    with open(bed_path) as fh:
+    with open_file(bed_path) as fh:
         for line in fh:
             line = line.strip()
             if not line or line.startswith('#'):
@@ -46,6 +51,26 @@ def load_exclusions(bed_path):
     for chrom in excl:
         excl[chrom].sort()
     return excl
+
+
+def overlaps_intervals(chrom, start_1based, end_1based, intervals_by_chrom):
+    """Return True if the 1-based closed interval [start, end] overlaps any
+    0-based half-open interval in intervals_by_chrom[chrom]."""
+    ivs = intervals_by_chrom.get(chrom)
+    if not ivs:
+        return False
+    # convert gene coords to 0-based half-open for comparison
+    g_s = start_1based - 1
+    g_e = end_1based          # already exclusive in 0-based
+    # binary search: find first interval whose end > g_s
+    lo, hi = 0, len(ivs)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if ivs[mid][1] <= g_s:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo < len(ivs) and ivs[lo][0] < g_e
 
 
 def build_allowed_intervals(chrom_sizes, exclusions):
@@ -116,15 +141,16 @@ def open_file(path, mode='rt'):
 # ── main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    if len(sys.argv) != 5:
-        print("Usage: python3 permute_gtf.py <seed> <input.gtf[.gz]> <tel_cen.bed> <output.gtf[.gz]>",
+    if len(sys.argv) != 6:
+        print("Usage: python3 permute_gtf.py <seed> <input.gtf[.gz]> <tel_cen.bed> <blacklist.bed[.gz]> <output.gtf[.gz]>",
               file=sys.stderr)
         sys.exit(1)
 
-    seed      = int(sys.argv[1])
-    gtf_in    = sys.argv[2]
-    bed_excl  = sys.argv[3]
-    gtf_out   = sys.argv[4]
+    seed       = int(sys.argv[1])
+    gtf_in     = sys.argv[2]
+    bed_excl   = sys.argv[3]
+    bed_black  = sys.argv[4]
+    gtf_out    = sys.argv[5]
 
     print(f"Seed: {seed}", flush=True)
 
@@ -139,10 +165,15 @@ def main():
 
     rng = random.Random(seed)
 
-    # ── 1. Load exclusion regions and build allowed intervals ────────────────
+    # ── 1. Load exclusion regions and blacklist; build allowed intervals ──────
     print("Loading exclusion regions...", flush=True)
     exclusions = load_exclusions(bed_excl)
     allowed    = build_allowed_intervals(HG38_CHROM_SIZES, exclusions)
+
+    print("Loading blacklist regions...", flush=True)
+    blacklist  = load_exclusions(bed_black)
+    n_bl_ivs   = sum(len(v) for v in blacklist.values())
+    print(f"  Blacklist: {n_bl_ivs:,} intervals across {len(blacklist)} chromosomes", flush=True)
 
     chroms      = sorted(allowed.keys(), key=lambda c: (0, int(c[3:])) if c[3:].isdigit() else (1, c[3:]))
     free_lens   = [total_free_length(allowed[c]) for c in chroms]
@@ -184,15 +215,26 @@ def main():
 
     # ── 3. For each gene, draw a new location and shift all features ─────────
     print("Permuting gene locations...", flush=True)
-    out_blocks = []
+    out_blocks  = []
+    n_permuted  = 0
+    n_blacklist = 0
+    n_no_coord  = 0
 
     for gid in gene_order:
         if gid not in gene_coords:
             # gene has no 'gene' feature line — pass through unchanged
             out_blocks.append(gene_blocks[gid])
+            n_no_coord += 1
             continue
 
         orig_chrom, g_start, g_end = gene_coords[gid]
+
+        # Skip permutation if the gene overlaps any blacklist interval
+        if overlaps_intervals(orig_chrom, g_start, g_end, blacklist):
+            out_blocks.append(gene_blocks[gid])
+            n_blacklist += 1
+            continue
+
         gene_len = g_end - g_start + 1   # 1-based inclusive length
 
         new_chrom, new_start_0 = draw_position(rng, allowed, chroms, cum_lengths, gene_len)
@@ -207,6 +249,9 @@ def main():
             f[4] = str(int(f[4]) + offset)
             new_fields_list.append(f)
         out_blocks.append(new_fields_list)
+        n_permuted += 1
+
+    print(f"  Permuted: {n_permuted:,}  |  Blacklisted (kept in place): {n_blacklist:,}  |  No coords: {n_no_coord:,}", flush=True)
 
     # ── 4. Write output GTF ──────────────────────────────────────────────────
     print(f"Writing output to {gtf_out} ...", flush=True)
@@ -217,7 +262,7 @@ def main():
             for fields in block:
                 fh.write('\t'.join(fields) + '\n')
 
-    print(f"Done. {len(gene_order):,} genes permuted.", flush=True)
+    print(f"Done. {len(gene_order):,} genes processed.", flush=True)
 
 
 if __name__ == '__main__':
