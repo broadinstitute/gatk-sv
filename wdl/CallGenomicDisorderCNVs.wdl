@@ -110,7 +110,7 @@ task RunGenomicDisorderCNVs {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 2,
-    mem_gb: 16.0,
+    mem_gb: 32.0,
     disk_gb: disk_gb,
     boot_disk_gb: 20,
     preemptible_tries: 3,
