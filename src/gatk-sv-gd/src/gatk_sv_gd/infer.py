@@ -18,7 +18,7 @@ Output:
 
 import argparse
 import os
-from typing import Optional
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -32,6 +32,11 @@ from gatk_sv_gd.depth import CNVModel, DepthData, ExclusionMask
 from gatk_sv_gd.models import GDTable
 from gatk_sv_gd.output import build_ploidy_map, estimate_ploidy, write_locus_metadata, write_posterior_tables
 from gatk_sv_gd.preprocess import collect_all_locus_bins, load_preprocessed_data
+
+
+def _flatten_multi_args(arg_groups: List[List[str]]) -> List[str]:
+    """Flatten argparse lists produced by repeated multi-value options."""
+    return [value for group in arg_groups for value in group]
 
 
 def run_gd_analysis(
@@ -211,7 +216,8 @@ def parse_args():
     )
     parser.add_argument(
         "-e", "--exclusion-intervals",
-        nargs="*",
+        nargs="+",
+        action="append",
         default=[],
         help="One or more BED files (plain or .bed.gz) of genomic regions "
              "to mask (e.g. segmental duplications, centromeres, satellites)."
@@ -515,6 +521,7 @@ def parse_args():
 def main():
     """Main function to run GD CNV detection pipeline."""
     args = parse_args()
+    args.exclusion_intervals = _flatten_multi_args(args.exclusion_intervals)
 
     _util.VERBOSE = args.verbose
 

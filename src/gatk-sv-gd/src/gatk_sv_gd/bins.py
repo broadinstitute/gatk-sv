@@ -5,9 +5,11 @@ Functions for extracting, filtering, rebinning, and assigning genomic bins
 to locus intervals. Also includes I/O helpers for reading depth data.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -15,7 +17,9 @@ import pandas as pd
 from gatk_sv_gd import _util
 from gatk_sv_gd._util import get_sample_columns
 from gatk_sv_gd.models import GDLocus
-from gatk_sv_gd.depth import ExclusionMask
+
+if TYPE_CHECKING:
+    from gatk_sv_gd.depth import ExclusionMask
 
 
 def _ploidy_adjust_depths(
@@ -180,6 +184,7 @@ def compute_flank_regions_from_bins(
     locus: GDLocus,
     target_size: int,
     min_flank_bases: int = 50000,
+    max_flank_bases: int = 1_000_000,
     min_flank_bins: int = 10,
     min_flank_coverage: float = 0.1,
     filter_params: Optional[dict] = None,
@@ -191,7 +196,7 @@ def compute_flank_regions_from_bins(
     Accumulates bins outward from each side of the locus until **all three**
     stopping criteria are satisfied simultaneously:
 
-    1. Accumulated base pairs ≥ *target_size* (typically locus_size).
+    1. Accumulated base pairs ≥ min(*target_size*, *max_flank_bases*).
     2. Accumulated base pairs ≥ *min_flank_bases* (absolute floor, default 50 kb).
     3. Number of accumulated bins ≥ *min_flank_bins* (default 10).
 
@@ -202,19 +207,13 @@ def compute_flank_regions_from_bins(
     flank to extend further to compensate for quality-failed bins, ensuring
     the resulting flank region contains enough high-quality bins.
 
-    If the accumulated base pairs never reach the target (e.g. because a
-    exclusion desert consumed most of the flanking region), the
-    flank keeps extending until all available bins on that side of the
-    chromosome are consumed.  The flank is always emitted — even if
-    accumulated coverage is below ``min_flank_coverage`` × *effective_bp_target*
-    — because hitting the chromosome boundary is the only valid reason to
-    stop.  A warning is logged when the coverage fraction is not met so
-    that downstream consumers can flag these loci.
+    A warning is logged when the target fraction or minimum bin count is
+    not met so that downstream consumers can flag these loci.
 
     The input ``locus_df`` should already be filtered (exclusion-masked
-    bins removed) so that only usable bins participate in flank discovery.
-    Because masked bins are absent, flanks naturally stop at the edge of
-    any large masked region rather than spanning across it.
+    bins removed, quality-checked) so that only usable bins participate
+    in flank discovery.  Segment-aware rebinning downstream handles any
+    remaining gaps between clean bins without synthesising oversized bins.
 
     This ensures small loci still receive adequately sized flanks for
     establishing a reliable baseline, while large loci keep the existing
@@ -227,6 +226,10 @@ def compute_flank_regions_from_bins(
         target_size: Target cumulative bin coverage in bp for each flank
         min_flank_bases: Minimum cumulative bp each flank must cover
             regardless of *target_size* (default 50 000).
+        max_flank_bases: Maximum cumulative bp target per flank.  Caps
+            *target_size* so that very large loci (e.g. 1q21 at ~24 Mb)
+            do not force flanks to consume all available clean bins on
+            the chromosome (default 1 000 000).
         min_flank_bins: Minimum number of bins each flank must contain
             regardless of the base-pair thresholds (default 10).
         min_flank_coverage: Minimum fraction of *effective_bp_target*
@@ -274,22 +277,25 @@ def compute_flank_regions_from_bins(
     locus_start = locus.start
     locus_end = locus.end
 
-    # Effective base-pair threshold is the larger of target_size and min_flank_bases
-    effective_bp_target = max(target_size, min_flank_bases)
+    # Effective base-pair threshold: at least min_flank_bases, at most max_flank_bases,
+    # with target_size (locus body size) as the nominal goal.
+    effective_bp_target = max(min(target_size, max_flank_bases), min_flank_bases)
 
     print(f"    [flanks] locus body: {locus_start:,}-{locus_end:,}  "
           f"target_size: {target_size:,} bp  min_flank_bases: {min_flank_bases:,} bp  "
           f"min_flank_bins: {min_flank_bins}  effective_bp_target: {effective_bp_target:,} bp")
-    print(f"    [flanks] input bins: {len(locus_df)}  "
-          f"range: {int(locus_df['Start'].min()):,}-{int(locus_df['End'].max()):,}" if len(locus_df) > 0
-          else f"    [flanks] input bins: 0")
+    if len(locus_df) > 0:
+        print(f"    [flanks] input bins: {len(locus_df)}  "
+              f"range: {int(locus_df['Start'].min()):,}-{int(locus_df['End'].max()):,}")
+    else:
+        print("    [flanks] input bins: 0")
 
     # Use bin midpoints for candidacy — consistent with how bins are assigned
     # throughout the rest of the codebase. Using strict End/Start comparisons
     # misses bins that straddle the locus boundary (common with zero-width breakpoints).
     bin_mids = (locus_df["Start"] + locus_df["End"]) / 2
 
-    # Left flank: bins whose midpoint is left of locus start, accumulated right-to-left
+    # Left flank: accumulate right-to-left from the locus start.
     left_bins = locus_df[bin_mids < locus_start].sort_values("Start", ascending=False)
 
     print(f"    [flanks] left candidate bins (mid < {locus_start:,}): {len(left_bins)}", end="")
@@ -309,16 +315,14 @@ def compute_flank_regions_from_bins(
               f"accumulated {cumulative:,} bp / {n_bins_accumulated} bins "
               f"(targets: {effective_bp_target:,} bp, {min_flank_bins} bins)  "
               f"coverage: {coverage_frac:.1%}")
-        if coverage_frac < min_flank_coverage:
-            print(f"    [flanks] WARNING: left flank coverage {coverage_frac:.1%} "
-                  f"< {min_flank_coverage:.0%} of target — exhausted "
-                  f"available bins, clearing {n_bins_accumulated} usable bins")
-        else:
-            flanks.append((leftmost_start, locus_start, "left_flank"))
+        if coverage_frac < min_flank_coverage or n_bins_accumulated < min_flank_bins:
+            print(f"    [flanks] WARNING: left flank has only {n_bins_accumulated} "
+                  f"usable bins and {coverage_frac:.1%} of target coverage")
+        flanks.append((leftmost_start, locus_start, "left_flank"))
     else:
         print()  # newline after the count
 
-    # Right flank: bins whose midpoint is right of locus end, accumulated left-to-right
+    # Right flank: accumulate left-to-right from the locus end.
     right_bins = locus_df[bin_mids >= locus_end].sort_values("Start")
 
     print(f"    [flanks] right candidate bins (mid >= {locus_end:,}): {len(right_bins)}", end="")
@@ -338,16 +342,125 @@ def compute_flank_regions_from_bins(
               f"accumulated {cumulative:,} bp / {n_bins_accumulated} bins "
               f"(targets: {effective_bp_target:,} bp, {min_flank_bins} bins)  "
               f"coverage: {coverage_frac:.1%}")
-        if coverage_frac < min_flank_coverage:
-            print(f"    [flanks] WARNING: right flank coverage {coverage_frac:.1%} "
-                  f"< {min_flank_coverage:.0%} of target — exhausted "
-                  f"available bins, clearing {n_bins_accumulated} usable bins")
-        else:
-            flanks.append((locus_end, rightmost_end, "right_flank"))
+        if coverage_frac < min_flank_coverage or n_bins_accumulated < min_flank_bins:
+            print(f"    [flanks] WARNING: right flank has only {n_bins_accumulated} "
+                  f"usable bins and {coverage_frac:.1%} of target coverage")
+        flanks.append((locus_end, rightmost_end, "right_flank"))
     else:
         print()  # newline after the count
 
     return flanks
+
+
+def _split_region_into_supported_segments(
+    region_df: pd.DataFrame,
+    clamp_start: Optional[int] = None,
+    clamp_end: Optional[int] = None,
+) -> List[Tuple[pd.DataFrame, int, int]]:
+    """Split a region into contiguous supported segments after clamping.
+
+    For flank regions, the selected outer bounds can contain large internal
+    masked gaps.  Rebinning across the full span synthesizes oversized bins
+    over unsupported sequence.  This helper clips each source bin to the
+    region boundaries, then splits the rows wherever the clipped coordinates
+    leave uncovered genomic space.
+
+    Returns:
+        List of ``(segment_df, segment_start, segment_end)`` tuples.  The
+        segment bounds reflect the clipped supported span, not the outer
+        region bounds.
+    """
+    if len(region_df) == 0:
+        return []
+
+    sorted_df = region_df.sort_values(["Start", "End"]).copy()
+    clipped_starts = sorted_df["Start"].values.astype(int)
+    clipped_ends = sorted_df["End"].values.astype(int)
+    if clamp_start is not None:
+        clipped_starts = np.maximum(clipped_starts, clamp_start)
+    if clamp_end is not None:
+        clipped_ends = np.minimum(clipped_ends, clamp_end)
+
+    valid = clipped_ends > clipped_starts
+    if not valid.all():
+        sorted_df = sorted_df.iloc[np.flatnonzero(valid)].copy()
+        clipped_starts = clipped_starts[valid]
+        clipped_ends = clipped_ends[valid]
+
+    if len(sorted_df) == 0:
+        return []
+
+    segments: List[Tuple[pd.DataFrame, int, int]] = []
+    segment_row_start = 0
+    segment_end = int(clipped_ends[0])
+
+    for i in range(1, len(sorted_df)):
+        if int(clipped_starts[i]) > segment_end:
+            segment_df = sorted_df.iloc[segment_row_start:i].copy()
+            segments.append(
+                (
+                    segment_df,
+                    int(clipped_starts[segment_row_start]),
+                    int(segment_end),
+                )
+            )
+            segment_row_start = i
+            segment_end = int(clipped_ends[i])
+        else:
+            segment_end = max(segment_end, int(clipped_ends[i]))
+
+    segment_df = sorted_df.iloc[segment_row_start:].copy()
+    segments.append(
+        (
+            segment_df,
+            int(clipped_starts[segment_row_start]),
+            int(segment_end),
+        )
+    )
+    return segments
+
+
+def _allocate_bins_across_segments(
+    segments: List[Tuple[pd.DataFrame, int, int]],
+    max_bins_per_interval: int,
+) -> List[int]:
+    """Allocate rebinned output bins across supported segments.
+
+    Each supported segment gets at least one output bin so fragmented flanks
+    are never merged across masked gaps.  When fragmentation exceeds the
+    nominal per-interval cap, the cap is relaxed up to one bin per segment so
+    every island of support is represented.
+    """
+    if not segments:
+        return []
+
+    total_source_bins = sum(len(segment_df) for segment_df, _, _ in segments)
+    total_target_bins = min(
+        total_source_bins,
+        max(min(max_bins_per_interval, total_source_bins), len(segments)),
+    )
+    allocations = [1] * len(segments)
+    remaining = total_target_bins - len(segments)
+
+    while remaining > 0:
+        candidates = [
+            i for i, (segment_df, _, _) in enumerate(segments)
+            if allocations[i] < len(segment_df)
+        ]
+        if not candidates:
+            break
+        best_idx = max(
+            candidates,
+            key=lambda i: (
+                len(segments[i][0]) / allocations[i],
+                segments[i][2] - segments[i][1],
+                -i,
+            ),
+        )
+        allocations[best_idx] += 1
+        remaining -= 1
+
+    return allocations
 
 
 def rebin_locus_intervals(
@@ -358,16 +471,17 @@ def rebin_locus_intervals(
     min_rebin_coverage: float = 0.5,
 ) -> pd.DataFrame:
     """
-    Reduce the number of bins by rebinning each interval and flanking region to have
-    at most max_bins_per_interval bins.
+    Reduce the number of bins by rebinning each interval and flanking region.
 
-    For each region, the genomic range (first bin start → last bin end) is divided
-    into ``max_bins_per_interval`` evenly-spaced putative intervals.  Each putative
+    Body intervals are rebinned across the full interval span into at most
+    ``max_bins_per_interval`` evenly-spaced putative intervals.  Each putative
     interval's depth is the overlap-weighted average of all original bins that
-    intersect it, where the weight is the number of base pairs of overlap.  This
-    guarantees uniform-width output bins regardless of the input bin size
-    distribution, avoiding the problem of a few tiny bins alongside one or two
-    very large ones.
+    intersect it, where the weight is the number of base pairs of overlap.
+
+    Flanks use the same averaging scheme, but first split the retained source
+    bins into contiguous supported segments after clamping to the selected
+    flank boundaries.  This prevents large masked gaps (for example, seg-dup
+    deserts) from being converted into oversized synthetic flank bins.
 
     Putative intervals where the fraction of the bin width covered by original
     bins is less than *min_rebin_coverage* are discarded to avoid biased
@@ -385,7 +499,10 @@ def rebin_locus_intervals(
     Args:
         df: DataFrame with bins for this locus
         locus: GDLocus object
-        max_bins_per_interval: Maximum number of bins per interval (default: 10)
+        max_bins_per_interval: Target maximum number of bins per body interval
+            or contiguous flank support set (default: 10).  Highly fragmented
+            flanks may exceed this cap by emitting one bin per supported
+            segment so masked gaps are preserved.
         min_rebin_coverage: Minimum fraction of each new bin's width that must
             be overlapped by original bins (default: 0.5).  Bins below this
             threshold are dropped.
@@ -400,24 +517,32 @@ def rebin_locus_intervals(
     metadata_cols = ["Chr", "Start", "End", "source_file", "Bin"]
     sample_cols = [col for col in df.columns if col not in metadata_cols]
 
-    def rebin_region(region_df: pd.DataFrame) -> List[dict]:
+    def rebin_region(region_df: pd.DataFrame,
+                     clamp_start: Optional[int] = None,
+                     clamp_end: Optional[int] = None,
+                     target_bins: Optional[int] = None) -> List[dict]:
         """Rebin bins into evenly-spaced putative intervals using overlap-weighted averaging.
 
-        The full genomic range of *region_df* is divided into
-        *max_bins_per_interval* equal-width putative intervals.  For each
-        putative interval the depth values are the overlap-weighted average
-        of every original bin that intersects it (weight = bp of overlap).
-        Putative intervals with zero overlap are omitted.
+        The genomic range is divided into *max_bins_per_interval* equal-width
+        putative intervals.  When *clamp_start* / *clamp_end* are provided the
+        range is constrained to the region boundaries so that rebinned bins
+        never extend beyond the region (e.g. a flank bin bleeding into the GD
+        body when a source bin straddles the boundary).  For each putative
+        interval the depth values are the overlap-weighted average of every
+        original bin that intersects it (weight = bp of overlap).  Putative
+        intervals with zero overlap are omitted.
         """
-        if len(region_df) <= max_bins_per_interval:
+        n_new_bins = target_bins if target_bins is not None else max_bins_per_interval
+        if len(region_df) <= n_new_bins:
             return region_df.to_dict("records")
 
-        n_new_bins = max_bins_per_interval
         region_df = region_df.sort_values("Start")
 
-        # Evenly divide the full range into putative intervals
-        range_start = int(region_df["Start"].min())
-        range_end = int(region_df["End"].max())
+        # Evenly divide the range into putative intervals, clamped to the
+        # region boundaries when available so that bins from a source row
+        # that straddles two adjacent regions don't leak across.
+        range_start = clamp_start if clamp_start is not None else int(region_df["Start"].min())
+        range_end = clamp_end if clamp_end is not None else int(region_df["End"].max())
         putative_edges = np.linspace(range_start, range_end, n_new_bins + 1)
 
         # Original bin coordinates as arrays for vectorised overlap computation
@@ -474,14 +599,42 @@ def rebin_locus_intervals(
     bin_ends = df["End"].values
     processed_mask = np.zeros(len(df), dtype=bool)
 
-    for region_start, region_end, _ in all_rebin_regions:
+    for region_start, region_end, region_name in all_rebin_regions:
         # True interval overlap: bin overlaps region if bin_start < region_end
         # and bin_end > region_start
         mask = (bin_starts < region_end) & (bin_ends > region_start)
         if not mask.any():
             continue
         processed_mask |= mask
-        rebinned_rows.extend(rebin_region(df[mask].copy()))
+        region_df = df[mask].copy()
+        is_flank = region_name in {"left_flank", "right_flank"}
+
+        if is_flank:
+            segments = _split_region_into_supported_segments(
+                region_df,
+                clamp_start=region_start,
+                clamp_end=region_end,
+            )
+            if len(segments) > 1:
+                print(f"    [rebin] preserving {len(segments)} supported {region_name} segments")
+            allocations = _allocate_bins_across_segments(segments, max_bins_per_interval)
+            for (segment_df, segment_start, segment_end), target_bins in zip(segments, allocations):
+                rebinned_rows.extend(
+                    rebin_region(
+                        segment_df,
+                        clamp_start=segment_start,
+                        clamp_end=segment_end,
+                        target_bins=target_bins,
+                    )
+                )
+        else:
+            rebinned_rows.extend(
+                rebin_region(
+                    region_df,
+                    clamp_start=region_start,
+                    clamp_end=region_end,
+                )
+            )
 
     # Bins inside breakpoint SD-block ranges (not covered by any body
     # interval or flank) are dropped — they carry unreliable depth signal
