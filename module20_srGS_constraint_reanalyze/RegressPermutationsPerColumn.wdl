@@ -91,6 +91,7 @@ workflow RegressPermutationsPerColumn {
     File median_table  = GatherMedian.merged_tsv_gz
     File sd_table_out  = GatherSd.merged_tsv_gz
     File lm_pred_table = GatherLmPred.merged_tsv_gz
+    Array[File] full_tables = RegressOneColumn.out_full
   }
 }
 
@@ -273,6 +274,14 @@ task RegressOneColumn {
     write_out(gene_sd,      sprintf("col_%d_sd.tsv.gz",      col_idx))
     write_out(gene_lm_pred, sprintf("col_%d_lm_pred.tsv.gz", col_idx))
 
+    # ── write full per-seed table (genes x seeds) ─────────────────────────
+    full_df <- data.frame(gene = rownames(sv_use), sv_use,
+                          stringsAsFactors = FALSE, check.names = FALSE)
+    colnames(full_df)[-1] <- paste0(col_name, ".seed", seq_len(ncol(sv_use)))
+    full_fname <- sprintf("col_%d_full.tsv.gz", col_idx)
+    write.table(full_df, gzfile(full_fname), sep = "\t", quote = FALSE, row.names = FALSE)
+    cat("  Wrote:", full_fname, "\n")
+
     cat("Done.\n")
     REOF
   >>>
@@ -282,6 +291,7 @@ task RegressOneColumn {
     File out_median  = "col_~{col_1based}_median.tsv.gz"
     File out_sd      = "col_~{col_1based}_sd.tsv.gz"
     File out_lm_pred = "col_~{col_1based}_lm_pred.tsv.gz"
+    File out_full    = "col_~{col_1based}_full.tsv.gz"
   }
 
   runtime {
