@@ -31,6 +31,7 @@ workflow PermutateSVAnnotation {
         File   sv_bed
         File   sv_info
         File   tel_cen_bed
+        File   blacklist_bed
         File   gene_info
 
         # Python scripts
@@ -71,6 +72,7 @@ workflow PermutateSVAnnotation {
             gtf_file              = gtf_file,
             permu_number          = permu_number,
             tel_cen_bed           = tel_cen_bed,
+            blacklist_bed         = blacklist_bed,
             permute_script        = permute_gtf_script,
             gtf_label             = gtf_label,
             seed_suffix           = seed_suffix,
@@ -291,6 +293,7 @@ task Task1_PermuteGTF {
         File   gtf_file
         Int    permu_number
         File   tel_cen_bed
+        File   blacklist_bed
         File   permute_script
         String gtf_label
         String seed_suffix
@@ -305,6 +308,7 @@ task Task1_PermuteGTF {
             ~{permu_number} \
             ~{gtf_file} \
             ~{tel_cen_bed} \
+            ~{blacklist_bed} \
             ~{out_gtf}
     >>>
 
