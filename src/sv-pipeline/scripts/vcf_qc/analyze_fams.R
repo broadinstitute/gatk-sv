@@ -21,6 +21,11 @@ nocall.placeholder <- 9999
 ###################
 ###HELPER FUNCTIONS
 ###################
+orderRegions <- function(regions){
+  canonical <- c("US","RM","SD","SR")
+  c(canonical[canonical %in% regions], sort(regions[!regions %in% canonical]))
+}
+
 #Read & clean list of variant IDs & genotypes per sample
 readDatPerSample <- function(ID, perSampDir, nocall.placeholder=9999){
   #Set path

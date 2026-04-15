@@ -193,7 +193,7 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, lps_dict=None):
 
         # Adjust hemizygous allele number and allele count, if optioned
         if hemi:
-            AN = AN / 2
+            AN = AN // 2
             # For hemizygous sites, AC must be the sum of all non-reference *genotypes*, not alleles
             AC = n_gts_with_gt_0_alts
 
