@@ -206,7 +206,7 @@ task CalcRepeatOverlap {
 
 
 # ---------------------------------------------------------------------------
-# Task 3: Merge per-sample overlap TSVs into one wide table.
+# Task 3: Merge per-sample overlap TSVs into one wide bgzipped table.
 #   Rows = genes (union across all inputs)
 #   Cols = gene, <column_labels[0]>, <column_labels[1]>, ...
 #   Missing values filled with NA.
@@ -215,12 +215,13 @@ task IntegrateOverlapTable {
   input {
     Array[File]   overlap_tsvs
     Array[String] column_labels
-    String        output_prefix   # e.g. "gene_SD_overlap" → gene_SD_overlap.tsv
+    String        output_prefix   # e.g. "gene_SD_overlap" → gene_SD_overlap.tsv.gz
     String        docker
     RuntimeAttr?  runtime_attr_override
   }
 
   String out_tsv = output_prefix + ".tsv"
+  String out_tsv_gz = output_prefix + ".tsv.gz"
 
   command <<<
     set -euo pipefail
@@ -250,10 +251,12 @@ with open(out_file, 'w') as out:
         row = [gene] + [d.get(gene, 'NA') for d in tables]
         out.write('\t'.join(row) + '\n')
 PYEOF
+
+    bgzip -c "~{out_tsv}" > "~{out_tsv_gz}"
   >>>
 
   output {
-    File integrated_table = out_tsv
+    File integrated_table = out_tsv_gz
   }
 
   RuntimeAttr default_attr = object {
