@@ -91,7 +91,7 @@ workflow QcAnnotations {
                 vcf_idx = use_vcf_idx,
                 contig = contig,
                 variants_per_shard = variants_per_shard,
-                create_variant_attributes = create_variant_attributes
+                create_variant_attributes = create_variant_attributes,
                 prefix = "~{prefix}.~{contig}",
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = gatk_sv_lr_docker,
