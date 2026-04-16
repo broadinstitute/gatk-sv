@@ -24,6 +24,7 @@ workflow QcAnnotations {
         Int? random_seed
         Int? max_gq
         Int? downsample_qc_per_sample
+        Boolean create_variant_attributes = false
 
         File? sample_renaming_tsv
         Array[Array[String]]? site_level_comparison_datasets
@@ -90,6 +91,7 @@ workflow QcAnnotations {
                 vcf_idx = use_vcf_idx,
                 contig = contig,
                 variants_per_shard = variants_per_shard,
+                create_variant_attributes = create_variant_attributes
                 prefix = "~{prefix}.~{contig}",
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = gatk_sv_lr_docker,

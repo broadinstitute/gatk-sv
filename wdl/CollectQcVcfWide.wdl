@@ -10,6 +10,7 @@ workflow CollectQcVcfWide {
         String prefix
 
         Int variants_per_shard
+        Boolean create_variant_attributes = false
 
         String sv_base_mini_docker
         String sv_pipeline_docker
@@ -37,9 +38,18 @@ workflow CollectQcVcfWide {
     Array[File] vcf_shards = ScatterVcf.shards
 
     scatter (i in range(length(vcf_shards))) {
+        if (create_variant_attributes) {
+            call AnnotateVariantAttributes {
+                input:
+                    vcf = vcf_shards[i],
+                    prefix = "~{output_prefix}.annotate_attrs.shard_~{i}",
+                    sv_pipeline_docker = sv_pipeline_docker
+            }
+        }
+
         call PreprocessVcf {
             input:
-                vcf = vcf_shards[i],
+                vcf = select_first([AnnotateVariantAttributes.annotated_vcf, vcf_shards[i]]),
                 prefix = "~{output_prefix}.preprocess.shard_~{i}",
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_override_preprocess_vcf
@@ -307,6 +317,75 @@ task SvtkVcf2bed {
         disk_gb: ceil(10.0 + input_size * 2.0),
         cpu_cores: 1,
         preemptible_tries: 3,
+        max_retries: 0,
+        boot_disk_gb: 10
+    }
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    runtime {
+        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: sv_pipeline_docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+}
+
+task AnnotateVariantAttributes {
+    input {
+        File vcf
+        String prefix
+        String sv_pipeline_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    Float input_size = size(vcf, "GiB")
+
+    command <<<
+        set -euo pipefail
+
+        bcftools query \
+            -f '%CHROM\t%POS\t%REF\t%ALT\t%ID\n' \
+            ~{vcf} \
+        | awk -F'\t' '{
+            ref_len = length($3)
+            alt_len = length($4)
+            diff = alt_len - ref_len
+            if (ref_len == 1 && alt_len == 1) {
+                atype = "snv"
+            } else if (alt_len > ref_len) {
+                atype = "ins"
+            } else {
+                atype = "del"
+            }
+            print $1"\t"$2"\t"$3"\t"$4"\t"$5"\t"diff"\t"atype
+        }' | bgzip -c > annot.txt.gz
+
+        tabix -s1 -b2 -e2 annot.txt.gz
+
+        printf '##INFO=<ID=allele_length,Number=1,Type=Integer,Description="Allele length">\n##INFO=<ID=allele_type,Number=1,Type=String,Description="Allele type">\n' > new_headers.txt
+
+        bcftools annotate \
+            -h new_headers.txt \
+            -a annot.txt.gz \
+            -c CHROM,POS,REF,ALT,~ID,INFO/allele_length,INFO/allele_type \
+            -Oz -o ~{prefix}.vcf.gz \
+            ~{vcf}
+
+        tabix -p vcf ~{prefix}.vcf.gz
+    >>>
+
+    output {
+        File annotated_vcf = "~{prefix}.vcf.gz"
+        File annotated_vcf_idx = "~{prefix}.vcf.gz.tbi"
+    }
+
+    RuntimeAttr runtime_default = object {
+        mem_gb: 4,
+        disk_gb: ceil(10.0 + input_size * 3.0),
+        cpu_cores: 1,
+        preemptible_tries: 2,
         max_retries: 0,
         boot_disk_gb: 10
     }
