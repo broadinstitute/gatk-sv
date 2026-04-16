@@ -22,7 +22,7 @@ workflow CallGenomicDisorderCNVs {
     File breakpoint_transition_matrix
     File? truth_table
 
-    Int rebinned_interval_size = 100000
+    Int rebinned_interval_size = 10000
     String sv_pipeline_docker
     String gatk_docker
     String? preprocess_args

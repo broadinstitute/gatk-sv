@@ -228,6 +228,63 @@ task CondenseReadCounts {
   }
 }
 
+task CondenseReadCountsMatrix {
+  input {
+    File counts
+    String output_prefix
+    File sequence_dictionary
+    Int? max_interval_size
+    Int? min_interval_size
+    File? gatk4_jar_override
+
+    # Runtime parameters
+    String gatk_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String output_name = "condensed_counts." + output_prefix + ".rd.txt.gz"
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 3.0,
+    disk_gb: ceil(50.0 + size(counts, "GB") * 2),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euxo pipefail
+    export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk4_jar_override}
+
+    tabix -0 -s1 -b2 -e3 in.rd.txt.gz
+    gatk --java-options -Xmx2g CondenseDepthEvidence \
+      -F ~{counts} \
+      -O ~{output_name} \
+      --sequence-dictionary ~{sequence_dictionary} \
+      --max-interval-size ~{default=2000 max_interval_size} \
+      --min-interval-size ~{default=101 min_interval_size}
+
+  >>>
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: gatk_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
+  }
+
+  output {
+    File out = output_name
+    File out_index = output_name + ".tbi"
+  }
+}
+
 task CountsToIntervals {
   input {
     File counts

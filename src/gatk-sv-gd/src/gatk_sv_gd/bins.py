@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import warnings
 from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
@@ -86,6 +87,149 @@ def _ploidy_adjust_depths_single_chrom(
         if ploidy > 0 and ploidy != 2:
             adjusted[:, j] *= 2.0 / ploidy
     return adjusted
+
+
+def _compute_quality_stats_single_chrom(
+    depths: np.ndarray,
+    chrom: str,
+    sample_cols: List[str],
+    ploidy_map: Optional[Dict[Tuple[str, str], int]] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return per-bin median/MAD stats after ploidy-aware scaling.
+
+    Samples with expected ploidy 0 on *chrom* are excluded from the
+    cohort summary entirely instead of contributing zero-like values.
+    This is important for mixed-ploidy sex chromosomes where many
+    ploidy-0 samples would otherwise distort the bin median/MAD.
+
+    Returns:
+        Tuple of ``(medians, mads, informative_counts)`` arrays aligned
+        to the rows of *depths*.
+    """
+    adjusted = depths.copy().astype(float)
+
+    if ploidy_map:
+        ploidies = np.asarray(
+            [ploidy_map.get((sample, chrom), 2) for sample in sample_cols],
+            dtype=int,
+        )
+        informative = ploidies > 0
+        scale_mask = informative & (ploidies != 2)
+        if scale_mask.any():
+            adjusted[:, scale_mask] *= (2.0 / ploidies[scale_mask])[np.newaxis, :]
+        if (~informative).any():
+            adjusted[:, ~informative] = np.nan
+
+    informative_counts = np.sum(~np.isnan(adjusted), axis=1)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        medians = np.nanmedian(adjusted, axis=1)
+        mads = np.nanmedian(np.abs(adjusted - medians[:, np.newaxis]), axis=1)
+
+    no_informative = informative_counts == 0
+    if no_informative.any():
+        medians[no_informative] = np.nan
+        mads[no_informative] = np.nan
+
+    return medians, mads, informative_counts
+
+
+def compute_bin_quality_mask(
+    df: pd.DataFrame,
+    median_min: float,
+    median_max: float,
+    mad_max: float,
+    ploidy_map: Optional[Dict[Tuple[str, str], int]] = None,
+    par_mask: Optional[ExclusionMask] = None,
+) -> Tuple[np.ndarray, Dict[str, int]]:
+    """Return a keep mask for median/MAD bin filtering.
+
+    Quality statistics are computed independently per chromosome using
+    ploidy-aware scaling. Samples with expected ploidy 0 are excluded
+    from sex-chromosome summaries. Bins overlapping the user-supplied
+    PAR mask are currently exempted from filtering entirely.
+
+    TODO: replace the temporary PAR exemption with explicit PAR ploidy
+    handling once we support interval-aware sex-chromosome ploidies.
+    """
+    if len(df) == 0:
+        return np.zeros(0, dtype=bool), {
+            "filtered": 0,
+            "par_ignored": 0,
+            "no_informative": 0,
+        }
+
+    sample_cols = get_sample_columns(df)
+    chroms = df["Chr"].values
+    keep_mask = np.zeros(len(df), dtype=bool)
+    par_ignored = np.zeros(len(df), dtype=bool)
+    no_informative = np.zeros(len(df), dtype=bool)
+
+    for chrom, chrom_df in df.groupby("Chr", sort=False):
+        row_positions = np.flatnonzero(chroms == chrom)
+        depths = chrom_df[sample_cols].values
+        medians, mads, informative_counts = _compute_quality_stats_single_chrom(
+            depths,
+            chrom,
+            sample_cols,
+            ploidy_map=ploidy_map,
+        )
+        chrom_keep = (
+            (informative_counts > 0) &
+            (medians >= median_min) &
+            (medians <= median_max) &
+            (mads <= mad_max)
+        )
+
+        if par_mask is not None:
+            chrom_par = par_mask.get_overlap_fractions_batch(
+                chrom,
+                chrom_df["Start"].values,
+                chrom_df["End"].values,
+            ) > 0.0
+            par_ignored[row_positions] = chrom_par
+            chrom_keep |= chrom_par
+
+        no_informative[row_positions] = informative_counts == 0
+        keep_mask[row_positions] = chrom_keep
+
+    stats = {
+        "filtered": int((~keep_mask).sum()),
+        "par_ignored": int(par_ignored.sum()),
+        "no_informative": int((no_informative & ~par_ignored).sum()),
+    }
+    return keep_mask, stats
+
+
+def get_flank_filter_params(
+    filter_params: Optional[Dict[str, float]],
+    chrom: str,
+) -> Optional[Dict[str, float]]:
+    """Return chrom-aware quality thresholds for flank bins.
+
+    GD body intervals must preserve potentially informative signal, but
+    flanks are expected to behave like neutral baseline depth. For
+    autosomes we therefore tighten the default flank criteria to a near-
+    diploid median range and a lower MAD ceiling, which removes noisy
+    flank segments such as the retained left flank at 1q21 in the
+    ref_panel_1kgp run.
+
+    Sex chromosomes keep the caller-supplied thresholds for now because
+    ploidy handling is still contig-wide and PAR bins are temporarily
+    exempted from filtering.
+    """
+    if filter_params is None:
+        return None
+
+    chrom_key = str(chrom).strip().lower()
+    if chrom_key in {"chrx", "x", "chry", "y"}:
+        return dict(filter_params)
+
+    return {
+        "median_min": max(float(filter_params["median_min"]), 1.5),
+        "median_max": min(float(filter_params["median_max"]), 2.5),
+        "mad_max": min(float(filter_params["mad_max"]), 0.3),
+    }
 
 
 def extract_locus_bins(
@@ -189,6 +333,7 @@ def compute_flank_regions_from_bins(
     min_flank_coverage: float = 0.1,
     filter_params: Optional[dict] = None,
     ploidy_map: Optional[Dict[Tuple[str, str], int]] = None,
+    par_mask: Optional[ExclusionMask] = None,
 ) -> List[Tuple[int, int, str]]:
     """
     Compute flanking regions based on actual available (filtered) bins.
@@ -245,6 +390,9 @@ def compute_flank_regions_from_bins(
             to adjust per-sample depths to diploid-equivalent before
             computing bin-level median/MAD statistics for quality
             filtering.
+        par_mask: Optional mask of pseudoautosomal intervals to exempt
+            from filtering while sex-chromosome ploidy handling remains
+            contig-wide.
 
     Returns:
         List of (start, end, name) tuples for "left_flank" and/or "right_flank".
@@ -252,25 +400,22 @@ def compute_flank_regions_from_bins(
     """
     # Apply quality filtering to candidate bins before accumulation
     if filter_params is not None and len(locus_df) > 0:
-        sample_cols = get_sample_columns(locus_df)
-        depths = locus_df[sample_cols].values
-        # Ploidy-adjust so sex-chrom bins are evaluated fairly
-        if ploidy_map:
-            depths = _ploidy_adjust_depths_single_chrom(
-                depths, locus.chrom, sample_cols, ploidy_map,
-            )
-        medians = np.median(depths, axis=1)
-        mads = np.median(np.abs(depths - medians[:, np.newaxis]), axis=1)
-        quality_keep = (
-            (medians >= filter_params["median_min"])
-            & (medians <= filter_params["median_max"])
-            & (mads <= filter_params["mad_max"])
+        quality_keep, quality_stats = compute_bin_quality_mask(
+            locus_df,
+            median_min=filter_params["median_min"],
+            median_max=filter_params["median_max"],
+            mad_max=filter_params["mad_max"],
+            ploidy_map=ploidy_map,
+            par_mask=par_mask,
         )
-        n_quality_filtered = int((~quality_keep).sum())
+        n_quality_filtered = quality_stats["filtered"]
         if n_quality_filtered > 0:
             print(f"    [flanks] quality-filtered {n_quality_filtered}/{len(locus_df)} "
                   f"candidate bins (median [{filter_params['median_min']}, "
                   f"{filter_params['median_max']}], MAD <= {filter_params['mad_max']})")
+        if quality_stats["par_ignored"] > 0:
+            print(f"    [flanks] ignored {quality_stats['par_ignored']}/{len(locus_df)} "
+                  f"candidate PAR bins during quality filtering")
         locus_df = locus_df[quality_keep].copy()
 
     flanks = []
@@ -1033,6 +1178,7 @@ def filter_low_quality_bins(
     median_max: float = 2.5,
     mad_max: float = 0.5,
     ploidy_map: Optional[Dict[Tuple[str, str], int]] = None,
+    par_mask: Optional[ExclusionMask] = None,
 ):
     """
     Filter out low quality bins based on median and MAD thresholds.
@@ -1041,7 +1187,11 @@ def filter_low_quality_bins(
     diploid-equivalent (``depth * 2 / ploidy``) before the per-bin median
     and MAD are computed.  This prevents normal-depth bins on haploid
     chromosomes (e.g. chrX in males, where depth ≈ 1.0) from being
-    incorrectly flagged as low quality.
+    incorrectly flagged as low quality. Samples with expected ploidy 0
+    are excluded from those summaries instead of contributing zeros.
+
+    Bins overlapping the user-provided PAR intervals are currently
+    exempted from quality filtering.
 
     Args:
         df: DataFrame with bins as rows and samples as columns
@@ -1050,22 +1200,20 @@ def filter_low_quality_bins(
         mad_max: Maximum MAD for bins
         ploidy_map: Optional mapping of ``(sample, chrom) → ploidy``
             used to adjust depths before computing statistics.
+        par_mask: Optional pseudoautosomal interval mask. Overlapping
+            bins are kept without applying median/MAD thresholds.
 
     Returns:
         Filtered DataFrame
     """
-    # Get sample columns (exclude metadata)
-    sample_cols = get_sample_columns(df)
-
-    # Compute median and MAD for each bin across samples
-    depths = df[sample_cols].values
-
-    # Ploidy-adjust depths so sex-chromosome bins are evaluated fairly
-    if ploidy_map:
-        depths = _ploidy_adjust_depths(depths, df, sample_cols, ploidy_map)
-
-    medians = np.median(depths, axis=1)
-    mads = np.median(np.abs(depths - medians[:, np.newaxis]), axis=1)
+    keep_mask, quality_stats = compute_bin_quality_mask(
+        df,
+        median_min=median_min,
+        median_max=median_max,
+        mad_max=mad_max,
+        ploidy_map=ploidy_map,
+        par_mask=par_mask,
+    )
 
     print(f"\n{'=' * 80}")
     print("FILTERING LOW QUALITY BINS")
@@ -1073,46 +1221,20 @@ def filter_low_quality_bins(
     print(f"Starting bins: {len(df)}")
 
     # Filter based on thresholds
-    keep_mask = (
-        (medians >= median_min) &
-        (medians <= median_max) &
-        (mads <= mad_max)
-    )
-
-    n_filtered = (~keep_mask).sum()
+    n_filtered = quality_stats["filtered"]
     print(f"Thresholds: median [{median_min}, {median_max}], MAD <= {mad_max}")
+    if quality_stats["par_ignored"] > 0:
+        print(f"PAR bins ignored: {quality_stats['par_ignored']}")
+    if quality_stats["no_informative"] > 0:
+        print(f"Bins with no informative samples: {quality_stats['no_informative']}")
     print(f"Bins filtered: {n_filtered}")
     print(f"Bins remaining: {keep_mask.sum()}")
 
     if _util.VERBOSE:
-        # Break down why bins were filtered
-        fail_med_low = (medians < median_min).sum()
-        fail_med_high = (medians > median_max).sum()
-        fail_mad = (mads > mad_max).sum()
-        print(f"  [verbose] Filter breakdown:")
-        print(f"    median < {median_min}: {fail_med_low}")
-        print(f"    median > {median_max}: {fail_med_high}")
-        print(f"    MAD > {mad_max}: {fail_mad}")
-        # Distribution of filtered bin statistics
-        if n_filtered > 0:
-            filt_medians = medians[~keep_mask]
-            filt_mads = mads[~keep_mask]
-            print(f"    filtered bins median depth: "
-                  f"min={filt_medians.min():.3f}, max={filt_medians.max():.3f}, "
-                  f"mean={filt_medians.mean():.3f}")
-            print(f"    filtered bins MAD: "
-                  f"min={filt_mads.min():.3f}, max={filt_mads.max():.3f}, "
-                  f"mean={filt_mads.mean():.3f}")
-        # Surviving bin distribution
-        surv_medians = medians[keep_mask]
-        surv_mads = mads[keep_mask]
-        if len(surv_medians) > 0:
-            print(f"    surviving bins median depth: "
-                  f"min={surv_medians.min():.3f}, max={surv_medians.max():.3f}, "
-                  f"mean={surv_medians.mean():.3f}")
-            print(f"    surviving bins MAD: "
-                  f"min={surv_mads.min():.3f}, max={surv_mads.max():.3f}, "
-                  f"mean={surv_mads.mean():.3f}")
+        print("  [verbose] Filter breakdown:")
+        print(f"    filtered bins: {quality_stats['filtered']}")
+        print(f"    PAR-ignored bins: {quality_stats['par_ignored']}")
+        print(f"    bins without informative samples: {quality_stats['no_informative']}")
 
     print(f"{'=' * 80}\n")
 

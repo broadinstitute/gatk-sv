@@ -307,3 +307,19 @@ class GDTable:
     def get_loci_by_chrom(self, chrom: str) -> Dict[str, GDLocus]:
         """Get all loci on a specific chromosome."""
         return {k: v for k, v in self.loci.items() if v.chrom == chrom}
+
+
+def validate_gd_table_for_preprocess(gd_table: GDTable) -> None:
+    """Reject GD loci that preprocess does not support yet."""
+    unsupported = [
+        f"{cluster} ({locus.chrom}:{locus.start:,}-{locus.end:,})"
+        for cluster, locus in gd_table.loci.items()
+        if str(locus.chrom).strip().lower() in {"chry", "y"}
+    ]
+    if unsupported:
+        joined = ", ".join(sorted(unsupported))
+        raise ValueError(
+            "gatk-sv-gd preprocess does not support GD loci on chrY. "
+            "We do not model GDs on chrY yet, so please remove these entries "
+            f"from the GD table before preprocessing: {joined}"
+        )

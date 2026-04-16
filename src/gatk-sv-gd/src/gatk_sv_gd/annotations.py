@@ -11,7 +11,9 @@ This module provides:
 """
 
 import gzip
+import os
 import re
+from time import perf_counter
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -19,6 +21,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from gatk_sv_gd.models import GDLocus
+
+
+PLOT_TIMING_ENABLED = os.getenv("GATK_SV_GD_PLOT_TIMING", "").strip().lower() in {
+    "1", "true", "yes", "on",
+}
+
+
+def _print_overview_timing(label: str, start_time: float) -> None:
+    if PLOT_TIMING_ENABLED:
+        print(f"      [timing] {label}: {perf_counter() - start_time:.3f}s")
 
 
 # =============================================================================
@@ -376,8 +388,10 @@ class FlankCompressor:
                 float(d) for d in self(np.array(minor_genomic)))
             # Drop any that land on (or very near) a major tick
             major_set = {round(d, 2) for d in major_display}
-            minor_display = [d for d in minor_display
-                            if round(d, 2) not in major_set]
+            minor_display = [
+                d for d in minor_display
+                if round(d, 2) not in major_set
+            ]
             ax.set_xticks(minor_display, minor=True)
             ax.tick_params(axis='x', which='minor', length=3, width=0.5)
 
@@ -600,8 +614,8 @@ def _build_heatmap_matrix(
     else:
         region_span = max(region_end - region_start, 1)
         pixel_genomic = (
-            (np.arange(n_viz_bins) + 0.5) * (region_span / n_viz_bins)
-            + region_start
+            (np.arange(n_viz_bins) + 0.5) * (region_span / n_viz_bins) +
+            region_start
         )
 
     bin_idx = np.searchsorted(bin_starts, pixel_genomic, side='right') - 1
@@ -637,6 +651,7 @@ def _draw_overview_column(
     show_colorbar: bool = True,
     gaps: Optional["GapsAnnotation"] = None,
     xform: Optional["FlankCompressor"] = None,
+    heatmap_viz_bins: int = 1000,
 ):
     """Draw annotation + carrier heatmap + non-carrier heatmap + mean-depth
     + individual-depth panels into a list of axes (one column of the overview figure).
@@ -661,18 +676,23 @@ def _draw_overview_column(
     d_end = xform.d_end
 
     # Panel 1: Gene annotations and segdup regions
+    stage_start = perf_counter()
     ax = axes_col[0]
     draw_annotations_panel(
         ax, locus, region_start, region_end, chrom, col_title,
         gtf=gtf, segdup=segdup, gaps=gaps, show_gd_entries=True,
         min_gene_label_spacing=min_gene_label_spacing, xform=xform,
     )
+    _print_overview_timing(f"{col_title} annotations", stage_start)
 
     # Panel 2: Carriers heatmap
+    stage_start = perf_counter()
     ax = axes_col[1]
     if n_carriers > 0:
         viz_matrix = _build_heatmap_matrix(
-            region_df, carrier_cols, region_start, region_end, xform=xform)
+            region_df, carrier_cols, region_start, region_end,
+            xform=xform, n_viz_bins=heatmap_viz_bins,
+        )
         cmap = plt.cm.RdBu.copy()
         cmap.set_bad(color='white')
         ax.imshow(viz_matrix, aspect="auto", cmap=cmap,
@@ -687,12 +707,16 @@ def _draw_overview_column(
         ax.axis('off')
         ax.text(0.5, 0.5, 'No carriers', ha='center', va='center',
                 transform=ax.transAxes)
+    _print_overview_timing(f"{col_title} carrier heatmap", stage_start)
 
     # Panel 3: Non-carriers heatmap
+    stage_start = perf_counter()
     ax = axes_col[2]
     if n_non_carriers > 0:
         viz_matrix = _build_heatmap_matrix(
-            region_df, non_carrier_cols, region_start, region_end, xform=xform)
+            region_df, non_carrier_cols, region_start, region_end,
+            xform=xform, n_viz_bins=heatmap_viz_bins,
+        )
         cmap = plt.cm.RdBu.copy()
         cmap.set_bad(color='white')
         im = ax.imshow(viz_matrix, aspect="auto", cmap=cmap,
@@ -711,8 +735,10 @@ def _draw_overview_column(
         ax.axis('off')
         ax.text(0.5, 0.5, 'No non-carriers', ha='center', va='center',
                 transform=ax.transAxes)
+    _print_overview_timing(f"{col_title} non-carrier heatmap", stage_start)
 
     # ---- Mean depth panels: one per ploidy state ----
+    stage_start = perf_counter()
     bin_mids = (region_df["Start"].values + region_df["End"].values) / 2
     bin_starts = region_df["Start"].values
     bin_ends = region_df["End"].values
@@ -818,8 +844,10 @@ def _draw_overview_column(
             xform.format_genomic_ticks(ax, locus.breakpoints, label_x=False)
         else:
             ax.set_xticks([])
+    _print_overview_timing(f"{col_title} mean-depth panels", stage_start)
 
     # ---- Individual depth traces panel (bottom) ----
+    stage_start = perf_counter()
     ax = axes_col[3 + n_ploidy_panels]
 
     # Non-carriers: gray, behind
@@ -870,3 +898,4 @@ def _draw_overview_column(
     ax.grid(True, alpha=0.3, axis="y")
     ax.set_xlabel(f"Position on {chrom}")
     xform.format_genomic_ticks(ax, locus.breakpoints)
+    _print_overview_timing(f"{col_title} individual traces", stage_start)

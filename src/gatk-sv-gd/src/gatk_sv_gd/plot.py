@@ -22,6 +22,7 @@ Usage:
 import argparse
 import os
 import sys
+from time import perf_counter
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -82,6 +83,19 @@ EMPTY_CALLS_COLUMNS = [
     "confidence_score",
     "calling_method",
 ]
+
+
+PLOT_TIMING_ENABLED = os.getenv("GATK_SV_GD_PLOT_TIMING", "").strip().lower() in {
+    "1", "true", "yes", "on",
+}
+
+PDF_MAX_SIGNAL_BINS = 300
+
+
+def _print_timing(label: str, start_time: float) -> None:
+    """Print elapsed wall-clock time for a plotting stage."""
+    if PLOT_TIMING_ENABLED:
+        print(f"    [timing] {label}: {perf_counter() - start_time:.3f}s")
 
 # =============================================================================
 # Viterbi overlay data container
@@ -195,9 +209,9 @@ class ViterbiOverlayData:
         cluster: str,
     ) -> bool:
         """Return True if per-haplotype paths are available for this sample."""
-        return (
-            self.get_path(sample_id, cluster, 1) is not None
-            or self.get_path(sample_id, cluster, 2) is not None
+        return any(
+            self.get_path(sample_id, cluster, haplotype) is not None
+            for haplotype in (1, 2)
         )
 
 
@@ -356,7 +370,8 @@ def _render_pdf_sample_page(
     raw_region_df: Optional[pd.DataFrame],
     minor_baf_region_df: Optional[pd.DataFrame],
     baf_sites_region_df: Optional[pd.DataFrame],
-    event_marginals_df: Optional[pd.DataFrame],
+    event_del_region_df: Optional[pd.DataFrame],
+    event_dup_region_df: Optional[pd.DataFrame],
     gaps: Optional[GapsAnnotation],
     viterbi_data: Optional[ViterbiOverlayData],
     title_suffix: Optional[str] = None,
@@ -364,6 +379,8 @@ def _render_pdf_sample_page(
     """Render one carrier-style review page into an output PDF."""
     if sample_id not in region_df.columns:
         return False
+
+    page_start = perf_counter()
 
     sample_calls = cluster_calls_df[cluster_calls_df["sample"] == sample_id]
     pdf_calls = sample_calls[sample_calls[confidence_column] >= confidence_threshold]
@@ -380,7 +397,6 @@ def _render_pdf_sample_page(
         gridspec_kw={"height_ratios": [1, 2, 1, 1]},
     )
 
-    bin_mids = (region_df["Start"].values + region_df["End"].values) / 2
     sample_depth = region_df[sample_id].values
     sample_minor_baf, sample_baf_sites = _extract_sample_baf_vectors(
         region_df,
@@ -388,9 +404,6 @@ def _render_pdf_sample_page(
         baf_sites_region_df,
         sample_id,
     )
-
-    d_bin_mids = xform(bin_mids)
-    d_bar_widths = xform(region_df["End"].values) - xform(region_df["Start"].values)
 
     carrier_call = None
     if len(pdf_calls) > 0:
@@ -404,9 +417,48 @@ def _render_pdf_sample_page(
         f" - {carrier_call['svtype']} confidence={carrier_call[confidence_column]:.2f}"
         if carrier_call is not None else ""
     )
+
+    event_probs = None
+    event_svtype = None
+    if carrier_call is not None:
+        event_svtype = str(carrier_call["svtype"])
+        event_region_df = event_del_region_df if event_svtype == "DEL" else event_dup_region_df
+        event_probs = _extract_sample_event_probabilities(
+            region_df,
+            event_region_df,
+            sample_id,
+        )
+
+    plot_region_df = region_df
+    plot_sample_depth = np.asarray(sample_depth, dtype=float)
+    plot_sample_minor_baf = sample_minor_baf
+    plot_sample_baf_sites = sample_baf_sites
+    plot_event_probs = event_probs
+    if len(region_df) > PDF_MAX_SIGNAL_BINS:
+        (
+            plot_region_df,
+            plot_sample_depth,
+            plot_sample_minor_baf,
+            plot_sample_baf_sites,
+            plot_event_probs,
+        ) = _coarsen_pdf_page_signals(
+            locus,
+            region_df,
+            sample_depth,
+            sample_minor_baf,
+            sample_baf_sites,
+            event_probs,
+            max_total_bins=PDF_MAX_SIGNAL_BINS,
+        )
+
+    plot_bin_mids = (plot_region_df["Start"].values + plot_region_df["End"].values) / 2
+    d_bin_mids = xform(plot_bin_mids)
+    d_bar_widths = xform(plot_region_df["End"].values) - xform(plot_region_df["Start"].values)
+
     title = f"{sample_id} at {cluster}{call_info}"
     if title_suffix:
         title = f"{title} [{title_suffix}]"
+    stage_start = perf_counter()
     draw_annotations_panel(
         axes[0],
         locus,
@@ -421,8 +473,10 @@ def _render_pdf_sample_page(
         min_gene_label_spacing=min_gene_label_spacing,
         xform=xform,
     )
+    _print_timing(f"{cluster} {sample_id} pdf annotations", stage_start)
 
     ax = axes[1]
+    stage_start = perf_counter()
     best_call = carrier_call
     if best_call is not None:
         svtype = best_call["svtype"]
@@ -434,17 +488,15 @@ def _render_pdf_sample_page(
         d_is, d_ie = xform(interval_start), xform(interval_end)
         ax.axvspan(d_is, d_ie, alpha=0.2, color=color, zorder=1,
                    label=f"{svtype} region")
-        ax.hlines(mean_depth, d_is, d_ie,
-                  colors="black", linewidth=2.5, alpha=0.8, zorder=2,
-                  label=f"Mean depth={mean_depth:.2f}")
+        ax.hlines(mean_depth, d_is, d_ie, colors="black", linewidth=2.5, alpha=0.8, zorder=2, label=f"Mean depth={mean_depth:.2f}")
 
     _plot_depth_bars_with_baf(
         ax,
         d_bin_mids,
         d_bar_widths,
-        sample_depth,
-        minor_baf_values=sample_minor_baf,
-        baf_site_counts=sample_baf_sites,
+        plot_sample_depth,
+        minor_baf_values=plot_sample_minor_baf,
+        baf_site_counts=plot_sample_baf_sites,
         zorder=3,
     )
 
@@ -495,45 +547,45 @@ def _render_pdf_sample_page(
     ax.set_ylabel("Normalized Depth")
     ax.grid(True, alpha=0.3, axis="y", zorder=0)
     ax.legend(loc="upper right", fontsize=8)
+    _print_timing(f"{cluster} {sample_id} pdf depth panel", stage_start)
 
     baf_ax = axes[2]
+    stage_start = perf_counter()
     _plot_baf_signal_panel(
         baf_ax,
         d_bin_mids,
         d_bar_widths,
-        sample_minor_baf,
-        sample_baf_sites,
+        plot_sample_minor_baf,
+        plot_sample_baf_sites,
         xform,
         locus,
         chrom,
         show_xlabel=False,
     )
+    _print_timing(f"{cluster} {sample_id} pdf baf panel", stage_start)
 
     event_ax = axes[3]
-    event_probs = None
-    event_svtype = None
-    if best_call is not None:
-        event_svtype = str(best_call["svtype"])
-        event_probs = _extract_sample_event_probabilities(
-            region_df,
-            event_marginals_df,
-            sample_id,
-            event_svtype,
-        )
+    stage_start = perf_counter()
     _plot_event_marginal_panel(
         event_ax,
         d_bin_mids,
         d_bar_widths,
-        event_probs,
+        plot_event_probs,
         xform,
         locus,
         chrom,
         event_svtype,
     )
+    _print_timing(f"{cluster} {sample_id} pdf event panel", stage_start)
 
+    stage_start = perf_counter()
     plt.tight_layout()
+    _print_timing(f"{cluster} {sample_id} pdf layout", stage_start)
+    stage_start = perf_counter()
     pdf.savefig(fig)
+    _print_timing(f"{cluster} {sample_id} pdf savefig", stage_start)
     plt.close()
+    _print_timing(f"{cluster} {sample_id} pdf total", page_start)
     return True
 
 
@@ -618,6 +670,7 @@ def _plot_viterbi_trace(
     alpha: float,
     zorder: int,
     vertical_offset: float = 0.0,
+    rasterized: bool = False,
 ) -> None:
     """Plot one Viterbi step trace using the shared carrier-plot code path."""
     trace_x, trace_y = _build_viterbi_trace_coords(
@@ -637,6 +690,7 @@ def _plot_viterbi_trace(
         label=label,
         solid_joinstyle="round",
         solid_capstyle="round",
+        rasterized=rasterized,
     )
 
 
@@ -658,6 +712,7 @@ def _plot_depth_bars_with_baf(
     minor_baf_values: Optional[np.ndarray] = None,
     baf_site_counts: Optional[np.ndarray] = None,
     zorder: int = 3,
+    rasterized: bool = False,
 ) -> None:
     """Draw normalized-depth bars, optionally split by modeled minor BAF.
 
@@ -679,6 +734,7 @@ def _plot_depth_bars_with_baf(
             edgecolor="none",
             zorder=zorder,
             label="Normalized depth",
+            rasterized=rasterized,
         )
         return
 
@@ -700,6 +756,7 @@ def _plot_depth_bars_with_baf(
             edgecolor="none",
             zorder=zorder,
             label="Normalized depth",
+            rasterized=rasterized,
         )
         return
 
@@ -717,6 +774,7 @@ def _plot_depth_bars_with_baf(
             edgecolor="none",
             zorder=zorder,
             label="Depth (no BAF)",
+            rasterized=rasterized,
         )
 
     ax.bar(
@@ -728,6 +786,7 @@ def _plot_depth_bars_with_baf(
         edgecolor="none",
         zorder=zorder,
         label="Minor-allele depth",
+        rasterized=rasterized,
     )
     ax.bar(
         x_positions[valid_baf],
@@ -739,7 +798,32 @@ def _plot_depth_bars_with_baf(
         edgecolor="none",
         zorder=zorder,
         label="Major-allele depth",
+        rasterized=rasterized,
     )
+
+
+def _aligned_region_sample_vector(
+    region_df: pd.DataFrame,
+    value_df: Optional[pd.DataFrame],
+    sample_id: str,
+) -> Optional[np.ndarray]:
+    """Return one sample vector aligned to ``region_df`` rows."""
+    if value_df is None or sample_id not in value_df.columns:
+        return None
+
+    key_cols = ["Cluster", "Chr", "Start", "End"]
+    if len(region_df) == len(value_df):
+        region_keys = region_df[key_cols].reset_index(drop=True)
+        value_keys = value_df[key_cols].reset_index(drop=True)
+        if region_keys.equals(value_keys):
+            return value_df[sample_id].to_numpy(copy=True)
+
+    aligned = region_df[key_cols].merge(
+        value_df[key_cols + [sample_id]],
+        on=key_cols,
+        how="left",
+    )
+    return aligned[sample_id].to_numpy(copy=True)
 
 
 def _extract_sample_baf_vectors(
@@ -749,30 +833,9 @@ def _extract_sample_baf_vectors(
     sample_id: str,
 ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
     """Align per-bin BAF summaries to a region/sample depth slice."""
-    if any([
-        minor_baf_df is None,
-        baf_sites_df is None,
-        sample_id not in minor_baf_df.columns if minor_baf_df is not None else True,
-        sample_id not in baf_sites_df.columns if baf_sites_df is not None else True,
-    ]):
-        return None, None
-
-    key_cols = ["Cluster", "Chr", "Start", "End"]
-    region_keys = region_df[key_cols]
-
-    baf_aligned = region_keys.merge(
-        minor_baf_df[key_cols + [sample_id]],
-        on=key_cols,
-        how="left",
-    )
-    baf_sites_aligned = region_keys.merge(
-        baf_sites_df[key_cols + [sample_id]],
-        on=key_cols,
-        how="left",
-    )
     return (
-        baf_aligned[sample_id].to_numpy(dtype=float),
-        baf_sites_aligned[sample_id].to_numpy(),
+        _aligned_region_sample_vector(region_df, minor_baf_df, sample_id),
+        _aligned_region_sample_vector(region_df, baf_sites_df, sample_id),
     )
 
 
@@ -786,6 +849,7 @@ def _plot_baf_signal_panel(
     locus: GDLocus,
     chrom: str,
     show_xlabel: bool = True,
+    rasterized: bool = False,
 ) -> None:
     """Render the modeled per-bin minor-BAF signal for one sample."""
     ax.set_xlim(0.0, xform.d_end)
@@ -829,7 +893,20 @@ def _plot_baf_signal_panel(
             alpha=0.25,
             edgecolor="none",
             zorder=1,
+            rasterized=rasterized,
         )
+        baf_stems = ax.vlines(
+            x_positions[valid_baf],
+            0.0,
+            clipped_minor_baf,
+            colors="#7B61A8",
+            linewidth=0.7,
+            alpha=0.5,
+            zorder=1.5,
+            rasterized=rasterized,
+        )
+        if hasattr(baf_stems, "set_capstyle"):
+            baf_stems.set_capstyle("round")
         ax.scatter(
             x_positions[valid_baf],
             clipped_minor_baf,
@@ -838,6 +915,7 @@ def _plot_baf_signal_panel(
             alpha=0.8,
             linewidths=0,
             zorder=2,
+            rasterized=rasterized,
         )
     else:
         ax.text(
@@ -859,30 +937,11 @@ def _plot_baf_signal_panel(
 
 def _extract_sample_event_probabilities(
     region_df: pd.DataFrame,
-    event_marginals_df: Optional[pd.DataFrame],
+    event_probability_df: Optional[pd.DataFrame],
     sample_id: str,
-    svtype: str,
 ) -> Optional[np.ndarray]:
     """Align per-bin event marginals to a region/sample depth slice."""
-    if event_marginals_df is None:
-        return None
-
-    event_column = _get_event_probability_column(svtype)
-    if sample_id not in event_marginals_df["sample"].astype(str).values:
-        return None
-
-    key_cols = ["Cluster", "Chr", "Start", "End"]
-    region_keys = region_df[key_cols]
-    sample_event_df = event_marginals_df[event_marginals_df["sample"] == sample_id]
-    if len(sample_event_df) == 0:
-        return None
-
-    aligned = region_keys.merge(
-        sample_event_df[key_cols + [event_column]],
-        on=key_cols,
-        how="left",
-    )
-    return aligned[event_column].to_numpy(dtype=float)
+    return _aligned_region_sample_vector(region_df, event_probability_df, sample_id)
 
 
 def _plot_event_marginal_panel(
@@ -894,6 +953,7 @@ def _plot_event_marginal_panel(
     locus: GDLocus,
     chrom: str,
     svtype: Optional[str],
+    rasterized: bool = False,
 ) -> None:
     """Render per-bin event marginal probabilities for one sample."""
     ax.set_xlim(0.0, xform.d_end)
@@ -930,6 +990,7 @@ def _plot_event_marginal_panel(
             alpha=0.25,
             edgecolor="none",
             zorder=1,
+            rasterized=rasterized,
         )
         ax.plot(
             x_positions[valid],
@@ -938,6 +999,7 @@ def _plot_event_marginal_panel(
             linewidth=1.2,
             alpha=0.9,
             zorder=2,
+            rasterized=rasterized,
         )
     else:
         ax.text(
@@ -964,8 +1026,10 @@ def _build_raw_region_df(
     sample_cols: List[str],
     raw_sample_medians: Dict[str, float],
     lowres_median_bin_size: float,
+    processed_region_df: Optional[pd.DataFrame] = None,
     highres_path: Optional[str] = None,
     size_threshold_factor: float = 10.0,
+    highres_max_bins: Optional[int] = None,
 ) -> Optional[pd.DataFrame]:
     """
     Build a normalised raw-depth DataFrame for a locus's visible region,
@@ -994,12 +1058,19 @@ def _build_raw_region_df(
             file; passed to
             :func:`~gatk_sv_gd.highres.normalize_highres_bins` for
             bin-size-ratio correction.
+        processed_region_df: Processed region DataFrame used in the model /
+            plotted depth bars. When provided, this is inspected to detect
+            locus-wide high-resolution replacement during preprocess.
         highres_path: Path to a bgzipped, tabix-indexed high-resolution
             read-count file (.tsv.gz + .tbi).  ``None`` disables high-res
             substitution entirely.
         size_threshold_factor: Regions whose genomic span is less than
             this multiple of *lowres_median_bin_size* are served from
             the high-res file (default 10).
+        highres_max_bins: Optional cap on the number of queried high-res bins
+            retained for plotting. When set, consecutive bins are merged by
+            mean before normalisation so plotting can be much faster while
+            preserving coarse visual structure.
 
     Returns:
         Normalised DataFrame with columns ``Chr``, ``Start``, ``End`` and
@@ -1020,13 +1091,48 @@ def _build_raw_region_df(
     # Array form required by normalize_highres_bins.
     column_medians_arr = np.array([raw_sample_medians[s] for s in common_samples])
 
+    def _count_interval_bins(df: pd.DataFrame, start: int, end: int) -> int:
+        if df is None or len(df) == 0:
+            return 0
+        mids = (df["Start"].values + df["End"].values) / 2
+        return int(((mids >= start) & (mids < end)).sum())
+
+    def _query_and_normalize_highres(query_start: int, query_end: int) -> Optional[pd.DataFrame]:
+        hr_raw = query_highres_bins(
+            highres_path,
+            chrom,
+            query_start,
+            query_end,
+            common_samples,
+            max_bins=highres_max_bins,
+        )
+        if len(hr_raw) == 0:
+            return None
+        if highres_max_bins is not None:
+            print(
+                f"    [high-res plot] coarsened query {chrom}:{query_start:,}-{query_end:,} "
+                f"to {len(hr_raw)} bins for plotting"
+            )
+        normed = normalize_highres_bins(
+            hr_raw, common_samples, column_medians_arr, lowres_median_bin_size,
+        )
+        keep_cols = ["Chr", "Start", "End"] + [
+            s for s in common_samples if s in normed.columns
+        ]
+        return (
+            normed.reset_index()[keep_cols]
+            .sort_values("Start")
+            .reset_index(drop=True)
+            .copy()
+        )
+
     # --- Step 1: normalised low-res base covering the full visible region ---
     base_df = pd.DataFrame()
     if raw_counts_df is not None:
         mask = (
-            (raw_counts_df["Chr"] == chrom)
-            & (raw_counts_df["End"] > region_start)
-            & (raw_counts_df["Start"] < region_end)
+            (raw_counts_df["Chr"] == chrom) &
+            (raw_counts_df["End"] > region_start) &
+            (raw_counts_df["Start"] < region_end)
         )
         raw_sub = raw_counts_df[mask].copy().sort_values("Start")
         if len(raw_sub) > 0:
@@ -1045,6 +1151,41 @@ def _build_raw_region_df(
     if highres_path is None:
         return base_df if len(base_df) > 0 else None
 
+    # --- Step 1b: mirror locus-wide high-res replacement from preprocess ---
+    # Preprocess switches the *entire locus* to high-res when any body interval
+    # is under-covered and the high-res result improves interval coverage. The
+    # processed bars in region_df therefore come from high-res across A-C / C-D
+    # too, not just the originally under-covered interval. To keep the plotted
+    # raw signal comparable, detect that condition and source the full visible
+    # region from high-res here as well.
+    if processed_region_df is not None and len(base_df) > 0:
+        locus_wide_highres = False
+        for iv_start, iv_end, iv_name in locus.get_intervals():
+            processed_count = _count_interval_bins(processed_region_df, iv_start, iv_end)
+            lowres_count = _count_interval_bins(base_df, iv_start, iv_end)
+            if processed_count > lowres_count:
+                print(
+                    f"    [high-res plot] full-locus replacement triggered: "
+                    f"processed {iv_name} has {processed_count} bins vs "
+                    f"{lowres_count} low-res bins"
+                )
+                locus_wide_highres = True
+                break
+
+        if locus_wide_highres:
+            full_region_highres = _query_and_normalize_highres(region_start, region_end)
+            if full_region_highres is not None:
+                print(
+                    f"    [high-res plot] using high-res across full visible region "
+                    f"{chrom}:{region_start:,}-{region_end:,} "
+                    f"({len(full_region_highres)} bins)"
+                )
+                return full_region_highres
+            print(
+                "    [high-res plot] full-region query returned no bins; "
+                "falling back to low-res / partial substitution"
+            )
+
     # --- Step 2: identify small regions to replace with high-res bins ---
     regions_to_check: List[Tuple[int, int, str]] = list(locus.get_intervals())
     if region_start < locus.start:
@@ -1059,23 +1200,15 @@ def _build_raw_region_df(
         region_size = r_end - r_start
         if region_size >= threshold_bp:
             continue  # large enough — low-res is adequate
-        hr_raw = query_highres_bins(
-            highres_path, chrom, r_start, r_end, common_samples,
-        )
-        if len(hr_raw) == 0:
+        normed = _query_and_normalize_highres(r_start, r_end)
+        if normed is None:
             print(f"    [high-res plot] {r_name}: no bins returned, keeping low-res")
             continue
-        normed = normalize_highres_bins(
-            hr_raw, common_samples, column_medians_arr, lowres_median_bin_size,
-        )
-        keep_cols = ["Chr", "Start", "End"] + [
-            s for s in common_samples if s in normed.columns
-        ]
-        highres_parts.append(normed.reset_index()[keep_cols])
+        highres_parts.append(normed)
         excluded_ranges.append((r_start, r_end))
         print(
             f"    [high-res plot] {r_name} ({region_size:,} bp "
-            f"< {threshold_bp:,.0f} bp threshold): {len(hr_raw)} high-res bins"
+            f"< {threshold_bp:,.0f} bp threshold): {len(normed)} high-res bins"
         )
 
     if not highres_parts:
@@ -1137,7 +1270,7 @@ def _rebin_region_df(
 
     parts: List[pd.DataFrame] = []
     for mask in (left_mask, body_mask, right_mask):
-        sub = df[mask]
+        sub = df[mask].copy()
         if len(sub) == 0:
             continue
         if len(sub) <= max_bins_per_region:
@@ -1158,6 +1291,228 @@ def _rebin_region_df(
     if not parts:
         return df
     return pd.concat(parts, ignore_index=True).sort_values("Start").reset_index(drop=True)
+
+
+def _allocate_segment_bin_targets(segment_counts: List[int], max_total_bins: int) -> List[int]:
+    """Allocate a total display-bin budget across left/body/right segments."""
+    positive_indices = [index for index, count in enumerate(segment_counts) if count > 0]
+    if not positive_indices:
+        return [0] * len(segment_counts)
+
+    total_bins = sum(segment_counts)
+    if total_bins <= max_total_bins:
+        return list(segment_counts)
+
+    raw_targets = [count * max_total_bins / total_bins if count > 0 else 0.0 for count in segment_counts]
+    targets = [0] * len(segment_counts)
+    for index in positive_indices:
+        targets[index] = min(segment_counts[index], max(1, int(np.floor(raw_targets[index]))))
+
+    current_total = sum(targets)
+    if current_total < max_total_bins:
+        residual_order = sorted(
+            positive_indices,
+            key=lambda index: (raw_targets[index] - targets[index], segment_counts[index]),
+            reverse=True,
+        )
+        while current_total < max_total_bins:
+            advanced = False
+            for index in residual_order:
+                if targets[index] < segment_counts[index]:
+                    targets[index] += 1
+                    current_total += 1
+                    advanced = True
+                    if current_total == max_total_bins:
+                        break
+            if not advanced:
+                break
+    elif current_total > max_total_bins:
+        shrink_order = sorted(
+            positive_indices,
+            key=lambda index: (targets[index] - raw_targets[index], targets[index]),
+            reverse=True,
+        )
+        while current_total > max_total_bins:
+            reduced = False
+            for index in shrink_order:
+                if targets[index] > 1:
+                    targets[index] -= 1
+                    current_total -= 1
+                    reduced = True
+                    if current_total == max_total_bins:
+                        break
+            if not reduced:
+                break
+
+    return targets
+
+
+def _rebin_aligned_region_dfs_for_display(
+    locus: GDLocus,
+    region_df: pd.DataFrame,
+    aligned_dfs: List[Optional[pd.DataFrame]],
+    max_total_bins: int = PDF_MAX_SIGNAL_BINS,
+) -> Tuple[pd.DataFrame, List[Optional[pd.DataFrame]]]:
+    """Rebin aligned plot DataFrames together for PDF display only.
+
+    The same grouping is applied to every compatible DataFrame so depth, BAF,
+    and event traces remain row-aligned after coarsening.
+    """
+    if region_df is None or len(region_df) == 0 or len(region_df) <= max_total_bins:
+        return region_df, aligned_dfs
+
+    key_cols = [column for column in ("Cluster", "Chr", "Start", "End") if column in region_df.columns]
+    mids = (region_df["Start"].values + region_df["End"].values) / 2
+    segment_masks = [
+        mids < locus.start,
+        (mids >= locus.start) & (mids < locus.end),
+        mids >= locus.end,
+    ]
+    segment_counts = [int(mask.sum()) for mask in segment_masks]
+    segment_targets = _allocate_segment_bin_targets(segment_counts, max_total_bins)
+
+    def _rebin_one(df: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
+        if df is None or len(df) == 0:
+            return df
+        if len(df) != len(region_df):
+            return _rebin_region_df(df, locus, max_bins_per_region=max(1, max_total_bins // 3))
+        if key_cols:
+            region_keys = region_df[key_cols].reset_index(drop=True)
+            df_keys = df[key_cols].reset_index(drop=True)
+            if not region_keys.equals(df_keys):
+                return _rebin_region_df(df, locus, max_bins_per_region=max(1, max_total_bins // 3))
+
+        value_cols = [column for column in df.columns if column not in key_cols]
+        rebinned_parts: List[pd.DataFrame] = []
+        for mask, target in zip(segment_masks, segment_targets):
+            sub = df[mask].copy()
+            if len(sub) == 0:
+                continue
+            if target <= 0 or len(sub) <= target:
+                rebinned_parts.append(sub)
+                continue
+            group_ids = np.arange(len(sub)) * target // len(sub)
+            grouped = sub.assign(_g=group_ids).groupby("_g", sort=True)
+            agg_spec = {}
+            for column in key_cols:
+                if column == "Start":
+                    agg_spec[column] = (column, "min")
+                elif column == "End":
+                    agg_spec[column] = (column, "max")
+                else:
+                    agg_spec[column] = (column, "first")
+            agg_spec.update({column: (column, "mean") for column in value_cols})
+            rebinned_parts.append(grouped.agg(**agg_spec).reset_index(drop=True))
+
+        if not rebinned_parts:
+            return df
+        return pd.concat(rebinned_parts, ignore_index=True).sort_values("Start").reset_index(drop=True)
+
+    rebinned_region = _rebin_one(region_df)
+    rebinned_aligned = [_rebin_one(df) for df in aligned_dfs]
+    return rebinned_region, rebinned_aligned
+
+
+def _coarsen_pdf_page_signals(
+    locus: GDLocus,
+    region_df: pd.DataFrame,
+    sample_depth: np.ndarray,
+    minor_baf_values: Optional[np.ndarray],
+    baf_site_counts: Optional[np.ndarray],
+    event_probabilities: Optional[np.ndarray],
+    max_total_bins: int = PDF_MAX_SIGNAL_BINS,
+) -> Tuple[pd.DataFrame, np.ndarray, Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray]]:
+    """Coarsen one PDF page's sample-specific signal arrays for display only."""
+    if len(region_df) <= max_total_bins:
+        return region_df, sample_depth, minor_baf_values, baf_site_counts, event_probabilities
+
+    starts = region_df["Start"].to_numpy(dtype=int)
+    ends = region_df["End"].to_numpy(dtype=int)
+    mids = (starts + ends) / 2
+    segment_masks = [
+        mids < locus.start,
+        (mids >= locus.start) & (mids < locus.end),
+        mids >= locus.end,
+    ]
+    segment_counts = [int(mask.sum()) for mask in segment_masks]
+    segment_targets = _allocate_segment_bin_targets(segment_counts, max_total_bins)
+
+    sample_depth = np.asarray(sample_depth, dtype=float)
+    minor_baf_arr = None if minor_baf_values is None else np.asarray(minor_baf_values, dtype=float)
+    baf_sites_arr = None if baf_site_counts is None else np.asarray(baf_site_counts)
+    event_probs_arr = None if event_probabilities is None else np.asarray(event_probabilities, dtype=float)
+
+    rebinned_rows: List[dict] = []
+    rebinned_depth: List[float] = []
+    rebinned_minor_baf: List[float] = [] if minor_baf_arr is not None else None
+    rebinned_baf_sites: List[float] = [] if baf_sites_arr is not None else None
+    rebinned_event_probs: List[float] = [] if event_probs_arr is not None else None
+
+    for mask, target in zip(segment_masks, segment_targets):
+        indices = np.flatnonzero(mask)
+        if len(indices) == 0:
+            continue
+        if target <= 0 or len(indices) <= target:
+            for index in indices:
+                rebinned_rows.append({
+                    key: region_df.iloc[index][key]
+                    for key in region_df.columns
+                    if key in ("Cluster", "Chr", "Start", "End")
+                })
+                rebinned_depth.append(float(sample_depth[index]))
+                if rebinned_minor_baf is not None:
+                    rebinned_minor_baf.append(float(minor_baf_arr[index]))
+                if rebinned_baf_sites is not None:
+                    rebinned_baf_sites.append(float(baf_sites_arr[index]))
+                if rebinned_event_probs is not None:
+                    rebinned_event_probs.append(float(event_probs_arr[index]))
+            continue
+
+        group_ids = np.arange(len(indices)) * target // len(indices)
+        for group_id in range(target):
+            group_indices = indices[group_ids == group_id]
+            if len(group_indices) == 0:
+                continue
+            rebinned_rows.append({
+                key: (
+                    region_df.iloc[group_indices[0]][key]
+                    if key not in ("Start", "End") else
+                    int(starts[group_indices].min()) if key == "Start" else int(ends[group_indices].max())
+                )
+                for key in region_df.columns
+                if key in ("Cluster", "Chr", "Start", "End")
+            })
+            rebinned_depth.append(float(np.nanmean(sample_depth[group_indices])))
+            if rebinned_minor_baf is not None:
+                group_sites = baf_sites_arr[group_indices] if baf_sites_arr is not None else None
+                valid_minor = np.isfinite(minor_baf_arr[group_indices])
+                if group_sites is not None:
+                    valid_minor &= np.isfinite(group_sites) & (group_sites > 0)
+                if np.any(valid_minor):
+                    if group_sites is not None:
+                        weights = group_sites[group_indices * 0 + valid_minor] if False else group_sites[valid_minor]
+                        values = minor_baf_arr[group_indices][valid_minor]
+                        weight_sum = float(np.sum(weights))
+                        rebinned_minor_baf.append(float(np.sum(values * weights) / weight_sum) if weight_sum > 0 else float(np.nanmean(values)))
+                    else:
+                        rebinned_minor_baf.append(float(np.nanmean(minor_baf_arr[group_indices][valid_minor])))
+                else:
+                    rebinned_minor_baf.append(np.nan)
+            if rebinned_baf_sites is not None:
+                valid_sites = baf_sites_arr[group_indices]
+                rebinned_baf_sites.append(float(np.nansum(valid_sites[np.isfinite(valid_sites)])))
+            if rebinned_event_probs is not None:
+                valid_event = event_probs_arr[group_indices]
+                rebinned_event_probs.append(float(np.nanmean(valid_event)))
+
+    plot_region_df = pd.DataFrame(rebinned_rows)
+    return (
+        plot_region_df,
+        np.asarray(rebinned_depth, dtype=float),
+        None if rebinned_minor_baf is None else np.asarray(rebinned_minor_baf, dtype=float),
+        None if rebinned_baf_sites is None else np.asarray(rebinned_baf_sites, dtype=float),
+        None if rebinned_event_probs is None else np.asarray(rebinned_event_probs, dtype=float),
+    )
 
 
 # =============================================================================
@@ -1182,6 +1537,8 @@ def plot_locus_overview(
     flank_scale: float = 0.20,
     lowres_median_bin_size: Optional[float] = None,
     highres_path: Optional[str] = None,
+    raw_heatmap_viz_bins: int = 400,
+    raw_highres_max_bins: int = 800,
 ):
     """
     Create overview plot for a GD locus showing all samples.
@@ -1205,6 +1562,8 @@ def plot_locus_overview(
         print(f"  Warning: No depth data found for locus {locus.cluster} "
               f"({chrom}:{locus.start:,}-{locus.end:,}), skipping plot")
         return
+
+    overview_start = perf_counter()
 
     region_start = int(region_df["Start"].min())
     region_end = int(region_df["End"].max())
@@ -1236,22 +1595,27 @@ def plot_locus_overview(
 
     # ---- Build raw-normalised DataFrame for the left column (if available) ----
     have_raw = (
-        (raw_counts_df is not None or highres_path is not None)
-        and raw_sample_medians is not None
-        and lowres_median_bin_size is not None
+        (raw_counts_df is not None or highres_path is not None) and
+        raw_sample_medians is not None and
+        lowres_median_bin_size is not None
     )
     raw_region_df: Optional[pd.DataFrame] = None
     if have_raw:
+        stage_start = perf_counter()
         raw_region_df = _build_raw_region_df(
             locus, region_start, region_end,
             raw_counts_df, sample_cols, raw_sample_medians,
-            lowres_median_bin_size, highres_path=highres_path,
+            lowres_median_bin_size,
+            processed_region_df=region_df,
+            highres_path=highres_path,
+            highres_max_bins=raw_highres_max_bins,
         )
         if raw_region_df is not None:
             raw_region_df = _rebin_region_df(raw_region_df, locus)
         if raw_region_df is None or len(raw_region_df) == 0:
             have_raw = False
             raw_region_df = None
+        _print_timing(f"{locus.cluster} raw-region prep", stage_start)
 
     # ---- figure layout ----
     figure_scale = 1.0
@@ -1260,14 +1624,16 @@ def plot_locus_overview(
     non_carrier_height = min(6, max(1, n_non_carriers * 0.15)) if n_non_carriers > 0 else 0.5
     depth_panel_height = 2.0
     indiv_depth_panel_height = 2.0
-    fig_height = (3 + carrier_height + non_carrier_height
-                  + n_ploidy_panels * depth_panel_height
-                  + indiv_depth_panel_height)
+    fig_height = (
+        3 + carrier_height + non_carrier_height +
+        n_ploidy_panels * depth_panel_height +
+        indiv_depth_panel_height
+    )
 
     height_ratios = (
-        [1, carrier_height, non_carrier_height]
-        + [depth_panel_height] * n_ploidy_panels
-        + [indiv_depth_panel_height]
+        [1, carrier_height, non_carrier_height] +
+        [depth_panel_height] * n_ploidy_panels +
+        [indiv_depth_panel_height]
     )
     n_rows = 3 + n_ploidy_panels + 1
     fig_width = 16 * n_cols
@@ -1281,6 +1647,7 @@ def plot_locus_overview(
     locus_label = f"{locus.cluster} ({chrom}:{locus.start:,}-{locus.end:,})"
 
     if have_raw:
+        stage_start = perf_counter()
         _draw_overview_column(
             [axes[r, 0] for r in range(n_rows)],
             raw_region_df, locus, calls_df,
@@ -1295,7 +1662,11 @@ def plot_locus_overview(
             show_colorbar=False,
             gaps=gaps,
             xform=xform,
+            heatmap_viz_bins=raw_heatmap_viz_bins,
         )
+        _print_timing(f"{locus.cluster} raw column draw", stage_start)
+
+        stage_start = perf_counter()
         _draw_overview_column(
             [axes[r, 1] for r in range(n_rows)],
             region_df, locus, calls_df,
@@ -1308,8 +1679,11 @@ def plot_locus_overview(
             show_colorbar=False,
             gaps=gaps,
             xform=xform,
+            heatmap_viz_bins=raw_heatmap_viz_bins,
         )
+        _print_timing(f"{locus.cluster} processed column draw", stage_start)
     else:
+        stage_start = perf_counter()
         _draw_overview_column(
             [axes[r, 0] for r in range(n_rows)],
             region_df, locus, calls_df,
@@ -1322,16 +1696,23 @@ def plot_locus_overview(
             show_colorbar=False,
             gaps=gaps,
             xform=xform,
+            heatmap_viz_bins=raw_heatmap_viz_bins,
         )
+        _print_timing(f"{locus.cluster} single column draw", stage_start)
 
+    stage_start = perf_counter()
     plt.tight_layout(h_pad=0.3, w_pad=0.5)
     fig.subplots_adjust(hspace=0.08)
+    _print_timing(f"{locus.cluster} layout", stage_start)
 
     locus_dir = os.path.join(output_dir, "locus_plots")
     os.makedirs(locus_dir, exist_ok=True)
     filename = f"{_sanitize_plot_label(locus.cluster)}_overview.png"
-    plt.savefig(os.path.join(locus_dir, filename), dpi=150, bbox_inches="tight")
+    stage_start = perf_counter()
+    fig.savefig(os.path.join(locus_dir, filename), dpi=100)
+    _print_timing(f"{locus.cluster} savefig", stage_start)
     plt.close()
+    _print_timing(f"{locus.cluster} overview total", overview_start)
     print(f"  Created: locus_plots/{filename}")
 
 
@@ -1549,6 +1930,8 @@ def create_carrier_pdf(
     segdup: Optional[SegDupAnnotation],
     output_dir: str,
     event_marginals_df: Optional[pd.DataFrame] = None,
+    event_del_df: Optional[pd.DataFrame] = None,
+    event_dup_df: Optional[pd.DataFrame] = None,
     minor_baf_df: Optional[pd.DataFrame] = None,
     baf_sites_df: Optional[pd.DataFrame] = None,
     padding: int = 50000,
@@ -1584,9 +1967,11 @@ def create_carrier_pdf(
 
     pdf_path = os.path.join(output_dir, "carrier_plots.pdf")
     print(f"Creating carrier PDF: {pdf_path}")
+    pdf_start = perf_counter()
 
     with PdfPages(pdf_path) as pdf:
         for cluster in sorted(carriers["cluster"].unique()):
+            cluster_start = perf_counter()
             locus = loci_by_cluster.get(cluster)
             if locus is None:
                 continue
@@ -1602,6 +1987,7 @@ def create_carrier_pdf(
             )
 
             chrom = locus.chrom
+            stage_start = perf_counter()
             locus_mask = (
                 (depth_df["Cluster"] == cluster) &
                 (depth_df["Chr"] == chrom)
@@ -1609,21 +1995,44 @@ def create_carrier_pdf(
             region_df = depth_df[locus_mask].sort_values("Start")
             baf_region_df = None
             baf_sites_region_df = None
+            event_del_region_df = None
+            event_dup_region_df = None
             if minor_baf_df is not None:
                 baf_region_df = minor_baf_df[locus_mask].sort_values("Start")
             if baf_sites_df is not None:
                 baf_sites_region_df = baf_sites_df[locus_mask].sort_values("Start")
+            if event_del_df is not None:
+                event_del_region_df = event_del_df[locus_mask].sort_values("Start")
+            if event_dup_df is not None:
+                event_dup_region_df = event_dup_df[locus_mask].sort_values("Start")
             if len(region_df) == 0:
                 continue
+            if len(region_df) > PDF_MAX_SIGNAL_BINS:
+                region_df, rebinned_frames = _rebin_aligned_region_dfs_for_display(
+                    locus,
+                    region_df,
+                    [baf_region_df, baf_sites_region_df, event_del_region_df, event_dup_region_df],
+                    max_total_bins=PDF_MAX_SIGNAL_BINS,
+                )
+                (
+                    baf_region_df,
+                    baf_sites_region_df,
+                    event_del_region_df,
+                    event_dup_region_df,
+                ) = rebinned_frames
+            _print_timing(f"{cluster} carrier region slice", stage_start)
 
             region_start = int(region_df["Start"].min())
             region_end = int(region_df["End"].max())
 
             # Build coordinate transform for this locus
+            stage_start = perf_counter()
             xform = FlankCompressor(region_start, region_end,
                                     locus.start, locus.end,
                                     flank_scale=flank_scale)
+            _print_timing(f"{cluster} carrier xform", stage_start)
 
+            stage_start = perf_counter()
             cluster_calls_df = calls_df[calls_df["cluster"] == cluster]
             _raw_region = None
             if all([
@@ -1635,11 +2044,14 @@ def create_carrier_pdf(
                     locus, region_start, region_end,
                     raw_counts_df, list(raw_sample_medians.keys()),
                     raw_sample_medians, lowres_median_bin_size,
+                    processed_region_df=region_df,
                     highres_path=highres_path,
                 )
                 if _raw_region is not None:
                     _raw_region = _rebin_region_df(_raw_region, locus)
+            _print_timing(f"{cluster} carrier raw-region prep", stage_start)
 
+            rendered_pages = 0
             for sample_id in sorted(cluster_carriers):
                 rendered = _render_pdf_sample_page(
                     pdf,
@@ -1657,14 +2069,22 @@ def create_carrier_pdf(
                     _raw_region,
                     baf_region_df,
                     baf_sites_region_df,
-                    event_marginals_df,
+                    event_del_region_df,
+                    event_dup_region_df,
                     gaps,
                     viterbi_data,
                 )
                 if not rendered:
                     continue
+                rendered_pages += 1
+
+            _print_timing(
+                f"{cluster} carrier cluster total ({rendered_pages} pages)",
+                cluster_start,
+            )
 
     print(f"  Saved carrier PDF: {pdf_path}")
+    _print_timing("carrier pdf total", pdf_start)
 
 
 def create_eval_category_pdfs(
@@ -1676,6 +2096,8 @@ def create_eval_category_pdfs(
     segdup: Optional[SegDupAnnotation],
     output_dir: str,
     event_marginals_df: Optional[pd.DataFrame] = None,
+    event_del_df: Optional[pd.DataFrame] = None,
+    event_dup_df: Optional[pd.DataFrame] = None,
     minor_baf_df: Optional[pd.DataFrame] = None,
     baf_sites_df: Optional[pd.DataFrame] = None,
     padding: int = 50000,
@@ -1716,18 +2138,21 @@ def create_eval_category_pdfs(
             continue
 
         print(f"Creating PDF: {pdf_path}")
+        category_start = perf_counter()
         with PdfPages(pdf_path) as pdf:
             pages_by_cluster: Dict[str, List[dict]] = {}
             for spec in page_specs:
                 pages_by_cluster.setdefault(str(spec["cluster"]), []).append(spec)
 
             for cluster in sorted(pages_by_cluster):
+                cluster_start = perf_counter()
                 locus = loci_by_cluster.get(cluster)
                 if locus is None or not locus.breakpoints:
                     print(f"  Warning: No breakpoints for {cluster}, skipping")
                     continue
 
                 chrom = locus.chrom
+                stage_start = perf_counter()
                 locus_mask = (
                     (depth_df["Cluster"] == cluster) &
                     (depth_df["Chr"] == chrom)
@@ -1735,16 +2160,37 @@ def create_eval_category_pdfs(
                 region_df = depth_df[locus_mask].sort_values("Start")
                 if len(region_df) == 0:
                     continue
+                _print_timing(f"{cluster} {category_name} region slice", stage_start)
 
                 baf_region_df = None
                 baf_sites_region_df = None
+                event_del_region_df = None
+                event_dup_region_df = None
                 if minor_baf_df is not None:
                     baf_region_df = minor_baf_df[locus_mask].sort_values("Start")
                 if baf_sites_df is not None:
                     baf_sites_region_df = baf_sites_df[locus_mask].sort_values("Start")
+                if event_del_df is not None:
+                    event_del_region_df = event_del_df[locus_mask].sort_values("Start")
+                if event_dup_df is not None:
+                    event_dup_region_df = event_dup_df[locus_mask].sort_values("Start")
+                if len(region_df) > PDF_MAX_SIGNAL_BINS:
+                    region_df, rebinned_frames = _rebin_aligned_region_dfs_for_display(
+                        locus,
+                        region_df,
+                        [baf_region_df, baf_sites_region_df, event_del_region_df, event_dup_region_df],
+                        max_total_bins=PDF_MAX_SIGNAL_BINS,
+                    )
+                    (
+                        baf_region_df,
+                        baf_sites_region_df,
+                        event_del_region_df,
+                        event_dup_region_df,
+                    ) = rebinned_frames
 
                 region_start = int(region_df["Start"].min())
                 region_end = int(region_df["End"].max())
+                stage_start = perf_counter()
                 xform = FlankCompressor(
                     region_start,
                     region_end,
@@ -1752,7 +2198,9 @@ def create_eval_category_pdfs(
                     locus.end,
                     flank_scale=flank_scale,
                 )
+                _print_timing(f"{cluster} {category_name} xform", stage_start)
 
+                stage_start = perf_counter()
                 cluster_calls_df = calls_df[calls_df["cluster"] == cluster]
                 raw_region_df = None
                 if all([
@@ -1768,10 +2216,12 @@ def create_eval_category_pdfs(
                         list(raw_sample_medians.keys()),
                         raw_sample_medians,
                         lowres_median_bin_size,
+                        processed_region_df=region_df,
                         highres_path=highres_path,
                     )
                     if raw_region_df is not None:
                         raw_region_df = _rebin_region_df(raw_region_df, locus)
+                _print_timing(f"{cluster} {category_name} raw-region prep", stage_start)
 
                 cluster_specs = sorted(
                     pages_by_cluster[cluster],
@@ -1795,13 +2245,20 @@ def create_eval_category_pdfs(
                         raw_region_df,
                         baf_region_df,
                         baf_sites_region_df,
-                        event_marginals_df,
+                        event_del_region_df,
+                        event_dup_region_df,
                         gaps,
                         viterbi_data,
                         title_suffix=spec.get("title_suffix"),
                     )
 
+                _print_timing(
+                    f"{cluster} {category_name} cluster total ({len(cluster_specs)} pages)",
+                    cluster_start,
+                )
+
         print(f"  Saved PDF: {pdf_path}")
+        _print_timing(f"{category_name} pdf total", category_start)
 
 
 # =============================================================================
@@ -2112,6 +2569,8 @@ def main():
         print(f"  {len(paths_df)} path records loaded")
 
     event_marginals_df: Optional[pd.DataFrame] = None
+    event_del_df: Optional[pd.DataFrame] = None
+    event_dup_df: Optional[pd.DataFrame] = None
     event_marginals_path = args.event_marginals
     if event_marginals_path is None:
         sibling_event_marginals = os.path.join(
@@ -2134,6 +2593,18 @@ def main():
             "start": "Start",
             "end": "End",
         })
+        if "prob_del_event" in event_marginals_df.columns:
+            event_del_df = event_marginals_df.pivot(
+                index=["Cluster", "Chr", "Start", "End"],
+                columns="sample",
+                values="prob_del_event",
+            ).reset_index()
+        if "prob_dup_event" in event_marginals_df.columns:
+            event_dup_df = event_marginals_df.pivot(
+                index=["Cluster", "Chr", "Start", "End"],
+                columns="sample",
+                values="prob_dup_event",
+            ).reset_index()
         print(f"  {len(event_marginals_df)} event-marginal records loaded")
     else:
         print("\nNo event marginals provided; event panel will show a placeholder.")
@@ -2205,6 +2676,8 @@ def main():
             segdup,
             args.output_dir,
             event_marginals_df=event_marginals_df,
+            event_del_df=event_del_df,
+            event_dup_df=event_dup_df,
             minor_baf_df=minor_baf_df,
             baf_sites_df=baf_sites_df,
             padding=args.padding,
@@ -2223,6 +2696,8 @@ def main():
             plot_calls_df, depth_df, loci_to_plot, gtf, segdup,
             args.output_dir,
             event_marginals_df=event_marginals_df,
+            event_del_df=event_del_df,
+            event_dup_df=event_dup_df,
             minor_baf_df=minor_baf_df,
             baf_sites_df=baf_sites_df,
             padding=args.padding,

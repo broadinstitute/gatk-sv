@@ -24,15 +24,16 @@ from intervaltree import IntervalTree
 
 from gatk_sv_gd import _util
 from gatk_sv_gd._util import get_sample_columns, setup_logging
-from gatk_sv_gd.models import GDLocus, GDTable
+from gatk_sv_gd.models import GDLocus, GDTable, validate_gd_table_for_preprocess
 from gatk_sv_gd.depth import ExclusionMask
 from gatk_sv_gd.bins import (
     LocusBinMapping,
-    _ploidy_adjust_depths_single_chrom,
     assign_bins_to_intervals,
+    compute_bin_quality_mask,
     compute_flank_regions_from_bins,
     extract_locus_bins,
     filter_low_quality_bins,
+    get_flank_filter_params,
     read_data,
     rebin_locus_intervals,
 )
@@ -58,6 +59,16 @@ def _parse_region(region_str: str) -> Tuple[str, Optional[int], Optional[int]]:
             )
         return chrom, int(parts[0]), int(parts[1])
     return region_str, None, None
+
+
+def _is_chr_x(chrom: str) -> bool:
+    """Return True when *chrom* refers to chromosome X."""
+    return str(chrom).strip().lower() in {"chrx", "x"}
+
+
+def _is_chr_y(chrom: str) -> bool:
+    """Return True when *chrom* refers to chromosome Y."""
+    return str(chrom).strip().lower() in {"chry", "y"}
 
 
 def _flatten_multi_args(arg_groups: List[List[str]]) -> List[str]:
@@ -94,6 +105,7 @@ def _filter_and_prepare_locus_bins(
     exclusion_bypass_regions: Optional[List[Tuple[int, int]]] = None,
     min_rebin_coverage: float = 0.5,
     ploidy_map: Optional[Dict[Tuple[str, str], int]] = None,
+    par_mask: Optional[ExclusionMask] = None,
 ) -> Tuple[pd.DataFrame, Dict[str, List[int]]]:
     """
     Shared helper: apply mask filtering, quality filtering, trimming,
@@ -124,6 +136,8 @@ def _filter_and_prepare_locus_bins(
             to adjust per-sample depths to diploid-equivalent before
             computing bin-level median/MAD statistics for quality
             filtering.
+        par_mask: Optional pseudoautosomal interval mask. Bins that
+            overlap PAR are temporarily exempted from quality filtering.
 
     Returns:
         Tuple of (processed DataFrame, interval_bins dict).
@@ -190,28 +204,31 @@ def _filter_and_prepare_locus_bins(
 
     # Optional quality filtering
     if filter_params is not None:
-        def _qf(sub_df, label):
+        flank_filter_params = get_flank_filter_params(filter_params, locus.chrom)
+
+        def _qf(sub_df, label, quality_params):
             if len(sub_df) == 0:
                 return sub_df
-            sc = get_sample_columns(sub_df)
-            depths = sub_df[sc].values
-            if ploidy_map:
-                depths = _ploidy_adjust_depths_single_chrom(
-                    depths, locus.chrom, sc, ploidy_map,
-                )
-            meds = np.median(depths, axis=1)
-            mads = np.median(np.abs(depths - meds[:, np.newaxis]), axis=1)
-            keep = (
-                (meds >= filter_params["median_min"])
-                & (meds <= filter_params["median_max"])
-                & (mads <= filter_params["mad_max"])
+            keep, quality_stats = compute_bin_quality_mask(
+                sub_df,
+                median_min=quality_params["median_min"],
+                median_max=quality_params["median_max"],
+                mad_max=quality_params["mad_max"],
+                ploidy_map=ploidy_map,
+                par_mask=par_mask,
             )
-            n_filt = int((~keep).sum())
+            n_filt = quality_stats["filtered"]
             if n_filt > 0:
-                print(f"    Quality-filtered {n_filt}/{len(sub_df)} {label} bins")
+                print(
+                    f"    Quality-filtered {n_filt}/{len(sub_df)} {label} bins "
+                    f"(median [{quality_params['median_min']}, {quality_params['median_max']}], "
+                    f"MAD <= {quality_params['mad_max']})"
+                )
+            if quality_stats["par_ignored"] > 0:
+                print(f"    Ignored {quality_stats['par_ignored']}/{len(sub_df)} {label} PAR bins")
             return sub_df[keep].copy()
-        body_df = _qf(body_df, "body")
-        flank_df = _qf(flank_df, "flank")
+        body_df = _qf(body_df, "body", filter_params)
+        flank_df = _qf(flank_df, "flank", flank_filter_params)
 
     # Combine body + flank bins
     parts = [p for p in [body_df, flank_df] if len(p) > 0]
@@ -249,6 +266,7 @@ def collect_all_locus_bins(
     gd_table: GDTable,
     exclusion_mask: Optional[ExclusionMask],
     flank_exclusion_mask: Optional[ExclusionMask] = None,
+    par_mask: Optional[ExclusionMask] = None,
     exclusion_threshold: float = 0.5,
     locus_padding: int = 0,
     min_bins_per_interval: int = 3,
@@ -288,6 +306,9 @@ def collect_all_locus_bins(
         exclusion_mask: Optional ExclusionMask for filtering.
         flank_exclusion_mask: Optional ExclusionMask applied only to
             left/right flanks, not GD body intervals.
+        par_mask: Optional pseudoautosomal interval mask. PAR bins are
+            currently exempted from quality filtering while ploidy-aware
+            handling remains contig-wide.
         exclusion_threshold: Minimum overlap fraction with the mask to
             exclude a bin.
         locus_padding: Padding around locus boundaries.
@@ -369,6 +390,8 @@ def collect_all_locus_bins(
         keep = np.ones(len(chrom_df), dtype=bool)
         n_excluded = 0
         n_quality = 0
+        n_par_ignored = 0
+        chrom_flank_filter_params = get_flank_filter_params(_flank_filter_params, chrom)
         if exclusion_mask is not None:
             overlaps = exclusion_mask.get_overlap_fractions_batch(
                 chrom, chrom_df["Start"].values, chrom_df["End"].values
@@ -380,22 +403,17 @@ def collect_all_locus_bins(
             exclusion_keep = overlaps == 0.0
             n_excluded = int((~exclusion_keep).sum())
             keep &= exclusion_keep
-        if _flank_filter_params is not None:
-            _sc = get_sample_columns(chrom_df)
-            _depths = chrom_df[_sc].values
-            # Ploidy-adjust so sex-chrom bins are evaluated fairly
-            if ploidy_map:
-                _depths = _ploidy_adjust_depths_single_chrom(
-                    _depths, chrom, _sc, ploidy_map,
-                )
-            _meds = np.median(_depths, axis=1)
-            _mads = np.median(np.abs(_depths - _meds[:, np.newaxis]), axis=1)
-            quality_keep = (
-                (_meds >= _flank_filter_params["median_min"])
-                & (_meds <= _flank_filter_params["median_max"])
-                & (_mads <= _flank_filter_params["mad_max"])
+        if chrom_flank_filter_params is not None:
+            quality_keep, quality_stats = compute_bin_quality_mask(
+                chrom_df,
+                median_min=chrom_flank_filter_params["median_min"],
+                median_max=chrom_flank_filter_params["median_max"],
+                mad_max=chrom_flank_filter_params["mad_max"],
+                ploidy_map=ploidy_map,
+                par_mask=par_mask,
             )
-            n_quality = int((~quality_keep).sum())
+            n_quality = quality_stats["filtered"]
+            n_par_ignored = quality_stats["par_ignored"]
             keep &= quality_keep
         chrom_filtered[chrom] = chrom_df[keep].copy()
         parts = [f"{len(chrom_filtered[chrom])} filtered bins (of {len(chrom_df)} total)"]
@@ -403,6 +421,8 @@ def collect_all_locus_bins(
             parts.append(f"{n_excluded} exclusion-masked")
         if n_quality > 0:
             parts.append(f"{n_quality} quality-filtered")
+        if n_par_ignored > 0:
+            parts.append(f"{n_par_ignored} PAR-ignored")
         print(f"  {chrom}: {', '.join(parts)}")
 
     # ------------------------------------------------------------------
@@ -482,14 +502,16 @@ def collect_all_locus_bins(
         # Compute flank coordinates from the full chromosome's filtered bins so
         # that even multi-megabase exclusion deserts don't prevent flank discovery.
         chrom_bins = chrom_filtered.get(locus.chrom, pd.DataFrame())
+        chrom_flank_filter_params = get_flank_filter_params(_flank_filter_params, locus.chrom)
         flank_regions = compute_flank_regions_from_bins(
             chrom_bins, locus, locus_size,
             min_flank_bases=min_flank_bases,
             max_flank_bases=max_flank_bases,
             min_flank_bins=min_flank_bins,
             min_flank_coverage=min_flank_coverage,
-            filter_params=_flank_filter_params,
+            filter_params=chrom_flank_filter_params,
             ploidy_map=ploidy_map,
+            par_mask=par_mask,
         )
         if flank_regions:
             for fs, fe, fn in flank_regions:
@@ -632,10 +654,10 @@ def collect_all_locus_bins(
         # size, so we exempt them from the hard-failure threshold later.
         hr_physically_limited: set = set()
         if (
-            undercovered
-            and highres_counts_path is not None
-            and column_medians is not None
-            and lowres_median_bin_size is not None
+            undercovered and
+            highres_counts_path is not None and
+            column_medians is not None and
+            lowres_median_bin_size is not None
         ):
             print(f"\n  *** {len(undercovered)} body interval(s) have fewer "
                   f"than {effective_min_bins} bins; switching to high-res ***")
@@ -689,6 +711,7 @@ def collect_all_locus_bins(
                     exclusion_bypass_regions=exclusion_bypass_regions,
                     min_rebin_coverage=min_rebin_coverage,
                     ploidy_map=ploidy_map,
+                    par_mask=par_mask,
                 )
 
                 hr_undercovered = _undercovered_intervals(hr_interval_bins, effective_min_bins)
@@ -701,10 +724,10 @@ def collect_all_locus_bins(
                 hr_uc_bins = sum(cnt for _, cnt in hr_undercovered)
                 orig_uc_bins = sum(cnt for _, cnt in undercovered)
                 accept_hr = (
-                    len(hr_undercovered) < len(undercovered)
-                    or (
-                        len(hr_undercovered) <= len(undercovered)
-                        and hr_uc_bins > orig_uc_bins
+                    len(hr_undercovered) < len(undercovered) or
+                    (
+                        len(hr_undercovered) <= len(undercovered) and
+                        hr_uc_bins > orig_uc_bins
                     )
                 )
 
@@ -713,15 +736,17 @@ def collect_all_locus_bins(
                     interval_bins = hr_interval_bins
                     used_highres = True
                     total_assigned = sum(len(v) for v in interval_bins.values())
-                    print(f"    [highres] ACCEPTED — replaced low-res bins")
+                    print("    [highres] ACCEPTED — replaced low-res bins")
                     for region_name, bins in interval_bins.items():
                         print(f"      {region_name}: {len(bins)} bins")
                     print(f"      total: {total_assigned} bins")
                 else:
-                    print(f"    [highres] REJECTED — high-res did not "
-                          f"reduce under-covered intervals")
+                    print(
+                        "    [highres] REJECTED — high-res did not "
+                        "reduce under-covered intervals"
+                    )
             else:
-                print(f"    [highres] no bins returned from tabix query")
+                print("    [highres] no bins returned from tabix query")
 
         # Hard-failure check: each body interval must have at least
         # min_bins_per_interval bins after all processing.
@@ -1098,6 +1123,10 @@ def parse_args():
         help="BED file(s) of regions to mask only in flanking regions, not GD body intervals",
     )
     parser.add_argument(
+        "--par-intervals", nargs="+", action="append", default=[],
+        help="BED file(s) of pseudoautosomal intervals to ignore during ploidy-aware filtering",
+    )
+    parser.add_argument(
         "-o", "--output-dir", required=True,
         help="Output directory for preprocessed files",
     )
@@ -1171,6 +1200,7 @@ def main():
     args = parse_args()
     args.exclusion_intervals = _flatten_multi_args(args.exclusion_intervals)
     args.flank_exclusion_intervals = _flatten_multi_args(args.flank_exclusion_intervals)
+    args.par_intervals = _flatten_multi_args(args.par_intervals)
     _util.VERBOSE = args.verbose
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -1180,6 +1210,7 @@ def main():
     # Load GD table
     print(f"\nLoading GD table: {args.gd_table}")
     gd_table = GDTable(args.gd_table)
+    validate_gd_table_for_preprocess(gd_table)
     print(f"Loaded {len(gd_table.loci)} loci")
     for cluster, locus in gd_table.loci.items():
         if locus.breakpoints:
@@ -1212,9 +1243,26 @@ def main():
             label="flank exclusion regions",
         )
 
+    par_mask = None
+    if args.par_intervals:
+        print(f"\nLoading {len(args.par_intervals)} PAR interval file(s):")
+        for p in args.par_intervals:
+            print(f"  {p}")
+        par_mask = ExclusionMask(
+            args.par_intervals,
+            label="pseudoautosomal intervals",
+        )
+
     # Load and normalise read depth data
     df = read_data(args.input)
     sample_cols = get_sample_columns(df)
+
+    if df["Chr"].map(_is_chr_x).any() and par_mask is None:
+        raise ValueError(
+            "Ploidy-aware preprocessing requires --par-intervals when chrX bins are present. "
+            "Provide PAR BED interval(s) for this reference build so those bins can be "
+            "ignored during filtering until we add explicit PAR ploidy support."
+        )
 
     autosome_mask = ~df["Chr"].isin(["chrX", "chrY"])
     if autosome_mask.any():
@@ -1242,6 +1290,7 @@ def main():
             df, median_min=args.median_min,
             median_max=args.median_max, mad_max=args.mad_max,
             ploidy_map=ploidy_map,
+            par_mask=par_mask,
         )
 
     # Build quality-filter params
@@ -1267,6 +1316,7 @@ def main():
     combined_df, mappings, included_loci = collect_all_locus_bins(
         df, gd_table, exclusion_mask,
         flank_exclusion_mask=flank_exclusion_mask,
+        par_mask=par_mask,
         exclusion_threshold=args.exclusion_threshold,
         locus_padding=args.locus_padding,
         min_bins_per_interval=args.min_bins_per_interval,
