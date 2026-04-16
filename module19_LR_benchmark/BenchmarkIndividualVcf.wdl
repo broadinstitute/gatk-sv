@@ -4,6 +4,7 @@ import "Structs.wdl"
 import "ExtractFileByIndex.wdl" as ExtractFileByIndex
 import "LongReadGenotypeTasks.wdl" as LongReadGenotypeTasks
 import "BenchmarkIndividualVcfPerContig.wdl" as BenchmarkIndividualVcfPerContig
+import "SplitMultiallelicVcf.wdl" as SplitMultiallelicVcf
 
 
 workflow BenchmarkIndividualVcf{
@@ -40,6 +41,8 @@ workflow BenchmarkIndividualVcf{
         String? truvari_params
         String sv_base_mini_docker
         String sv_pipeline_base_docker
+
+        RuntimeAttr? runtime_attr_split_multiallelic
     }
 
     String query_prefix = basename(query_vcf, ".vcf.gz")
@@ -65,6 +68,24 @@ workflow BenchmarkIndividualVcf{
                 docker_image = sv_pipeline_base_docker  
             }
 
+        call SplitMultiallelicVcf.SplitMultiallelicVcf as split_multiallelic_query{
+            input:
+                vcf_gz       = extract_chrom_variants_query.chr_vcf,
+                vcf_idx      = extract_chrom_variants_query.chr_vcf_idx,
+                output_prefix = "~{query_prefix}.~{chromosomes[index]}.split",
+                docker_image = sv_pipeline_base_docker,
+                runtime_attr_override = runtime_attr_split_multiallelic
+        }
+
+        call SplitMultiallelicVcf.SplitMultiallelicVcf as split_multiallelic_ref{
+            input:
+                vcf_gz       = extract_chrom_variants_ref.chr_vcf,
+                vcf_idx      = extract_chrom_variants_ref.chr_vcf_idx,
+                output_prefix = "~{ref_prefix}.~{chromosomes[index]}.split",
+                docker_image = sv_pipeline_base_docker,
+                runtime_attr_override = runtime_attr_split_multiallelic
+        }
+
         if (defined(query_filter_vcf) && defined(ref_filter_vcf)){
 
           call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_query_filter_a{
@@ -87,11 +108,11 @@ workflow BenchmarkIndividualVcf{
         
           call BenchmarkIndividualVcfPerContig.BenchmarkIndividualVcfPerContig as benchmark_individual_vcf_per_contig_filter_query_ref{
               input:
-                query_vcf = extract_chrom_variants_query.chr_vcf,
-                query_vcf_idx = extract_chrom_variants_query.chr_vcf_idx, 
+                query_vcf = split_multiallelic_query.output_vcf_gz,
+                query_vcf_idx = split_multiallelic_query.output_vcf_idx,
 
-                ref_vcf = extract_chrom_variants_ref.chr_vcf,
-                ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
+                ref_vcf = split_multiallelic_ref.output_vcf_gz,
+                ref_vcf_idx = split_multiallelic_ref.output_vcf_idx,
 
                 query_filter_vcf = extract_chrom_variants_query_filter_a.chr_vcf, 
                 query_filter_vcf_idx = extract_chrom_variants_query_filter_a.chr_vcf_idx,
@@ -133,11 +154,11 @@ workflow BenchmarkIndividualVcf{
 
           call BenchmarkIndividualVcfPerContig.BenchmarkIndividualVcfPerContig as benchmark_individual_vcf_per_contig_filter_query{
               input:
-                query_vcf = extract_chrom_variants_query.chr_vcf,
-                query_vcf_idx = extract_chrom_variants_query.chr_vcf_idx, 
+                query_vcf = split_multiallelic_query.output_vcf_gz,
+                query_vcf_idx = split_multiallelic_query.output_vcf_idx,
 
-                ref_vcf = extract_chrom_variants_ref.chr_vcf,
-                ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
+                ref_vcf = split_multiallelic_ref.output_vcf_gz,
+                ref_vcf_idx = split_multiallelic_ref.output_vcf_idx,
 
                 query_filter_vcf = extract_chrom_variants_query_filter_b.chr_vcf, 
                 query_filter_vcf_idx = extract_chrom_variants_query_filter_b.chr_vcf_idx,
@@ -177,11 +198,11 @@ workflow BenchmarkIndividualVcf{
         
           call BenchmarkIndividualVcfPerContig.BenchmarkIndividualVcfPerContig as benchmark_individual_vcf_per_contig_filter_ref{
               input:
-                query_vcf = extract_chrom_variants_query.chr_vcf,
-                query_vcf_idx = extract_chrom_variants_query.chr_vcf_idx, 
+                query_vcf = split_multiallelic_query.output_vcf_gz,
+                query_vcf_idx = split_multiallelic_query.output_vcf_idx,
 
-                ref_vcf = extract_chrom_variants_ref.chr_vcf,
-                ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
+                ref_vcf = split_multiallelic_ref.output_vcf_gz,
+                ref_vcf_idx = split_multiallelic_ref.output_vcf_idx,
 
                 ref_filter_vcf = extract_chrom_variants_ref_filter_b.chr_vcf, 
                 ref_filter_vcf_idx = extract_chrom_variants_ref_filter_b.chr_vcf_idx, 
@@ -212,11 +233,11 @@ workflow BenchmarkIndividualVcf{
         
           call BenchmarkIndividualVcfPerContig.BenchmarkIndividualVcfPerContig as benchmark_individual_vcf_per_contig{
               input:
-                query_vcf = extract_chrom_variants_query.chr_vcf,
-                query_vcf_idx = extract_chrom_variants_query.chr_vcf_idx, 
+                query_vcf = split_multiallelic_query.output_vcf_gz,
+                query_vcf_idx = split_multiallelic_query.output_vcf_idx,
 
-                ref_vcf = extract_chrom_variants_ref.chr_vcf,
-                ref_vcf_idx = extract_chrom_variants_ref.chr_vcf_idx,
+                ref_vcf = split_multiallelic_ref.output_vcf_gz,
+                ref_vcf_idx = split_multiallelic_ref.output_vcf_idx,
 
                 chromosome = chromosomes[index],
 
