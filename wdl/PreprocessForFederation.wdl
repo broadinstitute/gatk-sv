@@ -244,7 +244,7 @@ def _parse_bnd_ends(vcf_path):
     return bnd_end_dict
 
 
-bnd_end_dict = _parse_bnd_ends(~{vcf})
+bnd_end_dict = _parse_bnd_ends("~{vcf}")
 with pysam.VariantFile("~{vcf}", 'r') as inp:
   with pysam.VariantFile("~{output_file}", 'w', header=inp.header) as out:
     for record in inp:

@@ -225,10 +225,11 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False):
 
     # Multiallelic sites should reference FORMAT:CN rather than GT
     # Compute CN_NUMBER, CN_NONREF_COUNT, CN_NONREF_FREQ, and CN_COUNT/CN_FREQ for each copy state
-    else:
+    if record.info['SVTYPE'] in ['CNV', 'DEL', 'DUP']:
 
         # Get all sample CNs and remove Nones
-        CNs_wNones = [record.samples[s]['CN'] for s in samples]
+        cn_field = 'CN' if record.info['SVTYPE'] == "CNV" else 'RD_CN'
+        CNs_wNones = [record.samples[s].get(cn_field, None) for s in samples]
         CNs = [c for c in CNs_wNones if c is not None and c not in '. NA'.split()]
 
         if len(CNs) == 0:
