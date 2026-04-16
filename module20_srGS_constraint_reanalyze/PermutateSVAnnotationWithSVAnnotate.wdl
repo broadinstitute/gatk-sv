@@ -91,12 +91,9 @@ workflow PermutateSVAnnotationWithSVAnnotate {
         input:
             vcf = vcf,
             vcf_idx = vcf_idx, 
-            contigs = contigs,
             prefix = "permu_~{permu_number}",
-            min_length = 50,
             coding_gtf = Task1_PermuteGTF.permuted_gtf,
-            utils_docker = utils_docker,
-            gatk_docker = gatk_docker
+            docker = gatk_docker
     }
 
 }
