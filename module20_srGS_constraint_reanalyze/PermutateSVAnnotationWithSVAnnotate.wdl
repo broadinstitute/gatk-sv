@@ -34,7 +34,7 @@ workflow PermutateSVAnnotationWithSVAnnotate {
         File   gene_info
 
         Int    permu_number
-        Array[String] contigs
+        File contigs_list
 
         # Python scripts
         File   permute_gtf_script       # permute_gtf.py
@@ -67,6 +67,7 @@ workflow PermutateSVAnnotationWithSVAnnotate {
 
     String seed_suffix   = "permuted_seed" + permu_number
     String sv_gtf_prefix = sv_label + ".vs." + gtf_label
+    Array[String] contigs = read_lines(contigs_list)
 
     # ── Task 1: Permute GTF ────────────────────────────────────────────────
     call Task1_PermuteGTF {
