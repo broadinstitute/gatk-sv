@@ -58,9 +58,6 @@ task SplitMultiallelicVcf {
   RuntimeAttr runtime_attr =
     select_first([runtime_attr_override, default_attr])
 
-  String output_vcf_gz  = output_prefix + ".split_multiallelic.vcf.gz"
-  String output_vcf_idx = output_prefix + ".split_multiallelic.vcf.gz.tbi"
-
   command <<<
     set -euo pipefail
 
@@ -110,7 +107,7 @@ def split_multiallelic(input_vcf, output_vcf):
     # Collect per-allele INFO field IDs from header (Number=A)
     per_allele_info = set()
 
-    with open_in(input_vcf, 'rt') as fin, gzip.open(output_vcf, 'wt') as fout:
+    with open_in(input_vcf, 'rt') as fin, open(output_vcf, 'wt') as fout:
         for line in fin:
             # --- Header lines ---
             if line.startswith('##'):
@@ -207,16 +204,16 @@ def split_multiallelic(input_vcf, output_vcf):
                 fout.write('\t'.join(out_fields) + '\n')
 
 
-split_multiallelic("~{vcf_gz}", "~{output_vcf_gz}")
+split_multiallelic("~{vcf_gz}", "~{output_prefix}.split_multiallelic.vcf")
 print("Split complete.", file=sys.stderr)
 PYEOF
-
-    tabix -p vcf "~{output_vcf_gz}"
+    bgzip "~{output_prefix}.split_multiallelic.vcf"
+    tabix -p vcf "~{output_prefix}.split_multiallelic.vcf.gz"
   >>>
 
   output {
-    File output_vcf_gz  = output_vcf_gz
-    File output_vcf_idx = output_vcf_idx
+    File output_vcf_gz  = "~{output_prefix}.split_multiallelic.vcf.gz"
+    File output_vcf_idx = "~{output_prefix}.split_multiallelic.vcf.gz.tbi"
   }
 
   runtime {
