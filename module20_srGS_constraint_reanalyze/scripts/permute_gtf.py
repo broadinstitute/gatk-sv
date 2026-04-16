@@ -1,22 +1,22 @@
 """
 Permute gene locations across the genome.
 
-For each gene in the input GTF, randomly reassign it to a new location on any
-chromosome, avoiding telomere/centromere regions.  All sub-features of the gene
-(transcript, exon, CDS, UTR, etc.) are shifted by the same offset so internal
-gene structure is preserved exactly.
+This script now follows the same placement method as the R implementation:
+for each gene, choose one eligible free region uniformly at random, then choose
+a random start uniformly inside that region with a 1kb buffer on both sides.
 
-Genes whose original coordinates overlap any interval in the blacklist BED are
-not permuted and are written to the output at their original positions.
+Free regions are computed as the complement of the telomere/centromere BED over
+hg38 chromosome sizes. Genes whose original coordinates overlap any interval in
+the blacklist BED are not permuted and are written unchanged.
 
 Usage:
     python3 permute_gtf.py <seed> <input.gtf.gz> <tel_cen.bed> <blacklist.bed[.gz]> <output.gtf.gz>
 
 Example:
-    python3 permute_gtf.py 1 \\
-        genes_grch38_annotated_4_mapped_gencode_v39.CDS.gtf.gz \\
-        hg38_tel_cen.bed \\
-        merged_blacklist_GATKSV.bed.gz \\
+    python3 permute_gtf.py 1 \
+        genes_grch38_annotated_4_mapped_gencode_v39.CDS.gtf.gz \
+        hg38_tel_cen.bed \
+        merged_blacklist_GATKSV.bed.gz \
         genes_grch38_annotated_4_mapped_gencode_v39.CDS.permuted_seed1.gtf.gz
 """
 
@@ -99,39 +99,32 @@ def total_free_length(intervals):
     return sum(e - s for s, e in intervals)
 
 
-def draw_position(rng, allowed_by_chrom, chroms, cum_lengths, gene_len):
+def build_intergenic_candidates(allowed_by_chrom):
+    """Flatten free intervals into (chrom, start, end, length) rows."""
+    candidates = []
+    for chrom, intervals in allowed_by_chrom.items():
+        for s, e in intervals:
+            candidates.append((chrom, s, e, e - s))
+    return candidates
+
+
+def draw_position_r_style(rng, intergenic_candidates, gene_len, flank=1000):
+    """R-style placement:
+    1) choose eligible region uniformly where region_len > gene_len + 2*flank
+    2) choose start uniformly in [region_start + flank, region_end - flank - gene_len]
+    Returns (chrom, start_0_based).
     """
-    Pick a random (chrom, start) such that [start, start+gene_len) fits fully
-    within a free interval.  Falls back to retry if no interval on the chosen
-    chrom can fit the gene.
-    """
-    total = cum_lengths[-1]
-    for _ in range(10000):           # safety limit
-        r = rng.randint(0, total - 1)
-        # binary search to find which chromosome
-        lo, hi = 0, len(cum_lengths) - 1
-        while lo < hi:
-            mid = (lo + hi) // 2
-            if cum_lengths[mid] <= r:
-                lo = mid + 1
-            else:
-                hi = mid
-        chrom = chroms[lo]
-        intervals = allowed_by_chrom[chrom]
-        # find intervals large enough for this gene
-        fitting = [(s, e) for s, e in intervals if e - s >= gene_len]
-        if not fitting:
-            continue
-        # pick a random fitting interval weighted by length
-        lengths = [e - s - gene_len + 1 for s, e in fitting]
-        total_fit = sum(lengths)
-        r2 = rng.randint(0, total_fit - 1)
-        acc = 0
-        for (s, e), l in zip(fitting, lengths):
-            acc += l
-            if r2 < acc:
-                return chrom, s + (r2 - (acc - l))
-    raise RuntimeError(f"Could not place gene of length {gene_len} after 10000 tries")
+    eligible = [row for row in intergenic_candidates if row[3] > gene_len + 2 * flank]
+    if not eligible:
+        raise RuntimeError(
+            f"No eligible free interval for gene length {gene_len} with flank {flank}"
+        )
+
+    chrom, s, e, _ = eligible[rng.randint(0, len(eligible) - 1)]
+    start_min = s + flank
+    start_max = e - flank - gene_len
+    start = rng.randint(start_min, start_max)
+    return chrom, start
 
 
 def open_file(path, mode='rt'):
@@ -175,14 +168,9 @@ def main():
     n_bl_ivs   = sum(len(v) for v in blacklist.values())
     print(f"  Blacklist: {n_bl_ivs:,} intervals across {len(blacklist)} chromosomes", flush=True)
 
-    chroms      = sorted(allowed.keys(), key=lambda c: (0, int(c[3:])) if c[3:].isdigit() else (1, c[3:]))
-    free_lens   = [total_free_length(allowed[c]) for c in chroms]
-    cum_lengths = []
-    acc = 0
-    for fl in free_lens:
-        acc += fl
-        cum_lengths.append(acc)
-    print(f"  Total free genome: {acc:,} bp across {len(chroms)} chromosomes", flush=True)
+    intergenic_candidates = build_intergenic_candidates(allowed)
+    total_free = sum(row[3] for row in intergenic_candidates)
+    print(f"  Total free genome: {total_free:,} bp across {len(allowed)} chromosomes", flush=True)
 
     # ── 2. Read GTF: group lines by gene_id ──────────────────────────────────
     print("Reading GTF...", flush=True)
@@ -237,7 +225,7 @@ def main():
 
         gene_len = g_end - g_start + 1   # 1-based inclusive length
 
-        new_chrom, new_start_0 = draw_position(rng, allowed, chroms, cum_lengths, gene_len)
+        new_chrom, new_start_0 = draw_position_r_style(rng, intergenic_candidates, gene_len, flank=1000)
         new_start_1 = new_start_0 + 1    # convert to 1-based GTF coordinate
         offset = new_start_1 - g_start
 
