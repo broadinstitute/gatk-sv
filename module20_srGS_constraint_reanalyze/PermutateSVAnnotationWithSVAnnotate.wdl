@@ -58,6 +58,9 @@ workflow PermutateSVAnnotationWithSVAnnotate {
 
         # Runtime attribute overrides per task
         RuntimeAttr? runtime_attr_permute_gtf
+        RuntimeAttr? runtime_attr_split_vcf
+        RuntimeAttr? runtime_attr_annotate_sv
+        RuntimeAttr? runtime_attr_merge_vcf
         RuntimeAttr? runtime_attr_split_gtf
         RuntimeAttr? runtime_attr_bedtools_intersect
         RuntimeAttr? runtime_attr_extract_overlaps
@@ -85,17 +88,96 @@ workflow PermutateSVAnnotationWithSVAnnotate {
     }
 
 
-    # ── Task 2: Annotate functional consequences of SVs with permutated gtf ─────────────
-    
-    call AnnotateFunctionalConsequences {
-        input:
-            vcf = vcf,
-            vcf_idx = vcf_idx, 
-            prefix = "permu_~{permu_number}",
-            coding_gtf = Task1_PermuteGTF.permuted_gtf,
-            docker = gatk_docker
+    # ── Task 2: Split VCF by contig ─────────────────────────────────────────
+    scatter (contig in contigs) {
+        call SplitVcfByContig {
+            input:
+                vcf                   = vcf,
+                vcf_idx               = vcf_idx,
+                contig                = contig,
+                prefix                = "permu_~{permu_number}",
+                docker                = gatk_docker,
+                runtime_attr_override = runtime_attr_split_vcf
+        }
+
+        # ── Task 3: Annotate functional consequences per contig ────────────
+        call AnnotateFunctionalConsequences {
+            input:
+                vcf                   = SplitVcfByContig.contig_vcf,
+                vcf_idx               = SplitVcfByContig.contig_vcf_idx,
+                prefix                = "permu_~{permu_number}.~{contig}",
+                coding_gtf            = Task1_PermuteGTF.permuted_gtf,
+                docker                = gatk_docker,
+                runtime_attr_override = runtime_attr_annotate_sv
+        }
     }
 
+    # ── Task 4: Merge annotated VCFs across contigs ─────────────────────────
+    call MergeAnnotatedVcfs {
+        input:
+            vcfs                  = AnnotateFunctionalConsequences.anno_vcf,
+            prefix                = "permu_~{permu_number}",
+            docker                = gatk_docker,
+            runtime_attr_override = runtime_attr_merge_vcf
+    }
+
+    output {
+        File permuted_gtf          = Task1_PermuteGTF.permuted_gtf
+        File too_large_genes_list  = Task1_PermuteGTF.too_large_genes_list
+        Array[File] contig_vcfs    = SplitVcfByContig.contig_vcf
+        Array[File] contig_vcf_idx = SplitVcfByContig.contig_vcf_idx
+        Array[File] anno_vcfs      = AnnotateFunctionalConsequences.anno_vcf
+        Array[File] anno_vcf_idx   = AnnotateFunctionalConsequences.anno_vcf_idx
+        File merged_anno_vcf       = MergeAnnotatedVcfs.merged_vcf
+        File merged_anno_vcf_idx   = MergeAnnotatedVcfs.merged_vcf_idx
+    }
+
+}
+
+task SplitVcfByContig {
+    input {
+        File vcf
+        File vcf_idx
+        String contig
+        String prefix
+        String docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1,
+        mem_gb: 4,
+        disk_gb: 5 * ceil(size(vcf, "GB")) + 10,
+        boot_disk_gb: 10,
+        preemptible_tries: 2,
+        max_retries: 0
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+    Int java_mem_mb = 1000 * ceil(0.8 * select_first([runtime_attr.mem_gb, default_attr.mem_gb]))
+
+    command <<<
+        set -euo pipefail
+
+        gatk --java-options "-Xmx~{java_mem_mb}m" SelectVariants \
+            -V ~{vcf} \
+            -L ~{contig} \
+            -O ~{prefix}.~{contig}.vcf.gz
+    >>>
+
+    output {
+        File contig_vcf = "~{prefix}.~{contig}.vcf.gz"
+        File contig_vcf_idx = "~{prefix}.~{contig}.vcf.gz.tbi"
+    }
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
 }
 
 task AnnotateFunctionalConsequences {
@@ -131,6 +213,54 @@ task AnnotateFunctionalConsequences {
     output {
         File anno_vcf = "~{prefix}.vcf.gz"
         File anno_vcf_idx = "~{prefix}.vcf.gz.tbi"
+    }
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+}
+
+task MergeAnnotatedVcfs {
+    input {
+        Array[File] vcfs
+        String prefix
+        String docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1,
+        mem_gb: 4,
+        disk_gb: 20,
+        boot_disk_gb: 10,
+        preemptible_tries: 2,
+        max_retries: 0
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+    Int java_mem_mb = 1000 * ceil(0.8 * select_first([runtime_attr.mem_gb, default_attr.mem_gb]))
+
+    command <<<
+        set -euo pipefail
+
+        INPUT_ARGS=""
+        for f in ~{sep=' ' vcfs}; do
+            INPUT_ARGS+=" -I ${f}"
+        done
+
+        gatk --java-options "-Xmx~{java_mem_mb}m" MergeVcfs \
+            ${INPUT_ARGS} \
+            -O ~{prefix}.annotated.merged.vcf.gz
+    >>>
+
+    output {
+        File merged_vcf = "~{prefix}.annotated.merged.vcf.gz"
+        File merged_vcf_idx = "~{prefix}.annotated.merged.vcf.gz.tbi"
     }
 
     runtime {
