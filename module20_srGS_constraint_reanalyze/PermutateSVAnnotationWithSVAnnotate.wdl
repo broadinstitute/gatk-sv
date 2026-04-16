@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "PermutateSVAnnotation.wdl" as PermutateSVAnnotation
+
 # ============================================================
 # PermutateSVAnnotation.wdl
 #
@@ -87,7 +87,7 @@ workflow PermutateSVAnnotationWithSVAnnotate {
 
     # ── Task 2: Annotate functional consequences of SVs with permutated gtf ─────────────
     
-    call PermutateSVAnnotation.AnnotateSVAnnotate{
+    call AnnotateFunctionalConsequences {
         input:
             vcf = vcf,
             vcf_idx = vcf_idx, 
@@ -100,6 +100,53 @@ workflow PermutateSVAnnotationWithSVAnnotate {
     }
 
 }
+
+task AnnotateFunctionalConsequences {
+    input {
+        File vcf
+        File vcf_idx
+        File coding_gtf
+        String prefix
+        String docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1,
+        mem_gb: 4,
+        disk_gb: 5 * ceil(size(vcf, "GB")) + 10,
+        boot_disk_gb: 10,
+        preemptible_tries: 2,
+        max_retries: 0
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+    Int java_mem_mb = 1000 * ceil(0.8 * select_first([runtime_attr.mem_gb, default_attr.mem_gb]))
+
+    command <<<
+        set -euo pipefail
+
+        gatk --java-options "-Xmx~{java_mem_mb}m" SVAnnotate \
+            -V ~{vcf} \
+            --protein-coding-gtf ~{coding_gtf} \
+            -O ~{prefix}.vcf.gz
+    >>>
+
+    output {
+        File anno_vcf = "~{prefix}.vcf.gz"
+        File anno_vcf_idx = "~{prefix}.vcf.gz.tbi"
+    }
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+}
+
 
 # ======================================================================
 # TASK 1 — Permute GTF
