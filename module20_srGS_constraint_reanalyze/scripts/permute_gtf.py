@@ -10,17 +10,22 @@ hg38 chromosome sizes. Genes whose original coordinates overlap any interval in
 the blacklist BED are not permuted and are written unchanged.
 
 Usage:
-    python3 permute_gtf.py <seed> <input.gtf.gz> <tel_cen.bed> <blacklist.bed[.gz]> <output.gtf.gz>
+    python3 permute_gtf.py <seed> <input.gtf.gz> <tel_cen.bed> <blacklist.bed[.gz]> <output.gtf.gz> [too_large_genes.txt]
+
+The optional last argument is a path to write gene IDs that were too large to
+place (kept at their original locations). If omitted they are only printed to
+stderr.
 
 Example:
     python3 permute_gtf.py 1 \
         genes_grch38_annotated_4_mapped_gencode_v39.CDS.gtf.gz \
         hg38_tel_cen.bed \
         merged_blacklist_GATKSV.bed.gz \
-        genes_grch38_annotated_4_mapped_gencode_v39.CDS.permuted_seed1.gtf.gz
+        genes_grch38_annotated_4_mapped_gencode_v39.CDS.permuted_seed1.gtf.gz \
+        too_large_genes.seed1.txt
 """
 
-import re, gzip, sys, random
+import re, gzip, sys, random, bisect
 from collections import defaultdict
 
 # ── hg38 chromosome sizes (UCSC) ────────────────────────────────────────────
@@ -100,11 +105,13 @@ def total_free_length(intervals):
 
 
 def build_intergenic_candidates(allowed_by_chrom):
-    """Flatten free intervals into (chrom, start, end, length) rows."""
+    """Flatten free intervals into (chrom, start, end, length) rows,
+    sorted ascending by length so bisect can find eligible intervals quickly."""
     candidates = []
     for chrom, intervals in allowed_by_chrom.items():
         for s, e in intervals:
             candidates.append((chrom, s, e, e - s))
+    candidates.sort(key=lambda r: r[3])   # sort by length ascending
     return candidates
 
 
@@ -113,14 +120,21 @@ def draw_position_r_style(rng, intergenic_candidates, gene_len, flank=1000):
     1) choose eligible region uniformly where region_len > gene_len + 2*flank
     2) choose start uniformly in [region_start + flank, region_end - flank - gene_len]
     Returns (chrom, start_0_based).
+
+    Uses pre-sorted candidates + bisect for O(log N) eligibility lookup.
     """
-    eligible = [row for row in intergenic_candidates if row[3] > gene_len + 2 * flank]
-    if not eligible:
+    threshold = gene_len + 2 * flank
+    # bisect on the 4th field (length): find first index where length > threshold
+    # Use a key-based approach with a helper fake list
+    lengths = [r[3] for r in intergenic_candidates]  # already sorted
+    idx = bisect.bisect_right(lengths, threshold)
+    eligible_count = len(intergenic_candidates) - idx
+    if eligible_count == 0:
         raise RuntimeError(
             f"No eligible free interval for gene length {gene_len} with flank {flank}"
         )
 
-    chrom, s, e, _ = eligible[rng.randint(0, len(eligible) - 1)]
+    chrom, s, e, _ = intergenic_candidates[idx + rng.randint(0, eligible_count - 1)]
     start_min = s + flank
     start_max = e - flank - gene_len
     start = rng.randint(start_min, start_max)
@@ -134,16 +148,17 @@ def open_file(path, mode='rt'):
 # ── main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    if len(sys.argv) != 6:
-        print("Usage: python3 permute_gtf.py <seed> <input.gtf[.gz]> <tel_cen.bed> <blacklist.bed[.gz]> <output.gtf[.gz]>",
+    if len(sys.argv) not in (6, 7):
+        print("Usage: python3 permute_gtf.py <seed> <input.gtf[.gz]> <tel_cen.bed> <blacklist.bed[.gz]> <output.gtf[.gz]> [too_large_genes.txt]",
               file=sys.stderr)
         sys.exit(1)
 
-    seed       = int(sys.argv[1])
-    gtf_in     = sys.argv[2]
-    bed_excl   = sys.argv[3]
-    bed_black  = sys.argv[4]
-    gtf_out    = sys.argv[5]
+    seed            = int(sys.argv[1])
+    gtf_in          = sys.argv[2]
+    bed_excl        = sys.argv[3]
+    bed_black       = sys.argv[4]
+    gtf_out         = sys.argv[5]
+    too_large_out   = sys.argv[6] if len(sys.argv) == 7 else None
 
     print(f"Seed: {seed}", flush=True)
 
@@ -158,19 +173,29 @@ def main():
 
     rng = random.Random(seed)
 
-    # ── 1. Load exclusion regions and blacklist; build allowed intervals ──────
-    print("Loading exclusion regions...", flush=True)
+    # ── 1. Load exclusion regions and blacklist; merge and build allowed intervals ──
+    print("Loading exclusion regions (tel/cen)...", flush=True)
     exclusions = load_exclusions(bed_excl)
-    allowed    = build_allowed_intervals(HG38_CHROM_SIZES, exclusions)
 
     print("Loading blacklist regions...", flush=True)
     blacklist  = load_exclusions(bed_black)
     n_bl_ivs   = sum(len(v) for v in blacklist.values())
     print(f"  Blacklist: {n_bl_ivs:,} intervals across {len(blacklist)} chromosomes", flush=True)
 
+    # Merge blacklist into exclusions so genes cannot be *placed* over blacklist
+    # regions, but all source genes are still permuted regardless of their input location.
+    merged_excl = defaultdict(list)
+    for chrom, ivs in exclusions.items():
+        merged_excl[chrom].extend(ivs)
+    for chrom, ivs in blacklist.items():
+        merged_excl[chrom].extend(ivs)
+    for chrom in merged_excl:
+        merged_excl[chrom].sort()
+
+    allowed    = build_allowed_intervals(HG38_CHROM_SIZES, merged_excl)
     intergenic_candidates = build_intergenic_candidates(allowed)
     total_free = sum(row[3] for row in intergenic_candidates)
-    print(f"  Total free genome: {total_free:,} bp across {len(allowed)} chromosomes", flush=True)
+    print(f"  Total free genome after merging exclusions+blacklist: {total_free:,} bp across {len(allowed)} chromosomes", flush=True)
 
     # ── 2. Read GTF: group lines by gene_id ──────────────────────────────────
     print("Reading GTF...", flush=True)
@@ -203,10 +228,11 @@ def main():
 
     # ── 3. For each gene, draw a new location and shift all features ─────────
     print("Permuting gene locations...", flush=True)
-    out_blocks  = []
-    n_permuted  = 0
-    n_blacklist = 0
-    n_no_coord  = 0
+    out_blocks      = []
+    n_permuted      = 0
+    n_no_coord      = 0
+    n_too_large     = 0
+    too_large_genes = []   # gene IDs kept at original location due to size
 
     for gid in gene_order:
         if gid not in gene_coords:
@@ -216,16 +242,17 @@ def main():
             continue
 
         orig_chrom, g_start, g_end = gene_coords[gid]
-
-        # Skip permutation if the gene overlaps any blacklist interval
-        if overlaps_intervals(orig_chrom, g_start, g_end, blacklist):
-            out_blocks.append(gene_blocks[gid])
-            n_blacklist += 1
-            continue
-
         gene_len = g_end - g_start + 1   # 1-based inclusive length
 
-        new_chrom, new_start_0 = draw_position_r_style(rng, intergenic_candidates, gene_len, flank=1000)
+        try:
+            new_chrom, new_start_0 = draw_position_r_style(rng, intergenic_candidates, gene_len, flank=1000)
+        except RuntimeError:
+            # No eligible intergenic region is large enough; keep gene at original location
+            print(f"  WARNING: no eligible region for gene {gid} (len={gene_len:,} bp); keeping original location", flush=True)
+            out_blocks.append(gene_blocks[gid])
+            too_large_genes.append(gid)
+            n_too_large += 1
+            continue
         new_start_1 = new_start_0 + 1    # convert to 1-based GTF coordinate
         offset = new_start_1 - g_start
 
@@ -239,9 +266,21 @@ def main():
         out_blocks.append(new_fields_list)
         n_permuted += 1
 
-    print(f"  Permuted: {n_permuted:,}  |  Blacklisted (kept in place): {n_blacklist:,}  |  No coords: {n_no_coord:,}", flush=True)
+    print(f"  Permuted: {n_permuted:,}  |  Too large to place (kept in place): {n_too_large:,}  |  No coords (kept in place): {n_no_coord:,}", flush=True)
 
-    # ── 4. Write output GTF ──────────────────────────────────────────────────
+    # ── 4a. Write too-large gene list ────────────────────────────────────────
+    if too_large_genes:
+        if too_large_out:
+            with open(too_large_out, 'w') as fh:
+                for gid in too_large_genes:
+                    fh.write(gid + '\n')
+            print(f"  Too-large gene IDs written to: {too_large_out}", flush=True)
+        else:
+            print("  Too-large gene IDs (pass a 7th argument to save to file):", flush=True)
+            for gid in too_large_genes:
+                print(f"    {gid}", flush=True)
+
+    # ── 4b. Write output GTF ─────────────────────────────────────────────────
     print(f"Writing output to {gtf_out} ...", flush=True)
     with open_file(gtf_out, 'wt') as fh:
         for h in header_lines:

@@ -264,6 +264,7 @@ workflow PermutateSVAnnotation {
 
     output {
         File   permuted_gtf             = Task1_PermuteGTF.permuted_gtf
+        File   too_large_genes_list     = Task1_PermuteGTF.too_large_genes_list
         Array[File] split_beds          = Task2_SplitGTF.all_beds
         Array[File] intersection_beds   = Task3_BedtoolsIntersect.all_isec
         Array[File] overlap_tables      = Task4_ExtractOverlaps.all_overlaps
@@ -301,7 +302,8 @@ task Task1_PermuteGTF {
         RuntimeAttr? runtime_attr_override
     }
 
-    String out_gtf = gtf_label + "." + seed_suffix + ".gtf.gz"
+    String out_gtf          = gtf_label + "." + seed_suffix + ".gtf.gz"
+    String out_too_large     = gtf_label + "." + seed_suffix + ".too_large_genes.txt"
 
     command <<<
         python3 ~{permute_script} \
@@ -309,11 +311,13 @@ task Task1_PermuteGTF {
             ~{gtf_file} \
             ~{tel_cen_bed} \
             ~{blacklist_bed} \
-            ~{out_gtf}
+            ~{out_gtf} \
+            ~{out_too_large}
     >>>
 
     output {
-        File permuted_gtf = out_gtf
+        File permuted_gtf         = out_gtf
+        File too_large_genes_list = out_too_large
     }
 
     RuntimeAttr default_attr = object {
