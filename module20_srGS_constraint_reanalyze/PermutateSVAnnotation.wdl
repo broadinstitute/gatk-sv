@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-
+import "AnnotateSVAnnotate.wdl" as AnnotateSVAnnotate
 # ============================================================
 # PermutateSVAnnotation.wdl
 #
@@ -33,6 +33,9 @@ workflow PermutateSVAnnotation {
         File   tel_cen_bed
         File   blacklist_bed
         File   gene_info
+        File   vcf
+        File   vcf_idx
+        Array[String] contigs
 
         # Python scripts
         File   permute_gtf_script       # permute_gtf.py
@@ -51,6 +54,8 @@ workflow PermutateSVAnnotation {
         String python_docker   = "python:3.11-slim"
         String bedtools_docker = "quay.io/biocontainers/bedtools:2.31.1--h63f29b4_0"
         String r_docker        = "r-base:4.3.0"
+        String gatk_docker =  "us.gcr.io/broad-dsde-methods/gatk-sv/gatk:2025-05-20-4.6.2.0-4-g1facd911e-NIGHTLY-SNAPSHOT"
+        String utils_docker = "us-central1-docker.pkg.dev/talkowski-training/kj-development/utils:kj_V13"
 
         # Runtime attribute overrides per task
         RuntimeAttr? runtime_attr_permute_gtf
@@ -106,6 +111,18 @@ workflow PermutateSVAnnotation {
             seed_suffix           = seed_suffix,
             docker                = bedtools_docker,
             runtime_attr_override = runtime_attr_bedtools_intersect
+    }
+
+    call AnnotateSVAnnotate.AnnotateSVAnnotate{
+        input:
+            vcf = vcf,
+            vcf_idx = vcf_idx, 
+            contigs = contigs,
+            prefix = "permu_~{permu_number}",
+            min_length = 50,
+            coding_gtf = Task1_PermuteGTF.permuted_gtf,
+            utils_docker = utils_docker,
+            gatk_docker = gatk_docker
     }
 
     # ── Task 4: Extract overlap categories via awk/cut ────────────────────
