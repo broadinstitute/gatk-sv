@@ -373,7 +373,7 @@ def parse_args() -> argparse.Namespace:
     g.add_argument("--alpha-sex-non-ref", type=float, default=1.0,
                    help="Dirichlet concentration for other CN states on "
                         "sex chromosomes")
-    g.add_argument("--sex-cn-weight", type=float, default=5.0,
+    g.add_argument("--sex-cn-weight", type=float, default=3.0,
                    help="Weight of the sex-CN coupling factor "
                         "(0 to disable)")
     g.add_argument("--sex-prior", type=float, nargs=2,

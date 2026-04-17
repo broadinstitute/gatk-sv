@@ -332,7 +332,7 @@ class CNVModel:
         alpha_sex_ref: float = 1.0,
         alpha_sex_non_ref: float = 1.0,
         sex_prior: tuple = (0.5, 0.5),
-        sex_cn_weight: float = 5.0,
+        sex_cn_weight: float = 3.0,
     ) -> None:
         self.n_states = n_states
         self.alpha_ref = alpha_ref
