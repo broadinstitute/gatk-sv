@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Split a VCF into 6 subsets: TRV and 5 non-TRV categories by type/size."""
+"""Split a VCF into 6 subsets: TRV and 5 non-TRV categories by type/size.
+
+Non-TRV categories are derived from REF/ALT sequence comparison:
+- SNV: len(REF) == len(ALT) == 1
+- INS: len(ALT) > len(REF), size = len(ALT) - len(REF)
+- DEL: len(REF) > len(ALT), size = len(REF) - len(ALT)
+
+Records with symbolic/breakend ALT alleles (e.g. <DEL>, N]chr:pos]) are left
+as uncategorized.
+"""
 
 import argparse
 import gzip
@@ -23,7 +32,36 @@ def parse_info(info_str):
     return info_dict
 
 
-def classify_variant(variant_id, info_dict):
+def _classify_ref_alt_one(ref, alt):
+    """Classify a single REF/ALT allele pair.
+
+    Returns tuple(type, size) where:
+      - type in {'SNV', 'INS', 'DEL'}
+      - size is None for SNV, integer for INS/DEL
+    Or returns (None, None) if allele cannot be categorized.
+    """
+    if not ref or not alt:
+        return None, None
+
+    # Skip symbolic and breakend-like ALT representations.
+    if alt.startswith('<') or '[' in alt or ']' in alt or alt == '*':
+        return None, None
+
+    rlen = len(ref)
+    alen = len(alt)
+
+    if rlen == 1 and alen == 1:
+        return 'SNV', None
+    if alen > rlen:
+        return 'INS', alen - rlen
+    if rlen > alen:
+        return 'DEL', rlen - alen
+
+    # MNV or complex substitution with no net length change.
+    return None, None
+
+
+def classify_variant(variant_id, ref, alt_field):
     """Classify variant into one of 6 categories.
     
     Returns: category (trv, non_trv_snv, non_trv_ins_lt50, 
@@ -33,19 +71,28 @@ def classify_variant(variant_id, info_dict):
     if 'TRV' in variant_id:
         return 'trv'
     
-    # For non-TRV, get allele_type and allele_length from INFO (case-insensitive)
-    allele_type = info_dict.get('allele_type', '').upper()
-    allele_length_str = info_dict.get('allele_length', '')
-    
+    # For non-TRV, derive type/size from REF/ALT sequence comparison.
+    alts = alt_field.split(',')
+    per_alt = [_classify_ref_alt_one(ref, a) for a in alts]
+
+    # If any ALT is uncategorizable, keep conservative behavior.
+    if any(t is None for t, _ in per_alt):
+        return None
+
+    # If multi-allelic record mixes categories, treat as uncategorized.
+    cats = {t for t, _ in per_alt}
+    if len(cats) != 1:
+        return None
+
+    allele_type = next(iter(cats))
+
     if allele_type == 'SNV':
         return 'non_trv_snv'
-    
-    # Try to parse length. DEL records in this VCF use negative allele_length,
-    # so use absolute size thresholds for both INS and DEL.
-    try:
-        allele_length = abs(int(allele_length_str))
-    except (ValueError, TypeError):
+
+    lengths = {size for t, size in per_alt if size is not None}
+    if len(lengths) != 1:
         return None
+    allele_length = next(iter(lengths))
     
     if allele_type == 'INS':
         return 'non_trv_ins_lt50' if allele_length < 50 else 'non_trv_ins_ge50'
@@ -92,11 +139,11 @@ def split_vcf(input_vcf, out_prefix):
                 raise ValueError('Encountered malformed VCF line with fewer than 8 columns')
             
             variant_id = fields[2]
-            info_str = fields[7]
-            info_dict = parse_info(info_str)
+            ref = fields[3]
+            alt = fields[4]
             
             # Classify variant
-            category = classify_variant(variant_id, info_dict)
+            category = classify_variant(variant_id, ref, alt)
             
             if category is None:
                 stats['uncategorized'] += 1
