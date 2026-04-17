@@ -77,7 +77,6 @@ def _get_chr_info(
 
 def detect_aneuploidies(
     data: DepthData,
-    map_estimates: Dict[str, np.ndarray],
     cn_posterior: Dict[str, np.ndarray],
     prob_threshold: float = 0.5,
 ) -> Dict[int, List[Tuple[str, int, float]]]:
@@ -85,7 +84,6 @@ def detect_aneuploidies(
 
     Args:
         data: :class:`DepthData` used for inference.
-        map_estimates: MAP estimates from :meth:`CNVModel.get_map_estimates`.
         cn_posterior: Posterior from :meth:`CNVModel.run_discrete_inference`.
         prob_threshold: Minimum mean CN probability to call an aneuploidy.
 
@@ -531,7 +529,7 @@ def main() -> None:
 
     # ── detect aneuploidies ─────────────────────────────────────────────
     aneuploid_map = detect_aneuploidies(
-        data, map_est, cn_post, prob_threshold=args.prob_threshold
+        data, cn_post, prob_threshold=args.prob_threshold
     )
 
     # ── compute AF table for output statistics ──────────────────────────

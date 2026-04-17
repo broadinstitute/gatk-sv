@@ -4,16 +4,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-import pytest
-
 from gatk_sv_ploidy._util import (
     add_chromosome_labels,
-    concatenate_tsvs,
     format_column_name,
     get_chromosome_type,
     get_sample_columns,
     load_exclusion_ids,
-    read_file_list,
     save_and_close_plot,
 )
 
@@ -38,31 +34,11 @@ def test_dataframe_and_format_helpers() -> None:
     assert format_column_name("mean_depth") == "Mean Depth"
 
 
-def test_read_file_list_and_load_exclusion_ids(tmp_path) -> None:
+def test_load_exclusion_ids(tmp_path) -> None:
     path = tmp_path / "items.txt"
     path.write_text("a\n\n b \n")
 
-    assert read_file_list(str(path)) == ["a", "b"]
     assert load_exclusion_ids(str(path)) == ["a", "b"]
-
-
-def test_concatenate_tsvs_handles_missing_files(tmp_path, caplog) -> None:
-    first = tmp_path / "a.tsv"
-    second = tmp_path / "b.tsv"
-    first.write_text("x\tvalue\n1\t10\n")
-    second.write_text("x\tvalue\n2\t20\n")
-
-    combined = concatenate_tsvs(
-        [str(first), str(tmp_path / "missing.tsv"), str(second)],
-    )
-
-    assert combined["x"].tolist() == [1, 2]
-    assert "File not found" in caplog.text
-
-
-def test_concatenate_tsvs_raises_when_no_valid_files(tmp_path) -> None:
-    with pytest.raises(ValueError, match="No valid TSV files"):
-        concatenate_tsvs([str(tmp_path / "missing.tsv")])
 
 
 def test_plot_helpers_write_files_and_labels(tmp_path) -> None:

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import List, Optional, Sequence
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -81,47 +81,6 @@ def format_column_name(col: str) -> str:
         Title-cased string with underscores replaced by spaces.
     """
     return col.replace("_", " ").title()
-
-
-# ── file I/O helpers ────────────────────────────────────────────────────────
-
-def read_file_list(path: str) -> List[str]:
-    """Read a newline-delimited file list.
-
-    Args:
-        path: Path to a text file with one file path per line.
-
-    Returns:
-        List of non-empty, stripped lines.
-    """
-    with open(path) as fh:
-        return [line.strip() for line in fh if line.strip()]
-
-
-def concatenate_tsvs(file_paths: Sequence[str], sep: str = "\t") -> pd.DataFrame:
-    """Read and vertically concatenate several TSV files.
-
-    Args:
-        file_paths: Iterable of paths to TSV files.
-        sep: Column separator (default tab).
-
-    Returns:
-        Single concatenated :class:`~pandas.DataFrame`.
-
-    Raises:
-        ValueError: If no valid files are found.
-    """
-    frames: list[pd.DataFrame] = []
-    for fp in file_paths:
-        if os.path.exists(fp):
-            frames.append(pd.read_csv(fp, sep=sep))
-        else:
-            logger.warning("File not found: %s", fp)
-    if not frames:
-        raise ValueError("No valid TSV files found to concatenate")
-    combined = pd.concat(frames, ignore_index=True)
-    logger.info("Combined %d files → %d rows", len(frames), len(combined))
-    return combined
 
 
 def load_exclusion_ids(path: str) -> List[str]:

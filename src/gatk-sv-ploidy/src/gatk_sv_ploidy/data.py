@@ -56,7 +56,6 @@ class DepthData:
         clamp_threshold: float = 5.0,
         site_data: Optional[Dict[str, np.ndarray]] = None,
     ) -> None:
-        self.original_df = df.copy()
         sample_cols = get_sample_columns(df)
 
         # ── optional subsampling ────────────────────────────────────────
@@ -252,13 +251,10 @@ def read_depth_tsv(path: str) -> pd.DataFrame:
         df = df.rename(columns={"#Chr": "Chr"})
 
     # Add provenance info
-    df["Bin"] = (
-        df["Chr"].astype(str)
-        + ":"
-        + df["Start"].astype(str)
-        + "-"
-        + df["End"].astype(str)
-    )
+    bin_chr = df["Chr"].astype(str)
+    bin_start = df["Start"].astype(str)
+    bin_end = df["End"].astype(str)
+    df["Bin"] = bin_chr.str.cat(bin_start, sep=":").str.cat(bin_end, sep="-")
     df = df.set_index("Bin")
     df["source_file"] = str(Path(path).parent.parent.name)
     return df
