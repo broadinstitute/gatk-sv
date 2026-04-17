@@ -128,7 +128,7 @@ task GetBatchSampleList {
 
   command <<<
   set -euo pipefail
-  awk '$2=="~{batch}"' ~{batch_membership} > ~{batch}.samples.list
+  awk '$2=="~{batch}" {print $1}' ~{batch_membership} > ~{batch}.samples.list
   >>>
 
   output {
