@@ -12,7 +12,6 @@ workflow ManuallyReviewBalancedSVs {
     Array[File] batch_pe_files
 
     Array[String] batches
-    Array[File] samples_in_batches
     File batch_membership
 
     String vid_include_cmd
@@ -81,7 +80,7 @@ workflow ManuallyReviewBalancedSVs {
         cohort_vcf = ConcatCPX.concat_vcf,
         cohort_vcf_index = ConcatCPX.concat_vcf_idx,
         batch_pe_file = batch_pe_files[i],
-        batch_samples = samples_in_batches[i],
+        batch_membership = batch_membership,
         generate_pe_tabix_py_script=generate_pe_tabix_py_script,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker,

@@ -15,7 +15,7 @@ workflow ManuallyReviewBalancedSVsPerBatch {
     Boolean collect_background_pe = false
 
     String batch
-    File batch_samples
+    File batch_membership
 
     File generate_pe_tabix_py_script # for development
 
@@ -28,13 +28,22 @@ workflow ManuallyReviewBalancedSVsPerBatch {
     RuntimeAttr? runtime_attr_generate_script
     RuntimeAttr? runtime_attr_collect_pe
     RuntimeAttr? runtime_attr_collect_pe_background
+    RuntimeAttr? runtime_attr_get_batch_samples
+  }
+
+  call GetBatchSampleList {
+    input:
+      batch=batch,
+      batch_membership=batch_membership,
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_get_batch_samples
   }
 
   call util.SubsetVcfBySamplesList {
     input:
       vcf=cohort_vcf,
       vcf_idx=cohort_vcf_index,
-      list_of_samples=batch_samples,
+      list_of_samples=GetBatchSampleList.batch_samples,
       outfile_name="~{batch}.~{svtype}.vcf.gz",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_subset_samples
@@ -95,6 +104,44 @@ workflow ManuallyReviewBalancedSVsPerBatch {
   output {
     File batch_pe_evidence = CollectPEMetrics.evidence
     File? batch_pe_background = CollectPEBackground.evidence
+  }
+}
+
+
+task GetBatchSampleList {
+  input {
+    String batch
+    File batch_membership
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+  set -euo pipefail
+  awk '$2=="~{batch}"' ~{batch_membership} > ~{batch}.samples.list
+  >>>
+
+  output {
+    File batch_samples = "~{batch}.samples.list"
+  }
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
