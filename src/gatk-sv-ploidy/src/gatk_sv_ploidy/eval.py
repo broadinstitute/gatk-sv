@@ -42,12 +42,42 @@ def calculate_metrics(
     logger.info("Overall accuracy: %d / %d = %.4f (%.2f%%)",
                 correct, total, accuracy, 100 * accuracy)
 
-    report_str = classification_report(y_true, y_pred, zero_division=0)
+    labels = sorted(set(y_true) | set(y_pred))
+    if len(labels) == 1:
+        only_label = labels[0]
+        support = int((y_true == only_label).sum())
+        predicted = int((y_pred == only_label).sum())
+        tp = int(((y_true == only_label) & (y_pred == only_label)).sum())
+        precision = tp / predicted if predicted else 0.0
+        recall = tp / support if support else 0.0
+        f1_score = (
+            2 * precision * recall / (precision + recall)
+            if (precision + recall) > 0
+            else 0.0
+        )
+        report_str = (
+            "              precision    recall  f1-score   support\n\n"
+            f"{only_label:>12}       {precision:0.2f}      {recall:0.2f}      {f1_score:0.2f}         {support}\n\n"
+            f"    accuracy                           {accuracy:0.2f}         {total}\n"
+        )
+    else:
+        report_str = classification_report(
+            y_true,
+            y_pred,
+            labels=labels,
+            zero_division=0,
+        )
     logger.info("\n%s", report_str)
 
-    labels = sorted(y_true.unique())
-    cm = confusion_matrix(y_true, y_pred, labels=labels)
-    cm_df = pd.DataFrame(cm, index=labels, columns=labels)
+    if len(labels) == 1:
+        cm_df = pd.DataFrame(
+            [[int(((y_true == labels[0]) & (y_pred == labels[0])).sum())]],
+            index=labels,
+            columns=labels,
+        )
+    else:
+        cm = confusion_matrix(y_true, y_pred, labels=labels)
+        cm_df = pd.DataFrame(cm, index=labels, columns=labels)
     logger.info("Confusion matrix:\n%s", cm_df)
 
     # Save text report

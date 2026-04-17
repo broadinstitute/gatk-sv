@@ -1,0 +1,28 @@
+{
+  "max_sites_per_bin": 16,
+  "n_bins": 2823,
+  "n_samples": 12,
+  "sample_ids": [
+    "HG00150",
+    "HG00239",
+    "HG00288",
+    "HG00337",
+    "HG00349",
+    "HG00410",
+    "HG00096",
+    "HG00129",
+    "HG00140",
+    "HG00187",
+    "HG00277",
+    "HG00375"
+  ],
+  "source_run": "/Users/markw/Work/talkowski/sv-pipe-testing/mw_ploidy/gatk-sv-ploidy/site_depth",
+  "spec": "large",
+  "target_chromosomes": [
+    "chr13",
+    "chr18",
+    "chr21",
+    "chrX",
+    "chrY"
+  ]
+}

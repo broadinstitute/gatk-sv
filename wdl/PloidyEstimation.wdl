@@ -8,9 +8,14 @@ workflow Ploidy {
     File reference_dict
     String batch
     Array[File] sparse_sd_files
+    File? truth_json
     String? plot_highlight_sample
+    String? preprocess_args
     String? model_args
     String? plot_args
+    File? poor_regions
+    Float min_poor_region_coverage = 0.5
+    Boolean enable_ppd = false
     String gatk_docker
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_score
@@ -32,9 +37,14 @@ workflow Ploidy {
       ploidy_matrix = CondenseDepthMatrix.out,
       batch = batch,
       sparse_sd_files = sparse_sd_files,
+      truth_json = truth_json,
       plot_highlight_sample = plot_highlight_sample,
+      preprocess_args = preprocess_args,
       model_args = model_args,
       plot_args = plot_args,
+      poor_regions = poor_regions,
+      min_poor_region_coverage = min_poor_region_coverage,
+      enable_ppd = enable_ppd,
       sv_pipeline_qc_docker = sv_pipeline_qc_docker,
       runtime_attr_override = runtime_attr_score
   }
@@ -113,9 +123,14 @@ task PloidyScore {
     File ploidy_matrix
     String batch
     Array[File] sparse_sd_files
+    File? truth_json
     String? plot_highlight_sample
+    String? preprocess_args
     String? model_args
     String? plot_args
+    File? poor_regions
+    Float min_poor_region_coverage
+    Boolean enable_ppd
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -135,7 +150,7 @@ task PloidyScore {
   }
   
   command <<<
-    set -euxo pipefail
+    set -euo pipefail
 
     OUTDIR="./~{batch}_ploidy"
     mkdir -p "${OUTDIR}"
@@ -155,9 +170,14 @@ task PloidyScore {
       --input-depth ~{ploidy_matrix} \
       --work-dir ${OUTDIR} \
       ${SD_ARGS} \
-      ~{"--model-args " + model_args} \
-      ~{"--plot-args " + plot_args} \
-      ~{"--highlight-sample " + plot_highlight_sample}
+      ~{if defined(truth_json) then "--truth-json " + truth_json else ""} \
+      ~{if defined(preprocess_args) then "--preprocess-args " + preprocess_args else ""} \
+      ~{if defined(model_args) then "--model-args " + model_args else ""} \
+      ~{if defined(plot_args) then "--plot-args " + plot_args else ""} \
+      ~{if defined(poor_regions) then "--poor-regions " + poor_regions else ""} \
+      --min-poor-region-coverage ~{min_poor_region_coverage} \
+      ~{if enable_ppd then "--ppd" else ""} \
+      ~{if defined(plot_highlight_sample) then "--highlight-sample " + plot_highlight_sample else ""}
 
     # Package all outputs
     tar -zcf ~{batch}_ploidy.tar.gz "${OUTDIR}"

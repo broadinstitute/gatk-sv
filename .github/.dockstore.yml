@@ -282,3 +282,12 @@ workflows:
         - mw_ploidy
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: Ploidy
+    primaryDescriptorPath: /wdl/PloidyEstimation.wdl
+    filters:
+      branches:
+        - mw_ploidy
+      tags:
+        - /.*/

@@ -33,3 +33,11 @@ gatk-sv-ploidy = "gatk_sv_ploidy.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+markers = [
+    "integration: exercises multiple pipeline stages with filesystem artifacts",
+    "large: uses the larger real-data fixture and runs longer than the medium tier",
+]
+testpaths = ["tests"]

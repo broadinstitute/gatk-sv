@@ -2,7 +2,7 @@
 # run_ploidy.sh — run the full gatk-sv-ploidy pipeline
 #
 # Usage:
-#   ./run_ploidy.sh <output_dir>
+#   ./run_ploidy.sh --input-depth PATH --work-dir DIR [options]
 #
 # Required constants (configured via CLI args):
 #   --input-depth  : raw bins × samples depth TSV (may be gzipped) (required)
@@ -145,7 +145,7 @@ echo "  Work dir         : ${WORK_DIR}"
 echo ""
 
 # ── step 1: preprocess ───────────────────────────────────────────────────────
-echo "[1/5] preprocess"
+echo "[1/${TOTAL_STEPS}] preprocess"
 SD_ARGS=""
 if [[ -n "${SITE_DEPTH_LIST}" ]]; then
     SD_ARGS="--site-depth-list ${SITE_DEPTH_LIST}"
@@ -183,12 +183,17 @@ fi
 
 # ── step 3: call ─────────────────────────────────────────────────────────────
 echo "[3/${TOTAL_STEPS}] call"
+CALL_ARGS=""
+if [[ -n "${TRUTH_JSON}" ]]; then
+    CALL_ARGS="--truth-json ${TRUTH_JSON}"
+fi
 if [[ "${DRY_RUN}" == "true" ]]; then
-    echo "DRY-RUN: gatk-sv-ploidy call -c \"${CHROM_STATS}\" -o \"${CALL_DIR}\""
+    echo "DRY-RUN: gatk-sv-ploidy call -c \"${CHROM_STATS}\" -o \"${CALL_DIR}\" ${CALL_ARGS}"
 else
     gatk-sv-ploidy call \
         -c "${CHROM_STATS}" \
-        -o "${CALL_DIR}"
+        -o "${CALL_DIR}" \
+        $CALL_ARGS
 fi
 
 # ── step 4: posterior predictive checks (optional) ──────────────────────────
@@ -219,8 +224,12 @@ PLOT_PPD_ARGS=""
 if [[ "${ENABLE_PPD}" == "true" ]]; then
     PLOT_PPD_ARGS="--ppd-bin-summary ${PPD_BIN_SUMMARY} --ppd-chr-summary ${PPD_CHR_SUMMARY}"
 fi
+PLOT_SITE_ARGS=""
+if [[ -f "${SITE_DATA}" ]]; then
+    PLOT_SITE_ARGS="--site-data ${SITE_DATA}"
+fi
 if [[ "${DRY_RUN}" == "true" ]]; then
-    echo "DRY-RUN: gatk-sv-ploidy plot -c \"${CHROM_STATS}\" -b \"${BIN_STATS}\" -t \"${TRAINING_LOSS}\" -s \"${PREDICTIONS}\" -o \"${PLOT_DIR}\" ${PLOT_PPD_ARGS}"
+    echo "DRY-RUN: gatk-sv-ploidy plot -c \"${CHROM_STATS}\" -b \"${BIN_STATS}\" -t \"${TRAINING_LOSS}\" -s \"${PREDICTIONS}\" -o \"${PLOT_DIR}\" ${PLOT_SITE_ARGS} ${PLOT_PPD_ARGS}"
 else
     # Include highlight sample if provided
     if [[ -n "${HIGHLIGHT_SAMPLE}" ]]; then
@@ -230,6 +239,7 @@ else
             -t "${TRAINING_LOSS}" \
             -s "${PREDICTIONS}" \
             -o "${PLOT_DIR}" \
+            $PLOT_SITE_ARGS \
             --highlight-sample "${HIGHLIGHT_SAMPLE}" \
             $PLOT_PPD_ARGS \
             $PLOT_ARGS
@@ -240,6 +250,7 @@ else
             -t "${TRAINING_LOSS}" \
             -s "${PREDICTIONS}" \
             -o "${PLOT_DIR}" \
+            $PLOT_SITE_ARGS \
             $PLOT_PPD_ARGS \
             $PLOT_ARGS
     fi

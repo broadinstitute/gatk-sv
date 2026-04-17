@@ -175,20 +175,23 @@ def build_bin_stats(
         # All-sites stats
         n_sites_arr = sm.sum(axis=1).astype(int)   # (n_bins, n_samples)
         af_sum_arr = (site_af * sm).sum(axis=1)    # (n_bins, n_samples)
-        mean_af_arr = np.where(
-            n_sites_arr > 0, af_sum_arr / n_sites_arr, np.nan,
+        mean_af_arr = np.full(n_sites_arr.shape, np.nan, dtype=np.float64)
+        np.divide(
+            af_sum_arr,
+            n_sites_arr,
+            out=mean_af_arr,
+            where=n_sites_arr > 0,
         )
         # Het-only stats: alt count above threshold AND AF in het range
-        het_mask = (
-            sm
-            & (sa >= min_het_alt)
-            & (site_af >= min_het_af)
-            & (site_af <= max_het_af)
-        )
+        het_mask = sm & (sa >= min_het_alt) & (site_af >= min_het_af) & (site_af <= max_het_af)
         n_het_arr = het_mask.sum(axis=1).astype(int)
         het_af_sum = (site_af * het_mask).sum(axis=1)
-        mean_het_af_arr = np.where(
-            n_het_arr > 0, het_af_sum / n_het_arr, np.nan,
+        mean_het_af_arr = np.full(n_het_arr.shape, np.nan, dtype=np.float64)
+        np.divide(
+            het_af_sum,
+            n_het_arr,
+            out=mean_het_af_arr,
+            where=n_het_arr > 0,
         )
 
     rows: list[dict] = []
@@ -269,12 +272,7 @@ def build_chromosome_stats(
         site_af = sa / np.maximum(st, 1)
         n_sites_per_bin = sm.sum(axis=1).astype(int)   # (n_bins, n_samples)
         af_sum_per_bin = (site_af * sm).sum(axis=1)    # (n_bins, n_samples)
-        het_mask = (
-            sm
-            & (sa >= min_het_alt)
-            & (site_af >= min_het_af)
-            & (site_af <= max_het_af)
-        )
+        het_mask = sm & (sa >= min_het_alt) & (site_af >= min_het_af) & (site_af <= max_het_af)
         n_het_per_bin = het_mask.sum(axis=1).astype(int)
         het_af_sum_per_bin = (site_af * het_mask).sum(axis=1)
 
