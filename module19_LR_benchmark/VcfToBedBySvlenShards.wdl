@@ -4,7 +4,7 @@ import "Structs.wdl"
 
 workflow VcfToBedBySvlenShards {
   input {
-    File input_vcf
+    File input_vcf  # Accepts VCF.gz, BCF, or uncompressed VCF. Format is auto-detected from file extension.
     File vcf_to_bed_script
 
     Int variants_per_shard = 100000
@@ -85,17 +85,39 @@ task SplitVcfByVariantCount {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
+    # Install bcftools if needed (for BCF format support)
+    which bcftools > /dev/null 2>&1 || (apt-get update && apt-get install -y bcftools)
+    
     set -euo pipefail
 
     python3 << 'PY'
 import gzip
+import subprocess
+import os
 
 input_vcf = "~{input_vcf}"
 prefix = "~{output_prefix}"
 chunk_size = int("~{variants_per_shard}")
 
-def open_text(path, mode):
-    return gzip.open(path, mode) if path.endswith('.gz') else open(path, mode)
+# Detect format based on file extension
+input_format = "unknown"
+if input_vcf.endswith('.bcf'):
+    input_format = "bcf"
+elif input_vcf.endswith('.vcf.gz'):
+    input_format = "vcf.gz"
+elif input_vcf.endswith('.vcf'):
+    input_format = "vcf"
+
+def open_text(path, mode, file_format):
+    """Open file in text mode, handling gzip and bcf formats"""
+    if file_format == "bcf":
+        # Use bcftools to convert BCF to uncompressed VCF stream
+        proc = subprocess.Popen(['bcftools', 'view', path], stdout=subprocess.PIPE, text=True)
+        return proc.stdout
+    elif file_format == "vcf.gz":
+        return gzip.open(path, mode)
+    else:  # vcf or unknown
+        return open(path, mode)
 
 header_lines = []
 shard_idx = 0
@@ -103,7 +125,7 @@ records_in_shard = 0
 records_total = 0
 out = None
 
-with open_text(input_vcf, 'rt') as fh:
+with open_text(input_vcf, 'rt', input_format) as fh:
     for line in fh:
         if line.startswith('#'):
             header_lines.append(line)
@@ -132,7 +154,7 @@ elif records_total == 0:
         for h in header_lines:
             out_empty.write(h)
 
-print({"records_total": records_total, "shards": max(1, shard_idx)})
+print({"records_total": records_total, "shards": max(1, shard_idx), "input_format": input_format})
 PY
   >>>
 
