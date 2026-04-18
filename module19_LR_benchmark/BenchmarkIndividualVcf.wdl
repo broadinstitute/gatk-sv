@@ -42,8 +42,8 @@ workflow BenchmarkIndividualVcf{
         String sv_base_mini_docker
         String sv_pipeline_base_docker
 
-        Boolean split_multiallelic_query = true
-        Boolean split_multiallelic_ref = true
+        Boolean run_split_multiallelic_query = true
+        Boolean run_split_multiallelic_ref = true
 
         RuntimeAttr? runtime_attr_split_multiallelic
     }
@@ -71,7 +71,7 @@ workflow BenchmarkIndividualVcf{
                 docker_image = sv_pipeline_base_docker  
             }
 
-        if (split_multiallelic_query) {
+        if (run_split_multiallelic_query) {
           call SplitMultiallelicVcf.SplitMultiallelicVcf as split_multiallelic_query{
               input:
                   vcf_gz       = extract_chrom_variants_query.chr_vcf,
@@ -82,7 +82,7 @@ workflow BenchmarkIndividualVcf{
           }
         }
 
-        if (split_multiallelic_ref) {
+        if (run_split_multiallelic_ref) {
           call SplitMultiallelicVcf.SplitMultiallelicVcf as split_multiallelic_ref{
               input:
                   vcf_gz       = extract_chrom_variants_ref.chr_vcf,
