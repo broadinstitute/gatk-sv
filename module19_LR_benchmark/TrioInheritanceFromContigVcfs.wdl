@@ -10,6 +10,7 @@ workflow TrioInheritanceFromContigVcfs {
     File split_trv_by_motifs_script
     File count_trio_script
     File analyze_inheritance_script
+    File aggregate_rates_script
     File trio_table_tsv
 
     Boolean pass_only = false
@@ -18,6 +19,7 @@ workflow TrioInheritanceFromContigVcfs {
 
     RuntimeAttr? runtime_attr_process_contig
     RuntimeAttr? runtime_attr_aggregate_subset
+    RuntimeAttr? runtime_attr_aggregate_rates
   }
 
   scatter (i in range(length(contig_vcfs))) {
@@ -119,7 +121,76 @@ workflow TrioInheritanceFromContigVcfs {
       runtime_attr_override  = runtime_attr_aggregate_subset
   }
 
+  # Non-TR subsets (no TRV in ID, no TRID in INFO)
+  call AggregateSubsetSummary as aggregate_non_tr_snv {
+    input:
+      summary_files          = ProcessContigVcf.summary_non_tr_snv,
+      subset_name            = "non_tr_snv",
+      output_prefix          = output_prefix,
+      python_docker          = python_docker,
+      runtime_attr_override  = runtime_attr_aggregate_subset
+  }
+
+  call AggregateSubsetSummary as aggregate_non_tr_del_1_49 {
+    input:
+      summary_files          = ProcessContigVcf.summary_non_tr_del_1_49,
+      subset_name            = "non_tr_del_1_49",
+      output_prefix          = output_prefix,
+      python_docker          = python_docker,
+      runtime_attr_override  = runtime_attr_aggregate_subset
+  }
+
+  call AggregateSubsetSummary as aggregate_non_tr_del_50plus {
+    input:
+      summary_files          = ProcessContigVcf.summary_non_tr_del_50plus,
+      subset_name            = "non_tr_del_50plus",
+      output_prefix          = output_prefix,
+      python_docker          = python_docker,
+      runtime_attr_override  = runtime_attr_aggregate_subset
+  }
+
+  call AggregateSubsetSummary as aggregate_non_tr_ins_1_49 {
+    input:
+      summary_files          = ProcessContigVcf.summary_non_tr_ins_1_49,
+      subset_name            = "non_tr_ins_1_49",
+      output_prefix          = output_prefix,
+      python_docker          = python_docker,
+      runtime_attr_override  = runtime_attr_aggregate_subset
+  }
+
+  call AggregateSubsetSummary as aggregate_non_tr_ins_50plus {
+    input:
+      summary_files          = ProcessContigVcf.summary_non_tr_ins_50plus,
+      subset_name            = "non_tr_ins_50plus",
+      output_prefix          = output_prefix,
+      python_docker          = python_docker,
+      runtime_attr_override  = runtime_attr_aggregate_subset
+  }
+
+  # Aggregate inheritance rates across all subsets
+  call AggregateTrioInheritanceRates {
+    input:
+      aggregate_rates_script = aggregate_rates_script,
+      summary_files          = [
+        aggregate_trv.merged_summary,
+        aggregate_non_trv_snv.merged_summary,
+        aggregate_non_trv_del_lt50.merged_summary,
+        aggregate_non_trv_del_ge50.merged_summary,
+        aggregate_non_trv_ins_lt50.merged_summary,
+        aggregate_non_trv_ins_ge50.merged_summary,
+        aggregate_non_tr_snv.merged_summary,
+        aggregate_non_tr_del_1_49.merged_summary,
+        aggregate_non_tr_del_50plus.merged_summary,
+        aggregate_non_tr_ins_1_49.merged_summary,
+        aggregate_non_tr_ins_50plus.merged_summary
+      ],
+      output_prefix          = output_prefix,
+      python_docker          = python_docker,
+      runtime_attr_override  = runtime_attr_aggregate_rates
+  }
+
   output {
+    # Per-contig summaries
     Array[File] contig_summary_trv = ProcessContigVcf.summary_trv
     Array[File] contig_summary_non_trv_snv = ProcessContigVcf.summary_non_trv_snv
     Array[File] contig_summary_non_trv_ins_lt50 = ProcessContigVcf.summary_non_trv_ins_lt50
@@ -129,7 +200,13 @@ workflow TrioInheritanceFromContigVcfs {
     Array[File] contig_summary_trv_motif_1bp = ProcessContigVcf.summary_trv_motif_1bp
     Array[File] contig_summary_trv_motif_2bp = ProcessContigVcf.summary_trv_motif_2bp
     Array[File] contig_summary_trv_motif_rest = ProcessContigVcf.summary_trv_motif_rest
+    Array[File] contig_summary_non_tr_snv = ProcessContigVcf.summary_non_tr_snv
+    Array[File] contig_summary_non_tr_del_1_49 = ProcessContigVcf.summary_non_tr_del_1_49
+    Array[File] contig_summary_non_tr_del_50plus = ProcessContigVcf.summary_non_tr_del_50plus
+    Array[File] contig_summary_non_tr_ins_1_49 = ProcessContigVcf.summary_non_tr_ins_1_49
+    Array[File] contig_summary_non_tr_ins_50plus = ProcessContigVcf.summary_non_tr_ins_50plus
 
+    # Across-contig merged summaries
     File merged_summary_trv = aggregate_trv.merged_summary
     File merged_summary_non_trv_snv = aggregate_non_trv_snv.merged_summary
     File merged_summary_non_trv_ins_lt50 = aggregate_non_trv_ins_lt50.merged_summary
@@ -139,6 +216,14 @@ workflow TrioInheritanceFromContigVcfs {
     File merged_summary_trv_motif_1bp = aggregate_trv_motif_1bp.merged_summary
     File merged_summary_trv_motif_2bp = aggregate_trv_motif_2bp.merged_summary
     File merged_summary_trv_motif_rest = aggregate_trv_motif_rest.merged_summary
+    File merged_summary_non_tr_snv = aggregate_non_tr_snv.merged_summary
+    File merged_summary_non_tr_del_1_49 = aggregate_non_tr_del_1_49.merged_summary
+    File merged_summary_non_tr_del_50plus = aggregate_non_tr_del_50plus.merged_summary
+    File merged_summary_non_tr_ins_1_49 = aggregate_non_tr_ins_1_49.merged_summary
+    File merged_summary_non_tr_ins_50plus = aggregate_non_tr_ins_50plus.merged_summary
+
+    # Aggregated inheritance rates
+    File aggregated_rates = AggregateTrioInheritanceRates.aggregated_rates
   }
 }
 
@@ -183,7 +268,7 @@ task ProcessContigVcf {
       --input ~{contig_vcf} \
       --out-prefix ~{subset_prefix}
 
-    for subset in trv non_trv.snv non_trv.ins_lt50 non_trv.del_lt50 non_trv.ins_ge50 non_trv.del_ge50; do
+    for subset in trv non_trv.snv non_trv.ins_lt50 non_trv.del_lt50 non_trv.ins_ge50 non_trv.del_ge50 non_tr.snv non_tr.del_1_49 non_tr.del_50plus non_tr.ins_1_49 non_tr.ins_50plus; do
       subset_vcf="~{subset_prefix}.${subset}.vcf.gz"
       pattern_out="~{subset_prefix}.${subset}.inheritance.tsv"
       summary_out="~{subset_prefix}.${subset}.summary.tsv"
@@ -230,6 +315,11 @@ task ProcessContigVcf {
     File summary_trv_motif_1bp = subset_prefix + ".trv.motif_1bp.summary.tsv"
     File summary_trv_motif_2bp = subset_prefix + ".trv.motif_2bp.summary.tsv"
     File summary_trv_motif_rest = subset_prefix + ".trv.motif_rest.summary.tsv"
+    File summary_non_tr_snv = subset_prefix + ".non_tr.snv.summary.tsv"
+    File summary_non_tr_del_1_49 = subset_prefix + ".non_tr.del_1_49.summary.tsv"
+    File summary_non_tr_del_50plus = subset_prefix + ".non_tr.del_50plus.summary.tsv"
+    File summary_non_tr_ins_1_49 = subset_prefix + ".non_tr.ins_1_49.summary.tsv"
+    File summary_non_tr_ins_50plus = subset_prefix + ".non_tr.ins_50plus.summary.tsv"
   }
 
   runtime {
@@ -314,6 +404,61 @@ PY
 
   output {
     File merged_summary = out_file
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: python_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+task AggregateTrioInheritanceRates {
+  input {
+    File aggregate_rates_script
+    Array[File] summary_files
+    String output_prefix
+    String python_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 4,
+    disk_gb: 20,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  String out_file = output_prefix + ".inheritance_rates.all_subsets.tsv"
+
+  command <<<
+    set -euo pipefail
+
+    # Copy all summary files to working directory with proper naming
+    for file in ~{sep=' ' summary_files}; do
+      basename="$(basename "$file" .tsv)"
+      # Extract subset name by looking for pattern like "xxx.across_contigs.summary"
+      subset_name=$(echo "$basename" | sed 's/.*\.\([^.]*\)\.across_contigs\.summary/\1/')
+      cp "$file" "summary_$subset_name.across_contigs.summary.tsv"
+    done
+
+    python3 ~{aggregate_rates_script} \
+      --input-dir . \
+      --output ~{out_file} \
+      --subsets trv non_trv.snv non_trv.del_lt50 non_trv.del_ge50 non_trv.ins_lt50 non_trv.ins_ge50 non_tr.snv non_tr.del_1_49 non_tr.del_50plus non_tr.ins_1_49 non_tr.ins_50plus
+
+  >>>
+
+  output {
+    File aggregated_rates = out_file
   }
 
   runtime {

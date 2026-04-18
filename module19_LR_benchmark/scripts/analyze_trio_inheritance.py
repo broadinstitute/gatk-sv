@@ -15,7 +15,8 @@ Categories:
     - paternal_inheritance_error : father must transmit alt, child has too few alts
     - maternal_inheritance_error : mother must transmit alt, child has too few alts
     - error_from_either_side     : both parents must transmit alt, child has too few alts
-    - corrected_inherited        : Mendelian-consistent informative site
+    - corrected_inherited        : both child alleles known and traceable one-to-father, one-to-mother
+    - missing_allele_uninformative: no Mendelian error detected but cannot fully trace child alleles
     - filtered_no_reliable_alt   : excluded from summary counts
 
 Usage:
@@ -58,6 +59,29 @@ def has_reliable_alt(gt):
 
 def has_any_missing(gt):
     return '.' in parse_alleles(gt)
+
+
+def known_alleles(gt):
+    """Return list of non-'.' alleles in a genotype."""
+    return [a for a in parse_alleles(gt) if a != '.']
+
+
+def _can_trace_both_alleles(father_gt, mo_gt, child_gt):
+    """Return True iff both child alleles are known (no '.') and can be assigned
+    one-to-father and one-to-mother using only known (non-'.') parental alleles."""
+    child_alleles = parse_alleles(child_gt)
+    if '.' in child_alleles:
+        return False
+    father_known = known_alleles(father_gt)
+    mother_known = known_alleles(mo_gt)
+    if not father_known or not mother_known:
+        return False
+    a, b = child_alleles
+    if a in father_known and b in mother_known:
+        return True
+    if b in father_known and a in mother_known:
+        return True
+    return False
 
 
 def alt_copy_range(gt):
@@ -114,7 +138,9 @@ def classify(father_gt, mo_gt, child_gt):
             return 'maternal_inheritance_error'
         return 'error_from_either_side'
 
-    return 'corrected_inherited'
+    if _can_trace_both_alleles(father_gt, mo_gt, child_gt):
+        return 'corrected_inherited'
+    return 'missing_allele_uninformative'
 
 
 SUMMARY_CATEGORIES = [
@@ -123,6 +149,7 @@ SUMMARY_CATEGORIES = [
     'maternal_inheritance_error',
     'error_from_either_side',
     'corrected_inherited',
+    'missing_allele_uninformative',
 ]
 
 
