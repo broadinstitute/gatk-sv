@@ -58,10 +58,12 @@ task CollectVidsPerSample {
 
         mkdir -p ~{outdirprefix}
 
+        gq_fmt=$(bcftools view -h ~{vcf} | grep -q '##FORMAT=<ID=GQ' && echo '%GQ' || echo 'NA')
+
         bcftools view -S ~{samples_list} ~{vcf} \
             | bcftools +fill-tags -- -t AC \
             | bcftools view -i 'SVTYPE=="CNV" || AC>0' \
-            | bcftools query -f '[%SAMPLE\t%ID\t%ALT\t%GT\t%GQ\n]' \
+            | bcftools query -f "[%SAMPLE\t%ID\t%ALT\t%GT\t${gq_fmt}\n]" \
             | awk '{OFS="\t"; gt = $4; gq = $5; if (gq == ".") { gq = 99 }; if ($3 ~ /CN0/) { if ($4 == "0/2") { gt = "0/0" } else if ($4 == "0/1" || $4 == "0/3") { gt = "0/1" } else { gt = "1/1"} }; print $1, $2, gt, gq}' \
             | awk -v outprefix="~{outdirprefix}" '$3 != "0/0" && $3 != "./." {OFS="\t"; print $2, $3, $4 >> outprefix"/"$1".VIDs_genotypes.txt" }'
 

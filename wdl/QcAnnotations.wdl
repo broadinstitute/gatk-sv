@@ -296,22 +296,22 @@ task PlotQcVcfWide {
     }
 
     RuntimeAttr runtime_default = object {
-        mem_gb: 3.75,
-        disk_gb: 20,
         cpu_cores: 1,
+        mem_gb: 4,
+        disk_gb: 20,
+        boot_disk_gb: 10,
         preemptible_tries: 1,
-        max_retries: 0,
-        boot_disk_gb: 10
+        max_retries: 0
     }
     RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
     runtime {
-        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
         cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+        memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+        docker: sv_pipeline_qc_docker
         preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
         maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-        docker: sv_pipeline_qc_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
     }
 }
 
