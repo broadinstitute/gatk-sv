@@ -100,22 +100,23 @@ def classify_variant(variant_id, ref, alt_field, info_dict=None):
 
     allele_type = next(iter(cats))
 
-    lengths = {size for t, size in per_alt if size is not None}
-    if len(lengths) != 1:
-        return None
-    allele_length = next(iter(lengths)) if allele_type != 'SNV' else None
-    
     # Choose prefix: 'non_tr' if no TRID, else 'non_trv'
     prefix = 'non_tr' if not has_trid else 'non_trv'
     
     if allele_type == 'SNV':
         return f'{prefix}_snv'
-    elif allele_type == 'INS':
+
+    lengths = {size for t, size in per_alt if size is not None}
+    if len(lengths) != 1:
+        return None
+    allele_length = next(iter(lengths))
+
+    if allele_type == 'INS':
         if prefix == 'non_trv':
             return 'non_trv_ins_lt50' if allele_length < 50 else 'non_trv_ins_ge50'
         else:
             return 'non_tr_ins_1_49' if allele_length < 50 else 'non_tr_ins_50plus'
-    elif allele_type == 'DEL':
+    if allele_type == 'DEL':
         if prefix == 'non_trv':
             return 'non_trv_del_lt50' if allele_length < 50 else 'non_trv_del_ge50'
         else:

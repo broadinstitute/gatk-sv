@@ -266,6 +266,13 @@ def write_summary(out_path, counts, totals, meta):
         out.write("\t".join(grand) + "\n")
 
 
+def write_unclassified_consequences(out_path, unclassified_counts):
+    with open(out_path, "wt") as out:
+        out.write("consequence\tcount\n")
+        for term, n in sorted(unclassified_counts.items(), key=lambda kv: (-kv[1], kv[0])):
+            out.write(f"{term}\t{n}\n")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=(
@@ -275,6 +282,14 @@ def main():
     )
     parser.add_argument("--input", required=True, help="Input VCF/VCF.GZ")
     parser.add_argument("--output", required=True, help="Output TSV summary")
+    parser.add_argument(
+        "--unclassified-output",
+        default="",
+        help=(
+            "Optional output TSV for unclassified VEP consequences. "
+            "Default: <output>.unclassified_consequences.tsv"
+        ),
+    )
     parser.add_argument("--vep-key", default="vep", help="INFO key for VEP annotations (default: vep)")
     parser.add_argument(
         "--max-records",
@@ -291,6 +306,7 @@ def main():
     skipped_non_target_alleles = 0
     processed_variant_alleles = 0
     record_seen = 0
+    unclassified_counts = defaultdict(int)
 
     vep_fields = None
     allele_idx = None
@@ -352,6 +368,9 @@ def main():
                 counts[vclass][fclass] += 1
                 totals[fclass] += 1
                 processed_variant_alleles += 1
+                if fclass == "unclassified":
+                    unclassified_term = sev if sev is not None else "NO_VEP_CONSEQUENCE"
+                    unclassified_counts[unclassified_term] += 1
 
     meta = {
         "input_vcf": args.input,
@@ -362,7 +381,17 @@ def main():
     }
     write_summary(args.output, counts, totals, meta)
 
+    if args.unclassified_output:
+        unclassified_out = args.unclassified_output
+    elif args.output.endswith(".tsv"):
+        unclassified_out = args.output[:-4] + ".unclassified_consequences.tsv"
+    else:
+        unclassified_out = args.output + ".unclassified_consequences.tsv"
+
+    write_unclassified_consequences(unclassified_out, unclassified_counts)
+
     sys.stderr.write("Done. Wrote summary: %s\n" % args.output)
+    sys.stderr.write("Done. Wrote unclassified consequences: %s\n" % unclassified_out)
 
 
 if __name__ == "__main__":
