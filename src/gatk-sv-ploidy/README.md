@@ -9,6 +9,13 @@ Bayesian model (Pyro).
 pip install -e .
 ```
 
+The main package does not install Hail. If you need the local-only
+`pull-snps` helper, install its extra runtime dependencies separately:
+
+```bash
+pip install hail pysam
+```
+
 ## Usage
 
 ```bash
@@ -21,9 +28,11 @@ gatk-sv-ploidy <subcommand> [options]
 |-------------|-------------|
 | `preprocess` | Read and normalise depth data, filter low-quality bins |
 | `infer`      | Train Bayesian model and run discrete CN inference |
+| `ppd`        | Posterior predictive check: compare model predictions to data |
 | `call`       | Assign sex karyotype and aneuploidy type per sample |
 | `plot`       | Generate diagnostic and summary plots |
 | `eval`       | Evaluate predictions against a truth set |
+| `pull-snps`  | Pull common-SNP sites from gnomAD (requires Hail; local only) |
 
 Run `gatk-sv-ploidy <subcommand> --help` for subcommand-specific options.
 
@@ -31,22 +40,33 @@ Run `gatk-sv-ploidy <subcommand> --help` for subcommand-specific options.
 
 ```bash
 # 1. Preprocess raw depth data
-gatk-sv-ploidy preprocess -i depth.tsv -o out/
+gatk-sv-ploidy preprocess -i depth.tsv -o out/preprocess/
 
 # 2. Run Bayesian inference
-gatk-sv-ploidy infer -i out/preprocessed_depth.tsv -o out/
+gatk-sv-ploidy infer -i out/preprocess/preprocessed_depth.tsv -o out/infer/
 
-# 3. Call sex and aneuploidy types
-gatk-sv-ploidy call -c out/chromosome_stats.tsv -o out/
+# 3. Run posterior predictive checks
+gatk-sv-ploidy ppd -i out/preprocess/preprocessed_depth.tsv \
+  -a out/infer/inference_artifacts.npz -o out/ppd/
 
-# 4. Generate plots
-gatk-sv-ploidy plot -c out/chromosome_stats.tsv -o out/ \
-    --bin-stats out/bin_stats.tsv.gz --training-loss out/training_loss.tsv
+# 4. Call sex and aneuploidy types
+gatk-sv-ploidy call -c out/infer/chromosome_stats.tsv -o out/call/
 
-# 5. Evaluate against truth
-gatk-sv-ploidy eval -p out/aneuploidy_type_predictions.tsv \
-    -t truth.json -o out/
+# 5. Generate plots
+gatk-sv-ploidy plot -c out/infer/chromosome_stats.tsv -o out/plot/ \
+  --bin-stats out/infer/bin_stats.tsv.gz \
+  --training-loss out/infer/training_loss.tsv \
+  --ppd-bin-summary out/ppd/ppd_bin_summary.tsv.gz \
+  --ppd-chr-summary out/ppd/ppd_chromosome_summary.tsv
+
+# 6. Evaluate against truth
+gatk-sv-ploidy eval -p out/call/aneuploidy_type_predictions.tsv \
+  -t truth.json -o out/eval/
 ```
+
+`infer` uses a small additive background-depth prior by default
+(`--epsilon-mean 1e-2`). Pass `--epsilon-mean 0` to disable it and recover
+the older multiplicative-only depth model.
 
 ---
 
@@ -81,9 +101,19 @@ flowchart TD
         M --> SVI --> MAP --> DP
         DP --> CS["chromosome_stats.tsv"]
         DP --> BS["bin_stats.tsv.gz"]
+        MAP --> IA["inference_artifacts.npz"]
     end
 
-    subgraph "3. Call"
+    subgraph "3. PPD"
+        PPD["Posterior predictive\ndraws and summaries"]
+        PD --> PPD
+        SN -.-> PPD
+        IA --> PPD
+        PPD --> PB["ppd_bin_summary.tsv.gz"]
+        PPD --> PC["ppd_chromosome_summary.tsv"]
+    end
+
+    subgraph "4. Call"
         SC["Sex classification\n(chrX/chrY CN lookup)"]
         AC["Aneuploidy typing\n(rule-based)"]
         CS --> SC --> PR["aneuploidy_type_predictions.tsv"]
@@ -143,25 +173,50 @@ interpretable on a natural scale.
 
 Bins whose cross-sample statistics lie outside expected ranges are removed
 to eliminate mappability artefacts, centromeric noise, and collapse/expansion
-regions. For each bin $b$, define:
+regions. For autosomes, for each bin $b$, define:
 
 $$\mu_b = \operatorname{median}_s\{d_{bs}\}, \qquad
   \text{MAD}_b = \operatorname{median}_s\bigl\{|d_{bs} - \mu_b|\bigr\}$$
 
-Separate thresholds are applied per chromosome type because sex chromosomes
-have an inherently bimodal depth distribution (XX vs. XY samples):
+Autosomes are filtered with pooled cross-sample thresholds:
 
 | Chromosome type | Median range | MAD upper bound |
 |-----------------|:------------:|:---------------:|
-| Autosomes | $[1.0,\; 3.0]$ | $2.0$ |
-| chrX | $[0.0,\; 3.0]$ | $2.0$ |
-| chrY | $[0.0,\; 3.0]$ | $2.0$ |
+| Autosomes | $[1.5,\; 2.5]$ | $2.0$ |
+
+autosome-only because chrX and chrY expected depth depends on the cohort's
+Sex chromosomes are filtered differently because pooled chrX/chrY depth is
+inherently bimodal in mixed XX/XY cohorts. Preprocess first assigns each
+sample to a rough XX or XY depth group by whichever normalized chrX/chrY
+prototype it is closest to:
+
+- XX prototype: $(chrX, chrY) = (2, 0)$
+- XY prototype: $(chrX, chrY) = (1, 1)$
+
+Each chrX and chrY bin is then screened within those rough sex groups
+against the sex-specific expected normalized depth:
+
+| Chromosome | XX expected depth | XY expected depth |
+|------------|:-----------------:|:-----------------:|
+| chrX | $2.0$ | $1.0$ |
+| chrY | $0.0$ | $1.0$ |
+
+A sex-chromosome bin is removed when, within either inferred sex group,
+too many samples are farther than 0.3 from the expected depth, or when the
+within-group MAD exceeds the chromosome-specific MAD threshold.
+
+After the sex-chromosome pass, autosomal bins are additionally screened by
+a cohort-deviation filter: bins are removed when more than 75% of samples are
+farther than 0.3 from the expected diploid depth of 2.0.
 
 A post-filter check ensures at least 10 bins survive per chromosome;
 otherwise the run fails with a diagnostic message.
 
+By default, contigs with more than 30 surviving bins are then collapsed into
+contiguous length-weighted groups while retaining at least 30 bins per contig.
+
 **Justification.** The median/MAD pair is more robust to outliers than
-mean/std. The liberal autosome lower bound (1.0 rather than ~1.8) avoids
+mean/std. The liberal autosome lower bound (1.5 rather than ~1.8) avoids
 discarding real monosomic signal; the primary purpose is to remove
 zero-mappability and extreme-repeat bins.
 
@@ -185,9 +240,10 @@ is extracted using the known reference base, and:
 
 $$a_{bjs} = n_{bjs} - \text{ref\_count}_{bjs}$$
 
-where $n_{bjs} = A + C + G + T$ is the total depth. Sites with
-$n_{bjs} < 10$ (configurable) are discarded to suppress noise from
-low-coverage positions.
+where $n_{bjs} = A + C + G + T$ is the total depth. In fallback mode
+(`--known-sites` omitted), sites with low total depth are discarded to
+suppress noise from weakly covered positions; by default the CLI uses
+`--min-site-depth 3` for that mode.
 
 When no known-sites file is provided, a **fallback mode** uses every SD
 position with `pop_af = 0.5` and defines the alt count as
@@ -268,9 +324,9 @@ $$\alpha_c = \begin{cases}
 |-----------|:-------:|-----------|
 | $\alpha_{\text{ref}}$ | 50.0 | Strongly favours CN = 2 for most bins |
 | $\alpha_{\text{non-ref}}$ | 1.0 | Flat prior across non-reference states |
-| $\sigma_{\text{bias}}$ | 0.1 | Tight prior: bin biases close to 1.0 |
-| $\lambda_{\text{sample}}$ | 0.2 | Moderate per-sample noise |
-| $\lambda_{\text{bin}}$ | 0.2 | Moderate per-bin noise |
+| $\sigma_{\text{bias}}$ | 0.05 | Tight prior: bin biases close to 1.0 |
+| $\lambda_{\text{sample}}$ | 0.001 | Small default per-sample residual variance scale |
+| $\lambda_{\text{bin}}$ | 0.001 | Small default per-bin residual variance scale |
 
 **Justification.** In a typical WGS cohort, >99% of autosomal bins are
 diploid. Setting $\alpha_{\text{ref}} \gg \alpha_{\text{non-ref}}$ regularises
@@ -374,9 +430,11 @@ flowchart LR
     subgraph Variational family
         AD["AutoDelta\n(MAP point estimates)"]
         AN["AutoDiagonalNormal\n(mean-field Gaussian)"]
+        ALR["AutoLowRankMultivariateNormal\n(low-rank Gaussian)"]
     end
     AD --> SVI["SVI\n(Adam optimiser)"]
     AN --> SVI
+    ALR --> SVI
     SVI --> ELBO["TraceEnum_ELBO\n(discrete vars\nenumerated)"]
     ELBO --> CONV["Convergence\n(early stopping)"]
 ```
@@ -385,8 +443,9 @@ flowchart LR
 
 | Guide | Variational family | Use case |
 |-------|--------------------|----------|
-| `AutoDelta` | $q(\theta) = \delta(\theta - \hat\theta)$ | Fast MAP; no uncertainty |
-| `AutoDiagonalNormal` | $q(\theta) = \prod_i \mathcal{N}(\mu_i, \sigma_i^2)$ | Mean-field; captures variance |
+| `delta` | `AutoDelta`: $q(\theta) = \delta(\theta - \hat\theta)$ | Fast MAP; no uncertainty |
+| `diagonal` | `AutoDiagonalNormal`: $q(\theta) = \prod_i \mathcal{N}(\mu_i, \sigma_i^2)$ | Mean-field approximation |
+| `lowrank` | `AutoLowRankMultivariateNormal` | Captures some posterior correlation structure |
 
 **Learning rate schedule.** An exponential decay from `lr_init` to `lr_min`:
 

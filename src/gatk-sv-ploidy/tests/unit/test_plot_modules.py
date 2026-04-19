@@ -58,6 +58,7 @@ def _small_bin_df() -> pd.DataFrame:
                         "sample": sample,
                         "observed_depth": depth,
                         "cn_map": cn,
+                        "cnq": 10,
                         "bin_bias": 1.0,
                         "bin_var": 0.04,
                         "sample_var": 0.09 if sample == "S1" else 0.16,
@@ -179,11 +180,10 @@ def test_plot_detail_private_branches(tmp_path) -> None:
             "end": [100, 200],
             "observed_depth": [3.0, 3.1],
             "cn_map": [3, 3],
+            "cnq": [12, 18],
             "sample_var": [0.09, 0.09],
-            **{f"cn_prob_{i}": [0.01, 0.01] for i in range(6)},
         }
     )
-    no_af_sample["cn_prob_3"] = [0.95, 0.95]
     plot_sample_with_variance(
         no_af_sample,
         np.array([0.09, 0.16]),

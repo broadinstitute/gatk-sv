@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from gatk_sv_ploidy._util import add_chromosome_labels
+from gatk_sv_ploidy._util import add_chromosome_labels, compute_cnq_from_probabilities
 
 logger = logging.getLogger(__name__)
 
@@ -122,12 +122,16 @@ def _draw_site_af_scatter(
             s=1, alpha=0.15, color="#00897B",
             rasterized=True, zorder=2, linewidths=0,
         )
-        logger.info("  AF scatter: %d site points for %s",
-                     len(scatter_x), sample_data["sample"].iloc[0])
+        logger.info(
+            "  AF scatter: %d site points for %s",
+            len(scatter_x), sample_data["sample"].iloc[0],
+        )
 
     if roh_x:
-        logger.info("  AF scatter: %d homozygous bins for %s",
-                     len(roh_x), sample_data["sample"].iloc[0])
+        logger.info(
+            "  AF scatter: %d homozygous bins for %s",
+            len(roh_x), sample_data["sample"].iloc[0],
+        )
 
 
 def plot_sample_with_variance(
@@ -139,7 +143,7 @@ def plot_sample_with_variance(
     sample_idx_map: Optional[Dict[str, int]] = None,
     min_het_alt: int = 3,
 ) -> None:
-    """Multi-panel plot: depth + CN, optional AF scatter, CN posterior, sample-var histogram.
+    """Multi-panel plot: depth + CN, optional AF scatter, CNQ, sample-var histogram.
 
     When *site_data* is provided (the ``.npz`` from preprocessing), each
     individual SNP allele fraction is drawn as a translucent dot, giving a
@@ -171,17 +175,22 @@ def plot_sample_with_variance(
             has_site_scatter = True
 
     has_af = has_site_scatter or (
-        "mean_het_af" in sample_data.columns
-        and "n_het_sites" in sample_data.columns
-        and sample_data["n_het_sites"].sum() > 0
+        {"mean_het_af", "n_het_sites"}.issubset(sample_data.columns) and
+        sample_data["n_het_sites"].sum() > 0
     )
 
     obs = sample_data["observed_depth"].values
     cn_map = sample_data["cn_map"].values
     chrs = sample_data["chr"].values
-    probs = sample_data[
-        ["cn_prob_0", "cn_prob_1", "cn_prob_2", "cn_prob_3", "cn_prob_4", "cn_prob_5"]
-    ].values
+    if "cnq" in sample_data.columns:
+        cnq = sample_data["cnq"].to_numpy(dtype=float)
+    else:
+        prob_cols = [f"cn_prob_{i}" for i in range(6)]
+        if not set(prob_cols).issubset(sample_data.columns):
+            raise ValueError("Per-sample plots require either a 'cnq' column or CN posterior columns")
+        cnq = compute_cnq_from_probabilities(
+            sample_data[prob_cols].to_numpy(dtype=np.float64)
+        ).astype(float)
     svar = sample_data["sample_var"].iloc[0]
 
     x = _equal_width_x(chrs, len(obs))
@@ -242,14 +251,18 @@ def plot_sample_with_variance(
         ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.02), borderaxespad=0)
         ax.grid(True, axis="y", alpha=0.3)
 
-    # CN posterior stackplot (half height)
+    positive_diffs = np.diff(x)
+    positive_diffs = positive_diffs[positive_diffs > 0]
+    bar_width = 0.8 if positive_diffs.size == 0 else 0.9 * float(np.median(positive_diffs))
+
+    # CN quality bar plot (half height)
     ax = ax_cn_prob
-    ax.stackplot(x, probs.T, labels=[f"CN={i}" for i in range(6)],
-                 alpha=0.7, colors=_CN_COLORS)
-    ax.set_ylabel("Copy Number Probability")
-    ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.02), ncol=6, borderaxespad=0)
-    ax.set_ylim([0, 1])
-    ax.set_xlim([x.min(), x.max()])
+    ax.bar(x, cnq, width=bar_width, color="#546E7A", alpha=0.85,
+           linewidth=0, align="center")
+    ax.set_ylabel("CNQ")
+    ax.set_ylim([0, 99])
+    ax.set_xlim([x.min() - (bar_width / 2), x.max() + (bar_width / 2)])
+    ax.grid(True, axis="y", alpha=0.3)
 
     # Sample variance histogram (half height)
     ax = ax_hist

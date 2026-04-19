@@ -28,13 +28,20 @@ from pyro.infer import (
     config_enumerate,
     infer_discrete,
 )
-from pyro.infer.autoguide import AutoDelta, AutoDiagonalNormal
+from pyro.infer.autoguide import (
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoLowRankMultivariateNormal,
+)
 from tqdm import tqdm
 
 from gatk_sv_ploidy._util import DEFAULT_AF_CONCENTRATION, DEFAULT_AF_WEIGHT
 from gatk_sv_ploidy.data import DepthData
 
 logger = logging.getLogger(__name__)
+
+
+OBS_LIKELIHOODS = ("normal", "studentt", "laplace")
 
 
 # ── marginalized allele-fraction likelihood ─────────────────────────────────
@@ -261,13 +268,77 @@ def _precompute_af_table(
     return table
 
 
+def _normalize_obs_likelihood_name(name: str) -> str:
+    """Validate and normalize observation likelihood names."""
+    normalized = str(name).strip().lower()
+    if normalized not in OBS_LIKELIHOODS:
+        raise ValueError(
+            f"Unknown obs_likelihood: {name!r}. "
+            f"Choose one of {OBS_LIKELIHOODS}."
+        )
+    return normalized
+
+
+def _matched_residual_scale(
+    target_variance: torch.Tensor | np.ndarray | float,
+    obs_likelihood: str,
+    obs_df: float,
+) -> torch.Tensor | np.ndarray | float:
+    """Convert target variance to the scale parameter of the residual family."""
+    obs_likelihood = _normalize_obs_likelihood_name(obs_likelihood)
+    if obs_likelihood == "normal":
+        return target_variance ** 0.5
+    if obs_likelihood == "laplace":
+        return (target_variance / 2.0) ** 0.5
+    if obs_df <= 2.0:
+        raise ValueError("Student-t observation likelihood requires obs_df > 2.")
+    return (target_variance * (obs_df - 2.0) / obs_df) ** 0.5
+
+
+def _make_depth_distribution(
+    expected: torch.Tensor,
+    variance: torch.Tensor,
+    obs_likelihood: str,
+    obs_df: float,
+) -> dist.Distribution:
+    """Build the selected observation distribution with matched variance."""
+    scale = _matched_residual_scale(variance, obs_likelihood, obs_df)
+    if obs_likelihood == "normal":
+        return dist.Normal(expected, scale)
+    if obs_likelihood == "laplace":
+        return dist.Laplace(expected, scale)
+    return dist.StudentT(obs_df, loc=expected, scale=scale)
+
+
+def _depth_log_lik_numpy(
+    obs: np.ndarray,
+    expected: np.ndarray,
+    variance: np.ndarray,
+    obs_likelihood: str,
+    obs_df: float,
+) -> np.ndarray:
+    """Analytical residual log-likelihood matching the selected family."""
+    from scipy import stats as sp_stats
+
+    obs_likelihood = _normalize_obs_likelihood_name(obs_likelihood)
+    safe_variance = np.maximum(variance, 1e-10)
+    scale = _matched_residual_scale(safe_variance, obs_likelihood, obs_df)
+    if obs_likelihood == "normal":
+        return sp_stats.norm.logpdf(obs, loc=expected, scale=scale)
+    if obs_likelihood == "laplace":
+        return sp_stats.laplace.logpdf(obs, loc=expected, scale=scale)
+    return sp_stats.t.logpdf((obs - expected) / scale, df=obs_df) - np.log(scale)
+
+
 class CNVModel:
     """Hierarchical Bayesian model for whole-genome CN detection.
 
     The generative model uses a Dirichlet-Categorical prior over CN states
     (0–5), per-bin bias and variance, and per-sample variance.  Observed
-    normalised depth is drawn from a Normal likelihood whose mean is
-    ``CN × bin_bias`` and whose variance is ``bin_var + sample_var``.
+    normalised depth is drawn from a configurable observation likelihood
+    whose mean is ``CN × bin_bias + bin_epsilon`` and whose variance scales
+    with expected depth as
+    ``(bin_var + sample_var) × max(CN × bin_bias + bin_epsilon, 1e-3)``.
 
     When per-site allele data is provided, the model additionally includes
     a marginalized allele-fraction likelihood that jointly considers all
@@ -288,11 +359,15 @@ class CNVModel:
         Scale of the Exponential prior on per-sample variance.
     var_bin : float
         Scale of the Exponential prior on per-bin variance.
+    epsilon_mean : float
+        Mean of the Exponential prior on per-bin additive background depth.
+        Defaults to 1e-2. Set to 0 to disable the additive background term.
     device, dtype : str, torch.dtype
         Torch device and floating-point type.
     guide_type : str
         ``'delta'`` for :class:`AutoDelta` or ``'diagonal'`` for
-        :class:`AutoDiagonalNormal`.
+        :class:`AutoDiagonalNormal`, or ``'lowrank'`` for
+        :class:`AutoLowRankMultivariateNormal`.
     af_concentration : float
         Beta-Binomial concentration for the allele-fraction model.
     af_weight : float
@@ -311,9 +386,13 @@ class CNVModel:
         Weight of the per-bin sex–CN coupling factor.  Normalised by
         chromosome-type bin count so the total coupling per chromosome equals
         this value.  Set to 0 to disable the sex karyotype latent entirely.
+    obs_likelihood : str
+        Observation family for depth residuals: ``normal``, ``studentt``, or
+        ``laplace``.
+    obs_df : float
+        Degrees of freedom for the Student-t observation likelihood.
     """
 
-    # The list of continuous latent sites exposed to the guide.
     _latent_sites = ["bin_bias", "sample_var", "bin_var", "cn_probs"]
 
     def __init__(
@@ -321,18 +400,21 @@ class CNVModel:
         n_states: int = 6,
         alpha_ref: float = 50.0,
         alpha_non_ref: float = 1.0,
-        var_bias_bin: float = 0.1,
+        var_bias_bin: float = 0.05,
         var_sample: float = 0.2,
         var_bin: float = 0.2,
+        epsilon_mean: float = 1e-2,
         device: str = "cpu",
         dtype: torch.dtype = torch.float32,
-        guide_type: str = "diagonal",
+        guide_type: str = "delta",
         af_concentration: float = DEFAULT_AF_CONCENTRATION,
         af_weight: float = DEFAULT_AF_WEIGHT,
         alpha_sex_ref: float = 1.0,
         alpha_sex_non_ref: float = 1.0,
         sex_prior: tuple = (0.5, 0.5),
         sex_cn_weight: float = 3.0,
+        obs_likelihood: str = "normal",
+        obs_df: float = 3.5,
     ) -> None:
         self.n_states = n_states
         self.alpha_ref = alpha_ref
@@ -340,6 +422,7 @@ class CNVModel:
         self.var_bias_bin = var_bias_bin
         self.var_sample = var_sample
         self.var_bin = var_bin
+        self.epsilon_mean = epsilon_mean
         self.device = device
         self.dtype = dtype
         self.guide_type = guide_type
@@ -349,6 +432,18 @@ class CNVModel:
         self.alpha_sex_non_ref = alpha_sex_non_ref
         self.sex_prior = sex_prior
         self.sex_cn_weight = sex_cn_weight
+        self.obs_likelihood = _normalize_obs_likelihood_name(obs_likelihood)
+        self.obs_df = obs_df
+
+        if self.epsilon_mean < 0:
+            raise ValueError("epsilon_mean must be non-negative.")
+
+        if self.obs_likelihood == "studentt" and self.obs_df <= 2.0:
+            raise ValueError("Student-t observation likelihood requires obs_df > 2.")
+
+        self._latent_sites = list(self._latent_sites)
+        if self.epsilon_mean > 0:
+            self._latent_sites.append("bin_epsilon")
 
         # Per-chromosome-type Dirichlet alpha table: (3, n_states)
         # Row 0: autosomes — strong CN=2 prior
@@ -387,9 +482,12 @@ class CNVModel:
             self.guide = AutoDelta(blocked)
         elif guide_type == "diagonal":
             self.guide = AutoDiagonalNormal(blocked)
+        elif guide_type == "lowrank":
+            self.guide = AutoLowRankMultivariateNormal(blocked)
         else:
             raise ValueError(
-                f"Unknown guide_type: {guide_type!r}. Choose 'diagonal' or 'delta'."
+                f"Unknown guide_type: {guide_type!r}. "
+                "Choose 'delta', 'diagonal', or 'lowrank'."
             )
 
     # ── probabilistic model ─────────────────────────────────────────────
@@ -458,6 +556,12 @@ class CNVModel:
             bin_var = pyro.sample(
                 "bin_var", dist.Exponential(1.0 / self.var_bin)
             )
+            if self.epsilon_mean > 0:
+                bin_epsilon = pyro.sample(
+                    "bin_epsilon", dist.Exponential(1.0 / self.epsilon_mean)
+                )
+            else:
+                bin_epsilon = torch.zeros_like(bin_bias)
 
             # Dirichlet-Categorical CN prior — per-chromosome-type alphas
             if chr_type is not None:
@@ -472,9 +576,19 @@ class CNVModel:
         # Per-bin, per-sample observations
         with plate_bins, plate_samples:
             cn = pyro.sample("cn", dist.Categorical(cn_probs))
-            expected = Vindex(cn_states)[cn] * bin_bias
-            variance = sample_var + bin_var
-            pyro.sample("obs", dist.Normal(expected, variance.sqrt()), obs=depth)
+            expected = Vindex(cn_states)[cn] * bin_bias + bin_epsilon
+            base_variance = sample_var + bin_var
+            variance = base_variance * torch.clamp(expected, min=1e-3)
+            pyro.sample(
+                "obs",
+                _make_depth_distribution(
+                    expected,
+                    variance,
+                    self.obs_likelihood,
+                    self.obs_df,
+                ),
+                obs=depth,
+            )
 
             # ── sex–CN coupling factor ────────────────────────────────────────
             if self.sex_cn_weight > 0 and chr_type is not None:
@@ -645,9 +759,9 @@ class CNVModel:
         model_kw = self._model_kwargs(data)
 
         has_sex = (
-            self.sex_cn_weight > 0
-            and "chr_type" in model_kw
-            and model_kw["chr_type"] is not None
+            self.sex_cn_weight > 0 and
+            "chr_type" in model_kw and
+            model_kw["chr_type"] is not None
         )
         first_dim = -4 if has_sex else -3
 
@@ -659,7 +773,7 @@ class CNVModel:
         trace = poutine.trace(inferred).get_trace(**model_kw)
 
         estimates: Dict[str, np.ndarray] = {}
-        for site in ("bin_bias", "sample_var", "bin_var", "cn_probs"):
+        for site in self._latent_sites:
             estimates[site] = (
                 guide_trace.nodes[site]["value"].detach().cpu().numpy()
             )
@@ -701,9 +815,12 @@ class CNVModel:
 
         maps = map_estimates if map_estimates is not None else self.get_map_estimates(data)
 
-        bin_bias = np.asarray(maps["bin_bias"]).squeeze()
-        sample_var = np.asarray(maps["sample_var"]).squeeze()
-        bin_var = np.asarray(maps["bin_var"]).squeeze()
+        bin_bias = np.atleast_1d(np.asarray(maps["bin_bias"]).squeeze())
+        sample_var = np.atleast_1d(np.asarray(maps["sample_var"]).squeeze())
+        bin_var = np.atleast_1d(np.asarray(maps["bin_var"]).squeeze())
+        bin_epsilon = np.atleast_1d(
+            np.asarray(maps.get("bin_epsilon", np.zeros_like(bin_bias))).squeeze()
+        )
         cn_probs = np.asarray(maps["cn_probs"]).squeeze()
 
         if cn_probs.ndim == 1:
@@ -711,18 +828,21 @@ class CNVModel:
 
         obs = data.depth.detach().cpu().numpy()
 
-        variance = sample_var[np.newaxis, :] + bin_var[:, np.newaxis]
-        std = np.sqrt(np.maximum(variance, 1e-10))
+        base_variance = sample_var[np.newaxis, :] + bin_var[:, np.newaxis]
 
         cn_states = np.arange(self.n_states, dtype=obs.dtype).reshape(-1, 1, 1)
-        expected_depth = cn_states * bin_bias[np.newaxis, :, np.newaxis]
+        expected_depth = cn_states * bin_bias[np.newaxis, :, np.newaxis] + \
+            bin_epsilon[np.newaxis, :, np.newaxis]
+        variance = base_variance[np.newaxis, :, :] * np.maximum(expected_depth, 1e-3)
 
         obs_b = obs[np.newaxis, :, :]
-        std_b = std[np.newaxis, :, :]
-
-        log_lik = -0.5 * np.log(2 * np.pi * std_b ** 2) - (
-            (obs_b - expected_depth) ** 2
-        ) / (2 * std_b ** 2)
+        log_lik = _depth_log_lik_numpy(
+            obs_b,
+            expected_depth,
+            variance,
+            self.obs_likelihood,
+            self.obs_df,
+        )
 
         log_prior = np.log(np.maximum(cn_probs.T[:, :, np.newaxis], 1e-10))
         base_log_unnorm = log_lik + log_prior  # (n_states, n_bins, n_samples)
@@ -751,9 +871,9 @@ class CNVModel:
 
         # ── sex-aware marginalisation ────────────────────────────────
         has_sex = (
-            self.sex_cn_weight > 0
-            and hasattr(data, "chr_type")
-            and data.chr_type is not None
+            self.sex_cn_weight > 0 and
+            hasattr(data, "chr_type") and
+            data.chr_type is not None
         )
         if has_sex:
             chr_type_np = data.chr_type.cpu().numpy()
@@ -790,8 +910,8 @@ class CNVModel:
 
             # Posterior over sex per sample
             log_sex = (
-                np.log(np.maximum(sex_prior_np, 1e-10))[:, np.newaxis]
-                + log_evidence
+                np.log(np.maximum(sex_prior_np, 1e-10))[:, np.newaxis] +
+                log_evidence
             )
             mx_s = np.max(log_sex, axis=0, keepdims=True)
             sex_post = np.exp(log_sex - mx_s)
@@ -801,8 +921,8 @@ class CNVModel:
             cn_marginal = np.zeros((self.n_states, n_bins, n_samp))
             for s in range(2):
                 cn_marginal += (
-                    sex_post[s][np.newaxis, np.newaxis, :]
-                    * cn_post_given_sex[s]
+                    sex_post[s][np.newaxis, np.newaxis, :] *
+                    cn_post_given_sex[s]
                 )
 
             cn_posterior = np.transpose(cn_marginal, (1, 2, 0)).astype(

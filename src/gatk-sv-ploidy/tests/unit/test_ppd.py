@@ -35,6 +35,74 @@ def test_generate_ppd_depth_is_seeded(tiny_depth_df: pd.DataFrame) -> None:
     np.testing.assert_allclose(draws_one, draws_two)
 
 
+def test_generate_ppd_depth_supports_studentt_metadata(tiny_depth_df: pd.DataFrame) -> None:
+    data = DepthData(tiny_depth_df, clamp_threshold=None)
+    cn_post = _fake_cn_posterior(data.n_bins, data.n_samples, cn_state=2)
+    map_est_studentt = {
+        "bin_bias": np.full(data.n_bins, 1.0, dtype=np.float32),
+        "sample_var": np.full(data.n_samples, 0.1, dtype=np.float32),
+        "bin_var": np.full(data.n_bins, 0.05, dtype=np.float32),
+        "obs_likelihood": np.asarray("studentt"),
+        "obs_df": np.asarray(3.5, dtype=np.float32),
+    }
+    map_est_normal = {
+        "bin_bias": np.full(data.n_bins, 1.0, dtype=np.float32),
+        "sample_var": np.full(data.n_samples, 0.1, dtype=np.float32),
+        "bin_var": np.full(data.n_bins, 0.05, dtype=np.float32),
+        "obs_likelihood": np.asarray("normal"),
+        "obs_df": np.asarray(3.5, dtype=np.float32),
+    }
+
+    draws_studentt = generate_ppd_depth(
+        data,
+        map_est_studentt,
+        cn_post,
+        n_draws=12,
+        seed=11,
+    )
+    draws_normal = generate_ppd_depth(
+        data,
+        map_est_normal,
+        cn_post,
+        n_draws=12,
+        seed=11,
+    )
+
+    assert draws_studentt.shape == (12, data.n_bins, data.n_samples)
+    assert np.isfinite(draws_studentt).all()
+    assert not np.allclose(draws_studentt, draws_normal)
+
+
+def test_generate_ppd_depth_uses_bin_epsilon(tiny_depth_df: pd.DataFrame) -> None:
+    data = DepthData(tiny_depth_df.iloc[[3]], clamp_threshold=None)
+    cn_post = _fake_cn_posterior(data.n_bins, data.n_samples, cn_state=0)
+    base_map = {
+        "bin_bias": np.full(data.n_bins, 1.0, dtype=np.float32),
+        "sample_var": np.full(data.n_samples, 1e-4, dtype=np.float32),
+        "bin_var": np.full(data.n_bins, 1e-4, dtype=np.float32),
+    }
+
+    draws_without_epsilon = generate_ppd_depth(
+        data,
+        base_map,
+        cn_post,
+        n_draws=200,
+        seed=13,
+    )
+    draws_with_epsilon = generate_ppd_depth(
+        data,
+        {
+            **base_map,
+            "bin_epsilon": np.full(data.n_bins, 0.2, dtype=np.float32),
+        },
+        cn_post,
+        n_draws=200,
+        seed=13,
+    )
+
+    assert float(draws_with_epsilon.mean()) > float(draws_without_epsilon.mean()) + 0.15
+
+
 def test_ppd_summaries_have_expected_shapes(tiny_depth_df: pd.DataFrame) -> None:
     data = DepthData(tiny_depth_df, clamp_threshold=None)
     map_est = {

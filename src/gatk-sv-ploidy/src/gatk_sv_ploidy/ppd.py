@@ -1,4 +1,4 @@
-"""
+r"""
 Posterior predictive check (ppd) subcommand.
 
 Generates posterior predictive draws from the trained model and computes
@@ -11,12 +11,12 @@ For each bin × sample pair the predictive depth is a mixture of Gaussians:
 
 .. math::
 
-    p(\\tilde{d} | x) = \\sum_{c=0}^{5} p(c | x)
-        \\cdot \\mathcal{N}(\\tilde{d} \\mid c \\cdot b_i,
-                           \\sigma^2_{ij})
+    p(\tilde{d} | x) = \sum_{c=0}^{5} p(c | x)
+        \cdot \mathcal{N}(\tilde{d} \mid c \cdot b_i + \epsilon_i,
+                           \sigma^2_{ij})
 
-where *b_i* is the MAP ``bin_bias``, *σ²_{ij}* = ``bin_var_i`` +
-``sample_var_j``, and *p(c | x)* is the analytical CN posterior.
+where *b_i* is the MAP ``bin_bias``, *\epsilon_i* is the MAP additive
+background depth, and *p(c | x)* is the analytical CN posterior.
 """
 
 from __future__ import annotations
@@ -33,6 +33,10 @@ from scipy import stats as sp_stats
 
 from gatk_sv_ploidy.data import DepthData, load_site_data
 from gatk_sv_ploidy.infer import load_inference_artifacts
+from gatk_sv_ploidy.models import (
+    _matched_residual_scale,
+    _normalize_obs_likelihood_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +57,8 @@ def generate_ppd_depth(
     MAP continuous parameters, draw from the mixture:
 
     1. Sample a CN state *c* from the posterior.
-    2. Draw depth from Normal(c * bin_bias_i, sqrt(bin_var_i + sample_var_j)).
+     2. Draw depth from the configured residual family using variance
+         ``(bin_var_i + sample_var_j) × max(c × bin_bias_i + epsilon_i, 1e-3)``.
 
     Args:
         data: :class:`DepthData` instance.
@@ -68,15 +73,21 @@ def generate_ppd_depth(
     rng = np.random.RandomState(seed)
 
     cn_probs = cn_posterior["cn_posterior"]  # (n_bins, n_samples, n_states)
-    bin_bias = np.asarray(map_estimates["bin_bias"]).squeeze()
-    sample_var = np.asarray(map_estimates["sample_var"]).squeeze()
-    bin_var = np.asarray(map_estimates["bin_var"]).squeeze()
+    bin_bias = np.atleast_1d(np.asarray(map_estimates["bin_bias"]).squeeze())
+    sample_var = np.atleast_1d(np.asarray(map_estimates["sample_var"]).squeeze())
+    bin_var = np.atleast_1d(np.asarray(map_estimates["bin_var"]).squeeze())
+    bin_epsilon = np.atleast_1d(
+        np.asarray(map_estimates.get("bin_epsilon", np.zeros_like(bin_bias))).squeeze()
+    )
+    obs_likelihood = _normalize_obs_likelihood_name(
+        np.asarray(map_estimates.get("obs_likelihood", "normal")).item()
+    )
+    obs_df = float(np.asarray(map_estimates.get("obs_df", 6.0)).item())
 
     n_bins, n_samples, n_states = cn_probs.shape
 
-    # Precompute per-bin/sample variance and std
-    variance = bin_var[:, np.newaxis] + sample_var[np.newaxis, :]  # (n_bins, n_samples)
-    std = np.sqrt(np.maximum(variance, 1e-10))
+    # Precompute per-bin/sample base variance.
+    base_variance = bin_var[:, np.newaxis] + sample_var[np.newaxis, :]
 
     draws = np.empty((n_draws, n_bins, n_samples), dtype=np.float32)
 
@@ -89,11 +100,19 @@ def generate_ppd_depth(
         u = rng.uniform(size=(flat_probs.shape[0], 1))
         cn_sample = (u < cum).argmax(axis=1).reshape(n_bins, n_samples)
 
-        # Expected depth = cn * bin_bias
-        expected = cn_sample.astype(np.float32) * bin_bias[:, np.newaxis]
+        expected = cn_sample.astype(np.float32) * bin_bias[:, np.newaxis] + \
+            bin_epsilon[:, np.newaxis]
+        variance = base_variance * np.maximum(expected, 1e-3)
+        scale = _matched_residual_scale(variance, obs_likelihood, obs_df)
 
-        # Draw from Normal
-        draws[d] = rng.normal(expected, std).astype(np.float32)
+        if obs_likelihood == "normal":
+            draw = rng.normal(expected, scale)
+        elif obs_likelihood == "laplace":
+            draw = rng.laplace(expected, scale)
+        else:
+            draw = expected + rng.standard_t(obs_df, size=expected.shape) * scale
+
+        draws[d] = draw.astype(np.float32)
 
     return draws
 
@@ -287,15 +306,19 @@ def compute_ppd_global_summary(
     # Fraction of bins outside 90% predictive interval
     outside_90 = float(
         np.mean(
-            (ppd_bin_df["observed_depth"] < ppd_bin_df["ppd_q05"])
-            | (ppd_bin_df["observed_depth"] > ppd_bin_df["ppd_q95"])
+            np.logical_or(
+                ppd_bin_df["observed_depth"] < ppd_bin_df["ppd_q05"],
+                ppd_bin_df["observed_depth"] > ppd_bin_df["ppd_q95"],
+            )
         )
     )
     # Fraction outside 50% predictive interval
     outside_50 = float(
         np.mean(
-            (ppd_bin_df["observed_depth"] < ppd_bin_df["ppd_q25"])
-            | (ppd_bin_df["observed_depth"] > ppd_bin_df["ppd_q75"])
+            np.logical_or(
+                ppd_bin_df["observed_depth"] < ppd_bin_df["ppd_q25"],
+                ppd_bin_df["observed_depth"] > ppd_bin_df["ppd_q75"],
+            )
         )
     )
 

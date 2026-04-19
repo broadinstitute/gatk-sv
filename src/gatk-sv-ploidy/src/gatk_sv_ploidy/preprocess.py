@@ -200,6 +200,71 @@ def normalise_depth(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _infer_sex_depth_groups(df: pd.DataFrame) -> pd.Series:
+    """Infer rough XX/XY groups from normalized chrX/chrY depth.
+
+    The grouping is used only for preprocess-time filtering of sex
+    chromosomes. Each sample is assigned to the closer of the normalized
+    depth prototypes ``XX=(chrX=2, chrY=0)`` and ``XY=(chrX=1, chrY=1)``
+    using whichever sex chromosomes are available in *df*.
+
+    Args:
+        df: Normalized depth DataFrame.
+
+    Returns:
+        Series indexed by sample ID with values ``"XX"`` or ``"XY"``.
+        Returns an empty Series when no sex-chromosome bins are present.
+    """
+    sample_cols = get_sample_columns(df)
+    chr_x_mask = df["Chr"] == "chrX"
+    chr_y_mask = df["Chr"] == "chrY"
+
+    if len(sample_cols) == 0 or (not chr_x_mask.any() and not chr_y_mask.any()):
+        return pd.Series(dtype=object)
+
+    chr_x_depth = np.full(len(sample_cols), np.nan, dtype=np.float64)
+    chr_y_depth = np.full(len(sample_cols), np.nan, dtype=np.float64)
+
+    if chr_x_mask.any():
+        chr_x_depth = np.median(
+            df.loc[chr_x_mask, sample_cols].to_numpy(dtype=np.float64),
+            axis=0,
+        )
+    if chr_y_mask.any():
+        chr_y_depth = np.median(
+            df.loc[chr_y_mask, sample_cols].to_numpy(dtype=np.float64),
+            axis=0,
+        )
+
+    group_by_sample: dict[str, str] = {}
+    for sample_idx, sample_id in enumerate(sample_cols):
+        xx_distance = 0.0
+        xy_distance = 0.0
+        used_dimension = False
+
+        if np.isfinite(chr_x_depth[sample_idx]):
+            xx_distance += (chr_x_depth[sample_idx] - 2.0) ** 2
+            xy_distance += (chr_x_depth[sample_idx] - 1.0) ** 2
+            used_dimension = True
+        if np.isfinite(chr_y_depth[sample_idx]):
+            xx_distance += chr_y_depth[sample_idx] ** 2
+            xy_distance += (chr_y_depth[sample_idx] - 1.0) ** 2
+            used_dimension = True
+
+        if not used_dimension:
+            continue
+        group_by_sample[sample_id] = "XX" if xx_distance <= xy_distance else "XY"
+
+    sex_groups = pd.Series(group_by_sample, dtype=object)
+    if not sex_groups.empty:
+        counts = sex_groups.value_counts().to_dict()
+        logger.info(
+            "Approximate sex groups for preprocess filtering: %s",
+            ", ".join(f"{label}={count}" for label, count in sorted(counts.items())),
+        )
+    return sex_groups
+
+
 # ── bin quality filtering ───────────────────────────────────────────────────
 
 
@@ -213,7 +278,7 @@ def filter_low_quality_bins(
     chrX_median_max: float = 3.0,
     chrX_mad_max: float = 2.0,
     chrY_median_min: float = 0.0,
-    chrY_median_max: float = 3.0,
+    chrY_median_max: float = 0.85,
     chrY_mad_max: float = 2.0,
     cohort_deviation_threshold: float = 0.3,
     cohort_deviation_fraction_max: float = 0.75,
@@ -221,8 +286,10 @@ def filter_low_quality_bins(
 ) -> pd.DataFrame:
     """Filter bins whose cross-sample statistics fall outside thresholds.
 
-    Thresholds are applied separately for autosomes, chrX, and chrY because
-    expected depth distributions differ across chromosome types.
+    Autosomes are filtered using pooled cross-sample median/MAD thresholds.
+    Sex chromosomes are filtered separately within rough XX and XY depth
+    groups inferred from normalized chrX/chrY depth, because pooled chrX/chrY
+    depth is intrinsically bimodal in mixed-sex cohorts.
 
     In addition to per-bin median/MAD thresholds, a **cohort deviation
     fraction** filter removes bins where more than
@@ -235,12 +302,16 @@ def filter_low_quality_bins(
         df: Normalised depth DataFrame.
         autosome_median_min/max: Median depth range for autosomal bins.
         autosome_mad_max: Maximum MAD for autosomal bins.
-        chrX_median_min/max: Median depth range for chrX bins.
-        chrX_mad_max: Maximum MAD for chrX bins.
-        chrY_median_min/max: Median depth range for chrY bins.
-        chrY_mad_max: Maximum MAD for chrY bins.
+        chrX_median_min/max: Legacy pooled chrX median range. Used only when
+            sex-stratified filtering cannot be applied.
+        chrX_mad_max: Maximum within-group MAD for chrX bins.
+        chrY_median_min/max: Legacy pooled chrY median range. Used only when
+            sex-stratified filtering cannot be applied.
+        chrY_mad_max: Maximum within-group MAD for chrY bins.
         cohort_deviation_threshold: Per-sample depth deviation from the
-            expected ploidy that counts as "deviant" (default 0.3).
+            expected ploidy that counts as "deviant" (default 0.3). The same
+            threshold is used for autosome diploid filtering and for
+            sex-stratified chrX/chrY filtering.
         cohort_deviation_fraction_max: Maximum fraction of samples that
             may deviate before the bin is removed (default 0.75).
         min_bins_per_chr: Raise if any chromosome has fewer bins after
@@ -260,26 +331,15 @@ def filter_low_quality_bins(
     logger.info("Starting bins: %d", len(df))
 
     keep = np.ones(len(df), dtype=bool)
+    n_threshold_removed = 0
 
-    # -- per-chromosome-type thresholds --
+    # -- pooled autosome thresholds --
     _thresholds = {
         "autosome": (
             ~df["Chr"].isin(["chrX", "chrY"]),
             autosome_median_min,
             autosome_median_max,
             autosome_mad_max,
-        ),
-        "chrX": (
-            df["Chr"] == "chrX",
-            chrX_median_min,
-            chrX_median_max,
-            chrX_mad_max,
-        ),
-        "chrY": (
-            df["Chr"] == "chrY",
-            chrY_median_min,
-            chrY_median_max,
-            chrY_mad_max,
         ),
     }
 
@@ -300,7 +360,98 @@ def filter_low_quality_bins(
             n_before,
         )
 
-    n_median_mad = int((~keep).sum())
+    n_threshold_removed = int((~keep).sum())
+
+    # -- sex-stratified chrX / chrY thresholds --
+    sex_groups = _infer_sex_depth_groups(df)
+    if not sex_groups.empty:
+        group_indices = {
+            label: np.array(
+                [
+                    idx
+                    for idx, sample_id in enumerate(sample_cols)
+                    if sex_groups.get(sample_id) == label
+                ],
+                dtype=np.intp,
+            )
+            for label in ("XX", "XY")
+        }
+        expected_depths = {
+            "chrX": {"XX": 2.0, "XY": 1.0},
+            "chrY": {"XX": 0.0, "XY": 1.0},
+        }
+        mad_limits = {"chrX": chrX_mad_max, "chrY": chrY_mad_max}
+
+        for chrom in ("chrX", "chrY"):
+            chrom_mask = (df["Chr"] == chrom).values
+            if not chrom_mask.any():
+                continue
+
+            for label in ("XX", "XY"):
+                sample_idx = group_indices[label]
+                if len(sample_idx) == 0:
+                    continue
+
+                group_depths = depths[:, sample_idx]
+                group_mads = stats.median_abs_deviation(group_depths, axis=1)
+                group_bad = group_mads > mad_limits[chrom]
+
+                if cohort_deviation_threshold > 0 and cohort_deviation_fraction_max < 1.0:
+                    expected = expected_depths[chrom][label]
+                    deviant_fraction = (
+                        np.abs(group_depths - expected) > cohort_deviation_threshold
+                    ).mean(axis=1)
+                    group_bad |= deviant_fraction > cohort_deviation_fraction_max
+
+                group_bad &= chrom_mask
+                newly_removed = int((group_bad & keep).sum())
+                keep &= ~group_bad
+                logger.info(
+                    "%s %s: MAD ≤ %.1f and |depth−expected|>%.2f in >%.0f%% of samples → %d / %d bins kept (%d new removed)",
+                    chrom,
+                    label,
+                    mad_limits[chrom],
+                    cohort_deviation_threshold,
+                    cohort_deviation_fraction_max * 100,
+                    int(((df["Chr"] == chrom).values & keep).sum()),
+                    int(chrom_mask.sum()),
+                    newly_removed,
+                )
+        n_threshold_removed = int((~keep).sum())
+    else:
+        # Fallback for datasets lacking chrX / chrY context: retain the
+        # legacy pooled sex-chromosome thresholds.
+        legacy_thresholds = {
+            "chrX": (
+                df["Chr"] == "chrX",
+                chrX_median_min,
+                chrX_median_max,
+                chrX_mad_max,
+            ),
+            "chrY": (
+                df["Chr"] == "chrY",
+                chrY_median_min,
+                chrY_median_max,
+                chrY_mad_max,
+            ),
+        }
+        for label, (mask, med_min, med_max, mad_max) in legacy_thresholds.items():
+            if not mask.any():
+                continue
+            ok = (medians >= med_min) & (medians <= med_max) & (mads <= mad_max)
+            n_before = int(mask.sum())
+            keep[mask.values] &= ok[mask.values]
+            n_after = int((mask & keep).sum())
+            logger.info(
+                "%s legacy pooled filter: median [%.1f, %.1f], MAD ≤ %.1f → %d / %d bins kept",
+                label,
+                med_min,
+                med_max,
+                mad_max,
+                n_after,
+                n_before,
+            )
+        n_threshold_removed = int((~keep).sum())
 
     # -- cohort deviation fraction filter --
     # For each bin, compute the expected ploidy (2.0 for autosomes) and
@@ -330,11 +481,11 @@ def filter_low_quality_bins(
 
     df_out = df[keep].copy()
     logger.info(
-        "Bins after filtering: %d (removed %d: %d median/MAD, %d cohort)",
+        "Bins after filtering: %d (removed %d: %d threshold, %d cohort)",
         len(df_out),
         len(df) - len(df_out),
-        n_median_mad,
-        len(df) - len(df_out) - n_median_mad,
+        n_threshold_removed,
+        len(df) - len(df_out) - n_threshold_removed,
     )
 
     # Verify sufficient bins per chromosome
@@ -348,6 +499,104 @@ def filter_low_quality_bins(
         )
 
     return df_out
+
+
+def collapse_bins_per_contig(
+    df: pd.DataFrame,
+    *,
+    bins_per_contig: int = 30,
+) -> pd.DataFrame:
+    """Collapse contiguous bins within each contig when a contig is too dense.
+
+    For each contig with more than *bins_per_contig* bins, choose the largest
+    chunk size *k* such that collapsing contiguous groups of *k* bins still
+    yields at least *bins_per_contig* output bins. Depth values are averaged
+    using bin-length weights so larger intervals contribute proportionally
+    more to the collapsed depth.
+
+    Args:
+        df: Preprocessed depth DataFrame.
+        bins_per_contig: Target minimum number of bins to retain per contig.
+            Values <= 0 disable collapsing.
+
+    Returns:
+        DataFrame with collapsed bins and refreshed bin identifiers.
+    """
+    if bins_per_contig <= 0 or len(df) == 0:
+        return df.copy()
+
+    sample_cols = get_sample_columns(df)
+    collapsed_parts: list[pd.DataFrame] = []
+    n_rebinned_contigs = 0
+    n_bins_before = len(df)
+
+    for chrom, chrom_df in df.groupby("Chr", sort=False):
+        chrom_df = chrom_df.sort_values("Start", kind="mergesort").copy()
+        n_bins = len(chrom_df)
+        if n_bins <= bins_per_contig:
+            collapsed_parts.append(chrom_df)
+            continue
+
+        chunk_size = 1
+        while ((n_bins + chunk_size) // (chunk_size + 1)) >= bins_per_contig:
+            chunk_size += 1
+
+        rows: list[dict] = []
+        source_values = (
+            chrom_df["source_file"].tolist()
+            if "source_file" in chrom_df.columns
+            else None
+        )
+        starts = chrom_df["Start"].to_numpy(dtype=np.int64)
+        ends = chrom_df["End"].to_numpy(dtype=np.int64)
+        depths = chrom_df[sample_cols].to_numpy(dtype=np.float64)
+        bin_lengths = np.maximum(ends - starts, 1)
+
+        for start_idx in range(0, n_bins, chunk_size):
+            end_idx = min(start_idx + chunk_size, n_bins)
+            group_lengths = bin_lengths[start_idx:end_idx]
+            group_depths = depths[start_idx:end_idx]
+            weighted_depth = np.average(
+                group_depths,
+                axis=0,
+                weights=group_lengths,
+            )
+
+            row = {
+                "Chr": chrom,
+                "Start": int(starts[start_idx]),
+                "End": int(ends[end_idx - 1]),
+            }
+            if source_values is not None:
+                row["source_file"] = source_values[start_idx]
+            for sample_col, value in zip(sample_cols, weighted_depth):
+                row[sample_col] = float(value)
+            rows.append(row)
+
+        collapsed_df = pd.DataFrame(rows)
+        collapsed_df.index = [
+            f"{chrom}:{int(row.Start)}-{int(row.End)}"
+            for row in collapsed_df.itertuples(index=False)
+        ]
+        collapsed_parts.append(collapsed_df)
+        n_rebinned_contigs += 1
+        logger.info(
+            "Collapsed %s from %d bins to %d using contiguous groups of %d",
+            chrom,
+            n_bins,
+            len(collapsed_df),
+            chunk_size,
+        )
+
+    collapsed = pd.concat(collapsed_parts, axis=0)
+    logger.info(
+        "Contig bin collapsing: %d / %d contigs rebinned; %d → %d total bins",
+        n_rebinned_contigs,
+        df["Chr"].nunique(),
+        n_bins_before,
+        len(collapsed),
+    )
+    return collapsed
 
 # ── allele fraction preprocessing (per-site joint model) ─────────────────────
 
@@ -901,6 +1150,10 @@ def parse_args() -> argparse.Namespace:
         help="Minimum fraction of bin length overlapped by poor regions to "
              "remove the bin",
     )
+    p.add_argument(
+        "--bins-per-contig", type=int, default=100,
+        help="When a contig has more than this many bins, collapse contiguous bins into larger bins while retaining at least this many bins per contig",
+    )
 
     # Filter thresholds
     g = p.add_argument_group("bin-filter thresholds")
@@ -911,7 +1164,7 @@ def parse_args() -> argparse.Namespace:
     g.add_argument("--chrX-median-max", type=float, default=3.0)
     g.add_argument("--chrX-mad-max", type=float, default=2.0)
     g.add_argument("--chrY-median-min", type=float, default=0.0)
-    g.add_argument("--chrY-median-max", type=float, default=3.0)
+    g.add_argument("--chrY-median-max", type=float, default=0.85)
     g.add_argument("--chrY-mad-max", type=float, default=2.0)
     g.add_argument(
         "--cohort-deviation-threshold", type=float, default=0.3,
@@ -922,6 +1175,10 @@ def parse_args() -> argparse.Namespace:
         "--cohort-deviation-fraction-max", type=float, default=0.75,
         help="Max fraction of samples that may deviate before the bin "
              "is removed (default 0.75)",
+    )
+    g.add_argument(
+        "--min-bins-per-chr", type=int, default=10,
+        help="Minimum number of bins required per chromosome after filtering",
     )
 
     # Allele fraction arguments
@@ -943,7 +1200,7 @@ def parse_args() -> argparse.Namespace:
                    help="Minimum total depth at a site to include in fallback mode when --known-sites is omitted")
     a.add_argument("--max-sites-per-bin", type=int, default=50,
                    help="Maximum sites per bin (pad/subsample to this)")
-    a.add_argument("--sd-stride", type=int, default=1,
+    a.add_argument("--sd-stride", type=int, default=10,
                    help="Keep every Nth row from SD files (100 = 100x "
                         "downsample).  Ignored when --known-sites is given.")
     return p.parse_args()
@@ -995,6 +1252,7 @@ def main() -> None:
             chrY_mad_max=args.chrY_mad_max,
             cohort_deviation_threshold=args.cohort_deviation_threshold,
             cohort_deviation_fraction_max=args.cohort_deviation_fraction_max,
+            min_bins_per_chr=args.min_bins_per_chr,
         )
 
     if poor_regions_df is not None:
@@ -1003,6 +1261,11 @@ def main() -> None:
             poor_regions_df,
             min_poor_region_coverage=args.min_poor_region_coverage,
         )
+
+    df = collapse_bins_per_contig(
+        df,
+        bins_per_contig=args.bins_per_contig,
+    )
 
     logger.info(
         "Total bins retained after preprocess filters: %d / %d",

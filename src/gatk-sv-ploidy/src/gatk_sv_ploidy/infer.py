@@ -19,9 +19,13 @@ import pyro
 import torch
 from scipy import stats
 
-from gatk_sv_ploidy._util import DEFAULT_AF_WEIGHT
+from gatk_sv_ploidy._util import DEFAULT_AF_WEIGHT, compute_cnq_from_probabilities
 from gatk_sv_ploidy.data import DepthData, load_site_data
-from gatk_sv_ploidy.models import CNVModel, _precompute_af_table
+from gatk_sv_ploidy.models import (
+    OBS_LIKELIHOODS,
+    CNVModel,
+    _precompute_af_table,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +166,9 @@ def build_bin_stats(
         data is available) per-bin allele fraction summaries.
     """
     cn_probs = cn_posterior["cn_posterior"]
+    cnq = np.asarray(
+        cn_posterior.get("cnq", compute_cnq_from_probabilities(cn_probs))
+    )
 
     # Precompute per-bin AF summaries if site data available
     has_af = data.site_alt is not None
@@ -205,6 +212,7 @@ def build_bin_stats(
                 "sample": data.sample_ids[j],
                 "observed_depth": float(data.depth[i, j].cpu().numpy()),
                 "cn_map": cn_map_val,
+                "cnq": int(cnq[i, j]),
                 "cn_prob_0": prob[0],
                 "cn_prob_1": prob[1],
                 "cn_prob_2": prob[2],
@@ -216,6 +224,8 @@ def build_bin_stats(
                 "bin_var": float(map_estimates["bin_var"].flatten()[i]),
                 "sample_var": float(map_estimates["sample_var"].flatten()[j]),
             }
+            if "bin_epsilon" in map_estimates:
+                row["bin_epsilon"] = float(map_estimates["bin_epsilon"].flatten()[i])
             if has_af:
                 row["n_sites"] = int(n_sites_arr[i, j])
                 row["mean_observed_af"] = float(mean_af_arr[i, j])
@@ -355,14 +365,20 @@ def parse_args() -> argparse.Namespace:
                    help="Dirichlet concentration for CN=2 on autosomes")
     g.add_argument("--alpha-non-ref", type=float, default=1.0,
                    help="Dirichlet concentration for other CN states")
-    g.add_argument("--var-bias-bin", type=float, default=0.01,
+    g.add_argument("--var-bias-bin", type=float, default=0.05,
                    help="LogNormal scale for per-bin bias")
     g.add_argument("--var-sample", type=float, default=0.001,
                    help="Exponential rate for per-sample variance")
     g.add_argument("--var-bin", type=float, default=0.001,
                    help="Exponential rate for per-bin variance")
-    g.add_argument("--guide-type", choices=["delta", "diagonal"], default="delta",
+    g.add_argument("--epsilon-mean", type=float, default=1e-2,
+                   help="Mean of the Exponential prior on per-bin additive background depth; set to 0 to disable")
+    g.add_argument("--guide-type", choices=["delta", "diagonal", "lowrank"], default="delta",
                    help="Variational guide type")
+    g.add_argument("--obs-likelihood", choices=list(OBS_LIKELIHOODS), default="normal",
+                   help="Observation likelihood for depth residuals")
+    g.add_argument("--obs-df", type=float, default=3.5,
+                   help="Student-t degrees of freedom when --obs-likelihood=studentt")
 
     # Sex chromosome priors
     g = p.add_argument_group("sex chromosome priors")
@@ -466,6 +482,7 @@ def main() -> None:
         var_bias_bin=args.var_bias_bin,
         var_sample=args.var_sample,
         var_bin=args.var_bin,
+        epsilon_mean=args.epsilon_mean,
         device=device,
         dtype=torch.float32,
         guide_type=args.guide_type,
@@ -475,6 +492,8 @@ def main() -> None:
         alpha_sex_non_ref=args.alpha_sex_non_ref,
         sex_prior=tuple(args.sex_prior),
         sex_cn_weight=args.sex_cn_weight,
+        obs_likelihood=args.obs_likelihood,
+        obs_df=args.obs_df,
     )
 
     model.train(
@@ -502,6 +521,7 @@ def main() -> None:
         data,
         map_estimates=map_est,
     )
+    cn_post["cnq"] = compute_cnq_from_probabilities(cn_post["cn_posterior"])
 
     # ── log sex karyotype results ───────────────────────────────────────
     if "sex_posterior" in cn_post:
@@ -522,6 +542,9 @@ def main() -> None:
     # ── save inference artifacts for downstream tools (ppd, plot) ──────
     artifacts_path = os.path.join(args.output_dir, "inference_artifacts.npz")
     artifact_dict = {k: v for k, v in map_est.items()}
+    artifact_dict["obs_likelihood"] = np.asarray(model.obs_likelihood)
+    artifact_dict["obs_df"] = np.asarray(model.obs_df)
+    artifact_dict["epsilon_mean"] = np.asarray(model.epsilon_mean)
     for k, v in cn_post.items():
         artifact_dict[f"cn_post_{k}"] = v
     np.savez_compressed(artifacts_path, **artifact_dict)

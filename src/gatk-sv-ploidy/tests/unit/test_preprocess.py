@@ -11,6 +11,7 @@ from gatk_sv_ploidy.preprocess import (
     _site_alt_total,
     _site_minor_total,
     build_per_site_data,
+    collapse_bins_per_contig,
     filter_low_quality_bins,
     filter_poor_region_bins,
     main,
@@ -97,6 +98,70 @@ def test_filter_low_quality_bins_removes_cohort_shifted_bin() -> None:
     assert filtered["Start"].tolist() == [0, 100, 200]
 
 
+def test_filter_low_quality_bins_surgically_removes_high_median_chry_bin() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chrY", "chrY", "chrY"],
+            "Start": [0, 100, 200],
+            "End": [100, 200, 300],
+            "S1": [0.10, 0.86, 0.18],
+            "S2": [0.12, 0.89, 0.22],
+            "S3": [0.08, 0.91, 0.26],
+            "S4": [0.14, 0.94, 0.24],
+        }
+    )
+
+    filtered = filter_low_quality_bins(
+        df,
+        min_bins_per_chr=1,
+    )
+
+    assert filtered["Start"].tolist() == [0, 200]
+
+
+def test_filter_low_quality_bins_keeps_all_male_chry_bins() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chrY", "chrY", "chrY"],
+            "Start": [0, 100, 200],
+            "End": [100, 200, 300],
+            "S1": [0.95, 1.02, 0.98],
+            "S2": [1.00, 1.05, 0.97],
+            "S3": [0.92, 0.99, 1.01],
+        }
+    )
+
+    filtered = filter_low_quality_bins(
+        df,
+        min_bins_per_chr=1,
+    )
+
+    assert filtered["Start"].tolist() == [0, 100, 200]
+
+
+def test_filter_low_quality_bins_stratifies_chrX_and_chrY() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chrX", "chrX", "chrY", "chrY"],
+            "Start": [0, 100, 0, 100],
+            "End": [100, 200, 100, 200],
+            "XX1": [2.00, 2.55, 0.05, 0.45],
+            "XX2": [2.10, 2.60, 0.03, 0.50],
+            "XY1": [1.00, 1.55, 1.02, 1.45],
+            "XY2": [0.95, 1.60, 1.05, 1.50],
+        }
+    )
+
+    filtered = filter_low_quality_bins(
+        df,
+        cohort_deviation_threshold=0.3,
+        cohort_deviation_fraction_max=0.5,
+        min_bins_per_chr=1,
+    )
+
+    assert filtered[["Chr", "Start"]].values.tolist() == [["chrX", 0], ["chrY", 0]]
+
+
 def test_read_known_sites_reads_vcf_and_converts_to_zero_based(tmp_path) -> None:
     vcf = tmp_path / "sites.vcf"
     vcf.write_text(
@@ -148,6 +213,33 @@ def test_filter_low_quality_bins_raises_on_insufficient_bins() -> None:
 
     with pytest.raises(ValueError, match="Insufficient bins"):
         filter_low_quality_bins(df, min_bins_per_chr=2)
+
+
+def test_collapse_bins_per_contig_uses_weighted_depth_and_limit() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chr21"] * 10 + ["chrX"] * 2,
+            "Start": [0, 10, 30, 60, 100, 150, 210, 280, 360, 450, 0, 100],
+            "End": [10, 30, 60, 100, 150, 210, 280, 360, 450, 550, 100, 200],
+            "source_file": ["test"] * 12,
+            "S1": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 0.8, 1.2],
+            "S2": [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 1.0, 1.4],
+        },
+        index=[f"bin{i}" for i in range(12)],
+    )
+
+    collapsed = collapse_bins_per_contig(df, bins_per_contig=4)
+
+    assert collapsed[collapsed["Chr"] == "chr21"].shape[0] == 4
+    assert collapsed[collapsed["Chr"] == "chrX"].shape[0] == 2
+
+    chr21 = collapsed[collapsed["Chr"] == "chr21"].reset_index(drop=True)
+    assert chr21.loc[0, "Start"] == 0
+    assert chr21.loc[0, "End"] == 60
+    expected_s1 = (10 * 1.0 + 20 * 2.0 + 30 * 3.0) / 60.0
+    expected_s2 = (10 * 2.0 + 20 * 3.0 + 30 * 4.0) / 60.0
+    assert chr21.loc[0, "S1"] == pytest.approx(expected_s1)
+    assert chr21.loc[0, "S2"] == pytest.approx(expected_s2)
 
 
 def test_read_site_depth_tsv_plain_and_position_stride(tmp_path) -> None:
@@ -310,6 +402,10 @@ def test_preprocess_parse_args_and_main_paths(tmp_path, monkeypatch) -> None:
             str(sd_list),
             "--known-sites",
             str(known_sites),
+            "--bins-per-contig",
+            "1",
+            "--min-bins-per-chr",
+            "1",
             "--max-sites-per-bin",
             "2",
         ],
@@ -319,9 +415,31 @@ def test_preprocess_parse_args_and_main_paths(tmp_path, monkeypatch) -> None:
     assert args.viable_only is True
     assert args.skip_bin_filter is True
     assert args.site_depth_list == str(sd_list)
+    assert args.bins_per_contig == 1
+    assert args.min_bins_per_chr == 1
 
     main()
 
     preprocessed = pd.read_csv(output_dir / "preprocessed_depth.tsv", sep="\t", index_col=0)
     assert sorted(preprocessed["Chr"].unique().tolist()) == ["chr13", "chr18", "chr21", "chrX", "chrY"]
+    assert len(preprocessed) == 5
     assert (output_dir / "site_data.npz").exists()
+
+
+def test_preprocess_parse_args_defaults(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "gatk-sv-ploidy preprocess",
+            "--input",
+            "in.tsv",
+            "--output-dir",
+            "out",
+        ],
+    )
+
+    args = parse_args()
+
+    assert args.bins_per_contig == 30
+    assert args.chrY_median_max == pytest.approx(0.85)
+    assert args.min_bins_per_chr == 10

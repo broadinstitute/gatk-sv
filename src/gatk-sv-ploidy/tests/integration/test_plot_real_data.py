@@ -38,6 +38,10 @@ def test_plot_pipeline_runs_on_medium_fixture(
     )
     infer.main()
 
+    bin_stats_df = pd.read_csv(infer_out / "bin_stats.tsv.gz", sep="\t")
+    assert "cnq" in bin_stats_df.columns
+    assert bin_stats_df["cnq"].between(0, 99).all()
+
     call_out = tmp_path / "call"
     monkeypatch.setattr(
         sys,

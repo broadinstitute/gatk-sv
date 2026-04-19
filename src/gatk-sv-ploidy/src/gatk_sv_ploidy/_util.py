@@ -36,6 +36,8 @@ DEFAULT_AF_CONCENTRATION = 50.0
 
 DEFAULT_AF_WEIGHT = 0.25
 """Default relative weight of the allele-fraction likelihood term."""
+MAX_CNQ = 99
+"""Maximum phred-scaled CN quality score reported by the ploidy model."""
 
 
 # ── dataframe helpers ───────────────────────────────────────────────────────
@@ -94,6 +96,43 @@ def load_exclusion_ids(path: str) -> List[str]:
     """
     with open(path) as fh:
         return [line.strip() for line in fh if line.strip()]
+
+
+def compute_cnq_from_probabilities(
+    probabilities: np.ndarray,
+    max_score: int = MAX_CNQ,
+) -> np.ndarray:
+    """Compute per-bin CN quality from the top-two posterior probabilities.
+
+    CNQ is defined as ``round(-10 * log10(1 - p_diff))``, where
+    ``p_diff`` is the difference between the largest and second-largest CN
+    posterior probabilities. Scores are clipped to ``[0, max_score]``.
+
+    Args:
+        probabilities: Array whose last dimension enumerates CN states.
+        max_score: Maximum reported CNQ.
+
+    Returns:
+        Integer NumPy array with the same leading dimensions as
+        *probabilities* and one score per posterior vector.
+    """
+    probs = np.asarray(probabilities, dtype=np.float64)
+    if probs.shape[-1] == 0:
+        raise ValueError("CN posterior array must include at least one state")
+
+    if probs.shape[-1] == 1:
+        best = probs[..., 0]
+        second = np.zeros_like(best)
+    else:
+        kth = probs.shape[-1] - 2
+        top2 = np.partition(probs, kth=kth, axis=-1)[..., -2:]
+        best = top2[..., 1]
+        second = top2[..., 0]
+
+    p_diff = np.clip(best - second, 0.0, 1.0)
+    error_prob = np.clip(1.0 - p_diff, np.finfo(np.float64).tiny, 1.0)
+    cnq = np.rint(-10.0 * np.log10(error_prob))
+    return np.clip(cnq, 0, max_score).astype(np.int16, copy=False)
 
 
 # ── plotting helpers ────────────────────────────────────────────────────────
