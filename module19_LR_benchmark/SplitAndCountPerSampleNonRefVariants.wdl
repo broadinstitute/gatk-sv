@@ -4,7 +4,7 @@ import "Structs.wdl"
 
 workflow SplitAndCountPerSampleNonRefVariants {
   input {
-    File input_vcf
+    Array[File] input_vcfs
 
     String output_prefix = "per_sample_nonref"
     String bcftools_docker = "quay.io/biocontainers/bcftools:1.17--h3cc50cf_1"
@@ -18,33 +18,40 @@ workflow SplitAndCountPerSampleNonRefVariants {
 
   call GetVcfSampleList {
     input:
-      input_vcf             = input_vcf,
+      input_vcf             = input_vcfs[0],
       bcftools_docker       = bcftools_docker,
       runtime_attr_override = runtime_attr_sample_list
   }
 
-  scatter (sample_name in GetVcfSampleList.sample_names) {
-    call ExtractSampleNonRefVcf {
-      input:
-        input_vcf             = input_vcf,
-        sample_name           = sample_name,
-        bcftools_docker       = bcftools_docker,
-        runtime_attr_override = runtime_attr_extract
-    }
+  scatter (contig_vcf in input_vcfs) {
+    String contig_label = basename(contig_vcf, ".vcf.gz")
 
-    call SplitAndCountSampleVariants {
-      input:
-        sample_name            = sample_name,
-        sample_nonref_vcf      = ExtractSampleNonRefVcf.sample_nonref_vcf,
-        python_docker          = python_docker,
-        runtime_attr_override  = runtime_attr_split_count
+    scatter (sample_name in GetVcfSampleList.sample_names) {
+      call ExtractSampleNonRefVcf {
+        input:
+          input_vcf             = contig_vcf,
+          sample_name           = sample_name,
+          contig_label          = contig_label,
+          bcftools_docker       = bcftools_docker,
+          runtime_attr_override = runtime_attr_extract
+      }
+
+      call SplitAndCountSampleVariants {
+        input:
+          sample_name            = sample_name,
+          contig_label           = contig_label,
+          sample_nonref_vcf      = ExtractSampleNonRefVcf.sample_nonref_vcf,
+          python_docker          = python_docker,
+          runtime_attr_override  = runtime_attr_split_count
+      }
     }
   }
 
   call MergeSampleCountTables {
     input:
-      sample_count_tables    = SplitAndCountSampleVariants.count_tsv,
-      merged_output          = output_prefix + ".sample_category_counts.tsv",
+      sample_count_tables    = flatten(SplitAndCountSampleVariants.count_tsv),
+      merged_output          = output_prefix + ".sample_category_counts.per_contig.tsv",
+      summed_output          = output_prefix + ".sample_category_counts.summed_across_contigs.tsv",
       python_docker          = python_docker,
       runtime_attr_override  = runtime_attr_merge
   }
@@ -53,13 +60,14 @@ workflow SplitAndCountPerSampleNonRefVariants {
     File sample_list = GetVcfSampleList.sample_list
     Array[String] sample_names = GetVcfSampleList.sample_names
 
-    Array[File] sample_nonref_vcfs = ExtractSampleNonRefVcf.sample_nonref_vcf
-    Array[File] sample_nonref_vcf_indexes = ExtractSampleNonRefVcf.sample_nonref_vcf_tbi
+    Array[File] sample_nonref_vcfs = flatten(ExtractSampleNonRefVcf.sample_nonref_vcf)
+    Array[File] sample_nonref_vcf_indexes = flatten(ExtractSampleNonRefVcf.sample_nonref_vcf_tbi)
 
-    Array[File] per_sample_count_tables = SplitAndCountSampleVariants.count_tsv
-    Array[Array[File]] per_sample_category_vcfs = SplitAndCountSampleVariants.category_vcfs
+    Array[File] per_sample_count_tables = flatten(SplitAndCountSampleVariants.count_tsv)
+    Array[File] per_sample_category_vcfs = flatten(flatten(SplitAndCountSampleVariants.category_vcfs))
 
-    File merged_sample_count_table = MergeSampleCountTables.merged_count_table
+    File merged_sample_count_table_per_contig = MergeSampleCountTables.merged_count_table
+    File summed_sample_count_table = MergeSampleCountTables.summed_count_table
   }
 }
 
@@ -108,6 +116,7 @@ task ExtractSampleNonRefVcf {
   input {
     File input_vcf
     String sample_name
+    String contig_label
     String bcftools_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -123,7 +132,7 @@ task ExtractSampleNonRefVcf {
 
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  String sample_nonref_vcf_name = sample_name + ".nonref.vcf.gz"
+  String sample_nonref_vcf_name = contig_label + "." + sample_name + ".nonref.vcf.gz"
 
   command <<<
     set -euo pipefail
@@ -159,6 +168,7 @@ task ExtractSampleNonRefVcf {
 task SplitAndCountSampleVariants {
   input {
     String sample_name
+    String contig_label
     File sample_nonref_vcf
     String python_docker
     RuntimeAttr? runtime_attr_override
@@ -175,7 +185,7 @@ task SplitAndCountSampleVariants {
 
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  String count_tsv_name = sample_name + ".variant_category_counts.tsv"
+  String count_tsv_name = contig_label + "." + sample_name + ".variant_category_counts.tsv"
 
   command <<<
     set -euo pipefail
@@ -187,6 +197,7 @@ import re
 from collections import OrderedDict
 
 sample_name = "~{sample_name}"
+contig_label = "~{contig_label}"
 input_vcf = "~{sample_nonref_vcf}"
 count_tsv = "~{count_tsv_name}"
 
@@ -320,7 +331,7 @@ with gzip.open(input_vcf, "rt") as fin:
 
         if not vcf_writers:
             for cat in all_categories:
-                path = f"{sample_name}.{cat}.vcf.gz"
+            path = f"{contig_label}.{sample_name}.{cat}.vcf.gz"
                 fh = gzip.open(path, "wt")
                 vcf_handles[cat] = fh
                 vcf_writers[cat] = fh
@@ -368,7 +379,7 @@ with gzip.open(input_vcf, "rt") as fin:
 # Emit empty category VCFs if no records were seen.
 if not vcf_writers:
     for cat in all_categories:
-        path = f"{sample_name}.{cat}.vcf.gz"
+    path = f"{contig_label}.{sample_name}.{cat}.vcf.gz"
         fh = gzip.open(path, "wt")
         vcf_handles[cat] = fh
         for h in header_lines:
@@ -380,16 +391,16 @@ else:
 
 with open(count_tsv, "wt", newline="") as out:
     writer = csv.writer(out, delimiter='\t')
-    writer.writerow(["sample"] + all_categories)
-    writer.writerow([sample_name] + [counts[k] for k in all_categories])
+    writer.writerow(["contig", "sample"] + all_categories)
+    writer.writerow([contig_label, sample_name] + [counts[k] for k in all_categories])
 
-print({"sample": sample_name, "records_by_category": counts})
+print({"contig": contig_label, "sample": sample_name, "records_by_category": counts})
 PY
   >>>
 
   output {
     File count_tsv = count_tsv_name
-    Array[File] category_vcfs = glob("~{sample_name}.*.vcf.gz")
+    Array[File] category_vcfs = glob("~{contig_label}.~{sample_name}.*.vcf.gz")
   }
 
   runtime {
@@ -408,6 +419,7 @@ task MergeSampleCountTables {
   input {
     Array[File] sample_count_tables
     String merged_output
+    String summed_output
     String python_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -431,12 +443,15 @@ import csv
 
 inputs = "~{sep=' ' sample_count_tables}".split()
 out_path = "~{merged_output}"
+summed_path = "~{summed_output}"
 
 if not inputs:
     raise RuntimeError("No sample count tables provided")
 
 header = None
 rows_written = 0
+numeric_cols = []
+sum_by_sample = {}
 
 with open(out_path, "wt", newline="") as out:
     writer = None
@@ -448,6 +463,7 @@ with open(out_path, "wt", newline="") as out:
                 header = this_header
                 writer = csv.writer(out, delimiter='\t')
                 writer.writerow(header)
+              numeric_cols = header[2:]
             elif this_header != header:
                 raise RuntimeError(f"Header mismatch in {path}")
 
@@ -455,12 +471,28 @@ with open(out_path, "wt", newline="") as out:
                 writer.writerow(row)
                 rows_written += 1
 
-print({"inputs": len(inputs), "rows": rows_written, "output": out_path})
+              sample = row[1]
+              if sample not in sum_by_sample:
+                sum_by_sample[sample] = [0] * len(numeric_cols)
+
+              for i, _ in enumerate(numeric_cols):
+                raw = row[i + 2].strip()
+                val = int(float(raw)) if raw != '' else 0
+                sum_by_sample[sample][i] += val
+
+      with open(summed_path, "wt", newline="") as out_sum:
+        writer = csv.writer(out_sum, delimiter='\t')
+        writer.writerow(["sample"] + numeric_cols)
+        for sample in sorted(sum_by_sample.keys()):
+          writer.writerow([sample] + sum_by_sample[sample])
+
+      print({"inputs": len(inputs), "rows": rows_written, "output_per_contig": out_path, "output_summed": summed_path})
 PY
   >>>
 
   output {
     File merged_count_table = merged_output
+        File summed_count_table = summed_output
   }
 
   runtime {
