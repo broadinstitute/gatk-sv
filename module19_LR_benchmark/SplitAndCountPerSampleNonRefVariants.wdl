@@ -389,7 +389,7 @@ PY
 
   output {
     File count_tsv = count_tsv_name
-    Array[File] category_vcfs = glob("*.non_tr*.vcf.gz") + glob("*.trv_*.vcf.gz") + glob("*.uncategorized_*.vcf.gz")
+    Array[File] category_vcfs = glob("~{sample_name}.*.vcf.gz")
   }
 
   runtime {
