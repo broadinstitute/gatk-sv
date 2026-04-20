@@ -7,6 +7,10 @@ workflow SplitAndCountPerSampleNonRefVariants {
   input {
     Array[File] input_vcfs
 
+    # If provided, only these samples are processed per contig.
+    # If omitted, the sample list is derived from the first VCF header.
+    Array[String]? sample_list
+
     String output_prefix = "per_sample_nonref"
     String bcftools_docker = "quay.io/biocontainers/bcftools:1.17--h3cc50cf_1"
     String python_docker = "python:3.11-slim"
@@ -22,6 +26,7 @@ workflow SplitAndCountPerSampleNonRefVariants {
     call PerContig.SplitAndCountPerSampleNonRefVariantsPerContig as run_per_contig {
       input:
         input_vcf                 = contig_vcf,
+        sample_list               = sample_list,
         output_prefix             = output_prefix,
         bcftools_docker           = bcftools_docker,
         python_docker             = python_docker,

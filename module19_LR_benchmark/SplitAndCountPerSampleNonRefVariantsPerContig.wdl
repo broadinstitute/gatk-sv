@@ -7,6 +7,10 @@ workflow SplitAndCountPerSampleNonRefVariantsPerContig {
     File input_vcf
     String? contig_label
 
+    # If provided, only these samples are extracted and counted.
+    # If omitted, the sample list is derived from the VCF header via bcftools.
+    Array[String]? sample_list
+
     String output_prefix = "per_sample_nonref"
     String bcftools_docker = "quay.io/biocontainers/bcftools:1.17--h3cc50cf_1"
     String python_docker = "python:3.11-slim"
@@ -19,14 +23,18 @@ workflow SplitAndCountPerSampleNonRefVariantsPerContig {
 
   String contig = select_first([contig_label, basename(input_vcf, ".vcf.gz")])
 
-  call GetVcfSampleList {
-    input:
-      input_vcf             = input_vcf,
-      bcftools_docker       = bcftools_docker,
-      runtime_attr_override = runtime_attr_sample_list
+  if (!defined(sample_list)) {
+    call GetVcfSampleList {
+      input:
+        input_vcf             = input_vcf,
+        bcftools_docker       = bcftools_docker,
+        runtime_attr_override = runtime_attr_sample_list
+    }
   }
 
-  scatter (sample_name in GetVcfSampleList.sample_names) {
+  Array[String] effective_samples = select_first([sample_list, GetVcfSampleList.sample_names])
+
+  scatter (sample_name in effective_samples) {
     call ExtractSampleNonRefVcf {
       input:
         input_vcf             = input_vcf,
@@ -57,8 +65,8 @@ workflow SplitAndCountPerSampleNonRefVariantsPerContig {
   output {
     String contig_name = contig
 
-    File sample_list = GetVcfSampleList.sample_list
-    Array[String] sample_names = GetVcfSampleList.sample_names
+    File? vcf_derived_sample_list = GetVcfSampleList.sample_list
+    Array[String] sample_names = effective_samples
 
     Array[File] sample_nonref_vcfs = ExtractSampleNonRefVcf.sample_nonref_vcf
     Array[File] sample_nonref_vcf_indexes = ExtractSampleNonRefVcf.sample_nonref_vcf_tbi
