@@ -146,7 +146,7 @@ task ExtractSampleNonRefVcf {
 
     bcftools view \
       -s ~{sample_name} \
-      -i 'GT~"[1-9]"' \
+      -c 1 \
       -Oz \
       -o ~{sample_nonref_vcf_name} \
       ~{input_vcf}
