@@ -212,9 +212,11 @@ task AnnotateFunctionalConsequences {
     command <<<
         set -euo pipefail
 
+        gunzip -c ~{coding_gtf} > coding.gtf
+
         gatk --java-options "-Xmx~{java_mem_mb}m" SVAnnotate \
             -V ~{vcf} \
-            --protein-coding-gtf ~{coding_gtf} \
+            --protein-coding-gtf coding.gtf \
             -O ~{prefix}.vcf.gz
     >>>
 
