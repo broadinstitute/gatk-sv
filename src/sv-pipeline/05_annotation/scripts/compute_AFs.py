@@ -47,6 +47,22 @@ def create_pop_dict(popfile):
     return pop_dict
 
 
+def get_genotype_allele_value(gt, allele_idx, field_values, cast=None):
+    """
+    Map a per-genotype-allele value back to a specific allele index.
+    """
+    if field_values is None:
+        return None
+
+    values = field_values.split(',') if isinstance(field_values, str) else list(field_values)
+    for gt_allele, raw_value in zip(gt, values):
+        if gt_allele != allele_idx or raw_value is None or raw_value == '.':
+            continue
+        return cast(raw_value) if cast is not None else raw_value
+
+    return None
+
+
 def in_par(record, parbt):
     """
     Check if variant overlaps pseudoautosomal region.
@@ -265,7 +281,6 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, lps_dict=None):
         af_allele = [round(v / AN, 6) if AN > 0 else 0 for v in ac_allele]
 
         # Add AN, AC, and AF to INFO field
-        s_suffix = ('_' + prefix if prefix else '')
         record.info[('AN' if prefix is None else 'AN_' + prefix)] = AN
         record.info[('AC' if prefix is None else 'AC_' + prefix)] = tuple(ac_allele[1:])
         record.info[('AF' if prefix is None else 'AF_' + prefix)] = tuple(af_allele[1:])
@@ -279,27 +294,24 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, lps_dict=None):
             ncr = 1.0
         record.info[('NCR' if prefix is None else 'NCR_' + prefix)] = ncr
         
-        # Compute AP_allele, MC_allele and LPS_allele only for all samples
         if prefix is None:
-            # Compute AP_allele
+            # Calculate AP_allele for each allele
             ap_allele = []
             for allele_idx in allele_indices:
                 ap_val = None
                 for sample_name, gt in valid_GTs:
-                    if allele_idx in gt:
-                        gt_list = list(gt)
-                        if allele_idx in gt_list:
-                            pos_in_gt = gt_list.index(allele_idx)
-                            ap_field = record.samples[sample_name].get('AP')
-                            if ap_field is not None:
-                                ap_values = ap_field.split(',') if isinstance(ap_field, str) else ap_field
-                                if pos_in_gt < len(ap_values) and ap_values[pos_in_gt] is not None:
-                                    ap_val = float(ap_values[pos_in_gt])
-                            break
+                    ap_val = get_genotype_allele_value(
+                        gt,
+                        allele_idx,
+                        record.samples[sample_name].get('AP'),
+                        cast=float,
+                    )
+                    if ap_val is not None:
+                        break
                 ap_allele.append(ap_val if ap_val is not None else 0)
             record.info['AP_allele'] = tuple(ap_allele)
             
-            # Compute MC_allele and LPS_allele for single motif sites
+            # Calculate MC_allele and LPS_allele for single motif sites
             motifs_field = record.info.get('MOTIFS')
             motifs = list(motifs_field) if isinstance(motifs_field, tuple) or isinstance(motifs_field, list) else motifs_field.split(',')
             if len(motifs) == 1 and check_motifs_canonically_unique(motifs):
@@ -307,16 +319,14 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, lps_dict=None):
                 for allele_idx in allele_indices:
                     mc_val = None
                     for sample_name, gt in valid_GTs:
-                        if allele_idx in gt:
-                            gt_list = list(gt)
-                            if allele_idx in gt_list:
-                                pos_in_gt = gt_list.index(allele_idx)
-                                mc_field = record.samples[sample_name].get('MC')
-                                if mc_field is not None:
-                                    mc_values = list(mc_field) if isinstance(mc_field, tuple) or isinstance(mc_field, list) else mc_field.split(',')
-                                    if pos_in_gt < len(mc_values) and mc_values[pos_in_gt] is not None:
-                                        mc_val = int(mc_values[pos_in_gt])
-                                break
+                        mc_val = get_genotype_allele_value(
+                            gt,
+                            allele_idx,
+                            record.samples[sample_name].get('MC'),
+                            cast=int,
+                        )
+                        if mc_val is not None:
+                            break
                     mc_allele.append(mc_val if mc_val is not None else 0)
                 record.info['MC_allele'] = tuple(mc_allele)
 
@@ -325,14 +335,13 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False, lps_dict=None):
                     for allele_idx in allele_indices:
                         lps_val = None
                         for sample_name, gt in valid_GTs:
-                            if allele_idx in gt:
-                                gt_list = list(gt)
-                                if allele_idx in gt_list:
-                                    pos_in_gt = gt_list.index(allele_idx)
-                                    lps_field = lps_dict[record.id].get(sample_name)
-                                    if lps_field is not None and pos_in_gt < len(lps_field):
-                                        lps_val = lps_field[pos_in_gt]
-                                    break
+                            lps_val = get_genotype_allele_value(
+                                gt,
+                                allele_idx,
+                                lps_dict[record.id].get(sample_name),
+                            )
+                            if lps_val is not None:
+                                break
                         lps_allele.append(lps_val if lps_val is not None else 0)
                     record.info['LPS_allele'] = tuple(lps_allele)
 
