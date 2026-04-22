@@ -313,6 +313,8 @@ task Task1_PermuteGTF {
             ~{blacklist_bed} \
             ~{out_gtf} \
             ~{out_too_large}
+
+        touch ~{out_too_large}
     >>>
 
     output {
