@@ -50,6 +50,7 @@ workflow PermutateSVAnnotationWithSVAnnotate {
         String r_docker        = "r-base:4.3.0"
         String gatk_docker =  "us.gcr.io/broad-dsde-methods/gatk-sv/gatk:2025-05-20-4.6.2.0-4-g1facd911e-NIGHTLY-SNAPSHOT"
         String utils_docker = "us-central1-docker.pkg.dev/talkowski-training/kj-development/utils:kj_V13"
+        String sv_pipeline_docker = "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2026-02-06-v1.1-797b7604"
 
         # Runtime attribute overrides per task
         RuntimeAttr? runtime_attr_permute_gtf
@@ -124,7 +125,7 @@ workflow PermutateSVAnnotationWithSVAnnotate {
             script = calculate_gene_data_script,
             gene_info = gene_info,
             prefix = "permu_~{permu_number}",
-            docker = python_docker,
+            docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_calcu_gene_data
     }
 
