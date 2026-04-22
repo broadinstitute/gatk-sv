@@ -1354,13 +1354,22 @@ runRdTest<-function(bed)
       p.2ndmax[count]<-p[2]
     }
     ##Combine individual P-values with fisher.method##
-    if (length(p.list) > 1) {
-    ##Need to change 0 to 1e-300 for sumlog function##  
-      p.list<-rapply(p.list,function(x) ifelse(x==0,1e-300,x), how = "replace")
-      p.2ndmax<-rapply(p.2ndmax,function(x) ifelse(x==0,1e-300,x), how = "replace")
-      p <- list(sumlog(unlist(p.list))$p, sumlog(unlist(p.2ndmax))$p)
+    clean_p.list <- unlist(p.list)[!is.na(unlist(p.list))]
+    clean_p.2ndmax <- unlist(p.2ndmax)[!is.na(unlist(p.2ndmax))]
+
+    if (length(clean_p.list) > 1) {
+      ##Need to change 0 to 1e-300 for sumlog function##
+      clean_p.list <- ifelse(clean_p.list == 0, 1e-300, clean_p.list)
+      clean_p.2ndmax <- ifelse(clean_p.2ndmax == 0, 1e-300, clean_p.2ndmax)
+
+      p1_val <- sumlog(clean_p.list)$p
+      p2_val <- if(length(clean_p.2ndmax) > 0) sumlog(clean_p.2ndmax)$p else NA
+
+      p <- list(p1_val, p2_val)
+    } else if (length(clean_p.list) == 1) {
+      p <- c(clean_p.list[1], if(length(clean_p.2ndmax) > 0) clean_p.2ndmax[1] else NA)
     } else {
-      p <- c(p.list[1], p.2ndmax[1])
+      p <- c(NA, NA)
     }
     p[3]<-"singlesampZ"
     names(p)<-c("Pvalue","Pmax_2nd","Test")
