@@ -171,12 +171,13 @@ def estimate_site_pop_af_naive_bayes(
         posterior_mean[observed_sites] = (
             posterior_alpha[observed_sites] / posterior_denom[observed_sites]
         )
+        posterior_denom_observed = posterior_denom[observed_sites]
+        posterior_var_denom = (
+            posterior_denom_observed ** 2
+        ) * (posterior_denom_observed + 1.0)
         posterior_var = (
             posterior_alpha[observed_sites] * posterior_beta[observed_sites]
-        ) / (
-            posterior_denom[observed_sites] ** 2
-            * (posterior_denom[observed_sites] + 1.0)
-        )
+        ) / posterior_var_denom
         posterior_sd[observed_sites] = np.sqrt(np.maximum(posterior_var, 0.0))
         np.divide(
             sum_alt,
@@ -722,7 +723,7 @@ def parse_args() -> argparse.Namespace:
     g.add_argument(
         "--autosome-prior-mode",
         choices=list(AUTOSOME_PRIOR_MODES),
-        default="shrinkage",
+        default="dirichlet",
         help="Autosomal CN prior family",
     )
     g.add_argument("--alpha-ref", type=float, default=50.0,
@@ -747,12 +748,12 @@ def parse_args() -> argparse.Namespace:
         default=20.0,
         help="Per-bin shrinkage concentration toward the learned autosomal non-reference mean in shrinkage mode",
     )
-    g.add_argument("--var-bias-bin", type=float, default=0.05,
+    g.add_argument("--var-bias-bin", type=float, default=0.02,
                    help="LogNormal scale for per-bin bias")
-    g.add_argument("--var-sample", type=float, default=0.001,
-                   help="Exponential rate for per-sample variance")
+    g.add_argument("--var-sample", type=float, default=0.00025,
+                   help="Exponential mean for per-sample variance")
     g.add_argument("--var-bin", type=float, default=0.001,
-                   help="Exponential rate for per-bin variance")
+                   help="Exponential mean for per-bin variance")
     g.add_argument("--epsilon-mean", type=float, default=1e-2,
                    help="Mean of the Exponential prior on per-bin additive background depth; set to 0 to disable")
     g.add_argument("--guide-type", choices=["delta", "diagonal", "lowrank"], default="delta",
@@ -792,8 +793,24 @@ def parse_args() -> argparse.Namespace:
             "How to derive the site_pop_af values used during infer. "
             "'auto' is conservative and keeps the input AFs for current "
             "preprocess outputs, 'naive-bayes' explicitly replaces them when "
-            "the site encoding is coherent, and 'off' always keeps the input values."
+            "the site encoding is coherent, and 'off' always keeps the input values. "
+            "When --learn-site-af is enabled, these values are used as prior centers."
         ),
+    )
+    g.add_argument(
+        "--learn-site-af",
+        action="store_true",
+        default=False,
+        help=(
+            "Infer site_pop_af directly inside the model using a Delta guide for site AFs. "
+            "This disables AF-table precomputation and uses the current site_pop_af values as Beta prior means."
+        ),
+    )
+    g.add_argument(
+        "--site-af-prior-strength",
+        type=float,
+        default=20.0,
+        help="Strength of the Beta prior used when --learn-site-af is enabled",
     )
     g.add_argument(
         "--site-af-prior-alpha",
@@ -814,7 +831,7 @@ def parse_args() -> argparse.Namespace:
     g.add_argument(
         "--af-evidence-mode",
         choices=["absolute", "relative"],
-        default="absolute",
+        default="relative",
         help=(
             "How allele-fraction evidence enters the model: 'absolute' uses the "
             "summed AF log-likelihood directly, while 'relative' centers it "
@@ -915,11 +932,13 @@ def main() -> None:
         site_data=sd,
     )
     logger.info("Using %s input with %s observation model.", depth_space, obs_likelihood)
+    if args.learn_site_af and data.site_alt is None:
+        raise ValueError("--learn-site-af requires --site-data with per-site allele counts.")
 
     input_site_pop_af_np = None
     naive_bayes_site_pop_af_np = None
     effective_site_pop_af_np = None
-    site_af_estimates_df = None
+    site_af_summary = None
     site_af_estimation_applied = False
     if data.site_alt is not None:
         input_site_pop_af_np = data.site_pop_af.detach().cpu().numpy().copy()
@@ -971,27 +990,9 @@ def main() -> None:
             float(np.median(observed_input)) if observed_input.size else float("nan"),
             float(np.median(observed_naive)) if observed_naive.size else float("nan"),
         )
-        site_af_estimates_df = build_site_af_estimates(
-            data,
-            input_site_pop_af=input_site_pop_af_np,
-            naive_bayes_site_pop_af=naive_bayes_site_pop_af_np,
-            effective_site_pop_af=effective_site_pop_af_np,
-            posterior_sd=site_af_summary["posterior_sd"],
-            pooled_observed_af=site_af_summary["pooled_observed_af"],
-            sum_alt=site_af_summary["sum_alt"],
-            sum_total=site_af_summary["sum_total"],
-            n_observed_samples=site_af_summary["n_observed_samples"],
-        )
-        site_af_path = os.path.join(args.output_dir, "site_af_estimates.tsv.gz")
-        site_af_estimates_df.to_csv(
-            site_af_path,
-            sep="\t",
-            index=False,
-            compression="gzip",
-        )
-        logger.info("Site AF estimates saved to %s", site_af_path)
 
     learn_af_temperature = args.learn_af_temperature and data.site_alt is not None
+    learn_site_af = args.learn_site_af and data.site_alt is not None
 
     if data.site_alt is not None:
         logger.info(
@@ -1007,6 +1008,11 @@ def main() -> None:
         logger.info(
             "Guide type 'delta' is deterministic; %s will reduce to the current point-estimate behavior.",
             args.cn_inference_method,
+        )
+    if learn_site_af:
+        logger.info(
+            "Joint site AF inference enabled: using a Delta guide for site AFs with prior strength %.1f.",
+            args.site_af_prior_strength,
         )
 
     # ── build & train model ─────────────────────────────────────────────
@@ -1029,6 +1035,8 @@ def main() -> None:
         af_weight=args.af_weight if data.site_alt is not None else 0.0,
         af_evidence_mode=args.af_evidence_mode,
         learn_af_temperature=learn_af_temperature,
+        learn_site_pop_af=learn_site_af,
+        site_af_prior_strength=args.site_af_prior_strength,
         af_temperature_prior_scale=args.af_temperature_prior_scale,
         alpha_sex_ref=args.alpha_sex_ref,
         alpha_sex_non_ref=args.alpha_sex_non_ref,
@@ -1058,6 +1066,33 @@ def main() -> None:
     loss_df.to_csv(loss_path, sep="\t", index=False)
     logger.info("Training loss saved to %s", loss_path)
 
+    # ── point estimates + exact discrete inference ──────────────────────
+    point_estimate_method = args.cn_inference_method
+    if args.cn_inference_method == "multi-draw":
+        point_estimate_method = "median"
+
+    map_est = model.get_map_estimates(
+        data,
+        estimate_method=point_estimate_method,
+    )
+    if learn_site_af and "site_pop_af_latent" in map_est:
+        effective_site_pop_af_np = np.asarray(
+            map_est["site_pop_af_latent"],
+            dtype=np.float32,
+        )
+        data.site_pop_af = torch.tensor(
+            effective_site_pop_af_np,
+            dtype=tensor_dtype,
+            device=device,
+        )
+        observed_sites = site_af_summary["observed_sites"]
+        observed_learned = effective_site_pop_af_np[observed_sites]
+        logger.info(
+            "Learned site AF MAP: sites=%d, median=%.3f",
+            int(observed_sites.sum()),
+            float(np.median(observed_learned)) if observed_learned.size else float("nan"),
+        )
+
     # ── precompute AF table once for inference and output stats ─────────
     af_table_np = None
     if data.site_alt is not None and model.af_weight > 0:
@@ -1069,15 +1104,6 @@ def main() -> None:
                 data.chr_type if hasattr(data, "chr_type") else None,
             ).cpu().numpy()
 
-    # ── point estimates + exact discrete inference ──────────────────────
-    point_estimate_method = args.cn_inference_method
-    if args.cn_inference_method == "multi-draw":
-        point_estimate_method = "median"
-
-    map_est = model.get_map_estimates(
-        data,
-        estimate_method=point_estimate_method,
-    )
     posterior_draws: Dict[str, List[np.ndarray]] = {}
     if args.cn_inference_method == "multi-draw":
         cn_post = model.run_discrete_inference_multi_draw(
@@ -1120,6 +1146,27 @@ def main() -> None:
             int((sk == 0).sum()), int((sk == 1).sum()),
         )
 
+    if site_af_summary is not None:
+        site_af_estimates_df = build_site_af_estimates(
+            data,
+            input_site_pop_af=input_site_pop_af_np,
+            naive_bayes_site_pop_af=naive_bayes_site_pop_af_np,
+            effective_site_pop_af=effective_site_pop_af_np,
+            posterior_sd=site_af_summary["posterior_sd"],
+            pooled_observed_af=site_af_summary["pooled_observed_af"],
+            sum_alt=site_af_summary["sum_alt"],
+            sum_total=site_af_summary["sum_total"],
+            n_observed_samples=site_af_summary["n_observed_samples"],
+        )
+        site_af_path = os.path.join(args.output_dir, "site_af_estimates.tsv.gz")
+        site_af_estimates_df.to_csv(
+            site_af_path,
+            sep="\t",
+            index=False,
+            compression="gzip",
+        )
+        logger.info("Site AF estimates saved to %s", site_af_path)
+
     # ── save inference artifacts for downstream tools (ppd, plot) ──────
     artifacts_path = os.path.join(args.output_dir, "inference_artifacts.npz")
     artifact_dict = {k: v for k, v in map_est.items()}
@@ -1146,6 +1193,10 @@ def main() -> None:
     artifact_dict["model_af_weight"] = np.asarray(model.af_weight)
     artifact_dict["model_af_evidence_mode"] = np.asarray(model.af_evidence_mode)
     artifact_dict["model_learn_af_temperature"] = np.asarray(model.learn_af_temperature)
+    artifact_dict["model_learn_site_pop_af"] = np.asarray(model.learn_site_pop_af)
+    artifact_dict["model_site_af_prior_strength"] = np.asarray(
+        model.site_af_prior_strength
+    )
     artifact_dict["model_af_temperature_prior_scale"] = np.asarray(
         model.af_temperature_prior_scale
     )
@@ -1173,8 +1224,10 @@ def main() -> None:
         artifact_dict["site_af_estimation_applied"] = np.asarray(
             site_af_estimation_applied
         )
+        artifact_dict["site_af_learned_in_model"] = np.asarray(learn_site_af)
         artifact_dict["site_af_prior_alpha"] = np.asarray(args.site_af_prior_alpha)
         artifact_dict["site_af_prior_beta"] = np.asarray(args.site_af_prior_beta)
+        artifact_dict["site_af_prior_strength"] = np.asarray(args.site_af_prior_strength)
     for site, draws in posterior_draws.items():
         if draws:
             artifact_dict[f"posterior_draws_{site}"] = np.stack(draws, axis=0)

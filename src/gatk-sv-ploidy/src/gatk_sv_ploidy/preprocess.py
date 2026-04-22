@@ -27,6 +27,80 @@ from gatk_sv_ploidy.data import read_depth_tsv
 logger = logging.getLogger(__name__)
 
 
+def read_sample_list(path: str) -> list[str]:
+    """Read a text file of sample IDs to retain.
+
+    Blank lines and comment lines beginning with ``#`` are ignored. Duplicate
+    sample IDs are collapsed while preserving first-seen order.
+
+    Args:
+        path: Path to a text file with one sample ID per line.
+
+    Returns:
+        Ordered list of sample IDs.
+
+    Raises:
+        ValueError: If the file does not contain any sample IDs.
+    """
+    sample_ids: list[str] = []
+    seen: set[str] = set()
+
+    with open(path) as handle:
+        for line in handle:
+            sample_id = line.strip()
+            if not sample_id or sample_id.startswith("#"):
+                continue
+            if sample_id in seen:
+                continue
+            seen.add(sample_id)
+            sample_ids.append(sample_id)
+
+    if not sample_ids:
+        raise ValueError(f"No sample IDs found in samples list: {path}")
+
+    logger.info(
+        "Loaded sample subset: %d sample(s) from %s",
+        len(sample_ids),
+        path,
+    )
+    return sample_ids
+
+
+def subset_depth_samples(df: pd.DataFrame, sample_ids: list[str]) -> pd.DataFrame:
+    """Subset a depth matrix to a requested set of samples.
+
+    Args:
+        df: Depth DataFrame with metadata columns plus sample columns.
+        sample_ids: Ordered list of sample IDs to retain.
+
+    Returns:
+        Copy of *df* containing metadata columns and only the requested sample
+        columns, preserving the requested sample order.
+
+    Raises:
+        ValueError: If any requested sample is absent from *df*.
+    """
+    sample_cols = get_sample_columns(df)
+    sample_col_set = set(sample_cols)
+    missing = [sample_id for sample_id in sample_ids if sample_id not in sample_col_set]
+    if missing:
+        preview = ", ".join(missing[:5])
+        more = "" if len(missing) <= 5 else f" (+{len(missing) - 5} more)"
+        raise ValueError(
+            "Requested samples not found in depth matrix: "
+            f"{preview}{more}"
+        )
+
+    metadata_cols = [col for col in df.columns if col not in sample_col_set]
+    df_out = df.loc[:, metadata_cols + sample_ids].copy()
+    logger.info(
+        "Sample subset: retained %d / %d samples",
+        len(sample_ids),
+        len(sample_cols),
+    )
+    return df_out
+
+
 def read_bed_intervals(path: str) -> pd.DataFrame:
     """Read a BED-like interval file with at least 3 columns.
 
@@ -1037,6 +1111,10 @@ def parse_args() -> argparse.Namespace:
         help="Output directory",
     )
     p.add_argument(
+        "--samples-list", default=None,
+        help="Text file listing sample IDs to retain (one per line)",
+    )
+    p.add_argument(
         "--viable-only", action="store_true", default=False,
         help="Subset to chr13, chr18, chr21, chrX, chrY only",
     )
@@ -1117,6 +1195,10 @@ def main() -> None:
     # 1. Read
     raw_df = read_depth_tsv(args.input)
     n_input_bins = len(raw_df)
+
+    if args.samples_list:
+        sample_ids = read_sample_list(args.samples_list)
+        raw_df = subset_depth_samples(raw_df, sample_ids)
 
     poor_regions_df = None
     if args.poor_regions:

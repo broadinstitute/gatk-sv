@@ -17,6 +17,16 @@ from gatk_sv_ploidy.models import (
 )
 
 
+def test_cnv_model_defaults_match_current_preferred_configuration() -> None:
+    model = CNVModel()
+
+    assert model.autosome_prior_mode == "dirichlet"
+    assert model.var_bias_bin == 0.02
+    assert model.var_sample == 0.00025
+    assert model.var_bin == 0.001
+    assert model.af_evidence_mode == "relative"
+
+
 def test_marginalized_af_log_lik_matches_numpy(tiny_site_data: dict[str, np.ndarray]) -> None:
     cn = torch.full((4, 2), 2, dtype=torch.long)
     torch_result = _marginalized_af_log_lik(
@@ -234,6 +244,12 @@ def test_cnv_model_accepts_lowrank_guide() -> None:
     assert model.guide.__class__.__name__ == "AutoLowRankMultivariateNormal"
 
 
+def test_cnv_model_uses_mixed_guide_when_learning_site_af() -> None:
+    model = CNVModel(guide_type="lowrank", learn_site_pop_af=True)
+    assert model.guide.__class__.__name__ == "AutoGuideList"
+    assert "site_pop_af_latent" in model._latent_sites
+
+
 def test_cnv_model_negative_binomial_adds_sample_depth_latent() -> None:
     model = CNVModel(obs_likelihood="negative_binomial")
     assert "sample_depth" in model._latent_sites
@@ -401,6 +417,46 @@ def test_shrinkage_prior_trains_with_autosome_and_sex_bins() -> None:
     assert estimates["cn_probs"].shape == (2, 6)
     assert "autosome_nonref_prob" in estimates
     assert "sex_cn_probs" in estimates
+
+
+def test_model_kwargs_skip_precomputed_af_table_when_learning_site_af(
+    tiny_depth_df: pd.DataFrame,
+    tiny_site_data: dict[str, np.ndarray],
+) -> None:
+    data = DepthData(tiny_depth_df, device="cpu", site_data=tiny_site_data)
+    model = CNVModel(
+        sex_cn_weight=0.0,
+        epsilon_mean=0.0,
+        guide_type="diagonal",
+        learn_site_pop_af=True,
+        af_weight=0.5,
+    )
+
+    model_kw = model._model_kwargs(data)
+
+    assert "af_table" not in model_kw
+    assert model_kw["site_pop_af"].shape == data.site_pop_af.shape
+
+
+def test_learn_site_pop_af_trains_with_mixed_guide(
+    tiny_depth_df: pd.DataFrame,
+    tiny_site_data: dict[str, np.ndarray],
+) -> None:
+    data = DepthData(tiny_depth_df, device="cpu", site_data=tiny_site_data)
+    model = CNVModel(
+        sex_cn_weight=0.0,
+        epsilon_mean=0.0,
+        guide_type="diagonal",
+        autosome_prior_mode="dirichlet",
+        learn_site_pop_af=True,
+        af_weight=0.5,
+    )
+
+    model.train(data, max_iter=1, log_freq=1, early_stopping=False)
+    estimates = model.get_map_estimates(data, estimate_method="median")
+
+    assert "site_pop_af_latent" in estimates
+    assert estimates["site_pop_af_latent"].shape == tiny_site_data["site_pop_af"].shape
 
 
 def test_get_map_estimates_median_uses_guide_median(monkeypatch) -> None:

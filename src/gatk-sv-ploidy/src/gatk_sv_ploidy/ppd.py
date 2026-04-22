@@ -195,6 +195,12 @@ def _build_model_from_artifacts(
         learn_af_temperature=bool(
             np.asarray(map_estimates.get("model_learn_af_temperature", False)).item()
         ),
+        learn_site_pop_af=bool(
+            np.asarray(map_estimates.get("model_learn_site_pop_af", False)).item()
+        ),
+        site_af_prior_strength=float(
+            np.asarray(map_estimates.get("model_site_af_prior_strength", 20.0)).item()
+        ),
         af_temperature_prior_scale=float(
             np.asarray(
                 map_estimates.get("model_af_temperature_prior_scale", 0.5)
@@ -393,6 +399,28 @@ def generate_ppd_depth(
     return draws
 
 
+def _compute_randomized_pit(
+    ppd_draws: np.ndarray,
+    observed: np.ndarray,
+    seed: int = 0,
+) -> np.ndarray:
+    """Compute randomized PIT values from posterior predictive draws.
+
+    For discrete predictive distributions, ties at the observed value create
+    non-uniform one-sided tail histograms even when the model is calibrated.
+    This helper randomizes within the predictive mass at the observed value so
+    the resulting PIT is the appropriate uniform-target diagnostic.
+    """
+    observed = np.asarray(observed)
+    n_draws = int(ppd_draws.shape[0])
+    n_less = (ppd_draws < observed[np.newaxis, :, :]).sum(axis=0)
+    n_equal = (ppd_draws == observed[np.newaxis, :, :]).sum(axis=0)
+    rng = np.random.RandomState(seed)
+    tie_break = rng.uniform(size=observed.shape)
+    pit = (n_less + tie_break * n_equal) / max(n_draws, 1)
+    return np.clip(pit, 0.0, 1.0)
+
+
 # ── summary statistics ──────────────────────────────────────────────────────
 
 
@@ -408,6 +436,7 @@ def compute_ppd_bin_summary(
     - ``ppd_mean``, ``ppd_std``: mean and std of predictive draws.
     - ``residual``: observed − ppd_mean.
     - ``z_score``: residual / ppd_std.
+    - ``randomized_pit``: randomized probability integral transform value.
     - ``tail_prob``: fraction of PPD draws ≥ observed (one-sided).
     - ``two_tail_prob``: P(|draw − ppd_mean| ≥ |obs − ppd_mean|).
 
@@ -429,6 +458,8 @@ def compute_ppd_bin_summary(
 
     residual = obs - ppd_mean
     z_score = residual / ppd_std_safe
+
+    randomized_pit = _compute_randomized_pit(ppd_draws, obs, seed=0)
 
     # Tail probability: fraction of draws ≥ observed
     n_draws = ppd_draws.shape[0]
@@ -468,6 +499,7 @@ def compute_ppd_bin_summary(
                 "ppd_q95": float(ppd_q95[i, j]),
                 "residual": float(residual[i, j]),
                 "z_score": float(z_score[i, j]),
+                "randomized_pit": float(randomized_pit[i, j]),
                 "tail_prob": float(tail_prob[i, j]),
                 "two_tail_prob": float(two_tail_prob[i, j]),
                 "outside_90pct_interval": bool(outside_90pct_interval[i, j]),

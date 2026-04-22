@@ -5,6 +5,7 @@ import pandas as pd
 
 import pytest
 
+from gatk_sv_ploidy._util import get_sample_columns
 from gatk_sv_ploidy.preprocess import (
     _merge_intervals_by_chr,
     _process_sd_file,
@@ -453,8 +454,63 @@ def test_preprocess_parse_args_defaults(monkeypatch) -> None:
 
     assert args.bins_per_contig == 30
     assert args.output_space == "raw"
+    assert args.samples_list is None
     assert args.chrY_median_max == pytest.approx(0.85)
     assert args.min_bins_per_chr == 10
+
+
+def test_preprocess_can_subset_samples_from_list(tmp_path, monkeypatch) -> None:
+    raw_path = tmp_path / "raw.tsv"
+    raw_path.write_text(
+        "#Chr\tStart\tEnd\tS1\tS2\tS3\n"
+        "chr21\t0\t100\t10\t20\t30\n"
+        "chrX\t0\t100\t5\t10\t15\n"
+    )
+    samples_list = tmp_path / "samples.txt"
+    samples_list.write_text("# retain only these samples\nS3\n\nS1\nS3\n")
+    sd_path = tmp_path / "sample.sd.txt"
+    sd_path.write_text(
+        "chr21\t20\tS1\t8\t0\t0\t2\n"
+        "chr21\t20\tS2\t7\t0\t0\t3\n"
+        "chr21\t20\tS3\t9\t0\t0\t1\n"
+    )
+    output_dir = tmp_path / "out"
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "gatk-sv-ploidy preprocess",
+            "--input",
+            str(raw_path),
+            "--output-dir",
+            str(output_dir),
+            "--samples-list",
+            str(samples_list),
+            "--skip-bin-filter",
+            "--output-space",
+            "raw",
+            "--site-depth",
+            str(sd_path),
+            "--bins-per-contig",
+            "0",
+        ],
+    )
+
+    main()
+
+    preprocessed = pd.read_csv(
+        output_dir / "preprocessed_depth.tsv",
+        sep="\t",
+        index_col=0,
+    )
+    assert get_sample_columns(preprocessed) == ["S3", "S1"]
+    assert preprocessed.loc["chr21:0-100", "S3"] == pytest.approx(30.0)
+    assert preprocessed.loc["chrX:0-100", "S1"] == pytest.approx(5.0)
+
+    site_npz = np.load(output_dir / "site_data.npz", allow_pickle=True)
+    assert site_npz["sample_ids"].tolist() == ["S3", "S1"]
+    np.testing.assert_array_equal(site_npz["site_alt"][0, 0, :], np.array([1, 2]))
+    assert site_npz["site_pop_af"][0, 0] == pytest.approx((3.0 + 0.5) / 21.0)
 
 
 def test_preprocess_can_write_raw_counts(tmp_path, monkeypatch) -> None:

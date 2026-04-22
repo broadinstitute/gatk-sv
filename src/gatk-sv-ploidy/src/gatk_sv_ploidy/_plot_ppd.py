@@ -173,34 +173,60 @@ def plot_calibration_histogram(
     ppd_bin_df: pd.DataFrame,
     output_dir: str,
 ) -> None:
-    """Histogram of PPD tail probabilities — should be uniform if calibrated.
+    """Plot randomized PIT and posterior predictive p-value histograms.
 
     Args:
         ppd_bin_df: ``ppd_bin_summary.tsv.gz`` DataFrame.
         output_dir: Base output directory.
     """
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    has_randomized_pit = "randomized_pit" in ppd_bin_df.columns
+    n_panels = 3 if has_randomized_pit else 2
+    fig, axes = plt.subplots(1, n_panels, figsize=(6 * n_panels, 5))
+    axes = np.atleast_1d(axes)
+
+    panel_idx = 0
+    if has_randomized_pit:
+        ax = axes[panel_idx]
+        ax.hist(
+            ppd_bin_df["randomized_pit"],
+            bins=50,
+            density=True,
+            alpha=0.7,
+            edgecolor="black",
+            linewidth=0.3,
+            color="slateblue",
+        )
+        ax.axhline(
+            1.0,
+            color="red",
+            linestyle="--",
+            alpha=0.6,
+            label="Uniform(0,1)",
+        )
+        ax.set_xlabel("Randomized PIT")
+        ax.set_ylabel("Density")
+        ax.set_title("PPD Calibration: Randomized PIT")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        panel_idx += 1
 
     # One-sided tail probability
-    ax = axes[0]
+    ax = axes[panel_idx]
     ax.hist(ppd_bin_df["tail_prob"], bins=50, density=True, alpha=0.7,
             edgecolor="black", linewidth=0.3, color="steelblue")
-    ax.axhline(1.0, color="red", linestyle="--", alpha=0.6, label="Uniform(0,1)")
     ax.set_xlabel("Tail Probability P(draw ≥ obs)")
     ax.set_ylabel("Density")
-    ax.set_title("PPD Calibration: Tail Probabilities")
-    ax.legend()
+    ax.set_title("PPD One-Sided P-Values")
     ax.grid(True, alpha=0.3)
+    panel_idx += 1
 
     # Two-sided tail probability
-    ax = axes[1]
+    ax = axes[panel_idx]
     ax.hist(ppd_bin_df["two_tail_prob"], bins=50, density=True, alpha=0.7,
             edgecolor="black", linewidth=0.3, color="teal")
-    ax.axhline(1.0, color="red", linestyle="--", alpha=0.6, label="Uniform(0,1)")
     ax.set_xlabel("Two-Tail Probability")
     ax.set_ylabel("Density")
-    ax.set_title("PPD Calibration: Two-Tailed")
-    ax.legend()
+    ax.set_title("PPD Two-Sided P-Values")
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()

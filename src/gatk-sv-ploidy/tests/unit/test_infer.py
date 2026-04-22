@@ -34,17 +34,21 @@ def test_infer_parse_args_defaults(monkeypatch) -> None:
 
     args = parse_args()
 
-    assert args.autosome_prior_mode == "shrinkage"
-    assert args.var_bias_bin == 0.05
+    assert args.autosome_prior_mode == "dirichlet"
+    assert args.var_bias_bin == 0.02
+    assert args.var_sample == 0.00025
+    assert args.var_bin == 0.001
     assert args.alpha_ref == 50.0
     assert args.epsilon_mean == 1e-2
     assert args.depth_space == "auto"
     assert args.obs_likelihood == "auto"
     assert args.sample_depth_max == 10000.0
-    assert args.af_evidence_mode == "absolute"
+    assert args.af_evidence_mode == "relative"
     assert args.cn_inference_method == "multi-draw"
     assert args.cn_inference_draws == 100
     assert args.site_af_estimator == "auto"
+    assert args.learn_site_af is False
+    assert args.site_af_prior_strength == 20.0
     assert args.site_af_prior_alpha == 1.0
     assert args.site_af_prior_beta == 1.0
 
@@ -66,6 +70,27 @@ def test_infer_parse_args_accepts_relative_af_evidence_mode(monkeypatch) -> None
     args = parse_args()
 
     assert args.af_evidence_mode == "relative"
+
+
+def test_infer_parse_args_accepts_learn_site_af(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "infer",
+            "--input",
+            "depth.tsv",
+            "--output-dir",
+            "outdir",
+            "--learn-site-af",
+            "--site-af-prior-strength",
+            "12.5",
+        ],
+    )
+
+    args = parse_args()
+
+    assert args.learn_site_af is True
+    assert args.site_af_prior_strength == pytest.approx(12.5)
 
 
 def test_inference_tensor_dtype_always_uses_float64() -> None:

@@ -7,6 +7,7 @@ import pytest
 from gatk_sv_ploidy.data import DepthData
 from gatk_sv_ploidy.ppd import (
     _build_model_from_artifacts,
+    _compute_randomized_pit,
     _resolve_input_depth_space,
     apply_effective_site_pop_af,
     compute_call_stability_quality_summary,
@@ -39,6 +40,18 @@ def test_generate_ppd_depth_is_seeded(tiny_depth_df: pd.DataFrame) -> None:
     draws_two = generate_ppd_depth(data, map_est, cn_post, n_draws=5, seed=7)
 
     np.testing.assert_allclose(draws_one, draws_two)
+
+
+def test_compute_randomized_pit_randomizes_discrete_ties_deterministically() -> None:
+    draws = np.array([[[0.0]], [[1.0]], [[1.0]], [[2.0]]], dtype=np.float32)
+    observed = np.array([[1.0]], dtype=np.float32)
+
+    pit_one = _compute_randomized_pit(draws, observed, seed=0)
+    pit_two = _compute_randomized_pit(draws, observed, seed=0)
+
+    np.testing.assert_allclose(pit_one, pit_two)
+    assert float(pit_one[0, 0]) >= 0.25
+    assert float(pit_one[0, 0]) <= 0.75
 
 
 def test_generate_ppd_depth_supports_studentt_metadata(tiny_depth_df: pd.DataFrame) -> None:
@@ -264,12 +277,14 @@ def test_ppd_summaries_have_expected_shapes(tiny_depth_df: pd.DataFrame) -> None
 
     assert len(bin_summary) == data.n_bins * data.n_samples
     assert set([
+        "randomized_pit",
         "tail_prob",
         "two_tail_prob",
         "ppd_mean",
         "outside_90pct_interval",
         "outside_50pct_interval",
     ]).issubset(bin_summary.columns)
+    assert ((bin_summary["randomized_pit"] >= 0.0) & (bin_summary["randomized_pit"] <= 1.0)).all()
     assert ((bin_summary["tail_prob"] >= 0.0) & (bin_summary["tail_prob"] <= 1.0)).all()
     assert len(bin_quality) == data.n_bins
     assert set([

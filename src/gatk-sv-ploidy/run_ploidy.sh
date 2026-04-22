@@ -191,41 +191,41 @@ if [[ "${CALL_NEEDS_PPD_FILTER}" == "true" ]]; then
 fi
 
 # ── step 1: preprocess ───────────────────────────────────────────────────────
-echo "[1/${TOTAL_STEPS}] preprocess"
-SD_ARGS=""
-if [[ -n "${SITE_DEPTH_LIST}" ]]; then
-    SD_ARGS="--site-depth-list ${SITE_DEPTH_LIST}"
-fi
-PR_ARGS=""
-if [[ -n "${POOR_REGIONS}" ]]; then
-    PR_ARGS="--poor-regions ${POOR_REGIONS} --min-poor-region-coverage ${MIN_POOR_REGION_COVERAGE}"
-fi
-if [[ "${DRY_RUN}" == "true" ]]; then
-    echo "DRY-RUN: ${CLI_PYTHON} -m gatk_sv_ploidy.cli preprocess -i \"${INPUT_DEPTH}\" -o \"${PREPROCESS_DIR}\" ${SD_ARGS} ${PR_ARGS} ${PREPROCESS_ARGS}"
-else
-    run_cli preprocess \
-        -i "${INPUT_DEPTH}" \
-        -o "${PREPROCESS_DIR}" \
-        $SD_ARGS \
-        $PR_ARGS \
-        $PREPROCESS_ARGS
-fi
+# echo "[1/${TOTAL_STEPS}] preprocess"
+# SD_ARGS=""
+# if [[ -n "${SITE_DEPTH_LIST}" ]]; then
+#     SD_ARGS="--site-depth-list ${SITE_DEPTH_LIST}"
+# fi
+# PR_ARGS=""
+# if [[ -n "${POOR_REGIONS}" ]]; then
+#     PR_ARGS="--poor-regions ${POOR_REGIONS} --min-poor-region-coverage ${MIN_POOR_REGION_COVERAGE}"
+# fi
+# if [[ "${DRY_RUN}" == "true" ]]; then
+#     echo "DRY-RUN: ${CLI_PYTHON} -m gatk_sv_ploidy.cli preprocess -i \"${INPUT_DEPTH}\" -o \"${PREPROCESS_DIR}\" ${SD_ARGS} ${PR_ARGS} ${PREPROCESS_ARGS}"
+# else
+#     run_cli preprocess \
+#         -i "${INPUT_DEPTH}" \
+#         -o "${PREPROCESS_DIR}" \
+#         $SD_ARGS \
+#         $PR_ARGS \
+#         $PREPROCESS_ARGS
+# fi
 
-# ── step 2: infer ────────────────────────────────────────────────────────────
-echo "[2/${TOTAL_STEPS}] infer"
-AF_ARGS=""
-if [[ -f "${SITE_DATA}" ]]; then
-    AF_ARGS="--site-data ${SITE_DATA}"
-fi
-if [[ "${DRY_RUN}" == "true" ]]; then
-    echo "DRY-RUN: ${CLI_PYTHON} -m gatk_sv_ploidy.cli infer -i \"${PREPROCESSED_DEPTH}\" -o \"${INFER_DIR}\" ${AF_ARGS} ${MODEL_ARGS}"
-else
-    run_cli infer \
-        -i "${PREPROCESSED_DEPTH}" \
-        -o "${INFER_DIR}" \
-        $AF_ARGS \
-        $MODEL_ARGS
-fi
+# # ── step 2: infer ────────────────────────────────────────────────────────────
+# echo "[2/${TOTAL_STEPS}] infer"
+# AF_ARGS=""
+# if [[ -f "${SITE_DATA}" ]]; then
+#     AF_ARGS="--site-data ${SITE_DATA}"
+# fi
+# if [[ "${DRY_RUN}" == "true" ]]; then
+#     echo "DRY-RUN: ${CLI_PYTHON} -m gatk_sv_ploidy.cli infer -i \"${PREPROCESSED_DEPTH}\" -o \"${INFER_DIR}\" ${AF_ARGS} ${MODEL_ARGS}"
+# else
+#     run_cli infer \
+#         -i "${PREPROCESSED_DEPTH}" \
+#         -o "${INFER_DIR}" \
+#         $AF_ARGS \
+#         $MODEL_ARGS
+# fi
 
 # ── step 3/4: posterior predictive checks and call ──────────────────────────
 PPD_ARGS=""

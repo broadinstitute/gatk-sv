@@ -148,6 +148,9 @@ def _aggregate_bin_stats_to_chromosome_stats(bin_df: pd.DataFrame) -> pd.DataFra
 
         rows.append(row)
 
+    if not rows:
+        return pd.DataFrame(columns=["sample", "chromosome"])
+
     return pd.DataFrame(rows)
 
 
@@ -320,16 +323,17 @@ def _apply_binq_filter_to_annotated_bins(
         "n_bins_filtered",
         pd.Series(index=out.index, dtype=float),
     ).notna()
+    filtered_copy_number = out.get(
+        "copy_number_filtered",
+        pd.Series(index=out.index, dtype=float),
+    )
     sex_conflict_mask = (
         retained_mask &
         out["chromosome"].isin(_SEX_CHROMS) &
-        out.get(
-            "copy_number_filtered",
-            pd.Series(index=out.index, dtype=float),
-        ).notna() &
+        filtered_copy_number.notna() &
         (
             out["copy_number"].to_numpy(dtype=float) !=
-            out["copy_number_filtered"].to_numpy(dtype=float)
+            filtered_copy_number.to_numpy(dtype=float)
         )
     )
     replacement_mask = retained_mask & ~sex_conflict_mask

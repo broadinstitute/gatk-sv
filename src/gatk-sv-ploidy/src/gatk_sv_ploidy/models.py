@@ -32,6 +32,7 @@ from pyro.infer import (
 from pyro.infer.autoguide import (
     AutoDelta,
     AutoDiagonalNormal,
+    AutoGuideList,
     AutoLowRankMultivariateNormal,
 )
 from pyro.infer.autoguide.initialization import init_to_median
@@ -281,7 +282,6 @@ def _precompute_af_table(
             site_alt, site_total, site_pop_af, site_mask,
             cn=cn_c, n_states=n_states, concentration=concentration,
         )
-    logger.info("Precomputed AF table: shape %s", list(table.shape))
     return table
 
 
@@ -532,6 +532,13 @@ class CNVModel:
     learn_af_temperature : bool
         Whether to learn a single global AF temperature instead of keeping
         ``af_weight`` fixed.
+    learn_site_pop_af : bool
+        Whether to infer per-site population AFs inside the model using a
+        Delta guide while keeping the requested guide family for the remaining
+        latent variables.
+    site_af_prior_strength : float
+        Strength of the Beta prior on latent site AFs. The current
+        ``site_pop_af`` values are used as prior means.
     af_temperature_prior_scale : float
         LogNormal prior scale for the learned AF temperature.
     alpha_sex_ref : float
@@ -563,23 +570,25 @@ class CNVModel:
     def __init__(
         self,
         n_states: int = 6,
-        autosome_prior_mode: str = "shrinkage",
+        autosome_prior_mode: str = "dirichlet",
         alpha_ref: float = 50.0,
         alpha_non_ref: float = 1.0,
         autosome_nonref_mean_alpha: float = 1.0,
         autosome_nonref_mean_beta: float = 19.0,
         autosome_nonref_concentration: float = 20.0,
-        var_bias_bin: float = 0.05,
-        var_sample: float = 0.2,
-        var_bin: float = 0.2,
+        var_bias_bin: float = 0.02,
+        var_sample: float = 0.00025,
+        var_bin: float = 0.001,
         epsilon_mean: float = 1e-2,
         device: str = "cpu",
         dtype: torch.dtype = torch.float32,
         guide_type: str = "delta",
         af_concentration: float = DEFAULT_AF_CONCENTRATION,
         af_weight: float = DEFAULT_AF_WEIGHT,
-        af_evidence_mode: str = "absolute",
+        af_evidence_mode: str = "relative",
         learn_af_temperature: bool = False,
+        learn_site_pop_af: bool = False,
+        site_af_prior_strength: float = 20.0,
         af_temperature_prior_scale: float = 0.5,
         alpha_sex_ref: float = 1.0,
         alpha_sex_non_ref: float = 1.0,
@@ -607,6 +616,8 @@ class CNVModel:
         self.af_weight = af_weight
         self.af_evidence_mode = _normalize_af_evidence_mode(af_evidence_mode)
         self.learn_af_temperature = learn_af_temperature
+        self.learn_site_pop_af = learn_site_pop_af
+        self.site_af_prior_strength = site_af_prior_strength
         self.af_temperature_prior_scale = af_temperature_prior_scale
         self.alpha_sex_ref = alpha_sex_ref
         self.alpha_sex_non_ref = alpha_sex_non_ref
@@ -631,6 +642,10 @@ class CNVModel:
             raise ValueError("af_temperature_prior_scale must be positive.")
         if self.learn_af_temperature and self.af_weight <= 0:
             raise ValueError("learn_af_temperature requires af_weight > 0.")
+        if self.learn_site_pop_af and self.af_weight <= 0:
+            raise ValueError("learn_site_pop_af requires af_weight > 0.")
+        if self.site_af_prior_strength < 0:
+            raise ValueError("site_af_prior_strength must be non-negative.")
 
         if self.epsilon_mean < 0:
             raise ValueError("epsilon_mean must be non-negative.")
@@ -658,6 +673,8 @@ class CNVModel:
             self._latent_sites.append("bin_epsilon")
         if self.learn_af_temperature:
             self._latent_sites.append("af_temperature")
+        if self.learn_site_pop_af:
+            self._latent_sites.append("site_pop_af_latent")
 
         self.ref_state = 2
         self.nonref_state_indices = tuple(
@@ -706,23 +723,47 @@ class CNVModel:
 
         self.guide = self._build_guide()
 
-    def _build_guide(self, init_loc_fn=None):
-        """Construct the variational guide, optionally with custom init."""
-        blocked = poutine.block(self.model, expose=self._latent_sites)
-        guide_kwargs = {}
-        if init_loc_fn is not None:
-            guide_kwargs["init_loc_fn"] = init_loc_fn
-
+    def _build_base_guide(self, blocked_model, guide_kwargs: dict):
+        """Construct the requested autoguide for a blocked model."""
         if self.guide_type == "delta":
-            return AutoDelta(blocked, **guide_kwargs)
+            return AutoDelta(blocked_model, **guide_kwargs)
         if self.guide_type == "diagonal":
-            return AutoDiagonalNormal(blocked, **guide_kwargs)
+            return AutoDiagonalNormal(blocked_model, **guide_kwargs)
         if self.guide_type == "lowrank":
-            return AutoLowRankMultivariateNormal(blocked, **guide_kwargs)
+            return AutoLowRankMultivariateNormal(blocked_model, **guide_kwargs)
         raise ValueError(
             f"Unknown guide_type: {self.guide_type!r}. "
             "Choose 'delta', 'diagonal', or 'lowrank'."
         )
+
+    def _build_guide(self, init_loc_fn=None):
+        """Construct the variational guide, optionally with custom init."""
+        guide_kwargs = {}
+        if init_loc_fn is not None:
+            guide_kwargs["init_loc_fn"] = init_loc_fn
+
+        if self.learn_site_pop_af:
+            guide = AutoGuideList(self.model)
+            guide.append(
+                AutoDelta(
+                    poutine.block(self.model, expose=["site_pop_af_latent"]),
+                    **guide_kwargs,
+                )
+            )
+            remaining_latents = [
+                site for site in self._latent_sites if site != "site_pop_af_latent"
+            ]
+            if remaining_latents:
+                guide.append(
+                    self._build_base_guide(
+                        poutine.block(self.model, expose=remaining_latents),
+                        guide_kwargs,
+                    )
+                )
+            return guide
+
+        blocked = poutine.block(self.model, expose=self._latent_sites)
+        return self._build_base_guide(blocked, guide_kwargs)
 
     def _compose_autosome_cn_probs_torch(
         self,
@@ -1140,6 +1181,8 @@ class CNVModel:
         def init_loc_fn(site):
             if site["name"] == "sample_depth":
                 return sample_depth_init
+            if site["name"] == "site_pop_af_latent" and data.site_pop_af is not None:
+                return torch.clamp(data.site_pop_af, min=1e-6, max=1.0 - 1e-6)
             return base_init(site)
 
         return init_loc_fn
@@ -1220,6 +1263,21 @@ class CNVModel:
             )
         else:
             af_temperature = self._af_scale_torch()
+
+        if self.learn_site_pop_af and site_pop_af is not None and self.af_weight > 0:
+            prior_mean = torch.clamp(site_pop_af, min=1e-6, max=1.0 - 1e-6)
+            prior_strength = torch.tensor(
+                self.site_af_prior_strength,
+                device=self.device,
+                dtype=self.dtype,
+            )
+            site_pop_af = pyro.sample(
+                "site_pop_af_latent",
+                dist.Beta(
+                    1.0 + prior_strength * prior_mean,
+                    1.0 + prior_strength * (1.0 - prior_mean),
+                ).to_event(2),
+            )
 
         # Per-sample variance and sex karyotype
         sample_depth = None
@@ -1472,12 +1530,18 @@ class CNVModel:
                     self.sex_cn_weight / counts[ct]
                 ).unsqueeze(-1)  # (n_bins, 1)
         if data.site_alt is not None and self.af_weight > 0:
-            with torch.no_grad():
-                kw["af_table"] = self._prepare_af_table_torch(
-                    data.site_alt, data.site_total,
-                    data.site_pop_af, data.site_mask,
-                    kw.get("chr_type"),
-                )
+            if self.learn_site_pop_af:
+                kw["site_alt"] = data.site_alt
+                kw["site_total"] = data.site_total
+                kw["site_pop_af"] = data.site_pop_af
+                kw["site_mask"] = data.site_mask
+            else:
+                with torch.no_grad():
+                    kw["af_table"] = self._prepare_af_table_torch(
+                        data.site_alt, data.site_total,
+                        data.site_pop_af, data.site_mask,
+                        kw.get("chr_type"),
+                    )
         return kw
 
     def train(
@@ -1672,7 +1736,13 @@ class CNVModel:
         elif data.site_alt is not None and af_scale > 0:
             site_alt_np = data.site_alt.detach().cpu().numpy()
             site_total_np = data.site_total.detach().cpu().numpy()
-            site_pop_af_np = data.site_pop_af.detach().cpu().numpy()
+            site_pop_af_np = np.asarray(
+                maps.get(
+                    "site_pop_af_latent",
+                    data.site_pop_af.detach().cpu().numpy(),
+                ),
+                dtype=np.float64,
+            )
             site_mask_np = data.site_mask.detach().cpu().numpy()
             raw_af_table = np.empty(
                 (self.n_states, data.n_bins, data.n_samples),
@@ -1859,8 +1929,12 @@ class CNVModel:
             }
             if draw_estimate_collector is not None:
                 for site in draw_maps:
+                    if site == "site_pop_af_latent":
+                        continue
                     draw_estimate_collector.setdefault(site, [])
                 for site, value in draw_maps.items():
+                    if site == "site_pop_af_latent":
+                        continue
                     draw_estimate_collector[site].append(np.array(value, copy=True))
             draw_post = self._run_discrete_inference_fixed_latents(
                 data,

@@ -215,6 +215,91 @@ def test_apply_binq_filter_to_chromosome_stats_rebuilds_autosome_calls() -> None
     assert int(chrY["copy_number"]) == 0
 
 
+def test_apply_binq_filter_handles_fully_filtered_run() -> None:
+    chrom_df = pd.DataFrame(
+        [
+            {
+                "sample": "S1",
+                "chromosome": "chrX",
+                "copy_number": 2,
+                "is_aneuploid": False,
+                "mean_cn_probability": 0.95,
+                "median_depth": 2.0,
+                "n_bins": 1,
+            },
+            {
+                "sample": "S1",
+                "chromosome": "chr21",
+                "copy_number": 3,
+                "is_aneuploid": True,
+                "mean_cn_probability": 0.90,
+                "median_depth": 3.0,
+                "n_bins": 2,
+            },
+        ]
+    )
+    bin_stats_df = pd.DataFrame(
+        [
+            {
+                "chr": "chr21",
+                "start": 0,
+                "end": 100,
+                "sample": "S1",
+                "observed_depth": 3.0,
+                "cn_map": 3,
+                "cn_prob_0": 0.0,
+                "cn_prob_1": 0.0,
+                "cn_prob_2": 0.05,
+                "cn_prob_3": 0.95,
+                "cn_prob_4": 0.0,
+                "cn_prob_5": 0.0,
+                "cnq": 20,
+            },
+            {
+                "chr": "chr21",
+                "start": 100,
+                "end": 200,
+                "sample": "S1",
+                "observed_depth": 3.0,
+                "cn_map": 3,
+                "cn_prob_0": 0.0,
+                "cn_prob_1": 0.0,
+                "cn_prob_2": 0.05,
+                "cn_prob_3": 0.95,
+                "cn_prob_4": 0.0,
+                "cn_prob_5": 0.0,
+                "cnq": 20,
+            },
+        ]
+    )
+    bin_quality_df = pd.DataFrame(
+        [
+            {"chr": "chr21", "start": 0, "end": 100, "BINQ20": 5.0},
+            {"chr": "chr21", "start": 100, "end": 200, "BINQ20": 5.0},
+        ]
+    )
+
+    filtered = apply_binq_filter_to_chromosome_stats(
+        chrom_df,
+        bin_stats_df,
+        bin_quality_df,
+        min_binq=20.0,
+        binq_field="BINQ20",
+        prob_threshold=0.5,
+    )
+
+    chr21 = filtered[filtered["chromosome"] == "chr21"].iloc[0]
+    chrX = filtered[filtered["chromosome"] == "chrX"].iloc[0]
+
+    assert int(chr21["copy_number"]) == 2
+    assert pd.isna(chr21["mean_cn_probability"])
+    assert int(chr21["n_bins_retained"]) == 0
+    assert float(chr21["frac_bins_retained"]) == 0.0
+    assert bool(chr21["is_aneuploid"]) is False
+    assert int(chrX["copy_number"]) == 2
+    assert int(chrX["n_bins_retained"]) == 0
+
+
 def test_apply_binq_filter_uses_majority_vote_and_average_cnq() -> None:
     chrom_df = pd.DataFrame(
         [
