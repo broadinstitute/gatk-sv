@@ -68,6 +68,22 @@ gatk-sv-ploidy eval -p out/call/aneuploidy_type_predictions.tsv \
 (`--epsilon-mean 1e-2`). Pass `--epsilon-mean 0` to disable it and recover
 the older multiplicative-only depth model.
 
+To test the raw-count negative-binomial model instead of the historical
+normalized-depth residual model, keep preprocess filtering in normalized
+space but write filtered raw counts:
+
+```bash
+gatk-sv-ploidy preprocess -i depth.tsv -o out/preprocess_nb/ --output-space raw
+gatk-sv-ploidy infer -i out/preprocess_nb/preprocessed_depth.tsv -o out/infer_nb/ \
+  --depth-space raw --obs-likelihood negative_binomial
+gatk-sv-ploidy ppd -i out/preprocess_nb/preprocessed_depth.tsv \
+  -a out/infer_nb/inference_artifacts.npz -o out/ppd_nb/ --depth-space raw
+```
+
+In this mode the model infers a per-sample depth latent with a flat
+`Uniform(0, 10000)` prior and uses the per-bin and per-sample variance terms
+as negative-binomial overdispersion factors.
+
 ---
 
 ## Pipeline architecture
@@ -222,32 +238,32 @@ zero-mappability and extreme-repeat bins.
 
 #### 1.3 Per-site allele data assembly
 
-When per-sample site-depth (SD) files are provided, allele counts at known
-SNP positions are aggregated into a 3-D tensor aligned to the genomic bins.
+When per-sample site-depth (SD) files are provided, allele counts are
+aggregated into a 3-D tensor aligned to the genomic bins.
 
 ```mermaid
 flowchart LR
     SD["SD file\n(contig, pos, sample,\nA, C, G, T)"] --> JOIN
-    KS["Known sites\n(contig, pos, ref, pop_af)"] --> JOIN
     BINS["Bin coordinates\n(Chr, Start, End)"] --> JOIN
-    JOIN["Intersect &\nassign to bins"] --> PAD["Pad / subsample\nto max_sites_per_bin"]
+  JOIN["Assign to bins"] --> POOL["Pool cohort counts\nper site"]
+  POOL --> ID["Choose cohort-major\nallele identity"]
+  ID --> PAD["Pad / subsample\nto max_sites_per_bin"]
     PAD --> OUT["site_alt, site_total,\nsite_pop_af, site_mask\n(B × J × S)"]
 ```
 
-For each SD file, positions are intersected with known SNP sites via sorted
-`searchsorted` lookup. At each matching site, the **reference allele count**
-is extracted using the known reference base, and:
+At each retained site, the pooled cohort counts across all samples define a
+single major allele identity. Each sample's alt count is then all reads not
+matching that shared allele:
 
-$$a_{bjs} = n_{bjs} - \text{ref\_count}_{bjs}$$
+$$a_{bjs} = n_{bjs} - \text{major\_count}_{bjs}$$
 
-where $n_{bjs} = A + C + G + T$ is the total depth. In fallback mode
-(`--known-sites` omitted), sites with low total depth are discarded to
-suppress noise from weakly covered positions; by default the CLI uses
-`--min-site-depth 3` for that mode.
+where $n_{bjs} = A + C + G + T$ is the total depth. Sites with low total
+depth are discarded to suppress noise from weakly covered positions; by
+default the CLI uses `--min-site-depth 3`.
 
-When no known-sites file is provided, a **fallback mode** uses every SD
-position with `pop_af = 0.5` and defines the alt count as
-$n - \max(A, C, G, T)$ (minor allele count).
+The site population AF is estimated directly from the pooled cohort alt and
+total counts with light smoothing, so no external site-frequency resource is
+required.
 
 Each bin is padded or subsampled to a fixed width $J_{\max}$ (default 50)
 with a boolean validity mask $m_{bjs}$ tracking real entries. The result is

@@ -11,13 +11,17 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
-from gatk_sv_ploidy._util import get_sample_columns
+from gatk_sv_ploidy._util import (
+    DEPTH_SPACES,
+    get_sample_columns,
+    write_observation_type,
+)
 from gatk_sv_ploidy.data import read_depth_tsv
 
 logger = logging.getLogger(__name__)
@@ -505,6 +509,7 @@ def collapse_bins_per_contig(
     df: pd.DataFrame,
     *,
     bins_per_contig: int = 30,
+    aggregation: str = "weighted_mean",
 ) -> pd.DataFrame:
     """Collapse contiguous bins within each contig when a contig is too dense.
 
@@ -512,16 +517,23 @@ def collapse_bins_per_contig(
     chunk size *k* such that collapsing contiguous groups of *k* bins still
     yields at least *bins_per_contig* output bins. Depth values are averaged
     using bin-length weights so larger intervals contribute proportionally
-    more to the collapsed depth.
+    more to the collapsed depth. When ``aggregation='sum'``, per-sample depth
+    values are summed instead; this is used for raw-count output so the
+    collapsed bins remain integer count totals.
 
     Args:
         df: Preprocessed depth DataFrame.
         bins_per_contig: Target minimum number of bins to retain per contig.
             Values <= 0 disable collapsing.
+        aggregation: ``'weighted_mean'`` for normalized depth or ``'sum'``
+            for raw counts.
 
     Returns:
         DataFrame with collapsed bins and refreshed bin identifiers.
     """
+    if aggregation not in {"weighted_mean", "sum"}:
+        raise ValueError("aggregation must be 'weighted_mean' or 'sum'")
+
     if bins_per_contig <= 0 or len(df) == 0:
         return df.copy()
 
@@ -532,6 +544,15 @@ def collapse_bins_per_contig(
 
     for chrom, chrom_df in df.groupby("Chr", sort=False):
         chrom_df = chrom_df.sort_values("Start", kind="mergesort").copy()
+        if "BinLengthBp" in chrom_df.columns:
+            bin_lengths = chrom_df["BinLengthBp"].to_numpy(dtype=np.int64)
+        else:
+            bin_lengths = np.maximum(
+                chrom_df["End"].to_numpy(dtype=np.int64) -
+                chrom_df["Start"].to_numpy(dtype=np.int64),
+                1,
+            )
+            chrom_df["BinLengthBp"] = bin_lengths
         n_bins = len(chrom_df)
         if n_bins <= bins_per_contig:
             collapsed_parts.append(chrom_df)
@@ -550,26 +571,29 @@ def collapse_bins_per_contig(
         starts = chrom_df["Start"].to_numpy(dtype=np.int64)
         ends = chrom_df["End"].to_numpy(dtype=np.int64)
         depths = chrom_df[sample_cols].to_numpy(dtype=np.float64)
-        bin_lengths = np.maximum(ends - starts, 1)
 
         for start_idx in range(0, n_bins, chunk_size):
             end_idx = min(start_idx + chunk_size, n_bins)
             group_lengths = bin_lengths[start_idx:end_idx]
             group_depths = depths[start_idx:end_idx]
-            weighted_depth = np.average(
-                group_depths,
-                axis=0,
-                weights=group_lengths,
-            )
+            if aggregation == "sum":
+                aggregated_depth = group_depths.sum(axis=0)
+            else:
+                aggregated_depth = np.average(
+                    group_depths,
+                    axis=0,
+                    weights=group_lengths,
+                )
 
             row = {
                 "Chr": chrom,
                 "Start": int(starts[start_idx]),
                 "End": int(ends[end_idx - 1]),
+                "BinLengthBp": int(group_lengths.sum()),
             }
             if source_values is not None:
                 row["source_file"] = source_values[start_idx]
-            for sample_col, value in zip(sample_cols, weighted_depth):
+            for sample_col, value in zip(sample_cols, aggregated_depth):
                 row[sample_col] = float(value)
             rows.append(row)
 
@@ -681,125 +705,67 @@ def read_site_depth_tsv(
     return df
 
 
-def _site_alt_total(
-    a: np.ndarray, c: np.ndarray, g: np.ndarray, t: np.ndarray,
-    ref_base: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Compute alt allele count and total depth given reference base identity.
+def _infer_cohort_major_base(
+    a: np.ndarray,
+    c: np.ndarray,
+    g: np.ndarray,
+    t: np.ndarray,
+) -> int:
+    """Return the cohort-major base index for a site.
 
-    For each position the reference allele is extracted based on *ref_base*
-    (one of ``'A'``, ``'C'``, ``'G'``, ``'T'``).  The alt count is
-    ``total - ref_count``.
-
-    Args:
-        a, c, g, t: Per-base read counts (1-D integer arrays).
-        ref_base: 1-D array of single-character strings indicating the
-            reference allele at each position.
-
-    Returns:
-        ``(alt, total)`` integer arrays with the same length as the inputs.
+    The returned index follows ``A,C,G,T`` ordering.
     """
-    counts = np.stack([a, c, g, t], axis=-1)       # (N, 4)
-    total = counts.sum(axis=-1)                      # (N,)
+    pooled = np.array(
+        [
+            np.sum(a, dtype=np.int64),
+            np.sum(c, dtype=np.int64),
+            np.sum(g, dtype=np.int64),
+            np.sum(t, dtype=np.int64),
+        ],
+        dtype=np.int64,
+    )
+    return int(np.argmax(pooled))
 
-    base_to_idx = {"A": 0, "C": 1, "G": 2, "T": 3}
-    ref_idx = np.array([base_to_idx.get(b, 0) for b in ref_base], dtype=np.intp)
-    ref_count = counts[np.arange(len(counts)), ref_idx]
-    alt = total - ref_count
-    return alt, total
 
+def _site_nonmajor_total(
+    a: np.ndarray,
+    c: np.ndarray,
+    g: np.ndarray,
+    t: np.ndarray,
+    major_base_idx: int,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Compute non-major allele count and total depth from per-base counts.
 
-def _site_minor_total(a: np.ndarray, c: np.ndarray, g: np.ndarray, t: np.ndarray):
-    """Compute minor allele count and total depth from per-base counts.
-
-    The major allele is defined as the base with the most reads.  The minor
-    allele count is ``total - major``.
-
-    Returns:
-        ``(minor, total)`` integer arrays with the same length as the inputs.
+    The major allele is defined once per site from the pooled cohort counts.
+    Each sample's alt count is then all reads not matching that shared allele.
     """
     counts = np.stack([a, c, g, t], axis=-1)
     total = counts.sum(axis=-1)
-    major = counts.max(axis=-1)
-    minor = total - major
-    return minor, total
+    major = counts[:, major_base_idx]
+    alt = total - major
+    return alt, total
 
 
-def read_known_sites(path: str) -> pd.DataFrame:
-    """Read a known-sites file with population allele frequencies.
-
-    Accepts either a VCF (``#CHROM`` header) or a simple 4-column TSV
-    (``contig``, ``position``, ``ref``, ``pop_af``).  For VCFs the ``AF``
-    INFO field is extracted; for multi-allelic records only the first ALT AF
-    is used.  Positions are stored as 0-based.
-
-    Args:
-        path: Path to known-sites file (optionally gzipped).
-
-    Returns:
-        DataFrame with columns ``contig``, ``position`` (0-based), ``ref``,
-        ``pop_af``.
-    """
-    logger.info("Reading known sites: %s", path)
-    # Peek at the first line to detect format
-    import gzip
-    _open = gzip.open if path.endswith(".gz") else open
-    with _open(path, "rt") as fh:
-        first_line = ""
-        for line in fh:
-            if not line.startswith("##"):
-                first_line = line
-                break
-
-    if first_line.startswith("#CHROM") or first_line.startswith("CHROM"):
-        # VCF format — parse manually for speed
-        rows = []
-        with _open(path, "rt") as fh:
-            for line in fh:
-                if line.startswith("#"):
-                    continue
-                parts = line.rstrip("\n").split("\t", 8)
-                chrom = parts[0]
-                pos = int(parts[1]) - 1   # VCF is 1-based → 0-based
-                ref = parts[3]
-                info = parts[7]
-                # Extract AF from INFO
-                af_val = 0.5
-                for field in info.split(";"):
-                    if field.startswith("AF="):
-                        af_str = field[3:].split(",")[0]
-                        af_val = float(af_str)
-                        break
-                rows.append((chrom, pos, ref, af_val))
-        df = pd.DataFrame(rows, columns=["contig", "position", "ref", "pop_af"])
-    else:
-        # Simple TSV format
-        df = pd.read_csv(
-            path, sep="\t", compression="infer",
-            names=["contig", "position", "ref", "pop_af"],
-            dtype={"contig": str, "position": np.int64,
-                   "ref": str, "pop_af": np.float64},
-        )
-
-    logger.info("  %d known sites loaded", len(df))
-    return df
+def _estimate_site_pop_af(alt: np.ndarray, total: np.ndarray) -> float:
+    """Estimate cohort AF from pooled alt and total counts with smoothing."""
+    pooled_alt = float(np.sum(alt, dtype=np.float64))
+    pooled_total = float(np.sum(total, dtype=np.float64))
+    if pooled_total <= 0.0:
+        return 0.5
+    # Jeffreys smoothing avoids brittle 0/1 AFs at low coverage.
+    return float((pooled_alt + 0.5) / (pooled_total + 1.0))
 
 
 def _process_sd_file(
     sd_path: str,
     sample_to_idx: dict[str, int],
     bin_lookup: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]],
-    known_arrays: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]],
     *,
-    have_known: bool,
-    effective_stride: int,
+    position_stride: int,
     min_site_depth: int,
 ) -> tuple[str, int, dict[int, dict[int, dict[str, object]]]]:
     """Process one SD file into sparse per-bin site records."""
-    if have_known:
-        sd_df = read_site_depth_tsv(sd_path, stride=1)
-    else:
-        sd_df = read_site_depth_tsv(sd_path, position_stride=effective_stride)
+    sd_df = read_site_depth_tsv(sd_path, position_stride=position_stride)
 
     file_site_data: dict[int, dict[int, dict[str, object]]] = {}
     total_sites_used = 0
@@ -856,49 +822,15 @@ def _process_sd_file(
 
             totals = (c_a + c_c + c_g + c_t).astype(np.int64)
 
-            if have_known:
-                kp, kr, kaf = known_arrays.get(
-                    chrom, (np.empty(0, np.int64), np.empty(0, dtype="U1"), np.empty(0, np.float32)),
-                )
-                if len(kp) == 0:
-                    continue
-                ins = np.searchsorted(kp, c_pos)
-                ins_safe = np.clip(ins, 0, max(len(kp) - 1, 0))
-                match = kp[ins_safe] == c_pos
-
-                c_pos = c_pos[match]
-                c_a, c_c, c_g, c_t = (
-                    c_a[match], c_c[match], c_g[match], c_t[match],
-                )
-                g_bi_arr = g_bi_arr[match]
-                totals = totals[match]
-                ref_bases = kr[ins_safe[match]]
-                pop_afs = kaf[ins_safe[match]]
-
-                ref_counts = np.where(
-                    ref_bases == "A", c_a,
-                    np.where(ref_bases == "C", c_c,
-                             np.where(ref_bases == "G", c_g, c_t)),
-                )
-                alts = totals - ref_counts
-                observed = np.ones(len(c_pos), dtype=bool)
-            else:
-                depth_ok = totals >= min_site_depth
-                c_pos = c_pos[depth_ok]
-                c_a, c_c, c_g, c_t = (
-                    c_a[depth_ok], c_c[depth_ok], c_g[depth_ok], c_t[depth_ok],
-                )
-                g_bi_arr = g_bi_arr[depth_ok]
-                totals = totals[depth_ok]
-                if len(c_pos) == 0:
-                    continue
-
-                major = np.maximum(
-                    np.maximum(c_a, c_c), np.maximum(c_g, c_t),
-                )
-                alts = totals - major
-                pop_afs = np.full(len(c_pos), 0.5, dtype=np.float32)
-                observed = np.ones(len(c_pos), dtype=bool)
+            depth_ok = totals >= min_site_depth
+            c_pos = c_pos[depth_ok]
+            c_a, c_c, c_g, c_t = (
+                c_a[depth_ok], c_c[depth_ok], c_g[depth_ok], c_t[depth_ok],
+            )
+            g_bi_arr = g_bi_arr[depth_ok]
+            totals = totals[depth_ok]
+            if len(c_pos) == 0:
+                continue
 
             if len(c_pos) == 0:
                 continue
@@ -909,12 +841,9 @@ def _process_sd_file(
                 pos = int(c_pos[i])
                 g_bi = int(g_bi_arr[i])
                 bin_entry = file_site_data.setdefault(g_bi, {})
-                site_entry = bin_entry.setdefault(
-                    pos,
-                    {"pop_af": float(pop_afs[i]), "values": []},
-                )
+                site_entry = bin_entry.setdefault(pos, {"values": []})
                 site_entry["values"].append(
-                    (si, int(alts[i]), int(totals[i]), bool(observed[i]))
+                    (si, int(c_a[i]), int(c_c[i]), int(c_g[i]), int(c_t[i]))
                 )
 
             if n_sites_chrom > 0:
@@ -929,7 +858,6 @@ def _process_sd_file(
 def build_per_site_data(
     sd_paths: List[str],
     bins_df: pd.DataFrame,
-    known_sites_df: Optional[pd.DataFrame] = None,
     *,
     min_site_depth: int = 10,
     max_sites_per_bin: int = 50,
@@ -938,28 +866,21 @@ def build_per_site_data(
 ) -> dict:
     """Build per-site allele-count arrays for the joint genotype/CN model.
 
-    For every known SNP that falls inside a genomic bin, the alt and total
-    allele counts are stored per-sample.  Sites are grouped by bin and padded
-    to *max_sites_per_bin*.
-
-    When *known_sites_df* is ``None``, falls back to a naive mode where every
-    position in the SD files is treated as a known site with ``pop_af=0.5``
-    and the alt count is defined as ``total - major_allele``.
+    Every retained SD position inside a genomic bin is assigned a stable,
+    cohort-derived allele identity. For each site, the pooled cohort counts
+    define a single major allele, and each sample's alt count is all reads not
+    matching that allele. The site population AF is estimated directly from the
+    pooled alt and total counts.
 
     Args:
         sd_paths: Paths to per-sample ``.sd.txt.gz`` files.
         bins_df: Preprocessed depth DataFrame with ``Chr``, ``Start``, ``End``
             metadata columns.
-        known_sites_df: DataFrame with ``contig``, ``position`` (0-based),
-            ``ref``, ``pop_af`` (from :func:`read_known_sites`).  If ``None``,
-            every observed position is used with ``pop_af = 0.5``.
-        min_site_depth: Minimum total depth at a site to include in fallback
-            mode when *known_sites_df* is ``None``. In known-sites mode,
-            matched loci are retained even at zero/near-zero depth.
+        min_site_depth: Minimum total depth at a site to retain a sample-site
+            observation during cohort AF inference.
         max_sites_per_bin: Pad/subsample to this many sites per bin.
         sd_stride: Keep every *sd_stride*-th row when reading SD files
-            (1 = keep all, 100 = 100× downsample).  Ignored when
-            *known_sites_df* is provided (all matching sites are kept).
+            (1 = keep all, 100 = 100× downsample).
         seed: Random seed for reproducible subsampling.
 
     Returns:
@@ -980,8 +901,6 @@ def build_per_site_data(
     n_samples = len(sample_cols)
     sample_to_idx = {s: i for i, s in enumerate(sample_cols)}
 
-    have_known = known_sites_df is not None
-
     # Build bin-lookup per chromosome
     bin_lookup: dict = {}
     for chrom in bins_df["Chr"].unique():
@@ -991,43 +910,19 @@ def build_per_site_data(
         ends = bins_df["End"].values[chrom_mask]
         bin_lookup[chrom] = (chrom_indices, starts, ends)
 
-    # Build known-site lookup per chromosome as sorted arrays for
-    # vectorised searchsorted membership tests (no per-element dict lookups).
-    # known_arrays[chrom] = (sorted_positions, ref_bases, pop_afs)
-    known_arrays: dict = {}
-    if have_known:
-        for chrom, grp in known_sites_df.groupby("contig"):
-            order = np.argsort(grp["position"].values)
-            known_arrays[chrom] = (
-                grp["position"].values[order].astype(np.int64),
-                grp["ref"].str.upper().values[order],
-                grp["pop_af"].values[order].astype(np.float32),
-            )
-        n_known = sum(len(v[0]) for v in known_arrays.values())
-        logger.info(
-            "Known-site lookup: %d chromosomes, %d total sites",
-            len(known_arrays), n_known,
-        )
-
-    # Intermediate: collect per-bin lists of (site_pos, pop_af, per-sample alt, per-sample total)
+    # Intermediate: collect per-bin lists of (site_pos, per-sample A/C/G/T counts)
     # For each bin we accumulate site-level data across all SD files
-    # site_data[global_bin_idx] = {pos: {"pop_af": float, "alt": [n_samples], "total": [n_samples]}}
+    # site_data[global_bin_idx] = {pos: {"a": [n_samples], ..., "observed": [n_samples]}}
     site_data: List[dict] = [{} for _ in range(n_bins)]
 
     total_sites_used = 0
-
-    # When known sites are provided the searchsorted filter is fast
-    # enough; only downsample in fallback (no known sites) mode.
-    effective_stride = 1 if have_known else sd_stride
     logger.info("Loading %d SD file(s)", len(sd_paths))
     worker_results = [
         _process_sd_file(
             sd_path,
             sample_to_idx,
             bin_lookup,
-            known_arrays,
-            have_known=have_known,
-            effective_stride=effective_stride,
+            position_stride=sd_stride,
             min_site_depth=min_site_depth,
         )
         for sd_path in sd_paths
@@ -1045,15 +940,18 @@ def build_per_site_data(
             for pos, site_record in bin_sites.items():
                 if pos not in entry:
                     entry[pos] = {
-                        "pop_af": float(site_record["pop_af"]),
-                        "alt": np.zeros(n_samples, dtype=np.int32),
-                        "total": np.zeros(n_samples, dtype=np.int32),
+                        "a": np.zeros(n_samples, dtype=np.int32),
+                        "c": np.zeros(n_samples, dtype=np.int32),
+                        "g": np.zeros(n_samples, dtype=np.int32),
+                        "t": np.zeros(n_samples, dtype=np.int32),
                         "observed": np.zeros(n_samples, dtype=bool),
                     }
-                for si, alt, total, observed in site_record["values"]:
-                    entry[pos]["alt"][si] = alt
-                    entry[pos]["total"][si] = total
-                    entry[pos]["observed"][si] = observed
+                for si, a, c, g, t in site_record["values"]:
+                    entry[pos]["a"][si] = a
+                    entry[pos]["c"][si] = c
+                    entry[pos]["g"][si] = g
+                    entry[pos]["t"][si] = t
+                    entry[pos]["observed"][si] = True
 
     # ── pack into padded arrays ──────────────────────────────────────────
     site_alt = np.zeros((n_bins, max_sites_per_bin, n_samples), dtype=np.int32)
@@ -1072,7 +970,7 @@ def build_per_site_data(
         if len(positions) > max_sites_per_bin:
             # Prioritise positions with data for the most samples.
             coverage = np.array(
-                [int(np.sum(entries[p]["total"] > 0)) for p in positions],
+                [int(np.sum(entries[p]["observed"])) for p in positions],
             )
             # Stable argsort descending; among ties, keep original order
             order = np.argsort(-coverage, kind="mergesort")
@@ -1080,9 +978,15 @@ def build_per_site_data(
 
         for slot, pos in enumerate(positions):
             e = entries[pos]
-            site_alt[g_bi, slot, :] = e["alt"]
-            site_total[g_bi, slot, :] = e["total"]
-            site_pop_af[g_bi, slot] = e["pop_af"]
+            major_base_idx = _infer_cohort_major_base(
+                e["a"], e["c"], e["g"], e["t"],
+            )
+            alt, total = _site_nonmajor_total(
+                e["a"], e["c"], e["g"], e["t"], major_base_idx,
+            )
+            site_alt[g_bi, slot, :] = alt.astype(np.int32)
+            site_total[g_bi, slot, :] = total.astype(np.int32)
+            site_pop_af[g_bi, slot] = _estimate_site_pop_af(alt, total)
             site_mask[g_bi, slot, :] = e["observed"]
 
     logger.info(
@@ -1151,8 +1055,12 @@ def parse_args() -> argparse.Namespace:
              "remove the bin",
     )
     p.add_argument(
-        "--bins-per-contig", type=int, default=100,
+        "--bins-per-contig", type=int, default=30,
         help="When a contig has more than this many bins, collapse contiguous bins into larger bins while retaining at least this many bins per contig",
+    )
+    p.add_argument(
+        "--output-space", choices=list(DEPTH_SPACES), default="raw",
+        help="Write filtered normalized depth (historical behavior) or filtered raw counts. Bin-quality filters always run on normalized depth.",
     )
 
     # Filter thresholds
@@ -1191,18 +1099,12 @@ def parse_args() -> argparse.Namespace:
         "--site-depth", nargs="*", default=None,
         help="One or more per-sample SD file paths directly on the command line",
     )
-    a.add_argument(
-        "--known-sites", default=None,
-        help="VCF or TSV of known SNP sites with population AFs.  "
-             "If omitted, all observed positions are used with pop_af=0.5",
-    )
     a.add_argument("--min-site-depth", type=int, default=3,
-                   help="Minimum total depth at a site to include in fallback mode when --known-sites is omitted")
+                   help="Minimum total depth at a site to retain a sample-site observation during cohort AF inference")
     a.add_argument("--max-sites-per-bin", type=int, default=50,
                    help="Maximum sites per bin (pad/subsample to this)")
     a.add_argument("--sd-stride", type=int, default=10,
-                   help="Keep every Nth row from SD files (100 = 100x "
-                        "downsample).  Ignored when --known-sites is given.")
+                   help="Keep every Nth row from SD files (100 = 100x downsample)")
     return p.parse_args()
 
 
@@ -1213,8 +1115,8 @@ def main() -> None:
     os.makedirs(args.output_dir, exist_ok=True)
 
     # 1. Read
-    df = read_depth_tsv(args.input)
-    n_input_bins = len(df)
+    raw_df = read_depth_tsv(args.input)
+    n_input_bins = len(raw_df)
 
     poor_regions_df = None
     if args.poor_regions:
@@ -1223,24 +1125,24 @@ def main() -> None:
     # 2. Optionally subset to viable trisomy chromosomes
     if args.viable_only:
         viable = {"chr13", "chr18", "chr21", "chrX", "chrY"}
-        n_before = len(df)
-        df = df[df["Chr"].isin(viable)]
+        n_before = len(raw_df)
+        raw_df = raw_df[raw_df["Chr"].isin(viable)].copy()
         logger.info(
             "Viable-only filter: %d → %d bins (%s)",
             n_before,
-            len(df),
-            sorted(df["Chr"].unique()),
+            len(raw_df),
+            sorted(raw_df["Chr"].unique()),
         )
 
-    # 3. Normalise
-    df = normalise_depth(df)
+    # 3. Normalise for filter evaluation.
+    normalized_df = normalise_depth(raw_df)
 
     # 4. Filter
     if args.skip_bin_filter:
         logger.info("Skipping bin quality filtering (--skip-bin-filter)")
     else:
-        df = filter_low_quality_bins(
-            df,
+        normalized_df = filter_low_quality_bins(
+            normalized_df,
             autosome_median_min=args.autosome_median_min,
             autosome_median_max=args.autosome_median_max,
             autosome_mad_max=args.autosome_mad_max,
@@ -1255,28 +1157,45 @@ def main() -> None:
             min_bins_per_chr=args.min_bins_per_chr,
         )
 
+    raw_df = raw_df.loc[normalized_df.index].copy()
+
     if poor_regions_df is not None:
-        df = filter_poor_region_bins(
-            df,
+        normalized_df = filter_poor_region_bins(
+            normalized_df,
             poor_regions_df,
             min_poor_region_coverage=args.min_poor_region_coverage,
         )
+        raw_df = raw_df.loc[normalized_df.index].copy()
 
-    df = collapse_bins_per_contig(
-        df,
+    normalized_df = collapse_bins_per_contig(
+        normalized_df,
         bins_per_contig=args.bins_per_contig,
+        aggregation="weighted_mean",
     )
+    raw_df = collapse_bins_per_contig(
+        raw_df,
+        bins_per_contig=args.bins_per_contig,
+        aggregation="sum",
+    )
+
+    df = normalized_df if args.output_space == "normalized" else raw_df
 
     logger.info(
         "Total bins retained after preprocess filters: %d / %d",
         len(df),
         n_input_bins,
     )
+    if args.output_space == "raw":
+        logger.info(
+            "Writing filtered raw counts (--output-space raw); all quality filters were evaluated on normalized depth."
+        )
 
     # 5. Write preprocessed depth
     out_path = os.path.join(args.output_dir, "preprocessed_depth.tsv")
     df.to_csv(out_path, sep="\t")
     logger.info("Preprocessed depth written to %s", out_path)
+    marker_path = write_observation_type(args.output_dir, args.output_space)
+    logger.info("Observation type written to %s", marker_path)
 
     # 6. Build per-site allele data from site-depth files (optional)
     sd_paths: List[str] = []
@@ -1287,15 +1206,10 @@ def main() -> None:
         sd_paths.extend(args.site_depth)
 
     if sd_paths:
-        known_sites_df = None
-        if args.known_sites:
-            known_sites_df = read_known_sites(args.known_sites)
-
         logger.info("Building per-site allele data from %d SD file(s) …", len(sd_paths))
         site_arrays = build_per_site_data(
             sd_paths,
             df,
-            known_sites_df=known_sites_df,
             min_site_depth=args.min_site_depth,
             max_sites_per_bin=args.max_sites_per_bin,
             sd_stride=args.sd_stride,

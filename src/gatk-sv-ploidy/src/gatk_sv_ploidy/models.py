@@ -12,6 +12,7 @@ of pre-filtering sites by observed allele fraction.
 
 from __future__ import annotations
 
+import math
 import logging
 from typing import Dict, List, Optional
 
@@ -33,15 +34,35 @@ from pyro.infer.autoguide import (
     AutoDiagonalNormal,
     AutoLowRankMultivariateNormal,
 )
+from pyro.infer.autoguide.initialization import init_to_median
 from tqdm import tqdm
 
-from gatk_sv_ploidy._util import DEFAULT_AF_CONCENTRATION, DEFAULT_AF_WEIGHT
+from gatk_sv_ploidy._util import (
+    DEFAULT_AF_CONCENTRATION,
+    DEFAULT_AF_WEIGHT,
+    NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
+)
 from gatk_sv_ploidy.data import DepthData
 
 logger = logging.getLogger(__name__)
 
 
-OBS_LIKELIHOODS = ("normal", "studentt", "laplace")
+OBS_LIKELIHOODS = (
+    "normal",
+    "studentt",
+    "laplace",
+    NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
+)
+
+AF_EVIDENCE_MODES = (
+    "absolute",
+    "relative",
+)
+
+AUTOSOME_PRIOR_MODES = (
+    "dirichlet",
+    "shrinkage",
+)
 
 
 # ── marginalized allele-fraction likelihood ─────────────────────────────────
@@ -149,12 +170,10 @@ def _marginalized_af_log_lik(
     log_stack = torch.stack(log_terms, dim=0)  # (n_states, ..., n_bins, max_sites, n_samples)
     log_marginal = torch.logsumexp(log_stack, dim=0)  # (..., n_bins, max_sites, n_samples)
 
-    # Mask out invalid sites and average over observed sites so bins with more
-    # retained loci do not automatically outweigh bins with fewer loci.
+    # Mask out invalid sites and sum over observed sites so bins with more
+    # informative loci contribute proportionally more AF evidence.
     log_marginal = torch.where(site_mask, log_marginal, torch.zeros_like(log_marginal))
-    site_counts = site_mask.to(log_marginal.dtype).sum(dim=-2)
-    site_counts_safe = torch.clamp(site_counts, min=1.0)
-    return log_marginal.sum(dim=-2) / site_counts_safe
+    return log_marginal.sum(dim=-2)
 
 
 def _marginalized_af_log_lik_numpy(
@@ -181,7 +200,7 @@ def _marginalized_af_log_lik_numpy(
         concentration: Beta-Binomial concentration.
 
     Returns:
-        ``(n_bins, n_samples)`` log-likelihood averaged over observed sites
+        ``(n_bins, n_samples)`` log-likelihood summed over observed sites
         within each bin.
     """
     from scipy.stats import betabinom as betabinom_scipy
@@ -217,12 +236,10 @@ def _marginalized_af_log_lik_numpy(
         np.sum(np.exp(log_stack - max_val), axis=0) + 1e-30
     )
 
-    # Mask and average over observed sites so AF contribution is not a direct
-    # function of how many loci were retained in each bin.
+    # Mask and sum over observed sites so AF contribution scales with how many
+    # informative loci were retained in each bin.
     log_marginal = np.where(site_mask, log_marginal, 0.0)
-    site_counts = site_mask.sum(axis=1, dtype=np.float64)
-    site_counts_safe = np.maximum(site_counts, 1.0)
-    return log_marginal.sum(axis=1) / site_counts_safe
+    return log_marginal.sum(axis=1)
 
 
 def _precompute_af_table(
@@ -251,7 +268,7 @@ def _precompute_af_table(
     Returns:
         Tensor of shape ``(n_states, n_bins, n_samples)`` where entry
         ``[c, b, s]`` is the marginalized AF log-likelihood for CN state *c*
-        at bin *b* and sample *s*, normalized by observed site count.
+        at bin *b* and sample *s*, summed over observed sites.
     """
     n_bins = site_alt.shape[0]
     n_samples = site_alt.shape[2]
@@ -268,6 +285,32 @@ def _precompute_af_table(
     return table
 
 
+def _center_af_table_torch(
+    af_table: torch.Tensor,
+    reference_cn_probs: torch.Tensor,
+) -> torch.Tensor:
+    """Convert AF log-likelihoods into log-likelihood ratios vs. a fixed reference mixture."""
+    ref_log_probs = torch.log(
+        torch.clamp(reference_cn_probs, min=1e-10),
+    ).transpose(0, 1).unsqueeze(-1)
+    baseline = torch.logsumexp(ref_log_probs + af_table, dim=0, keepdim=True)
+    return af_table - baseline
+
+
+def _center_af_table_numpy(
+    af_table: np.ndarray,
+    reference_cn_probs: np.ndarray,
+) -> np.ndarray:
+    """NumPy counterpart of :func:`_center_af_table_torch`."""
+    ref_log_probs = np.log(np.maximum(reference_cn_probs, 1e-10)).T[:, :, np.newaxis]
+    raw = ref_log_probs + af_table
+    max_val = np.max(raw, axis=0, keepdims=True)
+    baseline = max_val + np.log(
+        np.sum(np.exp(raw - max_val), axis=0, keepdims=True) + 1e-30,
+    )
+    return af_table - baseline
+
+
 def _normalize_obs_likelihood_name(name: str) -> str:
     """Validate and normalize observation likelihood names."""
     normalized = str(name).strip().lower()
@@ -279,6 +322,84 @@ def _normalize_obs_likelihood_name(name: str) -> str:
     return normalized
 
 
+def _normalize_af_evidence_mode(name: str) -> str:
+    """Validate and normalize AF evidence mode names."""
+    normalized = str(name).strip().lower()
+    if normalized not in AF_EVIDENCE_MODES:
+        raise ValueError(
+            f"Unknown af_evidence_mode: {name!r}. "
+            f"Choose one of {AF_EVIDENCE_MODES}."
+        )
+    return normalized
+
+
+def _negative_binomial_total_count(
+    overdispersion: torch.Tensor,
+) -> torch.Tensor:
+    """Convert NB overdispersion to a Gamma-Poisson concentration."""
+    return 1.0 / torch.clamp(overdispersion, min=1e-8)
+
+
+def _make_negative_binomial_distribution(
+    mean: torch.Tensor,
+    overdispersion: torch.Tensor,
+) -> dist.Distribution:
+    """Build a Gamma-Poisson distribution with ``Var = μ + α μ²``."""
+    concentration = _negative_binomial_total_count(overdispersion)
+    mean_safe = torch.clamp(mean, min=1e-8)
+    rate = concentration / mean_safe
+    return dist.GammaPoisson(concentration, rate)
+
+
+def _negative_binomial_log_lik_numpy(
+    obs: np.ndarray,
+    mean: np.ndarray,
+    overdispersion: np.ndarray,
+) -> np.ndarray:
+    """Analytical Gamma-Poisson log-likelihood with ``Var = μ + α μ²``."""
+    from scipy.special import gammaln
+
+    obs_rounded = np.rint(obs)
+    if not np.allclose(obs, obs_rounded, atol=1e-6):
+        raise ValueError(
+            "negative_binomial observation likelihood requires integer-valued raw counts."
+        )
+
+    obs_safe = obs_rounded.astype(np.float64, copy=False)
+    mean_safe = np.maximum(mean, 1e-10)
+    concentration = 1.0 / np.maximum(overdispersion, 1e-8)
+    log_prob = gammaln(obs_safe + concentration)
+    log_prob = log_prob - gammaln(concentration)
+    log_prob = log_prob - gammaln(obs_safe + 1.0)
+    log_prob = log_prob + concentration * np.log(
+        concentration / (concentration + mean_safe)
+    )
+    log_prob = log_prob + obs_safe * np.log(
+        mean_safe / (concentration + mean_safe)
+    )
+
+    zero_mean = mean <= 0.0
+    log_prob = np.where(zero_mean & (obs_safe == 0.0), 0.0, log_prob)
+    log_prob = np.where(zero_mean & (obs_safe > 0.0), -1e10, log_prob)
+    return log_prob
+
+
+def _raw_expected_depth_units(
+    copy_number,
+    bin_bias,
+    bin_epsilon,
+):
+    """Map normalized-depth expectations onto the raw-count diploid baseline.
+
+    The continuous-depth model uses ``CN * bin_bias + bin_epsilon`` with
+    autosomal diploid bins centered near 2.  Raw counts, however, are most
+    naturally parameterized by each sample's diploid baseline depth per kb, so
+    we convert the normalized-depth expectation back to that diploid scale by
+    dividing by 2 before multiplying by ``sample_depth`` and bin length.
+    """
+    return 0.5 * (copy_number * bin_bias + bin_epsilon)
+
+
 def _matched_residual_scale(
     target_variance: torch.Tensor | np.ndarray | float,
     obs_likelihood: str,
@@ -286,6 +407,8 @@ def _matched_residual_scale(
 ) -> torch.Tensor | np.ndarray | float:
     """Convert target variance to the scale parameter of the residual family."""
     obs_likelihood = _normalize_obs_likelihood_name(obs_likelihood)
+    if obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
+        raise ValueError("negative_binomial does not use a residual scale parameter.")
     if obs_likelihood == "normal":
         return target_variance ** 0.5
     if obs_likelihood == "laplace":
@@ -321,6 +444,8 @@ def _depth_log_lik_numpy(
     from scipy import stats as sp_stats
 
     obs_likelihood = _normalize_obs_likelihood_name(obs_likelihood)
+    if obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
+        raise ValueError("negative_binomial uses the count likelihood helper.")
     safe_variance = np.maximum(variance, 1e-10)
     scale = _matched_residual_scale(safe_variance, obs_likelihood, obs_df)
     if obs_likelihood == "normal":
@@ -333,26 +458,56 @@ def _depth_log_lik_numpy(
 class CNVModel:
     """Hierarchical Bayesian model for whole-genome CN detection.
 
-    The generative model uses a Dirichlet-Categorical prior over CN states
-    (0–5), per-bin bias and variance, and per-sample variance.  Observed
-    normalised depth is drawn from a configurable observation likelihood
-    whose mean is ``CN × bin_bias + bin_epsilon`` and whose variance scales
-    with expected depth as
-    ``(bin_var + sample_var) × max(CN × bin_bias + bin_epsilon, 1e-3)``.
+    The generative model uses per-bin CN-state priors, per-bin bias and
+    variance, and per-sample variance. Autosomes can either use the historical
+    Dirichlet-Categorical prior or a shrinkage prior that separates total
+    non-reference mass from the distribution over alternative CN states. For
+    the historical continuous observation families, observed normalised depth
+    is drawn from a configurable residual model whose mean is
+    ``CN × bin_bias + bin_epsilon`` and whose variance scales with expected
+    depth as ``(bin_var + sample_var) × max(CN × bin_bias + bin_epsilon, 1e-3)``.
+
+    When ``obs_likelihood='negative_binomial'``, the model instead consumes
+    raw integer counts.  It introduces a per-sample latent depth scale
+    ``sample_depth ~ Uniform(0, sample_depth_max)`` and uses the bin-length
+    exposure in kilobases to model the count mean as
+
+    ``bin_length_kb × sample_depth × (CN × bin_bias + bin_epsilon) / 2``
+
+    with negative-binomial variance
+
+    ``μ + (bin_var + sample_var) × μ²``.
 
     When per-site allele data is provided, the model additionally includes
     a marginalized allele-fraction likelihood that jointly considers all
     possible genotype states at each SNP site, weighted by population
-    allele frequencies and normalized by observed site count per bin.
+    allele frequencies and summed over observed sites per bin.
 
     Parameters
     ----------
     n_states : int
         Number of copy-number states (default 6 for CN 0–5).
+    autosome_prior_mode : str
+        ``'shrinkage'`` to use a hierarchical autosomal non-reference mass
+        prior, or ``'dirichlet'`` for the historical autosomal
+        Dirichlet-Categorical prior.
     alpha_ref : float
-        Dirichlet concentration for the reference state (CN = 2).
+        Dirichlet concentration for the reference state (CN = 2) in autosomal
+        ``dirichlet`` mode.
     alpha_non_ref : float
-        Dirichlet concentration for non-reference states.
+        Dirichlet concentration for non-reference states in autosomal
+        ``dirichlet`` mode and for the alternative-state simplex in autosomal
+        ``shrinkage`` mode.
+    autosome_nonref_mean_alpha : float
+        Beta prior alpha for the cohort-wide autosomal non-reference mean in
+        ``shrinkage`` mode.
+    autosome_nonref_mean_beta : float
+        Beta prior beta for the cohort-wide autosomal non-reference mean in
+        ``shrinkage`` mode.
+    autosome_nonref_concentration : float
+        Fixed concentration controlling how tightly each autosomal bin's
+        non-reference prevalence is shrunk toward the learned cohort-wide mean
+        in ``shrinkage`` mode.
     var_bias_bin : float
         Scale of the LogNormal prior on per-bin bias.
     var_sample : float
@@ -360,8 +515,9 @@ class CNVModel:
     var_bin : float
         Scale of the Exponential prior on per-bin variance.
     epsilon_mean : float
-        Mean of the Exponential prior on per-bin additive background depth.
-        Defaults to 1e-2. Set to 0 to disable the additive background term.
+        Prior mean of the global scale controlling the per-bin additive
+        background depth term. Defaults to 1e-2. Set to 0 to disable the
+        additive background term.
     device, dtype : str, torch.dtype
         Torch device and floating-point type.
     guide_type : str
@@ -371,8 +527,13 @@ class CNVModel:
     af_concentration : float
         Beta-Binomial concentration for the allele-fraction model.
     af_weight : float
-        Relative weight of the per-bin, site-count-normalized allele-fraction
-        likelihood (0 to disable).
+        Global scale/temperature applied to the summed per-bin
+        allele-fraction log-likelihood (0 to disable).
+    learn_af_temperature : bool
+        Whether to learn a single global AF temperature instead of keeping
+        ``af_weight`` fixed.
+    af_temperature_prior_scale : float
+        LogNormal prior scale for the learned AF temperature.
     alpha_sex_ref : float
         Dirichlet concentration for CN = 2 on sex chromosomes (default 1.0,
         flat).  The sex–CN coupling factor provides the main sex-dependent
@@ -388,18 +549,26 @@ class CNVModel:
         this value.  Set to 0 to disable the sex karyotype latent entirely.
     obs_likelihood : str
         Observation family for depth residuals: ``normal``, ``studentt``, or
-        ``laplace``.
+        ``laplace`` for normalized depth, or ``negative_binomial`` for raw
+        counts.
     obs_df : float
         Degrees of freedom for the Student-t observation likelihood.
+    sample_depth_max : float
+        Upper bound of the Uniform prior on per-sample depth scale when using
+        the negative-binomial observation model.
     """
 
-    _latent_sites = ["bin_bias", "sample_var", "bin_var", "cn_probs"]
+    _latent_sites = ["bin_bias", "sample_var", "bin_var"]
 
     def __init__(
         self,
         n_states: int = 6,
+        autosome_prior_mode: str = "shrinkage",
         alpha_ref: float = 50.0,
         alpha_non_ref: float = 1.0,
+        autosome_nonref_mean_alpha: float = 1.0,
+        autosome_nonref_mean_beta: float = 19.0,
+        autosome_nonref_concentration: float = 20.0,
         var_bias_bin: float = 0.05,
         var_sample: float = 0.2,
         var_bin: float = 0.2,
@@ -409,16 +578,24 @@ class CNVModel:
         guide_type: str = "delta",
         af_concentration: float = DEFAULT_AF_CONCENTRATION,
         af_weight: float = DEFAULT_AF_WEIGHT,
+        af_evidence_mode: str = "absolute",
+        learn_af_temperature: bool = False,
+        af_temperature_prior_scale: float = 0.5,
         alpha_sex_ref: float = 1.0,
         alpha_sex_non_ref: float = 1.0,
         sex_prior: tuple = (0.5, 0.5),
         sex_cn_weight: float = 3.0,
         obs_likelihood: str = "normal",
         obs_df: float = 3.5,
+        sample_depth_max: float = 10000.0,
     ) -> None:
         self.n_states = n_states
+        self.autosome_prior_mode = autosome_prior_mode
         self.alpha_ref = alpha_ref
         self.alpha_non_ref = alpha_non_ref
+        self.autosome_nonref_mean_alpha = autosome_nonref_mean_alpha
+        self.autosome_nonref_mean_beta = autosome_nonref_mean_beta
+        self.autosome_nonref_concentration = autosome_nonref_concentration
         self.var_bias_bin = var_bias_bin
         self.var_sample = var_sample
         self.var_bin = var_bin
@@ -428,22 +605,73 @@ class CNVModel:
         self.guide_type = guide_type
         self.af_concentration = af_concentration
         self.af_weight = af_weight
+        self.af_evidence_mode = _normalize_af_evidence_mode(af_evidence_mode)
+        self.learn_af_temperature = learn_af_temperature
+        self.af_temperature_prior_scale = af_temperature_prior_scale
         self.alpha_sex_ref = alpha_sex_ref
         self.alpha_sex_non_ref = alpha_sex_non_ref
         self.sex_prior = sex_prior
         self.sex_cn_weight = sex_cn_weight
         self.obs_likelihood = _normalize_obs_likelihood_name(obs_likelihood)
         self.obs_df = obs_df
+        self.sample_depth_max = sample_depth_max
+
+        if self.autosome_prior_mode not in AUTOSOME_PRIOR_MODES:
+            raise ValueError(
+                f"Unknown autosome_prior_mode: {self.autosome_prior_mode!r}. "
+                f"Choose one of {AUTOSOME_PRIOR_MODES}."
+            )
+        if self.autosome_nonref_mean_alpha <= 0 or self.autosome_nonref_mean_beta <= 0:
+            raise ValueError(
+                "autosome_nonref_mean_alpha and autosome_nonref_mean_beta must be positive."
+            )
+        if self.autosome_nonref_concentration <= 0:
+            raise ValueError("autosome_nonref_concentration must be positive.")
+        if self.af_temperature_prior_scale <= 0:
+            raise ValueError("af_temperature_prior_scale must be positive.")
+        if self.learn_af_temperature and self.af_weight <= 0:
+            raise ValueError("learn_af_temperature requires af_weight > 0.")
 
         if self.epsilon_mean < 0:
             raise ValueError("epsilon_mean must be non-negative.")
 
         if self.obs_likelihood == "studentt" and self.obs_df <= 2.0:
             raise ValueError("Student-t observation likelihood requires obs_df > 2.")
+        if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD and self.sample_depth_max <= 0:
+            raise ValueError("sample_depth_max must be positive.")
 
         self._latent_sites = list(self._latent_sites)
+        if self.autosome_prior_mode == "shrinkage":
+            self._latent_sites.extend(
+                [
+                    "autosome_nonref_mean",
+                    "autosome_nonref_prob",
+                    "autosome_alt_cn_probs",
+                    "sex_cn_probs",
+                ]
+            )
+        else:
+            self._latent_sites.append("cn_probs")
+        if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
+            self._latent_sites.append("sample_depth")
         if self.epsilon_mean > 0:
             self._latent_sites.append("bin_epsilon")
+        if self.learn_af_temperature:
+            self._latent_sites.append("af_temperature")
+
+        self.ref_state = 2
+        self.nonref_state_indices = tuple(
+            idx for idx in range(self.n_states) if idx != self.ref_state
+        )
+        self.nonref_state_indices_torch = torch.tensor(
+            self.nonref_state_indices,
+            dtype=torch.long,
+            device=device,
+        )
+        self.nonref_state_indices_numpy = np.asarray(
+            self.nonref_state_indices,
+            dtype=np.int64,
+        )
 
         # Per-chromosome-type Dirichlet alpha table: (3, n_states)
         # Row 0: autosomes — strong CN=2 prior
@@ -476,19 +704,445 @@ class CNVModel:
 
         self.loss_history: Dict[str, List[float]] = {"epoch": [], "elbo": []}
 
-        # Build variational guide
+        self.guide = self._build_guide()
+
+    def _build_guide(self, init_loc_fn=None):
+        """Construct the variational guide, optionally with custom init."""
         blocked = poutine.block(self.model, expose=self._latent_sites)
-        if guide_type == "delta":
-            self.guide = AutoDelta(blocked)
-        elif guide_type == "diagonal":
-            self.guide = AutoDiagonalNormal(blocked)
-        elif guide_type == "lowrank":
-            self.guide = AutoLowRankMultivariateNormal(blocked)
+        guide_kwargs = {}
+        if init_loc_fn is not None:
+            guide_kwargs["init_loc_fn"] = init_loc_fn
+
+        if self.guide_type == "delta":
+            return AutoDelta(blocked, **guide_kwargs)
+        if self.guide_type == "diagonal":
+            return AutoDiagonalNormal(blocked, **guide_kwargs)
+        if self.guide_type == "lowrank":
+            return AutoLowRankMultivariateNormal(blocked, **guide_kwargs)
+        raise ValueError(
+            f"Unknown guide_type: {self.guide_type!r}. "
+            "Choose 'delta', 'diagonal', or 'lowrank'."
+        )
+
+    def _compose_autosome_cn_probs_torch(
+        self,
+        autosome_nonref_prob: torch.Tensor,
+        autosome_alt_cn_probs: torch.Tensor,
+    ) -> torch.Tensor:
+        """Expand autosomal non-reference mass and alternative simplex."""
+        cn_probs = torch.zeros(
+            autosome_alt_cn_probs.shape[:-1] + (self.n_states,),
+            dtype=autosome_alt_cn_probs.dtype,
+            device=autosome_alt_cn_probs.device,
+        )
+        autosome_nonref_prob = torch.clamp(
+            autosome_nonref_prob,
+            min=1e-6,
+            max=1.0 - 1e-6,
+        )
+        cn_probs[..., self.ref_state] = 1.0 - autosome_nonref_prob
+        cn_probs[..., self.nonref_state_indices_torch] = (
+            autosome_nonref_prob.unsqueeze(-1) * autosome_alt_cn_probs
+        )
+        return cn_probs
+
+    def _compose_autosome_cn_probs_numpy(
+        self,
+        autosome_nonref_prob: np.ndarray,
+        autosome_alt_cn_probs: np.ndarray,
+    ) -> np.ndarray:
+        """NumPy version of autosomal non-reference/simplex expansion."""
+        autosome_nonref_prob = np.asarray(autosome_nonref_prob, dtype=np.float64)
+        autosome_alt_cn_probs = np.asarray(autosome_alt_cn_probs, dtype=np.float64)
+        autosome_nonref_prob = np.clip(autosome_nonref_prob, 1e-6, 1.0 - 1e-6)
+        cn_probs = np.zeros(
+            autosome_alt_cn_probs.shape[:-1] + (self.n_states,),
+            dtype=autosome_alt_cn_probs.dtype,
+        )
+        cn_probs[..., self.ref_state] = 1.0 - autosome_nonref_prob
+        cn_probs[..., self.nonref_state_indices_numpy] = (
+            autosome_nonref_prob[..., np.newaxis] * autosome_alt_cn_probs
+        )
+        return cn_probs
+
+    def _default_cn_probs_torch(
+        self,
+        chr_type: torch.Tensor | None,
+        n_bins: int,
+    ) -> torch.Tensor:
+        """Return the historical Dirichlet mean simplex for each bin."""
+        if chr_type is not None:
+            alpha = self.alpha_table[chr_type]
+        else:
+            alpha = torch.full(
+                (n_bins, self.n_states),
+                self.alpha_non_ref,
+                dtype=self.dtype,
+                device=self.device,
+            )
+            alpha[:, self.ref_state] = self.alpha_ref
+        return alpha / alpha.sum(dim=-1, keepdim=True)
+
+    def _af_reference_cn_probs_torch(
+        self,
+        chr_type: torch.Tensor | None,
+        n_bins: int,
+    ) -> torch.Tensor:
+        """Build the fixed CN reference mixture used for relative AF evidence."""
+        if self.autosome_prior_mode != "shrinkage":
+            return self._default_cn_probs_torch(chr_type, n_bins)
+
+        autosome_nonref_mean = self.autosome_nonref_mean_alpha / (
+            self.autosome_nonref_mean_alpha + self.autosome_nonref_mean_beta
+        )
+        autosome_nonref_prob = torch.full(
+            (n_bins,),
+            autosome_nonref_mean,
+            dtype=self.dtype,
+            device=self.device,
+        )
+        autosome_alt_cn_probs = torch.full(
+            (n_bins, self.n_states - 1),
+            1.0 / (self.n_states - 1),
+            dtype=self.dtype,
+            device=self.device,
+        )
+        autosome_probs = self._compose_autosome_cn_probs_torch(
+            autosome_nonref_prob,
+            autosome_alt_cn_probs,
+        )
+
+        if chr_type is None:
+            return autosome_probs
+
+        cn_probs = self._default_cn_probs_torch(chr_type, n_bins)
+        autosome_mask = chr_type == 0
+        if autosome_mask.any():
+            cn_probs[autosome_mask] = autosome_probs[autosome_mask]
+        return cn_probs
+
+    def _build_cn_probs_from_estimates_torch(
+        self,
+        source: Dict[str, torch.Tensor],
+        chr_type: torch.Tensor | None,
+    ) -> torch.Tensor:
+        """Build per-bin CN simplexes from sampled or derived latent values."""
+        if "cn_probs" in source:
+            return source["cn_probs"]
+
+        n_bins = int(chr_type.shape[0]) if chr_type is not None else int(source["bin_bias"].shape[0])
+        if self.autosome_prior_mode != "shrinkage":
+            return self._default_cn_probs_torch(chr_type, n_bins)
+
+        if chr_type is None:
+            return self._compose_autosome_cn_probs_torch(
+                source["autosome_nonref_prob"],
+                source["autosome_alt_cn_probs"],
+            )
+
+        cn_probs = torch.empty(
+            (n_bins, self.n_states),
+            dtype=self.dtype,
+            device=self.device,
+        )
+        autosome_mask = chr_type == 0
+        if autosome_mask.any():
+            cn_probs[autosome_mask] = self._compose_autosome_cn_probs_torch(
+                source["autosome_nonref_prob"],
+                source["autosome_alt_cn_probs"],
+            )
+        if (~autosome_mask).any():
+            if "sex_cn_probs" in source and source["sex_cn_probs"].numel() > 0:
+                cn_probs[~autosome_mask] = source["sex_cn_probs"]
+            else:
+                cn_probs[~autosome_mask] = self._default_cn_probs_torch(
+                    chr_type[~autosome_mask],
+                    int((~autosome_mask).sum().item()),
+                )
+        return cn_probs
+
+    def _build_cn_probs_from_estimates_numpy(
+        self,
+        maps: Dict[str, np.ndarray],
+        chr_type: np.ndarray | None,
+        n_bins: int,
+    ) -> np.ndarray:
+        """NumPy mirror of per-bin CN simplex reconstruction."""
+        if "cn_probs" in maps:
+            cn_probs = np.asarray(maps["cn_probs"]).squeeze()
+            if cn_probs.ndim == 1:
+                cn_probs = cn_probs.reshape(1, -1)
+            return cn_probs
+
+        if self.autosome_prior_mode != "shrinkage" or (
+            "autosome_nonref_prob" not in maps or "autosome_alt_cn_probs" not in maps
+        ):
+            if chr_type is not None:
+                alpha = self.alpha_table.detach().cpu().numpy()[chr_type]
+            else:
+                alpha = np.full(
+                    (n_bins, self.n_states),
+                    self.alpha_non_ref,
+                    dtype=np.float64,
+                )
+                alpha[:, self.ref_state] = self.alpha_ref
+            return alpha / alpha.sum(axis=1, keepdims=True)
+
+        autosome_nonref_prob = np.atleast_1d(
+            np.asarray(maps["autosome_nonref_prob"]).squeeze()
+        )
+        autosome_alt_cn_probs = np.asarray(maps["autosome_alt_cn_probs"]).squeeze()
+        if autosome_alt_cn_probs.ndim == 1:
+            autosome_alt_cn_probs = autosome_alt_cn_probs.reshape(1, -1)
+
+        if chr_type is None:
+            return self._compose_autosome_cn_probs_numpy(
+                autosome_nonref_prob,
+                autosome_alt_cn_probs,
+            )
+
+        cn_probs = np.empty((n_bins, self.n_states), dtype=np.float64)
+        autosome_mask = chr_type == 0
+        if np.any(autosome_mask):
+            cn_probs[autosome_mask] = self._compose_autosome_cn_probs_numpy(
+                autosome_nonref_prob,
+                autosome_alt_cn_probs,
+            )
+        if np.any(~autosome_mask):
+            if "sex_cn_probs" in maps:
+                sex_cn_probs = np.asarray(maps["sex_cn_probs"]).squeeze()
+                if sex_cn_probs.ndim == 1:
+                    sex_cn_probs = sex_cn_probs.reshape(1, -1)
+                cn_probs[~autosome_mask] = sex_cn_probs
+            else:
+                sex_alpha = self.alpha_table.detach().cpu().numpy()[chr_type[~autosome_mask]]
+                cn_probs[~autosome_mask] = sex_alpha / sex_alpha.sum(axis=1, keepdims=True)
+        return cn_probs
+
+    def _af_reference_cn_probs_numpy(
+        self,
+        chr_type: np.ndarray | None,
+        n_bins: int,
+    ) -> np.ndarray:
+        """NumPy counterpart of :meth:`_af_reference_cn_probs_torch`."""
+        if self.autosome_prior_mode != "shrinkage":
+            alpha = self.alpha_table.detach().cpu().numpy()
+            if chr_type is not None:
+                selected = alpha[chr_type]
+            else:
+                selected = np.full(
+                    (n_bins, self.n_states),
+                    self.alpha_non_ref,
+                    dtype=np.float64,
+                )
+                selected[:, self.ref_state] = self.alpha_ref
+            return selected / selected.sum(axis=1, keepdims=True)
+
+        autosome_nonref_mean = self.autosome_nonref_mean_alpha / (
+            self.autosome_nonref_mean_alpha + self.autosome_nonref_mean_beta
+        )
+        autosome_nonref_prob = np.full((n_bins,), autosome_nonref_mean, dtype=np.float64)
+        autosome_alt_cn_probs = np.full(
+            (n_bins, self.n_states - 1),
+            1.0 / (self.n_states - 1),
+            dtype=np.float64,
+        )
+        autosome_probs = self._compose_autosome_cn_probs_numpy(
+            autosome_nonref_prob,
+            autosome_alt_cn_probs,
+        )
+
+        if chr_type is None:
+            return autosome_probs
+
+        alpha = self.alpha_table.detach().cpu().numpy()[chr_type]
+        cn_probs = alpha / alpha.sum(axis=1, keepdims=True)
+        autosome_mask = chr_type == 0
+        if np.any(autosome_mask):
+            cn_probs[autosome_mask] = autosome_probs[autosome_mask]
+        return cn_probs
+
+    def _apply_af_evidence_mode_torch(
+        self,
+        af_table: torch.Tensor,
+        chr_type: torch.Tensor | None,
+    ) -> torch.Tensor:
+        """Apply the configured AF evidence transformation to a precomputed table."""
+        if self.af_evidence_mode != "relative":
+            return af_table
+        reference_cn_probs = self._af_reference_cn_probs_torch(
+            chr_type,
+            af_table.shape[1],
+        )
+        return _center_af_table_torch(af_table, reference_cn_probs)
+
+    def _apply_af_evidence_mode_numpy(
+        self,
+        af_table: np.ndarray,
+        chr_type: np.ndarray | None,
+    ) -> np.ndarray:
+        """NumPy counterpart of :meth:`_apply_af_evidence_mode_torch`."""
+        if self.af_evidence_mode != "relative":
+            return af_table
+        reference_cn_probs = self._af_reference_cn_probs_numpy(
+            chr_type,
+            af_table.shape[1],
+        )
+        return _center_af_table_numpy(af_table, reference_cn_probs)
+
+    def _prepare_af_table_torch(
+        self,
+        site_alt: torch.Tensor,
+        site_total: torch.Tensor,
+        site_pop_af: torch.Tensor,
+        site_mask: torch.Tensor,
+        chr_type: torch.Tensor | None,
+    ) -> torch.Tensor:
+        """Precompute and transform the AF table according to the configured evidence mode."""
+        af_table = _precompute_af_table(
+            site_alt,
+            site_total,
+            site_pop_af,
+            site_mask,
+            n_states=self.n_states,
+            concentration=self.af_concentration,
+        )
+        return self._apply_af_evidence_mode_torch(af_table, chr_type)
+
+    def _af_scale_torch(
+        self,
+        source: Dict[str, torch.Tensor] | None = None,
+    ) -> torch.Tensor:
+        """Return the fixed or learned AF scale used to temper summed AF evidence."""
+        if source is not None and "af_temperature" in source:
+            return source["af_temperature"]
+        return torch.tensor(self.af_weight, dtype=self.dtype, device=self.device)
+
+    def _af_scale_numpy(
+        self,
+        maps: Dict[str, np.ndarray] | None = None,
+    ) -> float:
+        """NumPy counterpart of :meth:`_af_scale_torch`."""
+        if maps is not None and "af_temperature" in maps:
+            return float(np.asarray(maps["af_temperature"]).item())
+        return float(self.af_weight)
+
+    def _get_continuous_estimates(
+        self,
+        data: DepthData,
+        estimate_method: str = "current",
+        model_kw: dict | None = None,
+    ) -> Dict[str, torch.Tensor]:
+        """Return continuous latent estimates from the fitted guide.
+
+        ``estimate_method='current'`` preserves the historical behavior of
+        taking one guide draw. ``estimate_method='median'`` plugs in the guide
+        medians, which is deterministic for non-delta guides.
+        """
+        model_kw = self._model_kwargs(data) if model_kw is None else model_kw
+
+        if estimate_method == "current":
+            guide_trace = poutine.trace(self.guide).get_trace(**model_kw)
+            source = {
+                site: guide_trace.nodes[site]["value"] for site in self._latent_sites
+            }
+        elif estimate_method == "median":
+            guide_median = self.guide.median(**model_kw)
+            source = {site: guide_median[site] for site in self._latent_sites}
         else:
             raise ValueError(
-                f"Unknown guide_type: {guide_type!r}. "
-                "Choose 'delta', 'diagonal', or 'lowrank'."
+                f"Unknown estimate_method: {estimate_method!r}. "
+                "Choose 'current' or 'median'."
             )
+
+        estimates: Dict[str, torch.Tensor] = {}
+        for site, value in source.items():
+            if isinstance(value, torch.Tensor):
+                estimates[site] = value.detach().clone()
+            else:
+                estimates[site] = torch.as_tensor(value, device=self.device)
+        if "cn_probs" not in estimates:
+            estimates["cn_probs"] = self._build_cn_probs_from_estimates_torch(
+                estimates,
+                model_kw.get("chr_type"),
+            )
+        return estimates
+
+    def _infer_discrete_assignments(
+        self,
+        data: DepthData,
+        continuous_estimates: Dict[str, torch.Tensor],
+        model_kw: dict | None = None,
+    ) -> Dict[str, np.ndarray]:
+        """Infer discrete latents conditioned on fixed continuous estimates."""
+        model_kw = self._model_kwargs(data) if model_kw is None else model_kw
+        has_sex = (
+            self.sex_cn_weight > 0 and
+            "chr_type" in model_kw and
+            model_kw["chr_type"] is not None
+        )
+        first_dim = -4 if has_sex else -3
+
+        conditioned = poutine.condition(
+            self.model,
+            data={
+                site: continuous_estimates[site]
+                for site in self._latent_sites
+                if site in continuous_estimates
+            },
+        )
+        inferred = infer_discrete(
+            conditioned, temperature=0, first_available_dim=first_dim,
+        )
+        trace = poutine.trace(inferred).get_trace(**model_kw)
+
+        assignments = {
+            "cn": trace.nodes["cn"]["value"].detach().cpu().numpy(),
+        }
+        if has_sex and "sex_karyotype" in trace.nodes:
+            assignments["sex_karyotype"] = (
+                trace.nodes["sex_karyotype"]["value"].detach().cpu().numpy()
+            )
+        return assignments
+
+    def _estimate_sample_depth_init(self, data: DepthData) -> torch.Tensor:
+        """Estimate diploid baseline counts-per-kb from autosomal bins."""
+        autosome_mask = data.chr_type.detach().cpu().numpy() == 0
+        if not np.any(autosome_mask):
+            autosome_mask = np.ones(data.n_bins, dtype=bool)
+
+        depth_np = data.depth.detach().cpu().numpy()[autosome_mask, :]
+        bin_length_kb_np = data.bin_length_kb.detach().cpu().numpy()[autosome_mask]
+        per_kb = np.divide(
+            depth_np,
+            bin_length_kb_np[:, np.newaxis],
+            out=np.zeros_like(depth_np),
+            where=bin_length_kb_np[:, np.newaxis] > 0,
+        )
+        init_np = np.median(per_kb, axis=0)
+        init_np = np.clip(init_np, 1e-3, self.sample_depth_max * 0.95)
+        return torch.tensor(init_np, dtype=self.dtype, device=self.device)
+
+    def _make_init_loc_fn(self, data: DepthData):
+        """Build a guide init function anchored to raw autosomal depth."""
+        if self.obs_likelihood != NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
+            return None
+
+        sample_depth_init = self._estimate_sample_depth_init(data)
+        logger.info(
+            "Initial sample_depth from autosomal counts/kb: median=%.3f range=[%.3f, %.3f]",
+            float(sample_depth_init.median().item()),
+            float(sample_depth_init.min().item()),
+            float(sample_depth_init.max().item()),
+        )
+        base_init = init_to_median(num_samples=50)
+
+        def init_loc_fn(site):
+            if site["name"] == "sample_depth":
+                return sample_depth_init
+            return base_init(site)
+
+        return init_loc_fn
 
     # ── probabilistic model ─────────────────────────────────────────────
 
@@ -498,6 +1152,7 @@ class CNVModel:
         depth: torch.Tensor,
         n_bins: int = None,
         n_samples: int = None,
+        bin_length_kb: Optional[torch.Tensor] = None,
         chr_type: Optional[torch.Tensor] = None,
         sex_cn_weight_per_bin: Optional[torch.Tensor] = None,
         site_alt: Optional[torch.Tensor] = None,
@@ -509,9 +1164,12 @@ class CNVModel:
         """Pyro generative model.
 
         Args:
-            depth: Observed normalised depth tensor (n_bins × n_samples).
+            depth: Observed normalized depth or raw-count tensor
+                (n_bins × n_samples).
             n_bins: Number of genomic bins.
             n_samples: Number of samples.
+            bin_length_kb: Per-bin exposure in kilobases. Required when
+                ``obs_likelihood='negative_binomial'``.
             chr_type: Per-bin chromosome type (0=autosome, 1=chrX, 2=chrY).
             sex_cn_weight_per_bin: Per-bin normalised sex–CN coupling weight.
             site_alt: Per-site alt counts (n_bins, max_sites, n_samples).
@@ -531,15 +1189,54 @@ class CNVModel:
         cn_states = torch.arange(
             0, self.n_states, device=self.device, dtype=self.dtype
         )
+        sample_var_rate = torch.tensor(
+            1.0 / self.var_sample,
+            device=self.device,
+            dtype=self.dtype,
+        )
+        bin_var_rate = torch.tensor(
+            1.0 / self.var_bin,
+            device=self.device,
+            dtype=self.dtype,
+        )
 
         plate_bins = pyro.plate("bins", n_bins, dim=-2, device=self.device)
         plate_samples = pyro.plate("samples", n_samples, dim=-1, device=self.device)
+        if self.learn_af_temperature:
+            af_temperature = pyro.sample(
+                "af_temperature",
+                dist.LogNormal(
+                    torch.tensor(
+                        math.log(max(self.af_weight, 1e-6)),
+                        device=self.device,
+                        dtype=self.dtype,
+                    ),
+                    torch.tensor(
+                        self.af_temperature_prior_scale,
+                        device=self.device,
+                        dtype=self.dtype,
+                    ),
+                ),
+            )
+        else:
+            af_temperature = self._af_scale_torch()
 
         # Per-sample variance and sex karyotype
+        sample_depth = None
         with plate_samples:
-            sample_var = pyro.sample(
-                "sample_var", dist.Exponential(1.0 / self.var_sample)
-            )
+            sample_var = pyro.sample("sample_var", dist.Exponential(sample_var_rate))
+            if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
+                sample_depth = pyro.sample(
+                    "sample_depth",
+                    dist.Uniform(
+                        torch.tensor(0.0, device=self.device, dtype=self.dtype),
+                        torch.tensor(
+                            self.sample_depth_max,
+                            device=self.device,
+                            dtype=self.dtype,
+                        ),
+                    ),
+                )
             if self.sex_cn_weight > 0 and chr_type is not None:
                 sex_prior = torch.tensor(
                     self.sex_prior, device=self.device, dtype=self.dtype,
@@ -553,42 +1250,158 @@ class CNVModel:
             bin_bias = pyro.sample(
                 "bin_bias", dist.LogNormal(zero, self.var_bias_bin)
             )
-            bin_var = pyro.sample(
-                "bin_var", dist.Exponential(1.0 / self.var_bin)
-            )
+            bin_var = pyro.sample("bin_var", dist.Exponential(bin_var_rate))
             if self.epsilon_mean > 0:
                 bin_epsilon = pyro.sample(
-                    "bin_epsilon", dist.Exponential(1.0 / self.epsilon_mean)
+                    "bin_epsilon",
+                    dist.Exponential(
+                        torch.tensor(
+                            1.0 / self.epsilon_mean,
+                            device=self.device,
+                            dtype=self.dtype,
+                        ),
+                    ),
                 )
             else:
                 bin_epsilon = torch.zeros_like(bin_bias)
 
-            # Dirichlet-Categorical CN prior — per-chromosome-type alphas
-            if chr_type is not None:
-                # (n_bins, n_states) → (n_bins, 1, n_states) so the bins
-                # dimension sits at batch dim -2, matching plate_bins.
-                alpha = self.alpha_table[chr_type].unsqueeze(-2)
-            else:
-                alpha = self.alpha_non_ref * one.expand(self.n_states)
-                alpha[2] = self.alpha_ref
-            cn_probs = pyro.sample("cn_probs", dist.Dirichlet(alpha))
+        if self.autosome_prior_mode == "shrinkage":
+            autosome_nonref_mean = pyro.sample(
+                "autosome_nonref_mean",
+                dist.Beta(
+                    torch.tensor(
+                        self.autosome_nonref_mean_alpha,
+                        device=self.device,
+                        dtype=self.dtype,
+                    ),
+                    torch.tensor(
+                        self.autosome_nonref_mean_beta,
+                        device=self.device,
+                        dtype=self.dtype,
+                    ),
+                ),
+            )
+            autosome_mask = (
+                chr_type == 0 if chr_type is not None else torch.ones(
+                    n_bins,
+                    dtype=torch.bool,
+                    device=self.device,
+                )
+            )
+            autosome_idx = torch.nonzero(autosome_mask, as_tuple=False).squeeze(-1)
+            sex_idx = torch.nonzero(~autosome_mask, as_tuple=False).squeeze(-1)
+
+            autosome_nonref_prob = torch.empty(0, dtype=self.dtype, device=self.device)
+            autosome_alt_cn_probs = torch.empty(
+                (0, self.n_states - 1),
+                dtype=self.dtype,
+                device=self.device,
+            )
+            if autosome_idx.numel() > 0:
+                nonref_alpha = torch.clamp(
+                    autosome_nonref_mean * self.autosome_nonref_concentration,
+                    min=1e-4,
+                )
+                ref_alpha = torch.clamp(
+                    (1.0 - autosome_nonref_mean) * self.autosome_nonref_concentration,
+                    min=1e-4,
+                )
+                with pyro.plate("autosome_bins_prior", autosome_idx.numel()):
+                    autosome_nonref_prob = pyro.sample(
+                        "autosome_nonref_prob",
+                        dist.Beta(nonref_alpha, ref_alpha),
+                    )
+                    autosome_alt_cn_probs = pyro.sample(
+                        "autosome_alt_cn_probs",
+                        dist.Dirichlet(
+                            torch.full(
+                                (autosome_idx.numel(), self.n_states - 1),
+                                self.alpha_non_ref,
+                                dtype=self.dtype,
+                                device=self.device,
+                            )
+                        ),
+                    )
+
+            sex_cn_probs = torch.empty(
+                (0, self.n_states),
+                dtype=self.dtype,
+                device=self.device,
+            )
+            if sex_idx.numel() > 0:
+                sex_alpha = self.alpha_table[chr_type[sex_idx]]
+                with pyro.plate("sex_bins_prior", sex_idx.numel()):
+                    sex_cn_probs = pyro.sample(
+                        "sex_cn_probs",
+                        dist.Dirichlet(sex_alpha),
+                    )
+
+            cn_probs = torch.empty(
+                (n_bins, self.n_states),
+                dtype=self.dtype,
+                device=self.device,
+            )
+            if autosome_idx.numel() > 0:
+                cn_probs[autosome_idx] = self._compose_autosome_cn_probs_torch(
+                    autosome_nonref_prob,
+                    autosome_alt_cn_probs,
+                )
+            if sex_idx.numel() > 0:
+                cn_probs[sex_idx] = sex_cn_probs
+            cn_probs = pyro.deterministic("cn_probs", cn_probs)
+        else:
+            with plate_bins:
+                # Dirichlet-Categorical CN prior — per-chromosome-type alphas.
+                if chr_type is not None:
+                    alpha = self.alpha_table[chr_type].unsqueeze(-2)
+                else:
+                    alpha = self.alpha_non_ref * one.expand(self.n_states)
+                    alpha[2] = self.alpha_ref
+                cn_probs = pyro.sample("cn_probs", dist.Dirichlet(alpha))
 
         # Per-bin, per-sample observations
         with plate_bins, plate_samples:
-            cn = pyro.sample("cn", dist.Categorical(cn_probs))
-            expected = Vindex(cn_states)[cn] * bin_bias + bin_epsilon
-            base_variance = sample_var + bin_var
-            variance = base_variance * torch.clamp(expected, min=1e-3)
-            pyro.sample(
-                "obs",
-                _make_depth_distribution(
-                    expected,
-                    variance,
-                    self.obs_likelihood,
-                    self.obs_df,
-                ),
-                obs=depth,
+            # The legacy Dirichlet path produces an explicit singleton sample
+            # dimension. Restore that axis for derived shrinkage priors so the
+            # categorical probabilities broadcast across the samples plate.
+            cn_probs_for_samples = (
+                cn_probs.unsqueeze(-2) if cn_probs.dim() == 2 else cn_probs
             )
+            cn = pyro.sample("cn", dist.Categorical(cn_probs_for_samples))
+            expected_units = Vindex(cn_states)[cn] * bin_bias + bin_epsilon
+
+            if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
+                if bin_length_kb is None:
+                    raise ValueError(
+                        "bin_length_kb is required for negative_binomial observation likelihood."
+                    )
+                mean = _raw_expected_depth_units(
+                    Vindex(cn_states)[cn],
+                    bin_bias,
+                    bin_epsilon,
+                )
+                mean = torch.clamp(mean, min=0.0)
+                mean = mean * sample_depth
+                mean = mean * bin_length_kb.unsqueeze(-1)
+                overdispersion = sample_var + bin_var
+                pyro.sample(
+                    "obs",
+                    _make_negative_binomial_distribution(mean, overdispersion),
+                    obs=depth,
+                )
+            else:
+                base_variance = sample_var + bin_var
+                variance = base_variance * torch.clamp(expected_units, min=1e-3)
+                pyro.sample(
+                    "obs",
+                    _make_depth_distribution(
+                        expected_units,
+                        variance,
+                        self.obs_likelihood,
+                        self.obs_df,
+                    ),
+                    obs=depth,
+                )
 
             # ── sex–CN coupling factor ────────────────────────────────────────
             if self.sex_cn_weight > 0 and chr_type is not None:
@@ -611,15 +1424,22 @@ class CNVModel:
                     af_log_lik = af_log_lik + torch.where(
                         cn == c, af_table[c], zero,
                     )
-                pyro.factor("af_lik", self.af_weight * af_log_lik)
+                pyro.factor("af_lik", af_temperature * af_log_lik)
             elif site_alt is not None and site_total is not None and self.af_weight > 0:
-                # Slow fallback: compute BetaBinomial on the fly.
-                af_log_lik = _marginalized_af_log_lik(
-                    site_alt, site_total, site_pop_af, site_mask,
-                    cn=cn, n_states=self.n_states,
-                    concentration=self.af_concentration,
+                # Slow fallback: precompute once inside the model call.
+                af_table = self._prepare_af_table_torch(
+                    site_alt,
+                    site_total,
+                    site_pop_af,
+                    site_mask,
+                    chr_type,
                 )
-                pyro.factor("af_lik", self.af_weight * af_log_lik)
+                af_log_lik = torch.tensor(0.0, device=self.device)
+                for c in range(self.n_states):
+                    af_log_lik = af_log_lik + torch.where(
+                        cn == c, af_table[c], zero,
+                    )
+                pyro.factor("af_lik", af_temperature * af_log_lik)
 
     # ── training ────────────────────────────────────────────────────────
 
@@ -629,15 +1449,17 @@ class CNVModel:
         When per-site allele data is present and ``af_weight > 0``, the
         expensive BetaBinomial marginalisation is done **once** here and
         passed to the model as a precomputed lookup table (``af_table``).
-        The stored AF term is normalized by observed site count within each
-        bin/sample so changing ``max_sites_per_bin`` does not require a
-        compensating change to ``af_weight``.
+        The stored AF term is summed over observed sites within each
+        bin/sample so bins with more informative loci contribute
+        proportionally more evidence.
         """
         kw: dict = {
             "depth": data.depth,
             "n_bins": data.n_bins,
             "n_samples": data.n_samples,
         }
+        if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
+            kw["bin_length_kb"] = data.bin_length_kb
         # Chromosome-type tensor and per-bin sex-CN coupling weight
         if hasattr(data, "chr_type") and data.chr_type is not None:
             kw["chr_type"] = data.chr_type
@@ -651,11 +1473,10 @@ class CNVModel:
                 ).unsqueeze(-1)  # (n_bins, 1)
         if data.site_alt is not None and self.af_weight > 0:
             with torch.no_grad():
-                kw["af_table"] = _precompute_af_table(
+                kw["af_table"] = self._prepare_af_table_torch(
                     data.site_alt, data.site_total,
                     data.site_pop_af, data.site_mask,
-                    n_states=self.n_states,
-                    concentration=self.af_concentration,
+                    kw.get("chr_type"),
                 )
         return kw
 
@@ -695,6 +1516,7 @@ class CNVModel:
         """
         logger.info("Initialising training ...")
         pyro.clear_param_store()
+        self.guide = self._build_guide(self._make_init_loc_fn(data))
 
         scheduler = pyro.optim.LambdaLR(
             {
@@ -746,130 +1568,138 @@ class CNVModel:
 
     # ── posterior estimation ─────────────────────────────────────────────
 
-    def get_map_estimates(self, data: DepthData) -> Dict[str, np.ndarray]:
-        """Compute MAP estimates for all latent variables.
+    def get_map_estimates(
+        self,
+        data: DepthData,
+        estimate_method: str = "current",
+        model_kw: dict | None = None,
+    ) -> Dict[str, np.ndarray]:
+        """Compute point estimates for all latent variables.
 
         Args:
             data: :class:`DepthData` used during training.
+            estimate_method: ``'current'`` for the historical single guide
+                draw or ``'median'`` for deterministic guide medians.
 
         Returns:
             Dictionary mapping site names to numpy arrays.
         """
-        logger.info("Computing MAP estimates ...")
-        model_kw = self._model_kwargs(data)
-
-        has_sex = (
-            self.sex_cn_weight > 0 and
-            "chr_type" in model_kw and
-            model_kw["chr_type"] is not None
+        logger.info("Computing point estimates (method=%s) ...", estimate_method)
+        model_kw = self._model_kwargs(data) if model_kw is None else model_kw
+        continuous_estimates = self._get_continuous_estimates(
+            data,
+            estimate_method=estimate_method,
+            model_kw=model_kw,
         )
-        first_dim = -4 if has_sex else -3
-
-        guide_trace = poutine.trace(self.guide).get_trace(**model_kw)
-        replayed = poutine.replay(self.model, trace=guide_trace)
-        inferred = infer_discrete(
-            replayed, temperature=0, first_available_dim=first_dim,
-        )
-        trace = poutine.trace(inferred).get_trace(**model_kw)
 
         estimates: Dict[str, np.ndarray] = {}
-        for site in self._latent_sites:
-            estimates[site] = (
-                guide_trace.nodes[site]["value"].detach().cpu().numpy()
+        for site, value in continuous_estimates.items():
+            estimates[site] = value.detach().cpu().numpy()
+        estimates.update(
+            self._infer_discrete_assignments(
+                data,
+                continuous_estimates,
+                model_kw=model_kw,
             )
-        estimates["cn"] = trace.nodes["cn"]["value"].detach().cpu().numpy()
-        if has_sex and "sex_karyotype" in trace.nodes:
-            estimates["sex_karyotype"] = (
-                trace.nodes["sex_karyotype"]["value"].detach().cpu().numpy()
-            )
+        )
         return estimates
 
-    def run_discrete_inference(
+    def _run_discrete_inference_fixed_latents(
         self,
         data: DepthData,
-        map_estimates: Dict[str, np.ndarray] | None = None,
+        maps: Dict[str, np.ndarray],
+        af_table: np.ndarray | None = None,
     ) -> Dict[str, np.ndarray]:
-        """Compute exact discrete CN posteriors analytically.
-
-        Once the continuous latents are fixed at their MAP estimates, the
-        hidden copy-number state for each bin / sample pair has a small,
-        finite state space and a Gaussian likelihood.  That means the
-        posterior can be computed directly with Bayes' rule instead of via
-        repeated Monte Carlo calls to :func:`infer_discrete`.
-
-        When per-site allele data is available, the marginalized genotype
-        likelihood for each CN state is added to the log-posterior.
-
-        Args:
-            data: :class:`DepthData` instance.
-            map_estimates: Optional precomputed output from
-                :meth:`get_map_estimates` to avoid recomputation.
-
-        Returns:
-            Dictionary with ``'cn_posterior'`` of shape
-            ``(n_bins, n_samples, n_states)`` and, when sex–CN coupling is
-            active, ``'sex_posterior'`` of shape ``(n_samples, 2)`` giving
-            ``[P(XX), P(XY)]`` per sample.
-        """
-        logger.info("Running discrete inference ...")
-
-        maps = map_estimates if map_estimates is not None else self.get_map_estimates(data)
-
+        """Compute exact discrete CN posteriors with fixed continuous latents."""
         bin_bias = np.atleast_1d(np.asarray(maps["bin_bias"]).squeeze())
         sample_var = np.atleast_1d(np.asarray(maps["sample_var"]).squeeze())
         bin_var = np.atleast_1d(np.asarray(maps["bin_var"]).squeeze())
         bin_epsilon = np.atleast_1d(
             np.asarray(maps.get("bin_epsilon", np.zeros_like(bin_bias))).squeeze()
         )
-        cn_probs = np.asarray(maps["cn_probs"]).squeeze()
-
-        if cn_probs.ndim == 1:
-            cn_probs = cn_probs.reshape(1, -1)
+        chr_type_np = None
+        if hasattr(data, "chr_type") and data.chr_type is not None:
+            chr_type_np = data.chr_type.detach().cpu().numpy()
+        cn_probs = self._build_cn_probs_from_estimates_numpy(
+            maps,
+            chr_type_np,
+            data.n_bins,
+        )
 
         obs = data.depth.detach().cpu().numpy()
-
-        base_variance = sample_var[np.newaxis, :] + bin_var[:, np.newaxis]
-
         cn_states = np.arange(self.n_states, dtype=obs.dtype).reshape(-1, 1, 1)
-        expected_depth = cn_states * bin_bias[np.newaxis, :, np.newaxis] + \
-            bin_epsilon[np.newaxis, :, np.newaxis]
-        variance = base_variance[np.newaxis, :, :] * np.maximum(expected_depth, 1e-3)
-
         obs_b = obs[np.newaxis, :, :]
-        log_lik = _depth_log_lik_numpy(
-            obs_b,
-            expected_depth,
-            variance,
-            self.obs_likelihood,
-            self.obs_df,
-        )
+        if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
+            sample_depth = np.atleast_1d(
+                np.asarray(maps["sample_depth"]).squeeze()
+            )
+            overdispersion = (
+                sample_var[np.newaxis, :] + bin_var[:, np.newaxis]
+            )
+            expected_units = _raw_expected_depth_units(
+                cn_states,
+                bin_bias[np.newaxis, :, np.newaxis],
+                bin_epsilon[np.newaxis, :, np.newaxis],
+            )
+            mean = data.bin_length_kb.detach().cpu().numpy()[np.newaxis, :, np.newaxis]
+            mean = mean * sample_depth[np.newaxis, np.newaxis, :]
+            mean = mean * np.maximum(expected_units, 0.0)
+            log_lik = _negative_binomial_log_lik_numpy(
+                obs_b,
+                mean,
+                overdispersion[np.newaxis, :, :],
+            )
+        else:
+            base_variance = sample_var[np.newaxis, :] + bin_var[:, np.newaxis]
+            expected_depth = cn_states * bin_bias[np.newaxis, :, np.newaxis]
+            expected_depth = expected_depth + bin_epsilon[np.newaxis, :, np.newaxis]
+            variance = base_variance[np.newaxis, :, :]
+            variance = variance * np.maximum(expected_depth, 1e-3)
+            log_lik = _depth_log_lik_numpy(
+                obs_b,
+                expected_depth,
+                variance,
+                self.obs_likelihood,
+                self.obs_df,
+            )
 
         log_prior = np.log(np.maximum(cn_probs.T[:, :, np.newaxis], 1e-10))
         base_log_unnorm = log_lik + log_prior  # (n_states, n_bins, n_samples)
 
-        # ── marginalized allele-fraction likelihood ──────────────────────
-        if data.site_alt is not None and self.af_weight > 0:
+        af_scale = self._af_scale_numpy(maps)
+        if af_table is not None and af_scale > 0:
+            base_log_unnorm += af_scale * af_table
+        elif data.site_alt is not None and af_scale > 0:
             site_alt_np = data.site_alt.detach().cpu().numpy()
             site_total_np = data.site_total.detach().cpu().numpy()
             site_pop_af_np = data.site_pop_af.detach().cpu().numpy()
             site_mask_np = data.site_mask.detach().cpu().numpy()
+            raw_af_table = np.empty(
+                (self.n_states, data.n_bins, data.n_samples),
+                dtype=np.float64,
+            )
 
             for c in range(self.n_states):
-                af_ll = _marginalized_af_log_lik_numpy(
+                raw_af_table[c] = _marginalized_af_log_lik_numpy(
                     site_alt_np, site_total_np, site_pop_af_np, site_mask_np,
                     cn_state=c, n_states=self.n_states,
                     concentration=self.af_concentration,
                 )
-                base_log_unnorm[c] += self.af_weight * af_ll
+
+            af_ll_table = self._apply_af_evidence_mode_numpy(
+                raw_af_table,
+                chr_type_np,
+            )
+            base_log_unnorm += af_scale * af_ll_table
 
             n_sites = int(site_mask_np.any(axis=2).sum())
             logger.info(
-                "AF marginalised likelihood: %d total sites, normalized "
-                "per bin/sample (weight=%.2f)",
-                n_sites, self.af_weight,
+                "AF marginalised likelihood: %d total sites, summed per "
+                "bin/sample (scale=%.2f, mode=%s)",
+                n_sites, af_scale,
+                self.af_evidence_mode,
             )
 
-        # ── sex-aware marginalisation ────────────────────────────────
         has_sex = (
             self.sex_cn_weight > 0 and
             hasattr(data, "chr_type") and
@@ -880,7 +1710,6 @@ class CNVModel:
             sex_cn_np = self.sex_cn_score.cpu().numpy()  # (2, 3, n_states)
             sex_prior_np = np.array(self.sex_prior, dtype=np.float64)
 
-            # Per-bin weight normalised by chr-type bin count
             ct_counts = np.array(
                 [max(int((chr_type_np == t).sum()), 1) for t in range(3)],
                 dtype=np.float64,
@@ -908,7 +1737,6 @@ class CNVModel:
                 log_evidence[s] = log_Z_bin.sum(axis=0)
                 cn_post_given_sex[s] = ev / ev.sum(axis=0, keepdims=True)
 
-            # Posterior over sex per sample
             log_sex = (
                 np.log(np.maximum(sex_prior_np, 1e-10))[:, np.newaxis] +
                 log_evidence
@@ -917,7 +1745,6 @@ class CNVModel:
             sex_post = np.exp(log_sex - mx_s)
             sex_post /= sex_post.sum(axis=0, keepdims=True)
 
-            # Marginal CN posterior: weighted sum over sex states
             cn_marginal = np.zeros((self.n_states, n_bins, n_samp))
             for s in range(2):
                 cn_marginal += (
@@ -928,23 +1755,175 @@ class CNVModel:
             cn_posterior = np.transpose(cn_marginal, (1, 2, 0)).astype(
                 np.float32, copy=False,
             )
-            logger.info(
-                "Sex posterior (mean): P(XX)=%.3f  P(XY)=%.3f",
-                sex_post[0].mean(), sex_post[1].mean(),
-            )
-            logger.info("Exact analytical discrete inference complete.")
             return {
                 "cn_posterior": cn_posterior,
                 "sex_posterior": sex_post.T.astype(np.float32, copy=False),
             }
 
-        # ── fallback: no sex coupling ────────────────────────────────
         max_log = np.max(base_log_unnorm, axis=0, keepdims=True)
         exp_vals = np.exp(base_log_unnorm - max_log)
         posterior = exp_vals / np.sum(exp_vals, axis=0, keepdims=True)
         cn_posterior = np.transpose(posterior, (1, 2, 0)).astype(
             np.float32, copy=False,
         )
-
-        logger.info("Exact analytical discrete inference complete.")
         return {"cn_posterior": cn_posterior}
+
+    def run_discrete_inference(
+        self,
+        data: DepthData,
+        map_estimates: Dict[str, np.ndarray] | None = None,
+        af_table: np.ndarray | None = None,
+    ) -> Dict[str, np.ndarray]:
+        """Compute exact discrete CN posteriors analytically.
+
+        Once the continuous latents are fixed at point estimates, the
+        hidden copy-number state for each bin / sample pair has a small,
+        finite state space and a closed-form likelihood. That means the
+        posterior can be computed directly with Bayes' rule instead of via
+        repeated Monte Carlo calls to :func:`infer_discrete`.
+
+        When per-site allele data is available, the marginalized genotype
+        likelihood for each CN state is added to the log-posterior.
+
+        Args:
+            data: :class:`DepthData` instance.
+            map_estimates: Optional precomputed output from
+                :meth:`get_map_estimates` to avoid recomputation.
+            af_table: Optional precomputed AF log-likelihood table of shape
+                ``(n_states, n_bins, n_samples)``.
+
+        Returns:
+            Dictionary with ``'cn_posterior'`` of shape
+            ``(n_bins, n_samples, n_states)`` and, when sex–CN coupling is
+            active, ``'sex_posterior'`` of shape ``(n_samples, 2)`` giving
+            ``[P(XX), P(XY)]`` per sample.
+        """
+        logger.info("Running discrete inference ...")
+
+        maps = map_estimates if map_estimates is not None else self.get_map_estimates(data)
+        posterior = self._run_discrete_inference_fixed_latents(
+            data,
+            maps,
+            af_table=af_table,
+        )
+        logger.info("Exact analytical discrete inference complete.")
+        return posterior
+
+    def run_discrete_inference_multi_draw(
+        self,
+        data: DepthData,
+        n_draws: int = 30,
+        af_table: np.ndarray | None = None,
+        draw_estimate_collector: Dict[str, List[np.ndarray]] | None = None,
+    ) -> Dict[str, np.ndarray]:
+        """Average discrete CN posteriors over repeated guide draws.
+
+        When ``draw_estimate_collector`` is provided, each guide draw's
+        continuous latent values are appended to that dictionary so downstream
+        consumers can form a true posterior predictive distribution instead of
+        relying only on plug-in point estimates.
+        """
+        if n_draws < 1:
+            raise ValueError("n_draws must be at least 1.")
+
+        if self.guide_type == "delta":
+            logger.info(
+                "Guide type 'delta' is deterministic; multi-draw inference "
+                "collapses to a single point-estimate pass.",
+            )
+            point_estimates = self.get_map_estimates(data, estimate_method="current")
+            return self.run_discrete_inference(
+                data,
+                map_estimates=point_estimates,
+                af_table=af_table,
+            )
+
+        logger.info(
+            "Running multi-draw discrete inference (%d guide draws) ...",
+            n_draws,
+        )
+        model_kw = self._model_kwargs(data)
+        posterior_sum: Dict[str, np.ndarray] = {}
+        cn_map_counts: np.ndarray | None = None
+        sex_map_counts: np.ndarray | None = None
+        initialized = False
+        for _ in range(n_draws):
+            draw_estimates = self._get_continuous_estimates(
+                data,
+                estimate_method="current",
+                model_kw=model_kw,
+            )
+            draw_maps = {
+                site: value.detach().cpu().numpy()
+                for site, value in draw_estimates.items()
+            }
+            if draw_estimate_collector is not None:
+                for site in draw_maps:
+                    draw_estimate_collector.setdefault(site, [])
+                for site, value in draw_maps.items():
+                    draw_estimate_collector[site].append(np.array(value, copy=True))
+            draw_post = self._run_discrete_inference_fixed_latents(
+                data,
+                draw_maps,
+                af_table=af_table,
+            )
+            if not initialized:
+                posterior_sum = {
+                    key: np.asarray(value, dtype=np.float64)
+                    for key, value in draw_post.items()
+                }
+                cn_map_counts = np.zeros_like(
+                    draw_post["cn_posterior"],
+                    dtype=np.float64,
+                )
+                if "sex_posterior" in draw_post:
+                    sex_map_counts = np.zeros_like(
+                        draw_post["sex_posterior"],
+                        dtype=np.float64,
+                    )
+                initialized = True
+            else:
+                for key, value in draw_post.items():
+                    if key not in posterior_sum:
+                        continue
+                    posterior_sum[key] += np.asarray(value, dtype=np.float64)
+            cn_map = np.argmax(draw_post["cn_posterior"], axis=2)
+            np.add.at(
+                cn_map_counts,
+                (
+                    np.arange(data.n_bins)[:, np.newaxis],
+                    np.arange(data.n_samples)[np.newaxis, :],
+                    cn_map,
+                ),
+                1.0,
+            )
+            if sex_map_counts is not None and "sex_posterior" in draw_post:
+                sex_map = np.argmax(draw_post["sex_posterior"], axis=1)
+                np.add.at(
+                    sex_map_counts,
+                    (np.arange(data.n_samples), sex_map),
+                    1.0,
+                )
+
+        averaged = {
+            key: (value / float(n_draws)).astype(np.float32, copy=False)
+            for key, value in posterior_sum.items()
+        }
+        if cn_map_counts is not None:
+            cn_map_counts = cn_map_counts / float(n_draws)
+            final_cn_map = np.argmax(averaged["cn_posterior"], axis=2)
+            averaged["cn_map_stability"] = np.take_along_axis(
+                cn_map_counts,
+                final_cn_map[..., np.newaxis],
+                axis=2,
+            ).squeeze(axis=2).astype(np.float32, copy=False)
+        if sex_map_counts is not None and "sex_posterior" in averaged:
+            sex_map_counts = sex_map_counts / float(n_draws)
+            final_sex_map = np.argmax(averaged["sex_posterior"], axis=1)
+            averaged["sex_map_stability"] = np.take_along_axis(
+                sex_map_counts,
+                final_sex_map[:, np.newaxis],
+                axis=1,
+            ).squeeze(axis=1).astype(np.float32, copy=False)
+        logger.info("Exact analytical multi-draw discrete inference complete.")
+        return averaged

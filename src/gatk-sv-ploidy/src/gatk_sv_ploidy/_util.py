@@ -18,7 +18,14 @@ logger = logging.getLogger(__name__)
 
 # ── column / chromosome constants ───────────────────────────────────────────
 
-METADATA_COLS = frozenset({"Chr", "Start", "End", "source_file", "Bin"})
+METADATA_COLS = frozenset({
+    "Chr",
+    "Start",
+    "End",
+    "BinLengthBp",
+    "source_file",
+    "Bin",
+})
 """Columns that are *not* per-sample depth values."""
 
 CHR_ORDER = {f"chr{i}": i for i in range(1, 23)}
@@ -36,6 +43,16 @@ DEFAULT_AF_CONCENTRATION = 50.0
 
 DEFAULT_AF_WEIGHT = 0.25
 """Default relative weight of the allele-fraction likelihood term."""
+DEPTH_SPACES = ("normalized", "raw")
+"""Supported depth/count spaces for the depth matrix input."""
+OBSERVATION_TYPE_FILENAME = "observation_type.txt"
+"""Marker file written beside preprocess outputs to record depth space."""
+
+NEGATIVE_BINOMIAL_OBS_LIKELIHOOD = "negative_binomial"
+"""Observation likelihood name used for raw-count negative-binomial fits."""
+DEFAULT_NORMALIZED_OBS_LIKELIHOOD = "normal"
+"""Default observation likelihood used for normalized depth matrices."""
+
 MAX_CNQ = 99
 """Maximum phred-scaled CN quality score reported by the ploidy model."""
 
@@ -133,6 +150,197 @@ def compute_cnq_from_probabilities(
     error_prob = np.clip(1.0 - p_diff, np.finfo(np.float64).tiny, 1.0)
     cnq = np.rint(-10.0 * np.log10(error_prob))
     return np.clip(cnq, 0, max_score).astype(np.int16, copy=False)
+
+
+def compute_plq_from_probabilities(
+    probabilities: np.ndarray,
+    max_score: int = MAX_CNQ,
+) -> np.ndarray:
+    """Compute ploidy quality from the top-two posterior-probability ratio.
+
+    PLQ is the phred-scaled log-likelihood ratio between the most likely and
+    second most likely ploidy states:
+
+    ``round(10 * log10(p_best / p_second))``
+
+    Scores are clipped to ``[0, max_score]``.
+
+    Args:
+        probabilities: Array whose last dimension enumerates ploidy states.
+        max_score: Maximum reported PLQ.
+
+    Returns:
+        Integer NumPy array with the same leading dimensions as
+        *probabilities* and one score per posterior vector.
+    """
+    probs = np.asarray(probabilities, dtype=np.float64)
+    if probs.shape[-1] == 0:
+        raise ValueError(
+            "PLQ posterior array must include at least one state"
+        )
+
+    if probs.shape[-1] == 1:
+        return np.full(probs.shape[:-1], max_score, dtype=np.int16)
+
+    kth = probs.shape[-1] - 2
+    top2 = np.partition(probs, kth=kth, axis=-1)[..., -2:]
+    best = top2[..., 1]
+    second = top2[..., 0]
+
+    tiny = np.finfo(np.float64).tiny
+    ratio = np.maximum(best, tiny) / np.maximum(second, tiny)
+    plq = np.rint(10.0 * np.log10(ratio))
+    plq = np.where(best > tiny, plq, 0.0)
+    return np.clip(plq, 0, max_score).astype(np.int16, copy=False)
+
+
+def summarize_contig_ploidy_from_bin_calls(
+    cn_map: np.ndarray,
+    cnq: np.ndarray,
+    n_states: int = MAX_GENOTYPE_STATES,
+    max_score: int = MAX_CNQ,
+) -> tuple[int, float, np.ndarray, int]:
+    """Summarize contig ploidy from per-bin MAP calls and CNQ values.
+
+    The contig ploidy is the most frequent bin-level MAP copy number. The
+    returned support value is the fraction of bins assigned to that winning CN.
+    PLQ is the rounded mean CNQ across all bins on the contig.
+    """
+    cn_map_arr = np.asarray(cn_map, dtype=np.int64).reshape(-1)
+    cnq_arr = np.asarray(cnq, dtype=np.float64).reshape(-1)
+
+    if cn_map_arr.size == 0:
+        raise ValueError("cn_map must include at least one bin")
+    if cnq_arr.size != cn_map_arr.size:
+        raise ValueError("cnq must have one value per bin")
+    if np.any(cn_map_arr < 0) or np.any(cn_map_arr >= n_states):
+        raise ValueError("cn_map contains copy-number states outside the model range")
+
+    counts = np.bincount(cn_map_arr, minlength=n_states).astype(np.float64, copy=False)
+    total_bins = float(cn_map_arr.size)
+    ploidy_fractions = counts / total_bins
+    best_cn = int(np.argmax(counts))
+    best_fraction = float(ploidy_fractions[best_cn])
+
+    finite_cnq = cnq_arr[np.isfinite(cnq_arr)]
+    if finite_cnq.size == 0:
+        plq = 0
+    else:
+        plq = int(np.clip(np.rint(finite_cnq.mean()), 0, max_score))
+
+    return best_cn, best_fraction, ploidy_fractions.astype(np.float32, copy=False), plq
+
+
+def compute_contig_posterior_from_bin_posteriors(
+    bin_posteriors: np.ndarray,
+) -> np.ndarray:
+    """Aggregate per-bin CN posteriors into a contig-wide constant-state posterior.
+
+    For a chromosome with ``n`` bins, each ploidy hypothesis fixes all bins to
+    the same copy-number state. The hypothesis score is therefore the product
+    of the corresponding per-bin posterior probabilities. This helper performs
+    the calculation in log space and normalizes the resulting state scores.
+
+    Args:
+        bin_posteriors: Array of shape ``(n_bins, n_states)`` containing
+            per-bin posterior probabilities.
+
+    Returns:
+        Normalized posterior probabilities of shape ``(n_states,)``.
+    """
+    probs = np.asarray(bin_posteriors, dtype=np.float64)
+    if probs.ndim != 2:
+        raise ValueError(
+            "bin_posteriors must have shape (n_bins, n_states)"
+        )
+    if probs.shape[0] == 0 or probs.shape[1] == 0:
+        raise ValueError("bin_posteriors must include at least one bin and state")
+
+    log_joint = np.log(np.clip(probs, np.finfo(np.float64).tiny, 1.0)).sum(
+        axis=0,
+    )
+    log_joint -= np.max(log_joint)
+    posterior = np.exp(log_joint)
+    posterior /= np.sum(posterior)
+    return posterior.astype(np.float32, copy=False)
+
+
+def resolve_depth_space(depth_space: str, obs_likelihood: str) -> str:
+    """Resolve ``auto`` depth space to a concrete input representation."""
+    requested = str(depth_space).strip().lower()
+    if requested == "auto":
+        if str(obs_likelihood).strip().lower() == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
+            return "raw"
+        return "normalized"
+    if requested not in DEPTH_SPACES:
+        raise ValueError(
+            f"Unknown depth_space: {depth_space!r}. Choose one of {DEPTH_SPACES} or 'auto'."
+        )
+    return requested
+
+
+def default_obs_likelihood_for_depth_space(depth_space: str) -> str:
+    """Return the default observation likelihood for a resolved depth space."""
+    resolved = str(depth_space).strip().lower()
+    if resolved == "raw":
+        return NEGATIVE_BINOMIAL_OBS_LIKELIHOOD
+    if resolved == "normalized":
+        return DEFAULT_NORMALIZED_OBS_LIKELIHOOD
+    raise ValueError(
+        f"Unknown depth_space: {depth_space!r}. Choose one of {DEPTH_SPACES}."
+    )
+
+
+def validate_depth_space(depth_space: str, obs_likelihood: str) -> str:
+    """Validate that the chosen observation family matches the input space."""
+    resolved = resolve_depth_space(depth_space, obs_likelihood)
+    likelihood = str(obs_likelihood).strip().lower()
+    if likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD and resolved != "raw":
+        raise ValueError(
+            "negative_binomial observation likelihood requires raw count input "
+            "(--depth-space raw or --depth-space auto)."
+        )
+    if likelihood != NEGATIVE_BINOMIAL_OBS_LIKELIHOOD and resolved != "normalized":
+        raise ValueError(
+            "Continuous observation likelihoods require normalized depth input "
+            "(--depth-space normalized or --depth-space auto)."
+        )
+    return resolved
+
+
+def get_observation_type_path(depth_path: str) -> str:
+    """Return the marker-file path associated with a preprocess depth file."""
+    return os.path.join(
+        os.path.dirname(os.path.abspath(depth_path)),
+        OBSERVATION_TYPE_FILENAME,
+    )
+
+
+def write_observation_type(output_dir: str, depth_space: str) -> str:
+    """Write a preprocess observation-type marker and return its path."""
+    if depth_space not in DEPTH_SPACES:
+        raise ValueError(
+            f"Unknown depth_space: {depth_space!r}. Choose one of {DEPTH_SPACES}."
+        )
+    marker_path = os.path.join(output_dir, OBSERVATION_TYPE_FILENAME)
+    with open(marker_path, "w", encoding="ascii") as handle:
+        handle.write(f"{depth_space}\n")
+    return marker_path
+
+
+def read_observation_type(depth_path: str) -> Optional[str]:
+    """Read the preprocess observation-type marker when present."""
+    marker_path = get_observation_type_path(depth_path)
+    if not os.path.exists(marker_path):
+        return None
+    with open(marker_path, encoding="ascii") as handle:
+        value = handle.read().strip().lower()
+    if value not in DEPTH_SPACES:
+        raise ValueError(
+            f"Invalid observation type marker in {marker_path}: {value!r}. "
+            f"Expected one of {DEPTH_SPACES}."
+        )
+    return value
 
 
 # ── plotting helpers ────────────────────────────────────────────────────────

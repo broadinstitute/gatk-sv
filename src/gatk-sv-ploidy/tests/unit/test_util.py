@@ -6,6 +6,8 @@ import pandas as pd
 
 from gatk_sv_ploidy._util import (
     add_chromosome_labels,
+    compute_contig_posterior_from_bin_posteriors,
+    compute_plq_from_probabilities,
     format_column_name,
     get_chromosome_type,
     get_sample_columns,
@@ -39,6 +41,25 @@ def test_load_exclusion_ids(tmp_path) -> None:
     path.write_text("a\n\n b \n")
 
     assert load_exclusion_ids(str(path)) == ["a", "b"]
+
+
+def test_contig_posterior_and_plq_helpers() -> None:
+    bin_posteriors = np.array(
+        [
+            [0.0, 0.0, 0.51, 0.49, 0.0, 0.0],
+            [0.0, 0.0, 0.01, 0.99, 0.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
+
+    contig_posterior = compute_contig_posterior_from_bin_posteriors(
+        bin_posteriors,
+    )
+    plq = compute_plq_from_probabilities(contig_posterior)
+
+    assert int(np.argmax(contig_posterior)) == 3
+    assert contig_posterior[3] > 0.98
+    assert int(plq) == 20
 
 
 def test_plot_helpers_write_files_and_labels(tmp_path) -> None:

@@ -8,8 +8,9 @@ import pytest
 from gatk_sv_ploidy.preprocess import (
     _merge_intervals_by_chr,
     _process_sd_file,
-    _site_alt_total,
-    _site_minor_total,
+    _estimate_site_pop_af,
+    _infer_cohort_major_base,
+    _site_nonmajor_total,
     build_per_site_data,
     collapse_bins_per_contig,
     filter_low_quality_bins,
@@ -18,7 +19,6 @@ from gatk_sv_ploidy.preprocess import (
     normalise_depth,
     parse_args,
     read_bed_intervals,
-    read_known_sites,
     read_site_depth_tsv,
 )
 
@@ -162,21 +162,6 @@ def test_filter_low_quality_bins_stratifies_chrX_and_chrY() -> None:
     assert filtered[["Chr", "Start"]].values.tolist() == [["chrX", 0], ["chrY", 0]]
 
 
-def test_read_known_sites_reads_vcf_and_converts_to_zero_based(tmp_path) -> None:
-    vcf = tmp_path / "sites.vcf"
-    vcf.write_text(
-        "##fileformat=VCFv4.2\n"
-        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
-        "chr21\t501\t.\tA\tG\t.\tPASS\tAF=0.3\n"
-    )
-
-    sites = read_known_sites(str(vcf))
-
-    assert sites.loc[0, "position"] == 500
-    assert sites.loc[0, "ref"] == "A"
-    assert sites.loc[0, "pop_af"] == pytest.approx(0.3)
-
-
 def test_merge_intervals_and_empty_poor_region_cases() -> None:
     intervals = pd.DataFrame(
         {
@@ -236,10 +221,61 @@ def test_collapse_bins_per_contig_uses_weighted_depth_and_limit() -> None:
     chr21 = collapsed[collapsed["Chr"] == "chr21"].reset_index(drop=True)
     assert chr21.loc[0, "Start"] == 0
     assert chr21.loc[0, "End"] == 60
+    assert chr21.loc[0, "BinLengthBp"] == 60
     expected_s1 = (10 * 1.0 + 20 * 2.0 + 30 * 3.0) / 60.0
     expected_s2 = (10 * 2.0 + 20 * 3.0 + 30 * 4.0) / 60.0
     assert chr21.loc[0, "S1"] == pytest.approx(expected_s1)
     assert chr21.loc[0, "S2"] == pytest.approx(expected_s2)
+
+
+def test_collapse_bins_per_contig_can_sum_raw_counts() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chr21"] * 6,
+            "Start": [0, 100, 200, 300, 400, 500],
+            "End": [100, 200, 300, 400, 500, 600],
+            "source_file": ["test"] * 6,
+            "S1": [10, 20, 30, 40, 50, 60],
+            "S2": [1, 2, 3, 4, 5, 6],
+        },
+        index=[f"bin{i}" for i in range(6)],
+    )
+
+    collapsed = collapse_bins_per_contig(
+        df,
+        bins_per_contig=3,
+        aggregation="sum",
+    )
+
+    assert collapsed.shape[0] == 3
+    assert collapsed.iloc[0]["S1"] == pytest.approx(30.0)
+    assert collapsed.iloc[0]["S2"] == pytest.approx(3.0)
+    assert collapsed.iloc[0]["BinLengthBp"] == 200
+
+
+def test_collapse_bins_per_contig_preserves_covered_length_across_gaps() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chr21"] * 6,
+            "Start": [0, 1000, 2000, 3000, 4000, 5000],
+            "End": [100, 1100, 2100, 3100, 4100, 5100],
+            "source_file": ["test"] * 6,
+            "S1": [10, 20, 30, 40, 50, 60],
+            "S2": [1, 2, 3, 4, 5, 6],
+        },
+        index=[f"bin{i}" for i in range(6)],
+    )
+
+    collapsed = collapse_bins_per_contig(
+        df,
+        bins_per_contig=3,
+        aggregation="sum",
+    ).reset_index(drop=True)
+
+    assert collapsed.loc[0, "Start"] == 0
+    assert collapsed.loc[0, "End"] == 1100
+    assert collapsed.loc[0, "BinLengthBp"] == 200
+    assert collapsed.loc[0, "S1"] == pytest.approx(30.0)
 
 
 def test_read_site_depth_tsv_plain_and_position_stride(tmp_path) -> None:
@@ -259,31 +295,22 @@ def test_read_site_depth_tsv_plain_and_position_stride(tmp_path) -> None:
     assert empty_df["position"].tolist() == [0]
 
 
-def test_site_alt_and_minor_total_helpers() -> None:
-    a = np.array([10, 0])
-    c = np.array([0, 5])
+def test_site_cohort_major_helpers() -> None:
+    a = np.array([10, 4])
+    c = np.array([0, 0])
     g = np.array([0, 0])
-    t = np.array([5, 5])
-    ref = np.array(["A", "C"])
+    t = np.array([5, 6])
 
-    alt, total = _site_alt_total(a, c, g, t, ref)
-    minor, total_minor = _site_minor_total(a, c, g, t)
+    major_idx = _infer_cohort_major_base(a, c, g, t)
+    alt, total = _site_nonmajor_total(a, c, g, t, major_idx)
 
+    assert major_idx == 0
     np.testing.assert_array_equal(total, np.array([15, 10]))
-    np.testing.assert_array_equal(alt, np.array([5, 5]))
-    np.testing.assert_array_equal(total_minor, np.array([15, 10]))
-    np.testing.assert_array_equal(minor, np.array([5, 5]))
+    np.testing.assert_array_equal(alt, np.array([5, 6]))
+    assert _estimate_site_pop_af(alt, total) == pytest.approx((11.0 + 0.5) / 26.0)
 
 
-def test_read_known_sites_reads_tsv(tmp_path) -> None:
-    path = tmp_path / "sites.tsv"
-    path.write_text("chr21\t500\tA\t0.3\nchrX\t100\tC\t0.4\n")
-    sites = read_known_sites(str(path))
-    assert sites["contig"].tolist() == ["chr21", "chrX"]
-    assert sites["pop_af"].tolist() == [0.3, 0.4]
-
-
-def test_process_sd_file_handles_known_and_fallback_paths(tmp_path) -> None:
+def test_process_sd_file_collects_cohort_counts(tmp_path) -> None:
     sd_path = tmp_path / "sample.sd.txt"
     sd_path.write_text(
         "chr21\t20\tS1\t10\t0\t0\t5\n"
@@ -294,39 +321,19 @@ def test_process_sd_file_handles_known_and_fallback_paths(tmp_path) -> None:
     sample_to_idx = {"S1": 0}
     bin_lookup = {"chr21": (np.array([0]), np.array([0]), np.array([100]))}
 
-    known_arrays = {
-        "chr21": (
-            np.array([20], dtype=np.int64),
-            np.array(["A"]),
-            np.array([0.2], dtype=np.float32),
-        )
-    }
-    _, known_total, known_data = _process_sd_file(
+    _, total_sites, site_data = _process_sd_file(
         str(sd_path),
         sample_to_idx,
         bin_lookup,
-        known_arrays,
-        have_known=True,
-        effective_stride=1,
-        min_site_depth=5,
-    )
-    assert known_total == 1
-    assert known_data[0][20]["values"][0][:3] == (0, 5, 15)
-
-    _, fallback_total, fallback_data = _process_sd_file(
-        str(sd_path),
-        sample_to_idx,
-        bin_lookup,
-        {},
-        have_known=False,
-        effective_stride=1,
+        position_stride=1,
         min_site_depth=10,
     )
-    assert fallback_total == 2
-    assert sorted(fallback_data[0]) == [20, 75]
+    assert total_sites == 2
+    assert sorted(site_data[0]) == [20, 75]
+    assert site_data[0][20]["values"][0] == (0, 10, 0, 0, 5)
 
 
-def test_build_per_site_data_known_sites_and_site_limit(tmp_path) -> None:
+def test_build_per_site_data_uses_shared_cohort_identity_and_site_limit(tmp_path) -> None:
     bins_df = pd.DataFrame(
         {
             "Chr": ["chr21"],
@@ -339,30 +346,29 @@ def test_build_per_site_data_known_sites_and_site_limit(tmp_path) -> None:
     sd_path = tmp_path / "sample.sd.txt"
     sd_path.write_text(
         "chr21\t10\tS1\t8\t0\t0\t2\n"
-        "chr21\t20\tS1\t8\t0\t0\t2\n"
+        "chr21\t20\tS1\t2\t0\t0\t8\n"
         "chr21\t30\tS1\t8\t0\t0\t2\n"
         "chr21\t10\tS2\t7\t0\t0\t3\n"
         "chr21\t20\tS2\t7\t0\t0\t3\n"
-    )
-    known_sites = pd.DataFrame(
-        {
-            "contig": ["chr21", "chr21", "chr21"],
-            "position": [10, 20, 30],
-            "ref": ["A", "A", "A"],
-            "pop_af": [0.1, 0.2, 0.3],
-        }
     )
 
     result = build_per_site_data(
         [str(sd_path)],
         bins_df,
-        known_sites_df=known_sites,
         max_sites_per_bin=2,
     )
 
     assert result["site_alt"].shape == (1, 2, 2)
     assert result["site_mask"].sum() == 4
-    np.testing.assert_allclose(sorted(result["site_pop_af"][0].tolist()), [0.1, 0.2])
+    np.testing.assert_array_equal(result["site_alt"][0, 0, :], np.array([2, 3]))
+    np.testing.assert_array_equal(result["site_alt"][0, 1, :], np.array([2, 7]))
+    np.testing.assert_allclose(
+        result["site_pop_af"][0, :],
+        np.array([
+            (5.0 + 0.5) / 21.0,
+            (9.0 + 0.5) / 21.0,
+        ]),
+    )
 
 
 def test_preprocess_parse_args_and_main_paths(tmp_path, monkeypatch) -> None:
@@ -378,10 +384,11 @@ def test_preprocess_parse_args_and_main_paths(tmp_path, monkeypatch) -> None:
     )
     poor_regions = tmp_path / "poor.bed"
     poor_regions.write_text("chr13\t0\t10\n")
-    known_sites = tmp_path / "sites.tsv"
-    known_sites.write_text("chr13\t20\tA\t0.2\n")
     sd_path = tmp_path / "sample.sd.txt"
-    sd_path.write_text("chr13\t20\tS1\t8\t0\t0\t2\n")
+    sd_path.write_text(
+        "chr13\t20\tS1\t8\t0\t0\t2\n"
+        "chr13\t20\tS2\t7\t0\t0\t3\n"
+    )
     sd_list = tmp_path / "sd_list.txt"
     sd_list.write_text(f"{sd_path}\n")
     output_dir = tmp_path / "out"
@@ -396,12 +403,12 @@ def test_preprocess_parse_args_and_main_paths(tmp_path, monkeypatch) -> None:
             str(output_dir),
             "--viable-only",
             "--skip-bin-filter",
+            "--output-space",
+            "normalized",
             "--poor-regions",
             str(poor_regions),
             "--site-depth-list",
             str(sd_list),
-            "--known-sites",
-            str(known_sites),
             "--bins-per-contig",
             "1",
             "--min-bins-per-chr",
@@ -423,7 +430,11 @@ def test_preprocess_parse_args_and_main_paths(tmp_path, monkeypatch) -> None:
     preprocessed = pd.read_csv(output_dir / "preprocessed_depth.tsv", sep="\t", index_col=0)
     assert sorted(preprocessed["Chr"].unique().tolist()) == ["chr13", "chr18", "chr21", "chrX", "chrY"]
     assert len(preprocessed) == 5
+    assert (output_dir / "observation_type.txt").read_text().strip() == "normalized"
     assert (output_dir / "site_data.npz").exists()
+    site_npz = np.load(output_dir / "site_data.npz")
+    observed_af = site_npz["site_pop_af"][np.any(site_npz["site_mask"], axis=2)]
+    assert observed_af.tolist() == [pytest.approx((5.0 + 0.5) / 21.0)]
 
 
 def test_preprocess_parse_args_defaults(monkeypatch) -> None:
@@ -441,5 +452,48 @@ def test_preprocess_parse_args_defaults(monkeypatch) -> None:
     args = parse_args()
 
     assert args.bins_per_contig == 30
+    assert args.output_space == "raw"
     assert args.chrY_median_max == pytest.approx(0.85)
     assert args.min_bins_per_chr == 10
+
+
+def test_preprocess_can_write_raw_counts(tmp_path, monkeypatch) -> None:
+    raw_path = tmp_path / "raw.tsv"
+    raw_path.write_text(
+        "#Chr\tStart\tEnd\tS1\tS2\n"
+        "chr13\t0\t100\t10\t20\n"
+        "chr18\t0\t100\t12\t24\n"
+        "chr21\t0\t100\t14\t28\n"
+        "chrX\t0\t100\t6\t12\n"
+        "chrY\t0\t100\t4\t0\n"
+    )
+    output_dir = tmp_path / "out"
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "gatk-sv-ploidy preprocess",
+            "--input",
+            str(raw_path),
+            "--output-dir",
+            str(output_dir),
+            "--skip-bin-filter",
+            "--output-space",
+            "raw",
+            "--min-bins-per-chr",
+            "1",
+            "--bins-per-contig",
+            "0",
+        ],
+    )
+
+    main()
+
+    preprocessed = pd.read_csv(
+        output_dir / "preprocessed_depth.tsv",
+        sep="\t",
+        index_col=0,
+    )
+    assert preprocessed.loc["chr13:0-100", "S1"] == pytest.approx(10.0)
+    assert preprocessed.loc["chr18:0-100", "S2"] == pytest.approx(24.0)
+    assert (output_dir / "observation_type.txt").read_text().strip() == "raw"

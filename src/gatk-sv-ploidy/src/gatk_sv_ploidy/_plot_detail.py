@@ -15,6 +15,8 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.ticker import MaxNLocator
 
 from gatk_sv_ploidy._util import add_chromosome_labels, compute_cnq_from_probabilities
 
@@ -22,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 # CN state palette (matches original R / Python colours)
 _CN_COLORS = ["#004D40", "#FFC107", "#1E88E5", "#D81B60", "#38006B", "#FF6D00"]
+_IGNORED_BIN_COLOR = "#FFB300"
 
 
 # ── per-sample plots ───────────────────────────────────────────────────────
@@ -36,6 +39,54 @@ def _equal_width_x(chr_array: np.ndarray, n: int) -> np.ndarray:
         s, e = bounds[i], bounds[i + 1]
         x[s:e] = i + np.linspace(0, 1, e - s, endpoint=False)
     return x
+
+
+def _contiguous_bar_geometry(x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Return left edges and widths that tile the x-axis with no gaps."""
+    centers = np.asarray(x, dtype=float)
+    if centers.ndim != 1:
+        raise ValueError("x must be a one-dimensional array")
+    if centers.size == 0:
+        return np.array([], dtype=float), np.array([], dtype=float)
+    if centers.size == 1:
+        return np.array([centers[0] - 0.4], dtype=float), np.array([0.8], dtype=float)
+
+    midpoints = 0.5 * (centers[:-1] + centers[1:])
+    left_edges = np.empty_like(centers)
+    right_edges = np.empty_like(centers)
+    left_edges[1:] = midpoints
+    right_edges[:-1] = midpoints
+    left_edges[0] = centers[0] - 0.5 * (centers[1] - centers[0])
+    right_edges[-1] = centers[-1] + 0.5 * (centers[-1] - centers[-2])
+    widths = right_edges - left_edges
+    return left_edges, widths
+
+
+def _depth_axis_label_and_limit(
+    values: np.ndarray,
+    plot_col: str,
+) -> Tuple[str, float]:
+    """Choose a sensible y-axis label and upper bound for depth-style plots."""
+    finite = np.asarray(values, dtype=float)
+    finite = finite[np.isfinite(finite)]
+    if plot_col == "observed_depth":
+        upper = 5.0 if finite.size == 0 else max(5.0, float(finite.max()) * 1.05)
+        return "Normalized Depth", upper
+    return "Estimated Copy Number", 5.0
+
+
+def _draw_depth_reference_lines(ax: plt.Axes, y_max: float, normalized_scale: bool) -> None:
+    """Draw either dense CN-style reference lines or a bounded raw-depth grid."""
+    if normalized_scale:
+        for y in np.arange(0, y_max + 0.5, 0.5):
+            style = ("-", 0.5, 0.8) if y == int(y) else (":", 0.3, 0.5)
+            ax.axhline(y, color="gray", linestyle=style[0], alpha=style[1],
+                       linewidth=style[2])
+        ax.axhline(2, color="black", linestyle="-", linewidth=1.5)
+        return
+
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=8))
+    ax.grid(True, axis="y", alpha=0.3)
 
 
 def _draw_site_af_scatter(
@@ -59,12 +110,15 @@ def _draw_site_af_scatter(
     all.
     """
     # Build lookup: (chr, start, end) -> npz bin index
-    bin_chr = site_data["bin_chr"]
-    bin_start = site_data["bin_start"]
-    bin_end = site_data["bin_end"]
-    bin_lookup: Dict[tuple, int] = {}
-    for bi in range(len(bin_chr)):
-        bin_lookup[(str(bin_chr[bi]), int(bin_start[bi]), int(bin_end[bi]))] = bi
+    bin_lookup = site_data.get("_bin_lookup")
+    if bin_lookup is None:
+        bin_chr = site_data["bin_chr"]
+        bin_start = site_data["bin_start"]
+        bin_end = site_data["bin_end"]
+        bin_lookup = {}
+        for bi in range(len(bin_chr)):
+            bin_lookup[(str(bin_chr[bi]), int(bin_start[bi]), int(bin_end[bi]))] = bi
+        site_data["_bin_lookup"] = bin_lookup
 
     sa = site_data["site_alt"]     # (n_bins, max_sites, n_samples)
     st = site_data["site_total"]   # (n_bins, max_sites, n_samples)
@@ -134,6 +188,69 @@ def _draw_site_af_scatter(
         )
 
 
+def _draw_sample_depth_panel(
+    ax: plt.Axes,
+    x: np.ndarray,
+    obs: np.ndarray,
+    cn_map: np.ndarray,
+    x_min: float,
+    x_max: float,
+    retained_mask: Optional[np.ndarray] = None,
+    panel_label: str = "",
+) -> None:
+    """Draw the depth/CN panel, optionally omitting filtered bins."""
+    mask = np.ones(len(x), dtype=bool) if retained_mask is None else np.asarray(
+        retained_mask,
+        dtype=bool,
+    )
+
+    if np.any(mask):
+        ax.plot(
+            x[mask],
+            cn_map[mask],
+            "o",
+            alpha=0.5,
+            markersize=4,
+            color="black",
+            label="Predicted bin copy number",
+        )
+        obs_plot = np.where(mask, obs, np.nan)
+        ax.plot(
+            x,
+            obs_plot,
+            "r-",
+            linewidth=1,
+            alpha=0.7,
+            label="Normalised read depth",
+        )
+    else:
+        ax.text(
+            0.5,
+            0.5,
+            "No retained bins",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            fontsize=10,
+            color="#666666",
+        )
+
+    ax.grid(True, axis="y", alpha=1, linestyle="-", linewidth=1)
+    ax.set_ylim([-0.5, 5.5])
+    ax.set_xlim([x_min, x_max])
+    if panel_label:
+        ax.text(
+            0.01,
+            0.96,
+            panel_label,
+            transform=ax.transAxes,
+            va="top",
+            ha="left",
+            fontsize=10,
+            bbox=dict(boxstyle="round", facecolor="white", alpha=0.75),
+        )
+
+
 def plot_sample_with_variance(
     sample_data: pd.DataFrame,
     all_sample_vars: np.ndarray,
@@ -143,7 +260,7 @@ def plot_sample_with_variance(
     sample_idx_map: Optional[Dict[str, int]] = None,
     min_het_alt: int = 3,
 ) -> None:
-    """Multi-panel plot: depth + CN, optional AF scatter, CNQ, sample-var histogram.
+    """Multi-panel plot: depth + CN, optional AF scatter, CNQ, optional BINQ, sample-var histogram.
 
     When *site_data* is provided (the ``.npz`` from preprocessing), each
     individual SNP allele fraction is drawn as a translucent dot, giving a
@@ -178,6 +295,10 @@ def plot_sample_with_variance(
         {"mean_het_af", "n_het_sites"}.issubset(sample_data.columns) and
         sample_data["n_het_sites"].sum() > 0
     )
+    has_binq = (
+        "binq_value" in sample_data.columns and
+        np.isfinite(sample_data["binq_value"].to_numpy(dtype=float)).any()
+    )
 
     obs = sample_data["observed_depth"].values
     cn_map = sample_data["cn_map"].values
@@ -194,34 +315,64 @@ def plot_sample_with_variance(
     svar = sample_data["sample_var"].iloc[0]
 
     x = _equal_width_x(chrs, len(obs))
+    bar_left_edges, bar_widths = _contiguous_bar_geometry(x)
+    x_min = float(bar_left_edges[0])
+    x_max = float(bar_left_edges[-1] + bar_widths[-1])
+    ignored_mask = np.zeros(len(sample_data), dtype=bool)
+    if "ignored_in_call" in sample_data.columns:
+        ignored_mask = sample_data["ignored_in_call"].fillna(False).to_numpy(dtype=bool)
 
-    # Layout: tall depth panel, optional tall AF panel, half-height CN-prob
-    # and stdev panels.
+    has_filtered_panel = bool(np.any(ignored_mask))
+    height_ratios: list[int] = [2]
+    if has_filtered_panel:
+        height_ratios.append(2)
     if has_af:
-        fig, axes = plt.subplots(
-            4, 1, figsize=(8, 9),
-            gridspec_kw={"height_ratios": [2, 2, 1, 1]},
-        )
-        ax_depth, ax_af, ax_cn_prob, ax_hist = axes
-    else:
-        fig, axes = plt.subplots(
-            3, 1, figsize=(8, 6),
-            gridspec_kw={"height_ratios": [2, 1, 1]},
-        )
-        ax_depth, ax_cn_prob, ax_hist = axes
-        ax_af = None
+        height_ratios.append(2)
+    height_ratios.append(1)
+    if has_binq:
+        height_ratios.append(1)
+    height_ratios.append(1)
+
+    fig_height = 1.0 + float(sum(height_ratios))
+    fig, axes = plt.subplots(
+        len(height_ratios),
+        1,
+        figsize=(8, fig_height),
+        gridspec_kw={"height_ratios": height_ratios},
+    )
+    axes_arr = np.atleast_1d(axes)
+    axis_iter = iter(axes_arr)
+    ax_depth = next(axis_iter)
+    ax_depth_filtered = next(axis_iter) if has_filtered_panel else None
+    ax_af = next(axis_iter) if has_af else None
+    ax_cn_prob = next(axis_iter)
+    ax_binq = next(axis_iter) if has_binq else None
+    ax_hist = next(axis_iter)
 
     fig.text(0.1 / 8, 0.98, name, fontsize=12, fontweight="bold", va="top", ha="left")
 
     # Panel 1 — depth + MAP CN
-    ax = ax_depth
-    ax.plot(x, cn_map, "o", alpha=0.5, markersize=4, color="black",
-            label="Predicted bin copy number")
-    ax.plot(x, obs, "r-", linewidth=1, alpha=0.7, label="Normalised read depth")
-    ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.02), ncol=2, borderaxespad=0)
-    ax.grid(True, axis="y", alpha=1, linestyle="-", linewidth=1)
-    ax.set_ylim([-0.5, 5.5])
-    ax.set_xlim([x.min(), x.max()])
+    _draw_sample_depth_panel(
+        ax_depth,
+        x,
+        obs,
+        cn_map,
+        x_min,
+        x_max,
+        panel_label="All bins" if has_filtered_panel else "",
+    )
+
+    if ax_depth_filtered is not None:
+        _draw_sample_depth_panel(
+            ax_depth_filtered,
+            x,
+            obs,
+            cn_map,
+            x_min,
+            x_max,
+            retained_mask=~ignored_mask,
+            panel_label="Retained after BINQ filter",
+        )
 
     # Panel 2 — AF (per-site scatter when available, else bin-mean stems)
     if ax_af is not None:
@@ -247,22 +398,42 @@ def plot_sample_with_variance(
                    linewidth=1, label="Expected het AF (0.5)")
         ax.set_ylabel("Allele Fraction")
         ax.set_ylim([-0.05, 1.05])
-        ax.set_xlim([x.min(), x.max()])
+        ax.set_xlim([x_min, x_max])
         ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.02), borderaxespad=0)
         ax.grid(True, axis="y", alpha=0.3)
 
-    positive_diffs = np.diff(x)
-    positive_diffs = positive_diffs[positive_diffs > 0]
-    bar_width = 0.8 if positive_diffs.size == 0 else 0.9 * float(np.median(positive_diffs))
-
     # CN quality bar plot (half height)
     ax = ax_cn_prob
-    ax.bar(x, cnq, width=bar_width, color="#546E7A", alpha=0.85,
-           linewidth=0, align="center")
+    ax.bar(bar_left_edges, cnq, width=bar_widths, color="#546E7A", alpha=0.85,
+           linewidth=0, align="edge")
     ax.set_ylabel("CNQ")
     ax.set_ylim([0, 99])
-    ax.set_xlim([x.min() - (bar_width / 2), x.max() + (bar_width / 2)])
+    ax.set_xlim([x_min, x_max])
     ax.grid(True, axis="y", alpha=0.3)
+
+    if ax_binq is not None:
+        ax = ax_binq
+        binq = sample_data["binq_value"].to_numpy(dtype=float)
+        finite_binq = np.isfinite(binq)
+        if np.any(finite_binq):
+            ax.bar(
+                bar_left_edges[finite_binq],
+                binq[finite_binq],
+                width=bar_widths[finite_binq],
+                color="#7E57C2",
+                alpha=0.85,
+                linewidth=0,
+                align="edge",
+            )
+        binq_label = "BINQ"
+        if "binq_field" in sample_data.columns:
+            field_series = sample_data["binq_field"].dropna().astype(str)
+            if not field_series.empty:
+                binq_label = field_series.iloc[0]
+        ax.set_ylabel(binq_label)
+        ax.set_ylim([0, 99])
+        ax.set_xlim([x_min, x_max])
+        ax.grid(True, axis="y", alpha=0.3)
 
     # Sample variance histogram (half height)
     ax = ax_hist
@@ -278,9 +449,13 @@ def plot_sample_with_variance(
 
     # Highlight aneuploid chromosomes on spatial panels
     spatial_axes = [ax_depth]
+    if ax_depth_filtered is not None:
+        spatial_axes.append(ax_depth_filtered)
     if ax_af is not None:
         spatial_axes.append(ax_af)
     spatial_axes.append(ax_cn_prob)
+    if ax_binq is not None:
+        spatial_axes.append(ax_binq)
 
     if is_aneu:
         aneu_names = {c for c, _, _ in aneuploid_chrs}
@@ -289,6 +464,47 @@ def plot_sample_with_variance(
             if len(idx) > 0:
                 for a in spatial_axes:
                     a.axvspan(x[idx[0]], x[idx[-1]], alpha=0.15, color="red", zorder=0)
+
+    if np.any(ignored_mask):
+        for a in spatial_axes:
+            for left_edge, width in zip(
+                bar_left_edges[ignored_mask],
+                bar_widths[ignored_mask],
+            ):
+                a.axvspan(
+                    left_edge,
+                    left_edge + width,
+                    alpha=0.18,
+                    color=_IGNORED_BIN_COLOR,
+                    zorder=0.5,
+                )
+
+    depth_handles, depth_labels = ax_depth.get_legend_handles_labels()
+    if np.any(ignored_mask):
+        depth_handles.append(
+            Line2D([0], [0], color=_IGNORED_BIN_COLOR, linewidth=6, alpha=0.35)
+        )
+        depth_labels.append("Ignored in call")
+    ax_depth.legend(
+        depth_handles,
+        depth_labels,
+        loc="lower right",
+        bbox_to_anchor=(1.0, 1.02),
+        ncol=3 if np.any(ignored_mask) else 2,
+        borderaxespad=0,
+    )
+
+    if ax_depth_filtered is not None:
+        filtered_handles, filtered_labels = ax_depth_filtered.get_legend_handles_labels()
+        if filtered_handles:
+            ax_depth_filtered.legend(
+                filtered_handles,
+                filtered_labels,
+                loc="lower right",
+                bbox_to_anchor=(1.0, 1.02),
+                ncol=2,
+                borderaxespad=0,
+            )
 
     for a in spatial_axes:
         add_chromosome_labels(a, chrs, x_transformed=x)
@@ -334,6 +550,9 @@ def plot_cn_per_contig_boxplot(
     else:
         suffix = "all_samples"
 
+    contour = "with_contours" if connect_samples else "no_contours"
+    logger.info("Generating contig boxplot (%s, %s) ...", suffix, contour)
+
     if plot_df.empty:
         logger.info("Skipping contig boxplot for %s: no samples after filtering", suffix)
         return
@@ -354,17 +573,14 @@ def plot_cn_per_contig_boxplot(
     finite_depths = plot_df["median_depth"].to_numpy(dtype=float)
     finite_depths = finite_depths[np.isfinite(finite_depths)]
     y_max = max(4, float(finite_depths.max())) if len(finite_depths) > 0 else 4
+    normalized_scale = y_max <= 10
     ax.set_ylim(0, y_max)
 
     # Alternating chromosome shading
     for i in range(0, len(chr_order), 2):
         ax.axvspan(i - 0.5, i + 0.5, color="lightgray", alpha=0.3, zorder=0)
 
-    for y in np.arange(0, y_max + 0.5, 0.5):
-        style = ("-", 0.5, 0.8) if y == int(y) else (":", 0.3, 0.5)
-        ax.axhline(y, color="gray", linestyle=style[0], alpha=style[1],
-                   linewidth=style[2], zorder=1)
-    ax.axhline(2, color="black", linestyle="-", linewidth=1.5, zorder=2)
+    _draw_depth_reference_lines(ax, y_max, normalized_scale)
 
     # Lines connecting samples
     if connect_samples:
@@ -418,7 +634,7 @@ def plot_cn_per_contig_boxplot(
     ax.set_xticks(np.arange(len(chr_order)))
     ax.set_xticklabels([c.replace("chr", "") for c in chr_order], rotation=90)
     ax.set_xlabel("Chromosome", fontsize=12)
-    ax.set_ylabel("Normalised Depth", fontsize=12)
+    ax.set_ylabel("Median Depth", fontsize=12)
 
     n = wide.shape[0]
     ni = int(wide.isnull().any(axis=1).sum())
@@ -427,7 +643,6 @@ def plot_cn_per_contig_boxplot(
             bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
 
     plt.tight_layout()
-    contour = "with_contours" if connect_samples else "no_contours"
     dest = os.path.join(output_dir, "raw_depth_contig")
     os.makedirs(dest, exist_ok=True)
     fig.savefig(
@@ -474,41 +689,61 @@ def plot_cn_per_bin_chromosome(
     else:
         suffix = "all_samples"
 
+    logger.info("Generating per-bin plot: %s (%s) ...", chromosome, suffix)
+
+    if cdf.empty:
+        logger.info("Skipping per-bin plot: %s (%s) has no rows", chromosome, suffix)
+        return
+
     cdf = cdf.sort_values("start")
     bins = cdf[["start", "end"]].drop_duplicates().sort_values("start").reset_index(drop=True)
     bins["bin_idx"] = bins.index
     cdf = cdf.merge(bins[["start", "end", "bin_idx"]], on=["start", "end"], how="left")
+    values = cdf[plot_col].to_numpy(dtype=float)
+    ylabel, y_max = _depth_axis_label_and_limit(values, plot_col)
+    normalized_scale = plot_col != "observed_depth" or y_max <= 10
 
     fig, ax = plt.subplots(figsize=(12, 6))
-    ax.set_ylim(0, 5)
+    ax.set_ylim(0, y_max)
 
-    for y in np.arange(0, 5.5, 0.5):
-        style = ("-", 0.5, 0.8) if y == int(y) else (":", 0.3, 0.5)
-        ax.axhline(y, color="gray", linestyle=style[0], alpha=style[1], linewidth=style[2])
-    ax.axhline(2, color="black", linestyle="-", linewidth=1.5)
+    _draw_depth_reference_lines(ax, y_max, normalized_scale)
+
+    ignored_fraction_by_bin = None
+    if "ignored_fraction_in_call" in cdf.columns:
+        ignored_fraction_by_bin = (
+            cdf.groupby("bin_idx", sort=True)["ignored_fraction_in_call"].first()
+        )
+        for bin_idx, frac in ignored_fraction_by_bin.items():
+            frac = float(frac)
+            if frac <= 0:
+                continue
+            ax.axvspan(
+                bin_idx - 0.5,
+                bin_idx + 0.5,
+                color=_IGNORED_BIN_COLOR,
+                alpha=min(0.35, 0.08 + (0.45 * frac)),
+                zorder=0.5,
+            )
 
     # Sample lines
     rng = np.random.RandomState(0)
-    for sample in cdf["sample"].unique():
+    sample_groups = cdf.groupby("sample", sort=False)
+    for sample, sdf in sample_groups:
         if sample == highlight_sample:
             continue
-        sdf = cdf[cdf["sample"] == sample].sort_values("bin_idx")
         ax.plot(sdf["bin_idx"], sdf[plot_col], color="gray", alpha=0.2, linewidth=2)
 
     # Jittered scatter
-    bin_indices = sorted(cdf["bin_idx"].unique())
-    for bi in bin_indices:
-        vals = cdf[cdf["bin_idx"] == bi][plot_col].values
-        jx = rng.normal(bi, 0.1, size=len(vals))
-        ax.scatter(jx, vals, s=10, alpha=0.5, color="#838393")
+    jittered_x = cdf["bin_idx"].to_numpy(dtype=float) + rng.normal(0.0, 0.1, size=len(cdf))
+    ax.scatter(jittered_x, values, s=10, alpha=0.5, color="#838393")
 
     # Boxplots
-    bp_data, bp_pos = [], []
-    for bi in bin_indices:
-        vals = cdf[cdf["bin_idx"] == bi][plot_col].values
-        if len(vals) > 0:
-            bp_data.append(vals)
-            bp_pos.append(bi)
+    bin_groups = cdf.groupby("bin_idx", sort=True)[plot_col]
+    bp_pos = []
+    bp_data = []
+    for bin_idx, series in bin_groups:
+        bp_pos.append(bin_idx)
+        bp_data.append(series.to_numpy(dtype=float))
     if bp_data:
         ax.boxplot(
             bp_data, positions=bp_pos, widths=0.6,
@@ -520,13 +755,20 @@ def plot_cn_per_bin_chromosome(
         )
 
     if highlight_sample:
-        sdf = cdf[cdf["sample"] == highlight_sample].sort_values("bin_idx")
-        if len(sdf) > 0:
-            ax.plot(sdf["bin_idx"], sdf[plot_col], color="magenta", linewidth=2,
+        highlight_df = sample_groups.get_group(highlight_sample) if highlight_sample in sample_groups.groups else None
+        if highlight_df is not None and len(highlight_df) > 0:
+            ax.plot(highlight_df["bin_idx"], highlight_df[plot_col], color="magenta", linewidth=2,
                     label=" " + highlight_sample)
-            ax.legend(loc="upper right", framealpha=0.9)
 
-    ylabel = "Normalised Depth" if plot_col == "observed_depth" else "Estimated Copy Number"
+    handles, labels = ax.get_legend_handles_labels()
+    if ignored_fraction_by_bin is not None and np.any(ignored_fraction_by_bin.to_numpy(dtype=float) > 0):
+        handles.append(
+            Line2D([0], [0], color=_IGNORED_BIN_COLOR, linewidth=6, alpha=0.35)
+        )
+        labels.append("Ignored in call")
+    if handles:
+        ax.legend(handles, labels, loc="upper right", framealpha=0.9)
+
     ax.set_xlabel(f"{chromosome} Position (Binned)", fontsize=12)
     ax.set_ylabel(ylabel, fontsize=12)
     ax.set_xticks([])

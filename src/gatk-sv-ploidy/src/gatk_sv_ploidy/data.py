@@ -15,7 +15,12 @@ import numpy as np
 import pandas as pd
 import torch
 
-from gatk_sv_ploidy._util import AUTOSOME_NAMES, CHR_ORDER, get_sample_columns
+from gatk_sv_ploidy._util import (
+    AUTOSOME_NAMES,
+    CHR_ORDER,
+    DEPTH_SPACES,
+    get_sample_columns,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +60,7 @@ class DepthData:
         seed: int = 42,
         clamp_threshold: float = 5.0,
         site_data: Optional[Dict[str, np.ndarray]] = None,
+        depth_space: str = "normalized",
     ) -> None:
         sample_cols = get_sample_columns(df)
 
@@ -138,6 +144,26 @@ class DepthData:
         self.chr: np.ndarray = df["Chr"].values
         self.start: np.ndarray = df["Start"].values
         self.end: np.ndarray = df["End"].values
+        self.depth_space = str(depth_space).strip().lower()
+        if self.depth_space not in DEPTH_SPACES:
+            raise ValueError(
+                f"Unknown depth_space: {depth_space!r}. Choose one of {DEPTH_SPACES}."
+            )
+        if "BinLengthBp" in df.columns:
+            self.bin_length_bp = np.maximum(
+                df["BinLengthBp"].to_numpy(dtype=np.int64),
+                1,
+            )
+        else:
+            self.bin_length_bp = np.maximum(
+                self.end - self.start,
+                1,
+            ).astype(np.int64, copy=False)
+        self.bin_length_kb = torch.tensor(
+            self.bin_length_bp.astype(np.float32) / 1000.0,
+            dtype=dtype,
+            device=device,
+        )
         self.sample_ids: List[str] = sample_cols
 
         # ── chromosome type tensor (0=autosome, 1=chrX, 2=chrY) ────────
@@ -152,7 +178,17 @@ class DepthData:
         )
 
         # ── build depth tensor ──────────────────────────────────────────
-        depth_matrix = df[sample_cols].values.astype(np.float32)
+        depth_values = df[sample_cols].to_numpy(dtype=np.float64)
+        if self.depth_space == "raw":
+            if np.any(depth_values < 0):
+                raise ValueError("Raw count depth input must be non-negative.")
+            if not np.allclose(depth_values, np.rint(depth_values)):
+                raise ValueError(
+                    "Raw count depth input must be integer-valued. "
+                    "Run preprocess with --output-space raw or use normalized input."
+                )
+
+        depth_matrix = depth_values.astype(np.float32)
 
         if clamp_threshold is not None:
             n_clamped = int(np.sum(depth_matrix > clamp_threshold))

@@ -100,3 +100,66 @@ def test_load_site_data_round_trips_metadata(tmp_path) -> None:
         "bin_end",
     }
     assert loaded["site_alt"].shape == (2, 3, 1)
+
+
+def test_depth_data_accepts_raw_integer_counts() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chr21", "chrX"],
+            "Start": [0, 1000],
+            "End": [1000, 3000],
+            "S1": [120, 80],
+            "S2": [140, 60],
+        }
+    )
+    df["Bin"] = df["Chr"].astype(str) + ":" + df["Start"].astype(str) + "-" + df["End"].astype(str)
+
+    data = DepthData(
+        df.set_index("Bin"),
+        depth_space="raw",
+        clamp_threshold=None,
+    )
+
+    assert data.depth_space == "raw"
+    assert data.bin_length_bp.tolist() == [1000, 2000]
+    torch.testing.assert_close(
+        data.bin_length_kb,
+        torch.tensor([1.0, 2.0], dtype=torch.float32),
+    )
+
+
+def test_depth_data_prefers_explicit_bin_length_bp() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chr21"],
+            "Start": [0],
+            "End": [1200],
+            "BinLengthBp": [200],
+            "S1": [120],
+            "S2": [140],
+        }
+    )
+    df["Bin"] = df["Chr"].astype(str) + ":" + df["Start"].astype(str) + "-" + df["End"].astype(str)
+
+    data = DepthData(
+        df.set_index("Bin"),
+        depth_space="raw",
+        clamp_threshold=None,
+    )
+
+    assert data.bin_length_bp.tolist() == [200]
+    torch.testing.assert_close(
+        data.bin_length_kb,
+        torch.tensor([0.2], dtype=torch.float32),
+    )
+
+
+def test_depth_data_rejects_non_integer_raw_counts(
+    tiny_depth_df: pd.DataFrame,
+) -> None:
+    with pytest.raises(ValueError, match="integer-valued"):
+        DepthData(
+            tiny_depth_df,
+            depth_space="raw",
+            clamp_threshold=None,
+        )
