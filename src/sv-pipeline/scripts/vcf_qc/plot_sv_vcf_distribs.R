@@ -90,6 +90,14 @@ plotStackedBars <- function(mat,colors,scaled=T,log.y=FALSE,title=NULL){
 ###################
 #####SV count plots
 ###################
+# Format a count as "X.XXXK" or "X.XXXM" with 4 significant figures
+formatCount <- function(n){
+  if(is.na(n) || !is.finite(n)) return(as.character(n))
+  if(abs(n) >= 1e6) return(paste0(signif(n/1e6, 4), "M"))
+  if(abs(n) >= 1e3) return(paste0(signif(n/1e3, 4), "K"))
+  return(as.character(round(n)))
+}
+
 #Plot single set of bars of total count of SV
 plotSVCountBars <- function(dat,svtypes,title=NULL,ylab="Count",tr.env.dat=NULL){
   #Compute table
@@ -130,22 +138,29 @@ plotSVCountBars <- function(dat,svtypes,title=NULL,ylab="Count",tr.env.dat=NULL)
     cnt <- counts[i,2]
     bar.col <- counts[i,3]
     if(cnt > 0){
-      rect(xleft=i-0.85,xright=i-0.15,
-           ybottom=min.y,ytop=cnt,
-           lwd=0.7,col=bar.col)
-      # TR_ENVELOPED hatched overlay with count label in brackets
-      if(!is.null(te.counts) && !is.na(te.counts[i]) && te.counts[i] > 0){
-        te.cnt <- max(te.counts[i], min.y)
+      te.cnt <- if(!is.null(te.counts) && !is.na(te.counts[i]) && te.counts[i] > 0)
+        max(te.counts[i], min.y) else NULL
+      # Draw stacked bars: bottom = TR_ENVELOPED (striped), top = remainder (solid)
+      if(!is.null(te.cnt)){
+        # Bottom stripe segment (color + white diagonal hatching)
+        rect(xleft=i-0.85,xright=i-0.15, ybottom=min.y,ytop=te.cnt,
+             lwd=0.7, col=bar.col, border=bar.col)
+        rect(xleft=i-0.85,xright=i-0.15, ybottom=min.y,ytop=te.cnt,
+             density=15, angle=45, col="white", border=NA)
+        # Top solid segment
+        rect(xleft=i-0.85,xright=i-0.15, ybottom=te.cnt,ytop=cnt,
+             lwd=0.7, col=bar.col, border=bar.col)
+      } else {
         rect(xleft=i-0.85,xright=i-0.15,
-             ybottom=min.y,ytop=te.cnt,
-             density=15, angle=45, col="gray40", border=NA)
+             ybottom=min.y,ytop=cnt,
+             lwd=0.7,col=bar.col)
       }
       # Count label: main count, then bracketed TR_ENVELOPED count below
       text(x=i-0.5,y=cnt*1.3,col=bar.col,
-           labels=prettyNum(cnt,big.mark=","),cex=0.7)
-      if(!is.null(te.counts) && !is.na(te.counts[i]) && te.counts[i] > 0){
+           labels=formatCount(cnt),cex=0.7)
+      if(!is.null(te.cnt)){
         text(x=i-0.5,y=cnt*1.1,col=bar.col,cex=0.6,
-             labels=paste0("(",prettyNum(te.counts[i],big.mark=","),")"))
+             labels=paste0("(",formatCount(te.counts[i]),")"))
       }
     }
     axis(1,at=i-0.5,line=-0.8,tick=F,las=2,cex.axis=0.8,
@@ -1634,12 +1649,12 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
                       paste("Not in H-W equilibrium\n(Bonferroni; n=",
                             prettyNum(n.bonf,big.mark=","),"; ",
                             round(100*(n.bonf/nrow(HW.mat)),2),"%)\n",sep="")),
-             bty="n",bg=NA,cex=0.45)
+             bty="n",bg=NA,cex=0.35,xpd=TRUE)
     }else{
       legend("topright",pch=19,col=c("#4DAC26","#81F850","#AC26A1"),pt.cex=2,
-             legend=c(paste(round(100*(n.pass/nrow(HW.mat)),0),"%",sep=""),
-                      paste(round(100*(n.nom/nrow(HW.mat)),0),"%",sep=""),
-                      paste(round(100*(n.bonf/nrow(HW.mat)),0),"%",sep="")),
+             legend=c(paste(round(100*(n.pass/nrow(HW.mat)),2),"%",sep=""),
+                      paste(round(100*(n.nom/nrow(HW.mat)),2),"%",sep=""),
+                      paste(round(100*(n.bonf/nrow(HW.mat)),2),"%",sep="")),
              bty="n",bg=NA,cex=0.7)
     }
     
@@ -1658,7 +1673,7 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
   
   #Add filter labels
   if(full.legend==T){
-    legend("right",bg=NA,bty="n",pch=NA,cex=0.45,
+    legend("right",bg=NA,bty="n",pch=NA,cex=0.35,
            legend=c("Autosomal variants only"))
   }
 }
@@ -1679,7 +1694,16 @@ plotAlleleCarrierCorrelation <- function(dat,autosomal=T,biallelic=T,
   keep <- which(!is.na(CF) & !is.na(AF))
   CF <- CF[keep]
   AF <- AF[keep]
-  
+
+  # Subsample points for plotting to avoid over-dense scatter
+  max.plot.pts <- 50000
+  if(length(CF) > max.plot.pts){
+    sub.idx <- sort(sample(seq_along(CF), max.plot.pts))
+    CF.plot <- CF[sub.idx]; AF.plot <- AF[sub.idx]
+  } else {
+    CF.plot <- CF; AF.plot <- AF
+  }
+
   #Prep plot area
   par(mar=c(4,4,2,2))
   plot(x=0:1,y=0:1,type="n",
@@ -1701,8 +1725,8 @@ plotAlleleCarrierCorrelation <- function(dat,autosomal=T,biallelic=T,
   axis(4,at=c(0.5,1),las=2,line=-0.8,tick=F,col.axis="gray50",cex.axis=0.7,
        labels=c("All\nHet.","All\nHom."))
   
-  #Plot points & rolling mean
-  points(x=CF,y=AF,cex=0.2)
+  #Plot points & rolling mean (subsampled for display; full series used for rolling mean)
+  points(x=CF.plot,y=AF.plot,cex=0.2)
   points(x=rollmean(CF,k=100),
          y=rollmean(AF,k=100),
          type="l",col="red",lwd=1.25)
