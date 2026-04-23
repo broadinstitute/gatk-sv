@@ -1369,7 +1369,7 @@ runRdTest<-function(bed)
     } else if (length(clean_p.list) == 1) {
       p <- c(clean_p.list[1], if(length(clean_p.2ndmax) > 0) clean_p.2ndmax[1] else NA)
     } else {
-      p <- c(NA, NA)
+      p <- c(0, 0)
     }
     p[3]<-"singlesampZ"
     names(p)<-c("Pvalue","Pmax_2nd","Test")
