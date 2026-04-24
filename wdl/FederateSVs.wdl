@@ -14,6 +14,8 @@ workflow FederateSVs {
 
     File? scores
 
+    File? split_cpx_intervals_script
+
     File contig_list
     File reference_fasta
     File reference_fasta_fai
@@ -74,6 +76,7 @@ workflow FederateSVs {
       input:
         vcf=vcf_a,
         prefix=prefix_a + ".cpx_intervals",
+        script=split_cpx_intervals_script,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_split_cpx_intervals
     }
@@ -82,6 +85,7 @@ workflow FederateSVs {
       input:
         vcf=vcf_b,
         prefix=prefix_b + ".cpx_intervals",
+        script=split_cpx_intervals_script,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_split_cpx_intervals
     }
