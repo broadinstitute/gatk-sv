@@ -819,6 +819,23 @@ wrapperPlotAllSizeDistribs <- function(){
 ###########################
 #####Allele frequency plots
 ###########################
+prepFreqHistogram <- function(freqs, bins.per.order){
+  finite.freqs <- freqs[which(is.finite(freqs))]
+  if(length(finite.freqs) == 0) return(NULL)
+
+  xlims <- range(finite.freqs, na.rm=T)
+  if(xlims[1] == xlims[2]){
+    pad <- max(0.1, abs(xlims[1]) * 0.05)
+    xlims <- c(xlims[1] - pad, min(0, xlims[2] + pad))
+  }
+
+  n.breaks <- bins.per.order * max(1, abs(floor(xlims[1])))
+  breaks <- seq(xlims[1], xlims[2], length.out=n.breaks + 1)
+  mids <- (breaks[1:(length(breaks)-1)] + breaks[2:length(breaks)]) / 2
+
+  list(xlims=xlims, breaks=breaks, mids=mids)
+}
+
 #Plot single AF spectrum
 plotFreqDistrib <- function(dat, svtypes,
                             autosomal=F, biallelic=T,
@@ -834,10 +851,11 @@ plotFreqDistrib <- function(dat, svtypes,
     dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
   }
   freqs <- log10(dat$AF)
-  if(length(freqs)>0){
-    xlims <- range(freqs[which(!is.infinite(freqs))],na.rm=T)
-    breaks <- seq(xlims[1],xlims[2],by=(xlims[2]-xlims[1])/(25*abs(floor(xlims)[1])))
-    mids <- (breaks[1:(length(breaks)-1)]+breaks[2:length(breaks)])/2
+  freq.setup <- prepFreqHistogram(freqs, bins.per.order=25)
+  if(length(freqs)>0 && !is.null(freq.setup)){
+    xlims <- freq.setup$xlims
+    breaks <- freq.setup$breaks
+    mids <- freq.setup$mids
     
     #Gather freq densities per class
     dens <- lapply(svtypes$svtype,function(svtype){
@@ -953,9 +971,16 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
         return(freqs[which(dat$length>max.sizes[i-1] & dat$length<=max.sizes[i])])
       }
     })
-    xlims <- range(freqs[which(!is.infinite(unlist(freqs)))],na.rm=T)
-    breaks <- seq(xlims[1],xlims[2],by=(xlims[2]-xlims[1])/(20*abs(floor(xlims)[1])))
-    mids <- (breaks[1:(length(breaks)-1)]+breaks[2:length(breaks)])/2
+    freq.setup <- prepFreqHistogram(unlist(freqs), bins.per.order=20)
+    if(is.null(freq.setup)){
+      freqs <- list()
+    } else {
+      xlims <- freq.setup$xlims
+      breaks <- freq.setup$breaks
+      mids <- freq.setup$mids
+    }
+  }
+  if(length(freqs) > 0){
     
     #Gather freq densities per class
     dens <- lapply(freqs,function(vals){
@@ -1010,7 +1035,7 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
     plot(x=c(0,1),y=c(0,1),type="n",
          xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
     text(x=0.5,y=0.5,labels="No Data")
-    mtext(3,line=1.5,text=title,font=2,cex=lwd.cex)
+    mtext(3,line=1.5,text=title,font=2)
   }
   
   #Add filter labels
@@ -1019,8 +1044,10 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
   }
   
   #Add size legend
-  legend("right",bg="white",bty="n",lwd=3,col=col.pal,cex=0.7,
-         legend=gsub("\n","",legend.labs,fixed=T))
+  if(length(freqs) > 0){
+    legend("right",bg="white",bty="n",lwd=3,col=col.pal,cex=0.7,
+           legend=gsub("\n","",legend.labs,fixed=T))
+  }
 }
 
 #Wrapper to plot all AF distributions
