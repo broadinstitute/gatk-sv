@@ -102,9 +102,16 @@ countVarsSingle <- function(dat,vlist,count="variants"){
     }
     
     #Iterate over svtypes and count number of entries
+    # For TR types (sites counting), deduplicate by base VID to count one site per original TRV
+    tr.biallelic.types <- c("TR_SNV","TR_INS","TR_DEL")
     if(count=="variants"){
       res <- sapply(svtypes$svtype,function(svtype){
-        length(which(dat$svtype==svtype & dat$VID %in% vlist$VID))
+        matching <- dat$svtype==svtype & dat$VID %in% vlist$VID
+        if(svtype %in% tr.biallelic.types){
+          base.vids <- sub("_[0-9]+$", "", dat$VID[matching])
+          return(length(unique(base.vids)))
+        }
+        length(which(matching))
       })
     }else{
       res <- sapply(svtypes$svtype,function(svtype){
@@ -980,7 +987,7 @@ if(!is.null(svtypes.file)){
                         "color"=svtypes.c)
 }
 # Enforce canonical class ordering
-.svtype.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV","TR","VNTR")
+.svtype.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV","TR_SNV","TR_INS","TR_DEL")
 .order.idx <- c(match(.svtype.order[.svtype.order %in% svtypes$svtype], svtypes$svtype),
                 which(!svtypes$svtype %in% .svtype.order))
 svtypes <- svtypes[.order.idx, ]
@@ -997,7 +1004,7 @@ svtypes.merged <- data.frame(
             svtypes$color[match(intersect(c("DUP_SHORT","DUP"),svtypes$svtype)[1],svtypes$svtype)],
             svtypes$color[match(.other.ps, svtypes$svtype)]),
   stringsAsFactors=FALSE)
-.merged.order <- c("SNV","INS","DEL","DUP","TR","VNTR")
+.merged.order <- c("SNV","INS","DEL","DUP","TR_SNV","TR_INS","TR_DEL")
 .merged.idx <- c(match(.merged.order[.merged.order %in% svtypes.merged$svtype], svtypes.merged$svtype),
                  which(!svtypes.merged$svtype %in% .merged.order))
 svtypes.merged <- svtypes.merged[.merged.idx, ]

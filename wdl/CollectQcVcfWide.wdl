@@ -108,11 +108,15 @@ task PreprocessVcf {
     command <<<
         set -euo pipefail
 
+        # Split multiallelic TRV records into biallelic before processing
+        bcftools norm -m-any ~{vcf} -Oz -o ~{prefix}.split.vcf.gz
+        tabix -p vcf ~{prefix}.split.vcf.gz
+
         cat << 'EOF' > convert_to_symbolic.py
 import pysam
 import sys
 
-vcf_in = pysam.VariantFile("~{vcf}", "r")
+vcf_in = pysam.VariantFile("~{prefix}.split.vcf.gz", "r")
 if "SVTYPE" not in vcf_in.header.info:
     vcf_in.header.info.add("SVTYPE", 1, "String", "Type of variant.")
 if "SVLEN" not in vcf_in.header.info:
@@ -125,8 +129,70 @@ if "TRV_EXPANSION_RATIO" not in vcf_in.header.info:
     vcf_in.header.info.add("TRV_EXPANSION_RATIO", 1, "Float", "Proportion of non-ref alleles called as expansions (alt allele length > ref allele length) among non-neutral alleles for TRV variants.")
 vcf_out = pysam.VariantFile("~{prefix}.vcf.gz", "w", header=vcf_in.header)
 
+# Track consecutive TRV records from the same original multiallelic
+prev_trv_key = None
+trv_counter = 0
+
+def trim_common_bases(ref, alt):
+    """Trim common prefix and suffix between REF and ALT sequences."""
+    i = 0
+    while i < len(ref) and i < len(alt) and ref[i] == alt[i]:
+        i += 1
+    ref = ref[i:]
+    alt = alt[i:]
+    while len(ref) > 0 and len(alt) > 0 and ref[-1] == alt[-1]:
+        ref = ref[:-1]
+        alt = alt[:-1]
+    return ref, alt
+
 for rec in vcf_in:
     allele_type = rec.info["allele_type"].upper()
+
+    if allele_type == "TRV":
+        # Handle biallelic TRV (post bcftools norm -m-any)
+        current_key = (rec.chrom, rec.pos, rec.id)
+        if current_key == prev_trv_key:
+            trv_counter += 1
+        else:
+            trv_counter = 1
+            prev_trv_key = current_key
+
+        # Add suffix to ID to track which original multiallelic this came from
+        rec.id = f"{rec.id}_{trv_counter}"
+
+        # Trim common prefix/suffix to get the true variant portion
+        ref_seq = rec.ref
+        alt_seq = rec.alts[0] if rec.alts else ""
+        trim_ref, trim_alt = trim_common_bases(ref_seq, alt_seq)
+
+        # Classify based on trimmed lengths
+        if len(trim_alt) > len(trim_ref):
+            svtype = "TR_INS"
+            allele_length = len(trim_alt) - len(trim_ref)
+        elif len(trim_ref) > len(trim_alt):
+            svtype = "TR_DEL"
+            allele_length = len(trim_ref) - len(trim_alt)
+        else:
+            svtype = "TR_SNV"
+            allele_length = max(len(trim_ref), 1)
+
+        rec.info["SVTYPE"] = svtype
+        rec.info["SVLEN"] = allele_length
+        rec.stop = rec.pos + allele_length - 1
+
+        rec.alts = (f"<{allele_type}>",)
+
+        for s_name in rec.samples:
+            try:
+                rec.samples[s_name].phased = False
+            except (AttributeError, TypeError):
+                pass
+
+        vcf_out.write(rec)
+        continue
+
+    # Non-TRV processing
+    prev_trv_key = None
     allele_length = abs(rec.info["allele_length"]) if "allele_length" in rec.info else len(rec.ref)
 
     if "DEL" in allele_type:
@@ -135,14 +201,6 @@ for rec in vcf_in:
         svtype = "INS_SHORT" if allele_length < 50 else "INS_SV"
     elif "DUP" in allele_type:
         svtype = "DUP_SHORT" if allele_length < 50 else "DUP_SV"
-    elif allele_type == "TRV":
-        motifs = rec.info.get("MOTIFS", None)
-        if motifs:
-            motif_list = list(motifs) if isinstance(motifs, (list, tuple)) else [str(motifs)]
-            min_motif_len = min(len(str(m)) for m in motif_list)
-        else:
-            min_motif_len = 0
-        svtype = "TR" if min_motif_len <= 6 else "VNTR"
     else:
         svtype = allele_type
     
@@ -151,39 +209,6 @@ for rec in vcf_in:
     rec.info["SVTYPE"] = svtype
     rec.info["SVLEN"] = allele_length
     rec.stop = rec.pos + allele_length - 1
-
-    # For TRV: compute expansion ratio from AL FORMAT field before GT collapsing
-    if allele_type.lower() == "trv":
-        expansions = 0
-        contractions = 0
-        for sample in rec.samples.values():
-            gt = sample.get("GT", (None,))
-            al_raw = sample.get("AL", None)
-            if al_raw is None or gt is None:
-                continue
-            al = list(al_raw)
-            try:
-                ref_len = al[0]
-            except (IndexError, TypeError):
-                continue
-            if ref_len is None:
-                continue
-            for allele_idx in gt:
-                if allele_idx is None or allele_idx == 0:
-                    continue
-                try:
-                    alt_len = al[allele_idx]
-                except (IndexError, TypeError):
-                    continue
-                if alt_len is None:
-                    continue
-                if alt_len > ref_len:
-                    expansions += 1
-                elif alt_len < ref_len:
-                    contractions += 1
-        total = expansions + contractions
-        if total > 0:
-            rec.info["TRV_EXPANSION_RATIO"] = float(expansions) / total
 
     if len(rec.alts) > 1:
         for sample in rec.samples.values():
@@ -206,6 +231,7 @@ vcf_in.close()
 EOF
 
         python convert_to_symbolic.py
+        rm -f ~{prefix}.split.vcf.gz ~{prefix}.split.vcf.gz.tbi
 
         tabix ~{prefix}.vcf.gz
     >>>

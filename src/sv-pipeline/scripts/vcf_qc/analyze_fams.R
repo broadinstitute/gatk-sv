@@ -975,11 +975,11 @@ plotDNRByStrat <- function(strat.inh.list, strat.labs, count="variants",
 wrapperInheritancePlots <- function(fam.dat.list, fam.type, count="variants"){
   #Set title prefix & suffix and freq filter index
   if(count=="variants"){
-    title.prefix <- "SV Site "
+    title.prefix <- "Site "
     freq.idx <- which(colnames(dat)=="carrierFreq")
     freq.lab <- "CF"
   }else{
-    title.prefix <- "SV Allele "
+    title.prefix <- "Allele "
     freq.idx <- which(colnames(dat)=="AF")
     freq.lab <- "AF"
   }
@@ -1133,9 +1133,9 @@ wrapperDeNovoRateLines <- function(fam.dat.list, fam.type, count="variants",
                                    gq=F, max.GQ=99){
   #Set title prefix
   if(count=="variants"){
-    title.prefix <- "SV Site "
+    title.prefix <- "Site "
   }else{
-    title.prefix <- "SV Allele "
+    title.prefix <- "Allele "
   }
  
   #DNR by Size
@@ -1181,9 +1181,9 @@ wrapperDeNovoRateLines <- function(fam.dat.list, fam.type, count="variants",
 wrapperDeNovoRateHeats <- function(fam.dat.list, fam.type, count="variants"){
   #Set title prefix
   if(count=="variants"){
-    title.prefix <- "SV Site "
+    title.prefix <- "Site "
   }else{
-    title.prefix <- "SV Allele "
+    title.prefix <- "Allele "
   }
  
   #Gather DNR data
@@ -1261,7 +1261,7 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
 
   #Top row: SV sites
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list),
-               title=paste("SV Site Inheritance (n=", prettyNum(nfams, big.mark=","),
+               title=paste("Site Inheritance (n=", prettyNum(nfams, big.mark=","),
                            " ", fam.type, "s)", sep=""),
                count="variants", cex.lab=cex.lab)
   plotDNRByStrat(sz.inh, sz.labs, count="variants",
@@ -1281,7 +1281,7 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
 
   #Bottom row: SV alleles
   plotInhStats(inh.stats=computeInheritanceMulti(trio.dat.list=fam.dat.list),
-               title=paste("SV Allele Inheritance (n=", prettyNum(nfams, big.mark=","),
+               title=paste("Allele Inheritance (n=", prettyNum(nfams, big.mark=","),
                            " ", fam.type, "s)", sep=""),
                count="alleles", cex.lab=cex.lab)
   plotDNRByStrat(sz.inh, sz.labs, count="alleles",
@@ -1465,13 +1465,13 @@ if(!is.null(svtypes.file)){
                         "color"=svtypes.c)
 }
 # Enforce canonical class ordering
-.svtype.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV","TR","VNTR")
+.svtype.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV","TR_SNV","TR_INS","TR_DEL")
 .order.idx <- c(match(.svtype.order[.svtype.order %in% svtypes$svtype], svtypes$svtype),
                 which(!svtypes$svtype %in% .svtype.order))
 svtypes <- svtypes[.order.idx, ]
 
-#Create merged svtypes and data (combine X_SHORT and X_SV into base X class; merge VNTR into TR)
-sv.merge.map <- c("DEL_SHORT"="DEL","DEL_SV"="DEL","INS_SHORT"="INS","INS_SV"="INS","DUP_SHORT"="DUP","DUP_SV"="DUP","VNTR"="TR")
+#Create merged svtypes and data (combine X_SHORT and X_SV into base X class)
+sv.merge.map <- c("DEL_SHORT"="DEL","DEL_SV"="DEL","INS_SHORT"="INS","INS_SV"="INS","DUP_SHORT"="DUP","DUP_SV"="DUP")
 dat.merged <- dat
 for(sv.from in names(sv.merge.map)){
   dat.merged$svtype[dat.merged$svtype == sv.from] <- sv.merge.map[sv.from]

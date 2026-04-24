@@ -104,6 +104,15 @@ tr.env.col <- if("TR_ENVELOPED" %in% colnames(dat)) {
 } else NULL
 # TRV expansion ratio
 trv.exp.col <- if("TRV_EXPANSION_RATIO" %in% colnames(dat)) as.numeric(as.character(dat$TRV_EXPANSION_RATIO)) else NULL
+# TRID field (tandem repeat locus identifier)
+trid.col <- if("TRID" %in% colnames(dat)) as.character(dat$TRID) else NULL
+# Original allele_type from input VCF
+atype.col <- if("allele_type" %in% colnames(dat)) as.character(dat$allele_type) else NULL
+# TR_PARSED flag
+tr.parsed.col <- if("TR_PARSED" %in% colnames(dat)){
+  v <- as.character(dat$TR_PARSED)
+  !is.na(v) & toupper(v) %in% c("TRUE","1","YES")
+} else NULL
 # VEP Consequence field (pipe-field index 1 per comma-chained annotation, semicolon-joined unique values)
 vep.col <- if("vep" %in% colnames(dat)) {
   sapply(as.character(dat$vep), function(v){
@@ -152,6 +161,9 @@ for(pname in names(predicted.presence)) dat[[pname]] <- predicted.presence[[pnam
 if(!is.null(max.motif.len)) dat$max_motif_length <- as.integer(max.motif.len)
 if(!is.null(trv.exp.col)) dat$TRV_EXPANSION_RATIO <- trv.exp.col
 if(!is.null(tr.env.col)) dat$TR_ENVELOPED <- tr.env.col
+if(!is.null(trid.col)) dat$TRID <- trid.col
+if(!is.null(atype.col)) dat$allele_type <- atype.col
+if(!is.null(tr.parsed.col)) dat$TR_PARSED <- tr.parsed.col
 zeroes <- which(dat$AC==0 | dat$carriers==0)
 if(length(zeroes)>0){
   cat(paste("WARNING: ",prettyNum(length(zeroes),big.mark=","),"/",
@@ -172,10 +184,6 @@ if(labelMCNV==T){
     dat[mCNV.to.label,]$svtype <- "MCNV"
   }
 }
-#Split TRV into TRV (small) and TRV_SV (large) by size threshold
-trv.idx <- which(dat$svtype == "TRV" & !is.na(dat$length) & dat$length > 50)
-if(length(trv.idx) > 0) dat$svtype[trv.idx] <- "TRV_SV"
-
 #Set length of all BNDs to NA, if optioned
 if(keepBNDsize==F){
   if(any(dat$svtype=="BND")){
