@@ -140,20 +140,14 @@ plotSVCountBars <- function(dat,svtypes,title=NULL,ylab="Count",tr.env.dat=NULL)
     if(cnt > 0){
       te.cnt <- if(!is.null(te.counts) && !is.na(te.counts[i]) && te.counts[i] > 0)
         max(te.counts[i], min.y) else NULL
-      # Draw stacked bars: bottom = TR_ENVELOPED (striped), top = remainder (solid)
+      # Draw full solid bar, then overlay diagonal hatching on TR_ENVELOPED bottom portion
+      rect(xleft=i-0.85,xright=i-0.15,
+           ybottom=min.y,ytop=cnt,
+           lwd=0.7,col=bar.col)
       if(!is.null(te.cnt)){
-        # Bottom stripe segment (color + white diagonal hatching)
+        # Overlay dark diagonal hatching on TR_ENVELOPED bottom portion
         rect(xleft=i-0.85,xright=i-0.15, ybottom=min.y,ytop=te.cnt,
-             lwd=0.7, col=bar.col, border=bar.col)
-        rect(xleft=i-0.85,xright=i-0.15, ybottom=min.y,ytop=te.cnt,
-             density=15, angle=45, col="white", border=NA)
-        # Top solid segment
-        rect(xleft=i-0.85,xright=i-0.15, ybottom=te.cnt,ytop=cnt,
-             lwd=0.7, col=bar.col, border=bar.col)
-      } else {
-        rect(xleft=i-0.85,xright=i-0.15,
-             ybottom=min.y,ytop=cnt,
-             lwd=0.7,col=bar.col)
+             density=25, angle=45, col=adjustcolor("black", alpha.f=0.45), border=NA, lwd=0.5)
       }
       # Count label: main count, then bracketed TR_ENVELOPED count below
       text(x=i-0.5,y=cnt*1.3,col=bar.col,
@@ -471,7 +465,7 @@ wrapperPlotAllCountBars <- function(){
 plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
                             min.size=1, max.size=1000000,
                             autosomal=F, biallelic=F,
-                            title=NULL, legend=F, lwd.cex=1, text.cex=1){
+                            title=NULL, legend=F, lwd.cex=1, text.cex=1, log.y=FALSE){
   #Filter/process sizes & compute range + breaks
   filter.legend <- NULL
   if(autosomal==T){
@@ -510,14 +504,23 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
     dens$ALL <- as.numeric(all.h$counts/length(all.vals))
     
     #Prepare plot area
-    ylims <- c(0,quantile(unlist(dens),probs=0.99,na.rm=T))
-    dens <- lapply(dens,function(vals){
-      vals[which(vals>max(ylims))] <- max(ylims)
-      return(vals)
-    })
+    if(log.y){
+      pos.dens <- unlist(dens)[is.finite(unlist(dens)) & unlist(dens) > 0]
+      y.min <- if(length(pos.dens)>0) min(pos.dens)*0.5 else 1e-5
+      y.max <- quantile(pos.dens, probs=0.99, na.rm=TRUE)
+      ylims <- c(y.min, y.max)
+      dens <- lapply(dens, function(vals) { vals[!is.finite(vals) | vals <= 0] <- NA; vals })
+    } else {
+      ylims <- c(0,quantile(unlist(dens),probs=0.99,na.rm=T))
+      dens <- lapply(dens,function(vals){
+        vals[which(vals>max(ylims))] <- max(ylims)
+        return(vals)
+      })
+    }
     par(bty="n",mar=c(3.5,3.5,3,0.5))
     plot(x=xlims,y=ylims,type="n",
-         xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
+         xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i",
+         log=if(log.y) "y" else "")
     
     #Add vertical gridlines
     logscale.all <- log10(as.numeric(sapply(0:8,function(i){(1:9)*10^i})))
@@ -536,9 +539,17 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
     axis(1,at=logscale.minor,tick=F,cex.axis=0.8,line=-0.4,las=2,
          labels=logscale.minor.labs)
     mtext(1,text="Size",line=2.25,cex=text.cex)
-    axis(2,at=axTicks(2),tck=-0.025,labels=NA)
-    axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
-         labels=paste(round(100*axTicks(2),1),"%",sep=""))
+    if(log.y){
+      y.ticks <- 10^(seq(floor(log10(ylims[1])), ceiling(log10(ylims[2]))))
+      y.ticks <- y.ticks[y.ticks >= ylims[1] * 0.9 & y.ticks <= ylims[2] * 1.1]
+      axis(2,at=y.ticks,tck=-0.025,labels=NA)
+      axis(2,at=y.ticks,tick=F,line=-0.4,cex.axis=0.8,las=2,
+           labels=paste0(signif(y.ticks*100, 2), "%"))
+    } else {
+      axis(2,at=axTicks(2),tck=-0.025,labels=NA)
+      axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
+           labels=paste(round(100*axTicks(2),1),"%",sep=""))
+    }
     mtext(2,text="Fraction of Variants",line=2,cex=text.cex)
     sapply(1:2,function(i){
       axis(3,at=log10(c(300,6000))[i],labels=NA,tck=-0.01)
@@ -582,7 +593,7 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
       idx.for.legend <- which(unlist(lapply(dens,function(vals){any(!is.na(vals) & !is.infinite(vals) & vals>0)})))
       counts.for.legend <- sapply(names(idx.for.legend), function(svtype){
         if(svtype == "ALL"){
-          nrow(dat)
+          sum(is.finite(sizes))
         }else{
           length(which(dat$svtype==svtype))
         }
@@ -601,9 +612,15 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
     mtext(3,line=1.5,text=title,font=2,cex=text.cex)
   }
   
-  #Add number of SV to plot
+  #Add number of SV to plot (excluding SVs with size=0, e.g. SNVs)
+  n.sz.plotted <- sum(is.finite(sizes))
+  n.sz.dropped <- length(sizes) - n.sz.plotted
   axis(3,at=par("usr")[2],line=-0.9,hadj=1,tick=F,
-       labels=paste("n=",prettyNum(length(sizes),big.mark=","),sep=""))
+       labels=paste("n=",prettyNum(n.sz.plotted,big.mark=","),sep=""))
+  if(n.sz.dropped > 0){
+    axis(3,at=par("usr")[2],line=-1.9,hadj=1,tick=F,cex.axis=0.65,
+         labels=paste0("(",prettyNum(n.sz.dropped,big.mark=",")," dropped \u2212 SNVs (size=0))"))
+  }
   
   #Add filter labels
   if(!is.null(filter.legend)){
@@ -614,7 +631,7 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
 #Plot comparative size distributions for a series of AC & AF restrictions
 plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
                                   n.breaks=100, min.size=1, max.size=1000000,
-                                  autosomal=F, biallelic=T, title=NULL, lwd.cex=1){
+                                  autosomal=F, biallelic=T, title=NULL, lwd.cex=1, log.y=FALSE){
   #Process sizes & compute range + breaks
   filter.legend <- NULL
   if(autosomal==T){
@@ -656,14 +673,23 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
     })
     
     #Prepare plot area
-    ylims <- c(0,quantile(unlist(dens),probs=0.99,na.rm=T))
-    dens <- lapply(dens,function(vals){
-      vals[which(vals>max(ylims))] <- max(ylims)
-      return(vals)
-    })
+    if(log.y){
+      pos.dens <- unlist(dens)[is.finite(unlist(dens)) & unlist(dens) > 0]
+      y.min <- if(length(pos.dens)>0) min(pos.dens)*0.5 else 1e-5
+      y.max <- quantile(pos.dens, probs=0.99, na.rm=TRUE)
+      ylims <- c(y.min, y.max)
+      dens <- lapply(dens, function(vals) { vals[!is.finite(vals) | vals <= 0] <- NA; vals })
+    } else {
+      ylims <- c(0,quantile(unlist(dens),probs=0.99,na.rm=T))
+      dens <- lapply(dens,function(vals){
+        vals[which(vals>max(ylims))] <- max(ylims)
+        return(vals)
+      })
+    }
     par(bty="n",mar=c(3.5,3.5,3,0.5))
     plot(x=xlims,y=ylims,type="n",
-         xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
+         xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i",
+         log=if(log.y) "y" else "")
     
     #Add vertical gridlines
     logscale.all <- log10(as.numeric(sapply(0:8,function(i){(1:9)*10^i})))
@@ -682,9 +708,17 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
     axis(1,at=logscale.minor,tick=F,cex.axis=0.8,line=-0.4,las=2,
          labels=logscale.minor.labs)
     mtext(1,text="Size",line=2.25)
-    axis(2,at=axTicks(2),tck=-0.025,labels=NA)
-    axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
-         labels=paste(round(100*axTicks(2),1),"%",sep=""))
+    if(log.y){
+      y.ticks <- 10^(seq(floor(log10(ylims[1])), ceiling(log10(ylims[2]))))
+      y.ticks <- y.ticks[y.ticks >= ylims[1] * 0.9 & y.ticks <= ylims[2] * 1.1]
+      axis(2,at=y.ticks,tck=-0.025,labels=NA)
+      axis(2,at=y.ticks,tick=F,line=-0.4,cex.axis=0.8,las=2,
+           labels=paste0(signif(y.ticks*100, 2), "%"))
+    } else {
+      axis(2,at=axTicks(2),tck=-0.025,labels=NA)
+      axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
+           labels=paste(round(100*axTicks(2),1),"%",sep=""))
+    }
     mtext(2,text="Fraction of Variants",line=2)
     sapply(1:2,function(i){
       axis(3,at=log10(c(300,6000))[i],labels=NA,tck=-0.01)
@@ -795,23 +829,23 @@ wrapperPlotAllSizeDistribs <- function(){
          heights=c(4,2))
   plotSizeDistrib(dat=dat,svtypes=svtypes,
                   title="Size Distribution",
-                  legend=T, lwd.cex=1.5)
+                  legend=T, lwd.cex=1.5, log.y=TRUE)
   plotSizeDistribSeries(dat=dat,svtypes=svtypes,
                         max.AFs=c(1.1/(2*nsamp),rare.max.freq,uncommon.max.freq,
                                   common.max.freq,major.max.freq),
                         legend.labs=c("Singleton","<1%","1-10%","10-50%",">50%"),
                         title="Size Distributions by AF",
-                        lwd.cex=2)
+                        lwd.cex=2, log.y=TRUE)
   plotSizeDistrib(dat=dat[which(dat$AC==1),],svtypes=svtypes,
-                  autosomal=F, biallelic=T, title="AC = 1", text.cex=0.75)
+                  autosomal=F, biallelic=T, title="AC = 1", text.cex=0.75, log.y=TRUE)
   plotSizeDistrib(dat=dat[which(dat$AC>1 & dat$AF<rare.max.freq),],svtypes=svtypes,
-                  autosomal=F, biallelic=T, title="n > 1 & AF < 1%", text.cex=0.75)
+                  autosomal=F, biallelic=T, title="n > 1 & AF < 1%", text.cex=0.75, log.y=TRUE)
   plotSizeDistrib(dat=dat[which(dat$AF>=rare.max.freq & dat$AF<uncommon.max.freq),],svtypes=svtypes,
-                  autosomal=F,biallelic=T, title="1% - 10%", text.cex=0.75)
+                  autosomal=F,biallelic=T, title="1% - 10%", text.cex=0.75, log.y=TRUE)
   plotSizeDistrib(dat=dat[which(dat$AF>=uncommon.max.freq & dat$AF<common.max.freq),],svtypes=svtypes,
-                  autosomal=F, biallelic=T, title="10% - 50%", text.cex=0.75)
+                  autosomal=F, biallelic=T, title="10% - 50%", text.cex=0.75, log.y=TRUE)
   plotSizeDistrib(dat=dat[which(dat$AF>=common.max.freq),],svtypes=svtypes,
-                  autosomal=F, biallelic=T, title="> 50%", text.cex=0.75)
+                  autosomal=F, biallelic=T, title="> 50%", text.cex=0.75, log.y=TRUE)
   dev.off()
 }
 
@@ -1666,7 +1700,7 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
     n.nom <- length(which(HW.p<0.05 & HW.p>=0.05/nrow(HW.mat)))
     n.bonf <- length(which(HW.p<0.05/nrow(HW.mat)))
     if(full.legend==T){
-      legend("topright",pch=19,col=c("#4DAC26","#81F850","#AC26A1"),pt.cex=2,
+      legend("topright",pch=19,col=c("#4DAC26","#81F850","#AC26A1"),pt.cex=0.8,
              legend=c(paste("In H-W equilibrium\n(n=",
                             prettyNum(n.pass,big.mark=","),"; ",
                             round(100*(n.pass/nrow(HW.mat)),2),"%)\n",sep=""),
@@ -1678,7 +1712,7 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
                             round(100*(n.bonf/nrow(HW.mat)),2),"%)\n",sep="")),
              bty="n",bg=NA,cex=0.35,xpd=TRUE)
     }else{
-      legend("topright",pch=19,col=c("#4DAC26","#81F850","#AC26A1"),pt.cex=2,
+      legend("topright",pch=19,col=c("#4DAC26","#81F850","#AC26A1"),pt.cex=0.8,
              legend=c(paste(round(100*(n.pass/nrow(HW.mat)),2),"%",sep=""),
                       paste(round(100*(n.nom/nrow(HW.mat)),2),"%",sep=""),
                       paste(round(100*(n.bonf/nrow(HW.mat)),2),"%",sep="")),
@@ -1754,8 +1788,8 @@ plotAlleleCarrierCorrelation <- function(dat,autosomal=T,biallelic=T,
   
   #Plot points & rolling mean (subsampled for display; full series used for rolling mean)
   points(x=CF.plot,y=AF.plot,cex=0.2)
-  points(x=rollmean(CF,k=100),
-         y=rollmean(AF,k=100),
+  points(x=rollmean(CF.plot,k=100),
+         y=rollmean(AF.plot,k=100),
          type="l",col="red",lwd=1.25)
   
   #Add legend
