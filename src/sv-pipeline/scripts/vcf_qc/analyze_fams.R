@@ -1255,7 +1255,7 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
 
   #PDF 1: overall inheritance + stratified DNR beeswarm plots
   n.cols.ov <- 3 + as.integer(has.reg.strat)
-  pdf(paste(OUTDIR, "/main_plots/", fam.type, "_inheritance_overall.pdf", sep=""),
+  pdf(paste(OUTDIR, "/main_plots/", fam.type, "_inheritance_distributions.pdf", sep=""),
       height=5, width=3 + n.cols.ov * 3)
   layout(matrix(seq_len(n.cols.ov * 2), nrow=2, byrow=T))
 
@@ -1302,7 +1302,7 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
 
   #PDF 2: DNR line plots and heatmaps
   n.cols.de <- 3 + as.integer(gq)
-  pdf(paste(OUTDIR, "/main_plots/", fam.type, "_inheritance_denovo.pdf", sep=""),
+  pdf(paste(OUTDIR, "/main_plots/", fam.type, "_denovo_distributions.pdf", sep=""),
       height=5, width=n.cols.de * 3.5)
   layout(matrix(seq_len(n.cols.de * 2), nrow=2, byrow=T))
 
@@ -1417,6 +1417,9 @@ maxgq <- opts$maxgq
 #Read & clean SV stats data
 dat <- read.table(dat.in, comment.char="", sep="\t", header=T, check.names=F)
 colnames(dat)[1] <- "chr"
+# Normalize TRV VIDs: strip _N biallelic suffixes and deduplicate to one row per locus
+dat$VID <- sub("_[0-9]+$", "", dat$VID)
+dat <- dat[!duplicated(dat$VID), ]
 
 #Restrict data to autosomes only, and exclude multiallelics (if optioned)
 allosome.exclude.idx <- which(!(dat$chr %in% c(1:22, paste("chr", 1:22, sep=""))))

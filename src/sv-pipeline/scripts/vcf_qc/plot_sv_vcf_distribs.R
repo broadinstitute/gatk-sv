@@ -465,7 +465,7 @@ wrapperPlotAllCountBars <- function(){
 plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
                             min.size=1, max.size=1000000,
                             autosomal=F, biallelic=F,
-                            title=NULL, legend=F, lwd.cex=1, text.cex=1, log.y=FALSE){
+                            title=NULL, legend=F, lwd.cex=1, text.cex=1, log.y=FALSE, show.dropped=FALSE){
   #Filter/process sizes & compute range + breaks
   filter.legend <- NULL
   if(autosomal==T){
@@ -598,7 +598,7 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
           length(which(dat$svtype==svtype))
         }
       })
-      legend("right",bg=NA,bty="n",pch=NA,cex=text.cex*0.7,lwd=3,
+      legend("topright",bg=NA,bty="n",pch=NA,cex=text.cex*0.7,lwd=3,
              legend=paste(rbind(svtypes, c("ALL","gray15"))$svtype[idx.for.legend],
                           " (N=", prettyNum(counts.for.legend, big.mark=","),
                           ")", sep=""),
@@ -615,10 +615,10 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
   #Add number of SV to plot (excluding SVs with size=0, e.g. SNVs)
   n.sz.plotted <- sum(is.finite(sizes))
   n.sz.dropped <- length(sizes) - n.sz.plotted
-  axis(3,at=par("usr")[2],line=-0.9,hadj=1,tick=F,
+  axis(3,at=mean(par("usr")[1:2]),line=-0.9,tick=F,
        labels=paste("n=",prettyNum(n.sz.plotted,big.mark=","),sep=""))
-  if(n.sz.dropped > 0){
-    axis(3,at=par("usr")[2],line=-1.9,hadj=1,tick=F,cex.axis=0.65,
+  if(show.dropped && n.sz.dropped > 0){
+    axis(3,at=mean(par("usr")[1:2]),line=-1.9,tick=F,cex.axis=0.65,
          labels=paste0("(",prettyNum(n.sz.dropped,big.mark=",")," dropped \u2212 SNVs (size=0))"))
   }
   
@@ -829,7 +829,7 @@ wrapperPlotAllSizeDistribs <- function(){
          heights=c(4,2))
   plotSizeDistrib(dat=dat,svtypes=svtypes,
                   title="Size Distribution",
-                  legend=T, lwd.cex=1.5, log.y=TRUE)
+                  legend=T, lwd.cex=1.5, log.y=TRUE, show.dropped=TRUE)
   plotSizeDistribSeries(dat=dat,svtypes=svtypes,
                         max.AFs=c(1.1/(2*nsamp),rare.max.freq,uncommon.max.freq,
                                   common.max.freq,major.max.freq),
@@ -873,7 +873,7 @@ prepFreqHistogram <- function(freqs, bins.per.order){
 #Plot single AF spectrum
 plotFreqDistrib <- function(dat, svtypes,
                             autosomal=F, biallelic=T,
-                            title=NULL, lwd.cex=1, legend=F, show.dropped=F){
+                            title=NULL, lwd.cex=1, legend=F, show.dropped=F, log.y=FALSE){
   #Process freqs & compute range + breaks
   filter.legend <- NULL
   if(autosomal==T){
@@ -905,10 +905,19 @@ plotFreqDistrib <- function(dat, svtypes,
     dens$ALL <- as.numeric(all.h$counts/length(all.vals))
     
     #Prepare plot area
-    ylims <- c(0, quantile(unlist(dens), probs=0.99, na.rm=T))
+    if(log.y){
+      pos.dens <- unlist(dens)[is.finite(unlist(dens)) & unlist(dens) > 0]
+      y.min <- if(length(pos.dens)>0) min(pos.dens)*0.5 else 1e-5
+      y.max <- quantile(pos.dens, probs=0.99, na.rm=TRUE)
+      ylims <- c(y.min, y.max)
+      dens <- lapply(dens, function(vals) { vals[!is.finite(vals) | vals <= 0] <- NA; vals })
+    } else {
+      ylims <- c(0, quantile(unlist(dens), probs=0.99, na.rm=T))
+    }
     par(bty="n",mar=c(4.5,3.5,3,0.5))
     plot(x=xlims,y=ylims,type="n",
-         xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
+         xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i",
+         log=if(log.y)"y" else "")
     
     #Add vertical gridlines
     logscale.all <- log10(as.numeric(sapply(min(floor(xlims)):0,function(i){(1:9)*10^i})))
@@ -926,9 +935,17 @@ plotFreqDistrib <- function(dat, svtypes,
     axis(1,at=logscale.minor,tick=F,cex.axis=0.8,line=-0.4,las=2,
          labels=logscale.minor.labs)
     mtext(1,text="AF",line=3,cex=lwd.cex)
-    axis(2,at=axTicks(2),tck=-0.025,labels=NA)
-    axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
-         labels=paste(round(100*axTicks(2),1),"%",sep=""))
+    if(log.y){
+      y.ticks <- 10^(seq(floor(log10(ylims[1])), ceiling(log10(ylims[2]))))
+      y.ticks <- y.ticks[y.ticks >= ylims[1] * 0.9 & y.ticks <= ylims[2] * 1.1]
+      axis(2,at=y.ticks,tck=-0.025,labels=NA)
+      axis(2,at=y.ticks,tick=F,line=-0.4,cex.axis=0.8,las=2,
+           labels=paste0(signif(y.ticks*100, 2), "%"))
+    } else {
+      axis(2,at=axTicks(2),tck=-0.025,labels=NA)
+      axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
+           labels=paste(round(100*axTicks(2),1),"%",sep=""))
+    }
     mtext(2,text="Fraction of Variants",line=2.2,cex=lwd.cex)
     mtext(3,line=1.5,text=title,font=2,cex=lwd.cex)
     
@@ -986,7 +1003,7 @@ plotFreqDistrib <- function(dat, svtypes,
 
 #Plot AF spectrum series by sizes
 plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
-                                  autosomal=F, biallelic=T, title=NULL){
+                                  autosomal=F, biallelic=T, title=NULL, log.y=FALSE){
   #Process freqs & compute range + breaks
   filter.legend <- NULL
   if(autosomal==T){
@@ -1025,10 +1042,19 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
     })
     
     #Prepare plot area
-    ylims <- c(0, quantile(unlist(dens), probs=0.99, na.rm=T))
+    if(log.y){
+      pos.dens <- unlist(dens)[is.finite(unlist(dens)) & unlist(dens) > 0]
+      y.min <- if(length(pos.dens)>0) min(pos.dens)*0.5 else 1e-5
+      y.max <- quantile(pos.dens, probs=0.99, na.rm=TRUE)
+      ylims <- c(y.min, y.max)
+      dens <- lapply(dens, function(vals) { vals[!is.finite(vals) | vals <= 0] <- NA; vals })
+    } else {
+      ylims <- c(0, quantile(unlist(dens), probs=0.99, na.rm=T))
+    }
     par(bty="n",mar=c(4.5,3.5,3,0.5))
     plot(x=xlims,y=ylims,type="n",
-         xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
+         xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i",
+         log=if(log.y)"y" else "")
     
     #Add vertical gridlines
     logscale.all <- log10(as.numeric(sapply(min(floor(xlims)):0,function(i){(1:9)*10^i})))
@@ -1046,9 +1072,17 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
     axis(1,at=logscale.minor,tick=F,cex.axis=0.8,line=-0.4,las=2,
          labels=logscale.minor.labs)
     mtext(1,text="AF",line=3)
-    axis(2,at=axTicks(2),tck=-0.025,labels=NA)
-    axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
-         labels=paste(round(100*axTicks(2),1),"%",sep=""))
+    if(log.y){
+      y.ticks <- 10^(seq(floor(log10(ylims[1])), ceiling(log10(ylims[2]))))
+      y.ticks <- y.ticks[y.ticks >= ylims[1] * 0.9 & y.ticks <= ylims[2] * 1.1]
+      axis(2,at=y.ticks,tck=-0.025,labels=NA)
+      axis(2,at=y.ticks,tick=F,line=-0.4,cex.axis=0.8,las=2,
+           labels=paste0(signif(y.ticks*100, 2), "%"))
+    } else {
+      axis(2,at=axTicks(2),tck=-0.025,labels=NA)
+      axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
+           labels=paste(round(100*axTicks(2),1),"%",sep=""))
+    }
     mtext(2,text="Fraction of Variants",line=2.2)
     mtext(3,line=1.5,text=title,font=2)
     
@@ -1163,25 +1197,25 @@ wrapperPlotAllFreqDistribs <- function(){
          heights=c(4,2))
   plotFreqDistrib(dat=dat,svtypes=svtypes,
                   title="AF Distribution",
-                  legend=T, show.dropped=T)
+                  legend=T, show.dropped=T, log.y=TRUE)
   plotFreqDistribSeries(dat=dat,svtypes=svtypes,
                         max.sizes=c(tiny.max.size,small.max.size,medium.max.size,
                                     medlarge.max.size,large.max.size,huge.max.size),
                         legend.labs=c("<50bp","50-\n100bp","100bp-\n500bp",
                                       "500bp-\n5kb","5-50kb",">50kb"),
-                        title="AF Distributions by Size")
+                        title="AF Distributions by Size", log.y=TRUE)
   plotFreqDistrib(dat=dat[which(dat$length<tiny.max.size),],svtypes=svtypes,
-                  title="< 50bp",lwd.cex=0.7)
+                  title="< 50bp",lwd.cex=0.7, log.y=TRUE)
   plotFreqDistrib(dat=dat[which(dat$length>=tiny.max.size & dat$length<small.max.size),],svtypes=svtypes,
-                  title="50 - 100bp",lwd.cex=0.7)
+                  title="50 - 100bp",lwd.cex=0.7, log.y=TRUE)
   plotFreqDistrib(dat=dat[which(dat$length>=small.max.size & dat$length<medium.max.size),],svtypes=svtypes,
-                  title="100bp - 500bp",lwd.cex=0.7)
+                  title="100bp - 500bp",lwd.cex=0.7, log.y=TRUE)
   plotFreqDistrib(dat=dat[which(dat$length>=medium.max.size & dat$length<medlarge.max.size),],svtypes=svtypes,
-                  title="500bp - 5kb",lwd.cex=0.7)
+                  title="500bp - 5kb",lwd.cex=0.7, log.y=TRUE)
   plotFreqDistrib(dat=dat[which(dat$length>=medlarge.max.size & dat$length<large.max.size),],svtypes=svtypes,
-                  title="5 - 50kb",lwd.cex=0.7)
+                  title="5 - 50kb",lwd.cex=0.7, log.y=TRUE)
   plotFreqDistrib(dat=dat[which(dat$length>=large.max.size),],svtypes=svtypes,
-                  title="> 50kb",lwd.cex=0.7)
+                  title="> 50kb",lwd.cex=0.7, log.y=TRUE)
   dev.off()
 }
 
@@ -2425,17 +2459,16 @@ wrapperPlotTrLociDistrib <- function(){
   if(!is.matrix(tr.allele.counts)) tr.allele.counts <- matrix(tr.allele.counts, nrow=length(loci))
   colnames(tr.allele.counts) <- tr.detail.map
 
-  # Count enveloped non-TR variants per TRID per type
-  # Merge DUP into INS for comparison
+  # Count enveloped non-TR variants per locus base_vid per type
+  # Non-TRV enveloped variants have TRID=<base_vid of the enclosing TRV locus>
   non.tr <- dat[!dat$svtype %in% tr.types & !is.na(dat$TRID) & dat$TRID != "" & dat$TRID != ".",]
   non.tr$cmp_type <- non.tr$svtype
   non.tr$cmp_type[non.tr$cmp_type %in% c("DUP_SHORT")] <- "INS_SHORT"
   non.tr$cmp_type[non.tr$cmp_type %in% c("DUP_SV")] <- "INS_SV"
   env.counts <- sapply(detail.types, function(dt){
     sapply(loci, function(l){
-      tr.id <- trid.map[l]
-      if(is.na(tr.id)) return(0)
-      sum(non.tr$TRID==tr.id & non.tr$cmp_type==dt, na.rm=TRUE)
+      # TRID on non-TRV enveloped variants equals the base_vid of the TRV locus
+      sum(non.tr$TRID == l & non.tr$cmp_type == dt, na.rm=TRUE)
     })
   })
   if(!is.matrix(env.counts)) env.counts <- matrix(env.counts, nrow=length(loci))
@@ -2469,115 +2502,113 @@ wrapperPlotTrLociDistrib <- function(){
 #####INS distribution plot
 ######################################
 wrapperPlotInsDistrib <- function(){
-  # Filter to variants with 'INS' in their VID
   ins.idx <- grep("INS", dat$VID, ignore.case=FALSE)
   if(length(ins.idx) == 0) return(invisible(NULL))
   ins.dat <- dat[ins.idx,]
-
-  # Get allele_type; derive display labels
   if(!"allele_type" %in% colnames(ins.dat)) return(invisible(NULL))
-  atype <- tolower(ins.dat$allele_type)
-  # For 'ins' type: split into Unique, TR Enveloped, TR Parsed
-  is.ins <- atype == "ins"
-  is.tr.env <- is.ins & !is.na(ins.dat$TR_ENVELOPED) & ins.dat$TR_ENVELOPED %in% c(TRUE,"TRUE","1","true")
-  is.tr.parsed <- if("TR_PARSED" %in% colnames(ins.dat)){
-    is.ins & !is.na(ins.dat$TR_PARSED) & ins.dat$TR_PARSED %in% c(TRUE,"TRUE","1","true")
-  } else rep(FALSE, nrow(ins.dat))
 
-  # Build category vector
-  cat.vec <- toupper(gsub("_ins", "", atype))
-  cat.vec[cat.vec == "INS"] <- "Unique"
-  cat.vec[is.tr.env] <- "TR Enveloped"
-  cat.vec[is.tr.parsed] <- "TR Parsed"
+  # Priority-based category mapping (allele_type value -> display label)
+  atype.priority <- c("alu_ins"="ALU","line_ins"="LINE","sva_ins"="SVA",
+                      "dup"="Duplication","dup_interspersed"="Interspersed Duplication",
+                      "complex_dup"="Complex Duplication","inv_dup"="Inverted Duplication",
+                      "numt"="NUMT")
+  priority.order <- c("ALU","LINE","SVA","Duplication","Interspersed Duplication",
+                      "Complex Duplication","Inverted Duplication","NUMT",
+                      "TR Enveloped","TR Parsed","Unique")
+  all.cols.full <- c("ALU"="#E41A1C","LINE"="#FF7F00","SVA"="#984EA3",
+                     "Duplication"="#377EB8","Interspersed Duplication"="#4DAF4A",
+                     "Complex Duplication"="#A65628","Inverted Duplication"="#F781BF",
+                     "NUMT"="#DDCC00","TR Enveloped"="#555555",
+                     "TR Parsed"="#66C2A5","Unique"="#AAAAAA")
 
-  # Order: Unique first, then TR Enveloped, TR Parsed, then others alphabetically
-  cat.tab <- table(cat.vec)
-  fixed.cats <- c("Unique","TR Enveloped","TR Parsed")
-  other.cats <- sort(setdiff(names(cat.tab), fixed.cats))
-  all.cats <- c(fixed.cats[fixed.cats %in% names(cat.tab)], other.cats)
-  cat.counts <- as.numeric(cat.tab[all.cats])
+  assign.cats <- function(sub.dat){
+    cat.v <- rep("Unique", nrow(sub.dat))
+    atype <- tolower(as.character(sub.dat$allele_type))
+    # TR flags (lower priority)
+    if("TR_PARSED" %in% colnames(sub.dat)){
+      is.p <- !is.na(sub.dat$TR_PARSED) & sub.dat$TR_PARSED %in% c(TRUE,"TRUE","1","true")
+      cat.v[is.p] <- "TR Parsed"
+    }
+    if("TR_ENVELOPED" %in% colnames(sub.dat)){
+      is.e <- !is.na(sub.dat$TR_ENVELOPED) & sub.dat$TR_ENVELOPED %in% c(TRUE,"TRUE","1","true")
+      cat.v[is.e] <- "TR Enveloped"
+    }
+    # Specific allele_types (highest priority; applied in reverse so first listed wins)
+    for(at in rev(names(atype.priority))){
+      cat.v[atype == at] <- atype.priority[at]
+    }
+    cat.v
+  }
+
+  cat.vec <- assign.cats(ins.dat)
+  all.cats <- priority.order[priority.order %in% unique(cat.vec)]
+  cat.cols <- all.cols.full[all.cats]
+  n.cat <- length(all.cats)
+  cat.counts <- as.numeric(table(factor(cat.vec, levels=all.cats)))
   names(cat.counts) <- all.cats
   total <- sum(cat.counts)
 
-  # Colors
-  n.cat <- length(all.cats)
-  cat.cols <- setNames(colorRampPalette(c("#440154","#31688E","#35B779","#FDE725","#D95F02"))(n.cat), all.cats)
-
-  # Size buckets for the 6 smaller bars
   sz.labs <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
   sz.mins <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
   sz.maxs <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
 
-  # Build stacked bar matrix: rows = categories, cols = ALL + size buckets
   build.col <- function(sub.dat){
-    sub.atype <- tolower(sub.dat$allele_type)
-    sub.is.ins <- sub.atype == "ins"
-    sub.is.env <- sub.is.ins & !is.na(sub.dat$TR_ENVELOPED) & sub.dat$TR_ENVELOPED %in% c(TRUE,"TRUE","1","true")
-    sub.is.parsed <- if("TR_PARSED" %in% colnames(sub.dat)){
-      sub.is.ins & !is.na(sub.dat$TR_PARSED) & sub.dat$TR_PARSED %in% c(TRUE,"TRUE","1","true")
-    } else rep(FALSE, nrow(sub.dat))
-    sub.cat <- toupper(gsub("_ins", "", sub.atype))
-    sub.cat[sub.cat == "INS"] <- "Unique"
-    sub.cat[sub.is.env] <- "TR Enveloped"
-    sub.cat[sub.is.parsed] <- "TR Parsed"
-    sapply(all.cats, function(c) sum(sub.cat == c))
+    if(nrow(sub.dat)==0) return(setNames(rep(0, n.cat), all.cats))
+    as.numeric(table(factor(assign.cats(sub.dat), levels=all.cats)))
   }
+
   mat <- cbind(ALL=cat.counts,
                sapply(seq_along(sz.labs), function(i){
                  sub <- ins.dat[!is.na(ins.dat$length) & ins.dat$length >= sz.mins[i] & ins.dat$length < sz.maxs[i],]
-                 if(nrow(sub)==0) return(setNames(rep(0, n.cat), all.cats))
                  build.col(sub)
                }))
   colnames(mat) <- c("ALL", sz.labs)
 
-  # Plot
+  plotInsBar <- function(vals, title, ymax.ref=NULL, main.bar=FALSE){
+    tot <- sum(vals)
+    ymax <- max(if(!is.null(ymax.ref)) ymax.ref else tot, 1) * 1.1
+    starts <- cumsum(c(0, vals[-length(vals)]))
+    ends <- cumsum(vals)
+    par(mar=c(6, if(main.bar) 5 else 3, 3.5, 0.5), bty="n")
+    plot(x=c(0,1), y=c(0,ymax), type="n", xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i")
+    if(tot > 0){
+      rect(xleft=0.15, xright=0.85, ybottom=starts, ytop=ends,
+           col=cat.cols, border="white", lwd=0.5)
+      mid.y <- (starts + ends) / 2
+      for(j in seq_along(all.cats)){
+        if(vals[j] > 0){
+          pct <- round(100*vals[j]/tot, 1)
+          lbl <- paste0(formatCount(vals[j]), " (", pct, "%)")
+          if((ends[j]-starts[j]) > ymax * 0.04){
+            text(0.5, mid.y[j], labels=lbl, cex=0.55, col="white", font=2)
+          }
+        }
+      }
+    }
+    y.breaks <- pretty(c(0, ymax))
+    axis(2, at=y.breaks, labels=NA)
+    axis(2, at=y.breaks, tick=F, las=2, cex.axis=if(main.bar) 0.7 else 0.6, line=-0.4,
+         labels=prettyNum(y.breaks, big.mark=","))
+    if(main.bar) mtext(2, text="Count", line=3.5, cex=0.85)
+    mtext(3, text=title, font=2, line=0.5, cex=if(main.bar) 0.9 else 0.75)
+    axis(3, at=0.5, tick=F, line=-0.9, cex.axis=if(main.bar) 0.8 else 0.7,
+         labels=paste0("n=", prettyNum(tot, big.mark=",")))
+  }
+
   png(paste(OUTDIR,"/main_plots/ins_distributions.png",sep=""),
-      res=300, height=2400, width=4800)
-  layout(matrix(1:7, nrow=1), widths=c(3, rep(1.5, 6)))
+      res=300, height=2400, width=5600)
+  layout(matrix(1:8, nrow=1), widths=c(3, rep(1.5, 6), 1.8))
 
-  # Main bar (ALL)
-  par(mar=c(6,5,3,1), bty="n")
-  vals <- mat[,"ALL"]
-  starts <- cumsum(c(0, vals[-length(vals)]))
-  ends <- cumsum(vals)
-  ymax <- total * 1.1
-  plot(x=c(0,1), y=c(0, ymax), type="n", xaxt="n", yaxt="n", xlab="", ylab="Count", yaxs="i")
-  rect(xleft=0.15, xright=0.85, ybottom=starts, ytop=ends, col=cat.cols, border="white")
-  # Labels for each category
-  mid.y <- (starts + ends) / 2
-  for(j in seq_along(all.cats)){
-    if(vals[j] > 0){
-      pct <- round(100*vals[j]/total, 1)
-      text(0.5, mid.y[j], labels=paste0(all.cats[j], "\n", formatCount(vals[j]), " (", pct, "%)"),
-           cex=0.6, col="white", font=2)
-    }
-  }
-  axis(2, at=pretty(c(0, ymax)), labels=NA)
-  axis(2, at=pretty(c(0, ymax)), tick=F, las=2, cex.axis=0.8, line=-0.4,
-       labels=prettyNum(pretty(c(0, ymax)), big.mark=","))
-  mtext(3, text="INS Variant Composition", font=2, line=1)
-  axis(3, at=0.5, tick=F, line=-0.9, cex.axis=0.8,
-       labels=paste("n=", prettyNum(total, big.mark=","), sep=""))
-
-  # Size-bucketed bars
+  plotInsBar(mat[,"ALL"], title="Insertion Variant Types", main.bar=TRUE)
   for(s in seq_along(sz.labs)){
-    par(mar=c(6,3,3,1), bty="n")
-    vals.s <- mat[, sz.labs[s]]
-    tot.s <- sum(vals.s)
-    starts.s <- cumsum(c(0, vals.s[-length(vals.s)]))
-    ends.s <- cumsum(vals.s)
-    ymax.s <- max(tot.s * 1.1, 1)
-    plot(x=c(0,1), y=c(0, ymax.s), type="n", xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i")
-    if(tot.s > 0){
-      rect(xleft=0.15, xright=0.85, ybottom=starts.s, ytop=ends.s, col=cat.cols, border="white")
-    }
-    axis(2, at=pretty(c(0, ymax.s)), labels=NA)
-    axis(2, at=pretty(c(0, ymax.s)), tick=F, las=2, cex.axis=0.7, line=-0.4,
-         labels=prettyNum(pretty(c(0, ymax.s)), big.mark=","))
-    mtext(3, text=sz.labs[s], font=2, line=1, cex=0.8)
-    axis(3, at=0.5, tick=F, line=-0.9, cex.axis=0.7,
-         labels=paste("n=", prettyNum(tot.s, big.mark=","), sep=""))
+    plotInsBar(mat[,sz.labs[s]], title=sz.labs[s], ymax.ref=total)
   }
+
+  # Legend panel
+  par(mar=c(6,0,3.5,0.5), bty="n")
+  plot(x=c(0,1), y=c(0,1), type="n", xaxt="n", yaxt="n", xlab="", ylab="")
+  legend("topleft", legend=all.cats, fill=cat.cols, border=NA,
+         bty="n", cex=0.8, y.intersp=1.3)
   dev.off()
 }
 

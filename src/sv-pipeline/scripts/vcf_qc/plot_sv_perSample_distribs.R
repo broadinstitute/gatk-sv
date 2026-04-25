@@ -106,11 +106,13 @@ countVarsSingle <- function(dat,vlist,count="variants"){
     tr.biallelic.types <- c("TR_SNV","TR_INS","TR_DEL")
     if(count=="variants"){
       res <- sapply(svtypes$svtype,function(svtype){
-        matching <- dat$svtype==svtype & dat$VID %in% vlist$VID
         if(svtype %in% tr.biallelic.types){
-          base.vids <- sub("_[0-9]+$", "", dat$VID[matching])
-          return(length(unique(base.vids)))
+          # per-sample files have base VIDs (un-suffixed); dat has _N suffixed VIDs
+          base.dat.vids <- sub("_[0-9]+$", "", dat$VID[dat$svtype==svtype])
+          matching.base <- base.dat.vids %in% vlist$VID
+          return(length(unique(base.dat.vids[matching.base])))
         }
+        matching <- dat$svtype==svtype & dat$VID %in% vlist$VID
         length(which(matching))
       })
     }else{
