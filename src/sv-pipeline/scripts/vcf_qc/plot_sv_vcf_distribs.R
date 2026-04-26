@@ -145,9 +145,10 @@ plotSVCountBars <- function(dat,svtypes,title=NULL,ylab="Count",tr.env.dat=NULL)
            ybottom=min.y,ytop=cnt,
            lwd=0.7,col=bar.col)
       if(!is.null(te.cnt)){
-        # Overlay dark diagonal hatching on TR_ENVELOPED bottom portion
+        # Overlay semi-transparent dark fill on TR_ENVELOPED bottom portion
+        # (density-based hatching is incompatible with log-scale axes)
         rect(xleft=i-0.85,xright=i-0.15, ybottom=min.y,ytop=te.cnt,
-             density=25, angle=45, col=adjustcolor("black", alpha.f=0.45), border=NA, lwd=0.5)
+             col=adjustcolor("black", alpha.f=0.35), border=NA)
       }
       # Count label: main count, then bracketed TR_ENVELOPED count below
       text(x=i-0.5,y=cnt*1.3,col=bar.col,
@@ -619,7 +620,7 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
        labels=paste("n=",prettyNum(n.sz.plotted,big.mark=","),sep=""))
   if(show.dropped && n.sz.dropped > 0){
     axis(3,at=mean(par("usr")[1:2]),line=-1.9,tick=F,cex.axis=0.65,
-         labels=paste0("(",prettyNum(n.sz.dropped,big.mark=",")," dropped \u2212 SNVs (size=0))"))
+         labels=paste0("(",prettyNum(n.sz.dropped,big.mark=",")," dropped - SNVs (size=0))"))
   }
   
   #Add filter labels
@@ -959,11 +960,11 @@ plotFreqDistrib <- function(dat, svtypes,
         color <- svtypes[which(svtypes$svtype==svtype),2]
         lwd <- 2
       }
-      if(all(!is.nan(dens[[i]]))){
-        if(any(dens[[i]]>0)){
-          points(x=mids[which(dens[[i]]>0)],y=dens[[i]][which(dens[[i]]>0)],col=color,pch=19,cex=0.3*lwd.cex)
-          points(x=mids[which(dens[[i]]>0)],
-                 y=rollapply(dens[[i]][which(dens[[i]]>0)],width=10,mean,partial=T),
+      if(all(!is.nan(dens[[i]]), na.rm=TRUE)){
+        if(any(dens[[i]]>0, na.rm=TRUE)){
+          points(x=mids[which(!is.na(dens[[i]]) & dens[[i]]>0)],y=dens[[i]][which(!is.na(dens[[i]]) & dens[[i]]>0)],col=color,pch=19,cex=0.3*lwd.cex)
+          points(x=mids[which(!is.na(dens[[i]]) & dens[[i]]>0)],
+                 y=rollapply(dens[[i]][which(!is.na(dens[[i]]) & dens[[i]]>0)],width=10,mean,partial=T),
                  type="l",lwd=lwd.cex*lwd,col=color)
         }
       }
@@ -1089,11 +1090,11 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
     #Add points & rolling mean lines per size tranche
     col.pal <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(length(freqs))
     sapply(1:length(dens),function(i){
-      if(all(!is.nan(dens[[i]]))){
-        if(any(dens[[i]]>0)){
-          points(x=mids[which(dens[[i]]>0)],y=dens[[i]][which(dens[[i]]>0)],col=col.pal[i],pch=19,cex=0.3)
-          points(x=mids[which(dens[[i]]>0)],
-                 y=rollapply(dens[[i]][which(dens[[i]]>0)],3,mean,partial=T),
+      if(all(!is.nan(dens[[i]]), na.rm=TRUE)){
+        if(any(dens[[i]]>0, na.rm=TRUE)){
+          points(x=mids[which(!is.na(dens[[i]]) & dens[[i]]>0)],y=dens[[i]][which(!is.na(dens[[i]]) & dens[[i]]>0)],col=col.pal[i],pch=19,cex=0.3)
+          points(x=mids[which(!is.na(dens[[i]]) & dens[[i]]>0)],
+                 y=rollapply(dens[[i]][which(!is.na(dens[[i]]) & dens[[i]]>0)],3,mean,partial=T),
                  type="l",lwd=2,col=col.pal[i])
         }
       }
