@@ -121,8 +121,6 @@ task PreprocessVcf {
             ~{vcf} \
             -Oz -o ~{prefix}.split.vcf.gz
         
-        tabix -p vcf ~{prefix}.split.vcf.gz
-
         cat << 'EOF' > convert_to_symbolic.py
 import pysam
 import sys
