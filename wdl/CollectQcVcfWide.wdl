@@ -139,16 +139,17 @@ trv_counter = 0
 trv_buffer = []
 
 def trim_common_bases(ref, alt):
-    """Trim common prefix and suffix between REF and ALT sequences."""
+    """Trim common prefix and suffix. Returns (trimmed_ref, trimmed_alt, prefix_len)."""
     i = 0
     while i < len(ref) and i < len(alt) and ref[i] == alt[i]:
         i += 1
+    prefix_len = i
     ref = ref[i:]
     alt = alt[i:]
     while len(ref) > 0 and len(alt) > 0 and ref[-1] == alt[-1]:
         ref = ref[:-1]
         alt = alt[:-1]
-    return ref, alt
+    return ref, alt, prefix_len
 
 def flush_trv_buffer():
     """Compute locus-level carriers and write buffered TRV records."""
@@ -191,10 +192,11 @@ for rec in vcf_in:
             min_motif_len = 0
         svtype = "TR" if min_motif_len <= 6 else "VNTR"
 
-        # Trim common prefix/suffix to get the true variant portion
+        # Trim common prefix/suffix to get the true variant portion; update position accordingly
         ref_seq = rec.ref
         alt_seq = rec.alts[0] if rec.alts else ""
-        trim_ref, trim_alt = trim_common_bases(ref_seq, alt_seq)
+        trim_ref, trim_alt, prefix_len = trim_common_bases(ref_seq, alt_seq)
+        rec.pos = rec.pos + prefix_len
 
         # Classify allele-level detail (TR_INS/TR_DEL/TR_SNV)
         if len(trim_alt) > len(trim_ref):
@@ -259,8 +261,8 @@ for rec in vcf_in:
 
     vcf_out.write(rec)
 
-vcf_out.close()
 flush_trv_buffer()
+vcf_out.close()
 vcf_in.close()
 EOF
 
