@@ -12,6 +12,9 @@ workflow CollectQcVcfWide {
         Int variants_per_shard
         Boolean create_variant_attributes = false
 
+        File ref_fa
+        File ref_fai
+
         String sv_base_mini_docker
         String sv_pipeline_docker
 
@@ -51,6 +54,8 @@ workflow CollectQcVcfWide {
             input:
                 vcf = select_first([AnnotateVariantAttributes.annotated_vcf, vcf_shards[i]]),
                 prefix = "~{output_prefix}.preprocess.shard_~{i}",
+                ref_fa = ref_fa,
+                ref_fai = ref_fai,
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_override_preprocess_vcf
         }
@@ -101,6 +106,8 @@ task PreprocessVcf {
     input {
         File vcf
         String prefix
+        File ref_fa
+        File ref_fai
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
@@ -108,8 +115,12 @@ task PreprocessVcf {
     command <<<
         set -euo pipefail
 
-        # Split multiallelic TRV records into biallelic before processing
-        bcftools norm -m-any ~{vcf} -Oz -o ~{prefix}.split.vcf.gz
+        bcftools norm \
+            -m-any \
+            --fasta-ref ~{ref_fa} \
+            ~{vcf} \
+            -Oz -o ~{prefix}.split.vcf.gz
+        
         tabix -p vcf ~{prefix}.split.vcf.gz
 
         cat << 'EOF' > convert_to_symbolic.py
@@ -131,56 +142,43 @@ if "TR_ALLELE_CLASS" not in vcf_in.header.info:
     vcf_in.header.info.add("TR_ALLELE_CLASS", 1, "String", "Sub-classification of TRV biallelic allele: TR_INS, TR_DEL, or TR_SNV.")
 if "TRV_LOCUS_CARRIERS" not in vcf_in.header.info:
     vcf_in.header.info.add("TRV_LOCUS_CARRIERS", 1, "Integer", "Number of unique carriers across all biallelic alleles at this TRV locus.")
-vcf_out = pysam.VariantFile("~{prefix}.vcf.gz", "w", header=vcf_in.header)
+vcf_out = pysam.VariantFile("~{prefix}.unsorted.vcf.gz", "w", header=vcf_in.header)
 
-# Track consecutive TRV records from the same original multiallelic
 prev_trv_key = None
 trv_counter = 0
 trv_buffer = []
 
-def trim_common_bases(ref, alt):
-    """Trim common prefix and suffix. Returns (trimmed_ref, trimmed_alt, prefix_len)."""
-    i = 0
-    while i < len(ref) and i < len(alt) and ref[i] == alt[i]:
-        i += 1
-    prefix_len = i
-    ref = ref[i:]
-    alt = alt[i:]
-    while len(ref) > 0 and len(alt) > 0 and ref[-1] == alt[-1]:
-        ref = ref[:-1]
-        alt = alt[:-1]
-    return ref, alt, prefix_len
-
 def flush_trv_buffer():
-    """Compute locus-level carriers and write buffered TRV records."""
     if not trv_buffer:
         return
+    
     carrier_set = set()
     for rec in trv_buffer:
         for s_name in rec.samples:
             gt = rec.samples[s_name].get("GT", (None,))
             if gt and any(a is not None and a > 0 for a in gt):
                 carrier_set.add(s_name)
+    
     n_carriers = len(carrier_set)
     for rec in trv_buffer:
         rec.info["TRV_LOCUS_CARRIERS"] = n_carriers
         vcf_out.write(rec)
+    
     trv_buffer.clear()
 
 for rec in vcf_in:
     allele_type = rec.info["allele_type"].upper()
 
     if allele_type == "TRV":
-        # Handle biallelic TRV (post bcftools norm -m-any)
-        current_key = (rec.chrom, rec.pos, rec.id)
+        # bcftools norm preserves IDs when splitting multiallelics
+        # group by (chrom, id) since left-alignment can shift POS but not ID
+        current_key = (rec.chrom, rec.id)
         if current_key != prev_trv_key:
             flush_trv_buffer()
             trv_counter = 1
             prev_trv_key = current_key
         else:
             trv_counter += 1
-
-        # Add suffix to ID to track which original multiallelic this came from
         rec.id = f"{rec.id}_{trv_counter}"
 
         # Classify TR vs VNTR by min motif length
@@ -192,27 +190,24 @@ for rec in vcf_in:
             min_motif_len = 0
         svtype = "TR" if min_motif_len <= 6 else "VNTR"
 
-        # Trim common prefix/suffix to get the true variant portion; update position accordingly
+        # Allele class and length from bcftools-normalized REF/ALT
         ref_seq = rec.ref
         alt_seq = rec.alts[0] if rec.alts else ""
-        trim_ref, trim_alt, prefix_len = trim_common_bases(ref_seq, alt_seq)
-        rec.pos = rec.pos + prefix_len
-
-        # Classify allele-level detail (TR_INS/TR_DEL/TR_SNV)
-        if len(trim_alt) > len(trim_ref):
+        if len(alt_seq) > len(ref_seq):
             allele_class = "TR_INS"
-            allele_length = len(trim_alt) - len(trim_ref)
-        elif len(trim_ref) > len(trim_alt):
+            allele_length = len(alt_seq) - len(ref_seq)
+        elif len(ref_seq) > len(alt_seq):
             allele_class = "TR_DEL"
-            allele_length = len(trim_ref) - len(trim_alt)
+            allele_length = len(ref_seq) - len(alt_seq)
         else:
             allele_class = "TR_SNV"
-            allele_length = max(len(trim_ref), 1)
+            allele_length = max(len(ref_seq), 1)
 
+        ref_len = len(rec.ref)
         rec.info["SVTYPE"] = svtype
         rec.info["SVLEN"] = allele_length
         rec.info["TR_ALLELE_CLASS"] = allele_class
-        rec.stop = rec.pos + allele_length - 1
+        rec.stop = rec.pos + ref_len
 
         rec.alts = (f"<{allele_type}>",)
 
@@ -241,9 +236,10 @@ for rec in vcf_in:
     
     if allele_type == "SNV" and len(rec.alts) == 1 and len(rec.alts[0]) == 1:
         rec.info["ORIG_ALT"] = rec.alts[0]
+    ref_len = len(rec.ref)
     rec.info["SVTYPE"] = svtype
     rec.info["SVLEN"] = allele_length
-    rec.stop = rec.pos + allele_length - 1
+    rec.stop = rec.pos + ref_len
 
     if len(rec.alts) > 1:
         for sample in rec.samples.values():
@@ -252,7 +248,7 @@ for rec in vcf_in:
     
     rec.alts = (f"<{allele_type}>",)
 
-    # Strip phasing from all sample genotypes so 1|0 and 0|1 are treated as 0/1
+    # Strip phase data
     for s_name in rec.samples:
         try:
             rec.samples[s_name].phased = False
@@ -267,7 +263,17 @@ vcf_in.close()
 EOF
 
         python convert_to_symbolic.py
+
         rm -f ~{prefix}.split.vcf.gz ~{prefix}.split.vcf.gz.tbi
+
+        mkdir -p /tmp/bcftools_sort/
+
+        bcftools sort \
+            -T /tmp/bcftools_sort/ \
+            -Oz -o ~{prefix}.vcf.gz \
+            ~{prefix}.unsorted.vcf.gz
+        
+        rm -f ~{prefix}.unsorted.vcf.gz
 
         tabix ~{prefix}.vcf.gz
     >>>

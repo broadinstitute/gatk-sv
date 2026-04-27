@@ -18,6 +18,9 @@ workflow QcAnnotations {
 
         File ped_file
 
+        File ref_fa
+        File ref_fai
+
         Int variants_per_shard
         Int samples_per_shard
 
@@ -95,6 +98,8 @@ workflow QcAnnotations {
                 prefix = "~{prefix}.~{contig}",
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = gatk_sv_lr_docker,
+                ref_fa = ref_fa,
+                ref_fai = ref_fai,
                 runtime_override_preprocess_vcf = runtime_override_preprocess_vcf,
                 runtime_override_collect_sharded_vcf_stats = runtime_override_collect_sharded_vcf_stats,
                 runtime_override_svtk_vcf_2_bed = runtime_override_svtk_vcf_2_bed,
