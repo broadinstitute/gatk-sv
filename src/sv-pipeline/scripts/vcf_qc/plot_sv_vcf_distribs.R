@@ -90,11 +90,11 @@ plotStackedBars <- function(mat,colors,scaled=T,log.y=FALSE,title=NULL){
 ###################
 #####SV count plots
 ###################
-# Format a count as "X.XXXK" or "X.XXXM" with 4 significant figures
+# Format a count as "X.XXK" or "X.XXM" with 2 decimal places
 formatCount <- function(n){
   if(is.na(n) || !is.finite(n)) return(as.character(n))
-  if(abs(n) >= 1e6) return(paste0(signif(n/1e6, 4), "M"))
-  if(abs(n) >= 1e3) return(paste0(signif(n/1e3, 4), "K"))
+  if(abs(n) >= 1e6) return(paste0(round(n/1e6, 2), "M"))
+  if(abs(n) >= 1e3) return(paste0(round(n/1e3, 2), "K"))
   return(as.character(round(n)))
 }
 
@@ -125,7 +125,7 @@ plotSVCountBars <- function(dat,svtypes,title=NULL,ylab="Count",tr.env.dat=NULL)
   mtext(3,line=0.5,text=title,font=2)
   
   #Compute TR_ENVELOPED overlay counts per svtype (excluded for TR types)
-  tr.types <- c("TR_SNV","TR_INS","TR_DEL")
+  tr.types <- c("TR","VNTR")
   te.counts <- if(!is.null(tr.env.dat)){
     setNames(sapply(svtypes$svtype, function(svtype){
       if(svtype %in% tr.types) return(NA_real_)
@@ -415,7 +415,7 @@ wrapperPlotAllCountBars <- function(){
     }))
     colnames(region.mat) <- c("ALL",regions)
   }
-  pdf(paste(OUTDIR,"/main_plots/counts_distributions.pdf",sep=""),
+  pdf(paste(OUTDIR,"/main_plots/counts_distribution.pdf",sep=""),
       height=7,width=11)
   # Compute TR_ENVELOPED overlay data for leftmost count bar (use count-specific data)
   te.dat.count <- if("TR_ENVELOPED" %in% colnames(dat.count)){
@@ -466,7 +466,7 @@ wrapperPlotAllCountBars <- function(){
 plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
                             min.size=1, max.size=1000000,
                             autosomal=F, biallelic=F,
-                            title=NULL, legend=F, lwd.cex=1, text.cex=1, log.y=FALSE, show.dropped=FALSE){
+                            title=NULL, legend=F, lwd.cex=1, text.cex=1, log.y=FALSE, show.dropped=FALSE, show.alu.labels=TRUE){
   #Filter/process sizes & compute range + breaks
   filter.legend <- NULL
   if(autosomal==T){
@@ -616,10 +616,11 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
   #Add number of SV to plot (excluding SVs with size=0, e.g. SNVs)
   n.sz.plotted <- sum(is.finite(sizes))
   n.sz.dropped <- length(sizes) - n.sz.plotted
-  axis(3,at=mean(par("usr")[1:2]),line=-0.9,tick=F,
+  n.line <- if(show.alu.labels) 0.3 else -0.9
+  axis(3,at=mean(par("usr")[1:2]),line=n.line,tick=F,
        labels=paste("n=",prettyNum(n.sz.plotted,big.mark=","),sep=""))
   if(show.dropped && n.sz.dropped > 0){
-    axis(3,at=mean(par("usr")[1:2]),line=-1.9,tick=F,cex.axis=0.65,
+    axis(3,at=mean(par("usr")[1:2]),line=n.line-1,tick=F,cex.axis=0.65,
          labels=paste0("(",prettyNum(n.sz.dropped,big.mark=",")," dropped - SNVs (size=0))"))
   }
   
@@ -824,7 +825,7 @@ wrapperPlotAllSizeDistribs <- function(){
   dev.off()
   
   #Merged
-  pdf(paste(OUTDIR,"/main_plots/size_distributions.pdf",sep=""),
+  pdf(paste(OUTDIR,"/main_plots/size_distribution.pdf",sep=""),
       height=6,width=10)
   layout(matrix(c(1,1,1,2,2,3,4,5,6,7),byrow=T,nrow=2),
          heights=c(4,2))
@@ -838,15 +839,15 @@ wrapperPlotAllSizeDistribs <- function(){
                         title="Size Distributions by AF",
                         lwd.cex=2, log.y=TRUE)
   plotSizeDistrib(dat=dat[which(dat$AC==1),],svtypes=svtypes,
-                  autosomal=F, biallelic=T, title="AC = 1", text.cex=0.75, log.y=TRUE)
+                  autosomal=F, biallelic=T, title="AC = 1", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE)
   plotSizeDistrib(dat=dat[which(dat$AC>1 & dat$AF<rare.max.freq),],svtypes=svtypes,
-                  autosomal=F, biallelic=T, title="n > 1 & AF < 1%", text.cex=0.75, log.y=TRUE)
+                  autosomal=F, biallelic=T, title="n > 1 & AF < 1%", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE)
   plotSizeDistrib(dat=dat[which(dat$AF>=rare.max.freq & dat$AF<uncommon.max.freq),],svtypes=svtypes,
-                  autosomal=F,biallelic=T, title="1% - 10%", text.cex=0.75, log.y=TRUE)
+                  autosomal=F,biallelic=T, title="1% - 10%", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE)
   plotSizeDistrib(dat=dat[which(dat$AF>=uncommon.max.freq & dat$AF<common.max.freq),],svtypes=svtypes,
-                  autosomal=F, biallelic=T, title="10% - 50%", text.cex=0.75, log.y=TRUE)
+                  autosomal=F, biallelic=T, title="10% - 50%", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE)
   plotSizeDistrib(dat=dat[which(dat$AF>=common.max.freq),],svtypes=svtypes,
-                  autosomal=F, biallelic=T, title="> 50%", text.cex=0.75, log.y=TRUE)
+                  autosomal=F, biallelic=T, title="> 50%", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE)
   dev.off()
 }
 
@@ -1190,7 +1191,7 @@ wrapperPlotAllFreqDistribs <- function(){
   dev.off()
   
   #Merged
-  pdf(paste(OUTDIR,"/main_plots/af_distributions.pdf",sep=""),
+  pdf(paste(OUTDIR,"/main_plots/af_distribution.pdf",sep=""),
       height=6,width=10)
   layout(matrix(c(1,1,1,2,2,2,
                   3,4,5,6,7,8),
@@ -1296,7 +1297,7 @@ wrapperPlotTiTv <- function(){
   # Number of columns: AF panel + Size panel + optional heatmap
   n.panels <- 2 + as.integer(has.region && length(regions)>0)
   has.heatmap <- has.region && length(regions)>0
-  png(paste(OUTDIR,"/main_plots/ti_tv_distributions.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/ti_tv_distribution.png",sep=""),
       res=300, height=1800, width=n.panels*1800 + if(has.heatmap) 1800 else 0)
   layout(matrix(1:n.panels, nrow=1),
          widths=c(rep(1, n.panels - as.integer(has.heatmap)), if(has.heatmap) 1.6 else 1))
@@ -1467,7 +1468,7 @@ wrapperPlotQualDistrib <- function(){
   col.reg <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
 
   n.panels <- 5
-  png(paste(OUTDIR,"/main_plots/qual_distributions.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/qual_distribution.png",sep=""),
       res=300, height=1800, width=n.panels*1800)
   layout(matrix(1:n.panels, nrow=1))
 
@@ -1541,7 +1542,7 @@ wrapperPlotNcrDistrib <- function(){
   xlim <- c(0,1)
 
   n.panels <- 4
-  png(paste(OUTDIR,"/main_plots/ncr_distributions.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/ncr_distribution.png",sep=""),
       res=300, height=1800, width=n.panels*1800)
   layout(matrix(1:n.panels, nrow=1))
 
@@ -1636,7 +1637,7 @@ wrapperPlotGnomadMatchDistrib <- function(){
   # Determine number of panels
   n.panels <- 1 + as.integer(has.region && length(regions)>0) + 2  # overall + region(optional) + size + AF
   if(!has.region || length(regions)==0) n.panels <- 3
-  png(paste(OUTDIR,"/main_plots/gnomad_match_distributions.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/gnomad_match_distribution.png",sep=""),
       res=300, height=1800, width=n.panels*1800)
   layout(matrix(1:n.panels, nrow=1))
 
@@ -1860,22 +1861,22 @@ wrapperPlotAllHWDistribs <- function(){
 
   cell.px <- 1200
 
-  # gt_overall_distributions.png: overall HWE + carrier freq vs AF
-  png(paste(OUTDIR,"main_plots/gt_overall_distributions.png",sep=""),
+  # gt_overall_distribution.png: overall HWE + carrier freq vs AF
+  png(paste(OUTDIR,"main_plots/gt_overall_distribution.png",sep=""),
       res=300, height=cell.px, width=2*cell.px)
   layout(matrix(1:2, nrow=1))
   plotHWSingle(dat=dat, svtypes=svtypes, title="Genotype Distribution")
   plotAlleleCarrierCorrelation(dat=dat)
   dev.off()
 
-  # gt_type_distributions.png: specific 2x5 grid
-  # Row 1: SNV, INS_SHORT, DEL_SHORT, DUP_SHORT, TR_INS
-  # Row 2: TR_SNV, INS_SV, DEL_SV, DUP_SV, TR_DEL
-  type.grid <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","TR_INS",
-                  "TR_SNV","INS_SV","DEL_SV","DUP_SV","TR_DEL")
+  # gt_type_distribution.png: specific 2x5 grid
+  # Row 1: SNV, INS_SHORT, DEL_SHORT, DUP_SHORT, TR
+  # Row 2: INS_SV, DEL_SV, DUP_SV, VNTR
+  type.grid <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","TR",
+                  "INS_SV","DEL_SV","DUP_SV","VNTR")
   type.grid <- type.grid[type.grid %in% svtypes$svtype]
   n.type.cols <- ceiling(length(type.grid) / 2)
-  png(paste(OUTDIR,"main_plots/gt_type_distributions.png",sep=""),
+  png(paste(OUTDIR,"main_plots/gt_type_distribution.png",sep=""),
       res=300, height=2*cell.px, width=n.type.cols*cell.px)
   mat.type <- matrix(seq_len(length(type.grid)), nrow=2, byrow=TRUE)
   if(ncol(mat.type) * 2 > length(type.grid)){
@@ -1899,7 +1900,7 @@ wrapperPlotAllHWDistribs <- function(){
   mat.sz    <- matrix(NA, nrow=2, ncol=n.sz.cols)
   for(i in seq_len(n.sz)) mat.sz[((i-1)%%2)+1, ceiling(i/2)] <- i
   mat.sz[is.na(mat.sz)] <- n.sz+1
-  png(paste(OUTDIR,"main_plots/gt_size_distributions.png",sep=""),
+  png(paste(OUTDIR,"main_plots/gt_size_distribution.png",sep=""),
       res=300, height=2*cell.px, width=n.sz.cols*cell.px)
   layout(mat.sz)
   sapply(seq_len(n.sz), function(i){
@@ -1918,7 +1919,7 @@ wrapperPlotAllHWDistribs <- function(){
     mat.reg    <- matrix(NA, nrow=2, ncol=n.reg.cols)
     for(i in seq_len(n.reg)) mat.reg[((i-1)%%2)+1, ceiling(i/2)] <- i
     mat.reg[is.na(mat.reg)] <- n.reg+1
-    png(paste(OUTDIR,"main_plots/gt_region_distributions.png",sep=""),
+    png(paste(OUTDIR,"main_plots/gt_region_distribution.png",sep=""),
         res=300, height=2*cell.px, width=n.reg.cols*cell.px)
     layout(mat.reg)
     sapply(seq_len(n.reg), function(i){
@@ -1928,7 +1929,7 @@ wrapperPlotAllHWDistribs <- function(){
     if(n.reg %% 2 != 0) plot.new()
     dev.off()
   } else {
-    png(paste(OUTDIR,"main_plots/gt_region_distributions.png",sep=""),
+    png(paste(OUTDIR,"main_plots/gt_region_distribution.png",sep=""),
         res=300, height=cell.px, width=cell.px)
     plot(x=c(0,1),y=c(0,1),type="n",xaxt="n",yaxt="n",xlab="",ylab="",bty="n")
     text(x=0.5,y=0.5,labels="No region data.",cex=1.5)
@@ -2002,34 +2003,27 @@ if(!is.null(svtypes.file)){
                         "color"=svtypes.c)
 }
 # Enforce canonical class ordering
-.svtype.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV","TR_SNV","TR_INS","TR_DEL")
+.svtype.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV","TR","VNTR")
 .order.idx <- c(match(.svtype.order[.svtype.order %in% svtypes$svtype], svtypes$svtype),
                 which(!svtypes$svtype %in% .svtype.order))
 svtypes <- svtypes[.order.idx, ]
 
 # Build count-specific svtypes (TR/VNTR for unique locus counting)
-# These use deduplicated original TRV IDs classified by MOTIFS length
-svtypes.count <- rbind(
-  svtypes[!svtypes$svtype %in% c("TR_SNV","TR_INS","TR_DEL"),],
-  data.frame(svtype=c("TR","VNTR"), color=c("#FA931E","#B56A00"), stringsAsFactors=FALSE))
+# With TR/VNTR as native svtypes, svtypes.count = svtypes
+svtypes.count <- svtypes
 .count.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV","TR","VNTR")
 .count.idx <- c(match(.count.order[.count.order %in% svtypes.count$svtype], svtypes.count$svtype),
                 which(!svtypes.count$svtype %in% .count.order))
 svtypes.count <- svtypes.count[.count.idx, ]
 
-# Build count-specific data (deduplicate TR biallelics back to TR/VNTR loci)
-tr.biallelic.types <- c("TR_SNV","TR_INS","TR_DEL")
+# Build count-specific data (deduplicate TR/VNTR biallelics back to unique loci)
+tr.biallelic.types <- c("TR","VNTR")
 dat.count <- dat[!dat$svtype %in% tr.biallelic.types,]
 if(any(dat$svtype %in% tr.biallelic.types)){
   tr.dat.tmp <- dat[dat$svtype %in% tr.biallelic.types,]
   tr.dat.tmp$base_vid <- sub("_[0-9]+$", "", tr.dat.tmp$VID)
   first.idx <- !duplicated(tr.dat.tmp$base_vid)
   tr.dedup <- tr.dat.tmp[first.idx,]
-  if("max_motif_length" %in% colnames(tr.dedup)){
-    tr.dedup$svtype <- ifelse(!is.na(tr.dedup$max_motif_length) & tr.dedup$max_motif_length > 6, "VNTR", "TR")
-  } else {
-    tr.dedup$svtype <- "TR"
-  }
   tr.dedup$base_vid <- NULL
   tr.dat.tmp$base_vid <- NULL
   dat.count <- rbind(dat.count, tr.dedup)
@@ -2048,7 +2042,7 @@ svtypes.merged <- data.frame(
   color = c(.del.col, .ins.col, .dup.col,
             svtypes$color[match(.other.types, svtypes$svtype)]),
   stringsAsFactors=FALSE)
-.merged.order <- c("SNV","INS","DEL","DUP","TR_SNV","TR_INS","TR_DEL")
+.merged.order <- c("SNV","INS","DEL","DUP","TR","VNTR")
 .merged.idx <- c(match(.merged.order[.merged.order %in% svtypes.merged$svtype], svtypes.merged$svtype),
                  which(!svtypes.merged$svtype %in% .merged.order))
 svtypes.merged <- svtypes.merged[.merged.idx, ]
@@ -2098,7 +2092,7 @@ wrapperPlotVepDistrib <- function(){
   dat.exp$svtype_m[dat.exp$svtype_m %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
   dat.exp$svtype_m[dat.exp$svtype_m %in% c("INS_SHORT","INS_SV")] <- "INS"
   dat.exp$svtype_m[dat.exp$svtype_m %in% c("DUP_SHORT","DUP_SV")] <- "DUP"
-  dat.exp$svtype_m[dat.exp$svtype_m %in% c("TR_SNV","TR_INS","TR_DEL")] <- "TR"
+  dat.exp$svtype_m[dat.exp$svtype_m %in% c("TR","VNTR")] <- "TR"
 
   # Build consequence × stratum matrix
   makeConseqMat <- function(grp.vals, grp.labs){
@@ -2117,7 +2111,7 @@ wrapperPlotVepDistrib <- function(){
     labels=c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb"), include.lowest=TRUE))
 
   panel.w <- max(3600, n.csq * 150)
-  png(paste(OUTDIR, "/main_plots/vep_distributions.png", sep=""),
+  png(paste(OUTDIR, "/main_plots/vep_distribution.png", sep=""),
       res=300, height=2*1800, width=2*panel.w)
   layout(matrix(1:4, nrow=2, byrow=TRUE))
 
@@ -2210,7 +2204,7 @@ wrapperPlotSvAnnotateDistrib <- function(){
   svtype_m[svtype_m %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
   svtype_m[svtype_m %in% c("INS_SHORT","INS_SV")] <- "INS"
   svtype_m[svtype_m %in% c("DUP_SHORT","DUP_SV")] <- "DUP"
-  svtype_m[svtype_m %in% c("TR_SNV","TR_INS","TR_DEL")] <- "TR"
+  svtype_m[svtype_m %in% c("TR","VNTR")] <- "TR"
 
   af.cuts   <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
   af.breaks <- c(-Inf, 1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
@@ -2226,7 +2220,7 @@ wrapperPlotSvAnnotateDistrib <- function(){
   }
 
   panel.w <- max(3600, n.pred * 150)
-  png(paste(OUTDIR, "/main_plots/svannotate_distributions.png", sep=""),
+  png(paste(OUTDIR, "/main_plots/svannotate_distribution.png", sep=""),
       res=300, height=2*1800, width=2*panel.w)
   layout(matrix(1:4, nrow=2, byrow=TRUE))
 
@@ -2376,8 +2370,14 @@ plotTrvDistribPanels <- function(trv.dat, vals, xlab, xlim=NULL,
 }
 
 wrapperPlotTrvAlleleCount <- function(){
-  trv.dat <- dat[dat$svtype %in% c("TR_SNV","TR_INS","TR_DEL") & !is.na(dat$AC) & dat$AC > 0, ]
+  trv.dat <- dat[dat$svtype %in% c("TR","VNTR") & !is.na(dat$AC) & dat$AC > 0, ]
   if(nrow(trv.dat) == 0) return(invisible(NULL))
+  # Aggregate AC per locus (sum across biallelics)
+  trv.dat$base_vid <- sub("_[0-9]+$", "", trv.dat$VID)
+  locus.ac <- aggregate(AC ~ base_vid, data=trv.dat, FUN=sum)
+  first.rows <- trv.dat[!duplicated(trv.dat$base_vid), ]
+  first.rows$AC <- locus.ac$AC[match(first.rows$base_vid, locus.ac$base_vid)]
+  trv.dat <- first.rows
   vals <- trv.dat$AC
   xlim <- c(1, quantile(vals, 0.99))
   png(paste(OUTDIR,"/main_plots/tr_allele_count_distribution.png",sep=""),
@@ -2392,8 +2392,19 @@ wrapperPlotTrvAlleleCount <- function(){
 }
 
 wrapperPlotTrvSampleCount <- function(){
-  trv.dat <- dat[dat$svtype %in% c("TR_SNV","TR_INS","TR_DEL") & !is.na(dat$carriers) & dat$carriers > 0, ]
+  trv.dat <- dat[dat$svtype %in% c("TR","VNTR") & !is.na(dat$carriers) & dat$carriers > 0, ]
   if(nrow(trv.dat) == 0) return(invisible(NULL))
+  # Use TRV_LOCUS_CARRIERS for pre-normalization carrier count, or fall back to max per locus
+  trv.dat$base_vid <- sub("_[0-9]+$", "", trv.dat$VID)
+  if("TRV_LOCUS_CARRIERS" %in% colnames(trv.dat)){
+    first.rows <- trv.dat[!duplicated(trv.dat$base_vid), ]
+    first.rows$carriers <- first.rows$TRV_LOCUS_CARRIERS
+  } else {
+    locus.carriers <- aggregate(carriers ~ base_vid, data=trv.dat, FUN=max)
+    first.rows <- trv.dat[!duplicated(trv.dat$base_vid), ]
+    first.rows$carriers <- locus.carriers$carriers[match(first.rows$base_vid, locus.carriers$base_vid)]
+  }
+  trv.dat <- first.rows
   vals <- trv.dat$carriers
   xlim <- c(1, quantile(vals, 0.99))
   png(paste(OUTDIR,"/main_plots/tr_sample_count_distribution.png",sep=""),
@@ -2409,9 +2420,9 @@ wrapperPlotTrvSampleCount <- function(){
 
 wrapperPlotTrvExpansionRatio <- function(){
   if(!"TRV_EXPANSION_RATIO" %in% colnames(dat)) return(invisible(NULL))
-  trv.dat <- dat[dat$svtype %in% c("TR_SNV","TR_INS","TR_DEL") & !is.na(dat$TRV_EXPANSION_RATIO), ]
+  trv.dat <- dat[dat$svtype %in% c("TR","VNTR") & !is.na(dat$TRV_EXPANSION_RATIO), ]
   if(nrow(trv.dat) == 0) return(invisible(NULL))
-  n.trv.total <- sum(dat$svtype %in% c("TR_SNV","TR_INS","TR_DEL"))
+  n.trv.total <- sum(dat$svtype %in% c("TR","VNTR"))
   n.trv.dropped <- n.trv.total - nrow(trv.dat)
   trv.drop.text <- if(n.trv.dropped > 0) paste0("(",prettyNum(n.trv.dropped,big.mark=",")," dropped - no alternate allele of distinct size)") else NULL
   vals <- trv.dat$TRV_EXPANSION_RATIO
@@ -2433,19 +2444,23 @@ wrapperPlotTrvExpansionRatio <- function(){
 #####TR loci distribution plot
 ######################################
 wrapperPlotTrLociDistrib <- function(){
-  tr.types <- c("TR_SNV","TR_INS","TR_DEL")
+  tr.types <- c("TR","VNTR")
   if(!any(dat$svtype %in% tr.types)) return(invisible(NULL))
   if(!"TRID" %in% colnames(dat)) return(invisible(NULL))
 
   # Build per-locus counts of normalized TR alleles by detailed subtype
   tr.dat <- dat[dat$svtype %in% tr.types,]
   tr.dat$base_vid <- sub("_[0-9]+$", "", tr.dat$VID)
-  # Detailed subtype: TR_INS_SHORT, TR_INS_SV, TR_DEL_SHORT, TR_DEL_SV, TR_SNV
-  tr.dat$detail_type <- tr.dat$svtype
-  tr.dat$detail_type[tr.dat$svtype=="TR_INS" & tr.dat$length < 50] <- "TR_INS_SHORT"
-  tr.dat$detail_type[tr.dat$svtype=="TR_INS" & tr.dat$length >= 50] <- "TR_INS_SV"
-  tr.dat$detail_type[tr.dat$svtype=="TR_DEL" & tr.dat$length < 50] <- "TR_DEL_SHORT"
-  tr.dat$detail_type[tr.dat$svtype=="TR_DEL" & tr.dat$length >= 50] <- "TR_DEL_SV"
+  # Detailed subtype from TR_ALLELE_CLASS (TR_INS/TR_DEL/TR_SNV) + size
+  if("TR_ALLELE_CLASS" %in% colnames(tr.dat)){
+    tr.dat$detail_type <- tr.dat$TR_ALLELE_CLASS
+  } else {
+    tr.dat$detail_type <- "TR_SNV"
+  }
+  tr.dat$detail_type[tr.dat$detail_type=="TR_INS" & tr.dat$length < 50] <- "TR_INS_SHORT"
+  tr.dat$detail_type[tr.dat$detail_type=="TR_INS" & tr.dat$length >= 50] <- "TR_INS_SV"
+  tr.dat$detail_type[tr.dat$detail_type=="TR_DEL" & tr.dat$length < 50] <- "TR_DEL_SHORT"
+  tr.dat$detail_type[tr.dat$detail_type=="TR_DEL" & tr.dat$length >= 50] <- "TR_DEL_SV"
 
   # For each unique TR locus (base_vid), get TRID and count alleles per detail type
   loci <- unique(tr.dat$base_vid)
@@ -2596,13 +2611,13 @@ wrapperPlotInsDistrib <- function(){
          labels=paste0("n=", prettyNum(tot, big.mark=",")))
   }
 
-  png(paste(OUTDIR,"/main_plots/ins_distributions.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/ins_distribution.png",sep=""),
       res=300, height=2400, width=5600)
   layout(matrix(1:8, nrow=1), widths=c(3, rep(1.5, 6), 1.8))
 
   plotInsBar(mat[,"ALL"], title="Insertion Variant Types", main.bar=TRUE)
   for(s in seq_along(sz.labs)){
-    plotInsBar(mat[,sz.labs[s]], title=sz.labs[s], ymax.ref=total)
+    plotInsBar(mat[,sz.labs[s]], title=sz.labs[s])
   }
 
   # Legend panel

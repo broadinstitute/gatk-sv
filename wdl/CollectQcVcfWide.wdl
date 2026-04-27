@@ -127,11 +127,16 @@ if "ORIG_ALT" not in vcf_in.header.info:
     vcf_in.header.info.add("ORIG_ALT", 1, "String", "Original ALT nucleotide for SNVs before symbolic conversion.")
 if "TRV_EXPANSION_RATIO" not in vcf_in.header.info:
     vcf_in.header.info.add("TRV_EXPANSION_RATIO", 1, "Float", "Proportion of non-ref alleles called as expansions (alt allele length > ref allele length) among non-neutral alleles for TRV variants.")
+if "TR_ALLELE_CLASS" not in vcf_in.header.info:
+    vcf_in.header.info.add("TR_ALLELE_CLASS", 1, "String", "Sub-classification of TRV biallelic allele: TR_INS, TR_DEL, or TR_SNV.")
+if "TRV_LOCUS_CARRIERS" not in vcf_in.header.info:
+    vcf_in.header.info.add("TRV_LOCUS_CARRIERS", 1, "Integer", "Number of unique carriers across all biallelic alleles at this TRV locus.")
 vcf_out = pysam.VariantFile("~{prefix}.vcf.gz", "w", header=vcf_in.header)
 
 # Track consecutive TRV records from the same original multiallelic
 prev_trv_key = None
 trv_counter = 0
+trv_buffer = []
 
 def trim_common_bases(ref, alt):
     """Trim common prefix and suffix between REF and ALT sequences."""
@@ -145,39 +150,66 @@ def trim_common_bases(ref, alt):
         alt = alt[:-1]
     return ref, alt
 
+def flush_trv_buffer():
+    """Compute locus-level carriers and write buffered TRV records."""
+    if not trv_buffer:
+        return
+    carrier_set = set()
+    for rec in trv_buffer:
+        for s_name in rec.samples:
+            gt = rec.samples[s_name].get("GT", (None,))
+            if gt and any(a is not None and a > 0 for a in gt):
+                carrier_set.add(s_name)
+    n_carriers = len(carrier_set)
+    for rec in trv_buffer:
+        rec.info["TRV_LOCUS_CARRIERS"] = n_carriers
+        vcf_out.write(rec)
+    trv_buffer.clear()
+
 for rec in vcf_in:
     allele_type = rec.info["allele_type"].upper()
 
     if allele_type == "TRV":
         # Handle biallelic TRV (post bcftools norm -m-any)
         current_key = (rec.chrom, rec.pos, rec.id)
-        if current_key == prev_trv_key:
-            trv_counter += 1
-        else:
+        if current_key != prev_trv_key:
+            flush_trv_buffer()
             trv_counter = 1
             prev_trv_key = current_key
+        else:
+            trv_counter += 1
 
         # Add suffix to ID to track which original multiallelic this came from
         rec.id = f"{rec.id}_{trv_counter}"
+
+        # Classify TR vs VNTR by min motif length
+        motifs = rec.info.get("MOTIFS", None)
+        if motifs:
+            motif_list = list(motifs) if isinstance(motifs, (list, tuple)) else [str(motifs)]
+            min_motif_len = min(len(str(m)) for m in motif_list)
+        else:
+            min_motif_len = 0
+        svtype = "TR" if min_motif_len <= 6 else "VNTR"
 
         # Trim common prefix/suffix to get the true variant portion
         ref_seq = rec.ref
         alt_seq = rec.alts[0] if rec.alts else ""
         trim_ref, trim_alt = trim_common_bases(ref_seq, alt_seq)
 
-        # Classify based on trimmed lengths
+        # Classify allele-level detail (TR_INS/TR_DEL/TR_SNV)
         if len(trim_alt) > len(trim_ref):
-            svtype = "TR_INS"
+            allele_class = "TR_INS"
             allele_length = len(trim_alt) - len(trim_ref)
         elif len(trim_ref) > len(trim_alt):
-            svtype = "TR_DEL"
+            allele_class = "TR_DEL"
             allele_length = len(trim_ref) - len(trim_alt)
         else:
-            svtype = "TR_SNV"
+            allele_class = "TR_SNV"
             allele_length = max(len(trim_ref), 1)
 
         rec.info["SVTYPE"] = svtype
         rec.info["SVLEN"] = allele_length
+        rec.info["TR_ALLELE_CLASS"] = allele_class
         rec.stop = rec.pos + allele_length - 1
 
         rec.alts = (f"<{allele_type}>",)
@@ -188,10 +220,11 @@ for rec in vcf_in:
             except (AttributeError, TypeError):
                 pass
 
-        vcf_out.write(rec)
+        trv_buffer.append(rec.copy())
         continue
 
     # Non-TRV processing
+    flush_trv_buffer()
     prev_trv_key = None
     allele_length = abs(rec.info["allele_length"]) if "allele_length" in rec.info else len(rec.ref)
 
@@ -227,6 +260,7 @@ for rec in vcf_in:
     vcf_out.write(rec)
 
 vcf_out.close()
+flush_trv_buffer()
 vcf_in.close()
 EOF
 

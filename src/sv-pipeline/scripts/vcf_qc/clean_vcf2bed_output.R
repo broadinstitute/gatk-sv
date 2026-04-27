@@ -113,6 +113,10 @@ tr.parsed.col <- if("TR_PARSED" %in% colnames(dat)){
   v <- as.character(dat$TR_PARSED)
   !is.na(v) & toupper(v) %in% c("TRUE","1","YES")
 } else NULL
+# TR_ALLELE_CLASS field (per-biallelic TRV allele classification)
+tr.aclass.raw <- if("TR_ALLELE_CLASS" %in% colnames(dat)) as.character(dat$TR_ALLELE_CLASS) else NULL
+# TRV_LOCUS_CARRIERS field (pre-normalization locus-level carrier count)
+trv.locus.carriers.raw <- if("TRV_LOCUS_CARRIERS" %in% colnames(dat)) as.integer(as.character(dat$TRV_LOCUS_CARRIERS)) else NULL
 # VEP Consequence field (pipe-field index 1 per comma-chained annotation, semicolon-joined unique values)
 vep.col <- if("vep" %in% colnames(dat)) {
   sapply(as.character(dat$vep), function(v){
@@ -164,6 +168,10 @@ if(!is.null(tr.env.col)) dat$TR_ENVELOPED <- tr.env.col
 if(!is.null(trid.col)) dat$TRID <- trid.col
 if(!is.null(atype.col)) dat$allele_type <- atype.col
 if(!is.null(tr.parsed.col)) dat$TR_PARSED <- tr.parsed.col
+# TR_ALLELE_CLASS field (TR_INS/TR_DEL/TR_SNV per biallelic allele)
+if(!is.null(tr.aclass.raw)) dat$TR_ALLELE_CLASS <- tr.aclass.raw
+# TRV_LOCUS_CARRIERS field (pre-normalization carrier count per TRV locus)
+if(!is.null(trv.locus.carriers.raw)) dat$TRV_LOCUS_CARRIERS <- trv.locus.carriers.raw
 zeroes <- which(dat$AC==0 | dat$carriers==0)
 if(length(zeroes)>0){
   cat(paste("WARNING: ",prettyNum(length(zeroes),big.mark=","),"/",

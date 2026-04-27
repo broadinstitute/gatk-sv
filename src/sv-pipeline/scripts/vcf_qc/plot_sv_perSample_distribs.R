@@ -20,6 +20,13 @@ huge.max.size <- 300000000
 ###########################
 ###GENERIC HELPER FUNCTIONS
 ###########################
+# Format large numbers with K/M notation, 2 d.p.
+formatCount <- function(n){
+  if(is.na(n) || !is.finite(n)) return("NA")
+  if(abs(n) >= 1e6) return(paste0(round(n/1e6, 2), "M"))
+  if(abs(n) >= 1e3) return(paste0(round(n/1e3, 2), "K"))
+  return(as.character(round(n)))
+}
 orderRegions <- function(regions){
   canonical <- c("US","RM","SD","SR")
   c(canonical[canonical %in% regions], sort(regions[!regions %in% canonical]))
@@ -103,11 +110,10 @@ countVarsSingle <- function(dat,vlist,count="variants"){
     
     #Iterate over svtypes and count number of entries
     # For TR types (sites counting), deduplicate by base VID to count one site per original TRV
-    tr.biallelic.types <- c("TR_SNV","TR_INS","TR_DEL")
+    tr.biallelic.types <- c("TR","VNTR")
     if(count=="variants"){
       res <- sapply(svtypes$svtype,function(svtype){
         if(svtype %in% tr.biallelic.types){
-          # per-sample files have base VIDs (un-suffixed); dat has _N suffixed VIDs
           base.dat.vids <- sub("_[0-9]+$", "", dat$VID[dat$svtype==svtype])
           matching.base <- base.dat.vids %in% vlist$VID
           return(length(unique(base.dat.vids[matching.base])))
@@ -117,6 +123,11 @@ countVarsSingle <- function(dat,vlist,count="variants"){
       })
     }else{
       res <- sapply(svtypes$svtype,function(svtype){
+        if(svtype %in% tr.biallelic.types){
+          base.dat.vids <- sub("_[0-9]+$", "", dat$VID[dat$svtype==svtype])
+          unique.base <- unique(base.dat.vids)
+          return(sum(vlist[vlist$VID %in% unique.base, ]$alleles))
+        }
         sum(vlist[which(vlist$VID %in% dat[which(dat$svtype==svtype),]$VID),]$alleles)
       })
     }
@@ -361,7 +372,7 @@ plotViolins <- function(mat,colors=NULL,log=F,ylims=NULL,
       
       #Add text label for median value
       text(x=i-right.sep-0.48,y=median(vals),pos=4,cex=0.5,font=4,
-           col=colors[i],labels=prettyNum(round(median(vals),0),big.mark=","))
+           col=colors[i],labels=formatCount(median(vals)))
     }
     
     #Add category label on x-axis
@@ -434,7 +445,7 @@ plotViolins <- function(mat,colors=NULL,log=F,ylims=NULL,
     if(any(vals>0 & !is.infinite(as.vector(vals)) & !is.na(as.vector(vals)))){
       vals.scaled <- mat.classes.scaled[,i]
       text(x=i-0.48,y=median(vals.scaled),pos=4,cex=0.5,font=4,
-           col=colors[i+1],labels=prettyNum(round(median(vals),0),big.mark=","))
+           col=colors[i+1],labels=formatCount(median(vals)))
     }
   })
   
@@ -505,7 +516,7 @@ plotHeatmap <- function(mat,base.cols,
       rect(xleft=c-1,xright=c,ybottom=-r,ytop=-(r-1),
            lwd=0.5,border="gray95",col=color,density=dens)
       #Format cell annotation
-      anno.text <- paste(prettyNum(val,big.mark=","),"\n(",
+      anno.text <- paste(formatCount(val),"\n(",
                          pct,")",sep="")
       text(x=c-0.5,y=-(r-0.5),labels=anno.text,
            cex=0.6)
@@ -804,7 +815,7 @@ wrapperVariantCountHeats <- function(count="variants"){
 #Master wrapper for final top-level plot
 masterWrapperSummaryPlot <- function(){
   #Prep plot area
-  png(paste(OUTDIR,"/main_plots/per_genome_distributions.png",sep=""),
+  png(paste(OUTDIR,"/main_plots/per_genome_distribution.png",sep=""),
       height=5*300,width=17*300,res=300)
   layout(matrix(c(1,2,3,4,5,11,
                   6,7,8,9,10,12),nrow=2,byrow=T),
@@ -989,7 +1000,7 @@ if(!is.null(svtypes.file)){
                         "color"=svtypes.c)
 }
 # Enforce canonical class ordering
-.svtype.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV","TR_SNV","TR_INS","TR_DEL")
+.svtype.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV","TR","VNTR")
 .order.idx <- c(match(.svtype.order[.svtype.order %in% svtypes$svtype], svtypes$svtype),
                 which(!svtypes$svtype %in% .svtype.order))
 svtypes <- svtypes[.order.idx, ]
@@ -1006,7 +1017,7 @@ svtypes.merged <- data.frame(
             svtypes$color[match(intersect(c("DUP_SHORT","DUP"),svtypes$svtype)[1],svtypes$svtype)],
             svtypes$color[match(.other.ps, svtypes$svtype)]),
   stringsAsFactors=FALSE)
-.merged.order <- c("SNV","INS","DEL","DUP","TR_SNV","TR_INS","TR_DEL")
+.merged.order <- c("SNV","INS","DEL","DUP","TR","VNTR")
 .merged.idx <- c(match(.merged.order[.merged.order %in% svtypes.merged$svtype], svtypes.merged$svtype),
                  which(!svtypes.merged$svtype %in% .merged.order))
 svtypes.merged <- svtypes.merged[.merged.idx, ]

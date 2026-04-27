@@ -1255,7 +1255,7 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
 
   #PDF 1: overall inheritance + stratified DNR beeswarm plots
   n.cols.ov <- 3 + as.integer(has.reg.strat)
-  pdf(paste(OUTDIR, "/main_plots/", fam.type, "_inheritance_distributions.pdf", sep=""),
+  pdf(paste(OUTDIR, "/main_plots/", fam.type, "_inheritance_distribution.pdf", sep=""),
       height=5, width=3 + n.cols.ov * 3)
   layout(matrix(seq_len(n.cols.ov * 2), nrow=2, byrow=T))
 
@@ -1302,7 +1302,7 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
 
   #PDF 2: DNR line plots and heatmaps
   n.cols.de <- 3 + as.integer(gq)
-  pdf(paste(OUTDIR, "/main_plots/", fam.type, "_denovo_distributions.pdf", sep=""),
+  pdf(paste(OUTDIR, "/main_plots/", fam.type, "_denovo_distribution.pdf", sep=""),
       height=5, width=n.cols.de * 3.5)
   layout(matrix(seq_len(n.cols.de * 2), nrow=2, byrow=T))
 
@@ -1468,7 +1468,7 @@ if(!is.null(svtypes.file)){
                         "color"=svtypes.c)
 }
 # Enforce canonical class ordering
-.svtype.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV","TR_SNV","TR_INS","TR_DEL")
+.svtype.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV","TR","VNTR")
 .order.idx <- c(match(.svtype.order[.svtype.order %in% svtypes$svtype], svtypes$svtype),
                 which(!svtypes$svtype %in% .svtype.order))
 svtypes <- svtypes[.order.idx, ]
