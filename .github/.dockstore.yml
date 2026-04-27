@@ -268,5 +268,6 @@ workflows:
       branches:
         - main
         - vj-sv-shell-wdl
+        - vj-sv-shell-wdl-rgp
       tags:
         - /.*/
