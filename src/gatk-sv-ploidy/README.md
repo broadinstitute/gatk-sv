@@ -64,9 +64,14 @@ gatk-sv-ploidy eval -p out/call/aneuploidy_type_predictions.tsv \
   -t truth.json -o out/eval/
 ```
 
-`infer` uses a small additive background-depth prior by default
-(`--epsilon-mean 1e-2`). Pass `--epsilon-mean 0` to disable it and recover
-the older multiplicative-only depth model.
+`infer` uses a structured additive background model by default. A tiny
+contig-shared epsilon floor (`--epsilon-mean 1e-4 --epsilon-concentration 0.5`)
+is retained, and two low-rank additive background factors are enabled by default
+(`--background-factors 2`). This keeps the floor near zero while letting the
+model explain shared residual background patterns without fitting an
+independent epsilon term for every bin and sample. Pass `--background-factors 0`
+to disable the structured background term, or `--epsilon-mean 0` to remove the
+epsilon floor entirely.
 
 To test the raw-count negative-binomial model instead of the historical
 normalized-depth residual model, keep preprocess filtering in normalized
@@ -82,7 +87,11 @@ gatk-sv-ploidy ppd -i out/preprocess_nb/preprocessed_depth.tsv \
 
 In this mode the model infers a per-sample depth latent with a flat
 `Uniform(0, 10000)` prior and uses the per-bin and per-sample variance terms
-as negative-binomial overdispersion factors.
+as negative-binomial overdispersion factors. The raw-count path now assumes
+autosomes are mostly diploid: genome-wide coverage shifts are absorbed by the
+`sample_depth` latent rather than a separate baseline-ploidy latent, so the
+current `infer` + `call` path does not emit whole-genome `TRIPLOID` or
+`TETRAPLOID` calls.
 
 ---
 
@@ -470,8 +479,22 @@ $$\eta_k = \eta_{\min} + (\eta_{\text{init}} - \eta_{\min})\,e^{-k/\tau_{\text{d
 with defaults $\eta_{\text{init}} = 0.02$, $\eta_{\min} = 0.01$,
 $\tau_{\text{decay}} = 500$.
 
-**Early stopping.** Training halts when the ELBO has not improved by at least
-$\delta_{\min}$ (default 1000) for `patience` consecutive epochs (default 50).
+**Gradient clipping.** By default, inference clips the global SVI gradient
+norm to `10.0` before each optimizer step. This is intended to damp the
+large transient updates that can occur immediately after initialization,
+especially on noisier cohorts. Use `--grad-clip-norm` to tune the threshold
+or set it to `0` to disable clipping.
+
+**Early stopping.** Training compares the mean ELBO over the latest rolling
+window of iterations (default 50) to the preceding window and stops once the
+relative shift
+
+$$
+\frac{|\mathcal{L}_{\mathrm{curr}} - \mathcal{L}_{\mathrm{prev}}|}{|\mathcal{L}_{\mathrm{prev}}|}
+$$
+
+falls below `elbo_rtol` (default $10^{-4}$) for `patience` consecutive window
+comparisons (default 50).
 
 #### 2.6 Exact discrete posterior
 
@@ -539,11 +562,13 @@ flowchart TD
     CHECK -->|"(3, 0)"| TX["TRIPLE_X (XXX)"]
     CHECK -->|"(2, 1)"| K["KLINEFELTER (XXY)"]
     CHECK -->|"(1, 2)"| J["JACOBS (XYY)"]
-    CHECK -->|"(4, 0)"| TF["TETRAPLOID_FEMALE"]
-    CHECK -->|"(2, 2)"| TM["TETRAPLOID_MALE"]
-    CHECK -->|"(3, 1)"| TXY["TRIPLE_X_Y"]
     CHECK -->|else| O["OTHER"]
 ```
+
+  `TETRAPLOID_FEMALE`, `TETRAPLOID_MALE`, `TRIPLE_X_Y`, `TRIPLOID`, and
+  `TETRAPLOID` are still reserved label names for future polyploid-specific
+  post-processing, but they are not emitted by the current diploid-referenced
+  classifier.
 
 #### 3.3 Aneuploidy type classification
 
@@ -551,11 +576,10 @@ Aneuploidy types are assigned by a rule-based decision tree applied to the
 set of chromosomes flagged as aneuploid:
 
 1. **No aneuploid chromosomes** → `NORMAL`
-2. **Genome-wide tetraploidy** (≥80% of autosomes at CN = 4) → `TETRAPLOID`
-3. **Multiple autosomal or mixed auto+sex** → `MULTIPLE`
-4. **Sex-only aneuploidy** → mapped via the karyotype table above
+2. **Multiple autosomal or mixed auto+sex** → `MULTIPLE`
+3. **Sex-only aneuploidy** → mapped via the karyotype table above
    (e.g. `KLINEFELTER`, `TURNER`, `TRIPLE_X`, `JACOBS`)
-5. **Single autosomal aneuploidy** → named trisomy/tetrasomy when on a
+4. **Single autosomal aneuploidy** → named trisomy/tetrasomy when on a
    clinically recognised chromosome:
 
 | Chromosome | CN | Type |
@@ -571,5 +595,6 @@ set of chromosomes flagged as aneuploid:
 **Justification.** The three viable autosomal trisomies (13, 18, 21) are
 the most clinically relevant and are specifically named. Other autosomal
 aneuploidies are rare in viable samples and are grouped under `OTHER`.
-The 80% threshold for tetraploidy detection allows for a small number of
-bins with noisy CN estimates while still requiring near-genome-wide signal.
+The current calling rules intentionally stay in the diploid frame. A future
+polyploid-specific module can reuse the reserved labels above once it has its
+own evidence model.

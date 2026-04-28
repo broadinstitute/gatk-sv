@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# run_ploidy.sh — run the full gatk-sv-ploidy pipeline
+# run_ploidy.sh — run the gatk-sv-ploidy pipeline from preprocess outputs
 #
 # Usage:
-#   ./run_ploidy.sh --input-depth PATH --work-dir DIR [options]
+#   ./run_ploidy.sh --work-dir DIR [options]
 #
 # Required constants (configured via CLI args):
-#   --input-depth  : raw bins × samples depth TSV (may be gzipped) (required)
 #   --truth-json   : JSON mapping sample ID → true aneuploidy type (optional)
 #   --work-dir     : Root directory for all pipeline outputs (required)
+#
+# Note: the preprocess block is intentionally commented out in this wrapper.
+# It currently expects existing preprocess outputs under ${WORK_DIR}/preprocess/.
 
 set -euo pipefail
 
@@ -29,6 +31,23 @@ run_cli() {
         "${CLI_PYTHON}" -m gatk_sv_ploidy.cli "$@"
 }
 
+describe_redacted_input() {
+    local value="${1:-}"
+    local present_label="${2:-provided (redacted)}"
+    local absent_label="${3:-not provided}"
+
+    if [[ -n "${value}" ]]; then
+        printf '%s\n' "${present_label}"
+    else
+        printf '%s\n' "${absent_label}"
+    fi
+}
+
+dry_run_step() {
+    local step_name="$1"
+    echo "DRY-RUN: ${step_name} command prepared (arguments redacted)"
+}
+
 INPUT_DEPTH=""
 TRUTH_JSON=""
 WORK_DIR=""
@@ -44,8 +63,9 @@ POOR_REGIONS=""
 MIN_POOR_REGION_COVERAGE="0.5"
 
 usage() {
-    echo "Usage: $0 --input-depth PATH --work-dir DIR [--truth-json PATH] [--site-depth-list PATH] [--poor-regions PATH] [--ppd]" >&2
-    echo "  --input-depth PATH       Raw bins×samples depth TSV (may be gzipped)" >&2
+    echo "Usage: $0 --work-dir DIR [--input-depth PATH] [--truth-json PATH] [--site-depth-list PATH] [--poor-regions PATH] [--ppd]" >&2
+    echo "  Note: preprocess is currently disabled in this wrapper; it expects existing outputs in WORK_DIR/preprocess/" >&2
+    echo "  --input-depth PATH       Optional raw bins×samples depth TSV retained for provenance / future preprocess runs" >&2
     echo "  --work-dir DIR           Root directory for all pipeline outputs" >&2
     echo "  --truth-json PATH        Optional truth JSON to enable evaluation" >&2
     echo "  --site-depth-list PATH   Optional file listing per-sample SD file paths (one per line)" >&2
@@ -121,11 +141,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "${INPUT_DEPTH}" ]]; then
-    echo "Error: --input-depth is required" >&2
-    usage
-fi
-
 if [[ -z "${WORK_DIR}" ]]; then
     echo "Error: --work-dir is required" >&2
     usage
@@ -144,7 +159,7 @@ if [[ "${DRY_RUN}" == "true" ]]; then
     echo "DRY-RUN mode: commands will be printed but not executed"
 fi
 
-TOTAL_STEPS=5
+TOTAL_STEPS=4
 if [[ "${ENABLE_PPD}" == "true" ]]; then
     TOTAL_STEPS=$((TOTAL_STEPS + 1))
 fi
@@ -171,13 +186,15 @@ PPD_CHR_SUMMARY="${PPD_DIR}/ppd_chromosome_summary.tsv"
 IGNORED_BINS="${CALL_DIR}/ignored_bins.tsv.gz"
 
 echo "=== gatk-sv-ploidy pipeline ==="
-echo "  Input depth      : ${INPUT_DEPTH}"
-echo "  Site depth list  : ${SITE_DEPTH_LIST:-<none>}"
-echo "  Poor regions     : ${POOR_REGIONS:-<none>}"
+echo "  Input depth      : $(describe_redacted_input "${INPUT_DEPTH}")"
+echo "  Site depth list  : $(describe_redacted_input "${SITE_DEPTH_LIST}")"
+echo "  Poor regions     : $(describe_redacted_input "${POOR_REGIONS}")"
 echo "  Poor region cov  : ${MIN_POOR_REGION_COVERAGE}"
+echo "  Truth JSON       : $(describe_redacted_input "${TRUTH_JSON}")"
+echo "  Highlight sample : $(describe_redacted_input "${HIGHLIGHT_SAMPLE}")"
 echo "  Run PPD          : ${ENABLE_PPD}"
-echo "  Work dir         : ${WORK_DIR}"
-echo "  Python           : ${CLI_PYTHON}"
+echo "  Work dir         : configured (redacted)"
+echo "  Python           : resolved"
 echo ""
 
 CALL_STEP_ARGS="${CALL_ARGS}"
@@ -190,8 +207,8 @@ if [[ "${CALL_NEEDS_PPD_FILTER}" == "true" ]]; then
     fi
 fi
 
-# ── step 1: preprocess ───────────────────────────────────────────────────────
-# echo "[1/${TOTAL_STEPS}] preprocess"
+# ── preprocess ─────────────────────────
+# echo "[0/${TOTAL_STEPS}] preprocess"
 # SD_ARGS=""
 # if [[ -n "${SITE_DEPTH_LIST}" ]]; then
 #     SD_ARGS="--site-depth-list ${SITE_DEPTH_LIST}"
@@ -201,7 +218,7 @@ fi
 #     PR_ARGS="--poor-regions ${POOR_REGIONS} --min-poor-region-coverage ${MIN_POOR_REGION_COVERAGE}"
 # fi
 # if [[ "${DRY_RUN}" == "true" ]]; then
-#     echo "DRY-RUN: ${CLI_PYTHON} -m gatk_sv_ploidy.cli preprocess -i \"${INPUT_DEPTH}\" -o \"${PREPROCESS_DIR}\" ${SD_ARGS} ${PR_ARGS} ${PREPROCESS_ARGS}"
+#     dry_run_step "preprocess"
 # else
 #     run_cli preprocess \
 #         -i "${INPUT_DEPTH}" \
@@ -211,23 +228,23 @@ fi
 #         $PREPROCESS_ARGS
 # fi
 
-# # ── step 2: infer ────────────────────────────────────────────────────────────
-# echo "[2/${TOTAL_STEPS}] infer"
-# AF_ARGS=""
-# if [[ -f "${SITE_DATA}" ]]; then
-#     AF_ARGS="--site-data ${SITE_DATA}"
-# fi
-# if [[ "${DRY_RUN}" == "true" ]]; then
-#     echo "DRY-RUN: ${CLI_PYTHON} -m gatk_sv_ploidy.cli infer -i \"${PREPROCESSED_DEPTH}\" -o \"${INFER_DIR}\" ${AF_ARGS} ${MODEL_ARGS}"
-# else
-#     run_cli infer \
-#         -i "${PREPROCESSED_DEPTH}" \
-#         -o "${INFER_DIR}" \
-#         $AF_ARGS \
-#         $MODEL_ARGS
-# fi
+# ── step 1: infer ────────────────────────────────────────────────────────────
+echo "[1/${TOTAL_STEPS}] infer"
+AF_ARGS=""
+if [[ -f "${SITE_DATA}" ]]; then
+    AF_ARGS="--site-data ${SITE_DATA}"
+fi
+if [[ "${DRY_RUN}" == "true" ]]; then
+    dry_run_step "infer"
+else
+    run_cli infer \
+        -i "${PREPROCESSED_DEPTH}" \
+        -o "${INFER_DIR}" \
+        $AF_ARGS \
+        $MODEL_ARGS
+fi
 
-# ── step 3/4: posterior predictive checks and call ──────────────────────────
+# ── step 2/3: posterior predictive checks and call ──────────────────────────
 PPD_ARGS=""
 if [[ -f "${SITE_DATA}" ]]; then
     PPD_ARGS="--site-data ${SITE_DATA}"
@@ -239,7 +256,7 @@ fi
 
 run_call_step() {
     if [[ "${DRY_RUN}" == "true" ]]; then
-        echo "DRY-RUN: ${CLI_PYTHON} -m gatk_sv_ploidy.cli call -c \"${CHROM_STATS}\" -o \"${CALL_DIR}\" ${CALL_WITH_TRUTH_ARGS}"
+        dry_run_step "call"
     else
         run_cli call \
             -c "${CHROM_STATS}" \
@@ -250,7 +267,7 @@ run_call_step() {
 
 run_ppd_step() {
     if [[ "${DRY_RUN}" == "true" ]]; then
-        echo "DRY-RUN: ${CLI_PYTHON} -m gatk_sv_ploidy.cli ppd -i \"${PREPROCESSED_DEPTH}\" -a \"${INFERENCE_ARTIFACTS}\" -o \"${PPD_DIR}\" ${PPD_ARGS}"
+        dry_run_step "ppd"
     else
         run_cli ppd \
             -i "${PREPROCESSED_DEPTH}" \
@@ -261,24 +278,24 @@ run_ppd_step() {
 }
 
 if [[ "${ENABLE_PPD}" == "true" && "${CALL_NEEDS_PPD_FILTER}" == "true" ]]; then
-    echo "[3/${TOTAL_STEPS}] ppd"
+    echo "[2/${TOTAL_STEPS}] ppd"
     run_ppd_step
-    echo "[4/${TOTAL_STEPS}] call"
-    run_call_step
-else
     echo "[3/${TOTAL_STEPS}] call"
     run_call_step
+else
+    echo "[2/${TOTAL_STEPS}] call"
+    run_call_step
     if [[ "${ENABLE_PPD}" == "true" ]]; then
-        echo "[4/${TOTAL_STEPS}] ppd"
+        echo "[3/${TOTAL_STEPS}] ppd"
         run_ppd_step
     fi
 fi
 
-# ── step 5: plot ─────────────────────────────────────────────────────────────
+# ── step 3/4: plot ───────────────────────────────────────────────────────────
 if [[ "${ENABLE_PPD}" == "true" ]]; then
-    echo "[5/${TOTAL_STEPS}] plot"
-else
     echo "[4/${TOTAL_STEPS}] plot"
+else
+    echo "[3/${TOTAL_STEPS}] plot"
 fi
 PLOT_PPD_ARGS=""
 if [[ "${ENABLE_PPD}" == "true" ]]; then
@@ -306,7 +323,7 @@ if [[ -f "${SITE_DATA}" ]]; then
     PLOT_SITE_ARGS="--site-data ${SITE_DATA}"
 fi
 if [[ "${DRY_RUN}" == "true" ]]; then
-    echo "DRY-RUN: ${CLI_PYTHON} -m gatk_sv_ploidy.cli plot -c \"${PLOT_CHROM_STATS}\" -b \"${BIN_STATS}\" -t \"${TRAINING_LOSS}\" -s \"${PREDICTIONS}\" -o \"${PLOT_DIR}\" ${PLOT_SITE_ARGS} ${PLOT_IGNORED_ARGS} ${PLOT_BINQ_ARGS} ${PLOT_PPD_ARGS} ${PLOT_ARGS}"
+    dry_run_step "plot"
 else
     # Include highlight sample if provided
     if [[ -n "${HIGHLIGHT_SAMPLE}" ]]; then
@@ -337,15 +354,15 @@ else
     fi
 fi
 
-# ── step 6: eval (optional — skipped if TRUTH_JSON is unset) ─────────────────
+# ── step 4/5: eval (optional — skipped if TRUTH_JSON is unset) ──────────────
 if [[ -n "${TRUTH_JSON}" ]]; then
     if [[ "${ENABLE_PPD}" == "true" ]]; then
-        echo "[6/${TOTAL_STEPS}] eval"
-    else
         echo "[5/${TOTAL_STEPS}] eval"
+    else
+        echo "[4/${TOTAL_STEPS}] eval"
     fi
     if [[ "${DRY_RUN}" == "true" ]]; then
-        echo "DRY-RUN: ${CLI_PYTHON} -m gatk_sv_ploidy.cli eval -p \"${PREDICTIONS}\" -t \"${TRUTH_JSON}\" -o \"${EVAL_DIR}\""
+        dry_run_step "eval"
     else
         run_cli eval \
             -p "${PREDICTIONS}" \
@@ -354,12 +371,12 @@ if [[ -n "${TRUTH_JSON}" ]]; then
     fi
 else
     if [[ "${ENABLE_PPD}" == "true" ]]; then
-        echo "[6/${TOTAL_STEPS}] eval  (skipped — set TRUTH_JSON to enable)"
-    else
         echo "[5/${TOTAL_STEPS}] eval  (skipped — set TRUTH_JSON to enable)"
+    else
+        echo "[4/${TOTAL_STEPS}] eval  (skipped — set TRUTH_JSON to enable)"
     fi
 fi
 
 echo ""
 echo "=== pipeline complete ==="
-echo "  Outputs in: ${WORK_DIR}"
+echo "  Outputs written under configured work directory"

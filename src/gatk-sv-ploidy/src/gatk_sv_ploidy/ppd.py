@@ -16,20 +16,20 @@ location-scale residual distributions:
 .. math::
 
     p(\tilde{d} | x) = \sum_{c=0}^{5} p(c | x)
-        \cdot \mathcal{N}(\tilde{d} \mid c \cdot b_i + \epsilon_i,
+        \cdot \mathcal{N}(\tilde{d} \mid c \cdot b_i + \epsilon_{ij},
                            \sigma^2_{ij})
 
-where *b_i* is the MAP ``bin_bias``, *\epsilon_i* is the MAP additive
+where *b_i* is the MAP ``bin_bias``, *\epsilon_{ij}* is the MAP additive
 background depth, and *p(c | x)* is the analytical CN posterior.
 
 For ``negative_binomial`` fits on raw counts, the predictive mean becomes
 
 .. math::
 
-    \mu_{ij}(c) = \ell_i \cdot s_j \cdot (c \cdot b_i + \epsilon_i) / 2
+    \mu_{ij}(c) = \ell_i \cdot s_j \cdot (c \cdot b_i + \epsilon_{ij}) / 2
 
-with *\ell_i* the bin length in kilobases and *s_j* the MAP sample-depth
-latent, and the predictive variance follows
+with *\ell_i* the bin length in kilobases, *s_j* the MAP sample-depth
+latent. The predictive variance follows
 
 .. math::
 
@@ -49,6 +49,7 @@ import torch
 from scipy import stats as sp_stats
 
 from gatk_sv_ploidy._util import (
+    compose_additive_background_matrix,
     DEPTH_SPACES,
     read_observation_type,
     validate_depth_space,
@@ -57,6 +58,8 @@ from gatk_sv_ploidy.data import DepthData, load_site_data
 from gatk_sv_ploidy.infer import load_inference_artifacts
 from gatk_sv_ploidy.models import (
     CNVModel,
+    DEFAULT_BACKGROUND_BIN_SCALE,
+    DEFAULT_BACKGROUND_SAMPLE_SCALE,
     _matched_residual_scale,
     _normalize_obs_likelihood_name,
     _precompute_af_table,
@@ -182,6 +185,28 @@ def _build_model_from_artifacts(
         ),
         var_bin=float(np.asarray(map_estimates.get("model_var_bin", 0.001)).item()),
         epsilon_mean=float(np.asarray(map_estimates.get("epsilon_mean", 0.0)).item()),
+        epsilon_concentration=float(
+            np.asarray(map_estimates.get("model_epsilon_concentration", 1.0)).item()
+        ),
+        background_factors=int(
+            np.asarray(map_estimates.get("model_background_factors", 0)).item()
+        ),
+        background_sample_scale=float(
+            np.asarray(
+                map_estimates.get(
+                    "model_background_sample_scale",
+                    DEFAULT_BACKGROUND_SAMPLE_SCALE,
+                )
+            ).item()
+        ),
+        background_bin_scale=float(
+            np.asarray(
+                map_estimates.get(
+                    "model_background_bin_scale",
+                    DEFAULT_BACKGROUND_BIN_SCALE,
+                )
+            ).item()
+        ),
         device=device,
         dtype=dtype,
         guide_type=str(np.asarray(map_estimates.get("model_guide_type", "delta")).item()),
@@ -227,27 +252,35 @@ def _build_model_from_artifacts(
 def _sample_ppd_observation(
     data: DepthData,
     rng: np.random.RandomState,
-    cn_probs: np.ndarray,
+    discrete_posterior: Dict[str, np.ndarray],
     continuous_maps: Dict[str, np.ndarray],
     obs_likelihood: str,
     obs_df: float,
 ) -> np.ndarray:
     """Sample one posterior predictive observation matrix."""
+    cn_probs = discrete_posterior["cn_posterior"]
+    n_bins, n_samples, n_states = cn_probs.shape
     bin_bias = np.atleast_1d(np.asarray(continuous_maps["bin_bias"]).squeeze())
     sample_var = np.atleast_1d(np.asarray(continuous_maps["sample_var"]).squeeze())
     bin_var = np.atleast_1d(np.asarray(continuous_maps["bin_var"]).squeeze())
-    bin_epsilon = np.atleast_1d(
-        np.asarray(continuous_maps.get("bin_epsilon", np.zeros_like(bin_bias))).squeeze()
+    additive_background = compose_additive_background_matrix(
+        continuous_maps.get("bin_epsilon"),
+        n_bins,
+        n_samples,
+        dtype=np.float64,
+        contig_index=data.contig_index.detach().cpu().numpy(),
+        n_contigs=data.n_contigs,
+        background_bin_factors=continuous_maps.get("background_bin_factors"),
+        background_sample_factors=continuous_maps.get("background_sample_factors"),
     )
 
-    n_bins, n_samples, n_states = cn_probs.shape
     flat_probs = cn_probs.reshape(-1, n_states)
     cum = np.cumsum(flat_probs, axis=1)
     u = rng.uniform(size=(flat_probs.shape[0], 1))
     cn_sample = (u < cum).argmax(axis=1).reshape(n_bins, n_samples)
 
     expected = cn_sample.astype(np.float32) * bin_bias[:, np.newaxis]
-    expected = expected + bin_epsilon[:, np.newaxis]
+    expected = expected + additive_background
 
     if obs_likelihood == "negative_binomial":
         sample_depth = np.atleast_1d(
@@ -260,7 +293,7 @@ def _sample_ppd_observation(
             _raw_expected_depth_units(
                 cn_sample.astype(np.float32),
                 bin_bias[:, np.newaxis],
-                bin_epsilon[:, np.newaxis],
+                additive_background,
             ),
             0.0,
         )
@@ -304,11 +337,11 @@ def generate_ppd_depth(
     2. Draw depth from the configured observation family.
 
     For continuous observation families, the predictive variance is
-    ``(bin_var_i + sample_var_j) × max(c × bin_bias_i + epsilon_i, 1e-3)``.
+    ``(bin_var_i + sample_var_j) × max(c × bin_bias_i + additive_background_{ij}, 1e-3)``.
 
     For the negative-binomial observation family on raw counts, the
     predictive mean is
-    ``bin_length_kb_i × sample_depth_j × (c × bin_bias_i + epsilon_i) / 2`` and
+    ``bin_length_kb_i × sample_depth_j × (c × bin_bias_i + additive_background_{ij}) / 2`` and
     the predictive variance is
     ``μ + (bin_var_i + sample_var_j) × μ²``.
 
@@ -373,7 +406,7 @@ def generate_ppd_depth(
                 draws[out_idx] = _sample_ppd_observation(
                     data,
                     rng,
-                    draw_post["cn_posterior"],
+                    draw_post,
                     draw_maps,
                     obs_likelihood,
                     obs_df,
@@ -385,13 +418,12 @@ def generate_ppd_depth(
             "falling back to plug-in PPD.",
         )
 
-    cn_probs = cn_posterior["cn_posterior"]
     draws = np.empty((n_draws, data.n_bins, data.n_samples), dtype=np.float32)
     for d in range(n_draws):
         draws[d] = _sample_ppd_observation(
             data,
             rng,
-            cn_probs,
+            cn_posterior,
             map_estimates,
             obs_likelihood,
             obs_df,
@@ -793,7 +825,7 @@ def main() -> None:
     os.makedirs(args.output_dir, exist_ok=True)
 
     # ── load inference artifacts ────────────────────────────────────────
-    logger.info("Loading inference artifacts: %s", args.artifacts)
+    logger.info("Loading inference artifacts.")
     map_est, cn_post = load_inference_artifacts(args.artifacts)
     obs_likelihood = _normalize_obs_likelihood_name(
         np.asarray(map_est.get("obs_likelihood", "normal")).item()
@@ -806,7 +838,7 @@ def main() -> None:
     )
 
     # ── load data ───────────────────────────────────────────────────────
-    logger.info("Loading preprocessed depth: %s", args.input)
+    logger.info("Loading preprocessed depth.")
     df = pd.read_csv(args.input, sep="\t", index_col=0)
 
     sd = None
@@ -832,14 +864,14 @@ def main() -> None:
     # ── save raw PPD draws (compressed) ─────────────────────────────────
     draws_path = os.path.join(args.output_dir, "ppd_draws.npz")
     np.savez_compressed(draws_path, ppd_draws=ppd_draws)
-    logger.info("PPD draws saved to %s", draws_path)
+    logger.info("PPD draws saved.")
 
     # ── per-bin summary ─────────────────────────────────────────────────
     logger.info("Computing per-bin PPD summary …")
     ppd_bin_df = compute_ppd_bin_summary(data, ppd_draws, map_est, cn_post)
     ppd_bin_path = os.path.join(args.output_dir, "ppd_bin_summary.tsv.gz")
     ppd_bin_df.to_csv(ppd_bin_path, sep="\t", index=False, compression="gzip")
-    logger.info("PPD bin summary saved to %s", ppd_bin_path)
+    logger.info("PPD bin summary saved.")
 
     logger.info("Computing per-bin PPD quality summary …")
     ppd_quality_df = compute_ppd_bin_quality_summary(ppd_bin_df)
@@ -852,21 +884,21 @@ def main() -> None:
         )
     ppd_quality_path = os.path.join(args.output_dir, "ppd_bin_quality.tsv")
     ppd_quality_df.to_csv(ppd_quality_path, sep="\t", index=False)
-    logger.info("PPD bin quality summary saved to %s", ppd_quality_path)
+    logger.info("PPD bin quality summary saved.")
 
     # ── per-chromosome summary ──────────────────────────────────────────
     logger.info("Computing per-chromosome PPD summary …")
     ppd_chr_df = compute_ppd_chromosome_summary(data, ppd_draws, cn_post)
     ppd_chr_path = os.path.join(args.output_dir, "ppd_chromosome_summary.tsv")
     ppd_chr_df.to_csv(ppd_chr_path, sep="\t", index=False)
-    logger.info("PPD chromosome summary saved to %s", ppd_chr_path)
+    logger.info("PPD chromosome summary saved.")
 
     # ── global calibration summary ──────────────────────────────────────
     logger.info("Computing global calibration summary …")
     ppd_global_df = compute_ppd_global_summary(ppd_bin_df)
     ppd_global_path = os.path.join(args.output_dir, "ppd_global_summary.tsv")
     ppd_global_df.to_csv(ppd_global_path, sep="\t", index=False)
-    logger.info("PPD global summary saved to %s", ppd_global_path)
+    logger.info("PPD global summary saved.")
 
     # ── print key calibration metrics ───────────────────────────────────
     row = ppd_global_df.iloc[0]

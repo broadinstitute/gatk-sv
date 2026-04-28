@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -113,6 +113,274 @@ def load_exclusion_ids(path: str) -> List[str]:
     """
     with open(path) as fh:
         return [line.strip() for line in fh if line.strip()]
+
+
+def safe_path_label(path: str) -> str:
+    """Return a display-safe path label for logs."""
+    path_str = str(path)
+    stripped = path_str.rstrip(os.sep)
+    if not stripped:
+        return path_str
+    return os.path.basename(stripped) or stripped
+
+
+def summarize_numeric_array(
+    values: np.ndarray | Sequence[float],
+) -> dict[str, float | int]:
+    """Summarize numeric values with privacy-safe quantiles."""
+    arr = np.asarray(values, dtype=np.float64).reshape(-1)
+    finite = arr[np.isfinite(arr)]
+    summary: dict[str, float | int] = {
+        "n_total": int(arr.size),
+        "n_finite": int(finite.size),
+    }
+    if finite.size == 0:
+        return summary
+
+    quantiles = np.quantile(finite, [0.05, 0.25, 0.50, 0.75, 0.95])
+    summary.update(
+        {
+            "mean": float(finite.mean()),
+            "sd": float(finite.std(ddof=0)),
+            "p05": float(quantiles[0]),
+            "p25": float(quantiles[1]),
+            "median": float(quantiles[2]),
+            "p75": float(quantiles[3]),
+            "p95": float(quantiles[4]),
+        }
+    )
+    return summary
+
+
+def coerce_bin_epsilon_matrix(
+    values: np.ndarray | Sequence[float] | float | None,
+    n_bins: int,
+    n_samples: int,
+    dtype: np.dtype | type = np.float64,
+    contig_index: np.ndarray | Sequence[int] | None = None,
+    n_contigs: int | None = None,
+) -> np.ndarray:
+    """Return ``bin_epsilon`` as a ``(n_bins, n_samples)`` matrix.
+
+    Legacy artifacts stored one epsilon value per bin. Newer runs may store a
+    separate value for each bin / sample pair. Current runs may instead store
+    one value per contig / sample pair. This helper accepts all of those
+    forms and expands them to the effective per-bin matrix.
+    """
+    contig_index_arr = None
+    if contig_index is not None:
+        contig_index_arr = np.asarray(contig_index, dtype=np.int64).reshape(-1)
+        if contig_index_arr.shape[0] != n_bins:
+            raise ValueError("contig_index must have length n_bins.")
+
+    if values is None:
+        return np.zeros((n_bins, n_samples), dtype=dtype)
+
+    arr = np.asarray(values, dtype=dtype)
+    if arr.ndim > 2:
+        arr = np.squeeze(arr)
+    if arr.ndim == 0:
+        return np.full((n_bins, n_samples), float(arr), dtype=dtype)
+
+    if arr.ndim == 1:
+        if n_bins == 1 and arr.shape[0] == n_samples:
+            return arr.reshape(1, n_samples).astype(dtype, copy=False)
+        if arr.shape[0] == n_bins:
+            return np.broadcast_to(arr[:, np.newaxis], (n_bins, n_samples)).astype(
+                dtype,
+                copy=False,
+            )
+        if (
+            contig_index_arr is not None and
+            n_contigs is not None and
+            arr.shape[0] == n_contigs
+        ):
+            expanded = arr[contig_index_arr]
+            return np.broadcast_to(
+                expanded[:, np.newaxis],
+                (n_bins, n_samples),
+            ).astype(dtype, copy=False)
+        raise ValueError(
+            "bin_epsilon must have length n_bins, length n_contigs, or shape "
+            "(n_bins, n_samples)."
+        )
+
+    if arr.ndim == 2:
+        if arr.shape == (n_bins, n_samples):
+            return arr.astype(dtype, copy=False)
+        if arr.shape == (n_bins, 1):
+            return np.broadcast_to(arr, (n_bins, n_samples)).astype(
+                dtype,
+                copy=False,
+            )
+        if arr.shape == (1, n_samples):
+            return np.broadcast_to(arr, (n_bins, n_samples)).astype(
+                dtype,
+                copy=False,
+            )
+        if (
+            contig_index_arr is not None and
+            n_contigs is not None and
+            arr.shape == (n_contigs, n_samples)
+        ):
+            return arr[contig_index_arr, :].astype(dtype, copy=False)
+        if (
+            contig_index_arr is not None and
+            n_contigs is not None and
+            arr.shape == (n_contigs, 1)
+        ):
+            expanded = arr[contig_index_arr, :]
+            return np.broadcast_to(expanded, (n_bins, n_samples)).astype(
+                dtype,
+                copy=False,
+            )
+        raise ValueError(
+            "bin_epsilon must have shape (n_bins, n_samples) or "
+            "(n_contigs, n_samples)."
+        )
+
+    raise ValueError("bin_epsilon must be scalar, 1D, or 2D.")
+
+
+def _coerce_background_bin_factor_matrix(
+    values: np.ndarray | Sequence[float],
+    n_bins: int,
+    dtype: np.dtype | type,
+) -> np.ndarray:
+    """Return normalized per-bin background factors as an ``(n_bins, k)`` matrix."""
+    arr = np.asarray(values, dtype=dtype)
+    if arr.ndim > 2:
+        arr = np.squeeze(arr)
+    if arr.ndim == 1:
+        if arr.shape[0] != n_bins:
+            raise ValueError("background_bin_factors must have length n_bins.")
+        arr = arr[:, np.newaxis]
+    if arr.ndim != 2 or arr.shape[0] != n_bins:
+        raise ValueError("background_bin_factors must have shape (n_bins, k).")
+    if arr.shape[1] == 0:
+        return arr.astype(dtype, copy=False)
+    column_means = np.maximum(arr.mean(axis=0, keepdims=True), 1e-8)
+    return (arr / column_means).astype(dtype, copy=False)
+
+
+def _coerce_background_sample_factor_matrix(
+    values: np.ndarray | Sequence[float],
+    n_samples: int,
+    n_factors: int,
+    dtype: np.dtype | type,
+) -> np.ndarray:
+    """Return per-sample background factors as a ``(k, n_samples)`` matrix."""
+    arr = np.asarray(values, dtype=dtype)
+    if arr.ndim > 2:
+        arr = np.squeeze(arr)
+    if arr.ndim == 1:
+        if n_factors != 1 or arr.shape[0] != n_samples:
+            raise ValueError(
+                "background_sample_factors must have shape (k, n_samples)."
+            )
+        arr = arr[np.newaxis, :]
+    if arr.ndim != 2:
+        raise ValueError("background_sample_factors must be 1D or 2D.")
+    if arr.shape == (n_factors, n_samples):
+        return arr.astype(dtype, copy=False)
+    if arr.shape == (n_samples, n_factors) and n_samples != n_factors:
+        return arr.T.astype(dtype, copy=False)
+    raise ValueError("background_sample_factors must have shape (k, n_samples).")
+
+
+def compose_additive_background_matrix(
+    bin_epsilon: np.ndarray | Sequence[float] | float | None,
+    n_bins: int,
+    n_samples: int,
+    dtype: np.dtype | type = np.float64,
+    contig_index: np.ndarray | Sequence[int] | None = None,
+    n_contigs: int | None = None,
+    background_bin_factors: np.ndarray | Sequence[float] | None = None,
+    background_sample_factors: np.ndarray | Sequence[float] | None = None,
+) -> np.ndarray:
+    """Compose the effective additive background matrix.
+
+    This includes the contig-shared ``bin_epsilon`` floor and any low-rank
+    additive background factors stored as ``background_bin_factors`` and
+    ``background_sample_factors``.
+    """
+    additive = coerce_bin_epsilon_matrix(
+        bin_epsilon,
+        n_bins,
+        n_samples,
+        dtype=dtype,
+        contig_index=contig_index,
+        n_contigs=n_contigs,
+    )
+    if background_bin_factors is None and background_sample_factors is None:
+        return additive
+    if background_bin_factors is None or background_sample_factors is None:
+        raise ValueError(
+            "background_bin_factors and background_sample_factors must both be provided."
+        )
+    bin_factor_matrix = _coerce_background_bin_factor_matrix(
+        background_bin_factors,
+        n_bins,
+        dtype,
+    )
+    sample_factor_matrix = _coerce_background_sample_factor_matrix(
+        background_sample_factors,
+        n_samples,
+        bin_factor_matrix.shape[1],
+        dtype,
+    )
+    if bin_factor_matrix.shape[1] == 0:
+        return additive
+    return additive + bin_factor_matrix @ sample_factor_matrix
+
+
+def format_numeric_summary(
+    label: str,
+    values: np.ndarray | Sequence[float],
+    precision: int = 3,
+) -> str:
+    """Format a privacy-safe numeric summary string for logs."""
+    summary = summarize_numeric_array(values)
+    n_total = int(summary["n_total"])
+    n_finite = int(summary["n_finite"])
+    if n_total == 0:
+        return f"{label}: n=0"
+    if n_finite == 0:
+        return f"{label}: n={n_total}, finite=0"
+
+    fmt = f"{{:.{precision}f}}"
+    return (
+        f"{label}: n={n_total}, finite={n_finite}, "
+        f"mean={fmt.format(float(summary['mean']))}, "
+        f"sd={fmt.format(float(summary['sd']))}, "
+        f"p05={fmt.format(float(summary['p05']))}, "
+        f"p25={fmt.format(float(summary['p25']))}, "
+        f"median={fmt.format(float(summary['median']))}, "
+        f"p75={fmt.format(float(summary['p75']))}, "
+        f"p95={fmt.format(float(summary['p95']))}"
+    )
+
+
+def format_count_summary(
+    label: str,
+    counts: np.ndarray | Sequence[int],
+    names: Optional[Sequence[str]] = None,
+) -> str:
+    """Format count and fraction summaries for categorical diagnostics."""
+    count_arr = np.asarray(counts, dtype=np.int64).reshape(-1)
+    total = int(count_arr.sum())
+    if names is None:
+        names = [str(i) for i in range(count_arr.size)]
+    if len(names) != count_arr.size:
+        raise ValueError("names must match the number of counts")
+    if total == 0:
+        return f"{label}: total=0"
+
+    parts = [
+        f"{name}={int(count)} ({count / total:.1%})"
+        for name, count in zip(names, count_arr)
+    ]
+    return f"{label}: total={total}, " + ", ".join(parts)
 
 
 def compute_cnq_from_probabilities(

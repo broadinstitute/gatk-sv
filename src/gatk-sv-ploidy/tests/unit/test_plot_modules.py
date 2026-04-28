@@ -32,10 +32,12 @@ from gatk_sv_ploidy.plot import (
     _run_ploidy_plots,
     parse_args,
     plot_aneuploid_histograms,
+    plot_background_factor_diagnostics,
     plot_binq_genome_profile,
     plot_chromosome_cn_heatmap,
     plot_chromosome_plq_heatmap,
     plot_median_depth_distributions,
+    plot_sample_depth_diagnostics,
     plot_site_af_estimates,
     plot_training_loss_with_gradient,
     main,
@@ -58,6 +60,7 @@ def _small_chrom_df() -> pd.DataFrame:
 def _small_bin_df() -> pd.DataFrame:
     rows = []
     for sample, x_cn, y_cn, chr21_cn in [("S1", 1, 1, 2), ("S2", 2, 0, 3)]:
+        sample_depth = 1.0 if sample == "S1" else 1.5
         for chrom, cn, depth in [("chr21", chr21_cn, float(chr21_cn)), ("chrX", x_cn, float(x_cn)), ("chrY", y_cn, float(y_cn))]:
             for start in [0, 100]:
                 probs = [0.01] * 6
@@ -75,6 +78,9 @@ def _small_bin_df() -> pd.DataFrame:
                         "binq_value": 25.0 if start == 0 else 40.0,
                         "bin_bias": 1.0,
                         "bin_var": 0.04,
+                        "bin_epsilon": 0.0,
+                        "bin_length_kb": 1.0,
+                        "sample_depth": sample_depth,
                         "sample_var": 0.09 if sample == "S1" else 0.16,
                         "mean_het_af": 0.5,
                         "n_het_sites": 2,
@@ -264,6 +270,7 @@ def test_plot_helpers_prefer_plot_normalized_depth_columns() -> None:
 
     assert plot_chrom_df["median_depth"].iloc[0] == 12.0
     assert plot_bin_df["observed_depth"].iloc[0] == 7.0
+    assert plot_bin_df["raw_observed_depth"].iloc[0] == 2.0
     assert plot_sex_df.loc[plot_sex_df["sample"] == "S1", "chrX_depth"].iloc[0] == 11.0
     assert plot_sex_df.loc[plot_sex_df["sample"] == "S2", "chrY_depth"].iloc[0] == 10.0
 
@@ -405,8 +412,36 @@ def test_plot_module_orchestrators_and_skip_branches(tmp_path) -> None:
 
     assert (tmp_path / "ppd" / "ppd_obs_vs_predicted.png").exists()
     assert (tmp_path / "diagnostics" / "parameter_diagnostics.png").exists()
+    assert (tmp_path / "diagnostics" / "sample_depth_diagnostics.png").exists()
     assert (tmp_path / "diagnostics" / "chromosome_plq_heatmap.png").exists()
     assert (tmp_path / "diagnostics" / "binq_genome_profile.png").exists()
+
+
+def test_plot_sample_depth_diagnostics_outputs(tmp_path) -> None:
+    plot_sample_depth_diagnostics(_small_bin_df(), str(tmp_path))
+
+    assert (tmp_path / "diagnostics" / "sample_depth_diagnostics.png").exists()
+    summary_path = tmp_path / "diagnostics" / "sample_depth_diagnostics.tsv.gz"
+    assert summary_path.exists()
+
+    summary_df = pd.read_csv(summary_path, sep="\t", compression="gzip")
+    assert list(summary_df["sample"]) == ["S1", "S2"]
+    np.testing.assert_allclose(
+        summary_df["sample_depth_init_anchor"].to_numpy(dtype=float),
+        [2.0, 3.0],
+    )
+    np.testing.assert_allclose(
+        summary_df["sample_depth_map"].to_numpy(dtype=float),
+        [1.0, 1.5],
+    )
+    np.testing.assert_allclose(
+        summary_df["init_to_fitted_ratio"].to_numpy(dtype=float),
+        [2.0, 2.0],
+    )
+    np.testing.assert_allclose(
+        summary_df["fitted_to_init_ratio"].to_numpy(dtype=float),
+        [0.5, 0.5],
+    )
 
 
 def test_plot_site_af_estimates_outputs(tmp_path) -> None:
@@ -490,3 +525,115 @@ def test_plot_parse_args_and_warning_only_paths(tmp_path, monkeypatch) -> None:
     main()
     assert (tmp_path / "out" / "sex_assignments.png").exists()
     assert (tmp_path / "out" / "diagnostics" / "site_af_input_vs_effective.png").exists()
+
+
+def test_plot_main_runs_ppd_before_sample_plot_branches(tmp_path, monkeypatch) -> None:
+    chrom_stats = tmp_path / "chrom.tsv"
+    _small_chrom_df().to_csv(chrom_stats, sep="\t", index=False)
+
+    bin_stats = tmp_path / "bin.tsv.gz"
+    _small_bin_df().to_csv(bin_stats, sep="\t", index=False, compression="gzip")
+
+    training_loss = tmp_path / "training_loss.tsv"
+    _small_loss_df().to_csv(training_loss, sep="\t", index=False)
+
+    sex_assignments = tmp_path / "sex.tsv"
+    pd.DataFrame(
+        {
+            "sample": ["S1", "S2"],
+            "sex": ["MALE", "FEMALE"],
+            "chrX_depth": [1.0, 2.0],
+            "chrY_depth": [1.0, 0.0],
+        }
+    ).to_csv(sex_assignments, sep="\t", index=False)
+
+    ppd_bin_df, ppd_chr_df = _small_ppd_frames()
+    ppd_bin = tmp_path / "ppd_bin.tsv.gz"
+    ppd_chr = tmp_path / "ppd_chr.tsv"
+    ppd_bin_df.to_csv(ppd_bin, sep="\t", index=False, compression="gzip")
+    ppd_chr_df.to_csv(ppd_chr, sep="\t", index=False)
+
+    call_order: list[str] = []
+
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot.plot_histograms_by_chr_type",
+        lambda *args, **kwargs: call_order.append("hist"),
+    )
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot.plot_aneuploid_histograms",
+        lambda *args, **kwargs: call_order.append("aneuploid_hist"),
+    )
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot.plot_median_depth_distributions",
+        lambda *args, **kwargs: call_order.append("median_depth"),
+    )
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot.run_ppd_plots",
+        lambda *args, **kwargs: call_order.append("ppd"),
+    )
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot._run_ploidy_plots",
+        lambda *args, **kwargs: call_order.append("ploidy"),
+    )
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot._run_aneuploidy_plots",
+        lambda *args, **kwargs: call_order.append("sample_plots"),
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "gatk-sv-ploidy plot",
+            "--chrom-stats",
+            str(chrom_stats),
+            "--bin-stats",
+            str(bin_stats),
+            "--training-loss",
+            str(training_loss),
+            "--sex-assignments",
+            str(sex_assignments),
+            "--ppd-bin-summary",
+            str(ppd_bin),
+            "--ppd-chr-summary",
+            str(ppd_chr),
+            "--output-dir",
+            str(tmp_path / "out"),
+        ],
+    )
+
+    main()
+
+    assert "ppd" in call_order
+    assert "ploidy" in call_order
+    assert "sample_plots" in call_order
+    assert call_order.index("ppd") < call_order.index("ploidy")
+    assert call_order.index("ppd") < call_order.index("sample_plots")
+
+
+def test_plot_background_factor_diagnostics_outputs(tmp_path) -> None:
+    bin_df = _small_bin_df()
+    map_estimates = {
+        "background_bin_factors": np.array(
+            [
+                [0.8, 0.3],
+                [0.9, 0.2],
+                [1.0, 0.4],
+                [1.1, 0.5],
+                [2.0, 1.6],
+                [2.2, 1.8],
+            ],
+            dtype=np.float32,
+        ),
+        "background_sample_factors": np.array(
+            [
+                [0.02, 0.06],
+                [0.01, 0.04],
+            ],
+            dtype=np.float32,
+        ),
+    }
+
+    plot_background_factor_diagnostics(bin_df, map_estimates, str(tmp_path))
+
+    assert (tmp_path / "diagnostics" / "background_factor_diagnostics.png").exists()

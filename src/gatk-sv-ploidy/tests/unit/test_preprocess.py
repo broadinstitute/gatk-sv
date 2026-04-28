@@ -13,6 +13,7 @@ from gatk_sv_ploidy.preprocess import (
     _infer_cohort_major_base,
     _site_nonmajor_total,
     build_per_site_data,
+    clamp_depth_ratio,
     collapse_bins_per_contig,
     filter_low_quality_bins,
     filter_poor_region_bins,
@@ -75,6 +76,26 @@ def test_normalise_depth_scales_autosome_medians_to_two() -> None:
         np.median(normalized.loc[normalized["Chr"] != "chrX", ["S1", "S2"]], axis=0),
         np.array([2.0, 2.0]),
     )
+
+
+def test_clamp_depth_ratio_caps_per_sample_copy_number() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chr18", "chr21", "chrX"],
+            "Start": [0, 100, 200],
+            "End": [100, 200, 300],
+            "S1": [10.0, 10.0, 40.0],
+            "S2": [20.0, 20.0, 80.0],
+        }
+    )
+
+    clamped = clamp_depth_ratio(df, depth_ratio_clamp=6.0)
+    normalized = normalise_depth(clamped)
+
+    assert clamped.loc[2, "S1"] == pytest.approx(30.0)
+    assert clamped.loc[2, "S2"] == pytest.approx(60.0)
+    assert normalized.loc[2, "S1"] == pytest.approx(6.0)
+    assert normalized.loc[2, "S2"] == pytest.approx(6.0)
 
 
 def test_filter_low_quality_bins_removes_cohort_shifted_bin() -> None:
@@ -326,12 +347,50 @@ def test_process_sd_file_collects_cohort_counts(tmp_path) -> None:
         str(sd_path),
         sample_to_idx,
         bin_lookup,
-        position_stride=1,
+        stride=1,
         min_site_depth=10,
     )
     assert total_sites == 2
     assert sorted(site_data[0]) == [20, 75]
     assert site_data[0][20]["values"][0] == (0, 10, 0, 0, 5)
+
+
+def test_process_sd_file_uses_row_stride_for_sd_stride(monkeypatch) -> None:
+    captured: dict[str, int] = {}
+
+    def fake_read_site_depth_tsv(
+        path: str,
+        stride: int = 1,
+        position_stride: int = 0,
+    ) -> pd.DataFrame:
+        captured["stride"] = stride
+        captured["position_stride"] = position_stride
+        return pd.DataFrame(
+            {
+                "contig": ["chr21"],
+                "position": [20],
+                "sample": ["S1"],
+                "A": [10],
+                "C": [0],
+                "G": [0],
+                "T": [5],
+            }
+        )
+
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.preprocess.read_site_depth_tsv",
+        fake_read_site_depth_tsv,
+    )
+
+    _process_sd_file(
+        "dummy.sd.txt.gz",
+        {"S1": 0},
+        {"chr21": (np.array([0]), np.array([0]), np.array([100]))},
+        stride=7,
+        min_site_depth=1,
+    )
+
+    assert captured == {"stride": 7, "position_stride": 0}
 
 
 def test_build_per_site_data_uses_shared_cohort_identity_and_site_limit(tmp_path) -> None:
@@ -410,6 +469,8 @@ def test_preprocess_parse_args_and_main_paths(tmp_path, monkeypatch) -> None:
             str(poor_regions),
             "--site-depth-list",
             str(sd_list),
+                "--sd-stride",
+                "1",
             "--bins-per-contig",
             "1",
             "--min-bins-per-chr",
@@ -453,6 +514,7 @@ def test_preprocess_parse_args_defaults(monkeypatch) -> None:
     args = parse_args()
 
     assert args.bins_per_contig == 30
+    assert args.depth_ratio_clamp == pytest.approx(6.0)
     assert args.output_space == "raw"
     assert args.samples_list is None
     assert args.chrY_median_max == pytest.approx(0.85)
@@ -491,6 +553,8 @@ def test_preprocess_can_subset_samples_from_list(tmp_path, monkeypatch) -> None:
             "raw",
             "--site-depth",
             str(sd_path),
+                "--sd-stride",
+                "1",
             "--bins-per-contig",
             "0",
         ],
@@ -553,3 +617,44 @@ def test_preprocess_can_write_raw_counts(tmp_path, monkeypatch) -> None:
     assert preprocessed.loc["chr13:0-100", "S1"] == pytest.approx(10.0)
     assert preprocessed.loc["chr18:0-100", "S2"] == pytest.approx(24.0)
     assert (output_dir / "observation_type.txt").read_text().strip() == "raw"
+
+
+def test_preprocess_clamps_raw_output_counts(tmp_path, monkeypatch) -> None:
+    raw_path = tmp_path / "raw.tsv"
+    raw_path.write_text(
+        "#Chr\tStart\tEnd\tS1\n"
+        "chr13\t0\t100\t10\n"
+        "chr18\t0\t100\t10\n"
+        "chr21\t0\t100\t10\n"
+        "chrX\t0\t100\t40\n"
+    )
+    output_dir = tmp_path / "out"
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "gatk-sv-ploidy preprocess",
+            "--input",
+            str(raw_path),
+            "--output-dir",
+            str(output_dir),
+            "--skip-bin-filter",
+            "--output-space",
+            "raw",
+            "--min-bins-per-chr",
+            "1",
+            "--bins-per-contig",
+            "0",
+            "--depth-ratio-clamp",
+            "6",
+        ],
+    )
+
+    main()
+
+    preprocessed = pd.read_csv(
+        output_dir / "preprocessed_depth.tsv",
+        sep="\t",
+        index_col=0,
+    )
+    assert preprocessed.loc["chrX:0-100", "S1"] == pytest.approx(30.0)

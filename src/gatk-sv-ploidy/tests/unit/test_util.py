@@ -8,10 +8,13 @@ from gatk_sv_ploidy._util import (
     add_chromosome_labels,
     compute_contig_posterior_from_bin_posteriors,
     compute_plq_from_probabilities,
+    format_count_summary,
     format_column_name,
+    format_numeric_summary,
     get_chromosome_type,
     get_sample_columns,
     load_exclusion_ids,
+    safe_path_label,
     save_and_close_plot,
 )
 
@@ -41,6 +44,17 @@ def test_load_exclusion_ids(tmp_path) -> None:
     path.write_text("a\n\n b \n")
 
     assert load_exclusion_ids(str(path)) == ["a", "b"]
+
+
+def test_safe_log_helpers_format_summaries_without_raw_paths() -> None:
+    assert safe_path_label("/private/tmp/example/file.tsv.gz") == "file.tsv.gz"
+
+    numeric = format_numeric_summary("Example", [1.0, 2.0, 3.0, 4.0])
+    categorical = format_count_summary("States", [1, 3], ["A", "B"])
+
+    assert numeric.startswith("Example: n=4")
+    assert "median=" in numeric
+    assert categorical == "States: total=4, A=1 (25.0%), B=3 (75.0%)"
 
 
 def test_contig_posterior_and_plq_helpers() -> None:

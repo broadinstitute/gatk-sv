@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from gatk_sv_ploidy.call import (
+    _normalize_global_cn_artifact,
     _classify_aneuploidy,
     _classify_sex,
     apply_binq_filter_to_chromosome_stats,
@@ -21,10 +22,25 @@ def test_classify_sex_and_aneuploidy_tables() -> None:
     assert _classify_sex(1, 1) == "MALE"
     assert _classify_sex(2, 0) == "FEMALE"
     assert _classify_sex(3, 0) == "TRIPLE_X"
+    assert _classify_sex(2, 2) == "OTHER"
     assert _classify_sex(8, 1) == "OTHER"
 
     assert _classify_aneuploidy({}, {}, 2, 0) == "NORMAL"
     assert _classify_aneuploidy({"chr21": True}, {"chr21": 3}, 2, 0) == "TRISOMY_21"
+    assert _classify_aneuploidy(
+        {"chr13": True, "chr18": True, "chr21": True},
+        {"chr13": 3, "chr18": 3, "chr21": 3, "chrX": 1, "chrY": 2},
+        1,
+        2,
+        sample_depth_ratio=1.5,
+    ) == "MULTIPLE"
+    assert _classify_aneuploidy(
+        {},
+        {"chr13": 2, "chr18": 2, "chr21": 2, "chrX": 1, "chrY": 1},
+        1,
+        1,
+        sample_depth_ratio=2.0,
+    ) == "NORMAL"
     assert _classify_aneuploidy({"chrX": True}, {"chrX": 1, "chrY": 0}, 1, 0) == "TURNER"
     assert _classify_aneuploidy(
         {"chr13": True, "chr18": True},
@@ -32,6 +48,49 @@ def test_classify_sex_and_aneuploidy_tables() -> None:
         2,
         0,
     ) == "MULTIPLE"
+
+
+def test_normalize_global_cn_artifact_is_no_op() -> None:
+    normalized_cn_map, scale_factor = _normalize_global_cn_artifact(
+        {"chr13": 4, "chr18": 4, "chr21": 4, "chrX": 2, "chrY": 2},
+        sample_depth_ratio=1.0,
+    )
+    assert scale_factor == 1.0
+    assert normalized_cn_map == {
+        "chr13": 4,
+        "chr18": 4,
+        "chr21": 4,
+        "chrX": 2,
+        "chrY": 2,
+    }
+
+    unchanged_cn_map, unchanged_scale = _normalize_global_cn_artifact(
+        {"chr13": 4, "chr18": 4, "chr21": 4, "chrX": 2, "chrY": 2},
+        sample_depth_ratio=2.0,
+    )
+    assert unchanged_scale == 1.0
+    assert unchanged_cn_map["chr13"] == 4
+
+    trisomy_cn_map, trisomy_scale = _normalize_global_cn_artifact(
+        {"chr13": 4, "chr18": 4, "chr21": 5, "chrX": 2, "chrY": 2},
+        sample_depth_ratio=1.0,
+    )
+    assert trisomy_scale == 1.0
+    assert trisomy_cn_map == {
+        "chr13": 4,
+        "chr18": 4,
+        "chr21": 5,
+        "chrX": 2,
+        "chrY": 2,
+    }
+
+    preserved_cn_map, preserved_scale = _normalize_global_cn_artifact(
+        {"chr13": 4, "chr18": 4, "chr21": 4, "chrX": 2, "chrY": 2},
+        sample_depth_ratio=1.0,
+        normalize_doubled_labels=False,
+    )
+    assert preserved_scale == 1.0
+    assert preserved_cn_map["chr13"] == 4
 
 
 def test_assign_and_export_outputs(tmp_path) -> None:
@@ -113,8 +172,118 @@ def test_assign_and_export_outputs(tmp_path) -> None:
 
     export_aneuploid_data(df, str(tmp_path / "aneuploid.tsv"))
     exported = pd.read_csv(tmp_path / "aneuploid.tsv", sep="\t")
-    assert "inferred_sample_std" in exported.columns
+    assert "sample_overdispersion_map" in exported.columns
+    assert "sample_var_map" not in exported.columns
+    assert exported["sample_overdispersion_map"].iloc[0] == pytest.approx(0.09)
     assert "chr_type" not in exported.columns
+
+
+def test_assign_preserves_absolute_cn_labels() -> None:
+    rows = [
+        {
+            "sample": "reference",
+            "chromosome": chrom,
+            "copy_number": copy_number,
+            "is_aneuploid": False,
+            "mean_cn_probability": 0.95,
+            "median_depth": 1.0,
+            "sample_depth_map": 110.0,
+        }
+        for chrom, copy_number in (
+            ("chr13", 2),
+            ("chr18", 2),
+            ("chr21", 2),
+            ("chrX", 1),
+            ("chrY", 1),
+        )
+    ]
+    rows.extend(
+        {
+            "sample": "artifact",
+            "chromosome": chrom,
+            "copy_number": copy_number,
+            "is_aneuploid": True,
+            "mean_cn_probability": 0.95,
+            "median_depth": 1.0,
+            "sample_depth_map": 100.0,
+        }
+        for chrom, copy_number in (
+            ("chr13", 4),
+            ("chr18", 4),
+            ("chr21", 4),
+            ("chrX", 2),
+            ("chrY", 2),
+        )
+    )
+    rows.extend(
+        {
+            "sample": "tetraploid",
+            "chromosome": chrom,
+            "copy_number": copy_number,
+            "is_aneuploid": True,
+            "mean_cn_probability": 0.95,
+            "median_depth": 1.0,
+            "sample_depth_map": 240.0,
+        }
+        for chrom, copy_number in (
+            ("chr13", 4),
+            ("chr18", 4),
+            ("chr21", 4),
+            ("chrX", 2),
+            ("chrY", 2),
+        )
+    )
+    df = pd.DataFrame(rows)
+
+    pred_df = assign_sex_and_aneuploidy_types(df)
+    indexed_pred_df = pred_df.set_index("sample")
+
+    assert indexed_pred_df.loc["artifact", "sex"] == "OTHER"
+    assert indexed_pred_df.loc["artifact", "predicted_aneuploidy_type"] == "MULTIPLE"
+    assert indexed_pred_df.loc["artifact", "chrX_CN"] == 2
+    assert indexed_pred_df.loc["artifact", "chrY_CN"] == 2
+    assert indexed_pred_df.loc["artifact", "global_cn_scale_factor"] == 1.0
+
+    assert indexed_pred_df.loc["tetraploid", "sex"] == "OTHER"
+    assert indexed_pred_df.loc["tetraploid", "predicted_aneuploidy_type"] == "MULTIPLE"
+    assert indexed_pred_df.loc["tetraploid", "chrX_CN"] == 2
+    assert indexed_pred_df.loc["tetraploid", "chrY_CN"] == 2
+    assert indexed_pred_df.loc["tetraploid", "global_cn_scale_factor"] == 1.0
+
+
+def test_assign_normalize_doubled_labels_flag_is_ignored() -> None:
+    df = pd.DataFrame(
+        [
+            {
+                "sample": "tetraploid",
+                "chromosome": chrom,
+                "copy_number": copy_number,
+                "is_aneuploid": True,
+                "mean_cn_probability": 0.95,
+                "median_depth": 1.0,
+                "sample_depth_map": 110.0,
+            }
+            for chrom, copy_number in (
+                ("chr13", 4),
+                ("chr18", 4),
+                ("chr21", 4),
+                ("chrX", 2),
+                ("chrY", 2),
+            )
+        ]
+    )
+
+    pred_default = assign_sex_and_aneuploidy_types(df).set_index("sample")
+    pred_df = assign_sex_and_aneuploidy_types(
+        df,
+        normalize_doubled_labels=False,
+    ).set_index("sample")
+
+    assert pred_default.loc["tetraploid", "sex"] == "OTHER"
+    assert pred_default.loc["tetraploid", "predicted_aneuploidy_type"] == "MULTIPLE"
+    assert pred_df.loc["tetraploid", "sex"] == "OTHER"
+    assert pred_df.loc["tetraploid", "predicted_aneuploidy_type"] == "MULTIPLE"
+    assert pred_df.loc["tetraploid", "global_cn_scale_factor"] == 1.0
 
 
 def test_apply_binq_filter_to_chromosome_stats_rebuilds_autosome_calls() -> None:

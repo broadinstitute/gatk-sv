@@ -177,14 +177,14 @@ def _draw_site_af_scatter(
             rasterized=True, zorder=2, linewidths=0,
         )
         logger.info(
-            "  AF scatter: %d site points for %s",
-            len(scatter_x), sample_data["sample"].iloc[0],
+            "  AF scatter: %d site points",
+            len(scatter_x),
         )
 
     if roh_x:
         logger.info(
-            "  AF scatter: %d homozygous bins for %s",
-            len(roh_x), sample_data["sample"].iloc[0],
+            "  AF scatter: %d homozygous bins",
+            len(roh_x),
         )
 
 
@@ -422,7 +422,6 @@ def plot_sample_with_variance(
                 width=bar_widths[finite_binq],
                 color="#7E57C2",
                 alpha=0.85,
-                linewidth=0,
                 align="edge",
             )
         binq_label = "BINQ"
@@ -431,17 +430,27 @@ def plot_sample_with_variance(
             if not field_series.empty:
                 binq_label = field_series.iloc[0]
         ax.set_ylabel(binq_label)
-        ax.set_ylim([0, 99])
         ax.set_xlim([x_min, x_max])
         ax.grid(True, axis="y", alpha=0.3)
 
-    # Sample variance histogram (half height)
+    # Sample overdispersion histogram (half height)
     ax = ax_hist
-    ax.hist(np.sqrt(all_sample_vars), bins=30, alpha=0.7, edgecolor="black",
-            linewidth=0.5, color="gray")
-    ax.axvline(np.sqrt(svar), color="red", linestyle="--", linewidth=2,
-               label=f"This sample: {np.sqrt(svar):.3f}")
-    ax.set_xlabel("Sample stdev")
+    ax.hist(
+        all_sample_vars,
+        bins=30,
+        alpha=0.7,
+        edgecolor="black",
+        linewidth=0.5,
+        color="gray",
+    )
+    ax.axvline(
+        svar,
+        color="red",
+        linestyle="--",
+        linewidth=2,
+        label=f"This sample: {svar:.3f}",
+    )
+    ax.set_xlabel("Sample overdispersion")
     ax.set_ylabel("Count")
     ax.set_yscale("log")
     ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.02), borderaxespad=0)

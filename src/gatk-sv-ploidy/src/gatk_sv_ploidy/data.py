@@ -165,6 +165,16 @@ class DepthData:
             device=device,
         )
         self.sample_ids: List[str] = sample_cols
+        self.contig_names: np.ndarray = pd.Index(self.chr).unique().to_numpy()
+        contig_lookup = {
+            contig: idx for idx, contig in enumerate(self.contig_names.tolist())
+        }
+        self.contig_index = torch.tensor(
+            np.array([contig_lookup[contig] for contig in self.chr], dtype=np.int64),
+            dtype=torch.long,
+            device=device,
+        )
+        self.n_contigs: int = int(len(self.contig_names))
 
         # ── chromosome type tensor (0=autosome, 1=chrX, 2=chrY) ────────
         _chr_type_map = {c: 0 for c in AUTOSOME_NAMES}
@@ -279,7 +289,7 @@ def read_depth_tsv(path: str) -> pd.DataFrame:
     Raises:
         Exception: Propagated from :func:`pandas.read_csv`.
     """
-    logger.info("Loading: %s", path)
+    logger.info("Loading depth table.")
     df = pd.read_csv(path, sep="\t", compression="infer")
 
     # Normalise chromosome column name
@@ -312,7 +322,7 @@ def load_site_data(path: str) -> Dict[str, np.ndarray]:
     Returns:
         Dictionary with NumPy arrays ready for :class:`DepthData`.
     """
-    logger.info("Loading per-site allele data: %s", path)
+    logger.info("Loading per-site allele data.")
     npz = np.load(path, allow_pickle=True)
     result = {
         "site_alt": npz["site_alt"],

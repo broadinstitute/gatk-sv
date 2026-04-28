@@ -216,6 +216,48 @@ def test_build_model_from_artifacts_restores_af_evidence_mode() -> None:
     assert model.af_evidence_mode == "relative"
 
 
+def test_build_model_from_artifacts_defaults_old_epsilon_prior_to_exponential() -> None:
+    model = _build_model_from_artifacts(
+        {
+            "epsilon_mean": np.asarray(0.1),
+        },
+        device="cpu",
+        obs_likelihood="normal",
+        obs_df=3.5,
+    )
+
+    assert model.epsilon_mean == pytest.approx(0.1)
+    assert model.epsilon_concentration == pytest.approx(1.0)
+
+
+def test_build_model_from_artifacts_restores_sparse_gamma_epsilon_prior() -> None:
+    model = _build_model_from_artifacts(
+        {
+            "epsilon_mean": np.asarray(0.1),
+            "model_epsilon_concentration": np.asarray(0.5),
+        },
+        device="cpu",
+        obs_likelihood="normal",
+        obs_df=3.5,
+    )
+
+    assert model.epsilon_mean == pytest.approx(0.1)
+    assert model.epsilon_concentration == pytest.approx(0.5)
+
+
+def test_build_model_from_artifacts_defaults_old_background_factors_to_disabled() -> None:
+    model = _build_model_from_artifacts(
+        {
+            "epsilon_mean": np.asarray(0.1),
+        },
+        device="cpu",
+        obs_likelihood="normal",
+        obs_df=3.5,
+    )
+
+    assert model.background_factors == 0
+
+
 def test_generate_ppd_depth_uses_bin_epsilon(tiny_depth_df: pd.DataFrame) -> None:
     data = DepthData(tiny_depth_df.iloc[[3]], clamp_threshold=None)
     cn_post = _fake_cn_posterior(data.n_bins, data.n_samples, cn_state=0)
@@ -236,14 +278,103 @@ def test_generate_ppd_depth_uses_bin_epsilon(tiny_depth_df: pd.DataFrame) -> Non
         data,
         {
             **base_map,
-            "bin_epsilon": np.full(data.n_bins, 0.2, dtype=np.float32),
+            "bin_epsilon": np.array([[0.0, 0.2]], dtype=np.float32),
         },
         cn_post,
         n_draws=200,
         seed=13,
     )
 
-    assert float(draws_with_epsilon.mean()) > float(draws_without_epsilon.mean()) + 0.15
+    assert float(draws_with_epsilon[:, 0, 1].mean()) > float(draws_without_epsilon[:, 0, 1].mean()) + 0.15
+    assert abs(float(draws_with_epsilon[:, 0, 0].mean()) - float(draws_without_epsilon[:, 0, 0].mean())) < 0.15
+
+
+def test_generate_ppd_depth_expands_contig_shared_bin_epsilon() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chrY", "chrY"],
+            "Start": [25, 125],
+            "End": [125, 225],
+            "SAMPLE_B": [0.0, 0.0],
+            "SAMPLE_A": [0.0, 0.0],
+        }
+    )
+    df["Bin"] = df["Chr"].astype(str) + ":" + df["Start"].astype(str) + "-" + df["End"].astype(str)
+    data = DepthData(df.set_index("Bin"), clamp_threshold=None)
+    cn_post = _fake_cn_posterior(data.n_bins, data.n_samples, cn_state=0)
+    base_map = {
+        "bin_bias": np.full(data.n_bins, 1.0, dtype=np.float32),
+        "sample_var": np.full(data.n_samples, 1e-4, dtype=np.float32),
+        "bin_var": np.full(data.n_bins, 1e-4, dtype=np.float32),
+    }
+    sample_with_epsilon = data.sample_ids.index("SAMPLE_A")
+    sample_without_epsilon = data.sample_ids.index("SAMPLE_B")
+    contig_epsilon = np.zeros((1, data.n_samples), dtype=np.float32)
+    contig_epsilon[0, sample_with_epsilon] = 0.2
+
+    draws_without_epsilon = generate_ppd_depth(
+        data,
+        base_map,
+        cn_post,
+        n_draws=200,
+        seed=17,
+    )
+    draws_with_epsilon = generate_ppd_depth(
+        data,
+        {
+            **base_map,
+            "bin_epsilon": contig_epsilon,
+        },
+        cn_post,
+        n_draws=200,
+        seed=17,
+    )
+
+    for bin_index in range(data.n_bins):
+        assert float(draws_with_epsilon[:, bin_index, sample_with_epsilon].mean()) > float(
+            draws_without_epsilon[:, bin_index, sample_with_epsilon].mean()
+        ) + 0.15
+        assert abs(
+            float(draws_with_epsilon[:, bin_index, sample_without_epsilon].mean()) -
+            float(draws_without_epsilon[:, bin_index, sample_without_epsilon].mean())
+        ) < 0.15
+
+
+def test_generate_ppd_depth_uses_background_factors(tiny_depth_df: pd.DataFrame) -> None:
+    data = DepthData(tiny_depth_df.iloc[[3]], clamp_threshold=None)
+    cn_post = _fake_cn_posterior(data.n_bins, data.n_samples, cn_state=0)
+    base_map = {
+        "bin_bias": np.full(data.n_bins, 1.0, dtype=np.float32),
+        "sample_var": np.full(data.n_samples, 1e-4, dtype=np.float32),
+        "bin_var": np.full(data.n_bins, 1e-4, dtype=np.float32),
+    }
+
+    draws_without_background = generate_ppd_depth(
+        data,
+        base_map,
+        cn_post,
+        n_draws=200,
+        seed=23,
+    )
+    draws_with_background = generate_ppd_depth(
+        data,
+        {
+            **base_map,
+            "background_bin_factors": np.array([[3.0]], dtype=np.float32),
+            "background_sample_factors": np.array([[0.0, 0.2]], dtype=np.float32),
+        },
+        cn_post,
+        n_draws=200,
+        seed=23,
+    )
+
+    assert float(draws_with_background[:, 0, 1].mean()) > float(
+        draws_without_background[:, 0, 1].mean()
+    ) + 0.15
+    assert abs(
+        float(draws_with_background[:, 0, 0].mean()) -
+        float(draws_without_background[:, 0, 0].mean())
+    ) < 0.15
 
 
 def test_ppd_resolve_input_depth_space_prefers_preprocess_marker(tmp_path) -> None:

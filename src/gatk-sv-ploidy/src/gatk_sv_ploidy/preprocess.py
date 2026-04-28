@@ -27,6 +27,14 @@ from gatk_sv_ploidy.data import read_depth_tsv
 logger = logging.getLogger(__name__)
 
 
+def _compute_autosome_medians(df: pd.DataFrame) -> tuple[list[str], np.ndarray]:
+    """Compute per-sample autosomal median depth."""
+    sample_cols = get_sample_columns(df)
+    autosome_mask = ~df["Chr"].isin(["chrX", "chrY"])
+    medians = np.median(df.loc[autosome_mask, sample_cols].values, axis=0)
+    return sample_cols, medians
+
+
 def read_sample_list(path: str) -> list[str]:
     """Read a text file of sample IDs to retain.
 
@@ -58,11 +66,7 @@ def read_sample_list(path: str) -> list[str]:
     if not sample_ids:
         raise ValueError(f"No sample IDs found in samples list: {path}")
 
-    logger.info(
-        "Loaded sample subset: %d sample(s) from %s",
-        len(sample_ids),
-        path,
-    )
+    logger.info("Loaded sample subset: %d sample(s)", len(sample_ids))
     return sample_ids
 
 
@@ -135,10 +139,9 @@ def read_bed_intervals(path: str) -> pd.DataFrame:
 
     df = df.sort_values(["Chr", "Start", "End"]).reset_index(drop=True)
     logger.info(
-        "Loaded poor regions: %d intervals across %d chromosome(s) from %s",
+        "Loaded poor regions: %d intervals across %d chromosome(s)",
         len(df),
         df["Chr"].nunique(),
-        path,
     )
     return df
 
@@ -262,9 +265,7 @@ def normalise_depth(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         Copy of *df* with normalised depth values.
     """
-    sample_cols = get_sample_columns(df)
-    autosome_mask = ~df["Chr"].isin(["chrX", "chrY"])
-    medians = np.median(df.loc[autosome_mask, sample_cols].values, axis=0)
+    sample_cols, medians = _compute_autosome_medians(df)
 
     logger.info(
         "Autosomal medians: min=%.3f, max=%.3f, mean=%.3f",
@@ -276,6 +277,44 @@ def normalise_depth(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df[sample_cols] = 2.0 * df[sample_cols].values / medians[np.newaxis, :]
     return df
+
+
+def clamp_depth_ratio(df: pd.DataFrame, *, depth_ratio_clamp: float = 6.0) -> pd.DataFrame:
+    """Clamp per-sample depth to a maximum approximate copy number.
+
+    Each sample's depth is converted to an approximate copy number via
+    ``2 * depth / autosomal_median``. Values above *depth_ratio_clamp* are
+    capped at that threshold, equivalent to capping the raw depth at
+    ``autosomal_median * depth_ratio_clamp / 2``.
+
+    Args:
+        df: Depth DataFrame with autosomal bins available for median scaling.
+        depth_ratio_clamp: Maximum approximate copy number to retain.
+
+    Returns:
+        Copy of *df* with per-sample depth values clamped.
+
+    Raises:
+        ValueError: If *depth_ratio_clamp* is not positive.
+    """
+    if depth_ratio_clamp <= 0:
+        raise ValueError("depth_ratio_clamp must be > 0")
+
+    sample_cols, medians = _compute_autosome_medians(df)
+    clamp_values = medians * (depth_ratio_clamp / 2.0)
+
+    df_out = df.copy()
+    original = df_out[sample_cols].to_numpy(dtype=np.float64)
+    clamped = np.minimum(original, clamp_values[np.newaxis, :])
+    df_out[sample_cols] = clamped
+
+    n_clamped = int(np.count_nonzero(original > clamped))
+    logger.info(
+        "Depth-ratio clamp (CN ≤ %.1f): clamped %d sample-bin value(s)",
+        depth_ratio_clamp,
+        n_clamped,
+    )
+    return df_out
 
 
 def _infer_sex_depth_groups(df: pd.DataFrame) -> pd.Series:
@@ -746,9 +785,7 @@ def read_site_depth_tsv(
         # Position-based striding: read in chunks and keep only rows whose
         # genomic position is divisible by position_stride.  This ensures
         # cross-sample consistency at the cost of a full file scan.
-        logger.info(
-            "Reading site depth file: %s (position_stride=%d)", path, position_stride,
-        )
+        logger.info("Reading site depth file (position_stride=%d)", position_stride)
         chunks: list[pd.DataFrame] = []
         reader = pd.read_csv(
             path, sep="\t", compression="infer", header=None,
@@ -764,7 +801,7 @@ def read_site_depth_tsv(
             else pd.DataFrame(columns=_names)
         )
     else:
-        logger.info("Reading site depth file: %s (stride=%d)", path, stride)
+        logger.info("Reading site depth file (stride=%d)", stride)
         skiprows = (lambda i: i % stride != 0) if stride > 1 else None
         df = pd.read_csv(
             path, sep="\t", compression="infer", header=None,
@@ -835,11 +872,11 @@ def _process_sd_file(
     sample_to_idx: dict[str, int],
     bin_lookup: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]],
     *,
-    position_stride: int,
+    stride: int,
     min_site_depth: int,
 ) -> tuple[str, int, dict[int, dict[int, dict[str, object]]]]:
     """Process one SD file into sparse per-bin site records."""
-    sd_df = read_site_depth_tsv(sd_path, position_stride=position_stride)
+    sd_df = read_site_depth_tsv(sd_path, stride=stride)
 
     file_site_data: dict[int, dict[int, dict[str, object]]] = {}
     total_sites_used = 0
@@ -847,8 +884,7 @@ def _process_sd_file(
     for sample_id in sd_df["sample"].unique():
         if sample_id not in sample_to_idx:
             logger.warning(
-                "Sample %s in SD file not in depth data, skipping",
-                sample_id,
+                "Encountered site-depth rows for a sample absent from the depth matrix; skipping those rows.",
             )
             continue
 
@@ -880,8 +916,9 @@ def _process_sd_file(
             if not in_bin.all():
                 n_dropped = int((~in_bin).sum())
                 logger.debug(
-                    "  %s %s: dropping %d sites outside bin boundaries",
-                    sample_id, chrom, n_dropped,
+                    "  site-depth filtering: dropping %d sites outside bin boundaries on %s",
+                    n_dropped,
+                    chrom,
                 )
                 c_pos = c_pos[in_bin]
                 c_a = c_a[in_bin]
@@ -922,8 +959,9 @@ def _process_sd_file(
 
             if n_sites_chrom > 0:
                 logger.debug(
-                    "  %s %s: %d sites accumulated",
-                    sample_id, chrom, n_sites_chrom,
+                    "  site-depth aggregation: %d sites accumulated on %s",
+                    n_sites_chrom,
+                    chrom,
                 )
 
     return sd_path, total_sites_used, file_site_data
@@ -996,7 +1034,7 @@ def build_per_site_data(
             sd_path,
             sample_to_idx,
             bin_lookup,
-            position_stride=sd_stride,
+            stride=sd_stride,
             min_site_depth=min_site_depth,
         )
         for sd_path in sd_paths
@@ -1005,8 +1043,7 @@ def build_per_site_data(
     for sd_path, file_total_sites, file_site_data in worker_results:
         total_sites_used += file_total_sites
         logger.info(
-            "Completed site depth ingestion for %s: %d retained site-sample entries",
-            os.path.basename(sd_path),
+            "Completed site depth ingestion: %d retained site-sample entries",
             file_total_sites,
         )
         for g_bi, bin_sites in file_site_data.items():
@@ -1140,6 +1177,10 @@ def parse_args() -> argparse.Namespace:
         "--output-space", choices=list(DEPTH_SPACES), default="raw",
         help="Write filtered normalized depth (historical behavior) or filtered raw counts. Bin-quality filters always run on normalized depth.",
     )
+    p.add_argument(
+        "--depth-ratio-clamp", type=float, default=6.0,
+        help="Clamp each sample-bin depth to at most this approximate copy number, where approximate CN is computed as 2 * depth / autosomal_median",
+    )
 
     # Filter thresholds
     g = p.add_argument_group("bin-filter thresholds")
@@ -1216,6 +1257,8 @@ def main() -> None:
             sorted(raw_df["Chr"].unique()),
         )
 
+    raw_df = clamp_depth_ratio(raw_df, depth_ratio_clamp=args.depth_ratio_clamp)
+
     # 3. Normalise for filter evaluation.
     normalized_df = normalise_depth(raw_df)
 
@@ -1275,9 +1318,9 @@ def main() -> None:
     # 5. Write preprocessed depth
     out_path = os.path.join(args.output_dir, "preprocessed_depth.tsv")
     df.to_csv(out_path, sep="\t")
-    logger.info("Preprocessed depth written to %s", out_path)
-    marker_path = write_observation_type(args.output_dir, args.output_space)
-    logger.info("Observation type written to %s", marker_path)
+    logger.info("Preprocessed depth written.")
+    write_observation_type(args.output_dir, args.output_space)
+    logger.info("Observation type written.")
 
     # 6. Build per-site allele data from site-depth files (optional)
     sd_paths: List[str] = []
@@ -1298,7 +1341,7 @@ def main() -> None:
         )
         site_data_path = os.path.join(args.output_dir, "site_data.npz")
         np.savez_compressed(site_data_path, **site_arrays)
-        logger.info("Per-site allele data written to %s", site_data_path)
+        logger.info("Per-site allele data written.")
     else:
         logger.info("No site-depth files provided; skipping allele data")
 

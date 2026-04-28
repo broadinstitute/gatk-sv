@@ -27,6 +27,12 @@ _SEX_CHROMS = {"chrX", "chrY"}
 _CN_PROB_COLUMNS = [f"cn_prob_{cn}" for cn in range(6)]
 _PLOIDY_PROB_COLUMNS = [f"ploidy_prob_{cn}" for cn in range(6)]
 _BINQ_FIELD_OPTIONS = ["auto", "BINQ15", "BINQ20", "CALLQ15", "CALLQ20"]
+_RESERVED_POLYPLOID_ANEUPLOIDY_TYPES = ("TRIPLOID", "TETRAPLOID")
+_RESERVED_POLYPLOID_SEX_LABELS = {
+    (4, 0): "TETRAPLOID_FEMALE",
+    (2, 2): "TETRAPLOID_MALE",
+    (3, 1): "TRIPLE_X_Y",
+}
 
 
 def _resolve_binq_field(
@@ -69,6 +75,50 @@ def _safe_min_probability(values: pd.Series) -> float:
     if finite.empty:
         return float("nan")
     return float(finite.min())
+
+
+def _first_finite(values: pd.Series) -> float:
+    """Return the first finite value in a series, or NaN if none exist."""
+    arr = values.to_numpy(dtype=float)
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return float("nan")
+    return float(finite[0])
+
+
+def _compute_sample_depth_ratios(df: pd.DataFrame) -> tuple[dict[str, float], float]:
+    """Estimate cohort-relative sample-depth ratios from chromosome summaries."""
+    if "sample_depth_map" not in df.columns:
+        return {}, float("nan")
+
+    sample_depths = df.groupby("sample", sort=False)["sample_depth_map"].apply(_first_finite)
+    finite = sample_depths[np.isfinite(sample_depths) & (sample_depths > 0.0)]
+    if finite.empty:
+        return {}, float("nan")
+
+    reference_depth = float(np.median(finite.to_numpy(dtype=float)))
+    if not np.isfinite(reference_depth) or reference_depth <= 0.0:
+        return {}, float("nan")
+
+    depth_ratios = {
+        str(sample_id): float(depth / reference_depth)
+        for sample_id, depth in sample_depths.items()
+        if np.isfinite(depth) and depth > 0.0
+    }
+    return depth_ratios, reference_depth
+
+
+def _normalize_global_cn_artifact(
+    cn_map: dict,
+    sample_depth_ratio: float,
+    normalize_doubled_labels: bool = True,
+) -> tuple[dict, float]:
+    """Return chromosome copy numbers unchanged.
+
+    Infer now reports absolute diploid-referenced chromosome labels, so the
+    legacy doubled-label normalization path is disabled.
+    """
+    return dict(cn_map), 1.0
 
 
 def _aggregate_bin_stats_to_chromosome_stats(bin_df: pd.DataFrame) -> pd.DataFrame:
@@ -452,6 +502,7 @@ def apply_binq_filter_to_chromosome_stats(
 def assign_sex_and_aneuploidy_types(
     df: pd.DataFrame,
     truth_dict: Dict[str, str] | None = None,
+    normalize_doubled_labels: bool = True,
 ) -> pd.DataFrame:
     """Classify each sample's sex and aneuploidy type.
 
@@ -485,17 +536,30 @@ def assign_sex_and_aneuploidy_types(
     if truth_dict is None:
         truth_dict = {}
 
+    sample_depth_ratios, depth_reference = _compute_sample_depth_ratios(df)
     rows: list[dict] = []
 
     for sample_id, sdf in df.groupby("sample"):
         true_type = truth_dict.get(str(sample_id), "NORMAL")
 
-        cn_map = dict(zip(sdf["chromosome"], sdf["copy_number"]))
+        raw_cn_map = dict(zip(sdf["chromosome"], sdf["copy_number"]))
         depth_map = dict(zip(sdf["chromosome"], sdf["median_depth"]))
-        aneu_map = dict(zip(sdf["chromosome"], sdf["is_aneuploid"]))
+        sample_depth_ratio = sample_depth_ratios.get(str(sample_id), float("nan"))
+        cn_map, cn_scale_factor = _normalize_global_cn_artifact(
+            raw_cn_map,
+            sample_depth_ratio,
+            normalize_doubled_labels=normalize_doubled_labels,
+        )
+        aneu_map = {
+            chrom: bool(cn != 2)
+            for chrom, cn in cn_map.items()
+            if chrom not in _SEX_CHROMS
+        }
 
         x_cn = cn_map.get("chrX", 2)
         y_cn = cn_map.get("chrY", 0)
+        raw_x_cn = raw_cn_map.get("chrX", 2)
+        raw_y_cn = raw_cn_map.get("chrY", 0)
         x_depth = depth_map.get("chrX", 2.0)
         y_depth = depth_map.get("chrY", 0.0)
 
@@ -503,7 +567,13 @@ def assign_sex_and_aneuploidy_types(
         sex = _classify_sex(x_cn, y_cn)
 
         # ── aneuploidy type ─────────────────────────────────────────
-        pred_type = _classify_aneuploidy(aneu_map, cn_map, x_cn, y_cn)
+        pred_type = _classify_aneuploidy(
+            aneu_map,
+            cn_map,
+            x_cn,
+            y_cn,
+            sample_depth_ratio=sample_depth_ratio,
+        )
 
         rows.append(
             {
@@ -511,8 +581,13 @@ def assign_sex_and_aneuploidy_types(
                 "sex": sex,
                 "chrX_CN": x_cn,
                 "chrY_CN": y_cn,
+                "raw_chrX_CN": raw_x_cn,
+                "raw_chrY_CN": raw_y_cn,
                 "chrX_depth": x_depth,
                 "chrY_depth": y_depth,
+                "sample_depth_ratio": sample_depth_ratio,
+                "sample_depth_reference": depth_reference,
+                "global_cn_scale_factor": cn_scale_factor,
                 "true_aneuploidy_type": true_type,
                 "predicted_aneuploidy_type": pred_type,
                 "score": _safe_min_probability(sdf["mean_cn_probability"]),
@@ -531,10 +606,6 @@ def _classify_sex(x_cn: int, y_cn: int) -> str:
         (3, 0): "TRIPLE_X",
         (2, 1): "KLINEFELTER",
         (1, 2): "JACOBS",
-        # Tetraploid patterns
-        (4, 0): "TETRAPLOID_FEMALE",   # XXXX
-        (2, 2): "TETRAPLOID_MALE",     # XXYY
-        (3, 1): "TRIPLE_X_Y",          # XXXY
     }
     return _SEX_TABLE.get((x_cn, y_cn), "OTHER")
 
@@ -544,23 +615,23 @@ def _classify_aneuploidy(
     cn_map: dict,
     x_cn: int,
     y_cn: int,
+    sample_depth_ratio: float = float("nan"),
 ) -> str:
     """Determine predicted aneuploidy type from per-chromosome calls."""
-    aneuploid_chrs = [c for c, v in aneu_map.items() if v]
-
-    if not aneuploid_chrs:
-        return "NORMAL"
-
-    sex_aneu = [c for c in aneuploid_chrs if c in ("chrX", "chrY")]
-    auto_aneu = [c for c in aneuploid_chrs if c not in ("chrX", "chrY")]
-
-    # Check for genome-wide tetraploidy: ≥80% of autosomes at CN=4
+    sex_is_aneuploid = (x_cn, y_cn) not in {(2, 0), (1, 1)}
+    auto_aneu = [
+        chrom for chrom, is_aneuploid in aneu_map.items()
+        if is_aneuploid and chrom not in _SEX_CHROMS
+    ]
+    sex_aneu = ["chrX", "chrY"] if sex_is_aneuploid else []
     autosome_cns = {
         c: cn_map.get(c, 2) for c in cn_map if c not in ("chrX", "chrY")
     }
-    n_tetra_auto = sum(1 for cn in autosome_cns.values() if cn == 4)
-    if autosome_cns and n_tetra_auto >= len(autosome_cns) * 0.8:
-        return "TETRAPLOID"
+
+    aneuploid_chrs = auto_aneu + sex_aneu
+
+    if not aneuploid_chrs:
+        return "NORMAL"
 
     # Multiple autosomal or mixed → MULTIPLE
     if len(auto_aneu) > 1 or (auto_aneu and sex_aneu):
@@ -573,9 +644,6 @@ def _classify_aneuploidy(
             (3, 0): "TRIPLE_X",
             (1, 0): "TURNER",
             (1, 2): "JACOBS",
-            (4, 0): "TETRAPLOID_FEMALE",
-            (2, 2): "TETRAPLOID_MALE",
-            (3, 1): "TRIPLE_X_Y",
         }
         return _sex_type.get((x_cn, y_cn), "OTHER")
 
@@ -610,26 +678,29 @@ def save_sex_assignments(pred_df: pd.DataFrame, output_dir: str) -> None:
     out.columns = ["sample_id", "chrX.CN", "chrY.CN", "Assignment"]
     path = os.path.join(output_dir, "sex_assignments.txt.gz")
     out.to_csv(path, sep="\t", index=False, compression="gzip")
-    logger.info("Sex assignments saved to %s", path)
+    logger.info("Sex assignments saved.")
 
 
 def export_aneuploid_data(df: pd.DataFrame, output_path: str) -> None:
     """Export rows with ``is_aneuploid=True`` to a TSV.
 
-    Converts ``sample_var_map`` to ``inferred_sample_std`` and drops internal
-    columns before writing.
+    Normalizes legacy ``sample_var_map`` naming to
+    ``sample_overdispersion_map`` and drops internal columns before writing.
 
     Args:
         df: ``chromosome_stats.tsv`` DataFrame.
         output_path: Destination file path.
     """
     out = df[df["is_aneuploid"]].copy()
-    if "sample_var_map" in out.columns:
-        out["inferred_sample_std"] = np.sqrt(out["sample_var_map"])
-        out = out.drop(columns=["sample_var_map"], errors="ignore")
+    if (
+        "sample_overdispersion_map" not in out.columns and
+        "sample_var_map" in out.columns
+    ):
+        out["sample_overdispersion_map"] = out["sample_var_map"]
+    out = out.drop(columns=["sample_var_map"], errors="ignore")
     out = out.drop(columns=["chr_type"], errors="ignore")
     out.to_csv(output_path, sep="\t", index=False)
-    logger.info("Exported %d aneuploid rows to %s", len(out), output_path)
+    logger.info("Exported %d aneuploid rows.", len(out))
 
 
 def export_ignored_bins(df: pd.DataFrame, output_path: str) -> None:
@@ -716,7 +787,7 @@ def main() -> None:
     os.makedirs(args.output_dir, exist_ok=True)
 
     # ── load chromosome stats ───────────────────────────────────────────
-    logger.info("Reading chromosome stats: %s", args.chrom_stats)
+    logger.info("Reading chromosome stats.")
     df = pd.read_csv(args.chrom_stats, sep="\t")
     logger.info(
         "Loaded %d rows for %d samples", len(df), df["sample"].nunique()
@@ -730,10 +801,9 @@ def main() -> None:
                 "--min-binq requires both --bin-stats and --ppd-bin-quality."
             )
         logger.info(
-            "Applying %s >= %.2f filter using %s and rebuilding chromosome calls ...",
+            "Applying %s >= %.2f filter using PPD bin quality summaries and rebuilding chromosome calls ...",
             args.binq_field,
             args.min_binq,
-            args.ppd_bin_quality,
         )
         bin_stats_df = pd.read_csv(args.bin_stats, sep="\t")
         bin_quality_df = pd.read_csv(args.ppd_bin_quality, sep="\t")
@@ -751,7 +821,7 @@ def main() -> None:
         )
         filtered_path = os.path.join(args.output_dir, "chromosome_stats.filtered.tsv")
         df.to_csv(filtered_path, sep="\t", index=False)
-        logger.info("Filtered chromosome stats saved to %s", filtered_path)
+        logger.info("Filtered chromosome stats saved.")
 
     # ── optional exclusion ──────────────────────────────────────────────
     if args.exclusion_list:
@@ -780,13 +850,20 @@ def main() -> None:
         logger.info("Loaded %d truth entries", len(truth))
 
     # ── classify ────────────────────────────────────────────────────────
-    pred_df = assign_sex_and_aneuploidy_types(df, truth)
+    logger.info(
+        "Using absolute chromosome copy-number labels from infer; legacy sample-baseline normalization is disabled."
+    )
+
+    pred_df = assign_sex_and_aneuploidy_types(
+        df,
+        truth,
+    )
     save_sex_assignments(pred_df, args.output_dir)
 
     # ── save predictions ────────────────────────────────────────────────
     pred_path = os.path.join(args.output_dir, "aneuploidy_type_predictions.tsv")
     pred_df.to_csv(pred_path, sep="\t", index=False)
-    logger.info("Predictions saved to %s", pred_path)
+    logger.info("Predictions saved.")
 
     # ── export aneuploid data ───────────────────────────────────────────
     aneu_path = os.path.join(args.output_dir, "aneuploid_samples.tsv")
