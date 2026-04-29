@@ -102,8 +102,8 @@ class SR2TrainingLabeler(TrainingLabeler):
 
 class PESRTrainingLabeler(TrainingLabeler):
     def label_row(self, row):
-        if (row.RD_prob < 0.6 and row.PE_prob < 0.6 and
-                row.SR1_prob < 0.6):
+        if (row.RD_prob < 0.7 and row.PE_prob < 0.7 and
+                row.SR1_prob < 0.7):
             return 'Fail'
         elif (row.RD_prob >= 0.9 and row.PE_prob >= 0.9 and
                 row.SR1_prob >= 0.9):
