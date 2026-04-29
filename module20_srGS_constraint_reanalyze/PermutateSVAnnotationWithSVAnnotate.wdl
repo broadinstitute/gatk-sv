@@ -39,6 +39,7 @@ workflow PermutateSVAnnotationWithSVAnnotate {
         # Python scripts
         File   permute_gtf_script       # permute_gtf.py
         File   split_gtf_script         # split_gtf_annotations.py
+        File   strip_info_script         # remove_predicted_info_from_vcf.py
         File calculate_gene_data_script
 
         String gtf_label                # e.g. "r3.gencode.v39.ensembl.105"
@@ -55,6 +56,7 @@ workflow PermutateSVAnnotationWithSVAnnotate {
         # Runtime attribute overrides per task
         RuntimeAttr? runtime_attr_permute_gtf
         RuntimeAttr? runtime_attr_split_vcf
+        RuntimeAttr? runtime_attr_strip_info
         RuntimeAttr? runtime_attr_annotate_sv
         RuntimeAttr? runtime_attr_merge_vcf
         RuntimeAttr? runtime_attr_split_gtf
@@ -97,12 +99,23 @@ workflow PermutateSVAnnotationWithSVAnnotate {
                 runtime_attr_override = runtime_attr_split_vcf
         }
 
-        # ── Task 3: Annotate functional consequences per contig ────────────
-        call AnnotateFunctionalConsequences {
+        # ── Strip PREDICTED_/AF/AC/AN/N_/FREQ_ INFO fields before annotation ──
+        call StripInfoFields {
             input:
                 vcf                   = SplitVcfByContig.contig_vcf,
                 vcf_idx               = SplitVcfByContig.contig_vcf_idx,
+                strip_script          = strip_info_script,
                 prefix                = "permu_~{permu_number}.~{contig}",
+                docker                = utils_docker,
+                runtime_attr_override = runtime_attr_strip_info
+        }
+
+        # ── Task 3: Annotate functional consequences per contig ────────────
+        call AnnotateFunctionalConsequences {
+            input:
+                vcf                   = StripInfoFields.stripped_vcf,
+                vcf_idx               = StripInfoFields.stripped_vcf_idx,
+                prefix                = "permu_~{permu_number}.~{contig}.anno",
                 coding_gtf            = Task1_PermuteGTF.permuted_gtf,
                 docker                = gatk_docker,
                 runtime_attr_override = runtime_attr_annotate_sv
@@ -141,6 +154,52 @@ workflow PermutateSVAnnotationWithSVAnnotate {
         File gene_data = CalculateGeneData.result
     }
 
+}
+
+task StripInfoFields {
+    input {
+        File   vcf
+        File   vcf_idx
+        File   strip_script
+        String prefix
+        String docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1,
+        mem_gb: 4,
+        disk_gb: 5 * ceil(size(vcf, "GB")) + 10,
+        boot_disk_gb: 10,
+        preemptible_tries: 2,
+        max_retries: 0
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    command <<<
+        set -euo pipefail
+
+        python3 ~{strip_script} \
+            --input ~{vcf} \
+            --output ~{prefix}.stripped.vcf.gz
+
+        tabix -p vcf ~{prefix}.stripped.vcf.gz
+    >>>
+
+    output {
+        File stripped_vcf     = "~{prefix}.stripped.vcf.gz"
+        File stripped_vcf_idx = "~{prefix}.stripped.vcf.gz.tbi"
+    }
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
 }
 
 task SplitVcfByContig {
