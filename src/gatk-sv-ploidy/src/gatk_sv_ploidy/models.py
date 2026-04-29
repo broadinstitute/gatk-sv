@@ -75,8 +75,13 @@ AUTOSOME_PRIOR_MODES = (
 DEFAULT_EPSILON_MEAN = 1e-4
 DEFAULT_EPSILON_CONCENTRATION = 0.5
 DEFAULT_BACKGROUND_FACTORS = 2
+DEFAULT_MULTIPLICATIVE_FACTORS = 2
 DEFAULT_BACKGROUND_SAMPLE_SCALE = 0.02
 DEFAULT_BACKGROUND_BIN_SCALE = 0.5
+DEFAULT_GUIDE_INIT_SCALE = 0.02
+DEFAULT_GUIDE_WARMUP_ITER = -1
+DEFAULT_ALLOSOME_VAR = 2e-4
+DEFAULT_RAW_VARIANCE_POWER = 1.5
 
 
 def _windowed_relative_elbo_change(
@@ -539,13 +544,49 @@ def _negative_binomial_total_count(
     return 1.0 / torch.clamp(overdispersion, min=1e-8)
 
 
+def _effective_negative_binomial_overdispersion_torch(
+    overdispersion: torch.Tensor,
+    mean: torch.Tensor,
+    raw_variance_power: float,
+) -> torch.Tensor:
+    """Map a base dispersion to Gamma-Poisson overdispersion.
+
+    ``raw_variance_power=2`` recovers the usual NB2 variance
+    ``Var(Y)=μ+αμ²``.  Values below 2 use a power-law count variance
+    ``Var(Y)=μ+φμ^p`` by setting the Gamma-Poisson overdispersion to
+    ``α_eff=φμ^(p-2)``.  This preserves a Gamma-Poisson likelihood while
+    allowing residual scale to grow sub-linearly with raw-count depth.
+    """
+    if raw_variance_power == 2.0:
+        return overdispersion
+    mean_safe = torch.clamp(mean, min=1.0)
+    return overdispersion * torch.pow(mean_safe, raw_variance_power - 2.0)
+
+
+def _effective_negative_binomial_overdispersion_numpy(
+    overdispersion: np.ndarray,
+    mean: np.ndarray,
+    raw_variance_power: float,
+) -> np.ndarray:
+    """NumPy version of power-law Gamma-Poisson overdispersion."""
+    if raw_variance_power == 2.0:
+        return overdispersion
+    mean_safe = np.maximum(mean, 1.0)
+    return overdispersion * np.power(mean_safe, raw_variance_power - 2.0)
+
+
 def _make_negative_binomial_distribution(
     mean: torch.Tensor,
     overdispersion: torch.Tensor,
+    raw_variance_power: float = 2.0,
 ) -> dist.Distribution:
-    """Build a Gamma-Poisson distribution with ``Var = μ + α μ²``."""
-    concentration = _negative_binomial_total_count(overdispersion)
     mean_safe = torch.clamp(mean, min=1e-8)
+    effective_overdispersion = _effective_negative_binomial_overdispersion_torch(
+        overdispersion,
+        mean_safe,
+        raw_variance_power,
+    )
+    concentration = _negative_binomial_total_count(effective_overdispersion)
     rate = concentration / mean_safe
     return dist.GammaPoisson(concentration, rate)
 
@@ -554,8 +595,9 @@ def _negative_binomial_log_lik_numpy(
     obs: np.ndarray,
     mean: np.ndarray,
     overdispersion: np.ndarray,
+    raw_variance_power: float = 2.0,
 ) -> np.ndarray:
-    """Analytical Gamma-Poisson log-likelihood with ``Var = μ + α μ²``."""
+    """Analytical Gamma-Poisson log-likelihood with power-law variance."""
     from scipy.special import gammaln
 
     obs_rounded = np.rint(obs)
@@ -566,7 +608,12 @@ def _negative_binomial_log_lik_numpy(
 
     obs_safe = obs_rounded.astype(np.float64, copy=False)
     mean_safe = np.maximum(mean, 1e-10)
-    concentration = 1.0 / np.maximum(overdispersion, 1e-8)
+    effective_overdispersion = _effective_negative_binomial_overdispersion_numpy(
+        overdispersion,
+        mean_safe,
+        raw_variance_power,
+    )
+    concentration = 1.0 / np.maximum(effective_overdispersion, 1e-8)
     log_prob = gammaln(obs_safe + concentration)
     log_prob = log_prob - gammaln(concentration)
     log_prob = log_prob - gammaln(obs_safe + 1.0)
@@ -630,6 +677,183 @@ def _compose_additive_background_torch(
     )
 
 
+def _standardize_multiplicative_bin_factors_torch(
+    values: torch.Tensor,
+) -> torch.Tensor:
+    """Center and scale multiplicative bin loadings for stable amplitudes."""
+    if values.dim() != 2:
+        raise ValueError("multiplicative_bin_factors must be 2D.")
+    if values.shape[1] == 0:
+        return values
+    centered = values - values.mean(dim=0, keepdim=True)
+    eps = torch.finfo(values.dtype).eps
+    scale = torch.sqrt(torch.mean(centered * centered, dim=0, keepdim=True))
+    return centered / torch.clamp(scale, min=eps)
+
+
+def _standardize_multiplicative_bin_factors_numpy(
+    values: np.ndarray,
+) -> np.ndarray:
+    """NumPy version of multiplicative bin-loading standardization."""
+    arr = np.asarray(values, dtype=np.float64)
+    if arr.ndim != 2:
+        raise ValueError("multiplicative_bin_factors must be 2D.")
+    if arr.shape[1] == 0:
+        return arr
+    centered = arr - arr.mean(axis=0, keepdims=True)
+    scale = np.sqrt(np.mean(centered * centered, axis=0, keepdims=True))
+    return centered / np.maximum(scale, np.finfo(arr.dtype).eps)
+
+
+def _compose_effective_bin_bias_torch(
+    n_bins: int,
+    n_samples: int,
+    *,
+    device: str | torch.device,
+    dtype: torch.dtype,
+    fixed_bias: torch.Tensor | None = None,
+    multiplicative_bin_factors: torch.Tensor | None = None,
+    multiplicative_sample_factors: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Compose the effective multiplicative bias surface for the Pyro model."""
+    if fixed_bias is not None:
+        bias = fixed_bias
+        if bias.dim() == 1:
+            bias = bias.unsqueeze(-1)
+        if bias.dim() != 2 or bias.shape[0] != n_bins:
+            raise ValueError("bin_bias_fixed must have shape (n_bins,) or (n_bins, k).")
+        if bias.shape[1] == 1:
+            return bias.expand(n_bins, n_samples)
+        if bias.shape[1] != n_samples:
+            raise ValueError("bin_bias_fixed must broadcast across samples.")
+        return bias
+
+    if multiplicative_bin_factors is None and multiplicative_sample_factors is None:
+        return torch.ones((n_bins, n_samples), device=device, dtype=dtype)
+    if multiplicative_bin_factors is None or multiplicative_sample_factors is None:
+        raise ValueError(
+            "multiplicative_bin_factors and multiplicative_sample_factors must both be provided."
+        )
+    if multiplicative_bin_factors.dim() != 2 or multiplicative_bin_factors.shape[0] != n_bins:
+        raise ValueError("multiplicative_bin_factors must have shape (n_bins, n_factors).")
+    if multiplicative_sample_factors.dim() != 2 or multiplicative_sample_factors.shape[1] != n_samples:
+        raise ValueError(
+            "multiplicative_sample_factors must have shape (n_factors, n_samples)."
+        )
+    if multiplicative_bin_factors.shape[1] != multiplicative_sample_factors.shape[0]:
+        raise ValueError("Multiplicative factor ranks do not match.")
+    return torch.exp(
+        torch.matmul(
+            _standardize_multiplicative_bin_factors_torch(
+                multiplicative_bin_factors,
+            ),
+            multiplicative_sample_factors,
+        )
+    )
+
+
+def _compose_effective_bin_bias_numpy(
+    n_bins: int,
+    n_samples: int,
+    *,
+    fixed_bias: np.ndarray | None = None,
+    multiplicative_bin_factors: np.ndarray | None = None,
+    multiplicative_sample_factors: np.ndarray | None = None,
+    dtype: np.dtype | type = np.float64,
+) -> np.ndarray:
+    """NumPy version of effective multiplicative bias composition."""
+    if fixed_bias is not None:
+        bias = np.asarray(fixed_bias, dtype=dtype)
+        if bias.ndim == 1:
+            bias = bias[:, np.newaxis]
+        if bias.ndim != 2 or bias.shape[0] != n_bins:
+            raise ValueError("bin_bias must have shape (n_bins,) or (n_bins, k).")
+        if bias.shape[1] == 1:
+            return np.broadcast_to(bias, (n_bins, n_samples)).copy()
+        if bias.shape[1] != n_samples:
+            raise ValueError("bin_bias must broadcast across samples.")
+        return bias
+
+    if multiplicative_bin_factors is None and multiplicative_sample_factors is None:
+        return np.ones((n_bins, n_samples), dtype=dtype)
+    if multiplicative_bin_factors is None or multiplicative_sample_factors is None:
+        raise ValueError(
+            "multiplicative_bin_factors and multiplicative_sample_factors must both be provided."
+        )
+    bin_factors = np.asarray(multiplicative_bin_factors, dtype=np.float64)
+    sample_factors = np.asarray(multiplicative_sample_factors, dtype=np.float64)
+    if bin_factors.ndim != 2 or bin_factors.shape[0] != n_bins:
+        raise ValueError("multiplicative_bin_factors must have shape (n_bins, n_factors).")
+    if sample_factors.ndim != 2 or sample_factors.shape[1] != n_samples:
+        raise ValueError(
+            "multiplicative_sample_factors must have shape (n_factors, n_samples)."
+        )
+    if bin_factors.shape[1] != sample_factors.shape[0]:
+        raise ValueError("Multiplicative factor ranks do not match.")
+    return np.exp(
+        _standardize_multiplicative_bin_factors_numpy(bin_factors) @ sample_factors
+    ).astype(dtype, copy=False)
+
+
+def _compose_allosome_overdispersion_torch(
+    chr_type: torch.Tensor | None,
+    allosome_var: torch.Tensor | None,
+    n_bins: int,
+    *,
+    device: str | torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    """Return a bin-level chrX/chrY excess overdispersion column vector.
+
+    Autosomes are anchored at zero so this term captures only allosome-specific
+    residual variance beyond the global per-sample and optional per-bin terms.
+    """
+    zero = torch.zeros((n_bins, 1), device=device, dtype=dtype)
+    if chr_type is None or allosome_var is None:
+        return zero
+
+    values = allosome_var.reshape(-1).to(device=device, dtype=dtype)
+    if values.numel() == 0:
+        return zero
+    if values.numel() == 1:
+        values = values.expand(2)
+    else:
+        values = values[:2]
+
+    lookup = torch.zeros(3, device=device, dtype=dtype)
+    lookup[1] = values[0]
+    lookup[2] = values[1]
+    type_index = torch.clamp(chr_type.to(device=device, dtype=torch.long), min=0, max=2)
+    return lookup[type_index].unsqueeze(-1)
+
+
+def _compose_allosome_overdispersion_numpy(
+    chr_type: np.ndarray | None,
+    allosome_var: np.ndarray | None,
+    n_bins: int,
+) -> np.ndarray:
+    """Return a bin-level chrX/chrY excess overdispersion column vector."""
+    zero = np.zeros((n_bins, 1), dtype=np.float64)
+    if chr_type is None or allosome_var is None:
+        return zero
+
+    values = np.asarray(allosome_var, dtype=np.float64).reshape(-1)
+    if values.size == 0:
+        return zero
+    if values.size == 1:
+        values = np.repeat(values, 2)
+    else:
+        values = values[:2]
+
+    lookup = np.zeros(3, dtype=np.float64)
+    lookup[1] = values[0]
+    lookup[2] = values[1]
+    type_index = np.clip(np.asarray(chr_type, dtype=np.int64).reshape(-1), 0, 2)
+    if type_index.size != n_bins:
+        return zero
+    return lookup[type_index].reshape(n_bins, 1)
+
+
 def _matched_residual_scale(
     target_variance: torch.Tensor | np.ndarray | float,
     obs_likelihood: str,
@@ -688,15 +912,15 @@ def _depth_log_lik_numpy(
 class CNVModel:
     """Hierarchical Bayesian model for whole-genome CN detection.
 
-    The generative model uses per-bin CN-state priors, per-bin bias and
-    variance, and per-sample variance. Autosomes can either use the historical
-    Dirichlet-Categorical prior or a shrinkage prior that separates total
-    non-reference mass from the distribution over alternative CN states. For
-    the historical continuous observation families, observed normalised depth
-    is drawn from a configurable residual model whose mean is
-    ``CN × bin_bias + additive_background`` and whose variance scales with
-    expected depth as
-    ``(bin_var + sample_var) × max(CN × bin_bias + additive_background, 1e-3)``.
+    The generative model uses per-bin CN-state priors, low-rank multiplicative
+    bias, structured additive background, and per-sample variance. Autosomes
+    can either use the historical Dirichlet-Categorical prior or a shrinkage
+    prior that separates total non-reference mass from the distribution over
+    alternative CN states. For the historical continuous observation families,
+    observed normalised depth is drawn from a configurable residual model
+    whose mean is ``CN × bin_bias + additive_background`` and whose variance
+    scales with expected depth as
+    ``(bin_var + sample_var + allosome_var) × max(CN × bin_bias + additive_background, 1e-3)``.
 
     When ``obs_likelihood='negative_binomial'``, the model instead consumes
     raw integer counts. It introduces a per-sample diploid-baseline
@@ -707,9 +931,9 @@ class CNVModel:
 
     ``bin_length_kb × sample_depth × (CN × bin_bias + additive_background) / 2``
 
-    with negative-binomial variance
+    with negative-binomial-style power-law variance
 
-    ``μ + (bin_var + sample_var) × μ²``.
+    ``μ + (bin_var + sample_var + allosome_var) × μ^raw_variance_power``.
 
     When per-site allele data is provided, the model additionally includes
     a marginalized allele-fraction likelihood that jointly considers all
@@ -742,11 +966,26 @@ class CNVModel:
         non-reference prevalence is shrunk toward the learned cohort-wide mean
         in ``shrinkage`` mode.
     var_bias_bin : float
-        Scale of the LogNormal prior on per-bin bias.
+        Normal scale for the per-sample amplitudes of the low-rank
+        multiplicative bias factors.
     var_sample : float
         Mean of the Exponential prior on per-sample variance.
     var_bin : float
-        Scale of the Exponential prior on per-bin variance.
+        Mean of the Exponential prior on per-bin variance. Set to 0 or a
+        negative value to disable per-bin variance entirely.
+    var_allosome : float
+        Mean of the Exponential prior on chrX/chrY excess overdispersion.
+        Autosomes are anchored at zero for this component to keep it
+        identifiable from the global per-sample variance.
+    raw_variance_power : float
+        Mean exponent for raw-count extra-Poisson variance in the negative-
+        binomial observation model. ``2.0`` recovers the standard NB2
+        ``μ + αμ²`` variance. The default ``1.5`` lets residual scale grow
+        sub-linearly with raw-count depth, which is more appropriate for
+        binned read-depth counts with variable bin lengths.
+    multiplicative_factors : int
+        Number of low-rank multiplicative bias factors. Set to 0 to use a
+        fixed neutral multiplicative bias of 1 everywhere.
     epsilon_mean : float
         Prior mean of the global scale controlling the additive background
         depth term for each contig / sample pair. Defaults to ``1e-4``. Set
@@ -813,7 +1052,7 @@ class CNVModel:
         negative-binomial observation model.
     """
 
-    _latent_sites = ["bin_bias", "sample_var", "bin_var"]
+    _latent_sites = ["sample_var"]
 
     def __init__(
         self,
@@ -826,7 +1065,10 @@ class CNVModel:
         autosome_nonref_concentration: float = 20.0,
         var_bias_bin: float = 0.02,
         var_sample: float = 0.00025,
-        var_bin: float = 0.001,
+        var_bin: float = 0.0,
+        var_allosome: float = DEFAULT_ALLOSOME_VAR,
+        raw_variance_power: float = DEFAULT_RAW_VARIANCE_POWER,
+        multiplicative_factors: int = DEFAULT_MULTIPLICATIVE_FACTORS,
         epsilon_mean: float = DEFAULT_EPSILON_MEAN,
         epsilon_concentration: float = DEFAULT_EPSILON_CONCENTRATION,
         background_factors: int = DEFAULT_BACKGROUND_FACTORS,
@@ -835,6 +1077,8 @@ class CNVModel:
         device: str = "cpu",
         dtype: torch.dtype = torch.float32,
         guide_type: str = "delta",
+        guide_init_scale: float = DEFAULT_GUIDE_INIT_SCALE,
+        lowrank_guide_rank: Optional[int] = None,
         af_concentration: float = DEFAULT_AF_CONCENTRATION,
         af_weight: float = DEFAULT_AF_WEIGHT,
         af_evidence_mode: str = "relative",
@@ -864,6 +1108,9 @@ class CNVModel:
         self.var_bias_bin = var_bias_bin
         self.var_sample = var_sample
         self.var_bin = var_bin
+        self.var_allosome = var_allosome
+        self.raw_variance_power = raw_variance_power
+        self.multiplicative_factors = multiplicative_factors
         self.epsilon_mean = epsilon_mean
         self.epsilon_concentration = epsilon_concentration
         self.background_factors = background_factors
@@ -872,6 +1119,8 @@ class CNVModel:
         self.device = device
         self.dtype = dtype
         self.guide_type = guide_type
+        self.guide_init_scale = guide_init_scale
+        self.lowrank_guide_rank = lowrank_guide_rank
         self.af_concentration = af_concentration
         self.af_weight = af_weight
         self.af_evidence_mode = _normalize_af_evidence_mode(af_evidence_mode)
@@ -906,6 +1155,12 @@ class CNVModel:
             )
         if self.autosome_nonref_concentration <= 0:
             raise ValueError("autosome_nonref_concentration must be positive.")
+        if self.var_bias_bin <= 0:
+            raise ValueError("var_bias_bin must be positive.")
+        if self.var_allosome < 0:
+            raise ValueError("var_allosome must be non-negative.")
+        if self.raw_variance_power < 1.0 or self.raw_variance_power > 2.0:
+            raise ValueError("raw_variance_power must be between 1 and 2.")
         if self.af_temperature_prior_scale <= 0:
             raise ValueError("af_temperature_prior_scale must be positive.")
         if self.learn_af_temperature and self.af_weight <= 0:
@@ -914,11 +1169,24 @@ class CNVModel:
             raise ValueError("learn_site_pop_af requires af_weight > 0.")
         if self.site_af_prior_strength < 0:
             raise ValueError("site_af_prior_strength must be non-negative.")
+        if self.guide_init_scale <= 0:
+            raise ValueError("guide_init_scale must be positive.")
+        if self.lowrank_guide_rank is not None:
+            if int(self.lowrank_guide_rank) != self.lowrank_guide_rank:
+                raise ValueError("lowrank_guide_rank must be an integer.")
+            self.lowrank_guide_rank = int(self.lowrank_guide_rank)
+            if self.lowrank_guide_rank <= 0:
+                raise ValueError("lowrank_guide_rank must be positive.")
 
         if self.epsilon_mean < 0:
             raise ValueError("epsilon_mean must be non-negative.")
         if self.epsilon_concentration <= 0:
             raise ValueError("epsilon_concentration must be positive.")
+        if int(self.multiplicative_factors) != self.multiplicative_factors:
+            raise ValueError("multiplicative_factors must be an integer.")
+        self.multiplicative_factors = int(self.multiplicative_factors)
+        if self.multiplicative_factors < 0:
+            raise ValueError("multiplicative_factors must be non-negative.")
         if int(self.background_factors) != self.background_factors:
             raise ValueError("background_factors must be an integer.")
         self.background_factors = int(self.background_factors)
@@ -934,15 +1202,22 @@ class CNVModel:
         if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD and self.sample_depth_max <= 0:
             raise ValueError("sample_depth_max must be positive.")
 
+        self.learn_bin_var = self.var_bin > 0
+        self.learn_allosome_var = self.var_allosome > 0
+
         self._latent_sites = list(self._latent_sites)
-        if self.freeze_bin_bias:
-            self._latent_sites = [
-                site for site in self._latent_sites if site != "bin_bias"
-            ]
         if self.freeze_sample_var:
             self._latent_sites = [
                 site for site in self._latent_sites if site != "sample_var"
             ]
+        if self.learn_bin_var:
+            self._latent_sites.append("bin_var")
+        if self.learn_allosome_var:
+            self._latent_sites.append("allosome_var")
+        if all((not self.freeze_bin_bias, self.multiplicative_factors > 0)):
+            self._latent_sites.extend(
+                ["multiplicative_bin_factors", "multiplicative_sample_factors"]
+            )
         if self.autosome_prior_mode == "shrinkage":
             self._latent_sites.extend(
                 [
@@ -1020,20 +1295,34 @@ class CNVModel:
 
         self.guide = self._build_guide()
 
-    def _build_base_guide(self, blocked_model, guide_kwargs: dict):
+    def _build_base_guide(
+        self,
+        blocked_model,
+        guide_kwargs: dict,
+        guide_type: str | None = None,
+    ):
         """Construct the requested autoguide for a blocked model."""
-        if self.guide_type == "delta":
+        selected_guide_type = self.guide_type if guide_type is None else guide_type
+        if selected_guide_type == "delta":
             return AutoDelta(blocked_model, **guide_kwargs)
-        if self.guide_type == "diagonal":
-            return AutoDiagonalNormal(blocked_model, **guide_kwargs)
-        if self.guide_type == "lowrank":
-            return AutoLowRankMultivariateNormal(blocked_model, **guide_kwargs)
+        if selected_guide_type == "diagonal":
+            return AutoDiagonalNormal(
+                blocked_model,
+                **guide_kwargs,
+                init_scale=self.guide_init_scale,
+            )
+        if selected_guide_type == "lowrank":
+            lowrank_kwargs = dict(guide_kwargs)
+            lowrank_kwargs["init_scale"] = self.guide_init_scale
+            if self.lowrank_guide_rank is not None:
+                lowrank_kwargs["rank"] = self.lowrank_guide_rank
+            return AutoLowRankMultivariateNormal(blocked_model, **lowrank_kwargs)
         raise ValueError(
-            f"Unknown guide_type: {self.guide_type!r}. "
+            f"Unknown guide_type: {selected_guide_type!r}. "
             "Choose 'delta', 'diagonal', or 'lowrank'."
         )
 
-    def _build_guide(self, init_loc_fn=None):
+    def _build_guide(self, init_loc_fn=None, guide_type: str | None = None):
         """Construct the variational guide, optionally with custom init."""
         guide_kwargs = {}
         if init_loc_fn is not None:
@@ -1055,12 +1344,13 @@ class CNVModel:
                     self._build_base_guide(
                         poutine.block(self.model, expose=remaining_latents),
                         guide_kwargs,
+                        guide_type=guide_type,
                     )
                 )
             return guide
 
         blocked = poutine.block(self.model, expose=self._latent_sites)
-        return self._build_base_guide(blocked, guide_kwargs)
+        return self._build_base_guide(blocked, guide_kwargs, guide_type=guide_type)
 
     def _compose_autosome_cn_probs_torch(
         self,
@@ -1168,7 +1458,18 @@ class CNVModel:
         if "cn_probs" in source:
             return source["cn_probs"]
 
-        n_bins = int(chr_type.shape[0]) if chr_type is not None else int(source["bin_bias"].shape[0])
+        if chr_type is not None:
+            n_bins = int(chr_type.shape[0])
+        elif "bin_bias" in source:
+            n_bins = int(source["bin_bias"].shape[0])
+        elif "multiplicative_bin_factors" in source:
+            n_bins = int(source["multiplicative_bin_factors"].shape[0])
+        elif "background_bin_factors" in source:
+            n_bins = int(source["background_bin_factors"].shape[0])
+        elif "bin_epsilon" in source:
+            n_bins = int(source["bin_epsilon"].shape[0])
+        else:
+            raise KeyError("Unable to infer n_bins from latent estimates.")
         if self.autosome_prior_mode != "shrinkage":
             return self._default_cn_probs_torch(chr_type, n_bins)
 
@@ -1411,6 +1712,34 @@ class CNVModel:
                 estimates[site] = value.detach().clone()
             else:
                 estimates[site] = torch.as_tensor(value, device=self.device)
+
+        if all(
+            (
+                not self.learn_bin_var,
+                "bin_var" not in estimates,
+                model_kw.get("bin_var_fixed") is not None,
+            )
+        ):
+            estimates["bin_var"] = model_kw["bin_var_fixed"].detach().clone()
+        if not self.learn_allosome_var and "allosome_var" not in estimates:
+            estimates["allosome_var"] = torch.zeros(
+                (2,),
+                device=self.device,
+                dtype=self.dtype,
+            )
+
+        bin_bias_matrix = _compose_effective_bin_bias_torch(
+            int(model_kw["n_bins"]),
+            int(model_kw["n_samples"]),
+            device=self.device,
+            dtype=self.dtype,
+            fixed_bias=model_kw.get("bin_bias_fixed") if self.freeze_bin_bias else None,
+            multiplicative_bin_factors=estimates.get("multiplicative_bin_factors"),
+            multiplicative_sample_factors=estimates.get("multiplicative_sample_factors"),
+        )
+        estimates["bin_bias_matrix"] = bin_bias_matrix
+        estimates["bin_bias"] = bin_bias_matrix.mean(dim=-1)
+
         if all(
             (
                 self.freeze_bin_bias,
@@ -1558,19 +1887,33 @@ class CNVModel:
             "scale": torch.tensor(scale_np, dtype=self.dtype, device=self.device),
         }
 
-    def _make_init_loc_fn(self, data: DepthData, *, randomize: bool = False):
+    def _make_init_loc_fn(
+        self,
+        data: DepthData,
+        *,
+        randomize: bool = False,
+        initial_values: Dict[str, torch.Tensor | np.ndarray] | None = None,
+    ):
         """Build a guide init function anchored to raw autosomal depth."""
-        if not randomize and self.obs_likelihood != NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
+        uses_negative_binomial = (
+            self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD
+        )
+        if all((initial_values is None, not randomize, not uses_negative_binomial)):
             return None
 
         base_init = init_to_sample if randomize else init_to_median(num_samples=50)
+        initial_values = {} if initial_values is None else initial_values
 
-        if self.obs_likelihood != NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
+        if not initial_values and not uses_negative_binomial:
             return base_init
 
-        sample_depth_prior = self._estimate_sample_depth_prior(data)
-        sample_depth_init = sample_depth_prior["center"]
-        if not randomize:
+        sample_depth_prior = None
+        sample_depth_init = None
+        if uses_negative_binomial:
+            sample_depth_prior = self._estimate_sample_depth_prior(data)
+            sample_depth_init = sample_depth_prior["center"]
+
+        if not randomize and sample_depth_prior is not None:
             logger.info(
                 "Initial sample_depth from autosomal counts/kb: median=%.3f range=[%.3f, %.3f]",
                 float(sample_depth_init.median().item()),
@@ -1588,7 +1931,13 @@ class CNVModel:
             )
 
         def init_loc_fn(site):
-            if site["name"] == "sample_depth":
+            site_name = site["name"]
+            if site_name in initial_values:
+                value = initial_values[site_name]
+                if isinstance(value, torch.Tensor):
+                    return value.detach().to(device=self.device, dtype=self.dtype).clone()
+                return torch.as_tensor(value, device=self.device, dtype=self.dtype)
+            if site_name == "sample_depth" and sample_depth_prior is not None:
                 if randomize:
                     sampled_depth = dist.LogNormal(
                         sample_depth_prior["loc"],
@@ -1600,7 +1949,7 @@ class CNVModel:
                         max=self.sample_depth_max * 0.95,
                     )
                 return sample_depth_init
-            if site["name"] == "site_pop_af_latent" and data.site_pop_af is not None:
+            if site_name == "site_pop_af_latent" and data.site_pop_af is not None:
                 return torch.clamp(data.site_pop_af, min=1e-6, max=1.0 - 1e-6)
             return base_init(site)
 
@@ -1635,22 +1984,44 @@ class CNVModel:
         model_kw: dict,
         elbo,
         init_restarts: int,
+        guide_type: str | None = None,
+        initial_values: Dict[str, torch.Tensor | np.ndarray] | None = None,
     ) -> None:
         """Choose the best initial guide state before optimization."""
         if init_restarts < 1:
             raise ValueError("init_restarts must be at least 1.")
 
-        default_init_loc_fn = self._make_init_loc_fn(data)
-        if init_restarts == 1:
+        selected_guide_type = self.guide_type if guide_type is None else guide_type
+        default_init_loc_fn = self._make_init_loc_fn(
+            data,
+            initial_values=initial_values,
+        )
+        use_prior_random_restarts = (
+            selected_guide_type == "delta" and initial_values is None
+        )
+        effective_restarts = init_restarts if use_prior_random_restarts else 1
+
+        if init_restarts > 1 and not use_prior_random_restarts:
+            logger.info(
+                "Using anchored initialization for %s guide; disabling "
+                "prior-random restart candidates because expressive guides "
+                "are initialized near the empirical/MAP location.",
+                selected_guide_type,
+            )
+
+        if effective_restarts == 1:
             pyro.clear_param_store()
-            self.guide = self._build_guide(default_init_loc_fn)
+            self.guide = self._build_guide(
+                default_init_loc_fn,
+                guide_type=selected_guide_type,
+            )
             return
 
         logger.info(
             "Evaluating %d SVI initializations before gradient descent (%d anchored, %d random).",
-            init_restarts,
+            effective_restarts,
             1,
-            init_restarts - 1,
+            effective_restarts - 1,
         )
 
         rng_state = self._capture_rng_state()
@@ -1663,7 +2034,7 @@ class CNVModel:
         candidate_losses: list[float] = []
 
         try:
-            for restart_idx in range(init_restarts):
+            for restart_idx in range(effective_restarts):
                 pyro.clear_param_store()
                 if restart_idx == 0:
                     init_loc_fn = default_init_loc_fn
@@ -1671,14 +2042,17 @@ class CNVModel:
                     pyro.set_rng_seed((base_seed + restart_idx) % seed_modulus)
                     init_loc_fn = self._make_init_loc_fn(data, randomize=True)
 
-                guide = self._build_guide(init_loc_fn)
+                guide = self._build_guide(
+                    init_loc_fn,
+                    guide_type=selected_guide_type,
+                )
                 try:
                     loss = float(elbo.loss(self.model, guide, **model_kw))
                 except Exception as exc:
                     logger.warning(
                         "SVI init candidate %d/%d failed during loss evaluation: %s",
                         restart_idx + 1,
-                        init_restarts,
+                        effective_restarts,
                         exc,
                     )
                     continue
@@ -1687,7 +2061,7 @@ class CNVModel:
                     logger.warning(
                         "SVI init candidate %d/%d produced non-finite loss %s and will be skipped.",
                         restart_idx + 1,
-                        init_restarts,
+                        effective_restarts,
                         loss,
                     )
                     continue
@@ -1706,7 +2080,10 @@ class CNVModel:
             logger.warning(
                 "All SVI initialization candidates failed; falling back to the anchored initialization."
             )
-            self.guide = self._build_guide(default_init_loc_fn)
+            self.guide = self._build_guide(
+                default_init_loc_fn,
+                guide_type=selected_guide_type,
+            )
             return
 
         pyro.get_param_store().set_state(best_state)
@@ -1716,7 +2093,7 @@ class CNVModel:
         logger.info(
             "Selected SVI init candidate %d/%d with initial loss %.4f (median=%.4f, p10=%.4f, p90=%.4f).",
             best_restart_idx + 1,
-            init_restarts,
+            effective_restarts,
             best_loss,
             float(np.median(loss_arr)),
             float(np.quantile(loss_arr, 0.10)),
@@ -1733,6 +2110,7 @@ class CNVModel:
         n_samples: int = None,
         bin_length_kb: Optional[torch.Tensor] = None,
         bin_bias_fixed: Optional[torch.Tensor] = None,
+        bin_var_fixed: Optional[torch.Tensor] = None,
         sample_var_fixed: Optional[torch.Tensor] = None,
         sample_depth_prior_loc: Optional[torch.Tensor] = None,
         sample_depth_prior_scale: Optional[torch.Tensor] = None,
@@ -1758,6 +2136,8 @@ class CNVModel:
                 ``obs_likelihood='negative_binomial'``.
             bin_bias_fixed: Fixed per-bin bias values used when
                 ``freeze_bin_bias=True``.
+            bin_var_fixed: Fixed per-bin variance values used when
+                ``var_bin <= 0``.
             sample_var_fixed: Fixed per-sample overdispersion values used when
                 ``freeze_sample_var=True``.
             sample_depth_prior_loc: LogNormal location parameter for the
@@ -1790,11 +2170,20 @@ class CNVModel:
             device=self.device,
             dtype=self.dtype,
         )
-        bin_var_rate = torch.tensor(
-            1.0 / self.var_bin,
-            device=self.device,
-            dtype=self.dtype,
-        )
+        bin_var_rate = None
+        if self.learn_bin_var:
+            bin_var_rate = torch.tensor(
+                1.0 / self.var_bin,
+                device=self.device,
+                dtype=self.dtype,
+            )
+        allosome_var_rate = None
+        if self.learn_allosome_var:
+            allosome_var_rate = torch.tensor(
+                1.0 / self.var_allosome,
+                device=self.device,
+                dtype=self.dtype,
+            )
 
         plate_bins = pyro.plate("bins", n_bins, dim=-2, device=self.device)
         plate_samples = pyro.plate("samples", n_samples, dim=-1, device=self.device)
@@ -1834,6 +2223,13 @@ class CNVModel:
 
         # Per-sample variance and sex karyotype
         sample_depth = None
+        allosome_var = None
+        if self.learn_allosome_var:
+            allosome_var = pyro.sample(
+                "allosome_var",
+                dist.Exponential(allosome_var_rate).expand([2]).to_event(1),
+            )
+
         with plate_samples:
             if self.freeze_sample_var:
                 if sample_var_fixed is None:
@@ -1890,24 +2286,60 @@ class CNVModel:
 
         # Per-bin latent variables
         with plate_bins:
-            if self.freeze_bin_bias:
-                if bin_bias_fixed is None:
-                    raise ValueError(
-                        "bin_bias_fixed is required when freeze_bin_bias=True."
-                    )
-                bin_bias = pyro.sample(
-                    "bin_bias",
-                    dist.Delta(
-                        bin_bias_fixed,
-                        log_density=torch.zeros_like(bin_bias_fixed),
-                    ),
-                    obs=bin_bias_fixed,
-                )
+            if self.learn_bin_var:
+                bin_var = pyro.sample("bin_var", dist.Exponential(bin_var_rate))
             else:
-                bin_bias = pyro.sample(
-                    "bin_bias", dist.LogNormal(zero, self.var_bias_bin)
+                if bin_var_fixed is None:
+                    raise ValueError(
+                        "bin_var_fixed is required when var_bin <= 0."
+                    )
+                bin_var = bin_var_fixed
+
+        if self.freeze_bin_bias:
+            if bin_bias_fixed is None:
+                raise ValueError(
+                    "bin_bias_fixed is required when freeze_bin_bias=True."
                 )
-            bin_var = pyro.sample("bin_var", dist.Exponential(bin_var_rate))
+            bin_bias = _compose_effective_bin_bias_torch(
+                n_bins,
+                n_samples,
+                device=self.device,
+                dtype=self.dtype,
+                fixed_bias=bin_bias_fixed,
+            )
+        elif self.multiplicative_factors > 0:
+            multiplicative_bin_factors = pyro.sample(
+                "multiplicative_bin_factors",
+                dist.Normal(zero, one).expand(
+                    [n_bins, self.multiplicative_factors]
+                ).to_event(2),
+            )
+            multiplicative_sample_factors = pyro.sample(
+                "multiplicative_sample_factors",
+                dist.Normal(
+                    zero,
+                    torch.tensor(
+                        self.var_bias_bin,
+                        device=self.device,
+                        dtype=self.dtype,
+                    ),
+                ).expand([self.multiplicative_factors, n_samples]).to_event(2),
+            )
+            bin_bias = _compose_effective_bin_bias_torch(
+                n_bins,
+                n_samples,
+                device=self.device,
+                dtype=self.dtype,
+                multiplicative_bin_factors=multiplicative_bin_factors,
+                multiplicative_sample_factors=multiplicative_sample_factors,
+            )
+        else:
+            bin_bias = _compose_effective_bin_bias_torch(
+                n_bins,
+                n_samples,
+                device=self.device,
+                dtype=self.dtype,
+            )
 
         if self.epsilon_mean > 0:
             if n_contigs is None or contig_index is None:
@@ -2078,6 +2510,13 @@ class CNVModel:
             )
             cn = pyro.sample("cn", dist.Categorical(cn_probs_for_samples))
             expected_units = Vindex(cn_states)[cn] * bin_bias + additive_background
+            chrom_type_var = _compose_allosome_overdispersion_torch(
+                chr_type,
+                allosome_var,
+                n_bins,
+                device=self.device,
+                dtype=self.dtype,
+            )
 
             if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
                 if bin_length_kb is None:
@@ -2092,14 +2531,18 @@ class CNVModel:
                 mean = torch.clamp(mean, min=0.0)
                 mean = mean * sample_depth
                 mean = mean * bin_length_kb.unsqueeze(-1)
-                overdispersion = sample_var + bin_var
+                overdispersion = sample_var + bin_var + chrom_type_var
                 pyro.sample(
                     "obs",
-                    _make_negative_binomial_distribution(mean, overdispersion),
+                    _make_negative_binomial_distribution(
+                        mean,
+                        overdispersion,
+                        self.raw_variance_power,
+                    ),
                     obs=depth,
                 )
             else:
-                base_variance = sample_var + bin_var
+                base_variance = sample_var + bin_var + chrom_type_var
                 variance = base_variance * torch.clamp(expected_units, min=1e-3)
                 pyro.sample(
                     "obs",
@@ -2177,6 +2620,12 @@ class CNVModel:
                 device=self.device,
                 dtype=self.dtype,
             )
+        if not self.learn_bin_var:
+            kw["bin_var_fixed"] = torch.zeros(
+                (data.n_bins, 1),
+                device=self.device,
+                dtype=self.dtype,
+            )
         if self.freeze_bin_bias:
             kw["bin_bias_fixed"] = torch.ones(
                 (data.n_bins, 1),
@@ -2232,6 +2681,7 @@ class CNVModel:
         adam_beta2: float = 0.999,
         grad_clip_norm: float | None = 10.0,
         init_restarts: int = 1,
+        guide_warmup_iter: int = DEFAULT_GUIDE_WARMUP_ITER,
         log_freq: int = 50,
         jit: bool = False,
         early_stopping: bool = True,
@@ -2255,6 +2705,10 @@ class CNVModel:
                 evaluate before gradient descent. The first candidate uses
                 the existing anchored initialization and the remainder sample
                 random starts from the prior.
+            guide_warmup_iter: Number of AutoDelta iterations used to find a
+                local MAP warm start before switching to a diagonal or low-rank
+                guide. ``-1`` chooses an automatic value for expressive guides
+                and zero for delta guides.
             log_freq: Logging frequency (iterations).
             jit: Whether to JIT-compile the ELBO.
             early_stopping: Enable early stopping.
@@ -2270,6 +2724,8 @@ class CNVModel:
         logger.info("Initialising training ...")
         if init_restarts < 1:
             raise ValueError("init_restarts must be at least 1.")
+        if guide_warmup_iter < DEFAULT_GUIDE_WARMUP_ITER:
+            raise ValueError("guide_warmup_iter must be -1 or non-negative.")
         if early_stopping:
             if patience < 1:
                 raise ValueError("patience must be at least 1.")
@@ -2292,23 +2748,92 @@ class CNVModel:
         if grad_clip_norm is not None:
             clip_args = {"clip_norm": float(grad_clip_norm)}
 
-        scheduler = pyro.optim.LambdaLR(
-            {
-                "optimizer": torch.optim.Adam,
-                "optim_args": {"lr": 1.0, "betas": (adam_beta1, adam_beta2)},
-                "lr_lambda": lambda k: (
-                    lr_min + (lr_init - lr_min) * np.exp(-k / lr_decay)
-                ),
-            },
-            clip_args=clip_args,
-        )
+        def make_scheduler():
+            return pyro.optim.LambdaLR(
+                {
+                    "optimizer": torch.optim.Adam,
+                    "optim_args": {"lr": 1.0, "betas": (adam_beta1, adam_beta2)},
+                    "lr_lambda": lambda k: (
+                        lr_min + (lr_init - lr_min) * np.exp(-k / lr_decay)
+                    ),
+                },
+                clip_args=clip_args,
+            )
 
         elbo = JitTraceEnum_ELBO() if jit else TraceEnum_ELBO()
+
+        if guide_warmup_iter == DEFAULT_GUIDE_WARMUP_ITER:
+            resolved_warmup_iter = 0
+            if self.guide_type in {"diagonal", "lowrank"}:
+                resolved_warmup_iter = min(250, max(0, max_iter // 10))
+        else:
+            resolved_warmup_iter = guide_warmup_iter
+        if self.guide_type == "delta":
+            resolved_warmup_iter = 0
+
+        warmup_estimates: Dict[str, torch.Tensor] | None = None
+        if resolved_warmup_iter > 0:
+            logger.info(
+                "Guide warm start: training an AutoDelta guide for %d "
+                "iterations before switching to the %s guide.",
+                resolved_warmup_iter,
+                self.guide_type,
+            )
+            pyro.clear_param_store()
+            self.guide = self._build_guide(
+                self._make_init_loc_fn(data),
+                guide_type="delta",
+            )
+            warmup_scheduler = make_scheduler()
+            warmup_svi = SVI(
+                self.model,
+                self.guide,
+                optim=warmup_scheduler,
+                loss=elbo,
+            )
+            warmup_loss = float("nan")
+            try:
+                with tqdm(
+                    range(resolved_warmup_iter),
+                    desc="MAP warmup",
+                    unit="epoch",
+                ) as pbar:
+                    for warmup_epoch in pbar:
+                        warmup_loss = warmup_svi.step(**model_kw)
+                        if not np.isfinite(warmup_loss):
+                            raise RuntimeError(
+                                "AutoDelta warm-start produced non-finite loss "
+                                f"{warmup_loss} at epoch {warmup_epoch + 1}."
+                            )
+                        warmup_scheduler.step()
+                        pbar.set_postfix(loss=f"{warmup_loss:.4f}")
+                warmup_estimates = self._get_continuous_estimates(
+                    data,
+                    estimate_method="median",
+                    model_kw=model_kw,
+                )
+                logger.info(
+                    "Guide warm start complete. Final AutoDelta loss: %.4f.",
+                    warmup_loss,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Guide warm start failed; falling back to anchored %s "
+                    "guide initialization: %s",
+                    self.guide_type,
+                    exc,
+                )
+                warmup_estimates = None
+            finally:
+                pyro.clear_param_store()
+
+        scheduler = make_scheduler()
         self._select_svi_initialization(
             data,
             model_kw=model_kw,
             elbo=elbo,
             init_restarts=init_restarts,
+            initial_values=warmup_estimates,
         )
         svi = SVI(self.model, self.guide, optim=scheduler, loss=elbo)
 
@@ -2441,9 +2966,24 @@ class CNVModel:
         af_table: np.ndarray | None = None,
     ) -> Dict[str, np.ndarray]:
         """Compute exact discrete CN posteriors with fixed continuous latents."""
-        bin_bias = np.atleast_1d(np.asarray(maps["bin_bias"]).squeeze())
+        bin_bias = _compose_effective_bin_bias_numpy(
+            data.n_bins,
+            data.n_samples,
+            fixed_bias=np.asarray(maps.get("bin_bias_matrix", maps["bin_bias"])),
+        )
         sample_var = np.atleast_1d(np.asarray(maps["sample_var"]).squeeze())
-        bin_var = np.atleast_1d(np.asarray(maps["bin_var"]).squeeze())
+        if "bin_var" in maps:
+            bin_var = np.atleast_1d(np.asarray(maps["bin_var"]).squeeze())
+        else:
+            bin_var = np.zeros(data.n_bins, dtype=np.float64)
+        chr_type_np = None
+        if hasattr(data, "chr_type") and data.chr_type is not None:
+            chr_type_np = data.chr_type.detach().cpu().numpy()
+        chrom_type_var = _compose_allosome_overdispersion_numpy(
+            chr_type_np,
+            maps.get("allosome_var"),
+            data.n_bins,
+        )
         additive_background = compose_additive_background_matrix(
             maps.get("bin_epsilon"),
             data.n_bins,
@@ -2454,9 +2994,6 @@ class CNVModel:
             background_bin_factors=maps.get("background_bin_factors"),
             background_sample_factors=maps.get("background_sample_factors"),
         )
-        chr_type_np = None
-        if hasattr(data, "chr_type") and data.chr_type is not None:
-            chr_type_np = data.chr_type.detach().cpu().numpy()
         cn_probs = self._build_cn_probs_from_estimates_numpy(
             maps,
             chr_type_np,
@@ -2471,11 +3008,11 @@ class CNVModel:
                 np.asarray(maps["sample_depth"]).squeeze()
             )
             overdispersion = (
-                sample_var[np.newaxis, :] + bin_var[:, np.newaxis]
+                sample_var[np.newaxis, :] + bin_var[:, np.newaxis] + chrom_type_var
             )
             expected_units = _raw_expected_depth_units(
                 cn_states,
-                bin_bias[np.newaxis, :, np.newaxis],
+                bin_bias[np.newaxis, :, :],
                 additive_background[np.newaxis, :, :],
             )
             mean = data.bin_length_kb.detach().cpu().numpy()[np.newaxis, :, np.newaxis]
@@ -2485,10 +3022,11 @@ class CNVModel:
                 obs_b,
                 mean,
                 overdispersion[np.newaxis, :, :],
+                self.raw_variance_power,
             )
         else:
             base_variance = sample_var[np.newaxis, :] + bin_var[:, np.newaxis]
-            expected_depth = cn_states * bin_bias[np.newaxis, :, np.newaxis]
+            expected_depth = cn_states * bin_bias[np.newaxis, :, :]
             expected_depth = expected_depth + additive_background[np.newaxis, :, :]
             variance = base_variance[np.newaxis, :, :]
             variance = variance * np.maximum(expected_depth, 1e-3)

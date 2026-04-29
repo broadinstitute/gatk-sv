@@ -39,12 +39,14 @@ def _resolve_binq_field(
     bin_quality_df: pd.DataFrame,
     requested_field: str,
 ) -> str:
-    """Resolve a quality field, preferring posterior-predictive BINQ."""
+    """Resolve a quality field, defaulting auto to BINQ20 when available."""
     if requested_field != "auto":
         return requested_field
     if "BINQ20" in bin_quality_df.columns:
         return "BINQ20"
-    return "CALLQ20"
+    if "CALLQ20" in bin_quality_df.columns:
+        return "CALLQ20"
+    return "BINQ20"
 
 
 def _median_absolute_deviation(values: pd.Series) -> float:
@@ -624,9 +626,6 @@ def _classify_aneuploidy(
         if is_aneuploid and chrom not in _SEX_CHROMS
     ]
     sex_aneu = ["chrX", "chrY"] if sex_is_aneuploid else []
-    autosome_cns = {
-        c: cn_map.get(c, 2) for c in cn_map if c not in ("chrX", "chrY")
-    }
 
     aneuploid_chrs = auto_aneu + sex_aneu
 
@@ -760,16 +759,21 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--ppd-bin-quality", default=None,
-        help="Optional ppd/ppd_bin_quality.tsv used for BINQ-based bin filtering.",
+        help="Optional ppd/ppd_bin_quality.tsv used for per-bin quality filtering.",
+    )
+    p.add_argument(
+        "--use-callq20",
+        action="store_true",
+        help="Shortcut for using CALLQ20 instead of the default BINQ20 when --min-binq is provided.",
     )
     p.add_argument(
         "--binq-field", choices=_BINQ_FIELD_OPTIONS, default="BINQ20",
         help="Per-bin quality field to threshold when --min-binq is provided. "
-             "'auto' prefers CALLQ20 when available, otherwise BINQ20.",
+             "Defaults to BINQ20. 'auto' prefers BINQ20 and falls back to CALLQ20.",
     )
     p.add_argument(
         "--min-binq", type=float, default=None,
-        help="If set, rebuild chromosome calls after excluding bins with BINQ below this threshold.",
+        help="If set, rebuild chromosome calls after excluding bins with the selected quality field below this threshold. By default this uses BINQ20; use --use-callq20 to filter on CALLQ20 instead.",
     )
     p.add_argument(
         "--prob-threshold", type=float, default=0.5,
@@ -800,18 +804,29 @@ def main() -> None:
             raise ValueError(
                 "--min-binq requires both --bin-stats and --ppd-bin-quality."
             )
-        logger.info(
-            "Applying %s >= %.2f filter using PPD bin quality summaries and rebuilding chromosome calls ...",
-            args.binq_field,
-            args.min_binq,
-        )
         bin_stats_df = pd.read_csv(args.bin_stats, sep="\t")
         bin_quality_df = pd.read_csv(args.ppd_bin_quality, sep="\t")
+        requested_binq_field = args.binq_field
+        if args.use_callq20:
+            if requested_binq_field in {"BINQ15", "CALLQ15"}:
+                raise ValueError(
+                    "--use-callq20 cannot be combined with --binq-field set to a 15-threshold metric."
+                )
+            requested_binq_field = "CALLQ20"
+        resolved_binq_field = _resolve_binq_field(
+            bin_quality_df,
+            requested_binq_field,
+        )
+        logger.info(
+            "Applying %s >= %.2f filter using PPD quality summaries and rebuilding chromosome calls ...",
+            resolved_binq_field,
+            args.min_binq,
+        )
         annotated_bin_df = _annotate_binq_filter_for_bin_stats(
             bin_stats_df,
             bin_quality_df,
             min_binq=args.min_binq,
-            binq_field=args.binq_field,
+            binq_field=resolved_binq_field,
         )
         log_binq_filter_stats(annotated_bin_df)
         df = _apply_binq_filter_to_annotated_bins(

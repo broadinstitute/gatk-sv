@@ -319,6 +319,7 @@ def test_plot_annotate_binq_values_merges_quality_table() -> None:
             "start": [0, 100, 0, 100, 0, 100],
             "end": [100, 200, 100, 200, 100, 200],
             "BINQ20": [15.0, 35.0, 25.0, 45.0, 55.0, 65.0],
+            "CALLQ20": [99.0, 98.0, 97.0, 96.0, 95.0, 94.0],
         }
     )
 
@@ -330,6 +331,18 @@ def test_plot_annotate_binq_values_merges_quality_table() -> None:
         (annotated["chr"] == "chr21") & (annotated["start"] == 100),
         "binq_value",
     ].iloc[0] == pytest.approx(35.0)
+
+    auto_annotated = _annotate_binq_values(bin_df, bin_quality_df, "auto")
+    assert auto_annotated.loc[
+        (auto_annotated["chr"] == "chr21") & (auto_annotated["start"] == 100),
+        "binq_field",
+    ].iloc[0] == "BINQ20"
+
+    callq_annotated = _annotate_binq_values(bin_df, bin_quality_df, "CALLQ20")
+    assert callq_annotated.loc[
+        (callq_annotated["chr"] == "chr21") & (callq_annotated["start"] == 100),
+        "binq_field",
+    ].iloc[0] == "CALLQ20"
 
 
 def test_plot_detail_private_branches(tmp_path) -> None:
@@ -632,8 +645,27 @@ def test_plot_background_factor_diagnostics_outputs(tmp_path) -> None:
             ],
             dtype=np.float32,
         ),
+        "multiplicative_bin_factors": np.array(
+            [
+                [-0.4, 0.2],
+                [-0.2, 0.1],
+                [0.0, -0.1],
+                [0.1, -0.2],
+                [0.3, 0.4],
+                [0.5, 0.6],
+            ],
+            dtype=np.float32,
+        ),
+        "multiplicative_sample_factors": np.array(
+            [
+                [-0.05, 0.08],
+                [0.02, -0.03],
+            ],
+            dtype=np.float32,
+        ),
     }
 
     plot_background_factor_diagnostics(bin_df, map_estimates, str(tmp_path))
 
     assert (tmp_path / "diagnostics" / "background_factor_diagnostics.png").exists()
+    assert (tmp_path / "diagnostics" / "factor_mode_weight_diagnostics.png").exists()

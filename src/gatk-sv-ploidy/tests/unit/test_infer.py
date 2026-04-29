@@ -22,6 +22,7 @@ from gatk_sv_ploidy.infer import (
 from gatk_sv_ploidy.models import DEFAULT_EPSILON_MEAN
 from gatk_sv_ploidy.models import DEFAULT_EPSILON_CONCENTRATION
 from gatk_sv_ploidy.models import DEFAULT_BACKGROUND_FACTORS
+from gatk_sv_ploidy.models import DEFAULT_MULTIPLICATIVE_FACTORS
 
 
 def test_infer_parse_args_defaults(monkeypatch) -> None:
@@ -39,9 +40,10 @@ def test_infer_parse_args_defaults(monkeypatch) -> None:
     args = parse_args()
 
     assert args.autosome_prior_mode == "dirichlet"
-    assert args.var_bias_bin == pytest.approx(1e-9)
+    assert args.var_bias_bin == pytest.approx(0.01)
     assert args.var_sample == 0.01
-    assert args.var_bin == pytest.approx(1e-9)
+    assert args.var_bin == pytest.approx(0.0)
+    assert args.multiplicative_factors == DEFAULT_MULTIPLICATIVE_FACTORS
     assert args.alpha_ref == 50.0
     assert args.epsilon_mean == pytest.approx(DEFAULT_EPSILON_MEAN)
     assert args.epsilon_concentration == pytest.approx(
@@ -198,7 +200,7 @@ def test_infer_parse_args_defaults_include_elbo_convergence_controls(
     args = parse_args()
 
     assert args.elbo_window == 50
-    assert args.elbo_rtol == pytest.approx(1e-4)
+    assert args.elbo_rtol == pytest.approx(1e-3)
 
 
 def test_infer_parse_args_accepts_elbo_convergence_controls(monkeypatch) -> None:

@@ -64,6 +64,16 @@ gatk-sv-ploidy eval -p out/call/aneuploidy_type_predictions.tsv \
   -t truth.json -o out/eval/
 ```
 
+By default, `ppd` conditions on the fitted continuous latents and resamples
+copy number plus observation noise. This is the intended in-sample QC/BINQ
+calibration check. For a fully Bayesian posterior predictive check that also
+integrates saved continuous-latent posterior draws from expressive guides, add
+`--continuous-posterior-mode integrated`; this mode is expected to be more
+conservative for in-sample diagnostics.
+
+If you run the end-to-end wrapper, pass extra PPD CLI options through
+`run_ploidy.sh --ppd-args "--continuous-posterior-mode integrated"`.
+
 `infer` uses a structured additive background model by default. A tiny
 contig-shared epsilon floor (`--epsilon-mean 1e-4 --epsilon-concentration 0.5`)
 is retained, and two low-rank additive background factors are enabled by default

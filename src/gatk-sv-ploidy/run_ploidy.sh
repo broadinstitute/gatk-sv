@@ -55,12 +55,14 @@ DRY_RUN="false"
 ENABLE_PPD="false"
 PREPROCESS_ARGS=""
 MODEL_ARGS=""
+PPD_STEP_ARGS=""
 CALL_ARGS=""
 PLOT_ARGS=""
 HIGHLIGHT_SAMPLE=""
 SITE_DEPTH_LIST=""
 POOR_REGIONS=""
 MIN_POOR_REGION_COVERAGE="0.5"
+USE_CALLQ20="false"
 
 usage() {
     echo "Usage: $0 --work-dir DIR [--input-depth PATH] [--truth-json PATH] [--site-depth-list PATH] [--poor-regions PATH] [--ppd]" >&2
@@ -71,7 +73,9 @@ usage() {
     echo "  --site-depth-list PATH   Optional file listing per-sample SD file paths (one per line)" >&2
     echo "  --poor-regions PATH      Optional BED of poor regions to remove during preprocess" >&2
     echo "  --min-poor-region-coverage FLOAT  Min fraction of a bin overlapped by poor regions to filter it" >&2
+    echo "  --ppd-args STRING        Extra arguments passed through to the ppd step" >&2
     echo "  --call-args STRING       Extra arguments passed through to the call step" >&2
+    echo "  --use-callq20            Use CALLQ20 instead of the default BINQ20 when call filtering via --min-binq" >&2
     echo "  --ppd                    Run posterior predictive checks and enable PPD plots" >&2
     exit 1
 }
@@ -98,10 +102,16 @@ while [[ $# -gt 0 ]]; do
             MODEL_ARGS="$2"; shift 2;;
         --model-args=*)
             MODEL_ARGS="${1#*=}"; shift;;
+        --ppd-args)
+            PPD_STEP_ARGS="$2"; shift 2;;
+        --ppd-args=*)
+            PPD_STEP_ARGS="${1#*=}"; shift;;
         --call-args)
             CALL_ARGS="$2"; shift 2;;
         --call-args=*)
             CALL_ARGS="${1#*=}"; shift;;
+        --use-callq20)
+            USE_CALLQ20="true"; shift;;
         --plot-args)
             PLOT_ARGS="$2"; shift 2;;
         --plot-args=*)
@@ -192,12 +202,17 @@ echo "  Poor regions     : $(describe_redacted_input "${POOR_REGIONS}")"
 echo "  Poor region cov  : ${MIN_POOR_REGION_COVERAGE}"
 echo "  Truth JSON       : $(describe_redacted_input "${TRUTH_JSON}")"
 echo "  Highlight sample : $(describe_redacted_input "${HIGHLIGHT_SAMPLE}")"
+echo "  Call filter qual : $([[ "${USE_CALLQ20}" == "true" ]] && printf 'CALLQ20' || printf 'BINQ20')"
+echo "  PPD extra args   : $(describe_redacted_input "${PPD_STEP_ARGS}" "provided (redacted)" "none")"
 echo "  Run PPD          : ${ENABLE_PPD}"
 echo "  Work dir         : configured (redacted)"
 echo "  Python           : resolved"
 echo ""
 
 CALL_STEP_ARGS="${CALL_ARGS}"
+if [[ "${USE_CALLQ20}" == "true" ]]; then
+    CALL_STEP_ARGS="--use-callq20 ${CALL_STEP_ARGS}"
+fi
 if [[ "${CALL_NEEDS_PPD_FILTER}" == "true" ]]; then
     if [[ "${CALL_STEP_ARGS}" != *"--bin-stats"* ]]; then
         CALL_STEP_ARGS="--bin-stats ${BIN_STATS} ${CALL_STEP_ARGS}"
@@ -245,9 +260,9 @@ else
 fi
 
 # ── step 2/3: posterior predictive checks and call ──────────────────────────
-PPD_ARGS=""
+PPD_INPUT_ARGS=""
 if [[ -f "${SITE_DATA}" ]]; then
-    PPD_ARGS="--site-data ${SITE_DATA}"
+    PPD_INPUT_ARGS="--site-data ${SITE_DATA}"
 fi
 CALL_WITH_TRUTH_ARGS="${CALL_STEP_ARGS}"
 if [[ -n "${TRUTH_JSON}" ]]; then
@@ -273,7 +288,8 @@ run_ppd_step() {
             -i "${PREPROCESSED_DEPTH}" \
             -a "${INFERENCE_ARTIFACTS}" \
             -o "${PPD_DIR}" \
-            $PPD_ARGS
+            $PPD_INPUT_ARGS \
+            $PPD_STEP_ARGS
     fi
 }
 
@@ -306,6 +322,9 @@ if [[ "${ENABLE_PPD}" == "true" ]]; then
     PLOT_BINQ_ARGS="--ppd-bin-quality ${PPD_BIN_QUALITY}"
 elif [[ -f "${PPD_BIN_QUALITY}" ]]; then
     PLOT_BINQ_ARGS="--ppd-bin-quality ${PPD_BIN_QUALITY}"
+fi
+if [[ "${USE_CALLQ20}" == "true" && -n "${PLOT_BINQ_ARGS}" ]]; then
+    PLOT_BINQ_ARGS="${PLOT_BINQ_ARGS} --binq-field CALLQ20"
 fi
 PLOT_CHROM_STATS="${CHROM_STATS}"
 PLOT_IGNORED_ARGS=""

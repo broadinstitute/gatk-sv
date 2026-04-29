@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import gzip
+import sys
 
 import pandas as pd
 import pytest
 
 from gatk_sv_ploidy.call import (
+    _resolve_binq_field,
     _normalize_global_cn_artifact,
     _classify_aneuploidy,
     _classify_sex,
@@ -13,6 +15,7 @@ from gatk_sv_ploidy.call import (
     assign_sex_and_aneuploidy_types,
     export_ignored_bins,
     export_aneuploid_data,
+    parse_args,
     save_sex_assignments,
     summarize_binq_filter_stats,
 )
@@ -627,7 +630,7 @@ def test_apply_binq_filter_preserves_original_sex_call_on_conflicting_subset() -
     assert bool(chr_y["is_aneuploid"]) is False
 
 
-def test_apply_binq_filter_auto_prefers_binq_when_available() -> None:
+def test_apply_binq_filter_auto_uses_binq20_when_available() -> None:
     chrom_df = pd.DataFrame(
         [
             {
@@ -692,6 +695,100 @@ def test_apply_binq_filter_auto_prefers_binq_when_available() -> None:
     row = filtered.iloc[0]
     assert int(row["copy_number"]) == 3
     assert bool(row["is_aneuploid"]) is True
+
+
+def test_apply_binq_filter_explicit_callq20_uses_call_quality() -> None:
+    chrom_df = pd.DataFrame(
+        [
+            {
+                "sample": "S1",
+                "chromosome": "chr21",
+                "copy_number": 3,
+                "is_aneuploid": True,
+                "mean_cn_probability": 0.90,
+                "median_depth": 3.0,
+                "n_bins": 2,
+            },
+        ]
+    )
+    bin_stats_df = pd.DataFrame(
+        [
+            {
+                "chr": "chr21",
+                "start": 0,
+                "end": 100,
+                "sample": "S1",
+                "observed_depth": 3.0,
+                "cn_map": 3,
+                "cn_prob_0": 0.0,
+                "cn_prob_1": 0.0,
+                "cn_prob_2": 0.05,
+                "cn_prob_3": 0.95,
+                "cn_prob_4": 0.0,
+                "cn_prob_5": 0.0,
+            },
+            {
+                "chr": "chr21",
+                "start": 100,
+                "end": 200,
+                "sample": "S1",
+                "observed_depth": 2.0,
+                "cn_map": 2,
+                "cn_prob_0": 0.0,
+                "cn_prob_1": 0.0,
+                "cn_prob_2": 0.99,
+                "cn_prob_3": 0.01,
+                "cn_prob_4": 0.0,
+                "cn_prob_5": 0.0,
+            },
+        ]
+    )
+    bin_quality_df = pd.DataFrame(
+        [
+            {"chr": "chr21", "start": 0, "end": 100, "BINQ20": 40.0, "CALLQ20": 5.0},
+            {"chr": "chr21", "start": 100, "end": 200, "BINQ20": 5.0, "CALLQ20": 40.0},
+        ]
+    )
+
+    filtered = apply_binq_filter_to_chromosome_stats(
+        chrom_df,
+        bin_stats_df,
+        bin_quality_df,
+        min_binq=20.0,
+        binq_field="CALLQ20",
+        prob_threshold=0.5,
+    )
+
+    row = filtered.iloc[0]
+    assert int(row["copy_number"]) == 2
+    assert bool(row["is_aneuploid"]) is False
+
+
+def test_resolve_binq_field_auto_falls_back_to_binq_without_callq() -> None:
+    bin_quality_df = pd.DataFrame(
+        [{"chr": "chr21", "start": 0, "end": 100, "BINQ20": 40.0}]
+    )
+
+    assert _resolve_binq_field(bin_quality_df, "auto") == "BINQ20"
+
+
+def test_parse_args_accepts_use_callq20_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "gatk-sv-ploidy call",
+            "--chrom-stats",
+            "chromosome_stats.tsv",
+            "--output-dir",
+            "call",
+            "--use-callq20",
+        ],
+    )
+
+    args = parse_args()
+    assert args.use_callq20 is True
+    assert args.binq_field == "BINQ20"
 
 
 def test_export_ignored_bins_writes_gzip_table(tmp_path) -> None:

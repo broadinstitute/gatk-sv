@@ -19,21 +19,25 @@ location-scale residual distributions:
         \cdot \mathcal{N}(\tilde{d} \mid c \cdot b_i + \epsilon_{ij},
                            \sigma^2_{ij})
 
-where *b_i* is the MAP ``bin_bias``, *\epsilon_{ij}* is the MAP additive
+where *b_{ij}* is the MAP effective multiplicative bias surface, *\epsilon_{ij}* is the MAP additive
 background depth, and *p(c | x)* is the analytical CN posterior.
 
 For ``negative_binomial`` fits on raw counts, the predictive mean becomes
 
 .. math::
 
-    \mu_{ij}(c) = \ell_i \cdot s_j \cdot (c \cdot b_i + \epsilon_{ij}) / 2
+    \mu_{ij}(c) = \ell_i \cdot s_j \cdot (c \cdot b_{ij} + \epsilon_{ij}) / 2
 
 with *\ell_i* the bin length in kilobases, *s_j* the MAP sample-depth
 latent. The predictive variance follows
 
 .. math::
 
-    \mu_{ij}(c) + (\alpha_i + \beta_j) \mu_{ij}(c)^2
+    \mu_{ij}(c) + (\alpha_i + \beta_j + \gamma_{t(i)}) \mu_{ij}(c)^p
+
+where \gamma_{t(i)} is the learned chrX/chrY excess-overdispersion term
+and is anchored to zero on autosomes, and *p* is the raw-count variance
+power saved by ``infer``.
 """
 
 from __future__ import annotations
@@ -58,8 +62,13 @@ from gatk_sv_ploidy.data import DepthData, load_site_data
 from gatk_sv_ploidy.infer import load_inference_artifacts
 from gatk_sv_ploidy.models import (
     CNVModel,
+    DEFAULT_ALLOSOME_VAR,
     DEFAULT_BACKGROUND_BIN_SCALE,
     DEFAULT_BACKGROUND_SAMPLE_SCALE,
+    DEFAULT_MULTIPLICATIVE_FACTORS,
+    _compose_allosome_overdispersion_numpy,
+    _compose_effective_bin_bias_numpy,
+    _effective_negative_binomial_overdispersion_numpy,
     _matched_residual_scale,
     _normalize_obs_likelihood_name,
     _precompute_af_table,
@@ -67,6 +76,19 @@ from gatk_sv_ploidy.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+CONTINUOUS_POSTERIOR_MODES = ("conditioned", "integrated")
+
+
+def _normalize_continuous_posterior_mode(mode: str) -> str:
+    """Validate and normalize continuous-latent PPD mode names."""
+    normalized = str(mode).strip().lower()
+    if normalized not in CONTINUOUS_POSTERIOR_MODES:
+        raise ValueError(
+            f"Unknown continuous_posterior_mode: {mode!r}. "
+            f"Choose one of {CONTINUOUS_POSTERIOR_MODES}."
+        )
+    return normalized
 
 
 def apply_effective_site_pop_af(
@@ -184,6 +206,20 @@ def _build_model_from_artifacts(
             np.asarray(map_estimates.get("model_var_sample", 0.001)).item()
         ),
         var_bin=float(np.asarray(map_estimates.get("model_var_bin", 0.001)).item()),
+        var_allosome=float(
+            np.asarray(map_estimates.get("model_var_allosome", DEFAULT_ALLOSOME_VAR)).item()
+        ),
+        raw_variance_power=float(
+            np.asarray(map_estimates.get("model_raw_variance_power", 2.0)).item()
+        ),
+        multiplicative_factors=int(
+            np.asarray(
+                map_estimates.get(
+                    "model_multiplicative_factors",
+                    DEFAULT_MULTIPLICATIVE_FACTORS,
+                )
+            ).item()
+        ),
         epsilon_mean=float(np.asarray(map_estimates.get("epsilon_mean", 0.0)).item()),
         epsilon_concentration=float(
             np.asarray(map_estimates.get("model_epsilon_concentration", 1.0)).item()
@@ -260,9 +296,26 @@ def _sample_ppd_observation(
     """Sample one posterior predictive observation matrix."""
     cn_probs = discrete_posterior["cn_posterior"]
     n_bins, n_samples, n_states = cn_probs.shape
-    bin_bias = np.atleast_1d(np.asarray(continuous_maps["bin_bias"]).squeeze())
+    bin_bias = _compose_effective_bin_bias_numpy(
+        n_bins,
+        n_samples,
+        fixed_bias=np.asarray(
+            continuous_maps.get("bin_bias_matrix", continuous_maps["bin_bias"])
+        ),
+    )
     sample_var = np.atleast_1d(np.asarray(continuous_maps["sample_var"]).squeeze())
-    bin_var = np.atleast_1d(np.asarray(continuous_maps["bin_var"]).squeeze())
+    if "bin_var" in continuous_maps:
+        bin_var = np.atleast_1d(np.asarray(continuous_maps["bin_var"]).squeeze())
+    else:
+        bin_var = np.zeros(n_bins, dtype=np.float64)
+    chr_type_np = None
+    if hasattr(data, "chr_type") and data.chr_type is not None:
+        chr_type_np = data.chr_type.detach().cpu().numpy()
+    chrom_type_var = _compose_allosome_overdispersion_numpy(
+        chr_type_np,
+        continuous_maps.get("allosome_var"),
+        n_bins,
+    )
     additive_background = compose_additive_background_matrix(
         continuous_maps.get("bin_epsilon"),
         n_bins,
@@ -279,7 +332,7 @@ def _sample_ppd_observation(
     u = rng.uniform(size=(flat_probs.shape[0], 1))
     cn_sample = (u < cum).argmax(axis=1).reshape(n_bins, n_samples)
 
-    expected = cn_sample.astype(np.float32) * bin_bias[:, np.newaxis]
+    expected = cn_sample.astype(np.float32) * bin_bias
     expected = expected + additive_background
 
     if obs_likelihood == "negative_binomial":
@@ -287,17 +340,28 @@ def _sample_ppd_observation(
             np.asarray(continuous_maps["sample_depth"]).squeeze()
         )
         overdispersion = bin_var[:, np.newaxis] + sample_var[np.newaxis, :]
+        overdispersion = overdispersion + chrom_type_var
         mean = data.bin_length_kb.detach().cpu().numpy()[:, np.newaxis]
         mean = mean * sample_depth[np.newaxis, :]
         mean = mean * np.maximum(
             _raw_expected_depth_units(
                 cn_sample.astype(np.float32),
-                bin_bias[:, np.newaxis],
+                bin_bias,
                 additive_background,
             ),
             0.0,
         )
-        concentration = 1.0 / np.maximum(overdispersion, 1e-8)
+        raw_variance_power = float(
+            np.asarray(
+                continuous_maps.get("model_raw_variance_power", 2.0)
+            ).item()
+        )
+        effective_overdispersion = _effective_negative_binomial_overdispersion_numpy(
+            overdispersion,
+            mean,
+            raw_variance_power,
+        )
+        concentration = 1.0 / np.maximum(effective_overdispersion, 1e-8)
         latent_rate = rng.gamma(
             shape=concentration,
             scale=np.where(mean > 0.0, mean / concentration, 0.0),
@@ -305,6 +369,7 @@ def _sample_ppd_observation(
         draw = rng.poisson(latent_rate)
     else:
         variance = bin_var[:, np.newaxis] + sample_var[np.newaxis, :]
+        variance = variance + chrom_type_var
         variance = variance * np.maximum(expected, 1e-3)
         scale = _matched_residual_scale(variance, obs_likelihood, obs_df)
 
@@ -327,23 +392,24 @@ def generate_ppd_depth(
     cn_posterior: Dict[str, np.ndarray],
     n_draws: int = 100,
     seed: int = 42,
+    continuous_posterior_mode: str = "conditioned",
 ) -> np.ndarray:
     """Generate posterior predictive draws of observed depth.
 
     For each bin *i* and sample *j* with CN posterior *p(c|x)* and
-    MAP continuous parameters, draw from the mixture:
+    fitted continuous parameters, draw from the mixture:
 
     1. Sample a CN state *c* from the posterior.
     2. Draw depth from the configured observation family.
 
     For continuous observation families, the predictive variance is
-    ``(bin_var_i + sample_var_j) × max(c × bin_bias_i + additive_background_{ij}, 1e-3)``.
+    ``(bin_var_i + sample_var_j + allosome_var_i) × max(c × bin_bias_{ij} + additive_background_{ij}, 1e-3)``.
 
     For the negative-binomial observation family on raw counts, the
     predictive mean is
-    ``bin_length_kb_i × sample_depth_j × (c × bin_bias_i + additive_background_{ij}) / 2`` and
+    ``bin_length_kb_i × sample_depth_j × (c × bin_bias_{ij} + additive_background_{ij}) / 2`` and
     the predictive variance is
-    ``μ + (bin_var_i + sample_var_j) × μ²``.
+    ``μ + (bin_var_i + sample_var_j + allosome_var_i) × μ^raw_variance_power``.
 
     Args:
         data: :class:`DepthData` instance.
@@ -351,22 +417,38 @@ def generate_ppd_depth(
         cn_posterior: Discrete posterior dict.
         n_draws: Number of posterior predictive draws per bin/sample.
         seed: Random seed.
+        continuous_posterior_mode: ``"conditioned"`` conditions on fitted
+            continuous latents saved in ``map_estimates``.  This is the
+            default QC/BINQ diagnostic because it checks observation-level
+            calibration without double-counting in-sample parameter
+            uncertainty.  ``"integrated"`` uses saved ``posterior_draws_*``
+            arrays when present and recomputes the CN posterior for each
+            continuous-latent draw.
 
     Returns:
         Array of shape ``(n_draws, n_bins, n_samples)`` with simulated depths.
     """
     rng = np.random.RandomState(seed)
+    continuous_posterior_mode = _normalize_continuous_posterior_mode(
+        continuous_posterior_mode,
+    )
 
     obs_likelihood = _normalize_obs_likelihood_name(
         np.asarray(map_estimates.get("obs_likelihood", "normal")).item()
     )
     obs_df = float(np.asarray(map_estimates.get("obs_df", 6.0)).item())
-    saved_draws = _extract_saved_posterior_draws(map_estimates)
+    saved_draws = {}
+    if continuous_posterior_mode == "integrated":
+        saved_draws = _extract_saved_posterior_draws(map_estimates)
+    else:
+        logger.info("Conditioning PPD on fitted continuous latents.")
     required_sites = {"bin_bias", "sample_var", "bin_var"}
+    if "allosome_var" in map_estimates:
+        required_sites.add("allosome_var")
     if obs_likelihood == "negative_binomial":
         required_sites.add("sample_depth")
 
-    if required_sites.issubset(saved_draws):
+    if continuous_posterior_mode == "integrated" and required_sites.issubset(saved_draws):
         draw_count = int(next(iter(saved_draws.values())).shape[0])
         if all(int(value.shape[0]) == draw_count for value in saved_draws.values()):
             logger.info(
@@ -398,6 +480,10 @@ def generate_ppd_depth(
                     site: np.asarray(value[draw_idx])
                     for site, value in saved_draws.items()
                 }
+                if "model_raw_variance_power" in map_estimates:
+                    draw_maps["model_raw_variance_power"] = map_estimates[
+                        "model_raw_variance_power"
+                    ]
                 draw_post = model._run_discrete_inference_fixed_latents(
                     data,
                     draw_maps,
@@ -415,7 +501,12 @@ def generate_ppd_depth(
 
         logger.warning(
             "Saved posterior-draw arrays have inconsistent leading dimensions; "
-            "falling back to plug-in PPD.",
+            "falling back to conditioned PPD.",
+        )
+    elif continuous_posterior_mode == "integrated":
+        logger.warning(
+            "Integrated continuous-posterior PPD requested, but required "
+            "posterior_draws_* arrays are missing; falling back to conditioned PPD.",
         )
 
     draws = np.empty((n_draws, data.n_bins, data.n_samples), dtype=np.float32)
@@ -596,16 +687,29 @@ def compute_call_stability_quality_summary(
     cn_posterior: Dict[str, np.ndarray],
     instability_thresholds: tuple[float, float] = (0.15, 0.20),
 ) -> pd.DataFrame:
-    """Aggregate multi-draw call stability into per-bin quality metrics."""
+    """Aggregate per-bin call quality from posterior confidence and stability.
+
+    ``BINQ`` measures posterior-predictive model fit. That is useful for model
+    diagnostics, but it is not the right default for deciding whether a copy-
+    number call is reliable. ``CALLQ`` instead estimates the probability that a
+    bin has too large a per-sample call-error burden, where per-sample error is
+    the larger of posterior CN uncertainty and multi-draw MAP instability.
+    """
     thresholds = tuple(float(t) for t in instability_thresholds)
     if any(t <= 0.0 or t >= 1.0 for t in thresholds):
         raise ValueError("instability_thresholds must lie strictly between 0 and 1.")
 
+    cn_probs = np.asarray(cn_posterior["cn_posterior"], dtype=np.float64)
+    if cn_probs.shape[:2] != (data.n_bins, data.n_samples):
+        raise ValueError("cn_posterior must have shape (n_bins, n_samples, n_states).")
+    posterior_confidence = np.clip(cn_probs.max(axis=2), 0.0, 1.0)
+    posterior_error = 1.0 - posterior_confidence
+
     stability = cn_posterior.get("cn_map_stability")
     if stability is None:
-        return pd.DataFrame(columns=["chr", "start", "end"])
-
-    stability = np.asarray(stability, dtype=np.float64)
+        stability = np.ones((data.n_bins, data.n_samples), dtype=np.float64)
+    else:
+        stability = np.asarray(stability, dtype=np.float64)
     if stability.shape != (data.n_bins, data.n_samples):
         raise ValueError("cn_map_stability must have shape (n_bins, n_samples).")
 
@@ -613,8 +717,10 @@ def compute_call_stability_quality_summary(
     for i in range(data.n_bins):
         bin_stability = np.clip(stability[i, :], 0.0, 1.0)
         bin_instability = 1.0 - bin_stability
-        alpha = 1.0 + float(bin_instability.sum())
-        beta = 1.0 + float(bin_stability.sum())
+        bin_posterior_error = np.clip(posterior_error[i, :], 0.0, 1.0)
+        bin_call_error = np.maximum(bin_instability, bin_posterior_error)
+        alpha = 1.0 + float(bin_call_error.sum())
+        beta = 1.0 + float((1.0 - bin_call_error).sum())
         row = {
             "chr": data.chr[i],
             "start": int(data.start[i]),
@@ -622,6 +728,8 @@ def compute_call_stability_quality_summary(
             "mean_call_stability": float(bin_stability.mean()),
             "median_call_stability": float(np.median(bin_stability)),
             "mean_call_instability": float(bin_instability.mean()),
+            "mean_posterior_call_error": float(bin_posterior_error.mean()),
+            "mean_call_error": float(bin_call_error.mean()),
         }
         for threshold in thresholds:
             label = int(round(100 * threshold))
@@ -813,6 +921,17 @@ def parse_args() -> argparse.Namespace:
         help="Random seed for PPD sampling",
     )
     p.add_argument(
+        "--continuous-posterior-mode",
+        choices=CONTINUOUS_POSTERIOR_MODES,
+        default="conditioned",
+        help=(
+            "How to handle continuous latent uncertainty in PPD. "
+            "'conditioned' fixes fitted continuous latents and is the default "
+            "QC/BINQ calibration check. 'integrated' uses saved posterior "
+            "draws when available and includes parameter uncertainty."
+        ),
+    )
+    p.add_argument(
         "--device", choices=["cpu", "cuda"], default="cpu",
     )
     return p.parse_args()
@@ -857,7 +976,12 @@ def main() -> None:
     # ── generate posterior predictive draws ──────────────────────────────
     logger.info("Generating %d posterior predictive draws …", args.draws)
     ppd_draws = generate_ppd_depth(
-        data, map_est, cn_post, n_draws=args.draws, seed=args.seed,
+        data,
+        map_est,
+        cn_post,
+        n_draws=args.draws,
+        seed=args.seed,
+        continuous_posterior_mode=args.continuous_posterior_mode,
     )
     logger.info("PPD draws shape: %s", ppd_draws.shape)
 
@@ -896,6 +1020,11 @@ def main() -> None:
     # ── global calibration summary ──────────────────────────────────────
     logger.info("Computing global calibration summary …")
     ppd_global_df = compute_ppd_global_summary(ppd_bin_df)
+    ppd_global_df.insert(
+        1,
+        "continuous_posterior_mode",
+        args.continuous_posterior_mode,
+    )
     ppd_global_path = os.path.join(args.output_dir, "ppd_global_summary.tsv")
     ppd_global_df.to_csv(ppd_global_path, sep="\t", index=False)
     logger.info("PPD global summary saved.")

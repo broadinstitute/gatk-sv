@@ -11,11 +11,17 @@ from pyro.infer import TraceEnum_ELBO
 from gatk_sv_ploidy.data import DepthData
 from gatk_sv_ploidy.models import (
     CNVModel,
+    DEFAULT_ALLOSOME_VAR,
     DEFAULT_BACKGROUND_FACTORS,
     DEFAULT_EPSILON_CONCENTRATION,
     DEFAULT_EPSILON_MEAN,
+    DEFAULT_GUIDE_INIT_SCALE,
+    DEFAULT_MULTIPLICATIVE_FACTORS,
+    DEFAULT_RAW_VARIANCE_POWER,
     _center_af_table_numpy,
+    _compose_allosome_overdispersion_numpy,
     _depth_log_lik_numpy,
+    _effective_negative_binomial_overdispersion_numpy,
     _matched_residual_scale,
     _marginalized_af_log_lik,
     _marginalized_af_log_lik_numpy,
@@ -34,19 +40,37 @@ def test_cnv_model_defaults_match_current_preferred_configuration() -> None:
     assert model.autosome_prior_mode == "dirichlet"
     assert model.var_bias_bin == 0.02
     assert model.var_sample == 0.00025
-    assert model.var_bin == 0.001
+    assert model.var_bin == 0.0
+    assert model.var_allosome == pytest.approx(DEFAULT_ALLOSOME_VAR)
+    assert model.raw_variance_power == pytest.approx(DEFAULT_RAW_VARIANCE_POWER)
     assert model.epsilon_mean == pytest.approx(DEFAULT_EPSILON_MEAN)
     assert model.epsilon_concentration == pytest.approx(DEFAULT_EPSILON_CONCENTRATION)
     assert DEFAULT_BACKGROUND_FACTORS == 2
     assert model.background_factors == DEFAULT_BACKGROUND_FACTORS
+    assert model.multiplicative_factors == DEFAULT_MULTIPLICATIVE_FACTORS
+    assert model.guide_init_scale == pytest.approx(DEFAULT_GUIDE_INIT_SCALE)
+    assert model.lowrank_guide_rank is None
     assert model.af_evidence_mode == "relative"
     assert model.learn_af_temperature is True
     assert model.freeze_bin_bias is False
     assert model.freeze_cn_prior is False
     assert model.freeze_sample_var is False
+    assert "bin_var" not in model._latent_sites
+    assert "allosome_var" in model._latent_sites
+    assert "bin_bias" not in model._latent_sites
+    assert "multiplicative_bin_factors" in model._latent_sites
+    assert "multiplicative_sample_factors" in model._latent_sites
     assert "af_temperature" in model._latent_sites
     assert "background_bin_factors" in model._latent_sites
     assert "background_sample_factors" in model._latent_sites
+
+
+@pytest.mark.parametrize("raw_variance_power", [0.99, 2.01])
+def test_cnv_model_rejects_invalid_raw_variance_power(
+    raw_variance_power: float,
+) -> None:
+    with pytest.raises(ValueError, match="raw_variance_power"):
+        CNVModel(raw_variance_power=raw_variance_power)
 
 
 def test_freeze_sample_var_removes_latent_and_fixes_to_zero() -> None:
@@ -228,6 +252,44 @@ def test_sample_var_uses_exponential_prior() -> None:
     )
 
 
+def test_allosome_var_uses_exponential_prior_and_autosome_anchor() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chr21", "chrX", "chrY"],
+            "Start": [0, 0, 0],
+            "End": [1000, 1000, 1000],
+            "S1": [2.0, 1.0, 0.5],
+        }
+    )
+    df["Bin"] = ["chr21:0-1000", "chrX:0-1000", "chrY:0-1000"]
+    data = DepthData(df.set_index("Bin"), device="cpu")
+    model = CNVModel(
+        sex_cn_weight=0.0,
+        epsilon_mean=0.0,
+        var_allosome=0.123,
+        device="cpu",
+    )
+
+    trace = poutine.trace(model.model).get_trace(**model._model_kwargs(data))
+    allosome_var_fn = trace.nodes["allosome_var"]["fn"]
+
+    assert allosome_var_fn.__class__.__name__ == "Independent"
+    np.testing.assert_allclose(
+        np.asarray(allosome_var_fn.base_dist.rate.detach().cpu().numpy()).squeeze(),
+        np.array([1.0 / 0.123, 1.0 / 0.123]),
+        rtol=1e-6,
+        atol=1e-6,
+    )
+    np.testing.assert_allclose(
+        _compose_allosome_overdispersion_numpy(
+            data.chr_type.detach().cpu().numpy(),
+            np.array([0.01, 0.02]),
+            data.n_bins,
+        ).squeeze(),
+        np.array([0.0, 0.01, 0.02]),
+    )
+
+
 def test_bin_epsilon_uses_gamma_prior_with_requested_mean_and_concentration() -> None:
     df = pd.DataFrame(
         {
@@ -280,12 +342,16 @@ def test_select_svi_initialization_restores_best_candidate(monkeypatch) -> None:
             pyro.param("selected_candidate", torch.tensor(float(guide.candidate)))
             return guide.loss
 
-    def fake_make_init_loc_fn(data, randomize: bool = False):
+    def fake_make_init_loc_fn(
+        data,
+        randomize: bool = False,
+        initial_values=None,
+    ):
         candidate = len(init_calls)
         init_calls.append(randomize)
         return {"candidate": candidate}
 
-    def fake_build_guide(init_loc_fn):
+    def fake_build_guide(init_loc_fn, guide_type=None):
         candidate = init_loc_fn["candidate"]
         return DummyGuide(candidate, candidate_losses[candidate])
 
@@ -303,6 +369,38 @@ def test_select_svi_initialization_restores_best_candidate(monkeypatch) -> None:
     assert init_calls == [False, True, True]
     assert model.guide.candidate == 1
     assert pyro.param("selected_candidate").item() == pytest.approx(1.0)
+
+
+def test_select_svi_initialization_uses_single_anchor_for_expressive_guides(monkeypatch) -> None:
+    model = CNVModel(guide_type="diagonal")
+    init_calls = []
+
+    class DummyGuide:
+        candidate = 0
+
+    class FakeElbo:
+        def loss(self, model_fn, guide, **kwargs):
+            return 1.0
+
+    def fake_make_init_loc_fn(
+        data,
+        randomize: bool = False,
+        initial_values=None,
+    ):
+        init_calls.append((randomize, initial_values))
+        return {"candidate": len(init_calls) - 1}
+
+    monkeypatch.setattr(model, "_make_init_loc_fn", fake_make_init_loc_fn)
+    monkeypatch.setattr(model, "_build_guide", lambda init_loc_fn, guide_type=None: DummyGuide())
+
+    model._select_svi_initialization(
+        object(),
+        model_kw={},
+        elbo=FakeElbo(),
+        init_restarts=10,
+    )
+
+    assert init_calls == [(False, None)]
 
 
 def test_windowed_relative_elbo_change_requires_two_complete_windows() -> None:
@@ -339,7 +437,7 @@ def test_train_early_stopping_uses_windowed_relative_elbo_change(monkeypatch) ->
     monkeypatch.setattr(
         model,
         "_select_svi_initialization",
-        lambda data, model_kw, elbo, init_restarts: None,
+        lambda data, model_kw, elbo, init_restarts, **kwargs: None,
     )
     monkeypatch.setattr(
         "gatk_sv_ploidy.models.pyro.optim.LambdaLR",
@@ -386,7 +484,7 @@ def test_train_passes_gradient_clip_norm_to_scheduler(monkeypatch) -> None:
     monkeypatch.setattr(
         model,
         "_select_svi_initialization",
-        lambda data, model_kw, elbo, init_restarts: None,
+        lambda data, model_kw, elbo, init_restarts, **kwargs: None,
     )
     monkeypatch.setattr("gatk_sv_ploidy.models.pyro.optim.LambdaLR", fake_lambda_lr)
     monkeypatch.setattr("gatk_sv_ploidy.models.TraceEnum_ELBO", lambda: object())
@@ -427,7 +525,7 @@ def test_train_disables_gradient_clipping_for_non_positive_threshold(monkeypatch
     monkeypatch.setattr(
         model,
         "_select_svi_initialization",
-        lambda data, model_kw, elbo, init_restarts: None,
+        lambda data, model_kw, elbo, init_restarts, **kwargs: None,
     )
     monkeypatch.setattr("gatk_sv_ploidy.models.pyro.optim.LambdaLR", fake_lambda_lr)
     monkeypatch.setattr("gatk_sv_ploidy.models.TraceEnum_ELBO", lambda: object())
@@ -820,6 +918,26 @@ def test_negative_binomial_log_lik_numpy_prefers_matching_mean() -> None:
     assert float(matching_ll[0, 0, 0]) > float(mismatched_ll[0, 0, 0])
 
 
+def test_raw_variance_power_rebalances_low_and_high_count_overdispersion() -> None:
+    base_overdispersion = np.array([[[0.04, 0.04]]], dtype=np.float64)
+    mean = np.array([[[1.0e4, 1.0e6]]], dtype=np.float64)
+
+    nb2 = _effective_negative_binomial_overdispersion_numpy(
+        base_overdispersion,
+        mean,
+        raw_variance_power=2.0,
+    )
+    power_law = _effective_negative_binomial_overdispersion_numpy(
+        base_overdispersion,
+        mean,
+        raw_variance_power=1.5,
+    )
+
+    np.testing.assert_allclose(nb2, base_overdispersion)
+    assert float(power_law[0, 0, 0]) > float(power_law[0, 0, 1])
+    assert float(power_law[0, 0, 1]) < float(nb2[0, 0, 1])
+
+
 def test_run_discrete_inference_uses_learned_af_temperature_map() -> None:
     df = pd.DataFrame(
         {
@@ -870,8 +988,17 @@ def test_run_discrete_inference_uses_learned_af_temperature_map() -> None:
 
 
 def test_cnv_model_accepts_lowrank_guide() -> None:
-    model = CNVModel(guide_type="lowrank")
+    model = CNVModel(guide_type="lowrank", lowrank_guide_rank=2)
     assert model.guide.__class__.__name__ == "AutoLowRankMultivariateNormal"
+    assert model.guide._init_scale == pytest.approx(DEFAULT_GUIDE_INIT_SCALE)
+    assert model.lowrank_guide_rank == 2
+
+
+def test_cnv_model_passes_init_scale_to_diagonal_guide() -> None:
+    model = CNVModel(guide_type="diagonal", guide_init_scale=0.005)
+
+    assert model.guide.__class__.__name__ == "AutoDiagonalNormal"
+    assert model.guide._init_scale == pytest.approx(0.005)
 
 
 def test_cnv_model_uses_mixed_guide_when_learning_site_af() -> None:
@@ -1333,6 +1460,46 @@ def test_negative_binomial_model_trains_one_step_with_sample_depth_prior() -> No
     assert estimates["sample_depth"].shape == (2,)
 
 
+def test_diagonal_guide_trains_with_delta_warm_start() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chr21", "chr21"],
+            "Start": [0, 1000],
+            "End": [1000, 2000],
+            "S1": [10, 12],
+            "S2": [20, 19],
+        },
+        index=["chr21:0-1000", "chr21:1000-2000"],
+    )
+    data = DepthData(
+        df,
+        device="cpu",
+        depth_space="raw",
+        clamp_threshold=None,
+        dtype=torch.float64,
+    )
+    model = CNVModel(
+        obs_likelihood="negative_binomial",
+        guide_type="diagonal",
+        sex_cn_weight=0.0,
+        autosome_prior_mode="dirichlet",
+        device="cpu",
+        dtype=torch.float64,
+    )
+
+    history = model.train(
+        data,
+        max_iter=1,
+        guide_warmup_iter=1,
+        log_freq=1,
+        early_stopping=False,
+    )
+
+    assert len(history) == 1
+    assert np.isfinite(history).all()
+    assert model.guide.__class__.__name__ == "AutoDiagonalNormal"
+
+
 def test_shrinkage_prior_trains_with_autosome_and_sex_bins() -> None:
     df = pd.DataFrame(
         {
@@ -1402,18 +1569,20 @@ def test_learn_site_pop_af_trains_with_mixed_guide(
 def test_get_map_estimates_median_uses_guide_median(monkeypatch) -> None:
     df = pd.DataFrame(
         {
-            "Chr": ["chr21"],
-            "Start": [0],
-            "End": [1000],
-            "S1": [2.0],
+            "Chr": ["chr21", "chr21"],
+            "Start": [0, 1000],
+            "End": [1000, 2000],
+            "S1": [2.0, 2.0],
         }
     )
-    df["Bin"] = "chr21:0-1000"
+    df["Bin"] = ["chr21:0-1000", "chr21:1000-2000"]
     data = DepthData(df.set_index("Bin"), device="cpu")
     model = CNVModel(
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
         background_factors=0,
+        multiplicative_factors=1,
+        var_bin=0.0,
         guide_type="diagonal",
         autosome_prior_mode="dirichlet",
         learn_af_temperature=False,
@@ -1422,10 +1591,17 @@ def test_get_map_estimates_median_uses_guide_median(monkeypatch) -> None:
     class DummyGuide:
         def median(self, *args, **kwargs):
             return {
-                "bin_bias": torch.tensor([1.25], dtype=torch.float32),
+                "multiplicative_bin_factors": torch.tensor(
+                    [[-1.0], [1.0]],
+                    dtype=torch.float32,
+                ),
+                "multiplicative_sample_factors": torch.tensor(
+                    [[0.2]],
+                    dtype=torch.float32,
+                ),
                 "sample_var": torch.tensor([0.05], dtype=torch.float32),
-                "bin_var": torch.tensor([0.02], dtype=torch.float32),
-                "cn_probs": torch.full((1, 6), 1.0 / 6.0, dtype=torch.float32),
+                "allosome_var": torch.tensor([0.0, 0.0], dtype=torch.float32),
+                "cn_probs": torch.full((2, 6), 1.0 / 6.0, dtype=torch.float32),
             }
 
     model.guide = DummyGuide()
@@ -1439,7 +1615,19 @@ def test_get_map_estimates_median_uses_guide_median(monkeypatch) -> None:
 
     estimates = model.get_map_estimates(data, estimate_method="median")
 
-    assert float(estimates["bin_bias"][0]) == 1.25
+    expected_bias = np.exp(np.array([-1.0, 1.0], dtype=np.float32) * 0.2)
+    np.testing.assert_allclose(
+        estimates["bin_bias"],
+        expected_bias,
+        rtol=1e-6,
+        atol=1e-6,
+    )
+    np.testing.assert_allclose(
+        estimates["bin_bias_matrix"].reshape(2, 1),
+        expected_bias[:, np.newaxis],
+        rtol=1e-6,
+        atol=1e-6,
+    )
     assert int(estimates["cn"][0, 0]) == 2
 
 

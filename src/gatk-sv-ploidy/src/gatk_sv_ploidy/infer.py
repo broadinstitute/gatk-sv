@@ -34,11 +34,18 @@ from gatk_sv_ploidy._util import (
 from gatk_sv_ploidy.data import DepthData, load_site_data
 from gatk_sv_ploidy.models import (
     AUTOSOME_PRIOR_MODES,
+    DEFAULT_ALLOSOME_VAR,
     DEFAULT_BACKGROUND_FACTORS,
     DEFAULT_EPSILON_CONCENTRATION,
     DEFAULT_EPSILON_MEAN,
+    DEFAULT_GUIDE_INIT_SCALE,
+    DEFAULT_GUIDE_WARMUP_ITER,
+    DEFAULT_MULTIPLICATIVE_FACTORS,
+    DEFAULT_RAW_VARIANCE_POWER,
     OBS_LIKELIHOODS,
     CNVModel,
+    _compose_allosome_overdispersion_numpy,
+    _compose_effective_bin_bias_numpy,
     _resolve_fixed_site_pop_af_numpy,
     _site_level_marginalized_af_log_lik_numpy,
 )
@@ -205,6 +212,27 @@ def _coerce_background_factor_matrices(
     return normalized_bin_factors, sample_factors
 
 
+def _coerce_bin_bias_matrix(
+    map_estimates: Dict[str, np.ndarray],
+    n_bins: int,
+    n_samples: int,
+) -> np.ndarray | None:
+    """Return an effective bin-bias matrix when present or derivable."""
+    if "bin_bias_matrix" in map_estimates:
+        return _compose_effective_bin_bias_numpy(
+            n_bins,
+            n_samples,
+            fixed_bias=map_estimates["bin_bias_matrix"],
+        )
+    if "bin_bias" in map_estimates:
+        return _compose_effective_bin_bias_numpy(
+            n_bins,
+            n_samples,
+            fixed_bias=map_estimates["bin_bias"],
+        )
+    return None
+
+
 def _format_threshold_exceedance_summary(
     label: str,
     values: np.ndarray,
@@ -346,6 +374,7 @@ def build_safe_inference_diagnostic_messages(
         ("sample_depth", "Sample depth latent across samples"),
         ("bin_bias", "Bin bias latent across bins"),
         ("bin_var", "Bin variance latent across bins"),
+        ("allosome_var", "Allosome excess variance latent across chrX/chrY"),
     ):
         if key in map_estimates:
             messages.append(format_numeric_summary(label, map_estimates[key]))
@@ -424,6 +453,11 @@ def build_safe_inference_diagnostic_messages(
     cn_probs = np.asarray(cn_posterior["cn_posterior"], dtype=np.float64)
     cn_map = np.argmax(cn_probs, axis=2)
     cn_state_names = [f"CN{state}" for state in range(cn_probs.shape[2])]
+    bin_bias_matrix = _coerce_bin_bias_matrix(
+        map_estimates,
+        data.n_bins,
+        data.n_samples,
+    )
 
     for ct_value, chrom_label in ((1, "chrX"), (2, "chrY")):
         chrom_mask = chr_type == ct_value
@@ -510,13 +544,6 @@ def build_safe_inference_diagnostic_messages(
                 "chrX": {0: 2, 1: 1},
                 "chrY": {0: 0, 1: 1},
             }
-            bin_bias_arr = None
-            if "bin_bias" in map_estimates:
-                bin_bias_arr = np.asarray(
-                    map_estimates["bin_bias"],
-                    dtype=np.float64,
-                ).reshape(-1)
-
             depth_ratio_for_expected = None
             if all((data.depth_space == "raw", "sample_depth" in map_estimates)):
                 empirical_baseline = _plot_depth_baseline_per_sample(data)
@@ -599,7 +626,7 @@ def build_safe_inference_diagnostic_messages(
                                     f"{corr:.3f}"
                                 )
 
-                    if bin_bias_arr is not None:
+                    if bin_bias_matrix is not None:
                         if bin_epsilon_matrix is None:
                             epsilon_subset = np.zeros(
                                 (bin_idx.size, sample_idx.size),
@@ -607,8 +634,9 @@ def build_safe_inference_diagnostic_messages(
                             )
                         else:
                             epsilon_subset = bin_epsilon_matrix[np.ix_(bin_idx, sample_idx)]
+                        bias_subset = bin_bias_matrix[np.ix_(bin_idx, sample_idx)]
                         expected_plot_depth = (
-                            expected_cn * bin_bias_arr[bin_idx, np.newaxis] +
+                            expected_cn * bias_subset +
                             epsilon_subset
                         )
                         if depth_ratio_for_expected is not None:
@@ -643,7 +671,7 @@ def build_safe_inference_diagnostic_messages(
                                     f"{corr:.3f}"
                                 )
                         corr = _safe_correlation(
-                            bin_bias_arr[bin_idx],
+                            bias_subset.mean(axis=1),
                             mean_abs_residual_by_bin,
                         )
                         if corr is not None:
@@ -2080,6 +2108,11 @@ def build_bin_stats(
             background_bin_factors=map_estimates.get("background_bin_factors"),
             background_sample_factors=map_estimates.get("background_sample_factors"),
         )
+    chrom_type_overdispersion = _compose_allosome_overdispersion_numpy(
+        data.chr_type.detach().cpu().numpy(),
+        map_estimates.get("allosome_var"),
+        data.n_bins,
+    )
 
     for i in range(data.n_bins):
         for j in range(data.n_samples):
@@ -2103,6 +2136,7 @@ def build_bin_stats(
                 "bin_bias": float(map_estimates["bin_bias"].flatten()[i]),
                 "bin_var": float(map_estimates["bin_var"].flatten()[i]),
                 "sample_var": float(map_estimates["sample_var"].flatten()[j]),
+                "chrom_type_overdispersion": float(chrom_type_overdispersion[i, 0]),
             }
             if cn_map_stability is not None:
                 row["cn_map_stability"] = float(cn_map_stability[i, j])
@@ -2122,6 +2156,9 @@ def build_bin_stats(
                 )
                 row["bin_overdispersion"] = row["bin_var"]
                 row["sample_overdispersion"] = row["sample_var"]
+                row["chrom_type_overdispersion"] = float(
+                    chrom_type_overdispersion[i, 0]
+                )
             if bin_epsilon_matrix is not None:
                 row["bin_epsilon"] = float(bin_epsilon_matrix[i, j])
             if has_af:
@@ -2323,11 +2360,39 @@ def parse_args() -> argparse.Namespace:
         help="Per-bin shrinkage concentration toward the learned autosomal non-reference mean in shrinkage mode",
     )
     g.add_argument("--var-bias-bin", type=float, default=0.01,
-                   help="LogNormal scale for per-bin bias")
+                   help="Normal scale for per-sample amplitudes of the low-rank multiplicative bias factors")
     g.add_argument("--var-sample", type=float, default=0.01,
                    help="Exponential mean for per-sample variance")
-    g.add_argument("--var-bin", type=float, default=0.01,
-                   help="Exponential mean for per-bin variance")
+    g.add_argument("--var-bin", type=float, default=0.0,
+                   help="Exponential mean for per-bin variance; set to 0 or a negative value to disable the per-bin variance latent")
+    g.add_argument(
+        "--var-allosome",
+        type=float,
+        default=DEFAULT_ALLOSOME_VAR,
+        help=(
+            "Exponential mean for chrX/chrY excess overdispersion. "
+            "Set to 0 to disable; autosomes are anchored at zero for this component."
+        ),
+    )
+    g.add_argument(
+        "--raw-variance-power",
+        type=float,
+        default=DEFAULT_RAW_VARIANCE_POWER,
+        help=(
+            "Power-law exponent for raw-count extra-Poisson variance in the "
+            "negative-binomial model. 2.0 is standard NB2 variance; lower "
+            "values make residual scale grow sub-linearly with raw depth."
+        ),
+    )
+    g.add_argument(
+        "--multiplicative-factors",
+        type=int,
+        default=DEFAULT_MULTIPLICATIVE_FACTORS,
+        help=(
+            "Number of low-rank multiplicative bias factors. "
+            "Set to 0 to use a fixed neutral multiplicative bias of 1."
+        ),
+    )
     g.add_argument("--epsilon-mean", type=float, default=DEFAULT_EPSILON_MEAN,
                    help="Mean of the Gamma prior on per-contig additive background depth; "
                         "increase to absorb low-level zero-copy background depth, set to 0 to disable")
@@ -2352,6 +2417,22 @@ def parse_args() -> argparse.Namespace:
     )
     g.add_argument("--guide-type", choices=["delta", "diagonal", "lowrank"], default="delta",
                    help="Variational guide type")
+    g.add_argument(
+        "--guide-init-scale",
+        type=float,
+        default=DEFAULT_GUIDE_INIT_SCALE,
+        help=(
+            "Initial unconstrained posterior standard deviation for diagonal "
+            "and low-rank guides. Smaller values start the expressive guide "
+            "closer to a MAP estimate."
+        ),
+    )
+    g.add_argument(
+        "--lowrank-guide-rank",
+        type=int,
+        default=None,
+        help="Rank for --guide-type lowrank; omit to use Pyro's default rank.",
+    )
     g.add_argument("--obs-likelihood", choices=["auto", *list(OBS_LIKELIHOODS)], default="auto",
                    help="Observation likelihood for the depth/count matrix. 'auto' resolves from preprocess observation_type.txt when present.")
     g.add_argument("--obs-df", type=float, default=3.5,
@@ -2482,6 +2563,16 @@ def parse_args() -> argparse.Namespace:
             "Number of candidate autoguide initializations to score before "
             "gradient descent. The first candidate uses the anchored default "
             "init and the rest sample random prior starts."
+        ),
+    )
+    g.add_argument(
+        "--guide-warmup-iter",
+        type=int,
+        default=DEFAULT_GUIDE_WARMUP_ITER,
+        help=(
+            "AutoDelta MAP warm-start iterations before switching to a "
+            "diagonal or low-rank guide. Use -1 for automatic selection, "
+            "or 0 to disable. Ignored for --guide-type delta."
         ),
     )
     g.add_argument("--log-freq", type=int, default=50)
@@ -2672,12 +2763,17 @@ def main() -> None:
         var_bias_bin=args.var_bias_bin,
         var_sample=args.var_sample,
         var_bin=args.var_bin,
+        var_allosome=args.var_allosome,
+        raw_variance_power=args.raw_variance_power,
+        multiplicative_factors=args.multiplicative_factors,
         epsilon_mean=args.epsilon_mean,
         epsilon_concentration=args.epsilon_concentration,
         background_factors=args.background_factors,
         device=device,
         dtype=tensor_dtype,
         guide_type=args.guide_type,
+        guide_init_scale=args.guide_init_scale,
+        lowrank_guide_rank=args.lowrank_guide_rank,
         af_concentration=args.af_concentration,
         af_weight=args.af_weight if data.site_alt is not None else 0.0,
         af_evidence_mode=args.af_evidence_mode,
@@ -2706,6 +2802,7 @@ def main() -> None:
         lr_decay=args.lr_decay,
         grad_clip_norm=args.grad_clip_norm,
         init_restarts=args.svi_init_restarts,
+        guide_warmup_iter=args.guide_warmup_iter,
         log_freq=args.log_freq,
         jit=args.jit,
         early_stopping=args.early_stopping,
@@ -2857,6 +2954,11 @@ def main() -> None:
     artifact_dict["model_var_bias_bin"] = np.asarray(model.var_bias_bin)
     artifact_dict["model_var_sample"] = np.asarray(model.var_sample)
     artifact_dict["model_var_bin"] = np.asarray(model.var_bin)
+    artifact_dict["model_var_allosome"] = np.asarray(model.var_allosome)
+    artifact_dict["model_raw_variance_power"] = np.asarray(model.raw_variance_power)
+    artifact_dict["model_multiplicative_factors"] = np.asarray(
+        model.multiplicative_factors
+    )
     artifact_dict["model_af_concentration"] = np.asarray(model.af_concentration)
     artifact_dict["model_af_weight"] = np.asarray(model.af_weight)
     artifact_dict["model_af_evidence_mode"] = np.asarray(model.af_evidence_mode)
@@ -2873,6 +2975,11 @@ def main() -> None:
     artifact_dict["model_sex_prior"] = np.asarray(model.sex_prior)
     artifact_dict["model_sex_cn_weight"] = np.asarray(model.sex_cn_weight)
     artifact_dict["model_guide_type"] = np.asarray(model.guide_type)
+    artifact_dict["model_guide_init_scale"] = np.asarray(model.guide_init_scale)
+    artifact_dict["model_lowrank_guide_rank"] = np.asarray(
+        -1 if model.lowrank_guide_rank is None else model.lowrank_guide_rank
+    )
+    artifact_dict["model_guide_warmup_iter"] = np.asarray(args.guide_warmup_iter)
     artifact_dict["epsilon_mean"] = np.asarray(model.epsilon_mean)
     artifact_dict["model_epsilon_concentration"] = np.asarray(
         model.epsilon_concentration

@@ -142,6 +142,84 @@ def test_generate_ppd_depth_supports_negative_binomial_metadata() -> None:
     assert float(draws[:, 0, 1].mean()) > float(draws[:, 0, 0].mean())
 
 
+def test_generate_ppd_depth_uses_allosome_overdispersion() -> None:
+    raw_df = pd.DataFrame(
+        {
+            "Chr": ["chr21", "chrY"],
+            "Start": [0, 0],
+            "End": [1000, 1000],
+            "S1": [1000, 1000],
+        },
+        index=["chr21:0-1000", "chrY:0-1000"],
+    )
+    data = DepthData(raw_df, depth_space="raw", clamp_threshold=None)
+    cn_post = _fake_cn_posterior(data.n_bins, data.n_samples, cn_state=2)
+    map_est = {
+        "bin_bias": np.full(data.n_bins, 1.0, dtype=np.float32),
+        "sample_var": np.full(data.n_samples, 1e-8, dtype=np.float32),
+        "bin_var": np.full(data.n_bins, 0.0, dtype=np.float32),
+        "sample_depth": np.array([1000.0], dtype=np.float32),
+        "obs_likelihood": np.asarray("negative_binomial"),
+        "depth_space": np.asarray("raw"),
+    }
+
+    no_extra = generate_ppd_depth(data, map_est, cn_post, n_draws=300, seed=23)
+    with_extra = generate_ppd_depth(
+        data,
+        {**map_est, "allosome_var": np.array([0.0, 0.01], dtype=np.float32)},
+        cn_post,
+        n_draws=300,
+        seed=23,
+    )
+
+    assert float(with_extra[:, 1, 0].std()) > 2.0 * float(no_extra[:, 1, 0].std())
+    assert float(with_extra[:, 0, 0].std()) == pytest.approx(
+        float(no_extra[:, 0, 0].std()),
+        rel=0.2,
+    )
+
+
+def test_generate_ppd_depth_uses_raw_variance_power() -> None:
+    raw_df = pd.DataFrame(
+        {
+            "Chr": ["chr21", "chr21"],
+            "Start": [0, 0],
+            "End": [1000, 100000],
+            "S1": [100, 10000],
+        },
+        index=["chr21:0-1000", "chr21:0-100000"],
+    )
+    data = DepthData(raw_df, depth_space="raw", clamp_threshold=None)
+    cn_post = _fake_cn_posterior(data.n_bins, data.n_samples, cn_state=2)
+    map_est = {
+        "bin_bias": np.full(data.n_bins, 1.0, dtype=np.float32),
+        "sample_var": np.full(data.n_samples, 0.05, dtype=np.float32),
+        "bin_var": np.full(data.n_bins, 0.0, dtype=np.float32),
+        "sample_depth": np.array([100.0], dtype=np.float32),
+        "obs_likelihood": np.asarray("negative_binomial"),
+        "depth_space": np.asarray("raw"),
+    }
+
+    nb2 = generate_ppd_depth(
+        data,
+        {**map_est, "model_raw_variance_power": np.asarray(2.0)},
+        cn_post,
+        n_draws=1000,
+        seed=31,
+    )
+    power_law = generate_ppd_depth(
+        data,
+        {**map_est, "model_raw_variance_power": np.asarray(1.0)},
+        cn_post,
+        n_draws=1000,
+        seed=31,
+    )
+
+    nb2_ratio = float(nb2[:, 1, 0].std() / nb2[:, 0, 0].std())
+    power_ratio = float(power_law[:, 1, 0].std() / power_law[:, 0, 0].std())
+    assert power_ratio < 0.5 * nb2_ratio
+
+
 def test_generate_ppd_depth_uses_saved_posterior_draws() -> None:
     df = pd.DataFrame(
         {
@@ -184,6 +262,13 @@ def test_generate_ppd_depth_uses_saved_posterior_draws() -> None:
         if not key.startswith("posterior_draws_")
     }
     plugin_draws = generate_ppd_depth(data, plugin_map, cn_post, n_draws=200, seed=19)
+    conditioned_draws = generate_ppd_depth(
+        data,
+        base_map,
+        cn_post,
+        n_draws=200,
+        seed=19,
+    )
     posterior_draws = generate_ppd_depth(
         data,
         {
@@ -195,11 +280,36 @@ def test_generate_ppd_depth_uses_saved_posterior_draws() -> None:
         cn_post,
         n_draws=200,
         seed=19,
+        continuous_posterior_mode="integrated",
     )
 
     assert float(plugin_draws.mean()) == pytest.approx(2.0, abs=0.2)
+    assert float(conditioned_draws.mean()) == pytest.approx(
+        float(plugin_draws.mean()),
+        abs=0.2,
+    )
     assert float(posterior_draws.mean()) > float(plugin_draws.mean()) + 1.0
     assert float(posterior_draws.mean()) < 4.2
+
+
+def test_generate_ppd_depth_rejects_unknown_continuous_posterior_mode(
+    tiny_depth_df: pd.DataFrame,
+) -> None:
+    data = DepthData(tiny_depth_df, clamp_threshold=None)
+    cn_post = _fake_cn_posterior(data.n_bins, data.n_samples, cn_state=2)
+    map_est = {
+        "bin_bias": np.full(data.n_bins, 1.0, dtype=np.float32),
+        "sample_var": np.full(data.n_samples, 0.1, dtype=np.float32),
+        "bin_var": np.full(data.n_bins, 0.05, dtype=np.float32),
+    }
+
+    with pytest.raises(ValueError, match="continuous_posterior_mode"):
+        generate_ppd_depth(
+            data,
+            map_est,
+            cn_post,
+            continuous_posterior_mode="automatic",
+        )
 
 
 def test_build_model_from_artifacts_restores_af_evidence_mode() -> None:
@@ -496,6 +606,28 @@ def test_compute_call_stability_quality_summary_penalizes_unstable_bins(
     assert float(good["mean_call_instability"]) < float(bad["mean_call_instability"])
 
 
+def test_compute_call_stability_quality_summary_penalizes_low_cn_confidence(
+    tiny_depth_df: pd.DataFrame,
+) -> None:
+    data = DepthData(tiny_depth_df.iloc[:2], clamp_threshold=None)
+    cn_probs = np.zeros((data.n_bins, data.n_samples, 6), dtype=np.float32)
+    cn_probs[0, :, 2] = 0.99
+    cn_probs[0, :, 3] = 0.01
+    cn_probs[1, :, 2] = 0.55
+    cn_probs[1, :, 3] = 0.45
+    cn_post = {
+        "cn_posterior": cn_probs,
+        "cn_map_stability": np.ones((data.n_bins, data.n_samples), dtype=np.float32),
+    }
+
+    summary = compute_call_stability_quality_summary(data, cn_post)
+
+    good = summary.iloc[0]
+    bad = summary.iloc[1]
+    assert float(good["CALLQ20"]) > float(bad["CALLQ20"])
+    assert float(good["mean_posterior_call_error"]) < float(bad["mean_posterior_call_error"])
+
+
 def test_compute_ppd_global_summary_has_expected_columns() -> None:
     ppd_bin_df = pd.DataFrame(
         {
@@ -566,6 +698,7 @@ def test_ppd_parse_args_and_main_write_outputs(
     assert args.draws == 4
     assert args.seed == 9
     assert args.depth_space == "auto"
+    assert args.continuous_posterior_mode == "conditioned"
 
     main()
 
@@ -577,5 +710,6 @@ def test_ppd_parse_args_and_main_write_outputs(
 
     global_df = pd.read_csv(output_dir / "ppd_global_summary.tsv", sep="\t")
     assert global_df.loc[0, "n_bins_x_samples"] == n_bins * n_samples
+    assert global_df.loc[0, "continuous_posterior_mode"] == "conditioned"
     quality_df = pd.read_csv(output_dir / "ppd_bin_quality.tsv", sep="\t")
     assert "CALLQ20" in quality_df.columns

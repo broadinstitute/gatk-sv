@@ -331,7 +331,11 @@ def compose_additive_background_matrix(
     )
     if bin_factor_matrix.shape[1] == 0:
         return additive
-    return additive + bin_factor_matrix @ sample_factor_matrix
+    # ``np.matmul`` emits spurious floating-point RuntimeWarnings on some
+    # macOS NumPy/BLAS builds here even when both inputs and the result are
+    # finite. ``np.dot`` is equivalent for these 2D arrays and avoids that
+    # false-positive warning path.
+    return additive + np.dot(bin_factor_matrix, sample_factor_matrix)
 
 
 def format_numeric_summary(

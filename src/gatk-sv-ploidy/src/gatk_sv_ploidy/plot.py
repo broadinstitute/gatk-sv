@@ -34,6 +34,7 @@ from gatk_sv_ploidy._plot_detail import (
 from gatk_sv_ploidy._plot_ppd import run_ppd_plots
 from gatk_sv_ploidy.data import load_site_data
 from gatk_sv_ploidy.infer import load_inference_artifacts
+from gatk_sv_ploidy.models import _standardize_multiplicative_bin_factors_numpy
 
 logger = logging.getLogger(__name__)
 _BINQ_FIELD_OPTIONS = ["auto", "BINQ15", "BINQ20", "CALLQ15", "CALLQ20"]
@@ -47,7 +48,9 @@ def _resolve_binq_field(
         return requested_field
     if "BINQ20" in bin_quality_df.columns:
         return "BINQ20"
-    return "CALLQ20"
+    if "CALLQ20" in bin_quality_df.columns:
+        return "CALLQ20"
+    return "BINQ20"
 
 
 # ── histogram helpers ───────────────────────────────────────────────────────
@@ -573,128 +576,309 @@ def _coerce_background_factor_matrices(
     return normalized_bin_factors, sample_factors
 
 
+def _coerce_multiplicative_factor_matrices(
+    map_estimates: dict,
+) -> tuple[np.ndarray | None, np.ndarray | None]:
+    """Return standardized multiplicative loadings and sample weights."""
+    if (
+        "multiplicative_bin_factors" not in map_estimates or
+        "multiplicative_sample_factors" not in map_estimates
+    ):
+        return None, None
+
+    bin_factors = np.asarray(
+        map_estimates["multiplicative_bin_factors"],
+        dtype=np.float64,
+    ).squeeze()
+    if bin_factors.ndim == 1:
+        bin_factors = bin_factors[:, np.newaxis]
+
+    sample_factors = np.asarray(
+        map_estimates["multiplicative_sample_factors"],
+        dtype=np.float64,
+    ).squeeze()
+    if sample_factors.ndim == 1:
+        sample_factors = sample_factors[np.newaxis, :]
+
+    if bin_factors.ndim != 2 or sample_factors.ndim != 2:
+        return None, None
+    if sample_factors.shape[0] != bin_factors.shape[1]:
+        if sample_factors.shape[1] == bin_factors.shape[1]:
+            sample_factors = sample_factors.T
+        else:
+            return None, None
+
+    standardized_bin_factors = _standardize_multiplicative_bin_factors_numpy(
+        bin_factors,
+    )
+    return standardized_bin_factors, sample_factors
+
+
+def _build_factor_plot_specs(map_estimates: dict) -> list[dict[str, object]]:
+    """Collect factor matrices and display metadata for available factor types."""
+    specs: list[dict[str, object]] = []
+
+    background_bin_loadings, background_sample_factors = _coerce_background_factor_matrices(
+        map_estimates,
+    )
+    if background_bin_loadings is not None and background_sample_factors is not None:
+        specs.append(
+            {
+                "name": "Additive",
+                "bin_loadings": background_bin_loadings,
+                "sample_weights": background_sample_factors,
+                "loading_cmap": "viridis",
+                "weight_cmap": "magma",
+                "signed": False,
+                "loading_label": "Normalized loading",
+                "weight_label": "Sample weight",
+            }
+        )
+
+    multiplicative_bin_loadings, multiplicative_sample_factors = _coerce_multiplicative_factor_matrices(
+        map_estimates,
+    )
+    if (
+        multiplicative_bin_loadings is not None and
+        multiplicative_sample_factors is not None
+    ):
+        specs.append(
+            {
+                "name": "Multiplicative",
+                "bin_loadings": multiplicative_bin_loadings,
+                "sample_weights": multiplicative_sample_factors,
+                "loading_cmap": "coolwarm",
+                "weight_cmap": "coolwarm",
+                "signed": True,
+                "loading_label": "Standardized loading",
+                "weight_label": "Sample weight",
+            }
+        )
+
+    return specs
+
+
+def _symmetric_color_limits(values: np.ndarray) -> tuple[float, float]:
+    """Return symmetric color limits around zero for signed heatmaps."""
+    max_abs = float(np.nanmax(np.abs(values)))
+    max_abs = max(max_abs, 1e-8)
+    return -max_abs, max_abs
+
+
+def plot_factor_mode_weight_diagnostics(
+    map_estimates: dict,
+    output_dir: str,
+) -> None:
+    """Visualize per-mode sample weights for additive and multiplicative factors."""
+    factor_specs = _build_factor_plot_specs(map_estimates)
+    if not factor_specs:
+        logger.info("Factor weights absent from inference artifacts — skipping mode-weight diagnostics plot.")
+        return
+
+    fig, axes = plt.subplots(
+        len(factor_specs),
+        1,
+        figsize=(12, max(4.0, 3.6 * len(factor_specs))),
+        squeeze=False,
+    )
+
+    for spec_idx, spec in enumerate(factor_specs):
+        ax = axes[spec_idx, 0]
+        sample_weights = np.asarray(spec["sample_weights"], dtype=np.float64)
+        n_factors = sample_weights.shape[0]
+        factor_labels = [f"F{idx + 1}" for idx in range(n_factors)]
+        box_data = [
+            sample_weights[idx, np.isfinite(sample_weights[idx])]
+            for idx in range(n_factors)
+        ]
+        boxplot = ax.boxplot(
+            box_data,
+            patch_artist=True,
+            tick_labels=factor_labels,
+            widths=0.65,
+        )
+        color_map = plt.get_cmap(str(spec["weight_cmap"]))
+        for patch_idx, patch in enumerate(boxplot["boxes"]):
+            color = color_map((patch_idx + 0.5) / max(n_factors, 1))
+            patch.set_facecolor(color)
+            patch.set_alpha(0.75)
+        for median in boxplot["medians"]:
+            median.set_color("black")
+            median.set_linewidth(1.5)
+
+        if bool(spec["signed"]):
+            ax.axhline(0.0, color="black", linestyle="--", linewidth=1.0, alpha=0.7)
+        else:
+            ax.set_ylim(bottom=min(0.0, float(np.nanmin(sample_weights)) - 0.01))
+
+        ax.set_title(f"{spec['name']} Mode Weights Across Samples")
+        ax.set_xlabel("Mode")
+        ax.set_ylabel(str(spec["weight_label"]))
+        ax.grid(True, axis="y", alpha=0.25)
+
+    plt.tight_layout()
+    save_and_close_plot(output_dir, "factor_mode_weight_diagnostics.png")
+
+
 def plot_background_factor_diagnostics(
     bin_df: pd.DataFrame,
     map_estimates: dict,
     output_dir: str,
 ) -> None:
-    """Visualize learned background-factor loadings, amplitudes, and chrY context."""
-    background_bin_loadings, background_sample_factors = _coerce_background_factor_matrices(
-        map_estimates,
-    )
-    if background_bin_loadings is None or background_sample_factors is None:
-        logger.info("Background factors absent from inference artifacts — skipping background diagnostics plot.")
+    """Visualize additive and multiplicative factor loadings and sample weights."""
+    factor_specs = _build_factor_plot_specs(map_estimates)
+    if not factor_specs:
+        logger.info("Factor latents absent from inference artifacts — skipping factor diagnostics plot.")
         return
 
     unique = (
         bin_df.groupby(["chr", "start", "end"], sort=False)
-        .agg(
-            bin_bias=("bin_bias", "first"),
-            bin_var=("bin_var", "first"),
-            mean_bin_epsilon=("bin_epsilon", "mean"),
-        )
+        .first()
         .reset_index()
     )
-    if len(unique) != background_bin_loadings.shape[0]:
-        logger.warning(
-            "Skipping background diagnostics plot: %d unique bins in bin_stats but %d rows in inference artifacts.",
-            len(unique),
-            background_bin_loadings.shape[0],
-        )
+
+    valid_specs: list[dict[str, object]] = []
+    for spec in factor_specs:
+        bin_loadings = np.asarray(spec["bin_loadings"], dtype=np.float64)
+        if len(unique) != bin_loadings.shape[0]:
+            logger.warning(
+                "Skipping %s factor diagnostics: %d unique bins in bin_stats but %d rows in inference artifacts.",
+                spec["name"],
+                len(unique),
+                bin_loadings.shape[0],
+            )
+            continue
+        valid_specs.append(spec)
+    if not valid_specs:
         return
 
     chromosomes = unique["chr"].astype(str).to_numpy()
     x = np.arange(len(unique))
     chromosome_order = unique["chr"].drop_duplicates().tolist()
-    chromosome_means = np.vstack(
-        [
-            background_bin_loadings[chromosomes == chrom].mean(axis=0)
-            for chrom in chromosome_order
-        ]
-    )
-    sample_order = np.argsort(np.nanmean(background_sample_factors, axis=0))[::-1]
-    max_loading = np.nanmax(background_bin_loadings, axis=1)
-    chr_type = unique["chr"].map(get_chromosome_type)
-
-    n_factors = background_bin_loadings.shape[1]
-    fig_height = max(8.0, 6.5 + 0.35 * n_factors)
+    fig_height = max(8.0, 5.8 * len(valid_specs))
     fig, axes = plt.subplots(
-        2,
+        2 * len(valid_specs),
         2,
         figsize=(18, fig_height),
+        squeeze=False,
         gridspec_kw={"width_ratios": [3.2, 1.5]},
     )
 
-    loadings_im = axes[0, 0].imshow(
-        background_bin_loadings.T,
-        aspect="auto",
-        interpolation="nearest",
-        cmap="viridis",
-    )
-    axes[0, 0].set_title("Normalized Background Bin Loadings")
-    axes[0, 0].set_ylabel("Factor")
-    axes[0, 0].set_yticks(np.arange(n_factors))
-    axes[0, 0].set_yticklabels([f"F{idx + 1}" for idx in range(n_factors)])
-    add_chromosome_labels(axes[0, 0], chromosomes, x)
-    fig.colorbar(loadings_im, ax=axes[0, 0], fraction=0.03, pad=0.02, label="Normalized loading")
-
-    sample_im = axes[0, 1].imshow(
-        background_sample_factors[:, sample_order],
-        aspect="auto",
-        interpolation="nearest",
-        cmap="magma",
-    )
-    axes[0, 1].set_title("Background Sample Amplitudes")
-    axes[0, 1].set_xlabel("Samples sorted by mean factor amplitude")
-    axes[0, 1].set_ylabel("Factor")
-    axes[0, 1].set_yticks(np.arange(n_factors))
-    axes[0, 1].set_yticklabels([f"F{idx + 1}" for idx in range(n_factors)])
-    fig.colorbar(sample_im, ax=axes[0, 1], fraction=0.05, pad=0.03, label="Amplitude")
-
-    chromosome_im = axes[1, 0].imshow(
-        chromosome_means.T,
-        aspect="auto",
-        interpolation="nearest",
-        cmap="viridis",
-    )
-    axes[1, 0].set_title("Mean Background Loading by Chromosome")
-    axes[1, 0].set_xlabel("Chromosome")
-    axes[1, 0].set_ylabel("Factor")
-    axes[1, 0].set_xticks(np.arange(len(chromosome_order)))
-    axes[1, 0].set_xticklabels(chromosome_order, rotation=45, ha="right")
-    axes[1, 0].set_yticks(np.arange(n_factors))
-    axes[1, 0].set_yticklabels([f"F{idx + 1}" for idx in range(n_factors)])
-    fig.colorbar(chromosome_im, ax=axes[1, 0], fraction=0.03, pad=0.02, label="Mean normalized loading")
-
-    for chrom_type, color in _CHR_PALETTE.items():
-        mask = chr_type == chrom_type
-        if not np.any(mask):
-            continue
-        axes[1, 1].scatter(
-            unique.loc[mask, "bin_bias"],
-            np.sqrt(np.maximum(unique.loc[mask, "bin_var"], 0.0)),
-            s=20.0 + 30.0 * max_loading[mask.to_numpy()],
-            alpha=0.75,
-            color=color,
-            label=chrom_type,
+    for spec_idx, spec in enumerate(valid_specs):
+        bin_loadings = np.asarray(spec["bin_loadings"], dtype=np.float64)
+        sample_weights = np.asarray(spec["sample_weights"], dtype=np.float64)
+        n_factors = bin_loadings.shape[1]
+        factor_labels = [f"F{idx + 1}" for idx in range(n_factors)]
+        chromosome_means = np.vstack(
+            [
+                bin_loadings[chromosomes == chrom].mean(axis=0)
+                for chrom in chromosome_order
+            ]
         )
-    axes[1, 1].set_title("Bin Bias vs Variance with Background Loading")
-    axes[1, 1].set_xlabel("Bin bias")
-    axes[1, 1].set_ylabel("Bin stdev")
-    axes[1, 1].grid(True, alpha=0.25)
-    axes[1, 1].legend(loc="best", framealpha=0.9)
-    axes[1, 1].text(
-        0.02,
-        0.98,
-        "Marker size = max normalized background loading\nEffective additive background in bin_stats is summarized separately in infer diagnostics.",
-        transform=axes[1, 1].transAxes,
-        va="top",
-        ha="left",
-        fontsize=9,
-        bbox={"facecolor": "white", "alpha": 0.85, "edgecolor": "none"},
-    )
+        sample_strength = np.nanmean(
+            np.abs(sample_weights) if bool(spec["signed"]) else sample_weights,
+            axis=0,
+        )
+        sample_order = np.argsort(sample_strength)[::-1]
+        row0 = 2 * spec_idx
+        row1 = row0 + 1
 
+        loading_kwargs = {}
+        weight_kwargs = {}
+        if bool(spec["signed"]):
+            loading_kwargs["vmin"], loading_kwargs["vmax"] = _symmetric_color_limits(bin_loadings)
+            weight_kwargs["vmin"], weight_kwargs["vmax"] = _symmetric_color_limits(sample_weights)
+
+        loadings_im = axes[row0, 0].imshow(
+            bin_loadings.T,
+            aspect="auto",
+            interpolation="nearest",
+            cmap=str(spec["loading_cmap"]),
+            **loading_kwargs,
+        )
+        axes[row0, 0].set_title(f"{spec['name']} Bin Loadings")
+        axes[row0, 0].set_ylabel("Factor")
+        axes[row0, 0].set_yticks(np.arange(n_factors))
+        axes[row0, 0].set_yticklabels(factor_labels)
+        add_chromosome_labels(axes[row0, 0], chromosomes, x)
+        fig.colorbar(
+            loadings_im,
+            ax=axes[row0, 0],
+            fraction=0.03,
+            pad=0.02,
+            label=str(spec["loading_label"]),
+        )
+
+        sample_im = axes[row0, 1].imshow(
+            sample_weights[:, sample_order],
+            aspect="auto",
+            interpolation="nearest",
+            cmap=str(spec["weight_cmap"]),
+            **weight_kwargs,
+        )
+        axes[row0, 1].set_title(f"{spec['name']} Sample Weights")
+        axes[row0, 1].set_xlabel("Samples sorted by mean weight magnitude")
+        axes[row0, 1].set_ylabel("Factor")
+        axes[row0, 1].set_yticks(np.arange(n_factors))
+        axes[row0, 1].set_yticklabels(factor_labels)
+        fig.colorbar(
+            sample_im,
+            ax=axes[row0, 1],
+            fraction=0.05,
+            pad=0.03,
+            label=str(spec["weight_label"]),
+        )
+
+        chromosome_im = axes[row1, 0].imshow(
+            chromosome_means.T,
+            aspect="auto",
+            interpolation="nearest",
+            cmap=str(spec["loading_cmap"]),
+            **loading_kwargs,
+        )
+        axes[row1, 0].set_title(f"Mean {spec['name']} Loading by Chromosome")
+        axes[row1, 0].set_xlabel("Chromosome")
+        axes[row1, 0].set_ylabel("Factor")
+        axes[row1, 0].set_xticks(np.arange(len(chromosome_order)))
+        axes[row1, 0].set_xticklabels(chromosome_order, rotation=45, ha="right")
+        axes[row1, 0].set_yticks(np.arange(n_factors))
+        axes[row1, 0].set_yticklabels(factor_labels)
+        fig.colorbar(
+            chromosome_im,
+            ax=axes[row1, 0],
+            fraction=0.03,
+            pad=0.02,
+            label=f"Mean {spec['loading_label'].lower()}",
+        )
+
+        box_data = [
+            sample_weights[idx, np.isfinite(sample_weights[idx])]
+            for idx in range(n_factors)
+        ]
+        boxplot = axes[row1, 1].boxplot(
+            box_data,
+            patch_artist=True,
+            tick_labels=factor_labels,
+            widths=0.65,
+        )
+        color_map = plt.get_cmap(str(spec["weight_cmap"]))
+        for patch_idx, patch in enumerate(boxplot["boxes"]):
+            color = color_map((patch_idx + 0.5) / max(n_factors, 1))
+            patch.set_facecolor(color)
+            patch.set_alpha(0.75)
+        for median in boxplot["medians"]:
+            median.set_color("black")
+            median.set_linewidth(1.5)
+        if bool(spec["signed"]):
+            axes[row1, 1].axhline(0.0, color="black", linestyle="--", linewidth=1.0, alpha=0.7)
+        axes[row1, 1].set_title(f"{spec['name']} Mode Weights")
+        axes[row1, 1].set_xlabel("Mode")
+        axes[row1, 1].set_ylabel(str(spec["weight_label"]))
+        axes[row1, 1].grid(True, axis="y", alpha=0.25)
+
+    plt.tight_layout()
     save_and_close_plot(output_dir, "background_factor_diagnostics.png")
+    plot_factor_mode_weight_diagnostics(map_estimates, output_dir)
 
 
 # ── CN posterior entropy ────────────────────────────────────────────────────
@@ -1512,10 +1696,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ppd-chr-summary", default=None,
                    help="ppd_chromosome_summary.tsv (from 'ppd')")
     p.add_argument("--ppd-bin-quality", default=None,
-                   help="ppd_bin_quality.tsv (from 'ppd') to add BINQ overlays and diagnostics")
+                   help="ppd_bin_quality.tsv (from 'ppd') to add per-bin quality overlays and diagnostics")
     p.add_argument("--binq-field", choices=_BINQ_FIELD_OPTIONS, default="BINQ20",
                    help="Per-bin quality field to use when --ppd-bin-quality is provided. "
-                        "'auto' prefers CALLQ20 when available, otherwise BINQ20")
+                        "Defaults to BINQ20. 'auto' prefers BINQ20 and falls back to CALLQ20")
     p.add_argument("--ignored-bins", default=None,
                    help="ignored_bins.tsv.gz (from 'call') to overlay bins removed during filtered calling")
     return p.parse_args()

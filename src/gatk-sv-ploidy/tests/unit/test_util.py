@@ -3,11 +3,13 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import warnings
 
 from gatk_sv_ploidy._util import (
     add_chromosome_labels,
     compute_contig_posterior_from_bin_posteriors,
     compute_plq_from_probabilities,
+    compose_additive_background_matrix,
     format_count_summary,
     format_column_name,
     format_numeric_summary,
@@ -74,6 +76,33 @@ def test_contig_posterior_and_plq_helpers() -> None:
     assert int(np.argmax(contig_posterior)) == 3
     assert contig_posterior[3] > 0.98
     assert int(plq) == 20
+
+
+def test_compose_additive_background_matrix_avoids_spurious_matmul_warnings() -> None:
+    rng = np.random.default_rng(1)
+    background_bin_factors = rng.lognormal(
+        mean=0.0,
+        sigma=0.5,
+        size=(849, 16),
+    ).astype(np.float64)
+    background_sample_factors = np.abs(
+        rng.normal(loc=0.0, scale=0.02, size=(16, 156))
+    ).astype(np.float64)
+
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always", RuntimeWarning)
+        additive_background = compose_additive_background_matrix(
+            0.001,
+            n_bins=849,
+            n_samples=156,
+            dtype=np.float64,
+            background_bin_factors=background_bin_factors,
+            background_sample_factors=background_sample_factors,
+        )
+
+    assert captured == []
+    assert additive_background.shape == (849, 156)
+    assert np.isfinite(additive_background).all()
 
 
 def test_plot_helpers_write_files_and_labels(tmp_path) -> None:
