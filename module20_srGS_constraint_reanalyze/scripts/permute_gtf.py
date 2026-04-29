@@ -40,6 +40,8 @@ HG38_CHROM_SIZES = {
     'chr22':  50818468, 'chrX': 156040895,  'chrY':  57227415,
 }
 
+PLACEMENT_EXCLUDED_CHROMS = {'chrX', 'chrY'}
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def load_exclusions(bed_path):
@@ -109,6 +111,8 @@ def build_intergenic_candidates(allowed_by_chrom):
     sorted ascending by length so bisect can find eligible intervals quickly."""
     candidates = []
     for chrom, intervals in allowed_by_chrom.items():
+        if chrom in PLACEMENT_EXCLUDED_CHROMS:
+            continue
         for s, e in intervals:
             candidates.append((chrom, s, e, e - s))
     candidates.sort(key=lambda r: r[3])   # sort by length ascending
@@ -195,7 +199,11 @@ def main():
     allowed    = build_allowed_intervals(HG38_CHROM_SIZES, merged_excl)
     intergenic_candidates = build_intergenic_candidates(allowed)
     total_free = sum(row[3] for row in intergenic_candidates)
-    print(f"  Total free genome after merging exclusions+blacklist: {total_free:,} bp across {len(allowed)} chromosomes", flush=True)
+    print(
+        f"  Total free genome after merging exclusions+blacklist and excluding placement on "
+        f"{sorted(PLACEMENT_EXCLUDED_CHROMS)}: {total_free:,} bp across {len(allowed) - len(PLACEMENT_EXCLUDED_CHROMS)} chromosomes",
+        flush=True,
+    )
 
     # ── 2. Read GTF: group lines by gene_id ──────────────────────────────────
     print("Reading GTF...", flush=True)

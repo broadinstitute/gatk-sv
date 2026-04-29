@@ -1,0 +1,3 @@
+sample	non_trv_snv	non_trv_del_1_49bp	non_trv_ins_1_49bp	non_trv_del_gt49bp	non_trv_ins_gt49bp	non_trid_snv	non_trid_del_1_49bp	non_trid_ins_1_49bp	non_trid_del_gt49bp	non_trid_ins_gt49bp	trv_repeat_unit_le6bp	trv_repeat_unit_gt6bp	trv_repeat_unit_unknown	uncategorized_non_trv	uncategorized_non_trid
+HG00512	4185117	497914	501993	9075	14208	3815736	138733	131070	1712	2071	792413	47348	0	55	23
+HG00513	4246362	503076	508217	9218	14370	3874617	140315	132361	1707	2026	802592	48059	0	56	19
