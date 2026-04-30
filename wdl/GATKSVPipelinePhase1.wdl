@@ -100,6 +100,7 @@ workflow GATKSVPipelinePhase1 {
     Array[File]? melt_vcfs         # Melt VCF
     Array[File]? scramble_vcfs     # Scramble VCF
     Array[File]? wham_vcfs         # Wham VCF
+    Array[File]? stripy_vcfs       # STRipy VCF
     Int min_svsize                 # Minimum SV length to include
 
     # QC options
@@ -186,6 +187,7 @@ workflow GATKSVPipelinePhase1 {
     RuntimeAttr? runtime_attr_count_svs
     RuntimeAttr? runtime_attr_plot_svcounts
     RuntimeAttr? runtime_attr_cat_outliers_preview
+    RuntimeAttr? runtime_attr_merge_stripy_vcf_cluster_batch
 
     ############################################################
     ## GenerateBatchMetrics
@@ -329,6 +331,7 @@ workflow GATKSVPipelinePhase1 {
       wham_vcf_tar=GatherBatchEvidence.std_wham_vcf_tar,
       scramble_vcf_tar=GatherBatchEvidence.std_scramble_vcf_tar,
       melt_vcf_tar=GatherBatchEvidence.std_melt_vcf_tar,
+      stripy_vcfs=stripy_vcfs,
       del_bed=GatherBatchEvidence.merged_dels,
       dup_bed=GatherBatchEvidence.merged_dups,
       batch=batch,
@@ -378,7 +381,8 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_exclude_intervals_pesr=runtime_attr_exclude_intervals_pesr_cluster_batch,
       runtime_attr_count_svs = runtime_attr_count_svs,
       runtime_attr_plot_svcounts = runtime_attr_plot_svcounts,
-      runtime_attr_cat_outliers_preview = runtime_attr_cat_outliers_preview
+        runtime_attr_cat_outliers_preview = runtime_attr_cat_outliers_preview,
+        runtime_attr_merge_stripy_vcf = runtime_attr_merge_stripy_vcf_cluster_batch
   }
 
   call batchmetrics.GenerateBatchMetrics as GenerateBatchMetrics {
@@ -488,6 +492,8 @@ workflow GATKSVPipelinePhase1 {
     Int? clustered_num_outlier_samples = ClusterBatch.clustered_num_outlier_samples
 
     File? metrics_file_clusterbatch = ClusterBatch.metrics_file_clusterbatch
+    File? merged_stripy_vcf = ClusterBatch.merged_stripy_vcf
+    File? merged_stripy_vcf_index = ClusterBatch.merged_stripy_vcf_index
 
     # GenerateBatchMetrics
     File evidence_metrics = GenerateBatchMetrics.metrics

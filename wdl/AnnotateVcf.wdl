@@ -3,6 +3,7 @@ version 1.0
 import "Structs.wdl"
 import "ShardedAnnotateVcf.wdl" as sharded_annotate_vcf
 import "TasksMakeCohortVcf.wdl" as MiniTasks
+import "Utils.wdl" as utils
 
 workflow AnnotateVcf {
 
@@ -10,6 +11,9 @@ workflow AnnotateVcf {
     File vcf  # GATK-SV VCF for annotation. Index .tbi must be located at the same path
     File contig_list  # Ordered list of contigs to annotate that are present in the input VCF
     String prefix
+
+    # Optional simple post-annotation STRipy merge. This is not optimized for large cohorts.
+    Array[File]? stripy_vcfs
 
     File? protein_coding_gtf  # Provide at least one of protein_coding_gtf or noncoding_bed to perform functional annotation
     File? noncoding_bed
@@ -44,7 +48,10 @@ workflow AnnotateVcf {
     RuntimeAttr? runtime_attr_concat
     RuntimeAttr? runtime_attr_preconcat
     RuntimeAttr? runtime_attr_fix_header
+    RuntimeAttr? runtime_attr_merge_stripy_vcf
   }
+
+  Array[File] stripy_vcfs_ = select_first([stripy_vcfs, []])
 
   Array[String] contigs = read_lines(contig_list)
 
@@ -102,8 +109,19 @@ workflow AnnotateVcf {
       runtime_attr_override=runtime_attr_concat
   }
 
+  if (length(stripy_vcfs_) > 0) {
+    call utils.MergeStripyVcf {
+      input:
+        vcf = ConcatVcfs.concat_vcf,
+        stripy_vcfs = stripy_vcfs_,
+        output_prefix = prefix + ".annotated",
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_merge_stripy_vcf
+    }
+  }
+
   output {
-    File annotated_vcf = ConcatVcfs.concat_vcf
-    File annotated_vcf_index = ConcatVcfs.concat_vcf_idx
+    File annotated_vcf = select_first([MergeStripyVcf.out, ConcatVcfs.concat_vcf])
+    File annotated_vcf_index = select_first([MergeStripyVcf.out_index, ConcatVcfs.concat_vcf_idx])
   }
 }

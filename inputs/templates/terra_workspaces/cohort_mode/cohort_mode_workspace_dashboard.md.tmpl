@@ -4,3 +4,5 @@ This workspace contains the GATK-SV joint calling pipeline; for the single-sampl
 
 Please refer to the GATK-SV [website](https://broadinstitute.github.io/gatk-sv/) for documentation.
 The [joint calling pipeline execution page](https://broadinstitute.github.io/gatk-sv/docs/execution/joint) contains detailed information on this Terra workspace and how to apply the pipeline to your own data.
+
+Optional STRipy repeat-expansion calling is available as a standalone sample workflow after `02-EvidenceQC` has been run and `cohort_ped_file` has been generated. Run `StripyWorkflow` on the desired samples so Terra populates the default `stripy_vcf`, `stripy_json`, `stripy_tsv`, and `stripy_html` sample attributes, then run `05-ClusterBatch`; `20-AnnotateVcf` will append the merged STRipy VCFs when the `merged_stripy_vcf` sample-set attributes are present.

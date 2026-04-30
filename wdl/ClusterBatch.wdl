@@ -16,6 +16,7 @@ workflow ClusterBatch {
     File? wham_vcf_tar
     File? melt_vcf_tar
     File? scramble_vcf_tar
+    Array[File]? stripy_vcfs
 
     File del_bed
     File dup_bed
@@ -90,7 +91,10 @@ workflow ClusterBatch {
     RuntimeAttr? runtime_attr_count_svs
     RuntimeAttr? runtime_attr_plot_svcounts
     RuntimeAttr? runtime_attr_cat_outliers_preview
+    RuntimeAttr? runtime_attr_merge_stripy_vcf
   }
+
+  Array[File] stripy_vcfs_ = select_first([stripy_vcfs, []])
 
   call util.GetSampleIdsFromVcfTar {
     input:
@@ -337,6 +341,16 @@ workflow ClusterBatch {
     }
   }
 
+  if (length(stripy_vcfs_) > 0) {
+    call util.MergeStripyVcf {
+      input:
+        stripy_vcfs = stripy_vcfs_,
+        output_prefix = batch + ".stripy",
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_merge_stripy_vcf
+    }
+  }
+
   output {
     File clustered_depth_vcf = ClusterDepth.clustered_vcf
     File clustered_depth_vcf_index = ClusterDepth.clustered_vcf_index
@@ -356,6 +370,8 @@ workflow ClusterBatch {
     File? clustered_outlier_samples_with_reason = PlotSVCountsPerSample.outlier_samples_with_reason
     Int? clustered_num_outlier_samples = PlotSVCountsPerSample.num_outlier_samples
     File? metrics_file_clusterbatch = ClusterBatchMetrics.metrics_file
+    File? merged_stripy_vcf = MergeStripyVcf.out
+    File? merged_stripy_vcf_index = MergeStripyVcf.out_index
   }
 
 

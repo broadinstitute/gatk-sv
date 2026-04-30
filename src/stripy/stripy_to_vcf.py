@@ -6,7 +6,6 @@ import re
 from pathlib import Path
 
 import pysam
-from pyfaidx import Fasta
 
 
 def parse_coords(coord):
@@ -27,44 +26,107 @@ def chrom_key(c):
     return order.get(c, (9, c))
 
 
+def normalize_filter_label(raw_filter):
+    if raw_filter is None:
+        return None
+    filter_label = str(raw_filter).strip()
+    if not filter_label or filter_label == "." or filter_label.upper() == "PASS":
+        return None
+    return filter_label
+
+
+def to_vcf_filter_id(filter_label):
+    filter_id = re.sub(r"[^0-9A-Za-z_]+", "_", filter_label).strip("_")
+    if not filter_id:
+        filter_id = "STRIPY_FILTER"
+    if filter_id[0].isdigit():
+        filter_id = "STRIPY_" + filter_id
+    return filter_id
+
+
+def build_filter_id_map(loci):
+    raw_filters = set()
+    for locus in loci:
+        filter_label = normalize_filter_label(locus["filter"])
+        if filter_label is not None:
+            raw_filters.add(filter_label)
+
+    filter_id_map = {}
+    used_filter_ids = set()
+    for filter_label in sorted(raw_filters):
+        base_filter_id = to_vcf_filter_id(filter_label)
+        filter_id = base_filter_id
+        suffix = 2
+        while filter_id in used_filter_ids:
+            filter_id = f"{base_filter_id}_{suffix}"
+            suffix += 1
+        filter_id_map[filter_label] = filter_id
+        used_filter_ids.add(filter_id)
+    return filter_id_map
+
+
 def load_inputs(json_path):
     with open(json_path, "r") as f:
         J = json.load(f)
     loci = []
+
+    def to_float(x):
+        if x is None or x == "":
+            return None
+        try:
+            return float(x)
+        except Exception:
+            return float("nan")
+
+    def to_int(x):
+        if x is None or x == "":
+            return None
+        try:
+            return int(x)
+        except Exception:
+            try:
+                return int(float(x))
+            except Exception:
+                return None
+
+    def ci_tuple(a):
+        if not isinstance(a, dict):
+            return None
+        ci = a.get("CI") or {}
+        ci_min = to_int(ci.get("Min"))
+        ci_max = to_int(ci.get("Max"))
+        if ci_min is None or ci_max is None:
+            return None
+        return ci_min, ci_max
+
+    def outlier(a):
+        if not isinstance(a, dict):
+            return None
+        return to_int(a.get("IsPopulationOutlier"))
+
     for entry in J.get("GenotypingResults", []):
         for locus_name, locus in entry.items():
             tl = locus["TargetedLocus"]
             coords = tl["Coordinates"]
-            (chrom, start, end) = parse_coords(coords)
-            motif = tl["Motif"]
-            alleles = locus["Alleles"]
-            a1 = alleles[0]
-            if len(alleles) > 1:
-                a2 = alleles[1]
-            else:
-                a2 = None
-
-            def to_float(x):
-                try:
-                    return float(x)
-                except:
-                    return float("nan")
-
-            def ci_str(a):
-                ci = a["CI"]
-                return f"{ci.get('Min', '')}-{ci.get('Max', '')}"
-
-            def outlier(a):
-                return int(a["IsPopulationOutlier"])
+            parsed_coords = parse_coords(coords)
+            if parsed_coords is None:
+                raise ValueError(f"Unable to parse STRipy coordinates for {locus_name}: {coords!r}")
+            (chrom, start, end) = parsed_coords
+            motif = tl.get("Motif")
+            alleles = locus.get("Alleles") or []
+            a1 = alleles[0] if len(alleles) > 0 else None
+            a2 = alleles[1] if len(alleles) > 1 else None
 
             diseases = []
-            corr = tl["CorrespondingDisease"]
-            for sym, meta in corr.items():
-                diseases.append(meta["DiseaseSymbol"])
+            corr = tl.get("CorrespondingDisease") or {}
+            for meta in corr.values():
+                disease_symbol = meta.get("DiseaseSymbol")
+                if disease_symbol:
+                    diseases.append(disease_symbol)
             diseases_s = "|".join(sorted(set(diseases)))
-            meta = locus["Metadata"]
-            filt = locus["Filter"]
-            coverage = meta["Coverage"]
+            meta = locus.get("Metadata") or {}
+            filt = locus.get("Filter")
+            coverage = to_int(meta.get("Coverage"))
             locus_id = tl.get("LocusID") or locus_name
             loci.append({
                 "chrom": chrom,
@@ -72,15 +134,15 @@ def load_inputs(json_path):
                 "end": end,
                 "id": str(locus_id),
                 "motif": motif,
-                "period": len(motif),
-                "a1_rep": to_float(a1["Repeats"]),
-                "a2_rep": to_float(a2["Repeats"]) if a2 is not None else None,
-                "a1_ci": ci_str(a1),
-                "a2_ci": ci_str(a2) if a2 is not None else None,
+                "period": len(motif) if motif else None,
+                "a1_rep": to_float(a1.get("Repeats")) if isinstance(a1, dict) else None,
+                "a2_rep": to_float(a2.get("Repeats")) if isinstance(a2, dict) else None,
+                "a1_ci": ci_tuple(a1),
+                "a2_ci": ci_tuple(a2),
                 "a1_out": outlier(a1),
                 "a2_out": outlier(a2) if a2 is not None else None,
-                "a1_z": to_float(a1["PopulationZscore"]),
-                "a2_z": to_float(a2["PopulationZscore"] if a2 is not None else None),
+                "a1_z": to_float(a1.get("PopulationZscore")) if isinstance(a1, dict) else None,
+                "a2_z": to_float(a2.get("PopulationZscore")) if isinstance(a2, dict) else None,
                 "coverage": coverage,
                 "filter": filt,
                 "diseases": diseases_s,
@@ -184,9 +246,15 @@ VCF_HEADER = {
 
 def write_with_pysam(loci, out_path, sample_name, contigs=None):
     header = pysam.VariantHeader()
+    filter_id_map = build_filter_id_map(loci)
 
     header.add_meta("source", value="STRipy2VCF")
     header.add_meta("ALT", items=[("ID", "STR"), ("Description", "Short tandem repeat")])
+    for filter_label, filter_id in filter_id_map.items():
+        header.add_meta(
+            "FILTER",
+            items=[("ID", filter_id), ("Description", f"Filter status assigned by STRipy: {filter_label}")],
+        )
     for info in VCF_HEADER["INFO"]:
         items = list(info.items())
         header.add_meta("INFO", items=items)
@@ -214,7 +282,8 @@ def write_with_pysam(loci, out_path, sample_name, contigs=None):
         rec.id = str(loc["id"])
         rec.ref = "N"
         rec.alts = ("<STR>",)
-        rec.filter.add(loc["filter"] if loc["filter"] else "PASS")
+        filter_label = normalize_filter_label(loc["filter"])
+        rec.filter.add(filter_id_map[filter_label] if filter_label else "PASS")
         rec.info["SVTYPE"] = "STR"
         if loc["motif"]:
             rec.info["RU"] = loc["motif"]
@@ -222,26 +291,24 @@ def write_with_pysam(loci, out_path, sample_name, contigs=None):
                 rec.info["PERIOD"] = int(loc["period"])
         rec.info["DISEASES"] = loc["diseases"]
         rec.info["LOCUS"] = loc["id"]
-        rec.samples[sample_name]["GT"] = ('.', '.')
-        rec.samples[sample_name]["REPCN"] = (loc["a1_rep"], loc["a2_rep"])
-
-        def parse_ci_tuple(ci_s):
-            m = re.match(r"^\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*-\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*$", str(ci_s))
-            if not m:
-                return (0, 0)
-            a = int(float(m.group(1)))
-            b = int(float(m.group(2)))
-            return (a, b)
-
-        rec.samples[sample_name]["REPCI1"] = parse_ci_tuple(loc["a1_ci"])
-        rec.samples[sample_name]["REPCI2"] = parse_ci_tuple(loc["a2_ci"])
-        rec.samples[sample_name]["OUTLIER"] = (int(loc["a1_out"]), int(loc["a2_out"]) if loc["a2_out"] else None)
-        rec.samples[sample_name]["ZSCORE"] = (loc["a1_z"], loc["a2_z"])
-        rec.samples[sample_name]["DP"] = int(loc["coverage"])
+        sample = rec.samples[sample_name]
+        sample["GT"] = (None, None)
+        if loc["a1_rep"] is not None or loc["a2_rep"] is not None:
+            sample["REPCN"] = (loc["a1_rep"], loc["a2_rep"])
+        if loc["a1_ci"] is not None:
+            sample["REPCI1"] = loc["a1_ci"]
+        if loc["a2_ci"] is not None:
+            sample["REPCI2"] = loc["a2_ci"]
+        if loc["a1_out"] is not None or loc["a2_out"] is not None:
+            sample["OUTLIER"] = (loc["a1_out"], loc["a2_out"])
+        if loc["a1_z"] is not None or loc["a2_z"] is not None:
+            sample["ZSCORE"] = (loc["a1_z"], loc["a2_z"])
+        if loc["coverage"] is not None:
+            sample["DP"] = int(loc["coverage"])
         if loc["filter"]:
-            rec.samples[sample_name]["STR_FILTER"] = [str(loc["filter"])]
+            sample["STR_FILTER"] = [str(loc["filter"])]
         else:
-            rec.samples[sample_name]["STR_FILTER"] = ["PASS"]
+            sample["STR_FILTER"] = ["PASS"]
         vf.write(rec)
     vf.close()
 
@@ -260,8 +327,8 @@ def main():
     loci = load_inputs(args.json)
     contigs = None
     if args.reference:
-        reference = Fasta(args.reference, as_raw=True, read_ahead=1000000)
-        contigs = [(name, len(reference[name])) for name in reference.keys()]
+        reference = pysam.FastaFile(args.reference)
+        contigs = [(name, reference.get_reference_length(name)) for name in reference.references]
         reference.close()
     write_with_pysam(loci, args.out, args.sample_name, contigs=contigs)
 
