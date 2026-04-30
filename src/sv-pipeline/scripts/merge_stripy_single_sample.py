@@ -28,16 +28,12 @@ def update_header(header: pysam.VariantHeader) -> None:
 
 
 def validate_sample_id(main_header: pysam.VariantHeader,
-                       stripy_header: pysam.VariantHeader):
+                       stripy_header: pysam.VariantHeader) -> Text:
     if len(stripy_header.samples) != 1:
         raise ValueError(f"Expected exactly 1 sample in STRipy header but got {len(stripy_header.samples)}")
-    sample_raw = stripy_header.samples[0]
-    # TODO temp fix; we should expect the correct ID here
-    if not sample_raw.endswith(".final"):
-        raise ValueError(f"Expected STRipy sample ID to end with .final but got {sample_raw}")
-    sample = sample_raw.rsplit(".", 1)[0]
+    sample = stripy_header.samples[0]
     if sample not in main_header.samples:
-        raise ValueError(f"Sample {sample} (raw ID {sample_raw}) not found in single-sample VCF header")
+        raise ValueError(f"Sample {sample} not found in single-sample VCF header")
     return sample
 
 
@@ -60,7 +56,7 @@ def _process(sample: Text,
                 record.info[key] = stripy_record.info[key]
         record.samples[sample]['GT'] = (None, None)
         for key in FORMAT_FIELDS:
-            s = stripy_record.samples[sample + ".final"]
+            s = stripy_record.samples[sample]
             if key in s:
                 record.samples[sample][key] = s[key]
         out_vcf.write(record)
@@ -75,7 +71,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument("--main-vcf", type=str, required=True,
                         help="GATK-SV vcf, must contain the sample provided by --stripy-vcf")
     parser.add_argument("--stripy-vcf", type=str, required=True,
-                        help="Single-sample STRipy vcf, with sample ID ending with \".final\"")
+                        help="Single-sample STRipy vcf, with sample ID present in --main-vcf")
     parser.add_argument("--out", type=str, required=True,
                         help="Output vcf (unsorted)")
     if len(argv) <= 1:
