@@ -247,6 +247,53 @@ task RunQC {
   }
 }
 
+task MergeStripyVcf {
+  input {
+    File? vcf
+    Array[File] stripy_vcfs
+    String output_prefix
+    File? script
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 0.9,
+                               disk_gb: ceil(10 + 3 * (size(select_all([vcf]), "GiB") + size(stripy_vcfs, "GiB"))),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File out = "~{output_prefix}.vcf.gz"
+    File out_index = "~{output_prefix}.vcf.gz.tbi"
+  }
+  command <<<
+
+    set -euo pipefail
+    python ~{default="/opt/sv-pipeline/scripts/merge_stripy_vcfs.py" script} \
+      ~{if defined(vcf) then "--main-vcf " + select_first([vcf]) else ""} \
+      --stripy-vcfs-list ~{write_lines(stripy_vcfs)} \
+      --out unsorted.vcf.gz
+    bcftools sort unsorted.vcf.gz -Oz -o ~{output_prefix}.vcf.gz
+    tabix ~{output_prefix}.vcf.gz
+
+  >>>
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task GetFilteredSubsampledIndices {
   input {
     File all_strings

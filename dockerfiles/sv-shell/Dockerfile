@@ -165,8 +165,7 @@ WORKDIR /opt/stripy-pipeline
 
 RUN python3 -m venv /opt/stripy-env
 RUN /opt/stripy-env/bin/pip install --upgrade pip && \
-    if [ -f requirements.txt ]; then /opt/stripy-env/bin/pip install -r requirements.txt; fi && \
-    /opt/stripy-env/bin/pip install pyfaidx
+    if [ -f requirements.txt ]; then /opt/stripy-env/bin/pip install -r requirements.txt; fi
 
 # Copy wrapper script, default config, and loci profiles
 COPY src/stripy/stripy /usr/local/bin/stripy

@@ -56,7 +56,6 @@ COPY src/stripy/stripy /usr/local/bin/stripy
 COPY src/stripy/default-config.json /usr/local/bin/default-config.json
 COPY src/stripy/catalogs /opt/stripy-pipeline/scripts/catalogs
 COPY src/stripy/stripy_to_vcf.py /opt/stripy-pipeline/scripts/stripy_to_vcf.py
-RUN pip3 install pyfaidx
 
 # Make wrapper executable
 RUN chmod +x /usr/local/bin/stripy

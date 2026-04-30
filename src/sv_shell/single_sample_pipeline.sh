@@ -1152,12 +1152,19 @@ python /opt/sv-pipeline/scripts/single_sample/update_variant_representations.py 
 tabix "${UpdateBreakendRepresentationAndRemoveFilters_out}"
 
 
-# SingleSampleFiltering.MergeStripyVcf
+# utils.MergeStripyVcf
 # ----------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-python /opt/sv-pipeline/scripts/merge_stripy_single_sample.py \
+stripy_vcfs_list="$(realpath "${working_dir}/stripy_vcfs.list")"
+jq -r '.stripy_vcf // empty' "$stripy_outputs_json" > "${stripy_vcfs_list}"
+if ! [ -s "${stripy_vcfs_list}" ]; then
+  echo "STRipy did not produce a VCF output" >&2
+  exit 1
+fi
+
+python /opt/sv-pipeline/scripts/merge_stripy_vcfs.py \
   --main-vcf "${UpdateBreakendRepresentationAndRemoveFilters_out}" \
-  --stripy-vcf "$(jq -r ".vcf_output" "$stripy_outputs_json")" \
+  --stripy-vcfs-list "${stripy_vcfs_list}" \
   --out unsorted.vcf.gz
 
 MergeStripyVcf_out="$(realpath "${sample_id}.gatk_sv.vcf.gz")"
@@ -1233,10 +1240,10 @@ jq -n \
   '{
       "final_vcf": $final_vcf,
       "pre_cleanup_vcf": $annotate_vcf[0].annotated_vcf,
-      "stripy_json_output": $stripy[0].json_output,
-      "stripy_tsv_output": $stripy[0].tsv_output,
-      "stripy_html_output": $stripy[0].html_output,
-      "stripy_vcf_output": $stripy[0].vcf_output,
+      "stripy_json_output": $stripy[0].stripy_json,
+      "stripy_tsv_output": $stripy[0].stripy_tsv,
+      "stripy_html_output": $stripy[0].stripy_html,
+      "stripy_vcf_output": $stripy[0].stripy_vcf,
       "metrics_file": $metrics[0].metrics_file,
       "qc_file": $qc_out,
       "ploidy_matrix": $gbe[0].batch_ploidy_matrix,

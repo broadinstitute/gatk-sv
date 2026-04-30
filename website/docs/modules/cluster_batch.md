@@ -64,6 +64,10 @@ Family structures and sex assignments determined in [EvidenceQC](./eqc). See [PE
 If provided, plot SV counts per sample. This number is used as the cutoff of interquartile range multiples for flagging 
 outlier samples. Example value: 4.
 
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `stripy_vcfs`
+Single-sample STRipy VCFs to merge for the batch. In the Terra joint-calling workspace, these are produced by the optional
+standalone `StripyWorkflow` sample workflow and passed from the `stripy_vcf` sample attribute.
+
 ## Outputs
 
 #### `clustered_*_vcf`
@@ -71,3 +75,6 @@ Clustered variants for each caller (`depth` corresponds to depth-based CNV calle
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `clustered_sv_counts`, `clustered_sv_count_plots`, `clustered_outlier_samples_preview`, `clustered_outlier_samples_with_reason`, `clustered_num_outlier_samples`
 SV count QC tables and plots. Enable by providing [N_IQR_cutoff_plotting](#optional--n_iqr_cutoff_plotting)
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `merged_stripy_vcf`, `merged_stripy_vcf_index`
+Batch-level merged STRipy VCF and index, present when `stripy_vcfs` is provided.

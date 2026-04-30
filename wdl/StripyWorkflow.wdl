@@ -51,10 +51,10 @@ workflow StripyWorkflow {
     }
 
     output {
-        File json_output = RunStripy.json_output
-        File tsv_output = RunStripy.tsv_output
-        File html_output = RunStripy.html_output
-        File? vcf_output = RunStripy.vcf_output
+        File stripy_json = RunStripy.json_output
+        File stripy_tsv = RunStripy.tsv_output
+        File stripy_html = RunStripy.html_output
+        File? stripy_vcf = RunStripy.vcf_output
     }
 }
 
