@@ -55,6 +55,7 @@ DRY_RUN="false"
 ENABLE_PPD="false"
 PREPROCESS_ARGS=""
 MODEL_ARGS=""
+TRIPLOIDY_ARGS=""
 PPD_STEP_ARGS=""
 CALL_ARGS=""
 PLOT_ARGS=""
@@ -73,6 +74,7 @@ usage() {
     echo "  --site-depth-list PATH   Optional file listing per-sample SD file paths (one per line)" >&2
     echo "  --poor-regions PATH      Optional BED of poor regions to remove during preprocess" >&2
     echo "  --min-poor-region-coverage FLOAT  Min fraction of a bin overlapped by poor regions to filter it" >&2
+    echo "  --triploidy-args STRING  Extra arguments passed through to the triploidy step" >&2
     echo "  --ppd-args STRING        Extra arguments passed through to the ppd step" >&2
     echo "  --call-args STRING       Extra arguments passed through to the call step" >&2
     echo "  --use-callq20            Use CALLQ20 instead of the default BINQ20 when call filtering via --min-binq" >&2
@@ -102,6 +104,10 @@ while [[ $# -gt 0 ]]; do
             MODEL_ARGS="$2"; shift 2;;
         --model-args=*)
             MODEL_ARGS="${1#*=}"; shift;;
+        --triploidy-args)
+            TRIPLOIDY_ARGS="$2"; shift 2;;
+        --triploidy-args=*)
+            TRIPLOIDY_ARGS="${1#*=}"; shift;;
         --ppd-args)
             PPD_STEP_ARGS="$2"; shift 2;;
         --ppd-args=*)
@@ -169,13 +175,9 @@ if [[ "${DRY_RUN}" == "true" ]]; then
     echo "DRY-RUN mode: commands will be printed but not executed"
 fi
 
-TOTAL_STEPS=4
-if [[ "${ENABLE_PPD}" == "true" ]]; then
-    TOTAL_STEPS=$((TOTAL_STEPS + 1))
-fi
-
 # ── per-step output directories ───────────────────────────────────────────────
 PREPROCESS_DIR="${WORK_DIR}/preprocess"
+TRIPLOIDY_DIR="${WORK_DIR}/triploidy"
 INFER_DIR="${WORK_DIR}/infer"
 CALL_DIR="${WORK_DIR}/call"
 PLOT_DIR="${WORK_DIR}/plot"
@@ -185,6 +187,7 @@ EVAL_DIR="${WORK_DIR}/eval"
 # ── derived paths (outputs of earlier steps used as inputs to later steps) ───
 PREPROCESSED_DEPTH="${PREPROCESS_DIR}/preprocessed_depth.tsv"
 SITE_DATA="${PREPROCESS_DIR}/site_data.npz"
+TRIPLOIDY_MANIFEST="${TRIPLOIDY_DIR}/sample_autosomal_baseline_cn.tsv"
 CHROM_STATS="${INFER_DIR}/chromosome_stats.tsv"
 BIN_STATS="${INFER_DIR}/bin_stats.tsv.gz"
 TRAINING_LOSS="${INFER_DIR}/training_loss.tsv"
@@ -195,6 +198,19 @@ PPD_BIN_QUALITY="${PPD_DIR}/ppd_bin_quality.tsv"
 PPD_CHR_SUMMARY="${PPD_DIR}/ppd_chromosome_summary.tsv"
 IGNORED_BINS="${CALL_DIR}/ignored_bins.tsv.gz"
 
+RUN_TRIPLOIDY="false"
+if [[ -f "${SITE_DATA}" ]]; then
+    RUN_TRIPLOIDY="true"
+fi
+
+TOTAL_STEPS=4
+if [[ "${RUN_TRIPLOIDY}" == "true" ]]; then
+    TOTAL_STEPS=$((TOTAL_STEPS + 1))
+fi
+if [[ "${ENABLE_PPD}" == "true" ]]; then
+    TOTAL_STEPS=$((TOTAL_STEPS + 1))
+fi
+
 echo "=== gatk-sv-ploidy pipeline ==="
 echo "  Input depth      : $(describe_redacted_input "${INPUT_DEPTH}")"
 echo "  Site depth list  : $(describe_redacted_input "${SITE_DEPTH_LIST}")"
@@ -203,6 +219,7 @@ echo "  Poor region cov  : ${MIN_POOR_REGION_COVERAGE}"
 echo "  Truth JSON       : $(describe_redacted_input "${TRUTH_JSON}")"
 echo "  Highlight sample : $(describe_redacted_input "${HIGHLIGHT_SAMPLE}")"
 echo "  Call filter qual : $([[ "${USE_CALLQ20}" == "true" ]] && printf 'CALLQ20' || printf 'BINQ20')"
+echo "  Run triploidy    : ${RUN_TRIPLOIDY}"
 echo "  PPD extra args   : $(describe_redacted_input "${PPD_STEP_ARGS}" "provided (redacted)" "none")"
 echo "  Run PPD          : ${ENABLE_PPD}"
 echo "  Work dir         : configured (redacted)"
@@ -243,11 +260,33 @@ fi
 #         $PREPROCESS_ARGS
 # fi
 
-# ── step 1: infer ────────────────────────────────────────────────────────────
-echo "[1/${TOTAL_STEPS}] infer"
+CURRENT_STEP=1
+
+if [[ "${RUN_TRIPLOIDY}" == "true" ]]; then
+    echo "[${CURRENT_STEP}/${TOTAL_STEPS}] triploidy"
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        dry_run_step "triploidy"
+    else
+        run_cli triploidy \
+            -i "${PREPROCESSED_DEPTH}" \
+            --site-data "${SITE_DATA}" \
+            -o "${TRIPLOIDY_DIR}" \
+            $TRIPLOIDY_ARGS
+    fi
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+fi
+
+# ── infer ───────────────────────────────────────────────────────────────────
+echo "[${CURRENT_STEP}/${TOTAL_STEPS}] infer"
 AF_ARGS=""
 if [[ -f "${SITE_DATA}" ]]; then
     AF_ARGS="--site-data ${SITE_DATA}"
+fi
+BASELINE_ARGS=""
+if [[ "${RUN_TRIPLOIDY}" == "true" ]]; then
+    BASELINE_ARGS="--autosomal-baseline-cn-tsv ${TRIPLOIDY_MANIFEST}"
+elif [[ -f "${TRIPLOIDY_MANIFEST}" ]]; then
+    BASELINE_ARGS="--autosomal-baseline-cn-tsv ${TRIPLOIDY_MANIFEST}"
 fi
 if [[ "${DRY_RUN}" == "true" ]]; then
     dry_run_step "infer"
@@ -256,10 +295,12 @@ else
         -i "${PREPROCESSED_DEPTH}" \
         -o "${INFER_DIR}" \
         $AF_ARGS \
+        $BASELINE_ARGS \
         $MODEL_ARGS
 fi
+CURRENT_STEP=$((CURRENT_STEP + 1))
 
-# ── step 2/3: posterior predictive checks and call ──────────────────────────
+# ── posterior predictive checks and call ────────────────────────────────────
 PPD_INPUT_ARGS=""
 if [[ -f "${SITE_DATA}" ]]; then
     PPD_INPUT_ARGS="--site-data ${SITE_DATA}"
@@ -294,25 +335,25 @@ run_ppd_step() {
 }
 
 if [[ "${ENABLE_PPD}" == "true" && "${CALL_NEEDS_PPD_FILTER}" == "true" ]]; then
-    echo "[2/${TOTAL_STEPS}] ppd"
+    echo "[${CURRENT_STEP}/${TOTAL_STEPS}] ppd"
     run_ppd_step
-    echo "[3/${TOTAL_STEPS}] call"
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+    echo "[${CURRENT_STEP}/${TOTAL_STEPS}] call"
     run_call_step
+    CURRENT_STEP=$((CURRENT_STEP + 1))
 else
-    echo "[2/${TOTAL_STEPS}] call"
+    echo "[${CURRENT_STEP}/${TOTAL_STEPS}] call"
     run_call_step
+    CURRENT_STEP=$((CURRENT_STEP + 1))
     if [[ "${ENABLE_PPD}" == "true" ]]; then
-        echo "[3/${TOTAL_STEPS}] ppd"
+        echo "[${CURRENT_STEP}/${TOTAL_STEPS}] ppd"
         run_ppd_step
+        CURRENT_STEP=$((CURRENT_STEP + 1))
     fi
 fi
 
-# ── step 3/4: plot ───────────────────────────────────────────────────────────
-if [[ "${ENABLE_PPD}" == "true" ]]; then
-    echo "[4/${TOTAL_STEPS}] plot"
-else
-    echo "[3/${TOTAL_STEPS}] plot"
-fi
+# ── plot ────────────────────────────────────────────────────────────────────
+echo "[${CURRENT_STEP}/${TOTAL_STEPS}] plot"
 PLOT_PPD_ARGS=""
 if [[ "${ENABLE_PPD}" == "true" ]]; then
     PLOT_PPD_ARGS="--ppd-bin-summary ${PPD_BIN_SUMMARY} --ppd-chr-summary ${PPD_CHR_SUMMARY}"
@@ -372,14 +413,11 @@ else
             $PLOT_ARGS
     fi
 fi
+CURRENT_STEP=$((CURRENT_STEP + 1))
 
-# ── step 4/5: eval (optional — skipped if TRUTH_JSON is unset) ──────────────
+# ── eval (optional — skipped if TRUTH_JSON is unset) ────────────────────────
 if [[ -n "${TRUTH_JSON}" ]]; then
-    if [[ "${ENABLE_PPD}" == "true" ]]; then
-        echo "[5/${TOTAL_STEPS}] eval"
-    else
-        echo "[4/${TOTAL_STEPS}] eval"
-    fi
+    echo "[${CURRENT_STEP}/${TOTAL_STEPS}] eval"
     if [[ "${DRY_RUN}" == "true" ]]; then
         dry_run_step "eval"
     else
@@ -389,11 +427,7 @@ if [[ -n "${TRUTH_JSON}" ]]; then
             -o "${EVAL_DIR}"
     fi
 else
-    if [[ "${ENABLE_PPD}" == "true" ]]; then
-        echo "[5/${TOTAL_STEPS}] eval  (skipped — set TRUTH_JSON to enable)"
-    else
-        echo "[4/${TOTAL_STEPS}] eval  (skipped — set TRUTH_JSON to enable)"
-    fi
+    echo "[${CURRENT_STEP}/${TOTAL_STEPS}] eval  (skipped — set TRUTH_JSON to enable)"
 fi
 
 echo ""

@@ -27,6 +27,7 @@ gatk-sv-ploidy <subcommand> [options]
 | Subcommand   | Description |
 |-------------|-------------|
 | `preprocess` | Read and normalise depth data, filter low-quality bins |
+| `triploidy`  | Test pooled autosomal allele fractions for a triploid baseline |
 | `infer`      | Train Bayesian model and run discrete CN inference |
 | `ppd`        | Posterior predictive check: compare model predictions to data |
 | `call`       | Assign sex karyotype and aneuploidy type per sample |
@@ -42,24 +43,31 @@ Run `gatk-sv-ploidy <subcommand> --help` for subcommand-specific options.
 # 1. Preprocess raw depth data
 gatk-sv-ploidy preprocess -i depth.tsv -o out/preprocess/
 
-# 2. Run Bayesian inference
-gatk-sv-ploidy infer -i out/preprocess/preprocessed_depth.tsv -o out/infer/
+# 2. Test for whole-genome triploidy from pooled autosomal AFs
+gatk-sv-ploidy triploidy -i out/preprocess/preprocessed_depth.tsv \
+  --site-data out/preprocess/site_data.npz -o out/triploidy/ \
+  --diagnostics
 
-# 3. Run posterior predictive checks
+# 3. Run Bayesian inference
+gatk-sv-ploidy infer -i out/preprocess/preprocessed_depth.tsv -o out/infer/ \
+  --site-data out/preprocess/site_data.npz \
+  --autosomal-baseline-cn-tsv out/triploidy/sample_autosomal_baseline_cn.tsv
+
+# 4. Run posterior predictive checks
 gatk-sv-ploidy ppd -i out/preprocess/preprocessed_depth.tsv \
   -a out/infer/inference_artifacts.npz -o out/ppd/
 
-# 4. Call sex and aneuploidy types
+# 5. Call sex and aneuploidy types
 gatk-sv-ploidy call -c out/infer/chromosome_stats.tsv -o out/call/
 
-# 5. Generate plots
+# 6. Generate plots
 gatk-sv-ploidy plot -c out/infer/chromosome_stats.tsv -o out/plot/ \
   --bin-stats out/infer/bin_stats.tsv.gz \
   --training-loss out/infer/training_loss.tsv \
   --ppd-bin-summary out/ppd/ppd_bin_summary.tsv.gz \
   --ppd-chr-summary out/ppd/ppd_chromosome_summary.tsv
 
-# 6. Evaluate against truth
+# 7. Evaluate against truth
 gatk-sv-ploidy eval -p out/call/aneuploidy_type_predictions.tsv \
   -t truth.json -o out/eval/
 ```
@@ -74,14 +82,16 @@ conservative for in-sample diagnostics.
 If you run the end-to-end wrapper, pass extra PPD CLI options through
 `run_ploidy.sh --ppd-args "--continuous-posterior-mode integrated"`.
 
-`infer` uses a structured additive background model by default. A tiny
+`infer` now defaults to the simplified aneuploidy model: no low-rank
+multiplicative bias (`--multiplicative-factors 0`), no low-rank additive
+background (`--background-factors 0`), no allosome-specific overdispersion
+(`--var-allosome 0`), and no per-bin variance (`--var-bin 0`). A tiny
 contig-shared epsilon floor (`--epsilon-mean 1e-4 --epsilon-concentration 0.5`)
-is retained, and two low-rank additive background factors are enabled by default
-(`--background-factors 2`). This keeps the floor near zero while letting the
-model explain shared residual background patterns without fitting an
-independent epsilon term for every bin and sample. Pass `--background-factors 0`
-to disable the structured background term, or `--epsilon-mean 0` to remove the
-epsilon floor entirely.
+is retained for low-level background in zero-copy states. In raw-count
+negative-binomial runs, this additive background contributes only to CN=0; it
+does not inflate the expected depth for CN=1 or higher. Set
+`--epsilon-mean 0` to remove the epsilon floor entirely, or opt into the
+low-rank terms explicitly for model-checking experiments.
 
 To test the raw-count negative-binomial model instead of the historical
 normalized-depth residual model, keep preprocess filtering in normalized
@@ -95,13 +105,32 @@ gatk-sv-ploidy ppd -i out/preprocess_nb/preprocessed_depth.tsv \
   -a out/infer_nb/inference_artifacts.npz -o out/ppd_nb/ --depth-space raw
 ```
 
-In this mode the model infers a per-sample depth latent with a flat
-`Uniform(0, 10000)` prior and uses the per-bin and per-sample variance terms
-as negative-binomial overdispersion factors. The raw-count path now assumes
-autosomes are mostly diploid: genome-wide coverage shifts are absorbed by the
-`sample_depth` latent rather than a separate baseline-ploidy latent, so the
-current `infer` + `call` path does not emit whole-genome `TRIPLOID` or
-`TETRAPLOID` calls.
+In this mode the model fixes each per-sample `sample_depth` to the autosomal
+median counts/kb anchor by default and infers only sample-specific
+overdispersion. Whole-genome polyploid baselines are now handled as a separate
+post-preprocess step: run `triploidy` on `site_data.npz`, then pass the emitted
+`sample_autosomal_baseline_cn.tsv` into `infer` via
+`--autosomal-baseline-cn-tsv` so downstream `call` can emit `TRIPLOID` when
+appropriate. The triploidy AF classifier compares diploid and triploid
+beta-binomial genotype-mixture models and marginalizes over a log-spaced grid
+of AF concentration values, so overdispersed diploid AFs can be absorbed as
+extra beta-binomial scatter rather than forcing a triploid call. Calls are made
+from posterior triploidy probability using `--triploidy-prior` and the legacy
+`--pvalue-threshold` flag, which is now interpreted as the maximum posterior
+error probability. Use `--af-concentration` to set the prior median,
+`--af-concentration-prior-log-sd` to widen or narrow the concentration prior,
+or `--af-concentration-grid` to supply an explicit comma-separated grid. Add
+`--privacy-safe-diagnostics` to log aggregate-only summaries for protected
+manual debugging without filenames, paths, sample identifiers, raw rows, or
+sample-level values. Add
+`--diagnostics` to write per-sample AF summary metrics,
+sampled raw informative-site AFs, and diagnostic PNGs under
+`out/triploidy/diagnostics/`. The raw-AF profile plot overlays the diploid
+heterozygous peak at 0.5 and triploid peaks at 1/3 and 2/3, which is useful
+for spotting mixed or contamination-like AF profiles. A separate diploid-only
+raw-AF profile plot shows up to 12 diploid-called samples for comparison. Pass
+`--learn-sample-depth` to restore the legacy LogNormal sample-depth latent for
+cohorts where the fixed median anchor is not appropriate.
 
 ---
 
@@ -126,20 +155,28 @@ flowchart TD
         AF --> SN["site_data.npz"]
     end
 
-    subgraph "2. Infer"
+      subgraph "2. Triploidy"
+        TT["Autosomal AF\ntriploidy test"]
+        PD --> TT
+        SN --> TT
+        TT --> TM["sample_autosomal_baseline_cn.tsv"]
+      end
+
+      subgraph "3. Infer"
         M["Hierarchical Bayesian\nmodel (Pyro)"]
         SVI["Stochastic Variational\nInference (SVI)"]
         MAP["MAP estimation\n(continuous latents)"]
         DP["Exact discrete\nposterior (Bayes' rule)"]
         PD --> M
         SN -.-> M
+        TM -.-> M
         M --> SVI --> MAP --> DP
         DP --> CS["chromosome_stats.tsv"]
         DP --> BS["bin_stats.tsv.gz"]
         MAP --> IA["inference_artifacts.npz"]
     end
 
-    subgraph "3. PPD"
+      subgraph "4. PPD"
         PPD["Posterior predictive\ndraws and summaries"]
         PD --> PPD
         SN -.-> PPD
@@ -148,7 +185,7 @@ flowchart TD
         PPD --> PC["ppd_chromosome_summary.tsv"]
     end
 
-    subgraph "4. Call"
+      subgraph "5. Call"
         SC["Sex classification\n(chrX/chrY CN lookup)"]
         AC["Aneuploidy typing\n(rule-based)"]
         CS --> SC --> PR["aneuploidy_type_predictions.tsv"]

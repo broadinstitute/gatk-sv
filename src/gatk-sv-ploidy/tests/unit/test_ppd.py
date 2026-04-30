@@ -142,6 +142,55 @@ def test_generate_ppd_depth_supports_negative_binomial_metadata() -> None:
     assert float(draws[:, 0, 1].mean()) > float(draws[:, 0, 0].mean())
 
 
+def test_generate_ppd_depth_negative_binomial_background_is_cn0_only() -> None:
+    raw_df = pd.DataFrame(
+        {
+            "Chr": ["chr21"],
+            "Start": [0],
+            "End": [1000],
+            "S1": [20],
+        },
+        index=["chr21:0-1000"],
+    )
+    data = DepthData(raw_df, depth_space="raw", clamp_threshold=None)
+    base_map = {
+        "bin_bias": np.full(data.n_bins, 1.0, dtype=np.float32),
+        "sample_var": np.full(data.n_samples, 1e-3, dtype=np.float32),
+        "bin_var": np.full(data.n_bins, 0.0, dtype=np.float32),
+        "sample_depth": np.array([20.0], dtype=np.float32),
+        "obs_likelihood": np.asarray("negative_binomial"),
+        "depth_space": np.asarray("raw"),
+    }
+
+    cn2_post = _fake_cn_posterior(data.n_bins, data.n_samples, cn_state=2)
+    cn2_without_background = generate_ppd_depth(
+        data,
+        base_map,
+        cn2_post,
+        n_draws=100,
+        seed=19,
+    )
+    cn2_with_background = generate_ppd_depth(
+        data,
+        {**base_map, "bin_epsilon": np.array([[0.8]], dtype=np.float32)},
+        cn2_post,
+        n_draws=100,
+        seed=19,
+    )
+    np.testing.assert_array_equal(cn2_with_background, cn2_without_background)
+
+    cn0_post = _fake_cn_posterior(data.n_bins, data.n_samples, cn_state=0)
+    cn0_with_background = generate_ppd_depth(
+        data,
+        {**base_map, "bin_epsilon": np.array([[0.2]], dtype=np.float32)},
+        cn0_post,
+        n_draws=100,
+        seed=19,
+    )
+
+    assert float(cn0_with_background.mean()) > 1.0
+
+
 def test_generate_ppd_depth_uses_allosome_overdispersion() -> None:
     raw_df = pd.DataFrame(
         {
@@ -366,6 +415,9 @@ def test_build_model_from_artifacts_defaults_old_background_factors_to_disabled(
     )
 
     assert model.background_factors == 0
+    assert model.multiplicative_factors == 0
+    assert model.var_allosome == pytest.approx(0.0)
+    assert model.freeze_sample_depth is True
 
 
 def test_generate_ppd_depth_uses_bin_epsilon(tiny_depth_df: pd.DataFrame) -> None:

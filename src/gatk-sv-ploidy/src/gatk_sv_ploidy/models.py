@@ -13,8 +13,9 @@ of pre-filtering sites by observed allele fraction.
 from __future__ import annotations
 
 import copy
-import math
+import gc
 import logging
+import math
 import random
 from typing import Dict, List, Optional, Sequence
 
@@ -72,15 +73,15 @@ AUTOSOME_PRIOR_MODES = (
     "shrinkage",
 )
 
-DEFAULT_EPSILON_MEAN = 1e-4
+DEFAULT_EPSILON_MEAN = 1e-2
 DEFAULT_EPSILON_CONCENTRATION = 0.5
-DEFAULT_BACKGROUND_FACTORS = 2
-DEFAULT_MULTIPLICATIVE_FACTORS = 2
+DEFAULT_BACKGROUND_FACTORS = 0
+DEFAULT_MULTIPLICATIVE_FACTORS = 0
 DEFAULT_BACKGROUND_SAMPLE_SCALE = 0.02
 DEFAULT_BACKGROUND_BIN_SCALE = 0.5
 DEFAULT_GUIDE_INIT_SCALE = 0.02
 DEFAULT_GUIDE_WARMUP_ITER = -1
-DEFAULT_ALLOSOME_VAR = 2e-4
+DEFAULT_ALLOSOME_VAR = 0.0
 DEFAULT_RAW_VARIANCE_POWER = 1.5
 
 
@@ -368,9 +369,16 @@ def _center_af_table_torch(
     reference_cn_probs: torch.Tensor,
 ) -> torch.Tensor:
     """Convert AF log-likelihoods into log-likelihood ratios vs. a fixed reference mixture."""
-    ref_log_probs = torch.log(
-        torch.clamp(reference_cn_probs, min=1e-10),
-    ).transpose(0, 1).unsqueeze(-1)
+    ref_probs = torch.clamp(reference_cn_probs, min=1e-10)
+    if ref_probs.dim() == 2:
+        ref_log_probs = torch.log(ref_probs).transpose(0, 1).unsqueeze(-1)
+    elif ref_probs.dim() == 3:
+        ref_log_probs = torch.log(ref_probs).permute(2, 0, 1)
+    else:
+        raise ValueError(
+            "reference_cn_probs must have shape (n_bins, n_states) or "
+            "(n_bins, n_samples, n_states)."
+        )
     baseline = torch.logsumexp(ref_log_probs + af_table, dim=0, keepdim=True)
     return af_table - baseline
 
@@ -380,7 +388,16 @@ def _center_af_table_numpy(
     reference_cn_probs: np.ndarray,
 ) -> np.ndarray:
     """NumPy counterpart of :func:`_center_af_table_torch`."""
-    ref_log_probs = np.log(np.maximum(reference_cn_probs, 1e-10)).T[:, :, np.newaxis]
+    ref_probs = np.maximum(reference_cn_probs, 1e-10)
+    if ref_probs.ndim == 2:
+        ref_log_probs = np.log(ref_probs).T[:, :, np.newaxis]
+    elif ref_probs.ndim == 3:
+        ref_log_probs = np.log(np.transpose(ref_probs, (2, 0, 1)))
+    else:
+        raise ValueError(
+            "reference_cn_probs must have shape (n_bins, n_states) or "
+            "(n_bins, n_samples, n_states)."
+        )
     raw = ref_log_probs + af_table
     max_val = np.max(raw, axis=0, keepdims=True)
     baseline = max_val + np.log(
@@ -634,18 +651,93 @@ def _raw_expected_depth_units(
     copy_number,
     bin_bias,
     additive_background,
+    autosomal_baseline_copy_number=2.0,
 ):
-    """Map normalized-depth expectations onto a fixed diploid raw-count baseline.
+    """Map normalized-depth expectations onto a configurable raw-count baseline.
 
-    The continuous-depth model uses ``CN * bin_bias + additive_background``
-    with autosomal bins centered near diploid copy number. The additive
-    background may include the contig-shared epsilon floor and any fitted
-    low-rank background factors after expansion onto bins. Raw counts are
-    parameterized by each sample's diploid baseline depth per kb, so we
-    convert the normalized-depth expectation back to that baseline scale by
-    dividing by 2 before multiplying by ``sample_depth`` and bin length.
+    Raw counts are parameterized by each sample's autosomal-baseline depth per
+    kb, so normalized-depth expectations are divided by that baseline CN before
+    multiplying by ``sample_depth`` and bin length. The additive background may
+    include the bin-specific epsilon floor and optional low-rank factors, but
+    it is only added for CN=0 states so low-level zero-copy read background
+    cannot inflate expected depth for CN>0 states.
     """
-    return (copy_number * bin_bias + additive_background) / 2.0
+    if any(
+        torch.is_tensor(value)
+        for value in (copy_number, bin_bias, additive_background)
+    ):
+        template = next(
+            value
+            for value in (bin_bias, additive_background, copy_number)
+            if torch.is_tensor(value)
+        )
+        copy_number_t = torch.as_tensor(copy_number, device=template.device)
+        bin_bias_t = torch.as_tensor(
+            bin_bias,
+            dtype=template.dtype,
+            device=template.device,
+        )
+        background = torch.as_tensor(
+            additive_background,
+            dtype=template.dtype,
+            device=template.device,
+        )
+        baseline = torch.as_tensor(
+            autosomal_baseline_copy_number,
+            dtype=template.dtype,
+            device=template.device,
+        )
+        cn0_background = torch.where(
+            copy_number_t == 0,
+            background,
+            torch.zeros_like(background),
+        )
+        return (copy_number_t * bin_bias_t + cn0_background) / torch.clamp(
+            baseline,
+            min=1.0,
+        )
+    else:
+        baseline = np.clip(
+            np.asarray(autosomal_baseline_copy_number, dtype=np.float64),
+            1.0,
+            None,
+        )
+        cn0_background = np.where(
+            np.asarray(copy_number) == 0,
+            additive_background,
+            0.0,
+        )
+        return (copy_number * bin_bias + cn0_background) / baseline
+
+
+def _broadcast_reference_state_torch(
+    reference_state: int | torch.Tensor,
+    target_shape: torch.Size | tuple[int, ...],
+    *,
+    device: torch.device,
+) -> torch.Tensor:
+    """Broadcast autosomal reference states to ``target_shape``."""
+    ref = torch.as_tensor(reference_state, device=device, dtype=torch.long)
+    try:
+        return torch.broadcast_to(ref, target_shape)
+    except RuntimeError as exc:
+        raise ValueError(
+            "reference_state is not broadcastable to the requested target shape."
+        ) from exc
+
+
+def _broadcast_reference_state_numpy(
+    reference_state: int | np.ndarray,
+    target_shape: tuple[int, ...],
+) -> np.ndarray:
+    """NumPy counterpart of :func:`_broadcast_reference_state_torch`."""
+    ref = np.asarray(reference_state, dtype=np.int64)
+    try:
+        return np.broadcast_to(ref, target_shape)
+    except ValueError as exc:
+        raise ValueError(
+            "reference_state is not broadcastable to the requested target shape."
+        ) from exc
 
 
 def _normalize_background_bin_factors_torch(values: torch.Tensor) -> torch.Tensor:
@@ -913,7 +1005,8 @@ class CNVModel:
     """Hierarchical Bayesian model for whole-genome CN detection.
 
     The generative model uses per-bin CN-state priors, low-rank multiplicative
-    bias, structured additive background, and per-sample variance. Autosomes
+    optional low-rank bias, optional structured additive background, and
+    per-sample variance. Autosomes
     can either use the historical Dirichlet-Categorical prior or a shrinkage
     prior that separates total non-reference mass from the distribution over
     alternative CN states. For the historical continuous observation families,
@@ -923,13 +1016,12 @@ class CNVModel:
     ``(bin_var + sample_var + allosome_var) × max(CN × bin_bias + additive_background, 1e-3)``.
 
     When ``obs_likelihood='negative_binomial'``, the model instead consumes
-    raw integer counts. It introduces a per-sample diploid-baseline
-    depth scale ``sample_depth`` with an empirical-Bayes LogNormal prior
-    centered on that sample's autosomal median counts per kb and scaled by
-    a bootstrap estimate of the median's uncertainty, and uses the bin-length
-    exposure in kilobases to model the count mean as
+    raw integer counts. By default it fixes the per-sample diploid-baseline
+    depth scale ``sample_depth`` to that sample's autosomal median counts per
+    kb, and uses the bin-length exposure in kilobases to model the count mean
+    as
 
-    ``bin_length_kb × sample_depth × (CN × bin_bias + additive_background) / 2``
+    ``bin_length_kb × sample_depth × (CN × bin_bias + I(CN=0) × additive_background) / 2``
 
     with negative-binomial-style power-law variance
 
@@ -975,8 +1067,8 @@ class CNVModel:
         negative value to disable per-bin variance entirely.
     var_allosome : float
         Mean of the Exponential prior on chrX/chrY excess overdispersion.
-        Autosomes are anchored at zero for this component to keep it
-        identifiable from the global per-sample variance.
+        Defaults to 0.0, which disables this latent; autosomes are anchored
+        at zero when the latent is explicitly enabled.
     raw_variance_power : float
         Mean exponent for raw-count extra-Poisson variance in the negative-
         binomial observation model. ``2.0`` recovers the standard NB2
@@ -985,10 +1077,10 @@ class CNVModel:
         binned read-depth counts with variable bin lengths.
     multiplicative_factors : int
         Number of low-rank multiplicative bias factors. Set to 0 to use a
-        fixed neutral multiplicative bias of 1 everywhere.
+        fixed neutral multiplicative bias of 1 everywhere. Defaults to 0.
     epsilon_mean : float
         Prior mean of the global scale controlling the additive background
-        depth term for each contig / sample pair. Defaults to ``1e-4``. Set
+        depth term for each bin / sample pair. Defaults to ``1e-2``. Set
         to 0 to disable the epsilon floor.
     epsilon_concentration : float
         Gamma concentration for the additive background-depth prior. Values
@@ -996,7 +1088,7 @@ class CNVModel:
         positive tail; ``1.0`` recovers the original Exponential prior.
     background_factors : int
         Number of low-rank additive background factors. Set to 0 to disable
-        the structured background term entirely.
+        the structured background term entirely. Defaults to 0.
     background_sample_scale : float
         HalfNormal scale for the per-sample amplitudes of each background
         factor.
@@ -1050,6 +1142,13 @@ class CNVModel:
         Upper clip applied when deriving the empirical-Bayes prior center and
         guide initialisation for per-sample depth scale in the
         negative-binomial observation model.
+    autosomal_baseline_cn : sequence of int, optional
+        Fixed autosomal baseline copy number per sample. When omitted, the
+        historical diploid baseline CN=2 is used for all samples.
+    freeze_sample_depth : bool
+        If true, fixes raw-count ``sample_depth`` to the autosomal median
+        counts/kb anchor. This is the default simplified model; set false to
+        infer sample depth as a LogNormal latent for legacy experiments.
     """
 
     _latent_sites = ["sample_var"]
@@ -1093,10 +1192,11 @@ class CNVModel:
         obs_likelihood: str = "normal",
         obs_df: float = 3.5,
         sample_depth_max: float = 10000.0,
+        autosomal_baseline_cn: Optional[Sequence[int]] = None,
         freeze_bin_bias: bool = False,
         freeze_cn_prior: bool = False,
         freeze_sample_var: bool = False,
-        freeze_sample_depth: bool = False,
+        freeze_sample_depth: bool = True,
     ) -> None:
         self.n_states = n_states
         self.autosome_prior_mode = autosome_prior_mode
@@ -1135,6 +1235,11 @@ class CNVModel:
         self.obs_likelihood = _normalize_obs_likelihood_name(obs_likelihood)
         self.obs_df = obs_df
         self.sample_depth_max = sample_depth_max
+        self.autosomal_baseline_cn = (
+            None
+            if autosomal_baseline_cn is None
+            else np.atleast_1d(np.asarray(autosomal_baseline_cn, dtype=np.int64))
+        )
         self.freeze_bin_bias = bool(freeze_bin_bias)
         self.freeze_cn_prior = bool(freeze_cn_prior)
         self.freeze_sample_var = bool(freeze_sample_var)
@@ -1201,6 +1306,16 @@ class CNVModel:
             raise ValueError("Student-t observation likelihood requires obs_df > 2.")
         if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD and self.sample_depth_max <= 0:
             raise ValueError("sample_depth_max must be positive.")
+        if self.autosomal_baseline_cn is not None:
+            if self.autosomal_baseline_cn.size == 0:
+                raise ValueError("autosomal_baseline_cn must not be empty.")
+            if np.any(
+                (self.autosomal_baseline_cn < 1) |
+                (self.autosomal_baseline_cn >= self.n_states)
+            ):
+                raise ValueError(
+                    "autosomal_baseline_cn values must be between 1 and n_states - 1."
+                )
 
         self.learn_bin_var = self.var_bin > 0
         self.learn_allosome_var = self.var_allosome > 0
@@ -1356,8 +1471,11 @@ class CNVModel:
         self,
         autosome_nonref_prob: torch.Tensor,
         autosome_alt_cn_probs: torch.Tensor,
+        reference_state: int | torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Expand autosomal non-reference mass and alternative simplex."""
+        if reference_state is None:
+            reference_state = self.ref_state
         cn_probs = torch.zeros(
             autosome_alt_cn_probs.shape[:-1] + (self.n_states,),
             dtype=autosome_alt_cn_probs.dtype,
@@ -1368,18 +1486,32 @@ class CNVModel:
             min=1e-6,
             max=1.0 - 1e-6,
         )
-        cn_probs[..., self.ref_state] = 1.0 - autosome_nonref_prob
-        cn_probs[..., self.nonref_state_indices_torch] = (
-            autosome_nonref_prob.unsqueeze(-1) * autosome_alt_cn_probs
+        ref_state = _broadcast_reference_state_torch(
+            reference_state,
+            autosome_alt_cn_probs.shape[:-1],
+            device=autosome_alt_cn_probs.device,
         )
+        if torch.any((ref_state < 0) | (ref_state >= self.n_states)):
+            raise ValueError("reference_state must be between 0 and n_states - 1.")
+        ref_mask = torch.nn.functional.one_hot(
+            ref_state,
+            num_classes=self.n_states,
+        ).to(dtype=torch.bool)
+        cn_probs[ref_mask] = (1.0 - autosome_nonref_prob).reshape(-1)
+        cn_probs[~ref_mask] = (
+            autosome_nonref_prob.unsqueeze(-1) * autosome_alt_cn_probs
+        ).reshape(-1)
         return cn_probs
 
     def _compose_autosome_cn_probs_numpy(
         self,
         autosome_nonref_prob: np.ndarray,
         autosome_alt_cn_probs: np.ndarray,
+        reference_state: int | np.ndarray | None = None,
     ) -> np.ndarray:
         """NumPy version of autosomal non-reference/simplex expansion."""
+        if reference_state is None:
+            reference_state = self.ref_state
         autosome_nonref_prob = np.asarray(autosome_nonref_prob, dtype=np.float64)
         autosome_alt_cn_probs = np.asarray(autosome_alt_cn_probs, dtype=np.float64)
         autosome_nonref_prob = np.clip(autosome_nonref_prob, 1e-6, 1.0 - 1e-6)
@@ -1387,16 +1519,190 @@ class CNVModel:
             autosome_alt_cn_probs.shape[:-1] + (self.n_states,),
             dtype=autosome_alt_cn_probs.dtype,
         )
-        cn_probs[..., self.ref_state] = 1.0 - autosome_nonref_prob
-        cn_probs[..., self.nonref_state_indices_numpy] = (
-            autosome_nonref_prob[..., np.newaxis] * autosome_alt_cn_probs
+        ref_state = _broadcast_reference_state_numpy(
+            reference_state,
+            autosome_alt_cn_probs.shape[:-1],
         )
+        if np.any((ref_state < 0) | (ref_state >= self.n_states)):
+            raise ValueError("reference_state must be between 0 and n_states - 1.")
+        ref_mask = np.eye(self.n_states, dtype=bool)[ref_state]
+        cn_probs[ref_mask] = (1.0 - autosome_nonref_prob).reshape(-1)
+        cn_probs[~ref_mask] = (
+            autosome_nonref_prob[..., np.newaxis] * autosome_alt_cn_probs
+        ).reshape(-1)
         return cn_probs
+
+    def _resolve_autosomal_baseline_cn_torch(
+        self,
+        n_samples: int,
+        *,
+        device: torch.device,
+    ) -> torch.Tensor | None:
+        """Return the autosomal baseline CN vector for ``n_samples``."""
+        if self.autosomal_baseline_cn is None:
+            return None
+        baseline = _broadcast_reference_state_torch(
+            self.autosomal_baseline_cn,
+            (n_samples,),
+            device=device,
+        )
+        if torch.any((baseline < 1) | (baseline >= self.n_states)):
+            raise ValueError(
+                "autosomal_baseline_cn values must be between 1 and n_states - 1."
+            )
+        return baseline
+
+    def _resolve_autosomal_baseline_cn_numpy(
+        self,
+        n_samples: int,
+    ) -> np.ndarray | None:
+        """NumPy counterpart of :meth:`_resolve_autosomal_baseline_cn_torch`."""
+        if self.autosomal_baseline_cn is None:
+            return None
+        baseline = _broadcast_reference_state_numpy(
+            self.autosomal_baseline_cn,
+            (n_samples,),
+        )
+        if np.any((baseline < 1) | (baseline >= self.n_states)):
+            raise ValueError(
+                "autosomal_baseline_cn values must be between 1 and n_states - 1."
+            )
+        return baseline
+
+    def _remap_autosome_cn_probs_torch(
+        self,
+        canonical_cn_probs: torch.Tensor,
+        n_samples: int,
+    ) -> torch.Tensor:
+        """Move canonical autosomal reference mass onto sample-specific baseline states."""
+        baseline = self._resolve_autosomal_baseline_cn_torch(
+            n_samples,
+            device=canonical_cn_probs.device,
+        )
+        if baseline is None:
+            return canonical_cn_probs
+        nonref_prob = torch.clamp(
+            1.0 - canonical_cn_probs[..., self.ref_state],
+            min=0.0,
+            max=1.0,
+        )
+        alt_cn_probs = canonical_cn_probs[..., self.nonref_state_indices_torch]
+        alt_cn_probs = alt_cn_probs / torch.clamp(
+            nonref_prob.unsqueeze(-1),
+            min=1e-10,
+        )
+        expanded_nonref = nonref_prob.unsqueeze(-1).expand(
+            canonical_cn_probs.shape[:-1] + (n_samples,)
+        )
+        expanded_alt = alt_cn_probs.unsqueeze(-2).expand(
+            canonical_cn_probs.shape[:-1] + (n_samples, self.n_states - 1)
+        )
+        expanded_ref = baseline.view(
+            (1,) * (canonical_cn_probs.dim() - 1) + (n_samples,)
+        ).expand(canonical_cn_probs.shape[:-1] + (n_samples,))
+        return self._compose_autosome_cn_probs_torch(
+            expanded_nonref,
+            expanded_alt,
+            reference_state=expanded_ref,
+        )
+
+    def _remap_autosome_cn_probs_numpy(
+        self,
+        canonical_cn_probs: np.ndarray,
+        n_samples: int,
+    ) -> np.ndarray:
+        """NumPy counterpart of :meth:`_remap_autosome_cn_probs_torch`."""
+        baseline = self._resolve_autosomal_baseline_cn_numpy(n_samples)
+        if baseline is None:
+            return canonical_cn_probs
+        nonref_prob = np.clip(
+            1.0 - canonical_cn_probs[..., self.ref_state],
+            0.0,
+            1.0,
+        )
+        alt_cn_probs = canonical_cn_probs[..., self.nonref_state_indices_numpy]
+        alt_cn_probs = alt_cn_probs / np.maximum(nonref_prob[..., np.newaxis], 1e-10)
+        expanded_nonref = np.broadcast_to(
+            nonref_prob[..., np.newaxis],
+            canonical_cn_probs.shape[:-1] + (n_samples,),
+        )
+        expanded_alt = np.broadcast_to(
+            alt_cn_probs[..., np.newaxis, :],
+            canonical_cn_probs.shape[:-1] + (n_samples, self.n_states - 1),
+        )
+        expanded_ref = np.broadcast_to(
+            baseline.reshape((1,) * (canonical_cn_probs.ndim - 1) + (n_samples,)),
+            canonical_cn_probs.shape[:-1] + (n_samples,),
+        )
+        return self._compose_autosome_cn_probs_numpy(
+            expanded_nonref,
+            expanded_alt,
+            reference_state=expanded_ref,
+        )
+
+    def _expand_cn_probs_to_samples_torch(
+        self,
+        canonical_cn_probs: torch.Tensor,
+        chr_type: torch.Tensor | None,
+        n_samples: int,
+    ) -> torch.Tensor:
+        """Broadcast per-bin CN priors across samples and remap autosomes if needed."""
+        baseline = self._resolve_autosomal_baseline_cn_torch(
+            n_samples,
+            device=canonical_cn_probs.device,
+        )
+        if baseline is None:
+            return canonical_cn_probs
+        if canonical_cn_probs.dim() >= 3 and canonical_cn_probs.shape[-2] == 1:
+            canonical_cn_probs = canonical_cn_probs.squeeze(-2)
+        if canonical_cn_probs.dim() >= 3 and canonical_cn_probs.shape[-2] == n_samples:
+            return canonical_cn_probs
+        if chr_type is None:
+            return self._remap_autosome_cn_probs_torch(canonical_cn_probs, n_samples)
+        expanded = canonical_cn_probs.unsqueeze(-2).expand(
+            canonical_cn_probs.shape[:-1] + (n_samples, self.n_states)
+        ).clone()
+        autosome_mask = chr_type == 0
+        if autosome_mask.any():
+            expanded[autosome_mask] = self._remap_autosome_cn_probs_torch(
+                canonical_cn_probs[autosome_mask],
+                n_samples,
+            )
+        return expanded
+
+    def _expand_cn_probs_to_samples_numpy(
+        self,
+        canonical_cn_probs: np.ndarray,
+        chr_type: np.ndarray | None,
+        n_samples: int,
+    ) -> np.ndarray:
+        """NumPy counterpart of :meth:`_expand_cn_probs_to_samples_torch`."""
+        baseline = self._resolve_autosomal_baseline_cn_numpy(n_samples)
+        if baseline is None:
+            return canonical_cn_probs
+        if canonical_cn_probs.ndim >= 3 and canonical_cn_probs.shape[-2] == 1:
+            canonical_cn_probs = np.squeeze(canonical_cn_probs, axis=-2)
+        if canonical_cn_probs.ndim >= 3 and canonical_cn_probs.shape[-2] == n_samples:
+            return canonical_cn_probs
+        if chr_type is None:
+            return self._remap_autosome_cn_probs_numpy(canonical_cn_probs, n_samples)
+        expanded = np.broadcast_to(
+            canonical_cn_probs[..., np.newaxis, :],
+            canonical_cn_probs.shape[:-1] + (n_samples, self.n_states),
+        ).copy()
+        autosome_mask = chr_type == 0
+        if np.any(autosome_mask):
+            expanded[autosome_mask] = self._remap_autosome_cn_probs_numpy(
+                canonical_cn_probs[autosome_mask],
+                n_samples,
+            )
+        return expanded
 
     def _default_cn_probs_torch(
         self,
         chr_type: torch.Tensor | None,
         n_bins: int,
+        n_samples: int | None = None,
     ) -> torch.Tensor:
         """Return the historical Dirichlet mean simplex for each bin."""
         if chr_type is not None:
@@ -1409,16 +1715,24 @@ class CNVModel:
                 device=self.device,
             )
             alpha[:, self.ref_state] = self.alpha_ref
-        return alpha / alpha.sum(dim=-1, keepdim=True)
+        canonical_cn_probs = alpha / alpha.sum(dim=-1, keepdim=True)
+        if n_samples is None:
+            return canonical_cn_probs
+        return self._expand_cn_probs_to_samples_torch(
+            canonical_cn_probs,
+            chr_type,
+            n_samples,
+        )
 
     def _af_reference_cn_probs_torch(
         self,
         chr_type: torch.Tensor | None,
         n_bins: int,
+        n_samples: int,
     ) -> torch.Tensor:
         """Build the fixed CN reference mixture used for relative AF evidence."""
         if self.autosome_prior_mode != "shrinkage":
-            return self._default_cn_probs_torch(chr_type, n_bins)
+            return self._default_cn_probs_torch(chr_type, n_bins, n_samples)
 
         autosome_nonref_mean = self.autosome_nonref_mean_alpha / (
             self.autosome_nonref_mean_alpha + self.autosome_nonref_mean_beta
@@ -1435,28 +1749,40 @@ class CNVModel:
             dtype=self.dtype,
             device=self.device,
         )
-        autosome_probs = self._compose_autosome_cn_probs_torch(
+        canonical_autosome_probs = self._compose_autosome_cn_probs_torch(
             autosome_nonref_prob,
             autosome_alt_cn_probs,
         )
 
         if chr_type is None:
-            return autosome_probs
+            return self._expand_cn_probs_to_samples_torch(
+                canonical_autosome_probs,
+                None,
+                n_samples,
+            )
 
-        cn_probs = self._default_cn_probs_torch(chr_type, n_bins)
+        cn_probs = self._default_cn_probs_torch(chr_type, n_bins, n_samples)
         autosome_mask = chr_type == 0
         if autosome_mask.any():
-            cn_probs[autosome_mask] = autosome_probs[autosome_mask]
+            cn_probs[autosome_mask] = self._remap_autosome_cn_probs_torch(
+                canonical_autosome_probs[autosome_mask],
+                n_samples,
+            )
         return cn_probs
 
     def _build_cn_probs_from_estimates_torch(
         self,
         source: Dict[str, torch.Tensor],
         chr_type: torch.Tensor | None,
+        n_samples: int,
     ) -> torch.Tensor:
         """Build per-bin CN simplexes from sampled or derived latent values."""
         if "cn_probs" in source:
-            return source["cn_probs"]
+            return self._expand_cn_probs_to_samples_torch(
+                source["cn_probs"],
+                chr_type,
+                n_samples,
+            )
 
         if chr_type is not None:
             n_bins = int(chr_type.shape[0])
@@ -1471,12 +1797,17 @@ class CNVModel:
         else:
             raise KeyError("Unable to infer n_bins from latent estimates.")
         if self.autosome_prior_mode != "shrinkage":
-            return self._default_cn_probs_torch(chr_type, n_bins)
+            return self._default_cn_probs_torch(chr_type, n_bins, n_samples)
 
         if chr_type is None:
-            return self._compose_autosome_cn_probs_torch(
+            canonical_cn_probs = self._compose_autosome_cn_probs_torch(
                 source["autosome_nonref_prob"],
                 source["autosome_alt_cn_probs"],
+            )
+            return self._expand_cn_probs_to_samples_torch(
+                canonical_cn_probs,
+                None,
+                n_samples,
             )
 
         cn_probs = torch.empty(
@@ -1498,20 +1829,21 @@ class CNVModel:
                     chr_type[~autosome_mask],
                     int((~autosome_mask).sum().item()),
                 )
-        return cn_probs
+        return self._expand_cn_probs_to_samples_torch(cn_probs, chr_type, n_samples)
 
     def _build_cn_probs_from_estimates_numpy(
         self,
         maps: Dict[str, np.ndarray],
         chr_type: np.ndarray | None,
         n_bins: int,
+        n_samples: int,
     ) -> np.ndarray:
         """NumPy mirror of per-bin CN simplex reconstruction."""
         if "cn_probs" in maps:
             cn_probs = np.asarray(maps["cn_probs"]).squeeze()
             if cn_probs.ndim == 1:
                 cn_probs = cn_probs.reshape(1, -1)
-            return cn_probs
+            return self._expand_cn_probs_to_samples_numpy(cn_probs, chr_type, n_samples)
 
         if self.autosome_prior_mode != "shrinkage" or (
             "autosome_nonref_prob" not in maps or "autosome_alt_cn_probs" not in maps
@@ -1525,7 +1857,11 @@ class CNVModel:
                     dtype=np.float64,
                 )
                 alpha[:, self.ref_state] = self.alpha_ref
-            return alpha / alpha.sum(axis=1, keepdims=True)
+            return self._expand_cn_probs_to_samples_numpy(
+                alpha / alpha.sum(axis=1, keepdims=True),
+                chr_type,
+                n_samples,
+            )
 
         autosome_nonref_prob = np.atleast_1d(
             np.asarray(maps["autosome_nonref_prob"]).squeeze()
@@ -1535,9 +1871,14 @@ class CNVModel:
             autosome_alt_cn_probs = autosome_alt_cn_probs.reshape(1, -1)
 
         if chr_type is None:
-            return self._compose_autosome_cn_probs_numpy(
+            canonical_cn_probs = self._compose_autosome_cn_probs_numpy(
                 autosome_nonref_prob,
                 autosome_alt_cn_probs,
+            )
+            return self._expand_cn_probs_to_samples_numpy(
+                canonical_cn_probs,
+                None,
+                n_samples,
             )
 
         cn_probs = np.empty((n_bins, self.n_states), dtype=np.float64)
@@ -1556,12 +1897,13 @@ class CNVModel:
             else:
                 sex_alpha = self.alpha_table.detach().cpu().numpy()[chr_type[~autosome_mask]]
                 cn_probs[~autosome_mask] = sex_alpha / sex_alpha.sum(axis=1, keepdims=True)
-        return cn_probs
+        return self._expand_cn_probs_to_samples_numpy(cn_probs, chr_type, n_samples)
 
     def _af_reference_cn_probs_numpy(
         self,
         chr_type: np.ndarray | None,
         n_bins: int,
+        n_samples: int,
     ) -> np.ndarray:
         """NumPy counterpart of :meth:`_af_reference_cn_probs_torch`."""
         if self.autosome_prior_mode != "shrinkage":
@@ -1575,7 +1917,11 @@ class CNVModel:
                     dtype=np.float64,
                 )
                 selected[:, self.ref_state] = self.alpha_ref
-            return selected / selected.sum(axis=1, keepdims=True)
+            return self._expand_cn_probs_to_samples_numpy(
+                selected / selected.sum(axis=1, keepdims=True),
+                chr_type,
+                n_samples,
+            )
 
         autosome_nonref_mean = self.autosome_nonref_mean_alpha / (
             self.autosome_nonref_mean_alpha + self.autosome_nonref_mean_beta
@@ -1586,19 +1932,30 @@ class CNVModel:
             1.0 / (self.n_states - 1),
             dtype=np.float64,
         )
-        autosome_probs = self._compose_autosome_cn_probs_numpy(
+        canonical_autosome_probs = self._compose_autosome_cn_probs_numpy(
             autosome_nonref_prob,
             autosome_alt_cn_probs,
         )
 
         if chr_type is None:
-            return autosome_probs
+            return self._expand_cn_probs_to_samples_numpy(
+                canonical_autosome_probs,
+                None,
+                n_samples,
+            )
 
         alpha = self.alpha_table.detach().cpu().numpy()[chr_type]
-        cn_probs = alpha / alpha.sum(axis=1, keepdims=True)
+        cn_probs = self._expand_cn_probs_to_samples_numpy(
+            alpha / alpha.sum(axis=1, keepdims=True),
+            chr_type,
+            n_samples,
+        )
         autosome_mask = chr_type == 0
         if np.any(autosome_mask):
-            cn_probs[autosome_mask] = autosome_probs[autosome_mask]
+            cn_probs[autosome_mask] = self._remap_autosome_cn_probs_numpy(
+                canonical_autosome_probs[autosome_mask],
+                n_samples,
+            )
         return cn_probs
 
     def _apply_af_evidence_mode_torch(
@@ -1612,6 +1969,7 @@ class CNVModel:
         reference_cn_probs = self._af_reference_cn_probs_torch(
             chr_type,
             af_table.shape[1],
+            af_table.shape[2],
         )
         return _center_af_table_torch(af_table, reference_cn_probs)
 
@@ -1626,6 +1984,7 @@ class CNVModel:
         reference_cn_probs = self._af_reference_cn_probs_numpy(
             chr_type,
             af_table.shape[1],
+            af_table.shape[2],
         )
         return _center_af_table_numpy(af_table, reference_cn_probs)
 
@@ -1762,6 +2121,7 @@ class CNVModel:
             estimates["cn_probs"] = self._build_cn_probs_from_estimates_torch(
                 estimates,
                 model_kw.get("chr_type"),
+                int(model_kw["n_samples"]),
             )
         if all(
             (
@@ -1909,7 +2269,7 @@ class CNVModel:
 
         sample_depth_prior = None
         sample_depth_init = None
-        if uses_negative_binomial:
+        if uses_negative_binomial and not self.freeze_sample_depth:
             sample_depth_prior = self._estimate_sample_depth_prior(data)
             sample_depth_init = sample_depth_prior["center"]
 
@@ -2047,7 +2407,10 @@ class CNVModel:
                     guide_type=selected_guide_type,
                 )
                 try:
-                    loss = float(elbo.loss(self.model, guide, **model_kw))
+                    # Restart scoring only ranks candidate initial states, so
+                    # it does not need autograd graphs for every ELBO call.
+                    with torch.no_grad():
+                        loss = float(elbo.loss(self.model, guide, **model_kw))
                 except Exception as exc:
                     logger.warning(
                         "SVI init candidate %d/%d failed during loss evaluation: %s",
@@ -2072,6 +2435,10 @@ class CNVModel:
                     best_restart_idx = restart_idx
                     best_state = copy.deepcopy(pyro.get_param_store().get_state())
                     best_guide = guide
+
+                if guide is not best_guide:
+                    del guide
+                gc.collect()
         finally:
             self._restore_rng_state(rng_state)
 
@@ -2145,7 +2512,11 @@ class CNVModel:
             sample_depth_prior_scale: LogNormal scale parameter for the
                 per-sample diploid baseline depth scale.
             n_contigs: Number of unique contigs represented by the bins.
+                Retained for compatibility with downstream utilities that can
+                still expand legacy contig-shared epsilon artifacts.
             contig_index: Per-bin index into the contig axis.
+                Retained for compatibility with downstream utilities that can
+                still expand legacy contig-shared epsilon artifacts.
             chr_type: Per-bin chromosome type (0=autosome, 1=chrX, 2=chrY).
             sex_cn_weight_per_bin: Per-bin normalised sex–CN coupling weight.
             site_alt: Per-site alt counts (n_bins, max_sites, n_samples).
@@ -2342,16 +2713,12 @@ class CNVModel:
             )
 
         if self.epsilon_mean > 0:
-            if n_contigs is None or contig_index is None:
-                raise ValueError(
-                    "n_contigs and contig_index are required when epsilon_mean > 0."
-                )
             epsilon_concentration = torch.tensor(
                 self.epsilon_concentration,
                 device=self.device,
                 dtype=self.dtype,
             )
-            contig_epsilon = pyro.sample(
+            bin_epsilon = pyro.sample(
                 "bin_epsilon",
                 dist.Gamma(
                     epsilon_concentration,
@@ -2360,9 +2727,8 @@ class CNVModel:
                         device=self.device,
                         dtype=self.dtype,
                     ),
-                ).expand([n_contigs, n_samples]).to_event(2),
+                ).expand([n_bins, n_samples]).to_event(2),
             )
-            bin_epsilon = contig_epsilon[contig_index, :]
         else:
             bin_epsilon = torch.zeros(
                 (n_bins, n_samples),
@@ -2505,9 +2871,13 @@ class CNVModel:
             # The legacy Dirichlet path produces an explicit singleton sample
             # dimension. Restore that axis for derived shrinkage priors so the
             # categorical probabilities broadcast across the samples plate.
-            cn_probs_for_samples = (
-                cn_probs.unsqueeze(-2) if cn_probs.dim() == 2 else cn_probs
+            cn_probs_for_samples = self._expand_cn_probs_to_samples_torch(
+                cn_probs,
+                chr_type,
+                n_samples,
             )
+            if cn_probs_for_samples.dim() == 2:
+                cn_probs_for_samples = cn_probs_for_samples.unsqueeze(-2)
             cn = pyro.sample("cn", dist.Categorical(cn_probs_for_samples))
             expected_units = Vindex(cn_states)[cn] * bin_bias + additive_background
             chrom_type_var = _compose_allosome_overdispersion_torch(
@@ -2527,6 +2897,14 @@ class CNVModel:
                     Vindex(cn_states)[cn],
                     bin_bias,
                     additive_background,
+                    autosomal_baseline_copy_number=(
+                        self._resolve_autosomal_baseline_cn_torch(
+                            n_samples,
+                            device=depth.device,
+                        )
+                        if self.autosomal_baseline_cn is not None
+                        else 2.0
+                    ),
                 )
                 mean = torch.clamp(mean, min=0.0)
                 mean = mean * sample_depth
@@ -2634,15 +3012,16 @@ class CNVModel:
             )
         if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
             kw["bin_length_kb"] = data.bin_length_kb
-            sample_depth_prior = self._estimate_sample_depth_prior(data)
-            kw["sample_depth_prior_loc"] = sample_depth_prior["loc"]
-            kw["sample_depth_prior_scale"] = sample_depth_prior["scale"]
             if self.freeze_sample_depth:
                 kw["sample_depth_fixed"] = torch.tensor(
                     self._estimate_sample_depth_center(data),
                     device=self.device,
                     dtype=self.dtype,
                 )
+            else:
+                sample_depth_prior = self._estimate_sample_depth_prior(data)
+                kw["sample_depth_prior_loc"] = sample_depth_prior["loc"]
+                kw["sample_depth_prior_scale"] = sample_depth_prior["scale"]
         # Chromosome-type tensor and per-bin sex-CN coupling weight
         if hasattr(data, "chr_type") and data.chr_type is not None:
             kw["chr_type"] = data.chr_type
@@ -2998,6 +3377,7 @@ class CNVModel:
             maps,
             chr_type_np,
             data.n_bins,
+            data.n_samples,
         )
         obs = data.depth.detach().cpu().numpy()
         cn_states = np.arange(self.n_states, dtype=obs.dtype).reshape(-1, 1, 1)
@@ -3014,6 +3394,11 @@ class CNVModel:
                 cn_states,
                 bin_bias[np.newaxis, :, :],
                 additive_background[np.newaxis, :, :],
+                autosomal_baseline_copy_number=(
+                    self._resolve_autosomal_baseline_cn_numpy(data.n_samples)
+                    if self.autosomal_baseline_cn is not None
+                    else 2.0
+                ),
             )
             mean = data.bin_length_kb.detach().cpu().numpy()[np.newaxis, :, np.newaxis]
             mean = mean * sample_depth[np.newaxis, np.newaxis, :]
@@ -3038,7 +3423,15 @@ class CNVModel:
                 self.obs_df,
             )
 
-        log_prior = np.log(np.maximum(cn_probs.T[:, :, np.newaxis], 1e-10))
+        if cn_probs.ndim == 2:
+            log_prior = np.log(np.maximum(cn_probs.T[:, :, np.newaxis], 1e-10))
+        elif cn_probs.ndim == 3:
+            log_prior = np.log(np.maximum(np.transpose(cn_probs, (2, 0, 1)), 1e-10))
+        else:
+            raise ValueError(
+                "cn_probs must have shape (n_bins, n_states) or "
+                "(n_bins, n_samples, n_states)."
+            )
         base_log_unnorm = log_lik + log_prior  # (n_states, n_bins, n_samples)
 
         af_scale = self._af_scale_numpy(maps)

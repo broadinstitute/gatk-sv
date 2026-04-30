@@ -51,6 +51,13 @@ def test_classify_sex_and_aneuploidy_tables() -> None:
         2,
         0,
     ) == "MULTIPLE"
+    assert _classify_aneuploidy(
+        {},
+        {"chr13": 3, "chr18": 3, "chr21": 3, "chrX": 1, "chrY": 1},
+        1,
+        1,
+        autosomal_baseline_cn=3,
+    ) == "TRIPLOID"
 
 
 def test_normalize_global_cn_artifact_is_no_op() -> None:
@@ -287,6 +294,35 @@ def test_assign_normalize_doubled_labels_flag_is_ignored() -> None:
     assert pred_df.loc["tetraploid", "sex"] == "OTHER"
     assert pred_df.loc["tetraploid", "predicted_aneuploidy_type"] == "MULTIPLE"
     assert pred_df.loc["tetraploid", "global_cn_scale_factor"] == 1.0
+
+
+def test_assign_uses_autosomal_baseline_cn_for_triploid_samples() -> None:
+    df = pd.DataFrame(
+        [
+            {
+                "sample": "triploid",
+                "chromosome": chrom,
+                "copy_number": copy_number,
+                "is_aneuploid": False,
+                "mean_cn_probability": 0.95,
+                "median_depth": 1.0,
+                "sample_depth_map": 150.0,
+                "autosomal_baseline_cn": 3,
+            }
+            for chrom, copy_number in (
+                ("chr13", 3),
+                ("chr18", 3),
+                ("chr21", 3),
+                ("chrX", 1),
+                ("chrY", 1),
+            )
+        ]
+    )
+
+    pred_df = assign_sex_and_aneuploidy_types(df).set_index("sample")
+
+    assert pred_df.loc["triploid", "predicted_aneuploidy_type"] == "TRIPLOID"
+    assert int(pred_df.loc["triploid", "autosomal_baseline_cn"]) == 3
 
 
 def test_apply_binq_filter_to_chromosome_stats_rebuilds_autosome_calls() -> None:

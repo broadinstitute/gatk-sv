@@ -8,11 +8,13 @@ from gatk_sv_ploidy._util import compute_cnq_from_probabilities
 from gatk_sv_ploidy.data import DepthData
 from gatk_sv_ploidy.infer import (
     _inference_tensor_dtype,
+    _load_autosomal_baseline_cn,
     _resolve_observation_model,
     build_safe_inference_diagnostic_messages,
     build_site_af_estimates,
     build_bin_stats,
     build_chromosome_stats,
+    detect_aneuploidies,
     estimate_site_pop_af_naive_bayes,
     is_fallback_minor_site_data,
     parse_args,
@@ -49,13 +51,16 @@ def test_infer_parse_args_defaults(monkeypatch) -> None:
     assert args.epsilon_concentration == pytest.approx(
         DEFAULT_EPSILON_CONCENTRATION
     )
-    assert DEFAULT_BACKGROUND_FACTORS == 2
+    assert DEFAULT_BACKGROUND_FACTORS == 0
+    assert DEFAULT_MULTIPLICATIVE_FACTORS == 0
     assert args.background_factors == DEFAULT_BACKGROUND_FACTORS
     assert args.depth_space == "auto"
     assert args.obs_likelihood == "auto"
-    assert args.svi_init_restarts == 100
+    assert args.svi_init_restarts == 10
     assert args.grad_clip_norm == pytest.approx(10.0)
     assert args.sample_depth_max == 10000.0
+    assert args.autosomal_baseline_cn_tsv is None
+    assert args.freeze_sample_depth is True
     assert args.freeze_bin_bias is False
     assert args.freeze_cn_prior is False
     assert args.af_evidence_mode == "relative"
@@ -67,6 +72,24 @@ def test_infer_parse_args_defaults(monkeypatch) -> None:
     assert args.site_af_prior_strength == 20.0
     assert args.site_af_prior_alpha == 1.0
     assert args.site_af_prior_beta == 1.0
+
+
+def test_infer_parse_args_accepts_learn_sample_depth(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "infer",
+            "--input",
+            "depth.tsv",
+            "--output-dir",
+            "outdir",
+            "--learn-sample-depth",
+        ],
+    )
+
+    args = parse_args()
+
+    assert args.freeze_sample_depth is False
 
 
 def test_infer_parse_args_accepts_relative_af_evidence_mode(monkeypatch) -> None:
@@ -143,6 +166,44 @@ def test_infer_parse_args_accepts_fixed_af_temperature(monkeypatch) -> None:
     args = parse_args()
 
     assert args.learn_af_temperature is False
+
+
+def test_infer_parse_args_accepts_autosomal_baseline_cn_tsv(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "infer",
+            "--input",
+            "depth.tsv",
+            "--output-dir",
+            "outdir",
+            "--autosomal-baseline-cn-tsv",
+            "baseline.tsv",
+        ],
+    )
+
+    args = parse_args()
+
+    assert args.autosomal_baseline_cn_tsv == "baseline.tsv"
+
+
+def test_load_autosomal_baseline_cn_defaults_to_diploid() -> None:
+    baseline = _load_autosomal_baseline_cn(None, ["S1", "S2"])
+    np.testing.assert_array_equal(baseline, np.array([2, 2], dtype=np.int64))
+
+
+def test_load_autosomal_baseline_cn_orders_rows_by_sample(tmp_path) -> None:
+    baseline_path = tmp_path / "baseline.tsv"
+    pd.DataFrame(
+        {
+            "sample": ["S2", "S1"],
+            "autosomal_baseline_cn": [3, 2],
+        }
+    ).to_csv(baseline_path, sep="\t", index=False)
+
+    baseline = _load_autosomal_baseline_cn(str(baseline_path), ["S1", "S2"])
+
+    np.testing.assert_array_equal(baseline, np.array([2, 3], dtype=np.int64))
 
 
 def test_infer_parse_args_accepts_svi_init_restarts(monkeypatch) -> None:
@@ -1059,6 +1120,7 @@ def test_build_chromosome_stats_includes_plot_normalized_depth_for_raw_model() -
             "bin_var": np.full(depth_df.n_bins, 0.02, dtype=np.float32),
             "sample_var": np.full(depth_df.n_samples, 0.03, dtype=np.float32),
             "sample_depth": np.full(depth_df.n_samples, 10.0, dtype=np.float32),
+            "autosomal_baseline_cn": np.array([3], dtype=np.int64),
         },
         cn_posterior={"cn_posterior": cn_posterior},
         aneuploid_map={0: []},
@@ -1068,9 +1130,11 @@ def test_build_chromosome_stats_includes_plot_normalized_depth_for_raw_model() -
     assert "plot_median_depth" in chr_df.columns
     assert "plq" in chr_df.columns
     assert "ploidy_prob_2" in chr_df.columns
+    assert "autosomal_baseline_cn" in chr_df.columns
     assert chr_df["plot_mean_depth"].iloc[0] == 2.0
     assert chr_df["plot_median_depth"].iloc[0] == 2.0
     assert int(chr_df["plq"].iloc[0]) == 99
+    assert int(chr_df["autosomal_baseline_cn"].iloc[0]) == 3
     assert float(chr_df["ploidy_prob_2"].iloc[0]) == 1.0
 
 
@@ -1112,6 +1176,38 @@ def test_build_chromosome_stats_uses_majority_vote_and_average_cnq() -> None:
     assert float(row["mean_cn_probability"]) == pytest.approx(2.0 / 3.0)
     assert int(row["plq"]) == 30
     assert float(row["ploidy_prob_3"]) == pytest.approx(2.0 / 3.0)
+
+
+def test_detect_aneuploidies_uses_autosomal_baseline_cn() -> None:
+    depth_df = DepthData(
+        pd.DataFrame(
+            {
+                "Chr": ["chr21"],
+                "Start": [0],
+                "End": [1000],
+                "S1": np.array([3.0], dtype=np.float32),
+            },
+            index=["chr21:0-1000"],
+        ),
+        device="cpu",
+    )
+    cn_posterior = np.zeros((depth_df.n_bins, depth_df.n_samples, 6), dtype=np.float32)
+    cn_posterior[0, 0, 3] = 1.0
+
+    default_calls = detect_aneuploidies(
+        depth_df,
+        {"cn_posterior": cn_posterior},
+        prob_threshold=0.5,
+    )
+    triploid_calls = detect_aneuploidies(
+        depth_df,
+        {"cn_posterior": cn_posterior},
+        prob_threshold=0.5,
+        autosomal_baseline_cn=np.array([3], dtype=np.int64),
+    )
+
+    assert default_calls[0] == [("chr21", 3, 1.0)]
+    assert triploid_calls[0] == []
 
 
 def test_resolve_observation_model_prefers_preprocess_marker(tmp_path) -> None:

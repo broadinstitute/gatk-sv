@@ -222,9 +222,14 @@ def _annotate_aneuploidy_flags(
                 sdf["mean_cn_probability"].fillna(0.0),
             )
         )
+        autosomal_baseline_cn = 2
+        if "autosomal_baseline_cn" in sdf.columns:
+            baseline_values = sdf["autosomal_baseline_cn"].dropna()
+            if not baseline_values.empty:
+                autosomal_baseline_cn = int(baseline_values.iloc[0])
 
         auto_mask = ~sdf["chromosome"].isin(_SEX_CHROMS)
-        auto_aneu = auto_mask & (sdf["copy_number"] != 2)
+        auto_aneu = auto_mask & (sdf["copy_number"] != autosomal_baseline_cn)
         auto_aneu &= sdf["mean_cn_probability"].fillna(0.0) > prob_threshold
         out.loc[sdf.index[auto_aneu], "is_aneuploid"] = True
 
@@ -546,6 +551,11 @@ def assign_sex_and_aneuploidy_types(
 
         raw_cn_map = dict(zip(sdf["chromosome"], sdf["copy_number"]))
         depth_map = dict(zip(sdf["chromosome"], sdf["median_depth"]))
+        autosomal_baseline_cn = 2
+        if "autosomal_baseline_cn" in sdf.columns:
+            baseline_values = sdf["autosomal_baseline_cn"].dropna()
+            if not baseline_values.empty:
+                autosomal_baseline_cn = int(baseline_values.iloc[0])
         sample_depth_ratio = sample_depth_ratios.get(str(sample_id), float("nan"))
         cn_map, cn_scale_factor = _normalize_global_cn_artifact(
             raw_cn_map,
@@ -553,7 +563,7 @@ def assign_sex_and_aneuploidy_types(
             normalize_doubled_labels=normalize_doubled_labels,
         )
         aneu_map = {
-            chrom: bool(cn != 2)
+            chrom: bool(cn != autosomal_baseline_cn)
             for chrom, cn in cn_map.items()
             if chrom not in _SEX_CHROMS
         }
@@ -574,6 +584,7 @@ def assign_sex_and_aneuploidy_types(
             cn_map,
             x_cn,
             y_cn,
+            autosomal_baseline_cn=autosomal_baseline_cn,
             sample_depth_ratio=sample_depth_ratio,
         )
 
@@ -587,6 +598,7 @@ def assign_sex_and_aneuploidy_types(
                 "raw_chrY_CN": raw_y_cn,
                 "chrX_depth": x_depth,
                 "chrY_depth": y_depth,
+                "autosomal_baseline_cn": autosomal_baseline_cn,
                 "sample_depth_ratio": sample_depth_ratio,
                 "sample_depth_reference": depth_reference,
                 "global_cn_scale_factor": cn_scale_factor,
@@ -617,6 +629,7 @@ def _classify_aneuploidy(
     cn_map: dict,
     x_cn: int,
     y_cn: int,
+    autosomal_baseline_cn: int = 2,
     sample_depth_ratio: float = float("nan"),
 ) -> str:
     """Determine predicted aneuploidy type from per-chromosome calls."""
@@ -628,6 +641,15 @@ def _classify_aneuploidy(
     sex_aneu = ["chrX", "chrY"] if sex_is_aneuploid else []
 
     aneuploid_chrs = auto_aneu + sex_aneu
+
+    polyploid_type = {
+        3: "TRIPLOID",
+        4: "TETRAPLOID",
+    }.get(int(autosomal_baseline_cn))
+    if polyploid_type is not None:
+        if not auto_aneu:
+            return polyploid_type
+        return "MULTIPLE"
 
     if not aneuploid_chrs:
         return "NORMAL"

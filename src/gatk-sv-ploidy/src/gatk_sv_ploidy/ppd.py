@@ -26,7 +26,7 @@ For ``negative_binomial`` fits on raw counts, the predictive mean becomes
 
 .. math::
 
-    \mu_{ij}(c) = \ell_i \cdot s_j \cdot (c \cdot b_{ij} + \epsilon_{ij}) / 2
+    \mu_{ij}(c) = \ell_i \cdot s_j \cdot (c \cdot b_{ij} + I(c=0)\epsilon_{ij}) / 2
 
 with *\ell_i* the bin length in kilobases, *s_j* the MAP sample-depth
 latent. The predictive variance follows
@@ -177,7 +177,7 @@ def _build_model_from_artifacts(
         n_states=int(np.asarray(map_estimates.get("model_n_states", 6)).item()),
         autosome_prior_mode=str(
             np.asarray(
-                map_estimates.get("model_autosome_prior_mode", "shrinkage")
+                map_estimates.get("model_autosome_prior_mode", "dirichlet")
             ).item()
         ),
         alpha_ref=float(np.asarray(map_estimates.get("model_alpha_ref", 50.0)).item()),
@@ -205,7 +205,7 @@ def _build_model_from_artifacts(
         var_sample=float(
             np.asarray(map_estimates.get("model_var_sample", 0.001)).item()
         ),
-        var_bin=float(np.asarray(map_estimates.get("model_var_bin", 0.001)).item()),
+        var_bin=float(np.asarray(map_estimates.get("model_var_bin", 0.0)).item()),
         var_allosome=float(
             np.asarray(map_estimates.get("model_var_allosome", DEFAULT_ALLOSOME_VAR)).item()
         ),
@@ -281,6 +281,18 @@ def _build_model_from_artifacts(
         obs_df=obs_df,
         sample_depth_max=float(
             np.asarray(map_estimates.get("sample_depth_max", 10000.0)).item()
+        ),
+        freeze_bin_bias=bool(
+            np.asarray(map_estimates.get("freeze_bin_bias", False)).item()
+        ),
+        freeze_cn_prior=bool(
+            np.asarray(map_estimates.get("freeze_cn_prior", False)).item()
+        ),
+        freeze_sample_var=bool(
+            np.asarray(map_estimates.get("freeze_sample_var", False)).item()
+        ),
+        freeze_sample_depth=bool(
+            np.asarray(map_estimates.get("freeze_sample_depth", True)).item()
         ),
     )
 
@@ -407,7 +419,7 @@ def generate_ppd_depth(
 
     For the negative-binomial observation family on raw counts, the
     predictive mean is
-    ``bin_length_kb_i × sample_depth_j × (c × bin_bias_{ij} + additive_background_{ij}) / 2`` and
+    ``bin_length_kb_i × sample_depth_j × (c × bin_bias_{ij} + I(c=0) × additive_background_{ij}) / 2`` and
     the predictive variance is
     ``μ + (bin_var_i + sample_var_j + allosome_var_i) × μ^raw_variance_power``.
 

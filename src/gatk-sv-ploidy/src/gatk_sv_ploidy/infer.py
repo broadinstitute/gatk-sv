@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -1711,6 +1711,57 @@ def _resolve_observation_model(
     return resolved_depth_space, resolved_obs_likelihood
 
 
+def _load_autosomal_baseline_cn(
+    path: str | None,
+    sample_ids: Sequence[str],
+) -> np.ndarray:
+    """Load per-sample autosomal baseline CN values or default to diploid."""
+    if path is None:
+        return np.full(len(sample_ids), 2, dtype=np.int64)
+
+    baseline_df = pd.read_csv(path, sep="\t")
+    required_columns = {"sample", "autosomal_baseline_cn"}
+    missing_columns = required_columns - set(baseline_df.columns)
+    if missing_columns:
+        raise ValueError(
+            "Autosomal baseline CN TSV is missing required columns: "
+            + ", ".join(sorted(missing_columns))
+        )
+
+    if baseline_df["sample"].duplicated().any():
+        duplicates = baseline_df.loc[
+            baseline_df["sample"].duplicated(),
+            "sample",
+        ].astype(str).tolist()
+        raise ValueError(
+            "Autosomal baseline CN TSV contains duplicate sample rows: "
+            + ", ".join(duplicates[:5])
+        )
+
+    baseline_series = pd.Series(
+        baseline_df["autosomal_baseline_cn"].to_numpy(),
+        index=baseline_df["sample"].astype(str),
+    )
+    missing_samples = [sample_id for sample_id in sample_ids if sample_id not in baseline_series.index]
+    if missing_samples:
+        preview = ", ".join(missing_samples[:5])
+        more = "" if len(missing_samples) <= 5 else f" (+{len(missing_samples) - 5} more)"
+        raise ValueError(
+            "Autosomal baseline CN TSV is missing samples from the depth matrix: "
+            f"{preview}{more}"
+        )
+
+    baseline = np.asarray(
+        [baseline_series.loc[str(sample_id)] for sample_id in sample_ids],
+        dtype=np.int64,
+    )
+    if np.any((baseline < 1) | (baseline > 5)):
+        raise ValueError(
+            "autosomal_baseline_cn values must be integers between 1 and 5."
+        )
+    return baseline
+
+
 def _inference_tensor_dtype() -> torch.dtype:
     """Use float64 for all inference runs.
 
@@ -1949,6 +2000,7 @@ def detect_aneuploidies(
     data: DepthData,
     cn_posterior: Dict[str, np.ndarray],
     prob_threshold: float = 0.5,
+    autosomal_baseline_cn: np.ndarray | None = None,
 ) -> Dict[int, List[Tuple[str, int, float]]]:
     """Detect per-chromosome aneuploidies for every sample.
 
@@ -1963,6 +2015,16 @@ def detect_aneuploidies(
     """
     cn_probs = cn_posterior["cn_posterior"]
     unique_chrs = np.unique(data.chr)
+    if autosomal_baseline_cn is None:
+        autosomal_baseline_cn = np.full(data.n_samples, 2, dtype=np.int64)
+    autosomal_baseline_cn = np.asarray(
+        autosomal_baseline_cn,
+        dtype=np.int64,
+    ).reshape(-1)
+    if autosomal_baseline_cn.shape[0] != data.n_samples:
+        raise ValueError(
+            "autosomal_baseline_cn must provide one baseline copy number per sample."
+        )
 
     sex_chrs = {"chrX", "chrY"}
     autosomes = [c for c in unique_chrs if c not in sex_chrs]
@@ -1980,7 +2042,7 @@ def detect_aneuploidies(
                 chr_name,
                 si,
             )
-            if best_cn != 2 and mean_prob > prob_threshold:
+            if best_cn != int(autosomal_baseline_cn[si]) and mean_prob > prob_threshold:
                 aneuploid[si].append((chr_name, best_cn, mean_prob))
 
     # Sex chromosomes: aneuploidy when karyotype is not XX or XY
@@ -2224,6 +2286,13 @@ def build_chromosome_stats(
     rows: list[dict] = []
     plot_baseline = _plot_depth_baseline_per_sample(data)
     n_states = cn_probs.shape[-1]
+    autosomal_baseline_cn = np.asarray(
+        map_estimates.get(
+            "autosomal_baseline_cn",
+            np.full(data.n_samples, 2, dtype=np.int64),
+        ),
+        dtype=np.int64,
+    ).reshape(-1)
 
     for si in range(data.n_samples):
         aneu_set = {c for c, _, _ in aneuploid_map.get(si, [])}
@@ -2256,6 +2325,7 @@ def build_chromosome_stats(
                 "sample_var_map": float(
                     map_estimates["sample_var"].flatten()[si]
                 ),
+                "autosomal_baseline_cn": int(autosomal_baseline_cn[si]),
             }
             for cn_state in range(n_states):
                 row[f"ploidy_prob_{cn_state}"] = float(ploidy_fractions[cn_state])
@@ -2325,6 +2395,15 @@ def parse_args() -> argparse.Namespace:
         help="Output directory",
     )
     p.add_argument(
+        "--autosomal-baseline-cn-tsv",
+        default=None,
+        help=(
+            "Optional TSV with columns 'sample' and 'autosomal_baseline_cn' "
+            "that fixes each sample's neutral autosomal baseline CN. "
+            "Samples default to CN=2 when this is not provided."
+        ),
+    )
+    p.add_argument(
         "--depth-space", choices=["auto", *DEPTH_SPACES], default="auto",
         help="Interpret the input matrix as normalized depth or raw counts. 'auto' first consults preprocess observation_type.txt and otherwise falls back to the observation likelihood.",
     )
@@ -2371,7 +2450,7 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_ALLOSOME_VAR,
         help=(
             "Exponential mean for chrX/chrY excess overdispersion. "
-            "Set to 0 to disable; autosomes are anchored at zero for this component."
+            "Disabled by default; autosomes are anchored at zero when this component is enabled."
         ),
     )
     g.add_argument(
@@ -2390,18 +2469,18 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_MULTIPLICATIVE_FACTORS,
         help=(
             "Number of low-rank multiplicative bias factors. "
-            "Set to 0 to use a fixed neutral multiplicative bias of 1."
+            "Defaults to 0, which uses a fixed neutral multiplicative bias of 1."
         ),
     )
     g.add_argument("--epsilon-mean", type=float, default=DEFAULT_EPSILON_MEAN,
-                   help="Mean of the Gamma prior on per-contig additive background depth; "
+                   help="Mean of the Gamma prior on per-bin additive background depth; "
                         "increase to absorb low-level zero-copy background depth, set to 0 to disable")
     g.add_argument(
         "--epsilon-concentration",
         type=float,
         default=DEFAULT_EPSILON_CONCENTRATION,
         help=(
-            "Gamma concentration for per-contig additive background depth. "
+            "Gamma concentration for per-bin additive background depth. "
             "Values below 1 keep most entries near zero while retaining a heavier "
             "positive tail; 1.0 matches the old Exponential prior."
         ),
@@ -2412,7 +2491,7 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_BACKGROUND_FACTORS,
         help=(
             "Number of low-rank additive background factors. "
-            "Set to 0 to disable the structured background term."
+            "Defaults to 0; the CN=0 epsilon floor remains available for zero-copy background."
         ),
     )
     g.add_argument("--guide-type", choices=["delta", "diagonal", "lowrank"], default="delta",
@@ -2445,10 +2524,13 @@ def parse_args() -> argparse.Namespace:
                    help="Hold the learned per-bin CN prior fixed at the default chromosome-type prior during training. Useful for diagnosing whether recurrent high-copy bins are driven by learned per-bin prior entrenchment.")
     g.add_argument("--freeze-sample-var", action="store_true",
                    help="Hold per-sample sample_var fixed at 0 during training. Useful for diagnosing whether a noisy-sample tail is driven by sample-specific overdispersion.")
-    g.add_argument("--freeze-sample-depth", action="store_true",
+    g.add_argument("--freeze-sample-depth", dest="freeze_sample_depth", action="store_true",
                    help="Hold per-sample sample_depth fixed at the autosomal-median counts/kb "
-                        "anchor during training (raw-count runs only). Useful for diagnosing "
-                        "sample_depth collapse.")
+                        "anchor during training (raw-count runs only; default).")
+    g.add_argument("--learn-sample-depth", dest="freeze_sample_depth", action="store_false",
+                   help="Infer per-sample sample_depth as a LogNormal latent in raw-count runs. "
+                        "This is a legacy/expert fallback for cohorts where the median anchor is inadequate.")
+    g.set_defaults(freeze_sample_depth=True)
 
     # Sex chromosome priors
     g = p.add_argument_group("sex chromosome priors")
@@ -2558,7 +2640,7 @@ def parse_args() -> argparse.Namespace:
     g.add_argument(
         "--svi-init-restarts",
         type=int,
-        default=100,
+        default=10,
         help=(
             "Number of candidate autoguide initializations to score before "
             "gradient descent. The first candidate uses the anchored default "
@@ -2658,6 +2740,18 @@ def main() -> None:
         clamp_threshold=_clamp_threshold_for_depth_space(depth_space),
         depth_space=depth_space,
         site_data=sd,
+    )
+    autosomal_baseline_cn = _load_autosomal_baseline_cn(
+        args.autosomal_baseline_cn_tsv,
+        data.sample_ids,
+    )
+    logger.info(
+        "Autosomal baseline CNs: %s",
+        format_count_summary(
+            "autosomal_baseline_cn",
+            np.bincount(autosomal_baseline_cn, minlength=6)[1:6],
+            tuple(f"CN{cn}" for cn in range(1, 6)),
+        ),
     )
     logger.info(
         "Safe logging enabled: reporting cohort-level summaries only."
@@ -2788,6 +2882,7 @@ def main() -> None:
         obs_likelihood=obs_likelihood,
         obs_df=args.obs_df,
         sample_depth_max=args.sample_depth_max,
+        autosomal_baseline_cn=autosomal_baseline_cn,
         freeze_bin_bias=args.freeze_bin_bias,
         freeze_cn_prior=args.freeze_cn_prior,
         freeze_sample_var=args.freeze_sample_var,
@@ -2826,6 +2921,7 @@ def main() -> None:
         data,
         estimate_method=point_estimate_method,
     )
+    map_est["autosomal_baseline_cn"] = autosomal_baseline_cn.astype(np.int64, copy=False)
     if learn_site_af and "site_pop_af_latent" in map_est:
         effective_site_pop_af_np = np.asarray(
             map_est["site_pop_af_latent"],
@@ -3025,9 +3121,22 @@ def main() -> None:
     np.savez_compressed(artifacts_path, **artifact_dict)
     logger.info("Inference artifacts saved.")
 
+    baseline_df = pd.DataFrame(
+        {
+            "sample": data.sample_ids,
+            "autosomal_baseline_cn": autosomal_baseline_cn.astype(np.int64, copy=False),
+        }
+    )
+    baseline_path = os.path.join(args.output_dir, "sample_autosomal_baseline_cn.tsv")
+    baseline_df.to_csv(baseline_path, sep="\t", index=False)
+    logger.info("Sample autosomal baseline CNs saved.")
+
     # ── detect aneuploidies ─────────────────────────────────────────────
     aneuploid_map = detect_aneuploidies(
-        data, cn_post, prob_threshold=args.prob_threshold
+        data,
+        cn_post,
+        prob_threshold=args.prob_threshold,
+        autosomal_baseline_cn=autosomal_baseline_cn,
     )
 
     # ── write bin stats ─────────────────────────────────────────────────

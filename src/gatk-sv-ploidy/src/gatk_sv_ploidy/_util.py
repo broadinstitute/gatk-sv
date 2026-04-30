@@ -162,10 +162,10 @@ def coerce_bin_epsilon_matrix(
 ) -> np.ndarray:
     """Return ``bin_epsilon`` as a ``(n_bins, n_samples)`` matrix.
 
-    Legacy artifacts stored one epsilon value per bin. Newer runs may store a
-    separate value for each bin / sample pair. Current runs may instead store
-    one value per contig / sample pair. This helper accepts all of those
-    forms and expands them to the effective per-bin matrix.
+    Legacy artifacts may store one epsilon value per bin or one value per
+    contig / sample pair. Current runs store a separate value for each
+    bin / sample pair. This helper accepts all of those forms and expands
+    them to the effective per-bin matrix.
     """
     contig_index_arr = None
     if contig_index is not None:
@@ -300,9 +300,10 @@ def compose_additive_background_matrix(
 ) -> np.ndarray:
     """Compose the effective additive background matrix.
 
-    This includes the contig-shared ``bin_epsilon`` floor and any low-rank
-    additive background factors stored as ``background_bin_factors`` and
-    ``background_sample_factors``.
+    This includes the ``bin_epsilon`` floor, plus any low-rank additive
+    background factors stored as ``background_bin_factors`` and
+    ``background_sample_factors``. Legacy contig-shared epsilon artifacts
+    are expanded to bins via ``contig_index`` when needed.
     """
     additive = coerce_bin_epsilon_matrix(
         bin_epsilon,

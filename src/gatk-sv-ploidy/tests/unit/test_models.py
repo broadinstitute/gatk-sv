@@ -42,10 +42,12 @@ def test_cnv_model_defaults_match_current_preferred_configuration() -> None:
     assert model.var_sample == 0.00025
     assert model.var_bin == 0.0
     assert model.var_allosome == pytest.approx(DEFAULT_ALLOSOME_VAR)
+    assert model.var_allosome == 0.0
     assert model.raw_variance_power == pytest.approx(DEFAULT_RAW_VARIANCE_POWER)
     assert model.epsilon_mean == pytest.approx(DEFAULT_EPSILON_MEAN)
     assert model.epsilon_concentration == pytest.approx(DEFAULT_EPSILON_CONCENTRATION)
-    assert DEFAULT_BACKGROUND_FACTORS == 2
+    assert DEFAULT_BACKGROUND_FACTORS == 0
+    assert DEFAULT_MULTIPLICATIVE_FACTORS == 0
     assert model.background_factors == DEFAULT_BACKGROUND_FACTORS
     assert model.multiplicative_factors == DEFAULT_MULTIPLICATIVE_FACTORS
     assert model.guide_init_scale == pytest.approx(DEFAULT_GUIDE_INIT_SCALE)
@@ -55,14 +57,15 @@ def test_cnv_model_defaults_match_current_preferred_configuration() -> None:
     assert model.freeze_bin_bias is False
     assert model.freeze_cn_prior is False
     assert model.freeze_sample_var is False
+    assert model.freeze_sample_depth is True
     assert "bin_var" not in model._latent_sites
-    assert "allosome_var" in model._latent_sites
+    assert "allosome_var" not in model._latent_sites
     assert "bin_bias" not in model._latent_sites
-    assert "multiplicative_bin_factors" in model._latent_sites
-    assert "multiplicative_sample_factors" in model._latent_sites
+    assert "multiplicative_bin_factors" not in model._latent_sites
+    assert "multiplicative_sample_factors" not in model._latent_sites
     assert "af_temperature" in model._latent_sites
-    assert "background_bin_factors" in model._latent_sites
-    assert "background_sample_factors" in model._latent_sites
+    assert "background_bin_factors" not in model._latent_sites
+    assert "background_sample_factors" not in model._latent_sites
 
 
 @pytest.mark.parametrize("raw_variance_power", [0.99, 2.01])
@@ -293,13 +296,14 @@ def test_allosome_var_uses_exponential_prior_and_autosome_anchor() -> None:
 def test_bin_epsilon_uses_gamma_prior_with_requested_mean_and_concentration() -> None:
     df = pd.DataFrame(
         {
-            "Chr": ["chr21"],
-            "Start": [0],
-            "End": [1000],
-            "S1": [2.0],
+            "Chr": ["chr21", "chr21"],
+            "Start": [0, 1000],
+            "End": [1000, 2000],
+            "S1": [2.0, 3.0],
+            "S2": [2.5, 3.5],
         }
     )
-    df["Bin"] = "chr21:0-1000"
+    df["Bin"] = ["chr21:0-1000", "chr21:1000-2000"]
     data = DepthData(df.set_index("Bin"), device="cpu")
     model = CNVModel(
         sex_cn_weight=0.0,
@@ -310,9 +314,11 @@ def test_bin_epsilon_uses_gamma_prior_with_requested_mean_and_concentration() ->
 
     trace = poutine.trace(model.model).get_trace(**model._model_kwargs(data))
     bin_epsilon_fn = trace.nodes["bin_epsilon"]["fn"]
+    bin_epsilon_value = trace.nodes["bin_epsilon"]["value"]
     gamma_dist = getattr(bin_epsilon_fn, "base_dist", bin_epsilon_fn)
 
     assert gamma_dist.__class__.__name__ == "Gamma"
+    assert tuple(bin_epsilon_value.shape) == (data.n_bins, data.n_samples)
     np.testing.assert_allclose(
         np.asarray(gamma_dist.concentration.detach().cpu().numpy()).squeeze(),
         0.5,
@@ -586,14 +592,87 @@ def test_sample_depth_prior_uses_per_sample_anchor() -> None:
     assert sample_depth_prior["scale"][1].item() > 0.0
 
 
-def test_raw_expected_depth_units_assumes_diploid_baseline() -> None:
-    copy_number = np.array([0.0, 2.0, 4.0], dtype=np.float64)
+def test_raw_expected_depth_units_assumes_diploid_baseline_and_cn0_background() -> None:
+    copy_number = np.array([0.0, 1.0, 2.0, 4.0], dtype=np.float64)
     bin_bias = np.ones_like(copy_number)
-    additive_background = np.zeros_like(copy_number)
+    additive_background = np.full_like(copy_number, 0.2)
 
     expected = _raw_expected_depth_units(copy_number, bin_bias, additive_background)
 
-    np.testing.assert_allclose(expected, np.array([0.0, 1.0, 2.0], dtype=np.float64))
+    np.testing.assert_allclose(
+        expected,
+        np.array([0.1, 0.5, 1.0, 2.0], dtype=np.float64),
+    )
+
+    expected_torch = _raw_expected_depth_units(
+        torch.tensor(copy_number),
+        torch.tensor(bin_bias),
+        torch.tensor(additive_background),
+    )
+    np.testing.assert_allclose(expected_torch.numpy(), expected)
+
+
+def test_raw_expected_depth_units_supports_sample_specific_baselines() -> None:
+    copy_number = np.array(
+        [[2.0, 3.0], [4.0, 0.0]],
+        dtype=np.float64,
+    )
+    bin_bias = np.ones_like(copy_number)
+    additive_background = np.full_like(copy_number, 0.3)
+    baseline = np.array([2.0, 3.0], dtype=np.float64)
+
+    expected = _raw_expected_depth_units(
+        copy_number,
+        bin_bias,
+        additive_background,
+        autosomal_baseline_copy_number=baseline,
+    )
+
+    np.testing.assert_allclose(
+        expected,
+        np.array([[1.0, 1.0], [2.0, 0.1]], dtype=np.float64),
+    )
+
+    expected_torch = _raw_expected_depth_units(
+        torch.tensor(copy_number),
+        torch.tensor(bin_bias),
+        torch.tensor(additive_background),
+        autosomal_baseline_copy_number=torch.tensor(baseline),
+    )
+    np.testing.assert_allclose(expected_torch.numpy(), expected)
+
+
+def test_compose_autosome_cn_probs_supports_sample_specific_reference_states() -> None:
+    model = CNVModel(dtype=torch.float64, device="cpu")
+    autosome_nonref_prob = torch.tensor([0.3, 0.4], dtype=torch.float64)
+    autosome_alt_cn_probs = torch.tensor(
+        [
+            [0.05, 0.10, 0.20, 0.25, 0.40],
+            [0.05, 0.10, 0.20, 0.25, 0.40],
+        ],
+        dtype=torch.float64,
+    )
+
+    composed_torch = model._compose_autosome_cn_probs_torch(
+        autosome_nonref_prob,
+        autosome_alt_cn_probs,
+        reference_state=torch.tensor([2, 3]),
+    )
+    expected = np.array(
+        [
+            [0.015, 0.03, 0.7, 0.06, 0.075, 0.12],
+            [0.02, 0.04, 0.08, 0.6, 0.10, 0.16],
+        ],
+        dtype=np.float64,
+    )
+    np.testing.assert_allclose(composed_torch.cpu().numpy(), expected)
+
+    composed_numpy = model._compose_autosome_cn_probs_numpy(
+        autosome_nonref_prob.cpu().numpy(),
+        autosome_alt_cn_probs.cpu().numpy(),
+        reference_state=np.array([2, 3], dtype=np.int64),
+    )
+    np.testing.assert_allclose(composed_numpy, expected)
 
 
 def test_model_trace_supports_negative_binomial_cn_sampling() -> None:
@@ -768,7 +847,11 @@ def test_relative_af_evidence_centers_against_fixed_reference_mixture(
     chr_type_np = np.zeros(raw_table.shape[1], dtype=np.int64)
 
     transformed = model._apply_af_evidence_mode_numpy(raw_table, chr_type_np)
-    reference = model._af_reference_cn_probs_numpy(chr_type_np, raw_table.shape[1])
+    reference = model._af_reference_cn_probs_numpy(
+        chr_type_np,
+        raw_table.shape[1],
+        raw_table.shape[2],
+    )
     expected = _center_af_table_numpy(raw_table, reference)
 
     np.testing.assert_allclose(transformed, expected, rtol=1e-6, atol=1e-6)
@@ -1007,12 +1090,22 @@ def test_cnv_model_uses_mixed_guide_when_learning_site_af() -> None:
     assert "site_pop_af_latent" in model._latent_sites
 
 
-def test_cnv_model_negative_binomial_adds_sample_depth_latent() -> None:
+def test_cnv_model_negative_binomial_fixes_sample_depth_by_default() -> None:
     model = CNVModel(obs_likelihood="negative_binomial")
-    assert "sample_depth" in model._latent_sites
+    assert model.freeze_sample_depth is True
+    assert "sample_depth" not in model._latent_sites
     assert "bin_epsilon" in model._latent_sites
-    assert "background_bin_factors" in model._latent_sites
-    assert "background_sample_factors" in model._latent_sites
+    assert "background_bin_factors" not in model._latent_sites
+    assert "background_sample_factors" not in model._latent_sites
+
+
+def test_cnv_model_can_learn_sample_depth_when_requested() -> None:
+    model = CNVModel(
+        obs_likelihood="negative_binomial",
+        freeze_sample_depth=False,
+    )
+
+    assert "sample_depth" in model._latent_sites
 
 
 def test_cnv_model_can_disable_background_factors() -> None:
@@ -1197,7 +1290,7 @@ def test_estimate_sample_depth_prior_bootstrap_sd_tracks_sample_distribution() -
     assert raw_sd[1] > raw_sd[0]
 
 
-def test_model_kwargs_include_sample_depth_prior_for_negative_binomial() -> None:
+def test_model_kwargs_include_fixed_sample_depth_by_default_for_negative_binomial() -> None:
     df = pd.DataFrame(
         {
             "Chr": ["chr21"],
@@ -1217,10 +1310,23 @@ def test_model_kwargs_include_sample_depth_prior_for_negative_binomial() -> None
 
     model_kw = model._model_kwargs(data)
 
-    assert "sample_depth_prior_loc" in model_kw
-    assert "sample_depth_prior_scale" in model_kw
-    assert model_kw["sample_depth_prior_loc"].shape == (1,)
-    assert model_kw["sample_depth_prior_scale"].shape == (1,)
+    assert "sample_depth_fixed" in model_kw
+    assert "sample_depth_prior_loc" not in model_kw
+    assert "sample_depth_prior_scale" not in model_kw
+    assert model_kw["sample_depth_fixed"].shape == (1,)
+
+    learned_model = CNVModel(
+        obs_likelihood="negative_binomial",
+        freeze_sample_depth=False,
+        device="cpu",
+    )
+    learned_model_kw = learned_model._model_kwargs(data)
+
+    assert "sample_depth_fixed" not in learned_model_kw
+    assert "sample_depth_prior_loc" in learned_model_kw
+    assert "sample_depth_prior_scale" in learned_model_kw
+    assert learned_model_kw["sample_depth_prior_loc"].shape == (1,)
+    assert learned_model_kw["sample_depth_prior_scale"].shape == (1,)
 
 
 def test_run_discrete_inference_uses_bin_epsilon() -> None:
@@ -1382,6 +1488,140 @@ def test_run_discrete_inference_negative_binomial_uses_sample_depth() -> None:
     assert float(posterior["cn_posterior"][0, 0, 2]) > float(
         posterior["cn_posterior"][0, 0, 1]
     )
+
+
+def test_run_discrete_inference_negative_binomial_supports_triploid_baseline_cn() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chr21"],
+            "Start": [0],
+            "End": [1000],
+            "S1": [10],
+        }
+    )
+    df["Bin"] = "chr21:0-1000"
+    data = DepthData(
+        df.set_index("Bin"),
+        device="cpu",
+        depth_space="raw",
+        clamp_threshold=None,
+    )
+    model = CNVModel(
+        sex_cn_weight=0.0,
+        epsilon_mean=0.0,
+        obs_likelihood="negative_binomial",
+        autosomal_baseline_cn=[3],
+    )
+    posterior = model.run_discrete_inference(
+        data,
+        map_estimates={
+            "bin_bias": np.array([1.0], dtype=np.float32),
+            "sample_var": np.array([1e-4], dtype=np.float32),
+            "bin_var": np.array([1e-4], dtype=np.float32),
+            "sample_depth": np.array([10.0], dtype=np.float32),
+            "cn_probs": np.full((1, 6), 1.0 / 6.0, dtype=np.float32),
+        },
+    )
+
+    assert int(np.argmax(posterior["cn_posterior"][0, 0, :])) == 3
+    assert float(posterior["cn_posterior"][0, 0, 3]) > float(
+        posterior["cn_posterior"][0, 0, 2]
+    )
+
+
+def test_baseline_cn_expansion_squeezes_legacy_singleton_sample_axis() -> None:
+    model = CNVModel(
+        sex_cn_weight=0.0,
+        epsilon_mean=0.0,
+        autosomal_baseline_cn=[2, 3],
+        dtype=torch.float64,
+    )
+    canonical = torch.zeros((2, 1, model.n_states), dtype=torch.float64)
+    canonical[..., 1] = 0.2
+    canonical[..., 2] = 0.8
+    chr_type = torch.zeros(2, dtype=torch.long)
+
+    expanded = model._expand_cn_probs_to_samples_torch(
+        canonical,
+        chr_type,
+        n_samples=2,
+    )
+
+    assert expanded.shape == (2, 2, model.n_states)
+    np.testing.assert_allclose(expanded[:, 0, 2].detach().cpu().numpy(), 0.8)
+    np.testing.assert_allclose(expanded[:, 1, 3].detach().cpu().numpy(), 0.8)
+    np.testing.assert_allclose(expanded[:, :, 1].detach().cpu().numpy(), 0.2)
+
+
+def test_elbo_loss_supports_baseline_cn_with_dirichlet_singleton_cn_probs() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chr21", "chr21"],
+            "Start": [0, 1000],
+            "End": [1000, 2000],
+            "S1": [2.0, 2.0],
+            "S2": [3.0, 3.0],
+        },
+        index=["chr21:0-1000", "chr21:1000-2000"],
+    )
+    data = DepthData(df, device="cpu", dtype=torch.float64)
+    model = CNVModel(
+        sex_cn_weight=0.0,
+        epsilon_mean=0.0,
+        autosomal_baseline_cn=[2, 3],
+        dtype=torch.float64,
+        device="cpu",
+    )
+    model_kw = model._model_kwargs(data)
+
+    pyro.clear_param_store()
+    guide = model._build_guide(model._make_init_loc_fn(data))
+    loss = TraceEnum_ELBO().loss(model.model, guide, **model_kw)
+
+    assert np.isfinite(loss)
+
+
+def test_run_discrete_inference_negative_binomial_cn0_background() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chr21"],
+            "Start": [0],
+            "End": [1000],
+            "S1": [2],
+        }
+    )
+    df["Bin"] = "chr21:0-1000"
+    data = DepthData(
+        df.set_index("Bin"),
+        device="cpu",
+        depth_space="raw",
+        clamp_threshold=None,
+    )
+    model = CNVModel(
+        sex_cn_weight=0.0,
+        epsilon_mean=0.0,
+        obs_likelihood="negative_binomial",
+    )
+    base_map = {
+        "bin_bias": np.array([1.0], dtype=np.float32),
+        "sample_var": np.array([1e-4], dtype=np.float32),
+        "bin_var": np.array([0.0], dtype=np.float32),
+        "sample_depth": np.array([20.0], dtype=np.float32),
+        "cn_probs": np.full((1, 6), 1.0 / 6.0, dtype=np.float32),
+    }
+
+    no_background = model.run_discrete_inference(data, map_estimates=base_map)
+    with_background = model.run_discrete_inference(
+        data,
+        map_estimates={
+            **base_map,
+            "bin_epsilon": np.array([[0.2]], dtype=np.float32),
+        },
+    )
+
+    assert int(np.argmax(with_background["cn_posterior"][0, 0, :])) == 0
+    assert with_background["cn_posterior"][0, 0, 0] > no_background["cn_posterior"][0, 0, 0]
+    assert with_background["cn_posterior"][0, 0, 2] < no_background["cn_posterior"][0, 0, 2]
 
 
 def test_run_discrete_inference_supports_autosome_shrinkage_maps() -> None:
