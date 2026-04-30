@@ -87,7 +87,6 @@ class RandomForest:
 
             self.train = pd.concat([passes, fails])
 
-        print(self.train.loc[self.train.label == 'Fail'].shape[0])
         if self.train.loc[self.train.label == 'Pass'].shape[0] == 0:
             raise Exception('No Pass variants included in training set')
         if self.train.loc[self.train.label == 'Fail'].shape[0] == 0:
