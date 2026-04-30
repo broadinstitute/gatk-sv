@@ -74,7 +74,7 @@ AUTOSOME_PRIOR_MODES = (
 )
 
 DEFAULT_EPSILON_MEAN = 1e-2
-DEFAULT_EPSILON_CONCENTRATION = 0.5
+DEFAULT_EPSILON_CONCENTRATION = 1.0
 DEFAULT_BACKGROUND_FACTORS = 0
 DEFAULT_MULTIPLICATIVE_FACTORS = 0
 DEFAULT_BACKGROUND_SAMPLE_SCALE = 0.02
@@ -738,6 +738,20 @@ def _broadcast_reference_state_numpy(
         raise ValueError(
             "reference_state is not broadcastable to the requested target shape."
         ) from exc
+
+
+def _expected_allosome_copy_numbers_torch(
+    autosomal_baseline_cn: torch.Tensor,
+    sex_state: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return expected chrX/chrY CN vectors for a baseline and sex state."""
+    baseline = autosomal_baseline_cn.to(dtype=torch.long)
+    if sex_state == 0:
+        return baseline, torch.zeros_like(baseline)
+    male_y_cn = torch.div(baseline, 2, rounding_mode="floor")
+    male_y_cn = torch.clamp(male_y_cn, min=1)
+    male_y_cn = torch.minimum(male_y_cn, baseline)
+    return baseline - male_y_cn, male_y_cn
 
 
 def _normalize_background_bin_factors_torch(values: torch.Tensor) -> torch.Tensor:
@@ -1568,6 +1582,59 @@ class CNVModel:
                 "autosomal_baseline_cn values must be between 1 and n_states - 1."
             )
         return baseline
+
+    def _sex_cn_score_for_samples_torch(self, n_samples: int) -> torch.Tensor:
+        """Return baseline-aware sex-CN scores with a sample axis."""
+        baseline = self._resolve_autosomal_baseline_cn_torch(
+            n_samples,
+            device=self.device,
+        )
+        if baseline is None:
+            baseline = torch.full(
+                (n_samples,),
+                self.ref_state,
+                dtype=torch.long,
+                device=self.device,
+            )
+
+        score = torch.zeros(
+            (2, 3, self.n_states, n_samples),
+            dtype=self.dtype,
+            device=self.device,
+        )
+        sample_idx = torch.arange(n_samples, device=self.device)
+        for sex_state in range(2):
+            x_cn, y_cn = _expected_allosome_copy_numbers_torch(
+                baseline,
+                sex_state,
+            )
+            score[sex_state, 1, :, :] = -1.0
+            score[sex_state, 1, x_cn, sample_idx] = 0.0
+            score[sex_state, 2, :, :] = -1.0
+            score[sex_state, 2, y_cn, sample_idx] = 0.0
+        return score
+
+    def _sex_cn_score_for_samples_numpy(self, n_samples: int) -> np.ndarray:
+        """NumPy counterpart of :meth:`_sex_cn_score_for_samples_torch`."""
+        baseline = self._resolve_autosomal_baseline_cn_numpy(n_samples)
+        if baseline is None:
+            baseline = np.full(n_samples, self.ref_state, dtype=np.int64)
+
+        score = np.zeros((2, 3, self.n_states, n_samples), dtype=np.float64)
+        sample_idx = np.arange(n_samples)
+        for sex_state in range(2):
+            if sex_state == 0:
+                x_cn = baseline
+                y_cn = np.zeros_like(baseline)
+            else:
+                y_cn = np.maximum(baseline // 2, 1)
+                y_cn = np.minimum(y_cn, baseline)
+                x_cn = baseline - y_cn
+            score[sex_state, 1, :, :] = -1.0
+            score[sex_state, 1, x_cn, sample_idx] = 0.0
+            score[sex_state, 2, :, :] = -1.0
+            score[sex_state, 2, y_cn, sample_idx] = 0.0
+        return score
 
     def _remap_autosome_cn_probs_torch(
         self,
@@ -2936,8 +3003,12 @@ class CNVModel:
             # ── sex–CN coupling factor ────────────────────────────────────────
             if self.sex_cn_weight > 0 and chr_type is not None:
                 chr_type_exp = chr_type.unsqueeze(-1)       # (n_bins, 1)
-                score = Vindex(self.sex_cn_score)[
-                    sex_karyotype, chr_type_exp, cn,
+                sample_idx = torch.arange(
+                    n_samples,
+                    device=self.device,
+                ).unsqueeze(0)
+                score = Vindex(self._sex_cn_score_for_samples_torch(n_samples))[
+                    sex_karyotype, chr_type_exp, cn, sample_idx,
                 ]
                 pyro.factor(
                     "sex_cn_prior", sex_cn_weight_per_bin * score,
@@ -3492,7 +3563,7 @@ class CNVModel:
         )
         if has_sex:
             chr_type_np = data.chr_type.cpu().numpy()
-            sex_cn_np = self.sex_cn_score.cpu().numpy()  # (2, 3, n_states)
+            sex_cn_np = self._sex_cn_score_for_samples_numpy(data.n_samples)
             sex_prior_np = np.array(self.sex_prior, dtype=np.float64)
 
             ct_counts = np.array(
@@ -3508,10 +3579,10 @@ class CNVModel:
             )
 
             for s in range(2):
-                penalty = np.zeros((self.n_states, n_bins, 1))
+                penalty = np.zeros((self.n_states, n_bins, n_samp))
                 for c in range(self.n_states):
-                    penalty[c, :, 0] = (
-                        w_per_bin * sex_cn_np[s, chr_type_np, c]
+                    penalty[c, :, :] = (
+                        w_per_bin[:, np.newaxis] * sex_cn_np[s, chr_type_np, c, :]
                     )
                 log_unnorm_s = base_log_unnorm + penalty
 

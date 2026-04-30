@@ -25,6 +25,7 @@ from gatk_sv_ploidy._util import (
     DEPTH_SPACES,
     compute_cnq_from_probabilities,
     default_obs_likelihood_for_depth_space,
+    is_expected_allosome_copy_number_pair,
     format_count_summary,
     format_numeric_summary,
     read_observation_type,
@@ -1724,8 +1725,8 @@ def _load_autosomal_baseline_cn(
     missing_columns = required_columns - set(baseline_df.columns)
     if missing_columns:
         raise ValueError(
-            "Autosomal baseline CN TSV is missing required columns: "
-            + ", ".join(sorted(missing_columns))
+            "Autosomal baseline CN TSV is missing required columns: " +
+            ", ".join(sorted(missing_columns))
         )
 
     if baseline_df["sample"].duplicated().any():
@@ -1734,8 +1735,8 @@ def _load_autosomal_baseline_cn(
             "sample",
         ].astype(str).tolist()
         raise ValueError(
-            "Autosomal baseline CN TSV contains duplicate sample rows: "
-            + ", ".join(duplicates[:5])
+            "Autosomal baseline CN TSV contains duplicate sample rows: " +
+            ", ".join(duplicates[:5])
         )
 
     baseline_series = pd.Series(
@@ -2045,7 +2046,8 @@ def detect_aneuploidies(
             if best_cn != int(autosomal_baseline_cn[si]) and mean_prob > prob_threshold:
                 aneuploid[si].append((chr_name, best_cn, mean_prob))
 
-    # Sex chromosomes: aneuploidy when karyotype is not XX or XY
+    # Sex chromosomes: aneuploidy when the X/Y pair is not consistent with
+    # the sample's autosomal baseline CN.
     for si in range(data.n_samples):
         x_cn, x_prob, x_bins, _, _ = _get_chr_info(
             data,
@@ -2065,10 +2067,14 @@ def detect_aneuploidies(
 
         x_ok = x_prob > prob_threshold if x_bins > 0 else True
         y_ok = y_prob > prob_threshold if y_bins > 0 else True
-        is_XX = x_cn == 2 and y_cn == 0
-        is_XY = x_cn == 1 and y_cn == 1
+        baseline_cn = int(autosomal_baseline_cn[si])
+        is_expected_sex_pair = is_expected_allosome_copy_number_pair(
+            x_cn,
+            y_cn,
+            baseline_cn,
+        )
 
-        if not (is_XX or is_XY) and x_ok and y_ok:
+        if not is_expected_sex_pair and x_ok and y_ok:
             if x_bins > 0:
                 aneuploid[si].append(("chrX", x_cn, x_prob))
             if y_bins > 0:

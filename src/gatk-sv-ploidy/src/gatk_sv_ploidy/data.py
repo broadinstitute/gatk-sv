@@ -312,7 +312,7 @@ def load_site_data(path: str) -> Dict[str, np.ndarray]:
     The archive is expected to contain the keys ``site_alt``, ``site_total``,
     ``site_pop_af``, ``site_mask`` (as produced by
     :func:`~gatk_sv_ploidy.preprocess.build_per_site_data`).  Bin-coordinate
-    metadata (``bin_chr``, ``bin_start``, ``bin_end``) is also loaded when
+    metadata (``sample_ids``, ``bin_chr``, ``bin_start``, ``bin_end``) is also loaded when
     present; :class:`DepthData` uses these to validate alignment after
     sorting.
 
@@ -332,7 +332,7 @@ def load_site_data(path: str) -> Dict[str, np.ndarray]:
     }
     # Include bin coordinate metadata when available (for alignment
     # validation inside DepthData).
-    for key in ("bin_chr", "bin_start", "bin_end"):
+    for key in ("sample_ids", "bin_chr", "bin_start", "bin_end"):
         if key in npz:
             result[key] = npz[key]
     logger.info(

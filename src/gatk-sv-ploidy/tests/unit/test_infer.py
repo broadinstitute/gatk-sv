@@ -1210,6 +1210,39 @@ def test_detect_aneuploidies_uses_autosomal_baseline_cn() -> None:
     assert triploid_calls[0] == []
 
 
+def test_detect_aneuploidies_uses_baseline_aware_allosomes() -> None:
+    depth_df = DepthData(
+        pd.DataFrame(
+            {
+                "Chr": ["chrX", "chrY"],
+                "Start": [0, 0],
+                "End": [1000, 1000],
+                "S1": np.array([2.0, 1.0], dtype=np.float32),
+            },
+            index=["chrX:0-1000", "chrY:0-1000"],
+        ),
+        device="cpu",
+    )
+    cn_posterior = np.zeros((depth_df.n_bins, depth_df.n_samples, 6), dtype=np.float32)
+    cn_posterior[0, 0, 2] = 1.0
+    cn_posterior[1, 0, 1] = 1.0
+
+    diploid_calls = detect_aneuploidies(
+        depth_df,
+        {"cn_posterior": cn_posterior},
+        prob_threshold=0.5,
+    )
+    triploid_calls = detect_aneuploidies(
+        depth_df,
+        {"cn_posterior": cn_posterior},
+        prob_threshold=0.5,
+        autosomal_baseline_cn=np.array([3], dtype=np.int64),
+    )
+
+    assert diploid_calls[0] == [("chrX", 2, 1.0), ("chrY", 1, 1.0)]
+    assert triploid_calls[0] == []
+
+
 def test_resolve_observation_model_prefers_preprocess_marker(tmp_path) -> None:
     depth_path = tmp_path / "preprocessed_depth.tsv"
     depth_path.write_text("Bin\tChr\tStart\tEnd\tS1\n", encoding="ascii")

@@ -27,7 +27,7 @@ gatk-sv-ploidy <subcommand> [options]
 | Subcommand   | Description |
 |-------------|-------------|
 | `preprocess` | Read and normalise depth data, filter low-quality bins |
-| `triploidy`  | Test pooled autosomal allele fractions for a triploid baseline |
+| `triploidy`  | Classify autosomal baseline CN from pooled allele fractions |
 | `infer`      | Train Bayesian model and run discrete CN inference |
 | `ppd`        | Posterior predictive check: compare model predictions to data |
 | `call`       | Assign sex karyotype and aneuploidy type per sample |
@@ -43,7 +43,7 @@ Run `gatk-sv-ploidy <subcommand> --help` for subcommand-specific options.
 # 1. Preprocess raw depth data
 gatk-sv-ploidy preprocess -i depth.tsv -o out/preprocess/
 
-# 2. Test for whole-genome triploidy from pooled autosomal AFs
+# 2. Classify autosomal baseline CN from pooled autosomal AFs
 gatk-sv-ploidy triploidy -i out/preprocess/preprocessed_depth.tsv \
   --site-data out/preprocess/site_data.npz -o out/triploidy/ \
   --diagnostics
@@ -62,6 +62,7 @@ gatk-sv-ploidy call -c out/infer/chromosome_stats.tsv -o out/call/
 
 # 6. Generate plots
 gatk-sv-ploidy plot -c out/infer/chromosome_stats.tsv -o out/plot/ \
+  --sex-assignments out/call/aneuploidy_type_predictions.tsv \
   --bin-stats out/infer/bin_stats.tsv.gz \
   --training-loss out/infer/training_loss.tsv \
   --ppd-bin-summary out/ppd/ppd_bin_summary.tsv.gz \
@@ -78,6 +79,10 @@ calibration check. For a fully Bayesian posterior predictive check that also
 integrates saved continuous-latent posterior draws from expressive guides, add
 `--continuous-posterior-mode integrated`; this mode is expected to be more
 conservative for in-sample diagnostics.
+
+When call predictions are provided to `plot`, per-sample plots use the
+separated baseline-ploidy fields to visually mark non-diploid autosomal
+baselines, even when there is no focal chromosome-specific aneuploidy.
 
 If you run the end-to-end wrapper, pass extra PPD CLI options through
 `run_ploidy.sh --ppd-args "--continuous-posterior-mode integrated"`.
@@ -107,28 +112,44 @@ gatk-sv-ploidy ppd -i out/preprocess_nb/preprocessed_depth.tsv \
 
 In this mode the model fixes each per-sample `sample_depth` to the autosomal
 median counts/kb anchor by default and infers only sample-specific
-overdispersion. Whole-genome polyploid baselines are now handled as a separate
+overdispersion. Whole-genome baseline copy states are handled as a separate
 post-preprocess step: run `triploidy` on `site_data.npz`, then pass the emitted
 `sample_autosomal_baseline_cn.tsv` into `infer` via
-`--autosomal-baseline-cn-tsv` so downstream `call` can emit `TRIPLOID` when
-appropriate. The triploidy AF classifier compares diploid and triploid
+`--autosomal-baseline-cn-tsv` so downstream `call` can emit `HAPLOID`,
+`TRIPLOID`, or `TETRAPLOID` when appropriate. The command name is retained for
+compatibility, but the classifier now compares CN1, CN2, CN3, and CN4
 beta-binomial genotype-mixture models and marginalizes over a log-spaced grid
-of AF concentration values, so overdispersed diploid AFs can be absorbed as
-extra beta-binomial scatter rather than forcing a triploid call. Calls are made
-from posterior triploidy probability using `--triploidy-prior` and the legacy
-`--pvalue-threshold` flag, which is now interpreted as the maximum posterior
-error probability. Use `--af-concentration` to set the prior median,
+of AF concentration values. The direct AF peak model checks the canonical peak
+sets 0/1, 0/0.5/1, 0/1/3/2/3/1, and 0/1/4/0.5/3/4/1, then combines that peak
+evidence with the genotype likelihood under conservative priors.
+
+CN2 is the default when non-diploid evidence is ambiguous. CN4/tetraploid calls
+require explicit quarter-peak support near 1/4 or 3/4, so data compatible with
+only 0/0.5/1 remain diploid even when CN4 has some likelihood support. CN1 is
+called only when the informative pooled AFs are concentrated at 0 and 1 with
+little support for non-endpoint peaks. Use `--haploidy-prior`,
+`--triploidy-prior`, and `--tetraploidy-prior` to tune prior odds, and use the
+legacy `--pvalue-threshold` flag as the maximum posterior error probability for
+non-diploid calls. Use `--af-concentration` to set the prior median,
 `--af-concentration-prior-log-sd` to widen or narrow the concentration prior,
-or `--af-concentration-grid` to supply an explicit comma-separated grid. Add
+or `--af-concentration-grid` to supply an explicit comma-separated grid.
+
+Direct peak guards are controlled by `--ploidy-peak-af-window`,
+`--min-haploid-endpoint-fraction`, `--max-haploid-other-peak-fraction`,
+`--min-triploid-peak-fraction-advantage`,
+`--min-tetraploid-quarter-peak-fraction`, and
+`--min-tetraploid-quarter-peak-fraction-advantage`. Add
 `--privacy-safe-diagnostics` to log aggregate-only summaries for protected
 manual debugging without filenames, paths, sample identifiers, raw rows, or
-sample-level values. Add
-`--diagnostics` to write per-sample AF summary metrics,
-sampled raw informative-site AFs, and diagnostic PNGs under
-`out/triploidy/diagnostics/`. The raw-AF profile plot overlays the diploid
-heterozygous peak at 0.5 and triploid peaks at 1/3 and 2/3, which is useful
-for spotting mixed or contamination-like AF profiles. A separate diploid-only
-raw-AF profile plot shows up to 12 diploid-called samples for comparison. Pass
+sample-level values. The triploidy step emits aggregate stage logs and progress
+bars by default; use `--no-progress` to suppress progress bars in batch logs
+while retaining safe stage messages. Add `--diagnostics` to write per-sample AF
+summary metrics, sampled raw informative-site AFs, and diagnostic PNGs under
+`out/triploidy/diagnostics/`. The raw-AF profile plot overlays quarter,
+thirds, and half peaks, and the summary plot shows CN1 endpoint support, CN3
+thirds support, CN4 quarter support, and CN4 diploid-compatibility checks. A
+separate diploid-only raw-AF profile plot shows up to 12 diploid-called samples
+for comparison. Pass
 `--learn-sample-depth` to restore the legacy LogNormal sample-depth latent for
 cohorts where the fixed median anchor is not appropriate.
 
@@ -155,8 +176,8 @@ flowchart TD
         AF --> SN["site_data.npz"]
     end
 
-      subgraph "2. Triploidy"
-        TT["Autosomal AF\ntriploidy test"]
+      subgraph "2. Baseline CN"
+        TT["Autosomal AF\nbaseline CN classifier"]
         PD --> TT
         SN --> TT
         TT --> TM["sample_autosomal_baseline_cn.tsv"]
@@ -575,7 +596,8 @@ SVI training loop.
 ### 3. Calling
 
 The `call` subcommand converts per-bin CN posteriors into sample-level sex
-karyotype assignments and aneuploidy type predictions.
+karyotype assignments and separate baseline/autosomal/allosomal aneuploidy
+categories.
 
 #### 3.1 Per-chromosome CN assignment
 
@@ -591,14 +613,18 @@ $$\text{score}_{\text{chr}}
 = \frac{1}{|\{b \in \text{chr}\}|}
   \sum_{b \in \text{chr}} P(c_{bs} = \hat{c}_{\text{chr}} \mid d_{bs}, \hat\theta)$$
 
-A chromosome is flagged as **aneuploid** when $\hat{c}_{\text{chr}} \neq 2$
-(autosomes) or when the sex-chromosome pair does not match a normal XX/XY
-karyotype, provided $\text{score}_{\text{chr}}$ exceeds a configurable
-threshold (default 0.5).
+A chromosome is flagged as **aneuploid** when $\hat{c}_{\text{chr}}$ differs
+from the sample's autosomal baseline CN (autosomes) or when the
+sex-chromosome pair does not match a baseline-aware female-like or male-like
+composition, provided $\text{score}_{\text{chr}}$ exceeds a configurable
+threshold (default 0.5). For example, baseline CN = 3 treats `(chrX=3, chrY=0)`
+and `(chrX=2, chrY=1)` as expected triploid allosome compositions rather than
+diploid sex aneuploidies.
 
 #### 3.2 Sex karyotype classification
 
-Sex is assigned by deterministic lookup on the (chrX CN, chrY CN) pair:
+For diploid-baseline samples, sex is assigned by deterministic lookup on the
+(chrX CN, chrY CN) pair:
 
 ```mermaid
 flowchart TD
@@ -612,15 +638,33 @@ flowchart TD
     CHECK -->|else| O["OTHER"]
 ```
 
-  `TETRAPLOID_FEMALE`, `TETRAPLOID_MALE`, `TRIPLE_X_Y`, `TRIPLOID`, and
-  `TETRAPLOID` are still reserved label names for future polyploid-specific
-  post-processing, but they are not emitted by the current diploid-referenced
-  classifier.
+For non-diploid baseline samples, diploid sex-aneuploid labels are not applied
+directly. Baseline CN = 3 maps `(3,0)` to `TRIPLOID_FEMALE` and `(2,1)` to
+`TRIPLOID_MALE`; baseline CN = 4 maps `(4,0)` to `TETRAPLOID_FEMALE` and
+`(2,2)` to `TETRAPLOID_MALE`.
 
 #### 3.3 Aneuploidy type classification
 
-Aneuploidy types are assigned by a rule-based decision tree applied to the
-set of chromosomes flagged as aneuploid:
+Aneuploidy labels are intentionally split into three fields so baseline
+ploidy is not conflated with focal autosomal or allosomal aneuploidy:
+
+| Column | Meaning |
+|--------|---------|
+| `baseline_ploidy_type` | Autosomal baseline state: `DIPLOID`, `HAPLOID`, `TRIPLOID`, `TETRAPLOID`, or `BASELINE_CN*` |
+| `autosomal_aneuploidy_type` | Autosomal deviation from that baseline: `NONE`, a named trisomy/tetrasomy, `AUTOSOMAL_GAIN`, `AUTOSOMAL_LOSS`, or `MULTIPLE_AUTOSOMAL` |
+| `allosomal_aneuploidy_type` | chrX/chrY deviation from the baseline-aware expected pair: `NONE`, a diploid sex aneuploidy label, or `DISCORDANT_ALLOSOME_CN` |
+| `predicted_aneuploidy_type` | Backward-compatible composite summary derived from the three fields above |
+
+For example, a clean baseline-CN3 sample with `(chrX=2, chrY=1)` is reported as
+`baseline_ploidy_type=TRIPLOID`, `autosomal_aneuploidy_type=NONE`, and
+`allosomal_aneuploidy_type=NONE`. A baseline-CN3 sample with `(chrX=2,
+chrY=2)` is reported as `baseline_ploidy_type=TRIPLOID` and
+`allosomal_aneuploidy_type=DISCORDANT_ALLOSOME_CN`, with the composite
+`predicted_aneuploidy_type=TRIPLOID_WITH_ALLOSOME_ANEUPLOIDY`.
+
+For diploid-baseline samples, the composite label follows the traditional
+rule-based decision tree applied to the set of chromosomes flagged as
+aneuploid:
 
 1. **No aneuploid chromosomes** → `NORMAL`
 2. **Multiple autosomal or mixed auto+sex** → `MULTIPLE`

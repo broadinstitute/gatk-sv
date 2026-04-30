@@ -83,6 +83,7 @@ def test_load_site_data_round_trips_metadata(tmp_path) -> None:
         site_total=np.ones((2, 3, 1), dtype=np.int32) * 2,
         site_pop_af=np.full((2, 3), 0.25, dtype=np.float32),
         site_mask=np.ones((2, 3, 1), dtype=bool),
+        sample_ids=np.array(["S1"], dtype=object),
         bin_chr=np.array(["chr18", "chr21"], dtype=object),
         bin_start=np.array([0, 100], dtype=np.int64),
         bin_end=np.array([100, 200], dtype=np.int64),
@@ -95,11 +96,13 @@ def test_load_site_data_round_trips_metadata(tmp_path) -> None:
         "site_total",
         "site_pop_af",
         "site_mask",
+        "sample_ids",
         "bin_chr",
         "bin_start",
         "bin_end",
     }
     assert loaded["site_alt"].shape == (2, 3, 1)
+    np.testing.assert_array_equal(loaded["sample_ids"], np.array(["S1"], dtype=object))
 
 
 def test_depth_data_accepts_raw_integer_counts() -> None:

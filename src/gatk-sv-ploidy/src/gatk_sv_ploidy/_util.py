@@ -57,6 +57,33 @@ MAX_CNQ = 99
 """Maximum phred-scaled CN quality score reported by the ploidy model."""
 
 
+def expected_allosome_copy_number_pairs(
+    autosomal_baseline_cn: int,
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    """Return female-like and male-like chrX/chrY CN pairs for a baseline CN."""
+    baseline = int(autosomal_baseline_cn)
+    if baseline < 1:
+        raise ValueError("autosomal_baseline_cn must be at least 1.")
+
+    female_like = (baseline, 0)
+    male_y_cn = max(1, baseline // 2)
+    male_y_cn = min(male_y_cn, baseline)
+    male_like = (baseline - male_y_cn, male_y_cn)
+    return female_like, male_like
+
+
+def is_expected_allosome_copy_number_pair(
+    x_cn: int,
+    y_cn: int,
+    autosomal_baseline_cn: int,
+) -> bool:
+    """Return whether chrX/chrY CN matches a baseline-aware allosome pair."""
+    return (
+        int(x_cn),
+        int(y_cn),
+    ) in set(expected_allosome_copy_number_pairs(autosomal_baseline_cn))
+
+
 # ── dataframe helpers ───────────────────────────────────────────────────────
 
 def get_sample_columns(df: pd.DataFrame) -> List[str]:

@@ -51,6 +51,14 @@ workflow EvidenceQC {
 
     # Sparse SD files for ploidy estimation (required when run_ploidy is true)
     Array[File] sparse_sd_files = []
+    String? ploidy_plot_highlight_sample
+    String? ploidy_triploidy_args
+    String? ploidy_model_args
+    String? ploidy_ppd_args
+    String? ploidy_call_args
+    String? ploidy_plot_args
+    Boolean ploidy_enable_ppd = false
+    Boolean ploidy_use_callq20 = false
 
     Array[Float]? melt_insert_size
 
@@ -100,6 +108,14 @@ workflow EvidenceQC {
         merged_depth_file = MakeBincovMatrix.merged_bincov,
         batch = batch,
         sparse_sd_files = sparse_sd_files,
+        plot_highlight_sample = ploidy_plot_highlight_sample,
+        triploidy_args = ploidy_triploidy_args,
+        model_args = ploidy_model_args,
+        ppd_args = ploidy_ppd_args,
+        call_args = ploidy_call_args,
+        plot_args = ploidy_plot_args,
+        enable_ppd = ploidy_enable_ppd,
+        use_callq20 = ploidy_use_callq20,
         reference_dict = reference_dict,
         gatk_docker = gatk_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,

@@ -25,6 +25,14 @@ logger = logging.getLogger(__name__)
 # CN state palette (matches original R / Python colours)
 _CN_COLORS = ["#004D40", "#FFC107", "#1E88E5", "#D81B60", "#38006B", "#FF6D00"]
 _IGNORED_BIN_COLOR = "#FFB300"
+_NON_DIPLOID_BASELINE_COLOR = "#7B1FA2"
+_AF_REFERENCE_LINES = (
+    (0.25, "1/4"),
+    (1.0 / 3.0, "1/3"),
+    (0.5, "1/2"),
+    (2.0 / 3.0, "2/3"),
+    (0.75, "3/4"),
+)
 
 
 # ── per-sample plots ───────────────────────────────────────────────────────
@@ -89,6 +97,21 @@ def _draw_depth_reference_lines(ax: plt.Axes, y_max: float, normalized_scale: bo
     ax.grid(True, axis="y", alpha=0.3)
 
 
+def _draw_af_reference_lines(ax: plt.Axes) -> None:
+    """Draw canonical allele-fraction guide lines on an AF panel."""
+    grid_label = "AF grid (1/4, 1/3, 1/2, 2/3, 3/4)"
+    for value, _label in _AF_REFERENCE_LINES:
+        is_half = value == 0.5
+        ax.axhline(
+            value,
+            color="#424242" if is_half else "#757575",
+            linestyle=":",
+            alpha=0.35 if is_half else 0.25,
+            linewidth=1.0 if is_half else 0.8,
+            label=grid_label if value == 0.25 else "_nolegend_",
+        )
+
+
 def _draw_site_af_scatter(
     ax: plt.Axes,
     sample_data: pd.DataFrame,
@@ -100,9 +123,8 @@ def _draw_site_af_scatter(
     """Draw individual site AFs as a scatter on *ax*.
 
     Each valid site in each bin is plotted as a translucent dot at the bin's
-    x-coordinate (with small horizontal jitter).  This shows the raw per-site
-    data that the model uses, revealing the bimodal AF distribution
-    (homozygous-reference near 0 and heterozygous near 0.5).
+    x-coordinate (with small horizontal jitter).  The plotted value is the
+    raw observed non-major allele fraction, ``site_alt / site_total``.
 
     Bins that have site data but *no* sites meeting the *min_het_alt*
     threshold (likely runs of homozygosity) are marked with a small gray
@@ -256,6 +278,8 @@ def plot_sample_with_variance(
     all_sample_vars: np.ndarray,
     output_dir: str,
     aneuploid_chrs: Optional[List[Tuple[str, int, float]]] = None,
+    baseline_ploidy_type: str = "DIPLOID",
+    autosomal_baseline_cn: int = 2,
     site_data: Optional[Dict[str, np.ndarray]] = None,
     sample_idx_map: Optional[Dict[str, int]] = None,
     min_het_alt: int = 3,
@@ -264,9 +288,9 @@ def plot_sample_with_variance(
 
     When *site_data* is provided (the ``.npz`` from preprocessing), each
     individual SNP allele fraction is drawn as a translucent dot, giving a
-    faithful view of the per-site data the model actually uses.  Falls back
-    to a stem plot of per-bin mean het AF when only bin-level columns are
-    available.
+    faithful view of the per-site observations.  Raw site counts are required
+    for the AF panel; aggregate bin-level AF summaries such as ``mean_het_af``
+    are intentionally ignored and never used as a fallback.
 
     Args:
         sample_data: Bin-level rows for a single sample.
@@ -274,6 +298,8 @@ def plot_sample_with_variance(
         output_dir: Base output directory.
         aneuploid_chrs: Optional list of ``(chr, cn, prob)`` tuples for the
             aneuploid chromosomes to highlight.
+        baseline_ploidy_type: Sample-level autosomal baseline ploidy label.
+        autosomal_baseline_cn: Sample-level autosomal baseline copy number.
         site_data: Optional dict from ``site_data.npz`` with keys
             ``site_alt``, ``site_total``, ``site_mask``, ``bin_chr``,
             ``bin_start``, ``bin_end``, ``sample_ids``.
@@ -282,6 +308,14 @@ def plot_sample_with_variance(
     """
     name = sample_data["sample"].iloc[0]
     is_aneu = aneuploid_chrs is not None and len(aneuploid_chrs) > 0
+    baseline_ploidy_type = str(baseline_ploidy_type or "DIPLOID")
+    try:
+        autosomal_baseline_cn = int(autosomal_baseline_cn)
+    except (TypeError, ValueError):
+        autosomal_baseline_cn = 2
+    is_non_diploid_baseline = (
+        baseline_ploidy_type != "DIPLOID" or autosomal_baseline_cn != 2
+    )
 
     # Determine what AF data is available
     has_site_scatter = False
@@ -291,10 +325,17 @@ def plot_sample_with_variance(
         if _si is not None:
             has_site_scatter = True
 
-    has_af = has_site_scatter or (
+    has_aggregate_af = (
         {"mean_het_af", "n_het_sites"}.issubset(sample_data.columns) and
         sample_data["n_het_sites"].sum() > 0
     )
+    if has_aggregate_af and not has_site_scatter:
+        logger.debug(
+            "Skipping AF panel for %s: raw site_data counts are unavailable; "
+            "aggregate mean_het_af/n_het_sites columns are ignored.",
+            name,
+        )
+    has_af = has_site_scatter
     has_binq = (
         "binq_value" in sample_data.columns and
         np.isfinite(sample_data["binq_value"].to_numpy(dtype=float)).any()
@@ -349,7 +390,21 @@ def plot_sample_with_variance(
     ax_binq = next(axis_iter) if has_binq else None
     ax_hist = next(axis_iter)
 
-    fig.text(0.1 / 8, 0.98, name, fontsize=12, fontweight="bold", va="top", ha="left")
+    title_parts = [name]
+    if is_non_diploid_baseline:
+        title_parts.append(
+            f"baseline {baseline_ploidy_type} (CN={autosomal_baseline_cn})"
+        )
+    fig.text(
+        0.1 / 8,
+        0.98,
+        "  |  ".join(title_parts),
+        fontsize=12,
+        fontweight="bold",
+        va="top",
+        ha="left",
+        color=_NON_DIPLOID_BASELINE_COLOR if is_non_diploid_baseline else "black",
+    )
 
     # Panel 1 — depth + MAP CN
     _draw_sample_depth_panel(
@@ -374,29 +429,15 @@ def plot_sample_with_variance(
             panel_label="Retained after BINQ filter",
         )
 
-    # Panel 2 — AF (per-site scatter when available, else bin-mean stems)
+    # Panel 2 — raw observed per-site AF scatter
     if ax_af is not None:
         ax = ax_af
-        if has_site_scatter:
-            _draw_site_af_scatter(
-                ax, sample_data, x, site_data, _si,
-                min_het_alt=min_het_alt,
-            )
-        else:
-            # Fallback: bin-level mean het AF stems
-            af_vals = sample_data["mean_het_af"].values
-            n_sites_vals = sample_data["n_het_sites"].values
-            af_valid = (n_sites_vals > 0) & ~np.isnan(af_vals)
-            if af_valid.any():
-                markers, stems, base = ax.stem(
-                    x[af_valid], af_vals[af_valid],
-                )
-                plt.setp(stems, linewidth=0.8, alpha=0.2, color="#00897B")
-                plt.setp(markers, markersize=2, alpha=0.1, color="#00897B")
-                plt.setp(base, linewidth=0.5)
-        ax.axhline(0.5, color="red", linestyle="--", alpha=0.1,
-                   linewidth=1, label="Expected het AF (0.5)")
-        ax.set_ylabel("Allele Fraction")
+        _draw_site_af_scatter(
+            ax, sample_data, x, site_data, _si,
+            min_het_alt=min_het_alt,
+        )
+        _draw_af_reference_lines(ax)
+        ax.set_ylabel("Observed Non-major AF")
         ax.set_ylim([-0.05, 1.05])
         ax.set_xlim([x_min, x_max])
         ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.02), borderaxespad=0)
@@ -466,6 +507,20 @@ def plot_sample_with_variance(
     if ax_binq is not None:
         spatial_axes.append(ax_binq)
 
+    if is_non_diploid_baseline:
+        autosomal_mask = np.array([str(c) not in {"chrX", "chrY"} for c in chrs])
+        for cname in np.unique(chrs[autosomal_mask]):
+            idx = np.where(chrs == cname)[0]
+            if len(idx) > 0:
+                for a in spatial_axes:
+                    a.axvspan(
+                        x[idx[0]],
+                        x[idx[-1]],
+                        alpha=0.07,
+                        color=_NON_DIPLOID_BASELINE_COLOR,
+                        zorder=0,
+                    )
+
     if is_aneu:
         aneu_names = {c for c, _, _ in aneuploid_chrs}
         for cname in aneu_names:
@@ -489,6 +544,17 @@ def plot_sample_with_variance(
                 )
 
     depth_handles, depth_labels = ax_depth.get_legend_handles_labels()
+    if is_non_diploid_baseline:
+        depth_handles.append(
+            Line2D(
+                [0],
+                [0],
+                color=_NON_DIPLOID_BASELINE_COLOR,
+                linewidth=6,
+                alpha=0.35,
+            )
+        )
+        depth_labels.append(f"Autosomal baseline {baseline_ploidy_type}")
     if np.any(ignored_mask):
         depth_handles.append(
             Line2D([0], [0], color=_IGNORED_BIN_COLOR, linewidth=6, alpha=0.35)
@@ -499,7 +565,7 @@ def plot_sample_with_variance(
         depth_labels,
         loc="lower right",
         bbox_to_anchor=(1.0, 1.02),
-        ncol=3 if np.any(ignored_mask) else 2,
+        ncol=3 if (np.any(ignored_mask) or is_non_diploid_baseline) else 2,
         borderaxespad=0,
     )
 

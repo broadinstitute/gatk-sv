@@ -103,8 +103,13 @@ workflow GatherBatchEvidence {
 
     Boolean run_ploidy = false
     String? ploidy_plot_highlight_sample  # for single-sample mode
+    String? ploidy_triploidy_args
     String? ploidy_model_args
+    String? ploidy_ppd_args
+    String? ploidy_call_args
     String? ploidy_plot_args
+    Boolean ploidy_enable_ppd = false
+    Boolean ploidy_use_callq20 = false
 
     # Option to add first sample to the ped file (for single sample mode); run_ploidy must be true
     Boolean append_first_sample_to_ped = false
@@ -215,8 +220,13 @@ workflow GatherBatchEvidence {
         sparse_sd_files = all_sparse_SD_files,
         plot_highlight_sample = ploidy_plot_highlight_sample,
         reference_dict = ref_dict,
+        triploidy_args = ploidy_triploidy_args,
         model_args = ploidy_model_args,
+        ppd_args = ploidy_ppd_args,
+        call_args = ploidy_call_args,
         plot_args = ploidy_plot_args,
+        enable_ppd = ploidy_enable_ppd,
+        use_callq20 = ploidy_use_callq20,
         gatk_docker = gatk_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,
         runtime_attr_score = ploidy_score_runtime_attr,

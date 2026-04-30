@@ -10,6 +10,9 @@ from gatk_sv_ploidy.call import (
     _resolve_binq_field,
     _normalize_global_cn_artifact,
     _classify_aneuploidy,
+    _classify_allosomal_aneuploidy,
+    _classify_autosomal_aneuploidy,
+    _classify_baseline_ploidy,
     _classify_sex,
     apply_binq_filter_to_chromosome_stats,
     assign_sex_and_aneuploidy_types,
@@ -22,9 +25,17 @@ from gatk_sv_ploidy.call import (
 
 
 def test_classify_sex_and_aneuploidy_tables() -> None:
+    assert _classify_baseline_ploidy(2) == "DIPLOID"
+    assert _classify_baseline_ploidy(3) == "TRIPLOID"
+
     assert _classify_sex(1, 1) == "MALE"
     assert _classify_sex(2, 0) == "FEMALE"
     assert _classify_sex(3, 0) == "TRIPLE_X"
+    assert _classify_sex(2, 1) == "KLINEFELTER"
+    assert _classify_sex(2, 1, autosomal_baseline_cn=3) == "TRIPLOID_MALE"
+    assert _classify_sex(3, 0, autosomal_baseline_cn=3) == "TRIPLOID_FEMALE"
+    assert _classify_sex(2, 2, autosomal_baseline_cn=4) == "TETRAPLOID_MALE"
+    assert _classify_sex(3, 0, autosomal_baseline_cn=4) == "OTHER"
     assert _classify_sex(2, 2) == "OTHER"
     assert _classify_sex(8, 1) == "OTHER"
 
@@ -53,11 +64,35 @@ def test_classify_sex_and_aneuploidy_tables() -> None:
     ) == "MULTIPLE"
     assert _classify_aneuploidy(
         {},
-        {"chr13": 3, "chr18": 3, "chr21": 3, "chrX": 1, "chrY": 1},
-        1,
+        {"chr13": 3, "chr18": 3, "chr21": 3, "chrX": 2, "chrY": 1},
+        2,
         1,
         autosomal_baseline_cn=3,
     ) == "TRIPLOID"
+    assert _classify_aneuploidy(
+        {},
+        {"chr13": 3, "chr18": 3, "chr21": 3, "chrX": 2, "chrY": 2},
+        2,
+        2,
+        autosomal_baseline_cn=3,
+    ) == "TRIPLOID_WITH_ALLOSOME_ANEUPLOIDY"
+    assert _classify_aneuploidy(
+        {},
+        {"chr13": 1, "chr18": 1, "chr21": 1, "chrX": 1, "chrY": 0},
+        1,
+        0,
+        autosomal_baseline_cn=1,
+    ) == "HAPLOID"
+    assert _classify_autosomal_aneuploidy(
+        {"chr21": True},
+        {"chr21": 4},
+        autosomal_baseline_cn=3,
+    ) == "AUTOSOMAL_GAIN"
+    assert _classify_allosomal_aneuploidy(
+        2,
+        2,
+        autosomal_baseline_cn=3,
+    ) == "DISCORDANT_ALLOSOME_CN"
 
 
 def test_normalize_global_cn_artifact_is_no_op() -> None:
@@ -313,7 +348,7 @@ def test_assign_uses_autosomal_baseline_cn_for_triploid_samples() -> None:
                 ("chr13", 3),
                 ("chr18", 3),
                 ("chr21", 3),
-                ("chrX", 1),
+                ("chrX", 2),
                 ("chrY", 1),
             )
         ]
@@ -322,7 +357,72 @@ def test_assign_uses_autosomal_baseline_cn_for_triploid_samples() -> None:
     pred_df = assign_sex_and_aneuploidy_types(df).set_index("sample")
 
     assert pred_df.loc["triploid", "predicted_aneuploidy_type"] == "TRIPLOID"
+    assert pred_df.loc["triploid", "baseline_ploidy_type"] == "TRIPLOID"
+    assert pred_df.loc["triploid", "autosomal_aneuploidy_type"] == "NONE"
+    assert pred_df.loc["triploid", "allosomal_aneuploidy_type"] == "NONE"
+    assert pred_df.loc["triploid", "sex"] == "TRIPLOID_MALE"
     assert int(pred_df.loc["triploid", "autosomal_baseline_cn"]) == 3
+
+
+def test_assign_uses_baseline_cn_for_triploid_female_sex_label() -> None:
+    df = pd.DataFrame(
+        [
+            {
+                "sample": "triploid_female",
+                "chromosome": chrom,
+                "copy_number": copy_number,
+                "is_aneuploid": False,
+                "mean_cn_probability": 0.95,
+                "median_depth": 1.0,
+                "sample_depth_map": 150.0,
+                "autosomal_baseline_cn": 3,
+            }
+            for chrom, copy_number in (
+                ("chr13", 3),
+                ("chr18", 3),
+                ("chr21", 3),
+                ("chrX", 3),
+                ("chrY", 0),
+            )
+        ]
+    )
+
+    pred_df = assign_sex_and_aneuploidy_types(df).set_index("sample")
+
+    assert pred_df.loc["triploid_female", "predicted_aneuploidy_type"] == "TRIPLOID"
+    assert pred_df.loc["triploid_female", "sex"] == "TRIPLOID_FEMALE"
+
+
+def test_assign_separates_triploid_baseline_from_allosomal_aneuploidy() -> None:
+    df = pd.DataFrame(
+        [
+            {
+                "sample": "triploid_xxyy_like",
+                "chromosome": chrom,
+                "copy_number": copy_number,
+                "is_aneuploid": chrom in {"chrX", "chrY"},
+                "mean_cn_probability": 0.95,
+                "median_depth": 1.0,
+                "sample_depth_map": 150.0,
+                "autosomal_baseline_cn": 3,
+            }
+            for chrom, copy_number in (
+                ("chr13", 3),
+                ("chr18", 3),
+                ("chr21", 3),
+                ("chrX", 2),
+                ("chrY", 2),
+            )
+        ]
+    )
+
+    pred_df = assign_sex_and_aneuploidy_types(df).set_index("sample")
+
+    assert pred_df.loc["triploid_xxyy_like", "baseline_ploidy_type"] == "TRIPLOID"
+    assert pred_df.loc["triploid_xxyy_like", "autosomal_aneuploidy_type"] == "NONE"
+    assert pred_df.loc["triploid_xxyy_like", "allosomal_aneuploidy_type"] == "DISCORDANT_ALLOSOME_CN"
+    assert pred_df.loc["triploid_xxyy_like", "predicted_aneuploidy_type"] == "TRIPLOID_WITH_ALLOSOME_ANEUPLOIDY"
+    assert pred_df.loc["triploid_xxyy_like", "sex"] == "OTHER"
 
 
 def test_apply_binq_filter_to_chromosome_stats_rebuilds_autosome_calls() -> None:

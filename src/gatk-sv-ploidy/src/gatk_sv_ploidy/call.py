@@ -18,6 +18,7 @@ import pandas as pd
 
 from gatk_sv_ploidy._util import (
     compute_cnq_from_probabilities,
+    is_expected_allosome_copy_number_pair,
     summarize_contig_ploidy_from_bin_calls,
 )
 
@@ -27,11 +28,30 @@ _SEX_CHROMS = {"chrX", "chrY"}
 _CN_PROB_COLUMNS = [f"cn_prob_{cn}" for cn in range(6)]
 _PLOIDY_PROB_COLUMNS = [f"ploidy_prob_{cn}" for cn in range(6)]
 _BINQ_FIELD_OPTIONS = ["auto", "BINQ15", "BINQ20", "CALLQ15", "CALLQ20"]
-_RESERVED_POLYPLOID_ANEUPLOIDY_TYPES = ("TRIPLOID", "TETRAPLOID")
-_RESERVED_POLYPLOID_SEX_LABELS = {
-    (4, 0): "TETRAPLOID_FEMALE",
-    (2, 2): "TETRAPLOID_MALE",
-    (3, 1): "TRIPLE_X_Y",
+_RESERVED_POLYPLOID_ANEUPLOIDY_TYPES = ("HAPLOID", "TRIPLOID", "TETRAPLOID")
+_BASELINE_PLOIDY_TYPES = {
+    1: "HAPLOID",
+    2: "DIPLOID",
+    3: "TRIPLOID",
+    4: "TETRAPLOID",
+}
+_NO_ANEUPLOIDY = "NONE"
+_POLYPLOID_SEX_LABELS_BY_BASELINE = {
+    1: {
+        (1, 0): "HAPLOID_X",
+        (0, 1): "HAPLOID_Y",
+    },
+    3: {
+        (3, 0): "TRIPLOID_FEMALE",
+        (2, 1): "TRIPLOID_MALE",
+        (1, 2): "TRIPLOID_XYY",
+    },
+    4: {
+        (4, 0): "TETRAPLOID_FEMALE",
+        (2, 2): "TETRAPLOID_MALE",
+        (3, 1): "TETRAPLOID_XXXY",
+        (1, 3): "TETRAPLOID_XYYY",
+    },
 }
 
 
@@ -235,11 +255,14 @@ def _annotate_aneuploidy_flags(
 
         x_cn = int(cn_map.get("chrX", 2))
         y_cn = int(cn_map.get("chrY", 0))
-        is_xx = x_cn == 2 and y_cn == 0
-        is_xy = x_cn == 1 and y_cn == 1
+        is_expected_sex_pair = is_expected_allosome_copy_number_pair(
+            x_cn,
+            y_cn,
+            autosomal_baseline_cn,
+        )
         x_ok = ("chrX" not in prob_map) or (prob_map["chrX"] > prob_threshold)
         y_ok = ("chrY" not in prob_map) or (prob_map["chrY"] > prob_threshold)
-        if not (is_xx or is_xy) and x_ok and y_ok:
+        if not is_expected_sex_pair and x_ok and y_ok:
             sex_mask = sdf["chromosome"].isin(_SEX_CHROMS)
             out.loc[sdf.index[sex_mask], "is_aneuploid"] = True
 
@@ -576,10 +599,33 @@ def assign_sex_and_aneuploidy_types(
         y_depth = depth_map.get("chrY", 0.0)
 
         # ── sex assignment ──────────────────────────────────────────
-        sex = _classify_sex(x_cn, y_cn)
+        sex = _classify_sex(
+            x_cn,
+            y_cn,
+            autosomal_baseline_cn=autosomal_baseline_cn,
+        )
 
-        # ── aneuploidy type ─────────────────────────────────────────
-        pred_type = _classify_aneuploidy(
+        baseline_ploidy_type = _classify_baseline_ploidy(
+            autosomal_baseline_cn,
+        )
+        autosomal_aneuploidy_type = _classify_autosomal_aneuploidy(
+            aneu_map,
+            cn_map,
+            autosomal_baseline_cn=autosomal_baseline_cn,
+        )
+        allosomal_aneuploidy_type = _classify_allosomal_aneuploidy(
+            x_cn,
+            y_cn,
+            autosomal_baseline_cn=autosomal_baseline_cn,
+        )
+        pred_type = _compose_aneuploidy_type(
+            baseline_ploidy_type,
+            autosomal_aneuploidy_type,
+            allosomal_aneuploidy_type,
+        )
+
+        # Verify the legacy helper remains consistent with the split fields.
+        pred_type_legacy = _classify_aneuploidy(
             aneu_map,
             cn_map,
             x_cn,
@@ -587,6 +633,13 @@ def assign_sex_and_aneuploidy_types(
             autosomal_baseline_cn=autosomal_baseline_cn,
             sample_depth_ratio=sample_depth_ratio,
         )
+        if pred_type_legacy != pred_type:
+            logger.debug(
+                "Legacy aneuploidy type differed from split classifiers for %s: %s != %s",
+                sample_id,
+                pred_type_legacy,
+                pred_type,
+            )
 
         rows.append(
             {
@@ -603,6 +656,9 @@ def assign_sex_and_aneuploidy_types(
                 "sample_depth_reference": depth_reference,
                 "global_cn_scale_factor": cn_scale_factor,
                 "true_aneuploidy_type": true_type,
+                "baseline_ploidy_type": baseline_ploidy_type,
+                "autosomal_aneuploidy_type": autosomal_aneuploidy_type,
+                "allosomal_aneuploidy_type": allosomal_aneuploidy_type,
                 "predicted_aneuploidy_type": pred_type,
                 "score": _safe_min_probability(sdf["mean_cn_probability"]),
             }
@@ -611,8 +667,19 @@ def assign_sex_and_aneuploidy_types(
     return pd.DataFrame(rows)
 
 
-def _classify_sex(x_cn: int, y_cn: int) -> str:
+def _classify_sex(
+    x_cn: int,
+    y_cn: int,
+    autosomal_baseline_cn: int = 2,
+) -> str:
     """Map chrX/chrY copy numbers to a sex-karyotype label."""
+    if int(autosomal_baseline_cn) != 2:
+        labels = _POLYPLOID_SEX_LABELS_BY_BASELINE.get(
+            int(autosomal_baseline_cn),
+            {},
+        )
+        return labels.get((x_cn, y_cn), "OTHER")
+
     _SEX_TABLE = {
         (1, 1): "MALE",
         (2, 0): "FEMALE",
@@ -624,6 +691,111 @@ def _classify_sex(x_cn: int, y_cn: int) -> str:
     return _SEX_TABLE.get((x_cn, y_cn), "OTHER")
 
 
+def _classify_baseline_ploidy(autosomal_baseline_cn: int = 2) -> str:
+    """Map autosomal baseline copy number to a baseline ploidy label."""
+    baseline = int(autosomal_baseline_cn)
+    return _BASELINE_PLOIDY_TYPES.get(baseline, f"BASELINE_CN{baseline}")
+
+
+def _autosomal_aneuploid_chromosomes(aneu_map: dict) -> list[str]:
+    """Return autosomes marked as aneuploid in input order."""
+    return [
+        chrom for chrom, is_aneuploid in aneu_map.items()
+        if is_aneuploid and chrom not in _SEX_CHROMS
+    ]
+
+
+def _classify_autosomal_aneuploidy(
+    aneu_map: dict,
+    cn_map: dict,
+    autosomal_baseline_cn: int = 2,
+) -> str:
+    """Classify autosomal aneuploidy relative to the baseline CN."""
+    auto_aneu = _autosomal_aneuploid_chromosomes(aneu_map)
+    if not auto_aneu:
+        return _NO_ANEUPLOIDY
+    if len(auto_aneu) > 1:
+        return "MULTIPLE_AUTOSOMAL"
+
+    chrom = auto_aneu[0]
+    cn = int(cn_map[chrom])
+    baseline = int(autosomal_baseline_cn)
+    if baseline == 2:
+        _auto_type = {
+            ("chr13", 3): "TRISOMY_13",
+            ("chr18", 3): "TRISOMY_18",
+            ("chr21", 3): "TRISOMY_21",
+            ("chr13", 4): "TETRASOMY_13",
+            ("chr18", 4): "TETRASOMY_18",
+            ("chr21", 4): "TETRASOMY_21",
+        }
+        known_type = _auto_type.get((chrom, cn))
+        if known_type is not None:
+            return known_type
+
+    if cn > baseline:
+        return "AUTOSOMAL_GAIN"
+    if cn < baseline:
+        return "AUTOSOMAL_LOSS"
+    return _NO_ANEUPLOIDY
+
+
+def _classify_allosomal_aneuploidy(
+    x_cn: int,
+    y_cn: int,
+    autosomal_baseline_cn: int = 2,
+) -> str:
+    """Classify chrX/chrY aneuploidy relative to the baseline CN."""
+    if is_expected_allosome_copy_number_pair(
+        x_cn,
+        y_cn,
+        autosomal_baseline_cn,
+    ):
+        return _NO_ANEUPLOIDY
+
+    if int(autosomal_baseline_cn) == 2:
+        _sex_type = {
+            (2, 1): "KLINEFELTER",
+            (3, 0): "TRIPLE_X",
+            (1, 0): "TURNER",
+            (1, 2): "JACOBS",
+        }
+        return _sex_type.get((x_cn, y_cn), "ALLOSOME_ANEUPLOIDY")
+
+    return "DISCORDANT_ALLOSOME_CN"
+
+
+def _compose_aneuploidy_type(
+    baseline_ploidy_type: str,
+    autosomal_aneuploidy_type: str,
+    allosomal_aneuploidy_type: str,
+) -> str:
+    """Compose the backward-compatible summary aneuploidy label."""
+    has_auto = autosomal_aneuploidy_type != _NO_ANEUPLOIDY
+    has_allosome = allosomal_aneuploidy_type != _NO_ANEUPLOIDY
+
+    if baseline_ploidy_type == "DIPLOID":
+        if not has_auto and not has_allosome:
+            return "NORMAL"
+        if has_auto and has_allosome:
+            return "MULTIPLE"
+        if has_allosome:
+            return allosomal_aneuploidy_type
+        if autosomal_aneuploidy_type == "MULTIPLE_AUTOSOMAL":
+            return "MULTIPLE"
+        if autosomal_aneuploidy_type in {"AUTOSOMAL_GAIN", "AUTOSOMAL_LOSS"}:
+            return "OTHER"
+        return autosomal_aneuploidy_type
+
+    if not has_auto and not has_allosome:
+        return baseline_ploidy_type
+    if has_auto and has_allosome:
+        return f"{baseline_ploidy_type}_WITH_MULTIPLE_ANEUPLOIDY"
+    if has_allosome:
+        return f"{baseline_ploidy_type}_WITH_ALLOSOME_ANEUPLOIDY"
+    return f"{baseline_ploidy_type}_WITH_AUTOSOMAL_ANEUPLOIDY"
+
+
 def _classify_aneuploidy(
     aneu_map: dict,
     cn_map: dict,
@@ -633,56 +805,22 @@ def _classify_aneuploidy(
     sample_depth_ratio: float = float("nan"),
 ) -> str:
     """Determine predicted aneuploidy type from per-chromosome calls."""
-    sex_is_aneuploid = (x_cn, y_cn) not in {(2, 0), (1, 1)}
-    auto_aneu = [
-        chrom for chrom, is_aneuploid in aneu_map.items()
-        if is_aneuploid and chrom not in _SEX_CHROMS
-    ]
-    sex_aneu = ["chrX", "chrY"] if sex_is_aneuploid else []
-
-    aneuploid_chrs = auto_aneu + sex_aneu
-
-    polyploid_type = {
-        3: "TRIPLOID",
-        4: "TETRAPLOID",
-    }.get(int(autosomal_baseline_cn))
-    if polyploid_type is not None:
-        if not auto_aneu:
-            return polyploid_type
-        return "MULTIPLE"
-
-    if not aneuploid_chrs:
-        return "NORMAL"
-
-    # Multiple autosomal or mixed → MULTIPLE
-    if len(auto_aneu) > 1 or (auto_aneu and sex_aneu):
-        return "MULTIPLE"
-
-    # Sex-only aneuploidies
-    if sex_aneu and not auto_aneu:
-        _sex_type = {
-            (2, 1): "KLINEFELTER",
-            (3, 0): "TRIPLE_X",
-            (1, 0): "TURNER",
-            (1, 2): "JACOBS",
-        }
-        return _sex_type.get((x_cn, y_cn), "OTHER")
-
-    # Single autosomal aneuploidy
-    if len(auto_aneu) == 1:
-        chrom = auto_aneu[0]
-        cn = cn_map[chrom]
-        _auto_type = {
-            ("chr13", 3): "TRISOMY_13",
-            ("chr18", 3): "TRISOMY_18",
-            ("chr21", 3): "TRISOMY_21",
-            ("chr13", 4): "TETRASOMY_13",
-            ("chr18", 4): "TETRASOMY_18",
-            ("chr21", 4): "TETRASOMY_21",
-        }
-        return _auto_type.get((chrom, cn), "OTHER")
-
-    return "OTHER"
+    baseline_ploidy_type = _classify_baseline_ploidy(autosomal_baseline_cn)
+    autosomal_aneuploidy_type = _classify_autosomal_aneuploidy(
+        aneu_map,
+        cn_map,
+        autosomal_baseline_cn=autosomal_baseline_cn,
+    )
+    allosomal_aneuploidy_type = _classify_allosomal_aneuploidy(
+        x_cn,
+        y_cn,
+        autosomal_baseline_cn=autosomal_baseline_cn,
+    )
+    return _compose_aneuploidy_type(
+        baseline_ploidy_type,
+        autosomal_aneuploidy_type,
+        allosomal_aneuploidy_type,
+    )
 
 
 # ── output helpers ──────────────────────────────────────────────────────────

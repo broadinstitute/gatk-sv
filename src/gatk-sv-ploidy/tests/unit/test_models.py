@@ -1529,6 +1529,25 @@ def test_run_discrete_inference_negative_binomial_supports_triploid_baseline_cn(
     )
 
 
+def test_sex_cn_score_uses_sample_baseline_cn() -> None:
+    model = CNVModel(
+        sex_cn_weight=3.0,
+        epsilon_mean=0.0,
+        autosomal_baseline_cn=[2, 3],
+        dtype=torch.float64,
+    )
+
+    score = model._sex_cn_score_for_samples_numpy(2)
+
+    assert score[1, 1, 1, 0] == 0.0
+    assert score[1, 2, 1, 0] == 0.0
+    assert score[1, 1, 2, 1] == 0.0
+    assert score[1, 2, 1, 1] == 0.0
+    assert score[1, 1, 1, 1] < 0.0
+    assert score[0, 1, 3, 1] == 0.0
+    assert score[0, 2, 0, 1] == 0.0
+
+
 def test_baseline_cn_expansion_squeezes_legacy_singleton_sample_axis() -> None:
     model = CNVModel(
         sex_cn_weight=0.0,
@@ -1569,6 +1588,33 @@ def test_elbo_loss_supports_baseline_cn_with_dirichlet_singleton_cn_probs() -> N
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
         autosomal_baseline_cn=[2, 3],
+        dtype=torch.float64,
+        device="cpu",
+    )
+    model_kw = model._model_kwargs(data)
+
+    pyro.clear_param_store()
+    guide = model._build_guide(model._make_init_loc_fn(data))
+    loss = TraceEnum_ELBO().loss(model.model, guide, **model_kw)
+
+    assert np.isfinite(loss)
+
+
+def test_elbo_loss_supports_triploid_baseline_sex_cn_prior() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chrX", "chrY"],
+            "Start": [0, 0],
+            "End": [1000, 1000],
+            "S1": [2.0, 1.0],
+        },
+        index=["chrX:0-1000", "chrY:0-1000"],
+    )
+    data = DepthData(df, device="cpu", dtype=torch.float64)
+    model = CNVModel(
+        sex_cn_weight=3.0,
+        epsilon_mean=0.0,
+        autosomal_baseline_cn=[3],
         dtype=torch.float64,
         device="cpu",
     )

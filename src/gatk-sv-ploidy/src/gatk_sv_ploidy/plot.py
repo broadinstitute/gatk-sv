@@ -38,6 +38,12 @@ from gatk_sv_ploidy.models import _standardize_multiplicative_bin_factors_numpy
 
 logger = logging.getLogger(__name__)
 _BINQ_FIELD_OPTIONS = ["auto", "BINQ15", "BINQ20", "CALLQ15", "CALLQ20"]
+_BASELINE_PLOIDY_TYPES = {
+    1: "HAPLOID",
+    2: "DIPLOID",
+    3: "TRIPLOID",
+    4: "TETRAPLOID",
+}
 
 
 def _resolve_binq_field(
@@ -230,6 +236,57 @@ def _annotate_binq_values(
         binq_field,
     )
     return out
+
+
+def _baseline_ploidy_type_from_cn(autosomal_baseline_cn: int) -> str:
+    """Map an autosomal baseline CN to the plotting label."""
+    baseline_cn = int(autosomal_baseline_cn)
+    return _BASELINE_PLOIDY_TYPES.get(baseline_cn, f"BASELINE_CN{baseline_cn}")
+
+
+def _sample_baseline_ploidy_metadata(
+    chrom_df: pd.DataFrame,
+    sex_df: Optional[pd.DataFrame] = None,
+) -> dict[str, dict[str, object]]:
+    """Return sample-level baseline ploidy metadata for plotting."""
+    metadata: dict[str, dict[str, object]] = {}
+    if "sample" not in chrom_df.columns:
+        return metadata
+
+    for sample, sdf in chrom_df.groupby("sample", sort=False):
+        baseline_cn = 2
+        if "autosomal_baseline_cn" in sdf.columns:
+            values = pd.to_numeric(
+                sdf["autosomal_baseline_cn"],
+                errors="coerce",
+            ).dropna()
+            if not values.empty:
+                baseline_cn = int(values.iloc[0])
+        metadata[str(sample)] = {
+            "baseline_ploidy_type": _baseline_ploidy_type_from_cn(baseline_cn),
+            "autosomal_baseline_cn": baseline_cn,
+        }
+
+    if sex_df is not None and "sample" in sex_df.columns:
+        for _, row in sex_df.iterrows():
+            sample = str(row["sample"])
+            entry = metadata.setdefault(
+                sample,
+                {
+                    "baseline_ploidy_type": "DIPLOID",
+                    "autosomal_baseline_cn": 2,
+                },
+            )
+            if "autosomal_baseline_cn" in row.index and pd.notna(row["autosomal_baseline_cn"]):
+                baseline_cn = int(row["autosomal_baseline_cn"])
+                entry["autosomal_baseline_cn"] = baseline_cn
+                entry["baseline_ploidy_type"] = _baseline_ploidy_type_from_cn(
+                    baseline_cn,
+                )
+            if "baseline_ploidy_type" in row.index and pd.notna(row["baseline_ploidy_type"]):
+                entry["baseline_ploidy_type"] = str(row["baseline_ploidy_type"])
+
+    return metadata
 
 
 def _hist_by_hue(
@@ -1577,6 +1634,7 @@ def _run_aneuploidy_plots(
     site_data: Optional[dict] = None,
     min_het_alt: int = 3,
     map_estimates: Optional[dict] = None,
+    sex_df: Optional[pd.DataFrame] = None,
 ) -> None:
     """Generate aneuploidy-detection diagnostic plots."""
     plot_training_loss(loss_df, output_dir)
@@ -1593,31 +1651,57 @@ def _run_aneuploidy_plots(
 
     all_vars = bin_df.groupby("sample")["sample_var"].first().values
     sample_groups = {sample: sdf for sample, sdf in bin_df.groupby("sample", sort=False)}
-    aneuploid_samples = df[df["is_aneuploid"]]["sample"].unique()
-    normal_samples = df[~df["sample"].isin(aneuploid_samples)]["sample"].unique()
+    baseline_metadata = _sample_baseline_ploidy_metadata(df, sex_df)
+    aneuploid_samples = [str(sample) for sample in df[df["is_aneuploid"]]["sample"].unique()]
+    non_diploid_samples = [
+        sample for sample, metadata in baseline_metadata.items()
+        if (
+            str(metadata.get("baseline_ploidy_type", "DIPLOID")) != "DIPLOID" or
+            int(metadata.get("autosomal_baseline_cn", 2)) != 2
+        )
+    ]
+    highlighted_samples = list(dict.fromkeys(aneuploid_samples + non_diploid_samples))
+    normal_samples = [
+        str(sample) for sample in sample_groups
+        if str(sample) not in set(highlighted_samples)
+    ]
 
     if skip_per_sample:
         logger.info(
-            "Skipping per-sample plots (%d aneuploid, %d normal)",
-            len(aneuploid_samples),
+            "Skipping per-sample plots (%d highlighted, %d normal)",
+            len(highlighted_samples),
             len(normal_samples),
         )
         return
 
     logger.info(
-        "Generating per-sample plots (%d aneuploid, %d normal) …",
-        len(aneuploid_samples),
+        "Generating per-sample plots (%d highlighted, %d normal) …",
+        len(highlighted_samples),
         len(normal_samples),
     )
 
     # Build a sample-name → index mapping for site data lookups
     sample_idx_map: Optional[dict] = None
+    has_aggregate_af_columns = (
+        {"mean_het_af", "n_het_sites"}.issubset(bin_df.columns) and
+        bin_df["n_het_sites"].sum() > 0
+    )
     if site_data is not None and "sample_ids" in site_data:
         sample_idx_map = {
             str(s): i for i, s in enumerate(site_data["sample_ids"])
         }
+    elif site_data is not None:
+        logger.warning(
+            "site_data.npz lacks sample_ids; per-sample AF panels require "
+            "raw counts with unambiguous sample IDs and will be skipped."
+        )
+    elif has_aggregate_af_columns:
+        logger.warning(
+            "Per-sample AF panels require --site-data raw counts; aggregate "
+            "mean_het_af/n_het_sites columns are ignored."
+        )
 
-    for idx, sid in enumerate(aneuploid_samples, start=1):
+    for idx, sid in enumerate(highlighted_samples, start=1):
         sdata = sample_groups.get(sid)
         if sdata is None:
             continue
@@ -1626,15 +1710,21 @@ def _run_aneuploidy_plots(
             (r["chromosome"], r["copy_number"], r["mean_cn_probability"])
             for _, r in sdf[sdf["is_aneuploid"]].iterrows()
         ]
-        if idx == 1 or idx % 10 == 0 or idx == len(aneuploid_samples):
+        metadata = baseline_metadata.get(
+            str(sid),
+            {"baseline_ploidy_type": "DIPLOID", "autosomal_baseline_cn": 2},
+        )
+        if idx == 1 or idx % 10 == 0 or idx == len(highlighted_samples):
             logger.info(
-                "Per-sample plots: aneuploid %d/%d",
+                "Per-sample plots: highlighted %d/%d",
                 idx,
-                len(aneuploid_samples),
+                len(highlighted_samples),
             )
         plot_sample_with_variance(
             sdata, all_vars, output_dir,
             aneuploid_chrs=aneu_chrs,
+            baseline_ploidy_type=str(metadata.get("baseline_ploidy_type", "DIPLOID")),
+            autosomal_baseline_cn=int(metadata.get("autosomal_baseline_cn", 2)),
             site_data=site_data,
             sample_idx_map=sample_idx_map,
             min_het_alt=min_het_alt,
@@ -1644,6 +1734,10 @@ def _run_aneuploidy_plots(
         sdata = sample_groups.get(sid)
         if sdata is None:
             continue
+        metadata = baseline_metadata.get(
+            str(sid),
+            {"baseline_ploidy_type": "DIPLOID", "autosomal_baseline_cn": 2},
+        )
         if idx == 1 or idx % 10 == 0 or idx == len(normal_samples):
             logger.info(
                 "Per-sample plots: normal %d/%d",
@@ -1652,6 +1746,8 @@ def _run_aneuploidy_plots(
             )
         plot_sample_with_variance(
             sdata, all_vars, output_dir,
+            baseline_ploidy_type=str(metadata.get("baseline_ploidy_type", "DIPLOID")),
+            autosomal_baseline_cn=int(metadata.get("autosomal_baseline_cn", 2)),
             site_data=site_data,
             sample_idx_map=sample_idx_map,
             min_het_alt=min_het_alt,
@@ -1679,13 +1775,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("-s", "--sex-assignments", default=None,
                    help="aneuploidy_type_predictions.tsv (from 'call')")
     p.add_argument("--site-data", default=None,
-                   help="site_data.npz (from 'preprocess') for per-site AF scatter")
+                   help="site_data.npz (from 'preprocess'); required for raw per-site AF panels")
     p.add_argument(
         "--site-af-estimates",
         default=None,
         help="site_af_estimates.tsv.gz (from 'infer') for site-level AF diagnostics",
     )
-    p.add_argument("--min-het-alt", type=int, default=3,
+    p.add_argument("--min-het-alt", type=int, default=0,
                    help="Minimum alt-allele read count to show a site in the AF scatter")
     p.add_argument("--highlight-sample", default="",
                    help="Sample ID to highlight in plots")
@@ -1789,7 +1885,8 @@ def main() -> None:
                               args.skip_per_sample_plots,
                               site_data=site_data,
                               min_het_alt=args.min_het_alt,
-                              map_estimates=map_estimates)
+                              map_estimates=map_estimates,
+                              sex_df=sex_df)
     elif args.bin_stats or args.training_loss:
         logger.warning("Both --bin-stats and --training-loss required for "
                        "aneuploidy detection plots — skipping")

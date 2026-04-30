@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 from gatk_sv_ploidy._plot_detail import (
+    _draw_af_reference_lines,
     _contiguous_bar_geometry,
     _depth_axis_label_and_limit,
     _draw_sample_depth_panel,
@@ -28,6 +29,7 @@ from gatk_sv_ploidy.plot import (
     _apply_plot_depth_bin_columns,
     _apply_plot_depth_columns,
     _apply_plot_depth_sex_columns,
+    _sample_baseline_ploidy_metadata,
     _run_aneuploidy_plots,
     _run_ploidy_plots,
     parse_args,
@@ -220,6 +222,51 @@ def test_plot_detail_helpers_and_outputs(tmp_path, tiny_site_data) -> None:
     assert (tmp_path / "sex_assignments.png").exists()
 
 
+def test_af_reference_lines_are_dotted() -> None:
+    fig, ax = plt.subplots()
+    try:
+        _draw_af_reference_lines(ax)
+
+        y_values = sorted(float(line.get_ydata()[0]) for line in ax.lines)
+        np.testing.assert_allclose(
+            y_values,
+            [0.25, 1.0 / 3.0, 0.5, 2.0 / 3.0, 0.75],
+        )
+        assert {line.get_linestyle() for line in ax.lines} == {":"}
+        labels = [
+            line.get_label()
+            for line in ax.lines
+            if not line.get_label().startswith("_")
+        ]
+        assert labels == ["AF grid (1/4, 1/3, 1/2, 2/3, 3/4)"]
+    finally:
+        plt.close(fig)
+
+
+def test_plot_sample_ignores_aggregate_af_without_site_data(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    captured: dict[str, int] = {}
+    original_subplots = plt.subplots
+
+    def capture_subplots(nrows, *args, **kwargs):
+        captured["nrows"] = nrows
+        return original_subplots(nrows, *args, **kwargs)
+
+    monkeypatch.setattr(plt, "subplots", capture_subplots)
+
+    bin_df = _small_bin_df()
+    plot_sample_with_variance(
+        bin_df[bin_df["sample"] == "S1"],
+        np.array([0.09, 0.16]),
+        str(tmp_path),
+    )
+
+    assert captured["nrows"] == 4
+    assert any((tmp_path / "sample_plots").iterdir())
+
+
 def test_draw_sample_depth_panel_omits_ignored_bins() -> None:
     fig, ax = plt.subplots()
     x = np.array([0.0, 0.5, 1.0], dtype=float)
@@ -273,6 +320,29 @@ def test_plot_helpers_prefer_plot_normalized_depth_columns() -> None:
     assert plot_bin_df["raw_observed_depth"].iloc[0] == 2.0
     assert plot_sex_df.loc[plot_sex_df["sample"] == "S1", "chrX_depth"].iloc[0] == 11.0
     assert plot_sex_df.loc[plot_sex_df["sample"] == "S2", "chrY_depth"].iloc[0] == 10.0
+
+
+def test_plot_baseline_ploidy_metadata_prefers_call_columns() -> None:
+    chrom_df = _small_chrom_df()
+    chrom_df["autosomal_baseline_cn"] = [2, 2, 2, 3, 3, 3]
+    sex_df = pd.DataFrame(
+        {
+            "sample": ["S2"],
+            "baseline_ploidy_type": ["TRIPLOID"],
+            "autosomal_baseline_cn": [3],
+        }
+    )
+
+    metadata = _sample_baseline_ploidy_metadata(chrom_df, sex_df)
+
+    assert metadata["S1"] == {
+        "baseline_ploidy_type": "DIPLOID",
+        "autosomal_baseline_cn": 2,
+    }
+    assert metadata["S2"] == {
+        "baseline_ploidy_type": "TRIPLOID",
+        "autosomal_baseline_cn": 3,
+    }
 
 
 def test_plot_annotate_ignored_bins_and_overlay_branches(tmp_path) -> None:
@@ -383,6 +453,8 @@ def test_plot_detail_private_branches(tmp_path) -> None:
         np.array([0.09, 0.16]),
         str(tmp_path),
         aneuploid_chrs=[("chr21", 3, 0.95)],
+        baseline_ploidy_type="TRIPLOID",
+        autosomal_baseline_cn=3,
     )
     assert any((tmp_path / "sample_plots").iterdir())
 
@@ -428,6 +500,90 @@ def test_plot_module_orchestrators_and_skip_branches(tmp_path) -> None:
     assert (tmp_path / "diagnostics" / "sample_depth_diagnostics.png").exists()
     assert (tmp_path / "diagnostics" / "chromosome_plq_heatmap.png").exists()
     assert (tmp_path / "diagnostics" / "binq_genome_profile.png").exists()
+
+
+def test_run_aneuploidy_plots_passes_non_diploid_baseline_metadata(tmp_path, monkeypatch) -> None:
+    chrom_df = pd.concat(
+        [
+            _small_chrom_df(),
+            pd.DataFrame(
+                [
+                    {"sample": "S3", "chromosome": "chr21", "copy_number": 3, "mean_cn_probability": 0.95, "plq": 60, "is_aneuploid": False, "mean_depth": 3.0, "median_depth": 3.0, "std_depth": 0.1, "mad_depth": 0.1, "sex": "TRIPLOID_MALE", "autosomal_baseline_cn": 3},
+                    {"sample": "S3", "chromosome": "chrX", "copy_number": 2, "mean_cn_probability": 0.95, "plq": 55, "is_aneuploid": False, "mean_depth": 2.0, "median_depth": 2.0, "std_depth": 0.1, "mad_depth": 0.1, "sex": "TRIPLOID_MALE", "autosomal_baseline_cn": 3},
+                    {"sample": "S3", "chromosome": "chrY", "copy_number": 1, "mean_cn_probability": 0.95, "plq": 50, "is_aneuploid": False, "mean_depth": 1.0, "median_depth": 1.0, "std_depth": 0.1, "mad_depth": 0.1, "sex": "TRIPLOID_MALE", "autosomal_baseline_cn": 3},
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    chrom_df["autosomal_baseline_cn"] = chrom_df["autosomal_baseline_cn"].fillna(2)
+    bin_df = pd.concat(
+        [
+            _small_bin_df(),
+            pd.DataFrame(
+                [
+                    {
+                        "chr": chrom,
+                        "start": start,
+                        "end": start + 100,
+                        "sample": "S3",
+                        "observed_depth": float(cn),
+                        "cn_map": cn,
+                        "cnq": 20,
+                        "binq_value": 40.0,
+                        "sample_var": 0.2,
+                    }
+                    for chrom, cn in [("chr21", 3), ("chrX", 2), ("chrY", 1)]
+                    for start in [0, 100]
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    sex_df = pd.DataFrame(
+        {
+            "sample": ["S3"],
+            "baseline_ploidy_type": ["TRIPLOID"],
+            "autosomal_baseline_cn": [3],
+        }
+    )
+    captured: dict[str, dict[str, object]] = {}
+
+    for fn_name in (
+        "plot_training_loss",
+        "plot_training_loss_with_gradient",
+        "plot_bin_variance_bias",
+        "plot_cn_posterior_entropy",
+        "plot_chromosome_cn_heatmap",
+        "plot_chromosome_plq_heatmap",
+        "plot_binq_genome_profile",
+        "plot_parameter_diagnostics",
+        "plot_sample_depth_diagnostics",
+    ):
+        monkeypatch.setattr(
+            f"gatk_sv_ploidy.plot.{fn_name}",
+            lambda *args, **kwargs: None,
+        )
+
+    def fake_plot_sample_with_variance(sample_data, *args, **kwargs):
+        captured[str(sample_data["sample"].iloc[0])] = kwargs
+
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot.plot_sample_with_variance",
+        fake_plot_sample_with_variance,
+    )
+
+    _run_aneuploidy_plots(
+        chrom_df,
+        bin_df,
+        _small_loss_df(),
+        str(tmp_path),
+        sex_df=sex_df,
+    )
+
+    assert captured["S3"]["baseline_ploidy_type"] == "TRIPLOID"
+    assert captured["S3"]["autosomal_baseline_cn"] == 3
+    assert captured["S3"]["aneuploid_chrs"] == []
 
 
 def test_plot_sample_depth_diagnostics_outputs(tmp_path) -> None:

@@ -20,7 +20,7 @@ SUBCOMMANDS = {
 
 DESCRIPTIONS = {
     "preprocess": "Normalise and filter depth data for aneuploidy inference",
-    "triploidy": "Classify triploidy from pooled autosomal allele counts",
+    "triploidy": "Classify autosomal baseline CN from pooled allele counts",
     "infer": "Train Bayesian model and run discrete CN inference",
     "ppd": "Posterior predictive check: compare model predictions to data",
     "call": "Assign sex karyotype and aneuploidy type per sample",

@@ -10,12 +10,13 @@ workflow Ploidy {
     Array[File] sparse_sd_files
     File? truth_json
     String? plot_highlight_sample
-    String? preprocess_args
+    String? triploidy_args
     String? model_args
+    String? ppd_args
+    String? call_args
     String? plot_args
-    File? poor_regions
-    Float min_poor_region_coverage = 0.5
     Boolean enable_ppd = false
+    Boolean use_callq20 = false
     String gatk_docker
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_score
@@ -39,12 +40,13 @@ workflow Ploidy {
       sparse_sd_files = sparse_sd_files,
       truth_json = truth_json,
       plot_highlight_sample = plot_highlight_sample,
-      preprocess_args = preprocess_args,
+      triploidy_args = triploidy_args,
       model_args = model_args,
+      ppd_args = ppd_args,
+      call_args = call_args,
       plot_args = plot_args,
-      poor_regions = poor_regions,
-      min_poor_region_coverage = min_poor_region_coverage,
       enable_ppd = enable_ppd,
+      use_callq20 = use_callq20,
       sv_pipeline_qc_docker = sv_pipeline_qc_docker,
       runtime_attr_override = runtime_attr_score
   }
@@ -125,12 +127,13 @@ task PloidyScore {
     Array[File] sparse_sd_files
     File? truth_json
     String? plot_highlight_sample
-    String? preprocess_args
+    String? triploidy_args
     String? model_args
+    String? ppd_args
+    String? call_args
     String? plot_args
-    File? poor_regions
-    Float min_poor_region_coverage
     Boolean enable_ppd
+    Boolean use_callq20
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -171,12 +174,13 @@ task PloidyScore {
       --work-dir ${OUTDIR} \
       ${SD_ARGS} \
       ~{if defined(truth_json) then "--truth-json " + truth_json else ""} \
-      ~{if defined(preprocess_args) then "--preprocess-args " + preprocess_args else ""} \
+      ~{if defined(triploidy_args) then "--triploidy-args " + triploidy_args else ""} \
       ~{if defined(model_args) then "--model-args " + model_args else ""} \
+      ~{if defined(ppd_args) then "--ppd-args " + ppd_args else ""} \
+      ~{if defined(call_args) then "--call-args " + call_args else ""} \
       ~{if defined(plot_args) then "--plot-args " + plot_args else ""} \
-      ~{if defined(poor_regions) then "--poor-regions " + poor_regions else ""} \
-      --min-poor-region-coverage ~{min_poor_region_coverage} \
       ~{if enable_ppd then "--ppd" else ""} \
+      ~{if use_callq20 then "--use-callq20" else ""} \
       ~{if defined(plot_highlight_sample) then "--highlight-sample " + plot_highlight_sample else ""}
 
     # Package all outputs
