@@ -181,8 +181,9 @@ task StripInfoFields {
 
         python3 ~{strip_script} \
             --input ~{vcf} \
-            --output ~{prefix}.stripped.vcf.gz
+            --output ~{prefix}.stripped.vcf
 
+        bgzip -c ~{prefix}.stripped.vcf > ~{prefix}.stripped.vcf.gz
         tabix -p vcf ~{prefix}.stripped.vcf.gz
     >>>
 
