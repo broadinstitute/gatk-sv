@@ -928,7 +928,9 @@ option_list <- list(
               metavar="integer"),
   make_option(c("-G", "--maxgq"), type="integer", default=99,
               help="Max GQ value, ie. 99 for GQ on a scale of [0,99]",
-              metavar="integer")
+              metavar="integer"),
+  make_option(c("--skip_supporting"), action="store_true", default=FALSE,
+              help="skip generation of supporting plots [default %default]")
 )
 
 ###Get command-line arguments & options
@@ -938,6 +940,7 @@ args <- parse_args(OptionParser(usage="%prog svstats.bed samples.list perSampleD
 opts <- args$options
 downsamp <- opts$downsample
 maxgq <- opts$maxgq
+skip.supporting <- opts$skip_supporting
 
 ###Checks for appropriate positional arguments
 if(length(args$args) != 4){
@@ -1032,11 +1035,13 @@ if(!dir.exists(OUTDIR)){
 if(!dir.exists(paste(OUTDIR,"/main_plots/",sep=""))){
   dir.create(paste(OUTDIR,"/main_plots/",sep=""))
 }
-if(!dir.exists(paste(OUTDIR,"/supporting_plots/",sep=""))){
-  dir.create(paste(OUTDIR,"/supporting_plots/",sep=""))
-}
-if(!dir.exists(paste(OUTDIR,"/supporting_plots/per_sample_plots/",sep=""))){
-  dir.create(paste(OUTDIR,"/supporting_plots/per_sample_plots/",sep=""))
+if(!skip.supporting){
+  if(!dir.exists(paste(OUTDIR,"/supporting_plots/",sep=""))){
+    dir.create(paste(OUTDIR,"/supporting_plots/",sep=""))
+  }
+  if(!dir.exists(paste(OUTDIR,"/supporting_plots/per_sample_plots/",sep=""))){
+    dir.create(paste(OUTDIR,"/supporting_plots/per_sample_plots/",sep=""))
+  }
 }
 
 
@@ -1118,6 +1123,7 @@ names(plot.data) <- c("variants","alleles")
 ###Master plotting block
 #Summary panels
 masterWrapperSummaryPlot()
+if(!skip.supporting){
 #Variant sites per sample
 wrapperVariantCountViolins(count="variants")
 wrapperVariantCountBarplots(count="variants")
@@ -1126,4 +1132,5 @@ wrapperVariantCountHeats(count="variants")
 wrapperVariantCountViolins(count="alleles")
 wrapperVariantCountBarplots(count="alleles")
 wrapperVariantCountHeats(count="alleles")
+}
 

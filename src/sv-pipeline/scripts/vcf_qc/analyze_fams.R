@@ -1390,7 +1390,9 @@ option_list <- list(
               metavar="logical"),
   make_option(c("-G", "--maxgq"), type="integer", default=99,
               help="Max GQ value, ie. 99 for GQ on a scale of [0,99]",
-              metavar="integer")
+              metavar="integer"),
+  make_option(c("--skip_supporting"), action="store_true", default=FALSE,
+              help="skip generation of supporting plots [default %default]")
 )
 
 ###Get command-line arguments & options
@@ -1412,6 +1414,7 @@ OUTDIR <- args$args[4]
 svtypes.file <- opts$svtypes
 multiallelics <- opts$multiallelics
 maxgq <- opts$maxgq
+skip.supporting <- opts$skip_supporting
 
 ###Prepares I/O files
 #Read & clean SV stats data
@@ -1517,11 +1520,13 @@ if(!dir.exists(OUTDIR)){
 if(!dir.exists(paste(OUTDIR, "/main_plots/", sep=""))){
   dir.create(paste(OUTDIR, "/main_plots/", sep=""))
 }
-if(!dir.exists(paste(OUTDIR, "/supporting_plots/", sep=""))){
-  dir.create(paste(OUTDIR, "/supporting_plots/", sep=""))
-}
-if(!dir.exists(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/", sep=""))){
-  dir.create(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/", sep=""))
+if(!skip.supporting){
+  if(!dir.exists(paste(OUTDIR, "/supporting_plots/", sep=""))){
+    dir.create(paste(OUTDIR, "/supporting_plots/", sep=""))
+  }
+  if(!dir.exists(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/", sep=""))){
+    dir.create(paste(OUTDIR, "/supporting_plots/sv_inheritance_plots/", sep=""))
+  }
 }
 
 ###Performs trio analyses, if any trios exist
@@ -1540,6 +1545,7 @@ if(nrow(trios)>0){
  
   #Master wrapper
   masterInhWrapper(fam.dat.list=trio.dat, fam.type="trio", gq=gq, max.GQ=maxgq)
+  if(!skip.supporting){
   #Standard inheritance panels
   sapply(c("variants", "alleles"), function(count){
     wrapperInheritancePlots(fam.dat.list=trio.dat,
@@ -1561,5 +1567,6 @@ if(nrow(trios)>0){
                            fam.type="trio",
                            count=count)
   })
+  } # end if(!skip.supporting)
 }
 

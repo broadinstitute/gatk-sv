@@ -19,8 +19,6 @@ workflow CollectQcVcfWide {
         String sv_pipeline_docker
 
         RuntimeAttr? runtime_override_preprocess_vcf
-        RuntimeAttr? runtime_override_collect_sharded_vcf_stats
-        RuntimeAttr? runtime_override_svtk_vcf_2_bed
         RuntimeAttr? runtime_override_scatter_vcf
         RuntimeAttr? runtime_override_merge_subvcf_stat_shards
         RuntimeAttr? runtime_override_merge_svtk_vcf_2_bed
@@ -50,36 +48,20 @@ workflow CollectQcVcfWide {
             }
         }
 
-        call PreprocessVcf {
+        call PreprocessCollectAndConvert {
             input:
                 vcf = select_first([AnnotateVariantAttributes.annotated_vcf, vcf_shards[i]]),
-                prefix = "~{output_prefix}.preprocess.shard_~{i}",
+                prefix = "~{output_prefix}.shard_~{i}",
                 ref_fa = ref_fa,
                 ref_fai = ref_fai,
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_override_preprocess_vcf
         }
-
-        call CollectShardedVcfStats {
-            input:
-                vcf = PreprocessVcf.outvcf,
-                prefix = "~{output_prefix}.collect_stats.shard_~{i}",
-                sv_pipeline_docker = sv_pipeline_docker,
-                runtime_attr_override = runtime_override_collect_sharded_vcf_stats
-        }
-
-        call SvtkVcf2bed {
-            input:
-                vcf = PreprocessVcf.outvcf,
-                prefix = "~{output_prefix}.shard_~{i}",
-                sv_pipeline_docker = sv_pipeline_docker,
-                runtime_attr_override = runtime_override_svtk_vcf_2_bed
-        }
     }
 
     call MiniTasks.ConcatBeds as MergeSubvcfStatShards {
         input:
-            shard_bed_files = CollectShardedVcfStats.vcf_stats,
+            shard_bed_files = PreprocessCollectAndConvert.vcf_stats,
             prefix = "~{output_prefix}.VCF_sites.stats",
             sv_base_mini_docker = sv_base_mini_docker,
             runtime_attr_override = runtime_override_merge_subvcf_stat_shards
@@ -87,7 +69,7 @@ workflow CollectQcVcfWide {
 
     call MiniTasks.ConcatBeds as MergeSvtkVcf2bed {
         input:
-            shard_bed_files = SvtkVcf2bed.vcf2bed_subworkflow_out,
+            shard_bed_files = PreprocessCollectAndConvert.vcf2bed_out,
             prefix = "~{output_prefix}.vcf2bed_subworkflow",
             index_output = false,
             sv_base_mini_docker = sv_base_mini_docker,
@@ -97,12 +79,12 @@ workflow CollectQcVcfWide {
     output {
         File vcf_stats = MergeSubvcfStatShards.merged_bed_file
         File vcf_stats_idx = MergeSubvcfStatShards.merged_bed_idx
-        File samples_list = CollectShardedVcfStats.samples_list[0]
+        File samples_list = PreprocessCollectAndConvert.samples_list[0]
         File vcf2bed_out = MergeSvtkVcf2bed.merged_bed_file
     }
 }
 
-task PreprocessVcf {
+task PreprocessCollectAndConvert {
     input {
         File vcf
         String prefix
@@ -112,9 +94,12 @@ task PreprocessVcf {
         RuntimeAttr? runtime_attr_override
     }
 
+    Float input_size = size(vcf, "GiB")
+
     command <<<
         set -euo pipefail
 
+        # Step 1: Preprocess VCF (normalize, split multiallelics, convert to symbolic)
         bcftools norm \
             -m-any \
             --fasta-ref ~{ref_fa} \
@@ -168,8 +153,6 @@ for rec in vcf_in:
     allele_type = rec.info["allele_type"].upper()
 
     if allele_type == "TRV":
-        # bcftools norm preserves IDs when splitting multiallelics
-        # group by (chrom, id) since left-alignment can shift POS but not ID
         current_key = (rec.chrom, rec.id)
         if current_key != prev_trv_key:
             flush_trv_buffer()
@@ -179,7 +162,6 @@ for rec in vcf_in:
             trv_counter += 1
         rec.id = f"{rec.id}_{trv_counter}"
 
-        # Classify TR vs VNTR by min motif length
         motifs = rec.info.get("MOTIFS", None)
         if motifs:
             motif_list = list(motifs) if isinstance(motifs, (list, tuple)) else [str(motifs)]
@@ -188,7 +170,6 @@ for rec in vcf_in:
             min_motif_len = 0
         svtype = "TR" if min_motif_len <= 6 else "VNTR"
 
-        # Allele class and length from bcftools-normalized REF/ALT
         ref_seq = rec.ref
         alt_seq = rec.alts[0] if rec.alts else ""
         if len(alt_seq) > len(ref_seq):
@@ -218,7 +199,6 @@ for rec in vcf_in:
         trv_buffer.append(rec.copy())
         continue
 
-    # Non-TRV processing
     flush_trv_buffer()
     prev_trv_key = None
     allele_length = abs(rec.info["allele_length"]) if "allele_length" in rec.info else len(rec.ref)
@@ -246,7 +226,6 @@ for rec in vcf_in:
     
     rec.alts = (f"<{allele_type}>",)
 
-    # Strip phase data
     for s_name in rec.samples:
         try:
             rec.samples[s_name].phased = False
@@ -274,122 +253,46 @@ EOF
         rm -f ~{prefix}.unsorted.vcf.gz
 
         tabix ~{prefix}.vcf.gz
-    >>>
 
-    output {
-        File outvcf = "~{prefix}.vcf.gz"
-        File outvcf_index = "~{prefix}.vcf.gz.tbi"
-    }
-
-    RuntimeAttr runtime_default = object {
-        cpu_cores: 1,
-        mem_gb: 12,
-        disk_gb: 4 * ceil(size(vcf, "GiB")) + 10,
-        boot_disk_gb: 10,
-        preemptible_tries: 2,
-        max_retries: 0
-    }
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-    runtime {
-        memory: 12 + " GiB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-        docker: sv_pipeline_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    }
-}
-
-task CollectShardedVcfStats {
-    input {
-        File vcf
-        String prefix
-        String sv_pipeline_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    Float input_size = size(vcf, "GiB")
-
-    command <<<
-        set -euo pipefail
-    
+        # Step 2: Collect VCF-wide stats
         /opt/sv-pipeline/scripts/vcf_qc/collectQC.vcf_wide.sh \
-            ~{vcf} \
+            ~{prefix}.vcf.gz \
             /opt/sv-pipeline/scripts/vcf_qc/SV_colors.txt \
             collectQC_vcfwide_output/
         
         cp collectQC_vcfwide_output/data/VCF_sites.stats.bed.gz ~{prefix}.VCF_sites.stats.bed.gz
         cp collectQC_vcfwide_output/data/VCF_sites.stats.bed.gz.tbi ~{prefix}.VCF_sites.stats.bed.gz.tbi
         cp collectQC_vcfwide_output/analysis_samples.list ~{prefix}.analysis_samples.list
-        
-        tar -czvf \
-            ~{prefix}.collectQC_vcfwide_output.tar.gz \
-            collectQC_vcfwide_output
+
+        # Step 3: VCF to BED conversion
+        svtk vcf2bed --info ALL ~{prefix}.vcf.gz stdout \
+            | bgzip -c \
+            > ~{prefix}.vcf2bed.bed.gz
+
+        # Clean up intermediate files
+        rm -f ~{prefix}.vcf.gz ~{prefix}.vcf.gz.tbi
+        rm -rf collectQC_vcfwide_output/
     >>>
 
     output {
         File vcf_stats = "~{prefix}.VCF_sites.stats.bed.gz"
         File vcf_stats_idx = "~{prefix}.VCF_sites.stats.bed.gz.tbi"
         File samples_list = "~{prefix}.analysis_samples.list"
-        File vcfwide_tarball = "~{prefix}.collectQC_vcfwide_output.tar.gz"
+        File vcf2bed_out = "~{prefix}.vcf2bed.bed.gz"
     }
 
     RuntimeAttr runtime_default = object {
-        mem_gb: 1.5 + 2.0 * input_size,
-        disk_gb: ceil(10.0 + 2.0 * input_size),
         cpu_cores: 1,
-        preemptible_tries: 3,
-        max_retries: 0,
-        boot_disk_gb: 10
+        mem_gb: 12,
+        disk_gb: ceil(6.0 * input_size) + 20,
+        boot_disk_gb: 10,
+        preemptible_tries: 2,
+        max_retries: 0
     }
     RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
     runtime {
-        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-        docker: sv_pipeline_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    }
-}
-
-task SvtkVcf2bed {
-    input {
-        File vcf
-        String prefix
-        String sv_pipeline_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    String output_file = "~{prefix}.vcf2bed_subworkflow.bed.gz"
-    Float input_size = size(vcf, "GiB")
-
-    command <<<
-        set -euo pipefail
-        
-        svtk vcf2bed --info ALL ~{vcf} stdout \
-            | bgzip -c \
-            > "~{output_file}"
-    >>>
-
-    output {
-        File vcf2bed_subworkflow_out = output_file
-    }
-
-    RuntimeAttr runtime_default = object {
-        mem_gb: 4,
-        disk_gb: ceil(10.0 + input_size * 2.0),
-        cpu_cores: 1,
-        preemptible_tries: 3,
-        max_retries: 0,
-        boot_disk_gb: 10
-    }
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-    runtime {
-        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
         cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
         preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
         maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])

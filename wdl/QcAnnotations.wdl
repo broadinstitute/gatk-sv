@@ -5,7 +5,6 @@ import "CollectQcPerSample.wdl" as persample
 import "CollectSiteLevelBenchmarking.wdl" as sitebench
 import "CollectPerSampleBenchmarking.wdl" as samplebench
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "Utils.wdl" as Utils
 
 workflow QcAnnotations {
     input {
@@ -45,8 +44,6 @@ workflow QcAnnotations {
         RuntimeAttr? runtime_override_merge_vcfwide_stat_shards
         RuntimeAttr? runtime_override_merge_vcf_2_bed
         RuntimeAttr? runtime_override_preprocess_vcf
-        RuntimeAttr? runtime_override_collect_sharded_vcf_stats
-        RuntimeAttr? runtime_override_svtk_vcf_2_bed
         RuntimeAttr? runtime_override_scatter_vcf
         RuntimeAttr? runtime_override_merge_subvcf_stat_shards
         RuntimeAttr? runtime_override_site_level_benchmark
@@ -87,22 +84,24 @@ workflow QcAnnotations {
     File use_vcf = select_first([SubsetVcf.filtered_vcf, merged_vcf])
     File use_vcf_idx = select_first([SubsetVcf.filtered_vcf_idx, merged_vcf_idx])
 
-    scatter (contig in contigs) {
+    # When inputs are per-chromosome VCFs matching contigs, pass them directly
+    # to avoid downloading the full merged VCF 24 times in ScatterVcf
+    Boolean per_chrom_input = (length(vcfs) == length(contigs)) && !defined(subset_vcf_string)
+
+    scatter (i in range(length(contigs))) {
         call vcfwideqc.CollectQcVcfWide {
             input:
-                vcf = use_vcf,
-                vcf_idx = use_vcf_idx,
-                contig = contig,
+                vcf = if per_chrom_input then vcfs[i] else use_vcf,
+                vcf_idx = if per_chrom_input then vcfs_idx[i] else use_vcf_idx,
+                contig = contigs[i],
                 variants_per_shard = variants_per_shard,
                 create_variant_attributes = create_variant_attributes,
-                prefix = "~{prefix}.~{contig}",
+                prefix = "~{prefix}.~{contigs[i]}",
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = gatk_sv_lr_docker,
                 ref_fa = ref_fa,
                 ref_fai = ref_fai,
                 runtime_override_preprocess_vcf = runtime_override_preprocess_vcf,
-                runtime_override_collect_sharded_vcf_stats = runtime_override_collect_sharded_vcf_stats,
-                runtime_override_svtk_vcf_2_bed = runtime_override_svtk_vcf_2_bed,
                 runtime_override_scatter_vcf = runtime_override_scatter_vcf,
                 runtime_override_merge_subvcf_stat_shards = runtime_override_merge_subvcf_stat_shards,
                 runtime_override_merge_svtk_vcf_2_bed = runtime_override_merge_vcf_2_bed
@@ -286,10 +285,13 @@ task PlotQcVcfWide {
         set -euo pipefail
         
         /opt/sv-pipeline/scripts/vcf_qc/plot_sv_vcf_distribs.R \
+            --skip_supporting \
             -N $( cat ~{samples_list} | sort | uniq | wc -l ) \
             -S /opt/sv-pipeline/scripts/vcf_qc/SV_colors.txt \
             ~{vcf_stats} \
             plotQC_vcfwide_output/
+
+        rm -rf plotQC_vcfwide_output/supporting_plots/
 
         tar -czvf \
             ~{prefix}.plotQC_vcfwide_output.tar.gz \
@@ -443,6 +445,7 @@ task PlotQcPerSample {
         done
 
         /opt/sv-pipeline/scripts/vcf_qc/plot_sv_perSample_distribs.R \
+            --skip_supporting \
             -S /opt/sv-pipeline/scripts/vcf_qc/SV_colors.txt \
             ~{vcf_stats} \
             ~{samples_list} \
@@ -450,6 +453,8 @@ task PlotQcPerSample {
             ~{prefix}_perSample_plots/ \
             --maxgq ~{max_gq} \
             ~{"--downsample " + downsample_qc_per_sample}
+
+        rm -rf ~{prefix}_perSample_plots/supporting_plots/
 
         tar -czvf \
             ~{prefix}.plotQC_perSample.tar.gz \
@@ -528,6 +533,7 @@ task PlotQcPerFamily {
 
             echo -e "STARTING FAMILY-BASED ANALYSIS"
             /opt/sv-pipeline/scripts/vcf_qc/analyze_fams.R \
+                --skip_supporting \
                 -S /opt/sv-pipeline/scripts/vcf_qc/SV_colors.txt \
                 ~{vcf_stats} \
                 cleaned.subset.fam \
@@ -537,6 +543,8 @@ task PlotQcPerFamily {
         else
             mkdir ~{prefix}_perFamily_plots/
         fi
+
+        rm -rf ~{prefix}_perFamily_plots/supporting_plots/
 
         echo -e "COMPRESSING RESULTS AS A TARBALL"
         tar -czvf \
@@ -681,65 +689,37 @@ task SanitizeOutputs {
         mkdir ~{prefix}_SV_VCF_QC_output/
         mkdir ~{prefix}_SV_VCF_QC_output/data/
         mkdir ~{prefix}_SV_VCF_QC_output/plots/
-        mkdir ~{prefix}_SV_VCF_QC_output/plots/main_plots/
-        mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/
-        mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/vcf_summary_plots/
-
-        for tarball_fname in ~{sep=" " plot_qc_site_level_external_benchmarking_tarballs}; do
-            dname="$( basename -s '.tar.gz' $tarball_fname )_site_level_benchmarking_plots/"
-            mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/$dname
-        done
-
-        if ~{defined(plot_qc_per_sample_tarball)}; then
-            mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/per_sample_plots/
-        fi
-
-        if ~{defined(plot_qc_per_family_tarball)}; then
-            mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/sv_inheritance_plots/
-        fi
-
-        for tarball_fname in ~{sep=" " plot_qc_per_sample_external_benchmarking_tarballs}; do
-            dname="$( basename -s '.tar.gz' $tarball_fname )_per_sample_benchmarking_plots/"
-            mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/$dname
-        done
 
         cp ~{vcf_stats} ~{prefix}_SV_VCF_QC_output/data/~{prefix}.VCF_sites.stats.bed.gz
         cp ~{vcf_stats_idx} ~{prefix}_SV_VCF_QC_output/data/~{prefix}.VCF_sites.stats.bed.gz.tbi
         tar -xzvf ~{plot_qc_vcfwide_tarball}
-        cp plotQC_vcfwide_output/main_plots/* ~{prefix}_SV_VCF_QC_output/plots/main_plots/
-        cp plotQC_vcfwide_output/supporting_plots/vcf_summary_plots/* ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/vcf_summary_plots/
+        cp plotQC_vcfwide_output/main_plots/* ~{prefix}_SV_VCF_QC_output/plots/
 
         if ~{defined(plot_qc_site_level_external_benchmarking_tarballs)}; then
             for tarball_fname in ~{sep=" " plot_qc_site_level_external_benchmarking_tarballs}; do
                 bname="$( basename -s '.tar.gz' $tarball_fname \
                         | sed -e 's/^~{prefix}\.//g' -e 's/\.wPlots$//g' )"
-                dname="$( basename -s '.tar.gz' $tarball_fname )_site_level_benchmarking_plots/"
                 tar -xzvf $tarball_fname
                 cp $bname/data/* ~{prefix}_SV_VCF_QC_output/data/ || true
-                cp $bname/plots/*.ALL/main_plots/*.callset_benchmarking.png ~{prefix}_SV_VCF_QC_output/plots/main_plots/ || true
-                cp -r $bname/plots/* ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/$dname || true
+                cp $bname/plots/*.ALL/main_plots/*.callset_benchmarking.png ~{prefix}_SV_VCF_QC_output/plots/ || true
             done
         fi
 
         if ~{defined(plot_qc_per_sample_tarball)}; then
             tar -xzvf ~{plot_qc_per_sample_tarball}
-            cp ~{prefix}_perSample_plots/main_plots/* ~{prefix}_SV_VCF_QC_output/plots/main_plots/
-            cp ~{prefix}_perSample_plots/supporting_plots/per_sample_plots/* ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/per_sample_plots/
+            cp ~{prefix}_perSample_plots/main_plots/* ~{prefix}_SV_VCF_QC_output/plots/
         fi
 
         if ~{defined(plot_qc_per_family_tarball)}; then
             tar -xzvf ~{plot_qc_per_family_tarball}
-            cp ~{prefix}_perFamily_plots/main_plots/* ~{prefix}_SV_VCF_QC_output/plots/main_plots/ || true
-            cp ~{prefix}_perFamily_plots/supporting_plots/sv_inheritance_plots/* ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/sv_inheritance_plots/ || true
+            cp ~{prefix}_perFamily_plots/main_plots/* ~{prefix}_SV_VCF_QC_output/plots/ || true
         fi
 
         if ~{defined(plot_qc_per_sample_external_benchmarking_tarballs)}; then
             for tarball_fname in ~{sep=" " plot_qc_per_sample_external_benchmarking_tarballs}; do
-                bname="$( basename -s '.tar.gz' $tarball_fname )" 
-                dname="$bname""_per_sample_benchmarking_plots/"
+                bname="$( basename -s '.tar.gz' $tarball_fname )"
                 tar -xzvf $tarball_fname
-                cp $bname/main_plots/* ~{prefix}_SV_VCF_QC_output/plots/main_plots/ || true
-                cp $bname/supporting_plots/* ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/$dname || true
+                cp $bname/main_plots/* ~{prefix}_SV_VCF_QC_output/plots/ || true
             done
         fi
 

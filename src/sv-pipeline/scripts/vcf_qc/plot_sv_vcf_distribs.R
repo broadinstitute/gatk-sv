@@ -225,6 +225,42 @@ plotDotsSVperChrom <- function(dat,svtypes,title=NULL,ylab="Fraction"){
 
 #Wrapper to plot all barplots of SV counts
 wrapperPlotAllCountBars <- function(){
+  # Pre-compute data needed for main plot
+  AF.df <- data.frame("label"=c("AC=1","AF<1%","1-10%",
+                                "10-50%",">50%"),
+                      "max"=c(1.1/(2*nsamp),rare.max.freq,uncommon.max.freq,
+                              common.max.freq,major.max.freq))
+  size.df <- data.frame("label"=c("<50bp","50-\n100bp","100bp-\n500bp",
+                                  "500bp-\n5kb","5-50kb",">50kb"),
+                        "max"=c(tiny.max.size,small.max.size,medium.max.size,
+                                medlarge.max.size,large.max.size,huge.max.size))
+  AF.mat <- as.data.frame(sapply(0:nrow(AF.df),function(i){
+    min.AF <- max(c(0,AF.df[max(c(0,i-1)),2]))
+    max.AF <- min(c(AF.df[i,2],1))
+    plotset <- dat[which(dat$AF>min.AF & dat$AF<=max.AF),]
+    sapply(svtypes$svtype,function(svtype){
+      length(which(plotset$svtype==svtype))
+    })
+  }))
+  colnames(AF.mat) <- c("ALL",AF.df[,1])
+  size.mat <- as.data.frame(sapply(0:nrow(size.df),function(i){
+    min.size <- max(c(0,size.df[max(c(0,i-1)),2]))
+    max.size <- min(c(size.df[i,2],300000000))
+    plotset <- dat[which(dat$length>=min.size & dat$length<=max.size),]
+    sapply(svtypes$svtype,function(svtype){
+      length(which(plotset$svtype==svtype))
+    })
+  }))
+  colnames(size.mat) <- c("ALL",size.df[,1])
+  if("REGION" %in% colnames(dat)){
+    regions <- orderRegions(unique(dat$REGION[!is.na(dat$REGION)]))
+    region.mat <- as.data.frame(sapply(c("ALL",regions), function(reg){
+      plotset <- if(reg=="ALL") dat else dat[which(dat$REGION==reg),]
+      sapply(svtypes$svtype, function(svtype) length(which(plotset$svtype==svtype)))
+    }))
+    colnames(region.mat) <- c("ALL",regions)
+  }
+  if(!skip.supporting){
   #All SV
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/count.all.pdf",sep=""),
       height=4,width=2+(nrow(svtypes)/3))
@@ -415,6 +451,7 @@ wrapperPlotAllCountBars <- function(){
     }))
     colnames(region.mat) <- c("ALL",regions)
   }
+  } # end if(!skip.supporting)
   pdf(paste(OUTDIR,"/main_plots/counts_overall_distribution.pdf",sep=""),
       height=7,width=11)
   # Compute TR_ENVELOPED overlay data for leftmost count bar (use count-specific data)
@@ -760,7 +797,7 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
 #Wrapper to plot all size distributions
 wrapperPlotAllSizeDistribs <- function(){
   dat <- dat.norm.merged; svtypes <- svtypes.norm.merged
-  
+  if(!skip.supporting){
   #All SV
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/size_distribution.all.pdf",sep=""),
       height=4,width=6)
@@ -823,6 +860,7 @@ wrapperPlotAllSizeDistribs <- function(){
                         legend.labs=c("Singleton","<1%","1-10%","10-50%",">50%"),
                         title="Size Distributions by AF")
   dev.off()
+  } # end if(!skip.supporting)
   
   #Merged
   pdf(paste(OUTDIR,"/main_plots/size_distribution.pdf",sep=""),
@@ -1123,6 +1161,7 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
 #Wrapper to plot all AF distributions
 wrapperPlotAllFreqDistribs <- function(){
   dat <- dat.norm.merged; svtypes <- svtypes.norm.merged
+  if(!skip.supporting){
   #All SV
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.all.pdf",sep=""),
       height=4,width=4)
@@ -1189,6 +1228,7 @@ wrapperPlotAllFreqDistribs <- function(){
                                       "500bp-\n5kb","5-50kb",">50kb"),
                         title="AF Distributions by Size")
   dev.off()
+  } # end if(!skip.supporting)
   
   #Merged
   pdf(paste(OUTDIR,"/main_plots/af_distribution.pdf",sep=""),
@@ -1842,6 +1882,7 @@ plotAlleleCarrierCorrelation <- function(dat,autosomal=T,biallelic=T,
 
 #Wrapper to plot all HW distributions
 wrapperPlotAllHWDistribs <- function(){
+  if(!skip.supporting){
   # Supporting individual plots by size
   supp.dir <- paste(OUTDIR,"/supporting_plots/vcf_summary_plots/",sep="")
   for(item in list(
@@ -1860,6 +1901,7 @@ wrapperPlotAllHWDistribs <- function(){
   png(paste(supp.dir,"carrier_freq_vs_allele_freq.png",sep=""), res=300, height=1200, width=1200)
   plotAlleleCarrierCorrelation(dat=dat)
   dev.off()
+  } # end if(!skip.supporting)
 
   cell.px <- 1200
 
@@ -1954,7 +1996,9 @@ option_list <- list(
               metavar="integer"),
   make_option(c("-S", "--svtypes"), type="character", default=NULL,
               help="tab-delimited file specifying SV types and HEX colors [default %default]",
-              metavar="character")
+              metavar="character"),
+  make_option(c("--skip_supporting"), action="store_true", default=FALSE,
+              help="skip generation of supporting plots [default %default]")
 )
 
 ###Get command-line arguments & options
@@ -1973,6 +2017,7 @@ INFILE <- args$args[1]
 OUTDIR <- args$args[2]
 nsamp <- opts$nsamp
 svtypes.file <- opts$svtypes
+skip.supporting <- opts$skip_supporting
 
 ###Prepares I/O files
 #Read & clean data
@@ -1985,11 +2030,13 @@ if(!dir.exists(OUTDIR)){
 if(!dir.exists(paste(OUTDIR,"/main_plots/",sep=""))){
   dir.create(paste(OUTDIR,"/main_plots/",sep=""))
 }
-if(!dir.exists(paste(OUTDIR,"/supporting_plots/",sep=""))){
-  dir.create(paste(OUTDIR,"/supporting_plots/",sep=""))
-}
-if(!dir.exists(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/",sep=""))){
-  dir.create(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/",sep=""))
+if(!skip.supporting){
+  if(!dir.exists(paste(OUTDIR,"/supporting_plots/",sep=""))){
+    dir.create(paste(OUTDIR,"/supporting_plots/",sep=""))
+  }
+  if(!dir.exists(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/",sep=""))){
+    dir.create(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/",sep=""))
+  }
 }
 #Sets sv types & colors
 if(!is.null(svtypes.file)){
