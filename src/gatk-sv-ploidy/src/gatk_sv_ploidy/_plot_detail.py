@@ -282,7 +282,6 @@ def _draw_sample_depth_panel(
     x_min: float,
     x_max: float,
     retained_mask: Optional[np.ndarray] = None,
-    panel_label: str = "",
 ) -> None:
     """Draw the depth/CN panel, optionally omitting filtered bins."""
     mask = np.ones(len(x), dtype=bool) if retained_mask is None else np.asarray(
@@ -324,17 +323,6 @@ def _draw_sample_depth_panel(
     ax.grid(True, axis="y", alpha=0.25, linestyle="-", linewidth=0.35)
     ax.set_ylim([-0.5, 5.5])
     ax.set_xlim([x_min, x_max])
-    if panel_label:
-        ax.text(
-            0.01,
-            0.96,
-            panel_label,
-            transform=ax.transAxes,
-            va="top",
-            ha="left",
-            fontsize=PANEL_LABEL_SIZE_PT,
-            bbox=dict(boxstyle="round", facecolor="white", alpha=0.75),
-        )
 
 
 def plot_sample_with_variance(

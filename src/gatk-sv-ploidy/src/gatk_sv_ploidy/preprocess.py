@@ -1146,8 +1146,8 @@ def parse_args() -> argparse.Namespace:
         help="When a contig has more than this many bins, collapse contiguous bins into larger bins while retaining at least this many bins per contig",
     )
     p.add_argument(
-        "--output-space", choices=list(DEPTH_SPACES), default="raw",
-        help="Write filtered normalized depth or filtered raw counts. Bin-quality filters always run on normalized depth.",
+        "--output-space", choices=["raw"], default="raw",
+        help="Write filtered raw counts. Bin-quality filters still run on normalized depth internally.",
     )
     p.add_argument(
         "--depth-ratio-clamp", type=float, default=6.0,

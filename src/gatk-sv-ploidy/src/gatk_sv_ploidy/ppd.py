@@ -62,15 +62,12 @@ from gatk_sv_ploidy.data import DepthData, load_site_data
 from gatk_sv_ploidy.infer import load_inference_artifacts
 from gatk_sv_ploidy.models import (
     CNVModel,
-    DEFAULT_ALLOSOME_VAR,
     DEFAULT_BACKGROUND_BIN_SCALE,
     DEFAULT_BACKGROUND_SAMPLE_SCALE,
     DEFAULT_MULTIPLICATIVE_FACTORS,
-    _compose_allosome_overdispersion_numpy,
+    NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
     _compose_effective_bin_bias_numpy,
     _effective_negative_binomial_overdispersion_numpy,
-    _matched_residual_scale,
-    _normalize_obs_likelihood_name,
     _precompute_af_table,
     _raw_expected_depth_units,
 )
@@ -128,8 +125,8 @@ def _phred_scale_error_probability(
 
 
 def _clamp_threshold_for_depth_space(depth_space: str) -> float | None:
-    """Use clamping only for normalized-depth posterior predictive checks."""
-    return 5.0 if depth_space == "normalized" else None
+    """Raw-count posterior predictive checks do not clamp counts on load."""
+    return None
 
 
 def _resolve_input_depth_space(
@@ -163,8 +160,6 @@ def _extract_saved_posterior_draws(
 def _build_model_from_artifacts(
     map_estimates: Dict[str, np.ndarray],
     device: str,
-    obs_likelihood: str,
-    obs_df: float,
 ) -> CNVModel:
     """Reconstruct a model instance for analytical inference in PPD."""
     sex_prior = tuple(
@@ -172,7 +167,6 @@ def _build_model_from_artifacts(
             map_estimates.get("model_sex_prior", np.asarray([0.5, 0.5]))
         ).astype(np.float32).tolist()
     )
-    dtype = torch.float64 if obs_likelihood == "negative_binomial" else torch.float32
     return CNVModel(
         n_states=int(np.asarray(map_estimates.get("model_n_states", 6)).item()),
         autosome_prior_mode=str(
@@ -206,9 +200,6 @@ def _build_model_from_artifacts(
             np.asarray(map_estimates.get("model_var_sample", 0.001)).item()
         ),
         var_bin=float(np.asarray(map_estimates.get("model_var_bin", 0.0)).item()),
-        var_allosome=float(
-            np.asarray(map_estimates.get("model_var_allosome", DEFAULT_ALLOSOME_VAR)).item()
-        ),
         raw_variance_power=float(
             np.asarray(map_estimates.get("model_raw_variance_power", 2.0)).item()
         ),
@@ -244,15 +235,12 @@ def _build_model_from_artifacts(
             ).item()
         ),
         device=device,
-        dtype=dtype,
+        dtype=torch.float64,
         guide_type=str(np.asarray(map_estimates.get("model_guide_type", "delta")).item()),
         af_concentration=float(
             np.asarray(map_estimates.get("model_af_concentration", 50.0)).item()
         ),
         af_weight=float(np.asarray(map_estimates.get("model_af_weight", 0.0)).item()),
-        af_evidence_mode=str(
-            np.asarray(map_estimates.get("model_af_evidence_mode", "absolute")).item()
-        ),
         learn_af_temperature=bool(
             np.asarray(map_estimates.get("model_learn_af_temperature", False)).item()
         ),
@@ -277,8 +265,7 @@ def _build_model_from_artifacts(
         sex_cn_weight=float(
             np.asarray(map_estimates.get("model_sex_cn_weight", 3.0)).item()
         ),
-        obs_likelihood=obs_likelihood,
-        obs_df=obs_df,
+        obs_df=float(np.asarray(map_estimates.get("obs_df", 3.5)).item()),
         sample_depth_max=float(
             np.asarray(map_estimates.get("sample_depth_max", 10000.0)).item()
         ),
@@ -302,8 +289,6 @@ def _sample_ppd_observation(
     rng: np.random.RandomState,
     discrete_posterior: Dict[str, np.ndarray],
     continuous_maps: Dict[str, np.ndarray],
-    obs_likelihood: str,
-    obs_df: float,
 ) -> np.ndarray:
     """Sample one posterior predictive observation matrix."""
     cn_probs = discrete_posterior["cn_posterior"]
@@ -320,14 +305,6 @@ def _sample_ppd_observation(
         bin_var = np.atleast_1d(np.asarray(continuous_maps["bin_var"]).squeeze())
     else:
         bin_var = np.zeros(n_bins, dtype=np.float64)
-    chr_type_np = None
-    if hasattr(data, "chr_type") and data.chr_type is not None:
-        chr_type_np = data.chr_type.detach().cpu().numpy()
-    chrom_type_var = _compose_allosome_overdispersion_numpy(
-        chr_type_np,
-        continuous_maps.get("allosome_var"),
-        n_bins,
-    )
     additive_background = compose_additive_background_matrix(
         continuous_maps.get("bin_epsilon"),
         n_bins,
@@ -342,53 +319,36 @@ def _sample_ppd_observation(
     u = rng.uniform(size=(flat_probs.shape[0], 1))
     cn_sample = (u < cum).argmax(axis=1).reshape(n_bins, n_samples)
 
-    expected = cn_sample.astype(np.float32) * bin_bias
-    expected = expected + additive_background
-
-    if obs_likelihood == "negative_binomial":
-        sample_depth = np.atleast_1d(
-            np.asarray(continuous_maps["sample_depth"]).squeeze()
-        )
-        overdispersion = bin_var[:, np.newaxis] + sample_var[np.newaxis, :]
-        overdispersion = overdispersion + chrom_type_var
-        mean = data.bin_length_kb.detach().cpu().numpy()[:, np.newaxis]
-        mean = mean * sample_depth[np.newaxis, :]
-        mean = mean * np.maximum(
-            _raw_expected_depth_units(
-                cn_sample.astype(np.float32),
-                bin_bias,
-                additive_background,
-            ),
-            0.0,
-        )
-        raw_variance_power = float(
-            np.asarray(
-                continuous_maps.get("model_raw_variance_power", 2.0)
-            ).item()
-        )
-        effective_overdispersion = _effective_negative_binomial_overdispersion_numpy(
-            overdispersion,
-            mean,
-            raw_variance_power,
-        )
-        concentration = 1.0 / np.maximum(effective_overdispersion, 1e-8)
-        latent_rate = rng.gamma(
-            shape=concentration,
-            scale=np.where(mean > 0.0, mean / concentration, 0.0),
-        )
-        draw = rng.poisson(latent_rate)
-    else:
-        variance = bin_var[:, np.newaxis] + sample_var[np.newaxis, :]
-        variance = variance + chrom_type_var
-        variance = variance * np.maximum(expected, 1e-3)
-        scale = _matched_residual_scale(variance, obs_likelihood, obs_df)
-
-        if obs_likelihood == "normal":
-            draw = rng.normal(expected, scale)
-        elif obs_likelihood == "laplace":
-            draw = rng.laplace(expected, scale)
-        else:
-            draw = expected + rng.standard_t(obs_df, size=expected.shape) * scale
+    sample_depth = np.atleast_1d(
+        np.asarray(continuous_maps["sample_depth"]).squeeze()
+    )
+    overdispersion = bin_var[:, np.newaxis] + sample_var[np.newaxis, :]
+    mean = data.bin_length_kb.detach().cpu().numpy()[:, np.newaxis]
+    mean = mean * sample_depth[np.newaxis, :]
+    mean = mean * np.maximum(
+        _raw_expected_depth_units(
+            cn_sample.astype(np.float32),
+            bin_bias,
+            additive_background,
+        ),
+        0.0,
+    )
+    raw_variance_power = float(
+        np.asarray(
+            continuous_maps.get("model_raw_variance_power", 2.0)
+        ).item()
+    )
+    effective_overdispersion = _effective_negative_binomial_overdispersion_numpy(
+        overdispersion,
+        mean,
+        raw_variance_power,
+    )
+    concentration = 1.0 / np.maximum(effective_overdispersion, 1e-8)
+    latent_rate = rng.gamma(
+        shape=concentration,
+        scale=np.where(mean > 0.0, mean / concentration, 0.0),
+    )
+    draw = rng.poisson(latent_rate)
 
     return draw.astype(np.float32)
 
@@ -412,14 +372,11 @@ def generate_ppd_depth(
     1. Sample a CN state *c* from the posterior.
     2. Draw depth from the configured observation family.
 
-    For continuous observation families, the predictive variance is
-    ``(bin_var_i + sample_var_j + allosome_var_i) × max(c × bin_bias_{ij} + additive_background_{ij}, 1e-3)``.
-
     For the negative-binomial observation family on raw counts, the
     predictive mean is
     ``bin_length_kb_i × sample_depth_j × (c × bin_bias_{ij} + I(c=0) × additive_background_{ij}) / 2`` and
     the predictive variance is
-    ``μ + (bin_var_i + sample_var_j + allosome_var_i) × μ^raw_variance_power``.
+    ``μ + (bin_var_i + sample_var_j) × μ^raw_variance_power``.
 
     Args:
         data: :class:`DepthData` instance.
@@ -443,20 +400,13 @@ def generate_ppd_depth(
         continuous_posterior_mode,
     )
 
-    obs_likelihood = _normalize_obs_likelihood_name(
-        np.asarray(map_estimates.get("obs_likelihood", "normal")).item()
-    )
-    obs_df = float(np.asarray(map_estimates.get("obs_df", 6.0)).item())
     saved_draws = {}
     if continuous_posterior_mode == "integrated":
         saved_draws = _extract_saved_posterior_draws(map_estimates)
     else:
         logger.info("Conditioning PPD on fitted continuous latents.")
     required_sites = {"bin_bias", "sample_var", "bin_var"}
-    if "allosome_var" in map_estimates:
-        required_sites.add("allosome_var")
-    if obs_likelihood == "negative_binomial":
-        required_sites.add("sample_depth")
+    required_sites.add("sample_depth")
 
     if continuous_posterior_mode == "integrated" and required_sites.issubset(saved_draws):
         draw_count = int(next(iter(saved_draws.values())).shape[0])
@@ -468,8 +418,6 @@ def generate_ppd_depth(
             model = _build_model_from_artifacts(
                 map_estimates,
                 data.depth.device.type,
-                obs_likelihood,
-                obs_df,
             )
             af_table_np = None
             if data.site_alt is not None and model.af_weight > 0:
@@ -504,8 +452,6 @@ def generate_ppd_depth(
                     rng,
                     draw_post,
                     draw_maps,
-                    obs_likelihood,
-                    obs_df,
                 )
             return draws
 
@@ -526,8 +472,6 @@ def generate_ppd_depth(
             rng,
             cn_posterior,
             map_estimates,
-            obs_likelihood,
-            obs_df,
         )
     return draws
 
@@ -923,8 +867,8 @@ def parse_args() -> argparse.Namespace:
         help="Per-site allele data .npz (output of 'preprocess')",
     )
     p.add_argument(
-        "--depth-space", choices=["auto", *DEPTH_SPACES], default="auto",
-        help="Interpret the input matrix as normalized depth or raw counts. 'auto' first consults preprocess observation_type.txt, then saved inference metadata, and finally the observation likelihood.",
+        "--depth-space", choices=["auto", "raw"], default="auto",
+        help="Interpret the input matrix as raw counts. 'auto' first consults preprocess observation_type.txt, then saved inference metadata, and finally the observation likelihood.",
     )
     p.add_argument(
         "--seed", type=int, default=42,
@@ -956,15 +900,13 @@ def main() -> None:
     # ── load inference artifacts ────────────────────────────────────────
     logger.info("Loading inference artifacts.")
     map_est, cn_post = load_inference_artifacts(args.artifacts)
-    obs_likelihood = _normalize_obs_likelihood_name(
-        np.asarray(map_est.get("obs_likelihood", "normal")).item()
-    )
     depth_space = _resolve_input_depth_space(
         args.depth_space,
-        obs_likelihood,
+        NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
         args.input,
         map_est,
     )
+    map_est.setdefault("depth_space", np.asarray(depth_space))
 
     # ── load data ───────────────────────────────────────────────────────
     logger.info("Loading preprocessed depth.")
@@ -981,7 +923,11 @@ def main() -> None:
         depth_space=depth_space,
         site_data=sd,
     )
-    logger.info("Using %s input with %s observation model.", depth_space, obs_likelihood)
+    logger.info(
+        "Using %s input with %s observation model.",
+        depth_space,
+        NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
+    )
 
     # ── generate posterior predictive draws ──────────────────────────────
     logger.info("Generating %d posterior predictive draws …", args.draws)

@@ -1,7 +1,22 @@
 # gatk-sv-ploidy
 
-Whole-genome aneuploidy detection from binned read counts using a hierarchical
-Bayesian model (Pyro).
+Whole-genome aneuploidy detection from binned read counts with optional
+per-site allele-fraction evidence.
+
+The package implements a baseline-aware pipeline:
+
+1. preprocess raw depth and optionally build per-site AF tensors,
+2. optionally classify each sample's autosomal baseline CN as CN1, CN2, CN3,
+   or CN4,
+3. fit a Pyro-based Bayesian copy-number model,
+4. run posterior predictive checks,
+5. convert chromosome summaries into sample-level labels,
+6. generate plots and a static HTML report,
+7. evaluate calls against a truth set.
+
+The current implementation uses a simplified raw-count model only.
+`preprocess` writes filtered raw counts, and `infer` / `ppd` require that
+raw-count output with the negative-binomial observation model.
 
 ## Installation
 
@@ -24,694 +39,529 @@ gatk-sv-ploidy <subcommand> [options]
 
 ### Subcommands
 
-| Subcommand   | Description |
-|-------------|-------------|
-| `preprocess` | Read and normalise depth data, filter low-quality bins |
-| `polyploidy` | Classify autosomal baseline CN from pooled allele fractions |
-| `infer`      | Train Bayesian model and run discrete CN inference |
-| `ppd`        | Posterior predictive check: compare model predictions to data |
-| `call`       | Assign sex karyotype and aneuploidy type per sample |
-| `plot`       | Generate diagnostic plots and a static HTML report |
-| `eval`       | Evaluate predictions against a truth set |
-| `pull-snps`  | Pull common-SNP sites from gnomAD (requires Hail; local only) |
+| Subcommand | Description |
+|------------|-------------|
+| `preprocess` | Normalize internally for QC, filter bins, optionally build `site_data.npz`, and write filtered raw counts |
+| `polyploidy` | Classify per-sample autosomal baseline CN from pooled autosomal AF evidence |
+| `infer` | Fit the Bayesian CN model and write per-bin and per-chromosome summaries |
+| `ppd` | Generate posterior predictive draws and quality / calibration summaries |
+| `call` | Assign baseline-aware sex and aneuploidy labels per sample |
+| `plot` | Generate diagnostic plots and a static HTML report |
+| `eval` | Evaluate predictions against a truth set |
+| `pull-snps` | Pull common-SNP sites from gnomAD (requires Hail; local only) |
 
 Run `gatk-sv-ploidy <subcommand> --help` for subcommand-specific options.
 
-## Typical workflow
+## Typical Workflow
+
+The default path is raw-count preprocess output plus the raw-count
+negative-binomial observation model chosen automatically by `infer`.
 
 ```bash
-# 1. Preprocess raw depth data
-gatk-sv-ploidy preprocess -i depth.tsv -o out/preprocess/
+# 1. Filter depth data and optionally build per-site AF tensors.
+gatk-sv-ploidy preprocess -i depth.tsv -o out/preprocess \
+  --site-depth-list sample_sd_files.txt
 
-# 2. Classify autosomal baseline CN from pooled autosomal AFs
+# 2. Optional but recommended when non-diploid autosomal baselines are possible.
 gatk-sv-ploidy polyploidy -i out/preprocess/preprocessed_depth.tsv \
-  --site-data out/preprocess/site_data.npz -o out/polyploidy/ \
+  --site-data out/preprocess/site_data.npz \
+  -o out/polyploidy \
   --diagnostics
 
-# 3. Run Bayesian inference
-gatk-sv-ploidy infer -i out/preprocess/preprocessed_depth.tsv -o out/infer/ \
+# 3. Fit the Bayesian CN model.
+gatk-sv-ploidy infer -i out/preprocess/preprocessed_depth.tsv \
   --site-data out/preprocess/site_data.npz \
-  --autosomal-baseline-cn-tsv out/polyploidy/sample_autosomal_baseline_cn.tsv
+  --autosomal-baseline-cn-tsv out/polyploidy/sample_autosomal_baseline_cn.tsv \
+  -o out/infer
 
-# 4. Run posterior predictive checks
+# 4. Posterior predictive checks.
 gatk-sv-ploidy ppd -i out/preprocess/preprocessed_depth.tsv \
-  -a out/infer/inference_artifacts.npz -o out/ppd/
+  -a out/infer/inference_artifacts.npz \
+  --site-data out/preprocess/site_data.npz \
+  -o out/ppd
 
-# 5. Call sex and aneuploidy types
-gatk-sv-ploidy call -c out/infer/chromosome_stats.tsv -o out/call/
+# 5. Convert chromosome summaries into sample-level labels.
+gatk-sv-ploidy call -c out/infer/chromosome_stats.tsv -o out/call
 
-# 6. Generate plots
-gatk-sv-ploidy plot -c out/infer/chromosome_stats.tsv -o out/plot/ \
+# 6. Generate plots and the static report.
+gatk-sv-ploidy plot -c out/infer/chromosome_stats.tsv \
   --sex-assignments out/call/aneuploidy_type_predictions.tsv \
   --bin-stats out/infer/bin_stats.tsv.gz \
   --training-loss out/infer/training_loss.tsv \
   --ppd-bin-summary out/ppd/ppd_bin_summary.tsv.gz \
-  --ppd-chr-summary out/ppd/ppd_chromosome_summary.tsv
+  --ppd-chr-summary out/ppd/ppd_chromosome_summary.tsv \
+  -o out/plot
 
-# 7. Evaluate against truth
+# 7. Evaluate against truth.
 gatk-sv-ploidy eval -p out/call/aneuploidy_type_predictions.tsv \
-  -t truth.json -o out/eval/
+  -t truth.json \
+  -o out/eval
 ```
 
-The `plot` command now writes a static HTML report alongside the generated plot
-files:
+If all samples are expected to be diploid, or if no `site_data.npz` is
+available, you can skip `polyploidy` and omit
+`--autosomal-baseline-cn-tsv`. In that case `infer` and `call` use
+autosomal baseline CN = 2 for every sample.
+
+Normalized-depth residual inference is no longer supported by the public CLI.
+Historical normalized-depth preprocess artifacts must be regenerated as raw
+counts before running `infer` or `ppd`.
+
+### Primary Outputs
+
+| Step | Key outputs |
+|------|-------------|
+| `preprocess` | `preprocessed_depth.tsv`, `observation_type.txt`, optional `site_data.npz` |
+| `polyploidy` | `polyploidy_test_results.tsv`, `sample_autosomal_baseline_cn.tsv`, optional diagnostics under `diagnostics/` |
+| `infer` | `training_loss.tsv`, `inference_artifacts.npz`, `bin_stats.tsv.gz`, `chromosome_stats.tsv`, `sample_autosomal_baseline_cn.tsv` |
+| `ppd` | `ppd_draws.npz`, `ppd_bin_summary.tsv.gz`, `ppd_bin_quality.tsv`, `ppd_chromosome_summary.tsv`, `ppd_global_summary.tsv` |
+| `call` | `sex_assignments.txt.gz`, `aneuploidy_type_predictions.tsv`, optional `chromosome_stats.filtered.tsv` when BINQ filtering is used |
+| `plot` | `plot_manifest.tsv`, `report/index.html`, linked plot and table artifacts |
+| `eval` | `metrics_report.txt`, `predictions_with_truth.tsv` |
+
+### Plot Report
+
+`plot` writes a static HTML report alongside the generated artifacts:
 
 | Path | Description |
 |------|-------------|
-| `out/plot/report/index.html` | Static, dependency-free cohort report linking all generated figures and tables. |
-| `out/plot/plot_manifest.tsv` | Manifest with category, title, source path, report path, sample/chromosome tags, and file size for every report artifact. |
+| `out/plot/report/index.html` | Static cohort report linking the generated figures and tables |
+| `out/plot/plot_manifest.tsv` | Manifest with category, title, source path, report path, sample / chromosome tags, and file size |
 
-The report links directly to the original artifacts under paths such as
+The report links directly to the original artifacts under locations such as
 `out/plot/diagnostics/`, `out/plot/ppd/`, `out/plot/sample_plots/`, and
-`out/plot/raw_depth_*`. Those original files are the only on-disk copies.
+`out/plot/raw_depth_*`; it does not create duplicate copies of those files.
 
-Figures use a Nature-oriented, color-blind-aware palette and standard
-sans-serif typography. Figure artifacts are written as PNG by default at 450
-dpi. Add `gatk-sv-ploidy plot --pdf ...` to emit PDF figure artifacts instead.
+Helper-generated figures are written as PNG at 450 dpi by default. Add
+`gatk-sv-ploidy plot --pdf ...` to switch helper-generated figures to PDF.
 The multi-page `median_depth_distributions.pdf` summary remains PDF in either
 mode.
 
-The WDL tarball output still packages the full ploidy working directory, so
-existing data paths such as `call/sex_assignments.txt.gz`,
-`infer/chromosome_stats.tsv`, and `infer/bin_stats.tsv.gz` are unchanged.
-Open `plot/report/index.html` after extracting the tarball to review the
-report.
+If you use the end-to-end wrapper, pass extra PPD CLI options via
+`run_ploidy.sh --ppd-args "--continuous-posterior-mode integrated"` and plot
+options via `run_ploidy.sh --plot-args "--pdf"`.
 
-By default, `ppd` conditions on the fitted continuous latents and resamples
-copy number plus observation noise. This is the intended in-sample QC/BINQ
-calibration check. For a fully Bayesian posterior predictive check that also
-integrates saved continuous-latent posterior draws from expressive guides, add
-`--continuous-posterior-mode integrated`; this mode is expected to be more
-conservative for in-sample diagnostics.
-
-When call predictions are provided to `plot`, per-sample plots use the
-separated baseline-ploidy fields to visually mark non-diploid autosomal
-baselines, even when there is no focal chromosome-specific aneuploidy.
-
-If you run the end-to-end wrapper, pass extra PPD CLI options through
-`run_ploidy.sh --ppd-args "--continuous-posterior-mode integrated"`.
-Pass `run_ploidy.sh --plot-args "--pdf"` to switch the plot step to PDF figure
-outputs.
-
-`infer` now defaults to the simplified aneuploidy model: no low-rank
-multiplicative bias (`--multiplicative-factors 0`), no low-rank additive
-background (`--background-factors 0`), no allosome-specific overdispersion
-(`--var-allosome 0`), and no per-bin variance (`--var-bin 0`). A tiny
-epsilon floor (`--epsilon-mean 1e-4 --epsilon-concentration 0.5`) is retained
-for low-level background in zero-copy states. In raw-count
-negative-binomial runs, this additive background contributes only to CN=0; it
-does not inflate the expected depth for CN=1 or higher. Set
-`--epsilon-mean 0` to remove the epsilon floor entirely, or opt into the
-low-rank terms explicitly for model-checking experiments.
-
-To test the raw-count negative-binomial model instead of the
-normalized-depth residual model, keep preprocess filtering in normalized
-space but write filtered raw counts:
-
-```bash
-gatk-sv-ploidy preprocess -i depth.tsv -o out/preprocess_nb/ --output-space raw
-gatk-sv-ploidy infer -i out/preprocess_nb/preprocessed_depth.tsv -o out/infer_nb/ \
-  --depth-space raw --obs-likelihood negative_binomial
-gatk-sv-ploidy ppd -i out/preprocess_nb/preprocessed_depth.tsv \
-  -a out/infer_nb/inference_artifacts.npz -o out/ppd_nb/ --depth-space raw
-```
-
-In this mode the model fixes each per-sample `sample_depth` to the autosomal
-median counts/kb anchor by default and infers only sample-specific
-overdispersion. Whole-genome baseline copy states are handled as a separate
-post-preprocess step: run `polyploidy` on `site_data.npz`, then pass the emitted
-`sample_autosomal_baseline_cn.tsv` into `infer` via
-`--autosomal-baseline-cn-tsv` so downstream `call` can emit `HAPLOID`,
-`TRIPLOID`, or `TETRAPLOID` when appropriate. The classifier compares CN1,
-CN2, CN3, and CN4
-beta-binomial genotype-mixture models and marginalizes over a log-spaced grid
-of AF concentration values. The direct AF peak model checks the canonical peak
-sets 0/1, 0/0.5/1, 0/1/3/2/3/1, and 0/1/4/0.5/3/4/1, then combines that peak
-evidence with the genotype likelihood under conservative priors.
-
-CN2 is the default when non-diploid evidence is ambiguous. CN4/tetraploid calls
-require explicit quarter-peak support near 1/4 or 3/4, so data compatible with
-only 0/0.5/1 remain diploid even when CN4 has some likelihood support. CN1 is
-called only when the informative pooled AFs are concentrated at 0 and 1 with
-little support for non-endpoint peaks. Use `--haploidy-prior`,
-`--triploidy-prior`, and `--tetraploidy-prior` to tune prior odds, and use the
-`--pvalue-threshold` flag as the maximum posterior error probability for
-non-diploid calls. Use `--af-concentration` to set the prior median,
-`--af-concentration-prior-log-sd` to widen or narrow the concentration prior,
-or `--af-concentration-grid` to supply an explicit comma-separated grid.
-
-Direct peak guards are controlled by `--ploidy-peak-af-window`,
-`--min-haploid-endpoint-fraction`, `--max-haploid-other-peak-fraction`,
-`--min-triploid-peak-fraction-advantage`,
-`--min-tetraploid-quarter-peak-fraction`, and
-`--min-tetraploid-quarter-peak-fraction-advantage`. Add
-`--privacy-safe-diagnostics` to log aggregate-only summaries for protected
-manual debugging without filenames, paths, sample identifiers, raw rows, or
-sample-level values. The polyploidy step emits aggregate stage logs and progress
-bars by default; use `--no-progress` to suppress progress bars in batch logs
-while retaining safe stage messages. Add `--diagnostics` to write per-sample AF
-summary metrics, sampled raw informative-site AFs, and diagnostic PNGs under
-`out/polyploidy/diagnostics/`. The raw-AF profile plot overlays quarter,
-thirds, and half peaks, and the summary plot shows CN1 endpoint support, CN3
-thirds support, CN4 quarter support, and CN4 diploid-compatibility checks. A
-separate diploid-only raw-AF profile plot shows up to 12 diploid-called samples
-for comparison. Pass
-`--learn-sample-depth` to enable the LogNormal sample-depth latent for
-cohorts where the fixed median anchor is not appropriate.
-
----
-
-## Pipeline architecture
+## Pipeline Architecture
 
 ```mermaid
 flowchart TD
     subgraph Input
-        RD["Raw depth matrix\n(bins × samples)"]
+        RD["Raw depth matrix\n(bins x samples)"]
         SD["Site-depth files\n(.sd.txt.gz)"]
-        KS["Known SNP sites\n(VCF / TSV)"]
     end
 
     subgraph "1. Preprocess"
-        N["Autosomal-median\nnormalisation"]
+        N["Autosomal-median\nnormalization for QC"]
         BF["Bin quality\nfiltering"]
         AF["Per-site allele\ncount assembly"]
         RD --> N --> BF
-        SD --> AF
-        KS -.-> AF
+        SD -.-> AF
         BF --> PD["preprocessed_depth.tsv"]
+        BF --> OT["observation_type.txt"]
         AF --> SN["site_data.npz"]
     end
 
-      subgraph "2. Baseline CN"
-        TT["Autosomal AF\nbaseline CN classifier"]
-        PD --> TT
-        SN --> TT
-        TT --> TM["sample_autosomal_baseline_cn.tsv"]
-      end
-
-      subgraph "3. Infer"
-        M["Hierarchical Bayesian\nmodel (Pyro)"]
-        SVI["Stochastic Variational\nInference (SVI)"]
-        MAP["MAP estimation\n(continuous latents)"]
-        DP["Exact discrete\nposterior (Bayes' rule)"]
-        PD --> M
-        SN -.-> M
-        TM -.-> M
-        M --> SVI --> MAP --> DP
-        DP --> CS["chromosome_stats.tsv"]
-        DP --> BS["bin_stats.tsv.gz"]
-        MAP --> IA["inference_artifacts.npz"]
+    subgraph "2. Baseline CN"
+        PB["Autosomal AF\nbaseline classifier"]
+        PD --> PB
+        SN --> PB
+        PB --> AB["sample_autosomal_baseline_cn.tsv"]
     end
 
-      subgraph "4. PPD"
-        PPD["Posterior predictive\ndraws and summaries"]
+    subgraph "3. Infer"
+        M["Bayesian CN model\n(Pyro)"]
+        SVI["SVI over continuous latents\nwith discrete CN enumeration"]
+        POST["Per-bin CN posterior\nand summaries"]
+        PD --> M
+        SN -.-> M
+        AB -.-> M
+        M --> SVI --> POST
+        POST --> IA["inference_artifacts.npz"]
+        POST --> BS["bin_stats.tsv.gz"]
+        POST --> CS["chromosome_stats.tsv"]
+    end
+
+    subgraph "4. PPD"
+        PPD["Posterior predictive draws\nand quality summaries"]
         PD --> PPD
         SN -.-> PPD
         IA --> PPD
-        PPD --> PB["ppd_bin_summary.tsv.gz"]
+        PPD --> PQ["ppd_bin_quality.tsv"]
         PPD --> PC["ppd_chromosome_summary.tsv"]
     end
 
-      subgraph "5. Call"
-        SC["Sex classification\n(chrX/chrY CN lookup)"]
-        AC["Aneuploidy typing\n(rule-based)"]
-        CS --> SC --> PR["aneuploidy_type_predictions.tsv"]
-        CS --> AC --> PR
+    subgraph "5. Call"
+        CALL["Baseline-aware sex and\naneuploidy classification"]
+        CS --> CALL
+        PQ -.-> CALL
+        CALL --> PR["aneuploidy_type_predictions.tsv"]
     end
-
-    style Input fill:#e8f4fd,stroke:#4a90d9
-    style M fill:#fff3cd,stroke:#d4a843
 ```
 
----
+## Current Defaults
 
-## Mathematical description
+| Component | Default | Meaning |
+|-----------|---------|---------|
+| `preprocess --output-space` | `raw` | Filters are evaluated on normalized depth, but the written matrix is filtered raw counts |
+| `infer --autosome-prior-mode` | `dirichlet` | Strong per-bin CN2 prior on autosomes |
+| `infer --guide-type` | `delta` | MAP-style continuous latent fit |
+| `infer --multiplicative-factors` | `0` | No low-rank multiplicative bias by default |
+| `infer --background-factors` | `0` | No structured additive background by default |
+| `infer --var-bin` | `0` | No per-bin residual variance latent by default |
+| `infer --freeze-sample-depth` | enabled | Raw-count runs fix sample depth to the autosomal median counts-per-kb anchor |
+| `infer --epsilon-mean` | `1e-2` | Small CN0-only epsilon background floor is retained |
+| `infer --learn-af-temperature` | enabled | A single global AF temperature is learned by default |
+| `infer --cn-inference-method` | `multi-draw` | Expressive guides average CN posteriors over repeated guide draws; with the default delta guide this collapses to the current point estimate |
+| `ppd --continuous-posterior-mode` | `conditioned` | Default in-sample QC / BINQ calibration mode |
 
-### Notation
+## Objective And Decision Target
 
-| Symbol | Meaning |
-|--------|---------|
-| $B$ | Number of genomic bins after filtering |
-| $S$ | Number of samples |
-| $C$ | Number of CN states (default 6, for CN $\in \{0,1,2,3,4,5\}$) |
-| $d_{bs}$ | Observed normalised depth at bin $b$, sample $s$ |
-| $c_{bs}$ | Latent integer copy number at bin $b$, sample $s$ |
-| $\beta_b$ | Per-bin multiplicative bias |
-| $\sigma^2_b$ | Per-bin variance |
-| $\tau^2_s$ | Per-sample variance |
-| $\boldsymbol{\pi}_b$ | Per-bin CN-state probability simplex ($C$-vector) |
-| $a_{bjs}$ | Alt allele count at site $j$ in bin $b$, sample $s$ |
-| $n_{bjs}$ | Total read depth at site $j$ in bin $b$, sample $s$ |
-| $p_{bj}$ | Population alt-allele frequency at site $j$ in bin $b$ |
+The model's operational target is per-bin discrete copy number
+$c_{bs} \in \{0, 1, 2, 3, 4, 5\}$ for bin $b$ and sample $s$, plus the
+sample-level autosomal baseline CN $g_s \in \{1, 2, 3, 4\}$ when the optional
+`polyploidy` step is used.
 
----
+Those latent states support four downstream decisions:
 
-### 1. Preprocessing
+1. per-bin posterior CN summaries and quality scores,
+2. per-chromosome CN summaries,
+3. baseline-aware sample-level sex and aneuploidy labels,
+4. posterior predictive calibration summaries used for QC and BINQ filtering.
 
-#### 1.1 Autosomal-median normalisation
+Important implementation detail: `infer` does not learn whole-genome baseline
+ploidy. Baseline CN is either fixed from
+`sample_autosomal_baseline_cn.tsv` or defaults to CN2 for every sample.
 
-**Goal.** Transform raw per-sample read-depth counts to a common scale where
-diploid copy number ≈ 2.0, removing library-size and GC-content batch effects.
+## Proposed Data-Generating Model
 
-For each sample $s$, let $\tilde{m}_s$ be the median depth across all
-autosomal bins:
+### Observed Data
 
-$$\tilde{m}_s = \operatorname{median}\bigl\{d^{\text{raw}}_{bs} : b \in \text{autosomes}\bigr\}$$
+The pipeline consumes filtered raw counts written by `preprocess`.
 
-Every bin (including sex chromosomes) is then rescaled:
+Optional per-site allele tensors are stored in `site_data.npz` with arrays such
+as `site_alt`, `site_total`, `site_pop_af`, and `site_mask`.
 
-$$d_{bs} = \frac{2\,d^{\text{raw}}_{bs}}{\tilde{m}_s}$$
+### Preprocess
 
-**Justification.** The median is robust to the small fraction of
-aneuploid bins that may be present in the data (e.g. ~2% for a trisomy
-sample). Scaling to 2.0 rather than 1.0 keeps the expected depth equal to the
-integer copy number for diploid regions, making priors and likelihoods
-interpretable on a natural scale.
-
-#### 1.2 Bin quality filtering
-
-Bins whose cross-sample statistics lie outside expected ranges are removed
-to eliminate mappability artefacts, centromeric noise, and collapse/expansion
-regions. For autosomes, for each bin $b$, define:
-
-$$\mu_b = \operatorname{median}_s\{d_{bs}\}, \qquad
-  \text{MAD}_b = \operatorname{median}_s\bigl\{|d_{bs} - \mu_b|\bigr\}$$
-
-Autosomes are filtered with pooled cross-sample thresholds:
-
-| Chromosome type | Median range | MAD upper bound |
-|-----------------|:------------:|:---------------:|
-| Autosomes | $[1.5,\; 2.5]$ | $2.0$ |
-
-autosome-only because chrX and chrY expected depth depends on the cohort's
-Sex chromosomes are filtered differently because pooled chrX/chrY depth is
-inherently bimodal in mixed XX/XY cohorts. Preprocess first assigns each
-sample to a rough XX or XY depth group by whichever normalized chrX/chrY
-prototype it is closest to:
-
-- XX prototype: $(chrX, chrY) = (2, 0)$
-- XY prototype: $(chrX, chrY) = (1, 1)$
-
-Each chrX and chrY bin is then screened within those rough sex groups
-against the sex-specific expected normalized depth:
-
-| Chromosome | XX expected depth | XY expected depth |
-|------------|:-----------------:|:-----------------:|
-| chrX | $2.0$ | $1.0$ |
-| chrY | $0.0$ | $1.0$ |
-
-A sex-chromosome bin is removed when, within either inferred sex group,
-too many samples are farther than 0.3 from the expected depth, or when the
-within-group MAD exceeds the chromosome-specific MAD threshold.
-
-After the sex-chromosome pass, autosomal bins are additionally screened by
-a cohort-deviation filter: bins are removed when more than 75% of samples are
-farther than 0.3 from the expected diploid depth of 2.0.
-
-A post-filter check ensures at least 10 bins survive per chromosome;
-otherwise the run fails with a diagnostic message.
-
-By default, contigs with more than 30 surviving bins are then collapsed into
-contiguous length-weighted groups while retaining at least 30 bins per contig.
-
-**Justification.** The median/MAD pair is more robust to outliers than
-mean/std. The liberal autosome lower bound (1.5 rather than ~1.8) avoids
-discarding real monosomic signal; the primary purpose is to remove
-zero-mappability and extreme-repeat bins.
-
-#### 1.3 Per-site allele data assembly
-
-When per-sample site-depth (SD) files are provided, allele counts are
-aggregated into a 3-D tensor aligned to the genomic bins.
-
-```mermaid
-flowchart LR
-    SD["SD file\n(contig, pos, sample,\nA, C, G, T)"] --> JOIN
-    BINS["Bin coordinates\n(Chr, Start, End)"] --> JOIN
-  JOIN["Assign to bins"] --> POOL["Pool cohort counts\nper site"]
-  POOL --> ID["Choose cohort-major\nallele identity"]
-  ID --> PAD["Pad / subsample\nto max_sites_per_bin"]
-    PAD --> OUT["site_alt, site_total,\nsite_pop_af, site_mask\n(B × J × S)"]
-```
-
-At each retained site, the pooled cohort counts across all samples define a
-single major allele identity. Each sample's alt count is then all reads not
-matching that shared allele:
-
-$$a_{bjs} = n_{bjs} - \text{major\_count}_{bjs}$$
-
-where $n_{bjs} = A + C + G + T$ is the total depth. Sites with low total
-depth are discarded to suppress noise from weakly covered positions; by
-default the CLI uses `--min-site-depth 3`.
-
-The site population AF is estimated directly from the pooled cohort alt and
-total counts with light smoothing, so no external site-frequency resource is
-required.
-
-Each bin is padded or subsampled to a fixed width $J_{\max}$ (default 50)
-with a boolean validity mask $m_{bjs}$ tracking real entries. The result is
-stored as a compressed `.npz` archive with arrays:
-
-- `site_alt`: $\mathbb{Z}^{B \times J_{\max} \times S}$
-- `site_total`: $\mathbb{Z}^{B \times J_{\max} \times S}$
-- `site_pop_af`: $\mathbb{R}^{B \times J_{\max}}$ (broadcast across samples)
-- `site_mask`: $\{0,1\}^{B \times J_{\max} \times S}$
-
-**Justification.** Padding to a fixed width enables efficient batched tensor
-operations during inference. The `searchsorted` intersection avoids O(N²)
-joins and is critical when SD files contain ~50 M rows.
-
----
-
-### 2. Inference model
-
-#### 2.1 Generative model (plate diagram)
-
-```mermaid
-flowchart TB
-    subgraph plate_b ["plate b = 1 … B  (bins)"]
-        direction TB
-        beta["β_b ~ LogNormal(0, σ_bias)"]
-        sigma2_b["σ²_b ~ Exp(1/λ_bin)"]
-        pi["π_b ~ Dirichlet(α)"]
-
-        subgraph plate_s ["plate s = 1 … S  (samples)"]
-            cn["c_bs ~ Categorical(π_b)"]
-            obs["d_bs ~ Normal(c_bs · β_b,  √(σ²_b + τ²_s))"]
-            af_lik["AF likelihood\n(pyro.factor)"]
-            cn --> obs
-            cn --> af_lik
-        end
-        beta --> obs
-        sigma2_b --> obs
-        pi --> cn
-    end
-
-    tau["τ²_s ~ Exp(1/λ_sample)"]
-    tau --> obs
-
-    style plate_b fill:#fef9e7,stroke:#d4a843
-    style plate_s fill:#eaf2f8,stroke:#5dade2
-```
-
-#### 2.2 Prior specification
-
-The full joint prior is:
+`preprocess` always normalizes raw depth internally for QC:
 
 $$
-\begin{aligned}
-\tau^2_s &\sim \operatorname{Exponential}\!\left(\tfrac{1}{\lambda_{\text{sample}}}\right)
-  && \text{per-sample variance} \\[4pt]
-\beta_b &\sim \operatorname{LogNormal}(0,\; \sigma_{\text{bias}})
-  && \text{per-bin bias} \\[4pt]
-\sigma^2_b &\sim \operatorname{Exponential}\!\left(\tfrac{1}{\lambda_{\text{bin}}}\right)
-  && \text{per-bin variance} \\[4pt]
-\boldsymbol{\pi}_b &\sim \operatorname{Dirichlet}(\boldsymbol{\alpha})
-  && \text{per-bin CN prior}
-\end{aligned}
-$$
-
-The Dirichlet concentration vector $\boldsymbol{\alpha}$ encodes a strong
-prior expectation that most bins are diploid:
-
-$$\alpha_c = \begin{cases}
-\alpha_{\text{ref}} & \text{if } c = 2 \\
-\alpha_{\text{non-ref}} & \text{otherwise}
-\end{cases}$$
-
-| Parameter | Default | Rationale |
-|-----------|:-------:|-----------|
-| $\alpha_{\text{ref}}$ | 50.0 | Strongly favours CN = 2 for most bins |
-| $\alpha_{\text{non-ref}}$ | 1.0 | Flat prior across non-reference states |
-| $\sigma_{\text{bias}}$ | 0.05 | Tight prior: bin biases close to 1.0 |
-| $\lambda_{\text{sample}}$ | 0.001 | Small default per-sample residual variance scale |
-| $\lambda_{\text{bin}}$ | 0.001 | Small default per-bin residual variance scale |
-
-**Justification.** In a typical WGS cohort, >99% of autosomal bins are
-diploid. Setting $\alpha_{\text{ref}} \gg \alpha_{\text{non-ref}}$ regularises
-the model toward CN = 2 unless the depth evidence strongly supports an
-alternative state. The LogNormal prior on $\beta_b$ ensures positivity
-and centres the bias at 1.0 (i.e. no bias). Exponential priors on variance
-components are weakly informative and conjugate-like for Gaussian models.
-
-#### 2.3 Depth likelihood
-
-Conditioned on the latent copy number $c_{bs}$ and continuous parameters,
-observed normalised depth is:
-
-$$d_{bs} \mid c_{bs}, \beta_b, \sigma^2_b, \tau^2_s
-  \;\sim\; \mathcal{N}\!\bigl(c_{bs} \cdot \beta_b,\;\;
-  \sigma^2_b + \tau^2_s\bigr)$$
-
-The mean is the product of integer copy number and a per-bin bias term. The
-variance decomposes into a bin-specific component (capturing mappability and
-GC variation) and a sample-specific component (capturing library quality).
-
-#### 2.4 Marginalised allele-fraction likelihood
-
-When per-site allele count data is available, the model augments the depth
-likelihood with an allele-fraction term that is analytically marginalised
-over latent SNP genotype states at each site.
-
-For a site $j$ in bin $b$ at sample $s$, given copy number $c_{bs} = c$,
-the number of alt alleles $k$ ranges from $0$ to $c$. The marginalised
-likelihood is:
-
-$$
-P(a_{bjs} \mid c,\, p_{bj},\, n_{bjs})
-= \sum_{k=0}^{c}
-  \underbrace{\binom{c}{k}\, p_{bj}^k\,(1-p_{bj})^{c-k}}_{\text{genotype prior}}
-  \;\cdot\;
-  \underbrace{\operatorname{BetaBin}(a_{bjs} \mid \alpha_k,\, \beta_k,\, n_{bjs})}_{\text{allele-fraction likelihood}}
-$$
-
-where the Beta-Binomial parameters are determined by the expected allele
-fraction for genotype state $k$ at copy number $c$:
-
-$$\alpha_k = \kappa \cdot \frac{k}{c} + \varepsilon,
+x^{\mathrm{norm}}_{bs} = \frac{2 x^{\mathrm{raw}}_{bs}}{m_s},
 \qquad
-\beta_k = \kappa \cdot \left(1 - \frac{k}{c}\right) + \varepsilon$$
-
-with concentration $\kappa = 50$ (default) and $\varepsilon = 10^{-6}$ for
-numerical stability.
-
-**Special cases:**
-- **CN = 0** ($c = 0$): Only $k = 0$ is valid; the likelihood is flat
-  ($\alpha = \beta = \kappa/2$), contributing no allele-fraction information.
-- **CN = 1** ($c \in \{0, 1\}$): Two genotype states — homozygous reference
-  or homozygous alt — producing strongly peaked Beta-Binomial densities
-  near 0 or 1.
-- **CN = 2** ($c \in \{0, 1, 2\}$): The classic diploid case with
-  expected AFs of 0, 0.5, and 1.0.
-
-The per-bin AF log-likelihood sums over all valid sites:
-
-$$\ell^{\text{AF}}_{bs}(c) = \sum_{j:\, m_{bjs}=1}
-  \log P(a_{bjs} \mid c,\, p_{bj},\, n_{bjs})$$
-
-This is injected into the model via `pyro.factor("af_lik", w · ℓ_AF)` with
-configurable weight $w$ (default 1.0).
-
-**Justification.** Marginalising over genotype states avoids the
-circular-reasoning problem of pre-filtering SNPs by observed allele fraction
-(which would bias against detecting CN changes). The Binomial genotype prior
-weighted by population allele frequency correctly accounts for the expected
-genotype distribution at each copy number. The Beta-Binomial (rather than
-plain Binomial) observation model accommodates overdispersion from
-sequencing noise and mapping artefacts.
-
-**Precomputation optimisation.** The AF log-likelihood depends only on
-observed data and the discrete CN state — not on any continuous latent
-variables. It is therefore computed **once** before SVI training as a lookup
-table of shape $(C \times B \times S)$, reducing per-iteration cost by
-orders of magnitude.
-
-#### 2.5 Variational inference
-
-The model is trained via **Stochastic Variational Inference (SVI)**
-using Pyro's `TraceEnum_ELBO`, which analytically enumerates over the
-discrete $c_{bs}$ variables and optimises the Evidence Lower Bound (ELBO)
-for the continuous latents.
-
-The ELBO maximisation problem is:
-
-$$\max_{q} \;\; \mathcal{L}(q)
-= \mathbb{E}_{q(\theta)}\!\left[
-  \log p(\mathbf{d}, \theta) - \log q(\theta)
-\right]$$
-
-where $\theta = \{\beta_b, \sigma^2_b, \tau^2_s, \boldsymbol{\pi}_b\}$ are
-the continuous latent variables and the discrete $c_{bs}$ are summed out
-analytically inside the ELBO.
-
-```mermaid
-flowchart LR
-    subgraph Variational family
-        AD["AutoDelta\n(MAP point estimates)"]
-        AN["AutoDiagonalNormal\n(mean-field Gaussian)"]
-        ALR["AutoLowRankMultivariateNormal\n(low-rank Gaussian)"]
-    end
-    AD --> SVI["SVI\n(Adam optimiser)"]
-    AN --> SVI
-    ALR --> SVI
-    SVI --> ELBO["TraceEnum_ELBO\n(discrete vars\nenumerated)"]
-    ELBO --> CONV["Convergence\n(early stopping)"]
-```
-
-**Guide options:**
-
-| Guide | Variational family | Use case |
-|-------|--------------------|----------|
-| `delta` | `AutoDelta`: $q(\theta) = \delta(\theta - \hat\theta)$ | Fast MAP; no uncertainty |
-| `diagonal` | `AutoDiagonalNormal`: $q(\theta) = \prod_i \mathcal{N}(\mu_i, \sigma_i^2)$ | Mean-field approximation |
-| `lowrank` | `AutoLowRankMultivariateNormal` | Captures some posterior correlation structure |
-
-**Learning rate schedule.** An exponential decay from `lr_init` to `lr_min`:
-
-$$\eta_k = \eta_{\min} + (\eta_{\text{init}} - \eta_{\min})\,e^{-k/\tau_{\text{decay}}}$$
-
-with defaults $\eta_{\text{init}} = 0.02$, $\eta_{\min} = 0.01$,
-$\tau_{\text{decay}} = 500$.
-
-**Gradient clipping.** By default, inference clips the global SVI gradient
-norm to `10.0` before each optimizer step. This is intended to damp the
-large transient updates that can occur immediately after initialization,
-especially on noisier cohorts. Use `--grad-clip-norm` to tune the threshold
-or set it to `0` to disable clipping.
-
-**Early stopping.** Training compares the mean ELBO over the latest rolling
-window of iterations (default 50) to the preceding window and stops once the
-relative shift
-
-$$
-\frac{|\mathcal{L}_{\mathrm{curr}} - \mathcal{L}_{\mathrm{prev}}|}{|\mathcal{L}_{\mathrm{prev}}|}
+m_s = \operatorname{median}\{x^{\mathrm{raw}}_{bs} : b \in \text{autosomes}\}.
 $$
 
-falls below `elbo_rtol` (default $10^{-4}$) for `patience` consecutive window
-comparisons (default 50).
+That normalized view is used for bin filtering even when the written output is
+raw counts. The current filtering logic:
 
-#### 2.6 Exact discrete posterior
+- removes autosomal bins with outlying cohort median or MAD,
+- filters chrX and chrY within rough XX-like and XY-like groups,
+- removes bins with excessive cohort-wide deviation from the expected ploidy,
+- optionally removes bins overlapping poor regions,
+- collapses long contigs into larger contiguous bins while retaining at least
+  the requested number of bins per contig.
 
-After SVI converges, the continuous latents are fixed at their MAP values.
-The posterior over $c_{bs}$ is then computed in closed form via Bayes' rule
-over the finite state space:
+When site-depth files are provided, `preprocess` bins sites, defines the cohort
+major allele per site, records per-sample alternate and total counts, estimates
+`site_pop_af` from pooled cohort data, and pads or subsamples each bin to a
+fixed maximum number of sites.
+
+### Autosomal Baseline CN Classifier (`polyploidy`)
+
+`polyploidy` is a separate evidence model for sample-level autosomal baseline
+CN in states CN1, CN2, CN3, and CN4. It uses only autosomal informative sites.
+Sites are screened by a diploid heterozygosity prior based on the current
+`site_pop_af` estimate so that uninformative near-fixed sites do not dominate
+the evidence.
+
+For each sample and baseline state $g_s = c$, the classifier combines two AF
+signals:
+
+1. a beta-binomial genotype-mixture likelihood marginalized over genotype copy
+   states and over a grid of AF concentration values,
+2. a direct peak-mixture score around the canonical AF peaks for CN1, CN2,
+   CN3, and CN4.
+
+The genotype-mixture term is:
 
 $$
-P(c_{bs} = c \mid d_{bs}, \hat\theta)
-\;\propto\;
-\underbrace{\hat\pi_{b,c}}_{\text{prior}}
-\;\cdot\;
-\underbrace{\mathcal{N}\!\bigl(d_{bs}\,;\; c \cdot \hat\beta_b,\;
-\hat\sigma^2_b + \hat\tau^2_s\bigr)}_{\text{depth likelihood}}
-\;\cdot\;
-\underbrace{\exp\!\bigl(w \cdot \ell^{\text{AF}}_{bs}(c)\bigr)}_{\text{AF likelihood}}
+P(\text{AF}_s \mid g_s = c)
+\propto
+\int
+\prod_j
+\sum_{k=0}^{c}
+P(K_j = k \mid c, p_j)
+\; P(a_{js} \mid n_{js}, K_j = k, \kappa)
+\; p(\kappa) \, d\kappa,
 $$
 
-for $c = 0, 1, \ldots, C-1$. The normalisation constant is the sum over all
-$C$ states. This replaces Monte Carlo sampling with an exact computation
-over the $C = 6$ states, producing a posterior probability vector
-$\mathbf{q}_{bs} \in \Delta^{C-1}$ for every (bin, sample) pair.
+where $p_j$ is the site population AF, $k$ is the genotype alt-copy count, and
+$\kappa$ is the beta-binomial concentration parameter.
 
-**Justification.** Once the continuous parameters are fixed, the discrete
-posterior factorises across (bin, sample) pairs, each with only 6 states —
-making exhaustive enumeration both exact and trivially cheap compared to the
-SVI training loop.
+The direct peak checks are conservative by design:
 
----
+- CN1 requires strong endpoint support near AF 0 and 1 with little mass near
+  half, thirds, or quarters.
+- CN3 requires explicit thirds support near AF 1/3 and 2/3.
+- CN4 requires explicit quarter support near AF 1/4 and 3/4; evidence that is
+  only compatible with 0, 0.5, and 1 is kept diploid.
 
-### 3. Calling
+Non-diploid baseline calls require all of the following:
 
-The `call` subcommand converts per-bin CN posteriors into sample-level sex
-karyotype assignments and separate baseline/autosomal/allosomal aneuploidy
-categories.
+1. enough informative autosomal bins and sites,
+2. posterior error probability below `--pvalue-threshold`,
+3. positive log Bayes factor versus CN2,
+4. effect size per informative site above `--effect-size-threshold`,
+5. direct peak support for the candidate state.
 
-#### 3.1 Per-chromosome CN assignment
+If those conditions are not met, the classifier defaults to CN2 and records the
+reason in `polyploidy_test_results.tsv`. This is the intended failure-safe
+behavior for sparse or ambiguous AF data.
 
-For each (sample, chromosome) pair, the **chromosome-level CN** is the mode
-of the per-bin MAP CN values, weighted by the bin count:
+## Assumptions And Justifications
 
-$$\hat{c}_{\text{chr}} = \arg\max_c \;\sum_{b \in \text{chr}} \mathbb{1}[c_{bs} = c]$$
+### Domain-Supported Assumptions
 
-The associated confidence score is the mean posterior probability of the
-modal state across bins on that chromosome:
+- Most autosomal bins are neutral in most cohorts, so a strong autosomal CN2
+  prior is appropriate unless the user explicitly chooses the hierarchical
+  shrinkage prior mode.
+- The autosomal median depth is a stable per-sample anchor for preprocess QC
+  and, in the default raw-count model, for the fixed `sample_depth` scale.
+- chrX and chrY require separate prior handling because expected copy number
+  depends on sex karyotype.
+- AF evidence should be aggregated over genotype uncertainty rather than by
+  hard-calling genotype states from observed allele fractions.
 
-$$\text{score}_{\text{chr}}
-= \frac{1}{|\{b \in \text{chr}\}|}
-  \sum_{b \in \text{chr}} P(c_{bs} = \hat{c}_{\text{chr}} \mid d_{bs}, \hat\theta)$$
+### Convenience-Driven Assumptions
 
-A chromosome is flagged as **aneuploid** when $\hat{c}_{\text{chr}}$ differs
-from the sample's autosomal baseline CN (autosomes) or when the
-sex-chromosome pair does not match a baseline-aware female-like or male-like
-composition, provided $\text{score}_{\text{chr}}$ exceeds a configurable
-threshold (default 0.5). For example, baseline CN = 3 treats `(chrX=3, chrY=0)`
-and `(chrX=2, chrY=1)` as expected triploid allosome compositions rather than
-diploid sex aneuploidies.
+- `infer` conditions on a fixed autosomal baseline CN manifest instead of
+  learning whole-genome ploidy jointly with per-bin CN.
+- The default model removes low-rank multiplicative bias, structured additive
+  background, per-bin residual variance, and allosome-specific extra variance to
+  improve identifiability and reduce false high-copy fits.
+- The default AF pathway learns a single global temperature rather than a more
+  flexible bin-specific AF calibration term.
 
-#### 3.2 Sex karyotype classification
+### Explicitly Unverified Or User-Tunable Assumptions
 
-For diploid-baseline samples, sex is assigned by deterministic lookup on the
-(chrX CN, chrY CN) pair:
+- The fixed autosomal median counts-per-kb anchor can be wrong for some raw
+  count cohorts; use `--learn-sample-depth` when that anchor is not appropriate.
+- The site AF values produced by `preprocess` may be improved by infer-time
+  naive-Bayes re-estimation or by `--learn-site-af`, depending on cohort
+  quality.
+- Historical normalized-depth preprocess artifacts must be regenerated as raw
+  counts before they can be used with the current `infer` / `ppd` CLI.
 
-```mermaid
-flowchart TD
-    INPUT["(chrX_CN, chrY_CN)"] --> CHECK{Lookup table}
-    CHECK -->|"(2, 0)"| F["FEMALE (XX)"]
-    CHECK -->|"(1, 1)"| M["MALE (XY)"]
-    CHECK -->|"(1, 0)"| T["TURNER (X0)"]
-    CHECK -->|"(3, 0)"| TX["TRIPLE_X (XXX)"]
-    CHECK -->|"(2, 1)"| K["KLINEFELTER (XXY)"]
-    CHECK -->|"(1, 2)"| J["JACOBS (XYY)"]
-    CHECK -->|else| O["OTHER"]
-```
+## Likelihoods, Priors, And Inference Strategy
 
-For non-diploid baseline samples, diploid sex-aneuploid labels are not applied
-directly. Baseline CN = 3 maps `(3,0)` to `TRIPLOID_FEMALE` and `(2,1)` to
-`TRIPLOID_MALE`; baseline CN = 4 maps `(4,0)` to `TETRAPLOID_FEMALE` and
-`(2,2)` to `TETRAPLOID_MALE`.
+### Latent Structure In `infer`
 
-#### 3.3 Aneuploidy type classification
+For each sample $s$ and bin $b$, the model includes:
 
-Aneuploidy labels are intentionally split into three fields so baseline
-ploidy is not conflated with focal autosomal or allosomal aneuploidy:
+- discrete CN state $c_{bs} \in \{0, \dots, 5\}$,
+- optional per-sample sex latent $z_s \in \{\mathrm{XX}, \mathrm{XY}\}$ used to
+  couple chrX / chrY priors,
+- per-bin CN prior parameters,
+- continuous depth-model latents such as sample variance, optional low-rank
+  multiplicative bias, and optional additive background.
 
-| Column | Meaning |
-|--------|---------|
-| `baseline_ploidy_type` | Autosomal baseline state: `DIPLOID`, `HAPLOID`, `TRIPLOID`, `TETRAPLOID`, or `BASELINE_CN*` |
-| `autosomal_aneuploidy_type` | Autosomal deviation from that baseline: `NONE`, a named trisomy/tetrasomy, `AUTOSOMAL_GAIN`, `AUTOSOMAL_LOSS`, or `MULTIPLE_AUTOSOMAL` |
-| `allosomal_aneuploidy_type` | chrX/chrY deviation from the baseline-aware expected pair: `NONE`, a diploid sex aneuploidy label, or `DISCORDANT_ALLOSOME_CN` |
-| `predicted_aneuploidy_type` | Composite summary derived from the three fields above |
+The baseline CN $g_s$ is fixed input, not a latent variable in `infer`.
 
-For example, a clean baseline-CN3 sample with `(chrX=2, chrY=1)` is reported as
-`baseline_ploidy_type=TRIPLOID`, `autosomal_aneuploidy_type=NONE`, and
-`allosomal_aneuploidy_type=NONE`. A baseline-CN3 sample with `(chrX=2,
-chrY=2)` is reported as `baseline_ploidy_type=TRIPLOID` and
-`allosomal_aneuploidy_type=DISCORDANT_ALLOSOME_CN`, with the composite
-`predicted_aneuploidy_type=TRIPLOID_WITH_ALLOSOME_ANEUPLOIDY`.
+### Depth Model
 
-For diploid-baseline samples, the composite label follows the traditional
-rule-based decision tree applied to the set of chromosomes flagged as
-aneuploid:
+#### Raw-count default
 
-1. **No aneuploid chromosomes** → `NORMAL`
-2. **Multiple autosomal or mixed auto+sex** → `MULTIPLE`
-3. **Sex-only aneuploidy** → mapped via the karyotype table above
-   (e.g. `KLINEFELTER`, `TURNER`, `TRIPLE_X`, `JACOBS`)
-4. **Single autosomal aneuploidy** → named trisomy/tetrasomy when on a
-   clinically recognised chromosome:
+When preprocess output is raw and `infer` is left at the defaults, the expected
+count for bin $b$, sample $s$ is modeled as:
 
-| Chromosome | CN | Type |
-|:----------:|:--:|:----:|
-| chr21 | 3 | `TRISOMY_21` |
-| chr18 | 3 | `TRISOMY_18` |
-| chr13 | 3 | `TRISOMY_13` |
-| chr21 | 4 | `TETRASOMY_21` |
-| chr18 | 4 | `TETRASOMY_18` |
-| chr13 | 4 | `TETRASOMY_13` |
-| other | any | `OTHER` |
+$$
+\mu_{bs} = L_b D_s
+\frac{c_{bs} M_{bs} + \mathbf{1}(c_{bs} = 0) A_{bs}}{2},
+$$
 
-**Justification.** The three viable autosomal trisomies (13, 18, 21) are
-the most clinically relevant and are specifically named. Other autosomal
-aneuploidies are rare in viable samples and are grouped under `OTHER`.
-The current calling rules intentionally stay in the diploid frame. A future
-polyploid-specific module can reuse the reserved labels above once it has its
-own evidence model.
+where:
+
+- $L_b$ is bin length in kilobases,
+- $D_s$ is the sample-specific diploid depth scale,
+- $M_{bs}$ is the multiplicative bias term,
+- $A_{bs}$ is the additive background term.
+
+With the current defaults, `freeze_sample_depth` is on, so $D_s$ is fixed to
+the autosomal median counts-per-kb anchor, `multiplicative_factors=0` forces
+$M_{bs} = 1$, `background_factors=0` disables structured background, and the
+remaining epsilon floor contributes only when $c_{bs} = 0$.
+
+The raw-count likelihood is negative-binomial-like with power-law extra-Poisson
+variance:
+
+$$
+\operatorname{Var}(Y_{bs}) = \mu_{bs} + V_{bs} \mu_{bs}^{\rho},
+$$
+
+with default $\rho = 1.5$. By default $V_{bs}$ is driven only by the
+sample-specific variance term because `var_bin=0`.
+
+Normalized-depth residual inference is no longer exposed by the public CLI.
+
+### CN Priors
+
+Autosomes use one of two prior families:
+
+1. `dirichlet` (default): per-bin CN simplex with strong CN2 concentration
+   (`alpha_ref=50`, `alpha_non_ref=1` by default),
+2. `shrinkage`: hierarchical autosomal non-reference mass plus a separate
+   alternative-state simplex.
+
+chrX and chrY use flat Dirichlet concentrations by default, with the
+sex-karyotype latent providing the main prior regularization via
+`--sex-cn-weight`.
+
+### Allele-Fraction Evidence In `infer`
+
+When `site_data.npz` is provided and `--af-weight > 0`, the model adds a
+per-bin AF term marginalized over genotype copy counts:
+
+$$
+\ell^{\mathrm{AF}}_{bs}(c) =
+\sum_j
+\log
+\sum_{k=0}^{c}
+P(K_j = k \mid c, p_{bj})
+\; P(a_{bjs} \mid n_{bjs}, K_j = k, \kappa).
+$$
+
+Current implementation details:
+
+- default `af_evidence_mode=relative` centers AF evidence against a fixed CN
+  reference mixture before scaling,
+- default `learn_af_temperature` learns a single global AF temperature whose
+  prior median is `af_weight=0.25`,
+- unless `--learn-site-af` is used, the AF table is precomputed once because it
+  depends only on observed site data and the discrete CN state,
+- `--site-af-estimator auto` may replace the input `site_pop_af` with a
+  naive-Bayes estimate when the current encoding is coherent enough to do so
+  safely.
+
+Setting `--af-weight 0` disables AF evidence entirely.
+
+### Variational Inference And Discrete CN Inference
+
+Continuous latents are trained with Pyro SVI using `TraceEnum_ELBO`, so the
+discrete CN states are analytically enumerated during training.
+
+Guide options:
+
+- `delta` (default): MAP-style point estimate,
+- `diagonal`: mean-field Gaussian guide,
+- `lowrank`: low-rank multivariate Gaussian guide.
+
+Expressive guides can warm-start from a short AutoDelta stage, and early
+stopping compares rolling ELBO windows using `--elbo-window` and
+`--elbo-rtol`. Gradient clipping is enabled by default.
+
+After training, `infer` computes bin-level CN posteriors. The handling of
+continuous-latent uncertainty is controlled by `--cn-inference-method`:
+
+- `current`: use the current guide draw,
+- `median`: plug in guide medians,
+- `multi-draw` (default): average CN posteriors over repeated guide draws.
+
+With the default `delta` guide, these reduce to the same deterministic point
+estimate behavior.
+
+## Robustness Strategy For Sparse Or Poor-Quality Data
+
+- `preprocess` filters in normalized space even when the written output is raw,
+  which keeps QC thresholds interpretable.
+- The default simplified infer model removes weakly identified low-rank terms
+  unless the user explicitly opts into them.
+- `polyploidy` defaults to CN2 when evidence is sparse, contradictory, or lacks
+  explicit thirds / quarter-peak support.
+- AF evidence is optional and temperature-scaled; this reduces the chance that
+  miscalibrated AF likelihoods dominate depth evidence.
+- `call` can rebuild chromosome summaries after excluding low-quality bins using
+  `--bin-stats`, `--ppd-bin-quality`, and `--min-binq`.
+- `polyploidy --privacy-safe-diagnostics` logs aggregate-only summaries for
+  protected manual debugging.
+
+## Scaling Strategy For Small And Large Datasets
+
+The current implementation is designed to stay usable across small and large
+cohorts:
+
+- small datasets benefit from strong CN2 priors, conservative non-diploid
+  calling thresholds, and the default simpler latent structure,
+- large datasets benefit from bin collapsing in `preprocess`, fixed-width site
+  tensors, AF lookup-table precomputation, and optional omission of site-level
+  modeling when AF data is unavailable or too expensive,
+- expressive guides and integrated PPD are available, but they are optional
+  because they cost more memory and compute than the default delta guide and
+  conditioned PPD path.
+
+## Confidence Outputs And Thresholding Guidance
+
+The pipeline exposes multiple confidence outputs rather than a single hard call:
+
+- `polyploidy_test_results.tsv` contains posterior probabilities, posterior
+  error probabilities, effect sizes per informative site, direct-peak support
+  flags, and reason codes.
+- `bin_stats.tsv.gz` contains per-bin CN summaries and quality metrics.
+- `chromosome_stats.tsv` contains chromosome-level CN, mean posterior support,
+  ploidy fractions, and the fixed autosomal baseline CN used for that sample.
+- `ppd_bin_quality.tsv` provides PPD-derived BINQ and CALLQ metrics.
+- `aneuploidy_type_predictions.tsv` separates
+  `baseline_ploidy_type`, `autosomal_aneuploidy_type`,
+  `allosomal_aneuploidy_type`, and `predicted_aneuploidy_type`.
+
+Current calling semantics:
+
+- diploid-baseline samples use the legacy summary labels `NORMAL`, `MULTIPLE`,
+  named sex-aneuploidy labels, named trisomy / tetrasomy labels for chr13,
+  chr18, and chr21, or `OTHER`,
+- non-diploid baselines are reported explicitly as `HAPLOID`, `TRIPLOID`,
+  `TETRAPLOID`, or `BASELINE_CN*`, optionally composed with
+  `_WITH_AUTOSOMAL_ANEUPLOIDY`, `_WITH_ALLOSOME_ANEUPLOIDY`, or
+  `_WITH_MULTIPLE_ANEUPLOIDY`,
+- the `sex` field is also baseline-aware: for example a baseline-CN3 sample can
+  be labeled `TRIPLOID_FEMALE` or `TRIPLOID_MALE` instead of being forced into
+  diploid sex-aneuploidy labels.
+
+## Validation And Falsification Plan
+
+The implementation provides three main validation surfaces:
+
+1. `ppd` for posterior predictive checks and bin-level quality metrics,
+2. `plot` for visual diagnostics and cohort-wide reports,
+3. `eval` for truth-set comparison when labeled samples are available.
+
+`ppd` has two modes:
+
+- `conditioned` (default): fix fitted continuous latents and resample CN plus
+  observation noise; this is the intended in-sample QC / BINQ calibration path,
+- `integrated`: include saved continuous-latent posterior draws when available;
+  this is more conservative and better reflects parameter uncertainty for
+  expressive guides.
+
+When `call` is provided with `--min-binq`, it can use `ppd_bin_quality.tsv` to
+rebuild chromosome calls after excluding low-quality bins. This is the intended
+post-fit falsification check for bins that look inconsistent with the fitted
+model.
+
+## Expected Failure Modes
+
+- If no `site_data.npz` is available, AF evidence and baseline-CN classification
+  are unavailable; the pipeline falls back to depth-only inference with
+  autosomal baseline CN = 2.
+- If the fixed autosomal median counts-per-kb anchor is poor, the default raw
+  model can mis-scale whole-sample depth. Use `--learn-sample-depth` in those
+  cohorts.
+- If AF evidence is miscalibrated for a cohort, it can still shift CN posteriors
+  even with temperature learning. Compare depth-only and AF-enabled behavior,
+  inspect PPD summaries, and use the privacy-safe diagnostics when needed.
+- If you enable low-rank multiplicative or additive components without enough
+  data, they can absorb biological signal or reintroduce identifiability
+  problems. The defaults keep those components off for that reason.
+- Baseline-aware labels are only as good as the supplied baseline CN manifest.
+  If `polyploidy` is wrong or skipped when non-diploid baselines are present,
+  downstream autosomal and allosomal labels will be interpreted in the wrong
+  frame.

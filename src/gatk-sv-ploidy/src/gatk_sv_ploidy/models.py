@@ -55,19 +55,6 @@ _SAMPLE_DEPTH_PRIOR_BOOTSTRAP_DRAWS = 256
 _SAMPLE_DEPTH_PRIOR_BOOTSTRAP_SEED = 0
 _SAMPLE_DEPTH_PRIOR_SD_FLOOR_FRAC = 0.05
 
-
-OBS_LIKELIHOODS = (
-    "normal",
-    "studentt",
-    "laplace",
-    NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
-)
-
-AF_EVIDENCE_MODES = (
-    "absolute",
-    "relative",
-)
-
 AUTOSOME_PRIOR_MODES = (
     "dirichlet",
     "shrinkage",
@@ -81,7 +68,6 @@ DEFAULT_BACKGROUND_SAMPLE_SCALE = 0.02
 DEFAULT_BACKGROUND_BIN_SCALE = 0.5
 DEFAULT_GUIDE_INIT_SCALE = 0.02
 DEFAULT_GUIDE_WARMUP_ITER = -1
-DEFAULT_ALLOSOME_VAR = 0.0
 DEFAULT_RAW_VARIANCE_POWER = 1.5
 
 
@@ -532,28 +518,6 @@ def _resolve_fixed_site_pop_af_numpy(
     return leave_one_out_af, True
 
 
-def _normalize_obs_likelihood_name(name: str) -> str:
-    """Validate and normalize observation likelihood names."""
-    normalized = str(name).strip().lower()
-    if normalized not in OBS_LIKELIHOODS:
-        raise ValueError(
-            f"Unknown obs_likelihood: {name!r}. "
-            f"Choose one of {OBS_LIKELIHOODS}."
-        )
-    return normalized
-
-
-def _normalize_af_evidence_mode(name: str) -> str:
-    """Validate and normalize AF evidence mode names."""
-    normalized = str(name).strip().lower()
-    if normalized not in AF_EVIDENCE_MODES:
-        raise ValueError(
-            f"Unknown af_evidence_mode: {name!r}. "
-            f"Choose one of {AF_EVIDENCE_MODES}."
-        )
-    return normalized
-
-
 def _negative_binomial_total_count(
     overdispersion: torch.Tensor,
 ) -> torch.Tensor:
@@ -901,120 +865,6 @@ def _compose_effective_bin_bias_numpy(
     ).astype(dtype, copy=False)
 
 
-def _compose_allosome_overdispersion_torch(
-    chr_type: torch.Tensor | None,
-    allosome_var: torch.Tensor | None,
-    n_bins: int,
-    *,
-    device: str | torch.device,
-    dtype: torch.dtype,
-) -> torch.Tensor:
-    """Return a bin-level chrX/chrY excess overdispersion column vector.
-
-    Autosomes are anchored at zero so this term captures only allosome-specific
-    residual variance beyond the global per-sample and optional per-bin terms.
-    """
-    zero = torch.zeros((n_bins, 1), device=device, dtype=dtype)
-    if chr_type is None or allosome_var is None:
-        return zero
-
-    values = allosome_var.reshape(-1).to(device=device, dtype=dtype)
-    if values.numel() == 0:
-        return zero
-    if values.numel() == 1:
-        values = values.expand(2)
-    else:
-        values = values[:2]
-
-    lookup = torch.zeros(3, device=device, dtype=dtype)
-    lookup[1] = values[0]
-    lookup[2] = values[1]
-    type_index = torch.clamp(chr_type.to(device=device, dtype=torch.long), min=0, max=2)
-    return lookup[type_index].unsqueeze(-1)
-
-
-def _compose_allosome_overdispersion_numpy(
-    chr_type: np.ndarray | None,
-    allosome_var: np.ndarray | None,
-    n_bins: int,
-) -> np.ndarray:
-    """Return a bin-level chrX/chrY excess overdispersion column vector."""
-    zero = np.zeros((n_bins, 1), dtype=np.float64)
-    if chr_type is None or allosome_var is None:
-        return zero
-
-    values = np.asarray(allosome_var, dtype=np.float64).reshape(-1)
-    if values.size == 0:
-        return zero
-    if values.size == 1:
-        values = np.repeat(values, 2)
-    else:
-        values = values[:2]
-
-    lookup = np.zeros(3, dtype=np.float64)
-    lookup[1] = values[0]
-    lookup[2] = values[1]
-    type_index = np.clip(np.asarray(chr_type, dtype=np.int64).reshape(-1), 0, 2)
-    if type_index.size != n_bins:
-        return zero
-    return lookup[type_index].reshape(n_bins, 1)
-
-
-def _matched_residual_scale(
-    target_variance: torch.Tensor | np.ndarray | float,
-    obs_likelihood: str,
-    obs_df: float,
-) -> torch.Tensor | np.ndarray | float:
-    """Convert target variance to the scale parameter of the residual family."""
-    obs_likelihood = _normalize_obs_likelihood_name(obs_likelihood)
-    if obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
-        raise ValueError("negative_binomial does not use a residual scale parameter.")
-    if obs_likelihood == "normal":
-        return target_variance ** 0.5
-    if obs_likelihood == "laplace":
-        return (target_variance / 2.0) ** 0.5
-    if obs_df <= 2.0:
-        raise ValueError("Student-t observation likelihood requires obs_df > 2.")
-    return (target_variance * (obs_df - 2.0) / obs_df) ** 0.5
-
-
-def _make_depth_distribution(
-    expected: torch.Tensor,
-    variance: torch.Tensor,
-    obs_likelihood: str,
-    obs_df: float,
-) -> dist.Distribution:
-    """Build the selected observation distribution with matched variance."""
-    scale = _matched_residual_scale(variance, obs_likelihood, obs_df)
-    if obs_likelihood == "normal":
-        return dist.Normal(expected, scale)
-    if obs_likelihood == "laplace":
-        return dist.Laplace(expected, scale)
-    return dist.StudentT(obs_df, loc=expected, scale=scale)
-
-
-def _depth_log_lik_numpy(
-    obs: np.ndarray,
-    expected: np.ndarray,
-    variance: np.ndarray,
-    obs_likelihood: str,
-    obs_df: float,
-) -> np.ndarray:
-    """Analytical residual log-likelihood matching the selected family."""
-    from scipy import stats as sp_stats
-
-    obs_likelihood = _normalize_obs_likelihood_name(obs_likelihood)
-    if obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
-        raise ValueError("negative_binomial uses the count likelihood helper.")
-    safe_variance = np.maximum(variance, 1e-10)
-    scale = _matched_residual_scale(safe_variance, obs_likelihood, obs_df)
-    if obs_likelihood == "normal":
-        return sp_stats.norm.logpdf(obs, loc=expected, scale=scale)
-    if obs_likelihood == "laplace":
-        return sp_stats.laplace.logpdf(obs, loc=expected, scale=scale)
-    return sp_stats.t.logpdf((obs - expected) / scale, df=obs_df) - np.log(scale)
-
-
 class CNVModel:
     """Hierarchical Bayesian model for whole-genome CN detection.
 
@@ -1023,14 +873,8 @@ class CNVModel:
     per-sample variance. Autosomes
     can either use the historical Dirichlet-Categorical prior or a shrinkage
     prior that separates total non-reference mass from the distribution over
-    alternative CN states. For the historical continuous observation families,
-    observed normalised depth is drawn from a configurable residual model
-    whose mean is ``CN × bin_bias + additive_background`` and whose variance
-    scales with expected depth as
-    ``(bin_var + sample_var + allosome_var) × max(CN × bin_bias + additive_background, 1e-3)``.
-
-    When ``obs_likelihood='negative_binomial'``, the model instead consumes
-    raw integer counts. By default it fixes the per-sample diploid-baseline
+    alternative CN states. The model consumes raw integer counts. By default
+    it fixes the per-sample diploid-baseline
     depth scale ``sample_depth`` to that sample's autosomal median counts per
     kb, and uses the bin-length exposure in kilobases to model the count mean
     as
@@ -1039,7 +883,7 @@ class CNVModel:
 
     with negative-binomial-style power-law variance
 
-    ``μ + (bin_var + sample_var + allosome_var) × μ^raw_variance_power``.
+    ``μ + (bin_var + sample_var) × μ^raw_variance_power``.
 
     When per-site allele data is provided, the model additionally includes
     a marginalized allele-fraction likelihood that jointly considers all
@@ -1079,10 +923,6 @@ class CNVModel:
     var_bin : float
         Mean of the Exponential prior on per-bin variance. Set to 0 or a
         negative value to disable per-bin variance entirely.
-    var_allosome : float
-        Mean of the Exponential prior on chrX/chrY excess overdispersion.
-        Defaults to 0.0, which disables this latent; autosomes are anchored
-        at zero when the latent is explicitly enabled.
     raw_variance_power : float
         Mean exponent for raw-count extra-Poisson variance in the negative-
         binomial observation model. ``2.0`` recovers the standard NB2
@@ -1146,12 +986,9 @@ class CNVModel:
         Weight of the per-bin sex–CN coupling factor.  Normalised by
         chromosome-type bin count so the total coupling per chromosome equals
         this value.  Set to 0 to disable the sex karyotype latent entirely.
-    obs_likelihood : str
-        Observation family for depth residuals: ``normal``, ``studentt``, or
-        ``laplace`` for normalized depth, or ``negative_binomial`` for raw
-        counts.
     obs_df : float
-        Degrees of freedom for the Student-t observation likelihood.
+        Legacy argument retained for compatibility. Ignored by the raw-count
+        model.
     sample_depth_max : float
         Upper clip applied when deriving the empirical-Bayes prior center and
         guide initialisation for per-sample depth scale in the
@@ -1179,7 +1016,6 @@ class CNVModel:
         var_bias_bin: float = 0.02,
         var_sample: float = 0.00025,
         var_bin: float = 0.0,
-        var_allosome: float = DEFAULT_ALLOSOME_VAR,
         raw_variance_power: float = DEFAULT_RAW_VARIANCE_POWER,
         multiplicative_factors: int = DEFAULT_MULTIPLICATIVE_FACTORS,
         epsilon_mean: float = DEFAULT_EPSILON_MEAN,
@@ -1194,7 +1030,6 @@ class CNVModel:
         lowrank_guide_rank: Optional[int] = None,
         af_concentration: float = DEFAULT_AF_CONCENTRATION,
         af_weight: float = DEFAULT_AF_WEIGHT,
-        af_evidence_mode: str = "relative",
         learn_af_temperature: bool = True,
         learn_site_pop_af: bool = False,
         site_af_prior_strength: float = 20.0,
@@ -1203,7 +1038,6 @@ class CNVModel:
         alpha_sex_non_ref: float = 1.0,
         sex_prior: tuple = (0.5, 0.5),
         sex_cn_weight: float = 3.0,
-        obs_likelihood: str = "normal",
         obs_df: float = 3.5,
         sample_depth_max: float = 10000.0,
         autosomal_baseline_cn: Optional[Sequence[int]] = None,
@@ -1222,7 +1056,6 @@ class CNVModel:
         self.var_bias_bin = var_bias_bin
         self.var_sample = var_sample
         self.var_bin = var_bin
-        self.var_allosome = var_allosome
         self.raw_variance_power = raw_variance_power
         self.multiplicative_factors = multiplicative_factors
         self.epsilon_mean = epsilon_mean
@@ -1237,7 +1070,7 @@ class CNVModel:
         self.lowrank_guide_rank = lowrank_guide_rank
         self.af_concentration = af_concentration
         self.af_weight = af_weight
-        self.af_evidence_mode = _normalize_af_evidence_mode(af_evidence_mode)
+        self.af_evidence_mode = "relative"
         self.learn_af_temperature = learn_af_temperature
         self.learn_site_pop_af = learn_site_pop_af
         self.site_af_prior_strength = site_af_prior_strength
@@ -1246,7 +1079,6 @@ class CNVModel:
         self.alpha_sex_non_ref = alpha_sex_non_ref
         self.sex_prior = sex_prior
         self.sex_cn_weight = sex_cn_weight
-        self.obs_likelihood = _normalize_obs_likelihood_name(obs_likelihood)
         self.obs_df = obs_df
         self.sample_depth_max = sample_depth_max
         self.autosomal_baseline_cn = (
@@ -1276,8 +1108,6 @@ class CNVModel:
             raise ValueError("autosome_nonref_concentration must be positive.")
         if self.var_bias_bin <= 0:
             raise ValueError("var_bias_bin must be positive.")
-        if self.var_allosome < 0:
-            raise ValueError("var_allosome must be non-negative.")
         if self.raw_variance_power < 1.0 or self.raw_variance_power > 2.0:
             raise ValueError("raw_variance_power must be between 1 and 2.")
         if self.af_temperature_prior_scale <= 0:
@@ -1316,9 +1146,7 @@ class CNVModel:
         if self.background_bin_scale <= 0:
             raise ValueError("background_bin_scale must be positive.")
 
-        if self.obs_likelihood == "studentt" and self.obs_df <= 2.0:
-            raise ValueError("Student-t observation likelihood requires obs_df > 2.")
-        if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD and self.sample_depth_max <= 0:
+        if self.sample_depth_max <= 0:
             raise ValueError("sample_depth_max must be positive.")
         if self.autosomal_baseline_cn is not None:
             if self.autosomal_baseline_cn.size == 0:
@@ -1332,7 +1160,6 @@ class CNVModel:
                 )
 
         self.learn_bin_var = self.var_bin > 0
-        self.learn_allosome_var = self.var_allosome > 0
 
         self._latent_sites = list(self._latent_sites)
         if self.freeze_sample_var:
@@ -1341,8 +1168,6 @@ class CNVModel:
             ]
         if self.learn_bin_var:
             self._latent_sites.append("bin_var")
-        if self.learn_allosome_var:
-            self._latent_sites.append("allosome_var")
         if all((not self.freeze_bin_bias, self.multiplicative_factors > 0)):
             self._latent_sites.extend(
                 ["multiplicative_bin_factors", "multiplicative_sample_factors"]
@@ -1359,12 +1184,7 @@ class CNVModel:
         else:
             if not self.freeze_cn_prior:
                 self._latent_sites.append("cn_probs")
-        if all(
-            (
-                self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
-                not self.freeze_sample_depth,
-            )
-        ):
+        if not self.freeze_sample_depth:
             self._latent_sites.append("sample_depth")
         if self.epsilon_mean > 0:
             self._latent_sites.append("bin_epsilon")
@@ -2030,9 +1850,7 @@ class CNVModel:
         af_table: torch.Tensor,
         chr_type: torch.Tensor | None,
     ) -> torch.Tensor:
-        """Apply the configured AF evidence transformation to a precomputed table."""
-        if self.af_evidence_mode != "relative":
-            return af_table
+        """Center AF evidence against the fixed reference CN mixture."""
         reference_cn_probs = self._af_reference_cn_probs_torch(
             chr_type,
             af_table.shape[1],
@@ -2046,8 +1864,6 @@ class CNVModel:
         chr_type: np.ndarray | None,
     ) -> np.ndarray:
         """NumPy counterpart of :meth:`_apply_af_evidence_mode_torch`."""
-        if self.af_evidence_mode != "relative":
-            return af_table
         reference_cn_probs = self._af_reference_cn_probs_numpy(
             chr_type,
             af_table.shape[1],
@@ -2147,12 +1963,6 @@ class CNVModel:
             )
         ):
             estimates["bin_var"] = model_kw["bin_var_fixed"].detach().clone()
-        if not self.learn_allosome_var and "allosome_var" not in estimates:
-            estimates["allosome_var"] = torch.zeros(
-                (2,),
-                device=self.device,
-                dtype=self.dtype,
-            )
 
         bin_bias_matrix = _compose_effective_bin_bias_torch(
             int(model_kw["n_bins"]),
@@ -2192,7 +2002,6 @@ class CNVModel:
             )
         if all(
             (
-                self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
                 self.freeze_sample_depth,
                 "sample_depth" not in estimates,
                 model_kw.get("sample_depth_fixed") is not None,
@@ -2322,21 +2131,12 @@ class CNVModel:
         initial_values: Dict[str, torch.Tensor | np.ndarray] | None = None,
     ):
         """Build a guide init function anchored to raw autosomal depth."""
-        uses_negative_binomial = (
-            self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD
-        )
-        if all((initial_values is None, not randomize, not uses_negative_binomial)):
-            return None
-
         base_init = init_to_sample if randomize else init_to_median(num_samples=50)
         initial_values = {} if initial_values is None else initial_values
 
-        if not initial_values and not uses_negative_binomial:
-            return base_init
-
         sample_depth_prior = None
         sample_depth_init = None
-        if uses_negative_binomial and not self.freeze_sample_depth:
+        if not self.freeze_sample_depth:
             sample_depth_prior = self._estimate_sample_depth_prior(data)
             sample_depth_init = sample_depth_prior["center"]
 
@@ -2562,12 +2362,10 @@ class CNVModel:
         """Pyro generative model.
 
         Args:
-            depth: Observed normalized depth or raw-count tensor
-                (n_bins × n_samples).
+            depth: Observed raw-count tensor (n_bins × n_samples).
             n_bins: Number of genomic bins.
             n_samples: Number of samples.
-            bin_length_kb: Per-bin exposure in kilobases. Required when
-                ``obs_likelihood='negative_binomial'``.
+            bin_length_kb: Per-bin exposure in kilobases.
             bin_bias_fixed: Fixed per-bin bias values used when
                 ``freeze_bin_bias=True``.
             bin_var_fixed: Fixed per-bin variance values used when
@@ -2611,13 +2409,6 @@ class CNVModel:
                 device=self.device,
                 dtype=self.dtype,
             )
-        allosome_var_rate = None
-        if self.learn_allosome_var:
-            allosome_var_rate = torch.tensor(
-                1.0 / self.var_allosome,
-                device=self.device,
-                dtype=self.dtype,
-            )
 
         plate_bins = pyro.plate("bins", n_bins, dim=-2, device=self.device)
         plate_samples = pyro.plate("samples", n_samples, dim=-1, device=self.device)
@@ -2657,13 +2448,6 @@ class CNVModel:
 
         # Per-sample variance and sex karyotype
         sample_depth = None
-        allosome_var = None
-        if self.learn_allosome_var:
-            allosome_var = pyro.sample(
-                "allosome_var",
-                dist.Exponential(allosome_var_rate).expand([2]).to_event(1),
-            )
-
         with plate_samples:
             if self.freeze_sample_var:
                 if sample_var_fixed is None:
@@ -2683,33 +2467,32 @@ class CNVModel:
                     "sample_var",
                     dist.Exponential(1.0 / sample_var_mean),
                 )
-            if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
-                if self.freeze_sample_depth:
-                    if sample_depth_fixed is None:
-                        raise ValueError(
-                            "sample_depth_fixed is required when freeze_sample_depth=True."
-                        )
-                    sample_depth = pyro.sample(
-                        "sample_depth",
-                        dist.Delta(
-                            sample_depth_fixed,
-                            log_density=torch.zeros_like(sample_depth_fixed),
-                        ),
-                        obs=sample_depth_fixed,
+            if self.freeze_sample_depth:
+                if sample_depth_fixed is None:
+                    raise ValueError(
+                        "sample_depth_fixed is required when freeze_sample_depth=True."
                     )
-                else:
-                    if sample_depth_prior_loc is None or sample_depth_prior_scale is None:
-                        raise ValueError(
-                            "sample_depth_prior_loc and sample_depth_prior_scale are required "
-                            "for negative_binomial observation likelihood."
-                        )
-                    sample_depth = pyro.sample(
-                        "sample_depth",
-                        dist.LogNormal(
-                            sample_depth_prior_loc,
-                            sample_depth_prior_scale,
-                        ),
+                sample_depth = pyro.sample(
+                    "sample_depth",
+                    dist.Delta(
+                        sample_depth_fixed,
+                        log_density=torch.zeros_like(sample_depth_fixed),
+                    ),
+                    obs=sample_depth_fixed,
+                )
+            else:
+                if sample_depth_prior_loc is None or sample_depth_prior_scale is None:
+                    raise ValueError(
+                        "sample_depth_prior_loc and sample_depth_prior_scale are required "
+                        "for negative_binomial observation likelihood."
                     )
+                sample_depth = pyro.sample(
+                    "sample_depth",
+                    dist.LogNormal(
+                        sample_depth_prior_loc,
+                        sample_depth_prior_scale,
+                    ),
+                )
             if self.sex_cn_weight > 0 and chr_type is not None:
                 sex_prior = torch.tensor(
                     self.sex_prior, device=self.device, dtype=self.dtype,
@@ -2943,58 +2726,37 @@ class CNVModel:
                 cn_probs_for_samples = cn_probs_for_samples.unsqueeze(-2)
             cn = pyro.sample("cn", dist.Categorical(cn_probs_for_samples))
             expected_units = Vindex(cn_states)[cn] * bin_bias + additive_background
-            chrom_type_var = _compose_allosome_overdispersion_torch(
-                chr_type,
-                allosome_var,
-                n_bins,
-                device=self.device,
-                dtype=self.dtype,
-            )
 
-            if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
-                if bin_length_kb is None:
-                    raise ValueError(
-                        "bin_length_kb is required for negative_binomial observation likelihood."
+            if bin_length_kb is None:
+                raise ValueError(
+                    "bin_length_kb is required for negative_binomial observation likelihood."
+                )
+            mean = _raw_expected_depth_units(
+                Vindex(cn_states)[cn],
+                bin_bias,
+                additive_background,
+                autosomal_baseline_copy_number=(
+                    self._resolve_autosomal_baseline_cn_torch(
+                        n_samples,
+                        device=depth.device,
                     )
-                mean = _raw_expected_depth_units(
-                    Vindex(cn_states)[cn],
-                    bin_bias,
-                    additive_background,
-                    autosomal_baseline_copy_number=(
-                        self._resolve_autosomal_baseline_cn_torch(
-                            n_samples,
-                            device=depth.device,
-                        )
-                        if self.autosomal_baseline_cn is not None
-                        else 2.0
-                    ),
-                )
-                mean = torch.clamp(mean, min=0.0)
-                mean = mean * sample_depth
-                mean = mean * bin_length_kb.unsqueeze(-1)
-                overdispersion = sample_var + bin_var + chrom_type_var
-                pyro.sample(
-                    "obs",
-                    _make_negative_binomial_distribution(
-                        mean,
-                        overdispersion,
-                        self.raw_variance_power,
-                    ),
-                    obs=depth,
-                )
-            else:
-                base_variance = sample_var + bin_var + chrom_type_var
-                variance = base_variance * torch.clamp(expected_units, min=1e-3)
-                pyro.sample(
-                    "obs",
-                    _make_depth_distribution(
-                        expected_units,
-                        variance,
-                        self.obs_likelihood,
-                        self.obs_df,
-                    ),
-                    obs=depth,
-                )
+                    if self.autosomal_baseline_cn is not None
+                    else 2.0
+                ),
+            )
+            mean = torch.clamp(mean, min=0.0)
+            mean = mean * sample_depth
+            mean = mean * bin_length_kb.unsqueeze(-1)
+            overdispersion = sample_var + bin_var
+            pyro.sample(
+                "obs",
+                _make_negative_binomial_distribution(
+                    mean,
+                    overdispersion,
+                    self.raw_variance_power,
+                ),
+                obs=depth,
+            )
 
             # ── sex–CN coupling factor ────────────────────────────────────────
             if self.sex_cn_weight > 0 and chr_type is not None:
@@ -3077,18 +2839,17 @@ class CNVModel:
                 device=self.device,
                 dtype=self.dtype,
             )
-        if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
-            kw["bin_length_kb"] = data.bin_length_kb
-            if self.freeze_sample_depth:
-                kw["sample_depth_fixed"] = torch.tensor(
-                    self._estimate_sample_depth_center(data),
-                    device=self.device,
-                    dtype=self.dtype,
-                )
-            else:
-                sample_depth_prior = self._estimate_sample_depth_prior(data)
-                kw["sample_depth_prior_loc"] = sample_depth_prior["loc"]
-                kw["sample_depth_prior_scale"] = sample_depth_prior["scale"]
+        kw["bin_length_kb"] = data.bin_length_kb
+        if self.freeze_sample_depth:
+            kw["sample_depth_fixed"] = torch.tensor(
+                self._estimate_sample_depth_center(data),
+                device=self.device,
+                dtype=self.dtype,
+            )
+        else:
+            sample_depth_prior = self._estimate_sample_depth_prior(data)
+            kw["sample_depth_prior_loc"] = sample_depth_prior["loc"]
+            kw["sample_depth_prior_scale"] = sample_depth_prior["scale"]
         # Chromosome-type tensor and per-bin sex-CN coupling weight
         if hasattr(data, "chr_type") and data.chr_type is not None:
             kw["chr_type"] = data.chr_type
@@ -3387,7 +3148,6 @@ class CNVModel:
             )
         if all(
             (
-                self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
                 self.freeze_sample_depth,
                 "sample_depth" not in estimates,
                 "sample_depth_fixed" in model_kw,
@@ -3425,11 +3185,6 @@ class CNVModel:
         chr_type_np = None
         if hasattr(data, "chr_type") and data.chr_type is not None:
             chr_type_np = data.chr_type.detach().cpu().numpy()
-        chrom_type_var = _compose_allosome_overdispersion_numpy(
-            chr_type_np,
-            maps.get("allosome_var"),
-            data.n_bins,
-        )
         additive_background = compose_additive_background_matrix(
             maps.get("bin_epsilon"),
             data.n_bins,
@@ -3448,45 +3203,29 @@ class CNVModel:
         cn_states = np.arange(self.n_states, dtype=obs.dtype).reshape(-1, 1, 1)
         obs_b = obs[np.newaxis, :, :]
 
-        if self.obs_likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
-            sample_depth = np.atleast_1d(
-                np.asarray(maps["sample_depth"]).squeeze()
-            )
-            overdispersion = (
-                sample_var[np.newaxis, :] + bin_var[:, np.newaxis] + chrom_type_var
-            )
-            expected_units = _raw_expected_depth_units(
-                cn_states,
-                bin_bias[np.newaxis, :, :],
-                additive_background[np.newaxis, :, :],
-                autosomal_baseline_copy_number=(
-                    self._resolve_autosomal_baseline_cn_numpy(data.n_samples)
-                    if self.autosomal_baseline_cn is not None
-                    else 2.0
-                ),
-            )
-            mean = data.bin_length_kb.detach().cpu().numpy()[np.newaxis, :, np.newaxis]
-            mean = mean * sample_depth[np.newaxis, np.newaxis, :]
-            mean = mean * np.maximum(expected_units, 0.0)
-            log_lik = _negative_binomial_log_lik_numpy(
-                obs_b,
-                mean,
-                overdispersion[np.newaxis, :, :],
-                self.raw_variance_power,
-            )
-        else:
-            base_variance = sample_var[np.newaxis, :] + bin_var[:, np.newaxis]
-            expected_depth = cn_states * bin_bias[np.newaxis, :, :]
-            expected_depth = expected_depth + additive_background[np.newaxis, :, :]
-            variance = base_variance[np.newaxis, :, :]
-            variance = variance * np.maximum(expected_depth, 1e-3)
-            log_lik = _depth_log_lik_numpy(
-                obs_b,
-                expected_depth,
-                variance,
-                self.obs_likelihood,
-                self.obs_df,
-            )
+        sample_depth = np.atleast_1d(
+            np.asarray(maps["sample_depth"]).squeeze()
+        )
+        overdispersion = sample_var[np.newaxis, :] + bin_var[:, np.newaxis]
+        expected_units = _raw_expected_depth_units(
+            cn_states,
+            bin_bias[np.newaxis, :, :],
+            additive_background[np.newaxis, :, :],
+            autosomal_baseline_copy_number=(
+                self._resolve_autosomal_baseline_cn_numpy(data.n_samples)
+                if self.autosomal_baseline_cn is not None
+                else 2.0
+            ),
+        )
+        mean = data.bin_length_kb.detach().cpu().numpy()[np.newaxis, :, np.newaxis]
+        mean = mean * sample_depth[np.newaxis, np.newaxis, :]
+        mean = mean * np.maximum(expected_units, 0.0)
+        log_lik = _negative_binomial_log_lik_numpy(
+            obs_b,
+            mean,
+            overdispersion[np.newaxis, :, :],
+            self.raw_variance_power,
+        )
 
         if cn_probs.ndim == 2:
             log_prior = np.log(np.maximum(cn_probs.T[:, :, np.newaxis], 1e-10))

@@ -54,7 +54,6 @@ def test_infer_parse_args_defaults(monkeypatch) -> None:
     assert DEFAULT_MULTIPLICATIVE_FACTORS == 0
     assert args.background_factors == DEFAULT_BACKGROUND_FACTORS
     assert args.depth_space == "auto"
-    assert args.obs_likelihood == "auto"
     assert args.svi_init_restarts == 10
     assert args.grad_clip_norm == pytest.approx(10.0)
     assert args.sample_depth_max == 10000.0
@@ -62,7 +61,6 @@ def test_infer_parse_args_defaults(monkeypatch) -> None:
     assert args.freeze_sample_depth is True
     assert args.freeze_bin_bias is False
     assert args.freeze_cn_prior is False
-    assert args.af_evidence_mode == "relative"
     assert args.cn_inference_method == "multi-draw"
     assert args.cn_inference_draws == 100
     assert args.site_af_estimator == "auto"
@@ -89,25 +87,6 @@ def test_infer_parse_args_accepts_learn_sample_depth(monkeypatch) -> None:
     args = parse_args()
 
     assert args.freeze_sample_depth is False
-
-
-def test_infer_parse_args_accepts_relative_af_evidence_mode(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "infer",
-            "--input",
-            "depth.tsv",
-            "--output-dir",
-            "outdir",
-            "--af-evidence-mode",
-            "relative",
-        ],
-    )
-
-    args = parse_args()
-
-    assert args.af_evidence_mode == "relative"
 
 
 def test_infer_parse_args_accepts_freeze_cn_prior(monkeypatch) -> None:
@@ -1235,27 +1214,17 @@ def test_resolve_observation_model_prefers_preprocess_marker(tmp_path) -> None:
     depth_path.write_text("Bin\tChr\tStart\tEnd\tS1\n", encoding="ascii")
     (tmp_path / "observation_type.txt").write_text("raw\n", encoding="ascii")
 
-    depth_space, obs_likelihood = _resolve_observation_model(
-        "auto",
-        "auto",
-        str(depth_path),
-    )
+    depth_space = _resolve_observation_model("auto", str(depth_path))
 
     assert depth_space == "raw"
-    assert obs_likelihood == "negative_binomial"
 
 
-def test_resolve_observation_model_defaults_to_normalized_normal_without_marker(
+def test_resolve_observation_model_defaults_to_raw_negative_binomial_without_marker(
     tmp_path,
 ) -> None:
     depth_path = tmp_path / "preprocessed_depth.tsv"
     depth_path.write_text("Bin\tChr\tStart\tEnd\tS1\n", encoding="ascii")
 
-    depth_space, obs_likelihood = _resolve_observation_model(
-        "auto",
-        "auto",
-        str(depth_path),
-    )
+    depth_space = _resolve_observation_model("auto", str(depth_path))
 
-    assert depth_space == "normalized"
-    assert obs_likelihood == "normal"
+    assert depth_space == "raw"

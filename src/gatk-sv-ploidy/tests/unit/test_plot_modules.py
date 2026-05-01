@@ -289,7 +289,6 @@ def test_draw_sample_depth_panel_omits_ignored_bins() -> None:
         x_min=-0.25,
         x_max=1.25,
         retained_mask=retained_mask,
-        panel_label="Retained after BINQ filter",
     )
 
     cn_line, obs_line = ax.lines
@@ -349,7 +348,6 @@ def test_plot_sample_with_variance_omits_filtered_panel_and_filtered_af_cnq(
     ax_cnq = fig.axes[2]
     ax_binq = fig.axes[3]
     assert ax_af.get_ylabel() == "Allele fraction"
-    assert all(text.get_text() != "Retained after BINQ filter" for text in ax_depth.texts)
     assert tuple(ax_cnq.get_ylim()) == pytest.approx((0.0, 105.0))
     assert tuple(ax_binq.get_ylim()) == pytest.approx((0.0, 105.0))
 

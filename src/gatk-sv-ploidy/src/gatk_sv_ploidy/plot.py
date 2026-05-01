@@ -21,8 +21,11 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import BoundaryNorm, ListedColormap
 
 from gatk_sv_ploidy._util import (
+    BINQ_FIELD_OPTIONS,
     add_chromosome_labels,
+    baseline_ploidy_label,
     get_chromosome_type,
+    resolve_binq_field,
     save_and_close_plot,
 )
 from gatk_sv_ploidy._plot_detail import (
@@ -48,26 +51,6 @@ from gatk_sv_ploidy.infer import load_inference_artifacts
 from gatk_sv_ploidy.models import _standardize_multiplicative_bin_factors_numpy
 
 logger = logging.getLogger(__name__)
-_BINQ_FIELD_OPTIONS = ["auto", "BINQ15", "BINQ20", "CALLQ15", "CALLQ20"]
-_BASELINE_PLOIDY_TYPES = {
-    1: "HAPLOID",
-    2: "DIPLOID",
-    3: "TRIPLOID",
-    4: "TETRAPLOID",
-}
-
-
-def _resolve_binq_field(
-    bin_quality_df: pd.DataFrame,
-    requested_field: str,
-) -> str:
-    if requested_field != "auto":
-        return requested_field
-    if "BINQ20" in bin_quality_df.columns:
-        return "BINQ20"
-    if "CALLQ20" in bin_quality_df.columns:
-        return "CALLQ20"
-    return "BINQ20"
 
 
 # ── histogram helpers ───────────────────────────────────────────────────────
@@ -267,7 +250,7 @@ def _annotate_binq_values(
     if bin_df is None or bin_quality_df is None:
         return bin_df
 
-    binq_field = _resolve_binq_field(bin_quality_df, binq_field)
+    binq_field = resolve_binq_field(bin_quality_df, binq_field)
     required_cols = {"chr", "start", "end", binq_field}
     missing_cols = required_cols - set(bin_quality_df.columns)
     if missing_cols:
@@ -305,12 +288,6 @@ def _annotate_binq_values(
     return out
 
 
-def _baseline_ploidy_type_from_cn(autosomal_baseline_cn: int) -> str:
-    """Map an autosomal baseline CN to the plotting label."""
-    baseline_cn = int(autosomal_baseline_cn)
-    return _BASELINE_PLOIDY_TYPES.get(baseline_cn, f"BASELINE_CN{baseline_cn}")
-
-
 def _sample_baseline_ploidy_metadata(
     chrom_df: pd.DataFrame,
     sex_df: Optional[pd.DataFrame] = None,
@@ -330,7 +307,7 @@ def _sample_baseline_ploidy_metadata(
             if not values.empty:
                 baseline_cn = int(values.iloc[0])
         metadata[str(sample)] = {
-            "baseline_ploidy_type": _baseline_ploidy_type_from_cn(baseline_cn),
+            "baseline_ploidy_type": baseline_ploidy_label(baseline_cn),
             "autosomal_baseline_cn": baseline_cn,
         }
 
@@ -347,7 +324,7 @@ def _sample_baseline_ploidy_metadata(
             if "autosomal_baseline_cn" in row.index and pd.notna(row["autosomal_baseline_cn"]):
                 baseline_cn = int(row["autosomal_baseline_cn"])
                 entry["autosomal_baseline_cn"] = baseline_cn
-                entry["baseline_ploidy_type"] = _baseline_ploidy_type_from_cn(
+                entry["baseline_ploidy_type"] = baseline_ploidy_label(
                     baseline_cn,
                 )
             if "baseline_ploidy_type" in row.index and pd.notna(row["baseline_ploidy_type"]):
@@ -1426,7 +1403,7 @@ def parse_args() -> argparse.Namespace:
                    help="ppd_chromosome_summary.tsv (from 'ppd')")
     p.add_argument("--ppd-bin-quality", default=None,
                    help="ppd_bin_quality.tsv (from 'ppd') to add per-bin quality overlays and diagnostics")
-    p.add_argument("--binq-field", choices=_BINQ_FIELD_OPTIONS, default="BINQ20",
+    p.add_argument("--binq-field", choices=BINQ_FIELD_OPTIONS, default="BINQ20",
                    help="Per-bin quality field to use when --ppd-bin-quality is provided. "
                         "Defaults to BINQ20. 'auto' prefers BINQ20 and falls back to CALLQ20")
     p.add_argument("--ignored-bins", default=None,

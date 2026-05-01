@@ -464,7 +464,7 @@ def test_preprocess_parse_args_and_main_paths(tmp_path, monkeypatch) -> None:
             "--viable-only",
             "--skip-bin-filter",
             "--output-space",
-            "normalized",
+            "raw",
             "--poor-regions",
             str(poor_regions),
             "--site-depth-list",
@@ -492,7 +492,7 @@ def test_preprocess_parse_args_and_main_paths(tmp_path, monkeypatch) -> None:
     preprocessed = pd.read_csv(output_dir / "preprocessed_depth.tsv", sep="\t", index_col=0)
     assert sorted(preprocessed["Chr"].unique().tolist()) == ["chr13", "chr18", "chr21", "chrX", "chrY"]
     assert len(preprocessed) == 5
-    assert (output_dir / "observation_type.txt").read_text().strip() == "normalized"
+    assert (output_dir / "observation_type.txt").read_text().strip() == "raw"
     assert (output_dir / "site_data.npz").exists()
     site_npz = np.load(output_dir / "site_data.npz")
     observed_af = site_npz["site_pop_af"][np.any(site_npz["site_mask"], axis=2)]

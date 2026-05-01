@@ -17,8 +17,11 @@ import numpy as np
 import pandas as pd
 
 from gatk_sv_ploidy._util import (
+    BINQ_FIELD_OPTIONS,
+    baseline_ploidy_label,
     compute_cnq_from_probabilities,
     is_expected_allosome_copy_number_pair,
+    resolve_binq_field,
     summarize_contig_ploidy_from_bin_calls,
 )
 
@@ -27,14 +30,7 @@ logger = logging.getLogger(__name__)
 _SEX_CHROMS = {"chrX", "chrY"}
 _CN_PROB_COLUMNS = [f"cn_prob_{cn}" for cn in range(6)]
 _PLOIDY_PROB_COLUMNS = [f"ploidy_prob_{cn}" for cn in range(6)]
-_BINQ_FIELD_OPTIONS = ["auto", "BINQ15", "BINQ20", "CALLQ15", "CALLQ20"]
 _RESERVED_POLYPLOID_ANEUPLOIDY_TYPES = ("HAPLOID", "TRIPLOID", "TETRAPLOID")
-_BASELINE_PLOIDY_TYPES = {
-    1: "HAPLOID",
-    2: "DIPLOID",
-    3: "TRIPLOID",
-    4: "TETRAPLOID",
-}
 _NO_ANEUPLOIDY = "NONE"
 _POLYPLOID_SEX_LABELS_BY_BASELINE = {
     1: {
@@ -53,20 +49,6 @@ _POLYPLOID_SEX_LABELS_BY_BASELINE = {
         (1, 3): "TETRAPLOID_XYYY",
     },
 }
-
-
-def _resolve_binq_field(
-    bin_quality_df: pd.DataFrame,
-    requested_field: str,
-) -> str:
-    """Resolve a quality field, defaulting auto to BINQ20 when available."""
-    if requested_field != "auto":
-        return requested_field
-    if "BINQ20" in bin_quality_df.columns:
-        return "BINQ20"
-    if "CALLQ20" in bin_quality_df.columns:
-        return "CALLQ20"
-    return "BINQ20"
 
 
 def _median_absolute_deviation(values: pd.Series) -> float:
@@ -128,19 +110,6 @@ def _compute_sample_depth_ratios(df: pd.DataFrame) -> tuple[dict[str, float], fl
         if np.isfinite(depth) and depth > 0.0
     }
     return depth_ratios, reference_depth
-
-
-def _normalize_global_cn_artifact(
-    cn_map: dict,
-    sample_depth_ratio: float,
-    normalize_doubled_labels: bool = True,
-) -> tuple[dict, float]:
-    """Return chromosome copy numbers unchanged.
-
-    Infer reports absolute diploid-referenced chromosome labels, so no
-    additional normalization is applied here.
-    """
-    return dict(cn_map), 1.0
 
 
 def _aggregate_bin_stats_to_chromosome_stats(bin_df: pd.DataFrame) -> pd.DataFrame:
@@ -276,7 +245,7 @@ def _annotate_binq_filter_for_bin_stats(
     binq_field: str,
 ) -> pd.DataFrame:
     """Annotate each sample-bin row with BINQ-based call filtering metadata."""
-    binq_field = _resolve_binq_field(bin_quality_df, binq_field)
+    binq_field = resolve_binq_field(bin_quality_df, binq_field)
     required_quality_cols = {"chr", "start", "end", binq_field}
     missing_quality_cols = required_quality_cols - set(bin_quality_df.columns)
     if missing_quality_cols:
@@ -531,7 +500,6 @@ def apply_binq_filter_to_chromosome_stats(
 def assign_sex_and_aneuploidy_types(
     df: pd.DataFrame,
     truth_dict: Dict[str, str] | None = None,
-    normalize_doubled_labels: bool = True,
 ) -> pd.DataFrame:
     """Classify each sample's sex and aneuploidy type.
 
@@ -579,11 +547,8 @@ def assign_sex_and_aneuploidy_types(
             if not baseline_values.empty:
                 autosomal_baseline_cn = int(baseline_values.iloc[0])
         sample_depth_ratio = sample_depth_ratios.get(str(sample_id), float("nan"))
-        cn_map, cn_scale_factor = _normalize_global_cn_artifact(
-            raw_cn_map,
-            sample_depth_ratio,
-            normalize_doubled_labels=normalize_doubled_labels,
-        )
+        cn_map = dict(raw_cn_map)
+        cn_scale_factor = 1.0
         aneu_map = {
             chrom: bool(cn != autosomal_baseline_cn)
             for chrom, cn in cn_map.items()
@@ -675,8 +640,7 @@ def _classify_sex(
 
 def _classify_baseline_ploidy(autosomal_baseline_cn: int = 2) -> str:
     """Map autosomal baseline copy number to a baseline ploidy label."""
-    baseline = int(autosomal_baseline_cn)
-    return _BASELINE_PLOIDY_TYPES.get(baseline, f"BASELINE_CN{baseline}")
+    return baseline_ploidy_label(autosomal_baseline_cn)
 
 
 def _autosomal_aneuploid_chromosomes(aneu_map: dict) -> list[str]:
@@ -778,33 +742,6 @@ def _compose_aneuploidy_type(
     return f"{baseline_ploidy_type}_WITH_AUTOSOMAL_ANEUPLOIDY"
 
 
-def _classify_aneuploidy(
-    aneu_map: dict,
-    cn_map: dict,
-    x_cn: int,
-    y_cn: int,
-    autosomal_baseline_cn: int = 2,
-    sample_depth_ratio: float = float("nan"),
-) -> str:
-    """Determine predicted aneuploidy type from per-chromosome calls."""
-    baseline_ploidy_type = _classify_baseline_ploidy(autosomal_baseline_cn)
-    autosomal_aneuploidy_type = _classify_autosomal_aneuploidy(
-        aneu_map,
-        cn_map,
-        autosomal_baseline_cn=autosomal_baseline_cn,
-    )
-    allosomal_aneuploidy_type = _classify_allosomal_aneuploidy(
-        x_cn,
-        y_cn,
-        autosomal_baseline_cn=autosomal_baseline_cn,
-    )
-    return _compose_aneuploidy_type(
-        baseline_ploidy_type,
-        autosomal_aneuploidy_type,
-        allosomal_aneuploidy_type,
-    )
-
-
 # ── output helpers ──────────────────────────────────────────────────────────
 
 
@@ -902,7 +839,7 @@ def parse_args() -> argparse.Namespace:
         help="Shortcut for using CALLQ20 instead of the default BINQ20 when --min-binq is provided.",
     )
     p.add_argument(
-        "--binq-field", choices=_BINQ_FIELD_OPTIONS, default="BINQ20",
+        "--binq-field", choices=BINQ_FIELD_OPTIONS, default="BINQ20",
         help="Per-bin quality field to threshold when --min-binq is provided. "
              "Defaults to BINQ20. 'auto' prefers BINQ20 and falls back to CALLQ20.",
     )
@@ -948,7 +885,7 @@ def main() -> None:
                     "--use-callq20 cannot be combined with --binq-field set to a 15-threshold metric."
                 )
             requested_binq_field = "CALLQ20"
-        resolved_binq_field = _resolve_binq_field(
+        resolved_binq_field = resolve_binq_field(
             bin_quality_df,
             requested_binq_field,
         )

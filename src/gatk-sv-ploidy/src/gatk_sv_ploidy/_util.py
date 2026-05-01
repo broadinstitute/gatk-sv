@@ -47,16 +47,24 @@ DEFAULT_AF_WEIGHT = 0.25
 """Default relative weight of the allele-fraction likelihood term."""
 DEPTH_SPACES = ("normalized", "raw")
 """Supported depth/count spaces for the depth matrix input."""
+BINQ_FIELD_OPTIONS = ("auto", "BINQ15", "BINQ20", "CALLQ15", "CALLQ20")
+"""Supported BINQ/CALLQ selector values for filtering and plotting."""
 OBSERVATION_TYPE_FILENAME = "observation_type.txt"
 """Marker file written beside preprocess outputs to record depth space."""
 
 NEGATIVE_BINOMIAL_OBS_LIKELIHOOD = "negative_binomial"
 """Observation likelihood name used for raw-count negative-binomial fits."""
 DEFAULT_NORMALIZED_OBS_LIKELIHOOD = "normal"
-"""Default observation likelihood used for normalized depth matrices."""
-
+"""Legacy observation likelihood used by historical normalized depth artifacts."""
 MAX_CNQ = 99
 """Maximum phred-scaled CN quality score reported by the ploidy model."""
+
+_BASELINE_PLOIDY_LABELS = {
+    1: "HAPLOID",
+    2: "DIPLOID",
+    3: "TRIPLOID",
+    4: "TETRAPLOID",
+}
 
 
 def expected_allosome_copy_number_pairs(
@@ -84,6 +92,26 @@ def is_expected_allosome_copy_number_pair(
         int(x_cn),
         int(y_cn),
     ) in set(expected_allosome_copy_number_pairs(autosomal_baseline_cn))
+
+
+def baseline_ploidy_label(autosomal_baseline_cn: int) -> str:
+    """Return the standard label for a sample's autosomal baseline CN."""
+    baseline = int(autosomal_baseline_cn)
+    return _BASELINE_PLOIDY_LABELS.get(baseline, f"BASELINE_CN{baseline}")
+
+
+def resolve_binq_field(
+    bin_quality_df: pd.DataFrame,
+    requested_field: str,
+) -> str:
+    """Resolve a quality field, defaulting auto to BINQ20 when available."""
+    if requested_field != "auto":
+        return requested_field
+    if "BINQ20" in bin_quality_df.columns:
+        return "BINQ20"
+    if "CALLQ20" in bin_quality_df.columns:
+        return "CALLQ20"
+    return "BINQ20"
 
 
 # ── dataframe helpers ───────────────────────────────────────────────────────
@@ -530,9 +558,7 @@ def resolve_depth_space(depth_space: str, obs_likelihood: str) -> str:
     """Resolve ``auto`` depth space to a concrete input representation."""
     requested = str(depth_space).strip().lower()
     if requested == "auto":
-        if str(obs_likelihood).strip().lower() == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
-            return "raw"
-        return "normalized"
+        return "raw"
     if requested not in DEPTH_SPACES:
         raise ValueError(
             f"Unknown depth_space: {depth_space!r}. Choose one of {DEPTH_SPACES} or 'auto'."
@@ -556,15 +582,15 @@ def validate_depth_space(depth_space: str, obs_likelihood: str) -> str:
     """Validate that the chosen observation family matches the input space."""
     resolved = resolve_depth_space(depth_space, obs_likelihood)
     likelihood = str(obs_likelihood).strip().lower()
-    if likelihood == NEGATIVE_BINOMIAL_OBS_LIKELIHOOD and resolved != "raw":
+    if likelihood != NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
+        raise ValueError(
+            "Only negative_binomial raw-count inference is supported. "
+            "Re-run preprocess and infer on raw counts."
+        )
+    if resolved != "raw":
         raise ValueError(
             "negative_binomial observation likelihood requires raw count input "
             "(--depth-space raw or --depth-space auto)."
-        )
-    if likelihood != NEGATIVE_BINOMIAL_OBS_LIKELIHOOD and resolved != "normalized":
-        raise ValueError(
-            "Continuous observation likelihoods require normalized depth input "
-            "(--depth-space normalized or --depth-space auto)."
         )
     return resolved
 

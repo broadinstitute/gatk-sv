@@ -11,7 +11,6 @@ from pyro.infer import TraceEnum_ELBO
 from gatk_sv_ploidy.data import DepthData
 from gatk_sv_ploidy.models import (
     CNVModel,
-    DEFAULT_ALLOSOME_VAR,
     DEFAULT_BACKGROUND_FACTORS,
     DEFAULT_EPSILON_CONCENTRATION,
     DEFAULT_EPSILON_MEAN,
@@ -19,10 +18,7 @@ from gatk_sv_ploidy.models import (
     DEFAULT_MULTIPLICATIVE_FACTORS,
     DEFAULT_RAW_VARIANCE_POWER,
     _center_af_table_numpy,
-    _compose_allosome_overdispersion_numpy,
-    _depth_log_lik_numpy,
     _effective_negative_binomial_overdispersion_numpy,
-    _matched_residual_scale,
     _marginalized_af_log_lik,
     _marginalized_af_log_lik_numpy,
     _negative_binomial_log_lik_numpy,
@@ -33,7 +29,6 @@ from gatk_sv_ploidy.models import (
     _windowed_relative_elbo_change,
 )
 
-
 def test_cnv_model_defaults_match_current_preferred_configuration() -> None:
     model = CNVModel()
 
@@ -41,8 +36,6 @@ def test_cnv_model_defaults_match_current_preferred_configuration() -> None:
     assert model.var_bias_bin == 0.02
     assert model.var_sample == 0.00025
     assert model.var_bin == 0.0
-    assert model.var_allosome == pytest.approx(DEFAULT_ALLOSOME_VAR)
-    assert model.var_allosome == 0.0
     assert model.raw_variance_power == pytest.approx(DEFAULT_RAW_VARIANCE_POWER)
     assert model.epsilon_mean == pytest.approx(DEFAULT_EPSILON_MEAN)
     assert model.epsilon_concentration == pytest.approx(DEFAULT_EPSILON_CONCENTRATION)
@@ -67,14 +60,12 @@ def test_cnv_model_defaults_match_current_preferred_configuration() -> None:
     assert "background_bin_factors" not in model._latent_sites
     assert "background_sample_factors" not in model._latent_sites
 
-
 @pytest.mark.parametrize("raw_variance_power", [0.99, 2.01])
 def test_cnv_model_rejects_invalid_raw_variance_power(
     raw_variance_power: float,
 ) -> None:
     with pytest.raises(ValueError, match="raw_variance_power"):
         CNVModel(raw_variance_power=raw_variance_power)
-
 
 def test_freeze_sample_var_removes_latent_and_fixes_to_zero() -> None:
     df = pd.DataFrame(
@@ -96,7 +87,6 @@ def test_freeze_sample_var_removes_latent_and_fixes_to_zero() -> None:
     )
 
     model = CNVModel(
-        obs_likelihood="negative_binomial",
         device="cpu",
         dtype=torch.float64,
         freeze_sample_var=True,
@@ -109,14 +99,12 @@ def test_freeze_sample_var_removes_latent_and_fixes_to_zero() -> None:
         np.array([0.0, 0.0], dtype=np.float64),
     )
 
-    model.train(data, max_iter=1, log_freq=1, early_stopping=False)
     estimates = model.get_map_estimates(data, estimate_method="median")
 
     np.testing.assert_allclose(
         estimates["sample_var"],
         np.array([0.0, 0.0], dtype=np.float64),
     )
-
 
 def test_freeze_cn_prior_removes_latent_and_uses_default_prior() -> None:
     df = pd.DataFrame(
@@ -138,14 +126,12 @@ def test_freeze_cn_prior_removes_latent_and_uses_default_prior() -> None:
     )
 
     model = CNVModel(
-        obs_likelihood="negative_binomial",
         device="cpu",
         dtype=torch.float64,
         freeze_cn_prior=True,
     )
     assert "cn_probs" not in model._latent_sites
 
-    model.train(data, max_iter=1, log_freq=1, early_stopping=False)
     estimates = model.get_map_estimates(data, estimate_method="median")
 
     expected = np.array(
@@ -158,11 +144,9 @@ def test_freeze_cn_prior_removes_latent_and_uses_default_prior() -> None:
     )
     np.testing.assert_allclose(estimates["cn_probs"], expected)
 
-
 def test_freeze_cn_prior_rejects_shrinkage_mode() -> None:
     with pytest.raises(ValueError, match="freeze_cn_prior"):
         CNVModel(autosome_prior_mode="shrinkage", freeze_cn_prior=True)
-
 
 def test_multi_draw_inference_backfills_frozen_latents(monkeypatch) -> None:
     df = pd.DataFrame(
@@ -184,7 +168,6 @@ def test_multi_draw_inference_backfills_frozen_latents(monkeypatch) -> None:
     )
 
     model = CNVModel(
-        obs_likelihood="negative_binomial",
         guide_type="diagonal",
         device="cpu",
         dtype=torch.float64,
@@ -194,7 +177,7 @@ def test_multi_draw_inference_backfills_frozen_latents(monkeypatch) -> None:
     )
     model.train(data, max_iter=1, log_freq=1, early_stopping=False)
 
-    def fake_run_fixed(data, maps, af_table=None):
+    def fake_run_fixed(_data, maps, af_table=None):
         np.testing.assert_allclose(
             np.asarray(maps["bin_bias"]).reshape(-1),
             np.ones(data.n_bins, dtype=np.float64),
@@ -252,44 +235,6 @@ def test_sample_var_uses_exponential_prior() -> None:
         1.0 / 0.123,
         rtol=1e-6,
         atol=1e-6,
-    )
-
-
-def test_allosome_var_uses_exponential_prior_and_autosome_anchor() -> None:
-    df = pd.DataFrame(
-        {
-            "Chr": ["chr21", "chrX", "chrY"],
-            "Start": [0, 0, 0],
-            "End": [1000, 1000, 1000],
-            "S1": [2.0, 1.0, 0.5],
-        }
-    )
-    df["Bin"] = ["chr21:0-1000", "chrX:0-1000", "chrY:0-1000"]
-    data = DepthData(df.set_index("Bin"), device="cpu")
-    model = CNVModel(
-        sex_cn_weight=0.0,
-        epsilon_mean=0.0,
-        var_allosome=0.123,
-        device="cpu",
-    )
-
-    trace = poutine.trace(model.model).get_trace(**model._model_kwargs(data))
-    allosome_var_fn = trace.nodes["allosome_var"]["fn"]
-
-    assert allosome_var_fn.__class__.__name__ == "Independent"
-    np.testing.assert_allclose(
-        np.asarray(allosome_var_fn.base_dist.rate.detach().cpu().numpy()).squeeze(),
-        np.array([1.0 / 0.123, 1.0 / 0.123]),
-        rtol=1e-6,
-        atol=1e-6,
-    )
-    np.testing.assert_allclose(
-        _compose_allosome_overdispersion_numpy(
-            data.chr_type.detach().cpu().numpy(),
-            np.array([0.01, 0.02]),
-            data.n_bins,
-        ).squeeze(),
-        np.array([0.0, 0.01, 0.02]),
     )
 
 
@@ -568,11 +513,7 @@ def test_sample_depth_prior_uses_per_sample_anchor() -> None:
         dtype=torch.float64,
     )
 
-    model = CNVModel(
-        obs_likelihood="negative_binomial",
-        dtype=torch.float64,
-        device="cpu",
-    )
+    model = CNVModel(dtype=torch.float64, device="cpu")
 
     observed_center = model._estimate_sample_depth_center(data)
     sample_depth_prior = model._estimate_sample_depth_prior(data)
@@ -691,7 +632,6 @@ def test_model_trace_supports_negative_binomial_cn_sampling() -> None:
         dtype=torch.float64,
     )
     model = CNVModel(
-        obs_likelihood="negative_binomial",
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
         dtype=torch.float64,
@@ -722,11 +662,7 @@ def test_traceenum_elbo_supports_negative_binomial_and_sex_together() -> None:
         device="cpu",
         dtype=torch.float64,
     )
-    model = CNVModel(
-        obs_likelihood="negative_binomial",
-        dtype=torch.float64,
-        device="cpu",
-    )
+    model = CNVModel(dtype=torch.float64, device="cpu")
     guide = model._build_guide(model._make_init_loc_fn(data))
     kwargs = model._model_kwargs(data)
     loss = TraceEnum_ELBO(max_plate_nesting=2).loss(model.model, guide, **kwargs)
@@ -750,7 +686,6 @@ def test_discrete_inference_returns_cn_posterior() -> None:
         dtype=torch.float64,
     )
     model = CNVModel(
-        obs_likelihood="negative_binomial",
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
         dtype=torch.float64,
@@ -840,7 +775,6 @@ def test_relative_af_evidence_centers_against_fixed_reference_mixture(
     ).cpu().numpy()
     model = CNVModel(
         autosome_prior_mode="shrinkage",
-        af_evidence_mode="relative",
         sex_cn_weight=0.0,
         device="cpu",
     )
@@ -932,7 +866,6 @@ def test_prepare_af_table_uses_leave_one_out_for_self_pooled_site_pop_af() -> No
         dtype=torch.float64,
     )
     model = CNVModel(
-        af_evidence_mode="absolute",
         sex_cn_weight=0.0,
         device="cpu",
         dtype=torch.float64,
@@ -953,34 +886,9 @@ def test_prepare_af_table_uses_leave_one_out_for_self_pooled_site_pop_af() -> No
         n_states=model.n_states,
         concentration=model.af_concentration,
     )
+    expected_table = model._apply_af_evidence_mode_torch(expected_table, None)
 
     torch.testing.assert_close(auto_table, expected_table, rtol=1e-6, atol=1e-6)
-
-
-def test_matched_residual_scale_matches_target_variance() -> None:
-    target_variance = np.array([0.25, 1.0, 4.0], dtype=np.float64)
-
-    normal_scale = _matched_residual_scale(target_variance, "normal", 3.5)
-    laplace_scale = _matched_residual_scale(target_variance, "laplace", 3.5)
-    studentt_scale = _matched_residual_scale(target_variance, "studentt", 3.5)
-
-    np.testing.assert_allclose(normal_scale ** 2, target_variance)
-    np.testing.assert_allclose(2.0 * laplace_scale ** 2, target_variance)
-    np.testing.assert_allclose(
-        (3.5 / (3.5 - 2.0)) * studentt_scale ** 2,
-        target_variance,
-    )
-
-
-def test_depth_log_lik_numpy_studentt_is_heavier_tailed_than_normal() -> None:
-    obs = np.array([[[8.0]]], dtype=np.float64)
-    expected = np.array([[[2.0]]], dtype=np.float64)
-    variance = np.array([[[1.0]]], dtype=np.float64)
-
-    normal_ll = _depth_log_lik_numpy(obs, expected, variance, "normal", 3.5)
-    studentt_ll = _depth_log_lik_numpy(obs, expected, variance, "studentt", 3.5)
-
-    assert float(studentt_ll[0, 0, 0]) > float(normal_ll[0, 0, 0])
 
 
 def test_negative_binomial_log_lik_numpy_prefers_matching_mean() -> None:
@@ -1027,11 +935,16 @@ def test_run_discrete_inference_uses_learned_af_temperature_map() -> None:
             "Chr": ["chr21"],
             "Start": [0],
             "End": [1000],
-            "S1": [2.0],
+            "S1": [20],
         }
     )
     df["Bin"] = "chr21:0-1000"
-    data = DepthData(df.set_index("Bin"), device="cpu")
+    data = DepthData(
+        df.set_index("Bin"),
+        device="cpu",
+        depth_space="raw",
+        clamp_threshold=None,
+    )
     model = CNVModel(
         autosome_prior_mode="dirichlet",
         learn_af_temperature=True,
@@ -1045,6 +958,7 @@ def test_run_discrete_inference_uses_learned_af_temperature_map() -> None:
         "bin_bias": np.array([1.0], dtype=np.float32),
         "sample_var": np.array([1000.0], dtype=np.float32),
         "bin_var": np.array([1000.0], dtype=np.float32),
+        "sample_depth": np.array([20.0], dtype=np.float32),
         "cn_probs": np.full((1, 6), 1.0 / 6.0, dtype=np.float32),
     }
     af_table = np.full((6, 1, 1), -5.0, dtype=np.float32)
@@ -1091,7 +1005,7 @@ def test_cnv_model_uses_mixed_guide_when_learning_site_af() -> None:
 
 
 def test_cnv_model_negative_binomial_fixes_sample_depth_by_default() -> None:
-    model = CNVModel(obs_likelihood="negative_binomial")
+    model = CNVModel()
     assert model.freeze_sample_depth is True
     assert "sample_depth" not in model._latent_sites
     assert "bin_epsilon" in model._latent_sites
@@ -1100,10 +1014,7 @@ def test_cnv_model_negative_binomial_fixes_sample_depth_by_default() -> None:
 
 
 def test_cnv_model_can_learn_sample_depth_when_requested() -> None:
-    model = CNVModel(
-        obs_likelihood="negative_binomial",
-        freeze_sample_depth=False,
-    )
+    model = CNVModel(freeze_sample_depth=False)
 
     assert "sample_depth" in model._latent_sites
 
@@ -1135,7 +1046,6 @@ def test_freeze_sample_depth_removes_latent_and_fixes_anchor() -> None:
     )
 
     model = CNVModel(
-        obs_likelihood="negative_binomial",
         device="cpu",
         dtype=torch.float64,
         freeze_sample_depth=True,
@@ -1177,7 +1087,6 @@ def test_freeze_bin_bias_removes_latent_and_fixes_to_one() -> None:
     )
 
     model = CNVModel(
-        obs_likelihood="negative_binomial",
         device="cpu",
         dtype=torch.float64,
         freeze_bin_bias=True,
@@ -1216,7 +1125,7 @@ def test_estimate_sample_depth_init_uses_autosomal_counts_per_kb() -> None:
         depth_space="raw",
         clamp_threshold=None,
     )
-    model = CNVModel(obs_likelihood="negative_binomial", device="cpu")
+    model = CNVModel(device="cpu")
 
     init = model._estimate_sample_depth_init(data).cpu().numpy()
 
@@ -1240,7 +1149,7 @@ def test_estimate_sample_depth_prior_centers_on_autosomal_medians() -> None:
         depth_space="raw",
         clamp_threshold=None,
     )
-    model = CNVModel(obs_likelihood="negative_binomial", device="cpu")
+    model = CNVModel(device="cpu")
 
     prior = model._estimate_sample_depth_prior(data)
     center = prior["center"].cpu().numpy()
@@ -1279,7 +1188,7 @@ def test_estimate_sample_depth_prior_bootstrap_sd_tracks_sample_distribution() -
         depth_space="raw",
         clamp_threshold=None,
     )
-    model = CNVModel(obs_likelihood="negative_binomial", device="cpu")
+    model = CNVModel(device="cpu")
 
     prior = model._estimate_sample_depth_prior(data)
     center = prior["center"].cpu().numpy()
@@ -1306,7 +1215,7 @@ def test_model_kwargs_include_fixed_sample_depth_by_default_for_negative_binomia
         depth_space="raw",
         clamp_threshold=None,
     )
-    model = CNVModel(obs_likelihood="negative_binomial", device="cpu")
+    model = CNVModel(device="cpu")
 
     model_kw = model._model_kwargs(data)
 
@@ -1315,11 +1224,7 @@ def test_model_kwargs_include_fixed_sample_depth_by_default_for_negative_binomia
     assert "sample_depth_prior_scale" not in model_kw
     assert model_kw["sample_depth_fixed"].shape == (1,)
 
-    learned_model = CNVModel(
-        obs_likelihood="negative_binomial",
-        freeze_sample_depth=False,
-        device="cpu",
-    )
+    learned_model = CNVModel(freeze_sample_depth=False, device="cpu")
     learned_model_kw = learned_model._model_kwargs(data)
 
     assert "sample_depth_fixed" not in learned_model_kw
@@ -1335,16 +1240,22 @@ def test_run_discrete_inference_uses_bin_epsilon() -> None:
             "Chr": ["chrY"],
             "Start": [25],
             "End": [125],
-            "S1": [0.2],
+            "S1": [2],
         }
     )
     df["Bin"] = "chrY:25-125"
-    data = DepthData(df.set_index("Bin"), device="cpu")
+    data = DepthData(
+        df.set_index("Bin"),
+        device="cpu",
+        depth_space="raw",
+        clamp_threshold=None,
+    )
     model = CNVModel(sex_cn_weight=0.0, epsilon_mean=0.1)
     base_map = {
         "bin_bias": np.array([1.0], dtype=np.float32),
         "sample_var": np.array([0.01], dtype=np.float32),
         "bin_var": np.array([0.01], dtype=np.float32),
+        "sample_depth": np.array([20.0], dtype=np.float32),
         "cn_probs": np.full((1, 6), 1.0 / 6.0, dtype=np.float32),
     }
 
@@ -1366,12 +1277,17 @@ def test_run_discrete_inference_supports_sample_specific_bin_epsilon() -> None:
             "Chr": ["chrY"],
             "Start": [25],
             "End": [125],
-            "S1": [0.2],
-            "S2": [0.2],
+            "S1": [2],
+            "S2": [2],
         }
     )
     df["Bin"] = "chrY:25-125"
-    data = DepthData(df.set_index("Bin"), device="cpu")
+    data = DepthData(
+        df.set_index("Bin"),
+        device="cpu",
+        depth_space="raw",
+        clamp_threshold=None,
+    )
     model = CNVModel(sex_cn_weight=0.0, epsilon_mean=0.1)
 
     posterior = model.run_discrete_inference(
@@ -1381,6 +1297,7 @@ def test_run_discrete_inference_supports_sample_specific_bin_epsilon() -> None:
             "sample_var": np.array([0.01, 0.01], dtype=np.float32),
             "bin_var": np.array([0.01], dtype=np.float32),
             "bin_epsilon": np.array([[0.0, 0.3]], dtype=np.float32),
+            "sample_depth": np.array([20.0, 20.0], dtype=np.float32),
             "cn_probs": np.full((1, 6), 1.0 / 6.0, dtype=np.float32),
         },
     )
@@ -1394,16 +1311,22 @@ def test_run_discrete_inference_rejects_contig_shared_bin_epsilon() -> None:
             "Chr": ["chrY", "chrY"],
             "Start": [25, 125],
             "End": [125, 225],
-            "S1": [0.2, 0.2],
+            "S1": [2, 2],
         }
     )
     df["Bin"] = df["Chr"].astype(str) + ":" + df["Start"].astype(str) + "-" + df["End"].astype(str)
-    data = DepthData(df.set_index("Bin"), device="cpu")
+    data = DepthData(
+        df.set_index("Bin"),
+        device="cpu",
+        depth_space="raw",
+        clamp_threshold=None,
+    )
     model = CNVModel(sex_cn_weight=0.0, epsilon_mean=0.1)
     base_map = {
         "bin_bias": np.ones(data.n_bins, dtype=np.float32),
         "sample_var": np.array([0.01], dtype=np.float32),
         "bin_var": np.full(data.n_bins, 0.01, dtype=np.float32),
+        "sample_depth": np.array([20.0], dtype=np.float32),
         "cn_probs": np.full((data.n_bins, 6), 1.0 / 6.0, dtype=np.float32),
     }
 
@@ -1423,12 +1346,17 @@ def test_run_discrete_inference_uses_background_factors() -> None:
             "Chr": ["chrY"],
             "Start": [25],
             "End": [125],
-            "S1": [0.05],
-            "S2": [0.25],
+            "S1": [1],
+            "S2": [5],
         }
     )
     df["Bin"] = "chrY:25-125"
-    data = DepthData(df.set_index("Bin"), device="cpu")
+    data = DepthData(
+        df.set_index("Bin"),
+        device="cpu",
+        depth_space="raw",
+        clamp_threshold=None,
+    )
     model = CNVModel(sex_cn_weight=0.0, epsilon_mean=0.0)
 
     posterior = model.run_discrete_inference(
@@ -1439,6 +1367,7 @@ def test_run_discrete_inference_uses_background_factors() -> None:
             "bin_var": np.array([0.01], dtype=np.float32),
             "background_bin_factors": np.array([[2.0]], dtype=np.float32),
             "background_sample_factors": np.array([[0.0, 0.25]], dtype=np.float32),
+            "sample_depth": np.array([20.0, 20.0], dtype=np.float32),
             "cn_probs": np.full((1, 6), 1.0 / 6.0, dtype=np.float32),
         },
     )
@@ -1465,7 +1394,6 @@ def test_run_discrete_inference_negative_binomial_uses_sample_depth() -> None:
     model = CNVModel(
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
-        obs_likelihood="negative_binomial",
     )
     posterior = model.run_discrete_inference(
         data,
@@ -1503,7 +1431,6 @@ def test_run_discrete_inference_negative_binomial_supports_triploid_baseline_cn(
     model = CNVModel(
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
-        obs_likelihood="negative_binomial",
         autosomal_baseline_cn=[3],
     )
     posterior = model.run_discrete_inference(
@@ -1572,12 +1499,18 @@ def test_elbo_loss_supports_baseline_cn_with_dirichlet_singleton_cn_probs() -> N
             "Chr": ["chr21", "chr21"],
             "Start": [0, 1000],
             "End": [1000, 2000],
-            "S1": [2.0, 2.0],
-            "S2": [3.0, 3.0],
+            "S1": [20, 20],
+            "S2": [30, 30],
         },
         index=["chr21:0-1000", "chr21:1000-2000"],
     )
-    data = DepthData(df, device="cpu", dtype=torch.float64)
+    data = DepthData(
+        df,
+        device="cpu",
+        dtype=torch.float64,
+        depth_space="raw",
+        clamp_threshold=None,
+    )
     model = CNVModel(
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
@@ -1600,11 +1533,17 @@ def test_elbo_loss_supports_triploid_baseline_sex_cn_prior() -> None:
             "Chr": ["chrX", "chrY"],
             "Start": [0, 0],
             "End": [1000, 1000],
-            "S1": [2.0, 1.0],
+            "S1": [20, 10],
         },
         index=["chrX:0-1000", "chrY:0-1000"],
     )
-    data = DepthData(df, device="cpu", dtype=torch.float64)
+    data = DepthData(
+        df,
+        device="cpu",
+        dtype=torch.float64,
+        depth_space="raw",
+        clamp_threshold=None,
+    )
     model = CNVModel(
         sex_cn_weight=3.0,
         epsilon_mean=0.0,
@@ -1640,7 +1579,6 @@ def test_run_discrete_inference_negative_binomial_cn0_background() -> None:
     model = CNVModel(
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
-        obs_likelihood="negative_binomial",
     )
     base_map = {
         "bin_bias": np.array([1.0], dtype=np.float32),
@@ -1670,11 +1608,16 @@ def test_run_discrete_inference_supports_autosome_shrinkage_maps() -> None:
             "Chr": ["chr21"],
             "Start": [0],
             "End": [1000],
-            "S1": [2.0],
+            "S1": [20],
         }
     )
     df["Bin"] = "chr21:0-1000"
-    data = DepthData(df.set_index("Bin"), device="cpu")
+    data = DepthData(
+        df.set_index("Bin"),
+        device="cpu",
+        depth_space="raw",
+        clamp_threshold=None,
+    )
     model = CNVModel(
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
@@ -1685,6 +1628,7 @@ def test_run_discrete_inference_supports_autosome_shrinkage_maps() -> None:
         "bin_bias": np.array([1.0], dtype=np.float32),
         "sample_var": np.array([0.01], dtype=np.float32),
         "bin_var": np.array([0.01], dtype=np.float32),
+        "sample_depth": np.array([20.0], dtype=np.float32),
     }
     shrinkage_maps = {
         **common_maps,
@@ -1726,7 +1670,6 @@ def test_negative_binomial_model_trains_one_step_with_sample_depth_prior() -> No
         clamp_threshold=None,
     )
     model = CNVModel(
-        obs_likelihood="negative_binomial",
         guide_type="diagonal",
         sex_cn_weight=0.0,
         autosome_prior_mode="dirichlet",
@@ -1759,7 +1702,6 @@ def test_diagonal_guide_trains_with_delta_warm_start() -> None:
         dtype=torch.float64,
     )
     model = CNVModel(
-        obs_likelihood="negative_binomial",
         guide_type="diagonal",
         sex_cn_weight=0.0,
         autosome_prior_mode="dirichlet",
@@ -1786,11 +1728,11 @@ def test_shrinkage_prior_trains_with_autosome_and_sex_bins() -> None:
             "Chr": ["chr21", "chrX"],
             "Start": [0, 0],
             "End": [1000, 1000],
-            "S1": [2.0, 1.0],
+            "S1": [20, 10],
         },
         index=["chr21:0-1000", "chrX:0-1000"],
     )
-    data = DepthData(df, device="cpu")
+    data = DepthData(df, device="cpu", depth_space="raw", clamp_threshold=None)
     model = CNVModel(
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
@@ -1807,10 +1749,16 @@ def test_shrinkage_prior_trains_with_autosome_and_sex_bins() -> None:
 
 
 def test_model_kwargs_skip_precomputed_af_table_when_learning_site_af(
-    tiny_depth_df: pd.DataFrame,
+    tiny_raw_depth_df: pd.DataFrame,
     tiny_site_data: dict[str, np.ndarray],
 ) -> None:
-    data = DepthData(tiny_depth_df, device="cpu", site_data=tiny_site_data)
+    data = DepthData(
+        tiny_raw_depth_df,
+        device="cpu",
+        depth_space="raw",
+        clamp_threshold=None,
+        site_data=tiny_site_data,
+    )
     model = CNVModel(
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
@@ -1826,10 +1774,16 @@ def test_model_kwargs_skip_precomputed_af_table_when_learning_site_af(
 
 
 def test_learn_site_pop_af_trains_with_mixed_guide(
-    tiny_depth_df: pd.DataFrame,
+    tiny_raw_depth_df: pd.DataFrame,
     tiny_site_data: dict[str, np.ndarray],
 ) -> None:
-    data = DepthData(tiny_depth_df, device="cpu", site_data=tiny_site_data)
+    data = DepthData(
+        tiny_raw_depth_df,
+        device="cpu",
+        depth_space="raw",
+        clamp_threshold=None,
+        site_data=tiny_site_data,
+    )
     model = CNVModel(
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
@@ -1852,11 +1806,16 @@ def test_get_map_estimates_median_uses_guide_median(monkeypatch) -> None:
             "Chr": ["chr21", "chr21"],
             "Start": [0, 1000],
             "End": [1000, 2000],
-            "S1": [2.0, 2.0],
+            "S1": [20, 20],
         }
     )
     df["Bin"] = ["chr21:0-1000", "chr21:1000-2000"]
-    data = DepthData(df.set_index("Bin"), device="cpu")
+    data = DepthData(
+        df.set_index("Bin"),
+        device="cpu",
+        depth_space="raw",
+        clamp_threshold=None,
+    )
     model = CNVModel(
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
@@ -1880,8 +1839,8 @@ def test_get_map_estimates_median_uses_guide_median(monkeypatch) -> None:
                     dtype=torch.float32,
                 ),
                 "sample_var": torch.tensor([0.05], dtype=torch.float32),
-                "allosome_var": torch.tensor([0.0, 0.0], dtype=torch.float32),
                 "cn_probs": torch.full((2, 6), 1.0 / 6.0, dtype=torch.float32),
+                "sample_depth": torch.tensor([20.0], dtype=torch.float32),
             }
 
     model.guide = DummyGuide()
@@ -1917,11 +1876,16 @@ def test_run_discrete_inference_multi_draw_averages_posteriors(monkeypatch) -> N
             "Chr": ["chr21"],
             "Start": [0],
             "End": [1000],
-            "S1": [2.0],
+            "S1": [20],
         }
     )
     df["Bin"] = "chr21:0-1000"
-    data = DepthData(df.set_index("Bin"), device="cpu")
+    data = DepthData(
+        df.set_index("Bin"),
+        device="cpu",
+        depth_space="raw",
+        clamp_threshold=None,
+    )
     model = CNVModel(sex_cn_weight=0.0, epsilon_mean=0.0, guide_type="diagonal")
 
     draw_biases = iter([1.0, 2.0, 3.0])
@@ -1933,6 +1897,7 @@ def test_run_discrete_inference_multi_draw_averages_posteriors(monkeypatch) -> N
             "sample_var": torch.tensor([0.05], dtype=torch.float32),
             "bin_var": torch.tensor([0.02], dtype=torch.float32),
             "cn_probs": torch.full((1, 6), 1.0 / 6.0, dtype=torch.float32),
+            "sample_depth": torch.tensor([20.0], dtype=torch.float32),
         }
 
     def fake_run_fixed(data, maps, af_table=None):

@@ -55,6 +55,16 @@ def tiny_depth_df() -> pd.DataFrame:
 
 
 @pytest.fixture
+def tiny_raw_depth_df(tiny_depth_df: pd.DataFrame) -> pd.DataFrame:
+    raw_df = tiny_depth_df.copy()
+    sample_cols = get_sample_columns(raw_df)
+    raw_df.loc[:, sample_cols] = np.rint(
+        raw_df.loc[:, sample_cols].to_numpy(dtype=np.float64) * 10.0
+    ).astype(np.int64)
+    return raw_df
+
+
+@pytest.fixture
 def tiny_site_data() -> dict[str, np.ndarray]:
     site_alt = np.array(
         [

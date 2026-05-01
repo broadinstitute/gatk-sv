@@ -24,10 +24,10 @@ from gatk_sv_ploidy._util import (
     DEFAULT_AF_WEIGHT,
     DEPTH_SPACES,
     compute_cnq_from_probabilities,
-    default_obs_likelihood_for_depth_space,
     is_expected_allosome_copy_number_pair,
     format_count_summary,
     format_numeric_summary,
+    NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
     read_observation_type,
     summarize_contig_ploidy_from_bin_calls,
     validate_depth_space,
@@ -35,7 +35,6 @@ from gatk_sv_ploidy._util import (
 from gatk_sv_ploidy.data import DepthData, load_site_data
 from gatk_sv_ploidy.models import (
     AUTOSOME_PRIOR_MODES,
-    DEFAULT_ALLOSOME_VAR,
     DEFAULT_BACKGROUND_FACTORS,
     DEFAULT_EPSILON_CONCENTRATION,
     DEFAULT_EPSILON_MEAN,
@@ -43,9 +42,7 @@ from gatk_sv_ploidy.models import (
     DEFAULT_GUIDE_WARMUP_ITER,
     DEFAULT_MULTIPLICATIVE_FACTORS,
     DEFAULT_RAW_VARIANCE_POWER,
-    OBS_LIKELIHOODS,
     CNVModel,
-    _compose_allosome_overdispersion_numpy,
     _compose_effective_bin_bias_numpy,
     _resolve_fixed_site_pop_af_numpy,
     _site_level_marginalized_af_log_lik_numpy,
@@ -375,7 +372,6 @@ def build_safe_inference_diagnostic_messages(
         ("sample_depth", "Sample depth latent across samples"),
         ("bin_bias", "Bin bias latent across bins"),
         ("bin_var", "Bin variance latent across bins"),
-        ("allosome_var", "Allosome excess variance latent across chrX/chrY"),
     ):
         if key in map_estimates:
             messages.append(format_numeric_summary(label, map_estimates[key]))
@@ -1670,44 +1666,25 @@ def _plot_depth_baseline_per_sample(data: DepthData) -> np.ndarray:
 
 
 def _clamp_threshold_for_depth_space(depth_space: str) -> float | None:
-    """Use clamping only for the normalized-depth observation families."""
-    return 5.0 if depth_space == "normalized" else None
+    """Raw-count inference does not clamp counts on load."""
+    return None
 
 
 def _resolve_observation_model(
     requested_depth_space: str,
-    requested_obs_likelihood: str,
     input_path: str,
-) -> Tuple[str, str]:
-    """Resolve depth space and observation family using preprocess metadata."""
+) -> str:
+    """Resolve depth space for the fixed raw-count observation model."""
     marker_depth_space = read_observation_type(input_path)
     effective_depth_space = (
         marker_depth_space
         if marker_depth_space is not None and requested_depth_space == "auto"
         else requested_depth_space
     )
-
-    if requested_obs_likelihood == "auto":
-        if marker_depth_space is not None:
-            resolved_obs_likelihood = default_obs_likelihood_for_depth_space(
-                marker_depth_space,
-            )
-        elif effective_depth_space != "auto":
-            resolved_obs_likelihood = default_obs_likelihood_for_depth_space(
-                effective_depth_space,
-            )
-        else:
-            resolved_obs_likelihood = default_obs_likelihood_for_depth_space(
-                "normalized",
-            )
-    else:
-        resolved_obs_likelihood = requested_obs_likelihood
-
-    resolved_depth_space = validate_depth_space(
+    return validate_depth_space(
         effective_depth_space,
-        resolved_obs_likelihood,
+        NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
     )
-    return resolved_depth_space, resolved_obs_likelihood
 
 
 def _load_autosomal_baseline_cn(
@@ -2148,12 +2125,6 @@ def build_bin_stats(
             background_bin_factors=map_estimates.get("background_bin_factors"),
             background_sample_factors=map_estimates.get("background_sample_factors"),
         )
-    chrom_type_overdispersion = _compose_allosome_overdispersion_numpy(
-        data.chr_type.detach().cpu().numpy(),
-        map_estimates.get("allosome_var"),
-        data.n_bins,
-    )
-
     for i in range(data.n_bins):
         for j in range(data.n_samples):
             prob = cn_probs[i, j, :]
@@ -2176,7 +2147,6 @@ def build_bin_stats(
                 "bin_bias": float(map_estimates["bin_bias"].flatten()[i]),
                 "bin_var": float(map_estimates["bin_var"].flatten()[i]),
                 "sample_var": float(map_estimates["sample_var"].flatten()[j]),
-                "chrom_type_overdispersion": float(chrom_type_overdispersion[i, 0]),
             }
             if cn_map_stability is not None:
                 row["cn_map_stability"] = float(cn_map_stability[i, j])
@@ -2196,9 +2166,6 @@ def build_bin_stats(
                 )
                 row["bin_overdispersion"] = row["bin_var"]
                 row["sample_overdispersion"] = row["sample_var"]
-                row["chrom_type_overdispersion"] = float(
-                    chrom_type_overdispersion[i, 0]
-                )
             if bin_epsilon_matrix is not None:
                 row["bin_epsilon"] = float(bin_epsilon_matrix[i, j])
             if has_af:
@@ -2381,8 +2348,8 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     p.add_argument(
-        "--depth-space", choices=["auto", *DEPTH_SPACES], default="auto",
-        help="Interpret the input matrix as normalized depth or raw counts. 'auto' first consults preprocess observation_type.txt and otherwise falls back to the observation likelihood.",
+        "--depth-space", choices=["auto", "raw"], default="auto",
+        help="Interpret the input matrix as raw counts. 'auto' first consults preprocess observation_type.txt and otherwise resolves to raw.",
     )
 
     # Model priors
@@ -2421,15 +2388,6 @@ def parse_args() -> argparse.Namespace:
                    help="Exponential mean for per-sample variance")
     g.add_argument("--var-bin", type=float, default=0.0,
                    help="Exponential mean for per-bin variance; set to 0 or a negative value to disable the per-bin variance latent")
-    g.add_argument(
-        "--var-allosome",
-        type=float,
-        default=DEFAULT_ALLOSOME_VAR,
-        help=(
-            "Exponential mean for chrX/chrY excess overdispersion. "
-            "Disabled by default; autosomes are anchored at zero when this component is enabled."
-        ),
-    )
     g.add_argument(
         "--raw-variance-power",
         type=float,
@@ -2489,12 +2447,10 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Rank for --guide-type lowrank; omit to use Pyro's default rank.",
     )
-    g.add_argument("--obs-likelihood", choices=["auto", *list(OBS_LIKELIHOODS)], default="auto",
-                   help="Observation likelihood for the depth/count matrix. 'auto' resolves from preprocess observation_type.txt when present.")
     g.add_argument("--obs-df", type=float, default=3.5,
-                   help="Student-t degrees of freedom when --obs-likelihood=studentt")
+                   help="Unused legacy argument retained for CLI compatibility.")
     g.add_argument("--sample-depth-max", type=float, default=10000.0,
-                   help="Upper clip used when deriving the empirical-Bayes LogNormal prior center for per-sample depth scale when --obs-likelihood=negative_binomial")
+                   help="Upper clip used when deriving the empirical-Bayes LogNormal prior center for per-sample depth scale")
     g.add_argument("--freeze-bin-bias", action="store_true",
                    help="Hold per-bin bin_bias fixed at 1 during training. Useful for diagnosing whether low fitted bin_bias drives non-neutral CN calls.")
     g.add_argument("--freeze-cn-prior", action="store_true",
@@ -2572,16 +2528,6 @@ def parse_args() -> argparse.Namespace:
                    help="BetaBinomial concentration for allele fraction model")
     g.add_argument("--af-weight", type=float, default=DEFAULT_AF_WEIGHT,
                    help="Fixed AF scale when --fixed-af-temperature is used; otherwise the prior median for the learned global AF temperature (0 to disable)")
-    g.add_argument(
-        "--af-evidence-mode",
-        choices=["absolute", "relative"],
-        default="relative",
-        help=(
-            "How allele-fraction evidence enters the model: 'absolute' uses the "
-            "summed AF log-likelihood directly, while 'relative' centers it "
-            "against a fixed CN reference mixture before scaling."
-        ),
-    )
     p.set_defaults(learn_af_temperature=True)
     g.add_argument("--learn-af-temperature", dest="learn_af_temperature", action="store_true",
                    help="Learn a single global AF temperature instead of keeping --af-weight fixed (default)")
@@ -2697,11 +2643,7 @@ def main() -> None:
     # ── load data ───────────────────────────────────────────────────────
     logger.info("Loading preprocessed depth.")
     df = pd.read_csv(args.input, sep="\t", index_col=0)
-    depth_space, obs_likelihood = _resolve_observation_model(
-        args.depth_space,
-        args.obs_likelihood,
-        args.input,
-    )
+    depth_space = _resolve_observation_model(args.depth_space, args.input)
 
     # ── optional per-site allele data ─────────────────────────────────
     sd = None
@@ -2733,7 +2675,11 @@ def main() -> None:
     logger.info(
         "Safe logging enabled: reporting cohort-level summaries only."
     )
-    logger.info("Using %s input with %s observation model.", depth_space, obs_likelihood)
+    logger.info(
+        "Using %s input with %s observation model.",
+        depth_space,
+        NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
+    )
     if args.learn_site_af and data.site_alt is None:
         raise ValueError("--learn-site-af requires --site-data with per-site allele counts.")
 
@@ -2789,10 +2735,9 @@ def main() -> None:
 
     if af_enabled:
         logger.info(
-            "Allele-fraction evidence enabled (af_weight=%.2f, af_concentration=%.1f, mode=%s, summed over observed sites/bin, learn_af_temperature=%s)",
+            "Allele-fraction evidence enabled (af_weight=%.2f, af_concentration=%.1f, mode=relative, summed over observed sites/bin, learn_af_temperature=%s)",
             args.af_weight,
             args.af_concentration,
-            args.af_evidence_mode,
             learn_af_temperature,
         )
     elif data.site_alt is not None:
@@ -2824,7 +2769,6 @@ def main() -> None:
         var_bias_bin=args.var_bias_bin,
         var_sample=args.var_sample,
         var_bin=args.var_bin,
-        var_allosome=args.var_allosome,
         raw_variance_power=args.raw_variance_power,
         multiplicative_factors=args.multiplicative_factors,
         epsilon_mean=args.epsilon_mean,
@@ -2837,7 +2781,6 @@ def main() -> None:
         lowrank_guide_rank=args.lowrank_guide_rank,
         af_concentration=args.af_concentration,
         af_weight=args.af_weight if data.site_alt is not None else 0.0,
-        af_evidence_mode=args.af_evidence_mode,
         learn_af_temperature=learn_af_temperature,
         learn_site_pop_af=learn_site_af,
         site_af_prior_strength=args.site_af_prior_strength,
@@ -2846,7 +2789,6 @@ def main() -> None:
         alpha_sex_non_ref=args.alpha_sex_non_ref,
         sex_prior=tuple(args.sex_prior),
         sex_cn_weight=args.sex_cn_weight,
-        obs_likelihood=obs_likelihood,
         obs_df=args.obs_df,
         sample_depth_max=args.sample_depth_max,
         autosomal_baseline_cn=autosomal_baseline_cn,
@@ -2998,7 +2940,6 @@ def main() -> None:
     # ── save inference artifacts for downstream tools (ppd, plot) ──────
     artifacts_path = os.path.join(args.output_dir, "inference_artifacts.npz")
     artifact_dict = {k: v for k, v in map_est.items()}
-    artifact_dict["obs_likelihood"] = np.asarray(model.obs_likelihood)
     artifact_dict["obs_df"] = np.asarray(model.obs_df)
     artifact_dict["depth_space"] = np.asarray(depth_space)
     artifact_dict["model_n_states"] = np.asarray(model.n_states)
@@ -3017,14 +2958,12 @@ def main() -> None:
     artifact_dict["model_var_bias_bin"] = np.asarray(model.var_bias_bin)
     artifact_dict["model_var_sample"] = np.asarray(model.var_sample)
     artifact_dict["model_var_bin"] = np.asarray(model.var_bin)
-    artifact_dict["model_var_allosome"] = np.asarray(model.var_allosome)
     artifact_dict["model_raw_variance_power"] = np.asarray(model.raw_variance_power)
     artifact_dict["model_multiplicative_factors"] = np.asarray(
         model.multiplicative_factors
     )
     artifact_dict["model_af_concentration"] = np.asarray(model.af_concentration)
     artifact_dict["model_af_weight"] = np.asarray(model.af_weight)
-    artifact_dict["model_af_evidence_mode"] = np.asarray(model.af_evidence_mode)
     artifact_dict["model_learn_af_temperature"] = np.asarray(model.learn_af_temperature)
     artifact_dict["model_learn_site_pop_af"] = np.asarray(model.learn_site_pop_af)
     artifact_dict["model_site_af_prior_strength"] = np.asarray(

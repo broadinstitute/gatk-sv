@@ -103,8 +103,6 @@ def test_synthetic_fixture_absorbs_genomewide_depth_shifts_into_sample_depth(
             "cpu",
             "--depth-space",
             "raw",
-            "--obs-likelihood",
-            "negative_binomial",
             "--max-iter",
             "150",
             "--log-freq",
