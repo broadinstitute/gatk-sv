@@ -55,7 +55,7 @@ DRY_RUN="false"
 ENABLE_PPD="false"
 PREPROCESS_ARGS=""
 MODEL_ARGS=""
-TRIPLOIDY_ARGS=""
+POLYPLOIDY_ARGS=""
 PPD_STEP_ARGS=""
 CALL_ARGS=""
 PLOT_ARGS=""
@@ -74,7 +74,7 @@ usage() {
     echo "  --site-depth-list PATH   Optional file listing per-sample SD file paths (one per line)" >&2
     echo "  --poor-regions PATH      Optional BED of poor regions to remove during preprocess" >&2
     echo "  --min-poor-region-coverage FLOAT  Min fraction of a bin overlapped by poor regions to filter it" >&2
-    echo "  --triploidy-args STRING  Extra arguments passed through to the triploidy step" >&2
+    echo "  --polyploidy-args STRING Extra arguments passed through to the polyploidy step" >&2
     echo "  --ppd-args STRING        Extra arguments passed through to the ppd step" >&2
     echo "  --call-args STRING       Extra arguments passed through to the call step" >&2
     echo "  --use-callq20            Use CALLQ20 instead of the default BINQ20 when call filtering via --min-binq" >&2
@@ -104,10 +104,10 @@ while [[ $# -gt 0 ]]; do
             MODEL_ARGS="$2"; shift 2;;
         --model-args=*)
             MODEL_ARGS="${1#*=}"; shift;;
-        --triploidy-args)
-            TRIPLOIDY_ARGS="$2"; shift 2;;
-        --triploidy-args=*)
-            TRIPLOIDY_ARGS="${1#*=}"; shift;;
+        --polyploidy-args|--triploidy-args)
+            POLYPLOIDY_ARGS="$2"; shift 2;;
+        --polyploidy-args=*|--triploidy-args=*)
+            POLYPLOIDY_ARGS="${1#*=}"; shift;;
         --ppd-args)
             PPD_STEP_ARGS="$2"; shift 2;;
         --ppd-args=*)
@@ -177,7 +177,7 @@ fi
 
 # ── per-step output directories ───────────────────────────────────────────────
 PREPROCESS_DIR="${WORK_DIR}/preprocess"
-TRIPLOIDY_DIR="${WORK_DIR}/triploidy"
+POLYPLOIDY_DIR="${WORK_DIR}/polyploidy"
 INFER_DIR="${WORK_DIR}/infer"
 CALL_DIR="${WORK_DIR}/call"
 PLOT_DIR="${WORK_DIR}/plot"
@@ -187,7 +187,7 @@ EVAL_DIR="${WORK_DIR}/eval"
 # ── derived paths (outputs of earlier steps used as inputs to later steps) ───
 PREPROCESSED_DEPTH="${PREPROCESS_DIR}/preprocessed_depth.tsv"
 SITE_DATA="${PREPROCESS_DIR}/site_data.npz"
-TRIPLOIDY_MANIFEST="${TRIPLOIDY_DIR}/sample_autosomal_baseline_cn.tsv"
+POLYPLOIDY_MANIFEST="${POLYPLOIDY_DIR}/sample_autosomal_baseline_cn.tsv"
 CHROM_STATS="${INFER_DIR}/chromosome_stats.tsv"
 BIN_STATS="${INFER_DIR}/bin_stats.tsv.gz"
 TRAINING_LOSS="${INFER_DIR}/training_loss.tsv"
@@ -198,13 +198,13 @@ PPD_BIN_QUALITY="${PPD_DIR}/ppd_bin_quality.tsv"
 PPD_CHR_SUMMARY="${PPD_DIR}/ppd_chromosome_summary.tsv"
 IGNORED_BINS="${CALL_DIR}/ignored_bins.tsv.gz"
 
-RUN_TRIPLOIDY="false"
+RUN_POLYPLOIDY="false"
 if [[ -f "${SITE_DATA}" ]]; then
-    RUN_TRIPLOIDY="true"
+    RUN_POLYPLOIDY="true"
 fi
 
 TOTAL_STEPS=4
-if [[ "${RUN_TRIPLOIDY}" == "true" ]]; then
+if [[ "${RUN_POLYPLOIDY}" == "true" ]]; then
     TOTAL_STEPS=$((TOTAL_STEPS + 1))
 fi
 if [[ "${ENABLE_PPD}" == "true" ]]; then
@@ -219,7 +219,7 @@ echo "  Poor region cov  : ${MIN_POOR_REGION_COVERAGE}"
 echo "  Truth JSON       : $(describe_redacted_input "${TRUTH_JSON}")"
 echo "  Highlight sample : $(describe_redacted_input "${HIGHLIGHT_SAMPLE}")"
 echo "  Call filter qual : $([[ "${USE_CALLQ20}" == "true" ]] && printf 'CALLQ20' || printf 'BINQ20')"
-echo "  Run triploidy    : ${RUN_TRIPLOIDY}"
+echo "  Run polyploidy   : ${RUN_POLYPLOIDY}"
 echo "  PPD extra args   : $(describe_redacted_input "${PPD_STEP_ARGS}" "provided (redacted)" "none")"
 echo "  Run PPD          : ${ENABLE_PPD}"
 echo "  Work dir         : configured (redacted)"
@@ -262,16 +262,16 @@ fi
 
 CURRENT_STEP=1
 
-if [[ "${RUN_TRIPLOIDY}" == "true" ]]; then
-    echo "[${CURRENT_STEP}/${TOTAL_STEPS}] triploidy"
+if [[ "${RUN_POLYPLOIDY}" == "true" ]]; then
+    echo "[${CURRENT_STEP}/${TOTAL_STEPS}] polyploidy"
     if [[ "${DRY_RUN}" == "true" ]]; then
-        dry_run_step "triploidy"
+        dry_run_step "polyploidy"
     else
-        run_cli triploidy \
+        run_cli polyploidy \
             -i "${PREPROCESSED_DEPTH}" \
             --site-data "${SITE_DATA}" \
-            -o "${TRIPLOIDY_DIR}" \
-            $TRIPLOIDY_ARGS
+            -o "${POLYPLOIDY_DIR}" \
+            $POLYPLOIDY_ARGS
     fi
     CURRENT_STEP=$((CURRENT_STEP + 1))
 fi
@@ -283,10 +283,10 @@ if [[ -f "${SITE_DATA}" ]]; then
     AF_ARGS="--site-data ${SITE_DATA}"
 fi
 BASELINE_ARGS=""
-if [[ "${RUN_TRIPLOIDY}" == "true" ]]; then
-    BASELINE_ARGS="--autosomal-baseline-cn-tsv ${TRIPLOIDY_MANIFEST}"
-elif [[ -f "${TRIPLOIDY_MANIFEST}" ]]; then
-    BASELINE_ARGS="--autosomal-baseline-cn-tsv ${TRIPLOIDY_MANIFEST}"
+if [[ "${RUN_POLYPLOIDY}" == "true" ]]; then
+    BASELINE_ARGS="--autosomal-baseline-cn-tsv ${POLYPLOIDY_MANIFEST}"
+elif [[ -f "${POLYPLOIDY_MANIFEST}" ]]; then
+    BASELINE_ARGS="--autosomal-baseline-cn-tsv ${POLYPLOIDY_MANIFEST}"
 fi
 if [[ "${DRY_RUN}" == "true" ]]; then
     dry_run_step "infer"

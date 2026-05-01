@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import warnings
 
+from gatk_sv_ploidy._plot_style import plot_output_format
 from gatk_sv_ploidy._util import (
     add_chromosome_labels,
     compute_contig_posterior_from_bin_posteriors,
@@ -111,6 +112,14 @@ def test_plot_helpers_write_files_and_labels(tmp_path) -> None:
     add_chromosome_labels(ax, np.array(["chr1", "chr1", "chr2", "chr2"]))
     save_and_close_plot(str(tmp_path), "plot.png", subdir="plots")
     assert (tmp_path / "plots" / "plot.png").exists()
+    assert not (tmp_path / "plots" / "plot.pdf").exists()
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [1, 0])
+    with plot_output_format("pdf"):
+        save_and_close_plot(str(tmp_path), "plot.png", subdir="plots_pdf")
+    assert (tmp_path / "plots_pdf" / "plot.pdf").exists()
+    assert not (tmp_path / "plots_pdf" / "plot.png").exists()
 
     fig, ax = plt.subplots()
     add_chromosome_labels(

@@ -1,7 +1,8 @@
 """
 CLI entry point for gatk-sv-ploidy.
 
-Dispatches to subcommands: preprocess, triploidy, infer, ppd, call, plot, eval, pull-snps.
+Dispatches to subcommands: preprocess, polyploidy, infer, ppd, call, plot,
+eval, pull-snps.
 """
 
 import sys
@@ -9,7 +10,8 @@ import sys
 
 SUBCOMMANDS = {
     "preprocess": "gatk_sv_ploidy.preprocess",
-    "triploidy": "gatk_sv_ploidy.triploidy",
+    "polyploidy": "gatk_sv_ploidy.polyploidy",
+    "triploidy": "gatk_sv_ploidy.polyploidy",
     "infer": "gatk_sv_ploidy.infer",
     "ppd": "gatk_sv_ploidy.ppd",
     "call": "gatk_sv_ploidy.call",
@@ -20,7 +22,7 @@ SUBCOMMANDS = {
 
 DESCRIPTIONS = {
     "preprocess": "Normalise and filter depth data for aneuploidy inference",
-    "triploidy": "Classify autosomal baseline CN from pooled allele counts",
+    "polyploidy": "Classify autosomal baseline CN from pooled allele counts",
     "infer": "Train Bayesian model and run discrete CN inference",
     "ppd": "Posterior predictive check: compare model predictions to data",
     "call": "Assign sex karyotype and aneuploidy type per sample",
@@ -38,6 +40,7 @@ def _print_usage():
     print("Subcommands:")
     for name, desc in DESCRIPTIONS.items():
         print(f"  {name:12s}  {desc}")
+    print("\nLegacy alias: 'triploidy' maps to 'polyploidy'.")
     print(f"\nRun '{prog} <subcommand> --help' for subcommand-specific options.")
 
 

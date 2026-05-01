@@ -48,9 +48,12 @@ the needs of your cohort and study. There will be future opportunities
 (as part of [FilterBatch](/docs/modules/fb)) for filtering before the joint genotyping
 stage if necessary. Here are a few of the basic QC checks that we recommend:
 
-- Chromosome X and Y ploidy plots: check that sex assignments
-  match your expectations. If there are discrepancies, check for
-  sample swaps and update your PED file before proceeding.
+- Ploidy report: open `plot/report/index.html` from the `ploidy_plots`
+  tarball and check that chromosome X/Y sex assignments match your
+  expectations. If there are discrepancies, check for sample swaps and
+  update your PED file before proceeding. The tarball also includes
+  `plot/plot_manifest.tsv`, organized `plot/figures/` galleries, editable PDF
+  sidecars for publication review, and the legacy loose plot files.
 
 - Whole-genome dosage score (WGD): examine distribution and check that
   it is centered around 0 (the distribution of WGD for PCR-
@@ -139,7 +142,10 @@ Median coverage per sample
 Binned read depth matrix for the submitted batch
 
 #### `ploidy_*`
-Ploidy estimates, sex assignments, with plots
+Ploidy estimates, sex assignments, plots, and the static ploidy report. The
+`ploidy_plots` tarball contains `plot/report/index.html`,
+`plot/plot_manifest.tsv`, organized figure galleries, and the existing
+per-plot files.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `*_qc_low`, `*_qc_high`
 Outlier samples detected by call counts.

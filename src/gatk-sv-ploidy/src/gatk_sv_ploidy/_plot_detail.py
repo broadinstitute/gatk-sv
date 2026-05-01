@@ -19,13 +19,27 @@ from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
 
 from gatk_sv_ploidy._util import add_chromosome_labels, compute_cnq_from_probabilities
+from gatk_sv_ploidy._plot_style import (
+    ANNOTATION_SIZE_PT,
+    AXIS_LABEL_SIZE_PT,
+    CN_STATE_PALETTE,
+    DEFAULT_RASTER_DPI,
+    HIGHLIGHT_COLOR,
+    PANEL_LABEL_SIZE_PT,
+    SEX_PALETTE,
+    double_column_size,
+    save_publication_figure,
+    single_column_size,
+)
 
 logger = logging.getLogger(__name__)
 
-# CN state palette (matches original R / Python colours)
-_CN_COLORS = ["#004D40", "#FFC107", "#1E88E5", "#D81B60", "#38006B", "#FF6D00"]
+# CN state palette shared with the report overview plots.
+_CN_COLORS = [CN_STATE_PALETTE[i] for i in range(6)]
+_CNQ_TRACK_COLOR = "#5C6BC0"
 _IGNORED_BIN_COLOR = "#FFB300"
 _NON_DIPLOID_BASELINE_COLOR = "#7B1FA2"
+_SCORE_TRACK_YLIM = (0.0, 105.0)
 _AF_REFERENCE_LINES = (
     (0.25, "1/4"),
     (1.0 / 3.0, "1/3"),
@@ -105,7 +119,7 @@ def _draw_af_reference_lines(ax: plt.Axes) -> None:
         ax.axhline(
             value,
             color="#424242" if is_half else "#757575",
-            linestyle=":",
+            linestyle="-",
             alpha=0.35 if is_half else 0.25,
             linewidth=1.0 if is_half else 0.8,
             label=grid_label if value == 0.25 else "_nolegend_",
@@ -119,6 +133,7 @@ def _draw_site_af_scatter(
     site_data: Dict[str, np.ndarray],
     sample_idx: int,
     min_het_alt: int = 3,
+    retained_mask: Optional[np.ndarray] = None,
 ) -> None:
     """Draw individual site AFs as a scatter on *ax*.
 
@@ -149,7 +164,13 @@ def _draw_site_af_scatter(
     # Determine per-bin x-spacing for jitter scale
     if len(x) > 1:
         # median gap between consecutive bins
-        dx = np.median(np.diff(x[x > 0])) if np.any(x > 0) else 0.01
+        positive_x = x[x > 0]
+        if positive_x.size > 1:
+            dx = float(np.median(np.diff(positive_x)))
+        else:
+            dx = float(np.median(np.diff(x)))
+        if not np.isfinite(dx) or dx <= 0:
+            dx = 0.01
     else:
         dx = 0.01
     jitter_half = dx * 0.3
@@ -160,6 +181,8 @@ def _draw_site_af_scatter(
     roh_x: list = []  # bins with data but no het sites
 
     for row_i, (_, row) in enumerate(sample_data.iterrows()):
+        if retained_mask is not None and not bool(retained_mask[row_i]):
+            continue
         key = (str(row["chr"]), int(row["start"]), int(row["end"]))
         bi = bin_lookup.get(key)
         if bi is None:
@@ -198,16 +221,57 @@ def _draw_site_af_scatter(
             s=1, alpha=0.15, color="#00897B",
             rasterized=True, zorder=2, linewidths=0,
         )
-        logger.info(
+        logger.debug(
             "  AF scatter: %d site points",
             len(scatter_x),
         )
 
     if roh_x:
-        logger.info(
+        logger.debug(
             "  AF scatter: %d homozygous bins",
             len(roh_x),
         )
+
+
+def _draw_score_track(
+    ax: plt.Axes,
+    x: np.ndarray,
+    values: np.ndarray,
+    color: str,
+    retained_mask: Optional[np.ndarray] = None,
+) -> None:
+    """Render a dense per-bin score track as a step profile rather than bars."""
+    finite_mask = np.isfinite(values)
+    if retained_mask is not None:
+        finite_mask &= np.asarray(retained_mask, dtype=bool)
+
+    if not np.any(finite_mask):
+        return
+
+    plot_values = np.where(finite_mask, values, np.nan)
+    ax.fill_between(
+        x,
+        0.0,
+        plot_values,
+        where=np.isfinite(plot_values),
+        step="mid",
+        color=color,
+        alpha=0.18,
+        linewidth=0,
+        rasterized=True,
+        zorder=1.5,
+    )
+    ax.plot(
+        x,
+        plot_values,
+        color=color,
+        alpha=0.95,
+        linewidth=0.6,
+        drawstyle="steps-mid",
+        solid_capstyle="butt",
+        rasterized=True,
+        zorder=2.0,
+    )
 
 
 def _draw_sample_depth_panel(
@@ -253,11 +317,11 @@ def _draw_sample_depth_panel(
             transform=ax.transAxes,
             ha="center",
             va="center",
-            fontsize=10,
+            fontsize=AXIS_LABEL_SIZE_PT,
             color="#666666",
         )
 
-    ax.grid(True, axis="y", alpha=1, linestyle="-", linewidth=1)
+    ax.grid(True, axis="y", alpha=0.25, linestyle="-", linewidth=0.35)
     ax.set_ylim([-0.5, 5.5])
     ax.set_xlim([x_min, x_max])
     if panel_label:
@@ -268,7 +332,7 @@ def _draw_sample_depth_panel(
             transform=ax.transAxes,
             va="top",
             ha="left",
-            fontsize=10,
+            fontsize=PANEL_LABEL_SIZE_PT,
             bbox=dict(boxstyle="round", facecolor="white", alpha=0.75),
         )
 
@@ -284,7 +348,7 @@ def plot_sample_with_variance(
     sample_idx_map: Optional[Dict[str, int]] = None,
     min_het_alt: int = 3,
 ) -> None:
-    """Multi-panel plot: depth + CN, optional AF scatter, CNQ, optional BINQ, sample-var histogram.
+    """Multi-panel plot: retained-bin depth + CN, optional AF scatter, CNQ, optional BINQ, sample-var histogram.
 
     When *site_data* is provided (the ``.npz`` from preprocessing), each
     individual SNP allele fraction is drawn as a translucent dot, giving a
@@ -363,10 +427,9 @@ def plot_sample_with_variance(
     if "ignored_in_call" in sample_data.columns:
         ignored_mask = sample_data["ignored_in_call"].fillna(False).to_numpy(dtype=bool)
 
-    has_filtered_panel = bool(np.any(ignored_mask))
+    has_filtered_bins = bool(np.any(ignored_mask))
+    retained_mask = ~ignored_mask
     height_ratios: list[int] = [2]
-    if has_filtered_panel:
-        height_ratios.append(2)
     if has_af:
         height_ratios.append(2)
     height_ratios.append(1)
@@ -374,17 +437,15 @@ def plot_sample_with_variance(
         height_ratios.append(1)
     height_ratios.append(1)
 
-    fig_height = 1.0 + float(sum(height_ratios))
     fig, axes = plt.subplots(
         len(height_ratios),
         1,
-        figsize=(8, fig_height),
+        figsize=double_column_size(18.0 + (18.0 * sum(height_ratios))),
         gridspec_kw={"height_ratios": height_ratios},
     )
     axes_arr = np.atleast_1d(axes)
     axis_iter = iter(axes_arr)
     ax_depth = next(axis_iter)
-    ax_depth_filtered = next(axis_iter) if has_filtered_panel else None
     ax_af = next(axis_iter) if has_af else None
     ax_cn_prob = next(axis_iter)
     ax_binq = next(axis_iter) if has_binq else None
@@ -399,7 +460,7 @@ def plot_sample_with_variance(
         0.1 / 8,
         0.98,
         "  |  ".join(title_parts),
-        fontsize=12,
+        fontsize=AXIS_LABEL_SIZE_PT,
         fontweight="bold",
         va="top",
         ha="left",
@@ -414,20 +475,8 @@ def plot_sample_with_variance(
         cn_map,
         x_min,
         x_max,
-        panel_label="All bins" if has_filtered_panel else "",
+        retained_mask=retained_mask if has_filtered_bins else None,
     )
-
-    if ax_depth_filtered is not None:
-        _draw_sample_depth_panel(
-            ax_depth_filtered,
-            x,
-            obs,
-            cn_map,
-            x_min,
-            x_max,
-            retained_mask=~ignored_mask,
-            panel_label="Retained after BINQ filter",
-        )
 
     # Panel 2 — raw observed per-site AF scatter
     if ax_af is not None:
@@ -435,9 +484,10 @@ def plot_sample_with_variance(
         _draw_site_af_scatter(
             ax, sample_data, x, site_data, _si,
             min_het_alt=min_het_alt,
+            retained_mask=retained_mask if has_filtered_bins else None,
         )
         _draw_af_reference_lines(ax)
-        ax.set_ylabel("Observed Non-major AF")
+        ax.set_ylabel("Allele fraction")
         ax.set_ylim([-0.05, 1.05])
         ax.set_xlim([x_min, x_max])
         ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.02), borderaxespad=0)
@@ -445,32 +495,34 @@ def plot_sample_with_variance(
 
     # CN quality bar plot (half height)
     ax = ax_cn_prob
-    ax.bar(bar_left_edges, cnq, width=bar_widths, color="#546E7A", alpha=0.85,
-           linewidth=0, align="edge")
+    _draw_score_track(
+        ax,
+        x,
+        cnq,
+        color=_CNQ_TRACK_COLOR,
+        retained_mask=retained_mask if has_filtered_bins else None,
+    )
     ax.set_ylabel("CNQ")
-    ax.set_ylim([0, 99])
+    ax.set_ylim(_SCORE_TRACK_YLIM)
     ax.set_xlim([x_min, x_max])
     ax.grid(True, axis="y", alpha=0.3)
 
     if ax_binq is not None:
         ax = ax_binq
         binq = sample_data["binq_value"].to_numpy(dtype=float)
-        finite_binq = np.isfinite(binq)
-        if np.any(finite_binq):
-            ax.bar(
-                bar_left_edges[finite_binq],
-                binq[finite_binq],
-                width=bar_widths[finite_binq],
-                color="#7E57C2",
-                alpha=0.85,
-                align="edge",
-            )
+        _draw_score_track(
+            ax,
+            x,
+            binq,
+            color="#7E57C2",
+        )
         binq_label = "BINQ"
         if "binq_field" in sample_data.columns:
             field_series = sample_data["binq_field"].dropna().astype(str)
             if not field_series.empty:
                 binq_label = field_series.iloc[0]
         ax.set_ylabel(binq_label)
+        ax.set_ylim(_SCORE_TRACK_YLIM)
         ax.set_xlim([x_min, x_max])
         ax.grid(True, axis="y", alpha=0.3)
 
@@ -499,8 +551,6 @@ def plot_sample_with_variance(
 
     # Highlight aneuploid chromosomes on spatial panels
     spatial_axes = [ax_depth]
-    if ax_depth_filtered is not None:
-        spatial_axes.append(ax_depth_filtered)
     if ax_af is not None:
         spatial_axes.append(ax_af)
     spatial_axes.append(ax_cn_prob)
@@ -559,7 +609,7 @@ def plot_sample_with_variance(
         depth_handles.append(
             Line2D([0], [0], color=_IGNORED_BIN_COLOR, linewidth=6, alpha=0.35)
         )
-        depth_labels.append("Ignored in call")
+        depth_labels.append("Filtered")
     ax_depth.legend(
         depth_handles,
         depth_labels,
@@ -569,26 +619,18 @@ def plot_sample_with_variance(
         borderaxespad=0,
     )
 
-    if ax_depth_filtered is not None:
-        filtered_handles, filtered_labels = ax_depth_filtered.get_legend_handles_labels()
-        if filtered_handles:
-            ax_depth_filtered.legend(
-                filtered_handles,
-                filtered_labels,
-                loc="lower right",
-                bbox_to_anchor=(1.0, 1.02),
-                ncol=2,
-                borderaxespad=0,
-            )
-
     for a in spatial_axes:
         add_chromosome_labels(a, chrs, x_transformed=x)
 
-    plt.tight_layout()
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.97), pad=0.2, h_pad=0.15)
     dest = os.path.join(output_dir, "sample_plots")
     os.makedirs(dest, exist_ok=True)
     safe = name.replace("/", "_").replace(" ", "_")
-    fig.savefig(os.path.join(dest, f"{safe}.png"), dpi=150, bbox_inches="tight")
+    save_publication_figure(
+        fig,
+        os.path.join(dest, f"{safe}.png"),
+        dpi=DEFAULT_RASTER_DPI,
+    )
     plt.close(fig)
 
 
@@ -626,17 +668,17 @@ def plot_cn_per_contig_boxplot(
         suffix = "all_samples"
 
     contour = "with_contours" if connect_samples else "no_contours"
-    logger.info("Generating contig boxplot (%s, %s) ...", suffix, contour)
+    logger.debug("Generating contig boxplot (%s, %s) ...", suffix, contour)
 
     if plot_df.empty:
-        logger.info("Skipping contig boxplot for %s: no samples after filtering", suffix)
+        logger.debug("Skipping contig boxplot for %s: no samples after filtering", suffix)
         return
 
     chr_order = [f"chr{i}" for i in range(1, 23)] + ["chrX", "chrY"]
     chr_order = [c for c in chr_order if c in plot_df["chromosome"].unique()]
 
     if not chr_order:
-        logger.info("Skipping contig boxplot for %s: no chromosomes available", suffix)
+        logger.debug("Skipping contig boxplot for %s: no chromosomes available", suffix)
         return
 
     wide = plot_df.pivot(index="sample", columns="chromosome", values="median_depth")
@@ -644,7 +686,7 @@ def plot_cn_per_contig_boxplot(
     cn_wide = plot_df.pivot(index="sample", columns="chromosome", values="copy_number")
     cn_wide = cn_wide.reindex(columns=chr_order)
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=double_column_size(78))
     finite_depths = plot_df["median_depth"].to_numpy(dtype=float)
     finite_depths = finite_depths[np.isfinite(finite_depths)]
     y_max = max(4, float(finite_depths.max())) if len(finite_depths) > 0 else 4
@@ -684,7 +726,7 @@ def plot_cn_per_contig_boxplot(
 
         exp_lo, exp_hi = _expected_cn_range(chrom)
         colours = [
-            "blue" if cn > exp_hi else ("red" if cn < exp_lo else "#838393")
+            "#0072B2" if cn > exp_hi else ("#D55E00" if cn < exp_lo else "#838393")
             for cn in cns
         ]
         ax.scatter(jx, vals, s=10, alpha=0.5, c=colours, zorder=4)
@@ -702,30 +744,37 @@ def plot_cn_per_contig_boxplot(
         )
 
     if highlight_sample and highlight_sample in wide.index:
-        ax.plot(np.arange(len(chr_order)), wide.loc[highlight_sample].values,
-                color="magenta", linewidth=2, zorder=6, label=" " + highlight_sample)
+        ax.plot(
+            np.arange(len(chr_order)),
+            wide.loc[highlight_sample].values,
+            color=HIGHLIGHT_COLOR,
+            linewidth=1.2,
+            zorder=6,
+            label=" " + highlight_sample,
+        )
         ax.legend(loc="upper right", framealpha=0.9)
 
     ax.set_xticks(np.arange(len(chr_order)))
     ax.set_xticklabels([c.replace("chr", "") for c in chr_order], rotation=90)
-    ax.set_xlabel("Chromosome", fontsize=12)
-    ax.set_ylabel("Median Depth", fontsize=12)
+    ax.set_xlabel("Chromosome", fontsize=AXIS_LABEL_SIZE_PT)
+    ax.set_ylabel("Median Depth", fontsize=AXIS_LABEL_SIZE_PT)
 
     n = wide.shape[0]
     ni = int(wide.isnull().any(axis=1).sum())
     ax.text(0.02, 0.98, f"N={n} samples ({ni} incomplete)",
-            transform=ax.transAxes, va="top", ha="left", fontsize=10,
+            transform=ax.transAxes, va="top", ha="left", fontsize=ANNOTATION_SIZE_PT,
             bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
 
     plt.tight_layout()
     dest = os.path.join(output_dir, "raw_depth_contig")
     os.makedirs(dest, exist_ok=True)
-    fig.savefig(
+    save_publication_figure(
+        fig,
         os.path.join(dest, f"estimated_CN_per_contig.{suffix}.{contour}.png"),
-        dpi=300, bbox_inches="tight",
+        dpi=DEFAULT_RASTER_DPI,
     )
     plt.close(fig)
-    logger.info("Created contig boxplot (%s, %s)", suffix, contour)
+    logger.debug("Created contig boxplot (%s, %s)", suffix, contour)
 
 
 # ── per-bin-per-chromosome plot ─────────────────────────────────────────────
@@ -764,10 +813,10 @@ def plot_cn_per_bin_chromosome(
     else:
         suffix = "all_samples"
 
-    logger.info("Generating per-bin plot: %s (%s) ...", chromosome, suffix)
+    logger.debug("Generating per-bin plot: %s (%s) ...", chromosome, suffix)
 
     if cdf.empty:
-        logger.info("Skipping per-bin plot: %s (%s) has no rows", chromosome, suffix)
+        logger.debug("Skipping per-bin plot: %s (%s) has no rows", chromosome, suffix)
         return
 
     cdf = cdf.sort_values("start")
@@ -778,7 +827,7 @@ def plot_cn_per_bin_chromosome(
     ylabel, y_max = _depth_axis_label_and_limit(values, plot_col)
     normalized_scale = plot_col != "observed_depth" or y_max <= 10
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=double_column_size(78))
     ax.set_ylim(0, y_max)
 
     _draw_depth_reference_lines(ax, y_max, normalized_scale)
@@ -830,45 +879,54 @@ def plot_cn_per_bin_chromosome(
         )
 
     if highlight_sample:
-        highlight_df = sample_groups.get_group(highlight_sample) if highlight_sample in sample_groups.groups else None
+        highlight_df = (
+            sample_groups.get_group(highlight_sample)
+            if highlight_sample in sample_groups.groups else None
+        )
         if highlight_df is not None and len(highlight_df) > 0:
-            ax.plot(highlight_df["bin_idx"], highlight_df[plot_col], color="magenta", linewidth=2,
-                    label=" " + highlight_sample)
+            ax.plot(
+                highlight_df["bin_idx"],
+                highlight_df[plot_col],
+                color=HIGHLIGHT_COLOR,
+                linewidth=1.2,
+                label=" " + highlight_sample,
+            )
 
     handles, labels = ax.get_legend_handles_labels()
     if ignored_fraction_by_bin is not None and np.any(ignored_fraction_by_bin.to_numpy(dtype=float) > 0):
         handles.append(
             Line2D([0], [0], color=_IGNORED_BIN_COLOR, linewidth=6, alpha=0.35)
         )
-        labels.append("Ignored in call")
+        labels.append("Filtered")
     if handles:
         ax.legend(handles, labels, loc="upper right", framealpha=0.9)
 
-    ax.set_xlabel(f"{chromosome} Position (Binned)", fontsize=12)
-    ax.set_ylabel(ylabel, fontsize=12)
+    ax.set_xlabel(f"{chromosome} Position (Binned)", fontsize=AXIS_LABEL_SIZE_PT)
+    ax.set_ylabel(ylabel, fontsize=AXIS_LABEL_SIZE_PT)
     ax.set_xticks([])
 
     n = cdf["sample"].nunique()
     ax.text(0.02, 0.98, f"N={n} samples", transform=ax.transAxes, va="top",
-            ha="left", fontsize=10,
+            ha="left", fontsize=ANNOTATION_SIZE_PT,
             bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
 
     plt.tight_layout()
     dest = os.path.join(output_dir, "raw_depth_binned")
     os.makedirs(dest, exist_ok=True)
-    fig.savefig(
+    save_publication_figure(
+        fig,
         os.path.join(dest, f"estimated_CN_per_bin.{suffix}.{chromosome}.png"),
-        dpi=300, bbox_inches="tight",
+        dpi=DEFAULT_RASTER_DPI,
     )
     plt.close(fig)
-    logger.info("Created per-bin plot: %s (%s)", chromosome, suffix)
+    logger.debug("Created per-bin plot: %s (%s)", chromosome, suffix)
 
 
 # ── sex-assignment scatter ──────────────────────────────────────────────────
 
 _SEX_COLORS = {
-    "MALE": "#00BFF4",
-    "FEMALE": "#fd8eff",
+    "MALE": SEX_PALETTE["MALE"],
+    "FEMALE": SEX_PALETTE["FEMALE"],
     "TURNER": "#e02006",
     "TRIPLE_X": "#7B2AB3",
     "KLINEFELTER": "#FF6A09",
@@ -890,20 +948,20 @@ def plot_sex_assignments(
         output_dir: Base output directory.
         highlight_sample: Sample ID to mark with a triangle.
     """
-    logger.info("Generating sex-assignment scatter …")
-    fig, ax = plt.subplots(figsize=(8, 8))
+    logger.debug("Generating sex-assignment scatter …")
+    fig, ax = plt.subplots(figsize=single_column_size(89))
     lim = 3
     ax.set_xlim(-0.1, lim + 0.1)
     ax.set_ylim(-0.1, lim + 0.1)
-
     for i in range(lim + 1):
         ax.axhline(i, color="gray", linestyle=":", alpha=0.5)
         ax.axvline(i, color="gray", linestyle=":", alpha=0.5)
 
     for xc in range(lim + 1):
         for yc in range(lim + 1):
-            ax.text(xc, yc, "X" * xc + "Y" * yc, fontsize=16, fontweight="bold",
-                    color="lightgray", ha="center", va="center", alpha=0.8)
+            ax.text(xc, yc, "X" * xc + "Y" * yc, fontsize=PANEL_LABEL_SIZE_PT,
+                    fontweight="bold", color="#BBBBBB", ha="center", va="center",
+                    alpha=0.35)
 
     for assignment in sex_df["sex"].unique():
         sub = sex_df[sex_df["sex"] == assignment]
@@ -915,7 +973,7 @@ def plot_sex_assignments(
         hl = sub[sub["sample"] == highlight_sample]
         if len(hl):
             ax.scatter(hl["chrX_depth"], hl["chrY_depth"],
-                       c=_SEX_COLORS.get(assignment, "#8F1336"),
+                       c=HIGHLIGHT_COLOR,
                        s=100, alpha=1.0, marker="^", edgecolors="black", linewidths=2)
 
     if highlight_sample and highlight_sample in sex_df["sample"].values:
@@ -926,14 +984,17 @@ def plot_sex_assignments(
                    alpha=0.7)
 
     ax.legend(loc="upper right", framealpha=0.9)
-    ax.set_xlabel("chrX Normalised Depth", fontsize=12)
-    ax.set_ylabel("chrY Normalised Depth", fontsize=12)
+    ax.set_xlabel("chrX Normalised Depth", fontsize=AXIS_LABEL_SIZE_PT)
+    ax.set_ylabel("chrY Normalised Depth", fontsize=AXIS_LABEL_SIZE_PT)
 
     plt.tight_layout()
-    fig.savefig(os.path.join(output_dir, "sex_assignments.png"), dpi=300,
-                bbox_inches="tight")
+    save_publication_figure(
+        fig,
+        os.path.join(output_dir, "sex_assignments.png"),
+        dpi=DEFAULT_RASTER_DPI,
+    )
     plt.close(fig)
-    logger.info("Saved sex_assignments.png")
+    logger.debug("Saved sex_assignments.png")
 
 
 # ── private helpers ─────────────────────────────────────────────────────────

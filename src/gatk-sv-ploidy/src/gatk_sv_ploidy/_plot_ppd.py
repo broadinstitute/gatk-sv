@@ -20,10 +20,18 @@ from gatk_sv_ploidy._util import (
     get_chromosome_type,
     save_and_close_plot,
 )
+from gatk_sv_ploidy._plot_style import (
+    CHR_TYPE_PALETTE,
+    CN_STATE_PALETTE,
+    HIGHLIGHT_COLOR,
+    LEGEND_SIZE_PT,
+    double_column_size,
+    single_column_size,
+)
 
 logger = logging.getLogger(__name__)
 
-_CHR_PALETTE = {"Autosomal": "#1f77b4", "chrX": "#ff7f0e", "chrY": "#2ca02c"}
+_CHR_PALETTE = CHR_TYPE_PALETTE
 
 
 # ── observed vs predicted scatter ───────────────────────────────────────────
@@ -43,10 +51,9 @@ def plot_obs_vs_predicted(
         output_dir: Base output directory.
         highlight_sample: Sample to emphasise.
     """
-    fig, ax = plt.subplots(figsize=(8, 8))
+    fig, ax = plt.subplots(figsize=single_column_size(89))
 
-    cn_colors = {0: "#004D40", 1: "#FFC107", 2: "#1E88E5",
-                 3: "#D81B60", 4: "#38006B", 5: "#FF6D00"}
+    cn_colors = CN_STATE_PALETTE
 
     for cn in sorted(ppd_bin_df["cn_map"].unique()):
         sub = ppd_bin_df[ppd_bin_df["cn_map"] == cn]
@@ -62,7 +69,7 @@ def plot_obs_vs_predicted(
         hl = ppd_bin_df[ppd_bin_df["sample"] == highlight_sample]
         ax.scatter(
             hl["ppd_mean"], hl["observed_depth"],
-            s=8, alpha=0.7, color="magenta", marker="^",
+            s=8, alpha=0.7, color=HIGHLIGHT_COLOR, marker="^",
             label=highlight_sample, zorder=5,
         )
 
@@ -76,7 +83,7 @@ def plot_obs_vs_predicted(
     ax.set_xlabel("Predicted Depth (PPD Mean)")
     ax.set_ylabel("Observed Depth")
     ax.set_title("Observed vs Posterior Predictive Depth")
-    ax.legend(loc="upper left", fontsize=8, markerscale=3)
+    ax.legend(loc="upper left", fontsize=LEGEND_SIZE_PT, markerscale=3)
     ax.grid(True, alpha=0.3)
     save_and_close_plot(output_dir, "ppd_obs_vs_predicted.png", subdir="ppd")
 
@@ -107,7 +114,7 @@ def plot_residual_genome_profile(
     chrs = bin_avg["chr"].values
     x = np.arange(len(bin_avg))
 
-    fig, axes = plt.subplots(2, 1, figsize=(16, 8), sharex=True)
+    fig, axes = plt.subplots(2, 1, figsize=double_column_size(96), sharex=True)
 
     # Panel 1: Mean residual
     ax = axes[0]
@@ -141,7 +148,7 @@ def plot_residual_genome_profile(
         chrs_hl = hl["chr"].values
         x_hl = np.arange(len(hl))
 
-        fig, axes = plt.subplots(2, 1, figsize=(16, 8), sharex=True)
+        fig, axes = plt.subplots(2, 1, figsize=double_column_size(96), sharex=True)
         axes[0].scatter(x_hl, hl["residual"], s=3, alpha=0.6, color="steelblue",
                         rasterized=True)
         axes[0].axhline(0, color="red", linestyle="--", alpha=0.5)
@@ -181,7 +188,7 @@ def plot_calibration_histogram(
     """
     has_randomized_pit = "randomized_pit" in ppd_bin_df.columns
     n_panels = 3 if has_randomized_pit else 2
-    fig, axes = plt.subplots(1, n_panels, figsize=(6 * n_panels, 5))
+    fig, axes = plt.subplots(1, n_panels, figsize=double_column_size(62))
     axes = np.atleast_1d(axes)
 
     panel_idx = 0
@@ -248,7 +255,7 @@ def plot_qq(
         ppd_bin_df: ``ppd_bin_summary.tsv.gz`` DataFrame.
         output_dir: Base output directory.
     """
-    fig, ax = plt.subplots(figsize=(8, 8))
+    fig, ax = plt.subplots(figsize=single_column_size(89))
 
     df = ppd_bin_df.copy()
     df["chr_type"] = df["chr"].apply(get_chromosome_type)
@@ -276,109 +283,6 @@ def plot_qq(
     save_and_close_plot(output_dir, "ppd_qq_plot.png", subdir="ppd")
 
 
-# ── PPD interval coverage ──────────────────────────────────────────────────
-
-
-def plot_interval_coverage(
-    ppd_bin_df: pd.DataFrame,
-    output_dir: str,
-) -> None:
-    """Bar chart comparing nominal vs empirical predictive interval coverage.
-
-    For each nominal level (50%, 80%, 90%, 95%), shows the fraction of
-    observations actually falling within the corresponding PPD quantile
-    interval.
-
-    Args:
-        ppd_bin_df: ``ppd_bin_summary.tsv.gz`` DataFrame.
-        output_dir: Base output directory.
-    """
-    obs = ppd_bin_df["observed_depth"].values
-    levels = {
-        "50%": ("ppd_q25", "ppd_q75"),
-        "90%": ("ppd_q05", "ppd_q95"),
-    }
-
-    nominal = []
-    empirical = []
-    labels = []
-    for label, (lo_col, hi_col) in levels.items():
-        lo = ppd_bin_df[lo_col].values
-        hi = ppd_bin_df[hi_col].values
-        inside = np.mean((obs >= lo) & (obs <= hi))
-        nom = int(label.rstrip("%")) / 100.0
-        nominal.append(nom)
-        empirical.append(inside)
-        labels.append(label)
-
-    fig, ax = plt.subplots(figsize=(6, 5))
-    x = np.arange(len(labels))
-    width = 0.35
-    ax.bar(x - width / 2, nominal, width, label="Nominal", color="lightgray",
-           edgecolor="black")
-    ax.bar(x + width / 2, empirical, width, label="Empirical", color="steelblue",
-           edgecolor="black")
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    ax.set_xlabel("Predictive Interval")
-    ax.set_ylabel("Coverage Fraction")
-    ax.set_title("Predictive Interval Coverage")
-    ax.legend()
-    ax.set_ylim([0, 1.05])
-    ax.grid(True, alpha=0.3, axis="y")
-    save_and_close_plot(output_dir, "ppd_interval_coverage.png", subdir="ppd")
-
-
-# ── Bayesian p-value by chromosome ─────────────────────────────────────────
-
-
-def plot_bayesian_pvalue_heatmap(
-    ppd_chr_df: pd.DataFrame,
-    output_dir: str,
-) -> None:
-    """Heatmap of Bayesian p-values (samples × chromosomes).
-
-    Values near 0 or 1 indicate poor model fit for that chromosome/sample.
-
-    Args:
-        ppd_chr_df: ``ppd_chromosome_summary.tsv`` DataFrame.
-        output_dir: Base output directory.
-    """
-    pivot = ppd_chr_df.pivot(
-        index="sample", columns="chromosome", values="bayesian_pvalue",
-    )
-    # Sort chromosomes
-    chr_order = [f"chr{i}" for i in range(1, 23)] + ["chrX", "chrY"]
-    chr_order = [c for c in chr_order if c in pivot.columns]
-    pivot = pivot.reindex(columns=chr_order)
-
-    # Sort samples by mean p-value (most extreme first)
-    pivot["_mean_dev"] = (pivot.values - 0.5).mean(axis=1)
-    pivot = pivot.sort_values("_mean_dev")
-    pivot = pivot.drop("_mean_dev", axis=1)
-
-    # Truncate sample labels if too many
-    n_samples = len(pivot)
-    show_labels = n_samples <= 50
-
-    fig, ax = plt.subplots(figsize=(14, max(4, 0.3 * n_samples)))
-    im = ax.imshow(pivot.values, aspect="auto", cmap="RdYlGn",
-                   vmin=0, vmax=1, interpolation="nearest")
-    ax.set_xticks(np.arange(len(chr_order)))
-    ax.set_xticklabels([c.replace("chr", "") for c in chr_order], rotation=45)
-    if show_labels:
-        ax.set_yticks(np.arange(n_samples))
-        ax.set_yticklabels(pivot.index, fontsize=6)
-    else:
-        ax.set_yticks([])
-    ax.set_xlabel("Chromosome")
-    ax.set_ylabel("Sample")
-    ax.set_title("Bayesian P-Value per Sample × Chromosome")
-    plt.colorbar(im, ax=ax, label="Bayesian p-value")
-    plt.tight_layout()
-    save_and_close_plot(output_dir, "ppd_bayesian_pvalue_heatmap.png", subdir="ppd")
-
-
 # ── per-chromosome RMSE distribution ───────────────────────────────────────
 
 
@@ -395,7 +299,7 @@ def plot_chromosome_rmse(
     chr_order = [f"chr{i}" for i in range(1, 23)] + ["chrX", "chrY"]
     chr_order = [c for c in chr_order if c in ppd_chr_df["chromosome"].unique()]
 
-    fig, ax = plt.subplots(figsize=(14, 6))
+    fig, ax = plt.subplots(figsize=double_column_size(78))
     bp_data = []
     for chrom in chr_order:
         vals = ppd_chr_df[ppd_chr_df["chromosome"] == chrom]["rmse"].values
@@ -439,8 +343,6 @@ def run_ppd_plots(
     plot_residual_genome_profile(ppd_bin_df, output_dir, highlight_sample)
     plot_calibration_histogram(ppd_bin_df, output_dir)
     plot_qq(ppd_bin_df, output_dir)
-    plot_interval_coverage(ppd_bin_df, output_dir)
-    plot_bayesian_pvalue_heatmap(ppd_chr_df, output_dir)
     plot_chromosome_rmse(ppd_chr_df, output_dir)
 
     logger.info("PPD plots complete.")

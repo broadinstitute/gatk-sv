@@ -110,23 +110,23 @@ def test_plot_pipeline_runs_on_medium_fixture(
     expected_files = [
         plot_out / "sex_assignments.png",
         plot_out / "median_depth_distributions.pdf",
-        plot_out / "diagnostics" / "training_loss.png",
         plot_out / "diagnostics" / "training_loss_gradient.png",
         plot_out / "diagnostics" / "bin_posteriors.png",
-        plot_out / "diagnostics" / "cn_posterior_entropy.png",
         plot_out / "diagnostics" / "chromosome_cn_heatmap.png",
-        plot_out / "diagnostics" / "parameter_diagnostics.png",
         plot_out / "ppd" / "ppd_obs_vs_predicted.png",
         plot_out / "ppd" / "ppd_residual_genome.png",
         plot_out / "ppd" / f"ppd_residual_{highlight_sample}.png",
         plot_out / "ppd" / "ppd_calibration_histogram.png",
         plot_out / "ppd" / "ppd_qq_plot.png",
-        plot_out / "ppd" / "ppd_interval_coverage.png",
-        plot_out / "ppd" / "ppd_bayesian_pvalue_heatmap.png",
         plot_out / "ppd" / "ppd_chromosome_rmse.png",
+        plot_out / "report" / "index.html",
+        plot_out / "plot_manifest.tsv",
     ]
     for path in expected_files:
         assert path.exists(), path
+
+    assert not (plot_out / "figures").exists()
+    assert not (plot_out / "tables").exists()
 
     assert any((plot_out / "sample_plots").iterdir())
     assert any((plot_out / "raw_depth_contig").iterdir())

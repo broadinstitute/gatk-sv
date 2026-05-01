@@ -27,11 +27,11 @@ gatk-sv-ploidy <subcommand> [options]
 | Subcommand   | Description |
 |-------------|-------------|
 | `preprocess` | Read and normalise depth data, filter low-quality bins |
-| `triploidy`  | Classify autosomal baseline CN from pooled allele fractions |
+| `polyploidy` | Classify autosomal baseline CN from pooled allele fractions |
 | `infer`      | Train Bayesian model and run discrete CN inference |
 | `ppd`        | Posterior predictive check: compare model predictions to data |
 | `call`       | Assign sex karyotype and aneuploidy type per sample |
-| `plot`       | Generate diagnostic and summary plots |
+| `plot`       | Generate diagnostic plots and a static HTML report |
 | `eval`       | Evaluate predictions against a truth set |
 | `pull-snps`  | Pull common-SNP sites from gnomAD (requires Hail; local only) |
 
@@ -44,14 +44,14 @@ Run `gatk-sv-ploidy <subcommand> --help` for subcommand-specific options.
 gatk-sv-ploidy preprocess -i depth.tsv -o out/preprocess/
 
 # 2. Classify autosomal baseline CN from pooled autosomal AFs
-gatk-sv-ploidy triploidy -i out/preprocess/preprocessed_depth.tsv \
-  --site-data out/preprocess/site_data.npz -o out/triploidy/ \
+gatk-sv-ploidy polyploidy -i out/preprocess/preprocessed_depth.tsv \
+  --site-data out/preprocess/site_data.npz -o out/polyploidy/ \
   --diagnostics
 
 # 3. Run Bayesian inference
 gatk-sv-ploidy infer -i out/preprocess/preprocessed_depth.tsv -o out/infer/ \
   --site-data out/preprocess/site_data.npz \
-  --autosomal-baseline-cn-tsv out/triploidy/sample_autosomal_baseline_cn.tsv
+  --autosomal-baseline-cn-tsv out/polyploidy/sample_autosomal_baseline_cn.tsv
 
 # 4. Run posterior predictive checks
 gatk-sv-ploidy ppd -i out/preprocess/preprocessed_depth.tsv \
@@ -73,6 +73,30 @@ gatk-sv-ploidy eval -p out/call/aneuploidy_type_predictions.tsv \
   -t truth.json -o out/eval/
 ```
 
+The `plot` command now writes a static HTML report alongside the legacy plot
+files used by existing workflows:
+
+| Path | Description |
+|------|-------------|
+| `out/plot/report/index.html` | Static, dependency-free cohort report linking all generated figures and tables. |
+| `out/plot/plot_manifest.tsv` | Manifest with category, title, source path, report path, sample/chromosome tags, and file size for every report artifact. |
+
+The report links directly to the original artifacts under paths such as
+`out/plot/diagnostics/`, `out/plot/ppd/`, `out/plot/sample_plots/`, and
+`out/plot/raw_depth_*`. Those original files are the only on-disk copies.
+
+Figures use a Nature-oriented, color-blind-aware palette and standard
+sans-serif typography. Figure artifacts are written as PNG by default at 450
+dpi. Add `gatk-sv-ploidy plot --pdf ...` to emit PDF figure artifacts instead.
+The multi-page `median_depth_distributions.pdf` summary remains PDF in either
+mode.
+
+The WDL tarball output still packages the full ploidy working directory, so
+existing data paths such as `call/sex_assignments.txt.gz`,
+`infer/chromosome_stats.tsv`, and `infer/bin_stats.tsv.gz` are unchanged.
+Open `plot/report/index.html` after extracting the tarball to review the
+report.
+
 By default, `ppd` conditions on the fitted continuous latents and resamples
 copy number plus observation noise. This is the intended in-sample QC/BINQ
 calibration check. For a fully Bayesian posterior predictive check that also
@@ -86,6 +110,8 @@ baselines, even when there is no focal chromosome-specific aneuploidy.
 
 If you run the end-to-end wrapper, pass extra PPD CLI options through
 `run_ploidy.sh --ppd-args "--continuous-posterior-mode integrated"`.
+Pass `run_ploidy.sh --plot-args "--pdf"` to switch the plot step to PDF figure
+outputs.
 
 `infer` now defaults to the simplified aneuploidy model: no low-rank
 multiplicative bias (`--multiplicative-factors 0`), no low-rank additive
@@ -113,11 +139,11 @@ gatk-sv-ploidy ppd -i out/preprocess_nb/preprocessed_depth.tsv \
 In this mode the model fixes each per-sample `sample_depth` to the autosomal
 median counts/kb anchor by default and infers only sample-specific
 overdispersion. Whole-genome baseline copy states are handled as a separate
-post-preprocess step: run `triploidy` on `site_data.npz`, then pass the emitted
+post-preprocess step: run `polyploidy` on `site_data.npz`, then pass the emitted
 `sample_autosomal_baseline_cn.tsv` into `infer` via
 `--autosomal-baseline-cn-tsv` so downstream `call` can emit `HAPLOID`,
-`TRIPLOID`, or `TETRAPLOID` when appropriate. The command name is retained for
-compatibility, but the classifier now compares CN1, CN2, CN3, and CN4
+`TRIPLOID`, or `TETRAPLOID` when appropriate. A legacy `triploidy` alias is
+retained for compatibility, but the classifier now compares CN1, CN2, CN3, and CN4
 beta-binomial genotype-mixture models and marginalizes over a log-spaced grid
 of AF concentration values. The direct AF peak model checks the canonical peak
 sets 0/1, 0/0.5/1, 0/1/3/2/3/1, and 0/1/4/0.5/3/4/1, then combines that peak
@@ -141,11 +167,11 @@ Direct peak guards are controlled by `--ploidy-peak-af-window`,
 `--min-tetraploid-quarter-peak-fraction-advantage`. Add
 `--privacy-safe-diagnostics` to log aggregate-only summaries for protected
 manual debugging without filenames, paths, sample identifiers, raw rows, or
-sample-level values. The triploidy step emits aggregate stage logs and progress
+sample-level values. The polyploidy step emits aggregate stage logs and progress
 bars by default; use `--no-progress` to suppress progress bars in batch logs
 while retaining safe stage messages. Add `--diagnostics` to write per-sample AF
 summary metrics, sampled raw informative-site AFs, and diagnostic PNGs under
-`out/triploidy/diagnostics/`. The raw-AF profile plot overlays quarter,
+`out/polyploidy/diagnostics/`. The raw-AF profile plot overlays quarter,
 thirds, and half peaks, and the summary plot shows CN1 endpoint support, CN3
 thirds support, CN4 quarter support, and CN4 diploid-compatibility checks. A
 separate diploid-only raw-AF profile plot shows up to 12 diploid-called samples

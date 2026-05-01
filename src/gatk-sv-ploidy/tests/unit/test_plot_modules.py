@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,6 +24,13 @@ from gatk_sv_ploidy._plot_detail import (
     plot_sex_assignments,
 )
 from gatk_sv_ploidy._plot_ppd import run_ppd_plots
+from gatk_sv_ploidy._plot_report import write_plot_report
+from gatk_sv_ploidy._plot_style import (
+    _suppress_chatty_plot_dependency_loggers,
+    apply_theme,
+    get_plot_output_format,
+    set_plot_output_format,
+)
 from gatk_sv_ploidy.plot import (
     _annotate_binq_values,
     _annotate_ignored_bins,
@@ -33,13 +41,12 @@ from gatk_sv_ploidy.plot import (
     _run_aneuploidy_plots,
     _run_ploidy_plots,
     parse_args,
-    plot_aneuploid_histograms,
     plot_background_factor_diagnostics,
     plot_binq_genome_profile,
     plot_chromosome_cn_heatmap,
     plot_chromosome_plq_heatmap,
+    plot_histograms_by_chr_type,
     plot_median_depth_distributions,
-    plot_sample_depth_diagnostics,
     plot_site_af_estimates,
     plot_training_loss_with_gradient,
     main,
@@ -222,7 +229,7 @@ def test_plot_detail_helpers_and_outputs(tmp_path, tiny_site_data) -> None:
     assert (tmp_path / "sex_assignments.png").exists()
 
 
-def test_af_reference_lines_are_dotted() -> None:
+def test_af_reference_lines_are_solid() -> None:
     fig, ax = plt.subplots()
     try:
         _draw_af_reference_lines(ax)
@@ -232,7 +239,7 @@ def test_af_reference_lines_are_dotted() -> None:
             y_values,
             [0.25, 1.0 / 3.0, 0.5, 2.0 / 3.0, 0.75],
         )
-        assert {line.get_linestyle() for line in ax.lines} == {":"}
+        assert {line.get_linestyle() for line in ax.lines} == {"-"}
         labels = [
             line.get_label()
             for line in ax.lines
@@ -292,6 +299,71 @@ def test_draw_sample_depth_panel_omits_ignored_bins() -> None:
     assert np.isnan(obs_line.get_ydata()[1])
     assert tuple(ax.get_xlim()) == pytest.approx((-0.25, 1.25))
     plt.close(fig)
+
+
+def test_plot_sample_with_variance_omits_filtered_panel_and_filtered_af_cnq(
+    tmp_path,
+    tiny_site_data,
+    monkeypatch,
+) -> None:
+    sample_data = pd.DataFrame(
+        {
+            "sample": ["S1", "S1"],
+            "chr": ["chr21", "chr18"],
+            "start": [200, 100],
+            "end": [300, 200],
+            "observed_depth": [2.0, 1.9],
+            "cn_map": [2, 2],
+            "cnq": [20.0, 40.0],
+            "binq_field": ["BINQ20", "BINQ20"],
+            "binq_value": [35.0, 5.0],
+            "sample_var": [0.09, 0.09],
+            "ignored_in_call": [False, True],
+        }
+    )
+    site_data = dict(tiny_site_data)
+    site_data["sample_ids"] = np.array(["S1", "S2"], dtype=object)
+    captured: dict[str, plt.Figure] = {}
+
+    def fake_save_publication_figure(fig, path, dpi=None, **kwargs):
+        captured["fig"] = fig
+
+    monkeypatch.setattr(
+        "gatk_sv_ploidy._plot_detail.save_publication_figure",
+        fake_save_publication_figure,
+    )
+
+    plot_sample_with_variance(
+        sample_data,
+        np.array([0.09, 0.16]),
+        str(tmp_path),
+        site_data=site_data,
+        sample_idx_map={"S1": 0, "S2": 1},
+    )
+
+    fig = captured["fig"]
+    assert len(fig.axes) == 5
+
+    ax_depth = fig.axes[0]
+    ax_af = fig.axes[1]
+    ax_cnq = fig.axes[2]
+    ax_binq = fig.axes[3]
+    assert ax_af.get_ylabel() == "Allele fraction"
+    assert all(text.get_text() != "Retained after BINQ filter" for text in ax_depth.texts)
+    assert tuple(ax_cnq.get_ylim()) == pytest.approx((0.0, 105.0))
+    assert tuple(ax_binq.get_ylim()) == pytest.approx((0.0, 105.0))
+
+    af_point_counts = [
+        len(collection.get_offsets())
+        for collection in ax_af.collections
+        if hasattr(collection, "get_offsets") and len(collection.get_offsets()) > 0
+    ]
+    assert sum(af_point_counts) == 2
+    cnq_score_lines = [
+        line for line in ax_cnq.lines if line.get_drawstyle() == "steps-mid"
+    ]
+    assert len(cnq_score_lines) == 1
+    assert np.isfinite(cnq_score_lines[0].get_ydata()).sum() == 1
 
 
 def test_plot_helpers_prefer_plot_normalized_depth_columns() -> None:
@@ -483,7 +555,6 @@ def test_plot_module_orchestrators_and_skip_branches(tmp_path) -> None:
     loss_df = _small_loss_df()
     ppd_bin_df, ppd_chr_df = _small_ppd_frames()
 
-    plot_aneuploid_histograms(chrom_df[~chrom_df["is_aneuploid"]], str(tmp_path))
     plot_median_depth_distributions(chrom_df.drop(columns=["median_depth", "mad_depth"]), str(tmp_path))
     _run_ploidy_plots(
         chrom_df,
@@ -496,10 +567,132 @@ def test_plot_module_orchestrators_and_skip_branches(tmp_path) -> None:
     run_ppd_plots(ppd_bin_df, ppd_chr_df, str(tmp_path), highlight_sample="S1")
 
     assert (tmp_path / "ppd" / "ppd_obs_vs_predicted.png").exists()
-    assert (tmp_path / "diagnostics" / "parameter_diagnostics.png").exists()
-    assert (tmp_path / "diagnostics" / "sample_depth_diagnostics.png").exists()
     assert (tmp_path / "diagnostics" / "chromosome_plq_heatmap.png").exists()
     assert (tmp_path / "diagnostics" / "binq_genome_profile.png").exists()
+
+
+def test_plot_histograms_by_chr_type_uses_curated_unique_specs(monkeypatch, tmp_path) -> None:
+    chrom_df = _small_chrom_df().assign(
+        sample_var_map=[0.11, 0.11, 0.11, 0.23, 0.23, 0.23],
+        sample_overdispersion_map=[0.12, 0.12, 0.12, 0.24, 0.24, 0.24],
+        sample_depth_map=[1.0, 1.0, 1.0, 1.5, 1.5, 1.5],
+        n_bins_retained=[8, 8, 8, 6, 6, 6],
+        frac_bins_retained=[0.8, 0.8, 0.8, 0.6, 0.6, 0.6],
+        autosomal_baseline_cn=[2, 2, 2, 3, 3, 3],
+        sample_depth_ratio=[1.0, 1.0, 1.0, 1.45, 1.45, 1.45],
+        global_cn_scale_factor=[1.0, 1.0, 1.0, 1.5, 1.5, 1.5],
+    )
+
+    calls: list[dict[str, object]] = []
+
+    def _capture_hist(*args, **kwargs):
+        calls.append(
+            {
+                "x_col": args[1],
+                "filename": args[6],
+                "bins": kwargs.get("bins"),
+            }
+        )
+
+    monkeypatch.setattr("gatk_sv_ploidy.plot._hist_by_hue", _capture_hist)
+
+    plot_histograms_by_chr_type(chrom_df, str(tmp_path), highlight_sample="S1")
+
+    emitted_files = {str(call["filename"]) for call in calls}
+    assert emitted_files == {
+        "hist_sample_overdispersion.png",
+        "hist_sample_depth_map.png",
+        "hist_copy_number.png",
+        "hist_plq.png",
+        "hist_n_bins_retained.png",
+        "hist_frac_bins_retained.png",
+        "hist_autosomal_baseline_cn.png",
+        "hist_sample_depth_ratio.png",
+        "hist_global_cn_scale_factor.png",
+    }
+    assert "hist_sample_var_map.png" not in emitted_files
+    assert all(int(call["bins"]) == 30 for call in calls)
+
+    overdispersion_call = next(
+        call for call in calls if call["filename"] == "hist_sample_overdispersion.png"
+    )
+    assert overdispersion_call["x_col"] == "sample_overdispersion_map"
+
+
+def test_plot_report_generates_manifest_and_html(tmp_path) -> None:
+    diagnostics = tmp_path / "diagnostics"
+    ppd_dir = tmp_path / "ppd"
+    sample_dir = tmp_path / "sample_plots"
+    stale_figures_dir = tmp_path / "figures"
+    stale_tables_dir = tmp_path / "tables"
+    diagnostics.mkdir()
+    ppd_dir.mkdir()
+    sample_dir.mkdir()
+    stale_figures_dir.mkdir()
+    stale_tables_dir.mkdir()
+    (stale_figures_dir / "stale.txt").write_text("stale", encoding="utf-8")
+    (stale_tables_dir / "stale.txt").write_text("stale", encoding="utf-8")
+
+    (tmp_path / "sex_assignments.png").write_bytes(b"plot")
+    (diagnostics / "training_loss_gradient.png").write_bytes(b"plot")
+    (ppd_dir / "ppd_obs_vs_predicted.png").write_bytes(b"plot")
+    (sample_dir / "S1.png").write_bytes(b"plot")
+    (tmp_path / "median_depth_distribution_stats.tsv").write_text(
+        "sample\tchromosome\nS1\tchr21\n",
+        encoding="utf-8",
+    )
+
+    manifest_df = write_plot_report(
+        str(tmp_path),
+        chrom_df=_small_chrom_df(),
+        bin_df=_small_bin_df(),
+        sex_df=pd.DataFrame({"sample": ["S1"], "sex": ["MALE"]}),
+        highlight_sample="S1",
+    )
+
+    assert (tmp_path / "report" / "index.html").exists()
+    assert (tmp_path / "plot_manifest.tsv").exists()
+    assert not (tmp_path / "figures").exists()
+    assert not (tmp_path / "tables").exists()
+
+    assert set(manifest_df["category"]) >= {"overview", "model", "ppd", "per_sample", "tables"}
+    training_loss_row = manifest_df.loc[
+        manifest_df["source_path"] == "diagnostics/training_loss_gradient.png"
+    ].iloc[0]
+    assert training_loss_row["report_path"] == "../diagnostics/training_loss_gradient.png"
+    html = (tmp_path / "report" / "index.html").read_text(encoding="utf-8")
+    assert "GATK-SV Ploidy Report" in html
+    assert "Highlighted sample" in html
+    assert "../diagnostics/training_loss_gradient.png" in html
+
+
+def test_apply_theme_uses_nature_publication_defaults() -> None:
+    apply_theme()
+    assert plt.rcParams["font.size"] == 8
+    assert plt.rcParams["axes.labelsize"] == 8
+    assert plt.rcParams["xtick.labelsize"] == 8
+    assert plt.rcParams["legend.fontsize"] == 8
+    assert plt.rcParams["axes.grid"] is False
+    assert plt.rcParams["pdf.fonttype"] == 42
+    assert plt.rcParams["svg.fonttype"] == "none"
+
+
+def test_plot_style_suppresses_fonttools_info_logging() -> None:
+    fonttools_logger = logging.getLogger("fontTools")
+    fonttools_subset_logger = logging.getLogger("fontTools.subset")
+    original_levels = (fonttools_logger.level, fonttools_subset_logger.level)
+
+    try:
+        fonttools_logger.setLevel(logging.INFO)
+        fonttools_subset_logger.setLevel(logging.NOTSET)
+
+        _suppress_chatty_plot_dependency_loggers()
+
+        assert fonttools_logger.level == logging.WARNING
+        assert fonttools_subset_logger.level == logging.WARNING
+    finally:
+        fonttools_logger.setLevel(original_levels[0])
+        fonttools_subset_logger.setLevel(original_levels[1])
 
 
 def test_run_aneuploidy_plots_passes_non_diploid_baseline_metadata(tmp_path, monkeypatch) -> None:
@@ -550,15 +743,11 @@ def test_run_aneuploidy_plots_passes_non_diploid_baseline_metadata(tmp_path, mon
     captured: dict[str, dict[str, object]] = {}
 
     for fn_name in (
-        "plot_training_loss",
         "plot_training_loss_with_gradient",
         "plot_bin_variance_bias",
-        "plot_cn_posterior_entropy",
         "plot_chromosome_cn_heatmap",
         "plot_chromosome_plq_heatmap",
         "plot_binq_genome_profile",
-        "plot_parameter_diagnostics",
-        "plot_sample_depth_diagnostics",
     ):
         monkeypatch.setattr(
             f"gatk_sv_ploidy.plot.{fn_name}",
@@ -586,33 +775,6 @@ def test_run_aneuploidy_plots_passes_non_diploid_baseline_metadata(tmp_path, mon
     assert captured["S3"]["aneuploid_chrs"] == []
 
 
-def test_plot_sample_depth_diagnostics_outputs(tmp_path) -> None:
-    plot_sample_depth_diagnostics(_small_bin_df(), str(tmp_path))
-
-    assert (tmp_path / "diagnostics" / "sample_depth_diagnostics.png").exists()
-    summary_path = tmp_path / "diagnostics" / "sample_depth_diagnostics.tsv.gz"
-    assert summary_path.exists()
-
-    summary_df = pd.read_csv(summary_path, sep="\t", compression="gzip")
-    assert list(summary_df["sample"]) == ["S1", "S2"]
-    np.testing.assert_allclose(
-        summary_df["sample_depth_init_anchor"].to_numpy(dtype=float),
-        [2.0, 3.0],
-    )
-    np.testing.assert_allclose(
-        summary_df["sample_depth_map"].to_numpy(dtype=float),
-        [1.0, 1.5],
-    )
-    np.testing.assert_allclose(
-        summary_df["init_to_fitted_ratio"].to_numpy(dtype=float),
-        [2.0, 2.0],
-    )
-    np.testing.assert_allclose(
-        summary_df["fitted_to_init_ratio"].to_numpy(dtype=float),
-        [0.5, 0.5],
-    )
-
-
 def test_plot_site_af_estimates_outputs(tmp_path) -> None:
     plot_site_af_estimates(_small_site_af_df(), str(tmp_path))
 
@@ -623,9 +785,6 @@ def test_plot_site_af_estimates_outputs(tmp_path) -> None:
 
 def test_plot_public_helpers_cover_remaining_branches(tmp_path) -> None:
     chrom_df = _small_chrom_df()
-    plot_aneuploid_histograms(chrom_df, str(tmp_path), highlight_sample="S2")
-    assert (tmp_path / "diagnostics" / "hist_aneuploid_chromosome.png").exists()
-
     plot_chromosome_plq_heatmap(chrom_df, str(tmp_path))
     assert (tmp_path / "diagnostics" / "chromosome_plq_heatmap.png").exists()
 
@@ -694,6 +853,38 @@ def test_plot_parse_args_and_warning_only_paths(tmp_path, monkeypatch) -> None:
     main()
     assert (tmp_path / "out" / "sex_assignments.png").exists()
     assert (tmp_path / "out" / "diagnostics" / "site_af_input_vs_effective.png").exists()
+    assert (tmp_path / "out" / "report" / "index.html").exists()
+    assert (tmp_path / "out" / "plot_manifest.tsv").exists()
+
+
+def test_plot_main_writes_pdf_outputs_when_requested(tmp_path, monkeypatch) -> None:
+    chrom_stats = tmp_path / "chrom.tsv"
+    _small_chrom_df().to_csv(chrom_stats, sep="\t", index=False)
+
+    original_format = get_plot_output_format()
+    try:
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "gatk-sv-ploidy plot",
+                "--chrom-stats",
+                str(chrom_stats),
+                "--output-dir",
+                str(tmp_path / "out_pdf"),
+                "--pdf",
+            ],
+        )
+        main()
+    finally:
+        set_plot_output_format(original_format)
+
+    assert (tmp_path / "out_pdf" / "sex_assignments.pdf").exists()
+    assert not (tmp_path / "out_pdf" / "sex_assignments.png").exists()
+    assert (tmp_path / "out_pdf" / "report" / "index.html").exists()
+    assert not (tmp_path / "out_pdf" / "figures").exists()
+    html = (tmp_path / "out_pdf" / "report" / "index.html").read_text(encoding="utf-8")
+    assert "../sex_assignments.pdf" in html
 
 
 def test_plot_main_runs_ppd_before_sample_plot_branches(tmp_path, monkeypatch) -> None:
@@ -727,10 +918,6 @@ def test_plot_main_runs_ppd_before_sample_plot_branches(tmp_path, monkeypatch) -
     monkeypatch.setattr(
         "gatk_sv_ploidy.plot.plot_histograms_by_chr_type",
         lambda *args, **kwargs: call_order.append("hist"),
-    )
-    monkeypatch.setattr(
-        "gatk_sv_ploidy.plot.plot_aneuploid_histograms",
-        lambda *args, **kwargs: call_order.append("aneuploid_hist"),
     )
     monkeypatch.setattr(
         "gatk_sv_ploidy.plot.plot_median_depth_distributions",

@@ -14,6 +14,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from gatk_sv_ploidy._plot_style import DEFAULT_RASTER_DPI, save_publication_figure
+
 logger = logging.getLogger(__name__)
 
 # ── column / chromosome constants ───────────────────────────────────────────
@@ -650,13 +652,13 @@ def save_and_close_plot(
     filename: str,
     *,
     subdir: str = "diagnostics",
-    dpi: int = 300,
+    dpi: int = DEFAULT_RASTER_DPI,
 ) -> None:
     """Save the current matplotlib figure and close it.
 
     Args:
         output_dir: Top-level output directory.
-        filename: File name (e.g. ``'training_loss.png'``).
+        filename: File name (e.g. ``'plot.png'``).
         subdir: Sub-directory under *output_dir* (default ``'diagnostics'``).
         dpi: Resolution for raster formats.
     """
@@ -664,9 +666,9 @@ def save_and_close_plot(
     dest = os.path.join(output_dir, subdir)
     os.makedirs(dest, exist_ok=True)
     out = os.path.join(dest, filename)
-    plt.savefig(out, dpi=dpi, bbox_inches="tight")
+    actual_out = save_publication_figure(plt.gcf(), out, dpi=dpi)
     plt.close()
-    logger.info("Saved plot: %s/%s", subdir, filename)
+    logger.debug("Saved plot: %s", os.path.relpath(actual_out, output_dir))
 
 
 def add_chromosome_labels(
@@ -708,7 +710,15 @@ def add_chromosome_labels(
         labels.append(str(chr_array[start]).replace("chr", ""))
 
     for b in boundary_positions:
-        ax.axvline(b, color="gray", linestyle="--", alpha=1, linewidth=1)
+        ax.axvline(
+            b,
+            color="#424242",
+            linestyle="--",
+            alpha=0.9,
+            linewidth=1.1,
+            zorder=8,
+            clip_on=False,
+        )
 
     ax.set_xticks(positions)
     ax.set_xticklabels(labels, rotation=0, ha="center")
