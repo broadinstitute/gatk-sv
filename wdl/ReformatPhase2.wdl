@@ -59,8 +59,7 @@ task ReformatVcf {
 
   output {
     File reformatted_vcf = "${prefix}.reformatted.vcf.gz"
-    File reformatted_vcf_idx = "~{prefix}.reformatted_vcf.gz.tbi"
-    File original_vcf = vcf
+    File reformatted_vcf_idx = "~{prefix}.reformatted.vcf.gz.tbi"
   }
   command <<<
 
@@ -98,19 +97,19 @@ with gzip.open("~{vcf}", 'rt') as f, open("intermediate1.vcf", 'w') as out:
 
 # set BND/CTX END2 to ends from dictionary if not present
 with pysam.VariantFile("intermediate1.vcf", 'r') as vcf, pysam.VariantFile("intermediate2.vcf.gz", 'w', header=vcf.header) as out:
-    for line in vcf:
+    for record in vcf:
         svtype = record.info.get('SVTYPE', None)
         if (svtype == 'BND' or svtype == 'CTX') and 'END2' not in record.info:
             record.info['END2'] = bnd_end_dict[record.id] if bnd_end_dict is not None \
                 else record.info.get('END2', record.stop)
         if svtype == 'BND' and 'CHR2' not in record.info:
             record.info['CHR2'] = record.chrom
-        vcf_out.write(record)
+        out.write(record)
 
 CODE
 
     bcftools annotate -x INFO/MEMBERS intermediate2.vcf.gz -O z -o ~{prefix}.reformatted.vcf.gz
-    tabix ~{prefix}.vcf.gz
+    tabix ~{prefix}.reformatted.vcf.gz
 
   >>>
   runtime {
