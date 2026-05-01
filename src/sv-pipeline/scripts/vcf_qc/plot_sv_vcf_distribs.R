@@ -415,7 +415,7 @@ wrapperPlotAllCountBars <- function(){
     }))
     colnames(region.mat) <- c("ALL",regions)
   }
-  pdf(paste(OUTDIR,"/main_plots/counts_distribution.pdf",sep=""),
+  pdf(paste(OUTDIR,"/main_plots/counts_overall_distribution.pdf",sep=""),
       height=7,width=11)
   # Compute TR_ENVELOPED overlay data for leftmost count bar (use count-specific data)
   te.dat.count <- if("TR_ENVELOPED" %in% colnames(dat.count)){
@@ -759,7 +759,7 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
 
 #Wrapper to plot all size distributions
 wrapperPlotAllSizeDistribs <- function(){
-  dat <- dat.merged; svtypes <- svtypes.merged
+  dat <- dat.norm.merged; svtypes <- svtypes.norm.merged
   
   #All SV
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/size_distribution.all.pdf",sep=""),
@@ -974,7 +974,7 @@ plotFreqDistrib <- function(dat, svtypes,
     #Add legend of svtypes, if optioned
     if(legend==T){
       idx.for.legend <- which(unlist(lapply(dens,function(vals){any(!is.na(vals) & !is.infinite(vals) & vals>0)})))
-      legend("right",bg=NA,bty="n",pch=NA,cex=lwd.cex*0.7,lwd=3,
+      legend("topright",bg=NA,bty="n",pch=NA,cex=lwd.cex*0.7,lwd=3,
              legend=rbind(svtypes,c("ALL","gray15"))$svtype[idx.for.legend],
              col=rbind(svtypes,c("ALL","gray15"))$color[idx.for.legend])
     }
@@ -1122,7 +1122,7 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
 
 #Wrapper to plot all AF distributions
 wrapperPlotAllFreqDistribs <- function(){
-  dat <- dat.merged; svtypes <- svtypes.merged
+  dat <- dat.norm.merged; svtypes <- svtypes.norm.merged
   #All SV
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.all.pdf",sep=""),
       height=4,width=4)
@@ -1449,12 +1449,13 @@ plotDistribOverlaid <- function(sub.list, sub.labels, sub.colors, main.val=NULL,
 }
 
 wrapperPlotQualDistrib <- function(){
-  if(!"QUAL" %in% colnames(dat)) return(invisible(NULL))
-  qual.vals <- dat$QUAL[!is.na(dat$QUAL)]
+  if(!"QUAL" %in% colnames(dat.norm)) return(invisible(NULL))
+  d <- dat.norm
+  qual.vals <- d$QUAL[!is.na(d$QUAL)]
   if(length(qual.vals)==0) return(invisible(NULL))
 
-  has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
-  regions <- if(has.region) orderRegions(unique(dat$REGION[!is.na(dat$REGION)])) else character(0)
+  has.region <- "REGION" %in% colnames(d) && any(!is.na(d$REGION))
+  regions <- if(has.region) orderRegions(unique(d$REGION[!is.na(d$REGION)])) else character(0)
   af.labels <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
   af.mins <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
   af.maxs <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
@@ -1462,7 +1463,7 @@ wrapperPlotQualDistrib <- function(){
   size.mins <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
   size.maxs <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
 
-  col.svtype <- svtypes$color[match(svtypes$svtype, svtypes$svtype)]
+  col.svtype <- svtypes.norm$color
   col.af <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(length(af.labels))
   col.size <- colorRampPalette(c("#1B9E77","#D95F02","#7570B3","#E7298A","#66A61E","#E6AB02"))(length(size.labels))
   col.reg <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
@@ -1474,7 +1475,7 @@ wrapperPlotQualDistrib <- function(){
 
   # Panel 1: All variants
   par(bty="n", mar=c(4.5,4,3,1))
-  q.all <- pmin(dat$QUAL[!is.na(dat$QUAL) & is.finite(dat$QUAL)], 99)
+  q.all <- pmin(d$QUAL[!is.na(d$QUAL) & is.finite(d$QUAL)], 99)
   xlim <- c(min(q.all, na.rm=T), 99)
   breaks <- seq(xlim[1],xlim[2],length.out=51)
   h <- hist(q.all, breaks=breaks, plot=F)
@@ -1486,32 +1487,32 @@ wrapperPlotQualDistrib <- function(){
   mtext(1,text="QUAL",line=3,cex=0.9); mtext(2,text="Density",line=2.5,cex=0.9)
   mtext(3,text="QUAL Distribution",font=2,line=1)
   axis(3,at=mean(xlim),tick=F,line=-0.9,labels=paste("n=",prettyNum(length(q.all),big.mark=","),sep=""))
-  n.qual.dropped <- nrow(dat) - length(dat$QUAL[!is.na(dat$QUAL) & is.finite(dat$QUAL)])
+  n.qual.dropped <- nrow(d) - length(d$QUAL[!is.na(d$QUAL) & is.finite(d$QUAL)])
   if(n.qual.dropped > 0){
     axis(3,at=mean(xlim),tick=F,line=-1.9,cex.axis=0.75,
          labels=paste0("(",prettyNum(n.qual.dropped,big.mark=",")," dropped - missing QUAL score)"))
   }
 
   # Panel 2: By svtype
-  type.vals <- lapply(svtypes$svtype, function(st) pmin(dat$QUAL[!is.na(dat$QUAL) & dat$svtype==st], 99))
-  plotDistribOverlaid(sub.list=type.vals, sub.labels=svtypes$svtype, sub.colors=col.svtype,
+  type.vals <- lapply(svtypes.norm$svtype, function(st) pmin(d$QUAL[!is.na(d$QUAL) & d$svtype==st], 99))
+  plotDistribOverlaid(sub.list=type.vals, sub.labels=svtypes.norm$svtype, sub.colors=col.svtype,
                       main.val=q.all, xlab="QUAL", main.label="All",
                       title="QUAL by Type", xlim=xlim)
 
   # Panel 3: By size bucket
-  size.vals <- lapply(seq_along(size.labels), function(i) pmin(dat$QUAL[!is.na(dat$QUAL) & dat$length>=size.mins[i] & dat$length<=size.maxs[i]], 99))
+  size.vals <- lapply(seq_along(size.labels), function(i) pmin(d$QUAL[!is.na(d$QUAL) & d$length>=size.mins[i] & d$length<=size.maxs[i]], 99))
   plotDistribOverlaid(sub.list=size.vals, sub.labels=size.labels, sub.colors=col.size,
                       main.val=q.all, xlab="QUAL", main.label="All",
                       title="QUAL by Size", xlim=xlim)
 
   # Panel 4: By AF bucket
-  af.vals <- lapply(seq_along(af.labels), function(i) pmin(dat$QUAL[!is.na(dat$QUAL) & dat$AF>af.mins[i] & dat$AF<=af.maxs[i]], 99))
+  af.vals <- lapply(seq_along(af.labels), function(i) pmin(d$QUAL[!is.na(d$QUAL) & d$AF>af.mins[i] & d$AF<=af.maxs[i]], 99))
   plotDistribOverlaid(sub.list=af.vals, sub.labels=af.labels, sub.colors=col.af,
                       main.val=q.all, xlab="QUAL", main.label="All",
                       title="QUAL by AF", xlim=xlim)
 
   # Panel 5: By region
-  reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) pmin(dat$QUAL[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$QUAL)], 99)) else list()
+  reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) pmin(d$QUAL[!is.na(d$REGION) & d$REGION==r & !is.na(d$QUAL)], 99)) else list()
   plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
                       main.val=q.all, xlab="QUAL", main.label="All",
                       title="QUAL by Region", xlim=xlim)
@@ -1602,10 +1603,11 @@ calcGnomadMatchRate <- function(d){
 }
 
 wrapperPlotGnomadMatchDistrib <- function(){
-  if(!"gnomAD_V4_match_ID" %in% colnames(dat)) return(invisible(NULL))
+  if(!"gnomAD_V4_match_ID" %in% colnames(dat.norm)) return(invisible(NULL))
+  d <- dat.norm
 
-  has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
-  regions <- if(has.region) orderRegions(unique(dat$REGION[!is.na(dat$REGION)])) else character(0)
+  has.region <- "REGION" %in% colnames(d) && any(!is.na(d$REGION))
+  regions <- if(has.region) orderRegions(unique(d$REGION[!is.na(d$REGION)])) else character(0)
   af.labels <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
   af.mins <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
   af.maxs <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
@@ -1635,31 +1637,31 @@ wrapperPlotGnomadMatchDistrib <- function(){
   }
 
   # Determine number of panels
-  n.panels <- 1 + as.integer(has.region && length(regions)>0) + 2  # overall + region(optional) + size + AF
+  n.panels <- 1 + as.integer(has.region && length(regions)>0) + 2
   if(!has.region || length(regions)==0) n.panels <- 3
   png(paste(OUTDIR,"/main_plots/gnomad_match_distribution.png",sep=""),
       res=300, height=1800, width=n.panels*1800)
   layout(matrix(1:n.panels, nrow=1))
 
   # Panel 1: By svtype (overall bars)
-  svtype.rates <- sapply(svtypes$svtype, function(st) calcGnomadMatchRate(dat[dat$svtype==st,]))
-  plotMatchRateBars(vals=svtype.rates, labs=svtypes$svtype, cols=svtypes$color,
+  svtype.rates <- sapply(svtypes.norm$svtype, function(st) calcGnomadMatchRate(d[d$svtype==st,]))
+  plotMatchRateBars(vals=svtype.rates, labs=svtypes.norm$svtype, cols=svtypes.norm$color,
                     xlabel="Variant Type", title="gnomAD Match Rate by Variant Type")
 
   # Optional Panel 2: By region
   if(has.region && length(regions)>0){
-    reg.rates <- sapply(regions, function(r) calcGnomadMatchRate(dat[!is.na(dat$REGION) & dat$REGION==r,]))
+    reg.rates <- sapply(regions, function(r) calcGnomadMatchRate(d[!is.na(d$REGION) & d$REGION==r,]))
     plotMatchRateBars(vals=reg.rates, labs=regions, cols=col.reg,
                       xlabel="Region", title="gnomAD Match Rate by Region")
   }
 
   # Panel: By size bucket
-  size.rates <- sapply(seq_along(size.labels), function(i) calcGnomadMatchRate(dat[!is.na(dat$length) & dat$length>=size.mins[i] & dat$length<=size.maxs[i],]))
+  size.rates <- sapply(seq_along(size.labels), function(i) calcGnomadMatchRate(d[!is.na(d$length) & d$length>=size.mins[i] & d$length<=size.maxs[i],]))
   plotMatchRateBars(vals=size.rates, labs=size.labels, cols=col.size,
                     xlabel="Size Bucket", title="gnomAD Match Rate by Size")
 
   # Panel: By AF bucket
-  af.rates <- sapply(seq_along(af.labels), function(i) calcGnomadMatchRate(dat[!is.na(dat$AF) & dat$AF>af.mins[i] & dat$AF<=af.maxs[i],]))
+  af.rates <- sapply(seq_along(af.labels), function(i) calcGnomadMatchRate(d[!is.na(d$AF) & d$AF>af.mins[i] & d$AF<=af.maxs[i],]))
   plotMatchRateBars(vals=af.rates, labs=af.labels, cols=col.af,
                     xlabel="AF Bucket", title="gnomAD Match Rate by AF")
 
@@ -1829,7 +1831,7 @@ plotAlleleCarrierCorrelation <- function(dat,autosomal=T,biallelic=T,
          type="l",col="red",lwd=1.25)
   
   #Add legend
-  legend("bottomright",bg=NA,legend=c("Site","Rolling Mean"),cex=0.8,bty="n",
+  legend(x=0.55, y=0.25, bg=NA,legend=c("Site","Rolling Mean"),cex=0.8,bty="n",
          lwd=c(NA,2),col=c("black","red"),pch=c(1,NA),pt.cex=c(0.4,NA))
   
   #Add filter labels
@@ -1869,12 +1871,10 @@ wrapperPlotAllHWDistribs <- function(){
   plotAlleleCarrierCorrelation(dat=dat)
   dev.off()
 
-  # gt_type_distribution.png: specific 2x5 grid
-  # Row 1: SNV, INS_SHORT, DEL_SHORT, DUP_SHORT, TR
-  # Row 2: INS_SV, DEL_SV, DUP_SV, VNTR
-  type.grid <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","TR",
-                  "INS_SV","DEL_SV","DUP_SV","VNTR")
-  type.grid <- type.grid[type.grid %in% svtypes$svtype]
+  # gt_type_distribution.png: specific 2x5 grid (normalized TR types)
+  type.grid <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","TR_SNV",
+                  "INS_SV","DEL_SV","DUP_SV","TR_INS","TR_DEL")
+  type.grid <- type.grid[type.grid %in% svtypes.norm$svtype]
   n.type.cols <- ceiling(length(type.grid) / 2)
   png(paste(OUTDIR,"main_plots/gt_type_distribution.png",sep=""),
       res=300, height=2*cell.px, width=n.type.cols*cell.px)
@@ -1885,7 +1885,7 @@ wrapperPlotAllHWDistribs <- function(){
   layout(mat.type)
   sapply(seq_along(type.grid), function(i){
     st <- type.grid[i]
-    plotHWSingle(dat=dat[which(dat$svtype==st),], svtypes=svtypes,
+    plotHWSingle(dat=dat.norm[which(dat.norm$svtype==st),], svtypes=svtypes.norm,
                  title=st, full.legend=F, lab.cex=0.75)
   })
   if(length(type.grid) %% 2 != 0) plot.new()
@@ -2051,19 +2051,50 @@ dat.merged$svtype[dat.merged$svtype %in% .mg.del] <- "DEL"
 dat.merged$svtype[dat.merged$svtype %in% .mg.ins] <- "INS"
 dat.merged$svtype[dat.merged$svtype %in% .mg.dup] <- "DUP"
 
+# Normalized data: TR/VNTR -> TR_INS/TR_DEL/TR_SNV based on TR_ALLELE_CLASS
+dat.norm <- dat
+tr.biallelic.idx <- dat.norm$svtype %in% c("TR","VNTR")
+if(any(tr.biallelic.idx) && "TR_ALLELE_CLASS" %in% colnames(dat.norm)){
+  dat.norm$svtype[tr.biallelic.idx] <- dat.norm$TR_ALLELE_CLASS[tr.biallelic.idx]
+  dat.norm$svtype[is.na(dat.norm$svtype) | dat.norm$svtype == ""] <- "TR_SNV"
+}
+.norm.order <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV",
+                 "TR_SNV","TR_INS","TR_DEL")
+svtypes.norm <- data.frame(
+  svtype=.norm.order,
+  color=c(svtypes$color[match(c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","INS_SV","DEL_SV","DUP_SV"),
+                              svtypes$svtype)],
+          "#FA931E","#F5C71A","#B56A00"),
+  stringsAsFactors=FALSE)
+svtypes.norm <- svtypes.norm[svtypes.norm$svtype %in% unique(dat.norm$svtype),]
+
+# Merged normalized: merge short/SV, keep TR_SNV/TR_INS/TR_DEL separate
+dat.norm.merged <- dat.norm
+dat.norm.merged$svtype[dat.norm.merged$svtype %in% .mg.del] <- "DEL"
+dat.norm.merged$svtype[dat.norm.merged$svtype %in% .mg.ins] <- "INS"
+dat.norm.merged$svtype[dat.norm.merged$svtype %in% .mg.dup] <- "DUP"
+.norm.merged.order <- c("SNV","INS","DEL","DUP","TR_SNV","TR_INS","TR_DEL")
+svtypes.norm.merged <- data.frame(
+  svtype=.norm.merged.order,
+  color=c(svtypes.merged$color[match(c("SNV","INS","DEL","DUP"), svtypes.merged$svtype)],
+          "#FA931E","#F5C71A","#B56A00"),
+  stringsAsFactors=FALSE)
+svtypes.norm.merged <- svtypes.norm.merged[svtypes.norm.merged$svtype %in% unique(dat.norm.merged$svtype),]
+
 ######################################
 #####VEP consequence distribution plot
 ######################################
 wrapperPlotVepDistrib <- function(){
-  if(!"VEP_consequences" %in% colnames(dat)) return(invisible(NULL))
+  if(!"VEP_consequences" %in% colnames(dat.norm)) return(invisible(NULL))
+  d <- dat.norm
 
   # Expand: one row per (variant × consequence)
-  exp.cols <- intersect(c("svtype","length","AF","REGION"), colnames(dat))
-  dat.exp <- do.call(rbind, lapply(seq_len(nrow(dat)), function(i){
-    v <- dat$VEP_consequences[i]
+  exp.cols <- intersect(c("svtype","length","AF","REGION"), colnames(d))
+  dat.exp <- do.call(rbind, lapply(seq_len(nrow(d)), function(i){
+    v <- d$VEP_consequences[i]
     if(is.na(v) || v == "") return(NULL)
     csqs <- strsplit(v, ";", fixed=TRUE)[[1]]
-    cbind(dat[rep(i, length(csqs)), exp.cols, drop=FALSE],
+    cbind(d[rep(i, length(csqs)), exp.cols, drop=FALSE],
           consequence=csqs, stringsAsFactors=FALSE)
   }))
   if(is.null(dat.exp) || nrow(dat.exp) == 0) return(invisible(NULL))
@@ -2087,12 +2118,11 @@ wrapperPlotVepDistrib <- function(){
 
   has.region <- "REGION" %in% colnames(dat.exp) && any(!is.na(dat.exp$REGION))
 
-  # Merge svtypes in expanded data
+  # Merge svtypes in expanded data (use normalized TR types)
   dat.exp$svtype_m <- dat.exp$svtype
   dat.exp$svtype_m[dat.exp$svtype_m %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
   dat.exp$svtype_m[dat.exp$svtype_m %in% c("INS_SHORT","INS_SV")] <- "INS"
   dat.exp$svtype_m[dat.exp$svtype_m %in% c("DUP_SHORT","DUP_SV")] <- "DUP"
-  dat.exp$svtype_m[dat.exp$svtype_m %in% c("TR","VNTR")] <- "TR"
 
   # Build consequence × stratum matrix
   makeConseqMat <- function(grp.vals, grp.labs){
@@ -2129,7 +2159,7 @@ wrapperPlotVepDistrib <- function(){
        labels=all.csqs, srt=45, adj=1, xpd=TRUE, cex=0.7)
 
   # Panel 2: by variant type — x=svtype, stacked by consequence
-  st.labs <- svtypes.merged$svtype
+  st.labs <- svtypes.norm.merged$svtype
   st.labs <- st.labs[st.labs %in% dat.exp$svtype_m]
   mat.st <- makeConseqMat(dat.exp$svtype_m, st.labs)
   plotStackedBars(mat=mat.st, colors=col.csq[all.csqs], scaled=F,
@@ -2200,11 +2230,10 @@ wrapperPlotSvAnnotateDistrib <- function(){
 
   has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
 
-  svtype_m <- dat$svtype
+  svtype_m <- dat.norm$svtype
   svtype_m[svtype_m %in% c("DEL_SHORT","DEL_SV")] <- "DEL"
   svtype_m[svtype_m %in% c("INS_SHORT","INS_SV")] <- "INS"
   svtype_m[svtype_m %in% c("DUP_SHORT","DUP_SV")] <- "DUP"
-  svtype_m[svtype_m %in% c("TR","VNTR")] <- "TR"
 
   af.cuts   <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
   af.breaks <- c(-Inf, 1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
@@ -2238,7 +2267,7 @@ wrapperPlotSvAnnotateDistrib <- function(){
        labels=pred.labels, srt=45, adj=1, xpd=TRUE, cex=0.7)
 
   # Panel 2: by variant type — x=svtype, stacked by PREDICTED_
-  st.labs <- svtypes.merged$svtype
+  st.labs <- svtypes.norm.merged$svtype
   st.labs <- st.labs[st.labs %in% svtype_m]
   mat.st <- makePredMat(svtype_m, st.labs)
   plotStackedBars(mat=mat.st, colors=col.pred[pred.cols], scaled=F,
@@ -2468,27 +2497,26 @@ wrapperPlotTrLociDistrib <- function(){
   detail.types <- c("SNV","INS_SHORT","DEL_SHORT","INS_SV","DEL_SV")
   tr.detail.map <- c("TR_SNV","TR_INS_SHORT","TR_DEL_SHORT","TR_INS_SV","TR_DEL_SV")
 
-  # Count TR alleles per locus per detail type
-  tr.allele.counts <- sapply(tr.detail.map, function(dt){
-    sapply(loci, function(l) sum(tr.dat$base_vid==l & tr.dat$detail_type==dt))
-  })
-  if(!is.matrix(tr.allele.counts)) tr.allele.counts <- matrix(tr.allele.counts, nrow=length(loci))
-  colnames(tr.allele.counts) <- tr.detail.map
+  # Count TR alleles per locus per detail type (vectorized with table)
+  tr.allele.counts <- matrix(0, nrow=length(loci), ncol=length(tr.detail.map),
+                             dimnames=list(loci, tr.detail.map))
+  for(dt in tr.detail.map){
+    tab <- table(tr.dat$base_vid[tr.dat$detail_type == dt])
+    tr.allele.counts[names(tab), dt] <- as.integer(tab)
+  }
 
-  # Count enveloped non-TR variants per locus base_vid per type
-  # Non-TRV enveloped variants have TRID=<base_vid of the enclosing TRV locus>
+  # Count enveloped non-TR variants per locus base_vid per type (vectorized)
   non.tr <- dat[!dat$svtype %in% tr.types & !is.na(dat$TRID) & dat$TRID != "" & dat$TRID != ".",]
   non.tr$cmp_type <- non.tr$svtype
   non.tr$cmp_type[non.tr$cmp_type %in% c("DUP_SHORT")] <- "INS_SHORT"
   non.tr$cmp_type[non.tr$cmp_type %in% c("DUP_SV")] <- "INS_SV"
-  env.counts <- sapply(detail.types, function(dt){
-    sapply(loci, function(l){
-      # TRID on non-TRV enveloped variants equals the base_vid of the TRV locus
-      sum(non.tr$TRID == l & non.tr$cmp_type == dt, na.rm=TRUE)
-    })
-  })
-  if(!is.matrix(env.counts)) env.counts <- matrix(env.counts, nrow=length(loci))
-  colnames(env.counts) <- detail.types
+  env.counts <- matrix(0, nrow=length(loci), ncol=length(detail.types),
+                       dimnames=list(loci, detail.types))
+  for(dt in detail.types){
+    tab <- table(non.tr$TRID[non.tr$cmp_type == dt])
+    shared <- intersect(names(tab), loci)
+    if(length(shared) > 0) env.counts[shared, dt] <- as.integer(tab[shared])
+  }
 
   # Plot: one scatter per comparison type
   n.panels <- length(detail.types)
@@ -2524,13 +2552,11 @@ wrapperPlotInsDistrib <- function(){
   if(!"allele_type" %in% colnames(ins.dat)) return(invisible(NULL))
 
   # Priority-based category mapping (allele_type value -> display label)
+  # Applied in order: first match wins
   atype.priority <- c("alu_ins"="ALU","line_ins"="LINE","sva_ins"="SVA",
                       "dup"="Duplication","dup_interspersed"="Interspersed Duplication",
                       "complex_dup"="Complex Duplication","inv_dup"="Inverted Duplication",
                       "numt"="NUMT")
-  priority.order <- c("ALU","LINE","SVA","Duplication","Interspersed Duplication",
-                      "Complex Duplication","Inverted Duplication","NUMT",
-                      "TR Enveloped","TR Parsed","Unique")
   all.cols.full <- c("ALU"="#E41A1C","LINE"="#FF7F00","SVA"="#984EA3",
                      "Duplication"="#377EB8","Interspersed Duplication"="#4DAF4A",
                      "Complex Duplication"="#A65628","Inverted Duplication"="#F781BF",
@@ -2556,13 +2582,16 @@ wrapperPlotInsDistrib <- function(){
     cat.v
   }
 
+  # Assign categories for the full dataset
   cat.vec <- assign.cats(ins.dat)
-  all.cats <- priority.order[priority.order %in% unique(cat.vec)]
+  # Determine order by prevalence in "ALL" (most common at bottom, least at top)
+  all.cat.table <- table(factor(cat.vec, levels=names(all.cols.full)))
+  # Sort descending by count — most common first (bottom of stacked bar)
+  all.cats <- names(sort(all.cat.table[all.cat.table > 0], decreasing=TRUE))
   cat.cols <- all.cols.full[all.cats]
   n.cat <- length(all.cats)
   cat.counts <- as.numeric(table(factor(cat.vec, levels=all.cats)))
   names(cat.counts) <- all.cats
-  total <- sum(cat.counts)
 
   sz.labs <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
   sz.mins <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
@@ -2585,7 +2614,7 @@ wrapperPlotInsDistrib <- function(){
     ymax <- max(if(!is.null(ymax.ref)) ymax.ref else tot, 1) * 1.1
     starts <- cumsum(c(0, vals[-length(vals)]))
     ends <- cumsum(vals)
-    par(mar=c(6, if(main.bar) 5 else 3, 3.5, 0.5), bty="n")
+    par(mar=c(6, if(main.bar) 5 else 3, 4.5, 0.5), bty="n")
     plot(x=c(0,1), y=c(0,ymax), type="n", xaxt="n", yaxt="n", xlab="", ylab="", yaxs="i")
     if(tot > 0){
       rect(xleft=0.15, xright=0.85, ybottom=starts, ytop=ends,
@@ -2606,8 +2635,8 @@ wrapperPlotInsDistrib <- function(){
     axis(2, at=y.breaks, tick=F, las=2, cex.axis=if(main.bar) 0.7 else 0.6, line=-0.4,
          labels=prettyNum(y.breaks, big.mark=","))
     if(main.bar) mtext(2, text="Count", line=3.5, cex=0.85)
-    mtext(3, text=title, font=2, line=0.5, cex=if(main.bar) 0.9 else 0.75)
-    axis(3, at=0.5, tick=F, line=-0.9, cex.axis=if(main.bar) 0.8 else 0.7,
+    mtext(3, text=title, font=2, line=2.0, cex=if(main.bar) 0.9 else 0.75)
+    axis(3, at=0.5, tick=F, line=0.3, cex.axis=if(main.bar) 0.8 else 0.7,
          labels=paste0("n=", prettyNum(tot, big.mark=",")))
   }
 
@@ -2615,15 +2644,47 @@ wrapperPlotInsDistrib <- function(){
       res=300, height=2400, width=5600)
   layout(matrix(1:8, nrow=1), widths=c(3, rep(1.5, 6), 1.8))
 
-  plotInsBar(mat[,"ALL"], title="Insertion Variant Types", main.bar=TRUE)
+  plotInsBar(mat[,"ALL"], title="All Sizes", main.bar=TRUE)
   for(s in seq_along(sz.labs)){
     plotInsBar(mat[,sz.labs[s]], title=sz.labs[s])
   }
 
-  # Legend panel
-  par(mar=c(6,0,3.5,0.5), bty="n")
+  # Legend panel (reversed so most common is at bottom visually matching the bar)
+  par(mar=c(6,0,4.5,0.5), bty="n")
   plot(x=c(0,1), y=c(0,1), type="n", xaxt="n", yaxt="n", xlab="", ylab="")
-  legend("topleft", legend=all.cats, fill=cat.cols, border=NA,
+  legend("topleft", legend=rev(all.cats), fill=rev(cat.cols), border=NA,
+         bty="n", cex=0.8, y.intersp=1.3)
+  dev.off()
+
+  # INS SV region distribution (allele_length >= 50 only)
+  if(!"REGION" %in% colnames(ins.dat)) return(invisible(NULL))
+  ins.sv.dat <- ins.dat[!is.na(ins.dat$length) & ins.dat$length >= 50,]
+  if(nrow(ins.sv.dat) == 0) return(invisible(NULL))
+  regions <- orderRegions(unique(ins.sv.dat$REGION[!is.na(ins.sv.dat$REGION)]))
+  if(length(regions) == 0) return(invisible(NULL))
+
+  # Build matrix: rows=categories, cols=regions
+  mat.reg <- sapply(regions, function(r){
+    sub <- ins.sv.dat[!is.na(ins.sv.dat$REGION) & ins.sv.dat$REGION == r,]
+    build.col(sub)
+  })
+  if(!is.matrix(mat.reg)) mat.reg <- matrix(mat.reg, nrow=n.cat, ncol=length(regions))
+  colnames(mat.reg) <- regions
+  rownames(mat.reg) <- all.cats
+
+  n.reg.panels <- length(regions)
+  png(paste(OUTDIR,"/main_plots/ins_sv_region_distribution.png",sep=""),
+      res=300, height=2400, width=(n.reg.panels+1)*800)
+  layout(matrix(1:(n.reg.panels+1), nrow=1), widths=c(rep(1.5, n.reg.panels), 1.2))
+
+  for(r in seq_along(regions)){
+    plotInsBar(mat.reg[,regions[r]], title=regions[r])
+  }
+
+  # Legend panel
+  par(mar=c(6,0,4.5,0.5), bty="n")
+  plot(x=c(0,1), y=c(0,1), type="n", xaxt="n", yaxt="n", xlab="", ylab="")
+  legend("topleft", legend=rev(all.cats), fill=rev(cat.cols), border=NA,
          bty="n", cex=0.8, y.intersp=1.3)
   dev.off()
 }

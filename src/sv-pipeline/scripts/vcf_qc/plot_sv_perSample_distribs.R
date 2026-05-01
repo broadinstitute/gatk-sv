@@ -815,11 +815,11 @@ wrapperVariantCountHeats <- function(count="variants"){
 #Master wrapper for final top-level plot
 masterWrapperSummaryPlot <- function(){
   #Prep plot area
-  png(paste(OUTDIR,"/main_plots/per_genome_distribution.png",sep=""),
-      height=5*300,width=17*300,res=300)
+  png(paste(OUTDIR,"/main_plots/counts_per_genome_distribution.png",sep=""),
+      height=5*300,width=20*300,res=300)
   layout(matrix(c(1,2,3,4,5,11,
                   6,7,8,9,10,12),nrow=2,byrow=T),
-         widths=c(5,2,2,4,4,4))
+         widths=c(6,2,2,4,4,4))
   
   #Violin plot of SV sites per sample
   plotViolins(mat=plot.data$variants$count.all,

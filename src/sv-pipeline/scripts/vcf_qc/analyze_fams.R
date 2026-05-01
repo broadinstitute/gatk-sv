@@ -1237,12 +1237,12 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
     dat.merged$VID[dat.merged$length >= large.max.size])
   sz.inh <- lapply(sz.vids, function(vids) computeInheritanceMulti(trio.dat.list=fam.dat.list, VIDs=vids))
 
-  type.labs <- c("ALL", svtypes.merged$svtype)
+  type.labs <- c("ALL", svtypes.norm.merged$svtype)
   type.inh  <- c(
-    list(computeInheritanceMulti(trio.dat.list=fam.dat.list, VIDs=dat.merged$VID)),
-    lapply(svtypes.merged$svtype, function(st)
+    list(computeInheritanceMulti(trio.dat.list=fam.dat.list, VIDs=dat.norm.merged$VID)),
+    lapply(svtypes.norm.merged$svtype, function(st)
       computeInheritanceMulti(trio.dat.list=fam.dat.list,
-                              VIDs=dat.merged$VID[dat.merged$svtype==st])))
+                              VIDs=dat.norm.merged$VID[dat.norm.merged$svtype==st])))
 
   has.reg.strat <- has.region && length(regions) > 0
   reg.labs <- if(has.reg.strat) c("ALL", regions) else NULL
@@ -1308,23 +1308,23 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
 
   #Top row: SV sites
   size.dat.v <- deNovoRateBySize(trio.dat.list=fam.dat.list, size.bins=40, count="variants",
-                                 svtypes.use=svtypes.merged, dat.use=dat.merged)
+                                 svtypes.use=svtypes.norm.merged, dat.use=dat.norm.merged)
   plotDNRvsSize(DNRs=size.dat.v$DNRs, bins=size.dat.v$bins, k=4, nfams=nfams,
                 title="Site De Novo Rate by Size", fam.type=fam.type,
-                legend=T, cex.lab=cex.lab, svtypes.use=svtypes.merged)
+                legend=T, cex.lab=cex.lab, svtypes.use=svtypes.norm.merged)
   freq.dat.v <- deNovoRateByFreq(trio.dat.list=fam.dat.list, freq.bins=40, count="variants",
-                                 svtypes.use=svtypes.merged, dat.use=dat.merged)
+                                 svtypes.use=svtypes.norm.merged, dat.use=dat.norm.merged)
   plotDNRvsFreq(DNRs=freq.dat.v$DNRs, bins=freq.dat.v$bins, k=4, nfams=nfams,
                 title="Site De Novo Rate by AF", count="variants",
-                fam.type=fam.type, legend=T, cex.lab=cex.lab, svtypes.use=svtypes.merged)
+                fam.type=fam.type, legend=T, cex.lab=cex.lab, svtypes.use=svtypes.norm.merged)
   if(gq){
     GQ.dat.v <- deNovoRateByProGQ(trio.dat.list=fam.dat.list, GQ.bins=50,
                                   count="variants", max.GQ=max.GQ,
-                                  svtypes.use=svtypes.merged, dat.use=dat.merged)
+                                  svtypes.use=svtypes.norm.merged, dat.use=dat.norm.merged)
     plotDNRvsGQ(DNRs=GQ.dat.v$DNRs, bins=GQ.dat.v$bins, k=4, nfams=nfams,
                 title="Site De Novo Rate by GQ", count="variants",
                 fam.type=fam.type, legend=F, cex.lab=cex.lab,
-                xlabel="Min. Proband GQ", max.GQ=max.GQ, svtypes.use=svtypes.merged)
+                xlabel="Min. Proband GQ", max.GQ=max.GQ, svtypes.use=svtypes.norm.merged)
   }
   DNR.dat.v <- deNovoRateBySizeFreq(trio.dat.list=fam.dat.list, count="variants",
                                     max.sizes=c(tiny.max.size, small.max.size,
@@ -1339,23 +1339,23 @@ masterInhWrapper <- function(fam.dat.list, fam.type, gq=T, max.GQ=99){
 
   #Bottom row: SV alleles
   size.dat.a <- deNovoRateBySize(trio.dat.list=fam.dat.list, size.bins=40, count="alleles",
-                                 svtypes.use=svtypes.merged, dat.use=dat.merged)
+                                 svtypes.use=svtypes.norm.merged, dat.use=dat.norm.merged)
   plotDNRvsSize(DNRs=size.dat.a$DNRs, bins=size.dat.a$bins, k=4, nfams=nfams,
                 title="Allele De Novo Rate by Size", fam.type=fam.type,
-                legend=F, cex.lab=cex.lab, svtypes.use=svtypes.merged)
+                legend=F, cex.lab=cex.lab, svtypes.use=svtypes.norm.merged)
   freq.dat.a <- deNovoRateByFreq(trio.dat.list=fam.dat.list, freq.bins=40, count="alleles",
-                                 svtypes.use=svtypes.merged, dat.use=dat.merged)
+                                 svtypes.use=svtypes.norm.merged, dat.use=dat.norm.merged)
   plotDNRvsFreq(DNRs=freq.dat.a$DNRs, bins=freq.dat.a$bins, k=4, nfams=nfams,
                 title="Allele De Novo Rate by AF", count="alleles",
-                fam.type=fam.type, legend=F, cex.lab=cex.lab, svtypes.use=svtypes.merged)
+                fam.type=fam.type, legend=F, cex.lab=cex.lab, svtypes.use=svtypes.norm.merged)
   if(gq){
     GQ.dat.a <- deNovoRateByProGQ(trio.dat.list=fam.dat.list, GQ.bins=50,
                                   count="alleles", max.GQ=max.GQ,
-                                  svtypes.use=svtypes.merged, dat.use=dat.merged)
+                                  svtypes.use=svtypes.norm.merged, dat.use=dat.norm.merged)
     plotDNRvsGQ(DNRs=GQ.dat.a$DNRs, bins=GQ.dat.a$bins, k=4, nfams=nfams,
                 title="Allele De Novo Rate by GQ", count="alleles",
                 fam.type=fam.type, legend=F, cex.lab=cex.lab,
-                xlabel="Min. Proband GQ", max.GQ=max.GQ, svtypes.use=svtypes.merged)
+                xlabel="Min. Proband GQ", max.GQ=max.GQ, svtypes.use=svtypes.norm.merged)
   }
   DNR.dat.a <- deNovoRateBySizeFreq(trio.dat.list=fam.dat.list, count="alleles",
                                     max.sizes=c(tiny.max.size, small.max.size,
@@ -1485,6 +1485,30 @@ svtypes.merged <- do.call(rbind, lapply(unique(svtypes$svtype), function(st){
   data.frame(svtype=bt, color=svtypes$color[svtypes$svtype==st][1], stringsAsFactors=FALSE)
 }))
 svtypes.merged <- svtypes.merged[!duplicated(svtypes.merged$svtype), ]
+
+# Normalized merged: TR/VNTR -> TR_SNV/TR_INS/TR_DEL based on TR_ALLELE_CLASS
+dat.norm.merged <- dat
+tr.biallelic.idx <- dat.norm.merged$svtype %in% c("TR","VNTR")
+if(any(tr.biallelic.idx) && "TR_ALLELE_CLASS" %in% colnames(dat.norm.merged)){
+  dat.norm.merged$svtype[tr.biallelic.idx] <- dat.norm.merged$TR_ALLELE_CLASS[tr.biallelic.idx]
+  dat.norm.merged$svtype[is.na(dat.norm.merged$svtype) | dat.norm.merged$svtype == ""] <- "TR_SNV"
+}
+for(sv.from in names(sv.merge.map)){
+  dat.norm.merged$svtype[dat.norm.merged$svtype == sv.from] <- sv.merge.map[sv.from]
+}
+svtypes.norm.merged <- do.call(rbind, lapply(unique(dat.norm.merged$svtype), function(st){
+  col <- if(st %in% svtypes.merged$svtype) svtypes.merged$color[svtypes.merged$svtype==st]
+         else if(st == "TR_SNV") "#FA931E"
+         else if(st == "TR_INS") "#F5C71A"
+         else if(st == "TR_DEL") "#B56A00"
+         else "#888888"
+  data.frame(svtype=st, color=col, stringsAsFactors=FALSE)
+}))
+svtypes.norm.merged <- svtypes.norm.merged[!duplicated(svtypes.norm.merged$svtype), ]
+.norm.merged.ord <- c("SNV","INS","DEL","DUP","TR_SNV","TR_INS","TR_DEL")
+.nm.idx <- c(match(.norm.merged.ord[.norm.merged.ord %in% svtypes.norm.merged$svtype], svtypes.norm.merged$svtype),
+             which(!svtypes.norm.merged$svtype %in% .norm.merged.ord))
+svtypes.norm.merged <- svtypes.norm.merged[.nm.idx, ]
 
 #Create output directory structure, if necessary
 if(!dir.exists(OUTDIR)){
