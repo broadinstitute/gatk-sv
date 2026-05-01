@@ -97,14 +97,17 @@ with gzip.open("~{vcf}", 'rt') as f, open("intermediate1.vcf", 'w') as out:
 
 # set BND/CTX END2 to ends from dictionary if not present
 with pysam.VariantFile("intermediate1.vcf", 'r') as vcf, pysam.VariantFile("intermediate2.vcf.gz", 'w', header=vcf.header) as out:
-    for record in vcf:
-        svtype = record.info.get('SVTYPE', None)
-        if (svtype == 'BND' or svtype == 'CTX') and 'END2' not in record.info:
-            record.info['END2'] = bnd_end_dict[record.id] if bnd_end_dict is not None \
-                else record.info.get('END2', record.stop)
-        if svtype == 'BND' and 'CHR2' not in record.info:
-            record.info['CHR2'] = record.chrom
-        out.write(record)
+    header = vcf.header
+    header.add_line('##INFO=<ID=END2,Number=1,Type=Integer,Description="End position of the structural variant on CHR2">')
+    with pysam.VariantFile("intermediate2.vcf.gz", 'w', header=header) as out:
+        for record in vcf:
+            svtype = record.info.get('SVTYPE', None)
+            if (svtype == 'BND' or svtype == 'CTX') and 'END2' not in record.info:
+                record.info['END2'] = bnd_end_dict[record.id] if bnd_end_dict is not None \
+                    else record.info.get('END2', record.stop)
+            if svtype == 'BND' and 'CHR2' not in record.info:
+                record.info['CHR2'] = record.chrom
+            out.write(record)
 
 CODE
 
@@ -122,4 +125,3 @@ CODE
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
