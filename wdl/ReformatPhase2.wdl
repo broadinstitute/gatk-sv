@@ -96,7 +96,7 @@ with gzip.open("~{vcf}", 'rt') as f, open("intermediate1.vcf", 'w') as out:
         out.write("\t".join(columns))
 
 # set BND/CTX END2 to ends from dictionary if not present
-with pysam.VariantFile("intermediate1.vcf", 'r') as vcf, pysam.VariantFile("intermediate2.vcf.gz", 'w', header=vcf.header) as out:
+with pysam.VariantFile("intermediate1.vcf", 'r') as vcf:
     header = vcf.header
     header.add_line('##INFO=<ID=END2,Number=1,Type=Integer,Description="End position of the structural variant on CHR2">')
     with pysam.VariantFile("intermediate2.vcf.gz", 'w', header=header) as out:
