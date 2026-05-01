@@ -4,22 +4,37 @@ import "Structs.wdl"
 
 workflow ReformatPhase2 {
   input {
-    File vcf
+    File pesr_vcf
+    File depth_vcf
     String prefix
     String sv_pipeline_docker
   }
 
-  call ReformatVcf {
+  call ReformatVcf as ReformatPesr {
     input:
-      vcf=vcf,
-      vcf_idx="~{vcf}.tbi",
-      prefix=prefix,
+      vcf=pesr_vcf,
+      vcf_idx="~{pesr_vcf}.tbi",
+      prefix="~{prefix}.pesr",
+      sv_pipeline_docker=sv_pipeline_docker
+  }
+
+  call ReformatVcf as ReformatDepth {
+    input:
+      vcf=depth_vcf,
+      vcf_idx="~{depth_vcf}.tbi",
+      prefix="~{prefix}.depth",
       sv_pipeline_docker=sv_pipeline_docker
   }
 
   output {
-    File reformatted_vcf = ReformatVcf.reformatted_vcf
-    File reformatted_vcf_idx = ReformatVcf.reformatted_vcf_idx
+    File reformatted_pesr_vcf = ReformatPesr.reformatted_vcf
+    File reformatted_pesr_vcf_idx = ReformatPesr.reformatted_vcf_idx
+
+    File reformatted_depth_vcf = ReformatDepth.reformatted_vcf
+    File reformatted_depth_vcf_idx = ReformatDepth.reformatted_vcf_idx
+
+    File original_pesr_vcf = pesr_vcf
+    File original_depth_vcf = depth_vcf
   }
 }
 
