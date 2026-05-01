@@ -93,6 +93,16 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: ReformatPhase2
+    primaryDescriptorPath: /wdl/ReformatPhase2.wdl
+    filters:
+      branches:
+        - main
+        - eph_fix_ends_filterbatchsites
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: GenotypeBatch
     primaryDescriptorPath: /wdl/GenotypeBatch.wdl
     filters:
