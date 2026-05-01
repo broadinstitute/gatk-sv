@@ -102,9 +102,11 @@ with pysam.VariantFile("intermediate1.vcf", 'r') as vcf:
     with pysam.VariantFile("intermediate2.vcf.gz", 'w', header=header) as out:
         for record in vcf:
             svtype = record.info.get('SVTYPE', None)
-            if (svtype == 'BND' or svtype == 'CTX') and 'END2' not in record.info:
-                record.info['END2'] = bnd_end_dict[record.id] if bnd_end_dict is not None \
-                    else record.info.get('END2', record.stop)
+            if (svtype == 'BND' or svtype == 'CTX'):
+                if 'END2' not in record.info:
+                    record.info['END2'] = bnd_end_dict[record.id] if bnd_end_dict is not None \
+                        else record.info.get('END2', record.stop)
+                record.stop = record.pos
             if svtype == 'BND' and 'CHR2' not in record.info:
                 record.info['CHR2'] = record.chrom
             out.write(record)
