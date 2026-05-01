@@ -996,10 +996,6 @@ class CNVModel:
     autosomal_baseline_cn : sequence of int, optional
         Fixed autosomal baseline copy number per sample. When omitted, the
         default diploid baseline CN=2 is used for all samples.
-    freeze_sample_depth : bool
-        If true, fixes raw-count ``sample_depth`` to the autosomal median
-        counts/kb anchor. This is the default simplified model; set false to
-        infer sample depth as a LogNormal latent.
     """
 
     _latent_sites = ["sample_var"]
@@ -1041,10 +1037,6 @@ class CNVModel:
         obs_df: float = 3.5,
         sample_depth_max: float = 10000.0,
         autosomal_baseline_cn: Optional[Sequence[int]] = None,
-        freeze_bin_bias: bool = False,
-        freeze_cn_prior: bool = False,
-        freeze_sample_var: bool = False,
-        freeze_sample_depth: bool = True,
     ) -> None:
         self.n_states = n_states
         self.autosome_prior_mode = autosome_prior_mode
@@ -1086,19 +1078,11 @@ class CNVModel:
             if autosomal_baseline_cn is None
             else np.atleast_1d(np.asarray(autosomal_baseline_cn, dtype=np.int64))
         )
-        self.freeze_bin_bias = bool(freeze_bin_bias)
-        self.freeze_cn_prior = bool(freeze_cn_prior)
-        self.freeze_sample_var = bool(freeze_sample_var)
-        self.freeze_sample_depth = bool(freeze_sample_depth)
 
         if self.autosome_prior_mode not in AUTOSOME_PRIOR_MODES:
             raise ValueError(
                 f"Unknown autosome_prior_mode: {self.autosome_prior_mode!r}. "
                 f"Choose one of {AUTOSOME_PRIOR_MODES}."
-            )
-        if self.freeze_cn_prior and self.autosome_prior_mode == "shrinkage":
-            raise ValueError(
-                "freeze_cn_prior is only supported with autosome_prior_mode='dirichlet'."
             )
         if self.autosome_nonref_mean_alpha <= 0 or self.autosome_nonref_mean_beta <= 0:
             raise ValueError(
@@ -1162,13 +1146,9 @@ class CNVModel:
         self.learn_bin_var = self.var_bin > 0
 
         self._latent_sites = list(self._latent_sites)
-        if self.freeze_sample_var:
-            self._latent_sites = [
-                site for site in self._latent_sites if site != "sample_var"
-            ]
         if self.learn_bin_var:
             self._latent_sites.append("bin_var")
-        if all((not self.freeze_bin_bias, self.multiplicative_factors > 0)):
+        if self.multiplicative_factors > 0:
             self._latent_sites.extend(
                 ["multiplicative_bin_factors", "multiplicative_sample_factors"]
             )
@@ -1182,10 +1162,7 @@ class CNVModel:
                 ]
             )
         else:
-            if not self.freeze_cn_prior:
-                self._latent_sites.append("cn_probs")
-        if not self.freeze_sample_depth:
-            self._latent_sites.append("sample_depth")
+            self._latent_sites.append("cn_probs")
         if self.epsilon_mean > 0:
             self._latent_sites.append("bin_epsilon")
         if self.background_factors > 0:
@@ -1969,31 +1946,11 @@ class CNVModel:
             int(model_kw["n_samples"]),
             device=self.device,
             dtype=self.dtype,
-            fixed_bias=model_kw.get("bin_bias_fixed") if self.freeze_bin_bias else None,
             multiplicative_bin_factors=estimates.get("multiplicative_bin_factors"),
             multiplicative_sample_factors=estimates.get("multiplicative_sample_factors"),
         )
         estimates["bin_bias_matrix"] = bin_bias_matrix
         estimates["bin_bias"] = bin_bias_matrix.mean(dim=-1)
-
-        if all(
-            (
-                self.freeze_bin_bias,
-                "bin_bias" not in estimates,
-                model_kw.get("bin_bias_fixed") is not None,
-            )
-        ):
-            estimates["bin_bias"] = model_kw["bin_bias_fixed"].detach().clone()
-        if all(
-            (
-                self.freeze_sample_var,
-                "sample_var" not in estimates,
-                model_kw.get("sample_var_fixed") is not None,
-            )
-        ):
-            estimates["sample_var"] = (
-                model_kw["sample_var_fixed"].detach().clone()
-            )
         if "cn_probs" not in estimates:
             estimates["cn_probs"] = self._build_cn_probs_from_estimates_torch(
                 estimates,
@@ -2002,7 +1959,6 @@ class CNVModel:
             )
         if all(
             (
-                self.freeze_sample_depth,
                 "sample_depth" not in estimates,
                 model_kw.get("sample_depth_fixed") is not None,
             )
@@ -2134,29 +2090,6 @@ class CNVModel:
         base_init = init_to_sample if randomize else init_to_median(num_samples=50)
         initial_values = {} if initial_values is None else initial_values
 
-        sample_depth_prior = None
-        sample_depth_init = None
-        if not self.freeze_sample_depth:
-            sample_depth_prior = self._estimate_sample_depth_prior(data)
-            sample_depth_init = sample_depth_prior["center"]
-
-        if not randomize and sample_depth_prior is not None:
-            logger.info(
-                "Initial sample_depth from autosomal counts/kb: median=%.3f range=[%.3f, %.3f]",
-                float(sample_depth_init.median().item()),
-                float(sample_depth_init.min().item()),
-                float(sample_depth_init.max().item()),
-            )
-            logger.info(
-                "Sample_depth LogNormal prior from autosomal medians: bootstrap raw_sd median=%.3f range=[%.3f, %.3f], log_scale median=%.4f range=[%.4f, %.4f]",
-                float(sample_depth_prior["raw_sd"].median().item()),
-                float(sample_depth_prior["raw_sd"].min().item()),
-                float(sample_depth_prior["raw_sd"].max().item()),
-                float(sample_depth_prior["scale"].median().item()),
-                float(sample_depth_prior["scale"].min().item()),
-                float(sample_depth_prior["scale"].max().item()),
-            )
-
         def init_loc_fn(site):
             site_name = site["name"]
             if site_name in initial_values:
@@ -2164,18 +2097,6 @@ class CNVModel:
                 if isinstance(value, torch.Tensor):
                     return value.detach().to(device=self.device, dtype=self.dtype).clone()
                 return torch.as_tensor(value, device=self.device, dtype=self.dtype)
-            if site_name == "sample_depth" and sample_depth_prior is not None:
-                if randomize:
-                    sampled_depth = dist.LogNormal(
-                        sample_depth_prior["loc"],
-                        sample_depth_prior["scale"],
-                    ).sample()
-                    return torch.clamp(
-                        sampled_depth,
-                        min=1e-3,
-                        max=self.sample_depth_max * 0.95,
-                    )
-                return sample_depth_init
             if site_name == "site_pop_af_latent" and data.site_pop_af is not None:
                 return torch.clamp(data.site_pop_af, min=1e-6, max=1.0 - 1e-6)
             return base_init(site)
@@ -2343,11 +2264,7 @@ class CNVModel:
         n_bins: int = None,
         n_samples: int = None,
         bin_length_kb: Optional[torch.Tensor] = None,
-        bin_bias_fixed: Optional[torch.Tensor] = None,
         bin_var_fixed: Optional[torch.Tensor] = None,
-        sample_var_fixed: Optional[torch.Tensor] = None,
-        sample_depth_prior_loc: Optional[torch.Tensor] = None,
-        sample_depth_prior_scale: Optional[torch.Tensor] = None,
         sample_depth_fixed: Optional[torch.Tensor] = None,
         n_contigs: Optional[int] = None,
         contig_index: Optional[torch.Tensor] = None,
@@ -2366,16 +2283,10 @@ class CNVModel:
             n_bins: Number of genomic bins.
             n_samples: Number of samples.
             bin_length_kb: Per-bin exposure in kilobases.
-            bin_bias_fixed: Fixed per-bin bias values used when
-                ``freeze_bin_bias=True``.
             bin_var_fixed: Fixed per-bin variance values used when
                 ``var_bin <= 0``.
-            sample_var_fixed: Fixed per-sample overdispersion values used when
-                ``freeze_sample_var=True``.
-            sample_depth_prior_loc: LogNormal location parameter for the
-                per-sample diploid baseline depth scale.
-            sample_depth_prior_scale: LogNormal scale parameter for the
-                per-sample diploid baseline depth scale.
+            sample_depth_fixed: Fixed autosomal-median counts/kb anchor used
+                for the per-sample diploid baseline depth scale.
             n_contigs: Number of unique contigs represented by the bins.
             contig_index: Per-bin index into the contig axis.
             chr_type: Per-bin chromosome type (0=autosome, 1=chrX, 2=chrY).
@@ -2449,50 +2360,22 @@ class CNVModel:
         # Per-sample variance and sex karyotype
         sample_depth = None
         with plate_samples:
-            if self.freeze_sample_var:
-                if sample_var_fixed is None:
-                    raise ValueError(
-                        "sample_var_fixed is required when freeze_sample_var=True."
-                    )
-                sample_var = pyro.sample(
-                    "sample_var",
-                    dist.Delta(
-                        sample_var_fixed,
-                        log_density=torch.zeros_like(sample_var_fixed),
-                    ),
-                    obs=sample_var_fixed,
+            sample_var = pyro.sample(
+                "sample_var",
+                dist.Exponential(1.0 / sample_var_mean),
+            )
+            if sample_depth_fixed is None:
+                raise ValueError(
+                    "sample_depth_fixed is required for negative_binomial observation likelihood."
                 )
-            else:
-                sample_var = pyro.sample(
-                    "sample_var",
-                    dist.Exponential(1.0 / sample_var_mean),
-                )
-            if self.freeze_sample_depth:
-                if sample_depth_fixed is None:
-                    raise ValueError(
-                        "sample_depth_fixed is required when freeze_sample_depth=True."
-                    )
-                sample_depth = pyro.sample(
-                    "sample_depth",
-                    dist.Delta(
-                        sample_depth_fixed,
-                        log_density=torch.zeros_like(sample_depth_fixed),
-                    ),
-                    obs=sample_depth_fixed,
-                )
-            else:
-                if sample_depth_prior_loc is None or sample_depth_prior_scale is None:
-                    raise ValueError(
-                        "sample_depth_prior_loc and sample_depth_prior_scale are required "
-                        "for negative_binomial observation likelihood."
-                    )
-                sample_depth = pyro.sample(
-                    "sample_depth",
-                    dist.LogNormal(
-                        sample_depth_prior_loc,
-                        sample_depth_prior_scale,
-                    ),
-                )
+            sample_depth = pyro.sample(
+                "sample_depth",
+                dist.Delta(
+                    sample_depth_fixed,
+                    log_density=torch.zeros_like(sample_depth_fixed),
+                ),
+                obs=sample_depth_fixed,
+            )
             if self.sex_cn_weight > 0 and chr_type is not None:
                 sex_prior = torch.tensor(
                     self.sex_prior, device=self.device, dtype=self.dtype,
@@ -2512,19 +2395,7 @@ class CNVModel:
                     )
                 bin_var = bin_var_fixed
 
-        if self.freeze_bin_bias:
-            if bin_bias_fixed is None:
-                raise ValueError(
-                    "bin_bias_fixed is required when freeze_bin_bias=True."
-                )
-            bin_bias = _compose_effective_bin_bias_torch(
-                n_bins,
-                n_samples,
-                device=self.device,
-                dtype=self.dtype,
-                fixed_bias=bin_bias_fixed,
-            )
-        elif self.multiplicative_factors > 0:
+        if self.multiplicative_factors > 0:
             multiplicative_bin_factors = pyro.sample(
                 "multiplicative_bin_factors",
                 dist.Normal(zero, one).expand(
@@ -2697,20 +2568,14 @@ class CNVModel:
                 cn_probs[sex_idx] = sex_cn_probs
             cn_probs = pyro.deterministic("cn_probs", cn_probs)
         else:
-            if self.freeze_cn_prior:
-                cn_probs = pyro.deterministic(
-                    "cn_probs",
-                    self._default_cn_probs_torch(chr_type, n_bins),
-                )
-            else:
-                with plate_bins:
-                    # Dirichlet-Categorical CN prior — per-chromosome-type alphas.
-                    if chr_type is not None:
-                        alpha = self.alpha_table[chr_type].unsqueeze(-2)
-                    else:
-                        alpha = self.alpha_non_ref * one.expand(self.n_states)
-                        alpha[2] = self.alpha_ref
-                    cn_probs = pyro.sample("cn_probs", dist.Dirichlet(alpha))
+            with plate_bins:
+                # Dirichlet-Categorical CN prior — per-chromosome-type alphas.
+                if chr_type is not None:
+                    alpha = self.alpha_table[chr_type].unsqueeze(-2)
+                else:
+                    alpha = self.alpha_non_ref * one.expand(self.n_states)
+                    alpha[2] = self.alpha_ref
+                cn_probs = pyro.sample("cn_probs", dist.Dirichlet(alpha))
 
         # Per-bin, per-sample observations
         with plate_bins, plate_samples:
@@ -2725,7 +2590,6 @@ class CNVModel:
             if cn_probs_for_samples.dim() == 2:
                 cn_probs_for_samples = cn_probs_for_samples.unsqueeze(-2)
             cn = pyro.sample("cn", dist.Categorical(cn_probs_for_samples))
-            expected_units = Vindex(cn_states)[cn] * bin_bias + additive_background
 
             if bin_length_kb is None:
                 raise ValueError(
@@ -2821,35 +2685,18 @@ class CNVModel:
         if self.epsilon_mean > 0:
             kw["n_contigs"] = data.n_contigs
             kw["contig_index"] = data.contig_index
-        if self.freeze_sample_var:
-            kw["sample_var_fixed"] = torch.zeros(
-                (data.n_samples,),
-                device=self.device,
-                dtype=self.dtype,
-            )
         if not self.learn_bin_var:
             kw["bin_var_fixed"] = torch.zeros(
                 (data.n_bins, 1),
                 device=self.device,
                 dtype=self.dtype,
             )
-        if self.freeze_bin_bias:
-            kw["bin_bias_fixed"] = torch.ones(
-                (data.n_bins, 1),
-                device=self.device,
-                dtype=self.dtype,
-            )
         kw["bin_length_kb"] = data.bin_length_kb
-        if self.freeze_sample_depth:
-            kw["sample_depth_fixed"] = torch.tensor(
-                self._estimate_sample_depth_center(data),
-                device=self.device,
-                dtype=self.dtype,
-            )
-        else:
-            sample_depth_prior = self._estimate_sample_depth_prior(data)
-            kw["sample_depth_prior_loc"] = sample_depth_prior["loc"]
-            kw["sample_depth_prior_scale"] = sample_depth_prior["scale"]
+        kw["sample_depth_fixed"] = torch.tensor(
+            self._estimate_sample_depth_center(data),
+            device=self.device,
+            dtype=self.dtype,
+        )
         # Chromosome-type tensor and per-bin sex-CN coupling weight
         if hasattr(data, "chr_type") and data.chr_type is not None:
             kw["chr_type"] = data.chr_type
@@ -3130,25 +2977,6 @@ class CNVModel:
             estimates[site] = value.detach().cpu().numpy()
         if all(
             (
-                self.freeze_bin_bias,
-                "bin_bias" not in estimates,
-                "bin_bias_fixed" in model_kw,
-            )
-        ):
-            estimates["bin_bias"] = model_kw["bin_bias_fixed"].detach().cpu().numpy()
-        if all(
-            (
-                self.freeze_sample_var,
-                "sample_var" not in estimates,
-                "sample_var_fixed" in model_kw,
-            )
-        ):
-            estimates["sample_var"] = (
-                model_kw["sample_var_fixed"].detach().cpu().numpy()
-            )
-        if all(
-            (
-                self.freeze_sample_depth,
                 "sample_depth" not in estimates,
                 "sample_depth_fixed" in model_kw,
             )

@@ -67,7 +67,6 @@ def _write_synthetic_cohort_from_medium_fixture(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     synthetic_depth.to_csv(output_dir / "preprocessed_depth.tsv", sep="\t", index=True)
-    (output_dir / "observation_type.txt").write_text("raw\n", encoding="ascii")
 
     truth, sex_truth = builder.build_truth_maps(sample_specs)
     (output_dir / "truth.json").write_text(
@@ -101,8 +100,6 @@ def test_synthetic_fixture_absorbs_genomewide_depth_shifts_into_sample_depth(
             str(infer_out),
             "--device",
             "cpu",
-            "--depth-space",
-            "raw",
             "--max-iter",
             "150",
             "--log-freq",

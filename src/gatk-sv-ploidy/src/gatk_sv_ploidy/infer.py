@@ -22,15 +22,12 @@ from scipy import stats
 from gatk_sv_ploidy._util import (
     compose_additive_background_matrix,
     DEFAULT_AF_WEIGHT,
-    DEPTH_SPACES,
     compute_cnq_from_probabilities,
     is_expected_allosome_copy_number_pair,
     format_count_summary,
     format_numeric_summary,
     NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
-    read_observation_type,
     summarize_contig_ploidy_from_bin_calls,
-    validate_depth_space,
 )
 from gatk_sv_ploidy.data import DepthData, load_site_data
 from gatk_sv_ploidy.models import (
@@ -1665,28 +1662,6 @@ def _plot_depth_baseline_per_sample(data: DepthData) -> np.ndarray:
     return np.maximum(baseline, 1e-8)
 
 
-def _clamp_threshold_for_depth_space(depth_space: str) -> float | None:
-    """Raw-count inference does not clamp counts on load."""
-    return None
-
-
-def _resolve_observation_model(
-    requested_depth_space: str,
-    input_path: str,
-) -> str:
-    """Resolve depth space for the fixed raw-count observation model."""
-    marker_depth_space = read_observation_type(input_path)
-    effective_depth_space = (
-        marker_depth_space
-        if marker_depth_space is not None and requested_depth_space == "auto"
-        else requested_depth_space
-    )
-    return validate_depth_space(
-        effective_depth_space,
-        NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
-    )
-
-
 def _load_autosomal_baseline_cn(
     path: str | None,
     sample_ids: Sequence[str],
@@ -2330,15 +2305,20 @@ def parse_args() -> argparse.Namespace:
         description="Train Bayesian model and run CN inference",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument(
-        "-i", "--input", required=True,
+    io = p.add_argument_group("inputs and outputs")
+    io.add_argument(
+        "-i",
+        "--input",
+        required=True,
         help="Preprocessed depth TSV (output of 'preprocess')",
     )
-    p.add_argument(
-        "-o", "--output-dir", required=True,
+    io.add_argument(
+        "-o",
+        "--output-dir",
+        required=True,
         help="Output directory",
     )
-    p.add_argument(
+    io.add_argument(
         "--autosomal-baseline-cn-tsv",
         default=None,
         help=(
@@ -2347,58 +2327,81 @@ def parse_args() -> argparse.Namespace:
             "Samples default to CN=2 when this is not provided."
         ),
     )
-    p.add_argument(
-        "--depth-space", choices=["auto", "raw"], default="auto",
-        help="Interpret the input matrix as raw counts. 'auto' first consults preprocess observation_type.txt and otherwise resolves to raw.",
-    )
 
-    # Model priors
-    g = p.add_argument_group("model priors")
-    g.add_argument(
+    model_priors = p.add_argument_group("copy-number priors")
+    model_priors.add_argument(
         "--autosome-prior-mode",
         choices=list(AUTOSOME_PRIOR_MODES),
         default="dirichlet",
         help="Autosomal CN prior family",
     )
-    g.add_argument("--alpha-ref", type=float, default=50,
-                   help="Dirichlet concentration for CN=2 on autosomes")
-    g.add_argument("--alpha-non-ref", type=float, default=1.0,
-                   help="Dirichlet concentration for other CN states")
-    g.add_argument(
+    model_priors.add_argument(
+        "--alpha-ref",
+        type=float,
+        default=50,
+        help="Dirichlet concentration for CN=2 on autosomes",
+    )
+    model_priors.add_argument(
+        "--alpha-non-ref",
+        type=float,
+        default=1.0,
+        help="Dirichlet concentration for other CN states",
+    )
+    model_priors.add_argument(
         "--autosome-nonref-mean-alpha",
         type=float,
         default=1.0,
         help="Beta prior alpha for the cohort-wide autosomal non-reference mean in shrinkage mode",
     )
-    g.add_argument(
+    model_priors.add_argument(
         "--autosome-nonref-mean-beta",
         type=float,
         default=19.0,
         help="Beta prior beta for the cohort-wide autosomal non-reference mean in shrinkage mode",
     )
-    g.add_argument(
+    model_priors.add_argument(
         "--autosome-nonref-concentration",
         type=float,
         default=20.0,
         help="Per-bin shrinkage concentration toward the learned autosomal non-reference mean in shrinkage mode",
     )
-    g.add_argument("--var-bias-bin", type=float, default=0.01,
-                   help="Normal scale for per-sample amplitudes of the low-rank multiplicative bias factors")
-    g.add_argument("--var-sample", type=float, default=0.01,
-                   help="Exponential mean for per-sample variance")
-    g.add_argument("--var-bin", type=float, default=0.0,
-                   help="Exponential mean for per-bin variance; set to 0 or a negative value to disable the per-bin variance latent")
-    g.add_argument(
-        "--raw-variance-power",
+    model_priors.add_argument(
+        "--alpha-sex-ref",
         type=float,
-        default=DEFAULT_RAW_VARIANCE_POWER,
+        default=1.0,
         help=(
-            "Power-law exponent for raw-count extra-Poisson variance in the "
-            "negative-binomial model. 2.0 is standard NB2 variance; lower "
-            "values make residual scale grow sub-linearly with raw depth."
+            "Dirichlet concentration for CN=2 on sex chromosomes "
+            "(flat by default; sex-CN coupling handles sex-dependent CN)"
         ),
     )
-    g.add_argument(
+    model_priors.add_argument(
+        "--alpha-sex-non-ref",
+        type=float,
+        default=1.0,
+        help="Dirichlet concentration for other CN states on sex chromosomes",
+    )
+    model_priors.add_argument(
+        "--sex-prior",
+        type=float,
+        nargs=2,
+        default=[0.5, 0.5],
+        metavar=("P_XX", "P_XY"),
+        help="Prior probabilities for XX and XY karyotypes",
+    )
+    model_priors.add_argument(
+        "--sex-cn-weight",
+        type=float,
+        default=3.0,
+        help="Weight of the sex-CN coupling factor (0 to disable)",
+    )
+    depth_model = p.add_argument_group("depth model")
+    depth_model.add_argument(
+        "--var-bias-bin",
+        type=float,
+        default=0.01,
+        help="Normal scale for per-sample amplitudes of the low-rank multiplicative bias factors",
+    )
+    depth_model.add_argument(
         "--multiplicative-factors",
         type=int,
         default=DEFAULT_MULTIPLICATIVE_FACTORS,
@@ -2407,10 +2410,16 @@ def parse_args() -> argparse.Namespace:
             "Defaults to 0, which uses a fixed neutral multiplicative bias of 1."
         ),
     )
-    g.add_argument("--epsilon-mean", type=float, default=DEFAULT_EPSILON_MEAN,
-                   help="Mean of the Gamma prior on per-bin additive background depth; "
-                        "increase to absorb low-level zero-copy background depth, set to 0 to disable")
-    g.add_argument(
+    depth_model.add_argument(
+        "--epsilon-mean",
+        type=float,
+        default=DEFAULT_EPSILON_MEAN,
+        help=(
+            "Mean of the Gamma prior on per-bin additive background depth; "
+            "increase to absorb low-level zero-copy background depth, set to 0 to disable"
+        ),
+    )
+    depth_model.add_argument(
         "--epsilon-concentration",
         type=float,
         default=DEFAULT_EPSILON_CONCENTRATION,
@@ -2420,7 +2429,7 @@ def parse_args() -> argparse.Namespace:
             "positive tail; 1.0 matches the old Exponential prior."
         ),
     )
-    g.add_argument(
+    depth_model.add_argument(
         "--background-factors",
         type=int,
         default=DEFAULT_BACKGROUND_FACTORS,
@@ -2429,63 +2438,47 @@ def parse_args() -> argparse.Namespace:
             "Defaults to 0; the CN=0 epsilon floor remains available for zero-copy background."
         ),
     )
-    g.add_argument("--guide-type", choices=["delta", "diagonal", "lowrank"], default="delta",
-                   help="Variational guide type")
-    g.add_argument(
-        "--guide-init-scale",
+    depth_model.add_argument(
+        "--var-sample",
         type=float,
-        default=DEFAULT_GUIDE_INIT_SCALE,
+        default=0.01,
+        help="Exponential mean for per-sample variance",
+    )
+    depth_model.add_argument(
+        "--var-bin",
+        type=float,
+        default=0.0,
+        help="Exponential mean for per-bin variance; set to 0 or a negative value to disable the per-bin variance latent",
+    )
+    depth_model.add_argument(
+        "--raw-variance-power",
+        type=float,
+        default=DEFAULT_RAW_VARIANCE_POWER,
         help=(
-            "Initial unconstrained posterior standard deviation for diagonal "
-            "and low-rank guides. Smaller values start the expressive guide "
-            "closer to a MAP estimate."
+            "Power-law exponent for raw-count extra-Poisson variance in the "
+            "negative-binomial model. 2.0 is standard NB2 variance; lower "
+            "values make residual scale grow sub-linearly with raw depth."
         ),
     )
-    g.add_argument(
-        "--lowrank-guide-rank",
-        type=int,
-        default=None,
-        help="Rank for --guide-type lowrank; omit to use Pyro's default rank.",
+    depth_model.add_argument(
+        "--sample-depth-max",
+        type=float,
+        default=10000.0,
+        help="Upper clip used when deriving the empirical-Bayes LogNormal prior center for per-sample depth scale",
     )
-    g.add_argument("--obs-df", type=float, default=3.5,
-                   help="Unused legacy argument retained for CLI compatibility.")
-    g.add_argument("--sample-depth-max", type=float, default=10000.0,
-                   help="Upper clip used when deriving the empirical-Bayes LogNormal prior center for per-sample depth scale")
-    g.add_argument("--freeze-bin-bias", action="store_true",
-                   help="Hold per-bin bin_bias fixed at 1 during training. Useful for diagnosing whether low fitted bin_bias drives non-neutral CN calls.")
-    g.add_argument("--freeze-cn-prior", action="store_true",
-                   help="Hold the learned per-bin CN prior fixed at the default chromosome-type prior during training. Useful for diagnosing whether recurrent high-copy bins are driven by learned per-bin prior entrenchment.")
-    g.add_argument("--freeze-sample-var", action="store_true",
-                   help="Hold per-sample sample_var fixed at 0 during training. Useful for diagnosing whether a noisy-sample tail is driven by sample-specific overdispersion.")
-    g.add_argument("--freeze-sample-depth", dest="freeze_sample_depth", action="store_true",
-                   help="Hold per-sample sample_depth fixed at the autosomal-median counts/kb "
-                        "anchor during training (raw-count runs only; default).")
-    g.add_argument("--learn-sample-depth", dest="freeze_sample_depth", action="store_false",
-                   help="Infer per-sample sample_depth as a LogNormal latent in raw-count runs. "
-                        "Use this when the median anchor is inadequate.")
-    g.set_defaults(freeze_sample_depth=True)
-
-    # Sex chromosome priors
-    g = p.add_argument_group("sex chromosome priors")
-    g.add_argument("--alpha-sex-ref", type=float, default=1.0,
-                   help="Dirichlet concentration for CN=2 on sex chromosomes "
-                        "(flat by default; sex-CN coupling handles "
-                        "sex-dependent CN)")
-    g.add_argument("--alpha-sex-non-ref", type=float, default=1.0,
-                   help="Dirichlet concentration for other CN states on "
-                        "sex chromosomes")
-    g.add_argument("--sex-cn-weight", type=float, default=3.0,
-                   help="Weight of the sex-CN coupling factor "
-                        "(0 to disable)")
-    g.add_argument("--sex-prior", type=float, nargs=2,
-                   default=[0.5, 0.5], metavar=("P_XX", "P_XY"),
-                   help="Prior probabilities for XX and XY karyotypes")
-
-    # Allele fraction (per-site model)
-    g = p.add_argument_group("allele fraction")
-    g.add_argument("--site-data", default=None,
-                   help="Per-site allele data .npz (output of 'preprocess')")
-    g.add_argument(
+    depth_model.add_argument(
+        "--obs-df",
+        type=float,
+        default=3.5,
+        help="Unused legacy argument retained for CLI compatibility.",
+    )
+    allele_fraction = p.add_argument_group("allele fraction")
+    allele_fraction.add_argument(
+        "--site-data",
+        default=None,
+        help="Per-site allele data .npz (output of 'preprocess')",
+    )
+    allele_fraction.add_argument(
         "--site-af-estimator",
         choices=list(SITE_AF_ESTIMATORS),
         default="auto",
@@ -2497,7 +2490,7 @@ def parse_args() -> argparse.Namespace:
             "When --learn-site-af is enabled, these values are used as prior centers."
         ),
     )
-    g.add_argument(
+    allele_fraction.add_argument(
         "--learn-site-af",
         action="store_true",
         default=False,
@@ -2506,71 +2499,95 @@ def parse_args() -> argparse.Namespace:
             "This disables AF-table precomputation and uses the current site_pop_af values as Beta prior means."
         ),
     )
-    g.add_argument(
+    allele_fraction.add_argument(
         "--site-af-prior-strength",
         type=float,
         default=20.0,
         help="Strength of the Beta prior used when --learn-site-af is enabled",
     )
-    g.add_argument(
+    allele_fraction.add_argument(
         "--site-af-prior-alpha",
         type=float,
         default=1.0,
         help="Beta prior alpha for naive-Bayes site AF estimation",
     )
-    g.add_argument(
+    allele_fraction.add_argument(
         "--site-af-prior-beta",
         type=float,
         default=1.0,
         help="Beta prior beta for naive-Bayes site AF estimation",
     )
-    g.add_argument("--af-concentration", type=float, default=50.0,
-                   help="BetaBinomial concentration for allele fraction model")
-    g.add_argument("--af-weight", type=float, default=DEFAULT_AF_WEIGHT,
-                   help="Fixed AF scale when --fixed-af-temperature is used; otherwise the prior median for the learned global AF temperature (0 to disable)")
-    p.set_defaults(learn_af_temperature=True)
-    g.add_argument("--learn-af-temperature", dest="learn_af_temperature", action="store_true",
-                   help="Learn a single global AF temperature instead of keeping --af-weight fixed (default)")
-    g.add_argument("--fixed-af-temperature", dest="learn_af_temperature", action="store_false",
-                   help="Keep --af-weight fixed instead of learning a single global AF temperature")
-    g.add_argument("--af-temperature-prior-scale", type=float, default=0.5,
-                   help="LogNormal prior scale when --learn-af-temperature is enabled")
-    g.add_argument("--min-het-alt", type=int, default=3,
-                   help="Minimum alt-allele read count to classify a site as "
-                        "heterozygous in summary statistics")
-    g.add_argument("--min-het-af", type=float, default=0.2,
-                   help="Minimum allele fraction to classify a site as "
-                        "heterozygous in summary statistics")
-    g.add_argument("--max-het-af", type=float, default=0.8,
-                   help="Maximum allele fraction to classify a site as "
-                        "heterozygous in summary statistics")
-
-    # Training
-    g = p.add_argument_group("training")
-    g.add_argument("--max-iter", type=int, default=5000)
-    g.add_argument("--lr-init", type=float, default=0.02)
-    g.add_argument("--lr-min", type=float, default=0.01)
-    g.add_argument("--lr-decay", type=float, default=500)
-    g.add_argument(
-        "--grad-clip-norm",
+    allele_fraction.add_argument(
+        "--af-concentration",
         type=float,
-        default=10.0,
+        default=50.0,
+        help="BetaBinomial concentration for allele fraction model",
+    )
+    allele_fraction.add_argument(
+        "--af-weight",
+        type=float,
+        default=DEFAULT_AF_WEIGHT,
         help=(
-            "Clip the global SVI gradient norm to this value during training; "
-            "set to 0 or a negative value to disable clipping"
+            "Prior median for the learned global AF temperature by default, or the "
+            "fixed AF scale when --fixed-af-temperature is provided (0 to disable)"
         ),
     )
-    g.add_argument(
-        "--svi-init-restarts",
+    p.set_defaults(learn_af_temperature=True)
+    allele_fraction.add_argument(
+        "--fixed-af-temperature",
+        dest="learn_af_temperature",
+        action="store_false",
+        help="Keep --af-weight fixed instead of learning a single global AF temperature",
+    )
+    allele_fraction.add_argument(
+        "--af-temperature-prior-scale",
+        type=float,
+        default=0.5,
+        help="LogNormal prior scale when AF temperature learning is enabled (default)",
+    )
+    allele_fraction.add_argument(
+        "--min-het-alt",
         type=int,
-        default=10,
+        default=3,
+        help="Minimum alt-allele read count to classify a site as heterozygous in summary statistics",
+    )
+    allele_fraction.add_argument(
+        "--min-het-af",
+        type=float,
+        default=0.2,
+        help="Minimum allele fraction to classify a site as heterozygous in summary statistics",
+    )
+    allele_fraction.add_argument(
+        "--max-het-af",
+        type=float,
+        default=0.8,
+        help="Maximum allele fraction to classify a site as heterozygous in summary statistics",
+    )
+
+    guide = p.add_argument_group("variational guide")
+    guide.add_argument(
+        "--guide-type",
+        choices=["delta", "diagonal", "lowrank"],
+        default="delta",
+        help="Variational guide type",
+    )
+    guide.add_argument(
+        "--guide-init-scale",
+        type=float,
+        default=DEFAULT_GUIDE_INIT_SCALE,
         help=(
-            "Number of candidate autoguide initializations to score before "
-            "gradient descent. The first candidate uses the anchored default "
-            "init and the rest sample random prior starts."
+            "Initial unconstrained posterior standard deviation for diagonal "
+            "and low-rank guides. Smaller values start the expressive guide "
+            "closer to a MAP estimate."
         ),
     )
-    g.add_argument(
+    guide.add_argument(
+        "--lowrank-guide-rank",
+        type=int,
+        default=None,
+        help="Rank for --guide-type lowrank; omit to use Pyro's default rank.",
+    )
+    guide.add_argument(
         "--guide-warmup-iter",
         type=int,
         default=DEFAULT_GUIDE_WARMUP_ITER,
@@ -2580,49 +2597,80 @@ def parse_args() -> argparse.Namespace:
             "or 0 to disable. Ignored for --guide-type delta."
         ),
     )
-    g.add_argument("--log-freq", type=int, default=50)
-    g.add_argument("--jit", action="store_true", default=False)
-    g.add_argument("--early-stopping", action="store_true", default=True)
-    g.add_argument("--no-early-stopping", dest="early_stopping",
-                   action="store_false")
-    g.add_argument("--patience", type=int, default=50)
-    g.add_argument(
+    guide.add_argument(
+        "--svi-init-restarts",
+        type=int,
+        default=10,
+        help=(
+            "Number of candidate autoguide initializations to score before "
+            "gradient descent. The first candidate uses the anchored default "
+            "init and the rest sample random prior starts."
+        ),
+    )
+
+    training = p.add_argument_group("training")
+    training.add_argument("--max-iter", type=int, default=5000)
+    training.add_argument("--lr-init", type=float, default=0.02)
+    training.add_argument("--lr-min", type=float, default=0.01)
+    training.add_argument("--lr-decay", type=float, default=500)
+    training.add_argument(
+        "--grad-clip-norm",
+        type=float,
+        default=10.0,
+        help=(
+            "Clip the global SVI gradient norm to this value during training; "
+            "set to 0 or a negative value to disable clipping"
+        ),
+    )
+    training.add_argument("--log-freq", type=int, default=50)
+    training.add_argument("--jit", action="store_true", default=False)
+    training.add_argument("--early-stopping", action="store_true", default=True)
+    training.add_argument(
+        "--no-early-stopping",
+        dest="early_stopping",
+        action="store_false",
+    )
+    training.add_argument("--patience", type=int, default=50)
+    training.add_argument(
         "--elbo-window",
         type=int,
         default=50,
         help="Iterations per rolling ELBO window for early stopping",
     )
-    g.add_argument(
+    training.add_argument(
         "--elbo-rtol",
         type=float,
         default=1e-3,
         help="Relative tolerance between successive rolling ELBO windows",
     )
 
-    # Inference
-    g = p.add_argument_group("discrete inference")
-    g.add_argument("--prob-threshold", type=float, default=0.5,
-                   help="Min mean CN probability for aneuploidy call")
-    g.add_argument(
+    discrete = p.add_argument_group("discrete inference")
+    discrete.add_argument(
+        "--prob-threshold",
+        type=float,
+        default=0.5,
+        help="Min mean CN probability for aneuploidy call",
+    )
+    discrete.add_argument(
         "--cn-inference-method",
-        choices=["current", "median", "multi-draw"],
+        choices=["single", "median", "multi-draw"],
         default="multi-draw",
         help=(
             "How to handle continuous latent uncertainty before CN inference: "
-            "'current' uses a single guide draw, "
+            "'single' uses a single guide draw, "
             "'median' plugs in guide medians, and 'multi-draw' averages CN "
             "posteriors over repeated guide draws."
         ),
     )
-    g.add_argument(
+    discrete.add_argument(
         "--cn-inference-draws",
         type=int,
         default=100,
         help="Number of guide draws to average when --cn-inference-method=multi-draw",
     )
 
-    # Device
-    p.add_argument("--device", choices=["cpu", "cuda"], default="cpu")
+    runtime = p.add_argument_group("runtime")
+    runtime.add_argument("--device", choices=["cpu", "cuda"], default="cpu")
 
     return p.parse_args()
 
@@ -2643,7 +2691,7 @@ def main() -> None:
     # ── load data ───────────────────────────────────────────────────────
     logger.info("Loading preprocessed depth.")
     df = pd.read_csv(args.input, sep="\t", index_col=0)
-    depth_space = _resolve_observation_model(args.depth_space, args.input)
+    depth_space = "raw"
 
     # ── optional per-site allele data ─────────────────────────────────
     sd = None
@@ -2656,7 +2704,7 @@ def main() -> None:
     device = args.device
     data = DepthData(
         df, device=device, dtype=tensor_dtype,
-        clamp_threshold=_clamp_threshold_for_depth_space(depth_space),
+        clamp_threshold=None,
         depth_space=depth_space,
         site_data=sd,
     )
@@ -2746,9 +2794,9 @@ def main() -> None:
         )
     if args.cn_inference_draws < 1:
         raise ValueError("--cn-inference-draws must be at least 1.")
-    if args.guide_type == "delta" and args.cn_inference_method != "current":
+    if args.guide_type == "delta" and args.cn_inference_method != "single":
         logger.info(
-            "Guide type 'delta' is deterministic; %s will reduce to the current point-estimate behavior.",
+            "Guide type 'delta' is deterministic; %s will reduce to the single point-estimate behavior.",
             args.cn_inference_method,
         )
     if learn_site_af:
@@ -2792,10 +2840,6 @@ def main() -> None:
         obs_df=args.obs_df,
         sample_depth_max=args.sample_depth_max,
         autosomal_baseline_cn=autosomal_baseline_cn,
-        freeze_bin_bias=args.freeze_bin_bias,
-        freeze_cn_prior=args.freeze_cn_prior,
-        freeze_sample_var=args.freeze_sample_var,
-        freeze_sample_depth=args.freeze_sample_depth,
     )
 
     model.train(
@@ -2822,7 +2866,9 @@ def main() -> None:
     logger.info("Training loss saved.")
 
     # ── point estimates + exact discrete inference ──────────────────────
-    point_estimate_method = args.cn_inference_method
+    point_estimate_method = (
+        "current" if args.cn_inference_method == "single" else args.cn_inference_method
+    )
     if args.cn_inference_method == "multi-draw":
         point_estimate_method = "median"
 
@@ -2994,10 +3040,6 @@ def main() -> None:
         model.background_bin_scale
     )
     artifact_dict["sample_depth_max"] = np.asarray(model.sample_depth_max)
-    artifact_dict["freeze_bin_bias"] = np.asarray(model.freeze_bin_bias)
-    artifact_dict["freeze_cn_prior"] = np.asarray(model.freeze_cn_prior)
-    artifact_dict["freeze_sample_var"] = np.asarray(model.freeze_sample_var)
-    artifact_dict["freeze_sample_depth"] = np.asarray(model.freeze_sample_depth)
     artifact_dict["continuous_estimate_method"] = np.asarray(point_estimate_method)
     artifact_dict["cn_inference_method"] = np.asarray(args.cn_inference_method)
     artifact_dict["cn_inference_draws"] = np.asarray(

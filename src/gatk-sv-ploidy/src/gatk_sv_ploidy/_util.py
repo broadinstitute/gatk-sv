@@ -49,13 +49,9 @@ DEPTH_SPACES = ("normalized", "raw")
 """Supported depth/count spaces for the depth matrix input."""
 BINQ_FIELD_OPTIONS = ("auto", "BINQ15", "BINQ20", "CALLQ15", "CALLQ20")
 """Supported BINQ/CALLQ selector values for filtering and plotting."""
-OBSERVATION_TYPE_FILENAME = "observation_type.txt"
-"""Marker file written beside preprocess outputs to record depth space."""
 
 NEGATIVE_BINOMIAL_OBS_LIKELIHOOD = "negative_binomial"
 """Observation likelihood name used for raw-count negative-binomial fits."""
-DEFAULT_NORMALIZED_OBS_LIKELIHOOD = "normal"
-"""Legacy observation likelihood used by historical normalized depth artifacts."""
 MAX_CNQ = 99
 """Maximum phred-scaled CN quality score reported by the ploidy model."""
 
@@ -552,82 +548,6 @@ def compute_contig_posterior_from_bin_posteriors(
     posterior = np.exp(log_joint)
     posterior /= np.sum(posterior)
     return posterior.astype(np.float32, copy=False)
-
-
-def resolve_depth_space(depth_space: str, obs_likelihood: str) -> str:
-    """Resolve ``auto`` depth space to a concrete input representation."""
-    requested = str(depth_space).strip().lower()
-    if requested == "auto":
-        return "raw"
-    if requested not in DEPTH_SPACES:
-        raise ValueError(
-            f"Unknown depth_space: {depth_space!r}. Choose one of {DEPTH_SPACES} or 'auto'."
-        )
-    return requested
-
-
-def default_obs_likelihood_for_depth_space(depth_space: str) -> str:
-    """Return the default observation likelihood for a resolved depth space."""
-    resolved = str(depth_space).strip().lower()
-    if resolved == "raw":
-        return NEGATIVE_BINOMIAL_OBS_LIKELIHOOD
-    if resolved == "normalized":
-        return DEFAULT_NORMALIZED_OBS_LIKELIHOOD
-    raise ValueError(
-        f"Unknown depth_space: {depth_space!r}. Choose one of {DEPTH_SPACES}."
-    )
-
-
-def validate_depth_space(depth_space: str, obs_likelihood: str) -> str:
-    """Validate that the chosen observation family matches the input space."""
-    resolved = resolve_depth_space(depth_space, obs_likelihood)
-    likelihood = str(obs_likelihood).strip().lower()
-    if likelihood != NEGATIVE_BINOMIAL_OBS_LIKELIHOOD:
-        raise ValueError(
-            "Only negative_binomial raw-count inference is supported. "
-            "Re-run preprocess and infer on raw counts."
-        )
-    if resolved != "raw":
-        raise ValueError(
-            "negative_binomial observation likelihood requires raw count input "
-            "(--depth-space raw or --depth-space auto)."
-        )
-    return resolved
-
-
-def get_observation_type_path(depth_path: str) -> str:
-    """Return the marker-file path associated with a preprocess depth file."""
-    return os.path.join(
-        os.path.dirname(os.path.abspath(depth_path)),
-        OBSERVATION_TYPE_FILENAME,
-    )
-
-
-def write_observation_type(output_dir: str, depth_space: str) -> str:
-    """Write a preprocess observation-type marker and return its path."""
-    if depth_space not in DEPTH_SPACES:
-        raise ValueError(
-            f"Unknown depth_space: {depth_space!r}. Choose one of {DEPTH_SPACES}."
-        )
-    marker_path = os.path.join(output_dir, OBSERVATION_TYPE_FILENAME)
-    with open(marker_path, "w", encoding="ascii") as handle:
-        handle.write(f"{depth_space}\n")
-    return marker_path
-
-
-def read_observation_type(depth_path: str) -> Optional[str]:
-    """Read the preprocess observation-type marker when present."""
-    marker_path = get_observation_type_path(depth_path)
-    if not os.path.exists(marker_path):
-        return None
-    with open(marker_path, encoding="ascii") as handle:
-        value = handle.read().strip().lower()
-    if value not in DEPTH_SPACES:
-        raise ValueError(
-            f"Invalid observation type marker in {marker_path}: {value!r}. "
-            f"Expected one of {DEPTH_SPACES}."
-        )
-    return value
 
 
 # ── plotting helpers ────────────────────────────────────────────────────────

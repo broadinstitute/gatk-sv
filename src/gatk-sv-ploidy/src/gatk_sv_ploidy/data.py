@@ -195,7 +195,7 @@ class DepthData:
             if not np.allclose(depth_values, np.rint(depth_values)):
                 raise ValueError(
                     "Raw count depth input must be integer-valued. "
-                    "Run preprocess with --output-space raw or use normalized input."
+                    "Run preprocess to regenerate raw-count input or use normalized input."
                 )
 
         depth_matrix = depth_values.astype(np.float32)

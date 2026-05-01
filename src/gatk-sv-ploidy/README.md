@@ -111,7 +111,7 @@ counts before running `infer` or `ppd`.
 
 | Step | Key outputs |
 |------|-------------|
-| `preprocess` | `preprocessed_depth.tsv`, `observation_type.txt`, optional `site_data.npz` |
+| `preprocess` | `preprocessed_depth.tsv`, optional `site_data.npz` |
 | `polyploidy` | `polyploidy_test_results.tsv`, `sample_autosomal_baseline_cn.tsv`, optional diagnostics under `diagnostics/` |
 | `infer` | `training_loss.tsv`, `inference_artifacts.npz`, `bin_stats.tsv.gz`, `chromosome_stats.tsv`, `sample_autosomal_baseline_cn.tsv` |
 | `ppd` | `ppd_draws.npz`, `ppd_bin_summary.tsv.gz`, `ppd_bin_quality.tsv`, `ppd_chromosome_summary.tsv`, `ppd_global_summary.tsv` |
@@ -157,7 +157,6 @@ flowchart TD
         RD --> N --> BF
         SD -.-> AF
         BF --> PD["preprocessed_depth.tsv"]
-        BF --> OT["observation_type.txt"]
         AF --> SN["site_data.npz"]
     end
 
@@ -202,16 +201,16 @@ flowchart TD
 
 | Component | Default | Meaning |
 |-----------|---------|---------|
-| `preprocess --output-space` | `raw` | Filters are evaluated on normalized depth, but the written matrix is filtered raw counts |
+| `preprocess` output | raw counts | Filters are evaluated on normalized depth, but the written matrix is filtered raw counts |
 | `infer --autosome-prior-mode` | `dirichlet` | Strong per-bin CN2 prior on autosomes |
 | `infer --guide-type` | `delta` | MAP-style continuous latent fit |
 | `infer --multiplicative-factors` | `0` | No low-rank multiplicative bias by default |
 | `infer --background-factors` | `0` | No structured additive background by default |
 | `infer --var-bin` | `0` | No per-bin residual variance latent by default |
-| `infer --freeze-sample-depth` | enabled | Raw-count runs fix sample depth to the autosomal median counts-per-kb anchor |
+| `infer sample depth anchor` | enabled | Raw-count runs fix sample depth to the autosomal median counts-per-kb anchor |
 | `infer --epsilon-mean` | `1e-2` | Small CN0-only epsilon background floor is retained |
-| `infer --learn-af-temperature` | enabled | A single global AF temperature is learned by default |
-| `infer --cn-inference-method` | `multi-draw` | Expressive guides average CN posteriors over repeated guide draws; with the default delta guide this collapses to the current point estimate |
+| `infer AF temperature learning` | enabled | A single global AF temperature is learned by default; use `--fixed-af-temperature` to keep `--af-weight` fixed |
+| `infer --cn-inference-method` | `multi-draw` | Expressive guides average CN posteriors over repeated guide draws; with the default delta guide this collapses to the single point estimate |
 | `ppd --continuous-posterior-mode` | `conditioned` | Default in-sample QC / BINQ calibration mode |
 
 ## Objective And Decision Target
@@ -345,7 +344,8 @@ behavior for sparse or ambiguous AF data.
 ### Explicitly Unverified Or User-Tunable Assumptions
 
 - The fixed autosomal median counts-per-kb anchor can be wrong for some raw
-  count cohorts; use `--learn-sample-depth` when that anchor is not appropriate.
+  count cohorts and may need a future model change if that assumption proves
+  inadequate.
 - The site AF values produced by `preprocess` may be improved by infer-time
   naive-Bayes re-estimation or by `--learn-site-af`, depending on cohort
   quality.
@@ -386,8 +386,8 @@ where:
 - $M_{bs}$ is the multiplicative bias term,
 - $A_{bs}$ is the additive background term.
 
-With the current defaults, `freeze_sample_depth` is on, so $D_s$ is fixed to
-the autosomal median counts-per-kb anchor, `multiplicative_factors=0` forces
+With the current defaults, $D_s$ is fixed to the autosomal median
+counts-per-kb anchor, `multiplicative_factors=0` forces
 $M_{bs} = 1$, `background_factors=0` disables structured background, and the
 remaining epsilon floor contributes only when $c_{bs} = 0$.
 
@@ -434,7 +434,7 @@ Current implementation details:
 
 - default `af_evidence_mode=relative` centers AF evidence against a fixed CN
   reference mixture before scaling,
-- default `learn_af_temperature` learns a single global AF temperature whose
+- default AF temperature learning learns a single global AF temperature whose
   prior median is `af_weight=0.25`,
 - unless `--learn-site-af` is used, the AF table is precomputed once because it
   depends only on observed site data and the discrete CN state,
@@ -462,7 +462,7 @@ stopping compares rolling ELBO windows using `--elbo-window` and
 After training, `infer` computes bin-level CN posteriors. The handling of
 continuous-latent uncertainty is controlled by `--cn-inference-method`:
 
-- `current`: use the current guide draw,
+- `single`: use a single guide draw,
 - `median`: plug in guide medians,
 - `multi-draw` (default): average CN posteriors over repeated guide draws.
 
@@ -553,8 +553,8 @@ model.
   are unavailable; the pipeline falls back to depth-only inference with
   autosomal baseline CN = 2.
 - If the fixed autosomal median counts-per-kb anchor is poor, the default raw
-  model can mis-scale whole-sample depth. Use `--learn-sample-depth` in those
-  cohorts.
+  model can mis-scale whole-sample depth and may require future model changes
+  for those cohorts.
 - If AF evidence is miscalibrated for a cohort, it can still shift CN posteriors
   even with temperature learning. Compare depth-only and AF-enabled behavior,
   inspect PPD summaries, and use the privacy-safe diagnostics when needed.

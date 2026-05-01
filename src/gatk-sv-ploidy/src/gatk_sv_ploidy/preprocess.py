@@ -18,9 +18,7 @@ import pandas as pd
 from scipy import stats
 
 from gatk_sv_ploidy._util import (
-    DEPTH_SPACES,
     get_sample_columns,
-    write_observation_type,
 )
 from gatk_sv_ploidy.data import read_depth_tsv
 
@@ -1146,10 +1144,6 @@ def parse_args() -> argparse.Namespace:
         help="When a contig has more than this many bins, collapse contiguous bins into larger bins while retaining at least this many bins per contig",
     )
     p.add_argument(
-        "--output-space", choices=["raw"], default="raw",
-        help="Write filtered raw counts. Bin-quality filters still run on normalized depth internally.",
-    )
-    p.add_argument(
         "--depth-ratio-clamp", type=float, default=6.0,
         help="Clamp each sample-bin depth to at most this approximate copy number, where approximate CN is computed as 2 * depth / autosomal_median",
     )
@@ -1275,24 +1269,21 @@ def main() -> None:
         aggregation="sum",
     )
 
-    df = normalized_df if args.output_space == "normalized" else raw_df
+    df = raw_df
 
     logger.info(
         "Total bins retained after preprocess filters: %d / %d",
         len(df),
         n_input_bins,
     )
-    if args.output_space == "raw":
-        logger.info(
-            "Writing filtered raw counts (--output-space raw); all quality filters were evaluated on normalized depth."
-        )
+    logger.info(
+        "Writing filtered raw counts; all quality filters were evaluated on normalized depth."
+    )
 
     # 5. Write preprocessed depth
     out_path = os.path.join(args.output_dir, "preprocessed_depth.tsv")
     df.to_csv(out_path, sep="\t")
     logger.info("Preprocessed depth written.")
-    write_observation_type(args.output_dir, args.output_space)
-    logger.info("Observation type written.")
 
     # 6. Build per-site allele data from site-depth files (optional)
     sd_paths: List[str] = []

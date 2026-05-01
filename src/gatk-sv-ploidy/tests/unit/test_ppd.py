@@ -8,7 +8,6 @@ from gatk_sv_ploidy.data import DepthData
 from gatk_sv_ploidy.ppd import (
     _build_model_from_artifacts,
     _compute_randomized_pit,
-    _resolve_input_depth_space,
     apply_effective_site_pop_af,
     compute_call_stability_quality_summary,
     compute_ppd_bin_quality_summary,
@@ -362,7 +361,6 @@ def test_build_model_from_artifacts_defaults_old_background_factors_to_disabled(
 
     assert model.background_factors == 0
     assert model.multiplicative_factors == 0
-    assert model.freeze_sample_depth is True
 
 
 def test_generate_ppd_depth_uses_bin_epsilon(tiny_raw_depth_df: pd.DataFrame) -> None:
@@ -485,23 +483,6 @@ def test_generate_ppd_depth_uses_background_factors(tiny_raw_depth_df: pd.DataFr
         float(draws_with_background[:, 0, 0].mean()) -
         float(draws_without_background[:, 0, 0].mean())
     ) < 0.15
-
-
-def test_ppd_resolve_input_depth_space_prefers_preprocess_marker(tmp_path) -> None:
-    depth_path = tmp_path / "preprocessed_depth.tsv"
-    depth_path.write_text("Bin\tChr\tStart\tEnd\tS1\n", encoding="ascii")
-    (tmp_path / "observation_type.txt").write_text("raw\n", encoding="ascii")
-
-    depth_space = _resolve_input_depth_space(
-        "auto",
-        "negative_binomial",
-        str(depth_path),
-        {"depth_space": np.asarray("raw")},
-    )
-
-    assert depth_space == "raw"
-
-
 def test_ppd_summaries_have_expected_shapes(tiny_raw_depth_df: pd.DataFrame) -> None:
     data = DepthData(tiny_raw_depth_df, depth_space="raw", clamp_threshold=None)
     map_est = {
@@ -663,7 +644,6 @@ def test_ppd_parse_args_and_main_write_outputs(
     ).astype(np.int64)
     depth_path = tmp_path / "depth.tsv"
     raw_depth_df.to_csv(depth_path, sep="\t")
-    (tmp_path / "observation_type.txt").write_text("raw\n", encoding="ascii")
     site_path = tmp_path / "site_data.npz"
     np.savez_compressed(site_path, **tiny_site_data)
 
@@ -707,7 +687,6 @@ def test_ppd_parse_args_and_main_write_outputs(
     args = parse_args()
     assert args.draws == 4
     assert args.seed == 9
-    assert args.depth_space == "auto"
     assert args.continuous_posterior_mode == "conditioned"
 
     main()

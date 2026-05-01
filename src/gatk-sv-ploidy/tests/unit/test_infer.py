@@ -9,7 +9,6 @@ from gatk_sv_ploidy.data import DepthData
 from gatk_sv_ploidy.infer import (
     _inference_tensor_dtype,
     _load_autosomal_baseline_cn,
-    _resolve_observation_model,
     build_safe_inference_diagnostic_messages,
     build_site_af_estimates,
     build_bin_stats,
@@ -53,14 +52,10 @@ def test_infer_parse_args_defaults(monkeypatch) -> None:
     assert DEFAULT_BACKGROUND_FACTORS == 0
     assert DEFAULT_MULTIPLICATIVE_FACTORS == 0
     assert args.background_factors == DEFAULT_BACKGROUND_FACTORS
-    assert args.depth_space == "auto"
     assert args.svi_init_restarts == 10
     assert args.grad_clip_norm == pytest.approx(10.0)
     assert args.sample_depth_max == 10000.0
     assert args.autosomal_baseline_cn_tsv is None
-    assert args.freeze_sample_depth is True
-    assert args.freeze_bin_bias is False
-    assert args.freeze_cn_prior is False
     assert args.cn_inference_method == "multi-draw"
     assert args.cn_inference_draws == 100
     assert args.site_af_estimator == "auto"
@@ -71,7 +66,7 @@ def test_infer_parse_args_defaults(monkeypatch) -> None:
     assert args.site_af_prior_beta == 1.0
 
 
-def test_infer_parse_args_accepts_learn_sample_depth(monkeypatch) -> None:
+def test_infer_parse_args_accepts_single_cn_inference_method(monkeypatch) -> None:
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -80,31 +75,14 @@ def test_infer_parse_args_accepts_learn_sample_depth(monkeypatch) -> None:
             "depth.tsv",
             "--output-dir",
             "outdir",
-            "--learn-sample-depth",
+            "--cn-inference-method",
+            "single",
         ],
     )
 
     args = parse_args()
 
-    assert args.freeze_sample_depth is False
-
-
-def test_infer_parse_args_accepts_freeze_cn_prior(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "infer",
-            "--input",
-            "depth.tsv",
-            "--output-dir",
-            "outdir",
-            "--freeze-cn-prior",
-        ],
-    )
-
-    args = parse_args()
-
-    assert args.freeze_cn_prior is True
+    assert args.cn_inference_method == "single"
 
 
 def test_infer_parse_args_accepts_learn_site_af(monkeypatch) -> None:
@@ -144,6 +122,23 @@ def test_infer_parse_args_accepts_fixed_af_temperature(monkeypatch) -> None:
     args = parse_args()
 
     assert args.learn_af_temperature is False
+
+
+def test_infer_parse_args_rejects_removed_learn_af_temperature_flag(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "infer",
+            "--input",
+            "depth.tsv",
+            "--output-dir",
+            "outdir",
+            "--learn-af-temperature",
+        ],
+    )
+
+    with pytest.raises(SystemExit):
+        parse_args()
 
 
 def test_infer_parse_args_accepts_autosomal_baseline_cn_tsv(monkeypatch) -> None:
@@ -1208,23 +1203,3 @@ def test_detect_aneuploidies_uses_baseline_aware_allosomes() -> None:
     assert diploid_calls[0] == [("chrX", 2, 1.0), ("chrY", 1, 1.0)]
     assert triploid_calls[0] == []
 
-
-def test_resolve_observation_model_prefers_preprocess_marker(tmp_path) -> None:
-    depth_path = tmp_path / "preprocessed_depth.tsv"
-    depth_path.write_text("Bin\tChr\tStart\tEnd\tS1\n", encoding="ascii")
-    (tmp_path / "observation_type.txt").write_text("raw\n", encoding="ascii")
-
-    depth_space = _resolve_observation_model("auto", str(depth_path))
-
-    assert depth_space == "raw"
-
-
-def test_resolve_observation_model_defaults_to_raw_negative_binomial_without_marker(
-    tmp_path,
-) -> None:
-    depth_path = tmp_path / "preprocessed_depth.tsv"
-    depth_path.write_text("Bin\tChr\tStart\tEnd\tS1\n", encoding="ascii")
-
-    depth_space = _resolve_observation_model("auto", str(depth_path))
-
-    assert depth_space == "raw"

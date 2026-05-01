@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+import sys
 import types
 
 import pytest
@@ -34,6 +36,17 @@ def test_main_exits_zero_for_help(monkeypatch, capsys) -> None:
 
     assert exc_info.value.code == 0
     assert "Subcommands:" in capsys.readouterr().out
+
+
+def test_package_lazily_imports_depth_data(monkeypatch) -> None:
+    monkeypatch.delitem(sys.modules, "gatk_sv_ploidy", raising=False)
+    monkeypatch.delitem(sys.modules, "gatk_sv_ploidy.data", raising=False)
+
+    package = importlib.import_module("gatk_sv_ploidy")
+
+    assert "gatk_sv_ploidy.data" not in sys.modules
+    assert package.DepthData.__name__ == "DepthData"
+    assert "gatk_sv_ploidy.data" in sys.modules
 
 
 def test_main_rejects_unknown_subcommand(monkeypatch, capsys) -> None:

@@ -463,8 +463,6 @@ def test_preprocess_parse_args_and_main_paths(tmp_path, monkeypatch) -> None:
             str(output_dir),
             "--viable-only",
             "--skip-bin-filter",
-            "--output-space",
-            "raw",
             "--poor-regions",
             str(poor_regions),
             "--site-depth-list",
@@ -492,7 +490,6 @@ def test_preprocess_parse_args_and_main_paths(tmp_path, monkeypatch) -> None:
     preprocessed = pd.read_csv(output_dir / "preprocessed_depth.tsv", sep="\t", index_col=0)
     assert sorted(preprocessed["Chr"].unique().tolist()) == ["chr13", "chr18", "chr21", "chrX", "chrY"]
     assert len(preprocessed) == 5
-    assert (output_dir / "observation_type.txt").read_text().strip() == "raw"
     assert (output_dir / "site_data.npz").exists()
     site_npz = np.load(output_dir / "site_data.npz")
     observed_af = site_npz["site_pop_af"][np.any(site_npz["site_mask"], axis=2)]
@@ -515,7 +512,6 @@ def test_preprocess_parse_args_defaults(monkeypatch) -> None:
 
     assert args.bins_per_contig == 30
     assert args.depth_ratio_clamp == pytest.approx(6.0)
-    assert args.output_space == "raw"
     assert args.samples_list is None
     assert args.chrY_median_max == pytest.approx(0.85)
     assert args.min_bins_per_chr == 10
@@ -549,8 +545,6 @@ def test_preprocess_can_subset_samples_from_list(tmp_path, monkeypatch) -> None:
             "--samples-list",
             str(samples_list),
             "--skip-bin-filter",
-            "--output-space",
-            "raw",
             "--site-depth",
             str(sd_path),
                 "--sd-stride",
@@ -598,8 +592,6 @@ def test_preprocess_can_write_raw_counts(tmp_path, monkeypatch) -> None:
             "--output-dir",
             str(output_dir),
             "--skip-bin-filter",
-            "--output-space",
-            "raw",
             "--min-bins-per-chr",
             "1",
             "--bins-per-contig",
@@ -616,7 +608,6 @@ def test_preprocess_can_write_raw_counts(tmp_path, monkeypatch) -> None:
     )
     assert preprocessed.loc["chr13:0-100", "S1"] == pytest.approx(10.0)
     assert preprocessed.loc["chr18:0-100", "S2"] == pytest.approx(24.0)
-    assert (output_dir / "observation_type.txt").read_text().strip() == "raw"
 
 
 def test_preprocess_clamps_raw_output_counts(tmp_path, monkeypatch) -> None:
@@ -639,8 +630,6 @@ def test_preprocess_clamps_raw_output_counts(tmp_path, monkeypatch) -> None:
             "--output-dir",
             str(output_dir),
             "--skip-bin-filter",
-            "--output-space",
-            "raw",
             "--min-bins-per-chr",
             "1",
             "--bins-per-contig",

@@ -54,9 +54,6 @@ from scipy import stats as sp_stats
 
 from gatk_sv_ploidy._util import (
     compose_additive_background_matrix,
-    DEPTH_SPACES,
-    read_observation_type,
-    validate_depth_space,
 )
 from gatk_sv_ploidy.data import DepthData, load_site_data
 from gatk_sv_ploidy.infer import load_inference_artifacts
@@ -122,28 +119,6 @@ def _phred_scale_error_probability(
 ) -> float:
     """Convert an error probability into a Phred-scaled quality score."""
     return float(min(max_quality, -10.0 * np.log10(max(error_prob, 1e-300))))
-
-
-def _clamp_threshold_for_depth_space(depth_space: str) -> float | None:
-    """Raw-count posterior predictive checks do not clamp counts on load."""
-    return None
-
-
-def _resolve_input_depth_space(
-    requested_depth_space: str,
-    obs_likelihood: str,
-    input_path: str,
-    map_estimates: Dict[str, np.ndarray],
-) -> str:
-    """Resolve PPD input depth space from preprocess marker or artifacts."""
-    marker_depth_space = read_observation_type(input_path)
-    if marker_depth_space is not None:
-        return validate_depth_space(marker_depth_space, obs_likelihood)
-
-    artifact_depth_space = requested_depth_space
-    if artifact_depth_space == "auto" and "depth_space" in map_estimates:
-        artifact_depth_space = np.asarray(map_estimates["depth_space"]).item()
-    return validate_depth_space(artifact_depth_space, obs_likelihood)
 
 
 def _extract_saved_posterior_draws(
@@ -268,18 +243,6 @@ def _build_model_from_artifacts(
         obs_df=float(np.asarray(map_estimates.get("obs_df", 3.5)).item()),
         sample_depth_max=float(
             np.asarray(map_estimates.get("sample_depth_max", 10000.0)).item()
-        ),
-        freeze_bin_bias=bool(
-            np.asarray(map_estimates.get("freeze_bin_bias", False)).item()
-        ),
-        freeze_cn_prior=bool(
-            np.asarray(map_estimates.get("freeze_cn_prior", False)).item()
-        ),
-        freeze_sample_var=bool(
-            np.asarray(map_estimates.get("freeze_sample_var", False)).item()
-        ),
-        freeze_sample_depth=bool(
-            np.asarray(map_estimates.get("freeze_sample_depth", True)).item()
         ),
     )
 
@@ -867,10 +830,6 @@ def parse_args() -> argparse.Namespace:
         help="Per-site allele data .npz (output of 'preprocess')",
     )
     p.add_argument(
-        "--depth-space", choices=["auto", "raw"], default="auto",
-        help="Interpret the input matrix as raw counts. 'auto' first consults preprocess observation_type.txt, then saved inference metadata, and finally the observation likelihood.",
-    )
-    p.add_argument(
         "--seed", type=int, default=42,
         help="Random seed for PPD sampling",
     )
@@ -900,13 +859,7 @@ def main() -> None:
     # ── load inference artifacts ────────────────────────────────────────
     logger.info("Loading inference artifacts.")
     map_est, cn_post = load_inference_artifacts(args.artifacts)
-    depth_space = _resolve_input_depth_space(
-        args.depth_space,
-        NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
-        args.input,
-        map_est,
-    )
-    map_est.setdefault("depth_space", np.asarray(depth_space))
+    depth_space = "raw"
 
     # ── load data ───────────────────────────────────────────────────────
     logger.info("Loading preprocessed depth.")
@@ -919,7 +872,7 @@ def main() -> None:
 
     data = DepthData(
         df, device=args.device, dtype=torch.float32,
-        clamp_threshold=_clamp_threshold_for_depth_space(depth_space),
+        clamp_threshold=None,
         depth_space=depth_space,
         site_data=sd,
     )

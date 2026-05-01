@@ -47,10 +47,6 @@ def test_cnv_model_defaults_match_current_preferred_configuration() -> None:
     assert model.lowrank_guide_rank is None
     assert model.af_evidence_mode == "relative"
     assert model.learn_af_temperature is True
-    assert model.freeze_bin_bias is False
-    assert model.freeze_cn_prior is False
-    assert model.freeze_sample_var is False
-    assert model.freeze_sample_depth is True
     assert "bin_var" not in model._latent_sites
     assert "allosome_var" not in model._latent_sites
     assert "bin_bias" not in model._latent_sites
@@ -66,146 +62,6 @@ def test_cnv_model_rejects_invalid_raw_variance_power(
 ) -> None:
     with pytest.raises(ValueError, match="raw_variance_power"):
         CNVModel(raw_variance_power=raw_variance_power)
-
-def test_freeze_sample_var_removes_latent_and_fixes_to_zero() -> None:
-    df = pd.DataFrame(
-        {
-            "Chr": ["chr21", "chr21", "chrX"],
-            "Start": [0, 1000, 0],
-            "End": [1000, 2000, 1000],
-            "S1": [10, 12, 5],
-            "S2": [20, 24, 10],
-        },
-        index=["chr21:0-1000", "chr21:1000-2000", "chrX:0-1000"],
-    )
-    data = DepthData(
-        df,
-        device="cpu",
-        depth_space="raw",
-        clamp_threshold=None,
-        dtype=torch.float64,
-    )
-
-    model = CNVModel(
-        device="cpu",
-        dtype=torch.float64,
-        freeze_sample_var=True,
-    )
-    assert "sample_var" not in model._latent_sites
-    model_kw = model._model_kwargs(data)
-    assert "sample_var_fixed" in model_kw
-    np.testing.assert_allclose(
-        model_kw["sample_var_fixed"].cpu().numpy(),
-        np.array([0.0, 0.0], dtype=np.float64),
-    )
-
-    estimates = model.get_map_estimates(data, estimate_method="median")
-
-    np.testing.assert_allclose(
-        estimates["sample_var"],
-        np.array([0.0, 0.0], dtype=np.float64),
-    )
-
-def test_freeze_cn_prior_removes_latent_and_uses_default_prior() -> None:
-    df = pd.DataFrame(
-        {
-            "Chr": ["chr21", "chrX", "chrY"],
-            "Start": [0, 0, 0],
-            "End": [1000, 1000, 1000],
-            "S1": [10.0, 5.0, 1.0],
-            "S2": [12.0, 6.0, 1.0],
-        },
-        index=["chr21:0-1000", "chrX:0-1000", "chrY:0-1000"],
-    )
-    data = DepthData(
-        df,
-        device="cpu",
-        depth_space="raw",
-        clamp_threshold=None,
-        dtype=torch.float64,
-    )
-
-    model = CNVModel(
-        device="cpu",
-        dtype=torch.float64,
-        freeze_cn_prior=True,
-    )
-    assert "cn_probs" not in model._latent_sites
-
-    estimates = model.get_map_estimates(data, estimate_method="median")
-
-    expected = np.array(
-        [
-            [1.0 / 55.0, 1.0 / 55.0, 50.0 / 55.0, 1.0 / 55.0, 1.0 / 55.0, 1.0 / 55.0],
-            [1.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0],
-            [1.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0],
-        ],
-        dtype=np.float64,
-    )
-    np.testing.assert_allclose(estimates["cn_probs"], expected)
-
-def test_freeze_cn_prior_rejects_shrinkage_mode() -> None:
-    with pytest.raises(ValueError, match="freeze_cn_prior"):
-        CNVModel(autosome_prior_mode="shrinkage", freeze_cn_prior=True)
-
-def test_multi_draw_inference_backfills_frozen_latents(monkeypatch) -> None:
-    df = pd.DataFrame(
-        {
-            "Chr": ["chr21", "chr21", "chrX"],
-            "Start": [0, 1000, 0],
-            "End": [1000, 2000, 1000],
-            "S1": [10, 12, 5],
-            "S2": [20, 24, 10],
-        },
-        index=["chr21:0-1000", "chr21:1000-2000", "chrX:0-1000"],
-    )
-    data = DepthData(
-        df,
-        device="cpu",
-        depth_space="raw",
-        clamp_threshold=None,
-        dtype=torch.float64,
-    )
-
-    model = CNVModel(
-        guide_type="diagonal",
-        device="cpu",
-        dtype=torch.float64,
-        freeze_bin_bias=True,
-        freeze_sample_var=True,
-        freeze_sample_depth=True,
-    )
-    model.train(data, max_iter=1, log_freq=1, early_stopping=False)
-
-    def fake_run_fixed(_data, maps, af_table=None):
-        np.testing.assert_allclose(
-            np.asarray(maps["bin_bias"]).reshape(-1),
-            np.ones(data.n_bins, dtype=np.float64),
-        )
-        np.testing.assert_allclose(
-            np.asarray(maps["sample_var"]).reshape(-1),
-            np.zeros(data.n_samples, dtype=np.float64),
-        )
-        assert np.asarray(maps["sample_depth"]).reshape(-1).shape == (data.n_samples,)
-
-        cn_posterior = np.zeros(
-            (data.n_bins, data.n_samples, model.n_states),
-            dtype=np.float64,
-        )
-        cn_posterior[:, :, model.ref_state] = 1.0
-        sex_posterior = np.zeros((data.n_samples, 2), dtype=np.float64)
-        sex_posterior[:, 0] = 1.0
-        return {
-            "cn_posterior": cn_posterior,
-            "sex_posterior": sex_posterior,
-        }
-
-    monkeypatch.setattr(model, "_run_discrete_inference_fixed_latents", fake_run_fixed)
-
-    posterior = model.run_discrete_inference_multi_draw(data, n_draws=1)
-
-    assert posterior["cn_posterior"].shape == (data.n_bins, data.n_samples, model.n_states)
-    assert posterior["sex_posterior"].shape == (data.n_samples, 2)
 
 
 def test_sample_var_uses_exponential_prior() -> None:
@@ -1006,17 +862,10 @@ def test_cnv_model_uses_mixed_guide_when_learning_site_af() -> None:
 
 def test_cnv_model_negative_binomial_fixes_sample_depth_by_default() -> None:
     model = CNVModel()
-    assert model.freeze_sample_depth is True
     assert "sample_depth" not in model._latent_sites
     assert "bin_epsilon" in model._latent_sites
     assert "background_bin_factors" not in model._latent_sites
     assert "background_sample_factors" not in model._latent_sites
-
-
-def test_cnv_model_can_learn_sample_depth_when_requested() -> None:
-    model = CNVModel(freeze_sample_depth=False)
-
-    assert "sample_depth" in model._latent_sites
 
 
 def test_cnv_model_can_disable_background_factors() -> None:
@@ -1026,7 +875,7 @@ def test_cnv_model_can_disable_background_factors() -> None:
     assert "background_sample_factors" not in model._latent_sites
 
 
-def test_freeze_sample_depth_removes_latent_and_fixes_anchor() -> None:
+def test_sample_depth_uses_autosomal_anchor() -> None:
     df = pd.DataFrame(
         {
             "Chr": ["chr21", "chr21", "chrX"],
@@ -1048,7 +897,6 @@ def test_freeze_sample_depth_removes_latent_and_fixes_anchor() -> None:
     model = CNVModel(
         device="cpu",
         dtype=torch.float64,
-        freeze_sample_depth=True,
     )
     assert "sample_depth" not in model._latent_sites
     model_kw = model._model_kwargs(data)
@@ -1064,47 +912,6 @@ def test_freeze_sample_depth_removes_latent_and_fixes_anchor() -> None:
     np.testing.assert_allclose(
         estimates["sample_depth"],
         np.array([11.0, 22.0], dtype=np.float64),
-    )
-
-
-def test_freeze_bin_bias_removes_latent_and_fixes_to_one() -> None:
-    df = pd.DataFrame(
-        {
-            "Chr": ["chr21", "chr21", "chrX"],
-            "Start": [0, 1000, 0],
-            "End": [1000, 2000, 1000],
-            "S1": [10, 12, 5],
-            "S2": [20, 24, 10],
-        },
-        index=["chr21:0-1000", "chr21:1000-2000", "chrX:0-1000"],
-    )
-    data = DepthData(
-        df,
-        device="cpu",
-        depth_space="raw",
-        clamp_threshold=None,
-        dtype=torch.float64,
-    )
-
-    model = CNVModel(
-        device="cpu",
-        dtype=torch.float64,
-        freeze_bin_bias=True,
-    )
-    assert "bin_bias" not in model._latent_sites
-    model_kw = model._model_kwargs(data)
-    assert "bin_bias_fixed" in model_kw
-    np.testing.assert_allclose(
-        model_kw["bin_bias_fixed"].cpu().numpy().squeeze(),
-        np.ones(3, dtype=np.float64),
-    )
-
-    model.train(data, max_iter=1, log_freq=1, early_stopping=False)
-    estimates = model.get_map_estimates(data, estimate_method="median")
-
-    np.testing.assert_allclose(
-        np.asarray(estimates["bin_bias"]).squeeze(),
-        np.ones(3, dtype=np.float64),
     )
 
 
@@ -1223,15 +1030,6 @@ def test_model_kwargs_include_fixed_sample_depth_by_default_for_negative_binomia
     assert "sample_depth_prior_loc" not in model_kw
     assert "sample_depth_prior_scale" not in model_kw
     assert model_kw["sample_depth_fixed"].shape == (1,)
-
-    learned_model = CNVModel(freeze_sample_depth=False, device="cpu")
-    learned_model_kw = learned_model._model_kwargs(data)
-
-    assert "sample_depth_fixed" not in learned_model_kw
-    assert "sample_depth_prior_loc" in learned_model_kw
-    assert "sample_depth_prior_scale" in learned_model_kw
-    assert learned_model_kw["sample_depth_prior_loc"].shape == (1,)
-    assert learned_model_kw["sample_depth_prior_scale"].shape == (1,)
 
 
 def test_run_discrete_inference_uses_bin_epsilon() -> None:
