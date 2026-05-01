@@ -19,6 +19,18 @@ MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+log_info() {
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${CYAN}$1${NC}" | tee -a "${gather_sample_evidence_stdout}"
+}
+
+log_success() {
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${GREEN}$1${NC}" | tee -a "${gather_sample_evidence_stdout}"
+}
+
+log_error() {
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${RED}$1${NC}" | tee -a "${gather_sample_evidence_stderr}"
+}
+
 
 input_json=${1}
 output_json_filename=${2:-""}
@@ -152,7 +164,8 @@ if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
 
   collect_counts_end_time=`date +%s`
   collect_counts_et=$((collect_counts_end_time-collect_counts_start_time))
-  echo -e "${GREEN}Successfully finished running collect_counts.sh in ${collect_counts_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
+#  echo -e "${GREEN}Successfully finished running collect_counts.sh in ${collect_counts_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
+  log_success "Successfully finished running collect_counts.sh in ${collect_counts_et} seconds."
 fi
 
 if [[ "${run_manta}" == true ]]; then
@@ -160,7 +173,8 @@ if [[ "${run_manta}" == true ]]; then
   manta_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/manta_XXXXXX")
   manta_stdout=$(mktemp --suffix=.txt "${output_dir}/manta_stdout_XXXXXX")
   manta_stderr=$(mktemp --suffix=.txt "${output_dir}/manta_stderr_XXXXXX")
-  echo -e "${CYAN}Running run_manta.sh ... stdout:${manta_stdout} and stderr:${manta_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
+#  echo -e "${CYAN}Running run_manta.sh ... stdout:${manta_stdout} and stderr:${manta_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
+  log_info "Running run_manta.sh ... stdout: ${manta_stdout} and stderr: ${manta_stderr}"
   manta_start_time=`date +%s`
 
   CURRENT_STDERR_FILE="${manta_stderr}"
@@ -175,14 +189,16 @@ if [[ "${run_manta}" == true ]]; then
 
   manta_end_time=`date +%s`
   manta_et=$((manta_end_time-manta_start_time))
-  echo -e "${GREEN}Successfully finished running run_manta.sh in ${manta_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
+#  echo -e "${GREEN}Successfully finished running run_manta.sh in ${manta_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
+  log_success "Successfully finished running run_manta.sh in ${manta_et} seconds."
 fi
 
 if [[ "${collect_pesr}" == true ]]; then
 
   collect_pesr_stdout=$(mktemp --suffix=.txt "${output_dir}/collect_pesr_stdout_XXXXXX")
   collect_pesr_stderr=$(mktemp --suffix=.txt "${output_dir}/collect_pesr_stderr_XXXXXX")
-  echo -e "${CYAN}Running collect_sv_evidence.sh ... stdout:${collect_pesr_stdout} and stderr:${collect_pesr_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
+#  echo -e "${CYAN}Running collect_sv_evidence.sh ... stdout:${collect_pesr_stdout} and stderr:${collect_pesr_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
+  log_info "Running collect_sv_evidence.sh ... stdout: ${collect_pesr_stdout} and stderr: ${collect_pesr_stderr}"
   collect_pesr_start_time=`date +%s`
 
   collect_pesr_output_dir=$(mktemp -d "${SV_SHELL_BASE_DIR}/output_collect_pesr_XXXXXXXX")
@@ -213,7 +229,8 @@ if [[ "${collect_pesr}" == true ]]; then
 
   collect_pesr_end_time=`date +%s`
   collect_pesr_et=$((collect_pesr_end_time-collect_pesr_start_time))
-  echo -e "${GREEN}Successfully finished running collect_sv_evidence.sh in ${collect_pesr_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
+#  echo -e "${GREEN}Successfully finished running collect_sv_evidence.sh in ${collect_pesr_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
+  log_success "Successfully finished running collect_sv_evidence.sh in ${collect_pesr_et} seconds."
 fi
 
 
@@ -222,13 +239,15 @@ if [[ "${run_scramble}" == true && "${run_manta}" == true ]]; then
   scramble_p1_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/scramble_p1_XXXXXX")
   scramble_stdout=$(mktemp --suffix=.txt "${output_dir}/scramble_stdout_XXXXXX")
   scramble_stderr=$(mktemp --suffix=.txt "${output_dir}/scramble_stderr_XXXXXX")
-  echo -e "${CYAN}Running scramble.sh (part 1 & 2)... stdout:${scramble_stdout} and stderr:${scramble_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
+#  echo -e "${CYAN}Running scramble.sh (part 1 & 2)... stdout:${scramble_stdout} and stderr:${scramble_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
+  log_info "Running scramble.sh (part 1 & 2)... stdout: ${scramble_stdout} and stderr: ${scramble_stderr}"
   scramble_start_time=`date +%s`
 
   CURRENT_STDERR_FILE="${scramble_stderr}"
 
   {
-    echo "Running scramble."
+#    echo "Running scramble."
+    log_info "Running Scramble."
     bash /opt/sv_shell/scramble.sh \
       "${sample_id}" \
       "${bam_or_cram_file}" \
@@ -247,7 +266,8 @@ if [[ "${run_scramble}" == true && "${run_manta}" == true ]]; then
     realign_soft_clipped_reads_json_filename=$(mktemp --suffix=.json "${output_dir}/realign_soft_clipped_reads_XXXXXX")
     # addresses bug in Dragen v3.7.8 where some reads are incorrectly soft-clipped
 
-    echo "Running Realign soft clipped reads."
+#    echo "Running Realign soft clipped reads."
+    log_info "Running Realign soft clipped reads."
     bash /opt/sv_shell/realign_soft_clipped_reads.sh \
       "${sample_id}" \
       "${bam_or_cram_file}" \
@@ -265,7 +285,8 @@ if [[ "${run_scramble}" == true && "${run_manta}" == true ]]; then
       "${realign_soft_clipped_reads_json_filename}"
 
     # ScrambleRealigned
-    echo "Running Scramble part 2."
+#    echo "Running Scramble part 2."
+    log_info "Running Scramble part 2."
     scramble_p2_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/scramble_p2_XXXXXX")
     bash /opt/sv_shell/scramble.sh \
       "${sample_id}" \
@@ -285,7 +306,8 @@ if [[ "${run_scramble}" == true && "${run_manta}" == true ]]; then
 
   scramble_end_time=`date +%s`
   scramble_et=$((scramble_end_time-scramble_start_time))
-  echo -e "${GREEN}Successfully finished running scramble.sh (part 1 & 2) in ${scramble_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
+#  echo -e "${GREEN}Successfully finished running scramble.sh (part 1 & 2) in ${scramble_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
+  log_success "Successfully finished running scramble.sh (part 1 & 2) in ${scramble_et} seconds."
 fi
 
 if [[ "${run_wham}" == true ]]; then
@@ -293,7 +315,8 @@ if [[ "${run_wham}" == true ]]; then
   wham_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/wham_XXXXXX")
   wham_stdout=$(mktemp --suffix=.txt "${output_dir}/wham_stdout_XXXXXX")
   wham_stderr=$(mktemp --suffix=.txt "${output_dir}/wham_stderr_XXXXXX")
-  echo -e "${CYAN}Running run_whamg.sh ... stdout:${wham_stdout} and stderr:${wham_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
+#  echo -e "${CYAN}Running run_whamg.sh ... stdout:${wham_stdout} and stderr:${wham_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
+  log_info "Running run_whamg.sh ... stdout: ${wham_stdout} and stderr: ${wham_stderr}"
   wham_start_time=`date +%s`
 
   CURRENT_STDERR_FILE="${wham_stderr}"
@@ -309,7 +332,8 @@ if [[ "${run_wham}" == true ]]; then
 
   wham_end_time=`date +%s`
   wham_et=$((wham_end_time-wham_start_time))
-  echo -e "${GREEN}Successfully finished running run_whamg.sh (part 1 & 2) in ${wham_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
+#  echo -e "${GREEN}Successfully finished running run_whamg.sh (part 1 & 2) in ${wham_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
+  log_success "Successfully finished running run_whamg.sh (part 1 & 2) in ${wham_et} seconds."
 fi
 
 
@@ -355,4 +379,5 @@ echo "${outputs_json}" > "${output_json_filename}"
 
 gather_sample_evidence_end_time=`date +%s`
 gather_sample_evidence_et=$((gather_sample_evidence_end_time-gather_sample_evidence_start_time))
-echo -e "${GREEN}Successfully finished running gather_sample_evidence in ${gather_sample_evidence_et} seconds. Outputs are serialized to: ${output_json_filename} ${NC}" | tee -a "${gather_sample_evidence_stdout}"
+#echo -e "${GREEN}Successfully finished running gather_sample_evidence in ${gather_sample_evidence_et} seconds. Outputs are serialized to: ${output_json_filename} ${NC}" | tee -a "${gather_sample_evidence_stdout}"
+log_success "Successfully finished running gather_sample_evidence in ${gather_sample_evidence_et} seconds. Outputs are serialized to: ${output_json_filename}"
