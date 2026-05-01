@@ -666,6 +666,25 @@ def test_plot_report_generates_manifest_and_html(tmp_path) -> None:
     assert "../diagnostics/training_loss_gradient.png" in html
 
 
+def test_plot_report_preserves_sample_id_verbatim_in_report(tmp_path) -> None:
+    sample_dir = tmp_path / "sample_plots"
+    sample_dir.mkdir()
+    sample_id = "Hg-CaseMix-01A"
+    (sample_dir / f"{sample_id}.png").write_bytes(b"plot")
+
+    manifest_df = write_plot_report(str(tmp_path))
+
+    sample_row = manifest_df.loc[
+        manifest_df["source_path"] == f"sample_plots/{sample_id}.png"
+    ].iloc[0]
+    assert sample_row["title"] == sample_id
+    assert sample_row["sample"] == sample_id
+
+    html = (tmp_path / "report" / "index.html").read_text(encoding="utf-8")
+    assert sample_id in html
+    assert "Hg Casemix 01A" not in html
+
+
 def test_apply_theme_uses_nature_publication_defaults() -> None:
     apply_theme()
     assert plt.rcParams["font.size"] == 8
