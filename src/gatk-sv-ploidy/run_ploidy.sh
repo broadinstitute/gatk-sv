@@ -240,25 +240,25 @@ if [[ "${CALL_NEEDS_PPD_FILTER}" == "true" ]]; then
 fi
 
 # ── preprocess ─────────────────────────
-# echo "[0/${TOTAL_STEPS}] preprocess"
-# SD_ARGS=""
-# if [[ -n "${SITE_DEPTH_LIST}" ]]; then
-#     SD_ARGS="--site-depth-list ${SITE_DEPTH_LIST}"
-# fi
-# PR_ARGS=""
-# if [[ -n "${POOR_REGIONS}" ]]; then
-#     PR_ARGS="--poor-regions ${POOR_REGIONS} --min-poor-region-coverage ${MIN_POOR_REGION_COVERAGE}"
-# fi
-# if [[ "${DRY_RUN}" == "true" ]]; then
-#     dry_run_step "preprocess"
-# else
-#     run_cli preprocess \
-#         -i "${INPUT_DEPTH}" \
-#         -o "${PREPROCESS_DIR}" \
-#         $SD_ARGS \
-#         $PR_ARGS \
-#         $PREPROCESS_ARGS
-# fi
+echo "[0/${TOTAL_STEPS}] preprocess"
+SD_ARGS=""
+if [[ -n "${SITE_DEPTH_LIST}" ]]; then
+    SD_ARGS="--site-depth-list ${SITE_DEPTH_LIST}"
+fi
+PR_ARGS=""
+if [[ -n "${POOR_REGIONS}" ]]; then
+    PR_ARGS="--poor-regions ${POOR_REGIONS} --min-poor-region-coverage ${MIN_POOR_REGION_COVERAGE}"
+fi
+if [[ "${DRY_RUN}" == "true" ]]; then
+    dry_run_step "preprocess"
+else
+    run_cli preprocess \
+        -i "${INPUT_DEPTH}" \
+        -o "${PREPROCESS_DIR}" \
+        $SD_ARGS \
+        $PR_ARGS \
+        $PREPROCESS_ARGS
+fi
 
 CURRENT_STEP=1
 
