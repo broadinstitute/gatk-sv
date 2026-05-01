@@ -11,7 +11,6 @@ import sys
 SUBCOMMANDS = {
     "preprocess": "gatk_sv_ploidy.preprocess",
     "polyploidy": "gatk_sv_ploidy.polyploidy",
-    "triploidy": "gatk_sv_ploidy.polyploidy",
     "infer": "gatk_sv_ploidy.infer",
     "ppd": "gatk_sv_ploidy.ppd",
     "call": "gatk_sv_ploidy.call",
@@ -40,7 +39,6 @@ def _print_usage():
     print("Subcommands:")
     for name, desc in DESCRIPTIONS.items():
         print(f"  {name:12s}  {desc}")
-    print("\nLegacy alias: 'triploidy' maps to 'polyploidy'.")
     print(f"\nRun '{prog} <subcommand> --help' for subcommand-specific options.")
 
 

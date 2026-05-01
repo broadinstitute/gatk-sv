@@ -333,8 +333,6 @@ def _sample_ppd_observation(
         n_bins,
         n_samples,
         dtype=np.float64,
-        contig_index=data.contig_index.detach().cpu().numpy(),
-        n_contigs=data.n_contigs,
         background_bin_factors=continuous_maps.get("background_bin_factors"),
         background_sample_factors=continuous_maps.get("background_sample_factors"),
     )

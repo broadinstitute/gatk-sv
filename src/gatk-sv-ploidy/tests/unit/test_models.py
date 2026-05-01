@@ -1388,7 +1388,7 @@ def test_run_discrete_inference_supports_sample_specific_bin_epsilon() -> None:
     assert posterior["cn_posterior"][0, 1, 0] > posterior["cn_posterior"][0, 0, 0]
 
 
-def test_run_discrete_inference_supports_contig_shared_bin_epsilon() -> None:
+def test_run_discrete_inference_rejects_contig_shared_bin_epsilon() -> None:
     df = pd.DataFrame(
         {
             "Chr": ["chrY", "chrY"],
@@ -1407,20 +1407,14 @@ def test_run_discrete_inference_supports_contig_shared_bin_epsilon() -> None:
         "cn_probs": np.full((data.n_bins, 6), 1.0 / 6.0, dtype=np.float32),
     }
 
-    no_epsilon = model.run_discrete_inference(data, map_estimates=base_map)
-    shared_epsilon = model.run_discrete_inference(
-        data,
-        map_estimates={
-            **base_map,
-            "bin_epsilon": np.array([0.2], dtype=np.float32),
-        },
-    )
-
-    assert shared_epsilon["cn_posterior"][0, 0, 0] > no_epsilon["cn_posterior"][0, 0, 0]
-    assert shared_epsilon["cn_posterior"][1, 0, 0] > no_epsilon["cn_posterior"][1, 0, 0]
-    assert shared_epsilon["cn_posterior"][0, 0, 0] == pytest.approx(
-        shared_epsilon["cn_posterior"][1, 0, 0]
-    )
+    with pytest.raises(ValueError, match="length n_bins"):
+        model.run_discrete_inference(
+            data,
+            map_estimates={
+                **base_map,
+                "bin_epsilon": np.array([0.2], dtype=np.float32),
+            },
+        )
 
 
 def test_run_discrete_inference_uses_background_factors() -> None:
@@ -1548,7 +1542,7 @@ def test_sex_cn_score_uses_sample_baseline_cn() -> None:
     assert score[0, 2, 0, 1] == 0.0
 
 
-def test_baseline_cn_expansion_squeezes_legacy_singleton_sample_axis() -> None:
+def test_baseline_cn_expansion_squeezes_singleton_sample_axis() -> None:
     model = CNVModel(
         sex_cn_weight=0.0,
         epsilon_mean=0.0,

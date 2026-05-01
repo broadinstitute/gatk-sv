@@ -1158,11 +1158,11 @@ class CNVModel:
         negative-binomial observation model.
     autosomal_baseline_cn : sequence of int, optional
         Fixed autosomal baseline copy number per sample. When omitted, the
-        historical diploid baseline CN=2 is used for all samples.
+        default diploid baseline CN=2 is used for all samples.
     freeze_sample_depth : bool
         If true, fixes raw-count ``sample_depth`` to the autosomal median
         counts/kb anchor. This is the default simplified model; set false to
-        infer sample depth as a LogNormal latent for legacy experiments.
+        infer sample depth as a LogNormal latent.
     """
 
     _latent_sites = ["sample_var"]
@@ -2112,9 +2112,9 @@ class CNVModel:
     ) -> Dict[str, torch.Tensor]:
         """Return continuous latent estimates from the fitted guide.
 
-        ``estimate_method='current'`` preserves the historical behavior of
-        taking one guide draw. ``estimate_method='median'`` plugs in the guide
-        medians, which is deterministic for non-delta guides.
+        ``estimate_method='current'`` takes one guide draw.
+        ``estimate_method='median'`` plugs in the guide medians, which is
+        deterministic for non-delta guides.
         """
         model_kw = self._model_kwargs(data) if model_kw is None else model_kw
 
@@ -2579,11 +2579,7 @@ class CNVModel:
             sample_depth_prior_scale: LogNormal scale parameter for the
                 per-sample diploid baseline depth scale.
             n_contigs: Number of unique contigs represented by the bins.
-                Retained for compatibility with downstream utilities that can
-                still expand legacy contig-shared epsilon artifacts.
             contig_index: Per-bin index into the contig axis.
-                Retained for compatibility with downstream utilities that can
-                still expand legacy contig-shared epsilon artifacts.
             chr_type: Per-bin chromosome type (0=autosome, 1=chrX, 2=chrY).
             sex_cn_weight_per_bin: Per-bin normalised sex–CN coupling weight.
             site_alt: Per-site alt counts (n_bins, max_sites, n_samples).
@@ -2935,7 +2931,7 @@ class CNVModel:
 
         # Per-bin, per-sample observations
         with plate_bins, plate_samples:
-            # The legacy Dirichlet path produces an explicit singleton sample
+            # The Dirichlet path produces an explicit singleton sample
             # dimension. Restore that axis for derived shrinkage priors so the
             # categorical probabilities broadcast across the samples plate.
             cn_probs_for_samples = self._expand_cn_probs_to_samples_torch(
@@ -3439,8 +3435,6 @@ class CNVModel:
             data.n_bins,
             data.n_samples,
             dtype=np.float64,
-            contig_index=data.contig_index.detach().cpu().numpy(),
-            n_contigs=data.n_contigs,
             background_bin_factors=maps.get("background_bin_factors"),
             background_sample_factors=maps.get("background_sample_factors"),
         )

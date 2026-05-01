@@ -394,8 +394,6 @@ def build_safe_inference_diagnostic_messages(
             map_estimates.get("bin_epsilon"),
             data.n_bins,
             data.n_samples,
-            contig_index=data.contig_index.detach().cpu().numpy(),
-            n_contigs=data.n_contigs,
             background_bin_factors=map_estimates.get("background_bin_factors"),
             background_sample_factors=map_estimates.get("background_sample_factors"),
         )
@@ -1852,22 +1850,8 @@ def should_apply_site_af_estimator(
         return True
 
     # Auto mode is intentionally conservative. We only enable AF estimation
-    # when the representation feeding the AF model is known to be coherent,
-    # and legacy fallback site_data is not.
+    # when the representation feeding the AF model is known to be coherent.
     return False
-
-
-def is_fallback_minor_site_data(
-    current_site_pop_af: np.ndarray,
-    site_mask: np.ndarray,
-) -> bool:
-    """Return whether site_data matches preprocess fallback minor-count mode."""
-
-    observed_sites = np.any(site_mask, axis=2)
-    if not np.any(observed_sites):
-        return False
-    observed_pop_af = current_site_pop_af[observed_sites]
-    return bool(np.allclose(observed_pop_af, 0.5, atol=1e-6, rtol=0.0))
 
 
 def resolve_site_af_estimator_application(
@@ -1876,16 +1860,6 @@ def resolve_site_af_estimator_application(
     site_mask: np.ndarray,
 ) -> bool:
     """Resolve whether site AF estimation is valid for the current inputs."""
-    if is_fallback_minor_site_data(current_site_pop_af, site_mask):
-        if estimator == "naive-bayes":
-            raise ValueError(
-                "--site-af-estimator naive-bayes is incompatible with legacy fallback "
-                "site_data that stores per-sample minor counts with site_pop_af=0.5. "
-                "Disable the estimator or regenerate site_data with a coherent "
-                "site-level alt-allele identity."
-            )
-        return False
-
     return should_apply_site_af_estimator(
         estimator,
         current_site_pop_af,
@@ -2171,8 +2145,6 @@ def build_bin_stats(
             map_estimates.get("bin_epsilon"),
             data.n_bins,
             data.n_samples,
-            contig_index=data.contig_index.detach().cpu().numpy(),
-            n_contigs=data.n_contigs,
             background_bin_factors=map_estimates.get("background_bin_factors"),
             background_sample_factors=map_estimates.get("background_sample_factors"),
         )
@@ -2328,7 +2300,7 @@ def build_chromosome_stats(
                 "std_depth": float(np.std(depths)),
                 "median_depth": float(np.median(depths)),
                 "mad_depth": float(stats.median_abs_deviation(depths)),
-                "sample_var_map": float(
+                "sample_overdispersion_map": float(
                     map_estimates["sample_var"].flatten()[si]
                 ),
                 "autosomal_baseline_cn": int(autosomal_baseline_cn[si]),
@@ -2351,7 +2323,6 @@ def build_chromosome_stats(
                 row["plot_mad_depth"] = float(
                     stats.median_abs_deviation(plot_depths)
                 )
-                row["sample_overdispersion_map"] = row["sample_var_map"]
             if has_af:
                 chr_n_sites = int(n_sites_per_bin[mask, si].sum())
                 chr_af_sum = float(af_sum_per_bin[mask, si].sum())
@@ -2535,7 +2506,7 @@ def parse_args() -> argparse.Namespace:
                         "anchor during training (raw-count runs only; default).")
     g.add_argument("--learn-sample-depth", dest="freeze_sample_depth", action="store_false",
                    help="Infer per-sample sample_depth as a LogNormal latent in raw-count runs. "
-                        "This is a legacy/expert fallback for cohorts where the median anchor is inadequate.")
+                        "Use this when the median anchor is inadequate.")
     g.set_defaults(freeze_sample_depth=True)
 
     # Sex chromosome priors
@@ -2692,7 +2663,7 @@ def parse_args() -> argparse.Namespace:
         default="multi-draw",
         help=(
             "How to handle continuous latent uncertainty before CN inference: "
-            "'current' uses a single guide draw (historical behavior), "
+            "'current' uses a single guide draw, "
             "'median' plugs in guide medians, and 'multi-draw' averages CN "
             "posteriors over repeated guide draws."
         ),
@@ -2784,16 +2755,6 @@ def main() -> None:
             prior_beta=args.site_af_prior_beta,
         )
         naive_bayes_site_pop_af_np = site_af_summary["posterior_mean"]
-        fallback_minor_site_data = is_fallback_minor_site_data(
-            input_site_pop_af_np,
-            site_mask_np,
-        )
-        if fallback_minor_site_data and args.site_af_estimator != "off":
-            logger.warning(
-                "Detected legacy fallback site_data with uniform site_pop_af=0.5. "
-                "These inputs store per-sample minor counts, so infer will not "
-                "apply site AF estimation automatically."
-            )
         site_af_estimation_applied = resolve_site_af_estimator_application(
             args.site_af_estimator,
             input_site_pop_af_np,

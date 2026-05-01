@@ -186,22 +186,13 @@ def coerce_bin_epsilon_matrix(
     n_bins: int,
     n_samples: int,
     dtype: np.dtype | type = np.float64,
-    contig_index: np.ndarray | Sequence[int] | None = None,
-    n_contigs: int | None = None,
 ) -> np.ndarray:
     """Return ``bin_epsilon`` as a ``(n_bins, n_samples)`` matrix.
 
-    Legacy artifacts may store one epsilon value per bin or one value per
-    contig / sample pair. Current runs store a separate value for each
-    bin / sample pair. This helper accepts all of those forms and expands
-    them to the effective per-bin matrix.
+    Current runs store either a scalar epsilon floor, one epsilon value per
+    bin, or a full ``(n_bins, n_samples)`` matrix. This helper expands those
+    forms to the effective per-bin matrix.
     """
-    contig_index_arr = None
-    if contig_index is not None:
-        contig_index_arr = np.asarray(contig_index, dtype=np.int64).reshape(-1)
-        if contig_index_arr.shape[0] != n_bins:
-            raise ValueError("contig_index must have length n_bins.")
-
     if values is None:
         return np.zeros((n_bins, n_samples), dtype=dtype)
 
@@ -219,18 +210,8 @@ def coerce_bin_epsilon_matrix(
                 dtype,
                 copy=False,
             )
-        if (
-            contig_index_arr is not None and
-            n_contigs is not None and
-            arr.shape[0] == n_contigs
-        ):
-            expanded = arr[contig_index_arr]
-            return np.broadcast_to(
-                expanded[:, np.newaxis],
-                (n_bins, n_samples),
-            ).astype(dtype, copy=False)
         raise ValueError(
-            "bin_epsilon must have length n_bins, length n_contigs, or shape "
+            "bin_epsilon must have length n_bins or shape "
             "(n_bins, n_samples)."
         )
 
@@ -247,25 +228,8 @@ def coerce_bin_epsilon_matrix(
                 dtype,
                 copy=False,
             )
-        if (
-            contig_index_arr is not None and
-            n_contigs is not None and
-            arr.shape == (n_contigs, n_samples)
-        ):
-            return arr[contig_index_arr, :].astype(dtype, copy=False)
-        if (
-            contig_index_arr is not None and
-            n_contigs is not None and
-            arr.shape == (n_contigs, 1)
-        ):
-            expanded = arr[contig_index_arr, :]
-            return np.broadcast_to(expanded, (n_bins, n_samples)).astype(
-                dtype,
-                copy=False,
-            )
         raise ValueError(
-            "bin_epsilon must have shape (n_bins, n_samples) or "
-            "(n_contigs, n_samples)."
+            "bin_epsilon must have shape (n_bins, n_samples)."
         )
 
     raise ValueError("bin_epsilon must be scalar, 1D, or 2D.")
@@ -322,8 +286,6 @@ def compose_additive_background_matrix(
     n_bins: int,
     n_samples: int,
     dtype: np.dtype | type = np.float64,
-    contig_index: np.ndarray | Sequence[int] | None = None,
-    n_contigs: int | None = None,
     background_bin_factors: np.ndarray | Sequence[float] | None = None,
     background_sample_factors: np.ndarray | Sequence[float] | None = None,
 ) -> np.ndarray:
@@ -331,16 +293,13 @@ def compose_additive_background_matrix(
 
     This includes the ``bin_epsilon`` floor, plus any low-rank additive
     background factors stored as ``background_bin_factors`` and
-    ``background_sample_factors``. Legacy contig-shared epsilon artifacts
-    are expanded to bins via ``contig_index`` when needed.
+    ``background_sample_factors``.
     """
     additive = coerce_bin_epsilon_matrix(
         bin_epsilon,
         n_bins,
         n_samples,
         dtype=dtype,
-        contig_index=contig_index,
-        n_contigs=n_contigs,
     )
     if background_bin_factors is None and background_sample_factors is None:
         return additive

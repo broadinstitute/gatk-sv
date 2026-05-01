@@ -419,11 +419,11 @@ def filter_low_quality_bins(
         df: Normalised depth DataFrame.
         autosome_median_min/max: Median depth range for autosomal bins.
         autosome_mad_max: Maximum MAD for autosomal bins.
-        chrX_median_min/max: Legacy pooled chrX median range. Used only when
-            sex-stratified filtering cannot be applied.
+        chrX_median_min/max: Median depth range for chrX bins after sex-group
+            assignment.
         chrX_mad_max: Maximum within-group MAD for chrX bins.
-        chrY_median_min/max: Legacy pooled chrY median range. Used only when
-            sex-stratified filtering cannot be applied.
+        chrY_median_min/max: Median depth range for chrY bins after sex-group
+            assignment.
         chrY_mad_max: Maximum within-group MAD for chrY bins.
         cohort_deviation_threshold: Per-sample depth deviation from the
             expected ploidy that counts as "deviant" (default 0.3). The same
@@ -535,40 +535,12 @@ def filter_low_quality_bins(
                     newly_removed,
                 )
         n_threshold_removed = int((~keep).sum())
-    else:
-        # Fallback for datasets lacking chrX / chrY context: retain the
-        # legacy pooled sex-chromosome thresholds.
-        legacy_thresholds = {
-            "chrX": (
-                df["Chr"] == "chrX",
-                chrX_median_min,
-                chrX_median_max,
-                chrX_mad_max,
-            ),
-            "chrY": (
-                df["Chr"] == "chrY",
-                chrY_median_min,
-                chrY_median_max,
-                chrY_mad_max,
-            ),
-        }
-        for label, (mask, med_min, med_max, mad_max) in legacy_thresholds.items():
-            if not mask.any():
-                continue
-            ok = (medians >= med_min) & (medians <= med_max) & (mads <= mad_max)
-            n_before = int(mask.sum())
-            keep[mask.values] &= ok[mask.values]
-            n_after = int((mask & keep).sum())
-            logger.info(
-                "%s legacy pooled filter: median [%.1f, %.1f], MAD ≤ %.1f → %d / %d bins kept",
-                label,
-                med_min,
-                med_max,
-                mad_max,
-                n_after,
-                n_before,
-            )
-        n_threshold_removed = int((~keep).sum())
+    elif (df["Chr"] == "chrX").any() or (df["Chr"] == "chrY").any():
+        raise ValueError(
+            "Unable to infer chrX/chrY depth groups from current preprocess inputs. "
+            "Regenerate depth inputs with usable chrX and chrY coverage instead of "
+            "falling back to pooled sex-chromosome thresholds."
+        )
 
     # -- cohort deviation fraction filter --
     # For each bin, compute the expected ploidy (2.0 for autosomes) and
@@ -1175,7 +1147,7 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--output-space", choices=list(DEPTH_SPACES), default="raw",
-        help="Write filtered normalized depth (historical behavior) or filtered raw counts. Bin-quality filters always run on normalized depth.",
+        help="Write filtered normalized depth or filtered raw counts. Bin-quality filters always run on normalized depth.",
     )
     p.add_argument(
         "--depth-ratio-clamp", type=float, default=6.0,

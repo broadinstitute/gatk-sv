@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# run_ploidy.sh — run the gatk-sv-ploidy pipeline from preprocess outputs
+# run_ploidy.sh — run the gatk-sv-ploidy wrapper pipeline
 #
-# Usage:
-#   ./run_ploidy.sh --work-dir DIR [options]
+# Pipeline steps:
+#   preprocess -> polyploidy (if site_data.npz exists) -> infer -> call ->
+#   optional ppd -> plot -> optional eval
 #
-# Required constants (configured via CLI args):
-#   --truth-json   : JSON mapping sample ID → true aneuploidy type (optional)
-#   --work-dir     : Root directory for all pipeline outputs (required)
+# Required arguments for a normal run:
+#   --input-depth : Raw bins x samples depth TSV consumed by preprocess
+#   --work-dir    : Root directory for all pipeline outputs
 #
-# Note: the preprocess block is intentionally commented out in this wrapper.
-# It currently expects existing preprocess outputs under ${WORK_DIR}/preprocess/.
+# Step-specific non-file flags should be passed through via --preprocess-args,
+# --infer-args, --polyploidy-args, --ppd-args, --call-args, and --plot-args.
+# Use --ppd to enable the ppd step and related plot inputs.
 
 set -euo pipefail
 
@@ -54,31 +56,32 @@ WORK_DIR=""
 DRY_RUN="false"
 ENABLE_PPD="false"
 PREPROCESS_ARGS=""
-MODEL_ARGS=""
+INFER_ARGS=""
 POLYPLOIDY_ARGS=""
 PPD_STEP_ARGS=""
 CALL_ARGS=""
 PLOT_ARGS=""
-HIGHLIGHT_SAMPLE=""
 SITE_DEPTH_LIST=""
 POOR_REGIONS=""
-MIN_POOR_REGION_COVERAGE="0.5"
 USE_CALLQ20="false"
 
 usage() {
-    echo "Usage: $0 --work-dir DIR [--input-depth PATH] [--truth-json PATH] [--site-depth-list PATH] [--poor-regions PATH] [--ppd]" >&2
-    echo "  Note: preprocess is currently disabled in this wrapper; it expects existing outputs in WORK_DIR/preprocess/" >&2
-    echo "  --input-depth PATH       Optional raw bins×samples depth TSV retained for provenance / future preprocess runs" >&2
+    echo "Usage: $0 --input-depth PATH --work-dir DIR [options]" >&2
+    echo "  Runs preprocess, infer, call, plot, and optional ppd/eval under WORK_DIR" >&2
+    echo "  --input-depth PATH       Raw bins×samples depth TSV consumed by preprocess" >&2
     echo "  --work-dir DIR           Root directory for all pipeline outputs" >&2
     echo "  --truth-json PATH        Optional truth JSON to enable evaluation" >&2
     echo "  --site-depth-list PATH   Optional file listing per-sample SD file paths (one per line)" >&2
     echo "  --poor-regions PATH      Optional BED of poor regions to remove during preprocess" >&2
-    echo "  --min-poor-region-coverage FLOAT  Min fraction of a bin overlapped by poor regions to filter it" >&2
+    echo "  --preprocess-args STRING Extra arguments passed through to the preprocess step" >&2
+    echo "  --infer-args STRING      Extra arguments passed through to the infer step" >&2
     echo "  --polyploidy-args STRING Extra arguments passed through to the polyploidy step" >&2
     echo "  --ppd-args STRING        Extra arguments passed through to the ppd step" >&2
     echo "  --call-args STRING       Extra arguments passed through to the call step" >&2
     echo "  --use-callq20            Use CALLQ20 instead of the default BINQ20 when call filtering via --min-binq" >&2
+    echo "  --plot-args STRING       Extra arguments passed through to the plot step" >&2
     echo "  --ppd                    Run posterior predictive checks and enable PPD plots" >&2
+    echo "  --dry-run                Print prepared steps without executing them" >&2
     exit 1
 }
 
@@ -100,13 +103,13 @@ while [[ $# -gt 0 ]]; do
             PREPROCESS_ARGS="$2"; shift 2;;
         --preprocess-args=*)
             PREPROCESS_ARGS="${1#*=}"; shift;;
-        --model-args)
-            MODEL_ARGS="$2"; shift 2;;
-        --model-args=*)
-            MODEL_ARGS="${1#*=}"; shift;;
-        --polyploidy-args|--triploidy-args)
+        --infer-args)
+            INFER_ARGS="$2"; shift 2;;
+        --infer-args=*)
+            INFER_ARGS="${1#*=}"; shift;;
+        --polyploidy-args)
             POLYPLOIDY_ARGS="$2"; shift 2;;
-        --polyploidy-args=*|--triploidy-args=*)
+        --polyploidy-args=*)
             POLYPLOIDY_ARGS="${1#*=}"; shift;;
         --ppd-args)
             PPD_STEP_ARGS="$2"; shift 2;;
@@ -122,10 +125,6 @@ while [[ $# -gt 0 ]]; do
             PLOT_ARGS="$2"; shift 2;;
         --plot-args=*)
             PLOT_ARGS="${1#*=}"; shift;;
-        --highlight-sample)
-            HIGHLIGHT_SAMPLE="$2"; shift 2;;
-        --highlight-sample=*)
-            HIGHLIGHT_SAMPLE="${1#*=}"; shift;;
         --site-depth-list)
             SITE_DEPTH_LIST="$2"; shift 2;;
         --site-depth-list=*)
@@ -134,10 +133,6 @@ while [[ $# -gt 0 ]]; do
             POOR_REGIONS="$2"; shift 2;;
         --poor-regions=*)
             POOR_REGIONS="${1#*=}"; shift;;
-        --min-poor-region-coverage)
-            MIN_POOR_REGION_COVERAGE="$2"; shift 2;;
-        --min-poor-region-coverage=*)
-            MIN_POOR_REGION_COVERAGE="${1#*=}"; shift;;
         --dry-run)
             DRY_RUN="true"; shift;;
         --dry-run=*)
@@ -159,6 +154,11 @@ done
 
 if [[ -z "${WORK_DIR}" ]]; then
     echo "Error: --work-dir is required" >&2
+    usage
+fi
+
+if [[ -z "${INPUT_DEPTH}" ]]; then
+    echo "Error: --input-depth is required" >&2
     usage
 fi
 
@@ -203,21 +203,11 @@ if [[ -f "${SITE_DATA}" ]]; then
     RUN_POLYPLOIDY="true"
 fi
 
-TOTAL_STEPS=4
-if [[ "${RUN_POLYPLOIDY}" == "true" ]]; then
-    TOTAL_STEPS=$((TOTAL_STEPS + 1))
-fi
-if [[ "${ENABLE_PPD}" == "true" ]]; then
-    TOTAL_STEPS=$((TOTAL_STEPS + 1))
-fi
-
 echo "=== gatk-sv-ploidy pipeline ==="
 echo "  Input depth      : $(describe_redacted_input "${INPUT_DEPTH}")"
 echo "  Site depth list  : $(describe_redacted_input "${SITE_DEPTH_LIST}")"
 echo "  Poor regions     : $(describe_redacted_input "${POOR_REGIONS}")"
-echo "  Poor region cov  : ${MIN_POOR_REGION_COVERAGE}"
 echo "  Truth JSON       : $(describe_redacted_input "${TRUTH_JSON}")"
-echo "  Highlight sample : $(describe_redacted_input "${HIGHLIGHT_SAMPLE}")"
 echo "  Call filter qual : $([[ "${USE_CALLQ20}" == "true" ]] && printf 'CALLQ20' || printf 'BINQ20')"
 echo "  Run polyploidy   : ${RUN_POLYPLOIDY}"
 echo "  PPD extra args   : $(describe_redacted_input "${PPD_STEP_ARGS}" "provided (redacted)" "none")"
@@ -240,14 +230,14 @@ if [[ "${CALL_NEEDS_PPD_FILTER}" == "true" ]]; then
 fi
 
 # ── preprocess ─────────────────────────
-echo "[0/${TOTAL_STEPS}] preprocess"
+echo "preprocess"
 SD_ARGS=""
 if [[ -n "${SITE_DEPTH_LIST}" ]]; then
     SD_ARGS="--site-depth-list ${SITE_DEPTH_LIST}"
 fi
 PR_ARGS=""
 if [[ -n "${POOR_REGIONS}" ]]; then
-    PR_ARGS="--poor-regions ${POOR_REGIONS} --min-poor-region-coverage ${MIN_POOR_REGION_COVERAGE}"
+    PR_ARGS="--poor-regions ${POOR_REGIONS}"
 fi
 if [[ "${DRY_RUN}" == "true" ]]; then
     dry_run_step "preprocess"
@@ -260,10 +250,8 @@ else
         $PREPROCESS_ARGS
 fi
 
-CURRENT_STEP=1
-
 if [[ "${RUN_POLYPLOIDY}" == "true" ]]; then
-    echo "[${CURRENT_STEP}/${TOTAL_STEPS}] polyploidy"
+    echo "polyploidy"
     if [[ "${DRY_RUN}" == "true" ]]; then
         dry_run_step "polyploidy"
     else
@@ -273,11 +261,10 @@ if [[ "${RUN_POLYPLOIDY}" == "true" ]]; then
             -o "${POLYPLOIDY_DIR}" \
             $POLYPLOIDY_ARGS
     fi
-    CURRENT_STEP=$((CURRENT_STEP + 1))
 fi
 
 # ── infer ───────────────────────────────────────────────────────────────────
-echo "[${CURRENT_STEP}/${TOTAL_STEPS}] infer"
+echo "infer"
 AF_ARGS=""
 if [[ -f "${SITE_DATA}" ]]; then
     AF_ARGS="--site-data ${SITE_DATA}"
@@ -296,9 +283,8 @@ else
         -o "${INFER_DIR}" \
         $AF_ARGS \
         $BASELINE_ARGS \
-        $MODEL_ARGS
+        $INFER_ARGS
 fi
-CURRENT_STEP=$((CURRENT_STEP + 1))
 
 # ── posterior predictive checks and call ────────────────────────────────────
 PPD_INPUT_ARGS=""
@@ -335,25 +321,21 @@ run_ppd_step() {
 }
 
 if [[ "${ENABLE_PPD}" == "true" && "${CALL_NEEDS_PPD_FILTER}" == "true" ]]; then
-    echo "[${CURRENT_STEP}/${TOTAL_STEPS}] ppd"
+    echo "ppd"
     run_ppd_step
-    CURRENT_STEP=$((CURRENT_STEP + 1))
-    echo "[${CURRENT_STEP}/${TOTAL_STEPS}] call"
+    echo "call"
     run_call_step
-    CURRENT_STEP=$((CURRENT_STEP + 1))
 else
-    echo "[${CURRENT_STEP}/${TOTAL_STEPS}] call"
+    echo "call"
     run_call_step
-    CURRENT_STEP=$((CURRENT_STEP + 1))
     if [[ "${ENABLE_PPD}" == "true" ]]; then
-        echo "[${CURRENT_STEP}/${TOTAL_STEPS}] ppd"
+        echo "ppd"
         run_ppd_step
-        CURRENT_STEP=$((CURRENT_STEP + 1))
     fi
 fi
 
 # ── plot ────────────────────────────────────────────────────────────────────
-echo "[${CURRENT_STEP}/${TOTAL_STEPS}] plot"
+echo "plot"
 PLOT_PPD_ARGS=""
 if [[ "${ENABLE_PPD}" == "true" ]]; then
     PLOT_PPD_ARGS="--ppd-bin-summary ${PPD_BIN_SUMMARY} --ppd-chr-summary ${PPD_CHR_SUMMARY}"
@@ -385,39 +367,22 @@ fi
 if [[ "${DRY_RUN}" == "true" ]]; then
     dry_run_step "plot"
 else
-    # Include highlight sample if provided
-    if [[ -n "${HIGHLIGHT_SAMPLE}" ]]; then
-        run_cli plot \
-            -c "${PLOT_CHROM_STATS}" \
-            -b "${BIN_STATS}" \
-            -t "${TRAINING_LOSS}" \
-            -s "${PREDICTIONS}" \
-            -o "${PLOT_DIR}" \
-            $PLOT_SITE_ARGS \
-            $PLOT_IGNORED_ARGS \
-            $PLOT_BINQ_ARGS \
-            --highlight-sample "${HIGHLIGHT_SAMPLE}" \
-            $PLOT_PPD_ARGS \
-            $PLOT_ARGS
-    else
-        run_cli plot \
-            -c "${PLOT_CHROM_STATS}" \
-            -b "${BIN_STATS}" \
-            -t "${TRAINING_LOSS}" \
-            -s "${PREDICTIONS}" \
-            -o "${PLOT_DIR}" \
-            $PLOT_SITE_ARGS \
-            $PLOT_IGNORED_ARGS \
-            $PLOT_BINQ_ARGS \
-            $PLOT_PPD_ARGS \
-            $PLOT_ARGS
-    fi
+    run_cli plot \
+        -c "${PLOT_CHROM_STATS}" \
+        -b "${BIN_STATS}" \
+        -t "${TRAINING_LOSS}" \
+        -s "${PREDICTIONS}" \
+        -o "${PLOT_DIR}" \
+        $PLOT_SITE_ARGS \
+        $PLOT_IGNORED_ARGS \
+        $PLOT_BINQ_ARGS \
+        $PLOT_PPD_ARGS \
+        $PLOT_ARGS
 fi
-CURRENT_STEP=$((CURRENT_STEP + 1))
 
 # ── eval (optional — skipped if TRUTH_JSON is unset) ────────────────────────
 if [[ -n "${TRUTH_JSON}" ]]; then
-    echo "[${CURRENT_STEP}/${TOTAL_STEPS}] eval"
+    echo "eval"
     if [[ "${DRY_RUN}" == "true" ]]; then
         dry_run_step "eval"
     else
@@ -427,7 +392,7 @@ if [[ -n "${TRUTH_JSON}" ]]; then
             -o "${EVAL_DIR}"
     fi
 else
-    echo "[${CURRENT_STEP}/${TOTAL_STEPS}] eval  (skipped — set TRUTH_JSON to enable)"
+    echo "eval  (skipped — set TRUTH_JSON to enable)"
 fi
 
 echo ""

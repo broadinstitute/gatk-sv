@@ -73,8 +73,8 @@ gatk-sv-ploidy eval -p out/call/aneuploidy_type_predictions.tsv \
   -t truth.json -o out/eval/
 ```
 
-The `plot` command now writes a static HTML report alongside the legacy plot
-files used by existing workflows:
+The `plot` command now writes a static HTML report alongside the generated plot
+files:
 
 | Path | Description |
 |------|-------------|
@@ -117,14 +117,14 @@ outputs.
 multiplicative bias (`--multiplicative-factors 0`), no low-rank additive
 background (`--background-factors 0`), no allosome-specific overdispersion
 (`--var-allosome 0`), and no per-bin variance (`--var-bin 0`). A tiny
-contig-shared epsilon floor (`--epsilon-mean 1e-4 --epsilon-concentration 0.5`)
-is retained for low-level background in zero-copy states. In raw-count
+epsilon floor (`--epsilon-mean 1e-4 --epsilon-concentration 0.5`) is retained
+for low-level background in zero-copy states. In raw-count
 negative-binomial runs, this additive background contributes only to CN=0; it
 does not inflate the expected depth for CN=1 or higher. Set
 `--epsilon-mean 0` to remove the epsilon floor entirely, or opt into the
 low-rank terms explicitly for model-checking experiments.
 
-To test the raw-count negative-binomial model instead of the historical
+To test the raw-count negative-binomial model instead of the
 normalized-depth residual model, keep preprocess filtering in normalized
 space but write filtered raw counts:
 
@@ -142,8 +142,8 @@ overdispersion. Whole-genome baseline copy states are handled as a separate
 post-preprocess step: run `polyploidy` on `site_data.npz`, then pass the emitted
 `sample_autosomal_baseline_cn.tsv` into `infer` via
 `--autosomal-baseline-cn-tsv` so downstream `call` can emit `HAPLOID`,
-`TRIPLOID`, or `TETRAPLOID` when appropriate. A legacy `triploidy` alias is
-retained for compatibility, but the classifier now compares CN1, CN2, CN3, and CN4
+`TRIPLOID`, or `TETRAPLOID` when appropriate. The classifier compares CN1,
+CN2, CN3, and CN4
 beta-binomial genotype-mixture models and marginalizes over a log-spaced grid
 of AF concentration values. The direct AF peak model checks the canonical peak
 sets 0/1, 0/0.5/1, 0/1/3/2/3/1, and 0/1/4/0.5/3/4/1, then combines that peak
@@ -155,7 +155,7 @@ only 0/0.5/1 remain diploid even when CN4 has some likelihood support. CN1 is
 called only when the informative pooled AFs are concentrated at 0 and 1 with
 little support for non-endpoint peaks. Use `--haploidy-prior`,
 `--triploidy-prior`, and `--tetraploidy-prior` to tune prior odds, and use the
-legacy `--pvalue-threshold` flag as the maximum posterior error probability for
+`--pvalue-threshold` flag as the maximum posterior error probability for
 non-diploid calls. Use `--af-concentration` to set the prior median,
 `--af-concentration-prior-log-sd` to widen or narrow the concentration prior,
 or `--af-concentration-grid` to supply an explicit comma-separated grid.
@@ -176,7 +176,7 @@ thirds, and half peaks, and the summary plot shows CN1 endpoint support, CN3
 thirds support, CN4 quarter support, and CN4 diploid-compatibility checks. A
 separate diploid-only raw-AF profile plot shows up to 12 diploid-called samples
 for comparison. Pass
-`--learn-sample-depth` to restore the legacy LogNormal sample-depth latent for
+`--learn-sample-depth` to enable the LogNormal sample-depth latent for
 cohorts where the fixed median anchor is not appropriate.
 
 ---
@@ -679,7 +679,7 @@ ploidy is not conflated with focal autosomal or allosomal aneuploidy:
 | `baseline_ploidy_type` | Autosomal baseline state: `DIPLOID`, `HAPLOID`, `TRIPLOID`, `TETRAPLOID`, or `BASELINE_CN*` |
 | `autosomal_aneuploidy_type` | Autosomal deviation from that baseline: `NONE`, a named trisomy/tetrasomy, `AUTOSOMAL_GAIN`, `AUTOSOMAL_LOSS`, or `MULTIPLE_AUTOSOMAL` |
 | `allosomal_aneuploidy_type` | chrX/chrY deviation from the baseline-aware expected pair: `NONE`, a diploid sex aneuploidy label, or `DISCORDANT_ALLOSOME_CN` |
-| `predicted_aneuploidy_type` | Backward-compatible composite summary derived from the three fields above |
+| `predicted_aneuploidy_type` | Composite summary derived from the three fields above |
 
 For example, a clean baseline-CN3 sample with `(chrX=2, chrY=1)` is reported as
 `baseline_ploidy_type=TRIPLOID`, `autosomal_aneuploidy_type=NONE`, and

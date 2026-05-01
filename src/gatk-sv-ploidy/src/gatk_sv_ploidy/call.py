@@ -137,8 +137,8 @@ def _normalize_global_cn_artifact(
 ) -> tuple[dict, float]:
     """Return chromosome copy numbers unchanged.
 
-    Infer now reports absolute diploid-referenced chromosome labels, so the
-    legacy doubled-label normalization path is disabled.
+    Infer reports absolute diploid-referenced chromosome labels, so no
+    additional normalization is applied here.
     """
     return dict(cn_map), 1.0
 
@@ -182,8 +182,12 @@ def _aggregate_bin_stats_to_chromosome_stats(bin_df: pd.DataFrame) -> pd.DataFra
         for cn_state, ploidy_prob in enumerate(ploidy_fractions):
             row[f"ploidy_prob_{cn_state}"] = float(ploidy_prob)
 
-        if "sample_var" in sdf.columns:
-            row["sample_var_map"] = float(sdf["sample_var"].iloc[0])
+        if "sample_overdispersion" in sdf.columns:
+            row["sample_overdispersion_map"] = float(
+                sdf["sample_overdispersion"].iloc[0]
+            )
+        elif "sample_var" in sdf.columns:
+            row["sample_overdispersion_map"] = float(sdf["sample_var"].iloc[0])
         if "sample_depth" in sdf.columns:
             row["sample_depth_map"] = float(sdf["sample_depth"].iloc[0])
         if "plot_depth" in sdf.columns:
@@ -191,10 +195,6 @@ def _aggregate_bin_stats_to_chromosome_stats(bin_df: pd.DataFrame) -> pd.DataFra
             row["plot_std_depth"] = float(sdf["plot_depth"].std(ddof=0))
             row["plot_median_depth"] = float(sdf["plot_depth"].median())
             row["plot_mad_depth"] = _median_absolute_deviation(sdf["plot_depth"])
-        if "sample_overdispersion" in sdf.columns:
-            row["sample_overdispersion_map"] = float(
-                sdf["sample_overdispersion"].iloc[0]
-            )
         if "n_sites" in sdf.columns:
             row["n_sites"] = int(sdf["n_sites"].sum())
         if "mean_observed_af" in sdf.columns:
@@ -426,7 +426,6 @@ def _apply_binq_filter_to_annotated_bins(
         ("std_depth", "std_depth_filtered"),
         ("median_depth", "median_depth_filtered"),
         ("mad_depth", "mad_depth_filtered"),
-        ("sample_var_map", "sample_var_map_filtered"),
         ("sample_depth_map", "sample_depth_map_filtered"),
         ("plot_mean_depth", "plot_mean_depth_filtered"),
         ("plot_std_depth", "plot_std_depth_filtered"),
@@ -624,23 +623,6 @@ def assign_sex_and_aneuploidy_types(
             allosomal_aneuploidy_type,
         )
 
-        # Verify the legacy helper remains consistent with the split fields.
-        pred_type_legacy = _classify_aneuploidy(
-            aneu_map,
-            cn_map,
-            x_cn,
-            y_cn,
-            autosomal_baseline_cn=autosomal_baseline_cn,
-            sample_depth_ratio=sample_depth_ratio,
-        )
-        if pred_type_legacy != pred_type:
-            logger.debug(
-                "Legacy aneuploidy type differed from split classifiers for %s: %s != %s",
-                sample_id,
-                pred_type_legacy,
-                pred_type,
-            )
-
         rows.append(
             {
                 "sample": sample_id,
@@ -770,7 +752,7 @@ def _compose_aneuploidy_type(
     autosomal_aneuploidy_type: str,
     allosomal_aneuploidy_type: str,
 ) -> str:
-    """Compose the backward-compatible summary aneuploidy label."""
+    """Compose the summary aneuploidy label."""
     has_auto = autosomal_aneuploidy_type != _NO_ANEUPLOIDY
     has_allosome = allosomal_aneuploidy_type != _NO_ANEUPLOIDY
 
@@ -843,20 +825,13 @@ def save_sex_assignments(pred_df: pd.DataFrame, output_dir: str) -> None:
 def export_aneuploid_data(df: pd.DataFrame, output_path: str) -> None:
     """Export rows with ``is_aneuploid=True`` to a TSV.
 
-    Normalizes legacy ``sample_var_map`` naming to
-    ``sample_overdispersion_map`` and drops internal columns before writing.
+    Drops internal columns before writing.
 
     Args:
         df: ``chromosome_stats.tsv`` DataFrame.
         output_path: Destination file path.
     """
     out = df[df["is_aneuploid"]].copy()
-    if (
-        "sample_overdispersion_map" not in out.columns and
-        "sample_var_map" in out.columns
-    ):
-        out["sample_overdispersion_map"] = out["sample_var_map"]
-    out = out.drop(columns=["sample_var_map"], errors="ignore")
     out = out.drop(columns=["chr_type"], errors="ignore")
     out.to_csv(output_path, sep="\t", index=False)
     logger.info("Exported %d aneuploid rows.", len(out))
@@ -1026,7 +1001,7 @@ def main() -> None:
 
     # ── classify ────────────────────────────────────────────────────────
     logger.info(
-        "Using absolute chromosome copy-number labels from infer; legacy sample-baseline normalization is disabled."
+        "Using absolute chromosome copy-number labels from infer."
     )
 
     pred_df = assign_sex_and_aneuploidy_types(

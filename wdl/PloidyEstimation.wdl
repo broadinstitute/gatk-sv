@@ -9,9 +9,9 @@ workflow Ploidy {
     String batch
     Array[File] sparse_sd_files
     File? truth_json
-    String? plot_highlight_sample
-    String? triploidy_args
-    String? model_args
+    String? preprocess_args
+    String? polyploidy_args
+    String? infer_args
     String? ppd_args
     String? call_args
     String? plot_args
@@ -39,9 +39,9 @@ workflow Ploidy {
       batch = batch,
       sparse_sd_files = sparse_sd_files,
       truth_json = truth_json,
-      plot_highlight_sample = plot_highlight_sample,
-      triploidy_args = triploidy_args,
-      model_args = model_args,
+      preprocess_args = preprocess_args,
+      polyploidy_args = polyploidy_args,
+      infer_args = infer_args,
       ppd_args = ppd_args,
       call_args = call_args,
       plot_args = plot_args,
@@ -126,9 +126,9 @@ task PloidyScore {
     String batch
     Array[File] sparse_sd_files
     File? truth_json
-    String? plot_highlight_sample
-    String? triploidy_args
-    String? model_args
+    String? preprocess_args
+    String? polyploidy_args
+    String? infer_args
     String? ppd_args
     String? call_args
     String? plot_args
@@ -174,14 +174,14 @@ task PloidyScore {
       --work-dir ${OUTDIR} \
       ${SD_ARGS} \
       ~{if defined(truth_json) then "--truth-json " + truth_json else ""} \
-      ~{if defined(triploidy_args) then "--triploidy-args " + triploidy_args else ""} \
-      ~{if defined(model_args) then "--model-args " + model_args else ""} \
-      ~{if defined(ppd_args) then "--ppd-args " + ppd_args else ""} \
-      ~{if defined(call_args) then "--call-args " + call_args else ""} \
-      ~{if defined(plot_args) then "--plot-args " + plot_args else ""} \
+      ~{if defined(preprocess_args) then "--preprocess-args '" + preprocess_args + "'" else ""} \
+      ~{if defined(polyploidy_args) then "--polyploidy-args '" + polyploidy_args + "'" else ""} \
+      ~{if defined(infer_args) then "--infer-args '" + infer_args + "'" else ""} \
+      ~{if defined(ppd_args) then "--ppd-args '" + ppd_args + "'" else ""} \
+      ~{if defined(call_args) then "--call-args '" + call_args + "'" else ""} \
+      ~{if defined(plot_args) then "--plot-args '" + plot_args + "'" else ""} \
       ~{if enable_ppd then "--ppd" else ""} \
-      ~{if use_callq20 then "--use-callq20" else ""} \
-      ~{if defined(plot_highlight_sample) then "--highlight-sample " + plot_highlight_sample else ""}
+      ~{if use_callq20 then "--use-callq20" else ""}
 
     # Package all outputs
     tar -zcf ~{batch}_ploidy.tar.gz "${OUTDIR}"

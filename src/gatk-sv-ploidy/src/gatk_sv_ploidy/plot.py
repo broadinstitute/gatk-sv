@@ -75,7 +75,7 @@ def _resolve_binq_field(
 _CHR_PALETTE = CHR_TYPE_PALETTE
 _DIAGNOSTIC_HISTOGRAM_SPECS: tuple[dict[str, object], ...] = (
     {
-        "source_columns": ("sample_overdispersion_map", "sample_var_map"),
+        "source_columns": ("sample_overdispersion_map",),
         "title": "Sample Overdispersion by Chromosome Type",
         "xlabel": "Sample Overdispersion",
         "filename": "hist_sample_overdispersion.png",

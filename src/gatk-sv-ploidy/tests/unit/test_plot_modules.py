@@ -573,7 +573,6 @@ def test_plot_module_orchestrators_and_skip_branches(tmp_path) -> None:
 
 def test_plot_histograms_by_chr_type_uses_curated_unique_specs(monkeypatch, tmp_path) -> None:
     chrom_df = _small_chrom_df().assign(
-        sample_var_map=[0.11, 0.11, 0.11, 0.23, 0.23, 0.23],
         sample_overdispersion_map=[0.12, 0.12, 0.12, 0.24, 0.24, 0.24],
         sample_depth_map=[1.0, 1.0, 1.0, 1.5, 1.5, 1.5],
         n_bins_retained=[8, 8, 8, 6, 6, 6],
@@ -610,7 +609,6 @@ def test_plot_histograms_by_chr_type_uses_curated_unique_specs(monkeypatch, tmp_
         "hist_sample_depth_ratio.png",
         "hist_global_cn_scale_factor.png",
     }
-    assert "hist_sample_var_map.png" not in emitted_files
     assert all(int(call["bins"]) == 30 for call in calls)
 
     overdispersion_call = next(

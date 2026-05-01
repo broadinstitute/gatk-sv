@@ -3,6 +3,7 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pytest
 import warnings
 
 from gatk_sv_ploidy._plot_style import plot_output_format
@@ -104,6 +105,16 @@ def test_compose_additive_background_matrix_avoids_spurious_matmul_warnings() ->
     assert captured == []
     assert additive_background.shape == (849, 156)
     assert np.isfinite(additive_background).all()
+
+
+def test_compose_additive_background_matrix_rejects_unsupported_epsilon_shape() -> None:
+    with pytest.raises(ValueError, match="length n_bins"):
+        compose_additive_background_matrix(
+            np.array([0.01, 0.02], dtype=np.float64),
+            n_bins=4,
+            n_samples=3,
+            dtype=np.float64,
+        )
 
 
 def test_plot_helpers_write_files_and_labels(tmp_path) -> None:

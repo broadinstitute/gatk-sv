@@ -148,7 +148,7 @@ def test_assign_and_export_outputs(tmp_path) -> None:
                 "is_aneuploid": False,
                 "mean_cn_probability": 0.95,
                 "median_depth": 2.0,
-                "sample_var_map": 0.04,
+                "sample_overdispersion_map": 0.04,
                 "chr_type": 1,
             },
             {
@@ -158,7 +158,7 @@ def test_assign_and_export_outputs(tmp_path) -> None:
                 "is_aneuploid": False,
                 "mean_cn_probability": 0.93,
                 "median_depth": 0.0,
-                "sample_var_map": 0.04,
+                "sample_overdispersion_map": 0.04,
                 "chr_type": 2,
             },
             {
@@ -168,7 +168,7 @@ def test_assign_and_export_outputs(tmp_path) -> None:
                 "is_aneuploid": False,
                 "mean_cn_probability": 0.97,
                 "median_depth": 2.0,
-                "sample_var_map": 0.04,
+                "sample_overdispersion_map": 0.04,
                 "chr_type": 0,
             },
             {
@@ -178,7 +178,7 @@ def test_assign_and_export_outputs(tmp_path) -> None:
                 "is_aneuploid": True,
                 "mean_cn_probability": 0.91,
                 "median_depth": 1.0,
-                "sample_var_map": 0.09,
+                "sample_overdispersion_map": 0.09,
                 "chr_type": 1,
             },
             {
@@ -188,7 +188,7 @@ def test_assign_and_export_outputs(tmp_path) -> None:
                 "is_aneuploid": True,
                 "mean_cn_probability": 0.92,
                 "median_depth": 0.0,
-                "sample_var_map": 0.09,
+                "sample_overdispersion_map": 0.09,
                 "chr_type": 2,
             },
             {
@@ -198,7 +198,7 @@ def test_assign_and_export_outputs(tmp_path) -> None:
                 "is_aneuploid": True,
                 "mean_cn_probability": 0.90,
                 "median_depth": 3.0,
-                "sample_var_map": 0.09,
+                "sample_overdispersion_map": 0.09,
                 "chr_type": 0,
             },
         ]
@@ -218,7 +218,6 @@ def test_assign_and_export_outputs(tmp_path) -> None:
     export_aneuploid_data(df, str(tmp_path / "aneuploid.tsv"))
     exported = pd.read_csv(tmp_path / "aneuploid.tsv", sep="\t")
     assert "sample_overdispersion_map" in exported.columns
-    assert "sample_var_map" not in exported.columns
     assert exported["sample_overdispersion_map"].iloc[0] == pytest.approx(0.09)
     assert "chr_type" not in exported.columns
 

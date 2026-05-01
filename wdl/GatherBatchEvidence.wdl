@@ -102,9 +102,9 @@ workflow GatherBatchEvidence {
     Array[String]? allosomal_contigs
 
     Boolean run_ploidy = false
-    String? ploidy_plot_highlight_sample  # for single-sample mode
-    String? ploidy_triploidy_args
-    String? ploidy_model_args
+    String? ploidy_preprocess_args
+    String? ploidy_polyploidy_args
+    String? ploidy_infer_args
     String? ploidy_ppd_args
     String? ploidy_call_args
     String? ploidy_plot_args
@@ -218,10 +218,10 @@ workflow GatherBatchEvidence {
         merged_depth_file = merged_bincov_,
         batch = batch,
         sparse_sd_files = all_sparse_SD_files,
-        plot_highlight_sample = ploidy_plot_highlight_sample,
         reference_dict = ref_dict,
-        triploidy_args = ploidy_triploidy_args,
-        model_args = ploidy_model_args,
+        preprocess_args = ploidy_preprocess_args,
+        polyploidy_args = ploidy_polyploidy_args,
+        infer_args = ploidy_infer_args,
         ppd_args = ploidy_ppd_args,
         call_args = ploidy_call_args,
         plot_args = ploidy_plot_args,

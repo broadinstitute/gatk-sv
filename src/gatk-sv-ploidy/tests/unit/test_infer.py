@@ -16,7 +16,6 @@ from gatk_sv_ploidy.infer import (
     build_chromosome_stats,
     detect_aneuploidies,
     estimate_site_pop_af_naive_bayes,
-    is_fallback_minor_site_data,
     parse_args,
     resolve_site_af_estimator_application,
     should_apply_site_af_estimator,
@@ -530,32 +529,20 @@ def test_estimate_site_pop_af_naive_bayes_matches_beta_posterior_mean() -> None:
 
 def test_should_apply_site_af_estimator_auto_is_conservative() -> None:
     site_mask = np.array([[[True, True], [True, False]]], dtype=bool)
-    fallback = np.array([[0.5, 0.5]], dtype=np.float32)
     known = np.array([[0.25, 0.5]], dtype=np.float32)
 
-    assert should_apply_site_af_estimator("auto", fallback, site_mask) is False
     assert should_apply_site_af_estimator("auto", known, site_mask) is False
     assert should_apply_site_af_estimator("naive-bayes", known, site_mask) is True
-    assert should_apply_site_af_estimator("off", fallback, site_mask) is False
+    assert should_apply_site_af_estimator("off", known, site_mask) is False
 
 
-def test_is_fallback_minor_site_data_detects_uniform_half_af_inputs() -> None:
+def test_resolve_site_af_estimator_application_uses_current_inputs_only() -> None:
     site_mask = np.array([[[True, True], [True, False]]], dtype=bool)
-    fallback = np.array([[0.5, 0.5]], dtype=np.float32)
-    known = np.array([[0.25, 0.5]], dtype=np.float32)
+    current = np.array([[0.5, 0.5]], dtype=np.float32)
 
-    assert is_fallback_minor_site_data(fallback, site_mask) is True
-    assert is_fallback_minor_site_data(known, site_mask) is False
-
-
-def test_resolve_site_af_estimator_application_rejects_fallback_naive_bayes() -> None:
-    site_mask = np.array([[[True, True], [True, False]]], dtype=bool)
-    fallback = np.array([[0.5, 0.5]], dtype=np.float32)
-
-    assert resolve_site_af_estimator_application("auto", fallback, site_mask) is False
-    assert resolve_site_af_estimator_application("off", fallback, site_mask) is False
-    with pytest.raises(ValueError, match="legacy fallback site_data"):
-        resolve_site_af_estimator_application("naive-bayes", fallback, site_mask)
+    assert resolve_site_af_estimator_application("auto", current, site_mask) is False
+    assert resolve_site_af_estimator_application("off", current, site_mask) is False
+    assert resolve_site_af_estimator_application("naive-bayes", current, site_mask) is True
 
 
 def test_build_site_af_estimates_records_effective_afs(
