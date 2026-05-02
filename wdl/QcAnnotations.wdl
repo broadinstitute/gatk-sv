@@ -13,8 +13,6 @@ workflow QcAnnotations {
         Array[String] contigs
         String prefix
 
-        String? subset_vcf_string
-
         File ped_file
 
         File ref_fa
@@ -50,49 +48,18 @@ workflow QcAnnotations {
         RuntimeAttr? runtime_override_merge_site_level_benchmark
         RuntimeAttr? runtime_override_collect_vids_per_sample
         RuntimeAttr? runtime_override_split_samples_list
-        RuntimeAttr? runtime_override_tar_shard_vid_lists
         RuntimeAttr? runtime_override_merge_sharded_per_sample_vid_lists
         RuntimeAttr? runtime_override_benchmark_samples
         RuntimeAttr? runtime_override_split_shuffled_list
         RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
-        RuntimeAttr? runtime_override_concat_vcfs
     }
 
-    # Merge multiple input VCFs into one if needed
-    if (length(vcfs) > 1) {
-        call MiniTasks.ConcatVcfs as MergeInputVcfs {
-            input:
-                vcfs = vcfs,
-                vcfs_idx = vcfs_idx,
-                outfile_prefix = prefix + ".merged",
-                sv_base_mini_docker = sv_base_mini_docker,
-                runtime_attr_override = runtime_override_concat_vcfs
-        }
-    }
-    File merged_vcf = select_first([MergeInputVcfs.concat_vcf, vcfs[0]])
-    File merged_vcf_idx = select_first([MergeInputVcfs.concat_vcf_idx, vcfs_idx[0]])
-
-    if (defined(subset_vcf_string)) {
-        call MiniTasks.SubsetVcf {
-            input:
-                vcf = merged_vcf,
-                outfile_prefix = prefix + ".subset",
-                subset_flags = select_first([subset_vcf_string]),
-                sv_base_mini_docker = sv_base_mini_docker
-        }
-    }
-    File use_vcf = select_first([SubsetVcf.filtered_vcf, merged_vcf])
-    File use_vcf_idx = select_first([SubsetVcf.filtered_vcf_idx, merged_vcf_idx])
-
-    # When inputs are per-chromosome VCFs matching contigs, pass them directly
-    # to avoid downloading the full merged VCF 24 times in ScatterVcf
-    Boolean per_chrom_input = (length(vcfs) == length(contigs)) && !defined(subset_vcf_string)
-
+    # Scatter VCF-wide stats collection per chromosome (parallel)
     scatter (i in range(length(contigs))) {
         call vcfwideqc.CollectQcVcfWide {
             input:
-                vcf = if per_chrom_input then vcfs[i] else use_vcf,
-                vcf_idx = if per_chrom_input then vcfs_idx[i] else use_vcf_idx,
+                vcf = vcfs[i],
+                vcf_idx = vcfs_idx[i],
                 contig = contigs[i],
                 variants_per_shard = variants_per_shard,
                 create_variant_attributes = create_variant_attributes,
@@ -105,7 +72,7 @@ workflow QcAnnotations {
                 runtime_override_scatter_vcf = runtime_override_scatter_vcf,
                 runtime_override_merge_subvcf_stat_shards = runtime_override_merge_subvcf_stat_shards,
                 runtime_override_merge_svtk_vcf_2_bed = runtime_override_merge_vcf_2_bed
-            }
+        }
     }
 
     call MiniTasks.ConcatBeds as MergeVcfWideStats {
@@ -169,26 +136,31 @@ workflow QcAnnotations {
             runtime_attr_override = runtime_override_split_samples_list
     }
 
-    scatter (shard in SplitSamplesList.shards) {
-        call persample.CollectQcPerSample {
-            input:
-                vcf = use_vcf,
-                samples_list = shard,
-                prefix = prefix,
-                sv_base_mini_docker = sv_base_mini_docker,
-                sv_pipeline_docker = gatk_sv_lr_docker,
-                runtime_override_collect_vids_per_sample = runtime_override_collect_vids_per_sample,
-                runtime_override_merge_sharded_per_sample_vid_lists = runtime_override_merge_sharded_per_sample_vid_lists
+    # Scatter per-sample VID collection over contigs × sample shards (fully parallel)
+    # Calls CollectVidsPerSample directly to avoid redundant inner merge task per shard
+    scatter (i in range(length(contigs))) {
+        scatter (shard in SplitSamplesList.shards) {
+            call persample.CollectVidsPerSample {
+                input:
+                    vcf = vcfs[i],
+                    samples_list = shard,
+                    prefix = "~{prefix}.~{contigs[i]}",
+                    sv_pipeline_docker = gatk_sv_lr_docker,
+                    runtime_attr_override = runtime_override_collect_vids_per_sample
+            }
         }
     }
 
-    call TarShardVidLists {
+    # Flatten nested scatter results and merge all VID lists across contigs
+    Array[File] all_vid_lists = flatten(CollectVidsPerSample.vid_lists_tarball)
+
+    call persample.MergeShardedPerSampleVidLists as MergePerSampleVidLists {
         input:
-            in_tarballs = CollectQcPerSample.vid_lists,
-            folder_name = "~{prefix}_perSample_VIDs_merged",
-            tarball_prefix = "~{prefix}_perSample_VIDs",
+            tarballs = all_vid_lists,
+            samples_list = CollectQcVcfWide.samples_list[0],
+            prefix = prefix,
             sv_base_mini_docker = sv_base_mini_docker,
-            runtime_attr_override = runtime_override_tar_shard_vid_lists
+            runtime_attr_override = runtime_override_merge_sharded_per_sample_vid_lists
     }
 
     Int max_gq_ = select_first([max_gq, 99])
@@ -196,7 +168,7 @@ workflow QcAnnotations {
         input:
             vcf_stats = MergeVcfWideStats.merged_bed_file,
             samples_list = CollectQcVcfWide.samples_list[0],
-            per_sample_tarball = TarShardVidLists.vid_lists,
+            per_sample_tarball = MergePerSampleVidLists.merged_tarball,
             prefix = prefix,
             max_gq = max_gq_,
             downsample_qc_per_sample = downsample_qc_per_sample,
@@ -209,7 +181,7 @@ workflow QcAnnotations {
             vcf_stats = MergeVcfWideStats.merged_bed_file,
             samples_list = CollectQcVcfWide.samples_list[0],
             ped_file = ped_file,
-            per_sample_tarball = TarShardVidLists.vid_lists,
+            per_sample_tarball = MergePerSampleVidLists.merged_tarball,
             prefix = prefix,
             max_gq = max_gq_,
             sv_pipeline_qc_docker = gatk_sv_lr_docker,
@@ -222,7 +194,7 @@ workflow QcAnnotations {
                 input:
                     vcf_stats = MergeVcfWideStats.merged_bed_file,
                     samples_list = CollectQcVcfWide.samples_list[0],
-                    per_sample_tarball = TarShardVidLists.vid_lists,
+                    per_sample_tarball = MergePerSampleVidLists.merged_tarball,
                     comparison_tarball = comparison_dataset_info[1],
                     sample_renaming_tsv = sample_renaming_tsv,
                     prefix = prefix,
@@ -281,6 +253,8 @@ task PlotQcVcfWide {
         RuntimeAttr? runtime_attr_override
     }
 
+    Float input_size = size(vcf_stats, "GiB")
+
     command <<<
         set -euo pipefail
         
@@ -305,9 +279,9 @@ task PlotQcVcfWide {
     RuntimeAttr runtime_default = object {
         cpu_cores: 1,
         mem_gb: 4,
-        disk_gb: 20,
+        disk_gb: ceil(10 + input_size * 5),
         boot_disk_gb: 10,
-        preemptible_tries: 1,
+        preemptible_tries: 2,
         max_retries: 0
     }
     RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
@@ -319,55 +293,6 @@ task PlotQcVcfWide {
         docker: sv_pipeline_qc_docker
         preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
         maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    }
-}
-
-task TarShardVidLists {
-    input {
-        Array[File] in_tarballs
-        String? folder_name
-        String? tarball_prefix
-        String sv_base_mini_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    String tar_folder_name = select_first([folder_name, "merged"])
-    String outfile_name = select_first([tarball_prefix, tar_folder_name]) + ".tar.gz"
-    Float input_size = size(in_tarballs, "GB")
-
-    command <<<
-        set -euo pipefail
-
-        mkdir "~{tar_folder_name}"
-
-        while read tarball_path; do
-            tar -xzvf "$tarball_path" --directory ~{tar_folder_name}/
-        done < ~{write_lines(in_tarballs)}
-
-        tar -czvf "~{outfile_name}" "~{tar_folder_name}"
-    >>>
-
-    output {
-        File vid_lists = outfile_name
-    }
-
-    RuntimeAttr runtime_default = object {
-        mem_gb: 2.0,
-        disk_gb: ceil(10.0 + input_size * 2.0),
-        cpu_cores: 1,
-        preemptible_tries: 1,
-        max_retries: 0,
-        boot_disk_gb: 10
-    }
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-    runtime {
-        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-        docker: sv_base_mini_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
     }
 }
 
@@ -398,10 +323,10 @@ task PlotSiteLevelBenchmarking {
     }
 
     RuntimeAttr runtime_default = object {
-        mem_gb: 3.75,
+        mem_gb: 4,
         disk_gb: 20,
         cpu_cores: 1,
-        preemptible_tries: 1,
+        preemptible_tries: 2,
         max_retries: 0,
         boot_disk_gb: 10
     }
@@ -428,6 +353,8 @@ task PlotQcPerSample {
         String sv_pipeline_qc_docker
         RuntimeAttr? runtime_attr_override
     }
+
+    Float input_size = size([vcf_stats, per_sample_tarball], "GiB")
 
     command <<<
         set -euo pipefail
@@ -466,10 +393,10 @@ task PlotQcPerSample {
     }
 
     RuntimeAttr runtime_default = object {
-        mem_gb: 7.75,
-        disk_gb: 50,
+        mem_gb: 4,
+        disk_gb: ceil(10 + input_size * 5),
         cpu_cores: 1,
-        preemptible_tries: 1,
+        preemptible_tries: 2,
         max_retries: 0,
         boot_disk_gb: 10
     }
@@ -499,6 +426,7 @@ task PlotQcPerFamily {
     }
 
     Int random_seed_ = select_first([random_seed, 0])
+    Float input_size = size([vcf_stats, per_sample_tarball], "GiB")
 
     command <<<
         set -euo pipefail
@@ -558,10 +486,10 @@ task PlotQcPerFamily {
     }
 
     RuntimeAttr runtime_default = object {
-        mem_gb: 15,
-        disk_gb: 100,
+        mem_gb: 4,
+        disk_gb: ceil(10 + input_size * 5),
         cpu_cores: 1,
-        preemptible_tries: 1,
+        preemptible_tries: 2,
         max_retries: 0,
         boot_disk_gb: 10
     }
@@ -641,10 +569,10 @@ task PlotPerSampleBenchmarking {
     }
 
     RuntimeAttr runtime_default = object {
-        mem_gb: 7.75,
+        mem_gb: 8,
         disk_gb: 50,
         cpu_cores: 1,
-        preemptible_tries: 1,
+        preemptible_tries: 2,
         max_retries: 0,
         boot_disk_gb: 10
     }
@@ -739,10 +667,10 @@ task SanitizeOutputs {
     }
 
     RuntimeAttr runtime_default = object {
-        mem_gb: 2.0,
+        mem_gb: 2,
         disk_gb: ceil(10.0 + input_size * 5.0),
         cpu_cores: 1,
-        preemptible_tries: 1,
+        preemptible_tries: 2,
         max_retries: 0,
         boot_disk_gb: 10
     }

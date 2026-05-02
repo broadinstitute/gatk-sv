@@ -1870,13 +1870,11 @@ plotAlleleCarrierCorrelation <- function(dat,autosomal=T,biallelic=T,
          y=rollmean(AF.plot,k=100),
          type="l",col="red",lwd=1.25)
   
-  #Add legend
-  legend(x=0.55, y=0.25, bg=NA,legend=c("Site","Rolling Mean"),cex=0.8,bty="n",
+  #Add legend and filter labels below title
+  legend(x=0.02, y=0.98, bg=NA,legend=c("Site","Rolling Mean"),cex=0.6,bty="n",
          lwd=c(NA,2),col=c("black","red"),pch=c(1,NA),pt.cex=c(0.4,NA))
-  
-  #Add filter labels
   if(!is.null(filter.legend)){
-    legend("topleft",bg=NA,bty="n",pch=NA,legend=filter.legend,cex=0.55)
+    legend(x=0.02, y=0.88, bg=NA,bty="n",pch=NA,legend=filter.legend,cex=0.55)
   }
 }
 
@@ -1913,15 +1911,15 @@ wrapperPlotAllHWDistribs <- function(){
   plotAlleleCarrierCorrelation(dat=dat)
   dev.off()
 
-  # gt_type_distribution.png: specific 2x5 grid (normalized TR types)
-  type.grid <- c("SNV","INS_SHORT","DEL_SHORT","DUP_SHORT","TR_SNV",
-                  "INS_SV","DEL_SV","DUP_SV","TR_INS","TR_DEL")
+  # gt_type_distribution.png: paired columns (top/bottom)
+  type.grid <- c("SNV","TR_SNV","INS_SHORT","INS_SV","DEL_SHORT","DEL_SV",
+                  "DUP_SHORT","DUP_SV","TR_INS","TR_DEL")
   type.grid <- type.grid[type.grid %in% svtypes.norm$svtype]
   n.type.cols <- ceiling(length(type.grid) / 2)
   png(paste(OUTDIR,"main_plots/gt_type_distribution.png",sep=""),
       res=300, height=2*cell.px, width=n.type.cols*cell.px)
-  mat.type <- matrix(seq_len(length(type.grid)), nrow=2, byrow=TRUE)
-  if(ncol(mat.type) * 2 > length(type.grid)){
+  mat.type <- matrix(seq_len(length(type.grid)), nrow=2, byrow=FALSE)
+  if(nrow(mat.type) * ncol(mat.type) > length(type.grid)){
     mat.type[length(type.grid)+1] <- length(type.grid)+1
   }
   layout(mat.type)
@@ -1933,15 +1931,14 @@ wrapperPlotAllHWDistribs <- function(){
   if(length(type.grid) %% 2 != 0) plot.new()
   dev.off()
 
-  # gt_distributions_size.png: per-size-bucket HWE grid (2 rows)
+  # gt_distributions_size.png: per-size-bucket HWE grid (2 rows, L-R small to large)
   sz.labels.hwe <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
   sz.mins.hwe   <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
   sz.maxs.hwe   <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
   n.sz      <- length(sz.labels.hwe)
   n.sz.cols <- ceiling(n.sz / 2)
-  mat.sz    <- matrix(NA, nrow=2, ncol=n.sz.cols)
-  for(i in seq_len(n.sz)) mat.sz[((i-1)%%2)+1, ceiling(i/2)] <- i
-  mat.sz[is.na(mat.sz)] <- n.sz+1
+  mat.sz    <- matrix(seq_len(n.sz.cols * 2), nrow=2, ncol=n.sz.cols, byrow=TRUE)
+  if(n.sz.cols * 2 > n.sz) mat.sz[n.sz + 1] <- n.sz + 1
   png(paste(OUTDIR,"main_plots/gt_size_distribution.png",sep=""),
       res=300, height=2*cell.px, width=n.sz.cols*cell.px)
   layout(mat.sz)
@@ -2573,15 +2570,31 @@ wrapperPlotTrLociDistrib <- function(){
   for(k in seq_along(detail.types)){
     x <- tr.allele.counts[, tr.detail.map[k]]
     y <- env.counts[, detail.types[k]]
+    # Use only loci with at least one count on either axis
+    keep <- x > 0 | y > 0
+    x <- x[keep]; y <- y[keep]
+    # Log-scale equal axes: shared range for both axes
+    all.vals <- c(x[x > 0], y[y > 0])
+    if(length(all.vals) == 0){ plot.new(); next }
+    ax.min <- max(0.5, min(all.vals) * 0.5)
+    ax.max <- max(all.vals) * 2
     par(mar=c(4.5,4.5,3,1), bty="n")
-    plot(x, y, pch=19, cex=0.4, col=adjustcolor("gray30", alpha=0.5),
+    plot(pmax(x, ax.min), pmax(y, ax.min), pch=19, cex=0.4,
+         col=adjustcolor("gray30", alpha=0.5),
          xlab=paste("TR alleles (", tr.detail.map[k], ")", sep=""),
          ylab=paste("Enveloped ", detail.types[k], " variants", sep=""),
-         main=detail.types[k])
-    abline(0, 1, col="red", lty=2)
-    # R-squared
-    if(length(x) > 2 && sd(x) > 0 && sd(y) > 0){
-      r2 <- cor(x, y)^2
+         main=detail.types[k], log="xy",
+         xlim=c(ax.min, ax.max), ylim=c(ax.min, ax.max),
+         asp=1, xaxt="n", yaxt="n")
+    # Grid and y=x diagonal
+    log.ticks <- 10^(floor(log10(ax.min)):ceiling(log10(ax.max)))
+    axis(1, at=log.ticks, labels=log.ticks)
+    axis(2, at=log.ticks, labels=log.ticks, las=2)
+    abline(0, 1, col="red", lty=2, lwd=1.5)
+    # R-squared (on original scale, non-zero pairs)
+    both.pos <- x > 0 & y > 0
+    if(sum(both.pos) > 2 && sd(x[both.pos]) > 0 && sd(y[both.pos]) > 0){
+      r2 <- cor(log10(x[both.pos]), log10(y[both.pos]))^2
       legend("topleft", bty="n", cex=0.8,
              legend=bquote(R^2 == .(round(r2, 3))))
     }
@@ -2671,7 +2684,7 @@ wrapperPlotInsDistrib <- function(){
         if(vals[j] > 0){
           pct <- round(100*vals[j]/tot, 1)
           lbl <- paste0(formatCount(vals[j]), " (", pct, "%)")
-          if((ends[j]-starts[j]) > ymax * 0.04){
+          if(vals[j]/tot >= 0.01){
             text(0.5, mid.y[j], labels=lbl, cex=0.55, col="white", font=2)
           }
         }
@@ -2691,7 +2704,7 @@ wrapperPlotInsDistrib <- function(){
       res=300, height=2400, width=5600)
   layout(matrix(1:8, nrow=1), widths=c(3, rep(1.5, 6), 1.8))
 
-  plotInsBar(mat[,"ALL"], title="All Sizes", main.bar=TRUE)
+  plotInsBar(mat[,"ALL"], title="All", main.bar=TRUE)
   for(s in seq_along(sz.labs)){
     plotInsBar(mat[,sz.labs[s]], title=sz.labs[s])
   }

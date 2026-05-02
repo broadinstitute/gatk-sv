@@ -82,7 +82,7 @@ task CollectVidsPerSample {
     }
 
     RuntimeAttr runtime_default = object {
-        mem_gb: 8,
+        mem_gb: 2,
         disk_gb: ceil(10.0 + input_size),
         cpu_cores: 1,
         preemptible_tries: 3,
@@ -110,6 +110,8 @@ task MergeShardedPerSampleVidLists {
         RuntimeAttr? runtime_attr_override
     }
 
+    Float input_size = size(tarballs, "GiB")
+
     command <<<
         set -euo pipefail
 
@@ -121,13 +123,20 @@ task MergeShardedPerSampleVidLists {
             tar -xzvf "$tarball_path" --directory "shards/shard_$i"/
         done < <( awk -v OFS="\t" '{ print NR, $1 }' ~{write_lines(tarballs)} )
 
-        while read sample; do
-            find shards/ -name "$sample.VIDs_genotypes.txt.gz" \
+        OUTDIR="~{prefix}_perSample_VID_lists"
+        export OUTDIR
+
+        merge_sample() {
+            local sample="$1"
+            find shards/ -name "${sample}.VIDs_genotypes.txt.gz" \
             | xargs -I {} zcat {} \
             | sort -Vk1,1 -k2,2n -k3,3n \
             | gzip -c \
-            > "~{prefix}_perSample_VID_lists/$sample.VIDs_genotypes.txt.gz"
-        done < ~{samples_list}
+            > "${OUTDIR}/${sample}.VIDs_genotypes.txt.gz"
+        }
+        export -f merge_sample
+
+        cat ~{samples_list} | xargs -P $(nproc) -n 1 bash -c 'set -euo pipefail; merge_sample "$1"' _
 
         tar -czvf "~{prefix}_perSample_VID_lists.tar.gz" "~{prefix}_perSample_VID_lists"
     >>>
@@ -137,9 +146,9 @@ task MergeShardedPerSampleVidLists {
     }
 
     RuntimeAttr runtime_default = object {
-        mem_gb: 3.75,
-        disk_gb: 20,
-        cpu_cores: 1,
+        mem_gb: 4,
+        disk_gb: ceil(10 + input_size * 5),
+        cpu_cores: 2,
         preemptible_tries: 3,
         max_retries: 0,
         boot_disk_gb: 10
