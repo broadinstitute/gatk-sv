@@ -278,7 +278,7 @@ task PlotQcVcfWide {
 
     RuntimeAttr runtime_default = object {
         cpu_cores: 1,
-        mem_gb: 4,
+        mem_gb: 8,
         disk_gb: ceil(10 + input_size * 5),
         boot_disk_gb: 10,
         preemptible_tries: 2,

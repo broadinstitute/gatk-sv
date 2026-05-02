@@ -82,7 +82,7 @@ task CollectVidsPerSample {
     }
 
     RuntimeAttr runtime_default = object {
-        mem_gb: 2,
+        mem_gb: 4,
         disk_gb: ceil(10.0 + input_size),
         cpu_cores: 1,
         preemptible_tries: 3,
