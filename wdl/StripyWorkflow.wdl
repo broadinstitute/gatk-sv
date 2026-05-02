@@ -95,13 +95,21 @@ task RunStripy {
     String tsv_path = output_dir + "/" + sample_name + ".tsv"
     String html_path = output_dir + "/" + sample_name + ".html"
     String vcf_path = output_dir + "/" + sample_name + ".vcf"
+    String input_filename = basename(bam_or_cram_file)
+    Boolean input_is_bam = basename(bam_or_cram_file, ".bam") + ".bam" == basename(bam_or_cram_file)
+    String staged_index_filename = input_filename + if input_is_bam then ".bai" else ".crai"
 
     command <<<
         # Run STRipy pipeline using our wrapper
         set -euxo pipefail
         mkdir -p ~{output_dir}
+
+        # STRipy expects the BAM/CRAM index to live beside the input file.
+        ln -s ~{bam_or_cram_file} ~{input_filename}
+        ln -s ~{bam_or_cram_index} ~{staged_index_filename}
+
         stripy \
-            --input ~{bam_or_cram_file} \
+            --input ~{input_filename} \
             --sample-name ~{sample_name} \
             --genome ~{genome_build} \
             --reference ~{reference_fasta} \
