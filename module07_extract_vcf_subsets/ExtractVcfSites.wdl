@@ -39,7 +39,7 @@ workflow ExtractVcfSites {
                     vcf_idx = vcf_idx_list[i],
                     sample_list = sample_list,
                     midfix = contigs[i],
-                    extract_sites_only = (sample_list == null),
+                    extract_sites_only = !defined(sample_list),
                     sv_pipeline_docker = sv_pipeline_docker,
                     runtime_attr_override = runtime_attr_override_extract_subset_vcf
             }
@@ -64,7 +64,7 @@ workflow ExtractVcfSites {
                         vcf_idx = ShardVcf.shard_vcf_idxs[j],
                         sample_list = sample_list,
                         midfix = contigs[i] + ".shard_~{j}",
-                        extract_sites_only = (sample_list == null),
+                        extract_sites_only = !defined(sample_list),
                         sv_pipeline_docker = sv_pipeline_docker,
                         runtime_attr_override = runtime_attr_override_extract_subset_vcf
                 }
