@@ -5,7 +5,7 @@ usage() {
     cat >&2 <<'EOF'
 Usage: run_gd.sh --work-dir DIR --input-depth FILE --high-res-depth FILE --baf-table FILE --gd-table FILE \
                  --segdup-bed FILE --centromere-bed FILE --acrocentric-arm-bed FILE --gaps-bed FILE \
-                 --gtf FILE --transition-matrix FILE --breakpoint-transition-matrix FILE [options]
+                 --gtf FILE --par-bed FILE [options]
 
 Required arguments:
   --work-dir DIR
@@ -18,8 +18,7 @@ Required arguments:
   --acrocentric-arm-bed FILE
   --gaps-bed FILE
   --gtf FILE
-  --transition-matrix FILE
-  --breakpoint-transition-matrix FILE
+  --par-bed FILE
 
 Optional arguments:
   --flank-exclusion-interval FILE
@@ -55,8 +54,7 @@ CENTROMERE_BED=""
 ACROCENTRIC_ARM_BED=""
 GAPS_BED=""
 GTF=""
-TRANSITION_MATRIX=""
-BREAKPOINT_TRANSITION_MATRIX=""
+PAR_BED=""
 TRUTH_TABLE=""
 
 PREPROCESS_ARGS=""
@@ -122,12 +120,8 @@ while [[ $# -gt 0 ]]; do
             GTF="$2"
             shift 2
             ;;
-        --transition-matrix)
-            TRANSITION_MATRIX="$2"
-            shift 2
-            ;;
-        --breakpoint-transition-matrix)
-            BREAKPOINT_TRANSITION_MATRIX="$2"
+        --par-bed)
+            PAR_BED="$2"
             shift 2
             ;;
         --truth-table)
@@ -190,8 +184,7 @@ require_arg "${CENTROMERE_BED}" "--centromere-bed"
 require_arg "${ACROCENTRIC_ARM_BED}" "--acrocentric-arm-bed"
 require_arg "${GAPS_BED}" "--gaps-bed"
 require_arg "${GTF}" "--gtf"
-require_arg "${TRANSITION_MATRIX}" "--transition-matrix"
-require_arg "${BREAKPOINT_TRANSITION_MATRIX}" "--breakpoint-transition-matrix"
+require_arg "${PAR_BED}" "--par-bed"
 
 # ── Directories ────────────────────────────────────────────────────────────
 PREPROCESS_DIR="${WORK_DIR}/preprocess"
@@ -205,7 +198,6 @@ BIN_MAPPINGS="${PREPROCESS_DIR}/bin_mappings.tsv.gz"
 FILTERED_GD_TABLE="${PREPROCESS_DIR}/gd_table_filtered.tsv"
 CN_POSTERIORS="${INFER_DIR}/cn_posteriors.tsv.gz"
 GD_CALLS="${CALL_DIR}/gd_cnv_calls.tsv.gz"
-VITERBI_PATHS="${CALL_DIR}/viterbi_paths.tsv.gz"
 EVENT_MARGINALS="${CALL_DIR}/event_marginals.tsv.gz"
 PLOIDY_TABLE="${PREPROCESS_DIR}/ploidy_estimates.tsv"
 PREPROCESSED_BAF="${PREPROCESS_DIR}/preprocessed_baf.tsv.gz"
@@ -227,6 +219,7 @@ PREPROCESS_CMD=(
     -e "${SEG_DUP_BED}" \
     -e "${CENTROMERE_BED}" \
     -e "${ACROCENTRIC_ARM_BED}" \
+    --par-intervals "${PAR_BED}" \
     --verbose \
 )
 
@@ -272,8 +265,6 @@ CALL_CMD=(
     -g "${FILTERED_GD_TABLE}" \
     -o "${CALL_DIR}" \
     --ploidy-table "${PLOIDY_TABLE}" \
-    --transition-matrix "${TRANSITION_MATRIX}" \
-    --breakpoint-transition-matrix "${BREAKPOINT_TRANSITION_MATRIX}" \
     --verbose \
 )
 
@@ -327,7 +318,6 @@ PLOT_CMD=(
     --gtf "${GTF}"
     --segdup-bed "${SEG_DUP_BED}"
     --ploidy-table "${PLOIDY_TABLE}"
-    --viterbi-paths "${VITERBI_PATHS}"
     --event-marginals "${EVENT_MARGINALS}"
 )
 
