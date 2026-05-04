@@ -17,6 +17,7 @@ dependencies = [
     "pyro-ppl",
     "tqdm",
     "matplotlib",
+    "intervaltree",
 ]
 
 [project.optional-dependencies]
