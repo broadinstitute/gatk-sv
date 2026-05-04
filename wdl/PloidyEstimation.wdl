@@ -1,13 +1,16 @@
 version 1.0
 
 import "Structs.wdl"
+import "SubsetSD.wdl" as subset
 
 workflow Ploidy {
   input {
     File merged_depth_file
     File reference_dict
     String batch
-    Array[File] sparse_sd_files
+    Array[File] sd_files = []
+    File? ploidy_sd_locs_vcf
+    Int subset_sd_stride = 10
     File? truth_json
     String? preprocess_args
     String? polyploidy_args
@@ -18,7 +21,9 @@ workflow Ploidy {
     Boolean enable_ppd = false
     Boolean use_callq20 = false
     String gatk_docker
+    String sv_pipeline_docker
     String sv_pipeline_qc_docker
+    RuntimeAttr? runtime_attr_subset_sd
     RuntimeAttr? runtime_attr_score
     RuntimeAttr? runtime_attr_build
   }
@@ -33,11 +38,27 @@ workflow Ploidy {
       runtime_attr_override = runtime_attr_build
   }
 
+  if (length(sd_files) > 0) {
+    scatter (i in range(length(sd_files))) {
+      call subset.SubsetSDTask as SubsetSDForPloidy {
+        input:
+          sd_file = sd_files[i],
+          sites_vcf = select_first([ploidy_sd_locs_vcf]),
+          prefix = basename(sd_files[i], ".sd.txt.gz"),
+          stride = subset_sd_stride,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_attr_subset_sd
+      }
+    }
+  }
+
+  Array[File] subset_sd_files = select_first([SubsetSDForPloidy.subset_sd_file, []])
+
   call PloidyScore {
     input:
       ploidy_matrix = CondenseDepthMatrix.out,
       batch = batch,
-      sparse_sd_files = sparse_sd_files,
+      subset_sd_files = subset_sd_files,
       truth_json = truth_json,
       preprocess_args = preprocess_args,
       polyploidy_args = polyploidy_args,
@@ -54,6 +75,10 @@ workflow Ploidy {
   output {
     File ploidy_matrix = CondenseDepthMatrix.out
     File ploidy_matrix_index = CondenseDepthMatrix.out_index
+    File chromosome_stats = PloidyScore.chromosome_stats
+    File bin_stats = PloidyScore.bin_stats
+    File sample_sex_assignments = PloidyScore.sample_sex_assignments
+    File aneuploidy_type_predictions = PloidyScore.aneuploidy_type_predictions
     File ploidy_plots = PloidyScore.ploidy_plots
   }
 }
@@ -124,7 +149,7 @@ task PloidyScore {
   input {
     File ploidy_matrix
     String batch
-    Array[File] sparse_sd_files
+    Array[File] subset_sd_files
     File? truth_json
     String? preprocess_args
     String? polyploidy_args
@@ -149,6 +174,10 @@ task PloidyScore {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   
   output {
+    File chromosome_stats = "~{batch}_ploidy/infer/chromosome_stats.tsv"
+    File bin_stats = "~{batch}_ploidy/infer/bin_stats.tsv.gz"
+    File sample_sex_assignments = "~{batch}_ploidy/call/sex_assignments.txt.gz"
+    File aneuploidy_type_predictions = "~{batch}_ploidy/call/aneuploidy_type_predictions.tsv"
     File ploidy_plots = "~{batch}_ploidy.tar.gz"
   }
   
@@ -160,9 +189,9 @@ task PloidyScore {
 
     # Build site-depth list if SD files were provided
     SD_ARGS=""
-    if [[ ~{length(sparse_sd_files)} -gt 0 ]]; then
-      SD_LIST="sparse_sd_files.list"
-      for f in ~{sep=' ' sparse_sd_files}; do
+    if [[ ~{length(subset_sd_files)} -gt 0 ]]; then
+      SD_LIST="subset_sd_files.list"
+      for f in ~{sep=' ' subset_sd_files}; do
         echo "$f" >> "${SD_LIST}"
       done
       SD_ARGS="--site-depth-list ${SD_LIST}"

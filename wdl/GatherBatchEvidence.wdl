@@ -53,9 +53,8 @@ workflow GatherBatchEvidence {
     Array[File]? ref_panel_SR_files
     Array[File]? SD_files	# required unless BAF_files or ref_panel_SD_files is supplied
     Array[File]? ref_panel_SD_files	# required unless BAF_files or SD_files is supplied
-    Array[File]? sparse_SD_files	# optional sparse SD for ploidy estimation
-    Array[File]? ref_panel_sparse_SD_files	# optional ref panel sparse SD for ploidy estimation
     File? sd_locs_vcf	# must be same sd_locs_vcf that was presented to GatherSampleEvidence
+    File? ploidy_sd_locs_vcf	# VCF of ploidy SD sites used to subset regular SD files before scoring
 
     # Condense read counts
     Int? min_interval_size
@@ -108,6 +107,7 @@ workflow GatherBatchEvidence {
     String? ploidy_ppd_args
     String? ploidy_call_args
     String? ploidy_plot_args
+    Int ploidy_subset_sd_stride = 1
     Boolean ploidy_enable_ppd = false
     Boolean ploidy_use_callq20 = false
 
@@ -167,6 +167,7 @@ workflow GatherBatchEvidence {
     RuntimeAttr? cnmops_sample10_runtime_attr
     RuntimeAttr? cnmops_sample3_runtime_attr
 
+    RuntimeAttr? ploidy_subset_sd_runtime_attr
     RuntimeAttr? ploidy_score_runtime_attr
     RuntimeAttr? ploidy_build_runtime_attr
     RuntimeAttr? runtime_attr_subset_ped
@@ -193,8 +194,6 @@ workflow GatherBatchEvidence {
   Array[File] all_PE_files = flatten(select_all([PE_files, ref_panel_PE_files]))
   Array[File] all_SR_files = flatten(select_all([SR_files, ref_panel_SR_files]))
   Array[File] all_SD_files = flatten(select_all([SD_files, ref_panel_SD_files]))
-  Array[File] all_sparse_SD_files = flatten(select_all([sparse_SD_files, ref_panel_sparse_SD_files]))
-
   if(defined(ref_panel_bincov_matrix)
      || !(defined(bincov_matrix) && defined(bincov_matrix_index))) {
     call mbm.MakeBincovMatrix as MakeBincovMatrix {
@@ -203,7 +202,9 @@ workflow GatherBatchEvidence {
         count_files = counts,
         bincov_matrix = ref_panel_bincov_matrix,
         bincov_matrix_samples = ref_panel_samples,
+        reference_dict = ref_dict,
         batch = batch,
+        gatk_docker = gatk_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_base_docker = sv_base_docker,
         runtime_attr_override = evidence_merging_bincov_runtime_attr
@@ -217,7 +218,8 @@ workflow GatherBatchEvidence {
       input:
         merged_depth_file = merged_bincov_,
         batch = batch,
-        sparse_sd_files = all_sparse_SD_files,
+        sd_files = all_SD_files,
+        ploidy_sd_locs_vcf = ploidy_sd_locs_vcf,
         reference_dict = ref_dict,
         preprocess_args = ploidy_preprocess_args,
         polyploidy_args = ploidy_polyploidy_args,
@@ -225,10 +227,13 @@ workflow GatherBatchEvidence {
         ppd_args = ploidy_ppd_args,
         call_args = ploidy_call_args,
         plot_args = ploidy_plot_args,
+        subset_sd_stride = ploidy_subset_sd_stride,
         enable_ppd = ploidy_enable_ppd,
         use_callq20 = ploidy_use_callq20,
         gatk_docker = gatk_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,
+        runtime_attr_subset_sd = ploidy_subset_sd_runtime_attr,
         runtime_attr_score = ploidy_score_runtime_attr,
         runtime_attr_build = ploidy_build_runtime_attr
     }

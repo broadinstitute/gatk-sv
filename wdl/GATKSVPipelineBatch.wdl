@@ -30,7 +30,6 @@ workflow GATKSVPipelineBatch {
     Array[File]? pe_files_input
     Array[File]? sr_files_input
     Array[File]? sd_files_input
-    Array[File]? sparse_sd_files_input
     Array[File?]? baf_files_input
     Array[File]? manta_vcfs_input
     Array[File]? melt_vcfs_input
@@ -61,7 +60,7 @@ workflow GATKSVPipelineBatch {
     String chr_x
     String chr_y
 
-    # Sparse site-depth for ploidy estimation
+    # Ploidy site list used to subset regular SD files on the fly
     File sparse_sd_locs_vcf
 
     # gCNV
@@ -151,8 +150,7 @@ workflow GATKSVPipelineBatch {
         gatk_docker=gatk_docker,
         genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
         samtools_cloud_docker=samtools_cloud_docker,
-        cloud_sdk_docker = cloud_sdk_docker,
-        sparse_sd_locs_vcf = sparse_sd_locs_vcf
+        cloud_sdk_docker = cloud_sdk_docker
     }
   }
 
@@ -160,7 +158,6 @@ workflow GATKSVPipelineBatch {
   Array[File] pe_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_disc])) else select_first([pe_files_input])
   Array[File] sr_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_split])) else select_first([sr_files_input])
   Array[File] sd_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_sd])) else select_first([sd_files_input])
-  Array[File] sparse_sd_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_sparse_sd, []])) else select_first([sparse_sd_files_input, []])
 
   if (use_manta) {
     Array[File] manta_vcfs_ = if defined(manta_vcfs_input) then select_first([manta_vcfs_input]) else select_all(select_first([GatherSampleEvidenceBatch.manta_vcf]))
@@ -212,7 +209,7 @@ workflow GATKSVPipelineBatch {
       PE_files=pe_files_,
       SR_files=sr_files_,
       SD_files=sd_files_,
-      sparse_SD_files=sparse_sd_files_,
+      ploidy_sd_locs_vcf=sparse_sd_locs_vcf,
       manta_vcfs=manta_vcfs_,
       melt_vcfs=melt_vcfs_,
       scramble_vcfs=scramble_vcfs_,

@@ -45,12 +45,12 @@ workflow EvidenceQC {
     String sv_pipeline_docker
     String sv_pipeline_qc_docker
 
-    Int? disk_overhead_bincov_gb
-
     Boolean run_ploidy = true
 
-    # Sparse SD files for ploidy estimation (required when run_ploidy is true)
-    Array[File] sparse_sd_files = []
+    # Regular SD files for ploidy estimation; subsetting happens inside PloidyEstimation
+    Array[File] sd_files = []
+    File? ploidy_sd_locs_vcf
+    Int ploidy_subset_sd_stride = 10
     String? ploidy_preprocess_args
     String? ploidy_polyploidy_args
     String? ploidy_infer_args
@@ -65,6 +65,7 @@ workflow EvidenceQC {
     RuntimeAttr? runtime_attr_qc
     RuntimeAttr? runtime_attr_qc_outlier
     RuntimeAttr? runtime_attr_qc_counts
+    RuntimeAttr? ploidy_subset_sd_runtime_attr
     RuntimeAttr? ploidy_score_runtime_attr
     RuntimeAttr? ploidy_build_runtime_attr
 
@@ -85,8 +86,9 @@ workflow EvidenceQC {
     input:
       samples = samples,
       count_files = counts,
+      reference_dict = reference_dict,
       batch = batch,
-      disk_overhead_gb = disk_overhead_bincov_gb,
+      gatk_docker = gatk_docker,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_base_docker = sv_base_docker,
       runtime_attr_override = runtime_attr_bincov_attr
@@ -107,18 +109,22 @@ workflow EvidenceQC {
       input:
         merged_depth_file = MakeBincovMatrix.merged_bincov,
         batch = batch,
-        sparse_sd_files = sparse_sd_files,
+        sd_files = sd_files,
+        ploidy_sd_locs_vcf = ploidy_sd_locs_vcf,
         preprocess_args = ploidy_preprocess_args,
         polyploidy_args = ploidy_polyploidy_args,
         infer_args = ploidy_infer_args,
         ppd_args = ploidy_ppd_args,
         call_args = ploidy_call_args,
         plot_args = ploidy_plot_args,
+        subset_sd_stride = ploidy_subset_sd_stride,
         enable_ppd = ploidy_enable_ppd,
         use_callq20 = ploidy_use_callq20,
         reference_dict = reference_dict,
         gatk_docker = gatk_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,
+        runtime_attr_subset_sd = ploidy_subset_sd_runtime_attr,
         runtime_attr_score = ploidy_score_runtime_attr,
         runtime_attr_build = ploidy_build_runtime_attr
     }
@@ -220,7 +226,9 @@ workflow EvidenceQC {
       input:
         output_prefix = batch,
         samples = samples,
-        ploidy_plots = select_first([CreateVariantCountPlots.ploidy_plots, Ploidy.ploidy_plots]),
+        ploidy_chromosome_stats = select_first([Ploidy.chromosome_stats]),
+        ploidy_bin_stats = select_first([Ploidy.bin_stats]),
+        sample_sex_assignments = select_first([Ploidy.sample_sex_assignments]),
         bincov_median = MedianCov.medianCov,
         WGD_scores = WGD.WGD_scores,
         melt_insert_size = select_first([melt_insert_size, []]),
@@ -341,8 +349,9 @@ task CreateVariantCountPlots {
 
 task MakeQcTable {
   input {
-
-    File ploidy_plots
+    File ploidy_chromosome_stats
+    File ploidy_bin_stats
+    File sample_sex_assignments
     File bincov_median
     File WGD_scores
     Array[Float] melt_insert_size
@@ -386,13 +395,10 @@ task MakeQcTable {
       paste ~{write_lines(samples)} ~{write_lines(melt_insert_size)} >> mean_insert_size.tsv
     fi
 
-    tar -xvf ~{ploidy_plots}
-    PLOIDY_DIR=$(basename ~{ploidy_plots} .tar.gz)
-
     python /opt/sv-pipeline/scripts/make_evidence_qc_table.py \
-      --estimated-copy-number-filename ./${PLOIDY_DIR}/infer/chromosome_stats.tsv \
-      --sex-assignments-filename ./${PLOIDY_DIR}/call/sex_assignments.txt.gz \
-      --ploidy-bin-stats-filename ./${PLOIDY_DIR}/infer/bin_stats.tsv.gz \
+      ~{"--estimated-copy-number-filename " + ploidy_chromosome_stats} \
+      ~{"--sex-assignments-filename " + sample_sex_assignments} \
+      ~{"--ploidy-bin-stats-filename " + ploidy_bin_stats} \
       ~{"--median-cov-filename " + bincov_median} \
       ~{"--wgd-scores-filename " + WGD_scores} \
       ~{"--dragen-qc-outlier-high-filename " + dragen_qc_high} \
