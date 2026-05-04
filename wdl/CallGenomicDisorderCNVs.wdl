@@ -16,10 +16,9 @@ workflow CallGenomicDisorderCNVs {
     File centromere_bed
     File acrocentric_arm_bed
     Array[File]? flank_exclusion_intervals
+    File par_bed
     File gaps_bed
     File gtf
-    File transition_matrix
-    File breakpoint_transition_matrix
     File? truth_table
 
     Int rebinned_interval_size = 10000
@@ -57,10 +56,9 @@ workflow CallGenomicDisorderCNVs {
       centromere_bed = centromere_bed,
       acrocentric_arm_bed = acrocentric_arm_bed,
       flank_exclusion_intervals = flank_exclusion_intervals,
+      par_bed = par_bed,
       gaps_bed = gaps_bed,
       gtf = gtf,
-      transition_matrix = transition_matrix,
-      breakpoint_transition_matrix = breakpoint_transition_matrix,
       truth_table = truth_table,
       sv_pipeline_docker = sv_pipeline_docker,
       preprocess_args = preprocess_args,
@@ -88,10 +86,9 @@ task RunGenomicDisorderCNVs {
     File centromere_bed
     File acrocentric_arm_bed
     Array[File]? flank_exclusion_intervals
+    File par_bed
     File gaps_bed
     File gtf
-    File transition_matrix
-    File breakpoint_transition_matrix
     File? truth_table
     String sv_pipeline_docker
     String? preprocess_args
@@ -132,10 +129,9 @@ task RunGenomicDisorderCNVs {
       --centromere-bed ~{centromere_bed} \
       --acrocentric-arm-bed ~{acrocentric_arm_bed} \
       ~{if length(select_first([flank_exclusion_intervals, []])) > 0 then "--flank-exclusion-intervals" else ""} ~{sep=" " select_first([flank_exclusion_intervals, []])} \
+      --par-bed ~{par_bed} \
       --gaps-bed ~{gaps_bed} \
       --gtf ~{gtf} \
-      --transition-matrix ~{transition_matrix} \
-      --breakpoint-transition-matrix ~{breakpoint_transition_matrix} \
       --preprocess-args '~{default="" preprocess_args}' \
       --infer-args '~{default="" infer_args}' \
       --call-args '~{default="" call_args}' \
