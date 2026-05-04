@@ -80,8 +80,12 @@ task PrepareBincovEvidenceFile {
 
   command <<<
     set -euo pipefail
+    
+    ln -s ~{count_file} counts.tsv.gz
+    /gatk/gatk --java-options "-Xmx~{java_heap_size_mb}m" IndexFeatureFile -I counts.tsv.gz
+
     /gatk/gatk --java-options "-Xmx~{java_heap_size_mb}m" ConvertCountsToDepthFile \
-      --counts-filename "~{count_file}" \
+      --counts-filename counts.tsv.gz" \
       --output "~{sample_id}.rd.txt.gz"
   >>>
 
