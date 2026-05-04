@@ -72,15 +72,19 @@ workflow ExtractVcfSites {
         }
     }
 
+    Array[File] subset_vcf_list_unsharded = select_all(ExtractSubsetSamples.out_vcf)
+    Array[Array[File]] subset_vcf_list_sharded_nested = select_all(ExtractFromShard.out_vcf)
+    Array[File] subset_vcf_list_sharded = flatten(subset_vcf_list_sharded_nested)
+    Array[File] subset_vcf_list_all = flatten([subset_vcf_list_unsharded, subset_vcf_list_sharded])
+
+    Array[File] subset_vcf_idx_list_unsharded = select_all(ExtractSubsetSamples.out_vcf_idx)
+    Array[Array[File]] subset_vcf_idx_list_sharded_nested = select_all(ExtractFromShard.out_vcf_idx)
+    Array[File] subset_vcf_idx_list_sharded = flatten(subset_vcf_idx_list_sharded_nested)
+    Array[File] subset_vcf_idx_list_all = flatten([subset_vcf_idx_list_unsharded, subset_vcf_idx_list_sharded])
+
     output {
-        Array[File?] subset_vcf_list = flatten([
-            ExtractSubsetSamples.out_vcf,
-            flatten(ExtractFromShard.out_vcf)
-        ])
-        Array[File?] subset_vcf_idx_list = flatten([
-            ExtractSubsetSamples.out_vcf_idx,
-            flatten(ExtractFromShard.out_vcf_idx)
-        ])
+        Array[File] subset_vcf_list = subset_vcf_list_all
+        Array[File] subset_vcf_idx_list = subset_vcf_idx_list_all
     }
 }
 
