@@ -216,13 +216,7 @@ task ExtractSubsetSamples {
             | bgzip > ~{prefix}.~{midfix}.vcf.gz
         else
             # Extract samples if sample_list is provided, otherwise keep all genotypes
-            if [[ -f ~{sample_list} ]]; then
-                bcftools view -S ~{sample_list} ~{vcf} \
-                | bgzip > ~{prefix}.~{midfix}.vcf.gz
-            else
-                bcftools view ~{vcf} \
-                | bgzip > ~{prefix}.~{midfix}.vcf.gz
-            fi
+            bcftools view -S ~{sample_list} ~{vcf} | bgzip > ~{prefix}.~{midfix}.vcf.gz
         fi
 
         tabix -p vcf ~{prefix}.~{midfix}.vcf.gz
