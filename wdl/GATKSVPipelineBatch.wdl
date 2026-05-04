@@ -62,6 +62,7 @@ workflow GATKSVPipelineBatch {
 
     # Ploidy site list used to subset regular SD files on the fly
     File sparse_sd_locs_vcf
+    File? ploidy_poor_regions
 
     # gCNV
     File contig_ploidy_model_tar
@@ -210,6 +211,7 @@ workflow GATKSVPipelineBatch {
       SR_files=sr_files_,
       SD_files=sd_files_,
       ploidy_sd_locs_vcf=sparse_sd_locs_vcf,
+      ploidy_poor_regions=ploidy_poor_regions,
       manta_vcfs=manta_vcfs_,
       melt_vcfs=melt_vcfs_,
       scramble_vcfs=scramble_vcfs_,

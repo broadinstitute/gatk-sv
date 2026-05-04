@@ -50,6 +50,7 @@ workflow EvidenceQC {
     # Regular SD files for ploidy estimation; subsetting happens inside PloidyEstimation
     Array[File] sd_files = []
     File? ploidy_sd_locs_vcf
+    File? ploidy_poor_regions
     Int ploidy_subset_sd_stride = 10
     String? ploidy_preprocess_args
     String? ploidy_polyploidy_args
@@ -111,6 +112,7 @@ workflow EvidenceQC {
         batch = batch,
         sd_files = sd_files,
         ploidy_sd_locs_vcf = ploidy_sd_locs_vcf,
+        poor_regions = ploidy_poor_regions,
         preprocess_args = ploidy_preprocess_args,
         polyploidy_args = ploidy_polyploidy_args,
         infer_args = ploidy_infer_args,

@@ -55,6 +55,7 @@ workflow GatherBatchEvidence {
     Array[File]? ref_panel_SD_files	# required unless BAF_files or SD_files is supplied
     File? sd_locs_vcf	# must be same sd_locs_vcf that was presented to GatherSampleEvidence
     File? ploidy_sd_locs_vcf	# VCF of ploidy SD sites used to subset regular SD files before scoring
+    File? ploidy_poor_regions	# Optional BED of poor regions to mask during ploidy preprocess
 
     # Condense read counts
     Int? min_interval_size
@@ -220,6 +221,7 @@ workflow GatherBatchEvidence {
         batch = batch,
         sd_files = all_SD_files,
         ploidy_sd_locs_vcf = ploidy_sd_locs_vcf,
+        poor_regions = ploidy_poor_regions,
         reference_dict = ref_dict,
         preprocess_args = ploidy_preprocess_args,
         polyploidy_args = ploidy_polyploidy_args,

@@ -119,6 +119,7 @@ workflow GATKSVPipelineSingleSample {
     # PESR inputs
     File sd_locs_vcf
     File sparse_sd_locs_vcf
+    File? ploidy_poor_regions
 
     # Melt inputs
     File? melt_standard_vcf_header # required if use_melt True
@@ -717,6 +718,7 @@ workflow GATKSVPipelineSingleSample {
       ref_panel_SD_files=ref_pesr_sd_files,
       sd_locs_vcf=sd_locs_vcf,
       ploidy_sd_locs_vcf=sparse_sd_locs_vcf,
+      ploidy_poor_regions=ploidy_poor_regions,
       contig_ploidy_model_tar = contig_ploidy_model_tar,
       gcnv_model_tars = gcnv_model_tars,
       gatk4_jar_override = gatk4_jar_override,

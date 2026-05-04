@@ -10,6 +10,7 @@ workflow Ploidy {
     String batch
     Array[File] sd_files = []
     File? ploidy_sd_locs_vcf
+    File? poor_regions
     Int subset_sd_stride = 10
     File? truth_json
     String? preprocess_args
@@ -59,6 +60,7 @@ workflow Ploidy {
       ploidy_matrix = CondenseDepthMatrix.out,
       batch = batch,
       subset_sd_files = subset_sd_files,
+      poor_regions = poor_regions,
       truth_json = truth_json,
       preprocess_args = preprocess_args,
       polyploidy_args = polyploidy_args,
@@ -150,6 +152,7 @@ task PloidyScore {
     File ploidy_matrix
     String batch
     Array[File] subset_sd_files
+    File? poor_regions
     File? truth_json
     String? preprocess_args
     String? polyploidy_args
@@ -202,6 +205,7 @@ task PloidyScore {
       --input-depth ~{ploidy_matrix} \
       --work-dir ${OUTDIR} \
       ${SD_ARGS} \
+      ~{if defined(poor_regions) then "--poor-regions " + poor_regions else ""} \
       ~{if defined(truth_json) then "--truth-json " + truth_json else ""} \
       ~{if defined(preprocess_args) then "--preprocess-args '" + preprocess_args + "'" else ""} \
       ~{if defined(polyploidy_args) then "--polyploidy-args '" + polyploidy_args + "'" else ""} \
