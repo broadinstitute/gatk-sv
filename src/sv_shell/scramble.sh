@@ -180,14 +180,16 @@ mv "${sample_name}.scramble.vcf.gz.tbi" "${vcf_idx_filename}"
 mv "${gzipped_clusters_file}" "${clusters_filename}"
 mv "${scramble_table}" "${table_filename}"
 
+rm -rf "${working_dir_p1}"
+rm -rf "${working_dir_p2}"
+rm -rf "${working_dir_make_vcf}"
+
 outputs_filename="${output_dir}/outputs.json"
-outputs_json=$(jq -n \
+jq -n \
   --arg vcf "${vcf_filename}" \
   --arg vcf_idx "${vcf_idx_filename}" \
   --arg clusters "${clusters_filename}" \
   --arg table "${table_filename}" \
-  '{vcf: $vcf, index: $vcf_idx, clusters: $clusters, table: $table}')
-echo "${outputs_json}" > "${outputs_filename}"
-cp "${outputs_filename}" "${outputs_json_filename}"
+  '{vcf: $vcf, index: $vcf_idx, clusters: $clusters, table: $table}' > "${outputs_json_filename}"
 
 echo "Successfully finished Scramble."

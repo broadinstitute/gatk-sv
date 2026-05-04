@@ -135,4 +135,6 @@ jq -n \
       merged_bincov_idx: $merged_bincov_idx
   }' > "${output_json_filename}"
 
+rm -rf "${working_dir}"
+
 echo "Finished make bincov matrix, output json filename: ${output_json_filename}"

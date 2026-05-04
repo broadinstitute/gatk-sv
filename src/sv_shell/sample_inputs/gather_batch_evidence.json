@@ -520,5 +520,6 @@
   "wham_vcfs": [
     "/inputs/NA12878.wham.vcf.gz"
   ],
-  "min_svsize": 50
+  "min_svsize": 50,
+  "cytobands": "/inputs/cytobands_hg38.bed.gz"
 }

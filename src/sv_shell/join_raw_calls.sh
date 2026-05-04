@@ -113,9 +113,6 @@ sv_cluster_output_dir="$(realpath ${sv_cluster_output_dir})"
 sv_cluster_inputs_json="$(realpath "${sv_cluster_output_dir}/sv_cluster_inputs.json")"
 sv_cluster_output_json="$(realpath "${sv_cluster_output_dir}/sv_cluster_output.json")"
 
-sv_cluster_wd_dir=$(mktemp -d "${SV_SHELL_BASE_DIR}/wd_sv_cluster_XXXXXXXX")
-sv_cluster_wd_dir="$(realpath ${sv_cluster_wd_dir})"
-
 jq -n \
   --arg vcfs "${FormatVcfForGatk_gatk_formatted_vcf}" \
   --arg ploidy_table "${CreatePloidyTableFromPed_out}" \
@@ -146,11 +143,11 @@ jq -n \
       "variant_prefix": $variant_prefix
   }' > "${sv_cluster_inputs_json}"
 
-  bash /opt/sv_shell/sv_cluster.sh "${sv_cluster_inputs_json}" "${sv_cluster_output_json}" "${sv_cluster_output_dir}"
+bash /opt/sv_shell/sv_cluster.sh "${sv_cluster_inputs_json}" "${sv_cluster_output_json}" "${sv_cluster_output_dir}"
 
-  echo "Finished SV clustering; output json: ${sv_cluster_output_dir}"
+echo "Finished SV clustering; output json: ${sv_cluster_output_dir}"
 
-  sv_cluster_vcf_out=$(jq -r ".out" "${sv_cluster_output_json}")
+sv_cluster_vcf_out=$(jq -r ".out" "${sv_cluster_output_json}")
 
 
 # -------------------------------------------------------

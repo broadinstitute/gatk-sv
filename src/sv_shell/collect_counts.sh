@@ -70,10 +70,8 @@ java -Xmx${command_mem_mb}m -jar /opt/gatk.jar IndexFeatureFile -I "${sample_id}
 counts_filename="${output_dir}/${sample_id}.counts.tsv.gz"
 mv "${sample_id}.counts.tsv.gz" "${counts_filename}"
 mv "${sample_id}.counts.tsv.gz.tbi" "${counts_filename}.tbi"
+rm -rf "${working_dir}"
 
-outputs_filename="${output_dir}/outputs.json"
-outputs_json=$(jq -n \
+jq -n \
   --arg c "${counts_filename}" \
-  '{counts: $c}' )
-echo "${outputs_json}" > "${outputs_filename}"
-cp "${outputs_filename}" "${outputs_json_filename}"
+  '{counts: $c}' > "${outputs_json_filename}"
