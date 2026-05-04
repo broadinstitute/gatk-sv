@@ -32,7 +32,7 @@ workflow ExtractVcfSites {
 
     scatter(i in range(length(vcf_list))) {
         # If no sharding, process VCF as whole
-        if (shard_counts == null) {
+        if (!defined(shard_counts)) {
             call ExtractSubsetSamples {
                 input:
                     vcf = vcf_list[i],
@@ -46,7 +46,7 @@ workflow ExtractVcfSites {
         }
 
         # If sharding, first shard the VCF then extract samples/sites from each shard
-        if (shard_counts != null) {
+        if (defined(shard_counts)) {
             call ShardVcf {
                 input:
                     vcf = vcf_list[i],
