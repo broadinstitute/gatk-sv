@@ -85,6 +85,7 @@ task PrepareBincovEvidenceFile {
     /gatk/gatk --java-options "-Xmx~{java_heap_size_mb}m" IndexFeatureFile -I "sample.counts.tsv.gz"
 
     /gatk/gatk --java-options "-Xmx~{java_heap_size_mb}m" ConvertCountsToDepthFile \
+      --sample-name "~{sample_id}" \
       --counts-filename "sample.counts.tsv.gz" \
       --output "~{sample_id}.rd.txt.gz"
   >>>
