@@ -555,7 +555,7 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
         return(vals)
       })
     }
-    par(bty="n",mar=c(3.5,3.5,3,0.5))
+    par(bty="n",mar=c(3.5,3.5,4.5,0.5))
     plot(x=xlims,y=ylims,type="n",
          xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i",
          log=if(log.y) "y" else "")
@@ -598,7 +598,7 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
       axis(3,at=log10(c(1000,2000)),labels=NA,tck=-0.01)
       axis(3,at=mean(log10(c(1000,2000))),tick=F,line=-0.9,cex.axis=0.8,labels="SVA",font=3)
     }
-    mtext(3,line=1.5,text=title,font=2,cex=text.cex)
+    mtext(3,line=3.2,text=title,font=2,cex=text.cex)
     
     #Add points per SV type
     sapply(1:length(dens),function(i){
@@ -625,7 +625,9 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
         lwd <- 1.5
       }
       #Rolling mean for line
-      points(x=mids,y=rollapply(dens[[i]],width=k,mean,partial=T),type="l",lwd=lwd.cex*lwd,col=color)
+      roll.vals <- rollapply(dens[[i]],width=k,function(x) mean(x, na.rm=TRUE),partial=T)
+      roll.vals[!is.finite(roll.vals)] <- NA
+      points(x=mids,y=roll.vals,type="l",lwd=lwd.cex*lwd,col=color)
     })  
     
     #Add sv type legend
@@ -655,13 +657,12 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
   #Add number of SV to plot
   n.sz.plotted <- sum(is.finite(sizes))
   n.sz.dropped <- length(sizes) - n.sz.plotted
-  n.line <- if(show.alu.labels) 0.5 else -0.5
-  axis(3,at=mean(par("usr")[1:2]),line=n.line,tick=F,
-       labels=paste("n=",prettyNum(n.sz.plotted,big.mark=","),sep=""))
+  n.line <- if(show.alu.labels) 2 else 1.8
+  n.label <- paste("n=",prettyNum(n.sz.plotted,big.mark=","),sep="")
   if(show.dropped && n.sz.dropped > 0){
-    axis(3,at=mean(par("usr")[1:2]),line=n.line-0.8,tick=F,cex.axis=0.65,
-         labels=paste0("(",prettyNum(n.sz.dropped,big.mark=",")," dropped - SNVs)"))
+    n.label <- paste0(n.label, "  (", prettyNum(n.sz.dropped,big.mark=",")," dropped - SNVs)")
   }
+  mtext(3,line=n.line,text=n.label,cex=text.cex*0.75)
   
   #Add filter labels
   if(!is.null(filter.legend)){
@@ -727,7 +728,7 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
         return(vals)
       })
     }
-    par(bty="n",mar=c(3.5,3.5,3,0.5))
+    par(bty="n",mar=c(3.5,3.5,4.5,0.5))
     plot(x=xlims,y=ylims,type="n",
          xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i",
          log=if(log.y) "y" else "")
@@ -768,7 +769,7 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
     })
     axis(3,at=log10(c(1000,2000)),labels=NA,tck=-0.01)
     axis(3,at=mean(log10(c(1000,2000))),tick=F,line=-0.9,cex.axis=0.8,labels="SVA",font=3)
-    mtext(3,line=1.5,text=title,font=2)
+    mtext(3,line=3.2,text=title,font=2)
     
     #Add points & rolling mean per AF tranche
     col.pal <- rev(colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(length(sizes)))
@@ -776,8 +777,9 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
       #Points per individual bin
       points(x=mids, y=dens[[i]], pch=19, cex=0.25, col=col.pal[i])
       #Rolling mean for line
-      points(x=mids, y=rollapply(dens[[i]], width=5, mean, partial=T),
-             type="l", lwd=lwd.cex, col=col.pal[i])
+      roll.vals <- rollapply(dens[[i]], width=5, function(x) mean(x, na.rm=TRUE), partial=T)
+      roll.vals[!is.finite(roll.vals)] <- NA
+      points(x=mids, y=roll.vals, type="l", lwd=lwd.cex, col=col.pal[i])
     })  
   }else{
     par(bty="n",mar=c(3.5,3.5,3,0.5))
