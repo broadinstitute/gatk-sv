@@ -1727,7 +1727,7 @@ def get_carrier_status(
         .astype(pandas.BooleanDtype())
     if not use_copy_number:
         return gt_carrier_status
-    # genotypes are often left no-call or REF for multi-allelic CNVs, so check if we can get copy number
+    # genotypes are often left no-call or REF for CNVs, so check if we can get copy number
     copy_number = get_copy_number(variants, use_cn=use_cn)
     if copy_number is None:
         return gt_carrier_status
@@ -1769,7 +1769,7 @@ def get_or_estimate_allele_frequency(
     gt_allele_frequency = gt_allele_counts / gt_num_called_alleles
     if not use_copy_number:
         return gt_allele_frequency
-    # genotypes are often left no-call or REF for multi-allelic CNVs, so check if we can get copy number
+    # genotypes are often left no-call or REF for CNVs, so check if we can get copy number
     copy_number = get_copy_number(variants, use_cn=use_cn)
     if copy_number is None:
         return gt_allele_frequency

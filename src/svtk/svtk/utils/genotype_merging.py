@@ -24,7 +24,7 @@ def choose_best_genotype(sample, records):
     """
 
     # Returns true if the GT is called and non-ref
-    # TODO: does not handle multi-allelic CNVs
+    # TODO: does not handle CNVs
     def _is_non_ref(format_fields):
         gt = format_fields.get('GT', None)
         if gt in _carrier_map:
@@ -57,7 +57,7 @@ def check_multiallelic(records):
 
 def make_multiallelic_alts(records):
     """
-    Sets simple symbolic alt for multi-allelic records
+    Sets simple symbolic alt for multiallelic records
     """
     for record in records:
         record.alts = ('<CNV>',)
@@ -99,7 +99,7 @@ def update_best_genotypes(new_record, records, preserve_multiallelic=False):
                 if key == 'GT':
                     gt = best_record.samples[sample][key]
                     if is_multiallelic:
-                        # No genotypes for multi-allelic records since they can't always be determined
+                        # No genotypes for multiallelic records since they can't always be determined
                         new_record.samples[sample][key] = (None, None)
                     else:
                         new_record.samples[sample][key] = tuple([x if x is None else min(x, 1) for x in gt])

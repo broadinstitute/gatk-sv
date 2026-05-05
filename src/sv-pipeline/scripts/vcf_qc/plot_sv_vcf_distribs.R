@@ -650,7 +650,7 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
     mtext(3,line=1.5,text=title,font=2,cex=text.cex)
   }
   
-  #Add number of SV to plot (excluding SVs with size=0, e.g. SNVs)
+  #Add number of SV to plot
   n.sz.plotted <- sum(is.finite(sizes))
   n.sz.dropped <- length(sizes) - n.sz.plotted
   n.line <- if(show.alu.labels) 0.3 else -0.9
@@ -658,7 +658,7 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
        labels=paste("n=",prettyNum(n.sz.plotted,big.mark=","),sep=""))
   if(show.dropped && n.sz.dropped > 0){
     axis(3,at=mean(par("usr")[1:2]),line=n.line-1,tick=F,cex.axis=0.65,
-         labels=paste0("(",prettyNum(n.sz.dropped,big.mark=",")," dropped - SNVs (size=0))"))
+         labels=paste0("(",prettyNum(n.sz.dropped,big.mark=",")," dropped - SNVs)"))
   }
   
   #Add filter labels
@@ -1031,7 +1031,7 @@ plotFreqDistrib <- function(dat, svtypes,
     n.dropped <- n.pre.filter - nrow(dat)
     if(n.dropped > 0){
       axis(3,at=mean(par("usr")[1:2]),line=-1.9,tick=F,cex.axis=0.75,
-           labels=paste0("(",prettyNum(n.dropped,big.mark=",")," dropped - multi-allelic sites)"))
+           labels=paste0("(",prettyNum(n.dropped,big.mark=",")," dropped - multiallelic sites)"))
     }
   }
 

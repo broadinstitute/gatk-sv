@@ -627,8 +627,11 @@ task SanitizeOutputs {
             for tarball_fname in ~{sep=" " plot_qc_site_level_external_benchmarking_tarballs}; do
                 bname="$( basename -s '.tar.gz' $tarball_fname \
                         | sed -e 's/^~{prefix}\.//g' -e 's/\.wPlots$//g' )"
+                
                 tar -xzvf $tarball_fname
+
                 cp $bname/data/* ~{prefix}_SV_VCF_QC_output/data/ || true
+                
                 cp $bname/plots/*.ALL/main_plots/*.callset_benchmarking.png ~{prefix}_SV_VCF_QC_output/plots/ || true
             done
         fi

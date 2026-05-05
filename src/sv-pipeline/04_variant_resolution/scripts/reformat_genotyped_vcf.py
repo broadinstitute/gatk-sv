@@ -3,7 +3,7 @@
 #
 
 """
-Fixes alleles for multi-allelic CNVs. Optionally drops records with invalid coordinates.
+Fixes alleles for CNVs. Optionally drops records with invalid coordinates.
 """
 
 import argparse
@@ -88,7 +88,7 @@ def valid_record_coordinates(record_tokens, ref_contig_length_dict):
 
 
 def process_record(record, drop_invalid_coords, ref_contig_length_dict):
-    # Fix multi-allelic CNV alts (legacy)
+    # Fix CNV alts (legacy)
     if record.alts[0].startswith('<CN'):
         record.alts = ('<CNV>',)
         record.info['SVTYPE'] = 'CNV'

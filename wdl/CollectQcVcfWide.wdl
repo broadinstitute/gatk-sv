@@ -84,6 +84,75 @@ workflow CollectQcVcfWide {
     }
 }
 
+task AnnotateVariantAttributes {
+    input {
+        File vcf
+        String prefix
+        String sv_pipeline_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    Float input_size = size(vcf, "GiB")
+
+    command <<<
+        set -euo pipefail
+
+        bcftools query \
+            -f '%CHROM\t%POS\t%REF\t%ALT\t%ID\n' \
+            ~{vcf} \
+        | awk -F'\t' '{
+            ref_len = length($3)
+            alt_len = length($4)
+            diff = alt_len - ref_len
+            if (ref_len == 1 && alt_len == 1) {
+                atype = "snv"
+            } else if (alt_len > ref_len) {
+                atype = "ins"
+            } else {
+                atype = "del"
+            }
+            print $1"\t"$2"\t"$3"\t"$4"\t"$5"\t"diff"\t"atype
+        }' | bgzip -c > annot.txt.gz
+
+        tabix -s1 -b2 -e2 annot.txt.gz
+
+        printf '##INFO=<ID=allele_length,Number=1,Type=Integer,Description="Allele length">\n##INFO=<ID=allele_type,Number=1,Type=String,Description="Allele type">\n' > new_headers.txt
+
+        bcftools annotate \
+            -h new_headers.txt \
+            -a annot.txt.gz \
+            -c CHROM,POS,REF,ALT,~ID,INFO/allele_length,INFO/allele_type \
+            -Oz -o ~{prefix}.vcf.gz \
+            ~{vcf}
+
+        tabix -p vcf ~{prefix}.vcf.gz
+    >>>
+
+    output {
+        File annotated_vcf = "~{prefix}.vcf.gz"
+        File annotated_vcf_idx = "~{prefix}.vcf.gz.tbi"
+    }
+
+    RuntimeAttr runtime_default = object {
+        mem_gb: 4,
+        disk_gb: ceil(10.0 + input_size * 3.0),
+        cpu_cores: 1,
+        preemptible_tries: 2,
+        max_retries: 0,
+        boot_disk_gb: 10
+    }
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    runtime {
+        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: sv_pipeline_docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+}
+
 task PreprocessCollectAndConvert {
     input {
         File vcf
@@ -93,8 +162,6 @@ task PreprocessCollectAndConvert {
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
-
-    Float input_size = size(vcf, "GiB")
 
     command <<<
         set -euo pipefail
@@ -283,8 +350,8 @@ EOF
 
     RuntimeAttr runtime_default = object {
         cpu_cores: 1,
-        mem_gb: 12,
-        disk_gb: ceil(6.0 * input_size) + 20,
+        mem_gb: 8,
+        disk_gb: 5 * ceil(size(vcf, "GiB")) + 20,
         boot_disk_gb: 10,
         preemptible_tries: 2,
         max_retries: 0
@@ -293,75 +360,6 @@ EOF
     runtime {
         memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
-        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-        docker: sv_pipeline_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    }
-}
-
-task AnnotateVariantAttributes {
-    input {
-        File vcf
-        String prefix
-        String sv_pipeline_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    Float input_size = size(vcf, "GiB")
-
-    command <<<
-        set -euo pipefail
-
-        bcftools query \
-            -f '%CHROM\t%POS\t%REF\t%ALT\t%ID\n' \
-            ~{vcf} \
-        | awk -F'\t' '{
-            ref_len = length($3)
-            alt_len = length($4)
-            diff = alt_len - ref_len
-            if (ref_len == 1 && alt_len == 1) {
-                atype = "snv"
-            } else if (alt_len > ref_len) {
-                atype = "ins"
-            } else {
-                atype = "del"
-            }
-            print $1"\t"$2"\t"$3"\t"$4"\t"$5"\t"diff"\t"atype
-        }' | bgzip -c > annot.txt.gz
-
-        tabix -s1 -b2 -e2 annot.txt.gz
-
-        printf '##INFO=<ID=allele_length,Number=1,Type=Integer,Description="Allele length">\n##INFO=<ID=allele_type,Number=1,Type=String,Description="Allele type">\n' > new_headers.txt
-
-        bcftools annotate \
-            -h new_headers.txt \
-            -a annot.txt.gz \
-            -c CHROM,POS,REF,ALT,~ID,INFO/allele_length,INFO/allele_type \
-            -Oz -o ~{prefix}.vcf.gz \
-            ~{vcf}
-
-        tabix -p vcf ~{prefix}.vcf.gz
-    >>>
-
-    output {
-        File annotated_vcf = "~{prefix}.vcf.gz"
-        File annotated_vcf_idx = "~{prefix}.vcf.gz.tbi"
-    }
-
-    RuntimeAttr runtime_default = object {
-        mem_gb: 4,
-        disk_gb: ceil(10.0 + input_size * 3.0),
-        cpu_cores: 1,
-        preemptible_tries: 2,
-        max_retries: 0,
-        boot_disk_gb: 10
-    }
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-    runtime {
-        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
         cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
         preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
         maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
