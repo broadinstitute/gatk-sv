@@ -631,7 +631,7 @@ task SanitizeOutputs {
                 tar -xzvf $tarball_fname
 
                 cp $bname/data/* ~{prefix}_SV_VCF_QC_output/data/ || true
-                
+
                 cp $bname/plots/*.ALL/main_plots/*.callset_benchmarking.png ~{prefix}_SV_VCF_QC_output/plots/ || true
             done
         fi

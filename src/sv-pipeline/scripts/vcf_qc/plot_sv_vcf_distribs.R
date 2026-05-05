@@ -589,13 +589,15 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
            labels=paste(round(100*axTicks(2),1),"%",sep=""))
     }
     mtext(2,text="Fraction of Variants",line=2,cex=text.cex)
-    sapply(1:2,function(i){
-      axis(3,at=log10(c(300,6000))[i],labels=NA,tck=-0.01)
-      axis(3,at=log10(c(300,6000))[i],tick=F,line=-0.9,cex.axis=0.8,
-           labels=c("Alu","L1")[i],font=3)
-    })
-    axis(3,at=log10(c(1000,2000)),labels=NA,tck=-0.01)
-    axis(3,at=mean(log10(c(1000,2000))),tick=F,line=-0.9,cex.axis=0.8,labels="SVA",font=3)
+    if(show.alu.labels){
+      sapply(1:2,function(i){
+        axis(3,at=log10(c(300,6000))[i],labels=NA,tck=-0.01)
+        axis(3,at=log10(c(300,6000))[i],tick=F,line=-0.9,cex.axis=0.8,
+             labels=c("Alu","L1")[i],font=3)
+      })
+      axis(3,at=log10(c(1000,2000)),labels=NA,tck=-0.01)
+      axis(3,at=mean(log10(c(1000,2000))),tick=F,line=-0.9,cex.axis=0.8,labels="SVA",font=3)
+    }
     mtext(3,line=1.5,text=title,font=2,cex=text.cex)
     
     #Add points per SV type
@@ -653,11 +655,11 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
   #Add number of SV to plot
   n.sz.plotted <- sum(is.finite(sizes))
   n.sz.dropped <- length(sizes) - n.sz.plotted
-  n.line <- if(show.alu.labels) 0.3 else -0.9
+  n.line <- if(show.alu.labels) 0.5 else -0.5
   axis(3,at=mean(par("usr")[1:2]),line=n.line,tick=F,
        labels=paste("n=",prettyNum(n.sz.plotted,big.mark=","),sep=""))
   if(show.dropped && n.sz.dropped > 0){
-    axis(3,at=mean(par("usr")[1:2]),line=n.line-1,tick=F,cex.axis=0.65,
+    axis(3,at=mean(par("usr")[1:2]),line=n.line-0.8,tick=F,cex.axis=0.65,
          labels=paste0("(",prettyNum(n.sz.dropped,big.mark=",")," dropped - SNVs)"))
   }
   
@@ -691,7 +693,7 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
     })
     finite_sizes <- unlist(sizes)[!is.infinite(unlist(sizes))]
     xlims <- range(finite_sizes, na.rm=T)
-    xlims[1] <- max(c(log10(min.size),xlims[1]))
+    xlims[1] <- log10(min.size)
     xlims[2] <- min(c(log10(max.size),xlims[2]))
     if(!all(is.finite(xlims)) || xlims[1] >= xlims[2]){
       par(bty="n",mar=c(3.5,3.5,3,0.5))

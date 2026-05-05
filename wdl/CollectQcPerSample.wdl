@@ -123,6 +123,14 @@ task MergeShardedPerSampleVidLists {
             tar -xzvf "$tarball_path" --directory "shards/shard_$i"/
         done < <( awk -v OFS="\t" '{ print NR, $1 }' ~{write_lines(tarballs)} )
 
+        # Verify tarballs produced files
+        N_VID_FILES=$(find shards/ -name "*.VIDs_genotypes.txt.gz" | wc -l)
+        if [ "$N_VID_FILES" -eq 0 ]; then
+            echo "ERROR: No VID files found in extracted tarballs" >&2
+            exit 1
+        fi
+        echo "Found $N_VID_FILES VID files across shards"
+
         OUTDIR="~{prefix}_perSample_VID_lists"
         export OUTDIR
 
@@ -137,6 +145,14 @@ task MergeShardedPerSampleVidLists {
         export -f merge_sample
 
         cat ~{samples_list} | xargs -P $(nproc) -n 1 bash -c 'set -euo pipefail; merge_sample "$1"' _
+
+        # Verify output is non-empty for at least one sample
+        N_NONEMPTY=$(find "${OUTDIR}" -name "*.VIDs_genotypes.txt.gz" -size +20c | wc -l)
+        if [ "$N_NONEMPTY" -eq 0 ]; then
+            echo "ERROR: All merged VID files are empty" >&2
+            exit 1
+        fi
+        echo "$N_NONEMPTY non-empty VID files produced"
 
         tar -czvf "~{prefix}_perSample_VID_lists.tar.gz" "~{prefix}_perSample_VID_lists"
     >>>
