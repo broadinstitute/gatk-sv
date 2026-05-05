@@ -15,7 +15,7 @@ import argparse
 import gzip
 import os
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -924,6 +924,51 @@ def _detect_baf_columns(filepath: str) -> Tuple[Optional[int], List[str]]:
     return None, ["Chr", "Pos", "BAF", "Sample"]
 
 
+def _iter_roi_baf_records(
+    baf_path: str,
+    roi_intervals: Dict[str, List[Tuple[int, int]]],
+    header: Optional[int],
+    column_names: List[str],
+) -> Iterator[Tuple[str, int, str, float, str, str]]:
+    """Yield validated ROI BAF records from a tabix-indexed file."""
+    tbx = pysam.TabixFile(baf_path)
+    try:
+        for chrom, intervals in sorted(roi_intervals.items()):
+            for start, end in intervals:
+                try:
+                    records = tbx.fetch(chrom, max(0, start), end)
+                except ValueError:
+                    continue
+
+                for line in records:
+                    fields = line.rstrip("\n").split("\t")
+                    if len(fields) < 4:
+                        continue
+
+                    if header == 0 and fields[:4] == column_names[:4]:
+                        continue
+
+                    record = dict(zip(column_names, fields[:4]))
+                    try:
+                        pos = int(record["Pos"])
+                        baf = float(record["BAF"])
+                    except ValueError:
+                        continue
+                    if not (0.0 <= baf <= 1.0):
+                        continue
+
+                    yield (
+                        str(record["Chr"]),
+                        pos,
+                        str(record["Pos"]),
+                        baf,
+                        str(record["BAF"]),
+                        str(record["Sample"]),
+                    )
+    finally:
+        tbx.close()
+
+
 def write_preprocessed_baf(
     baf_path: str,
     mappings: List[LocusBinMapping],
@@ -943,6 +988,7 @@ def write_preprocessed_baf(
     header, column_names = _detect_baf_columns(baf_path)
     roi_intervals = _build_roi_intervals_from_mappings(mappings)
     written_rows = 0
+    sample_baf_stats: Dict[str, Tuple[int, float, float]] = {}
 
     interval_trees: Dict[str, IntervalTree] = {}
     mapping_by_idx = {int(m.array_idx): m for m in mappings}
@@ -950,52 +996,75 @@ def write_preprocessed_baf(
         tree = interval_trees.setdefault(mapping.chrom, IntervalTree())
         tree.addi(int(mapping.start), int(mapping.end), int(mapping.array_idx))
 
+    for _, _, _, baf, _, sample_id in _iter_roi_baf_records(
+        baf_path,
+        roi_intervals,
+        header,
+        column_names,
+    ):
+        count, min_baf, max_baf = sample_baf_stats.get(sample_id, (0, baf, baf))
+        if count == 0:
+            sample_baf_stats[sample_id] = (1, baf, baf)
+        else:
+            sample_baf_stats[sample_id] = (
+                count + 1,
+                min(min_baf, baf),
+                max(max_baf, baf),
+            )
+
+    excluded_samples = {
+        sample_id
+        for sample_id, (count, min_baf, max_baf) in sample_baf_stats.items()
+        if count > 1 and min_baf == max_baf
+    }
+    excluded_rows = sum(sample_baf_stats[sample_id][0] for sample_id in excluded_samples)
+
+    if excluded_samples:
+        print(
+            f"  Excluding BAF for {len(excluded_samples)} sample(s) with constant "
+            f"ROI BAF values ({excluded_rows:,} rows skipped):"
+        )
+        for sample_id in sorted(excluded_samples):
+            count, min_baf, _ = sample_baf_stats[sample_id]
+            print(f"    {sample_id}: {count:,} rows, constant BAF={min_baf:g}")
+
     baf_values_by_bin_sample: Dict[Tuple[int, str], List[float]] = defaultdict(list)
 
     with gzip.open(output_path, "wt") as out_handle:
         out_handle.write("Chr\tPos\tBAF\tSample\n")
+        for chrom, pos, pos_text, baf, baf_text, sample_id in _iter_roi_baf_records(
+            baf_path,
+            roi_intervals,
+            header,
+            column_names,
+        ):
+            if sample_id in excluded_samples:
+                continue
 
-        tbx = pysam.TabixFile(baf_path)
-        try:
-            for chrom, intervals in sorted(roi_intervals.items()):
-                for start, end in intervals:
-                    try:
-                        records = tbx.fetch(chrom, max(0, start), end)
-                    except ValueError:
-                        continue
+            out_handle.write(f"{chrom}\t{pos_text}\t{baf_text}\t{sample_id}\n")
+            written_rows += 1
 
-                    for line in records:
-                        fields = line.rstrip("\n").split("\t")
-                        if len(fields) < 4:
-                            continue
-
-                        if header == 0 and fields[:4] == column_names[:4]:
-                            continue
-
-                        record = dict(zip(column_names, fields[:4]))
-                        try:
-                            pos = int(record["Pos"])
-                            baf = float(record["BAF"])
-                        except ValueError:
-                            continue
-                        if not (0.0 <= baf <= 1.0):
-                            continue
-
-                        out_handle.write(
-                            f"{record['Chr']}\t{record['Pos']}\t"
-                            f"{record['BAF']}\t{record['Sample']}\n"
-                        )
-                        written_rows += 1
-
-                        tree = interval_trees.get(record["Chr"])
-                        if tree is None:
-                            continue
-                        for hit in tree.at(pos):
-                            baf_values_by_bin_sample[(int(hit.data), str(record["Sample"]))].append(baf)
-        finally:
-            tbx.close()
+            tree = interval_trees.get(chrom)
+            if tree is None:
+                continue
+            for hit in tree.at(pos):
+                baf_values_by_bin_sample[(int(hit.data), sample_id)].append(baf)
 
     summary_rows: List[dict] = []
+    summary_columns = [
+        "cluster",
+        "interval",
+        "chr",
+        "start",
+        "end",
+        "array_idx",
+        "sample",
+        "baf_median",
+        "minor_baf_median",
+        "baf_variance",
+        "baf_empirical_var",
+        "baf_n_sites",
+    ]
     prior_site_var = 0.01
     for (array_idx, sample_id), baf_values in baf_values_by_bin_sample.items():
         mapping = mapping_by_idx.get(array_idx)
@@ -1033,7 +1102,7 @@ def write_preprocessed_baf(
             "baf_n_sites": n_sites,
         })
 
-    summary_df = pd.DataFrame(summary_rows)
+    summary_df = pd.DataFrame(summary_rows, columns=summary_columns)
     summary_df.to_csv(summary_path, sep="\t", index=False, compression="gzip")
 
     print(f"  Saved: {output_path}")
@@ -1145,7 +1214,7 @@ def parse_args():
     # Locus processing
     parser.add_argument("--locus-padding", type=int, default=10000,
                         help="Padding around locus boundaries (bp)")
-    parser.add_argument("--exclusion-threshold", type=float, default=0.5,
+    parser.add_argument("--exclusion-threshold", type=float, default=0.1,
                         help="Min overlap fraction with exclusion regions to mask a bin")
     parser.add_argument("--exclusion-bypass-threshold", type=float, default=0.6,
                         help="Body-interval overlap fraction above which masking is skipped")

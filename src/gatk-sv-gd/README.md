@@ -152,7 +152,7 @@ the output tables are produced by collapsing pair-state posteriors onto total co
 | `--alpha-ref` | `1.0` | Dirichlet concentration for the reference pair state `(1,1)` |
 | `--alpha-non-ref` | `1.0` | Dirichlet concentration for all non-reference pair states |
 | `--state-prior-weight` | `0.0` | Weight of the learned pair-state prior in analytical posterior reconstruction |
-| `--baf-variance-scale` | `32.0` | Downweights the BAF likelihood by inflating its variance |
+| `--baf-weight` | `0.25` | Prior median for the learned per-sample BAF temperature, or the fixed BAF likelihood weight when `--fixed-baf-temperature` is set |
 | `--var-bias-bin` | `0.01` | Scale for per-bin multiplicative bias |
 | `--var-sample` | `0.001` | Scale for per-sample variance |
 | `--var-bin` | `0.001` | Scale for per-bin variance |
@@ -176,8 +176,9 @@ If a stronger diploid prior is needed for sparse cohorts, raise `--alpha-ref` ab
     uneven.
 - Quality filters use ploidy-aware median/MAD thresholds, and depth values are hard-clamped by
     `--clamp-threshold` before inference.
-- When BAF summaries are noisy or sparse, `--baf-variance-scale` reduces their influence
-    without disabling depth-based calling.
+- When BAF summaries are noisy or sparse, the learned per-sample BAF temperature can
+    shrink their influence automatically; `--fixed-baf-temperature --baf-weight ...`
+    keeps the weight fixed when you want deterministic sweeps.
 
 ### Scaling strategy for small and large datasets
 
@@ -405,7 +406,7 @@ gatk-sv-gd infer \
 | `--preprocessed-dir` | — | Reuse cached preprocessing outputs |
 | `--alpha-ref` / `--alpha-non-ref` | `1.0 / 1.0` | Pair-state prior concentrations |
 | `--state-prior-weight` | `0.0` | Weight of the learned pair-state prior in analytical posterior reconstruction |
-| `--baf-variance-scale` | `32.0` | Downweight BAF evidence by inflating variance |
+| `--baf-weight` | `0.25` | Prior median for the learned per-sample BAF temperature, or the fixed BAF weight with `--fixed-baf-temperature` |
 | `--var-bias-bin` / `--var-sample` / `--var-bin` | `0.01 / 0.001 / 0.001` | Continuous prior scales |
 | `--bin-size-factor` | `10000.0` | Variance scaling reference bin size |
 | `--guide-type` | `diagonal` | `diagonal` or `delta` |

@@ -374,6 +374,7 @@ def _render_pdf_sample_page(
     event_dup_region_df: Optional[pd.DataFrame],
     gaps: Optional[GapsAnnotation],
     viterbi_data: Optional[ViterbiOverlayData],
+    baf_temperature_by_sample: Optional[Dict[str, float]] = None,
     title_suffix: Optional[str] = None,
 ) -> bool:
     """Render one carrier-style review page into an output PDF."""
@@ -404,6 +405,9 @@ def _render_pdf_sample_page(
         baf_sites_region_df,
         sample_id,
     )
+    sample_baf_temperature = None
+    if baf_temperature_by_sample is not None:
+        sample_baf_temperature = baf_temperature_by_sample.get(str(sample_id))
 
     carrier_call = None
     if len(pdf_calls) > 0:
@@ -560,6 +564,7 @@ def _render_pdf_sample_page(
         xform,
         locus,
         chrom,
+        baf_temperature=sample_baf_temperature,
         show_xlabel=False,
     )
     _print_timing(f"{cluster} {sample_id} pdf baf panel", stage_start)
@@ -848,12 +853,17 @@ def _plot_baf_signal_panel(
     xform: FlankCompressor,
     locus: GDLocus,
     chrom: str,
+    baf_temperature: Optional[float] = None,
     show_xlabel: bool = True,
     rasterized: bool = False,
 ) -> None:
     """Render the modeled per-bin minor-BAF signal for one sample."""
     ax.set_xlim(0.0, xform.d_end)
     ax.set_ylim(0.0, 1.0)
+
+    if baf_temperature is not None and np.isfinite(baf_temperature):
+        baf_temperature_label = f"BAF weight MAP: {baf_temperature:.3f}".rstrip("0").rstrip(".")
+        ax.set_title(baf_temperature_label, fontsize=10, pad=6)
 
     for y_value in (1.0 / 3.0, 0.5, 2.0 / 3.0):
         ax.axhline(y_value, color="gray", linestyle=":", linewidth=0.8, alpha=0.25, zorder=0)
@@ -1943,6 +1953,7 @@ def create_carrier_pdf(
     highres_path: Optional[str] = None,
     viterbi_data: Optional[ViterbiOverlayData] = None,
     confidence_threshold: float = 0.5,
+    baf_temperature_by_sample: Optional[Dict[str, float]] = None,
 ):
     """Create a PDF with plots for calls above the confidence threshold."""
     confidence_column = _get_confidence_column(calls_df)
@@ -2073,6 +2084,7 @@ def create_carrier_pdf(
                     event_dup_region_df,
                     gaps,
                     viterbi_data,
+                    baf_temperature_by_sample=baf_temperature_by_sample,
                 )
                 if not rendered:
                     continue
@@ -2109,6 +2121,7 @@ def create_eval_category_pdfs(
     highres_path: Optional[str] = None,
     viterbi_data: Optional[ViterbiOverlayData] = None,
     confidence_threshold: float = 0.5,
+    baf_temperature_by_sample: Optional[Dict[str, float]] = None,
 ):
     """Create TP/FP/FN review PDFs when an eval report is provided."""
     confidence_column = _get_confidence_column(calls_df)
@@ -2249,6 +2262,7 @@ def create_eval_category_pdfs(
                         event_dup_region_df,
                         gaps,
                         viterbi_data,
+                        baf_temperature_by_sample=baf_temperature_by_sample,
                         title_suffix=spec.get("title_suffix"),
                     )
 
@@ -2281,6 +2295,14 @@ def parse_args():
         "--cn-posteriors",
         required=True,
         help="CN posteriors file (cn_posteriors.tsv.gz) with depth values",
+    )
+    parser.add_argument(
+        "--sample-posteriors",
+        required=False,
+        help="Optional sample-level posterior file (sample_posteriors.tsv.gz). "
+             "When provided, the Minor BAF subplot is labeled with the sample's "
+             "BAF weight MAP estimate. If omitted, plot.py will look for a "
+             "sibling file next to --cn-posteriors.",
     )
     parser.add_argument(
         "--gd-table", "-g",
@@ -2426,6 +2448,30 @@ def main():
     print(f"  Loading CN posteriors: {args.cn_posteriors}")
     cn_posteriors_df = pd.read_csv(args.cn_posteriors, sep="\t", compression="infer")
     print(f"    {len(cn_posteriors_df)} bin-sample records")
+
+    sample_posteriors_path = args.sample_posteriors
+    if sample_posteriors_path is None:
+        sibling_sample_posteriors = os.path.join(
+            os.path.dirname(args.cn_posteriors),
+            "sample_posteriors.tsv.gz",
+        )
+        if os.path.exists(sibling_sample_posteriors):
+            sample_posteriors_path = sibling_sample_posteriors
+
+    baf_temperature_by_sample: Dict[str, float] = {}
+    if sample_posteriors_path:
+        print(f"  Loading sample posteriors: {sample_posteriors_path}")
+        sample_posteriors_df = pd.read_csv(sample_posteriors_path, sep="\t", compression="infer")
+        print(f"    {len(sample_posteriors_df)} sample records")
+        if "sample" in sample_posteriors_df.columns and "baf_temperature_map" in sample_posteriors_df.columns:
+            valid_baf_temperature = sample_posteriors_df[["sample", "baf_temperature_map"]].dropna()
+            baf_temperature_by_sample = {
+                str(row["sample"]): float(row["baf_temperature_map"])
+                for _, row in valid_baf_temperature.iterrows()
+            }
+            print(f"    Loaded BAF temperature MAP values for {len(baf_temperature_by_sample)} samples")
+        else:
+            print("    Sample posteriors file has no baf_temperature_map column; Minor BAF labels will be omitted")
 
     print(f"  Loading GD table: {args.gd_table}")
     gd_table = GDTable(args.gd_table)
@@ -2689,6 +2735,7 @@ def main():
             highres_path=highres_path,
             viterbi_data=viterbi_data,
             confidence_threshold=args.carrier_confidence_threshold,
+            baf_temperature_by_sample=baf_temperature_by_sample,
         )
     else:
         print("\nCreating carrier PDF...")
@@ -2709,6 +2756,7 @@ def main():
             highres_path=highres_path,
             viterbi_data=viterbi_data,
             confidence_threshold=args.carrier_confidence_threshold,
+            baf_temperature_by_sample=baf_temperature_by_sample,
         )
 
     print("\n" + "=" * 80)

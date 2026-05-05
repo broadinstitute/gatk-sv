@@ -7,6 +7,7 @@ Contains:
     - CNVModel: hierarchical Bayesian CNV detection model
 """
 
+import math
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -21,6 +22,7 @@ from pyro import poutine
 from pyro.ops.indexing import Vindex
 from pyro.infer import config_enumerate, infer_discrete
 from pyro.infer.autoguide import AutoDiagonalNormal, AutoDelta
+from pyro.infer.autoguide.initialization import init_to_value
 from pyro.infer import JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.infer.svi import SVI
 
@@ -53,6 +55,44 @@ def pair_state_total_cn(pair_states: List[Tuple[int, int]]) -> np.ndarray:
     return np.asarray([h1 + h2 for h1, h2 in pair_states], dtype=np.int64)
 
 
+def _center_state_log_likelihood_table_torch(
+    log_lik_table: torch.Tensor,
+    reference_probs: torch.Tensor,
+) -> torch.Tensor:
+    """Center per-state log-likelihoods against a fixed reference mixture.
+
+    The returned table is a relative-evidence table with the property that
+
+    ``logsumexp(log(reference_probs) + centered, axis=state) == 0``
+
+    for every downstream bin/sample cell. This removes any state-independent
+    density offset, which makes learned evidence temperatures well-posed.
+    """
+    reference_probs = torch.clamp(reference_probs, min=1e-10)
+    if reference_probs.dim() != 1:
+        raise ValueError("reference_probs must be a 1D tensor.")
+    view_shape = (reference_probs.shape[0],) + (1,) * (log_lik_table.dim() - 1)
+    reference_log_probs = torch.log(reference_probs).view(view_shape)
+    baseline = torch.logsumexp(reference_log_probs + log_lik_table, dim=0, keepdim=True)
+    return log_lik_table - baseline
+
+
+def _center_state_log_likelihood_table_numpy(
+    log_lik_table: np.ndarray,
+    reference_probs: np.ndarray,
+) -> np.ndarray:
+    """NumPy counterpart of :func:`_center_state_log_likelihood_table_torch`."""
+    reference_probs = np.asarray(reference_probs, dtype=np.float64)
+    if reference_probs.ndim != 1:
+        raise ValueError("reference_probs must be a 1D array.")
+    reference_probs = np.maximum(reference_probs, 1e-10)
+    view_shape = (reference_probs.shape[0],) + (1,) * (log_lik_table.ndim - 1)
+    raw = np.log(reference_probs).reshape(view_shape) + log_lik_table
+    max_val = np.max(raw, axis=0, keepdims=True)
+    baseline = max_val + np.log(np.sum(np.exp(raw - max_val), axis=0, keepdims=True) + 1e-30)
+    return log_lik_table - baseline
+
+
 def _windowed_relative_elbo_change(
     loss_history: Sequence[float],
     window: int,
@@ -69,6 +109,12 @@ def _windowed_relative_elbo_change(
     current_mean = float(current_window.mean())
     baseline = max(abs(previous_mean), np.finfo(np.float64).eps)
     return abs(current_mean - previous_mean) / baseline
+
+
+def _logit_clipped(value: float, eps: float = 1e-6) -> float:
+    """Return a finite logit after clipping to the open unit interval."""
+    clipped = min(max(float(value), eps), 1.0 - eps)
+    return math.log(clipped / (1.0 - clipped))
 
 
 class ExclusionMask:
@@ -435,10 +481,15 @@ class CNVModel:
         alpha_ref: float = 50.0,
         alpha_non_ref: float = 1.0,
         state_prior_weight: float = 1.0,
-        baf_variance_scale: float = 1.0,
+        baf_weight: float = 0.25,
+        learn_baf_temperature: bool = True,
+        baf_temperature_prior_scale: float = 0.5,
         var_bias_bin: float = 0.1,
         var_sample: float = 0.2,
         var_bin: float = 0.2,
+        freeze_bin_bias: bool = False,
+        freeze_bin_var: bool = False,
+        freeze_pair_state_priors: bool = False,
         bin_size_factor: float = 10000.0,
         device: str = "cpu",
         dtype: torch.dtype = torch.float32,
@@ -455,12 +506,25 @@ class CNVModel:
             state_prior_weight: Multiplicative weight applied to the learned
                 per-bin pair-state log-prior when reconstructing analytical
                 discrete posteriors. Values < 1.0 temper overly sharp priors.
-            baf_variance_scale: Multiplicative scale applied to per-bin BAF
-                variance before evaluating the BAF likelihood. Values > 1.0
-                downweight BAF evidence.
+            baf_weight: Fixed BAF likelihood weight when
+                ``learn_baf_temperature`` is disabled; otherwise the prior
+                median for the learned per-sample BAF weight. Learned-mode
+                values must lie strictly between 0 and 1. Set to 0 to disable
+                BAF evidence entirely.
+            learn_baf_temperature: Whether to learn a per-sample bounded BAF
+                likelihood weight instead of keeping ``baf_weight`` fixed.
+            baf_temperature_prior_scale: LogitNormal prior scale for the
+                learned per-sample BAF weight.
             var_bias_bin: Variance for per-bin mean bias (log-normal)
             var_sample: Variance for per-sample variance factor (log-normal)
             var_bin: Variance for per-bin variance factor (log-normal)
+            freeze_bin_bias: If true, fix per-bin mean bias at 1.0 instead
+                of inferring it.
+            freeze_bin_var: If true, fix per-bin variance at ``var_bin``
+                instead of inferring a separate value per bin.
+            freeze_pair_state_priors: If true, fix per-bin pair-state priors
+                to the Dirichlet prior mean implied by ``alpha_ref`` and
+                ``alpha_non_ref``.
             bin_size_factor: Reference bin size (bp) for variance scaling.
                 The total variance is multiplied by
                 ``bin_size_factor / interval_size`` so that smaller bins
@@ -474,15 +538,28 @@ class CNVModel:
         self.alpha_ref = alpha_ref
         self.alpha_non_ref = alpha_non_ref
         self.state_prior_weight = state_prior_weight
-        self.baf_variance_scale = baf_variance_scale
+        self.baf_weight = baf_weight
+        self.learn_baf_temperature = learn_baf_temperature
+        self.baf_temperature_prior_scale = baf_temperature_prior_scale
         self.var_bias_bin = var_bias_bin
         self.var_sample = var_sample
         self.var_bin = var_bin
+        self.freeze_bin_bias = freeze_bin_bias
+        self.freeze_bin_var = freeze_bin_var
+        self.freeze_pair_state_priors = freeze_pair_state_priors
         self.bin_size_factor = bin_size_factor
         self.device = device
         self.dtype = dtype
         self.debug = debug
         self.guide_type = guide_type
+        if self.baf_weight < 0:
+            raise ValueError("baf_weight must be non-negative.")
+        if self.baf_temperature_prior_scale <= 0:
+            raise ValueError("baf_temperature_prior_scale must be positive.")
+        if self.learn_baf_temperature and self.baf_weight <= 0:
+            raise ValueError("learn_baf_temperature requires baf_weight > 0.")
+        if self.learn_baf_temperature and self.baf_weight >= 1:
+            raise ValueError("learn_baf_temperature requires baf_weight < 1.")
         self.pair_states = build_diploid_pair_states(max_hap_cn=2)
         if n_states != len(self.pair_states):
             raise ValueError(
@@ -501,23 +578,266 @@ class CNVModel:
         )
         self.ref_state_idx = self.pair_states.index((1, 1))
         self.max_total_cn = int(max(sum(p) for p in self.pair_states))
+        self._zero_t = torch.zeros(1, device=self.device, dtype=self.dtype)
+        self._one_t = torch.ones(1, device=self.device, dtype=self.dtype)
+        self._sample_var_rate_t = torch.tensor(
+            1.0 / self.var_sample,
+            device=self.device,
+            dtype=self.dtype,
+        )
+        self._baf_weight_logit_t = torch.tensor(
+            _logit_clipped(self.baf_weight),
+            device=self.device,
+            dtype=self.dtype,
+        )
+        self._baf_temperature_prior_scale_t = torch.tensor(
+            self.baf_temperature_prior_scale,
+            device=self.device,
+            dtype=self.dtype,
+        )
+        self._var_bias_bin_t = torch.tensor(
+            self.var_bias_bin,
+            device=self.device,
+            dtype=self.dtype,
+        )
+        self._bin_var_rate_t = None
+        if self.var_bin > 0:
+            self._bin_var_rate_t = torch.tensor(
+                1.0 / self.var_bin,
+                device=self.device,
+                dtype=self.dtype,
+            )
+        self._pair_state_prior_mean_np = self._pair_state_prior_mean_values().astype(np.float64, copy=False)
+        self._pair_state_prior_mean_t = torch.tensor(
+            self._pair_state_prior_mean_np,
+            device=self.device,
+            dtype=self.dtype,
+        )
+        self._alpha_pair_t = torch.full(
+            (self.n_states,),
+            self.alpha_non_ref,
+            device=self.device,
+            dtype=self.dtype,
+        )
+        self._alpha_pair_t[self.ref_state_idx] = self.alpha_ref
 
         # Training history
         self.loss_history = {"epoch": [], "elbo": []}
 
         # Define which sites to expose to the guide (continuous latent variables)
-        self.latent_sites = ["bin_bias", "sample_var", "bin_var", "pair_state_probs"]
+        self.latent_sites = []
+        if not self.freeze_bin_bias:
+            self.latent_sites.append("bin_bias")
+        self.latent_sites.append("sample_var")
+        if self.learn_baf_temperature:
+            self.latent_sites.append("baf_temperature")
+        if not self.freeze_bin_var:
+            self.latent_sites.append("bin_var")
+        if not self.freeze_pair_state_priors:
+            self.latent_sites.append("pair_state_probs")
 
         # Initialize guide based on type
-        blocked_model = poutine.block(self.model, expose=self.latent_sites)
+        self._blocked_model = poutine.block(self.model, expose=self.latent_sites)
+        self.guide = self._build_guide(guide_type)
+
+    def _build_guide(self, guide_type: str, init_loc_fn=None):
         if guide_type == "delta":
-            self.guide = AutoDelta(blocked_model)
-        elif guide_type == "diagonal":
-            self.guide = AutoDiagonalNormal(blocked_model)
+            return AutoDelta(self._blocked_model)
+        if guide_type == "diagonal":
+            if init_loc_fn is None:
+                return AutoDiagonalNormal(self._blocked_model)
+            return AutoDiagonalNormal(self._blocked_model, init_loc_fn=init_loc_fn)
+        raise ValueError(
+            f"Unknown guide_type: {guide_type}. Choose 'diagonal' or 'delta'."
+        )
+
+    def _extract_guide_latent_values(self, guide, data) -> Dict[str, torch.Tensor]:
+        guide_trace = poutine.trace(guide).get_trace(
+            depth=data.depth,
+            interval_sizes=data.interval_sizes,
+            n_bins=data.n_bins,
+            n_samples=data.n_samples,
+        )
+        return {
+            site_name: guide_trace.nodes[site_name]["value"].detach().clone()
+            for site_name in self.latent_sites
+            if site_name in guide_trace.nodes
+        }
+
+    def _run_svi_training(
+        self,
+        data,
+        guide,
+        max_iter: int,
+        lr_init: float,
+        lr_min: float,
+        lr_decay: float,
+        adam_beta1: float,
+        adam_beta2: float,
+        log_freq: int,
+        jit: bool,
+        early_stopping: bool,
+        patience: int,
+        convergence_window: int,
+        convergence_rtol: float,
+        progress_desc: str,
+        record_history: bool,
+    ) -> None:
+        scheduler = pyro.optim.LambdaLR(
+            {
+                "optimizer": torch.optim.Adam,
+                "optim_args": {"lr": 1.0, "betas": (adam_beta1, adam_beta2)},
+                "lr_lambda": lambda k: (
+                    lr_min + (lr_init - lr_min) * np.exp(-k / lr_decay)
+                ),
+            }
+        )
+
+        if jit:
+            loss = JitTraceEnum_ELBO()
         else:
-            raise ValueError(
-                f"Unknown guide_type: {guide_type}. Choose 'diagonal' or 'delta'."
+            loss = TraceEnum_ELBO()
+
+        svi = SVI(self.model, guide, optim=scheduler, loss=loss)
+
+        print(f"{progress_desc} for up to {max_iter} iterations...")
+        if early_stopping:
+            print(
+                "Early stopping enabled: "
+                f"patience={patience}, "
+                f"elbo_window={convergence_window}, "
+                f"elbo_rtol={convergence_rtol}"
             )
+
+        patience_counter = 0
+        stopped_early = False
+        stop_relative_change = None
+        epoch_loss = float("nan")
+
+        with tqdm(
+            range(max_iter),
+            desc=progress_desc,
+            unit="epoch",
+            mininterval=0.1,
+            dynamic_ncols=True,
+        ) as pbar:
+            for epoch in pbar:
+                epoch_loss = svi.step(
+                    depth=data.depth,
+                    interval_sizes=data.interval_sizes,
+                    n_bins=data.n_bins,
+                    n_samples=data.n_samples,
+                )
+                scheduler.step()
+
+                if record_history:
+                    self.loss_history["epoch"].append(epoch)
+                    self.loss_history["elbo"].append(epoch_loss)
+
+                relative_change = None
+                if early_stopping and record_history:
+                    relative_change = _windowed_relative_elbo_change(
+                        self.loss_history["elbo"],
+                        convergence_window,
+                    )
+
+                if relative_change is None:
+                    pbar.set_postfix(loss=f"{epoch_loss:.4f}")
+                else:
+                    pbar.set_postfix(
+                        loss=f"{epoch_loss:.4f}",
+                        rel=f"{relative_change:.2e}",
+                    )
+
+                if (epoch + 1) % log_freq == 0:
+                    if relative_change is None:
+                        tqdm.write(f"[epoch {epoch + 1:04d}]  loss: {epoch_loss:.4f}")
+                    else:
+                        tqdm.write(
+                            f"[epoch {epoch + 1:04d}]  loss: {epoch_loss:.4f}  "
+                            f"rel_change: {relative_change:.2e}"
+                        )
+
+                if early_stopping and relative_change is not None:
+                    if relative_change < convergence_rtol:
+                        patience_counter += 1
+                    else:
+                        patience_counter = 0
+
+                    if patience_counter >= patience:
+                        tqdm.write(
+                            f"\nEarly stopping at epoch {epoch + 1} "
+                            f"(window={convergence_window}, "
+                            f"rel_change={relative_change:.2e})"
+                        )
+                        stopped_early = True
+                        stop_relative_change = relative_change
+                        break
+
+        if stopped_early:
+            print(
+                f"\nTraining stopped early after {epoch + 1} epochs "
+                f"(rel_change={stop_relative_change:.2e})"
+            )
+            print(f"Final loss: {epoch_loss:.4f}")
+        else:
+            print(
+                f"\nTraining complete after {max_iter} epochs, final loss: {epoch_loss:.4f}"
+            )
+
+    def _fixed_bin_bias_values(self, n_bins: int) -> np.ndarray:
+        return np.ones(n_bins, dtype=np.float32)
+
+    def _fixed_bin_var_values(self, n_bins: int) -> np.ndarray:
+        return np.full(n_bins, self.var_bin, dtype=np.float32)
+
+    def _fixed_bin_bias_tensor(self, n_bins: int) -> torch.Tensor:
+        return torch.ones((n_bins, 1), device=self.device, dtype=self.dtype)
+
+    def _fixed_bin_var_tensor(self, n_bins: int) -> torch.Tensor:
+        return torch.full((n_bins, 1), float(self.var_bin), device=self.device, dtype=self.dtype)
+
+    def _fixed_baf_temperature_values(self, n_samples: int) -> np.ndarray:
+        return np.full(n_samples, self.baf_weight, dtype=np.float32)
+
+    def _fixed_baf_temperature_tensor(self, n_samples: int) -> torch.Tensor:
+        return torch.full((n_samples,), float(self.baf_weight), device=self.device, dtype=self.dtype)
+
+    def _pair_state_alpha_values(self) -> np.ndarray:
+        alpha = np.full(self.n_states, self.alpha_non_ref, dtype=np.float32)
+        alpha[self.ref_state_idx] = self.alpha_ref
+        return alpha
+
+    def _pair_state_prior_mean_values(self) -> np.ndarray:
+        if hasattr(self, "_pair_state_prior_mean_np"):
+            return np.asarray(self._pair_state_prior_mean_np, dtype=np.float32)
+        alpha = self._pair_state_alpha_values()
+        return alpha / float(alpha.sum())
+
+    def _fixed_pair_state_probs_values(self, n_bins: int) -> np.ndarray:
+        base_probs = self._pair_state_prior_mean_values()
+        return np.broadcast_to(base_probs, (n_bins, self.n_states)).copy()
+
+    def _fixed_pair_state_probs_tensor(self, n_bins: int) -> torch.Tensor:
+        if hasattr(self, "_pair_state_prior_mean_t"):
+            return self._pair_state_prior_mean_t.view(1, 1, self.n_states).expand(n_bins, 1, self.n_states).clone()
+        base_probs = self._pair_state_prior_mean_values()
+        repeated_probs = np.broadcast_to(base_probs, (n_bins, 1, self.n_states)).copy()
+        return torch.tensor(repeated_probs, device=self.device, dtype=self.dtype)
+
+    def _baf_scale_numpy(self, maps: dict, n_samples: int) -> np.ndarray:
+        if "baf_temperature" in maps:
+            values = np.asarray(maps["baf_temperature"]).squeeze()
+            if values.ndim == 0:
+                return np.full(n_samples, float(values), dtype=np.float64)
+            return np.asarray(values, dtype=np.float64)
+        return np.full(n_samples, self.baf_weight, dtype=np.float64)
+
+    def _baf_reference_probs_tensor(self) -> torch.Tensor:
+        return self._pair_state_prior_mean_t
+
+    def _baf_reference_probs_numpy(self) -> np.ndarray:
+        return self._pair_state_prior_mean_np
 
     @config_enumerate(default="parallel")
     def model(self, depth: torch.Tensor, interval_sizes: torch.Tensor, n_bins: int = None, n_samples: int = None):
@@ -533,8 +853,7 @@ class CNVModel:
             print("\n=== MODEL DEBUG ===")
             print(f"depth.shape: {depth.shape}")
 
-        zero_t = torch.zeros(1, device=self.device, dtype=self.dtype)
-        one_t = torch.ones(1, device=self.device, dtype=self.dtype)
+        zero_t = self._zero_t
 
         # Plates for bins and samples
         plate_bins = pyro.plate("bins", n_bins, dim=-2, device=self.device)
@@ -543,33 +862,50 @@ class CNVModel:
         # Per-sample variance factor (log-normal prior)
         with plate_samples:
             sample_var = pyro.sample(
-                "sample_var", dist.Exponential(torch.tensor(1.0 / self.var_sample, device=self.device, dtype=self.dtype))
+                "sample_var", dist.Exponential(self._sample_var_rate_t)
             )
+            if self.learn_baf_temperature:
+                baf_temperature = pyro.sample(
+                    "baf_temperature",
+                    dist.TransformedDistribution(
+                        dist.Normal(
+                            self._baf_weight_logit_t,
+                            self._baf_temperature_prior_scale_t,
+                        ),
+                        [dist.transforms.SigmoidTransform()],
+                    ),
+                )
+            else:
+                baf_temperature = self._fixed_baf_temperature_tensor(n_samples)
         if self.debug:
             print(f"sample_var.shape: {sample_var.shape}")
 
         # Per-bin latent variables
         with plate_bins:
             # Per-bin mean bias factor (log-normal prior, centered at 1.0)
-            bin_bias = pyro.sample(
-                "bin_bias", dist.LogNormal(zero_t, torch.tensor(self.var_bias_bin, device=self.device, dtype=self.dtype))
-            )
+            if self.freeze_bin_bias:
+                bin_bias = self._fixed_bin_bias_tensor(n_bins)
+            else:
+                bin_bias = pyro.sample(
+                    "bin_bias", dist.LogNormal(zero_t, self._var_bias_bin_t)
+                )
             if self.debug:
                 print(f"bin_bias.shape: {bin_bias.shape}")
 
             # Per-bin variance factor (log-normal prior)
-            bin_var = pyro.sample("bin_var", dist.Exponential(torch.tensor(1.0 / self.var_bin, device=self.device, dtype=self.dtype)))
+            if self.freeze_bin_var:
+                bin_var = self._fixed_bin_var_tensor(n_bins)
+            else:
+                bin_var = pyro.sample("bin_var", dist.Exponential(self._bin_var_rate_t))
             if self.debug:
                 print(f"bin_var.shape: {bin_var.shape}")
 
             # Pair-state prior (Dirichlet-Categorical)
             # Heavily weight the diploid reference state (1,1)
-            alpha_pair = self.alpha_non_ref * one_t.expand(self.n_states)
-            alpha_pair = alpha_pair.clone()
-            alpha_pair[self.ref_state_idx] = torch.tensor(
-                self.alpha_ref, device=self.device, dtype=self.dtype,
-            )
-            pair_state_probs = pyro.sample("pair_state_probs", dist.Dirichlet(alpha_pair))
+            if self.freeze_pair_state_priors:
+                pair_state_probs = self._fixed_pair_state_probs_tensor(n_bins)
+            else:
+                pair_state_probs = pyro.sample("pair_state_probs", dist.Dirichlet(self._alpha_pair_t))
         if self.debug:
             print(f"pair_state_probs.shape: {pair_state_probs.shape}")
 
@@ -614,7 +950,7 @@ class CNVModel:
             # The observed variance is estimated upstream from the number of
             # SNP sites per bin, so bins with more sites contribute a tighter
             # likelihood. Missing / unsupported bins are masked out.
-            if hasattr(self, "current_data") and getattr(self.current_data, "has_baf", False):
+            if self.baf_weight > 0 and hasattr(self, "current_data") and getattr(self.current_data, "has_baf", False):
                 baf_obs = self.current_data.minor_baf_median
                 baf_var = self.current_data.baf_variance
                 baf_sites = self.current_data.baf_n_sites
@@ -623,18 +959,30 @@ class CNVModel:
                               (torch.isfinite(baf_var)) &
                               (baf_sites > 0) &
                               (baf_var > 0))
-                if torch.any(valid_mask):
-                    expected_minor_baf = Vindex(self.minor_baf_by_state)[pair_state]
-                    scaled_baf_var = baf_var * self.baf_variance_scale
-                    safe_baf_var = torch.where(valid_mask, scaled_baf_var, torch.ones_like(scaled_baf_var))
-                    baf_std = torch.sqrt(torch.clamp(safe_baf_var, min=1e-6))
-                    safe_baf_obs = torch.where(valid_mask, baf_obs, expected_minor_baf)
-                    with poutine.mask(mask=valid_mask):
-                        pyro.sample(
-                            "baf_obs",
-                            dist.Normal(expected_minor_baf, baf_std),
-                            obs=safe_baf_obs,
-                        )
+                safe_baf_var = torch.where(valid_mask, baf_var, torch.ones_like(baf_var))
+                baf_std = torch.sqrt(torch.clamp(safe_baf_var, min=1e-6))
+                state_mean = self.minor_baf_by_state.view(self.n_states, 1, 1)
+                obs_expanded = baf_obs.unsqueeze(0)
+                std_expanded = baf_std.unsqueeze(0)
+                safe_baf_obs = torch.where(valid_mask.unsqueeze(0), obs_expanded, state_mean)
+                raw_baf_log_lik = dist.Normal(state_mean, std_expanded).log_prob(safe_baf_obs)
+                raw_baf_log_lik = torch.where(
+                    valid_mask.unsqueeze(0),
+                    raw_baf_log_lik,
+                    torch.zeros_like(raw_baf_log_lik),
+                )
+                centered_baf_log_lik = _center_state_log_likelihood_table_torch(
+                    raw_baf_log_lik,
+                    self._baf_reference_probs_tensor(),
+                )
+                baf_rel_lik = torch.zeros_like(baf_obs)
+                for state_idx in range(self.n_states):
+                    baf_rel_lik = baf_rel_lik + torch.where(
+                        pair_state == state_idx,
+                        centered_baf_log_lik[state_idx],
+                        torch.zeros_like(baf_obs),
+                    )
+                pyro.factor("baf_lik", baf_temperature * baf_rel_lik)
         if self.debug:
             print("=== END MODEL DEBUG ===\n")
 
@@ -642,6 +990,7 @@ class CNVModel:
         self,
         data,
         max_iter: int = 1000,
+        guide_warmup_iter: int = 250,
         lr_init: float = 0.01,
         lr_min: float = 0.001,
         lr_decay: float = 500,
@@ -660,6 +1009,8 @@ class CNVModel:
         Args:
             data: DepthData object
             max_iter: Maximum number of training iterations
+            guide_warmup_iter: AutoDelta MAP warmup iterations before
+                switching back to a non-delta guide; set to 0 to disable
             lr_init: Initial learning rate
             lr_min: Minimum learning rate
             lr_decay: Learning rate decay constant
@@ -682,121 +1033,66 @@ class CNVModel:
                 raise ValueError("convergence_window must be at least 1.")
             if convergence_rtol < 0:
                 raise ValueError("convergence_rtol must be non-negative.")
+        if guide_warmup_iter < 0:
+            raise ValueError("guide_warmup_iter must be non-negative.")
 
         self.loss_history = {"epoch": [], "elbo": []}
-        pyro.clear_param_store()
-
-        # Create optimizer with learning rate schedule
-        scheduler = pyro.optim.LambdaLR(
-            {
-                "optimizer": torch.optim.Adam,
-                "optim_args": {"lr": 1.0, "betas": (adam_beta1, adam_beta2)},
-                "lr_lambda": lambda k: (
-                    lr_min + (lr_init - lr_min) * np.exp(-k / lr_decay)
-                ),
-            }
-        )
-
-        # Create ELBO loss
-        if jit:
-            loss = JitTraceEnum_ELBO()
-        else:
-            loss = TraceEnum_ELBO()
-
-        # Create SVI object
-        svi = SVI(self.model, self.guide, optim=scheduler, loss=loss)
-
-        print(f"Training for up to {max_iter} iterations...")
-        if early_stopping:
-            print(
-                "Early stopping enabled: "
-                f"patience={patience}, "
-                f"elbo_window={convergence_window}, "
-                f"elbo_rtol={convergence_rtol}"
-            )
-
-        # Early stopping tracking
-        patience_counter = 0
-        stopped_early = False
-        stop_relative_change = None
 
         try:
             self.current_data = data
-            # Configure tqdm with mininterval to force updates
-            with tqdm(
-                range(max_iter),
-                desc="Training",
-                unit="epoch",
-                mininterval=0.1,
-                dynamic_ncols=True,
-            ) as pbar:
-                for epoch in pbar:
-                    # Train step
-                    epoch_loss = svi.step(
-                        depth=data.depth,
-                        interval_sizes=data.interval_sizes,
-                        n_bins=data.n_bins,
-                        n_samples=data.n_samples,
-                    )
-                    scheduler.step()
+            pyro.clear_param_store()
 
-                    # Record loss
-                    self.loss_history["epoch"].append(epoch)
-                    self.loss_history["elbo"].append(epoch_loss)
-
-                    relative_change = None
-                    if early_stopping:
-                        relative_change = _windowed_relative_elbo_change(
-                            self.loss_history["elbo"],
-                            convergence_window,
-                        )
-
-                    # Update progress bar with loss
-                    if relative_change is None:
-                        pbar.set_postfix(loss=f"{epoch_loss:.4f}")
-                    else:
-                        pbar.set_postfix(
-                            loss=f"{epoch_loss:.4f}",
-                            rel=f"{relative_change:.2e}",
-                        )
-
-                    # Log progress
-                    if (epoch + 1) % log_freq == 0:
-                        if relative_change is None:
-                            tqdm.write(f"[epoch {epoch + 1:04d}]  loss: {epoch_loss:.4f}")
-                        else:
-                            tqdm.write(
-                                f"[epoch {epoch + 1:04d}]  loss: {epoch_loss:.4f}  "
-                                f"rel_change: {relative_change:.2e}"
-                            )
-
-                    # Early stopping check
-                    if early_stopping and relative_change is not None:
-                        if relative_change < convergence_rtol:
-                            patience_counter += 1
-                        else:
-                            patience_counter = 0
-
-                        if patience_counter >= patience:
-                            tqdm.write(
-                                f"\nEarly stopping at epoch {epoch + 1} "
-                                f"(window={convergence_window}, "
-                                f"rel_change={relative_change:.2e})"
-                            )
-                            stopped_early = True
-                            stop_relative_change = relative_change
-                            break
-
-            if stopped_early:
+            if self.guide_type != "delta" and guide_warmup_iter > 0:
                 print(
-                    f"\nTraining stopped early after {epoch + 1} epochs "
-                    f"(rel_change={stop_relative_change:.2e})"
+                    f"Running AutoDelta MAP warmup for {guide_warmup_iter} iterations "
+                    f"before {self.guide_type} guide training..."
                 )
-                print(f"Final loss: {epoch_loss:.4f}")
+                warmup_guide = self._build_guide("delta")
+                self._run_svi_training(
+                    data,
+                    guide=warmup_guide,
+                    max_iter=guide_warmup_iter,
+                    lr_init=lr_init,
+                    lr_min=lr_min,
+                    lr_decay=lr_decay,
+                    adam_beta1=adam_beta1,
+                    adam_beta2=adam_beta2,
+                    log_freq=log_freq,
+                    jit=jit,
+                    early_stopping=False,
+                    patience=patience,
+                    convergence_window=convergence_window,
+                    convergence_rtol=convergence_rtol,
+                    progress_desc="MAP warmup",
+                    record_history=False,
+                )
+                warmup_values = self._extract_guide_latent_values(warmup_guide, data)
+                pyro.clear_param_store()
+                self.guide = self._build_guide(
+                    self.guide_type,
+                    init_loc_fn=init_to_value(values=warmup_values),
+                )
             else:
-                print(
-                    f"\nTraining complete after {max_iter} epochs, final loss: {epoch_loss:.4f}"
-                )
+                self.guide = self._build_guide(self.guide_type)
+
+            self._run_svi_training(
+                data,
+                guide=self.guide,
+                max_iter=max_iter,
+                lr_init=lr_init,
+                lr_min=lr_min,
+                lr_decay=lr_decay,
+                adam_beta1=adam_beta1,
+                adam_beta2=adam_beta2,
+                log_freq=log_freq,
+                jit=jit,
+                early_stopping=early_stopping,
+                patience=patience,
+                convergence_window=convergence_window,
+                convergence_rtol=convergence_rtol,
+                progress_desc="Training",
+                record_history=True,
+            )
 
         except KeyboardInterrupt:
             print("\nTraining interrupted by user.")
@@ -839,18 +1135,33 @@ class CNVModel:
         map_estimates = {}
 
         # Continuous variables from guide
-        map_estimates["bin_bias"] = (
-            guide_trace.nodes["bin_bias"]["value"].detach().cpu().numpy()
-        )
+        if self.freeze_bin_bias:
+            map_estimates["bin_bias"] = self._fixed_bin_bias_values(data.n_bins)
+        else:
+            map_estimates["bin_bias"] = (
+                guide_trace.nodes["bin_bias"]["value"].detach().cpu().numpy()
+            )
         map_estimates["sample_var"] = (
             guide_trace.nodes["sample_var"]["value"].detach().cpu().numpy()
         )
-        map_estimates["bin_var"] = (
-            guide_trace.nodes["bin_var"]["value"].detach().cpu().numpy()
-        )
-        map_estimates["pair_state_probs"] = (
-            guide_trace.nodes["pair_state_probs"]["value"].detach().cpu().numpy()
-        )
+        if self.learn_baf_temperature:
+            map_estimates["baf_temperature"] = (
+                guide_trace.nodes["baf_temperature"]["value"].detach().cpu().numpy()
+            )
+        else:
+            map_estimates["baf_temperature"] = self._fixed_baf_temperature_values(data.n_samples)
+        if self.freeze_bin_var:
+            map_estimates["bin_var"] = self._fixed_bin_var_values(data.n_bins)
+        else:
+            map_estimates["bin_var"] = (
+                guide_trace.nodes["bin_var"]["value"].detach().cpu().numpy()
+            )
+        if self.freeze_pair_state_priors:
+            map_estimates["pair_state_probs"] = self._fixed_pair_state_probs_values(data.n_bins)
+        else:
+            map_estimates["pair_state_probs"] = (
+                guide_trace.nodes["pair_state_probs"]["value"].detach().cpu().numpy()
+            )
 
         # Discrete variable (pair state), plus compatibility total CN.
         pair_state_idx = trace.nodes["pair_state"]["value"].detach().cpu().numpy().squeeze()
@@ -906,6 +1217,7 @@ class CNVModel:
         sample_var = maps["sample_var"]   # (n_samples,) or (1, n_samples)
         bin_var = maps["bin_var"]         # (n_bins,) or (n_bins, 1)
         pair_state_probs = maps["pair_state_probs"]
+        baf_temperature = self._baf_scale_numpy(maps, data.n_samples)
 
         # Flatten to 1-D / 2-D where needed (guide may add singleton
         # plate dimensions).
@@ -948,7 +1260,7 @@ class CNVModel:
         log_unnormalized = log_lik + log_prior
 
         # 4b. Optional BAF log-likelihood contribution.
-        if getattr(data, "has_baf", False):
+        if getattr(data, "has_baf", False) and np.any(baf_temperature > 0):
             minor_baf = data.minor_baf_median.detach().cpu().numpy()
             baf_var = data.baf_variance.detach().cpu().numpy()
             baf_sites = data.baf_n_sites.detach().cpu().numpy()
@@ -960,13 +1272,18 @@ class CNVModel:
             if np.any(valid):
                 exp_minor_baf = pair_minor_baf.reshape(-1, 1, 1)
                 baf_obs = minor_baf[np.newaxis, :, :]
-                scaled_baf_var = self.baf_variance_scale * baf_var[np.newaxis, :, :]
-                baf_std = np.sqrt(np.maximum(scaled_baf_var, 1e-6))
-                baf_log_lik = -0.5 * np.log(2 * np.pi * baf_std ** 2) - (
+                baf_std = np.sqrt(np.maximum(baf_var[np.newaxis, :, :], 1e-6))
+                raw_baf_log_lik = -0.5 * np.log(2 * np.pi * baf_std ** 2) - (
                     (baf_obs - exp_minor_baf) ** 2
                 ) / (2 * baf_std ** 2)
-                baf_log_lik = np.where(valid[np.newaxis, :, :], baf_log_lik, 0.0)
-                log_unnormalized += baf_log_lik
+                raw_baf_log_lik = np.where(valid[np.newaxis, :, :], raw_baf_log_lik, 0.0)
+                centered_baf_log_lik = _center_state_log_likelihood_table_numpy(
+                    raw_baf_log_lik,
+                    self._baf_reference_probs_numpy(),
+                )
+                log_unnormalized += (
+                    baf_temperature[np.newaxis, np.newaxis, :] * centered_baf_log_lik
+                )
 
         # 5. Log-sum-exp softmax across the state dimension (axis 0)
         max_log = np.max(log_unnormalized, axis=0, keepdims=True)

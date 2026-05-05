@@ -135,10 +135,15 @@ def run_gd_analysis(
         alpha_ref=args.alpha_ref,
         alpha_non_ref=args.alpha_non_ref,
         state_prior_weight=args.state_prior_weight,
-        baf_variance_scale=args.baf_variance_scale,
+        baf_weight=args.baf_weight,
+        learn_baf_temperature=not args.fixed_baf_temperature and args.baf_weight > 0,
+        baf_temperature_prior_scale=args.baf_temperature_prior_scale,
         var_bias_bin=args.var_bias_bin,
         var_sample=args.var_sample,
         var_bin=args.var_bin,
+        freeze_bin_bias=args.freeze_bin_bias,
+        freeze_bin_var=args.freeze_bin_var,
+        freeze_pair_state_priors=args.freeze_pair_state_priors,
         bin_size_factor=args.bin_size_factor,
         device=device,
         dtype=torch.float32,
@@ -149,6 +154,7 @@ def run_gd_analysis(
     model.train(
         data=combined_data,
         max_iter=args.max_iter,
+        guide_warmup_iter=args.guide_warmup_iter,
         lr_init=args.lr_init,
         lr_min=args.lr_min,
         lr_decay=args.lr_decay,
@@ -351,11 +357,34 @@ def parse_args():
              "Values below 1.0 temper overly sharp priors.",
     )
     parser.add_argument(
+        "--baf-weight",
+        type=float,
+        default=0.25,
+        help="Fixed BAF likelihood weight when --fixed-baf-temperature is set; "
+             "otherwise the prior median for the learned per-sample BAF "
+             "weight. Learned mode requires 0 < weight < 1. Set to 0 to "
+             "disable BAF evidence.",
+    )
+    parser.add_argument(
+        "--fixed-baf-temperature",
+        action="store_true",
+        default=False,
+        help="Keep the BAF likelihood weight fixed at --baf-weight instead of "
+             "learning a per-sample temperature.",
+    )
+    parser.add_argument(
+        "--baf-temperature-prior-scale",
+        type=float,
+        default=0.5,
+        help="LogitNormal prior scale for the learned per-sample BAF weight.",
+    )
+    parser.add_argument(
         "--baf-variance-scale",
         type=float,
-        default=32.0,
-        help="Multiply per-bin BAF variance by this factor before scoring "
-             "the BAF likelihood. Values above 1.0 downweight BAF evidence.",
+        default=None,
+        help="Deprecated compatibility flag. Approximates the old fixed BAF "
+             "variance inflation by setting a fixed BAF temperature of "
+             "1 / --baf-variance-scale and disabling learned temperatures.",
     )
     parser.add_argument(
         "--var-bias-bin",
@@ -366,14 +395,33 @@ def parse_args():
     parser.add_argument(
         "--var-sample",
         type=float,
-        default=0.001,
+        default=0.01,
         help="Variance for per-sample variance factor",
     )
     parser.add_argument(
         "--var-bin",
         type=float,
-        default=0.001,
+        default=0,
         help="Variance for per-bin variance factor",
+    )
+    parser.add_argument(
+        "--freeze-bin-bias",
+        action="store_true",
+        default=False,
+        help="Fix per-bin mean bias at 1.0 instead of inferring it",
+    )
+    parser.add_argument(
+        "--unfreeze-bin-var",
+        action="store_false",
+        dest="freeze_bin_var",
+        default=True,
+        help="Infer per-bin variance instead of fixing it at --var-bin",
+    )
+    parser.add_argument(
+        "--freeze-pair-state-priors",
+        action="store_true",
+        default=False,
+        help="Fix per-bin pair-state priors to the Dirichlet prior mean instead of inferring them",
     )
     parser.add_argument(
         "--bin-size-factor",
@@ -392,6 +440,12 @@ def parse_args():
         default="diagonal",
         choices=["delta", "diagonal"],
         help="Type of variational guide",
+    )
+    parser.add_argument(
+        "--guide-warmup-iter",
+        type=int,
+        default=250,
+        help="AutoDelta MAP warmup iterations before diagonal-guide training; set to 0 to disable and ignored for --guide-type delta",
     )
     parser.add_argument(
         "--clamp-threshold",
@@ -522,7 +576,35 @@ def parse_args():
              "raw and normalised depth signals.",
     )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.baf_weight < 0:
+        parser.error("--baf-weight must be non-negative.")
+    if not args.fixed_baf_temperature and args.baf_weight > 0 and args.baf_weight >= 1:
+        parser.error("Learned BAF weight mode requires --baf-weight < 1.")
+    if args.baf_temperature_prior_scale <= 0:
+        parser.error("--baf-temperature-prior-scale must be positive.")
+    if args.guide_warmup_iter < 0:
+        parser.error("--guide-warmup-iter must be non-negative.")
+    if args.baf_variance_scale is not None:
+        if args.baf_variance_scale <= 0:
+            parser.error("--baf-variance-scale must be positive.")
+        if (
+            args.baf_weight != 0.25 or
+            args.fixed_baf_temperature or
+            args.baf_temperature_prior_scale != 0.5
+        ):
+            parser.error(
+                "Do not combine --baf-variance-scale with the new BAF "
+                "temperature arguments. Use one interface or the other."
+            )
+        args.baf_weight = 1.0 / args.baf_variance_scale
+        args.fixed_baf_temperature = True
+        print(
+            "Warning: --baf-variance-scale is deprecated; using a fixed "
+            f"BAF temperature of {args.baf_weight:.6g} instead."
+        )
+
+    return args
 
 
 def main():

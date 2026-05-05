@@ -155,10 +155,15 @@ def write_posterior_tables(
 
     # Convert to numpy array and squeeze extra dimensions
     sample_var = np.asarray(map_estimates["sample_var"]).squeeze()
+    baf_temperature = map_estimates.get("baf_temperature")
+    if baf_temperature is not None:
+        baf_temperature = np.asarray(baf_temperature).squeeze()
 
     # Ensure it's at least 1D
     if sample_var.ndim == 0:
         sample_var = sample_var.reshape(1)
+    if baf_temperature is not None and baf_temperature.ndim == 0:
+        baf_temperature = baf_temperature.reshape(1)
 
     for sample_idx, sample_id in enumerate(combined_data.sample_ids):
         var_val = sample_var[sample_idx]
@@ -166,6 +171,9 @@ def write_posterior_tables(
             "sample": sample_id,
             "sample_var_map": var_val.tolist() if isinstance(var_val, np.ndarray) else float(var_val),
         }
+        if baf_temperature is not None:
+            temp_val = baf_temperature[sample_idx]
+            row["baf_temperature_map"] = temp_val.tolist() if isinstance(temp_val, np.ndarray) else float(temp_val)
         sample_rows.append(row)
 
     sample_df = pd.DataFrame(sample_rows)
