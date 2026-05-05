@@ -1,0 +1,34 @@
+VEP_Annotation	Impact_Tier	Common_Term	
+transcript_ablation	HIGH	LoF	
+splice_acceptor_variant	HIGH	LoF (canonical splice)	
+splice_donor_variant	HIGH	LoF (canonical splice)	
+stop_gained	HIGH	LoF (nonsense)	
+frameshift_variant	HIGH	LoF (frameshift)	
+stop_lost	HIGH	LoF (readthrough)	
+start_lost	HIGH	LoF (initiation)	
+TFBS_ablation	HIGH	Regulatory LoF	
+regulatory_region_ablation	HIGH	Regulatory LoF	
+protein_altering_variant	MODERATE	—	
+inframe_insertion	MODERATE	Non-frameshift indel	
+inframe_deletion	MODERATE	Non-frameshift indel	
+missense_variant	MODERATE	Missense	
+incomplete_terminal_codon_variant	MODERATE	—	
+coding_sequence_variant	MODERATE	Coding variant	
+mature_miRNA_variant	MODIFIER	miRNA variant	
+5_prime_UTR_variant	MODIFIER	UTR variant	
+3_prime_UTR_variant	MODIFIER	UTR variant	
+non_coding_transcript_exon_variant	MODIFIER	Noncoding exonic	
+splice_donor_5th_base_variant	LOW	Splicing variant (non-canonical)	
+splice_region_variant	LOW	Splicing variant (non-canonical)	
+splice_donor_region_variant	LOW	Splicing variant (non-canonical)	
+splice_polypyrimidine_tract_variant	LOW	Splicing variant (non-canonical)	
+stop_retained_variant	LOW	Synonymous (stop)	
+synonymous_variant	LOW	Synonymous (silent)	
+NMD_transcript_variant	MODIFIER	NMD-associated	
+non_coding_transcript_variant	MODIFIER	Noncoding intronic	
+intron_variant	MODIFIER	Intronic	
+TF_binding_site_variant	MODIFIER	Regulatory variant	
+regulatory_region_variant	MODIFIER	Regulatory variant	
+upstream_gene_variant	MODIFIER	Regulatory / proximal	
+downstream_gene_variant	MODIFIER	Regulatory / proximal	
+intergenic_variant	MODIFIER	Intergenic	

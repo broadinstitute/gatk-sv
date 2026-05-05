@@ -184,17 +184,52 @@ task ConcatenateGeneCounts {
     command <<<
         set -euo pipefail
 
-        # Get header from first file
-        head -1 ~{count_files[0]} > merged_gene_counts.tsv
+        python3 - ~{sep=' ' count_files} <<'PY'
+import csv
+from collections import OrderedDict
+    import sys
 
-        # Append data rows from all files (skipping headers)
-        for file in ~{sep=' ' count_files}; do
-            tail -n +2 "$file" >> merged_gene_counts.tsv
-        done
+    count_files = sys.argv[1:]
+output_path = "merged_gene_counts.tsv"
 
-        # Remove duplicate rows and sort by gene name
-        (head -1 merged_gene_counts.tsv; tail -n +2 merged_gene_counts.tsv | sort -u) > temp.tsv
-        mv temp.tsv merged_gene_counts.tsv
+all_columns = []
+seen_columns = set()
+rows = []
+
+for path in count_files:
+    with open(path, "r", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        if reader.fieldnames is None:
+            continue
+
+        for column in reader.fieldnames:
+            if column not in seen_columns:
+                seen_columns.add(column)
+                all_columns.append(column)
+
+        for row in reader:
+            rows.append(dict(row))
+
+if not all_columns:
+    raise RuntimeError("No columns found in count_files")
+
+if "gene" in seen_columns:
+    ordered_columns = ["gene"] + [c for c in all_columns if c != "gene"]
+else:
+    ordered_columns = all_columns
+
+with open(output_path, "w", newline="") as handle:
+    writer = csv.DictWriter(handle, fieldnames=ordered_columns, delimiter="\t", lineterminator="\n")
+    writer.writeheader()
+    for row in rows:
+        normalized = OrderedDict()
+        for column in ordered_columns:
+            if column == "gene":
+                normalized[column] = row.get(column, "")
+            else:
+                normalized[column] = row.get(column, "0") or "0"
+        writer.writerow(normalized)
+PY
     >>>
 
     output {
