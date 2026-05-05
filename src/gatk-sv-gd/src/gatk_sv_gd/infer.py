@@ -156,7 +156,8 @@ def run_gd_analysis(
         jit=not args.disable_jit,
         early_stopping=args.early_stopping,
         patience=args.patience,
-        min_delta=args.min_delta,
+        convergence_window=args.elbo_window,
+        convergence_rtol=args.elbo_rtol,
     )
 
     # Get MAP estimates and posterior for all bins
@@ -452,13 +453,19 @@ def parse_args():
         "--patience",
         type=int,
         default=50,
-        help="Early stopping patience",
+        help="Consecutive rolling ELBO-window checks below tolerance before stopping",
     )
     parser.add_argument(
-        "--min-delta",
+        "--elbo-window",
+        type=int,
+        default=50,
+        help="Iterations per rolling ELBO window for early stopping",
+    )
+    parser.add_argument(
+        "--elbo-rtol",
         type=float,
-        default=1000.0,
-        help="Minimum improvement for early stopping",
+        default=1e-3,
+        help="Relative tolerance between successive rolling ELBO windows",
     )
 
     # Inference parameters

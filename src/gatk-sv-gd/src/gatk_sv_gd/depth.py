@@ -7,7 +7,7 @@ Contains:
     - CNVModel: hierarchical Bayesian CNV detection model
 """
 
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -51,6 +51,24 @@ def pair_state_minor_baf(pair_states: List[Tuple[int, int]]) -> np.ndarray:
 def pair_state_total_cn(pair_states: List[Tuple[int, int]]) -> np.ndarray:
     """Total CN implied by each diploid pair state."""
     return np.asarray([h1 + h2 for h1, h2 in pair_states], dtype=np.int64)
+
+
+def _windowed_relative_elbo_change(
+    loss_history: Sequence[float],
+    window: int,
+) -> Optional[float]:
+    """Return the relative ELBO shift between the two latest rolling windows."""
+    if window < 1:
+        raise ValueError("convergence_window must be at least 1.")
+    if len(loss_history) < 2 * window:
+        return None
+
+    previous_window = np.asarray(loss_history[-2 * window:-window], dtype=np.float64)
+    current_window = np.asarray(loss_history[-window:], dtype=np.float64)
+    previous_mean = float(previous_window.mean())
+    current_mean = float(current_window.mean())
+    baseline = max(abs(previous_mean), np.finfo(np.float64).eps)
+    return abs(current_mean - previous_mean) / baseline
 
 
 class ExclusionMask:
@@ -633,7 +651,8 @@ class CNVModel:
         jit: bool = False,
         early_stopping: bool = True,
         patience: int = 50,
-        min_delta: float = 1000.0,
+        convergence_window: int = 50,
+        convergence_rtol: float = 1e-3,
     ):
         """
         Train the model using stochastic variational inference (SVI).
@@ -649,10 +668,22 @@ class CNVModel:
             log_freq: Frequency of logging (iterations)
             jit: Whether to use JIT compilation
             early_stopping: Whether to use early stopping
-            patience: Number of epochs to wait for improvement before stopping
-            min_delta: Minimum change in loss to qualify as improvement
+            patience: Consecutive window comparisons below the relative
+                tolerance before stopping
+            convergence_window: Number of iterations per rolling ELBO window
+            convergence_rtol: Relative tolerance between successive rolling
+                ELBO windows
         """
         print("Initializing training...")
+        if early_stopping:
+            if patience < 1:
+                raise ValueError("patience must be at least 1.")
+            if convergence_window < 1:
+                raise ValueError("convergence_window must be at least 1.")
+            if convergence_rtol < 0:
+                raise ValueError("convergence_rtol must be non-negative.")
+
+        self.loss_history = {"epoch": [], "elbo": []}
         pyro.clear_param_store()
 
         # Create optimizer with learning rate schedule
@@ -677,12 +708,17 @@ class CNVModel:
 
         print(f"Training for up to {max_iter} iterations...")
         if early_stopping:
-            print(f"Early stopping enabled: patience={patience}, min_delta={min_delta}")
+            print(
+                "Early stopping enabled: "
+                f"patience={patience}, "
+                f"elbo_window={convergence_window}, "
+                f"elbo_rtol={convergence_rtol}"
+            )
 
         # Early stopping tracking
-        best_loss = float("inf")
         patience_counter = 0
         stopped_early = False
+        stop_relative_change = None
 
         try:
             self.current_data = data
@@ -708,36 +744,55 @@ class CNVModel:
                     self.loss_history["epoch"].append(epoch)
                     self.loss_history["elbo"].append(epoch_loss)
 
+                    relative_change = None
+                    if early_stopping:
+                        relative_change = _windowed_relative_elbo_change(
+                            self.loss_history["elbo"],
+                            convergence_window,
+                        )
+
                     # Update progress bar with loss
-                    pbar.set_postfix({"loss": f"{epoch_loss:.4f}"})
+                    if relative_change is None:
+                        pbar.set_postfix(loss=f"{epoch_loss:.4f}")
+                    else:
+                        pbar.set_postfix(
+                            loss=f"{epoch_loss:.4f}",
+                            rel=f"{relative_change:.2e}",
+                        )
 
                     # Log progress
                     if (epoch + 1) % log_freq == 0:
-                        tqdm.write(f"[epoch {epoch + 1:04d}]  loss: {epoch_loss:.4f}")
+                        if relative_change is None:
+                            tqdm.write(f"[epoch {epoch + 1:04d}]  loss: {epoch_loss:.4f}")
+                        else:
+                            tqdm.write(
+                                f"[epoch {epoch + 1:04d}]  loss: {epoch_loss:.4f}  "
+                                f"rel_change: {relative_change:.2e}"
+                            )
 
                     # Early stopping check
-                    if early_stopping:
-                        if epoch_loss < best_loss - min_delta:
-                            # Improvement detected
-                            best_loss = epoch_loss
-                            patience_counter = 0
-                        else:
-                            # No improvement
+                    if early_stopping and relative_change is not None:
+                        if relative_change < convergence_rtol:
                             patience_counter += 1
+                        else:
+                            patience_counter = 0
 
                         if patience_counter >= patience:
                             tqdm.write(
-                                f"\nEarly stopping triggered at epoch {epoch + 1}"
-                            )
-                            tqdm.write(
-                                f"No improvement for {patience} epochs (best loss: {best_loss:.4f})"
+                                f"\nEarly stopping at epoch {epoch + 1} "
+                                f"(window={convergence_window}, "
+                                f"rel_change={relative_change:.2e})"
                             )
                             stopped_early = True
+                            stop_relative_change = relative_change
                             break
 
             if stopped_early:
-                print(f"\nTraining stopped early after {epoch + 1} epochs")
-                print(f"Best loss: {best_loss:.4f}, Final loss: {epoch_loss:.4f}")
+                print(
+                    f"\nTraining stopped early after {epoch + 1} epochs "
+                    f"(rel_change={stop_relative_change:.2e})"
+                )
+                print(f"Final loss: {epoch_loss:.4f}")
             else:
                 print(
                     f"\nTraining complete after {max_iter} epochs, final loss: {epoch_loss:.4f}"
