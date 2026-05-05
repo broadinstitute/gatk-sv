@@ -17,33 +17,36 @@ def read_ploidy(filename: str) -> pd.DataFrame:
     """
     Args:
         filename: A tab-delimited file containing estimated copy numbers in long format.
-                  Expected columns: sample, chromosome, median_depth, sample_var_map, etc.
+                  Expected columns: sample, chromosome, copy_number, and
+                  sample_overdispersion_map.
     Returns:
         A pandas DataFrame containing the following columns:
-        [sample_id, chr1_CopyNumber, ..., chr22_CopyNumber, chrX_CopyNumber, chrY_CopyNumber, chrX_CopyNumber_rounded, sample_var_map].
+        [sample_id, chr1_CopyNumber, ..., chr22_CopyNumber, chrX_CopyNumber,
+         chrY_CopyNumber, chrX_CopyNumber_rounded, sample_var_map].
     """
     df_ploidy = pd.read_csv(filename, sep="\t")
-    
-    # Extract sample_var_map for each sample (same across all chromosomes)
-    sample_var_map = df_ploidy.groupby('sample')['sample_var_map'].first().reset_index()
-    
-    # Pivot from long format to wide format
-    df_wide = df_ploidy.pivot(index='sample', columns='chromosome', values='median_depth')
-    
-    # Rename columns to match expected format (e.g., 'chr1' -> 'chr1_CopyNumber')
+
+    # Pivot copy numbers back to the legacy wide format used by downstream QC.
+    df_wide = df_ploidy.pivot(index='sample', columns='chromosome', values='copy_number')
+
+    # Rename columns to match the historical EvidenceQC output contract.
     df_wide.columns = [f"{col}_CopyNumber" for col in df_wide.columns]
-    
-    # Reset index to make 'sample' a regular column and rename to 'sample_id'
+
+    # Reset index to make 'sample' a regular column and rename to 'sample_id'.
     df_wide = df_wide.reset_index().rename(columns={'sample': ID_COL})
-    
-    # Merge sample_var_map back in
-    sample_var_map = sample_var_map.rename(columns={'sample': ID_COL})
+
+    # Keep the historical QC table column name while reading the current
+    # ploidy overdispersion field.
+    sample_var_map = df_ploidy.groupby('sample')['sample_overdispersion_map'].first().reset_index()
+    sample_var_map = sample_var_map.rename(
+        columns={'sample': ID_COL, 'sample_overdispersion_map': 'sample_var_map'}
+    )
     df_wide = df_wide.merge(sample_var_map, on=ID_COL, how='left')
-    
+
     # Add chrX_CopyNumber_rounded column
     df_wide.loc[round(df_wide["chrX_CopyNumber"]) < 2, "chrX_CopyNumber_rounded"] = 1
     df_wide.loc[round(df_wide["chrX_CopyNumber"]) >= 2, "chrX_CopyNumber_rounded"] = 2
-    
+
     return df_wide
 
 
