@@ -41,3 +41,15 @@ def test_run_ploidy_wrapper_uses_step_passthroughs_for_infer_call_and_preprocess
     assert 'CALL_STEP_ARGS="--use-callq20 ${CALL_STEP_ARGS}"' in script_text
     assert 'PR_ARGS="--poor-regions ${POOR_REGIONS}"' in script_text
     assert 'Error: --input-depth is required' in script_text
+
+
+def test_run_ploidy_wrapper_recomputes_polyploidy_after_preprocess() -> None:
+    script_path = Path(__file__).resolve().parents[2] / "run_ploidy.sh"
+    script_text = script_path.read_text(encoding="utf-8")
+
+    assert 'RUN_POLYPLOIDY_STATUS="pending site_data check"' in script_text
+    assert 'echo "  Run polyploidy   : ${RUN_POLYPLOIDY_STATUS}"' in script_text
+    assert 'RUN_POLYPLOIDY="false"' in script_text
+    assert 'if [[ -f "${SITE_DATA}" ]]; then' in script_text
+    assert 'elif [[ "${DRY_RUN}" == "true" && -n "${SITE_DEPTH_LIST}" ]]; then' in script_text
+    assert 'Warning: site-depth list was provided but preprocess did not create ${SITE_DATA}; AF-enabled polyploidy and raw AF plots will be skipped.' in script_text

@@ -198,9 +198,9 @@ PPD_BIN_QUALITY="${PPD_DIR}/ppd_bin_quality.tsv"
 PPD_CHR_SUMMARY="${PPD_DIR}/ppd_chromosome_summary.tsv"
 IGNORED_BINS="${CALL_DIR}/ignored_bins.tsv.gz"
 
-RUN_POLYPLOIDY="false"
-if [[ -f "${SITE_DATA}" ]]; then
-    RUN_POLYPLOIDY="true"
+RUN_POLYPLOIDY_STATUS="false"
+if [[ -n "${SITE_DEPTH_LIST}" ]]; then
+    RUN_POLYPLOIDY_STATUS="pending site_data check"
 fi
 
 echo "=== gatk-sv-ploidy pipeline ==="
@@ -209,7 +209,7 @@ echo "  Site depth list  : $(describe_redacted_input "${SITE_DEPTH_LIST}")"
 echo "  Poor regions     : $(describe_redacted_input "${POOR_REGIONS}")"
 echo "  Truth JSON       : $(describe_redacted_input "${TRUTH_JSON}")"
 echo "  Call filter qual : $([[ "${USE_CALLQ20}" == "true" ]] && printf 'CALLQ20' || printf 'BINQ20')"
-echo "  Run polyploidy   : ${RUN_POLYPLOIDY}"
+echo "  Run polyploidy   : ${RUN_POLYPLOIDY_STATUS}"
 echo "  PPD extra args   : $(describe_redacted_input "${PPD_STEP_ARGS}" "provided (redacted)" "none")"
 echo "  Run PPD          : ${ENABLE_PPD}"
 echo "  Work dir         : configured (redacted)"
@@ -248,6 +248,15 @@ else
         $SD_ARGS \
         $PR_ARGS \
         $PREPROCESS_ARGS
+fi
+
+RUN_POLYPLOIDY="false"
+if [[ -f "${SITE_DATA}" ]]; then
+    RUN_POLYPLOIDY="true"
+elif [[ "${DRY_RUN}" == "true" && -n "${SITE_DEPTH_LIST}" ]]; then
+    RUN_POLYPLOIDY="true"
+elif [[ -n "${SITE_DEPTH_LIST}" ]]; then
+    echo "Warning: site-depth list was provided but preprocess did not create ${SITE_DATA}; AF-enabled polyploidy and raw AF plots will be skipped." >&2
 fi
 
 if [[ "${RUN_POLYPLOIDY}" == "true" ]]; then
