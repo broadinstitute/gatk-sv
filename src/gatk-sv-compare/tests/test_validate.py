@@ -465,3 +465,24 @@ def test_validate_and_fix_writes_bgzip_and_tabix_for_gz_output(make_vcf, tmp_pat
     with pysam.VariantFile(str(out_path)) as vcf:
         record = next(iter(vcf))
         assert str(record.info["SVTYPE"]) == "INS"
+
+
+def test_validate_and_fix_infers_missing_svtype_from_symbolic_alt_prefix(make_vcf, tmp_path) -> None:
+    vcf_path = make_vcf(
+        file_name="mixed_missing_svtype.vcf",
+        records=[
+            "chr1\t100\tdel1\tN\t<DEL:ME:SVA>\t.\tPASS\tSVLEN=25\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+            "chr1\t200\tdup1\tN\t<DUP:TANDEM>\t.\tPASS\tSVLEN=50\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+            "chr1\t300\tins1\tN\t<INS:ME>\t.\tPASS\tSVLEN=10\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+            "chr1\t400\tcpx1\tN\t<CPX:CTX_INV>\t.\tPASS\tSVLEN=75\tGT:GQ:ECN\t0/1:60:2\t0/0:50:2",
+        ],
+    )
+    out_path = tmp_path / "mixed_missing_svtype.fixed.vcf.gz"
+
+    result = validate_and_fix(vcf_path, out_path)
+
+    assert result.wrote_output is True
+    assert result.fixed_summary is not None
+    assert result.fixed_summary.has_errors is False
+    with pysam.VariantFile(str(out_path)) as vcf:
+        assert [str(record.info["SVTYPE"]) for record in vcf] == ["DEL", "DUP", "INS", "CPX"]

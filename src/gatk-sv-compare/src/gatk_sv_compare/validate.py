@@ -310,11 +310,10 @@ def _infer_svtype(chrom: str, alt_values: List[str]) -> Optional[str]:
     symbolic_match = _SYMBOLIC_ALT_PATTERN.fullmatch(alt_value)
     if symbolic_match is None:
         return None
-    symbolic_type = symbolic_match.group(1)
-    if symbolic_type in {"DEL", "DUP", "INS", "INV", "BND", "CTX", "CPX", "CNV"}:
-        return symbolic_type
-    if symbolic_type.startswith("INS:"):
-        return "INS"
+    symbolic_type = symbolic_match.group(1).upper()
+    symbolic_prefix = symbolic_type.split(":", 1)[0]
+    if symbolic_prefix in {"DEL", "DUP", "INS", "INV", "BND", "CTX", "CPX", "CNV"}:
+        return symbolic_prefix
     if symbolic_type.startswith("CN") and symbolic_type[2:].isdigit():
         return "CNV"
     return None
