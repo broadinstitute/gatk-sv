@@ -23,8 +23,8 @@ huge.max.size <- 300000000
 # Format large numbers with K/M notation, 2 d.p.
 formatCount <- function(n){
   if(is.na(n) || !is.finite(n)) return("NA")
-  if(abs(n) >= 1e6) return(paste0(round(n/1e6, 2), "M"))
-  if(abs(n) >= 1e3) return(paste0(round(n/1e3, 2), "K"))
+  if(abs(n) >= 1e6) return(paste0(sprintf("%.2f", n/1e6), "M"))
+  if(abs(n) >= 1e3) return(paste0(sprintf("%.2f", n/1e3), "K"))
   return(as.character(round(n)))
 }
 orderRegions <- function(regions){

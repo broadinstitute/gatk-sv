@@ -93,8 +93,8 @@ plotStackedBars <- function(mat,colors,scaled=T,log.y=FALSE,title=NULL){
 # Format a count as "X.XXK" or "X.XXM" with 2 decimal places
 formatCount <- function(n){
   if(is.na(n) || !is.finite(n)) return(as.character(n))
-  if(abs(n) >= 1e6) return(paste0(round(n/1e6, 2), "M"))
-  if(abs(n) >= 1e3) return(paste0(round(n/1e3, 2), "K"))
+  if(abs(n) >= 1e6) return(paste0(sprintf("%.2f", n/1e6), "M"))
+  if(abs(n) >= 1e3) return(paste0(sprintf("%.2f", n/1e3), "K"))
   return(as.character(round(n)))
 }
 
@@ -659,10 +659,10 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
   n.sz.dropped <- length(sizes) - n.sz.plotted
   n.line <- if(show.alu.labels) 2 else 1.8
   n.label <- paste("n=",prettyNum(n.sz.plotted,big.mark=","),sep="")
-  if(show.dropped && n.sz.dropped > 0){
-    n.label <- paste0(n.label, "  (", prettyNum(n.sz.dropped,big.mark=",")," dropped - SNVs)")
-  }
   mtext(3,line=n.line,text=n.label,cex=text.cex*0.75)
+  if(show.dropped && n.sz.dropped > 0){
+    mtext(3,line=n.line-0.8,text=paste0("(",prettyNum(n.sz.dropped,big.mark=",")," dropped - SNVs)"),cex=text.cex*0.65)
+  }
   
   #Add filter labels
   if(!is.null(filter.legend)){
@@ -2566,12 +2566,16 @@ wrapperPlotTrLociDistrib <- function(){
     if(length(shared) > 0) env.counts[shared, dt] <- as.integer(tab[shared])
   }
 
-  # Plot: one scatter per comparison type
+  # Plot: SNV big on left (2 rows), then 2x2 grid on right
   n.panels <- length(detail.types)
   png(paste(OUTDIR,"/main_plots/tr_loci_distribution.png",sep=""),
-      res=300, height=1800, width=n.panels*1800)
-  par(mfrow=c(1, n.panels))
-  for(k in seq_along(detail.types)){
+      res=300, height=3600, width=5400)
+  layout(matrix(c(1, 2, 3,
+                  1, 4, 5), nrow=2, byrow=TRUE),
+         widths=c(2, 1, 1))
+  # Reorder: SNV first (big), then INS_SHORT, DEL_SHORT, INS_SV, DEL_SV
+  panel.order <- c(1, 2, 3, 4, 5)  # already in desired order
+  for(k in panel.order){
     x <- tr.allele.counts[, tr.detail.map[k]]
     y <- env.counts[, detail.types[k]]
     # Use only loci with at least one count on either axis
@@ -2765,7 +2769,7 @@ wrapperPlotAllSizeDistribs()
 wrapperPlotAllFreqDistribs()
 
 #Genotype frequencies
-wrapperPlotAllHWDistribs()
+tryCatch(wrapperPlotAllHWDistribs(), error=function(e) message("Skipping HW plots: ", e$message))
 
 #Transition/Transversion distribution
 wrapperPlotTiTv()
