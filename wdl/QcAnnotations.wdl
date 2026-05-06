@@ -604,12 +604,8 @@ task SanitizeOutputs {
         RuntimeAttr? runtime_attr_override
     }
 
-    Float isize_1 = size([samples_list, vcf_stats, vcf_stats_idx, plot_qc_vcfwide_tarball], "GiB")
-    Float isize_2 = size(select_first([plot_qc_site_level_external_benchmarking_tarballs, []]), "GiB")
-    Float isize_3 = size(select_first([plot_qc_per_family_tarball, []]), "GiB")
-    Float isize_4 = size(select_first([plot_qc_per_sample_external_benchmarking_tarballs, []]), "GiB")
-    Float isize_5 = size(select_first([plot_qc_per_sample_tarball, []]), "GiB")
-    Float input_size = isize_1 + isize_2 + isize_3 + isize_4 + isize_5
+    Float input_size = size([plot_qc_vcfwide_tarball, plot_qc_per_family_tarball, plot_qc_site_level_external_benchmarking_tarballs,
+                             plot_qc_per_sample_tarball, plot_qc_per_sample_external_benchmarking_tarballs, vcf_stats], "GiB")
     
     command <<<
         set -euo pipefail
