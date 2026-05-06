@@ -49,6 +49,25 @@ def test_validate_vcf_reports_missing_ecn_as_error(make_vcf) -> None:
     assert "MISSING_ECN" in check_ids
 
 
+def test_validate_vcf_accepts_str_without_ecn(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="str_without_ecn.vcf",
+        extra_header_lines=[
+            "##INFO=<ID=RU,Number=1,Type=String,Description=\"Repeat unit\">",
+            "##INFO=<ID=PERIOD,Number=1,Type=Integer,Description=\"Repeat period\">",
+            "##INFO=<ID=LOCUS,Number=1,Type=String,Description=\"STR locus\">",
+            "##FORMAT=<ID=REPCN,Number=.,Type=Integer,Description=\"Repeat copy number\">",
+        ],
+        records=[
+            "chr1\t100\tstr1\tN\t<STR>\t.\tPASS\tSVTYPE=STR;END=150;RU=AC;PERIOD=2;LOCUS=L1\tGT:REPCN\t0/1:10,11\t0/0:10,10",
+        ],
+    )
+
+    summary = validate_vcf(ValidateConfig(vcf_path=vcf_path))
+
+    assert summary.has_errors is False
+
+
 def test_render_summary_deduplicates_detail_lines_and_reports_counts(make_vcf) -> None:
     vcf_path = make_vcf(
         file_name="repeated_issues.vcf",
@@ -486,3 +505,29 @@ def test_validate_and_fix_infers_missing_svtype_from_symbolic_alt_prefix(make_vc
     assert result.fixed_summary.has_errors is False
     with pysam.VariantFile(str(out_path)) as vcf:
         assert [str(record.info["SVTYPE"]) for record in vcf] == ["DEL", "DUP", "INS", "CPX"]
+
+
+def test_validate_and_fix_infers_missing_svtype_from_str_alt(make_vcf, tmp_path) -> None:
+    vcf_path = make_vcf(
+        file_name="str_missing_svtype.vcf",
+        extra_header_lines=[
+            "##INFO=<ID=RU,Number=1,Type=String,Description=\"Repeat unit\">",
+            "##INFO=<ID=PERIOD,Number=1,Type=Integer,Description=\"Repeat period\">",
+            "##INFO=<ID=LOCUS,Number=1,Type=String,Description=\"STR locus\">",
+            "##FORMAT=<ID=REPCN,Number=.,Type=Integer,Description=\"Repeat copy number\">",
+        ],
+        records=[
+            "chr1\t100\tstr1\tN\t<STR>\t.\tPASS\tEND=150;RU=AC;PERIOD=2;LOCUS=L1\tGT:REPCN\t0/1:10,11\t0/0:10,10",
+        ],
+    )
+    out_path = tmp_path / "str_missing_svtype.fixed.vcf.gz"
+
+    result = validate_and_fix(vcf_path, out_path)
+
+    assert result.wrote_output is True
+    assert result.fixed_summary is not None
+    assert result.fixed_summary.has_errors is False
+    with pysam.VariantFile(str(out_path)) as vcf:
+        record = next(iter(vcf))
+        assert str(record.info["SVTYPE"]) == "STR"
+        assert "ECN" not in record.format

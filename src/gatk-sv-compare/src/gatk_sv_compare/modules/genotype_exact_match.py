@@ -19,6 +19,12 @@ from .base import AnalysisModule, relabel_vcf_columns, write_tsv_gz
 _GT_LABELS = {0: "hom_ref", 1: "het", 2: "hom_alt"}
 
 
+def _as_object_vector(values: list[object]) -> np.ndarray:
+    vector = np.empty(len(values), dtype=object)
+    vector[:] = values
+    return vector
+
+
 def _record_identifier(record: pysam.VariantRecord) -> str:
     return record.id or f"{record.contig}:{record.pos}"
 
@@ -32,7 +38,26 @@ def _iter_records_for_contig(vcf: pysam.VariantFile, contig: str):
                 yield record
 
 
-def _gt_code(sample: pysam.libcbcf.VariantRecordSample, svtype: str) -> Optional[int]:
+def _canonical_repcn(value: object) -> Optional[tuple[object, ...]]:
+    if value in (None, "."):
+        return None
+    if isinstance(value, (tuple, list)):
+        raw_values = list(value)
+    else:
+        text = str(value)
+        separator = "/" if "/" in text else ","
+        raw_values = text.split(separator)
+    if not raw_values or any(raw_value in (None, ".", "") for raw_value in raw_values):
+        return None
+    try:
+        return tuple(sorted(int(raw_value) for raw_value in raw_values))
+    except (TypeError, ValueError):
+        return tuple(sorted(str(raw_value) for raw_value in raw_values))
+
+
+def _gt_code(sample: pysam.libcbcf.VariantRecordSample, svtype: str) -> Optional[object]:
+    if svtype == "STR":
+        return _canonical_repcn(sample.get("REPCN"))
     if svtype == "CNV":
         cn = sample.get("CN")
         ecn = sample.get("ECN")
@@ -61,8 +86,16 @@ def _extract_genotype_vectors(
                 svtype = svtype_by_vid.get(variant_id, "UNKNOWN")
                 sample_values = list(record.samples.values())
                 codes = [_gt_code(sample_values[int(index)], svtype) for index in sample_indices]
-                vectors[variant_id] = np.asarray([np.nan if code is None else float(code) for code in codes], dtype=float)
+                vectors[variant_id] = _as_object_vector(codes)
     return vectors
+
+
+def _valid_genotype_mask(left: np.ndarray, right: np.ndarray) -> np.ndarray:
+    return np.asarray([left_value is not None and right_value is not None for left_value, right_value in zip(left, right)], dtype=bool)
+
+
+def _is_numeric_genotype_vector(values: np.ndarray) -> bool:
+    return all(isinstance(value, (int, float, np.integer, np.floating)) for value in values)
 
 
 def build_exact_match_table(data: AggregatedData, config: AnalysisConfig) -> pd.DataFrame:
@@ -113,12 +146,20 @@ def build_exact_match_table(data: AggregatedData, config: AnalysisConfig) -> pd.
         vector_b = vectors_b.get(str(row.variant_id_b))
         if vector_a is None or vector_b is None:
             continue
-        valid = ~np.isnan(vector_a) & ~np.isnan(vector_b)
+        valid = _valid_genotype_mask(vector_a, vector_b)
         n_compared = int(valid.sum())
         if n_compared == 0:
             continue
-        left = vector_a[valid].astype(int)
-        right = vector_b[valid].astype(int)
+        left = vector_a[valid]
+        right = vector_b[valid]
+        exact_match_rate = float(np.equal(left, right).mean())
+        has_numeric_codes = _is_numeric_genotype_vector(left) and _is_numeric_genotype_vector(right)
+        if has_numeric_codes:
+            left_numeric = left.astype(int)
+            right_numeric = right.astype(int)
+        else:
+            left_numeric = np.asarray([], dtype=int)
+            right_numeric = np.asarray([], dtype=int)
         meta_a = site_meta_a.loc[str(row.variant_id_a)]
         meta_b = site_meta_b.loc[str(row.variant_id_b)]
         rows.append(
@@ -138,13 +179,13 @@ def build_exact_match_table(data: AggregatedData, config: AnalysisConfig) -> pd.
                 "algorithms_b": meta_b["algorithms"],
                 "evidence_bucket_b": meta_b["evidence_bucket"],
                 "n_compared": n_compared,
-                "exact_match_rate": float((left == right).mean()),
-                "homref_to_het_rate": float(((left == 0) & (right == 1)).mean()),
-                "het_to_homref_rate": float(((left == 1) & (right == 0)).mean()),
-                "homref_to_homalt_rate": float(((left == 0) & (right == 2)).mean()),
-                "homalt_to_homref_rate": float(((left == 2) & (right == 0)).mean()),
-                "het_to_homalt_rate": float(((left == 1) & (right == 2)).mean()),
-                "homalt_to_het_rate": float(((left == 2) & (right == 1)).mean()),
+                "exact_match_rate": exact_match_rate,
+                "homref_to_het_rate": float(((left_numeric == 0) & (right_numeric == 1)).mean()) if has_numeric_codes else 0.0,
+                "het_to_homref_rate": float(((left_numeric == 1) & (right_numeric == 0)).mean()) if has_numeric_codes else 0.0,
+                "homref_to_homalt_rate": float(((left_numeric == 0) & (right_numeric == 2)).mean()) if has_numeric_codes else 0.0,
+                "homalt_to_homref_rate": float(((left_numeric == 2) & (right_numeric == 0)).mean()) if has_numeric_codes else 0.0,
+                "het_to_homalt_rate": float(((left_numeric == 1) & (right_numeric == 2)).mean()) if has_numeric_codes else 0.0,
+                "homalt_to_het_rate": float(((left_numeric == 2) & (right_numeric == 1)).mean()) if has_numeric_codes else 0.0,
             }
         )
     return pd.DataFrame(rows, columns=columns)

@@ -224,6 +224,8 @@ def _extract_concordance_metrics(record: pysam.VariantRecord) -> Optional[Dict[s
 
 
 def _genomic_context(record: pysam.VariantRecord, svtype: str, context_overlap: float = 0.5) -> str:
+    if svtype == "STR":
+        return "simple_repeat"
     normalized_keys = {_normalize_info_key(str(key)): str(key) for key in record.info.keys()}
     candidates: List[Tuple[float, int, int, str]] = []
     for context_index, context in enumerate(GENOMIC_CONTEXTS):

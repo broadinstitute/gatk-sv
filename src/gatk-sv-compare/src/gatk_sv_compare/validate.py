@@ -13,7 +13,7 @@ import pysam
 
 from .config import ValidateConfig
 from .gq_utils import detect_gq_scale_factor
-from .vcf_format import FormatIssue, PipelineStage, check_header, check_record, detect_pipeline_stage, has_precomputed_counts
+from .vcf_format import FormatIssue, PipelineStage, check_header, check_record, detect_pipeline_stage, has_precomputed_counts, infer_svtype_from_alt_values
 
 _FIXABLE_CHECK_IDS = {
     "MISSING_SVTYPE",
@@ -22,7 +22,6 @@ _FIXABLE_CHECK_IDS = {
     "MULTI_ALLELIC_NON_CNV",
 }
 _BND_MATE_PATTERN = re.compile(r"[\[\]]([^:\[\]]+):(\d+)[\[\]]")
-_SYMBOLIC_ALT_PATTERN = re.compile(r"^<([^>]+)>$")
 _CN_ALT_PATTERN = re.compile(r"^<CN\d+>$")
 _ORIGINAL_ALT_INFO_HEADER = '##INFO=<ID=ORIGINAL_ALT,Number=1,Type=String,Description="Original ALT allele before validate --fix canonicalization">'
 _ECN_FORMAT_HEADER = '##FORMAT=<ID=ECN,Number=1,Type=Integer,Description="Expected copy number">'
@@ -294,29 +293,7 @@ def _parse_breakend_alt(alt: str) -> Optional[Tuple[str, str]]:
 
 
 def _infer_svtype(chrom: str, alt_values: List[str]) -> Optional[str]:
-    if not alt_values:
-        return None
-    if len(alt_values) > 1 and all(_CN_ALT_PATTERN.fullmatch(alt_value) for alt_value in alt_values):
-        return "CNV"
-    if len(alt_values) != 1:
-        return None
-    alt_value = alt_values[0]
-    if "[" in alt_value or "]" in alt_value:
-        mate = _parse_breakend_alt(alt_value)
-        if mate is None:
-            return None
-        mate_chrom, _ = mate
-        return "CTX" if mate_chrom != chrom else "BND"
-    symbolic_match = _SYMBOLIC_ALT_PATTERN.fullmatch(alt_value)
-    if symbolic_match is None:
-        return None
-    symbolic_type = symbolic_match.group(1).upper()
-    symbolic_prefix = symbolic_type.split(":", 1)[0]
-    if symbolic_prefix in {"DEL", "DUP", "INS", "INV", "BND", "CTX", "CPX", "CNV"}:
-        return symbolic_prefix
-    if symbolic_type.startswith("CN") and symbolic_type[2:].isdigit():
-        return "CNV"
-    return None
+    return infer_svtype_from_alt_values(chrom, alt_values)
 
 
 def _is_cn_alt_list(alt_values: List[str]) -> bool:
@@ -431,7 +408,7 @@ def _fix_record_line(
             info_values = _info_dict(info_fields)
             alt = f"<{breakend_svtype}>"
 
-    if ploidy_dict is not None and format_text is not None and "ECN" not in format_text.split(":"):
+    if ploidy_dict is not None and format_text is not None and svtype != "STR" and "ECN" not in format_text.split(":"):
         if sample_names is None or len(sample_names) != len(sample_texts):
             raise ValueError("Cannot repair ECN without aligned sample names")
         format_keys = format_text.split(":") if format_text else []

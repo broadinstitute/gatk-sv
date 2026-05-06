@@ -20,6 +20,7 @@ SVTYPE_COLORS = {
     "CPX": "#71E38C",
     "CNV": "#7459B2",
     "INS:MEI": "#D474E0",
+    "STR": "#00A08A",
     "OTH": "#397246",
 }
 

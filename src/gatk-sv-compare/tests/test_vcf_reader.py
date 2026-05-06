@@ -134,3 +134,28 @@ def test_iter_contig_applies_context_overlap_threshold_for_span_variants(make_vc
 
     assert default_records[0].genomic_context == "none"
     assert relaxed_records[0].genomic_context == "segdup"
+
+
+def test_iter_contig_treats_str_as_simple_repeat(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="str_reader.vcf",
+        extra_header_lines=[
+            "##INFO=<ID=RU,Number=1,Type=String,Description=\"Repeat unit\">",
+            "##INFO=<ID=PERIOD,Number=1,Type=Integer,Description=\"Repeat period\">",
+            "##INFO=<ID=LOCUS,Number=1,Type=String,Description=\"STR locus\">",
+            "##INFO=<ID=STATUS,Number=1,Type=String,Description=\"Match status\">",
+            "##INFO=<ID=TRUTH_VID,Number=1,Type=String,Description=\"Truth variant id\">",
+            "##FORMAT=<ID=REPCN,Number=.,Type=Integer,Description=\"Repeat copy number\">",
+        ],
+        records=[
+            "chr1\t100\tstr1\tN\t<STR>\t.\tPASS\tSVTYPE=STR;END=150;RU=AC;PERIOD=2;LOCUS=L1;STATUS=MATCHED;TRUTH_VID=str2\tGT:REPCN\t0/1:10,11\t0/0:10,10",
+        ],
+    )
+
+    records = list(iter_contig(vcf_path, "chr1"))
+
+    assert len(records) == 1
+    assert records[0].svtype == "STR"
+    assert records[0].genomic_context == "simple_repeat"
+    assert records[0].status == "MATCHED"
+    assert records[0].truth_vid == "str2"

@@ -2,22 +2,37 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
 import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import pysam
 
 from .config import AnalysisConfig
+from .dimensions import STATUS_MATCHED, STATUS_UNMATCHED
+from .vcf_format import resolve_record_svtype
 
 logger = logging.getLogger(__name__)
 
 
 class PreprocessError(RuntimeError):
     """Raised when preprocessing fails."""
+
+
+StrSiteKey = Tuple[str, int, Tuple[Tuple[str, str], ...]]
+_STR_MATCH_EXCLUDED_INFO = frozenset({"STATUS", "TRUTH_VID"})
+
+
+@dataclass(frozen=True)
+class SplitVcfPaths:
+    sv_vcf: Path
+    str_vcf: Path
+    sv_count: int
+    str_count: int
 
 
 def read_contig_list(contig_list_path: Path) -> List[str]:
@@ -53,6 +68,198 @@ def get_tracks(config: AnalysisConfig) -> Dict[str, Path]:
     if config.repeatmasker_track is not None:
         tracks["repeatmasker"] = config.repeatmasker_track
     return tracks
+
+
+def _record_identifier(record: pysam.VariantRecord) -> str:
+    return record.id or f"{record.contig}:{record.pos}"
+
+
+def _ensure_info_header(header: pysam.VariantHeader, key: str, number: str | int, value_type: str, description: str) -> None:
+    if key not in header.info:
+        header.add_meta("INFO", items=[("ID", key), ("Number", number), ("Type", value_type), ("Description", description)])
+
+
+def _ensure_str_passthrough_headers(header: pysam.VariantHeader) -> None:
+    _ensure_info_header(header, "SVTYPE", 1, "String", "SV type")
+    _ensure_info_header(header, "STATUS", 1, "String", "Match status")
+    _ensure_info_header(header, "TRUTH_VID", 1, "String", "Matched truth variant ID")
+
+
+def _translate_record(record: pysam.VariantRecord, header: pysam.VariantHeader) -> pysam.VariantRecord:
+    translated = record.copy()
+    translated.translate(header)
+    return translated
+
+
+def _set_missing_svtype(record: pysam.VariantRecord, svtype: Optional[str]) -> None:
+    if svtype is None:
+        return
+    current = record.info.get("SVTYPE") if "SVTYPE" in record.header.info else None
+    if current in (None, "."):
+        record.info["SVTYPE"] = svtype
+
+
+def _split_str_sv_vcfs(input_vcf: Path, sv_output: Path, str_output: Path) -> SplitVcfPaths:
+    """Split one input VCF into GATK-compatible SV records and STR pass-through records."""
+    sv_output.parent.mkdir(parents=True, exist_ok=True)
+    sv_count = 0
+    str_count = 0
+    with pysam.VariantFile(str(input_vcf)) as in_vcf:
+        header = in_vcf.header.copy()
+        _ensure_str_passthrough_headers(header)
+        with pysam.VariantFile(str(sv_output), "wz", header=header) as sv_vcf, pysam.VariantFile(str(str_output), "wz", header=header) as str_vcf:
+            for record in in_vcf:
+                svtype = resolve_record_svtype(record)
+                if svtype == "STR":
+                    output_record = _translate_record(record, str_vcf.header)
+                    _set_missing_svtype(output_record, svtype)
+                    str_vcf.write(output_record)
+                    str_count += 1
+                else:
+                    output_record = _translate_record(record, sv_vcf.header)
+                    _set_missing_svtype(output_record, svtype)
+                    sv_vcf.write(output_record)
+                    sv_count += 1
+    pysam.tabix_index(str(sv_output), preset="vcf", force=True)
+    pysam.tabix_index(str(str_output), preset="vcf", force=True)
+    return SplitVcfPaths(sv_vcf=sv_output, str_vcf=str_output, sv_count=sv_count, str_count=str_count)
+
+
+def _canonical_info_value(value: object) -> str:
+    if value is True:
+        return ""
+    if isinstance(value, (tuple, list)):
+        return ",".join(str(item) for item in value)
+    return str(value)
+
+
+def _str_site_key(record: pysam.VariantRecord) -> StrSiteKey:
+    info_items: List[Tuple[str, str]] = []
+    observed_svtype = False
+    for key in sorted(str(key) for key in record.info.keys() if str(key) not in _STR_MATCH_EXCLUDED_INFO):
+        value = record.info.get(key)
+        if key == "SVTYPE":
+            observed_svtype = True
+            value = "STR"
+        info_items.append((key, _canonical_info_value(value)))
+    if not observed_svtype:
+        info_items.append(("SVTYPE", "STR"))
+        info_items.sort()
+    return (record.contig, int(record.pos), tuple(info_items))
+
+
+def _load_str_site_ids(str_vcf: Path) -> Dict[StrSiteKey, str]:
+    site_ids: Dict[StrSiteKey, str] = {}
+    with pysam.VariantFile(str(str_vcf)) as vcf:
+        for record in vcf:
+            key = _str_site_key(record)
+            if key in site_ids:
+                raise PreprocessError(f"Duplicate STR fixed site in {str_vcf}: {_record_identifier(record)} and {site_ids[key]}")
+            site_ids[key] = _record_identifier(record)
+    return site_ids
+
+
+def _delete_info_if_present(record: pysam.VariantRecord, key: str) -> None:
+    try:
+        del record.info[key]
+    except (KeyError, ValueError):
+        pass
+
+
+def _annotate_str_vcf(str_vcf: Path, output_path: Path, truth_ids_by_key: Dict[StrSiteKey, str]) -> Path:
+    with pysam.VariantFile(str(str_vcf)) as in_vcf:
+        header = in_vcf.header.copy()
+        _ensure_str_passthrough_headers(header)
+        with pysam.VariantFile(str(output_path), "wz", header=header) as out_vcf:
+            for record in in_vcf:
+                output_record = _translate_record(record, out_vcf.header)
+                _set_missing_svtype(output_record, "STR")
+                key = _str_site_key(output_record)
+                truth_id = truth_ids_by_key.get(key)
+                if truth_id is None:
+                    output_record.info["STATUS"] = STATUS_UNMATCHED
+                    _delete_info_if_present(output_record, "TRUTH_VID")
+                else:
+                    output_record.info["STATUS"] = STATUS_MATCHED
+                    output_record.info["TRUTH_VID"] = truth_id
+                out_vcf.write(output_record)
+    pysam.tabix_index(str(output_path), preset="vcf", force=True)
+    return output_path
+
+
+def _annotate_str_pair(str_a: Path, str_b: Path, output_a: Path, output_b: Path) -> Tuple[Path, Path]:
+    ids_a = _load_str_site_ids(str_a)
+    ids_b = _load_str_site_ids(str_b)
+    return (
+        _annotate_str_vcf(str_a, output_a, ids_b),
+        _annotate_str_vcf(str_b, output_b, ids_a),
+    )
+
+
+def _write_empty_vcf_like(source_path: Path, output_path: Path) -> Path:
+    with pysam.VariantFile(str(source_path)) as source_vcf:
+        header = source_vcf.header.copy()
+        with pysam.VariantFile(str(output_path), "wz", header=header):
+            pass
+    pysam.tabix_index(str(output_path), preset="vcf", force=True)
+    return output_path
+
+
+def _add_missing_header_records(header: pysam.VariantHeader, extra_header: pysam.VariantHeader) -> None:
+    for contig_name, contig in extra_header.contigs.items():
+        if contig_name not in header.contigs:
+            header.contigs.add(contig_name, length=contig.length)
+    for key, value in extra_header.info.items():
+        if key not in header.info:
+            header.add_line(str(value.record).strip())
+    for key, value in extra_header.formats.items():
+        if key not in header.formats:
+            header.add_line(str(value.record).strip())
+    for key, value in extra_header.alts.items():
+        if key not in header.alts:
+            header.add_line(str(value).strip())
+    for key, value in extra_header.filters.items():
+        if key != "PASS" and key not in header.filters:
+            header.add_line(str(value.record).strip())
+    for sample in extra_header.samples:
+        if sample not in header.samples:
+            header.add_sample(sample)
+
+
+def _iter_records_for_contig(vcf: pysam.VariantFile, contig: str) -> Iterable[pysam.VariantRecord]:
+    try:
+        yield from vcf.fetch(contig)
+    except ValueError:
+        for record in vcf:
+            if record.contig == contig:
+                yield record
+
+
+def _merge_vcfs(input_paths: Sequence[Path], output_path: Path, contigs: Sequence[str]) -> Path:
+    if not input_paths:
+        raise PreprocessError("No input VCFs provided for merge.")
+    with pysam.VariantFile(str(input_paths[0])) as first_vcf:
+        header = first_vcf.header.copy()
+    for input_path in input_paths[1:]:
+        with pysam.VariantFile(str(input_path)) as vcf:
+            _add_missing_header_records(header, vcf.header)
+
+    opened_vcfs = [pysam.VariantFile(str(input_path)) for input_path in input_paths]
+    try:
+        with pysam.VariantFile(str(output_path), "wz", header=header) as out_vcf:
+            for contig in contigs:
+                records: List[Tuple[int, int, int, str, pysam.VariantRecord]] = []
+                for source_index, vcf in enumerate(opened_vcfs):
+                    for record in _iter_records_for_contig(vcf, contig):
+                        records.append((int(record.pos), int(record.stop), source_index, _record_identifier(record), record.copy()))
+                for _, _, _, _, record in sorted(records, key=lambda item: item[:4]):
+                    output_record = _translate_record(record, out_vcf.header)
+                    out_vcf.write(output_record)
+    finally:
+        for vcf in opened_vcfs:
+            vcf.close()
+    pysam.tabix_index(str(output_path), preset="vcf", force=True)
+    return output_path
 
 
 def build_svconcordance_command(
@@ -342,44 +549,68 @@ def run_preprocess(config: AnalysisConfig) -> Tuple[Path, Path]:
     else:
         logger.info("No region-overlap tracks configured; annotated outputs will mirror concordance outputs")
 
-    logger.info("Running concordance with VCF A as eval and VCF B as truth")
-    concordance_a_shards = _scatter_concordance(
-        eval_vcf=config.vcf_a_path,
-        truth_vcf=config.vcf_b_path,
-        contigs=config.contigs,
-        reference_dict=config.reference_dict,
-        output_dir=preprocess_dir / "concordance_a_eval.per_contig",
-        gatk_path=config.gatk_path,
-        java_options=config.java_options,
-        n_workers=config.n_workers,
-        clustering_config=config.clustering_config,
-        stratification_config=config.stratification_config,
+    split_a = _split_str_sv_vcfs(
+        config.vcf_a_path,
+        preprocess_dir / "input_a.sv.vcf.gz",
+        preprocess_dir / "input_a.str.vcf.gz",
     )
-    logger.info("Running concordance with VCF B as eval and VCF A as truth")
-    concordance_b_shards = _scatter_concordance(
-        eval_vcf=config.vcf_b_path,
-        truth_vcf=config.vcf_a_path,
-        contigs=config.contigs,
-        reference_dict=config.reference_dict,
-        output_dir=preprocess_dir / "concordance_b_eval.per_contig",
-        gatk_path=config.gatk_path,
-        java_options=config.java_options,
-        n_workers=config.n_workers,
-        clustering_config=config.clustering_config,
-        stratification_config=config.stratification_config,
+    split_b = _split_str_sv_vcfs(
+        config.vcf_b_path,
+        preprocess_dir / "input_b.sv.vcf.gz",
+        preprocess_dir / "input_b.str.vcf.gz",
+    )
+    logger.info(
+        "Split inputs: A has %s SV records and %s STR records; B has %s SV records and %s STR records",
+        split_a.sv_count,
+        split_a.str_count,
+        split_b.sv_count,
+        split_b.str_count,
     )
 
+    logger.info("Running concordance with VCF A as eval and VCF B as truth")
+    if split_a.sv_count:
+        concordance_a_shards = _scatter_concordance(
+            eval_vcf=split_a.sv_vcf,
+            truth_vcf=split_b.sv_vcf,
+            contigs=config.contigs,
+            reference_dict=config.reference_dict,
+            output_dir=preprocess_dir / "concordance_a_eval.per_contig",
+            gatk_path=config.gatk_path,
+            java_options=config.java_options,
+            n_workers=config.n_workers,
+            clustering_config=config.clustering_config,
+            stratification_config=config.stratification_config,
+        )
+    else:
+        logger.info("Skipping VCF A concordance because A has no non-STR SV records")
+        concordance_a_shards = []
+    logger.info("Running concordance with VCF B as eval and VCF A as truth")
+    if split_b.sv_count:
+        concordance_b_shards = _scatter_concordance(
+            eval_vcf=split_b.sv_vcf,
+            truth_vcf=split_a.sv_vcf,
+            contigs=config.contigs,
+            reference_dict=config.reference_dict,
+            output_dir=preprocess_dir / "concordance_b_eval.per_contig",
+            gatk_path=config.gatk_path,
+            java_options=config.java_options,
+            n_workers=config.n_workers,
+            clustering_config=config.clustering_config,
+            stratification_config=config.stratification_config,
+        )
+    else:
+        logger.info("Skipping VCF B concordance because B has no non-STR SV records")
+        concordance_b_shards = []
+
     logger.info("Concatenating %s concordance shards into %s", len(concordance_a_shards), preprocess_dir / "concordance_a.vcf.gz")
-    concordance_a = concatenate_vcfs(
-        sorted(concordance_a_shards), preprocess_dir / "concordance_a.vcf.gz"
-    )
+    concordance_a = concatenate_vcfs(sorted(concordance_a_shards), preprocess_dir / "concordance_a.vcf.gz") if concordance_a_shards else _write_empty_vcf_like(split_a.sv_vcf, preprocess_dir / "concordance_a.vcf.gz")
     logger.info("Concatenating %s concordance shards into %s", len(concordance_b_shards), preprocess_dir / "concordance_b.vcf.gz")
-    concordance_b = concatenate_vcfs(
-        sorted(concordance_b_shards), preprocess_dir / "concordance_b.vcf.gz"
-    )
+    concordance_b = concatenate_vcfs(sorted(concordance_b_shards), preprocess_dir / "concordance_b.vcf.gz") if concordance_b_shards else _write_empty_vcf_like(split_b.sv_vcf, preprocess_dir / "concordance_b.vcf.gz")
 
     annotated_a = preprocess_dir / "annotated_a.vcf.gz"
     annotated_b = preprocess_dir / "annotated_b.vcf.gz"
+    annotated_sv_a = preprocess_dir / "annotated_a.sv.vcf.gz"
+    annotated_sv_b = preprocess_dir / "annotated_b.sv.vcf.gz"
     if tracks:
         logger.info("Running region-overlap annotation for annotated_a")
         annotated_a_shards = _scatter_region_overlap(
@@ -390,7 +621,7 @@ def run_preprocess(config: AnalysisConfig) -> Tuple[Path, Path]:
             java_options=config.java_options,
             n_workers=config.n_workers,
             tracks=tracks,
-        )
+        ) if concordance_a_shards else []
         logger.info("Running region-overlap annotation for annotated_b")
         annotated_b_shards = _scatter_region_overlap(
             vcfs=sorted(concordance_b_shards),
@@ -400,15 +631,24 @@ def run_preprocess(config: AnalysisConfig) -> Tuple[Path, Path]:
             java_options=config.java_options,
             n_workers=config.n_workers,
             tracks=tracks,
-        )
-        logger.info("Concatenating %s annotated shards into %s", len(annotated_a_shards), annotated_a)
-        concatenate_vcfs(sorted(annotated_a_shards), annotated_a)
-        logger.info("Concatenating %s annotated shards into %s", len(annotated_b_shards), annotated_b)
-        concatenate_vcfs(sorted(annotated_b_shards), annotated_b)
+        ) if concordance_b_shards else []
+        logger.info("Concatenating %s annotated shards into %s", len(annotated_a_shards), annotated_sv_a)
+        concatenate_vcfs(sorted(annotated_a_shards), annotated_sv_a) if annotated_a_shards else _write_empty_vcf_like(concordance_a, annotated_sv_a)
+        logger.info("Concatenating %s annotated shards into %s", len(annotated_b_shards), annotated_sv_b)
+        concatenate_vcfs(sorted(annotated_b_shards), annotated_sv_b) if annotated_b_shards else _write_empty_vcf_like(concordance_b, annotated_sv_b)
     else:
         logger.info("Copying concordance outputs to annotated outputs (no region-overlap stage)")
-        _copy_with_index(concordance_a, annotated_a)
-        _copy_with_index(concordance_b, annotated_b)
+        _copy_with_index(concordance_a, annotated_sv_a)
+        _copy_with_index(concordance_b, annotated_sv_b)
+
+    annotated_str_a, annotated_str_b = _annotate_str_pair(
+        split_a.str_vcf,
+        split_b.str_vcf,
+        preprocess_dir / "annotated_a.str.vcf.gz",
+        preprocess_dir / "annotated_b.str.vcf.gz",
+    )
+    _merge_vcfs([annotated_sv_a, annotated_str_a], annotated_a, config.contigs)
+    _merge_vcfs([annotated_sv_b, annotated_str_b], annotated_b, config.contigs)
 
     logger.info("Preprocess complete: annotated_a=%s annotated_b=%s", annotated_a, annotated_b)
     return annotated_a, annotated_b

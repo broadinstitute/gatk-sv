@@ -100,3 +100,24 @@ def test_check_record_allows_999_scale_gq(make_vcf) -> None:
     issues = check_record(record)
 
     assert any(issue.check_id == "GQ_RANGE" and issue.severity == "WARN" for issue in issues)
+
+
+def test_check_record_allows_str_without_ecn(make_vcf) -> None:
+    vcf_path = make_vcf(
+        file_name="str.vcf",
+        extra_header_lines=[
+            "##INFO=<ID=RU,Number=1,Type=String,Description=\"Repeat unit\">",
+            "##INFO=<ID=PERIOD,Number=1,Type=Integer,Description=\"Repeat period\">",
+            "##INFO=<ID=LOCUS,Number=1,Type=String,Description=\"STR locus\">",
+            "##FORMAT=<ID=REPCN,Number=.,Type=Integer,Description=\"Repeat copy number\">",
+        ],
+        records=[
+            "chr1\t100\tstr1\tN\t<STR>\t.\tPASS\tSVTYPE=STR;END=150;RU=AC;PERIOD=2;LOCUS=L1\tGT:REPCN\t0/1:10,11\t0/0:10,10",
+        ],
+    )
+    with pysam.VariantFile(str(vcf_path)) as vcf:
+        record = next(iter(vcf))
+
+    issues = check_record(record)
+
+    assert all(issue.check_id not in {"UNKNOWN_SVTYPE", "MISSING_ECN"} for issue in issues)

@@ -9,8 +9,8 @@ from typing import FrozenSet, Iterable, Mapping, Optional, Sequence, Set, Union
 
 import pandas as pd
 
-SVTYPE_ORDER = ["DEL", "DUP", "CNV", "INS", "INS:MEI", "INV", "CPX", "CTX", "BND"]
-SVTYPES_CORE = ["DEL", "DUP", "INS", "INV", "BND", "CPX", "CTX", "CNV"]
+SVTYPE_ORDER = ["DEL", "DUP", "CNV", "INS", "INS:MEI", "INV", "CPX", "CTX", "BND", "STR"]
+SVTYPES_CORE = ["DEL", "DUP", "INS", "INV", "BND", "CPX", "CTX", "CNV", "STR"]
 SVTYPE_INS_MEI = "INS:MEI"
 MEI_ALT_PATTERNS = frozenset({"<INS:ME:", "<INS:ME>"})
 INS_NON_MEI_ALTS = frozenset({"<INS>", "<INS:UNK>"})
@@ -85,7 +85,7 @@ def is_filtered_pass(filter_values: Union[Set[str], FrozenSet[str]]) -> bool:
 
 def bucket_size(svtype: str, svlen: Optional[int]) -> str:
     """Assign an SV to a size bucket."""
-    if svtype in {"BND", "CTX"}:
+    if svtype in {"BND", "CTX", "STR"}:
         return "N/A"
     if svlen is None or svlen <= 0:
         return "unknown"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, unique
+import re
 from typing import Iterable, List, Optional, Set, TypeVar, overload
 
 import pysam
@@ -12,6 +13,9 @@ from .dimensions import SVTYPES_CORE
 
 _ALLOWED_SVTYPES = set(SVTYPES_CORE)
 _DefaultT = TypeVar("_DefaultT")
+_BND_MATE_PATTERN = re.compile(r"[\[\]]([^:\[\]]+):(\d+)[\[\]]")
+_CN_ALT_PATTERN = re.compile(r"^<CN\d+>$")
+_SYMBOLIC_ALT_PATTERN = re.compile(r"^<([^>]+)>$")
 
 
 @dataclass(frozen=True)
@@ -68,12 +72,63 @@ def safe_info_get(record: pysam.VariantRecord, key: str, default: _DefaultT | No
         return default
 
 
+def _parse_breakend_alt(alt: str) -> tuple[str, str] | None:
+    match = _BND_MATE_PATTERN.search(alt)
+    if match is None:
+        return None
+    mate_chrom, mate_pos = match.groups()
+    return mate_chrom, mate_pos
+
+
+def infer_svtype_from_alt_values(chrom: str, alt_values: Iterable[str]) -> Optional[str]:
+    """Infer a coarse SVTYPE from ALT alleles when INFO/SVTYPE is absent."""
+    values = [str(value) for value in alt_values]
+    if not values:
+        return None
+    if len(values) > 1 and all(_CN_ALT_PATTERN.fullmatch(value) for value in values):
+        return "CNV"
+    if len(values) != 1:
+        return None
+
+    alt_value = values[0]
+    if "[" in alt_value or "]" in alt_value:
+        mate = _parse_breakend_alt(alt_value)
+        if mate is None:
+            return None
+        mate_chrom, _ = mate
+        return "CTX" if mate_chrom != chrom else "BND"
+
+    symbolic_match = _SYMBOLIC_ALT_PATTERN.fullmatch(alt_value)
+    if symbolic_match is None:
+        return None
+    symbolic_type = symbolic_match.group(1).upper()
+    symbolic_prefix = symbolic_type.split(":", 1)[0]
+    if symbolic_prefix in _ALLOWED_SVTYPES:
+        return symbolic_prefix
+    if symbolic_type.startswith("CN") and symbolic_type[2:].isdigit():
+        return "CNV"
+    return None
+
+
+def resolve_record_svtype(record: pysam.VariantRecord) -> Optional[str]:
+    """Return INFO/SVTYPE, falling back to symbolic ALT inference."""
+    svtype = safe_info_get(record, "SVTYPE")
+    if svtype not in (None, "."):
+        return str(svtype)
+    return infer_svtype_from_alt_values(record.contig, _iter_alt_alleles(record))
+
+
+def is_str_record(record: pysam.VariantRecord) -> bool:
+    """Return True for STR records represented by SVTYPE=STR or ALT=<STR...>."""
+    return resolve_record_svtype(record) == "STR"
+
+
 def is_mei(alt_allele: str) -> bool:
     return "<INS:ME:" in alt_allele or alt_allele == "<INS:ME>"
 
 
 def is_cnv(record: pysam.VariantRecord) -> bool:
-    return str(safe_info_get(record, "SVTYPE", "")) == "CNV"
+    return resolve_record_svtype(record) == "CNV"
 
 
 def has_precomputed_counts(vcf: pysam.VariantFile) -> bool:
@@ -193,7 +248,7 @@ def check_record(record: pysam.VariantRecord, contig_length: Optional[int] = Non
 
     if "GT" not in record.format:
         issues.append(FormatIssue("MISSING_GT", "ERROR", record_id, "GT FORMAT field is missing"))
-    if "ECN" not in record.format:
+    if svtype_text != "STR" and "ECN" not in record.format:
         issues.append(FormatIssue("MISSING_ECN", "ERROR", record_id, "ECN FORMAT field is missing"))
     if "GQ" in record.format:
         for sample in record.samples.values():
