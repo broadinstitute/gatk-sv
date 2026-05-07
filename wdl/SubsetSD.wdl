@@ -6,6 +6,7 @@ workflow SubsetSD {
   input {
     File sd_file
     File sites_vcf
+    String? sample_id_override
     String sv_pipeline_docker
     String prefix = basename(sd_file, ".sd.txt.gz")
     Int stride = 1
@@ -16,6 +17,7 @@ workflow SubsetSD {
     input:
       sd_file = sd_file,
       sites_vcf = sites_vcf,
+      sample_id_override = sample_id_override,
       prefix = prefix,
       stride = stride,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -32,6 +34,7 @@ task SubsetSDTask {
   input {
     File sd_file
     File sites_vcf
+    String? sample_id_override
     String prefix
     Int stride = 1
     String sv_pipeline_docker
@@ -54,6 +57,10 @@ task SubsetSDTask {
   command <<<
     set -euo pipefail
 
+    cat > sample_id_override.txt <<'EOF'
+    ~{default="" sample_id_override}
+    EOF
+
     python3 <<CODE
     from collections import defaultdict
     import gzip
@@ -63,6 +70,9 @@ task SubsetSDTask {
     stride = ~{stride}
     if stride < 1:
         raise ValueError(f"Stride must be >= 1; got {stride}")
+
+    with open("sample_id_override.txt", "rt", encoding="utf-8") as fin:
+      sample_id_override = fin.read().strip() or None
 
     sites_by_contig = defaultdict(set)
     with pysam.VariantFile("~{sites_vcf}") as vcf:
@@ -74,8 +84,8 @@ task SubsetSDTask {
     kept_records = 0
     with gzip.open("~{sd_file}", "rt") as fin, open("~{subset_sd_txt}", "wt") as fout:
         for line in fin:
-            fields = line.split("\t", 2)
-            if len(fields) < 2:
+          fields = line.rstrip("\n").split("\t")
+          if len(fields) < 3:
                 raise ValueError(f"Malformed SD line: {line.rstrip()}")
 
             contig = fields[0]
@@ -85,7 +95,9 @@ task SubsetSDTask {
                 continue
 
             if matched_records % stride == 0:
-                fout.write(line)
+                if sample_id_override is not None:
+                    fields[2] = sample_id_override
+                fout.write("\t".join(fields) + "\n")
                 kept_records += 1
             matched_records += 1
 

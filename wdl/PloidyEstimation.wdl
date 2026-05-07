@@ -8,6 +8,7 @@ workflow Ploidy {
     File merged_depth_file
     File reference_dict
     String batch
+    Array[String] sample_ids
     Array[File] sd_files = []
     File? ploidy_sd_locs_vcf
     File? poor_regions
@@ -45,6 +46,7 @@ workflow Ploidy {
         input:
           sd_file = sd_files[i],
           sites_vcf = select_first([ploidy_sd_locs_vcf]),
+          sample_id_override = sample_ids[i],
           prefix = basename(sd_files[i], ".sd.txt.gz"),
           stride = subset_sd_stride,
           sv_pipeline_docker = sv_pipeline_docker,

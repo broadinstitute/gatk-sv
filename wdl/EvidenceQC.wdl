@@ -110,6 +110,7 @@ workflow EvidenceQC {
       input:
         merged_depth_file = MakeBincovMatrix.merged_bincov,
         batch = batch,
+        sample_ids = samples,
         sd_files = sd_files,
         ploidy_sd_locs_vcf = ploidy_sd_locs_vcf,
         poor_regions = ploidy_poor_regions,

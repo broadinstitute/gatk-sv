@@ -219,6 +219,7 @@ workflow GatherBatchEvidence {
       input:
         merged_depth_file = merged_bincov_,
         batch = batch,
+        sample_ids = all_samples,
         sd_files = all_SD_files,
         ploidy_sd_locs_vcf = ploidy_sd_locs_vcf,
         poor_regions = ploidy_poor_regions,
