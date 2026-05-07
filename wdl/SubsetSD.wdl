@@ -84,10 +84,9 @@ task SubsetSDTask {
     kept_records = 0
     with gzip.open("~{sd_file}", "rt") as fin, open("~{subset_sd_txt}", "wt") as fout:
         for line in fin:
-          fields = line.rstrip("\n").split("\t")
-          if len(fields) < 3:
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) < 3:
                 raise ValueError(f"Malformed SD line: {line.rstrip()}")
-
             contig = fields[0]
             pos = int(fields[1])
             contig_sites = sites_by_contig.get(contig)
