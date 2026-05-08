@@ -55,9 +55,12 @@ def _parse_region(region_str: str) -> Tuple[str, Optional[int], Optional[int]]:
         parts = coords.replace(",", "").split("-")
         if len(parts) != 2:
             raise ValueError(
-                f"Invalid region format '{region_str}': expected chrom:start-end"
+                "Invalid region format: expected chrom:start-end"
             )
-        return chrom, int(parts[0]), int(parts[1])
+        try:
+            return chrom, int(parts[0]), int(parts[1])
+        except ValueError:
+            raise ValueError("Invalid region coordinates") from None
     return region_str, None, None
 
 
@@ -136,8 +139,9 @@ def _filter_and_prepare_locus_bins(
             to adjust per-sample depths to diploid-equivalent before
             computing bin-level median/MAD statistics for quality
             filtering.
-        par_mask: Optional pseudoautosomal interval mask. Bins that
-            overlap PAR are temporarily exempted from quality filtering.
+        par_mask: Optional pseudoautosomal interval mask. Body bins that
+            overlap PAR are temporarily exempted from quality filtering;
+            flank bins that overlap PAR are excluded from baseline regions.
 
     Returns:
         Tuple of (processed DataFrame, interval_bins dict).
@@ -149,7 +153,7 @@ def _filter_and_prepare_locus_bins(
     locus_df = locus_df[
         (locus_df["End"] > left_bound) & (locus_df["Start"] < right_bound)
     ].copy()
-    print(f"    Bins in active region [{left_bound:,}, {right_bound:,}): {len(locus_df)}")
+    print(f"    Bins in active region: {len(locus_df)}")
 
     if len(locus_df) == 0:
         return locus_df, {}
@@ -201,6 +205,16 @@ def _filter_and_prepare_locus_bins(
         if n_masked > 0:
             print(f"    Masked {n_masked} flank bins due to flank-exclusion overlap")
         flank_df = flank_df[fe_keep].copy()
+
+    if par_mask is not None and len(flank_df) > 0:
+        par_ov = par_mask.get_overlap_fractions_batch(
+            locus.chrom, flank_df["Start"].values, flank_df["End"].values,
+        )
+        par_keep = par_ov == 0.0
+        n_masked = int((~par_keep).sum())
+        if n_masked > 0:
+            print(f"    Masked {n_masked} flank bins due to PAR overlap")
+        flank_df = flank_df[par_keep].copy()
 
     # Optional quality filtering
     if filter_params is not None:
@@ -261,6 +275,77 @@ def _filter_and_prepare_locus_bins(
     return locus_df, interval_bins
 
 
+def _select_highres_interval_replacements(
+    undercovered: List[Tuple[str, int]],
+    hr_interval_bins: Dict[str, List[int]],
+    min_bins_per_interval: Optional[int] = None,
+) -> List[Tuple[str, int, int]]:
+    """Return body intervals whose high-res replacement improves bin count.
+
+    High-resolution rescue should be decided per under-covered body interval,
+    not by replacing the entire locus wholesale. Only intervals whose
+    processed high-res result yields more modeled bins than the current
+    low-resolution result are selected for replacement. When
+    *min_bins_per_interval* is provided, the high-res result must also meet
+    that usual hard-failure threshold.
+    """
+    replacements: List[Tuple[str, int, int]] = []
+    for name, orig_count in undercovered:
+        hr_count = len(hr_interval_bins.get(name, []))
+        meets_minimum = min_bins_per_interval is None or hr_count >= min_bins_per_interval
+        if hr_count > orig_count and meets_minimum:
+            replacements.append((name, orig_count, hr_count))
+    return replacements
+
+
+def _merge_highres_interval_replacements(
+    locus_df: pd.DataFrame,
+    hr_locus_df: pd.DataFrame,
+    interval_bins: Dict[str, List[int]],
+    hr_interval_bins: Dict[str, List[int]],
+    replacement_intervals: List[str],
+    locus: GDLocus,
+    flank_regions: List[Tuple[int, int, str]],
+) -> Tuple[pd.DataFrame, Dict[str, List[int]]]:
+    """Replace selected body intervals with high-res bins and reassign bins.
+
+    The replacement is intentionally interval-scoped: untouched body intervals
+    and flanks remain on the existing low-resolution representation.
+    """
+    if not replacement_intervals:
+        return locus_df, interval_bins
+
+    orig_drop_indices = sorted({
+        idx
+        for name in replacement_intervals
+        for idx in interval_bins.get(name, [])
+    })
+    hr_add_indices = sorted({
+        idx
+        for name in replacement_intervals
+        for idx in hr_interval_bins.get(name, [])
+    })
+
+    remaining_df = locus_df.drop(index=orig_drop_indices) if orig_drop_indices else locus_df
+    hr_replacement_df = hr_locus_df.loc[hr_add_indices] if hr_add_indices else hr_locus_df.iloc[0:0].copy()
+
+    merged_df = (
+        pd.concat([remaining_df, hr_replacement_df], axis=0)
+        .sort_values("Start")
+        .reset_index(drop=True)
+    )
+
+    merged_interval_bins = assign_bins_to_intervals(merged_df, locus, flank_regions)
+    bp_range_indices = merged_interval_bins.pop("breakpoint_ranges", [])
+    if bp_range_indices:
+        print(f"    [highres] masked {len(bp_range_indices)} breakpoint-range bin(s) after merge")
+        merged_df = merged_df.drop(index=bp_range_indices).reset_index(drop=True)
+        merged_interval_bins = assign_bins_to_intervals(merged_df, locus, flank_regions)
+        merged_interval_bins.pop("breakpoint_ranges", None)
+
+    return merged_df, merged_interval_bins
+
+
 def collect_all_locus_bins(
     df: pd.DataFrame,
     gd_table: GDTable,
@@ -307,8 +392,10 @@ def collect_all_locus_bins(
         flank_exclusion_mask: Optional ExclusionMask applied only to
             left/right flanks, not GD body intervals.
         par_mask: Optional pseudoautosomal interval mask. PAR bins are
-            currently exempted from quality filtering while ploidy-aware
-            handling remains contig-wide.
+            excluded from flanking regions because they do not provide a
+            valid non-PAR chrX/chrY baseline under contig-wide ploidy
+            handling. Body bins overlapping PAR remain temporarily exempted
+            from quality filtering.
         exclusion_threshold: Minimum overlap fraction with the mask to
             exclude a bin.
         locus_padding: Padding around locus boundaries.
@@ -318,7 +405,11 @@ def collect_all_locus_bins(
             (0 = no rebinning).
         highres_counts_path: Optional path to a bgzipped, tabix-indexed
             high-resolution read-count file.  When set, loci with any
-            under-covered interval are re-queried at this resolution.
+            under-covered interval are re-queried at this resolution. If a
+            high-res body interval remains under-covered after normal
+            rebinning, preprocessing retries that high-res locus with 10x
+            more bins per interval and fails if the interval still misses
+            *min_bins_per_interval*.
         column_medians: Per-sample autosomal median *raw* counts from the
             low-res file.  Required when *highres_counts_path* is set.
         lowres_median_bin_size: Median bin size (bp) in the low-res file.
@@ -386,11 +477,17 @@ def collect_all_locus_bins(
         pass  # will be passed as None; quality filtering already applied to df
 
     chrom_filtered: Dict[str, pd.DataFrame] = {}
+    cache_total_bins = 0
+    cache_input_bins = 0
+    cache_excluded_bins = 0
+    cache_par_excluded_bins = 0
+    cache_quality_filtered_bins = 0
     for chrom, chrom_df in df.groupby("Chr"):
         keep = np.ones(len(chrom_df), dtype=bool)
         n_excluded = 0
         n_quality = 0
-        n_par_ignored = 0
+        n_par_excluded = 0
+        par_overlap = np.zeros(len(chrom_df), dtype=bool)
         chrom_flank_filter_params = get_flank_filter_params(_flank_filter_params, chrom)
         if exclusion_mask is not None:
             overlaps = exclusion_mask.get_overlap_fractions_batch(
@@ -403,27 +500,41 @@ def collect_all_locus_bins(
             exclusion_keep = overlaps == 0.0
             n_excluded = int((~exclusion_keep).sum())
             keep &= exclusion_keep
+        if par_mask is not None:
+            par_overlap = par_mask.get_overlap_fractions_batch(
+                chrom, chrom_df["Start"].values, chrom_df["End"].values,
+            ) > 0.0
+            n_par_excluded = int(par_overlap.sum())
+            keep &= ~par_overlap
         if chrom_flank_filter_params is not None:
-            quality_keep, quality_stats = compute_bin_quality_mask(
-                chrom_df,
-                median_min=chrom_flank_filter_params["median_min"],
-                median_max=chrom_flank_filter_params["median_max"],
-                mad_max=chrom_flank_filter_params["mad_max"],
-                ploidy_map=ploidy_map,
-                par_mask=par_mask,
-            )
-            n_quality = quality_stats["filtered"]
-            n_par_ignored = quality_stats["par_ignored"]
+            quality_keep = np.ones(len(chrom_df), dtype=bool)
+            quality_positions = np.flatnonzero(~par_overlap)
+            if len(quality_positions) > 0:
+                subset_keep, quality_stats = compute_bin_quality_mask(
+                    chrom_df.iloc[quality_positions],
+                    median_min=chrom_flank_filter_params["median_min"],
+                    median_max=chrom_flank_filter_params["median_max"],
+                    mad_max=chrom_flank_filter_params["mad_max"],
+                    ploidy_map=ploidy_map,
+                    par_mask=None,
+                )
+                quality_keep[quality_positions] = subset_keep
+                n_quality = quality_stats["filtered"]
             keep &= quality_keep
         chrom_filtered[chrom] = chrom_df[keep].copy()
-        parts = [f"{len(chrom_filtered[chrom])} filtered bins (of {len(chrom_df)} total)"]
-        if n_excluded > 0:
-            parts.append(f"{n_excluded} exclusion-masked")
-        if n_quality > 0:
-            parts.append(f"{n_quality} quality-filtered")
-        if n_par_ignored > 0:
-            parts.append(f"{n_par_ignored} PAR-ignored")
-        print(f"  {chrom}: {', '.join(parts)}")
+        cache_total_bins += len(chrom_filtered[chrom])
+        cache_input_bins += len(chrom_df)
+        cache_excluded_bins += n_excluded
+        cache_par_excluded_bins += n_par_excluded
+        cache_quality_filtered_bins += n_quality
+
+    print(
+        "  Filtered cache built: "
+        f"{cache_total_bins:,}/{cache_input_bins:,} bins retained across "
+        f"{len(chrom_filtered)} contigs; exclusion-masked={cache_excluded_bins:,}, "
+        f"PAR-excluded={cache_par_excluded_bins:,}, "
+        f"quality-filtered={cache_quality_filtered_bins:,}"
+    )
 
     # ------------------------------------------------------------------
     # Helper: create LocusBinMapping entries for a processed locus_df
@@ -461,9 +572,7 @@ def collect_all_locus_bins(
                 # Breakpoint-range bins should have been masked upstream;
                 # if one slips through, warn and skip rather than silently
                 # including unreliable signal.
-                print(f"  WARNING: bin {bin_row['Chr']}:{int(bin_row['Start'])}-"
-                      f"{int(bin_row['End'])} in cluster {cluster} does not match "
-                      f"any interval or flank — skipping (likely breakpoint range)")
+                print("  WARNING: skipped one unassigned bin outside modeled intervals")
                 continue
 
             mappings.append(LocusBinMapping(
@@ -481,6 +590,11 @@ def collect_all_locus_bins(
     # ------------------------------------------------------------------
     # Per-locus processing
     # ------------------------------------------------------------------
+    processed_nahr_loci = 0
+    skipped_non_nahr_loci = 0
+    loci_without_flanks = 0
+    exclusion_bypassed_intervals = 0
+    highres_rescue_attempts = 0
     for cluster, locus in gd_table.get_all_loci().items():
         # Skip loci outside requested regions
         if regions is not None and not _locus_overlaps_regions(locus, regions):
@@ -488,14 +602,15 @@ def collect_all_locus_bins(
 
         # Only NAHR loci are analyzed
         if not locus.is_nahr:
-            print(f"\nSkipping non-NAHR locus: {cluster}  "
-                  f"({locus.chrom}:{locus.start:,}-{locus.end:,})")
+            skipped_non_nahr_loci += 1
             continue
 
-        print(f"\nProcessing locus: {cluster}")
-        print(f"  Chromosome: {locus.chrom}")
-        print(f"  Breakpoints: {locus.breakpoints}")
-        print(f"  GD entries: {len(locus.gd_entries)} ({', '.join(locus.svtypes)})")
+        processed_nahr_loci += 1
+        if _util.VERBOSE:
+            print(
+                "\nProcessing one NAHR locus "
+                f"({len(locus.gd_entries)} GD entries, {locus.n_breakpoints} breakpoints)"
+            )
 
         locus_size = locus.end - locus.start
 
@@ -514,10 +629,12 @@ def collect_all_locus_bins(
             par_mask=par_mask,
         )
         if flank_regions:
-            for fs, fe, fn in flank_regions:
-                print(f"  {fn}: {fs:,}-{fe:,} (bin-derived)")
+            if _util.VERBOSE:
+                print(f"  Flank regions selected: {len(flank_regions)}")
         else:
-            print(f"  Warning: no flanking bins found for locus {cluster}")
+            loci_without_flanks += 1
+            if _util.VERBOSE:
+                print("  Warning: no flanking bins found for one locus")
 
         # Determine extraction bounds: locus body + computed flank extents.
         left_bound = locus.start
@@ -537,8 +654,7 @@ def collect_all_locus_bins(
                     locus.chrom, iv_start, iv_end,
                 )
                 if iv_overlap >= exclusion_bypass_threshold:
-                    print(f"  Interval '{iv_name}' is {iv_overlap:.0%} exclusion-overlapped "
-                          f"(>= {exclusion_bypass_threshold:.0%}); bypassing exclusion masking")
+                    exclusion_bypassed_intervals += 1
                     exclusion_bypass_regions.append((iv_start, iv_end))
 
         # ------------------------------------------------------------------
@@ -550,7 +666,8 @@ def collect_all_locus_bins(
             padding=locus_padding,
             exclusion_bypass_regions=exclusion_bypass_regions,
         )
-        print(f"  Body bins after filtering: {len(body_df)}")
+        if _util.VERBOSE:
+            print(f"  Body bins after filtering: {len(body_df)}")
 
         # ------------------------------------------------------------------
         # Step 2 (flanks): collect pre-filtered flank bins from cache
@@ -572,7 +689,6 @@ def collect_all_locus_bins(
                     matched = matched[_fe_ov == 0.0]
                 if len(matched) > 0:
                     flank_dfs.append(matched)
-                    print(f"  {fn} bins from filtered cache: {len(matched)}")
         flank_df = pd.concat(flank_dfs) if flank_dfs else pd.DataFrame(columns=df.columns)
 
         # Combine body + flank bins
@@ -583,7 +699,8 @@ def collect_all_locus_bins(
             ).sort_values("Start").reset_index(drop=True)
         else:
             locus_df = pd.DataFrame(columns=df.columns)
-        print(f"  Combined bins (body + flanks): {len(locus_df)}")
+        if _util.VERBOSE:
+            print(f"  Combined bins (body + flanks): {len(locus_df)}")
 
         # Rebin to reduce number of bins per interval/flank if requested
         if max_bins_per_interval > 0:
@@ -591,39 +708,39 @@ def collect_all_locus_bins(
             if _util.VERBOSE:
                 _sc = get_sample_columns(locus_df_orig)
                 _meds = np.median(locus_df_orig[_sc].values, axis=1)
-                print(f"    [verbose] pre-rebin per-bin median depths ({len(locus_df_orig)} bins):")
-                for _j in range(len(locus_df_orig)):
-                    _r = locus_df_orig.iloc[_j]
-                    print(f"      {_r['Chr']}:{_r['Start']}-{_r['End']}  "
-                          f"median={_meds[_j]:.3f}")
+                print(
+                    "    [verbose] pre-rebin median depth summary: "
+                    f"bins={len(locus_df_orig)}, min={np.min(_meds):.3f}, "
+                    f"median={np.median(_meds):.3f}, max={np.max(_meds):.3f}"
+                )
 
             locus_df = rebin_locus_intervals(locus_df, locus, max_bins_per_interval, flank_regions,
                                              min_rebin_coverage=min_rebin_coverage)
-            if len(locus_df) < len(locus_df_orig):
+            if len(locus_df) < len(locus_df_orig) and _util.VERBOSE:
                 print(f"  Bins after rebinning: {len(locus_df)} (reduced from {len(locus_df_orig)})")
 
             if _util.VERBOSE:
                 _sc = get_sample_columns(locus_df)
                 _meds = np.median(locus_df[_sc].values, axis=1)
-                print(f"    [verbose] post-rebin per-bin median depths ({len(locus_df)} bins):")
-                for _j in range(len(locus_df)):
-                    _r = locus_df.iloc[_j]
-                    print(f"      {_r['Chr']}:{_r['Start']}-{_r['End']}  "
-                          f"median={_meds[_j]:.3f}")
+                print(
+                    "    [verbose] post-rebin median depth summary: "
+                    f"bins={len(locus_df)}, min={np.min(_meds):.3f}, "
+                    f"median={np.median(_meds):.3f}, max={np.max(_meds):.3f}"
+                )
 
         # Assign bins to intervals and flanking regions
         interval_bins = assign_bins_to_intervals(locus_df, locus, flank_regions)
         total_assigned = sum(len(v) for v in interval_bins.values())
-        for region_name, bins in interval_bins.items():
-            print(f"    {region_name}: {len(bins)} bins")
-        print(f"    total: {total_assigned} bins")
+        if _util.VERBOSE:
+            print(f"    total: {total_assigned} bins")
 
         # Mask breakpoint-range bins: bins inside the breakpoint SD-block
         # ranges (not in any body interval or flank) carry unreliable depth
         # signal and must be excluded from model training.
         bp_range_indices = interval_bins.pop("breakpoint_ranges", [])
         if bp_range_indices:
-            print(f"    Masking {len(bp_range_indices)} breakpoint-range bin(s)")
+            if _util.VERBOSE:
+                print(f"    Masking {len(bp_range_indices)} breakpoint-range bin(s)")
             locus_df = locus_df.drop(index=bp_range_indices)
 
         # ------------------------------------------------------------------
@@ -653,16 +770,16 @@ def collect_all_locus_bins(
         # enough bins — the resolution is simply too coarse for this locus
         # size, so we exempt them from the hard-failure threshold later.
         hr_physically_limited: set = set()
+        hr_fallback_failed: set = set()
         if (
             undercovered and
             highres_counts_path is not None and
             column_medians is not None and
             lowres_median_bin_size is not None
         ):
+            highres_rescue_attempts += 1
             print(f"\n  *** {len(undercovered)} body interval(s) have fewer "
-                  f"than {effective_min_bins} bins; switching to high-res ***")
-            for name, cnt in undercovered:
-                print(f"      {name}: {cnt} bins")
+                f"than {effective_min_bins} bins; switching to high-res ***")
 
             # Query the tabix-indexed high-res file for the active region
             hr_raw_df = query_highres_bins(
@@ -672,8 +789,7 @@ def collect_all_locus_bins(
                 right_bound,
                 sample_cols,
             )
-            print(f"    [highres] queried {len(hr_raw_df)} raw bins "
-                  f"in {locus.chrom}:{left_bound:,}-{right_bound:,}")
+            print(f"    [highres] queried {len(hr_raw_df)} raw bins for active locus region")
 
             if len(hr_raw_df) > 0:
                 # Before any filtering, count how many raw hi-res bins
@@ -687,9 +803,10 @@ def collect_all_locus_bins(
                     raw_count = int(((hr_raw_mids >= iv_start) & (hr_raw_mids < iv_end)).sum())
                     if raw_count < min_bins_per_interval:
                         hr_physically_limited.add(iv_name)
-                        print(f"    [highres] body interval '{iv_name}' has only "
-                              f"{raw_count} raw bins (< {min_bins_per_interval}); "
-                              f"resolution-limited, will relax threshold")
+                        print(
+                            "    [highres] one body interval is resolution-limited; "
+                            "will relax threshold"
+                        )
 
                 # Normalise using the low-res calibration, scaled by bin size ratio
                 hr_norm_df = normalize_highres_bins(
@@ -714,37 +831,138 @@ def collect_all_locus_bins(
                     par_mask=par_mask,
                 )
 
-                hr_undercovered = _undercovered_intervals(hr_interval_bins, effective_min_bins)
-
-                # Accept the high-res data if it improved coverage:
-                # (a) fewer under-covered intervals, OR
-                # (b) same number of under-covered intervals but more bins
-                #     in those intervals (e.g. 5 bins vs 0 is a real
-                #     improvement even if both are still below threshold).
-                hr_uc_bins = sum(cnt for _, cnt in hr_undercovered)
-                orig_uc_bins = sum(cnt for _, cnt in undercovered)
-                accept_hr = (
-                    len(hr_undercovered) < len(undercovered) or
-                    (
-                        len(hr_undercovered) <= len(undercovered) and
-                        hr_uc_bins > orig_uc_bins
-                    )
+                interval_replacements = _select_highres_interval_replacements(
+                    undercovered,
+                    hr_interval_bins,
+                    min_bins_per_interval=min_bins_per_interval,
                 )
+                normal_replacement_names = {name for name, _, _ in interval_replacements}
 
-                if accept_hr:
-                    locus_df = hr_locus_df
-                    interval_bins = hr_interval_bins
+                hr_still_undercovered = [
+                    (name, len(hr_interval_bins.get(name, [])))
+                    for name, _ in undercovered
+                    if name not in normal_replacement_names and
+                    len(hr_interval_bins.get(name, [])) < min_bins_per_interval
+                ]
+                fallback_replacements: List[Tuple[str, int, int]] = []
+                fallback_locus_df: Optional[pd.DataFrame] = None
+                fallback_interval_bins: Dict[str, List[int]] = {}
+
+                if hr_still_undercovered:
+                    if max_bins_per_interval > 0:
+                        fallback_max_bins_per_interval = max_bins_per_interval * 10
+                        print(
+                            f"    [highres] {len(hr_still_undercovered)} interval(s) "
+                            f"remain under-covered after high-res; retrying rebin with "
+                            f"--max-bins-per-interval={fallback_max_bins_per_interval}"
+                        )
+                        fallback_locus_df, fallback_interval_bins = _filter_and_prepare_locus_bins(
+                            hr_norm_df,
+                            locus,
+                            flank_regions,
+                            left_bound,
+                            right_bound,
+                            fallback_max_bins_per_interval,
+                            exclusion_mask=exclusion_mask,
+                            flank_exclusion_mask=flank_exclusion_mask,
+                            exclusion_threshold=exclusion_threshold,
+                            filter_params=filter_params,
+                            exclusion_bypass_regions=exclusion_bypass_regions,
+                            min_rebin_coverage=min_rebin_coverage,
+                            ploidy_map=ploidy_map,
+                            par_mask=par_mask,
+                        )
+
+                        retry_undercovered = [
+                            (name, orig_count)
+                            for name, orig_count in undercovered
+                            if any(name == retry_name for retry_name, _ in hr_still_undercovered)
+                        ]
+                        fallback_replacements = _select_highres_interval_replacements(
+                            retry_undercovered,
+                            fallback_interval_bins,
+                            min_bins_per_interval=min_bins_per_interval,
+                        )
+                        fallback_replacement_names = {name for name, _, _ in fallback_replacements}
+
+                        for name, normal_count in hr_still_undercovered:
+                            fallback_count = len(fallback_interval_bins.get(name, []))
+                            if name in fallback_replacement_names:
+                                print(
+                                    "    [highres] one fallback interval reached "
+                                    f"{fallback_count} bins; replacing low-res interval"
+                                )
+                            else:
+                                hr_fallback_failed.add(name)
+                                print(
+                                    "    [highres] one fallback interval still has "
+                                    f"{fallback_count} bins (normal high-res had {normal_count}; "
+                                    f"need >= {min_bins_per_interval})"
+                                )
+                    else:
+                        for name, cnt in hr_still_undercovered:
+                            hr_fallback_failed.add(name)
+                            print(
+                                "    [highres] one interval remains under-covered "
+                                f"after high-res ({cnt} bins), and fallback rebin is not "
+                                "available because --max-bins-per-interval=0"
+                            )
+
+                if interval_replacements:
+                    replacement_names = [name for name, _, _ in interval_replacements]
+                    print(
+                        f"    [highres] {len(replacement_names)} interval(s) improved; "
+                        "replacing low-res intervals"
+                    )
+
+                    locus_df, interval_bins = _merge_highres_interval_replacements(
+                        locus_df,
+                        hr_locus_df,
+                        interval_bins,
+                        hr_interval_bins,
+                        replacement_names,
+                        locus,
+                        flank_regions,
+                    )
                     used_highres = True
                     total_assigned = sum(len(v) for v in interval_bins.values())
                     print("    [highres] ACCEPTED — replaced low-res bins")
-                    for region_name, bins in interval_bins.items():
-                        print(f"      {region_name}: {len(bins)} bins")
+                    print(f"      total: {total_assigned} bins")
+                if fallback_replacements:
+                    fallback_names = [name for name, _, _ in fallback_replacements]
+                    if fallback_locus_df is None:
+                        raise RuntimeError("High-res fallback replacements exist without fallback bins")
+                    locus_df, interval_bins = _merge_highres_interval_replacements(
+                        locus_df,
+                        fallback_locus_df,
+                        interval_bins,
+                        fallback_interval_bins,
+                        fallback_names,
+                        locus,
+                        flank_regions,
+                    )
+                    used_highres = True
+                    total_assigned = sum(len(v) for v in interval_bins.values())
+                    print("    [highres] FALLBACK ACCEPTED — replaced low-res bins")
                     print(f"      total: {total_assigned} bins")
                 else:
-                    print(
-                        "    [highres] REJECTED — high-res did not "
-                        "reduce under-covered intervals"
-                    )
+                    unreplaced = [
+                        (name, orig_count)
+                        for name, orig_count in undercovered
+                        if name not in normal_replacement_names and name not in hr_fallback_failed
+                    ]
+                    for name, orig_count in unreplaced:
+                        hr_count = len(hr_interval_bins.get(name, []))
+                        print(
+                            "    [highres] one interval did not improve to criteria "
+                            f"({orig_count} -> {hr_count} bins; need >= "
+                            f"{min_bins_per_interval}); keeping low-res interval"
+                        )
+                    if not interval_replacements and not fallback_replacements:
+                        print(
+                            "    [highres] REJECTED — high-res did not improve any "
+                            "under-covered intervals to criteria"
+                        )
             else:
                 print("    [highres] no bins returned from tabix query")
 
@@ -758,30 +976,29 @@ def collect_all_locus_bins(
         if hard_check:
             hard_failures = [
                 (name, cnt) for name, cnt in hard_check
-                if name not in hr_physically_limited or cnt == 0
+                if name in hr_fallback_failed or name not in hr_physically_limited or cnt == 0
             ]
             soft_warnings = [
                 (name, cnt) for name, cnt in hard_check
-                if name in hr_physically_limited and cnt > 0
+                if name not in hr_fallback_failed and name in hr_physically_limited and cnt > 0
             ]
 
             if soft_warnings:
                 for name, cnt in soft_warnings:
-                    print(f"  NOTE: body interval '{name}' has {cnt} bins "
+                    print(f"  NOTE: one body interval has {cnt} bins "
                           f"(< {min_bins_per_interval}), but this is the maximum "
                           f"the bin resolution can provide — proceeding anyway.")
 
             if hard_failures:
                 details = "\n".join(
-                    f"    interval '{name}': {cnt} bins (need >= {min_bins_per_interval})"
+                    f"    interval: {cnt} bins (need >= {min_bins_per_interval})"
                     for name, cnt in hard_failures
                 )
                 raise ValueError(
-                    f"\n  WARNING: Locus {cluster} ({locus.chrom}:{locus.start:,}-"
-                    f"{locus.end:,}) has {len(hard_failures)} body interval(s) with "
+                    f"\n  WARNING: One locus has {len(hard_failures)} body interval(s) with "
                     f"fewer than --min-bins-per-interval={min_bins_per_interval} bins "
                     f"after all processing"
-                    f"{' (including high-res replacement)' if used_highres else ''}:\n"
+                    f"{' (including high-res fallback)' if hr_fallback_failed else (' (including high-res replacement)' if used_highres else '')}:\n"
                     f"{details}\n"
                     f"  CNV calls spanning these intervals will have reduced "
                     f"statistical power."
@@ -810,6 +1027,13 @@ def collect_all_locus_bins(
 
     print(f"\n{'=' * 80}")
     print(f"TOTAL: {len(combined_df)} bins across {len(included_loci)} loci")
+    print(
+        "Locus preprocessing summary: "
+        f"processed_NAHR={processed_nahr_loci}, skipped_non_NAHR={skipped_non_nahr_loci}, "
+        f"without_flanks={loci_without_flanks}, "
+        f"exclusion_bypassed_intervals={exclusion_bypassed_intervals}, "
+        f"highres_rescue_attempts={highres_rescue_attempts}"
+    )
     print(f"{'=' * 80}\n")
 
     return combined_df, all_mappings, included_loci
@@ -855,7 +1079,7 @@ def write_preprocessed_bins(
     """
     output_path = os.path.join(output_dir, "preprocessed_bins.tsv.gz")
     combined_df.to_csv(output_path, sep="\t", index=False, compression="gzip")
-    print(f"  Saved: {output_path}")
+    print("  Saved preprocessed bins table")
     print(f"  Rows: {len(combined_df):,}")
     return output_path
 
@@ -911,9 +1135,7 @@ def _detect_baf_columns(filepath: str) -> Tuple[Optional[int], List[str]]:
 
     parts = first_line.split("\t")
     if len(parts) < 4:
-        raise ValueError(
-            f"BAF table {filepath} must have at least 4 tab-delimited columns"
-        )
+        raise ValueError("BAF table must have at least 4 tab-delimited columns")
 
     try:
         int(parts[1])
@@ -1022,11 +1244,8 @@ def write_preprocessed_baf(
     if excluded_samples:
         print(
             f"  Excluding BAF for {len(excluded_samples)} sample(s) with constant "
-            f"ROI BAF values ({excluded_rows:,} rows skipped):"
+            f"ROI BAF values ({excluded_rows:,} rows skipped)"
         )
-        for sample_id in sorted(excluded_samples):
-            count, min_baf, _ = sample_baf_stats[sample_id]
-            print(f"    {sample_id}: {count:,} rows, constant BAF={min_baf:g}")
 
     baf_values_by_bin_sample: Dict[Tuple[int, str], List[float]] = defaultdict(list)
 
@@ -1105,9 +1324,9 @@ def write_preprocessed_baf(
     summary_df = pd.DataFrame(summary_rows, columns=summary_columns)
     summary_df.to_csv(summary_path, sep="\t", index=False, compression="gzip")
 
-    print(f"  Saved: {output_path}")
+    print("  Saved preprocessed BAF table")
     print(f"  Rows: {written_rows:,} ROI-filtered BAF rows retained")
-    print(f"  Saved: {summary_path}")
+    print("  Saved preprocessed BAF summary table")
     print(f"  Rows: {len(summary_df):,} bin × sample BAF summaries")
     return output_path
 
@@ -1133,11 +1352,11 @@ def load_preprocessed_data(
     mappings_path = os.path.join(preprocessed_dir, "bin_mappings.tsv.gz")
     baf_summary_path = os.path.join(preprocessed_dir, "preprocessed_baf_summary.tsv.gz")
 
-    print(f"  Loading preprocessed bins: {bins_path}")
+    print("  Loading preprocessed bins")
     combined_df = pd.read_csv(bins_path, sep="\t", compression="infer")
     print(f"    {len(combined_df)} bins")
 
-    print(f"  Loading bin mappings: {mappings_path}")
+    print("  Loading bin mappings")
     mappings_df = pd.read_csv(mappings_path, sep="\t", compression="infer")
     print(f"    {len(mappings_df)} mapping records")
 
@@ -1155,7 +1374,7 @@ def load_preprocessed_data(
 
     baf_summary_df: Optional[pd.DataFrame] = None
     if os.path.exists(baf_summary_path):
-        print(f"  Loading BAF summaries: {baf_summary_path}")
+        print("  Loading BAF summaries")
         baf_summary_df = pd.read_csv(baf_summary_path, sep="\t", compression="infer")
         print(f"    {len(baf_summary_df)} BAF summary rows")
 
@@ -1193,7 +1412,7 @@ def parse_args():
     )
     parser.add_argument(
         "--par-intervals", nargs="+", action="append", default=[],
-        help="BED file(s) of pseudoautosomal intervals to ignore during ploidy-aware filtering",
+        help="BED file(s) of pseudoautosomal intervals to exclude from flanks and ignore during ploidy-aware body filtering",
     )
     parser.add_argument(
         "-o", "--output-dir", required=True,
@@ -1216,7 +1435,7 @@ def parse_args():
                         help="Padding around locus boundaries (bp)")
     parser.add_argument("--exclusion-threshold", type=float, default=0.1,
                         help="Min overlap fraction with exclusion regions to mask a bin")
-    parser.add_argument("--exclusion-bypass-threshold", type=float, default=0.6,
+    parser.add_argument("--exclusion-bypass-threshold", type=float, default=0.8,
                         help="Body-interval overlap fraction above which masking is skipped")
     parser.add_argument("--min-bins-per-interval", type=int, default=10,
                         help="Hard-failure minimum bins per body interval")
@@ -1273,30 +1492,32 @@ def main():
     _util.VERBOSE = args.verbose
 
     os.makedirs(args.output_dir, exist_ok=True)
-    setup_logging(args.output_dir, filename="preprocess_log.txt")
-    print(f"Output directory: {args.output_dir}")
+    setup_logging(
+        args.output_dir,
+        filename="preprocess_log.txt",
+        verbose=args.verbose,
+        command="preprocess",
+        args=args,
+    )
+    print("Output directory configured")
 
     # Load GD table
-    print(f"\nLoading GD table: {args.gd_table}")
+    print("\nLoading GD table")
     gd_table = GDTable(args.gd_table)
     validate_gd_table_for_preprocess(gd_table)
-    print(f"Loaded {len(gd_table.loci)} loci")
-    for cluster, locus in gd_table.loci.items():
-        if locus.breakpoints:
-            bp_start = min(bp[0] for bp in locus.breakpoints)
-            bp_end = max(bp[1] for bp in locus.breakpoints)
-            print(f"  {cluster}: {locus.chrom}:{bp_start}-{bp_end} "
-                  f"({len(locus.gd_entries)} entries, {locus.n_breakpoints} breakpoints)")
-        else:
-            print(f"  {cluster}: {locus.chrom} - NO BREAKPOINTS DEFINED")
+    loci_with_breakpoints = sum(1 for locus in gd_table.loci.values() if locus.breakpoints)
+    total_breakpoints = sum(locus.n_breakpoints for locus in gd_table.loci.values())
+    print(
+        f"Loaded {len(gd_table.loci)} loci; "
+        f"{loci_with_breakpoints} with breakpoints; "
+        f"{total_breakpoints} total breakpoint intervals"
+    )
 
     # Load exclusion mask — all BED files are concatenated first so that
     # cross-file overlapping intervals are merged before the index is built.
     exclusion_mask = None
     if args.exclusion_intervals:
-        print(f"\nLoading {len(args.exclusion_intervals)} exclusion interval file(s):")
-        for p in args.exclusion_intervals:
-            print(f"  {p}")
+        print(f"\nLoading {len(args.exclusion_intervals)} exclusion interval file(s)")
         exclusion_mask = ExclusionMask(
             args.exclusion_intervals,
             label="exclusion regions",
@@ -1304,9 +1525,7 @@ def main():
 
     flank_exclusion_mask = None
     if args.flank_exclusion_intervals:
-        print(f"\nLoading {len(args.flank_exclusion_intervals)} flank exclusion interval file(s):")
-        for p in args.flank_exclusion_intervals:
-            print(f"  {p}")
+        print(f"\nLoading {len(args.flank_exclusion_intervals)} flank exclusion interval file(s)")
         flank_exclusion_mask = ExclusionMask(
             args.flank_exclusion_intervals,
             label="flank exclusion regions",
@@ -1314,9 +1533,7 @@ def main():
 
     par_mask = None
     if args.par_intervals:
-        print(f"\nLoading {len(args.par_intervals)} PAR interval file(s):")
-        for p in args.par_intervals:
-            print(f"  {p}")
+        print(f"\nLoading {len(args.par_intervals)} PAR interval file(s)")
         par_mask = ExclusionMask(
             args.par_intervals,
             label="pseudoautosomal intervals",
@@ -1374,12 +1591,7 @@ def main():
     parsed_regions = None
     if args.regions:
         parsed_regions = [_parse_region(r) for r in args.regions]
-        print(f"\nRestricting to {len(parsed_regions)} region(s):")
-        for chrom, start, end in parsed_regions:
-            if start is None:
-                print(f"  {chrom}")
-            else:
-                print(f"  {chrom}:{start:,}-{end:,}")
+        print(f"\nRestricting to {len(parsed_regions)} region filter(s)")
 
     # Collect all bins across all loci
     combined_df, mappings, included_loci = collect_all_locus_bins(
@@ -1444,25 +1656,19 @@ def main():
     filtered_gd_df = gd_table.df[effective_cluster.isin(included_clusters)].copy()
     filtered_gd_path = os.path.join(args.output_dir, "gd_table_filtered.tsv")
     filtered_gd_df.to_csv(filtered_gd_path, sep="\t", index=False)
-    print(f"  Saved: {filtered_gd_path}")
+    print("  Saved filtered GD table")
     print(f"  Rows: {len(filtered_gd_df):,} entries "
           f"({len(included_clusters)} loci of {len(gd_table.loci)} total)")
 
     print("\n" + "=" * 80)
     print("PREPROCESSING COMPLETE")
     print("=" * 80)
-    print("\nOutput files:")
-    print("  - preprocessed_bins.tsv.gz")
-    print("  - bin_mappings.tsv.gz")
-    print("  - locus_intervals.tsv.gz")
-    print("  - gd_entry_intervals.tsv.gz")
-    print("  - ploidy_estimates.tsv")
-    print("  - gd_table_filtered.tsv")
+    output_count = 6 + (2 if args.baf_table else 0)
+    print(f"\nOutput tables written: {output_count}")
     if args.baf_table:
-        print("  - preprocessed_baf.tsv.gz")
-        print("  - preprocessed_baf_summary.tsv.gz")
-    print(f"\nNext: run 'gatk-sv-gd infer --preprocessed-dir {args.output_dir}'")
-    print(f"       Use --gd-table {args.output_dir}/gd_table_filtered.tsv for call/plot/eval")
+        print("  BAF outputs included")
+    print("\nNext: run infer with the preprocessed output directory")
+    print("      Use the filtered GD table output for call, plot, and eval")
     print("=" * 80)
 
 

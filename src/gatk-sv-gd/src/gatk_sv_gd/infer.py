@@ -135,8 +135,8 @@ def run_gd_analysis(
         alpha_ref=args.alpha_ref,
         alpha_non_ref=args.alpha_non_ref,
         state_prior_weight=args.state_prior_weight,
-        baf_weight=args.baf_weight,
-        learn_baf_temperature=not args.fixed_baf_temperature and args.baf_weight > 0,
+        baf_temperature=args.baf_temperature,
+        learn_baf_temperature=not args.fixed_baf_temperature and args.baf_temperature > 0,
         baf_temperature_prior_scale=args.baf_temperature_prior_scale,
         var_bias_bin=args.var_bias_bin,
         var_sample=args.var_sample,
@@ -357,34 +357,28 @@ def parse_args():
              "Values below 1.0 temper overly sharp priors.",
     )
     parser.add_argument(
-        "--baf-weight",
+        "--baf-temperature",
         type=float,
-        default=0.25,
-        help="Fixed BAF likelihood weight when --fixed-baf-temperature is set; "
-             "otherwise the prior median for the learned per-sample BAF "
-             "weight. Learned mode requires 0 < weight < 1. Set to 0 to "
+        default=25.0,
+        help="Global multiplicative BAF variance scale. Larger values soften "
+             "BAF evidence and make contradictory BAF/depth evidence reduce "
+             "posterior confidence rather than switching BAF off. In learned "
+             "mode this is the LogNormal prior median; with "
+             "--fixed-baf-temperature it is the fixed scale. Set to 0 to "
              "disable BAF evidence.",
     )
     parser.add_argument(
         "--fixed-baf-temperature",
         action="store_true",
         default=False,
-        help="Keep the BAF likelihood weight fixed at --baf-weight instead of "
-             "learning a per-sample temperature.",
+        help="Keep the global BAF variance temperature fixed at "
+             "--baf-temperature instead of learning it.",
     )
     parser.add_argument(
         "--baf-temperature-prior-scale",
         type=float,
         default=0.5,
-        help="LogitNormal prior scale for the learned per-sample BAF weight.",
-    )
-    parser.add_argument(
-        "--baf-variance-scale",
-        type=float,
-        default=None,
-        help="Deprecated compatibility flag. Approximates the old fixed BAF "
-             "variance inflation by setting a fixed BAF temperature of "
-             "1 / --baf-variance-scale and disabling learned temperatures.",
+        help="LogNormal prior scale for the learned global BAF variance temperature.",
     )
     parser.add_argument(
         "--var-bias-bin",
@@ -577,32 +571,12 @@ def parse_args():
     )
 
     args = parser.parse_args()
-    if args.baf_weight < 0:
-        parser.error("--baf-weight must be non-negative.")
-    if not args.fixed_baf_temperature and args.baf_weight > 0 and args.baf_weight >= 1:
-        parser.error("Learned BAF weight mode requires --baf-weight < 1.")
+    if args.baf_temperature < 0:
+        parser.error("--baf-temperature must be non-negative.")
     if args.baf_temperature_prior_scale <= 0:
         parser.error("--baf-temperature-prior-scale must be positive.")
     if args.guide_warmup_iter < 0:
         parser.error("--guide-warmup-iter must be non-negative.")
-    if args.baf_variance_scale is not None:
-        if args.baf_variance_scale <= 0:
-            parser.error("--baf-variance-scale must be positive.")
-        if (
-            args.baf_weight != 0.25 or
-            args.fixed_baf_temperature or
-            args.baf_temperature_prior_scale != 0.5
-        ):
-            parser.error(
-                "Do not combine --baf-variance-scale with the new BAF "
-                "temperature arguments. Use one interface or the other."
-            )
-        args.baf_weight = 1.0 / args.baf_variance_scale
-        args.fixed_baf_temperature = True
-        print(
-            "Warning: --baf-variance-scale is deprecated; using a fixed "
-            f"BAF temperature of {args.baf_weight:.6g} instead."
-        )
 
     return args
 
@@ -617,16 +591,21 @@ def main():
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # Mirror all stdout/stderr to a log file in the output directory
-    setup_logging(args.output_dir)
+    setup_logging(
+        args.output_dir,
+        verbose=args.verbose,
+        command="infer",
+        args=args,
+        seed_info={"pyro": 42, "torch": 42, "numpy": 42},
+    )
 
-    print(f"Output directory: {args.output_dir}")
+    print("Output directory configured")
 
     # ------------------------------------------------------------------
     # Branch: load preprocessed data or run full preprocessing
     # ------------------------------------------------------------------
     if args.preprocessed_dir:
-        print(f"\nLoading preprocessed data from: {args.preprocessed_dir}")
+        print("\nLoading preprocessed data")
         preprocessed_bins, preprocessed_mappings, preprocessed_baf_summary = load_preprocessed_data(
             args.preprocessed_dir
         )
@@ -656,26 +635,22 @@ def main():
             raise SystemExit(1)
 
         # Load GD table
-        print(f"\nLoading GD table: {args.gd_table}")
+        print("\nLoading GD table")
         gd_table = GDTable(args.gd_table)
-        print(f"Loaded {len(gd_table.loci)} loci")
-        for cluster, locus in gd_table.loci.items():
-            if locus.breakpoints:
-                overall_start = min(bp[0] for bp in locus.breakpoints)
-                overall_end = max(bp[1] for bp in locus.breakpoints)
-                print(f"  {cluster}: {locus.chrom}:{overall_start}-{overall_end} "
-                      f"({len(locus.gd_entries)} entries, {locus.n_breakpoints} breakpoints)")
-            else:
-                print(f"  {cluster}: {locus.chrom} - NO BREAKPOINTS DEFINED")
+        loci_with_breakpoints = sum(1 for locus in gd_table.loci.values() if locus.breakpoints)
+        total_breakpoints = sum(locus.n_breakpoints for locus in gd_table.loci.values())
+        print(
+            f"Loaded {len(gd_table.loci)} loci; "
+            f"{loci_with_breakpoints} with breakpoints; "
+            f"{total_breakpoints} total breakpoint intervals"
+        )
 
         # Load exclusion mask — all BED files are concatenated first so
         # that cross-file overlapping intervals are merged before the
         # index is built.
         exclusion_mask = None
         if args.exclusion_intervals:
-            print(f"\nLoading {len(args.exclusion_intervals)} exclusion interval file(s):")
-            for p in args.exclusion_intervals:
-                print(f"  {p}")
+            print(f"\nLoading {len(args.exclusion_intervals)} exclusion interval file(s)")
             exclusion_mask = ExclusionMask(
                 args.exclusion_intervals,
                 label="exclusion regions",
@@ -696,9 +671,11 @@ def main():
               f"max={column_medians.max():.3f}, mean={column_medians.mean():.3f}")
 
         if _util.VERBOSE:
-            print("\n  [verbose] Per-sample autosomal median raw counts:")
-            for i, s in enumerate(sample_cols):
-                print(f"    {s}: {column_medians[i]:.3f}")
+            print(
+                "\n  [verbose] Per-sample autosomal median raw-count summary: "
+                f"samples={len(sample_cols)}, min={column_medians.min():.3f}, "
+                f"median={np.median(column_medians):.3f}, max={column_medians.max():.3f}"
+            )
             raw_depths = df[sample_cols].values
             print(f"\n  [verbose] Pre-normalisation depth summary "
                   f"({len(df)} bins x {len(sample_cols)} samples):")
@@ -746,7 +723,7 @@ def main():
 
         # Log high-res counts file if provided
         if args.high_res_counts:
-            print(f"\nHigh-resolution counts file: {args.high_res_counts}")
+            print("\nHigh-resolution counts enabled")
         else:
             print("\nNo high-resolution counts file provided (--high-res-counts)")
 
@@ -761,14 +738,8 @@ def main():
     print("\n" + "=" * 80)
     print("ANALYSIS COMPLETE")
     print("=" * 80)
-    print("\nOutput files:")
-    print("  - ploidy_estimates.tsv")
-    print("  - cn_posteriors.tsv.gz")
-    print("  - sample_posteriors.tsv.gz")
-    print("  - bin_posteriors.tsv.gz")
-    print("  - bin_mappings.tsv.gz")
-    print("  - locus_intervals.tsv.gz")
-    print("\nNext step: Run plot_gd_cnv_output.py to call CNVs and generate plots.")
+    print("\nOutput tables written: 6")
+    print("\nNext step: run call and plot on the inference outputs.")
     print("=" * 80)
 
     print("\n" + "=" * 80)

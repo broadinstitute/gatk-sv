@@ -46,6 +46,7 @@ import numpy as np
 import pysam
 from tqdm import tqdm
 
+from gatk_sv_gd._util import setup_logging
 from gatk_sv_gd.models import GDLocus, GDTable
 
 
@@ -60,9 +61,12 @@ def _parse_region(region_str: str) -> Tuple[str, Optional[int], Optional[int]]:
         parts = coords.replace(",", "").split("-")
         if len(parts) != 2:
             raise ValueError(
-                f"Invalid region format '{region_str}': expected chrom:start-end"
+                "Invalid region format: expected chrom:start-end"
             )
-        return chrom, int(parts[0]), int(parts[1])
+        try:
+            return chrom, int(parts[0]), int(parts[1])
+        except ValueError:
+            raise ValueError("Invalid region coordinates") from None
     return region_str, None, None
 
 
@@ -97,9 +101,7 @@ def _detect_baf_columns(filepath: str) -> Tuple[Optional[int], List[str]]:
 
     parts = first_line.split("\t")
     if len(parts) < 4:
-        raise ValueError(
-            f"BAF table {filepath} must have at least 4 tab-delimited columns"
-        )
+        raise ValueError("BAF table must have at least 4 tab-delimited columns")
 
     try:
         int(parts[1])
@@ -125,7 +127,7 @@ def _build_gd_lookup(gd_table: GDTable) -> Dict[str, Tuple[str, dict]]:
         for entry in locus.gd_entries:
             gd_id = str(entry["GD_ID"])
             if gd_id in lookup:
-                raise ValueError(f"Duplicate GD_ID in GD table: {gd_id}")
+                raise ValueError("Duplicate GD_ID in GD table")
             lookup[gd_id] = (locus.chrom, entry)
     return lookup
 
@@ -150,11 +152,11 @@ def _load_truth_assignments(
             if not sample_id or not gd_id:
                 continue
             if gd_id not in gd_lookup:
-                raise ValueError(f"GD_ID '{gd_id}' from truth table not found in GD table")
+                raise ValueError("Truth-table GD_ID not found in GD table")
             existing = assignments.get(sample_id)
             if existing is not None and str(existing[1]["GD_ID"]) != gd_id:
                 raise ValueError(
-                    f"Sample '{sample_id}' has multiple GD assignments in truth table"
+                    "One sample has multiple GD assignments in truth table"
                 )
             assignments[sample_id] = gd_lookup[gd_id]
     return assignments
@@ -674,7 +676,7 @@ def _ensure_tabix_index(path: str) -> None:
     """
     tbi = path + ".tbi"
     if not os.path.exists(tbi):
-        print(f"  Creating tabix index for {os.path.basename(path)} …")
+        print("  Creating tabix index")
         pysam.tabix_index(
             path, seq_col=0, start_col=1, end_col=2,
             meta_char="#", zerobased=True, force=True,
@@ -688,7 +690,7 @@ def _ensure_baf_tabix_index(path: str) -> None:
         return
 
     header, _ = _detect_baf_columns(path)
-    print(f"  Creating tabix index for {os.path.basename(path)} …")
+    print("  Creating tabix index")
     pysam.tabix_index(
         path,
         seq_col=0,
@@ -884,8 +886,7 @@ def _rewrite_counts_file(
     _ensure_tabix_index(input_path)
 
     file_size = os.path.getsize(input_path)
-    print(f"  [{label}] {input_path} "
-          f"({file_size / 1e9:.2f} GB compressed)")
+    print(f"  [{label}] input size: {file_size / 1e9:.2f} GB compressed")
 
     tbx = pysam.TabixFile(input_path)
     contigs = list(tbx.contigs)
@@ -893,7 +894,7 @@ def _rewrite_counts_file(
     tbx.close()
 
     if not header_lines:
-        raise ValueError(f"No header found in {input_path}")
+        raise ValueError("No header found in input counts table")
 
     # ── Parse header → column index map ──────────────────────────────
     header_text = header_lines[-1]  # last header line has column names
@@ -981,7 +982,7 @@ def _rewrite_counts_file(
         _concat_bgzf_parts(output_path, ordered_parts, label=label)
 
     # ── Create tabix index on the output ─────────────────────────────
-    print(f"  [{label}] Indexing {os.path.basename(output_path)} …")
+    print(f"  [{label}] Indexing output …")
     pysam.tabix_index(
         output_path, seq_col=0, start_col=1, end_col=2,
         meta_char="#", zerobased=True, force=True,
@@ -1103,7 +1104,7 @@ def _rewrite_baf_file(
     sample_col = column_names.index("Sample")
 
     file_size = os.path.getsize(input_path)
-    print(f"  [{label}] {input_path} ({file_size / 1e9:.2f} GB compressed)")
+    print(f"  [{label}] input size: {file_size / 1e9:.2f} GB compressed")
 
     tbx = pysam.TabixFile(input_path)
     contigs = list(tbx.contigs)
@@ -1173,7 +1174,7 @@ def _rewrite_baf_file(
         ordered_parts = [header_path] + [tp for _, tp in contig_temp_paths]
         _concat_bgzf_parts(output_path, ordered_parts, label=label)
 
-    print(f"  [{label}] Indexing {os.path.basename(output_path)} …")
+    print(f"  [{label}] Indexing output …")
     pysam.tabix_index(
         output_path,
         seq_col=0,
@@ -1209,7 +1210,7 @@ def _write_truth_table(
         for sid in sorted(assignments):
             _, entry = assignments[sid]
             writer.writerow([sid, entry["GD_ID"]])
-    print(f"  Truth table: {output_path} ({len(assignments)} carriers)")
+    print(f"  Truth table written ({len(assignments)} carriers)")
 
 
 def _write_background_event_table(
@@ -1241,7 +1242,7 @@ def _write_background_event_table(
         for event in events:
             row = {column: event.get(column, "") for column in columns}
             writer.writerow(row)
-    print(f"  Background events: {output_path} ({len(events)} events)")
+    print(f"  Background event manifest written ({len(events)} events)")
 
 
 # ---------------------------------------------------------------------------
@@ -1343,6 +1344,13 @@ def main():
     args = parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
+    setup_logging(
+        args.output_dir,
+        filename="synthesize_log.txt",
+        command="synthesize",
+        args=args,
+        seed_info={"numpy.default_rng": args.seed},
+    )
 
     if not any([args.lo_res_counts, args.hi_res_counts, args.baf_table]):
         print(
@@ -1353,7 +1361,7 @@ def main():
         sys.exit(1)
 
     # ── Load GD table ────────────────────────────────────────────────
-    print(f"Loading GD table: {args.gd_table}")
+    print("Loading GD table")
     gd_table = GDTable(args.gd_table)
     print(f"  {len(gd_table.loci)} loci loaded")
     gd_lookup = _build_gd_lookup(gd_table)
@@ -1381,12 +1389,7 @@ def main():
         parsed_regions = None
         if args.regions:
             parsed_regions = [_parse_region(r) for r in args.regions]
-            region_strs = []
-            for chrom, start, end in parsed_regions:
-                region_strs.append(
-                    f"{chrom}" if start is None else f"{chrom}:{start:,}-{end:,}"
-                )
-            print(f"  Region filter: {', '.join(region_strs)}")
+            print(f"  Region filters applied: {len(parsed_regions)}")
 
         for cluster, locus in gd_table.get_all_loci().items():
             if not locus.is_nahr:
@@ -1428,14 +1431,14 @@ def main():
 
     ploidy_lookup: Optional[Dict[Tuple[str, str], int]] = None
     if args.ploidy_table:
-        print(f"\nLoading ploidy table: {args.ploidy_table}")
+        print("\nLoading ploidy table")
         ploidy_lookup = _load_ploidy_lookup(args.ploidy_table)
         print(f"  {len(ploidy_lookup)} sample/contig ploidy records")
     else:
         print("\nNo ploidy table provided; assuming diploid (ploidy=2) everywhere")
 
     if args.truth_table:
-        print(f"\nLoading existing truth assignments: {args.truth_table}")
+        print("\nLoading existing truth assignments")
         assignments = _load_truth_assignments(args.truth_table, gd_lookup)
         dropped_non_nahr = sorted(
             sid for sid, (_, entry) in assignments.items()
@@ -1468,12 +1471,17 @@ def main():
         )
         print(f"\nAssigned GD events to {len(assignments)}/{len(sample_ids)} samples")
 
-    # Summary by GD_ID
+    # Summary by GD_ID, reported only as aggregate distribution.
     gd_counts: Dict[str, int] = {}
     for _, (_, entry) in assignments.items():
         gd_counts[entry["GD_ID"]] = gd_counts.get(entry["GD_ID"], 0) + 1
-    for gd_id, count in sorted(gd_counts.items()):
-        print(f"  {gd_id}: {count} carrier(s)")
+    if gd_counts:
+        counts = list(gd_counts.values())
+        print(
+            "  Carrier assignments by GD event: "
+            f"events={len(counts)}, min={min(counts)}, "
+            f"median={float(np.median(counts)):.1f}, max={max(counts)}"
+        )
 
     if not assignments:
         print("WARNING: No samples assigned a GD event (try increasing "
@@ -1518,7 +1526,7 @@ def main():
     lo_out = None
     if args.lo_res_counts:
         lo_out = os.path.join(args.output_dir, "lo_res_counts.synthesized.rd.txt.gz")
-        print(f"\nRewriting low-res counts → {lo_out}")
+        print("\nRewriting low-res counts")
         _rewrite_counts_file(
             args.lo_res_counts,
             lo_out,
@@ -1530,7 +1538,7 @@ def main():
     hi_out = None
     if args.hi_res_counts:
         hi_out = os.path.join(args.output_dir, "hi_res_counts.synthesized.rd.txt.gz")
-        print(f"\nRewriting high-res counts → {hi_out}")
+        print("\nRewriting high-res counts")
         _rewrite_counts_file(
             args.hi_res_counts,
             hi_out,
@@ -1542,7 +1550,7 @@ def main():
     baf_out = None
     if args.baf_table:
         baf_out = os.path.join(args.output_dir, "all_samples.synthesized.baf.txt.gz")
-        print(f"\nRewriting BAF table → {baf_out}")
+        print("\nRewriting BAF table")
         _rewrite_baf_file(
             args.baf_table,
             baf_out,
@@ -1553,11 +1561,11 @@ def main():
 
     # ── Write truth table ────────────────────────────────────────────
     truth_path = os.path.join(args.output_dir, "truth_table.tsv")
-    print(f"\nWriting truth table → {truth_path}")
+    print("\nWriting truth table")
     _write_truth_table(assignments, truth_path)
 
     background_truth_path = os.path.join(args.output_dir, "background_events.tsv")
-    print(f"Writing background event manifest → {background_truth_path}")
+    print("Writing background event manifest")
     _write_background_event_table(background_events, background_truth_path)
 
     # ── Summary ──────────────────────────────────────────────────────
@@ -1565,13 +1573,13 @@ def main():
     print("SYNTHESIS COMPLETE")
     print(f"{'=' * 60}")
     if lo_out:
-        print(f"  Low-res output:  {lo_out}")
+        print("  Low-res output written")
     if hi_out:
-        print(f"  High-res output: {hi_out}")
+        print("  High-res output written")
     if baf_out:
-        print(f"  BAF output:      {baf_out}")
-    print(f"  Truth table:     {truth_path}")
-    print(f"  Background:      {background_truth_path}")
+        print("  BAF output written")
+    print("  Truth table written")
+    print("  Background event manifest written")
     if sample_ids:
         print(f"  Carriers:        {len(assignments)}/{len(sample_ids)} samples")
     else:

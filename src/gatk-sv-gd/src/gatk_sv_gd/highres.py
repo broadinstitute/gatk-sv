@@ -257,13 +257,6 @@ def normalize_highres_bins(
         print(f"    [verbose] high-res post-normalisation: "
               f"per-bin-median mean={per_bin_medians.mean():.3f}, "
               f"min={per_bin_medians.min():.3f}, max={per_bin_medians.max():.3f}")
-        # Log first few bins for spot-checking
-        for i in range(min(5, len(df))):
-            row = df.iloc[i]
-            med = np.nanmedian(row[sample_cols].values.astype(float))
-            print(f"      bin {row['Chr']}:{row['Start']}-{row['End']}  "
-                  f"norm_median={med:.3f}")
-        if len(df) > 5:
-            print(f"      ... ({len(df) - 5} more bins)")
+        print(f"      [verbose] high-res normalisation summarized across {len(df)} bins")
 
     return df.copy()

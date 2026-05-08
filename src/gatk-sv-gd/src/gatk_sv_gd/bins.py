@@ -307,16 +307,11 @@ def extract_locus_bins(
             print(f"  Bypassed exclusion masking for {n_bypassed} bins in heavily-overlapped intervals")
 
         if _util.VERBOSE:
-            for i, (_, row) in enumerate(locus_df.iterrows()):
-                if in_bypass[i]:
-                    print(f"    [verbose] bin {row['Chr']}:{row['Start']}-{row['End']} "
-                          f"in exclusion bypass region — kept")
-                elif not keep_mask[i]:
-                    sample_cols = get_sample_columns(locus_df)
-                    med = np.median(row[sample_cols].values.astype(float))
-                    print(f"    [verbose] bin {row['Chr']}:{row['Start']}-{row['End']} "
-                          f"exclusion overlap={overlaps[i]:.2f} >= {exclusion_threshold} — MASKED "
-                          f"(median depth={med:.3f})")
+            print(
+                "    [verbose] exclusion mask summary: "
+                f"kept={int(keep_mask.sum())}, masked={n_masked}, "
+                f"bypassed={n_bypassed}, threshold={exclusion_threshold}"
+            )
 
         locus_df = locus_df[keep_mask]
 
@@ -426,14 +421,8 @@ def compute_flank_regions_from_bins(
     # with target_size (locus body size) as the nominal goal.
     effective_bp_target = max(min(target_size, max_flank_bases), min_flank_bases)
 
-    print(f"    [flanks] locus body: {locus_start:,}-{locus_end:,}  "
-          f"target_size: {target_size:,} bp  min_flank_bases: {min_flank_bases:,} bp  "
-          f"min_flank_bins: {min_flank_bins}  effective_bp_target: {effective_bp_target:,} bp")
-    if len(locus_df) > 0:
-        print(f"    [flanks] input bins: {len(locus_df)}  "
-              f"range: {int(locus_df['Start'].min()):,}-{int(locus_df['End'].max()):,}")
-    else:
-        print("    [flanks] input bins: 0")
+    flank_summaries = []
+    low_coverage_flanks = 0
 
     # Use bin midpoints for candidacy — consistent with how bins are assigned
     # throughout the rest of the codebase. Using strict End/Start comparisons
@@ -443,10 +432,7 @@ def compute_flank_regions_from_bins(
     # Left flank: accumulate right-to-left from the locus start.
     left_bins = locus_df[bin_mids < locus_start].sort_values("Start", ascending=False)
 
-    print(f"    [flanks] left candidate bins (mid < {locus_start:,}): {len(left_bins)}", end="")
     if len(left_bins) > 0:
-        print(f"  span {int(left_bins['Start'].min()):,}-{int(left_bins['End'].max()):,}  "
-              f"total bp: {int((left_bins['End'] - left_bins['Start']).sum()):,}")
         sizes = (left_bins["End"].values - left_bins["Start"].values).astype(int)
         cumsum_bp = np.cumsum(sizes)
         n_bins_arr = np.arange(1, len(sizes) + 1)
@@ -456,24 +442,15 @@ def compute_flank_regions_from_bins(
         n_bins_accumulated = int(n_bins_arr[idx])
         leftmost_start = int(left_bins.iloc[idx]["Start"])
         coverage_frac = cumulative / effective_bp_target if effective_bp_target > 0 else 1.0
-        print(f"    [flanks] left_flank: {leftmost_start:,}-{locus_start:,}  "
-              f"accumulated {cumulative:,} bp / {n_bins_accumulated} bins "
-              f"(targets: {effective_bp_target:,} bp, {min_flank_bins} bins)  "
-              f"coverage: {coverage_frac:.1%}")
         if coverage_frac < min_flank_coverage or n_bins_accumulated < min_flank_bins:
-            print(f"    [flanks] WARNING: left flank has only {n_bins_accumulated} "
-                  f"usable bins and {coverage_frac:.1%} of target coverage")
+            low_coverage_flanks += 1
         flanks.append((leftmost_start, locus_start, "left_flank"))
-    else:
-        print()  # newline after the count
+        flank_summaries.append(("left", n_bins_accumulated, cumulative, coverage_frac))
 
     # Right flank: accumulate left-to-right from the locus end.
     right_bins = locus_df[bin_mids >= locus_end].sort_values("Start")
 
-    print(f"    [flanks] right candidate bins (mid >= {locus_end:,}): {len(right_bins)}", end="")
     if len(right_bins) > 0:
-        print(f"  span {int(right_bins['Start'].min()):,}-{int(right_bins['End'].max()):,}  "
-              f"total bp: {int((right_bins['End'] - right_bins['Start']).sum()):,}")
         sizes = (right_bins["End"].values - right_bins["Start"].values).astype(int)
         cumsum_bp = np.cumsum(sizes)
         n_bins_arr = np.arange(1, len(sizes) + 1)
@@ -483,16 +460,22 @@ def compute_flank_regions_from_bins(
         n_bins_accumulated = int(n_bins_arr[idx])
         rightmost_end = int(right_bins.iloc[idx]["End"])
         coverage_frac = cumulative / effective_bp_target if effective_bp_target > 0 else 1.0
-        print(f"    [flanks] right_flank: {locus_end:,}-{rightmost_end:,}  "
-              f"accumulated {cumulative:,} bp / {n_bins_accumulated} bins "
-              f"(targets: {effective_bp_target:,} bp, {min_flank_bins} bins)  "
-              f"coverage: {coverage_frac:.1%}")
         if coverage_frac < min_flank_coverage or n_bins_accumulated < min_flank_bins:
-            print(f"    [flanks] WARNING: right flank has only {n_bins_accumulated} "
-                  f"usable bins and {coverage_frac:.1%} of target coverage")
+            low_coverage_flanks += 1
         flanks.append((locus_end, rightmost_end, "right_flank"))
+        flank_summaries.append(("right", n_bins_accumulated, cumulative, coverage_frac))
+
+    if flank_summaries:
+        summary = "; ".join(
+            f"{side}: bins={n_bins}, bp={bp:,}, coverage={coverage:.1%}"
+            for side, n_bins, bp, coverage in flank_summaries
+        )
+        print(
+            f"    [flanks] selected {len(flank_summaries)} flank(s): {summary}; "
+            f"low-coverage={low_coverage_flanks}"
+        )
     else:
-        print()  # newline after the count
+        print("    [flanks] selected 0 flank(s)")
 
     return flanks
 
@@ -713,10 +696,11 @@ def rebin_locus_intervals(
             bin_width = p_end - p_start
             if bin_width > 0 and (total_overlap / bin_width) < min_rebin_coverage:
                 if _util.VERBOSE:
-                    print(f"      [verbose] rebin: dropping putative bin "
-                          f"{int(round(p_start))}-{int(round(p_end))} "
-                          f"(coverage {total_overlap / bin_width:.1%} "
-                          f"< {min_rebin_coverage:.0%})")
+                    print(
+                        "      [verbose] rebin: dropping one putative bin "
+                        f"(coverage {total_overlap / bin_width:.1%} "
+                        f"< {min_rebin_coverage:.0%})"
+                    )
                 continue
 
             weights = overlaps / total_overlap
@@ -760,7 +744,7 @@ def rebin_locus_intervals(
                 clamp_start=region_start,
                 clamp_end=region_end,
             )
-            if len(segments) > 1:
+            if len(segments) > 1 and _util.VERBOSE:
                 print(f"    [rebin] preserving {len(segments)} supported {region_name} segments")
             allocations = _allocate_bins_across_segments(segments, max_bins_per_interval)
             for (segment_df, segment_start, segment_end), target_bins in zip(segments, allocations):
@@ -1143,7 +1127,7 @@ def determine_best_breakpoints(
 
 def read_data(file_path: str) -> pd.DataFrame:
     """Load binned read count data from TSV file."""
-    print(f"Loading: {file_path}")
+    print("Loading binned read-count data")
     try:
         # Read gzipped TSV file
         df_file = pd.read_csv(file_path, sep="\t", compression="infer")
@@ -1168,7 +1152,7 @@ def read_data(file_path: str) -> pd.DataFrame:
         df_file["source_file"] = source_file
         return df_file
     except Exception as e:
-        print(f"Error loading {file_path}")
+        print("Error loading binned read-count data")
         raise e
 
 

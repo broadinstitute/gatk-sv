@@ -28,15 +28,17 @@ DESCRIPTIONS = {
 }
 
 
-def _print_usage():
+def _print_usage(file=None):
     """Print top-level usage information."""
+    if file is None:
+        file = sys.stdout
     prog = "gatk-sv-gd"
-    print(f"Usage: {prog} <subcommand> [options]\n")
-    print("Genomic Disorder CNV detection from binned read counts.\n")
-    print("Subcommands:")
+    print(f"Usage: {prog} <subcommand> [options]\n", file=file)
+    print("Genomic Disorder CNV detection from binned read counts.\n", file=file)
+    print("Subcommands:", file=file)
     for name, desc in DESCRIPTIONS.items():
-        print(f"  {name:8s}  {desc}")
-    print(f"\nRun '{prog} <subcommand> --help' for subcommand-specific options.")
+        print(f"  {name:8s}  {desc}", file=file)
+    print(f"\nRun '{prog} <subcommand> --help' for subcommand-specific options.", file=file)
 
 
 def main():
@@ -48,8 +50,8 @@ def main():
     subcommand = sys.argv[1]
 
     if subcommand not in SUBCOMMANDS:
-        print(f"Error: unknown subcommand '{subcommand}'\n")
-        _print_usage()
+        print(f"Error: unknown subcommand '{subcommand}'\n", file=sys.stderr)
+        _print_usage(file=sys.stderr)
         sys.exit(1)
 
     # Rewrite sys.argv so the submodule's argparse sees the correct prog name

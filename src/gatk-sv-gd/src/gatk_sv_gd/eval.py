@@ -20,7 +20,10 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
-from gatk_sv_gd._util import TeeStream, setup_logging
+from gatk_sv_gd._util import posterior_probability_to_qual, setup_logging
+
+
+DEFAULT_MIN_CONFIDENCE = float(posterior_probability_to_qual(0.95))
 
 
 # =============================================================================
@@ -169,6 +172,8 @@ def load_truth_table(filepath: str) -> pd.DataFrame:
 
 def _get_confidence_column(calls_df: pd.DataFrame) -> Optional[str]:
     """Return the preferred confidence column present in the calls file."""
+    if "qual_score" in calls_df.columns:
+        return "qual_score"
     if "confidence_score" in calls_df.columns:
         return "confidence_score"
     if "log_prob_score" in calls_df.columns:
@@ -209,8 +214,9 @@ def evaluate_against_truth(
             before scoring.
         min_confidence: Optional minimum confidence required for a predicted
             carrier call to count during evaluation. Uses
-            ``confidence_score`` when present, otherwise falls back to
-            ``log_prob_score``. If ``None``, no confidence filter is applied.
+            ``qual_score`` when present, otherwise falls back to
+            ``confidence_score`` and then ``log_prob_score``. If ``None``, no
+            confidence filter is applied.
 
     Returns:
         Per-site report DataFrame.
@@ -228,11 +234,11 @@ def evaluate_against_truth(
         if score_column is None:
             raise ValueError(
                 "--min-confidence requires a calls file with either "
-                "confidence_score or log_prob_score column"
+                "qual_score, confidence_score, or log_prob_score column"
             )
         print(
             f"  Enforcing call confidence threshold: "
-            f"{score_column} >= {min_confidence:.3f}"
+            f"{score_column} >= {min_confidence:.2f}"
         )
 
     # Build predicted carrier sets keyed by GD_ID.
@@ -328,21 +334,14 @@ def evaluate_against_truth(
     print(f"  Overall sensitivity: {overall_sens:.4f}")
     print(f"  Overall precision:   {overall_prec:.4f}")
 
-    # Per-site summary to stdout
-    print(f"\n  {'GD_ID':30s}  {'SVTYPE':6s}  truth  pred    TP    FP    FN   sens   prec")
-    print("  " + "-" * 100)
-    for r in rows:
-        sens_str = f"{r['sensitivity']:.2f}" if r["sensitivity"] != "NA" else "  NA"
-        prec_str = f"{r['precision']:.2f}" if r["precision"] != "NA" else "  NA"
-        print(f"  {r['GD_ID']:30s}  {str(r['SVTYPE']):6s}  "
-              f"{r['n_truth_carriers']:5d}  {r['n_pred_carriers']:4d}  "
-              f"{r['TP']:4d}  {r['FP']:4d}  {r['FN']:4d}  "
-              f"{sens_str:>5s}  {prec_str:>5s}")
+    if rows:
+        svtype_summary = report_df.groupby("SVTYPE", dropna=False).size().to_dict()
+        print(f"  Per-site result rows by SVTYPE: {svtype_summary}")
 
     # Write report
     output_path = os.path.join(output_dir, "truth_evaluation_report.tsv")
     report_df.to_csv(output_path, sep="\t", index=False)
-    print(f"\n  Saved report: {output_path}")
+    print("\n  Saved evaluation report")
     print("=" * 80 + "\n")
 
     return report_df
@@ -402,14 +401,15 @@ def parse_args():
     parser.add_argument(
         "--min-confidence",
         nargs="?",
-        const=0.95,
+           const=DEFAULT_MIN_CONFIDENCE,
         default=None,
         type=float,
         help="Optional minimum confidence required for a predicted carrier to "
-             "count in evaluation. Uses confidence_score when present, "
-             "otherwise falls back to log_prob_score. If the flag is provided "
-             "without a value, uses 0.95. If omitted entirely, no confidence "
-             "threshold is enforced.",
+               "count in evaluation. Uses qual_score when present, otherwise falls "
+               "back to confidence_score and then log_prob_score. If the flag is "
+               "provided without a value, uses the QUAL equivalent of 0.95 event "
+               "probability. If omitted entirely, no confidence threshold is "
+               "enforced.",
     )
     return parser.parse_args()
 
@@ -419,23 +419,28 @@ def main():
     args = parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
-    setup_logging(args.output_dir, filename="eval_log.txt")
+    setup_logging(
+        args.output_dir,
+        filename="eval_log.txt",
+        command="eval",
+        args=args,
+    )
 
-    print(f"Output directory: {args.output_dir}")
+    print("Output directory configured")
 
     # Load calls
-    print(f"\n  Loading calls: {args.calls}")
+    print("\n  Loading calls")
     calls_df = pd.read_csv(args.calls, sep="\t", compression="infer")
     print(f"    {len(calls_df)} call records")
 
     # Load ploidy table to identify batch samples
-    print(f"\n  Loading ploidy table: {args.ploidy_table}")
+    print("\n  Loading ploidy table")
     ploidy_df = pd.read_csv(args.ploidy_table, sep="\t")
     batch_samples = set(ploidy_df["sample"].astype(str).unique())
     print(f"    {len(batch_samples)} samples in batch")
 
     # Load truth table
-    print(f"\n  Loading truth table: {args.truth_table}")
+    print("\n  Loading truth table")
     truth_df = load_truth_table(args.truth_table)
     print(f"    {len(truth_df)} truth entries")
 
@@ -446,7 +451,7 @@ def main():
     print(f"\n  Derived {len(modeled_gd_ids)} modeled GD_IDs from calls file")
 
     if args.gd_table is not None:
-        print(f"  Loading filtered GD table: {args.gd_table}")
+        print("  Loading filtered GD table")
         gd_df = pd.read_csv(args.gd_table, sep="\t")
         gd_table_ids = set(gd_df["GD_ID"].astype(str).unique())
         print(f"    {len(gd_table_ids)} modeled GD_IDs in filtered table")

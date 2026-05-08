@@ -146,7 +146,7 @@ def write_posterior_tables(
     cn_df = pd.DataFrame(cn_rows)
     cn_output = os.path.join(output_dir, "cn_posteriors.tsv.gz")
     cn_df.to_csv(cn_output, sep="\t", index=False, compression="gzip")
-    print(f"  Saved: {cn_output}")
+    print("  Saved copy-state posterior table")
     print(f"  Rows: {len(cn_df):,} ({combined_data.n_bins:,} bins × {combined_data.n_samples} samples)")
 
     # 2. Sample-specific variable posteriors
@@ -157,13 +157,15 @@ def write_posterior_tables(
     sample_var = np.asarray(map_estimates["sample_var"]).squeeze()
     baf_temperature = map_estimates.get("baf_temperature")
     if baf_temperature is not None:
-        baf_temperature = np.asarray(baf_temperature).squeeze()
+        baf_temperature = np.asarray(baf_temperature, dtype=np.float64).squeeze()
 
     # Ensure it's at least 1D
     if sample_var.ndim == 0:
         sample_var = sample_var.reshape(1)
     if baf_temperature is not None and baf_temperature.ndim == 0:
-        baf_temperature = baf_temperature.reshape(1)
+        baf_temperature = np.full(combined_data.n_samples, float(baf_temperature), dtype=np.float64)
+    elif baf_temperature is not None and baf_temperature.size == 1:
+        baf_temperature = np.full(combined_data.n_samples, float(baf_temperature.reshape(-1)[0]), dtype=np.float64)
 
     for sample_idx, sample_id in enumerate(combined_data.sample_ids):
         var_val = sample_var[sample_idx]
@@ -173,13 +175,15 @@ def write_posterior_tables(
         }
         if baf_temperature is not None:
             temp_val = baf_temperature[sample_idx]
-            row["baf_temperature_map"] = temp_val.tolist() if isinstance(temp_val, np.ndarray) else float(temp_val)
+            temp_val = temp_val.tolist() if isinstance(temp_val, np.ndarray) else float(temp_val)
+            row["baf_temperature_map"] = temp_val
+            row["baf_variance_scale_map"] = temp_val
         sample_rows.append(row)
 
     sample_df = pd.DataFrame(sample_rows)
     sample_output = os.path.join(output_dir, "sample_posteriors.tsv.gz")
     sample_df.to_csv(sample_output, sep="\t", index=False, compression="gzip")
-    print(f"  Saved: {sample_output}")
+    print("  Saved sample-level posterior table")
     print(f"  Rows: {len(sample_df):,} ({combined_data.n_samples} samples)")
 
     # 3. Bin-specific variable posteriors
@@ -233,7 +237,7 @@ def write_posterior_tables(
     bin_df = pd.DataFrame(bin_rows)
     bin_output = os.path.join(output_dir, "bin_posteriors.tsv.gz")
     bin_df.to_csv(bin_output, sep="\t", index=False, compression="gzip")
-    print(f"  Saved: {bin_output}")
+    print("  Saved bin-level posterior table")
     print(f"  Rows: {len(bin_df):,} ({combined_data.n_bins:,} bins)")
 
     print("\n" + "=" * 80)
@@ -269,7 +273,7 @@ def write_locus_metadata(
     bin_mapping_df = pd.DataFrame(bin_mapping_rows)
     bin_mapping_output = os.path.join(output_dir, "bin_mappings.tsv.gz")
     bin_mapping_df.to_csv(bin_mapping_output, sep="\t", index=False, compression="gzip")
-    print(f"  Saved: {bin_mapping_output}")
+    print("  Saved bin mapping table")
     print(f"  Rows: {len(bin_mapping_df):,} bins")
 
     # 2. Write locus definitions with interval coordinates
@@ -288,7 +292,7 @@ def write_locus_metadata(
     locus_df = pd.DataFrame(locus_rows)
     locus_output = os.path.join(output_dir, "locus_intervals.tsv.gz")
     locus_df.to_csv(locus_output, sep="\t", index=False, compression="gzip")
-    print(f"  Saved: {locus_output}")
+    print("  Saved locus interval table")
     print(f"  Rows: {len(locus_df):,} intervals")
 
     # 3. Write GD-entry → interval mapping
@@ -311,15 +315,14 @@ def write_locus_metadata(
     #   chr          – chromosome
     #   interval_start, interval_end – genomic coordinates of the sub-interval
     gd_entry_rows = []
+    unresolved_entries = 0
     for cluster, locus in included_loci.items():
         for entry in locus.gd_entries:
             covered = locus.get_intervals_between(entry["BP1"], entry["BP2"])
             if not covered:
                 # BP1/BP2 names not found in this locus (should not happen for
                 # well-formed input, but guard against it gracefully).
-                print(f"  WARNING: GD entry {entry['GD_ID']} has BP1={entry['BP1']}, "
-                      f"BP2={entry['BP2']} which do not resolve to any interval in "
-                      f"cluster {cluster} — omitting from gd_entry_intervals.tsv.gz")
+                unresolved_entries += 1
                 continue
             for iv_start, iv_end, iv_name in covered:
                 gd_entry_rows.append({
@@ -337,7 +340,9 @@ def write_locus_metadata(
     gd_entry_df = pd.DataFrame(gd_entry_rows)
     gd_entry_output = os.path.join(output_dir, "gd_entry_intervals.tsv.gz")
     gd_entry_df.to_csv(gd_entry_output, sep="\t", index=False, compression="gzip")
-    print(f"  Saved: {gd_entry_output}")
+    if unresolved_entries:
+        print(f"  WARNING: omitted {unresolved_entries} GD entries with unresolved breakpoints")
+    print("  Saved GD-entry interval mapping table")
     print(f"  Rows: {len(gd_entry_df):,} (GD entry × interval)")
 
 
@@ -386,17 +391,14 @@ def estimate_ploidy(
     n_contigs = ploidy_df["contig"].nunique()
     print(f"  Samples: {n_samples}")
     print(f"  Contigs: {n_contigs}")
-    for contig in sorted(ploidy_df["contig"].unique(),
-                         key=lambda c: (0, int(c.replace('chr', ''))) if c.replace('chr', '').isdigit() else (1, c)):
-        sub = ploidy_df[ploidy_df["contig"] == contig]
-        counts = sub["ploidy"].value_counts().sort_index()
-        dist_str = ", ".join(f"ploidy {p}: {n}" for p, n in counts.items())
-        print(f"    {contig}: {dist_str}")
+    counts = ploidy_df["ploidy"].value_counts().sort_index()
+    dist_str = ", ".join(f"ploidy {p}: {n}" for p, n in counts.items())
+    print(f"  Ploidy distribution across sample/contig pairs: {dist_str}")
 
     # Write to disk
     output_path = os.path.join(output_dir, "ploidy_estimates.tsv")
     ploidy_df.to_csv(output_path, sep="\t", index=False)
-    print(f"  Saved: {output_path}")
+    print("  Saved ploidy estimate table")
     print(f"  Rows: {len(ploidy_df):,}")
     print(f"{'=' * 80}\n")
 

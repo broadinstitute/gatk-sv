@@ -26,6 +26,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import pysam
 
+from gatk_sv_gd._util import setup_logging
 from gatk_sv_gd.models import GDTable
 
 # ── INFO header definitions ──────────────────────────────────────────
@@ -534,6 +535,12 @@ def main() -> None:
     args = _parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
+    setup_logging(
+        args.output_dir,
+        filename="extract_log.txt",
+        command="extract",
+        args=args,
+    )
 
     # Resolve VCF list
     if args.vcf_list:
@@ -545,14 +552,14 @@ def main() -> None:
     # Validate inputs exist
     for path in vcf_paths:
         if not os.path.exists(path):
-            print(f"Error: VCF not found: {path}", file=sys.stderr)
+            print("Error: required VCF input not found", file=sys.stderr)
             sys.exit(1)
     if not os.path.exists(args.gd_table):
-        print(f"Error: GD table not found: {args.gd_table}", file=sys.stderr)
+        print("Error: required GD table input not found", file=sys.stderr)
         sys.exit(1)
 
     # Load GD table
-    print(f"Loading GD table from {args.gd_table}")
+    print("Loading GD table")
     gd_table = GDTable(args.gd_table)
     n_loci = len(gd_table.get_all_loci())
     n_entries = len(gd_table.df)
@@ -584,10 +591,10 @@ def main() -> None:
     vcf_out = os.path.join(args.output_dir, "gd_variants.vcf.gz")
     bed_out = os.path.join(args.output_dir, "gd_variants.bed")
 
-    print(f"Writing VCF to {vcf_out}")
+    print("Writing annotated VCF output")
     _write_vcf(annotated, out_header, vcf_out)
 
-    print(f"Writing BED to {bed_out}")
+    print("Writing annotated BED output")
     _write_bed(annotated, sample_names, bed_out)
 
     print("Done.")

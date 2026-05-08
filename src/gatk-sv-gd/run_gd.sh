@@ -21,6 +21,7 @@ Required arguments:
   --par-bed FILE
 
 Optional arguments:
+    --custom-mask-bed FILE
   --flank-exclusion-interval FILE
   --flank-exclusion-intervals FILE [FILE ...]
   --truth-table FILE
@@ -44,6 +45,10 @@ require_arg() {
     fi
 }
 
+log() {
+    printf '%s\n' "$*" >&2
+}
+
 WORK_DIR=""
 INPUT_DEPTH=""
 HIGH_RESOLUTION_DEPTH=""
@@ -55,6 +60,7 @@ ACROCENTRIC_ARM_BED=""
 GAPS_BED=""
 GTF=""
 PAR_BED=""
+CUSTOM_MASK_BED=""
 TRUTH_TABLE=""
 
 PREPROCESS_ARGS=""
@@ -99,6 +105,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --acrocentric-arm-bed)
             ACROCENTRIC_ARM_BED="$2"
+            shift 2
+            ;;
+        --custom-mask-bed)
+            CUSTOM_MASK_BED="$2"
             shift 2
             ;;
         --flank-exclusion-interval)
@@ -206,7 +216,7 @@ EVAL_REPORT="${EVAL_DIR}/truth_evaluation_report.tsv"
 mkdir -p "${WORK_DIR}"
 
 # ── Step 1: preprocess ─────────────────────────────────────────────────────
-echo "[1/5] preprocess"
+log "[1/5] preprocess"
 rm -rf "${PREPROCESS_DIR}"
 PREPROCESS_CMD=(
     "${GD_CMD[@]}"
@@ -223,6 +233,10 @@ PREPROCESS_CMD=(
     --verbose \
 )
 
+if [[ -n "${CUSTOM_MASK_BED}" ]]; then
+    PREPROCESS_CMD+=(-e "${CUSTOM_MASK_BED}")
+fi
+
 if [[ ${#FLANK_EXCLUSION_INTERVALS[@]} -gt 0 ]]; then
     PREPROCESS_CMD+=(--flank-exclusion-intervals "${FLANK_EXCLUSION_INTERVALS[@]}")
 fi
@@ -236,7 +250,7 @@ fi
 "${PREPROCESS_CMD[@]}"
 
 # ── Step 2: infer ──────────────────────────────────────────────────────────
-echo "[2/5] infer"
+log "[2/5] infer"
 rm -rf "${INFER_DIR}"
 INFER_CMD=(
     "${GD_CMD[@]}"
@@ -255,7 +269,7 @@ fi
 "${INFER_CMD[@]}"
 
 # ── Step 3: call ───────────────────────────────────────────────────────────
-echo "[3/5] call"
+log "[3/5] call"
 rm -rf "${CALL_DIR}"
 CALL_CMD=(
     "${GD_CMD[@]}"
@@ -278,7 +292,7 @@ fi
 
 # ── Step 4: eval (optional) ────────────────────────────────────────────────
 if [[ -n "${TRUTH_TABLE}" ]]; then
-    echo "[4/5] eval"
+    log "[4/5] eval"
     rm -rf "${EVAL_DIR}"
     EVAL_CMD=(
         "${GD_CMD[@]}"
@@ -298,11 +312,11 @@ if [[ -n "${TRUTH_TABLE}" ]]; then
 
     "${EVAL_CMD[@]}"
 else
-    echo "[4/5] eval  (skipped — TRUTH_TABLE not set)"
+    log "[4/5] eval  (skipped — TRUTH_TABLE not set)"
 fi
 
 # ── Step 5: plot ───────────────────────────────────────────────────────────
-echo "[5/5] plot"
+log "[5/5] plot"
 rm -rf "${PLOT_DIR}"
 
 PLOT_CMD=(
@@ -327,10 +341,10 @@ fi
 
 "${PLOT_CMD[@]}"
 
-echo
+log ""
 if [[ -n "${TRUTH_TABLE}" ]]; then
-    echo "Eval report: ${EVAL_REPORT}"
+    log "Eval report: ${EVAL_REPORT}"
 else
-    echo "Eval report: skipped (TRUTH_TABLE not set)"
+    log "Eval report: skipped (TRUTH_TABLE not set)"
 fi
-echo "Plot directory: ${PLOT_DIR}"
+log "Plot directory: ${PLOT_DIR}"

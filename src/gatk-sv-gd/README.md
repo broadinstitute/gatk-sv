@@ -54,6 +54,32 @@ For end-to-end runs, the repository also includes `run_gd.sh`, a convenience wra
 orchestrates `preprocess`, `infer`, `call`, optional `eval`, and `plot`, and wires common
 annotation inputs including pseudoautosomal-region (PAR) intervals into preprocessing.
 
+## Logging contract
+
+`gatk-sv-gd` treats stdout as a clean data channel. Workflow progress, warnings, errors,
+configuration summaries, and reproducibility metadata are emitted on stderr and written to
+the subcommand log file under `--output-dir`:
+
+| Subcommand | Log file |
+|------------|----------|
+| `preprocess` | `preprocess_log.txt` |
+| `infer` | `log.txt` |
+| `call` | `call_log.txt` |
+| `eval` | `eval_log.txt` |
+| `plot` | `log.txt` |
+| `extract` | `extract_log.txt` |
+| `synthesize` | `synthesize_log.txt` |
+
+Every diagnostic log record includes an ISO 8601 UTC timestamp and severity level. The first
+record captures reproducibility metadata, including package version, Git commit, parsed
+arguments, selected dependency versions, working directory, host, process ID, relevant thread
+and accelerator environment variables, and known random seeds.
+
+Use subcommand `--verbose` flags where available to enable detailed debugging logs. For
+workflow engines, sweeps, or dashboards, set `GATK_SV_GD_LOG_FORMAT=json` to write parseable
+JSON-lines records instead of the default human-readable text format. The convenience
+`run_gd.sh` wrapper also sends its step banners to stderr so redirected stdout remains clean.
+
 ---
 
 ## Modeling overview
@@ -152,7 +178,7 @@ the output tables are produced by collapsing pair-state posteriors onto total co
 | `--alpha-ref` | `1.0` | Dirichlet concentration for the reference pair state `(1,1)` |
 | `--alpha-non-ref` | `1.0` | Dirichlet concentration for all non-reference pair states |
 | `--state-prior-weight` | `0.0` | Weight of the learned pair-state prior in analytical posterior reconstruction |
-| `--baf-weight` | `0.25` | Prior median for the learned per-sample BAF temperature, or the fixed BAF likelihood weight when `--fixed-baf-temperature` is set |
+| `--baf-temperature` | `25.0` | Prior median for the learned global multiplicative BAF variance scale, or the fixed scale when `--fixed-baf-temperature` is set |
 | `--var-bias-bin` | `0.01` | Scale for per-bin multiplicative bias |
 | `--var-sample` | `0.001` | Scale for per-sample variance |
 | `--var-bin` | `0.001` | Scale for per-bin variance |
@@ -176,9 +202,12 @@ If a stronger diploid prior is needed for sparse cohorts, raise `--alpha-ref` ab
     uneven.
 - Quality filters use ploidy-aware median/MAD thresholds, and depth values are hard-clamped by
     `--clamp-threshold` before inference.
-- When BAF summaries are noisy or sparse, the learned per-sample BAF temperature can
-    shrink their influence automatically; `--fixed-baf-temperature --baf-weight ...`
-    keeps the weight fixed when you want deterministic sweeps.
+- BAF summaries use a global multiplicative variance temperature rather than a
+    per-sample likelihood weight. This keeps contradictory BAF evidence in the
+    likelihood, but softens overconfident BAF observations so disagreement with
+    depth reduces posterior confidence instead of silently switching BAF off.
+    `--fixed-baf-temperature --baf-temperature ...` keeps the scale fixed when
+    you want deterministic sweeps.
 
 ### Scaling strategy for small and large datasets
 
@@ -196,15 +225,22 @@ If a stronger diploid prior is needed for sparse cohorts, raise `--alpha-ref` ab
 - `infer` writes per-bin `prob_cn_*` columns and per-bin `prob_pair_*` columns, along with
     `cn_map`, `pair_state_map`, and optional BAF summaries when available.
 - `call` writes `gd_cnv_calls.tsv.gz` with the preferred `confidence_score` column plus
-    supporting diagnostics such as `min_interval_confidence`,
-    `min_flank_non_event_confidence`, `interval_coverage`, and `is_best_match`.
+    a posterior-derived `qual_score` column. In posterior-marginal mode, both scores are on a
+    0-99 QUAL scale and summarize called-state posterior log odds across the whole site:
+    covered body intervals use DEL/DUP-vs-non-event odds, flanks use the flipped non-event-vs-event
+    odds, and the site-level score is the minimum of the available region-average QUAL values across
+    left flank, right flank, and each covered GD body interval. Supporting diagnostics such as
+    `min_interval_confidence` and `min_flank_non_event_confidence` are reported on the same QUAL scale,
+    while `log_prob_score` preserves the raw mean event probability across the GD body.
 - The default `posterior-marginal` calling mode selects at most one DEL and one DUP per locus,
     requiring every covered interval to exceed
-    `--min-posterior-interval-confidence` (default `0.80`) and each available flank to exceed
-    `--min-flank-non-event-confidence` (default `0.90`).
+    `--min-posterior-interval-confidence` (default `6.02`) and each available flank to exceed
+    `--min-flank-non-event-confidence` (default `9.54`), both on the 0-99 QUAL scale.
 - `viterbi` mode is available when `--transition-matrix` is supplied; it can optionally use a
     less sticky `--breakpoint-transition-matrix` at known SD breakpoints.
-- `event_marginals.tsv.gz` is always emitted for downstream plotting. In Viterbi mode,
+- `event_marginals.tsv.gz` is always emitted for downstream plotting. Carrier PDFs convert those
+    marginals into called-state QUAL traces, so bins inside the selected GD body and bins in the
+    flanks are scored against the state they are expected to support. In Viterbi mode,
     `viterbi_paths.tsv.gz` provides the segmented path.
 
 ### Validation and falsification plan
@@ -357,7 +393,7 @@ gatk-sv-gd preprocess -i counts.rd.txt.gz -g gd_table.tsv -o preprocess/ [option
 |------|---------|-------------|
 | `--exclusion-intervals` | `[]` | BED files masked in both body and flanks |
 | `--flank-exclusion-intervals` | `[]` | BED files masked only in flanks |
-| `--par-intervals` | `[]` | PAR BED files ignored during ploidy-aware filtering |
+| `--par-intervals` | `[]` | PAR BED files excluded from flanks and ignored during ploidy-aware body filtering |
 | `--high-res-counts` | — | bgzipped, tabix-indexed high-resolution depth table for fallback |
 | `--baf-table` | — | bgzipped, tabix-indexed BAF table to summarize over retained bins |
 | `--region` | — | Restrict preprocessing to specific contigs or intervals |
@@ -406,7 +442,7 @@ gatk-sv-gd infer \
 | `--preprocessed-dir` | — | Reuse cached preprocessing outputs |
 | `--alpha-ref` / `--alpha-non-ref` | `1.0 / 1.0` | Pair-state prior concentrations |
 | `--state-prior-weight` | `0.0` | Weight of the learned pair-state prior in analytical posterior reconstruction |
-| `--baf-weight` | `0.25` | Prior median for the learned per-sample BAF temperature, or the fixed BAF weight with `--fixed-baf-temperature` |
+| `--baf-temperature` | `25.0` | Prior median for the learned global multiplicative BAF variance scale, or the fixed scale with `--fixed-baf-temperature` |
 | `--var-bias-bin` / `--var-sample` / `--var-bin` | `0.01 / 0.001 / 0.001` | Continuous prior scales |
 | `--bin-size-factor` | `10000.0` | Variance scaling reference bin size |
 | `--guide-type` | `diagonal` | `diagonal` or `delta` |
@@ -461,11 +497,11 @@ gatk-sv-gd call \
 | File | Description |
 |------|-------------|
 | `gd_cnv_calls.tsv.gz` | One row per sample × GD entry with confidence and match metadata |
-| `event_marginals.tsv.gz` | Per-bin DEL/DUP event probabilities used by `plot` |
+| `event_marginals.tsv.gz` | Per-bin DEL/DUP event probabilities plus capped phred-scale log-odds QUAL columns used by `plot` |
 | `viterbi_paths.tsv.gz` | Segmented path output for Viterbi runs |
 
-Prefer `confidence_score` for thresholding; `log_prob_score` is retained as a compatibility
-column.
+Prefer `confidence_score` for thresholding; posterior-mode outputs also include `qual_score`, and
+`log_prob_score` is retained as a compatibility column.
 
 ---
 

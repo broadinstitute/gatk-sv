@@ -79,7 +79,7 @@ def load_transition_matrix(filepath: str) -> np.ndarray:
     row_sums = mat.sum(axis=1, keepdims=True)
     mat = mat / row_sums
 
-    print(f"  Loaded {mat.shape[0]}x{mat.shape[1]} transition matrix from {filepath}")
+    print(f"  Loaded {mat.shape[0]}x{mat.shape[1]} transition matrix")
     return mat
 
 
@@ -640,9 +640,10 @@ def _run_diploid_viterbi(
         result_candidates.append((hap1, hap2, cand_conf))
 
     if verbose:
-        _util.vlog(f"    [LIST-VIT] {sample_id}  {cluster}: "
-                   f"{len(result_candidates)} near-tied candidate(s) "
-                   f"from {len(candidates)} total")
+        _util.vlog(
+            f"    [LIST-VIT] {len(result_candidates)} near-tied candidate(s) "
+            f"from {len(candidates)} total"
+        )
 
     return result_candidates, pair_states
 
@@ -711,9 +712,10 @@ def _run_pair_state_viterbi(
         result_candidates.append((hap1, hap2, cand_conf))
 
     if verbose:
-        _util.vlog(f"    [PAIR-VIT] {sample_id}  {cluster}: "
-                   f"{len(result_candidates)} near-tied candidate(s) "
-                   f"from {len(candidates)} total")
+        _util.vlog(
+            f"    [PAIR-VIT] {len(result_candidates)} near-tied candidate(s) "
+            f"from {len(candidates)} total"
+        )
 
     return result_candidates
 
@@ -1278,13 +1280,12 @@ def viterbi_call_gd_cnv(
 
     if len(all_bins_set) == 0:
         if verbose:
-            _util.vlog(f"  [VIT] {sample_id}  {locus.cluster}: no bins -> skip")
+            _util.vlog("  [VIT] no bins for one sample/locus evaluation -> skip")
         return [], []
 
     if bin_coords is None:
         if verbose:
-            _util.vlog(f"  [VIT] {sample_id}  {locus.cluster}: "
-                       f"no bin_coords -> skip")
+            _util.vlog("  [VIT] no bin coordinates for one sample/locus evaluation -> skip")
         return [], []
 
     # Sort bins by **genomic start coordinate** (not array_idx).
@@ -1337,16 +1338,8 @@ def viterbi_call_gd_cnv(
         if verbose:
             n_bp = int(breakpoint_mask.sum())
             if n_bp > 0:
-                bp_steps = [
-                    (all_bins[t], all_bins[t + 1])
-                    for t in range(len(all_bins) - 1)
-                    if breakpoint_mask[t]
-                ]
                 _util.vlog(
-                    f"  [VIT] {sample_id}  {locus.cluster}: "
-                    f"{n_bp} transition(s) will use breakpoint matrix "
-                    f"(array_idx pairs: "
-                    f"{bp_steps[:5]}{'...' if len(bp_steps) > 5 else ''})"
+                    f"  [VIT] {n_bp} transition(s) will use breakpoint matrix"
                 )
 
     # Subset breakpoint matrix to n_states if provided
@@ -1372,17 +1365,13 @@ def viterbi_call_gd_cnv(
     if verbose:
         pair_state_path = np.argmax(pair_priors, axis=1)
         pair_segs = _extract_segments(pair_state_path)
-        seg_str = " -> ".join(
-            f"PAIR{pair_states[state]}x{end - start}" for start, end, state in pair_segs
-        )
-        _util.vlog(f"  [PAIR-VIT] {sample_id}  {locus.cluster}  "
-                   f"{len(all_bins)} bins  sample_ploidy={ploidy}  "
-                   f"confidence={confidence:+.4f}")
-        _util.vlog(f"    Pair posterior peaks: {seg_str}")
         h1_segs = _extract_segments(hap1_path)
         h2_segs = _extract_segments(hap2_path)
-        _util.vlog(f"    Hap1: {' -> '.join(f'CN{s}x{e-b}' for b,e,s in h1_segs)}")
-        _util.vlog(f"    Hap2: {' -> '.join(f'CN{s}x{e-b}' for b,e,s in h2_segs)}")
+        _util.vlog(
+            f"  [PAIR-VIT] bins={len(all_bins)}, sample_ploidy={ploidy}, "
+            f"confidence={confidence:+.4f}, pair_segments={len(pair_segs)}, "
+            f"hap1_segments={len(h1_segs)}, hap2_segments={len(h2_segs)}"
+        )
 
     hap1_cat_segs = _build_category_segments(hap1_path, all_bins, bin_coords, ploidy=1)
     hap2_cat_segs = _build_category_segments(hap2_path, all_bins, bin_coords, ploidy=1)
@@ -1398,13 +1387,8 @@ def viterbi_call_gd_cnv(
         all_candidate_match_segs.append(cand_match)
 
     if verbose:
-        for seg in total_cat_segs:
-            if seg["category"] != "REF":
-                _util.vlog(
-                    f"    {seg['category']} segment: "
-                    f"{seg['start']:,}-{seg['end']:,} "
-                    f"({seg['n_bins']} bins, CN={seg['cn_state']})"
-                )
+        n_non_ref_segments = sum(seg["category"] != "REF" for seg in total_cat_segs)
+        _util.vlog(f"    non-reference Viterbi segments: {n_non_ref_segments}")
 
     # ----------------------------------------------------------------
     # Match each GD entry against category segments by longest qualifying
@@ -1592,19 +1576,6 @@ def viterbi_call_gd_cnv(
     calls: List[dict] = []
     for idx, call in enumerate(entry_results):
         call["is_carrier"] = best_carrier_idx_by_svtype.get(call["svtype"]) == idx
-
-        if verbose:
-            tag = " [CARRIER]" if call["is_carrier"] else ""
-            _util.vlog(
-                f"    Entry {call['GD_ID']} ({call['svtype']}, BP1={call['BP1']}, "
-                f"BP2={call['BP2']}  ploidy={ploidy}):  "
-                f"coverage={call['interval_coverage']:.2%}  "
-                f"left_flank={call['left_flank_coverage'] if not np.isnan(call['left_flank_coverage']) else float('nan'):.2%}  "
-                f"right_flank={call['right_flank_coverage'] if not np.isnan(call['right_flank_coverage']) else float('nan'):.2%}  "
-                f"flank_pass={call['flank_pass']}  "
-                f"min_interval={min_mean_coverage:.0%}  "
-                f"matched_bp={call['matched_interval_bp']}{tag}"
-            )
 
         del call["covered_bp_total"]
         calls.append(call)

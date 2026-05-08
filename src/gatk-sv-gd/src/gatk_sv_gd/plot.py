@@ -32,16 +32,17 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-from gatk_sv_gd._util import TeeStream, setup_logging
+from gatk_sv_gd._util import (
+    posterior_called_state_to_qual,
+    posterior_probability_to_qual,
+    setup_logging,
+)
 from gatk_sv_gd.annotations import (
     FlankCompressor,
     GapsAnnotation,
     GTFParser,
     SegDupAnnotation,
-    _build_gap_positions,
-    _build_heatmap_matrix,
     _build_ploidy_lookup,
-    _depths_with_gaps,
     _draw_overview_column,
     _sort_samples_by_ploidy,
     draw_annotations_panel,
@@ -81,6 +82,7 @@ EMPTY_CALLS_COLUMNS = [
     "is_best_match",
     "log_prob_score",
     "confidence_score",
+    "qual_score",
     "calling_method",
 ]
 
@@ -90,12 +92,13 @@ PLOT_TIMING_ENABLED = os.getenv("GATK_SV_GD_PLOT_TIMING", "").strip().lower() in
 }
 
 PDF_MAX_SIGNAL_BINS = 300
+DEFAULT_CARRIER_CONFIDENCE_THRESHOLD = 60
 
 
 def _print_timing(label: str, start_time: float) -> None:
     """Print elapsed wall-clock time for a plotting stage."""
     if PLOT_TIMING_ENABLED:
-        print(f"    [timing] {label}: {perf_counter() - start_time:.3f}s")
+        print(f"    [timing] plotting stage: {perf_counter() - start_time:.3f}s")
 
 # =============================================================================
 # Viterbi overlay data container
@@ -217,18 +220,25 @@ class ViterbiOverlayData:
 
 def _get_confidence_column(calls_df: pd.DataFrame) -> str:
     """Return the preferred confidence column present in the calls table."""
+    if "qual_score" in calls_df.columns:
+        return "qual_score"
     if "confidence_score" in calls_df.columns:
         return "confidence_score"
     if "log_prob_score" in calls_df.columns:
         return "log_prob_score"
     raise ValueError(
-        "Calls table is missing both 'confidence_score' and 'log_prob_score'."
+        "Calls table is missing 'qual_score', 'confidence_score', and "
+        "'log_prob_score'."
     )
 
 
 def _get_confidence_label(confidence_column: str) -> str:
     """Return a human-readable axis label for the confidence column."""
-    return "Confidence Score" if confidence_column == "confidence_score" else "Log Probability Score"
+    if confidence_column == "qual_score":
+        return "Call QUAL"
+    if confidence_column == "confidence_score":
+        return "Confidence Score"
+    return "Log Probability Score"
 
 
 def _sanitize_plot_label(label: str) -> str:
@@ -289,6 +299,20 @@ def _build_gd_to_cluster_map(
     return gd_to_cluster
 
 
+def _get_locus_gd_entry(
+    locus: GDLocus,
+    gd_id: Optional[str],
+) -> Optional[dict]:
+    """Return the GD-table entry for one GD_ID within a locus."""
+    if gd_id is None:
+        return None
+    gd_id_str = str(gd_id)
+    for entry in locus.gd_entries:
+        if str(entry["GD_ID"]) == gd_id_str:
+            return entry
+    return None
+
+
 def _build_eval_pdf_specs(
     eval_report_df: pd.DataFrame,
     calls_df: pd.DataFrame,
@@ -331,7 +355,7 @@ def _build_eval_pdf_specs(
         expected_tp = int(row.get("TP", len(tp_samples)))
         if expected_tp != len(tp_samples):
             print(
-                f"  WARNING: derived TP count for {gd_id} is {len(tp_samples)} "
+                f"  WARNING: derived TP count is {len(tp_samples)} "
                 f"but eval report says {expected_tp}. "
                 "Make sure the carrier confidence threshold matches the eval run."
             )
@@ -375,6 +399,7 @@ def _render_pdf_sample_page(
     gaps: Optional[GapsAnnotation],
     viterbi_data: Optional[ViterbiOverlayData],
     baf_temperature_by_sample: Optional[Dict[str, float]] = None,
+    target_gd_id: Optional[str] = None,
     title_suffix: Optional[str] = None,
 ) -> bool:
     """Render one carrier-style review page into an output PDF."""
@@ -385,6 +410,15 @@ def _render_pdf_sample_page(
 
     sample_calls = cluster_calls_df[cluster_calls_df["sample"] == sample_id]
     pdf_calls = sample_calls[sample_calls[confidence_column] >= confidence_threshold]
+    target_entry = _get_locus_gd_entry(locus, target_gd_id)
+    if target_entry is not None:
+        target_gd_id_str = str(target_entry["GD_ID"])
+        sample_calls = sample_calls[
+            sample_calls["GD_ID"].astype(str) == target_gd_id_str
+        ]
+        pdf_calls = pdf_calls[
+            pdf_calls["GD_ID"].astype(str) == target_gd_id_str
+        ]
 
     region_start = int(region_df["Start"].min())
     region_end = int(region_df["End"].max())
@@ -394,8 +428,8 @@ def _render_pdf_sample_page(
     fig, axes = plt.subplots(
         4,
         1,
-        figsize=(12 * figure_scale, 7.5 * figure_scale),
-        gridspec_kw={"height_ratios": [1, 2, 1, 1]},
+        figsize=(12 * figure_scale, 6.6 * figure_scale),
+        gridspec_kw={"height_ratios": [0.85, 2, 0.85, 0.85]},
     )
 
     sample_depth = region_df[sample_id].values
@@ -426,6 +460,9 @@ def _render_pdf_sample_page(
     event_svtype = None
     if carrier_call is not None:
         event_svtype = str(carrier_call["svtype"])
+    elif target_entry is not None:
+        event_svtype = str(target_entry["svtype"])
+    if event_svtype is not None:
         event_region_df = event_del_region_df if event_svtype == "DEL" else event_dup_region_df
         event_probs = _extract_sample_event_probabilities(
             region_df,
@@ -482,17 +519,28 @@ def _render_pdf_sample_page(
     ax = axes[1]
     stage_start = perf_counter()
     best_call = carrier_call
+    highlight_start = None
+    highlight_end = None
+    mean_depth = None
+    svtype = None
     if best_call is not None:
-        svtype = best_call["svtype"]
-        mean_depth = best_call["mean_depth"]
+        svtype = str(best_call["svtype"])
+        mean_depth = float(best_call["mean_depth"])
+        highlight_start = int(best_call["start"])
+        highlight_end = int(best_call["end"])
+    elif target_entry is not None:
+        svtype = str(target_entry["svtype"])
+        highlight_start = int(target_entry["start_GRCh38"])
+        highlight_end = int(target_entry["end_GRCh38"])
+
+    if highlight_start is not None and highlight_end is not None and svtype is not None:
         color = "#FF6B6B" if svtype == "DEL" else "#6B9BD1"
 
-        interval_start = best_call["start"]
-        interval_end = best_call["end"]
-        d_is, d_ie = xform(interval_start), xform(interval_end)
+        d_is, d_ie = xform(highlight_start), xform(highlight_end)
         ax.axvspan(d_is, d_ie, alpha=0.2, color=color, zorder=1,
                    label=f"{svtype} region")
-        ax.hlines(mean_depth, d_is, d_ie, colors="black", linewidth=2.5, alpha=0.8, zorder=2, label=f"Mean depth={mean_depth:.2f}")
+        if mean_depth is not None:
+            ax.hlines(mean_depth, d_is, d_ie, colors="black", linewidth=2.5, alpha=0.8, zorder=2, label=f"Mean depth={mean_depth:.2f}")
 
     _plot_depth_bars_with_baf(
         ax,
@@ -571,6 +619,11 @@ def _render_pdf_sample_page(
 
     event_ax = axes[3]
     stage_start = perf_counter()
+    plot_called_event_mask = _build_called_event_mask(
+        plot_region_df,
+        highlight_start,
+        highlight_end,
+    )
     _plot_event_marginal_panel(
         event_ax,
         d_bin_mids,
@@ -580,11 +633,16 @@ def _render_pdf_sample_page(
         locus,
         chrom,
         event_svtype,
+        show_trace=False,
+        called_event_mask=plot_called_event_mask,
     )
     _print_timing(f"{cluster} {sample_id} pdf event panel", stage_start)
 
+    _apply_carrier_pdf_x_axis_layout(axes, xform, locus)
+
     stage_start = perf_counter()
-    plt.tight_layout()
+    plt.tight_layout(h_pad=0.15)
+    fig.subplots_adjust(hspace=0.04)
     _print_timing(f"{cluster} {sample_id} pdf layout", stage_start)
     stage_start = perf_counter()
     pdf.savefig(fig)
@@ -601,6 +659,43 @@ def _get_event_probability_column(svtype: str) -> str:
     if svtype == "DUP":
         return "prob_dup_event"
     raise ValueError(f"Unsupported svtype: {svtype}")
+
+
+def _apply_carrier_pdf_x_axis_layout(
+    axes,
+    xform: FlankCompressor,
+    locus: GDLocus,
+) -> None:
+    """Show genomic tick labels only on the annotation panel at the top."""
+    annotation_ax = axes[0]
+    signal_axes = axes[1:]
+
+    xform.format_genomic_ticks(annotation_ax, locus.breakpoints, label_x=True)
+    annotation_ax.xaxis.set_ticks_position("top")
+    annotation_ax.tick_params(
+        axis="x",
+        which="major",
+        top=True,
+        labeltop=True,
+        bottom=False,
+        labelbottom=False,
+        pad=2,
+    )
+    annotation_ax.tick_params(axis="x", which="minor", top=True, bottom=False)
+    annotation_ax.set_xlabel("")
+
+    for ax in signal_axes:
+        ax.set_xlabel("")
+        ax.set_xticks([])
+        ax.set_xticks([], minor=True)
+        ax.tick_params(
+            axis="x",
+            which="both",
+            top=False,
+            bottom=False,
+            labeltop=False,
+            labelbottom=False,
+        )
 
 
 def _sorted_viterbi_segments(segments: Optional[List[dict]]) -> List[dict]:
@@ -861,10 +956,6 @@ def _plot_baf_signal_panel(
     ax.set_xlim(0.0, xform.d_end)
     ax.set_ylim(0.0, 1.0)
 
-    if baf_temperature is not None and np.isfinite(baf_temperature):
-        baf_temperature_label = f"BAF weight MAP: {baf_temperature:.3f}".rstrip("0").rstrip(".")
-        ax.set_title(baf_temperature_label, fontsize=10, pad=6)
-
     for y_value in (1.0 / 3.0, 0.5, 2.0 / 3.0):
         ax.axhline(y_value, color="gray", linestyle=":", linewidth=0.8, alpha=0.25, zorder=0)
 
@@ -954,6 +1045,19 @@ def _extract_sample_event_probabilities(
     return _aligned_region_sample_vector(region_df, event_probability_df, sample_id)
 
 
+def _build_called_event_mask(
+    region_df: pd.DataFrame,
+    called_start: Optional[int],
+    called_end: Optional[int],
+) -> Optional[np.ndarray]:
+    """Mark bins overlapping the called GD body for site-state QUAL plots."""
+    if called_start is None or called_end is None or len(region_df) == 0:
+        return None
+    starts = region_df["Start"].to_numpy(dtype=float)
+    ends = region_df["End"].to_numpy(dtype=float)
+    return np.logical_and(ends > float(called_start), starts < float(called_end))
+
+
 def _plot_event_marginal_panel(
     ax,
     x_positions: np.ndarray,
@@ -963,12 +1067,14 @@ def _plot_event_marginal_panel(
     locus: GDLocus,
     chrom: str,
     svtype: Optional[str],
+    show_trace: bool = True,
     rasterized: bool = False,
+    called_event_mask: Optional[np.ndarray] = None,
 ) -> None:
-    """Render per-bin event marginal probabilities for one sample."""
+    """Render per-bin event QUAL scores for one sample."""
     ax.set_xlim(0.0, xform.d_end)
-    ax.set_ylim(0.0, 1.0)
-    ax.axhline(0.5, color="gray", linestyle=":", linewidth=0.8, alpha=0.25, zorder=0)
+    ax.set_ylim(0.0, 99.0)
+    ax.grid(True, alpha=0.3, axis="y", zorder=0)
 
     if event_probabilities is None or svtype is None:
         ax.text(
@@ -982,16 +1088,27 @@ def _plot_event_marginal_panel(
             fontsize=9,
         )
         ax.set_xlabel(f"Position on {chrom}")
-        ax.set_ylabel("Event Prob.")
+        ax.set_ylabel("Called-state QUAL")
         xform.format_genomic_ticks(ax, locus.breakpoints)
         return
 
     event_probabilities = np.asarray(event_probabilities, dtype=float)
+    if called_event_mask is None:
+        called_event_mask = np.ones(event_probabilities.shape, dtype=bool)
+        y_label = f"QUAL({svtype} on ≥1 hap)"
+    else:
+        called_event_mask = np.asarray(called_event_mask, dtype=bool)
+        if called_event_mask.shape != event_probabilities.shape:
+            raise ValueError("called_event_mask must align with event_probabilities")
+        y_label = f"QUAL({svtype} site state)"
     valid = np.isfinite(event_probabilities)
     color = "#C23B22" if svtype == "DEL" else "#2A6FBB"
 
     if np.any(valid):
-        clipped = np.clip(event_probabilities[valid], 0.0, 1.0)
+        clipped = posterior_called_state_to_qual(
+            event_probabilities[valid],
+            called_event_mask[valid],
+        )
         ax.bar(
             x_positions[valid],
             clipped,
@@ -1002,15 +1119,16 @@ def _plot_event_marginal_panel(
             zorder=1,
             rasterized=rasterized,
         )
-        ax.plot(
-            x_positions[valid],
-            clipped,
-            color=color,
-            linewidth=1.2,
-            alpha=0.9,
-            zorder=2,
-            rasterized=rasterized,
-        )
+        if show_trace:
+            ax.plot(
+                x_positions[valid],
+                clipped,
+                color=color,
+                linewidth=1.2,
+                alpha=0.9,
+                zorder=2,
+                rasterized=rasterized,
+            )
     else:
         ax.text(
             0.5,
@@ -1024,7 +1142,7 @@ def _plot_event_marginal_panel(
         )
 
     ax.set_xlabel(f"Position on {chrom}")
-    ax.set_ylabel(f"P({svtype} on ≥1 hap)")
+    ax.set_ylabel(y_label)
     xform.format_genomic_ticks(ax, locus.breakpoints)
 
 
@@ -1120,7 +1238,7 @@ def _build_raw_region_df(
             return None
         if highres_max_bins is not None:
             print(
-                f"    [high-res plot] coarsened query {chrom}:{query_start:,}-{query_end:,} "
+                "    [high-res plot] coarsened one query "
                 f"to {len(hr_raw)} bins for plotting"
             )
         normed = normalize_highres_bins(
@@ -1176,7 +1294,7 @@ def _build_raw_region_df(
             if processed_count > lowres_count:
                 print(
                     f"    [high-res plot] full-locus replacement triggered: "
-                    f"processed {iv_name} has {processed_count} bins vs "
+                    f"processed interval has {processed_count} bins vs "
                     f"{lowres_count} low-res bins"
                 )
                 locus_wide_highres = True
@@ -1187,7 +1305,6 @@ def _build_raw_region_df(
             if full_region_highres is not None:
                 print(
                     f"    [high-res plot] using high-res across full visible region "
-                    f"{chrom}:{region_start:,}-{region_end:,} "
                     f"({len(full_region_highres)} bins)"
                 )
                 return full_region_highres
@@ -1212,12 +1329,12 @@ def _build_raw_region_df(
             continue  # large enough — low-res is adequate
         normed = _query_and_normalize_highres(r_start, r_end)
         if normed is None:
-            print(f"    [high-res plot] {r_name}: no bins returned, keeping low-res")
+            print("    [high-res plot] no bins returned for one region, keeping low-res")
             continue
         highres_parts.append(normed)
         excluded_ranges.append((r_start, r_end))
         print(
-            f"    [high-res plot] {r_name} ({region_size:,} bp "
+            f"    [high-res plot] one region ({region_size:,} bp "
             f"< {threshold_bp:,.0f} bp threshold): {len(normed)} high-res bins"
         )
 
@@ -1558,7 +1675,7 @@ def plot_locus_overview(
       - **Right**: processed rebinned counts from the model
     """
     if not locus.breakpoints:
-        print(f"  Warning: No breakpoints defined for locus {locus.cluster}, skipping")
+        print("  Warning: no breakpoints defined for one locus; skipping")
         return
 
     chrom = locus.chrom
@@ -1569,8 +1686,7 @@ def plot_locus_overview(
     region_df = depth_df[mask].copy().sort_values("Start")
 
     if len(region_df) == 0:
-        print(f"  Warning: No depth data found for locus {locus.cluster} "
-              f"({chrom}:{locus.start:,}-{locus.end:,}), skipping plot")
+        print("  Warning: no depth data found for one locus; skipping plot")
         return
 
     overview_start = perf_counter()
@@ -1723,7 +1839,7 @@ def plot_locus_overview(
     _print_timing(f"{locus.cluster} savefig", stage_start)
     plt.close()
     _print_timing(f"{locus.cluster} overview total", overview_start)
-    print(f"  Created: locus_plots/{filename}")
+    print("  Created one locus overview plot")
 
 
 def plot_sample_at_locus(
@@ -1886,7 +2002,7 @@ def plot_carrier_summary(calls_df: pd.DataFrame, output_dir: str):
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "carrier_summary.png"), dpi=150, bbox_inches="tight")
     plt.close()
-    print("Created: carrier_summary.png")
+    print("Created carrier summary plot")
 
 
 def plot_confidence_distribution(calls_df: pd.DataFrame, output_dir: str):
@@ -1929,7 +2045,7 @@ def plot_confidence_distribution(calls_df: pd.DataFrame, output_dir: str):
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "confidence_distribution.png"), dpi=150, bbox_inches="tight")
     plt.close()
-    print("Created: confidence_distribution.png")
+    print("Created confidence distribution plot")
 
 
 def create_carrier_pdf(
@@ -1977,7 +2093,7 @@ def create_carrier_pdf(
         lowres_median_bin_size = estimate_lowres_bin_size(raw_counts_df)
 
     pdf_path = os.path.join(output_dir, "carrier_plots.pdf")
-    print(f"Creating carrier PDF: {pdf_path}")
+    print("Creating carrier PDF")
     pdf_start = perf_counter()
 
     with PdfPages(pdf_path) as pdf:
@@ -1988,12 +2104,12 @@ def create_carrier_pdf(
                 continue
 
             if not locus.breakpoints:
-                print(f"  Warning: No breakpoints for {cluster}, skipping")
+                print("  Warning: no breakpoints for one locus; skipping")
                 continue
 
             cluster_carriers = carriers[carriers["cluster"] == cluster]["sample"].unique()
             print(
-                f"  Adding {len(cluster_carriers)} high-confidence sample(s) for {cluster} "
+                f"  Adding {len(cluster_carriers)} high-confidence sample plot(s) "
                 f"(threshold={confidence_threshold:.2f})"
             )
 
@@ -2095,7 +2211,7 @@ def create_carrier_pdf(
                 cluster_start,
             )
 
-    print(f"  Saved carrier PDF: {pdf_path}")
+    print("  Saved carrier PDF")
     _print_timing("carrier pdf total", pdf_start)
 
 
@@ -2147,10 +2263,10 @@ def create_eval_category_pdfs(
     for category_name, pdf_path in output_paths.items():
         page_specs = specs_by_category.get(category_name, [])
         if not page_specs:
-            print(f"No pages for {os.path.basename(pdf_path)}")
+            print("No pages for one eval-category PDF")
             continue
 
-        print(f"Creating PDF: {pdf_path}")
+        print("Creating eval-category PDF")
         category_start = perf_counter()
         with PdfPages(pdf_path) as pdf:
             pages_by_cluster: Dict[str, List[dict]] = {}
@@ -2161,7 +2277,7 @@ def create_eval_category_pdfs(
                 cluster_start = perf_counter()
                 locus = loci_by_cluster.get(cluster)
                 if locus is None or not locus.breakpoints:
-                    print(f"  Warning: No breakpoints for {cluster}, skipping")
+                    print("  Warning: no breakpoints for one locus; skipping")
                     continue
 
                 chrom = locus.chrom
@@ -2240,7 +2356,7 @@ def create_eval_category_pdfs(
                     pages_by_cluster[cluster],
                     key=lambda spec: (str(spec["sample"]), str(spec.get("gd_id", ""))),
                 )
-                print(f"  Adding {len(cluster_specs)} page(s) for {cluster}")
+                print(f"  Adding {len(cluster_specs)} page(s) for one locus")
                 for spec in cluster_specs:
                     _render_pdf_sample_page(
                         pdf,
@@ -2263,6 +2379,7 @@ def create_eval_category_pdfs(
                         gaps,
                         viterbi_data,
                         baf_temperature_by_sample=baf_temperature_by_sample,
+                        target_gd_id=spec.get("gd_id"),
                         title_suffix=spec.get("title_suffix"),
                     )
 
@@ -2271,7 +2388,7 @@ def create_eval_category_pdfs(
                     cluster_start,
                 )
 
-        print(f"  Saved PDF: {pdf_path}")
+        print("  Saved eval-category PDF")
         _print_timing(f"{category_name} pdf total", category_start)
 
 
@@ -2301,7 +2418,7 @@ def parse_args():
         required=False,
         help="Optional sample-level posterior file (sample_posteriors.tsv.gz). "
              "When provided, the Minor BAF subplot is labeled with the sample's "
-             "BAF weight MAP estimate. If omitted, plot.py will look for a "
+               "BAF variance scale MAP estimate. If omitted, plot.py will look for a "
              "sibling file next to --cn-posteriors.",
     )
     parser.add_argument(
@@ -2418,8 +2535,10 @@ def parse_args():
     parser.add_argument(
         "--carrier-confidence-threshold",
         type=float,
-        default=0.6,
-        help="Minimum confidence required for a call to appear in carrier_plots.pdf.",
+        default=DEFAULT_CARRIER_CONFIDENCE_THRESHOLD,
+        help="Minimum QUAL required for a call to appear in carrier_plots.pdf when "
+             "QUAL columns are present. Uses the selected confidence column's native "
+             "scale otherwise.",
     )
     return parser.parse_args()
 
@@ -2429,15 +2548,15 @@ def main():
     args = parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
-    setup_logging(args.output_dir)
+    setup_logging(args.output_dir, command="plot", args=args)
 
-    print(f"Output directory: {args.output_dir}")
+    print("Output directory configured")
     print(f"Flank scale: {args.flank_scale}")
 
     # Load data
     print("\nLoading data...")
 
-    print(f"  Loading calls: {args.calls}")
+    print("  Loading calls")
     try:
         calls_df = pd.read_csv(args.calls, sep="\t", compression="infer")
     except pd.errors.EmptyDataError:
@@ -2445,7 +2564,7 @@ def main():
         calls_df = pd.DataFrame(columns=EMPTY_CALLS_COLUMNS)
     print(f"    {len(calls_df)} call records")
 
-    print(f"  Loading CN posteriors: {args.cn_posteriors}")
+    print("  Loading CN posteriors")
     cn_posteriors_df = pd.read_csv(args.cn_posteriors, sep="\t", compression="infer")
     print(f"    {len(cn_posteriors_df)} bin-sample records")
 
@@ -2460,27 +2579,32 @@ def main():
 
     baf_temperature_by_sample: Dict[str, float] = {}
     if sample_posteriors_path:
-        print(f"  Loading sample posteriors: {sample_posteriors_path}")
+        print("  Loading sample posteriors")
         sample_posteriors_df = pd.read_csv(sample_posteriors_path, sep="\t", compression="infer")
         print(f"    {len(sample_posteriors_df)} sample records")
-        if "sample" in sample_posteriors_df.columns and "baf_temperature_map" in sample_posteriors_df.columns:
-            valid_baf_temperature = sample_posteriors_df[["sample", "baf_temperature_map"]].dropna()
+        baf_temperature_column = None
+        if "baf_variance_scale_map" in sample_posteriors_df.columns:
+            baf_temperature_column = "baf_variance_scale_map"
+        elif "baf_temperature_map" in sample_posteriors_df.columns:
+            baf_temperature_column = "baf_temperature_map"
+        if "sample" in sample_posteriors_df.columns and baf_temperature_column is not None:
+            valid_baf_temperature = sample_posteriors_df[["sample", baf_temperature_column]].dropna()
             baf_temperature_by_sample = {
-                str(row["sample"]): float(row["baf_temperature_map"])
+                str(row["sample"]): float(row[baf_temperature_column])
                 for _, row in valid_baf_temperature.iterrows()
             }
-            print(f"    Loaded BAF temperature MAP values for {len(baf_temperature_by_sample)} samples")
+            print(f"    Loaded BAF variance scale MAP values for {len(baf_temperature_by_sample)} samples")
         else:
-            print("    Sample posteriors file has no baf_temperature_map column; Minor BAF labels will be omitted")
+            print("    Sample posteriors file has no BAF temperature column; Minor BAF labels will be omitted")
 
-    print(f"  Loading GD table: {args.gd_table}")
+    print("  Loading GD table")
     gd_table = GDTable(args.gd_table)
     print(f"    {len(gd_table.loci)} loci")
 
     # Load ploidy table if provided
     ploidy_df = None
     if args.ploidy_table:
-        print(f"  Loading ploidy table: {args.ploidy_table}")
+        print("  Loading ploidy table")
         ploidy_df = pd.read_csv(args.ploidy_table, sep="\t")
         print(f"    {len(ploidy_df)} sample/contig ploidy records")
 
@@ -2532,24 +2656,24 @@ def main():
     # Optional annotations
     gtf = None
     if args.gtf:
-        print(f"\n  Loading GTF: {args.gtf}")
+        print("\n  Loading GTF annotations")
         gtf = GTFParser(args.gtf)
 
     segdup = None
     if args.segdup_bed:
-        print(f"  Loading segdup BED: {args.segdup_bed}")
+        print("  Loading segdup annotations")
         segdup = SegDupAnnotation(args.segdup_bed)
 
     gaps = None
     if args.gaps_bed:
-        print(f"  Loading gaps BED: {args.gaps_bed}")
+        print("  Loading gap annotations")
         gaps = GapsAnnotation(args.gaps_bed)
 
     # Load raw counts matrix if provided
     raw_counts_df = None
     raw_sample_medians: Dict[str, float] = {}
     if args.raw_counts:
-        print(f"\n  Loading raw counts: {args.raw_counts}")
+        print("\n  Loading raw counts")
         raw_counts_df = pd.read_csv(args.raw_counts, sep="\t", compression="infer")
         if "#Chr" in raw_counts_df.columns:
             raw_counts_df.rename(columns={"#Chr": "Chr"}, inplace=True)
@@ -2578,16 +2702,19 @@ def main():
         if not args.raw_counts:
             print("ERROR: --high-res-counts requires --raw-counts for per-sample median estimation")
             sys.exit(1)
-        print(f"  High-res counts: {highres_path}")
+        print("  High-res counts enabled")
 
     # ---- Determine which loci to plot ----
     if args.loci:
         loci_to_plot = {}
+        missing_loci = 0
         for name in args.loci:
             if name in gd_table.loci:
                 loci_to_plot[name] = gd_table.loci[name]
             else:
-                print(f"  WARNING: --locus '{name}' not found in GD table, skipping")
+                missing_loci += 1
+        if missing_loci:
+            print(f"  WARNING: {missing_loci} requested locus filter(s) were not found; skipping")
         if not loci_to_plot:
             print("ERROR: none of the requested loci were found in the GD table")
             sys.exit(1)
@@ -2607,7 +2734,7 @@ def main():
     # Load Viterbi overlay data if paths file provided
     viterbi_data: Optional[ViterbiOverlayData] = None
     if args.viterbi_paths:
-        print(f"\nLoading Viterbi paths: {args.viterbi_paths}")
+        print("\nLoading Viterbi paths")
         paths_df = pd.read_csv(
             args.viterbi_paths, sep="\t", compression="infer",
         )
@@ -2627,7 +2754,7 @@ def main():
             event_marginals_path = sibling_event_marginals
 
     if event_marginals_path:
-        print(f"\nLoading event marginals: {event_marginals_path}")
+        print("\nLoading event marginals")
         event_marginals_df = pd.read_csv(
             event_marginals_path,
             sep="\t",
@@ -2657,7 +2784,7 @@ def main():
 
     eval_report_df: Optional[pd.DataFrame] = None
     if args.eval_report:
-        print(f"\nLoading eval report: {args.eval_report}")
+        print("\nLoading eval report")
         eval_report_df = pd.read_csv(args.eval_report, sep="\t")
         print(f"  {len(eval_report_df)} eval report rows loaded")
 
@@ -2669,11 +2796,11 @@ def main():
     # Create locus overview plots
     print("\nCreating locus overview plots...")
     depth_by_cluster = {k: v for k, v in depth_df.groupby("Cluster")}
+    skipped_locus_plots = 0
     for cluster, locus in loci_to_plot.items():
-        print(f"  Processing {cluster}...")
         cluster_depth = depth_by_cluster.get(cluster)
         if cluster_depth is None:
-            print(f"  Warning: No depth data for {cluster}, skipping")
+            skipped_locus_plots += 1
             continue
         plot_locus_overview(
             locus, calls_df, cluster_depth, gtf, segdup,
@@ -2687,6 +2814,8 @@ def main():
             lowres_median_bin_size=lowres_median_bin_size,
             highres_path=highres_path,
         )
+    if skipped_locus_plots:
+        print(f"  Skipped {skipped_locus_plots} locus overview plot(s) with no depth data")
 
     # Create individual sample plots
     if args.plot_all_samples or args.sample:

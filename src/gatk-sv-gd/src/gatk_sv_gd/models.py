@@ -10,6 +10,8 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
+from gatk_sv_gd import _util
+
 
 @dataclass
 class GDLocus:
@@ -274,7 +276,7 @@ class GDTable:
                     bp_ranges.append(bp_range)
             else:
                 # No breakpoints found at all - this shouldn't happen, but handle it
-                print(f"  ERROR: No breakpoints found for {cluster}, skipping")
+                print("  ERROR: one GD locus has no breakpoints; skipping")
                 continue
             
             result[cluster] = GDLocus(
@@ -287,12 +289,13 @@ class GDTable:
                 is_terminal=data["is_terminal"],
             )
             
-            # Print breakpoint ranges for debugging
-            print(f"  {cluster}: {len(bp_ranges)} breakpoints")
-            for i, (start, end) in enumerate(bp_ranges):
-                width = end - start
-                bp_label = bp_names_sorted[i]
-                print(f"    BP {bp_label}: {start:,} - {end:,} (width: {width:,} bp)")
+            if _util.VERBOSE:
+                widths = [end - start for start, end in bp_ranges]
+                print(
+                    "  [verbose] parsed breakpoint summary for one locus: "
+                    f"count={len(bp_ranges)}, min_width={min(widths):,}, "
+                    f"max_width={max(widths):,}"
+                )
 
         return result
 

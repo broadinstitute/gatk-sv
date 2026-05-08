@@ -21,7 +21,7 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.ops.indexing import Vindex
 from pyro.infer import config_enumerate, infer_discrete
-from pyro.infer.autoguide import AutoDiagonalNormal, AutoDelta
+from pyro.infer.autoguide import AutoDiagonalNormal, AutoDelta, AutoGuideList
 from pyro.infer.autoguide.initialization import init_to_value
 from pyro.infer import JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.infer.svi import SVI
@@ -74,7 +74,12 @@ def _center_state_log_likelihood_table_torch(
     view_shape = (reference_probs.shape[0],) + (1,) * (log_lik_table.dim() - 1)
     reference_log_probs = torch.log(reference_probs).view(view_shape)
     baseline = torch.logsumexp(reference_log_probs + log_lik_table, dim=0, keepdim=True)
-    return log_lik_table - baseline
+    centered = log_lik_table - baseline
+    return torch.where(
+        torch.isfinite(baseline).expand_as(centered),
+        centered,
+        torch.zeros_like(centered),
+    )
 
 
 def _center_state_log_likelihood_table_numpy(
@@ -89,8 +94,54 @@ def _center_state_log_likelihood_table_numpy(
     view_shape = (reference_probs.shape[0],) + (1,) * (log_lik_table.ndim - 1)
     raw = np.log(reference_probs).reshape(view_shape) + log_lik_table
     max_val = np.max(raw, axis=0, keepdims=True)
-    baseline = max_val + np.log(np.sum(np.exp(raw - max_val), axis=0, keepdims=True) + 1e-30)
-    return log_lik_table - baseline
+    finite_max = np.where(np.isfinite(max_val), max_val, 0.0)
+    shifted = np.where(np.isfinite(max_val), raw - finite_max, -np.inf)
+    baseline = np.where(
+        np.isfinite(max_val),
+        finite_max + np.log(np.sum(np.exp(shifted), axis=0, keepdims=True) + 1e-30),
+        -np.inf,
+    )
+    centered = np.zeros_like(log_lik_table)
+    np.subtract(log_lik_table, baseline, out=centered, where=np.isfinite(baseline))
+    return centered
+
+
+def _clip_baf_variance_torch(value: torch.Tensor) -> torch.Tensor:
+    """Clamp scaled BAF variances to a finite range before Normal log-probs."""
+    return torch.clamp(
+        torch.nan_to_num(value, nan=1e6, posinf=1e6, neginf=1e-6),
+        min=1e-6,
+        max=1e6,
+    )
+
+
+def _safe_scaled_baf_variance_torch(
+    baf_var: torch.Tensor,
+    valid_mask: torch.Tensor,
+    baf_temperature: torch.Tensor,
+) -> torch.Tensor:
+    """Scale BAF variance without letting masked NaNs affect gradients."""
+    finite_baf_var = torch.nan_to_num(baf_var, nan=1.0, posinf=1.0, neginf=1.0)
+    positive_baf_var = torch.where(
+        finite_baf_var > 0,
+        finite_baf_var,
+        torch.ones_like(finite_baf_var),
+    )
+    scaled_baf_var = torch.where(
+        valid_mask,
+        positive_baf_var * baf_temperature,
+        torch.ones_like(positive_baf_var),
+    )
+    return _clip_baf_variance_torch(scaled_baf_var)
+
+
+def _clip_baf_variance_numpy(value: np.ndarray) -> np.ndarray:
+    """NumPy counterpart of :func:`_clip_baf_variance_torch`."""
+    return np.clip(
+        np.nan_to_num(value, nan=1e6, posinf=1e6, neginf=1e-6),
+        1e-6,
+        1e6,
+    )
 
 
 def _windowed_relative_elbo_change(
@@ -115,6 +166,11 @@ def _logit_clipped(value: float, eps: float = 1e-6) -> float:
     """Return a finite logit after clipping to the open unit interval."""
     clipped = min(max(float(value), eps), 1.0 - eps)
     return math.log(clipped / (1.0 - clipped))
+
+
+def _positive_clipped_log(value: float, eps: float = 1e-6) -> float:
+    """Return a finite log after clipping to a positive value."""
+    return math.log(max(float(value), eps))
 
 
 class ExclusionMask:
@@ -156,6 +212,7 @@ class ExclusionMask:
         if isinstance(filepaths, str):
             filepaths = [filepaths]
         dfs = []
+        n_input_files = len(filepaths)
         for fp in filepaths:
             df = pd.read_csv(
                 fp,
@@ -165,14 +222,13 @@ class ExclusionMask:
                 names=["chr", "start", "end"],
                 compression="gzip" if fp.endswith(".gz") else None,
             )
-            print(f"  Loaded {len(df):,} regions from {fp}")
             dfs.append(df)
         self.df = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame(
             columns=["chr", "start", "end"]
         )
         self._build_interval_index()
         print(f"Exclusion mask: {len(self.df):,} total {label} regions "
-              f"({len(filepaths)} file(s)) → "
+              f"({n_input_files} file(s)) → "
               f"{sum(len(t) for t in self.trees.values())} merged intervals")
 
     def _build_interval_index(self):
@@ -285,6 +341,7 @@ class ExclusionMask:
         if isinstance(filepaths, str):
             filepaths = [filepaths]
         dfs = [self.df]
+        n_input_files = len(filepaths)
         for fp in filepaths:
             df = pd.read_csv(
                 fp,
@@ -294,12 +351,14 @@ class ExclusionMask:
                 names=["chr", "start", "end"],
                 compression="gzip" if fp.endswith(".gz") else None,
             )
-            print(f"  Adding {len(df):,} regions from {fp}")
             dfs.append(df)
         self.df = pd.concat(dfs, ignore_index=True)
         self._build_interval_index()
-        print(f"Exclusion mask updated: {len(self.df):,} total regions → "
-              f"{sum(len(t) for t in self.trees.values())} merged intervals")
+        print(
+            f"Exclusion mask updated from {n_input_files} additional file(s): "
+            f"{len(self.df):,} total regions -> "
+            f"{sum(len(t) for t in self.trees.values())} merged intervals"
+        )
 
 
 class DepthData:
@@ -481,7 +540,7 @@ class CNVModel:
         alpha_ref: float = 50.0,
         alpha_non_ref: float = 1.0,
         state_prior_weight: float = 1.0,
-        baf_weight: float = 0.25,
+        baf_temperature: float = 25.0,
         learn_baf_temperature: bool = True,
         baf_temperature_prior_scale: float = 0.5,
         var_bias_bin: float = 0.1,
@@ -506,15 +565,15 @@ class CNVModel:
             state_prior_weight: Multiplicative weight applied to the learned
                 per-bin pair-state log-prior when reconstructing analytical
                 discrete posteriors. Values < 1.0 temper overly sharp priors.
-            baf_weight: Fixed BAF likelihood weight when
-                ``learn_baf_temperature`` is disabled; otherwise the prior
-                median for the learned per-sample BAF weight. Learned-mode
-                values must lie strictly between 0 and 1. Set to 0 to disable
-                BAF evidence entirely.
-            learn_baf_temperature: Whether to learn a per-sample bounded BAF
-                likelihood weight instead of keeping ``baf_weight`` fixed.
-            baf_temperature_prior_scale: LogitNormal prior scale for the
-                learned per-sample BAF weight.
+            baf_temperature: Fixed global multiplicative BAF variance scale
+                when ``learn_baf_temperature`` is disabled; otherwise the
+                LogNormal prior median for the learned global BAF variance
+                scale. Larger values soften BAF evidence without removing it.
+                Set to 0 to disable BAF evidence entirely in fixed mode.
+            learn_baf_temperature: Whether to learn one global BAF variance
+                temperature instead of keeping ``baf_temperature`` fixed.
+            baf_temperature_prior_scale: LogNormal prior scale for the learned
+                global BAF variance temperature.
             var_bias_bin: Variance for per-bin mean bias (log-normal)
             var_sample: Variance for per-sample variance factor (log-normal)
             var_bin: Variance for per-bin variance factor (log-normal)
@@ -538,7 +597,7 @@ class CNVModel:
         self.alpha_ref = alpha_ref
         self.alpha_non_ref = alpha_non_ref
         self.state_prior_weight = state_prior_weight
-        self.baf_weight = baf_weight
+        self.baf_temperature = float(baf_temperature)
         self.learn_baf_temperature = learn_baf_temperature
         self.baf_temperature_prior_scale = baf_temperature_prior_scale
         self.var_bias_bin = var_bias_bin
@@ -552,14 +611,12 @@ class CNVModel:
         self.dtype = dtype
         self.debug = debug
         self.guide_type = guide_type
-        if self.baf_weight < 0:
-            raise ValueError("baf_weight must be non-negative.")
+        if self.baf_temperature < 0:
+            raise ValueError("baf_temperature must be non-negative.")
         if self.baf_temperature_prior_scale <= 0:
             raise ValueError("baf_temperature_prior_scale must be positive.")
-        if self.learn_baf_temperature and self.baf_weight <= 0:
-            raise ValueError("learn_baf_temperature requires baf_weight > 0.")
-        if self.learn_baf_temperature and self.baf_weight >= 1:
-            raise ValueError("learn_baf_temperature requires baf_weight < 1.")
+        if self.learn_baf_temperature and self.baf_temperature <= 0:
+            raise ValueError("learn_baf_temperature requires baf_temperature > 0.")
         self.pair_states = build_diploid_pair_states(max_hap_cn=2)
         if n_states != len(self.pair_states):
             raise ValueError(
@@ -585,8 +642,8 @@ class CNVModel:
             device=self.device,
             dtype=self.dtype,
         )
-        self._baf_weight_logit_t = torch.tensor(
-            _logit_clipped(self.baf_weight),
+        self._baf_temperature_log_t = torch.tensor(
+            _positive_clipped_log(self.baf_temperature),
             device=self.device,
             dtype=self.dtype,
         )
@@ -637,19 +694,50 @@ class CNVModel:
             self.latent_sites.append("pair_state_probs")
 
         # Initialize guide based on type
-        self._blocked_model = poutine.block(self.model, expose=self.latent_sites)
         self.guide = self._build_guide(guide_type)
 
-    def _build_guide(self, guide_type: str, init_loc_fn=None):
+    def _build_guide(self, guide_type: str, init_loc_fn=None, model_fn=None, expose_sites=None):
+        target_model = self.model if model_fn is None else model_fn
+        target_sites = self.latent_sites if expose_sites is None else expose_sites
+        blocked_model = poutine.block(target_model, expose=target_sites)
         if guide_type == "delta":
-            return AutoDelta(self._blocked_model)
+            return AutoDelta(blocked_model)
         if guide_type == "diagonal":
+            if self.learn_baf_temperature and "baf_temperature" in target_sites:
+                guide = AutoGuideList(target_model)
+                diagonal_sites = [site for site in target_sites if site != "baf_temperature"]
+                if diagonal_sites:
+                    diagonal_model = poutine.block(target_model, expose=diagonal_sites)
+                    if init_loc_fn is None:
+                        guide.append(AutoDiagonalNormal(diagonal_model))
+                    else:
+                        guide.append(AutoDiagonalNormal(diagonal_model, init_loc_fn=init_loc_fn))
+                temperature_model = poutine.block(target_model, expose=["baf_temperature"])
+                if init_loc_fn is None:
+                    guide.append(AutoDelta(temperature_model))
+                else:
+                    guide.append(AutoDelta(temperature_model, init_loc_fn=init_loc_fn))
+                return guide
             if init_loc_fn is None:
-                return AutoDiagonalNormal(self._blocked_model)
-            return AutoDiagonalNormal(self._blocked_model, init_loc_fn=init_loc_fn)
+                return AutoDiagonalNormal(blocked_model)
+            return AutoDiagonalNormal(blocked_model, init_loc_fn=init_loc_fn)
         raise ValueError(
             f"Unknown guide_type: {guide_type}. Choose 'diagonal' or 'delta'."
         )
+
+    def _warmup_model_and_initial_values(self):
+        model_fn = self.model
+        expose_sites = list(self.latent_sites)
+        init_values = {}
+        if self.learn_baf_temperature:
+            fixed_baf_temperature = self._fixed_baf_temperature_tensor().detach().clone()
+            model_fn = poutine.condition(
+                self.model,
+                data={"baf_temperature": fixed_baf_temperature},
+            )
+            expose_sites = [site for site in expose_sites if site != "baf_temperature"]
+            init_values["baf_temperature"] = fixed_baf_temperature
+        return model_fn, expose_sites, init_values
 
     def _extract_guide_latent_values(self, guide, data) -> Dict[str, torch.Tensor]:
         guide_trace = poutine.trace(guide).get_trace(
@@ -797,11 +885,11 @@ class CNVModel:
     def _fixed_bin_var_tensor(self, n_bins: int) -> torch.Tensor:
         return torch.full((n_bins, 1), float(self.var_bin), device=self.device, dtype=self.dtype)
 
-    def _fixed_baf_temperature_values(self, n_samples: int) -> np.ndarray:
-        return np.full(n_samples, self.baf_weight, dtype=np.float32)
+    def _fixed_baf_temperature_values(self) -> np.ndarray:
+        return np.asarray(self.baf_temperature, dtype=np.float32)
 
-    def _fixed_baf_temperature_tensor(self, n_samples: int) -> torch.Tensor:
-        return torch.full((n_samples,), float(self.baf_weight), device=self.device, dtype=self.dtype)
+    def _fixed_baf_temperature_tensor(self) -> torch.Tensor:
+        return torch.tensor(float(self.baf_temperature), device=self.device, dtype=self.dtype)
 
     def _pair_state_alpha_values(self) -> np.ndarray:
         alpha = np.full(self.n_states, self.alpha_non_ref, dtype=np.float32)
@@ -825,13 +913,11 @@ class CNVModel:
         repeated_probs = np.broadcast_to(base_probs, (n_bins, 1, self.n_states)).copy()
         return torch.tensor(repeated_probs, device=self.device, dtype=self.dtype)
 
-    def _baf_scale_numpy(self, maps: dict, n_samples: int) -> np.ndarray:
+    def _baf_scale_numpy(self, maps: dict, n_samples: int = 0) -> float:
         if "baf_temperature" in maps:
             values = np.asarray(maps["baf_temperature"]).squeeze()
-            if values.ndim == 0:
-                return np.full(n_samples, float(values), dtype=np.float64)
-            return np.asarray(values, dtype=np.float64)
-        return np.full(n_samples, self.baf_weight, dtype=np.float64)
+            return float(np.asarray(values, dtype=np.float64).mean())
+        return float(self.baf_temperature)
 
     def _baf_reference_probs_tensor(self) -> torch.Tensor:
         return self._pair_state_prior_mean_t
@@ -864,19 +950,16 @@ class CNVModel:
             sample_var = pyro.sample(
                 "sample_var", dist.Exponential(self._sample_var_rate_t)
             )
-            if self.learn_baf_temperature:
-                baf_temperature = pyro.sample(
-                    "baf_temperature",
-                    dist.TransformedDistribution(
-                        dist.Normal(
-                            self._baf_weight_logit_t,
-                            self._baf_temperature_prior_scale_t,
-                        ),
-                        [dist.transforms.SigmoidTransform()],
-                    ),
-                )
-            else:
-                baf_temperature = self._fixed_baf_temperature_tensor(n_samples)
+        if self.learn_baf_temperature:
+            baf_temperature = pyro.sample(
+                "baf_temperature",
+                dist.LogNormal(
+                    self._baf_temperature_log_t,
+                    self._baf_temperature_prior_scale_t,
+                ),
+            )
+        else:
+            baf_temperature = self._fixed_baf_temperature_tensor()
         if self.debug:
             print(f"sample_var.shape: {sample_var.shape}")
 
@@ -950,7 +1033,7 @@ class CNVModel:
             # The observed variance is estimated upstream from the number of
             # SNP sites per bin, so bins with more sites contribute a tighter
             # likelihood. Missing / unsupported bins are masked out.
-            if self.baf_weight > 0 and hasattr(self, "current_data") and getattr(self.current_data, "has_baf", False):
+            if self.baf_temperature > 0 and hasattr(self, "current_data") and getattr(self.current_data, "has_baf", False):
                 baf_obs = self.current_data.minor_baf_median
                 baf_var = self.current_data.baf_variance
                 baf_sites = self.current_data.baf_n_sites
@@ -959,8 +1042,12 @@ class CNVModel:
                               (torch.isfinite(baf_var)) &
                               (baf_sites > 0) &
                               (baf_var > 0))
-                safe_baf_var = torch.where(valid_mask, baf_var, torch.ones_like(baf_var))
-                baf_std = torch.sqrt(torch.clamp(safe_baf_var, min=1e-6))
+                safe_baf_var = _safe_scaled_baf_variance_torch(
+                    baf_var,
+                    valid_mask,
+                    baf_temperature,
+                )
+                baf_std = torch.sqrt(safe_baf_var)
                 state_mean = self.minor_baf_by_state.view(self.n_states, 1, 1)
                 obs_expanded = baf_obs.unsqueeze(0)
                 std_expanded = baf_std.unsqueeze(0)
@@ -982,7 +1069,7 @@ class CNVModel:
                         centered_baf_log_lik[state_idx],
                         torch.zeros_like(baf_obs),
                     )
-                pyro.factor("baf_lik", baf_temperature * baf_rel_lik)
+                pyro.factor("baf_lik", baf_rel_lik)
         if self.debug:
             print("=== END MODEL DEBUG ===\n")
 
@@ -1047,7 +1134,12 @@ class CNVModel:
                     f"Running AutoDelta MAP warmup for {guide_warmup_iter} iterations "
                     f"before {self.guide_type} guide training..."
                 )
-                warmup_guide = self._build_guide("delta")
+                warmup_model, warmup_sites, warmup_values = self._warmup_model_and_initial_values()
+                warmup_guide = self._build_guide(
+                    "delta",
+                    model_fn=warmup_model,
+                    expose_sites=warmup_sites,
+                )
                 self._run_svi_training(
                     data,
                     guide=warmup_guide,
@@ -1066,7 +1158,7 @@ class CNVModel:
                     progress_desc="MAP warmup",
                     record_history=False,
                 )
-                warmup_values = self._extract_guide_latent_values(warmup_guide, data)
+                warmup_values.update(self._extract_guide_latent_values(warmup_guide, data))
                 pyro.clear_param_store()
                 self.guide = self._build_guide(
                     self.guide_type,
@@ -1149,7 +1241,7 @@ class CNVModel:
                 guide_trace.nodes["baf_temperature"]["value"].detach().cpu().numpy()
             )
         else:
-            map_estimates["baf_temperature"] = self._fixed_baf_temperature_values(data.n_samples)
+            map_estimates["baf_temperature"] = self._fixed_baf_temperature_values()
         if self.freeze_bin_var:
             map_estimates["bin_var"] = self._fixed_bin_var_values(data.n_bins)
         else:
@@ -1260,7 +1352,7 @@ class CNVModel:
         log_unnormalized = log_lik + log_prior
 
         # 4b. Optional BAF log-likelihood contribution.
-        if getattr(data, "has_baf", False) and np.any(baf_temperature > 0):
+        if getattr(data, "has_baf", False) and baf_temperature > 0:
             minor_baf = data.minor_baf_median.detach().cpu().numpy()
             baf_var = data.baf_variance.detach().cpu().numpy()
             baf_sites = data.baf_n_sites.detach().cpu().numpy()
@@ -1272,7 +1364,10 @@ class CNVModel:
             if np.any(valid):
                 exp_minor_baf = pair_minor_baf.reshape(-1, 1, 1)
                 baf_obs = minor_baf[np.newaxis, :, :]
-                baf_std = np.sqrt(np.maximum(baf_var[np.newaxis, :, :], 1e-6))
+                scaled_baf_var = _clip_baf_variance_numpy(
+                    baf_var[np.newaxis, :, :] * baf_temperature
+                )
+                baf_std = np.sqrt(scaled_baf_var)
                 raw_baf_log_lik = -0.5 * np.log(2 * np.pi * baf_std ** 2) - (
                     (baf_obs - exp_minor_baf) ** 2
                 ) / (2 * baf_std ** 2)
@@ -1281,9 +1376,7 @@ class CNVModel:
                     raw_baf_log_lik,
                     self._baf_reference_probs_numpy(),
                 )
-                log_unnormalized += (
-                    baf_temperature[np.newaxis, np.newaxis, :] * centered_baf_log_lik
-                )
+                log_unnormalized += centered_baf_log_lik
 
         # 5. Log-sum-exp softmax across the state dimension (axis 0)
         max_log = np.max(log_unnormalized, axis=0, keepdims=True)

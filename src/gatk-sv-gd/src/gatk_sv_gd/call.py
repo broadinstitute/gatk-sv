@@ -9,28 +9,24 @@ Supports two calling modes:
 import argparse
 import os
 import re
-import sys
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
 from gatk_sv_gd import _util
+from gatk_sv_gd._util import setup_logging
 from gatk_sv_gd.models import GDTable
 from gatk_sv_gd.viterbi import (
     load_transition_matrix,
     viterbi_call_gd_cnv,
 )
-
-
-def setup_logging(output_dir: str, filename: str = "call_log.txt"):
-    """Redirect stdout/stderr to console and log file."""
-    log_path = os.path.join(output_dir, filename)
-    log_fh = open(log_path, "w")
-    _util._log_fh = log_fh
-    sys.stdout = _util.TeeStream(sys.__stdout__, log_fh)
-    sys.stderr = _util.TeeStream(sys.__stderr__, log_fh)
-    return log_fh
+DEFAULT_MIN_POSTERIOR_INTERVAL_CONFIDENCE = float(
+    _util.posterior_probability_to_qual(0.80)
+)
+DEFAULT_MIN_FLANK_NON_EVENT_CONFIDENCE = float(
+    _util.posterior_probability_to_qual(0.90)
+)
 
 
 def get_locus_interval_bins(
@@ -105,7 +101,8 @@ def determine_posterior_carrier_breakpoints(
 ) -> Dict[str, Optional[str]]:
     """Pick at most one qualifying posterior-marginal GD_ID per SV type.
 
-    A call qualifies only when each covered interval's mean event probability
+    A call qualifies only when each covered interval's mean called-state QUAL
+    meets the minimum threshold and each available flank's median non-event QUAL
     meets the minimum threshold. Among qualifying calls, choose the largest one.
     """
     selected_by_svtype: Dict[str, Optional[str]] = {}
@@ -259,11 +256,6 @@ def score_call_from_posterior_marginals(
         covered_bin_indices.extend(interval_bin_arrays.get(interval_name, np.array([], dtype=int)).tolist())
 
     event_mask = build_event_pair_mask(pair_states, svtype, sample_ploidy)
-    flank_non_event_mask = build_flank_non_event_pair_mask(
-        pair_states,
-        svtype,
-        sample_ploidy,
-    )
     interval_confidences: List[float] = []
     if np.any(event_mask):
         for interval_name in covered_intervals:
@@ -279,7 +271,11 @@ def score_call_from_posterior_marginals(
                 0.0,
                 1.0,
             )
-            interval_confidences.append(float(np.mean(interval_probs)))
+            interval_quals = _util.posterior_called_state_to_qual(
+                interval_probs,
+                True,
+            )
+            interval_confidences.append(float(np.mean(interval_quals)))
 
     if covered_bin_indices and np.any(event_mask):
         per_bin_event_probs = np.clip(
@@ -287,31 +283,52 @@ def score_call_from_posterior_marginals(
             0.0,
             1.0,
         )
-        confidence = float(np.mean(per_bin_event_probs))
+        log_prob_score = float(np.mean(per_bin_event_probs))
     else:
-        confidence = 0.0
+        log_prob_score = 0.0
 
     covered_bp_total = int(
         sum(max(0, int(end) - int(start)) for start, end, _ in covered_tuples)
     )
 
     flank_non_event_medians: Dict[str, float] = {}
+    flank_confidences: Dict[str, float] = {}
     for flank_name in ("left_flank", "right_flank"):
         flank_bin_indices = interval_bin_arrays.get(flank_name, np.array([], dtype=int))
-        if len(flank_bin_indices) == 0 or not np.any(flank_non_event_mask):
+        if len(flank_bin_indices) == 0:
             flank_non_event_medians[flank_name] = np.nan
+            flank_confidences[flank_name] = np.nan
             continue
-        flank_non_event_probs = np.clip(
-            sample_pair_probs[flank_bin_indices][:, flank_non_event_mask].sum(axis=1),
-            0.0,
-            1.0,
+        if np.any(event_mask):
+            flank_event_probs = np.clip(
+                sample_pair_probs[flank_bin_indices][:, event_mask].sum(axis=1),
+                0.0,
+                1.0,
+            )
+        else:
+            flank_event_probs = np.zeros(len(flank_bin_indices), dtype=float)
+        flank_quals = _util.posterior_called_state_to_qual(
+            flank_event_probs,
+            False,
         )
-        flank_non_event_medians[flank_name] = float(np.median(flank_non_event_probs))
+        flank_non_event_medians[flank_name] = float(np.median(flank_quals))
+        flank_confidences[flank_name] = float(np.mean(flank_quals))
 
     valid_flank_medians = [
         value for value in flank_non_event_medians.values()
         if pd.notna(value)
     ]
+
+    confidence_components: List[float] = list(interval_confidences)
+    for flank_name in ("left_flank", "right_flank"):
+        flank_confidence = flank_confidences.get(flank_name, np.nan)
+        if pd.notna(flank_confidence):
+            confidence_components.append(float(flank_confidence))
+    confidence = (
+        float(min(confidence_components))
+        if confidence_components else 0.0
+    )
+    qual_score = confidence
 
     return {
         "GD_ID": entry["GD_ID"],
@@ -330,8 +347,8 @@ def score_call_from_posterior_marginals(
         "matched_seg_end": np.nan,
         "matched_seg_n_bins": 0,
         "matched_interval_bp": covered_bp_total,
-        "interval_coverage": confidence,
-        "reciprocal_overlap": confidence,
+        "interval_coverage": log_prob_score,
+        "reciprocal_overlap": log_prob_score,
         "intervals": covered_intervals,
         "interval_confidences": interval_confidences,
         "min_interval_confidence": (
@@ -342,8 +359,9 @@ def score_call_from_posterior_marginals(
         "min_flank_non_event_confidence": (
             float(min(valid_flank_medians)) if valid_flank_medians else np.nan
         ),
-        "log_prob_score": confidence,
+        "log_prob_score": log_prob_score,
         "confidence_score": confidence,
+        "qual_score": qual_score,
         "is_carrier": False,
     }
 
@@ -358,8 +376,8 @@ def call_cnvs_from_posteriors(
     min_mean_coverage: float = 0.90,
     breakpoint_transition_matrix: Optional[np.ndarray] = None,
     calling_mode: str = "viterbi",
-    min_posterior_interval_confidence: float = 0.80,
-    min_flank_non_event_confidence: float = 0.90,
+    min_posterior_interval_confidence: float = DEFAULT_MIN_POSTERIOR_INTERVAL_CONFIDENCE,
+    min_flank_non_event_confidence: float = DEFAULT_MIN_FLANK_NON_EVENT_CONFIDENCE,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Call GD CNVs from posterior probabilities."""
     if calling_mode not in {"viterbi", "posterior-marginal"}:
@@ -381,10 +399,10 @@ def call_cnvs_from_posteriors(
     else:
         print(
             "  Calling mode: posterior-marginal scoring  "
-            "(minimum per-interval confidence="
-            f"{min_posterior_interval_confidence:.0%}, "
-            "minimum flank non-event confidence="
-            f"{min_flank_non_event_confidence:.0%})"
+            "(minimum per-interval QUAL="
+            f"{min_posterior_interval_confidence:.2f}, "
+            "minimum flank non-event QUAL="
+            f"{min_flank_non_event_confidence:.2f})"
         )
     print("=" * 80)
 
@@ -435,7 +453,7 @@ def call_cnvs_from_posteriors(
         print(f"  Validated: bin coordinates match between posteriors and mappings ({n_bins} bins)")
     else:
         print(
-            f"  WARNING: sample {first_sample} has {len(first_sample_rows)} bins, "
+            f"  WARNING: one sample has {len(first_sample_rows)} bins, "
             f"expected {n_bins}; skipping alignment check"
         )
 
@@ -464,8 +482,13 @@ def call_cnvs_from_posteriors(
         )
     )
 
+    processed_loci = 0
+    skipped_loci = 0
+    breakpoint_masked_bins = 0
+    missing_flank_sets = 0
+    interval_sets = 0
     for cluster, locus in gd_table.loci.items():
-        print(f"\nCalling CNVs for locus: {cluster}")
+        processed_loci += 1
 
         cluster_bin_rows = (
             bin_mappings_df[bin_mappings_df["cluster"] == cluster]
@@ -477,21 +500,17 @@ def call_cnvs_from_posteriors(
         interval_bins = get_locus_interval_bins(bin_mappings_df, cluster)
         bp_masked = interval_bins.pop("breakpoint_ranges", [])
         if bp_masked:
-            print(f"  Masking {len(bp_masked)} breakpoint-range bin(s)")
+            breakpoint_masked_bins += len(bp_masked)
 
         if not interval_bins:
-            print("  Skipping — no bins in mappings for this locus")
+            skipped_loci += 1
             continue
 
-        for interval_name, bins in interval_bins.items():
-            print(f"  {interval_name}: {len(bins)} bins")
+        interval_sets += len(interval_bins)
 
         for flank_name in ("left_flank", "right_flank"):
             if flank_name not in interval_bins or len(interval_bins[flank_name]) == 0:
-                warning = f"  WARNING: no {flank_name} bins for {cluster}"
-                if calling_mode == "viterbi":
-                    warning += " — Viterbi trace will not cover that flank"
-                print(warning)
+                missing_flank_sets += 1
 
         interval_bin_arrays = {
             name: np.array(bins, dtype=int)
@@ -529,13 +548,9 @@ def call_cnvs_from_posteriors(
                         "end": int(bin_row["end"]),
                         "prob_del_event": float(del_prob),
                         "prob_dup_event": float(dup_prob),
+                        "qual_del_event": float(_util.posterior_probability_to_qual(del_prob)),
+                        "qual_dup_event": float(_util.posterior_probability_to_qual(dup_prob)),
                     }
-                )
-
-            if verbose:
-                _util.vlog(
-                    f"\n  [{calling_mode}] Sample: {sample_id}  "
-                    f"({locus.chrom}, ploidy={sample_ploidy})"
                 )
 
             if calling_mode == "viterbi":
@@ -547,7 +562,7 @@ def call_cnvs_from_posteriors(
                     interval_bin_arrays,
                     ploidy=sample_ploidy,
                     min_mean_coverage=min_mean_coverage,
-                    verbose=verbose,
+                    verbose=False,
                     sample_id=str(sample_id),
                     breakpoint_transition_matrix=breakpoint_transition_matrix,
                     bin_coords=bin_coords_by_idx,
@@ -594,35 +609,6 @@ def call_cnvs_from_posteriors(
                     )
                     call["is_carrier"] = bool(is_selected)
                     call["is_best_match"] = bool(is_selected)
-
-            if verbose:
-                for call in calls:
-                    tag = " [CARRIER]" if call.get("is_carrier", False) else ""
-                    if calling_mode == "viterbi":
-                        coverage = call.get(
-                            "interval_coverage",
-                            call.get("reciprocal_overlap", 0.0),
-                        )
-                        _util.vlog(
-                            f"    [VIT] {sample_id:30s}  "
-                            f"{call['GD_ID']:25s}  "
-                            f"{call['svtype']:4s}  ploidy={sample_ploidy}  "
-                            f"score={get_call_confidence(call):+.4f}  "
-                            f"coverage={coverage:.2%}  "
-                            f"intervals={','.join(call['intervals'])}"
-                            f"{tag}"
-                        )
-                    else:
-                        _util.vlog(
-                            f"    [POST] {sample_id:30s}  "
-                            f"{call['GD_ID']:25s}  "
-                            f"{call['svtype']:4s}  ploidy={sample_ploidy}  "
-                            f"confidence={get_call_confidence(call):.4f}  "
-                            f"min_interval={call.get('min_interval_confidence', np.nan):.4f}  "
-                            f"min_flank_non_event={call.get('min_flank_non_event_confidence', np.nan):.4f}  "
-                            f"intervals={','.join(call['intervals'])}"
-                            f"{tag}"
-                        )
 
             for call in calls:
                 svtype = call["svtype"]
@@ -685,9 +671,17 @@ def call_cnvs_from_posteriors(
                     ),
                     "log_prob_score": call.get("log_prob_score", confidence_score),
                     "confidence_score": confidence_score,
+                    "qual_score": call.get("qual_score", np.nan),
                     "calling_method": calling_mode,
                 }
                 all_results.append(result)
+
+    print(
+        "  Calling summary: "
+        f"loci={processed_loci}, skipped_no_bins={skipped_loci}, "
+        f"interval_sets={interval_sets}, breakpoint_bins_masked={breakpoint_masked_bins}, "
+        f"missing_flank_sets={missing_flank_sets}"
+    )
 
     calls_df = pd.DataFrame(
         all_results,
@@ -721,6 +715,7 @@ def call_cnvs_from_posteriors(
             "is_best_match",
             "log_prob_score",
             "confidence_score",
+            "qual_score",
             "calling_method",
         ],
     )
@@ -746,6 +741,8 @@ def call_cnvs_from_posteriors(
             "end",
             "prob_del_event",
             "prob_dup_event",
+            "qual_del_event",
+            "qual_dup_event",
         ],
     )
     return calls_df, paths_df, event_marginals_df
@@ -812,17 +809,18 @@ def parse_args():
     parser.add_argument(
         "--min-posterior-interval-confidence",
         type=float,
-        default=0.80,
-        help="In posterior-marginal mode, mark every breakpoint combination as a "
-             "carrier when each covered interval's mean event probability meets "
-             "or exceeds this threshold.",
+           default=DEFAULT_MIN_POSTERIOR_INTERVAL_CONFIDENCE,
+           help="In posterior-marginal mode, mark a breakpoint combination as a "
+               "carrier only when each covered interval's mean called-state QUAL "
+               "meets or exceeds this threshold on the 0-99 scale.",
     )
     parser.add_argument(
         "--min-flank-non-event-confidence",
         type=float,
-        default=0.90,
+           default=DEFAULT_MIN_FLANK_NON_EVENT_CONFIDENCE,
         help="In posterior-marginal mode, reject a breakpoint combination when any "
-             "available flank has median non-event probability below this threshold.",
+               "available flank has median non-event QUAL below this threshold on the "
+               "0-99 scale.",
     )
     parser.add_argument(
         "--verbose", "-v",
@@ -837,28 +835,34 @@ def main():
     args = parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
-    setup_logging(args.output_dir)
+    setup_logging(
+        args.output_dir,
+        filename="call_log.txt",
+        verbose=args.verbose,
+        command="call",
+        args=args,
+    )
 
-    print(f"Output directory: {args.output_dir}")
+    print("Output directory configured")
     print(f"Calling mode: {args.calling_mode}")
 
     print("\nLoading data...")
 
-    print(f"  Loading CN posteriors: {args.cn_posteriors}")
+    print("  Loading CN posteriors")
     cn_posteriors_df = pd.read_csv(args.cn_posteriors, sep="\t", compression="infer")
     print(f"    {len(cn_posteriors_df)} bin-sample records")
 
-    print(f"  Loading bin mappings: {args.bin_mappings}")
+    print("  Loading bin mappings")
     bin_mappings_df = pd.read_csv(args.bin_mappings, sep="\t", compression="infer")
     print(f"    {len(bin_mappings_df)} bin mappings")
 
-    print(f"  Loading GD table: {args.gd_table}")
+    print("  Loading GD table")
     gd_table = GDTable(args.gd_table)
     print(f"    {len(gd_table.loci)} loci")
 
     ploidy_df = None
     if args.ploidy_table:
-        print(f"  Loading ploidy table: {args.ploidy_table}")
+        print("  Loading ploidy table")
         ploidy_df = pd.read_csv(args.ploidy_table, sep="\t")
         print(f"    {len(ploidy_df)} sample/contig ploidy records")
 
@@ -867,14 +871,11 @@ def main():
     if args.calling_mode == "viterbi":
         if not args.transition_matrix:
             raise ValueError("--transition-matrix is required when --calling-mode=viterbi")
-        print(f"\n  Loading transition matrix: {args.transition_matrix}")
+        print("\n  Loading transition matrix")
         transition_matrix = load_transition_matrix(args.transition_matrix)
 
         if args.breakpoint_transition_matrix:
-            print(
-                "  Loading breakpoint transition matrix: "
-                f"{args.breakpoint_transition_matrix}"
-            )
+            print("  Loading breakpoint transition matrix")
             breakpoint_transition_matrix = load_transition_matrix(
                 args.breakpoint_transition_matrix
             )
@@ -895,12 +896,12 @@ def main():
 
     output_file = os.path.join(args.output_dir, "gd_cnv_calls.tsv.gz")
     calls_df.to_csv(output_file, sep="\t", index=False, compression="gzip")
-    print(f"\n  Saved calls to: {output_file}")
+    print("\n  Saved calls table")
     print(f"    {len(calls_df)} call records")
 
     paths_file = os.path.join(args.output_dir, "viterbi_paths.tsv.gz")
     paths_df.to_csv(paths_file, sep="\t", index=False, compression="gzip")
-    print(f"  Saved Viterbi paths to: {paths_file}")
+    print("  Saved Viterbi paths table")
     print(f"    {len(paths_df)} path records")
 
     event_marginals_file = os.path.join(args.output_dir, "event_marginals.tsv.gz")
@@ -910,7 +911,7 @@ def main():
         index=False,
         compression="gzip",
     )
-    print(f"  Saved event marginals to: {event_marginals_file}")
+    print("  Saved event marginals table")
     print(f"    {len(event_marginals_df)} bin-sample records")
 
     if len(calls_df) > 0:
