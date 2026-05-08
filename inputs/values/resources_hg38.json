@@ -34,6 +34,7 @@
   "gd_segdup_bed" : "gs://broad-dsde-methods-markw/mw-gd-resources/hg38_SD.bed.gz",
   "gd_centromere_bed" : "gs://broad-dsde-methods-markw/mw-gd-resources/hg38_centromeres.bed",
   "gd_acrocentric_arm_bed" : "gs://broad-dsde-methods-markw/mw-gd-resources/hg38_acrocentric_arms.bed",
+  "gd_custom_mask_bed" : "gs://broad-dsde-methods-markw/mw-gd-resources/hg38_GD_custom_mask.bed",
   "gd_gaps_bed" : "gs://broad-dsde-methods-markw/mw-gd-resources/hg38_gap.bed",
   "gd_gtf" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gencode.v47.basic.protein_coding.canonical.gtf",
   "gd_transition_matrix" : "gs://broad-dsde-methods-markw/mw-gd-resources/transition_matrix.tsv",

@@ -15,6 +15,7 @@ workflow CallGenomicDisorderCNVs {
     File segdup_bed
     File centromere_bed
     File acrocentric_arm_bed
+    File custom_mask_bed
     Array[File]? flank_exclusion_intervals
     File par_bed
     File gaps_bed
@@ -55,6 +56,7 @@ workflow CallGenomicDisorderCNVs {
       segdup_bed = segdup_bed,
       centromere_bed = centromere_bed,
       acrocentric_arm_bed = acrocentric_arm_bed,
+      custom_mask_bed = custom_mask_bed,
       flank_exclusion_intervals = flank_exclusion_intervals,
       par_bed = par_bed,
       gaps_bed = gaps_bed,
@@ -85,6 +87,7 @@ task RunGenomicDisorderCNVs {
     File segdup_bed
     File centromere_bed
     File acrocentric_arm_bed
+    File custom_mask_bed
     Array[File]? flank_exclusion_intervals
     File par_bed
     File gaps_bed
@@ -128,6 +131,7 @@ task RunGenomicDisorderCNVs {
       --segdup-bed ~{segdup_bed} \
       --centromere-bed ~{centromere_bed} \
       --acrocentric-arm-bed ~{acrocentric_arm_bed} \
+      --custom-mask-bed ~{custom_mask_bed} \
       ~{if length(select_first([flank_exclusion_intervals, []])) > 0 then "--flank-exclusion-intervals" else ""} ~{sep=" " select_first([flank_exclusion_intervals, []])} \
       --par-bed ~{par_bed} \
       --gaps-bed ~{gaps_bed} \
