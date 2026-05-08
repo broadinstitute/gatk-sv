@@ -56,6 +56,7 @@ logger = logging.getLogger(__name__)
 # ── histogram helpers ───────────────────────────────────────────────────────
 
 _CHR_PALETTE = CHR_TYPE_PALETTE
+_SEX_CHROMS = frozenset({"chrX", "chrY"})
 _DIAGNOSTIC_HISTOGRAM_SPECS: tuple[dict[str, object], ...] = (
     {
         "source_columns": ("sample_overdispersion_map",),
@@ -331,6 +332,53 @@ def _sample_baseline_ploidy_metadata(
                 entry["baseline_ploidy_type"] = str(row["baseline_ploidy_type"])
 
     return metadata
+
+
+def _prepare_chromosome_cn_heatmap_data(
+    df: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+    """Return display CN and confidence matrices for the chromosome heatmap.
+
+    Autosomes fall back to the sample baseline copy number unless they are
+    explicitly flagged as aneuploid. This keeps the cohort heatmap aligned with
+    the call semantics while retaining raw chrX/chrY copy-number states.
+    """
+    chr_order = [f"chr{i}" for i in range(1, 23)] + ["chrX", "chrY"]
+    chr_order = [c for c in chr_order if c in df["chromosome"].unique()]
+
+    plot_df = df.copy()
+    display_cn = pd.to_numeric(plot_df["copy_number"], errors="coerce")
+    if "is_aneuploid" in plot_df.columns:
+        is_autosome = ~plot_df["chromosome"].isin(_SEX_CHROMS)
+        if "autosomal_baseline_cn" in plot_df.columns:
+            baseline_cn = pd.to_numeric(
+                plot_df["autosomal_baseline_cn"],
+                errors="coerce",
+            ).fillna(2.0)
+        else:
+            baseline_cn = pd.Series(2.0, index=plot_df.index, dtype=float)
+        keep_raw_cn = (~is_autosome) | plot_df["is_aneuploid"].fillna(False)
+        display_cn = display_cn.where(keep_raw_cn, baseline_cn)
+
+    plot_df["display_copy_number"] = display_cn
+    cn_pivot = plot_df.pivot(
+        index="sample",
+        columns="chromosome",
+        values="display_copy_number",
+    )
+    cn_pivot = cn_pivot.reindex(columns=chr_order)
+
+    if "mean_cn_probability" in plot_df.columns:
+        prob_pivot = plot_df.pivot(
+            index="sample",
+            columns="chromosome",
+            values="mean_cn_probability",
+        )
+        prob_pivot = prob_pivot.reindex(columns=chr_order)
+    else:
+        prob_pivot = pd.DataFrame(1.0, index=cn_pivot.index, columns=chr_order)
+
+    return cn_pivot, prob_pivot, chr_order
 
 
 def _hist_by_hue(
@@ -898,24 +946,17 @@ def plot_background_factor_diagnostics(
 def plot_chromosome_cn_heatmap(
     df: pd.DataFrame, output_dir: str
 ) -> None:
-    """Heatmap of dominant CN per sample × chromosome.
+    """Heatmap of called chromosome CN per sample × chromosome.
 
-    Colour intensity encodes the CN probability. Useful for spotting
-    sample-wide or chromosome-wide patterns.
+    Autosomal cells show the sample baseline CN unless the chromosome is called
+    aneuploid. chrX and chrY retain their explicit copy-number states.
+    Opacity encodes the chromosome-level CN support when available.
 
     Args:
         df: ``chromosome_stats.tsv`` DataFrame.
         output_dir: Base output directory.
     """
-    chr_order = [f"chr{i}" for i in range(1, 23)] + ["chrX", "chrY"]
-    chr_order = [c for c in chr_order if c in df["chromosome"].unique()]
-
-    cn_pivot = df.pivot(index="sample", columns="chromosome", values="copy_number")
-    cn_pivot = cn_pivot.reindex(columns=chr_order)
-    prob_pivot = df.pivot(
-        index="sample", columns="chromosome", values="mean_cn_probability",
-    )
-    prob_pivot = prob_pivot.reindex(columns=chr_order)
+    cn_pivot, prob_pivot, chr_order = _prepare_chromosome_cn_heatmap_data(df)
 
     # Sort samples by sex-chromosome state, then broad CN burden.
     sort_df = pd.DataFrame(index=cn_pivot.index)
@@ -932,6 +973,10 @@ def plot_chromosome_cn_heatmap(
     show_labels = n_samples <= 60
 
     values = np.ma.masked_invalid(cn_pivot.to_numpy(dtype=float))
+    alpha = prob_pivot.to_numpy(dtype=float)
+    alpha = np.clip(alpha, 0.25, 1.0)
+    alpha[~np.isfinite(alpha)] = 0.25
+    alpha[np.ma.getmaskarray(values)] = 0.0
     cmap = ListedColormap([CN_STATE_PALETTE[i] for i in range(6)])
     cmap.set_bad(color="#F0F3F7")
     norm = BoundaryNorm(np.arange(-0.5, 6.5, 1.0), cmap.N)
@@ -940,7 +985,7 @@ def plot_chromosome_cn_heatmap(
         figsize=double_column_size(max(60.0, 22.0 + (2.1 * n_samples)))
     )
     im = ax.imshow(values, aspect="auto", cmap=cmap, norm=norm,
-                   interpolation="nearest")
+                   interpolation="nearest", alpha=alpha)
     ax.set_xticks(np.arange(len(chr_order)))
     ax.set_xticklabels([c.replace("chr", "") for c in chr_order], rotation=45)
     if show_labels:
@@ -950,7 +995,7 @@ def plot_chromosome_cn_heatmap(
         ax.set_yticks([])
     ax.set_xlabel("Chromosome")
     ax.set_ylabel("Sample")
-    ax.set_title("Dominant Copy Number per Sample × Chromosome")
+    ax.set_title("Called Copy Number per Sample × Chromosome")
     cbar = plt.colorbar(im, ax=ax, label="Copy Number", ticks=np.arange(6))
     cbar.ax.set_yticklabels([str(i) for i in range(6)])
     plt.tight_layout()

@@ -37,6 +37,7 @@ from gatk_sv_ploidy.plot import (
     _apply_plot_depth_bin_columns,
     _apply_plot_depth_columns,
     _apply_plot_depth_sex_columns,
+    _prepare_chromosome_cn_heatmap_data,
     _sample_baseline_ploidy_metadata,
     _run_aneuploidy_plots,
     _run_ploidy_plots,
@@ -820,6 +821,54 @@ def test_plot_public_helpers_cover_remaining_branches(tmp_path) -> None:
     )
     plot_chromosome_cn_heatmap(big_df, str(tmp_path))
     assert (tmp_path / "diagnostics" / "chromosome_cn_heatmap.png").exists()
+
+
+def test_prepare_chromosome_cn_heatmap_data_uses_called_autosomal_states() -> None:
+    chrom_df = pd.DataFrame(
+        [
+            {
+                "sample": "S_low",
+                "chromosome": "chr21",
+                "copy_number": 3,
+                "mean_cn_probability": 0.49,
+                "is_aneuploid": False,
+                "autosomal_baseline_cn": 2,
+            },
+            {
+                "sample": "S_low",
+                "chromosome": "chrX",
+                "copy_number": 1,
+                "mean_cn_probability": 0.90,
+                "is_aneuploid": False,
+                "autosomal_baseline_cn": 2,
+            },
+            {
+                "sample": "S_call",
+                "chromosome": "chr21",
+                "copy_number": 3,
+                "mean_cn_probability": 0.95,
+                "is_aneuploid": True,
+                "autosomal_baseline_cn": 2,
+            },
+            {
+                "sample": "S_poly",
+                "chromosome": "chr21",
+                "copy_number": 3,
+                "mean_cn_probability": 0.95,
+                "is_aneuploid": False,
+                "autosomal_baseline_cn": 3,
+            },
+        ]
+    )
+
+    cn_pivot, prob_pivot, chr_order = _prepare_chromosome_cn_heatmap_data(chrom_df)
+
+    assert chr_order == ["chr21", "chrX"]
+    assert cn_pivot.loc["S_low", "chr21"] == pytest.approx(2.0)
+    assert cn_pivot.loc["S_call", "chr21"] == pytest.approx(3.0)
+    assert cn_pivot.loc["S_poly", "chr21"] == pytest.approx(3.0)
+    assert cn_pivot.loc["S_low", "chrX"] == pytest.approx(1.0)
+    assert prob_pivot.loc["S_low", "chr21"] == pytest.approx(0.49)
 
 
 def test_plot_parse_args_and_warning_only_paths(tmp_path, monkeypatch) -> None:
