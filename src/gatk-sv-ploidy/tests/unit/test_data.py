@@ -166,3 +166,48 @@ def test_depth_data_rejects_non_integer_raw_counts(
             depth_space="raw",
             clamp_threshold=None,
         )
+
+
+def test_depth_data_rejects_large_fractional_raw_counts() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chr21"],
+            "Start": [0],
+            "End": [1000],
+            "S1": [2_077_000.25],
+            "S2": [1_753_400.0],
+        }
+    )
+    df["Bin"] = "chr21:0-1000"
+
+    with pytest.raises(ValueError, match="Max fractional residual"):
+        DepthData(
+            df.set_index("Bin"),
+            depth_space="raw",
+            clamp_threshold=None,
+        )
+
+
+def test_depth_data_rounds_near_integer_raw_counts() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chr21"],
+            "Start": [0],
+            "End": [1000],
+            "S1": [120.0000000001],
+            "S2": [139.9999999999],
+        }
+    )
+    df["Bin"] = "chr21:0-1000"
+
+    data = DepthData(
+        df.set_index("Bin"),
+        depth_space="raw",
+        clamp_threshold=None,
+        dtype=torch.float64,
+    )
+
+    torch.testing.assert_close(
+        data.depth,
+        torch.tensor([[120.0, 140.0]], dtype=torch.float64),
+    )

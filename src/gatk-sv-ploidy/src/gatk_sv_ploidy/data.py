@@ -24,6 +24,8 @@ from gatk_sv_ploidy._util import (
 
 logger = logging.getLogger(__name__)
 
+RAW_COUNT_INTEGER_ATOL = 1e-6
+
 
 class DepthData:
     """Torch-backed container for a bins × samples normalised depth matrix.
@@ -190,15 +192,38 @@ class DepthData:
         # ── build depth tensor ──────────────────────────────────────────
         depth_values = df[sample_cols].to_numpy(dtype=np.float64)
         if self.depth_space == "raw":
+            if not np.all(np.isfinite(depth_values)):
+                raise ValueError(
+                    "Raw count depth input must contain only finite values."
+                )
             if np.any(depth_values < 0):
                 raise ValueError("Raw count depth input must be non-negative.")
-            if not np.allclose(depth_values, np.rint(depth_values)):
-                raise ValueError(
-                    "Raw count depth input must be integer-valued. "
-                    "Run preprocess to regenerate raw-count input or use normalized input."
+            rounded_depth_values = np.rint(depth_values)
+            integer_residual = np.abs(depth_values - rounded_depth_values)
+            if np.any(integer_residual > RAW_COUNT_INTEGER_ATOL):
+                max_pos = np.unravel_index(
+                    int(np.argmax(integer_residual)),
+                    integer_residual.shape,
                 )
+                bin_idx, sample_idx = int(max_pos[0]), int(max_pos[1])
+                bin_label = (
+                    f"{self.chr[bin_idx]}:"
+                    f"{int(self.start[bin_idx])}-{int(self.end[bin_idx])}"
+                )
+                raise ValueError(
+                    "Raw count depth input must be integer-valued within "
+                    f"absolute tolerance {RAW_COUNT_INTEGER_ATOL:g}. "
+                    f"Max fractional residual={integer_residual[max_pos]:.6g} "
+                    f"at {bin_label}, sample {sample_cols[sample_idx]} "
+                    f"(value={depth_values[max_pos]:.12g}). "
+                    "Run preprocess to regenerate raw-count input."
+                )
+            depth_values = rounded_depth_values
 
-        depth_matrix = depth_values.astype(np.float32)
+        if self.depth_space == "raw":
+            depth_matrix = depth_values
+        else:
+            depth_matrix = depth_values.astype(np.float32)
 
         if clamp_threshold is not None:
             n_clamped = int(np.sum(depth_matrix > clamp_threshold))

@@ -785,6 +785,15 @@ def test_raw_variance_power_rebalances_low_and_high_count_overdispersion() -> No
     assert float(power_law[0, 0, 1]) < float(nb2[0, 0, 1])
 
 
+def test_negative_binomial_log_lik_rejects_large_fractional_counts() -> None:
+    with pytest.raises(ValueError, match="integer-valued raw counts"):
+        _negative_binomial_log_lik_numpy(
+            np.array([[[1_000_000.25]]], dtype=np.float64),
+            np.array([[[1_000_000.0]]], dtype=np.float64),
+            np.array([[[0.04]]], dtype=np.float64),
+        )
+
+
 def test_run_discrete_inference_uses_learned_af_temperature_map() -> None:
     df = pd.DataFrame(
         {

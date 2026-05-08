@@ -582,7 +582,7 @@ def _negative_binomial_log_lik_numpy(
     from scipy.special import gammaln
 
     obs_rounded = np.rint(obs)
-    if not np.allclose(obs, obs_rounded, atol=1e-6):
+    if not np.allclose(obs, obs_rounded, atol=1e-6, rtol=0.0):
         raise ValueError(
             "negative_binomial observation likelihood requires integer-valued raw counts."
         )
