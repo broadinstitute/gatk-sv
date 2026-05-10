@@ -1512,12 +1512,14 @@ wrapperPlotQualDistrib <- function(){
   col.size <- colorRampPalette(c("#1B9E77","#D95F02","#7570B3","#E7298A","#66A61E","#E6AB02"))(length(size.labels))
   col.reg <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
 
-  n.panels <- 5
+  # Layout: "All" big on left (2 rows), 2x2 grid on right
   png(paste(OUTDIR,"/main_plots/qual_distribution.png",sep=""),
-      res=300, height=1800, width=n.panels*1800)
-  layout(matrix(1:n.panels, nrow=1))
+      res=300, height=2700, width=5400)
+  layout(matrix(c(1, 2, 3,
+                  1, 4, 5), nrow=2, byrow=TRUE),
+         widths=c(2, 1, 1))
 
-  # Panel 1: All variants
+  # Panel 1: All variants (big left panel)
   par(bty="n", mar=c(4.5,4,3,1))
   q.all <- pmin(d$QUAL[!is.na(d$QUAL) & is.finite(d$QUAL)], 99)
   xlim <- c(min(q.all, na.rm=T), 99)
@@ -1581,17 +1583,20 @@ wrapperPlotNcrDistrib <- function(){
   size.mins <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
   size.maxs <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
 
+  col.svtype <- svtypes.norm$color
   col.af <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(length(af.labels))
   col.size <- colorRampPalette(c("#1B9E77","#D95F02","#7570B3","#E7298A","#66A61E","#E6AB02"))(length(size.labels))
   col.reg <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
   xlim <- c(0,1)
 
-  n.panels <- 4
+  # Layout: "All" big on left (2 rows), 2x2 grid on right
   png(paste(OUTDIR,"/main_plots/ncr_distribution.png",sep=""),
-      res=300, height=1800, width=n.panels*1800)
-  layout(matrix(1:n.panels, nrow=1))
+      res=300, height=2700, width=5400)
+  layout(matrix(c(1, 2, 3,
+                  1, 4, 5), nrow=2, byrow=TRUE),
+         widths=c(2, 1, 1))
 
-  # Panel 1: All variants - log x-axis
+  # Panel 1: All variants - log x-axis (big left panel)
   par(bty="n", mar=c(4.5,4,3,1))
   n.all <- dat$NCR[!is.na(dat$NCR)]
   ncr.floor <- 0.001
@@ -1615,20 +1620,25 @@ wrapperPlotNcrDistrib <- function(){
     mtext(3,text=paste0("(",prettyNum(n.ncr.dropped,big.mark=",")," dropped - missing NCR value)"),line=-1.1,cex=0.7)
   }
 
-  # Panel 2: By region
-  reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) dat$NCR[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$NCR)]) else list()
-  plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
-                      xlab="NCR", title="NCR by Region", xlim=c(0.001,1), log.x=TRUE)
+  # Panel 2 (top-right): By type
+  type.vals <- lapply(svtypes.norm$svtype, function(st) dat.norm$NCR[!is.na(dat.norm$NCR) & dat.norm$svtype==st])
+  plotDistribOverlaid(sub.list=type.vals, sub.labels=svtypes.norm$svtype, sub.colors=col.svtype,
+                      xlab="NCR", title="NCR by Type", xlim=c(0.001,1), log.x=TRUE)
 
-  # Panel 3: By size bucket
+  # Panel 3 (top-right): By size bucket
   size.vals <- lapply(seq_along(size.labels), function(i) dat$NCR[!is.na(dat$NCR) & dat$length>=size.mins[i] & dat$length<=size.maxs[i]])
   plotDistribOverlaid(sub.list=size.vals, sub.labels=size.labels, sub.colors=col.size,
                       xlab="NCR", title="NCR by Size", xlim=c(0.001,1), log.x=TRUE)
 
-  # Panel 4: By AF bucket
+  # Panel 4 (bottom-right): By AF bucket
   af.vals <- lapply(seq_along(af.labels), function(i) dat$NCR[!is.na(dat$NCR) & dat$AF>af.mins[i] & dat$AF<=af.maxs[i]])
   plotDistribOverlaid(sub.list=af.vals, sub.labels=af.labels, sub.colors=col.af,
                       xlab="NCR", title="NCR by AF", xlim=c(0.001,1), log.x=TRUE)
+
+  # Panel 5 (bottom-right): By region
+  reg.vals <- if(has.region && length(regions)>0) lapply(regions, function(r) dat$NCR[!is.na(dat$REGION) & dat$REGION==r & !is.na(dat$NCR)]) else list()
+  plotDistribOverlaid(sub.list=reg.vals, sub.labels=regions, sub.colors=col.reg,
+                      xlab="NCR", title="NCR by Region", xlim=c(0.001,1), log.x=TRUE)
   dev.off()
 }
 
@@ -1663,7 +1673,7 @@ wrapperPlotGnomadMatchDistrib <- function(){
   col.size <- colorRampPalette(c("#1B9E77","#D95F02","#7570B3","#E7298A","#66A61E","#E6AB02"))(length(size.labels))
   col.reg <- colorRampPalette(c("#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A","#B15928"))(length(regions))
 
-  plotMatchRateBars <- function(vals, labs, cols, xlabel, title){
+  plotMatchRateBars <- function(vals, labs, cols, xlabel, title, ylabel="Match Rate"){
     vals[is.nan(vals)] <- NA
     ylim <- c(0, max(vals, na.rm=T)*1.15)
     par(bty="n", mar=c(7,4.5,3,0.5))
@@ -1676,38 +1686,38 @@ wrapperPlotGnomadMatchDistrib <- function(){
     axis(1,at=1:length(labs),labels=labs,las=2,cex.axis=0.8,tick=F,line=0.5)
     axis(2,at=axTicks(2),labels=NA); axis(2,at=axTicks(2),tick=F,las=2,cex.axis=0.8,line=-0.4,
          labels=paste(round(100*axTicks(2),1),"%",sep=""))
-    mtext(1,text=xlabel,line=5.5,cex=0.9); mtext(2,text="gnomAD Match Rate",line=3,cex=0.9)
+    mtext(1,text=xlabel,line=5.5,cex=0.9); mtext(2,text=ylabel,line=3,cex=0.9)
     mtext(3,text=title,font=2,line=0.5)
   }
 
-  # Determine number of panels
-  n.panels <- 1 + as.integer(has.region && length(regions)>0) + 2
-  if(!has.region || length(regions)==0) n.panels <- 3
+  # 2x2 layout
   png(paste(OUTDIR,"/main_plots/gnomad_match_distribution.png",sep=""),
-      res=300, height=1800, width=n.panels*1800)
-  layout(matrix(1:n.panels, nrow=1))
+      res=300, height=2*1800, width=2*1800)
+  layout(matrix(1:4, nrow=2, byrow=TRUE))
 
   # Panel 1: By svtype (overall bars)
   svtype.rates <- sapply(svtypes.norm$svtype, function(st) calcGnomadMatchRate(d[d$svtype==st,]))
   plotMatchRateBars(vals=svtype.rates, labs=svtypes.norm$svtype, cols=svtypes.norm$color,
-                    xlabel="Variant Type", title="gnomAD Match Rate by Variant Type")
+                    xlabel="Type", title="gnomAD Match Rate by Type", ylabel="gnomAD Match Rate")
 
-  # Optional Panel 2: By region
+  # Panel 2: By size bucket
+  size.rates <- sapply(seq_along(size.labels), function(i) calcGnomadMatchRate(d[!is.na(d$length) & d$length>=size.mins[i] & d$length<=size.maxs[i],]))
+  plotMatchRateBars(vals=size.rates, labs=size.labels, cols=col.size,
+                    xlabel="Size Bucket", title="Match Rate by Size")
+
+  # Panel 3: By AF bucket
+  af.rates <- sapply(seq_along(af.labels), function(i) calcGnomadMatchRate(d[!is.na(d$AF) & d$AF>af.mins[i] & d$AF<=af.maxs[i],]))
+  plotMatchRateBars(vals=af.rates, labs=af.labels, cols=col.af,
+                    xlabel="AF Bucket", title="Match Rate by AF")
+
+  # Panel 4: By region
   if(has.region && length(regions)>0){
     reg.rates <- sapply(regions, function(r) calcGnomadMatchRate(d[!is.na(d$REGION) & d$REGION==r,]))
     plotMatchRateBars(vals=reg.rates, labs=regions, cols=col.reg,
-                      xlabel="Region", title="gnomAD Match Rate by Region")
+                      xlabel="Region", title="Match Rate by Region")
+  } else {
+    par(bty="n"); plot.new()
   }
-
-  # Panel: By size bucket
-  size.rates <- sapply(seq_along(size.labels), function(i) calcGnomadMatchRate(d[!is.na(d$length) & d$length>=size.mins[i] & d$length<=size.maxs[i],]))
-  plotMatchRateBars(vals=size.rates, labs=size.labels, cols=col.size,
-                    xlabel="Size Bucket", title="gnomAD Match Rate by Size")
-
-  # Panel: By AF bucket
-  af.rates <- sapply(seq_along(af.labels), function(i) calcGnomadMatchRate(d[!is.na(d$AF) & d$AF>af.mins[i] & d$AF<=af.maxs[i],]))
-  plotMatchRateBars(vals=af.rates, labs=af.labels, cols=col.af,
-                    xlabel="AF Bucket", title="gnomAD Match Rate by AF")
 
   dev.off()
 }
@@ -2201,7 +2211,7 @@ wrapperPlotVepDistrib <- function(){
   axis(2, at=axTicks(2), labels=NA)
   axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4, labels=prettyNum(axTicks(2), big.mark=","))
   mtext(2, text="Count", line=3, cex=0.9)
-  mtext(3, text="VEP Consequences (All Variants)", font=2, line=2.0)
+  mtext(3, text="VEP Consequence Distribution", font=2, line=2.0)
   mtext(3, text=paste("n=", prettyNum(nrow(dat.exp), big.mark=","), sep=""), line=0.6, cex=0.75)
   text(x=bp, y=par("usr")[3] - diff(par("usr")[3:4])*0.025,
        labels=all.csqs, srt=45, adj=1, xpd=TRUE, cex=0.7)
@@ -2211,14 +2221,14 @@ wrapperPlotVepDistrib <- function(){
   st.labs <- st.labs[st.labs %in% dat.exp$svtype_m]
   mat.st <- makeConseqMat(dat.exp$svtype_m, st.labs)
   plotStackedBars(mat=mat.st, colors=col.csq[all.csqs], scaled=F,
-                  title="VEP Consequences by Variant Type")
+                  title="Consequences by Type")
 
   # Panel 3: by AF bucket — x=AF, stacked by consequence
   mat.af <- makeConseqMat(dat.exp$af_grp[!is.na(dat.exp$af_grp)],
                           af.cuts[af.cuts %in% dat.exp$af_grp])
   if(ncol(mat.af) > 0)
     plotStackedBars(mat=mat.af, colors=col.csq[all.csqs], scaled=F,
-                    title="VEP Consequences by AF")
+                    title="Consequences by AF")
   else plot.new()
 
   # Panel 4: by region (if present) or size
@@ -2226,13 +2236,13 @@ wrapperPlotVepDistrib <- function(){
     reg.labs <- orderRegions(unique(dat.exp$REGION[!is.na(dat.exp$REGION)]))
     mat.reg <- makeConseqMat(dat.exp$REGION[!is.na(dat.exp$REGION)], reg.labs)
     plotStackedBars(mat=mat.reg, colors=col.csq[all.csqs], scaled=F,
-                    title="VEP Consequences by Region")
+                    title="Consequences by Region")
   } else {
     sz.labs <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
     mat.sz <- makeConseqMat(dat.exp$size_grp[!is.na(dat.exp$size_grp)],
                             sz.labs[sz.labs %in% dat.exp$size_grp])
     plotStackedBars(mat=mat.sz, colors=col.csq[all.csqs], scaled=F,
-                    title="VEP Consequences by Size")
+                    title="Consequences by Size")
   }
   dev.off()
 }
@@ -2309,7 +2319,7 @@ wrapperPlotSvAnnotateDistrib <- function(){
   axis(2, at=axTicks(2), labels=NA)
   axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4, labels=prettyNum(axTicks(2), big.mark=","))
   mtext(2, text="Count", line=3, cex=0.9)
-  mtext(3, text="SVAnnotate Consequences (All Variants)", font=2, line=2.0)
+  mtext(3, text="SVAnnotate Consequence Distribution", font=2, line=2.0)
   mtext(3, text=paste("n=", prettyNum(sum(has.pred), big.mark=","), sep=""), line=0.6, cex=0.75)
   text(x=bp, y=par("usr")[3] - diff(par("usr")[3:4])*0.025,
        labels=pred.labels, srt=45, adj=1, xpd=TRUE, cex=0.7)
@@ -2319,14 +2329,14 @@ wrapperPlotSvAnnotateDistrib <- function(){
   st.labs <- st.labs[st.labs %in% svtype_m]
   mat.st <- makePredMat(svtype_m, st.labs)
   plotStackedBars(mat=mat.st, colors=col.pred[pred.cols], scaled=F,
-                  title="SVAnnotate Consequences by Variant Type")
+                  title="Consequences by Type")
 
   # Panel 3: by AF bucket
   af.present <- af.cuts[af.cuts %in% af_grp]
   mat.af <- makePredMat(af_grp[!is.na(af_grp)], af.present)
   if(ncol(mat.af) > 0)
     plotStackedBars(mat=mat.af, colors=col.pred[pred.cols], scaled=F,
-                    title="SVAnnotate Consequences by AF")
+                    title="Consequences by AF")
   else plot.new()
 
   # Panel 4: by region (if present) or size
@@ -2334,14 +2344,14 @@ wrapperPlotSvAnnotateDistrib <- function(){
     reg.labs <- orderRegions(unique(dat$REGION[!is.na(dat$REGION)]))
     mat.reg <- makePredMat(dat$REGION[!is.na(dat$REGION)], reg.labs)
     plotStackedBars(mat=mat.reg, colors=col.pred[pred.cols], scaled=F,
-                    title="SVAnnotate Consequences by Region")
+                    title="Consequences by Region")
   } else {
     sz.labs   <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
     sz.breaks <- c(-Inf, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, Inf)
     sz_grp    <- as.character(cut(dat$length, breaks=sz.breaks, labels=sz.labs, include.lowest=TRUE))
     mat.sz    <- makePredMat(sz_grp[!is.na(sz_grp)], sz.labs[sz.labs %in% sz_grp])
     plotStackedBars(mat=mat.sz, colors=col.pred[pred.cols], scaled=F,
-                    title="SVAnnotate Consequences by Size")
+                    title="Consequences by Size")
   }
   dev.off()
 }
@@ -2458,13 +2468,13 @@ wrapperPlotTrvAlleleCount <- function(){
   vals <- trv.dat$AC
   xlim <- c(1, quantile(vals, 0.99))
   png(paste(OUTDIR,"/main_plots/tr_allele_count_distribution.png",sep=""),
-      res=300, height=1800, width=4*1800)
-  layout(matrix(1:4, nrow=1))
+      res=300, height=2*1800, width=2*1800)
+  layout(matrix(1:4, nrow=2, byrow=TRUE))
   plotTrvDistribPanels(trv.dat=trv.dat, vals=vals, xlab="Non-Ref Allele Count", xlim=xlim,
-                       title.all="TR Allele Count",
-                       title.size="TR Allele Count by Size",
-                       title.motif="TR Allele Count by Motif Length",
-                       title.region="TR Allele Count by Region")
+                       title.all="TR Allele Count Distribution",
+                       title.size="Count by Size",
+                       title.motif="Count by Motif Length",
+                       title.region="Count by Region")
   dev.off()
 }
 
@@ -2485,13 +2495,13 @@ wrapperPlotTrvSampleCount <- function(){
   vals <- trv.dat$carriers
   xlim <- c(1, quantile(vals, 0.99))
   png(paste(OUTDIR,"/main_plots/tr_sample_count_distribution.png",sep=""),
-      res=300, height=1800, width=4*1800)
-  layout(matrix(1:4, nrow=1))
+      res=300, height=2*1800, width=2*1800)
+  layout(matrix(1:4, nrow=2, byrow=TRUE))
   plotTrvDistribPanels(trv.dat=trv.dat, vals=vals, xlab="Variant Sample Count", xlim=xlim,
-                       title.all="TR Sample Count",
-                       title.size="TR Sample Count by Size",
-                       title.motif="TR Sample Count by Motif Length",
-                       title.region="TR Sample Count by Region")
+                       title.all="TR Sample Count Distribution",
+                       title.size="Count by Size",
+                       title.motif="Count by Motif Length",
+                       title.region="Count by Region")
   dev.off()
 }
 
@@ -2569,7 +2579,7 @@ wrapperPlotTrLociDistrib <- function(){
   # Plot: SNV big on left (2 rows), then 2x2 grid on right
   n.panels <- length(detail.types)
   png(paste(OUTDIR,"/main_plots/tr_loci_distribution.png",sep=""),
-      res=300, height=3600, width=5400)
+      res=300, height=2700, width=5400)
   layout(matrix(c(1, 2, 3,
                   1, 4, 5), nrow=2, byrow=TRUE),
          widths=c(2, 1, 1))
@@ -2712,7 +2722,7 @@ wrapperPlotInsDistrib <- function(){
       res=300, height=2400, width=5600)
   layout(matrix(1:8, nrow=1), widths=c(3, rep(1.5, 6), 1.8))
 
-  plotInsBar(mat[,"ALL"], title="All", main.bar=TRUE)
+  plotInsBar(mat[,"ALL"], title="Insertion Distribution", main.bar=TRUE)
   for(s in seq_along(sz.labs)){
     plotInsBar(mat[,sz.labs[s]], title=sz.labs[s])
   }
