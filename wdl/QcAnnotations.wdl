@@ -9,7 +9,7 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 workflow QcAnnotations {
     input {
         Array[File] vcfs
-        Array[File] vcfs_idx
+        Array[File] vcf_idxs
         Array[String] contigs
         String prefix
 
@@ -63,7 +63,7 @@ workflow QcAnnotations {
         call vcfwideqc.CollectQcVcfWide {
             input:
                 vcf = vcfs[i],
-                vcf_idx = vcfs_idx[i],
+                vcf_idx = vcf_idxs[i],
                 contig = contigs[i],
                 variants_per_shard = variants_per_shard,
                 subset_vcf_string = subset_vcf_string,
