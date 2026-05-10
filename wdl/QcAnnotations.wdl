@@ -21,10 +21,11 @@ workflow QcAnnotations {
         Int variants_per_shard
         Int samples_per_shard
 
+        Boolean create_variant_attributes = false
+        String? subset_vcf_string
         Int? random_seed
         Int? max_gq
         Int? downsample_qc_per_sample
-        Boolean create_variant_attributes = false
 
         File? sample_renaming_tsv
         Array[Array[String]]? site_level_comparison_datasets
@@ -33,25 +34,28 @@ workflow QcAnnotations {
         String sv_base_mini_docker
         String gatk_sv_lr_docker
 
-        RuntimeAttr? runtime_override_plot_qc_vcf_wide
-        RuntimeAttr? runtime_override_site_level_benchmark_plot
-        RuntimeAttr? runtime_override_plot_qc_per_sample
-        RuntimeAttr? runtime_override_plot_qc_per_family
-        RuntimeAttr? runtime_override_per_sample_benchmark_plot
-        RuntimeAttr? runtime_override_sanitize_outputs
-        RuntimeAttr? runtime_override_merge_vcfwide_stat_shards
-        RuntimeAttr? runtime_override_merge_vcf_2_bed
+        RuntimeAttr? runtime_override_subset_vcf
+        RuntimeAttr? runtime_override_annotate_attributes
         RuntimeAttr? runtime_override_preprocess_vcf
         RuntimeAttr? runtime_override_scatter_vcf
         RuntimeAttr? runtime_override_merge_subvcf_stat_shards
+        RuntimeAttr? runtime_override_merge_vcf_2_bed
+
+        RuntimeAttr? runtime_override_merge_vcfwide_stat_shards
+        RuntimeAttr? runtime_override_plot_qc_vcf_wide
         RuntimeAttr? runtime_override_site_level_benchmark
         RuntimeAttr? runtime_override_merge_site_level_benchmark
-        RuntimeAttr? runtime_override_collect_vids_per_sample
+        RuntimeAttr? runtime_override_site_level_benchmark_plot
         RuntimeAttr? runtime_override_split_samples_list
+        RuntimeAttr? runtime_override_collect_vids_per_sample
         RuntimeAttr? runtime_override_merge_sharded_per_sample_vid_lists
+        RuntimeAttr? runtime_override_plot_qc_per_sample
+        RuntimeAttr? runtime_override_plot_qc_per_family
         RuntimeAttr? runtime_override_benchmark_samples
         RuntimeAttr? runtime_override_split_shuffled_list
         RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
+        RuntimeAttr? runtime_override_per_sample_benchmark_plot
+        RuntimeAttr? runtime_override_sanitize_outputs
     }
 
     # Scatter VCF-wide stats collection per chromosome (parallel)
@@ -62,14 +66,17 @@ workflow QcAnnotations {
                 vcf_idx = vcfs_idx[i],
                 contig = contigs[i],
                 variants_per_shard = variants_per_shard,
+                subset_vcf_string = subset_vcf_string,
                 create_variant_attributes = create_variant_attributes,
                 prefix = "~{prefix}.~{contigs[i]}",
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = gatk_sv_lr_docker,
                 ref_fa = ref_fa,
                 ref_fai = ref_fai,
-                runtime_override_preprocess_vcf = runtime_override_preprocess_vcf,
                 runtime_override_scatter_vcf = runtime_override_scatter_vcf,
+                runtime_override_subset_vcf = runtime_override_subset_vcf,
+                runtime_override_annotate_attributes = runtime_override_annotate_attributes,
+                runtime_override_preprocess_vcf = runtime_override_preprocess_vcf,
                 runtime_override_merge_subvcf_stat_shards = runtime_override_merge_subvcf_stat_shards,
                 runtime_override_merge_svtk_vcf_2_bed = runtime_override_merge_vcf_2_bed
         }

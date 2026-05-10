@@ -527,7 +527,13 @@ task SubsetVcf {
 
   command <<<
     set -eu
-    bcftools view --no-version ~{subset_flags} -O z -o ~{outfile_name} ~{vcf}
+
+    bcftools view \
+      --no-version \
+      ~{subset_flags} \
+      -Oz -o ~{outfile_name} \
+      ~{vcf}
+
     tabix ~{outfile_name}
   >>>
 

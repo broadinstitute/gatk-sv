@@ -10,6 +10,8 @@ workflow CollectQcVcfWide {
         String prefix
 
         Int variants_per_shard
+
+        String? subset_vcf_string
         Boolean create_variant_attributes = false
 
         File ref_fa
@@ -18,8 +20,10 @@ workflow CollectQcVcfWide {
         String sv_base_mini_docker
         String sv_pipeline_docker
 
-        RuntimeAttr? runtime_override_preprocess_vcf
         RuntimeAttr? runtime_override_scatter_vcf
+        RuntimeAttr? runtime_override_subset_vcf
+        RuntimeAttr? runtime_override_annotate_attributes
+        RuntimeAttr? runtime_override_preprocess_vcf
         RuntimeAttr? runtime_override_merge_subvcf_stat_shards
         RuntimeAttr? runtime_override_merge_svtk_vcf_2_bed
     }
@@ -39,18 +43,30 @@ workflow CollectQcVcfWide {
     Array[File] vcf_shards = ScatterVcf.shards
 
     scatter (i in range(length(vcf_shards))) {
+        if (defined(subset_vcf_string)) {
+            call MiniTasks.SubsetVcf {
+                input:
+                    vcf = vcf_shards[i],
+                    outfile_prefix = "~{output_prefix}.shard_~{i}",
+                    subset_flags = select_first([subset_vcf_string]),
+                    sv_base_mini_docker = sv_base_mini_docker,
+                    runtime_attr_override = runtime_override_subset_vcf
+            }
+        }
+
         if (create_variant_attributes) {
             call AnnotateVariantAttributes {
                 input:
-                    vcf = vcf_shards[i],
+                    vcf = select_first([SubsetVcf.filtered_vcf, vcf_shards[i]]),
                     prefix = "~{output_prefix}.annotate_attrs.shard_~{i}",
-                    sv_pipeline_docker = sv_pipeline_docker
+                    sv_pipeline_docker = sv_pipeline_docker,
+                    runtime_attr_override = runtime_override_annotate_attributes
             }
         }
 
         call PreprocessCollectAndConvert {
             input:
-                vcf = select_first([AnnotateVariantAttributes.annotated_vcf, vcf_shards[i]]),
+                vcf = select_first([AnnotateVariantAttributes.annotated_vcf, SubsetVcf.filtered_vcf, vcf_shards[i]]),
                 prefix = "~{output_prefix}.shard_~{i}",
                 ref_fa = ref_fa,
                 ref_fai = ref_fai,
