@@ -1,4 +1,4 @@
-#!R 
+#!R
 library("optparse")
 
 option_list = list(
@@ -9,86 +9,109 @@ option_list = list(
 opt_parser = OptionParser(option_list=option_list);
 opt = parse_args(opt_parser);
 
-safe_read_table <- function(file, ...) {
-  if (!file.exists(file) || file.info(file)$size == 0) {
-    return(data.frame())
+
+read_safe_no_header <- function(file, col.names = NULL, sep = "\t", ...) {
+  if (!file.exists(file)) {
+    stop("File does not exist: ", file)
   }
-  
-  if (length(readLines(file, warn = FALSE)) == 0) {
-    return(data.frame())
+
+  # Check if the file has at least one line
+  line_count <- length(readLines(file, n = 1))
+
+  if (line_count == 0) {
+    # File is completely empty
+    if (is.null(col.names)) {
+      return(data.frame())  # no column names provided
+    } else {
+      return(as.data.frame(setNames(replicate(length(col.names), character(0), simplify = FALSE), col.names)))
+    }
+  } else {
+    # File has data, read with no header
+    return(read.table(file, header = FALSE, sep = sep, ...))
   }
-  
-  read.table(file, ...)
 }
 
+
 #integrate GC of each breakpoints:
-	dat=safe_read_table(opt$input,sep='\t')
-	sr_le=safe_read_table(paste(opt$path,'il_inte.le_bp.vs.SR', sep='/'))
-	sd_le=safe_read_table(paste(opt$path,'il_inte.le_bp.vs.SD', sep='/'))
-	rm_le=safe_read_table(paste(opt$path,'il_inte.le_bp.vs.RM', sep='/'))
 
-	sr_ri=safe_read_table(paste(opt$path,'il_inte.ri_bp.vs.SR', sep='/'))
-	sd_ri=safe_read_table(paste(opt$path,'il_inte.ri_bp.vs.SD', sep='/'))
-	rm_ri=safe_read_table(paste(opt$path,'il_inte.ri_bp.vs.RM', sep='/'))
+dat=read.table(opt$input,sep='\t')
 
-	if(nrow(dat)>0){
+sr_le=read_safe_no_header(paste(opt$path,'il_inte.le_bp.vs.SR', sep='/'))
+sd_le=read_safe_no_header(paste(opt$path,'il_inte.le_bp.vs.SD', sep='/'))
+rm_le=read_safe_no_header(paste(opt$path,'il_inte.le_bp.vs.RM', sep='/'))
 
+sr_ri=read_safe_no_header(paste(opt$path,'il_inte.ri_bp.vs.SR', sep='/'))
+sd_ri=read_safe_no_header(paste(opt$path,'il_inte.ri_bp.vs.SD', sep='/'))
+rm_ri=read_safe_no_header(paste(opt$path,'il_inte.ri_bp.vs.RM', sep='/'))
 
-		dat[,ncol(dat)+1] = 'US'
-		if(nrow(rm_le)>0){
-				dat[dat[,4]%in%rm_le[,4],][,ncol(dat)]='RM'
-		}
-		if(nrow(rm_ri)>0){
-			dat[dat[,4]%in%rm_ri[,4],][,ncol(dat)]='RM'
-		}
-		if(nrow(sd_le)>0){
-			dat[dat[,4]%in%sd_le[,4],][,ncol(dat)]='SD'
-		}
-		if(nrow(sd_ri)>0){
-			dat[dat[,4]%in%sd_ri[,4],][,ncol(dat)]='SD'
-		}
-		if(nrow(sr_le)>0){
-			dat[dat[,4]%in%sr_le[,4],][,ncol(dat)]='SR'
-		}
-		if(nrow(sr_ri)>0){
-			dat[dat[,4]%in%sr_ri[,4],][,ncol(dat)]='SR'
-		}
+dat[,ncol(dat)+1] = 'US'
 
+if (nrow(rm_le) > 0) {
+    if(nrow(dat[dat[,4]%in%rm_le[,4],])>0){
+        dat[dat[,4]%in%rm_le[,4],][,ncol(dat)]='RM'
+    }
+}
 
-		colnames(dat)[ncol(dat)] = 'GC'
-	        colnames(dat)[4]='SVID'
- 
-		if (file.exists(paste(opt$path,'il_inte.lg_cnv.vs.SR', sep='/'))) {
-			lg_cnv_sr=read.table(paste(opt$path,'il_inte.lg_cnv.vs.SR', sep='/'))
-			lg_cnv_sd=read.table(paste(opt$path,'il_inte.lg_cnv.vs.SD', sep='/'))
-			lg_cnv_rm=read.table(paste(opt$path,'il_inte.lg_cnv.vs.RM', sep='/'))
-			lg_cnv = cbind(lg_cnv_sr[,c(4,ncol(lg_cnv_sr))], lg_cnv_sd[,ncol(lg_cnv_sd)], lg_cnv_rm[,ncol(lg_cnv_rm)])
-			lg_cnv[,ncol(lg_cnv)+1] = 1-rowSums(lg_cnv[,c(2:4)])
-			colnames(lg_cnv)=c('SVID','SR','SD','RM','US')
-			lg_cnv[,ncol(lg_cnv)+1] = 'US'
-			if(nrow(lg_cnv[lg_cnv$RM>.5,])>0){
-				lg_cnv[lg_cnv$RM>.5,][,ncol(lg_cnv)]='RM'
-			}
-			if(nrow(lg_cnv[lg_cnv$SD>.5,])>0){
-				lg_cnv[lg_cnv$SD>.5,][,ncol(lg_cnv)]='SD'
-			}
-			if(nrow(lg_cnv[lg_cnv$SR>.5,])>0){
-				lg_cnv[lg_cnv$SR>.5,][,ncol(lg_cnv)]='SR'
-			}
+if (nrow(rm_ri) > 0) {
+    if (nrow(dat[dat[,4]%in%rm_ri[,4],])>0){
+        dat[dat[,4]%in%rm_ri[,4],][,ncol(dat)]='RM'
+    }
+}
 
-	 
-			dat=merge(dat, lg_cnv[,c(1,6)], by='SVID',all=T)
-			dat[!is.na(dat[,ncol(dat)]),][,ncol(dat)-1] = dat[!is.na(dat[,ncol(dat)]),][,ncol(dat)] 
-		}
-	}
+if (nrow(sd_le) > 0){
+    if (nrow(dat[dat[,4]%in%sd_le[,4],])>0){
+        dat[dat[,4]%in%sd_le[,4],][,ncol(dat)]='SD'
+    }
+}
 
-	if(nrow(dat) == 0){
-		dat = data.frame('SVID' = 0, 'GC' = 0)
-	}
-	
-	write.table(dat[,c('SVID','GC')],opt$output, quote=F, sep='\t', col.names=T, row.names=F)
+if(nrow(sd_ri) > 0){
+    if (nrow(dat[dat[,4]%in%sd_ri[,4],])>0){
+        dat[dat[,4]%in%sd_ri[,4],][,ncol(dat)]='SD'
+    }
+}
+
+if(nrow(sr_le) > 0){
+    if (nrow(dat[dat[,4]%in%sr_le[,4],])>0){
+        dat[dat[,4]%in%sr_le[,4],][,ncol(dat)]='SR'
+    }
+}
+
+if(nrow(sr_ri) > 0){
+    if (nrow(dat[dat[,4]%in%sr_ri[,4],])>0){
+        dat[dat[,4]%in%sr_ri[,4],][,ncol(dat)]='SR'
+    }
+}
 
 
+colnames(dat)[ncol(dat)] = 'GC'
+colnames(dat)[4]='SVID'
+
+if (file.exists(paste(opt$path,'il_inte.lg_cnv.vs.SR', sep='/'))) {
+        lg_cnv_sr=read.table(paste(opt$path,'il_inte.lg_cnv.vs.SR', sep='/'))
+        lg_cnv_sd=read.table(paste(opt$path,'il_inte.lg_cnv.vs.SD', sep='/'))
+        lg_cnv_rm=read.table(paste(opt$path,'il_inte.lg_cnv.vs.RM', sep='/'))
+        lg_cnv = cbind(lg_cnv_sr[,c(4,ncol(lg_cnv_sr))], lg_cnv_sd[,ncol(lg_cnv_sd)], lg_cnv_rm[,ncol(lg_cnv_rm)])
+        lg_cnv[,ncol(lg_cnv)+1] = 1-rowSums(lg_cnv[,c(2:4)])
+        colnames(lg_cnv)=c('SVID','SR','SD','RM','US')
+        lg_cnv[,ncol(lg_cnv)+1] = 'US'
+
+        if(nrow(lg_cnv[lg_cnv$RM>.5,])>0){
+            lg_cnv[lg_cnv$RM>.5,][,ncol(lg_cnv)]='RM'
+        }
+
+        if(nrow(lg_cnv[lg_cnv$SD>.5,])>0){
+            lg_cnv[lg_cnv$SD>.5,][,ncol(lg_cnv)]='SD'
+        }
+
+        if(nrow(lg_cnv[lg_cnv$SR>.5,])>0){
+            lg_cnv[lg_cnv$SR>.5,][,ncol(lg_cnv)]='SR'
+        }
+
+        dat=merge(dat, lg_cnv[,c(1,6)], by='SVID',all=T)
+        dat[!is.na(dat[,ncol(dat)]),][,ncol(dat)-1] = dat[!is.na(dat[,ncol(dat)]),][,ncol(dat)]
+}
+
+write.table(dat[,c('SVID','GC')],opt$output, quote=F, sep='\t', col.names=T, row.names=F)
 
 
 
