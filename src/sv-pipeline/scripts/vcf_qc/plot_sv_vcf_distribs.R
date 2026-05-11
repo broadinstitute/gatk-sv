@@ -2211,7 +2211,7 @@ wrapperPlotVepDistrib <- function(){
   axis(2, at=axTicks(2), labels=NA)
   axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4, labels=prettyNum(axTicks(2), big.mark=","))
   mtext(2, text="Count", line=3, cex=0.9)
-  mtext(3, text="VEP Consequence Distribution", font=2, line=2.0)
+  mtext(3, text="VEP Consequences Distribution", font=2, line=2.0)
   mtext(3, text=paste("n=", prettyNum(nrow(dat.exp), big.mark=","), sep=""), line=0.6, cex=0.75)
   text(x=bp, y=par("usr")[3] - diff(par("usr")[3:4])*0.025,
        labels=all.csqs, srt=45, adj=1, xpd=TRUE, cex=0.7)
@@ -2319,7 +2319,7 @@ wrapperPlotSvAnnotateDistrib <- function(){
   axis(2, at=axTicks(2), labels=NA)
   axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4, labels=prettyNum(axTicks(2), big.mark=","))
   mtext(2, text="Count", line=3, cex=0.9)
-  mtext(3, text="SVAnnotate Consequence Distribution", font=2, line=2.0)
+  mtext(3, text="SVAnnotate Consequences Distribution", font=2, line=2.0)
   mtext(3, text=paste("n=", prettyNum(sum(has.pred), big.mark=","), sep=""), line=0.6, cex=0.75)
   text(x=bp, y=par("usr")[3] - diff(par("usr")[3:4])*0.025,
        labels=pred.labels, srt=45, adj=1, xpd=TRUE, cex=0.7)
