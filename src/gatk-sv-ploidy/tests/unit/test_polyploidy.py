@@ -136,6 +136,32 @@ def test_classify_polyploidy_from_site_data_classifies_cn1_to_cn4() -> None:
     assert float(results.loc["haploid_sample", "fraction_near_haploid_endpoints"]) == 1.0
     assert float(results.loc["triploid_sample", "fraction_near_triploid_thirds"]) == 1.0
     assert float(results.loc["tetraploid_sample", "fraction_near_tetraploid_quarters"]) == 1.0
+    assert bool(results.loc["tetraploid_sample", "cn4_direct_peak_supported"]) is True
+    assert float(results.loc["tetraploid_sample", "peak_evidence_weight"]) == 0.0
+    cn4_quarter_fraction = float(
+        results.loc["tetraploid_sample", "tetraploid_quarter_genotype_fraction"]
+    )
+    cn4_half_fraction = float(
+        results.loc["tetraploid_sample", "tetraploid_half_genotype_fraction"]
+    )
+    assert cn4_quarter_fraction > 0.95
+    assert cn4_half_fraction < 0.05
+    assert (
+        float(
+            results.loc[
+                "tetraploid_sample",
+                "tetraploid_expected_quarter_genotype_fraction",
+            ]
+        ) > 0.45
+    )
+    assert (
+        float(
+            results.loc[
+                "tetraploid_sample",
+                "tetraploid_quarter_effective_site_fraction",
+            ]
+        ) > 0.5
+    )
     posterior_sum = results[
         [
             "posterior_cn_1",
@@ -176,6 +202,101 @@ def test_classify_polyploidy_defaults_cn4_ambiguous_half_peaks_to_diploid() -> N
     assert bool(results.loc["tetraploid_ambiguous", "cn4_direct_peak_supported"]) is False
     assert float(results.loc["tetraploid_ambiguous", "fraction_near_diploid_half"]) == 1.0
     assert float(results.loc["tetraploid_ambiguous", "fraction_near_tetraploid_quarters"]) == 0.0
+    assert (
+        float(
+            results.loc[
+                "tetraploid_ambiguous",
+                "tetraploid_quarter_genotype_fraction",
+            ]
+        ) < 0.05
+    )
+    assert (
+        float(
+            results.loc[
+                "tetraploid_ambiguous",
+                "tetraploid_half_genotype_fraction",
+            ]
+        ) > 0.95
+    )
+    assert (
+        float(
+            results.loc[
+                "tetraploid_ambiguous",
+                "tetraploid_expected_quarter_genotype_fraction",
+            ]
+        ) > 0.45
+    )
+    assert (
+        float(
+            results.loc[
+                "tetraploid_ambiguous",
+                "tetraploid_quarter_observed_expected_ratio",
+            ]
+        ) < 0.1
+    )
+
+
+def test_tetraploid_direct_support_requires_raw_quarter_peaks() -> None:
+    metrics = {
+        "fraction_near_diploid_half": 1.0,
+        "fraction_near_triploid_thirds": 0.0,
+        "fraction_near_tetraploid_quarters": 0.0,
+        "tetraploid_quarter_peak_fraction_advantage": -1.0,
+        "tetraploid_quarter_genotype_fraction": 0.53,
+        "tetraploid_quarter_genotype_advantage": 0.055,
+        "tetraploid_quarter_effective_site_fraction": 0.29,
+    }
+
+    assert (
+        polyploidy._has_direct_state_peak_support(
+            metrics,
+            4,
+            min_haploid_endpoint_fraction=0.85,
+            max_haploid_other_peak_fraction=0.05,
+            min_triploid_peak_fraction_advantage=0.0,
+            min_tetraploid_quarter_peak_fraction=0.10,
+            min_tetraploid_quarter_peak_fraction_advantage=0.05,
+        )
+        is False
+    )
+
+
+def test_classify_polyploidy_requires_raw_cn4_quarter_peaks_at_low_concentration() -> None:
+    sample_ids = ["low_concentration_diploid_like"]
+    bin_chr = np.array([f"chr{i + 1}" for i in range(8)], dtype=object)
+    site_total = np.full((8, 8, 1), 100, dtype=np.int32)
+    site_alt = np.full((8, 8, 1), 50, dtype=np.int32)
+    site_pop_af = np.full((8, 8), 0.30, dtype=np.float64)
+    site_mask = np.ones((8, 8, 1), dtype=bool)
+
+    results = polyploidy.classify_polyploidy_from_site_data(
+        sample_ids=sample_ids,
+        bin_chr=bin_chr,
+        site_alt=site_alt,
+        site_total=site_total,
+        site_pop_af=site_pop_af,
+        site_mask=site_mask,
+        af_concentration=2.489,
+        af_concentration_grid=[2.489],
+        haploidy_prior=0.001,
+        triploidy_prior=0.001,
+        tetraploidy_prior=0.49,
+        min_diploid_het_prior=0.0,
+        min_informative_bins=4,
+        min_informative_sites=32,
+        pvalue_threshold=0.9,
+        effect_size_threshold=-100.0,
+    ).set_index("sample")
+
+    sample = "low_concentration_diploid_like"
+    assert int(results.loc[sample, "autosomal_baseline_cn"]) == 2
+    assert results.loc[sample, "baseline_cn_call"] == "DIPLOID"
+    assert bool(results.loc[sample, "cn4_posterior_supported"]) is True
+    assert bool(results.loc[sample, "cn4_direct_peak_supported"]) is False
+    assert float(results.loc[sample, "fraction_near_diploid_half"]) == 1.0
+    assert float(results.loc[sample, "fraction_near_tetraploid_quarters"]) == 0.0
+    assert float(results.loc[sample, "tetraploid_quarter_genotype_fraction"]) > 0.5
+    assert float(results.loc[sample, "tetraploid_quarter_genotype_advantage"]) > 0.05
 
 
 def test_classify_polyploidy_from_site_data_handles_overdispersed_diploid_af() -> None:
@@ -456,6 +577,10 @@ def test_polyploidy_main_writes_diagnostics(tmp_path, monkeypatch) -> None:
     assert float(metrics_df.loc["diploid_sample", "fraction_near_diploid_half"]) == 1.0
     assert float(metrics_df.loc["triploid_sample", "fraction_near_triploid_thirds"]) == 1.0
     assert float(metrics_df.loc["tetraploid_sample", "fraction_near_tetraploid_quarters"]) == 1.0
+    diagnostic_cn4_quarter_fraction = float(
+        metrics_df.loc["tetraploid_sample", "tetraploid_quarter_genotype_fraction"]
+    )
+    assert diagnostic_cn4_quarter_fraction > 0.95
     assert set(raw_site_df["sample"]) == set(sample_ids)
     assert raw_site_df.groupby("sample").size().max() <= 10
     assert (diagnostics_dir / "polyploidy_diagnostic_metrics.png").exists()

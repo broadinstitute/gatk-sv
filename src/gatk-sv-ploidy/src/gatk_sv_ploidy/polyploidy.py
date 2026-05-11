@@ -43,7 +43,7 @@ _DEFAULT_TETRAPLOIDY_PRIOR = 1e-6
 _DEFAULT_AF_CONCENTRATION_PRIOR_LOG_SD = 1.25
 _DEFAULT_PLOIDY_PEAK_AF_WINDOW = 0.04
 _DEFAULT_DIAGNOSTIC_AF_WINDOW = 0.08
-_DEFAULT_PEAK_EVIDENCE_WEIGHT = 0.25
+_DEFAULT_PEAK_EVIDENCE_WEIGHT = 0.0
 _DEFAULT_PEAK_KERNEL_SD = 0.035
 _DEFAULT_PEAK_OUTLIER_PROBABILITY = 0.02
 _DEFAULT_MIN_HAPLOID_ENDPOINT_FRACTION = 0.85
@@ -546,6 +546,203 @@ def _state_peak_log_lik(
     return float(np.sum(np.logaddexp(log_signal, log_outlier)))
 
 
+def _beta_binomial_logpmf_counts(
+    alt: np.ndarray,
+    total: np.ndarray,
+    alpha: float,
+    beta: float,
+) -> np.ndarray:
+    log_prob = (
+        gammaln(total + 1.0) -
+        gammaln(alt + 1.0) -
+        gammaln(total - alt + 1.0)
+    )
+    log_prob = log_prob + gammaln(alt + alpha)
+    log_prob = log_prob + gammaln(total - alt + beta)
+    log_prob = log_prob - gammaln(total + alpha + beta)
+    log_prob = log_prob - gammaln(alpha)
+    log_prob = log_prob - gammaln(beta)
+    log_prob = log_prob + gammaln(alpha + beta)
+    invalid_count = (alt < 0.0) | (alt > total)
+    if np.any(invalid_count):
+        log_prob[invalid_count] = -np.inf
+    return np.nan_to_num(log_prob, nan=0.0, posinf=0.0, neginf=-100.0)
+
+
+def _entropy_from_probabilities(probabilities: np.ndarray) -> np.ndarray:
+    safe_probabilities = np.clip(probabilities, 1e-12, 1.0)
+    return -np.sum(probabilities * np.log(safe_probabilities), axis=0)
+
+
+def _weighted_mean_or_nan(values: np.ndarray, weights: np.ndarray) -> float:
+    weight_sum = float(np.sum(weights))
+    if weight_sum <= 0.0:
+        return float("nan")
+    return float(np.sum(values * weights) / weight_sum)
+
+
+def _compute_tetraploid_quarter_genotype_metrics(
+    *,
+    site_alt_auto: np.ndarray,
+    site_total_auto: np.ndarray,
+    site_pop_af_auto: np.ndarray,
+    site_mask_auto: np.ndarray,
+    af_concentration_by_sample: np.ndarray,
+) -> list[dict[str, float]]:
+    n_samples = site_alt_auto.shape[2]
+    rows: list[dict[str, float]] = []
+    site_pop_af_arr = np.asarray(site_pop_af_auto, dtype=np.float64)
+    concentration_arr = np.asarray(af_concentration_by_sample, dtype=np.float64)
+
+    empty_metrics = {
+        "tetraploid_quarter_genotype_fraction": float("nan"),
+        "tetraploid_half_genotype_fraction": float("nan"),
+        "tetraploid_diploid_compatible_genotype_fraction": float("nan"),
+        "tetraploid_quarter_genotype_advantage": float("nan"),
+        "tetraploid_expected_quarter_genotype_fraction": float("nan"),
+        "tetraploid_expected_half_genotype_fraction": float("nan"),
+        "tetraploid_expected_quarter_genotype_advantage": float("nan"),
+        "tetraploid_quarter_observed_expected_ratio": float("nan"),
+        "tetraploid_quarter_effective_sites": 0.0,
+        "tetraploid_quarter_effective_site_fraction": float("nan"),
+    }
+
+    for sample_idx in range(n_samples):
+        sample_mask = site_mask_auto[:, :, sample_idx]
+        if not np.any(sample_mask):
+            rows.append(dict(empty_metrics))
+            continue
+
+        alt = np.asarray(site_alt_auto[:, :, sample_idx][sample_mask], dtype=np.float64)
+        total = np.asarray(
+            site_total_auto[:, :, sample_idx][sample_mask],
+            dtype=np.float64,
+        )
+        if site_pop_af_arr.ndim == 2:
+            pop_af = site_pop_af_arr[sample_mask]
+        else:
+            pop_af = site_pop_af_arr[:, :, sample_idx][sample_mask]
+        finite_mask = (
+            np.isfinite(alt) &
+            np.isfinite(total) &
+            np.isfinite(pop_af) &
+            (total > 0.0)
+        )
+        if not np.any(finite_mask):
+            rows.append(dict(empty_metrics))
+            continue
+
+        alt = alt[finite_mask]
+        total = np.maximum(total[finite_mask], 1.0)
+        pop_af = np.clip(pop_af[finite_mask], 1e-6, 1.0 - 1e-6)
+        concentration = float(concentration_arr[sample_idx])
+        if not np.isfinite(concentration) or concentration <= 0.0:
+            rows.append(dict(empty_metrics))
+            continue
+
+        log_terms = []
+        log_priors = []
+        for genotype_dosage in range(_TETRAPLOID_BASELINE_CN + 1):
+            log_prior = (
+                gammaln(_TETRAPLOID_BASELINE_CN + 1.0) -
+                gammaln(genotype_dosage + 1.0) -
+                gammaln(_TETRAPLOID_BASELINE_CN - genotype_dosage + 1.0) +
+                genotype_dosage * np.log(pop_af) +
+                (_TETRAPLOID_BASELINE_CN - genotype_dosage) * np.log1p(-pop_af)
+            )
+            expected_af = genotype_dosage / float(_TETRAPLOID_BASELINE_CN)
+            alpha = concentration * expected_af + 1e-6
+            beta = concentration * (1.0 - expected_af) + 1e-6
+            log_terms.append(
+                log_prior + _beta_binomial_logpmf_counts(alt, total, alpha, beta)
+            )
+            log_priors.append(log_prior)
+
+        log_prior_stack = np.stack(log_priors, axis=0)
+        prior_probabilities = np.exp(
+            log_prior_stack - logsumexp(log_prior_stack, axis=0)[np.newaxis, :]
+        )
+        log_stack = np.stack(log_terms, axis=0)
+        log_norm = logsumexp(log_stack, axis=0)
+        posterior = np.exp(log_stack - log_norm[np.newaxis, :])
+
+        prior_entropy = _entropy_from_probabilities(prior_probabilities)
+        posterior_entropy = _entropy_from_probabilities(posterior)
+        information_weight = np.divide(
+            prior_entropy - posterior_entropy,
+            prior_entropy,
+            out=np.zeros_like(prior_entropy),
+            where=prior_entropy > 1e-12,
+        )
+        information_weight = np.clip(information_weight, 0.0, 1.0)
+
+        quarter_posterior = posterior[1] + posterior[3]
+        half_posterior = posterior[2]
+        diploid_compatible_posterior = posterior[0] + posterior[2] + posterior[4]
+        expected_quarter = prior_probabilities[1] + prior_probabilities[3]
+        expected_half = prior_probabilities[2]
+
+        quarter_fraction = _weighted_mean_or_nan(
+            quarter_posterior,
+            information_weight,
+        )
+        half_fraction = _weighted_mean_or_nan(half_posterior, information_weight)
+        compatible_fraction = _weighted_mean_or_nan(
+            diploid_compatible_posterior,
+            information_weight,
+        )
+        expected_quarter_fraction = _weighted_mean_or_nan(
+            expected_quarter,
+            information_weight,
+        )
+        expected_half_fraction = _weighted_mean_or_nan(
+            expected_half,
+            information_weight,
+        )
+        effective_sites = float(np.sum(information_weight))
+        effective_site_fraction = float(effective_sites / information_weight.size)
+        observed_expected_ratio = (
+            quarter_fraction / expected_quarter_fraction
+            if (
+                np.isfinite(quarter_fraction) and
+                np.isfinite(expected_quarter_fraction) and
+                expected_quarter_fraction > 0.0
+            ) else float("nan")
+        )
+
+        rows.append(
+            {
+                "tetraploid_quarter_genotype_fraction": quarter_fraction,
+                "tetraploid_half_genotype_fraction": half_fraction,
+                "tetraploid_diploid_compatible_genotype_fraction": compatible_fraction,
+                "tetraploid_quarter_genotype_advantage": (
+                    quarter_fraction - half_fraction
+                    if np.isfinite(quarter_fraction) and np.isfinite(half_fraction)
+                    else float("nan")
+                ),
+                "tetraploid_expected_quarter_genotype_fraction": (
+                    expected_quarter_fraction
+                ),
+                "tetraploid_expected_half_genotype_fraction": expected_half_fraction,
+                "tetraploid_expected_quarter_genotype_advantage": (
+                    expected_quarter_fraction - expected_half_fraction
+                    if (
+                        np.isfinite(expected_quarter_fraction) and
+                        np.isfinite(expected_half_fraction)
+                    ) else float("nan")
+                ),
+                "tetraploid_quarter_observed_expected_ratio": (
+                    observed_expected_ratio
+                ),
+                "tetraploid_quarter_effective_sites": effective_sites,
+                "tetraploid_quarter_effective_site_fraction": (
+                    effective_site_fraction
+                ),
+            }
+        )
+    return rows
+
+
 def _peak_log_likelihood_matrix(
     *,
     observed_af_auto: np.ndarray,
@@ -626,14 +823,16 @@ def _has_direct_state_peak_support(
         )
         return bool(triploid_peak_ok)
     if cn_state == 4:
+        quarter_fraction = metrics["fraction_near_tetraploid_quarters"]
+        quarter_advantage = metrics["tetraploid_quarter_peak_fraction_advantage"]
         quarter_fraction_ok = (
-            np.isfinite(metrics["fraction_near_tetraploid_quarters"]) and
-            metrics["fraction_near_tetraploid_quarters"] >=
+            np.isfinite(quarter_fraction) and
+            quarter_fraction >=
             min_tetraploid_quarter_peak_fraction
         )
         quarter_advantage_ok = (
-            np.isfinite(metrics["tetraploid_quarter_peak_fraction_advantage"]) and
-            metrics["tetraploid_quarter_peak_fraction_advantage"] >=
+            np.isfinite(quarter_advantage) and
+            quarter_advantage >=
             min_tetraploid_quarter_peak_fraction_advantage
         )
         return bool(quarter_fraction_ok and quarter_advantage_ok)
@@ -888,6 +1087,15 @@ def classify_polyploidy_from_site_data(
         )
         for sample_idx in range(len(sample_ids))
     ]
+    tetraploid_genotype_metrics = _compute_tetraploid_quarter_genotype_metrics(
+        site_alt_auto=site_alt_auto,
+        site_total_auto=site_total_auto,
+        site_pop_af_auto=site_pop_af_auto,
+        site_mask_auto=site_mask_auto,
+        af_concentration_by_sample=(
+            concentration_mean_by_cn[_TETRAPLOID_BASELINE_CN]
+        ),
+    )
 
     if log_progress:
         logger.info("Polyploidy progress: classifying samples.")
@@ -905,7 +1113,10 @@ def classify_polyploidy_from_site_data(
         informative_blocks = block_sites > 0
         n_blocks = int(informative_blocks.sum())
         n_sites = int(block_sites[informative_blocks].sum())
-        sample_metrics = peak_metrics[sample_idx]
+        sample_metrics = {
+            **peak_metrics[sample_idx],
+            **tetraploid_genotype_metrics[sample_idx],
+        }
 
         sample_posterior = {
             cn: float(posterior[state_index[cn], sample_idx])
@@ -1282,6 +1493,13 @@ def _log_privacy_safe_af_peak_metrics(metrics_df: pd.DataFrame) -> None:
         "fraction_near_diploid_half",
         "fraction_near_triploid_thirds",
         "fraction_near_tetraploid_quarters",
+        "tetraploid_quarter_genotype_fraction",
+        "tetraploid_half_genotype_fraction",
+        "tetraploid_quarter_genotype_advantage",
+        "tetraploid_expected_quarter_genotype_fraction",
+        "tetraploid_expected_half_genotype_fraction",
+        "tetraploid_quarter_observed_expected_ratio",
+        "tetraploid_quarter_effective_site_fraction",
         "fraction_near_diploid_compatible",
         "fraction_near_any_modeled_peak",
         "fraction_intermediate_third_to_half",
@@ -1331,6 +1549,9 @@ def _log_privacy_safe_af_peak_metrics(metrics_df: pd.DataFrame) -> None:
             "fraction_near_diploid_half",
             "fraction_near_triploid_thirds",
             "fraction_near_tetraploid_quarters",
+            "tetraploid_quarter_genotype_fraction",
+            "tetraploid_quarter_genotype_advantage",
+            "tetraploid_quarter_effective_site_fraction",
             "fraction_near_diploid_compatible",
             "raw_af_sd",
             "median_site_depth",
@@ -1414,6 +1635,16 @@ def log_privacy_safe_polyploidy_diagnostics(
         "fraction_near_diploid_half",
         "fraction_near_triploid_thirds",
         "fraction_near_tetraploid_quarters",
+        "tetraploid_quarter_genotype_fraction",
+        "tetraploid_half_genotype_fraction",
+        "tetraploid_diploid_compatible_genotype_fraction",
+        "tetraploid_quarter_genotype_advantage",
+        "tetraploid_expected_quarter_genotype_fraction",
+        "tetraploid_expected_half_genotype_fraction",
+        "tetraploid_expected_quarter_genotype_advantage",
+        "tetraploid_quarter_observed_expected_ratio",
+        "tetraploid_quarter_effective_sites",
+        "tetraploid_quarter_effective_site_fraction",
         "fraction_near_diploid_compatible",
         "triploid_peak_fraction_advantage",
         "tetraploid_quarter_peak_fraction_advantage",
@@ -1590,6 +1821,16 @@ def build_polyploidy_diagnostic_metrics(
         "cn1_direct_peak_supported",
         "cn3_direct_peak_supported",
         "cn4_direct_peak_supported",
+        "tetraploid_quarter_genotype_fraction",
+        "tetraploid_half_genotype_fraction",
+        "tetraploid_diploid_compatible_genotype_fraction",
+        "tetraploid_quarter_genotype_advantage",
+        "tetraploid_expected_quarter_genotype_fraction",
+        "tetraploid_expected_half_genotype_fraction",
+        "tetraploid_expected_quarter_genotype_advantage",
+        "tetraploid_quarter_observed_expected_ratio",
+        "tetraploid_quarter_effective_sites",
+        "tetraploid_quarter_effective_site_fraction",
         "n_informative_bins",
         "n_informative_sites",
     ]
@@ -2137,13 +2378,16 @@ def parse_args() -> argparse.Namespace:
         "--min-tetraploid-quarter-peak-fraction",
         type=float,
         default=_DEFAULT_MIN_TETRAPLOID_QUARTER_PEAK_FRACTION,
-        help="Minimum observed AF fraction near 1/4 or 3/4 for calling CN=4",
+        help="Minimum observed AF fraction near 0.25/0.75 for calling CN=4",
     )
     parser.add_argument(
         "--min-tetraploid-quarter-peak-fraction-advantage",
         type=float,
         default=_DEFAULT_MIN_TETRAPLOID_QUARTER_PEAK_FRACTION_ADVANTAGE,
-        help="Minimum excess of quarter-peak fraction over half-peak fraction for CN=4",
+        help=(
+            "Minimum excess of observed tetraploid quarter-peak fraction "
+            "over half-peak fraction for CN=4"
+        ),
     )
     parser.add_argument(
         "--diagnostics",
