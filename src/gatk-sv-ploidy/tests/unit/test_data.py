@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import pandas as pd
 import torch
@@ -157,18 +159,37 @@ def test_depth_data_prefers_explicit_bin_length_bp() -> None:
     )
 
 
-def test_depth_data_rejects_non_integer_raw_counts(
+def test_depth_data_warns_and_rounds_non_integer_raw_counts(
     tiny_depth_df: pd.DataFrame,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    with pytest.raises(ValueError, match="integer-valued"):
-        DepthData(
+    with caplog.at_level(logging.WARNING, logger="gatk_sv_ploidy.data"):
+        data = DepthData(
             tiny_depth_df,
             depth_space="raw",
             clamp_threshold=None,
+            dtype=torch.float64,
         )
 
+    assert "rounding to nearest integer instead of failing" in caplog.text
+    assert "Max fractional residual=0.2" in caplog.text
+    torch.testing.assert_close(
+        data.depth,
+        torch.tensor(
+            [
+                [2.0, 2.0],
+                [2.0, 2.0],
+                [2.0, 1.0],
+                [0.0, 1.0],
+            ],
+            dtype=torch.float64,
+        ),
+    )
 
-def test_depth_data_rejects_large_fractional_raw_counts() -> None:
+
+def test_depth_data_warns_and_rounds_large_fractional_raw_counts(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     df = pd.DataFrame(
         {
             "Chr": ["chr21"],
@@ -180,12 +201,20 @@ def test_depth_data_rejects_large_fractional_raw_counts() -> None:
     )
     df["Bin"] = "chr21:0-1000"
 
-    with pytest.raises(ValueError, match="Max fractional residual"):
-        DepthData(
+    with caplog.at_level(logging.WARNING, logger="gatk_sv_ploidy.data"):
+        data = DepthData(
             df.set_index("Bin"),
             depth_space="raw",
             clamp_threshold=None,
+            dtype=torch.float64,
         )
+
+    assert "Max fractional residual=0.25" in caplog.text
+    assert "chr21:0-1000" in caplog.text
+    torch.testing.assert_close(
+        data.depth,
+        torch.tensor([[2_077_000.0, 1_753_400.0]], dtype=torch.float64),
+    )
 
 
 def test_depth_data_rounds_near_integer_raw_counts() -> None:

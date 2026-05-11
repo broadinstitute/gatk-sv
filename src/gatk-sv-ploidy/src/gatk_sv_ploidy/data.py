@@ -210,13 +210,17 @@ class DepthData:
                     f"{self.chr[bin_idx]}:"
                     f"{int(self.start[bin_idx])}-{int(self.end[bin_idx])}"
                 )
-                raise ValueError(
-                    "Raw count depth input must be integer-valued within "
-                    f"absolute tolerance {RAW_COUNT_INTEGER_ATOL:g}. "
-                    f"Max fractional residual={integer_residual[max_pos]:.6g} "
-                    f"at {bin_label}, sample {sample_cols[sample_idx]} "
-                    f"(value={depth_values[max_pos]:.12g}). "
-                    "Run preprocess to regenerate raw-count input."
+                logger.warning(
+                    "Raw count depth input contains non-integer values; "
+                    "rounding to nearest integer instead of failing. "
+                    "Absolute tolerance=%g. Max fractional residual=%.6g at %s, "
+                    "sample %s (value=%.12g). Run preprocess to regenerate "
+                    "raw-count input if this is unexpected.",
+                    RAW_COUNT_INTEGER_ATOL,
+                    float(integer_residual[max_pos]),
+                    bin_label,
+                    sample_cols[sample_idx],
+                    float(depth_values[max_pos]),
                 )
             depth_values = rounded_depth_values
 
