@@ -2680,11 +2680,12 @@ wrapperPlotInsDistrib <- function(){
     as.numeric(table(factor(assign.cats(sub.dat), levels=all.cats)))
   }
 
-  mat <- cbind(ALL=cat.counts,
-               sapply(seq_along(sz.labs), function(i){
-                 sub <- ins.dat[!is.na(ins.dat$length) & ins.dat$length >= sz.mins[i] & ins.dat$length < sz.maxs[i],]
-                 build.col(sub)
-               }))
+  size.mat <- sapply(seq_along(sz.labs), function(i){
+    sub <- ins.dat[!is.na(ins.dat$length) & ins.dat$length >= sz.mins[i] & ins.dat$length < sz.maxs[i],]
+    build.col(sub)
+  })
+  if(!is.matrix(size.mat)) size.mat <- matrix(size.mat, nrow=n.cat, ncol=length(sz.labs))
+  mat <- cbind(ALL=cat.counts, size.mat)
   colnames(mat) <- c("ALL", sz.labs)
 
   plotInsBar <- function(vals, title, ymax.ref=NULL, main.bar=FALSE){
