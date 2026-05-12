@@ -91,8 +91,8 @@ GQfilterVIDs <- function(ID,min.GQ=0){
     vlist <- NULL
   }
   if(!is.null(vlist)){
-    #Filter variant list on GQ
-    vlist <- vlist[which(vlist$GQ>=min.GQ),]
+    #Filter variant list on GQ (pass through NA GQ values)
+    vlist <- vlist[which(is.na(vlist$GQ) | vlist$GQ>=min.GQ),]
   }
   #Return result
   return(vlist)
