@@ -48,7 +48,6 @@ keepBNDsize <- opts$keepBNDsize
 ###Reads & cleans data
 #Read data
 dat <- read.table(INFILE,comment.char="",sep="\t",header=T,check.names=F)
-#Fix leading column name
 colnames(dat)[1] <- "chr"
 drops <- c('AF','AN','AC')
 dat=dat[,!colnames(dat)%in%drops]
