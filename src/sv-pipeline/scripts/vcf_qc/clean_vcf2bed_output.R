@@ -55,9 +55,16 @@ dat=dat[,!colnames(dat)%in%drops]
 #Read genotype counts
 gt <- read.table(GENOTYPES,sep="\t",comment.char="",header=T,check.names=F)
 #Merge data & genotypes
-dat <- merge(dat,gt,sort=F,
-                by.x=which(colnames(dat)=="name"),
-                by.y=which(colnames(gt)=="VID"))
+if(all(c("chr","start","end","name") %in% colnames(dat)) &&
+   all(c("CHROM","START","END","VID") %in% colnames(gt))){
+  dat <- merge(dat,gt,sort=F,
+               by.x=c("chr","start","end","name"),
+               by.y=c("CHROM","START","END","VID"))
+}else{
+  dat <- merge(dat,gt,sort=F,
+               by.x=which(colnames(dat)=="name"),
+               by.y=which(colnames(gt)=="VID"))
+}
 #Sets sv types
 if(!is.null(svtypes.file)){
   svtypes <- read.table(svtypes.file,sep="\t",header=F,comment.char="",check.names=F)[,1]
