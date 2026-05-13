@@ -278,7 +278,7 @@ def _draw_sample_depth_panel(
     ax: plt.Axes,
     x: np.ndarray,
     obs: np.ndarray,
-    cn_map: np.ndarray,
+    cn_map: Optional[np.ndarray],
     x_min: float,
     x_max: float,
     retained_mask: Optional[np.ndarray] = None,
@@ -288,17 +288,20 @@ def _draw_sample_depth_panel(
         retained_mask,
         dtype=bool,
     )
+    has_cn_map = cn_map is not None and np.isfinite(np.asarray(cn_map, dtype=float)).any()
 
     if np.any(mask):
-        ax.plot(
-            x[mask],
-            cn_map[mask],
-            "o",
-            alpha=0.5,
-            markersize=4,
-            color="black",
-            label="Predicted bin copy number",
-        )
+        if has_cn_map:
+            cn_map_arr = np.asarray(cn_map, dtype=float)
+            ax.plot(
+                x[mask],
+                cn_map_arr[mask],
+                "o",
+                alpha=0.5,
+                markersize=4,
+                color="black",
+                label="Predicted bin copy number",
+            )
         obs_plot = np.where(mask, obs, np.nan)
         ax.plot(
             x,
@@ -321,13 +324,25 @@ def _draw_sample_depth_panel(
         )
 
     ax.grid(True, axis="y", alpha=0.25, linestyle="-", linewidth=0.35)
-    ax.set_ylim([-0.5, 5.5])
+    if has_cn_map:
+        finite_obs = obs[np.isfinite(obs)]
+        finite_cn = np.asarray(cn_map, dtype=float)[np.isfinite(cn_map)]
+        finite_values = np.concatenate([finite_obs, finite_cn])
+        y_max = max(5.5, float(np.nanmax(finite_values)) + 0.5) if finite_values.size else 5.5
+        ax.set_ylim([-0.5, y_max])
+    else:
+        finite_obs = obs[np.isfinite(obs)]
+        if finite_obs.size:
+            _, y_max = _depth_axis_label_and_limit(finite_obs, "observed_depth")
+        else:
+            y_max = 1.0
+        ax.set_ylim([-0.05 * y_max, y_max])
     ax.set_xlim([x_min, x_max])
 
 
 def plot_sample_with_variance(
     sample_data: pd.DataFrame,
-    all_sample_vars: np.ndarray,
+    all_sample_vars: Optional[np.ndarray],
     output_dir: str,
     aneuploid_chrs: Optional[List[Tuple[str, int, float]]] = None,
     baseline_ploidy_type: str = "DIPLOID",
@@ -335,6 +350,7 @@ def plot_sample_with_variance(
     site_data: Optional[Dict[str, np.ndarray]] = None,
     sample_idx_map: Optional[Dict[str, int]] = None,
     min_het_alt: int = 3,
+    detail_note: Optional[str] = None,
 ) -> None:
     """Multi-panel plot: retained-bin depth + CN, optional AF scatter, CNQ, optional BINQ, sample-var histogram.
 
@@ -357,8 +373,13 @@ def plot_sample_with_variance(
             ``bin_start``, ``bin_end``, ``sample_ids``.
         sample_idx_map: Optional mapping of sample name to column index in
             the site-data arrays.
+        detail_note: Optional short note appended to the plot title.
     """
     name = sample_data["sample"].iloc[0]
+    all_sample_vars_arr = np.asarray(
+        [] if all_sample_vars is None else all_sample_vars,
+        dtype=float,
+    )
     is_aneu = aneuploid_chrs is not None and len(aneuploid_chrs) > 0
     baseline_ploidy_type = str(baseline_ploidy_type or "DIPLOID")
     try:
@@ -394,18 +415,33 @@ def plot_sample_with_variance(
     )
 
     obs = sample_data["observed_depth"].values
-    cn_map = sample_data["cn_map"].values
+    has_cn_map = (
+        "cn_map" in sample_data.columns and
+        np.isfinite(sample_data["cn_map"].to_numpy(dtype=float)).any()
+    )
+    cn_map = sample_data["cn_map"].to_numpy(dtype=float) if has_cn_map else None
     chrs = sample_data["chr"].values
-    if "cnq" in sample_data.columns:
+    has_cnq = False
+    cnq: Optional[np.ndarray] = None
+    if "cnq" in sample_data.columns and np.isfinite(sample_data["cnq"].to_numpy(dtype=float)).any():
         cnq = sample_data["cnq"].to_numpy(dtype=float)
+        has_cnq = True
     else:
         prob_cols = [f"cn_prob_{i}" for i in range(6)]
-        if not set(prob_cols).issubset(sample_data.columns):
-            raise ValueError("Per-sample plots require either a 'cnq' column or CN posterior columns")
-        cnq = compute_cnq_from_probabilities(
-            sample_data[prob_cols].to_numpy(dtype=np.float64)
-        ).astype(float)
-    svar = sample_data["sample_var"].iloc[0]
+        if set(prob_cols).issubset(sample_data.columns):
+            cnq = compute_cnq_from_probabilities(
+                sample_data[prob_cols].to_numpy(dtype=np.float64)
+            ).astype(float)
+            has_cnq = True
+    has_sample_var = (
+        all_sample_vars_arr.size > 0 and
+        "sample_var" in sample_data.columns and
+        pd.to_numeric(sample_data["sample_var"], errors="coerce").notna().any()
+    )
+    svar = (
+        float(pd.to_numeric(sample_data["sample_var"], errors="coerce").dropna().iloc[0])
+        if has_sample_var else None
+    )
 
     x = _equal_width_x(chrs, len(obs))
     bar_left_edges, bar_widths = _contiguous_bar_geometry(x)
@@ -420,10 +456,12 @@ def plot_sample_with_variance(
     height_ratios: list[int] = [2]
     if has_af:
         height_ratios.append(2)
-    height_ratios.append(1)
+    if has_cnq:
+        height_ratios.append(1)
     if has_binq:
         height_ratios.append(1)
-    height_ratios.append(1)
+    if has_sample_var:
+        height_ratios.append(1)
 
     fig, axes = plt.subplots(
         len(height_ratios),
@@ -435,15 +473,17 @@ def plot_sample_with_variance(
     axis_iter = iter(axes_arr)
     ax_depth = next(axis_iter)
     ax_af = next(axis_iter) if has_af else None
-    ax_cn_prob = next(axis_iter)
+    ax_cn_prob = next(axis_iter) if has_cnq else None
     ax_binq = next(axis_iter) if has_binq else None
-    ax_hist = next(axis_iter)
+    ax_hist = next(axis_iter) if has_sample_var else None
 
     title_parts = [name]
     if is_non_diploid_baseline:
         title_parts.append(
             f"baseline {baseline_ploidy_type} (CN={autosomal_baseline_cn})"
         )
+    if detail_note:
+        title_parts.append(detail_note)
     fig.text(
         0.1 / 8,
         0.98,
@@ -482,18 +522,19 @@ def plot_sample_with_variance(
         ax.grid(True, axis="y", alpha=0.3)
 
     # CN quality bar plot (half height)
-    ax = ax_cn_prob
-    _draw_score_track(
-        ax,
-        x,
-        cnq,
-        color=_CNQ_TRACK_COLOR,
-        retained_mask=retained_mask if has_filtered_bins else None,
-    )
-    ax.set_ylabel("CNQ")
-    ax.set_ylim(_SCORE_TRACK_YLIM)
-    ax.set_xlim([x_min, x_max])
-    ax.grid(True, axis="y", alpha=0.3)
+    if ax_cn_prob is not None and cnq is not None:
+        ax = ax_cn_prob
+        _draw_score_track(
+            ax,
+            x,
+            cnq,
+            color=_CNQ_TRACK_COLOR,
+            retained_mask=retained_mask if has_filtered_bins else None,
+        )
+        ax.set_ylabel("CNQ")
+        ax.set_ylim(_SCORE_TRACK_YLIM)
+        ax.set_xlim([x_min, x_max])
+        ax.grid(True, axis="y", alpha=0.3)
 
     if ax_binq is not None:
         ax = ax_binq
@@ -515,35 +556,34 @@ def plot_sample_with_variance(
         ax.grid(True, axis="y", alpha=0.3)
 
     # Sample overdispersion histogram (half height)
-    ax = ax_hist
-    ax.hist(
-        all_sample_vars,
-        bins=30,
-        alpha=0.7,
-        edgecolor="black",
-        linewidth=0.5,
-        color="gray",
-    )
-    ax.axvline(
-        svar,
-        color="red",
-        linestyle="--",
-        linewidth=2,
-        label=f"This sample: {svar:.3f}",
-    )
-    ax.set_xlabel("Sample overdispersion")
-    ax.set_ylabel("Count")
-    ax.set_yscale("log")
-    ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.02), borderaxespad=0)
-    ax.grid(True, alpha=0.3)
+    if ax_hist is not None and svar is not None:
+        ax = ax_hist
+        ax.hist(
+            all_sample_vars_arr,
+            bins=30,
+            alpha=0.7,
+            edgecolor="black",
+            linewidth=0.5,
+            color="gray",
+        )
+        ax.axvline(
+            svar,
+            color="red",
+            linestyle="--",
+            linewidth=2,
+            label=f"This sample: {svar:.3f}",
+        )
+        ax.set_xlabel("Sample overdispersion")
+        ax.set_ylabel("Count")
+        ax.set_yscale("log")
+        ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.02), borderaxespad=0)
+        ax.grid(True, alpha=0.3)
 
     # Highlight aneuploid chromosomes on spatial panels
-    spatial_axes = [ax_depth]
-    if ax_af is not None:
-        spatial_axes.append(ax_af)
-    spatial_axes.append(ax_cn_prob)
-    if ax_binq is not None:
-        spatial_axes.append(ax_binq)
+    spatial_axes = [
+        axis for axis in (ax_depth, ax_af, ax_cn_prob, ax_binq)
+        if axis is not None
+    ]
 
     if is_non_diploid_baseline:
         autosomal_mask = np.array([str(c) not in {"chrX", "chrY"} for c in chrs])
@@ -598,14 +638,15 @@ def plot_sample_with_variance(
             Line2D([0], [0], color=_IGNORED_BIN_COLOR, linewidth=6, alpha=0.35)
         )
         depth_labels.append("Filtered")
-    ax_depth.legend(
-        depth_handles,
-        depth_labels,
-        loc="lower right",
-        bbox_to_anchor=(1.0, 1.02),
-        ncol=3 if (np.any(ignored_mask) or is_non_diploid_baseline) else 2,
-        borderaxespad=0,
-    )
+    if depth_handles:
+        ax_depth.legend(
+            depth_handles,
+            depth_labels,
+            loc="lower right",
+            bbox_to_anchor=(1.0, 1.02),
+            ncol=min(len(depth_labels), 3),
+            borderaxespad=0,
+        )
 
     for a in spatial_axes:
         add_chromosome_labels(a, chrs, x_transformed=x)

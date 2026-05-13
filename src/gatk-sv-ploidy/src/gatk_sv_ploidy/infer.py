@@ -26,12 +26,15 @@ from gatk_sv_ploidy._util import (
     is_expected_allosome_copy_number_pair,
     format_count_summary,
     format_numeric_summary,
+    get_sample_columns,
     NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
     summarize_contig_ploidy_from_bin_calls,
 )
 from gatk_sv_ploidy.data import DepthData, load_site_data
 from gatk_sv_ploidy.models import (
     AUTOSOME_PRIOR_MODES,
+    DEFAULT_AF_BACKGROUND_CONCENTRATION,
+    DEFAULT_AF_OUTLIER_WEIGHT,
     DEFAULT_BACKGROUND_FACTORS,
     DEFAULT_EPSILON_CONCENTRATION,
     DEFAULT_EPSILON_MEAN,
@@ -41,12 +44,16 @@ from gatk_sv_ploidy.models import (
     DEFAULT_RAW_VARIANCE_POWER,
     CNVModel,
     _compose_effective_bin_bias_numpy,
+    _marginalized_af_log_lik_numpy,
     _resolve_fixed_site_pop_af_numpy,
     _site_level_marginalized_af_log_lik_numpy,
+    estimate_af_background_concentration_numpy,
 )
 
 logger = logging.getLogger(__name__)
 SITE_AF_ESTIMATORS = ("off", "auto", "naive-bayes")
+SAMPLE_AF_CONCENTRATION_MODES = ("shared", "depth-posterior")
+_UNDETERMINED_CALL = "UNDETERMINED"
 
 
 def _gini_coefficient(values: np.ndarray) -> float | None:
@@ -339,7 +346,8 @@ def build_safe_inference_diagnostic_messages(
     cn_posterior: Dict[str, np.ndarray],
     depth_only_cn_posterior: Dict[str, np.ndarray] | None = None,
     af_table: np.ndarray | None = None,
-    af_concentration: float = 50.0,
+    af_concentration: float | np.ndarray = 50.0,
+    af_outlier_weight: float = 0.0,
 ) -> list[str]:
     """Build privacy-safe cohort diagnostics for troubleshooting model fits."""
     messages: list[str] = [
@@ -367,6 +375,8 @@ def build_safe_inference_diagnostic_messages(
     for key, label in (
         ("sample_var", "Sample variance latent across samples"),
         ("sample_depth", "Sample depth latent across samples"),
+        ("sample_af_concentration_map", "Sample-specific AF concentration MAP across samples"),
+        ("sample_af_concentration_mean", "Sample-specific AF concentration posterior mean across samples"),
         ("bin_bias", "Bin bias latent across bins"),
         ("bin_var", "Bin variance latent across bins"),
     ):
@@ -1366,6 +1376,7 @@ def build_safe_inference_diagnostic_messages(
                         cn_state=2,
                         n_states=cn_probs.shape[2],
                         concentration=af_concentration,
+                        outlier_weight=af_outlier_weight,
                     )
                     site_level_cn4 = _site_level_marginalized_af_log_lik_numpy(
                         site_alt,
@@ -1375,6 +1386,7 @@ def build_safe_inference_diagnostic_messages(
                         cn_state=4,
                         n_states=cn_probs.shape[2],
                         concentration=af_concentration,
+                        outlier_weight=af_outlier_weight,
                     )
                     site_level_cn5 = _site_level_marginalized_af_log_lik_numpy(
                         site_alt,
@@ -1384,6 +1396,7 @@ def build_safe_inference_diagnostic_messages(
                         cn_state=5,
                         n_states=cn_probs.shape[2],
                         concentration=af_concentration,
+                        outlier_weight=af_outlier_weight,
                     )
                     site_level_cn4_vs_cn2_margin = site_level_cn4 - site_level_cn2
                     site_level_cn5_vs_cn2_margin = site_level_cn5 - site_level_cn2
@@ -1713,6 +1726,121 @@ def _load_autosomal_baseline_cn(
     return baseline
 
 
+def _coerce_manifest_include_values(values: pd.Series) -> pd.Series:
+    if pd.api.types.is_bool_dtype(values):
+        return values.fillna(True).astype(bool)
+    normalized = values.astype(str).str.strip().str.lower()
+    false_values = {"0", "false", "f", "no", "n", "exclude", "excluded"}
+    true_values = {"1", "true", "t", "yes", "y", "include", "included"}
+    include = pd.Series(True, index=values.index)
+    include[normalized.isin(false_values)] = False
+    include[normalized.isin(true_values)] = True
+    include[values.isna()] = True
+    return include.astype(bool)
+
+
+def _subset_site_data_samples(
+    site_data: Dict[str, np.ndarray] | None,
+    selected_indices: Sequence[int],
+    selected_sample_ids: Sequence[str],
+) -> Dict[str, np.ndarray] | None:
+    if site_data is None:
+        return None
+    index = np.asarray(selected_indices, dtype=np.int64)
+    out = dict(site_data)
+    for key in ("site_alt", "site_total", "site_mask"):
+        out[key] = out[key][:, :, index]
+    if "sample_ids" in out:
+        out["sample_ids"] = np.asarray(list(selected_sample_ids), dtype=object)
+    return out
+
+
+def _filter_inputs_by_baseline_manifest(
+    df: pd.DataFrame,
+    site_data: Dict[str, np.ndarray] | None,
+    baseline_path: str | None,
+) -> tuple[pd.DataFrame, Dict[str, np.ndarray] | None]:
+    if baseline_path is None:
+        return df, site_data
+
+    baseline_df = pd.read_csv(baseline_path, sep="\t")
+    required_columns = {"sample", "autosomal_baseline_cn"}
+    missing_columns = required_columns - set(baseline_df.columns)
+    if missing_columns:
+        raise ValueError(
+            "Autosomal baseline CN TSV is missing required columns: " +
+            ", ".join(sorted(missing_columns))
+        )
+
+    if baseline_df["sample"].duplicated().any():
+        duplicates = baseline_df.loc[
+            baseline_df["sample"].duplicated(),
+            "sample",
+        ].astype(str).tolist()
+        raise ValueError(
+            "Autosomal baseline CN TSV contains duplicate sample rows: " +
+            ", ".join(duplicates[:5])
+        )
+
+    sample_cols = get_sample_columns(df)
+    manifest = baseline_df.copy()
+    manifest["sample"] = manifest["sample"].astype(str)
+    manifest = manifest.set_index("sample", drop=False)
+    missing_samples = [sample_id for sample_id in sample_cols if sample_id not in manifest.index]
+    if missing_samples:
+        preview = ", ".join(missing_samples[:5])
+        more = "" if len(missing_samples) <= 5 else f" (+{len(missing_samples) - 5} more)"
+        raise ValueError(
+            "Autosomal baseline CN TSV is missing samples from the depth matrix: "
+            f"{preview}{more}"
+        )
+
+    include = pd.Series(True, index=manifest.index)
+    if "include_in_infer" in manifest.columns:
+        include &= _coerce_manifest_include_values(manifest["include_in_infer"])
+    if "baseline_cn_call" in manifest.columns:
+        include &= (
+            manifest["baseline_cn_call"].astype(str).str.upper() !=
+            _UNDETERMINED_CALL
+        )
+    baseline_cn = pd.to_numeric(
+        manifest["autosomal_baseline_cn"],
+        errors="coerce",
+    )
+    include &= baseline_cn != 0
+
+    selected_sample_ids = [sample_id for sample_id in sample_cols if bool(include.loc[sample_id])]
+    if len(selected_sample_ids) == len(sample_cols):
+        return df, site_data
+    if not selected_sample_ids:
+        raise ValueError(
+            "All samples were excluded from infer by the autosomal baseline CN TSV."
+        )
+
+    selected_indices = [sample_cols.index(sample_id) for sample_id in selected_sample_ids]
+    if site_data is not None and "sample_ids" in site_data:
+        site_sample_ids = [
+            str(sample_id) for sample_id in np.asarray(site_data["sample_ids"]).tolist()
+        ]
+        if site_sample_ids != sample_cols:
+            raise ValueError(
+                "site_data sample_ids do not match the preprocessed depth sample order."
+            )
+
+    metadata_cols = [column for column in df.columns if column not in sample_cols]
+    filtered_df = df.loc[:, metadata_cols + selected_sample_ids].copy()
+    filtered_site_data = _subset_site_data_samples(
+        site_data,
+        selected_indices,
+        selected_sample_ids,
+    )
+    logger.info(
+        "Excluding %d samples from infer based on autosomal baseline CN status.",
+        int(len(sample_cols) - len(selected_sample_ids)),
+    )
+    return filtered_df, filtered_site_data
+
+
 def _inference_tensor_dtype() -> torch.dtype:
     """Use float64 for all inference runs.
 
@@ -1817,6 +1945,220 @@ def resolve_site_af_estimator_application(
         current_site_pop_af,
         site_mask,
     )
+
+
+def _parse_sample_af_concentration_grid(value: str | None) -> np.ndarray | None:
+    """Parse an optional comma-separated AF concentration grid."""
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if text == "":
+        return None
+
+    grid = np.asarray(
+        [float(token.strip()) for token in text.split(",") if token.strip()],
+        dtype=np.float64,
+    )
+    if grid.size == 0:
+        return None
+    if not np.isfinite(grid).all() or np.any(grid <= 0.0):
+        raise ValueError(
+            "sample_af_concentration_grid must contain positive finite values."
+        )
+
+    return np.unique(grid)
+
+
+def _build_sample_af_concentration_grid(
+    base_concentration: float,
+    concentration_grid: np.ndarray | None,
+) -> np.ndarray:
+    """Return the concentration grid used for per-sample AF estimation."""
+    if not np.isfinite(base_concentration) or base_concentration <= 0.0:
+        raise ValueError("base_concentration must be a positive finite value.")
+
+    if concentration_grid is None:
+        log_grid = np.linspace(
+            np.log(base_concentration) - 3.0,
+            np.log(base_concentration) + 2.0,
+            11,
+        )
+        grid = np.exp(log_grid)
+    else:
+        grid = np.asarray(concentration_grid, dtype=np.float64)
+        if not np.isfinite(grid).all() or np.any(grid <= 0.0):
+            raise ValueError(
+                "sample_af_concentration_grid must contain positive finite values."
+            )
+
+    return np.unique(
+        np.concatenate([
+            grid,
+            np.asarray([base_concentration], dtype=np.float64),
+        ])
+    )
+
+
+def _sample_af_concentration_log_prior(
+    concentration_grid: np.ndarray,
+    base_concentration: float,
+    prior_log_sd: float,
+) -> np.ndarray:
+    """Return a shrinkage prior on log concentration centered at the base value."""
+    if not np.isfinite(prior_log_sd) or prior_log_sd <= 0.0:
+        raise ValueError("sample_af_concentration_prior_log_sd must be positive.")
+
+    log_grid = np.log(np.asarray(concentration_grid, dtype=np.float64))
+    log_base = float(np.log(base_concentration))
+    return -0.5 * ((log_grid - log_base) / prior_log_sd) ** 2
+
+
+def _count_sample_af_concentration_grid_boundary_hits(
+    concentration_map: np.ndarray,
+    concentration_grid: np.ndarray,
+) -> tuple[int, int]:
+    """Count how often sample-level MAPs land on the concentration-grid edges."""
+    concentration_arr = np.asarray(concentration_map, dtype=np.float64).reshape(-1)
+    grid_arr = np.asarray(concentration_grid, dtype=np.float64).reshape(-1)
+    if concentration_arr.size == 0 or grid_arr.size == 0:
+        return 0, 0
+
+    lower_hits = int(
+        np.isclose(
+            concentration_arr,
+            float(grid_arr.min()),
+            rtol=0.0,
+            atol=1e-6,
+        ).sum()
+    )
+    upper_hits = int(
+        np.isclose(
+            concentration_arr,
+            float(grid_arr.max()),
+            rtol=0.0,
+            atol=1e-6,
+        ).sum()
+    )
+    return lower_hits, upper_hits
+
+
+def estimate_sample_af_concentration_from_cn_posterior(
+    site_alt: np.ndarray,
+    site_total: np.ndarray,
+    site_pop_af: np.ndarray,
+    site_mask: np.ndarray,
+    cn_posterior: np.ndarray,
+    chr_type: np.ndarray | None,
+    *,
+    base_concentration: float,
+    af_outlier_weight: float = 0.0,
+    concentration_grid: np.ndarray | None = None,
+    prior_log_sd: float = 0.75,
+) -> Dict[str, np.ndarray]:
+    """Estimate a fixed AF concentration per sample from a depth-only CN posterior."""
+    site_alt_arr = np.asarray(site_alt)
+    site_total_arr = np.asarray(site_total)
+    site_pop_af_arr = np.asarray(site_pop_af)
+    site_mask_arr = np.asarray(site_mask, dtype=bool)
+    cn_probs = np.asarray(cn_posterior, dtype=np.float64)
+
+    if site_alt_arr.shape != site_total_arr.shape or site_alt_arr.shape != site_mask_arr.shape:
+        raise ValueError("site_alt, site_total, and site_mask must have matching shapes.")
+    if site_alt_arr.ndim != 3:
+        raise ValueError("site_alt must have shape (n_bins, max_sites, n_samples).")
+    if cn_probs.ndim != 3:
+        raise ValueError("cn_posterior must have shape (n_bins, n_samples, n_states).")
+    if cn_probs.shape[0] != site_alt_arr.shape[0] or cn_probs.shape[1] != site_alt_arr.shape[2]:
+        raise ValueError(
+            "cn_posterior must align with site data as (n_bins, n_samples, n_states)."
+        )
+
+    n_bins, _, n_samples = site_alt_arr.shape
+    autosome_mask = np.ones(n_bins, dtype=bool)
+    if chr_type is not None:
+        chr_type_arr = np.asarray(chr_type, dtype=np.int64).reshape(-1)
+        if chr_type_arr.size != n_bins:
+            raise ValueError("chr_type must provide one chromosome type per bin.")
+        autosome_mask = chr_type_arr == 0
+
+    grid = _build_sample_af_concentration_grid(base_concentration, concentration_grid)
+    log_prior = _sample_af_concentration_log_prior(
+        grid,
+        base_concentration,
+        prior_log_sd,
+    )
+
+    observed_sites_per_sample = np.asarray(
+        site_mask_arr[autosome_mask].sum(axis=(0, 1)) if np.any(autosome_mask)
+        else np.zeros(n_samples, dtype=np.int64),
+        dtype=np.int64,
+    )
+    default_map = np.full(n_samples, base_concentration, dtype=np.float64)
+    default_mean = np.full(n_samples, base_concentration, dtype=np.float64)
+
+    if not np.any(autosome_mask):
+        return {
+            "concentration_grid": grid.astype(np.float32),
+            "sample_af_concentration_map": default_map.astype(np.float32),
+            "sample_af_concentration_mean": default_mean.astype(np.float32),
+            "sample_af_concentration_observed_sites": observed_sites_per_sample,
+        }
+
+    site_alt_auto = site_alt_arr[autosome_mask]
+    site_total_auto = site_total_arr[autosome_mask]
+    site_mask_auto = site_mask_arr[autosome_mask]
+    if site_pop_af_arr.ndim == 2:
+        site_pop_af_auto = site_pop_af_arr[autosome_mask]
+    elif site_pop_af_arr.ndim == 3:
+        site_pop_af_auto = site_pop_af_arr[autosome_mask]
+    else:
+        raise ValueError(
+            "site_pop_af must have shape (n_bins, max_sites) or (n_bins, max_sites, n_samples)."
+        )
+    cn_probs_auto = cn_probs[autosome_mask]
+    n_states = cn_probs_auto.shape[2]
+    posterior_weights = np.transpose(cn_probs_auto, (2, 0, 1))
+
+    log_lik_by_concentration = np.empty((grid.size, n_samples), dtype=np.float64)
+    for grid_idx, concentration in enumerate(grid):
+        af_table = np.empty((n_states, site_alt_auto.shape[0], n_samples), dtype=np.float64)
+        for cn_state in range(n_states):
+            af_table[cn_state] = _marginalized_af_log_lik_numpy(
+                site_alt_auto,
+                site_total_auto,
+                site_pop_af_auto,
+                site_mask_auto,
+                cn_state=cn_state,
+                n_states=n_states,
+                concentration=concentration,
+                outlier_weight=af_outlier_weight,
+            )
+        log_lik_by_concentration[grid_idx] = (
+            af_table * posterior_weights
+        ).sum(axis=(0, 1))
+
+    log_posterior = log_lik_by_concentration + log_prior[:, np.newaxis]
+    log_posterior_max = np.max(log_posterior, axis=0, keepdims=True)
+    posterior_prob = np.exp(log_posterior - log_posterior_max)
+    posterior_prob /= np.maximum(posterior_prob.sum(axis=0, keepdims=True), 1e-30)
+
+    map_concentration = grid[np.argmax(log_posterior, axis=0)]
+    mean_concentration = np.sum(
+        posterior_prob * grid[:, np.newaxis],
+        axis=0,
+    )
+
+    no_site_mask = observed_sites_per_sample == 0
+    map_concentration[no_site_mask] = base_concentration
+    mean_concentration[no_site_mask] = base_concentration
+
+    return {
+        "concentration_grid": grid.astype(np.float32),
+        "sample_af_concentration_map": map_concentration.astype(np.float32),
+        "sample_af_concentration_mean": mean_concentration.astype(np.float32),
+        "sample_af_concentration_observed_sites": observed_sites_per_sample,
+    }
 
 
 def build_site_af_estimates(
@@ -2123,6 +2465,20 @@ def build_bin_stats(
                 "bin_var": float(map_estimates["bin_var"].flatten()[i]),
                 "sample_var": float(map_estimates["sample_var"].flatten()[j]),
             }
+            if "sample_af_concentration_map" in map_estimates:
+                row["sample_af_concentration_map"] = float(
+                    np.asarray(
+                        map_estimates["sample_af_concentration_map"],
+                        dtype=np.float64,
+                    ).reshape(-1)[j]
+                )
+            if "sample_af_concentration_mean" in map_estimates:
+                row["sample_af_concentration_mean"] = float(
+                    np.asarray(
+                        map_estimates["sample_af_concentration_mean"],
+                        dtype=np.float64,
+                    ).reshape(-1)[j]
+                )
             if cn_map_stability is not None:
                 row["cn_map_stability"] = float(cn_map_stability[i, j])
             if "sample_depth" in map_estimates:
@@ -2247,6 +2603,20 @@ def build_chromosome_stats(
                 ),
                 "autosomal_baseline_cn": int(autosomal_baseline_cn[si]),
             }
+            if "sample_af_concentration_map" in map_estimates:
+                row["sample_af_concentration_map"] = float(
+                    np.asarray(
+                        map_estimates["sample_af_concentration_map"],
+                        dtype=np.float64,
+                    ).reshape(-1)[si]
+                )
+            if "sample_af_concentration_mean" in map_estimates:
+                row["sample_af_concentration_mean"] = float(
+                    np.asarray(
+                        map_estimates["sample_af_concentration_mean"],
+                        dtype=np.float64,
+                    ).reshape(-1)[si]
+                )
             for cn_state in range(n_states):
                 row[f"ploidy_prob_{cn_state}"] = float(ploidy_fractions[cn_state])
             if "sample_depth" in map_estimates:
@@ -2490,6 +2860,7 @@ def parse_args() -> argparse.Namespace:
             "When --learn-site-af is enabled, these values are used as prior centers."
         ),
     )
+    # TODO: make default true
     allele_fraction.add_argument(
         "--learn-site-af",
         action="store_true",
@@ -2528,11 +2899,39 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=DEFAULT_AF_WEIGHT,
         help=(
-            "Prior median for the learned global AF temperature by default, or the "
-            "fixed AF scale when --fixed-af-temperature is provided (0 to disable)"
+            "Fixed genotype-informative AF mixture probability when --fixed-af-temperature "
+            "is provided, or the prior median for the learned global AF temperature "
+            "by default (0 to disable)"
+        ),
+    )
+    allele_fraction.add_argument(
+        "--af-outlier-weight",
+        type=float,
+        default=DEFAULT_AF_OUTLIER_WEIGHT,
+        help=(
+            "Fixed mixture weight for a uniform Beta-Binomial AF outlier component "
+            "used to absorb contamination or mismatched sites"
+        ),
+    )
+    allele_fraction.add_argument(
+        "--af-background-concentration",
+        type=float,
+        default=None,
+        help=(
+            "Beta-Binomial concentration for the CN-independent population-AF "
+            "background. Defaults to empirical-Bayes estimation from the run."
         ),
     )
     p.set_defaults(learn_af_temperature=True)
+    allele_fraction.add_argument(
+        "--learn-af-temperature",
+        dest="learn_af_temperature",
+        action="store_true",
+        help=(
+            "Learn a single global AF informative-mixture probability instead of "
+            "keeping --af-weight fixed. This is the default."
+        ),
+    )
     allele_fraction.add_argument(
         "--fixed-af-temperature",
         dest="learn_af_temperature",
@@ -2543,7 +2942,32 @@ def parse_args() -> argparse.Namespace:
         "--af-temperature-prior-scale",
         type=float,
         default=0.5,
-        help="LogNormal prior scale when AF temperature learning is enabled (default)",
+        help="LogitNormal prior scale when AF temperature learning is enabled (default)",
+    )
+    allele_fraction.add_argument(
+        "--sample-af-concentration-mode",
+        choices=list(SAMPLE_AF_CONCENTRATION_MODES),
+        default="shared",
+        help=(
+            "How to choose AF concentration across samples. 'shared' keeps the "
+            "current cohort-wide scalar concentration. 'depth-posterior' runs a "
+            "depth-only prefit, estimates one fixed concentration per sample from "
+            "the depth posterior, then trains the final AF-enabled model with those values."
+        ),
+    )
+    allele_fraction.add_argument(
+        "--sample-af-concentration-prior-log-sd",
+        type=float,
+        default=0.75,
+        help="Log-scale shrinkage width for depth-posterior sample AF concentration estimation",
+    )
+    allele_fraction.add_argument(
+        "--sample-af-concentration-grid",
+        default=None,
+        help=(
+            "Optional comma-separated AF concentration grid for --sample-af-concentration-mode depth-posterior. "
+            "Defaults to an automatically generated grid around --af-concentration."
+        ),
     )
     allele_fraction.add_argument(
         "--min-het-alt",
@@ -2675,6 +3099,83 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def _build_infer_model(
+    args: argparse.Namespace,
+    *,
+    device: str,
+    tensor_dtype: torch.dtype,
+    autosomal_baseline_cn: np.ndarray,
+    af_concentration: float | np.ndarray,
+    af_weight: float,
+    af_outlier_weight: float,
+    af_background_concentration: float,
+    learn_af_temperature: bool,
+    learn_site_af: bool,
+) -> CNVModel:
+    """Construct a CNVModel for infer with explicit AF overrides."""
+    return CNVModel(
+        n_states=6,
+        autosome_prior_mode=args.autosome_prior_mode,
+        alpha_ref=args.alpha_ref,
+        alpha_non_ref=args.alpha_non_ref,
+        autosome_nonref_mean_alpha=args.autosome_nonref_mean_alpha,
+        autosome_nonref_mean_beta=args.autosome_nonref_mean_beta,
+        autosome_nonref_concentration=args.autosome_nonref_concentration,
+        var_bias_bin=args.var_bias_bin,
+        var_sample=args.var_sample,
+        var_bin=args.var_bin,
+        raw_variance_power=args.raw_variance_power,
+        multiplicative_factors=args.multiplicative_factors,
+        epsilon_mean=args.epsilon_mean,
+        epsilon_concentration=args.epsilon_concentration,
+        background_factors=args.background_factors,
+        device=device,
+        dtype=tensor_dtype,
+        guide_type=args.guide_type,
+        guide_init_scale=args.guide_init_scale,
+        lowrank_guide_rank=args.lowrank_guide_rank,
+        af_concentration=af_concentration,
+        af_weight=af_weight,
+        af_outlier_weight=af_outlier_weight,
+        af_background_concentration=af_background_concentration,
+        learn_af_temperature=learn_af_temperature,
+        learn_site_pop_af=learn_site_af,
+        site_af_prior_strength=args.site_af_prior_strength,
+        af_temperature_prior_scale=args.af_temperature_prior_scale,
+        alpha_sex_ref=args.alpha_sex_ref,
+        alpha_sex_non_ref=args.alpha_sex_non_ref,
+        sex_prior=tuple(args.sex_prior),
+        sex_cn_weight=args.sex_cn_weight,
+        obs_df=args.obs_df,
+        sample_depth_max=args.sample_depth_max,
+        autosomal_baseline_cn=autosomal_baseline_cn,
+    )
+
+
+def _train_infer_model(
+    model: CNVModel,
+    data: DepthData,
+    args: argparse.Namespace,
+) -> None:
+    """Train a CNVModel using the infer CLI training controls."""
+    model.train(
+        data,
+        max_iter=args.max_iter,
+        lr_init=args.lr_init,
+        lr_min=args.lr_min,
+        lr_decay=args.lr_decay,
+        grad_clip_norm=args.grad_clip_norm,
+        init_restarts=args.svi_init_restarts,
+        guide_warmup_iter=args.guide_warmup_iter,
+        log_freq=args.log_freq,
+        jit=args.jit,
+        early_stopping=args.early_stopping,
+        patience=args.patience,
+        convergence_window=args.elbo_window,
+        convergence_rtol=args.elbo_rtol,
+    )
+
+
 def main() -> None:
     """Entry point for ``gatk-sv-ploidy infer``."""
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -2697,6 +3198,12 @@ def main() -> None:
     sd = None
     if args.site_data:
         sd = load_site_data(args.site_data)
+
+    df, sd = _filter_inputs_by_baseline_manifest(
+        df,
+        sd,
+        args.autosomal_baseline_cn_tsv,
+    )
 
     tensor_dtype = _inference_tensor_dtype()
     logger.info("Using float64 tensors for inference.")
@@ -2783,9 +3290,11 @@ def main() -> None:
 
     if af_enabled:
         logger.info(
-            "Allele-fraction evidence enabled (af_weight=%.2f, af_concentration=%.1f, mode=relative, summed over observed sites/bin, learn_af_temperature=%s)",
+            "Allele-fraction evidence enabled (af_weight=%.2f, af_concentration=%.1f, af_outlier_weight=%.3f, sample_af_concentration_mode=%s, mode=relative, background=population-af, summed over observed sites/bin, learn_af_temperature=%s)",
             args.af_weight,
             args.af_concentration,
+            args.af_outlier_weight,
+            args.sample_af_concentration_mode,
             learn_af_temperature,
         )
     elif data.site_alt is not None:
@@ -2805,59 +3314,149 @@ def main() -> None:
             args.site_af_prior_strength,
         )
 
-    # ── build & train model ─────────────────────────────────────────────
-    model = CNVModel(
-        n_states=6,
-        autosome_prior_mode=args.autosome_prior_mode,
-        alpha_ref=args.alpha_ref,
-        alpha_non_ref=args.alpha_non_ref,
-        autosome_nonref_mean_alpha=args.autosome_nonref_mean_alpha,
-        autosome_nonref_mean_beta=args.autosome_nonref_mean_beta,
-        autosome_nonref_concentration=args.autosome_nonref_concentration,
-        var_bias_bin=args.var_bias_bin,
-        var_sample=args.var_sample,
-        var_bin=args.var_bin,
-        raw_variance_power=args.raw_variance_power,
-        multiplicative_factors=args.multiplicative_factors,
-        epsilon_mean=args.epsilon_mean,
-        epsilon_concentration=args.epsilon_concentration,
-        background_factors=args.background_factors,
-        device=device,
-        dtype=tensor_dtype,
-        guide_type=args.guide_type,
-        guide_init_scale=args.guide_init_scale,
-        lowrank_guide_rank=args.lowrank_guide_rank,
-        af_concentration=args.af_concentration,
-        af_weight=args.af_weight if data.site_alt is not None else 0.0,
-        learn_af_temperature=learn_af_temperature,
-        learn_site_pop_af=learn_site_af,
-        site_af_prior_strength=args.site_af_prior_strength,
-        af_temperature_prior_scale=args.af_temperature_prior_scale,
-        alpha_sex_ref=args.alpha_sex_ref,
-        alpha_sex_non_ref=args.alpha_sex_non_ref,
-        sex_prior=tuple(args.sex_prior),
-        sex_cn_weight=args.sex_cn_weight,
-        obs_df=args.obs_df,
-        sample_depth_max=args.sample_depth_max,
-        autosomal_baseline_cn=autosomal_baseline_cn,
-    )
+    model_af_background_concentration = DEFAULT_AF_BACKGROUND_CONCENTRATION
+    if af_enabled:
+        if args.af_background_concentration is None:
+            site_pop_for_background, used_leave_one_out = _resolve_fixed_site_pop_af_numpy(
+                data.site_alt.detach().cpu().numpy(),
+                data.site_total.detach().cpu().numpy(),
+                effective_site_pop_af_np,
+                data.site_mask.detach().cpu().numpy(),
+            )
+            model_af_background_concentration = estimate_af_background_concentration_numpy(
+                data.site_alt.detach().cpu().numpy(),
+                data.site_total.detach().cpu().numpy(),
+                site_pop_for_background,
+                data.site_mask.detach().cpu().numpy(),
+            )
+            logger.info(
+                "Estimated population-AF background concentration=%.4f%s.",
+                model_af_background_concentration,
+                " using leave-one-out AFs" if used_leave_one_out else "",
+            )
+        else:
+            model_af_background_concentration = float(args.af_background_concentration)
+            if not np.isfinite(model_af_background_concentration):
+                raise ValueError("--af-background-concentration must be finite.")
+            if model_af_background_concentration <= 0.0:
+                raise ValueError("--af-background-concentration must be positive.")
+            logger.info(
+                "Using requested population-AF background concentration=%.4f.",
+                model_af_background_concentration,
+            )
 
-    model.train(
-        data,
-        max_iter=args.max_iter,
-        lr_init=args.lr_init,
-        lr_min=args.lr_min,
-        lr_decay=args.lr_decay,
-        grad_clip_norm=args.grad_clip_norm,
-        init_restarts=args.svi_init_restarts,
-        guide_warmup_iter=args.guide_warmup_iter,
-        log_freq=args.log_freq,
-        jit=args.jit,
-        early_stopping=args.early_stopping,
-        patience=args.patience,
-        convergence_window=args.elbo_window,
-        convergence_rtol=args.elbo_rtol,
+    point_estimate_method = (
+        "current" if args.cn_inference_method == "single" else args.cn_inference_method
     )
+    if args.cn_inference_method == "multi-draw":
+        point_estimate_method = "median"
+
+    sample_af_concentration_grid = _parse_sample_af_concentration_grid(
+        args.sample_af_concentration_grid,
+    )
+    sample_af_concentration_summary = None
+    model_af_concentration: float | np.ndarray = args.af_concentration
+
+    if af_enabled and args.sample_af_concentration_mode == "depth-posterior":
+        logger.info(
+            "Estimating sample-specific AF concentration from a depth-only prefit."
+        )
+        depth_prefit_model = _build_infer_model(
+            args,
+            device=device,
+            tensor_dtype=tensor_dtype,
+            autosomal_baseline_cn=autosomal_baseline_cn,
+            af_concentration=args.af_concentration,
+            af_weight=0.0,
+            af_outlier_weight=args.af_outlier_weight,
+            af_background_concentration=model_af_background_concentration,
+            learn_af_temperature=False,
+            learn_site_af=False,
+        )
+        _train_infer_model(depth_prefit_model, data, args)
+        depth_prefit_map = depth_prefit_model.get_map_estimates(
+            data,
+            estimate_method=point_estimate_method,
+        )
+        depth_prefit_cn_post = depth_prefit_model.run_discrete_inference(
+            data,
+            map_estimates=depth_prefit_map,
+        )
+        sample_af_concentration_summary = (
+            estimate_sample_af_concentration_from_cn_posterior(
+                data.site_alt.detach().cpu().numpy(),
+                data.site_total.detach().cpu().numpy(),
+                effective_site_pop_af_np,
+                data.site_mask.detach().cpu().numpy(),
+                depth_prefit_cn_post["cn_posterior"],
+                data.chr_type.detach().cpu().numpy(),
+                base_concentration=args.af_concentration,
+                af_outlier_weight=args.af_outlier_weight,
+                concentration_grid=sample_af_concentration_grid,
+                prior_log_sd=args.sample_af_concentration_prior_log_sd,
+            )
+        )
+        sample_af_concentration_map = np.asarray(
+            sample_af_concentration_summary["sample_af_concentration_map"],
+            dtype=np.float64,
+        )
+        sample_af_concentration_mean = np.asarray(
+            sample_af_concentration_summary["sample_af_concentration_mean"],
+            dtype=np.float64,
+        )
+        sample_af_concentration_grid_arr = np.asarray(
+            sample_af_concentration_summary["concentration_grid"],
+            dtype=np.float64,
+        )
+        lower_grid_hits, upper_grid_hits = (
+            _count_sample_af_concentration_grid_boundary_hits(
+                sample_af_concentration_map,
+                sample_af_concentration_grid_arr,
+            )
+        )
+        model_af_concentration = np.asarray(
+            sample_af_concentration_mean,
+            dtype=np.float64,
+        )
+        logger.info(
+            format_numeric_summary(
+                "Estimated sample-specific AF concentration MAP across samples",
+                sample_af_concentration_map,
+                precision=4,
+            )
+        )
+        logger.info(
+            format_numeric_summary(
+                "Estimated sample-specific AF concentration posterior mean across samples",
+                sample_af_concentration_mean,
+                precision=4,
+            )
+        )
+        if lower_grid_hits > 0 or upper_grid_hits > 0:
+            logger.info(
+                "Sample-specific AF concentration MAP boundary hits: lower=%d/%d upper=%d/%d grid_min=%.4f grid_max=%.4f; using posterior means for downstream AF concentration values.",
+                lower_grid_hits,
+                sample_af_concentration_map.size,
+                upper_grid_hits,
+                sample_af_concentration_map.size,
+                float(sample_af_concentration_grid_arr.min()),
+                float(sample_af_concentration_grid_arr.max()),
+            )
+
+    # ── build & train model ─────────────────────────────────────────────
+    model = _build_infer_model(
+        args,
+        device=device,
+        tensor_dtype=tensor_dtype,
+        autosomal_baseline_cn=autosomal_baseline_cn,
+        af_concentration=model_af_concentration,
+        af_weight=args.af_weight if data.site_alt is not None else 0.0,
+        af_outlier_weight=args.af_outlier_weight,
+        af_background_concentration=model_af_background_concentration,
+        learn_af_temperature=learn_af_temperature,
+        learn_site_af=learn_site_af,
+    )
+    _train_infer_model(model, data, args)
 
     # ── save training loss ──────────────────────────────────────────────
     loss_df = pd.DataFrame(model.loss_history)
@@ -2866,17 +3465,26 @@ def main() -> None:
     logger.info("Training loss saved.")
 
     # ── point estimates + exact discrete inference ──────────────────────
-    point_estimate_method = (
-        "current" if args.cn_inference_method == "single" else args.cn_inference_method
-    )
-    if args.cn_inference_method == "multi-draw":
-        point_estimate_method = "median"
-
     map_est = model.get_map_estimates(
         data,
         estimate_method=point_estimate_method,
     )
     map_est["autosomal_baseline_cn"] = autosomal_baseline_cn.astype(np.int64, copy=False)
+    if sample_af_concentration_summary is not None:
+        map_est["sample_af_concentration_map"] = np.asarray(
+            sample_af_concentration_summary["sample_af_concentration_map"],
+            dtype=np.float32,
+        )
+        map_est["sample_af_concentration_mean"] = np.asarray(
+            sample_af_concentration_summary["sample_af_concentration_mean"],
+            dtype=np.float32,
+        )
+        map_est["sample_af_concentration_observed_sites"] = np.asarray(
+            sample_af_concentration_summary[
+                "sample_af_concentration_observed_sites"
+            ],
+            dtype=np.int64,
+        )
     if learn_site_af and "site_pop_af_latent" in map_est:
         effective_site_pop_af_np = np.asarray(
             map_est["site_pop_af_latent"],
@@ -2899,11 +3507,17 @@ def main() -> None:
     af_table_np = None
     if data.site_alt is not None and model.af_weight > 0:
         logger.info("Computing AF table for analytical inference and output statistics ...")
+        af_informative_weight = model._af_scale_numpy(map_est)
         with torch.no_grad():
             af_table_np = model._prepare_af_table_torch(
                 data.site_alt, data.site_total,
                 data.site_pop_af, data.site_mask,
                 data.chr_type if hasattr(data, "chr_type") else None,
+                informative_weight=torch.tensor(
+                    af_informative_weight,
+                    dtype=tensor_dtype,
+                    device=device,
+                ),
             ).cpu().numpy()
 
     posterior_draws: Dict[str, List[np.ndarray]] = {}
@@ -2950,7 +3564,8 @@ def main() -> None:
         cn_post,
         depth_only_cn_posterior=depth_only_cn_post,
         af_table=af_table_np,
-        af_concentration=args.af_concentration,
+        af_concentration=model_af_concentration,
+        af_outlier_weight=model.af_outlier_weight,
     )
     for message in safe_diagnostic_messages:
         logger.info(message)
@@ -3010,8 +3625,18 @@ def main() -> None:
     )
     artifact_dict["model_af_concentration"] = np.asarray(model.af_concentration)
     artifact_dict["model_af_weight"] = np.asarray(model.af_weight)
+    artifact_dict["model_af_outlier_weight"] = np.asarray(model.af_outlier_weight)
+    artifact_dict["model_af_background_concentration"] = np.asarray(
+        model.af_background_concentration
+    )
     artifact_dict["model_learn_af_temperature"] = np.asarray(model.learn_af_temperature)
     artifact_dict["model_learn_site_pop_af"] = np.asarray(model.learn_site_pop_af)
+    artifact_dict["model_sample_af_concentration_mode"] = np.asarray(
+        args.sample_af_concentration_mode
+    )
+    artifact_dict["model_sample_af_concentration_prior_log_sd"] = np.asarray(
+        args.sample_af_concentration_prior_log_sd
+    )
     artifact_dict["model_site_af_prior_strength"] = np.asarray(
         model.site_af_prior_strength
     )
@@ -3061,6 +3686,11 @@ def main() -> None:
         artifact_dict["site_af_prior_alpha"] = np.asarray(args.site_af_prior_alpha)
         artifact_dict["site_af_prior_beta"] = np.asarray(args.site_af_prior_beta)
         artifact_dict["site_af_prior_strength"] = np.asarray(args.site_af_prior_strength)
+    if sample_af_concentration_summary is not None:
+        artifact_dict["model_sample_af_concentration_grid"] = np.asarray(
+            sample_af_concentration_summary["concentration_grid"],
+            dtype=np.float32,
+        )
     for site, draws in posterior_draws.items():
         if draws:
             artifact_dict[f"posterior_draws_{site}"] = np.stack(draws, axis=0)

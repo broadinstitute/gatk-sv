@@ -54,18 +54,21 @@ from scipy import stats as sp_stats
 
 from gatk_sv_ploidy._util import (
     compose_additive_background_matrix,
+    get_sample_columns,
+    NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
 )
 from gatk_sv_ploidy.data import DepthData, load_site_data
-from gatk_sv_ploidy.infer import load_inference_artifacts
+from gatk_sv_ploidy.infer import (
+    _filter_inputs_by_baseline_manifest,
+    load_inference_artifacts,
+)
 from gatk_sv_ploidy.models import (
     CNVModel,
     DEFAULT_BACKGROUND_BIN_SCALE,
     DEFAULT_BACKGROUND_SAMPLE_SCALE,
     DEFAULT_MULTIPLICATIVE_FACTORS,
-    NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
     _compose_effective_bin_bias_numpy,
     _effective_negative_binomial_overdispersion_numpy,
-    _precompute_af_table,
     _raw_expected_depth_units,
 )
 
@@ -113,6 +116,213 @@ def apply_effective_site_pop_af(
     return updated
 
 
+def _align_ppd_inputs_to_sample_ids(
+    df: pd.DataFrame,
+    site_data: Dict[str, np.ndarray] | None,
+    fitted_sample_ids: np.ndarray,
+) -> tuple[pd.DataFrame, Dict[str, np.ndarray] | None]:
+    """Subset and reorder PPD inputs to the fitted sample order."""
+    sample_cols = get_sample_columns(df)
+    desired_sample_ids = [
+        str(sample_id) for sample_id in np.asarray(fitted_sample_ids).tolist()
+    ]
+    missing_depth_samples = [
+        sample_id for sample_id in desired_sample_ids if sample_id not in sample_cols
+    ]
+    if missing_depth_samples:
+        preview = ", ".join(missing_depth_samples[:5])
+        more = "" if len(missing_depth_samples) <= 5 else f" (+{len(missing_depth_samples) - 5} more)"
+        raise ValueError(
+            "Inference artifacts refer to samples missing from the PPD depth input: "
+            f"{preview}{more}"
+        )
+
+    metadata_cols = [column for column in df.columns if column not in sample_cols]
+    aligned_df = df.loc[:, metadata_cols + desired_sample_ids].copy()
+
+    if site_data is None:
+        return aligned_df, None
+
+    if "sample_ids" in site_data:
+        site_sample_ids = [
+            str(sample_id) for sample_id in np.asarray(site_data["sample_ids"]).tolist()
+        ]
+    else:
+        site_sample_ids = sample_cols
+        if int(site_data["site_alt"].shape[2]) != len(sample_cols):
+            raise ValueError(
+                "site_data is missing sample_ids metadata and its sample axis does not "
+                "match the PPD depth input sample count. Regenerate site_data.npz."
+            )
+
+    missing_site_samples = [
+        sample_id for sample_id in desired_sample_ids if sample_id not in site_sample_ids
+    ]
+    if missing_site_samples:
+        preview = ", ".join(missing_site_samples[:5])
+        more = "" if len(missing_site_samples) <= 5 else f" (+{len(missing_site_samples) - 5} more)"
+        raise ValueError(
+            "Inference artifacts refer to samples missing from the PPD site-data input: "
+            f"{preview}{more}"
+        )
+
+    selected_indices = [site_sample_ids.index(sample_id) for sample_id in desired_sample_ids]
+    aligned_site_data = dict(site_data)
+    for key in ("site_alt", "site_total", "site_mask"):
+        if key in aligned_site_data:
+            aligned_site_data[key] = aligned_site_data[key][:, :, selected_indices]
+    aligned_site_data["sample_ids"] = np.asarray(desired_sample_ids, dtype=object)
+    return aligned_df, aligned_site_data
+
+
+def _resolve_ppd_baseline_manifest(
+    artifacts_path: str,
+    explicit_path: str | None,
+) -> str | None:
+    """Find the baseline manifest used to exclude samples before infer."""
+    if explicit_path is not None:
+        return explicit_path
+
+    sibling_path = os.path.join(
+        os.path.dirname(os.path.abspath(artifacts_path)),
+        "sample_autosomal_baseline_cn.tsv",
+    )
+    if os.path.exists(sibling_path):
+        logger.info(
+            "Auto-discovered autosomal baseline CN manifest for PPD input alignment: %s",
+            sibling_path,
+        )
+        return sibling_path
+    return None
+
+
+def _align_ppd_inputs_from_baseline_manifest(
+    df: pd.DataFrame,
+    site_data: Dict[str, np.ndarray] | None,
+    baseline_path: str,
+    expected_n_samples: int,
+) -> tuple[pd.DataFrame, Dict[str, np.ndarray] | None]:
+    """Align PPD inputs using either full-manifest or subset-manifest TSVs."""
+    baseline_df = pd.read_csv(baseline_path, sep="\t")
+    if "sample" not in baseline_df.columns:
+        raise ValueError(
+            "Autosomal baseline CN TSV is missing required columns: sample"
+        )
+
+    if baseline_df["sample"].duplicated().any():
+        duplicates = baseline_df.loc[
+            baseline_df["sample"].duplicated(),
+            "sample",
+        ].astype(str).tolist()
+        raise ValueError(
+            "Autosomal baseline CN TSV contains duplicate sample rows: " +
+            ", ".join(duplicates[:5])
+        )
+
+    sample_cols = get_sample_columns(df)
+    manifest_sample_ids = [
+        str(sample_id) for sample_id in baseline_df["sample"].astype(str).tolist()
+    ]
+    manifest_sample_set = set(manifest_sample_ids)
+    sample_col_set = set(sample_cols)
+
+    if sample_col_set.issubset(manifest_sample_set):
+        filtered_df, filtered_site_data = _filter_inputs_by_baseline_manifest(
+            df,
+            site_data,
+            baseline_path,
+        )
+        return filtered_df, filtered_site_data
+
+    missing_from_depth = [
+        sample_id for sample_id in manifest_sample_ids if sample_id not in sample_col_set
+    ]
+    if missing_from_depth:
+        preview = ", ".join(missing_from_depth[:5])
+        more = "" if len(missing_from_depth) <= 5 else f" (+{len(missing_from_depth) - 5} more)"
+        raise ValueError(
+            "Autosomal baseline CN TSV contains samples missing from the PPD depth input: "
+            f"{preview}{more}"
+        )
+
+    if len(manifest_sample_ids) != expected_n_samples:
+        raise ValueError(
+            "Auto-discovered autosomal baseline CN TSV appears to contain only the "
+            "infer-retained sample subset, but its sample count does not match the "
+            f"inference artifacts. Manifest has {len(manifest_sample_ids)} samples, "
+            f"while cn_posterior expects {expected_n_samples}."
+        )
+
+    logger.info(
+        "Aligning PPD inputs to %d samples listed in autosomal baseline CN TSV.",
+        len(manifest_sample_ids),
+    )
+    return _align_ppd_inputs_to_sample_ids(df, site_data, np.asarray(manifest_sample_ids, dtype=object))
+
+
+def _prepare_ppd_inputs(
+    df: pd.DataFrame,
+    site_data: Dict[str, np.ndarray] | None,
+    map_estimates: Dict[str, np.ndarray],
+    cn_posterior: Dict[str, np.ndarray],
+    artifacts_path: str,
+    baseline_path: str | None,
+) -> tuple[pd.DataFrame, Dict[str, np.ndarray] | None]:
+    """Align PPD inputs to the sample subset used by infer."""
+    cn_probs = np.asarray(cn_posterior["cn_posterior"])
+    if cn_probs.ndim != 3:
+        raise ValueError("cn_posterior must have shape (n_bins, n_samples, n_states).")
+
+    fitted_sample_ids = map_estimates.get("sample_ids")
+    if fitted_sample_ids is not None:
+        fitted_sample_ids = np.asarray(fitted_sample_ids)
+        if int(fitted_sample_ids.shape[0]) != int(cn_probs.shape[1]):
+            raise ValueError(
+                "Inference artifacts contain sample_ids with length "
+                f"{int(fitted_sample_ids.shape[0])}, but cn_posterior expects "
+                f"{int(cn_probs.shape[1])} samples."
+            )
+        logger.info(
+            "Aligning PPD inputs to %d fitted samples saved in inference artifacts.",
+            int(fitted_sample_ids.shape[0]),
+        )
+        return _align_ppd_inputs_to_sample_ids(df, site_data, fitted_sample_ids)
+
+    input_n_samples = len(get_sample_columns(df))
+    expected_n_samples = int(cn_probs.shape[1])
+    if input_n_samples == expected_n_samples:
+        return df, site_data
+
+    resolved_baseline_path = _resolve_ppd_baseline_manifest(artifacts_path, baseline_path)
+    if resolved_baseline_path is not None:
+        filtered_df, filtered_site_data = _align_ppd_inputs_from_baseline_manifest(
+            df,
+            site_data,
+            resolved_baseline_path,
+            expected_n_samples,
+        )
+        filtered_n_samples = len(get_sample_columns(filtered_df))
+        if filtered_n_samples == expected_n_samples:
+            logger.info(
+                "Filtered PPD inputs from %d to %d infer-included samples.",
+                input_n_samples,
+                filtered_n_samples,
+            )
+            return filtered_df, filtered_site_data
+        raise ValueError(
+            "PPD input sample count still does not match inference artifacts after "
+            f"filtering with {resolved_baseline_path}. Depth input has {filtered_n_samples} "
+            f"retained samples, but cn_posterior expects {expected_n_samples}."
+        )
+
+    raise ValueError(
+        "PPD input sample count does not match inference artifacts: depth input has "
+        f"{input_n_samples} samples, but cn_posterior expects {expected_n_samples}. "
+        "This infer run likely excluded samples before fitting. Provide "
+        "--autosomal-baseline-cn-tsv or rerun infer with artifact sample_ids support."
+    )
+
+
 def _phred_scale_error_probability(
     error_prob: float,
     max_quality: float = 99.0,
@@ -137,6 +347,18 @@ def _build_model_from_artifacts(
     device: str,
 ) -> CNVModel:
     """Reconstruct a model instance for analytical inference in PPD."""
+    af_concentration = np.asarray(
+        map_estimates.get(
+            "sample_af_concentration_map",
+            map_estimates.get("model_af_concentration", 50.0),
+        ),
+        dtype=np.float64,
+    )
+    if af_concentration.ndim == 0:
+        af_concentration_value: float | np.ndarray = float(af_concentration.item())
+    else:
+        af_concentration_value = af_concentration.astype(np.float64, copy=False)
+
     sex_prior = tuple(
         np.asarray(
             map_estimates.get("model_sex_prior", np.asarray([0.5, 0.5]))
@@ -212,10 +434,16 @@ def _build_model_from_artifacts(
         device=device,
         dtype=torch.float64,
         guide_type=str(np.asarray(map_estimates.get("model_guide_type", "delta")).item()),
-        af_concentration=float(
-            np.asarray(map_estimates.get("model_af_concentration", 50.0)).item()
-        ),
+        af_concentration=af_concentration_value,
         af_weight=float(np.asarray(map_estimates.get("model_af_weight", 0.0)).item()),
+        af_outlier_weight=float(
+            np.asarray(map_estimates.get("model_af_outlier_weight", 0.05)).item()
+        ),
+        af_background_concentration=float(
+            np.asarray(
+                map_estimates.get("model_af_background_concentration", 0.5)
+            ).item()
+        ),
         learn_af_temperature=bool(
             np.asarray(map_estimates.get("model_learn_af_temperature", False)).item()
         ),
@@ -362,6 +590,17 @@ def generate_ppd_depth(
     continuous_posterior_mode = _normalize_continuous_posterior_mode(
         continuous_posterior_mode,
     )
+    cn_probs = np.asarray(cn_posterior["cn_posterior"])
+    if cn_probs.ndim != 3:
+        raise ValueError("cn_posterior must have shape (n_bins, n_samples, n_states).")
+    expected_shape = (int(data.n_bins), int(data.n_samples))
+    observed_shape = (int(cn_probs.shape[0]), int(cn_probs.shape[1]))
+    if observed_shape != expected_shape:
+        raise ValueError(
+            "cn_posterior shape does not match the supplied depth matrix. "
+            f"Expected bins×samples {expected_shape}, got {observed_shape}. "
+            "Align the ppd input depth/site data to the fitted infer sample subset."
+        )
 
     saved_draws = {}
     if continuous_posterior_mode == "integrated":
@@ -383,15 +622,18 @@ def generate_ppd_depth(
                 data.depth.device.type,
             )
             af_table_np = None
-            if data.site_alt is not None and model.af_weight > 0:
+            if (
+                data.site_alt is not None and
+                model.af_weight > 0 and
+                not model.learn_af_temperature
+            ):
                 with torch.no_grad():
-                    af_table_np = _precompute_af_table(
+                    af_table_np = model._prepare_af_table_torch(
                         data.site_alt,
                         data.site_total,
                         data.site_pop_af,
                         data.site_mask,
-                        n_states=model.n_states,
-                        concentration=model.af_concentration,
+                        data.chr_type if hasattr(data, "chr_type") else None,
                     ).cpu().numpy()
 
             draw_indices = rng.randint(draw_count, size=n_draws)
@@ -830,6 +1072,15 @@ def parse_args() -> argparse.Namespace:
         help="Per-site allele data .npz (output of 'preprocess')",
     )
     p.add_argument(
+        "--autosomal-baseline-cn-tsv",
+        default=None,
+        help=(
+            "Optional TSV used to exclude samples omitted by infer before PPD. "
+            "If omitted, ppd also looks for sample_autosomal_baseline_cn.tsv "
+            "next to --artifacts."
+        ),
+    )
+    p.add_argument(
         "--seed", type=int, default=42,
         help="Random seed for PPD sampling",
     )
@@ -868,6 +1119,17 @@ def main() -> None:
     sd = None
     if args.site_data:
         sd = load_site_data(args.site_data)
+
+    df, sd = _prepare_ppd_inputs(
+        df,
+        sd,
+        map_est,
+        cn_post,
+        args.artifacts,
+        args.autosomal_baseline_cn_tsv,
+    )
+
+    if sd is not None:
         sd = apply_effective_site_pop_af(sd, map_est)
 
     data = DepthData(

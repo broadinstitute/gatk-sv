@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 _BASELINE_CN_STATES = (1, 2, 3, 4)
 _NON_DIPLOID_CN_STATES = (1, 3, 4)
+_UNDETERMINED_BASELINE_CN = 0
+_UNDETERMINED_CALL = "UNDETERMINED"
 _DIPLOID_BASELINE_CN = 2
 _TRIPLOID_BASELINE_CN = 3
 _TETRAPLOID_BASELINE_CN = 4
@@ -48,9 +50,11 @@ _DEFAULT_PEAK_KERNEL_SD = 0.035
 _DEFAULT_PEAK_OUTLIER_PROBABILITY = 0.02
 _DEFAULT_MIN_HAPLOID_ENDPOINT_FRACTION = 0.85
 _DEFAULT_MAX_HAPLOID_OTHER_PEAK_FRACTION = 0.05
+_DEFAULT_MIN_TRIPLOID_PEAK_FRACTION = 0.10
 _DEFAULT_MIN_TRIPLOID_PEAK_FRACTION_ADVANTAGE = 0.0
 _DEFAULT_MIN_TETRAPLOID_QUARTER_PEAK_FRACTION = 0.10
 _DEFAULT_MIN_TETRAPLOID_QUARTER_PEAK_FRACTION_ADVANTAGE = 0.05
+_DEFAULT_MAX_POLYPLOIDY_CONTAMINATION_MIXTURE_SCORE = 0.25
 _DEFAULT_DIAGNOSTIC_SAMPLE_LIMIT = 12
 _DEFAULT_DIAGNOSTIC_DIPLOID_SAMPLE_LIMIT = 12
 _DEFAULT_DIAGNOSTIC_MAX_SITES_PER_SAMPLE = 5000
@@ -453,6 +457,7 @@ def _compute_observed_af_peak_metrics(
             "fraction_near_tetraploid_quarters": float("nan"),
             "fraction_near_diploid_compatible": float("nan"),
             "fraction_near_any_modeled_peak": float("nan"),
+            "contamination_mixture_score": float("nan"),
             "triploid_peak_fraction_advantage": float("nan"),
             "tetraploid_quarter_peak_fraction_advantage": float("nan"),
             "haploid_endpoint_peak_fraction_advantage": float("nan"),
@@ -495,6 +500,9 @@ def _compute_observed_af_peak_metrics(
         "fraction_near_tetraploid_quarters": fraction_near_tetraploid,
         "fraction_near_diploid_compatible": fraction_near_diploid_compatible,
         "fraction_near_any_modeled_peak": fraction_near_any,
+        "contamination_mixture_score": float(
+            np.sqrt(fraction_near_diploid * fraction_near_triploid)
+        ),
         "triploid_peak_fraction_advantage": (
             fraction_near_triploid - fraction_near_diploid
         ),
@@ -839,6 +847,36 @@ def _has_direct_state_peak_support(
     return cn_state == 2
 
 
+def _has_polyploidy_af_fit_support(
+    metrics: dict[str, float],
+    cn_state: int,
+    *,
+    min_triploid_peak_fraction: float,
+    min_tetraploid_quarter_peak_fraction: float,
+    max_polyploidy_contamination_mixture_score: float,
+) -> bool:
+    if cn_state not in {_TRIPLOID_BASELINE_CN, _TETRAPLOID_BASELINE_CN}:
+        return True
+
+    if cn_state == _TRIPLOID_BASELINE_CN:
+        peak_fraction = metrics["fraction_near_triploid_thirds"]
+        min_peak_fraction = min_triploid_peak_fraction
+    else:
+        peak_fraction = metrics["fraction_near_tetraploid_quarters"]
+        min_peak_fraction = min_tetraploid_quarter_peak_fraction
+
+    contamination_score = metrics["contamination_mixture_score"]
+    peak_fraction_ok = (
+        np.isfinite(peak_fraction) and
+        peak_fraction >= min_peak_fraction
+    )
+    contamination_ok = (
+        np.isfinite(contamination_score) and
+        contamination_score <= max_polyploidy_contamination_mixture_score
+    )
+    return bool(peak_fraction_ok and contamination_ok)
+
+
 def _direct_support_failure_reason(cn_state: int) -> str:
     if cn_state == 1:
         return "haploid_endpoint_support_below_threshold"
@@ -847,6 +885,14 @@ def _direct_support_failure_reason(cn_state: int) -> str:
     if cn_state == 4:
         return "tetraploid_quarter_support_below_threshold"
     return "diploid_default_or_ambiguous"
+
+
+def _af_fit_failure_reason(cn_state: int) -> str:
+    if cn_state == _TRIPLOID_BASELINE_CN:
+        return "cn3_af_shape_misfit"
+    if cn_state == _TETRAPLOID_BASELINE_CN:
+        return "cn4_af_shape_misfit"
+    return f"cn{cn_state}_af_shape_misfit"
 
 
 def _prepare_autosomal_informative_sites(
@@ -931,6 +977,7 @@ def classify_polyploidy_from_site_data(
     peak_af_window: float = _DEFAULT_PLOIDY_PEAK_AF_WINDOW,
     min_haploid_endpoint_fraction: float = _DEFAULT_MIN_HAPLOID_ENDPOINT_FRACTION,
     max_haploid_other_peak_fraction: float = _DEFAULT_MAX_HAPLOID_OTHER_PEAK_FRACTION,
+    min_triploid_peak_fraction: float = _DEFAULT_MIN_TRIPLOID_PEAK_FRACTION,
     min_triploid_peak_fraction_advantage: float = (
         _DEFAULT_MIN_TRIPLOID_PEAK_FRACTION_ADVANTAGE
     ),
@@ -939,6 +986,9 @@ def classify_polyploidy_from_site_data(
     ),
     min_tetraploid_quarter_peak_fraction_advantage: float = (
         _DEFAULT_MIN_TETRAPLOID_QUARTER_PEAK_FRACTION_ADVANTAGE
+    ),
+    max_polyploidy_contamination_mixture_score: float = (
+        _DEFAULT_MAX_POLYPLOIDY_CONTAMINATION_MIXTURE_SCORE
     ),
     n_states: int = 6,
     show_progress: bool = False,
@@ -965,6 +1015,16 @@ def classify_polyploidy_from_site_data(
         raise ValueError("peak_evidence_weight must be non-negative and finite.")
     if not np.isfinite(peak_af_window) or not (0.0 < peak_af_window < 0.25):
         raise ValueError("peak_af_window must be greater than 0 and less than 0.25.")
+    if not np.isfinite(min_triploid_peak_fraction) or not (
+        0.0 <= min_triploid_peak_fraction <= 1.0
+    ):
+        raise ValueError("min_triploid_peak_fraction must be between 0 and 1.")
+    if not np.isfinite(max_polyploidy_contamination_mixture_score) or not (
+        0.0 <= max_polyploidy_contamination_mixture_score <= 1.0
+    ):
+        raise ValueError(
+            "max_polyploidy_contamination_mixture_score must be between 0 and 1."
+        )
 
     prior_probs = _build_baseline_cn_priors(
         haploidy_prior=haploidy_prior,
@@ -1166,6 +1226,20 @@ def classify_polyploidy_from_site_data(
             )
             for cn in _NON_DIPLOID_CN_STATES
         }
+        af_fit_support = {
+            cn: _has_polyploidy_af_fit_support(
+                sample_metrics,
+                cn,
+                min_triploid_peak_fraction=min_triploid_peak_fraction,
+                min_tetraploid_quarter_peak_fraction=(
+                    min_tetraploid_quarter_peak_fraction
+                ),
+                max_polyploidy_contamination_mixture_score=(
+                    max_polyploidy_contamination_mixture_score
+                ),
+            )
+            for cn in _NON_DIPLOID_CN_STATES
+        }
         posterior_supported = {
             cn: bool(
                 np.isfinite(sample_posterior[cn]) and
@@ -1177,7 +1251,11 @@ def classify_polyploidy_from_site_data(
             for cn in _NON_DIPLOID_CN_STATES
         }
         call_supported = {
-            cn: bool(posterior_supported[cn] and direct_support[cn])
+            cn: bool(
+                posterior_supported[cn] and
+                direct_support[cn] and
+                af_fit_support[cn]
+            )
             for cn in _NON_DIPLOID_CN_STATES
         }
 
@@ -1196,6 +1274,38 @@ def classify_polyploidy_from_site_data(
                 baseline_cn = max(supported_states, key=lambda cn: sample_posterior[cn])
                 call = baseline_ploidy_label(baseline_cn)
                 reason = f"cn{baseline_cn}_posterior_and_peak_supported"
+            elif map_cn != _DIPLOID_BASELINE_CN:
+                top_non_diploid = max(
+                    _NON_DIPLOID_CN_STATES,
+                    key=lambda cn: sample_posterior[cn],
+                )
+                empirical_non_diploid_signal = bool(
+                    direct_support[top_non_diploid] or af_fit_support[top_non_diploid]
+                )
+                if empirical_non_diploid_signal:
+                    baseline_cn = _UNDETERMINED_BASELINE_CN
+                    call = _UNDETERMINED_CALL
+                    if not posterior_supported[top_non_diploid]:
+                        if log_bf_vs_cn2[top_non_diploid] <= 0.0:
+                            reason = f"cn{top_non_diploid}_bayes_factor_not_positive"
+                        elif (
+                            not np.isfinite(effect_size_vs_cn2[top_non_diploid]) or
+                            effect_size_vs_cn2[top_non_diploid] < effect_size_threshold
+                        ):
+                            reason = f"cn{top_non_diploid}_effect_size_below_threshold"
+                        else:
+                            reason = f"cn{top_non_diploid}_posterior_error_above_threshold"
+                    elif not af_fit_support[top_non_diploid]:
+                        reason = _af_fit_failure_reason(top_non_diploid)
+                    else:
+                        reason = _direct_support_failure_reason(top_non_diploid)
+                else:
+                    baseline_cn = _DIPLOID_BASELINE_CN
+                    call = "DIPLOID"
+                    reason = (
+                        f"cn{top_non_diploid}_empirical_peak_support_absent_"
+                        "diploid_default"
+                    )
             else:
                 baseline_cn = _DIPLOID_BASELINE_CN
                 call = "DIPLOID"
@@ -1220,8 +1330,16 @@ def classify_polyploidy_from_site_data(
                     if top_non_diploid == _TETRAPLOID_BASELINE_CN:
                         reason = "tetraploid_not_conclusive_diploid_default"
 
-        final_posterior = sample_posterior[baseline_cn]
-        final_posterior_error = 1.0 - final_posterior
+        candidate_baseline_cn = int(map_cn)
+        candidate_posterior = sample_posterior[candidate_baseline_cn]
+        if baseline_cn == _UNDETERMINED_BASELINE_CN:
+            final_posterior = float("nan")
+            final_posterior_error = float("nan")
+            final_effect_size = float("nan")
+        else:
+            final_posterior = sample_posterior[baseline_cn]
+            final_posterior_error = 1.0 - final_posterior
+            final_effect_size = effect_size_vs_cn2.get(baseline_cn, 0.0)
         triploid_log_prior_odds = (
             np.log(prior_probs[state_index[_TRIPLOID_BASELINE_CN]]) -
             np.log(prior_probs[diploid_idx])
@@ -1236,14 +1354,16 @@ def classify_polyploidy_from_site_data(
             "autosomal_baseline_cn": int(baseline_cn),
             "baseline_cn_call": call,
             "baseline_cn_reason": reason,
+            "include_in_infer": bool(call != _UNDETERMINED_CALL),
+            "candidate_baseline_cn": int(candidate_baseline_cn),
+            "candidate_baseline_cn_call": baseline_ploidy_label(candidate_baseline_cn),
+            "candidate_baseline_cn_posterior_probability": float(candidate_posterior),
             "baseline_cn_map": int(map_cn),
             "baseline_cn_map_call": baseline_ploidy_label(int(map_cn)),
             "baseline_cn_posterior_probability": float(final_posterior),
             "baseline_cn_posterior_error_probability": float(final_posterior_error),
             "baseline_cn_map_posterior_probability": float(sample_posterior[map_cn]),
-            "baseline_cn_effect_size_per_site": float(
-                effect_size_vs_cn2.get(baseline_cn, 0.0)
-            ),
+            "baseline_cn_effect_size_per_site": float(final_effect_size),
             "triploidy_call": call,
             "triploidy_reason": reason,
             "triploidy_t_stat": float(triploid_log_posterior_odds),
@@ -1267,6 +1387,7 @@ def classify_polyploidy_from_site_data(
             "triploidy_peak_af_window": float(peak_af_window),
             "min_haploid_endpoint_fraction": float(min_haploid_endpoint_fraction),
             "max_haploid_other_peak_fraction": float(max_haploid_other_peak_fraction),
+            "min_triploid_peak_fraction": float(min_triploid_peak_fraction),
             "min_triploid_peak_fraction_advantage": float(
                 min_triploid_peak_fraction_advantage
             ),
@@ -1275,6 +1396,9 @@ def classify_polyploidy_from_site_data(
             ),
             "min_tetraploid_quarter_peak_fraction_advantage": float(
                 min_tetraploid_quarter_peak_fraction_advantage
+            ),
+            "max_polyploidy_contamination_mixture_score": float(
+                max_polyploidy_contamination_mixture_score
             ),
             "peak_evidence_weight": float(peak_evidence_weight),
             "peak_kernel_sd": float(peak_kernel_sd),
@@ -1307,6 +1431,7 @@ def classify_polyploidy_from_site_data(
             )
         for cn_state in _NON_DIPLOID_CN_STATES:
             row[f"cn{cn_state}_direct_peak_supported"] = bool(direct_support[cn_state])
+            row[f"cn{cn_state}_af_fit_supported"] = bool(af_fit_support[cn_state])
             row[f"cn{cn_state}_posterior_supported"] = bool(
                 posterior_supported[cn_state]
             )
@@ -1886,14 +2011,30 @@ def _select_ploidy_specific_diagnostic_samples(
     if sample_limit <= 0 or metrics_df.empty:
         return []
 
+    expected_call = (
+        _UNDETERMINED_CALL
+        if baseline_cn == _UNDETERMINED_BASELINE_CN
+        else baseline_ploidy_label(baseline_cn)
+    )
     subset = metrics_df[
         (metrics_df["autosomal_baseline_cn"] == baseline_cn) &
-        (metrics_df["baseline_cn_call"] == baseline_ploidy_label(baseline_cn))
+        (metrics_df["baseline_cn_call"] == expected_call)
     ].copy()
     if subset.empty:
         return []
 
-    subset["_posterior_sort"] = subset["baseline_cn_posterior_probability"].fillna(0.0)
+    posterior_sort = pd.to_numeric(
+        subset["baseline_cn_posterior_probability"],
+        errors="coerce",
+    )
+    if "candidate_baseline_cn_posterior_probability" in subset.columns:
+        posterior_sort = posterior_sort.fillna(
+            pd.to_numeric(
+                subset["candidate_baseline_cn_posterior_probability"],
+                errors="coerce",
+            )
+        )
+    subset["_posterior_sort"] = posterior_sort.fillna(0.0)
     subset["_site_sort"] = subset["diagnostic_informative_sites"].fillna(0)
     subset = subset.sort_values(
         ["_posterior_sort", "_site_sort", "sample"],
@@ -2122,6 +2263,7 @@ def _plot_polyploidy_raw_af_profiles(
         ax.grid(True, axis="y", alpha=0.2)
 
     label = {
+        _UNDETERMINED_BASELINE_CN: "Undetermined",
         1: "Monoploid",
         2: "Diploid",
         3: "Triploid",
@@ -2197,15 +2339,22 @@ def write_polyploidy_diagnostics(
     logger.info("Polyploidy sampled raw AF sites saved.")
 
     raw_site_frames_by_cn: dict[int, pd.DataFrame] = {}
-    for baseline_cn in _BASELINE_CN_STATES:
+    for baseline_cn in (_UNDETERMINED_BASELINE_CN, *_BASELINE_CN_STATES):
         ploidy_samples = _select_ploidy_specific_diagnostic_samples(
             metrics_df,
             baseline_cn,
             sample_limit,
         )
+        ploidy_label = {
+            _UNDETERMINED_BASELINE_CN: _UNDETERMINED_CALL,
+            1: "CN1",
+            2: "CN2",
+            3: "CN3",
+            4: "CN4",
+        }.get(baseline_cn, f"CN{baseline_cn}")
         logger.info(
-            "Polyploidy progress: sampling CN%d AF profile sites selected_samples=%d.",
-            baseline_cn,
+            "Polyploidy progress: sampling %s AF profile sites selected_samples=%d.",
+            ploidy_label,
             int(len(ploidy_samples)),
         )
         raw_site_frames_by_cn[baseline_cn] = _collect_diagnostic_site_rows(
@@ -2224,6 +2373,7 @@ def write_polyploidy_diagnostics(
     logger.info("Polyploidy progress: rendering diagnostic plots.")
     _plot_polyploidy_diagnostic_metrics(metrics_df, output_dir)
     for baseline_cn, filename in (
+        (_UNDETERMINED_BASELINE_CN, "polyploidy_raw_af_undetermined_profiles.png"),
         (1, "polyploidy_raw_af_monoploid_profiles.png"),
         (2, "polyploidy_raw_af_diploid_profiles.png"),
         (3, "polyploidy_raw_af_triploid_profiles.png"),
@@ -2369,6 +2519,12 @@ def parse_args() -> argparse.Namespace:
         help="Maximum observed AF fraction near non-endpoint peaks for calling CN=1",
     )
     parser.add_argument(
+        "--min-triploid-peak-fraction",
+        type=float,
+        default=_DEFAULT_MIN_TRIPLOID_PEAK_FRACTION,
+        help="Minimum observed AF fraction near 1/3 or 2/3 for calling CN=3",
+    )
+    parser.add_argument(
         "--min-triploid-peak-fraction-advantage",
         type=float,
         default=_DEFAULT_MIN_TRIPLOID_PEAK_FRACTION_ADVANTAGE,
@@ -2387,6 +2543,16 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Minimum excess of observed tetraploid quarter-peak fraction "
             "over half-peak fraction for CN=4"
+        ),
+    )
+    parser.add_argument(
+        "--max-polyploidy-contamination-mixture-score",
+        type=float,
+        default=_DEFAULT_MAX_POLYPLOIDY_CONTAMINATION_MIXTURE_SCORE,
+        help=(
+            "Maximum sqrt(half-peak fraction * thirds-peak fraction) allowed "
+            "for CN=3/CN=4 calls; lower values are more sensitive to "
+            "contamination-like AF mixtures and produce UNDETERMINED calls"
         ),
     )
     parser.add_argument(
@@ -2496,6 +2662,7 @@ def main() -> None:
         peak_af_window=args.ploidy_peak_af_window,
         min_haploid_endpoint_fraction=args.min_haploid_endpoint_fraction,
         max_haploid_other_peak_fraction=args.max_haploid_other_peak_fraction,
+        min_triploid_peak_fraction=args.min_triploid_peak_fraction,
         min_triploid_peak_fraction_advantage=(
             args.min_triploid_peak_fraction_advantage
         ),
@@ -2504,6 +2671,9 @@ def main() -> None:
         ),
         min_tetraploid_quarter_peak_fraction_advantage=(
             args.min_tetraploid_quarter_peak_fraction_advantage
+        ),
+        max_polyploidy_contamination_mixture_score=(
+            args.max_polyploidy_contamination_mixture_score
         ),
         show_progress=show_progress,
         log_progress=True,
@@ -2537,7 +2707,14 @@ def main() -> None:
     results_df.to_csv(results_path, sep="\t", index=False)
     logger.info("Polyploidy test results saved.")
 
-    manifest_df = results_df[["sample", "autosomal_baseline_cn"]].copy()
+    manifest_columns = [
+        "sample",
+        "autosomal_baseline_cn",
+        "baseline_cn_call",
+        "baseline_cn_reason",
+        "include_in_infer",
+    ]
+    manifest_df = results_df[manifest_columns].copy()
     manifest_path = os.path.join(args.output_dir, "sample_autosomal_baseline_cn.tsv")
     manifest_df.to_csv(manifest_path, sep="\t", index=False)
     logger.info("Sample autosomal baseline CN manifest saved.")

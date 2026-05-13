@@ -34,10 +34,12 @@ from gatk_sv_ploidy._plot_style import (
 from gatk_sv_ploidy.plot import (
     _annotate_binq_values,
     _annotate_ignored_bins,
+    _apply_plot_baseline_manifest,
     _apply_plot_depth_bin_columns,
     _apply_plot_depth_columns,
     _apply_plot_depth_sex_columns,
     _prepare_chromosome_cn_heatmap_data,
+    _sample_plot_data_from_preprocessed_depth,
     _sample_baseline_ploidy_metadata,
     _run_aneuploidy_plots,
     _run_ploidy_plots,
@@ -171,6 +173,18 @@ def _small_site_af_df() -> pd.DataFrame:
     )
 
 
+def _small_preprocessed_depth_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "Chr": ["chr21", "chr18", "chrX", "chrY"],
+            "Start": [200, 100, 50, 25],
+            "End": [300, 200, 150, 125],
+            "S1": [200, 180, 100, 100],
+            "S3": [210, 190, 110, 20],
+        }
+    )
+
+
 def test_plot_detail_helpers_and_outputs(tmp_path, tiny_site_data) -> None:
     chrom_df = _small_chrom_df()
     bin_df = _small_bin_df()
@@ -273,6 +287,61 @@ def test_plot_sample_ignores_aggregate_af_without_site_data(
 
     assert captured["nrows"] == 4
     assert any((tmp_path / "sample_plots").iterdir())
+
+
+def test_plot_sample_with_variance_supports_raw_depth_only_mode(
+    tmp_path,
+    tiny_site_data,
+    monkeypatch,
+) -> None:
+    sample_data = pd.DataFrame(
+        {
+            "sample": ["S1", "S1", "S1", "S1"],
+            "chr": ["chr21", "chr18", "chrX", "chrY"],
+            "start": [200, 100, 50, 25],
+            "end": [300, 200, 150, 125],
+            "observed_depth": [2.0, 1.8, 1.0, 1.0],
+        }
+    )
+    site_data = dict(tiny_site_data)
+    site_data["sample_ids"] = np.array(["S1", "S2"], dtype=object)
+    captured: dict[str, plt.Figure] = {}
+
+    def fake_save_publication_figure(fig, path, dpi=None, **kwargs):
+        captured["fig"] = fig
+
+    monkeypatch.setattr(
+        "gatk_sv_ploidy._plot_detail.save_publication_figure",
+        fake_save_publication_figure,
+    )
+
+    plot_sample_with_variance(
+        sample_data,
+        None,
+        str(tmp_path),
+        baseline_ploidy_type="UNDETERMINED",
+        autosomal_baseline_cn=0,
+        site_data=site_data,
+        sample_idx_map={"S1": 0, "S2": 1},
+        detail_note="excluded from infer: raw depth/AF only",
+    )
+
+    fig = captured["fig"]
+    assert len(fig.axes) == 2
+    assert "raw depth/AF only" in fig.texts[0].get_text()
+    assert fig.axes[1].get_ylabel() == "Allele fraction"
+
+
+def test_sample_plot_data_from_preprocessed_depth_normalizes_by_autosomal_median() -> None:
+    sample_df = _sample_plot_data_from_preprocessed_depth(
+        _small_preprocessed_depth_df(),
+        "S3",
+    )
+
+    np.testing.assert_allclose(
+        sample_df["observed_depth"].to_numpy(dtype=float),
+        [2.1, 1.9, 1.1, 0.2],
+    )
 
 
 def test_draw_sample_depth_panel_omits_ignored_bins() -> None:
@@ -413,6 +482,33 @@ def test_plot_baseline_ploidy_metadata_prefers_call_columns() -> None:
     assert metadata["S2"] == {
         "baseline_ploidy_type": "TRIPLOID",
         "autosomal_baseline_cn": 3,
+    }
+
+
+def test_plot_baseline_manifest_overrides_candidate_labels() -> None:
+    chrom_df = _small_chrom_df()
+    chrom_df["autosomal_baseline_cn"] = [2, 2, 2, 3, 3, 3]
+    sex_df = pd.DataFrame(
+        {
+            "sample": ["S2"],
+            "baseline_ploidy_type": ["TRIPLOID"],
+            "autosomal_baseline_cn": [3],
+        }
+    )
+    baseline_df = pd.DataFrame(
+        {
+            "sample": ["S2"],
+            "autosomal_baseline_cn": [0],
+            "baseline_cn_call": ["UNDETERMINED"],
+        }
+    )
+
+    merged_sex_df = _apply_plot_baseline_manifest(sex_df, baseline_df)
+    metadata = _sample_baseline_ploidy_metadata(chrom_df, merged_sex_df)
+
+    assert metadata["S2"] == {
+        "baseline_ploidy_type": "UNDETERMINED",
+        "autosomal_baseline_cn": 0,
     }
 
 
@@ -682,6 +778,26 @@ def test_plot_report_preserves_sample_id_verbatim_in_report(tmp_path) -> None:
     assert "Hg Casemix 01A" not in html
 
 
+def test_plot_report_includes_undetermined_summary_card(tmp_path) -> None:
+    (tmp_path / "sex_assignments.png").write_bytes(b"plot")
+
+    write_plot_report(
+        str(tmp_path),
+        chrom_df=_small_chrom_df(),
+        sex_df=pd.DataFrame({"sample": ["S1"], "sex": ["MALE"]}),
+        baseline_df=pd.DataFrame(
+            {
+                "sample": ["S1", "S2"],
+                "baseline_cn_call": ["DIPLOID", "UNDETERMINED"],
+            }
+        ),
+    )
+
+    html = (tmp_path / "report" / "index.html").read_text(encoding="utf-8")
+    assert "Undetermined Samples" in html
+    assert "excluded from infer" in html
+
+
 def test_apply_theme_uses_nature_publication_defaults() -> None:
     apply_theme()
     assert plt.rcParams["font.size"] == 8
@@ -789,6 +905,66 @@ def test_run_aneuploidy_plots_passes_non_diploid_baseline_metadata(tmp_path, mon
     assert captured["S3"]["baseline_ploidy_type"] == "TRIPLOID"
     assert captured["S3"]["autosomal_baseline_cn"] == 3
     assert captured["S3"]["aneuploid_chrs"] == []
+
+
+def test_run_aneuploidy_plots_adds_excluded_undetermined_sample_plots(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    chrom_df = _small_chrom_df()[_small_chrom_df()["sample"] == "S1"].copy()
+    bin_df = _small_bin_df()[_small_bin_df()["sample"] == "S1"].copy()
+    baseline_df = pd.DataFrame(
+        {
+            "sample": ["S1", "S3"],
+            "autosomal_baseline_cn": [2, 0],
+            "baseline_cn_call": ["DIPLOID", "UNDETERMINED"],
+        }
+    )
+    captured: dict[str, dict[str, object]] = {}
+
+    for fn_name in (
+        "plot_training_loss_with_gradient",
+        "plot_bin_variance_bias",
+        "plot_chromosome_cn_heatmap",
+        "plot_chromosome_plq_heatmap",
+        "plot_binq_genome_profile",
+    ):
+        monkeypatch.setattr(
+            f"gatk_sv_ploidy.plot.{fn_name}",
+            lambda *args, **kwargs: None,
+        )
+
+    def fake_plot_sample_with_variance(sample_data, *args, **kwargs):
+        captured[str(sample_data["sample"].iloc[0])] = {
+            "columns": list(sample_data.columns),
+            "observed_depth": sample_data["observed_depth"].to_numpy(dtype=float),
+            **kwargs,
+        }
+
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot.plot_sample_with_variance",
+        fake_plot_sample_with_variance,
+    )
+
+    _run_aneuploidy_plots(
+        chrom_df,
+        bin_df,
+        _small_loss_df(),
+        str(tmp_path),
+        preprocessed_depth_df=_small_preprocessed_depth_df(),
+        baseline_df=baseline_df,
+    )
+
+    assert "S1" in captured
+    assert "S3" in captured
+    assert "cn_map" not in captured["S3"]["columns"]
+    np.testing.assert_allclose(
+        captured["S3"]["observed_depth"],
+        [2.1, 1.9, 1.1, 0.2],
+    )
+    assert captured["S3"]["baseline_ploidy_type"] == "UNDETERMINED"
+    assert captured["S3"]["autosomal_baseline_cn"] == 0
+    assert captured["S3"]["detail_note"] == "excluded from infer: raw depth/AF only"
 
 
 def test_plot_site_af_estimates_outputs(tmp_path) -> None:
@@ -1029,6 +1205,195 @@ def test_plot_main_runs_ppd_before_sample_plot_branches(tmp_path, monkeypatch) -
     assert "sample_plots" in call_order
     assert call_order.index("ppd") < call_order.index("ploidy")
     assert call_order.index("ppd") < call_order.index("sample_plots")
+
+
+def test_plot_main_applies_baseline_manifest_to_plot_metadata(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    chrom_stats = tmp_path / "chrom.tsv"
+    _small_chrom_df().to_csv(chrom_stats, sep="\t", index=False)
+
+    bin_stats = tmp_path / "bin.tsv.gz"
+    _small_bin_df().to_csv(bin_stats, sep="\t", index=False, compression="gzip")
+
+    training_loss = tmp_path / "training_loss.tsv"
+    _small_loss_df().to_csv(training_loss, sep="\t", index=False)
+
+    sex_assignments = tmp_path / "sex.tsv"
+    pd.DataFrame(
+        {
+            "sample": ["S1", "S2"],
+            "sex": ["MALE", "FEMALE"],
+            "chrX_depth": [1.0, 2.0],
+            "chrY_depth": [1.0, 0.0],
+            "baseline_ploidy_type": ["DIPLOID", "TRIPLOID"],
+            "autosomal_baseline_cn": [2, 3],
+        }
+    ).to_csv(sex_assignments, sep="\t", index=False)
+
+    baseline_manifest = tmp_path / "baseline.tsv"
+    pd.DataFrame(
+        {
+            "sample": ["S1", "S2"],
+            "autosomal_baseline_cn": [2, 0],
+            "baseline_cn_call": ["DIPLOID", "UNDETERMINED"],
+        }
+    ).to_csv(baseline_manifest, sep="\t", index=False)
+
+    captured: dict[str, pd.DataFrame] = {}
+
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot.plot_histograms_by_chr_type",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot.plot_median_depth_distributions",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot._run_ploidy_plots",
+        lambda *args, **kwargs: None,
+    )
+
+    def fake_run_aneuploidy_plots(*args, **kwargs):
+        captured["sex_df"] = kwargs["sex_df"].copy()
+
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot._run_aneuploidy_plots",
+        fake_run_aneuploidy_plots,
+    )
+
+    def fake_write_plot_report(output_dir, **kwargs):
+        captured["report_sex_df"] = kwargs["sex_df"].copy()
+        captured["baseline_df"] = kwargs["baseline_df"].copy()
+        return pd.DataFrame()
+
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot.write_plot_report",
+        fake_write_plot_report,
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "gatk-sv-ploidy plot",
+            "--chrom-stats",
+            str(chrom_stats),
+            "--bin-stats",
+            str(bin_stats),
+            "--training-loss",
+            str(training_loss),
+            "--sex-assignments",
+            str(sex_assignments),
+            "--autosomal-baseline-cn-tsv",
+            str(baseline_manifest),
+            "--output-dir",
+            str(tmp_path / "out"),
+        ],
+    )
+
+    main()
+
+    sex_df = captured["sex_df"]
+    report_sex_df = captured["report_sex_df"]
+    baseline_df = captured["baseline_df"]
+
+    assert sex_df.loc[sex_df["sample"] == "S2", "baseline_ploidy_type"].iloc[0] == "UNDETERMINED"
+    assert int(sex_df.loc[sex_df["sample"] == "S2", "autosomal_baseline_cn"].iloc[0]) == 0
+    assert report_sex_df.loc[
+        report_sex_df["sample"] == "S2",
+        "baseline_ploidy_type",
+    ].iloc[0] == "UNDETERMINED"
+    assert baseline_df.loc[
+        baseline_df["sample"] == "S2",
+        "baseline_cn_call",
+    ].iloc[0] == "UNDETERMINED"
+
+
+def test_plot_main_passes_preprocessed_depth_to_sample_plots(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    chrom_stats = tmp_path / "chrom.tsv"
+    _small_chrom_df().to_csv(chrom_stats, sep="\t", index=False)
+
+    bin_stats = tmp_path / "bin.tsv.gz"
+    _small_bin_df().to_csv(bin_stats, sep="\t", index=False, compression="gzip")
+
+    training_loss = tmp_path / "training_loss.tsv"
+    _small_loss_df().to_csv(training_loss, sep="\t", index=False)
+
+    baseline_manifest = tmp_path / "baseline.tsv"
+    pd.DataFrame(
+        {
+            "sample": ["S1", "S3"],
+            "autosomal_baseline_cn": [2, 0],
+            "baseline_cn_call": ["DIPLOID", "UNDETERMINED"],
+        }
+    ).to_csv(baseline_manifest, sep="\t", index=False)
+
+    preprocessed_depth = tmp_path / "preprocessed_depth.tsv"
+    _small_preprocessed_depth_df().to_csv(preprocessed_depth, sep="\t", index=False)
+
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot.plot_histograms_by_chr_type",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot.plot_median_depth_distributions",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot._run_ploidy_plots",
+        lambda *args, **kwargs: None,
+    )
+
+    def fake_run_aneuploidy_plots(*args, **kwargs):
+        captured["preprocessed_depth_df"] = kwargs["preprocessed_depth_df"].copy()
+        captured["baseline_df"] = kwargs["baseline_df"].copy()
+
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot._run_aneuploidy_plots",
+        fake_run_aneuploidy_plots,
+    )
+    monkeypatch.setattr(
+        "gatk_sv_ploidy.plot.write_plot_report",
+        lambda *args, **kwargs: pd.DataFrame(),
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "gatk-sv-ploidy plot",
+            "--chrom-stats",
+            str(chrom_stats),
+            "--bin-stats",
+            str(bin_stats),
+            "--training-loss",
+            str(training_loss),
+            "--autosomal-baseline-cn-tsv",
+            str(baseline_manifest),
+            "--preprocessed-depth",
+            str(preprocessed_depth),
+            "--output-dir",
+            str(tmp_path / "out"),
+        ],
+    )
+
+    main()
+
+    preprocessed_depth_df = captured["preprocessed_depth_df"]
+    baseline_df = captured["baseline_df"]
+    assert "S3" in preprocessed_depth_df.columns
+    assert baseline_df.loc[
+        baseline_df["sample"] == "S3",
+        "baseline_cn_call",
+    ].iloc[0] == "UNDETERMINED"
 
 
 def test_plot_background_factor_diagnostics_outputs(tmp_path) -> None:

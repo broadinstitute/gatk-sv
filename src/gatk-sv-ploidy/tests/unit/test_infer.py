@@ -7,6 +7,8 @@ import torch
 from gatk_sv_ploidy._util import compute_cnq_from_probabilities
 from gatk_sv_ploidy.data import DepthData
 from gatk_sv_ploidy.infer import (
+    _build_sample_af_concentration_grid,
+    _filter_inputs_by_baseline_manifest,
     _inference_tensor_dtype,
     _load_autosomal_baseline_cn,
     build_safe_inference_diagnostic_messages,
@@ -14,6 +16,7 @@ from gatk_sv_ploidy.infer import (
     build_bin_stats,
     build_chromosome_stats,
     detect_aneuploidies,
+    estimate_sample_af_concentration_from_cn_posterior,
     estimate_site_pop_af_naive_bayes,
     parse_args,
     resolve_site_af_estimator_application,
@@ -60,10 +63,15 @@ def test_infer_parse_args_defaults(monkeypatch) -> None:
     assert args.cn_inference_draws == 100
     assert args.site_af_estimator == "auto"
     assert args.learn_af_temperature is True
+    assert args.af_outlier_weight == pytest.approx(0.05)
+    assert args.af_background_concentration is None
     assert args.learn_site_af is False
     assert args.site_af_prior_strength == 20.0
     assert args.site_af_prior_alpha == 1.0
     assert args.site_af_prior_beta == 1.0
+    assert args.sample_af_concentration_mode == "shared"
+    assert args.sample_af_concentration_prior_log_sd == pytest.approx(0.75)
+    assert args.sample_af_concentration_grid is None
 
 
 def test_infer_parse_args_accepts_single_cn_inference_method(monkeypatch) -> None:
@@ -124,7 +132,70 @@ def test_infer_parse_args_accepts_fixed_af_temperature(monkeypatch) -> None:
     assert args.learn_af_temperature is False
 
 
-def test_infer_parse_args_rejects_removed_learn_af_temperature_flag(monkeypatch) -> None:
+def test_infer_parse_args_accepts_sample_af_concentration_controls(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "infer",
+            "--input",
+            "depth.tsv",
+            "--output-dir",
+            "outdir",
+            "--sample-af-concentration-mode",
+            "depth-posterior",
+            "--sample-af-concentration-prior-log-sd",
+            "0.35",
+            "--sample-af-concentration-grid",
+            "2,5,10",
+        ],
+    )
+
+    args = parse_args()
+
+    assert args.sample_af_concentration_mode == "depth-posterior"
+    assert args.sample_af_concentration_prior_log_sd == pytest.approx(0.35)
+    assert args.sample_af_concentration_grid == "2,5,10"
+
+
+def test_infer_parse_args_accepts_af_outlier_weight(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "infer",
+            "--input",
+            "depth.tsv",
+            "--output-dir",
+            "outdir",
+            "--af-outlier-weight",
+            "0.12",
+        ],
+    )
+
+    args = parse_args()
+
+    assert args.af_outlier_weight == pytest.approx(0.12)
+
+
+def test_infer_parse_args_accepts_af_background_concentration(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "infer",
+            "--input",
+            "depth.tsv",
+            "--output-dir",
+            "outdir",
+            "--af-background-concentration",
+            "0.7",
+        ],
+    )
+
+    args = parse_args()
+
+    assert args.af_background_concentration == pytest.approx(0.7)
+
+
+def test_infer_parse_args_accepts_learn_af_temperature(monkeypatch) -> None:
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -137,8 +208,9 @@ def test_infer_parse_args_rejects_removed_learn_af_temperature_flag(monkeypatch)
         ],
     )
 
-    with pytest.raises(SystemExit):
-        parse_args()
+    args = parse_args()
+
+    assert args.learn_af_temperature is True
 
 
 def test_infer_parse_args_accepts_autosomal_baseline_cn_tsv(monkeypatch) -> None:
@@ -176,6 +248,53 @@ def test_load_autosomal_baseline_cn_orders_rows_by_sample(tmp_path) -> None:
 
     baseline = _load_autosomal_baseline_cn(str(baseline_path), ["S1", "S2"])
 
+    np.testing.assert_array_equal(baseline, np.array([2, 3], dtype=np.int64))
+
+
+def test_filter_inputs_by_baseline_manifest_excludes_undetermined_samples(tmp_path) -> None:
+    depth_df = pd.DataFrame(
+        {
+            "Chr": ["chr1", "chr2"],
+            "Start": [0, 1000],
+            "End": [1000, 2000],
+            "S1": [10, 11],
+            "S2": [20, 21],
+            "S3": [30, 31],
+        },
+        index=["bin1", "bin2"],
+    )
+    site_data = {
+        "site_alt": np.arange(2 * 3 * 3).reshape(2, 3, 3),
+        "site_total": np.arange(2 * 3 * 3).reshape(2, 3, 3) + 100,
+        "site_pop_af": np.full((2, 3), 0.5),
+        "site_mask": np.ones((2, 3, 3), dtype=bool),
+        "sample_ids": np.array(["S1", "S2", "S3"], dtype=object),
+    }
+    baseline_path = tmp_path / "sample_autosomal_baseline_cn.tsv"
+    pd.DataFrame(
+        {
+            "sample": ["S1", "S2", "S3"],
+            "autosomal_baseline_cn": [2, 0, 3],
+            "baseline_cn_call": ["DIPLOID", "UNDETERMINED", "TRIPLOID"],
+            "include_in_infer": [True, False, True],
+        }
+    ).to_csv(baseline_path, sep="\t", index=False)
+
+    filtered_df, filtered_site_data = _filter_inputs_by_baseline_manifest(
+        depth_df,
+        site_data,
+        str(baseline_path),
+    )
+
+    assert "S1" in filtered_df.columns
+    assert "S2" not in filtered_df.columns
+    assert "S3" in filtered_df.columns
+    assert filtered_site_data is not None
+    assert filtered_site_data["site_alt"].shape == (2, 3, 2)
+    assert filtered_site_data["site_mask"].shape == (2, 3, 2)
+    assert filtered_site_data["sample_ids"].tolist() == ["S1", "S3"]
+
+    baseline = _load_autosomal_baseline_cn(str(baseline_path), ["S1", "S3"])
     np.testing.assert_array_equal(baseline, np.array([2, 3], dtype=np.int64))
 
 
@@ -499,6 +618,60 @@ def test_estimate_site_pop_af_naive_bayes_matches_beta_posterior_mean() -> None:
         result["sum_total"],
         np.array([[20, 4]], dtype=np.int64),
     )
+
+
+def test_estimate_sample_af_concentration_from_cn_posterior_prefers_lower_concentration_for_noisy_sample() -> None:
+    site_alt = np.array(
+        [
+            [[5, 10]],
+            [[15, 10]],
+        ],
+        dtype=np.int32,
+    )
+    site_total = np.full_like(site_alt, 20, dtype=np.int32)
+    site_mask = np.ones_like(site_alt, dtype=bool)
+    site_pop_af = np.full((2, 1), 0.5, dtype=np.float32)
+    cn_posterior = np.zeros((2, 2, 6), dtype=np.float32)
+    cn_posterior[:, :, 2] = 1.0
+
+    result = estimate_sample_af_concentration_from_cn_posterior(
+        site_alt,
+        site_total,
+        site_pop_af,
+        site_mask,
+        cn_posterior,
+        np.zeros(2, dtype=np.int64),
+        base_concentration=50.0,
+        concentration_grid=np.array([5.0, 50.0], dtype=np.float64),
+        prior_log_sd=2.0,
+    )
+
+    np.testing.assert_allclose(
+        result["concentration_grid"],
+        np.array([5.0, 50.0], dtype=np.float32),
+        rtol=1e-6,
+        atol=1e-6,
+    )
+    np.testing.assert_allclose(
+        result["sample_af_concentration_map"],
+        np.array([5.0, 50.0], dtype=np.float32),
+        rtol=1e-6,
+        atol=1e-6,
+    )
+    assert result["sample_af_concentration_mean"][0] < result["sample_af_concentration_mean"][1]
+    np.testing.assert_array_equal(
+        result["sample_af_concentration_observed_sites"],
+        np.array([2, 2], dtype=np.int64),
+    )
+
+
+def test_build_sample_af_concentration_grid_matches_polyploidy_span() -> None:
+    grid = _build_sample_af_concentration_grid(50.0, None)
+
+    assert 50.0 in grid
+    assert grid[0] < 3.0
+    assert grid[-1] > 300.0
+    assert np.all(np.diff(grid) > 0)
 
 
 def test_should_apply_site_af_estimator_auto_is_conservative() -> None:
@@ -1202,4 +1375,3 @@ def test_detect_aneuploidies_uses_baseline_aware_allosomes() -> None:
 
     assert diploid_calls[0] == [("chrX", 2, 1.0), ("chrY", 1, 1.0)]
     assert triploid_calls[0] == []
-

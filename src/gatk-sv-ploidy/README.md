@@ -311,11 +311,18 @@ Non-diploid baseline calls require all of the following:
 2. posterior error probability below `--pvalue-threshold`,
 3. positive log Bayes factor versus CN2,
 4. effect size per informative site above `--effect-size-threshold`,
-5. direct peak support for the candidate state.
+5. direct peak support for the candidate state,
+6. AF-shape fit that is not dominated by contamination-like mixtures.
 
-If those conditions are not met, the classifier defaults to CN2 and records the
-reason in `polyploidy_test_results.tsv`. This is the intended failure-safe
-behavior for sparse or ambiguous AF data.
+If a non-diploid MAP candidate has no empirical non-diploid AF peak support,
+the classifier defaults back to CN2 and records the reason in
+`polyploidy_test_results.tsv`. If a non-diploid candidate has empirical
+non-diploid AF signal but fails the stricter AF-shape fit checks, the
+classifier emits `UNDETERMINED`, writes `include_in_infer=false` in
+`sample_autosomal_baseline_cn.tsv`, and `infer` excludes that sample before
+chromosome-level aneuploidy calling. The main sensitivity knobs for this
+behavior are `--max-polyploidy-contamination-mixture-score` and
+`--min-triploid-peak-fraction`.
 
 ## Assumptions And Justifications
 
@@ -475,8 +482,9 @@ estimate behavior.
   which keeps QC thresholds interpretable.
 - The default simplified infer model removes weakly identified low-rank terms
   unless the user explicitly opts into them.
-- `polyploidy` defaults to CN2 when evidence is sparse, contradictory, or lacks
-  explicit thirds / quarter-peak support.
+- `polyploidy` defaults to CN2 when non-diploid evidence is absent, and marks
+  statistically supported but poor-fit non-diploid candidates `UNDETERMINED` so
+  they can be excluded from downstream aneuploidy calling.
 - AF evidence is optional and temperature-scaled; this reduces the chance that
   miscalibrated AF likelihoods dominate depth evidence.
 - `call` can rebuild chromosome summaries after excluding low-quality bins using
@@ -522,6 +530,8 @@ Current calling semantics:
   `TETRAPLOID`, or `BASELINE_CN*`, optionally composed with
   `_WITH_AUTOSOMAL_ANEUPLOIDY`, `_WITH_ALLOSOME_ANEUPLOIDY`, or
   `_WITH_MULTIPLE_ANEUPLOIDY`,
+- `UNDETERMINED` polyploidy calls are treated as excluded inputs for `infer`,
+  not as baseline CN calls eligible for aneuploidy labeling,
 - the `sex` field is also baseline-aware: for example a baseline-CN3 sample can
   be labeled `TRIPLOID_FEMALE` or `TRIPLOID_MALE` instead of being forced into
   diploid sex-aneuploidy labels.

@@ -73,6 +73,36 @@ def test_apply_effective_site_pop_af_prefers_saved_infer_values(
     np.testing.assert_allclose(updated["site_pop_af"], 0.125)
 
 
+def test_build_model_from_artifacts_accepts_sample_specific_af_concentration() -> None:
+    model = _build_model_from_artifacts(
+        {
+            "model_af_concentration": np.asarray(50.0, dtype=np.float32),
+            "sample_af_concentration_map": np.asarray([5.0, 12.0], dtype=np.float32),
+        },
+        device="cpu",
+    )
+
+    np.testing.assert_allclose(
+        np.asarray(model.af_concentration, dtype=np.float64),
+        np.array([5.0, 12.0], dtype=np.float64),
+        rtol=1e-6,
+        atol=1e-6,
+    )
+
+
+def test_build_model_from_artifacts_restores_af_outlier_weight() -> None:
+    model = _build_model_from_artifacts(
+        {
+            "model_af_outlier_weight": np.asarray(0.08, dtype=np.float32),
+            "model_af_background_concentration": np.asarray(0.42, dtype=np.float32),
+        },
+        device="cpu",
+    )
+
+    assert model.af_outlier_weight == pytest.approx(0.08)
+    assert model.af_background_concentration == pytest.approx(0.42)
+
+
 def test_generate_ppd_depth_supports_negative_binomial_metadata() -> None:
     raw_df = pd.DataFrame(
         {
@@ -315,6 +345,22 @@ def test_generate_ppd_depth_rejects_unknown_continuous_posterior_mode(
         )
 
 
+def test_generate_ppd_depth_rejects_misaligned_cn_posterior(
+    tiny_raw_depth_df: pd.DataFrame,
+) -> None:
+    data = DepthData(tiny_raw_depth_df, depth_space="raw", clamp_threshold=None)
+    map_est = {
+        "bin_bias": np.full(data.n_bins, 1.0, dtype=np.float32),
+        "sample_var": np.full(1, 1e-3, dtype=np.float32),
+        "bin_var": np.full(data.n_bins, 1e-3, dtype=np.float32),
+        "sample_depth": np.array([19.0], dtype=np.float32),
+    }
+    cn_post = _fake_cn_posterior(data.n_bins, 1, cn_state=2)
+
+    with pytest.raises(ValueError, match="cn_posterior shape does not match"):
+        generate_ppd_depth(data, map_est, cn_post, n_draws=4, seed=11)
+
+
 def test_build_model_from_artifacts_defaults_to_relative_af_evidence_mode() -> None:
     model = _build_model_from_artifacts(
         {
@@ -483,6 +529,8 @@ def test_generate_ppd_depth_uses_background_factors(tiny_raw_depth_df: pd.DataFr
         float(draws_with_background[:, 0, 0].mean()) -
         float(draws_without_background[:, 0, 0].mean())
     ) < 0.15
+
+
 def test_ppd_summaries_have_expected_shapes(tiny_raw_depth_df: pd.DataFrame) -> None:
     data = DepthData(tiny_raw_depth_df, depth_space="raw", clamp_threshold=None)
     map_est = {
@@ -702,3 +750,128 @@ def test_ppd_parse_args_and_main_write_outputs(
     assert global_df.loc[0, "continuous_posterior_mode"] == "conditioned"
     quality_df = pd.read_csv(output_dir / "ppd_bin_quality.tsv", sep="\t")
     assert "CALLQ20" in quality_df.columns
+
+
+def test_ppd_main_aligns_inputs_to_artifact_sample_ids(
+    tiny_depth_df: pd.DataFrame,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    raw_depth_df = tiny_depth_df.copy()
+    sample_cols = [col for col in raw_depth_df.columns if col.startswith("SAMPLE_")]
+    raw_depth_df.loc[:, sample_cols] = np.rint(
+        raw_depth_df.loc[:, sample_cols].to_numpy(dtype=np.float64) * 10.0
+    ).astype(np.int64)
+    raw_depth_df["SAMPLE_C"] = raw_depth_df["SAMPLE_A"]
+    depth_path = tmp_path / "depth.tsv"
+    raw_depth_df.to_csv(depth_path, sep="\t")
+
+    n_bins = len(raw_depth_df)
+    posterior = np.zeros((n_bins, 2, 6), dtype=np.float32)
+    posterior[:, :, 2] = 1.0
+    artifact_path = tmp_path / "artifacts.npz"
+    np.savez_compressed(
+        artifact_path,
+        bin_bias=np.full(n_bins, 1.0, dtype=np.float32),
+        sample_var=np.full(2, 1e-3, dtype=np.float32),
+        bin_var=np.full(n_bins, 1e-3, dtype=np.float32),
+        sample_depth=np.array([20.0, 19.0], dtype=np.float32),
+        sample_ids=np.array(["SAMPLE_B", "SAMPLE_A"], dtype=object),
+        obs_likelihood=np.asarray("negative_binomial"),
+        depth_space=np.asarray("raw"),
+        cn_post_cn_posterior=posterior,
+        cn_post_cn_map_stability=np.full((n_bins, 2), 1.0, dtype=np.float32),
+    )
+    output_dir = tmp_path / "out"
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "gatk-sv-ploidy ppd",
+            "--input",
+            str(depth_path),
+            "--artifacts",
+            str(artifact_path),
+            "--output-dir",
+            str(output_dir),
+            "--draws",
+            "4",
+            "--seed",
+            "9",
+        ],
+    )
+
+    main()
+
+    draws = np.load(output_dir / "ppd_draws.npz")["ppd_draws"]
+    assert draws.shape == (4, n_bins, 2)
+    global_df = pd.read_csv(output_dir / "ppd_global_summary.tsv", sep="\t")
+    assert global_df.loc[0, "n_bins_x_samples"] == n_bins * 2
+
+
+def test_ppd_main_auto_discovers_baseline_manifest_for_old_artifacts(
+    tiny_depth_df: pd.DataFrame,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    raw_depth_df = tiny_depth_df.copy()
+    sample_cols = [col for col in raw_depth_df.columns if col.startswith("SAMPLE_")]
+    raw_depth_df.loc[:, sample_cols] = np.rint(
+        raw_depth_df.loc[:, sample_cols].to_numpy(dtype=np.float64) * 10.0
+    ).astype(np.int64)
+    raw_depth_df["SAMPLE_C"] = raw_depth_df["SAMPLE_A"]
+    depth_path = tmp_path / "depth.tsv"
+    raw_depth_df.to_csv(depth_path, sep="\t")
+
+    n_bins = len(raw_depth_df)
+    posterior = np.zeros((n_bins, 2, 6), dtype=np.float32)
+    posterior[:, :, 2] = 1.0
+    artifact_dir = tmp_path / "infer"
+    artifact_dir.mkdir()
+    artifact_path = artifact_dir / "inference_artifacts.npz"
+    np.savez_compressed(
+        artifact_path,
+        bin_bias=np.full(n_bins, 1.0, dtype=np.float32),
+        sample_var=np.full(2, 1e-3, dtype=np.float32),
+        bin_var=np.full(n_bins, 1e-3, dtype=np.float32),
+        sample_depth=np.array([20.0, 19.0], dtype=np.float32),
+        obs_likelihood=np.asarray("negative_binomial"),
+        depth_space=np.asarray("raw"),
+        cn_post_cn_posterior=posterior,
+        cn_post_cn_map_stability=np.full((n_bins, 2), 1.0, dtype=np.float32),
+    )
+    pd.DataFrame(
+        {
+            "sample": ["SAMPLE_B", "SAMPLE_A"],
+            "autosomal_baseline_cn": [2, 2],
+        }
+    ).to_csv(
+        artifact_dir / "sample_autosomal_baseline_cn.tsv",
+        sep="\t",
+        index=False,
+    )
+    output_dir = tmp_path / "out"
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "gatk-sv-ploidy ppd",
+            "--input",
+            str(depth_path),
+            "--artifacts",
+            str(artifact_path),
+            "--output-dir",
+            str(output_dir),
+            "--draws",
+            "4",
+            "--seed",
+            "9",
+        ],
+    )
+
+    main()
+
+    draws = np.load(output_dir / "ppd_draws.npz")["ppd_draws"]
+    assert draws.shape == (4, n_bins, 2)
+    global_df = pd.read_csv(output_dir / "ppd_global_summary.tsv", sep="\t")
+    assert global_df.loc[0, "n_bins_x_samples"] == n_bins * 2

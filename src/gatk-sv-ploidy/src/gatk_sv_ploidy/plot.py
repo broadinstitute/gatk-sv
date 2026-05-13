@@ -46,7 +46,7 @@ from gatk_sv_ploidy._plot_style import (
     plot_output_format,
     single_column_size,
 )
-from gatk_sv_ploidy.data import load_site_data
+from gatk_sv_ploidy.data import load_site_data, read_depth_tsv
 from gatk_sv_ploidy.infer import load_inference_artifacts
 from gatk_sv_ploidy.models import _standardize_multiplicative_bin_factors_numpy
 
@@ -167,6 +167,130 @@ def _apply_plot_depth_sex_columns(
     if "chrY" in depth_pivot.columns:
         out["chrY_depth"] = out["sample"].map(depth_pivot["chrY"])
     return out
+
+
+def _apply_plot_baseline_manifest(
+    sex_df: pd.DataFrame,
+    baseline_df: pd.DataFrame | None,
+) -> pd.DataFrame:
+    """Override plot baseline labels from the polyploidy manifest."""
+    if baseline_df is None or baseline_df.empty or "sample" not in baseline_df.columns:
+        return sex_df
+
+    merge_cols = [
+        col
+        for col in ("sample", "autosomal_baseline_cn", "baseline_cn_call")
+        if col in baseline_df.columns
+    ]
+    if merge_cols == ["sample"]:
+        return sex_df
+
+    baseline_view = baseline_df[merge_cols].drop_duplicates(
+        subset=["sample"],
+        keep="last",
+    )
+    out = sex_df.copy()
+    replace_cols = [
+        col for col in merge_cols
+        if col != "sample" and col in out.columns
+    ]
+    if replace_cols:
+        out = out.drop(columns=replace_cols)
+    out = out.merge(baseline_view, on="sample", how="left")
+
+    if "baseline_ploidy_type" not in out.columns:
+        out["baseline_ploidy_type"] = pd.Series(
+            pd.NA,
+            index=out.index,
+            dtype="object",
+        )
+    if "baseline_cn_call" in out.columns:
+        has_baseline_call = out["baseline_cn_call"].notna()
+        out.loc[has_baseline_call, "baseline_ploidy_type"] = (
+            out.loc[has_baseline_call, "baseline_cn_call"].astype(str)
+        )
+    return out
+
+
+def _baseline_metadata_from_manifest(
+    baseline_df: pd.DataFrame | None,
+) -> dict[str, dict[str, object]]:
+    """Return sample-level baseline metadata from the polyploidy manifest."""
+    metadata: dict[str, dict[str, object]] = {}
+    if baseline_df is None or baseline_df.empty or "sample" not in baseline_df.columns:
+        return metadata
+
+    baseline_view = baseline_df.drop_duplicates(subset=["sample"], keep="last")
+    for _, row in baseline_view.iterrows():
+        baseline_cn = 2
+        if "autosomal_baseline_cn" in row.index:
+            cn_value = pd.to_numeric(
+                pd.Series([row["autosomal_baseline_cn"]]),
+                errors="coerce",
+            ).iloc[0]
+            if pd.notna(cn_value):
+                baseline_cn = int(cn_value)
+
+        baseline_type = None
+        if "baseline_cn_call" in row.index and pd.notna(row["baseline_cn_call"]):
+            baseline_type = str(row["baseline_cn_call"])
+        elif baseline_cn == 0:
+            baseline_type = "UNDETERMINED"
+
+        metadata[str(row["sample"])] = {
+            "baseline_ploidy_type": baseline_type or baseline_ploidy_label(baseline_cn),
+            "autosomal_baseline_cn": baseline_cn,
+        }
+
+    return metadata
+
+
+def _sample_plot_data_from_preprocessed_depth(
+    preprocessed_depth_df: pd.DataFrame | None,
+    sample: str,
+) -> pd.DataFrame | None:
+    """Build plot-normalized depth rows for a sample excluded from infer."""
+    if preprocessed_depth_df is None or sample not in preprocessed_depth_df.columns:
+        return None
+
+    sample_df = preprocessed_depth_df[["Chr", "Start", "End", sample]].copy()
+    sample_df = sample_df.rename(
+        columns={
+            "Chr": "chr",
+            "Start": "start",
+            "End": "end",
+            sample: "observed_depth",
+        }
+    )
+    sample_df["sample"] = str(sample)
+    sample_df["observed_depth"] = pd.to_numeric(
+        sample_df["observed_depth"],
+        errors="coerce",
+    )
+    sample_df = sample_df.dropna(subset=["observed_depth"]).reset_index(drop=True)
+
+    bin_length_kb = np.maximum(
+        sample_df["end"].to_numpy(dtype=np.float64) -
+        sample_df["start"].to_numpy(dtype=np.float64),
+        1.0,
+    ) / 1000.0
+    autosome_mask = sample_df["chr"].astype(str).str.match(r"^chr([1-9]|1[0-9]|2[0-2])$")
+    if not autosome_mask.any():
+        autosome_mask = pd.Series(True, index=sample_df.index)
+    autosome_depth_per_kb = np.divide(
+        sample_df.loc[autosome_mask, "observed_depth"].to_numpy(dtype=np.float64),
+        bin_length_kb[autosome_mask.to_numpy(dtype=bool)],
+        out=np.zeros(int(autosome_mask.sum()), dtype=np.float64),
+        where=bin_length_kb[autosome_mask.to_numpy(dtype=bool)] > 0,
+    )
+    diploid_depth_per_kb = max(float(np.median(autosome_depth_per_kb)), 1e-8)
+    sample_df["observed_depth"] = np.divide(
+        2.0 * sample_df["observed_depth"].to_numpy(dtype=np.float64),
+        bin_length_kb * diploid_depth_per_kb,
+        out=np.zeros(len(sample_df), dtype=np.float64),
+        where=(bin_length_kb * diploid_depth_per_kb) > 0,
+    )
+    return sample_df[["sample", "chr", "start", "end", "observed_depth"]]
 
 
 def _annotate_ignored_bins(
@@ -300,6 +424,11 @@ def _sample_baseline_ploidy_metadata(
 
     for sample, sdf in chrom_df.groupby("sample", sort=False):
         baseline_cn = 2
+        baseline_type = None
+        if "baseline_cn_call" in sdf.columns:
+            call_values = sdf["baseline_cn_call"].dropna()
+            if not call_values.empty:
+                baseline_type = str(call_values.iloc[0])
         if "autosomal_baseline_cn" in sdf.columns:
             values = pd.to_numeric(
                 sdf["autosomal_baseline_cn"],
@@ -308,7 +437,9 @@ def _sample_baseline_ploidy_metadata(
             if not values.empty:
                 baseline_cn = int(values.iloc[0])
         metadata[str(sample)] = {
-            "baseline_ploidy_type": baseline_ploidy_label(baseline_cn),
+            "baseline_ploidy_type": (
+                baseline_type or baseline_ploidy_label(baseline_cn)
+            ),
             "autosomal_baseline_cn": baseline_cn,
         }
 
@@ -328,7 +459,9 @@ def _sample_baseline_ploidy_metadata(
                 entry["baseline_ploidy_type"] = baseline_ploidy_label(
                     baseline_cn,
                 )
-            if "baseline_ploidy_type" in row.index and pd.notna(row["baseline_ploidy_type"]):
+            if "baseline_cn_call" in row.index and pd.notna(row["baseline_cn_call"]):
+                entry["baseline_ploidy_type"] = str(row["baseline_cn_call"])
+            elif "baseline_ploidy_type" in row.index and pd.notna(row["baseline_ploidy_type"]):
                 entry["baseline_ploidy_type"] = str(row["baseline_ploidy_type"])
 
     return metadata
@@ -1294,6 +1427,8 @@ def _run_aneuploidy_plots(
     min_het_alt: int = 3,
     map_estimates: Optional[dict] = None,
     sex_df: Optional[pd.DataFrame] = None,
+    preprocessed_depth_df: Optional[pd.DataFrame] = None,
+    baseline_df: Optional[pd.DataFrame] = None,
 ) -> None:
     """Generate aneuploidy-detection diagnostic plots."""
     plot_training_loss_with_gradient(loss_df, output_dir)
@@ -1307,6 +1442,7 @@ def _run_aneuploidy_plots(
     all_vars = bin_df.groupby("sample")["sample_var"].first().values
     sample_groups = {sample: sdf for sample, sdf in bin_df.groupby("sample", sort=False)}
     baseline_metadata = _sample_baseline_ploidy_metadata(df, sex_df)
+    baseline_metadata.update(_baseline_metadata_from_manifest(baseline_df))
     aneuploid_samples = [str(sample) for sample in df[df["is_aneuploid"]]["sample"].unique()]
     non_diploid_samples = [
         sample for sample, metadata in baseline_metadata.items()
@@ -1316,23 +1452,36 @@ def _run_aneuploidy_plots(
         )
     ]
     highlighted_samples = list(dict.fromkeys(aneuploid_samples + non_diploid_samples))
+    retained_highlighted_samples = [
+        sample for sample in highlighted_samples
+        if sample in sample_groups
+    ]
+    excluded_undetermined_samples = [
+        sample for sample, metadata in baseline_metadata.items()
+        if (
+            str(metadata.get("baseline_ploidy_type", "DIPLOID")) == "UNDETERMINED" and
+            sample not in sample_groups
+        )
+    ]
     normal_samples = [
         str(sample) for sample in sample_groups
-        if str(sample) not in set(highlighted_samples)
+        if str(sample) not in set(retained_highlighted_samples)
     ]
 
     if skip_per_sample:
         logger.info(
-            "Skipping per-sample plots (%d highlighted, %d normal)",
-            len(highlighted_samples),
+            "Skipping per-sample plots (%d highlighted, %d normal, %d excluded undetermined)",
+            len(retained_highlighted_samples),
             len(normal_samples),
+            len(excluded_undetermined_samples),
         )
         return
 
     logger.info(
-        "Generating per-sample plots (%d highlighted, %d normal) …",
-        len(highlighted_samples),
+        "Generating per-sample plots (%d highlighted, %d normal, %d excluded undetermined) …",
+        len(retained_highlighted_samples),
         len(normal_samples),
+        len(excluded_undetermined_samples),
     )
 
     # Build a sample-name → index mapping for site data lookups
@@ -1356,7 +1505,7 @@ def _run_aneuploidy_plots(
             "mean_het_af/n_het_sites columns are ignored."
         )
 
-    for idx, sid in enumerate(highlighted_samples, start=1):
+    for idx, sid in enumerate(retained_highlighted_samples, start=1):
         sdata = sample_groups.get(sid)
         if sdata is None:
             continue
@@ -1369,11 +1518,11 @@ def _run_aneuploidy_plots(
             str(sid),
             {"baseline_ploidy_type": "DIPLOID", "autosomal_baseline_cn": 2},
         )
-        if idx == 1 or idx % 10 == 0 or idx == len(highlighted_samples):
+        if idx == 1 or idx % 10 == 0 or idx == len(retained_highlighted_samples):
             logger.debug(
                 "Per-sample plots: highlighted %d/%d",
                 idx,
-                len(highlighted_samples),
+                len(retained_highlighted_samples),
             )
         plot_sample_with_variance(
             sdata, all_vars, output_dir,
@@ -1383,6 +1532,44 @@ def _run_aneuploidy_plots(
             site_data=site_data,
             sample_idx_map=sample_idx_map,
             min_het_alt=min_het_alt,
+        )
+
+    if excluded_undetermined_samples and preprocessed_depth_df is None:
+        logger.warning(
+            "Skipping %d UNDETERMINED sample plots excluded from infer because --preprocessed-depth was not provided.",
+            len(excluded_undetermined_samples),
+        )
+        excluded_undetermined_samples = []
+
+    for idx, sid in enumerate(excluded_undetermined_samples, start=1):
+        sample_data = _sample_plot_data_from_preprocessed_depth(preprocessed_depth_df, sid)
+        if sample_data is None or sample_data.empty:
+            logger.warning(
+                "Skipping UNDETERMINED sample %s in per-sample plots: not present in --preprocessed-depth.",
+                sid,
+            )
+            continue
+
+        metadata = baseline_metadata.get(
+            str(sid),
+            {"baseline_ploidy_type": "UNDETERMINED", "autosomal_baseline_cn": 0},
+        )
+        if idx == 1 or idx % 10 == 0 or idx == len(excluded_undetermined_samples):
+            logger.debug(
+                "Per-sample plots: excluded undetermined %d/%d",
+                idx,
+                len(excluded_undetermined_samples),
+            )
+        plot_sample_with_variance(
+            sample_data,
+            None,
+            output_dir,
+            baseline_ploidy_type=str(metadata.get("baseline_ploidy_type", "UNDETERMINED")),
+            autosomal_baseline_cn=int(metadata.get("autosomal_baseline_cn", 0)),
+            site_data=site_data,
+            sample_idx_map=sample_idx_map,
+            min_het_alt=min_het_alt,
+            detail_note="excluded from infer: raw depth/AF only",
         )
 
     for idx, sid in enumerate(normal_samples, start=1):
@@ -1429,6 +1616,18 @@ def parse_args() -> argparse.Namespace:
                    help="training_loss.tsv (from 'infer')")
     p.add_argument("-s", "--sex-assignments", default=None,
                    help="aneuploidy_type_predictions.tsv (from 'call')")
+    p.add_argument(
+        "--autosomal-baseline-cn-tsv",
+        default=None,
+        help="sample_autosomal_baseline_cn.tsv (from 'polyploidy') to "
+             "preserve final baseline calls such as UNDETERMINED in plots "
+             "and the HTML report",
+    )
+    p.add_argument(
+        "--preprocessed-depth",
+        default=None,
+        help="preprocessed_depth.tsv (from 'preprocess'); required to render depth/AF-only sample plots for UNDETERMINED samples excluded from infer",
+    )
     p.add_argument("--site-data", default=None,
                    help="site_data.npz (from 'preprocess'); required for raw per-site AF panels")
     p.add_argument(
@@ -1524,6 +1723,13 @@ def main() -> None:
             logger.warning("Both --ppd-bin-summary and --ppd-chr-summary "
                            "required for PPD plots — skipping")
 
+        baseline_df = None
+        if args.autosomal_baseline_cn_tsv:
+            baseline_df = pd.read_csv(args.autosomal_baseline_cn_tsv, sep="\t")
+        preprocessed_depth_df = None
+        if args.preprocessed_depth:
+            preprocessed_depth_df = read_depth_tsv(args.preprocessed_depth)
+
         # ── ploidy-style plots ──────────────────────────────────────────────
         sex_df = None
         if args.sex_assignments:
@@ -1533,6 +1739,7 @@ def main() -> None:
             from gatk_sv_ploidy.call import assign_sex_and_aneuploidy_types
             sex_df = assign_sex_and_aneuploidy_types(df)
         sex_df = _apply_plot_depth_sex_columns(sex_df, df)
+        sex_df = _apply_plot_baseline_manifest(sex_df, baseline_df)
 
         _run_ploidy_plots(df, bin_df, sex_df, args.output_dir, args.highlight_sample)
 
@@ -1548,7 +1755,9 @@ def main() -> None:
                                   site_data=site_data,
                                   min_het_alt=args.min_het_alt,
                                   map_estimates=map_estimates,
-                                  sex_df=sex_df)
+                                  sex_df=sex_df,
+                                  preprocessed_depth_df=preprocessed_depth_df,
+                                  baseline_df=baseline_df)
         elif args.bin_stats or args.training_loss:
             logger.warning("Both --bin-stats and --training-loss required for "
                            "aneuploidy detection plots — skipping")
@@ -1558,6 +1767,7 @@ def main() -> None:
             chrom_df=df,
             bin_df=bin_df,
             sex_df=sex_df,
+            baseline_df=baseline_df,
             highlight_sample=args.highlight_sample,
         )
 

@@ -11,6 +11,8 @@ from pyro.infer import TraceEnum_ELBO
 from gatk_sv_ploidy.data import DepthData
 from gatk_sv_ploidy.models import (
     CNVModel,
+    DEFAULT_AF_BACKGROUND_CONCENTRATION,
+    DEFAULT_AF_OUTLIER_WEIGHT,
     DEFAULT_BACKGROUND_FACTORS,
     DEFAULT_EPSILON_CONCENTRATION,
     DEFAULT_EPSILON_MEAN,
@@ -19,6 +21,10 @@ from gatk_sv_ploidy.models import (
     DEFAULT_RAW_VARIANCE_POWER,
     _center_af_table_numpy,
     _effective_negative_binomial_overdispersion_numpy,
+    _precompute_af_table_from_observed_genotype_log_lik,
+    _precompute_af_genotype_log_lik,
+    _precompute_af_table_from_genotype_log_lik,
+    _precompute_observed_af_genotype_log_lik,
     _marginalized_af_log_lik,
     _marginalized_af_log_lik_numpy,
     _negative_binomial_log_lik_numpy,
@@ -46,13 +52,17 @@ def test_cnv_model_defaults_match_current_preferred_configuration() -> None:
     assert model.guide_init_scale == pytest.approx(DEFAULT_GUIDE_INIT_SCALE)
     assert model.lowrank_guide_rank is None
     assert model.af_evidence_mode == "relative"
-    assert model.learn_af_temperature is True
+    assert model.learn_af_temperature is False
+    assert model.af_outlier_weight == pytest.approx(DEFAULT_AF_OUTLIER_WEIGHT)
+    assert model.af_background_concentration == pytest.approx(
+        DEFAULT_AF_BACKGROUND_CONCENTRATION
+    )
     assert "bin_var" not in model._latent_sites
     assert "allosome_var" not in model._latent_sites
     assert "bin_bias" not in model._latent_sites
     assert "multiplicative_bin_factors" not in model._latent_sites
     assert "multiplicative_sample_factors" not in model._latent_sites
-    assert "af_temperature" in model._latent_sites
+    assert "af_temperature" not in model._latent_sites
     assert "background_bin_factors" not in model._latent_sites
     assert "background_sample_factors" not in model._latent_sites
 
@@ -526,6 +536,72 @@ def test_traceenum_elbo_supports_negative_binomial_and_sex_together() -> None:
     assert np.isfinite(loss)
 
 
+def test_traceenum_elbo_supports_joint_af_and_sex_factors() -> None:
+    df = pd.DataFrame(
+        {
+            "Chr": ["chrX", "chrX"],
+            "Start": [82462542, 86462542],
+            "End": [86462542, 94462542],
+            "S1": [899291.0, 893183.0],
+            "S2": [450085.0, 447599.0],
+        },
+        index=[
+            "chrX:82462542-86462542",
+            "chrX:86462542-94462542",
+        ],
+    )
+    data = DepthData(
+        df,
+        depth_space="raw",
+        clamp_threshold=None,
+        device="cpu",
+        dtype=torch.float64,
+    )
+    model = CNVModel(
+        sex_cn_weight=3.5,
+        af_weight=0.8,
+        learn_af_temperature=True,
+        device="cpu",
+        dtype=torch.float64,
+    )
+    kwargs = model._model_kwargs(data)
+    kwargs["af_table"] = torch.tensor(
+        [
+            [
+                [-8.731556539984444e01, -6.612377062059409e01],
+                [-1.368110966644657e02, -1.814617429338733e02],
+            ],
+            [
+                [-1.488844565971347e02, -1.656738939179022e01],
+                [-3.580629440725404e02, 1.632826355252483e00],
+            ],
+            [
+                [1.790295811632028e00, -1.692863593990445e00],
+                [1.789305086134846e00, -1.259268134340488e-01],
+            ],
+            [
+                [-4.993605053063245e00, 1.707493550236123e00],
+                [-4.247519362663468e00, -1.576731826990715e01],
+            ],
+            [
+                [-6.255349242860806e00, -1.214220162548450e00],
+                [-7.804633313324430e00, -3.016906861661726e01],
+            ],
+            [
+                [-9.508844668952335e00, -5.535106331824970e00],
+                [-1.411907518276722e01, -4.268211546796122e01],
+            ],
+        ],
+        dtype=torch.float64,
+    )
+
+    pyro.clear_param_store()
+    guide = model._build_guide(model._make_init_loc_fn(data))
+    loss = TraceEnum_ELBO().loss(model.model, guide, **kwargs)
+
+    assert np.isfinite(loss)
+
+
 def test_discrete_inference_returns_cn_posterior() -> None:
     df = pd.DataFrame(
         {
@@ -589,6 +665,141 @@ def test_marginalized_af_log_lik_matches_numpy(tiny_site_data: dict[str, np.ndar
     np.testing.assert_allclose(torch_result, numpy_result, rtol=1e-5, atol=1e-5)
 
 
+def test_marginalized_af_log_lik_matches_numpy_with_outlier_component(
+    tiny_site_data: dict[str, np.ndarray],
+) -> None:
+    cn = torch.full((4, 2), 2, dtype=torch.long)
+    torch_result = _marginalized_af_log_lik(
+        torch.tensor(tiny_site_data["site_alt"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_total"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_pop_af"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_mask"], dtype=torch.bool),
+        cn=cn,
+        n_states=6,
+        concentration=50.0,
+        outlier_weight=0.05,
+    ).cpu().numpy()
+
+    numpy_result = _marginalized_af_log_lik_numpy(
+        tiny_site_data["site_alt"],
+        tiny_site_data["site_total"],
+        tiny_site_data["site_pop_af"],
+        tiny_site_data["site_mask"],
+        cn_state=2,
+        n_states=6,
+        concentration=50.0,
+        outlier_weight=0.05,
+    )
+
+    np.testing.assert_allclose(torch_result, numpy_result, rtol=1e-5, atol=1e-5)
+
+
+def test_marginalized_af_log_lik_outlier_component_softens_mismatch() -> None:
+    site_alt = np.array([[[9]]], dtype=np.int32)
+    site_total = np.array([[[10]]], dtype=np.int32)
+    site_pop_af = np.array([[0.5]], dtype=np.float32)
+    site_mask = np.array([[[True]]], dtype=bool)
+
+    no_outlier = _marginalized_af_log_lik_numpy(
+        site_alt,
+        site_total,
+        site_pop_af,
+        site_mask,
+        cn_state=2,
+        n_states=6,
+        concentration=400.0,
+        outlier_weight=0.0,
+    )
+    with_outlier = _marginalized_af_log_lik_numpy(
+        site_alt,
+        site_total,
+        site_pop_af,
+        site_mask,
+        cn_state=2,
+        n_states=6,
+        concentration=400.0,
+        outlier_weight=0.10,
+    )
+
+    assert with_outlier[0, 0] > no_outlier[0, 0]
+
+
+def test_marginalized_af_log_lik_matches_scalar_when_using_repeated_sample_concentration(
+    tiny_site_data: dict[str, np.ndarray],
+) -> None:
+    cn = torch.full((4, 2), 2, dtype=torch.long)
+    scalar_torch = _marginalized_af_log_lik(
+        torch.tensor(tiny_site_data["site_alt"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_total"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_pop_af"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_mask"], dtype=torch.bool),
+        cn=cn,
+        n_states=6,
+        concentration=50.0,
+    ).cpu().numpy()
+    vector_torch = _marginalized_af_log_lik(
+        torch.tensor(tiny_site_data["site_alt"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_total"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_pop_af"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_mask"], dtype=torch.bool),
+        cn=cn,
+        n_states=6,
+        concentration=torch.full((2,), 50.0, dtype=torch.float32),
+    ).cpu().numpy()
+
+    scalar_numpy = _marginalized_af_log_lik_numpy(
+        tiny_site_data["site_alt"],
+        tiny_site_data["site_total"],
+        tiny_site_data["site_pop_af"],
+        tiny_site_data["site_mask"],
+        cn_state=2,
+        n_states=6,
+        concentration=50.0,
+    )
+    vector_numpy = _marginalized_af_log_lik_numpy(
+        tiny_site_data["site_alt"],
+        tiny_site_data["site_total"],
+        tiny_site_data["site_pop_af"],
+        tiny_site_data["site_mask"],
+        cn_state=2,
+        n_states=6,
+        concentration=np.full(2, 50.0, dtype=np.float64),
+    )
+
+    np.testing.assert_allclose(vector_torch, scalar_torch, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(vector_numpy, scalar_numpy, rtol=1e-5, atol=1e-5)
+
+
+def test_marginalized_af_log_lik_sanitizes_invalid_site_counts() -> None:
+    site_alt = np.array([[[2]]], dtype=np.int32)
+    site_total = np.array([[[1]]], dtype=np.int32)
+    site_pop_af = np.array([[0.5]], dtype=np.float32)
+    site_mask = np.array([[[True]]], dtype=bool)
+
+    torch_result = _marginalized_af_log_lik(
+        torch.tensor(site_alt, dtype=torch.float32),
+        torch.tensor(site_total, dtype=torch.float32),
+        torch.tensor(site_pop_af, dtype=torch.float32),
+        torch.tensor(site_mask, dtype=torch.bool),
+        cn=torch.tensor([[2]], dtype=torch.long),
+        n_states=6,
+        concentration=50.0,
+    ).cpu().numpy()
+
+    numpy_result = _marginalized_af_log_lik_numpy(
+        site_alt,
+        site_total,
+        site_pop_af,
+        site_mask,
+        cn_state=2,
+        n_states=6,
+        concentration=50.0,
+    )
+
+    assert np.isfinite(torch_result).all()
+    np.testing.assert_allclose(torch_result, numpy_result, rtol=1e-5, atol=1e-5)
+
+
 def test_precompute_af_table_contains_expected_state_slice(
     tiny_site_data: dict[str, np.ndarray],
 ) -> None:
@@ -616,6 +827,206 @@ def test_precompute_af_table_contains_expected_state_slice(
         rtol=1e-5,
         atol=1e-5,
     )
+
+
+def test_precompute_af_table_matches_scalar_when_using_repeated_sample_concentration(
+    tiny_site_data: dict[str, np.ndarray],
+) -> None:
+    scalar_table = _precompute_af_table(
+        torch.tensor(tiny_site_data["site_alt"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_total"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_pop_af"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_mask"], dtype=torch.bool),
+        n_states=6,
+        concentration=50.0,
+    )
+    vector_table = _precompute_af_table(
+        torch.tensor(tiny_site_data["site_alt"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_total"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_pop_af"], dtype=torch.float32),
+        torch.tensor(tiny_site_data["site_mask"], dtype=torch.bool),
+        n_states=6,
+        concentration=torch.full((2,), 50.0, dtype=torch.float32),
+    )
+
+    torch.testing.assert_close(vector_table, scalar_table, rtol=1e-5, atol=1e-5)
+
+
+def test_precompute_af_table_softens_only_target_sample_with_sample_specific_concentration() -> None:
+    site_alt = torch.tensor([[[18.0, 20.0]]], dtype=torch.float32)
+    site_total = torch.tensor([[[20.0, 20.0]]], dtype=torch.float32)
+    site_pop_af = torch.tensor([[0.5]], dtype=torch.float32)
+    site_mask = torch.tensor([[[True, True]]], dtype=torch.bool)
+
+    scalar_table = _precompute_af_table(
+        site_alt,
+        site_total,
+        site_pop_af,
+        site_mask,
+        n_states=6,
+        concentration=50.0,
+    )
+    mixed_table = _precompute_af_table(
+        site_alt,
+        site_total,
+        site_pop_af,
+        site_mask,
+        n_states=6,
+        concentration=torch.tensor([5.0, 50.0], dtype=torch.float32),
+    )
+
+    assert float(mixed_table[2, 0, 0]) > float(scalar_table[2, 0, 0])
+    torch.testing.assert_close(
+        mixed_table[:, :, 1],
+        scalar_table[:, :, 1],
+        rtol=1e-5,
+        atol=1e-5,
+    )
+
+
+def test_precomputed_af_genotype_log_lik_rebuilds_af_table(
+    tiny_site_data: dict[str, np.ndarray],
+) -> None:
+    site_alt = torch.tensor(tiny_site_data["site_alt"], dtype=torch.float32)
+    site_total = torch.tensor(tiny_site_data["site_total"], dtype=torch.float32)
+    site_pop_af = torch.tensor(tiny_site_data["site_pop_af"], dtype=torch.float32)
+    site_mask = torch.tensor(tiny_site_data["site_mask"], dtype=torch.bool)
+
+    genotype_log_lik = _precompute_af_genotype_log_lik(
+        site_alt,
+        site_total,
+        site_mask,
+        n_states=6,
+        concentration=50.0,
+    )
+    cached_table = _precompute_af_table_from_genotype_log_lik(
+        site_pop_af,
+        site_alt,
+        site_total,
+        site_mask,
+        genotype_log_lik,
+        n_states=6,
+    )
+    direct_table = _precompute_af_table(
+        site_alt,
+        site_total,
+        site_pop_af,
+        site_mask,
+        n_states=6,
+        concentration=50.0,
+    )
+
+    torch.testing.assert_close(cached_table, direct_table, rtol=1e-5, atol=1e-5)
+
+    site_pop_af_grad = site_pop_af.detach().clone().requires_grad_(True)
+    gradient_table = _precompute_af_table_from_genotype_log_lik(
+        site_pop_af_grad,
+        site_alt,
+        site_total,
+        site_mask,
+        genotype_log_lik,
+        n_states=6,
+    )
+    gradient_table.sum().backward()
+    assert site_pop_af_grad.grad is not None
+    assert torch.isfinite(site_pop_af_grad.grad).all()
+
+
+def test_precompute_af_genotype_log_lik_sanitizes_invalid_site_counts() -> None:
+    site_alt = torch.tensor([[[2]]], dtype=torch.float32)
+    site_total = torch.tensor([[[1]]], dtype=torch.float32)
+    site_mask = torch.tensor([[[True]]], dtype=torch.bool)
+
+    genotype_log_lik = _precompute_af_genotype_log_lik(
+        site_alt,
+        site_total,
+        site_mask,
+        n_states=6,
+        concentration=50.0,
+    )
+    observed_log_lik, *_ = _precompute_observed_af_genotype_log_lik(
+        site_alt,
+        site_total,
+        site_mask,
+        n_states=6,
+        concentration=50.0,
+    )
+
+    assert torch.isfinite(genotype_log_lik).all()
+    assert torch.isfinite(observed_log_lik).all()
+
+
+def test_observed_af_genotype_log_lik_rebuilds_af_table(
+    tiny_site_data: dict[str, np.ndarray],
+) -> None:
+    site_alt = torch.tensor(tiny_site_data["site_alt"], dtype=torch.float32)
+    site_total = torch.tensor(tiny_site_data["site_total"], dtype=torch.float32)
+    site_pop_af = torch.tensor(tiny_site_data["site_pop_af"], dtype=torch.float32)
+    site_mask = torch.tensor(tiny_site_data["site_mask"], dtype=torch.bool)
+
+    (
+        observed_genotype_log_lik,
+        observed_alt,
+        observed_total,
+        observed_bin_idx,
+        observed_site_idx,
+        observed_sample_idx,
+        observed_site_slot_idx,
+        site_slot_bin_idx,
+        site_slot_site_idx,
+    ) = _precompute_observed_af_genotype_log_lik(
+        site_alt,
+        site_total,
+        site_mask,
+        n_states=6,
+        concentration=50.0,
+    )
+    observed_table = _precompute_af_table_from_observed_genotype_log_lik(
+        site_pop_af,
+        observed_alt,
+        observed_total,
+        observed_bin_idx,
+        observed_site_idx,
+        observed_sample_idx,
+        observed_site_slot_idx,
+        observed_genotype_log_lik,
+        n_bins=site_alt.shape[0],
+        n_samples=site_alt.shape[2],
+        n_states=6,
+    )
+    direct_table = _precompute_af_table(
+        site_alt,
+        site_total,
+        site_pop_af,
+        site_mask,
+        n_states=6,
+        concentration=50.0,
+    )
+
+    torch.testing.assert_close(observed_table, direct_table, rtol=1e-5, atol=1e-5)
+
+    observed_site_pop_af = (
+        site_pop_af[site_slot_bin_idx, site_slot_site_idx]
+        .detach()
+        .clone()
+        .requires_grad_(True)
+    )
+    gradient_table = _precompute_af_table_from_observed_genotype_log_lik(
+        observed_site_pop_af,
+        observed_alt,
+        observed_total,
+        observed_bin_idx,
+        observed_site_idx,
+        observed_sample_idx,
+        observed_site_slot_idx,
+        observed_genotype_log_lik,
+        n_bins=site_alt.shape[0],
+        n_samples=site_alt.shape[2],
+        n_states=6,
+    )
+    gradient_table.sum().backward()
+    assert observed_site_pop_af.grad is not None
+    assert torch.isfinite(observed_site_pop_af.grad).all()
 
 
 def test_relative_af_evidence_centers_against_fixed_reference_mixture(
@@ -741,6 +1152,9 @@ def test_prepare_af_table_uses_leave_one_out_for_self_pooled_site_pop_af() -> No
         site_mask,
         n_states=model.n_states,
         concentration=model.af_concentration,
+        outlier_weight=model.af_outlier_weight,
+        background_concentration=model.af_background_concentration,
+        informative_weight=model.af_weight,
     )
     expected_table = model._apply_af_evidence_mode_torch(expected_table, None)
 
@@ -804,11 +1218,18 @@ def test_run_discrete_inference_uses_learned_af_temperature_map() -> None:
         }
     )
     df["Bin"] = "chr21:0-1000"
+    site_data = {
+        "site_alt": np.asarray([[[5]]], dtype=np.int32),
+        "site_total": np.asarray([[[10]]], dtype=np.int32),
+        "site_pop_af": np.asarray([[0.5]], dtype=np.float32),
+        "site_mask": np.asarray([[[True]]], dtype=bool),
+    }
     data = DepthData(
         df.set_index("Bin"),
         device="cpu",
         depth_space="raw",
         clamp_threshold=None,
+        site_data=site_data,
     )
     model = CNVModel(
         autosome_prior_mode="dirichlet",
@@ -826,24 +1247,19 @@ def test_run_discrete_inference_uses_learned_af_temperature_map() -> None:
         "sample_depth": np.array([20.0], dtype=np.float32),
         "cn_probs": np.full((1, 6), 1.0 / 6.0, dtype=np.float32),
     }
-    af_table = np.full((6, 1, 1), -5.0, dtype=np.float32)
-    af_table[2, 0, 0] = 0.0
-
     low_temp = model.run_discrete_inference(
         data,
         map_estimates={
             **base_map,
             "af_temperature": np.asarray(0.0, dtype=np.float32),
         },
-        af_table=af_table,
     )
     high_temp = model.run_discrete_inference(
         data,
         map_estimates={
             **base_map,
-            "af_temperature": np.asarray(2.0, dtype=np.float32),
+            "af_temperature": np.asarray(1.0, dtype=np.float32),
         },
-        af_table=af_table,
     )
 
     assert high_temp["cn_posterior"][0, 0, 2] > low_temp["cn_posterior"][0, 0, 2]
@@ -866,7 +1282,7 @@ def test_cnv_model_passes_init_scale_to_diagonal_guide() -> None:
 def test_cnv_model_uses_mixed_guide_when_learning_site_af() -> None:
     model = CNVModel(guide_type="lowrank", learn_site_pop_af=True)
     assert model.guide.__class__.__name__ == "AutoGuideList"
-    assert "site_pop_af_latent" in model._latent_sites
+    assert "site_pop_af_latent_observed" in model._latent_sites
 
 
 def test_cnv_model_negative_binomial_fixes_sample_depth_by_default() -> None:
@@ -1577,6 +1993,14 @@ def test_model_kwargs_skip_precomputed_af_table_when_learning_site_af(
     model_kw = model._model_kwargs(data)
 
     assert "af_table" not in model_kw
+    assert "af_observed_genotype_log_lik" in model_kw
+    assert "af_observed_bin_idx" in model_kw
+    assert "af_observed_sample_idx" in model_kw
+    assert "af_observed_site_slot_idx" in model_kw
+    assert "af_site_bin_idx" in model_kw
+    assert model_kw["af_site_bin_idx"].numel() <= data.site_pop_af.numel()
+    assert "site_alt" not in model_kw
+    assert "site_total" not in model_kw
     assert model_kw["site_pop_af"].shape == data.site_pop_af.shape
 
 
@@ -1603,8 +2027,10 @@ def test_learn_site_pop_af_trains_with_mixed_guide(
     model.train(data, max_iter=1, log_freq=1, early_stopping=False)
     estimates = model.get_map_estimates(data, estimate_method="median")
 
+    assert "site_pop_af_latent_observed" in estimates
     assert "site_pop_af_latent" in estimates
     assert estimates["site_pop_af_latent"].shape == tiny_site_data["site_pop_af"].shape
+    assert estimates["site_pop_af_latent_observed"].ndim == 1
 
 
 def test_get_map_estimates_median_uses_guide_median(monkeypatch) -> None:

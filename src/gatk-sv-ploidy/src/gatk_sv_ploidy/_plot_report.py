@@ -44,6 +44,7 @@ def write_plot_report(
     chrom_df: Optional[pd.DataFrame] = None,
     bin_df: Optional[pd.DataFrame] = None,
     sex_df: Optional[pd.DataFrame] = None,
+    baseline_df: Optional[pd.DataFrame] = None,
     highlight_sample: str = "",
 ) -> pd.DataFrame:
     """Write the ploidy plot manifest and static HTML report.
@@ -70,7 +71,13 @@ def write_plot_report(
     manifest_path = root / "plot_manifest.tsv"
     manifest_df.to_csv(manifest_path, sep="\t", index=False)
 
-    summary_cards = _build_summary_cards(chrom_df, bin_df, sex_df, manifest_df)
+    summary_cards = _build_summary_cards(
+        chrom_df,
+        bin_df,
+        sex_df,
+        manifest_df,
+        baseline_df,
+    )
     html = _render_html_report(
         manifest_df,
         summary_cards,
@@ -219,10 +226,32 @@ def _build_summary_cards(
     bin_df: Optional[pd.DataFrame],
     sex_df: Optional[pd.DataFrame],
     manifest_df: pd.DataFrame,
+    baseline_df: Optional[pd.DataFrame] = None,
 ) -> list[tuple[str, str, str]]:
     cards: list[tuple[str, str, str]] = []
     if chrom_df is not None and not chrom_df.empty:
         cards.append(("Samples", _fmt_int(chrom_df["sample"].nunique()), "unique samples"))
+        undetermined_samples = None
+        if baseline_df is not None and "baseline_cn_call" in baseline_df.columns:
+            undetermined_mask = baseline_df["baseline_cn_call"].astype(str) == "UNDETERMINED"
+            if "sample" in baseline_df.columns:
+                undetermined_samples = baseline_df.loc[
+                    undetermined_mask,
+                    "sample",
+                ].nunique()
+            else:
+                undetermined_samples = int(undetermined_mask.sum())
+        elif sex_df is not None and "baseline_ploidy_type" in sex_df.columns:
+            undetermined_mask = sex_df["baseline_ploidy_type"].astype(str) == "UNDETERMINED"
+            undetermined_samples = int(undetermined_mask.sum())
+        if undetermined_samples is not None:
+            cards.append(
+                (
+                    "Undetermined Samples",
+                    _fmt_int(undetermined_samples),
+                    "excluded from infer",
+                )
+            )
         cards.append(("Chromosomes", _fmt_int(chrom_df["chromosome"].nunique()), "reported contigs"))
         if "is_aneuploid" in chrom_df.columns:
             aneuploid_samples = chrom_df.loc[chrom_df["is_aneuploid"], "sample"].nunique()

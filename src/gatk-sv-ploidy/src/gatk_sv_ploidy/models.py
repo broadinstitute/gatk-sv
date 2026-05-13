@@ -45,7 +45,6 @@ from gatk_sv_ploidy._util import (
     compose_additive_background_matrix,
     DEFAULT_AF_CONCENTRATION,
     DEFAULT_AF_WEIGHT,
-    NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
 )
 from gatk_sv_ploidy.data import DepthData
 
@@ -69,6 +68,8 @@ DEFAULT_BACKGROUND_BIN_SCALE = 0.5
 DEFAULT_GUIDE_INIT_SCALE = 0.02
 DEFAULT_GUIDE_WARMUP_ITER = -1
 DEFAULT_RAW_VARIANCE_POWER = 1.5
+DEFAULT_AF_OUTLIER_WEIGHT = 0.05
+DEFAULT_AF_BACKGROUND_CONCENTRATION = 0.5
 
 
 def _windowed_relative_elbo_change(
@@ -92,6 +93,261 @@ def _windowed_relative_elbo_change(
 # ── marginalized allele-fraction likelihood ─────────────────────────────────
 
 
+def _sanitize_af_log_prob_torch(log_prob: torch.Tensor) -> torch.Tensor:
+    """Replace non-finite AF log-probability terms with a bounded penalty."""
+    return torch.nan_to_num(log_prob, nan=0.0, posinf=0.0, neginf=-100.0)
+
+
+def _normalize_af_outlier_weight(outlier_weight: float) -> float:
+    """Validate a fixed AF outlier mixture weight."""
+    weight = float(outlier_weight)
+    if not math.isfinite(weight):
+        raise ValueError("af_outlier_weight must be finite.")
+    if weight < 0.0 or weight >= 1.0:
+        raise ValueError("af_outlier_weight must satisfy 0 <= weight < 1.")
+    return weight
+
+
+def _normalize_af_informative_weight(informative_weight: float) -> float:
+    """Validate a fixed AF informative-mixture weight."""
+    weight = float(informative_weight)
+    if not math.isfinite(weight):
+        raise ValueError("af informative weight must be finite.")
+    if weight < 0.0 or weight > 1.0:
+        raise ValueError("af informative weight must satisfy 0 <= weight <= 1.")
+    return weight
+
+
+def _normalize_af_background_concentration(concentration: float) -> float:
+    """Validate the CN-independent population-AF background concentration."""
+    value = float(concentration)
+    if not math.isfinite(value):
+        raise ValueError("af_background_concentration must be finite.")
+    if value <= 0.0:
+        raise ValueError("af_background_concentration must be positive.")
+    return value
+
+
+def _mix_population_af_background_torch(
+    genotype_log_lik: torch.Tensor,
+    background_log_lik: torch.Tensor,
+    informative_weight: float | torch.Tensor,
+) -> torch.Tensor:
+    """Mix CN/genotype AF evidence with a CN-independent AF background."""
+    if isinstance(informative_weight, torch.Tensor):
+        weight = torch.clamp(
+            informative_weight.to(dtype=genotype_log_lik.dtype, device=genotype_log_lik.device),
+            min=1e-6,
+            max=1.0 - 1e-6,
+        )
+        return torch.logaddexp(
+            genotype_log_lik + torch.log(weight),
+            background_log_lik + torch.log1p(-weight),
+        )
+    weight = _normalize_af_informative_weight(informative_weight)
+    if weight == 1.0:
+        return genotype_log_lik
+    if weight == 0.0:
+        return background_log_lik.expand_as(genotype_log_lik)
+    return torch.logaddexp(
+        genotype_log_lik + math.log(weight),
+        background_log_lik + math.log1p(-weight),
+    )
+
+
+def _mix_population_af_background_numpy(
+    genotype_log_lik: np.ndarray,
+    background_log_lik: np.ndarray,
+    informative_weight: float,
+) -> np.ndarray:
+    """NumPy counterpart of :func:`_mix_population_af_background_torch`."""
+    weight = _normalize_af_informative_weight(informative_weight)
+    if weight == 1.0:
+        return genotype_log_lik
+    if weight == 0.0:
+        return np.broadcast_to(background_log_lik, genotype_log_lik.shape)
+    return np.logaddexp(
+        genotype_log_lik + math.log(weight),
+        background_log_lik + math.log1p(-weight),
+    )
+
+
+def _uniform_af_log_prob_torch(
+    site_alt: torch.Tensor,
+    site_total_safe: torch.Tensor,
+) -> torch.Tensor:
+    """Return the uniform Beta-Binomial AF log-probability per observation."""
+    return _sanitize_af_log_prob_torch(
+        dist.BetaBinomial(
+            torch.ones((), dtype=site_alt.dtype, device=site_alt.device),
+            torch.ones((), dtype=site_alt.dtype, device=site_alt.device),
+            site_total_safe,
+            validate_args=False,
+        ).log_prob(site_alt)
+    )
+
+
+def _population_af_background_log_prob_torch(
+    site_alt: torch.Tensor,
+    site_total_safe: torch.Tensor,
+    site_pop_af: torch.Tensor,
+    background_concentration: float,
+) -> torch.Tensor:
+    """Return CN-independent Beta-Binomial log-probs centered on site AF."""
+    eps = 1e-6
+    concentration = _normalize_af_background_concentration(background_concentration)
+    if site_pop_af.dim() == site_alt.dim():
+        pop_af = site_pop_af
+    elif site_pop_af.dim() == 2:
+        pop_af = site_pop_af.unsqueeze(-1)
+    elif site_pop_af.dim() == 3:
+        pop_af = site_pop_af
+    else:
+        raise ValueError(
+            "site_pop_af must have shape (n_bins, max_sites) or "
+            "(n_bins, max_sites, n_samples)."
+        )
+    pop_af_safe = torch.clamp(pop_af, min=eps, max=1.0 - eps)
+    alpha = concentration * pop_af_safe + eps
+    beta = concentration * (1.0 - pop_af_safe) + eps
+    return _sanitize_af_log_prob_torch(dist.BetaBinomial(
+        alpha,
+        beta,
+        site_total_safe,
+        validate_args=False,
+    ).log_prob(site_alt))
+
+
+def _mix_af_log_likelihood_torch(
+    genotype_log_lik: torch.Tensor,
+    uniform_log_lik: torch.Tensor,
+    outlier_weight: float,
+) -> torch.Tensor:
+    """Mix genotype AF evidence with a uniform outlier component."""
+    weight = _normalize_af_outlier_weight(outlier_weight)
+    if weight == 0.0:
+        return genotype_log_lik
+    return torch.logaddexp(
+        genotype_log_lik + math.log1p(-weight),
+        uniform_log_lik + math.log(weight),
+    )
+
+
+def _uniform_af_log_prob_numpy(
+    site_alt: np.ndarray,
+    site_total_safe: np.ndarray,
+) -> np.ndarray:
+    """Return the uniform Beta-Binomial AF log-probability per observation."""
+    from scipy.stats import betabinom as betabinom_scipy
+
+    log_prob = betabinom_scipy.logpmf(
+        site_alt,
+        site_total_safe,
+        np.ones_like(site_alt, dtype=np.float64),
+        np.ones_like(site_alt, dtype=np.float64),
+    )
+    return np.nan_to_num(log_prob, nan=0.0, posinf=0.0, neginf=-100.0)
+
+
+def _population_af_background_log_prob_numpy(
+    site_alt: np.ndarray,
+    site_total_safe: np.ndarray,
+    site_pop_af: np.ndarray,
+    background_concentration: float,
+) -> np.ndarray:
+    """NumPy counterpart of :func:`_population_af_background_log_prob_torch`."""
+    from scipy.stats import betabinom as betabinom_scipy
+
+    eps = 1e-6
+    concentration = _normalize_af_background_concentration(background_concentration)
+    if site_pop_af.ndim == site_alt.ndim:
+        pop_af = site_pop_af
+    elif site_pop_af.ndim == 2:
+        pop_af = site_pop_af[:, :, np.newaxis]
+    elif site_pop_af.ndim == 3:
+        pop_af = site_pop_af
+    else:
+        raise ValueError(
+            "site_pop_af must have shape (n_bins, max_sites) or "
+            "(n_bins, max_sites, n_samples)."
+        )
+    pop_af_safe = np.clip(pop_af, eps, 1.0 - eps)
+    alpha = concentration * pop_af_safe + eps
+    beta = concentration * (1.0 - pop_af_safe) + eps
+    log_prob = betabinom_scipy.logpmf(site_alt, site_total_safe, alpha, beta)
+    return np.nan_to_num(log_prob, nan=0.0, posinf=0.0, neginf=-100.0)
+
+
+def _mix_af_log_likelihood_numpy(
+    genotype_log_lik: np.ndarray,
+    uniform_log_lik: np.ndarray,
+    outlier_weight: float,
+) -> np.ndarray:
+    """Mix genotype AF evidence with a uniform outlier component."""
+    weight = _normalize_af_outlier_weight(outlier_weight)
+    if weight == 0.0:
+        return genotype_log_lik
+    return np.logaddexp(
+        genotype_log_lik + math.log1p(-weight),
+        uniform_log_lik + math.log(weight),
+    )
+
+
+def _normalize_af_concentration_torch(
+    concentration: float | np.ndarray | torch.Tensor,
+    n_samples: int,
+    *,
+    dtype: torch.dtype,
+    device: str | torch.device,
+) -> torch.Tensor:
+    """Return scalar or per-sample AF concentration broadcast over samples."""
+    concentration_tensor = torch.as_tensor(
+        concentration,
+        dtype=dtype,
+        device=device,
+    )
+    if concentration_tensor.ndim == 0:
+        concentration_tensor = concentration_tensor.reshape(1, 1, 1)
+    else:
+        concentration_tensor = concentration_tensor.reshape(-1)
+        if concentration_tensor.numel() != n_samples:
+            raise ValueError(
+                "sample-specific AF concentration must have length n_samples."
+            )
+        concentration_tensor = concentration_tensor.reshape(1, 1, n_samples)
+
+    if not torch.isfinite(concentration_tensor).all():
+        raise ValueError("AF concentration must be finite.")
+    if torch.any(concentration_tensor <= 0):
+        raise ValueError("AF concentration must be positive.")
+
+    return concentration_tensor
+
+
+def _normalize_af_concentration_numpy(
+    concentration: float | np.ndarray,
+    n_samples: int,
+) -> np.ndarray:
+    """NumPy counterpart of :func:`_normalize_af_concentration_torch`."""
+    concentration_arr = np.asarray(concentration, dtype=np.float64)
+    if concentration_arr.ndim == 0:
+        concentration_arr = concentration_arr.reshape(1, 1, 1)
+    else:
+        concentration_arr = concentration_arr.reshape(-1)
+        if concentration_arr.size != n_samples:
+            raise ValueError(
+                "sample-specific AF concentration must have length n_samples."
+            )
+        concentration_arr = concentration_arr.reshape(1, 1, n_samples)
+
+    if not np.isfinite(concentration_arr).all():
+        raise ValueError("AF concentration must be finite.")
+    if np.any(concentration_arr <= 0.0):
+        raise ValueError("AF concentration must be positive.")
+
+    return concentration_arr
+
+
 def _marginalized_af_log_lik(
     site_alt: torch.Tensor,
     site_total: torch.Tensor,
@@ -99,7 +355,10 @@ def _marginalized_af_log_lik(
     site_mask: torch.Tensor,
     cn: torch.Tensor,
     n_states: int,
-    concentration: float,
+    concentration: float | np.ndarray | torch.Tensor,
+    outlier_weight: float = 0.0,
+    background_concentration: float | None = None,
+    informative_weight: float | torch.Tensor = 1.0,
 ) -> torch.Tensor:
     """Compute per-bin AF log-likelihood marginalised over genotype states.
 
@@ -128,7 +387,8 @@ def _marginalized_af_log_lik(
         cn: ``(n_bins, n_samples)`` integer copy-number state per bin/sample
             (may have extra leading enumeration dimensions from Pyro).
         n_states: Maximum CN state (6 for CN 0–5).
-        concentration: Beta-Binomial concentration parameter.
+        concentration: Beta-Binomial concentration parameter, either a
+            scalar or a per-sample vector of length ``n_samples``.
 
     Returns:
         Per-bin, per-sample log-likelihood averaged over valid sites.
@@ -141,6 +401,12 @@ def _marginalized_af_log_lik(
     cn_f = cn_e.float()
 
     site_total_safe = torch.clamp(site_total, min=1)
+    concentration_tensor = _normalize_af_concentration_torch(
+        concentration,
+        site_total.shape[2],
+        dtype=site_total.dtype,
+        device=site_total.device,
+    )
     if site_pop_af.dim() == 2:
         pop_af = site_pop_af.unsqueeze(-1)  # (n_bins, max_sites, 1)
     elif site_pop_af.dim() == 3:
@@ -163,13 +429,14 @@ def _marginalized_af_log_lik(
         # Manual log Binom(k | c, p) to avoid distribution validation issues
         # and explicit expand calls — rely on broadcasting throughout.
         cn_safe = cn_f.clamp(min=1)
+        remaining_copies = torch.clamp(cn_safe - k_f, min=0.0)
         log_comb = torch.lgamma(cn_safe + 1)
         log_comb = log_comb - torch.lgamma(
             torch.tensor(k_f + 1, device=cn_f.device),
         )
-        log_comb = log_comb - torch.lgamma(cn_safe - k_f + 1)
-        log_p = k_f * torch.log(pop_af_safe) + (cn_safe - k_f) * torch.log(
-            1.0 - pop_af_safe,
+        log_comb = log_comb - torch.lgamma(remaining_copies + 1)
+        log_p = k_f * torch.log(pop_af_safe) + remaining_copies * torch.log1p(
+            -pop_af_safe,
         )
         log_binom = log_comb + log_p
 
@@ -191,18 +458,38 @@ def _marginalized_af_log_lik(
             (torch.tensor(k_f, device=cn_f.device) / cn_safe).clamp(0.0, 1.0),
             torch.tensor(0.5, device=cn_f.device),
         )
-        alpha = concentration * eaf + eps
-        beta = concentration * (1.0 - eaf) + eps
+        alpha = concentration_tensor * eaf + eps
+        beta = concentration_tensor * (1.0 - eaf) + eps
 
-        log_bb = dist.BetaBinomial(
+        log_bb = _sanitize_af_log_prob_torch(dist.BetaBinomial(
             alpha, beta, site_total_safe, validate_args=False,
-        ).log_prob(site_alt)
+        ).log_prob(site_alt))
 
         log_terms.append(log_binom_prior + log_bb)
 
     # logsumexp over genotype states
     log_stack = torch.stack(log_terms, dim=0)  # (n_states, ..., n_bins, max_sites, n_samples)
     log_marginal = torch.logsumexp(log_stack, dim=0)  # (..., n_bins, max_sites, n_samples)
+
+    uniform_log_lik = _uniform_af_log_prob_torch(site_alt, site_total_safe)
+    log_marginal = _mix_af_log_likelihood_torch(
+        log_marginal,
+        uniform_log_lik,
+        outlier_weight,
+    )
+
+    if background_concentration is not None:
+        background_log_lik = _population_af_background_log_prob_torch(
+            site_alt,
+            site_total_safe,
+            pop_af,
+            background_concentration,
+        )
+        log_marginal = _mix_population_af_background_torch(
+            log_marginal,
+            background_log_lik,
+            informative_weight,
+        )
 
     # Mask out invalid sites and sum over observed sites so bins with more
     # informative loci contribute proportionally more AF evidence.
@@ -217,7 +504,10 @@ def _marginalized_af_log_lik_numpy(
     site_mask: np.ndarray,
     cn_state: int,
     n_states: int,
-    concentration: float,
+    concentration: float | np.ndarray,
+    outlier_weight: float = 0.0,
+    background_concentration: float | None = None,
+    informative_weight: float = 1.0,
 ) -> np.ndarray:
     """NumPy version for analytical discrete inference.
 
@@ -232,7 +522,8 @@ def _marginalized_af_log_lik_numpy(
         site_mask: ``(n_bins, max_sites, n_samples)``
         cn_state: The CN value (integer).
         n_states: Max CN.
-        concentration: Beta-Binomial concentration.
+        concentration: Beta-Binomial concentration, either a scalar or a
+            per-sample vector of length ``n_samples``.
 
     Returns:
         ``(n_bins, n_samples)`` log-likelihood summed over observed sites
@@ -246,6 +537,9 @@ def _marginalized_af_log_lik_numpy(
         cn_state=cn_state,
         n_states=n_states,
         concentration=concentration,
+        outlier_weight=outlier_weight,
+        background_concentration=background_concentration,
+        informative_weight=informative_weight,
     ).sum(axis=1)
 
 
@@ -256,7 +550,10 @@ def _site_level_marginalized_af_log_lik_numpy(
     site_mask: np.ndarray,
     cn_state: int,
     n_states: int,
-    concentration: float,
+    concentration: float | np.ndarray,
+    outlier_weight: float = 0.0,
+    background_concentration: float | None = None,
+    informative_weight: float = 1.0,
 ) -> np.ndarray:
     """Return the per-site marginalized AF log-likelihood for one CN state.
 
@@ -269,6 +566,10 @@ def _site_level_marginalized_af_log_lik_numpy(
 
     eps = 1e-6
     site_total_safe = np.maximum(site_total, 1)
+    concentration_arr = _normalize_af_concentration_numpy(
+        concentration,
+        site_total.shape[2],
+    )
     if site_pop_af.ndim == 2:
         pop_af = site_pop_af[:, :, np.newaxis]   # (n_bins, max_sites, 1)
     elif site_pop_af.ndim == 3:
@@ -291,8 +592,8 @@ def _site_level_marginalized_af_log_lik_numpy(
 
         # BetaBinomial likelihood
         eaf = k / max(cn_state, 1)
-        alpha = concentration * eaf + eps
-        beta = concentration * (1.0 - eaf) + eps
+        alpha = concentration_arr * eaf + eps
+        beta = concentration_arr * (1.0 - eaf) + eps
         log_bb = betabinom_scipy.logpmf(site_alt, site_total_safe, alpha, beta)
         log_bb = np.nan_to_num(log_bb, nan=0.0, posinf=0.0, neginf=-100.0)
 
@@ -305,7 +606,92 @@ def _site_level_marginalized_af_log_lik_numpy(
         np.sum(np.exp(log_stack - max_val), axis=0) + 1e-30
     )
 
-    return np.where(site_mask, log_marginal, 0.0)
+    uniform_log_lik = _uniform_af_log_prob_numpy(site_alt, site_total_safe)
+    mixed_log_lik = _mix_af_log_likelihood_numpy(
+        log_marginal,
+        uniform_log_lik,
+        outlier_weight,
+    )
+    if background_concentration is not None:
+        background_log_lik = _population_af_background_log_prob_numpy(
+            site_alt,
+            site_total_safe,
+            pop_af,
+            background_concentration,
+        )
+        mixed_log_lik = _mix_population_af_background_numpy(
+            mixed_log_lik,
+            background_log_lik,
+            informative_weight,
+        )
+    return np.where(site_mask, mixed_log_lik, 0.0)
+
+
+def estimate_af_background_concentration_numpy(
+    site_alt: np.ndarray,
+    site_total: np.ndarray,
+    site_pop_af: np.ndarray,
+    site_mask: np.ndarray,
+    *,
+    max_observations: int = 250000,
+    seed: int = 13,
+    lower: float = 0.01,
+    upper: float = 500.0,
+) -> float:
+    """Estimate the CN-independent population-AF background concentration.
+
+    The background model is ``BetaBinomial(total, phi * p, phi * (1 - p))``
+    with site/sample population AF ``p``.  ``phi`` is fit by maximum marginal
+    likelihood over observed site-sample allele counts, optionally on a fixed
+    deterministic subsample for speed.
+    """
+    from scipy.optimize import minimize_scalar
+
+    if site_alt.shape != site_total.shape or site_alt.shape != site_mask.shape:
+        raise ValueError(
+            "site_alt, site_total, and site_mask must have matching shapes."
+        )
+    observed = site_mask & (site_total > 0)
+    if not np.any(observed):
+        return DEFAULT_AF_BACKGROUND_CONCENTRATION
+    if site_pop_af.ndim == 2:
+        pop_af = np.broadcast_to(site_pop_af[:, :, np.newaxis], site_total.shape)
+    elif site_pop_af.ndim == 3:
+        pop_af = site_pop_af
+    else:
+        raise ValueError(
+            "site_pop_af must have shape (n_bins, max_sites) or "
+            "(n_bins, max_sites, n_samples)."
+        )
+    alt = np.asarray(site_alt[observed], dtype=np.float64)
+    total = np.asarray(site_total[observed], dtype=np.float64)
+    pop = np.clip(np.asarray(pop_af[observed], dtype=np.float64), 1e-6, 1.0 - 1e-6)
+    if alt.size > max_observations:
+        rng = np.random.default_rng(seed)
+        idx = rng.choice(alt.size, size=max_observations, replace=False)
+        alt = alt[idx]
+        total = total[idx]
+        pop = pop[idx]
+
+    total_safe = np.maximum(total, 1.0)
+
+    def objective(log_concentration: float) -> float:
+        concentration = math.exp(log_concentration)
+        log_prob = _population_af_background_log_prob_numpy(
+            alt,
+            total_safe,
+            pop,
+            concentration,
+        )
+        return -float(np.sum(log_prob))
+
+    result = minimize_scalar(
+        objective,
+        bounds=(math.log(lower), math.log(upper)),
+        method="bounded",
+        options={"xatol": 1e-3},
+    )
+    return _normalize_af_background_concentration(math.exp(float(result.x)))
 
 
 def _precompute_af_table(
@@ -314,7 +700,10 @@ def _precompute_af_table(
     site_pop_af: torch.Tensor,
     site_mask: torch.Tensor,
     n_states: int,
-    concentration: float,
+    concentration: float | np.ndarray | torch.Tensor,
+    outlier_weight: float = 0.0,
+    background_concentration: float | None = None,
+    informative_weight: float | torch.Tensor = 1.0,
 ) -> torch.Tensor:
     """Precompute AF log-likelihood for every CN state.
 
@@ -329,7 +718,8 @@ def _precompute_af_table(
         site_pop_af: ``(n_bins, max_sites)``
         site_mask: ``(n_bins, max_sites, n_samples)``
         n_states: Number of CN states.
-        concentration: Beta-Binomial concentration.
+        concentration: Beta-Binomial concentration, either a scalar or a
+            per-sample vector of length ``n_samples``.
 
     Returns:
         Tensor of shape ``(n_states, n_bins, n_samples)`` where entry
@@ -346,8 +736,465 @@ def _precompute_af_table(
         table[c] = _marginalized_af_log_lik(
             site_alt, site_total, site_pop_af, site_mask,
             cn=cn_c, n_states=n_states, concentration=concentration,
+            outlier_weight=outlier_weight,
+            background_concentration=background_concentration,
+            informative_weight=informative_weight,
         )
     return table
+
+
+def _precompute_af_site_log_lik(
+    site_alt: torch.Tensor,
+    site_total: torch.Tensor,
+    site_pop_af: torch.Tensor,
+    site_mask: torch.Tensor,
+    n_states: int,
+    concentration: float | np.ndarray | torch.Tensor,
+    outlier_weight: float = 0.0,
+) -> torch.Tensor:
+    """Precompute per-site CN/genotype AF log-likelihood components."""
+    n_bins, max_sites, n_samples = site_alt.shape
+    table = torch.empty(
+        n_states,
+        n_bins,
+        max_sites,
+        n_samples,
+        device=site_alt.device,
+        dtype=site_alt.dtype,
+    )
+    for c in range(n_states):
+        cn_c = torch.full(
+            (n_bins, n_samples),
+            c,
+            dtype=torch.long,
+            device=site_alt.device,
+        )
+        cn_e = cn_c.unsqueeze(-2)
+        cn_f = cn_e.float()
+        site_total_safe = torch.clamp(site_total, min=1)
+        concentration_tensor = _normalize_af_concentration_torch(
+            concentration,
+            n_samples,
+            dtype=site_total.dtype,
+            device=site_total.device,
+        )
+        if site_pop_af.dim() == 2:
+            pop_af = site_pop_af.unsqueeze(-1)
+        elif site_pop_af.dim() == 3:
+            pop_af = site_pop_af
+        else:
+            raise ValueError(
+                "site_pop_af must have shape (n_bins, max_sites) or "
+                "(n_bins, max_sites, n_samples)."
+            )
+        pop_af_safe = torch.clamp(pop_af, min=1e-6, max=1.0 - 1e-6)
+        log_terms = []
+        for k in range(c + 1):
+            k_f = float(k)
+            cn_safe = cn_f.clamp(min=1)
+            remaining_copies = torch.clamp(cn_safe - k_f, min=0.0)
+            log_comb = torch.lgamma(cn_safe + 1)
+            log_comb = log_comb - torch.lgamma(
+                torch.tensor(k_f + 1, device=cn_f.device),
+            )
+            log_comb = log_comb - torch.lgamma(remaining_copies + 1)
+            log_genotype_prior = log_comb + k_f * torch.log(pop_af_safe)
+            log_genotype_prior = log_genotype_prior + remaining_copies * torch.log1p(
+                -pop_af_safe,
+            )
+            if c == 0:
+                log_genotype_prior = torch.zeros_like(log_genotype_prior)
+            eaf = torch.where(
+                cn_f > 0,
+                (torch.tensor(k_f, device=cn_f.device) / cn_safe).clamp(0.0, 1.0),
+                torch.tensor(0.5, device=cn_f.device),
+            )
+            alpha = concentration_tensor * eaf + 1e-6
+            beta = concentration_tensor * (1.0 - eaf) + 1e-6
+            log_bb = _sanitize_af_log_prob_torch(dist.BetaBinomial(
+                alpha,
+                beta,
+                site_total_safe,
+                validate_args=False,
+            ).log_prob(site_alt))
+            log_terms.append(log_genotype_prior + log_bb)
+        log_marginal = torch.logsumexp(torch.stack(log_terms, dim=0), dim=0)
+        uniform_log_lik = _uniform_af_log_prob_torch(site_alt, site_total_safe)
+        mixed_log_lik = _mix_af_log_likelihood_torch(
+            log_marginal,
+            uniform_log_lik,
+            outlier_weight,
+        )
+        table[c] = torch.where(site_mask, mixed_log_lik, torch.zeros_like(mixed_log_lik))
+    return table
+
+
+def _precompute_af_background_log_lik(
+    site_alt: torch.Tensor,
+    site_total: torch.Tensor,
+    site_pop_af: torch.Tensor,
+    site_mask: torch.Tensor,
+    background_concentration: float,
+) -> torch.Tensor:
+    """Precompute per-site CN-independent AF background log-likelihood."""
+    site_total_safe = torch.clamp(site_total, min=1)
+    background_log_lik = _population_af_background_log_prob_torch(
+        site_alt,
+        site_total_safe,
+        site_pop_af,
+        background_concentration,
+    )
+    return torch.where(site_mask, background_log_lik, torch.zeros_like(background_log_lik))
+
+
+def _precompute_af_table_from_site_log_lik(
+    af_site_log_lik: torch.Tensor,
+    af_background_log_lik: torch.Tensor | None,
+    informative_weight: float | torch.Tensor,
+) -> torch.Tensor:
+    """Build a summed AF table from cached per-site likelihood components."""
+    if af_background_log_lik is not None:
+        site_log_lik = _mix_population_af_background_torch(
+            af_site_log_lik,
+            af_background_log_lik.unsqueeze(0),
+            informative_weight,
+        )
+    else:
+        site_log_lik = af_site_log_lik
+    return site_log_lik.sum(dim=-2)
+
+
+def _af_genotype_fraction_lookup(n_states: int) -> tuple[list[float], np.ndarray]:
+    """Return unique genotype allele-fraction values and a CN/k lookup table."""
+    fraction_to_index: dict[tuple[int, int], int] = {}
+    fractions: list[float] = []
+    index = np.full((n_states, n_states), -1, dtype=np.int64)
+
+    for cn_state in range(n_states):
+        for alt_copies in range(cn_state + 1):
+            if cn_state == 0:
+                fraction_key = (1, 2)
+            else:
+                divisor = math.gcd(alt_copies, cn_state)
+                fraction_key = (alt_copies // divisor, cn_state // divisor)
+            if fraction_key not in fraction_to_index:
+                fraction_to_index[fraction_key] = len(fractions)
+                fractions.append(fraction_key[0] / fraction_key[1])
+            index[cn_state, alt_copies] = fraction_to_index[fraction_key]
+
+    return fractions, index
+
+
+def _precompute_af_genotype_log_lik(
+    site_alt: torch.Tensor,
+    site_total: torch.Tensor,
+    site_mask: torch.Tensor,
+    n_states: int,
+    concentration: float | np.ndarray | torch.Tensor,
+) -> torch.Tensor:
+    """Precompute Beta-Binomial AF emissions for unique genotype fractions."""
+    if tuple(site_alt.shape) != tuple(site_total.shape):
+        raise ValueError("site_alt and site_total must have matching shapes.")
+    if tuple(site_alt.shape) != tuple(site_mask.shape):
+        raise ValueError("site_alt and site_mask must have matching shapes.")
+
+    eps = 1e-6
+    site_total_safe = torch.clamp(site_total, min=1)
+    concentration_tensor = _normalize_af_concentration_torch(
+        concentration,
+        site_total.shape[2],
+        dtype=site_total.dtype,
+        device=site_total.device,
+    )
+    fractions, _ = _af_genotype_fraction_lookup(n_states)
+    log_lik_rows = []
+
+    for expected_af in fractions:
+        expected_af_tensor = torch.tensor(
+            expected_af,
+            dtype=site_alt.dtype,
+            device=site_alt.device,
+        )
+        alpha = concentration_tensor * expected_af_tensor + eps
+        beta = concentration_tensor * (1.0 - expected_af_tensor) + eps
+        log_lik_rows.append(
+            _sanitize_af_log_prob_torch(dist.BetaBinomial(
+                alpha,
+                beta,
+                site_total_safe,
+                validate_args=False,
+            ).log_prob(site_alt))
+        )
+
+    return torch.stack(log_lik_rows, dim=0)
+
+
+def _precompute_af_table_from_genotype_log_lik(
+    site_pop_af: torch.Tensor,
+    site_alt: torch.Tensor,
+    site_total: torch.Tensor,
+    site_mask: torch.Tensor,
+    genotype_log_lik: torch.Tensor,
+    n_states: int,
+    outlier_weight: float = 0.0,
+    background_concentration: float | None = None,
+    informative_weight: float | torch.Tensor = 1.0,
+) -> torch.Tensor:
+    """Build an AF table from cached genotype emissions and current site AFs."""
+    eps = 1e-6
+    fractions, genotype_fraction_index = _af_genotype_fraction_lookup(n_states)
+    if genotype_log_lik.shape[0] != len(fractions):
+        raise ValueError(
+            "genotype_log_lik has an unexpected number of genotype-fraction rows."
+        )
+    if tuple(genotype_log_lik.shape[1:]) != tuple(site_mask.shape):
+        raise ValueError(
+            "genotype_log_lik trailing dimensions must match site_mask."
+        )
+
+    if site_pop_af.dim() == 2:
+        pop_af = site_pop_af.unsqueeze(-1)
+    elif site_pop_af.dim() == 3:
+        pop_af = site_pop_af
+    else:
+        raise ValueError(
+            "site_pop_af must have shape (n_bins, max_sites) or "
+            "(n_bins, max_sites, n_samples)."
+        )
+    pop_af_safe = torch.clamp(pop_af, min=eps, max=1.0 - eps)
+    log_pop_af = torch.log(pop_af_safe)
+    log_ref_af = torch.log1p(-pop_af_safe)
+    uniform_log_lik = _uniform_af_log_prob_torch(
+        site_alt,
+        torch.clamp(site_total, min=1),
+    )
+
+    table_rows = []
+    for cn_state in range(n_states):
+        log_terms = []
+        for alt_copies in range(cn_state + 1):
+            emission_index = int(genotype_fraction_index[cn_state, alt_copies])
+            log_comb = math.lgamma(cn_state + 1.0)
+            log_comb -= math.lgamma(alt_copies + 1.0)
+            log_comb -= math.lgamma(cn_state - alt_copies + 1.0)
+            log_genotype_prior = (
+                log_comb +
+                alt_copies * log_pop_af +
+                (cn_state - alt_copies) * log_ref_af
+            )
+            log_terms.append(log_genotype_prior + genotype_log_lik[emission_index])
+
+        log_marginal = torch.logsumexp(torch.stack(log_terms, dim=0), dim=0)
+        log_marginal = _mix_af_log_likelihood_torch(
+            log_marginal,
+            uniform_log_lik,
+            outlier_weight,
+        )
+        if background_concentration is not None:
+            background_log_lik = _population_af_background_log_prob_torch(
+                site_alt,
+                torch.clamp(site_total, min=1),
+                pop_af,
+                background_concentration,
+            )
+            log_marginal = _mix_population_af_background_torch(
+                log_marginal,
+                background_log_lik,
+                informative_weight,
+            )
+        log_marginal = torch.where(
+            site_mask,
+            log_marginal,
+            torch.zeros_like(log_marginal),
+        )
+        table_rows.append(log_marginal.sum(dim=-2))
+
+    return torch.stack(table_rows, dim=0)
+
+
+def _precompute_observed_af_genotype_log_lik(
+    site_alt: torch.Tensor,
+    site_total: torch.Tensor,
+    site_mask: torch.Tensor,
+    n_states: int,
+    concentration: float | np.ndarray | torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Precompute AF emissions only for observed site-sample entries."""
+    if tuple(site_alt.shape) != tuple(site_total.shape):
+        raise ValueError("site_alt and site_total must have matching shapes.")
+    if tuple(site_alt.shape) != tuple(site_mask.shape):
+        raise ValueError("site_alt and site_mask must have matching shapes.")
+
+    site_slot_mask = site_mask.any(dim=2)
+    site_slot_bin_idx, site_slot_site_idx = torch.nonzero(
+        site_slot_mask,
+        as_tuple=True,
+    )
+    site_slot_lookup = torch.full(
+        site_slot_mask.shape,
+        -1,
+        dtype=torch.long,
+        device=site_mask.device,
+    )
+    site_slot_lookup[site_slot_bin_idx, site_slot_site_idx] = torch.arange(
+        site_slot_bin_idx.numel(),
+        dtype=torch.long,
+        device=site_mask.device,
+    )
+
+    observed_bin_idx, observed_site_idx, observed_sample_idx = torch.nonzero(
+        site_mask,
+        as_tuple=True,
+    )
+    observed_site_slot_idx = site_slot_lookup[observed_bin_idx, observed_site_idx]
+    observed_alt = site_alt[observed_bin_idx, observed_site_idx, observed_sample_idx]
+    observed_total = site_total[observed_bin_idx, observed_site_idx, observed_sample_idx]
+    observed_total_safe = torch.clamp(observed_total, min=1)
+    concentration_tensor = _normalize_af_concentration_torch(
+        concentration,
+        site_total.shape[2],
+        dtype=site_total.dtype,
+        device=site_total.device,
+    )
+    observed_concentration = concentration_tensor.expand(
+        1,
+        1,
+        site_total.shape[2],
+    ).reshape(-1)[observed_sample_idx]
+
+    eps = 1e-6
+    fractions, _ = _af_genotype_fraction_lookup(n_states)
+    log_lik_rows = []
+    for expected_af in fractions:
+        expected_af_tensor = torch.tensor(
+            expected_af,
+            dtype=site_alt.dtype,
+            device=site_alt.device,
+        )
+        alpha = observed_concentration * expected_af_tensor + eps
+        beta = observed_concentration * (1.0 - expected_af_tensor) + eps
+        log_lik_rows.append(
+            _sanitize_af_log_prob_torch(dist.BetaBinomial(
+                alpha,
+                beta,
+                observed_total_safe,
+                validate_args=False,
+            ).log_prob(observed_alt))
+        )
+
+    observed_genotype_log_lik = torch.stack(log_lik_rows, dim=0)
+    return (
+        observed_genotype_log_lik,
+        observed_alt,
+        observed_total,
+        observed_bin_idx,
+        observed_site_idx,
+        observed_sample_idx,
+        observed_site_slot_idx,
+        site_slot_bin_idx,
+        site_slot_site_idx,
+    )
+
+
+def _precompute_af_table_from_observed_genotype_log_lik(
+    site_pop_af: torch.Tensor,
+    observed_alt: torch.Tensor,
+    observed_total: torch.Tensor,
+    observed_bin_idx: torch.Tensor,
+    observed_site_idx: torch.Tensor,
+    observed_sample_idx: torch.Tensor,
+    observed_site_slot_idx: torch.Tensor,
+    observed_genotype_log_lik: torch.Tensor,
+    n_bins: int,
+    n_samples: int,
+    n_states: int,
+    outlier_weight: float = 0.0,
+    background_concentration: float | None = None,
+    informative_weight: float | torch.Tensor = 1.0,
+) -> torch.Tensor:
+    """Build an AF table by scattering observed site-sample AF contributions."""
+    fractions, genotype_fraction_index = _af_genotype_fraction_lookup(n_states)
+    if observed_genotype_log_lik.shape[0] != len(fractions):
+        raise ValueError(
+            "observed_genotype_log_lik has an unexpected number of genotype-fraction rows."
+        )
+    if observed_genotype_log_lik.shape[1] != observed_bin_idx.numel():
+        raise ValueError(
+            "observed_genotype_log_lik columns must match observed index length."
+        )
+
+    table_flat = observed_genotype_log_lik.new_zeros((n_states, n_bins * n_samples))
+    if observed_bin_idx.numel() == 0:
+        return table_flat.reshape(n_states, n_bins, n_samples)
+
+    eps = 1e-6
+    if site_pop_af.dim() == 1:
+        pop_af = site_pop_af[observed_site_slot_idx]
+    elif site_pop_af.dim() == 2:
+        pop_af = site_pop_af[observed_bin_idx, observed_site_idx]
+    elif site_pop_af.dim() == 3:
+        pop_af = site_pop_af[
+            observed_bin_idx,
+            observed_site_idx,
+            observed_sample_idx,
+        ]
+    else:
+        raise ValueError(
+            "site_pop_af must have shape (n_observed_sites,), "
+            "(n_bins, max_sites), or (n_bins, max_sites, n_samples)."
+        )
+
+    pop_af_safe = torch.clamp(pop_af, min=eps, max=1.0 - eps)
+    log_pop_af = torch.log(pop_af_safe)
+    log_ref_af = torch.log1p(-pop_af_safe)
+    uniform_log_lik = _uniform_af_log_prob_torch(
+        observed_alt,
+        torch.clamp(observed_total, min=1),
+    )
+
+    table_rows = []
+    for cn_state in range(n_states):
+        log_terms = []
+        for alt_copies in range(cn_state + 1):
+            emission_index = int(genotype_fraction_index[cn_state, alt_copies])
+            log_comb = math.lgamma(cn_state + 1.0)
+            log_comb -= math.lgamma(alt_copies + 1.0)
+            log_comb -= math.lgamma(cn_state - alt_copies + 1.0)
+            log_genotype_prior = (
+                log_comb +
+                alt_copies * log_pop_af +
+                (cn_state - alt_copies) * log_ref_af
+            )
+            log_terms.append(
+                log_genotype_prior + observed_genotype_log_lik[emission_index]
+            )
+        table_rows.append(torch.logsumexp(torch.stack(log_terms, dim=0), dim=0))
+
+    log_marginal = torch.stack(table_rows, dim=0)
+    log_marginal = _mix_af_log_likelihood_torch(
+        log_marginal,
+        uniform_log_lik.unsqueeze(0).expand_as(log_marginal),
+        outlier_weight,
+    )
+    if background_concentration is not None:
+        background_log_lik = _population_af_background_log_prob_torch(
+            observed_alt,
+            torch.clamp(observed_total, min=1),
+            pop_af_safe,
+            background_concentration,
+        )
+        log_marginal = _mix_population_af_background_torch(
+            log_marginal,
+            background_log_lik.unsqueeze(0).expand_as(log_marginal),
+            informative_weight,
+        )
+    flat_index = observed_bin_idx * n_samples + observed_sample_idx
+    table_flat = table_flat.scatter_add(
+        1,
+        flat_index.unsqueeze(0).expand(n_states, -1),
+        log_marginal,
+    )
+    return table_flat.reshape(n_states, n_bins, n_samples)
 
 
 def _center_af_table_torch(
@@ -958,12 +1805,12 @@ class CNVModel:
     af_concentration : float
         Beta-Binomial concentration for the allele-fraction model.
     af_weight : float
-        Fixed global scale applied to the summed per-bin allele-fraction
-        log-likelihood when ``learn_af_temperature`` is disabled; otherwise
-        the prior median for the learned global AF temperature (0 to disable).
+        Fixed genotype-informative mixture probability applied to the AF
+        likelihood when ``learn_af_temperature`` is disabled; otherwise the
+        prior median for the learned global AF temperature (0 to disable).
     learn_af_temperature : bool
-        Whether to learn a single global AF temperature instead of keeping
-        ``af_weight`` fixed.
+        Whether to learn a single global AF informative-mixture probability
+        instead of keeping ``af_weight`` fixed.
     learn_site_pop_af : bool
         Whether to infer per-site population AFs inside the model using a
         Delta guide while keeping the requested guide family for the remaining
@@ -972,7 +1819,7 @@ class CNVModel:
         Strength of the Beta prior on latent site AFs. The current
         ``site_pop_af`` values are used as prior means.
     af_temperature_prior_scale : float
-        LogNormal prior scale for the learned AF temperature.
+        LogitNormal prior scale for the learned AF temperature.
     alpha_sex_ref : float
         Dirichlet concentration for CN = 2 on sex chromosomes (default 1.0,
         flat).  The sex–CN coupling factor provides the main sex-dependent
@@ -1026,7 +1873,9 @@ class CNVModel:
         lowrank_guide_rank: Optional[int] = None,
         af_concentration: float = DEFAULT_AF_CONCENTRATION,
         af_weight: float = DEFAULT_AF_WEIGHT,
-        learn_af_temperature: bool = True,
+        af_outlier_weight: float = DEFAULT_AF_OUTLIER_WEIGHT,
+        af_background_concentration: float = DEFAULT_AF_BACKGROUND_CONCENTRATION,
+        learn_af_temperature: bool = False,
         learn_site_pop_af: bool = False,
         site_af_prior_strength: float = 20.0,
         af_temperature_prior_scale: float = 0.5,
@@ -1062,6 +1911,8 @@ class CNVModel:
         self.lowrank_guide_rank = lowrank_guide_rank
         self.af_concentration = af_concentration
         self.af_weight = af_weight
+        self.af_outlier_weight = af_outlier_weight
+        self.af_background_concentration = af_background_concentration
         self.af_evidence_mode = "relative"
         self.learn_af_temperature = learn_af_temperature
         self.learn_site_pop_af = learn_site_pop_af
@@ -1096,8 +1947,16 @@ class CNVModel:
             raise ValueError("raw_variance_power must be between 1 and 2.")
         if self.af_temperature_prior_scale <= 0:
             raise ValueError("af_temperature_prior_scale must be positive.")
-        if self.learn_af_temperature and self.af_weight <= 0:
-            raise ValueError("learn_af_temperature requires af_weight > 0.")
+        self.af_outlier_weight = _normalize_af_outlier_weight(self.af_outlier_weight)
+        self.af_background_concentration = _normalize_af_background_concentration(
+            self.af_background_concentration,
+        )
+        if self.af_weight < 0.0 or self.af_weight > 1.0:
+            raise ValueError("af_weight must satisfy 0 <= af_weight <= 1.")
+        if self.learn_af_temperature and (
+            self.af_weight <= 0.0 or self.af_weight >= 1.0
+        ):
+            raise ValueError("learn_af_temperature requires 0 < af_weight < 1.")
         if self.learn_site_pop_af and self.af_weight <= 0:
             raise ValueError("learn_site_pop_af requires af_weight > 0.")
         if self.site_af_prior_strength < 0:
@@ -1172,7 +2031,7 @@ class CNVModel:
         if self.learn_af_temperature:
             self._latent_sites.append("af_temperature")
         if self.learn_site_pop_af:
-            self._latent_sites.append("site_pop_af_latent")
+            self._latent_sites.append("site_pop_af_latent_observed")
 
         self.ref_state = 2
         self.nonref_state_indices = tuple(
@@ -1258,12 +2117,16 @@ class CNVModel:
             guide = AutoGuideList(self.model)
             guide.append(
                 AutoDelta(
-                    poutine.block(self.model, expose=["site_pop_af_latent"]),
+                    poutine.block(
+                        self.model,
+                        expose=["site_pop_af_latent_observed"],
+                    ),
                     **guide_kwargs,
                 )
             )
             remaining_latents = [
-                site for site in self._latent_sites if site != "site_pop_af_latent"
+                site for site in self._latent_sites
+                if site != "site_pop_af_latent_observed"
             ]
             if remaining_latents:
                 guide.append(
@@ -1856,6 +2719,7 @@ class CNVModel:
         site_mask: torch.Tensor,
         chr_type: torch.Tensor | None,
         auto_leave_one_out: bool = True,
+        informative_weight: float | torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Precompute and transform the AF table according to the configured evidence mode."""
         if auto_leave_one_out:
@@ -1876,6 +2740,13 @@ class CNVModel:
             site_mask,
             n_states=self.n_states,
             concentration=self.af_concentration,
+            outlier_weight=self.af_outlier_weight,
+            background_concentration=self.af_background_concentration,
+            informative_weight=(
+                self._af_scale_torch()
+                if informative_weight is None
+                else informative_weight
+            ),
         )
         return self._apply_af_evidence_mode_torch(af_table, chr_type)
 
@@ -1966,6 +2837,18 @@ class CNVModel:
             estimates["sample_depth"] = (
                 model_kw["sample_depth_fixed"].detach().clone()
             )
+        if (
+            "site_pop_af_latent_observed" in estimates and
+            model_kw.get("site_pop_af") is not None and
+            model_kw.get("af_site_bin_idx") is not None and
+            model_kw.get("af_site_site_idx") is not None
+        ):
+            site_pop_af_latent = model_kw["site_pop_af"].detach().clone()
+            site_pop_af_latent[
+                model_kw["af_site_bin_idx"],
+                model_kw["af_site_site_idx"],
+            ] = estimates["site_pop_af_latent_observed"]
+            estimates["site_pop_af_latent"] = site_pop_af_latent
         return estimates
 
     def _infer_discrete_assignments(
@@ -2097,6 +2980,17 @@ class CNVModel:
                 if isinstance(value, torch.Tensor):
                     return value.detach().to(device=self.device, dtype=self.dtype).clone()
                 return torch.as_tensor(value, device=self.device, dtype=self.dtype)
+            if (
+                site_name == "site_pop_af_latent_observed" and
+                data.site_pop_af is not None and
+                data.site_mask is not None
+            ):
+                observed_site_mask = data.site_mask.any(dim=2)
+                return torch.clamp(
+                    data.site_pop_af[observed_site_mask],
+                    min=1e-6,
+                    max=1.0 - 1e-6,
+                )
             if site_name == "site_pop_af_latent" and data.site_pop_af is not None:
                 return torch.clamp(data.site_pop_af, min=1e-6, max=1.0 - 1e-6)
             return base_init(site)
@@ -2275,6 +3169,18 @@ class CNVModel:
         site_pop_af: Optional[torch.Tensor] = None,
         site_mask: Optional[torch.Tensor] = None,
         af_table: Optional[torch.Tensor] = None,
+        af_site_log_lik: Optional[torch.Tensor] = None,
+        af_background_log_lik: Optional[torch.Tensor] = None,
+        af_genotype_log_lik: Optional[torch.Tensor] = None,
+        af_observed_genotype_log_lik: Optional[torch.Tensor] = None,
+        af_observed_alt: Optional[torch.Tensor] = None,
+        af_observed_total: Optional[torch.Tensor] = None,
+        af_observed_bin_idx: Optional[torch.Tensor] = None,
+        af_observed_site_idx: Optional[torch.Tensor] = None,
+        af_observed_sample_idx: Optional[torch.Tensor] = None,
+        af_observed_site_slot_idx: Optional[torch.Tensor] = None,
+        af_site_bin_idx: Optional[torch.Tensor] = None,
+        af_site_site_idx: Optional[torch.Tensor] = None,
     ) -> None:
         """Pyro generative model.
 
@@ -2302,6 +3208,20 @@ class CNVModel:
                 :func:`_precompute_af_table`.  When provided, the model
                 performs a cheap table lookup instead of recomputing
                 BetaBinomial log-probs at every SVI step.
+            af_site_log_lik: Cached per-site CN/genotype AF likelihoods used
+                when learned AF temperature changes the genotype/background
+                mixture during SVI.
+            af_background_log_lik: Cached per-site CN-independent AF
+                background likelihoods aligned to ``af_site_log_lik``.
+            af_genotype_log_lik: Cached per-genotype-fraction Beta-Binomial
+                emissions used when site AFs are latent and the full AF table
+                must be rebuilt from the current ``site_pop_af`` values.
+            af_observed_genotype_log_lik: Cached per-genotype-fraction
+                Beta-Binomial emissions for observed site-sample entries only.
+            af_observed_alt: Observed alt counts aligned to the cached
+                ``af_observed_*`` indices.
+            af_observed_total: Observed total counts aligned to the cached
+                ``af_observed_*`` indices.
         """
         zero = torch.zeros(1, device=self.device, dtype=self.dtype)
         one = torch.ones(1, device=self.device, dtype=self.dtype)
@@ -2324,38 +3244,57 @@ class CNVModel:
         plate_bins = pyro.plate("bins", n_bins, dim=-2, device=self.device)
         plate_samples = pyro.plate("samples", n_samples, dim=-1, device=self.device)
         if self.learn_af_temperature:
+            af_weight_logit = math.log(self.af_weight) - math.log1p(-self.af_weight)
             af_temperature = pyro.sample(
                 "af_temperature",
-                dist.LogNormal(
-                    torch.tensor(
-                        math.log(max(self.af_weight, 1e-6)),
-                        device=self.device,
-                        dtype=self.dtype,
+                dist.TransformedDistribution(
+                    dist.Normal(
+                        torch.tensor(
+                            af_weight_logit,
+                            device=self.device,
+                            dtype=self.dtype,
+                        ),
+                        torch.tensor(
+                            self.af_temperature_prior_scale,
+                            device=self.device,
+                            dtype=self.dtype,
+                        ),
                     ),
-                    torch.tensor(
-                        self.af_temperature_prior_scale,
-                        device=self.device,
-                        dtype=self.dtype,
-                    ),
+                    [dist.transforms.SigmoidTransform()],
                 ),
             )
         else:
             af_temperature = self._af_scale_torch()
 
+        site_pop_af_observed = None
         if self.learn_site_pop_af and site_pop_af is not None and self.af_weight > 0:
-            prior_mean = torch.clamp(site_pop_af, min=1e-6, max=1.0 - 1e-6)
             prior_strength = torch.tensor(
                 self.site_af_prior_strength,
                 device=self.device,
                 dtype=self.dtype,
             )
-            site_pop_af = pyro.sample(
-                "site_pop_af_latent",
-                dist.Beta(
-                    1.0 + prior_strength * prior_mean,
-                    1.0 + prior_strength * (1.0 - prior_mean),
-                ).to_event(2),
-            )
+            if af_site_bin_idx is not None and af_site_site_idx is not None:
+                prior_mean = torch.clamp(
+                    site_pop_af[af_site_bin_idx, af_site_site_idx],
+                    min=1e-6,
+                    max=1.0 - 1e-6,
+                )
+                site_pop_af_observed = pyro.sample(
+                    "site_pop_af_latent_observed",
+                    dist.Beta(
+                        1.0 + prior_strength * prior_mean,
+                        1.0 + prior_strength * (1.0 - prior_mean),
+                    ).to_event(1),
+                )
+            else:
+                prior_mean = torch.clamp(site_pop_af, min=1e-6, max=1.0 - 1e-6)
+                site_pop_af = pyro.sample(
+                    "site_pop_af_latent",
+                    dist.Beta(
+                        1.0 + prior_strength * prior_mean,
+                        1.0 + prior_strength * (1.0 - prior_mean),
+                    ).to_event(2),
+                )
 
         # Per-sample variance and sex karyotype
         sample_depth = None
@@ -2622,6 +3561,12 @@ class CNVModel:
                 obs=depth,
             )
 
+            # Accumulate cn/sex-dependent auxiliary scores into a single factor.
+            # Keeping AF and sex-CN terms separate can drive TraceEnum_ELBO into
+            # a non-finite contraction on some cohorts even when each term is
+            # finite on its own.
+            cn_aux_log_factor = None
+
             # ── sex–CN coupling factor ────────────────────────────────────────
             if self.sex_cn_weight > 0 and chr_type is not None:
                 chr_type_exp = chr_type.unsqueeze(-1)       # (n_bins, 1)
@@ -2632,9 +3577,7 @@ class CNVModel:
                 score = Vindex(self._sex_cn_score_for_samples_torch(n_samples))[
                     sex_karyotype, chr_type_exp, cn, sample_idx,
                 ]
-                pyro.factor(
-                    "sex_cn_prior", sex_cn_weight_per_bin * score,
-                )
+                cn_aux_log_factor = sex_cn_weight_per_bin * score
 
             # ── marginalized allele-fraction likelihood ───────────────────
             if af_table is not None and self.af_weight > 0:
@@ -2647,7 +3590,104 @@ class CNVModel:
                     af_log_lik = af_log_lik + torch.where(
                         cn == c, af_table[c], zero,
                     )
-                pyro.factor("af_lik", af_temperature * af_log_lik)
+                af_log_factor = af_log_lik
+                cn_aux_log_factor = (
+                    af_log_factor
+                    if cn_aux_log_factor is None
+                    else cn_aux_log_factor + af_log_factor
+                )
+            elif (
+                af_site_log_lik is not None and
+                af_background_log_lik is not None and
+                self.af_weight > 0
+            ):
+                af_table = _precompute_af_table_from_site_log_lik(
+                    af_site_log_lik,
+                    af_background_log_lik,
+                    af_temperature,
+                )
+                af_table = self._apply_af_evidence_mode_torch(af_table, chr_type)
+                af_log_lik = torch.tensor(0.0, device=self.device)
+                for c in range(self.n_states):
+                    af_log_lik = af_log_lik + torch.where(
+                        cn == c, af_table[c], zero,
+                    )
+                af_log_factor = af_log_lik
+                cn_aux_log_factor = (
+                    af_log_factor
+                    if cn_aux_log_factor is None
+                    else cn_aux_log_factor + af_log_factor
+                )
+            elif (
+                af_observed_genotype_log_lik is not None and
+                af_observed_bin_idx is not None and
+                af_observed_site_idx is not None and
+                af_observed_sample_idx is not None and
+                af_observed_site_slot_idx is not None and
+                site_pop_af is not None and
+                self.af_weight > 0
+            ):
+                af_table = _precompute_af_table_from_observed_genotype_log_lik(
+                    (
+                        site_pop_af_observed
+                        if site_pop_af_observed is not None
+                        else site_pop_af
+                    ),
+                    af_observed_alt,
+                    af_observed_total,
+                    af_observed_bin_idx,
+                    af_observed_site_idx,
+                    af_observed_sample_idx,
+                    af_observed_site_slot_idx,
+                    af_observed_genotype_log_lik,
+                    n_bins=n_bins,
+                    n_samples=n_samples,
+                    n_states=self.n_states,
+                    outlier_weight=self.af_outlier_weight,
+                    background_concentration=self.af_background_concentration,
+                    informative_weight=af_temperature,
+                )
+                af_table = self._apply_af_evidence_mode_torch(af_table, chr_type)
+                af_log_lik = torch.tensor(0.0, device=self.device)
+                for c in range(self.n_states):
+                    af_log_lik = af_log_lik + torch.where(
+                        cn == c, af_table[c], zero,
+                    )
+                af_log_factor = af_log_lik
+                cn_aux_log_factor = (
+                    af_log_factor
+                    if cn_aux_log_factor is None
+                    else cn_aux_log_factor + af_log_factor
+                )
+            elif (
+                af_genotype_log_lik is not None and
+                site_pop_af is not None and
+                site_mask is not None and
+                self.af_weight > 0
+            ):
+                af_table = _precompute_af_table_from_genotype_log_lik(
+                    site_pop_af,
+                    site_alt,
+                    site_total,
+                    site_mask,
+                    af_genotype_log_lik,
+                    n_states=self.n_states,
+                    outlier_weight=self.af_outlier_weight,
+                    background_concentration=self.af_background_concentration,
+                    informative_weight=af_temperature,
+                )
+                af_table = self._apply_af_evidence_mode_torch(af_table, chr_type)
+                af_log_lik = torch.tensor(0.0, device=self.device)
+                for c in range(self.n_states):
+                    af_log_lik = af_log_lik + torch.where(
+                        cn == c, af_table[c], zero,
+                    )
+                af_log_factor = af_log_lik
+                cn_aux_log_factor = (
+                    af_log_factor
+                    if cn_aux_log_factor is None
+                    else cn_aux_log_factor + af_log_factor
+                )
             elif site_alt is not None and site_total is not None and self.af_weight > 0:
                 # Slow fallback: precompute once inside the model call.
                 af_table = self._prepare_af_table_torch(
@@ -2657,13 +3697,22 @@ class CNVModel:
                     site_mask,
                     chr_type,
                     auto_leave_one_out=not self.learn_site_pop_af,
+                    informative_weight=af_temperature,
                 )
                 af_log_lik = torch.tensor(0.0, device=self.device)
                 for c in range(self.n_states):
                     af_log_lik = af_log_lik + torch.where(
                         cn == c, af_table[c], zero,
                     )
-                pyro.factor("af_lik", af_temperature * af_log_lik)
+                af_log_factor = af_log_lik
+                cn_aux_log_factor = (
+                    af_log_factor
+                    if cn_aux_log_factor is None
+                    else cn_aux_log_factor + af_log_factor
+                )
+
+            if cn_aux_log_factor is not None:
+                pyro.factor("cn_aux_lik", cn_aux_log_factor)
 
     # ── training ────────────────────────────────────────────────────────
 
@@ -2710,10 +3759,53 @@ class CNVModel:
                 ).unsqueeze(-1)  # (n_bins, 1)
         if data.site_alt is not None and self.af_weight > 0:
             if self.learn_site_pop_af:
-                kw["site_alt"] = data.site_alt
-                kw["site_total"] = data.site_total
                 kw["site_pop_af"] = data.site_pop_af
-                kw["site_mask"] = data.site_mask
+                with torch.no_grad():
+                    (
+                        kw["af_observed_genotype_log_lik"],
+                        kw["af_observed_alt"],
+                        kw["af_observed_total"],
+                        kw["af_observed_bin_idx"],
+                        kw["af_observed_site_idx"],
+                        kw["af_observed_sample_idx"],
+                        kw["af_observed_site_slot_idx"],
+                        kw["af_site_bin_idx"],
+                        kw["af_site_site_idx"],
+                    ) = _precompute_observed_af_genotype_log_lik(
+                        data.site_alt,
+                        data.site_total,
+                        data.site_mask,
+                        n_states=self.n_states,
+                        concentration=self.af_concentration,
+                    )
+            elif self.learn_af_temperature:
+                with torch.no_grad():
+                    site_pop_af, used_leave_one_out = _resolve_fixed_site_pop_af_torch(
+                        data.site_alt,
+                        data.site_total,
+                        data.site_pop_af,
+                        data.site_mask,
+                    )
+                    if used_leave_one_out:
+                        logger.info(
+                            "AF table: detected self-pooled site_pop_af; using leave-one-out population AFs per sample."
+                        )
+                    kw["af_site_log_lik"] = _precompute_af_site_log_lik(
+                        data.site_alt,
+                        data.site_total,
+                        site_pop_af,
+                        data.site_mask,
+                        n_states=self.n_states,
+                        concentration=self.af_concentration,
+                        outlier_weight=self.af_outlier_weight,
+                    )
+                    kw["af_background_log_lik"] = _precompute_af_background_log_lik(
+                        data.site_alt,
+                        data.site_total,
+                        site_pop_af,
+                        data.site_mask,
+                        self.af_background_concentration,
+                    )
             else:
                 with torch.no_grad():
                     kw["af_table"] = self._prepare_af_table_torch(
@@ -3068,7 +4160,7 @@ class CNVModel:
 
         af_scale = self._af_scale_numpy(maps)
         if af_table is not None and af_scale > 0:
-            base_log_unnorm += af_scale * af_table
+            base_log_unnorm += af_table
         elif data.site_alt is not None and af_scale > 0:
             site_alt_np = data.site_alt.detach().cpu().numpy()
             site_total_np = data.site_total.detach().cpu().numpy()
@@ -3101,18 +4193,21 @@ class CNVModel:
                     site_alt_np, site_total_np, site_pop_af_np, site_mask_np,
                     cn_state=c, n_states=self.n_states,
                     concentration=self.af_concentration,
+                    outlier_weight=self.af_outlier_weight,
+                    background_concentration=self.af_background_concentration,
+                    informative_weight=af_scale,
                 )
 
             af_ll_table = self._apply_af_evidence_mode_numpy(
                 raw_af_table,
                 chr_type_np,
             )
-            base_log_unnorm += af_scale * af_ll_table
+            base_log_unnorm += af_ll_table
 
             n_sites = int(site_mask_np.any(axis=2).sum())
             logger.info(
                 "AF marginalised likelihood: %d total sites, summed per "
-                "bin/sample (scale=%.2f, mode=%s)",
+                "bin/sample (informative_weight=%.3f, mode=%s)",
                 n_sites, af_scale,
                 self.af_evidence_mode,
             )
