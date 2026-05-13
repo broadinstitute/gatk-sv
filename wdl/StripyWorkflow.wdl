@@ -91,20 +91,26 @@ task RunStripy {
                                }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-    String bam_filename = basename(bam_or_cram_file)
-    String bam_base_default = sub(bam_filename, "\\\.[^.]+$", "")
-
     String json_path = output_dir + "/" + sample_name + ".json"
     String tsv_path = output_dir + "/" + sample_name + ".tsv"
     String html_path = output_dir + "/" + sample_name + ".html"
     String vcf_path = output_dir + "/" + sample_name + ".vcf"
+    String input_filename = basename(bam_or_cram_file)
+    Boolean input_is_bam = basename(bam_or_cram_file, ".bam") + ".bam" == basename(bam_or_cram_file)
+    String staged_index_filename = input_filename + if input_is_bam then ".bai" else ".crai"
 
     command <<<
         # Run STRipy pipeline using our wrapper
         set -euxo pipefail
         mkdir -p ~{output_dir}
+
+        # STRipy expects the BAM/CRAM index to live beside the input file.
+        ln -s ~{bam_or_cram_file} ~{input_filename}
+        ln -s ~{bam_or_cram_index} ~{staged_index_filename}
+
         stripy \
-            --input ~{bam_or_cram_file} \
+            --input ~{input_filename} \
+            --sample-name ~{sample_name} \
             --genome ~{genome_build} \
             --reference ~{reference_fasta} \
             --output ~{output_dir} \
@@ -119,26 +125,6 @@ task RunStripy {
             ~{if defined(locus) then "--locus " + locus else ""} \
             ~{if defined(sex) then "--sex " + sex else ""} \
             ~{if defined(custom_catalog) then "--custom " + custom_catalog else ""}
-
-        ACTUAL_FILENAME=$(basename "~{bam_or_cram_file}")
-        ACTUAL_BASE=$(echo "${ACTUAL_FILENAME}" | sed 's/\.[^.]*$//')
-        TARGET_BASE='~{sample_name}'
-        echo "ACTUAL_FILENAME: ${ACTUAL_FILENAME}"
-        echo "ACTUAL_BASE: ${ACTUAL_BASE}"
-        echo "TARGET_BASE: ${TARGET_BASE}"
-        ls ~{output_dir}
-        if [ -f "~{output_dir}/${ACTUAL_FILENAME}.json" ]; then
-            mv "~{output_dir}/${ACTUAL_FILENAME}.json" "~{output_dir}/${TARGET_BASE}.json"
-        fi
-        if [ -f "~{output_dir}/${ACTUAL_FILENAME}.tsv" ]; then
-            mv "~{output_dir}/${ACTUAL_FILENAME}.tsv" "~{output_dir}/${TARGET_BASE}.tsv"
-        fi
-        if [ -f "~{output_dir}/${ACTUAL_FILENAME}.html" ]; then
-            mv "~{output_dir}/${ACTUAL_FILENAME}.html" "~{output_dir}/${TARGET_BASE}.html"
-        fi
-        if [ -f "~{output_dir}/${ACTUAL_BASE}.vcf" ]; then
-            mv "~{output_dir}/${ACTUAL_BASE}.vcf" "~{output_dir}/${TARGET_BASE}.vcf"
-        fi
     >>>
 
     runtime {
