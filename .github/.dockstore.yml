@@ -240,7 +240,6 @@ workflows:
     filters:
       branches:
         - main
-        - mw_stripy_sample_id_fix
       tags:
         - /.*/
 
