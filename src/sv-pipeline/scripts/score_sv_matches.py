@@ -24,7 +24,7 @@ def get_metric_from_list(r, metric, i):
 
 def load_matches(vcf_path, this_cohort, that_cohort, cpx_intervals=False):
     print(f"Loading {vcf_path}")
-    columns = ['VID_' + this_cohort, 'RECIPROCAL_OVERLAP', 'SIZE_SIMILARITY', 'BPDIST', 'logAF_DIF', 'VID_' + that_cohort, 'TYPE_PENALTY']
+    columns = ['VID_' + this_cohort, 'RECIPROCAL_OVERLAP', 'SIZE_SIMILARITY', 'BPDIST', 'logAF_DIF', 'VID_' + that_cohort]
     dat = []
     with pysam.VariantFile(vcf_path) as vcf:
         for r in vcf:
@@ -40,7 +40,6 @@ def load_matches(vcf_path, this_cohort, that_cohort, cpx_intervals=False):
                 for i in range(len(truth_vids)):
                     # one line per variant pair
                     truth_svtype = get_metric_from_list(r, 'TRUTH_SVTYPE', i)
-                    type_penalty = 0 if (svtype == truth_svtype) else 1  # penalize cross-type matches
 
                     # AF
                     # if comparing a multiallelic and a biallelic CNV, regardless of truth/eval, use RD_CN_ESTIMATED_AF
@@ -97,7 +96,7 @@ def load_matches(vcf_path, this_cohort, that_cohort, cpx_intervals=False):
                             ss = np.mean(interval_ss)
 
                     # calculate and add BPDIST, logAF_DIF, TRUTH_VID as VID_A/B
-                    r_data = [vid, ro, ss, bd, calculate_log_af_dif(af, truth_af), truth_vids[i], type_penalty]
+                    r_data = [vid, ro, ss, bd, calculate_log_af_dif(af, truth_af), truth_vids[i]]
                     dat.append(r_data)
     return pd.DataFrame(dat, columns=columns)
 
@@ -122,20 +121,13 @@ def merge_tables(df_a, df_b):
     merged['RANK_SS'] = merged.SIZESIM.rank()
 
     # calculate ranksum
-    merged['ORIG_SCORE'] = merged.RANK_SS + merged.RANK_AF_DIF + merged.RANK_BPDIST
+    merged['SCORE'] = merged.RANK_SS + merged.RANK_AF_DIF + merged.RANK_BPDIST
 
-    # penalize cross-type matches by giving them negative scores, but retain order by score
-    merged['SCORE'] = merged.ORIG_SCORE.where(merged.TYPE_PENALTY == 0, 0 - np.nanmax(merged.ORIG_SCORE) + merged.ORIG_SCORE)
     return merged[['VID_A', 'VID_B', 'SCORE']]
 
 
 def add_cpx(merged, merged_cpx):
     print("Combining cross-subtype complex interval matches with all other matches")
-    # force cross-subtype CPX matches to have lower scores than same-subtype CPX matches by making them negative
-    # but retain ascending order by match quality
-    merged_cpx['ORIG_SCORE'] = merged_cpx['SCORE']
-    merged_cpx['SCORE'] = 0 - np.nanmax(merged_cpx.ORIG_SCORE) + merged_cpx.ORIG_SCORE
-
     return pd.concat([merged, merged_cpx[['VID_A', 'VID_B', 'SCORE']]])
 
 
