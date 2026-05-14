@@ -7,6 +7,7 @@
 ##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
 ##INFO=<ID=CHR2,Number=1,Type=String,Description="Chromosome for END coordinate">
 ##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the structural variant">
+##INFO=<ID=END2,Number=1,Type=Integer,Description="Position of breakpoint on CHR2">
 ##INFO=<ID=STRANDS,Number=1,Type=String,Description="Breakpoint strandedness [++,+-,-+,--]">
 ##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="SV length">
 ##INFO=<ID=ALGORITHMS,Number=.,Type=String,Description="Source algorithms">

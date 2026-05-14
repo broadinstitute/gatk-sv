@@ -115,6 +115,9 @@ class VCFStandardizer:
                 if chr2 not in self.std_vcf.header.contigs:
                     continue
 
+            if record.alts is None:
+                continue
+
             # Filter on chr2 if a breakend
             if '[' in record.alts[0] or ']' in record.alts[0]:
                 chr2, end = parse_bnd_pos(record.alts[0])

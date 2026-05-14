@@ -298,27 +298,27 @@ output_path = "~{output_prefix}.tsv"
 sample_overlap = "~{sample_overlap}"
 
 with open(input_path, newline="") as src, open(output_path, "w", newline="") as dst:
-    writer = csv.writer(dst, delimiter="\t", lineterminator="\n")
-    reader = csv.reader(src, delimiter="\t")
-    header = None
-    sample_overlap_idx = None
-    for row in reader:
+  writer = csv.writer(dst, delimiter="\t", lineterminator="\n")
+  reader = csv.reader(src, delimiter="\t")
+  header = None
+  sample_overlap_idx = None
+  for row in reader:
+    if not row:
+      writer.writerow(row)
+      continue
+    if row[0].startswith("#") and header is None:
+      writer.writerow(row)
+      continue
+    if header is None:
+      header = row
+      writer.writerow(header)
+      sample_overlap_idx = header.index("SAMPLE_OVERLAP")
+      continue
       if not row:
-        writer.writerow(row)
-        continue
-      if row[0].startswith("#") and header is None:
-        writer.writerow(row)
-        continue
-      if header is None:
-        header = row
-        writer.writerow(header)
-        sample_overlap_idx = header.index("SAMPLE_OVERLAP")
-        continue
-        if not row:
-            writer.writerow(row)
-            continue
-        row[sample_overlap_idx] = sample_overlap
-        writer.writerow(row)
+          writer.writerow(row)
+          continue
+      row[sample_overlap_idx] = sample_overlap
+      writer.writerow(row)
 
   if header is None:
     raise ValueError("Failed to find clustering config header")
