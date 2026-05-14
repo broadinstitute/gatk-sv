@@ -1,0 +1,28 @@
+{
+  "ClusterDragenVcfs.cohort_name": "${this.sample_set_set_id}",
+  "ClusterDragenVcfs.ped_file": "${workspace.cohort_ped_file}",
+
+  "ClusterDragenVcfs.dragen_sv_vcf": "${this.dragen_sv_vcf}",
+  "ClusterDragenVcfs.dragen_cnv_vcf": "${this.dragen_cnv_vcf}",
+
+  "ClusterDragenVcfs.contig_list": "${workspace.primary_contigs_fai}",
+  "ClusterDragenVcfs.min_size": 50,
+
+  "ClusterDragenVcfs.clustering_config_part1": "${workspace.clustering_config_part1}",
+  "ClusterDragenVcfs.stratification_config_part1": "${workspace.stratification_config_part1}",
+  "ClusterDragenVcfs.clustering_config_part2": "${workspace.clustering_config_part2}",
+  "ClusterDragenVcfs.stratification_config_part2": "${workspace.stratification_config_part2}",
+  "ClusterDragenVcfs.track_bed_files": {{ reference_resources.clustering_tracks | tojson }},
+  "ClusterDragenVcfs.track_names": {{ reference_resources.clustering_track_names | tojson }},
+
+  "ClusterDragenVcfs.reference_fasta": "${workspace.reference_fasta}",
+  "ClusterDragenVcfs.reference_fasta_fai": "${workspace.reference_index}",
+  "ClusterDragenVcfs.reference_dict": "${workspace.reference_dict}",
+  "ClusterDragenVcfs.chr_x": "${workspace.chr_x}",
+  "ClusterDragenVcfs.chr_y": "${workspace.chr_y}",
+
+  "ClusterDragenVcfs.grouped_sample_overlap": 0,
+
+  "ClusterDragenVcfs.gatk_docker": "${workspace.gatk_docker}",
+  "ClusterDragenVcfs.sv_pipeline_docker": "${workspace.sv_pipeline_docker}"
+}

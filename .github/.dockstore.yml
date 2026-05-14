@@ -269,3 +269,12 @@ workflows:
         - main
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: ClusterDragenVcfs
+    primaryDescriptorPath: /wdl/ClusterDragenVcfs.wdl
+    filters:
+      branches:
+        - mw_cluster_dragen_vcfs
+      tags:
+        - /.*/
