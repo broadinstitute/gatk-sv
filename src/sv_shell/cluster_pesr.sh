@@ -3,6 +3,11 @@
 set -Exeuo pipefail
 
 
+if [ -z "${SV_SHELL_CLEAN_UP_WORKING_DIR:-}" ]; then
+  SV_SHELL_CLEAN_UP_WORKING_DIR=true
+fi
+
+
 function ExcludeIntervalsByEndpoints() {
   local _vcf=$1
   local _reference_fasta_fai=$2
@@ -235,11 +240,13 @@ outputs_json=$(jq -n \
   '{clustered_vcf: $vcf, clustered_vcf_index: $idx}' )
 echo "${outputs_json}" > "${output_json_filename}"
 
-rm -rf "${ConcatVcfs_wd}"
-rm -rf "${working_dir}"
+if [ "${SV_SHELL_CLEAN_UP_WORKING_DIR}" == "true" ]; then
+  rm -rf "${ConcatVcfs_wd}"
+  rm -rf "${working_dir}"
 
-for wd in "${wds_to_delete[@]}"; do
-  rm -rf "${wd}"
-done
+  for wd in "${wds_to_delete[@]}"; do
+    rm -rf "${wd}"
+  done
+fi
 
 echo "Finished Cluster PE/SR successfully, output json filename: ${output_json_filename}"

@@ -240,6 +240,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_stripy_sample_id_fix
       tags:
         - /.*/
 
@@ -258,5 +259,16 @@ workflows:
     filters:
       branches:
         - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: SVShell
+    primaryDescriptorPath: /wdl/SVShell.wdl
+    filters:
+      branches:
+        - main
+        - vj-sv-shell-wdl
+        - vj-sv-shell-wdl-rgp
       tags:
         - /.*/
