@@ -6,65 +6,69 @@
 
 set -Exeuo pipefail
 
-sample_name=${1}
-bam_or_cram_file=${2}
-bam_or_cram_index=${3}
-original_bam_or_cram_file=${4}
-original_bam_or_cram_index=${5}
-counts_file=${6}
-input_vcf=${7}
-reference_fasta=${8}
-reference_index=${9}
-regions_list=${10}
+if [ -z "${SV_SHELL_CLEAN_UP_WORKING_DIR:-}" ]; then
+  SV_SHELL_CLEAN_UP_WORKING_DIR=true
+fi
+
+# -------------------------------------------------------
+# ==================== Input & Setup ====================
+# -------------------------------------------------------
+
+input_json=${1}
+outputs_json_filename=${2:-""}
+output_dir=${3:-""}
+
+input_json="$(realpath "${input_json}")"
+
+if [ -z "${output_dir}" ]; then
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_scramble_XXXXXXXX)
+else
+  mkdir -p "${output_dir}"
+fi
+output_dir="$(realpath "${output_dir}")"
+
+if [ -z "${outputs_json_filename}" ]; then
+  outputs_json_filename="${output_dir}/output.json"
+else
+  outputs_json_filename="$(realpath "${outputs_json_filename}")"
+fi
+
+sample_name=$(jq -r ".sample_name" "${input_json}")
+bam_or_cram_file=$(jq -r ".bam_or_cram_file" "${input_json}")
+bam_or_cram_index=$(jq -r ".bam_or_cram_index" "${input_json}")
+original_bam_or_cram_file=$(jq -r ".original_bam_or_cram_file" "${input_json}")
+original_bam_or_cram_index=$(jq -r ".original_bam_or_cram_index" "${input_json}")
+counts_file=$(jq -r ".counts_file" "${input_json}")
+input_vcf=$(jq -r ".input_vcf" "${input_json}")
+reference_fasta=$(jq -r ".reference_fasta" "${input_json}")
+reference_index=$(jq -r ".reference_index" "${input_json}")
+regions_list=$(jq -r ".regions_list" "${input_json}")
 
 # Critical parameter for sensitivity/specificity
 # Recommended values for aligners:
 #   BWA-MEM: 90
 #   DRAGEN-3.7.8: 60
-alignment_score_cutoff=${11}
+alignment_score_cutoff=$(jq -r ".alignment_score_cutoff" "${input_json}")
 
-mei_bed=${12}
-
-outputs_json_filename=${13}
-
-min_clipped_reads_fraction=${14:-0.22}
-percent_align_cutoff=${15:-70}
-
-part2_threads=${16:-7}
-
-scramble_vcf_script=${17:-"/opt/sv-pipeline/scripts/make_scramble_vcf.py"}
-make_scramble_vcf_args=${18:-""}
-
-min_clipped_reads=${19:-20}
-# TODO: make this settable from the caller script.
-#  If set to "" it will result in calculating this based on the read depth.
-#  The default value is set to 20 to match the downsampled data for testing purpose.
+mei_bed=$(jq -r ".mei_bed" "${input_json}")
+min_clipped_reads_fraction=$(jq -r '.min_clipped_reads_fraction // 0.22' "${input_json}")
+percent_align_cutoff=$(jq -r '.percent_align_cutoff // 70' "${input_json}")
+part2_threads=$(jq -r '.part2_threads // 7' "${input_json}")
+make_scramble_vcf_args=$(jq -r '.make_scramble_vcf_args // ""' "${input_json}")
 
 echo "=============== Running scramble.sh"
-echo "sample_name:                " "${sample_name}"
-echo "bam_or_cram_file:           " "${bam_or_cram_file}"
-echo "bam_or_cram_index:          " "${bam_or_cram_index}"
-echo "original_bam_or_cram_file:  " "${original_bam_or_cram_file}"
-echo "original_bam_or_cram_index: " "${original_bam_or_cram_index}"
-echo "counts_file:                " "${counts_file}"
-echo "input_vcf:                  " "${input_vcf}"
-echo "reference_fasta:            " "${reference_fasta}"
-echo "reference_index:            " "${reference_index}"
-echo "regions_list:               " "${regions_list}"
-echo "alignment_score_cutoff:     " "${alignment_score_cutoff}"
-echo "mei_bed:                    " "${mei_bed}"
-echo "min_clipped_reads_fraction: " "${min_clipped_reads_fraction}"
-echo "percent_align_cutoff:       " "${percent_align_cutoff}"
-echo "part2_threads:              " "${part2_threads}"
-echo "scramble_vcf_script:        " "${scramble_vcf_script}"
-echo "make_scramble_vcf_args:     " "${make_scramble_vcf_args}"
-
 
 initial_wd=$PWD
 output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_scramble_XXXXXXXX)
 output_dir="$(realpath ${output_dir})"
 
 scramble_dir="/app/scramble-gatk-sv"
+
+
+# -------------------------------------------------------
+# ======================= Command =======================
+# -------------------------------------------------------
+
 
 # We bypass version detection and conservatively assume Dragen 3.7.8.
 # This adds a few extra steps but is safer logic in case of issues with other Dragen aligner versions.
@@ -90,20 +94,15 @@ working_dir_p1=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_scramble_p1_XXXXXXXX)
 working_dir_p1="$(realpath ${working_dir_p1})"
 cd "${working_dir_p1}"
 
-# Calibrate clipped reads cutoff based on median coverage
-if [[ "${min_clipped_reads}" == "" ]]; then
-  zcat "${counts_file}" \
-    | awk '$0!~"@"' \
-    | sed 1d \
-    | awk 'NR % 100 == 0' \
-    | cut -f4 \
-    | Rscript -e "cat(round(${min_clipped_reads_fraction}*median(data.matrix(read.csv(file(\"stdin\"))))))" \
-    > cutoff.txt
-  MIN_CLIPPED_READS=$(cat cutoff.txt)
-  echo "MIN_CLIPPED_READS: ${MIN_CLIPPED_READS}"
-else
-  MIN_CLIPPED_READS="${min_clipped_reads}"
-fi
+zcat "${counts_file}" \
+  | awk '$0!~"@"' \
+  | sed 1d \
+  | awk 'NR % 100 == 0' \
+  | cut -f4 \
+  | Rscript -e "cat(round(${min_clipped_reads_fraction}*median(data.matrix(read.csv(file(\"stdin\"))))))" \
+  > cutoff.txt
+MIN_CLIPPED_READS=$(cat cutoff.txt)
+echo "MIN_CLIPPED_READS: ${MIN_CLIPPED_READS}"
 
 gzipped_clusters_file="${working_dir_p1}/${sample_name}_scramble_clusters.tsv.gz"
 gzipped_clusters_file="$(realpath ${gzipped_clusters_file})"
@@ -158,7 +157,7 @@ working_dir_make_vcf=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_scramble_make_vcf_XXXXX
 working_dir_make_vcf="$(realpath ${working_dir_make_vcf})"
 cd "${working_dir_make_vcf}"
 
-python "${scramble_vcf_script}" \
+python /opt/sv-pipeline/scripts/make_scramble_vcf.py \
   --table "${scramble_table}" \
   --input-vcf "${input_vcf}" \
   --alignments-file "${original_bam_or_cram_file}" \
@@ -180,11 +179,18 @@ mv "${sample_name}.scramble.vcf.gz.tbi" "${vcf_idx_filename}"
 mv "${gzipped_clusters_file}" "${clusters_filename}"
 mv "${scramble_table}" "${table_filename}"
 
-rm -rf "${working_dir_p1}"
-rm -rf "${working_dir_p2}"
-rm -rf "${working_dir_make_vcf}"
+if [ "${SV_SHELL_CLEAN_UP_WORKING_DIR}" == "true" ]; then
+  rm -rf "${working_dir_p1}"
+  rm -rf "${working_dir_p2}"
+  rm -rf "${working_dir_make_vcf}"
+fi
 
-outputs_filename="${output_dir}/outputs.json"
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+
 jq -n \
   --arg vcf "${vcf_filename}" \
   --arg vcf_idx "${vcf_idx_filename}" \

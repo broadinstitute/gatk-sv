@@ -6,6 +6,10 @@
 
 set -Exeuo pipefail
 
+if [ -z "${SV_SHELL_CLEAN_UP_WORKING_DIR:-}" ]; then
+  SV_SHELL_CLEAN_UP_WORKING_DIR=true
+fi
+
 sample_id=$1
 bam_or_cram_file=$2
 bam_or_cram_index=$3
@@ -68,7 +72,10 @@ output_vcf_filename="$(realpath ${output_dir}/$sample_id.manta.vcf.gz)"
 output_vcf_index_filename="$(realpath ${output_dir}/$sample_id.manta.vcf.gz.tbi)"
 mv "${working_dir}/$sample_id.manta.vcf.gz" "${output_vcf_filename}"
 mv "${working_dir}/${sample_id}.manta.vcf.gz.tbi" "${output_vcf_index_filename}"
-rm -rf "${working_dir}"
+
+if [ "${SV_SHELL_CLEAN_UP_WORKING_DIR}" == "true" ]; then
+  rm -rf "${working_dir}"
+fi
 
 jq -n \
   --arg vcf "${output_vcf_filename}" \

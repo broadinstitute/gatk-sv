@@ -6,6 +6,10 @@
 
 set -Exeuo pipefail
 
+if [ -z "${SV_SHELL_CLEAN_UP_WORKING_DIR:-}" ]; then
+  SV_SHELL_CLEAN_UP_WORKING_DIR=true
+fi
+
 function getJavaMem() {
   # get JVM memory in MiB by getting total memory from /proc/meminfo
   # and multiplying by java_mem_fraction
@@ -135,6 +139,8 @@ jq -n \
       merged_bincov_idx: $merged_bincov_idx
   }' > "${output_json_filename}"
 
-rm -rf "${working_dir}"
+if [ "${SV_SHELL_CLEAN_UP_WORKING_DIR}" == "true" ]; then
+  rm -rf "${working_dir}"
+fi
 
 echo "Finished make bincov matrix, output json filename: ${output_json_filename}"

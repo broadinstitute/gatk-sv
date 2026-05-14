@@ -1,5 +1,29 @@
 #!/bin/bash
 
+# For details: https://serverfault.com/a/103569
+# saves original stdout to &3 and original stderr to &4
+# without this, the logs of subprocess can get mixed with the parent's logs.
+exec 3>&1 4>&2
+
+RED='\033[0;31m'
+BOLD_RED="\033[1;31m"
+GREEN='\033[0;32m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+log_info() {
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${CYAN}$1${NC}" | tee -a "${single_sample_pipeline_stdout}"
+}
+
+log_success() {
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${GREEN}$1${NC}" | tee -a "${single_sample_pipeline_stdout}"
+}
+
+log_error() {
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${RED}$1${NC}" | tee -a "${single_sample_pipeline_stderr}"
+}
+
 set -Exeuo pipefail
 
 # it is not ideal to set a default value if the variable is not defined,
@@ -83,6 +107,11 @@ fi
 working_dir=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/wd_single_sample_XXXXXXXX"))
 cd "${working_dir}"
 echo "Single-Sample Working directory: ${working_dir}"
+
+single_sample_pipeline_stdout="${output_dir}/single_sample_pipeline_stdout.txt"
+single_sample_pipeline_stderr="${output_dir}/single_sample_pipeline_stderr.txt"
+touch "${single_sample_pipeline_stdout}"
+touch "${single_sample_pipeline_stderr}"
 
 batch=$(jq -r ".batch" "$input_json")
 sample_id=$(jq -r ".sample_id" "$input_json")
@@ -202,6 +231,7 @@ bash /opt/sv_shell/gather_sample_evidence.sh \
   "${gather_sample_evidence_outputs_json}" \
   "${gather_sample_evidence_output_dir}"
 
+log_success "Successfully finished gather sample evidence."
 
 # EvidenceQC
 # ---------------------------------------------------------------------------------------------------------------------
@@ -230,6 +260,7 @@ bash /opt/sv_shell/evidence_qc.sh \
   "${evidence_qc_outputs_json_filename}" \
   "${evidence_qc_output_dir}"
 
+log_success "Successfully finished evidence QC."
 
 # GatherBatchEvidence
 # ---------------------------------------------------------------------------------------------------------------------
@@ -328,6 +359,7 @@ bash /opt/sv_shell/gather_batch_evidence.sh \
   "${gather_batch_evidence_outputs_json_filename}" \
   "${gather_batch_evidence_output_dir}"
 
+log_success "Successfully finished gather batch evidence."
 
 # stripy
 # ----------------------------------------------------------------------------------------------------------------------
@@ -351,9 +383,13 @@ bash /opt/sv_shell/stripy.sh \
   "${stripy_outputs_json}" \
   "${stripy_output_dir}"
 
+log_success "Successfully finished stripy."
+
 # CombineTars
 # ----------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
+
+log_info "Starting to Combine Std."
 
 # CombineMantaStd
 # -----------------------
@@ -397,6 +433,8 @@ if $run_wham; then
   tar czf "${merged_wham_vcf_tar}" -C "${CombineWhamStd_working_dir}/" .
 fi
 
+log_success "Successfully finished Combine Std."
+
 # Merge depth
 # ----------------------------------------------------------------------------------------------------------------------
 # Note that the zcat command called in the following is implemented as a function in merge_depth.sh.
@@ -438,6 +476,7 @@ zcat -f "${MergeSetDup_beds[@]}" \
   | bgzip -c > "${MergeSetDup_out}";
 tabix -p bed "${MergeSetDup_out}"
 
+log_success "Successfully finished merge depth."
 
 # ClusterBatch
 # ----------------------------------------------------------------------------------------------------------------------
@@ -480,6 +519,9 @@ bash /opt/sv_shell/cluster_batch.sh \
   "${cluster_batch_outputs_json_filename}" \
   "${cluster_batch_output_dir}"
 
+log_success "Successfully finished cluster batch."
+
+log_info "Starting filtering."
 
 # FilterDepth
 # -----------------------
@@ -529,6 +571,8 @@ if $run_wham; then
   FilterWham_outfile="$(realpath "${FilterWham_vcf_vcf_filebase}.${sample_id}.vcf.gz")"
   FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterWham_vcf}" "${sample_id}" "RD,PE,SR" "${FilterWham_outfile}"
 fi
+
+log_success "Successfully finished filtering."
 
 # MergePesrVcfs
 # ----------------------------------------------------------------------------------------------------------------------
@@ -697,6 +741,8 @@ bash /opt/sv_shell/genotype_svs.sh \
 
 GenotypeSVs_out="$(jq -r ".out" "$genotype_svs_outputs_json_filename")"
 
+log_success "Successfully finished genotype svs."
+
 # SeparateDepthPesr
 # ----------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
@@ -736,7 +782,7 @@ jq -n \
   --slurpfile inputs "${input_json}" \
   --slurpfile gbe "${gather_batch_evidence_outputs_json_filename}" \
   --arg pesr_vcf "${ConvertCNVsWithoutDepthSupportToBNDs_out_vcf}" \
-  --arg depth_vcf "${SeparateDepthPesr_pesr_vcf}" \
+  --arg depth_vcf "${SeparateDepthPesr_depth_vcf}" \
   '{
     "min_sr_background_fail_batches": $inputs[0].clean_vcf_min_sr_background_fail_batches,
     "ped_file": $gbe[0].combined_ped_file,
@@ -779,6 +825,8 @@ bash /opt/sv_shell/make_cohort_vcf.sh \
   "${MakeCohortVcf_inputs_json_filename}" \
   "${MakeCohortVcf_outputs_json_filename}" \
   "${MakeCohortVcf_output_dir}" \
+
+log_success "Successfully finished making cohort vcf."
 
 
 # FilterVcfDepthLt5kb
@@ -877,6 +925,8 @@ bash /opt/sv_shell/refine_complex_variants.sh \
   "${RefineComplexVariants_outputs_json}" \
   "${RefineComplexVariants_output_dir}"
 
+log_success "Successfully finished refine complex variants."
+
 
 # JoinRawCalls
 # ----------------------------------------------------------------------------------------------------------------------
@@ -908,6 +958,8 @@ bash /opt/sv_shell/join_raw_calls.sh \
   "${JoinRawCalls_outputs_json}" \
   "${JoinRawCalls_output_dir}"
 
+log_success "Successfully finished join raw calls."
+
 
 # SVConcordance
 # ----------------------------------------------------------------------------------------------------------------------
@@ -920,6 +972,8 @@ java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar SVConcordance \
   --eval "$(jq -r ".cpx_refined_vcf" "$RefineComplexVariants_outputs_json")" \
   --truth "$(jq -r ".joined_raw_calls_vcf" "$JoinRawCalls_outputs_json")" \
   -O "${SVConcordance_concordance_vcf}"
+
+log_success "Successfully finished SV concordance."
 
 
 # ScoreGenotypes
@@ -946,6 +1000,8 @@ bash /opt/sv_shell/score_genotypes.sh \
   "${ScoreGenotypes_inputs_json}" \
   "${ScoreGenotypes_outputs_json}" \
   "${ScoreGenotypes_output_dir}"
+
+log_success "Successfully finished score genotypes."
 
 
 # FilterGenotypes
@@ -974,6 +1030,8 @@ bash /opt/sv_shell/filter_genotypes.sh \
   "${FilterGenotypes_outputs_json}" \
   "${FilterGenotypes_output_dir}"
 
+log_success "Successfully finished filter genotypes."
+
 
 # SampleFilterMetrics
 # ----------------------------------------------------------------------------------------------------------------------
@@ -999,6 +1057,8 @@ bash /opt/sv_shell/single_sample_metrics.sh \
   "${SampleFilterMetrics_inputs_json}" \
   "${SampleFilterMetrics_outputs_json}" \
   "${SampleFilterMetrics_output_dir}"
+
+log_success "Successfully finished single sample metrics."
 
 
 # SampleFilterQC
@@ -1045,7 +1105,7 @@ fi
 
 tabix "${FilterSample_out}"
 
-
+log_success "Successfully finished filter sample."
 
 # AnnotateVcf
 # ----------------------------------------------------------------------------------------------------------------------
@@ -1076,6 +1136,7 @@ bash /opt/sv_shell/annotate_vcf.sh \
   "${AnnotateVcf_outputs_json}" \
   "${AnnotateVcf_output_dir}"
 
+log_success "Successfully finished annotate vcf."
 
 # UpdateBreakendRepresentationAndRemoveFilters
 # ----------------------------------------------------------------------------------------------------------------------
@@ -1142,6 +1203,7 @@ bash /opt/sv_shell/single_sample_metrics.sh \
   "${SingleSampleMetrics_outputs_json}" \
   "${SingleSampleMetrics_output_dir}"
 
+log_success "Successfully finished single sample metrics."
 
 # SingleSampleQC
 # ----------------------------------------------------------------------------------------------------------------------
@@ -1182,4 +1244,4 @@ jq -n \
       "non_genotyped_unique_depth_calls": $ng_unique_depth_calls
   }' > "${output_json_filename}"
 
-echo "Finished single-sample pipeline, output json filename: ${output_json_filename}"
+log_success "Finished single-sample pipeline, output json filename: ${output_json_filename}"
