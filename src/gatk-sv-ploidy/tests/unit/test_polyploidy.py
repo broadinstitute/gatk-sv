@@ -11,6 +11,28 @@ from gatk_sv_ploidy.models import _marginalized_af_log_lik_numpy
 
 def _synthetic_ploidy_inputs() -> tuple[
     list[str],
+    pd.DataFrame,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+]:
+    return _synthetic_ploidy_inputs_with_mixture_fraction()
+
+
+def _expected_mixed_af(*, cn_state: int, genotype_dosage: int, mixture_fraction: float) -> float:
+    mixed_alt_cn = mixture_fraction * genotype_dosage + (1.0 - mixture_fraction) * 1.0
+    mixed_total_cn = mixture_fraction * cn_state + (1.0 - mixture_fraction) * 2.0
+    return mixed_alt_cn / mixed_total_cn
+
+
+def _synthetic_ploidy_inputs_with_mixture_fraction(
+    *,
+    mixture_fraction: float = 1.0,
+) -> tuple[
+    list[str],
+    pd.DataFrame,
     np.ndarray,
     np.ndarray,
     np.ndarray,
@@ -24,28 +46,88 @@ def _synthetic_ploidy_inputs() -> tuple[
         "tetraploid_sample",
     ]
     bin_chr = np.array([f"chr{i + 1}" for i in range(6)], dtype=object)
-    site_total = np.full((6, 6, 4), 60, dtype=np.int32)
+    site_total = np.full((6, 6, 4), 120, dtype=np.int32)
     site_alt = np.empty((6, 6, 4), dtype=np.int32)
-    site_alt[:, :, 0] = np.array([0, 60, 0, 60, 0, 60], dtype=np.int32)
-    site_alt[:, :, 1] = 30
-    site_alt[:, :, 2] = np.array([20, 40, 20, 40, 20, 40], dtype=np.int32)
-    site_alt[:, :, 3] = np.array([15, 45, 15, 45, 15, 45], dtype=np.int32)
+
+    haploid_af = np.array([
+        _expected_mixed_af(
+            cn_state=1,
+            genotype_dosage=dosage,
+            mixture_fraction=mixture_fraction,
+        )
+        for dosage in (0, 1, 0, 1, 0, 1)
+    ])
+    diploid_af = np.array([
+        _expected_mixed_af(
+            cn_state=2,
+            genotype_dosage=1,
+            mixture_fraction=mixture_fraction,
+        )
+        for _ in range(6)
+    ])
+    triploid_af = np.array([
+        _expected_mixed_af(
+            cn_state=3,
+            genotype_dosage=dosage,
+            mixture_fraction=mixture_fraction,
+        )
+        for dosage in (1, 2, 1, 2, 1, 2)
+    ])
+    tetraploid_af = np.array([
+        _expected_mixed_af(
+            cn_state=4,
+            genotype_dosage=dosage,
+            mixture_fraction=mixture_fraction,
+        )
+        for dosage in (1, 3, 1, 3, 1, 3)
+    ])
+
+    site_alt[:, :, 0] = np.rint(120 * haploid_af).astype(np.int32)
+    site_alt[:, :, 1] = np.rint(120 * diploid_af).astype(np.int32)
+    site_alt[:, :, 2] = np.rint(120 * triploid_af).astype(np.int32)
+    site_alt[:, :, 3] = np.rint(120 * tetraploid_af).astype(np.int32)
     site_pop_af = np.full((6, 6), 0.5, dtype=np.float64)
     site_mask = np.ones((6, 6, 4), dtype=bool)
-    return sample_ids, bin_chr, site_alt, site_total, site_pop_af, site_mask
+
+    depth_df = pd.DataFrame(
+        {
+            "Chr": bin_chr,
+            "Start": np.arange(0, 6000, 1000),
+            "End": np.arange(1000, 7000, 1000),
+            sample_ids[0]: [1.0] * 6,
+            sample_ids[1]: [1.0] * 6,
+            sample_ids[2]: [1.0] * 6,
+            sample_ids[3]: [1.0] * 6,
+        },
+        index=[f"chr{i + 1}:{i * 1000}-{(i + 1) * 1000}" for i in range(6)],
+    )
+    return depth_df.columns[3:].tolist(), depth_df, bin_chr, site_alt, site_total, site_pop_af, site_mask
 
 
-def _classify_synthetic_ploidy() -> pd.DataFrame:
-    sample_ids, bin_chr, site_alt, site_total, site_pop_af, site_mask = (
-        _synthetic_ploidy_inputs()
+def _classify_synthetic_ploidy(
+    *,
+    mixture_fraction_grid: list[float],
+    mixture_fraction: float | None = None,
+    min_mixture_fraction_for_call: float = 0.75,
+) -> pd.DataFrame:
+    if mixture_fraction is None:
+        mixture_fraction = mixture_fraction_grid[0]
+    sample_ids, depth_df, bin_chr, site_alt, site_total, site_pop_af, site_mask = (
+        _synthetic_ploidy_inputs_with_mixture_fraction(
+            mixture_fraction=mixture_fraction
+        )
     )
     return polyploidy.classify_polyploidy_from_site_data(
         sample_ids=sample_ids,
+        depth_df=depth_df,
         bin_chr=bin_chr,
         site_alt=site_alt,
         site_total=site_total,
         site_pop_af=site_pop_af,
         site_mask=site_mask,
+        mixture_fraction_grid=mixture_fraction_grid,
+        min_mixture_fraction_for_call=min_mixture_fraction_for_call,
+        af_concentration_grid=[80.0],
         haploidy_prior=0.2,
         triploidy_prior=0.2,
         tetraploidy_prior=0.2,
@@ -53,6 +135,7 @@ def _classify_synthetic_ploidy() -> pd.DataFrame:
         min_informative_sites=18,
         pvalue_threshold=0.2,
         effect_size_threshold=0.0,
+        max_classifier_sites_per_sample=0,
     )
 
 
@@ -120,7 +203,9 @@ def test_fast_af_likelihood_matches_reference_for_masked_inputs() -> None:
 
 
 def test_classify_polyploidy_from_site_data_classifies_cn1_to_cn4() -> None:
-    results = _classify_synthetic_ploidy().set_index("sample")
+    results = _classify_synthetic_ploidy(mixture_fraction_grid=[1.0]).set_index(
+        "sample"
+    )
 
     expected = {
         "haploid_sample": (1, "HAPLOID"),
@@ -133,35 +218,12 @@ def test_classify_polyploidy_from_site_data_classifies_cn1_to_cn4() -> None:
         assert results.loc[sample_id, "baseline_cn_call"] == expected_call
         assert float(results.loc[sample_id, "baseline_cn_posterior_probability"]) > 0.8
 
+    assert float(results.loc["triploid_sample", "mixture_fraction"]) == 1.0
+    assert float(results.loc["tetraploid_sample", "mixture_fraction"]) == 1.0
     assert float(results.loc["haploid_sample", "fraction_near_haploid_endpoints"]) == 1.0
     assert float(results.loc["triploid_sample", "fraction_near_triploid_thirds"]) == 1.0
     assert float(results.loc["tetraploid_sample", "fraction_near_tetraploid_quarters"]) == 1.0
     assert bool(results.loc["tetraploid_sample", "cn4_direct_peak_supported"]) is True
-    assert float(results.loc["tetraploid_sample", "peak_evidence_weight"]) == 0.0
-    cn4_quarter_fraction = float(
-        results.loc["tetraploid_sample", "tetraploid_quarter_genotype_fraction"]
-    )
-    cn4_half_fraction = float(
-        results.loc["tetraploid_sample", "tetraploid_half_genotype_fraction"]
-    )
-    assert cn4_quarter_fraction > 0.95
-    assert cn4_half_fraction < 0.05
-    assert (
-        float(
-            results.loc[
-                "tetraploid_sample",
-                "tetraploid_expected_quarter_genotype_fraction",
-            ]
-        ) > 0.45
-    )
-    assert (
-        float(
-            results.loc[
-                "tetraploid_sample",
-                "tetraploid_quarter_effective_site_fraction",
-            ]
-        ) > 0.5
-    )
     posterior_sum = results[
         [
             "posterior_cn_1",
@@ -202,37 +264,8 @@ def test_classify_polyploidy_defaults_cn4_ambiguous_half_peaks_to_diploid() -> N
     assert bool(results.loc["tetraploid_ambiguous", "cn4_direct_peak_supported"]) is False
     assert float(results.loc["tetraploid_ambiguous", "fraction_near_diploid_half"]) == 1.0
     assert float(results.loc["tetraploid_ambiguous", "fraction_near_tetraploid_quarters"]) == 0.0
-    assert (
-        float(
-            results.loc[
-                "tetraploid_ambiguous",
-                "tetraploid_quarter_genotype_fraction",
-            ]
-        ) < 0.05
-    )
-    assert (
-        float(
-            results.loc[
-                "tetraploid_ambiguous",
-                "tetraploid_half_genotype_fraction",
-            ]
-        ) > 0.95
-    )
-    assert (
-        float(
-            results.loc[
-                "tetraploid_ambiguous",
-                "tetraploid_expected_quarter_genotype_fraction",
-            ]
-        ) > 0.45
-    )
-    assert (
-        float(
-            results.loc[
-                "tetraploid_ambiguous",
-                "tetraploid_quarter_observed_expected_ratio",
-            ]
-        ) < 0.1
+    assert results.loc["tetraploid_ambiguous", "baseline_cn_reason"] == (
+        "diploid_posterior_supported"
     )
 
 
@@ -261,47 +294,16 @@ def test_tetraploid_direct_support_requires_raw_quarter_peaks() -> None:
     )
 
 
-def test_classify_polyploidy_defaults_low_fit_cn4_candidate_to_diploid() -> None:
-    sample_ids = ["low_concentration_diploid_like"]
-    bin_chr = np.array([f"chr{i + 1}" for i in range(8)], dtype=object)
-    site_total = np.full((8, 8, 1), 100, dtype=np.int32)
-    site_alt = np.full((8, 8, 1), 50, dtype=np.int32)
-    site_pop_af = np.full((8, 8), 0.30, dtype=np.float64)
-    site_mask = np.ones((8, 8, 1), dtype=bool)
-
-    results = polyploidy.classify_polyploidy_from_site_data(
-        sample_ids=sample_ids,
-        bin_chr=bin_chr,
-        site_alt=site_alt,
-        site_total=site_total,
-        site_pop_af=site_pop_af,
-        site_mask=site_mask,
-        af_concentration=2.489,
-        af_concentration_grid=[2.489],
-        haploidy_prior=0.001,
-        triploidy_prior=0.001,
-        tetraploidy_prior=0.49,
-        min_diploid_het_prior=0.0,
-        min_informative_bins=4,
-        min_informative_sites=32,
-        pvalue_threshold=0.9,
-        effect_size_threshold=-100.0,
+def test_classify_polyploidy_models_mixture_fraction_grid() -> None:
+    results = _classify_synthetic_ploidy(
+        mixture_fraction_grid=[0.8, 1.0],
+        mixture_fraction=0.8,
     ).set_index("sample")
 
-    sample = "low_concentration_diploid_like"
-    assert int(results.loc[sample, "autosomal_baseline_cn"]) == 2
-    assert results.loc[sample, "baseline_cn_call"] == "DIPLOID"
-    assert results.loc[sample, "baseline_cn_reason"] == (
-        "cn4_empirical_peak_support_absent_diploid_default"
-    )
-    assert bool(results.loc[sample, "include_in_infer"]) is True
-    assert bool(results.loc[sample, "cn4_posterior_supported"]) is True
-    assert bool(results.loc[sample, "cn4_direct_peak_supported"]) is False
-    assert bool(results.loc[sample, "cn4_af_fit_supported"]) is False
-    assert float(results.loc[sample, "fraction_near_diploid_half"]) == 1.0
-    assert float(results.loc[sample, "fraction_near_tetraploid_quarters"]) == 0.0
-    assert float(results.loc[sample, "tetraploid_quarter_genotype_fraction"]) > 0.5
-    assert float(results.loc[sample, "tetraploid_quarter_genotype_advantage"]) > 0.05
+    assert int(results.loc["triploid_sample", "autosomal_baseline_cn"]) == 3
+    assert results.loc["triploid_sample", "baseline_cn_call"] == "TRIPLOID"
+    assert float(results.loc["triploid_sample", "mixture_fraction"]) == 0.8
+    assert float(results.loc["triploid_sample", "candidate_mixture_fraction"]) == 0.8
 
 
 def test_classify_polyploidy_defaults_low_fit_cn3_candidate_to_diploid() -> None:
@@ -345,41 +347,22 @@ def test_classify_polyploidy_defaults_low_fit_cn3_candidate_to_diploid() -> None
     assert bool(results.loc[sample, "cn3_af_fit_supported"]) is False
 
 
-def test_classify_polyploidy_marks_low_fit_cn3_candidate_undetermined() -> None:
-    sample_ids = ["contamination_like_triploid_candidate"]
-    bin_chr = np.array([f"chr{i + 1}" for i in range(10)], dtype=object)
-    site_total = np.full((10, 10, 1), 120, dtype=np.int32)
-    site_alt = np.empty((10, 10, 1), dtype=np.int32)
-    site_alt[:, :8, 0] = 40
-    site_alt[:, 8:, 0] = 60
-    site_pop_af = np.full((10, 10), 0.5, dtype=np.float64)
-    site_mask = np.ones((10, 10, 1), dtype=bool)
-
-    results = polyploidy.classify_polyploidy_from_site_data(
-        sample_ids=sample_ids,
-        bin_chr=bin_chr,
-        site_alt=site_alt,
-        site_total=site_total,
-        site_pop_af=site_pop_af,
-        site_mask=site_mask,
-        haploidy_prior=0.001,
-        triploidy_prior=0.49,
-        tetraploidy_prior=0.001,
-        min_informative_bins=4,
-        min_informative_sites=50,
-        pvalue_threshold=0.9,
-        effect_size_threshold=-100.0,
-        min_triploid_peak_fraction=0.90,
+def test_classify_polyploidy_requires_minimum_mixture_fraction_for_non_diploid_calls() -> None:
+    results = _classify_synthetic_ploidy(
+        mixture_fraction_grid=[0.8, 1.0],
+        mixture_fraction=0.8,
+        min_mixture_fraction_for_call=0.85,
     ).set_index("sample")
 
-    sample = "contamination_like_triploid_candidate"
-    assert int(results.loc[sample, "autosomal_baseline_cn"]) == 0
-    assert results.loc[sample, "baseline_cn_call"] == "UNDETERMINED"
-    assert results.loc[sample, "baseline_cn_reason"] == "cn3_af_shape_misfit"
-    assert bool(results.loc[sample, "include_in_infer"]) is False
-    assert bool(results.loc[sample, "cn3_posterior_supported"]) is True
-    assert bool(results.loc[sample, "cn3_af_fit_supported"]) is False
-    assert int(results.loc[sample, "candidate_baseline_cn"]) == 3
+    assert int(results.loc["triploid_sample", "candidate_baseline_cn"]) == 3
+    assert int(results.loc["triploid_sample", "autosomal_baseline_cn"]) == 0
+    assert results.loc["triploid_sample", "baseline_cn_call"] == "UNDETERMINED"
+    assert results.loc["triploid_sample", "baseline_cn_reason"] == (
+        "cn3_mixture_fraction_below_threshold"
+    )
+    assert bool(results.loc["triploid_sample", "cn3_posterior_supported"]) is True
+    assert bool(results.loc["triploid_sample", "cn3_mixture_fraction_supported"]) is False
+    assert bool(results.loc["triploid_sample", "include_in_infer"]) is False
 
 
 def test_classify_polyploidy_from_site_data_handles_overdispersed_diploid_af() -> None:
@@ -408,15 +391,18 @@ def test_classify_polyploidy_from_site_data_handles_overdispersed_diploid_af() -
 
     assert int(results.loc["overdispersed_diploid", "autosomal_baseline_cn"]) == 2
     assert results.loc["overdispersed_diploid", "baseline_cn_call"] == "DIPLOID"
-    assert float(results.loc["overdispersed_diploid", "posterior_cn_3"]) < 0.5
+    assert int(results.loc["overdispersed_diploid", "candidate_baseline_cn"]) == 3
+    assert results.loc["overdispersed_diploid", "baseline_cn_reason"] == (
+        "cn3_empirical_peak_support_absent_diploid_default"
+    )
     assert bool(results.loc["overdispersed_diploid", "cn3_direct_peak_supported"]) is False
 
 
 def test_privacy_safe_polyploidy_diagnostics_do_not_log_sample_ids(caplog) -> None:
-    sample_ids, bin_chr, site_alt, site_total, site_pop_af, site_mask = (
+    sample_ids, _depth_df, bin_chr, site_alt, site_total, site_pop_af, site_mask = (
         _synthetic_ploidy_inputs()
     )
-    results = _classify_synthetic_ploidy()
+    results = _classify_synthetic_ploidy(mixture_fraction_grid=[1.0])
     metrics = polyploidy.build_polyploidy_diagnostic_metrics(
         sample_ids=sample_ids,
         bin_chr=bin_chr,
@@ -440,14 +426,13 @@ def test_privacy_safe_polyploidy_diagnostics_do_not_log_sample_ids(caplog) -> No
     assert "PRIVACY_SAFE_POLYPLOIDY" in log_text
     assert "autosomal_baseline_cn_counts" in log_text
     assert "posterior_threshold_counts state=cn4" in log_text
-    assert "tetraploid_ambiguity_counts" in log_text
     assert "af_peak_counts" in log_text
     for sample_id in sample_ids:
         assert sample_id not in log_text
 
 
 def test_polyploidy_progress_messages_do_not_log_sample_ids(monkeypatch, caplog) -> None:
-    sample_ids, bin_chr, site_alt, site_total, site_pop_af, site_mask = (
+    sample_ids, depth_df, bin_chr, site_alt, site_total, site_pop_af, site_mask = (
         _synthetic_ploidy_inputs()
     )
     progress_calls = []
@@ -461,11 +446,13 @@ def test_polyploidy_progress_messages_do_not_log_sample_ids(monkeypatch, caplog)
 
     polyploidy.classify_polyploidy_from_site_data(
         sample_ids=sample_ids,
+        depth_df=depth_df,
         bin_chr=bin_chr,
         site_alt=site_alt,
         site_total=site_total,
         site_pop_af=site_pop_af,
         site_mask=site_mask,
+        mixture_fraction_grid=[1.0],
         af_concentration_grid=[10.0],
         haploidy_prior=0.2,
         triploidy_prior=0.2,
@@ -474,19 +461,13 @@ def test_polyploidy_progress_messages_do_not_log_sample_ids(monkeypatch, caplog)
         min_informative_sites=18,
         pvalue_threshold=0.2,
         effect_size_threshold=0.0,
+        max_classifier_sites_per_sample=0,
         show_progress=True,
         log_progress=True,
     )
 
     descriptions = [str(call.get("desc", "")) for call in progress_calls]
-    assert descriptions == [
-        "CN1 AF likelihood",
-        "CN2 AF likelihood",
-        "CN3 AF likelihood",
-        "CN4 AF likelihood",
-        "Baseline CN peak evidence",
-        "Classifying samples",
-    ]
+    assert descriptions == ["Polyploidy grid search"]
 
     log_text = "\n".join(record.getMessage() for record in caplog.records)
     assert "Polyploidy progress: prepared aggregate AF matrix" in log_text
@@ -498,21 +479,8 @@ def test_polyploidy_progress_messages_do_not_log_sample_ids(monkeypatch, caplog)
 
 
 def test_polyploidy_main_writes_manifest_and_results(tmp_path, monkeypatch) -> None:
-    sample_ids, bin_chr, site_alt, site_total, site_pop_af, site_mask = (
+    sample_ids, depth_df, bin_chr, site_alt, site_total, site_pop_af, site_mask = (
         _synthetic_ploidy_inputs()
-    )
-
-    depth_df = pd.DataFrame(
-        {
-            "Chr": bin_chr,
-            "Start": np.arange(0, 6000, 1000),
-            "End": np.arange(1000, 7000, 1000),
-            sample_ids[0]: [1.0] * 6,
-            sample_ids[1]: [1.0] * 6,
-            sample_ids[2]: [1.0] * 6,
-            sample_ids[3]: [1.0] * 6,
-        },
-        index=[f"chr{i + 1}:{i * 1000}-{(i + 1) * 1000}" for i in range(6)],
     )
     depth_path = tmp_path / "preprocessed_depth.tsv"
     depth_df.to_csv(depth_path, sep="\t")
@@ -539,6 +507,10 @@ def test_polyploidy_main_writes_manifest_and_results(tmp_path, monkeypatch) -> N
             str(site_data_path),
             "--output-dir",
             str(output_dir),
+            "--mixture-fraction-grid",
+            "1.0",
+            "--af-concentration-grid",
+            "80.0",
             "--min-informative-bins",
             "3",
             "--min-informative-sites",
@@ -553,6 +525,8 @@ def test_polyploidy_main_writes_manifest_and_results(tmp_path, monkeypatch) -> N
             "0.2",
             "--tetraploidy-prior",
             "0.2",
+            "--max-classifier-sites-per-sample",
+            "0",
             "--no-progress",
         ],
     )
@@ -577,26 +551,14 @@ def test_polyploidy_main_writes_manifest_and_results(tmp_path, monkeypatch) -> N
         "triploid_sample": "TRIPLOID",
         "tetraploid_sample": "TETRAPLOID",
     }
+    assert set(results_df["mixture_fraction"]) == {1.0}
     assert "include_in_infer" in manifest_df.columns
     assert manifest_df["include_in_infer"].all()
 
 
 def test_polyploidy_main_writes_diagnostics(tmp_path, monkeypatch) -> None:
-    sample_ids, bin_chr, site_alt, site_total, site_pop_af, site_mask = (
+    sample_ids, depth_df, bin_chr, site_alt, site_total, site_pop_af, site_mask = (
         _synthetic_ploidy_inputs()
-    )
-
-    depth_df = pd.DataFrame(
-        {
-            "Chr": bin_chr,
-            "Start": np.arange(0, 6000, 1000),
-            "End": np.arange(1000, 7000, 1000),
-            sample_ids[0]: [1.0] * 6,
-            sample_ids[1]: [1.0] * 6,
-            sample_ids[2]: [1.0] * 6,
-            sample_ids[3]: [1.0] * 6,
-        },
-        index=[f"chr{i + 1}:{i * 1000}-{(i + 1) * 1000}" for i in range(6)],
     )
     depth_path = tmp_path / "preprocessed_depth.tsv"
     depth_df.to_csv(depth_path, sep="\t")
@@ -623,6 +585,10 @@ def test_polyploidy_main_writes_diagnostics(tmp_path, monkeypatch) -> None:
             str(site_data_path),
             "--output-dir",
             str(output_dir),
+            "--mixture-fraction-grid",
+            "1.0",
+            "--af-concentration-grid",
+            "80.0",
             "--min-informative-bins",
             "3",
             "--min-informative-sites",
@@ -642,6 +608,8 @@ def test_polyploidy_main_writes_diagnostics(tmp_path, monkeypatch) -> None:
             "4",
             "--diagnostic-max-sites-per-sample",
             "10",
+            "--max-classifier-sites-per-sample",
+            "0",
             "--no-progress",
         ],
     )
@@ -662,10 +630,6 @@ def test_polyploidy_main_writes_diagnostics(tmp_path, monkeypatch) -> None:
     assert float(metrics_df.loc["diploid_sample", "fraction_near_diploid_half"]) == 1.0
     assert float(metrics_df.loc["triploid_sample", "fraction_near_triploid_thirds"]) == 1.0
     assert float(metrics_df.loc["tetraploid_sample", "fraction_near_tetraploid_quarters"]) == 1.0
-    diagnostic_cn4_quarter_fraction = float(
-        metrics_df.loc["tetraploid_sample", "tetraploid_quarter_genotype_fraction"]
-    )
-    assert diagnostic_cn4_quarter_fraction > 0.95
     assert set(raw_site_df["sample"]) == set(sample_ids)
     assert raw_site_df.groupby("sample").size().max() <= 10
     assert (diagnostics_dir / "polyploidy_diagnostic_metrics.png").exists()

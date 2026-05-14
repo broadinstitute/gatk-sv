@@ -324,6 +324,23 @@ chromosome-level aneuploidy calling. The main sensitivity knobs for this
 behavior are `--max-polyploidy-contamination-mixture-score` and
 `--min-triploid-peak-fraction`.
 
+`polyploidy` now fits each non-diploid baseline state on a configurable
+mixture-fraction grid instead of assuming a fully pure whole-genome shift. For
+each candidate baseline CN, the classifier marginalizes common-SNP allele counts
+over allele-specific copy states and beta-binomial overdispersion, then applies
+the same conservative direct-peak guards before accepting a non-diploid call.
+
+The default mixture-fraction grid is `1.0,0.95,0.9,0.8,0.7,0.6`; non-diploid
+calls also require the best-fit mixture fraction to clear
+`--min-mixture-fraction-for-call`. Detailed grid summaries are written into
+`polyploidy_test_results.tsv`, while the drop-in manifest remains
+`sample_autosomal_baseline_cn.tsv`.
+
+Because library depth can vary independently of true autosomal baseline CN, the
+cohort-relative LogR-style depth term is available but disabled by default
+(`--depth-evidence-weight 0`). Increase that weight only when the input depth
+scale is known to be comparable across samples.
+
 ## Assumptions And Justifications
 
 ### Domain-Supported Assumptions

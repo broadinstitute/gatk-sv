@@ -1,4 +1,7 @@
-"""Autosomal baseline CN classifier from pooled allele-fraction data."""
+"""Autosomal baseline CN classifier from pooled allele-fraction data.
+
+Inspired by the ASCAT idea of fitting baseline CN together with a mixture grid.
+"""
 
 from __future__ import annotations
 
@@ -55,6 +58,12 @@ _DEFAULT_MIN_TRIPLOID_PEAK_FRACTION_ADVANTAGE = 0.0
 _DEFAULT_MIN_TETRAPLOID_QUARTER_PEAK_FRACTION = 0.10
 _DEFAULT_MIN_TETRAPLOID_QUARTER_PEAK_FRACTION_ADVANTAGE = 0.05
 _DEFAULT_MAX_POLYPLOIDY_CONTAMINATION_MIXTURE_SCORE = 0.25
+_DEFAULT_MIXTURE_FRACTIONS = (1.0, 0.95, 0.9, 0.8, 0.7, 0.6)
+_DEFAULT_MIN_MIXTURE_FRACTION_FOR_CALL = 0.75
+_DEFAULT_DEPTH_LOGR_SD = 0.35
+_DEFAULT_DEPTH_EVIDENCE_WEIGHT = 0.0
+_DEFAULT_CLASSIFIER_MAX_SITES_PER_SAMPLE = 50000
+_DEFAULT_CLASSIFIER_RANDOM_SEED = 173
 _DEFAULT_DIAGNOSTIC_SAMPLE_LIMIT = 12
 _DEFAULT_DIAGNOSTIC_DIPLOID_SAMPLE_LIMIT = 12
 _DEFAULT_DIAGNOSTIC_MAX_SITES_PER_SAMPLE = 5000
@@ -77,6 +86,17 @@ class _FlattenedAfObservations:
         return int(self.site_alt.size)
 
 
+@dataclass(frozen=True)
+class _SampleAfObservations:
+    alt: np.ndarray
+    total: np.ndarray
+    site_pop_af: np.ndarray
+    log_choose_total_alt: np.ndarray
+    n_informative_bins: int
+    n_informative_sites: int
+    n_modeled_sites: int
+
+
 def _progress_iter(
     iterable,
     *,
@@ -93,6 +113,286 @@ def _progress_iter(
         dynamic_ncols=True,
         disable=not show_progress,
     )
+
+
+def _parse_float_grid(value: Optional[str], *, name: str) -> Optional[np.ndarray]:
+    if value is None or value.strip() == "":
+        return None
+    try:
+        grid = np.array(
+            [float(part.strip()) for part in value.split(",") if part.strip()],
+            dtype=np.float64,
+        )
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a comma-separated list of numbers.") from exc
+    if grid.size == 0 or np.any(~np.isfinite(grid)):
+        raise ValueError(f"{name} must contain at least one finite value.")
+    return np.unique(np.sort(grid))
+
+
+def _parse_mixture_fraction_grid(value: Optional[str]) -> np.ndarray:
+    grid = _parse_float_grid(value, name="mixture_fraction_grid")
+    if grid is None:
+        grid = np.asarray(_DEFAULT_MIXTURE_FRACTIONS, dtype=np.float64)
+    if np.any(grid <= 0.0) or np.any(grid > 1.0):
+        raise ValueError(
+            "mixture_fraction_grid values must be greater than 0 and at most 1."
+        )
+    return np.unique(np.sort(grid))[::-1]
+
+
+def _log_binomial_genotype_prior(
+    *,
+    cn_state: int,
+    genotype_dosage: int,
+    site_pop_af: np.ndarray,
+) -> np.ndarray:
+    pop_af = np.clip(site_pop_af, 1e-6, 1.0 - 1e-6)
+    dosage = int(genotype_dosage)
+    cn = int(cn_state)
+    return (
+        gammaln(cn + 1.0) -
+        gammaln(dosage + 1.0) -
+        gammaln(cn - dosage + 1.0) +
+        dosage * np.log(pop_af) +
+        (cn - dosage) * np.log1p(-pop_af)
+    )
+
+
+def _collect_sample_observations(
+    *,
+    sample_index: int,
+    site_alt_auto: np.ndarray,
+    site_total_auto: np.ndarray,
+    site_pop_af_auto: np.ndarray,
+    site_mask_auto: np.ndarray,
+    max_sites_per_sample: int,
+    random_seed: int,
+) -> _SampleAfObservations:
+    sample_mask = site_mask_auto[:, :, sample_index]
+    n_informative_bins = int(np.sum(np.any(sample_mask, axis=1)))
+    if not np.any(sample_mask):
+        empty = np.asarray([], dtype=np.float64)
+        return _SampleAfObservations(
+            alt=empty,
+            total=empty,
+            site_pop_af=empty,
+            log_choose_total_alt=empty,
+            n_informative_bins=n_informative_bins,
+            n_informative_sites=0,
+            n_modeled_sites=0,
+        )
+
+    alt = np.asarray(
+        site_alt_auto[:, :, sample_index][sample_mask],
+        dtype=np.float64,
+    )
+    total = np.asarray(
+        site_total_auto[:, :, sample_index][sample_mask],
+        dtype=np.float64,
+    )
+    if site_pop_af_auto.ndim == 2:
+        site_pop_af = np.asarray(site_pop_af_auto[sample_mask], dtype=np.float64)
+    else:
+        site_pop_af = np.asarray(
+            site_pop_af_auto[:, :, sample_index][sample_mask],
+            dtype=np.float64,
+        )
+    finite = (
+        np.isfinite(alt) &
+        np.isfinite(total) &
+        np.isfinite(site_pop_af) &
+        (total > 0.0) &
+        (alt >= 0.0) &
+        (alt <= total)
+    )
+    alt = alt[finite]
+    total = total[finite]
+    site_pop_af = site_pop_af[finite]
+    n_informative_sites = int(alt.size)
+
+    if max_sites_per_sample > 0 and alt.size > max_sites_per_sample:
+        rng = np.random.default_rng(int(random_seed) + int(sample_index))
+        selected = rng.choice(alt.size, size=max_sites_per_sample, replace=False)
+        selected.sort()
+        alt = alt[selected]
+        total = total[selected]
+        site_pop_af = site_pop_af[selected]
+
+    log_choose = (
+        gammaln(total + 1.0) -
+        gammaln(alt + 1.0) -
+        gammaln(total - alt + 1.0)
+    )
+    log_choose = np.nan_to_num(log_choose, nan=0.0, posinf=0.0, neginf=-100.0)
+    return _SampleAfObservations(
+        alt=alt,
+        total=total,
+        site_pop_af=np.clip(site_pop_af, 1e-6, 1.0 - 1e-6),
+        log_choose_total_alt=log_choose,
+        n_informative_bins=n_informative_bins,
+        n_informative_sites=n_informative_sites,
+        n_modeled_sites=int(alt.size),
+    )
+
+
+def _mixture_baf_log_likelihood_grid(
+    observations: _SampleAfObservations,
+    *,
+    cn_state: int,
+    mixture_fraction_grid: np.ndarray,
+    concentration_grid: np.ndarray,
+) -> np.ndarray:
+    result = np.zeros(
+        (int(mixture_fraction_grid.size), int(concentration_grid.size)),
+        dtype=np.float64,
+    )
+    if observations.n_modeled_sites == 0:
+        return result
+
+    genotype_log_priors = [
+        _log_binomial_genotype_prior(
+            cn_state=cn_state,
+            genotype_dosage=genotype_dosage,
+            site_pop_af=observations.site_pop_af,
+        )
+        for genotype_dosage in range(cn_state + 1)
+    ]
+
+    for mixture_idx, mixture_fraction in enumerate(mixture_fraction_grid):
+        mixed_total_cn = (
+            float(mixture_fraction) * cn_state +
+            (1.0 - float(mixture_fraction)) * 2.0
+        )
+        for concentration_idx, concentration in enumerate(concentration_grid):
+            log_terms = []
+            for genotype_dosage, log_prior in enumerate(genotype_log_priors):
+                mixed_alt_cn = (
+                    float(mixture_fraction) * genotype_dosage +
+                    (1.0 - float(mixture_fraction)) * 1.0
+                )
+                expected_af = mixed_alt_cn / mixed_total_cn
+                alpha = float(concentration) * np.clip(expected_af, 1e-6, 1.0 - 1e-6)
+                beta = float(concentration) * (1.0 - np.clip(expected_af, 1e-6, 1.0 - 1e-6))
+                log_terms.append(
+                    log_prior +
+                    _beta_binomial_logpmf_counts(
+                        observations.alt,
+                        observations.total,
+                        alpha + 1e-6,
+                        beta + 1e-6,
+                    )
+                )
+            result[mixture_idx, concentration_idx] = float(
+                np.sum(logsumexp(np.vstack(log_terms), axis=0))
+            )
+    return result
+
+
+def _compute_sample_depth_log2_ratio_from_df(
+    *,
+    depth_df: Optional[pd.DataFrame],
+    sample_ids: list[str],
+    bin_chr: np.ndarray,
+) -> np.ndarray:
+    if depth_df is None:
+        return np.full(len(sample_ids), np.nan, dtype=np.float64)
+
+    depth_values = depth_df.loc[:, sample_ids].to_numpy(dtype=np.float64)
+    if depth_values.shape[0] != len(bin_chr):
+        raise ValueError("Depth matrix row count does not match chromosome metadata.")
+    autosome_mask = ~np.isin(np.asarray(bin_chr, dtype=object), ["chrX", "chrY"])
+    if not np.any(autosome_mask):
+        return np.zeros(len(sample_ids), dtype=np.float64)
+
+    auto_depth = depth_values[autosome_mask]
+    if "BinLengthBp" in depth_df.columns:
+        bin_length = np.asarray(
+            depth_df.loc[autosome_mask, "BinLengthBp"],
+            dtype=np.float64,
+        )
+        auto_depth = auto_depth / np.maximum(bin_length[:, np.newaxis], 1.0)
+
+    positive_depth = np.where(auto_depth > 0.0, auto_depth, np.nan)
+    bin_reference = np.nanmedian(positive_depth, axis=1)
+    valid_bins = np.isfinite(bin_reference) & (bin_reference > 0.0)
+    if not np.any(valid_bins):
+        return np.zeros(len(sample_ids), dtype=np.float64)
+
+    relative_depth = positive_depth[valid_bins] / bin_reference[valid_bins, np.newaxis]
+    sample_scale = np.nanmedian(relative_depth, axis=0)
+    cohort_scale = np.nanmedian(sample_scale)
+    if not np.isfinite(cohort_scale) or cohort_scale <= 0.0:
+        return np.zeros(len(sample_ids), dtype=np.float64)
+    return np.log2(np.clip(sample_scale / cohort_scale, 1e-6, None))
+
+
+def _depth_log_likelihood_grid(
+    *,
+    observed_depth_log2_ratio: float,
+    cn_state: int,
+    mixture_fraction_grid: np.ndarray,
+    depth_logr_sd: float,
+) -> np.ndarray:
+    if not np.isfinite(observed_depth_log2_ratio):
+        return np.zeros(int(mixture_fraction_grid.size), dtype=np.float64)
+    expected_total_cn = (
+        mixture_fraction_grid * cn_state +
+        (1.0 - mixture_fraction_grid) * 2.0
+    )
+    expected_log2_ratio = np.log2(np.clip(expected_total_cn / 2.0, 1e-6, None))
+    sd = float(depth_logr_sd)
+    return (
+        -0.5 * ((observed_depth_log2_ratio - expected_log2_ratio) / sd) ** 2 -
+        np.log(sd * np.sqrt(2.0 * np.pi))
+    )
+
+
+def _softmax_from_log_evidence(log_evidence: np.ndarray) -> np.ndarray:
+    log_norm = logsumexp(log_evidence)
+    return np.exp(log_evidence - log_norm)
+
+
+def _best_grid_point(
+    grid_log_joint: np.ndarray,
+    *,
+    mixture_fraction_grid: np.ndarray,
+    concentration_grid: np.ndarray,
+) -> tuple[float, float, float]:
+    flat_index = int(np.argmax(grid_log_joint))
+    mixture_idx, concentration_idx = np.unravel_index(
+        flat_index,
+        grid_log_joint.shape,
+    )
+    return (
+        float(mixture_fraction_grid[mixture_idx]),
+        float(concentration_grid[concentration_idx]),
+        float(grid_log_joint[mixture_idx, concentration_idx]),
+    )
+
+
+def _validate_classifier_thresholds(
+    *,
+    pvalue_threshold: float,
+    effect_size_threshold: float,
+    min_mixture_fraction_for_call: float,
+    depth_logr_sd: float,
+    depth_evidence_weight: float,
+    max_classifier_sites_per_sample: int,
+) -> None:
+    if not np.isfinite(pvalue_threshold) or not (0.0 < pvalue_threshold < 1.0):
+        raise ValueError("pvalue_threshold must be between 0 and 1.")
+    if not np.isfinite(effect_size_threshold):
+        raise ValueError("effect_size_threshold must be finite.")
+    if not np.isfinite(min_mixture_fraction_for_call) or not (
+            0.0 < min_mixture_fraction_for_call <= 1.0):
+        raise ValueError("min_mixture_fraction_for_call must be in (0, 1].")
+    if not np.isfinite(depth_logr_sd) or depth_logr_sd <= 0.0:
+        raise ValueError("depth_logr_sd must be positive and finite.")
+    if not np.isfinite(depth_evidence_weight) or depth_evidence_weight < 0.0:
+        raise ValueError("depth_evidence_weight must be non-negative and finite.")
+    if max_classifier_sites_per_sample < 0:
+        raise ValueError("max_classifier_sites_per_sample must be non-negative.")
 
 
 def _parse_af_concentration_grid(value: Optional[str]) -> Optional[np.ndarray]:
@@ -960,6 +1260,8 @@ def classify_polyploidy_from_site_data(
     site_total: np.ndarray,
     site_pop_af: np.ndarray,
     site_mask: np.ndarray,
+    depth_df: Optional[pd.DataFrame] = None,
+    mixture_fraction_grid: Optional[Sequence[float]] = None,
     af_concentration: float = 50.0,
     af_concentration_grid: Optional[Sequence[float]] = None,
     af_concentration_prior_log_sd: float = _DEFAULT_AF_CONCENTRATION_PRIOR_LOG_SD,
@@ -990,6 +1292,11 @@ def classify_polyploidy_from_site_data(
     max_polyploidy_contamination_mixture_score: float = (
         _DEFAULT_MAX_POLYPLOIDY_CONTAMINATION_MIXTURE_SCORE
     ),
+    min_mixture_fraction_for_call: float = _DEFAULT_MIN_MIXTURE_FRACTION_FOR_CALL,
+    depth_logr_sd: float = _DEFAULT_DEPTH_LOGR_SD,
+    depth_evidence_weight: float = _DEFAULT_DEPTH_EVIDENCE_WEIGHT,
+    max_classifier_sites_per_sample: int = _DEFAULT_CLASSIFIER_MAX_SITES_PER_SAMPLE,
+    random_seed: int = _DEFAULT_CLASSIFIER_RANDOM_SEED,
     n_states: int = 6,
     show_progress: bool = False,
     log_progress: bool = False,
@@ -1007,10 +1314,14 @@ def classify_polyploidy_from_site_data(
         )
     )
 
-    if not np.isfinite(pvalue_threshold) or not (0.0 < pvalue_threshold < 1.0):
-        raise ValueError("pvalue_threshold must be between 0 and 1.")
-    if not np.isfinite(effect_size_threshold):
-        raise ValueError("effect_size_threshold must be finite.")
+    _validate_classifier_thresholds(
+        pvalue_threshold=pvalue_threshold,
+        effect_size_threshold=effect_size_threshold,
+        min_mixture_fraction_for_call=min_mixture_fraction_for_call,
+        depth_logr_sd=depth_logr_sd,
+        depth_evidence_weight=depth_evidence_weight,
+        max_classifier_sites_per_sample=max_classifier_sites_per_sample,
+    )
     if not np.isfinite(peak_evidence_weight) or peak_evidence_weight < 0.0:
         raise ValueError("peak_evidence_weight must be non-negative and finite.")
     if not np.isfinite(peak_af_window) or not (0.0 < peak_af_window < 0.25):
@@ -1031,7 +1342,19 @@ def classify_polyploidy_from_site_data(
         triploidy_prior=triploidy_prior,
         tetraploidy_prior=tetraploidy_prior,
     )
+    state_index = {cn: idx for idx, cn in enumerate(_BASELINE_CN_STATES)}
     log_cn_prior = np.log(prior_probs)
+    mixture_fraction_arr = np.asarray(
+        _DEFAULT_MIXTURE_FRACTIONS if mixture_fraction_grid is None else mixture_fraction_grid,
+        dtype=np.float64,
+    )
+    if mixture_fraction_arr.size == 0 or np.any(~np.isfinite(mixture_fraction_arr)):
+        raise ValueError("mixture_fraction_grid must contain finite values.")
+    if np.any(mixture_fraction_arr <= 0.0) or np.any(mixture_fraction_arr > 1.0):
+        raise ValueError(
+            "mixture_fraction_grid values must be greater than 0 and at most 1."
+        )
+    mixture_fraction_arr = np.unique(np.sort(mixture_fraction_arr))[::-1]
     concentration_grid = _build_af_concentration_grid(
         af_concentration,
         af_concentration_grid,
@@ -1041,157 +1364,123 @@ def classify_polyploidy_from_site_data(
         af_concentration,
         af_concentration_prior_log_sd,
     )
-    af_observations = _flatten_valid_af_observations(
-        site_alt=site_alt_auto,
-        site_total=site_total_auto,
-        site_pop_af=site_pop_af_auto,
-        site_mask=site_mask_auto,
-        n_samples=len(sample_ids),
+    log_mixture_prior = np.full(
+        int(mixture_fraction_arr.size),
+        -np.log(float(mixture_fraction_arr.size)),
+        dtype=np.float64,
     )
-
-    if log_progress:
-        logger.info(
-            "Polyploidy progress: prepared aggregate AF matrix "
-            "samples=%d autosomal_bins=%d max_sites_per_bin=%d "
-            "informative_site_observations=%d concentration_grid_size=%d "
-            "baseline_cn_states=1,2,3,4",
-            int(len(sample_ids)),
-            int(site_alt_auto.shape[0]),
-            int(site_alt_auto.shape[1]),
-            int(af_observations.n_observations),
-            int(concentration_grid.size),
-        )
-
-    genotype_log_marginal_by_cn: dict[int, np.ndarray] = {}
-    concentration_map_by_cn: dict[int, np.ndarray] = {}
-    concentration_mean_by_cn: dict[int, np.ndarray] = {}
-    for cn_state in _BASELINE_CN_STATES:
-        if log_progress:
-            logger.info(
-                "Polyploidy progress: evaluating CN%d AF likelihood grid.",
-                cn_state,
-            )
-        cn_timer_start = time.perf_counter()
-        ll_by_concentration = _summed_af_log_lik_by_concentration(
-            site_alt=site_alt_auto,
-            site_total=site_total_auto,
-            site_pop_af=site_pop_af_auto,
-            site_mask=site_mask_auto,
-            cn_state=cn_state,
-            n_states=n_states,
-            concentration_grid=concentration_grid,
-            show_progress=show_progress,
-            progress_desc=f"CN{cn_state} AF likelihood",
-            observations=af_observations,
-        )
-        if log_progress:
-            logger.info(
-                "Polyploidy progress: CN%d AF likelihood grid complete "
-                "elapsed_sec=%.3f valid_observations=%d "
-                "concentration_grid_size=%d",
-                cn_state,
-                float(time.perf_counter() - cn_timer_start),
-                int(af_observations.n_observations),
-                int(concentration_grid.size),
-            )
-        log_marginal = logsumexp(
-            ll_by_concentration + log_concentration_prior[:, np.newaxis],
-            axis=0,
-        )
-        genotype_log_marginal_by_cn[cn_state] = log_marginal
-        concentration_map, concentration_mean = _concentration_posterior_summaries(
-            ll_by_concentration,
-            log_concentration_prior,
-            log_marginal,
-            concentration_grid,
-        )
-        concentration_map_by_cn[cn_state] = concentration_map
-        concentration_mean_by_cn[cn_state] = concentration_mean
-
+    depth_log2_ratio = _compute_sample_depth_log2_ratio_from_df(
+        depth_df=depth_df,
+        sample_ids=sample_ids,
+        bin_chr=bin_chr,
+    )
     observed_af_auto = np.divide(
         site_alt_auto,
         site_total_auto,
         out=np.full(site_alt_auto.shape, np.nan, dtype=np.float64),
         where=site_total_auto > 0,
     )
+
     if log_progress:
-        logger.info("Polyploidy progress: evaluating direct AF peak mixtures.")
-    peak_log_lik = _peak_log_likelihood_matrix(
-        observed_af_auto=observed_af_auto,
-        site_pop_af_auto=site_pop_af_auto,
-        site_mask_auto=site_mask_auto,
-        peak_kernel_sd=peak_kernel_sd,
-        peak_outlier_probability=peak_outlier_probability,
-        show_progress=show_progress,
-    )
-
-    genotype_log_marginal = np.vstack(
-        [genotype_log_marginal_by_cn[cn] for cn in _BASELINE_CN_STATES]
-    )
-    log_evidence = (
-        log_cn_prior[:, np.newaxis] +
-        genotype_log_marginal +
-        float(peak_evidence_weight) * peak_log_lik
-    )
-    log_posterior_norm = logsumexp(log_evidence, axis=0)
-    posterior = np.exp(log_evidence - log_posterior_norm[np.newaxis, :])
-    state_index = {cn: idx for idx, cn in enumerate(_BASELINE_CN_STATES)}
-    diploid_idx = state_index[_DIPLOID_BASELINE_CN]
-
-    informative_site_counts = site_mask_auto.sum(axis=1).astype(np.int64, copy=False)
-    peak_metrics = [
-        _compute_observed_af_peak_metrics(
-            observed_af_auto[:, :, sample_idx],
-            site_mask_auto[:, :, sample_idx],
-            peak_af_window,
+        logger.info(
+            "Polyploidy progress: prepared aggregate AF matrix "
+            "samples=%d autosomal_bins=%d max_sites_per_bin=%d "
+            "informative_site_observations=%d mixture_fraction_grid_size=%d "
+            "concentration_grid_size=%d "
+            "baseline_cn_states=1,2,3,4",
+            int(len(sample_ids)),
+            int(site_alt_auto.shape[0]),
+            int(site_alt_auto.shape[1]),
+            int(site_mask_auto.sum()),
+            int(mixture_fraction_arr.size),
+            int(concentration_grid.size),
         )
-        for sample_idx in range(len(sample_ids))
-    ]
-    tetraploid_genotype_metrics = _compute_tetraploid_quarter_genotype_metrics(
-        site_alt_auto=site_alt_auto,
-        site_total_auto=site_total_auto,
-        site_pop_af_auto=site_pop_af_auto,
-        site_mask_auto=site_mask_auto,
-        af_concentration_by_sample=(
-            concentration_mean_by_cn[_TETRAPLOID_BASELINE_CN]
-        ),
-    )
 
     if log_progress:
         logger.info("Polyploidy progress: classifying samples.")
     rows: list[dict[str, object]] = []
     sample_indices = _progress_iter(
         range(len(sample_ids)),
-        desc="Classifying samples",
+        desc="Polyploidy grid search",
         unit="sample",
         total=len(sample_ids),
         show_progress=show_progress,
     )
     for sample_idx in sample_indices:
+        sample_timer_start = time.perf_counter()
         sample_id = sample_ids[sample_idx]
-        block_sites = informative_site_counts[:, sample_idx]
-        informative_blocks = block_sites > 0
-        n_blocks = int(informative_blocks.sum())
-        n_sites = int(block_sites[informative_blocks].sum())
-        sample_metrics = {
-            **peak_metrics[sample_idx],
-            **tetraploid_genotype_metrics[sample_idx],
-        }
+        observations = _collect_sample_observations(
+            sample_index=sample_idx,
+            site_alt_auto=site_alt_auto,
+            site_total_auto=site_total_auto,
+            site_pop_af_auto=site_pop_af_auto,
+            site_mask_auto=site_mask_auto,
+            max_sites_per_sample=max_classifier_sites_per_sample,
+            random_seed=random_seed,
+        )
+        sample_metrics = _compute_observed_af_peak_metrics(
+            observed_af_auto[:, :, sample_idx],
+            site_mask_auto[:, :, sample_idx],
+            peak_af_window,
+        )
+        log_marginal_by_cn: dict[int, float] = {}
+        best_mixture_fraction_by_cn: dict[int, float] = {}
+        best_concentration_by_cn: dict[int, float] = {}
+        best_grid_log_joint_by_cn: dict[int, float] = {}
+        depth_ll_by_cn: dict[int, float] = {}
+        for cn_state in _BASELINE_CN_STATES:
+            baf_ll_grid = _mixture_baf_log_likelihood_grid(
+                observations,
+                cn_state=cn_state,
+                mixture_fraction_grid=mixture_fraction_arr,
+                concentration_grid=concentration_grid,
+            )
+            depth_ll = _depth_log_likelihood_grid(
+                observed_depth_log2_ratio=float(depth_log2_ratio[sample_idx]),
+                cn_state=cn_state,
+                mixture_fraction_grid=mixture_fraction_arr,
+                depth_logr_sd=depth_logr_sd,
+            )
+            grid_log_joint = (
+                baf_ll_grid +
+                log_mixture_prior[:, np.newaxis] +
+                log_concentration_prior[np.newaxis, :] +
+                depth_evidence_weight * depth_ll[:, np.newaxis]
+            )
+            log_marginal_by_cn[cn_state] = float(logsumexp(grid_log_joint))
+            (
+                best_mixture_fraction_by_cn[cn_state],
+                best_concentration_by_cn[cn_state],
+                best_grid_log_joint_by_cn[cn_state],
+            ) = _best_grid_point(
+                grid_log_joint,
+                mixture_fraction_grid=mixture_fraction_arr,
+                concentration_grid=concentration_grid,
+            )
+            best_mixture_idx = int(
+                np.where(
+                    np.isclose(
+                        mixture_fraction_arr,
+                        best_mixture_fraction_by_cn[cn_state],
+                    )
+                )[0][0]
+            )
+            depth_ll_by_cn[cn_state] = float(depth_ll[best_mixture_idx])
 
+        log_evidence = np.asarray(
+            [
+                log_cn_prior[state_index[cn_state]] + log_marginal_by_cn[cn_state]
+                for cn_state in _BASELINE_CN_STATES
+            ],
+            dtype=np.float64,
+        )
+        posterior = _softmax_from_log_evidence(log_evidence)
         sample_posterior = {
-            cn: float(posterior[state_index[cn], sample_idx])
+            cn: float(posterior[state_index[cn]])
             for cn in _BASELINE_CN_STATES
         }
         sample_log_evidence = {
-            cn: float(log_evidence[state_index[cn], sample_idx])
-            for cn in _BASELINE_CN_STATES
-        }
-        sample_genotype_ll = {
-            cn: float(genotype_log_marginal[state_index[cn], sample_idx])
-            for cn in _BASELINE_CN_STATES
-        }
-        sample_peak_ll = {
-            cn: float(peak_log_lik[state_index[cn], sample_idx])
+            cn: float(log_evidence[state_index[cn]])
             for cn in _BASELINE_CN_STATES
         }
         log_bf_vs_cn2 = {
@@ -1203,8 +1492,8 @@ def classify_polyploidy_from_site_data(
         }
         effect_size_vs_cn2 = {
             cn: (
-                log_bf_vs_cn2[cn] / n_sites
-                if n_sites > 0 else float("nan")
+                log_bf_vs_cn2[cn] / observations.n_modeled_sites
+                if observations.n_modeled_sites > 0 else float("nan")
             )
             for cn in _BASELINE_CN_STATES
         }
@@ -1240,6 +1529,12 @@ def classify_polyploidy_from_site_data(
             )
             for cn in _NON_DIPLOID_CN_STATES
         }
+        mixture_fraction_supported = {
+            cn: bool(
+                best_mixture_fraction_by_cn[cn] >= min_mixture_fraction_for_call
+            )
+            for cn in _NON_DIPLOID_CN_STATES
+        }
         posterior_supported = {
             cn: bool(
                 np.isfinite(sample_posterior[cn]) and
@@ -1254,17 +1549,18 @@ def classify_polyploidy_from_site_data(
             cn: bool(
                 posterior_supported[cn] and
                 direct_support[cn] and
-                af_fit_support[cn]
+                af_fit_support[cn] and
+                mixture_fraction_supported[cn]
             )
             for cn in _NON_DIPLOID_CN_STATES
         }
 
-        map_cn = _BASELINE_CN_STATES[int(np.argmax(posterior[:, sample_idx]))]
-        if n_blocks < min_informative_bins:
+        map_cn = _BASELINE_CN_STATES[int(np.argmax(posterior))]
+        if observations.n_informative_bins < min_informative_bins:
             baseline_cn = _DIPLOID_BASELINE_CN
             reason = "insufficient_informative_bins"
             call = "INSUFFICIENT_DATA"
-        elif n_sites < min_informative_sites:
+        elif observations.n_informative_sites < min_informative_sites:
             baseline_cn = _DIPLOID_BASELINE_CN
             reason = "insufficient_informative_sites"
             call = "INSUFFICIENT_DATA"
@@ -1273,7 +1569,7 @@ def classify_polyploidy_from_site_data(
             if supported_states:
                 baseline_cn = max(supported_states, key=lambda cn: sample_posterior[cn])
                 call = baseline_ploidy_label(baseline_cn)
-                reason = f"cn{baseline_cn}_posterior_and_peak_supported"
+                reason = f"cn{baseline_cn}_grid_and_peak_supported"
             elif map_cn != _DIPLOID_BASELINE_CN:
                 top_non_diploid = max(
                     _NON_DIPLOID_CN_STATES,
@@ -1297,6 +1593,10 @@ def classify_polyploidy_from_site_data(
                             reason = f"cn{top_non_diploid}_posterior_error_above_threshold"
                     elif not af_fit_support[top_non_diploid]:
                         reason = _af_fit_failure_reason(top_non_diploid)
+                    elif not mixture_fraction_supported[top_non_diploid]:
+                        reason = (
+                            f"cn{top_non_diploid}_mixture_fraction_below_threshold"
+                        )
                     else:
                         reason = _direct_support_failure_reason(top_non_diploid)
                 else:
@@ -1336,10 +1636,15 @@ def classify_polyploidy_from_site_data(
             final_posterior = float("nan")
             final_posterior_error = float("nan")
             final_effect_size = float("nan")
+            final_mixture_fraction = float("nan")
+            final_concentration = float("nan")
         else:
             final_posterior = sample_posterior[baseline_cn]
             final_posterior_error = 1.0 - final_posterior
             final_effect_size = effect_size_vs_cn2.get(baseline_cn, 0.0)
+            final_mixture_fraction = best_mixture_fraction_by_cn[baseline_cn]
+            final_concentration = best_concentration_by_cn[baseline_cn]
+        diploid_idx = state_index[_DIPLOID_BASELINE_CN]
         triploid_log_prior_odds = (
             np.log(prior_probs[state_index[_TRIPLOID_BASELINE_CN]]) -
             np.log(prior_probs[diploid_idx])
@@ -1364,6 +1669,26 @@ def classify_polyploidy_from_site_data(
             "baseline_cn_posterior_error_probability": float(final_posterior_error),
             "baseline_cn_map_posterior_probability": float(sample_posterior[map_cn]),
             "baseline_cn_effect_size_per_site": float(final_effect_size),
+            "mixture_fraction": float(final_mixture_fraction),
+            "af_concentration": float(final_concentration),
+            "candidate_mixture_fraction": float(
+                best_mixture_fraction_by_cn[candidate_baseline_cn]
+            ),
+            "candidate_af_concentration": float(
+                best_concentration_by_cn[candidate_baseline_cn]
+            ),
+            "observed_depth_log2_ratio": float(depth_log2_ratio[sample_idx]),
+            "depth_evidence_weight": float(depth_evidence_weight),
+            "depth_logr_sd": float(depth_logr_sd),
+            "min_mixture_fraction_for_call": float(
+                min_mixture_fraction_for_call
+            ),
+            "mixture_fraction_grid": ",".join(
+                f"{value:.6g}" for value in mixture_fraction_arr
+            ),
+            "mixture_af_concentration_grid": ",".join(
+                f"{value:.6g}" for value in concentration_grid
+            ),
             "triploidy_call": call,
             "triploidy_reason": reason,
             "triploidy_t_stat": float(triploid_log_posterior_odds),
@@ -1412,8 +1737,10 @@ def classify_polyploidy_from_site_data(
             "diploidy_prior": float(prior_probs[state_index[2]]),
             "triploidy_prior": float(prior_probs[state_index[3]]),
             "tetraploidy_prior": float(prior_probs[state_index[4]]),
-            "n_informative_bins": n_blocks,
-            "n_informative_sites": n_sites,
+            "n_informative_bins": int(observations.n_informative_bins),
+            "n_informative_sites": int(observations.n_informative_sites),
+            "n_modeled_sites": int(observations.n_modeled_sites),
+            "elapsed_sec": float(time.perf_counter() - sample_timer_start),
         }
         row.update(sample_metrics)
         for cn_state in _BASELINE_CN_STATES:
@@ -1421,17 +1748,33 @@ def classify_polyploidy_from_site_data(
             row[f"log_evidence_cn_{cn_state}"] = sample_log_evidence[cn_state]
             row[f"log_bayes_factor_cn{cn_state}_vs_cn2"] = log_bf_vs_cn2[cn_state]
             row[f"effect_size_cn{cn_state}_vs_cn2"] = effect_size_vs_cn2[cn_state]
-            row[f"genotype_log_lik_cn_{cn_state}"] = sample_genotype_ll[cn_state]
-            row[f"peak_log_lik_cn_{cn_state}"] = sample_peak_ll[cn_state]
-            row[f"cn{cn_state}_af_concentration_map"] = float(
-                concentration_map_by_cn[cn_state][sample_idx]
+            row[f"mixture_fraction_map_cn_{cn_state}"] = float(
+                best_mixture_fraction_by_cn[cn_state]
             )
-            row[f"cn{cn_state}_af_concentration_mean"] = float(
-                concentration_mean_by_cn[cn_state][sample_idx]
+            row[f"af_concentration_map_cn_{cn_state}"] = float(
+                best_concentration_by_cn[cn_state]
             )
+            row[f"cn{cn_state}_af_concentration_map"] = row[
+                f"af_concentration_map_cn_{cn_state}"
+            ]
+            row[f"cn{cn_state}_af_concentration_mean"] = row[
+                f"af_concentration_map_cn_{cn_state}"
+            ]
+            row[f"grid_log_lik_cn_{cn_state}"] = float(log_marginal_by_cn[cn_state])
+            row[f"genotype_log_lik_cn_{cn_state}"] = row[
+                f"grid_log_lik_cn_{cn_state}"
+            ]
+            row[f"grid_map_log_joint_cn_{cn_state}"] = float(
+                best_grid_log_joint_by_cn[cn_state]
+            )
+            row[f"depth_log_lik_cn_{cn_state}"] = float(depth_ll_by_cn[cn_state])
+            row[f"peak_log_lik_cn_{cn_state}"] = float("nan")
         for cn_state in _NON_DIPLOID_CN_STATES:
             row[f"cn{cn_state}_direct_peak_supported"] = bool(direct_support[cn_state])
             row[f"cn{cn_state}_af_fit_supported"] = bool(af_fit_support[cn_state])
+            row[f"cn{cn_state}_mixture_fraction_supported"] = bool(
+                mixture_fraction_supported[cn_state]
+            )
             row[f"cn{cn_state}_posterior_supported"] = bool(
                 posterior_supported[cn_state]
             )
@@ -1440,10 +1783,12 @@ def classify_polyploidy_from_site_data(
             )
         row["diploid_log_lik"] = row["log_evidence_cn_2"]
         row["triploid_log_lik"] = row["log_evidence_cn_3"]
-        row["diploid_af_concentration_map"] = row["cn2_af_concentration_map"]
-        row["triploid_af_concentration_map"] = row["cn3_af_concentration_map"]
-        row["diploid_af_concentration_mean"] = row["cn2_af_concentration_mean"]
-        row["triploid_af_concentration_mean"] = row["cn3_af_concentration_mean"]
+        row["diploid_mixture_fraction_map"] = row["mixture_fraction_map_cn_2"]
+        row["triploid_mixture_fraction_map"] = row["mixture_fraction_map_cn_3"]
+        row["diploid_af_concentration_map"] = row["af_concentration_map_cn_2"]
+        row["triploid_af_concentration_map"] = row["af_concentration_map_cn_3"]
+        row["diploid_af_concentration_mean"] = row["diploid_af_concentration_map"]
+        row["triploid_af_concentration_mean"] = row["triploid_af_concentration_map"]
         rows.append(row)
 
     results_df = pd.DataFrame(rows)
@@ -1681,6 +2026,8 @@ def _log_privacy_safe_af_peak_metrics(metrics_df: pd.DataFrame) -> None:
             "raw_af_sd",
             "median_site_depth",
         ]:
+            if column not in metrics_df.columns:
+                continue
             corr, n_used = _safe_correlation(metrics_df[column], metrics_df[bf_column])
             logger.info(
                 "PRIVACY_SAFE_POLYPLOIDY af_peak_correlation_with_log_bayes_factor "
@@ -2498,6 +2845,47 @@ def parse_args() -> argparse.Namespace:
         help="Minimum mean log Bayes factor per informative site for non-diploid calls",
     )
     parser.add_argument(
+        "--mixture-fraction-grid",
+        default=",".join(f"{value:g}" for value in _DEFAULT_MIXTURE_FRACTIONS),
+        help=(
+            "Comma-separated mixture-fraction grid used to fit non-diploid "
+            "baseline states against a diploid background"
+        ),
+    )
+    parser.add_argument(
+        "--min-mixture-fraction-for-call",
+        type=float,
+        default=_DEFAULT_MIN_MIXTURE_FRACTION_FOR_CALL,
+        help="Minimum best-fit mixture fraction allowed for non-diploid calls",
+    )
+    parser.add_argument(
+        "--depth-evidence-weight",
+        type=float,
+        default=_DEFAULT_DEPTH_EVIDENCE_WEIGHT,
+        help=(
+            "Composite-likelihood weight for cohort-relative autosomal depth "
+            "log2-ratio evidence"
+        ),
+    )
+    parser.add_argument(
+        "--depth-logr-sd",
+        type=float,
+        default=_DEFAULT_DEPTH_LOGR_SD,
+        help="Standard deviation for autosomal depth log2-ratio evidence",
+    )
+    parser.add_argument(
+        "--max-classifier-sites-per-sample",
+        type=int,
+        default=_DEFAULT_CLASSIFIER_MAX_SITES_PER_SAMPLE,
+        help="Maximum informative sites modeled per sample; 0 disables subsampling",
+    )
+    parser.add_argument(
+        "--random-seed",
+        type=int,
+        default=_DEFAULT_CLASSIFIER_RANDOM_SEED,
+        help="Seed for deterministic classifier site subsampling",
+    )
+    parser.add_argument(
         "--ploidy-peak-af-window",
         "--polyploidy-peak-af-window",
         "--triploidy-peak-af-window",
@@ -2637,14 +3025,19 @@ def main() -> None:
         raise ValueError("site_data bin axis does not match available chromosome metadata.")
 
     af_concentration_grid = _parse_af_concentration_grid(args.af_concentration_grid)
+    mixture_fraction_grid = _parse_mixture_fraction_grid(
+        args.mixture_fraction_grid
+    )
     logger.info("Polyploidy progress: starting autosomal baseline CN classification.")
     results_df = classify_polyploidy_from_site_data(
         sample_ids=sample_ids,
+        depth_df=depth_df,
         bin_chr=bin_chr,
         site_alt=site_alt,
         site_total=site_total,
         site_pop_af=site_pop_af,
         site_mask=site_mask,
+        mixture_fraction_grid=mixture_fraction_grid,
         af_concentration=args.af_concentration,
         af_concentration_grid=af_concentration_grid,
         af_concentration_prior_log_sd=args.af_concentration_prior_log_sd,
@@ -2675,6 +3068,11 @@ def main() -> None:
         max_polyploidy_contamination_mixture_score=(
             args.max_polyploidy_contamination_mixture_score
         ),
+        min_mixture_fraction_for_call=args.min_mixture_fraction_for_call,
+        depth_logr_sd=args.depth_logr_sd,
+        depth_evidence_weight=args.depth_evidence_weight,
+        max_classifier_sites_per_sample=args.max_classifier_sites_per_sample,
+        random_seed=args.random_seed,
         show_progress=show_progress,
         log_progress=True,
     )

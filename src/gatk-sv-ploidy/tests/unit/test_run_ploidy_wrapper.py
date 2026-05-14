@@ -35,6 +35,8 @@ def test_run_ploidy_wrapper_uses_step_passthroughs_for_infer_call_and_preprocess
     assert 'INFER_ARGS="${1#*=}"; shift;;' in script_text
     assert '--polyploidy-args)' in script_text
     assert '--polyploidy-args=*)' in script_text
+    assert 'Baseline CN tool : polyploidy' in script_text
+    assert 'run_cli polyploidy \\' in script_text
     assert '--min-poor-region-coverage)' not in script_text
     assert '--use-callq20)' in script_text
     assert 'USE_CALLQ20="false"' in script_text

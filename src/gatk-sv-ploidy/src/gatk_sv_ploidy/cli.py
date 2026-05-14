@@ -1,8 +1,8 @@
 """
 CLI entry point for gatk-sv-ploidy.
 
-Dispatches to subcommands: preprocess, polyploidy, infer, ppd, call, plot,
-eval, pull-snps.
+Dispatches to subcommands: preprocess, polyploidy, infer, ppd, call,
+plot, eval, pull-snps.
 """
 
 import sys
