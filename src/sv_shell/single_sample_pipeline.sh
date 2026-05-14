@@ -208,6 +208,7 @@ if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
 
   dragen_sv_vcf="std.dragen.${sample_id}.vcf.gz"
   bcftools sort tmp.vcf -Oz -o "${dragen_sv_vcf}"
+  rm tmp.vcf
 fi
 
 # GatherSampleEvidence
@@ -301,6 +302,7 @@ jq -n \
   --slurpfile gse_outputs "${gather_sample_evidence_outputs_json}" \
   --slurpfile eqc_outputs "${evidence_qc_outputs_json_filename}" \
   --arg samples "${sample_id}" \
+  --arg dragen_vcf "${dragen_sv_vcf}" \
   --argjson ref_samples "${ref_samples_json_array}" \
   --argjson ref_pe_disc "${ref_pesr_disc_files_json_array}" \
   --argjson ref_pe_split "${ref_pesr_split_files_json_array}" \
@@ -364,7 +366,7 @@ jq -n \
       ref_copy_number_autosomal_contigs: $inputs[0].ref_copy_number_autosomal_contigs,
       allosomal_contigs: $inputs[0].allosomal_contigs,
       gcnv_qs_cutoff: $inputs[0].gcnv_qs_cutoff,
-      dragen_vcfs: null,
+      dragen_vcfs: [$dragen_vcf],
       manta_vcfs: [$gse_outputs[0].manta_vcf],
       scramble_vcfs: [$gse_outputs[0].scramble_vcf],
       wham_vcfs: [$gse_outputs[0].wham_vcf],
@@ -460,6 +462,19 @@ if $run_wham; then
   tar czf "${merged_wham_vcf_tar}" -C "${CombineWhamStd_working_dir}/" .
 fi
 
+# CombineDragen
+# -----------------------
+std_dragen_vcf_tar=$(jq -r ".std_dragen_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
+merged_dragen_vcf_tar=""
+
+if $use_dragen; then
+  merged_dragen_vcf_tar="${working_dir}/$(basename "${std_dragen_vcf_tar}")"
+  CombineDragenStd_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CombineDragenStd_XXXXXXXX)
+  tar xzf "${ref_std_dragen_vcf_tar}" -C "${CombineDragenStd_working_dir}/"
+  tar xzf "${std_dragen_vcf_tar}" -C "${CombineDragenStd_working_dir}/"
+  tar czf "${merged_dragen_vcf_tar}" -C "${CombineDragenStd_working_dir}/" .
+fi
+
 log_success "Successfully finished Combine Std."
 
 # Merge depth
@@ -517,6 +532,7 @@ jq -n \
   --arg manta_vcf_tar "${merged_manta_vcf_tar}" \
   --arg scramble_vcf_tar "${merged_scramble_vcf_tar}" \
   --arg wham_vcf_tar "${merged_wham_vcf_tar}" \
+  --arg dragen_vcf_tar
   --arg del_bed "${MergeSetDel_out}" \
   --arg dup_bed "${MergeSetDup_out}" \
   '{
