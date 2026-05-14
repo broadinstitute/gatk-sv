@@ -1186,7 +1186,7 @@ def parse_args() -> argparse.Namespace:
     )
     a.add_argument("--min-site-depth", type=int, default=3,
                    help="Minimum total depth at a site to retain a sample-site observation during cohort AF inference")
-    a.add_argument("--max-sites-per-bin", type=int, default=10,
+    a.add_argument("--max-sites-per-bin", type=int, default=50,
                    help="Maximum sites per bin (pad/subsample to this)")
     a.add_argument("--sd-stride", type=int, default=10,
                    help="Keep every Nth row from SD files (100 = 100x downsample)")

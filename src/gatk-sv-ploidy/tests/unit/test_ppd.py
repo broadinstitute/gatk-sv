@@ -103,6 +103,17 @@ def test_build_model_from_artifacts_restores_af_outlier_weight() -> None:
     assert model.af_background_concentration == pytest.approx(0.42)
 
 
+def test_build_model_from_artifacts_restores_autosomal_baseline_cn() -> None:
+    model = _build_model_from_artifacts(
+        {
+            "autosomal_baseline_cn": np.asarray([2, 3], dtype=np.int64),
+        },
+        device="cpu",
+    )
+
+    np.testing.assert_array_equal(model.autosomal_baseline_cn, np.array([2, 3]))
+
+
 def test_generate_ppd_depth_supports_negative_binomial_metadata() -> None:
     raw_df = pd.DataFrame(
         {
@@ -181,6 +192,33 @@ def test_generate_ppd_depth_negative_binomial_background_is_cn0_only() -> None:
     )
 
     assert float(cn0_with_background.mean()) > 1.0
+
+
+def test_generate_ppd_depth_uses_autosomal_baseline_cn_for_raw_expectation() -> None:
+    raw_df = pd.DataFrame(
+        {
+            "Chr": ["chr21"],
+            "Start": [0],
+            "End": [1000],
+            "S1": [20],
+        },
+        index=["chr21:0-1000"],
+    )
+    data = DepthData(raw_df, depth_space="raw", clamp_threshold=None)
+    cn_post = _fake_cn_posterior(data.n_bins, data.n_samples, cn_state=3)
+    map_est = {
+        "bin_bias": np.full(data.n_bins, 1.0, dtype=np.float32),
+        "sample_var": np.full(data.n_samples, 1e-6, dtype=np.float32),
+        "bin_var": np.full(data.n_bins, 0.0, dtype=np.float32),
+        "sample_depth": np.array([20.0], dtype=np.float32),
+        "autosomal_baseline_cn": np.array([3], dtype=np.int64),
+        "obs_likelihood": np.asarray("negative_binomial"),
+        "depth_space": np.asarray("raw"),
+    }
+
+    draws = generate_ppd_depth(data, map_est, cn_post, n_draws=300, seed=29)
+
+    assert float(draws.mean()) == pytest.approx(20.0, rel=0.15)
 
 
 def test_generate_ppd_depth_uses_allosome_overdispersion() -> None:

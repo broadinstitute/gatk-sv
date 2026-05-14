@@ -19,6 +19,8 @@ from gatk_sv_ploidy.models import (
     DEFAULT_GUIDE_INIT_SCALE,
     DEFAULT_MULTIPLICATIVE_FACTORS,
     DEFAULT_RAW_VARIANCE_POWER,
+    _baseline_af_background_log_prob_numpy,
+    _baseline_af_background_log_prob_torch,
     _center_af_table_numpy,
     _effective_negative_binomial_overdispersion_numpy,
     _precompute_af_table_from_observed_genotype_log_lik,
@@ -34,6 +36,33 @@ from gatk_sv_ploidy.models import (
     _resolve_fixed_site_pop_af_torch,
     _windowed_relative_elbo_change,
 )
+
+
+def _hand_baseline_background_log_prob(
+    alt_count: int,
+    total_count: int,
+    site_pop_af: float,
+    baseline_cn: int,
+    concentration: float,
+) -> float:
+    from scipy.special import logsumexp
+    from scipy.stats import betabinom as betabinom_scipy
+    from scipy.stats import binom as binom_scipy
+
+    eps = 1e-6
+    terms = []
+    for alt_copies in range(baseline_cn + 1):
+        expected_af = alt_copies / baseline_cn
+        terms.append(
+            binom_scipy.logpmf(alt_copies, baseline_cn, site_pop_af) +
+            betabinom_scipy.logpmf(
+                alt_count,
+                total_count,
+                concentration * expected_af + eps,
+                concentration * (1.0 - expected_af) + eps,
+            )
+        )
+    return float(logsumexp(terms))
 
 def test_cnv_model_defaults_match_current_preferred_configuration() -> None:
     model = CNVModel()
@@ -1062,6 +1091,92 @@ def test_relative_af_evidence_centers_against_fixed_reference_mixture(
         rtol=1e-6,
         atol=1e-6,
     )
+
+
+@pytest.mark.parametrize(
+    ("baseline_cn", "site_pop_af", "alt_count", "total_count"),
+    [(2, 0.2, 2, 12), (3, 0.4, 5, 14)],
+)
+def test_baseline_af_background_matches_hand_genotype_mixture(
+    baseline_cn: int,
+    site_pop_af: float,
+    alt_count: int,
+    total_count: int,
+) -> None:
+    concentration = 17.0
+    site_alt_np = np.array([[[alt_count]]], dtype=np.float64)
+    site_total_np = np.array([[[total_count]]], dtype=np.float64)
+    site_pop_af_np = np.array([[site_pop_af]], dtype=np.float64)
+    expected = _hand_baseline_background_log_prob(
+        alt_count,
+        total_count,
+        site_pop_af,
+        baseline_cn,
+        concentration,
+    )
+
+    numpy_log_prob = _baseline_af_background_log_prob_numpy(
+        site_alt_np,
+        site_total_np,
+        site_pop_af_np,
+        np.array([baseline_cn], dtype=np.int64),
+        n_states=6,
+        background_concentration=concentration,
+    )
+    torch_log_prob = _baseline_af_background_log_prob_torch(
+        torch.tensor(site_alt_np, dtype=torch.float64),
+        torch.tensor(site_total_np, dtype=torch.float64),
+        torch.tensor(site_pop_af_np, dtype=torch.float64),
+        torch.tensor([baseline_cn], dtype=torch.long),
+        n_states=6,
+        background_concentration=concentration,
+    )
+
+    np.testing.assert_allclose(numpy_log_prob, expected, rtol=1e-8, atol=1e-8)
+    np.testing.assert_allclose(
+        torch_log_prob.detach().cpu().numpy(),
+        expected,
+        rtol=1e-8,
+        atol=1e-8,
+    )
+
+
+def test_zero_informative_weight_uses_baseline_background_for_all_cn_states() -> None:
+    site_alt = torch.tensor([[[4.0, 5.0]]], dtype=torch.float64)
+    site_total = torch.tensor([[[12.0, 12.0]]], dtype=torch.float64)
+    site_pop_af = torch.tensor([[0.35]], dtype=torch.float64)
+    site_mask = torch.tensor([[[True, True]]], dtype=torch.bool)
+    baseline_cn = torch.tensor([2, 3], dtype=torch.long)
+    concentration = 19.0
+
+    table = _precompute_af_table(
+        site_alt,
+        site_total,
+        site_pop_af,
+        site_mask,
+        n_states=6,
+        concentration=50.0,
+        outlier_weight=0.0,
+        background_concentration=concentration,
+        background_baseline_cn=baseline_cn,
+        informative_weight=0.0,
+    )
+    expected_background = _baseline_af_background_log_prob_torch(
+        site_alt,
+        site_total,
+        site_pop_af,
+        baseline_cn,
+        n_states=6,
+        background_concentration=concentration,
+    ).sum(dim=-2)
+
+    for cn_state in range(6):
+        torch.testing.assert_close(
+            table[cn_state],
+            expected_background,
+            rtol=1e-8,
+            atol=1e-8,
+        )
 
 
 def test_marginalized_af_log_lik_scales_with_informative_site_count() -> None:

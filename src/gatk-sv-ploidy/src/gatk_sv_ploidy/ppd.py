@@ -472,6 +472,9 @@ def _build_model_from_artifacts(
         sample_depth_max=float(
             np.asarray(map_estimates.get("sample_depth_max", 10000.0)).item()
         ),
+        autosomal_baseline_cn=np.asarray(
+            map_estimates.get("autosomal_baseline_cn", None)
+        ) if "autosomal_baseline_cn" in map_estimates else None,
     )
 
 
@@ -516,11 +519,13 @@ def _sample_ppd_observation(
     overdispersion = bin_var[:, np.newaxis] + sample_var[np.newaxis, :]
     mean = data.bin_length_kb.detach().cpu().numpy()[:, np.newaxis]
     mean = mean * sample_depth[np.newaxis, :]
+    autosomal_baseline_cn = continuous_maps.get("autosomal_baseline_cn", 2.0)
     mean = mean * np.maximum(
         _raw_expected_depth_units(
             cn_sample.astype(np.float32),
             bin_bias,
             additive_background,
+            autosomal_baseline_copy_number=autosomal_baseline_cn,
         ),
         0.0,
     )
@@ -646,6 +651,10 @@ def generate_ppd_depth(
                 if "model_raw_variance_power" in map_estimates:
                     draw_maps["model_raw_variance_power"] = map_estimates[
                         "model_raw_variance_power"
+                    ]
+                if "autosomal_baseline_cn" in map_estimates:
+                    draw_maps["autosomal_baseline_cn"] = map_estimates[
+                        "autosomal_baseline_cn"
                     ]
                 draw_post = model._run_discrete_inference_fixed_latents(
                     data,

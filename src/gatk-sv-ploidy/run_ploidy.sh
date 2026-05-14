@@ -259,18 +259,18 @@ elif [[ -n "${SITE_DEPTH_LIST}" ]]; then
     echo "Warning: site-depth list was provided but preprocess did not create ${SITE_DATA}; AF-enabled polyploidy and raw AF plots will be skipped." >&2
 fi
 
-# if [[ "${RUN_POLYPLOIDY}" == "true" ]]; then
-#     echo "polyploidy"
-#     if [[ "${DRY_RUN}" == "true" ]]; then
-#         dry_run_step "polyploidy"
-#     else
-#         run_cli polyploidy \
-#             -i "${PREPROCESSED_DEPTH}" \
-#             --site-data "${SITE_DATA}" \
-#             -o "${POLYPLOIDY_DIR}" \
-#             $POLYPLOIDY_ARGS
-#     fi
-# fi
+if [[ "${RUN_POLYPLOIDY}" == "true" ]]; then
+    echo "polyploidy"
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        dry_run_step "polyploidy"
+    else
+        run_cli polyploidy \
+            -i "${PREPROCESSED_DEPTH}" \
+            --site-data "${SITE_DATA}" \
+            -o "${POLYPLOIDY_DIR}" \
+            $POLYPLOIDY_ARGS
+    fi
+fi
 
 # ── infer ───────────────────────────────────────────────────────────────────
 echo "infer"

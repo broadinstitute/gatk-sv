@@ -119,13 +119,65 @@ def _normalize_af_informative_weight(informative_weight: float) -> float:
 
 
 def _normalize_af_background_concentration(concentration: float) -> float:
-    """Validate the CN-independent population-AF background concentration."""
+    """Validate the allele-fraction background concentration."""
     value = float(concentration)
     if not math.isfinite(value):
         raise ValueError("af_background_concentration must be finite.")
     if value <= 0.0:
         raise ValueError("af_background_concentration must be positive.")
     return value
+
+
+def _normalize_af_background_baseline_cn_torch(
+    baseline_cn: int | Sequence[int] | np.ndarray | torch.Tensor | None,
+    n_samples: int,
+    n_states: int,
+    *,
+    device: torch.device,
+) -> torch.Tensor:
+    """Return a validated baseline copy-number vector for allele counts."""
+    if baseline_cn is None:
+        baseline = torch.full((n_samples,), 2, dtype=torch.long, device=device)
+    else:
+        baseline = torch.as_tensor(baseline_cn, dtype=torch.long, device=device)
+        if baseline.ndim == 0:
+            baseline = baseline.expand(n_samples)
+        else:
+            baseline = baseline.reshape(-1)
+            if baseline.numel() != n_samples:
+                raise ValueError(
+                    "background_baseline_cn must be scalar or have length n_samples."
+                )
+    if torch.any((baseline < 1) | (baseline >= n_states)):
+        raise ValueError(
+            "background_baseline_cn values must be between 1 and n_states - 1."
+        )
+    return baseline
+
+
+def _normalize_af_background_baseline_cn_numpy(
+    baseline_cn: int | Sequence[int] | np.ndarray | None,
+    n_samples: int,
+    n_states: int,
+) -> np.ndarray:
+    """NumPy counterpart of :func:`_normalize_af_background_baseline_cn_torch`."""
+    if baseline_cn is None:
+        baseline = np.full(n_samples, 2, dtype=np.int64)
+    else:
+        baseline = np.asarray(baseline_cn, dtype=np.int64)
+        if baseline.ndim == 0:
+            baseline = np.full(n_samples, int(baseline), dtype=np.int64)
+        else:
+            baseline = baseline.reshape(-1)
+            if baseline.size != n_samples:
+                raise ValueError(
+                    "background_baseline_cn must be scalar or have length n_samples."
+                )
+    if np.any((baseline < 1) | (baseline >= n_states)):
+        raise ValueError(
+            "background_baseline_cn values must be between 1 and n_states - 1."
+        )
+    return baseline
 
 
 def _mix_population_af_background_torch(
@@ -218,6 +270,76 @@ def _population_af_background_log_prob_torch(
     ).log_prob(site_alt))
 
 
+def _baseline_af_background_log_prob_torch(
+    site_alt: torch.Tensor,
+    site_total_safe: torch.Tensor,
+    site_pop_af: torch.Tensor,
+    background_baseline_cn: int | Sequence[int] | np.ndarray | torch.Tensor | None,
+    n_states: int,
+    background_concentration: float,
+) -> torch.Tensor:
+    """Return baseline-copy-number genotype-mixture log-probs per observation."""
+    eps = 1e-6
+    concentration = _normalize_af_background_concentration(background_concentration)
+    if site_pop_af.dim() == site_alt.dim():
+        pop_af = site_pop_af
+    elif site_alt.dim() == 3 and site_pop_af.dim() == 2:
+        pop_af = site_pop_af.unsqueeze(-1)
+    elif site_alt.dim() == 3 and site_pop_af.dim() == 3:
+        pop_af = site_pop_af
+    else:
+        raise ValueError(
+            "site_pop_af must match site_alt shape, have shape "
+            "(n_bins, max_sites), or have shape (n_bins, max_sites, n_samples)."
+        )
+    pop_af_safe = torch.clamp(pop_af, min=eps, max=1.0 - eps)
+
+    n_observations = site_alt.shape[-1]
+    baseline = _normalize_af_background_baseline_cn_torch(
+        background_baseline_cn,
+        n_observations,
+        n_states,
+        device=site_alt.device,
+    )
+    baseline_shape = (1,) * (site_alt.dim() - 1) + (n_observations,)
+    baseline_e = baseline.reshape(baseline_shape)
+    baseline_f = baseline_e.to(dtype=site_alt.dtype)
+
+    log_terms = []
+    for alt_copies in range(n_states):
+        alt_copies_f = float(alt_copies)
+        valid_genotype = baseline_e >= alt_copies
+        remaining_copies = torch.clamp(baseline_f - alt_copies_f, min=0.0)
+        log_comb = torch.lgamma(baseline_f + 1.0)
+        log_comb = log_comb - torch.lgamma(
+            torch.tensor(alt_copies_f + 1.0, device=site_alt.device, dtype=site_alt.dtype)
+        )
+        log_comb = log_comb - torch.lgamma(remaining_copies + 1.0)
+        log_genotype_prior = (
+            log_comb +
+            alt_copies_f * torch.log(pop_af_safe) +
+            remaining_copies * torch.log1p(-pop_af_safe)
+        )
+        log_genotype_prior = torch.where(
+            valid_genotype,
+            log_genotype_prior,
+            torch.full_like(log_genotype_prior, -1e10),
+        )
+
+        expected_af = (alt_copies_f / baseline_f).clamp(0.0, 1.0)
+        alpha = concentration * expected_af + eps
+        beta = concentration * (1.0 - expected_af) + eps
+        log_bb = _sanitize_af_log_prob_torch(dist.BetaBinomial(
+            alpha,
+            beta,
+            site_total_safe,
+            validate_args=False,
+        ).log_prob(site_alt))
+        log_terms.append(log_genotype_prior + log_bb)
+
+    return torch.logsumexp(torch.stack(log_terms, dim=0), dim=0)
+
+
 def _mix_af_log_likelihood_torch(
     genotype_log_lik: torch.Tensor,
     uniform_log_lik: torch.Tensor,
@@ -276,6 +398,71 @@ def _population_af_background_log_prob_numpy(
     beta = concentration * (1.0 - pop_af_safe) + eps
     log_prob = betabinom_scipy.logpmf(site_alt, site_total_safe, alpha, beta)
     return np.nan_to_num(log_prob, nan=0.0, posinf=0.0, neginf=-100.0)
+
+
+def _baseline_af_background_log_prob_numpy(
+    site_alt: np.ndarray,
+    site_total_safe: np.ndarray,
+    site_pop_af: np.ndarray,
+    background_baseline_cn: int | Sequence[int] | np.ndarray | None,
+    n_states: int,
+    background_concentration: float,
+) -> np.ndarray:
+    """NumPy counterpart of :func:`_baseline_af_background_log_prob_torch`."""
+    from scipy.special import gammaln
+    from scipy.stats import betabinom as betabinom_scipy
+
+    eps = 1e-6
+    concentration = _normalize_af_background_concentration(background_concentration)
+    if site_pop_af.ndim == site_alt.ndim:
+        pop_af = site_pop_af
+    elif site_alt.ndim == 3 and site_pop_af.ndim == 2:
+        pop_af = site_pop_af[:, :, np.newaxis]
+    elif site_alt.ndim == 3 and site_pop_af.ndim == 3:
+        pop_af = site_pop_af
+    else:
+        raise ValueError(
+            "site_pop_af must match site_alt shape, have shape "
+            "(n_bins, max_sites), or have shape (n_bins, max_sites, n_samples)."
+        )
+    pop_af_safe = np.clip(pop_af, eps, 1.0 - eps)
+
+    n_observations = site_alt.shape[-1]
+    baseline = _normalize_af_background_baseline_cn_numpy(
+        background_baseline_cn,
+        n_observations,
+        n_states,
+    )
+    baseline_shape = (1,) * (site_alt.ndim - 1) + (n_observations,)
+    baseline_e = baseline.reshape(baseline_shape)
+    baseline_f = baseline_e.astype(np.float64)
+
+    log_terms = []
+    for alt_copies in range(n_states):
+        valid_genotype = baseline_e >= alt_copies
+        remaining_copies = np.clip(baseline_f - float(alt_copies), 0.0, None)
+        log_comb = gammaln(baseline_f + 1.0)
+        log_comb -= gammaln(float(alt_copies) + 1.0)
+        log_comb -= gammaln(remaining_copies + 1.0)
+        log_genotype_prior = (
+            log_comb +
+            alt_copies * np.log(pop_af_safe) +
+            remaining_copies * np.log1p(-pop_af_safe)
+        )
+        log_genotype_prior = np.where(valid_genotype, log_genotype_prior, -1e10)
+
+        expected_af = np.clip(float(alt_copies) / baseline_f, 0.0, 1.0)
+        alpha = concentration * expected_af + eps
+        beta = concentration * (1.0 - expected_af) + eps
+        log_bb = betabinom_scipy.logpmf(site_alt, site_total_safe, alpha, beta)
+        log_bb = np.nan_to_num(log_bb, nan=0.0, posinf=0.0, neginf=-100.0)
+        log_terms.append(log_genotype_prior + log_bb)
+
+    log_stack = np.stack(log_terms, axis=0)
+    max_val = np.max(log_stack, axis=0, keepdims=True)
+    return max_val.squeeze(0) + np.log(
+        np.sum(np.exp(log_stack - max_val), axis=0) + 1e-30
+    )
 
 
 def _mix_af_log_likelihood_numpy(
@@ -358,6 +545,7 @@ def _marginalized_af_log_lik(
     concentration: float | np.ndarray | torch.Tensor,
     outlier_weight: float = 0.0,
     background_concentration: float | None = None,
+    background_baseline_cn: int | Sequence[int] | np.ndarray | torch.Tensor | None = None,
     informative_weight: float | torch.Tensor = 1.0,
 ) -> torch.Tensor:
     """Compute per-bin AF log-likelihood marginalised over genotype states.
@@ -479,10 +667,12 @@ def _marginalized_af_log_lik(
     )
 
     if background_concentration is not None:
-        background_log_lik = _population_af_background_log_prob_torch(
+        background_log_lik = _baseline_af_background_log_prob_torch(
             site_alt,
             site_total_safe,
             pop_af,
+            background_baseline_cn,
+            n_states,
             background_concentration,
         )
         log_marginal = _mix_population_af_background_torch(
@@ -507,6 +697,7 @@ def _marginalized_af_log_lik_numpy(
     concentration: float | np.ndarray,
     outlier_weight: float = 0.0,
     background_concentration: float | None = None,
+    background_baseline_cn: int | Sequence[int] | np.ndarray | None = None,
     informative_weight: float = 1.0,
 ) -> np.ndarray:
     """NumPy version for analytical discrete inference.
@@ -539,6 +730,7 @@ def _marginalized_af_log_lik_numpy(
         concentration=concentration,
         outlier_weight=outlier_weight,
         background_concentration=background_concentration,
+        background_baseline_cn=background_baseline_cn,
         informative_weight=informative_weight,
     ).sum(axis=1)
 
@@ -553,6 +745,7 @@ def _site_level_marginalized_af_log_lik_numpy(
     concentration: float | np.ndarray,
     outlier_weight: float = 0.0,
     background_concentration: float | None = None,
+    background_baseline_cn: int | Sequence[int] | np.ndarray | None = None,
     informative_weight: float = 1.0,
 ) -> np.ndarray:
     """Return the per-site marginalized AF log-likelihood for one CN state.
@@ -613,10 +806,12 @@ def _site_level_marginalized_af_log_lik_numpy(
         outlier_weight,
     )
     if background_concentration is not None:
-        background_log_lik = _population_af_background_log_prob_numpy(
+        background_log_lik = _baseline_af_background_log_prob_numpy(
             site_alt,
             site_total_safe,
             pop_af,
+            background_baseline_cn,
+            n_states,
             background_concentration,
         )
         mixed_log_lik = _mix_population_af_background_numpy(
@@ -633,17 +828,20 @@ def estimate_af_background_concentration_numpy(
     site_pop_af: np.ndarray,
     site_mask: np.ndarray,
     *,
+    background_baseline_cn: int | Sequence[int] | np.ndarray | None = None,
+    n_states: int = 6,
     max_observations: int = 250000,
     seed: int = 13,
     lower: float = 0.01,
     upper: float = 500.0,
 ) -> float:
-    """Estimate the CN-independent population-AF background concentration.
+    """Estimate the baseline-copy-number background concentration.
 
-    The background model is ``BetaBinomial(total, phi * p, phi * (1 - p))``
-    with site/sample population AF ``p``.  ``phi`` is fit by maximum marginal
-    likelihood over observed site-sample allele counts, optionally on a fixed
-    deterministic subsample for speed.
+    The background marginalizes baseline alternate-copy count under the sample's
+    baseline copy number with site population allele frequency as the prior
+    mean.  ``phi`` is fit by maximum marginal likelihood over observed
+    site-sample allele counts, optionally on a fixed deterministic subsample
+    for speed.
     """
     from scipy.optimize import minimize_scalar
 
@@ -663,24 +861,34 @@ def estimate_af_background_concentration_numpy(
             "site_pop_af must have shape (n_bins, max_sites) or "
             "(n_bins, max_sites, n_samples)."
         )
+    _, _, observed_sample_idx = np.nonzero(observed)
     alt = np.asarray(site_alt[observed], dtype=np.float64)
     total = np.asarray(site_total[observed], dtype=np.float64)
     pop = np.clip(np.asarray(pop_af[observed], dtype=np.float64), 1e-6, 1.0 - 1e-6)
+    baseline_vector = _normalize_af_background_baseline_cn_numpy(
+        background_baseline_cn,
+        site_total.shape[2],
+        n_states,
+    )
+    baseline = baseline_vector[observed_sample_idx]
     if alt.size > max_observations:
         rng = np.random.default_rng(seed)
         idx = rng.choice(alt.size, size=max_observations, replace=False)
         alt = alt[idx]
         total = total[idx]
         pop = pop[idx]
+        baseline = baseline[idx]
 
     total_safe = np.maximum(total, 1.0)
 
     def objective(log_concentration: float) -> float:
         concentration = math.exp(log_concentration)
-        log_prob = _population_af_background_log_prob_numpy(
+        log_prob = _baseline_af_background_log_prob_numpy(
             alt,
             total_safe,
             pop,
+            baseline,
+            n_states,
             concentration,
         )
         return -float(np.sum(log_prob))
@@ -703,6 +911,7 @@ def _precompute_af_table(
     concentration: float | np.ndarray | torch.Tensor,
     outlier_weight: float = 0.0,
     background_concentration: float | None = None,
+    background_baseline_cn: int | Sequence[int] | np.ndarray | torch.Tensor | None = None,
     informative_weight: float | torch.Tensor = 1.0,
 ) -> torch.Tensor:
     """Precompute AF log-likelihood for every CN state.
@@ -738,6 +947,7 @@ def _precompute_af_table(
             cn=cn_c, n_states=n_states, concentration=concentration,
             outlier_weight=outlier_weight,
             background_concentration=background_concentration,
+            background_baseline_cn=background_baseline_cn,
             informative_weight=informative_weight,
         )
     return table
@@ -835,13 +1045,17 @@ def _precompute_af_background_log_lik(
     site_pop_af: torch.Tensor,
     site_mask: torch.Tensor,
     background_concentration: float,
+    background_baseline_cn: int | Sequence[int] | np.ndarray | torch.Tensor | None,
+    n_states: int,
 ) -> torch.Tensor:
-    """Precompute per-site CN-independent AF background log-likelihood."""
+    """Precompute per-site baseline-copy-number AF background log-likelihood."""
     site_total_safe = torch.clamp(site_total, min=1)
-    background_log_lik = _population_af_background_log_prob_torch(
+    background_log_lik = _baseline_af_background_log_prob_torch(
         site_alt,
         site_total_safe,
         site_pop_af,
+        background_baseline_cn,
+        n_states,
         background_concentration,
     )
     return torch.where(site_mask, background_log_lik, torch.zeros_like(background_log_lik))
@@ -938,6 +1152,7 @@ def _precompute_af_table_from_genotype_log_lik(
     n_states: int,
     outlier_weight: float = 0.0,
     background_concentration: float | None = None,
+    background_baseline_cn: int | Sequence[int] | np.ndarray | torch.Tensor | None = None,
     informative_weight: float | torch.Tensor = 1.0,
 ) -> torch.Tensor:
     """Build an AF table from cached genotype emissions and current site AFs."""
@@ -991,10 +1206,12 @@ def _precompute_af_table_from_genotype_log_lik(
             outlier_weight,
         )
         if background_concentration is not None:
-            background_log_lik = _population_af_background_log_prob_torch(
+            background_log_lik = _baseline_af_background_log_prob_torch(
                 site_alt,
                 torch.clamp(site_total, min=1),
                 pop_af,
+                background_baseline_cn,
+                n_states,
                 background_concentration,
             )
             log_marginal = _mix_population_af_background_torch(
@@ -1110,6 +1327,7 @@ def _precompute_af_table_from_observed_genotype_log_lik(
     n_states: int,
     outlier_weight: float = 0.0,
     background_concentration: float | None = None,
+    background_baseline_cn: int | Sequence[int] | np.ndarray | torch.Tensor | None = None,
     informative_weight: float | torch.Tensor = 1.0,
 ) -> torch.Tensor:
     """Build an AF table by scattering observed site-sample AF contributions."""
@@ -1177,10 +1395,25 @@ def _precompute_af_table_from_observed_genotype_log_lik(
         outlier_weight,
     )
     if background_concentration is not None:
-        background_log_lik = _population_af_background_log_prob_torch(
+        observed_background_baseline_cn = None
+        if background_baseline_cn is not None:
+            background_baseline_tensor = torch.as_tensor(
+                background_baseline_cn,
+                dtype=torch.long,
+                device=observed_alt.device,
+            )
+            if background_baseline_tensor.ndim == 0:
+                observed_background_baseline_cn = background_baseline_tensor
+            else:
+                observed_background_baseline_cn = background_baseline_tensor.reshape(-1)[
+                    observed_sample_idx
+                ]
+        background_log_lik = _baseline_af_background_log_prob_torch(
             observed_alt,
             torch.clamp(observed_total, min=1),
             pop_af_safe,
+            observed_background_baseline_cn,
+            n_states,
             background_concentration,
         )
         log_marginal = _mix_population_af_background_torch(
@@ -2742,6 +2975,10 @@ class CNVModel:
             concentration=self.af_concentration,
             outlier_weight=self.af_outlier_weight,
             background_concentration=self.af_background_concentration,
+            background_baseline_cn=self._resolve_autosomal_baseline_cn_torch(
+                site_alt.shape[2],
+                device=site_alt.device,
+            ),
             informative_weight=(
                 self._af_scale_torch()
                 if informative_weight is None
@@ -3266,6 +3503,11 @@ class CNVModel:
         else:
             af_temperature = self._af_scale_torch()
 
+        af_background_baseline_cn = self._resolve_autosomal_baseline_cn_torch(
+            n_samples,
+            device=self.device,
+        )
+
         site_pop_af_observed = None
         if self.learn_site_pop_af and site_pop_af is not None and self.af_weight > 0:
             prior_strength = torch.tensor(
@@ -3645,6 +3887,7 @@ class CNVModel:
                     n_states=self.n_states,
                     outlier_weight=self.af_outlier_weight,
                     background_concentration=self.af_background_concentration,
+                    background_baseline_cn=af_background_baseline_cn,
                     informative_weight=af_temperature,
                 )
                 af_table = self._apply_af_evidence_mode_torch(af_table, chr_type)
@@ -3674,6 +3917,7 @@ class CNVModel:
                     n_states=self.n_states,
                     outlier_weight=self.af_outlier_weight,
                     background_concentration=self.af_background_concentration,
+                    background_baseline_cn=af_background_baseline_cn,
                     informative_weight=af_temperature,
                 )
                 af_table = self._apply_af_evidence_mode_torch(af_table, chr_type)
@@ -3805,6 +4049,11 @@ class CNVModel:
                         site_pop_af,
                         data.site_mask,
                         self.af_background_concentration,
+                        self._resolve_autosomal_baseline_cn_torch(
+                            data.n_samples,
+                            device=data.site_alt.device,
+                        ),
+                        self.n_states,
                     )
             else:
                 with torch.no_grad():
@@ -4187,6 +4436,9 @@ class CNVModel:
                 (self.n_states, data.n_bins, data.n_samples),
                 dtype=np.float64,
             )
+            af_background_baseline_cn = self._resolve_autosomal_baseline_cn_numpy(
+                data.n_samples,
+            )
 
             for c in range(self.n_states):
                 raw_af_table[c] = _marginalized_af_log_lik_numpy(
@@ -4195,6 +4447,7 @@ class CNVModel:
                     concentration=self.af_concentration,
                     outlier_weight=self.af_outlier_weight,
                     background_concentration=self.af_background_concentration,
+                    background_baseline_cn=af_background_baseline_cn,
                     informative_weight=af_scale,
                 )
 

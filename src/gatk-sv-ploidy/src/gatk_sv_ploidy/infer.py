@@ -348,6 +348,9 @@ def build_safe_inference_diagnostic_messages(
     af_table: np.ndarray | None = None,
     af_concentration: float | np.ndarray = 50.0,
     af_outlier_weight: float = 0.0,
+    af_background_concentration: float | None = None,
+    autosomal_baseline_cn: np.ndarray | None = None,
+    af_informative_weight: float = 1.0,
 ) -> list[str]:
     """Build privacy-safe cohort diagnostics for troubleshooting model fits."""
     messages: list[str] = [
@@ -1377,6 +1380,9 @@ def build_safe_inference_diagnostic_messages(
                         n_states=cn_probs.shape[2],
                         concentration=af_concentration,
                         outlier_weight=af_outlier_weight,
+                        background_concentration=af_background_concentration,
+                        background_baseline_cn=autosomal_baseline_cn,
+                        informative_weight=af_informative_weight,
                     )
                     site_level_cn4 = _site_level_marginalized_af_log_lik_numpy(
                         site_alt,
@@ -1387,6 +1393,9 @@ def build_safe_inference_diagnostic_messages(
                         n_states=cn_probs.shape[2],
                         concentration=af_concentration,
                         outlier_weight=af_outlier_weight,
+                        background_concentration=af_background_concentration,
+                        background_baseline_cn=autosomal_baseline_cn,
+                        informative_weight=af_informative_weight,
                     )
                     site_level_cn5 = _site_level_marginalized_af_log_lik_numpy(
                         site_alt,
@@ -1397,6 +1406,9 @@ def build_safe_inference_diagnostic_messages(
                         n_states=cn_probs.shape[2],
                         concentration=af_concentration,
                         outlier_weight=af_outlier_weight,
+                        background_concentration=af_background_concentration,
+                        background_baseline_cn=autosomal_baseline_cn,
+                        informative_weight=af_informative_weight,
                     )
                     site_level_cn4_vs_cn2_margin = site_level_cn4 - site_level_cn2
                     site_level_cn5_vs_cn2_margin = site_level_cn5 - site_level_cn2
@@ -2918,7 +2930,7 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=None,
         help=(
-            "Beta-Binomial concentration for the CN-independent population-AF "
+            "Beta-Binomial concentration for the baseline-copy-number allele-fraction "
             "background. Defaults to empirical-Bayes estimation from the run."
         ),
     )
@@ -3290,7 +3302,7 @@ def main() -> None:
 
     if af_enabled:
         logger.info(
-            "Allele-fraction evidence enabled (af_weight=%.2f, af_concentration=%.1f, af_outlier_weight=%.3f, sample_af_concentration_mode=%s, mode=relative, background=population-af, summed over observed sites/bin, learn_af_temperature=%s)",
+            "Allele-fraction evidence enabled (af_weight=%.2f, af_concentration=%.1f, af_outlier_weight=%.3f, sample_af_concentration_mode=%s, mode=relative, background=baseline-copy-number, summed over observed sites/bin, learn_af_temperature=%s)",
             args.af_weight,
             args.af_concentration,
             args.af_outlier_weight,
@@ -3328,9 +3340,11 @@ def main() -> None:
                 data.site_total.detach().cpu().numpy(),
                 site_pop_for_background,
                 data.site_mask.detach().cpu().numpy(),
+                background_baseline_cn=autosomal_baseline_cn,
+                n_states=6,
             )
             logger.info(
-                "Estimated population-AF background concentration=%.4f%s.",
+                "Estimated baseline-copy-number allele-fraction background concentration=%.4f%s.",
                 model_af_background_concentration,
                 " using leave-one-out AFs" if used_leave_one_out else "",
             )
@@ -3341,7 +3355,7 @@ def main() -> None:
             if model_af_background_concentration <= 0.0:
                 raise ValueError("--af-background-concentration must be positive.")
             logger.info(
-                "Using requested population-AF background concentration=%.4f.",
+                "Using requested baseline-copy-number allele-fraction background concentration=%.4f.",
                 model_af_background_concentration,
             )
 
@@ -3566,6 +3580,9 @@ def main() -> None:
         af_table=af_table_np,
         af_concentration=model_af_concentration,
         af_outlier_weight=model.af_outlier_weight,
+        af_background_concentration=model_af_background_concentration,
+        autosomal_baseline_cn=autosomal_baseline_cn,
+        af_informative_weight=float(np.asarray(map_est.get("af_temperature", 1.0))),
     )
     for message in safe_diagnostic_messages:
         logger.info(message)
@@ -3629,6 +3646,7 @@ def main() -> None:
     artifact_dict["model_af_background_concentration"] = np.asarray(
         model.af_background_concentration
     )
+    artifact_dict["model_af_background_mode"] = np.asarray("baseline-copy-number")
     artifact_dict["model_learn_af_temperature"] = np.asarray(model.learn_af_temperature)
     artifact_dict["model_learn_site_pop_af"] = np.asarray(model.learn_site_pop_af)
     artifact_dict["model_sample_af_concentration_mode"] = np.asarray(

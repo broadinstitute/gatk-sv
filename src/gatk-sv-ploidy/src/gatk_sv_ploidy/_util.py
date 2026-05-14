@@ -43,7 +43,7 @@ MAX_GENOTYPE_STATES = 6
 DEFAULT_AF_CONCENTRATION = 50.0
 """Default Beta-Binomial concentration for the per-site allele model."""
 
-DEFAULT_AF_WEIGHT = 0.25
+DEFAULT_AF_WEIGHT = 0.5
 """Default relative weight of the allele-fraction likelihood term."""
 DEPTH_SPACES = ("normalized", "raw")
 """Supported depth/count spaces for the depth matrix input."""
