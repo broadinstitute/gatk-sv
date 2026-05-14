@@ -96,9 +96,18 @@ collect_coverage=$(jq -r ".collect_coverage" "${input_json}")
 run_scramble=$(jq -r ".run_scramble" "${input_json}")
 run_manta=$(jq -r ".run_manta" "${input_json}")
 run_wham=$(jq -r ".run_wham" "${input_json}")
+use_dragen=$(jq -r ".use_dragen" "${input_json}")
 collect_pesr=$(jq -r ".collect_pesr" "${input_json}")
 scramble_alignment_score_cutoff=$(jq -r ".scramble_alignment_score_cutoff" "${input_json}")
 run_module_metrics=$(jq -r ".run_module_metrics" "${input_json}")
+
+
+run_manta_or_dragen=false
+if [[ "${run_manta}" == false && "${use_dragen}" == false ]]; then
+  log_error "Both run_manta and use_dragen are set to false, at least one is required."
+elif [[ "${run_manta}" == true && "${use_dragen}" == true ]]; then
+  log_error "Both run_manta and use_dragen are set to true, they are mutually exclusive."
+fi
 
 
 gather_sample_evidence_stdout="${output_dir}/gather_sample_evidence_stdout.txt"
@@ -168,7 +177,7 @@ if [[ "${collect_coverage}" == true || "${run_scramble}" == true ]]; then
 
   collect_counts_end_time=`date +%s`
   collect_counts_et=$((collect_counts_end_time-collect_counts_start_time))
-#  echo -e "${GREEN}Successfully finished running collect_counts.sh in ${collect_counts_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
+
   log_success "Successfully finished running collect_counts.sh in ${collect_counts_et} seconds."
 fi
 
@@ -177,7 +186,7 @@ if [[ "${run_manta}" == true ]]; then
   manta_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/manta_XXXXXX")
   manta_stdout=$(mktemp --suffix=.txt "${output_dir}/manta_stdout_XXXXXX")
   manta_stderr=$(mktemp --suffix=.txt "${output_dir}/manta_stderr_XXXXXX")
-#  echo -e "${CYAN}Running run_manta.sh ... stdout:${manta_stdout} and stderr:${manta_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
+
   log_info "Running run_manta.sh ... stdout: ${manta_stdout} and stderr: ${manta_stderr}"
   manta_start_time=`date +%s`
 
@@ -193,7 +202,7 @@ if [[ "${run_manta}" == true ]]; then
 
   manta_end_time=`date +%s`
   manta_et=$((manta_end_time-manta_start_time))
-#  echo -e "${GREEN}Successfully finished running run_manta.sh in ${manta_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
+
   log_success "Successfully finished running run_manta.sh in ${manta_et} seconds."
 fi
 
@@ -233,24 +242,36 @@ if [[ "${collect_pesr}" == true ]]; then
 
   collect_pesr_end_time=`date +%s`
   collect_pesr_et=$((collect_pesr_end_time-collect_pesr_start_time))
-#  echo -e "${GREEN}Successfully finished running collect_sv_evidence.sh in ${collect_pesr_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
+
   log_success "Successfully finished running collect_sv_evidence.sh in ${collect_pesr_et} seconds."
 fi
 
 
-if [[ "${run_scramble}" == true && "${run_manta}" == true ]]; then
+run_manta_or_dragen=false
+manta_or_dragen_vcf=""
+if [[ "${run_manta}" == true && "${use_dragen}" == false ]]; then
+  run_manta_or_dragen=true
+  manta_or_dragen_vcf=$(jq -r ".vcf" "${manta_outputs_json_filename}")
+  log_info "Using manta vcf."
+elif [[ "${run_manta}" == false && "${use_dragen}" == true ]]; then
+  run_manta_or_dragen=true
+  manta_or_dragen_vcf=$(jq -r ".dragen_vcf" "${input_json}")
+  log_info "Using dragen vcf."
+fi
+
+
+if [[ "${run_scramble}" == true && "${run_manta_or_dragen}" == true ]]; then
 
   scramble_p1_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/scramble_p1_XXXXXX")
   scramble_stdout=$(mktemp --suffix=.txt "${output_dir}/scramble_stdout_XXXXXX")
   scramble_stderr=$(mktemp --suffix=.txt "${output_dir}/scramble_stderr_XXXXXX")
-#  echo -e "${CYAN}Running scramble.sh (part 1 & 2)... stdout:${scramble_stdout} and stderr:${scramble_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
+
   log_info "Running scramble.sh (part 1 & 2)... stdout: ${scramble_stdout} and stderr: ${scramble_stderr}"
   scramble_start_time=`date +%s`
 
   CURRENT_STDERR_FILE="${scramble_stderr}"
 
   {
-#    echo "Running scramble."
     log_info "Running Scramble."
     scramble_p1_inputs_json_filename=$(mktemp --suffix=.json "${output_dir}/scramble_p1_inputs_XXXXXX")
     jq -n \
@@ -260,7 +281,7 @@ if [[ "${run_scramble}" == true && "${run_manta}" == true ]]; then
       --arg original_bam_or_cram_file "${bam_or_cram_file}" \
       --arg original_bam_or_cram_index "${bam_or_cram_index}" \
       --arg counts_file "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".counts" "${collect_pesr_outputs_json_filename}")" \
-      --arg input_vcf "$([ "${run_manta}" = "false" ] && echo "" || jq -r ".vcf" "${manta_outputs_json_filename}")" \
+      --arg input_vcf "${manta_or_dragen_vcf}" \
       --arg reference_fasta "${reference_fasta}" \
       --arg reference_index "${reference_index}" \
       --arg regions_list "${primary_contigs_list}" \
@@ -318,7 +339,7 @@ if [[ "${run_scramble}" == true && "${run_manta}" == true ]]; then
       --arg original_bam_or_cram_file "${bam_or_cram_file}" \
       --arg original_bam_or_cram_index "${bam_or_cram_index}" \
       --arg counts_file "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".counts" "${collect_pesr_outputs_json_filename}")" \
-      --arg input_vcf "$([ "${run_manta}" = "false" ] && echo "" || jq -r ".vcf" "${manta_outputs_json_filename}")" \
+      --arg input_vcf "${manta_or_dragen_vcf}" \
       --arg reference_fasta "${reference_fasta}" \
       --arg reference_index "${reference_index}" \
       --arg regions_list "${primary_contigs_list}" \

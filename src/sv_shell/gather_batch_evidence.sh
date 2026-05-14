@@ -9,6 +9,18 @@ MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+log_info() {
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${CYAN}$1${NC}" | tee -a "${gather_sample_evidence_stdout}"
+}
+
+log_success() {
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${GREEN}$1${NC}" | tee -a "${gather_sample_evidence_stdout}"
+}
+
+log_error() {
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${RED}$1${NC}" | tee -a "${gather_sample_evidence_stderr}"
+}
+
 # -------------------------------------------------------
 # ==================== Input & Setup ====================
 # -------------------------------------------------------
@@ -59,7 +71,7 @@ rename_samples=$(jq -r ".rename_samples" "${input_json}")
 
 # make binned coverage matrix
 # ---------------------------------------------------------------------------------------------------------------------
-echo -e "${MAGENTA}Running make binned coverage matrix.${NC}"
+log_info "Running make binned coverage matrix."
 make_bin_cov_matrix_inputs_json="$(realpath "${output_dir}/make_bincov_matrix_inputs.json")"
 make_bin_cov_matrix_outputs_json="$(realpath "${output_dir}/make_bincov_matrix_outputs.json")"
 
@@ -78,7 +90,7 @@ bash /opt/sv_shell/make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "$
 merged_bincov_=$(jq -r ".merged_bincov" "${make_bin_cov_matrix_outputs_json}")
 merged_bincov_idx_=$(jq -r ".merged_bincov_idx" "${make_bin_cov_matrix_outputs_json}")
 
-echo -e "${GREEN}Successfully finished make binned coverage matrix.${NC}"
+log_success "Successfully finished make binned coverage matrix."
 
 
 # ploidy estimation
@@ -94,7 +106,7 @@ jq -n \
 
 bash /opt/sv_shell/ploidy_estimation.sh "${ploidy_estimation_inputs_json}" "${ploidy_estimation_outputs_json}"
 
-echo -e "${GREEN}Successfully finished running ploidy estimation.${NC}"
+log_success "Successfully finished running ploidy estimation."
 
 sample_sex_assignments=$(jq -r ".sample_sex_assignments" "${ploidy_estimation_outputs_json}")
 
@@ -136,7 +148,7 @@ if [[ "${append_first_sample_to_ped}" == "true" ]]; then
   awk -v sample="${sample_id}" -v sex="${SEX}" '{print} END {OFS="\t"; print "case_sample",sample,"0","0",sex,"1" }' < "${ped_subset_filename}" > "${combined_ped_file}"
 fi
 
-echo -e "${GREEN}Successfully finished Validating, subsetting, and adding sample to PED file.${NC}"
+log_success "Successfully finished Validating, subsetting, and adding sample to PED file."
 
 
 # Batch evidence merging
@@ -174,7 +186,7 @@ bash /opt/sv_shell/batch_evidence_merging.sh \
   "${batch_evidence_merging_inputs_json}" \
   "${batch_evidence_merging_outputs_json}"
 
-echo -e "${GREEN}Successfully finished batch evidence merging.${NC}"
+log_success "Successfully finished batch evidence merging."
 
 
 
@@ -220,7 +232,7 @@ jq -n \
 
 bash /opt/sv_shell/cnmops.sh "${cnmops_inputs_json}" "${cnmops_outputs_json}"
 
-echo -e "${GREEN}Successfully finished running cnMOPS.${NC}"
+log_success "Successfully finished running cnMOPS."
 
 
 # CNMOPS Large
@@ -265,7 +277,7 @@ jq -n \
 
 bash /opt/sv_shell/cnmops.sh "${cnmops_large_inputs_json}" "${cnmops_large_outputs_json}"
 
-echo -e "${GREEN}Successfully finished running cnMOPS Large.${NC}"
+log_success "Successfully finished running cnMOPS Large."
 
 
 
@@ -294,7 +306,7 @@ jq -n \
 
 bash /opt/sv_shell/condense_read_counts.sh "${condense_read_counts_inputs_json}" "${condense_read_counts_outputs_json}"
 
-echo -e "${GREEN}Successfully finished running Condense Read Counts.${NC}"
+log_success "Successfully finished running Condense Read Counts."
 
 
 
@@ -305,10 +317,6 @@ echo -e "${MAGENTA}Starting Merge Depth.${NC}"
 merge_depth_inputs_json="$(realpath "${output_dir}/merge_depth_inputs.json")"
 merge_depth_outputs_json="$(realpath "${output_dir}/mergge_depth_outputs.json")"
 
-# The following args are all temporarily skipped as they are gcnv related.
-#  --arg genotyped_segments_vcfs
-#  --arg contig_ploidy_calls
-#  --arg gcnv_qs_cutoff
 
 jq -n \
   --argfile samples <(jq '.samples' "${input_json}") \
@@ -330,7 +338,7 @@ jq -n \
 
 bash /opt/sv_shell/merge_depth.sh "${merge_depth_inputs_json}" "${merge_depth_outputs_json}"
 
-echo -e "${GREEN}Successfully finished running Merge Depth.${NC}"
+log_success "Successfully finished running Merge Depth."
 
 
 
@@ -344,7 +352,7 @@ _ref_median_cov_file="$(jq -r ".ref_panel_median_cov" "${input_json}")"
 _sample_median_cov_file="$(jq -r ".sample_median_cov" "${input_json}")"
 paste -d'\t' "${_sample_median_cov_file}" "${_ref_median_cov_file}" > "${output_median_cov}"
 
-echo -e "${GREEN}Successfully finished running Median Cov.${NC}"
+log_success "Successfully finished running Median Cov."
 
 # Preprocess PE/SR
 # ---------------------------------------------------------------------------------------------------------------------
@@ -376,7 +384,7 @@ jq -n \
 
 bash /opt/sv_shell/preprocess_pesr.sh "${preprocess_pesr_inputs_json}" "${preprocess_pesr_outputs_json}"
 
-echo -e "${GREEN}Successfully finished running Preprocess PE/SR.${NC}"
+log_success "Successfully finished running Preprocess PE/SR."
 
 
 
@@ -554,4 +562,4 @@ outputs_json=$(jq -n \
   }' > "${output_json_filename}"
 )
 
-echo "Successfully finished Gather Batch Evidence, output json filename: ${output_json_filename}"
+log_success "Successfully finished Gather Batch Evidence, output json filename: ${output_json_filename}"

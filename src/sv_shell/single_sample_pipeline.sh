@@ -223,6 +223,8 @@ jq -n \
   --arg run_scramble "${run_scramble}" \
   --arg run_manta "${run_manta}" \
   --arg run_wham "${run_wham}" \
+  --arg use_dragen "${use_dragen}" \
+  --arg dragen_vcf "${dragen_sv_vcf}" \
   --arg collect_pesr "${collect_pesr}" \
   '{
     "sample_id": $inputs[0].sample_id,
@@ -249,6 +251,8 @@ jq -n \
     "run_scramble": $run_scramble,
     "run_manta": $run_manta,
     "run_wham": $run_wham,
+    "use_dragen": $use_dragen,
+    "dragen_vcf": $dragen_vcf,
     "collect_pesr": $collect_pesr,
     "scramble_alignment_score_cutoff": 90,
     "run_module_metrics": $inputs[0].run_sampleevidence_metrics
