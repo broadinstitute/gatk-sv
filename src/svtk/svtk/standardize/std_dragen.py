@@ -93,7 +93,8 @@ class DragenStandardizer(VCFStandardizer):
         std_rec.id = std_rec.id.replace(':', '_')
 
         # Define CHR2 and END
-        if svtype == 'BND' or svtype == 'INV':
+        # Check if the ALT string is symbolic before parsing breakend notation; is related to different DRAGEN versions.
+        if (svtype == 'BND' or svtype == 'INV') and not raw_rec.alts[0].startswith('<'):
             chr2, end = parse_bnd_pos(raw_rec.alts[0])
             chrom, pos = raw_rec.chrom, raw_rec.pos
             if not is_smaller_chrom(chrom, chr2):

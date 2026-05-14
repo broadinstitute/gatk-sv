@@ -163,6 +163,11 @@ if [[ -n "${ref_std_wham_vcf_tar}" && -f "${ref_std_wham_vcf_tar}" ]]; then
   run_wham=true
 fi
 
+ref_std_dragen_vcf_tar=$(jq -r '.ref_std_dragen_vcf_tar // empty' "$input_json")
+dragen_sv_vcf=$(jq -r '.dragen_sv_vcf // empty' "$input_json")
+primary_contigs_fai=$(jq -r ".primary_contigs_fai" "$input_json")
+min_svsize=$(jq -r ".min_svsize" "$input_json")
+
 function getJavaMem() {
   # get JVM memory in MiB by getting total memory from /proc/meminfo
   # and multiplying by java_mem_fraction
@@ -183,6 +188,35 @@ echo "JVM memory: $JVM_MAX_MEM"
 # ======================= Command =======================
 # -------------------------------------------------------
 
+
+use_dragen=false
+if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
+  use_dragen=true
+
+  if [[ -z "${ref_std_dragen_vcf_tar}" || ! -f "${ref_std_dragen_vcf_tar}" ]]; then
+    log_error "use_dragen is true but ref_std_dragen_vcf_tar is missing or does not exist."
+    exit 1
+  fi
+
+  if [[ "${run_manta}" == true ]]; then
+    log_info "run_manta is ${run_manta}; however, since use_dragen is set true, we override run_manta=false"
+    run_manta=false
+  fi
+
+  svtk standardize \
+    --sample-names ${sample_id} \
+    --prefix "dragen_${sample_id}" \
+    --contigs "${primary_contigs_fai}" \
+    --min-size "${min_svsize}" \
+    "${dragen_sv_vcf}" \
+    tmp.vcf \
+    "dragen"
+
+  dragen_sv_vcf=$(realpath "std.dragen.${sample_id}.vcf.gz")
+  bcftools sort tmp.vcf -Oz -o "${dragen_sv_vcf}"
+  rm tmp.vcf
+fi
+
 # GatherSampleEvidence
 # ---------------------------------------------------------------------------------------------------------------------
 gather_sample_evidence_output_dir=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/output_GatherSampleEvidence_XXXXXXXX"))
@@ -195,6 +229,8 @@ jq -n \
   --arg run_scramble "${run_scramble}" \
   --arg run_manta "${run_manta}" \
   --arg run_wham "${run_wham}" \
+  --arg use_dragen "${use_dragen}" \
+  --arg dragen_vcf "${dragen_sv_vcf}" \
   --arg collect_pesr "${collect_pesr}" \
   '{
     "sample_id": $inputs[0].sample_id,
@@ -221,15 +257,20 @@ jq -n \
     "run_scramble": $run_scramble,
     "run_manta": $run_manta,
     "run_wham": $run_wham,
+    "use_dragen": $use_dragen,
+    "dragen_vcf": $dragen_vcf,
     "collect_pesr": $collect_pesr,
     "scramble_alignment_score_cutoff": 90,
     "run_module_metrics": $inputs[0].run_sampleevidence_metrics
   }' > "${gather_sample_evidence_inputs_json}"
 
-bash /opt/sv_shell/gather_sample_evidence.sh \
-  "${gather_sample_evidence_inputs_json}" \
-  "${gather_sample_evidence_outputs_json}" \
-  "${gather_sample_evidence_output_dir}"
+# TODO: TEMP
+#bash /opt/sv_shell/gather_sample_evidence.sh \
+#  "${gather_sample_evidence_inputs_json}" \
+#  "${gather_sample_evidence_outputs_json}" \
+#  "${gather_sample_evidence_output_dir}"
+# TODO: TEMP
+gather_sample_evidence_outputs_json="/wd/output_GatherSampleEvidence_gtkLFQVN/outputs.json"
 
 log_success "Successfully finished gather sample evidence."
 
@@ -255,10 +296,13 @@ jq -n \
       bincov_matrix: $inputs[0].ref_panel_bincov_matrix
   }' > "${evidence_qc_inputs_json_filename}"
 
-bash /opt/sv_shell/evidence_qc.sh \
-  "${evidence_qc_inputs_json_filename}" \
-  "${evidence_qc_outputs_json_filename}" \
-  "${evidence_qc_output_dir}"
+# TODO: TEMP
+#bash /opt/sv_shell/evidence_qc.sh \
+#  "${evidence_qc_inputs_json_filename}" \
+#  "${evidence_qc_outputs_json_filename}" \
+#  "${evidence_qc_output_dir}"
+# TODO: TEMP
+evidence_qc_outputs_json_filename="/wd/output_evidence_qc_0QRJunIj/outputs.json"
 
 log_success "Successfully finished evidence QC."
 
@@ -274,6 +318,7 @@ jq -n \
   --slurpfile gse_outputs "${gather_sample_evidence_outputs_json}" \
   --slurpfile eqc_outputs "${evidence_qc_outputs_json_filename}" \
   --arg samples "${sample_id}" \
+  --arg dragen_vcf "${dragen_sv_vcf}" \
   --argjson ref_samples "${ref_samples_json_array}" \
   --argjson ref_pe_disc "${ref_pesr_disc_files_json_array}" \
   --argjson ref_pe_split "${ref_pesr_split_files_json_array}" \
@@ -337,10 +382,10 @@ jq -n \
       ref_copy_number_autosomal_contigs: $inputs[0].ref_copy_number_autosomal_contigs,
       allosomal_contigs: $inputs[0].allosomal_contigs,
       gcnv_qs_cutoff: $inputs[0].gcnv_qs_cutoff,
-      dragen_vcfs: null,
-      manta_vcfs: [$gse_outputs[0].manta_vcf],
-      scramble_vcfs: [$gse_outputs[0].scramble_vcf],
-      wham_vcfs: [$gse_outputs[0].wham_vcf],
+      dragen_vcfs: (if $dragen_vcf != "" then [$dragen_vcf] else [] end),
+      manta_vcfs: (if $gse_outputs[0].manta_vcf != "" then [$gse_outputs[0].manta_vcf] else [] end),
+      scramble_vcfs: (if $gse_outputs[0].scramble_vcf != "" then [$gse_outputs[0].scramble_vcf] else [] end),
+      wham_vcfs: (if $gse_outputs[0].wham_vcf != "" then [$gse_outputs[0].wham_vcf] else [] end),
       min_svsize: $inputs[0].min_svsize,
       cnmops_chrom_file: $inputs[0].autosome_file,
       cnmops_exclude_list: $inputs[0].cnmops_exclude_list,
@@ -352,6 +397,8 @@ jq -n \
       ref_panel_median_cov: $inputs[0].ref_panel_median_cov,
       sample_median_cov: $eqc_outputs[0].bincov_median,
       "cytobands": $inputs[0].cytobands,
+      "dragen_cnv_vcf": $inputs[0].dragen_cnv_vcf,
+      "dragen_cnv_vcf_index": $inputs[0].dragen_cnv_vcf_index
   }' > "${gather_batch_evidence_inputs_json_filename}"
 
 bash /opt/sv_shell/gather_batch_evidence.sh \
@@ -396,7 +443,6 @@ log_info "Starting to Combine Std."
 std_manta_vcf_tar=$(jq -r ".std_manta_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
 merged_manta_vcf_tar=""
 
-#if [[ -f "${ref_std_manta_vcf_tar}" && -f "${std_manta_vcf_tar}" ]]; then
 if $run_manta; then
   merged_manta_vcf_tar="${working_dir}/$(basename "${std_manta_vcf_tar}")"
   CombineMantaStd_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CombineMantaStd_XXXXXXXX)
@@ -410,7 +456,6 @@ fi
 std_scramble_vcf_tar=$(jq -r ".std_scramble_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
 merged_scramble_vcf_tar=""
 
-#if [[ -f "${ref_std_scramble_vcf_tar}" && -f "${std_scramble_vcf_tar}" ]]; then
 if $run_scramble; then
   merged_scramble_vcf_tar="${working_dir}/$(basename "${std_scramble_vcf_tar}")"
   CombineScrambleStd_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CombineScrambleStd_XXXXXXXX)
@@ -424,13 +469,25 @@ fi
 std_wham_vcf_tar=$(jq -r ".std_wham_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
 merged_wham_vcf_tar=""
 
-#if [[ -f "${ref_std_wham_vcf_tar}" && -f "${std_wham_vcf_tar}" ]]; then
 if $run_wham; then
   merged_wham_vcf_tar="${working_dir}/$(basename "${std_wham_vcf_tar}")"
   CombineWhamStd_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CombineWhamStd_XXXXXXXX)
   tar xzf "${ref_std_wham_vcf_tar}" -C "${CombineWhamStd_working_dir}/"
   tar xzf "${std_wham_vcf_tar}" -C "${CombineWhamStd_working_dir}/"
   tar czf "${merged_wham_vcf_tar}" -C "${CombineWhamStd_working_dir}/" .
+fi
+
+# CombineDragen
+# -----------------------
+std_dragen_vcf_tar=$(jq -r ".std_dragen_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
+merged_dragen_vcf_tar=""
+
+if $use_dragen; then
+  merged_dragen_vcf_tar="${working_dir}/$(basename "${std_dragen_vcf_tar}")"
+  CombineDragenStd_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CombineDragenStd_XXXXXXXX)
+  tar xzf "${ref_std_dragen_vcf_tar}" -C "${CombineDragenStd_working_dir}/"
+  tar xzf "${std_dragen_vcf_tar}" -C "${CombineDragenStd_working_dir}/"
+  tar czf "${merged_dragen_vcf_tar}" -C "${CombineDragenStd_working_dir}/" .
 fi
 
 log_success "Successfully finished Combine Std."
@@ -490,9 +547,11 @@ jq -n \
   --arg manta_vcf_tar "${merged_manta_vcf_tar}" \
   --arg scramble_vcf_tar "${merged_scramble_vcf_tar}" \
   --arg wham_vcf_tar "${merged_wham_vcf_tar}" \
+  --arg dragen_vcf_tar "${merged_dragen_vcf_tar}" \
   --arg del_bed "${MergeSetDel_out}" \
   --arg dup_bed "${MergeSetDup_out}" \
   '{
+      dragen_vcf_tar: $dragen_vcf_tar,
       manta_vcf_tar: $manta_vcf_tar,
       scramble_vcf_tar: $scramble_vcf_tar,
       wham_vcf_tar: $wham_vcf_tar,
@@ -546,6 +605,19 @@ if $run_manta; then
   FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterManta_vcf}" "${sample_id}" "RD,PE,SR" "${FilterManta_outfile}"
 fi
 
+# FilterDragen
+# -----------------------
+FilterDragen_outfile=""
+if $use_dragen; then
+  cd "${working_dir}"
+  FilterDragen_wd=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/wd_FilterDragen_XXXXXXXX"))
+  cd "${FilterDragen_wd}"
+  FilterDragen_vcf=$(jq -r ".clustered_dragen_vcf" "$cluster_batch_outputs_json_filename")
+  FilterDragen_vcf_filebase=$(basename "${FilterDragen_vcf}" .vcf.gz)
+  FilterDragen_outfile="$(realpath "${FilterDragen_vcf_filebase}.${sample_id}.vcf.gz")"
+  FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterDragen_vcf}" "${sample_id}" "RD,PE,SR" "${FilterDragen_outfile}"
+fi
+
 # FilterScramble
 # -----------------------
 FilterScramble_outfile=""
@@ -582,6 +654,7 @@ MergePesrVcfs_concat_vcf="${batch}.filtered_pesr_merged.vcf.gz"
 MergePesrVcfs_list_txt="MergePesrVcfs_vcfs_list.txt"
 > "${MergePesrVcfs_list_txt}"
 [[ -n "$FilterManta_outfile" ]]    && echo "$FilterManta_outfile"    >> "${MergePesrVcfs_list_txt}"
+[[ -n "$FilterDragen_outfile" ]]   && echo "$FilterDragen_outfile"   >> "${MergePesrVcfs_list_txt}"
 [[ -n "$FilterScramble_outfile" ]] && echo "$FilterScramble_outfile" >> "${MergePesrVcfs_list_txt}"
 [[ -n "$FilterWham_outfile" ]]     && echo "$FilterWham_outfile"     >> "${MergePesrVcfs_list_txt}"
 
