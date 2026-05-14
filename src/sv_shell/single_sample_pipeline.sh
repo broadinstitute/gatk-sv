@@ -193,11 +193,10 @@ if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
   use_dragen=true
 
   if [[ "${run_manta}" == true ]]; then
-    echo "run_manta is ${run_manta}; however, since use_dragen is set true, we override run_manta=false"
+    log_info "run_manta is ${run_manta}; however, since use_dragen is set true, we override run_manta=false"
     run_manta=false
   fi
 
-  vcf=${vcfs[$i]}
   svtk standardize \
     --sample-names ${sample_id} \
     --prefix "dragen_${sample_id}" \
