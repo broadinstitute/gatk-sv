@@ -6,6 +6,11 @@
 
 set -Exeuo pipefail
 
+
+if [ -z "${SV_SHELL_CLEAN_UP_WORKING_DIR:-}" ]; then
+  SV_SHELL_CLEAN_UP_WORKING_DIR=true
+fi
+
 intervals=$1
 cram_or_bam=$2
 cram_or_bam_idx=$3
@@ -70,7 +75,10 @@ java -Xmx${command_mem_mb}m -jar /opt/gatk.jar IndexFeatureFile -I "${sample_id}
 counts_filename="${output_dir}/${sample_id}.counts.tsv.gz"
 mv "${sample_id}.counts.tsv.gz" "${counts_filename}"
 mv "${sample_id}.counts.tsv.gz.tbi" "${counts_filename}.tbi"
-rm -rf "${working_dir}"
+
+if [ "${SV_SHELL_CLEAN_UP_WORKING_DIR}" == "true" ]; then
+  rm -rf "${working_dir}"
+fi
 
 jq -n \
   --arg c "${counts_filename}" \

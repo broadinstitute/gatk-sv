@@ -2,6 +2,10 @@
 
 set -Exeuo pipefail
 
+if [ -z "${SV_SHELL_CLEAN_UP_WORKING_DIR:-}" ]; then
+  SV_SHELL_CLEAN_UP_WORKING_DIR=true
+fi
+
 # -------------------------------------------------------
 # ==================== Input & Setup ====================
 # -------------------------------------------------------
@@ -162,7 +166,9 @@ cluster_out_in_output_dir="${output_dir}/$(basename "${cluster_out_in_wd}")"
 mv "${cluster_out_in_wd}" "${cluster_out_in_output_dir}"
 mv "${cluster_out_in_wd}.tbi" "${cluster_out_in_output_dir}.tbi"
 
-rm -rf "${working_dir}"
+if [ "${SV_SHELL_CLEAN_UP_WORKING_DIR}" == "true" ]; then
+  rm -rf "${working_dir}"
+fi
 
 jq -n \
   --arg out "${cluster_out_in_output_dir}" \

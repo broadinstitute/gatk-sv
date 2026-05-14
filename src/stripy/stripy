@@ -3,10 +3,8 @@
 import json
 import sys
 import os
-import argparse
 import tempfile
 import subprocess
-from pathlib import Path
 
 def load_locus_profiles(profiles_path=None):
     """Load locus profiles from JSON file"""
@@ -133,9 +131,48 @@ def find_vcf_script():
             return path
     return None
 
+def find_output_file(output_dir, extension, preferred_names=None):
+    if not output_dir or not os.path.isdir(output_dir):
+        return None
+
+    preferred_names = preferred_names or []
+    for name in preferred_names:
+        path = os.path.join(output_dir, name)
+        if os.path.isfile(path):
+            return path
+
+    candidates = [
+        os.path.join(output_dir, name)
+        for name in os.listdir(output_dir)
+        if name.lower().endswith(extension) and os.path.isfile(os.path.join(output_dir, name))
+    ]
+    if not candidates:
+        return None
+    return sorted(candidates, key=lambda path: os.path.getsize(path), reverse=True)[0]
+
+def normalize_sample_output(output_dir, sample_name, extension, input_bam=None):
+    preferred_names = []
+    if input_bam:
+        input_filename = os.path.basename(input_bam)
+        input_base = os.path.splitext(input_filename)[0]
+        preferred_names.extend([
+            f"{input_filename}{extension}",
+            f"{input_base}{extension}",
+        ])
+    preferred_names.append(f"{sample_name}{extension}")
+
+    source = find_output_file(output_dir, extension, preferred_names=preferred_names)
+    if source is None:
+        return None
+
+    target = os.path.join(output_dir, f"{sample_name}{extension}")
+    if os.path.abspath(source) != os.path.abspath(target):
+        os.replace(source, target)
+    return target
+
 def main():
     if len(sys.argv) < 2:
-        print("Usage: stripy [STRipy arguments...]", file=sys.stderr)
+        print("Usage: stripy --sample-name SAMPLE_ID [STRipy arguments...]", file=sys.stderr)
         sys.exit(1)
     
     args = sys.argv[1:]
@@ -146,6 +183,7 @@ def main():
     output_dir = None
     reference_fasta = None
     input_bam = None
+    sample_name = None
     
     # Config options we handle
     config_options = {
@@ -203,6 +241,9 @@ def main():
             input_bam = args[i + 1]
             new_args.extend([arg, input_bam])
             i += 2
+        elif arg == "--sample-name" and i + 1 < len(args):
+            sample_name = args[i + 1]
+            i += 2
         elif arg == "--locus" and i + 1 < len(args):
             # Found --locus, expand it
             profiles = load_locus_profiles()
@@ -214,6 +255,10 @@ def main():
         else:
             new_args.append(arg)
             i += 1
+
+    if not sample_name and "--help" not in args and "-h" not in args:
+        print("ERROR: --sample-name is required", file=sys.stderr)
+        sys.exit(1)
     
     # Always create config file (base config is required)
     config_file = create_config_file(
@@ -258,28 +303,30 @@ def main():
         if not vcf_tool:
             print("ERROR: Could not locate stripy_to_vcf.py script", file=sys.stderr)
             sys.exit(1)
-        json_candidates = []
-        if os.path.isdir(output_dir):
-            for name in os.listdir(output_dir):
-                if name.lower().endswith('.json'):
-                    json_candidates.append(os.path.join(output_dir, name))
-        if not json_candidates:
+
+        preferred_json_names = []
+        if input_bam:
+            input_filename = os.path.basename(input_bam)
+            input_base = os.path.splitext(input_filename)[0]
+            preferred_json_names.extend([f"{input_filename}.json", f"{input_base}.json"])
+        json_path = find_output_file(output_dir, ".json", preferred_names=preferred_json_names)
+        if not json_path:
             print("ERROR: No JSON output found to convert to VCF", file=sys.stderr)
             sys.exit(1)
-        json_path = sorted(json_candidates, key=lambda p: os.path.getsize(p), reverse=True)[0]
+
+        json_path = normalize_sample_output(output_dir, sample_name, ".json", input_bam=input_bam) or json_path
         
-        # Derive VCF filename from input BAM filename (like other outputs)
-        if input_bam:
-            base_name = os.path.splitext(os.path.basename(input_bam))[0]
-            vcf_filename = f"{base_name}.vcf"
-        else:
-            vcf_filename = "stripy.vcf"
+        vcf_filename = f"{sample_name}.vcf"
         
         vcf_out = os.path.join(output_dir, vcf_filename)
         vcf_cmd = ["python3", vcf_tool, "--json", json_path, "-o", vcf_out]
+        vcf_cmd.extend(["--sample-name", sample_name])
         if reference_fasta:
             vcf_cmd.extend(["--reference", reference_fasta])
         vcf_res = subprocess.run(vcf_cmd)
+        if vcf_res.returncode == 0:
+            normalize_sample_output(output_dir, sample_name, ".tsv", input_bam=input_bam)
+            normalize_sample_output(output_dir, sample_name, ".html", input_bam=input_bam)
         sys.exit(vcf_res.returncode)
     else:
         os.execvp("python3", ["python3", "/opt/stripy-pipeline/stri.py"] + new_args)

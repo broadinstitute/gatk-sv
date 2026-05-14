@@ -6,6 +6,11 @@
 
 set -Exeuo pipefail
 
+
+if [ -z "${SV_SHELL_CLEAN_UP_WORKING_DIR:-}" ]; then
+  SV_SHELL_CLEAN_UP_WORKING_DIR=true
+fi
+
 # -------------------------------------------------------
 # ==================== Input & Setup ====================
 # -------------------------------------------------------
@@ -92,7 +97,9 @@ sd_out_filename="${output_dir}/${sample_id}.sd.txt.gz"
 mv "${sample_id}.sd.txt.gz" "${sd_out_filename}"
 mv "${sample_id}.sd.txt.gz.tbi" "${sd_out_filename}.tbi"
 
-rm -rf "${working_dir}"
+if [ "${SV_SHELL_CLEAN_UP_WORKING_DIR}" == "true" ]; then
+  rm -rf "${working_dir}"
+fi
 
 jq -n \
   --arg split_out "${split_out_filename}" \

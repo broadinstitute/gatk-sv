@@ -255,7 +255,7 @@ task GenotypeSVs {
 
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
-                               mem_gb: 3.75,
+                               mem_gb: 7.5,
                                disk_gb: ceil(50 + size([vcf, rd_file, pe_file, sr_file], "GB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
