@@ -213,8 +213,6 @@ task RunSVShell {
     Int clean_vcf_random_seed
     Int clean_vcf_samples_per_clean_vcf_step2_shard
     Int refine_complex_variants_n_per_split
-    String sv_shell_docker
-    RuntimeAttr? runtime_attr_override
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
@@ -437,16 +435,8 @@ task RunSVShell {
     max_retries: 0
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-#
-#    runtime {
-#    predefinedMachineType: "c4d-standard-8-lssd"
-##    bootDiskSizeGb: 30
-#    docker: sv_shell_docker
-#    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-#  }
-#
+
   runtime {
-#    predefinedMachineType: "c4d-standard-8-lssd"
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
