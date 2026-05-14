@@ -10,9 +10,9 @@ workflow ClusterDragenVcfs {
     String cohort_name
     File ped_file
 
-    # Raw multi-sample DRAGEN inputs
-    File dragen_sv_vcf
-    File dragen_cnv_vcf
+    # Raw DRAGEN inputs, one VCF per batch/input set
+    Array[File] dragen_sv_vcfs
+    Array[File] dragen_cnv_vcfs
 
     # Use the same primary-contig fai for ploidy generation and svtk standardization.
     File contig_list
@@ -64,45 +64,49 @@ workflow ClusterDragenVcfs {
       runtime_attr_override=runtime_attr_create_ploidy
   }
 
-  call StandardizeVcf as StandardizeDragenSv {
-    input:
-      vcf=dragen_sv_vcf,
-      caller="dragen",
-      output_prefix="~{cohort_name}.dragen_sv.standardized",
-      contig_list=contig_list,
-      min_size=min_size,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_standardize_sv
+  scatter (i in range(length(dragen_sv_vcfs))) {
+    call StandardizeVcf as StandardizeDragenSv {
+      input:
+        vcf=dragen_sv_vcfs[i],
+        caller="dragen",
+        output_prefix="~{cohort_name}.dragen_sv.~{i}.standardized",
+        contig_list=contig_list,
+        min_size=min_size,
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_standardize_sv
+    }
+
+    call GatkFormatting.FormatVcf as FormatDragenSv {
+      input:
+        vcf=StandardizeDragenSv.out,
+        ploidy_table=CreatePloidyTableFromPed.out,
+        output_prefix="~{cohort_name}.dragen_sv.~{i}.gatk",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_format_sv
+    }
   }
 
-  # DRAGEN CNV is currently registered as "depth" in this checkout.
-  call StandardizeVcf as StandardizeDragenCnv {
-    input:
-      vcf=dragen_cnv_vcf,
-      caller="depth",
-      output_prefix="~{cohort_name}.dragen_cnv.standardized",
-      contig_list=contig_list,
-      min_size=min_size,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_standardize_cnv
-  }
+  scatter (i in range(length(dragen_cnv_vcfs))) {
+    # DRAGEN CNV is currently registered as "depth" in this checkout.
+    call StandardizeVcf as StandardizeDragenCnv {
+      input:
+        vcf=dragen_cnv_vcfs[i],
+        caller="depth",
+        output_prefix="~{cohort_name}.dragen_cnv.~{i}.standardized",
+        contig_list=contig_list,
+        min_size=min_size,
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_standardize_cnv
+    }
 
-  call GatkFormatting.FormatVcf as FormatDragenSv {
-    input:
-      vcf=StandardizeDragenSv.out,
-      ploidy_table=CreatePloidyTableFromPed.out,
-      output_prefix="~{cohort_name}.dragen_sv.gatk",
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_format_sv
-  }
-
-  call GatkFormatting.FormatVcf as FormatDragenCnv {
-    input:
-      vcf=StandardizeDragenCnv.out,
-      ploidy_table=CreatePloidyTableFromPed.out,
-      output_prefix="~{cohort_name}.dragen_cnv.gatk",
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_format_cnv
+    call GatkFormatting.FormatVcf as FormatDragenCnv {
+      input:
+        vcf=StandardizeDragenCnv.out,
+        ploidy_table=CreatePloidyTableFromPed.out,
+        output_prefix="~{cohort_name}.dragen_cnv.~{i}.gatk",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_format_cnv
+    }
   }
 
   call RewriteGroupedClusteringConfig as RewriteClusteringConfigPart1 {
@@ -125,7 +129,7 @@ workflow ClusterDragenVcfs {
 
   call ClusterTasks.SVCluster as JoinVcfs {
     input:
-      vcfs=[FormatDragenSv.out, FormatDragenCnv.out],
+      vcfs=flatten([FormatDragenSv.out, FormatDragenCnv.out]),
       ploidy_table=CreatePloidyTableFromPed.out,
       output_prefix="~{cohort_name}.join_vcfs",
       fast_mode=false,
@@ -208,29 +212,8 @@ workflow ClusterDragenVcfs {
   }
 
   output {
-    File ploidy_table = CreatePloidyTableFromPed.out
-
-    File standardized_sv_vcf = StandardizeDragenSv.out
-    File standardized_sv_vcf_index = StandardizeDragenSv.out_index
-    File standardized_cnv_vcf = StandardizeDragenCnv.out
-    File standardized_cnv_vcf_index = StandardizeDragenCnv.out_index
-
-    File gatk_formatted_sv_vcf = FormatDragenSv.out
-    File gatk_formatted_sv_vcf_index = FormatDragenSv.out_index
-    File gatk_formatted_cnv_vcf = FormatDragenCnv.out
-    File gatk_formatted_cnv_vcf_index = FormatDragenCnv.out_index
-
-    File clustering_config_part1_zero_sample_overlap = RewriteClusteringConfigPart1.out
-    File clustering_config_part2_zero_sample_overlap = RewriteClusteringConfigPart2.out
-
-    File joined_vcf = JoinVcfs.out
-    File joined_vcf_index = JoinVcfs.out_index
-    File clustered_sites_vcf = ClusterSites.out
-    File clustered_sites_vcf_index = ClusterSites.out_index
-    File grouped_cluster_part1_vcf = GroupedSVClusterPart1.out
-    File grouped_cluster_part1_vcf_index = GroupedSVClusterPart1.out_index
-    File grouped_clustered_vcf = GroupedSVClusterPart2.out
-    File grouped_clustered_vcf_index = GroupedSVClusterPart2.out_index
+    File clustered_vcf = GroupedSVClusterPart2.out
+    File clustered_vcf_index = GroupedSVClusterPart2.out_index
   }
 }
 
