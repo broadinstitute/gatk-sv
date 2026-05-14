@@ -139,5 +139,7 @@
   "genotyping_pe_table": "/inputs/all_samples.pe_geno_params.tsv",
   "genotyping_sr_table": "/inputs/all_samples.sr_geno_params.tsv",
   "intron_reference": "/inputs/gencode.v39.CDS.intron.tsv.gz",
-  "outlier_samples_list": null
+  "outlier_samples_list": null,
+  "dragen_sv_vcf": "/intermediates/RGP_101_1.sv.vcf.gz",
+  "dragen_sv_vcf_index": "/intermediates/RGP_101_1.sv.vcf.gz.tbi"
 }

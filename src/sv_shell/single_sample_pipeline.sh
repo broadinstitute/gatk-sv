@@ -163,6 +163,10 @@ if [[ -n "${ref_std_wham_vcf_tar}" && -f "${ref_std_wham_vcf_tar}" ]]; then
   run_wham=true
 fi
 
+dragen_sv_vcf=$(jq -r '.dragen_sv_vcf // empty' "$input_json")
+primary_contigs_fai=$(jq -r ".primary_contigs_fai" "$input_json")
+min_svsize=$(jq -r ".min_svsize" "$input_json")
+
 function getJavaMem() {
   # get JVM memory in MiB by getting total memory from /proc/meminfo
   # and multiplying by java_mem_fraction
@@ -182,6 +186,30 @@ echo "JVM memory: $JVM_MAX_MEM"
 # -------------------------------------------------------
 # ======================= Command =======================
 # -------------------------------------------------------
+
+
+use_dragen=false
+if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
+  use_dragen=true
+
+  if [[ "${run_manta}" == true ]]; then
+    echo "run_manta is ${run_manta}; however, since use_dragen is set true, we override run_manta=false"
+    run_manta=false
+  fi
+
+  vcf=${vcfs[$i]}
+  svtk standardize \
+    --sample-names ${sample_id} \
+    --prefix "dragen_${sample_id}" \
+    --contigs "${primary_contigs_fai}" \
+    --min-size "${min_svsize}" \
+    "${dragen_sv_vcf}" \
+    tmp.vcf \
+    "dragen"
+
+  dragen_sv_vcf="std.dragen.${sample_id}.vcf.gz"
+  bcftools sort tmp.vcf -Oz -o "${dragen_sv_vcf}"
+fi
 
 # GatherSampleEvidence
 # ---------------------------------------------------------------------------------------------------------------------
