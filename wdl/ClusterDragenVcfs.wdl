@@ -314,11 +314,8 @@ with open(input_path, newline="") as src, open(output_path, "w", newline="") as 
       writer.writerow(header)
       sample_overlap_idx = header.index("SAMPLE_OVERLAP")
       continue
-      if not row:
-          writer.writerow(row)
-          continue
-      row[sample_overlap_idx] = sample_overlap
-      writer.writerow(row)
+    row[sample_overlap_idx] = sample_overlap
+    writer.writerow(row)
 
   if header is None:
     raise ValueError("Failed to find clustering config header")
