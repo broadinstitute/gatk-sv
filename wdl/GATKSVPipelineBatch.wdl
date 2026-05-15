@@ -6,7 +6,10 @@ import "GATKSVPipelinePhase1.wdl" as phase1
 import "GenotypeBatch.wdl" as genotypebatch
 import "RegenotypeCNVs.wdl" as regenocnvs
 import "MakeCohortVcf.wdl" as makecohortvcf
+import "TasksClusterBatch.wdl" as tasks_cluster
 import "TasksMakeCohortVcf.wdl" as tasks_makecohortvcf
+import "StripyWorkflow.wdl" as stripy
+import "AnnotateVcf.wdl" as annotate
 import "Utils.wdl" as utils
 import "Structs.wdl"
 import "TestUtils.wdl" as tu
@@ -35,12 +38,14 @@ workflow GATKSVPipelineBatch {
     Array[File]? melt_vcfs_input
     Array[File]? scramble_vcfs_input
     Array[File]? wham_vcfs_input
+    Array[File]? stripy_vcfs_input
 
     # Enable different callers
     Boolean use_manta = true
     Boolean use_melt = false
     Boolean use_scramble = true
     Boolean use_wham = true
+    Boolean use_stripy = false
 
     # Merge contig vcfs at each stage of MakeCohortVcf for QC
     Boolean makecohortvcf_merge_cluster_vcfs = false
@@ -59,6 +64,21 @@ workflow GATKSVPipelineBatch {
     File allosome_file      # fai of allosomal contigs
     String chr_x
     String chr_y
+
+    # Annotation resources
+    File? protein_coding_gtf
+    File? noncoding_bed
+    Int? promoter_window
+    Int? max_breakend_as_cnv_length
+    String? svannotate_additional_args
+    File? sample_pop_assignments
+    File? sample_keep_list
+    File? par_bed
+    File? allosomes_list
+    Int annotation_sv_per_shard = 5000
+    File? external_af_ref_bed
+    String? external_af_ref_bed_prefix
+    Array[String]? external_af_population
 
     # gCNV
     File contig_ploidy_model_tar
@@ -101,14 +121,34 @@ workflow GATKSVPipelineBatch {
     String? melt_docker
     String? scramble_docker
     String? wham_docker
+    String? stripy_docker
     String cloud_sdk_docker
 
     # Batch metrics
     RuntimeAttr? runtime_attr_cat_metrics
     RuntimeAttr? runtime_attr_plot_metrics
 
+    # Batch ploidy generation
+    RuntimeAttr? runtime_attr_create_ploidy
+
+    # AnnotateVcf
+    RuntimeAttr? runtime_attr_svannotate
+    RuntimeAttr? runtime_attr_scatter_vcf
+    RuntimeAttr? runtime_attr_subset_vcf_by_samples_list
+    RuntimeAttr? runtime_attr_compute_AFs
+    RuntimeAttr? runtime_attr_modify_vcf
+    RuntimeAttr? runtime_attr_split_ref_bed
+    RuntimeAttr? runtime_attr_split_query_vcf
+    RuntimeAttr? runtime_attr_bedtools_closest
+    RuntimeAttr? runtime_attr_select_matched_svs
+    RuntimeAttr? runtime_attr_concat
+    RuntimeAttr? runtime_attr_preconcat
+    RuntimeAttr? runtime_attr_fix_header
+    RuntimeAttr? runtime_attr_merge_stripy_vcf
+
     # Do not use
     Array[File]? NONE_ARRAY_
+    File? NONE_FILE_
     String? NONE_STRING_
   }
 
@@ -119,6 +159,7 @@ workflow GATKSVPipelineBatch {
   String? melt_docker_ = if (!defined(melt_vcfs_input) && use_melt) then melt_docker else NONE_STRING_
   String? scramble_docker_ = if (!defined(scramble_vcfs_input) && use_scramble) then scramble_docker else NONE_STRING_
   String? wham_docker_ = if (!defined(wham_vcfs_input) && use_wham) then wham_docker else NONE_STRING_
+  Boolean run_stripy_ = use_stripy && !defined(stripy_vcfs_input)
 
   Boolean run_sampleevidence = collect_coverage_ || collect_pesr_ || defined(manta_docker_) || defined(melt_docker_) || defined(scramble_docker_) || defined(wham_docker_)
 
@@ -169,6 +210,25 @@ workflow GATKSVPipelineBatch {
     Array[File] wham_vcfs_ = if defined(wham_vcfs_input) then select_first([wham_vcfs_input]) else select_all(select_first([GatherSampleEvidenceBatch.wham_vcf]))
   }
 
+  if (run_stripy_) {
+    scatter (i in range(length(samples))) {
+      call stripy.StripyWorkflow {
+        input:
+          bam_or_cram_file = select_first([bam_or_cram_files])[i],
+          bam_or_cram_index = if defined(bam_or_cram_indexes) then select_first([bam_or_cram_indexes])[i] else NONE_FILE_,
+          sample_name = samples[i],
+          ped_file = ped_file,
+          reference_fasta = reference_fasta,
+          reference_fasta_fai = reference_index,
+          linux_docker = linux_docker,
+          stripy_docker = select_first([stripy_docker])
+      }
+    }
+  }
+
+  Array[File] generated_stripy_vcfs_ = select_all(select_first([StripyWorkflow.stripy_vcf, []]))
+  Array[File]? stripy_vcfs_ = if use_stripy then (if defined(stripy_vcfs_input) then select_first([stripy_vcfs_input]) else generated_stripy_vcfs_) else NONE_ARRAY_
+
   call evidenceqc.EvidenceQC as EvidenceQC {
     input:
       batch=name,
@@ -208,6 +268,7 @@ workflow GATKSVPipelineBatch {
       melt_vcfs=melt_vcfs_,
       scramble_vcfs=scramble_vcfs_,
       wham_vcfs=wham_vcfs_,
+      stripy_vcfs=stripy_vcfs_,
 
       cnmops_chrom_file=autosome_file,
       cnmops_allo_file=allosome_file,
@@ -223,9 +284,11 @@ workflow GATKSVPipelineBatch {
       linux_docker=linux_docker,
       cnmops_docker=cnmops_docker,
       gatk_docker=gatk_docker,
-      gcnv_gatk_docker=gcnv_gatk_docker
+      gcnv_gatk_docker=gcnv_gatk_docker,
+      runtime_attr_merge_stripy_vcf_cluster_batch=runtime_attr_merge_stripy_vcf
   }
 
+  Array[File] stripy_vcfs_for_annotation_ = select_all([GATKSVPipelinePhase1.merged_stripy_vcf])
   Array[File] merge_vcfs_ = select_all([GATKSVPipelinePhase1.filtered_pesr_vcf, GATKSVPipelinePhase1.filtered_depth_vcf])
   call tasks_makecohortvcf.ConcatVcfs as MergePesrDepthVcfs {
     input:
@@ -234,6 +297,18 @@ workflow GATKSVPipelineBatch {
     allow_overlaps = true,
     outfile_prefix = "~{name}.merge_pesr_depth",
     sv_base_mini_docker = sv_base_mini_docker
+  }
+
+  call tasks_cluster.CreatePloidyTableFromPed {
+    input:
+      ped_file = ped_file,
+      contig_list = primary_contigs_list,
+      retain_female_chr_y = false,
+      chr_x = chr_x,
+      chr_y = chr_y,
+      output_prefix = "~{name}.ploidy",
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_create_ploidy
   }
 
   call genotypebatch.GenotypeBatch as GenotypeBatch {
@@ -246,6 +321,7 @@ workflow GATKSVPipelineBatch {
       pe_file=GATKSVPipelinePhase1.merged_PE,
       sr_file=GATKSVPipelinePhase1.merged_SR,
       reference_dict=reference_dict,
+        ploidy_table=CreatePloidyTableFromPed.out,
       contig_list = primary_contigs_list,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -262,6 +338,7 @@ workflow GATKSVPipelineBatch {
       coveragefiles=[GATKSVPipelinePhase1.merged_bincov],
       coveragefile_idxs=[GATKSVPipelinePhase1.merged_bincov_index],
       genotyping_rd_table=[select_first([GenotypeBatch.genotyping_rd_table])],
+        ploidy_tables=[CreatePloidyTableFromPed.out],
       contig_list=primary_contigs_list,
       regeno_coverage_medians=[GenotypeBatch.regeno_coverage_medians],
       sv_base_mini_docker=sv_base_mini_docker,
@@ -298,6 +375,44 @@ workflow GATKSVPipelineBatch {
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker
+  }
+
+  call annotate.AnnotateVcf {
+    input:
+      vcf = MakeCohortVcf.vcf,
+      contig_list = primary_contigs_list,
+      prefix = name,
+      stripy_vcfs = stripy_vcfs_for_annotation_,
+      protein_coding_gtf = protein_coding_gtf,
+      noncoding_bed = noncoding_bed,
+      promoter_window = promoter_window,
+      max_breakend_as_cnv_length = max_breakend_as_cnv_length,
+      svannotate_additional_args = svannotate_additional_args,
+      sample_pop_assignments = sample_pop_assignments,
+      sample_keep_list = sample_keep_list,
+      ped_file = ped_file,
+      par_bed = par_bed,
+      allosomes_list = allosomes_list,
+      sv_per_shard = annotation_sv_per_shard,
+      external_af_ref_bed = external_af_ref_bed,
+      external_af_ref_prefix = external_af_ref_bed_prefix,
+      external_af_population = external_af_population,
+      sv_pipeline_docker = sv_pipeline_docker,
+      sv_base_mini_docker = sv_base_mini_docker,
+      gatk_docker = gatk_docker,
+      runtime_attr_svannotate = runtime_attr_svannotate,
+      runtime_attr_scatter_vcf = runtime_attr_scatter_vcf,
+      runtime_attr_subset_vcf_by_samples_list = runtime_attr_subset_vcf_by_samples_list,
+      runtime_attr_compute_AFs = runtime_attr_compute_AFs,
+      runtime_attr_modify_vcf = runtime_attr_modify_vcf,
+      runtime_attr_split_ref_bed = runtime_attr_split_ref_bed,
+      runtime_attr_split_query_vcf = runtime_attr_split_query_vcf,
+      runtime_attr_bedtools_closest = runtime_attr_bedtools_closest,
+      runtime_attr_select_matched_svs = runtime_attr_select_matched_svs,
+      runtime_attr_concat = runtime_attr_concat,
+      runtime_attr_preconcat = runtime_attr_preconcat,
+      runtime_attr_fix_header = runtime_attr_fix_header,
+      runtime_attr_merge_stripy_vcf = runtime_attr_merge_stripy_vcf
   }
 
   call tu.CatMetrics as CatBatchMetrics {
@@ -360,6 +475,8 @@ workflow GATKSVPipelineBatch {
   output {
     File clean_vcf = MakeCohortVcf.vcf
     File clean_vcf_index = MakeCohortVcf.vcf_index
+    File annotated_vcf = AnnotateVcf.annotated_vcf
+    File annotated_vcf_index = AnnotateVcf.annotated_vcf_index
     File metrics_file_batch = CatBatchMetrics.out
     File qc_file = BatchQC.out
     File master_vcf_qc = MakeCohortVcf.vcf_qc
@@ -379,6 +496,12 @@ workflow GATKSVPipelineBatch {
     Array[File]? melt_vcfs_index = melt_vcfs_index_
     Array[File]? wham_vcfs = wham_vcfs_
     Array[File]? wham_vcfs_index = wham_vcfs_index_
+    Array[File]? stripy_vcfs = stripy_vcfs_
+    Array[File]? stripy_json_outputs = StripyWorkflow.stripy_json
+    Array[File]? stripy_tsv_outputs = StripyWorkflow.stripy_tsv
+    Array[File]? stripy_html_outputs = StripyWorkflow.stripy_html
+    File? merged_stripy_vcf = GATKSVPipelinePhase1.merged_stripy_vcf
+    File? merged_stripy_vcf_index = GATKSVPipelinePhase1.merged_stripy_vcf_index
 
     File medianfile = GATKSVPipelinePhase1.median_cov
     File merged_coverage_file = GATKSVPipelinePhase1.merged_bincov

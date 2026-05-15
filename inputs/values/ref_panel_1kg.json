@@ -2189,8 +2189,10 @@
     "name": "ref_panel_1kg",
     "number_regenotyped_file": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/bc58d14f-5d94-42d3-ae35-625b9e327b4d/RegenotypeCNVs/ea755c49-76b4-4654-9c48-58475133bb3e/call-MergeList/regeno_num_lines.txt",
     "number_regenotyped_filtered_file": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/bc58d14f-5d94-42d3-ae35-625b9e327b4d/RegenotypeCNVs/ea755c49-76b4-4654-9c48-58475133bb3e/call-CombineReassess/CombineReassess/c3a5730e-a9cb-4d4a-9a2e-8fef9500a57a/call-MergeList/regeno_filtered_num_lines.txt",
+    "outlier_cutoff_table": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v1/module03_outlier_cutoff_table.tsv",
     "ped_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/v1/ped/1kg_ref_panel_v1.ped",
     "ploidy_table": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/2ed878f4-1779-4672-9990-929a71eef6d5/JoinRawCalls/80507730-c211-4e62-9bf8-e89904fee11b/call-CreatePloidyTableFromPed/all_batches.ploidy.tsv",
+    "qc_definitions": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/ref_panel_1kg.qc_definitions.tsv",
     "regeno_coverage_medians": "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/27d47462-8e97-455f-bddd-e48c141da7ae/GenotypeBatch/5112d586-f3cc-4a93-b4fb-3a3052853046/call-GenotypeDepthPart2/GenotypeDepthPart2/5b46d817-84fd-4b01-b485-9f3a1370d8d6/call-MergeRegenoCoverageMedians/cacheCopy/all_samples.regeno.coverage_medians_merged.bed.gz",
     "regenotyped_depth_vcf": [
         "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/bc58d14f-5d94-42d3-ae35-625b9e327b4d/RegenotypeCNVs/ea755c49-76b4-4654-9c48-58475133bb3e/call-ConcatRegenotypedVcfs/shard-0/all_samples.depth.regeno_final.vcf.gz"
@@ -2199,6 +2201,7 @@
         "gs://gatk-sv-ref-panel-1kg-v1-1/submissions/bc58d14f-5d94-42d3-ae35-625b9e327b4d/RegenotypeCNVs/ea755c49-76b4-4654-9c48-58475133bb3e/call-ConcatRegenotypedVcfs/shard-0/all_samples.depth.regeno_final.vcf.gz.tbi"
     ],
     "sample_example": "HG00096",
+    "sample_pop_assignments": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/populations.ref_panel_1kg.tsv",
     "samples": [
         "HG00096",
         "HG00129",

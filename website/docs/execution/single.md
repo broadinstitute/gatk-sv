@@ -70,6 +70,7 @@ The workflow accepts a single CRAM or BAM file as input, configured in the follo
 |---------|--------|--------------|
 |`String`|`sample_id`|Case sample identifier|
 |`File`|`bam_or_cram_file`|Path to the GCS location of the input CRAM or BAM file|
+|`File?`|`case_stripy_file`|Optional precomputed single-sample STRipy VCF. Leave blank to run STRipy when `use_stripy` is enabled.|
 |`String`|`batch`|Arbitrary name to be assigned to the run|
 
 #### Additional workspace-level inputs
@@ -77,6 +78,7 @@ The workflow accepts a single CRAM or BAM file as input, configured in the follo
 - Reference resources for hg38
 - Input data for the reference panel
 - The set of docker images used in the pipeline.
+- `use_stripy`, which controls optional STRipy repeat-expansion calling and defaults to true.
 
 Please contact GATK-SV developers if you are interested in customizing these
 inputs beyond their defaults.
@@ -85,11 +87,15 @@ inputs beyond their defaults.
 
 |Output Type|Output Name|Description|
 |---------|--------|--------------|
-|`File`|`final_vcf`|SV VCF output for the pipeline. Includes all sites genotyped as variant in the case sample and genotypes for the reference panel. Sites are annotated with overlap of functional genome elements and allele frequencies of matching variants in gnomAD|
+|`File`|`final_vcf`|SV VCF output for the pipeline. Includes all sites genotyped as variant in the case sample and genotypes for the reference panel. Sites are annotated with overlap of functional genome elements and allele frequencies of matching variants in gnomAD. When STRipy is enabled, STRipy repeat-expansion records are appended after final cleanup.|
 |`File`|`final_vcf_idx`|Index file for `final_vcf`|
 |`File`|`final_bed`|Final output in BED format. Filter status, list of variant samples, and all VCF INFO fields are reported as additional columns.|
-|`File`|`metrics_file`|Metrics computed from the input data and intermediate and final VCFs. Includes metrics on the SV evidence, and on the number of variants called, broken down by type and size range.|
+|`File`|`metrics_file`|Metrics computed from the input data and intermediate and final VCFs. Includes metrics on the SV evidence, and on the number of variants called, broken down by type and size range. STRipy records are not included in these metrics.|
 |`File`|`qc_file`|Quality-control check file. This extracts several key metrics from the `metrics_file` and compares them to pre-specified threshold values. If any QC checks evaluate to FAIL, further diagnostics may be required.|
+|`File?`|`stripy_json_output`|STRipy JSON output, present when STRipy is run by the workflow.|
+|`File?`|`stripy_tsv_output`|STRipy TSV output, present when STRipy is run by the workflow.|
+|`File?`|`stripy_html_output`|STRipy HTML report, present when STRipy is run by the workflow.|
+|`File?`|`stripy_vcf_output`|Single-sample STRipy VCF, present when STRipy is run by the workflow.|
 |`File`|`ploidy_matrix`|Matrix of contig ploidy estimates computed by GATK gCNV.|
 |`File`|`ploidy_plots`|Plots of contig ploidy generated from `ploidy_matrix`|
 |`File`|`non_genotyped_unique_depth_calls`|This VCF file contains any depth based calls made in the case sample that did not pass genotyping checks and do not match a depth-based call from the reference panel. If very high sensitivity is desired, examine this file for additional large CNV calls.|

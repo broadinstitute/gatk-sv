@@ -51,7 +51,7 @@ Prefix for output VCF, such as the cohort name. May be alphanumeric with undersc
 Array of batch names. These should be the same batch names used in [GatherBatchEvidence](./gbe#batch).
 
 #### `batch_sample_lists`
-Array of sample ID lists for all batches, generated in [FilterBatch](./fb#batch_samples_postoutlierexclusion). Order must match [batch_name_list](#batch_name_list).
+Array of sample ID lists for all batches, generated in [FilterBatch](./fb#filtered_batch_samples_file). Order must match [batch_name_list](#batch_name_list).
 
 #### `PE_metrics`
 Array of PE metrics files for all batches, generated in [GatherBatchEvidence](./gbe#merged_pe). Order must match [batch_name_list](#batch_name_list).

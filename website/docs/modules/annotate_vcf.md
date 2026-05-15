@@ -67,6 +67,9 @@ annotates population-specific allele frequencies.
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `sample_keep_list`
 If provided, subset samples to this list in the output VCF.
 
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `stripy_vcfs`
+Array of pre-merged multi-sample STRipy VCFs from [ClusterBatch](./cb). This merge is a simple post-processing step and is not optimized for large cohorts.
+
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `ped_file`
 Family structures and sex assignments determined in [EvidenceQC](./eqc). See [PED file format](/docs/gs/inputs#ped-format). 
 If provided, sex-specific allele frequencies will be annotated.

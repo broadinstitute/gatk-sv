@@ -19,6 +19,7 @@
   "GATKSVPipelineBatch.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
   "GATKSVPipelineBatch.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
   "GATKSVPipelineBatch.cloud_sdk_docker": {{ dockers.cloud_sdk_docker | tojson }},
+  "GATKSVPipelineBatch.stripy_docker": {{ dockers.stripy_docker | tojson }},
 
   "GATKSVPipelineBatch.reference_dict" : {{ reference_resources.reference_dict | tojson }},
   "GATKSVPipelineBatch.reference_fasta" : {{ reference_resources.reference_fasta | tojson }},
@@ -31,6 +32,15 @@
   "GATKSVPipelineBatch.genome_file" : {{ reference_resources.genome_file | tojson }},
   "GATKSVPipelineBatch.chr_x": {{ reference_resources.chr_x | tojson }},
   "GATKSVPipelineBatch.chr_y": {{ reference_resources.chr_y | tojson }},
+
+  "GATKSVPipelineBatch.protein_coding_gtf" : {{ reference_resources.protein_coding_gtf | tojson }},
+  "GATKSVPipelineBatch.noncoding_bed" : {{ reference_resources.noncoding_bed | tojson }},
+  "GATKSVPipelineBatch.external_af_ref_bed" : {{ reference_resources.external_af_ref_bed | tojson }},
+  "GATKSVPipelineBatch.external_af_ref_bed_prefix" : {{ reference_resources.external_af_ref_bed_prefix | tojson }},
+  "GATKSVPipelineBatch.external_af_population" : {{ reference_resources.external_af_population | tojson }},
+  "GATKSVPipelineBatch.par_bed": {{ reference_resources.par_bed | tojson }},
+  "GATKSVPipelineBatch.sample_pop_assignments": {{ test_batch.sample_pop_assignments | tojson }},
+  "GATKSVPipelineBatch.annotation_sv_per_shard" : "5000",
 
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_version": {{ reference_resources.reference_version | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.manta_region_bed": {{ reference_resources.manta_region_bed | tojson }},
@@ -96,15 +106,13 @@
 
   "GATKSVPipelineBatch.outlier_cutoff_table" : {{ test_batch.outlier_cutoff_table | tojson }},
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.outlier_cutoff_nIQR": "999999",
-  "GATKSVPipelineBatch.GenotypeBatch.n_RD_genotype_bins": "100000",
-  "GATKSVPipelineBatch.GenotypeBatch.n_per_split": "5000",
-  "GATKSVPipelineBatch.GenotypeBatch.pesr_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
-  "GATKSVPipelineBatch.GenotypeBatch.seed_cutoffs": {{ reference_resources.seed_cutoffs | tojson }},
-  "GATKSVPipelineBatch.GenotypeBatch.reference_build": "hg38",
-  "GATKSVPipelineBatch.GenotypeBatch.bin_exclude": {{ reference_resources.bin_exclude | tojson }},
+  "GATKSVPipelineBatch.GenotypeBatch.pesr_exclusion_intervals": {{ reference_resources.pesr_exclude_list | tojson }},
+  "GATKSVPipelineBatch.GenotypeBatch.depth_exclusion_intervals": {{ reference_resources.bin_exclude | tojson }},
+  "GATKSVPipelineBatch.GenotypeBatch.training_intervals": {{ reference_resources.depth_training_bed | tojson }},
 
   "GATKSVPipelineBatch.RegenotypeCNVs.n_RdTest_bins": "100000",
   "GATKSVPipelineBatch.RegenotypeCNVs.n_per_split": "5000",
+  "GATKSVPipelineBatch.RegenotypeCNVs.merge_batch_sites_vcf": {{ test_batch.merge_batch_sites_vcf | tojson }},
 
   "GATKSVPipelineBatch.MakeCohortVcf.bin_exclude": {{ reference_resources.bin_exclude | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.site_level_comparison_datasets": [
