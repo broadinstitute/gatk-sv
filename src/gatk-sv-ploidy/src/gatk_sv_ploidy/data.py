@@ -7,7 +7,6 @@ depth matrix) and helpers for reading / writing TSV depth files.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -21,10 +20,6 @@ from gatk_sv_ploidy._util import (
     DEPTH_SPACES,
     get_sample_columns,
 )
-
-logger = logging.getLogger(__name__)
-
-RAW_COUNT_INTEGER_ATOL = 1e-6
 
 
 class DepthData:
@@ -70,7 +65,6 @@ class DepthData:
         if subsample_bins is not None or subsample_samples is not None:
             rng = np.random.RandomState(seed)
             if subsample_bins is not None and subsample_bins < len(df):
-                logger.info("Subsampling %d / %d bins", subsample_bins, len(df))
                 idx = np.sort(rng.choice(len(df), subsample_bins, replace=False))
                 df = df.iloc[idx].copy()
                 if site_data is not None:
@@ -81,11 +75,6 @@ class DepthData:
                         "site_mask": site_data["site_mask"][idx],
                     }
             if subsample_samples is not None and subsample_samples < len(sample_cols):
-                logger.info(
-                    "Subsampling %d / %d samples",
-                    subsample_samples,
-                    len(sample_cols),
-                )
                 sel = rng.choice(len(sample_cols), subsample_samples, replace=False)
                 sample_cols = [sample_cols[i] for i in sel]
                 if site_data is not None:
@@ -138,9 +127,6 @@ class DepthData:
                         f"first at index {mismatches[0]}). "
                         "Regenerate site_data.npz."
                     )
-                logger.info(
-                    "Site-data bin coordinates validated against depth bins."
-                )
 
         # ── store metadata arrays ───────────────────────────────────────
         self.chr: np.ndarray = df["Chr"].values
@@ -199,29 +185,6 @@ class DepthData:
             if np.any(depth_values < 0):
                 raise ValueError("Raw count depth input must be non-negative.")
             rounded_depth_values = np.rint(depth_values)
-            integer_residual = np.abs(depth_values - rounded_depth_values)
-            if np.any(integer_residual > RAW_COUNT_INTEGER_ATOL):
-                max_pos = np.unravel_index(
-                    int(np.argmax(integer_residual)),
-                    integer_residual.shape,
-                )
-                bin_idx, sample_idx = int(max_pos[0]), int(max_pos[1])
-                bin_label = (
-                    f"{self.chr[bin_idx]}:"
-                    f"{int(self.start[bin_idx])}-{int(self.end[bin_idx])}"
-                )
-                logger.warning(
-                    "Raw count depth input contains non-integer values; "
-                    "rounding to nearest integer instead of failing. "
-                    "Absolute tolerance=%g. Max fractional residual=%.6g at %s, "
-                    "sample %s (value=%.12g). Run preprocess to regenerate "
-                    "raw-count input if this is unexpected.",
-                    RAW_COUNT_INTEGER_ATOL,
-                    float(integer_residual[max_pos]),
-                    bin_label,
-                    sample_cols[sample_idx],
-                    float(depth_values[max_pos]),
-                )
             depth_values = rounded_depth_values
 
         if self.depth_space == "raw":
@@ -230,24 +193,11 @@ class DepthData:
             depth_matrix = depth_values.astype(np.float32)
 
         if clamp_threshold is not None:
-            n_clamped = int(np.sum(depth_matrix > clamp_threshold))
-            if n_clamped > 0:
-                logger.info(
-                    "Clamping %d values above %.1f", n_clamped, clamp_threshold
-                )
-                depth_matrix = np.clip(depth_matrix, None, clamp_threshold)
+            depth_matrix = np.clip(depth_matrix, None, clamp_threshold)
 
         self.depth = torch.tensor(depth_matrix, dtype=dtype, device=device)
         self.n_bins: int = self.depth.shape[0]
         self.n_samples: int = self.depth.shape[1]
-
-        logger.info("Loaded data: %d bins × %d samples", self.n_bins, self.n_samples)
-        logger.info(
-            "Depth range: [%.3f, %.3f], mean=%.3f",
-            self.depth.min().item(),
-            self.depth.max().item(),
-            self.depth.mean().item(),
-        )
 
         # ── optional per-site allele data ───────────────────────────────
         if site_data is not None:
@@ -283,14 +233,6 @@ class DepthData:
             )
             self.site_mask = torch.tensor(sm, dtype=torch.bool, device=device)
             self.max_sites: int = sa.shape[1]
-
-            n_informative = int(self.site_mask.any(dim=1).any(dim=1).sum().item())
-            total_sites = int(self.site_mask.any(dim=2).sum().item())
-            logger.info(
-                "Per-site allele data: %d bins with data, %d total sites, "
-                "max %d sites/bin",
-                n_informative, total_sites, self.max_sites,
-            )
         else:
             self.site_alt: Optional[torch.Tensor] = None
             self.site_total: Optional[torch.Tensor] = None
@@ -318,7 +260,6 @@ def read_depth_tsv(path: str) -> pd.DataFrame:
     Raises:
         Exception: Propagated from :func:`pandas.read_csv`.
     """
-    logger.info("Loading depth table.")
     df = pd.read_csv(path, sep="\t", compression="infer")
 
     # Normalise chromosome column name
@@ -351,7 +292,6 @@ def load_site_data(path: str) -> Dict[str, np.ndarray]:
     Returns:
         Dictionary with NumPy arrays ready for :class:`DepthData`.
     """
-    logger.info("Loading per-site allele data.")
     npz = np.load(path, allow_pickle=True)
     result = {
         "site_alt": npz["site_alt"],
@@ -364,10 +304,4 @@ def load_site_data(path: str) -> Dict[str, np.ndarray]:
     for key in ("sample_ids", "bin_chr", "bin_start", "bin_end"):
         if key in npz:
             result[key] = npz[key]
-    logger.info(
-        "  shape: bins=%d, max_sites=%d, samples=%d",
-        result["site_alt"].shape[0],
-        result["site_alt"].shape[1],
-        result["site_alt"].shape[2],
-    )
     return result

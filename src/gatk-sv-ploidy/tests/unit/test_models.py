@@ -13,20 +13,15 @@ from gatk_sv_ploidy.models import (
     CNVModel,
     DEFAULT_AF_BACKGROUND_CONCENTRATION,
     DEFAULT_AF_OUTLIER_WEIGHT,
-    DEFAULT_BACKGROUND_FACTORS,
     DEFAULT_EPSILON_CONCENTRATION,
     DEFAULT_EPSILON_MEAN,
-    DEFAULT_GUIDE_INIT_SCALE,
-    DEFAULT_MULTIPLICATIVE_FACTORS,
     DEFAULT_RAW_VARIANCE_POWER,
     _baseline_af_background_log_prob_numpy,
     _baseline_af_background_log_prob_torch,
     _center_af_table_numpy,
     _effective_negative_binomial_overdispersion_numpy,
-    _precompute_af_table_from_observed_genotype_log_lik,
     _precompute_af_genotype_log_lik,
     _precompute_af_table_from_genotype_log_lik,
-    _precompute_observed_af_genotype_log_lik,
     _marginalized_af_log_lik,
     _marginalized_af_log_lik_numpy,
     _negative_binomial_log_lik_numpy,
@@ -68,18 +63,10 @@ def test_cnv_model_defaults_match_current_preferred_configuration() -> None:
     model = CNVModel()
 
     assert model.autosome_prior_mode == "dirichlet"
-    assert model.var_bias_bin == 0.02
     assert model.var_sample == 0.00025
-    assert model.var_bin == 0.0
     assert model.raw_variance_power == pytest.approx(DEFAULT_RAW_VARIANCE_POWER)
     assert model.epsilon_mean == pytest.approx(DEFAULT_EPSILON_MEAN)
     assert model.epsilon_concentration == pytest.approx(DEFAULT_EPSILON_CONCENTRATION)
-    assert DEFAULT_BACKGROUND_FACTORS == 0
-    assert DEFAULT_MULTIPLICATIVE_FACTORS == 0
-    assert model.background_factors == DEFAULT_BACKGROUND_FACTORS
-    assert model.multiplicative_factors == DEFAULT_MULTIPLICATIVE_FACTORS
-    assert model.guide_init_scale == pytest.approx(DEFAULT_GUIDE_INIT_SCALE)
-    assert model.lowrank_guide_rank is None
     assert model.af_evidence_mode == "relative"
     assert model.learn_af_temperature is False
     assert model.af_outlier_weight == pytest.approx(DEFAULT_AF_OUTLIER_WEIGHT)
@@ -89,11 +76,7 @@ def test_cnv_model_defaults_match_current_preferred_configuration() -> None:
     assert "bin_var" not in model._latent_sites
     assert "allosome_var" not in model._latent_sites
     assert "bin_bias" not in model._latent_sites
-    assert "multiplicative_bin_factors" not in model._latent_sites
-    assert "multiplicative_sample_factors" not in model._latent_sites
     assert "af_temperature" not in model._latent_sites
-    assert "background_bin_factors" not in model._latent_sites
-    assert "background_sample_factors" not in model._latent_sites
 
 @pytest.mark.parametrize("raw_variance_power", [0.99, 2.01])
 def test_cnv_model_rejects_invalid_raw_variance_power(
@@ -197,7 +180,7 @@ def test_select_svi_initialization_restores_best_candidate(monkeypatch) -> None:
         init_calls.append(randomize)
         return {"candidate": candidate}
 
-    def fake_build_guide(init_loc_fn, guide_type=None):
+    def fake_build_guide(init_loc_fn):
         candidate = init_loc_fn["candidate"]
         return DummyGuide(candidate, candidate_losses[candidate])
 
@@ -215,38 +198,6 @@ def test_select_svi_initialization_restores_best_candidate(monkeypatch) -> None:
     assert init_calls == [False, True, True]
     assert model.guide.candidate == 1
     assert pyro.param("selected_candidate").item() == pytest.approx(1.0)
-
-
-def test_select_svi_initialization_uses_single_anchor_for_expressive_guides(monkeypatch) -> None:
-    model = CNVModel(guide_type="diagonal")
-    init_calls = []
-
-    class DummyGuide:
-        candidate = 0
-
-    class FakeElbo:
-        def loss(self, model_fn, guide, **kwargs):
-            return 1.0
-
-    def fake_make_init_loc_fn(
-        data,
-        randomize: bool = False,
-        initial_values=None,
-    ):
-        init_calls.append((randomize, initial_values))
-        return {"candidate": len(init_calls) - 1}
-
-    monkeypatch.setattr(model, "_make_init_loc_fn", fake_make_init_loc_fn)
-    monkeypatch.setattr(model, "_build_guide", lambda init_loc_fn, guide_type=None: DummyGuide())
-
-    model._select_svi_initialization(
-        object(),
-        model_kw={},
-        elbo=FakeElbo(),
-        init_restarts=10,
-    )
-
-    assert init_calls == [(False, None)]
 
 
 def test_windowed_relative_elbo_change_requires_two_complete_windows() -> None:
@@ -973,89 +924,8 @@ def test_precompute_af_genotype_log_lik_sanitizes_invalid_site_counts() -> None:
         n_states=6,
         concentration=50.0,
     )
-    observed_log_lik, *_ = _precompute_observed_af_genotype_log_lik(
-        site_alt,
-        site_total,
-        site_mask,
-        n_states=6,
-        concentration=50.0,
-    )
 
     assert torch.isfinite(genotype_log_lik).all()
-    assert torch.isfinite(observed_log_lik).all()
-
-
-def test_observed_af_genotype_log_lik_rebuilds_af_table(
-    tiny_site_data: dict[str, np.ndarray],
-) -> None:
-    site_alt = torch.tensor(tiny_site_data["site_alt"], dtype=torch.float32)
-    site_total = torch.tensor(tiny_site_data["site_total"], dtype=torch.float32)
-    site_pop_af = torch.tensor(tiny_site_data["site_pop_af"], dtype=torch.float32)
-    site_mask = torch.tensor(tiny_site_data["site_mask"], dtype=torch.bool)
-
-    (
-        observed_genotype_log_lik,
-        observed_alt,
-        observed_total,
-        observed_bin_idx,
-        observed_site_idx,
-        observed_sample_idx,
-        observed_site_slot_idx,
-        site_slot_bin_idx,
-        site_slot_site_idx,
-    ) = _precompute_observed_af_genotype_log_lik(
-        site_alt,
-        site_total,
-        site_mask,
-        n_states=6,
-        concentration=50.0,
-    )
-    observed_table = _precompute_af_table_from_observed_genotype_log_lik(
-        site_pop_af,
-        observed_alt,
-        observed_total,
-        observed_bin_idx,
-        observed_site_idx,
-        observed_sample_idx,
-        observed_site_slot_idx,
-        observed_genotype_log_lik,
-        n_bins=site_alt.shape[0],
-        n_samples=site_alt.shape[2],
-        n_states=6,
-    )
-    direct_table = _precompute_af_table(
-        site_alt,
-        site_total,
-        site_pop_af,
-        site_mask,
-        n_states=6,
-        concentration=50.0,
-    )
-
-    torch.testing.assert_close(observed_table, direct_table, rtol=1e-5, atol=1e-5)
-
-    observed_site_pop_af = (
-        site_pop_af[site_slot_bin_idx, site_slot_site_idx]
-        .detach()
-        .clone()
-        .requires_grad_(True)
-    )
-    gradient_table = _precompute_af_table_from_observed_genotype_log_lik(
-        observed_site_pop_af,
-        observed_alt,
-        observed_total,
-        observed_bin_idx,
-        observed_site_idx,
-        observed_sample_idx,
-        observed_site_slot_idx,
-        observed_genotype_log_lik,
-        n_bins=site_alt.shape[0],
-        n_samples=site_alt.shape[2],
-        n_states=6,
-    )
-    gradient_table.sum().backward()
-    assert observed_site_pop_af.grad is not None
-    assert torch.isfinite(observed_site_pop_af.grad).all()
 
 
 def test_relative_af_evidence_centers_against_fixed_reference_mixture(
@@ -1351,7 +1221,6 @@ def test_run_discrete_inference_uses_learned_af_temperature_map() -> None:
         learn_af_temperature=True,
         af_weight=0.25,
         var_sample=1000.0,
-        var_bin=1000.0,
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
     )
@@ -1380,39 +1249,10 @@ def test_run_discrete_inference_uses_learned_af_temperature_map() -> None:
     assert high_temp["cn_posterior"][0, 0, 2] > low_temp["cn_posterior"][0, 0, 2]
 
 
-def test_cnv_model_accepts_lowrank_guide() -> None:
-    model = CNVModel(guide_type="lowrank", lowrank_guide_rank=2)
-    assert model.guide.__class__.__name__ == "AutoLowRankMultivariateNormal"
-    assert model.guide._init_scale == pytest.approx(DEFAULT_GUIDE_INIT_SCALE)
-    assert model.lowrank_guide_rank == 2
-
-
-def test_cnv_model_passes_init_scale_to_diagonal_guide() -> None:
-    model = CNVModel(guide_type="diagonal", guide_init_scale=0.005)
-
-    assert model.guide.__class__.__name__ == "AutoDiagonalNormal"
-    assert model.guide._init_scale == pytest.approx(0.005)
-
-
-def test_cnv_model_uses_mixed_guide_when_learning_site_af() -> None:
-    model = CNVModel(guide_type="lowrank", learn_site_pop_af=True)
-    assert model.guide.__class__.__name__ == "AutoGuideList"
-    assert "site_pop_af_latent_observed" in model._latent_sites
-
-
 def test_cnv_model_negative_binomial_fixes_sample_depth_by_default() -> None:
     model = CNVModel()
     assert "sample_depth" not in model._latent_sites
     assert "bin_epsilon" in model._latent_sites
-    assert "background_bin_factors" not in model._latent_sites
-    assert "background_sample_factors" not in model._latent_sites
-
-
-def test_cnv_model_can_disable_background_factors() -> None:
-    model = CNVModel(background_factors=0)
-
-    assert "background_bin_factors" not in model._latent_sites
-    assert "background_sample_factors" not in model._latent_sites
 
 
 def test_sample_depth_uses_autosomal_anchor() -> None:
@@ -1676,41 +1516,6 @@ def test_run_discrete_inference_rejects_contig_shared_bin_epsilon() -> None:
                 "bin_epsilon": np.array([0.2], dtype=np.float32),
             },
         )
-
-
-def test_run_discrete_inference_uses_background_factors() -> None:
-    df = pd.DataFrame(
-        {
-            "Chr": ["chrY"],
-            "Start": [25],
-            "End": [125],
-            "S1": [1],
-            "S2": [5],
-        }
-    )
-    df["Bin"] = "chrY:25-125"
-    data = DepthData(
-        df.set_index("Bin"),
-        device="cpu",
-        depth_space="raw",
-        clamp_threshold=None,
-    )
-    model = CNVModel(sex_cn_weight=0.0, epsilon_mean=0.0)
-
-    posterior = model.run_discrete_inference(
-        data,
-        map_estimates={
-            "bin_bias": np.array([1.0], dtype=np.float32),
-            "sample_var": np.array([0.01, 0.01], dtype=np.float32),
-            "bin_var": np.array([0.01], dtype=np.float32),
-            "background_bin_factors": np.array([[2.0]], dtype=np.float32),
-            "background_sample_factors": np.array([[0.0, 0.25]], dtype=np.float32),
-            "sample_depth": np.array([20.0, 20.0], dtype=np.float32),
-            "cn_probs": np.full((1, 6), 1.0 / 6.0, dtype=np.float32),
-        },
-    )
-
-    assert posterior["cn_posterior"][0, 1, 0] > posterior["cn_posterior"][0, 0, 0]
 
 
 def test_run_discrete_inference_negative_binomial_uses_sample_depth() -> None:
@@ -2008,7 +1813,6 @@ def test_negative_binomial_model_trains_one_step_with_sample_depth_prior() -> No
         clamp_threshold=None,
     )
     model = CNVModel(
-        guide_type="diagonal",
         sex_cn_weight=0.0,
         autosome_prior_mode="dirichlet",
         device="cpu",
@@ -2019,45 +1823,6 @@ def test_negative_binomial_model_trains_one_step_with_sample_depth_prior() -> No
 
     assert "sample_depth" in estimates
     assert estimates["sample_depth"].shape == (2,)
-
-
-def test_diagonal_guide_trains_with_delta_warm_start() -> None:
-    df = pd.DataFrame(
-        {
-            "Chr": ["chr21", "chr21"],
-            "Start": [0, 1000],
-            "End": [1000, 2000],
-            "S1": [10, 12],
-            "S2": [20, 19],
-        },
-        index=["chr21:0-1000", "chr21:1000-2000"],
-    )
-    data = DepthData(
-        df,
-        device="cpu",
-        depth_space="raw",
-        clamp_threshold=None,
-        dtype=torch.float64,
-    )
-    model = CNVModel(
-        guide_type="diagonal",
-        sex_cn_weight=0.0,
-        autosome_prior_mode="dirichlet",
-        device="cpu",
-        dtype=torch.float64,
-    )
-
-    history = model.train(
-        data,
-        max_iter=1,
-        guide_warmup_iter=1,
-        log_freq=1,
-        early_stopping=False,
-    )
-
-    assert len(history) == 1
-    assert np.isfinite(history).all()
-    assert model.guide.__class__.__name__ == "AutoDiagonalNormal"
 
 
 def test_shrinkage_prior_trains_with_autosome_and_sex_bins() -> None:
@@ -2074,7 +1839,6 @@ def test_shrinkage_prior_trains_with_autosome_and_sex_bins() -> None:
     model = CNVModel(
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
-        guide_type="diagonal",
         autosome_prior_mode="shrinkage",
     )
 
@@ -2084,68 +1848,6 @@ def test_shrinkage_prior_trains_with_autosome_and_sex_bins() -> None:
     assert estimates["cn_probs"].shape == (2, 6)
     assert "autosome_nonref_prob" in estimates
     assert "sex_cn_probs" in estimates
-
-
-def test_model_kwargs_skip_precomputed_af_table_when_learning_site_af(
-    tiny_raw_depth_df: pd.DataFrame,
-    tiny_site_data: dict[str, np.ndarray],
-) -> None:
-    data = DepthData(
-        tiny_raw_depth_df,
-        device="cpu",
-        depth_space="raw",
-        clamp_threshold=None,
-        site_data=tiny_site_data,
-    )
-    model = CNVModel(
-        sex_cn_weight=0.0,
-        epsilon_mean=0.0,
-        guide_type="diagonal",
-        learn_site_pop_af=True,
-        af_weight=0.5,
-    )
-
-    model_kw = model._model_kwargs(data)
-
-    assert "af_table" not in model_kw
-    assert "af_observed_genotype_log_lik" in model_kw
-    assert "af_observed_bin_idx" in model_kw
-    assert "af_observed_sample_idx" in model_kw
-    assert "af_observed_site_slot_idx" in model_kw
-    assert "af_site_bin_idx" in model_kw
-    assert model_kw["af_site_bin_idx"].numel() <= data.site_pop_af.numel()
-    assert "site_alt" not in model_kw
-    assert "site_total" not in model_kw
-    assert model_kw["site_pop_af"].shape == data.site_pop_af.shape
-
-
-def test_learn_site_pop_af_trains_with_mixed_guide(
-    tiny_raw_depth_df: pd.DataFrame,
-    tiny_site_data: dict[str, np.ndarray],
-) -> None:
-    data = DepthData(
-        tiny_raw_depth_df,
-        device="cpu",
-        depth_space="raw",
-        clamp_threshold=None,
-        site_data=tiny_site_data,
-    )
-    model = CNVModel(
-        sex_cn_weight=0.0,
-        epsilon_mean=0.0,
-        guide_type="diagonal",
-        autosome_prior_mode="dirichlet",
-        learn_site_pop_af=True,
-        af_weight=0.5,
-    )
-
-    model.train(data, max_iter=1, log_freq=1, early_stopping=False)
-    estimates = model.get_map_estimates(data, estimate_method="median")
-
-    assert "site_pop_af_latent_observed" in estimates
-    assert "site_pop_af_latent" in estimates
-    assert estimates["site_pop_af_latent"].shape == tiny_site_data["site_pop_af"].shape
-    assert estimates["site_pop_af_latent_observed"].ndim == 1
 
 
 def test_get_map_estimates_median_uses_guide_median(monkeypatch) -> None:
@@ -2167,10 +1869,6 @@ def test_get_map_estimates_median_uses_guide_median(monkeypatch) -> None:
     model = CNVModel(
         sex_cn_weight=0.0,
         epsilon_mean=0.0,
-        background_factors=0,
-        multiplicative_factors=1,
-        var_bin=0.0,
-        guide_type="diagonal",
         autosome_prior_mode="dirichlet",
         learn_af_temperature=False,
     )
@@ -2178,15 +1876,8 @@ def test_get_map_estimates_median_uses_guide_median(monkeypatch) -> None:
     class DummyGuide:
         def median(self, *args, **kwargs):
             return {
-                "multiplicative_bin_factors": torch.tensor(
-                    [[-1.0], [1.0]],
-                    dtype=torch.float32,
-                ),
-                "multiplicative_sample_factors": torch.tensor(
-                    [[0.2]],
-                    dtype=torch.float32,
-                ),
                 "sample_var": torch.tensor([0.05], dtype=torch.float32),
+                "bin_epsilon": torch.zeros((2, 1), dtype=torch.float32),
                 "cn_probs": torch.full((2, 6), 1.0 / 6.0, dtype=torch.float32),
                 "sample_depth": torch.tensor([20.0], dtype=torch.float32),
             }
@@ -2202,23 +1893,23 @@ def test_get_map_estimates_median_uses_guide_median(monkeypatch) -> None:
 
     estimates = model.get_map_estimates(data, estimate_method="median")
 
-    expected_bias = np.exp(np.array([-1.0, 1.0], dtype=np.float32) * 0.2)
     np.testing.assert_allclose(
         estimates["bin_bias"],
-        expected_bias,
+        np.ones(2, dtype=np.float32),
         rtol=1e-6,
         atol=1e-6,
     )
     np.testing.assert_allclose(
         estimates["bin_bias_matrix"].reshape(2, 1),
-        expected_bias[:, np.newaxis],
+        np.ones((2, 1), dtype=np.float32),
         rtol=1e-6,
         atol=1e-6,
     )
+    np.testing.assert_allclose(estimates["sample_var"], np.array([0.05], dtype=np.float32))
     assert int(estimates["cn"][0, 0]) == 2
 
 
-def test_run_discrete_inference_multi_draw_averages_posteriors(monkeypatch) -> None:
+def test_run_discrete_inference_multi_draw_uses_single_point_estimate(monkeypatch) -> None:
     df = pd.DataFrame(
         {
             "Chr": ["chr21"],
@@ -2234,65 +1925,34 @@ def test_run_discrete_inference_multi_draw_averages_posteriors(monkeypatch) -> N
         depth_space="raw",
         clamp_threshold=None,
     )
-    model = CNVModel(sex_cn_weight=0.0, epsilon_mean=0.0, guide_type="diagonal")
+    model = CNVModel(sex_cn_weight=0.0, epsilon_mean=0.0)
+    calls = []
 
-    draw_biases = iter([1.0, 2.0, 3.0])
+    point_estimates = {"bin_bias": np.array([2.0], dtype=np.float32)}
+    expected = {
+        "cn_posterior": np.array([[[0.0, 1.0, 0.0, 0.0, 0.0, 0.0]]], dtype=np.float32),
+        "sex_posterior": np.array([[0.0, 1.0]], dtype=np.float32),
+    }
 
-    def fake_get_continuous_estimates(data, estimate_method="current", model_kw=None):
-        bias = next(draw_biases)
-        return {
-            "bin_bias": torch.tensor([bias], dtype=torch.float32),
-            "sample_var": torch.tensor([0.05], dtype=torch.float32),
-            "bin_var": torch.tensor([0.02], dtype=torch.float32),
-            "cn_probs": torch.full((1, 6), 1.0 / 6.0, dtype=torch.float32),
-            "sample_depth": torch.tensor([20.0], dtype=torch.float32),
-        }
+    def fake_get_map_estimates(data, estimate_method="current"):
+        calls.append(estimate_method)
+        return point_estimates
 
-    def fake_run_fixed(data, maps, af_table=None):
-        bias = float(np.asarray(maps["bin_bias"]).reshape(-1)[0])
-        if bias < 1.5:
-            return {
-                "cn_posterior": np.array([[[1.0, 0.0, 0.0, 0.0, 0.0, 0.0]]], dtype=np.float32),
-                "sex_posterior": np.array([[1.0, 0.0]], dtype=np.float32),
-            }
-        if bias < 2.5:
-            return {
-                "cn_posterior": np.array([[[0.0, 1.0, 0.0, 0.0, 0.0, 0.0]]], dtype=np.float32),
-                "sex_posterior": np.array([[0.0, 1.0]], dtype=np.float32),
-            }
-        return {
-            "cn_posterior": np.array([[[0.0, 0.0, 1.0, 0.0, 0.0, 0.0]]], dtype=np.float32),
-            "sex_posterior": np.array([[0.5, 0.5]], dtype=np.float32),
-        }
+    def fake_run_discrete_inference(data, map_estimates=None, af_table=None):
+        assert map_estimates is point_estimates
+        return expected
 
-    monkeypatch.setattr(model, "_get_continuous_estimates", fake_get_continuous_estimates)
-    monkeypatch.setattr(model, "_run_discrete_inference_fixed_latents", fake_run_fixed)
+    monkeypatch.setattr(model, "get_map_estimates", fake_get_map_estimates)
+    monkeypatch.setattr(model, "run_discrete_inference", fake_run_discrete_inference)
 
-    collected_draws = {}
-    posterior = model.run_discrete_inference_multi_draw(
-        data,
-        n_draws=3,
-        draw_estimate_collector=collected_draws,
-    )
+    posterior = model.run_discrete_inference_multi_draw(data, n_draws=3)
 
     np.testing.assert_allclose(
         posterior["cn_posterior"],
-        np.array([[[1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0, 0.0, 0.0, 0.0]]], dtype=np.float32),
+        expected["cn_posterior"],
     )
     np.testing.assert_allclose(
         posterior["sex_posterior"],
-        np.array([[0.5, 0.5]], dtype=np.float32),
+        expected["sex_posterior"],
     )
-    np.testing.assert_allclose(
-        posterior["cn_map_stability"],
-        np.array([[1.0 / 3.0]], dtype=np.float32),
-    )
-    np.testing.assert_allclose(
-        posterior["sex_map_stability"],
-        np.array([2.0 / 3.0], dtype=np.float32),
-    )
-    assert [
-        float(np.asarray(draw).reshape(-1)[0])
-        for draw in collected_draws["bin_bias"]
-    ] == [1.0, 2.0, 3.0]
-    assert len(collected_draws["cn_probs"]) == 3
+    assert calls == ["current"]

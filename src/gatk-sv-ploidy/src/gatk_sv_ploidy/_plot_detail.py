@@ -8,7 +8,6 @@ scatter.  These are called from :mod:`gatk_sv_ploidy.plot`.
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import Dict, List, Optional, Tuple
 
@@ -31,8 +30,6 @@ from gatk_sv_ploidy._plot_style import (
     save_publication_figure,
     single_column_size,
 )
-
-logger = logging.getLogger(__name__)
 
 # CN state palette shared with the report overview plots.
 _CN_COLORS = [CN_STATE_PALETTE[i] for i in range(6)]
@@ -221,16 +218,6 @@ def _draw_site_af_scatter(
             s=1, alpha=0.15, color="#00897B",
             rasterized=True, zorder=2, linewidths=0,
         )
-        logger.debug(
-            "  AF scatter: %d site points",
-            len(scatter_x),
-        )
-
-    if roh_x:
-        logger.debug(
-            "  AF scatter: %d homozygous bins",
-            len(roh_x),
-        )
 
 
 def _draw_score_track(
@@ -402,12 +389,6 @@ def plot_sample_with_variance(
         {"mean_het_af", "n_het_sites"}.issubset(sample_data.columns) and
         sample_data["n_het_sites"].sum() > 0
     )
-    if has_aggregate_af and not has_site_scatter:
-        logger.debug(
-            "Skipping AF panel for %s: raw site_data counts are unavailable; "
-            "aggregate mean_het_af/n_het_sites columns are ignored.",
-            name,
-        )
     has_af = has_site_scatter
     has_binq = (
         "binq_value" in sample_data.columns and
@@ -697,17 +678,14 @@ def plot_cn_per_contig_boxplot(
         suffix = "all_samples"
 
     contour = "with_contours" if connect_samples else "no_contours"
-    logger.debug("Generating contig boxplot (%s, %s) ...", suffix, contour)
 
     if plot_df.empty:
-        logger.debug("Skipping contig boxplot for %s: no samples after filtering", suffix)
         return
 
     chr_order = [f"chr{i}" for i in range(1, 23)] + ["chrX", "chrY"]
     chr_order = [c for c in chr_order if c in plot_df["chromosome"].unique()]
 
     if not chr_order:
-        logger.debug("Skipping contig boxplot for %s: no chromosomes available", suffix)
         return
 
     wide = plot_df.pivot(index="sample", columns="chromosome", values="median_depth")
@@ -803,7 +781,6 @@ def plot_cn_per_contig_boxplot(
         dpi=DEFAULT_RASTER_DPI,
     )
     plt.close(fig)
-    logger.debug("Created contig boxplot (%s, %s)", suffix, contour)
 
 
 # ── per-bin-per-chromosome plot ─────────────────────────────────────────────
@@ -842,10 +819,7 @@ def plot_cn_per_bin_chromosome(
     else:
         suffix = "all_samples"
 
-    logger.debug("Generating per-bin plot: %s (%s) ...", chromosome, suffix)
-
     if cdf.empty:
-        logger.debug("Skipping per-bin plot: %s (%s) has no rows", chromosome, suffix)
         return
 
     cdf = cdf.sort_values("start")
@@ -948,7 +922,6 @@ def plot_cn_per_bin_chromosome(
         dpi=DEFAULT_RASTER_DPI,
     )
     plt.close(fig)
-    logger.debug("Created per-bin plot: %s (%s)", chromosome, suffix)
 
 
 # ── sex-assignment scatter ──────────────────────────────────────────────────
@@ -977,7 +950,6 @@ def plot_sex_assignments(
         output_dir: Base output directory.
         highlight_sample: Sample ID to mark with a triangle.
     """
-    logger.debug("Generating sex-assignment scatter …")
     fig, ax = plt.subplots(figsize=single_column_size(89))
     lim = 3
     ax.set_xlim(-0.1, lim + 0.1)
@@ -1023,7 +995,6 @@ def plot_sex_assignments(
         dpi=DEFAULT_RASTER_DPI,
     )
     plt.close(fig)
-    logger.debug("Saved sex_assignments.png")
 
 
 # ── private helpers ─────────────────────────────────────────────────────────

@@ -20,11 +20,14 @@ The result is exported as a block-gzipped VCF.
 """
 
 import argparse
+import logging
 import os
 import shutil
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
+
+from gatk_sv_ploidy._logging import log_output_artifacts, tool_logging_context
 
 DEFAULT_INPUT_HT = (
     "gs://gcp-public-data--gnomad/release/4.1.1/ht/genomes/"
@@ -33,6 +36,7 @@ DEFAULT_INPUT_HT = (
 
 DEFAULT_AF_CUTOFF = 0.5
 DEFAULT_AF_CUTOFF_Y = 0.01
+LOGGER = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -191,8 +195,7 @@ def pull_snps(
         hl.export_vcf(ht, temp_vcf, metadata=metadata)
         _bgzip_and_index_vcf(temp_vcf, output_path)
 
-    print(f"Wrote {output_path}")
-    print(f"Wrote {output_path}.tbi")
+    LOGGER.info("Wrote common-SNP VCF and tabix index")
 
 
 # ---------------------------------------------------------------------------
@@ -244,12 +247,12 @@ def _parse_args():
     return parser.parse_args()
 
 
-def main() -> None:
-    """Entry point for the ``pull-snps`` subcommand."""
-    args = _parse_args()
+def _run_pull_snps(args: argparse.Namespace, output_path: str, logger) -> None:
+    """Run pull-snps after CLI logging is configured."""
 
     # Lazy import — keeps hail out of the critical path for every other
     # subcommand and ensures a clear error when it is not installed.
+    logger.info("Loading local-only Hail runtime")
     hl = _require_hail()
     _require_java()
 
@@ -257,16 +260,36 @@ def main() -> None:
     hl.default_reference("GRCh38")
     _require_supported_filesystem(hl, args.input_ht)
 
-    output_path = str(Path.cwd() / args.output)
-    pull_snps(
-        hl,
-        input_ht=args.input_ht,
-        output_path=output_path,
-        af_cutoff=args.af_cutoff,
-        af_cutoff_y=args.af_cutoff_y,
-    )
+    try:
+        logger.info(
+            "Filtering common SNP sites: af_cutoff=%.6g af_cutoff_y=%.6g",
+            args.af_cutoff,
+            args.af_cutoff_y,
+        )
+        pull_snps(
+            hl,
+            input_ht=args.input_ht,
+            output_path=output_path,
+            af_cutoff=args.af_cutoff,
+            af_cutoff_y=args.af_cutoff_y,
+        )
+    finally:
+        hl.stop()
+    log_output_artifacts(logger, [output_path, f"{output_path}.tbi"])
 
-    hl.stop()
+
+def main() -> None:
+    """Entry point for the ``pull-snps`` subcommand."""
+    args = _parse_args()
+    output_path = str(Path.cwd() / args.output)
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    with tool_logging_context(
+        tool_name="pull_snps",
+        output_dir=Path(output_path).parent,
+        args=args,
+        log_filename="pull-snps.log",
+    ) as logger:
+        _run_pull_snps(args, output_path, logger)
 
 
 if __name__ == "__main__":

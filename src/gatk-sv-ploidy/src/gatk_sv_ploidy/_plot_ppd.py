@@ -8,8 +8,6 @@ files are available.
 
 from __future__ import annotations
 
-import logging
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -28,8 +26,6 @@ from gatk_sv_ploidy._plot_style import (
     double_column_size,
     single_column_size,
 )
-
-logger = logging.getLogger(__name__)
 
 _CHR_PALETTE = CHR_TYPE_PALETTE
 
@@ -337,12 +333,8 @@ def run_ppd_plots(
         output_dir: Base output directory.
         highlight_sample: Sample ID to highlight.
     """
-    logger.info("Generating PPD diagnostic plots …")
-
     plot_obs_vs_predicted(ppd_bin_df, output_dir, highlight_sample)
     plot_residual_genome_profile(ppd_bin_df, output_dir, highlight_sample)
     plot_calibration_histogram(ppd_bin_df, output_dir)
     plot_qq(ppd_bin_df, output_dir)
     plot_chromosome_rmse(ppd_chr_df, output_dir)
-
-    logger.info("PPD plots complete.")

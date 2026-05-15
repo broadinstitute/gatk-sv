@@ -9,7 +9,6 @@ writes the preprocessed matrix to disk.
 from __future__ import annotations
 
 import argparse
-import logging
 import os
 from typing import List, Tuple
 
@@ -17,12 +16,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from gatk_sv_ploidy._logging import log_output_artifacts, tool_logging_context
 from gatk_sv_ploidy._util import (
     get_sample_columns,
 )
 from gatk_sv_ploidy.data import read_depth_tsv
-
-logger = logging.getLogger(__name__)
 
 
 def _compute_autosome_medians(df: pd.DataFrame) -> tuple[list[str], np.ndarray]:
@@ -63,8 +61,6 @@ def read_sample_list(path: str) -> list[str]:
 
     if not sample_ids:
         raise ValueError(f"No sample IDs found in samples list: {path}")
-
-    logger.info("Loaded sample subset: %d sample(s)", len(sample_ids))
     return sample_ids
 
 
@@ -95,11 +91,6 @@ def subset_depth_samples(df: pd.DataFrame, sample_ids: list[str]) -> pd.DataFram
 
     metadata_cols = [col for col in df.columns if col not in sample_col_set]
     df_out = df.loc[:, metadata_cols + sample_ids].copy()
-    logger.info(
-        "Sample subset: retained %d / %d samples",
-        len(sample_ids),
-        len(sample_cols),
-    )
     return df_out
 
 
@@ -136,11 +127,6 @@ def read_bed_intervals(path: str) -> pd.DataFrame:
         )
 
     df = df.sort_values(["Chr", "Start", "End"]).reset_index(drop=True)
-    logger.info(
-        "Loaded poor regions: %d intervals across %d chromosome(s)",
-        len(df),
-        df["Chr"].nunique(),
-    )
     return df
 
 
@@ -190,10 +176,6 @@ def filter_poor_region_bins(
         raise ValueError("min_poor_region_coverage must be between 0 and 1")
 
     if len(df) == 0 or len(poor_regions) == 0:
-        logger.info(
-            "Poor-region filter: no intervals or no bins to filter; kept %d bins",
-            len(df),
-        )
         return df.copy()
 
     merged_by_chr = _merge_intervals_by_chr(poor_regions)
@@ -236,15 +218,7 @@ def filter_poor_region_bins(
             overlap_fraction[row_pos] = overlap_bp / bin_len
 
     poor_bad = overlap_fraction >= min_poor_region_coverage
-    n_flagged = int(poor_bad.sum())
     df_out = df.loc[~poor_bad].copy()
-    logger.info(
-        "Poor-region filter (coverage ≥ %.0f%%): removed %d / %d bins; %d remain",
-        min_poor_region_coverage * 100,
-        n_flagged,
-        len(df),
-        len(df_out),
-    )
     return df_out
 
 
@@ -264,13 +238,6 @@ def normalise_depth(df: pd.DataFrame) -> pd.DataFrame:
         Copy of *df* with normalised depth values.
     """
     sample_cols, medians = _compute_autosome_medians(df)
-
-    logger.info(
-        "Autosomal medians: min=%.3f, max=%.3f, mean=%.3f",
-        medians.min(),
-        medians.max(),
-        medians.mean(),
-    )
 
     df = df.copy()
     df[sample_cols] = 2.0 * df[sample_cols].values / medians[np.newaxis, :]
@@ -305,13 +272,6 @@ def clamp_depth_ratio(df: pd.DataFrame, *, depth_ratio_clamp: float = 6.0) -> pd
     original = df_out[sample_cols].to_numpy(dtype=np.float64)
     clamped = np.minimum(original, clamp_values[np.newaxis, :])
     df_out[sample_cols] = clamped
-
-    n_clamped = int(np.count_nonzero(original > clamped))
-    logger.info(
-        "Depth-ratio clamp (CN ≤ %.1f): clamped %d sample-bin value(s)",
-        depth_ratio_clamp,
-        n_clamped,
-    )
     return df_out
 
 
@@ -371,12 +331,6 @@ def _infer_sex_depth_groups(df: pd.DataFrame) -> pd.Series:
         group_by_sample[sample_id] = "XX" if xx_distance <= xy_distance else "XY"
 
     sex_groups = pd.Series(group_by_sample, dtype=object)
-    if not sex_groups.empty:
-        counts = sex_groups.value_counts().to_dict()
-        logger.info(
-            "Approximate sex groups for preprocess filtering: %s",
-            ", ".join(f"{label}={count}" for label, count in sorted(counts.items())),
-        )
     return sex_groups
 
 
@@ -443,10 +397,7 @@ def filter_low_quality_bins(
     medians = np.median(depths, axis=1)
     mads = stats.median_abs_deviation(depths, axis=1)
 
-    logger.info("Starting bins: %d", len(df))
-
     keep = np.ones(len(df), dtype=bool)
-    n_threshold_removed = 0
 
     # -- pooled autosome thresholds --
     _thresholds = {
@@ -462,20 +413,7 @@ def filter_low_quality_bins(
         if not mask.any():
             continue
         ok = (medians >= med_min) & (medians <= med_max) & (mads <= mad_max)
-        n_before = int(mask.sum())
         keep[mask.values] &= ok[mask.values]
-        n_after = int((mask & keep).sum())
-        logger.info(
-            "%s: median [%.1f, %.1f], MAD ≤ %.1f → %d / %d bins kept",
-            label,
-            med_min,
-            med_max,
-            mad_max,
-            n_after,
-            n_before,
-        )
-
-    n_threshold_removed = int((~keep).sum())
 
     # -- sex-stratified chrX / chrY thresholds --
     sex_groups = _infer_sex_depth_groups(df)
@@ -519,20 +457,7 @@ def filter_low_quality_bins(
                     group_bad |= deviant_fraction > cohort_deviation_fraction_max
 
                 group_bad &= chrom_mask
-                newly_removed = int((group_bad & keep).sum())
                 keep &= ~group_bad
-                logger.info(
-                    "%s %s: MAD ≤ %.1f and |depth−expected|>%.2f in >%.0f%% of samples → %d / %d bins kept (%d new removed)",
-                    chrom,
-                    label,
-                    mad_limits[chrom],
-                    cohort_deviation_threshold,
-                    cohort_deviation_fraction_max * 100,
-                    int(((df["Chr"] == chrom).values & keep).sum()),
-                    int(chrom_mask.sum()),
-                    newly_removed,
-                )
-        n_threshold_removed = int((~keep).sum())
     elif (df["Chr"] == "chrX").any() or (df["Chr"] == "chrY").any():
         raise ValueError(
             "Unable to infer chrX/chrY depth groups from current preprocess inputs. "
@@ -553,27 +478,9 @@ def filter_low_quality_bins(
             auto_deviations > cohort_deviation_threshold
         ).mean(axis=1)
         cohort_bad = is_auto & (deviant_frac > cohort_deviation_fraction_max)
-        n_cohort = int(cohort_bad.sum())
-        # Only remove bins that weren't already removed
-        newly_removed = int((cohort_bad & keep).sum())
         keep &= ~cohort_bad
-        logger.info(
-            "Cohort deviation filter (|depth−expected|>%.2f in >%.0f%% "
-            "of samples): flagged %d bins (%d new)",
-            cohort_deviation_threshold,
-            cohort_deviation_fraction_max * 100,
-            n_cohort,
-            newly_removed,
-        )
 
     df_out = df[keep].copy()
-    logger.info(
-        "Bins after filtering: %d (removed %d: %d threshold, %d cohort)",
-        len(df_out),
-        len(df) - len(df_out),
-        n_threshold_removed,
-        len(df) - len(df_out) - n_threshold_removed,
-    )
 
     # Verify sufficient bins per chromosome
     counts = df_out.groupby("Chr").size()
@@ -622,8 +529,6 @@ def collapse_bins_per_contig(
 
     sample_cols = get_sample_columns(df)
     collapsed_parts: list[pd.DataFrame] = []
-    n_rebinned_contigs = 0
-    n_bins_before = len(df)
 
     for chrom, chrom_df in df.groupby("Chr", sort=False):
         chrom_df = chrom_df.sort_values("Start", kind="mergesort").copy()
@@ -686,23 +591,8 @@ def collapse_bins_per_contig(
             for row in collapsed_df.itertuples(index=False)
         ]
         collapsed_parts.append(collapsed_df)
-        n_rebinned_contigs += 1
-        logger.info(
-            "Collapsed %s from %d bins to %d using contiguous groups of %d",
-            chrom,
-            n_bins,
-            len(collapsed_df),
-            chunk_size,
-        )
 
     collapsed = pd.concat(collapsed_parts, axis=0)
-    logger.info(
-        "Contig bin collapsing: %d / %d contigs rebinned; %d → %d total bins",
-        n_rebinned_contigs,
-        df["Chr"].nunique(),
-        n_bins_before,
-        len(collapsed),
-    )
     return collapsed
 
 # ── allele fraction preprocessing (per-site joint model) ─────────────────────
@@ -755,7 +645,6 @@ def read_site_depth_tsv(
         # Position-based striding: read in chunks and keep only rows whose
         # genomic position is divisible by position_stride.  This ensures
         # cross-sample consistency at the cost of a full file scan.
-        logger.info("Reading site depth file (position_stride=%d)", position_stride)
         chunks: list[pd.DataFrame] = []
         reader = pd.read_csv(
             path, sep="\t", compression="infer", header=None,
@@ -771,18 +660,11 @@ def read_site_depth_tsv(
             else pd.DataFrame(columns=_names)
         )
     else:
-        logger.info("Reading site depth file (stride=%d)", stride)
         skiprows = (lambda i: i % stride != 0) if stride > 1 else None
         df = pd.read_csv(
             path, sep="\t", compression="infer", header=None,
             names=_names, dtype=_dtypes, skiprows=skiprows,
         )
-
-    logger.info(
-        "  %d sites for %d sample(s)",
-        len(df),
-        df["sample"].nunique(),
-    )
     return df
 
 
@@ -853,9 +735,6 @@ def _process_sd_file(
 
     for sample_id in sd_df["sample"].unique():
         if sample_id not in sample_to_idx:
-            logger.warning(
-                "Encountered site-depth rows for a sample absent from the depth matrix; skipping those rows.",
-            )
             continue
 
         si = sample_to_idx[sample_id]
@@ -884,12 +763,6 @@ def _process_sd_file(
 
             # Drop sites that don't fall inside any surviving bin.
             if not in_bin.all():
-                n_dropped = int((~in_bin).sum())
-                logger.debug(
-                    "  site-depth filtering: dropping %d sites outside bin boundaries on %s",
-                    n_dropped,
-                    chrom,
-                )
                 c_pos = c_pos[in_bin]
                 c_a = c_a[in_bin]
                 c_c = c_c[in_bin]
@@ -925,13 +798,6 @@ def _process_sd_file(
                 site_entry = bin_entry.setdefault(pos, {"values": []})
                 site_entry["values"].append(
                     (si, int(c_a[i]), int(c_c[i]), int(c_g[i]), int(c_t[i]))
-                )
-
-            if n_sites_chrom > 0:
-                logger.debug(
-                    "  site-depth aggregation: %d sites accumulated on %s",
-                    n_sites_chrom,
-                    chrom,
                 )
 
     return sd_path, total_sites_used, file_site_data
@@ -998,7 +864,6 @@ def build_per_site_data(
     site_data: List[dict] = [{} for _ in range(n_bins)]
 
     total_sites_used = 0
-    logger.info("Loading %d SD file(s)", len(sd_paths))
     worker_results = [
         _process_sd_file(
             sd_path,
@@ -1012,10 +877,6 @@ def build_per_site_data(
 
     for sd_path, file_total_sites, file_site_data in worker_results:
         total_sites_used += file_total_sites
-        logger.info(
-            "Completed site depth ingestion: %d retained site-sample entries",
-            file_total_sites,
-        )
         for g_bi, bin_sites in file_site_data.items():
             entry = site_data[g_bi]
             for pos, site_record in bin_sites.items():
@@ -1069,25 +930,6 @@ def build_per_site_data(
             site_total[g_bi, slot, :] = total.astype(np.int32)
             site_pop_af[g_bi, slot] = _estimate_site_pop_af(alt, total)
             site_mask[g_bi, slot, :] = e["observed"]
-
-    logger.info(
-        "Per-site data: %d total site-sample entries, %d / %d bins with data, "
-        "padded to %d sites/bin",
-        total_sites_used, bins_with_data, n_bins, max_sites_per_bin,
-    )
-
-    # Per-chromosome summary for diagnostics
-    chr_labels = bins_df["Chr"].values
-    for chrom in sorted(set(chr_labels)):
-        chrom_mask_arr = chr_labels == chrom
-        n_chrom_bins = int(chrom_mask_arr.sum())
-        chrom_sites = site_mask[chrom_mask_arr].any(axis=2).sum()
-        n_unique = sum(len(site_data[i]) for i in np.where(chrom_mask_arr)[0])
-        logger.info(
-            "  %s: %d bins, %d unique positions, %d retained (max %d/bin)",
-            chrom, n_chrom_bins, n_unique, int(chrom_sites),
-            max_sites_per_bin,
-        )
 
     return {
         "site_alt": site_alt,
@@ -1193,35 +1035,36 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def main() -> None:
-    """Entry point for ``gatk-sv-ploidy preprocess``."""
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    args = parse_args()
-    os.makedirs(args.output_dir, exist_ok=True)
+def _run_preprocess(args: argparse.Namespace, logger) -> None:
+    """Run preprocessing after CLI logging is configured."""
 
     # 1. Read
+    logger.info("Loading raw depth matrix")
     raw_df = read_depth_tsv(args.input)
-    n_input_bins = len(raw_df)
+    logger.info(
+        "Raw depth matrix loaded: bins=%d samples=%d",
+        len(raw_df),
+        len(get_sample_columns(raw_df)),
+    )
 
     if args.samples_list:
         sample_ids = read_sample_list(args.samples_list)
         raw_df = subset_depth_samples(raw_df, sample_ids)
+        logger.info(
+            "Applied sample subset: retained_samples=%d",
+            len(get_sample_columns(raw_df)),
+        )
 
     poor_regions_df = None
     if args.poor_regions:
         poor_regions_df = read_bed_intervals(args.poor_regions)
+        logger.info("Loaded poor-region intervals: n_intervals=%d", len(poor_regions_df))
 
     # 2. Optionally subset to viable trisomy chromosomes
     if args.viable_only:
         viable = {"chr13", "chr18", "chr21", "chrX", "chrY"}
-        n_before = len(raw_df)
         raw_df = raw_df[raw_df["Chr"].isin(viable)].copy()
-        logger.info(
-            "Viable-only filter: %d → %d bins (%s)",
-            n_before,
-            len(raw_df),
-            sorted(raw_df["Chr"].unique()),
-        )
+        logger.info("Applied viable-only contig subset: bins=%d", len(raw_df))
 
     raw_df = clamp_depth_ratio(raw_df, depth_ratio_clamp=args.depth_ratio_clamp)
 
@@ -1229,9 +1072,7 @@ def main() -> None:
     normalized_df = normalise_depth(raw_df)
 
     # 4. Filter
-    if args.skip_bin_filter:
-        logger.info("Skipping bin quality filtering (--skip-bin-filter)")
-    else:
+    if not args.skip_bin_filter:
         normalized_df = filter_low_quality_bins(
             normalized_df,
             autosome_median_min=args.autosome_median_min,
@@ -1247,6 +1088,12 @@ def main() -> None:
             cohort_deviation_fraction_max=args.cohort_deviation_fraction_max,
             min_bins_per_chr=args.min_bins_per_chr,
         )
+        logger.info(
+            "Applied bin quality filters: retained_bins=%d",
+            len(normalized_df),
+        )
+    else:
+        logger.info("Skipped bin quality filters")
 
     raw_df = raw_df.loc[normalized_df.index].copy()
 
@@ -1257,6 +1104,10 @@ def main() -> None:
             min_poor_region_coverage=args.min_poor_region_coverage,
         )
         raw_df = raw_df.loc[normalized_df.index].copy()
+        logger.info(
+            "Applied poor-region filter: retained_bins=%d",
+            len(normalized_df),
+        )
 
     normalized_df = collapse_bins_per_contig(
         normalized_df,
@@ -1271,19 +1122,15 @@ def main() -> None:
 
     df = raw_df
 
-    logger.info(
-        "Total bins retained after preprocess filters: %d / %d",
-        len(df),
-        n_input_bins,
-    )
-    logger.info(
-        "Writing filtered raw counts; all quality filters were evaluated on normalized depth."
-    )
-
     # 5. Write preprocessed depth
     out_path = os.path.join(args.output_dir, "preprocessed_depth.tsv")
     df.to_csv(out_path, sep="\t")
-    logger.info("Preprocessed depth written.")
+    output_artifacts = [out_path]
+    logger.info(
+        "Wrote preprocessed depth matrix: bins=%d samples=%d",
+        len(df),
+        len(get_sample_columns(df)),
+    )
 
     # 6. Build per-site allele data from site-depth files (optional)
     sd_paths: List[str] = []
@@ -1294,7 +1141,6 @@ def main() -> None:
         sd_paths.extend(args.site_depth)
 
     if sd_paths:
-        logger.info("Building per-site allele data from %d SD file(s) …", len(sd_paths))
         site_arrays = build_per_site_data(
             sd_paths,
             df,
@@ -1304,9 +1150,29 @@ def main() -> None:
         )
         site_data_path = os.path.join(args.output_dir, "site_data.npz")
         np.savez_compressed(site_data_path, **site_arrays)
-        logger.info("Per-site allele data written.")
+        output_artifacts.append(site_data_path)
+        logger.info(
+            "Wrote per-site allele tensors: bins=%d max_sites_per_bin=%d samples=%d",
+            int(site_arrays["site_alt"].shape[0]),
+            int(site_arrays["site_alt"].shape[1]),
+            int(site_arrays["site_alt"].shape[2]),
+        )
     else:
-        logger.info("No site-depth files provided; skipping allele data")
+        logger.info("No site-depth inputs provided; site_data.npz was not written")
+
+    log_output_artifacts(logger, output_artifacts)
+
+
+def main() -> None:
+    """Entry point for ``gatk-sv-ploidy preprocess``."""
+    args = parse_args()
+    os.makedirs(args.output_dir, exist_ok=True)
+    with tool_logging_context(
+        tool_name="preprocess",
+        output_dir=args.output_dir,
+        args=args,
+    ) as logger:
+        _run_preprocess(args, logger)
 
 
 if __name__ == "__main__":

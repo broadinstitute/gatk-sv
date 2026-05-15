@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import logging
-
 import numpy as np
 import pandas as pd
 import torch
@@ -159,20 +157,16 @@ def test_depth_data_prefers_explicit_bin_length_bp() -> None:
     )
 
 
-def test_depth_data_warns_and_rounds_non_integer_raw_counts(
+def test_depth_data_rounds_non_integer_raw_counts(
     tiny_depth_df: pd.DataFrame,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    with caplog.at_level(logging.WARNING, logger="gatk_sv_ploidy.data"):
-        data = DepthData(
-            tiny_depth_df,
-            depth_space="raw",
-            clamp_threshold=None,
-            dtype=torch.float64,
-        )
+    data = DepthData(
+        tiny_depth_df,
+        depth_space="raw",
+        clamp_threshold=None,
+        dtype=torch.float64,
+    )
 
-    assert "rounding to nearest integer instead of failing" in caplog.text
-    assert "Max fractional residual=0.2" in caplog.text
     torch.testing.assert_close(
         data.depth,
         torch.tensor(
@@ -187,9 +181,7 @@ def test_depth_data_warns_and_rounds_non_integer_raw_counts(
     )
 
 
-def test_depth_data_warns_and_rounds_large_fractional_raw_counts(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_depth_data_rounds_large_fractional_raw_counts() -> None:
     df = pd.DataFrame(
         {
             "Chr": ["chr21"],
@@ -201,16 +193,13 @@ def test_depth_data_warns_and_rounds_large_fractional_raw_counts(
     )
     df["Bin"] = "chr21:0-1000"
 
-    with caplog.at_level(logging.WARNING, logger="gatk_sv_ploidy.data"):
-        data = DepthData(
-            df.set_index("Bin"),
-            depth_space="raw",
-            clamp_threshold=None,
-            dtype=torch.float64,
-        )
+    data = DepthData(
+        df.set_index("Bin"),
+        depth_space="raw",
+        clamp_threshold=None,
+        dtype=torch.float64,
+    )
 
-    assert "Max fractional residual=0.25" in caplog.text
-    assert "chr21:0-1000" in caplog.text
     torch.testing.assert_close(
         data.depth,
         torch.tensor([[2_077_000.0, 1_753_400.0]], dtype=torch.float64),

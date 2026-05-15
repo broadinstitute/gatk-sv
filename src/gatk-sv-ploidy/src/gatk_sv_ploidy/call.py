@@ -16,6 +16,7 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 
+from gatk_sv_ploidy._logging import log_output_artifacts, tool_logging_context
 from gatk_sv_ploidy._util import (
     BINQ_FIELD_OPTIONS,
     baseline_ploidy_label,
@@ -24,8 +25,6 @@ from gatk_sv_ploidy._util import (
     resolve_binq_field,
     summarize_contig_ploidy_from_bin_calls,
 )
-
-logger = logging.getLogger(__name__)
 
 _SEX_CHROMS = {"chrX", "chrY"}
 _CN_PROB_COLUMNS = [f"cn_prob_{cn}" for cn in range(6)]
@@ -49,6 +48,7 @@ _POLYPLOID_SEX_LABELS_BY_BASELINE = {
         (1, 3): "TETRAPLOID_XYYY",
     },
 }
+LOGGER = logging.getLogger(__name__)
 
 
 def _median_absolute_deviation(values: pd.Series) -> float:
@@ -328,23 +328,22 @@ def summarize_binq_filter_stats(annotated_bin_df: pd.DataFrame) -> pd.DataFrame:
 
 def log_binq_filter_stats(annotated_bin_df: pd.DataFrame) -> None:
     """Log per-contig BINQ filtering statistics over unique bins."""
-    summary = summarize_binq_filter_stats(annotated_bin_df)
-    if summary.empty:
-        logger.info("No bins were available for BINQ filtering summary.")
+    summary_df = summarize_binq_filter_stats(annotated_bin_df)
+    if summary_df.empty:
+        LOGGER.info("BINQ filter summary: no bins available")
         return
-
-    logger.info(
-        "BINQ filtering summary by contig:"
+    total_bins = int(summary_df["n_bins"].sum())
+    filtered_bins = int(summary_df["n_bins_filtered"].sum())
+    retained_pct = summary_df["pct_coverage_remaining"].to_numpy(dtype=float)
+    LOGGER.info(
+        "BINQ filter summary: contigs=%d bins=%d filtered_bins=%d "
+        "median_coverage_remaining_pct=%.2f min_coverage_remaining_pct=%.2f",
+        int(len(summary_df)),
+        total_bins,
+        filtered_bins,
+        float(np.nanmedian(retained_pct)),
+        float(np.nanmin(retained_pct)),
     )
-    for row in summary.itertuples(index=False):
-        logger.info(
-            "%s: bins=%d filtered=%d coverage_remaining=%.2f%% remaining_mb=%.3f",
-            row.chromosome,
-            int(row.n_bins),
-            int(row.n_bins_filtered),
-            float(row.pct_coverage_remaining),
-            float(row.coverage_remaining_mb),
-        )
 
 
 def _apply_binq_filter_to_annotated_bins(
@@ -756,7 +755,6 @@ def save_sex_assignments(pred_df: pd.DataFrame, output_dir: str) -> None:
     out.columns = ["sample_id", "chrX.CN", "chrY.CN", "Assignment"]
     path = os.path.join(output_dir, "sex_assignments.txt.gz")
     out.to_csv(path, sep="\t", index=False, compression="gzip")
-    logger.info("Sex assignments saved.")
 
 
 def export_aneuploid_data(df: pd.DataFrame, output_path: str) -> None:
@@ -771,7 +769,6 @@ def export_aneuploid_data(df: pd.DataFrame, output_path: str) -> None:
     out = df[df["is_aneuploid"]].copy()
     out = out.drop(columns=["chr_type"], errors="ignore")
     out.to_csv(output_path, sep="\t", index=False)
-    logger.info("Exported %d aneuploid rows.", len(out))
 
 
 def export_ignored_bins(df: pd.DataFrame, output_path: str) -> None:
@@ -791,13 +788,6 @@ def export_ignored_bins(df: pd.DataFrame, output_path: str) -> None:
     out = df[df["ignored_in_call"]].copy()
     out = out[use_cols]
     out.to_csv(output_path, sep="\t", index=False, compression="gzip")
-    n_unique_bins = len(out[["chr", "start", "end"]].drop_duplicates()) if len(out) else 0
-    logger.info(
-        "Exported %d ignored sample-bin rows across %d bins to %s",
-        len(out),
-        n_unique_bins,
-        output_path,
-    )
 
 
 # ── CLI ─────────────────────────────────────────────────────────────────────
@@ -854,22 +844,21 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def main() -> None:
-    """Entry point for ``gatk-sv-ploidy call``."""
+def _run_call(args: argparse.Namespace, logger) -> None:
+    """Run call assignment after CLI logging is configured."""
     import json
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    args = parse_args()
-    os.makedirs(args.output_dir, exist_ok=True)
-
     # ── load chromosome stats ───────────────────────────────────────────
-    logger.info("Reading chromosome stats.")
+    logger.info("Loading chromosome statistics")
     df = pd.read_csv(args.chrom_stats, sep="\t")
     logger.info(
-        "Loaded %d rows for %d samples", len(df), df["sample"].nunique()
+        "Chromosome statistics loaded: rows=%d samples=%d",
+        len(df),
+        int(df["sample"].nunique()) if "sample" in df.columns else 0,
     )
 
     annotated_bin_df: pd.DataFrame | None = None
+    output_artifacts: list[str] = []
 
     if args.min_binq is not None:
         if not args.bin_stats or not args.ppd_bin_quality:
@@ -889,11 +878,6 @@ def main() -> None:
             bin_quality_df,
             requested_binq_field,
         )
-        logger.info(
-            "Applying %s >= %.2f filter using PPD quality summaries and rebuilding chromosome calls ...",
-            resolved_binq_field,
-            args.min_binq,
-        )
         annotated_bin_df = _annotate_binq_filter_for_bin_stats(
             bin_stats_df,
             bin_quality_df,
@@ -908,55 +892,69 @@ def main() -> None:
         )
         filtered_path = os.path.join(args.output_dir, "chromosome_stats.filtered.tsv")
         df.to_csv(filtered_path, sep="\t", index=False)
-        logger.info("Filtered chromosome stats saved.")
+        output_artifacts.append(filtered_path)
+        logger.info("Wrote BINQ-filtered chromosome statistics")
 
     # ── optional exclusion ──────────────────────────────────────────────
     if args.exclusion_list:
         from gatk_sv_ploidy._util import load_exclusion_ids
 
         excl = set(load_exclusion_ids(args.exclusion_list))
-        n_before = df["sample"].nunique()
         df = df[~df["sample"].isin(excl)]
         if annotated_bin_df is not None:
             annotated_bin_df = annotated_bin_df[~annotated_bin_df["sample"].isin(excl)].copy()
-        logger.info(
-            "Excluded %d samples → %d remaining",
-            n_before - df["sample"].nunique(),
-            df["sample"].nunique(),
-        )
+        logger.info("Applied exclusion list: excluded_samples=%d", len(excl))
 
     if annotated_bin_df is not None:
         ignored_path = os.path.join(args.output_dir, "ignored_bins.tsv.gz")
         export_ignored_bins(annotated_bin_df, ignored_path)
+        output_artifacts.append(ignored_path)
+        logger.info("Wrote ignored-bin table")
 
     # ── optional truth ──────────────────────────────────────────────────
     truth: Dict[str, str] = {}
     if args.truth_json:
         with open(args.truth_json) as fh:
             truth = json.load(fh)
-        logger.info("Loaded %d truth entries", len(truth))
+        logger.info("Loaded truth labels: n_labels=%d", len(truth))
 
     # ── classify ────────────────────────────────────────────────────────
-    logger.info(
-        "Using absolute chromosome copy-number labels from infer."
-    )
-
     pred_df = assign_sex_and_aneuploidy_types(
         df,
         truth,
     )
     save_sex_assignments(pred_df, args.output_dir)
+    sex_path = os.path.join(args.output_dir, "sex_assignments.txt.gz")
+    output_artifacts.append(sex_path)
+    logger.info(
+        "Assigned baseline-aware labels: samples=%d predicted_types=%d",
+        len(pred_df),
+        int(pred_df["predicted_aneuploidy_type"].nunique()),
+    )
 
     # ── save predictions ────────────────────────────────────────────────
     pred_path = os.path.join(args.output_dir, "aneuploidy_type_predictions.tsv")
     pred_df.to_csv(pred_path, sep="\t", index=False)
-    logger.info("Predictions saved.")
+    output_artifacts.append(pred_path)
 
     # ── export aneuploid data ───────────────────────────────────────────
     aneu_path = os.path.join(args.output_dir, "aneuploid_samples.tsv")
     export_aneuploid_data(df, aneu_path)
+    output_artifacts.append(aneu_path)
+    logger.info("Wrote call tables")
+    log_output_artifacts(logger, output_artifacts)
 
-    logger.info("Done.")
+
+def main() -> None:
+    """Entry point for ``gatk-sv-ploidy call``."""
+    args = parse_args()
+    os.makedirs(args.output_dir, exist_ok=True)
+    with tool_logging_context(
+        tool_name="call",
+        output_dir=args.output_dir,
+        args=args,
+    ) as logger:
+        _run_call(args, logger)
 
 
 if __name__ == "__main__":

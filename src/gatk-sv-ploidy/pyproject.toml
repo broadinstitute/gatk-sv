@@ -15,7 +15,6 @@ dependencies = [
     "pysam",
     "torch",
     "pyro-ppl",
-    "tqdm",
     "matplotlib",
     "seaborn",
     "scipy",

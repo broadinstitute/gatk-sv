@@ -107,17 +107,31 @@ Normalized-depth residual inference is no longer supported by the public CLI.
 Historical normalized-depth preprocess artifacts must be regenerated as raw
 counts before running `infer` or `ppd`.
 
+### Logging
+
+Each subcommand writes ISO-timestamped diagnostics to the terminal on `stderr`
+and to a text log in its output directory: `preprocess.log`,
+`polyploidy.log`, `infer.log`, `ppd.log`, `call.log`, `plot.log`, or
+`eval.log`. The local-only `pull-snps` helper writes `pull-snps.log` next to
+its output VCF.
+
+Logs are privacy-safe by default. They record aggregate run metadata,
+dependency versions, sanitized command-line arguments, random seeds when used,
+stage transitions, bounded progress updates, and output artifact names. Full
+input paths, sample IDs, and per-sample diagnostic records are not written to
+the log. Machine-readable output files remain separate from diagnostics.
+
 ### Primary Outputs
 
 | Step | Key outputs |
 |------|-------------|
-| `preprocess` | `preprocessed_depth.tsv`, optional `site_data.npz` |
-| `polyploidy` | `polyploidy_test_results.tsv`, `sample_autosomal_baseline_cn.tsv`, optional diagnostics under `diagnostics/` |
-| `infer` | `training_loss.tsv`, `inference_artifacts.npz`, `bin_stats.tsv.gz`, `chromosome_stats.tsv`, `sample_autosomal_baseline_cn.tsv` |
-| `ppd` | `ppd_draws.npz`, `ppd_bin_summary.tsv.gz`, `ppd_bin_quality.tsv`, `ppd_chromosome_summary.tsv`, `ppd_global_summary.tsv` |
-| `call` | `sex_assignments.txt.gz`, `aneuploidy_type_predictions.tsv`, optional `chromosome_stats.filtered.tsv` when BINQ filtering is used |
-| `plot` | `plot_manifest.tsv`, `report/index.html`, linked plot and table artifacts |
-| `eval` | `metrics_report.txt`, `predictions_with_truth.tsv` |
+| `preprocess` | `preprocess.log`, `preprocessed_depth.tsv`, optional `site_data.npz` |
+| `polyploidy` | `polyploidy.log`, `polyploidy_test_results.tsv`, `sample_autosomal_baseline_cn.tsv`, optional diagnostics under `diagnostics/` |
+| `infer` | `infer.log`, `training_loss.tsv`, `inference_artifacts.npz`, `bin_stats.tsv.gz`, `chromosome_stats.tsv`, `sample_autosomal_baseline_cn.tsv` |
+| `ppd` | `ppd.log`, `ppd_draws.npz`, `ppd_bin_summary.tsv.gz`, `ppd_bin_quality.tsv`, `ppd_chromosome_summary.tsv`, `ppd_global_summary.tsv` |
+| `call` | `call.log`, `sex_assignments.txt.gz`, `aneuploidy_type_predictions.tsv`, optional `chromosome_stats.filtered.tsv` when BINQ filtering is used |
+| `plot` | `plot.log`, `plot_manifest.tsv`, `report/index.html`, linked plot and table artifacts |
+| `eval` | `eval.log`, `metrics_report.txt`, `predictions_with_truth.tsv` |
 
 ### Plot Report
 
@@ -137,9 +151,8 @@ Helper-generated figures are written as PNG at 450 dpi by default. Add
 The multi-page `median_depth_distributions.pdf` summary remains PDF in either
 mode.
 
-If you use the end-to-end wrapper, pass extra PPD CLI options via
-`run_ploidy.sh --ppd-args "--continuous-posterior-mode integrated"` and plot
-options via `run_ploidy.sh --plot-args "--pdf"`.
+If you use the end-to-end wrapper, pass plot options via
+`run_ploidy.sh --plot-args "--pdf"`.
 
 ## Pipeline Architecture
 
@@ -203,15 +216,11 @@ flowchart TD
 |-----------|---------|---------|
 | `preprocess` output | raw counts | Filters are evaluated on normalized depth, but the written matrix is filtered raw counts |
 | `infer --autosome-prior-mode` | `dirichlet` | Strong per-bin CN2 prior on autosomes |
-| `infer --guide-type` | `delta` | MAP-style continuous latent fit |
-| `infer --multiplicative-factors` | `0` | No low-rank multiplicative bias by default |
-| `infer --background-factors` | `0` | No structured additive background by default |
-| `infer --var-bin` | `0` | No per-bin residual variance latent by default |
+| SVI guide | `delta` | MAP-style continuous latent fit |
 | `infer sample depth anchor` | enabled | Raw-count runs fix sample depth to the autosomal median counts-per-kb anchor |
 | `infer --epsilon-mean` | `1e-2` | Small CN0-only epsilon background floor is retained |
-| `infer AF temperature learning` | enabled | A single global AF temperature is learned by default; use `--fixed-af-temperature` to keep `--af-weight` fixed |
-| `infer --cn-inference-method` | `multi-draw` | Expressive guides average CN posteriors over repeated guide draws; with the default delta guide this collapses to the single point estimate |
-| `ppd --continuous-posterior-mode` | `conditioned` | Default in-sample QC / BINQ calibration mode |
+| `infer AF temperature learning` | enabled when allele-fraction evidence is active | A single global allele-fraction temperature is learned by default |
+| `infer --cn-inference-method` | `multi-draw` | With the default delta guide, discrete CN inference uses the fitted point estimate |
 
 ## Objective And Decision Target
 
@@ -371,8 +380,7 @@ scale is known to be comparable across samples.
   count cohorts and may need a future model change if that assumption proves
   inadequate.
 - The site AF values produced by `preprocess` may be improved by infer-time
-  naive-Bayes re-estimation or by `--learn-site-af`, depending on cohort
-  quality.
+  naive-Bayes re-estimation, depending on cohort quality.
 - Historical normalized-depth preprocess artifacts must be regenerated as raw
   counts before they can be used with the current `infer` / `ppd` CLI.
 
@@ -386,8 +394,8 @@ For each sample $s$ and bin $b$, the model includes:
 - optional per-sample sex latent $z_s \in \{\mathrm{XX}, \mathrm{XY}\}$ used to
   couple chrX / chrY priors,
 - per-bin CN prior parameters,
-- continuous depth-model latents such as sample variance, optional low-rank
-  multiplicative bias, and optional additive background.
+- continuous depth-model latents such as sample variance and the CN0 epsilon
+  background floor.
 
 The baseline CN $g_s$ is fixed input, not a latent variable in `infer`.
 
@@ -400,20 +408,18 @@ count for bin $b$, sample $s$ is modeled as:
 
 $$
 \mu_{bs} = L_b D_s
-\frac{c_{bs} M_{bs} + \mathbf{1}(c_{bs} = 0) A_{bs}}{2},
+\frac{c_{bs} + \mathbf{1}(c_{bs} = 0) A_{bs}}{2},
 $$
 
 where:
 
 - $L_b$ is bin length in kilobases,
 - $D_s$ is the sample-specific diploid depth scale,
-- $M_{bs}$ is the multiplicative bias term,
-- $A_{bs}$ is the additive background term.
+- $A_{bs}$ is the additive epsilon background floor.
 
 With the current defaults, $D_s$ is fixed to the autosomal median
-counts-per-kb anchor, `multiplicative_factors=0` forces
-$M_{bs} = 1$, `background_factors=0` disables structured background, and the
-remaining epsilon floor contributes only when $c_{bs} = 0$.
+counts-per-kb anchor, and the epsilon floor contributes only when
+$c_{bs} = 0$.
 
 The raw-count likelihood is negative-binomial-like with power-law extra-Poisson
 variance:
@@ -422,8 +428,8 @@ $$
 \operatorname{Var}(Y_{bs}) = \mu_{bs} + V_{bs} \mu_{bs}^{\rho},
 $$
 
-with default $\rho = 1.5$. By default $V_{bs}$ is driven only by the
-sample-specific variance term because `var_bin=0`.
+with default $\rho = 1.5$. $V_{bs}$ is driven by the sample-specific variance
+term.
 
 Normalized-depth residual inference is no longer exposed by the public CLI.
 
@@ -460,8 +466,8 @@ Current implementation details:
   reference mixture before scaling,
 - default AF temperature learning learns a single global AF temperature whose
   prior median is `af_weight=0.25`,
-- unless `--learn-site-af` is used, the AF table is precomputed once because it
-  depends only on observed site data and the discrete CN state,
+- the AF table is precomputed once because it depends only on observed site
+  data and the discrete CN state,
 - `--site-af-estimator auto` may replace the input `site_pop_af` with a
   naive-Bayes estimate when the current encoding is coherent enough to do so
   safely.
@@ -473,14 +479,8 @@ Setting `--af-weight 0` disables AF evidence entirely.
 Continuous latents are trained with Pyro SVI using `TraceEnum_ELBO`, so the
 discrete CN states are analytically enumerated during training.
 
-Guide options:
-
-- `delta` (default): MAP-style point estimate,
-- `diagonal`: mean-field Gaussian guide,
-- `lowrank`: low-rank multivariate Gaussian guide.
-
-Expressive guides can warm-start from a short AutoDelta stage, and early
-stopping compares rolling ELBO windows using `--elbo-window` and
+The guide is a delta guide, giving a MAP-style point estimate for continuous
+latents. Early stopping compares rolling ELBO windows using `--elbo-window` and
 `--elbo-rtol`. Gradient clipping is enabled by default.
 
 After training, `infer` computes bin-level CN posteriors. The handling of
@@ -490,15 +490,14 @@ continuous-latent uncertainty is controlled by `--cn-inference-method`:
 - `median`: plug in guide medians,
 - `multi-draw` (default): average CN posteriors over repeated guide draws.
 
-With the default `delta` guide, these reduce to the same deterministic point
-estimate behavior.
+With the delta guide, these reduce to the same deterministic point-estimate
+behavior.
 
 ## Robustness Strategy For Sparse Or Poor-Quality Data
 
 - `preprocess` filters in normalized space even when the written output is raw,
   which keeps QC thresholds interpretable.
-- The default simplified infer model removes weakly identified low-rank terms
-  unless the user explicitly opts into them.
+- The default simplified infer model removes weakly identified low-rank terms.
 - `polyploidy` defaults to CN2 when non-diploid evidence is absent, and marks
   statistically supported but poor-fit non-diploid candidates `UNDETERMINED` so
   they can be excluded from downstream aneuploidy calling.
@@ -585,9 +584,6 @@ model.
 - If AF evidence is miscalibrated for a cohort, it can still shift CN posteriors
   even with temperature learning. Compare depth-only and AF-enabled behavior,
   inspect PPD summaries, and use the privacy-safe diagnostics when needed.
-- If you enable low-rank multiplicative or additive components without enough
-  data, they can absorb biological signal or reintroduce identifiability
-  problems. The defaults keep those components off for that reason.
 - Baseline-aware labels are only as good as the supplied baseline CN manifest.
   If `polyploidy` is wrong or skipped when non-diploid baselines are present,
   downstream autosomal and allosomal labels will be interpreted in the wrong

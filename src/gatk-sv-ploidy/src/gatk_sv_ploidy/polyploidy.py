@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import json
 import logging
 import os
 import time
@@ -15,15 +16,17 @@ from typing import Optional, Sequence
 import numpy as np
 import pandas as pd
 from scipy.special import gammaln, logsumexp
-from tqdm import tqdm
 
+from gatk_sv_ploidy._logging import (
+    log_output_artifacts,
+    progress_iter,
+    tool_logging_context,
+)
 from gatk_sv_ploidy._util import (
     baseline_ploidy_label,
     get_sample_columns,
     save_and_close_plot,
 )
-
-logger = logging.getLogger(__name__)
 
 _BASELINE_CN_STATES = (1, 2, 3, 4)
 _NON_DIPLOID_CN_STATES = (1, 3, 4)
@@ -70,6 +73,7 @@ _DEFAULT_DIAGNOSTIC_MAX_SITES_PER_SAMPLE = 5000
 _DIAGNOSTIC_RANDOM_SEED = 17
 _PRIVACY_SAFE_QUANTILES = (0.01, 0.05, 0.25, 0.50, 0.75, 0.95, 0.99)
 _AF_LIKELIHOOD_CONCENTRATION_BATCH_SIZE = 4
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -105,13 +109,13 @@ def _progress_iter(
     show_progress: bool,
     total: Optional[int] = None,
 ):
-    return tqdm(
+    return progress_iter(
         iterable,
-        desc=desc,
+        logger=LOGGER,
+        description=desc,
         unit=unit,
+        enabled=show_progress,
         total=total,
-        dynamic_ncols=True,
-        disable=not show_progress,
     )
 
 
@@ -1381,23 +1385,6 @@ def classify_polyploidy_from_site_data(
         where=site_total_auto > 0,
     )
 
-    if log_progress:
-        logger.info(
-            "Polyploidy progress: prepared aggregate AF matrix "
-            "samples=%d autosomal_bins=%d max_sites_per_bin=%d "
-            "informative_site_observations=%d mixture_fraction_grid_size=%d "
-            "concentration_grid_size=%d "
-            "baseline_cn_states=1,2,3,4",
-            int(len(sample_ids)),
-            int(site_alt_auto.shape[0]),
-            int(site_alt_auto.shape[1]),
-            int(site_mask_auto.sum()),
-            int(mixture_fraction_arr.size),
-            int(concentration_grid.size),
-        )
-
-    if log_progress:
-        logger.info("Polyploidy progress: classifying samples.")
     rows: list[dict[str, object]] = []
     sample_indices = _progress_iter(
         range(len(sample_ids)),
@@ -1792,21 +1779,6 @@ def classify_polyploidy_from_site_data(
         rows.append(row)
 
     results_df = pd.DataFrame(rows)
-    if log_progress:
-        logger.info(
-            "Polyploidy progress: classification complete %s",
-            _format_category_counts(
-                "autosomal_baseline_cn_counts",
-                results_df["autosomal_baseline_cn"],
-            ),
-        )
-        logger.info(
-            "Polyploidy progress: classification call summary %s",
-            _format_category_counts(
-                "baseline_cn_call_counts",
-                results_df["baseline_cn_call"],
-            ),
-        )
     return results_df
 
 
@@ -1816,14 +1788,16 @@ def _log_privacy_safe_quantiles_by_baseline(
 ) -> None:
     if column not in results_df.columns:
         return
-    for baseline_cn in sorted(results_df["autosomal_baseline_cn"].dropna().unique()):
-        subset = results_df[results_df["autosomal_baseline_cn"] == baseline_cn]
-        logger.info(
-            "PRIVACY_SAFE_POLYPLOIDY result_quantiles_by_baseline_cn "
-            "column=%s baseline_cn=%s %s",
+    group_col = "baseline_cn_call" if "baseline_cn_call" in results_df.columns else None
+    if group_col is None:
+        LOGGER.info("Polyploidy %s summary: %s", column, _format_quantile_summary(column, results_df[column]))
+        return
+    for call_label, group_df in results_df.groupby(group_col, dropna=False):
+        LOGGER.info(
+            "Polyploidy %s summary for call=%s: %s",
             column,
-            baseline_cn,
-            _format_quantile_summary(column, subset[column]),
+            str(call_label),
+            _format_quantile_summary(column, group_df[column]),
         )
 
 
@@ -1832,211 +1806,50 @@ def _log_privacy_safe_threshold_counts(
     pvalue_threshold: float,
     effect_size_threshold: float,
 ) -> None:
-    thresholds = (0.5, 0.9, 0.99, 0.999, 0.9999)
-    for cn_state in _NON_DIPLOID_CN_STATES:
-        posterior = results_df[f"posterior_cn_{cn_state}"].to_numpy(dtype=np.float64)
-        posterior_error = 1.0 - posterior
-        log_bf = results_df[f"log_bayes_factor_cn{cn_state}_vs_cn2"].to_numpy(
-            dtype=np.float64,
-        )
-        effect_size = results_df[f"effect_size_cn{cn_state}_vs_cn2"].to_numpy(
-            dtype=np.float64,
-        )
-        direct = results_df[f"cn{cn_state}_direct_peak_supported"].to_numpy(dtype=bool)
-        posterior_supported = results_df[f"cn{cn_state}_posterior_supported"].to_numpy(
-            dtype=bool,
-        )
-        called = results_df["autosomal_baseline_cn"].to_numpy(dtype=np.int64) == cn_state
-        posterior_parts = [
-            f"posterior_ge_{threshold:g}={int(np.sum(posterior >= threshold))}"
-            for threshold in thresholds
-        ]
-        logger.info(
-            "PRIVACY_SAFE_POLYPLOIDY posterior_threshold_counts state=cn%d "
-            "total=%d finite=%d %s posterior_error_le_call_threshold=%d "
-            "log_bayes_factor_positive=%d effect_size_ge_threshold=%d "
-            "direct_peak_supported=%d posterior_and_peak_supported=%d "
-            "called=%d high_posterior_direct_failed=%d "
-            "direct_supported_posterior_failed=%d",
-            cn_state,
-            int(results_df.shape[0]),
-            int(np.isfinite(posterior).sum()),
-            ", ".join(posterior_parts),
-            int(np.sum(posterior_error <= pvalue_threshold)),
-            int(np.sum(log_bf > 0.0)),
-            int(np.sum(effect_size >= effect_size_threshold)),
-            int(np.sum(direct)),
-            int(np.sum(direct & posterior_supported)),
-            int(np.sum(called)),
-            int(np.sum(posterior_supported & ~direct)),
-            int(np.sum(direct & ~posterior_supported)),
-        )
-
-    cn4_posterior = results_df["posterior_cn_4"].to_numpy(dtype=np.float64)
-    cn4_direct = results_df["cn4_direct_peak_supported"].to_numpy(dtype=bool)
-    diploid_compatible = results_df["fraction_near_diploid_compatible"].to_numpy(
-        dtype=np.float64,
-    )
-    quarter_fraction = results_df["fraction_near_tetraploid_quarters"].to_numpy(
-        dtype=np.float64,
-    )
-    logger.info(
-        "PRIVACY_SAFE_POLYPLOIDY tetraploid_ambiguity_counts "
-        "posterior_ge_0.5_direct_failed=%d posterior_ge_0.9_direct_failed=%d "
-        "diploid_compatible_ge_0.9=%d quarter_fraction_zero_or_nan=%d "
-        "cn4_called=%d",
-        int(np.sum((cn4_posterior >= 0.5) & ~cn4_direct)),
-        int(np.sum((cn4_posterior >= 0.9) & ~cn4_direct)),
-        int(np.sum(diploid_compatible >= 0.9)),
-        int(np.sum((~np.isfinite(quarter_fraction)) | (quarter_fraction <= 0.0))),
-        int(np.sum(results_df["autosomal_baseline_cn"] == _TETRAPLOID_BASELINE_CN)),
-    )
+    summary: dict[str, object] = {
+        "pvalue_threshold": float(pvalue_threshold),
+        "effect_size_threshold": float(effect_size_threshold),
+        "n_samples": int(len(results_df)),
+    }
+    for column in ("baseline_cn_call", "baseline_cn_reason", "include_in_infer"):
+        if column in results_df.columns:
+            counts = results_df[column].value_counts(dropna=False).sort_index()
+            summary[column] = {str(key): int(value) for key, value in counts.items()}
+    LOGGER.info("Polyploidy decision counts: %s", json.dumps(summary, sort_keys=True))
 
 
 def _log_privacy_safe_decision_margins(results_df: pd.DataFrame) -> None:
-    for cn_state in _NON_DIPLOID_CN_STATES:
-        column = f"log_bayes_factor_cn{cn_state}_vs_cn2"
-        called = results_df["autosomal_baseline_cn"] == cn_state
-        logger.info(
-            "PRIVACY_SAFE_POLYPLOIDY decision_margin_summary state=cn%d "
-            "called=%d log_bayes_factor_positive=%d %s",
-            cn_state,
-            int(called.sum()),
-            int(np.sum(results_df[column].to_numpy(dtype=np.float64) > 0.0)),
-            _format_quantile_summary(column, results_df[column]),
-        )
+    for column in (
+        "baseline_cn_posterior_error_probability",
+        "baseline_cn_effect_size_per_site",
+        "candidate_baseline_cn_posterior_probability",
+        "n_informative_bins",
+        "n_informative_sites",
+        "n_modeled_sites",
+        "elapsed_sec",
+    ):
+        _log_privacy_safe_quantiles_by_baseline(results_df, column)
 
 
 def _log_privacy_safe_concentration_boundaries(results_df: pd.DataFrame) -> None:
-    if "af_concentration_grid" not in results_df.columns or results_df.empty:
-        return
-    grid_values = results_df["af_concentration_grid"].dropna().unique()
-    if len(grid_values) != 1:
-        logger.info(
-            "PRIVACY_SAFE_POLYPLOIDY concentration_grid_summary "
-            "skipped=non_unique_grid unique_grid_count=%d",
-            len(grid_values),
-        )
-        return
-    concentration_grid = _parse_af_concentration_grid(str(grid_values[0]))
-    if concentration_grid is None or concentration_grid.size == 0:
-        return
-    grid_min = float(concentration_grid[0])
-    grid_max = float(concentration_grid[-1])
-    for cn_state in _BASELINE_CN_STATES:
-        map_column = f"cn{cn_state}_af_concentration_map"
-        mean_column = f"cn{cn_state}_af_concentration_mean"
-        for label, mask in (
-            ("all", np.ones(len(results_df), dtype=bool)),
-            (
-                f"called_cn{cn_state}",
-                (results_df["autosomal_baseline_cn"] == cn_state).to_numpy(dtype=bool),
-            ),
-        ):
-            subset = results_df.loc[mask]
-            if subset.empty:
-                continue
-            map_values = subset[map_column].to_numpy(dtype=np.float64)
-            logger.info(
-                "PRIVACY_SAFE_POLYPLOIDY concentration_boundary_counts "
-                "state=cn%d group=%s n=%d grid_size=%d grid_min=%.6g "
-                "grid_max=%.6g map_at_min=%d map_at_max=%d",
-                cn_state,
-                label,
-                int(subset.shape[0]),
-                int(concentration_grid.size),
-                grid_min,
-                grid_max,
-                int(np.sum(np.isclose(map_values, grid_min))),
-                int(np.sum(np.isclose(map_values, grid_max))),
-            )
-        logger.info(
-            "PRIVACY_SAFE_POLYPLOIDY concentration_mean_quantiles state=cn%d %s",
-            cn_state,
-            _format_quantile_summary(mean_column, results_df[mean_column]),
-        )
+    for column in (
+        "af_concentration",
+        "candidate_af_concentration",
+        "mixture_fraction",
+        "candidate_mixture_fraction",
+    ):
+        _log_privacy_safe_quantiles_by_baseline(results_df, column)
 
 
 def _log_privacy_safe_af_peak_metrics(metrics_df: pd.DataFrame) -> None:
-    metric_columns = [
+    for column in (
         "fraction_near_haploid_endpoints",
         "fraction_near_diploid_half",
         "fraction_near_triploid_thirds",
         "fraction_near_tetraploid_quarters",
-        "tetraploid_quarter_genotype_fraction",
-        "tetraploid_half_genotype_fraction",
-        "tetraploid_quarter_genotype_advantage",
-        "tetraploid_expected_quarter_genotype_fraction",
-        "tetraploid_expected_half_genotype_fraction",
-        "tetraploid_quarter_observed_expected_ratio",
-        "tetraploid_quarter_effective_site_fraction",
-        "fraction_near_diploid_compatible",
         "fraction_near_any_modeled_peak",
-        "fraction_intermediate_third_to_half",
-        "contamination_mixture_score",
-        "raw_af_triploid_minus_diploid_fraction",
-        "raw_af_tetraploid_quarter_minus_diploid_fraction",
-        "raw_af_haploid_endpoint_minus_other_peak_fraction",
-        "folded_af_median",
-        "folded_af_p10",
-        "folded_af_p90",
-        "raw_af_sd",
-        "median_site_depth",
-        "diagnostic_informative_sites",
-    ]
-    for baseline_cn in sorted(metrics_df["autosomal_baseline_cn"].dropna().unique()):
-        subset = metrics_df[metrics_df["autosomal_baseline_cn"] == baseline_cn]
-        logger.info(
-            "PRIVACY_SAFE_POLYPLOIDY af_peak_counts baseline_cn=%s n=%d "
-            "haploid_endpoint_supported=%d triploid_peak_supported=%d "
-            "tetraploid_quarter_supported=%d diploid_compatible_ge_0.9=%d "
-            "mixed_half_and_thirds_ge_0.25=%d",
-            baseline_cn,
-            int(subset.shape[0]),
-            int(np.sum(subset.get("cn1_direct_peak_supported", False))),
-            int(np.sum(subset.get("cn3_direct_peak_supported", False))),
-            int(np.sum(subset.get("cn4_direct_peak_supported", False))),
-            int(np.sum(subset["fraction_near_diploid_compatible"] >= 0.9)),
-            int(np.sum(subset["contamination_mixture_score"] >= 0.25)),
-        )
-        for column in metric_columns:
-            if column not in subset.columns:
-                continue
-            logger.info(
-                "PRIVACY_SAFE_POLYPLOIDY af_peak_quantiles_by_baseline_cn "
-                "column=%s baseline_cn=%s %s",
-                column,
-                baseline_cn,
-                _format_quantile_summary(column, subset[column]),
-            )
-
-    for cn_state in _NON_DIPLOID_CN_STATES:
-        bf_column = f"log_bayes_factor_cn{cn_state}_vs_cn2"
-        if bf_column not in metrics_df.columns:
-            continue
-        for column in [
-            "fraction_near_haploid_endpoints",
-            "fraction_near_diploid_half",
-            "fraction_near_triploid_thirds",
-            "fraction_near_tetraploid_quarters",
-            "tetraploid_quarter_genotype_fraction",
-            "tetraploid_quarter_genotype_advantage",
-            "tetraploid_quarter_effective_site_fraction",
-            "fraction_near_diploid_compatible",
-            "raw_af_sd",
-            "median_site_depth",
-        ]:
-            if column not in metrics_df.columns:
-                continue
-            corr, n_used = _safe_correlation(metrics_df[column], metrics_df[bf_column])
-            logger.info(
-                "PRIVACY_SAFE_POLYPLOIDY af_peak_correlation_with_log_bayes_factor "
-                "state=cn%d metric=%s n=%d corr=%.6g",
-                cn_state,
-                column,
-                n_used,
-                corr,
-            )
+    ):
+        _log_privacy_safe_quantiles_by_baseline(metrics_df, column)
 
 
 def log_privacy_safe_polyploidy_diagnostics(
@@ -2046,42 +1859,10 @@ def log_privacy_safe_polyploidy_diagnostics(
     effect_size_threshold: float,
     metrics_df: Optional[pd.DataFrame] = None,
 ) -> None:
-    """Log aggregate-only baseline CN diagnostics safe for protected cohorts."""
-    logger.info(
-        "PRIVACY_SAFE_POLYPLOIDY privacy_contract aggregate_only=true "
-        "forbidden=filenames,paths,sample_ids,raw_rows,sample_level_values"
-    )
-    logger.info(
-        "PRIVACY_SAFE_POLYPLOIDY hypothesis "
-        "multi_state_cn1_cn2_cn3_cn4_bayesian_peak_mixture"
-    )
-    logger.info(
-        "PRIVACY_SAFE_POLYPLOIDY %s",
-        _format_category_counts(
-            "autosomal_baseline_cn_counts",
-            results_df["autosomal_baseline_cn"],
-        ),
-    )
-    logger.info(
-        "PRIVACY_SAFE_POLYPLOIDY %s",
-        _format_category_counts(
-            "baseline_cn_call_counts",
-            results_df["baseline_cn_call"],
-        ),
-    )
-    logger.info(
-        "PRIVACY_SAFE_POLYPLOIDY %s",
-        _format_category_counts(
-            "baseline_cn_reason_counts",
-            results_df["baseline_cn_reason"],
-        ),
-    )
-    logger.info(
-        "PRIVACY_SAFE_POLYPLOIDY %s",
-        _format_category_counts(
-            "baseline_cn_map_counts",
-            results_df["baseline_cn_map"],
-        ),
+    """Log cohort-level polyploidy summaries without sample identifiers."""
+    LOGGER.info(
+        "Privacy-safe polyploidy diagnostics: cohort-level summaries only; "
+        "sample identifiers and per-sample records are suppressed."
     )
     _log_privacy_safe_threshold_counts(
         results_df,
@@ -2089,56 +1870,8 @@ def log_privacy_safe_polyploidy_diagnostics(
         effect_size_threshold,
     )
     _log_privacy_safe_decision_margins(results_df)
-    for column in [
-        "baseline_cn_posterior_probability",
-        "baseline_cn_posterior_error_probability",
-        "baseline_cn_effect_size_per_site",
-        "posterior_cn_1",
-        "posterior_cn_2",
-        "posterior_cn_3",
-        "posterior_cn_4",
-        "log_bayes_factor_cn1_vs_cn2",
-        "log_bayes_factor_cn3_vs_cn2",
-        "log_bayes_factor_cn4_vs_cn2",
-        "effect_size_cn1_vs_cn2",
-        "effect_size_cn3_vs_cn2",
-        "effect_size_cn4_vs_cn2",
-        "fraction_near_haploid_endpoints",
-        "fraction_near_diploid_half",
-        "fraction_near_triploid_thirds",
-        "fraction_near_tetraploid_quarters",
-        "tetraploid_quarter_genotype_fraction",
-        "tetraploid_half_genotype_fraction",
-        "tetraploid_diploid_compatible_genotype_fraction",
-        "tetraploid_quarter_genotype_advantage",
-        "tetraploid_expected_quarter_genotype_fraction",
-        "tetraploid_expected_half_genotype_fraction",
-        "tetraploid_expected_quarter_genotype_advantage",
-        "tetraploid_quarter_observed_expected_ratio",
-        "tetraploid_quarter_effective_sites",
-        "tetraploid_quarter_effective_site_fraction",
-        "fraction_near_diploid_compatible",
-        "triploid_peak_fraction_advantage",
-        "tetraploid_quarter_peak_fraction_advantage",
-        "haploid_endpoint_peak_fraction_advantage",
-        "n_informative_bins",
-        "n_informative_sites",
-    ]:
-        if column not in results_df.columns:
-            continue
-        logger.info(
-            "PRIVACY_SAFE_POLYPLOIDY result_quantiles_all %s",
-            _format_quantile_summary(column, results_df[column]),
-        )
-        _log_privacy_safe_quantiles_by_baseline(results_df, column)
     _log_privacy_safe_concentration_boundaries(results_df)
-
-    if metrics_df is None:
-        logger.info(
-            "PRIVACY_SAFE_POLYPLOIDY af_peak_metrics not_computed "
-            "rerun_with_privacy_safe_diagnostics=true"
-        )
-    else:
+    if metrics_df is not None:
         _log_privacy_safe_af_peak_metrics(metrics_df)
 
 
@@ -2645,7 +2378,6 @@ def write_polyploidy_diagnostics(
     show_progress: bool = False,
 ) -> None:
     """Write baseline CN diagnostic metrics and plots."""
-    logger.info("Polyploidy progress: computing diagnostic AF metrics.")
     metrics_df = build_polyploidy_diagnostic_metrics(
         sample_ids=sample_ids,
         bin_chr=bin_chr,
@@ -2662,13 +2394,8 @@ def write_polyploidy_diagnostics(
     os.makedirs(diagnostics_dir, exist_ok=True)
     metrics_path = os.path.join(diagnostics_dir, "polyploidy_diagnostic_metrics.tsv")
     metrics_df.to_csv(metrics_path, sep="\t", index=False)
-    logger.info("Polyploidy diagnostic metrics saved.")
 
     selected_samples = _select_diagnostic_samples(metrics_df, sample_limit)
-    logger.info(
-        "Polyploidy progress: sampling diagnostic AF sites selected_samples=%d.",
-        int(len(selected_samples)),
-    )
     raw_site_df = _collect_diagnostic_site_rows(
         sample_ids=sample_ids,
         selected_samples=selected_samples,
@@ -2683,7 +2410,6 @@ def write_polyploidy_diagnostics(
     )
     raw_site_path = os.path.join(diagnostics_dir, "polyploidy_raw_af_sites.tsv.gz")
     raw_site_df.to_csv(raw_site_path, sep="\t", index=False)
-    logger.info("Polyploidy sampled raw AF sites saved.")
 
     raw_site_frames_by_cn: dict[int, pd.DataFrame] = {}
     for baseline_cn in (_UNDETERMINED_BASELINE_CN, *_BASELINE_CN_STATES):
@@ -2691,18 +2417,6 @@ def write_polyploidy_diagnostics(
             metrics_df,
             baseline_cn,
             sample_limit,
-        )
-        ploidy_label = {
-            _UNDETERMINED_BASELINE_CN: _UNDETERMINED_CALL,
-            1: "CN1",
-            2: "CN2",
-            3: "CN3",
-            4: "CN4",
-        }.get(baseline_cn, f"CN{baseline_cn}")
-        logger.info(
-            "Polyploidy progress: sampling %s AF profile sites selected_samples=%d.",
-            ploidy_label,
-            int(len(ploidy_samples)),
         )
         raw_site_frames_by_cn[baseline_cn] = _collect_diagnostic_site_rows(
             sample_ids=sample_ids,
@@ -2717,7 +2431,6 @@ def write_polyploidy_diagnostics(
             show_progress=show_progress,
         )
 
-    logger.info("Polyploidy progress: rendering diagnostic plots.")
     _plot_polyploidy_diagnostic_metrics(metrics_df, output_dir)
     for baseline_cn, filename in (
         (_UNDETERMINED_BASELINE_CN, "polyploidy_raw_af_undetermined_profiles.png"),
@@ -2736,7 +2449,6 @@ def write_polyploidy_diagnostics(
             baseline_cn=baseline_cn,
             filename=filename,
         )
-    logger.info("Polyploidy diagnostics saved.")
 
 
 def parse_args() -> argparse.Namespace:
@@ -2951,7 +2663,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--privacy-safe-diagnostics",
         action="store_true",
-        help="Log aggregate-only baseline CN diagnostics safe for protected cohorts",
+        help="Compatibility no-op retained after removal of polyploidy logging",
     )
     parser.add_argument(
         "--diagnostic-sample-limit",
@@ -2974,21 +2686,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--no-progress",
         action="store_true",
-        help="Disable progress bars while keeping aggregate stage logs",
+        help="Disable periodic progress log messages while keeping stage logs",
     )
     return parser.parse_args()
 
 
-def main() -> None:
-    """Entry point for ``gatk-sv-ploidy polyploidy``."""
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    args = parse_args()
-    os.makedirs(args.output_dir, exist_ok=True)
+def _run_polyploidy(args: argparse.Namespace, logger) -> None:
+    """Run autosomal baseline CN classification after logging is configured."""
     show_progress = not args.no_progress
 
-    logger.info("Polyploidy progress: loading depth table and site data.")
+    logger.info("Loading polyploidy inputs")
     depth_df = pd.read_csv(args.input, sep="\t", index_col=0)
     sample_ids = [str(sample_id) for sample_id in get_sample_columns(depth_df)]
+    logger.info(
+        "Loaded depth matrix for polyploidy: bins=%d samples=%d",
+        len(depth_df),
+        len(sample_ids),
+    )
 
     site_npz = np.load(args.site_data, allow_pickle=True)
     site_alt = np.asarray(site_npz["site_alt"], dtype=np.int32)
@@ -2996,12 +2710,10 @@ def main() -> None:
     site_pop_af = np.asarray(site_npz["site_pop_af"], dtype=np.float64)
     site_mask = np.asarray(site_npz["site_mask"], dtype=bool)
     logger.info(
-        "Polyploidy progress: loaded aggregate inputs samples=%d bins=%d "
-        "max_sites_per_bin=%d valid_site_observations=%d.",
-        int(len(sample_ids)),
+        "Loaded site tensors for polyploidy: bins=%d max_sites_per_bin=%d samples=%d",
         int(site_alt.shape[0]),
         int(site_alt.shape[1]),
-        int(site_mask.sum()),
+        int(site_alt.shape[2]),
     )
 
     if "sample_ids" in site_npz:
@@ -3028,7 +2740,15 @@ def main() -> None:
     mixture_fraction_grid = _parse_mixture_fraction_grid(
         args.mixture_fraction_grid
     )
-    logger.info("Polyploidy progress: starting autosomal baseline CN classification.")
+    effective_concentration_grid = _build_af_concentration_grid(
+        args.af_concentration,
+        af_concentration_grid,
+    )
+    logger.info(
+        "Running baseline CN classifier: mixture_grid=%d concentration_grid=%d",
+        int(mixture_fraction_grid.size),
+        int(effective_concentration_grid.size),
+    )
     results_df = classify_polyploidy_from_site_data(
         sample_ids=sample_ids,
         depth_df=depth_df,
@@ -3079,7 +2799,6 @@ def main() -> None:
 
     privacy_safe_metrics_df = None
     if args.privacy_safe_diagnostics:
-        logger.info("Polyploidy progress: computing privacy-safe AF diagnostics.")
         privacy_safe_metrics_df = build_polyploidy_diagnostic_metrics(
             sample_ids=sample_ids,
             bin_chr=bin_chr,
@@ -3092,7 +2811,6 @@ def main() -> None:
             af_window=args.diagnostic_af_window,
             show_progress=show_progress,
         )
-    logger.info("Polyploidy progress: logging aggregate privacy-safe summary.")
     log_privacy_safe_polyploidy_diagnostics(
         results_df,
         pvalue_threshold=args.pvalue_threshold,
@@ -3100,10 +2818,9 @@ def main() -> None:
         metrics_df=privacy_safe_metrics_df,
     )
 
-    logger.info("Polyploidy progress: writing result tables.")
     results_path = os.path.join(args.output_dir, "polyploidy_test_results.tsv")
     results_df.to_csv(results_path, sep="\t", index=False)
-    logger.info("Polyploidy test results saved.")
+    output_artifacts = [results_path]
 
     manifest_columns = [
         "sample",
@@ -3115,7 +2832,12 @@ def main() -> None:
     manifest_df = results_df[manifest_columns].copy()
     manifest_path = os.path.join(args.output_dir, "sample_autosomal_baseline_cn.tsv")
     manifest_df.to_csv(manifest_path, sep="\t", index=False)
-    logger.info("Sample autosomal baseline CN manifest saved.")
+    output_artifacts.append(manifest_path)
+    logger.info(
+        "Wrote polyploidy results: samples=%d calls=%d",
+        len(results_df),
+        int(results_df["baseline_cn_call"].nunique()),
+    )
 
     if args.diagnostics:
         write_polyploidy_diagnostics(
@@ -3133,6 +2855,24 @@ def main() -> None:
             max_sites_per_sample=args.diagnostic_max_sites_per_sample,
             show_progress=show_progress,
         )
+        diagnostics_dir = os.path.join(args.output_dir, "diagnostics")
+        output_artifacts.append(diagnostics_dir)
+        logger.info("Wrote polyploidy diagnostic artifacts")
+
+    log_output_artifacts(logger, output_artifacts)
+
+
+def main() -> None:
+    """Entry point for ``gatk-sv-ploidy polyploidy``."""
+    args = parse_args()
+    os.makedirs(args.output_dir, exist_ok=True)
+    with tool_logging_context(
+        tool_name="polyploidy",
+        output_dir=args.output_dir,
+        args=args,
+        random_seeds={"classifier": args.random_seed},
+    ) as logger:
+        _run_polyploidy(args, logger)
 
 
 if __name__ == "__main__":

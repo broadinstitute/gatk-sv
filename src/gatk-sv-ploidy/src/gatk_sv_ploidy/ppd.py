@@ -43,7 +43,6 @@ power saved by ``infer``.
 from __future__ import annotations
 
 import argparse
-import logging
 import os
 from typing import Dict
 
@@ -52,10 +51,10 @@ import pandas as pd
 import torch
 from scipy import stats as sp_stats
 
+from gatk_sv_ploidy._logging import log_output_artifacts, tool_logging_context
 from gatk_sv_ploidy._util import (
     compose_additive_background_matrix,
     get_sample_columns,
-    NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
 )
 from gatk_sv_ploidy.data import DepthData, load_site_data
 from gatk_sv_ploidy.infer import (
@@ -64,28 +63,10 @@ from gatk_sv_ploidy.infer import (
 )
 from gatk_sv_ploidy.models import (
     CNVModel,
-    DEFAULT_BACKGROUND_BIN_SCALE,
-    DEFAULT_BACKGROUND_SAMPLE_SCALE,
-    DEFAULT_MULTIPLICATIVE_FACTORS,
     _compose_effective_bin_bias_numpy,
     _effective_negative_binomial_overdispersion_numpy,
     _raw_expected_depth_units,
 )
-
-logger = logging.getLogger(__name__)
-
-CONTINUOUS_POSTERIOR_MODES = ("conditioned", "integrated")
-
-
-def _normalize_continuous_posterior_mode(mode: str) -> str:
-    """Validate and normalize continuous-latent PPD mode names."""
-    normalized = str(mode).strip().lower()
-    if normalized not in CONTINUOUS_POSTERIOR_MODES:
-        raise ValueError(
-            f"Unknown continuous_posterior_mode: {mode!r}. "
-            f"Choose one of {CONTINUOUS_POSTERIOR_MODES}."
-        )
-    return normalized
 
 
 def apply_effective_site_pop_af(
@@ -107,11 +88,6 @@ def apply_effective_site_pop_af(
     updated["site_pop_af"] = effective_site_pop_af.astype(
         site_data["site_pop_af"].dtype,
         copy=False,
-    )
-    logger.info(
-        "Using effective site AFs from inference artifacts for PPD "
-        "(applied=%s).",
-        bool(np.asarray(map_estimates.get("site_af_estimation_applied", False)).item()),
     )
     return updated
 
@@ -188,10 +164,6 @@ def _resolve_ppd_baseline_manifest(
         "sample_autosomal_baseline_cn.tsv",
     )
     if os.path.exists(sibling_path):
-        logger.info(
-            "Auto-discovered autosomal baseline CN manifest for PPD input alignment: %s",
-            sibling_path,
-        )
         return sibling_path
     return None
 
@@ -252,11 +224,6 @@ def _align_ppd_inputs_from_baseline_manifest(
             f"inference artifacts. Manifest has {len(manifest_sample_ids)} samples, "
             f"while cn_posterior expects {expected_n_samples}."
         )
-
-    logger.info(
-        "Aligning PPD inputs to %d samples listed in autosomal baseline CN TSV.",
-        len(manifest_sample_ids),
-    )
     return _align_ppd_inputs_to_sample_ids(df, site_data, np.asarray(manifest_sample_ids, dtype=object))
 
 
@@ -282,10 +249,6 @@ def _prepare_ppd_inputs(
                 f"{int(fitted_sample_ids.shape[0])}, but cn_posterior expects "
                 f"{int(cn_probs.shape[1])} samples."
             )
-        logger.info(
-            "Aligning PPD inputs to %d fitted samples saved in inference artifacts.",
-            int(fitted_sample_ids.shape[0]),
-        )
         return _align_ppd_inputs_to_sample_ids(df, site_data, fitted_sample_ids)
 
     input_n_samples = len(get_sample_columns(df))
@@ -303,11 +266,6 @@ def _prepare_ppd_inputs(
         )
         filtered_n_samples = len(get_sample_columns(filtered_df))
         if filtered_n_samples == expected_n_samples:
-            logger.info(
-                "Filtered PPD inputs from %d to %d infer-included samples.",
-                input_n_samples,
-                filtered_n_samples,
-            )
             return filtered_df, filtered_site_data
         raise ValueError(
             "PPD input sample count still does not match inference artifacts after "
@@ -331,27 +289,13 @@ def _phred_scale_error_probability(
     return float(min(max_quality, -10.0 * np.log10(max(error_prob, 1e-300))))
 
 
-def _extract_saved_posterior_draws(
-    map_estimates: Dict[str, np.ndarray],
-) -> Dict[str, np.ndarray]:
-    """Return saved continuous latent draws from inference artifacts."""
-    return {
-        key[len("posterior_draws_"):]: value
-        for key, value in map_estimates.items()
-        if key.startswith("posterior_draws_")
-    }
-
-
 def _build_model_from_artifacts(
     map_estimates: Dict[str, np.ndarray],
     device: str,
 ) -> CNVModel:
     """Reconstruct a model instance for analytical inference in PPD."""
     af_concentration = np.asarray(
-        map_estimates.get(
-            "sample_af_concentration_map",
-            map_estimates.get("model_af_concentration", 50.0),
-        ),
+        map_estimates.get("model_af_concentration", 50.0),
         dtype=np.float64,
     )
     if af_concentration.ndim == 0:
@@ -390,50 +334,18 @@ def _build_model_from_artifacts(
                 map_estimates.get("model_autosome_nonref_concentration", 20.0)
             ).item()
         ),
-        var_bias_bin=float(
-            np.asarray(map_estimates.get("model_var_bias_bin", 0.05)).item()
-        ),
         var_sample=float(
             np.asarray(map_estimates.get("model_var_sample", 0.001)).item()
         ),
-        var_bin=float(np.asarray(map_estimates.get("model_var_bin", 0.0)).item()),
         raw_variance_power=float(
             np.asarray(map_estimates.get("model_raw_variance_power", 2.0)).item()
-        ),
-        multiplicative_factors=int(
-            np.asarray(
-                map_estimates.get(
-                    "model_multiplicative_factors",
-                    DEFAULT_MULTIPLICATIVE_FACTORS,
-                )
-            ).item()
         ),
         epsilon_mean=float(np.asarray(map_estimates.get("epsilon_mean", 0.0)).item()),
         epsilon_concentration=float(
             np.asarray(map_estimates.get("model_epsilon_concentration", 1.0)).item()
         ),
-        background_factors=int(
-            np.asarray(map_estimates.get("model_background_factors", 0)).item()
-        ),
-        background_sample_scale=float(
-            np.asarray(
-                map_estimates.get(
-                    "model_background_sample_scale",
-                    DEFAULT_BACKGROUND_SAMPLE_SCALE,
-                )
-            ).item()
-        ),
-        background_bin_scale=float(
-            np.asarray(
-                map_estimates.get(
-                    "model_background_bin_scale",
-                    DEFAULT_BACKGROUND_BIN_SCALE,
-                )
-            ).item()
-        ),
         device=device,
         dtype=torch.float64,
-        guide_type=str(np.asarray(map_estimates.get("model_guide_type", "delta")).item()),
         af_concentration=af_concentration_value,
         af_weight=float(np.asarray(map_estimates.get("model_af_weight", 0.0)).item()),
         af_outlier_weight=float(
@@ -446,12 +358,6 @@ def _build_model_from_artifacts(
         ),
         learn_af_temperature=bool(
             np.asarray(map_estimates.get("model_learn_af_temperature", False)).item()
-        ),
-        learn_site_pop_af=bool(
-            np.asarray(map_estimates.get("model_learn_site_pop_af", False)).item()
-        ),
-        site_af_prior_strength=float(
-            np.asarray(map_estimates.get("model_site_af_prior_strength", 20.0)).item()
         ),
         af_temperature_prior_scale=float(
             np.asarray(
@@ -468,7 +374,6 @@ def _build_model_from_artifacts(
         sex_cn_weight=float(
             np.asarray(map_estimates.get("model_sex_cn_weight", 3.0)).item()
         ),
-        obs_df=float(np.asarray(map_estimates.get("obs_df", 3.5)).item()),
         sample_depth_max=float(
             np.asarray(map_estimates.get("sample_depth_max", 10000.0)).item()
         ),
@@ -504,8 +409,6 @@ def _sample_ppd_observation(
         n_bins,
         n_samples,
         dtype=np.float64,
-        background_bin_factors=continuous_maps.get("background_bin_factors"),
-        background_sample_factors=continuous_maps.get("background_sample_factors"),
     )
 
     flat_probs = cn_probs.reshape(-1, n_states)
@@ -558,7 +461,6 @@ def generate_ppd_depth(
     cn_posterior: Dict[str, np.ndarray],
     n_draws: int = 100,
     seed: int = 42,
-    continuous_posterior_mode: str = "conditioned",
 ) -> np.ndarray:
     """Generate posterior predictive draws of observed depth.
 
@@ -580,21 +482,10 @@ def generate_ppd_depth(
         cn_posterior: Discrete posterior dict.
         n_draws: Number of posterior predictive draws per bin/sample.
         seed: Random seed.
-        continuous_posterior_mode: ``"conditioned"`` conditions on fitted
-            continuous latents saved in ``map_estimates``.  This is the
-            default QC/BINQ diagnostic because it checks observation-level
-            calibration without double-counting in-sample parameter
-            uncertainty.  ``"integrated"`` uses saved ``posterior_draws_*``
-            arrays when present and recomputes the CN posterior for each
-            continuous-latent draw.
-
     Returns:
         Array of shape ``(n_draws, n_bins, n_samples)`` with simulated depths.
     """
     rng = np.random.RandomState(seed)
-    continuous_posterior_mode = _normalize_continuous_posterior_mode(
-        continuous_posterior_mode,
-    )
     cn_probs = np.asarray(cn_posterior["cn_posterior"])
     if cn_probs.ndim != 3:
         raise ValueError("cn_posterior must have shape (n_bins, n_samples, n_states).")
@@ -606,79 +497,6 @@ def generate_ppd_depth(
             f"Expected bins×samples {expected_shape}, got {observed_shape}. "
             "Align the ppd input depth/site data to the fitted infer sample subset."
         )
-
-    saved_draws = {}
-    if continuous_posterior_mode == "integrated":
-        saved_draws = _extract_saved_posterior_draws(map_estimates)
-    else:
-        logger.info("Conditioning PPD on fitted continuous latents.")
-    required_sites = {"bin_bias", "sample_var", "bin_var"}
-    required_sites.add("sample_depth")
-
-    if continuous_posterior_mode == "integrated" and required_sites.issubset(saved_draws):
-        draw_count = int(next(iter(saved_draws.values())).shape[0])
-        if all(int(value.shape[0]) == draw_count for value in saved_draws.values()):
-            logger.info(
-                "Using %d saved continuous posterior draws for PPD integration.",
-                draw_count,
-            )
-            model = _build_model_from_artifacts(
-                map_estimates,
-                data.depth.device.type,
-            )
-            af_table_np = None
-            if (
-                data.site_alt is not None and
-                model.af_weight > 0 and
-                not model.learn_af_temperature
-            ):
-                with torch.no_grad():
-                    af_table_np = model._prepare_af_table_torch(
-                        data.site_alt,
-                        data.site_total,
-                        data.site_pop_af,
-                        data.site_mask,
-                        data.chr_type if hasattr(data, "chr_type") else None,
-                    ).cpu().numpy()
-
-            draw_indices = rng.randint(draw_count, size=n_draws)
-            draws = np.empty((n_draws, data.n_bins, data.n_samples), dtype=np.float32)
-            for out_idx, draw_idx in enumerate(draw_indices):
-                draw_maps = {
-                    site: np.asarray(value[draw_idx])
-                    for site, value in saved_draws.items()
-                }
-                if "model_raw_variance_power" in map_estimates:
-                    draw_maps["model_raw_variance_power"] = map_estimates[
-                        "model_raw_variance_power"
-                    ]
-                if "autosomal_baseline_cn" in map_estimates:
-                    draw_maps["autosomal_baseline_cn"] = map_estimates[
-                        "autosomal_baseline_cn"
-                    ]
-                draw_post = model._run_discrete_inference_fixed_latents(
-                    data,
-                    draw_maps,
-                    af_table=af_table_np,
-                )
-                draws[out_idx] = _sample_ppd_observation(
-                    data,
-                    rng,
-                    draw_post,
-                    draw_maps,
-                )
-            return draws
-
-        logger.warning(
-            "Saved posterior-draw arrays have inconsistent leading dimensions; "
-            "falling back to conditioned PPD.",
-        )
-    elif continuous_posterior_mode == "integrated":
-        logger.warning(
-            "Integrated continuous-posterior PPD requested, but required "
-            "posterior_draws_* arrays are missing; falling back to conditioned PPD.",
-        )
-
     draws = np.empty((n_draws, data.n_bins, data.n_samples), dtype=np.float32)
     for d in range(n_draws):
         draws[d] = _sample_ppd_observation(
@@ -1094,40 +912,31 @@ def parse_args() -> argparse.Namespace:
         help="Random seed for PPD sampling",
     )
     p.add_argument(
-        "--continuous-posterior-mode",
-        choices=CONTINUOUS_POSTERIOR_MODES,
-        default="conditioned",
-        help=(
-            "How to handle continuous latent uncertainty in PPD. "
-            "'conditioned' fixes fitted continuous latents and is the default "
-            "QC/BINQ calibration check. 'integrated' uses saved posterior "
-            "draws when available and includes parameter uncertainty."
-        ),
-    )
-    p.add_argument(
         "--device", choices=["cpu", "cuda"], default="cpu",
     )
     return p.parse_args()
 
 
-def main() -> None:
-    """Entry point for ``gatk-sv-ploidy ppd``."""
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    args = parse_args()
-    os.makedirs(args.output_dir, exist_ok=True)
+def _run_ppd(args: argparse.Namespace, logger) -> None:
+    """Run posterior predictive diagnostics after logging is configured."""
 
     # ── load inference artifacts ────────────────────────────────────────
-    logger.info("Loading inference artifacts.")
+    logger.info("Loading inference artifacts")
     map_est, cn_post = load_inference_artifacts(args.artifacts)
     depth_space = "raw"
 
     # ── load data ───────────────────────────────────────────────────────
-    logger.info("Loading preprocessed depth.")
     df = pd.read_csv(args.input, sep="\t", index_col=0)
+    logger.info(
+        "Loaded depth matrix for PPD: bins=%d samples=%d",
+        len(df),
+        len(get_sample_columns(df)),
+    )
 
     sd = None
     if args.site_data:
         sd = load_site_data(args.site_data)
+        logger.info("Loaded per-site allele tensors for PPD")
 
     df, sd = _prepare_ppd_inputs(
         df,
@@ -1147,37 +956,28 @@ def main() -> None:
         depth_space=depth_space,
         site_data=sd,
     )
-    logger.info(
-        "Using %s input with %s observation model.",
-        depth_space,
-        NEGATIVE_BINOMIAL_OBS_LIKELIHOOD,
-    )
 
     # ── generate posterior predictive draws ──────────────────────────────
-    logger.info("Generating %d posterior predictive draws …", args.draws)
+    logger.info("Generating posterior predictive draws: draws=%d", args.draws)
     ppd_draws = generate_ppd_depth(
         data,
         map_est,
         cn_post,
         n_draws=args.draws,
         seed=args.seed,
-        continuous_posterior_mode=args.continuous_posterior_mode,
     )
-    logger.info("PPD draws shape: %s", ppd_draws.shape)
 
     # ── save raw PPD draws (compressed) ─────────────────────────────────
     draws_path = os.path.join(args.output_dir, "ppd_draws.npz")
     np.savez_compressed(draws_path, ppd_draws=ppd_draws)
-    logger.info("PPD draws saved.")
+    output_artifacts = [draws_path]
 
     # ── per-bin summary ─────────────────────────────────────────────────
-    logger.info("Computing per-bin PPD summary …")
     ppd_bin_df = compute_ppd_bin_summary(data, ppd_draws, map_est, cn_post)
     ppd_bin_path = os.path.join(args.output_dir, "ppd_bin_summary.tsv.gz")
     ppd_bin_df.to_csv(ppd_bin_path, sep="\t", index=False, compression="gzip")
-    logger.info("PPD bin summary saved.")
+    output_artifacts.append(ppd_bin_path)
 
-    logger.info("Computing per-bin PPD quality summary …")
     ppd_quality_df = compute_ppd_bin_quality_summary(ppd_bin_df)
     call_quality_df = compute_call_stability_quality_summary(data, cn_post)
     if not call_quality_df.empty:
@@ -1188,42 +988,38 @@ def main() -> None:
         )
     ppd_quality_path = os.path.join(args.output_dir, "ppd_bin_quality.tsv")
     ppd_quality_df.to_csv(ppd_quality_path, sep="\t", index=False)
-    logger.info("PPD bin quality summary saved.")
+    output_artifacts.append(ppd_quality_path)
 
     # ── per-chromosome summary ──────────────────────────────────────────
-    logger.info("Computing per-chromosome PPD summary …")
     ppd_chr_df = compute_ppd_chromosome_summary(data, ppd_draws, cn_post)
     ppd_chr_path = os.path.join(args.output_dir, "ppd_chromosome_summary.tsv")
     ppd_chr_df.to_csv(ppd_chr_path, sep="\t", index=False)
-    logger.info("PPD chromosome summary saved.")
+    output_artifacts.append(ppd_chr_path)
 
     # ── global calibration summary ──────────────────────────────────────
-    logger.info("Computing global calibration summary …")
     ppd_global_df = compute_ppd_global_summary(ppd_bin_df)
-    ppd_global_df.insert(
-        1,
-        "continuous_posterior_mode",
-        args.continuous_posterior_mode,
-    )
     ppd_global_path = os.path.join(args.output_dir, "ppd_global_summary.tsv")
     ppd_global_df.to_csv(ppd_global_path, sep="\t", index=False)
-    logger.info("PPD global summary saved.")
+    output_artifacts.append(ppd_global_path)
+    logger.info(
+        "PPD summaries written: bin_rows=%d chromosome_rows=%d",
+        len(ppd_bin_df),
+        len(ppd_chr_df),
+    )
+    log_output_artifacts(logger, output_artifacts)
 
-    # ── print key calibration metrics ───────────────────────────────────
-    row = ppd_global_df.iloc[0]
-    logger.info("")
-    logger.info("=== Posterior Predictive Check Summary ===")
-    logger.info("  RMSE:                    %.4f", row["rmse"])
-    logger.info("  Mean z-score:            %.4f (ideal: 0)", row["z_score_mean"])
-    logger.info("  Std z-score:             %.4f (ideal: 1)", row["z_score_std"])
-    logger.info("  Tail prob KS p-value:    %.4f (>0.05 = well-calibrated)",
-                row["tail_prob_ks_pval"])
-    logger.info("  Frac outside 90%% PI:    %.3f (ideal: 0.10)",
-                row["frac_outside_90pct_interval"])
-    logger.info("  Frac outside 50%% PI:    %.3f (ideal: 0.50)",
-                row["frac_outside_50pct_interval"])
 
-    logger.info("\nDone.")
+def main() -> None:
+    """Entry point for ``gatk-sv-ploidy ppd``."""
+    args = parse_args()
+    os.makedirs(args.output_dir, exist_ok=True)
+    with tool_logging_context(
+        tool_name="ppd",
+        output_dir=args.output_dir,
+        args=args,
+        random_seeds={"ppd": args.seed},
+    ) as logger:
+        _run_ppd(args, logger)
 
 
 if __name__ == "__main__":

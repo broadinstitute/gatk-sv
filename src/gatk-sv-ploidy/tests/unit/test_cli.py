@@ -56,7 +56,7 @@ def test_main_rejects_unknown_subcommand(monkeypatch, capsys) -> None:
         cli.main()
 
     assert exc_info.value.code == 1
-    assert "unknown subcommand" in capsys.readouterr().out
+    assert "unknown subcommand" in capsys.readouterr().err
 
 
 def test_main_dispatches_to_subcommand(monkeypatch) -> None:

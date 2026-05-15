@@ -6,7 +6,6 @@ Small helper functions used by multiple subcommands.
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import List, Optional, Sequence
 
@@ -15,8 +14,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from gatk_sv_ploidy._plot_style import DEFAULT_RASTER_DPI, save_publication_figure
-
-logger = logging.getLogger(__name__)
 
 # ── column / chromosome constants ───────────────────────────────────────────
 
@@ -259,96 +256,19 @@ def coerce_bin_epsilon_matrix(
     raise ValueError("bin_epsilon must be scalar, 1D, or 2D.")
 
 
-def _coerce_background_bin_factor_matrix(
-    values: np.ndarray | Sequence[float],
-    n_bins: int,
-    dtype: np.dtype | type,
-) -> np.ndarray:
-    """Return normalized per-bin background factors as an ``(n_bins, k)`` matrix."""
-    arr = np.asarray(values, dtype=dtype)
-    if arr.ndim > 2:
-        arr = np.squeeze(arr)
-    if arr.ndim == 1:
-        if arr.shape[0] != n_bins:
-            raise ValueError("background_bin_factors must have length n_bins.")
-        arr = arr[:, np.newaxis]
-    if arr.ndim != 2 or arr.shape[0] != n_bins:
-        raise ValueError("background_bin_factors must have shape (n_bins, k).")
-    if arr.shape[1] == 0:
-        return arr.astype(dtype, copy=False)
-    column_means = np.maximum(arr.mean(axis=0, keepdims=True), 1e-8)
-    return (arr / column_means).astype(dtype, copy=False)
-
-
-def _coerce_background_sample_factor_matrix(
-    values: np.ndarray | Sequence[float],
-    n_samples: int,
-    n_factors: int,
-    dtype: np.dtype | type,
-) -> np.ndarray:
-    """Return per-sample background factors as a ``(k, n_samples)`` matrix."""
-    arr = np.asarray(values, dtype=dtype)
-    if arr.ndim > 2:
-        arr = np.squeeze(arr)
-    if arr.ndim == 1:
-        if n_factors != 1 or arr.shape[0] != n_samples:
-            raise ValueError(
-                "background_sample_factors must have shape (k, n_samples)."
-            )
-        arr = arr[np.newaxis, :]
-    if arr.ndim != 2:
-        raise ValueError("background_sample_factors must be 1D or 2D.")
-    if arr.shape == (n_factors, n_samples):
-        return arr.astype(dtype, copy=False)
-    if arr.shape == (n_samples, n_factors) and n_samples != n_factors:
-        return arr.T.astype(dtype, copy=False)
-    raise ValueError("background_sample_factors must have shape (k, n_samples).")
-
-
 def compose_additive_background_matrix(
     bin_epsilon: np.ndarray | Sequence[float] | float | None,
     n_bins: int,
     n_samples: int,
     dtype: np.dtype | type = np.float64,
-    background_bin_factors: np.ndarray | Sequence[float] | None = None,
-    background_sample_factors: np.ndarray | Sequence[float] | None = None,
 ) -> np.ndarray:
-    """Compose the effective additive background matrix.
-
-    This includes the ``bin_epsilon`` floor, plus any low-rank additive
-    background factors stored as ``background_bin_factors`` and
-    ``background_sample_factors``.
-    """
-    additive = coerce_bin_epsilon_matrix(
+    """Return the effective additive background matrix from ``bin_epsilon``."""
+    return coerce_bin_epsilon_matrix(
         bin_epsilon,
         n_bins,
         n_samples,
         dtype=dtype,
     )
-    if background_bin_factors is None and background_sample_factors is None:
-        return additive
-    if background_bin_factors is None or background_sample_factors is None:
-        raise ValueError(
-            "background_bin_factors and background_sample_factors must both be provided."
-        )
-    bin_factor_matrix = _coerce_background_bin_factor_matrix(
-        background_bin_factors,
-        n_bins,
-        dtype,
-    )
-    sample_factor_matrix = _coerce_background_sample_factor_matrix(
-        background_sample_factors,
-        n_samples,
-        bin_factor_matrix.shape[1],
-        dtype,
-    )
-    if bin_factor_matrix.shape[1] == 0:
-        return additive
-    # ``np.matmul`` emits spurious floating-point RuntimeWarnings on some
-    # macOS NumPy/BLAS builds here even when both inputs and the result are
-    # finite. ``np.dot`` is equivalent for these 2D arrays and avoids that
-    # false-positive warning path.
-    return additive + np.dot(bin_factor_matrix, sample_factor_matrix)
 
 
 def format_numeric_summary(
@@ -571,9 +491,8 @@ def save_and_close_plot(
     dest = os.path.join(output_dir, subdir)
     os.makedirs(dest, exist_ok=True)
     out = os.path.join(dest, filename)
-    actual_out = save_publication_figure(plt.gcf(), out, dpi=dpi)
+    save_publication_figure(plt.gcf(), out, dpi=dpi)
     plt.close()
-    logger.debug("Saved plot: %s", os.path.relpath(actual_out, output_dir))
 
 
 def add_chromosome_labels(

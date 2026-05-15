@@ -9,13 +9,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import os
 
 import pandas as pd
 from sklearn.metrics import classification_report, confusion_matrix
 
-logger = logging.getLogger(__name__)
+from gatk_sv_ploidy._logging import log_output_artifacts, tool_logging_context
 
 
 # ── metrics ─────────────────────────────────────────────────────────────────
@@ -38,9 +37,6 @@ def calculate_metrics(
     correct = int((y_true == y_pred).sum())
     total = len(pred_df)
     accuracy = correct / total if total else 0.0
-
-    logger.info("Overall accuracy: %d / %d = %.4f (%.2f%%)",
-                correct, total, accuracy, 100 * accuracy)
 
     labels = sorted(set(y_true) | set(y_pred))
     if len(labels) == 1:
@@ -67,7 +63,6 @@ def calculate_metrics(
             labels=labels,
             zero_division=0,
         )
-    logger.info("\n%s", report_str)
 
     if len(labels) == 1:
         cm_df = pd.DataFrame(
@@ -78,7 +73,6 @@ def calculate_metrics(
     else:
         cm = confusion_matrix(y_true, y_pred, labels=labels)
         cm_df = pd.DataFrame(cm, index=labels, columns=labels)
-    logger.info("Confusion matrix:\n%s", cm_df)
 
     # Save text report
     report_path = os.path.join(output_dir, "metrics_report.txt")
@@ -99,8 +93,6 @@ def calculate_metrics(
         fh.write("-" * 80 + "\n")
         fh.write(cm_df.to_string())
         fh.write("\n")
-
-    logger.info("Metrics report saved to %s", report_path)
 
 
 # ── CLI ─────────────────────────────────────────────────────────────────────
@@ -131,20 +123,21 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def main() -> None:
-    """Entry point for ``gatk-sv-ploidy eval``."""
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    args = parse_args()
-    os.makedirs(args.output_dir, exist_ok=True)
+def _run_eval(args: argparse.Namespace, logger) -> None:
+    """Run evaluation after CLI logging is configured."""
 
     # Load predictions
-    logger.info("Loading predictions: %s", args.predictions)
     pred_df = pd.read_csv(args.predictions, sep="\t")
+    logger.info(
+        "Loaded prediction table: rows=%d samples=%d",
+        len(pred_df),
+        int(pred_df["sample"].nunique()) if "sample" in pred_df.columns else 0,
+    )
 
     # Load truth and merge
-    logger.info("Loading truth: %s", args.truth_json)
     with open(args.truth_json) as fh:
         truth = json.load(fh)
+    logger.info("Loaded truth labels: n_labels=%d", len(truth))
 
     # Update truth column from JSON (overrides any existing values)
     pred_df["true_aneuploidy_type"] = pred_df["sample"].map(
@@ -156,9 +149,8 @@ def main() -> None:
         from gatk_sv_ploidy._util import load_exclusion_ids
 
         excl = set(load_exclusion_ids(args.exclusion_list))
-        n_before = len(pred_df)
         pred_df = pred_df[~pred_df["sample"].isin(excl)]
-        logger.info("Excluded %d samples", n_before - len(pred_df))
+        logger.info("Applied exclusion list: excluded_samples=%d", len(excl))
 
     # Calculate and save metrics
     calculate_metrics(pred_df, args.output_dir)
@@ -166,9 +158,30 @@ def main() -> None:
     # Also save the merged predictions table
     merged_path = os.path.join(args.output_dir, "predictions_with_truth.tsv")
     pred_df.to_csv(merged_path, sep="\t", index=False)
-    logger.info("Merged predictions saved to %s", merged_path)
+    report_path = os.path.join(args.output_dir, "metrics_report.txt")
+    accuracy = (
+        float((pred_df["true_aneuploidy_type"] == pred_df["predicted_aneuploidy_type"]).mean())
+        if len(pred_df) else 0.0
+    )
+    logger.info(
+        "Evaluation complete: samples=%d accuracy=%.4f predicted_types=%d",
+        len(pred_df),
+        accuracy,
+        int(pred_df["predicted_aneuploidy_type"].nunique()),
+    )
+    log_output_artifacts(logger, [report_path, merged_path])
 
-    logger.info("Done.")
+
+def main() -> None:
+    """Entry point for ``gatk-sv-ploidy eval``."""
+    args = parse_args()
+    os.makedirs(args.output_dir, exist_ok=True)
+    with tool_logging_context(
+        tool_name="eval",
+        output_dir=args.output_dir,
+        args=args,
+    ) as logger:
+        _run_eval(args, logger)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import logging
-
 import numpy as np
 import pandas as pd
 
@@ -398,7 +396,7 @@ def test_classify_polyploidy_from_site_data_handles_overdispersed_diploid_af() -
     assert bool(results.loc["overdispersed_diploid", "cn3_direct_peak_supported"]) is False
 
 
-def test_privacy_safe_polyploidy_diagnostics_do_not_log_sample_ids(caplog) -> None:
+def test_privacy_safe_polyploidy_diagnostics_is_noop() -> None:
     sample_ids, _depth_df, bin_chr, site_alt, site_total, site_pop_af, site_mask = (
         _synthetic_ploidy_inputs()
     )
@@ -414,7 +412,6 @@ def test_privacy_safe_polyploidy_diagnostics_do_not_log_sample_ids(caplog) -> No
         min_diploid_het_prior=0.1,
     )
 
-    caplog.set_level(logging.INFO, logger=polyploidy.logger.name)
     polyploidy.log_privacy_safe_polyploidy_diagnostics(
         results,
         pvalue_threshold=0.2,
@@ -422,27 +419,17 @@ def test_privacy_safe_polyploidy_diagnostics_do_not_log_sample_ids(caplog) -> No
         metrics_df=metrics,
     )
 
-    log_text = "\n".join(record.getMessage() for record in caplog.records)
-    assert "PRIVACY_SAFE_POLYPLOIDY" in log_text
-    assert "autosomal_baseline_cn_counts" in log_text
-    assert "posterior_threshold_counts state=cn4" in log_text
-    assert "af_peak_counts" in log_text
-    for sample_id in sample_ids:
-        assert sample_id not in log_text
 
-
-def test_polyploidy_progress_messages_do_not_log_sample_ids(monkeypatch, caplog) -> None:
+def test_polyploidy_progress_uses_privacy_safe_logging(monkeypatch) -> None:
     sample_ids, depth_df, bin_chr, site_alt, site_total, site_pop_af, site_mask = (
         _synthetic_ploidy_inputs()
     )
-    progress_calls = []
+    progress_messages = []
 
-    def fake_tqdm(iterable, **kwargs):
-        progress_calls.append(kwargs)
-        return iterable
+    def fake_info(message, *args, **_kwargs):
+        progress_messages.append(message % args if args else message)
 
-    monkeypatch.setattr(polyploidy, "tqdm", fake_tqdm)
-    caplog.set_level(logging.INFO, logger=polyploidy.logger.name)
+    monkeypatch.setattr(polyploidy.LOGGER, "info", fake_info)
 
     polyploidy.classify_polyploidy_from_site_data(
         sample_ids=sample_ids,
@@ -466,16 +453,11 @@ def test_polyploidy_progress_messages_do_not_log_sample_ids(monkeypatch, caplog)
         log_progress=True,
     )
 
-    descriptions = [str(call.get("desc", "")) for call in progress_calls]
-    assert descriptions == ["Polyploidy grid search"]
-
-    log_text = "\n".join(record.getMessage() for record in caplog.records)
-    assert "Polyploidy progress: prepared aggregate AF matrix" in log_text
-    assert "baseline_cn_states=1,2,3,4" in log_text
-    assert "Polyploidy progress: classification complete" in log_text
+    log_text = "\n".join(progress_messages)
+    assert "Polyploidy grid search started" in log_text
+    assert "Polyploidy grid search progress" in log_text
     for sample_id in sample_ids:
         assert sample_id not in log_text
-        assert all(sample_id not in description for description in descriptions)
 
 
 def test_polyploidy_main_writes_manifest_and_results(tmp_path, monkeypatch) -> None:

@@ -73,23 +73,6 @@ def test_apply_effective_site_pop_af_prefers_saved_infer_values(
     np.testing.assert_allclose(updated["site_pop_af"], 0.125)
 
 
-def test_build_model_from_artifacts_accepts_sample_specific_af_concentration() -> None:
-    model = _build_model_from_artifacts(
-        {
-            "model_af_concentration": np.asarray(50.0, dtype=np.float32),
-            "sample_af_concentration_map": np.asarray([5.0, 12.0], dtype=np.float32),
-        },
-        device="cpu",
-    )
-
-    np.testing.assert_allclose(
-        np.asarray(model.af_concentration, dtype=np.float64),
-        np.array([5.0, 12.0], dtype=np.float64),
-        rtol=1e-6,
-        atol=1e-6,
-    )
-
-
 def test_build_model_from_artifacts_restores_af_outlier_weight() -> None:
     model = _build_model_from_artifacts(
         {
@@ -288,101 +271,6 @@ def test_generate_ppd_depth_uses_raw_variance_power() -> None:
     assert power_ratio < 0.5 * nb2_ratio
 
 
-def test_generate_ppd_depth_uses_saved_posterior_draws() -> None:
-    df = pd.DataFrame(
-        {
-            "Chr": ["chr21"],
-            "Start": [0],
-            "End": [1000],
-            "S1": [30],
-        },
-        index=["chr21:0-1000"],
-    )
-    data = DepthData(df, depth_space="raw", clamp_threshold=None)
-    cn_post = _fake_cn_posterior(data.n_bins, data.n_samples, cn_state=2)
-    base_map = {
-        "bin_bias": np.array([1.0], dtype=np.float32),
-        "sample_var": np.array([1e-6], dtype=np.float32),
-        "bin_var": np.array([1e-6], dtype=np.float32),
-        "sample_depth": np.array([20.0], dtype=np.float32),
-        "obs_likelihood": np.asarray("negative_binomial"),
-        "model_n_states": np.asarray(6),
-        "model_alpha_ref": np.asarray(50.0),
-        "model_alpha_non_ref": np.asarray(1.0),
-        "model_var_bias_bin": np.asarray(0.05),
-        "model_var_sample": np.asarray(0.001),
-        "model_var_bin": np.asarray(0.001),
-        "model_af_concentration": np.asarray(50.0),
-        "model_af_weight": np.asarray(0.0),
-        "model_alpha_sex_ref": np.asarray(1.0),
-        "model_alpha_sex_non_ref": np.asarray(1.0),
-        "model_sex_prior": np.asarray([0.5, 0.5], dtype=np.float32),
-        "model_sex_cn_weight": np.asarray(0.0),
-        "model_guide_type": np.asarray("diagonal"),
-        "model_raw_variance_power": np.asarray(1.5),
-        "posterior_draws_bin_bias": np.array([[1.0], [2.0]], dtype=np.float32),
-        "posterior_draws_sample_var": np.array([[1e-6], [1e-6]], dtype=np.float32),
-        "posterior_draws_bin_var": np.array([[1e-6], [1e-6]], dtype=np.float32),
-        "posterior_draws_sample_depth": np.array([[20.0], [20.0]], dtype=np.float32),
-    }
-
-    plugin_map = {
-        key: value
-        for key, value in base_map.items()
-        if not key.startswith("posterior_draws_")
-    }
-    plugin_draws = generate_ppd_depth(data, plugin_map, cn_post, n_draws=200, seed=19)
-    conditioned_draws = generate_ppd_depth(
-        data,
-        base_map,
-        cn_post,
-        n_draws=200,
-        seed=19,
-    )
-    posterior_draws = generate_ppd_depth(
-        data,
-        {
-            **base_map,
-            "posterior_draws_bin_bias": base_map["posterior_draws_bin_bias"],
-            "posterior_draws_sample_var": base_map["posterior_draws_sample_var"],
-            "posterior_draws_bin_var": base_map["posterior_draws_bin_var"],
-        },
-        cn_post,
-        n_draws=200,
-        seed=19,
-        continuous_posterior_mode="integrated",
-    )
-
-    assert float(plugin_draws.mean()) == pytest.approx(20.0, abs=2.0)
-    assert float(conditioned_draws.mean()) == pytest.approx(
-        float(plugin_draws.mean()),
-        abs=2.0,
-    )
-    assert float(posterior_draws.mean()) > float(plugin_draws.mean()) + 5.0
-    assert float(posterior_draws.mean()) < 45.0
-
-
-def test_generate_ppd_depth_rejects_unknown_continuous_posterior_mode(
-    tiny_raw_depth_df: pd.DataFrame,
-) -> None:
-    data = DepthData(tiny_raw_depth_df, depth_space="raw", clamp_threshold=None)
-    cn_post = _fake_cn_posterior(data.n_bins, data.n_samples, cn_state=2)
-    map_est = {
-        "bin_bias": np.full(data.n_bins, 1.0, dtype=np.float32),
-        "sample_var": np.full(data.n_samples, 1e-3, dtype=np.float32),
-        "bin_var": np.full(data.n_bins, 1e-3, dtype=np.float32),
-        "sample_depth": np.array([19.0, 20.0], dtype=np.float32),
-    }
-
-    with pytest.raises(ValueError, match="continuous_posterior_mode"):
-        generate_ppd_depth(
-            data,
-            map_est,
-            cn_post,
-            continuous_posterior_mode="automatic",
-        )
-
-
 def test_generate_ppd_depth_rejects_misaligned_cn_posterior(
     tiny_raw_depth_df: pd.DataFrame,
 ) -> None:
@@ -433,18 +321,6 @@ def test_build_model_from_artifacts_restores_sparse_gamma_epsilon_prior() -> Non
 
     assert model.epsilon_mean == pytest.approx(0.1)
     assert model.epsilon_concentration == pytest.approx(0.5)
-
-
-def test_build_model_from_artifacts_defaults_old_background_factors_to_disabled() -> None:
-    model = _build_model_from_artifacts(
-        {
-            "epsilon_mean": np.asarray(0.1),
-        },
-        device="cpu",
-    )
-
-    assert model.background_factors == 0
-    assert model.multiplicative_factors == 0
 
 
 def test_generate_ppd_depth_uses_bin_epsilon(tiny_raw_depth_df: pd.DataFrame) -> None:
@@ -529,44 +405,6 @@ def test_generate_ppd_depth_expands_contig_shared_bin_epsilon() -> None:
             float(draws_with_epsilon[:, bin_index, sample_without_epsilon].mean()) -
             float(draws_without_epsilon[:, bin_index, sample_without_epsilon].mean())
         ) < 0.15
-
-
-def test_generate_ppd_depth_uses_background_factors(tiny_raw_depth_df: pd.DataFrame) -> None:
-    data = DepthData(tiny_raw_depth_df.iloc[[3]], depth_space="raw", clamp_threshold=None)
-    cn_post = _fake_cn_posterior(data.n_bins, data.n_samples, cn_state=0)
-    base_map = {
-        "bin_bias": np.full(data.n_bins, 1.0, dtype=np.float32),
-        "sample_var": np.full(data.n_samples, 1e-4, dtype=np.float32),
-        "bin_var": np.full(data.n_bins, 1e-4, dtype=np.float32),
-        "sample_depth": np.array([19.0, 20.0], dtype=np.float32),
-    }
-
-    draws_without_background = generate_ppd_depth(
-        data,
-        base_map,
-        cn_post,
-        n_draws=200,
-        seed=23,
-    )
-    draws_with_background = generate_ppd_depth(
-        data,
-        {
-            **base_map,
-            "background_bin_factors": np.array([[3.0]], dtype=np.float32),
-            "background_sample_factors": np.array([[0.0, 0.2]], dtype=np.float32),
-        },
-        cn_post,
-        n_draws=200,
-        seed=23,
-    )
-
-    assert float(draws_with_background[:, 0, 1].mean()) > float(
-        draws_without_background[:, 0, 1].mean()
-    ) + 0.15
-    assert abs(
-        float(draws_with_background[:, 0, 0].mean()) -
-        float(draws_without_background[:, 0, 0].mean())
-    ) < 0.15
 
 
 def test_ppd_summaries_have_expected_shapes(tiny_raw_depth_df: pd.DataFrame) -> None:
@@ -773,7 +611,6 @@ def test_ppd_parse_args_and_main_write_outputs(
     args = parse_args()
     assert args.draws == 4
     assert args.seed == 9
-    assert args.continuous_posterior_mode == "conditioned"
 
     main()
 
@@ -785,7 +622,6 @@ def test_ppd_parse_args_and_main_write_outputs(
 
     global_df = pd.read_csv(output_dir / "ppd_global_summary.tsv", sep="\t")
     assert global_df.loc[0, "n_bins_x_samples"] == n_bins * n_samples
-    assert global_df.loc[0, "continuous_posterior_mode"] == "conditioned"
     quality_df = pd.read_csv(output_dir / "ppd_bin_quality.tsv", sep="\t")
     assert "CALLQ20" in quality_df.columns
 

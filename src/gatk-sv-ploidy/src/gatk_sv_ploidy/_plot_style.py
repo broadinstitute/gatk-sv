@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-import logging
 from pathlib import Path
 from typing import Iterable
 
@@ -78,17 +77,8 @@ _ACTIVE_PLOT_OUTPUT_FORMAT = "png"
 
 
 def _suppress_chatty_plot_dependency_loggers() -> None:
-    """Keep verbose plotting dependencies from inheriting CLI INFO logging.
-
-    Matplotlib can emit very noisy fontTools subsetting logs when figures are
-    exported as PDF. The plot CLI intentionally uses INFO-level output for
-    user-facing progress, so we raise the fontTools logger threshold here to
-    keep those internal messages out of normal runs.
-    """
-    for logger_name in ("fontTools", "fontTools.subset"):
-        dep_logger = logging.getLogger(logger_name)
-        if dep_logger.level in (logging.NOTSET, logging.DEBUG, logging.INFO):
-            dep_logger.setLevel(logging.WARNING)
+    """Retained as a no-op after package logging removal."""
+    return None
 
 
 def set_plot_output_format(output_format: str) -> None:

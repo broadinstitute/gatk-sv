@@ -9,7 +9,6 @@ per-bin chromosome plots, per-sample CN plots, and model-diagnostic plots.
 from __future__ import annotations
 
 import argparse
-import logging
 import os
 from typing import Optional
 
@@ -20,6 +19,7 @@ import seaborn as sns
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import BoundaryNorm, ListedColormap
 
+from gatk_sv_ploidy._logging import log_output_artifacts, tool_logging_context
 from gatk_sv_ploidy._util import (
     BINQ_FIELD_OPTIONS,
     add_chromosome_labels,
@@ -47,10 +47,6 @@ from gatk_sv_ploidy._plot_style import (
     single_column_size,
 )
 from gatk_sv_ploidy.data import load_site_data, read_depth_tsv
-from gatk_sv_ploidy.infer import load_inference_artifacts
-from gatk_sv_ploidy.models import _standardize_multiplicative_bin_factors_numpy
-
-logger = logging.getLogger(__name__)
 
 
 # ── histogram helpers ───────────────────────────────────────────────────────
@@ -124,13 +120,9 @@ def _apply_plot_depth_columns(df: pd.DataFrame) -> pd.DataFrame:
         "mad_depth": "plot_mad_depth",
     }
     out = df.copy()
-    used = False
     for base_col, plot_col in plot_map.items():
         if plot_col in out.columns:
             out[base_col] = out[plot_col]
-            used = True
-    if used:
-        logger.debug("Using plot-normalized chromosome depth summaries.")
     return out
 
 
@@ -143,7 +135,6 @@ def _apply_plot_depth_bin_columns(bin_df: pd.DataFrame | None) -> pd.DataFrame |
         if "raw_observed_depth" not in out.columns and "observed_depth" in out.columns:
             out["raw_observed_depth"] = out["observed_depth"]
         out["observed_depth"] = out["plot_depth"]
-        logger.debug("Using plot-normalized per-bin depth profiles.")
     return out
 
 
@@ -357,12 +348,6 @@ def _annotate_ignored_bins(
         how="left",
     )
     out["ignored_fraction_in_call"] = out["ignored_fraction_in_call"].fillna(0.0)
-
-    logger.debug(
-        "Annotated %d ignored sample-bin calls across %d unique bins.",
-        int(out["ignored_in_call"].sum()),
-        int((ignored_fraction["ignored_fraction_in_call"] > 0).sum()),
-    )
     return out
 
 
@@ -404,12 +389,6 @@ def _annotate_binq_values(
         else:
             out[col] = out[quality_col]
         out = out.drop(columns=[quality_col])
-
-    logger.debug(
-        "Annotated BINQ values for %d sample-bin rows using %s.",
-        int(out["binq_value"].notna().sum()) if "binq_value" in out.columns else 0,
-        binq_field,
-    )
     return out
 
 
@@ -522,7 +501,7 @@ def _hist_by_hue(
     xlabel: str,
     output_dir: str,
     filename: str,
-    palette: dict,
+    palette: dict[str, str],
     bins: int = 30,
     highlight_sample: str = "",
     sample_values: Optional[list] = None,
@@ -610,7 +589,6 @@ def plot_median_depth_distributions(
         highlight_sample: Sample ID to highlight.
     """
     if "median_depth" not in df.columns or "mad_depth" not in df.columns:
-        logger.warning("median_depth / mad_depth missing — skipping")
         return
 
     stats_df = df[
@@ -664,8 +642,6 @@ def plot_median_depth_distributions(
             plt.tight_layout()
             pdf.savefig(fig, bbox_inches="tight")
             plt.close()
-
-    logger.debug("Saved median depth distributions to %s", pdf_path)
 
 
 # ── bin variance / bias ────────────────────────────────────────────────────
@@ -730,347 +706,6 @@ def plot_bin_variance_bias(bin_df: pd.DataFrame, output_dir: str) -> None:
 
     plt.tight_layout()
     save_and_close_plot(output_dir, "bin_posteriors.png")
-
-
-def _coerce_background_factor_matrices(
-    map_estimates: dict,
-) -> tuple[np.ndarray | None, np.ndarray | None]:
-    """Return normalized bin loadings and sample amplitudes when present."""
-    if "background_bin_factors" not in map_estimates or "background_sample_factors" not in map_estimates:
-        return None, None
-
-    bin_factors = np.asarray(
-        map_estimates["background_bin_factors"],
-        dtype=np.float64,
-    ).squeeze()
-    if bin_factors.ndim == 1:
-        bin_factors = bin_factors[:, np.newaxis]
-
-    sample_factors = np.asarray(
-        map_estimates["background_sample_factors"],
-        dtype=np.float64,
-    ).squeeze()
-    if sample_factors.ndim == 1:
-        sample_factors = sample_factors[np.newaxis, :]
-
-    if bin_factors.ndim != 2 or sample_factors.ndim != 2:
-        return None, None
-    if sample_factors.shape[0] != bin_factors.shape[1]:
-        if sample_factors.shape[1] == bin_factors.shape[1]:
-            sample_factors = sample_factors.T
-        else:
-            return None, None
-
-    normalized_bin_factors = bin_factors / np.maximum(
-        bin_factors.mean(axis=0, keepdims=True),
-        1e-8,
-    )
-    return normalized_bin_factors, sample_factors
-
-
-def _coerce_multiplicative_factor_matrices(
-    map_estimates: dict,
-) -> tuple[np.ndarray | None, np.ndarray | None]:
-    """Return standardized multiplicative loadings and sample weights."""
-    if (
-        "multiplicative_bin_factors" not in map_estimates or
-        "multiplicative_sample_factors" not in map_estimates
-    ):
-        return None, None
-
-    bin_factors = np.asarray(
-        map_estimates["multiplicative_bin_factors"],
-        dtype=np.float64,
-    ).squeeze()
-    if bin_factors.ndim == 1:
-        bin_factors = bin_factors[:, np.newaxis]
-
-    sample_factors = np.asarray(
-        map_estimates["multiplicative_sample_factors"],
-        dtype=np.float64,
-    ).squeeze()
-    if sample_factors.ndim == 1:
-        sample_factors = sample_factors[np.newaxis, :]
-
-    if bin_factors.ndim != 2 or sample_factors.ndim != 2:
-        return None, None
-    if sample_factors.shape[0] != bin_factors.shape[1]:
-        if sample_factors.shape[1] == bin_factors.shape[1]:
-            sample_factors = sample_factors.T
-        else:
-            return None, None
-
-    standardized_bin_factors = _standardize_multiplicative_bin_factors_numpy(
-        bin_factors,
-    )
-    return standardized_bin_factors, sample_factors
-
-
-def _build_factor_plot_specs(map_estimates: dict) -> list[dict[str, object]]:
-    """Collect factor matrices and display metadata for available factor types."""
-    specs: list[dict[str, object]] = []
-
-    background_bin_loadings, background_sample_factors = _coerce_background_factor_matrices(
-        map_estimates,
-    )
-    if background_bin_loadings is not None and background_sample_factors is not None:
-        specs.append(
-            {
-                "name": "Additive",
-                "bin_loadings": background_bin_loadings,
-                "sample_weights": background_sample_factors,
-                "loading_cmap": "viridis",
-                "weight_cmap": "magma",
-                "signed": False,
-                "loading_label": "Normalized loading",
-                "weight_label": "Sample weight",
-            }
-        )
-
-    multiplicative_bin_loadings, multiplicative_sample_factors = _coerce_multiplicative_factor_matrices(
-        map_estimates,
-    )
-    if (
-        multiplicative_bin_loadings is not None and
-        multiplicative_sample_factors is not None
-    ):
-        specs.append(
-            {
-                "name": "Multiplicative",
-                "bin_loadings": multiplicative_bin_loadings,
-                "sample_weights": multiplicative_sample_factors,
-                "loading_cmap": "coolwarm",
-                "weight_cmap": "coolwarm",
-                "signed": True,
-                "loading_label": "Standardized loading",
-                "weight_label": "Sample weight",
-            }
-        )
-
-    return specs
-
-
-def _symmetric_color_limits(values: np.ndarray) -> tuple[float, float]:
-    """Return symmetric color limits around zero for signed heatmaps."""
-    max_abs = float(np.nanmax(np.abs(values)))
-    max_abs = max(max_abs, 1e-8)
-    return -max_abs, max_abs
-
-
-def plot_factor_mode_weight_diagnostics(
-    map_estimates: dict,
-    output_dir: str,
-) -> None:
-    """Visualize per-mode sample weights for additive and multiplicative factors."""
-    factor_specs = _build_factor_plot_specs(map_estimates)
-    if not factor_specs:
-        logger.debug("Factor weights absent from inference artifacts — skipping mode-weight diagnostics plot.")
-        return
-
-    fig, axes = plt.subplots(
-        len(factor_specs),
-        1,
-        figsize=single_column_size(max(55.0, 40.0 * len(factor_specs))),
-        squeeze=False,
-    )
-
-    for spec_idx, spec in enumerate(factor_specs):
-        ax = axes[spec_idx, 0]
-        sample_weights = np.asarray(spec["sample_weights"], dtype=np.float64)
-        n_factors = sample_weights.shape[0]
-        factor_labels = [f"F{idx + 1}" for idx in range(n_factors)]
-        box_data = [
-            sample_weights[idx, np.isfinite(sample_weights[idx])]
-            for idx in range(n_factors)
-        ]
-        boxplot = ax.boxplot(
-            box_data,
-            patch_artist=True,
-            tick_labels=factor_labels,
-            widths=0.65,
-        )
-        color_map = plt.get_cmap(str(spec["weight_cmap"]))
-        for patch_idx, patch in enumerate(boxplot["boxes"]):
-            color = color_map((patch_idx + 0.5) / max(n_factors, 1))
-            patch.set_facecolor(color)
-            patch.set_alpha(0.75)
-        for median in boxplot["medians"]:
-            median.set_color("black")
-            median.set_linewidth(1.5)
-
-        if bool(spec["signed"]):
-            ax.axhline(0.0, color="black", linestyle="--", linewidth=1.0, alpha=0.7)
-        else:
-            ax.set_ylim(bottom=min(0.0, float(np.nanmin(sample_weights)) - 0.01))
-
-        ax.set_title(f"{spec['name']} Mode Weights Across Samples")
-        ax.set_xlabel("Mode")
-        ax.set_ylabel(str(spec["weight_label"]))
-        ax.grid(True, axis="y", alpha=0.25)
-
-    plt.tight_layout()
-    save_and_close_plot(output_dir, "factor_mode_weight_diagnostics.png")
-
-
-def plot_background_factor_diagnostics(
-    bin_df: pd.DataFrame,
-    map_estimates: dict,
-    output_dir: str,
-) -> None:
-    """Visualize additive and multiplicative factor loadings and sample weights."""
-    factor_specs = _build_factor_plot_specs(map_estimates)
-    if not factor_specs:
-        logger.debug("Factor latents absent from inference artifacts — skipping factor diagnostics plot.")
-        return
-
-    unique = (
-        bin_df.groupby(["chr", "start", "end"], sort=False)
-        .first()
-        .reset_index()
-    )
-
-    valid_specs: list[dict[str, object]] = []
-    for spec in factor_specs:
-        bin_loadings = np.asarray(spec["bin_loadings"], dtype=np.float64)
-        if len(unique) != bin_loadings.shape[0]:
-            logger.warning(
-                "Skipping %s factor diagnostics: %d unique bins in bin_stats but %d rows in inference artifacts.",
-                spec["name"],
-                len(unique),
-                bin_loadings.shape[0],
-            )
-            continue
-        valid_specs.append(spec)
-    if not valid_specs:
-        return
-
-    chromosomes = unique["chr"].astype(str).to_numpy()
-    x = np.arange(len(unique))
-    chromosome_order = unique["chr"].drop_duplicates().tolist()
-    fig_height_mm = max(85.0, 64.0 * len(valid_specs))
-    fig, axes = plt.subplots(
-        2 * len(valid_specs),
-        2,
-        figsize=double_column_size(fig_height_mm),
-        squeeze=False,
-        gridspec_kw={"width_ratios": [3.2, 1.5]},
-    )
-
-    for spec_idx, spec in enumerate(valid_specs):
-        bin_loadings = np.asarray(spec["bin_loadings"], dtype=np.float64)
-        sample_weights = np.asarray(spec["sample_weights"], dtype=np.float64)
-        n_factors = bin_loadings.shape[1]
-        factor_labels = [f"F{idx + 1}" for idx in range(n_factors)]
-        chromosome_means = np.vstack(
-            [
-                bin_loadings[chromosomes == chrom].mean(axis=0)
-                for chrom in chromosome_order
-            ]
-        )
-        sample_strength = np.nanmean(
-            np.abs(sample_weights) if bool(spec["signed"]) else sample_weights,
-            axis=0,
-        )
-        sample_order = np.argsort(sample_strength)[::-1]
-        row0 = 2 * spec_idx
-        row1 = row0 + 1
-
-        loading_kwargs = {}
-        weight_kwargs = {}
-        if bool(spec["signed"]):
-            loading_kwargs["vmin"], loading_kwargs["vmax"] = _symmetric_color_limits(bin_loadings)
-            weight_kwargs["vmin"], weight_kwargs["vmax"] = _symmetric_color_limits(sample_weights)
-
-        loadings_im = axes[row0, 0].imshow(
-            bin_loadings.T,
-            aspect="auto",
-            interpolation="nearest",
-            cmap=str(spec["loading_cmap"]),
-            **loading_kwargs,
-        )
-        axes[row0, 0].set_title(f"{spec['name']} Bin Loadings")
-        axes[row0, 0].set_ylabel("Factor")
-        axes[row0, 0].set_yticks(np.arange(n_factors))
-        axes[row0, 0].set_yticklabels(factor_labels)
-        add_chromosome_labels(axes[row0, 0], chromosomes, x)
-        fig.colorbar(
-            loadings_im,
-            ax=axes[row0, 0],
-            fraction=0.03,
-            pad=0.02,
-            label=str(spec["loading_label"]),
-        )
-
-        sample_im = axes[row0, 1].imshow(
-            sample_weights[:, sample_order],
-            aspect="auto",
-            interpolation="nearest",
-            cmap=str(spec["weight_cmap"]),
-            **weight_kwargs,
-        )
-        axes[row0, 1].set_title(f"{spec['name']} Sample Weights")
-        axes[row0, 1].set_xlabel("Samples sorted by mean weight magnitude")
-        axes[row0, 1].set_ylabel("Factor")
-        axes[row0, 1].set_yticks(np.arange(n_factors))
-        axes[row0, 1].set_yticklabels(factor_labels)
-        fig.colorbar(
-            sample_im,
-            ax=axes[row0, 1],
-            fraction=0.05,
-            pad=0.03,
-            label=str(spec["weight_label"]),
-        )
-
-        chromosome_im = axes[row1, 0].imshow(
-            chromosome_means.T,
-            aspect="auto",
-            interpolation="nearest",
-            cmap=str(spec["loading_cmap"]),
-            **loading_kwargs,
-        )
-        axes[row1, 0].set_title(f"Mean {spec['name']} Loading by Chromosome")
-        axes[row1, 0].set_xlabel("Chromosome")
-        axes[row1, 0].set_ylabel("Factor")
-        axes[row1, 0].set_xticks(np.arange(len(chromosome_order)))
-        axes[row1, 0].set_xticklabels(chromosome_order, rotation=45, ha="right")
-        axes[row1, 0].set_yticks(np.arange(n_factors))
-        axes[row1, 0].set_yticklabels(factor_labels)
-        fig.colorbar(
-            chromosome_im,
-            ax=axes[row1, 0],
-            fraction=0.03,
-            pad=0.02,
-            label=f"Mean {spec['loading_label'].lower()}",
-        )
-
-        box_data = [
-            sample_weights[idx, np.isfinite(sample_weights[idx])]
-            for idx in range(n_factors)
-        ]
-        boxplot = axes[row1, 1].boxplot(
-            box_data,
-            patch_artist=True,
-            tick_labels=factor_labels,
-            widths=0.65,
-        )
-        color_map = plt.get_cmap(str(spec["weight_cmap"]))
-        for patch_idx, patch in enumerate(boxplot["boxes"]):
-            color = color_map((patch_idx + 0.5) / max(n_factors, 1))
-            patch.set_facecolor(color)
-            patch.set_alpha(0.75)
-        for median in boxplot["medians"]:
-            median.set_color("black")
-            median.set_linewidth(1.5)
-        if bool(spec["signed"]):
-            axes[row1, 1].axhline(0.0, color="black", linestyle="--", linewidth=1.0, alpha=0.7)
-        axes[row1, 1].set_title(f"{spec['name']} Mode Weights")
-        axes[row1, 1].set_xlabel("Mode")
-        axes[row1, 1].set_ylabel(str(spec["weight_label"]))
-        axes[row1, 1].grid(True, axis="y", alpha=0.25)
-
-    plt.tight_layout()
-    save_and_close_plot(output_dir, "background_factor_diagnostics.png")
-    plot_factor_mode_weight_diagnostics(map_estimates, output_dir)
 
 
 # ── chromosome CN heatmap ──────────────────────────────────────────────────
@@ -1140,7 +775,6 @@ def plot_chromosome_plq_heatmap(
 ) -> None:
     """Heatmap of chromosome-level PLQ per sample × chromosome."""
     if "plq" not in df.columns:
-        logger.warning("plq missing from chromosome stats — skipping PLQ heatmap")
         return
 
     chr_order = [f"chr{i}" for i in range(1, 23)] + ["chrX", "chrY"]
@@ -1189,7 +823,6 @@ def plot_binq_genome_profile(
 ) -> None:
     """Genome-wide profile of per-bin BINQ values."""
     if "binq_value" not in bin_df.columns:
-        logger.warning("binq_value missing from bin stats — skipping BINQ profile")
         return
 
     group_cols = ["chr", "start", "end", "binq_value"]
@@ -1203,7 +836,6 @@ def plot_binq_genome_profile(
     values = unique["binq_value"].to_numpy(dtype=float)
     finite_mask = np.isfinite(values)
     if not np.any(finite_mask):
-        logger.warning("No finite BINQ values available — skipping BINQ profile")
         return
 
     field_label = "BINQ"
@@ -1391,7 +1023,6 @@ def _run_ploidy_plots(
     highlight_sample: str = "",
 ) -> None:
     """Generate all estimatePloidy-style plots."""
-    logger.info("Generating ploidy summary plots ...")
     plot_sex_assignments(sex_df, output_dir, highlight_sample)
 
     for sex in ("male", "female", "all"):
@@ -1414,7 +1045,6 @@ def _run_ploidy_plots(
                     chrom,
                     highlight_sample=highlight_sample,
                 )
-    logger.info("Completed ploidy summary plots.")
 
 
 def _run_aneuploidy_plots(
@@ -1425,7 +1055,6 @@ def _run_aneuploidy_plots(
     skip_per_sample: bool = False,
     site_data: Optional[dict] = None,
     min_het_alt: int = 3,
-    map_estimates: Optional[dict] = None,
     sex_df: Optional[pd.DataFrame] = None,
     preprocessed_depth_df: Optional[pd.DataFrame] = None,
     baseline_df: Optional[pd.DataFrame] = None,
@@ -1436,8 +1065,6 @@ def _run_aneuploidy_plots(
     plot_chromosome_cn_heatmap(df, output_dir)
     plot_chromosome_plq_heatmap(df, output_dir)
     plot_binq_genome_profile(bin_df, output_dir)
-    if map_estimates is not None:
-        plot_background_factor_diagnostics(bin_df, map_estimates, output_dir)
 
     all_vars = bin_df.groupby("sample")["sample_var"].first().values
     sample_groups = {sample: sdf for sample, sdf in bin_df.groupby("sample", sort=False)}
@@ -1469,41 +1096,14 @@ def _run_aneuploidy_plots(
     ]
 
     if skip_per_sample:
-        logger.info(
-            "Skipping per-sample plots (%d highlighted, %d normal, %d excluded undetermined)",
-            len(retained_highlighted_samples),
-            len(normal_samples),
-            len(excluded_undetermined_samples),
-        )
         return
-
-    logger.info(
-        "Generating per-sample plots (%d highlighted, %d normal, %d excluded undetermined) …",
-        len(retained_highlighted_samples),
-        len(normal_samples),
-        len(excluded_undetermined_samples),
-    )
 
     # Build a sample-name → index mapping for site data lookups
     sample_idx_map: Optional[dict] = None
-    has_aggregate_af_columns = (
-        {"mean_het_af", "n_het_sites"}.issubset(bin_df.columns) and
-        bin_df["n_het_sites"].sum() > 0
-    )
     if site_data is not None and "sample_ids" in site_data:
         sample_idx_map = {
             str(s): i for i, s in enumerate(site_data["sample_ids"])
         }
-    elif site_data is not None:
-        logger.warning(
-            "site_data.npz lacks sample_ids; per-sample AF panels require "
-            "raw counts with unambiguous sample IDs and will be skipped."
-        )
-    elif has_aggregate_af_columns:
-        logger.warning(
-            "Per-sample AF panels require --site-data raw counts; aggregate "
-            "mean_het_af/n_het_sites columns are ignored."
-        )
 
     for idx, sid in enumerate(retained_highlighted_samples, start=1):
         sdata = sample_groups.get(sid)
@@ -1518,12 +1118,6 @@ def _run_aneuploidy_plots(
             str(sid),
             {"baseline_ploidy_type": "DIPLOID", "autosomal_baseline_cn": 2},
         )
-        if idx == 1 or idx % 10 == 0 or idx == len(retained_highlighted_samples):
-            logger.debug(
-                "Per-sample plots: highlighted %d/%d",
-                idx,
-                len(retained_highlighted_samples),
-            )
         plot_sample_with_variance(
             sdata, all_vars, output_dir,
             aneuploid_chrs=aneu_chrs,
@@ -1535,31 +1129,17 @@ def _run_aneuploidy_plots(
         )
 
     if excluded_undetermined_samples and preprocessed_depth_df is None:
-        logger.warning(
-            "Skipping %d UNDETERMINED sample plots excluded from infer because --preprocessed-depth was not provided.",
-            len(excluded_undetermined_samples),
-        )
         excluded_undetermined_samples = []
 
     for idx, sid in enumerate(excluded_undetermined_samples, start=1):
         sample_data = _sample_plot_data_from_preprocessed_depth(preprocessed_depth_df, sid)
         if sample_data is None or sample_data.empty:
-            logger.warning(
-                "Skipping UNDETERMINED sample %s in per-sample plots: not present in --preprocessed-depth.",
-                sid,
-            )
             continue
 
         metadata = baseline_metadata.get(
             str(sid),
             {"baseline_ploidy_type": "UNDETERMINED", "autosomal_baseline_cn": 0},
         )
-        if idx == 1 or idx % 10 == 0 or idx == len(excluded_undetermined_samples):
-            logger.debug(
-                "Per-sample plots: excluded undetermined %d/%d",
-                idx,
-                len(excluded_undetermined_samples),
-            )
         plot_sample_with_variance(
             sample_data,
             None,
@@ -1580,12 +1160,6 @@ def _run_aneuploidy_plots(
             str(sid),
             {"baseline_ploidy_type": "DIPLOID", "autosomal_baseline_cn": 2},
         )
-        if idx == 1 or idx % 10 == 0 or idx == len(normal_samples):
-            logger.debug(
-                "Per-sample plots: normal %d/%d",
-                idx,
-                len(normal_samples),
-            )
         plot_sample_with_variance(
             sdata, all_vars, output_dir,
             baseline_ploidy_type=str(metadata.get("baseline_ploidy_type", "DIPLOID")),
@@ -1610,8 +1184,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("-o", "--output-dir", required=True)
     p.add_argument("-b", "--bin-stats", default=None,
                    help="bin_stats.tsv.gz (from 'infer')")
-    p.add_argument("--artifacts", default=None,
-                   help="inference_artifacts.npz (from 'infer'); auto-detected next to --bin-stats or --chrom-stats when present")
     p.add_argument("-t", "--training-loss", default=None,
                    help="training_loss.tsv (from 'infer')")
     p.add_argument("-s", "--sex-assignments", default=None,
@@ -1661,47 +1233,33 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def main() -> None:
-    """Entry point for ``gatk-sv-ploidy plot``."""
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    args = parse_args()
-    os.makedirs(args.output_dir, exist_ok=True)
+def _run_plot(args: argparse.Namespace, logger) -> None:
+    """Generate plots after CLI logging is configured."""
     with plot_output_format("pdf" if args.pdf else "png"):
         apply_theme()
 
         df = _apply_plot_depth_columns(pd.read_csv(args.chrom_stats, sep="\t"))
-        logger.info("Loaded %d rows for %d samples", len(df), df["sample"].nunique())
+        logger.info(
+            "Loaded chromosome statistics for plotting: rows=%d samples=%d",
+            len(df),
+            int(df["sample"].nunique()) if "sample" in df.columns else 0,
+        )
 
         bin_df = None
         if args.bin_stats:
             bin_df = _apply_plot_depth_bin_columns(
                 pd.read_csv(args.bin_stats, sep="\t", compression="gzip")
             )
+            logger.info("Loaded bin statistics for plotting: rows=%d", len(bin_df))
             if args.ppd_bin_quality:
                 bin_quality_df = pd.read_csv(args.ppd_bin_quality, sep="\t")
                 bin_df = _annotate_binq_values(bin_df, bin_quality_df, args.binq_field)
             if args.ignored_bins:
                 ignored_bins_df = pd.read_csv(args.ignored_bins, sep="\t")
                 bin_df = _annotate_ignored_bins(bin_df, ignored_bins_df)
-        elif args.ignored_bins or args.ppd_bin_quality:
-            logger.warning("--ignored-bins and --ppd-bin-quality require --bin-stats for overlay plots — ignoring")
-
-        artifacts_path = None
-        for candidate in (
-            args.artifacts,
-            os.path.join(os.path.dirname(args.bin_stats), "inference_artifacts.npz") if args.bin_stats else None,
-            os.path.join(os.path.dirname(args.chrom_stats), "inference_artifacts.npz"),
-        ):
-            if candidate and os.path.exists(candidate):
-                artifacts_path = candidate
-                break
-        if args.artifacts and artifacts_path is None:
-            logger.warning("Inference artifacts not found at %s — skipping background diagnostics plot.", args.artifacts)
-        map_estimates = None
-        if artifacts_path is not None:
-            map_estimates, _ = load_inference_artifacts(artifacts_path)
 
         # ── histograms ──────────────────────────────────────────────────────
+        logger.info("Generating cohort summary plots")
         plot_histograms_by_chr_type(df, args.output_dir, args.highlight_sample)
         plot_median_depth_distributions(df, args.output_dir, args.highlight_sample)
         if args.site_af_estimates:
@@ -1717,11 +1275,13 @@ def main() -> None:
             ppd_bin_df = pd.read_csv(args.ppd_bin_summary, sep="\t",
                                      compression="gzip")
             ppd_chr_df = pd.read_csv(args.ppd_chr_summary, sep="\t")
+            logger.info(
+                "Generating PPD plots: bin_rows=%d chromosome_rows=%d",
+                len(ppd_bin_df),
+                len(ppd_chr_df),
+            )
             run_ppd_plots(ppd_bin_df, ppd_chr_df, args.output_dir,
                           args.highlight_sample)
-        elif args.ppd_bin_summary or args.ppd_chr_summary:
-            logger.warning("Both --ppd-bin-summary and --ppd-chr-summary "
-                           "required for PPD plots — skipping")
 
         baseline_df = None
         if args.autosomal_baseline_cn_tsv:
@@ -1747,20 +1307,18 @@ def main() -> None:
         site_data = None
         if args.site_data:
             site_data = load_site_data(args.site_data)
+            logger.info("Loaded per-site allele tensors for plotting")
 
         if args.bin_stats and args.training_loss:
             loss_df = pd.read_csv(args.training_loss, sep="\t")
+            logger.info("Generating per-sample and training diagnostic plots")
             _run_aneuploidy_plots(df, bin_df, loss_df, args.output_dir,
                                   args.skip_per_sample_plots,
                                   site_data=site_data,
                                   min_het_alt=args.min_het_alt,
-                                  map_estimates=map_estimates,
                                   sex_df=sex_df,
                                   preprocessed_depth_df=preprocessed_depth_df,
                                   baseline_df=baseline_df)
-        elif args.bin_stats or args.training_loss:
-            logger.warning("Both --bin-stats and --training-loss required for "
-                           "aneuploidy detection plots — skipping")
 
         write_plot_report(
             args.output_dir,
@@ -1770,8 +1328,21 @@ def main() -> None:
             baseline_df=baseline_df,
             highlight_sample=args.highlight_sample,
         )
+        report_path = os.path.join(args.output_dir, "report", "index.html")
+        logger.info("Wrote static plot report")
+        log_output_artifacts(logger, [report_path])
 
-        logger.info("Done.")
+
+def main() -> None:
+    """Entry point for ``gatk-sv-ploidy plot``."""
+    args = parse_args()
+    os.makedirs(args.output_dir, exist_ok=True)
+    with tool_logging_context(
+        tool_name="plot",
+        output_dir=args.output_dir,
+        args=args,
+    ) as logger:
+        _run_plot(args, logger)
 
 
 if __name__ == "__main__":

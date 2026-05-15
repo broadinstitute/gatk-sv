@@ -80,17 +80,7 @@ def test_contig_posterior_and_plq_helpers() -> None:
     assert int(plq) == 20
 
 
-def test_compose_additive_background_matrix_avoids_spurious_matmul_warnings() -> None:
-    rng = np.random.default_rng(1)
-    background_bin_factors = rng.lognormal(
-        mean=0.0,
-        sigma=0.5,
-        size=(849, 16),
-    ).astype(np.float64)
-    background_sample_factors = np.abs(
-        rng.normal(loc=0.0, scale=0.02, size=(16, 156))
-    ).astype(np.float64)
-
+def test_compose_additive_background_matrix_broadcasts_epsilon() -> None:
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always", RuntimeWarning)
         additive_background = compose_additive_background_matrix(
@@ -98,12 +88,11 @@ def test_compose_additive_background_matrix_avoids_spurious_matmul_warnings() ->
             n_bins=849,
             n_samples=156,
             dtype=np.float64,
-            background_bin_factors=background_bin_factors,
-            background_sample_factors=background_sample_factors,
         )
 
     assert captured == []
     assert additive_background.shape == (849, 156)
+    assert np.all(additive_background == pytest.approx(0.001))
     assert np.isfinite(additive_background).all()
 
 

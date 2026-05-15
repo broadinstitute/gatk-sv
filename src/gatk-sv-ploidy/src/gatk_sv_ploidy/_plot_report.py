@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields
 from html import escape
-import logging
 import os
 from pathlib import Path
 import shutil
@@ -12,9 +11,6 @@ from typing import Iterable, Optional
 
 import numpy as np
 import pandas as pd
-
-
-logger = logging.getLogger(__name__)
 
 _FIGURE_SUFFIXES = {".png", ".jpg", ".jpeg", ".svg", ".pdf"}
 _TABLE_SUFFIXES = {".tsv", ".txt", ".csv"}
@@ -86,9 +82,6 @@ def write_plot_report(
     report_dir = root / "report"
     report_dir.mkdir(exist_ok=True)
     (report_dir / "index.html").write_text(html, encoding="utf-8")
-
-    logger.debug("Saved plot manifest: plot_manifest.tsv")
-    logger.debug("Saved plot report: report/index.html")
     return manifest_df
 
 

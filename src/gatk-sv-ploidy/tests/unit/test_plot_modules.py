@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -26,7 +25,6 @@ from gatk_sv_ploidy._plot_detail import (
 from gatk_sv_ploidy._plot_ppd import run_ppd_plots
 from gatk_sv_ploidy._plot_report import write_plot_report
 from gatk_sv_ploidy._plot_style import (
-    _suppress_chatty_plot_dependency_loggers,
     apply_theme,
     get_plot_output_format,
     set_plot_output_format,
@@ -44,7 +42,6 @@ from gatk_sv_ploidy.plot import (
     _run_aneuploidy_plots,
     _run_ploidy_plots,
     parse_args,
-    plot_background_factor_diagnostics,
     plot_binq_genome_profile,
     plot_chromosome_cn_heatmap,
     plot_chromosome_plq_heatmap,
@@ -809,24 +806,6 @@ def test_apply_theme_uses_nature_publication_defaults() -> None:
     assert plt.rcParams["svg.fonttype"] == "none"
 
 
-def test_plot_style_suppresses_fonttools_info_logging() -> None:
-    fonttools_logger = logging.getLogger("fontTools")
-    fonttools_subset_logger = logging.getLogger("fontTools.subset")
-    original_levels = (fonttools_logger.level, fonttools_subset_logger.level)
-
-    try:
-        fonttools_logger.setLevel(logging.INFO)
-        fonttools_subset_logger.setLevel(logging.NOTSET)
-
-        _suppress_chatty_plot_dependency_loggers()
-
-        assert fonttools_logger.level == logging.WARNING
-        assert fonttools_subset_logger.level == logging.WARNING
-    finally:
-        fonttools_logger.setLevel(original_levels[0])
-        fonttools_subset_logger.setLevel(original_levels[1])
-
-
 def test_run_aneuploidy_plots_passes_non_diploid_baseline_metadata(tmp_path, monkeypatch) -> None:
     chrom_df = pd.concat(
         [
@@ -1310,8 +1289,6 @@ def test_plot_main_applies_baseline_manifest_to_plot_metadata(
         baseline_df["sample"] == "S2",
         "baseline_cn_call",
     ].iloc[0] == "UNDETERMINED"
-
-
 def test_plot_main_passes_preprocessed_depth_to_sample_plots(
     tmp_path,
     monkeypatch,
@@ -1394,50 +1371,3 @@ def test_plot_main_passes_preprocessed_depth_to_sample_plots(
         baseline_df["sample"] == "S3",
         "baseline_cn_call",
     ].iloc[0] == "UNDETERMINED"
-
-
-def test_plot_background_factor_diagnostics_outputs(tmp_path) -> None:
-    bin_df = _small_bin_df()
-    map_estimates = {
-        "background_bin_factors": np.array(
-            [
-                [0.8, 0.3],
-                [0.9, 0.2],
-                [1.0, 0.4],
-                [1.1, 0.5],
-                [2.0, 1.6],
-                [2.2, 1.8],
-            ],
-            dtype=np.float32,
-        ),
-        "background_sample_factors": np.array(
-            [
-                [0.02, 0.06],
-                [0.01, 0.04],
-            ],
-            dtype=np.float32,
-        ),
-        "multiplicative_bin_factors": np.array(
-            [
-                [-0.4, 0.2],
-                [-0.2, 0.1],
-                [0.0, -0.1],
-                [0.1, -0.2],
-                [0.3, 0.4],
-                [0.5, 0.6],
-            ],
-            dtype=np.float32,
-        ),
-        "multiplicative_sample_factors": np.array(
-            [
-                [-0.05, 0.08],
-                [0.02, -0.03],
-            ],
-            dtype=np.float32,
-        ),
-    }
-
-    plot_background_factor_diagnostics(bin_df, map_estimates, str(tmp_path))
-
-    assert (tmp_path / "diagnostics" / "background_factor_diagnostics.png").exists()
-    assert (tmp_path / "diagnostics" / "factor_mode_weight_diagnostics.png").exists()

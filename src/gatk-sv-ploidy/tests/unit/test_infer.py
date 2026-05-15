@@ -7,7 +7,6 @@ import torch
 from gatk_sv_ploidy._util import compute_cnq_from_probabilities
 from gatk_sv_ploidy.data import DepthData
 from gatk_sv_ploidy.infer import (
-    _build_sample_af_concentration_grid,
     _filter_inputs_by_baseline_manifest,
     _inference_tensor_dtype,
     _load_autosomal_baseline_cn,
@@ -16,7 +15,6 @@ from gatk_sv_ploidy.infer import (
     build_bin_stats,
     build_chromosome_stats,
     detect_aneuploidies,
-    estimate_sample_af_concentration_from_cn_posterior,
     estimate_site_pop_af_naive_bayes,
     parse_args,
     resolve_site_af_estimator_application,
@@ -24,8 +22,6 @@ from gatk_sv_ploidy.infer import (
 )
 from gatk_sv_ploidy.models import DEFAULT_EPSILON_MEAN
 from gatk_sv_ploidy.models import DEFAULT_EPSILON_CONCENTRATION
-from gatk_sv_ploidy.models import DEFAULT_BACKGROUND_FACTORS
-from gatk_sv_ploidy.models import DEFAULT_MULTIPLICATIVE_FACTORS
 
 
 def test_infer_parse_args_defaults(monkeypatch) -> None:
@@ -43,18 +39,12 @@ def test_infer_parse_args_defaults(monkeypatch) -> None:
     args = parse_args()
 
     assert args.autosome_prior_mode == "dirichlet"
-    assert args.var_bias_bin == pytest.approx(0.01)
     assert args.var_sample == 0.01
-    assert args.var_bin == pytest.approx(0.0)
-    assert args.multiplicative_factors == DEFAULT_MULTIPLICATIVE_FACTORS
     assert args.alpha_ref == 50.0
     assert args.epsilon_mean == pytest.approx(DEFAULT_EPSILON_MEAN)
     assert args.epsilon_concentration == pytest.approx(
         DEFAULT_EPSILON_CONCENTRATION
     )
-    assert DEFAULT_BACKGROUND_FACTORS == 0
-    assert DEFAULT_MULTIPLICATIVE_FACTORS == 0
-    assert args.background_factors == DEFAULT_BACKGROUND_FACTORS
     assert args.svi_init_restarts == 10
     assert args.grad_clip_norm == pytest.approx(10.0)
     assert args.sample_depth_max == 10000.0
@@ -62,16 +52,10 @@ def test_infer_parse_args_defaults(monkeypatch) -> None:
     assert args.cn_inference_method == "multi-draw"
     assert args.cn_inference_draws == 100
     assert args.site_af_estimator == "auto"
-    assert args.learn_af_temperature is True
     assert args.af_outlier_weight == pytest.approx(0.05)
     assert args.af_background_concentration is None
-    assert args.learn_site_af is False
-    assert args.site_af_prior_strength == 20.0
     assert args.site_af_prior_alpha == 1.0
     assert args.site_af_prior_beta == 1.0
-    assert args.sample_af_concentration_mode == "shared"
-    assert args.sample_af_concentration_prior_log_sd == pytest.approx(0.75)
-    assert args.sample_af_concentration_grid is None
 
 
 def test_infer_parse_args_accepts_single_cn_inference_method(monkeypatch) -> None:
@@ -91,70 +75,6 @@ def test_infer_parse_args_accepts_single_cn_inference_method(monkeypatch) -> Non
     args = parse_args()
 
     assert args.cn_inference_method == "single"
-
-
-def test_infer_parse_args_accepts_learn_site_af(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "infer",
-            "--input",
-            "depth.tsv",
-            "--output-dir",
-            "outdir",
-            "--learn-site-af",
-            "--site-af-prior-strength",
-            "12.5",
-        ],
-    )
-
-    args = parse_args()
-
-    assert args.learn_site_af is True
-    assert args.site_af_prior_strength == pytest.approx(12.5)
-
-
-def test_infer_parse_args_accepts_fixed_af_temperature(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "infer",
-            "--input",
-            "depth.tsv",
-            "--output-dir",
-            "outdir",
-            "--fixed-af-temperature",
-        ],
-    )
-
-    args = parse_args()
-
-    assert args.learn_af_temperature is False
-
-
-def test_infer_parse_args_accepts_sample_af_concentration_controls(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "infer",
-            "--input",
-            "depth.tsv",
-            "--output-dir",
-            "outdir",
-            "--sample-af-concentration-mode",
-            "depth-posterior",
-            "--sample-af-concentration-prior-log-sd",
-            "0.35",
-            "--sample-af-concentration-grid",
-            "2,5,10",
-        ],
-    )
-
-    args = parse_args()
-
-    assert args.sample_af_concentration_mode == "depth-posterior"
-    assert args.sample_af_concentration_prior_log_sd == pytest.approx(0.35)
-    assert args.sample_af_concentration_grid == "2,5,10"
 
 
 def test_infer_parse_args_accepts_af_outlier_weight(monkeypatch) -> None:
@@ -193,24 +113,6 @@ def test_infer_parse_args_accepts_af_background_concentration(monkeypatch) -> No
     args = parse_args()
 
     assert args.af_background_concentration == pytest.approx(0.7)
-
-
-def test_infer_parse_args_accepts_learn_af_temperature(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "infer",
-            "--input",
-            "depth.tsv",
-            "--output-dir",
-            "outdir",
-            "--learn-af-temperature",
-        ],
-    )
-
-    args = parse_args()
-
-    assert args.learn_af_temperature is True
 
 
 def test_infer_parse_args_accepts_autosomal_baseline_cn_tsv(monkeypatch) -> None:
@@ -531,7 +433,7 @@ def test_build_bin_stats_expands_contig_shared_bin_epsilon() -> None:
     assert sample_b.to_list() == pytest.approx([sample_b_expected, sample_b_expected])
 
 
-def test_build_bin_stats_uses_background_factors() -> None:
+def test_build_bin_stats_uses_bin_epsilon() -> None:
     df = pd.DataFrame(
         {
             "Chr": ["chrY", "chrY"],
@@ -552,8 +454,7 @@ def test_build_bin_stats_uses_background_factors() -> None:
             "bin_bias": np.ones(data.n_bins, dtype=np.float32),
             "bin_var": np.full(data.n_bins, 0.01, dtype=np.float32),
             "sample_var": np.full(data.n_samples, 0.01, dtype=np.float32),
-            "background_bin_factors": np.array([[1.0], [2.0]], dtype=np.float32),
-            "background_sample_factors": np.array([[0.1, 0.2]], dtype=np.float32),
+            "bin_epsilon": np.array([[0.1, 0.2], [0.3, 0.4]], dtype=np.float32),
         },
         {
             "cn_posterior": cn_posterior,
@@ -567,25 +468,25 @@ def test_build_bin_stats_uses_background_factors() -> None:
     }
     np.testing.assert_allclose(
         observed[("chrY", "SAMPLE_A", 25)],
-        2.0 / 3.0 * 0.1,
+        0.1,
         rtol=1e-6,
         atol=1e-6,
     )
     np.testing.assert_allclose(
         observed[("chrY", "SAMPLE_A", 125)],
-        4.0 / 3.0 * 0.1,
+        0.3,
         rtol=1e-6,
         atol=1e-6,
     )
     np.testing.assert_allclose(
         observed[("chrY", "SAMPLE_B", 25)],
-        2.0 / 3.0 * 0.2,
+        0.2,
         rtol=1e-6,
         atol=1e-6,
     )
     np.testing.assert_allclose(
         observed[("chrY", "SAMPLE_B", 125)],
-        4.0 / 3.0 * 0.2,
+        0.4,
         rtol=1e-6,
         atol=1e-6,
     )
@@ -618,60 +519,6 @@ def test_estimate_site_pop_af_naive_bayes_matches_beta_posterior_mean() -> None:
         result["sum_total"],
         np.array([[20, 4]], dtype=np.int64),
     )
-
-
-def test_estimate_sample_af_concentration_from_cn_posterior_prefers_lower_concentration_for_noisy_sample() -> None:
-    site_alt = np.array(
-        [
-            [[5, 10]],
-            [[15, 10]],
-        ],
-        dtype=np.int32,
-    )
-    site_total = np.full_like(site_alt, 20, dtype=np.int32)
-    site_mask = np.ones_like(site_alt, dtype=bool)
-    site_pop_af = np.full((2, 1), 0.5, dtype=np.float32)
-    cn_posterior = np.zeros((2, 2, 6), dtype=np.float32)
-    cn_posterior[:, :, 2] = 1.0
-
-    result = estimate_sample_af_concentration_from_cn_posterior(
-        site_alt,
-        site_total,
-        site_pop_af,
-        site_mask,
-        cn_posterior,
-        np.zeros(2, dtype=np.int64),
-        base_concentration=50.0,
-        concentration_grid=np.array([5.0, 50.0], dtype=np.float64),
-        prior_log_sd=2.0,
-    )
-
-    np.testing.assert_allclose(
-        result["concentration_grid"],
-        np.array([5.0, 50.0], dtype=np.float32),
-        rtol=1e-6,
-        atol=1e-6,
-    )
-    np.testing.assert_allclose(
-        result["sample_af_concentration_map"],
-        np.array([5.0, 50.0], dtype=np.float32),
-        rtol=1e-6,
-        atol=1e-6,
-    )
-    assert result["sample_af_concentration_mean"][0] < result["sample_af_concentration_mean"][1]
-    np.testing.assert_array_equal(
-        result["sample_af_concentration_observed_sites"],
-        np.array([2, 2], dtype=np.int64),
-    )
-
-
-def test_build_sample_af_concentration_grid_matches_polyploidy_span() -> None:
-    grid = _build_sample_af_concentration_grid(50.0, None)
-
-    assert 50.0 in grid
-    assert grid[0] < 3.0
-    assert grid[-1] > 300.0
-    assert np.all(np.diff(grid) > 0)
 
 
 def test_should_apply_site_af_estimator_auto_is_conservative() -> None:
@@ -819,7 +666,7 @@ def test_build_safe_inference_diagnostic_messages_reports_allosomal_signals(
     assert "chrY observed-minus-expected plot depth for expected XX copy number" in joined
 
 
-def test_build_safe_inference_diagnostic_messages_reports_background_factor_chrY_residuals() -> None:
+def test_build_safe_inference_diagnostic_messages_reports_chrY_residuals() -> None:
     depth_df = pd.DataFrame(
         {
             "Chr": ["chr21", "chrY", "chrY", "chrY"],
@@ -856,8 +703,6 @@ def test_build_safe_inference_diagnostic_messages_reports_background_factor_chrY
             "bin_bias": np.array([1.0, 0.989, 0.992, 0.995], dtype=np.float32),
             "bin_var": np.array([0.01, 0.18, 0.21, 0.24], dtype=np.float32),
             "bin_epsilon": np.zeros((data.n_bins, data.n_samples), dtype=np.float32),
-            "background_bin_factors": np.array([[1.0], [0.2], [1.0], [2.4]], dtype=np.float32),
-            "background_sample_factors": np.array([[0.02, 0.03, 0.05, 0.06]], dtype=np.float32),
         },
         cn_posterior={
             "cn_posterior": cn_posterior,
@@ -874,9 +719,6 @@ def test_build_safe_inference_diagnostic_messages_reports_background_factor_chrY
     )
 
     joined = "\n".join(messages)
-    assert "Background sample-factor amplitudes across factor-sample pairs" in joined
-    assert "Background factor 1 normalized loadings across chrY bins" in joined
-    assert "Correlation(background_factor_1_loading, chrY mean plot depth among XX-assigned samples by bin)" in joined
     assert "Correlation(bin_bias, chrY mean absolute observed-minus-expected plot depth among XX-assigned samples by bin)" in joined
     assert "Correlation(bin_var, chrY mean absolute observed-minus-expected plot depth among XX-assigned samples by bin)" in joined
 
