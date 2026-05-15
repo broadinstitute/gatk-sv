@@ -11,6 +11,7 @@ import "Structs.wdl"
 workflow RawVcfQC {
   input {
     Array[File] vcfs
+    Array[String] samples
     String prefix
     String caller
     String sv_pipeline_docker
@@ -19,10 +20,11 @@ workflow RawVcfQC {
     RuntimeAttr? runtime_attr_counts
   }
 
-  scatter (vcf in vcfs) {
+  scatter (i in range(length(vcfs))) {
     call RunIndividualQC {
       input:
-        vcf = vcf,
+        vcf = vcfs[i],
+        sample_id = samples[i],
         caller = caller,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_qc
@@ -57,12 +59,11 @@ workflow RawVcfQC {
 task RunIndividualQC {
   input {
     File vcf
+    String sample_id
     String caller
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
-  
-  String sample_name = basename(vcf, ".vcf.gz")
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
@@ -75,11 +76,12 @@ task RunIndividualQC {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File stat = "${caller}.${sample_name}.QC.stat"
+    File stat = "${caller}.${sample_id}.QC.stat"
   }
   command <<<
+    set -euo pipefail
 
-    python /opt/sv-pipeline/pre_SVCalling_and_QC/raw_vcf_qc/calcu_num_SVs.by_type_chromo.py ~{vcf} ~{caller}.~{sample_name}.QC.stat
+    python /opt/sv-pipeline/pre_SVCalling_and_QC/raw_vcf_qc/calcu_num_SVs.by_type_chromo.py ~{vcf} ~{caller}.~{sample_id}.QC.stat ~{sample_id}
     
   >>>
   runtime {
@@ -169,57 +171,37 @@ task MergeVariantCounts {
     echo "~{sep='\n' stat_files}" > stat_files.list
     
     python <<CODE
-import pandas as pd
 import os
+
+import pandas as pd
 
 dfs = []
 with open('stat_files.list', 'r') as file_list:
-    # Iterate over each stats file
     for file_path in file_list:
         file_path = file_path.strip()
-        if not os.path.exists(file_path):
+        if not file_path or not os.path.exists(file_path):
             continue
-            
-        # Read the stat file
+
         df = pd.read_csv(file_path, sep='\t')
-        
-        # Iterate over each row in the stat file
-        records = []
-        for _, row in df.iterrows():
-            # Skip header rows
-            if row['#CHROM'].startswith('#'):
-                continue
-                
-            # Extract sample ID from file path
-            sample_name = row['SAMPLE']
-            if '/' in sample_name:
-                sample_name = sample_name.split('/')[-1]
-            if '.' in sample_name:
-                sample_name = sample_name.split('.')[0]
-                
-            # Create metric name
-            metric = f"~{caller}_{row['SVTYPE']}_{row['#CHROM']}"
-            
-            # Add to records
-            records.append({
-                'sample_id': sample_name,
-                'metric': metric,
-                'count': row['NUM']
-            })
-        
-        # Convert records to dataframe and add to list
-        if records:
-            dfs.append(pd.DataFrame(records))
+        if df.empty:
+            continue
 
-# Combine all dataframes
-combined = pd.concat(dfs, ignore_index=True)
+        df = df.rename(columns={'SAMPLE': 'sample_id', 'NUM': 'count'})
+        df['metric'] = (
+            '~{caller}_'
+            + df['SVTYPE'].astype(str)
+            + '_'
+            + df['#CHROM'].astype(str)
+        )
+        dfs.append(df[['sample_id', 'metric', 'count']])
 
-# Pivot to create a wide format table
-pivoted = combined.pivot(index='sample_id', columns='metric', values='count')
-pivoted = pivoted.fillna(0).astype(int)
-pivoted = pivoted.reset_index()
+if dfs:
+    combined = pd.concat(dfs, ignore_index=True)
+    pivoted = combined.pivot(index='sample_id', columns='metric', values='count')
+    pivoted = pivoted.fillna(0).astype(int).reset_index()
+else:
+    pivoted = pd.DataFrame(columns=['sample_id'])
 
-# Write output
 pivoted.to_csv('~{prefix}.~{caller}.variant_counts.tsv', sep='\t', index=False)
 CODE
   >>>

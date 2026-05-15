@@ -6,13 +6,11 @@ import argparse
 import pandas as pd
 from collections import Counter
 from functools import reduce
-from pathlib import Path
+
 import numpy as np
 
 ID_COL = "sample_id"
 EMPTY_OUTLIERS = "EMPTY_ROWS_DROP"
-
-
 def read_ploidy(filename: str) -> pd.DataFrame:
     """
     Args:
@@ -154,8 +152,7 @@ def read_outlier(filename: str, outlier_col_label: str) -> pd.DataFrame:
         df[ID_COL] = df.apply(lambda _: EMPTY_OUTLIERS, axis=0)
         outlier_sample = df.pivot_table(columns=[ID_COL], aggfunc="size").astype(int)
     else:
-        df['Outlier_Sample'] = df['Outlier_Sample'].apply(Path)
-        df[ID_COL] = df['Outlier_Sample'].apply(lambda x: x.stem if '.' in x.suffix else np.nan)
+        df[ID_COL] = df["Outlier_Sample"].astype(str)
         outlier_sample = df.pivot_table(columns=[ID_COL], aggfunc="size").astype(int)
     outlier_df = outlier_sample.reset_index()
     outlier_df.columns = [ID_COL, outlier_col_label]

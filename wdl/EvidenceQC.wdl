@@ -148,6 +148,7 @@ workflow EvidenceQC {
       call vcfqc.RawVcfQC as RawVcfQC_Dragen {
         input:
           vcfs = select_first([dragen_vcfs]),
+          samples = samples,
           prefix = batch,
           caller = "Dragen",
           runtime_attr_qc = runtime_attr_qc,
@@ -159,6 +160,7 @@ workflow EvidenceQC {
       call vcfqc.RawVcfQC as RawVcfQC_Manta {
         input:
           vcfs = select_first([manta_vcfs]),
+          samples = samples,
           prefix = batch,
           caller = "Manta",
           sv_pipeline_docker = sv_pipeline_docker,
@@ -171,6 +173,7 @@ workflow EvidenceQC {
       call vcfqc.RawVcfQC as RawVcfQC_Melt {
         input:
           vcfs = select_first([melt_vcfs]),
+          samples = samples,
           prefix = batch,
           caller = "Melt",
           sv_pipeline_docker = sv_pipeline_docker,
@@ -183,6 +186,7 @@ workflow EvidenceQC {
       call vcfqc.RawVcfQC as RawVcfQC_Wham {
         input:
           vcfs = select_first([wham_vcfs]),
+          samples = samples,
           prefix = batch,
           caller = "Wham",
           sv_pipeline_docker = sv_pipeline_docker,
@@ -195,6 +199,7 @@ workflow EvidenceQC {
       call vcfqc.RawVcfQC as RawVcfQC_Scramble {
         input:
           vcfs = select_first([scramble_vcfs]),
+          samples = samples,
           prefix = batch,
           caller = "Scramble",
           sv_pipeline_docker = sv_pipeline_docker,

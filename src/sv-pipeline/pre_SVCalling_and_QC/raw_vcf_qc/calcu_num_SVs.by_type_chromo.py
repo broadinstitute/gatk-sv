@@ -59,8 +59,11 @@ def main():
     parser.add_argument(
         "vcf", type=str, help="name of input file in vcf.gz format")
     parser.add_argument("out", type=str, help="name of output file")
+    parser.add_argument(
+        "sample_id", nargs="?", default=None,
+        help="canonical sample ID to record in the stats table")
     args = parser.parse_args()
-    sample_name = args.vcf.replace('.vcf.gz', '')
+    sample_name = args.sample_id if args.sample_id is not None else args.vcf.replace('.vcf.gz', '')
     [stat_hash, sv_types] = vcf_stat_readin(args.vcf)
     write_output(args.out, stat_hash, sv_types, sample_name)
 
