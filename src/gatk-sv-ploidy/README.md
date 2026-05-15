@@ -1,11 +1,11 @@
 # gatk-sv-ploidy
 
 Whole-genome aneuploidy detection from binned read counts with optional
-per-site allele-fraction evidence.
+per-site allele fraction evidence.
 
 The package implements a baseline-aware pipeline:
 
-1. preprocess raw depth and optionally build per-site allele-fraction tensors,
+1. preprocess raw depth and optionally build per-site allele fraction tensors,
 2. optionally classify each sample's autosomal baseline CN as CN1, CN2, CN3,
    or CN4,
 3. fit a Pyro-based Bayesian copy-number model,
@@ -43,7 +43,7 @@ gatk-sv-ploidy <subcommand> [options]
 | Subcommand | Description |
 |------------|-------------|
 | `preprocess` | Normalize internally for QC, filter bins, optionally build `site_data.npz`, and write filtered raw counts |
-| `polyploidy` | Classify per-sample autosomal baseline CN from pooled autosomal allele-fraction evidence |
+| `polyploidy` | Classify per-sample autosomal baseline CN from pooled autosomal allele fraction evidence |
 | `infer` | Fit the Bayesian CN model and write per-bin and per-chromosome summaries |
 | `ppd` | Generate posterior predictive draws and quality / calibration summaries |
 | `call` | Assign baseline-aware sex and aneuploidy labels per sample |
@@ -59,7 +59,7 @@ The default path is raw-count preprocess output plus the raw-count
 negative-binomial observation model chosen automatically by `infer`.
 
 ```bash
-# 1. Filter depth data and optionally build per-site allele-fraction tensors.
+# 1. Filter depth data and optionally build per-site allele fraction tensors.
 gatk-sv-ploidy preprocess -i depth.tsv -o out/preprocess \
   --site-depth-list sample_sd_files.txt
 
@@ -184,7 +184,7 @@ flowchart TD
     subgraph "1. Preprocess"
         N["Autosomal-median\nnormalization for QC"]
         BF["Bin quality\nfiltering"]
-        AC["Per-site allele-fraction\ncount assembly"]
+        AC["Per-site allele fraction\ncount assembly"]
         RD --> N --> BF
         SD -.-> AC
         BF --> PD["preprocessed_depth.tsv"]
@@ -192,7 +192,7 @@ flowchart TD
     end
 
     subgraph "2. Baseline CN"
-        PB["Autosomal allele-fraction\nbaseline classifier"]
+        PB["Autosomal allele fraction\nbaseline classifier"]
         PD --> PB
         SN --> PB
         PB --> AB["sample_autosomal_baseline_cn.tsv"]
@@ -237,8 +237,8 @@ flowchart TD
 | SVI guide | `delta` | MAP-style continuous latent fit |
 | `infer sample depth anchor` | enabled | Raw-count runs fix sample depth to the autosomal median counts-per-kb anchor |
 | `infer --epsilon-mean` | `1e-2` | Small CN0-only epsilon background floor is retained |
-| `infer --af-weight` | `0.5` | Prior median for the learned global allele-fraction informative-mixture probability |
-| `infer allele-fraction temperature learning` | enabled when allele-fraction evidence is active | A single global allele-fraction temperature is learned by default |
+| `infer --af-weight` | `0.5` | Prior median for the learned global allele fraction informative-mixture probability |
+| `infer allele fraction temperature learning` | enabled when allele fraction evidence is active | A single global allele fraction temperature is learned by default |
 | `infer --cn-inference-method` | `multi-draw` | With the default delta guide, discrete CN inference uses the fitted point estimate |
 
 ## Objective And Decision Target
@@ -305,11 +305,11 @@ Sites are screened by a diploid heterozygosity prior based on the current
 the evidence.
 
 For each sample and baseline state $g_s = c$, the classifier combines two
-allele-fraction signals:
+allele fraction signals:
 
 1. a beta-binomial genotype-mixture likelihood marginalized over genotype copy
-  states and over a grid of allele-fraction concentration values,
-2. a direct peak-mixture score around the canonical allele-fraction peaks for
+  states and over a grid of allele fraction concentration values,
+2. a direct peak-mixture score around the canonical allele fraction peaks for
   CN1, CN2, CN3, and CN4.
 
 The genotype-mixture term is:
@@ -344,13 +344,13 @@ Non-diploid baseline calls require all of the following:
 3. positive log Bayes factor versus CN2,
 4. effect size per informative site above `--effect-size-threshold`,
 5. direct peak support for the candidate state,
-6. allele-fraction shape fit that is not dominated by contamination-like
+6. allele fraction shape fit that is not dominated by contamination-like
   mixtures.
 
-If a non-diploid MAP candidate has no empirical non-diploid allele-fraction
+If a non-diploid MAP candidate has no empirical non-diploid allele fraction
 peak support, the classifier defaults back to CN2 and records the reason in
 `polyploidy_test_results.tsv`. If a non-diploid candidate has empirical
-non-diploid allele-fraction signal but fails the stricter allele-fraction shape
+non-diploid allele fraction signal but fails the stricter allele fraction shape
 fit checks, the classifier emits `UNDETERMINED`, writes `include_in_infer=false` in
 `sample_autosomal_baseline_cn.tsv`, and `infer` excludes that sample before
 chromosome-level aneuploidy calling. The main sensitivity knobs for this
@@ -386,7 +386,7 @@ scale is known to be comparable across samples.
   and, in the default raw-count model, for the fixed `sample_depth` scale.
 - chrX and chrY require separate prior handling because expected copy number
   depends on sex karyotype.
-- Allele-fraction evidence should be aggregated over genotype uncertainty
+- Allele fraction evidence should be aggregated over genotype uncertainty
   rather than by hard-calling genotype states from observed allele fractions.
 
 ### Convenience-Driven Assumptions
@@ -396,7 +396,7 @@ scale is known to be comparable across samples.
 - The default model removes low-rank multiplicative bias, structured additive
   background, per-bin residual variance, and allosome-specific extra variance to
   improve identifiability and reduce false high-copy fits.
-- The default allele-fraction pathway learns a single global temperature rather
+- The default allele fraction pathway learns a single global temperature rather
   than a more flexible bin-specific calibration term.
 
 ### Explicitly Unverified Or User-Tunable Assumptions
@@ -475,10 +475,10 @@ chrX and chrY use flat Dirichlet concentrations by default, with the
 sex-karyotype latent providing the main prior regularization via
 `--sex-cn-weight`.
 
-### Allele-Fraction Evidence In `infer`
+### Allele Fraction Evidence In `infer`
 
 When `site_data.npz` is provided and `--af-weight > 0`, the model adds a
-per-bin allele-fraction term marginalized over genotype copy counts:
+per-bin allele fraction term marginalized over genotype copy counts:
 
 $$
 \ell^{\mathrm{allele}}_{bs}(c) =
@@ -491,17 +491,17 @@ $$
 
 Current implementation details:
 
-- the allele-fraction table is centered internally against a fixed CN reference
+- the allele fraction table is centered internally against a fixed CN reference
   mixture before scaling,
 - default temperature learning treats `--af-weight 0.5` as the prior median for
-  one global allele-fraction informative-mixture probability,
-- the allele-fraction table is precomputed once because it depends only on
+  one global allele fraction informative-mixture probability,
+- the allele fraction table is precomputed once because it depends only on
   observed site data and the discrete CN state,
 - `--site-af-estimator auto` may replace the input `site_pop_af` with a
   naive-Bayes estimate when the current encoding is coherent enough to do so
   safely.
 
-Setting `--af-weight 0` disables allele-fraction evidence entirely.
+Setting `--af-weight 0` disables allele fraction evidence entirely.
 
 ### Variational Inference And Discrete CN Inference
 
@@ -530,8 +530,8 @@ behavior.
 - `polyploidy` defaults to CN2 when non-diploid evidence is absent, and marks
   statistically supported but poor-fit non-diploid candidates `UNDETERMINED` so
   they can be excluded from downstream aneuploidy calling.
-- Allele-fraction evidence is optional and temperature-scaled; this reduces the
-  chance that miscalibrated allele-fraction likelihoods dominate depth evidence.
+- Allele fraction evidence is optional and temperature-scaled; this reduces the
+  chance that miscalibrated allele fraction likelihoods dominate depth evidence.
 - `call` can rebuild chromosome summaries after excluding low-quality bins using
   `--bin-stats`, `--ppd-bin-quality`, and `--min-binq`.
 - `polyploidy --privacy-safe-diagnostics` logs aggregate-only summaries for
@@ -545,8 +545,8 @@ cohorts:
 - small datasets benefit from strong neutral-state priors, conservative
   non-diploid calling thresholds, and the default simpler latent structure,
 - large datasets benefit from bin collapsing in `preprocess`, fixed-width site
-  tensors, allele-fraction lookup-table precomputation, and optional omission
-  of site-level modeling when allele-fraction data is unavailable or too
+  tensors, allele fraction lookup-table precomputation, and optional omission
+  of site-level modeling when allele fraction data is unavailable or too
   expensive,
 - the default delta guide and fitted-parameter posterior predictive checks keep
   runtime predictable; broader uncertainty propagation would require a more
@@ -560,7 +560,7 @@ The pipeline exposes multiple confidence outputs rather than a single hard call:
   error probabilities, effect sizes per informative site, direct-peak support
   flags, best-fit mixture fractions, and reason codes.
 - `safe_inference_diagnostics.txt` contains aggregate, privacy-safe checks on
-  the fitted model and allele-fraction influence.
+  the fitted model and allele fraction influence.
 - `site_af_estimates.tsv.gz`, when written, records input, naive-Bayes, and
   effective site allele-frequency estimates used by `infer`.
 - `bin_stats.tsv.gz` contains per-bin CN summaries and quality metrics.
@@ -662,15 +662,15 @@ model.
 
 ## Expected Failure Modes
 
-- If no `site_data.npz` is available, allele-fraction evidence and baseline-CN
+- If no `site_data.npz` is available, allele fraction evidence and baseline-CN
   classification are unavailable; the pipeline falls back to depth-only
   inference with autosomal baseline CN = 2.
 - If the fixed autosomal median counts-per-kb anchor is poor, the default raw
   model can mis-scale whole-sample depth and may require future model changes
   for those cohorts.
-- If allele-fraction evidence is miscalibrated for a cohort, it can still shift
+- If allele fraction evidence is miscalibrated for a cohort, it can still shift
   CN posteriors even with temperature learning. Compare depth-only and
-  allele-fraction-enabled behavior, inspect PPD summaries, and use the
+  allele fraction-enabled behavior, inspect PPD summaries, and use the
   privacy-safe diagnostics when needed.
 - Baseline-aware labels are only as good as the supplied baseline CN manifest.
   If `polyploidy` is wrong or skipped when non-diploid baselines are present,
