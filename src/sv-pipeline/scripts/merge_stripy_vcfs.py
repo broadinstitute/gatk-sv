@@ -24,6 +24,7 @@ def update_header(header: pysam.VariantHeader) -> None:
     """
     Adds needed STRipy header lines. These should correspond to the FORMAT_FIELDS and INFO_FIELDS variables.
     """
+    _add_header_line_if_absent(header, header.alts, "STR", '##ALT=<ID=STR,Description="Short tandem repeat">')
     _add_header_line_if_absent(header, header.formats, "GT", '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">')
     _add_header_line_if_absent(header, header.info, "END", '##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">')
     _add_header_line_if_absent(header, header.info, "RU", '##INFO=<ID=RU,Number=1,Type=String,Description="Repeat unit in the reference orientation">')
@@ -48,6 +49,13 @@ def _copy_stripy_header_metadata(output_header: pysam.VariantHeader,
                 output_header.contigs.add(contig)
             else:
                 output_header.contigs.add(contig, length=contig_length)
+
+    for alt_name in stripy_header.alts:
+        if alt_name not in output_header.alts:
+            alt_description = stripy_header.alts[alt_name].get("Description") or "STRipy alternate allele"
+            if alt_description.startswith('"') and alt_description.endswith('"'):
+                alt_description = alt_description[1:-1]
+            output_header.add_meta("ALT", items=[("ID", alt_name), ("Description", alt_description)])
 
     for filter_name in stripy_header.filters:
         if filter_name != "PASS" and filter_name not in output_header.filters:
