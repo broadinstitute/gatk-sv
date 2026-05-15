@@ -7,7 +7,7 @@ import sys
 from typing import Dict, Iterable, List, Optional, Sequence, Text, Tuple
 
 
-INFO_FIELDS = ["RU", "PERIOD", "LOCUS"]
+INFO_FIELDS = ["RU", "PERIOD", "LOCUS", "SVTYPE", "DISEASES"]
 FORMAT_FIELDS = ["REPCN", "REPCI1", "REPCI2", "OUTLIER", "ZSCORE", "DP", "STR_FILTER"]
 StripyRecordKey = Tuple[Text, int, int, Optional[Text], Tuple[Text, ...]]
 
