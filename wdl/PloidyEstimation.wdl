@@ -120,7 +120,7 @@ task PloidyScore {
 
     sleep 10
     
-    python /opt/sv-pipeline/02_evidence_assessment/estimated_CN_denoising.py \
+    python /opt/sv-pipeline/pre_SVCalling_and_QC/estimated_CN_denoising.py \
       --binwise-copy-number ./ploidy_est/binwise_estimated_copy_numbers.bed.gz \
       --estimated-copy-number ./ploidy_est/estimated_copy_numbers.txt.gz \
       --output-stats cn_denoising_stats.tsv \
