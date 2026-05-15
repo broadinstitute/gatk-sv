@@ -56,15 +56,16 @@ def _copy_stripy_header_metadata(output_header: pysam.VariantHeader,
 
 
 def build_output_header(main_header: Optional[pysam.VariantHeader],
-                        stripy_vcfs: Sequence[pysam.VariantFile]) -> pysam.VariantHeader:
+                        stripy_vcfs: Sequence[pysam.VariantFile],
+                        selected_samples_by_vcf: Sequence[Sequence[Text]]) -> pysam.VariantHeader:
     if main_header is None:
         output_header = stripy_vcfs[0].header.copy()
     else:
         output_header = main_header.copy()
 
-    for stripy_vcf in stripy_vcfs:
+    for stripy_vcf, selected_samples in zip(stripy_vcfs, selected_samples_by_vcf):
         _copy_stripy_header_metadata(output_header=output_header, stripy_header=stripy_vcf.header)
-        for sample in stripy_vcf.header.samples:
+        for sample in selected_samples:
             if sample not in output_header.samples:
                 output_header.add_sample(sample)
 
@@ -73,20 +74,22 @@ def build_output_header(main_header: Optional[pysam.VariantHeader],
 
 
 def validate_sample_ids(main_header: Optional[pysam.VariantHeader],
-                        stripy_vcfs: Sequence[pysam.VariantFile]) -> List[Text]:
-    samples: List[Text] = []
+                        stripy_vcfs: Sequence[pysam.VariantFile]) -> List[List[Text]]:
+    selected_samples_by_vcf: List[List[Text]] = []
     seen_samples = set()
     for stripy_vcf in stripy_vcfs:
         if len(stripy_vcf.header.samples) == 0:
             raise ValueError("Expected at least 1 sample in STRipy header but got 0")
+        selected_samples: List[Text] = []
         for sample in stripy_vcf.header.samples:
             if main_header is not None and sample not in main_header.samples:
-                raise ValueError(f"Sample {sample} not found in main VCF header")
+                continue
             if sample in seen_samples:
                 raise ValueError(f"Sample {sample} appears in multiple STRipy VCFs")
             seen_samples.add(sample)
-            samples.append(sample)
-    return samples
+            selected_samples.append(sample)
+        selected_samples_by_vcf.append(selected_samples)
+    return selected_samples_by_vcf
 
 
 def _build_stripy_record_key(stripy_record: pysam.VariantRecord) -> StripyRecordKey:
@@ -137,11 +140,13 @@ def _copy_stripy_sample_fields(record: pysam.VariantRecord,
                 record.samples[sample][key] = stripy_sample[key]
 
 
-def _write_stripy_records(stripy_inputs: Iterable[pysam.VariantFile],
+def _write_stripy_records(stripy_inputs: Sequence[pysam.VariantFile],
+                          selected_samples_by_vcf: Sequence[Sequence[Text]],
                           out_vcf: pysam.VariantFile) -> None:
     merged_records: Dict[StripyRecordKey, pysam.VariantRecord] = {}
-    for stripy_vcf in stripy_inputs:
-        samples = list(stripy_vcf.header.samples)
+    for stripy_vcf, samples in zip(stripy_inputs, selected_samples_by_vcf):
+        if not samples:
+            continue
         for stripy_record in stripy_vcf:
             key = _build_stripy_record_key(stripy_record)
             if key not in merged_records:
@@ -155,7 +160,8 @@ def _write_stripy_records(stripy_inputs: Iterable[pysam.VariantFile],
 
 
 def _process(main_vcf: Optional[pysam.VariantFile],
-             stripy_inputs: Iterable[pysam.VariantFile],
+             stripy_inputs: Sequence[pysam.VariantFile],
+             selected_samples_by_vcf: Sequence[Sequence[Text]],
              out_vcf: pysam.VariantFile) -> None:
     """
     Copies the main VCF records when provided and appends STRipy records merged by site across inputs.
@@ -165,7 +171,11 @@ def _process(main_vcf: Optional[pysam.VariantFile],
             translated_record = record.copy()
             translated_record.translate(out_vcf.header)
             out_vcf.write(translated_record)
-    _write_stripy_records(stripy_inputs=stripy_inputs, out_vcf=out_vcf)
+    _write_stripy_records(
+        stripy_inputs=stripy_inputs,
+        selected_samples_by_vcf=selected_samples_by_vcf,
+        out_vcf=out_vcf,
+    )
 
 
 def _read_stripy_vcf_paths(file_list_path: Text) -> List[Text]:
@@ -182,7 +192,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument("--main-vcf", type=str,
-                        help="Optional GATK-SV VCF; when provided, every sample in the STRipy VCF list must be present in this header")
+                        help="Optional GATK-SV VCF; when provided, STRipy samples absent from this header are ignored")
     parser.add_argument("--stripy-vcfs-list", type=str, required=True,
                         help="Text file listing one STRipy VCF path per line")
     parser.add_argument("--out", type=str, required=True,
@@ -204,10 +214,19 @@ def main(argv: Optional[List[Text]] = None):
         main_vcf = exit_stack.enter_context(pysam.VariantFile(arguments.main_vcf)) if arguments.main_vcf else None
         stripy_vcfs = [exit_stack.enter_context(pysam.VariantFile(path)) for path in stripy_vcf_paths]
         main_header = main_vcf.header if main_vcf is not None else None
-        validate_sample_ids(main_header=main_header, stripy_vcfs=stripy_vcfs)
-        output_header = build_output_header(main_header=main_header, stripy_vcfs=stripy_vcfs)
+        selected_samples_by_vcf = validate_sample_ids(main_header=main_header, stripy_vcfs=stripy_vcfs)
+        output_header = build_output_header(
+            main_header=main_header,
+            stripy_vcfs=stripy_vcfs,
+            selected_samples_by_vcf=selected_samples_by_vcf,
+        )
         with pysam.VariantFile(arguments.out, mode='w', header=output_header) as out_vcf:
-            _process(main_vcf=main_vcf, stripy_inputs=stripy_vcfs, out_vcf=out_vcf)
+            _process(
+                main_vcf=main_vcf,
+                stripy_inputs=stripy_vcfs,
+                selected_samples_by_vcf=selected_samples_by_vcf,
+                out_vcf=out_vcf,
+            )
 
 
 if __name__ == "__main__":
