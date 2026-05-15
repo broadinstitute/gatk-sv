@@ -4,6 +4,7 @@
   "StripyWorkflow.sample_name": {{ test_batch.sample_example | tojson }},
   "StripyWorkflow.ped_file": {{ test_batch.ped_file | tojson }},
   "StripyWorkflow.reference_fasta": {{ reference_resources.reference_fasta | tojson }},
+  "StripyWorkflow.reference_fasta_fai": {{ reference_resources.reference_index | tojson }},
   "StripyWorkflow.locus": "HTT,ATXN3,AFF2",
   "StripyWorkflow.linux_docker": {{ dockers.linux_docker | tojson }},
   "StripyWorkflow.stripy_docker": {{ dockers.stripy_docker | tojson }}

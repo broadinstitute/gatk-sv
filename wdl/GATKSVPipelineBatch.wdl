@@ -219,6 +219,7 @@ workflow GATKSVPipelineBatch {
           sample_name = samples[i],
           ped_file = ped_file,
           reference_fasta = reference_fasta,
+          reference_fasta_fai = reference_index,
           linux_docker = linux_docker,
           stripy_docker = select_first([stripy_docker])
       }

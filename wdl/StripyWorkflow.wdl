@@ -10,6 +10,7 @@ workflow StripyWorkflow {
         File ped_file
         String? genome_build
         File reference_fasta
+        File reference_fasta_fai
         String sample_name
         String? locus
         File? custom_catalog
@@ -39,6 +40,7 @@ workflow StripyWorkflow {
             bam_or_cram_index = bam_or_cram_index_,
             genome_build = genome_build,
             reference_fasta = reference_fasta,
+            reference_fasta_fai = reference_fasta_fai,
             sample_name = sample_name,
             locus = locus,
             sex = GetSampleSex.out_string,
@@ -64,6 +66,7 @@ task RunStripy {
         File bam_or_cram_index
         String genome_build = "hg38"
         File reference_fasta
+        File reference_fasta_fai
         String sample_name
         String locus = "AFF2,AR,ARX_1,ARX_2,ATN1,ATXN1,ATXN10,ATXN2,ATXN3,ATXN7,ATXN8OS,BEAN1,C9ORF72,CACNA1A,CBL,CNBP,COMP,DAB1,DIP2B,DMD,DMPK,FGF14,FMR1,FOXL2,FXN,GIPC1,GLS,HOXA13_1,HOXA13_2,HOXA13_3,HOXD13,HTT,JPH3,LRP12,MARCHF6,NIPA1,NOP56,NOTCH2NLC,NUTM2B-AS1,PABPN1,PHOX2B,PPP2R2B,PRDM12,RAPGEF2,RFC1,RILPL1,RUNX2,SAMD12,SOX3,STARD7,TBP,TBX1,TCF4,TNRC6A,XYLT1,YEATS2,ZIC2,ZIC3"
         String? sex
@@ -98,6 +101,8 @@ task RunStripy {
     String input_filename = basename(bam_or_cram_file)
     Boolean input_is_bam = basename(bam_or_cram_file, ".bam") + ".bam" == basename(bam_or_cram_file)
     String staged_index_filename = input_filename + if input_is_bam then ".bai" else ".crai"
+    String staged_reference_fasta = basename(reference_fasta)
+    String staged_reference_fai = staged_reference_fasta + ".fai"
 
     command <<<
         # Run STRipy pipeline using our wrapper
@@ -108,11 +113,15 @@ task RunStripy {
         ln -s ~{bam_or_cram_file} ~{input_filename}
         ln -s ~{bam_or_cram_index} ~{staged_index_filename}
 
+        # pysam.FastaFile expects the FASTA index beside the localized reference path.
+        ln -s ~{reference_fasta} ~{staged_reference_fasta}
+        ln -s ~{reference_fasta_fai} ~{staged_reference_fai}
+
         stripy \
             --input ~{input_filename} \
             --sample-name ~{sample_name} \
             --genome ~{genome_build} \
-            --reference ~{reference_fasta} \
+            --reference ~{staged_reference_fasta} \
             --output ~{output_dir} \
             --analysis ~{analysis} \
             --output-json true \

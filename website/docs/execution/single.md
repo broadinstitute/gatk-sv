@@ -117,7 +117,7 @@ If you would like to run this workflow on your own samples (which must be medium
   Select `us-central1` for the region. If you must use a different region, you will need to copy all GATK-SV docker images to the other region
   before running the pipeline. See the [docker images section](/docs/gs/dockers#regions-important) for details.
 - In the cloned workspace, upload rows to the Sample and (optionally) the Participant Data Table that describe your samples.
-  Ensure that the rows you add to the Sample table contain the columns `sample_id` and `bam_or_cram_file` are populated appropriately. To merge an existing STRipy VCF instead of running STRipy, populate `case_stripy_file`; to skip STRipy entirely, set `use_stripy` to false in Workspace Data.
+  Ensure that the rows you add to the Sample table contain the columns `sample_id` and `bam_or_cram_file` are populated appropriately.
 - There is no need to modify values in the workspace data or method configuration. If you are interested in modifying the reference
   genome resources or reference panel, please contact the GATK team for support as listed below.
 - Launch the workflow from the "Workflows" tab, selecting your samples as the inputs.

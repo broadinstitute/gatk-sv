@@ -800,6 +800,7 @@ workflow GATKSVPipelineSingleSample {
         sample_name = sample_id,
         ped_file = combined_ped_file,
         reference_fasta = reference_fasta,
+        reference_fasta_fai = reference_index,
         linux_docker = linux_docker,
         stripy_docker = select_first([stripy_docker])
     }

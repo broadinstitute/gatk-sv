@@ -117,6 +117,44 @@ def _new_stripy_output_record(stripy_record: pysam.VariantRecord,
     return record
 
 
+def _get_stripy_site_filter_values(stripy_record: pysam.VariantRecord) -> List[Text]:
+    filter_values = list(stripy_record.filter.keys())
+    return filter_values or ["PASS"]
+
+
+def _normalize_str_filter_values(filter_values: Optional[Sequence[Text]]) -> List[Text]:
+    if filter_values is None:
+        return []
+    if isinstance(filter_values, str):
+        return [filter_values]
+    return [str(value) for value in filter_values if value is not None]
+
+
+def _merge_stripy_site_filters(existing_record: pysam.VariantRecord,
+                               stripy_record: pysam.VariantRecord) -> None:
+    merged_filters = [filter_name for filter_name in existing_record.filter.keys() if filter_name != "PASS"]
+    for filter_name in _get_stripy_site_filter_values(stripy_record):
+        if filter_name != "PASS" and filter_name not in merged_filters:
+            merged_filters.append(filter_name)
+
+    existing_record.filter.clear()
+    if merged_filters:
+        for filter_name in merged_filters:
+            existing_record.filter.add(filter_name)
+    else:
+        existing_record.filter.add("PASS")
+
+
+def _get_sample_str_filter_values(stripy_record: pysam.VariantRecord,
+                                  sample: Text) -> List[Text]:
+    stripy_sample = stripy_record.samples[sample]
+    if "STR_FILTER" in stripy_sample:
+        str_filter_values = _normalize_str_filter_values(stripy_sample["STR_FILTER"])
+        if str_filter_values:
+            return str_filter_values
+    return _get_stripy_site_filter_values(stripy_record)
+
+
 def _validate_stripy_site_metadata(existing_record: pysam.VariantRecord,
                                    stripy_record: pysam.VariantRecord) -> None:
     for key in INFO_FIELDS:
@@ -136,8 +174,11 @@ def _copy_stripy_sample_fields(record: pysam.VariantRecord,
         record.samples[sample]['GT'] = (None, None)
         stripy_sample = stripy_record.samples[sample]
         for key in FORMAT_FIELDS:
+            if key == "STR_FILTER":
+                continue
             if key in stripy_sample:
                 record.samples[sample][key] = stripy_sample[key]
+        record.samples[sample]["STR_FILTER"] = _get_sample_str_filter_values(stripy_record=stripy_record, sample=sample)
 
 
 def _write_stripy_records(stripy_inputs: Sequence[pysam.VariantFile],
@@ -153,6 +194,7 @@ def _write_stripy_records(stripy_inputs: Sequence[pysam.VariantFile],
                 merged_records[key] = _new_stripy_output_record(stripy_record=stripy_record, out_vcf=out_vcf)
             else:
                 _validate_stripy_site_metadata(existing_record=merged_records[key], stripy_record=stripy_record)
+                _merge_stripy_site_filters(existing_record=merged_records[key], stripy_record=stripy_record)
             _copy_stripy_sample_fields(record=merged_records[key], stripy_record=stripy_record, samples=samples)
 
     for record in merged_records.values():
