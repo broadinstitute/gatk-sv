@@ -72,7 +72,7 @@ ARG BUILD_DEPS="make cmake g++ gcc gfortran \
                 libbz2-dev libblas-dev libicu-dev liblapack-dev liblzma-dev libpcre2-dev zlib1g-dev \
                 pkg-config libcurl4-openssl-dev libssl-dev libatlas-base-dev libssh2-1-dev libssh2-1 \
                 libgit2-dev libfftw3-dev libjpeg8-dev libxml2-dev libfontconfig1-dev libharfbuzz-dev \
-                libfribidi-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev"
+                libfribidi-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev libuv1-dev"
 ARG RUN_DEPS="file bzip2 libssl3 libatlas3-base libssh2-1 libgit2-1.1 libfftw3-3 libjpeg8 libxml2"
 RUN export NEW_PACKAGES=$(diff_of_lists.sh "$RUN_DEPS" $APT_REQUIRED_PACKAGES) && \
     printf " $NEW_PACKAGES" | fix_spaces.sh >> $APT_REQUIRED_PACKAGES
@@ -80,7 +80,7 @@ RUN export NEW_PACKAGES=$(diff_of_lists.sh "$RUN_DEPS" $APT_REQUIRED_PACKAGES) &
 # install R packages
 ARG R_PACKAGES="assertthat beeswarm BH BSDA caret cli crayon DAAG data.table devtools digest dplyr e1071 fansi fpc \
                 generics gert glue HardyWeinberg hash latticeExtra magrittr metap mnormt nlme nloptr nnet \
-                numDeriv perm pillar pkgconfig plogr plyr purrr pwr R6 RColorBrewer Rcpp reshape reshape2 rlang ROCR \
+                numDeriv perm pillar pkgconfig plyr purrr pwr R6 RColorBrewer Rcpp reshape reshape2 rlang ROCR \
                 rpart stringi stringr survival tibble tidyr tidyselect utf8 vioplot withr zoo"
 ARG BIOCONDUCTOR_PKGS="SNPRelate multtest"
 ARG DEBIAN_FRONTEND=noninteractive
