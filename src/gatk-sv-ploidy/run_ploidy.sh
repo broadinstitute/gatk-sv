@@ -231,25 +231,25 @@ if [[ "${CALL_NEEDS_PPD_FILTER}" == "true" ]]; then
 fi
 
 # ── preprocess ─────────────────────────
-# echo "preprocess"
-# SD_ARGS=""
-# if [[ -n "${SITE_DEPTH_LIST}" ]]; then
-#     SD_ARGS="--site-depth-list ${SITE_DEPTH_LIST}"
-# fi
-# PR_ARGS=""
-# if [[ -n "${POOR_REGIONS}" ]]; then
-#     PR_ARGS="--poor-regions ${POOR_REGIONS}"
-# fi
-# if [[ "${DRY_RUN}" == "true" ]]; then
-#     dry_run_step "preprocess"
-# else
-#     run_cli preprocess \
-#         -i "${INPUT_DEPTH}" \
-#         -o "${PREPROCESS_DIR}" \
-#         $SD_ARGS \
-#         $PR_ARGS \
-#         $PREPROCESS_ARGS
-# fi
+echo "preprocess"
+SD_ARGS=""
+if [[ -n "${SITE_DEPTH_LIST}" ]]; then
+    SD_ARGS="--site-depth-list ${SITE_DEPTH_LIST}"
+fi
+PR_ARGS=""
+if [[ -n "${POOR_REGIONS}" ]]; then
+    PR_ARGS="--poor-regions ${POOR_REGIONS}"
+fi
+if [[ "${DRY_RUN}" == "true" ]]; then
+    dry_run_step "preprocess"
+else
+    run_cli preprocess \
+        -i "${INPUT_DEPTH}" \
+        -o "${PREPROCESS_DIR}" \
+        $SD_ARGS \
+        $PR_ARGS \
+        $PREPROCESS_ARGS
+fi
 
 RUN_POLYPLOIDY="false"
 if [[ -f "${SITE_DATA}" ]]; then
