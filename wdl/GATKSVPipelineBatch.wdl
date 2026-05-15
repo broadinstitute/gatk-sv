@@ -45,7 +45,7 @@ workflow GATKSVPipelineBatch {
     Boolean use_melt = false
     Boolean use_scramble = true
     Boolean use_wham = true
-    Boolean use_stripy = true
+    Boolean use_stripy = false
 
     # Merge contig vcfs at each stage of MakeCohortVcf for QC
     Boolean makecohortvcf_merge_cluster_vcfs = false
