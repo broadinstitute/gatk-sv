@@ -21,6 +21,7 @@ workflow TrainRDGenotyping {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String? tmp_sv_pipeline_docker_override_rdtest_bug
     RuntimeAttr? runtime_attr_training_bed
     RuntimeAttr? runtime_attr_genotype_train
     RuntimeAttr? runtime_attr_generate_cutoff
@@ -31,6 +32,8 @@ workflow TrainRDGenotyping {
   }
 
   File bin_exclude_idx = bin_exclude + ".tbi"
+
+  String tmp_sv_pipeline_docker = select_first([tmp_sv_pipeline_docker_override_rdtest_bug, sv_pipeline_docker])
 
   call MakeTrainingBed {
     input:
@@ -120,7 +123,7 @@ workflow TrainRDGenotyping {
         prefix = basename(gt5kb_bed),
         generate_melted_genotypes = false,
         ref_dict = ref_dict,
-        sv_pipeline_docker = sv_pipeline_docker,
+        sv_pipeline_docker = tmp_sv_pipeline_docker,
         runtime_attr_override = runtime_attr_rdtest_genotype
     }
   }

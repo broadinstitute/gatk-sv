@@ -20,6 +20,7 @@ workflow GenotypeDepthPart1 {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String tmp_sv_pipeline_docker_override_rdtest_bug
     RuntimeAttr? runtime_attr_training_bed
     RuntimeAttr? runtime_attr_genotype_train
     RuntimeAttr? runtime_attr_generate_cutoff
@@ -46,6 +47,7 @@ workflow GenotypeDepthPart1 {
       ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
+      tmp_sv_pipeline_docker_override_rdtest_bug = tmp_sv_pipeline_docker_override_rdtest_bug,
       runtime_attr_training_bed = runtime_attr_training_bed,
       runtime_attr_genotype_train = runtime_attr_genotype_train,
       runtime_attr_generate_cutoff = runtime_attr_generate_cutoff,

@@ -52,6 +52,7 @@ workflow GenotypeBatch {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String tmp_sv_pipeline_docker_override_rdtest_bug
     String linux_docker
 
     # Common
@@ -151,6 +152,7 @@ workflow GenotypeBatch {
         ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
+        tmp_sv_pipeline_docker_override_rdtest_bug = tmp_sv_pipeline_docker_override_rdtest_bug,
         runtime_attr_split_vcf = runtime_attr_split_vcf,
         runtime_attr_merge_counts = runtime_attr_merge_counts,
         runtime_attr_make_batch_bed = runtime_attr_make_batch_bed,
@@ -225,6 +227,7 @@ workflow GenotypeBatch {
         ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
+        tmp_sv_pipeline_docker_override_rdtest_bug = tmp_sv_pipeline_docker_override_rdtest_bug,
         runtime_attr_training_bed = runtime_attr_training_bed,
         runtime_attr_genotype_train = runtime_attr_genotype_train,
         runtime_attr_generate_cutoff = runtime_attr_generate_cutoff,

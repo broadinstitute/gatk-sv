@@ -101,6 +101,7 @@ workflows:
       branches:
         - main
         - phase3_b5d5049
+        - phase3-fix-rdtest-in-genotypebatch
       tags:
         - /.*/
 
