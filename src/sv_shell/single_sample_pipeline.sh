@@ -1156,7 +1156,7 @@ tabix "${UpdateBreakendRepresentationAndRemoveFilters_out}"
 # ----------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
 stripy_vcfs_list="$(realpath "${working_dir}/stripy_vcfs.list")"
-jq -r '.vcf_output // .stripy_vcf // empty' "$stripy_outputs_json" > "${stripy_vcfs_list}"
+jq -r '.stripy_vcf // empty' "$stripy_outputs_json" > "${stripy_vcfs_list}"
 if ! [ -s "${stripy_vcfs_list}" ]; then
   echo "STRipy did not produce a VCF output" >&2
   exit 1
