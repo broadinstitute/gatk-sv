@@ -1,6 +1,6 @@
 ARG UBUNTU_RELEASE="22.04"
 # available R releases listed here:  https://cdn.rstudio.com/r/versions.json
-ARG R_RELEASE_VERSION="4.1.3"
+ARG R_RELEASE_VERSION="4.5.0"
 ARG R_INSTALL_PATH=/opt/R
 ARG APT_REQUIRED_PACKAGES="/opt/apt-required-packages.list"
 
@@ -23,7 +23,8 @@ ARG BUILD_DEPS="make cmake g++ gcc gfortran \
 ARG RUN_DEPS="wget curl apt-transport-https ca-certificates unzip zip ucf \
               libbz2-1.0 libopenblas0 libicu70 liblapack3 liblzma5 libpcre2-8-0 libpcre2-16-0 libpcre2-32-0 \
               libpcre2-posix3 zlib1g libc6 libcairo2 libcurl4 libglib2.0-0 libgomp1 libjpeg8 libpango-1.0-0 \
-              libpangocairo-1.0-0 libpaper-utils libpng16-16 libreadline8 libtcl8.6 libtiff5 libtk8.6 libx11-6 libxt6"
+              libpangocairo-1.0-0 libpaper-utils libpng16-16 libreadline8 libtcl8.6 libtiff5 libtk8.6 libx11-6 libxt6 \
+              libdeflate-dev libssl-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev libwebp-dev"
 ARG APT_REQUIRED_PACKAGES
 RUN printf "$RUN_DEPS" | fix_spaces.sh > $APT_REQUIRED_PACKAGES
 
