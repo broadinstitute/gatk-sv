@@ -163,6 +163,7 @@ if [[ -n "${ref_std_wham_vcf_tar}" && -f "${ref_std_wham_vcf_tar}" ]]; then
   run_wham=true
 fi
 
+ref_std_dragen_vcf_tar=$(jq -r '.ref_std_dragen_vcf_tar // empty' "$input_json")
 dragen_sv_vcf=$(jq -r '.dragen_sv_vcf // empty' "$input_json")
 primary_contigs_fai=$(jq -r ".primary_contigs_fai" "$input_json")
 min_svsize=$(jq -r ".min_svsize" "$input_json")
@@ -191,6 +192,11 @@ echo "JVM memory: $JVM_MAX_MEM"
 use_dragen=false
 if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
   use_dragen=true
+
+  if [[ -z "${ref_std_dragen_vcf_tar}" || ! -f "${ref_std_dragen_vcf_tar}" ]]; then
+    log_error "use_dragen is true but ref_std_dragen_vcf_tar is missing or does not exist."
+    exit 1
+  fi
 
   if [[ "${run_manta}" == true ]]; then
     log_info "run_manta is ${run_manta}; however, since use_dragen is set true, we override run_manta=false"
@@ -429,7 +435,6 @@ log_info "Starting to Combine Std."
 std_manta_vcf_tar=$(jq -r ".std_manta_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
 merged_manta_vcf_tar=""
 
-#if [[ -f "${ref_std_manta_vcf_tar}" && -f "${std_manta_vcf_tar}" ]]; then
 if $run_manta; then
   merged_manta_vcf_tar="${working_dir}/$(basename "${std_manta_vcf_tar}")"
   CombineMantaStd_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CombineMantaStd_XXXXXXXX)
@@ -443,7 +448,6 @@ fi
 std_scramble_vcf_tar=$(jq -r ".std_scramble_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
 merged_scramble_vcf_tar=""
 
-#if [[ -f "${ref_std_scramble_vcf_tar}" && -f "${std_scramble_vcf_tar}" ]]; then
 if $run_scramble; then
   merged_scramble_vcf_tar="${working_dir}/$(basename "${std_scramble_vcf_tar}")"
   CombineScrambleStd_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CombineScrambleStd_XXXXXXXX)
@@ -457,7 +461,6 @@ fi
 std_wham_vcf_tar=$(jq -r ".std_wham_vcf_tar" "$gather_batch_evidence_outputs_json_filename")
 merged_wham_vcf_tar=""
 
-#if [[ -f "${ref_std_wham_vcf_tar}" && -f "${std_wham_vcf_tar}" ]]; then
 if $run_wham; then
   merged_wham_vcf_tar="${working_dir}/$(basename "${std_wham_vcf_tar}")"
   CombineWhamStd_working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_CombineWhamStd_XXXXXXXX)
@@ -536,10 +539,11 @@ jq -n \
   --arg manta_vcf_tar "${merged_manta_vcf_tar}" \
   --arg scramble_vcf_tar "${merged_scramble_vcf_tar}" \
   --arg wham_vcf_tar "${merged_wham_vcf_tar}" \
-  --arg dragen_vcf_tar
+  --arg dragen_vcf_tar "${merged_dragen_vcf_tar}" \
   --arg del_bed "${MergeSetDel_out}" \
   --arg dup_bed "${MergeSetDup_out}" \
   '{
+      dragen_vcf_tar: $dragen_vcf_tar,
       manta_vcf_tar: $manta_vcf_tar,
       scramble_vcf_tar: $scramble_vcf_tar,
       wham_vcf_tar: $wham_vcf_tar,
@@ -593,6 +597,19 @@ if $run_manta; then
   FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterManta_vcf}" "${sample_id}" "RD,PE,SR" "${FilterManta_outfile}"
 fi
 
+# FilterDragen
+# -----------------------
+FilterDragen_outfile=""
+if $use_dragen; then
+  cd "${working_dir}"
+  FilterDragen_wd=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/wd_FilterDragen_XXXXXXXX"))
+  cd "${FilterDragen_wd}"
+  FilterDragen_vcf=$(jq -r ".clustered_dragen_vcf" "$cluster_batch_outputs_json_filename")
+  FilterDragen_vcf_filebase=$(basename "${FilterDragen_vcf}" .vcf.gz)
+  FilterDragen_outfile="$(realpath "${FilterDragen_vcf_filebase}.${sample_id}.vcf.gz")"
+  FilterVcfBySampleGenotypeAndAddEvidenceAnnotation "${FilterDragen_vcf}" "${sample_id}" "RD,PE,SR" "${FilterDragen_outfile}"
+fi
+
 # FilterScramble
 # -----------------------
 FilterScramble_outfile=""
@@ -629,6 +646,7 @@ MergePesrVcfs_concat_vcf="${batch}.filtered_pesr_merged.vcf.gz"
 MergePesrVcfs_list_txt="MergePesrVcfs_vcfs_list.txt"
 > "${MergePesrVcfs_list_txt}"
 [[ -n "$FilterManta_outfile" ]]    && echo "$FilterManta_outfile"    >> "${MergePesrVcfs_list_txt}"
+[[ -n "$FilterDragen_outfile" ]]   && echo "$FilterDragen_outfile"   >> "${MergePesrVcfs_list_txt}"
 [[ -n "$FilterScramble_outfile" ]] && echo "$FilterScramble_outfile" >> "${MergePesrVcfs_list_txt}"
 [[ -n "$FilterWham_outfile" ]]     && echo "$FilterWham_outfile"     >> "${MergePesrVcfs_list_txt}"
 
