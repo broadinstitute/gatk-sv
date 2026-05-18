@@ -206,7 +206,7 @@ if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
     tmp.vcf \
     "dragen"
 
-  dragen_sv_vcf="std.dragen.${sample_id}.vcf.gz"
+  dragen_sv_vcf=$(realpath "std.dragen.${sample_id}.vcf.gz")
   bcftools sort tmp.vcf -Oz -o "${dragen_sv_vcf}"
   rm tmp.vcf
 fi

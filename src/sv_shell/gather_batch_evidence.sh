@@ -10,15 +10,15 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 log_info() {
-  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${CYAN}$1${NC}" | tee -a "${gather_sample_evidence_stdout}"
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${CYAN}$1${NC}" | tee -a "${gather_batch_evidence_stdout}"
 }
 
 log_success() {
-  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${GREEN}$1${NC}" | tee -a "${gather_sample_evidence_stdout}"
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${GREEN}$1${NC}" | tee -a "${gather_batch_evidence_stdout}"
 }
 
 log_error() {
-  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${RED}$1${NC}" | tee -a "${gather_sample_evidence_stderr}"
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${RED}$1${NC}" | tee -a "${gather_batch_evidence_stderr}"
 }
 
 # -------------------------------------------------------
@@ -47,6 +47,11 @@ fi
 working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_gather_batch_evidence_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
+
+gather_batch_evidence_stdout="${output_dir}/gather_batch_evidence_stdout.txt"
+gather_batch_evidence_stderr="${output_dir}/gather_batch_evidence_stderr.txt"
+touch "${gather_batch_evidence_stdout}"
+touch "${gather_batch_evidence_stderr}"
 
 batch=$(jq -r ".batch" "${input_json}")
 samples=$(jq -r ".samples[]" "${input_json}")

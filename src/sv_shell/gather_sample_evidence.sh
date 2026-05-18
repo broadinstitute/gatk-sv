@@ -210,7 +210,6 @@ if [[ "${collect_pesr}" == true ]]; then
 
   collect_pesr_stdout=$(mktemp --suffix=.txt "${output_dir}/collect_pesr_stdout_XXXXXX")
   collect_pesr_stderr=$(mktemp --suffix=.txt "${output_dir}/collect_pesr_stderr_XXXXXX")
-#  echo -e "${CYAN}Running collect_sv_evidence.sh ... stdout:${collect_pesr_stdout} and stderr:${collect_pesr_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
   log_info "Running collect_sv_evidence.sh ... stdout: ${collect_pesr_stdout} and stderr: ${collect_pesr_stderr}"
   collect_pesr_start_time=`date +%s`
 
@@ -280,7 +279,7 @@ if [[ "${run_scramble}" == true && "${run_manta_or_dragen}" == true ]]; then
       --arg bam_or_cram_index "${bam_or_cram_index}" \
       --arg original_bam_or_cram_file "${bam_or_cram_file}" \
       --arg original_bam_or_cram_index "${bam_or_cram_index}" \
-      --arg counts_file "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".counts" "${collect_pesr_outputs_json_filename}")" \
+      --arg counts_file "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".counts" "${collect_counts_outputs_json_filename}")" \
       --arg input_vcf "${manta_or_dragen_vcf}" \
       --arg reference_fasta "${reference_fasta}" \
       --arg reference_index "${reference_index}" \
@@ -338,7 +337,7 @@ if [[ "${run_scramble}" == true && "${run_manta_or_dragen}" == true ]]; then
       --arg bam_or_cram_index "$(jq -r ".out_index" "${realign_soft_clipped_reads_json_filename}")" \
       --arg original_bam_or_cram_file "${bam_or_cram_file}" \
       --arg original_bam_or_cram_index "${bam_or_cram_index}" \
-      --arg counts_file "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".counts" "${collect_pesr_outputs_json_filename}")" \
+      --arg counts_file "$([ "${collect_pesr}" = "false" ] && echo "" || jq -r ".counts" "${collect_counts_outputs_json_filename}")" \
       --arg input_vcf "${manta_or_dragen_vcf}" \
       --arg reference_fasta "${reference_fasta}" \
       --arg reference_index "${reference_index}" \
@@ -367,7 +366,6 @@ if [[ "${run_scramble}" == true && "${run_manta_or_dragen}" == true ]]; then
 
   scramble_end_time=`date +%s`
   scramble_et=$((scramble_end_time-scramble_start_time))
-#  echo -e "${GREEN}Successfully finished running scramble.sh (part 1 & 2) in ${scramble_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
   log_success "Successfully finished running scramble.sh (part 1 & 2) in ${scramble_et} seconds."
 fi
 
@@ -376,7 +374,6 @@ if [[ "${run_wham}" == true ]]; then
   wham_outputs_json_filename=$(mktemp --suffix=.json "${output_dir}/wham_XXXXXX")
   wham_stdout=$(mktemp --suffix=.txt "${output_dir}/wham_stdout_XXXXXX")
   wham_stderr=$(mktemp --suffix=.txt "${output_dir}/wham_stderr_XXXXXX")
-#  echo -e "${CYAN}Running run_whamg.sh ... stdout:${wham_stdout} and stderr:${wham_stderr}${NC}" | tee -a "${gather_sample_evidence_stdout}"
   log_info "Running run_whamg.sh ... stdout: ${wham_stdout} and stderr: ${wham_stderr}"
   wham_start_time=`date +%s`
 
@@ -393,7 +390,6 @@ if [[ "${run_wham}" == true ]]; then
 
   wham_end_time=`date +%s`
   wham_et=$((wham_end_time-wham_start_time))
-#  echo -e "${GREEN}Successfully finished running run_whamg.sh (part 1 & 2) in ${wham_et} seconds.${NC}" | tee -a "${gather_sample_evidence_stdout}"
   log_success "Successfully finished running run_whamg.sh (part 1 & 2) in ${wham_et} seconds."
 fi
 
