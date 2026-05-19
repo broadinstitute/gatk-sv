@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 
 # Converts single sample SV/CNV vcf.gz (e.g., DRAGEN) to .del.bed and .dup.bed files
-# Uses both explicit SVTYPE/ALT tags AND Copy Number (CN) fields to infer DEL/DUP
 
-import sys
 import argparse
 from pysam import VariantFile
 
 COPY_NUMBER_FIELD = 'CN'
-SCORE_FIELD = 'QS'
-DEFAULT_CUTOFF = 30
+DEFAULT_QUAL_CUTOFF = 30
+DEFAULT_MIN_SVLEN = 5000
 
 
 # Writes record in bed format
@@ -26,58 +24,69 @@ def write_bed_entry(file, record, score, sv_type, sample):
     file.write('\t'.join(bed_entries) + '\n')
 
 
-# Writes record in bed format if it is a del or dup of sufficient quality
-def convert_record(record, del_file, dup_file, input_sample, qs_cutoff, output_sample, xy_ploidy):
+# Writes record in bed format if it is a del or dup of sufficient quality and length
+def convert_record(record, del_file, dup_file, input_sample, qual_cutoff, min_svlen, output_sample, xy_ploidy):
+    # Extract Quality Score directly from the VCF QUAL column
+    qual = record.qual
+
+    # If QUAL is missing or below the cutoff, skip
+    if qual is None or qual < qual_cutoff:
+        return
+
+    # Extract SVLEN from the INFO field.
+    # pysam returns INFO fields as tuples (e.g., (-1036,)), so we grab the first element.
+    svlen = record.info.get('SVLEN')
+    if svlen is not None:
+        if isinstance(svlen, tuple):
+            svlen = svlen[0]
+        # Use absolute value because deletions have negative lengths (e.g., -1036)
+        if abs(svlen) < min_svlen:
+            return
+    else:
+        # If no SVLEN is present, it's likely a reference (REF) block. Skip.
+        return
+
     sample_data = record.samples[input_sample]
+    alt_allele = record.alts[0] if record.alts else ""
 
-    # Extract Quality Score
-    QS = sample_data.get(SCORE_FIELD)
-    if QS is None:
-        QS = record.qual
+    # Check ALT tags first
+    if '<DEL>' in alt_allele:
+        write_bed_entry(del_file, record, qual, 'DEL', output_sample)
+        return
+    elif '<DUP>' in alt_allele:
+        write_bed_entry(dup_file, record, qual, 'DUP', output_sample)
+        return
 
-    if isinstance(QS, tuple):
-        QS = QS[0]
+    # Fallback to Copy Number (CN) if ALT tag is generic (e.g., <CNV>)
+    CN = sample_data.get(COPY_NUMBER_FIELD)
+    if CN is not None:
+        if isinstance(CN, tuple):
+            CN = CN[0]
 
-    if QS is not None and QS >= qs_cutoff:
-        alt_allele = record.alts[0] if record.alts else ""
-        svtype = record.info.get('SVTYPE', '')
+        # Determine baseline ploidy
+        chrom = record.chrom.lower()
+        if 'x' in chrom or 'y' in chrom:
+            baseline_ploidy = xy_ploidy
+        else:
+            baseline_ploidy = 2  # Autosomes default to diploid
 
-        # 1. Try explicit SVTYPE or ALT string (Standard for SV callers)
-        if svtype == 'DEL' or '<DEL>' in alt_allele:
-            write_bed_entry(del_file, record, QS, 'DEL', output_sample)
-            return
-        elif svtype == 'DUP' or '<DUP>' in alt_allele:
-            write_bed_entry(dup_file, record, QS, 'DUP', output_sample)
-            return
-
-        # 2. Fallback to Copy Number (CN) field (Standard for DRAGEN CNV callers)
-        CN = sample_data.get(COPY_NUMBER_FIELD)
-        if CN is not None:
-            if isinstance(CN, tuple):
-                CN = CN[0]
-
-            # Determine baseline ploidy
-            chrom = record.chrom.lower()
-            if 'x' in chrom or 'y' in chrom:
-                baseline_ploidy = xy_ploidy
-            else:
-                baseline_ploidy = 2  # Autosomes default to diploid
-
-            # Separate based on copy number vs baseline
-            if CN < baseline_ploidy:
-                write_bed_entry(del_file, record, QS, 'DEL', output_sample)
-            elif CN > baseline_ploidy:
-                write_bed_entry(dup_file, record, QS, 'DUP', output_sample)
+        # Separate based on copy number vs baseline
+        if CN < baseline_ploidy:
+            write_bed_entry(del_file, record, qual, 'DEL', output_sample)
+        elif CN > baseline_ploidy:
+            write_bed_entry(dup_file, record, qual, 'DUP', output_sample)
 
 
 # Main function
 def main():
     parser = argparse.ArgumentParser(
-        description="Converts CNV/SV vcf.gz to .del.bed and .dup.bed files")
+        description="Converts DRAGEN CNV/SV vcf.gz to .del.bed and .dup.bed files")
     parser.add_argument(
         "--input_sample", help="sample id in the vcf (defaults to first sample in vcf header)")
     parser.add_argument(
-        "--cutoff", help="QS score cutoff", type=int, default=DEFAULT_CUTOFF)
+        "--cutoff", help="QUAL score cutoff", type=int, default=DEFAULT_QUAL_CUTOFF)
+    parser.add_argument(
+        "--min_svlen", help="Minimum absolute length of SV to keep", type=int, default=DEFAULT_MIN_SVLEN)
     parser.add_argument(
         "--xy_ploidy", help="Baseline ploidy for sex chromosomes (1 for XY males, 2 for XX females). Defaults to 2.",
         type=int, default=2)
@@ -89,7 +98,8 @@ def main():
     args = parser.parse_args()
 
     input_sample = args.input_sample
-    qs_cutoff = args.cutoff
+    qual_cutoff = args.cutoff
+    min_svlen = args.min_svlen
 
     del_name = args.output_sample + ".del.bed"
     dup_name = args.output_sample + ".dup.bed"
@@ -106,7 +116,8 @@ def main():
                 del_file=del_bed,
                 dup_file=dup_bed,
                 input_sample=input_sample,
-                qs_cutoff=qs_cutoff,
+                qual_cutoff=qual_cutoff,
+                min_svlen=min_svlen,
                 output_sample=args.output_sample,
                 xy_ploidy=args.xy_ploidy
             )
