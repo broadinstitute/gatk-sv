@@ -6,7 +6,7 @@ workflows:
     filters:
       branches:
         - main
-        - mw_ploidy_simplified
+        - mw_ploidy_external
       tags:
         - /.*/
 
@@ -16,7 +16,7 @@ workflows:
     filters:
       branches:
         - main
-        - mw_ploidy_simplified
+        - mw_ploidy_external
       tags:
         - /.*/
 
@@ -35,7 +35,7 @@ workflows:
     filters:
       branches:
         - main
-        - mw_ploidy_simplified
+        - mw_ploidy_external
       tags:
         - /.*/
 
@@ -243,7 +243,7 @@ workflows:
     filters:
       branches:
         - main
-        - mw_ploidy_simplified
+        - mw_ploidy_external
       tags:
         - /.*/
 
@@ -279,7 +279,7 @@ workflows:
     primaryDescriptorPath: /wdl/SparsifySD.wdl
     filters:
       branches:
-        - mw_ploidy_simplified
+        - mw_ploidy_external
       tags:
         - /.*/
 
@@ -288,7 +288,7 @@ workflows:
     primaryDescriptorPath: /wdl/CollectSparseSD.wdl
     filters:
       branches:
-        - mw_ploidy_simplified
+        - mw_ploidy_external
       tags:
         - /.*/
 
@@ -297,7 +297,7 @@ workflows:
     primaryDescriptorPath: /wdl/SubsetSD.wdl
     filters:
       branches:
-        - mw_ploidy_simplified
+        - mw_ploidy_external
       tags:
         - /.*/
 
@@ -306,6 +306,6 @@ workflows:
     primaryDescriptorPath: /wdl/PloidyEstimation.wdl
     filters:
       branches:
-        - mw_ploidy_simplified
+        - mw_ploidy_external
       tags:
         - /.*/
