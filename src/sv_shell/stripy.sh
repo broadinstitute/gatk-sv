@@ -71,6 +71,7 @@ stripy_output_dir="STRipy_output"
 mkdir -p "${stripy_output_dir}"
 stripy \
   --input "${bam_or_cram_file}" \
+  --sample-name "${sample_name}" \
   --genome "${genome_build}" \
   --reference "${reference_fasta}" \
   --output "${stripy_output_dir}" \
@@ -85,26 +86,6 @@ stripy \
   --sex "${GetSampleSex_out_string}"
 
 deactivate
-
-ACTUAL_FILENAME=$(basename "${bam_or_cram_file}")
-ACTUAL_BASE=$(echo "${ACTUAL_FILENAME}" | sed 's/\.[^.]*$//')
-TARGET_BASE="${sample_name}"
-echo "ACTUAL_FILENAME: ${ACTUAL_FILENAME}"
-echo "ACTUAL_BASE: ${ACTUAL_BASE}"
-echo "TARGET_BASE: ${TARGET_BASE}"
-ls "${stripy_output_dir}"
-if [ -f "${stripy_output_dir}/${ACTUAL_FILENAME}.json" ]; then
-  mv "${stripy_output_dir}/${ACTUAL_FILENAME}.json" "${stripy_output_dir}/${TARGET_BASE}.json"
-fi
-if [ -f "${stripy_output_dir}/${ACTUAL_FILENAME}.tsv" ]; then
-  mv "${stripy_output_dir}/${ACTUAL_FILENAME}.tsv" "${stripy_output_dir}/${TARGET_BASE}.tsv"
-fi
-if [ -f "${stripy_output_dir}/${ACTUAL_FILENAME}.html" ]; then
-  mv "${stripy_output_dir}/${ACTUAL_FILENAME}.html" "${stripy_output_dir}/${TARGET_BASE}.html"
-fi
-if [ -f "${stripy_output_dir}/${ACTUAL_BASE}.vcf" ]; then
-  mv "${stripy_output_dir}/${ACTUAL_BASE}.vcf" "${stripy_output_dir}/${TARGET_BASE}.vcf"
-fi
 
 
 # -------------------------------------------------------

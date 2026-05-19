@@ -2,6 +2,10 @@
 
 set -Exeuo pipefail
 
+if [ -z "${SV_SHELL_CLEAN_UP_WORKING_DIR:-}" ]; then
+  SV_SHELL_CLEAN_UP_WORKING_DIR=true
+fi
+
 # -------------------------------------------------------
 # ==================== Input & Setup ====================
 # -------------------------------------------------------
@@ -162,14 +166,16 @@ cluster_out_in_output_dir="${output_dir}/$(basename "${cluster_out_in_wd}")"
 mv "${cluster_out_in_wd}" "${cluster_out_in_output_dir}"
 mv "${cluster_out_in_wd}.tbi" "${cluster_out_in_output_dir}.tbi"
 
-outputs_json=$(jq -n \
+if [ "${SV_SHELL_CLEAN_UP_WORKING_DIR}" == "true" ]; then
+  rm -rf "${working_dir}"
+fi
+
+jq -n \
   --arg out "${cluster_out_in_output_dir}" \
   --arg out_index "${cluster_out_in_output_dir}.tbi" \
   '{
      "out": $out,
      "out_index": $out_index
-   }' \
-)
-echo "${outputs_json}" > "${output_json_filename}"
+   }' > "${output_json_filename}"
 
 echo "Successfully finished SVCluster, output json filename: ${output_json_filename}"

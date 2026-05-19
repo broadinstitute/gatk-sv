@@ -6,6 +6,11 @@
 
 set -Exeuo pipefail
 
+
+if [ -z "${SV_SHELL_CLEAN_UP_WORKING_DIR:-}" ]; then
+  SV_SHELL_CLEAN_UP_WORKING_DIR=true
+fi
+
 sample_id=$1
 cram_file=$2
 cram_index=$3
@@ -83,10 +88,11 @@ mv "${sample_id}.wham.vcf.gz" "${vcf_filename}"
 index_filename="${output_dir}/${sample_id}.wham.vcf.gz.tbi"
 mv "${sample_id}.wham.vcf.gz.tbi" "${index_filename}"
 
-outputs_filename="${output_dir}/outputs.json"
-outputs_json=$(jq -n \
+if [ "${SV_SHELL_CLEAN_UP_WORKING_DIR}" == "true" ]; then
+  rm -rf "${working_dir}"
+fi
+
+jq -n \
   --arg vcf "${vcf_filename}" \
   --arg index "${index_filename}" \
-  '{vcf: $vcf, index: $index}' )
-echo "${outputs_json}" > "${outputs_filename}"
-cp "${outputs_filename}" "${outputs_json_filename}"
+  '{vcf: $vcf, index: $index}' > "${outputs_json_filename}"

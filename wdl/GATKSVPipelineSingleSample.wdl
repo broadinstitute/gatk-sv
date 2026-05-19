@@ -796,6 +796,7 @@ workflow GATKSVPipelineSingleSample {
     call stripy.StripyWorkflow {
       input:
         bam_or_cram_file = select_first([bam_or_cram_file]),
+        bam_or_cram_index = bam_or_cram_index,
         sample_name = sample_id,
         ped_file = combined_ped_file,
         reference_fasta = reference_fasta,

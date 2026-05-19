@@ -3,6 +3,10 @@
 set -Exeuo pipefail
 
 
+if [ -z "${SV_SHELL_CLEAN_UP_WORKING_DIR:-}" ]; then
+  SV_SHELL_CLEAN_UP_WORKING_DIR=true
+fi
+
 # -------------------------------------------------------
 # ==================== Input & Setup ====================
 # -------------------------------------------------------
@@ -106,5 +110,9 @@ jq -n \
       unfiltered_recalibrated_vcf: $unfiltered_recalibrated_vcf,
       unfiltered_recalibrated_vcf_index: $unfiltered_recalibrated_vcf_index
   }' > "${output_json_filename}"
+
+if [ "${SV_SHELL_CLEAN_UP_WORKING_DIR}" == "true" ]; then
+  rm -rf "${working_dir}"
+fi
 
 echo "Finished Score Genotypes successfully, output json filename: ${output_json_filename}"
