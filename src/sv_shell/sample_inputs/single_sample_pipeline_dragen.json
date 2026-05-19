@@ -1,13 +1,13 @@
 {
-  "sample_id": "NA12878",
+  "sample_id": "RGP_1153_3",
   "PE_metrics": "/inputs/all_samples.pe_metric_file.txt",
   "wham_include_list_bed_file": "/inputs/wham_whitelist.bed",
   "reference_bwa_pac": "/inputs/Homo_sapiens_assembly38.fasta.64.pac",
   "clustering_config_part2": "/inputs/clustering_config.part_two.tsv",
-  "batch": "NA12878",
+  "batch": "RGP_1153_3",
   "stratification_config_part2": "/inputs/stratify_config.part_two.tsv",
   "ref_std_manta_vcf_tar": "/inputs/all_samples.manta_std.tar.gz",
-  "ref_std_dragen_vcf_tar": "",
+  "ref_std_dragen_vcf_tar": "/inputs/all_samples.manta_std.tar.gz",
   "clean_vcf_samples_per_clean_vcf_step2_shard": "100",
   "SR_metrics": "/inputs/all_samples.sr_metric_file.txt",
   "pesr_clustering_algorithm": "SINGLE_LINKAGE",
@@ -17,8 +17,8 @@
   "min_svsize": "50",
   "primary_contigs_list": "/inputs/primary_contigs.list",
   "HERVK_reference": "/inputs/HERVK.sorted.bed.gz",
-  "bam_or_cram_file": "/inputs/NA12878.final.cram",
-  "bam_or_cram_index": "/inputs/NA12878.final.cram.crai",
+  "bam_or_cram_file": "/inputs/RGP_1153_3.cram",
+  "bam_or_cram_index": "/inputs/RGP_1153_3.cram.crai",
   "ref_panel_dup_bed": "/inputs/all_samples.DUP.bed.gz",
   "genotyping_n_per_split": "1000",
   "stratification_config_part1": "/inputs/stratify_config.part_one.tsv",
@@ -141,6 +141,6 @@
   "genotyping_sr_table": "/inputs/all_samples.sr_geno_params.tsv",
   "intron_reference": "/inputs/gencode.v39.CDS.intron.tsv.gz",
   "outlier_samples_list": null,
-  "dragen_sv_vcf": "/intermediates/RGP_101_1.sv.vcf.gz",
-  "dragen_sv_vcf_index": "/intermediates/RGP_101_1.sv.vcf.gz.tbi"
+  "dragen_sv_vcf": "/inputs/RGP_1153_3.sv.vcf.gz",
+  "dragen_sv_vcf_index": "/inputs/RGP_1153_3.sv.vcf.gz.tbi"
 }
