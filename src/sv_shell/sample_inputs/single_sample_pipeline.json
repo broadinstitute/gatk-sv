@@ -7,7 +7,7 @@
   "batch": "NA12878",
   "stratification_config_part2": "/inputs/stratify_config.part_two.tsv",
   "ref_std_manta_vcf_tar": "/inputs/all_samples.manta_std.tar.gz",
-  "ref_std_dragen_vcf_tar": "/inputs/all_samples.manta_std.tar.gz",
+  "ref_std_dragen_vcf_tar": "",
   "clean_vcf_samples_per_clean_vcf_step2_shard": "100",
   "SR_metrics": "/inputs/all_samples.sr_metric_file.txt",
   "pesr_clustering_algorithm": "SINGLE_LINKAGE",
