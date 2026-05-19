@@ -17,7 +17,7 @@ def write_bed_entry(file, record, score, sv_type, sample):
         str(score),
         sample,
         sv_type,
-        'gcnv'
+        'dragen'
     )
     file.write('\t'.join(bed_entries) + '\n')
 
