@@ -1,9 +1,5 @@
 #!/bin/bash
 
-# TODO: note that the WDL implementation of this script has gcnv support,
-# this script has temporarily dropped any gcnv related logic, as
-# we're postponing implementing gcnv.
-
 set -Exeuo pipefail
 
 function MergeSample() {
@@ -93,8 +89,9 @@ std_cnmops_del=$(jq -r '.std_cnmops_del // ""' "$input_json")
 std_cnmops_dup=$(jq -r '.std_cnmops_dup // ""' "$input_json")
 large_cnmops_del=$(jq -r '.large_cnmops_del // ""' "$input_json")
 large_cnmops_dup=$(jq -r '.large_cnmops_dup // ""' "$input_json")
-gcnv_del=$(jq -r '.gcnv_del // ""' "$input_json")
-gcnv_dup=$(jq -r '.gcnv_dup // ""' "$input_json")
+gcnv_vcf=$(jq -r '.genotyped_segments_vcfs[0] // ""' "$input_json")
+contig_ploidy_call_tar=$(jq -r '.contig_ploidy_calls[0] // ""' "$input_json")
+gcnv_qs_cutoff=$(jq -r '.gcnv_qs_cutoff // "30"' "$input_json")
 defragment_max_dist=$(jq -r '.defragment_max_dist // ""' "$input_json")
 dragen_cnv_vcf=$(jq -r '.dragen_cnv_vcf // ""' "$input_json")
 
@@ -104,7 +101,7 @@ if [[ -n "${std_cnmops_del}" || -n "${std_cnmops_dup}" || -n "${large_cnmops_del
 fi
 
 run_gcnv="false"
-if [[ -n "${gcnv_del}" || -n "${gcnv_dup}" ]]; then
+if [[ -n "${gcnv_vcf}" && "${gcnv_vcf}" != "null" ]]; then
   run_gcnv="true"
 fi
 
@@ -116,6 +113,28 @@ fi
 # -------------------------------------------------------
 # ======================= Command =======================
 # -------------------------------------------------------
+
+gcnv_del=""
+gcnv_dup=""
+
+if [[ "${run_gcnv}" == "true" ]]; then
+  echo "Converting gCNV VCF to BED"
+  gcnv_vcf_to_bed_wd=$(mktemp -d "${SV_SHELL_BASE_DIR}/wd_gcnv_vcf_to_bed_XXXXXXXX")
+  cd "${gcnv_vcf_to_bed_wd}"
+  
+  sample_id=${samples[0]}
+  tar xzf "${contig_ploidy_call_tar}"
+  tabix -f "${gcnv_vcf}" || tabix -p vcf "${gcnv_vcf}" || true
+  python /opt/WGD/bin/convert_gcnv.py \
+    --cutoff "${gcnv_qs_cutoff}" \
+    contig_ploidy.tsv \
+    "${gcnv_vcf}" \
+    "${sample_id}"
+  
+  gcnv_del="$(realpath "${sample_id}.del.bed")"
+  gcnv_dup="$(realpath "${sample_id}.dup.bed")"
+  cd "${working_dir}"
+fi
 
 dragen_del_bed=""
 dragen_dup_bed=""

@@ -376,10 +376,10 @@ jq -n \
       ref_copy_number_autosomal_contigs: $inputs[0].ref_copy_number_autosomal_contigs,
       allosomal_contigs: $inputs[0].allosomal_contigs,
       gcnv_qs_cutoff: $inputs[0].gcnv_qs_cutoff,
-      dragen_vcfs: [$dragen_vcf],
-      manta_vcfs: [$gse_outputs[0].manta_vcf],
-      scramble_vcfs: [$gse_outputs[0].scramble_vcf],
-      wham_vcfs: [$gse_outputs[0].wham_vcf],
+      dragen_vcfs: (if $dragen_vcf != "" then [$dragen_vcf] else [] end),
+      manta_vcfs: (if $gse_outputs[0].manta_vcf != "" then [$gse_outputs[0].manta_vcf] else [] end),
+      scramble_vcfs: (if $gse_outputs[0].scramble_vcf != "" then [$gse_outputs[0].scramble_vcf] else [] end),
+      wham_vcfs: (if $gse_outputs[0].wham_vcf != "" then [$gse_outputs[0].wham_vcf] else [] end),
       min_svsize: $inputs[0].min_svsize,
       cnmops_chrom_file: $inputs[0].autosome_file,
       cnmops_exclude_list: $inputs[0].cnmops_exclude_list,
@@ -391,6 +391,8 @@ jq -n \
       ref_panel_median_cov: $inputs[0].ref_panel_median_cov,
       sample_median_cov: $eqc_outputs[0].bincov_median,
       "cytobands": $inputs[0].cytobands,
+      "dragen_cnv_vcf": $inputs[0].dragen_cnv_vcf,
+      "dragen_cnv_vcf_index": $inputs[0].dragen_cnv_vcf_index
   }' > "${gather_batch_evidence_inputs_json_filename}"
 
 bash /opt/sv_shell/gather_batch_evidence.sh \
