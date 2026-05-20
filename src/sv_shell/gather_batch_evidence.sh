@@ -88,31 +88,18 @@ log_info "Running make binned coverage matrix."
 make_bin_cov_matrix_inputs_json="$(realpath "${output_dir}/make_bincov_matrix_inputs.json")"
 make_bin_cov_matrix_outputs_json="$(realpath "${output_dir}/make_bincov_matrix_outputs.json")"
 
-  jq -n \
+jq -n \
     --slurpfile inputs "${input_json}" \
-    --argfile samples <(jq '.samples' "${input_json}") \
-    --argfile defragment_max_dist <(jq '.defragment_max_dist // ""' "${input_json}") \
-    --argfile std_cnmops_del <(jq '.Del // ""' "${cnmops_outputs_json}") \
-    --argfile std_cnmops_dup <(jq '.Dup // ""' "${cnmops_outputs_json}") \
-    --argfile large_cnmops_del <(jq '.Del // ""' "${cnmops_large_outputs_json}") \
-    --argfile large_cnmops_dup <(jq '.Dup // ""' "${cnmops_large_outputs_json}") \
-    --argfile genotyped_segments_vcfs <(jq 'if has("genotyped_segments_vcf") and (.genotyped_segments_vcf | length > 0) then [.genotyped_segments_vcf[0]] else [""] end' "${gcnv_outputs_json}") \
-    --argfile contig_ploidy_calls <(jq 'if has("sample_contig_ploidy_calls_tars") and (.sample_contig_ploidy_calls_tars | length > 0) then [.sample_contig_ploidy_calls_tars[0]] else [""] end' "${gcnv_outputs_json}") \
-    --arg batch "${batch}" \
     '{
-        "samples": $samples,
-        "defragment_max_dist": $defragment_max_dist,
-        "std_cnmops_del": $std_cnmops_del,
-        "std_cnmops_dup": $std_cnmops_dup,
-        "large_cnmops_del": $large_cnmops_del,
-        "large_cnmops_dup": $large_cnmops_dup,
-        "genotyped_segments_vcfs": $genotyped_segments_vcfs,
-        "contig_ploidy_calls": $contig_ploidy_calls,
-        "gcnv_qs_cutoff": $inputs[0].gcnv_qs_cutoff,
-        "batch": $batch,
-        "dragen_cnv_vcf": (if $inputs[0].dragen_cnv_vcf != "" then $inputs[0].dragen_cnv_vcf else null end),
-        "dragen_cnv_vcf_index": (if $inputs[0].dragen_cnv_vcf_index != "" then $inputs[0].dragen_cnv_vcf_index else null end)
-    }' > "${merge_depth_inputs_json}"
+        "samples": $inputs[0].samples,
+        "count_files": $inputs[0].counts,
+        "bincov_matrix_samples": $inputs[0].ref_panel_samples,
+        "bincov_matrix": $inputs[0].ref_panel_bincov_matrix,
+        "reference_dict": $inputs[0].reference_dict,
+        "batch": $inputs[0].batch,
+        "bin_size": null,
+        "skip_bin_size_filter": false
+    }' > "${make_bin_cov_matrix_inputs_json}"
 
 bash /opt/sv_shell/make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "${make_bin_cov_matrix_outputs_json}"
 
