@@ -19,7 +19,7 @@ function MergeSample() {
   echo "_sample_id: ${_sample_id}"
   echo "----------------------------------------------"
 
-  zcat -f ${_std_cnmops} ${_large_cnmops} ${_gcnv} ${_dragen} | awk -F "\t" -v OFS="\t" -v sample="${_sample_id}" '{if ($5==sample) print}' > cnmops.cnv
+  zcat ${_std_cnmops} ${_large_cnmops} ${_gcnv} ${_dragen} | awk -F "\t" -v OFS="\t" -v sample="${_sample_id}" '{if ($5==sample) print}' > cnmops.cnv
   sort -k1,1V -k2,2n cnmops.cnv > "${_sample_id}.bed"
   bedtools merge -i "${_sample_id}.bed" -d 0 -c 4,5,6,7 -o distinct > "${_sample_id}.merged.bed"
   /opt/sv-pipeline/00_preprocessing/scripts/defragment_cnvs.py \
