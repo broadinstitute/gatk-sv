@@ -109,7 +109,8 @@ log_success "Successfully finished make binned coverage matrix."
 # ploidy estimation
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-echo -e "${MAGENTA}Running ploidy estimation.${NC}"
+
+log_info "Running ploidy estimation."
 ploidy_estimation_inputs_json="$(realpath "${output_dir}/ploidy_estimation_inputs.json")"
 ploidy_estimation_outputs_json="$(realpath "${output_dir}/ploidy_estimation_outputs.json")"
 jq -n \
@@ -167,7 +168,7 @@ log_success "Successfully finished Validating, subsetting, and adding sample to 
 # Batch evidence merging
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-echo -e "${MAGENTA}Starting batch evidence merging.${NC}"
+log_info "Starting batch evidence merging."
 batch_evidence_merging_inputs_json="$(realpath "${output_dir}/batch_evidence_merging_inputs.json")"
 batch_evidence_merging_outputs_json="$(realpath "${output_dir}/batch_evidence_merging_outputs.json")"
 jq -n \
@@ -360,7 +361,7 @@ fi
 # Merge Depth
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-echo -e "${MAGENTA}Starting Merge Depth.${NC}"
+log_info "Starting merge depth."
 merge_depth_inputs_json="$(realpath "${output_dir}/merge_depth_inputs.json")"
 merge_depth_outputs_json="$(realpath "${output_dir}/mergge_depth_outputs.json")"
 
@@ -400,7 +401,7 @@ log_success "Successfully finished running Merge Depth."
 # Median Cov
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-echo -e "${MAGENTA}Starting Median Cov.${NC}"
+log_info "Starting median cov."
 
 output_median_cov="$(realpath "${working_dir}/${batch}_medianCov.transposed.bed")"
 _ref_median_cov_file="$(jq -r ".ref_panel_median_cov" "${input_json}")"
