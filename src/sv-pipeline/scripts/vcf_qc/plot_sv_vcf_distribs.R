@@ -801,6 +801,17 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
 #Wrapper to plot all size distributions
 wrapperPlotAllSizeDistribs <- function(){
   dat <- dat.norm.merged; svtypes <- svtypes.norm.merged
+  # Combine INS and DUP into a single "INS + DUP" group using the INS color
+  ins.idx <- match("INS", svtypes$svtype)
+  ins.col <- if(!is.na(ins.idx)) svtypes$color[ins.idx] else "#FA75D1"
+  dat$svtype[dat$svtype %in% c("INS","DUP")] <- "INS + DUP"
+  svtypes <- svtypes[!svtypes$svtype %in% c("INS","DUP"), ]
+  if("INS + DUP" %in% dat$svtype){
+    insert.at <- if(!is.na(ins.idx)) min(ins.idx, nrow(svtypes)+1) else 1
+    svtypes <- rbind(svtypes[seq_len(insert.at-1), , drop=FALSE],
+                     data.frame(svtype="INS + DUP", color=ins.col, stringsAsFactors=FALSE),
+                     svtypes[seq.int(insert.at, length.out=nrow(svtypes)-insert.at+1), , drop=FALSE])
+  }
   if(!skip.supporting){
   #All SV
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/size_distribution.all.pdf",sep=""),
@@ -1165,6 +1176,17 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
 #Wrapper to plot all AF distributions
 wrapperPlotAllFreqDistribs <- function(){
   dat <- dat.norm.merged; svtypes <- svtypes.norm.merged
+  # Combine INS and DUP into a single "INS + DUP" group using the INS color
+  ins.idx <- match("INS", svtypes$svtype)
+  ins.col <- if(!is.na(ins.idx)) svtypes$color[ins.idx] else "#FA75D1"
+  dat$svtype[dat$svtype %in% c("INS","DUP")] <- "INS + DUP"
+  svtypes <- svtypes[!svtypes$svtype %in% c("INS","DUP"), ]
+  if("INS + DUP" %in% dat$svtype){
+    insert.at <- if(!is.na(ins.idx)) min(ins.idx, nrow(svtypes)+1) else 1
+    svtypes <- rbind(svtypes[seq_len(insert.at-1), , drop=FALSE],
+                     data.frame(svtype="INS + DUP", color=ins.col, stringsAsFactors=FALSE),
+                     svtypes[seq.int(insert.at, length.out=nrow(svtypes)-insert.at+1), , drop=FALSE])
+  }
   if(!skip.supporting){
   #All SV
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.all.pdf",sep=""),
@@ -2146,32 +2168,50 @@ wrapperPlotVepDistrib <- function(){
   if(!"VEP_consequences" %in% colnames(dat.norm)) return(invisible(NULL))
   d <- dat.norm
 
-  # Expand: one row per (variant × consequence)
+  # Map raw VEP consequence terms to high-level priority labels
+  # (mirrors CONSEQUENCE_PRIORITY in CountAnnotations.wdl).
+  csq.priority <- list(
+    "LoF (VEP)" = c("transcript_ablation","stop_gained","frameshift_variant",
+                    "splice_donor_variant","splice_acceptor_variant","stop_lost",
+                    "start_lost","transcript_amplification","feature_elongation",
+                    "feature_truncation"),
+    "Missense"  = c("missense_variant","inframe_insertion","inframe_deletion",
+                    "protein_altering_variant"),
+    "Coding"    = c("synonymous_variant","stop_retained_variant","start_retained_variant",
+                    "incomplete_terminal_codon_variant","coding_sequence_variant"),
+    "Intronic"  = c("intron_variant","splice_region_variant","splice_donor_region_variant",
+                    "splice_polypyrimidine_tract_variant","splice_donor_5th_base_variant",
+                    "NMD_transcript_variant","non_coding_transcript_exon_variant",
+                    "non_coding_transcript_variant"),
+    "Intergenic"= c("intergenic_variant","upstream_gene_variant","downstream_gene_variant",
+                    "regulatory_region_variant","regulatory_region_ablation",
+                    "regulatory_region_amplification","TF_binding_site_variant",
+                    "TFBS_ablation","TFBS_amplification","3_prime_UTR_variant",
+                    "5_prime_UTR_variant")
+  )
+  priority.order <- names(csq.priority)
+  term.to.label <- setNames(rep(priority.order, sapply(csq.priority, length)),
+                            unlist(csq.priority, use.names=FALSE))
+
+  # Expand: one row per (variant × priority label). For each variant, collect all
+  # distinct priority labels its raw VEP terms map to; un-mapped terms are dropped.
   exp.cols <- intersect(c("svtype","length","AF","REGION"), colnames(d))
   dat.exp <- do.call(rbind, lapply(seq_len(nrow(d)), function(i){
     v <- d$VEP_consequences[i]
     if(is.na(v) || v == "") return(NULL)
     csqs <- strsplit(v, ";", fixed=TRUE)[[1]]
-    cbind(d[rep(i, length(csqs)), exp.cols, drop=FALSE],
-          consequence=csqs, stringsAsFactors=FALSE)
+    labels <- unique(term.to.label[csqs])
+    labels <- labels[!is.na(labels)]
+    if(length(labels) == 0) return(NULL)
+    cbind(d[rep(i, length(labels)), exp.cols, drop=FALSE],
+          consequence=labels, stringsAsFactors=FALSE)
   }))
   if(is.null(dat.exp) || nrow(dat.exp) == 0) return(invisible(NULL))
 
-  # Filter to non-zero consequences, cap at 9 + 'All other'
-  all.csqs.raw <- names(sort(table(dat.exp$consequence), decreasing=TRUE))
-  all.csqs.raw <- all.csqs.raw[sapply(all.csqs.raw, function(csq) sum(dat.exp$consequence==csq))>0]
-  max.show <- 9
-  other.col <- "#AAAAAA"
-  if(length(all.csqs.raw) > max.show){
-    top.csqs <- all.csqs.raw[seq_len(max.show)]
-    dat.exp$consequence[!dat.exp$consequence %in% top.csqs] <- "All other"
-    all.csqs <- c(top.csqs, "All other")
-    col.csq.base <- setNames(colorRampPalette(c("#440154","#31688E","#35B779","#FDE725"))(max.show), top.csqs)
-    col.csq <- c(col.csq.base, "All other"=other.col)
-  } else {
-    all.csqs <- all.csqs.raw
-    col.csq <- setNames(colorRampPalette(c("#440154","#31688E","#35B779","#FDE725"))(length(all.csqs)), all.csqs)
-  }
+  # Keep only priority labels present in the data, in priority order
+  all.csqs <- priority.order[priority.order %in% dat.exp$consequence]
+  col.csq <- setNames(colorRampPalette(c("#440154","#31688E","#35B779","#FDE725"))(length(all.csqs)),
+                      all.csqs)
   n.csq <- length(all.csqs)
 
   has.region <- "REGION" %in% colnames(dat.exp) && any(!is.na(dat.exp$REGION))
@@ -2252,38 +2292,37 @@ wrapperPlotVepDistrib <- function(){
 #####SVAnnotate prediction distribution plot
 ######################################
 wrapperPlotSvAnnotateDistrib <- function(){
-  pred.cols <- grep("^PREDICTED_", colnames(dat), value=TRUE)
+  # User-specified display order for SVAnnotate PREDICTED_ columns
+  pred.order <- c("PREDICTED_INTERGENIC",
+                  "PREDICTED_NONCODING_SPAN",
+                  "PREDICTED_NONCODING_BREAKPOINT",
+                  "PREDICTED_INTRONIC",
+                  "PREDICTED_PROMOTER",
+                  "PREDICTED_UTR",
+                  "PREDICTED_COPY_GAIN",
+                  "PREDICTED_DUP_PARTIAL",
+                  "PREDICTED_PARTIAL_DISPERSED_DUP",
+                  "PREDICTED_TSS_DUP",
+                  "PREDICTED_INTRAGENIC_EXON_DUP",
+                  "PREDICTED_PARTIAL_EXON_DUP",
+                  "PREDICTED_BREAKEND_EXONIC",
+                  "PREDICTED_LOF")
+  pred.cols <- pred.order[pred.order %in% colnames(dat)]
   if(length(pred.cols) == 0) return(invisible(NULL))
 
   has.pred <- rowSums(as.data.frame(lapply(pred.cols, function(p) as.integer(dat[[p]]))), na.rm=TRUE) > 0
   if(sum(has.pred) == 0) return(invisible(NULL))
 
-  # Filter to non-zero PREDICTED_ cols, cap at 9 + 'All other'
+  # Drop any PREDICTED_ columns with zero variants assigned
   counts.raw <- sapply(pred.cols, function(p) sum(as.logical(dat[[p]]), na.rm=TRUE))
-  nonzero.pred <- pred.cols[counts.raw > 0]
-  if(length(nonzero.pred) == 0) return(invisible(NULL))
-  max.show.pred <- 9
-  other.pred.col <- "#AAAAAA"
-  if(length(nonzero.pred) > max.show.pred){
-    top.preds <- nonzero.pred[seq_len(max.show.pred)]
-    other.preds <- nonzero.pred[-(seq_len(max.show.pred))]
-    # Add an "All other" boolean column: TRUE if any of other.preds is TRUE
-    dat[["PRED_OTHER"]] <- rowSums(as.data.frame(lapply(other.preds, function(p) as.integer(dat[[p]]))), na.rm=TRUE) > 0
-    pred.cols.use <- c(top.preds, "PRED_OTHER")
-    pred.labels.use <- c(sub("^PREDICTED_","",top.preds), "All other")
-    col.pred.base <- setNames(colorRampPalette(c("#A50026","#F46D43","#FEE090",
-                                                 "#74ADD1","#4575B4","#762A83",
-                                                 "#1B7837","#5AAE61","#F7F7F7"))(max.show.pred), top.preds)
-    col.pred <- c(col.pred.base, "PRED_OTHER"=other.pred.col)
-  } else {
-    pred.cols.use <- nonzero.pred
-    pred.labels.use <- sub("^PREDICTED_","",nonzero.pred)
-    col.pred <- setNames(colorRampPalette(c("#A50026","#F46D43","#FEE090",
-                                            "#74ADD1","#4575B4","#762A83",
-                                            "#1B7837","#5AAE61","#F7F7F7"))(length(nonzero.pred)), nonzero.pred)
-  }
-  pred.cols <- pred.cols.use
-  pred.labels <- pred.labels.use
+  pred.cols <- pred.cols[counts.raw > 0]
+  if(length(pred.cols) == 0) return(invisible(NULL))
+
+  pred.labels <- gsub("_", " ", sub("^PREDICTED_", "", pred.cols))
+  col.pred <- setNames(colorRampPalette(c("#A50026","#F46D43","#FEE090",
+                                          "#74ADD1","#4575B4","#762A83",
+                                          "#1B7837","#5AAE61","#F7F7F7"))(length(pred.cols)),
+                       pred.cols)
   n.pred <- length(pred.cols)
 
   has.region <- "REGION" %in% colnames(dat) && any(!is.na(dat$REGION))
