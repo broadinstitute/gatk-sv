@@ -35,7 +35,6 @@ workflow QcAnnotations {
         String gatk_sv_lr_docker
 
         RuntimeAttr? runtime_override_subset_vcf
-        RuntimeAttr? runtime_override_annotate_attributes
         RuntimeAttr? runtime_override_preprocess_vcf
         RuntimeAttr? runtime_override_scatter_vcf
         RuntimeAttr? runtime_override_merge_subvcf_stat_shards
@@ -75,7 +74,6 @@ workflow QcAnnotations {
                 ref_fai = ref_fai,
                 runtime_override_scatter_vcf = runtime_override_scatter_vcf,
                 runtime_override_subset_vcf = runtime_override_subset_vcf,
-                runtime_override_annotate_attributes = runtime_override_annotate_attributes,
                 runtime_override_preprocess_vcf = runtime_override_preprocess_vcf,
                 runtime_override_merge_subvcf_stat_shards = runtime_override_merge_subvcf_stat_shards,
                 runtime_override_merge_svtk_vcf_2_bed = runtime_override_merge_vcf_2_bed

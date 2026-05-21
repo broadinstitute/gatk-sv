@@ -22,7 +22,6 @@ workflow CollectQcVcfWide {
 
         RuntimeAttr? runtime_override_scatter_vcf
         RuntimeAttr? runtime_override_subset_vcf
-        RuntimeAttr? runtime_override_annotate_attributes
         RuntimeAttr? runtime_override_preprocess_vcf
         RuntimeAttr? runtime_override_merge_subvcf_stat_shards
         RuntimeAttr? runtime_override_merge_svtk_vcf_2_bed
@@ -54,22 +53,13 @@ workflow CollectQcVcfWide {
             }
         }
 
-        if (create_variant_attributes) {
-            call AnnotateVariantAttributes {
-                input:
-                    vcf = select_first([SubsetVcf.filtered_vcf, vcf_shards[i]]),
-                    prefix = "~{output_prefix}.annotate_attrs.shard_~{i}",
-                    sv_pipeline_docker = sv_pipeline_docker,
-                    runtime_attr_override = runtime_override_annotate_attributes
-            }
-        }
-
         call PreprocessCollectAndConvert {
             input:
-                vcf = select_first([AnnotateVariantAttributes.annotated_vcf, SubsetVcf.filtered_vcf, vcf_shards[i]]),
+                vcf = select_first([SubsetVcf.filtered_vcf, vcf_shards[i]]),
                 prefix = "~{output_prefix}.shard_~{i}",
                 ref_fa = ref_fa,
                 ref_fai = ref_fai,
+                create_variant_attributes = create_variant_attributes,
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_override_preprocess_vcf
         }
@@ -100,81 +90,13 @@ workflow CollectQcVcfWide {
     }
 }
 
-task AnnotateVariantAttributes {
-    input {
-        File vcf
-        String prefix
-        String sv_pipeline_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    Float input_size = size(vcf, "GiB")
-
-    command <<<
-        set -euo pipefail
-
-        bcftools query \
-            -f '%CHROM\t%POS\t%REF\t%ALT\t%ID\n' \
-            ~{vcf} \
-        | awk -F'\t' '{
-            ref_len = length($3)
-            alt_len = length($4)
-            diff = alt_len - ref_len
-            if (ref_len == 1 && alt_len == 1) {
-                atype = "snv"
-            } else if (alt_len > ref_len) {
-                atype = "ins"
-            } else {
-                atype = "del"
-            }
-            print $1"\t"$2"\t"$3"\t"$4"\t"$5"\t"diff"\t"atype
-        }' | bgzip -c > annot.txt.gz
-
-        tabix -s1 -b2 -e2 annot.txt.gz
-
-        printf '##INFO=<ID=allele_length,Number=1,Type=Integer,Description="Allele length">\n##INFO=<ID=allele_type,Number=1,Type=String,Description="Allele type">\n' > new_headers.txt
-
-        bcftools annotate \
-            -h new_headers.txt \
-            -a annot.txt.gz \
-            -c CHROM,POS,REF,ALT,~ID,INFO/allele_length,INFO/allele_type \
-            -Oz -o ~{prefix}.vcf.gz \
-            ~{vcf}
-
-        tabix -p vcf ~{prefix}.vcf.gz
-    >>>
-
-    output {
-        File annotated_vcf = "~{prefix}.vcf.gz"
-        File annotated_vcf_idx = "~{prefix}.vcf.gz.tbi"
-    }
-
-    RuntimeAttr runtime_default = object {
-        mem_gb: 4,
-        disk_gb: ceil(10.0 + input_size * 3.0),
-        cpu_cores: 1,
-        preemptible_tries: 2,
-        max_retries: 0,
-        boot_disk_gb: 10
-    }
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-    runtime {
-        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-        docker: sv_pipeline_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-    }
-}
-
 task PreprocessCollectAndConvert {
     input {
         File vcf
         String prefix
         File ref_fa
         File ref_fai
+        Boolean create_variant_attributes = false
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
@@ -188,7 +110,44 @@ task PreprocessCollectAndConvert {
             --fasta-ref ~{ref_fa} \
             ~{vcf} \
             -Oz -o ~{prefix}.split.vcf.gz
-        
+
+        # Step 2: Optionally annotate allele_length & allele_type
+        if ~{create_variant_attributes}; then
+            tabix -p vcf ~{prefix}.split.vcf.gz
+
+            bcftools query \
+                -f '%CHROM\t%POS\t%REF\t%ALT\t%ID\n' \
+                ~{prefix}.split.vcf.gz \
+            | awk -F'\t' '{
+                ref_len = length($3)
+                alt_len = length($4)
+                diff = alt_len - ref_len
+                if (ref_len == 1 && alt_len == 1) {
+                    atype = "snv"
+                } else if (alt_len > ref_len) {
+                    atype = "ins"
+                } else {
+                    atype = "del"
+                }
+                print $1"\t"$2"\t"$3"\t"$4"\t"$5"\t"diff"\t"atype
+            }' | bgzip -c > annot.txt.gz
+
+            tabix -s1 -b2 -e2 annot.txt.gz
+
+            printf '##INFO=<ID=allele_length,Number=1,Type=Integer,Description="Allele length">\n##INFO=<ID=allele_type,Number=1,Type=String,Description="Allele type">\n' > new_headers.txt
+
+            bcftools annotate \
+                -h new_headers.txt \
+                -a annot.txt.gz \
+                -c CHROM,POS,REF,ALT,~ID,INFO/allele_length,INFO/allele_type \
+                -Oz -o ~{prefix}.split.annotated.vcf.gz \
+                ~{prefix}.split.vcf.gz
+
+            mv ~{prefix}.split.annotated.vcf.gz ~{prefix}.split.vcf.gz
+            
+            rm -f ~{prefix}.split.vcf.gz.tbi annot.txt.gz annot.txt.gz.tbi new_headers.txt
+        fi
+
         cat << 'EOF' > convert_to_symbolic.py
 import pysam
 import sys
@@ -326,6 +285,7 @@ EOF
 
         rm -f ~{prefix}.split.vcf.gz ~{prefix}.split.vcf.gz.tbi
 
+        # Step 3: Sort VCF
         mkdir -p /tmp/bcftools_sort/
 
         bcftools sort \
@@ -337,7 +297,7 @@ EOF
 
         tabix ~{prefix}.vcf.gz
 
-        # Step 2: Collect VCF-wide stats
+        # Step 4: Collect VCF-wide stats
         /opt/sv-pipeline/scripts/vcf_qc/collectQC.vcf_wide.sh \
             ~{prefix}.vcf.gz \
             /opt/sv-pipeline/scripts/vcf_qc/SV_colors.txt \
@@ -347,7 +307,7 @@ EOF
         cp collectQC_vcfwide_output/data/VCF_sites.stats.bed.gz.tbi ~{prefix}.VCF_sites.stats.bed.gz.tbi
         cp collectQC_vcfwide_output/analysis_samples.list ~{prefix}.analysis_samples.list
 
-        # Step 3: VCF to BED conversion
+        # Step 5: VCF to BED conversion
         svtk vcf2bed --info ALL ~{prefix}.vcf.gz stdout \
             | bgzip -c \
             > ~{prefix}.vcf2bed.bed.gz
