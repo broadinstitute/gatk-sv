@@ -173,6 +173,9 @@ prev_trv_key = None
 trv_counter = 0
 trv_buffer = []
 
+prev_nontrv_key = None
+nontrv_counter = 1
+
 def flush_trv_buffer():
     if not trv_buffer:
         return
@@ -243,6 +246,15 @@ for rec in vcf_in:
 
     flush_trv_buffer()
     prev_trv_key = None
+
+    nontrv_key = (rec.chrom, rec.pos, rec.id)
+    if nontrv_key == prev_nontrv_key:
+        nontrv_counter += 1
+        rec.id = f"{rec.id}_{nontrv_counter}"
+    else:
+        prev_nontrv_key = nontrv_key
+        nontrv_counter = 1
+
     allele_length = abs(rec.info["allele_length"]) if "allele_length" in rec.info else len(rec.ref)
 
     if "DEL" in allele_type:

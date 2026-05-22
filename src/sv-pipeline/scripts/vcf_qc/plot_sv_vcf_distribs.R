@@ -503,7 +503,8 @@ wrapperPlotAllCountBars <- function(){
 plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
                             min.size=1, max.size=1000000,
                             autosomal=F, biallelic=F,
-                            title=NULL, legend=F, lwd.cex=1, text.cex=1, log.y=FALSE, show.dropped=FALSE, show.alu.labels=TRUE){
+                            title=NULL, legend=F, lwd.cex=1, text.cex=1, log.y=FALSE, show.dropped=FALSE, show.alu.labels=TRUE,
+                            legend.show.counts=TRUE, extra.dropped.count=0, extra.dropped.label=NULL){
   #Filter/process sizes & compute range + breaks
   filter.legend <- NULL
   if(autosomal==T){
@@ -633,17 +634,22 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
     #Add sv type legend
     if(legend==T){
       idx.for.legend <- which(unlist(lapply(dens,function(vals){any(!is.na(vals) & !is.infinite(vals) & vals>0)})))
-      counts.for.legend <- sapply(names(idx.for.legend), function(svtype){
-        if(svtype == "ALL"){
-          sum(is.finite(sizes))
-        }else{
-          length(which(dat$svtype==svtype))
-        }
-      })
+      legend.svtypes <- rbind(svtypes, c("ALL","gray15"))$svtype[idx.for.legend]
+      if(legend.show.counts){
+        counts.for.legend <- sapply(names(idx.for.legend), function(svtype){
+          if(svtype == "ALL"){
+            sum(is.finite(sizes))
+          }else{
+            length(which(dat$svtype==svtype))
+          }
+        })
+        legend.text <- paste(legend.svtypes,
+                             " (N=", prettyNum(counts.for.legend, big.mark=","), ")", sep="")
+      } else {
+        legend.text <- legend.svtypes
+      }
       legend("topright",bg=NA,bty="n",pch=NA,cex=text.cex*0.7,lwd=3,
-             legend=paste(rbind(svtypes, c("ALL","gray15"))$svtype[idx.for.legend],
-                          " (N=", prettyNum(counts.for.legend, big.mark=","),
-                          ")", sep=""),
+             legend=legend.text,
              col=rbind(svtypes,c("ALL","gray15"))$color[idx.for.legend])
     }
   }else{
@@ -656,12 +662,13 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
   
   #Add number of SV to plot
   n.sz.plotted <- sum(is.finite(sizes))
-  n.sz.dropped <- length(sizes) - n.sz.plotted
+  n.sz.dropped <- length(sizes) - n.sz.plotted + extra.dropped.count
   n.line <- if(show.alu.labels) 2 else 1.8
   n.label <- paste("n=",prettyNum(n.sz.plotted,big.mark=","),sep="")
   mtext(3,line=n.line,text=n.label,cex=text.cex*0.75)
   if(show.dropped && n.sz.dropped > 0){
-    mtext(3,line=n.line-0.8,text=paste0("(",prettyNum(n.sz.dropped,big.mark=",")," dropped - SNVs)"),cex=text.cex*0.65)
+    drop.label <- if(!is.null(extra.dropped.label)) extra.dropped.label else "SNVs"
+    mtext(3,line=n.line-0.8,text=paste0("(",prettyNum(n.sz.dropped,big.mark=",")," dropped - ", drop.label, ")"),cex=text.cex*0.65)
   }
   
   #Add filter labels
@@ -876,7 +883,15 @@ wrapperPlotAllSizeDistribs <- function(){
                         title="Size Distributions by AF")
   dev.off()
   } # end if(!skip.supporting)
-  
+
+  # For the main_plots size_distribution.pdf: TR_SNV variants are not meaningful
+  # in a size plot (TR allele class = SNV ⇒ no SV length), so drop them from the
+  # data and add their count to the "dropped" annotation under the title.
+  n.tr.snv <- sum(dat$svtype == "TR_SNV", na.rm=TRUE)
+  dat <- dat[dat$svtype != "TR_SNV", ]
+  svtypes <- svtypes[svtypes$svtype != "TR_SNV", ]
+  drop.label <- if(n.tr.snv > 0) "SNVs and TR_SNVs" else "SNVs"
+
   #Merged
   pdf(paste(OUTDIR,"/main_plots/size_distribution.pdf",sep=""),
       height=6,width=10)
@@ -884,7 +899,9 @@ wrapperPlotAllSizeDistribs <- function(){
          heights=c(4,2))
   plotSizeDistrib(dat=dat,svtypes=svtypes,
                   title="Size Distribution",
-                  legend=T, lwd.cex=1.5, log.y=TRUE, show.dropped=TRUE)
+                  legend=T, lwd.cex=1.5, log.y=TRUE, show.dropped=TRUE,
+                  legend.show.counts=FALSE,
+                  extra.dropped.count=n.tr.snv, extra.dropped.label=drop.label)
   plotSizeDistribSeries(dat=dat,svtypes=svtypes,
                         max.AFs=c(1.1/(2*nsamp),rare.max.freq,uncommon.max.freq,
                                   common.max.freq,major.max.freq),
@@ -892,15 +909,20 @@ wrapperPlotAllSizeDistribs <- function(){
                         title="Size Distributions by AF",
                         lwd.cex=2, log.y=TRUE)
   plotSizeDistrib(dat=dat[which(dat$AC==1),],svtypes=svtypes,
-                  autosomal=F, biallelic=T, title="AC = 1", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE)
+                  autosomal=F, biallelic=T, title="AC = 1", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE,
+                  legend.show.counts=FALSE)
   plotSizeDistrib(dat=dat[which(dat$AC>1 & dat$AF<rare.max.freq),],svtypes=svtypes,
-                  autosomal=F, biallelic=T, title="n > 1 & AF < 1%", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE)
+                  autosomal=F, biallelic=T, title="n > 1 & AF < 1%", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE,
+                  legend.show.counts=FALSE)
   plotSizeDistrib(dat=dat[which(dat$AF>=rare.max.freq & dat$AF<uncommon.max.freq),],svtypes=svtypes,
-                  autosomal=F,biallelic=T, title="1% - 10%", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE)
+                  autosomal=F,biallelic=T, title="1% - 10%", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE,
+                  legend.show.counts=FALSE)
   plotSizeDistrib(dat=dat[which(dat$AF>=uncommon.max.freq & dat$AF<common.max.freq),],svtypes=svtypes,
-                  autosomal=F, biallelic=T, title="10% - 50%", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE)
+                  autosomal=F, biallelic=T, title="10% - 50%", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE,
+                  legend.show.counts=FALSE)
   plotSizeDistrib(dat=dat[which(dat$AF>=common.max.freq),],svtypes=svtypes,
-                  autosomal=F, biallelic=T, title="> 50%", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE)
+                  autosomal=F, biallelic=T, title="> 50%", text.cex=0.75, log.y=TRUE, show.alu.labels=FALSE,
+                  legend.show.counts=FALSE)
   dev.off()
 }
 
@@ -2169,9 +2191,11 @@ wrapperPlotVepDistrib <- function(){
   d <- dat.norm
 
   # Map raw VEP consequence terms to high-level priority labels
-  # (mirrors CONSEQUENCE_PRIORITY in CountAnnotations.wdl).
+  # (mirrors CONSEQUENCE_PRIORITY in CountAnnotations.wdl). Any term that doesn't
+  # match a priority falls into "Other" (matching the Python fallback in
+  # determine_consequence_labels).
   csq.priority <- list(
-    "LoF (VEP)" = c("transcript_ablation","stop_gained","frameshift_variant",
+    "LoF"       = c("transcript_ablation","stop_gained","frameshift_variant",
                     "splice_donor_variant","splice_acceptor_variant","stop_lost",
                     "start_lost","transcript_amplification","feature_elongation",
                     "feature_truncation"),
@@ -2189,12 +2213,14 @@ wrapperPlotVepDistrib <- function(){
                     "TFBS_ablation","TFBS_amplification","3_prime_UTR_variant",
                     "5_prime_UTR_variant")
   )
-  priority.order <- names(csq.priority)
-  term.to.label <- setNames(rep(priority.order, sapply(csq.priority, length)),
+  term.to.label <- setNames(rep(names(csq.priority), sapply(csq.priority, length)),
                             unlist(csq.priority, use.names=FALSE))
+  # Display order requested (left-to-right): Intergenic, Intronic, Coding, Missense, LoF, Other
+  display.order <- c("Intergenic","Intronic","Coding","Missense","LoF","Other")
 
-  # Expand: one row per (variant × priority label). For each variant, collect all
-  # distinct priority labels its raw VEP terms map to; un-mapped terms are dropped.
+  # Expand: one row per (variant × priority label). For each variant, map all
+  # raw VEP terms to priority labels; terms with no match contribute "Other"
+  # (only added if the variant has no priority match — mirrors the Python code).
   exp.cols <- intersect(c("svtype","length","AF","REGION"), colnames(d))
   dat.exp <- do.call(rbind, lapply(seq_len(nrow(d)), function(i){
     v <- d$VEP_consequences[i]
@@ -2202,14 +2228,14 @@ wrapperPlotVepDistrib <- function(){
     csqs <- strsplit(v, ";", fixed=TRUE)[[1]]
     labels <- unique(term.to.label[csqs])
     labels <- labels[!is.na(labels)]
-    if(length(labels) == 0) return(NULL)
+    if(length(labels) == 0) labels <- "Other"
     cbind(d[rep(i, length(labels)), exp.cols, drop=FALSE],
           consequence=labels, stringsAsFactors=FALSE)
   }))
   if(is.null(dat.exp) || nrow(dat.exp) == 0) return(invisible(NULL))
 
-  # Keep only priority labels present in the data, in priority order
-  all.csqs <- priority.order[priority.order %in% dat.exp$consequence]
+  # Keep only labels present in the data, in the requested display order
+  all.csqs <- display.order[display.order %in% dat.exp$consequence]
   col.csq <- setNames(colorRampPalette(c("#440154","#31688E","#35B779","#FDE725"))(length(all.csqs)),
                       all.csqs)
   n.csq <- length(all.csqs)
@@ -2243,17 +2269,19 @@ wrapperPlotVepDistrib <- function(){
       res=300, height=2*1800, width=2*panel.w)
   layout(matrix(1:4, nrow=2, byrow=TRUE))
 
-  # Panel 1: All variants — x=consequence, y=count
+  # Panel 1: All variants — x=consequence, y=count (log scale)
   counts.all <- sapply(all.csqs, function(csq) sum(dat.exp$consequence == csq))
   par(bty="n", mar=c(12, 4.5, 4.5, 0.5))
+  log.ymax <- 10^ceiling(log10(max(counts.all, 1)))
   bp <- barplot(counts.all, names.arg=rep("", n.csq), col=col.csq[all.csqs],
-                border=NA, ylim=c(0, max(counts.all)*1.15), yaxt="n")
-  axis(2, at=axTicks(2), labels=NA)
-  axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4, labels=prettyNum(axTicks(2), big.mark=","))
+                border=NA, ylim=c(1, log.ymax * 1.5), yaxt="n", log="y")
+  log.ticks <- 10^(0:ceiling(log10(log.ymax)))
+  axis(2, at=log.ticks, labels=NA)
+  axis(2, at=log.ticks, tick=F, las=2, cex.axis=0.8, line=-0.4, labels=prettyNum(log.ticks, big.mark=","))
   mtext(2, text="Count", line=3, cex=0.9)
   mtext(3, text="VEP Consequences Distribution", font=2, line=2.0)
   mtext(3, text=paste("n=", prettyNum(nrow(dat.exp), big.mark=","), sep=""), line=0.6, cex=0.75)
-  text(x=bp, y=par("usr")[3] - diff(par("usr")[3:4])*0.025,
+  text(x=bp, y=10^(par("usr")[3] - diff(par("usr")[3:4])*0.025),
        labels=all.csqs, srt=45, adj=1, xpd=TRUE, cex=0.7)
 
   # Panel 2: by variant type — x=svtype, stacked by consequence
@@ -2350,17 +2378,19 @@ wrapperPlotSvAnnotateDistrib <- function(){
       res=300, height=2*1800, width=2*panel.w)
   layout(matrix(1:4, nrow=2, byrow=TRUE))
 
-  # Panel 1: All variants — x=PREDICTED_ category, y=count
+  # Panel 1: All variants — x=PREDICTED_ category, y=count (log scale)
   counts.all <- sapply(pred.cols, function(p) sum(as.logical(dat[[p]]), na.rm=T))
   par(bty="n", mar=c(12, 4.5, 4.5, 0.5))
+  log.ymax <- 10^ceiling(log10(max(counts.all, 1)))
   bp <- barplot(counts.all, names.arg=rep("", n.pred), col=col.pred[pred.cols],
-                border=NA, ylim=c(0, max(counts.all)*1.15), yaxt="n")
-  axis(2, at=axTicks(2), labels=NA)
-  axis(2, at=axTicks(2), tick=F, las=2, cex.axis=0.8, line=-0.4, labels=prettyNum(axTicks(2), big.mark=","))
+                border=NA, ylim=c(1, log.ymax * 1.5), yaxt="n", log="y")
+  log.ticks <- 10^(0:ceiling(log10(log.ymax)))
+  axis(2, at=log.ticks, labels=NA)
+  axis(2, at=log.ticks, tick=F, las=2, cex.axis=0.8, line=-0.4, labels=prettyNum(log.ticks, big.mark=","))
   mtext(2, text="Count", line=3, cex=0.9)
   mtext(3, text="SVAnnotate Consequences Distribution", font=2, line=2.0)
   mtext(3, text=paste("n=", prettyNum(sum(has.pred), big.mark=","), sep=""), line=0.6, cex=0.75)
-  text(x=bp, y=par("usr")[3] - diff(par("usr")[3:4])*0.025,
+  text(x=bp, y=10^(par("usr")[3] - diff(par("usr")[3:4])*0.025),
        labels=pred.labels, srt=45, adj=1, xpd=TRUE, cex=0.7)
 
   # Panel 2: by variant type — x=svtype, stacked by PREDICTED_
