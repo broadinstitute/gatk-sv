@@ -104,17 +104,15 @@ task PreprocessCollectAndConvert {
     command <<<
         set -euo pipefail
 
-        # Step 1: Preprocess VCF (normalize, split multiallelics, convert to symbolic)
+        # Normalize multiallelics
         bcftools norm \
             -m-any \
             --fasta-ref ~{ref_fa} \
             ~{vcf} \
             -Oz -o ~{prefix}.split.vcf.gz
 
-        # Step 2: Optionally annotate allele_length & allele_type
+        # (Optional) Annotate allele_length & allele_type
         if ~{create_variant_attributes}; then
-            tabix -p vcf ~{prefix}.split.vcf.gz
-
             bcftools query \
                 -f '%CHROM\t%POS\t%REF\t%ALT\t%ID\n' \
                 ~{prefix}.split.vcf.gz \
@@ -148,6 +146,7 @@ task PreprocessCollectAndConvert {
             rm -f ~{prefix}.split.vcf.gz.tbi annot.txt.gz annot.txt.gz.tbi new_headers.txt
         fi
 
+        # Convert to symbolic
         cat << 'EOF' > convert_to_symbolic.py
 import pysam
 import sys
@@ -227,11 +226,10 @@ for rec in vcf_in:
             allele_class = "TR_SNV"
             allele_length = max(len(ref_seq), 1)
 
-        ref_len = len(rec.ref)
         rec.info["SVTYPE"] = svtype
         rec.info["SVLEN"] = allele_length
         rec.info["TR_ALLELE_CLASS"] = allele_class
-        rec.stop = rec.pos + ref_len
+        rec.stop = rec.pos + len(rec.ref)
 
         rec.alts = (f"<{allele_type}>",)
 
@@ -266,18 +264,12 @@ for rec in vcf_in:
     else:
         svtype = allele_type
     
-    if allele_type == "SNV" and len(rec.alts) == 1 and len(rec.alts[0]) == 1:
+    if allele_type == "SNV" and len(rec.alts[0]) == 1:
         rec.info["ORIG_ALT"] = rec.alts[0]
-    ref_len = len(rec.ref)
     rec.info["SVTYPE"] = svtype
     rec.info["SVLEN"] = allele_length
-    rec.stop = rec.pos + ref_len
+    rec.stop = rec.pos + len(rec.ref)
 
-    if len(rec.alts) > 1:
-        for sample in rec.samples.values():
-            gt = sample["GT"]
-            sample["GT"] = tuple(0 if a == 0 else (1 if a is not None else None) for a in gt)
-    
     rec.alts = (f"<{allele_type}>",)
 
     for s_name in rec.samples:
@@ -297,21 +289,21 @@ EOF
 
         rm -f ~{prefix}.split.vcf.gz ~{prefix}.split.vcf.gz.tbi
 
-        # Step 3: Sort VCF
+        # Sort
         mkdir -p /tmp/bcftools_sort/
 
         bcftools sort \
             -T /tmp/bcftools_sort/ \
-            -Oz -o ~{prefix}.vcf.gz \
+            -Oz -o ~{prefix}.sorted.vcf.gz \
             ~{prefix}.unsorted.vcf.gz
         
         rm -f ~{prefix}.unsorted.vcf.gz
 
-        tabix ~{prefix}.vcf.gz
+        tabix ~{prefix}.sorted.vcf.gz
 
-        # Step 4: Collect VCF-wide stats
+        # Collect stats
         /opt/sv-pipeline/scripts/vcf_qc/collectQC.vcf_wide.sh \
-            ~{prefix}.vcf.gz \
+            ~{prefix}.sorted.vcf.gz \
             /opt/sv-pipeline/scripts/vcf_qc/SV_colors.txt \
             collectQC_vcfwide_output/
         
@@ -319,13 +311,10 @@ EOF
         cp collectQC_vcfwide_output/data/VCF_sites.stats.bed.gz.tbi ~{prefix}.VCF_sites.stats.bed.gz.tbi
         cp collectQC_vcfwide_output/analysis_samples.list ~{prefix}.analysis_samples.list
 
-        # Step 5: VCF to BED conversion
-        svtk vcf2bed --info ALL ~{prefix}.vcf.gz stdout \
-            | bgzip -c \
-            > ~{prefix}.vcf2bed.bed.gz
+        # Reuse the BED collectQC.vcf_wide.sh already produced (skip a redundant svtk vcf2bed pass)
+        bgzip -c collectQC_vcfwide_output/vcf2bed_raw.bed > ~{prefix}.vcf2bed.bed.gz
 
-        # Clean up intermediate files
-        rm -f ~{prefix}.vcf.gz ~{prefix}.vcf.gz.tbi
+        rm -f ~{prefix}.sorted.vcf.gz ~{prefix}.sorted.vcf.gz.tbi
         rm -rf collectQC_vcfwide_output/
     >>>
 

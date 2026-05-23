@@ -27,6 +27,21 @@ orderRegions <- function(regions){
   c(canonical[canonical %in% regions], sort(regions[!regions %in% canonical]))
 }
 
+# Collapse INS and DUP into "INS + DUP" (slotted at INS's position, using INS's color)
+mergeInsDup <- function(dat, svtypes){
+  ins.idx <- match("INS", svtypes$svtype)
+  ins.col <- if(!is.na(ins.idx)) svtypes$color[ins.idx] else "#FA75D1"
+  dat$svtype[dat$svtype %in% c("INS","DUP")] <- "INS + DUP"
+  svtypes <- svtypes[!svtypes$svtype %in% c("INS","DUP"), ]
+  if("INS + DUP" %in% dat$svtype){
+    insert.at <- if(!is.na(ins.idx)) min(ins.idx, nrow(svtypes)+1) else 1
+    svtypes <- rbind(svtypes[seq_len(insert.at-1), , drop=FALSE],
+                     data.frame(svtype="INS + DUP", color=ins.col, stringsAsFactors=FALSE),
+                     svtypes[seq.int(insert.at, length.out=nrow(svtypes)-insert.at+1), , drop=FALSE])
+  }
+  list(dat=dat, svtypes=svtypes)
+}
+
 #General function to plot stacked bars from a matrix
 plotStackedBars <- function(mat,colors,scaled=T,log.y=FALSE,title=NULL){
   #Scale columns, if options
@@ -807,18 +822,8 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
 
 #Wrapper to plot all size distributions
 wrapperPlotAllSizeDistribs <- function(){
-  dat <- dat.norm.merged; svtypes <- svtypes.norm.merged
-  # Combine INS and DUP into a single "INS + DUP" group using the INS color
-  ins.idx <- match("INS", svtypes$svtype)
-  ins.col <- if(!is.na(ins.idx)) svtypes$color[ins.idx] else "#FA75D1"
-  dat$svtype[dat$svtype %in% c("INS","DUP")] <- "INS + DUP"
-  svtypes <- svtypes[!svtypes$svtype %in% c("INS","DUP"), ]
-  if("INS + DUP" %in% dat$svtype){
-    insert.at <- if(!is.na(ins.idx)) min(ins.idx, nrow(svtypes)+1) else 1
-    svtypes <- rbind(svtypes[seq_len(insert.at-1), , drop=FALSE],
-                     data.frame(svtype="INS + DUP", color=ins.col, stringsAsFactors=FALSE),
-                     svtypes[seq.int(insert.at, length.out=nrow(svtypes)-insert.at+1), , drop=FALSE])
-  }
+  merged <- mergeInsDup(dat.norm.merged, svtypes.norm.merged)
+  dat <- merged$dat; svtypes <- merged$svtypes
   if(!skip.supporting){
   #All SV
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/size_distribution.all.pdf",sep=""),
@@ -884,9 +889,7 @@ wrapperPlotAllSizeDistribs <- function(){
   dev.off()
   } # end if(!skip.supporting)
 
-  # For the main_plots size_distribution.pdf: TR_SNV variants are not meaningful
-  # in a size plot (TR allele class = SNV ⇒ no SV length), so drop them from the
-  # data and add their count to the "dropped" annotation under the title.
+  # Drop TR_SNV (no meaningful size); fold into the "dropped" annotation
   n.tr.snv <- sum(dat$svtype == "TR_SNV", na.rm=TRUE)
   dat <- dat[dat$svtype != "TR_SNV", ]
   svtypes <- svtypes[svtypes$svtype != "TR_SNV", ]
@@ -1197,18 +1200,8 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
 
 #Wrapper to plot all AF distributions
 wrapperPlotAllFreqDistribs <- function(){
-  dat <- dat.norm.merged; svtypes <- svtypes.norm.merged
-  # Combine INS and DUP into a single "INS + DUP" group using the INS color
-  ins.idx <- match("INS", svtypes$svtype)
-  ins.col <- if(!is.na(ins.idx)) svtypes$color[ins.idx] else "#FA75D1"
-  dat$svtype[dat$svtype %in% c("INS","DUP")] <- "INS + DUP"
-  svtypes <- svtypes[!svtypes$svtype %in% c("INS","DUP"), ]
-  if("INS + DUP" %in% dat$svtype){
-    insert.at <- if(!is.na(ins.idx)) min(ins.idx, nrow(svtypes)+1) else 1
-    svtypes <- rbind(svtypes[seq_len(insert.at-1), , drop=FALSE],
-                     data.frame(svtype="INS + DUP", color=ins.col, stringsAsFactors=FALSE),
-                     svtypes[seq.int(insert.at, length.out=nrow(svtypes)-insert.at+1), , drop=FALSE])
-  }
+  merged <- mergeInsDup(dat.norm.merged, svtypes.norm.merged)
+  dat <- merged$dat; svtypes <- merged$svtypes
   if(!skip.supporting){
   #All SV
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.all.pdf",sep=""),
@@ -2190,10 +2183,7 @@ wrapperPlotVepDistrib <- function(){
   if(!"VEP_consequences" %in% colnames(dat.norm)) return(invisible(NULL))
   d <- dat.norm
 
-  # Map raw VEP consequence terms to high-level priority labels
-  # (mirrors CONSEQUENCE_PRIORITY in CountAnnotations.wdl). Any term that doesn't
-  # match a priority falls into "Other" (matching the Python fallback in
-  # determine_consequence_labels).
+  # Map VEP terms to priority labels (mirrors CONSEQUENCE_PRIORITY in CountAnnotations.wdl)
   csq.priority <- list(
     "LoF"       = c("transcript_ablation","stop_gained","frameshift_variant",
                     "splice_donor_variant","splice_acceptor_variant","stop_lost",
@@ -2215,12 +2205,9 @@ wrapperPlotVepDistrib <- function(){
   )
   term.to.label <- setNames(rep(names(csq.priority), sapply(csq.priority, length)),
                             unlist(csq.priority, use.names=FALSE))
-  # Display order requested (left-to-right): Intergenic, Intronic, Coding, Missense, LoF, Other
   display.order <- c("Intergenic","Intronic","Coding","Missense","LoF","Other")
 
-  # Expand: one row per (variant × priority label). For each variant, map all
-  # raw VEP terms to priority labels; terms with no match contribute "Other"
-  # (only added if the variant has no priority match — mirrors the Python code).
+  # Expand: one row per (variant × priority label); variants with no priority match get "Other"
   exp.cols <- intersect(c("svtype","length","AF","REGION"), colnames(d))
   dat.exp <- do.call(rbind, lapply(seq_len(nrow(d)), function(i){
     v <- d$VEP_consequences[i]
@@ -2668,8 +2655,8 @@ wrapperPlotTrLociDistrib <- function(){
     par(mar=c(4.5,4.5,3,1), bty="n")
     plot(pmax(x, ax.min), pmax(y, ax.min), pch=19, cex=0.4,
          col=adjustcolor("gray30", alpha=0.5),
-         xlab=paste("TR alleles (", tr.detail.map[k], ")", sep=""),
-         ylab=paste("Enveloped ", detail.types[k], " variants", sep=""),
+         xlab=paste("TR Alleles", sep=""),
+         ylab=paste("Enveloped Variants", sep=""),
          main=detail.types[k], log="xy",
          xlim=c(ax.min, ax.max), ylim=c(ax.min, ax.max),
          asp=1, xaxt="n", yaxt="n")

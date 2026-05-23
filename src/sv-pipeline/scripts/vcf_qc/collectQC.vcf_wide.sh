@@ -155,9 +155,10 @@ cp ${QCTMP}/analysis_samples.list ${OUTDIR}/
 if [ ${QUIET} == 0 ]; then
   echo -e "$( date ) - VCF QC STATUS: Processing VCF"
 fi
-#Run svtk vcf2bed with all info fields
+#Run svtk vcf2bed with all info fields (also exposed for downstream reuse)
 svtk vcf2bed -i ALL \
 ${QCTMP}/input.vcf ${QCTMP}/vcf2bed_unsorted_unfiltered.bed
+cp ${QCTMP}/vcf2bed_unsorted_unfiltered.bed ${OUTDIR}/vcf2bed_raw.bed
 
 #Get genotype counts per variant for all types of SVs except for multi-alleleic CNVs
 echo -e "CHROM\tSTART\tEND\tVID\tnsamp_gt\thomref\thet\thomalt\tother\tunknown\tAC\tAN\tAF\tQUAL\tREF\tALT" > \
