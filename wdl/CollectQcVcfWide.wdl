@@ -105,10 +105,14 @@ task PreprocessCollectAndConvert {
         set -euo pipefail
 
         # Normalize multiallelics
+        mkdir -p /tmp/bcftools_sort/
+
         bcftools norm \
             -m-any \
             --fasta-ref ~{ref_fa} \
             ~{vcf} \
+        | bcftools sort \
+            -T /tmp/bcftools_sort/ \
             -Oz -o ~{prefix}.split.vcf.gz
 
         # (Optional) Annotate allele_length & allele_type
@@ -290,8 +294,6 @@ EOF
         rm -f ~{prefix}.split.vcf.gz ~{prefix}.split.vcf.gz.tbi
 
         # Sort
-        mkdir -p /tmp/bcftools_sort/
-
         bcftools sort \
             -T /tmp/bcftools_sort/ \
             -Oz -o ~{prefix}.sorted.vcf.gz \
