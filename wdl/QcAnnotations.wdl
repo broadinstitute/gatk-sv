@@ -22,6 +22,8 @@ workflow QcAnnotations {
         Int samples_per_shard
 
         Boolean create_variant_attributes = false
+        Boolean run_per_sample = true
+        Int? subset_sample_count
         String? subset_vcf_string
         Int? random_seed
         Int? max_gq
@@ -132,97 +134,112 @@ workflow QcAnnotations {
         }
     }
 
-    call MiniTasks.SplitUncompressed as SplitSamplesList {
-        input:
-            whole_file = CollectQcVcfWide.samples_list[0],
-            lines_per_shard = samples_per_shard,
-            shard_prefix = "~{prefix}.list_shard.",
-            sv_pipeline_docker = gatk_sv_lr_docker,
-            runtime_attr_override = runtime_override_split_samples_list
-    }
-
-    # Scatter per-sample VID collection over contigs × sample shards (fully parallel)
-    # Calls CollectVidsPerSample directly to avoid redundant inner merge task per shard
-    scatter (i in range(length(contigs))) {
-        scatter (shard in SplitSamplesList.shards) {
-            call persample.CollectVidsPerSample {
+    if (run_per_sample) {
+        if (defined(subset_sample_count)) {
+            call SubsetSamplesList {
                 input:
-                    vcf = vcfs[i],
-                    samples_list = shard,
-                    prefix = "~{prefix}.~{contigs[i]}",
-                    sv_pipeline_docker = gatk_sv_lr_docker,
-                    runtime_attr_override = runtime_override_collect_vids_per_sample
+                    samples_list = CollectQcVcfWide.samples_list[0],
+                    subset_count = select_first([subset_sample_count]),
+                    random_seed = select_first([random_seed, 0]),
+                    prefix = prefix,
+                    sv_base_mini_docker = sv_base_mini_docker
             }
         }
-    }
 
-    # Flatten nested scatter results and merge all VID lists across contigs
-    Array[File] all_vid_lists = flatten(CollectVidsPerSample.vid_lists_tarball)
+        File per_sample_samples_list = select_first([SubsetSamplesList.subset_samples_list, CollectQcVcfWide.samples_list[0]])
 
-    call persample.MergeShardedPerSampleVidLists as MergePerSampleVidLists {
-        input:
-            tarballs = all_vid_lists,
-            samples_list = CollectQcVcfWide.samples_list[0],
-            prefix = prefix,
-            sv_base_mini_docker = sv_base_mini_docker,
-            runtime_attr_override = runtime_override_merge_sharded_per_sample_vid_lists
-    }
+        call MiniTasks.SplitUncompressed as SplitSamplesList {
+            input:
+                whole_file = per_sample_samples_list,
+                lines_per_shard = samples_per_shard,
+                shard_prefix = "~{prefix}.list_shard.",
+                sv_pipeline_docker = gatk_sv_lr_docker,
+                runtime_attr_override = runtime_override_split_samples_list
+        }
 
-    Int max_gq_ = select_first([max_gq, 99])
-    call PlotQcPerSample {
-        input:
-            vcf_stats = MergeVcfWideStats.merged_bed_file,
-            samples_list = CollectQcVcfWide.samples_list[0],
-            per_sample_tarball = MergePerSampleVidLists.merged_tarball,
-            prefix = prefix,
-            max_gq = max_gq_,
-            downsample_qc_per_sample = downsample_qc_per_sample,
-            sv_pipeline_qc_docker = gatk_sv_lr_docker,
-            runtime_attr_override = runtime_override_plot_qc_per_sample
-    }
-
-    call PlotQcPerFamily {
-        input:
-            vcf_stats = MergeVcfWideStats.merged_bed_file,
-            samples_list = CollectQcVcfWide.samples_list[0],
-            ped_file = ped_file,
-            per_sample_tarball = MergePerSampleVidLists.merged_tarball,
-            prefix = prefix,
-            max_gq = max_gq_,
-            sv_pipeline_qc_docker = gatk_sv_lr_docker,
-            runtime_attr_override = runtime_override_plot_qc_per_family
-    }
-
-    if (defined(sample_level_comparison_datasets)) {
-        scatter (comparison_dataset_info in select_first([sample_level_comparison_datasets, [[], []]])) {
-            call samplebench.CollectPerSampleBenchmarking {
-                input:
-                    vcf_stats = MergeVcfWideStats.merged_bed_file,
-                    samples_list = CollectQcVcfWide.samples_list[0],
-                    per_sample_tarball = MergePerSampleVidLists.merged_tarball,
-                    comparison_tarball = comparison_dataset_info[1],
-                    sample_renaming_tsv = sample_renaming_tsv,
-                    prefix = prefix,
-                    contigs = contigs,
-                    comparison_set_name = comparison_dataset_info[0],
-                    samples_per_shard = samples_per_shard,
-                    random_seed = random_seed,
-                    sv_base_mini_docker = sv_base_mini_docker,
-                    sv_pipeline_docker = gatk_sv_lr_docker,
-                    sv_pipeline_qc_docker = gatk_sv_lr_docker,
-                    runtime_override_benchmark_samples = runtime_override_benchmark_samples,
-                    runtime_override_split_shuffled_list = runtime_override_split_shuffled_list,
-                    runtime_override_merge_and_tar_shard_benchmarks = runtime_override_merge_and_tar_shard_benchmarks
+        # Scatter per-sample VID collection over contigs × sample shards (fully parallel)
+        # Calls CollectVidsPerSample directly to avoid redundant inner merge task per shard
+        scatter (i in range(length(contigs))) {
+            scatter (shard in SplitSamplesList.shards) {
+                call persample.CollectVidsPerSample {
+                    input:
+                        vcf = vcfs[i],
+                        samples_list = shard,
+                        prefix = "~{prefix}.~{contigs[i]}",
+                        sv_pipeline_docker = gatk_sv_lr_docker,
+                        runtime_attr_override = runtime_override_collect_vids_per_sample
+                }
             }
+        }
 
-            call PlotPerSampleBenchmarking {
-                input:
-                    per_sample_benchmarking_tarball = CollectPerSampleBenchmarking.benchmarking_results_tarball,
-                    samples_list = CollectQcVcfWide.samples_list[0],
-                    comparison_set_name = comparison_dataset_info[0],
-                    prefix = prefix,
-                    sv_pipeline_qc_docker = gatk_sv_lr_docker,
-                    runtime_attr_override = runtime_override_per_sample_benchmark_plot
+        # Flatten nested scatter results and merge all VID lists across contigs
+        Array[File] all_vid_lists = flatten(CollectVidsPerSample.vid_lists_tarball)
+
+        call persample.MergeShardedPerSampleVidLists as MergePerSampleVidLists {
+            input:
+                tarballs = all_vid_lists,
+                samples_list = per_sample_samples_list,
+                prefix = prefix,
+                sv_base_mini_docker = sv_base_mini_docker,
+                runtime_attr_override = runtime_override_merge_sharded_per_sample_vid_lists
+        }
+
+        Int max_gq_ = select_first([max_gq, 99])
+        call PlotQcPerSample {
+            input:
+                vcf_stats = MergeVcfWideStats.merged_bed_file,
+                samples_list = per_sample_samples_list,
+                per_sample_tarball = MergePerSampleVidLists.merged_tarball,
+                prefix = prefix,
+                max_gq = max_gq_,
+                downsample_qc_per_sample = downsample_qc_per_sample,
+                sv_pipeline_qc_docker = gatk_sv_lr_docker,
+                runtime_attr_override = runtime_override_plot_qc_per_sample
+        }
+
+        call PlotQcPerFamily {
+            input:
+                vcf_stats = MergeVcfWideStats.merged_bed_file,
+                samples_list = per_sample_samples_list,
+                ped_file = ped_file,
+                per_sample_tarball = MergePerSampleVidLists.merged_tarball,
+                prefix = prefix,
+                max_gq = max_gq_,
+                sv_pipeline_qc_docker = gatk_sv_lr_docker,
+                runtime_attr_override = runtime_override_plot_qc_per_family
+        }
+
+        if (defined(sample_level_comparison_datasets)) {
+            scatter (comparison_dataset_info in select_first([sample_level_comparison_datasets, [[], []]])) {
+                call samplebench.CollectPerSampleBenchmarking {
+                    input:
+                        vcf_stats = MergeVcfWideStats.merged_bed_file,
+                        samples_list = per_sample_samples_list,
+                        per_sample_tarball = MergePerSampleVidLists.merged_tarball,
+                        comparison_tarball = comparison_dataset_info[1],
+                        sample_renaming_tsv = sample_renaming_tsv,
+                        prefix = prefix,
+                        contigs = contigs,
+                        comparison_set_name = comparison_dataset_info[0],
+                        samples_per_shard = samples_per_shard,
+                        random_seed = random_seed,
+                        sv_base_mini_docker = sv_base_mini_docker,
+                        sv_pipeline_docker = gatk_sv_lr_docker,
+                        sv_pipeline_qc_docker = gatk_sv_lr_docker,
+                        runtime_override_benchmark_samples = runtime_override_benchmark_samples,
+                        runtime_override_split_shuffled_list = runtime_override_split_shuffled_list,
+                        runtime_override_merge_and_tar_shard_benchmarks = runtime_override_merge_and_tar_shard_benchmarks
+                }
+
+                call PlotPerSampleBenchmarking {
+                    input:
+                        per_sample_benchmarking_tarball = CollectPerSampleBenchmarking.benchmarking_results_tarball,
+                        samples_list = per_sample_samples_list,
+                        comparison_set_name = comparison_dataset_info[0],
+                        prefix = prefix,
+                        sv_pipeline_qc_docker = gatk_sv_lr_docker,
+                        runtime_attr_override = runtime_override_per_sample_benchmark_plot
+                }
             }
         }
     }
@@ -687,5 +704,55 @@ task SanitizeOutputs {
         maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
         docker: sv_base_mini_docker
         bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+}
+
+task SubsetSamplesList {
+    input {
+        File samples_list
+        Int subset_count
+        Int random_seed
+        String prefix
+        String sv_base_mini_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    command <<<
+        set -euo pipefail
+
+        sort -u ~{samples_list} > all_samples.uniq.list
+        n_total=$( wc -l < all_samples.uniq.list )
+        
+        if [ $n_total -le ~{subset_count} ]; then
+            cp all_samples.uniq.list ~{prefix}.subset_samples.list
+        else
+            sort -R --random-source <( yes ~{random_seed} ) all_samples.uniq.list \
+              | head -n ~{subset_count} \
+              | sort \
+              > ~{prefix}.subset_samples.list
+        fi
+    >>>
+
+    output {
+        File subset_samples_list = "~{prefix}.subset_samples.list"
+    }
+
+    RuntimeAttr runtime_default = object {
+        cpu_cores: 1,
+        mem_gb: 1,
+        disk_gb: 10,
+        boot_disk_gb: 10,
+        preemptible_tries: 2,
+        max_retries: 0
+    }
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    runtime {
+        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+        memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+        docker: sv_base_mini_docker
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     }
 }
