@@ -59,7 +59,6 @@ workflow QcAnnotations {
         RuntimeAttr? runtime_override_sanitize_outputs
     }
 
-    # Scatter VCF-wide stats collection per chromosome (parallel)
     scatter (i in range(length(contigs))) {
         call vcfwideqc.CollectQcVcfWide {
             input:
@@ -157,8 +156,6 @@ workflow QcAnnotations {
                 runtime_attr_override = runtime_override_split_samples_list
         }
 
-        # Scatter per-sample VID collection over contigs × sample shards (fully parallel)
-        # Calls CollectVidsPerSample directly to avoid redundant inner merge task per shard
         scatter (i in range(length(contigs))) {
             scatter (shard in SplitSamplesList.shards) {
                 call persample.CollectVidsPerSample {
@@ -172,7 +169,6 @@ workflow QcAnnotations {
             }
         }
 
-        # Flatten nested scatter results and merge all VID lists across contigs
         Array[File] all_vid_lists = flatten(CollectVidsPerSample.vid_lists_tarball)
 
         call persample.MergeShardedPerSampleVidLists as MergePerSampleVidLists {
