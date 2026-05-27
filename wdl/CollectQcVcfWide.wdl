@@ -104,26 +104,65 @@ task PreprocessCollectAndConvert {
     command <<<
         set -euo pipefail
 
+        # Per-step memory logging. Writes "[hh:mm:ss] [MEM] <label>: used=XMB avail=YMB"
+        # to stderr so the last line(s) before an OOM kill identify the step that grew.
+        log_mem() {
+            local label="$1"
+            local mem_info="(unknown)"
+            if command -v free >/dev/null 2>&1; then
+                mem_info=$(free -m 2>/dev/null | awk '/^Mem:/ {printf "used=%dMB avail=%dMB", $3, $7}') || mem_info="(free failed)"
+            fi
+            echo "[$(date +'%H:%M:%S')] [MEM] ${label}: ${mem_info}" >&2 || true
+        }
+
+        # Background sampler: snapshots memory every 10s for the lifetime of the task,
+        # so an OOM kill leaves a fresh "tick" log adjacent to the offending step.
+        ( while true; do log_mem "tick"; sleep 10; done ) &
+        SAMPLER_PID=$!
+        trap 'kill $SAMPLER_PID 2>/dev/null || true' EXIT
+
+        log_mem "task start"
+
         # Normalize multiallelics
+        log_mem "before bcftools norm"
         bcftools norm \
             -m-any \
             --check-ref w \
             --fasta-ref ~{ref_fa} \
             -Oz -o ~{prefix}.split.vcf.gz \
             ~{vcf}
+        log_mem "after bcftools norm"
 
         # Convert to symbolic, optionally annotating allele_length / allele_type
+        log_mem "before python convert_to_symbolic"
         python <<'PYCODE'
 import pysam
+import sys
+
+PROGRESS_INTERVAL = 500000
+
+def log_mem(label):
+    rss_mb = 0
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    rss_mb = int(line.split()[1]) // 1024
+                    break
+    except Exception:
+        pass
+    print(f"[MEM-PY] {label}: RSS={rss_mb}MB", file=sys.stderr, flush=True)
 
 VCF_IN = "~{prefix}.split.vcf.gz"
 VCF_OUT = "~{prefix}.unsorted.vcf.gz"
 CREATE_VARIANT_ATTRIBUTES = "~{create_variant_attributes}".lower() == "true"
 
+log_mem("pass1 start")
 group_carrier_counts = []
 vcf_in = pysam.VariantFile(VCF_IN, "r")
 current_locus = None
 current_carrier_set = set()
+pass1_records = 0
 for rec in vcf_in:
     if CREATE_VARIANT_ATTRIBUTES:
         ref_len = len(rec.ref)
@@ -154,10 +193,16 @@ for rec in vcf_in:
         current_locus = None
         current_carrier_set = set()
 
+    pass1_records += 1
+    if pass1_records % PROGRESS_INTERVAL == 0:
+        log_mem(f"pass1 records={pass1_records} groups={len(group_carrier_counts)}")
+
 if current_locus is not None:
     group_carrier_counts.append(len(current_carrier_set))
 vcf_in.close()
+log_mem(f"pass1 done records={pass1_records} groups={len(group_carrier_counts)}")
 
+log_mem("pass2 start")
 vcf_in = pysam.VariantFile(VCF_IN, "r")
 
 if CREATE_VARIANT_ATTRIBUTES:
@@ -191,6 +236,7 @@ nontrv_counter = 1
 group_idx = -1
 current_group_carriers = 0
 
+pass2_records = 0
 for rec in vcf_in:
     if CREATE_VARIANT_ATTRIBUTES:
         ref_len = len(rec.ref)
@@ -253,6 +299,9 @@ for rec in vcf_in:
                 pass
 
         vcf_out.write(rec)
+        pass2_records += 1
+        if pass2_records % PROGRESS_INTERVAL == 0:
+            log_mem(f"pass2 records={pass2_records}")
         continue
 
     prev_trv_key = None
@@ -291,14 +340,20 @@ for rec in vcf_in:
             pass
 
     vcf_out.write(rec)
+    pass2_records += 1
+    if pass2_records % PROGRESS_INTERVAL == 0:
+        log_mem(f"pass2 records={pass2_records}")
 
 vcf_out.close()
 vcf_in.close()
+log_mem(f"pass2 done records={pass2_records}")
 PYCODE
+        log_mem "after python convert_to_symbolic"
 
         rm -f ~{prefix}.split.vcf.gz ~{prefix}.split.vcf.gz.tbi
 
         # Sort
+        log_mem "before bcftools sort"
         mkdir -p /tmp/bcftools_sort/
 
         bcftools sort \
@@ -306,17 +361,22 @@ PYCODE
             -T /tmp/bcftools_sort/ \
             -Oz -o ~{prefix}.sorted.vcf.gz \
             ~{prefix}.unsorted.vcf.gz
+        log_mem "after bcftools sort"
 
         rm -f ~{prefix}.unsorted.vcf.gz
 
+        log_mem "before tabix"
         tabix ~{prefix}.sorted.vcf.gz
+        log_mem "after tabix"
 
         # Collect stats
+        log_mem "before collectQC.vcf_wide.sh"
         /opt/sv-pipeline/scripts/vcf_qc/collectQC.vcf_wide.sh \
             ~{prefix}.sorted.vcf.gz \
             /opt/sv-pipeline/scripts/vcf_qc/SV_colors.txt \
             collectQC_vcfwide_output/
-        
+        log_mem "after collectQC.vcf_wide.sh"
+
         cp collectQC_vcfwide_output/data/VCF_sites.stats.bed.gz ~{prefix}.VCF_sites.stats.bed.gz
         cp collectQC_vcfwide_output/data/VCF_sites.stats.bed.gz.tbi ~{prefix}.VCF_sites.stats.bed.gz.tbi
         cp collectQC_vcfwide_output/analysis_samples.list ~{prefix}.analysis_samples.list
@@ -324,6 +384,8 @@ PYCODE
 
         rm -f ~{prefix}.sorted.vcf.gz ~{prefix}.sorted.vcf.gz.tbi
         rm -rf collectQC_vcfwide_output/
+
+        log_mem "task end"
     >>>
 
     output {
