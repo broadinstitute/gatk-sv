@@ -264,13 +264,10 @@ jq -n \
     "run_module_metrics": $inputs[0].run_sampleevidence_metrics
   }' > "${gather_sample_evidence_inputs_json}"
 
-# TODO: TEMP
-#bash /opt/sv_shell/gather_sample_evidence.sh \
-#  "${gather_sample_evidence_inputs_json}" \
-#  "${gather_sample_evidence_outputs_json}" \
-#  "${gather_sample_evidence_output_dir}"
-# TODO: TEMP
-gather_sample_evidence_outputs_json="/wd/output_GatherSampleEvidence_gtkLFQVN/outputs.json"
+bash /opt/sv_shell/gather_sample_evidence.sh \
+  "${gather_sample_evidence_inputs_json}" \
+  "${gather_sample_evidence_outputs_json}" \
+  "${gather_sample_evidence_output_dir}"
 
 log_success "Successfully finished gather sample evidence."
 
@@ -296,13 +293,10 @@ jq -n \
       bincov_matrix: $inputs[0].ref_panel_bincov_matrix
   }' > "${evidence_qc_inputs_json_filename}"
 
-# TODO: TEMP
-#bash /opt/sv_shell/evidence_qc.sh \
-#  "${evidence_qc_inputs_json_filename}" \
-#  "${evidence_qc_outputs_json_filename}" \
-#  "${evidence_qc_output_dir}"
-# TODO: TEMP
-evidence_qc_outputs_json_filename="/wd/output_evidence_qc_0QRJunIj/outputs.json"
+bash /opt/sv_shell/evidence_qc.sh \
+  "${evidence_qc_inputs_json_filename}" \
+  "${evidence_qc_outputs_json_filename}" \
+  "${evidence_qc_output_dir}"
 
 log_success "Successfully finished evidence QC."
 
