@@ -267,5 +267,6 @@ workflows:
     filters:
       branches:
         - main
+        - vj-dragen
       tags:
         - /.*/
