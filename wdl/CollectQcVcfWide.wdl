@@ -105,57 +105,28 @@ task PreprocessCollectAndConvert {
         set -euo pipefail
 
         # Normalize multiallelics
-        mkdir -p /tmp/bcftools_sort/
-
         bcftools norm \
             -m-any \
             --fasta-ref ~{ref_fa} \
             ~{vcf} \
-        | bcftools sort \
-            -T /tmp/bcftools_sort/ \
             -Oz -o ~{prefix}.split.vcf.gz
 
-        # (Optional) Annotate allele_length & allele_type
-        if ~{create_variant_attributes}; then
-            bcftools query \
-                -f '%CHROM\t%POS\t%REF\t%ALT\t%ID\n' \
-                ~{prefix}.split.vcf.gz \
-            | awk -F'\t' '{
-                ref_len = length($3)
-                alt_len = length($4)
-                diff = alt_len - ref_len
-                if (ref_len == 1 && alt_len == 1) {
-                    atype = "snv"
-                } else if (alt_len > ref_len) {
-                    atype = "ins"
-                } else {
-                    atype = "del"
-                }
-                print $1"\t"$2"\t"$3"\t"$4"\t"$5"\t"diff"\t"atype
-            }' | bgzip -c > annot.txt.gz
-
-            tabix -s1 -b2 -e2 annot.txt.gz
-
-            printf '##INFO=<ID=allele_length,Number=1,Type=Integer,Description="Allele length">\n##INFO=<ID=allele_type,Number=1,Type=String,Description="Allele type">\n' > new_headers.txt
-
-            bcftools annotate \
-                -h new_headers.txt \
-                -a annot.txt.gz \
-                -c CHROM,POS,REF,ALT,~ID,INFO/allele_length,INFO/allele_type \
-                -Oz -o ~{prefix}.split.annotated.vcf.gz \
-                ~{prefix}.split.vcf.gz
-
-            mv ~{prefix}.split.annotated.vcf.gz ~{prefix}.split.vcf.gz
-            
-            rm -f ~{prefix}.split.vcf.gz.tbi annot.txt.gz annot.txt.gz.tbi new_headers.txt
-        fi
-
-        # Convert to symbolic
-        cat << 'EOF' > convert_to_symbolic.py
+        # Convert to symbolic, optionally annotating allele_length / allele_type
+        python <<'PYCODE'
 import pysam
-import sys
 
-vcf_in = pysam.VariantFile("~{prefix}.split.vcf.gz", "r")
+VCF_IN = "~{prefix}.split.vcf.gz"
+VCF_OUT = "~{prefix}.unsorted.vcf.gz"
+CREATE_VARIANT_ATTRIBUTES = "~{create_variant_attributes}".lower() == "true"
+
+vcf_in = pysam.VariantFile(VCF_IN, "r")
+
+if CREATE_VARIANT_ATTRIBUTES:
+    if "allele_length" not in vcf_in.header.info:
+        vcf_in.header.info.add("allele_length", 1, "Integer", "Allele length (alt_len - ref_len)")
+    if "allele_type" not in vcf_in.header.info:
+        vcf_in.header.info.add("allele_type", 1, "String", "Allele type (snv/ins/del)")
+
 if "SVTYPE" not in vcf_in.header.info:
     vcf_in.header.info.add("SVTYPE", 1, "String", "Type of variant.")
 if "SVLEN" not in vcf_in.header.info:
@@ -170,7 +141,7 @@ if "TR_ALLELE_CLASS" not in vcf_in.header.info:
     vcf_in.header.info.add("TR_ALLELE_CLASS", 1, "String", "Sub-classification of TRV biallelic allele: TR_INS, TR_DEL, or TR_SNV.")
 if "TRV_LOCUS_CARRIERS" not in vcf_in.header.info:
     vcf_in.header.info.add("TRV_LOCUS_CARRIERS", 1, "Integer", "Number of unique carriers across all biallelic alleles at this TRV locus.")
-vcf_out = pysam.VariantFile("~{prefix}.unsorted.vcf.gz", "w", header=vcf_in.header)
+vcf_out = pysam.VariantFile(VCF_OUT, "w", header=vcf_in.header)
 
 prev_trv_key = None
 trv_counter = 0
@@ -182,22 +153,35 @@ nontrv_counter = 1
 def flush_trv_buffer():
     if not trv_buffer:
         return
-    
+
     carrier_set = set()
     for rec in trv_buffer:
         for s_name in rec.samples:
             gt = rec.samples[s_name].get("GT", (None,))
             if gt and any(a is not None and a > 0 for a in gt):
                 carrier_set.add(s_name)
-    
+
     n_carriers = len(carrier_set)
     for rec in trv_buffer:
         rec.info["TRV_LOCUS_CARRIERS"] = n_carriers
         vcf_out.write(rec)
-    
+
     trv_buffer.clear()
 
 for rec in vcf_in:
+    if CREATE_VARIANT_ATTRIBUTES:
+        ref_len = len(rec.ref)
+        first_alt = rec.alts[0] if rec.alts else ""
+        alt_len = len(first_alt)
+        if ref_len == 1 and alt_len == 1:
+            inferred_type = "snv"
+        elif alt_len > ref_len:
+            inferred_type = "ins"
+        else:
+            inferred_type = "del"
+        rec.info["allele_length"] = alt_len - ref_len
+        rec.info["allele_type"] = inferred_type
+
     allele_type = rec.info["allele_type"].upper()
 
     if allele_type == "TRV":
@@ -267,7 +251,7 @@ for rec in vcf_in:
         svtype = "DUP_SHORT" if allele_length < 50 else "DUP_SV"
     else:
         svtype = allele_type
-    
+
     if allele_type == "SNV" and len(rec.alts[0]) == 1:
         rec.info["ORIG_ALT"] = rec.alts[0]
     rec.info["SVTYPE"] = svtype
@@ -287,18 +271,18 @@ for rec in vcf_in:
 flush_trv_buffer()
 vcf_out.close()
 vcf_in.close()
-EOF
-
-        python convert_to_symbolic.py
+PYCODE
 
         rm -f ~{prefix}.split.vcf.gz ~{prefix}.split.vcf.gz.tbi
 
         # Sort
+        mkdir -p /tmp/bcftools_sort/
+
         bcftools sort \
             -T /tmp/bcftools_sort/ \
             -Oz -o ~{prefix}.sorted.vcf.gz \
             ~{prefix}.unsorted.vcf.gz
-        
+
         rm -f ~{prefix}.unsorted.vcf.gz
 
         tabix ~{prefix}.sorted.vcf.gz
