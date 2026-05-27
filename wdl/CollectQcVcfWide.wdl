@@ -108,8 +108,8 @@ task PreprocessCollectAndConvert {
         bcftools norm \
             -m-any \
             --fasta-ref ~{ref_fa} \
-            ~{vcf} \
-            -Oz -o ~{prefix}.split.vcf.gz
+            -Oz -o ~{prefix}.split.vcf.gz \
+            ~{vcf}
 
         # Convert to symbolic, optionally annotating allele_length / allele_type
         python <<'PYCODE'
@@ -118,6 +118,44 @@ import pysam
 VCF_IN = "~{prefix}.split.vcf.gz"
 VCF_OUT = "~{prefix}.unsorted.vcf.gz"
 CREATE_VARIANT_ATTRIBUTES = "~{create_variant_attributes}".lower() == "true"
+
+group_carrier_counts = []
+vcf_in = pysam.VariantFile(VCF_IN, "r")
+current_locus = None
+current_carrier_set = set()
+for rec in vcf_in:
+    if CREATE_VARIANT_ATTRIBUTES:
+        ref_len = len(rec.ref)
+        first_alt = rec.alts[0] if rec.alts else ""
+        alt_len = len(first_alt)
+        if ref_len == 1 and alt_len == 1:
+            at = "SNV"
+        elif alt_len > ref_len:
+            at = "INS"
+        else:
+            at = "DEL"
+    else:
+        at = rec.info["allele_type"].upper() if "allele_type" in rec.info else ""
+
+    if at == "TRV":
+        key = (rec.chrom, rec.id)
+        if key != current_locus:
+            if current_locus is not None:
+                group_carrier_counts.append(len(current_carrier_set))
+            current_locus = key
+            current_carrier_set = set()
+        for s_name in rec.samples:
+            gt = rec.samples[s_name].get("GT", (None,))
+            if gt and any(a is not None and a > 0 for a in gt):
+                current_carrier_set.add(s_name)
+    elif current_locus is not None:
+        group_carrier_counts.append(len(current_carrier_set))
+        current_locus = None
+        current_carrier_set = set()
+
+if current_locus is not None:
+    group_carrier_counts.append(len(current_carrier_set))
+vcf_in.close()
 
 vcf_in = pysam.VariantFile(VCF_IN, "r")
 
@@ -145,28 +183,12 @@ vcf_out = pysam.VariantFile(VCF_OUT, "w", header=vcf_in.header)
 
 prev_trv_key = None
 trv_counter = 0
-trv_buffer = []
 
 prev_nontrv_key = None
 nontrv_counter = 1
 
-def flush_trv_buffer():
-    if not trv_buffer:
-        return
-
-    carrier_set = set()
-    for rec in trv_buffer:
-        for s_name in rec.samples:
-            gt = rec.samples[s_name].get("GT", (None,))
-            if gt and any(a is not None and a > 0 for a in gt):
-                carrier_set.add(s_name)
-
-    n_carriers = len(carrier_set)
-    for rec in trv_buffer:
-        rec.info["TRV_LOCUS_CARRIERS"] = n_carriers
-        vcf_out.write(rec)
-
-    trv_buffer.clear()
+group_idx = -1
+current_group_carriers = 0
 
 for rec in vcf_in:
     if CREATE_VARIANT_ATTRIBUTES:
@@ -187,7 +209,8 @@ for rec in vcf_in:
     if allele_type == "TRV":
         current_key = (rec.chrom, rec.id)
         if current_key != prev_trv_key:
-            flush_trv_buffer()
+            group_idx += 1
+            current_group_carriers = group_carrier_counts[group_idx]
             trv_counter = 1
             prev_trv_key = current_key
         else:
@@ -217,6 +240,7 @@ for rec in vcf_in:
         rec.info["SVTYPE"] = svtype
         rec.info["SVLEN"] = allele_length
         rec.info["TR_ALLELE_CLASS"] = allele_class
+        rec.info["TRV_LOCUS_CARRIERS"] = current_group_carriers
         rec.stop = rec.pos + len(rec.ref)
 
         rec.alts = (f"<{allele_type}>",)
@@ -227,10 +251,9 @@ for rec in vcf_in:
             except (AttributeError, TypeError):
                 pass
 
-        trv_buffer.append(rec.copy())
+        vcf_out.write(rec)
         continue
 
-    flush_trv_buffer()
     prev_trv_key = None
 
     nontrv_key = (rec.chrom, rec.pos, rec.id)
@@ -268,7 +291,6 @@ for rec in vcf_in:
 
     vcf_out.write(rec)
 
-flush_trv_buffer()
 vcf_out.close()
 vcf_in.close()
 PYCODE
@@ -279,6 +301,7 @@ PYCODE
         mkdir -p /tmp/bcftools_sort/
 
         bcftools sort \
+            --max-mem ~{sort_max_mem_gb}G \
             -T /tmp/bcftools_sort/ \
             -Oz -o ~{prefix}.sorted.vcf.gz \
             ~{prefix}.unsorted.vcf.gz
@@ -296,8 +319,6 @@ PYCODE
         cp collectQC_vcfwide_output/data/VCF_sites.stats.bed.gz ~{prefix}.VCF_sites.stats.bed.gz
         cp collectQC_vcfwide_output/data/VCF_sites.stats.bed.gz.tbi ~{prefix}.VCF_sites.stats.bed.gz.tbi
         cp collectQC_vcfwide_output/analysis_samples.list ~{prefix}.analysis_samples.list
-
-        # Reuse the BED collectQC.vcf_wide.sh already produced (skip a redundant svtk vcf2bed pass)
         bgzip -c collectQC_vcfwide_output/vcf2bed_raw.bed > ~{prefix}.vcf2bed.bed.gz
 
         rm -f ~{prefix}.sorted.vcf.gz ~{prefix}.sorted.vcf.gz.tbi
@@ -313,15 +334,16 @@ PYCODE
 
     RuntimeAttr runtime_default = object {
         cpu_cores: 1,
-        mem_gb: 8,
+        mem_gb: 12,
         disk_gb: 5 * ceil(size(vcf, "GiB")) + 20,
         boot_disk_gb: 10,
         preemptible_tries: 2,
         max_retries: 0
     }
     RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    Int sort_max_mem_gb = floor(0.9 * select_first([runtime_override.mem_gb, runtime_default.mem_gb]))
     runtime {
-        memory: 16 + " GiB"
+        memory: 12 + " GiB"
         disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
         cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
         preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
