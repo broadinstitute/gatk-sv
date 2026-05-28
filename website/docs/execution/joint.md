@@ -45,15 +45,14 @@ The following are the main pipeline outputs. For more information on the outputs
 
 |Output Type|Output Name|Description|
 |---------|--------|--------------|
-|`File`|`annotated_vcf`|Annotated SV VCF for the cohort***|
+|`File`|`annotated_vcf`|Annotated SV VCF for the cohort|
 |`File`|`annotated_vcf_idx`|Index for `annotated_vcf`|
 |`File`|`sv_vcf_qc_output`|QC plots (bundled in a .tar.gz file)|
 
-***Note that this VCF is not filtered
 
 ### Pipeline overview
 
-![Pipeline Diagram](https://media.githubusercontent.com/media/broadinstitute/gatk-sv/refs/tags/v1.0/terra_pipeline_diagram.jpg)
+![Pipeline Diagram](https://media.githubusercontent.com/media/broadinstitute/gatk-sv/refs/tags/v1.2/terra_pipeline_diagram.jpg)
 
 The following workflows and Jupyter notebooks are included in this workspace, to be executed in this order:
 
@@ -81,8 +80,8 @@ cutoff for outlier filtration in `08-FilterBatchSamples`
 19. `17-JoinRawCalls`: Raw call aggregation
 20. `18-SVConcordance`: Annotate genotype concordance with raw calls
 21. `19-ScoreGenotypes`: Scores genotypes to optimize GQ recalibrator model
-21. `19-FilterGenotypes`: Apply genotype filtering using GQ recalibrator model
-22. `20-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
+21. `20-FilterGenotypes`: Apply genotype filtering using GQ recalibrator model
+22. `21-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
 AF annotation with external population callsets
 
 Extra workflows (Not part of canonical pipeline, but included for your convenience. May require manual configuration):
@@ -300,10 +299,10 @@ that follows the [sample ID requirements](/docs/gs/inputs#sampleids).
 Read the full GenotypeBatch documentation [here](/docs/modules/gb).
 * Use the same `sample_set` definitions you used for `03-TrainGCNV` through `08-FilterBatchSamples`.
 
-### Steps 11-20
+### Steps 11-21
 
 Read the full documentation for [RegenotypeCNVs](/docs/modules/rgcnvs), [CombineBatches](/docs/modules/cmb), 
 [ResolveComplexVariants](/docs/modules/rcv), [GenotypeComplexVariants](/docs/modules/gcv), [CleanVcf](/docs/modules/cvcf), 
 [RefineComplexVariants](/docs/modules/refcv), [JoinRawCalls](/docs/modules/jrc), [SVConcordance](/docs/modules/svc), 
-[FilterGenotypes](/docs/modules/fg), and [AnnotateVcf](/docs/modules/av).
+[ScoreGenotypes](docs/modules/sg), [FilterGenotypes](/docs/modules/fg), and [AnnotateVcf](/docs/modules/av).
 * Use the same cohort `sample_set_set` you created and used for `09-MergeBatchSites`.
