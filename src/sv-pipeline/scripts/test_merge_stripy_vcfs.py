@@ -202,3 +202,4 @@ def test_process_merges_site_filters_and_populates_str_filter(tmp_path):
     assert list(records[0].filter.keys()) == ["LOW_DP"]
     assert list(records[0].samples["sample_a"]["STR_FILTER"]) == ["PASS"]
     assert list(records[0].samples["sample_b"]["STR_FILTER"]) == ["Low depth (<10 reads)"]
+    
