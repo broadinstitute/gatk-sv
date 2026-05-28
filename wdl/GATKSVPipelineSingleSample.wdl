@@ -192,6 +192,9 @@ workflow GATKSVPipelineSingleSample {
     # Parameters
     Int min_svsize                  # Minimum SV length to include
 
+    # Ploidy plot args (--highlight-sample is always set to the case sample)
+    String? ploidy_plot_args
+
     # gCNV inputs
     File contig_ploidy_model_tar
     File gcnv_model_tars_list
@@ -694,6 +697,9 @@ workflow GATKSVPipelineSingleSample {
   Array[File] ref_pesr_split_files = read_lines(ref_pesr_split_files_list)
   Array[File] ref_pesr_sd_files = read_lines(ref_pesr_sd_files_list)
 
+  # Always highlight the case sample in ploidy plots; append any extra user-provided plot args
+  String effective_ploidy_plot_args = "--highlight-sample " + sample_id + if defined(ploidy_plot_args) then " " + select_first([ploidy_plot_args]) else ""
+
   call batchevidence.GatherBatchEvidence as GatherBatchEvidence {
     input:
       batch=batch,
@@ -724,6 +730,7 @@ workflow GATKSVPipelineSingleSample {
       gatk4_jar_override = gatk4_jar_override,
       run_ploidy = true,
       append_first_sample_to_ped = true,
+      ploidy_plot_args = effective_ploidy_plot_args,
       gcnv_p_alt = gcnv_p_alt,
       gcnv_cnv_coherence_length = gcnv_cnv_coherence_length,
       gcnv_max_copy_number = gcnv_max_copy_number,

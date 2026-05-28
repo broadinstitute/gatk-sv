@@ -269,11 +269,21 @@ gather_batch_evidence_output_dir=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/ou
 gather_batch_evidence_inputs_json_filename="${gather_batch_evidence_output_dir}/inputs.json"
 gather_batch_evidence_outputs_json_filename="${gather_batch_evidence_output_dir}/outputs.json"
 
+# Always highlight the case sample in ploidy plots; append any extra user-provided plot args
+_ploidy_plot_args_base="--highlight-sample ${sample_id}"
+_ploidy_plot_args_extra=$(jq -r '.ploidy_plot_args // empty' "${input_json}")
+if [[ -n "${_ploidy_plot_args_extra}" ]]; then
+  _ploidy_plot_args="${_ploidy_plot_args_base} ${_ploidy_plot_args_extra}"
+else
+  _ploidy_plot_args="${_ploidy_plot_args_base}"
+fi
+
 jq -n \
   --slurpfile inputs "${input_json}" \
   --slurpfile gse_outputs "${gather_sample_evidence_outputs_json}" \
   --slurpfile eqc_outputs "${evidence_qc_outputs_json_filename}" \
   --arg samples "${sample_id}" \
+  --arg ploidy_plot_args "${_ploidy_plot_args}" \
   --argjson ref_samples "${ref_samples_json_array}" \
   --argjson ref_pe_disc "${ref_pesr_disc_files_json_array}" \
   --argjson ref_pe_split "${ref_pesr_split_files_json_array}" \
@@ -306,6 +316,7 @@ jq -n \
       gcnv_model_tars: $gcnv_model_tars,
       run_ploidy: true,
       append_first_sample_to_ped: true,
+      ploidy_plot_args: $ploidy_plot_args,
       gcnv_p_alt: $inputs[0].gcnv_p_alt,
       gcnv_cnv_coherence_length: $inputs[0].gcnv_cnv_coherence_length,
       gcnv_max_copy_number: $inputs[0].gcnv_max_copy_number,
