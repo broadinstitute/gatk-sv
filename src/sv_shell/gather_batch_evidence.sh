@@ -88,9 +88,29 @@ echo -e "${MAGENTA}Running ploidy estimation.${NC}"
 ploidy_estimation_inputs_json="$(realpath "${output_dir}/ploidy_estimation_inputs.json")"
 ploidy_estimation_outputs_json="$(realpath "${output_dir}/ploidy_estimation_outputs.json")"
 jq -n \
-  --arg b "${batch}" \
-  --argfile m <(jq '.merged_bincov' "${make_bin_cov_matrix_outputs_json}") \
-  '{batch: $b, bincov_matrix: $m}' > "${ploidy_estimation_inputs_json}"
+  --arg batch "${batch}" \
+  --arg bincov_matrix "${merged_bincov_}" \
+  --arg reference_dict "${reference_dict}" \
+  --slurpfile cfg "${input_json}" \
+  '{
+     batch: $batch,
+     bincov_matrix: $bincov_matrix,
+     reference_dict: $reference_dict
+   } + ($cfg[0] | {
+     poor_regions:      .ploidy_poor_regions,
+     truth_json:        .ploidy_truth_json,
+     preprocess_args:   .ploidy_preprocess_args,
+     polyploidy_args:   .ploidy_polyploidy_args,
+     infer_args:        .ploidy_infer_args,
+     ppd_args:          .ploidy_ppd_args,
+     call_args:         .ploidy_call_args,
+     plot_args:         .ploidy_plot_args,
+     enable_ppd:        .ploidy_enable_ppd,
+     use_callq20:       .ploidy_use_callq20,
+     subset_sd_files:   .ploidy_subset_sd_files,
+     java_mem_fraction: .java_mem_fraction
+   } | with_entries(select(.value != null)))' \
+  > "${ploidy_estimation_inputs_json}"
 
 bash /opt/sv_shell/ploidy_estimation.sh "${ploidy_estimation_inputs_json}" "${ploidy_estimation_outputs_json}"
 

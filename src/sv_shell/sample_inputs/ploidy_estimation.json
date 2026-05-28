@@ -1,4 +1,5 @@
 {
   "batch": "NA12878",
-  "bincov_matrix": "/inputs/NA12878.RD.txt.gz"
+  "bincov_matrix": "/inputs/NA12878.RD.txt.gz",
+  "reference_dict": "/inputs/Homo_sapiens_assembly38.dict"
 }

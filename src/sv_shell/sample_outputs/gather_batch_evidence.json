@@ -4,7 +4,7 @@
   "PE_stats": null,
   "RD_stats": null,
   "SR_stats": null,
-  "batch_ploidy_matrix": "/intermediates/GatherBatchEvidence_outputs/NA12878_ploidy_matrix.bed.gz",
+  "batch_ploidy_matrix": "/intermediates/GatherBatchEvidence_outputs/NA12878_condensed_depth.rd.txt.gz",
   "batch_ploidy_plots": "/intermediates/GatherBatchEvidence_outputs/NA12878_ploidy_plots.tar.gz",
   "cnmops_del": "/intermediates/GatherBatchEvidence_outputs/NA12878.DEL.header.bed.gz",
   "cnmops_del_index": "/intermediates/GatherBatchEvidence_outputs/NA12878.DEL.header.bed.gz.tbi",

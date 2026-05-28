@@ -228,7 +228,7 @@ task RunSVShell {
   String stripy_vcf_filename = sample_id + ".stripy.vcf"
   String metrics_filename = "single_sample." + batch + ".metrics.tsv"
   String qc_filename = "sv_qc." + batch + ".tsv"
-  String ploidy_matrix_filename = batch + "_ploidy_matrix.bed.gz"
+  String ploidy_matrix_filename = batch + "_condensed_depth.rd.txt.gz"
   String ploidy_plots_filename = batch + "_ploidy_plots.tar.gz"
   String non_genotyped_unique_depth_calls_filename = batch + ".non_genotyped_unique_depth_calls.vcf.gz"
 
