@@ -217,6 +217,7 @@ task RunSVShell {
     File? dragen_sv_vcf_index
     File? dragen_cnv_vcf
     File? dragen_cnv_vcf_index
+    File? ref_std_dragen_vcf_tar
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
@@ -350,6 +351,7 @@ task RunSVShell {
       --arg dragen_sv_vcf_index "~{select_first([dragen_sv_vcf_index, ""])}" \
       --arg dragen_cnv_vcf "~{select_first([dragen_cnv_vcf, ""])}" \
       --arg dragen_cnv_vcf_index "~{select_first([dragen_cnv_vcf_index, ""])}" \
+      --arg ref_std_dragen_vcf_tar "~{select_first([ref_std_dragen_vcf_tar, ""])}" \
       '$ARGS.named | with_entries(select(.value != "" and .value != null))' > "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json"
 
     bash /opt/sv_shell/single_sample_pipeline.sh \
