@@ -1,5 +1,27 @@
 #!/bin/env python
 
+"""
+Merge one or more STRipy VCFs into a single output VCF.
+
+This script supports two common usages:
+
+1. Append STRipy calls onto an existing GATK-SV VCF with ``--main-vcf``.
+    In this mode, the main VCF header and records are copied to the output first,
+    then STRipy records are appended. Only STRipy samples already present in the
+    main VCF header are retained.
+
+2. Produce a STRipy-only merged VCF by omitting ``--main-vcf``.
+    In this mode, the output header is built from the STRipy inputs and the output
+    contains only STRipy records.
+
+The ``--stripy-vcfs-list`` argument must point to a text file containing one
+STRipy VCF path per line. Across the listed inputs, duplicate samples are not
+allowed. Records describing the same STR locus are merged by site and allele
+tuple so that sample-level STRipy FORMAT fields can be combined into one record.
+
+The output VCF is written in input traversal order and is not sorted.
+"""
+
 import argparse
 from contextlib import ExitStack
 import pysam
