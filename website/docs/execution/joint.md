@@ -239,9 +239,7 @@ and create corresponding `sample_sets` for use in `03-TrainGCNV` and beyond.
 
 ### Optional STRipy repeat-expansion calling {#stripy}
 
-After `02-EvidenceQC` and sample QC are complete, generate the cohort PED file and set `cohort_ped_file` in Workspace Data.
-You can then run [StripyWorkflow](/docs/modules/stripy) on selected samples as an optional standalone workflow. `20-AnnotateVcf` appends those merged 
-STRipy VCFs when they are present.
+After `02-EvidenceQC` and sample QC are complete, make sure `cohort_ped_file` in Workspace Data is set to the updated PED file containing sex assignments from sample QC.
 
 ### 03-TrainGCNV {#traingcnv}
 
