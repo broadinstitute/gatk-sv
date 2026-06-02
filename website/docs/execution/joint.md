@@ -240,12 +240,8 @@ and create corresponding `sample_sets` for use in `03-TrainGCNV` and beyond.
 ### Optional STRipy repeat-expansion calling {#stripy}
 
 After `02-EvidenceQC` and sample QC are complete, generate the cohort PED file and set `cohort_ped_file` in Workspace Data.
-You can then run `StripyWorkflow` on selected samples as an optional standalone workflow. Terra's default output
-handling writes the workflow outputs directly to the sample row as `stripy_vcf`, `stripy_json`, `stripy_tsv`, and
-`stripy_html`. `05-ClusterBatch` reads `${this.samples.stripy_vcf}` and writes `merged_stripy_vcf` and
-`merged_stripy_vcf_index` to the sample-set row using its default output names; `20-AnnotateVcf` appends those merged
+You can then run [StripyWorkflow](/docs/modules/stripy) on selected samples as an optional standalone workflow. `20-AnnotateVcf` appends those merged 
 STRipy VCFs when they are present.
-
 
 ### 03-TrainGCNV {#traingcnv}
 

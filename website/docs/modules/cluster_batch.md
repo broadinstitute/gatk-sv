@@ -66,7 +66,7 @@ outlier samples. Example value: 4.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `stripy_vcfs`
 Single-sample STRipy VCFs to merge for the batch. In the Terra joint-calling workspace, these are produced by the optional
-standalone `StripyWorkflow` sample workflow and passed from the `stripy_vcf` sample attribute.
+standalone [StripyWorkflow](./stripy) sample workflow and passed from the `stripy_vcf` sample attribute.
 
 ## Outputs
 
