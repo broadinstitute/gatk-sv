@@ -87,7 +87,7 @@ inputs beyond their defaults.
 
 |Output Type|Output Name|Description|
 |---------|--------|--------------|
-|`File`|`final_vcf`|SV VCF output for the pipeline. Includes all sites genotyped as variant in the case sample and genotypes for the reference panel. Sites are annotated with overlap of functional genome elements and allele frequencies of matching variants in gnomAD. When STRipy is enabled, STRipy repeat-expansion records are appended after final cleanup.|
+|`File`|`final_vcf`|SV VCF output for the pipeline. Includes all sites genotyped as variant in the case sample and genotypes for the reference panel. Sites are annotated with overlap of functional genome elements and allele frequencies of matching variants in gnomAD. When STRipy is enabled, STRipy repeat-expansion records are added after final cleanup.|
 |`File`|`final_vcf_idx`|Index file for `final_vcf`|
 |`File`|`final_bed`|Final output in BED format. Filter status, list of variant samples, and all VCF INFO fields are reported as additional columns.|
 |`File`|`metrics_file`|Metrics computed from the input data and intermediate and final VCFs. Includes metrics on the SV evidence, and on the number of variants called, broken down by type and size range. STRipy records are not included in these metrics.|
