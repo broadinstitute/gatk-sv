@@ -87,7 +87,7 @@ workflow GATKSVPipelineSingleSample {
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
     String cloud_sdk_docker
-    String stripy_docker
+    String? stripy_docker
 
     # Must be provided if corresponding use_* is true and case_*_vcf is not provided
     String? manta_docker
@@ -800,8 +800,9 @@ workflow GATKSVPipelineSingleSample {
         sample_name = sample_id,
         ped_file = combined_ped_file,
         reference_fasta = reference_fasta,
+        reference_fasta_fai = reference_index,
         linux_docker = linux_docker,
-        stripy_docker = stripy_docker
+        stripy_docker = select_first([stripy_docker])
     }
   }
 
@@ -1457,15 +1458,17 @@ workflow GATKSVPipelineSingleSample {
   }
 
   if (use_stripy) {
-    call SingleSampleFiltering.MergeStripyVcf {
+    call utils.MergeStripyVcf {
       input:
       vcf = UpdateBreakendRepresentationAndRemoveFilters.out,
-      stripy_vcf = select_first([StripyWorkflow.vcf_output, case_stripy_file]),
+      stripy_vcfs = [select_first([StripyWorkflow.stripy_vcf, case_stripy_file])],
       output_prefix = sample_id + ".gatk_sv",
       sv_pipeline_docker = sv_pipeline_docker
     }
   }
 
+  # SingleSampleMetrics does not currently tolerate STRipy records, so metrics and QC intentionally use the
+  # final-cleanup VCF before optional STRipy records are appended to the workflow's final_vcf output.
   call SingleSampleMetrics.SingleSampleMetrics {
     input:
       name = batch,
@@ -1505,10 +1508,10 @@ workflow GATKSVPipelineSingleSample {
     File pre_cleanup_vcf_idx = AnnotateVcf.annotated_vcf_index
 
     # STRipy outputs
-    File? stripy_json_output = StripyWorkflow.json_output
-    File? stripy_tsv_output = StripyWorkflow.tsv_output
-    File? stripy_html_output = StripyWorkflow.html_output
-    File? stripy_vcf_output = StripyWorkflow.vcf_output
+    File? stripy_json_output = StripyWorkflow.stripy_json
+    File? stripy_tsv_output = StripyWorkflow.stripy_tsv
+    File? stripy_html_output = StripyWorkflow.stripy_html
+    File? stripy_vcf_output = StripyWorkflow.stripy_vcf
 
     # QC files
     File metrics_file = SingleSampleMetrics.metrics_file

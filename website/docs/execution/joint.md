@@ -62,27 +62,28 @@ algorithms (Manta, Scramble, and Wham), read depth (RD), split read positions (S
 2. `02-EvidenceQC`: Dosage bias scoring and ploidy estimation, run on preliminary batches
 3. [Notebook] `SampleQC.ipynb`: Interactively perform sample QC and filtering using outputs from `02-EvidenceQC`
 4. [Notebook] `Batching.ipynb`: Create batches for subsequent steps. For cohorts >500 samples or smaller heterogeneous cohorts
-5. `03-TrainGCNV`: Per-batch training of a gCNV model for use in `04-GatherBatchEvidence`
-6. `04-GatherBatchEvidence`: Per-batch copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) 
+5. Optional `StripyWorkflow`: Per-sample STRipy repeat-expansion calling after the cohort PED file has been generated
+6. `03-TrainGCNV`: Per-batch training of a gCNV model for use in `04-GatherBatchEvidence`
+7. `04-GatherBatchEvidence`: Per-batch copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) 
 generation; call and evidence aggregation
-7. `05-ClusterBatch`: Per-batch variant clustering
-8. `06-GenerateBatchMetrics`: Per-batch metric generation
-9. `07-FilterBatchSites`: Per-batch variant filtering and plot SV counts per sample per SV type to enable choice of IQR 
+8. `05-ClusterBatch`: Per-batch variant clustering and optional STRipy VCF merging
+9. `06-GenerateBatchMetrics`: Per-batch metric generation
+10. `07-FilterBatchSites`: Per-batch variant filtering and plot SV counts per sample per SV type to enable choice of IQR 
 cutoff for outlier filtration in `08-FilterBatchSamples`
-10. `08-FilterBatchSamples`: Per-batch outlier sample filtration
-11. `09-MergeBatchSites`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
-12. `10-GenotypeBatch`: Per-batch genotyping of all sites in the cohort
-13. `11-RegenotypeCNVs`: Cohort-level genotype refinement of some depth calls
-14. `12-CombineBatches`: Cohort-level cross-batch integration and clustering
-15. `13-ResolveComplexVariants`: Complex variant resolution
-16. `14-GenotypeComplexVariants`: Complex variant re-genotyping
-17. `15-CleanVcf`: VCF cleanup
-18. `16-RefineComplexVariants`: Complex variant filtering and refinement
-19. `17-JoinRawCalls`: Raw call aggregation
-20. `18-SVConcordance`: Annotate genotype concordance with raw calls
-21. `19-ScoreGenotypes`: Scores genotypes to optimize GQ recalibrator model
-21. `19-FilterGenotypes`: Apply genotype filtering using GQ recalibrator model
-22. `20-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
+11. `08-FilterBatchSamples`: Per-batch outlier sample filtration
+12. `09-MergeBatchSites`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
+13. `10-GenotypeBatch`: Per-batch genotyping of all sites in the cohort
+14. `11-RegenotypeCNVs`: Cohort-level genotype refinement of some depth calls
+15. `12-CombineBatches`: Cohort-level cross-batch integration and clustering
+16. `13-ResolveComplexVariants`: Complex variant resolution
+17. `14-GenotypeComplexVariants`: Complex variant re-genotyping
+18. `15-CleanVcf`: VCF cleanup
+19. `16-RefineComplexVariants`: Complex variant filtering and refinement
+20. `17-JoinRawCalls`: Raw call aggregation
+21. `18-SVConcordance`: Annotate genotype concordance with raw calls
+22. `19-ScoreGenotypes`: Scores genotypes to optimize GQ recalibrator model
+23. `19-FilterGenotypes`: Apply genotype filtering using GQ recalibrator model
+24. `20-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
 AF annotation with external population callsets
 
 Extra workflows (Not part of canonical pipeline, but included for your convenience. May require manual configuration):
@@ -236,6 +237,9 @@ Read the documentation on batching [here](/docs/modules/eqc#batching).
 If necessary, follow the `Batching.ipynb` notebook step-by-step to divide samples into batches
 and create corresponding `sample_sets` for use in `03-TrainGCNV` and beyond.
 
+### Optional STRipy repeat-expansion calling {#stripy}
+
+After `02-EvidenceQC` and sample QC are complete, make sure `cohort_ped_file` in Workspace Data is set to the updated PED file containing sex assignments from sample QC.
 
 ### 03-TrainGCNV {#traingcnv}
 

@@ -111,15 +111,15 @@ mv "${vcf_path}" "${vcf_path_output_dir}"
 
 
 jq -n \
-  --arg json "${json_path_output_dir}" \
-  --arg tsv "${tsv_path_output_dir}" \
-  --arg html "${html_path_output_dir}" \
-  --arg vcf "${vcf_path_output_dir}" \
+  --arg stripy_json "${json_path_output_dir}" \
+  --arg stripy_tsv "${tsv_path_output_dir}" \
+  --arg stripy_html "${html_path_output_dir}" \
+  --arg stripy_vcf "${vcf_path_output_dir}" \
   '{
-      json_output: $json,
-      tsv_output: $tsv,
-      html_output: $html,
-      vcf_output: $vcf
+      stripy_json: $stripy_json,
+      stripy_tsv: $stripy_tsv,
+      stripy_html: $stripy_html,
+      stripy_vcf: $stripy_vcf
   }' > "${output_json_filename}"
 
 echo "Finished stripy, output json filename: ${output_json_filename}"
