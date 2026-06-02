@@ -42,7 +42,6 @@ workflows:
     filters:
       branches:
         - main
-        - mw_stripy_joint
       tags:
         - /.*/
 
@@ -205,7 +204,6 @@ workflows:
     filters:
       branches:
         - main
-        - mw_stripy_joint
       tags:
         - /.*/
 
@@ -242,7 +240,6 @@ workflows:
     filters:
       branches:
         - main
-        - mw_stripy_joint
       tags:
         - /.*/
 
@@ -252,7 +249,6 @@ workflows:
     filters:
       branches:
         - main
-        - mw_stripy_joint
       tags:
         - /.*/
 
