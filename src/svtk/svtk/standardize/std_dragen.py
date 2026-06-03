@@ -108,10 +108,7 @@ class DragenStandardizer(VCFStandardizer):
                 std_rec.stop = std_rec.pos
                 std_rec.info['END2'] = end
 
-                if std_rec.chrom != chr2:
-                    std_rec.info['SVLEN'] = -1
-                else:
-                    std_rec.info['SVLEN'] = 0
+                # std_rec.info['SVLEN'] = -1
 
             elif svtype == 'INV':
                 std_rec.info['CHR2'] = chr2
@@ -155,7 +152,7 @@ class DragenStandardizer(VCFStandardizer):
         std_rec.info['STRANDS'] = strands
 
         # Define SVLEN
-        if svtype == 'BND' and std_rec.chrom != std_rec.info['CHR2']:
+        if svtype == 'BND': # and std_rec.chrom != std_rec.info['CHR2']:
             std_rec.info['SVLEN'] = -1
         elif svtype == 'INS':
             std_rec.info['SVLEN'] = raw_rec.info.get('SVLEN', -1)
