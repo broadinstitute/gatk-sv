@@ -102,9 +102,23 @@ class DragenStandardizer(VCFStandardizer):
                 chrom, chr2 = chr2, chrom
                 std_rec.pos = pos
                 std_rec.chrom = chrom
-            std_rec.info['CHR2'] = chr2
-            std_rec.stop = std_rec.pos
-            std_rec.info['END2'] = end
+
+            # TODO: this part needs testing
+            # TODO: need to check if bnd is correct compared to manta standardized vcf info column field should match
+            # TODO: there should not be any inv with svlen zero
+            if svtype == 'BND':
+                std_rec.info['CHR2'] = chr2
+                std_rec.stop = std_rec.pos
+                std_rec.info['END2'] = end
+            elif svtype == 'INV':
+                std_rec.info['CHR2'] = chr2
+
+                std_rec.pos = min(pos, end)
+                std_rec.stop = max(pos, end)
+
+                if std_rec.pos == std_rec.stop:
+                    std_rec.stop += 1
+
         elif svtype == 'INS':
             std_rec.info['CHR2'] = raw_rec.chrom
             std_rec.stop = raw_rec.pos + 1
