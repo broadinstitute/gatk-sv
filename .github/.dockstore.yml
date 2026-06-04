@@ -120,6 +120,7 @@ workflows:
     filters:
       branches:
         - main
+        - phase3_b5d5049
       tags:
         - /.*/
 
@@ -129,6 +130,7 @@ workflows:
     filters:
       branches:
         - main
+        - phase3_b5d5049
       tags:
         - /.*/
 
@@ -138,6 +140,7 @@ workflows:
     filters:
       branches:
         - main
+        - phase3_b5d5049
       tags:
         - /.*/
 
@@ -147,6 +150,7 @@ workflows:
     filters:
       branches:
         - main
+        - phase3_b5d5049
       tags:
         - /.*/
 
