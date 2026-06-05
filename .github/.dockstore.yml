@@ -154,6 +154,16 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: RefineComplexVariants2
+    primaryDescriptorPath: /wdl/RefineComplexVariants2.wdl
+    filters:
+      branches:
+        - main
+        - eph_refinecpx
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: JoinRawCalls
     primaryDescriptorPath: /wdl/JoinRawCalls.wdl
     filters:
