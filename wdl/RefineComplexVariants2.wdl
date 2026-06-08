@@ -124,6 +124,7 @@ task TarFilesWithOrderedManifest {
       fi
 
       cp "$file" "$target_path"
+      tabix "$target_path"
       echo "$target_path" >> "~{ordered_manifest_path}"
     done < ~{write_lines(files)}
 
