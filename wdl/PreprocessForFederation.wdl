@@ -12,12 +12,12 @@ workflow PreprocessForFederation {
     File contig_list
     String prefix
 
-    File sample_keep_list
+    File? sample_keep_list
     File? sample_id_rename_map
 
     File par_bed
-    File sample_pop_assignments
-    File ped_file
+    File? sample_pop_assignments
+    File? ped_file
     File ploidy_table
     Int sv_per_shard
 
