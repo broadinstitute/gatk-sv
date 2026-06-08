@@ -19,7 +19,7 @@ workflow PreprocessForFederation {
     File? sample_pop_assignments
     File? ped_file
     File ploidy_table
-    Int sv_per_shard
+    Int sv_per_shard = 5000
 
     String header_drop_fields
 
