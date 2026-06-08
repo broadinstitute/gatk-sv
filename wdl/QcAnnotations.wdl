@@ -36,7 +36,6 @@ workflow QcAnnotations {
         String sv_base_mini_docker
         String gatk_sv_lr_docker
 
-        RuntimeAttr? runtime_override_subset_vcf
         RuntimeAttr? runtime_override_preprocess_vcf
         RuntimeAttr? runtime_override_scatter_vcf
         RuntimeAttr? runtime_override_merge_subvcf_stat_shards
@@ -74,7 +73,6 @@ workflow QcAnnotations {
                 ref_fa = ref_fa,
                 ref_fai = ref_fai,
                 runtime_override_scatter_vcf = runtime_override_scatter_vcf,
-                runtime_override_subset_vcf = runtime_override_subset_vcf,
                 runtime_override_preprocess_vcf = runtime_override_preprocess_vcf,
                 runtime_override_merge_subvcf_stat_shards = runtime_override_merge_subvcf_stat_shards,
                 runtime_override_merge_svtk_vcf_2_bed = runtime_override_merge_vcf_2_bed
@@ -423,7 +421,7 @@ task PlotQcPerSample {
         memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
         disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
         cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        preemptible: 0
         maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
         docker: sv_pipeline_qc_docker
         bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
@@ -516,7 +514,7 @@ task PlotQcPerFamily {
         memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
         disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
         cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        preemptible: 0
         maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
         docker: sv_pipeline_qc_docker
         bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])

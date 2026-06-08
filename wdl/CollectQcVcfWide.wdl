@@ -21,7 +21,6 @@ workflow CollectQcVcfWide {
         String sv_pipeline_docker
 
         RuntimeAttr? runtime_override_scatter_vcf
-        RuntimeAttr? runtime_override_subset_vcf
         RuntimeAttr? runtime_override_preprocess_vcf
         RuntimeAttr? runtime_override_merge_subvcf_stat_shards
         RuntimeAttr? runtime_override_merge_svtk_vcf_2_bed
@@ -39,23 +38,14 @@ workflow CollectQcVcfWide {
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_override_scatter_vcf
     }
+
     Array[File] vcf_shards = ScatterVcf.shards
 
     scatter (i in range(length(vcf_shards))) {
-        if (defined(subset_vcf_string)) {
-            call MiniTasks.SubsetVcf {
-                input:
-                    vcf = vcf_shards[i],
-                    outfile_prefix = "~{output_prefix}.shard_~{i}",
-                    subset_flags = select_first([subset_vcf_string]),
-                    sv_base_mini_docker = sv_base_mini_docker,
-                    runtime_attr_override = runtime_override_subset_vcf
-            }
-        }
-
         call PreprocessCollectAndConvert {
             input:
-                vcf = select_first([SubsetVcf.filtered_vcf, vcf_shards[i]]),
+                vcf = vcf_shards[i],
+                subset_flags = subset_vcf_string,
                 prefix = "~{output_prefix}.shard_~{i}",
                 ref_fa = ref_fa,
                 ref_fai = ref_fai,
@@ -93,6 +83,7 @@ workflow CollectQcVcfWide {
 task PreprocessCollectAndConvert {
     input {
         File vcf
+        String? subset_flags
         String prefix
         File ref_fa
         File ref_fai
@@ -104,6 +95,14 @@ task PreprocessCollectAndConvert {
     command <<<
         set -euo pipefail
 
+        # Optionally pre-filter records on the shard (replaces the standalone SubsetVcf task)
+        SUBSET_FLAGS="~{default="" subset_flags}"
+        if [ -n "$SUBSET_FLAGS" ]; then
+            bcftools view --no-version $SUBSET_FLAGS -Oz -o filtered_input.vcf.gz ~{vcf}
+        else
+            ln -s ~{vcf} filtered_input.vcf.gz
+        fi
+
         # Normalize multiallelics
         echo "Normalizing multiallelics"
         bcftools norm \
@@ -111,7 +110,9 @@ task PreprocessCollectAndConvert {
             --check-ref w \
             --fasta-ref ~{ref_fa} \
             -Oz -o ~{prefix}.split.vcf.gz \
-            ~{vcf}
+            filtered_input.vcf.gz
+
+        rm -f filtered_input.vcf.gz
 
         # Convert to symbolic, optionally annotating allele_length / allele_type
         echo "Converting to symbolic"
@@ -342,7 +343,7 @@ PYCODE
     RuntimeAttr runtime_default = object {
         cpu_cores: 1,
         mem_gb: 8,
-        disk_gb: 5 * ceil(size(vcf, "GiB")) + 20,
+        disk_gb: 3 * ceil(size(vcf, "GiB")) + 20,
         boot_disk_gb: 10,
         preemptible_tries: 2,
         max_retries: 0
