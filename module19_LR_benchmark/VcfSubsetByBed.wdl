@@ -26,6 +26,7 @@ workflow VcfSubsetByBed {
         String      output_prefix = "merged_subset"
 
         # Runtime
+        String      sv_base_docker
         String      bcftools_docker = "quay.io/biocontainers/bcftools:1.19--h8b25389_1"
         String      htslib_docker   = "quay.io/biocontainers/htslib:1.19--h81da01d_0"
         Int         subset_mem_gb   = 8
@@ -42,7 +43,7 @@ workflow VcfSubsetByBed {
         input:
             bed_file   = bed_file,
             padding_bp = padding_bp,
-            docker     = bcftools_docker,
+            docker     = sv_base_docker,
             mem_gb     = 2
     }
 
