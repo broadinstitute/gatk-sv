@@ -183,6 +183,9 @@ task RunRefineComplexVariants {
     tar -xzf ~{depth_del_beds_tarball}
     tar -xzf ~{depth_dup_beds_tarball}
 
+    DEL_BED_ARGS=$(awk '{printf " --depth-del-beds %s", $0}' "depth_del_beds/manifest/ordered_manifest.txt")
+    DUP_BED_ARGS=$(awk '{printf " --depth-dup-beds %s", $0}' "depth_dup_beds/manifest/ordered_manifest.txt")
+
     gatk RefineComplexVariants \
       -V ~{vcf} \
       --min-pe-cpx ~{min_pe_cpx} \
@@ -190,8 +193,9 @@ task RunRefineComplexVariants {
       -O ~{output_vcf} \
       --batch-sample-lists ~{sep=" --batch-sample-lists " batch_sample_lists} \
       --discordant-pairs-files ~{sep=" --discordant-pairs-files " pe_files} \
-      --depth-del-beds ~{sep=" --depth-del-beds " read_lines("depth_del_beds/manifest/ordered_manifest.txt")} \
-      --depth-dup-beds ~{sep=" --depth-dup-beds " read_lines("depth_dup_beds/manifest/ordered_manifest.txt")}
+      ${DEL_BED_ARGS} \
+      ${DUP_BED_ARGS}
+
   >>>
 
   output {
