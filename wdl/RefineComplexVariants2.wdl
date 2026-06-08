@@ -180,6 +180,8 @@ task RunRefineComplexVariants {
   command <<<
     set -euo pipefail
 
+    tabix ~{vcf}
+
     tar -xzf ~{depth_del_beds_tarball}
     tar -xzf ~{depth_dup_beds_tarball}
 
