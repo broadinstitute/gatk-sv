@@ -96,9 +96,8 @@ task PreprocessCollectAndConvert {
         set -euo pipefail
 
         # Optionally pre-filter records on the shard (replaces the standalone SubsetVcf task)
-        SUBSET_FLAGS="~{default="" subset_flags}"
-        if [ -n "$SUBSET_FLAGS" ]; then
-            bcftools view --no-version $SUBSET_FLAGS -Oz -o filtered_input.vcf.gz ~{vcf}
+        if ~{if defined(subset_flags) then "true" else "false"}; then
+            bcftools view --no-version ~{subset_flags} -Oz -o filtered_input.vcf.gz ~{vcf}
         else
             ln -s ~{vcf} filtered_input.vcf.gz
         fi
