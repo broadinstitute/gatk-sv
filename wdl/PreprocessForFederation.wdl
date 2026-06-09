@@ -191,8 +191,8 @@ with pysam.VariantFile("~{vcf}", 'r') as inp:
         if 'END2' in record.info:
           record.info.pop('END2')
 
-      # move SOURCE to CPX_INTERVALS for INS_iDEL
-      if 'CPX_TYPE' in record.info and record.info['CPX_TYPE'] == 'INS_iDEL':
+      # move SOURCE (if exists) to CPX_INTERVALS for INS_iDEL
+      if 'CPX_TYPE' in record.info and record.info['CPX_TYPE'] == 'INS_iDEL' and 'SOURCE' in record.info:
         lst_intervals = list(record.info['CPX_INTERVALS'])
         lst_intervals.append(record.info['SOURCE'])
         record.info.pop('SOURCE')
