@@ -297,7 +297,7 @@ task PlotQcVcfWide {
         mem_gb: 8,
         disk_gb: ceil(10 + input_size * 5),
         boot_disk_gb: 10,
-        preemptible_tries: 2,
+        preemptible_tries: 1,
         max_retries: 0
     }
     RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
@@ -342,7 +342,7 @@ task PlotSiteLevelBenchmarking {
         mem_gb: 4,
         disk_gb: 20,
         cpu_cores: 1,
-        preemptible_tries: 2,
+        preemptible_tries: 1,
         max_retries: 0,
         boot_disk_gb: 10
     }
@@ -412,7 +412,7 @@ task PlotQcPerSample {
         mem_gb: 4,
         disk_gb: ceil(10 + input_size * 5),
         cpu_cores: 1,
-        preemptible_tries: 2,
+        preemptible_tries: 1,
         max_retries: 0,
         boot_disk_gb: 10
     }
@@ -505,7 +505,7 @@ task PlotQcPerFamily {
         mem_gb: 4,
         disk_gb: ceil(10 + input_size * 5),
         cpu_cores: 1,
-        preemptible_tries: 2,
+        preemptible_tries: 1,
         max_retries: 0,
         boot_disk_gb: 10
     }
@@ -588,7 +588,7 @@ task PlotPerSampleBenchmarking {
         mem_gb: 8,
         disk_gb: 50,
         cpu_cores: 1,
-        preemptible_tries: 2,
+        preemptible_tries: 1,
         max_retries: 0,
         boot_disk_gb: 10
     }
@@ -685,7 +685,7 @@ task SanitizeOutputs {
         mem_gb: 2,
         disk_gb: ceil(10.0 + input_size * 5.0),
         cpu_cores: 1,
-        preemptible_tries: 2,
+        preemptible_tries: 1,
         max_retries: 0,
         boot_disk_gb: 10
     }
@@ -736,7 +736,7 @@ task SubsetSamplesList {
         mem_gb: 1,
         disk_gb: 10,
         boot_disk_gb: 10,
-        preemptible_tries: 2,
+        preemptible_tries: 1,
         max_retries: 0
     }
     RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])

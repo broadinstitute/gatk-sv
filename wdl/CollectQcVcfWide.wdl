@@ -344,7 +344,7 @@ PYCODE
         mem_gb: 8,
         disk_gb: 3 * ceil(size(vcf, "GiB")) + 20,
         boot_disk_gb: 10,
-        preemptible_tries: 2,
+        preemptible_tries: 1,
         max_retries: 0
     }
     RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
