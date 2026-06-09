@@ -46,6 +46,7 @@ workflow QcAnnotations {
         RuntimeAttr? runtime_override_site_level_benchmark
         RuntimeAttr? runtime_override_merge_site_level_benchmark
         RuntimeAttr? runtime_override_site_level_benchmark_plot
+        RuntimeAttr? runtime_override_subset_samples_list
         RuntimeAttr? runtime_override_split_samples_list
         RuntimeAttr? runtime_override_collect_vids_per_sample
         RuntimeAttr? runtime_override_merge_sharded_per_sample_vid_lists
@@ -139,7 +140,8 @@ workflow QcAnnotations {
                     subset_count = select_first([subset_sample_count]),
                     random_seed = select_first([random_seed, 0]),
                     prefix = prefix,
-                    sv_base_mini_docker = sv_base_mini_docker
+                    sv_base_mini_docker = sv_base_mini_docker,
+                    runtime_attr_override = runtime_override_subset_samples_list
             }
         }
 
