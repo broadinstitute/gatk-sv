@@ -219,7 +219,7 @@ task ApplyFilters {
       --vcf ~{vcf} \
       --out ~{prefix}.vcf.gz \
       --ploidy-table ~{ploidy_table} \
-      --ncr-threshold ~{no_call_rate_cutoff} \
+      ~{"--ncr-threshold " + no_call_rate_cutoff} \
       ~{"--cohort-id " + cohort_id} \
       ~{"--shard-index " + shard_index} \
       ~{if (filter_reference_artifacts) then "--filter-reference-artifacts" else ""} \

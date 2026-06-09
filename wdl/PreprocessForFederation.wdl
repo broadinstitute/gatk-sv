@@ -162,7 +162,7 @@ def _parse_bnd_ends(vcf_path):
 
 bnd_end_dict = _parse_bnd_ends("~{vcf}")
 with pysam.VariantFile("~{vcf}", 'r') as inp:
-  header = vcf.header
+  header = inp.header
   header.add_line("##INFO=<ID=MULTIALLELIC,Number=0,Type=Flag,Description=\"Multiallelic site\">")
   with pysam.VariantFile("~{output_file}", 'w', header=header) as out:
     for record in inp:
