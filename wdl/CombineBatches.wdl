@@ -23,6 +23,7 @@ workflow CombineBatches {
     Array[File] raw_sr_background_fail_files
 
     File contig_list
+    File? contig_list_for_scatter
     Float min_sr_background_fail_batches
 
     # Reclustering parameters
@@ -122,7 +123,7 @@ workflow CombineBatches {
   }
 
   #Scatter per chromosome
-  Array[String] contigs = transpose(read_tsv(contig_list))[0]
+  Array[String] contigs = transpose(read_tsv(select_first([contig_list_for_scatter, contig_list])))[0]
   scatter ( contig in contigs ) {
 
     # Naively join across batches
