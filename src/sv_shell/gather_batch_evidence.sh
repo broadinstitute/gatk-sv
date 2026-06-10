@@ -9,6 +9,18 @@ MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+log_info() {
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${CYAN}$1${NC}" | tee -a "${gather_batch_evidence_stdout}"
+}
+
+log_success() {
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${GREEN}$1${NC}" | tee -a "${gather_batch_evidence_stdout}"
+}
+
+log_error() {
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${RED}$1${NC}" | tee -a "${gather_batch_evidence_stderr}"
+}
+
 # -------------------------------------------------------
 # ==================== Input & Setup ====================
 # -------------------------------------------------------
@@ -36,6 +48,11 @@ working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_gather_batch_evidence_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
 cd "${working_dir}"
 
+gather_batch_evidence_stdout="${output_dir}/gather_batch_evidence_stdout.txt"
+gather_batch_evidence_stderr="${output_dir}/gather_batch_evidence_stderr.txt"
+touch "${gather_batch_evidence_stdout}"
+touch "${gather_batch_evidence_stderr}"
+
 batch=$(jq -r ".batch" "${input_json}")
 samples=$(jq -r ".samples[]" "${input_json}")
 counts=$(jq -r ".counts[]" "${input_json}")
@@ -50,7 +67,15 @@ sd_locs_vcf=$(jq -r ".sd_locs_vcf" "${input_json}")
 primary_contigs_fai=$(jq -r ".primary_contigs_fai" "${input_json}")
 subset_primary_contigs=$(jq -r ".subset_primary_contigs" "${input_json}")
 rename_samples=$(jq -r ".rename_samples" "${input_json}")
+dragen_cnv_vcf=$(jq -r '.dragen_cnv_vcf // ""' "${input_json}")
 
+if [[ -n "${dragen_cnv_vcf}" && "${dragen_cnv_vcf}" != "null" ]]; then
+  run_cnmops="false"
+  run_gcnv="false"
+else
+  run_cnmops="true"
+  run_gcnv="true"
+fi
 
 # -------------------------------------------------------
 # ======================= Command =======================
@@ -59,7 +84,7 @@ rename_samples=$(jq -r ".rename_samples" "${input_json}")
 
 # make binned coverage matrix
 # ---------------------------------------------------------------------------------------------------------------------
-echo -e "${MAGENTA}Running make binned coverage matrix.${NC}"
+log_info "Running make binned coverage matrix."
 make_bin_cov_matrix_inputs_json="$(realpath "${output_dir}/make_bincov_matrix_inputs.json")"
 make_bin_cov_matrix_outputs_json="$(realpath "${output_dir}/make_bincov_matrix_outputs.json")"
 
@@ -78,13 +103,14 @@ bash /opt/sv_shell/make_bincov_matrix.sh "${make_bin_cov_matrix_inputs_json}" "$
 merged_bincov_=$(jq -r ".merged_bincov" "${make_bin_cov_matrix_outputs_json}")
 merged_bincov_idx_=$(jq -r ".merged_bincov_idx" "${make_bin_cov_matrix_outputs_json}")
 
-echo -e "${GREEN}Successfully finished make binned coverage matrix.${NC}"
+log_success "Successfully finished make binned coverage matrix."
 
 
 # ploidy estimation
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-echo -e "${MAGENTA}Running ploidy estimation.${NC}"
+
+log_info "Running ploidy estimation."
 ploidy_estimation_inputs_json="$(realpath "${output_dir}/ploidy_estimation_inputs.json")"
 ploidy_estimation_outputs_json="$(realpath "${output_dir}/ploidy_estimation_outputs.json")"
 jq -n \
@@ -94,7 +120,7 @@ jq -n \
 
 bash /opt/sv_shell/ploidy_estimation.sh "${ploidy_estimation_inputs_json}" "${ploidy_estimation_outputs_json}"
 
-echo -e "${GREEN}Successfully finished running ploidy estimation.${NC}"
+log_success "Successfully finished running ploidy estimation."
 
 sample_sex_assignments=$(jq -r ".sample_sex_assignments" "${ploidy_estimation_outputs_json}")
 
@@ -136,13 +162,13 @@ if [[ "${append_first_sample_to_ped}" == "true" ]]; then
   awk -v sample="${sample_id}" -v sex="${SEX}" '{print} END {OFS="\t"; print "case_sample",sample,"0","0",sex,"1" }' < "${ped_subset_filename}" > "${combined_ped_file}"
 fi
 
-echo -e "${GREEN}Successfully finished Validating, subsetting, and adding sample to PED file.${NC}"
+log_success "Successfully finished Validating, subsetting, and adding sample to PED file."
 
 
 # Batch evidence merging
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-echo -e "${MAGENTA}Starting batch evidence merging.${NC}"
+log_info "Starting batch evidence merging."
 batch_evidence_merging_inputs_json="$(realpath "${output_dir}/batch_evidence_merging_inputs.json")"
 batch_evidence_merging_outputs_json="$(realpath "${output_dir}/batch_evidence_merging_outputs.json")"
 jq -n \
@@ -174,99 +200,110 @@ bash /opt/sv_shell/batch_evidence_merging.sh \
   "${batch_evidence_merging_inputs_json}" \
   "${batch_evidence_merging_outputs_json}"
 
-echo -e "${GREEN}Successfully finished batch evidence merging.${NC}"
+log_success "Successfully finished batch evidence merging."
 
 
 
 # CNMOPS
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-echo -e "${MAGENTA}Starting cnMOPS.${NC}"
 cnmops_inputs_json="$(realpath "${output_dir}/cnmops_inputs.json")"
 cnmops_outputs_json="$(realpath "${output_dir}/cnmops_outputs.json")"
 
-jq -n \
-  --slurpfile inputs "${input_json}" \
-  --arg r1 "3" \
-  --arg r2 "10" \
-  --arg batch "${batch}" \
-  --argfile samples <(jq '.samples + .ref_panel_samples' "${input_json}") \
-  --arg bincov_matrix "${merged_bincov_}" \
-  --arg bincov_matrix_index "${merged_bincov_idx_}" \
-  --argfile chrom_file <(jq '.cnmops_chrom_file' "${input_json}") \
-  --argfile exclude_list <(jq '.cnmops_exclude_list' "${input_json}") \
-  --argfile allo_file <(jq '.cnmops_allo_file' "${input_json}") \
-  --argfile min_size <(jq '.cnmops_min_size // 1000000' "${input_json}") \
-  --arg ped_file "${combined_ped_file}" \
-  --arg ref_dict "${reference_dict}" \
-  --arg prefix "header" \
-  --arg stitch_and_clean_large_events false \
-  '{
-      "r1": $r1,
-      "r2": $r2,
-      "batch": $batch,
-      "samples": $samples,
-      "bincov_matrix": $bincov_matrix,
-      "bincov_matrix_index": $bincov_matrix_index,
-      "chrom_file": $chrom_file,
-      "ped_file": $ped_file,
-      "exclude_list": $exclude_list,
-      "allo_file": $allo_file,
-      "ref_dict": $ref_dict,
-      "prefix": $prefix,
-      "stitch_and_clean_large_events": $stitch_and_clean_large_events,
-      "cytobands": $inputs[0].cytobands
-  }' > "${cnmops_inputs_json}"
+if [[ "${run_cnmops}" == "true" ]]; then
+  log_info "Starting cnMOPS"
 
-bash /opt/sv_shell/cnmops.sh "${cnmops_inputs_json}" "${cnmops_outputs_json}"
+  jq -n \
+    --slurpfile inputs "${input_json}" \
+    --arg r1 "3" \
+    --arg r2 "10" \
+    --arg batch "${batch}" \
+    --argfile samples <(jq '.samples + .ref_panel_samples' "${input_json}") \
+    --arg bincov_matrix "${merged_bincov_}" \
+    --arg bincov_matrix_index "${merged_bincov_idx_}" \
+    --argfile chrom_file <(jq '.cnmops_chrom_file' "${input_json}") \
+    --argfile exclude_list <(jq '.cnmops_exclude_list' "${input_json}") \
+    --argfile allo_file <(jq '.cnmops_allo_file' "${input_json}") \
+    --argfile min_size <(jq '.cnmops_min_size // 1000000' "${input_json}") \
+    --arg ped_file "${combined_ped_file}" \
+    --arg ref_dict "${reference_dict}" \
+    --arg prefix "header" \
+    --arg stitch_and_clean_large_events false \
+    '{
+        "r1": $r1,
+        "r2": $r2,
+        "batch": $batch,
+        "samples": $samples,
+        "bincov_matrix": $bincov_matrix,
+        "bincov_matrix_index": $bincov_matrix_index,
+        "chrom_file": $chrom_file,
+        "ped_file": $ped_file,
+        "exclude_list": $exclude_list,
+        "allo_file": $allo_file,
+        "ref_dict": $ref_dict,
+        "prefix": $prefix,
+        "stitch_and_clean_large_events": $stitch_and_clean_large_events,
+        "cytobands": $inputs[0].cytobands
+    }' > "${cnmops_inputs_json}"
 
-echo -e "${GREEN}Successfully finished running cnMOPS.${NC}"
+  bash /opt/sv_shell/cnmops.sh "${cnmops_inputs_json}" "${cnmops_outputs_json}"
+
+  log_success "Successfully finished running cnMOPS."
+else
+  echo "{}" > "${cnmops_outputs_json}"
+  log_info "Skipping cnMOPS."
+fi
 
 
 # CNMOPS Large
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-echo -e "${MAGENTA}Starting cnMOPS Large.${NC}"
 cnmops_large_inputs_json="$(realpath "${output_dir}/cnmops_large_inputs.json")"
 cnmops_large_outputs_json="$(realpath "${output_dir}/cnmops_large_outputs.json")"
 
-jq -n \
-  --slurpfile inputs "${input_json}" \
-  --arg r1 "1000" \
-  --arg r2 "100" \
-  --arg batch "${batch}" \
-  --argfile samples <(jq '.samples + .ref_panel_samples' "${input_json}") \
-  --arg bincov_matrix "${merged_bincov_}" \
-  --arg bincov_matrix_index "${merged_bincov_idx_}" \
-  --argfile chrom_file <(jq '.cnmops_chrom_file' "${input_json}") \
-  --argfile exclude_list <(jq '.cnmops_exclude_list' "${input_json}") \
-  --argfile allo_file <(jq '.cnmops_allo_file' "${input_json}") \
-  --argfile min_size <(jq '.cnmops_large_min_size // 1000000' "${input_json}") \
-  --arg ped_file "${combined_ped_file}" \
-  --arg ref_dict "${reference_dict}" \
-  --arg prefix "large" \
-  --arg stitch_and_clean_large_events false \
-  '{
-      "r1": $r1,
-      "r2": $r2,
-      "batch": $batch,
-      "samples": $samples,
-      "bincov_matrix": $bincov_matrix,
-      "bincov_matrix_index": $bincov_matrix_index,
-      "chrom_file": $chrom_file,
-      "ped_file": $ped_file,
-      "exclude_list": $exclude_list,
-      "allo_file": $allo_file,
-      "ref_dict": $ref_dict,
-      "prefix": $prefix,
-      "stitch_and_clean_large_events": $stitch_and_clean_large_events,
-      "cytobands": $inputs[0].cytobands
-  }' > "${cnmops_large_inputs_json}"
+if [[ "${run_cnmops}" == "true" ]]; then
+  log_info "Starting cnMOPS large"
 
-bash /opt/sv_shell/cnmops.sh "${cnmops_large_inputs_json}" "${cnmops_large_outputs_json}"
+  jq -n \
+    --slurpfile inputs "${input_json}" \
+    --arg r1 "1000" \
+    --arg r2 "100" \
+    --arg batch "${batch}" \
+    --argfile samples <(jq '.samples + .ref_panel_samples' "${input_json}") \
+    --arg bincov_matrix "${merged_bincov_}" \
+    --arg bincov_matrix_index "${merged_bincov_idx_}" \
+    --argfile chrom_file <(jq '.cnmops_chrom_file' "${input_json}") \
+    --argfile exclude_list <(jq '.cnmops_exclude_list' "${input_json}") \
+    --argfile allo_file <(jq '.cnmops_allo_file' "${input_json}") \
+    --argfile min_size <(jq '.cnmops_large_min_size // 1000000' "${input_json}") \
+    --arg ped_file "${combined_ped_file}" \
+    --arg ref_dict "${reference_dict}" \
+    --arg prefix "large" \
+    --arg stitch_and_clean_large_events false \
+    '{
+        "r1": $r1,
+        "r2": $r2,
+        "batch": $batch,
+        "samples": $samples,
+        "bincov_matrix": $bincov_matrix,
+        "bincov_matrix_index": $bincov_matrix_index,
+        "chrom_file": $chrom_file,
+        "ped_file": $ped_file,
+        "exclude_list": $exclude_list,
+        "allo_file": $allo_file,
+        "ref_dict": $ref_dict,
+        "prefix": $prefix,
+        "stitch_and_clean_large_events": $stitch_and_clean_large_events,
+        "cytobands": $inputs[0].cytobands
+    }' > "${cnmops_large_inputs_json}"
 
-echo -e "${GREEN}Successfully finished running cnMOPS Large.${NC}"
+  bash /opt/sv_shell/cnmops.sh "${cnmops_large_inputs_json}" "${cnmops_large_outputs_json}"
 
+  log_success "Successfully finished running cnMOPS Large."
+else
+  echo "{}" > "${cnmops_large_outputs_json}"
+  log_info "Skipping cnMOPS Large."
+fi
 
 
 # Condense Read Counts
@@ -276,7 +313,7 @@ echo -e "${GREEN}Successfully finished running cnMOPS Large.${NC}"
 # however, since in the single-sample mode the 'samples' list contains one sample only,
 # for simplicity, the in the sv-shell version we're not implementing the loop.
 cd "${working_dir}"
-echo -e "${MAGENTA}Starting Condense Read Counts.${NC}"
+log_info "Starting condense read counts."
 condense_read_counts_inputs_json="$(realpath "${output_dir}/condense_read_counts_inputs.json")"
 condense_read_counts_outputs_json="$(realpath "${output_dir}/condense_read_counts_outputs.json")"
 
@@ -294,62 +331,90 @@ jq -n \
 
 bash /opt/sv_shell/condense_read_counts.sh "${condense_read_counts_inputs_json}" "${condense_read_counts_outputs_json}"
 
-echo -e "${GREEN}Successfully finished running Condense Read Counts.${NC}"
+log_success "Successfully finished running Condense Read Counts."
+
+
+# gCNVCase
+# ---------------------------------------------------------------------------------------------------------------------
+cd "${working_dir}"
+gcnv_inputs_json="$(realpath "${output_dir}/gcnv_inputs.json")"
+gcnv_outputs_json="$(realpath "${output_dir}/gcnv_outputs.json")"
+
+if [[ "${run_gcnv}" == "true" ]]; then
+  log_info "Starting gCNV"
+
+  _condensed_counts=$(jq -r '.out' "${condense_read_counts_outputs_json}")
+  jq --arg condensed "${_condensed_counts}" \
+    '. + {count_entity_ids: .samples, counts: [$condensed]}' "${input_json}" > "${gcnv_inputs_json}"
+
+  bash /opt/sv_shell/cnv_germline_case.sh "${gcnv_inputs_json}" "${gcnv_outputs_json}"
+
+  log_success "Successfully finished running gCNV."
+
+else
+  echo "{}" > "${gcnv_outputs_json}"
+  log_info "Skipping gCNV."
+fi
 
 
 
 # Merge Depth
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-echo -e "${MAGENTA}Starting Merge Depth.${NC}"
+log_info "Starting merge depth."
 merge_depth_inputs_json="$(realpath "${output_dir}/merge_depth_inputs.json")"
 merge_depth_outputs_json="$(realpath "${output_dir}/mergge_depth_outputs.json")"
 
-# The following args are all temporarily skipped as they are gcnv related.
-#  --arg genotyped_segments_vcfs
-#  --arg contig_ploidy_calls
-#  --arg gcnv_qs_cutoff
 
 jq -n \
+  --slurpfile inputs "${input_json}" \
   --argfile samples <(jq '.samples' "${input_json}") \
   --argfile defragment_max_dist <(jq '.defragment_max_dist // ""' "${input_json}") \
   --argfile std_cnmops_del <(jq '.Del // ""' "${cnmops_outputs_json}") \
   --argfile std_cnmops_dup <(jq '.Dup // ""' "${cnmops_outputs_json}") \
   --argfile large_cnmops_del <(jq '.Del // ""' "${cnmops_large_outputs_json}") \
   --argfile large_cnmops_dup <(jq '.Dup // ""' "${cnmops_large_outputs_json}") \
-  --arg batch "${batch}" \
-  '{
-      "samples": $samples,
-      "defragment_max_dist": $defragment_max_dist,
-      "std_cnmops_del": $std_cnmops_del,
-      "std_cnmops_dup": $std_cnmops_dup,
-      "large_cnmops_del": $large_cnmops_del,
-      "large_cnmops_dup": $large_cnmops_dup,
-      "batch": $batch
-  }' > "${merge_depth_inputs_json}"
+    --argfile genotyped_segments_vcfs <(jq 'if has("genotyped_segments_vcf") and (.genotyped_segments_vcf | length > 0) then [.genotyped_segments_vcf[0]] else [""] end' "${gcnv_outputs_json}") \
+    --argfile contig_ploidy_calls <(jq 'if has("sample_contig_ploidy_calls_tars") and (.sample_contig_ploidy_calls_tars | length > 0) then [.sample_contig_ploidy_calls_tars[0]] else [""] end' "${gcnv_outputs_json}") \
+    --arg batch "${batch}" \
+    '{
+        "samples": $samples,
+        "defragment_max_dist": $defragment_max_dist,
+        "std_cnmops_del": $std_cnmops_del,
+        "std_cnmops_dup": $std_cnmops_dup,
+        "large_cnmops_del": $large_cnmops_del,
+        "large_cnmops_dup": $large_cnmops_dup,
+        "genotyped_segments_vcfs": $genotyped_segments_vcfs,
+        "contig_ploidy_calls": $contig_ploidy_calls,
+        "gcnv_qs_cutoff": $inputs[0].gcnv_qs_cutoff,
+        "batch": $batch,
+        "dragen_cnv_vcf": (if $inputs[0].dragen_cnv_vcf != "" then $inputs[0].dragen_cnv_vcf else null end),
+        "dragen_cnv_vcf_index": (if $inputs[0].dragen_cnv_vcf_index != "" then $inputs[0].dragen_cnv_vcf_index else null end)
+    }' > "${merge_depth_inputs_json}"
 
 bash /opt/sv_shell/merge_depth.sh "${merge_depth_inputs_json}" "${merge_depth_outputs_json}"
 
-echo -e "${GREEN}Successfully finished running Merge Depth.${NC}"
+log_success "Successfully finished running Merge Depth."
 
 
 
 # Median Cov
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-echo -e "${MAGENTA}Starting Median Cov.${NC}"
+log_info "Starting median cov."
 
 output_median_cov="$(realpath "${working_dir}/${batch}_medianCov.transposed.bed")"
 _ref_median_cov_file="$(jq -r ".ref_panel_median_cov" "${input_json}")"
 _sample_median_cov_file="$(jq -r ".sample_median_cov" "${input_json}")"
 paste -d'\t' "${_sample_median_cov_file}" "${_ref_median_cov_file}" > "${output_median_cov}"
 
-echo -e "${GREEN}Successfully finished running Median Cov.${NC}"
+log_success "Successfully finished running Median Cov."
 
 # Preprocess PE/SR
 # ---------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-echo -e "${MAGENTA}Starting Preprocess PE/SR.${NC}"
+
+log_info "Starting Preprocess PE/SR."
 preprocess_pesr_inputs_json="$(realpath "${output_dir}/preprocess_pesr_inputs.json")"
 preprocess_pesr_outputs_json="$(realpath "${output_dir}/preprocess_pesr_outputs.json")"
 
@@ -376,7 +441,7 @@ jq -n \
 
 bash /opt/sv_shell/preprocess_pesr.sh "${preprocess_pesr_inputs_json}" "${preprocess_pesr_outputs_json}"
 
-echo -e "${GREEN}Successfully finished running Preprocess PE/SR.${NC}"
+log_success "Successfully finished running Preprocess PE/SR."
 
 
 
@@ -433,37 +498,51 @@ merge_depth_dup_task_out=$(jq -r ".Dup" "${merge_depth_outputs_json}")
 merge_depth_dup="${output_dir}/$(basename "${merge_depth_dup_task_out}")"
 mv "${merge_depth_dup_task_out}" "${merge_depth_dup}"
 
-cnmops_del_task_out=$(jq -r ".Del" "${cnmops_outputs_json}")
-cnmops_del="${output_dir}/$(basename "${cnmops_del_task_out}")"
-mv "${cnmops_del_task_out}" "${cnmops_del}"
+cnmops_del=""
+cnmops_del_idx=""
+cnmops_dup=""
+cnmops_dup_idx=""
 
-cnmops_del_idx_task_out=$(jq -r ".Del_idx" "${cnmops_outputs_json}")
-cnmops_del_idx="${output_dir}/$(basename "${cnmops_del_idx_task_out}")"
-mv "${cnmops_del_idx_task_out}" "${cnmops_del_idx}"
+if [[ "${run_cnmops}" == "true" ]]; then
+  cnmops_del_task_out=$(jq -r ".Del" "${cnmops_outputs_json}")
+  cnmops_del="${output_dir}/$(basename "${cnmops_del_task_out}")"
+  mv "${cnmops_del_task_out}" "${cnmops_del}"
 
-cnmops_dup_task_out=$(jq -r ".Dup" "${cnmops_outputs_json}")
-cnmops_dup="${output_dir}/$(basename "${cnmops_dup_task_out}")"
-mv "${cnmops_dup_task_out}" "${cnmops_dup}"
+  cnmops_del_idx_task_out=$(jq -r ".Del_idx" "${cnmops_outputs_json}")
+  cnmops_del_idx="${output_dir}/$(basename "${cnmops_del_idx_task_out}")"
+  mv "${cnmops_del_idx_task_out}" "${cnmops_del_idx}"
 
-cnmops_dup_idx_task_out=$(jq -r ".Dup_idx" "${cnmops_outputs_json}")
-cnmops_dup_idx="${output_dir}/$(basename "${cnmops_dup_idx_task_out}")"
-mv "${cnmops_dup_idx_task_out}" "${cnmops_dup_idx}"
+  cnmops_dup_task_out=$(jq -r ".Dup" "${cnmops_outputs_json}")
+  cnmops_dup="${output_dir}/$(basename "${cnmops_dup_task_out}")"
+  mv "${cnmops_dup_task_out}" "${cnmops_dup}"
 
-cnmops_large_del_task_out=$(jq -r ".Del" "${cnmops_large_outputs_json}")
-cnmops_large_del="${output_dir}/$(basename "${cnmops_large_del_task_out}")"
-mv "${cnmops_large_del_task_out}" "${cnmops_large_del}"
+  cnmops_dup_idx_task_out=$(jq -r ".Dup_idx" "${cnmops_outputs_json}")
+  cnmops_dup_idx="${output_dir}/$(basename "${cnmops_dup_idx_task_out}")"
+  mv "${cnmops_dup_idx_task_out}" "${cnmops_dup_idx}"
+fi
 
-cnmops_large_del_idx_task_out=$(jq -r ".Del_idx" "${cnmops_large_outputs_json}")
-cnmops_large_del_idx="${output_dir}/$(basename "${cnmops_large_del_idx_task_out}")"
-mv "${cnmops_large_del_idx_task_out}" "${cnmops_large_del_idx}"
+cnmops_large_del=""
+cnmops_large_del_idx=""
+cnmops_large_dup=""
+cnmops_large_dup_idx=""
 
-cnmops_large_dup_task_out=$(jq -r ".Dup" "${cnmops_large_outputs_json}")
-cnmops_large_dup="${output_dir}/$(basename "${cnmops_large_dup_task_out}")"
-mv "${cnmops_large_dup_task_out}" "${cnmops_large_dup}"
+if [[ "${run_cnmops}" == "true" ]]; then
+  cnmops_large_del_task_out=$(jq -r ".Del" "${cnmops_large_outputs_json}")
+  cnmops_large_del="${output_dir}/$(basename "${cnmops_large_del_task_out}")"
+  mv "${cnmops_large_del_task_out}" "${cnmops_large_del}"
 
-cnmops_large_dup_idx_task_out=$(jq -r ".Dup_idx" "${cnmops_large_outputs_json}")
-cnmops_large_dup_idx="${output_dir}/$(basename "${cnmops_large_dup_idx_task_out}")"
-mv "${cnmops_large_dup_idx_task_out}" "${cnmops_large_dup_idx}"
+  cnmops_large_del_idx_task_out=$(jq -r ".Del_idx" "${cnmops_large_outputs_json}")
+  cnmops_large_del_idx="${output_dir}/$(basename "${cnmops_large_del_idx_task_out}")"
+  mv "${cnmops_large_del_idx_task_out}" "${cnmops_large_del_idx}"
+
+  cnmops_large_dup_task_out=$(jq -r ".Dup" "${cnmops_large_outputs_json}")
+  cnmops_large_dup="${output_dir}/$(basename "${cnmops_large_dup_task_out}")"
+  mv "${cnmops_large_dup_task_out}" "${cnmops_large_dup}"
+
+  cnmops_large_dup_idx_task_out=$(jq -r ".Dup_idx" "${cnmops_large_outputs_json}")
+  cnmops_large_dup_idx="${output_dir}/$(basename "${cnmops_large_dup_idx_task_out}")"
+  mv "${cnmops_large_dup_idx_task_out}" "${cnmops_large_dup_idx}"
+fi
 
 output_median_cov_output="${output_dir}/$(basename "${output_median_cov}")"
 mv "${output_median_cov}" "${output_median_cov_output}"
@@ -554,4 +633,4 @@ outputs_json=$(jq -n \
   }' > "${output_json_filename}"
 )
 
-echo "Successfully finished Gather Batch Evidence, output json filename: ${output_json_filename}"
+log_success "Successfully finished Gather Batch Evidence, output json filename: ${output_json_filename}"

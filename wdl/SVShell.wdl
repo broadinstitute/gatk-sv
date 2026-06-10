@@ -213,6 +213,11 @@ task RunSVShell {
     Int clean_vcf_random_seed
     Int clean_vcf_samples_per_clean_vcf_step2_shard
     Int refine_complex_variants_n_per_split
+    File? dragen_sv_vcf
+    File? dragen_sv_vcf_index
+    File? dragen_cnv_vcf
+    File? dragen_cnv_vcf_index
+    File? ref_std_dragen_vcf_tar
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
@@ -342,6 +347,11 @@ task RunSVShell {
       --argjson clean_vcf_random_seed ~{clean_vcf_random_seed} \
       --argjson clean_vcf_samples_per_clean_vcf_step2_shard ~{clean_vcf_samples_per_clean_vcf_step2_shard} \
       --argjson "RefineComplexVariants.n_per_split" ~{refine_complex_variants_n_per_split} \
+      --arg dragen_sv_vcf "~{select_first([dragen_sv_vcf, ""])}" \
+      --arg dragen_sv_vcf_index "~{select_first([dragen_sv_vcf_index, ""])}" \
+      --arg dragen_cnv_vcf "~{select_first([dragen_cnv_vcf, ""])}" \
+      --arg dragen_cnv_vcf_index "~{select_first([dragen_cnv_vcf_index, ""])}" \
+      --arg ref_std_dragen_vcf_tar "~{select_first([ref_std_dragen_vcf_tar, ""])}" \
       '$ARGS.named | with_entries(select(.value != "" and .value != null))' > "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json"
 
     bash /opt/sv_shell/single_sample_pipeline.sh \

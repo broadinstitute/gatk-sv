@@ -24,6 +24,8 @@
   "run_scramble": true,
   "run_manta": true,
   "run_wham": true,
+  "use_dragen": false,
+  "dragen_vcf": "",
   "collect_pesr": true,
   "scramble_alignment_score_cutoff": 90,
   "run_module_metrics": true
