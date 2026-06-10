@@ -350,8 +350,8 @@ PYCODE
     RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
     Int sort_max_mem_gb = floor(0.9 * select_first([runtime_override.mem_gb, runtime_default.mem_gb]))
     runtime {
-        memory: 100 + " GiB"
-        disks: "local-disk " + 500 + " HDD"
+        memory: 8 + " GiB"
+        disks: "local-disk " + 30 + " HDD"
         cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
         preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
         maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
