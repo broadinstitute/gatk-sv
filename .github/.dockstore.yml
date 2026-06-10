@@ -121,6 +121,7 @@ workflows:
       branches:
         - main
         - phase3_b5d5049
+        - eph_combine_by_contig
       tags:
         - /.*/
 
