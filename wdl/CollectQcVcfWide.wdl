@@ -302,15 +302,13 @@ PYCODE
 
         # Sort
         echo "Sorting"
-
-        mkdir -p /tmp/bcftools_sort/
-
+        
         bcftools sort \
             --max-mem ~{sort_max_mem_gb}G \
-            -T /tmp/bcftools_sort/ \
+            -T . \
             -Oz -o ~{prefix}.sorted.vcf.gz \
             ~{prefix}.unsorted.vcf.gz
-
+        
         rm -f ~{prefix}.unsorted.vcf.gz
 
         tabix ~{prefix}.sorted.vcf.gz
@@ -350,8 +348,8 @@ PYCODE
     RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
     Int sort_max_mem_gb = floor(0.9 * select_first([runtime_override.mem_gb, runtime_default.mem_gb]))
     runtime {
-        memory: 100 + " GiB"
-        disks: "local-disk " + 150 + " HDD"
+        memory: 8 + " GiB"
+        disks: "local-disk " + 30 + " HDD"
         cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
         preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
         maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
