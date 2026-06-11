@@ -130,6 +130,7 @@ workflow CombineBatches {
     call ClusterTasks.SVCluster as JoinVcfs {
       input:
         vcfs=FormatVcf.out,
+        vcf_idxs=FormatVcf.out_index,
         ploidy_table=CreatePloidyTableFromPed.out,
         output_prefix="~{cohort_name}.combine_batches.~{contig}.join_vcfs",
         contig=contig,

@@ -6,6 +6,7 @@ task SVCluster {
     input {
         # Either vcfs of vcfs_tar should be provided
         Array[File] vcfs = []  # Can't use optional because of write_lines() call
+        Array[File] vcf_idxs = []
         File? vcfs_tar
 
         File ploidy_table
