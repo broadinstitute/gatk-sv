@@ -129,8 +129,8 @@ workflow CombineBatches {
       input:
         pesr_vcf = FormatVcf.out[i],
         pesr_vcf_index = FormatVcf.out_index[i],
-        depth_vcf = FormatVcf.out[(n_batches - 1 + i)],
-        depth_vcf_index = FormatVcf.out_index[(n_batches - 1 + i)],
+        depth_vcf = FormatVcf.out[(n_batches + i)],
+        depth_vcf_index = FormatVcf.out_index[(n_batches + i)],
         prefix = batches[i],
         records_per_shard = records_per_shard_join,
         contig=contig,
