@@ -23,7 +23,7 @@ workflow CombineBatches {
     Array[File] raw_sr_background_fail_files
 
     File contig_list
-    String? contig
+    String contig
     Int records_per_shard_join
     Float min_sr_background_fail_batches
 
@@ -255,27 +255,20 @@ workflow CombineBatches {
     }
   }
 
-  # Merge resolved vcfs for QC
-  if (merge_vcfs) {
-    call MiniTasks.ConcatVcfs {
-      input:
-        vcfs=GatkToSvtkVcf.out,
-        vcfs_idx=GatkToSvtkVcf.out_index,
-        naive=true,
-        outfile_prefix="~{cohort_name}.combine_batches.concat_all_contigs",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_override_concat
-    }
+  call MiniTasks.ConcatVcfs {
+    input:
+      vcfs=GatkToSvtkVcf.out,
+      vcfs_idx=GatkToSvtkVcf.out_index,
+      naive=true,
+      outfile_prefix="~{cohort_name}.combine_batches.concat_~{contig}",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_concat
   }
 
   #Final outputs
   output {
-    Array[File] combined_vcfs = GatkToSvtkVcf.out
-    Array[File] combined_vcf_indexes = GatkToSvtkVcf.out_index
-    Array[File] cluster_background_fail_lists = ExtractSRVariantLists.high_sr_background_list
-    Array[File] cluster_bothside_pass_lists = ExtractSRVariantLists.bothsides_sr_support
-    File? combine_batches_merged_vcf = ConcatVcfs.concat_vcf
-    File? combine_batches_merged_vcf_index = ConcatVcfs.concat_vcf_idx
+    File combined_vcf = ConcatVcfs.concat_vcf
+    File combined_vcf_index = ConcatVcfs.concat_vcf_idx
   }
 }
 
