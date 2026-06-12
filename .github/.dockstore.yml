@@ -123,6 +123,7 @@ workflows:
         - phase3_b5d5049
         - eph_combine_by_contig
         - eph_localize_combine
+        - eph_scatter_joinvcfs
       tags:
         - /.*/
 
