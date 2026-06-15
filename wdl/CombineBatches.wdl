@@ -437,7 +437,7 @@ task ScatterVcf {
   command <<<
     set -euo pipefail
     # merge pesr and depth vcfs from the same batch first
-    bcftools concat --no-version --allow-overlaps -Oz ~{pesr_vcf} ~{depth_vcf} -O z -o merged.vcf.gz --write-index=tbi ~{"-r " + contig}
+    bcftools concat --no-version --allow-overlaps -Oz ~{pesr_vcf} ~{depth_vcf} -O z -o merged.vcf.gz --write-index="tbi" ~{"-r " + contig}
 
     # scatter merged per-batch vcf by number of records
     bcftools +scatter merged.vcf.gz -o . -O z -p "~{prefix}".shard. --threads ~{threads} -n ~{records_per_shard} ~{"-r " + contig}
