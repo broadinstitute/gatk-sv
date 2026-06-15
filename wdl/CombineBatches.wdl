@@ -356,7 +356,7 @@ task JoinVcfs {
         done < ~{write_lines(vcf_tarballs)}
 
         # create the arguments file listing the VCFs extracted
-        ls -1 "*.shard.~{shard_number}.vcf.gz" | sed 's/^/-V /' > arguments.txt
+        ls -1 *.shard.~{shard_number}.vcf.gz | sed 's/^/-V /' > arguments.txt
 
         gatk --java-options "-Xmx${JVM_MAX_MEM}" SVCluster \
             --arguments_file arguments.txt \
