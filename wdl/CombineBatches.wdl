@@ -358,6 +358,11 @@ task JoinVcfs {
         # create the arguments file listing the VCFs extracted
         ls -1 *.shard.~{shard_number}.vcf.gz | sed 's/^/-V /' > arguments.txt
 
+        # create tabix indexes for vcfs
+        while read vcf; do
+            tabix $vcf
+        done < ls -1 *.shard.~{shard_number}.vcf.gz
+
         gatk --java-options "-Xmx${JVM_MAX_MEM}" SVCluster \
             --arguments_file arguments.txt \
             --output ~{output_prefix}.vcf.gz \
