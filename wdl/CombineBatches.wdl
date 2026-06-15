@@ -361,7 +361,7 @@ task JoinVcfs {
         # create tabix indexes for vcfs
         while read vcf; do
             tabix $vcf
-        done < ls -1 *.shard.~{shard_number}.vcf.gz
+        done < <(ls -1 *.shard.~{shard_number}.vcf.gz)
 
         gatk --java-options "-Xmx${JVM_MAX_MEM}" SVCluster \
             --arguments_file arguments.txt \
