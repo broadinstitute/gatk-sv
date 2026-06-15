@@ -437,7 +437,7 @@ task ScatterVcf {
   command <<<
     set -euo pipefail
     # merge pesr and depth vcfs from the same batch first
-    bcftools concat --no-version --allow-overlaps -Oz ~{pesr_vcf} ~{depth_vcf} -O z -o merged.vcf.gz ~{"-r " + contig}
+    bcftools concat --no-version --allow-overlaps -Oz ~{pesr_vcf} ~{depth_vcf} -o merged.vcf.gz ~{"-r " + contig}
     tabix merged.vcf.gz
 
     # scatter merged per-batch vcf by number of records
