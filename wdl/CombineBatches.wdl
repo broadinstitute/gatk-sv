@@ -14,6 +14,9 @@ workflow CombineBatches {
 
     Boolean merge_vcfs = false
 
+    File cohort_pesr_vcf
+    File cohort_depth_vcf
+
     Array[File] pesr_vcfs
     Array[File] depth_vcfs
     # Set to true if using vcfs generated with a prior version, i.e. not ending in "_reformatted.vcf.gz"
@@ -25,6 +28,7 @@ workflow CombineBatches {
     File contig_list
     String contig
     Int records_per_shard_join
+    Int records_per_shard_cluster
     Float min_sr_background_fail_batches
 
     # Reclustering parameters
@@ -62,6 +66,9 @@ workflow CombineBatches {
     RuntimeAttr? runtime_attr_gatk_to_svtk_vcf
     RuntimeAttr? runtime_attr_extract_vids
     RuntimeAttr? runtime_override_concat
+    RuntimeAttr? runtime_attr_cluster_for_sharding
+    RuntimeAttr? runtime_override_concat_sites
+    RuntimeAttr? runtime_override_concat_join
   }
 
   # Preprocess some inputs
@@ -165,14 +172,80 @@ workflow CombineBatches {
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_join_vcfs
     }
+  }
+
+  call MiniTasks.ConcatVcfs as ConcatJoinVcfs {
+    input:
+      vcfs=JoinVcfs.out,
+      vcfs_idx=JoinVcfs.out_index,
+      naive=true,
+      outfile_prefix="~{cohort_name}.join.concat_~{contig}",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_concat_join
+  }
+
+  call MiniTasks.ConcatVcfs as ConcatSitesVcfs {
+    input:
+      vcfs=[cohort_pesr_vcf, cohort_depth_vcf],
+      vcfs_idx=[cohort_pesr_vcf + ".tbi", cohort_depth_vcf + ".tbi"],
+      allow_overlaps=true,
+      sites_only=true,
+      outfile_prefix="~{cohort_name}.sites.concat_~{contig}",
+      additional_args="-r ~{contig}",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_concat_sites
+  }
+
+  call ClusterTasks.SVCluster as ClusterForSharding {
+    input:
+      vcfs=[ConcatSitesVcfs.concat_vcf],
+      vcf_idxs=[ConcatSitesVcfs.concat_vcf_idx],
+      ploidy_table=CreatePloidyTableFromPed.out,
+      output_prefix="~{cohort_name}.sites.cluster_for_shard",
+      fast_mode=false,
+      breakpoint_summary_strategy="REPRESENTATIVE",
+      pesr_sample_overlap=0,
+      pesr_interval_overlap=0,
+      pesr_breakend_window=500,
+      depth_sample_overlap=0,
+      depth_interval_overlap=0.3,
+      depth_breakend_window=1000000,
+      mixed_sample_overlap=0,
+      mixed_interval_overlap=0.3,
+      mixed_breakend_window=1000000,
+      reference_fasta=reference_fasta,
+      reference_fasta_fai=reference_fasta_fai,
+      reference_dict=reference_dict,
+      java_mem_fraction=java_mem_fraction,
+      variant_prefix="~{cohort_name}_~{contig}_",
+      gatk_docker=gatk_docker,
+      runtime_attr_override=runtime_attr_cluster_for_sharding
+  }
+
+  call GetShardVids {
+    input:
+      vcf=ClusterForSharding.out,
+      records_per_shard=records_per_shard_cluster,
+      prefix="~{cohort_name}.~{contig}.shard_vids",
+      sv_pipeline_docker=sv_pipeline_docker
+  }
+
+  scatter (i in range(length(GetShardVids.vid_lists))) {
+    call MiniTasks.PullVcfShard {
+      input:
+        vcf=ConcatJoinVcfs.concat_vcf,
+        vids=GetShardVids.vid_lists[i],
+        prefix="~{cohort_name}.~{contig}.pull_shard_~{i}",
+        sv_base_mini_docker=sv_base_mini_docker
+    }
 
     # First round of clustering
     call ClusterTasks.SVCluster as ClusterSites {
       input:
-        vcfs=[JoinVcfs.out],
-        vcf_idxs=[JoinVcfs.out_index],
+        vcfs=[PullVcfShard.out],
+        vcf_idxs=[PullVcfShard.out_index],
         ploidy_table=CreatePloidyTableFromPed.out,
-        output_prefix="~{cohort_name}.combine_batches.~{contig}.cluster_sites",
+        output_prefix="~{cohort_name}.combine_batches.~{contig}.~{i}.cluster_sites",
         fast_mode=false,
         breakpoint_summary_strategy="REPRESENTATIVE",
         pesr_sample_overlap=0.5,
@@ -198,7 +271,7 @@ workflow CombineBatches {
       input:
         vcf=ClusterSites.out,
         ploidy_table=CreatePloidyTableFromPed.out,
-        output_prefix="~{cohort_name}.combine_batches.~{contig}.recluster_part_1",
+        output_prefix="~{cohort_name}.combine_batches.~{contig}.~{i}.recluster_part_1",
         reference_fasta=reference_fasta,
         reference_fasta_fai=reference_fasta_fai,
         reference_dict=reference_dict,
@@ -217,7 +290,7 @@ workflow CombineBatches {
       input:
         vcf=GroupedSVClusterPart1.out,
         ploidy_table=CreatePloidyTableFromPed.out,
-        output_prefix="~{cohort_name}.combine_batches.~{contig}.recluster_part_2",
+        output_prefix="~{cohort_name}.combine_batches.~{contig}.~{i}.recluster_part_2",
         reference_fasta=reference_fasta,
         reference_fasta_fai=reference_fasta_fai,
         reference_dict=reference_dict,
@@ -236,7 +309,7 @@ workflow CombineBatches {
     call ClusterTasks.GatkToSvtkVcf {
       input:
         vcf=GroupedSVClusterPart2.out,
-        output_prefix="~{cohort_name}.combine_batches.~{contig}.svtk_formatted",
+        output_prefix="~{cohort_name}.combine_batches.~{contig}.~{i}.svtk_formatted",
         source="depth",
         contig_list=contig_list,
         remove_formats="CN",
@@ -244,15 +317,6 @@ workflow CombineBatches {
         set_pass=true,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_gatk_to_svtk_vcf
-    }
-
-    call ExtractSRVariantLists {
-      input:
-        vcf=GroupedSVClusterPart2.out,
-        vcf_index=GroupedSVClusterPart2.out_index,
-        output_prefix="~{cohort_name}.combine_batches.~{contig}",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_extract_vids
     }
   }
 
@@ -266,10 +330,21 @@ workflow CombineBatches {
       runtime_attr_override=runtime_override_concat
   }
 
+  call ExtractSRVariantLists {
+      input:
+        vcf=ConcatVcfs.concat_vcf,
+        vcf_index=ConcatVcfs.concat_vcf_idx,
+        output_prefix="~{cohort_name}.combine_batches.~{contig}",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_extract_vids
+    }
+
   #Final outputs
   output {
     File combined_vcf = ConcatVcfs.concat_vcf
     File combined_vcf_index = ConcatVcfs.concat_vcf_idx
+    File cluster_background_fail_list = ExtractSRVariantLists.high_sr_background_list
+    File cluster_bothside_pass_list = ExtractSRVariantLists.bothsides_sr_support
   }
 }
 
@@ -459,6 +534,95 @@ task ScatterVcf {
   output {
     File shards_tarball = "~{prefix}.shards.tar.gz"
     Int n_shards = read_int("n_shards.txt")
+  }
+}
+
+task GetShardVids {
+  input {
+    File vcf
+    String prefix
+    Int records_per_shard
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 2.0,
+                                  disk_gb: ceil(20.0 + size(vcf, "GiB")),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+
+    touch ~{prefix}.shard_000000.list
+
+    python3 <<CODE
+import pysam
+
+
+def extract_vids(record):
+  if 'MEMBERS' in record.info:
+    members = record.info['MEMBERS']
+    if members is None:
+      return []
+    if isinstance(members, str):
+      return [v for v in members.split(',') if v]
+    return [str(v) for v in members if str(v)]
+  return [str(record.id)]
+
+
+def shard_path(shard_index):
+  return f"~{prefix}.shard_{shard_index:06d}.list"
+
+
+current_count = 0
+current_shard = 0
+fout = None
+
+with pysam.VariantFile("~{vcf}", 'r') as fin, with open("shard_sizes.txt", "w") as sizes_out:
+  for rec in fin:
+    current_vids = extract_vids(rec)
+    if len(current_vids) == 0:
+      continue
+
+    if current_count > 1 and (current_count + len(current_vids)) > ~{records_per_shard}:
+      if fout is not None:
+        fout.close()
+      sizes_out.write(f"{current_count}\n")
+      current_shard += 1
+      fout = open(shard_path(current_shard), "w")
+      for vid in current_vids:
+        fout.write(f"{vid}\n")
+      current_count = len(current_vids)
+    else:
+      if fout is None:
+        fout = open(shard_path(current_shard), "w")
+      for vid in current_vids:
+        fout.write(f"{vid}\n")
+      current_count += len(current_vids)
+
+if fout is not None:
+  fout.close()
+CODE
+  >>>
+
+  output {
+    Array[File] vid_lists = glob("~{prefix}.shard_*.list")
+    File shard_sizes = "shard_sizes.txt"
   }
 }
 

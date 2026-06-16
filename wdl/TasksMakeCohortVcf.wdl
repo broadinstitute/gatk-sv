@@ -227,6 +227,7 @@ task ConcatVcfs {
     Boolean generate_index = true
     Boolean sites_only = false
     Boolean sort_vcf_list = false
+    String? additional_args
     String? outfile_prefix
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
@@ -268,7 +269,7 @@ task ConcatVcfs {
       VCFS="~{write_lines(vcfs)}"
     fi
     bcftools concat --no-version ~{allow_overlaps_flag} ~{naive_flag} -Oz --file-list $VCFS \
-      ~{sites_only_command} \
+      ~{sites_only_command} ~{additional_args} \
       > ~{outfile_name}
     ~{generate_index_command}
   >>>
