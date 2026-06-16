@@ -170,6 +170,7 @@ workflow CombineBatches {
     call ClusterTasks.SVCluster as ClusterSites {
       input:
         vcfs=[JoinVcfs.out],
+        vcf_idxs=[JoinVcfs.out_index],
         ploidy_table=CreatePloidyTableFromPed.out,
         output_prefix="~{cohort_name}.combine_batches.~{contig}.cluster_sites",
         fast_mode=false,
