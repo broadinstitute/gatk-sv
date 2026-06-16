@@ -14,9 +14,6 @@ workflow CombineBatches {
 
     Boolean merge_vcfs = false
 
-    File cohort_pesr_vcf
-    File cohort_depth_vcf
-
     Array[File] pesr_vcfs
     Array[File] depth_vcfs
     # Set to true if using vcfs generated with a prior version, i.e. not ending in "_reformatted.vcf.gz"
@@ -184,22 +181,18 @@ workflow CombineBatches {
       runtime_attr_override=runtime_override_concat_join
   }
 
-  call MiniTasks.ConcatVcfs as ConcatSitesVcfs {
+  call MakeSitesOnlyVcf {
     input:
-      vcfs=[cohort_pesr_vcf, cohort_depth_vcf],
-      vcfs_idx=[cohort_pesr_vcf + ".tbi", cohort_depth_vcf + ".tbi"],
-      allow_overlaps=true,
-      sites_only=true,
-      outfile_prefix="~{cohort_name}.sites.concat_~{contig}",
-      additional_args="-r ~{contig}",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_concat_sites
+      vcf=ConcatJoinVcfs.concat_vcf,
+      vcf_index=ConcatJoinVcfs.concat_vcf_idx,
+      prefix="~{cohort_name}.sites.join.concat_~{contig}",
+      sv_base_mini_docker=sv_base_mini_docker
   }
 
   call ClusterTasks.SVCluster as ClusterForSharding {
     input:
-      vcfs=[ConcatSitesVcfs.concat_vcf],
-      vcf_idxs=[ConcatSitesVcfs.concat_vcf_idx],
+      vcfs=[MakeSitesOnlyVcf.out],
+      vcf_idxs=[MakeSitesOnlyVcf.out_index],
       ploidy_table=CreatePloidyTableFromPed.out,
       output_prefix="~{cohort_name}.sites.cluster_for_shard",
       fast_mode=false,
@@ -345,6 +338,46 @@ workflow CombineBatches {
     File combined_vcf_index = ConcatVcfs.concat_vcf_idx
     File cluster_background_fail_list = ExtractSRVariantLists.high_sr_background_list
     File cluster_bothside_pass_list = ExtractSRVariantLists.bothsides_sr_support
+  }
+}
+
+task MakeSitesOnlyVcf {
+  input {
+    File vcf
+    File vcf_index
+    String prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10.0 + size(vcf, "GiB") * 1.2),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euxo pipefail
+    bcftools view --no-version -G ~{vcf} | bcftools annotate -x INFO/MEMBERS -Oz -o ~{prefix}.vcf.gz
+    tabix ~{prefix}.vcf.gz
+  >>>
+
+  output {
+    File out = "~{prefix}.vcf.gz"
+    File out_index = "~{prefix}.vcf.gz.tbi"
   }
 }
 
