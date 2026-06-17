@@ -626,7 +626,7 @@ current_count = 0
 current_shard = 0
 fout = None
 
-with pysam.VariantFile("~{vcf}", 'r') as fin, with open("shard_sizes.txt", "w") as sizes_out:
+with pysam.VariantFile("~{vcf}", 'r') as fin, open("shard_sizes.txt", "w") as sizes_out:
   for rec in fin:
     current_vids = extract_vids(rec)
     if len(current_vids) == 0:
