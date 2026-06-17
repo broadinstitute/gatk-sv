@@ -650,6 +650,8 @@ with pysam.VariantFile("~{vcf}", 'r') as fin, open("shard_sizes.txt", "w") as si
 
 if fout is not None:
   fout.close()
+  with open("shard_sizes.txt", "a") as sizes_out:
+    sizes_out.write(f"{current_count}\n")
 CODE
   >>>
 
