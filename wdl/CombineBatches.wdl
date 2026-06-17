@@ -317,7 +317,7 @@ workflow CombineBatches {
     input:
       vcfs=GatkToSvtkVcf.out,
       vcfs_idx=GatkToSvtkVcf.out_index,
-      naive=true,
+      allow_overlaps=true,
       outfile_prefix="~{cohort_name}.combine_batches.concat_~{contig}",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_concat
