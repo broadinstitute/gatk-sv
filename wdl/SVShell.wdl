@@ -96,6 +96,10 @@ workflow SVShell {
     File ploidy_matrix = RunSVShell.ploidy_matrix
     File ploidy_plots = RunSVShell.ploidy_plots
     File non_genotyped_unique_depth_calls = RunSVShell.non_genotyped_unique_depth_calls
+
+    File TEMP_gather_sample_output = RunSVShell.TEMP_gather_sample_output
+    File TEMP_gather_batch_output = RunSVShell.TEMP_gather_batch_output
+    File TEMP_gcnv_output = RunSVShell.TEMP_gcnv_output
   }
 }
 
@@ -415,6 +419,25 @@ task RunSVShell {
     non_genotyped_path=$(jq -r '.non_genotyped_unique_depth_calls' "${BASE_DIR}/single_sample_pipeline_outputs.json")
     mv "${non_genotyped_path}" "${BASE_DIR}/~{non_genotyped_unique_depth_calls_filename}"
 
+
+    if ls ${BASE_DIR}/output_GatherSampleEvidence_* 1> /dev/null 2>&1; then
+        tar -czvf gather_sample_output.tar.gz ${BASE_DIR}/output_GatherSampleEvidence_*
+    else
+        touch gather_sample_output.tar.gz
+    fi
+
+    if ls ${BASE_DIR}/output_gather_batch_evidence_* 1> /dev/null 2>&1; then
+        tar -czvf gather_batch_output.tar.gz ${BASE_DIR}/output_gather_batch_evidence_*
+    else
+        touch gather_batch_output.tar.gz
+    fi
+
+    if ls ${BASE_DIR}/output_cnv_germline_case_* 1> /dev/null 2>&1; then
+        tar -czvf gcnv_output.tar.gz ${BASE_DIR}/output_cnv_germline_case_*
+    else
+        touch gcnv_output.tar.gz
+    fi
+
     df -h
   >>>
 
@@ -434,6 +457,9 @@ task RunSVShell {
     File ploidy_matrix = ploidy_matrix_filename
     File ploidy_plots = ploidy_plots_filename
     File non_genotyped_unique_depth_calls = non_genotyped_unique_depth_calls_filename
+    File TEMP_gather_sample_output = "gather_sample_output.tar.gz"
+    File TEMP_gather_batch_output = "gather_batch_output.tar.gz"
+    File TEMP_gcnv_output = "gcnv_output.tar.gz"
   }
 
   RuntimeAttr default_attr = object {
