@@ -97,9 +97,7 @@ workflow SVShell {
     File ploidy_plots = RunSVShell.ploidy_plots
     File non_genotyped_unique_depth_calls = RunSVShell.non_genotyped_unique_depth_calls
 
-    File TEMP_gather_sample_output = RunSVShell.TEMP_gather_sample_output
-    File TEMP_gather_batch_output = RunSVShell.TEMP_gather_batch_output
-    File TEMP_gcnv_output = RunSVShell.TEMP_gcnv_output
+    File TEMP_intermediates = RunSVShell.TEMP_intermediates
   }
 }
 
@@ -420,22 +418,33 @@ task RunSVShell {
     mv "${non_genotyped_path}" "${BASE_DIR}/~{non_genotyped_unique_depth_calls_filename}"
 
 
+    # TODO: this is for testing purpose ONLY
+    FILES_TO_TAR=()
+
+    # 2. Check each pattern and add it to the array if it exists
     if ls ${BASE_DIR}/output_GatherSampleEvidence_* 1> /dev/null 2>&1; then
-        tar -czvf gather_sample_output.tar.gz ${BASE_DIR}/output_GatherSampleEvidence_*
-    else
-        touch gather_sample_output.tar.gz
+        FILES_TO_TAR+=(${BASE_DIR}/output_GatherSampleEvidence_*)
     fi
 
     if ls ${BASE_DIR}/output_gather_batch_evidence_* 1> /dev/null 2>&1; then
-        tar -czvf gather_batch_output.tar.gz ${BASE_DIR}/output_gather_batch_evidence_*
-    else
-        touch gather_batch_output.tar.gz
+        FILES_TO_TAR+=(${BASE_DIR}/output_gather_batch_evidence_*)
     fi
 
     if ls ${BASE_DIR}/output_cnv_germline_case_* 1> /dev/null 2>&1; then
-        tar -czvf gcnv_output.tar.gz ${BASE_DIR}/output_cnv_germline_case_*
+        FILES_TO_TAR+=(${BASE_DIR}/output_cnv_germline_case_*)
+    fi
+
+    if ls ${BASE_DIR}/output_manta_* 1> /dev/null 2>&1; then
+        FILES_TO_TAR+=(${BASE_DIR}/output_manta_*)
+    fi
+
+    # 3. Check if we found any files at all
+    if [ ${#FILES_TO_TAR[@]} -gt 0 ]; then
+        # Tar everything in the array together into one file
+        tar -czvf combined_outputs.tar.gz "${FILES_TO_TAR[@]}"
     else
-        touch gcnv_output.tar.gz
+        # If no files matched any of the patterns, touch the empty file
+        touch combined_outputs.tar.gz
     fi
 
     df -h
@@ -457,9 +466,7 @@ task RunSVShell {
     File ploidy_matrix = ploidy_matrix_filename
     File ploidy_plots = ploidy_plots_filename
     File non_genotyped_unique_depth_calls = non_genotyped_unique_depth_calls_filename
-    File TEMP_gather_sample_output = "gather_sample_output.tar.gz"
-    File TEMP_gather_batch_output = "gather_batch_output.tar.gz"
-    File TEMP_gcnv_output = "gcnv_output.tar.gz"
+    File TEMP_intermediates = "combined_outputs.tar.gz"
   }
 
   RuntimeAttr default_attr = object {
