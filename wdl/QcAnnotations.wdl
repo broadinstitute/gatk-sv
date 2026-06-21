@@ -414,7 +414,7 @@ task PlotQcPerSample {
         mem_gb: 4,
         disk_gb: ceil(10 + input_size * 5),
         cpu_cores: 1,
-        preemptible_tries: 1,
+        preemptible_tries: 0,
         max_retries: 0,
         boot_disk_gb: 10
     }

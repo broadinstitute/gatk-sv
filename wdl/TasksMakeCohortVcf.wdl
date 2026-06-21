@@ -299,7 +299,7 @@ task ConcatBeds {
     mem_gb: 2.0,
     disk_gb: ceil(10.0 + input_size * 7.0),
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 0,
     max_retries: 1,
     boot_disk_gb: 10
   }
