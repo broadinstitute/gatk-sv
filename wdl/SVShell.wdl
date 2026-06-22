@@ -419,31 +419,31 @@ task RunSVShell {
 
 
     # TODO: this is for testing purpose ONLY
-    FILES_TO_TAR=()
 
-    # 2. Check each pattern and add it to the array if it exists
-    if ls ${BASE_DIR}/output_GatherSampleEvidence_* 1> /dev/null 2>&1; then
-        FILES_TO_TAR+=(${BASE_DIR}/output_GatherSampleEvidence_*)
-    fi
+    echo "-----------"
+    echo "${BASE_DIR}"
+    echo "-----------"
+    ls
 
-    if ls ${BASE_DIR}/output_gather_batch_evidence_* 1> /dev/null 2>&1; then
-        FILES_TO_TAR+=(${BASE_DIR}/output_gather_batch_evidence_*)
-    fi
+    # Enable nullglob so non-matching wildcards safely expand to nothing
+    shopt -s nullglob
 
-    if ls ${BASE_DIR}/output_cnv_germline_case_* 1> /dev/null 2>&1; then
-        FILES_TO_TAR+=(${BASE_DIR}/output_cnv_germline_case_*)
-    fi
+    # Let bash do the work. If the files exist, they go in the array.
+    # If they don't, nothing is added.
+    FILES_TO_TAR=(
+        ${BASE_DIR}/output_GatherSampleEvidence_*
+        ${BASE_DIR}/output_gather_batch_evidence_*
+        ${BASE_DIR}/output_cnv_germline_case_*
+        ${BASE_DIR}/output_manta_*
+    )
 
-    if ls ${BASE_DIR}/output_manta_* 1> /dev/null 2>&1; then
-        FILES_TO_TAR+=(${BASE_DIR}/output_manta_*)
-    fi
-
-    # 3. Check if we found any files at all
+    # Check if the array picked up any files
     if [ ${#FILES_TO_TAR[@]} -gt 0 ]; then
         # Tar everything in the array together into one file
         tar -czvf combined_outputs.tar.gz "${FILES_TO_TAR[@]}"
     else
-        # If no files matched any of the patterns, touch the empty file
+        # If the array is empty, touch the empty file
+        echo "No output directories found. Generating empty tar."
         touch combined_outputs.tar.gz
     fi
 
