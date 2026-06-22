@@ -189,7 +189,7 @@ workflow CombineBatches {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call ClusterTasks.SVCluster as ClusterForSharding {
+  call ClusterForSharding {
     input:
       vcfs=[MakeSitesOnlyVcf.out],
       vcf_idxs=[MakeSitesOnlyVcf.out_index],
@@ -340,6 +340,140 @@ workflow CombineBatches {
     File cluster_bothside_pass_list = ExtractSRVariantLists.bothsides_sr_support
   }
 }
+
+task ClusterForSharding {
+    input {
+        # Either vcfs of vcfs_tar should be provided
+        Array[File] vcfs = []  # Can't use optional because of write_lines() call
+        Array[File] vcf_idxs = []
+        File? vcfs_tar
+
+        File ploidy_table
+        String output_prefix
+
+        String? contig
+
+        Boolean? fast_mode
+        Boolean? omit_members
+        Boolean? enable_cnv
+        Boolean? default_no_call
+
+        String? algorithm
+        String? insertion_length_summary_strategy
+        String? breakpoint_summary_strategy
+        String? alt_allele_summary_strategy
+
+        Float? defrag_padding_fraction
+        Float? defrag_sample_overlap
+
+        Float? depth_sample_overlap
+        Float? depth_interval_overlap
+        Float? depth_size_similarity
+        Int? depth_breakend_window
+        Float? mixed_sample_overlap
+        Float? mixed_interval_overlap
+        Float? mixed_size_similarity
+        Int? mixed_breakend_window
+        Float? pesr_sample_overlap
+        Float? pesr_interval_overlap
+        Float? pesr_size_similarity
+        Int? pesr_breakend_window
+
+        File reference_fasta
+        File reference_fasta_fai
+        File reference_dict
+
+        Float? java_mem_fraction
+        String? additional_args
+        String? variant_prefix
+
+        String gatk_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr default_attr = object {
+                                   cpu_cores: 1,
+                                   mem_gb: 3.75,
+                                   disk_gb: ceil(10 + size(vcfs, "GB") * 3 + size(reference_fasta, "GB")),
+                                   boot_disk_gb: 10,
+                                   preemptible_tries: 3,
+                                   max_retries: 1
+                               }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    output {
+        File out = "~{output_prefix}.vcf.gz"
+        File out_index = "~{output_prefix}.vcf.gz.tbi"
+    }
+    command <<<
+        set -euxo pipefail
+
+        function getJavaMem() {
+            # get JVM memory in MiB by getting total memory from /proc/meminfo
+            # and multiplying by java_mem_fraction
+            cat /proc/meminfo \
+                | awk -v MEM_FIELD="$1" '{
+                    f[substr($1, 1, length($1)-1)] = $2
+                } END {
+                    printf "%dM", f[MEM_FIELD] * ~{default="0.85" java_mem_fraction} / 1024
+                }'
+        }
+        JVM_MAX_MEM=$(getJavaMem MemTotal)
+        echo "JVM memory: $JVM_MAX_MEM"
+
+        if ~{length(vcfs) > 0}; then
+            awk '{print "-V "$0}' ~{write_lines(vcfs)} > arguments.txt
+        elif ~{defined(vcfs_tar)}; then
+            mkdir vcfs
+            tar xzf ~{vcfs_tar} -C vcfs/
+            ls vcfs/*.vcf.gz | awk '{print "-V "$0}' > arguments.txt
+        else
+            echo "ERROR: neither vcfs nor vcfs_tar was provided"
+            exit 1
+        fi
+
+        gatk --java-options "-Xmx${JVM_MAX_MEM}" SVCluster \
+            --arguments_file arguments.txt \
+            --output ~{output_prefix}.vcf.gz \
+            --ploidy-table ~{ploidy_table} \
+            --reference ~{reference_fasta} \
+            ~{"-L " + contig} \
+            ~{true="--fast-mode" false="" fast_mode} \
+            ~{true="--enable-cnv" false="" enable_cnv} \
+            ~{true="--omit-members" false="" omit_members} \
+            ~{true="--default-no-call" false="" default_no_call} \
+            ~{"--variant-prefix " + variant_prefix} \
+            ~{"--algorithm " + algorithm} \
+            ~{"--defrag-padding-fraction " + defrag_padding_fraction} \
+            ~{"--defrag-sample-overlap " + defrag_sample_overlap} \
+            ~{"--depth-sample-overlap " + depth_sample_overlap} \
+            ~{"--depth-interval-overlap " + depth_interval_overlap} \
+            ~{"--depth-size-similarity " + depth_size_similarity} \
+            ~{"--depth-breakend-window " + depth_breakend_window} \
+            ~{"--mixed-sample-overlap " + mixed_sample_overlap} \
+            ~{"--mixed-interval-overlap " + mixed_interval_overlap} \
+            ~{"--mixed-size-similarity " + mixed_size_similarity} \
+            ~{"--mixed-breakend-window " + mixed_breakend_window} \
+            ~{"--pesr-sample-overlap " + pesr_sample_overlap} \
+            ~{"--pesr-interval-overlap " + pesr_interval_overlap} \
+            ~{"--pesr-size-similarity " + pesr_size_similarity} \
+            ~{"--pesr-breakend-window " + pesr_breakend_window} \
+            ~{"--insertion-length-summary-strategy " + insertion_length_summary_strategy} \
+            ~{"--breakpoint-summary-strategy " + breakpoint_summary_strategy} \
+            ~{"--alt-allele-summary-strategy " + alt_allele_summary_strategy} \
+            ~{additional_args}
+    >>>
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: gatk_docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+}
+
 
 task MakeSitesOnlyVcf {
   input {
