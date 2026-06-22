@@ -133,6 +133,17 @@ task SVCluster {
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
+
+##   to run this, comment out the above, and uncomment the following.
+##   The following is machine with 90 cores and 720gb ram
+#    runtime {
+#        predefinedMachineType: "c3d-highmem-90"
+#        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
+#        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+#        docker: gatk_docker
+#        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+#        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+#      }
 }
 
 task ExcludeIntervalsByEndpoints {
