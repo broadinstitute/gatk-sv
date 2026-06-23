@@ -428,13 +428,12 @@ task RunSVShell {
     # Enable nullglob so non-matching wildcards safely expand to nothing
     shopt -s nullglob
 
-    # Let bash do the work. If the files exist, they go in the array.
-    # If they don't, nothing is added.
+    # If the files exist, they go in the array; otherwise, nothing is added.
     FILES_TO_TAR=(
-        ${BASE_DIR}/output_GatherSampleEvidence_*
-        ${BASE_DIR}/output_gather_batch_evidence_*
-        ${BASE_DIR}/output_cnv_germline_case_*
-        ${BASE_DIR}/output_manta_*
+        ${BASE_DIR}/wd/output_GatherSampleEvidence_*
+        ${BASE_DIR}/wd/output_gather_batch_evidence_*
+        ${BASE_DIR}/wd/output_cnv_germline_case_*
+        ${BASE_DIR}/wd/output_manta_*
     )
 
     # Check if the array picked up any files
