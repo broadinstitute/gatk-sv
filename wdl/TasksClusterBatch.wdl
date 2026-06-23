@@ -137,7 +137,7 @@ task SVCluster {
 #   to run this, comment out the above, and uncomment the following.
 #   The following is machine with 90 cores and 720gb ram
     runtime {
-        predefinedMachineType: "c3d-highmem-90"
+        predefinedMachineType: "m1-ultramem-40"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
         docker: gatk_docker
