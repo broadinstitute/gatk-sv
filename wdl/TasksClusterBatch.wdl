@@ -93,6 +93,8 @@ task SVCluster {
             exit 1
         fi
 
+        mkdir -p tmp
+
         gatk --java-options "-Xmx${JVM_MAX_MEM}" SVCluster \
             --arguments_file arguments.txt \
             --output ~{output_prefix}.vcf.gz \
@@ -122,6 +124,7 @@ task SVCluster {
             ~{"--insertion-length-summary-strategy " + insertion_length_summary_strategy} \
             ~{"--breakpoint-summary-strategy " + breakpoint_summary_strategy} \
             ~{"--alt-allele-summary-strategy " + alt_allele_summary_strategy} \
+            --tmp-dir ${PWD}/tmp \
             ~{additional_args}
     >>>
     runtime {

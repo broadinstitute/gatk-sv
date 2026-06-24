@@ -472,6 +472,8 @@ task JoinVcfs {
             tabix $vcf
         done < <(ls -1 *.shard.~{shard_number}.vcf.gz)
 
+        mkdir -p tmp
+
         gatk --java-options "-Xmx${JVM_MAX_MEM}" SVCluster \
             --arguments_file arguments.txt \
             --output ~{output_prefix}.vcf.gz \
@@ -501,6 +503,7 @@ task JoinVcfs {
             ~{"--insertion-length-summary-strategy " + insertion_length_summary_strategy} \
             ~{"--breakpoint-summary-strategy " + breakpoint_summary_strategy} \
             ~{"--alt-allele-summary-strategy " + alt_allele_summary_strategy} \
+            --tmp-dir ${PWD}/tmp \
             ~{additional_args}
     >>>
     runtime {
@@ -771,6 +774,8 @@ task GroupedSVClusterTask {
     JVM_MAX_MEM=$(getJavaMem MemTotal)
     echo "JVM memory: $JVM_MAX_MEM"
 
+    mkdir -p tmp
+
     gatk --java-options "-Xmx${JVM_MAX_MEM}" GroupedSVCluster \
       ~{"-L " + contig} \
       --reference ~{reference_fasta} \
@@ -785,6 +790,7 @@ task GroupedSVClusterTask {
       --stratify-num-breakpoint-overlaps ~{context_num_breakpoint_overlaps} \
       --stratify-num-breakpoint-overlaps-interchromosomal ~{context_interchrom_num_breakpoint_overlaps} \
       ~{"--breakpoint-summary-strategy " + breakpoint_summary_strategy} \
+      --tmp-dir ${PWD}/tmp \
       ~{additional_args}
   >>>
   runtime {
