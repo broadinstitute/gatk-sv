@@ -4,27 +4,3 @@ This workspace contains the GATK-SV joint calling pipeline; for the single-sampl
 
 Please refer to the GATK-SV [website](https://broadinstitute.github.io/gatk-sv/) for documentation.
 The [joint calling pipeline execution page](https://broadinstitute.github.io/gatk-sv/docs/execution/joint) contains detailed information on this Terra workspace and how to apply the pipeline to your own data.
-
-## Genomic Disorder CNV Calling
-
-This workspace includes the `CallGenomicDisorderCNVs` workflow for detecting copy-number variants at known genomic disorder loci.
-This workflow runs as a standalone post-processing step after `04-GatherBatchEvidence` completes.
-
-| Attribute | Description |
-|-----------|-------------|
-| `gd_table` | Genomic disorder regions table (TSV) |
-| `gd_segdup_bed` | Segmental duplication regions (BED) |
-| `gd_centromere_bed` | Centromere regions (BED) |
-| `gd_acrocentric_arm_bed` | Acrocentric chromosome arm regions (BED) |
-| `gd_custom_mask_bed` | Custom masking regions (BED) |
-| `gd_hard_inclusion_bed` | Hard inclusion intervals (BED) |
-| `gd_gaps_bed` | Assembly gap regions (BED) |
-| `gd_gtf` | Gene annotation (GTF) |
-
-The workflow produces a single compressed output tarball (`gd_output_tarball`) containing:
-- `gd_cnv_calls.tsv.gz` — Final GD CNV calls with scores
-- `cn_posteriors.tsv.gz` — Per-bin copy-number posterior probabilities
-- `viterbi_paths.tsv.gz` — Viterbi segmentation paths (when using viterbi calling mode)
-- `bin_mappings.tsv.gz` — Bin-to-interval coordinate mappings
-- `locus_intervals.tsv.gz` — Locus definitions with interval coordinates
-- `gd_entry_intervals.tsv.gz` — GD entry to interval mappings
