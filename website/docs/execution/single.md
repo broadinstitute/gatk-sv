@@ -132,8 +132,3 @@ suggested acceptable ranges.
 If a metric exceeds the recommended range, all variants will be automatically flagged with 
 a non-passing `FILTER` status in the output VCF.
 :::
-### Genomic Disorder CNV calling
-
-The single-sample pipeline runs [CallGenomicDisorderCNVs](/docs/modules/gd) to detect CNVs at known genomic
-disorder loci. See that module page for full details on inputs, outputs, reference resources, and how to
-disable GD calling.
