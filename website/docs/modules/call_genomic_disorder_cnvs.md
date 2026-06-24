@@ -89,4 +89,4 @@ Free-form string arguments passed to the respective `gatk-sv-gd` subcommands.
 ## Outputs
 
 #### `gd_output_tarball`
-Compressed tarball (`.tar.gz`) containing all GD analysis results, consumed by [IntegrateGDVcf](./igdv). See [gatk-sv-gd](https://github.com/broadinstitute/gatk-sv-gd) for details about the tarball's contents.
+Compressed tarball (`.tar.gz`) containing all GD analysis results, consumed by `IntegrateGDVcf`. See [gatk-sv-gd](https://github.com/broadinstitute/gatk-sv-gd) for details about the tarball's contents.
