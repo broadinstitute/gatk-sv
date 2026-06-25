@@ -141,6 +141,7 @@ workflows:
       branches:
         - main
         - phase3_b5d5049
+        - eph_genocpx_scatter
       tags:
         - /.*/
 
