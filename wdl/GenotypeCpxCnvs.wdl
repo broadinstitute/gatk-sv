@@ -11,11 +11,11 @@ workflow GenotypeCpxCnvs {
   input {
     File bin_exclude
     File vcf
-    Array[String] batches
-    Array[File] coverage_files
-    Array[File] rd_depth_sep_cutoff_files
-    Array[File] ped_files
-    Array[File] median_coverage_files
+    File batches_file
+    File coverage_files_file
+    File rd_depth_sep_cutoff_files_file
+    File ped_file
+    File median_coverage_files_file
     Int n_per_split_small
     Int n_per_split_large
     Int n_rd_test_bins
@@ -54,6 +54,11 @@ workflow GenotypeCpxCnvs {
       runtime_attr_override=runtime_override_get_cpx_cnv_intervals
   }
 
+  Array[String] batches = read_lines(batches_file)
+  Array[File] rd_depth_sep_cutoff_files = read_lines(rd_depth_sep_cutoff_files_file)
+  Array[File] coverage_files = read_lines(coverage_files_file)
+  Array[File] median_coverage_files = read_lines(median_coverage_files_file)
+
   # Scatter over each batch (row) in gt_input_files and run depth genotyping
   scatter (i in range(length(batches))) {
     call RunDepthGenotypePerBatch.GenotypeCpxCnvsPerBatch as GenotypeBatch {
@@ -63,7 +68,7 @@ workflow GenotypeCpxCnvs {
         batch=batches[i],
         coverage_file=coverage_files[i],
         rd_depth_sep_cutoff=rd_depth_sep_cutoff_files[i],
-        ped_file=ped_files[i],
+        ped_file=ped_file,
         median_file=median_coverage_files[i],
         n_per_split_small=n_per_split_small,
         n_per_split_large=n_per_split_large,

@@ -50,22 +50,11 @@ workflow GenotypeComplexVariants {
     RuntimeAttr? runtime_override_fix_header
   }
 
-  scatter (i in range(length(batches))) {
-    call util.GetSampleIdsFromVcf {
-      input:
-        vcf = depth_vcfs[i],
-        sv_base_mini_docker = sv_base_mini_docker,
-        runtime_attr_override = runtime_attr_ids_from_vcf
-    }
-    call util.SubsetPedFile {
-      input:
-        ped_file = ped_file,
-        sample_list = GetSampleIdsFromVcf.out_file,
-        subset_name = batches[i],
-        sv_base_mini_docker = sv_base_mini_docker,
-        runtime_attr_override = runtime_attr_subset_ped
-    }
-  }
+
+  File batches_file = write_lines(batches)
+  File bincov_files_file = write_lines(bincov_files)
+  File depth_gt_rd_sep_files_file = write_lines(depth_gt_rd_sep_files)
+  File median_coverage_files_file = write_lines(median_coverage_files)
 
   #Scatter per chromosome
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
@@ -78,18 +67,17 @@ workflow GenotypeComplexVariants {
         bin_exclude=bin_exclude,
         vcf=complex_resolve_vcfs[i],
         records_per_shard=select_first([records_per_shard, 50000]),
-        batches=batches,
-        coverage_files=bincov_files,
-        rd_depth_sep_cutoff_files=depth_gt_rd_sep_files,
+        batches_file=batches_file,
+        coverage_files_file=bincov_files_file,
+        rd_depth_sep_cutoff_files_file=depth_gt_rd_sep_files_file,
         ped_file=ped_file,
-        median_coverage_files=median_coverage_files,
+        median_coverage_files_file=median_coverage_files_file,
         n_per_split_small=2500,
         n_per_split_large=250,
         n_rd_test_bins=100000,
         min_ddup_thresh=min_ddup_thresh,
         prefix="~{cohort_name}.~{contig}",
         contig=contig,
-        ped_files=SubsetPedFile.ped_subset_file,
         ref_dict=ref_dict,
         linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,

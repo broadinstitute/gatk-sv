@@ -36,21 +36,14 @@ workflow GenotypeCpxCnvsPerBatch {
   }
 
   File coverage_file_idx = coverage_file + ".tbi"
-
-  call Utils.GetSampleIdsFromMedianCoverageFile {
-    input:
-      median_file = median_file,
-      name = batch,
-      linux_docker = linux_docker,
-      runtime_attr_override = runtime_override_ids_from_median
-  }
   
   call SplitBedBySize {
     input:
       bed=cpx_bed,
+      median_file = median_file,
+      name=batch,
       n_per_split_small=n_per_split_small,
       n_per_split_large=n_per_split_large,
-      samples_list=GetSampleIdsFromMedianCoverageFile.out_file,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_split_bed_by_size
   }
@@ -64,7 +57,7 @@ workflow GenotypeCpxCnvsPerBatch {
         coverage_file_idx=coverage_file_idx,
         median_file=median_file,
         ped_file=ped_file,
-        samples_list=GetSampleIdsFromMedianCoverageFile.out_file,
+        samples_list=SplitBedBySize.samples_list,
         gt_cutoffs=rd_depth_sep_cutoff,
         n_bins=n_rd_test_bins,
         prefix=basename(split_bed_file, ".bed"),
@@ -94,17 +87,19 @@ task SplitBedBySize {
     File bed
     Int n_per_split_small
     Int n_per_split_large
-    File samples_list
+    File median_file
+    String name
     Int? size_cutoff_kb
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
 
+  String sample_list = name + ".samples.txt"
   Int size_cutoff=select_first([size_cutoff_kb, 5])
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size([bed, samples_list], "GiB")
+  Float input_size = size([bed, median_file], "GiB")
   Float compression_factor = 5.0
   Float base_disk_gb = 5.0
   Float base_mem_gb = 2.0
@@ -129,11 +124,12 @@ task SplitBedBySize {
 
   command <<<
     set -eu -o pipefail
+    head -1 ~{median_file} | sed -e 's/\t/\n/g' > ~{sample_list}
 
     #First, replace samples in input bed with full list of all samples in batch
     MERGED_BED="newBed_wSamples.bed"
     zcat ~{bed} \
-      | awk -F "\t" -v OFS="\t" -v samples=$(paste -s -d, ~{samples_list}) \
+      | awk -F "\t" -v OFS="\t" -v samples=$(paste -s -d, ~{sample_list}) \
         '{ print $1, $2, $3, $4, samples, $6 }' \
       | sort -Vk1,1 -k2,2n -k3,3n \
       > $MERGED_BED
@@ -174,6 +170,7 @@ task SplitBedBySize {
   output {
     Array[File] small_beds = glob("lt~{size_cutoff}kb.*")
     Array[File] large_beds = glob("gt~{size_cutoff}kb.*")
+    File samples_list = sample_list
   }
 }
 
