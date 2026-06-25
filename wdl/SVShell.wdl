@@ -429,11 +429,21 @@ task RunSVShell {
     shopt -s nullglob
 
     # If the files exist, they go in the array; otherwise, nothing is added.
+
+    mkdir -p output_gather_batch_evidence_copy && \
+      find output_gather_batch_evidence_*/ -type f \
+        ! -name '*.sr.txt.gz*' \
+        ! -name '*.RD.txt*' \
+        ! -name '*.baf.txt*' \
+        ! -name '*.pe.txt.gz*' \
+        -exec cp {} output_gather_batch_evidence_copy/ \;
+
     FILES_TO_TAR=(
         ${BASE_DIR}/wd/output_GatherSampleEvidence_*
-        ${BASE_DIR}/wd/output_gather_batch_evidence_*
+        ${BASE_DIR}/wd/output_gather_batch_evidence_copy
         ${BASE_DIR}/wd/output_cnv_germline_case_*
         ${BASE_DIR}/wd/output_manta_*
+        ${BASE_DIR}/wd/output_cluster_batch_*
     )
 
     # Check if the array picked up any files
