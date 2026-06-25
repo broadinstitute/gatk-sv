@@ -323,14 +323,24 @@ workflow CombineBatches {
       runtime_attr_override=runtime_override_concat
   }
 
+  call MiniTasks.ConcatVcfs as ConcatGroupedOutputs {
+    input:
+      vcfs=GroupedSVClusterPart2.out,
+      vcfs_idx=GroupedSVClusterPart2.out_index,
+      allow_overlaps=true,
+      outfile_prefix="~{cohort_name}.combine_batches.grouped.concat_~{contig}",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_concat
+  }
+
   call ExtractSRVariantLists {
       input:
-        vcf=ConcatVcfs.concat_vcf,
-        vcf_index=ConcatVcfs.concat_vcf_idx,
+        vcf=ConcatGroupedOutputs.concat_vcf,
+        vcf_index=ConcatGroupedOutputs.concat_vcf_idx,
         output_prefix="~{cohort_name}.combine_batches.~{contig}",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_attr_extract_vids
-    }
+  }
 
   #Final outputs
   output {
