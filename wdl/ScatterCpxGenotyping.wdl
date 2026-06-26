@@ -144,7 +144,7 @@ task SelectCandidatesAndScatter {
   command <<<
     set -euo pipefail
     # select candidate CPX
-    zcat your_file.vcf.gz | awk '
+    zcat ~{vcf} | awk '
     {
         if (/^#/ || (/CPX/ && !/UNRESOLVED/) || (/INVERSION_SINGLE_ENDER/ && /UNRESOLVED/)) {
             print | "bgzip -c > candidates.vcf.gz"
