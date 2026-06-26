@@ -11,11 +11,11 @@ workflow GenotypeCpxCnvs {
   input {
     File bin_exclude
     File vcf
-    Array[String] batches
-    Array[File] coverage_files
-    Array[File] rd_depth_sep_cutoff_files
+    File batches_file
+    File coverage_files_file
+    File rd_depth_sep_cutoff_files_file
     File ped_file
-    Array[File] median_coverage_files
+    File median_coverage_files_file
     Int n_per_split_small
     Int n_per_split_large
     Int n_rd_test_bins
@@ -53,6 +53,11 @@ workflow GenotypeCpxCnvs {
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_get_cpx_cnv_intervals
   }
+
+  Array[String] batches = read_lines(batches_file)
+  Array[File] rd_depth_sep_cutoff_files = read_lines(rd_depth_sep_cutoff_files_file)
+  Array[File] coverage_files = read_lines(coverage_files_file)
+  Array[File] median_coverage_files = read_lines(median_coverage_files_file)
 
   # Scatter over each batch (row) in gt_input_files and run depth genotyping
   scatter (i in range(length(batches))) {

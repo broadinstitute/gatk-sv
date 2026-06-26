@@ -50,6 +50,34 @@ workflow GenotypeComplexVariants {
     RuntimeAttr? runtime_override_fix_header
   }
 
+  call util.WriteLines as WriteBatches {
+    input:
+      lines=batches,
+      output_filename="~{cohort_name}.batches.list",
+      linux_docker=linux_docker
+  }
+
+  call util.WriteLines as WriteBincov {
+    input:
+      lines=bincov_files,
+      output_filename="~{cohort_name}.bincov_files.list",
+      linux_docker=linux_docker
+  }
+
+  call util.WriteLines as WriteCutoffs {
+    input:
+      lines=depth_gt_rd_sep_files,
+      output_filename="~{cohort_name}.depth_gt_rd_sep_files.list",
+      linux_docker=linux_docker
+  }
+
+  call util.WriteLines as WriteMedians {
+    input:
+      lines=median_coverage_files,
+      output_filename="~{cohort_name}.median_coverage_files.list",
+      linux_docker=linux_docker
+  }
+
   #Scatter per chromosome
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter ( i in range(length(contigs)) ) {
@@ -61,11 +89,11 @@ workflow GenotypeComplexVariants {
         bin_exclude=bin_exclude,
         vcf=complex_resolve_vcfs[i],
         records_per_shard=select_first([records_per_shard, 50000]),
-        batches=batches,
-        coverage_files=bincov_files,
-        rd_depth_sep_cutoff_files=depth_gt_rd_sep_files,
+        batches_file=WriteBatches.out,
+        coverage_files_file=WriteBincov.out,
+        rd_depth_sep_cutoff_files_file=WriteCutoffs.out,
         ped_file=ped_file,
-        median_coverage_files=median_coverage_files,
+        median_coverage_files_file=WriteMedians.out,
         n_per_split_small=2500,
         n_per_split_large=250,
         n_rd_test_bins=100000,
