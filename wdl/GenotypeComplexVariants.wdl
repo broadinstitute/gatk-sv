@@ -50,12 +50,6 @@ workflow GenotypeComplexVariants {
     RuntimeAttr? runtime_override_fix_header
   }
 
-
-  File batches_file = write_lines(batches)
-  File bincov_files_file = write_lines(bincov_files)
-  File depth_gt_rd_sep_files_file = write_lines(depth_gt_rd_sep_files)
-  File median_coverage_files_file = write_lines(median_coverage_files)
-
   #Scatter per chromosome
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter ( i in range(length(contigs)) ) {
@@ -67,11 +61,11 @@ workflow GenotypeComplexVariants {
         bin_exclude=bin_exclude,
         vcf=complex_resolve_vcfs[i],
         records_per_shard=select_first([records_per_shard, 50000]),
-        batches_file=batches_file,
-        coverage_files_file=bincov_files_file,
-        rd_depth_sep_cutoff_files_file=depth_gt_rd_sep_files_file,
+        batches=batches,
+        coverage_files=bincov_files,
+        rd_depth_sep_cutoff_files=depth_gt_rd_sep_files,
         ped_file=ped_file,
-        median_coverage_files_file=median_coverage_files_file,
+        median_coverage_files=median_coverage_files,
         n_per_split_small=2500,
         n_per_split_large=250,
         n_rd_test_bins=100000,

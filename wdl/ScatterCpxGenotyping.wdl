@@ -12,11 +12,11 @@ workflow ScatterCpxGenotyping {
     File bin_exclude
     File vcf
     Int records_per_shard
-    File batches_file
-    File coverage_files_file
-    File rd_depth_sep_cutoff_files_file
+    Array[String] batches
+    Array[File] coverage_files
+    Array[File] rd_depth_sep_cutoff_files
     File ped_file
-    File median_coverage_files_file
+    Array[File] median_coverage_files
     Int n_per_split_small
     Int n_per_split_large
     Int n_rd_test_bins
@@ -65,11 +65,11 @@ workflow ScatterCpxGenotyping {
       input:
         bin_exclude=bin_exclude,
         vcf=shard,
-        batches_file=batches_file,
-        coverage_files_file=coverage_files_file,
-        rd_depth_sep_cutoff_files_file=rd_depth_sep_cutoff_files_file,
+        batches=batches,
+        coverage_files=coverage_files,
+        rd_depth_sep_cutoff_files=rd_depth_sep_cutoff_files,
         ped_file=ped_file,
-        median_coverage_files_file=median_coverage_files_file,
+        median_coverage_files=median_coverage_files,
         n_per_split_large=n_per_split_large,
         n_per_split_small=n_per_split_small,
         n_rd_test_bins=n_rd_test_bins,
