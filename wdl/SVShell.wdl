@@ -430,13 +430,13 @@ task RunSVShell {
 
     # If the files exist, they go in the array; otherwise, nothing is added.
 
-    mkdir -p output_gather_batch_evidence_copy && \
-      find output_gather_batch_evidence_*/ -type f \
+    mkdir -p ${BASE_DIR}/wd/gather_batch_evidence_copy && \
+      find ${BASE_DIR}/wd/output_gather_batch_evidence_*/ -type f \
         ! -name '*.sr.txt.gz*' \
         ! -name '*.RD.txt*' \
         ! -name '*.baf.txt*' \
         ! -name '*.pe.txt.gz*' \
-        -exec cp {} output_gather_batch_evidence_copy/ \;
+        -exec cp {} ${BASE_DIR}/wd/gather_batch_evidence_copy/ \;
 
     FILES_TO_TAR=(
         ${BASE_DIR}/wd/output_GatherSampleEvidence_*
