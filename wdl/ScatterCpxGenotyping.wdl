@@ -49,7 +49,7 @@ workflow ScatterCpxGenotyping {
   String contig_prefix = prefix + "." + contig
 
   # Shard VCF into even slices
-  call MiniTasks.ScatterVcf as SplitVcfToGenotype {
+  call SelectCandidatesAndScatter {
     input:
       vcf=vcf,
       prefix=contig_prefix,
@@ -59,7 +59,7 @@ workflow ScatterCpxGenotyping {
   }
 
   # Scatter genotyping over shards
-  scatter ( shard in SplitVcfToGenotype.shards ) {
+  scatter ( shard in SelectCandidatesAndScatter.shards ) {
     # Run genotyping
     call GenotypeCpx.GenotypeCpxCnvs as GenotypeShard {
       input:
@@ -93,8 +93,8 @@ workflow ScatterCpxGenotyping {
 
   call MiniTasks.ConcatVcfs as ConcatCpxCnvVcfs {
     input:
-      vcfs=GenotypeShard.cpx_depth_gt_resolved_vcf,
-      vcfs_idx=GenotypeShard.cpx_depth_gt_resolved_vcf_idx,
+      vcfs=flatten([GenotypeShard.cpx_depth_gt_resolved_vcf, [SelectCandidatesAndScatter.non_candidates_vcf]]),
+      vcfs_idx=flatten([GenotypeShard.cpx_depth_gt_resolved_vcf_idx, [SelectCandidatesAndScatter.non_candidates_vcf_index]]),
       allow_overlaps=true,
       outfile_prefix="~{prefix}.regenotyped",
       sv_base_mini_docker=sv_base_mini_docker,
@@ -107,3 +107,73 @@ workflow ScatterCpxGenotyping {
     File cpx_depth_gt_resolved_vcf_idx = ConcatCpxCnvVcfs.concat_vcf_idx
   }
  }
+
+ # Note: requires docker with updated bcftools
+task SelectCandidatesAndScatter {
+  input {
+    File vcf
+    File? vcf_index
+    String prefix
+    Int records_per_shard
+    Int? threads = 1
+    String? contig
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Float input_size = size(vcf, "GB")
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10.0 + input_size * 5.0),
+                                  cpu_cores: 2,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+    # select candidate CPX
+    zcat your_file.vcf.gz | awk '
+    {
+        if (/^#/ || (/CPX/ && !/UNRESOLVED/) || (/INVERSION_SINGLE_ENDER/ && /UNRESOLVED/)) {
+            print | "bgzip -c > candidates.vcf.gz"
+        }
+
+        if (/^#/ || (!/CPX/ && !(/INVERSION_SINGLE_ENDER/ && /UNRESOLVED/)) || (/CPX/ && /UNRESOLVED/)) {
+            print | "bgzip -c > ~{prefix}.noncandidates.vcf.gz"
+        }
+    }'
+    tabix candidates.vcf.gz
+    tabix ~{prefix}.noncandidates.vcf.gz
+
+    # in case the file is empty create an empty shard
+    bcftools view -h candidates.vcf.gz | bgzip -c > "~{prefix}.0.vcf.gz"
+
+    # scatter the candidates vcf
+    bcftools +scatter candidates.vcf.gz -o . -O z -p "~{prefix}". --threads ~{threads} -n ~{records_per_shard} ~{"-r " + contig}
+
+    ls "~{prefix}".*.vcf.gz | sort -k1,1V > vcfs.list
+    i=0
+    while read VCF; do
+      shard_no=`printf %06d $i`
+      mv "$VCF" "~{prefix}.shard_${shard_no}.vcf.gz"
+      i=$((i+1))
+    done < vcfs.list
+  >>>
+  output {
+    Array[File] shards = glob("~{prefix}.shard_*.vcf.gz")
+    File non_candidates_vcf = "~{prefix}.noncandidates.vcf.gz"
+    File non_candidates_vcf_index = "~{prefix}.noncandidates.vcf.gz.tbi"
+  }
+}
