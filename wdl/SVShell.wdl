@@ -428,19 +428,19 @@ task RunSVShell {
     # Enable nullglob so non-matching wildcards safely expand to nothing
     shopt -s nullglob
 
-    # If the files exist, they go in the array; otherwise, nothing is added.
-
-    mkdir -p ${BASE_DIR}/wd/gather_batch_evidence_copy && \
+    # Create the copy directory and copy the filtered files
+    mkdir -p ${BASE_DIR}/wd/copy_of_gather_batch_evidence && \
       find ${BASE_DIR}/wd/output_gather_batch_evidence_*/ -type f \
         ! -name '*.sr.txt.gz*' \
         ! -name '*.RD.txt*' \
         ! -name '*.baf.txt*' \
         ! -name '*.pe.txt.gz*' \
-        -exec cp {} ${BASE_DIR}/wd/gather_batch_evidence_copy/ \;
+        -exec cp -t ${BASE_DIR}/wd/copy_of_gather_batch_evidence/ {} +
 
+    # Build the array (Make sure the copy directory name matches exactly!)
     FILES_TO_TAR=(
         ${BASE_DIR}/wd/output_GatherSampleEvidence_*
-        ${BASE_DIR}/wd/output_gather_batch_evidence_copy
+        ${BASE_DIR}/wd/copy_of_gather_batch_evidence
         ${BASE_DIR}/wd/output_cnv_germline_case_*
         ${BASE_DIR}/wd/output_manta_*
         ${BASE_DIR}/wd/output_cluster_batch_*
