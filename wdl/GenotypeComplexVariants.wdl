@@ -98,7 +98,7 @@ workflow GenotypeComplexVariants {
         n_per_split_large=250,
         n_rd_test_bins=100000,
         min_ddup_thresh=min_ddup_thresh,
-        prefix="~{cohort_name}.~{contig}",
+        prefix=cohort_name,
         contig=contig,
         ref_dict=ref_dict,
         linux_docker=linux_docker,

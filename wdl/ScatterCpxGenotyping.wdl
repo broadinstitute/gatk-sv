@@ -151,11 +151,10 @@ task SelectCandidatesAndScatter {
         }
 
         if (/^#/ || (!/CPX/ && !(/INVERSION_SINGLE_ENDER/ && /UNRESOLVED/)) || (/CPX/ && /UNRESOLVED/)) {
-            print | "bgzip -c > ~{prefix}.noncandidates.vcf.gz"
+            print | "bgzip -c > noncandidates.vcf.gz"
         }
     }'
     tabix candidates.vcf.gz
-    tabix ~{prefix}.noncandidates.vcf.gz
 
     # in case the file is empty create an empty shard
     bcftools view -h candidates.vcf.gz | bgzip -c > "~{prefix}.0.vcf.gz"
@@ -170,6 +169,10 @@ task SelectCandidatesAndScatter {
       mv "$VCF" "~{prefix}.shard_${shard_no}.vcf.gz"
       i=$((i+1))
     done < vcfs.list
+
+    # rename noncandidates vcf AFTER handling shard naming to prevent lumping together
+    mv noncandidates.vcf.gz ~{prefix}.noncandidates.vcf.gz
+    tabix ~{prefix}.noncandidates.vcf.gz
   >>>
   output {
     Array[File] shards = glob("~{prefix}.shard_*.vcf.gz")
