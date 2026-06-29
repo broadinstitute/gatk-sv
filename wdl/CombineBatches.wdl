@@ -152,6 +152,7 @@ workflow CombineBatches {
         ploidy_table=CreatePloidyTableFromPed.out,
         output_prefix="~{cohort_name}.combine_batches.~{contig}.join_vcfs",
         contig=contig,
+        variant_prefix="~{cohort_name}_~{contig}_~{i}",
         fast_mode=false,
         pesr_sample_overlap=0,
         pesr_interval_overlap=1,
@@ -254,7 +255,7 @@ workflow CombineBatches {
         reference_fasta_fai=reference_fasta_fai,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
-        variant_prefix="~{cohort_name}_~{contig}_",
+        variant_prefix="~{cohort_name}_~{contig}_~{i}",
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_cluster_sites
     }
@@ -265,6 +266,7 @@ workflow CombineBatches {
         vcf=ClusterSites.out,
         ploidy_table=CreatePloidyTableFromPed.out,
         output_prefix="~{cohort_name}.combine_batches.~{contig}.~{i}.recluster_part_1",
+        variant_prefix="~{cohort_name}_~{contig}_~{i}",
         reference_fasta=reference_fasta,
         reference_fasta_fai=reference_fasta_fai,
         reference_dict=reference_dict,
@@ -284,6 +286,7 @@ workflow CombineBatches {
         vcf=GroupedSVClusterPart1.out,
         ploidy_table=CreatePloidyTableFromPed.out,
         output_prefix="~{cohort_name}.combine_batches.~{contig}.~{i}.recluster_part_2",
+        variant_prefix="~{cohort_name}_~{contig}_~{i}",
         reference_fasta=reference_fasta,
         reference_fasta_fai=reference_fasta_fai,
         reference_dict=reference_dict,
@@ -741,6 +744,7 @@ task GroupedSVClusterTask {
 
     String? breakpoint_summary_strategy
     String? contig
+    String? variant_prefix
     String? additional_args
 
     Float? java_mem_fraction
@@ -800,6 +804,7 @@ task GroupedSVClusterTask {
       --stratify-num-breakpoint-overlaps ~{context_num_breakpoint_overlaps} \
       --stratify-num-breakpoint-overlaps-interchromosomal ~{context_interchrom_num_breakpoint_overlaps} \
       ~{"--breakpoint-summary-strategy " + breakpoint_summary_strategy} \
+      ~{"--variant-prefix " + variant_prefix} \
       --tmp-dir ${PWD}/tmp \
       ~{additional_args}
   >>>
