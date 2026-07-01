@@ -47,6 +47,7 @@ workflow CombineBatches {
     Float? java_mem_fraction
 
     String gatk_docker
+    String? gatk_docker_cluster
     String sv_base_mini_docker
     String sv_pipeline_docker
 
@@ -256,7 +257,7 @@ workflow CombineBatches {
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
         variant_prefix="~{cohort_name}_~{contig}_~{i}",
-        gatk_docker=gatk_docker,
+        gatk_docker=select_first([gatk_docker_cluster, gatk_docker]),
         runtime_attr_override=runtime_attr_cluster_sites
     }
 
@@ -276,7 +277,7 @@ workflow CombineBatches {
         track_names=track_names,
         breakpoint_summary_strategy="REPRESENTATIVE",
         java_mem_fraction=java_mem_fraction,
-        gatk_docker=gatk_docker,
+        gatk_docker=select_first([gatk_docker_cluster, gatk_docker]),
         runtime_attr_override=runtime_attr_recluster_part1
     }
 
@@ -296,7 +297,7 @@ workflow CombineBatches {
         track_names=track_names,
         breakpoint_summary_strategy="REPRESENTATIVE",
         java_mem_fraction=java_mem_fraction,
-        gatk_docker=gatk_docker,
+        gatk_docker=select_first([gatk_docker_cluster, gatk_docker]),
         runtime_attr_override=runtime_attr_recluster_part2
     }
 
