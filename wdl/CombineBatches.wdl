@@ -67,6 +67,7 @@ workflow CombineBatches {
     RuntimeAttr? runtime_attr_cluster_for_sharding
     RuntimeAttr? runtime_override_concat_sites
     RuntimeAttr? runtime_override_concat_join
+    RuntimeAttr? runtime_override_concat_grouped
   }
 
   # Preprocess some inputs
@@ -334,7 +335,7 @@ workflow CombineBatches {
       allow_overlaps=true,
       outfile_prefix="~{cohort_name}.combine_batches.grouped.concat_~{contig}",
       sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_concat
+      runtime_attr_override=runtime_override_concat_grouped
   }
 
   call ExtractSRVariantLists {
