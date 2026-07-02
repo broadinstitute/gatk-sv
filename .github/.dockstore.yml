@@ -124,6 +124,7 @@ workflows:
         - eph_combine_by_contig
         - eph_localize_combine
         - eph_scatter_joinvcfs
+        - vj_scatter_joinvcfs_mem_hardcode_svcluster
       tags:
         - /.*/
 
