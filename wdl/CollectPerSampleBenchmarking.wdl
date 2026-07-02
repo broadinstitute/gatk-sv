@@ -87,7 +87,6 @@ task RenameBenchmarkTarfileSamples {
     }
 
     String benchmark_renamed_samples_filename = basename(benchmark_tarfile, ".tar.gz") + "_~{renamed_suffix}.tar.gz"
-    Float input_size = size(benchmark_tarfile, "GiB")
 
     command <<<
         set -euo pipefail
@@ -124,7 +123,7 @@ task RenameBenchmarkTarfileSamples {
 
     RuntimeAttr default_attr = object {
         mem_gb: 2.0,
-        disk_gb: ceil(10.0 + 3 * input_size),
+        disk_gb: 3 * ceil(size(benchmark_tarfile, "GiB")) + 10,
         cpu_cores: 1,
         preemptible_tries: 3,
         max_retries: 0,
@@ -156,7 +155,6 @@ task BenchmarkSamples {
     }
 
     String output_folder = "~{prefix}_~{comparison_set_name}_perSample_results"
-    Float input_size = size([vcf_stats, samples_list, per_sample_tarball, comparison_tarball], "GiB")
 
     command <<<
         set -euo pipefail
@@ -181,7 +179,7 @@ task BenchmarkSamples {
 
     RuntimeAttr runtime_default = object {
         mem_gb: 3.75,
-        disk_gb: ceil(10.0 + input_size * 15),
+        disk_gb: 15 * ceil(size([vcf_stats, samples_list, per_sample_tarball, comparison_tarball], "GiB")) + 10,
         cpu_cores: 1,
         preemptible_tries: 3,
         max_retries: 0,
@@ -210,7 +208,6 @@ task MergeTarballs {
 
     String tar_folder_name = select_first([folder_name, "merged"])
     String outfile_name = select_first([tarball_prefix, tar_folder_name]) + ".tar.gz"
-    Float input_size = size(in_tarballs, "GB")
 
     command <<<
         set -euo pipefail
@@ -230,7 +227,7 @@ task MergeTarballs {
 
     RuntimeAttr runtime_default = object {
         mem_gb: 2.0,
-        disk_gb: ceil(10.0 + input_size * 2.0),
+        disk_gb: 2 * ceil(size(in_tarballs, "GB")) + 10,
         cpu_cores: 1,
         preemptible_tries: 3,
         max_retries: 0,

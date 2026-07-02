@@ -271,11 +271,9 @@ task PlotQcVcfWide {
         RuntimeAttr? runtime_attr_override
     }
 
-    Float input_size = size(vcf_stats, "GiB")
-
     command <<<
         set -euo pipefail
-        
+
         /opt/sv-pipeline/scripts/vcf_qc/plot_sv_vcf_distribs.R \
             --skip_supporting \
             -N $( cat ~{samples_list} | sort | uniq | wc -l ) \
@@ -297,7 +295,7 @@ task PlotQcVcfWide {
     RuntimeAttr runtime_default = object {
         cpu_cores: 1,
         mem_gb: 8,
-        disk_gb: ceil(10 + input_size * 5),
+        disk_gb: 5 * ceil(size(vcf_stats, "GiB")) + 10,
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 0
@@ -372,11 +370,9 @@ task PlotQcPerSample {
         RuntimeAttr? runtime_attr_override
     }
 
-    Float input_size = size([vcf_stats, per_sample_tarball], "GiB")
-
     command <<<
         set -euo pipefail
-        
+
         mkdir ~{prefix}_perSample/
 
         mkdir tmp_untar/
@@ -412,7 +408,7 @@ task PlotQcPerSample {
 
     RuntimeAttr runtime_default = object {
         mem_gb: 4,
-        disk_gb: ceil(10 + input_size * 5),
+        disk_gb: 5 * ceil(size([vcf_stats, per_sample_tarball], "GiB")) + 10,
         cpu_cores: 1,
         preemptible_tries: 0,
         max_retries: 0,
@@ -444,7 +440,6 @@ task PlotQcPerFamily {
     }
 
     Int random_seed_ = select_first([random_seed, 0])
-    Float input_size = size([vcf_stats, per_sample_tarball], "GiB")
 
     command <<<
         set -euo pipefail
@@ -505,7 +500,7 @@ task PlotQcPerFamily {
 
     RuntimeAttr runtime_default = object {
         mem_gb: 4,
-        disk_gb: ceil(10 + input_size * 5),
+        disk_gb: 5 * ceil(size([vcf_stats, per_sample_tarball], "GiB")) + 10,
         cpu_cores: 1,
         preemptible_tries: 1,
         max_retries: 0,
@@ -622,9 +617,6 @@ task SanitizeOutputs {
         RuntimeAttr? runtime_attr_override
     }
 
-    Float input_size = size([plot_qc_vcfwide_tarball, plot_qc_per_family_tarball, plot_qc_site_level_external_benchmarking_tarballs,
-                             plot_qc_per_sample_tarball, plot_qc_per_sample_external_benchmarking_tarballs, vcf_stats], "GiB")
-    
     command <<<
         set -euo pipefail
         
@@ -685,7 +677,7 @@ task SanitizeOutputs {
 
     RuntimeAttr runtime_default = object {
         mem_gb: 2,
-        disk_gb: ceil(10.0 + input_size * 5.0),
+        disk_gb: 5 * ceil(size([plot_qc_vcfwide_tarball, plot_qc_per_family_tarball, plot_qc_site_level_external_benchmarking_tarballs, plot_qc_per_sample_tarball, plot_qc_per_sample_external_benchmarking_tarballs, vcf_stats], "GiB")) + 10,
         cpu_cores: 1,
         preemptible_tries: 1,
         max_retries: 0,

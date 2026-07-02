@@ -23,11 +23,9 @@ task ZcatCompressedFiles {
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size(shards, "GB")
-  Float compression_factor = 5.0
   RuntimeAttr runtime_default = object {
     mem_gb: 2.0,
-    disk_gb: ceil(10.0 + input_size * if do_filter then 2.0 + compression_factor else 2.0),
+    disk_gb: ceil(10.0 + size(shards, "GB") * if (defined(filter_command) && select_first([filter_command]) != "") then 7.0 else 2.0),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -83,10 +81,9 @@ task CatUncompressedFiles {
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size(shards, "GB")
   RuntimeAttr runtime_default = object {
     mem_gb: 2.0,
-    disk_gb: ceil(10.0 + input_size * (if do_filter then 3.0 else 2.0)),
+    disk_gb: ceil(10.0 + size(shards, "GB") * (if (defined(filter_command) && select_first([filter_command]) != "") then 3.0 else 2.0)),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -294,10 +291,9 @@ task ConcatBeds {
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size(shard_bed_files, "GB")
   RuntimeAttr runtime_default = object {
     mem_gb: 2.0,
-    disk_gb: ceil(10.0 + input_size * 7.0),
+    disk_gb: 7 * ceil(size(shard_bed_files, "GB")) + 10,
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -361,10 +357,9 @@ task FilesToTarredFolder {
   String outfile_name = select_first([tarball_prefix, tar_folder_name]) + ".tar.gz"
 
   # Since the input files are often/always compressed themselves, assume compression factor for tarring is 1.0
-  Float input_size = size(in_files, "GB")
   RuntimeAttr runtime_default = object {
     mem_gb: 2.0,
-    disk_gb: ceil(10.0 + input_size * 2.0),
+    disk_gb: 2 * ceil(size(in_files, "GB")) + 10,
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -411,10 +406,9 @@ task PasteFiles {
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size(input_files, "GB")
   RuntimeAttr runtime_default = object {
     mem_gb: 2.0,
-    disk_gb: ceil(10.0 + input_size * 2.0),
+    disk_gb: 2 * ceil(size(input_files, "GB")) + 10,
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -562,10 +556,9 @@ task SplitUncompressed {
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size(whole_file, "GB")
   RuntimeAttr runtime_default = object {
     mem_gb: 2.0,
-    disk_gb: ceil(10.0 + input_size * 2.0),
+    disk_gb: 2 * ceil(size(whole_file, "GB")) + 10,
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -638,10 +631,9 @@ task SplitVcf {
   # Worst-case scenario for disk size: simultaneously storing uncompressed vcf and records vcf
   # Note that the header is multiplied by the number of shards, but it's so small as to be a rounding error unless
   # thousands of shards are produced (and even then, small compared to base_disk_gb)
-  Float input_size = size(vcf, "GB")
   RuntimeAttr runtime_default = object {
     mem_gb: 2.0,
-    disk_gb: ceil(10.0 + input_size * 30),
+    disk_gb: 30 * ceil(size(vcf, "GB")) + 10,
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -739,7 +731,6 @@ task UpdateSrList {
     RuntimeAttr? runtime_attr_override
   }
 
-  Float input_size = size([vcf, original_list], "GiB")
   RuntimeAttr runtime_default = object {
     mem_gb: 3.75,
     disk_gb: ceil(10.0 + size(original_list, "GiB") * 3 + size(vcf, "GiB")),
@@ -793,10 +784,9 @@ task ShardVidsForClustering {
     RuntimeAttr? runtime_attr_override
   }
 
-  Float input_size = size(clustered_vcf, "GiB")
   RuntimeAttr runtime_default = object {
                                   mem_gb: 2.0,
-                                  disk_gb: ceil(10.0 + input_size),
+                                  disk_gb: ceil(size(clustered_vcf, "GiB")) + 10,
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -1018,10 +1008,9 @@ task RenameVariantIds {
   }
 
   String disk_type = if (defined(use_ssd) && select_first([use_ssd])) then "SSD" else "HDD"
-  Float input_size = size(vcf, "GiB")
   RuntimeAttr runtime_default = object {
                                   mem_gb: 2.0,
-                                  disk_gb: ceil(10.0 + input_size * 2),
+                                  disk_gb: 2 * ceil(size(vcf, "GiB")) + 10,
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -1070,10 +1059,9 @@ task ScatterVcf {
     RuntimeAttr? runtime_attr_override
   }
 
-  Float input_size = size(vcf, "GB")
   RuntimeAttr runtime_default = object {
                                   mem_gb: 3.75,
-                                  disk_gb: ceil(10.0 + input_size * 5.0),
+                                  disk_gb: 5 * ceil(size(vcf, "GB")) + 10,
                                   cpu_cores: 2,
                                   preemptible_tries: 3,
                                   max_retries: 1,

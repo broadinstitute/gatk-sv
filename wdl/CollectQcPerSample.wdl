@@ -51,7 +51,6 @@ task CollectVidsPerSample {
     }
 
     String outdirprefix = "~{prefix}_perSample_VIDs"
-    Float input_size = size([vcf, samples_list], "GiB")
 
     command <<<
         set -euo pipefail
@@ -83,7 +82,7 @@ task CollectVidsPerSample {
 
     RuntimeAttr runtime_default = object {
         mem_gb: 4,
-        disk_gb: ceil(10.0 + input_size),
+        disk_gb: ceil(size([vcf, samples_list], "GiB")) + 10,
         cpu_cores: 1,
         preemptible_tries: 3,
         max_retries: 0,
@@ -109,8 +108,6 @@ task MergeShardedPerSampleVidLists {
         String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
     }
-
-    Float input_size = size(tarballs, "GiB")
 
     command <<<
         set -euo pipefail
@@ -163,7 +160,7 @@ task MergeShardedPerSampleVidLists {
 
     RuntimeAttr runtime_default = object {
         mem_gb: 4,
-        disk_gb: ceil(10 + input_size * 5),
+        disk_gb: 5 * ceil(size(tarballs, "GiB")) + 10,
         cpu_cores: 2,
         preemptible_tries: 3,
         max_retries: 0,
