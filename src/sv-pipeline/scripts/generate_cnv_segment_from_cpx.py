@@ -1,5 +1,6 @@
 import os
 import argparse
+import subprocess
 
 # Implementation note:
 # This code implements the same python code in the GenerateCnvSegmentFromCpx task without alterations.
@@ -23,7 +24,7 @@ def get_sample_batch_map(sample_batch_pe_map):
 
 def readin_cpx_cnv(bed_input, sample_to_batch, min_depth_size):
     CPX_CNV = []
-    f_bed = os.popen(r'''zcat %s''' % (bed_input))
+    f_bed = subprocess.Popen(['zcat', bed_input], stdout=subprocess.PIPE, text=True).stdout
     for line in f_bed:
         pin = line.strip().split('\t')
         if pin[0][0] == '#':
