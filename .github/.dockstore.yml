@@ -244,3 +244,13 @@ workflows:
         - main
       tags:
         - /.*/
+
+  - subclass: SVConcordanceCNVBySample
+    name: CallDeNovoSV
+    primaryDescriptorPath: /wdl/SVConcordanceCNVBySample.wdl
+    filters:
+      branches:
+        - main
+        - vj_callset_evaluations
+      tags:
+        - /.*/
