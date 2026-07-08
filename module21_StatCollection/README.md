@@ -14,12 +14,34 @@ Given an `af_cutoff`, it reports a table with:
 
 This is intended as a lightweight stats-collection utility for downstream QC and cohort-level distribution checks.
 
+## Efficiency update (scatter + merge)
+
+The workflow now:
+
+1. **Scatters across input VCFs** (`CountPerContigVariantsByAF`) to compute per-sample counts per contig.
+2. **Merges per-contig tables** (`SumCountsAcrossContigs`) to produce one final per-sample summary across all contigs.
+
 ## Inputs
 
 - `Array[File] vcfs`
 - `Float af_cutoff`
 - Optional `output_prefix`
 - Optional `bcftools_docker`
+
+## Outputs
+
+- `sample_counts_tsv`: final merged table
+- `per_contig_sample_counts`: per-contig intermediate tables (one per VCF)
+
+## Helper script
+
+- `sum_counts_across_contigs.sh`
+  - Standalone script to merge multiple per-contig count tables
+  - Usage:
+
+  ```bash
+  ./sum_counts_across_contigs.sh OUTPUT_TSV contig1.tsv contig2.tsv contig3.tsv
+  ```
 
 ## Example input JSON
 
