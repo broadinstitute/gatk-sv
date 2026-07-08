@@ -1,0 +1,10 @@
+{
+  "CountVariantsByAFCutoff.vcfs": [
+    "gs://YOUR_BUCKET/path/to/chr1.vcf.gz",
+    "gs://YOUR_BUCKET/path/to/chr2.vcf.gz",
+    "gs://YOUR_BUCKET/path/to/chr3.vcf.gz"
+  ],
+  "CountVariantsByAFCutoff.af_cutoff": 0.01,
+  "CountVariantsByAFCutoff.output_prefix": "cohort_af01_variant_counts",
+  "CountVariantsByAFCutoff.bcftools_docker": "quay.io/biocontainers/bcftools:1.17--h3cc50cf_1"
+}
