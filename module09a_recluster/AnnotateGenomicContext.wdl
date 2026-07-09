@@ -7,8 +7,9 @@ import "Structs.wdl"
 # Workflow to annotate vcf file with genomic context
 workflow AnnotateSVsWithGenomicContext {
     input {
-        File vcf
-        File vcf_index
+        File? vcf
+        File? vcf_index
+        File? bed
         File Repeat_Masks
         File Simple_Repeats
         File Segmental_Duplicates
@@ -24,25 +25,29 @@ workflow AnnotateSVsWithGenomicContext {
         RuntimeAttr? runtime_attr_override_inte_gc
     }
 
-    call ExtractSitesFromVcf {
-        input:
-            vcf = vcf,
-            vcf_index = vcf_index,
-            sv_base_mini_docker=sv_base_mini_docker,
-            runtime_attr_override=runtime_override_extract_SV_sites
+    if ((! defined(bed)) && (defined(vcf))) {
+        call ExtractSitesFromVcf {
+            input:
+                vcf = select_first([vcf]),
+                vcf_index = select_first([vcf_index]),
+                sv_base_mini_docker=sv_base_mini_docker,
+                runtime_attr_override=runtime_override_extract_SV_sites
+        }
+
+        call Vcf2Bed{
+            input:
+                vcf = ExtractSitesFromVcf.out,
+                vcf_index = ExtractSitesFromVcf.out_idx,
+                sv_pipeline_docker=sv_pipeline_docker,
+                runtime_attr_override=runtime_override_vcf_to_bed
+        }
     }
 
-    call Vcf2Bed{
-        input:
-            vcf = ExtractSitesFromVcf.out,
-            vcf_index = ExtractSitesFromVcf.out_idx, 
-            sv_pipeline_docker=sv_pipeline_docker,
-            runtime_attr_override=runtime_override_vcf_to_bed
-    }
+    File bed_ = select_first([bed, Vcf2Bed.out])
 
     call AnnotateGenomicContext{
         input:
-            bed_gz = Vcf2Bed.out,
+            bed_gz = bed_,
             simp_rep = Simple_Repeats,
             seg_dup = Segmental_Duplicates,
             rep_mask = Repeat_Masks,
@@ -52,7 +57,7 @@ workflow AnnotateSVsWithGenomicContext {
 
     call IntegrateGenomicContext{
         input:
-            bed_gz = Vcf2Bed.out,
+            bed_gz = bed_,
             le_bp_vs_sr = AnnotateGenomicContext.le_bp_vs_sr,
             le_bp_vs_sd = AnnotateGenomicContext.le_bp_vs_sd,
             le_bp_vs_rm = AnnotateGenomicContext.le_bp_vs_rm,
