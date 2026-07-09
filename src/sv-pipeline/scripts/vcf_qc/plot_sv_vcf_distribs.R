@@ -53,6 +53,7 @@ plotStackedBars <- function(mat,colors,scaled=T,log.y=FALSE,title=NULL){
   
   #Prepare plot area
   ymax <- max(apply(mat,2,sum,na.rm=T),na.rm=T)
+  if(log.y && (ymax <= 0 || !is.finite(ymax))) ymax <- 1
   ymin <- if(log.y) 0.5 else 0
   log.arg <- if(log.y) "y" else ""
   ymax.plot <- if(log.y) 10^ceiling(log10(ymax)) else 1.02*ymax
@@ -243,7 +244,7 @@ wrapperPlotAllCountBars <- function(){
   # Pre-compute data needed for main plot
   AF.df <- data.frame("label"=c("AC=1","AF<1%","1-10%",
                                 "10-50%",">50%"),
-                      "max"=c(1.1/(2*nsamp),rare.max.freq,uncommon.max.freq,
+                      "max"=c(singleton.af.max,rare.max.freq,uncommon.max.freq,
                               common.max.freq,major.max.freq))
   size.df <- data.frame("label"=c("<50bp","50-\n100bp","100bp-\n500bp",
                                   "500bp-\n5kb","5-50kb",">50kb"),
@@ -360,7 +361,7 @@ wrapperPlotAllCountBars <- function(){
   #Iterator data frames
   AF.df <- data.frame("label"=c("AC=1","AF<1%","1-10%",
                                 "10-50%",">50%"),
-                      "max"=c(1.1/(2*nsamp),rare.max.freq,uncommon.max.freq,
+                      "max"=c(singleton.af.max,rare.max.freq,uncommon.max.freq,
                               common.max.freq,major.max.freq))
   size.df <- data.frame("label"=c("<50bp","50-\n100bp","100bp-\n500bp",
                                   "500bp-\n5kb","5-50kb",">50kb"),
@@ -802,7 +803,13 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
       roll.vals <- rollapply(dens[[i]], width=5, function(x) mean(x, na.rm=TRUE), partial=T)
       roll.vals[!is.finite(roll.vals)] <- NA
       points(x=mids, y=roll.vals, type="l", lwd=lwd.cex, col=col.pal[i])
-    })  
+    })
+    #Add filter labels
+    if(!is.null(filter.legend)){
+      legend("topright",bg=NA,bty="n",pch=NA,legend=filter.legend)
+    }
+    #Add freq legend
+    legend("right",bg="white",bty="n",lwd=3,col=col.pal,legend=legend.labs,cex=0.8)
   }else{
     par(bty="n",mar=c(3.5,3.5,3,0.5))
     plot(x=c(0,1),y=c(0,1),type="n",
@@ -810,14 +817,6 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
     text(x=0.5,y=0.5,labels="No Data")
     mtext(3,line=1.5,text=title,font=2,cex=lwd.cex)
   }
-  
-  #Add filter labels
-  if(!is.null(filter.legend)){
-    legend("topright",bg=NA,bty="n",pch=NA,legend=filter.legend)
-  }
-  
-  #Add freq legend
-  legend("right",bg="white",bty="n",lwd=3,col=col.pal,legend=legend.labs,cex=0.8)
 }
 
 #Wrapper to plot all size distributions
@@ -882,7 +881,7 @@ wrapperPlotAllSizeDistribs <- function(){
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/size_distribution.across_freqs.pdf",sep=""),
       height=4,width=6)
   plotSizeDistribSeries(dat=dat,svtypes=svtypes,
-                        max.AFs=c(1.1/(2*nsamp),rare.max.freq,uncommon.max.freq,
+                        max.AFs=c(singleton.af.max,rare.max.freq,uncommon.max.freq,
                                   common.max.freq,major.max.freq),
                         legend.labs=c("Singleton","<1%","1-10%","10-50%",">50%"),
                         title="Size Distributions by AF")
@@ -906,7 +905,7 @@ wrapperPlotAllSizeDistribs <- function(){
                   legend.show.counts=FALSE,
                   extra.dropped.count=n.tr.snv, extra.dropped.label=drop.label)
   plotSizeDistribSeries(dat=dat,svtypes=svtypes,
-                        max.AFs=c(1.1/(2*nsamp),rare.max.freq,uncommon.max.freq,
+                        max.AFs=c(singleton.af.max,rare.max.freq,uncommon.max.freq,
                                   common.max.freq,major.max.freq),
                         legend.labs=c("Singleton","<1%","1-10%","10-50%",">50%"),
                         title="Size Distributions by AF",
@@ -1367,7 +1366,7 @@ wrapperPlotTiTv <- function(){
 
   af.labels <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
   af.mins <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
-  af.maxs <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
+  af.maxs <- c(singleton.af.max, rare.max.freq, uncommon.max.freq, common.max.freq, 1)
   size.labels <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
   size.mins <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
   size.maxs <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
@@ -1539,7 +1538,7 @@ wrapperPlotQualDistrib <- function(){
   regions <- if(has.region) orderRegions(unique(d$REGION[!is.na(d$REGION)])) else character(0)
   af.labels <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
   af.mins <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
-  af.maxs <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
+  af.maxs <- c(singleton.af.max, rare.max.freq, uncommon.max.freq, common.max.freq, 1)
   size.labels <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
   size.mins <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
   size.maxs <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
@@ -1615,7 +1614,7 @@ wrapperPlotNcrDistrib <- function(){
   regions <- if(has.region) orderRegions(unique(dat$REGION[!is.na(dat$REGION)])) else character(0)
   af.labels <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
   af.mins <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
-  af.maxs <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
+  af.maxs <- c(singleton.af.max, rare.max.freq, uncommon.max.freq, common.max.freq, 1)
   size.labels <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
   size.mins <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
   size.maxs <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
@@ -1701,7 +1700,7 @@ wrapperPlotGnomadMatchDistrib <- function(){
   regions <- if(has.region) orderRegions(unique(d$REGION[!is.na(d$REGION)])) else character(0)
   af.labels <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
   af.mins <- c(0, 0, rare.max.freq, uncommon.max.freq, common.max.freq)
-  af.maxs <- c(1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
+  af.maxs <- c(singleton.af.max, rare.max.freq, uncommon.max.freq, common.max.freq, 1)
   size.labels <- c("<50bp","50-100bp","100bp-500bp","500bp-5kb","5-50kb",">50kb")
   size.mins <- c(0, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size)
   size.maxs <- c(tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, huge.max.size)
@@ -2064,6 +2063,7 @@ if(length(args$args) != 2){
 INFILE <- args$args[1]
 OUTDIR <- args$args[2]
 nsamp <- opts$nsamp
+singleton.af.max <- if (!is.null(nsamp) && nsamp > 0L) 1.1 / (2 * nsamp) else 0
 svtypes.file <- opts$svtypes
 skip.supporting <- opts$skip_supporting
 
@@ -2245,7 +2245,7 @@ wrapperPlotVepDistrib <- function(){
   }
 
   af.cuts  <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
-  af.breaks <- c(-Inf, 1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
+  af.breaks <- c(-Inf, singleton.af.max, rare.max.freq, uncommon.max.freq, common.max.freq, 1)
   dat.exp$af_grp   <- as.character(cut(dat.exp$AF, breaks=af.breaks, labels=af.cuts, include.lowest=TRUE))
   dat.exp$size_grp <- as.character(cut(dat.exp$length,
     breaks=c(-Inf, tiny.max.size, small.max.size, medium.max.size, medlarge.max.size, large.max.size, Inf),
@@ -2348,7 +2348,7 @@ wrapperPlotSvAnnotateDistrib <- function(){
   svtype_m[svtype_m %in% c("DUP_SHORT","DUP_SV")] <- "DUP"
 
   af.cuts   <- c("AC=1","AF<1%","1-10%","10-50%",">50%")
-  af.breaks <- c(-Inf, 1.1/(2*nsamp), rare.max.freq, uncommon.max.freq, common.max.freq, 1)
+  af.breaks <- c(-Inf, singleton.af.max, rare.max.freq, uncommon.max.freq, common.max.freq, 1)
   af_grp    <- as.character(cut(dat$AF, breaks=af.breaks, labels=af.cuts, include.lowest=TRUE))
 
   # Build prediction × stratum matrix

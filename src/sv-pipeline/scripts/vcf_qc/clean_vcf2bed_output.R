@@ -77,14 +77,16 @@ if(is.null(nsamp)){
   nsamp <- length(unique(unlist(strsplit(as.character(dat$samples),split=","))))
 }
 dat$observations <- sapply(dat$samples,function(samples){
-  length(unique(unlist(strsplit(as.character(samples),split=","))))
+  s <- as.character(samples)
+  if(is.na(s) || s == "." || nchar(s) == 0) return(0L)
+  length(unique(unlist(strsplit(s,split=","))))
 })
 if (nrow(dat) > 0) {
-  dat$carrierFreq <- dat$observations/nsamp
+  dat$carrierFreq <- if (!is.null(nsamp) && nsamp > 0) dat$observations/nsamp else rep(NA_real_, nrow(dat))
 } else {
   dat$carrierFreq <- numeric()
 }
-if(any(dat$frequency > 1)){
+if(isTRUE(any(dat$carrierFreq > 1, na.rm=TRUE))){
   stop("Incorrect number of samples supplied; some carrier frequencies > 1")
 }
 #Subset to relevant columns
@@ -157,9 +159,9 @@ dat <- data.frame("chr"=dat$chr,
                   "missing_gts"=dat$unknown,
                   "carriers"=dat$observations,
                   "carrierFreq"=dat$carrierFreq,
-                  "AN"=dat$AN,
-                  "AC"=dat$AC,
-                  "AF"=dat$AF)
+                  "AN"=as.integer(as.character(dat$AN)),
+                  "AC"=as.integer(as.character(dat$AC)),
+                  "AF"=as.numeric(as.character(dat$AF)))
 if(!is.null(region.col)) dat$REGION <- region.col
 if(!is.null(qual.col)) dat$QUAL <- as.numeric(as.character(qual.col))
 if(!is.null(ref.col)) dat$REF <- as.character(ref.col)
@@ -178,7 +180,7 @@ if(!is.null(tr.parsed.col)) dat$TR_PARSED <- tr.parsed.col
 if(!is.null(tr.aclass.raw)) dat$TR_ALLELE_CLASS <- tr.aclass.raw
 # TRV_LOCUS_CARRIERS field (pre-normalization carrier count per TRV locus)
 if(!is.null(trv.locus.carriers.raw)) dat$TRV_LOCUS_CARRIERS <- trv.locus.carriers.raw
-zeroes <- which(dat$AC==0 | dat$carriers==0)
+zeroes <- if(!is.null(nsamp) && nsamp > 0) which(dat$AC==0 | dat$carriers==0) else which(dat$AC==0)
 if(length(zeroes)>0){
   cat(paste("WARNING: ",prettyNum(length(zeroes),big.mark=","),"/",
               prettyNum(nrow(dat),big.mark=",")," (",

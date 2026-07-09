@@ -112,16 +112,16 @@ if ! [ -e ${OUTDIR}/data ]; then
   mkdir ${OUTDIR}/data
 fi
 mkdir ${QCTMP}/perSample
-#Unzip VCF
-zcat ${VCF} > ${QCTMP}/input.vcf
+#Unzip VCF (gunzip -c handles both .gz and plain .vcf cross-platform)
+{ gunzip -c ${VCF} 2>/dev/null || cat ${VCF}; } > ${QCTMP}/input.vcf
 #Gather SV types to process
 cut -f1 ${SVTYPES} | sort | uniq > ${QCTMP}/svtypes.txt
 
 
 ###DETERMINE SAMPLES TO PROCESS
-#Write list of all samples in VCF header
+#Write list of all samples in VCF header (grep -v removes empty lines from sites-only VCFs)
 fgrep "#" ${QCTMP}/input.vcf | fgrep -v "##" | cut -f10- | \
-sed 's/\t/\n/g' | sort | uniq > ${QCTMP}/vcf_samples.list
+sed 's/\t/\n/g' | grep -v '^[[:space:]]*$' | sort | uniq > ${QCTMP}/vcf_samples.list
 #If FAM file not provided, use all samples in VCF header
 if [ -z ${FAM} ] || [ ! -s ${FAM} ]; then
   cp ${QCTMP}/vcf_samples.list \
@@ -141,10 +141,9 @@ else
 fi
 #Get number of samples
 nsamp=$( cat ${QCTMP}/analysis_samples.list | wc -l )
-#Exit if no samples left for analysis
-if [ -z ${nsamp} ] | [ ${nsamp} -eq 0 ]; then
-  echo -e "$( date ) - VCF QC ERROR: No samples included for analysis. Check input VCF, fam file, and -R flag and rerun."
-  exit 1
+#Warn if sites-only VCF (no samples in header); AF/AC/AN will be read from INFO fields
+if [ ${nsamp} -eq 0 ]; then
+  echo -e "$( date ) - VCF QC STATUS: No samples in VCF header (sites-only VCF). AF/AC/AN will be read from INFO fields."
 fi
 #Move list of analysis samples to $OUTDIR
 cp ${QCTMP}/analysis_samples.list ${OUTDIR}/
@@ -160,52 +159,88 @@ svtk vcf2bed -i ALL \
 ${QCTMP}/input.vcf ${QCTMP}/vcf2bed_unsorted_unfiltered.bed
 cp ${QCTMP}/vcf2bed_unsorted_unfiltered.bed ${OUTDIR}/vcf2bed_raw.bed
 
-#Get genotype counts per variant for all types of SVs except for multi-alleleic CNVs
+#Get genotype counts per variant (or INFO-field AF/AC/AN for sites-only VCFs)
 echo -e "CHROM\tSTART\tEND\tVID\tnsamp_gt\thomref\thet\thomalt\tother\tunknown\tAC\tAN\tAF\tQUAL\tREF\tALT" > \
 ${QCTMP}/genotype_counts_per_SV.txt
 
-grep -v ^# ${QCTMP}/input.vcf | grep -v "<CNV>" | \
-awk -v FS="\t" -v OFS="\t" -v nsamp=${nsamp} '{
- unknown=0; homref=0; het=0; homalt=0; other=0; for(i=10;i<=NF;i++) {
-  split($i,a,":"); split(a[1],GT,"[/|]");
-  if (GT[1]=="." && GT[2]==".") {unknown++}
-  else if (GT[1]==0 && GT[2]==0) {homref++}
-  else if (GT[1]==1 && GT[2]==1) {homalt++}
-  else if ((GT[1]==0 && GT[2]==1) || (GT[1]==1 && GT[2]==0)) {het++}
-  else if (GT[1]=="." || GT[2]==".") {het++}
-  else {other++} };
-  if (other > 0 || (nsamp==other+unknown)) {AC="NA"; AN="NA"; AF="NA"}
-  else {AC=(2*homalt)+het; AN=2*(nsamp-(unknown+other)); AF=AC/AN};
-  start=$2-1; end=$2+length($4);
-  orig_alt="."; n=split($8,info,";");
-  for(j=1;j<=n;j++){if(info[j]~"^ORIG_ALT="){split(info[j],kv,"="); orig_alt=kv[2]}}
-  print $1, start, end, $3, nsamp-unknown, homref, het, homalt, other, unknown, AC, AN, AF, $6, $4, orig_alt }' >> \
-${QCTMP}/genotype_counts_per_SV.txt
+if [ ${nsamp} -eq 0 ]; then
+  #Sites-only VCF: extract AC/AN/AF directly from INFO fields
+  grep -v ^# ${QCTMP}/input.vcf | grep -v "<CNV>" | \
+  awk -v FS="\t" -v OFS="\t" '{
+    AC="NA"; AN="NA"; AF="NA"; orig_alt=".";
+    n=split($8,info,";");
+    for(j=1;j<=n;j++){
+      if(info[j]~"^AC="){split(info[j],kv,"="); AC=kv[2]}
+      else if(info[j]~"^AN="){split(info[j],kv,"="); AN=kv[2]}
+      else if(info[j]~"^AF="){split(info[j],kv,"="); AF=kv[2]}
+      else if(info[j]~"^ORIG_ALT="){split(info[j],kv,"="); orig_alt=kv[2]}
+    }
+    start=$2-1; end=$2+length($4);
+    print $1, start, end, $3, 0, 0, 0, 0, 0, 0, AC, AN, AF, $6, $4, orig_alt
+  }' >> ${QCTMP}/genotype_counts_per_SV.txt
+  grep -v ^# ${QCTMP}/input.vcf | grep "<CNV>" | \
+  awk -v FS="\t" -v OFS="\t" '{
+    AC="NA"; AN="NA"; AF="NA";
+    n=split($8,info,";");
+    for(j=1;j<=n;j++){
+      if(info[j]~"^AC="){split(info[j],kv,"="); AC=kv[2]}
+      else if(info[j]~"^AN="){split(info[j],kv,"="); AN=kv[2]}
+      else if(info[j]~"^AF="){split(info[j],kv,"="); AF=kv[2]}
+    }
+    start=$2-1; end=$2+length($4);
+    print $1, start, end, $3, 0, 0, 0, 0, 0, 0, AC, AN, AF, $6, $4, "."
+  }' >> ${QCTMP}/genotype_counts_per_SV.txt
+else
+  #Standard genotype counting for VCFs with sample data
+  grep -v ^# ${QCTMP}/input.vcf | grep -v "<CNV>" | \
+  awk -v FS="\t" -v OFS="\t" -v nsamp=${nsamp} '{
+   unknown=0; homref=0; het=0; homalt=0; other=0; for(i=10;i<=NF;i++) {
+    split($i,a,":"); split(a[1],GT,"[/|]");
+    if (GT[1]=="." && GT[2]==".") {unknown++}
+    else if (GT[1]==0 && GT[2]==0) {homref++}
+    else if (GT[1]==1 && GT[2]==1) {homalt++}
+    else if ((GT[1]==0 && GT[2]==1) || (GT[1]==1 && GT[2]==0)) {het++}
+    else if (GT[1]=="." || GT[2]==".") {het++}
+    else {other++} };
+    if (other > 0 || (nsamp==other+unknown)) {AC="NA"; AN="NA"; AF="NA"}
+    else {AC=(2*homalt)+het; AN=2*(nsamp-(unknown+other)); AF=AC/AN};
+    start=$2-1; end=$2+length($4);
+    orig_alt="."; n=split($8,info,";");
+    for(j=1;j<=n;j++){if(info[j]~"^ORIG_ALT="){split(info[j],kv,"="); orig_alt=kv[2]}}
+    print $1, start, end, $3, nsamp-unknown, homref, het, homalt, other, unknown, AC, AN, AF, $6, $4, orig_alt }' >> \
+  ${QCTMP}/genotype_counts_per_SV.txt
 
-#Get genotype counts per variant for multi-alleleic CNVs
-grep -v ^# ${QCTMP}/input.vcf | grep "<CNV>" | \
-awk -v FS="\t" -v OFS="\t" -v nsamp=${nsamp} '{
- unknown=0; homref=0; het=0; homalt=0; other=0;
- split($9,format,":"); for (f=1;f<=length(format);f++) { if (format[f] == "CN") CN=f };
- for(i=10;i<=NF;i++) {
-  split($i,a,":");
-    if (a[CN]==2) {homref++}
-    else if (a[CN]==0 || a[CN]>=4) {homalt++}
-    else {het++} };
-  AC=(2*homalt)+het; AN=2*(nsamp-(unknown+other)); AF=AC/AN;
-  start=$2-1; end=$2+length($4);
-  print $1, start, end, $3, nsamp-unknown, homref, het, homalt, other, unknown, AC, AN, AF, $6, $4, "." }' >> \
-${QCTMP}/genotype_counts_per_SV.txt
+  #Get genotype counts per variant for multi-alleleic CNVs
+  grep -v ^# ${QCTMP}/input.vcf | grep "<CNV>" | \
+  awk -v FS="\t" -v OFS="\t" -v nsamp=${nsamp} '{
+   unknown=0; homref=0; het=0; homalt=0; other=0;
+   split($9,format,":"); for (f=1;f<=length(format);f++) { if (format[f] == "CN") CN=f };
+   for(i=10;i<=NF;i++) {
+    split($i,a,":");
+      if (a[CN]==2) {homref++}
+      else if (a[CN]==0 || a[CN]>=4) {homalt++}
+      else {het++} };
+    AC=(2*homalt)+het; AN=2*(nsamp-(unknown+other)); AF=AC/AN;
+    start=$2-1; end=$2+length($4);
+    print $1, start, end, $3, nsamp-unknown, homref, het, homalt, other, unknown, AC, AN, AF, $6, $4, "." }' >> \
+  ${QCTMP}/genotype_counts_per_SV.txt
+fi
 
 
 #Write header
 head -n1 ${QCTMP}/vcf2bed_unsorted_unfiltered.bed > \
 ${QCTMP}/vcf2bed_cleaned.bed
-#Sort & filter 
-fgrep -wf ${QCTMP}/analysis_samples.list \
-${QCTMP}/vcf2bed_unsorted_unfiltered.bed | \
-sort -Vk1,1 -k2,2n -k3,3n >> \
-${QCTMP}/vcf2bed_cleaned.bed
+#Sort & filter by sample list (skip for sites-only VCFs)
+if [ ${nsamp} -gt 0 ]; then
+  fgrep -wf ${QCTMP}/analysis_samples.list \
+  ${QCTMP}/vcf2bed_unsorted_unfiltered.bed | \
+  sort -Vk1,1 -k2,2n -k3,3n >> \
+  ${QCTMP}/vcf2bed_cleaned.bed
+else
+  tail -n+2 ${QCTMP}/vcf2bed_unsorted_unfiltered.bed | \
+  sort -Vk1,1 -k2,2n -k3,3n >> \
+  ${QCTMP}/vcf2bed_cleaned.bed
+fi
 
 #Run Rscript to clean VCF stats
 ${BIN}/clean_vcf2bed_output.R \
