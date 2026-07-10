@@ -7,24 +7,28 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 workflow ReshardVcf {
   input {
-    Array[File] vcfs  # Order does not matter but must be sorted and indexed
+    Array[File] complex_resolve_vcfs  # Order does not matter but must be sorted and indexed
+    Array[File] complex_resolve_bothside_pass_lists
+    Array[File] complex_resolve_background_fail_lists
     File contig_list
     String prefix
     Boolean? use_ssd
     String sv_base_mini_docker
     RuntimeAttr? runtime_override_reshard
+    RuntimeAttr? runtime_override_concat_background_fail
+    RuntimeAttr? runtime_override_concat_bothside_pass
   }
 
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
 
-  scatter (i in range(length(vcfs))) {
-    File vcf_indexes = vcfs[i] + ".tbi"
+  scatter (i in range(length(complex_resolve_vcfs))) {
+    File vcf_indexes = complex_resolve_vcfs[i] + ".tbi"
   }
 
   scatter (contig in contigs) {
     call ReshardContig {
       input:
-        vcfs=vcfs,
+        vcfs=complex_resolve_vcfs,
         vcf_indexes=vcf_indexes,
         contig=contig,
         prefix="~{prefix}.~{contig}.resharded",
@@ -33,9 +37,30 @@ workflow ReshardVcf {
         runtime_attr_override=runtime_override_reshard
     }
   }
+
+  # Due to vcf resharding, these contig-sharded lists are no longer valid
+  # Here we combine variant list arrays into single genome-wide lists
+  # This is faster than reshuffling and shouldn't have much performance impact in CleanVcf1a
+  call MiniTasks.CatUncompressedFiles as ConcatBothsidePass {
+    input:
+      shards=complex_resolve_bothside_pass_lists,
+      outfile_name="~{prefix}.all.sr_bothside_pass.updated3.txt",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_concat_bothside_pass
+  }
+  call MiniTasks.CatUncompressedFiles as ConcatBackgroundFail {
+    input:
+      shards=complex_resolve_background_fail_lists,
+      outfile_name="~{prefix}.all.sr_background_fail.updated3.txt",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_concat_background_fail
+  }
+
   output {
     Array[File] resharded_vcfs = ReshardContig.out
     Array[File] resharded_vcf_indexes = ReshardContig.out_index
+    File resharded_bothside_pass_list = ConcatBothsidePass.outfile
+    File resharded_background_fail_list = ConcatBackgroundFail.outfile
   }
 }
 
@@ -75,7 +100,7 @@ task ReshardContig {
 
   command <<<
     set -euo pipefail
-    bcftools concat ~{threads_arg} --allow-overlaps --regions "~{contig}" -Oz -o ~{prefix}.vcf.gz ~{sep=" " vcfs}
+    bcftools concat ~{threads_arg} --allow-overlaps --regions "~{contig}" -Oz -o ~{prefix}.vcf.gz --threads $(nproc) ~{sep=" " vcfs}
     tabix ~{prefix}.vcf.gz
   >>>
 

@@ -131,8 +131,16 @@ workflows:
       branches:
         - main
         - phase3_b5d5049
+        - eph_reshard_genome
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: ReshardVcf
+    primaryDescriptorPath: /wdl/ReshardVcf.wdl
+    filters:
+      branches:
+        - eph_reshard_genome
 
   - subclass: WDL
     name: GenotypeComplexVariants
