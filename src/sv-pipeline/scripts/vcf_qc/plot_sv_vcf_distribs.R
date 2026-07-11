@@ -528,7 +528,7 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
     filter.legend <- c(filter.legend,"Autosomal variants only")
   }
   if(biallelic==T){
-    dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
+    dat <- dat[which(dat$other_gts==0 & (dat$genotyped_samples==0 | dat$missing_gts<dat$genotyped_samples)),]
   }
   sizes <- log10(dat$length)
   if(length(sizes)>0){
@@ -597,9 +597,11 @@ plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
     if(log.y){
       y.ticks <- 10^(seq(floor(log10(ylims[1])), ceiling(log10(ylims[2]))))
       y.ticks <- y.ticks[y.ticks >= ylims[1] * 0.9 & y.ticks <= ylims[2] * 1.1]
-      axis(2,at=y.ticks,tck=-0.025,labels=NA)
-      axis(2,at=y.ticks,tick=F,line=-0.4,cex.axis=0.8,las=2,
-           labels=paste0(signif(y.ticks*100, 2), "%"))
+      if(length(y.ticks) > 0){
+        axis(2,at=y.ticks,tck=-0.025,labels=NA)
+        axis(2,at=y.ticks,tick=F,line=-0.4,cex.axis=0.8,las=2,
+             labels=paste0(signif(y.ticks*100, 2), "%"))
+      }
     } else {
       axis(2,at=axTicks(2),tck=-0.025,labels=NA)
       axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
@@ -704,7 +706,7 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
     filter.legend <- c(filter.legend,"Autosomal variants only")
   }
   if(biallelic==T){
-    dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
+    dat <- dat[which(dat$other_gts==0 & (dat$genotyped_samples==0 | dat$missing_gts<dat$genotyped_samples)),]
   }
   sizes <- log10(dat$length)
   if(length(sizes) > 0){
@@ -776,9 +778,11 @@ plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
     if(log.y){
       y.ticks <- 10^(seq(floor(log10(ylims[1])), ceiling(log10(ylims[2]))))
       y.ticks <- y.ticks[y.ticks >= ylims[1] * 0.9 & y.ticks <= ylims[2] * 1.1]
-      axis(2,at=y.ticks,tck=-0.025,labels=NA)
-      axis(2,at=y.ticks,tick=F,line=-0.4,cex.axis=0.8,las=2,
-           labels=paste0(signif(y.ticks*100, 2), "%"))
+      if(length(y.ticks) > 0){
+        axis(2,at=y.ticks,tck=-0.025,labels=NA)
+        axis(2,at=y.ticks,tick=F,line=-0.4,cex.axis=0.8,las=2,
+             labels=paste0(signif(y.ticks*100, 2), "%"))
+      }
     } else {
       axis(2,at=axTicks(2),tck=-0.025,labels=NA)
       axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
@@ -961,7 +965,7 @@ plotFreqDistrib <- function(dat, svtypes,
   }
   n.pre.filter <- nrow(dat)
   if(biallelic==T){
-    dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
+    dat <- dat[which(dat$other_gts==0 & (dat$genotyped_samples==0 | dat$missing_gts<dat$genotyped_samples)),]
   }
   freqs <- log10(dat$AF)
   freq.setup <- prepFreqHistogram(freqs, bins.per.order=25)
@@ -1017,9 +1021,11 @@ plotFreqDistrib <- function(dat, svtypes,
     if(log.y){
       y.ticks <- 10^(seq(floor(log10(ylims[1])), ceiling(log10(ylims[2]))))
       y.ticks <- y.ticks[y.ticks >= ylims[1] * 0.9 & y.ticks <= ylims[2] * 1.1]
-      axis(2,at=y.ticks,tck=-0.025,labels=NA)
-      axis(2,at=y.ticks,tick=F,line=-0.4,cex.axis=0.8,las=2,
-           labels=paste0(signif(y.ticks*100, 2), "%"))
+      if(length(y.ticks) > 0){
+        axis(2,at=y.ticks,tck=-0.025,labels=NA)
+        axis(2,at=y.ticks,tick=F,line=-0.4,cex.axis=0.8,las=2,
+             labels=paste0(signif(y.ticks*100, 2), "%"))
+      }
     } else {
       axis(2,at=axTicks(2),tck=-0.025,labels=NA)
       axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
@@ -1090,7 +1096,7 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
     filter.legend <- c(filter.legend,"Autosomal variants only")
   }
   if(biallelic==T){
-    dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
+    dat <- dat[which(dat$other_gts==0 & (dat$genotyped_samples==0 | dat$missing_gts<dat$genotyped_samples)),]
   }
   freqs <- log10(dat$AF)
   if(length(freqs) > 0){
@@ -1154,9 +1160,11 @@ plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
     if(log.y){
       y.ticks <- 10^(seq(floor(log10(ylims[1])), ceiling(log10(ylims[2]))))
       y.ticks <- y.ticks[y.ticks >= ylims[1] * 0.9 & y.ticks <= ylims[2] * 1.1]
-      axis(2,at=y.ticks,tck=-0.025,labels=NA)
-      axis(2,at=y.ticks,tick=F,line=-0.4,cex.axis=0.8,las=2,
-           labels=paste0(signif(y.ticks*100, 2), "%"))
+      if(length(y.ticks) > 0){
+        axis(2,at=y.ticks,tck=-0.025,labels=NA)
+        axis(2,at=y.ticks,tick=F,line=-0.4,cex.axis=0.8,las=2,
+             labels=paste0(signif(y.ticks*100, 2), "%"))
+      }
     } else {
       axis(2,at=axTicks(2),tck=-0.025,labels=NA)
       axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
@@ -1876,7 +1884,7 @@ plotAlleleCarrierCorrelation <- function(dat,autosomal=T,biallelic=T,
     filter.legend <- c(filter.legend,"Autosomal variants only")
   }
   if(biallelic==T){
-    dat <- dat[which(dat$other_gts==0 & dat$missing_gts<dat$genotyped_samples),]
+    dat <- dat[which(dat$other_gts==0 & (dat$genotyped_samples==0 | dat$missing_gts<dat$genotyped_samples)),]
   }
   CF <- sort(dat$carrierFreq)
   AF <- dat$AF[order(dat$carrierFreq)]
@@ -2071,6 +2079,12 @@ skip.supporting <- opts$skip_supporting
 #Read & clean data
 dat <- read.table(INFILE,comment.char="",sep="\t",header=T,check.names=F)
 colnames(dat)[1] <- "chr"
+#For sites-only VCFs (nsamp=0), derive singleton.af.max from median AN in data (analogous to 1.1/AN for diploid)
+if (is.null(nsamp) || nsamp == 0L) {
+  an_vals <- suppressWarnings(as.numeric(as.character(dat$AN)))
+  an_vals <- an_vals[!is.na(an_vals) & an_vals > 0]
+  singleton.af.max <- if (length(an_vals) > 0) 1.1 / median(an_vals) else 0
+}
 #Create output directory structure, if necessary
 if(!dir.exists(OUTDIR)){
   dir.create(OUTDIR)

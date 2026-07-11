@@ -339,7 +339,7 @@ PYCODE
 
     RuntimeAttr runtime_default = object {
         cpu_cores: 1,
-        mem_gb: 8,
+        mem_gb: 4,
         disk_gb: 5 * ceil(size(vcf, "GiB")) + 20,
         boot_disk_gb: 10,
         preemptible_tries: 1,
