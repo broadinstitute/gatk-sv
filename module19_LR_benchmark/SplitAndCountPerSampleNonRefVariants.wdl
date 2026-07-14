@@ -7,8 +7,9 @@ workflow SplitAndCountPerSampleNonRefVariants {
   input {
     Array[File] input_vcfs
 
-    # If provided, only these samples are processed per contig.
-    # If omitted, the sample list is derived from the first VCF header.
+    # If provided, only these samples are processed.
+    # If omitted, all samples are derived from the first VCF header and
+    # consistently processed across all contigs.
     Array[String]? sample_list
 
     String output_prefix = "per_sample_nonref"
@@ -22,11 +23,22 @@ workflow SplitAndCountPerSampleNonRefVariants {
     RuntimeAttr? runtime_attr_sum
   }
 
+  if (!defined(sample_list)) {
+    call PerContig.GetVcfSampleList as GetWorkflowSampleList {
+      input:
+        input_vcf             = input_vcfs[0],
+        bcftools_docker       = bcftools_docker,
+        runtime_attr_override = runtime_attr_sample_list
+    }
+  }
+
+  Array[String] effective_samples = select_first([sample_list, GetWorkflowSampleList.sample_names])
+
   scatter (contig_vcf in input_vcfs) {
     call PerContig.SplitAndCountPerSampleNonRefVariantsPerContig as run_per_contig {
       input:
         input_vcf                 = contig_vcf,
-        sample_list               = sample_list,
+        sample_list               = effective_samples,
         output_prefix             = output_prefix,
         bcftools_docker           = bcftools_docker,
         python_docker             = python_docker,
@@ -47,6 +59,9 @@ workflow SplitAndCountPerSampleNonRefVariants {
   }
 
   output {
+    File? vcf_derived_sample_list = GetWorkflowSampleList.sample_list
+    Array[String] processed_samples = effective_samples
+    Array[Array[File]] per_contig_sample_nonref_vcfs = run_per_contig.sample_nonref_vcfs
     Array[File] per_contig_merged_count_tables = run_per_contig.merged_sample_count_table
     Array[Array[File]] per_contig_per_sample_count_tables = run_per_contig.per_sample_count_tables
 
