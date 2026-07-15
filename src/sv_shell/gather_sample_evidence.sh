@@ -399,11 +399,14 @@ fi
 # -------------------------------------------------------
 
 collect_coverage_file=""
+collect_coverage_file_idx=""
 if [ "${collect_coverage}" = "true" ]; then
   _ccf=$(jq -r ".counts" "${collect_counts_outputs_json_filename}")
   collect_coverage_file="${output_dir}/$(basename "${_ccf}")"
+  collect_coverage_file_idx="${collect_coverage_file}.tbi"
+
   mv "${_ccf}" "${collect_coverage_file}"
-  mv "${_ccf}.tbi" "${collect_coverage_file}.tbi"
+  mv "${_ccf}.tbi" "${collect_coverage_file_idx}"
 fi
 
 manta_vcf=""
@@ -417,11 +420,13 @@ if [ "${run_manta}" = "true" ]; then
 fi
 
 scramble_vcf=""
+scramble_vcf_idx=""
 scramble_clusters=""
 scramble_table=""
 if [ "${run_scramble}" = "true" ]; then
   _scramble_vcf=$(jq -r ".vcf" "${scramble_p2_outputs_json_filename}")
   scramble_vcf="${output_dir}/$(basename "${_scramble_vcf}")"
+  scramble_vcf_idx="${scramble_vcf}.tbi"
   mv "${_scramble_vcf}" "${scramble_vcf}"
   mv "${_scramble_vcf}.tbi" "${scramble_vcf}.tbi"
 
@@ -465,10 +470,11 @@ fi
 
 jq -n \
   --arg coverage_counts "${collect_coverage_file}" \
+  --arg coverage_counts_idx "${collect_coverage_file_idx}" \
   --arg manta_vcf "${manta_vcf}" \
   --arg manta_index "${manta_vcf_idx}" \
   --arg scramble_vcf "${scramble_vcf}" \
-  --arg scramble_index "${scramble_vcf}.tbi" \
+  --arg scramble_index "${scramble_vcf_idx}" \
   --arg scramble_clusters "${scramble_clusters}" \
   --arg scramble_table "${scramble_table}" \
   --arg pesr_disc "${pesr_disc}" \
@@ -481,6 +487,7 @@ jq -n \
   --arg wham_index "${wham_vcf}.tbi" \
   '{
      "coverage_counts": $coverage_counts,
+     "coverage_counts_index": $coverage_counts_idx,
      "manta_vcf": $manta_vcf,
      "manta_index": $manta_index,
      "scramble_vcf": $scramble_vcf,
