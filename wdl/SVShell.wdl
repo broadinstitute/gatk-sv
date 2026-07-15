@@ -4,6 +4,7 @@ import "Structs.wdl"
 
 workflow SVShell {
   input {
+    String sample_id
     File gcnv_model_tars_list
     File ref_pesr_split_files_list
     File ref_pesr_disc_files_list
@@ -17,6 +18,15 @@ workflow SVShell {
     File depth_exclude_list
     File mei_bed
     File manta_region_bed
+    File primary_contigs_fai
+    Int min_svsize
+    String sv_pipeline_docker
+
+    File? dragen_sv_vcf
+    File? dragen_sv_vcf_index
+    File? dragen_cnv_vcf
+    File? dragen_cnv_vcf_index
+    File? ref_std_dragen_vcf_tar
   }
 
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
@@ -52,6 +62,7 @@ workflow SVShell {
 
   call RunSVShell {
     input:
+      sample_id = sample_id,
       gcnv_model_tars = gcnv_model_tars,
       ref_pesr_split_files = ref_pesr_split_files,
       ref_pesr_split_files_indices = ref_pesr_split_file_index,
@@ -76,9 +87,92 @@ workflow SVShell {
       mei_bed = mei_bed,
       mei_bed_index = mei_bed_index,
       manta_region_bed = manta_region_bed,
-      manta_region_bed_index = manta_region_bed_index
+      manta_region_bed_index = manta_region_bed_index,
+      primary_contigs_fai = primary_contigs_fai,
+      min_svsize = min_svsize,
+      dragen_sv_vcf = dragen_sv_vcf,
+      dragen_sv_vcf_index = dragen_sv_vcf_index,
+      dragen_cnv_vcf = dragen_cnv_vcf,
+      dragen_cnv_vcf_index = dragen_cnv_vcf_index,
+      ref_std_dragen_vcf_tar = ref_std_dragen_vcf_tar
   }
 
+
+  if (defined(RunSVShell.scramble_vcf)) {
+    call StandardizeVcf as StandardizeScramble {
+      input:
+        sample_id = sample_id,
+        vcf_path = select_first([RunSVShell.scramble_vcf]),
+        caller = "scramble",
+        contigs_fai = primary_contigs_fai,
+        min_size = min_svsize,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+    call FormatVcfForGatk as FormatScramble {
+      input:
+        sample_id = sample_id,
+        vcf_path = StandardizeScramble.standardized_vcf,
+        ploidy_table = RunSVShell.ploidy_table,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+  }
+
+  if (defined(RunSVShell.wham_vcf)) {
+    call StandardizeVcf as StandardizeWham {
+      input:
+        sample_id = sample_id,
+        vcf_path = select_first([RunSVShell.wham_vcf]),
+        caller = "wham",
+        contigs_fai = primary_contigs_fai,
+        min_size = min_svsize,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+    call FormatVcfForGatk as FormatWham {
+      input:
+        sample_id = sample_id,
+        vcf_path = StandardizeWham.standardized_vcf,
+        ploidy_table = RunSVShell.ploidy_table,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+  }
+
+  if (defined(dragen_sv_vcf)) {
+    call StandardizeVcf as StandardizeDragenSv {
+      input:
+        sample_id = sample_id,
+        vcf_path = select_first([dragen_sv_vcf]),
+        caller = "dragen",
+        contigs_fai = primary_contigs_fai,
+        min_size = min_svsize,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+    call FormatVcfForGatk as FormatDragenSv {
+      input:
+        sample_id = sample_id,
+        vcf_path = StandardizeDragenSv.standardized_vcf,
+        ploidy_table = RunSVShell.ploidy_table,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+  }
+
+  if (defined(dragen_cnv_vcf)) {
+    call StandardizeVcf as StandardizeDragenCnv {
+      input:
+        sample_id = sample_id,
+        vcf_path = select_first([dragen_cnv_vcf]),
+        caller = "dragen",
+        contigs_fai = primary_contigs_fai,
+        min_size = min_svsize,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+    call FormatVcfForGatk as FormatDragenCnv {
+      input:
+        sample_id = sample_id,
+        vcf_path = StandardizeDragenCnv.standardized_vcf,
+        ploidy_table = RunSVShell.ploidy_table,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+  }
 
   output {
     File inputs_json = RunSVShell.inputs_json
@@ -109,6 +203,14 @@ workflow SVShell {
     File merged_dels = RunSVShell.merged_dels
     File merged_dups = RunSVShell.merged_dups
     File ploidy_table = RunSVShell.ploidy_table
+    File? scramble_vcf_formatted = FormatScramble.formatted_vcf
+    File? scramble_vcf_formatted_index = FormatScramble.formatted_vcf_index
+    File? wham_vcf_formatted = FormatWham.formatted_vcf
+    File? wham_vcf_formatted_index = FormatWham.formatted_vcf_index
+    File? dragen_sv_vcf_formatted = FormatDragenSv.formatted_vcf
+    File? dragen_sv_vcf_formatted_index = FormatDragenSv.formatted_vcf_index
+    File? dragen_cnv_vcf_formatted = FormatDragenCnv.formatted_vcf
+    File? dragen_cnv_vcf_formatted_index = FormatDragenCnv.formatted_vcf_index
   }
 }
 
@@ -547,5 +649,75 @@ task RunSVShell {
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_shell_docker
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task StandardizeVcf {
+  input {
+    String sample_id
+    File vcf_path
+    String caller
+    File contigs_fai
+    Int min_size
+    String sv_pipeline_docker
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    svtk standardize \
+      --sample-names ~{sample_id} \
+      --contigs ~{contigs_fai} \
+      --min-size ~{min_size} \
+      ~{vcf_path} \
+      ~{sample_id}.std.vcf.gz \
+      ~{caller}
+
+    tabix -p vcf ~{sample_id}.std.vcf.gz
+  >>>
+
+  output {
+    File standardized_vcf = "~{sample_id}.std.vcf.gz"
+    File standardized_vcf_index = "~{sample_id}.std.vcf.gz.tbi"
+  }
+
+  runtime {
+    cpu: 1
+    memory: "2 GiB"
+    disks: "local-disk 20 HDD"
+    docker: sv_pipeline_docker
+  }
+}
+
+task FormatVcfForGatk {
+  input {
+    String sample_id
+    File vcf_path
+    File ploidy_table
+    String sv_pipeline_docker
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    python /opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py \
+      --vcf ~{vcf_path} \
+      --out ~{sample_id}.fmt.vcf.gz \
+      --ploidy-table ~{ploidy_table} \
+      --fix-end
+
+    tabix -p vcf ~{sample_id}.fmt.vcf.gz
+  >>>
+
+  output {
+    File formatted_vcf = "~{sample_id}.fmt.vcf.gz"
+    File formatted_vcf_index = "~{sample_id}.fmt.vcf.gz.tbi"
+  }
+
+  runtime {
+    cpu: 1
+    memory: "4 GiB"
+    disks: "local-disk 20 SSD"
+    docker: sv_pipeline_docker
   }
 }
