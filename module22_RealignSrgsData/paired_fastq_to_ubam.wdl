@@ -6,9 +6,9 @@ workflow ConvertPairedFastQsToUnmappedBamWf {
     String        sample_name
     File          fastq_1
     File          fastq_2
-    Array[String] library_names
-    Array[String] platform_names
-    Array[String] sequencing_centers
+    Array[String]? library_names
+    Array[String]? platform_names
+    Array[String]? sequencing_centers
     Array[String]? run_dates
 
     File   ref_dict
@@ -91,9 +91,9 @@ task SplitPairedFastqByReadGroupAndBuildMetadata {
     String        sample_name
     File          fastq_1
     File          fastq_2
-    Array[String] library_names
-    Array[String] platform_names
-    Array[String] sequencing_centers
+    Array[String]? library_names
+    Array[String]? platform_names
+    Array[String]? sequencing_centers
     Array[String]? run_dates
     File          ref_dict
 
@@ -103,6 +103,9 @@ task SplitPairedFastqByReadGroupAndBuildMetadata {
     String docker
   }
 
+  Array[String] provided_library_names = select_first([library_names, []])
+  Array[String] provided_platform_names = select_first([platform_names, []])
+  Array[String] provided_sequencing_centers = select_first([sequencing_centers, []])
   Array[String] provided_run_dates = select_first([run_dates, []])
   Int disk_space_gb = ceil((size(fastq_1, "GB") + size(fastq_2, "GB")) * 6) + additional_disk_space_gb
 
@@ -187,9 +190,9 @@ with open("split_fastq_2.list", "w") as f2:
 PY
 
     mapfile -t PLATFORM_UNITS < platform_units.txt
-    mapfile -t LIB_NAMES < ~{write_lines(library_names)}
-    mapfile -t PLAT_NAMES < ~{write_lines(platform_names)}
-    mapfile -t SEQ_CENTERS < ~{write_lines(sequencing_centers)}
+    mapfile -t LIB_NAMES < ~{write_lines(provided_library_names)}
+    mapfile -t PLAT_NAMES < ~{write_lines(provided_platform_names)}
+    mapfile -t SEQ_CENTERS < ~{write_lines(provided_sequencing_centers)}
     mapfile -t RUN_DATES < ~{write_lines(provided_run_dates)}
 
     n_rg=${#PLATFORM_UNITS[@]}
@@ -220,9 +223,15 @@ PY
       fi
     }
 
-    check_array_length LIB_NAMES
-    check_array_length PLAT_NAMES
-    check_array_length SEQ_CENTERS
+    if [ "${#LIB_NAMES[@]}" -ne 0 ]; then
+      check_array_length LIB_NAMES
+    fi
+    if [ "${#PLAT_NAMES[@]}" -ne 0 ]; then
+      check_array_length PLAT_NAMES
+    fi
+    if [ "${#SEQ_CENTERS[@]}" -ne 0 ]; then
+      check_array_length SEQ_CENTERS
+    fi
     if [ "${#RUN_DATES[@]}" -ne 0 ]; then
       check_array_length RUN_DATES
     fi
@@ -239,9 +248,21 @@ PY
 
     for (( i=0; i<n_rg; i++ )); do
       RG_ID="~{sample_name}.${PLATFORM_UNITS[$i]}"
-      LB=$(pick_value LIB_NAMES "$i")
-      PL=$(pick_value PLAT_NAMES "$i")
-      CN=$(pick_value SEQ_CENTERS "$i")
+      if [ "${#LIB_NAMES[@]}" -eq 0 ]; then
+        LB="~{sample_name}"
+      else
+        LB=$(pick_value LIB_NAMES "$i")
+      fi
+      if [ "${#PLAT_NAMES[@]}" -eq 0 ]; then
+        PL="ILLUMINA"
+      else
+        PL=$(pick_value PLAT_NAMES "$i")
+      fi
+      if [ "${#SEQ_CENTERS[@]}" -eq 0 ]; then
+        CN="ILLUMINA"
+      else
+        CN=$(pick_value SEQ_CENTERS "$i")
+      fi
       if [ "${#RUN_DATES[@]}" -eq 0 ]; then
         DT="$JOB_DATE"
       else
