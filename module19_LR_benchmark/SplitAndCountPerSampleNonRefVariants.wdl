@@ -58,15 +58,109 @@ workflow SplitAndCountPerSampleNonRefVariants {
       runtime_attr_override   = runtime_attr_sum
   }
 
+  Array[File] all_per_contig_sample_nonref_vcfs = flatten(run_per_contig.sample_nonref_vcfs)
+
+  scatter (sample_name in effective_samples) {
+    call MergePerSampleNonRefVcfsAcrossContigs {
+      input:
+        sample_name             = sample_name,
+        all_sample_nonref_vcfs  = all_per_contig_sample_nonref_vcfs,
+        expected_contigs        = length(input_vcfs),
+        output_prefix           = output_prefix,
+        bcftools_docker         = bcftools_docker,
+        runtime_attr_override   = runtime_attr_merge
+    }
+  }
+
   output {
     File? vcf_derived_sample_list = GetWorkflowSampleList.sample_list
     Array[String] processed_samples = effective_samples
     Array[Array[File]] per_contig_sample_nonref_vcfs = run_per_contig.sample_nonref_vcfs
+    Array[File] per_sample_merged_nonref_vcfs = MergePerSampleNonRefVcfsAcrossContigs.merged_sample_nonref_vcf
+    Array[File] per_sample_merged_nonref_vcf_indexes = MergePerSampleNonRefVcfsAcrossContigs.merged_sample_nonref_vcf_tbi
     Array[File] per_contig_merged_count_tables = run_per_contig.merged_sample_count_table
     Array[Array[File]] per_contig_per_sample_count_tables = run_per_contig.per_sample_count_tables
 
     File all_contigs_per_sample_table = SumAcrossContigs.per_contig_table
     File summed_across_contigs_per_sample_table = SumAcrossContigs.summed_table
+  }
+}
+
+
+task MergePerSampleNonRefVcfsAcrossContigs {
+  input {
+    String sample_name
+    Array[File] all_sample_nonref_vcfs
+    Int expected_contigs
+    String output_prefix
+    String bcftools_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 4,
+    disk_gb: 60,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  String merged_sample_nonref_vcf_name = output_prefix + "." + sample_name + ".nonref.vcf.gz"
+
+  command <<<
+    set -euo pipefail
+
+    python3 << 'PY'
+import json
+
+sample = "~{sample_name}"
+expected_contigs = int("~{expected_contigs}")
+paths = "~{sep=' ' all_sample_nonref_vcfs}".split()
+suffix = "." + sample + ".nonref.vcf.gz"
+selected = [p for p in paths if p.endswith(suffix)]
+
+if not selected:
+    raise RuntimeError(f"No per-contig sample non-ref VCFs found for sample: {sample}")
+
+if len(selected) != expected_contigs:
+    raise RuntimeError(
+        f"Expected {expected_contigs} per-contig VCFs for sample {sample}, found {len(selected)}"
+    )
+
+with open("sample_vcfs.list", "wt") as out:
+    for p in selected:
+        out.write(p + "\n")
+
+print(json.dumps({
+    "sample": sample,
+    "expected_contigs": expected_contigs,
+    "matched_vcfs": len(selected)
+}))
+PY
+
+    bcftools concat \
+      -f sample_vcfs.list \
+      -Oz \
+      -o ~{merged_sample_nonref_vcf_name}
+
+    bcftools index -t ~{merged_sample_nonref_vcf_name}
+  >>>
+
+  output {
+    File merged_sample_nonref_vcf = merged_sample_nonref_vcf_name
+    File merged_sample_nonref_vcf_tbi = merged_sample_nonref_vcf_name + ".tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: bcftools_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
