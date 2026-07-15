@@ -1301,6 +1301,7 @@ jq -n \
   --slurpfile stripy "${stripy_outputs_json}" \
   --slurpfile metrics "${SingleSampleMetrics_outputs_json}" \
   --slurpfile gbe "${gather_batch_evidence_outputs_json_filename}" \
+  --slurpfile gse "${gather_sample_evidence_outputs_json}" \
   --arg final_vcf "${MergeStripyVcf_out}" \
   --arg qc_out "${SingleSampleQC_out}" \
   --arg ng_unique_depth_calls "${GetUniqueNonGenotypedDepthCalls_out}" \
@@ -1315,7 +1316,19 @@ jq -n \
       "qc_file": $qc_out,
       "ploidy_matrix": $gbe[0].batch_ploidy_matrix,
       "ploidy_plots": $gbe[0].batch_ploidy_plots,
-      "non_genotyped_unique_depth_calls": $ng_unique_depth_calls
+      "non_genotyped_unique_depth_calls": $ng_unique_depth_calls,
+      "manta_vcf": $gse[0].manta_vcf,
+      "manta_index": $gse[0].manta_index,
+      "scramble_vcf": $gse[0].scramble_vcf,
+      "scramble_index": $gse[0].scramble_index,
+      "wham_vcf": $gse[0].wham_vcf,
+      "wham_index": $gse[0].wham_index,
+      "scramble_clusters": $gse[0].scramble_clusters,
+      "scramble_table": $gse[0].scramble_table,
+      "coverage_counts": $gse[0].coverage_counts,
+      "coverage_counts_idx": $gse[0].coverage_counts_index,
+      "merged_dels": $gbe[0].merged_dels,
+      "merged_dups": $gbe[0].merged_dups
   }' > "${output_json_filename}"
 
 log_success "Finished single-sample pipeline, output json filename: ${output_json_filename}"

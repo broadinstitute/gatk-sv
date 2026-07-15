@@ -96,6 +96,18 @@ workflow SVShell {
     File ploidy_matrix = RunSVShell.ploidy_matrix
     File ploidy_plots = RunSVShell.ploidy_plots
     File non_genotyped_unique_depth_calls = RunSVShell.non_genotyped_unique_depth_calls
+    File? manta_vcf = RunSVShell.manta_vcf
+    File? manta_vcf_idx = RunSVShell.manta_vcf_idx
+    File? scramble_vcf = RunSVShell.scramble_vcf
+    File? scramble_vcf_idx = RunSVShell.scramble_vcf_idx
+    File? wham_vcf = RunSVShell.wham_vcf
+    File? wham_vcf_idx = RunSVShell.wham_vcf_idx
+    File? scramble_clusters = RunSVShell.scramble_clusters
+    File? scramble_table = RunSVShell.scramble_table
+    File coverage_counts = RunSVShell.coverage_counts
+    File coverage_counts_idx = RunSVShell.coverage_counts_idx
+    File merged_dels = RunSVShell.merged_dels
+    File merged_dups = RunSVShell.merged_dups
   }
 }
 
@@ -236,6 +248,18 @@ task RunSVShell {
   String ploidy_matrix_filename = batch + "_ploidy_matrix.bed.gz"
   String ploidy_plots_filename = batch + "_ploidy_plots.tar.gz"
   String non_genotyped_unique_depth_calls_filename = batch + ".non_genotyped_unique_depth_calls.vcf.gz"
+  String manta_vcf_filename = sample_id + ".manta.vcf.gz"
+  String manta_vcf_idx_filename = manta_vcf_filename + ".tbi"
+  String scramble_vcf_filename = sample_id + ".scramble.vcf.gz"
+  String scramble_vcf_idx_filename = scramble_vcf_filename + ".tbi"
+  String wham_vcf_filename = sample_id + ".wham.vcf.gz"
+  String wham_vcf_idx_filename = wham_vcf_filename + ".tbi"
+  String scramble_clusters_filename = sample_id + ".scramble_clusters.tsv.gz"
+  String scramble_table_filename = sample_id + ".scramble.tsv.gz"
+  String coverage_counts_filename = sample_id + ".counts.tsv.gz"
+  String coverage_counts_idx_filename = coverage_counts_filename + ".tbi"
+  String merged_dels_filename = batch + ".DEL.bed.gz"
+  String merged_dups_filename = batch + ".DUP.bed.gz"
 
   command <<<
     set -Exeuo pipefail
@@ -373,6 +397,18 @@ task RunSVShell {
     touch "~{ploidy_matrix_filename}"
     touch "~{ploidy_plots_filename}"
     touch "~{non_genotyped_unique_depth_calls_filename}"
+    touch "~{manta_vcf_filename}"
+    touch "~{manta_vcf_idx_filename}"
+    touch "~{scramble_vcf_filename}"
+    touch "~{scramble_vcf_idx_filename}"
+    touch "~{wham_vcf_filename}"
+    touch "~{wham_vcf_idx_filename}"
+    touch "~{scramble_clusters_filename}"
+    touch "~{scramble_table_filename}"
+    touch "~{coverage_counts_filename}"
+    touch "~{coverage_counts_idx_filename}"
+    touch "~{merged_dels_filename}"
+    touch "~{merged_dups_filename}"
 
     echo "----------------------"
     echo "${PWD}"
@@ -415,6 +451,45 @@ task RunSVShell {
     non_genotyped_path=$(jq -r '.non_genotyped_unique_depth_calls' "${BASE_DIR}/single_sample_pipeline_outputs.json")
     mv "${non_genotyped_path}" "${BASE_DIR}/~{non_genotyped_unique_depth_calls_filename}"
 
+    manta_vcf_path=$(jq -r '.manta_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${manta_vcf_path}" && "${manta_vcf_path}" != "null" ]]; then
+      mv "${manta_vcf_path}" "${BASE_DIR}/~{manta_vcf_filename}"
+      mv "${manta_vcf_path}.tbi" "${BASE_DIR}/~{manta_vcf_idx_filename}"
+    fi
+
+    scramble_vcf_path=$(jq -r '.scramble_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${scramble_vcf_path}" && "${scramble_vcf_path}" != "null" ]]; then
+      mv "${scramble_vcf_path}" "${BASE_DIR}/~{scramble_vcf_filename}"
+      mv "${scramble_vcf_path}.tbi" "${BASE_DIR}/~{scramble_vcf_idx_filename}"
+    fi
+
+    wham_vcf_path=$(jq -r '.wham_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${wham_vcf_path}" && "${wham_vcf_path}" != "null" ]]; then
+      mv "${wham_vcf_path}" "${BASE_DIR}/~{wham_vcf_filename}"
+      mv "${wham_vcf_path}.tbi" "${BASE_DIR}/~{wham_vcf_idx_filename}"
+    fi
+
+    scramble_clusters_path=$(jq -r '.scramble_clusters' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${scramble_clusters_path}" && "${scramble_clusters_path}" != "null" ]]; then
+      mv "${scramble_clusters_path}" "${BASE_DIR}/~{scramble_clusters_filename}"
+    fi
+
+    scramble_table_path=$(jq -r '.scramble_table' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${scramble_table_path}" && "${scramble_table_path}" != "null" ]]; then
+      mv "${scramble_table_path}" "${BASE_DIR}/~{scramble_table_filename}"
+    fi
+
+    coverage_counts_path=$(jq -r '.coverage_counts' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${coverage_counts_path}" "${BASE_DIR}/~{coverage_counts_filename}"
+    coverage_counts_idx_path=$(jq -r '.coverage_counts_idx' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${coverage_counts_idx_path}" "${BASE_DIR}/~{coverage_counts_idx_filename}"
+
+    merged_dels_path=$(jq -r '.merged_dels' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${merged_dels_path}" "${BASE_DIR}/~{merged_dels_filename}"
+
+    merged_dups_path=$(jq -r '.merged_dups' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${merged_dups_path}" "${BASE_DIR}/~{merged_dups_filename}"
+
     df -h
   >>>
 
@@ -434,6 +509,18 @@ task RunSVShell {
     File ploidy_matrix = ploidy_matrix_filename
     File ploidy_plots = ploidy_plots_filename
     File non_genotyped_unique_depth_calls = non_genotyped_unique_depth_calls_filename
+    File? manta_vcf = manta_vcf_filename
+    File? manta_vcf_idx = manta_vcf_idx_filename
+    File? scramble_vcf = scramble_vcf_filename
+    File? scramble_vcf_idx = scramble_vcf_idx_filename
+    File? wham_vcf = wham_vcf_filename
+    File? wham_vcf_idx = wham_vcf_idx_filename
+    File? scramble_clusters = scramble_clusters_filename
+    File? scramble_table = scramble_table_filename
+    File coverage_counts = coverage_counts_filename
+    File coverage_counts_idx = coverage_counts_idx_filename
+    File merged_dels = merged_dels_filename
+    File merged_dups = merged_dups_filename
   }
 
   RuntimeAttr default_attr = object {
