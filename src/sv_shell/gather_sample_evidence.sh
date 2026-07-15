@@ -407,9 +407,11 @@ if [ "${collect_coverage}" = "true" ]; then
 fi
 
 manta_vcf=""
+manta_vcf_idx=""
 if [ "${run_manta}" = "true" ]; then
   _manta_vcf=$(jq -r ".vcf" "${manta_outputs_json_filename}")
   manta_vcf="${output_dir}/$(basename "${_manta_vcf}")"
+  manta_vcf_idx="${manta_vcf}.tbi"
   mv "${_manta_vcf}" "${manta_vcf}"
   mv "${_manta_vcf}.tbi" "${manta_vcf}.tbi"
 fi
@@ -464,7 +466,7 @@ fi
 jq -n \
   --arg coverage_counts "${collect_coverage_file}" \
   --arg manta_vcf "${manta_vcf}" \
-  --arg manta_index "${manta_vcf}.tbi" \
+  --arg manta_index "${manta_vcf_idx}" \
   --arg scramble_vcf "${scramble_vcf}" \
   --arg scramble_index "${scramble_vcf}.tbi" \
   --arg scramble_clusters "${scramble_clusters}" \
