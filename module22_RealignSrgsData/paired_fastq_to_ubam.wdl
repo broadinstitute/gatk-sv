@@ -18,7 +18,7 @@ workflow ConvertPairedFastQsToUnmappedBamWf {
 
     Int additional_disk_space_gb = 50
     Int machine_mem_gb           = 7
-    Int preemptible_attempts     = 3
+    Int preemptible_attempts     = 1
   }
 
   call SplitPairedFastqByReadGroupAndBuildMetadata {
@@ -99,7 +99,7 @@ task SplitPairedFastqByReadGroupAndBuildMetadata {
 
     Int    additional_disk_space_gb = 50
     Int    machine_mem_gb           = 7
-    Int    preemptible_attempts     = 3
+    Int    preemptible_attempts     = 1
     String docker
   }
 
@@ -323,7 +323,7 @@ task ImportReadGroupFastqPairToUbam {
 
     Int    additional_disk_space_gb = 50
     Int    machine_mem_gb           = 7
-    Int    preemptible_attempts     = 3
+    Int    preemptible_attempts     = 1
     String docker
   }
 
@@ -370,7 +370,7 @@ task MergeReadGroupUbams {
 
     Int    additional_disk_space_gb = 50
     Int    machine_mem_gb           = 7
-    Int    preemptible_attempts     = 3
+    Int    preemptible_attempts     = 1
     String docker
   }
 
@@ -408,7 +408,7 @@ task SortSam {
     String docker
     Int    machine_mem_gb           = 7
     Int    additional_disk_space_gb = 50
-    Int    preemptible_attempts     = 3
+    Int    preemptible_attempts     = 1
   }
 
   Int command_mem_gb = machine_mem_gb - 1
