@@ -1,0 +1,147 @@
+version 1.0
+
+import "Structs.wdl"
+
+workflow FilterAndMergeSnvIndelWithSvPerContig {
+  input {
+    # Per-contig SNV/indel VCFs in contig order.
+    Array[File] snv_indel_vcfs
+
+    # Per-contig SV VCFs in matching contig order.
+    Array[File] sv_vcfs
+
+    String output_prefix = "merged_snv_indel_sv"
+    String bcftools_docker = "quay.io/biocontainers/bcftools:1.17--h3cc50cf_1"
+
+    RuntimeAttr? runtime_attr_validate
+    RuntimeAttr? runtime_attr_merge
+  }
+
+  call ValidateVcfListLengths {
+    input:
+      snv_indel_count      = length(snv_indel_vcfs),
+      sv_count             = length(sv_vcfs),
+      runtime_attr_override = runtime_attr_validate
+  }
+
+  scatter (idx in range(length(snv_indel_vcfs))) {
+    String contig_label = basename(snv_indel_vcfs[idx], ".vcf.gz")
+
+    call MergeOneContigSnvIndelAndSv {
+      input:
+        snv_indel_vcf        = snv_indel_vcfs[idx],
+        sv_vcf               = sv_vcfs[idx],
+        contig_label         = contig_label,
+        output_prefix        = output_prefix,
+        bcftools_docker      = bcftools_docker,
+        runtime_attr_override = runtime_attr_merge
+    }
+  }
+
+  output {
+    File validated_inputs = ValidateVcfListLengths.validation_file
+    Array[File] merged_vcfs = MergeOneContigSnvIndelAndSv.merged_vcf
+    Array[File] merged_vcf_indexes = MergeOneContigSnvIndelAndSv.merged_vcf_tbi
+  }
+}
+
+
+task ValidateVcfListLengths {
+  input {
+    Int snv_indel_count
+    Int sv_count
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    if [ "~{snv_indel_count}" -ne "~{sv_count}" ]; then
+      echo "Input list length mismatch: snv_indel_vcfs=~{snv_indel_count}, sv_vcfs=~{sv_count}" >&2
+      exit 1
+    fi
+
+    echo "ok" > validate_lists.ok
+  >>>
+
+  output {
+    File validation_file = "validate_lists.ok"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: "ubuntu:22.04"
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+task MergeOneContigSnvIndelAndSv {
+  input {
+    File snv_indel_vcf
+    File sv_vcf
+    String contig_label
+    String output_prefix
+    String bcftools_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 6,
+    disk_gb: ceil(20 + size(snv_indel_vcf, "GB") * 3 + size(sv_vcf, "GB") * 2),
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  String output_name = output_prefix + "." + contig_label + ".vcf.gz"
+
+  command <<<
+    set -euo pipefail
+
+    # Keep header, then keep only non-SVTYPE records from SNV/indel VCF body.
+    bcftools view -h ~{snv_indel_vcf} > snv_indel.no_svtype.header.vcf
+    bcftools view -H ~{snv_indel_vcf} | awk -F'\t' '$8 !~ /(^|;)SVTYPE=/' > snv_indel.no_svtype.body.vcf
+
+    cat snv_indel.no_svtype.header.vcf snv_indel.no_svtype.body.vcf | bgzip -c > snv_indel.no_svtype.vcf.gz
+    tabix -p vcf snv_indel.no_svtype.vcf.gz
+
+    # Combine filtered SNV/indel records with SV records, then sort and index.
+    bcftools concat -a snv_indel.no_svtype.vcf.gz ~{sv_vcf} -Ou \
+      | bcftools sort -Oz -o ~{output_name}
+
+    tabix -p vcf ~{output_name}
+  >>>
+
+  output {
+    File merged_vcf = output_name
+    File merged_vcf_tbi = output_name + ".tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: bcftools_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}

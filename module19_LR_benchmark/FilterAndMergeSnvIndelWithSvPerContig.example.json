@@ -1,0 +1,12 @@
+{
+  "FilterAndMergeSnvIndelWithSvPerContig.snv_indel_vcfs": [
+    "gs://your-bucket/path/snv_indel.chr1.vcf.gz",
+    "gs://your-bucket/path/snv_indel.chr2.vcf.gz"
+  ],
+  "FilterAndMergeSnvIndelWithSvPerContig.sv_vcfs": [
+    "gs://your-bucket/path/sv.chr1.vcf.gz",
+    "gs://your-bucket/path/sv.chr2.vcf.gz"
+  ],
+  "FilterAndMergeSnvIndelWithSvPerContig.output_prefix": "snv_indel_sv_merged",
+  "FilterAndMergeSnvIndelWithSvPerContig.bcftools_docker": "quay.io/biocontainers/bcftools:1.17--h3cc50cf_1"
+}
