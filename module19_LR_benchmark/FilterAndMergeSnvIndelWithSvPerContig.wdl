@@ -102,9 +102,9 @@ task MergeOneContigSnvIndelAndSv {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 6,
-    disk_gb: ceil(20 + size(snv_indel_vcf, "GB") * 3 + size(sv_vcf, "GB") * 2),
+    cpu_cores: 2,
+    mem_gb: 32,
+    disk_gb: ceil(100 + size(snv_indel_vcf, "GB") * 6 + size(sv_vcf, "GB") * 4),
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
