@@ -1,15 +1,21 @@
 version 1.0
 
+import "Structs.wdl"
+
 workflow ExtractReadGroupsWorkflow {
   input {
     File fastq_gz
     String sample_id
+    String docker = "ubuntu:22.04"
+    RuntimeAttr? runtime_attr_extract
   }
 
   call ExtractReadGroups {
     input:
-      fastq_gz = fastq_gz,
-      sample_id = sample_id
+      fastq_gz              = fastq_gz,
+      sample_id             = sample_id,
+      docker                = docker,
+      runtime_attr_override = runtime_attr_extract
   }
 
   output {
@@ -24,7 +30,20 @@ task ExtractReadGroups {
   input {
     File fastq_gz
     String sample_id
+    String docker
+    RuntimeAttr? runtime_attr_override
   }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores:        1,
+    mem_gb:           ceil(2 + size(fastq_gz, "GB") * 2),
+    disk_gb:          ceil(20 + size(fastq_gz, "GB") * 4),
+    boot_disk_gb:     10,
+    preemptible_tries: 2,
+    max_retries:      1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
     set -euo pipefail
@@ -53,8 +72,12 @@ task ExtractReadGroups {
   }
 
   runtime {
-    docker: "ubuntu:22.04"
-    cpu: 1
-    memory: "2 GB"
+    cpu:           select_first([runtime_attr.cpu_cores,        default_attr.cpu_cores])
+    memory:        select_first([runtime_attr.mem_gb,           default_attr.mem_gb]) + " GiB"
+    disks:         "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb,   default_attr.boot_disk_gb])
+    docker:        docker
+    preemptible:   select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries:    select_first([runtime_attr.max_retries,      default_attr.max_retries])
   }
 }
