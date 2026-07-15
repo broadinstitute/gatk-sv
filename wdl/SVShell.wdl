@@ -108,6 +108,7 @@ workflow SVShell {
     File coverage_counts_idx = RunSVShell.coverage_counts_idx
     File merged_dels = RunSVShell.merged_dels
     File merged_dups = RunSVShell.merged_dups
+    File ploidy_table = RunSVShell.ploidy_table
   }
 }
 
@@ -260,6 +261,7 @@ task RunSVShell {
   String coverage_counts_idx_filename = coverage_counts_filename + ".tbi"
   String merged_dels_filename = batch + ".DEL.bed.gz"
   String merged_dups_filename = batch + ".DUP.bed.gz"
+  String ploidy_table_filename = sample_id + "." + batch + ".ploidy.tsv"
 
   command <<<
     set -Exeuo pipefail
@@ -409,6 +411,7 @@ task RunSVShell {
     touch "~{coverage_counts_idx_filename}"
     touch "~{merged_dels_filename}"
     touch "~{merged_dups_filename}"
+    touch "~{ploidy_table_filename}"
 
     echo "----------------------"
     echo "${PWD}"
@@ -490,6 +493,9 @@ task RunSVShell {
     merged_dups_path=$(jq -r '.merged_dups' "${BASE_DIR}/single_sample_pipeline_outputs.json")
     mv "${merged_dups_path}" "${BASE_DIR}/~{merged_dups_filename}"
 
+    ploidy_table_path=$(jq -r '.ploidy_table' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${ploidy_table_path}" "${BASE_DIR}/~{ploidy_table_filename}"
+
     df -h
   >>>
 
@@ -521,6 +527,7 @@ task RunSVShell {
     File coverage_counts_idx = coverage_counts_idx_filename
     File merged_dels = merged_dels_filename
     File merged_dups = merged_dups_filename
+    File ploidy_table = ploidy_table_filename
   }
 
   RuntimeAttr default_attr = object {

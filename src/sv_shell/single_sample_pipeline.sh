@@ -1305,6 +1305,7 @@ jq -n \
   --arg final_vcf "${MergeStripyVcf_out}" \
   --arg qc_out "${SingleSampleQC_out}" \
   --arg ng_unique_depth_calls "${GetUniqueNonGenotypedDepthCalls_out}" \
+  --arg ploidy_table "${CreatePloidyTableFromPed_out}" \
   '{
       "final_vcf": $final_vcf,
       "pre_cleanup_vcf": $annotate_vcf[0].annotated_vcf,
@@ -1328,7 +1329,8 @@ jq -n \
       "coverage_counts": $gse[0].coverage_counts,
       "coverage_counts_idx": $gse[0].coverage_counts_index,
       "merged_dels": $gbe[0].merged_dels,
-      "merged_dups": $gbe[0].merged_dups
+      "merged_dups": $gbe[0].merged_dups,
+      "ploidy_table": $ploidy_table
   }' > "${output_json_filename}"
 
 log_success "Finished single-sample pipeline, output json filename: ${output_json_filename}"
