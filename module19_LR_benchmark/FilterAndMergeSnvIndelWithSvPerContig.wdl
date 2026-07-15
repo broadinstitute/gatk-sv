@@ -136,11 +136,14 @@ task MergeOneContigSnvIndelAndSv {
   command <<<
     set -euo pipefail
 
-    # Keep header, then keep only non-SVTYPE records from SNV/indel VCF body.
-    bcftools view -h ~{snv_indel_vcf} > snv_indel.no_svtype.header.vcf
-    bcftools view -H ~{snv_indel_vcf} | awk -F'\t' '$8 !~ /(^|;)SVTYPE=/' > snv_indel.no_svtype.body.vcf
+    # Filter SNV/indel VCF: strip records that carry SVTYPE= in their INFO field.
+    # Pipe header + awk-filtered body through bcftools view -Oz to guarantee
+    # well-formed BGZF output (avoids "Bad BCF record" errors from raw bgzip).
+    ( bcftools view -h ~{snv_indel_vcf}; \
+      bcftools view -H ~{snv_indel_vcf} \
+        | awk -F'\t' '$8 !~ /(^|;)SVTYPE=/' ) \
+      | bcftools view -Oz -o snv_indel.no_svtype.vcf.gz
 
-    cat snv_indel.no_svtype.header.vcf snv_indel.no_svtype.body.vcf | bgzip -c > snv_indel.no_svtype.vcf.gz
     tabix -p vcf snv_indel.no_svtype.vcf.gz
 
     # Combine filtered SNV/indel records with SV records, then sort and index.
