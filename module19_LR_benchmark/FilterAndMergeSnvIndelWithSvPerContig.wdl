@@ -4,11 +4,13 @@ import "Structs.wdl"
 
 workflow FilterAndMergeSnvIndelWithSvPerContig {
   input {
-    # Per-contig SNV/indel VCFs in contig order.
+    # Per-contig SNV/indel VCFs and their indexes in contig order.
     Array[File] snv_indel_vcfs
+    Array[File] snv_indel_vcf_indexes
 
-    # Per-contig SV VCFs in matching contig order.
+    # Per-contig SV VCFs and their indexes in matching contig order.
     Array[File] sv_vcfs
+    Array[File] sv_vcf_indexes
 
     String output_prefix = "merged_snv_indel_sv"
     String bcftools_docker = "quay.io/biocontainers/bcftools:1.17--h3cc50cf_1"
@@ -19,8 +21,10 @@ workflow FilterAndMergeSnvIndelWithSvPerContig {
 
   call ValidateVcfListLengths {
     input:
-      snv_indel_count      = length(snv_indel_vcfs),
-      sv_count             = length(sv_vcfs),
+      snv_indel_count       = length(snv_indel_vcfs),
+      sv_count              = length(sv_vcfs),
+      snv_indel_index_count = length(snv_indel_vcf_indexes),
+      sv_index_count        = length(sv_vcf_indexes),
       runtime_attr_override = runtime_attr_validate
   }
 
@@ -29,11 +33,13 @@ workflow FilterAndMergeSnvIndelWithSvPerContig {
 
     call MergeOneContigSnvIndelAndSv {
       input:
-        snv_indel_vcf        = snv_indel_vcfs[idx],
-        sv_vcf               = sv_vcfs[idx],
-        contig_label         = contig_label,
-        output_prefix        = output_prefix,
-        bcftools_docker      = bcftools_docker,
+        snv_indel_vcf         = snv_indel_vcfs[idx],
+        snv_indel_vcf_index   = snv_indel_vcf_indexes[idx],
+        sv_vcf                = sv_vcfs[idx],
+        sv_vcf_index          = sv_vcf_indexes[idx],
+        contig_label          = contig_label,
+        output_prefix         = output_prefix,
+        bcftools_docker       = bcftools_docker,
         runtime_attr_override = runtime_attr_merge
     }
   }
@@ -50,6 +56,8 @@ task ValidateVcfListLengths {
   input {
     Int snv_indel_count
     Int sv_count
+    Int snv_indel_index_count
+    Int sv_index_count
     RuntimeAttr? runtime_attr_override
   }
 
@@ -69,6 +77,16 @@ task ValidateVcfListLengths {
 
     if [ "~{snv_indel_count}" -ne "~{sv_count}" ]; then
       echo "Input list length mismatch: snv_indel_vcfs=~{snv_indel_count}, sv_vcfs=~{sv_count}" >&2
+      exit 1
+    fi
+
+    if [ "~{snv_indel_index_count}" -ne "~{snv_indel_count}" ]; then
+      echo "Index list length mismatch: snv_indel_vcf_indexes=~{snv_indel_index_count}, snv_indel_vcfs=~{snv_indel_count}" >&2
+      exit 1
+    fi
+
+    if [ "~{sv_index_count}" -ne "~{sv_count}" ]; then
+      echo "Index list length mismatch: sv_vcf_indexes=~{sv_index_count}, sv_vcfs=~{sv_count}" >&2
       exit 1
     fi
 
@@ -94,7 +112,9 @@ task ValidateVcfListLengths {
 task MergeOneContigSnvIndelAndSv {
   input {
     File snv_indel_vcf
+    File snv_indel_vcf_index
     File sv_vcf
+    File sv_vcf_index
     String contig_label
     String output_prefix
     String bcftools_docker
