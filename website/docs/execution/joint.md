@@ -82,10 +82,10 @@ cutoff for outlier filtration in `08-FilterBatchSamples`
 20. `17-JoinRawCalls`: Raw call aggregation
 21. `18-SVConcordance`: Annotate genotype concordance with raw calls
 22. `19-ScoreGenotypes`: Scores genotypes to optimize GQ recalibrator model
-23. `19-FilterGenotypes`: Apply genotype filtering using GQ recalibrator model
-24. `20-CallGenomicDisorderCNVs`: Generate per-batch GD CNV calls.
-25. `21-IntegrateGDVcf`: Integrate GD CNV calls into the cohort VCF.
-26. `22-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
+23. `20-FilterGenotypes`: Apply genotype filtering using GQ recalibrator model
+24. `21-CallGenomicDisorderCNVs`: Generate per-batch GD CNV calls.
+25. `22-IntegrateGDVcf`: Integrate GD CNV calls into the cohort VCF.
+26. `23-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
 AF annotation with external population callsets
 
 Extra workflows (Not part of canonical pipeline, but included for your convenience. May require manual configuration):
