@@ -99,6 +99,8 @@ workflow ConvertPairedFastQsToUnmappedBamWf {
     Array[String] readgroup_names = DiscoverReadGroupsAndMetadata.readgroup_names
     Array[String] platform_units = DiscoverReadGroupsAndMetadata.platform_units
     Array[String] effective_run_dates = DiscoverReadGroupsAndMetadata.effective_run_dates
+    Array[File] split_chunk_fastq_1s = SplitPairedFastqIntoChunks.chunk_fastq_1s
+    Array[File] split_chunk_fastq_2s = SplitPairedFastqIntoChunks.chunk_fastq_2s
   }
 }
 
@@ -328,8 +330,8 @@ PY
   >>>
 
   output {
-    Array[File] chunk_fastq_1s = read_lines("chunk_fastq_1.list")
-    Array[File] chunk_fastq_2s = read_lines("chunk_fastq_2.list")
+    Array[File] chunk_fastq_1s = glob("chunks/*_R1.fastq.gz")
+    Array[File] chunk_fastq_2s = glob("chunks/*_R2.fastq.gz")
   }
 
   runtime {
