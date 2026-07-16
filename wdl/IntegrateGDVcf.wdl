@@ -12,7 +12,7 @@ import "TasksMakeCohortVcf.wdl" as tasks_cohort
 # the VCF (tabix), GD calls table (col 4 = chrom), and GD regions table (col 1 =
 # CHROM) before running integration. Per-chromosome VCFs are merged with ConcatVcfs.
 #
-# The integration happens after MakeCohortVcf/FilterGenotypes/SampleQC filtering
+# The integration happens after CallGenomicDisorderCNVs 
 # and before functional consequence and allele frequency annotations.
 #
 # Inputs:
@@ -29,7 +29,7 @@ workflow IntegrateGDVcf {
     File vcf_index
     String prefix
     Array[File] gd_output_tarballs
-    Array[File] ploidy_tables
+    Array[File] ploidy_tables  # TODO : use joint ploidy table from JoinRawCalls
     File gd_table
     File par_bed
     File contig_list
