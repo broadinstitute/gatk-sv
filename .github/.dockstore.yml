@@ -258,7 +258,6 @@ workflows:
     filters:
       branches:
         - main
-        - mw_gd_external
       tags:
         - /.*/
 
@@ -294,7 +293,7 @@ workflows:
     primaryDescriptorPath: /wdl/CallGenomicDisorderCNVs.wdl
     filters:
       branches:
-        - mw_gd_external
+        - main
       tags:
         - /.*/
 
@@ -303,6 +302,6 @@ workflows:
     primaryDescriptorPath: /wdl/IntegrateGDVcf.wdl
     filters:
       branches:
-        - mw_gd_external
+        - main
       tags:
         - /.*/
