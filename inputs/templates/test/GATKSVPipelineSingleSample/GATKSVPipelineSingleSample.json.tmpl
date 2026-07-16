@@ -131,5 +131,18 @@
   "GATKSVPipelineSingleSample.ref_pesr_disc_files_list" : {{ ref_panel.PE_files_list | tojson }},
   "GATKSVPipelineSingleSample.ref_pesr_split_files_list" : {{ ref_panel.SR_files_list | tojson }},
   "GATKSVPipelineSingleSample.ref_pesr_sd_files_list" : {{ ref_panel.SD_files_list | tojson }},
-  "GATKSVPipelineSingleSample.gcnv_model_tars_list" : {{ ref_panel.gcnv_model_tars_list | tojson }}
+  "GATKSVPipelineSingleSample.gcnv_model_tars_list" : {{ ref_panel.gcnv_model_tars_list | tojson }},
+
+  "GATKSVPipelineSingleSample.ref_panel_baf": {{ ref_panel.merged_baf_file | tojson }},
+  "GATKSVPipelineSingleSample.ref_panel_baf_index": {{ ref_panel.merged_baf_file_index | tojson }},
+  "GATKSVPipelineSingleSample.gd_table": {{ reference_resources.gd_table | tojson }},
+  "GATKSVPipelineSingleSample.segdup_bed": {{ reference_resources.gd_segdup_bed | tojson }},
+  "GATKSVPipelineSingleSample.centromere_bed": {{ reference_resources.gd_centromere_bed | tojson }},
+  "GATKSVPipelineSingleSample.acrocentric_arm_bed": {{ reference_resources.gd_acrocentric_arm_bed | tojson }},
+  "GATKSVPipelineSingleSample.custom_mask_bed": {{ reference_resources.gd_custom_mask_bed | tojson }},
+  "GATKSVPipelineSingleSample.hard_inclusion_bed": {{ reference_resources.gd_hard_inclusion_bed | tojson }},
+  "GATKSVPipelineSingleSample.par_bed": {{ reference_resources.par_bed | tojson }},
+  "GATKSVPipelineSingleSample.gaps_bed": {{ reference_resources.gd_gaps_bed | tojson }},
+  "GATKSVPipelineSingleSample.gtf": {{ reference_resources.gd_gtf | tojson }},
+  "GATKSVPipelineSingleSample.flank_exclusion_intervals": [{{ reference_resources.gd_segdup_bed | tojson }}]
 }
