@@ -6,6 +6,9 @@ workflow ConvertPairedFastQsToPerReadgroupUbamWf {
     File fastq_1
     File fastq_2
 
+    # If provided, skip ExtractUniqueReadGroups and use these as the readgroup units
+    Array[String]? read_groups
+
     Array[String]? library_names
     Array[String]? platform_units
     Array[String]? run_dates
@@ -20,27 +23,34 @@ workflow ConvertPairedFastQsToPerReadgroupUbamWf {
     Int preemptible_attempts     = 1
   }
 
-  call ExtractUniqueReadGroups {
-    input:
-      sample_name              = sample_name,
-      fastq_1                  = fastq_1,
-      library_names            = library_names,
-      platform_units           = platform_units,
-      run_dates                = run_dates,
-      platform_names           = platform_names,
-      sequencing_centers       = sequencing_centers,
-      docker                   = samtools_docker,
-      additional_disk_space_gb = additional_disk_space_gb,
-      machine_mem_gb           = machine_mem_gb,
-      machine_cpu_cores        = machine_cpu_cores,
-      preemptible_attempts     = preemptible_attempts
+  # Only run extraction when read_groups are not supplied
+  if (!defined(read_groups)) {
+    call ExtractUniqueReadGroups {
+      input:
+        sample_name              = sample_name,
+        fastq_1                  = fastq_1,
+        library_names            = library_names,
+        platform_units           = platform_units,
+        run_dates                = run_dates,
+        platform_names           = platform_names,
+        sequencing_centers       = sequencing_centers,
+        docker                   = samtools_docker,
+        additional_disk_space_gb = additional_disk_space_gb,
+        machine_mem_gb           = machine_mem_gb,
+        machine_cpu_cores        = machine_cpu_cores,
+        preemptible_attempts     = preemptible_attempts
+    }
   }
+
+  # Resolve the readgroup units: provided input takes precedence over extracted
+  Array[String] resolved_readgroup_units = select_first([read_groups,
+                                                         ExtractUniqueReadGroups.detected_readgroup_units])
 
   call SplitPairedFastqByReadGroup {
     input:
       fastq_1                  = fastq_1,
       fastq_2                  = fastq_2,
-      readgroup_units          = ExtractUniqueReadGroups.detected_readgroup_units,
+      readgroup_units          = resolved_readgroup_units,
       docker                   = samtools_docker,
       additional_disk_space_gb = additional_disk_space_gb,
       machine_mem_gb           = machine_mem_gb,
@@ -48,16 +58,31 @@ workflow ConvertPairedFastQsToPerReadgroupUbamWf {
       preemptible_attempts     = preemptible_attempts
   }
 
+  # Resolve per-RG metadata: from ExtractUniqueReadGroups when available, otherwise
+  # fall back to the resolved_readgroup_units (used as RG names when extraction was skipped)
+  Array[String] resolved_readgroup_names    = select_first([ExtractUniqueReadGroups.readgroup_names,
+                                                            resolved_readgroup_units])
+  Array[String] resolved_effective_lib      = select_first([ExtractUniqueReadGroups.effective_library_names,
+                                                            resolved_readgroup_units])
+  Array[String] resolved_effective_pu       = select_first([ExtractUniqueReadGroups.effective_platform_units,
+                                                            resolved_readgroup_units])
+  Array[String] resolved_effective_dt       = select_first([ExtractUniqueReadGroups.effective_run_dates,
+                                                            resolved_readgroup_units])
+  Array[String] resolved_effective_pl       = select_first([ExtractUniqueReadGroups.effective_platform_names,
+                                                            resolved_readgroup_units])
+  Array[String] resolved_effective_cn       = select_first([ExtractUniqueReadGroups.effective_sequencing_centers,
+                                                            resolved_readgroup_units])
+
   scatter (i in range(length(SplitPairedFastqByReadGroup.split_fastq_1s))) {
     call ConvertReadGroupFastqToUbam {
       input:
         sample_name                   = sample_name,
-        readgroup_name                = ExtractUniqueReadGroups.readgroup_names[i],
-        effective_library_name        = ExtractUniqueReadGroups.effective_library_names[i],
-        effective_platform_unit       = ExtractUniqueReadGroups.effective_platform_units[i],
-        effective_run_date            = ExtractUniqueReadGroups.effective_run_dates[i],
-        effective_platform_name       = ExtractUniqueReadGroups.effective_platform_names[i],
-        effective_sequencing_center   = ExtractUniqueReadGroups.effective_sequencing_centers[i],
+        readgroup_name                = resolved_readgroup_names[i],
+        effective_library_name        = resolved_effective_lib[i],
+        effective_platform_unit       = resolved_effective_pu[i],
+        effective_run_date            = resolved_effective_dt[i],
+        effective_platform_name       = resolved_effective_pl[i],
+        effective_sequencing_center   = resolved_effective_cn[i],
         split_fastq_1                 = SplitPairedFastqByReadGroup.split_fastq_1s[i],
         split_fastq_2                 = SplitPairedFastqByReadGroup.split_fastq_2s[i],
         readgroup_index               = i,
@@ -81,14 +106,14 @@ workflow ConvertPairedFastQsToPerReadgroupUbamWf {
   }
 
   output {
-    Array[File] split_readgroup_fastq_1s = SplitPairedFastqByReadGroup.split_fastq_1s
-    Array[File] split_readgroup_fastq_2s = SplitPairedFastqByReadGroup.split_fastq_2s
+    Array[File] split_readgroup_fastq_1s   = SplitPairedFastqByReadGroup.split_fastq_1s
+    Array[File] split_readgroup_fastq_2s   = SplitPairedFastqByReadGroup.split_fastq_2s
     Array[File] per_readgroup_sorted_ubams = SortReadGroupUbam.sorted_ubam
 
-    Array[String] detected_readgroup_units = ExtractUniqueReadGroups.detected_readgroup_units
-    Array[String] readgroup_names = ExtractUniqueReadGroups.readgroup_names
-    Array[String] effective_platform_units = ExtractUniqueReadGroups.effective_platform_units
-    Array[String] effective_run_dates = ExtractUniqueReadGroups.effective_run_dates
+    Array[String] resolved_readgroup_units_out = resolved_readgroup_units
+    Array[String] readgroup_names              = resolved_readgroup_names
+    Array[String] effective_platform_units     = resolved_effective_pu
+    Array[String] effective_run_dates          = resolved_effective_dt
   }
 }
 
