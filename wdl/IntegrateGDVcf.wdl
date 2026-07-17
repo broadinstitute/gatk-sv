@@ -25,8 +25,7 @@ import "TasksMakeCohortVcf.wdl" as tasks_cohort
 
 workflow IntegrateGDVcf {
   input {
-    File vcf
-    File vcf_index
+    Array[File] vcfs
     String prefix
     Array[File] gd_output_tarballs
     Array[File] ploidy_tables  # TODO : use joint ploidy table from JoinRawCalls
@@ -50,13 +49,14 @@ workflow IntegrateGDVcf {
       runtime_attr_override = runtime_attr_override_prepare
   }
 
-  scatter (contig in read_lines(contig_list)) {
+  Array[String] contigs = read_lines(contig_list)
+  scatter (i in range(length(vcfs))) {
     call IntegrateGDVcfTask {
       input:
-        vcf = vcf,
-        vcf_index = vcf_index,
+        vcf = vcfs[i],
+        vcf_index = "~{vcfs[i]}.tbi",
         prefix = prefix,
-        contig = contig,
+        contig = contigs[i],
         combined_gd_calls = PrepareGDCallsTask.combined_gd_calls,
         combined_ploidy = PrepareGDCallsTask.combined_ploidy,
         gd_table = gd_table,
