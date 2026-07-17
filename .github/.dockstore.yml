@@ -303,5 +303,6 @@ workflows:
     filters:
       branches:
         - main
+        - eph_gds_by_contig
       tags:
         - /.*/
