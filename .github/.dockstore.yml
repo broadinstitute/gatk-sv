@@ -132,6 +132,7 @@ workflows:
         - main
         - phase3_b5d5049
         - eph_reshard_genome
+        - vj_reshard_genome_disk_override
       tags:
         - /.*/
 
