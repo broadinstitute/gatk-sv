@@ -125,6 +125,7 @@ workflows:
         - eph_localize_combine
         - eph_scatter_joinvcfs
         - vj_scatter_joinvcfs_increase_mem
+        - vj_scatter_joinvcfs_512gb
       tags:
         - /.*/
 
