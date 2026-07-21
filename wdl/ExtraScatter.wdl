@@ -66,6 +66,7 @@ workflow ExtraScatter {
           mixed_sample_overlap=0,
           mixed_interval_overlap=1,
           mixed_breakend_window=0,
+          additional_args=additional_args,
           reference_fasta=reference_fasta,
           reference_fasta_fai=reference_fasta_fai,
           reference_dict=reference_dict,
@@ -109,6 +110,7 @@ workflow ExtraScatter {
         reference_fasta_fai=reference_fasta_fai,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
+        additional_args=additional_args,
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_join_vcfs
     }
