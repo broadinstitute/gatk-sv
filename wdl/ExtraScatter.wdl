@@ -302,6 +302,9 @@ task ScatterVcf {
     # scatter batch vcf by number of records
     bcftools +scatter $vcf -o . -O z -p "~{prefix}".shard. --threads ~{threads} -n ~{records_per_shard} ~{"-r " + contig}
 
+    # to avoid getting included in output tarball
+    mv $vcf elsewhere.vcf.gz
+
     # get number of shards (will match across all batches)
     ls -1 "~{prefix}".shard.*.vcf.gz | wc -l | tr -d ' ' > n_shards.txt
 
