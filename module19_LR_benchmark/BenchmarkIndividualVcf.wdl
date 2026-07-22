@@ -494,60 +494,94 @@ task CalcAndPlotFPRByContext {
     command <<<
         set -euo pipefail
 
-        # extract CHROM, GC context annotation, and benchmark tag from every sample's merged VCF
+        # extract CHROM, ID (for size/type parsing), GC context annotation, and benchmark tag
         while read -r vcf; do
-            bcftools query -f '%CHROM\t%INFO/GC\t%INFO/benchmark\n' "$vcf" >> combined.~{label}.tsv
+            bcftools query -f '%CHROM\t%ID\t%INFO/GC\t%INFO/benchmark\n' "$vcf" >> combined.~{label}.tsv
         done < ~{write_lines(merged_vcfs)}
 
         cat <<'EOF' > run_fpr.R
         args <- commandArgs(trailingOnly = TRUE)
-        in_file  <- args[1]
+        in_file   <- args[1]
         out_table <- args[2]
         out_plot  <- args[3]
         label     <- args[4]
 
         df <- read.table(in_file, header = FALSE, sep = "\t", stringsAsFactors = FALSE,
-                          col.names = c("chrom", "GC", "benchmark"))
+                          col.names = c("chrom", "id", "GC", "benchmark"))
 
+        # --- genomic context grouping ---
         df$context_group <- NA
         df$context_group[df$GC %in% c("US", "RM")] <- "GC_US_RM"
         df$context_group[df$GC %in% c("SD", "SR")] <- "GC_SD_SR"
         df <- df[!is.na(df$context_group), ]
 
+        # --- variant class from ID, e.g. chr1_11079_11079_SNV_0 / chr1_13656_13658_DEL_2 / chr1_66162_66378_INS_275 ---
+        # last "_"-delimited field is the size; SNV=0, 1-49bp=indel, >49bp=SV
+        id_size <- suppressWarnings(as.numeric(sapply(strsplit(df$id, "_"), function(p) p[length(p)])))
+        df$variant_class <- ifelse(is.na(id_size), NA,
+                              ifelse(id_size == 0, "SNV",
+                              ifelse(id_size <= 49, "indel", "SV")))
+        df <- df[!is.na(df$variant_class), ]
+
         chrom_order <- paste0("chr", c(1:22, "X", "Y"))
         df$chrom <- factor(df$chrom, levels = chrom_order[chrom_order %in% unique(df$chrom)])
 
-        res <- do.call(rbind, lapply(split(df, list(df$chrom, df$context_group)), function(sub) {
-          if (nrow(sub) == 0) return(NULL)
-          data.frame(
-            chrom = as.character(unique(sub$chrom)),
-            context_group = unique(sub$context_group),
-            n_total = nrow(sub),
-            n_FP = sum(sub$benchmark == "FP"),
-            FPR = sum(sub$benchmark == "FP") / nrow(sub)
-          )
+        calc_fpr <- function(sub_df) {
+          do.call(rbind, lapply(split(sub_df, list(sub_df$chrom, sub_df$context_group)), function(sub) {
+            if (nrow(sub) == 0) return(NULL)
+            data.frame(
+              chrom = as.character(unique(sub$chrom)),
+              context_group = unique(sub$context_group),
+              n_total = nrow(sub),
+              n_FP = sum(sub$benchmark == "FP"),
+              FPR = sum(sub$benchmark == "FP") / nrow(sub)
+            )
+          }))
+        }
+
+        classes <- c("ALL", "SNV", "indel", "SV")
+        res_all <- do.call(rbind, lapply(classes, function(cl) {
+          sub_df <- if (cl == "ALL") df else df[df$variant_class == cl, ]
+          r <- calc_fpr(sub_df)
+          if (is.null(r)) return(NULL)
+          r$variant_class <- cl
+          r
         }))
-        res$chrom <- factor(res$chrom, levels = chrom_order[chrom_order %in% unique(res$chrom)])
-        res <- res[order(res$context_group, res$chrom), ]
-        write.csv(res, out_table, row.names = FALSE)
+        res_all$chrom <- factor(res_all$chrom, levels = chrom_order[chrom_order %in% unique(res_all$chrom)])
+        res_all <- res_all[order(match(res_all$variant_class, classes), res_all$context_group, res_all$chrom), ]
+        write.csv(res_all, out_table, row.names = FALSE)
 
-        chroms <- levels(res$chrom)
-        groupA <- res[res$context_group == "GC_US_RM", ]
-        groupB <- res[res$context_group == "GC_SD_SR", ]
-        groupA <- groupA[match(chroms, groupA$chrom), ]
-        groupB <- groupB[match(chroms, groupB$chrom), ]
+        plot_panel <- function(res, chroms, panel_title) {
+          groupA <- res[res$context_group == "GC_US_RM", ]
+          groupB <- res[res$context_group == "GC_SD_SR", ]
+          groupA <- groupA[match(chroms, groupA$chrom), ]
+          groupB <- groupB[match(chroms, groupB$chrom), ]
+          ymax <- suppressWarnings(max(c(groupA$FPR, groupB$FPR), na.rm = TRUE))
+          if (!is.finite(ymax) || ymax <= 0) ymax <- 1
+          plot(seq_along(chroms), groupA$FPR, type = "b", col = "#2E5C8A", pch = 16, lwd = 2,
+               xaxt = "n", ylim = c(0, ymax * 1.2),
+               xlab = "Chromosome", ylab = "FDR = FP / (TP+FP)",
+               main = panel_title, cex.main = 1.0)
+          axis(1, at = seq_along(chroms), labels = chroms, las = 2, cex.axis = 0.65)
+          lines(seq_along(chroms), groupB$FPR, type = "b", col = "#B23A48", pch = 17, lwd = 2)
+          legend("topright",
+                 legend = c("GC=US/RM", "GC=SD/SR"),
+                 col = c("#2E5C8A", "#B23A48"), pch = c(16, 17), lwd = 2, bty = "n", cex = 0.7)
+        }
 
-        pdf(out_plot, width = 9, height = 5)
-        ymax <- max(c(groupA$FPR, groupB$FPR), na.rm = TRUE) * 1.2
-        plot(seq_along(chroms), groupA$FPR, type = "b", col = "#2E5C8A", pch = 16, lwd = 2,
-             xaxt = "n", ylim = c(0, ymax),
-             xlab = "Chromosome", ylab = "FPR = FP / (TP+FP)",
-             main = paste0("False positive rate by chromosome and genomic context (", label, ")"))
-        axis(1, at = seq_along(chroms), labels = chroms, las = 2, cex.axis = 0.7)
-        lines(seq_along(chroms), groupB$FPR, type = "b", col = "#B23A48", pch = 17, lwd = 2)
-        legend("topright",
-               legend = c("GC=US/RM (unique / repeat-masked)", "GC=SD/SR (segdup / simple repeat)"),
-               col = c("#2E5C8A", "#B23A48"), pch = c(16, 17), lwd = 2, bty = "n", cex = 0.8)
+        pdf(out_plot, width = 11, height = 9)
+        par(mfrow = c(2, 2), mar = c(6, 4.5, 3, 1), oma = c(0, 0, 2, 0))
+        panel_titles <- c(ALL = "All variants - overall FDR by context",
+                           SNV = "SNVs only",
+                           indel = "Indels (1-49bp) only",
+                           SV = "SVs (>49bp) only")
+        for (cl in classes) {
+          res_cl <- res_all[res_all$variant_class == cl, ]
+          chroms <- chrom_order[chrom_order %in% unique(res_cl$chrom)]
+          plot_panel(res_cl, chroms, panel_titles[[cl]])
+        }
+        mtext(paste0("FDR by chromosome and genomic context (", label, ")"),
+              side = 3, line = -1.5, outer = TRUE, cex = 1.1, font = 2)
         dev.off()
 EOF
 
