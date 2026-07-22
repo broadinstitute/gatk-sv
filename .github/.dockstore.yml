@@ -267,15 +267,6 @@ workflows:
     filters:
       branches:
         - main
-      tags:
-        - /.*/
-
-  - subclass: WDL
-    name: SVShellPostProcessIntermediates
-    primaryDescriptorPath: /wdl/SVShellPostProcessIntermediates.wdl
-    filters:
-      branches:
-        - main
         - vj-sv-shell-intermediates
       tags:
         - /.*/
