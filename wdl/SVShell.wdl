@@ -4,6 +4,7 @@ import "Structs.wdl"
 
 workflow SVShell {
   input {
+    String sample_id
     File gcnv_model_tars_list
     File ref_pesr_split_files_list
     File ref_pesr_disc_files_list
@@ -17,6 +18,15 @@ workflow SVShell {
     File depth_exclude_list
     File mei_bed
     File manta_region_bed
+    File primary_contigs_fai
+    Int min_svsize
+    String sv_pipeline_docker
+
+    File? dragen_sv_vcf
+    File? dragen_sv_vcf_index
+    File? dragen_cnv_vcf
+    File? dragen_cnv_vcf_index
+    File? ref_std_dragen_vcf_tar
   }
 
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
@@ -52,6 +62,7 @@ workflow SVShell {
 
   call RunSVShell {
     input:
+      sample_id = sample_id,
       gcnv_model_tars = gcnv_model_tars,
       ref_pesr_split_files = ref_pesr_split_files,
       ref_pesr_split_files_indices = ref_pesr_split_file_index,
@@ -76,9 +87,92 @@ workflow SVShell {
       mei_bed = mei_bed,
       mei_bed_index = mei_bed_index,
       manta_region_bed = manta_region_bed,
-      manta_region_bed_index = manta_region_bed_index
+      manta_region_bed_index = manta_region_bed_index,
+      primary_contigs_fai = primary_contigs_fai,
+      min_svsize = min_svsize,
+      dragen_sv_vcf = dragen_sv_vcf,
+      dragen_sv_vcf_index = dragen_sv_vcf_index,
+      dragen_cnv_vcf = dragen_cnv_vcf,
+      dragen_cnv_vcf_index = dragen_cnv_vcf_index,
+      ref_std_dragen_vcf_tar = ref_std_dragen_vcf_tar
   }
 
+
+  if (defined(RunSVShell.scramble_vcf)) {
+    call StandardizeVcf as StandardizeScramble {
+      input:
+        sample_id = sample_id,
+        vcf_path = select_first([RunSVShell.scramble_vcf]),
+        caller = "scramble",
+        contigs_fai = primary_contigs_fai,
+        min_size = min_svsize,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+    call FormatVcfForGatk as FormatScramble {
+      input:
+        sample_id = sample_id,
+        vcf_path = StandardizeScramble.standardized_vcf,
+        ploidy_table = RunSVShell.ploidy_table,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+  }
+
+  if (defined(RunSVShell.wham_vcf)) {
+    call StandardizeVcf as StandardizeWham {
+      input:
+        sample_id = sample_id,
+        vcf_path = select_first([RunSVShell.wham_vcf]),
+        caller = "wham",
+        contigs_fai = primary_contigs_fai,
+        min_size = min_svsize,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+    call FormatVcfForGatk as FormatWham {
+      input:
+        sample_id = sample_id,
+        vcf_path = StandardizeWham.standardized_vcf,
+        ploidy_table = RunSVShell.ploidy_table,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+  }
+
+  if (defined(dragen_sv_vcf)) {
+    call StandardizeVcf as StandardizeDragenSv {
+      input:
+        sample_id = sample_id,
+        vcf_path = select_first([dragen_sv_vcf]),
+        caller = "dragen",
+        contigs_fai = primary_contigs_fai,
+        min_size = min_svsize,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+    call FormatVcfForGatk as FormatDragenSv {
+      input:
+        sample_id = sample_id,
+        vcf_path = StandardizeDragenSv.standardized_vcf,
+        ploidy_table = RunSVShell.ploidy_table,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+  }
+
+  if (defined(dragen_cnv_vcf)) {
+    call StandardizeVcf as StandardizeDragenCnv {
+      input:
+        sample_id = sample_id,
+        vcf_path = select_first([dragen_cnv_vcf]),
+        caller = "dragen",
+        contigs_fai = primary_contigs_fai,
+        min_size = min_svsize,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+    call FormatVcfForGatk as FormatDragenCnv {
+      input:
+        sample_id = sample_id,
+        vcf_path = StandardizeDragenCnv.standardized_vcf,
+        ploidy_table = RunSVShell.ploidy_table,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+  }
 
   output {
     File inputs_json = RunSVShell.inputs_json
@@ -96,6 +190,27 @@ workflow SVShell {
     File ploidy_matrix = RunSVShell.ploidy_matrix
     File ploidy_plots = RunSVShell.ploidy_plots
     File non_genotyped_unique_depth_calls = RunSVShell.non_genotyped_unique_depth_calls
+    File? manta_vcf = RunSVShell.manta_vcf
+    File? manta_vcf_idx = RunSVShell.manta_vcf_idx
+    File? scramble_vcf = RunSVShell.scramble_vcf
+    File? scramble_vcf_idx = RunSVShell.scramble_vcf_idx
+    File? wham_vcf = RunSVShell.wham_vcf
+    File? wham_vcf_idx = RunSVShell.wham_vcf_idx
+    File? scramble_clusters = RunSVShell.scramble_clusters
+    File? scramble_table = RunSVShell.scramble_table
+    File coverage_counts = RunSVShell.coverage_counts
+    File coverage_counts_idx = RunSVShell.coverage_counts_idx
+    File merged_dels = RunSVShell.merged_dels
+    File merged_dups = RunSVShell.merged_dups
+    File ploidy_table = RunSVShell.ploidy_table
+    File? scramble_vcf_formatted = FormatScramble.formatted_vcf
+    File? scramble_vcf_formatted_index = FormatScramble.formatted_vcf_index
+    File? wham_vcf_formatted = FormatWham.formatted_vcf
+    File? wham_vcf_formatted_index = FormatWham.formatted_vcf_index
+    File? dragen_sv_vcf_formatted = FormatDragenSv.formatted_vcf
+    File? dragen_sv_vcf_formatted_index = FormatDragenSv.formatted_vcf_index
+    File? dragen_cnv_vcf_formatted = FormatDragenCnv.formatted_vcf
+    File? dragen_cnv_vcf_formatted_index = FormatDragenCnv.formatted_vcf_index
   }
 }
 
@@ -236,6 +351,19 @@ task RunSVShell {
   String ploidy_matrix_filename = batch + "_ploidy_matrix.bed.gz"
   String ploidy_plots_filename = batch + "_ploidy_plots.tar.gz"
   String non_genotyped_unique_depth_calls_filename = batch + ".non_genotyped_unique_depth_calls.vcf.gz"
+  String manta_vcf_filename = sample_id + ".manta.vcf.gz"
+  String manta_vcf_idx_filename = manta_vcf_filename + ".tbi"
+  String scramble_vcf_filename = sample_id + ".scramble.vcf.gz"
+  String scramble_vcf_idx_filename = scramble_vcf_filename + ".tbi"
+  String wham_vcf_filename = sample_id + ".wham.vcf.gz"
+  String wham_vcf_idx_filename = wham_vcf_filename + ".tbi"
+  String scramble_clusters_filename = sample_id + ".scramble_clusters.tsv.gz"
+  String scramble_table_filename = sample_id + ".scramble.tsv.gz"
+  String coverage_counts_filename = sample_id + ".counts.tsv.gz"
+  String coverage_counts_idx_filename = coverage_counts_filename + ".tbi"
+  String merged_dels_filename = batch + ".DEL.bed.gz"
+  String merged_dups_filename = batch + ".DUP.bed.gz"
+  String ploidy_table_filename = sample_id + "." + batch + ".ploidy.tsv"
 
   command <<<
     set -Exeuo pipefail
@@ -373,12 +501,22 @@ task RunSVShell {
     touch "~{ploidy_matrix_filename}"
     touch "~{ploidy_plots_filename}"
     touch "~{non_genotyped_unique_depth_calls_filename}"
+    touch "~{manta_vcf_filename}"
+    touch "~{manta_vcf_idx_filename}"
+    touch "~{scramble_vcf_filename}"
+    touch "~{scramble_vcf_idx_filename}"
+    touch "~{wham_vcf_filename}"
+    touch "~{wham_vcf_idx_filename}"
+    touch "~{scramble_clusters_filename}"
+    touch "~{scramble_table_filename}"
+    touch "~{coverage_counts_filename}"
+    touch "~{coverage_counts_idx_filename}"
+    touch "~{merged_dels_filename}"
+    touch "~{merged_dups_filename}"
+    touch "~{ploidy_table_filename}"
 
-    echo "----------------------"
-    echo "${PWD}"
     cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" "${BASE_DIR}/"
     cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json" "${BASE_DIR}/"
-    ls
 
     final_vcf_path=$(jq -r '.final_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
     mv "${final_vcf_path}" "${BASE_DIR}/~{final_vcf_filename}"
@@ -415,6 +553,48 @@ task RunSVShell {
     non_genotyped_path=$(jq -r '.non_genotyped_unique_depth_calls' "${BASE_DIR}/single_sample_pipeline_outputs.json")
     mv "${non_genotyped_path}" "${BASE_DIR}/~{non_genotyped_unique_depth_calls_filename}"
 
+    manta_vcf_path=$(jq -r '.manta_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${manta_vcf_path}" && "${manta_vcf_path}" != "null" ]]; then
+      mv "${manta_vcf_path}" "${BASE_DIR}/~{manta_vcf_filename}"
+      mv "${manta_vcf_path}.tbi" "${BASE_DIR}/~{manta_vcf_idx_filename}"
+    fi
+
+    scramble_vcf_path=$(jq -r '.scramble_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${scramble_vcf_path}" && "${scramble_vcf_path}" != "null" ]]; then
+      mv "${scramble_vcf_path}" "${BASE_DIR}/~{scramble_vcf_filename}"
+      mv "${scramble_vcf_path}.tbi" "${BASE_DIR}/~{scramble_vcf_idx_filename}"
+    fi
+
+    wham_vcf_path=$(jq -r '.wham_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${wham_vcf_path}" && "${wham_vcf_path}" != "null" ]]; then
+      mv "${wham_vcf_path}" "${BASE_DIR}/~{wham_vcf_filename}"
+      mv "${wham_vcf_path}.tbi" "${BASE_DIR}/~{wham_vcf_idx_filename}"
+    fi
+
+    scramble_clusters_path=$(jq -r '.scramble_clusters' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${scramble_clusters_path}" && "${scramble_clusters_path}" != "null" ]]; then
+      mv "${scramble_clusters_path}" "${BASE_DIR}/~{scramble_clusters_filename}"
+    fi
+
+    scramble_table_path=$(jq -r '.scramble_table' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${scramble_table_path}" && "${scramble_table_path}" != "null" ]]; then
+      mv "${scramble_table_path}" "${BASE_DIR}/~{scramble_table_filename}"
+    fi
+
+    coverage_counts_path=$(jq -r '.coverage_counts' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${coverage_counts_path}" "${BASE_DIR}/~{coverage_counts_filename}"
+    coverage_counts_idx_path=$(jq -r '.coverage_counts_idx' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${coverage_counts_idx_path}" "${BASE_DIR}/~{coverage_counts_idx_filename}"
+
+    merged_dels_path=$(jq -r '.merged_dels' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${merged_dels_path}" "${BASE_DIR}/~{merged_dels_filename}"
+
+    merged_dups_path=$(jq -r '.merged_dups' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${merged_dups_path}" "${BASE_DIR}/~{merged_dups_filename}"
+
+    ploidy_table_path=$(jq -r '.ploidy_table' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${ploidy_table_path}" "${BASE_DIR}/~{ploidy_table_filename}"
+
     df -h
   >>>
 
@@ -434,6 +614,19 @@ task RunSVShell {
     File ploidy_matrix = ploidy_matrix_filename
     File ploidy_plots = ploidy_plots_filename
     File non_genotyped_unique_depth_calls = non_genotyped_unique_depth_calls_filename
+    File? manta_vcf = manta_vcf_filename
+    File? manta_vcf_idx = manta_vcf_idx_filename
+    File? scramble_vcf = scramble_vcf_filename
+    File? scramble_vcf_idx = scramble_vcf_idx_filename
+    File? wham_vcf = wham_vcf_filename
+    File? wham_vcf_idx = wham_vcf_idx_filename
+    File? scramble_clusters = scramble_clusters_filename
+    File? scramble_table = scramble_table_filename
+    File coverage_counts = coverage_counts_filename
+    File coverage_counts_idx = coverage_counts_idx_filename
+    File merged_dels = merged_dels_filename
+    File merged_dups = merged_dups_filename
+    File ploidy_table = ploidy_table_filename
   }
 
   RuntimeAttr default_attr = object {
@@ -453,5 +646,75 @@ task RunSVShell {
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_shell_docker
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task StandardizeVcf {
+  input {
+    String sample_id
+    File vcf_path
+    String caller
+    File contigs_fai
+    Int min_size
+    String sv_pipeline_docker
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    svtk standardize \
+      --sample-names ~{sample_id} \
+      --contigs ~{contigs_fai} \
+      --min-size ~{min_size} \
+      ~{vcf_path} \
+      ~{sample_id}.std.vcf.gz \
+      ~{caller}
+
+    tabix -p vcf ~{sample_id}.std.vcf.gz
+  >>>
+
+  output {
+    File standardized_vcf = "~{sample_id}.std.vcf.gz"
+    File standardized_vcf_index = "~{sample_id}.std.vcf.gz.tbi"
+  }
+
+  runtime {
+    cpu: 1
+    memory: "2 GiB"
+    disks: "local-disk 20 HDD"
+    docker: sv_pipeline_docker
+  }
+}
+
+task FormatVcfForGatk {
+  input {
+    String sample_id
+    File vcf_path
+    File ploidy_table
+    String sv_pipeline_docker
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    python /opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py \
+      --vcf ~{vcf_path} \
+      --out ~{sample_id}.fmt.vcf.gz \
+      --ploidy-table ~{ploidy_table} \
+      --fix-end
+
+    tabix -p vcf ~{sample_id}.fmt.vcf.gz
+  >>>
+
+  output {
+    File formatted_vcf = "~{sample_id}.fmt.vcf.gz"
+    File formatted_vcf_index = "~{sample_id}.fmt.vcf.gz.tbi"
+  }
+
+  runtime {
+    cpu: 1
+    memory: "4 GiB"
+    disks: "local-disk 20 SSD"
+    docker: sv_pipeline_docker
   }
 }
