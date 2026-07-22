@@ -515,11 +515,8 @@ task RunSVShell {
     touch "~{merged_dups_filename}"
     touch "~{ploidy_table_filename}"
 
-    echo "----------------------"
-    echo "${PWD}"
     cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" "${BASE_DIR}/"
     cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json" "${BASE_DIR}/"
-    ls
 
     final_vcf_path=$(jq -r '.final_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
     mv "${final_vcf_path}" "${BASE_DIR}/~{final_vcf_filename}"
