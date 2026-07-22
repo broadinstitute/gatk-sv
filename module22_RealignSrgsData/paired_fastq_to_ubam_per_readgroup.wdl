@@ -105,10 +105,22 @@ workflow ConvertPairedFastQsToPerReadgroupUbamWf {
     }
   }
 
+  call MergeSortedReadGroupUbams {
+    input:
+      sample_name               = sample_name,
+      input_ubams               = SortReadGroupUbam.sorted_ubam,
+      docker                    = samtools_docker,
+      additional_disk_space_gb  = additional_disk_space_gb,
+      machine_mem_gb            = machine_mem_gb,
+      machine_cpu_cores         = machine_cpu_cores,
+      preemptible_attempts      = preemptible_attempts
+  }
+
   output {
     Array[File] split_readgroup_fastq_1s   = SplitPairedFastqByReadGroup.split_fastq_1s
     Array[File] split_readgroup_fastq_2s   = SplitPairedFastqByReadGroup.split_fastq_2s
     Array[File] per_readgroup_sorted_ubams = SortReadGroupUbam.sorted_ubam
+    File output_united_sorted_ubam         = MergeSortedReadGroupUbams.merged_ubam
 
     Array[String] resolved_readgroup_units_out = resolved_readgroup_units
     Array[String] readgroup_names              = resolved_readgroup_names
@@ -443,6 +455,45 @@ task SortReadGroupUbam {
 
   output {
     File sorted_ubam = "rg.~{readgroup_index}.query_sorted.unmapped.bam"
+  }
+
+  runtime {
+    docker:      docker
+    cpu:         machine_cpu_cores
+    memory:      machine_mem_gb + " GB"
+    disks:       "local-disk " + disk_space_gb + " HDD"
+    preemptible: preemptible_attempts
+    maxRetries:  preemptible_attempts
+  }
+}
+
+
+task MergeSortedReadGroupUbams {
+  input {
+    String sample_name
+    Array[File] input_ubams
+
+    Int additional_disk_space_gb = 50
+    Int machine_mem_gb           = 16
+    Int machine_cpu_cores        = 8
+    Int preemptible_attempts     = 1
+    String docker
+  }
+
+  Int disk_space_gb = ceil(size(input_ubams, "GB") * 4) + additional_disk_space_gb
+
+  command <<<
+    set -euo pipefail
+
+    if [ "~{length(input_ubams)}" -eq 1 ]; then
+      cp ~{input_ubams[0]} ~{sample_name}.query_sorted.united.unmapped.bam
+    else
+      samtools merge         -n         -@ ~{machine_cpu_cores}         -f         -O BAM         ~{sample_name}.query_sorted.united.unmapped.bam         ~{sep=' ' input_ubams}
+    fi
+  >>>
+
+  output {
+    File merged_ubam = "~{sample_name}.query_sorted.united.unmapped.bam"
   }
 
   runtime {
