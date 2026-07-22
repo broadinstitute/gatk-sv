@@ -117,6 +117,24 @@ jobs:
       matrix:
         python-version: ['3.8']
     steps:
+      - name: Cleanup Disk Space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h
+          
+          # Remove heavy frameworks and SDKs
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          
+          # Prune internal Docker layers and images
+          sudo docker image prune --all --force
+          sudo docker builder prune --all --force
+          
+          echo "=== Disk space after cleanup ==="
+          df -h
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -153,6 +171,24 @@ jobs:
     env:
       DOCKERS_GCP: "./inputs/values/dockers.json"
     steps:
+      - name: Cleanup Disk Space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h
+          
+          # Remove heavy frameworks and SDKs
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          
+          # Prune internal Docker layers and images
+          sudo docker image prune --all --force
+          sudo docker builder prune --all --force
+          
+          echo "=== Disk space after cleanup ==="
+          df -h
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
