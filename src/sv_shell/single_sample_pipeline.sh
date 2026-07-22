@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# TEST
 # For details: https://serverfault.com/a/103569
 # saves original stdout to &3 and original stderr to &4
 # without this, the logs of subprocess can get mixed with the parent's logs.
