@@ -1,30 +1,43 @@
 version 1.0
 
 import "Structs.wdl"
+import "paired_fastq_to_ubam_per_readgroup.wdl" as ubam_utils
+
 ## Fixes a malformed DT: field in the @RG line of a BAM header
 ## (e.g. "DT:HMMYHDSX7.1", which looks like a flowcell ID that leaked
 ## into the DT field instead of an actual date) and replaces it with
-## the current date/time in SAM-spec ISO8601 format.
+## the current date/time in SAM-spec ISO8601 format, for each uBAM in
+## a list, then merges the fixed uBAMs into one.
 
 workflow FixBamHeaderDT {
   input {
-    File input_bam
-    String output_basename
+    Array[File] input_ubams
+    String sample_name
+    String merge_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  call FixHeader {
+  scatter (idx in range(length(input_ubams))) {
+    call FixHeader {
+      input:
+        input_bam = input_ubams[idx],
+        output_basename = sample_name + ".rg" + idx,
+        runtime_attr_override = runtime_attr_override
+    }
+  }
+
+  call ubam_utils.MergeSortedReadGroupUbams {
     input:
-      input_bam = input_bam,
-      output_basename = output_basename,
-      runtime_attr_override = runtime_attr_override
+      sample_name = sample_name,
+      input_ubams = FixHeader.fixed_bam,
+      docker = merge_docker
   }
 
   output {
-    File fixed_bam = FixHeader.fixed_bam
-    File fixed_bam_index = FixHeader.fixed_bam_index
-    File original_header = FixHeader.original_header
-    File fixed_header = FixHeader.fixed_header
+    File merged_ubam = MergeSortedReadGroupUbams.merged_ubam
+    Array[File] fixed_ubams = FixHeader.fixed_bam
+    Array[File] original_headers = FixHeader.original_header
+    Array[File] fixed_headers = FixHeader.fixed_header
   }
 }
 
@@ -42,7 +55,7 @@ task FixHeader {
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 4.0,
-    disk_gb: ceil(input_size * 5) + 20,
+    disk_gb: ceil(input_size * 2) + 20,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -79,14 +92,13 @@ task FixHeader {
     }' original_header.sam > fixed_header.sam
 
     # Reheader in place (fast: text-only edit, no need for -P since
-    # read/sort order is unaffected by a tag value change)
+    # read/sort order is unaffected by a tag value change). No indexing
+    # here since this is an unaligned/queryname-ordered uBAM.
     samtools reheader fixed_header.sam ~{input_bam} > ~{output_basename}.reheadered.bam
-    samtools index ~{output_basename}.reheadered.bam
   >>>
 
   output {
     File fixed_bam = "~{output_basename}.reheadered.bam"
-    File fixed_bam_index = "~{output_basename}.reheadered.bam.bai"
     File original_header = "original_header.sam"
     File fixed_header = "fixed_header.sam"
   }
