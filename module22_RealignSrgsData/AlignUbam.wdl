@@ -22,9 +22,7 @@ version 1.0
 ##
 ## To avoid it, this WDL writes bwa mem's output to an actual file first, then runs
 ## MergeBamAlignment as a second, separate command reading that completed file (this is
-## the fix that resolved the issue for other users who hit the same bug). This costs a
-## bit of extra local disk space and I/O for the intermediate aligned SAM/BAM, which is
-## reflected in the disk_size calculation below.
+## the fix that resolved the issue for other users who hit the same bug).
 ##
 ## These steps are split into three separate tasks (SamToFastq, BwaMem, MergeAlignment)
 ## rather than one combined task. Each intermediate file - the interleaved FASTQ and the
@@ -33,10 +31,20 @@ version 1.0
 ## the next step ever touches it. It also means Cromwell retries and caches each step
 ## independently, so a failure downstream doesn't force earlier steps to rerun.
 ##
+## RESOURCE SIZING:
+## Each task computes a default memory/disk/cpu footprint (RuntimeAttr, imported from
+## Structs.wdl) scaled off the size of its own actual input file(s), rather than a single
+## fixed number for every sample. If a job still runs out of memory or disk on a
+## particularly large or unusual input, pass a `runtime_attr_override` to that task
+## (any subset of RuntimeAttr's fields - unset fields fall back to the computed default)
+## rather than editing the WDL.
+##
 ## LICENSING:
 ## Released under the WDL source code license (BSD-3), matching the license terms of the
 ## original WARP task this is adapted from. The programs it calls (bwa, Picard, samtools)
 ## may be subject to different licenses - check the docker image for details.
+
+import "Structs.wdl"
 
 struct ReferenceFasta {
     File ref_fasta
@@ -61,13 +69,18 @@ workflow AlignUbam {
         Boolean unmap_contaminant_reads = true
         Boolean allow_empty_ref_alt = false
         Int preemptible_tries = 3
+
+        RuntimeAttr? runtime_attr_sam_to_fastq_override
+        RuntimeAttr? runtime_attr_bwa_mem_override
+        RuntimeAttr? runtime_attr_merge_alignment_override
     }
 
     call SamToFastq {
         input:
             input_bam           = input_bam,
             output_bam_basename = output_bam_basename,
-            preemptible_tries   = preemptible_tries
+            preemptible_tries   = preemptible_tries,
+            runtime_attr_override = runtime_attr_sam_to_fastq_override
     }
 
     call BwaMem {
@@ -77,7 +90,8 @@ workflow AlignUbam {
             bwa_commandline      = bwa_commandline,
             reference_fasta      = reference_fasta,
             preemptible_tries    = preemptible_tries,
-            allow_empty_ref_alt  = allow_empty_ref_alt
+            allow_empty_ref_alt  = allow_empty_ref_alt,
+            runtime_attr_override = runtime_attr_bwa_mem_override
     }
 
     call MergeAlignment {
@@ -92,7 +106,8 @@ workflow AlignUbam {
             compression_level       = compression_level,
             hard_clip_reads         = hard_clip_reads,
             unmap_contaminant_reads = unmap_contaminant_reads,
-            preemptible_tries       = preemptible_tries
+            preemptible_tries       = preemptible_tries,
+            runtime_attr_override   = runtime_attr_merge_alignment_override
     }
 
     output {
@@ -106,25 +121,41 @@ workflow AlignUbam {
 # Step 1: uBAM -> interleaved FASTQ. Its output (fastq) is a normal task output, so you
 # can QC it directly - read counts, spot-check read names/pairing - before bwa mem
 # ever touches it.
+#
+# Sizing: SamToFastq streams the BAM and writes text; memory needs are modest and mostly
+# flat, but we still scale disk directly off the input BAM size since the interleaved
+# FASTQ (names + sequence + quals, uncompressed) can run noticeably larger than the
+# source BAM.
 task SamToFastq {
     input {
         File input_bam
         String output_bam_basename
         Int preemptible_tries
+        RuntimeAttr? runtime_attr_override
     }
 
     Float unmapped_bam_size = size(input_bam, "GiB")
 
-    # Interleaved FASTQ (names + sequence + quals, uncompressed) runs larger than the
-    # source BAM; leave generous headroom plus spillage room.
-    Float disk_multiplier = 4.0
-    Int disk_size = ceil(unmapped_bam_size + (disk_multiplier * unmapped_bam_size) + 20)
+    Int disk_gb_default = ceil(unmapped_bam_size + (4.0 * unmapped_bam_size) + 20)
+    Float mem_gb_default = 4.0
+
+    RuntimeAttr runtime_attr_str_to_fastq_default = object {
+        cpu_cores:          2,
+        mem_gb:             mem_gb_default,
+        disk_gb:            disk_gb_default,
+        boot_disk_gb:       15,
+        preemptible_tries:  preemptible_tries,
+        max_retries:        1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_attr_str_to_fastq_default])
 
     command <<<
         set -o pipefail
         set -e
 
-        java -Xms1000m -Xmx1000m -jar /usr/gitc/picard.jar \
+        java -Xms~{ceil(select_first([runtime_attr.mem_gb, mem_gb_default]) * 1000 * 0.8)}m \
+             -Xmx~{ceil(select_first([runtime_attr.mem_gb, mem_gb_default]) * 1000 * 0.8)}m \
+             -jar /usr/gitc/picard.jar \
             SamToFastq \
             INPUT=~{input_bam} \
             FASTQ=~{output_bam_basename}.interleaved.fastq \
@@ -133,11 +164,13 @@ task SamToFastq {
     >>>
 
     runtime {
-        docker: "us.gcr.io/broad-gotc-prod/samtools-picard-bwa:1.0.2-0.7.15-2.26.10-1643840748"
-        preemptible: preemptible_tries
-        memory: "3 GiB"
-        cpu: "2"
-        disks: "local-disk " + disk_size + " HDD"
+        docker:             "us.gcr.io/broad-gotc-prod/samtools-picard-bwa:1.0.2-0.7.15-2.26.10-1643840748"
+        cpu:                select_first([runtime_attr.cpu_cores, runtime_attr_str_to_fastq_default.cpu_cores])
+        memory:             select_first([runtime_attr.mem_gb, runtime_attr_str_to_fastq_default.mem_gb]) + " GiB"
+        disks:               "local-disk " + select_first([runtime_attr.disk_gb, runtime_attr_str_to_fastq_default.disk_gb]) + " HDD"
+        bootDiskSizeGb:     select_first([runtime_attr.boot_disk_gb, runtime_attr_str_to_fastq_default.boot_disk_gb])
+        preemptible:        select_first([runtime_attr.preemptible_tries, runtime_attr_str_to_fastq_default.preemptible_tries])
+        maxRetries:         select_first([runtime_attr.max_retries, runtime_attr_str_to_fastq_default.max_retries])
     }
 
     output {
@@ -149,6 +182,13 @@ task SamToFastq {
 # than piping it into MergeBamAlignment. Its output (aligned_sam) is a normal task
 # output, so you can QC it directly - samtools quickcheck/flagstat, check @SQ lines are
 # complete, compare read counts against the FASTQ - before MergeAlignment ever touches it.
+#
+# Sizing: bwa mem's memory footprint is driven mostly by the reference index it loads
+# (bwt/pac/etc, roughly proportional to reference fasta size) plus per-thread batch
+# buffers, not by the FASTQ input size itself - so mem_gb below scales off bwa_ref_size,
+# with a floor to cover the base index + threads overhead for a typical human genome.
+# Disk scales off the FASTQ size, since the output SAM is uncompressed text of
+# comparable size, plus the reference files bwa needs to read.
 task BwaMem {
     input {
         File input_fastq
@@ -162,16 +202,30 @@ task BwaMem {
 
         Int preemptible_tries
         Boolean allow_empty_ref_alt = false
+        RuntimeAttr? runtime_attr_override
     }
 
     Float fastq_size = size(input_fastq, "GiB")
     Float ref_size = size(reference_fasta.ref_fasta, "GiB") + size(reference_fasta.ref_fasta_index, "GiB") + size(reference_fasta.ref_dict, "GiB")
     Float bwa_ref_size = ref_size + size(reference_fasta.ref_alt, "GiB") + size(reference_fasta.ref_amb, "GiB") + size(reference_fasta.ref_ann, "GiB") + size(reference_fasta.ref_bwt, "GiB") + size(reference_fasta.ref_pac, "GiB") + size(reference_fasta.ref_sa, "GiB")
 
-    # The aligned SAM output is uncompressed text, roughly on par with the FASTQ input
-    # plus alignment tags, so give it generous headroom.
-    Float disk_multiplier = 3.0
-    Int disk_size = ceil(fastq_size + bwa_ref_size + (disk_multiplier * fastq_size) + 20)
+    Int disk_gb_default = ceil(fastq_size + bwa_ref_size + (3.0 * fastq_size) + 20)
+
+    # bwa mem index + working memory roughly doubles the on-disk reference size, plus a
+    # base overhead for 16 threads' worth of batch buffers (-K 100000000). Floor at 14 GiB
+    # to match what a standard hg38-with-ALT-and-decoys reference needs in practice.
+    Float mem_gb_scaled = (bwa_ref_size * 2.0) + 6.0
+    Float mem_gb_default = if mem_gb_scaled > 14.0 then mem_gb_scaled else 14.0
+
+    RuntimeAttr runtime_attr_bwa_mem_default = object {
+        cpu_cores:          16,
+        mem_gb:             mem_gb_default,
+        disk_gb:            disk_gb_default,
+        boot_disk_gb:       15,
+        preemptible_tries:  preemptible_tries,
+        max_retries:        1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_attr_bwa_mem_default])
 
     command <<<
         set -o pipefail
@@ -208,11 +262,13 @@ task BwaMem {
     >>>
 
     runtime {
-        docker: "us.gcr.io/broad-gotc-prod/samtools-picard-bwa:1.0.2-0.7.15-2.26.10-1643840748"
-        preemptible: preemptible_tries
-        memory: "14 GiB"
-        cpu: "16"
-        disks: "local-disk " + disk_size + " HDD"
+        docker:             "us.gcr.io/broad-gotc-prod/samtools-picard-bwa:1.0.2-0.7.15-2.26.10-1643840748"
+        cpu:                select_first([runtime_attr.cpu_cores, runtime_attr_bwa_mem_default.cpu_cores])
+        memory:             select_first([runtime_attr.mem_gb, runtime_attr_bwa_mem_default.mem_gb]) + " GiB"
+        disks:              "local-disk " + select_first([runtime_attr.disk_gb, runtime_attr_bwa_mem_default.disk_gb]) + " HDD"
+        bootDiskSizeGb:     select_first([runtime_attr.boot_disk_gb, runtime_attr_bwa_mem_default.boot_disk_gb])
+        preemptible:        select_first([runtime_attr.preemptible_tries, runtime_attr_bwa_mem_default.preemptible_tries])
+        maxRetries:         select_first([runtime_attr.max_retries, runtime_attr_bwa_mem_default.max_retries])
     }
 
     output {
@@ -230,6 +286,10 @@ task BwaMem {
 # every alignment record. That bug has been reported independently by multiple users
 # running this same style of pipeline (Biostars, GATK support forum, Drop-seq GitHub
 # issues), including on modern GATK4 releases.
+#
+# Sizing: MergeBamAlignment buffers up to MAX_RECORDS_IN_RAM records; memory is mostly
+# flat but given a small bump for larger inputs. Disk scales off both the uBAM and the
+# aligned SAM, since the merged output is comparable in size to the aligned SAM.
 task MergeAlignment {
     input {
         File input_bam
@@ -245,20 +305,36 @@ task MergeAlignment {
         Int preemptible_tries
         Boolean hard_clip_reads = false
         Boolean unmap_contaminant_reads = true
+        RuntimeAttr? runtime_attr_override
     }
 
     Float unmapped_bam_size = size(input_bam, "GiB")
     Float aligned_sam_size = size(aligned_sam, "GiB")
     Float ref_size = size(reference_fasta.ref_fasta, "GiB") + size(reference_fasta.ref_fasta_index, "GiB") + size(reference_fasta.ref_dict, "GiB")
 
-    Float disk_multiplier = 2.5
-    Int disk_size = ceil(unmapped_bam_size + aligned_sam_size + ref_size + (disk_multiplier * unmapped_bam_size) + 20)
+    Int disk_gb_default = ceil(unmapped_bam_size + aligned_sam_size + ref_size + (2.5 * unmapped_bam_size) + 20)
+
+    Float mem_gb_scaled = 4.0 + (aligned_sam_size / 50.0)
+    Float mem_gb_default = if mem_gb_scaled > 5.0 then mem_gb_scaled else 5.0
+
+    RuntimeAttr runtime_attr_merge_alignment_default = object {
+        cpu_cores:          2,
+        mem_gb:             mem_gb_default,
+        disk_gb:            disk_gb_default,
+        boot_disk_gb:       15,
+        preemptible_tries:  preemptible_tries,
+        max_retries:        1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_attr_merge_alignment_default])
 
     command <<<
         set -o pipefail
         set -e
 
-        java -Dsamjdk.compression_level=~{compression_level} -Xms1000m -Xmx1000m -jar /usr/gitc/picard.jar \
+        java -Dsamjdk.compression_level=~{compression_level} \
+             -Xms~{ceil(select_first([runtime_attr.mem_gb, mem_gb_default]) * 1000 * 0.8)}m \
+             -Xmx~{ceil(select_first([runtime_attr.mem_gb, mem_gb_default]) * 1000 * 0.8)}m \
+             -jar /usr/gitc/picard.jar \
             MergeBamAlignment \
             VALIDATION_STRINGENCY=SILENT \
             EXPECTED_ORIENTATIONS=FR \
@@ -290,11 +366,13 @@ task MergeAlignment {
     >>>
 
     runtime {
-        docker: "us.gcr.io/broad-gotc-prod/samtools-picard-bwa:1.0.2-0.7.15-2.26.10-1643840748"
-        preemptible: preemptible_tries
-        memory: "5 GiB"
-        cpu: "2"
-        disks: "local-disk " + disk_size + " HDD"
+        docker:             "us.gcr.io/broad-gotc-prod/samtools-picard-bwa:1.0.2-0.7.15-2.26.10-1643840748"
+        cpu:                select_first([runtime_attr.cpu_cores, runtime_attr_merge_alignment_default.cpu_cores])
+        memory:             select_first([runtime_attr.mem_gb, runtime_attr_merge_alignment_default.mem_gb]) + " GiB"
+        disks:              "local-disk " + select_first([runtime_attr.disk_gb, runtime_attr_merge_alignment_default.disk_gb]) + " HDD"
+        bootDiskSizeGb:     select_first([runtime_attr.boot_disk_gb, runtime_attr_merge_alignment_default.boot_disk_gb])
+        preemptible:        select_first([runtime_attr.preemptible_tries, runtime_attr_merge_alignment_default.preemptible_tries])
+        maxRetries:         select_first([runtime_attr.max_retries, runtime_attr_merge_alignment_default.max_retries])
     }
 
     output {
