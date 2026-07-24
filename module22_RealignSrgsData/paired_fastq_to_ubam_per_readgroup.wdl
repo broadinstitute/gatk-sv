@@ -6,7 +6,9 @@ workflow ConvertPairedFastQsToPerReadgroupUbamWf {
     File fastq_1
     File fastq_2
 
-    # If provided, skip ExtractUniqueReadGroups and use these as the readgroup units
+    # If provided, skip auto-detection from the FASTQ header and use these as
+    # the readgroup units (ExtractUniqueReadGroups still runs either way, so
+    # DT/PL/CN/LB defaults and current-date computation are always correct)
     Array[String]? read_groups
 
     Array[String]? library_names
@@ -23,28 +25,27 @@ workflow ConvertPairedFastQsToPerReadgroupUbamWf {
     Int preemptible_attempts     = 1
   }
 
-  # Only run extraction when read_groups are not supplied
-  if (!defined(read_groups)) {
-    call ExtractUniqueReadGroups {
-      input:
-        sample_name              = sample_name,
-        fastq_1                  = fastq_1,
-        library_names            = library_names,
-        platform_units           = platform_units,
-        run_dates                = run_dates,
-        platform_names           = platform_names,
-        sequencing_centers       = sequencing_centers,
-        docker                   = samtools_docker,
-        additional_disk_space_gb = additional_disk_space_gb,
-        machine_mem_gb           = machine_mem_gb,
-        machine_cpu_cores        = machine_cpu_cores,
-        preemptible_attempts     = preemptible_attempts
-    }
+  # Always run this task so effective_run_dates/platform_names/sequencing_centers/
+  # library_names are computed correctly (current date + proper defaults) whether
+  # read_groups was auto-detected from the FASTQ or supplied directly.
+  call ExtractUniqueReadGroups {
+    input:
+      sample_name              = sample_name,
+      fastq_1                  = fastq_1,
+      read_group_override      = read_groups,
+      library_names            = library_names,
+      platform_units           = platform_units,
+      run_dates                = run_dates,
+      platform_names           = platform_names,
+      sequencing_centers       = sequencing_centers,
+      docker                   = samtools_docker,
+      additional_disk_space_gb = additional_disk_space_gb,
+      machine_mem_gb           = machine_mem_gb,
+      machine_cpu_cores        = machine_cpu_cores,
+      preemptible_attempts     = preemptible_attempts
   }
 
-  # Resolve the readgroup units: provided input takes precedence over extracted
-  Array[String] resolved_readgroup_units = select_first([read_groups,
-                                                         ExtractUniqueReadGroups.detected_readgroup_units])
+  Array[String] resolved_readgroup_units = ExtractUniqueReadGroups.detected_readgroup_units
 
   call SplitPairedFastqByReadGroup {
     input:
@@ -58,20 +59,12 @@ workflow ConvertPairedFastQsToPerReadgroupUbamWf {
       preemptible_attempts     = preemptible_attempts
   }
 
-  # Resolve per-RG metadata: from ExtractUniqueReadGroups when available, otherwise
-  # fall back to the resolved_readgroup_units (used as RG names when extraction was skipped)
-  Array[String] resolved_readgroup_names    = select_first([ExtractUniqueReadGroups.readgroup_names,
-                                                            resolved_readgroup_units])
-  Array[String] resolved_effective_lib      = select_first([ExtractUniqueReadGroups.effective_library_names,
-                                                            resolved_readgroup_units])
-  Array[String] resolved_effective_pu       = select_first([ExtractUniqueReadGroups.effective_platform_units,
-                                                            resolved_readgroup_units])
-  Array[String] resolved_effective_dt       = select_first([ExtractUniqueReadGroups.effective_run_dates,
-                                                            resolved_readgroup_units])
-  Array[String] resolved_effective_pl       = select_first([ExtractUniqueReadGroups.effective_platform_names,
-                                                            resolved_readgroup_units])
-  Array[String] resolved_effective_cn       = select_first([ExtractUniqueReadGroups.effective_sequencing_centers,
-                                                            resolved_readgroup_units])
+  Array[String] resolved_readgroup_names    = ExtractUniqueReadGroups.readgroup_names
+  Array[String] resolved_effective_lib      = ExtractUniqueReadGroups.effective_library_names
+  Array[String] resolved_effective_pu       = ExtractUniqueReadGroups.effective_platform_units
+  Array[String] resolved_effective_dt       = ExtractUniqueReadGroups.effective_run_dates
+  Array[String] resolved_effective_pl       = ExtractUniqueReadGroups.effective_platform_names
+  Array[String] resolved_effective_cn       = ExtractUniqueReadGroups.effective_sequencing_centers
 
   scatter (i in range(length(SplitPairedFastqByReadGroup.split_fastq_1s))) {
     call ConvertReadGroupFastqToUbam {
@@ -134,6 +127,13 @@ task ExtractUniqueReadGroups {
     String sample_name
     File fastq_1
 
+    # If provided, skip FASTQ-header auto-detection and use these units directly.
+    # This still runs the rest of the task (defaults + current date computation)
+    # so effective_run_dates/platform_names/sequencing_centers/library_names are
+    # always computed correctly, regardless of whether read groups were supplied
+    # or auto-detected.
+    Array[String]? read_group_override
+
     Array[String]? library_names
     Array[String]? platform_units
     Array[String]? run_dates
@@ -147,6 +147,7 @@ task ExtractUniqueReadGroups {
     String docker
   }
 
+  Array[String] provided_read_group_override = select_first([read_group_override, []])
   Array[String] provided_library_names = select_first([library_names, []])
   Array[String] provided_platform_units = select_first([platform_units, []])
   Array[String] provided_run_dates = select_first([run_dates, []])
@@ -163,21 +164,26 @@ task ExtractUniqueReadGroups {
     mapfile -t PLAT_NAMES < ~{write_lines(provided_platform_names)}
     mapfile -t SEQ_CENTERS < ~{write_lines(provided_sequencing_centers)}
 
-    FASTQ1="~{fastq_1}"
-    if [[ "$FASTQ1" == *.gz ]]; then
-      gzip -cd "$FASTQ1"
+    mapfile -t RG_OVERRIDE < ~{write_lines(provided_read_group_override)}
+    if [ "${#RG_OVERRIDE[@]}" -gt 0 ]; then
+      printf "%s\n" "${RG_OVERRIDE[@]}" | sort -u > detected_readgroup_units.txt
     else
-      cat "$FASTQ1"
-    fi | awk 'NR % 4 == 1 {
-      h=$1
-      sub(/^@/, "", h)
-      n=split(h, a, ":")
-      if (n < 4) {
-        print "ERROR: FASTQ header does not match Illumina format: " $0 > "/dev/stderr"
-        exit 1
-      }
-      print a[3] "." a[4]
-    }' | sort -u > detected_readgroup_units.txt
+      FASTQ1="~{fastq_1}"
+      if [[ "$FASTQ1" == *.gz ]]; then
+        gzip -cd "$FASTQ1"
+      else
+        cat "$FASTQ1"
+      fi | awk 'NR % 4 == 1 {
+        h=$1
+        sub(/^@/, "", h)
+        n=split(h, a, ":")
+        if (n < 4) {
+          print "ERROR: FASTQ header does not match Illumina format: " $0 > "/dev/stderr"
+          exit 1
+        }
+        print a[3] "." a[4]
+      }' | sort -u > detected_readgroup_units.txt
+    fi
 
     n_rg=$(wc -l < detected_readgroup_units.txt)
     if [ "$n_rg" -eq 0 ]; then
