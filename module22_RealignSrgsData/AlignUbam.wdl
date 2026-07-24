@@ -153,8 +153,8 @@ task SamToFastq {
         set -o pipefail
         set -e
 
-        java -Xms~{ceil(select_first([runtime_attr.mem_gb, mem_gb_default]) * 1000 * 0.8)}m \
-             -Xmx~{ceil(select_first([runtime_attr.mem_gb, mem_gb_default]) * 1000 * 0.8)}m \
+        java -Xms~{ceil(select_first([runtime_attr.mem_gb, mem_gb_default]) * 800)}m \
+             -Xmx~{ceil(select_first([runtime_attr.mem_gb, mem_gb_default]) * 800)}m \
              -jar /usr/gitc/picard.jar \
             SamToFastq \
             INPUT=~{input_bam} \
@@ -332,8 +332,8 @@ task MergeAlignment {
         set -e
 
         java -Dsamjdk.compression_level=~{compression_level} \
-             -Xms~{ceil(select_first([runtime_attr.mem_gb, mem_gb_default]) * 1000 * 0.8)}m \
-             -Xmx~{ceil(select_first([runtime_attr.mem_gb, mem_gb_default]) * 1000 * 0.8)}m \
+             -Xms~{ceil(select_first([runtime_attr.mem_gb, mem_gb_default]) * 800)}m \
+             -Xmx~{ceil(select_first([runtime_attr.mem_gb, mem_gb_default]) * 800)}m \
              -jar /usr/gitc/picard.jar \
             MergeBamAlignment \
             VALIDATION_STRINGENCY=SILENT \
