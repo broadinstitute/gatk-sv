@@ -214,7 +214,7 @@ task BwaMem {
     # bwa mem index + working memory roughly doubles the on-disk reference size, plus a
     # base overhead for 16 threads' worth of batch buffers (-K 100000000). Floor at 14 GiB
     # to match what a standard hg38-with-ALT-and-decoys reference needs in practice.
-    Float mem_gb_scaled = (bwa_ref_size * 2.0) + 6.0
+    Float mem_gb_scaled = (bwa_ref_size * 2.0) + 12.0
     Float mem_gb_default = if mem_gb_scaled > 14.0 then mem_gb_scaled else 14.0
 
     RuntimeAttr runtime_attr_bwa_mem_default = object {
