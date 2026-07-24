@@ -62,6 +62,10 @@ workflow AlignUbam {
     input {
         File input_bam
         String output_bam_basename
+        # Flags only - do NOT include the reference path or the fastq path here.
+        # e.g. "bwa mem -K 100000000 -p -v 3 -t 16 -Y"
+        # The BwaMem task appends "<idxbase> <in1.fq>" itself: reference_fasta.ref_fasta
+        # as the index base, then the interleaved FASTQ from SamToFastq.
         String bwa_commandline
         ReferenceFasta reference_fasta
         Int compression_level = 2
@@ -248,7 +252,7 @@ task BwaMem {
         # if reference_fasta.ref_alt has data in it or allow_empty_ref_alt is set
         if [ -s ~{reference_fasta.ref_alt} ] || ~{allow_empty_ref_alt}; then
 
-            /usr/gitc/~{bwa_commandline} ~{input_fastq} \
+            /usr/gitc/~{bwa_commandline} ~{reference_fasta.ref_fasta} ~{input_fastq} \
                 > ~{output_bam_basename}.aligned.unsorted.bwa.sam \
                 2> >(tee ~{output_bam_basename}.bwa.stderr.log >&2)
 
@@ -360,7 +364,7 @@ task MergeAlignment {
             PRIMARY_ALIGNMENT_STRATEGY=MostDistant \
             PROGRAM_RECORD_ID="bwamem" \
             PROGRAM_GROUP_VERSION="~{bwa_version}" \
-            PROGRAM_GROUP_COMMAND_LINE="~{bwa_commandline}" \
+            PROGRAM_GROUP_COMMAND_LINE="~{bwa_commandline} ~{reference_fasta.ref_fasta}" \
             PROGRAM_GROUP_NAME="bwamem" \
             UNMAPPED_READ_STRATEGY=COPY_TO_TAG \
             ALIGNER_PROPER_PAIR_FLAGS=true \
