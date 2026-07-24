@@ -26,15 +26,15 @@ workflow FixBamHeaderDT {
     }
   }
 
-  call ubam_utils.MergeSortedReadGroupUbams {
-    input:
-      sample_name = sample_name,
-      input_ubams = FixHeader.fixed_bam,
-      docker = merge_docker
-  }
+  #call ubam_utils.MergeSortedReadGroupUbams {
+  #  input:
+  #    sample_name = sample_name,
+  #    input_ubams = FixHeader.fixed_bam,
+  #    docker = merge_docker
+  #}
 
   output {
-    File merged_ubam = MergeSortedReadGroupUbams.merged_ubam
+    #File merged_ubam = MergeSortedReadGroupUbams.merged_ubam
     Array[File] fixed_ubams = FixHeader.fixed_bam
     Array[File] original_headers = FixHeader.original_header
     Array[File] fixed_headers = FixHeader.fixed_header
