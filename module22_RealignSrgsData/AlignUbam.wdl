@@ -60,12 +60,16 @@ struct ReferenceFasta {
 
 workflow AlignUbam {
     input {
+        # Still required even if you supply fastq1/fastq2 directly below - MergeAlignment
+        # needs the unmapped BAM to pull read-group/tag metadata from.
         File input_bam
         String output_bam_basename
-        # Flags only - do NOT include the reference path or the fastq path here.
-        # e.g. "bwa mem -K 100000000 -p -v 3 -t 16 -Y"
-        # The BwaMem task appends "<idxbase> <in1.fq>" itself: reference_fasta.ref_fasta
-        # as the index base, then the interleaved FASTQ from SamToFastq.
+        # Flags only - do NOT include the reference path or any fastq path here.
+        # For a single interleaved FASTQ (the SamToFastq path below): include -p,
+        #   e.g. "bwa mem -K 100000000 -p -v 3 -t 16 -Y"
+        # For two separate paired-end FASTQs (fastq1/fastq2 below): omit -p,
+        #   e.g. "bwa mem -K 100000000 -v 3 -t 16 -Y"
+        # The BwaMem task appends "<idxbase> <in1.fq> [in2.fq]" itself.
         String bwa_commandline
         ReferenceFasta reference_fasta
         Int compression_level = 2
@@ -74,22 +78,39 @@ workflow AlignUbam {
         Boolean allow_empty_ref_alt = false
         Int preemptible_tries = 3
 
+        # Optional: if you already have paired FASTQs, provide both here to skip
+        # SamToFastq entirely and feed them straight to bwa mem as two files
+        # (remember to drop -p from bwa_commandline in that case). Leave both unset to
+        # derive an interleaved FASTQ from input_bam via SamToFastq as before.
+        File? fastq1
+        File? fastq2
+
         RuntimeAttr? runtime_attr_sam_to_fastq_override
         RuntimeAttr? runtime_attr_bwa_mem_override
         RuntimeAttr? runtime_attr_merge_alignment_override
     }
 
-    call SamToFastq {
-        input:
-            input_bam           = input_bam,
-            output_bam_basename = output_bam_basename,
-            preemptible_tries   = preemptible_tries,
-            runtime_attr_override = runtime_attr_sam_to_fastq_override
+    Boolean has_paired_fastqs = defined(fastq1) && defined(fastq2)
+
+    if (!has_paired_fastqs) {
+        call SamToFastq {
+            input:
+                input_bam           = input_bam,
+                output_bam_basename = output_bam_basename,
+                preemptible_tries   = preemptible_tries,
+                runtime_attr_override = runtime_attr_sam_to_fastq_override
+        }
     }
+
+    # Either [fastq1, fastq2] (paired, two files) or [SamToFastq.fastq] (interleaved,
+    # one file) - bwa mem accepts either form, so BwaMem just takes an array.
+    Array[File] bwa_input_fastqs = if has_paired_fastqs
+        then select_all([fastq1, fastq2])
+        else select_all([SamToFastq.fastq])
 
     call BwaMem {
         input:
-            input_fastq          = SamToFastq.fastq,
+            input_fastqs         = bwa_input_fastqs,
             output_bam_basename  = output_bam_basename,
             bwa_commandline      = bwa_commandline,
             reference_fasta      = reference_fasta,
@@ -116,7 +137,7 @@ workflow AlignUbam {
 
     output {
         File output_bam     = MergeAlignment.output_bam
-        File fastq          = SamToFastq.fastq
+        File? fastq         = SamToFastq.fastq
         File aligned_sam    = BwaMem.aligned_sam
         File bwa_stderr_log = BwaMem.bwa_stderr_log
     }
@@ -195,7 +216,9 @@ task SamToFastq {
 # comparable size, plus the reference files bwa needs to read.
 task BwaMem {
     input {
-        File input_fastq
+        # One file (interleaved, use -p in bwa_commandline) or two files (paired-end,
+        # no -p) - bwa mem accepts either form as positional args after the idxbase.
+        Array[File] input_fastqs
         String bwa_commandline
         String output_bam_basename
 
@@ -209,7 +232,7 @@ task BwaMem {
         RuntimeAttr? runtime_attr_override
     }
 
-    Float fastq_size = size(input_fastq, "GiB")
+    Float fastq_size = size(input_fastqs, "GiB")
     Float ref_size = size(reference_fasta.ref_fasta, "GiB") + size(reference_fasta.ref_fasta_index, "GiB") + size(reference_fasta.ref_dict, "GiB")
     Float bwa_ref_size = ref_size + size(reference_fasta.ref_alt, "GiB") + size(reference_fasta.ref_amb, "GiB") + size(reference_fasta.ref_ann, "GiB") + size(reference_fasta.ref_bwt, "GiB") + size(reference_fasta.ref_pac, "GiB") + size(reference_fasta.ref_sa, "GiB")
 
@@ -252,7 +275,7 @@ task BwaMem {
         # if reference_fasta.ref_alt has data in it or allow_empty_ref_alt is set
         if [ -s ~{reference_fasta.ref_alt} ] || ~{allow_empty_ref_alt}; then
 
-            /usr/gitc/~{bwa_commandline} ~{reference_fasta.ref_fasta} ~{input_fastq} \
+            /usr/gitc/~{bwa_commandline} ~{reference_fasta.ref_fasta} ~{sep=' ' input_fastqs} \
                 > ~{output_bam_basename}.aligned.unsorted.bwa.sam \
                 2> >(tee ~{output_bam_basename}.bwa.stderr.log >&2)
 
