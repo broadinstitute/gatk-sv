@@ -214,7 +214,7 @@ task BwaMem {
     # bwa mem index + working memory roughly doubles the on-disk reference size, plus a
     # base overhead for 16 threads' worth of batch buffers (-K 100000000). Floor at 14 GiB
     # to match what a standard hg38-with-ALT-and-decoys reference needs in practice.
-    Float mem_gb_scaled = (bwa_ref_size * 2.0) + 12.0
+    Float mem_gb_scaled = (bwa_ref_size * 2.0) + 6.0
     Float mem_gb_default = if mem_gb_scaled > 14.0 then mem_gb_scaled else 14.0
 
     RuntimeAttr runtime_attr_bwa_mem_default = object {
@@ -228,14 +228,17 @@ task BwaMem {
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_attr_bwa_mem_default])
 
     command <<<
-        set -o pipefail
-        set -e
-
-        # This is done before "set -o pipefail" applies to later commands because bwa
-        # prints its version banner with rc=1, and we don't want that rc to trip pipefail.
+        # This is done before "set -o pipefail" / "set -e" because bwa prints its
+        # version banner with rc=1, and with pipefail active that rc would make this
+        # whole pipeline (and the assignment below) look "failed" under errexit -
+        # killing the script immediately, before we even get to check whether
+        # BWA_VERSION actually came back empty.
         BWA_VERSION=$(/usr/gitc/bwa 2>&1 | \
             grep -e '^Version' | \
             sed 's/Version: //')
+
+        set -o pipefail
+        set -e
 
         if [ -z "${BWA_VERSION}" ]; then
             exit 1
