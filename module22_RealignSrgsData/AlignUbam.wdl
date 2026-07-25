@@ -342,7 +342,7 @@ task SortSamByQueryName {
     Float mem_gb_default = 8.0
 
     RuntimeAttr runtime_attr_sort_sam_default = object {
-        cpu_cores:          4,
+        cpu_cores:          2,
         mem_gb:             mem_gb_default,
         disk_gb:            disk_gb_default,
         boot_disk_gb:       15,
@@ -355,9 +355,13 @@ task SortSamByQueryName {
         set -o pipefail
         set -e
 
-        samtools sort -n -O SAM -@ ~{select_first([runtime_attr.cpu_cores, runtime_attr_sort_sam_default.cpu_cores])} \
-            -o ~{output_bam_basename}.aligned.query_sorted.sam \
-            ~{aligned_sam}
+        java -Xms~{ceil(select_first([runtime_attr.mem_gb, mem_gb_default]) * 800)}m \
+             -Xmx~{ceil(select_first([runtime_attr.mem_gb, mem_gb_default]) * 800)}m \
+             -jar /usr/gitc/picard.jar \
+            SortSam \
+            INPUT=~{aligned_sam} \
+            OUTPUT=~{output_bam_basename}.aligned.query_sorted.sam \
+            SORT_ORDER=queryname
     >>>
 
     runtime {
