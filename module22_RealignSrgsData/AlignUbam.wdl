@@ -3,6 +3,46 @@ version 1.0
 ## Copyright (structure adapted from Broad Institute WARP, tasks/wdl/Alignment.wdl,
 ## tag WholeGenomeReprocessing_v3.3.7:
 ## https://github.com/broadinstitute/warp/blob/WholeGenomeReprocessing_v3.3.7/tasks/wdl/Alignment.wdl
+##
+## This WDL aligns a single unmapped BAM (uBAM) with bwa mem and merges the alignment
+## back into the uBAM's metadata (read groups, tags, etc.) using Picard MergeBamAlignment,
+## producing an aligned, unsorted BAM.
+##
+## DIFFERENCE FROM THE ORIGINAL WARP TASK:
+## The original task pipes bwa mem's SAM output directly into MergeBamAlignment via
+## ALIGNED_BAM=/dev/stdin in a single shell pipeline. That streaming pattern can trigger a
+## known Picard/htsjdk bug in SamAlignmentMerger.getDictionaryForMergedBam(), which throws:
+##   "Do not use this function to merge dictionaries with different sequences in them...
+##    Found [] and [chr1, chr2, ...]"
+## even after MergeBamAlignment has successfully read and merged every alignment record.
+## This has been reported independently by multiple users running this exact WARP-style
+## pipeline (Biostars, GATK support forum, Drop-seq GitHub issues), including on modern
+## GATK4 releases, so it appears to be a persistent upstream limitation rather than
+## something specific to any one dataset.
+##
+## To avoid it, this WDL writes bwa mem's output to an actual file first, then runs
+## MergeBamAlignment as a second, separate command reading that completed file (this is
+## the fix that resolved the issue for other users who hit the same bug).
+##
+## These steps are split into separate tasks (SamToFastq, BwaMem, SortSamByQueryName, MergeAlignment)
+## rather than one combined task. Each intermediate file - the interleaved FASTQ, the
+## aligned SAM, and the queryname-sorted SAM - is a first-class WDL output you can pull up on its own: check read counts
+## in the FASTQ, run samtools quickcheck/flagstat/view -H on the aligned SAM, etc. - before
+## the next step ever touches it. It also means Cromwell retries and caches each step
+## independently, so a failure downstream doesn't force earlier steps to rerun.
+##
+## RESOURCE SIZING:
+## Each task computes a default memory/disk/cpu footprint (RuntimeAttr, imported from
+## Structs.wdl) scaled off the size of its own actual input file(s), rather than a single
+## fixed number for every sample. If a job still runs out of memory or disk on a
+## particularly large or unusual input, pass a `runtime_attr_override` to that task
+## (any subset of RuntimeAttr's fields - unset fields fall back to the computed default)
+## rather than editing the WDL.
+##
+## LICENSING:
+## Released under the WDL source code license (BSD-3), matching the license terms of the
+## original WARP task this is adapted from. The programs it calls (bwa, Picard, samtools)
+## may be subject to different licenses - check the docker image for details.
 
 import "Structs.wdl"
 
@@ -20,13 +60,25 @@ struct ReferenceFasta {
 
 workflow AlignUbam {
     input {
+        # Still required even if you supply fastq1/fastq2 directly below - MergeAlignment
+        # needs the unmapped BAM to pull read-group/tag metadata from.
         File input_bam
         String output_bam_basename
         ReferenceFasta reference_fasta
 
+        # Optional: if you already have paired FASTQs, provide both here to skip
+        # SamToFastq entirely and feed them straight to bwa mem as two files.
+        # Leave both unset to derive an interleaved FASTQ from input_bam via SamToFastq
+        # instead (the default path).
         File? fastq1
         File? fastq2
 
+        # $bash_ref_fasta is a bash variable the BwaMem task sets to
+        # reference_fasta.ref_fasta at runtime (matching the original WARP script) - it
+        # is substituted by bash when the command runs, not by WDL, so leave it as
+        # literal text here. -p is required for the single interleaved-FASTQ path and
+        # must be dropped for the two-file fastq1/fastq2 path, which this default
+        # switches on automatically; override explicitly if you need different flags.
         String bwa_commandline = if (defined(fastq1) && defined(fastq2))
             then "bwa mem -K 100000000 -v 3 -t 16 -Y $bash_ref_fasta"
             else "bwa mem -K 100000000 -p -v 3 -t 16 -Y $bash_ref_fasta"
@@ -48,25 +100,27 @@ workflow AlignUbam {
     if (!has_paired_fastqs) {
         call SamToFastq {
             input:
-                input_bam             = input_bam,
-                output_bam_basename   = output_bam_basename,
-                preemptible_tries     = preemptible_tries,
+                input_bam           = input_bam,
+                output_bam_basename = output_bam_basename,
+                preemptible_tries   = preemptible_tries,
                 runtime_attr_override = runtime_attr_sam_to_fastq_override
         }
     }
 
+    # Either [fastq1, fastq2] (paired, two files) or [SamToFastq.fastq] (interleaved,
+    # one file) - bwa mem accepts either form, so BwaMem just takes an array.
     Array[File] bwa_input_fastqs = if has_paired_fastqs
         then select_all([fastq1, fastq2])
         else select_all([SamToFastq.fastq])
 
     call BwaMem {
         input:
-            input_fastqs          = bwa_input_fastqs,
-            output_bam_basename   = output_bam_basename,
-            bwa_commandline       = bwa_commandline,
-            reference_fasta       = reference_fasta,
-            preemptible_tries     = preemptible_tries,
-            allow_empty_ref_alt   = allow_empty_ref_alt,
+            input_fastqs         = bwa_input_fastqs,
+            output_bam_basename  = output_bam_basename,
+            bwa_commandline      = bwa_commandline,
+            reference_fasta      = reference_fasta,
+            preemptible_tries    = preemptible_tries,
+            allow_empty_ref_alt  = allow_empty_ref_alt,
             runtime_attr_override = runtime_attr_bwa_mem_override
     }
 
@@ -88,7 +142,6 @@ workflow AlignUbam {
             runtime_attr_override = runtime_attr_sort_sam_override
     }
 
-    # Step 3: Merge the matched, Picard-queryname-sorted alignment and uBAM files
     call MergeAlignment {
         input:
             input_bam               = SortUnmappedBam.sorted_bam,
@@ -115,7 +168,14 @@ workflow AlignUbam {
     }
 }
 
-# Task 1: uBAM -> interleaved FASTQ
+# Step 1: uBAM -> interleaved FASTQ. Its output (fastq) is a normal task output, so you
+# can QC it directly - read counts, spot-check read names/pairing - before bwa mem
+# ever touches it.
+#
+# Sizing: SamToFastq streams the BAM and writes text; memory needs are modest and mostly
+# flat, but we still scale disk directly off the input BAM size since the interleaved
+# FASTQ (names + sequence + quals, uncompressed) can run noticeably larger than the
+# source BAM.
 task SamToFastq {
     input {
         File input_bam
@@ -168,13 +228,30 @@ task SamToFastq {
     }
 }
 
-# Task 2: interleaved FASTQ -> BWA-MEM alignment
+# Step 2: interleaved FASTQ -> bwa mem, writing the aligned output to a real file rather
+# than piping it into MergeBamAlignment. Its output (aligned_sam) is a normal task
+# output, so you can QC it directly - samtools quickcheck/flagstat, check @SQ lines are
+# complete, compare read counts against the FASTQ - before MergeAlignment ever touches it.
+#
+# Sizing: bwa mem's memory footprint is driven mostly by the reference index it loads
+# (bwt/pac/etc, roughly proportional to reference fasta size) plus per-thread batch
+# buffers, not by the FASTQ input size itself - so mem_gb below scales off bwa_ref_size,
+# with a floor to cover the base index + threads overhead for a typical human genome.
+# Disk scales off the FASTQ size, since the output SAM is uncompressed text of
+# comparable size, plus the reference files bwa needs to read.
 task BwaMem {
     input {
+        # One file (interleaved, use -p in bwa_commandline) or two files (paired-end,
+        # no -p) - bwa mem accepts either form as positional args after the idxbase.
         Array[File] input_fastqs
         String bwa_commandline
         String output_bam_basename
+
+        # reference_fasta.ref_alt is the .alt file from bwa-kit
+        # (https://github.com/lh3/bwa/tree/master/bwakit),
+        # listing the reference contigs that are "alternative".
         ReferenceFasta reference_fasta
+
         Int preemptible_tries
         Boolean allow_empty_ref_alt = false
         RuntimeAttr? runtime_attr_override
@@ -186,6 +263,9 @@ task BwaMem {
 
     Int disk_gb_default = ceil(fastq_size + bwa_ref_size + (3.0 * fastq_size) + 20)
 
+    # bwa mem index + working memory roughly doubles the on-disk reference size, plus a
+    # base overhead for 16 threads' worth of batch buffers (-K 100000000). Floor at 14 GiB
+    # to match what a standard hg38-with-ALT-and-decoys reference needs in practice.
     Float mem_gb_scaled = (bwa_ref_size * 2.0) + 6.0
     Float mem_gb_default = if mem_gb_scaled > 14.0 then mem_gb_scaled else 14.0
 
@@ -200,6 +280,11 @@ task BwaMem {
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_attr_bwa_mem_default])
 
     command <<<
+        # This is done before "set -o pipefail" / "set -e" because bwa prints its
+        # version banner with rc=1, and with pipefail active that rc would make this
+        # whole pipeline (and the assignment below) look "failed" under errexit -
+        # killing the script immediately, before we even get to check whether
+        # BWA_VERSION actually came back empty.
         BWA_VERSION=$(/usr/gitc/bwa 2>&1 | \
             grep -e '^Version' | \
             sed 's/Version: //')
@@ -212,9 +297,14 @@ task BwaMem {
         fi
         echo "${BWA_VERSION}" > bwa_version.txt
 
+        # bwa_commandline contains the literal text "$bash_ref_fasta" (see the workflow
+        # input default) - set the bash variable it refers to before bwa mem runs, so
+        # bash substitutes in the actual reference path when the line below executes.
         bash_ref_fasta=~{reference_fasta.ref_fasta}
 
+        # if reference_fasta.ref_alt has data in it or allow_empty_ref_alt is set
         if [ -s ~{reference_fasta.ref_alt} ] || ~{allow_empty_ref_alt}; then
+
             /usr/gitc/~{bwa_commandline} ~{sep=' ' input_fastqs} \
                 > ~{output_bam_basename}.aligned.unsorted.bwa.sam \
                 2> >(tee ~{output_bam_basename}.bwa.stderr.log >&2)
@@ -223,6 +313,8 @@ task BwaMem {
                 grep -m1 "read .* ALT contigs" ~{output_bam_basename}.bwa.stderr.log | \
                     grep -v "read 0 ALT contigs"
             fi
+
+        # else reference_fasta.ref_alt is empty or could not be found
         else
             echo "ref_alt input is empty or not provided." >&2
             exit 1
@@ -298,7 +390,18 @@ task SortSamByQueryName {
     }
 }
 
-# Task 4: Picard MergeBamAlignment on strictly matched queryname-sorted streams
+# Step 3: merge the completed alignment file back into the unmapped BAM's metadata
+# (read groups, tags, etc.) via Picard MergeBamAlignment. Reading ALIGNED_BAM from a
+# finished file here - rather than /dev/stdin in the same pipeline as bwa mem - avoids a
+# known Picard/htsjdk bug in SamAlignmentMerger.getDictionaryForMergedBam() that throws
+# "Do not use this function to merge dictionaries..." even after successfully reading
+# every alignment record. That bug has been reported independently by multiple users
+# running this same style of pipeline (Biostars, GATK support forum, Drop-seq GitHub
+# issues), including on modern GATK4 releases.
+#
+# Sizing: MergeBamAlignment buffers up to MAX_RECORDS_IN_RAM records; memory is mostly
+# flat but given a small bump for larger inputs. Disk scales off both the uBAM and the
+# aligned SAM, since the merged output is comparable in size to the aligned SAM.
 task MergeAlignment {
     input {
         File input_bam
