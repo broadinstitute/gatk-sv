@@ -42,6 +42,8 @@ workflow AlignUbam {
     Boolean allow_empty_ref_alt = false
     Int preemptible_tries = 3
 
+    String sv_pipeline_base_docker
+
     RuntimeAttr? runtime_attr_sam_to_fastq_override
     RuntimeAttr? runtime_attr_bwa_mem_override
     RuntimeAttr? runtime_attr_sort_sam_override
@@ -133,7 +135,8 @@ workflow AlignUbam {
   call CreateSequenceGroupingTSV {
     input:
       ref_dict          = reference_fasta.ref_dict,
-      preemptible_tries = preemptible_tries
+      preemptible_tries = preemptible_tries,
+      sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
   # Estimate level of cross-sample contamination
@@ -612,6 +615,7 @@ task CreateSequenceGroupingTSV {
   input {
     File ref_dict
     Int preemptible_tries
+    String sv_pipeline_base_docker
   }
 
   command <<<
@@ -662,7 +666,7 @@ task CreateSequenceGroupingTSV {
   >>>
 
   runtime {
-    docker: "us.gcr.io/broad-gotc-prod/samtools-picard-bwa:1.0.2-0.7.15-2.26.10-1643840748"
+    docker: sv_pipeline_base_docker
     memory: "2 GiB"
     cpu: 1
     preemptible: preemptible_tries
