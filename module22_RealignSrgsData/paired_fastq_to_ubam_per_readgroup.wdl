@@ -505,7 +505,7 @@ task SortReadGroupUbam {
   >>>
 
   output {
-    File sorted_bam = "rg.~{readgroup_index}.query_sorted.unmapped.bam"
+    File sorted_ubam = "rg.~{readgroup_index}.query_sorted.unmapped.bam"
   }
 
   runtime {
