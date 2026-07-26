@@ -235,7 +235,7 @@ task SamToFastq {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_attr_str_to_fastq_default])
 
-  String output_bam_basename = output_basename(input_bam, ".bam")
+  String output_bam_basename = basename(input_bam, ".bam")
 
   command <<<
     set -o pipefail
@@ -295,7 +295,7 @@ task BwaMem {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_attr_bwa_mem_default])
 
-  String output_bam_basename = output_basename(input_bam, ".bam")
+  String output_bam_basename = basename(input_bam, ".bam")
 
   command <<<
     BWA_VERSION=$(/usr/gitc/bwa 2>&1 | grep -e '^Version' | sed 's/Version: //')
@@ -356,7 +356,7 @@ task SortSamByQueryName {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_attr_sort_sam_default])
 
-  String output_basename = output_basename(input_sam_or_bam)
+  String output_basename = basename(input_sam_or_bam)
   command <<<
     set -o pipefail
     set -e
