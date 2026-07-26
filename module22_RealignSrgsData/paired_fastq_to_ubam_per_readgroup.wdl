@@ -482,7 +482,6 @@ task SortReadGroupUbam {
   input {
     File input_ubam
     Int readgroup_index
-
     Int additional_disk_space_gb = 50
     Int machine_mem_gb           = 16
     Int machine_cpu_cores        = 8
@@ -496,18 +495,17 @@ task SortReadGroupUbam {
     set -euo pipefail
     mkdir -p tmp
 
-    samtools sort \
-      -n \
-      -@ ~{machine_cpu_cores} \
-      -m 1G \
-      -T tmp/queryname_sort \
-      -O BAM \
-      -o rg.~{readgroup_index}.query_sorted.unmapped.bam \
-      ~{input_ubam}
+    java -Xms~{machine_mem_gb - 1}g -Xmx~{machine_mem_gb - 1}g \
+      -jar /usr/gitc/picard.jar \
+      SortSam \
+      INPUT=~{input_ubam} \
+      OUTPUT=rg.~{readgroup_index}.query_sorted.unmapped.bam \
+      SORT_ORDER=queryname \
+      TMP_DIR=tmp
   >>>
 
   output {
-    File sorted_ubam = "rg.~{readgroup_index}.query_sorted.unmapped.bam"
+    File sorted_bam = "rg.~{readgroup_index}.query_sorted.unmapped.bam"
   }
 
   runtime {
@@ -519,7 +517,6 @@ task SortReadGroupUbam {
     maxRetries:  preemptible_attempts
   }
 }
-
 
 task MergeSortedReadGroupUbams {
   input {
