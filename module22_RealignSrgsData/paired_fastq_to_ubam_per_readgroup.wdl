@@ -126,7 +126,7 @@ workflow ConvertPairedFastQsToPerReadgroupUbamWf {
       input:
         input_ubam                    = ConvertReadGroupFastqToUbam.unmapped_ubam,
         readgroup_index               = i,
-        docker                        = samtools_docker,
+        docker                        = "us.gcr.io/broad-gotc-prod/samtools-picard-bwa:1.0.2-0.7.15-2.26.10-1643840748",
         additional_disk_space_gb      = additional_disk_space_gb,
         machine_mem_gb                = machine_mem_gb,
         machine_cpu_cores             = machine_cpu_cores,
