@@ -529,7 +529,7 @@ task MarkDuplicates {
   command <<<
     set -e
     java -Dsamjdk.compression_level=~{compression_level} \
-      -Xms~{ceil(select_first([runtime_attr.mem_gb, 14.0]) * 800)}m \
+      -Xms~{ceil(select_first([runtime_attr.mem_gb, default_mem_gb]) * 800)}m \
       -jar /usr/gitc/picard.jar \
       MarkDuplicates \
       INPUT=~{sep=' INPUT=' input_bams} \
@@ -538,6 +538,7 @@ task MarkDuplicates {
       VALIDATION_STRINGENCY=SILENT \
       OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500 \
       ASSUME_SORT_ORDER=queryname
+
   >>>
 
   runtime {
