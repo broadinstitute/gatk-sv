@@ -271,7 +271,6 @@ task BwaMem {
     File input_bam
     Array[File] input_fastqs
     String bwa_commandline
-    String output_bam_basename
     ReferenceFasta reference_fasta
     Int preemptible_tries
     Boolean allow_empty_ref_alt = false
