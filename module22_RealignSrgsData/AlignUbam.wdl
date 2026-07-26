@@ -580,7 +580,7 @@ task SortSampleBam {
 
   command <<<
     set -e
-    java -Xms~{ceil(select_first([runtime_attr.mem_gb, 8.0]) * 800)}m \
+    java -Xms~{ceil(select_first([runtime_attr.mem_gb, default_mem_gb]) * 800)}m \
       -jar /usr/gitc/picard.jar \
       SortSam \
       INPUT=~{input_bam} \
