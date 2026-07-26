@@ -515,6 +515,7 @@ task MarkDuplicates {
 
   Float input_size = size(input_bams, "GiB")
   Int disk_gb_default = ceil(input_size * 3.0 + 30)
+  Int default_mem_gb = ceil(input_size * 2.0 + 20)
 
   RuntimeAttr runtime_attr_md_default = object {
     cpu_cores:          2,
@@ -567,6 +568,7 @@ task SortSampleBam {
 
   Float input_size = size(input_bam, "GiB")
   Int disk_gb_default = ceil(input_size * 3.0 + 30)
+  Int default_mem_gb = ceil(input_size * 2.0 + 20)
 
   RuntimeAttr runtime_attr_sort_default = object {
     cpu_cores:          2,
