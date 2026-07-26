@@ -61,7 +61,6 @@ workflow AlignUbam {
       call SamToFastq {
         input:
           input_bam             = input_bam,
-          output_bam_basename   = input_bam,
           preemptible_tries     = preemptible_tries,
           runtime_attr_override = runtime_attr_sam_to_fastq_override
       }
@@ -71,8 +70,8 @@ workflow AlignUbam {
 
     call BwaMem {
       input:
+        input_bam             = input_bam,
         input_fastqs          = bwa_input_fastqs,
-        output_bam_basename   = input_bam,
         bwa_commandline       = if has_paired_fastqs then bwa_commandline else bwa_commandline + " -p",
         reference_fasta       = reference_fasta,
         preemptible_tries     = preemptible_tries,
@@ -83,7 +82,6 @@ workflow AlignUbam {
     call SortSamByQueryName as SortAlignedSam {
       input:
         input_sam_or_bam      = BwaMem.aligned_sam,
-        output_basename       = input_bam + ".aligned",
         preemptible_tries     = preemptible_tries,
         runtime_attr_override = runtime_attr_sort_sam_override
     }
@@ -95,7 +93,6 @@ workflow AlignUbam {
         bwa_stderr_log          = BwaMem.bwa_stderr_log,
         bwa_version             = BwaMem.bwa_version,
         bwa_commandline         = bwa_commandline,
-        output_bam_basename     = input_bam,
         reference_fasta         = reference_fasta,
         compression_level       = compression_level,
         hard_clip_reads         = hard_clip_reads,
@@ -107,7 +104,6 @@ workflow AlignUbam {
     call CollectUnsortedReadgroupBamQualityMetrics {
       input:
         input_bam         = MergeAlignment.output_bam,
-        output_basename   = input_bam,
         reference_fasta   = reference_fasta,
         preemptible_tries = preemptible_tries
     }
@@ -218,7 +214,6 @@ workflow AlignUbam {
 task SamToFastq {
   input {
     File input_bam
-    String output_bam_basename
     Int preemptible_tries
     RuntimeAttr? runtime_attr_override
   }
@@ -236,6 +231,8 @@ task SamToFastq {
     max_retries:        1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_attr_str_to_fastq_default])
+
+  String output_bam_basename = output_basename(input_bam, ".bam")
 
   command <<<
     set -o pipefail
@@ -268,6 +265,7 @@ task SamToFastq {
 
 task BwaMem {
   input {
+    File input_bam
     Array[File] input_fastqs
     String bwa_commandline
     String output_bam_basename
@@ -294,6 +292,8 @@ task BwaMem {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_attr_bwa_mem_default])
 
+  String output_bam_basename = output_basename(input_bam, ".bam")
+
   command <<<
     BWA_VERSION=$(/usr/gitc/bwa 2>&1 | grep -e '^Version' | sed 's/Version: //')
     set -o pipefail
@@ -305,7 +305,8 @@ task BwaMem {
     bash_ref_fasta=~{reference_fasta.ref_fasta}
 
     if [ -s ~{reference_fasta.ref_alt} ] || ~{allow_empty_ref_alt}; then
-      /usr/gitc/~{bwa_commandline} ~{sep=' ' input_fastqs} \
+      /usr/gitc/~{bwa_commandline} \
+        ~{sep=' ' input_fastqs} \
         > ~{output_bam_basename}.aligned.unsorted.bwa.sam \
         2> >(tee ~{output_bam_basename}.bwa.stderr.log >&2)
     else
@@ -334,7 +335,6 @@ task BwaMem {
 task SortSamByQueryName {
   input {
     File input_sam_or_bam
-    String output_basename
     Int preemptible_tries
     RuntimeAttr? runtime_attr_override
   }
@@ -353,6 +353,7 @@ task SortSamByQueryName {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_attr_sort_sam_default])
 
+  String output_basename = output_basename(input_sam_or_bam)
   command <<<
     set -o pipefail
     set -e
@@ -388,7 +389,6 @@ task MergeAlignment {
     File bwa_stderr_log
     String bwa_version
     String bwa_commandline
-    String output_bam_basename
     ReferenceFasta reference_fasta
     Int compression_level
     Int preemptible_tries
@@ -414,6 +414,7 @@ task MergeAlignment {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_attr_merge_alignment_default])
 
+  String output_bam_basename = basename(input_bam, ".bam")
   command <<<
     set -o pipefail
     set -e
@@ -470,11 +471,11 @@ task MergeAlignment {
 task CollectUnsortedReadgroupBamQualityMetrics {
   input {
     File input_bam
-    String output_basename
     ReferenceFasta reference_fasta
     Int preemptible_tries
   }
 
+  String output_basename = basename(input_bam, ".bam")
   command <<<
     set -e
     java -Xms2000m -jar /usr/gitc/picard.jar \
