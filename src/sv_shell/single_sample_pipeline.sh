@@ -13,15 +13,15 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 log_info() {
-  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${CYAN}$1${NC}" | tee -a "${single_sample_pipeline_stdout}"
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${CYAN} $1 ${NC}" | tee -a "${single_sample_pipeline_stdout}"
 }
 
 log_success() {
-  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${GREEN}$1${NC}" | tee -a "${single_sample_pipeline_stdout}"
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${GREEN} $1 ${NC}" | tee -a "${single_sample_pipeline_stdout}"
 }
 
 log_error() {
-  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${RED}$1${NC}" | tee -a "${single_sample_pipeline_stderr}"
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${RED} $1 ${NC}" | tee -a "${single_sample_pipeline_stderr}"
 }
 
 set -Exeuo pipefail
