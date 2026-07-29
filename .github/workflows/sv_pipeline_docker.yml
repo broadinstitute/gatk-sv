@@ -150,6 +150,9 @@ jobs:
       - name: Run build_docker.py
         timeout-minutes: 360
         run: |
+          echo "=== TEST ==="
+          df -h
+          
           cd ./scripts/docker/
           python build_docker.py \
             --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
