@@ -113,7 +113,7 @@ jobs:
     name: Test Images Build
     if: github.event_name == 'pull_request'
     needs: build_args_job
-    timeout-minutes: 360
+    timeout-minutes: 120
     strategy:
       matrix:
         python-version: ['3.8']
@@ -148,11 +148,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Run build_docker.py
-        timeout-minutes: 360
+        timeout-minutes: 120
         run: |
-          echo "=== TEST ==="
-          df -h
-          
           cd ./scripts/docker/
           python build_docker.py \
             --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
@@ -170,7 +167,7 @@ jobs:
     environment: Deploy
     if: github.event_name == 'push'
     needs: build_args_job
-    timeout-minutes: 360
+    timeout-minutes: 120
     strategy:
       matrix:
         python-version: ['3.8']
@@ -249,7 +246,7 @@ jobs:
 
       - name: Build and Publish Docker Images to Google Artifact Registry
         id: build_and_publish
-        timeout-minutes: 360
+        timeout-minutes: 120
         run: |
           python ./scripts/docker/build_docker.py \
             --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
