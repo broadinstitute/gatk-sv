@@ -2,6 +2,43 @@ ARG SV_PIPELINE_IMAGE=sv-pipeline:latest
 ARG WHAM_IMAGE=wham:latest
 
 FROM $WHAM_IMAGE as wham_layer
+
+# ---- GATK build stage --------------------------------------------------
+# Builds gatk.jar and the "gatk" conda env here, isolated from the final
+# image, so the full JDK, git, git-lfs, and gradle never ship at runtime.
+# note that gatk is installed in sv-base docker, which this docker image inherits.
+# however, the base images are currently being updated: https://github.com/broadinstitute/gatk-sv/pull/816
+# so as a temporary work-around we're re-installing gatk in this image using code in a specific branch.
+# setting SHELL to bash in the following is needed for the `source` command in the following RUN,
+# since the default sh does not support `source`.
+FROM $SV_PIPELINE_IMAGE AS gatk_builder
+ENV DEBIAN_FRONTEND noninteractive
+SHELL ["/bin/bash", "-c"]
+RUN apt-get update && apt-get -qqy install --no-upgrade --no-install-recommends --fix-missing \
+        git \
+        git-lfs \
+        openjdk-17-jdk \
+        libgomp1 \
+        wget && \
+    GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git && \
+    cd gatk && \
+    git checkout mw_gatk_sv && \
+    git checkout 672d8557d82d17cefe972df5796ba719f0d7adbc && \
+    mkdir -p /opt/gatk_miniconda3 && \
+    wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.10.0-1-Linux-x86_64.sh -O /opt/gatk_miniconda3/miniconda.sh && \
+    bash /opt/gatk_miniconda3/miniconda.sh -p /opt/gatk_miniconda3 -b -u && \
+    rm /opt/gatk_miniconda3/miniconda.sh && \
+    /opt/gatk_miniconda3/bin/conda config --append envs_dirs /opt/conda/envs && \
+    source /opt/gatk_miniconda3/bin/activate && \
+    conda config --set auto_update_conda false && \
+    conda config --set solver libmamba && \
+    ./gradlew localDevCondaEnv && \
+    ./gradlew localJar && \
+    cp ./build/libs/gatk.jar /opt/gatk.jar && \
+    cd / && rm -rf gatk ~/.gradle && \
+    conda clean -afy
+
+
 FROM $SV_PIPELINE_IMAGE
 
 ENV DEBIAN_FRONTEND noninteractive
@@ -10,7 +47,7 @@ ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get clean all && \
     apt-get update && \
     apt-get upgrade -y && \
-    apt-get install -y  \
+    apt-get install -y --no-install-recommends \
         autoconf \
         autogen \
         build-essential \
@@ -45,7 +82,7 @@ RUN apt-get clean && \
 RUN Rscript -e "install.packages('htmlwidgets', repos='http://cran.us.r-project.org')"
 RUN Rscript -e "install.packages('shiny', repos='http://cran.us.r-project.org')"
 RUN echo "r <- getOption('repos'); r['CRAN'] <- 'http://cran.us.r-project.org'; options(repos = r);" > ~/.Rprofile
-RUN Rscript -e "library(devtools); install_github('mhahsler/rBLAST')"
+RUN Rscript -e "install.packages('remotes', repos='http://cran.us.r-project.org'); remotes::install_github('mhahsler/rBLAST')"
 
 # install bcftools and htslib
 ARG HTSLIB_VERSION="1.18"
@@ -90,7 +127,6 @@ CMD ["Rscript"]
 
 
 # Whamg Docker
-ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy dist-upgrade && \
     apt-get -qqy install --no-install-recommends \
@@ -112,31 +148,13 @@ RUN mkdir -p /opt/R/4.5.0/lib/R/doc/html && \
 
 
 # Install GATK
-# note that gatk is installed in sv-base docker, which this docker image inherits.
-# however, the base images are currently being updated: https://github.com/broadinstitute/gatk-sv/pull/816
-# so as a temporary work-around we're re-installing gatk in this image using code in a specific branch.
-# setting SHELL to bash in the following is needed for the `source` command in the following RUN,
-# since the default sh does not support `source`.
-SHELL ["/bin/bash", "-c"]
-RUN apt-get update && apt-get -qqy install --no-upgrade --no-install-recommends --fix-missing git git-lfs openjdk-17-jdk openjdk-17-jre-headless libgomp1 && \
-    GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git && \
-    cd gatk && \
-    git checkout mw_gatk_sv && \
-    git checkout 672d8557d82d17cefe972df5796ba719f0d7adbc && \
-    mkdir -p /opt/gatk_miniconda3 && \
-    wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.10.0-1-Linux-x86_64.sh -O /opt/gatk_miniconda3/miniconda.sh && \
-    bash /opt/gatk_miniconda3/miniconda.sh -p /opt/gatk_miniconda3 -b -u && \
-    rm /opt/gatk_miniconda3/miniconda.sh && \
-    /opt/gatk_miniconda3/bin/conda config --append envs_dirs /opt/conda/envs && \
-    source /opt/gatk_miniconda3/bin/activate && \
-    conda config --set auto_update_conda false && \
-    conda config --set solver libmamba && \
-    ./gradlew localDevCondaEnv && \
-    ./gradlew localJar && \
-    cp ./build/libs/gatk.jar /opt/gatk.jar && \
-    cd .. && \
-    rm -rf gatk/ && \
-    ln -s /opt/gatk_miniconda3/bin/conda /usr/local/bin/conda
+# gatk.jar and its conda env are built in the gatk_builder stage above; only the
+# JRE needed to run the jar, the jar itself, and the conda env are brought in here.
+RUN apt-get update && apt-get -qqy install --no-upgrade --no-install-recommends --fix-missing openjdk-17-jre-headless && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+COPY --from=gatk_builder /opt/gatk.jar /opt/gatk.jar
+COPY --from=gatk_builder /opt/gatk_miniconda3 /opt/gatk_miniconda3
+RUN ln -s /opt/gatk_miniconda3/bin/conda /usr/local/bin/conda
 
 
 # stripy docker
@@ -164,8 +182,8 @@ RUN git clone https://gitlab.com/andreassh/stripy-pipeline.git /opt/stripy-pipel
 WORKDIR /opt/stripy-pipeline
 
 RUN python3 -m venv /opt/stripy-env
-RUN /opt/stripy-env/bin/pip install --upgrade pip && \
-    if [ -f requirements.txt ]; then /opt/stripy-env/bin/pip install -r requirements.txt; fi
+RUN /opt/stripy-env/bin/pip install --no-cache-dir --upgrade pip && \
+    if [ -f requirements.txt ]; then /opt/stripy-env/bin/pip install --no-cache-dir -r requirements.txt; fi
 
 # Copy wrapper script, default config, and loci profiles
 COPY src/stripy/stripy /usr/local/bin/stripy
@@ -181,7 +199,7 @@ RUN chmod +x /usr/local/bin/stripy
 COPY src/sv_shell /opt/sv_shell
 
 # SYSSTAT (SAR) configuration. Collect stats every 30 seconds (two measurements in 1min)
-RUN apt-get update && apt-get install -y cron sysstat && \
+RUN apt-get update && apt-get install -y --no-install-recommends cron sysstat && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     sed -i 's/ENABLED="false"/ENABLED="true"/' /etc/default/sysstat && \
     sed -i 's|^5-55/10.*|* * * * * root command -v debian-sa1 > /dev/null \&\& debian-sa1 30 2|' /etc/cron.d/sysstat
