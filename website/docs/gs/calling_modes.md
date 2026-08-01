@@ -4,15 +4,28 @@ description: Description of single-sample and joint calling
 sidebar_position: 1
 ---
 
-# Calling modes
+# Calling Modes
 
-GATK-SV offers two different modes for SV calling. Users should carefully review the following sections to determine
-which mode is appropriate for their use case.
+GATK-SV offers three different modes for SV calling. 
+This section guides you to determine
+which mode is appropriate for your use case.
 
-## Single-sample mode
+Please refer to the table below for a quick comparison; 
+each mode is covered in more detail later in this page.
+
+|  | [Cohort Mode](#join-calling) | [Single-sample (Terra)](#single-sample-terra) | [Single-sample (SV-Shell)](#single-sample-sv-shell) |
+|--|------------------------------|-----------------------------------------------|-----------------------------------------------------|
+| **Designed for**  | Biobank-level joint-calling SVs                               | Clinical use-cases                                      | Clinical use-cases                                      |
+| **Use when**      | All the data is available when starting to run the pipeline   | Data is available in smaller batches on a rolling basis | Data is available in smaller batches on a rolling basis |
+| **Scalability**   | Hundreds of thousands of WGS                                  | One WGS at a time                                       | One WGS at a time                                       |
+| **Availability**  | Exclusively Terra platform running on GCP                     | Exclusively Terra platform running on GCP               | Platform-agnostic and available on Terra                |
+
+
+## Single-Sample Mode (GCP Only) {#single-sample-terra}
 
 GATK-SV can perform SV calling on individual samples. In this mode, a sample is jointly called against a fixed reference 
-panel of [156 high-quality samples from the 1000 Genomes Project](https://app.terra.bio/#workspaces/anvil-datastorage/1000G-high-coverage-2019). Single-sample mode is a good option for the following 
+panel of [156 high-quality samples from the 1000 Genomes Project](https://app.terra.bio/#workspaces/anvil-datastorage/1000G-high-coverage-2019). 
+Single-sample mode is a good option for the following 
 use cases:
 
 - Studies involving fewer 100 samples
@@ -23,7 +36,26 @@ simpler to run than joint calling. However, it also has higher compute costs on 
 as joint calling with larger cohorts. Additionally, SV quality will be best when the case sample closely resembles the samples
 in the reference panel in terms of sequencing depth, sample quality, and library preparation.
 
-## Joint calling mode
+Please refer to [this page](/docs/execution/single) for more details on this mode.
+
+## Single-Sample Mode (Platform-Agnostic) {#single-sample-sv-shell}
+
+Single-sample mode runs exclusively on the Terra platform, which supports only GCP.
+To address this limitation, we developed SV-Shell, 
+a platform-agnostic reimplementation of the single-sample mode.
+It offers the same functionality as single-sample mode, 
+and additionally supports optional DRAGEN-generated SV and CNV calls.
+
+You may want to use SV-Shell for the following use cases:
+
+- Running on platforms other than GCP/Terra, such as AWS, Azure, or institutional HPC
+- Studies involving fewer than 100 samples
+- Studies with rolling data delivery, i.e. in small batches over time
+- Using DRAGEN-generated SV and CNV calls
+
+Please refer to [this page](/docs/execution/svshell) for more details on this mode.
+
+## Joint Calling Mode {#join-calling}
 
 GATK-SV can also perform joint calling on a set of samples. Users may opt for this mode in the following use cases:
 
@@ -36,7 +68,4 @@ some features, such as genotype recalibration and filtering and in-depth QC plot
 However, this pipeline is considerably more complex to execute than the single-sample mode, requiring sample batching and the execution of 
 several individual modules.
 
-## Related content
-
-More information on single-sample and joint calling can be found in the [Execution](/docs/execution/overview) section.
-
+Please refer to [this page](/docs/execution/joint) for more details on this mode.
