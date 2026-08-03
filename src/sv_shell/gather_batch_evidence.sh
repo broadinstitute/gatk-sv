@@ -72,9 +72,11 @@ dragen_cnv_vcf=$(jq -r '.dragen_cnv_vcf // ""' "${input_json}")
 if [[ -n "${dragen_cnv_vcf}" && "${dragen_cnv_vcf}" != "null" ]]; then
   run_cnmops="false"
   run_gcnv="false"
+  run_condense_read_counts="false"
 else
   run_cnmops="true"
   run_gcnv="true"
+  run_condense_read_counts="true"
 fi
 
 # -------------------------------------------------------
@@ -313,25 +315,31 @@ fi
 # however, since in the single-sample mode the 'samples' list contains one sample only,
 # for simplicity, the in the sv-shell version we're not implementing the loop.
 cd "${working_dir}"
-log_info "Starting condense read counts."
 condense_read_counts_inputs_json="$(realpath "${output_dir}/condense_read_counts_inputs.json")"
 condense_read_counts_outputs_json="$(realpath "${output_dir}/condense_read_counts_outputs.json")"
 
-jq -n \
-  --arg counts "${counts[0]}" \
-  --arg sample "${samples[0]}" \
-  --argfile min_interval_size <(jq '.min_interval_size' "${input_json}") \
-  --argfile max_interval_size <(jq '.max_interval_size' "${input_json}") \
-  '{
-      "sample": $sample,
-      "counts": $counts,
-      "min_interval_size": $min_interval_size,
-      "max_interval_size": $max_interval_size
-  }' > "${condense_read_counts_inputs_json}"
+if [[ "${run_condense_read_counts}" == "true" ]]; then
+  log_info "Starting Condense Read Counts."
 
-bash /opt/sv_shell/condense_read_counts.sh "${condense_read_counts_inputs_json}" "${condense_read_counts_outputs_json}"
+  jq -n \
+    --arg counts "${counts[0]}" \
+    --arg sample "${samples[0]}" \
+    --argfile min_interval_size <(jq '.min_interval_size' "${input_json}") \
+    --argfile max_interval_size <(jq '.max_interval_size' "${input_json}") \
+    '{
+        "sample": $sample,
+        "counts": $counts,
+        "min_interval_size": $min_interval_size,
+        "max_interval_size": $max_interval_size
+    }' > "${condense_read_counts_inputs_json}"
 
-log_success "Successfully finished running Condense Read Counts."
+  bash /opt/sv_shell/condense_read_counts.sh "${condense_read_counts_inputs_json}" "${condense_read_counts_outputs_json}"
+
+  log_success "Successfully finished running Condense Read Counts."
+else
+  echo "{}" > "${condense_read_counts_outputs_json}"
+  log_info "Skipping Condense Read Counts."
+fi
 
 
 # gCNVCase
@@ -364,7 +372,6 @@ cd "${working_dir}"
 log_info "Starting merge depth."
 merge_depth_inputs_json="$(realpath "${output_dir}/merge_depth_inputs.json")"
 merge_depth_outputs_json="$(realpath "${output_dir}/mergge_depth_outputs.json")"
-
 
 jq -n \
   --slurpfile inputs "${input_json}" \

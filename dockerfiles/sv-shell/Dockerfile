@@ -82,7 +82,9 @@ RUN apt-get clean && \
 RUN Rscript -e "install.packages('htmlwidgets', repos='http://cran.us.r-project.org')"
 RUN Rscript -e "install.packages('shiny', repos='http://cran.us.r-project.org')"
 RUN echo "r <- getOption('repos'); r['CRAN'] <- 'http://cran.us.r-project.org'; options(repos = r);" > ~/.Rprofile
-RUN Rscript -e "install.packages('remotes', repos='http://cran.us.r-project.org'); remotes::install_github('mhahsler/rBLAST')"
+RUN Rscript --vanilla -e 'if (!requireNamespace("BiocManager", quietly=TRUE)) install.packages("BiocManager", repos="https://cloud.r-project.org"); BiocManager::install("pwalign", ask=FALSE, update=FALSE)'
+RUN Rscript -e 'if (!requireNamespace("BiocManager", quietly=TRUE)) install.packages("BiocManager", repos="https://cloud.r-project.org"); BiocManager::install("pwalign", ask=FALSE, update=FALSE)'
+RUN Rscript -e 'install.packages("remotes"); remotes::install_github("mhahsler/rBLAST")'
 
 # install bcftools and htslib
 ARG HTSLIB_VERSION="1.18"
@@ -109,7 +111,7 @@ RUN wget -q https://github.com/Illumina/manta/releases/download/v${MANTA_RELEASE
     rm -rf ${MANTA_INSTALL_DIR}share/demo
 
 # install scramble
-ARG SCRAMBLE_COMMIT="56b5ae849d16ec1fc83ea1426b0ffc356ee6d99c"
+ARG SCRAMBLE_COMMIT="d2f457f11bd6b656d4ca692d9484e7186f52639c"
 RUN mkdir /app && cd /app \
     && git clone https://github.com/mwalker174/scramble-gatk-sv.git \
     && cd scramble-gatk-sv \
