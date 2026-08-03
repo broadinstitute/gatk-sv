@@ -25,5 +25,5 @@
   "stripy_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/stripy:2026-06-02-v1.1-24f0fd08",
   "str": "us.gcr.io/broad-dsde-methods/gatk-sv/str:2023-05-23-v0.27.3-beta-e537bdd6",
   "denovo": "us.gcr.io/broad-dsde-methods/gatk-sv/denovo:2026-06-02-v1.1-24f0fd08",
-  "sv-shell": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-shell:2025-11-19-v1.1-76795a82"
+  "sv-shell": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-shell:2026-08-03-v1.1.1-c5521374"
 }
