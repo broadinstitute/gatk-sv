@@ -142,6 +142,7 @@ workflows:
         - main
         - phase3_b5d5049
         - eph_genocpx_scatter
+        - eph_genocpx_scatter_percontig
       tags:
         - /.*/
 

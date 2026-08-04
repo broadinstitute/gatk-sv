@@ -15,8 +15,8 @@ workflow GenotypeComplexVariants {
     Int? records_per_shard
     Int? min_ddup_thresh
 
-    Array[File] complex_resolve_vcfs
-    Array[File] complex_resolve_vcf_indexes
+    File complex_resolve_vcf
+    File complex_resolve_vcf_index
 
     Array[File] bincov_files
 
@@ -24,7 +24,7 @@ workflow GenotypeComplexVariants {
     Array[File] median_coverage_files
 
     File bin_exclude
-    File contig_list
+    String contig
     File ref_dict
 
     String linux_docker
@@ -78,64 +78,43 @@ workflow GenotypeComplexVariants {
       linux_docker=linux_docker
   }
 
-  #Scatter per chromosome
-  Array[String] contigs = transpose(read_tsv(contig_list))[0]
-  scatter ( i in range(length(contigs)) ) {
-    String contig = contigs[i]
-
-    #Depth-based genotyping of complex intervals
-    call GenotypeComplexContig.ScatterCpxGenotyping {
-      input:
-        bin_exclude=bin_exclude,
-        vcf=complex_resolve_vcfs[i],
-        records_per_shard=select_first([records_per_shard, 50000]),
-        batches_file=WriteBatches.out,
-        coverage_files_file=WriteBincov.out,
-        rd_depth_sep_cutoff_files_file=WriteCutoffs.out,
-        ped_file=ped_file,
-        median_coverage_files_file=WriteMedians.out,
-        n_per_split_small=2500,
-        n_per_split_large=250,
-        n_rd_test_bins=100000,
-        min_ddup_thresh=min_ddup_thresh,
-        prefix=cohort_name,
-        contig=contig,
-        ref_dict=ref_dict,
-        linux_docker=linux_docker,
-        sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_override_ids_from_median=runtime_override_ids_from_median,
-        runtime_override_split_vcf_to_genotype=runtime_override_split_vcf_to_genotype,
-        runtime_override_concat_cpx_cnv_vcfs=runtime_override_concat_cpx_cnv_vcfs,
-        runtime_override_get_cpx_cnv_intervals=runtime_override_get_cpx_cnv_intervals,
-        runtime_override_parse_genotypes=runtime_override_parse_genotypes,
-        runtime_override_merge_melted_gts=runtime_override_merge_melted_gts,
-        runtime_override_split_bed_by_size=runtime_override_split_bed_by_size,
-        runtime_override_rd_genotype=runtime_override_rd_genotype,
-        runtime_override_concat_melted_genotypes=runtime_override_concat_melted_genotypes,
-        runtime_override_preconcat=runtime_override_preconcat,
-        runtime_override_fix_header=runtime_override_fix_header
-    }
-  }
-
-  #Merge resolved vcfs for QC
-  if (merge_vcfs) {
-    call MiniTasks.ConcatVcfs {
-      input:
-        vcfs=ScatterCpxGenotyping.cpx_depth_gt_resolved_vcf,
-        vcfs_idx=ScatterCpxGenotyping.cpx_depth_gt_resolved_vcf_idx,
-        allow_overlaps=true,
-        outfile_prefix="~{cohort_name}.complex_genotype",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_override_concat
-    }
+  #Depth-based genotyping of complex intervals
+  call GenotypeComplexContig.ScatterCpxGenotyping {
+    input:
+      bin_exclude=bin_exclude,
+      vcf=complex_resolve_vcf,
+      records_per_shard=select_first([records_per_shard, 50000]),
+      batches_file=WriteBatches.out,
+      coverage_files_file=WriteBincov.out,
+      rd_depth_sep_cutoff_files_file=WriteCutoffs.out,
+      ped_file=ped_file,
+      median_coverage_files_file=WriteMedians.out,
+      n_per_split_small=2500,
+      n_per_split_large=250,
+      n_rd_test_bins=100000,
+      min_ddup_thresh=min_ddup_thresh,
+      prefix=cohort_name,
+      contig=contig,
+      ref_dict=ref_dict,
+      linux_docker=linux_docker,
+      sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_override_ids_from_median=runtime_override_ids_from_median,
+      runtime_override_split_vcf_to_genotype=runtime_override_split_vcf_to_genotype,
+      runtime_override_concat_cpx_cnv_vcfs=runtime_override_concat_cpx_cnv_vcfs,
+      runtime_override_get_cpx_cnv_intervals=runtime_override_get_cpx_cnv_intervals,
+      runtime_override_parse_genotypes=runtime_override_parse_genotypes,
+      runtime_override_merge_melted_gts=runtime_override_merge_melted_gts,
+      runtime_override_split_bed_by_size=runtime_override_split_bed_by_size,
+      runtime_override_rd_genotype=runtime_override_rd_genotype,
+      runtime_override_concat_melted_genotypes=runtime_override_concat_melted_genotypes,
+      runtime_override_preconcat=runtime_override_preconcat,
+      runtime_override_fix_header=runtime_override_fix_header
   }
 
   #Final outputs
   output {
-    Array[File] complex_genotype_vcfs = ScatterCpxGenotyping.cpx_depth_gt_resolved_vcf
-    Array[File] complex_genotype_vcf_indexes = ScatterCpxGenotyping.cpx_depth_gt_resolved_vcf_idx
-    File? complex_genotype_merged_vcf = ConcatVcfs.concat_vcf
-    File? complex_genotype_merged_vcf_index = ConcatVcfs.concat_vcf_idx
+    File complex_genotype_vcf = ScatterCpxGenotyping.cpx_depth_gt_resolved_vcf
+    File complex_genotype_vcf_index = ScatterCpxGenotyping.cpx_depth_gt_resolved_vcf_idx
   }
 }
