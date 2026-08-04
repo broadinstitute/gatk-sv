@@ -241,6 +241,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_cleanvcf_posthoc_fix
       tags:
         - /.*/
 
