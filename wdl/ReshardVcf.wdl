@@ -87,7 +87,6 @@ task ReshardContig {
                                 }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_default])
   Int n_cpu = select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
-  String threads_arg = if n_cpu > 1 then "--threads " + n_cpu else ""
   runtime {
     memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " " + disk_type
@@ -100,7 +99,7 @@ task ReshardContig {
 
   command <<<
     set -euo pipefail
-    bcftools concat ~{threads_arg} --allow-overlaps --regions "~{contig}" -Oz -o ~{prefix}.vcf.gz --threads $(nproc) ~{sep=" " vcfs}
+    bcftools concat --allow-overlaps --regions "~{contig}" -Oz -o ~{prefix}.vcf.gz --threads $(nproc) ~{sep=" " vcfs}
     tabix ~{prefix}.vcf.gz
   >>>
 
