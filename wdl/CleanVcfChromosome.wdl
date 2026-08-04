@@ -802,7 +802,8 @@ task AddRetroDelFilters {
     python /opt/sv-pipeline/04_variant_resolution/scripts/add_retro_del_filters.py \
       ~{vcf} \
       ~{intron_reference} \
-      ~{prefix}.vcf.gz
+      ~{prefix}.vcf.gz \
+      --contig ~{contig}
   >>>
 
   output {
