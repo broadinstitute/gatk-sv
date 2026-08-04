@@ -12,6 +12,7 @@ jobs:
   readonly:
     name: Verify
     runs-on: ubuntu-latest
+    if: github.actor != 'gatk-sv-bot'
     steps:
     - uses: actions/checkout@v6
       with:
