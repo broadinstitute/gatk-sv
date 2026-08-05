@@ -12,7 +12,7 @@ FROM $SV_BASE_MINI_IMAGE as sv_base_mini
 FROM $PYTHON_VIRTUAL_ENV_IMAGE as python_virtual_env
 
 # install any build dependencies
-ARG BUILD_DEPS="g++ make apt-transport-https ca-certificates wget libcurl4-openssl-dev"
+ARG BUILD_DEPS="g++ make apt-transport-https ca-certificates wget libcurl4-openssl-dev zlib1g-dev"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-install-recommends $BUILD_DEPS
@@ -20,7 +20,7 @@ RUN apt-get -qqy update --fix-missing && \
 # install conda packages
 # NOTE: need to use scipy=1.7.3 instead of scipy=1.8.0 because it makes hail angry
 ARG CONDA_PKGS="cython=0.29.28 numpy=1.22.3 pandas=1.4.2 scipy=1.7.3 scikit-learn=1.0.2 intervaltree=3.1.0 \
-                matplotlib=3.5.1 natsort=8.1.0 google-cloud-dataproc=4.0.2 seaborn=0.12.2"
+                matplotlib=3.5.1 natsort=8.1.0 google-cloud-dataproc=5.18.1 seaborn=0.12.2"
 RUN mamba install -qy --freeze-installed -n $CONDA_ENV_NAME -c conda-forge -c bioconda $CONDA_PKGS
 
 # copy in HTSLIB install so that pysam uses same version as is available in pipeline
@@ -37,15 +37,16 @@ RUN mamba install -qy --freeze-installed -n $CONDA_ENV_NAME -c conda-forge -c bi
 # duplicate libraries. The older pysam that needs to be installed for BND issues has problems with cython during pip
 # install, so must be built from source. One last pysam wrinkle: it's install can't handle the newest versions of
 # setuptools, so we're going to downgrade then re-upgrade them just for pysam
-ARG PYSAM_VERSION=0.15.4
-RUN export SETUPTOOLS_VERSION=$(python -c 'import setuptools; print(setuptools.__version__)') && \
-    pip install setuptools==57.5.0 && \
-    wget -q https://github.com/pysam-developers/pysam/archive/refs/tags/v$PYSAM_VERSION.tar.gz && \
-    tar -xzf v$PYSAM_VERSION.tar.gz && \
-    cd pysam-$PYSAM_VERSION && \
-    python setup.py build && \
-    python setup.py install && \
-    pip install setuptools==$SETUPTOOLS_VERSION
+ARG PYSAM_VERSION=0.23.0
+# RUN export SETUPTOOLS_VERSION=$(python -c 'import setuptools; print(setuptools.__version__)') && \
+#     pip install setuptools==80.1.0 && \
+#     wget -q https://github.com/pysam-developers/pysam/archive/refs/tags/v$PYSAM_VERSION.tar.gz && \
+#     tar -xzf v$PYSAM_VERSION.tar.gz && \
+#     cd pysam-$PYSAM_VERSION && \
+#     python setup.py build && \
+#     python setup.py install && \
+#     pip install setuptools==$SETUPTOOLS_VERSION
+RUN pip install pysam==$PYSAM_VERSION
 
 # pybedtools needs to be installed via pip because it doesn't like the updated python
 # Run cache purge in case the base is out of date.
