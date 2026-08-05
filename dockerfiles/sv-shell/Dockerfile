@@ -38,172 +38,183 @@ RUN apt-get update && apt-get -qqy install --no-upgrade --no-install-recommends 
     cd / && rm -rf gatk ~/.gradle && \
     conda clean -afy
 
-#
-# FROM $SV_PIPELINE_IMAGE
-#
-# ENV DEBIAN_FRONTEND noninteractive
-#
-# # apt-get update and install global requirements
-# RUN apt-get clean all && \
-#     apt-get update && \
-#     apt-get upgrade -y && \
-#     apt-get install -y --no-install-recommends \
-#         autoconf \
-#         autogen \
-#         build-essential \
-#         curl \
-#         git \
-#         libbz2-dev \
-#         libcurl4-openssl-dev \
-#         liblzma-dev \
-#         libncurses5-dev \
-#         libnss-sss \
-#         libssl-dev \
-#         libxml2-dev \
-#         ncbi-blast+ \
-#         r-base \
-#         r-bioc-biostrings \
-#         r-bioc-rsamtools \
-#         r-cran-biocmanager \
-#         r-cran-devtools \
-#         r-cran-stringr \
-#         r-cran-optparse \
-#         wget \
-#         zlib1g-dev \
-#         jq \
-#         # needed for manta
-#         python2.7
-#
-# # apt-get clean and remove cached source lists
-# RUN apt-get clean && \
-#     rm -rf /var/lib/apt/lists/*
-#
-# # install global r requirements
-# RUN Rscript -e "install.packages('htmlwidgets', repos='http://cran.us.r-project.org')"
-# RUN Rscript -e "install.packages('shiny', repos='http://cran.us.r-project.org')"
-# RUN echo "r <- getOption('repos'); r['CRAN'] <- 'http://cran.us.r-project.org'; options(repos = r);" > ~/.Rprofile
-# RUN Rscript --vanilla -e 'if (!requireNamespace("BiocManager", quietly=TRUE)) install.packages("BiocManager", repos="https://cloud.r-project.org"); BiocManager::install("pwalign", ask=FALSE, update=FALSE)'
-# RUN Rscript -e 'if (!requireNamespace("BiocManager", quietly=TRUE)) install.packages("BiocManager", repos="https://cloud.r-project.org"); BiocManager::install("pwalign", ask=FALSE, update=FALSE)'
-# RUN Rscript -e 'install.packages("remotes"); remotes::install_github("mhahsler/rBLAST")'
-#
-# # install bcftools and htslib
-# ARG HTSLIB_VERSION="1.18"
-# RUN mkdir -p /opt && cd /opt && \
-#     wget -q https://github.com/samtools/bcftools/releases/download/${HTSLIB_VERSION}/bcftools-${HTSLIB_VERSION}.tar.bz2 && \
-#     tar xjf bcftools-${HTSLIB_VERSION}.tar.bz2 && \
-#     cd bcftools-${HTSLIB_VERSION} && \
-#     ./configure --quiet && \
-#     make -s all && \
-#     make -s install install-htslib && \
-#     cd / && rm -r /opt/bcftools-${HTSLIB_VERSION} /opt/bcftools-${HTSLIB_VERSION}.tar.bz2
-#
-# ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-#
-# # install manta
-# ARG MANTA_RELEASE=1.6.0
-# ARG MANTA_INSTALL_DIR=/usr/local/bin/manta/
-# RUN wget -q https://github.com/Illumina/manta/releases/download/v${MANTA_RELEASE}/manta-${MANTA_RELEASE}.centos6_x86_64.tar.bz2 && \
-#     tar -xjf manta-${MANTA_RELEASE}.centos6_x86_64.tar.bz2 && \
-#     mv ./manta-${MANTA_RELEASE}.centos6_x86_64 ${MANTA_INSTALL_DIR} && \
-#     ln -s $(which python2.7) /usr/bin/python2 && \
-#     python2 ${MANTA_INSTALL_DIR}/bin/runMantaWorkflowDemo.py && \
-#     rm -rf MantaDemoAnalysis && \
-#     rm -rf ${MANTA_INSTALL_DIR}share/demo
-#
-# # install scramble
-# ARG SCRAMBLE_COMMIT="d2f457f11bd6b656d4ca692d9484e7186f52639c"
-# RUN mkdir /app && cd /app \
-#     && git clone https://github.com/mwalker174/scramble-gatk-sv.git \
-#     && cd scramble-gatk-sv \
-#     && git checkout ${SCRAMBLE_COMMIT} \
-#     && cd cluster_identifier/src \
-#     && make \
-#     && ln -s /app/scramble-gatk-sv/cluster_identifier/src/build/cluster_identifier /usr/local/bin
-#
-# # test
-# RUN Rscript --vanilla /app/scramble-gatk-sv/cluster_analysis/bin/SCRAMble.R --help
-# RUN /app/scramble-gatk-sv/cluster_identifier/src/build/cluster_identifier -v
-#
-# # define default command
-# CMD ["Rscript"]
-#
-#
-# # Whamg Docker
-# RUN apt-get -qqy update --fix-missing && \
-#     apt-get -qqy dist-upgrade && \
-#     apt-get -qqy install --no-install-recommends \
-#                  bcftools \
-#                  gawk \
-#                  libgomp1 \
-#                  tabix \
-#                  zlib1g-dev && \
-#     apt-get -qqy autoremove --purge && \
-#     apt-get -qqy clean
-# COPY --from=wham_layer /bin/whamg /bin/
-#
-#
-# # cnmops
-# # Note that the following installation is different from the installation in cnmops docker
-# # since that method does not compile on this docker.
-# RUN mkdir -p /opt/R/4.5.0/lib/R/doc/html && \
-#     R -e 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/focal/latest")); BiocManager::install(c("cn.mops", "rtracklayer", "XML"), update=FALSE, ask=FALSE)'
-#
-#
-# # Install GATK
-# # gatk.jar and its conda env are built in the gatk_builder stage above; only the
-# # JRE needed to run the jar, the jar itself, and the conda env are brought in here.
-# RUN apt-get update && apt-get -qqy install --no-upgrade --no-install-recommends --fix-missing openjdk-17-jre-headless && \
-#     apt-get clean && rm -rf /var/lib/apt/lists/*
-# COPY --from=gatk_builder /opt/gatk.jar /opt/gatk.jar
-# COPY --from=gatk_builder /opt/gatk_miniconda3 /opt/gatk_miniconda3
-# RUN ln -s /opt/gatk_miniconda3/bin/conda /usr/local/bin/conda
-#
-#
-# # stripy docker
-# # copied from the stripy docker, the diff includes installing a separate pip env for stripy
-# # so to install pysam==0.19.1 that the tool needs but base image has pysam==0.15.4.
-# # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-# # Install ExpansionHunter (core dependency for STR analysis)
-# ARG EXPANSIONHUNTER_VERSION=5.0.0
-# RUN wget https://github.com/Illumina/ExpansionHunter/releases/download/v${EXPANSIONHUNTER_VERSION}/ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64.tar.gz \
-#     && tar -xzf ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64.tar.gz \
-#     && mv ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64/bin/ExpansionHunter /usr/local/bin/ \
-#     && rm -rf ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64*
-#
-# # Install REViewer (for read visualization in STR analysis)
-# ARG REVIEWER_VERSION=0.2.7
-# RUN wget https://github.com/Illumina/REViewer/releases/download/v${REVIEWER_VERSION}/REViewer-v${REVIEWER_VERSION}-linux_x86_64.gz \
-#     && gunzip REViewer-v${REVIEWER_VERSION}-linux_x86_64.gz \
-#     && chmod +x REViewer-v${REVIEWER_VERSION}-linux_x86_64 \
-#     && mv REViewer-v${REVIEWER_VERSION}-linux_x86_64 /usr/local/bin/REViewer
-#
-# # Clone STRipy-pipeline repository
-# RUN git clone https://gitlab.com/andreassh/stripy-pipeline.git /opt/stripy-pipeline
-#
-# # Set working directory
-# WORKDIR /opt/stripy-pipeline
-#
-# RUN python3 -m venv /opt/stripy-env
-# RUN /opt/stripy-env/bin/pip install --no-cache-dir --upgrade pip && \
-#     if [ -f requirements.txt ]; then /opt/stripy-env/bin/pip install --no-cache-dir -r requirements.txt; fi
-#
-# # Copy wrapper script, default config, and loci profiles
-# COPY src/stripy/stripy /usr/local/bin/stripy
-# COPY src/stripy/default-config.json /usr/local/bin/default-config.json
-# COPY src/stripy/catalogs /opt/stripy-pipeline/scripts/catalogs
-# COPY src/stripy/stripy_to_vcf.py /opt/stripy-pipeline/scripts/stripy_to_vcf.py
-#
-# # Make wrapper executable
-# RUN chmod +x /usr/local/bin/stripy
-# # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-#
-#
-# COPY src/sv_shell /opt/sv_shell
-#
-# # SYSSTAT (SAR) configuration. Collect stats every 30 seconds (two measurements in 1min)
-# RUN apt-get update && apt-get install -y --no-install-recommends cron sysstat && \
-#     apt-get clean && rm -rf /var/lib/apt/lists/* && \
-#     sed -i 's/ENABLED="false"/ENABLED="true"/' /etc/default/sysstat && \
-#     sed -i 's|^5-55/10.*|* * * * * root command -v debian-sa1 > /dev/null \&\& debian-sa1 30 2|' /etc/cron.d/sysstat
-#
-# WORKDIR /
+
+FROM $SV_PIPELINE_IMAGE
+
+ENV DEBIAN_FRONTEND noninteractive
+
+# apt-get update and install global requirements
+RUN apt-get clean all && \
+    apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+        autoconf \
+        autogen \
+        build-essential \
+        curl \
+        git \
+        libbz2-dev \
+        libcurl4-openssl-dev \
+        liblzma-dev \
+        libncurses5-dev \
+        libnss-sss \
+        libssl-dev \
+        libxml2-dev \
+        ncbi-blast+ \
+        r-base \
+        r-bioc-biostrings \
+        r-bioc-rsamtools \
+        r-cran-biocmanager \
+        r-cran-devtools \
+        r-cran-stringr \
+        r-cran-optparse \
+        wget \
+        zlib1g-dev \
+        jq \
+        # needed for manta
+        python2.7
+
+# apt-get clean and remove cached source lists
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# install global r requirements
+RUN Rscript -e "install.packages('htmlwidgets', repos='http://cran.us.r-project.org')"
+RUN Rscript -e "install.packages('shiny', repos='http://cran.us.r-project.org')"
+RUN echo "r <- getOption('repos'); r['CRAN'] <- 'http://cran.us.r-project.org'; options(repos = r);" > ~/.Rprofile
+RUN Rscript --vanilla -e 'if (!requireNamespace("BiocManager", quietly=TRUE)) install.packages("BiocManager", repos="https://cloud.r-project.org"); BiocManager::install("pwalign", ask=FALSE, update=FALSE)'
+RUN Rscript -e 'if (!requireNamespace("BiocManager", quietly=TRUE)) install.packages("BiocManager", repos="https://cloud.r-project.org"); BiocManager::install("pwalign", ask=FALSE, update=FALSE)'
+RUN Rscript -e 'install.packages("remotes"); remotes::install_github("mhahsler/rBLAST")'
+
+# install bcftools and htslib
+ARG HTSLIB_VERSION="1.18"
+RUN mkdir -p /opt && cd /opt && \
+    wget -q https://github.com/samtools/bcftools/releases/download/${HTSLIB_VERSION}/bcftools-${HTSLIB_VERSION}.tar.bz2 && \
+    tar xjf bcftools-${HTSLIB_VERSION}.tar.bz2 && \
+    cd bcftools-${HTSLIB_VERSION} && \
+    ./configure --quiet && \
+    make -s all && \
+    make -s install install-htslib && \
+    cd / && rm -r /opt/bcftools-${HTSLIB_VERSION} /opt/bcftools-${HTSLIB_VERSION}.tar.bz2
+
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+
+# install manta
+ARG MANTA_RELEASE=1.6.0
+ARG MANTA_INSTALL_DIR=/usr/local/bin/manta/
+RUN wget -q https://github.com/Illumina/manta/releases/download/v${MANTA_RELEASE}/manta-${MANTA_RELEASE}.centos6_x86_64.tar.bz2 && \
+    tar -xjf manta-${MANTA_RELEASE}.centos6_x86_64.tar.bz2 && \
+    mv ./manta-${MANTA_RELEASE}.centos6_x86_64 ${MANTA_INSTALL_DIR} && \
+    ln -s $(which python2.7) /usr/bin/python2 && \
+    python2 ${MANTA_INSTALL_DIR}/bin/runMantaWorkflowDemo.py && \
+    rm -rf MantaDemoAnalysis && \
+    rm -rf ${MANTA_INSTALL_DIR}share/demo
+
+# install scramble
+ARG SCRAMBLE_COMMIT="d2f457f11bd6b656d4ca692d9484e7186f52639c"
+RUN mkdir /app && cd /app \
+    && git clone https://github.com/mwalker174/scramble-gatk-sv.git \
+    && cd scramble-gatk-sv \
+    && git checkout ${SCRAMBLE_COMMIT} \
+    && cd cluster_identifier/src \
+    && make \
+    && ln -s /app/scramble-gatk-sv/cluster_identifier/src/build/cluster_identifier /usr/local/bin
+
+# test
+RUN Rscript --vanilla /app/scramble-gatk-sv/cluster_analysis/bin/SCRAMble.R --help
+RUN /app/scramble-gatk-sv/cluster_identifier/src/build/cluster_identifier -v
+
+# define default command
+CMD ["Rscript"]
+
+
+# Whamg Docker
+RUN apt-get -qqy update --fix-missing && \
+    apt-get -qqy dist-upgrade && \
+    apt-get -qqy install --no-install-recommends \
+                 bcftools \
+                 gawk \
+                 libgomp1 \
+                 tabix \
+                 zlib1g-dev && \
+    apt-get -qqy autoremove --purge && \
+    apt-get -qqy clean
+COPY --from=wham_layer /bin/whamg /bin/
+
+
+# cnmops
+# Note that the following installation is different from the installation in cnmops docker
+# since that method does not compile on this docker.
+RUN mkdir -p /opt/R/4.5.0/lib/R/doc/html && \
+    R -e 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/focal/latest")); BiocManager::install(c("cn.mops", "rtracklayer", "XML"), update=FALSE, ask=FALSE)'
+
+
+# Install GATK
+# gatk.jar and its conda env are built in the gatk_builder stage above; only the
+# JRE needed to run the jar, the jar itself, and the conda env are brought in here.
+# Note: `conda env create` (invoked by `./gradlew localDevCondaEnv` in the gatk_builder
+# stage) places the *named* "gatk" env in the highest-priority writable envs_dirs entry.
+# Because that stage appends /opt/conda/envs to envs_dirs (so the same conda install can
+# later activate "gatk-sv" too), /opt/conda/envs outranks the default
+# /opt/gatk_miniconda3/envs -- so the "gatk" env actually lives at /opt/conda/envs/gatk,
+# not under /opt/gatk_miniconda3, and must be copied separately. The envs_dirs config
+# itself lives in /root/.condarc, which isn't part of /opt/gatk_miniconda3 either, so it
+# must be re-applied here too, otherwise the copied-over conda can't find "gatk-sv"
+# (needed by src/sv_shell scripts that `conda activate gatk-sv` after `conda activate gatk`).
+RUN apt-get update && apt-get -qqy install --no-upgrade --no-install-recommends --fix-missing openjdk-17-jre-headless && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+COPY --from=gatk_builder /opt/gatk.jar /opt/gatk.jar
+COPY --from=gatk_builder /opt/gatk_miniconda3 /opt/gatk_miniconda3
+COPY --from=gatk_builder /opt/conda/envs/gatk /opt/conda/envs/gatk
+RUN /opt/gatk_miniconda3/bin/conda config --append envs_dirs /opt/conda/envs && \
+    ln -s /opt/gatk_miniconda3/bin/conda /usr/local/bin/conda
+
+
+# stripy docker
+# copied from the stripy docker, the diff includes installing a separate pip env for stripy
+# so to install pysam==0.19.1 that the tool needs but base image has pysam==0.15.4.
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# Install ExpansionHunter (core dependency for STR analysis)
+ARG EXPANSIONHUNTER_VERSION=5.0.0
+RUN wget https://github.com/Illumina/ExpansionHunter/releases/download/v${EXPANSIONHUNTER_VERSION}/ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64.tar.gz \
+    && tar -xzf ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64.tar.gz \
+    && mv ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64/bin/ExpansionHunter /usr/local/bin/ \
+    && rm -rf ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64*
+
+# Install REViewer (for read visualization in STR analysis)
+ARG REVIEWER_VERSION=0.2.7
+RUN wget https://github.com/Illumina/REViewer/releases/download/v${REVIEWER_VERSION}/REViewer-v${REVIEWER_VERSION}-linux_x86_64.gz \
+    && gunzip REViewer-v${REVIEWER_VERSION}-linux_x86_64.gz \
+    && chmod +x REViewer-v${REVIEWER_VERSION}-linux_x86_64 \
+    && mv REViewer-v${REVIEWER_VERSION}-linux_x86_64 /usr/local/bin/REViewer
+
+# Clone STRipy-pipeline repository
+RUN git clone https://gitlab.com/andreassh/stripy-pipeline.git /opt/stripy-pipeline
+
+# Set working directory
+WORKDIR /opt/stripy-pipeline
+
+RUN python3 -m venv /opt/stripy-env
+RUN /opt/stripy-env/bin/pip install --no-cache-dir --upgrade pip && \
+    if [ -f requirements.txt ]; then /opt/stripy-env/bin/pip install --no-cache-dir -r requirements.txt; fi
+
+# Copy wrapper script, default config, and loci profiles
+COPY src/stripy/stripy /usr/local/bin/stripy
+COPY src/stripy/default-config.json /usr/local/bin/default-config.json
+COPY src/stripy/catalogs /opt/stripy-pipeline/scripts/catalogs
+COPY src/stripy/stripy_to_vcf.py /opt/stripy-pipeline/scripts/stripy_to_vcf.py
+
+# Make wrapper executable
+RUN chmod +x /usr/local/bin/stripy
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+COPY src/sv_shell /opt/sv_shell
+
+# SYSSTAT (SAR) configuration. Collect stats every 30 seconds (two measurements in 1min)
+RUN apt-get update && apt-get install -y --no-install-recommends cron sysstat && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    sed -i 's/ENABLED="false"/ENABLED="true"/' /etc/default/sysstat && \
+    sed -i 's|^5-55/10.*|* * * * * root command -v debian-sa1 > /dev/null \&\& debian-sa1 30 2|' /etc/cron.d/sysstat
+
+WORKDIR /
