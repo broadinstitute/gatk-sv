@@ -16,7 +16,6 @@ workflow GenotypeComplexVariants {
     Int? min_ddup_thresh
 
     File complex_resolve_vcf
-    File complex_resolve_vcf_index
 
     Array[File] bincov_files
 
