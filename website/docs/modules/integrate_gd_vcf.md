@@ -49,7 +49,7 @@ Prefix for the output VCF, such as the cohort name.
 Array of GD analysis tarballs, one per batch, produced by [CallGenomicDisorderCNVs](./gd#gd_output_tarball).
 
 #### `ploidy_tables`
-Array of ploidy tables, one per batch, generated in [JoinRawCalls](./jrc#ploidy_table).
+Array of ploidy tables, one per batch, generated in [GenerateBatchMetrics](./gbm#ploidy_table).
 
 #### `gd_table`
 Path to the genomic disorder regions table (TSV), the same file used in [CallGenomicDisorderCNVs](./gd#gd_table).
