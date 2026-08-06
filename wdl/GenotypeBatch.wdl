@@ -27,6 +27,11 @@ workflow GenotypeBatch {
     String? training_args
     String? genotype_args
 
+    # Fail the workflow if SR frequency cutoff training produced a degenerate grid, which
+    # silently resolves to zero cutoffs and disables SR background filtering. Set false to let
+    # a diagnostic run complete and inspect genotyping_sr_cutoff_diagnostics anyway.
+    Boolean fail_on_degenerate_sr_cutoffs = true
+
     String gatk_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -70,6 +75,17 @@ workflow GenotypeBatch {
       runtime_attr_override = runtime_attr_train
   }
 
+  # TrainSVGenotyping cannot fail on a degenerate SR cutoff grid: Cromwell delocalizes task
+  # outputs only on success, so failing there would strand the diagnostics needed to explain it.
+  # Enforcement therefore happens here, after the diagnostics have been copied out. Gates the
+  # genotyping scatter so a doomed run does not pay for every contig shard.
+  call ValidateSRCutoffs {
+    input:
+      sr_table = TrainSVGenotyping.sr_table,
+      sr_cutoff_diagnostics = TrainSVGenotyping.sr_cutoff_diagnostics,
+      fail_on_degenerate_sr_cutoffs = fail_on_degenerate_sr_cutoffs,
+      sv_base_mini_docker = sv_base_mini_docker
+  }
 
   scatter (contig in read_lines(contig_list)) {
     call GenotypeSVs {
@@ -94,7 +110,8 @@ workflow GenotypeBatch {
         rd_depth_table = TrainSVGenotyping.rd_depth_table,
         rd_pesr_table = TrainSVGenotyping.rd_pesr_table,
         pe_table = TrainSVGenotyping.pe_table,
-        sr_table = TrainSVGenotyping.sr_table,
+        # Via ValidateSRCutoffs so the scatter cannot start on a rejected cutoff grid
+        sr_table = ValidateSRCutoffs.validated_sr_table,
         genotype_args = genotype_args,
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_genotype
@@ -136,6 +153,7 @@ workflow GenotypeBatch {
     File genotyping_rd_pesr_table = TrainSVGenotyping.rd_pesr_table
     File genotyping_pe_table = TrainSVGenotyping.pe_table
     File genotyping_sr_table = TrainSVGenotyping.sr_table
+    File genotyping_sr_cutoff_diagnostics = TrainSVGenotyping.sr_cutoff_diagnostics
     File regeno_coverage_medians = GenerateRegenoCoverageMedians.out
   }
 }
@@ -269,6 +287,10 @@ task TrainSVGenotyping {
     }
     JVM_MAX_MEM=$(getJavaMem MemTotal)
 
+    # TrainSVGenotyping writes SR cutoff diagnostics on a best-effort basis. Pre-create the
+    # file so a diagnostics failure cannot fail the task on a missing output.
+    touch ~{output_name}.sr_cutoff_diagnostics.txt
+
     gatk --java-options "-Xmx${JVM_MAX_MEM}" TrainSVGenotyping \
       -XL chrX -XL chrY \
       -V ~{vcf} \
@@ -296,6 +318,7 @@ task TrainSVGenotyping {
     File rd_pesr_table = "~{output_name}.rd_pesr_geno_params.tsv"
     File pe_table = "~{output_name}.pe_geno_params.tsv"
     File sr_table = "~{output_name}.sr_geno_params.tsv"
+    File sr_cutoff_diagnostics = "~{output_name}.sr_cutoff_diagnostics.txt"
   }
 
   runtime {
@@ -304,6 +327,70 @@ task TrainSVGenotyping {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: gatk_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+# Enforce that SR frequency cutoff training found real signal.
+#
+# TrainSVGenotyping only reports a degenerate cutoff grid, it does not fail on one, because
+# Cromwell delocalizes task outputs solely on success and failing there would leave the
+# diagnostics report on the worker. This task runs after that report has been copied out, so it
+# can fail loudly while the evidence remains retrievable. It passes sr_table through so the
+# genotyping scatter depends on it and cannot start on rejected cutoffs.
+task ValidateSRCutoffs {
+  input {
+    File sr_table
+    File sr_cutoff_diagnostics
+    Boolean fail_on_degenerate_sr_cutoffs
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    cp ~{sr_table} validated.sr_geno_params.tsv
+
+    # Status keys are written by SplitReadEvidenceGenotyper.appendSelectionStatus
+    REJECTED=$(awk -F'\t' '$1 ~ /_selection_status$/ && $2 != "OK" {print $1"="$2}' \
+                 ~{sr_cutoff_diagnostics} || true)
+
+    if [ -n "${REJECTED}" ]; then
+      echo "SR frequency cutoff selection was rejected: ${REJECTED}" >&2
+      awk -F'\t' '$1 ~ /_selection_rejection_reason$/ {print $2}' ~{sr_cutoff_diagnostics} >&2
+      echo "Cutoffs fell back to 0.0, which makes the frequency predicate a tautology and" >&2
+      echo "disables SR background filtering. Inspect the sr_cutoff_diagnostics output." >&2
+      if ~{if fail_on_degenerate_sr_cutoffs then "true" else "false"}; then
+        exit 1
+      fi
+      echo "fail_on_degenerate_sr_cutoffs is false; continuing with unfiltered SR genotypes." >&2
+    else
+      echo "SR frequency cutoff selection OK for both frequency bins."
+    fi
+  >>>
+
+  output {
+    File validated_sr_table = "validated.sr_geno_params.tsv"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

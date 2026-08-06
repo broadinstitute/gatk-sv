@@ -434,6 +434,7 @@ workflow GATKSVPipelineBatch {
     File genotyping_rd_pesr_table = GenotypeBatch.genotyping_rd_pesr_table
     File genotyping_pe_table = GenotypeBatch.genotyping_pe_table
     File genotyping_sr_table = GenotypeBatch.genotyping_sr_table
+    File genotyping_sr_cutoff_diagnostics = GenotypeBatch.genotyping_sr_cutoff_diagnostics
 
     # CombineBatches
     Array[File] combined_vcfs = MakeCohortVcf.combined_vcfs
