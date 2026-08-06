@@ -152,11 +152,22 @@ RUN mkdir -p /opt/R/4.5.0/lib/R/doc/html && \
 # Install GATK
 # gatk.jar and its conda env are built in the gatk_builder stage above; only the
 # JRE needed to run the jar, the jar itself, and the conda env are brought in here.
+# Note: `conda env create` (invoked by `./gradlew localDevCondaEnv` in the gatk_builder
+# stage) places the *named* "gatk" env in the highest-priority writable envs_dirs entry.
+# Because that stage appends /opt/conda/envs to envs_dirs (so the same conda install can
+# later activate "gatk-sv" too), /opt/conda/envs outranks the default
+# /opt/gatk_miniconda3/envs -- so the "gatk" env actually lives at /opt/conda/envs/gatk,
+# not under /opt/gatk_miniconda3, and must be copied separately. The envs_dirs config
+# itself lives in /root/.condarc, which isn't part of /opt/gatk_miniconda3 either, so it
+# must be re-applied here too, otherwise the copied-over conda can't find "gatk-sv"
+# (needed by src/sv_shell scripts that `conda activate gatk-sv` after `conda activate gatk`).
 RUN apt-get update && apt-get -qqy install --no-upgrade --no-install-recommends --fix-missing openjdk-17-jre-headless && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 COPY --from=gatk_builder /opt/gatk.jar /opt/gatk.jar
 COPY --from=gatk_builder /opt/gatk_miniconda3 /opt/gatk_miniconda3
-RUN ln -s /opt/gatk_miniconda3/bin/conda /usr/local/bin/conda
+COPY --from=gatk_builder /opt/conda/envs/gatk /opt/conda/envs/gatk
+RUN /opt/gatk_miniconda3/bin/conda config --append envs_dirs /opt/conda/envs && \
+    ln -s /opt/gatk_miniconda3/bin/conda /usr/local/bin/conda
 
 
 # stripy docker
