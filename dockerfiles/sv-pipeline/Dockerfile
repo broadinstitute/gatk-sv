@@ -2,6 +2,8 @@
 # for the sv-pipeline, sv-pipeline-qc, and sv-pipeline-rdtest
 ARG SVBASE_IMAGE=sv-base:latest
 ARG VIRTUAL_ENV_IMAGE=sv-pipeline-virtual-env:latest
+ARG GATK_SV_GD_REPO=https://github.com/broadinstitute/gatk-sv-gd.git
+ARG GATK_SV_GD_COMMIT=621a71d3ad0966404a9560a4dec6562c6f08034a
 
 ################# get alias for updating dependencies
 FROM $SVBASE_IMAGE as base
@@ -39,14 +41,20 @@ ENV PATH=/opt/WGD/bin:/opt/bin:$PATH
 # install any missing support libraries, along with libraries needed for build
 # Install svtk, svtest, svqc
 # purge transient (build) deps, leaving only the required packages
-ARG BUILD_DEPS="make cmake g++ gcc gfortran"
+ARG BUILD_DEPS="git make cmake g++ gcc gfortran"
+ARG GATK_SV_GD_REPO
+ARG GATK_SV_GD_COMMIT
 ARG DEBIAN_FRONTEND=noninteractive
 RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED_PACKAGES) && \
     apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends $BUILD_DEPS $(fix_spaces.sh $APT_REQUIRED_PACKAGES) && \
+    GIT_LFS_SKIP_SMUDGE=1 git clone "$GATK_SV_GD_REPO" /opt/gatk-sv-gd && \
+    cd /opt/gatk-sv-gd && \
+    git checkout "$GATK_SV_GD_COMMIT" && \
     pip install -e /opt/svtk && \
     pip install -e /opt/svtest && \
     pip install -e /opt/svqc && \
+    pip install -e /opt/gatk-sv-gd && \
     apt-get -qqy remove --purge $APT_TRANSIENT_PACKAGES && \
     apt-get -qqy autoremove --purge && \
     apt-get -qqy clean && \
@@ -61,6 +69,7 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
 RUN svtk -h
 RUN svtest -h
 RUN svqc -h
+RUN gatk-sv-gd -h
 RUN plink2 || true
 # the command should be installed, but has no help mode, and outputs an error if not used on data
 #RUN king
