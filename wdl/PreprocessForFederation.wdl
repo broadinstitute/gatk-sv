@@ -21,7 +21,7 @@ workflow PreprocessForFederation {
     File ploidy_table
     Int sv_per_shard = 5000
 
-    String header_drop_fields
+    String? header_drop_fields
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -69,19 +69,21 @@ workflow PreprocessForFederation {
       sv_pipeline_docker = sv_pipeline_docker
   }
 
-  call filter.SanitizeHeader {
-    input:
-      vcf = ReformatVcf.reformatted_vcf,
-      vcf_index = ReformatVcf.reformatted_vcf_idx,
-      drop_fields = header_drop_fields,
-      prefix = "~{prefix}.sanitized",
-      sv_pipeline_docker = sv_pipeline_docker
+  if (defined (header_drop_fields)) {
+    call filter.SanitizeHeader {
+      input:
+        vcf = ReformatVcf.reformatted_vcf,
+        vcf_index = ReformatVcf.reformatted_vcf_idx,
+        drop_fields = select_first([header_drop_fields]),
+        prefix = "~{prefix}.sanitized",
+        sv_pipeline_docker = sv_pipeline_docker
+    }
   }
 
 
   output {
-    File preprocessed_vcf = SanitizeHeader.out
-    File preprocessed_vcf_idx = SanitizeHeader.out_index
+    File preprocessed_vcf = select_first([SanitizeHeader.out, ReformatVcf.reformatted_vcf])
+    File preprocessed_vcf_idx = select_first([SanitizeHeader.out_index, ReformatVcf.reformatted_vcf_idx])
   }
 }
 
