@@ -641,11 +641,16 @@ task StandardizeVcf {
   command <<<
     set -eu -o pipefail
 
+    bcftools view -i "INFO/SVLEN='.' || INFO/SVLEN=-1 || INFO/SVLEN>=~{min_size}" \
+      ~{vcf_path} \
+      -Oz -o filtered.vcf.gz
+    tabix -p vcf filtered.vcf.gz
+
     svtk standardize \
       --sample-names ~{sample_id} \
       --contigs ~{contigs_fai} \
       --min-size ~{min_size} \
-      ~{vcf_path} \
+      filtered.vcf.gz \
       ~{sample_id}.std.vcf.gz \
       ~{caller}
 
