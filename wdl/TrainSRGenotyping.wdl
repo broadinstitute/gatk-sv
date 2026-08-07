@@ -76,6 +76,10 @@ workflow TrainSRGenotyping {
 
   output {
     File SR_metrics = GenotypeSRPart1.SR_metrics
+    File SR_frac_histograms = GenotypeSRPart1.SR_frac_histograms
+    File SR_freq_count_distributions = GenotypeSRPart1.SR_freq_count_distributions
+    File SR_recover_entry_counts = GenotypeSRPart1.SR_recover_entry_counts
+    File SR_cutoff_grid = GenotypeSRPart1.SR_cutoff_grid
   }
 }
 
@@ -106,6 +110,11 @@ task GenotypeSRPart1 {
 
   output {
     File SR_metrics = "~{batch}.sr_metric_file.txt"
+    # Diagnostics for comparing SR cutoff training against the GATK implementation
+    File SR_frac_histograms = "~{batch}.sr_frac_histograms.txt"
+    File SR_freq_count_distributions = "~{batch}.sr_freq_count_distributions.txt"
+    File SR_recover_entry_counts = "~{batch}.sr_recover_entry_counts.txt"
+    File SR_cutoff_grid = "~{batch}.sr_cutoff_grid.txt"
   }
   command <<<
 

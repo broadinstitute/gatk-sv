@@ -197,6 +197,84 @@ rare_max=$(awk '{if (NR/100>=2) print NR/100;else print 2}' $whitelist|tail -n 1
 common_min=$rare_max
 common_max=$(cat $whitelist|wc -l )
 
+##Diagnostics: distribution of the recovery fractions that feed the cutoff grid below,
+##split the same way optimalsrcutoff.sh splits them, so they can be compared directly
+##against the equivalent histograms from the GATK TrainSVGenotyping implementation.
+##Observational only -- nothing here feeds the cutoffs.
+##
+##recover.* columns: VID  freq_count($2)  denom  frac($4)  VID@sample($5)
+##optimalsrcutoff.sh selects on ($4>=cutoff && $2<=freqmax && $2>freqmin), so the same
+##$2 window is applied here. Fractions are binned as [0,0.1) [0.1,0.2) ... [0.9,1.0) and
+##>=1.0, matching the 11-bin layout on the GATK side.
+{
+  echo -e "#histogram\tfreq_bin\tclass\tbin0\tbin1\tbin2\tbin3\tbin4\tbin5\tbin6\tbin7\tbin8\tbin9\tbin10"
+  for hist in single both
+  do
+    for cls in pass fail
+    do
+      if [ "$cls" = "pass" ]
+      then
+        recover_file="recover.$hist.txt"
+      else
+        recover_file="recover.$hist.fail.txt"
+      fi
+      for freq_bin in rare common
+      do
+        if [ "$freq_bin" = "rare" ]
+        then
+          fmin=$rare_min
+          fmax=$rare_max
+        else
+          fmin=$common_min
+          fmax=$common_max
+        fi
+        awk -F'\t' -v h="$hist" -v fb="$freq_bin" -v c="$cls" -v fmin="$fmin" -v fmax="$fmax" '
+          ($2>fmin && $2<=fmax) { b=int($4*10); if (b>10) b=10; if (b<0) b=0; n[b]++ }
+          END { printf "%s\t%s\t%s", h, fb, c
+                for (i=0;i<=10;i++) printf "\t%d", n[i]+0
+                printf "\n" }' "$recover_file"
+      done
+    done
+  done
+} > "$batch.sr_frac_histograms.txt"
+
+##Distribution of the frequency-test column ($2) itself, before any frequency window is
+##applied. Compare against SR_COUNT_DISTRIBUTIONS on the GATK side. recover.txt keys on
+##the non-ref sample count, recover.bothsides.txt on the two-sided sample count.
+##
+##Note: unlike recover.single/both[.fail].txt, these two are NOT fully tab separated --
+##join emits space separated fields and only the trailing ratio is tab appended. Default
+##awk whitespace splitting is therefore required here, not -F'\t'.
+{
+  echo -e "#source\tfreq_count\tnum_variants"
+  for recover_file in recover.txt recover.bothsides.txt
+  do
+    awk -v s="$recover_file" '{n[$2]++} END {for (k in n) printf "%s\t%s\t%d\n", s, k, n[k]}' \
+      "$recover_file" | sort -k2,2n
+  done
+} > "$batch.sr_freq_count_distributions.txt"
+
+##Entry counts per class: the totals the grid starts from.
+##
+##optimalsrcutoff.sh counts UNIQUE $5 (VID@sample), whereas the GATK implementation counts
+##entries, so the two are only comparable if $5 is already unique within each file. The
+##adjacent-duplicate count below checks that. These files are emitted in VID-sorted order
+##(recover.txt and recover.bothsides.txt come out of sort/join, and the recover.*.txt files
+##inherit that order), so a repeated key would be adjacent.
+##
+##Deliberately streaming: recover.both.fail.txt carries one line per non-ref entry and can
+##reach tens of millions of lines, so a whole-file `sort -u` here risks exhausting the
+##task's temp disk. Nothing below holds more than one line in memory.
+{
+  echo -e "#file\tnum_entries\tnum_adjacent_duplicate_keys"
+  for recover_file in recover.single.txt recover.single.fail.txt recover.both.txt recover.both.fail.txt
+  do
+    awk -F'\t' -v f="$recover_file" '
+      { if (NR>1 && $5==prev) d++; prev=$5 }
+      END { printf "%s\t%d\t%d\n", f, NR, d+0 }' "$recover_file"
+  done
+} > "$batch.sr_recover_entry_counts.txt"
+
 for i in 0 .1 .2 .3 .4 .5 .6 .7 .8 .9 1
 do
   for j in 0 .1 .2 .3 .4 .5 .6 .7 .8 .9 1
@@ -209,6 +287,17 @@ done
 ##combine values from different freq checks##
 cat pe_support.combined.check.*.$rare_min.$rare_max.txt>pe_support.combined.rare.txt
 cat pe_support.combined.check.*.$common_min.$common_max.txt>pe_support.combined.common.txt
+
+##Diagnostics: retain the fully enumerated cutoff grids. Columns are
+##frac_single frac_both combine_pass combine_fail, one row per grid cell, in the
+##concatenation order the argmin below sees. Directly comparable to SR_CUTOFF_GRID on the
+##GATK side. Note these are emitted before the argmin so they record every candidate, not
+##just the winner.
+{
+  echo -e "#freq_bin\tfrac_single\tfrac_both\tcombine_pass\tcombine_fail"
+  awk -v OFS='\t' '{print "rare", $1, $2, $3, $4}' pe_support.combined.rare.txt
+  awk -v OFS='\t' '{print "common", $1, $2, $3, $4}' pe_support.combined.common.txt
+} > "$batch.sr_cutoff_grid.txt"
 
 echo "step6"
 

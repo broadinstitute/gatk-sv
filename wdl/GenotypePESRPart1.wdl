@@ -129,6 +129,10 @@ workflow GenotypePESRPart1 {
     File SR_metrics = TrainSRGenotyping.SR_metrics
     File PE_metrics = TrainPEGenotyping.PE_metrics
     File RD_pesr_sepcutoff = TrainRDGenotyping.pesr_sepcutoff
+    File SR_frac_histograms = TrainSRGenotyping.SR_frac_histograms
+    File SR_freq_count_distributions = TrainSRGenotyping.SR_freq_count_distributions
+    File SR_recover_entry_counts = TrainSRGenotyping.SR_recover_entry_counts
+    File SR_cutoff_grid = TrainSRGenotyping.SR_cutoff_grid
   }
 }
 

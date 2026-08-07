@@ -288,6 +288,12 @@ workflow GenotypeBatch {
     File? trained_PE_metrics = GenotypePESRPart1.PE_metrics
     File? trained_SR_metrics = GenotypePESRPart1.SR_metrics
 
+    # SR cutoff training diagnostics (absent in single-sample mode, where training is skipped)
+    File? trained_SR_frac_histograms = GenotypePESRPart1.SR_frac_histograms
+    File? trained_SR_freq_count_distributions = GenotypePESRPart1.SR_freq_count_distributions
+    File? trained_SR_recover_entry_counts = GenotypePESRPart1.SR_recover_entry_counts
+    File? trained_SR_cutoff_grid = GenotypePESRPart1.SR_cutoff_grid
+
     File? trained_genotype_pesr_pesr_sepcutoff = GenotypePESRPart1.RD_pesr_sepcutoff
     File? trained_genotype_pesr_depth_sepcutoff = GenotypePESRPart1.RD_depth_sepcutoff
     File? trained_genotype_depth_pesr_sepcutoff = GenotypeDepthPart1.RD_pesr_sepcutoff
