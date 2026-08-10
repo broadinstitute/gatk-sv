@@ -267,6 +267,5 @@ workflows:
     filters:
       branches:
         - main
-        - sv-shell-filter
       tags:
         - /.*/
