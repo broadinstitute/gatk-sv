@@ -15,6 +15,7 @@
   "GenotypeBatch.sr_file": {{ test_batch.merged_sr_file | tojson }},
   "GenotypeBatch.median_coverage": {{ test_batch.medianfile | tojson }},
   "GenotypeBatch.vcf": {{ test_batch.merge_batch_sites_vcf | tojson }},
+  "GenotypeBatch.training_vcf": {{ test_batch.filtered_pesr_vcf | tojson }},
 
   "GenotypeBatch.training_intervals": {{ reference_resources.depth_training_bed | tojson }},
   "GenotypeBatch.ploidy_table": {{ test_batch.ploidy_table | tojson }}

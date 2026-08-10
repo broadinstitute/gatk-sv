@@ -11,6 +11,22 @@ workflow GenotypeBatch {
     # but we should add an option to subset to just retained samples in case of sample filtering
     File vcf
 
+    # Sites used to train the PE/SR genotyping models: normally this batch's own FilterBatch PESR
+    # calls. Deliberately separate from `vcf`, which is the (potentially cohort-wide) set of sites
+    # to genotype.
+    #
+    # These should not be the same file when `vcf` is cohort-wide. The SR frequency cutoff optimizer
+    # learns recovery-fraction thresholds by contrasting variants that have depth/PE support against
+    # those that do not. Cohort-wide sites absent from this batch contribute background-only
+    # fractions to both classes, which erases the separation the optimizer needs. On one AoU batch
+    # that drove the pass:fail ratio from ~1:10 to ~1:26 and collapsed all four cutoffs to zero,
+    # silently disabling SR background filtering.
+    #
+    # Only PE and SR training read this VCF. RD is trained from `training_intervals` plus the depth
+    # matrix, and its depth-only vs PESR split comes from separation constraints rather than from
+    # the VCF, so a PESR-only training VCF is sufficient here.
+    File training_vcf
+
     File training_intervals
     File median_coverage
     File rd_file
@@ -50,10 +66,21 @@ workflow GenotypeBatch {
       sv_base_mini_docker = sv_base_mini_docker
   }
 
+  # Apply the same wham-deletion exclusion to the training sites. Training on variant classes that
+  # are then filtered out of the genotyped output would calibrate the cutoffs against records that
+  # never get genotyped.
+  call FilterWhamDeletions as FilterWhamDeletionsTraining {
+    input:
+      vcf = training_vcf,
+      vcf_index = training_vcf + ".tbi",
+      prefix = batch + ".training.wham_del_filtered",
+      sv_base_mini_docker = sv_base_mini_docker
+  }
+
   call TrainSVGenotyping {
     input:
-      vcf = FilterWhamDeletions.filtered_vcf,
-      vcf_index = FilterWhamDeletions.filtered_vcf_index,
+      vcf = FilterWhamDeletionsTraining.filtered_vcf,
+      vcf_index = FilterWhamDeletionsTraining.filtered_vcf_index,
       output_name = batch,
       training_intervals = training_intervals,
       median_coverage = median_coverage,

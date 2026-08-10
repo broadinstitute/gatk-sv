@@ -239,6 +239,8 @@ workflow GATKSVPipelineBatch {
   call genotypebatch.GenotypeBatch as GenotypeBatch {
     input:
       vcf=MergePesrDepthVcfs.concat_vcf,
+      # PE/SR cutoff training uses this batch's own PESR calls, not the sites being genotyped
+      training_vcf=select_first([GATKSVPipelinePhase1.filtered_pesr_vcf]),
       batch=name,
       rf_cutoffs=GATKSVPipelinePhase1.cutoffs,
       median_coverage=GATKSVPipelinePhase1.median_cov,
