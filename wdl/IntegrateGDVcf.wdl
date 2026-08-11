@@ -67,19 +67,9 @@ workflow IntegrateGDVcf {
     }
   }
 
-  call tasks_cohort.ConcatVcfs {
-    input:
-      vcfs = IntegrateGDVcfTask.integrated_vcf,
-      vcfs_idx = IntegrateGDVcfTask.integrated_vcf_index,
-      naive = true,
-      outfile_prefix = prefix + ".integrate_gd",
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_override_concat
-  }
-
   output {
-    File integrate_gd_vcf = ConcatVcfs.concat_vcf
-    File integrate_gd_vcf_index = ConcatVcfs.concat_vcf_idx
+    Array[File] integrate_gd_vcfs = IntegrateGDVcfTask.integrated_vcf
+    Array[File] integrate_gd_vcf_indexes = IntegrateGDVcfTask.integrated_vcf_index
   }
 }
 
