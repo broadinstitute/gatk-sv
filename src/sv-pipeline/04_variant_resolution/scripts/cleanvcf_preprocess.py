@@ -1,6 +1,7 @@
 #!/bin/python
 
 import argparse
+import re
 import pysam
 import gzip
 
@@ -13,7 +14,8 @@ UNRESOLVED = 'UNRESOLVED'
 HIGH_SR_BACKGROUND = 'HIGH_SR_BACKGROUND'
 BOTHSIDES_SUPPORT = 'BOTHSIDES_SUPPORT'
 REVISED_EVENT = 'REVISED_EVENT'
-EV_VALUES = ['SR', 'PE', 'SR,PE', 'RD', 'BAF', 'RD,BAF']
+EV = 'EV'
+EV_VALUES = [None, 'RD', 'PE', 'RD,PE', 'SR', 'RD,SR', 'PE,SR', 'RD,PE,SR']
 MIN_ALLOSOME_EVENT_SIZE = 5000
 
 
@@ -188,6 +190,39 @@ def process_record(record, chrX, chrY, fail_set, pass_set, unknown_sex_samples):
     return record
 
 
+def needs_ev_recode(header):
+    return header.formats[EV].type == 'Integer'
+
+
+def recode_ev_header(header):
+    new_header = pysam.VariantHeader()
+    for line in str(header).split('\n'):
+        if line.startswith('#CHROM'):
+            continue
+        if line.startswith('##FORMAT=<ID=EV,'):
+            line = re.sub('Type=Integer', 'Type=String', line)
+        if line:
+            new_header.add_line(line)
+    for sample in header.samples:
+        new_header.add_sample(sample)
+    return new_header
+
+
+def rebuild_record(record, output_header):
+    new_record = output_header.new_record(contig=record.contig, start=record.start, stop=record.stop,
+                                          alleles=record.alleles, id=record.id, qual=record.qual,
+                                          filter=list(record.filter))
+    for key in record.info.keys():
+        new_record.info[key] = record.info[key]
+    for sample in record.samples:
+        for key in record.samples[sample].keys():
+            value = record.samples[sample][key]
+            if key == EV and isinstance(value, int):
+                value = EV_VALUES[value]
+            new_record.samples[sample][key] = value
+    return new_record
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='CleanVcf preprocessing.')
     parser.add_argument('-V', '--input', dest='input_vcf', required=True, help='Input VCF file')
@@ -210,12 +245,16 @@ if __name__ == '__main__':
     else:
         vcf_in = pysam.VariantFile(args.input_vcf)
 
+    recode_ev = needs_ev_recode(vcf_in.header)
+    output_header = recode_ev_header(vcf_in.header) if recode_ev else vcf_in.header
     if args.output_vcf.endswith('.gz'):
-        vcf_out = pysam.VariantFile(args.output_vcf, 'wz', header=vcf_in.header)
+        vcf_out = pysam.VariantFile(args.output_vcf, 'wz', header=output_header)
     else:
-        vcf_out = pysam.VariantFile(args.output_vcf, 'w', header=vcf_in.header.copy())
+        vcf_out = pysam.VariantFile(args.output_vcf, 'w', header=output_header)
 
     for record in vcf_in:
+        if recode_ev:
+            record = rebuild_record(record, output_header)
         record = process_record(record, chrX, chrY, fail_set, pass_set, unknown_sex_samples)
         vcf_out.write(record)
 

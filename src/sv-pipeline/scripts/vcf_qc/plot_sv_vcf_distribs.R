@@ -1023,10 +1023,10 @@ plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
   if(nrow(HW.dat)>0){
     #Prep HW matrix
     nsamps <- HW.dat$reference_gts+HW.dat$het_gts+HW.dat$hom_gts
-    HW.mat <- data.frame("AA"=HW.dat$reference_gts/nsamps,
+    HW.mat <- as.matrix(data.frame("AA"=HW.dat$reference_gts/nsamps,
                          "AB"=HW.dat$het_gts/nsamps,
-                         "BB"=HW.dat$hom_gts/nsamps)
-    
+                         "BB"=HW.dat$hom_gts/nsamps))
+
     #Gather HW p-values & colors
     HW.p <- HWChisqStats(X=HW.mat*nsamp,x.linked=F,pvalues=T)
     HW.cols <- rep("#4DAC26",times=length(HW.p))
