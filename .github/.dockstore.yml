@@ -143,6 +143,7 @@ workflows:
         - main
         - kj_cleanvcf_posthoc_fix
         - eph_percontig_kj_cleanvcf
+        - eph_scatter_cleanvcf
       tags:
         - /.*/
 
