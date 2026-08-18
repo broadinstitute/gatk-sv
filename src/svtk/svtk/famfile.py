@@ -62,10 +62,16 @@ def parse_famfile(famfile):
     # Label parents
     for ID, sample in samples.items():
         if sample.father is not None:
-            samples[sample.father].is_parent = True
-            samples[sample.father].children.append(ID)
+            if sample.father in samples:
+                samples[sample.father].is_parent = True
+                samples[sample.father].children.append(ID)
+            else:
+                sample.father = None
         if sample.mother is not None:
-            samples[sample.mother].is_parent = True
-            samples[sample.mother].children.append(ID)
+            if sample.mother in samples:
+                samples[sample.mother].is_parent = True
+                samples[sample.mother].children.append(ID)
+            else:
+                sample.mother = None
 
     return Fam(samples, families)
