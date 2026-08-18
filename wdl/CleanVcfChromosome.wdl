@@ -19,6 +19,7 @@ workflow CleanVcfChromosome {
     Int format_vcf_records_per_shard = 5000
     Int preprocess_records_per_shard = 5000
     Int postprocess_records_per_shard = 5000
+    Int records_per_shard_revise_multiallelics = 5000
 
     File contig_list
     File allosome_fai
@@ -55,6 +56,7 @@ workflow CleanVcfChromosome {
     RuntimeAttr? runtime_attr_format_to_output_scatter
     RuntimeAttr? runtime_attr_format_to_output_format
     RuntimeAttr? runtime_attr_format_to_output_concat
+    RuntimeAttr? runtime_attr_scatter_revise_multiallelics
   }
 
   call fvcf.FormatVcfForGatk as FormatVcfToClean {
@@ -121,20 +123,42 @@ workflow CleanVcfChromosome {
       runtime_attr_override=runtime_attr_revise_overlapping_cnvs
   }
 
-  call CleanVcfReviseMultiallelicCnvs {
+  call MiniTasks.ScatterVcf as ScatterReviseMultiallelics {
     input:
       vcf=CleanVcfReviseOverlappingCnvs.out,
-      vcf_idx=CleanVcfReviseOverlappingCnvs.out_idx,
-      outlier_samples_list=outlier_samples_list,
-      prefix="~{prefix}.revise_multiallelic_cnvs",
-      gatk_docker=gatk_docker,
-      runtime_attr_override=runtime_attr_revise_large_cnvs
+      vcf_index=CleanVcfReviseOverlappingCnvs.out_idx,
+      prefix="~{prefix}.scatter_for_revise_multiallelics",
+      records_per_shard=records_per_shard_revise_multiallelics,
+      contig=contig,
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_scatter_revise_multiallelics
+  }
+
+  scatter (shard in ScatterReviseMultiallelics.shards) {
+    call CleanVcfReviseMultiallelicCnvs {
+      input:
+        vcf=shard,
+        outlier_samples_list=outlier_samples_list,
+        prefix="~{prefix}.revise_multiallelic_cnvs",
+        gatk_docker=gatk_docker,
+        runtime_attr_override=runtime_attr_revise_large_cnvs
+    }
+  }
+
+  call MiniTasks.ConcatVcfs as ConcatReviseMultiallelics {
+    input:
+      vcfs=CleanVcfReviseMultiallelicCnvs.out,
+      vcfs_idx=CleanVcfReviseMultiallelicCnvs.out_idx,
+      allow_overlaps=true,
+      outfile_prefix="~{prefix}.revisemultiallelics.concat",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_concat_preprocess
   }
 
   call CleanVcfReviseOverlappingMultiallelics {
     input:
-      vcf=CleanVcfReviseMultiallelicCnvs.out,
-      vcf_idx=CleanVcfReviseMultiallelicCnvs.out_idx,
+      vcf=ConcatReviseMultiallelics.concat_vcf,
+      vcf_idx=ConcatReviseMultiallelics.concat_vcf_idx,
       prefix="~{prefix}.revise_overlapping_multiallelics",
       gatk_docker=gatk_docker,
       runtime_attr_override=runtime_attr_revise_multiallelics
@@ -378,7 +402,6 @@ task CleanVcfReviseOverlappingCnvs {
 task CleanVcfReviseMultiallelicCnvs {
   input {
     File vcf
-    File vcf_idx
     File? outlier_samples_list
     String prefix
     String gatk_docker
@@ -409,6 +432,8 @@ task CleanVcfReviseMultiallelicCnvs {
 
   command <<<
     set -euo pipefail
+
+    tabix ~{vcf}
     
     gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseMultiallelicCnvs \
       -V ~{vcf} \
