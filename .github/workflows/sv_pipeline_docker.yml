@@ -123,11 +123,20 @@ jobs:
           echo "=== Disk space before cleanup ==="
           df -h
           
-          # Remove heavy frameworks and SDKs
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          # Remove heavy frameworks, SDKs, and preinstalled toolchains
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache \
+            /usr/local/.ghcup \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /usr/lib/jvm \
+            /usr/local/lib/node_modules \
+            /usr/share/miniconda \
+            /opt/az \
+            /usr/local/share/powershell
           
           # Prune internal Docker layers and images
           sudo docker image prune --all --force
@@ -150,6 +159,9 @@ jobs:
       - name: Run build_docker.py
         timeout-minutes: 120
         run: |
+          # Streams one-line disk/memory snapshots into this step's log
+          python3 .github/workflows/resource_monitor.py &
+
           cd ./scripts/docker/
           python build_docker.py \
             --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
@@ -179,11 +191,20 @@ jobs:
           echo "=== Disk space before cleanup ==="
           df -h
           
-          # Remove heavy frameworks and SDKs
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          # Remove heavy frameworks, SDKs, and preinstalled toolchains
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache \
+            /usr/local/.ghcup \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /usr/lib/jvm \
+            /usr/local/lib/node_modules \
+            /usr/share/miniconda \
+            /opt/az \
+            /usr/local/share/powershell
           
           # Prune internal Docker layers and images
           sudo docker image prune --all --force
@@ -231,10 +252,10 @@ jobs:
         # images to be pushed to GCR. This flag is only available when
         # experimental features are enabled, hence are enabled in this section.
         #
-        # The /etc/docker/daemon.json is not created by default during 
-        # Docker installation; however, upstream configurations may 
-        # create and use this file for their configuration depending 
-        # on their versions. Hence, we create the file if it does not 
+        # The /etc/docker/daemon.json is not created by default during
+        # Docker installation; however, upstream configurations may
+        # create and use this file for their configuration depending
+        # on their versions. Hence, we create the file if it does not
         # exist in order to preserve compatibility.
         run: |
           gcloud auth configure-docker
@@ -248,6 +269,9 @@ jobs:
         id: build_and_publish
         timeout-minutes: 120
         run: |
+          # Streams one-line disk/memory snapshots into this step's log
+          python3 .github/workflows/resource_monitor.py &
+
           python ./scripts/docker/build_docker.py \
             --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
             --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
