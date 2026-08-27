@@ -3,6 +3,7 @@ version 1.0
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "FormatVcfForGatk.wdl" as fvcf
+import "TasksClusterBatch.wdl" as tasks_cluster
 
 workflow CleanVcfChromosome {
   input {
@@ -20,6 +21,9 @@ workflow CleanVcfChromosome {
     Int preprocess_records_per_shard = 5000
     Int postprocess_records_per_shard = 5000
     Int records_per_shard_revise_multiallelics = 5000
+    Int records_per_shard_final_steps = 5000
+
+    String? formatter_args
 
     File contig_list
     File allosome_fai
@@ -57,6 +61,8 @@ workflow CleanVcfChromosome {
     RuntimeAttr? runtime_attr_format_to_output_format
     RuntimeAttr? runtime_attr_format_to_output_concat
     RuntimeAttr? runtime_attr_scatter_revise_multiallelics
+    RuntimeAttr? runtime_attr_scatter_final_steps
+    RuntimeAttr? runtime_attr_concat_final
   }
 
   call fvcf.FormatVcfForGatk as FormatVcfToClean {
@@ -221,65 +227,93 @@ workflow CleanVcfChromosome {
       runtime_attr_override=runtime_override_stitch_fragmented_cnvs
   }
 
-  call RescueMobileElementDeletions {
+  call MiniTasks.ScatterVcf as ScatterFinalSteps {
     input:
-      vcf = StitchFragmentedCnvs.stitched_vcf_shard,
-      prefix = "~{prefix}.rescue_me_dels",
-      LINE1 = LINE1_reference,
-      HERVK = HERVK_reference,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_override_rescue_me_dels
-  }
-
-  call AddHighFDRFilters {
-    input:
-      vcf=RescueMobileElementDeletions.out,
-      prefix="~{prefix}.high_fdr_filtered",
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_add_high_fp_rate_filters
-  }
-
-  call AddRetroDelFilters {
-    input:
-      vcf=AddHighFDRFilters.out,
-      intron_reference=intron_reference,
+      vcf=StitchFragmentedCnvs.stitched_vcf,
+      vcf_index=StitchFragmentedCnvs.stitched_vcf,
+      prefix="~{prefix}.scatter_final_steps",
+      records_per_shard=records_per_shard_final_steps,
       contig=contig,
-      prefix="~{prefix}.retro_del_filtered",
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_add_retro_del_filters
+      runtime_attr_override=runtime_attr_scatter_final_steps
   }
 
-  call FinalCleanup {
+  call tasks_cluster.CreatePloidyTableFromPed {
     input:
-      vcf=AddRetroDelFilters.out,
-      contig=contig,
-      prefix="~{prefix}.final_cleanup",
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_final_cleanup
-  }
-
-  call fvcf.FormatVcfForGatk as FormatVcfToOutput {
-    input:
-      vcf=FinalCleanup.final_cleaned_shard,
-      prefix="~{prefix}.final_format",
       ped_file=ped_file,
-      records_per_shard=format_vcf_records_per_shard,
       contig_list=contig_list,
-      bothside_pass_list=bothsides_pass_list,
-      background_fail_list=background_list,
+      retain_female_chr_y=false,
       chr_x=chr_x,
       chr_y=chr_y,
-      sv_base_mini_docker=sv_base_mini_docker,
+      output_prefix="~{prefix}.ploidy",
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_create_ploidy=runtime_attr_format_to_output_create_ploidy,
-      runtime_attr_scatter=runtime_attr_format_to_output_scatter,
-      runtime_attr_format=runtime_attr_format_to_output_format,
-      runtime_override_concat=runtime_attr_format_to_output_concat
+      runtime_attr_override=runtime_attr_format_to_output_create_ploidy
+  }
+
+  scatter (shard in ScatterFinalSteps.shards) {
+    call RescueMobileElementDeletions {
+      input:
+        vcf = shard,
+        prefix = "~{prefix}.rescue_me_dels",
+        LINE1 = LINE1_reference,
+        HERVK = HERVK_reference,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_override_rescue_me_dels
+    }
+
+    call AddHighFDRFilters {
+      input:
+        vcf=RescueMobileElementDeletions.out,
+        prefix="~{prefix}.high_fdr_filtered",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_add_high_fp_rate_filters
+    }
+
+    call AddRetroDelFilters {
+      input:
+        vcf=AddHighFDRFilters.out,
+        intron_reference=intron_reference,
+        contig=contig,
+        prefix="~{prefix}.retro_del_filtered",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_add_retro_del_filters
+    }
+
+    call FinalCleanup {
+      input:
+        vcf=AddRetroDelFilters.out,
+        contig=contig,
+        prefix="~{prefix}.final_cleanup",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_override_final_cleanup
+    }
+
+    call fvcf.FormatVcf {
+      input:
+        vcf=FinalCleanup.final_cleaned_shard,
+        ploidy_table=CreatePloidyTableFromPed.out,
+        args=formatter_args,
+        output_prefix="~{prefix}.format",
+        bothside_pass_list=bothsides_pass_list,
+        background_fail_list=background_list,
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_format_to_output_format
+    }
+  }
+
+  call MiniTasks.ConcatVcfs as ConcatFinal {
+    input:
+      vcfs=FormatVcf.out,
+      vcfs_idx=FormatVcf.out_index,
+      naive=true,
+      outfile_prefix="~{prefix}.concat_final",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_concat_final
   }
     
   output {
-    File out = FormatVcfToOutput.gatk_formatted_vcf
-    File out_idx = FormatVcfToOutput.gatk_formatted_vcf_index
+    File out = ConcatFinal.concat_vcf
+    File out_idx = ConcatFinal.concat_vcf_idx
   }
 }
 
@@ -734,10 +768,13 @@ task StitchFragmentedCnvs {
     java -Xmx~{java_mem_mb}M -jar ${STITCH_JAR} 0.2 200000 0.2 tmp.vcf.gz \
       | bgzip \
       > ~{prefix}.vcf.gz
+
+    tabix ~{prefix}.vcf.gz
   >>>
 
   output {
-    File stitched_vcf_shard = "~{prefix}.vcf.gz"
+    File stitched_vcf = "~{prefix}.vcf.gz"
+    File stitched_vcf_idx = "~{prefix}.vcf.gz.tbi"
   }
 }
 
