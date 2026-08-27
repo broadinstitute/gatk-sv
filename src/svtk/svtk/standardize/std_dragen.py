@@ -129,6 +129,13 @@ class DragenStandardizer(VCFStandardizer):
             else:
                 svlen = raw_rec.info.get('SVLEN', 0)
             std_rec.stop = raw_rec.pos + svlen
+        elif svtype == 'DEL':
+            std_rec.info['CHR2'] = raw_rec.chrom
+            if isinstance(raw_rec.info.get('SVLEN', 0), tuple):
+                svlen = raw_rec.info['SVLEN'][0]
+            else:
+                svlen = raw_rec.info.get('SVLEN', 0)
+            std_rec.info['SVLEN'] = abs(svlen)
         else:
             std_rec.info['CHR2'] = raw_rec.chrom
             std_rec.stop = raw_rec.stop
