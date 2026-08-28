@@ -79,12 +79,17 @@ RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # install global r requirements
-RUN Rscript -e "install.packages('htmlwidgets', repos='http://cran.us.r-project.org')"
-RUN Rscript -e "install.packages('shiny', repos='http://cran.us.r-project.org')"
-RUN echo "r <- getOption('repos'); r['CRAN'] <- 'http://cran.us.r-project.org'; options(repos = r);" > ~/.Rprofile
-RUN Rscript --vanilla -e 'if (!requireNamespace("BiocManager", quietly=TRUE)) install.packages("BiocManager", repos="https://cloud.r-project.org"); BiocManager::install("pwalign", ask=FALSE, update=FALSE)'
-RUN Rscript -e 'if (!requireNamespace("BiocManager", quietly=TRUE)) install.packages("BiocManager", repos="https://cloud.r-project.org"); BiocManager::install("pwalign", ask=FALSE, update=FALSE)'
-RUN Rscript -e 'install.packages("remotes"); remotes::install_github("mhahsler/rBLAST")'
+# The CRAN mirror must be set before any install: cran.us.r-project.org now
+# redirects to lib.stat.cmu.edu, which returns HTTP 403, and install.packages()
+# only warns on a failed download, so the missing packages were not detected
+# until a later step tried to load them.
+ARG CRAN_REPO="https://cloud.r-project.org"
+RUN echo "options(repos = c(CRAN = '${CRAN_REPO}'))" > ~/.Rprofile
+RUN Rscript -e "install.packages(c('htmlwidgets', 'shiny', 'remotes'), repos='${CRAN_REPO}')"
+RUN Rscript -e "if (!requireNamespace('BiocManager', quietly=TRUE)) install.packages('BiocManager', repos='${CRAN_REPO}'); BiocManager::install('pwalign', ask=FALSE, update=FALSE)"
+RUN Rscript -e "remotes::install_github('mhahsler/rBLAST')"
+# fail the build here rather than at run time if any of the above silently failed
+RUN Rscript -e "invisible(lapply(c('htmlwidgets', 'shiny', 'remotes', 'BiocManager', 'pwalign', 'rBLAST'), library, character.only=TRUE))"
 
 # install bcftools and htslib
 ARG HTSLIB_VERSION="1.18"

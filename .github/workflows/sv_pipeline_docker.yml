@@ -118,16 +118,40 @@ jobs:
       matrix:
         python-version: ['3.8']
     steps:
-      - name: Cleanup Disk Space
+      - name: Prepare Runner (free disk space, add swap)
+        # Two provisioning tasks for the large docker builds ahead:
+        #
+        # 1) Free disk space: remove preinstalled frameworks, SDKs, and
+        #    toolchains this workflow never uses. Must run before
+        #    actions/setup-python because it deletes /opt/hostedtoolcache;
+        #    setup-python (later) downloads Python 3.8 itself, exactly as it
+        #    already does today ("Version 3.8 was not found in the local
+        #    cache" in previous runs).
+        #
+        # 2) Add swap: docker's "exporting layers" phase allocates memory
+        #    proportional to image size (observed: ~13 GB for sv-shell alone)
+        #    and hard-OOMs the 16 GB runner VM on the largest images, which
+        #    surfaces as "The runner has received a shutdown signal" /
+        #    exit 143. A 12 GB swapfile on the runner's fast local /mnt disk
+        #    turns that fatal kill into, at worst, a slower export.
         run: |
           echo "=== Disk space before cleanup ==="
           df -h
           
-          # Remove heavy frameworks and SDKs
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          # Remove heavy frameworks, SDKs, and preinstalled toolchains
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache \
+            /usr/local/.ghcup \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /usr/lib/jvm \
+            /usr/local/lib/node_modules \
+            /usr/share/miniconda \
+            /opt/az \
+            /usr/local/share/powershell
           
           # Prune internal Docker layers and images
           sudo docker image prune --all --force
@@ -135,6 +159,15 @@ jobs:
           
           echo "=== Disk space after cleanup ==="
           df -h
+          
+          # Extend swap with a 12 GB swapfile on the local SSD (/mnt)
+          sudo fallocate -l 12G /mnt/swapfile-extra
+          sudo chmod 600 /mnt/swapfile-extra
+          sudo mkswap /mnt/swapfile-extra
+          sudo swapon /mnt/swapfile-extra
+          echo "=== Swap devices ==="
+          swapon --show
+          free -h
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -150,6 +183,9 @@ jobs:
       - name: Run build_docker.py
         timeout-minutes: 120
         run: |
+          # Streams one-line disk/memory snapshots into this step's log
+          python3 .github/workflows/resource_monitor.py &
+
           cd ./scripts/docker/
           python build_docker.py \
             --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
@@ -174,16 +210,40 @@ jobs:
     env:
       DOCKERS_GCP: "./inputs/values/dockers.json"
     steps:
-      - name: Cleanup Disk Space
+      - name: Prepare Runner (free disk space, add swap)
+        # Two provisioning tasks for the large docker builds ahead:
+        #
+        # 1) Free disk space: remove preinstalled frameworks, SDKs, and
+        #    toolchains this workflow never uses. Must run before
+        #    actions/setup-python because it deletes /opt/hostedtoolcache;
+        #    setup-python (later) downloads Python 3.8 itself, exactly as it
+        #    already does today ("Version 3.8 was not found in the local
+        #    cache" in previous runs).
+        #
+        # 2) Add swap: docker's "exporting layers" phase allocates memory
+        #    proportional to image size (observed: ~13 GB for sv-shell alone)
+        #    and hard-OOMs the 16 GB runner VM on the largest images, which
+        #    surfaces as "The runner has received a shutdown signal" /
+        #    exit 143. A 12 GB swapfile on the runner's fast local /mnt disk
+        #    turns that fatal kill into, at worst, a slower export.
         run: |
           echo "=== Disk space before cleanup ==="
           df -h
           
-          # Remove heavy frameworks and SDKs
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          # Remove heavy frameworks, SDKs, and preinstalled toolchains
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache \
+            /usr/local/.ghcup \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /usr/lib/jvm \
+            /usr/local/lib/node_modules \
+            /usr/share/miniconda \
+            /opt/az \
+            /usr/local/share/powershell
           
           # Prune internal Docker layers and images
           sudo docker image prune --all --force
@@ -191,6 +251,15 @@ jobs:
           
           echo "=== Disk space after cleanup ==="
           df -h
+          
+          # Extend swap with a 12 GB swapfile on the local SSD (/mnt)
+          sudo fallocate -l 12G /mnt/swapfile-extra
+          sudo chmod 600 /mnt/swapfile-extra
+          sudo mkswap /mnt/swapfile-extra
+          sudo swapon /mnt/swapfile-extra
+          echo "=== Swap devices ==="
+          swapon --show
+          free -h
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -231,10 +300,10 @@ jobs:
         # images to be pushed to GCR. This flag is only available when
         # experimental features are enabled, hence are enabled in this section.
         #
-        # The /etc/docker/daemon.json is not created by default during 
-        # Docker installation; however, upstream configurations may 
-        # create and use this file for their configuration depending 
-        # on their versions. Hence, we create the file if it does not 
+        # The /etc/docker/daemon.json is not created by default during
+        # Docker installation; however, upstream configurations may
+        # create and use this file for their configuration depending
+        # on their versions. Hence, we create the file if it does not
         # exist in order to preserve compatibility.
         run: |
           gcloud auth configure-docker
@@ -248,6 +317,9 @@ jobs:
         id: build_and_publish
         timeout-minutes: 120
         run: |
+          # Streams one-line disk/memory snapshots into this step's log
+          python3 .github/workflows/resource_monitor.py &
+
           python ./scripts/docker/build_docker.py \
             --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
             --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
