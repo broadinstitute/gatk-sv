@@ -250,11 +250,11 @@ workflow CleanVcfChromosome {
       runtime_attr_override=runtime_attr_format_to_output_create_ploidy
   }
 
-  scatter (shard in ScatterFinalSteps.shards) {
+  scatter (i in range(length(ScatterFinalSteps.shards))) {
     call RescueMobileElementDeletions {
       input:
-        vcf = shard,
-        prefix = "~{prefix}.rescue_me_dels",
+        vcf = ScatterFinalSteps.shards[i],
+        prefix = "~{prefix}.rescue_me_dels.shard_~{i}",
         LINE1 = LINE1_reference,
         HERVK = HERVK_reference,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -264,7 +264,7 @@ workflow CleanVcfChromosome {
     call AddHighFDRFilters {
       input:
         vcf=RescueMobileElementDeletions.out,
-        prefix="~{prefix}.high_fdr_filtered",
+        prefix="~{prefix}.high_fdr_filtered.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_add_high_fp_rate_filters
     }
@@ -274,7 +274,7 @@ workflow CleanVcfChromosome {
         vcf=AddHighFDRFilters.out,
         intron_reference=intron_reference,
         contig=contig,
-        prefix="~{prefix}.retro_del_filtered",
+        prefix="~{prefix}.retro_del_filtered.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_add_retro_del_filters
     }
@@ -283,7 +283,7 @@ workflow CleanVcfChromosome {
       input:
         vcf=AddRetroDelFilters.out,
         contig=contig,
-        prefix="~{prefix}.final_cleanup",
+        prefix="~{prefix}.final_cleanup.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_final_cleanup
     }
@@ -293,7 +293,7 @@ workflow CleanVcfChromosome {
         vcf=FinalCleanup.final_cleaned_shard,
         ploidy_table=CreatePloidyTableFromPed.out,
         args=formatter_args,
-        output_prefix="~{prefix}.format",
+        output_prefix="~{prefix}.format.shard_~{i}",
         bothside_pass_list=bothsides_pass_list,
         background_fail_list=background_list,
         sv_pipeline_docker=sv_pipeline_docker,
