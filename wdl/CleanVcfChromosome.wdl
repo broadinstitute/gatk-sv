@@ -230,7 +230,7 @@ workflow CleanVcfChromosome {
   call MiniTasks.ScatterVcf as ScatterFinalSteps {
     input:
       vcf=StitchFragmentedCnvs.stitched_vcf,
-      vcf_index=StitchFragmentedCnvs.stitched_vcf,
+      vcf_index=StitchFragmentedCnvs.stitched_vcf_idx,
       prefix="~{prefix}.scatter_final_steps",
       records_per_shard=records_per_shard_final_steps,
       contig=contig,
