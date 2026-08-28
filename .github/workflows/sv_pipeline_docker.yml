@@ -118,7 +118,22 @@ jobs:
       matrix:
         python-version: ['3.8']
     steps:
-      - name: Cleanup Disk Space
+      - name: Prepare Runner (free disk space, add swap)
+        # Two provisioning tasks for the large docker builds ahead:
+        #
+        # 1) Free disk space: remove preinstalled frameworks, SDKs, and
+        #    toolchains this workflow never uses. Must run before
+        #    actions/setup-python because it deletes /opt/hostedtoolcache;
+        #    setup-python (later) downloads Python 3.8 itself, exactly as it
+        #    already does today ("Version 3.8 was not found in the local
+        #    cache" in previous runs).
+        #
+        # 2) Add swap: docker's "exporting layers" phase allocates memory
+        #    proportional to image size (observed: ~13 GB for sv-shell alone)
+        #    and hard-OOMs the 16 GB runner VM on the largest images, which
+        #    surfaces as "The runner has received a shutdown signal" /
+        #    exit 143. A 12 GB swapfile on the runner's fast local /mnt disk
+        #    turns that fatal kill into, at worst, a slower export.
         run: |
           echo "=== Disk space before cleanup ==="
           df -h
@@ -144,6 +159,15 @@ jobs:
           
           echo "=== Disk space after cleanup ==="
           df -h
+          
+          # Extend swap with a 12 GB swapfile on the local SSD (/mnt)
+          sudo fallocate -l 12G /mnt/swapfile-extra
+          sudo chmod 600 /mnt/swapfile-extra
+          sudo mkswap /mnt/swapfile-extra
+          sudo swapon /mnt/swapfile-extra
+          echo "=== Swap devices ==="
+          swapon --show
+          free -h
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -186,7 +210,22 @@ jobs:
     env:
       DOCKERS_GCP: "./inputs/values/dockers.json"
     steps:
-      - name: Cleanup Disk Space
+      - name: Prepare Runner (free disk space, add swap)
+        # Two provisioning tasks for the large docker builds ahead:
+        #
+        # 1) Free disk space: remove preinstalled frameworks, SDKs, and
+        #    toolchains this workflow never uses. Must run before
+        #    actions/setup-python because it deletes /opt/hostedtoolcache;
+        #    setup-python (later) downloads Python 3.8 itself, exactly as it
+        #    already does today ("Version 3.8 was not found in the local
+        #    cache" in previous runs).
+        #
+        # 2) Add swap: docker's "exporting layers" phase allocates memory
+        #    proportional to image size (observed: ~13 GB for sv-shell alone)
+        #    and hard-OOMs the 16 GB runner VM on the largest images, which
+        #    surfaces as "The runner has received a shutdown signal" /
+        #    exit 143. A 12 GB swapfile on the runner's fast local /mnt disk
+        #    turns that fatal kill into, at worst, a slower export.
         run: |
           echo "=== Disk space before cleanup ==="
           df -h
@@ -212,6 +251,15 @@ jobs:
           
           echo "=== Disk space after cleanup ==="
           df -h
+          
+          # Extend swap with a 12 GB swapfile on the local SSD (/mnt)
+          sudo fallocate -l 12G /mnt/swapfile-extra
+          sudo chmod 600 /mnt/swapfile-extra
+          sudo mkswap /mnt/swapfile-extra
+          sudo swapon /mnt/swapfile-extra
+          echo "=== Swap devices ==="
+          swapon --show
+          free -h
 
       - name: Checkout code
         uses: actions/checkout@v4

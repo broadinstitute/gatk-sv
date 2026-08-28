@@ -12,7 +12,7 @@ want to watch (before any `cd`), leaving the rest of the step untouched:
 Output - a single colored line every --interval seconds (default 20),
 interleaved with the build log but visually distinct and greppable:
 
-    [RESOURCE MONITOR] 14:32:10 UTC | disk: 38G/145G (27%) - 107G free | mem: 1.3G/15G (8%) - 14G avail
+    [RESOURCE MONITOR] 14:32:10 UTC | disk: 38G/145G (27%) - 107G free | mem: 1.3G/15G (8%) - 14G avail | swap: 0B/16G
 
 The line color escalates with disk usage: cyan (normal) -> yellow (>= 75%)
 -> red (>= 90%). Grep the raw log for "RESOURCE MONITOR" to extract the
@@ -29,8 +29,22 @@ Annotations panel on the run's summary page (separate from the logs):
 Annotations are processed live as the log streams, so they survive a runner
 shutdown. They fire on threshold *crossings* only (not every sample),
 because GitHub caps annotations at ~10 per type per step.
-"""
 
+Why this must be started inside the build step (not as its own step): a
+GitHub Actions step's log only captures output written while that step is
+alive. Started with `&` inside the build step, this process inherits the
+build step's stdout pipe, so its snapshots stream into the live log right
+up to the moment of a runner shutdown - the last visible snapshot then
+tells you whether disk or memory hit the wall.
+
+No cleanup is needed in the workflow: the monitor exits on its own when the
+step finishes, either because it notices its parent shell is gone (it gets
+re-parented, so the parent PID changes) or because the runner closed the
+log pipe (the next write raises BrokenPipeError).
+
+Note: this file lives in .github/workflows/ for convenience; GitHub only
+parses .yml/.yaml files there as workflows, so a .py file is ignored.
+"""
 import argparse
 import os
 import shutil
@@ -58,15 +72,15 @@ def human(nbytes):
 
 
 def mem_info():
-    """Return (total_bytes, available_bytes) from /proc/meminfo."""
-    total = avail = 0
+    """Return (total, available, swap_total, swap_free) bytes from /proc/meminfo."""
+    fields = {"MemTotal:": 0, "MemAvailable:": 0, "SwapTotal:": 0, "SwapFree:": 0}
     with open("/proc/meminfo") as f:
         for line in f:
-            if line.startswith("MemTotal:"):
-                total = int(line.split()[1]) * 1024
-            elif line.startswith("MemAvailable:"):
-                avail = int(line.split()[1]) * 1024
-    return total, avail
+            key = line.split()[0]
+            if key in fields:
+                fields[key] = int(line.split()[1]) * 1024
+    return (fields["MemTotal:"], fields["MemAvailable:"],
+            fields["SwapTotal:"], fields["SwapFree:"])
 
 
 def emit(text):
@@ -76,19 +90,21 @@ def emit(text):
 def snapshot(state):
     du = shutil.disk_usage("/")
     disk_pct = int(round(du.used * 100.0 / du.total))
-    mem_total, mem_avail = mem_info()
+    mem_total, mem_avail, swap_total, swap_free = mem_info()
     mem_used = mem_total - mem_avail
     mem_pct = int(round(mem_used * 100.0 / mem_total)) if mem_total else 0
     mem_avail_pct = 100 - mem_pct
+    swap_used = swap_total - swap_free
     ts = time.strftime("%H:%M:%S", time.gmtime())
 
     color = RED if disk_pct >= DISK_ERROR_PCT else \
         YELLOW if disk_pct >= DISK_WARN_PCT else CYAN
     emit("{}[RESOURCE MONITOR] {} UTC \u2502 disk: {}/{} ({}%) \u2014 {} free"
-         " \u2502 mem: {}/{} ({}%) \u2014 {} avail{}".format(
+         " \u2502 mem: {}/{} ({}%) \u2014 {} avail \u2502 swap: {}/{}{}".format(
              color, ts,
              human(du.used), human(du.total), disk_pct, human(du.free),
              human(mem_used), human(mem_total), mem_pct, human(mem_avail),
+             human(swap_used), human(swap_total),
              RESET))
 
     # Threshold-crossing annotations (plain lines, no ANSI codes: workflow
