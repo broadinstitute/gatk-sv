@@ -1,0 +1,14 @@
+{
+  "ApplyNCRAndRefArtifactFilters.vcfs": [ {{ test_batch.genotype_filtered_vcf | tojson }} ],
+  "ApplyNCRAndRefArtifactFilters.apply_filters_script": "gs://broad-dsde-methods-eph/apply_ncr_and_ref_artifact_filters.py",
+  "ApplyNCRAndRefArtifactFilters.ploidy_table": {{ test_batch.ploidy_table | tojson }},
+  "ApplyNCRAndRefArtifactFilters.primary_contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
+  "ApplyNCRAndRefArtifactFilters.cohort_id": {{ test_batch.name | tojson }},
+
+  "ApplyNCRAndRefArtifactFilters.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "ApplyNCRAndRefArtifactFilters.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+
+  "ApplyNCRAndRefArtifactFilters.ApplyNCRAndRefArtifactFiltersPerContig.no_call_rate_cutoff": 0.05,
+  "ApplyNCRAndRefArtifactFilters.ApplyNCRAndRefArtifactFiltersPerContig.filter_reference_artifacts": "true",
+  "ApplyNCRAndRefArtifactFilters.ApplyNCRAndRefArtifactFiltersPerContig.remove_zero_carrier_sites": "true"
+}
