@@ -1,0 +1,22 @@
+{
+  "CallGenomicDisorderCNVs.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "CallGenomicDisorderCNVs.gatk_docker": {{ dockers.gatk_docker | tojson }},
+
+  "CallGenomicDisorderCNVs.batch": {{ test_batch.name | tojson }},
+  "CallGenomicDisorderCNVs.baf_matrix": {{ test_batch.merged_baf_file | tojson }},
+  "CallGenomicDisorderCNVs.high_res_rd_matrix": {{ test_batch.merged_rd_file | tojson }},
+  "CallGenomicDisorderCNVs.reference_dict": {{ reference_resources.reference_dict | tojson }},
+  "CallGenomicDisorderCNVs.reference_fasta": {{ reference_resources.reference_fasta | tojson }},
+
+  "CallGenomicDisorderCNVs.gd_table": {{ reference_resources.gd_table | tojson }},
+  "CallGenomicDisorderCNVs.segdup_bed": {{ reference_resources.gd_segdup_bed | tojson }},
+  "CallGenomicDisorderCNVs.centromere_bed": {{ reference_resources.gd_centromere_bed | tojson }},
+  "CallGenomicDisorderCNVs.acrocentric_arm_bed": {{ reference_resources.gd_acrocentric_arm_bed | tojson }},
+  "CallGenomicDisorderCNVs.custom_mask_bed": {{ reference_resources.gd_custom_mask_bed | tojson }},
+  "CallGenomicDisorderCNVs.hard_inclusion_bed": {{ reference_resources.gd_hard_inclusion_bed | tojson }},
+  "CallGenomicDisorderCNVs.par_bed": {{ reference_resources.par_bed | tojson }},
+  "CallGenomicDisorderCNVs.gaps_bed": {{ reference_resources.gd_gaps_bed | tojson }},
+  "CallGenomicDisorderCNVs.gtf": {{ reference_resources.gd_gtf | tojson }},
+
+  "CallGenomicDisorderCNVs.flank_exclusion_intervals": [{{ reference_resources.gd_segdup_bed | tojson }}]
+}
