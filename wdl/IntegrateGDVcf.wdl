@@ -100,7 +100,13 @@ task PrepareGDCallsTask {
     # --- Extract & concatenate GD calls from all batch tarballs ---
     mkdir -p gd_calls
     for tarball in ~{sep=" " gd_output_tarballs}; do
-      tar -xzf "$tarball" -C gd_calls/
+      # Get the filename from the path
+      filename=$(basename "$tarball")
+      # Strip everything after the first dot to isolate the batch name
+      batch_name="${filename%%.*}"
+
+      mkdir -p "gd_calls/${batch_name}"
+      tar -xzf "$tarball" -C "gd_calls/${batch_name}/"
     done
 
     # Concatenate all gd_cnv_calls.tsv.gz (preserve one header)
