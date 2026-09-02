@@ -28,7 +28,8 @@ workflow PerSampleVariantCountSizeSummary {
     File vcf_gz
     File vcf_tbi
     String output_prefix
-    String docker = "python:3.11-slim"
+    String bcftools_docker = "quay.io/biocontainers/bcftools:1.17--h3cc50cf_1"
+    String python_docker = "python:3.11-slim"
 
     RuntimeAttr? runtime_attr_sample_ids
     RuntimeAttr? runtime_attr_extract
@@ -38,15 +39,16 @@ workflow PerSampleVariantCountSizeSummary {
   call ExtractSampleIds {
     input:
       vcf_gz = vcf_gz,
-      docker = docker,
+      docker = bcftools_docker,
       runtime_attr_override = runtime_attr_sample_ids
   }
 
   call ExtractNonrefPassVariants {
     input:
       vcf_gz = vcf_gz,
+      vcf_tbi = vcf_tbi,
       output_prefix = output_prefix,
-      docker = docker,
+      docker = bcftools_docker,
       runtime_attr_override = runtime_attr_extract
   }
 
@@ -55,7 +57,7 @@ workflow PerSampleVariantCountSizeSummary {
       nonref_variants_table = ExtractNonrefPassVariants.nonref_variants_table,
       sample_ids = ExtractSampleIds.sample_ids,
       output_prefix = output_prefix,
-      docker = docker,
+      docker = python_docker,
       runtime_attr_override = runtime_attr_summarize
   }
 
@@ -88,24 +90,8 @@ task ExtractSampleIds {
   command <<<
     set -euo pipefail
 
-    python3 << 'EOF'
-    import gzip
-
-    with gzip.open("~{vcf_gz}", "rt") as f:
-        for line in f:
-            if line.startswith("#CHROM"):
-                fields = line.rstrip("\n").split("\t")
-                samples = fields[9:]
-                break
-        else:
-            raise RuntimeError("No #CHROM header line found in VCF")
-
-    with open("sample_ids.list", "w") as out:
-        for s in samples:
-            out.write(s + "\n")
-
-    print(f"n_samples={len(samples)}")
-    EOF
+    bcftools query -l ~{vcf_gz} > sample_ids.list
+    wc -l < sample_ids.list
   >>>
 
   output {
@@ -127,6 +113,7 @@ task ExtractSampleIds {
 task ExtractNonrefPassVariants {
   input {
     File vcf_gz
+    File vcf_tbi
     String output_prefix
     String docker
     RuntimeAttr? runtime_attr_override
@@ -134,7 +121,7 @@ task ExtractNonrefPassVariants {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 8,
+    mem_gb: 4,
     disk_gb: ceil(20 + size(vcf_gz, "GB") * 3),
     boot_disk_gb: 10,
     preemptible_tries: 2,
@@ -144,64 +131,21 @@ task ExtractNonrefPassVariants {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   String out_name = output_prefix + ".nonref_pass_variants.tsv.gz"
 
+  # NOTE: GT="alt" (not GT!="ref") is required here -- GT!="ref" was tried
+  # first and found to incorrectly retain missing (./.) genotypes alongside
+  # true alt-carrying ones, silently inflating counts by ~80x. GT="alt"
+  # matches only genotypes with at least one non-ref, non-missing allele,
+  # which is exactly the non-ref/non-missing definition used throughout
+  # this pipeline.
   command <<<
     set -euo pipefail
 
-    python3 << 'EOF'
-    import gzip
-
-    in_path = "~{vcf_gz}"
-    out_path = "~{out_name}"
-
-    def parse_info(info_str):
-        info = {}
-        for entry in info_str.split(";"):
-            if "=" in entry:
-                key, _, value = entry.partition("=")
-                info[key] = value
-        return info
-
-    def is_nonref(gt_str):
-        gt_str = gt_str.split(":")[0]
-        alleles = gt_str.replace("|", "/").split("/")
-        return any(a not in (".", "0") for a in alleles)
-
-    samples = None
-    gt_idx = 0
-    n_out = 0
-
-    with gzip.open(in_path, "rt") as fin, gzip.open(out_path, "wt") as fout:
-        fout.write("sample_id\tID\tSVTYPE\tSVLEN\tCPX_INTERVALS\n")
-        for line in fin:
-            if line.startswith("##"):
-                continue
-            if line.startswith("#CHROM"):
-                fields = line.rstrip("\n").split("\t")
-                samples = fields[9:]
-                continue
-
-            fields = line.rstrip("\n").split("\t")
-            variant_id = fields[2]
-            filter_val = fields[6]
-            info = parse_info(fields[7])
-            format_keys = fields[8].split(":")
-            gt_idx = format_keys.index("GT")
-
-            if filter_val != "PASS":
-                continue
-
-            svtype = info.get("SVTYPE", ".")
-            svlen = info.get("SVLEN", ".")
-            cpx_intervals = info.get("CPX_INTERVALS", ".")
-
-            for sample, sample_field in zip(samples, fields[9:]):
-                sample_gt = sample_field.split(":")[gt_idx]
-                if is_nonref(sample_gt):
-                    fout.write(f"{sample}\t{variant_id}\t{svtype}\t{svlen}\t{cpx_intervals}\n")
-                    n_out += 1
-
-    print(f"n_nonref_pass_records_written={n_out}")
-    EOF
+    { echo -e "sample_id\tID\tSVTYPE\tSVLEN\tCPX_INTERVALS"; \
+      bcftools query \
+        -i 'FILTER="PASS" && GT="alt"' \
+        -f '[%SAMPLE\t%ID\t%INFO/SVTYPE\t%INFO/SVLEN\t%INFO/CPX_INTERVALS\n]' \
+        ~{vcf_gz}; \
+    } | gzip -c > ~{out_name}
   >>>
 
   output {

@@ -12,7 +12,8 @@ workflow PerSampleVariantCountSizeSummaryAcrossContigs {
     Array[File] contig_vcf_gzs
     Array[File] contig_vcf_tbis
     String output_prefix
-    String docker = "python:3.11-slim"
+    String bcftools_docker = "quay.io/biocontainers/bcftools:1.17--h3cc50cf_1"
+    String python_docker = "python:3.11-slim"
 
     RuntimeAttr? runtime_attr_sample_ids
     RuntimeAttr? runtime_attr_extract
@@ -26,7 +27,8 @@ workflow PerSampleVariantCountSizeSummaryAcrossContigs {
         vcf_gz = vcf_pair.left,
         vcf_tbi = vcf_pair.right,
         output_prefix = output_prefix,
-        docker = docker,
+        bcftools_docker = bcftools_docker,
+        python_docker = python_docker,
         runtime_attr_sample_ids = runtime_attr_sample_ids,
         runtime_attr_extract = runtime_attr_extract,
         runtime_attr_summarize = runtime_attr_summarize
@@ -37,7 +39,7 @@ workflow PerSampleVariantCountSizeSummaryAcrossContigs {
     input:
       per_contig_tables = run_per_contig.variant_counts_table,
       output_name = output_prefix + ".variant_counts_per_sample.genome_wide.tsv",
-      docker = docker,
+      docker = python_docker,
       runtime_attr_override = runtime_attr_sum
   }
 
@@ -45,7 +47,7 @@ workflow PerSampleVariantCountSizeSummaryAcrossContigs {
     input:
       per_contig_tables = run_per_contig.variant_sizes_table,
       output_name = output_prefix + ".variant_sizes_per_sample.genome_wide.tsv",
-      docker = docker,
+      docker = python_docker,
       runtime_attr_override = runtime_attr_sum
   }
 
