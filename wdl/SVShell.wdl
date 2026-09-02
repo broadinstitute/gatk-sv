@@ -155,6 +155,25 @@ workflow SVShell {
     }
   }
 
+  if (defined(dragen_cnv_vcf)) {
+    call StandardizeVcf as StandardizeDragenCnv {
+      input:
+        sample_id = sample_id,
+        vcf_path = select_first([dragen_cnv_vcf]),
+        caller = "dragen",
+        contigs_fai = primary_contigs_fai,
+        min_size = min_svsize,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+    call FormatVcfForGatk as FormatDragenCnv {
+      input:
+        sample_id = sample_id,
+        vcf_path = StandardizeDragenCnv.standardized_vcf,
+        ploidy_table = RunSVShell.ploidy_table,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+  }
+
   output {
     File inputs_json = RunSVShell.inputs_json
     File outputs_json = RunSVShell.outputs_json
@@ -190,6 +209,8 @@ workflow SVShell {
     File? wham_vcf_formatted_index = FormatWham.formatted_vcf_index
     File? dragen_sv_vcf_formatted = FormatDragenSv.formatted_vcf
     File? dragen_sv_vcf_formatted_index = FormatDragenSv.formatted_vcf_index
+    File? dragen_cnv_vcf_formatted = FormatDragenCnv.formatted_vcf
+    File? dragen_cnv_vcf_formatted_index = FormatDragenCnv.formatted_vcf_index
   }
 }
 
