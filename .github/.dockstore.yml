@@ -164,6 +164,16 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: RefineComplexVariantsAcrossContigs
+    primaryDescriptorPath: /wdl/RefineComplexVariantsAcrossContigs.wdl
+    filters:
+      branches:
+        - main
+        - aou_p3_vj_refine_cpx_all_contigs
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: JoinRawCalls
     primaryDescriptorPath: /wdl/JoinRawCalls.wdl
     filters:
