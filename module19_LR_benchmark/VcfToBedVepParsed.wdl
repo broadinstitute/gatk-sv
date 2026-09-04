@@ -42,6 +42,16 @@ workflow VcfToBedVepParsed {
                 disk_gb      = disk_gb,
                 preemptible  = preemptible
         }
+
+        call ExtractIdFilter {
+            input:
+                bed          = ConvertVcfToBed.bed,
+                docker       = docker,
+                mem_gb       = mem_gb,
+                cpu          = cpu,
+                disk_gb      = disk_gb,
+                preemptible  = preemptible
+        }
     }
 
     # ── gather: merge all BED shards ─────────────────────────────────────────
@@ -56,8 +66,21 @@ workflow VcfToBedVepParsed {
             preemptible     = preemptible
     }
 
+    # ── gather: merge all ID/FILTER shards ───────────────────────────────────
+    call ConcatIdFilter {
+        input:
+            id_filter_files = ExtractIdFilter.id_filter,
+            output_basename = output_basename,
+            docker          = docker,
+            mem_gb          = mem_gb,
+            cpu             = 2,
+            disk_gb         = disk_gb,
+            preemptible     = preemptible
+    }
+
     output {
-        File merged_bed = ConcatBeds.merged_bed
+        File merged_bed        = ConcatBeds.merged_bed
+        File merged_id_filter  = ConcatIdFilter.merged_id_filter
     }
 
     meta {
@@ -90,6 +113,41 @@ task ConvertVcfToBed {
 
     output {
         File bed = out_bed
+    }
+
+    runtime {
+        docker:      docker
+        memory:      mem_gb + " GB"
+        cpu:         cpu
+        disks:       "local-disk " + disk_gb + " HDD"
+        preemptible: preemptible
+    }
+}
+
+# ── Task: extract ID and FILTER columns from one BED shard ───────────────────
+task ExtractIdFilter {
+
+    input {
+        File    bed
+        String  docker
+        Int     mem_gb
+        Int     cpu
+        Int     disk_gb
+        Int     preemptible
+    }
+
+    # BED columns are #CHROM START END ID REF ALT QUAL FILTER ... -- ID is
+    # column 4, FILTER is column 8.
+    String bed_basename = basename(bed, ".bed")
+    String out_name      = bed_basename + ".id_filter.tsv"
+
+    command <<<
+        set -euo pipefail
+        cut -f4,8 ~{bed} > ~{out_name}
+    >>>
+
+    output {
+        File id_filter = out_name
     }
 
     runtime {
@@ -135,6 +193,51 @@ task ConcatBeds {
 
     output {
         File merged_bed = merged
+    }
+
+    runtime {
+        docker:      docker
+        memory:      mem_gb + " GB"
+        cpu:         cpu
+        disks:       "local-disk " + disk_gb + " HDD"
+        preemptible: preemptible
+    }
+}
+
+# ── Task: concatenate shard ID/FILTER files into one file ────────────────────
+task ConcatIdFilter {
+
+    input {
+        Array[File] id_filter_files
+        String      output_basename
+        String      docker
+        Int         mem_gb
+        Int         cpu
+        Int         disk_gb
+        Int         preemptible
+    }
+
+    String merged = output_basename + ".id_filter.tsv"
+
+    command <<<
+        set -euo pipefail
+
+        ID_FILTER_FILES=(~{sep=" " id_filter_files})
+        OUT="~{merged}"
+
+        # Write header from the first shard
+        head -1 "${ID_FILTER_FILES[0]}" > "$OUT"
+
+        # Append data rows (skip header line 1) from every shard
+        for f in "${ID_FILTER_FILES[@]}"; do
+            tail -n +2 "$f" >> "$OUT"
+        done
+
+        echo "Merged $(( $(wc -l < "$OUT") - 1 )) variants → $OUT"
+    >>>
+
+    output {
+        File merged_id_filter = merged
     }
 
     runtime {
