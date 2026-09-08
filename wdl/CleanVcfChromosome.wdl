@@ -187,7 +187,7 @@ workflow CleanVcfChromosome {
         vcf=shard,
         ped_file=ped_file,
         prefix="~{prefix}.postprocess",
-        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_docker="us.gcr.io/broad-dsde-methods/eph/sv-pipeline:eph_scatter_more_cleanvcf-3d54907d",
         runtime_attr_override=runtime_attr_postprocess
     }
   }
@@ -207,7 +207,7 @@ workflow CleanVcfChromosome {
       vcf=ConcatPostprocess.concat_vcf,
       prefix="~{prefix}.drop_redundant_cnvs",
       contig=contig,
-      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_docker="us.gcr.io/broad-dsde-methods/eph/sv-pipeline:eph_scatter_more_cleanvcf-3d54907d",
       runtime_attr_override=runtime_override_drop_redundant_cnvs
   }
 
@@ -223,7 +223,7 @@ workflow CleanVcfChromosome {
     input:
       vcf=SortDropRedundantCnvs.out,
       prefix="~{prefix}.stitch_fragmented_cnvs",
-      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_docker="us.gcr.io/broad-dsde-methods/eph/sv-pipeline:eph_scatter_more_cleanvcf-3d54907d",
       runtime_attr_override=runtime_override_stitch_fragmented_cnvs
   }
 
@@ -234,7 +234,7 @@ workflow CleanVcfChromosome {
       prefix="~{prefix}.scatter_final_steps",
       records_per_shard=records_per_shard_final_steps,
       contig=contig,
-      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_docker="us.gcr.io/broad-dsde-methods/eph/sv-pipeline:eph_scatter_more_cleanvcf-3d54907d",
       runtime_attr_override=runtime_attr_scatter_final_steps
   }
 
@@ -257,7 +257,7 @@ workflow CleanVcfChromosome {
         prefix = "~{prefix}.rescue_me_dels.shard_~{i}",
         LINE1 = LINE1_reference,
         HERVK = HERVK_reference,
-        sv_pipeline_docker = sv_pipeline_docker,
+        sv_pipeline_docker = "us.gcr.io/broad-dsde-methods/eph/sv-pipeline:eph_scatter_more_cleanvcf-3d54907d",
         runtime_attr_override = runtime_override_rescue_me_dels
     }
 
@@ -265,7 +265,7 @@ workflow CleanVcfChromosome {
       input:
         vcf=RescueMobileElementDeletions.out,
         prefix="~{prefix}.high_fdr_filtered.shard_~{i}",
-        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_docker="us.gcr.io/broad-dsde-methods/eph/sv-pipeline:eph_scatter_more_cleanvcf-3d54907d",
         runtime_attr_override=runtime_attr_add_high_fp_rate_filters
     }
 
@@ -275,7 +275,7 @@ workflow CleanVcfChromosome {
         intron_reference=intron_reference,
         contig=contig,
         prefix="~{prefix}.retro_del_filtered.shard_~{i}",
-        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_docker="us.gcr.io/broad-dsde-methods/eph/sv-pipeline:eph_scatter_more_cleanvcf-3d54907d",
         runtime_attr_override=runtime_attr_add_retro_del_filters
     }
 
@@ -284,7 +284,7 @@ workflow CleanVcfChromosome {
         vcf=AddRetroDelFilters.out,
         contig=contig,
         prefix="~{prefix}.final_cleanup.shard_~{i}",
-        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_docker="us.gcr.io/broad-dsde-methods/eph/sv-pipeline:eph_scatter_more_cleanvcf-3d54907d",
         runtime_attr_override=runtime_override_final_cleanup
     }
 
@@ -296,7 +296,7 @@ workflow CleanVcfChromosome {
         output_prefix="~{prefix}.format.shard_~{i}",
         bothside_pass_list=bothsides_pass_list,
         background_fail_list=background_list,
-        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_docker="us.gcr.io/broad-dsde-methods/eph/sv-pipeline:eph_scatter_more_cleanvcf-3d54907d",
         runtime_attr_override=runtime_attr_format_to_output_format
     }
   }
