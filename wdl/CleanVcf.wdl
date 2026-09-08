@@ -6,7 +6,9 @@ import "MakeCohortVcfMetrics.wdl" as metrics
 
 workflow CleanVcf {
   input {
-    File complex_genotype_vcf
+    File intermediate_vcf
+    File intermediate_vcf_idx
+
     File complex_resolve_bothside_pass_list
     File complex_resolve_background_fail_list
     File? outlier_samples_list
@@ -74,7 +76,8 @@ workflow CleanVcf {
 
   call CleanVcfChromosome.CleanVcfChromosome {
     input:
-      vcf=complex_genotype_vcf,
+      vcf=intermediate_vcf,
+      vcf_idx=intermediate_vcf_idx,
       contig=contig,
       background_list=complex_resolve_background_fail_list,
       bothsides_pass_list=complex_resolve_bothside_pass_list,

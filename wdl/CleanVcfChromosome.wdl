@@ -8,6 +8,7 @@ import "TasksClusterBatch.wdl" as tasks_cluster
 workflow CleanVcfChromosome {
   input {
     File vcf
+    File vcf_idx
     String contig
     File background_list
     File bothsides_pass_list
@@ -65,172 +66,10 @@ workflow CleanVcfChromosome {
     RuntimeAttr? runtime_attr_concat_final
   }
 
-  call fvcf.FormatVcfForGatk as FormatVcfToClean {
-    input:
-      vcf=vcf,
-      prefix="~{prefix}.formatted",
-      ped_file=ped_file,
-      records_per_shard=format_vcf_records_per_shard,
-      contig_list=contig_list,
-      bothside_pass_list=bothsides_pass_list,
-      background_fail_list=background_list,
-      chr_x=chr_x,
-      chr_y=chr_y,
-      sv_base_mini_docker=sv_base_mini_docker,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_create_ploidy=runtime_attr_format_to_clean_create_ploidy,
-      runtime_attr_scatter=runtime_attr_format_to_clean_scatter,
-      runtime_attr_format=runtime_attr_format_to_clean_format,
-      runtime_override_concat=runtime_attr_format_to_clean_concat
-  }
-
-  call MiniTasks.ScatterVcf as ScatterPreprocess {
-    input:
-      vcf=FormatVcfToClean.gatk_formatted_vcf,
-      vcf_index=FormatVcfToClean.gatk_formatted_vcf_index,
-      prefix="~{prefix}.preprocess.scatter",
-      records_per_shard=preprocess_records_per_shard,
-      contig=contig,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_scatter_preprocess
-  }
-
-  scatter (shard in ScatterPreprocess.shards) {
-    call CleanVcfPreprocess {
-      input:
-        vcf=shard,
-        chr_x=chr_x,
-        chr_y=chr_y,
-        background_list=background_list,
-        bothsides_pass_list=bothsides_pass_list,
-        ped_file=ped_file,
-        prefix="~{prefix}.preprocess",
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_attr_preprocess
-    }
-  }
-
-  call MiniTasks.ConcatVcfs as ConcatPreprocess {
-    input:
-      vcfs=CleanVcfPreprocess.out,
-      vcfs_idx=CleanVcfPreprocess.out_idx,
-      allow_overlaps=true,
-      outfile_prefix="~{prefix}.preprocess.concat",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_concat_preprocess
-  }
-
-  call CleanVcfReviseOverlappingCnvs {
-    input:
-      vcf=ConcatPreprocess.concat_vcf,
-      vcf_idx=ConcatPreprocess.concat_vcf_idx,
-      prefix="~{prefix}.revise_overlapping_cnvs",
-      gatk_docker=gatk_docker,
-      runtime_attr_override=runtime_attr_revise_overlapping_cnvs
-  }
-
-  call MiniTasks.ScatterVcf as ScatterReviseMultiallelics {
-    input:
-      vcf=CleanVcfReviseOverlappingCnvs.out,
-      vcf_index=CleanVcfReviseOverlappingCnvs.out_idx,
-      prefix="~{prefix}.scatter_for_revise_multiallelics",
-      records_per_shard=records_per_shard_revise_multiallelics,
-      contig=contig,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_scatter_revise_multiallelics
-  }
-
-  scatter (shard in ScatterReviseMultiallelics.shards) {
-    call CleanVcfReviseMultiallelicCnvs {
-      input:
-        vcf=shard,
-        outlier_samples_list=outlier_samples_list,
-        prefix="~{prefix}.revise_multiallelic_cnvs",
-        gatk_docker=gatk_docker,
-        runtime_attr_override=runtime_attr_revise_large_cnvs
-    }
-  }
-
-  call MiniTasks.ConcatVcfs as ConcatReviseMultiallelics {
-    input:
-      vcfs=CleanVcfReviseMultiallelicCnvs.out,
-      vcfs_idx=CleanVcfReviseMultiallelicCnvs.out_idx,
-      allow_overlaps=true,
-      outfile_prefix="~{prefix}.revisemultiallelics.concat",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_concat_preprocess
-  }
-
-  call CleanVcfReviseOverlappingMultiallelics {
-    input:
-      vcf=ConcatReviseMultiallelics.concat_vcf,
-      vcf_idx=ConcatReviseMultiallelics.concat_vcf_idx,
-      prefix="~{prefix}.revise_overlapping_multiallelics",
-      gatk_docker=gatk_docker,
-      runtime_attr_override=runtime_attr_revise_multiallelics
-  }
-
-  call MiniTasks.ScatterVcf as ScatterPostprocess {
-    input:
-      vcf=CleanVcfReviseOverlappingMultiallelics.out,
-      vcf_index=CleanVcfReviseOverlappingMultiallelics.out_idx,
-      prefix="~{prefix}.postprocess.scatter",
-      records_per_shard=postprocess_records_per_shard,
-      contig=contig,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_scatter_postprocess
-  }
-
-  scatter (shard in ScatterPostprocess.shards) {
-    call CleanVcfPostprocess {
-      input:
-        vcf=shard,
-        ped_file=ped_file,
-        prefix="~{prefix}.postprocess",
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_attr_postprocess
-    }
-  }
-
-  call MiniTasks.ConcatVcfs as ConcatPostprocess {
-    input:
-      vcfs=CleanVcfPostprocess.out,
-      vcfs_idx=CleanVcfPostprocess.out_idx,
-      allow_overlaps=true,
-      outfile_prefix="~{prefix}.postprocess.concat",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_concat_postprocess
-  }
-
-  call DropRedundantCnvs {
-    input:
-      vcf=ConcatPostprocess.concat_vcf,
-      prefix="~{prefix}.drop_redundant_cnvs",
-      contig=contig,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_drop_redundant_cnvs
-  }
-
-  call MiniTasks.SortVcf as SortDropRedundantCnvs {
-    input:
-      vcf=DropRedundantCnvs.out,
-      outfile_prefix="~{prefix}.drop_redundant_cnvs.sorted",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_sort_drop_redundant_cnvs
-  }
-
-  call StitchFragmentedCnvs {
-    input:
-      vcf=SortDropRedundantCnvs.out,
-      prefix="~{prefix}.stitch_fragmented_cnvs",
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_stitch_fragmented_cnvs
-  }
-
   call MiniTasks.ScatterVcf as ScatterFinalSteps {
     input:
-      vcf=StitchFragmentedCnvs.stitched_vcf,
-      vcf_index=StitchFragmentedCnvs.stitched_vcf_idx,
+      vcf=vcf,
+      vcf_index=vcf_idx,
       prefix="~{prefix}.scatter_final_steps",
       records_per_shard=records_per_shard_final_steps,
       contig=contig,
