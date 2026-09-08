@@ -145,6 +145,7 @@ workflows:
         - eph_percontig_kj_cleanvcf
         - eph_scatter_cleanvcf
         - eph_scatter_more_cleanvcf
+        - aou_p3_vj_scatter_more_cleanvcf_docker_chr4
       tags:
         - /.*/
 
