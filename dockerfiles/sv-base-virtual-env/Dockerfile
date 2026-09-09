@@ -56,7 +56,7 @@ COPY dockerfiles/sv-base-virtual-env/union_lists.sh $R_INSTALL_BIN/
 ENV PATH=$R_INSTALL_BIN:/opt/bin:$PATH
 
 # update the installed R packages
-RUN Rscript -e "update.packages(contriburl=contrib.url(repos=c('http://lib.stat.cmu.edu/R/CRAN/', 'https://cran.rstudio.com')), clean=TRUE, quiet=TRUE, ask=FALSE)"
+RUN Rscript -e "update.packages(contriburl=contrib.url(repos=c('https://cloud.r-project.org', 'https://cran.rstudio.com')), clean=TRUE, quiet=TRUE, ask=FALSE)"
 # install the required R packages for this stage
 ARG SV_BASE_R_PKGS="optparse BiocManager"
 RUN install_R_packages.R $SV_BASE_R_PKGS
