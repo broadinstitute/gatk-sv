@@ -99,7 +99,7 @@ with gzip.open("~{vcf}", 'rt') as f, open("intermediate1.vcf", 'w') as out:
 with pysam.VariantFile("intermediate1.vcf", 'r') as vcf:
     header = vcf.header
     header.add_line('##INFO=<ID=END2,Number=1,Type=Integer,Description="End position of the structural variant on CHR2">')
-    with pysam.VariantFile("intermediate2.vcf.gz", 'w', header=header) as out:
+    with pysam.VariantFile("~{prefix}.reformatted.vcf.gz", 'w', header=header) as out:
         for record in vcf:
             svtype = record.info.get('SVTYPE', None)
             if (svtype == 'BND' or svtype == 'CTX'):
@@ -113,7 +113,6 @@ with pysam.VariantFile("intermediate1.vcf", 'r') as vcf:
 
 CODE
 
-    bcftools annotate -x INFO/MEMBERS intermediate2.vcf.gz -O z -o ~{prefix}.reformatted.vcf.gz
     tabix ~{prefix}.reformatted.vcf.gz
 
   >>>

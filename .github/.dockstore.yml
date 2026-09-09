@@ -99,6 +99,7 @@ workflows:
       branches:
         - main
         - eph_fix_ends_filterbatchsites
+        - eph_fix_ends_joinrawcalls
       tags:
         - /.*/
 
