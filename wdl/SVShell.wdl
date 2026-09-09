@@ -352,6 +352,14 @@ task RunSVShell {
     export TMPDIR="${PWD}/wd/tmp"
     mkdir -p "${PWD}/wd/tmp"
 
+    # TMP
+    git clone https://github.com/broadinstitute/gatk-sv
+    cd gatk-sv
+    git checkout vj-sv-shell-dragen-standardize
+    rm -rf /opt/sv_shell/
+    sudo mv ./src/sv_shell /opt/sv_shell
+    cd ..
+
     jq -n \
       --arg batch "~{batch}" \
       --arg sample_id "~{sample_id}" \
