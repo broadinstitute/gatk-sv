@@ -11,8 +11,8 @@
 
 
 <link rel="search" type="application/opensearchdescription+xml" title="GATK-SV" href="/gatk-sv/opensearch.xml"><link rel="stylesheet" href="/gatk-sv/assets/css/styles.4b5ba934.css">
-<script src="/gatk-sv/assets/js/runtime~main.b59c98d1.js" defer="defer"></script>
-<script src="/gatk-sv/assets/js/main.d7f71a3d.js" defer="defer"></script>
+<script src="/gatk-sv/assets/js/runtime~main.34e13251.js" defer="defer"></script>
+<script src="/gatk-sv/assets/js/main.ab0dc710.js" defer="defer"></script>
 </head>
 <body>
 <svg style="display: none;"><defs>
@@ -70,8 +70,10 @@ cutoff for outlier filtration in <code>08-FilterBatchSamples</code></li>
 <li class=""><code>17-JoinRawCalls</code>: Raw call aggregation</li>
 <li class=""><code>18-SVConcordance</code>: Annotate genotype concordance with raw calls</li>
 <li class=""><code>19-ScoreGenotypes</code>: Scores genotypes to optimize GQ recalibrator model</li>
-<li class=""><code>19-FilterGenotypes</code>: Apply genotype filtering using GQ recalibrator model</li>
-<li class=""><code>20-AnnotateVcf</code>: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and
+<li class=""><code>20-FilterGenotypes</code>: Apply genotype filtering using GQ recalibrator model</li>
+<li class=""><code>21-CallGenomicDisorderCNVs</code>: Generate per-batch GD CNV calls.</li>
+<li class=""><code>22-IntegrateGDVcf</code>: Integrate GD CNV calls into the cohort VCF.</li>
+<li class=""><code>23-AnnotateVcf</code>: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and
 AF annotation with external population callsets</li>
 </ol>
 <p>Extra workflows (Not part of canonical pipeline, but included for your convenience. May require manual configuration):</p>
