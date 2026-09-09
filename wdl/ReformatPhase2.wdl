@@ -29,7 +29,7 @@ workflow ReformatPhase2 {
       input:
         vcf=vcfs[i],
         vcf_idx=vcf_indexes[i],
-        prefix="~{prefix}.{labels[i]}",
+        prefix="~{prefix}.~{labels[i]}",
         sv_pipeline_docker=sv_pipeline_docker
     }
   }
