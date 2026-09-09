@@ -1,7 +1,7 @@
 ---
 title: AnnotateVcf
 description: Annotate VCF
-sidebar_position: 21
+sidebar_position: 23
 slug: av
 ---
 
@@ -29,9 +29,9 @@ stateDiagram
   classDef thisModule font-weight:bold,stroke-width:0px,fill:#ff9900,color:white
   classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
 
-  fg: FilterGenotypes
+  igdv: IntegrateGDVcf
   avcf: AnnotateVcf
-  fg --> avcf
+  igdv --> avcf
   
   class avcf thisModule
   class fg inModules
