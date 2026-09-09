@@ -4,41 +4,57 @@ import "Structs.wdl"
 
 workflow ReformatPhase2 {
   input {
-    File pesr_vcf
-    File pesr_vcf_index
-    File depth_vcf
-    File depth_vcf_index
+    File clustered_manta_vcf
+    File clustered_manta_vcf_index
+
+    File clustered_depth_vcf
+    File clustered_depth_vcf_index
+
+    File clustered_scramble_vcf
+    File clustered_scramble_vcf_index
+
+    File clustered_wham_vcf
+    File clustered_wham_vcf_index
+
     String prefix
     String sv_pipeline_docker
   }
 
-  call ReformatVcf as ReformatPesr {
-    input:
-      vcf=pesr_vcf,
-      vcf_idx=pesr_vcf_index,
-      prefix="~{prefix}.pesr",
-      sv_pipeline_docker=sv_pipeline_docker
-  }
+  Array[File] vcfs = [clustered_manta_vcf, clustered_depth_vcf, clustered_scramble_vcf, clustered_wham_vcf]
+  Array[File] vcf_indexes = [clustered_manta_vcf_index, clustered_depth_vcf_index, clustered_scramble_vcf_index, clustered_wham_vcf_index]
+  Array[String] labels = ['manta', 'depth', 'scramble', 'wham']
 
-  call ReformatVcf as ReformatDepth {
-    input:
-      vcf=depth_vcf,
-      vcf_idx=depth_vcf_index,
-      prefix="~{prefix}.depth",
-      sv_pipeline_docker=sv_pipeline_docker
+  scatter (i in range(length(vcfs))) {
+    call ReformatVcf {
+      input:
+        vcf=vcfs[i],
+        vcf_idx=vcf_indexes[i],
+        prefix="~{prefix}.{labels[i]}",
+        sv_pipeline_docker=sv_pipeline_docker
+    }
   }
 
   output {
-    File reformatted_pesr_vcf = ReformatPesr.reformatted_vcf
-    File reformatted_pesr_vcf_idx = ReformatPesr.reformatted_vcf_idx
+    File reformatted_manta_vcf = ReformatVcf.reformatted_vcf[0]
+    File reformatted_manta_vcf_idx = ReformatVcf.reformatted_vcf_idx[0]
 
-    File reformatted_depth_vcf = ReformatDepth.reformatted_vcf
-    File reformatted_depth_vcf_idx = ReformatDepth.reformatted_vcf_idx
+    File reformatted_depth_vcf = ReformatVcf.reformatted_vcf[1]
+    File reformatted_depth_vcf_idx = ReformatVcf.reformatted_vcf_idx[1]
 
-    File original_pesr_vcf = pesr_vcf
-    File original_pesr_vcf_index = pesr_vcf_index
-    File original_depth_vcf = depth_vcf
-    File original_depth_vcf_index = depth_vcf_index
+    File reformatted_scramble_vcf = ReformatVcf.reformatted_vcf[2]
+    File reformatted_scramble_vcf_idx = ReformatVcf.reformatted_vcf_idx[2]
+
+    File reformatted_wham_vcf = ReformatVcf.reformatted_vcf[3]
+    File reformatted_wham_vcf_idx = ReformatVcf.reformatted_vcf_idx[3]
+
+    File original_manta_vcf = clustered_manta_vcf
+    File original_manta_vcf_index = clustered_manta_vcf_index
+    File original_depth_vcf = clustered_depth_vcf
+    File original_depth_vcf_index = clustered_depth_vcf_index
+    File original_scramble_vcf = clustered_scramble_vcf
+    File original_scramble_vcf_index = clustered_scramble_vcf_index
+    File original_wham_vcf = clustered_wham_vcf
+    File original_wham_vcf_index = clustered_wham_vcf_index
   }
 }
 
