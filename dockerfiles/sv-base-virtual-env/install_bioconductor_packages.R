@@ -14,9 +14,10 @@ if ( 0 == length(to.be.installed) ) {
 }
 
 # multiple repos, multiple retries when one of them is un-reachable
-repos <- c("http://lib.stat.cmu.edu/R/CRAN/",
-           "https://cran.rstudio.com",
-           "http://cran.mtu.edu")
+# See note in install_R_packages.R: plain-HTTP mirrors (lib.stat.cmu.edu,
+# cran.mtu.edu) break under options(warn=2); use HTTPS repos only.
+repos <- c("https://cloud.r-project.org",
+           "https://cran.rstudio.com")
 
 # install to default place, quietly, then leave
 if (!requireNamespace("BiocManager")){
