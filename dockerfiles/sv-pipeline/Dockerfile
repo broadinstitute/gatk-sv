@@ -3,7 +3,7 @@
 ARG SVBASE_IMAGE=sv-base:latest
 ARG VIRTUAL_ENV_IMAGE=sv-pipeline-virtual-env:latest
 ARG GATK_SV_GD_REPO=https://github.com/broadinstitute/gatk-sv-gd.git
-ARG GATK_SV_GD_COMMIT=621a71d3ad0966404a9560a4dec6562c6f08034a
+ARG GATK_SV_GD_COMMIT=ed244c9ca4a215923e7ace0fa2ac42847426b81b
 
 ################# get alias for updating dependencies
 FROM $SVBASE_IMAGE as base
