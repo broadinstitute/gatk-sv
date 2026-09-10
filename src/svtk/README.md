@@ -5,9 +5,11 @@ Utilities for consolidating, filtering, resolving, and annotating structural var
 ## Installation
 
 ```
-$ git clone https://github.com/broadinstitute/gatk-sv.git
-$ cd gatk-sv
-$ pip install -e ./src/svtk
+git clone https://github.com/broadinstitute/gatk-sv.git
+cd gatk-sv
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ./src/svtk
 ```
 
 ## Available commands
