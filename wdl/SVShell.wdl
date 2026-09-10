@@ -160,7 +160,7 @@ workflow SVShell {
       input:
         sample_id = sample_id,
         vcf_path = select_first([dragen_cnv_vcf]),
-        caller = "dragen",
+        caller = "dragen_cnv",
         contigs_fai = primary_contigs_fai,
         min_size = min_svsize,
         sv_pipeline_docker = sv_pipeline_docker

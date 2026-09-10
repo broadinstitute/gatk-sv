@@ -224,7 +224,7 @@ if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
     --min-size "${min_svsize}" \
     "${dragen_cnv_vcf}" \
     tmp.vcf \
-    "dragen"
+    "dragen_cnv"
 
   dragen_cnv_vcf=$(realpath "std.dragen.cnv.${sample_id}.vcf.gz")
   bcftools sort tmp.vcf -Oz -o "${dragen_cnv_vcf}"
