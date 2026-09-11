@@ -204,6 +204,12 @@ if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
     run_manta=false
   fi
 
+  # Note that instead of standardizing here, the bash script
+  # can assume the user standardizes outside of this script
+  # and provides standardized dragen SV and CNV vcfs (e.g., the SVShell WDL can do this).
+  # However, we don't have an easy way of checking if DRAGEN files are standardized,
+  # and if a user misses standardization, it leads to confusing errors that are
+  # hard to debug. Hence, we standardize input here to ensure SVShell always has standardized VCFs.
   svtk standardize \
     --sample-names ${sample_id} \
     --prefix "dragen_${sample_id}" \
@@ -215,6 +221,7 @@ if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
 
   dragen_sv_vcf=$(realpath "std.dragen.sv.${sample_id}.vcf.gz")
   bcftools sort tmp.vcf -Oz -o "${dragen_sv_vcf}"
+  tabix -p vcf "${dragen_sv_vcf}"
   rm tmp.vcf
 
   svtk standardize \
@@ -228,6 +235,7 @@ if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
 
   dragen_cnv_vcf=$(realpath "std.dragen.cnv.${sample_id}.vcf.gz")
   bcftools sort tmp.vcf -Oz -o "${dragen_cnv_vcf}"
+  tabix -p vcf "${dragen_cnv_vcf}"
   rm tmp.vcf
 fi
 
