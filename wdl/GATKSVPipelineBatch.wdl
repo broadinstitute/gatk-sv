@@ -70,6 +70,19 @@ workflow GATKSVPipelineBatch {
     File? outlier_cutoff_table
     File qc_definitions
 
+    # Required by GenotypeBatch; WDL gives File inputs no default, so the pipeline must take them
+    # from its caller. Production (cohort-mode) sources, inputs/values/resources_hg38.json:
+    #   training_intervals        = depth_training_bed   (gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/train_hg38_reviewed_final.bed)
+    #   depth_exclusion_intervals = bin_exclude          (gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.gatkcov.bed.gz)
+    #   pesr_exclusion_intervals  = pesr_exclude_list    (gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz)
+    #   ploidy_table              = caller-provided ploidy table (cohort mode: ${this.ploidy_table};
+    #                               alternatively call tasks_cluster.CreatePloidyTableFromPed as main's
+    #                               GATKSVPipelineBatch.wdl:302 does -- not part of this minimal patch)
+    File training_intervals
+    File ploidy_table
+    File depth_exclusion_intervals
+    File pesr_exclusion_intervals
+
     # Run module metrics - all modules on by default for batch WDL
     Boolean? run_sampleevidence_metrics
     Boolean? run_batchevidence_metrics = true  # GatherBatchEvidenceMetrics is off by default standalone but on for batch WDL
@@ -248,6 +261,10 @@ workflow GATKSVPipelineBatch {
       pe_file=GATKSVPipelinePhase1.merged_PE,
       sr_file=GATKSVPipelinePhase1.merged_SR,
       reference_dict=reference_dict,
+      training_intervals=training_intervals,
+      ploidy_table=ploidy_table,
+      depth_exclusion_intervals=depth_exclusion_intervals,
+      pesr_exclusion_intervals=pesr_exclusion_intervals,
       contig_list = primary_contigs_list,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
