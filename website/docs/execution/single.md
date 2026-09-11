@@ -87,7 +87,7 @@ inputs beyond their defaults.
 
 |Output Type|Output Name|Description|
 |---------|--------|--------------|
-|`File`|`final_vcf`|SV VCF output for the pipeline. Includes all sites genotyped as variant in the case sample and genotypes for the reference panel. Sites are annotated with overlap of functional genome elements and allele frequencies of matching variants in gnomAD. When STRipy is enabled, STRipy repeat-expansion records are added after final cleanup.|
+|`File`|`final_vcf`|SV VCF output for the pipeline. In single-case mode it includes all sites genotyped as variant in the case sample and genotypes for the reference panel. In [trio de novo mode](#trio-de-novo-mode) it retains all variants across case + mother + father and every record is annotated with `MOI`/`MOI_CONFIDENCE`. Sites are annotated with overlap of functional genome elements and allele frequencies of matching variants in gnomAD. When STRipy is enabled, STRipy repeat-expansion records are added after final cleanup.|
 |`File`|`final_vcf_idx`|Index file for `final_vcf`|
 |`File`|`final_bed`|Final output in BED format. Filter status, list of variant samples, and all VCF INFO fields are reported as additional columns.|
 |`File`|`metrics_file`|Metrics computed from the input data and intermediate and final VCFs. Includes metrics on the SV evidence, and on the number of variants called, broken down by type and size range. STRipy records are not included in these metrics.|
@@ -98,8 +98,8 @@ inputs beyond their defaults.
 |`File?`|`stripy_vcf_output`|Single-sample STRipy VCF, present when STRipy is run by the workflow.|
 |`File`|`ploidy_matrix`|Matrix of contig ploidy estimates computed by GATK gCNV.|
 |`File`|`ploidy_plots`|Plots of contig ploidy generated from `ploidy_matrix`|
-|`File`|`non_genotyped_unique_depth_calls`|This VCF file contains any depth based calls made in the case sample that did not pass genotyping checks and do not match a depth-based call from the reference panel. If very high sensitivity is desired, examine this file for additional large CNV calls.|
-|`File`|`non_genotyped_unique_depth_calls_idx`|Index file for `non_genotyped_unique_depth_calls`|
+|`File?`|`non_genotyped_unique_depth_calls`|This VCF file contains any depth based calls made in the case sample that did not pass genotyping checks and do not match a depth-based call from the reference panel. If very high sensitivity is desired, examine this file for additional large CNV calls. Single-case mode only; not present in trio de novo mode.|
+|`File?`|`non_genotyped_unique_depth_calls_idx`|Index file for `non_genotyped_unique_depth_calls`|
 |`File`|`pre_cleanup_vcf`|VCF output in a representation used internally in the pipeline. This file is less compliant with the VCF spec and is intended for debugging purposes.|
 |`File`|`pre_cleanup_vcf_idx`|Index file for `pre_cleanup_vcf`|
 |`File`|`gd_output_tarball`|Tarball containing Genomic Disorder CNV calling results (VCFs, plots, metrics). Contains results for all samples in the combined matrix; case-specific results can be extracted by filtering on the case sample name.|
@@ -132,3 +132,64 @@ suggested acceptable ranges.
 If a metric exceeds the recommended range, all variants will be automatically flagged with 
 a non-passing `FILTER` status in the output VCF.
 :::
+
+## Trio de novo mode
+
+Trio de novo mode extends the Single Sample pipeline to a case with one or both parents.
+Provide the mother and/or father WGS CRAM files (in addition to the case CRAM) and the
+workflow will:
+
+- Call structural variants in each provided parent with the same callers as the case
+  (Manta, Scramble, Wham, and optionally MELT) and merge those calls into the shared
+  clustered call set.
+- **Retain all variants across case + mother + father** in the final call set, rather than
+  filtering to case-only calls as the default single-sample mode does.
+- Annotate the **mode of inheritance (MOI)** of every variant as the final step.
+
+### Enabling trio de novo
+
+Trio de novo mode activates automatically when a parent CRAM is provided. In addition to the
+case inputs above, configure the following parameters:
+
+|Input Type|Input Name|Description|
+|---------|--------|--------------|
+|`String?`|`mother_sample_id`|Mother sample identifier (required if `mother_cram` is set). Must match the sample name inside the mother CRAM.|
+|`File?`|`mother_cram`|Mother WGS CRAM. Leave blank to run without the mother.|
+|`File?`|`mother_cram_index`|Mother CRAM index.|
+|`String?`|`father_sample_id`|Father sample identifier (required if `father_cram` is set). Must match the sample name inside the father CRAM.|
+|`File?`|`father_cram`|Father WGS CRAM. Leave blank to run without the father.|
+|`File?`|`father_cram_index`|Father CRAM index.|
+
+Either parent may be omitted (half-trio). If both are omitted the workflow runs in the usual
+single-case mode and no MOI annotation is added.
+
+### Mode of inheritance (MOI)
+
+In trio de novo mode, every record in `final_vcf` carries two INFO fields computed by comparing
+the case genotype with the provided parent genotypes:
+
+- `MOI` — one of:
+  - `DE_NOVO` — the case is non-reference and every provided parent is reference.
+  - `INHERITED_FROM_MOTHER` — the case is non-reference and the mother (but not the father) is non-reference.
+  - `INHERITED_FROM_FATHER` — the case is non-reference and the father (but not the mother) is non-reference.
+  - `INHERITED_FROM_BOTH` — the case is non-reference and both provided parents are non-reference.
+  - `PARENT_ONLY` — the case is reference and at least one provided parent is non-reference.
+  - `UNASSESSABLE` — the case genotype is missing/unknown at that variant.
+- `MOI_CONFIDENCE` — `CONFIRMED` when the determination does not depend on a parent that was
+  not assayed (or whose genotype was missing), and `UNCONFIRMED` when a parent was not assayed
+  or its genotype was missing (e.g. a `DE_NOVO` call in a half-trio, where the absent parent
+  could not be checked).
+
+:::note
+Because parent-only variants are retained, the final trio VCF includes variants called in any
+trio member. Records that are present only in a parent are labeled `PARENT_ONLY`.
+:::
+
+### Trio-specific outputs
+
+|Output Type|Output Name|Description|
+|---------|--------|--------------|
+|`File`|`final_vcf`|Trio call set. In addition to the standard annotation, every record carries the `MOI` and `MOI_CONFIDENCE` INFO fields.|
+|`File?`|`moi_summary`|Per-MOI record counts (one row per MOI value). Present only in trio de novo mode.|
+|`File`|`working_ped`|The working pedigree: reference panel + case (single-case mode) or reference panel + case + provided parents (trio de novo mode).|
+

@@ -4,6 +4,10 @@
 """
 After genotyping, identifies CNV variants over a size threshold without depth support but with PESR evidence and changes
 them to BNDs. This task is ordinarily accomplished by Module 3 but in some cases (ie the single sample pipeline) that is skipped.
+
+Record-level decisions (drop / convert-to-BND) consider all "proband" samples given on the command line. In the
+single-sample pipeline that is just the case; in trio de novo mode it is case + provided parents, so that a variant
+supported by depth or PE/SR evidence in ANY proband is retained.
 """
 
 import argparse
@@ -70,7 +74,9 @@ def main():
     parser.add_argument('vcf', help='Module 04 genotyped PESR vcf')
     parser.add_argument('allosome_contigs_file')
     parser.add_argument('famfile', type=argparse.FileType('r'))
-    parser.add_argument('case_sample')
+    parser.add_argument(
+        'proband_samples', nargs='+',
+        help='Case sample and any provided parent sample names (space-separated).')
     parser.add_argument(
         'min_size', help='minumum size at which to apply conversions', type=int)
     parser.add_argument('-o', '--outfile',
@@ -84,7 +90,10 @@ def main():
         vcf = pysam.VariantFile(args.vcf)
     header = vcf.header
 
-    case_sample = args.case_sample
+    proband_samples = [s for s in args.proband_samples if s in vcf.header.samples]
+    if not proband_samples:
+        sys.exit("Error: none of the proband samples {} are present in the VCF "
+                 "samples {}".format(args.proband_samples, vcf.header.samples))
     min_size = args.min_size
 
     if args.outfile is None:
@@ -96,26 +105,27 @@ def main():
     allosome_contigs = read_contigs_list(args.allosome_contigs_file)
 
     fam = parse_famfile(args.famfile)
-    case_sample_sex = fam.samples[args.case_sample].sex
     samples_by_sex = {'1': [s for s in fam.samples if fam.samples[s].sex == '1'],
                       '2': [s for s in fam.samples if fam.samples[s].sex == '2']}
 
+    def has_depth_support(record, sample):
+        """Depth support for one sample on one record (autosome or allosome)."""
+        if record.contig not in allosome_contigs:
+            return has_depth_support_autosome(record, sample)
+        return has_depth_support_allosome(record, sample, samples_by_sex[fam.samples[sample].sex])
+
     for record in vcf:
-        contig = record.contig
         svtype = record.info['SVTYPE']
         if (svtype == 'DEL' or svtype == 'DUP') and record.info['SVLEN'] >= min_size:
-            pesr_support = has_sr_or_pe_support(record, case_sample)
-            if record.samples[case_sample].get('RD_CN') is None:
-                if not pesr_support:
-                    sys.stderr.write("Record {} has a missing depth genotype and no PE/SR support; dropping\n".format(record.id))
-                    continue
-            if contig not in allosome_contigs:
-                if not has_depth_support_autosome(record, case_sample) and pesr_support:
-                    convert_record_to_bnd(record)
-            else:
-                if not has_depth_support_allosome(record, case_sample, samples_by_sex[case_sample_sex]) \
-                        and pesr_support:
-                    convert_record_to_bnd(record)
+            any_pesr_support = any(has_sr_or_pe_support(record, s) for s in proband_samples)
+            all_depth_missing = all(
+                record.samples[s].get('RD_CN') is None for s in proband_samples)
+            if all_depth_missing and not any_pesr_support:
+                sys.stderr.write("Record {} has a missing depth genotype and no PE/SR support in any proband; dropping\n".format(record.id))
+                continue
+            no_depth_support = not any(has_depth_support(record, s) for s in proband_samples)
+            if no_depth_support and any_pesr_support:
+                convert_record_to_bnd(record)
         fout.write(record)
 
 
