@@ -28,6 +28,16 @@ workflow GenotypeBatch {
     File training_vcf
 
     File training_intervals
+    # RD genotyping bin count, used for BOTH training and apply so cutoffs are fitted on the same
+    # values they are applied to. v1.1.1 fitted and applied RD with -i 100000 (its GenotypeBatch.wdl:25
+    # n_RD_genotype_bins -> TrainRDGenotyping.wdl:53 -> TasksGenotypeBatch.wdl:359 -i ~{n_bins}), and
+    # RdTest.R:388-401 clamps that to each interval's own bin count, i.e. no rebinning at all. The Java
+    # default is 10 (TrainSVGenotyping.java:238, which mirrors RdTest.R:81's *dead* -i default that the
+    # WDL always overrode) while GenotypeSVs.java:239 defaults to 100000, so with no caller passing this
+    # argument RD cutoffs were fitted on 10-bin-resampled depth and applied to full-resolution depth.
+    # Effect on the frozen v1.1.1 156-sample cohort (curated loci, real bin_exclude, otherwise identical):
+    # state-0 sd 1.58x baseline at 10 bins vs 1.000x (equal to 14 s.f.) at 100000 bins.
+    Int n_RD_genotype_bins = 100000
     File median_coverage
     File rd_file
     File pe_file
@@ -83,6 +93,7 @@ workflow GenotypeBatch {
       vcf_index = FilterWhamDeletionsTraining.filtered_vcf_index,
       output_name = batch,
       training_intervals = training_intervals,
+      n_RD_genotype_bins = n_RD_genotype_bins,
       median_coverage = median_coverage,
       rd_file = rd_file,
       rd_file_index = rd_file + ".tbi",
@@ -237,6 +248,7 @@ task TrainSVGenotyping {
     File vcf
     File vcf_index
     File training_intervals
+    Int n_RD_genotype_bins = 100000
     File median_coverage
     File rd_file
     File rd_file_index
@@ -335,6 +347,7 @@ task TrainSVGenotyping {
       --sr-quality ${SRQ} \
       --rd-depth-min-separation ${DEPTH_SEP} \
       --rd-pesr-min-separation ${PESR_SEP} \
+      --num-bins ~{n_RD_genotype_bins} \
       --output-dir ./ \
       --output-name ~{output_name} \
       ~{training_args}
