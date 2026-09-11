@@ -104,6 +104,12 @@ workflow GatherBatchEvidence {
     # Option to add first sample to the ped file (for single sample mode); run_ploidy must be true
     Boolean append_first_sample_to_ped = false
 
+    # Trio de novo: when set, ALL of these non-reference-panel samples are added
+    # to the ped instead of just samples[0] (run_ploidy must be true)
+    Array[String] extra_ped_samples = []
+    String? extra_ped_mother_sample_id
+    String? extra_ped_father_sample_id
+
     Int gcnv_qs_cutoff              # QS filtering cutoff
     Float? defragment_max_dist
 
@@ -231,7 +237,19 @@ workflow GatherBatchEvidence {
       runtime_attr_override = runtime_attr_subset_ped
   }
 
-  if (append_first_sample_to_ped) {
+  if (append_first_sample_to_ped && length(extra_ped_samples) > 0) {
+    call AddTrioSamplesToPed as AddTrioSamplesToPed {
+      input:
+        ref_ped_file = SubsetPedFile.ped_subset_file,
+        ploidy_plots = select_first([Ploidy.ploidy_plots]),
+        sample_ids = extra_ped_samples,
+        mother_sample_id = extra_ped_mother_sample_id,
+        father_sample_id = extra_ped_father_sample_id,
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = add_sample_to_ped_runtime_attr
+    }
+  }
+  if (append_first_sample_to_ped && length(extra_ped_samples) == 0) {
     call AddCaseSampleToPed {
       input:
         ref_ped_file = SubsetPedFile.ped_subset_file,
@@ -241,6 +259,10 @@ workflow GatherBatchEvidence {
         runtime_attr_override = add_sample_to_ped_runtime_attr
     }
   }
+
+  # Ped that includes the non-reference-panel samples: the trio (case + provided
+  # parents) in trio de novo mode, or just the case in single-case mode.
+  File combined_ped_file_ = select_first([AddTrioSamplesToPed.combined_ped_file, AddCaseSampleToPed.combined_ped_file, SubsetPedFile.ped_subset_file])
 
   call bem.BatchEvidenceMerging as BatchEvidenceMerging {
     input:
@@ -268,7 +290,7 @@ workflow GatherBatchEvidence {
       bincov_matrix = merged_bincov_,
       bincov_matrix_index = merged_bincov_idx_,
       chrom_file = cnmops_chrom_file,
-      ped_file = select_first([AddCaseSampleToPed.combined_ped_file, SubsetPedFile.ped_subset_file]),
+      ped_file = combined_ped_file_,
       exclude_list = cnmops_exclude_list,
       allo_file = cnmops_allo_file,
       ref_dict = ref_dict,
@@ -292,7 +314,7 @@ workflow GatherBatchEvidence {
       bincov_matrix = merged_bincov_,
       bincov_matrix_index = merged_bincov_idx_,
       chrom_file = cnmops_chrom_file,
-      ped_file = select_first([AddCaseSampleToPed.combined_ped_file, SubsetPedFile.ped_subset_file]),
+      ped_file = combined_ped_file_,
       exclude_list = cnmops_exclude_list,
       allo_file = cnmops_allo_file,
       ref_dict = ref_dict,
@@ -478,7 +500,7 @@ workflow GatherBatchEvidence {
     File? batch_ploidy_matrix = Ploidy.ploidy_matrix
     File? batch_ploidy_plots = Ploidy.ploidy_plots
 
-    File? combined_ped_file = AddCaseSampleToPed.combined_ped_file
+    File? combined_ped_file = select_first([combined_ped_file_])
 
     File merged_dels = MergeDepth.del
     File merged_dups = MergeDepth.dup
@@ -549,6 +571,78 @@ task AddCaseSampleToPed {
 
     awk -v sample=~{sample_id} '$2 == sample { print "ERROR: A sample with the name "sample" is already present in the ped file." > "/dev/stderr"; exit 1; }' < ~{ref_ped_file}
     awk -v sample=~{sample_id} -v sex=$SEX '{print} END {OFS="\t"; print "case_sample",sample,"0","0",sex,"1" }' < ~{ref_ped_file} > combined_ped_file.ped
+  >>>
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
+  }
+}
+
+# Trio de novo variant of AddCaseSampleToPed.
+# Appends every non-reference-panel trio member (case and any provided parents)
+# to the reference panel ped, using sex assignments from the ploidy calls.
+# All samples share the family name "trio_denovo", with the father/mother PED
+# columns filled in when both parents are present.
+task AddTrioSamplesToPed {
+  input {
+    File ref_ped_file
+    File ploidy_plots
+    Array[String] sample_ids  # ordered, e.g. [case, mother, father]
+    String? mother_sample_id
+    String? father_sample_id
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 2,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  String mother_id = select_first([mother_sample_id, "0"])
+  String father_id = select_first([father_sample_id, "0"])
+
+  output {
+    File combined_ped_file = "trio_combined_ped_file.ped"
+  }
+
+  command <<<
+    set -euo pipefail
+    export MOTHER_ID="~{mother_id}"
+    export FATHER_ID="~{father_id}"
+
+    tar xzf ~{ploidy_plots} -C .
+    cp ~{write_lines(sample_ids)} trio_samples.txt
+
+    # Every trio member must have a ploidy sex assignment and must not already
+    # be present in the reference panel ped
+    while read -r sample; do
+      RECORD=$(gunzip -c ploidy_est/sample_sex_assignments.txt.gz | { grep -w "^$sample" || true; })
+      if [ -z "$RECORD" ]; then
+        >&2 echo "Error: Sample $sample not found in ploidy calls"
+        exit 1
+      fi
+      awk -v sample="$sample" '$2 == sample { print "ERROR: A sample with the name " sample " is already present in the ped file." > "/dev/stderr"; exit 1; }' < ~{ref_ped_file}
+    done < trio_samples.txt
+
+    # Emit reference panel lines, then one PED line per trio member
+    cat ~{ref_ped_file} > trio_combined_ped_file.ped
+    while read -r sample; do
+      SEX=$(gunzip -c ploidy_est/sample_sex_assignments.txt.gz | awk -v s="$sample" '$1 == s {print $2; exit}')
+      printf 'trio_denovo\t%s\t%s\t%s\t%s\t1\n' "$sample" "$FATHER_ID" "$MOTHER_ID" "$SEX" >> trio_combined_ped_file.ped
+    done < trio_samples.txt
   >>>
 
   runtime {

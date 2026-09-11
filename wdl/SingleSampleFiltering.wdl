@@ -78,6 +78,79 @@ task FilterVcfBySampleGenotypeAndAddEvidenceAnnotation {
 }
 
 
+task FilterVcfBySamplesGenotypeAndAddEvidenceAnnotation {
+  # Trio-mode variant of FilterVcfBySampleGenotypeAndAddEvidenceAnnotation.
+  # Retains every record genotyped (non-ref) in ANY of the samples listed in
+  # samples_list, instead of a single sample.
+  input {
+    File vcf_gz
+    File samples_list  # one sample ID per line
+    String sv_base_mini_docker
+    String evidence
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 3.75,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  String filebase = basename(vcf_gz, ".vcf.gz")
+  String outfile = "~{filebase}.trio_merged.vcf.gz"
+
+  output {
+    File out = "~{outfile}"
+    File out_index = "~{outfile}.tbi"
+  }
+  command <<<
+    set -euo pipefail
+    # Build a bcftools -i condition that is true if any listed sample is alt:
+    # GT[0]="alt" | GT[1]="alt" | ...
+    condition=""
+    while read -r sid; do
+      idx=`gzip -cd ~{vcf_gz} | grep '^#CHROM' | cut -f10- | tr "\t" "\n" | awk -v s="$sid" '$1 == s {found=1; print NR - 1; exit} END { if (found != 1) { print "sample " s " not found" > "/dev/stderr"; exit 1; }}'`
+      if [ -z "$condition" ]; then
+        condition="GT[$idx]=\"alt\""
+      else
+        condition="$condition | GT[$idx]=\"alt\""
+      fi
+    done < ~{samples_list}
+
+    echo '##INFO=<ID=EVIDENCE,Number=.,Type=String,Description="Classes of random forest support.">' > header_line.txt
+
+# see FilterVcfBySampleGenotypeAndAddEvidenceAnnotation for the bcftools EVIDENCE work-around rationale
+    bcftools annotate \
+        -i "$condition" \
+        -h header_line.txt \
+        -O v \
+        ~{vcf_gz} \
+    | awk \
+        '$0 ~ /^#/ { print $0; next; }
+        { for(i=1; i<8; ++i) printf "%s\t", $i;
+          printf "%s;EVIDENCE=~{evidence}", $8;
+          for(i=9; i<=NF; ++i) printf "\t%s", $i;
+          printf "\n"
+        }' \
+    | bgzip -c \
+    > ~{outfile}
+    tabix ~{outfile}
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task FilterVcfForShortDepthCalls {
   input {
     File vcf_gz
@@ -217,6 +290,66 @@ task FilterVcfForCaseSampleGenotype {
 
     bcftools filter \
         -i "FILTER ~ \"MULTIALLELIC\" || GT[${sampleIndex}]=\"alt\"" \
+        ~{vcf_gz} | bgzip -c > ~{outfile}
+
+    tabix ~{outfile}
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task FilterVcfForTrioSamplesGenotype {
+  # Trio de novo variant of FilterVcfForCaseSampleGenotype: drops MULTIALLELIC
+  # filtered records (as the case-only task does) but retains every record
+  # genotyped as variant in ANY of the listed samples, so that variants called
+  # only in a parent are retained.
+  input {
+    File vcf_gz
+    File samples_list  # one sample ID per line
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 3.75,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  String filebase = basename(vcf_gz, ".vcf.gz")
+  String outfile = "~{filebase}.filter_by_trio_gt.vcf.gz"
+
+  output {
+    File out = "~{outfile}"
+    File out_index = "~{outfile}.tbi"
+  }
+  command <<<
+    set -euo pipefail
+    # Build a condition that is true if any listed sample is alt:
+    # GT[0]="alt" | GT[1]="alt" | ...
+    condition=""
+    while read -r sid; do
+      idx=`gzip -cd ~{vcf_gz} | grep '^#CHROM' | cut -f10- | tr "\t" "\n" | awk -v s="$sid" '$1 == s {found=1; print NR - 1; exit} END { if (found != 1) { print "sample " s " not found" > "/dev/stderr"; exit 1; }}'`
+      if [ -z "$condition" ]; then
+        condition="GT[$idx]=\"alt\""
+      else
+        condition="$condition | GT[$idx]=\"alt\""
+      fi
+    done < ~{samples_list}
+
+    bcftools filter \
+        -i "FILTER ~ \"MULTIALLELIC\" || $condition" \
         ~{vcf_gz} | bgzip -c > ~{outfile}
 
     tabix ~{outfile}
@@ -517,7 +650,7 @@ task ConvertCNVsWithoutDepthSupportToBNDs {
   input {
     File genotyped_pesr_vcf
     File allosome_file
-    String case_sample
+    Array[String] proband_samples  # case, plus provided parents in trio de novo mode
     File merged_famfile
     Int? min_length
     String sv_pipeline_docker
@@ -549,7 +682,7 @@ task ConvertCNVsWithoutDepthSupportToBNDs {
         ~{genotyped_pesr_vcf} \
         ~{allosome_file} \
         ~{merged_famfile} \
-        ~{case_sample} \
+        $(tr '\n' ' ' < ~{write_lines(proband_samples)}) \
         ~{default="1000" min_length} \
         -o ~{outfile}
 
