@@ -406,7 +406,7 @@ jq -n \
       ref_panel_median_cov: $inputs[0].ref_panel_median_cov,
       sample_median_cov: $eqc_outputs[0].bincov_median,
       "cytobands": $inputs[0].cytobands,
-      "dragen_cnv_vcf": (if $dragen_cnv_vcf != "" then $dragen_cnv_vcf else "" end)
+      "dragen_cnv_vcf": $dragen_cnv_vcf
   }' > "${gather_batch_evidence_inputs_json_filename}"
 
 bash /opt/sv_shell/gather_batch_evidence.sh \
