@@ -424,8 +424,6 @@ bash /opt/sv_shell/gather_batch_evidence.sh \
 
 log_success "Successfully finished gather batch evidence."
 
-# TODO: TMP
-exit 0
 
 # stripy
 # ----------------------------------------------------------------------------------------------------------------------
