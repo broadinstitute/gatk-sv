@@ -15,6 +15,7 @@ workflow ShardedCountSVs {
     String sv_pipeline_docker
     String sv_base_mini_docker
 
+    RuntimeAttr? runtime_attr_override_scatterVcf
   }
 
   call tasks.ScatterVcf {
@@ -22,7 +23,8 @@ workflow ShardedCountSVs {
       vcf = vcf,
       records_per_shard = records_per_shard,
       prefix = "~{prefix}.scatter",
-      sv_pipeline_docker = sv_pipeline_docker
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_override_scatterVcf
   }
 
   scatter (i in range(length(ScatterVcf.shards))) {
