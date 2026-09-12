@@ -165,6 +165,7 @@ fi
 
 ref_std_dragen_vcf_tar=$(jq -r '.ref_std_dragen_vcf_tar // empty' "$input_json")
 dragen_sv_vcf=$(jq -r '.dragen_sv_vcf // empty' "$input_json")
+dragen_cnv_vcf=$(jq -r '.dragen_cnv_vcf // empty' "$input_json")
 primary_contigs_fai=$(jq -r ".primary_contigs_fai" "$input_json")
 min_svsize=$(jq -r ".min_svsize" "$input_json")
 
@@ -203,6 +204,12 @@ if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
     run_manta=false
   fi
 
+  # Note that instead of standardizing here, the bash script
+  # can assume the user standardizes outside of this script
+  # and provides standardized dragen SV and CNV vcfs (e.g., the SVShell WDL can do this).
+  # However, we don't have an easy way of checking if DRAGEN files are standardized,
+  # and if a user misses standardization, it leads to confusing errors that are
+  # hard to debug. Hence, we standardize input here to ensure SVShell always has standardized VCFs.
   svtk standardize \
     --sample-names ${sample_id} \
     --prefix "dragen_${sample_id}" \
@@ -212,8 +219,23 @@ if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
     tmp.vcf \
     "dragen"
 
-  dragen_sv_vcf=$(realpath "std.dragen.${sample_id}.vcf.gz")
+  dragen_sv_vcf=$(realpath "std.dragen.sv.${sample_id}.vcf.gz")
   bcftools sort tmp.vcf -Oz -o "${dragen_sv_vcf}"
+  tabix -p vcf "${dragen_sv_vcf}"
+  rm tmp.vcf
+
+  svtk standardize \
+    --sample-names ${sample_id} \
+    --prefix "dragen_${sample_id}" \
+    --contigs "${primary_contigs_fai}" \
+    --min-size "${min_svsize}" \
+    "${dragen_cnv_vcf}" \
+    tmp.vcf \
+    "dragen_cnv"
+
+  dragen_cnv_vcf=$(realpath "std.dragen.cnv.${sample_id}.vcf.gz")
+  bcftools sort tmp.vcf -Oz -o "${dragen_cnv_vcf}"
+  tabix -p vcf "${dragen_cnv_vcf}"
   rm tmp.vcf
 fi
 
@@ -312,7 +334,8 @@ jq -n \
   --slurpfile gse_outputs "${gather_sample_evidence_outputs_json}" \
   --slurpfile eqc_outputs "${evidence_qc_outputs_json_filename}" \
   --arg samples "${sample_id}" \
-  --arg dragen_vcf "${dragen_sv_vcf}" \
+  --arg dragen_sv_vcf "${dragen_sv_vcf}" \
+  --arg dragen_cnv_vcf "${dragen_cnv_vcf}" \
   --argjson ref_samples "${ref_samples_json_array}" \
   --argjson ref_pe_disc "${ref_pesr_disc_files_json_array}" \
   --argjson ref_pe_split "${ref_pesr_split_files_json_array}" \
@@ -376,7 +399,7 @@ jq -n \
       ref_copy_number_autosomal_contigs: $inputs[0].ref_copy_number_autosomal_contigs,
       allosomal_contigs: $inputs[0].allosomal_contigs,
       gcnv_qs_cutoff: $inputs[0].gcnv_qs_cutoff,
-      dragen_vcfs: (if $dragen_vcf != "" then [$dragen_vcf] else [] end),
+      dragen_vcfs: (if $dragen_sv_vcf != "" then [$dragen_sv_vcf] else [] end),
       manta_vcfs: (if $gse_outputs[0].manta_vcf != "" then [$gse_outputs[0].manta_vcf] else [] end),
       scramble_vcfs: (if $gse_outputs[0].scramble_vcf != "" then [$gse_outputs[0].scramble_vcf] else [] end),
       wham_vcfs: (if $gse_outputs[0].wham_vcf != "" then [$gse_outputs[0].wham_vcf] else [] end),
@@ -391,8 +414,7 @@ jq -n \
       ref_panel_median_cov: $inputs[0].ref_panel_median_cov,
       sample_median_cov: $eqc_outputs[0].bincov_median,
       "cytobands": $inputs[0].cytobands,
-      "dragen_cnv_vcf": $inputs[0].dragen_cnv_vcf,
-      "dragen_cnv_vcf_index": $inputs[0].dragen_cnv_vcf_index
+      "dragen_cnv_vcf": $dragen_cnv_vcf
   }' > "${gather_batch_evidence_inputs_json_filename}"
 
 bash /opt/sv_shell/gather_batch_evidence.sh \
@@ -401,6 +423,7 @@ bash /opt/sv_shell/gather_batch_evidence.sh \
   "${gather_batch_evidence_output_dir}"
 
 log_success "Successfully finished gather batch evidence."
+
 
 # stripy
 # ----------------------------------------------------------------------------------------------------------------------

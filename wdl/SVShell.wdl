@@ -155,6 +155,25 @@ workflow SVShell {
     }
   }
 
+  if (defined(dragen_cnv_vcf)) {
+    call StandardizeVcf as StandardizeDragenCnv {
+      input:
+        sample_id = sample_id,
+        vcf_path = select_first([dragen_cnv_vcf]),
+        caller = "dragen_cnv",
+        contigs_fai = primary_contigs_fai,
+        min_size = min_svsize,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+    call FormatVcfForGatk as FormatDragenCnv {
+      input:
+        sample_id = sample_id,
+        vcf_path = StandardizeDragenCnv.standardized_vcf,
+        ploidy_table = RunSVShell.ploidy_table,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+  }
+
   output {
     File inputs_json = RunSVShell.inputs_json
     File outputs_json = RunSVShell.outputs_json
@@ -190,6 +209,8 @@ workflow SVShell {
     File? wham_vcf_formatted_index = FormatWham.formatted_vcf_index
     File? dragen_sv_vcf_formatted = FormatDragenSv.formatted_vcf
     File? dragen_sv_vcf_formatted_index = FormatDragenSv.formatted_vcf_index
+    File? dragen_cnv_vcf_formatted = FormatDragenCnv.formatted_vcf
+    File? dragen_cnv_vcf_formatted_index = FormatDragenCnv.formatted_vcf_index
   }
 }
 
@@ -352,6 +373,14 @@ task RunSVShell {
     export TMPDIR="${PWD}/wd/tmp"
     mkdir -p "${PWD}/wd/tmp"
 
+    # TMP
+    git clone https://github.com/broadinstitute/gatk-sv
+    cd gatk-sv
+    git checkout vj-sv-shell-dragen-standardize
+    rm -rf /opt/sv_shell/
+    mv ./src/sv_shell /opt/sv_shell
+    cd ..
+
     jq -n \
       --arg batch "~{batch}" \
       --arg sample_id "~{sample_id}" \
@@ -464,6 +493,10 @@ task RunSVShell {
     bash /opt/sv_shell/single_sample_pipeline.sh \
       "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" \
       "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json"
+
+#    # tar first: recursive cp of raw tree breaks on filenames with [ ] chars ("must match exactly one URL")
+#    tar -czf "${BASE_DIR}/wd.tar.gz" -C "$(dirname "${SV_SHELL_BASE_DIR}")" "$(basename "${SV_SHELL_BASE_DIR}")"
+#    gcloud storage cp "${BASE_DIR}/wd.tar.gz" "gs://broad-dsde-methods-vj/TMP-debug-svshell/~{sample_id}.wd.tar.gz"
 
     touch single_sample_pipeline_inputs.json
     touch single_sample_pipeline_outputs.json
