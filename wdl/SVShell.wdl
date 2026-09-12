@@ -494,9 +494,9 @@ task RunSVShell {
       "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" \
       "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json"
 
-    # tar first: recursive cp of raw tree breaks on filenames with [ ] chars ("must match exactly one URL")
-    tar -czf "${BASE_DIR}/wd.tar.gz" -C "$(dirname "${SV_SHELL_BASE_DIR}")" "$(basename "${SV_SHELL_BASE_DIR}")"
-    gcloud storage cp "${BASE_DIR}/wd.tar.gz" "gs://broad-dsde-methods-vj/TMP-debug-svshell/~{sample_id}.wd.tar.gz"
+#    # tar first: recursive cp of raw tree breaks on filenames with [ ] chars ("must match exactly one URL")
+#    tar -czf "${BASE_DIR}/wd.tar.gz" -C "$(dirname "${SV_SHELL_BASE_DIR}")" "$(basename "${SV_SHELL_BASE_DIR}")"
+#    gcloud storage cp "${BASE_DIR}/wd.tar.gz" "gs://broad-dsde-methods-vj/TMP-debug-svshell/~{sample_id}.wd.tar.gz"
 
     touch single_sample_pipeline_inputs.json
     touch single_sample_pipeline_outputs.json
@@ -527,85 +527,85 @@ task RunSVShell {
     touch "~{merged_dups_filename}"
     touch "~{ploidy_table_filename}"
 
-#    cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" "${BASE_DIR}/"
-#    cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json" "${BASE_DIR}/"
-#
-#    final_vcf_path=$(jq -r '.final_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${final_vcf_path}" "${BASE_DIR}/~{final_vcf_filename}"
-#    mv "${final_vcf_path}.tbi" "${BASE_DIR}/~{final_vcf_idx_filename}"
-#
-#    pre_cleanup_vcf_path=$(jq -r '.pre_cleanup_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${pre_cleanup_vcf_path}" "${BASE_DIR}/~{pre_cleanup_vcf_filename}"
-#    mv "${pre_cleanup_vcf_path}.tbi" "${BASE_DIR}/~{pre_cleanup_vcf_idx_filename}"
-#
-#    stripy_json_path=$(jq -r '.stripy_json_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${stripy_json_path}" "${BASE_DIR}/~{stripy_json_filename}"
-#
-#    stripy_tsv_path=$(jq -r '.stripy_tsv_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${stripy_tsv_path}" "${BASE_DIR}/~{stripy_tsv_filename}"
-#
-#    stripy_html_path=$(jq -r '.stripy_html_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${stripy_html_path}" "${BASE_DIR}/~{stripy_html_filename}"
-#
-#    stripy_vcf_path=$(jq -r '.stripy_vcf_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${stripy_vcf_path}" "${BASE_DIR}/~{stripy_vcf_filename}"
-#
-#    metrics_path=$(jq -r '.metrics_file' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${metrics_path}" "${BASE_DIR}/~{metrics_filename}"
-#
-#    qc_path=$(jq -r '.qc_file' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${qc_path}" "${BASE_DIR}/~{qc_filename}"
-#
-#    ploidy_matrix_path=$(jq -r '.ploidy_matrix' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${ploidy_matrix_path}" "${BASE_DIR}/~{ploidy_matrix_filename}"
-#
-#    ploidy_plots_path=$(jq -r '.ploidy_plots' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${ploidy_plots_path}" "${BASE_DIR}/~{ploidy_plots_filename}"
-#
-#    non_genotyped_path=$(jq -r '.non_genotyped_unique_depth_calls' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${non_genotyped_path}" "${BASE_DIR}/~{non_genotyped_unique_depth_calls_filename}"
-#
-#    manta_vcf_path=$(jq -r '.manta_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    if [[ -n "${manta_vcf_path}" && "${manta_vcf_path}" != "null" ]]; then
-#      mv "${manta_vcf_path}" "${BASE_DIR}/~{manta_vcf_filename}"
-#      mv "${manta_vcf_path}.tbi" "${BASE_DIR}/~{manta_vcf_idx_filename}"
-#    fi
-#
-#    scramble_vcf_path=$(jq -r '.scramble_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    if [[ -n "${scramble_vcf_path}" && "${scramble_vcf_path}" != "null" ]]; then
-#      mv "${scramble_vcf_path}" "${BASE_DIR}/~{scramble_vcf_filename}"
-#      mv "${scramble_vcf_path}.tbi" "${BASE_DIR}/~{scramble_vcf_idx_filename}"
-#    fi
-#
-#    wham_vcf_path=$(jq -r '.wham_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    if [[ -n "${wham_vcf_path}" && "${wham_vcf_path}" != "null" ]]; then
-#      mv "${wham_vcf_path}" "${BASE_DIR}/~{wham_vcf_filename}"
-#      mv "${wham_vcf_path}.tbi" "${BASE_DIR}/~{wham_vcf_idx_filename}"
-#    fi
-#
-#    scramble_clusters_path=$(jq -r '.scramble_clusters' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    if [[ -n "${scramble_clusters_path}" && "${scramble_clusters_path}" != "null" ]]; then
-#      mv "${scramble_clusters_path}" "${BASE_DIR}/~{scramble_clusters_filename}"
-#    fi
-#
-#    scramble_table_path=$(jq -r '.scramble_table' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    if [[ -n "${scramble_table_path}" && "${scramble_table_path}" != "null" ]]; then
-#      mv "${scramble_table_path}" "${BASE_DIR}/~{scramble_table_filename}"
-#    fi
-#
-#    coverage_counts_path=$(jq -r '.coverage_counts' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${coverage_counts_path}" "${BASE_DIR}/~{coverage_counts_filename}"
-#    coverage_counts_idx_path=$(jq -r '.coverage_counts_idx' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${coverage_counts_idx_path}" "${BASE_DIR}/~{coverage_counts_idx_filename}"
-#
-#    merged_dels_path=$(jq -r '.merged_dels' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${merged_dels_path}" "${BASE_DIR}/~{merged_dels_filename}"
-#
-#    merged_dups_path=$(jq -r '.merged_dups' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${merged_dups_path}" "${BASE_DIR}/~{merged_dups_filename}"
-#
-#    ploidy_table_path=$(jq -r '.ploidy_table' "${BASE_DIR}/single_sample_pipeline_outputs.json")
-#    mv "${ploidy_table_path}" "${BASE_DIR}/~{ploidy_table_filename}"
+    cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" "${BASE_DIR}/"
+    cp "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json" "${BASE_DIR}/"
+
+    final_vcf_path=$(jq -r '.final_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${final_vcf_path}" "${BASE_DIR}/~{final_vcf_filename}"
+    mv "${final_vcf_path}.tbi" "${BASE_DIR}/~{final_vcf_idx_filename}"
+
+    pre_cleanup_vcf_path=$(jq -r '.pre_cleanup_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${pre_cleanup_vcf_path}" "${BASE_DIR}/~{pre_cleanup_vcf_filename}"
+    mv "${pre_cleanup_vcf_path}.tbi" "${BASE_DIR}/~{pre_cleanup_vcf_idx_filename}"
+
+    stripy_json_path=$(jq -r '.stripy_json_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${stripy_json_path}" "${BASE_DIR}/~{stripy_json_filename}"
+
+    stripy_tsv_path=$(jq -r '.stripy_tsv_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${stripy_tsv_path}" "${BASE_DIR}/~{stripy_tsv_filename}"
+
+    stripy_html_path=$(jq -r '.stripy_html_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${stripy_html_path}" "${BASE_DIR}/~{stripy_html_filename}"
+
+    stripy_vcf_path=$(jq -r '.stripy_vcf_output' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${stripy_vcf_path}" "${BASE_DIR}/~{stripy_vcf_filename}"
+
+    metrics_path=$(jq -r '.metrics_file' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${metrics_path}" "${BASE_DIR}/~{metrics_filename}"
+
+    qc_path=$(jq -r '.qc_file' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${qc_path}" "${BASE_DIR}/~{qc_filename}"
+
+    ploidy_matrix_path=$(jq -r '.ploidy_matrix' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${ploidy_matrix_path}" "${BASE_DIR}/~{ploidy_matrix_filename}"
+
+    ploidy_plots_path=$(jq -r '.ploidy_plots' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${ploidy_plots_path}" "${BASE_DIR}/~{ploidy_plots_filename}"
+
+    non_genotyped_path=$(jq -r '.non_genotyped_unique_depth_calls' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${non_genotyped_path}" "${BASE_DIR}/~{non_genotyped_unique_depth_calls_filename}"
+
+    manta_vcf_path=$(jq -r '.manta_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${manta_vcf_path}" && "${manta_vcf_path}" != "null" ]]; then
+      mv "${manta_vcf_path}" "${BASE_DIR}/~{manta_vcf_filename}"
+      mv "${manta_vcf_path}.tbi" "${BASE_DIR}/~{manta_vcf_idx_filename}"
+    fi
+
+    scramble_vcf_path=$(jq -r '.scramble_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${scramble_vcf_path}" && "${scramble_vcf_path}" != "null" ]]; then
+      mv "${scramble_vcf_path}" "${BASE_DIR}/~{scramble_vcf_filename}"
+      mv "${scramble_vcf_path}.tbi" "${BASE_DIR}/~{scramble_vcf_idx_filename}"
+    fi
+
+    wham_vcf_path=$(jq -r '.wham_vcf' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${wham_vcf_path}" && "${wham_vcf_path}" != "null" ]]; then
+      mv "${wham_vcf_path}" "${BASE_DIR}/~{wham_vcf_filename}"
+      mv "${wham_vcf_path}.tbi" "${BASE_DIR}/~{wham_vcf_idx_filename}"
+    fi
+
+    scramble_clusters_path=$(jq -r '.scramble_clusters' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${scramble_clusters_path}" && "${scramble_clusters_path}" != "null" ]]; then
+      mv "${scramble_clusters_path}" "${BASE_DIR}/~{scramble_clusters_filename}"
+    fi
+
+    scramble_table_path=$(jq -r '.scramble_table' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    if [[ -n "${scramble_table_path}" && "${scramble_table_path}" != "null" ]]; then
+      mv "${scramble_table_path}" "${BASE_DIR}/~{scramble_table_filename}"
+    fi
+
+    coverage_counts_path=$(jq -r '.coverage_counts' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${coverage_counts_path}" "${BASE_DIR}/~{coverage_counts_filename}"
+    coverage_counts_idx_path=$(jq -r '.coverage_counts_idx' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${coverage_counts_idx_path}" "${BASE_DIR}/~{coverage_counts_idx_filename}"
+
+    merged_dels_path=$(jq -r '.merged_dels' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${merged_dels_path}" "${BASE_DIR}/~{merged_dels_filename}"
+
+    merged_dups_path=$(jq -r '.merged_dups' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${merged_dups_path}" "${BASE_DIR}/~{merged_dups_filename}"
+
+    ploidy_table_path=$(jq -r '.ploidy_table' "${BASE_DIR}/single_sample_pipeline_outputs.json")
+    mv "${ploidy_table_path}" "${BASE_DIR}/~{ploidy_table_filename}"
 
     df -h
   >>>
