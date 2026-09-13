@@ -16,6 +16,7 @@ workflow ShardedCountSVs {
     String sv_base_mini_docker
 
     RuntimeAttr? runtime_attr_override_scatterVcf
+    RuntimeAttr? runtime_attr_override_preprocessVcf
   }
 
   call tasks.ScatterVcf {
@@ -34,7 +35,8 @@ workflow ShardedCountSVs {
           vcf = ScatterVcf.shards[i],
           bcftools_preprocessing_options=select_first([bcftools_preprocessing_options]),
           prefix = "~{prefix}.shard_~{i}.preprocessed",
-          sv_base_mini_docker = sv_base_mini_docker
+          sv_base_mini_docker = sv_base_mini_docker,
+          runtime_attr_override = runtime_attr_override_preprocessVcf
       }
     }
 
