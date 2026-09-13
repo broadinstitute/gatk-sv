@@ -20,9 +20,15 @@ genotypes and add two INFO fields:
         UNCONFIRMED           a parent was not assayed (or its genotype was
                                 missing), so the call cannot be fully confirmed
 
-The case sample must be present in the VCF. Parents are optional; a parent is
-only considered if it is both provided on the command line and present in the
-VCF sample column.
+The case sample must be present in the VCF. Parents are optional, but a parent
+provided on the command line must be present in the VCF sample columns (the
+program exits with an error otherwise).
+
+A sample counts as non-reference at a record if its genotype carries a
+non-reference allele of that record. This is a per-record allele-presence
+test, not allele-index specific: on the rare records retained with multiple
+ALT alleles (MULTIALLELIC), a case carrying ALT1 and a parent carrying ALT2
+will be considered matching.
 
 Outputs:
     <prefix>.vcf.gz  annotated, bgzipped VCF
