@@ -634,8 +634,40 @@ workflow GATKSVPipelineSingleSample {
   Boolean is_trio_denovo = run_mother_evidence || run_father_evidence
 
   Array[String] trio_samples = select_all([sample_id, mother_sample_id, father_sample_id])
-  File trio_samples_list = write_lines(trio_samples)
+  File raw_trio_samples_list = write_lines(trio_samples)
   Array[String] trio_extra_ped_samples = if is_trio_denovo then trio_samples else []
+
+  # Fail fast on invalid trio de novo input combinations (parent id/CRAM must
+  # be paired, no duplicate sample ids, no precomputed case caller VCFs or
+  # DRAGEN calls, dockers required for all enabled callers, ...). The output
+  # sample list is the input list passed through unchanged, and every
+  # downstream consumer of trio_samples_list depends on it, so this task is
+  # always executed.
+  call ValidateTrioInputs {
+    input:
+      samples_list = raw_trio_samples_list,
+      case_sample_id = sample_id,
+      mother_sample_id = mother_sample_id,
+      mother_cram = mother_cram,
+      father_sample_id = father_sample_id,
+      father_cram = father_cram,
+      is_trio_denovo = is_trio_denovo,
+      dragen_vcf = dragen_vcf,
+      case_manta_vcf = case_manta_vcf,
+      case_melt_vcf = case_melt_vcf,
+      case_scramble_vcf = case_scramble_vcf,
+      case_wham_vcf = case_wham_vcf,
+      use_manta = use_manta,
+      use_melt = use_melt,
+      use_scramble = use_scramble,
+      use_wham = use_wham,
+      manta_docker = manta_docker,
+      melt_docker = melt_docker,
+      scramble_docker = scramble_docker,
+      wham_docker = wham_docker,
+      sv_base_mini_docker = sv_base_mini_docker
+  }
+  File trio_samples_list = ValidateTrioInputs.validated_samples_list
 
   if (run_sampleevidence) {
     call sampleevidence.GatherSampleEvidence as GatherSampleEvidence {
@@ -1565,18 +1597,21 @@ workflow GATKSVPipelineSingleSample {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  # Case-specific diagnostics and case-only filtering are skipped in trio de novo
-  # mode: the call set retains all variants across case + mother + father.
-  if (!is_trio_denovo) {
-    call SingleSampleFiltering.GetUniqueNonGenotypedDepthCalls {
-      input:
-        vcf_gz=select_first([MakeCohortVcf.complex_genotype_vcf]),
-        sample_id=sample_id,
-        ref_panel_dels=ref_panel_del_bed,
-        ref_panel_dups=ref_panel_dup_bed,
-        sv_base_mini_docker=sv_base_mini_docker
-    }
+  # Case-specific diagnostic: large depth calls that are unique (absent from
+  # the reference panel) and not genotyped alt in the case. Runs in both
+  # modes (it is a case-only diagnostic, but downstream metrics consume it).
+  call SingleSampleFiltering.GetUniqueNonGenotypedDepthCalls {
+    input:
+      vcf_gz=select_first([MakeCohortVcf.complex_genotype_vcf]),
+      sample_id=sample_id,
+      ref_panel_dels=ref_panel_del_bed,
+      ref_panel_dups=ref_panel_dup_bed,
+      sv_base_mini_docker=sv_base_mini_docker
+  }
 
+  # Case-only filtering is skipped in trio de novo mode: the call set retains
+  # all variants across case + mother + father.
+  if (!is_trio_denovo) {
     call SingleSampleFiltering.FilterVcfForCaseSampleGenotype {
       input:
         vcf_gz=FilterVcfDepthLt5kb.out,
@@ -1758,8 +1793,8 @@ workflow GATKSVPipelineSingleSample {
         vcf_idx = select_first([MergeStripyVcf.out_index, UpdateBreakendRepresentationAndRemoveFilters.out_idx]),
         prefix = sample_id + ".moi",
         case_sample = sample_id,
-        mother_sample = select_first([mother_sample_id]),
-        father_sample = select_first([father_sample_id]),
+        mother_sample = mother_sample_id,
+        father_sample = father_sample_id,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_moi
     }
@@ -1821,7 +1856,6 @@ workflow GATKSVPipelineSingleSample {
 
     # These files contain any depth based calls made in the case sample that did not pass genotyping
     # in the case sample and do not match a depth-based call from the reference panel.
-    # (Single-case mode only; skipped in trio de novo mode.)
     File? non_genotyped_unique_depth_calls = select_first([GetUniqueNonGenotypedDepthCalls.out])
     File? non_genotyped_unique_depth_calls_idx = select_first([GetUniqueNonGenotypedDepthCalls.out_idx])
 
@@ -1903,5 +1937,110 @@ task ConcatBaf {
     preemptible: 3
     maxRetries: 1
     noAddress: true
+  }
+}
+
+# Fail-fast validation of trio de novo input combinations.
+# Emits the input sample list unchanged only if all checks pass; every
+# downstream consumer of trio_samples_list depends on this file, so the task
+# is always executed.
+task ValidateTrioInputs {
+  input {
+    File samples_list          # write_lines(trio_samples), case first
+    String case_sample_id
+    String? mother_sample_id
+    File? mother_cram
+    String? father_sample_id
+    File? father_cram
+    Boolean is_trio_denovo
+    File? dragen_vcf
+    File? case_manta_vcf
+    File? case_melt_vcf
+    File? case_scramble_vcf
+    File? case_wham_vcf
+    Boolean use_manta
+    Boolean use_melt
+    Boolean use_scramble
+    Boolean use_wham
+    String? manta_docker
+    String? melt_docker
+    String? scramble_docker
+    String? wham_docker
+    String sv_base_mini_docker
+  }
+
+  command <<<
+    set -euo pipefail
+    errors=0
+    err() { echo "ERROR: $1" >&2; errors=1; }
+
+    if [ -z "~{case_sample_id}" ]; then
+      err "case sample_id must not be empty"
+    fi
+
+    # Each parent CRAM and its sample id must be provided together
+    if [ "~{defined(mother_cram)}" != "~{defined(mother_sample_id)}" ]; then
+      err "mother_cram and mother_sample_id must be provided together"
+    fi
+    if [ "~{defined(father_cram)}" != "~{defined(father_sample_id)}" ]; then
+      err "father_cram and father_sample_id must be provided together"
+    fi
+
+    # Sample ids must be unique across case + mother + father
+    if ! awk 'seen[$0]++ { exit 1 }' ~{samples_list}; then
+      err "duplicate sample ids across case + mother + father: $(paste -sd, ~{samples_list})"
+    fi
+
+    if [ "~{is_trio_denovo}" = "true" ]; then
+      # Precomputed case caller calls would leave the provided parents without
+      # those callers and break the per-caller sample<->VCF array alignment
+      # that call preprocessing requires; in trio mode every member must be
+      # called from BAM/CRAM with the same callers.
+      if [ "~{defined(dragen_vcf)}" = "true" ]; then
+        err "trio de novo mode does not support precomputed dragen_vcf calls; provide parent CRAMs only"
+      fi
+      if [ "~{defined(case_manta_vcf)}" = "true" ]; then
+        err "trio de novo mode does not support precomputed case_manta_vcf calls (parents would lack Manta calls)"
+      fi
+      if [ "~{defined(case_melt_vcf)}" = "true" ]; then
+        err "trio de novo mode does not support precomputed case_melt_vcf calls (parents would lack MELT calls)"
+      fi
+      if [ "~{defined(case_scramble_vcf)}" = "true" ]; then
+        err "trio de novo mode does not support precomputed case_scramble_vcf calls (parents would lack Scramble calls)"
+      fi
+      if [ "~{defined(case_wham_vcf)}" = "true" ]; then
+        err "trio de novo mode does not support precomputed case_wham_vcf calls (parents would lack WHAM calls)"
+      fi
+      # All enabled PESR callers must run on every trio member, so their
+      # dockers are required in trio mode.
+      if [ "~{use_manta}" = "true" ] && [ "~{defined(manta_docker)}" != "true" ]; then
+        err "trio de novo mode requires manta_docker when use_manta is true"
+      fi
+      if [ "~{use_melt}" = "true" ] && [ "~{defined(melt_docker)}" != "true" ]; then
+        err "trio de novo mode requires melt_docker when use_melt is true"
+      fi
+      if [ "~{use_scramble}" = "true" ] && [ "~{defined(scramble_docker)}" != "true" ]; then
+        err "trio de novo mode requires scramble_docker when use_scramble is true"
+      fi
+      if [ "~{use_wham}" = "true" ] && [ "~{defined(wham_docker)}" != "true" ]; then
+        err "trio de novo mode requires wham_docker when use_wham is true"
+      fi
+    fi
+
+    if [ "$errors" -ne 0 ]; then exit 1; fi
+    cp ~{samples_list} validated_samples.list
+  >>>
+
+  output {
+    File validated_samples_list = "validated_samples.list"
+  }
+
+  runtime {
+    cpu: 1
+    memory: "2 GiB"
+    disks: "local-disk 10 HDD"
+    docker: sv_base_mini_docker
+    preemptible: 3
+    maxRetries: 1
   }
 }

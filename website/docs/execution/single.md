@@ -163,6 +163,25 @@ case inputs above, configure the following parameters:
 Either parent may be omitted (half-trio). If both are omitted the workflow runs in the usual
 single-case mode and no MOI annotation is added.
 
+### Trio mode limitations
+
+These constraints are validated up front (the run fails immediately with a descriptive error):
+
+- Each parent CRAM must be provided together with its `*_sample_id`, and the three sample
+  ids must be distinct.
+- Precomputed caller VCFs for the case (`dragen_vcf`, `case_manta_vcf`, `case_melt_vcf`,
+  `case_scramble_vcf`, `case_wham_vcf`) are not supported in trio mode: every trio member
+  must be called from its BAM/CRAM with the same set of callers, so caller arrays would
+  no longer align with samples.
+- Every enabled PESR caller requires its `*_docker` in trio mode (the parents are called
+  from CRAM, unlike case-only runs where precomputed VCFs can substitute).
+
+:::note
+STRipy (repeat-expansion) calls are made for the case only; parents have no genotype at
+STRipy records, so those records get `MOI_CONFIDENCE=UNCONFIRMED` (and are `DE_NOVO` only
+if the case genotype is non-reference).
+:::
+
 ### Mode of inheritance (MOI)
 
 In trio de novo mode, every record in `final_vcf` carries two INFO fields computed by comparing

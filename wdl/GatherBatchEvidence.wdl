@@ -500,7 +500,9 @@ workflow GatherBatchEvidence {
     File? batch_ploidy_matrix = Ploidy.ploidy_matrix
     File? batch_ploidy_plots = Ploidy.ploidy_plots
 
-    File? combined_ped_file = select_first([combined_ped_file_])
+    # Preserve the original semantics: null unless a PED line was appended for
+    # the non-reference-panel samples (case-only or trio).
+    File? combined_ped_file = if (length(extra_ped_samples) > 0) then AddTrioSamplesToPed.combined_ped_file else AddCaseSampleToPed.combined_ped_file
 
     File merged_dels = MergeDepth.del
     File merged_dups = MergeDepth.dup
@@ -632,6 +634,11 @@ task AddTrioSamplesToPed {
       RECORD=$(gunzip -c ploidy_est/sample_sex_assignments.txt.gz | { grep -w "^$sample" || true; })
       if [ -z "$RECORD" ]; then
         >&2 echo "Error: Sample $sample not found in ploidy calls"
+        exit 1
+      fi
+      PED_SEX=$(echo "$RECORD" | cut -f2)
+      if [ "$PED_SEX" != "1" ] && [ "$PED_SEX" != "2" ]; then
+        >&2 echo "Error: ploidy-derived sex code '$PED_SEX' for sample $sample is not 1 (male) or 2 (female); cannot write a valid PED line"
         exit 1
       fi
       awk -v sample="$sample" '$2 == sample { print "ERROR: A sample with the name " sample " is already present in the ped file." > "/dev/stderr"; exit 1; }' < ~{ref_ped_file}
