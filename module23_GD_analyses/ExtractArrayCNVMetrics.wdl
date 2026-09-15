@@ -1,17 +1,17 @@
 version 1.0
 
-## Given a multi-sample SNP-array VCF (+ index), a list of sample IDs, and a
-## region of interest, scatter across samples -- subsetting each to its own
-## single-sample VCF for that region -- and run extract_array_cnv_metrics.sh
+## Given one single-sample SNP-array VCF per sample and a region of
+## interest, scatter across samples and run extract_array_cnv_metrics.sh
 ## per sample to pull out copy-number-relevant metrics (GT, BAF, LRR by
 ## default). Aggregate the per-sample tables into one combined long-format
 ## table (one row per variant x sample).
+##
+## extract_array_cnv_metrics.sh handles compression and indexing itself, so
+## each input VCF can be plain, gzipped, or bgzipped, indexed or not.
 
 workflow ExtractArrayCNVMetrics {
   input {
-    File vcf
-    File vcf_idx
-    File sample_list
+    Array[File] vcfs
     String region
     File script
     Boolean extra_fields = false
@@ -19,14 +19,10 @@ workflow ExtractArrayCNVMetrics {
     String docker = "staphb/bcftools:1.19"
   }
 
-  Array[String] samples = read_lines(sample_list)
-
-  scatter (sample in samples) {
+  scatter (vcf in vcfs) {
     call ExtractPerSample {
       input:
         vcf = vcf,
-        vcf_idx = vcf_idx,
-        sample = sample,
         region = region,
         script = script,
         extra_fields = extra_fields,
@@ -50,8 +46,6 @@ workflow ExtractArrayCNVMetrics {
 task ExtractPerSample {
   input {
     File vcf
-    File vcf_idx
-    String sample
     String region
     File script
     Boolean extra_fields
@@ -63,14 +57,12 @@ task ExtractPerSample {
   command <<<
     set -euo pipefail
 
-    bcftools view -s ~{sample} -r ~{region} ~{vcf} -Oz -o ~{sample}.subset.vcf.gz
-    bcftools index -t ~{sample}.subset.vcf.gz
-
-    bash ~{script} ~{sample}.subset.vcf.gz ~{region} ~{sample}.array_cnv_metrics.tsv ~{true="--extra" false="" extra_fields}
+    sample=$(bcftools query -l ~{vcf} | head -n1)
+    bash ~{script} ~{vcf} ~{region} "${sample}.array_cnv_metrics.tsv" ~{true="--extra" false="" extra_fields}
   >>>
 
   output {
-    File metrics_tsv = "~{sample}.array_cnv_metrics.tsv"
+    File metrics_tsv = glob("*.array_cnv_metrics.tsv")[0]
   }
 
   runtime {
