@@ -51,6 +51,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_genotype_scale
       tags:
         - /.*/
 
@@ -79,6 +80,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_genotype_scale
       tags:
         - /.*/
 
@@ -88,6 +90,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_genotype_scale
       tags:
         - /.*/
 
