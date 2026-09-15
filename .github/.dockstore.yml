@@ -280,6 +280,16 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: SubsetAndConcat
+    primaryDescriptorPath: /wdl/SubsetAndConcat.wdl
+    filters:
+      branches:
+        - main
+        - eph_getcpx
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: SVShell
     primaryDescriptorPath: /wdl/SVShell.wdl
     filters:
