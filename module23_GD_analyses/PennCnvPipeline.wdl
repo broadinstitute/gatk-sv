@@ -20,11 +20,13 @@ version 1.0
 ##   - The VCF ID field is assumed to contain the marker/probe name used by your PFB/manifest.
 ##   - `bcftools_docker` needs bcftools installed; `penncnv_docker` needs PennCNV (perl scripts
 ##     + compiled C binaries) installed.
-##   - The HMM model file (hhall.hmm) ships bundled inside the PennCNV install itself, so it is
-##     NOT a workflow input -- DetectCNV references it directly at `hmm_path` inside the
-##     container. Verify this path matches your chosen penncnv_docker image by running:
-##       docker run --rm <penncnv_docker> find / -name "*.hmm" 2>/dev/null
-##     and update the `hmm_path` default in the DetectCNV task below if it differs.
+##   - PennCNV's perl scripts (compile_pfb.pl, cal_gc_snp.pl, detect_cnv.pl, clean_cnv.pl,
+##     filter_cnv.pl) and the bundled hhall.hmm model ship inside the PennCNV install, but their
+##     directory is not guaranteed to be on $PATH in every image (this is what caused the
+##     "compile_pfb.pl: command not found" error). Every PennCNV task below runs a small
+##     `find_penncnv_dir` snippet at the start of its command block that locates the install
+##     directory at runtime and adds it to $PATH, so this works regardless of the exact internal
+##     layout of whichever penncnv_docker image you use -- no hardcoded path required.
 ##   - If you already have a cohort PFB (and optionally a GC model) rather than building one from
 ##     scratch, set `precomputed_pfb_file` (and `precomputed_gcmodel_file`) and the workflow will
 ##     use those instead of running CompilePFB / CalcGCModel.
@@ -146,6 +148,14 @@ task CompilePFB {
 
   command <<<
     set -euo pipefail
+    # Locate compile_pfb.pl wherever it lives inside this image and add it to PATH.
+    PENNCNV_DIR="$(dirname "$(find / -xdev -iname 'compile_pfb.pl' 2>/dev/null | head -n1)")"
+    if [ -z "$PENNCNV_DIR" ] || [ "$PENNCNV_DIR" = "." ]; then
+      echo "ERROR: could not locate compile_pfb.pl inside the container image." >&2
+      exit 1
+    fi
+    export PATH="$PENNCNV_DIR:$PATH"
+
     compile_pfb.pl -listfile ~{write_lines(signal_files)} -output ~{output_basename}.pfb
   >>>
 
@@ -171,6 +181,13 @@ task CalcGCModel {
 
   command <<<
     set -euo pipefail
+    PENNCNV_DIR="$(dirname "$(find / -xdev -iname 'cal_gc_snp.pl' 2>/dev/null | head -n1)")"
+    if [ -z "$PENNCNV_DIR" ] || [ "$PENNCNV_DIR" = "." ]; then
+      echo "ERROR: could not locate cal_gc_snp.pl inside the container image." >&2
+      exit 1
+    fi
+    export PATH="$PENNCNV_DIR:$PATH"
+
     cal_gc_snp.pl ~{gc_reference_file} ~{pfb_file} -output ~{output_basename}.gcmodel
   >>>
 
@@ -193,16 +210,30 @@ task DetectCNV {
     File? gcmodel_file
     String sample_id
     String docker
-
-    # HMM model ships bundled inside the PennCNV install -- not exposed as a workflow input.
-    # Verify/update this path for whichever penncnv_docker image you actually use.
-    String hmm_path = "/opt/PennCNV/lib/hhall.hmm"
   }
 
   command <<<
     set -euo pipefail
+    PENNCNV_DIR="$(dirname "$(find / -xdev -iname 'detect_cnv.pl' 2>/dev/null | head -n1)")"
+    if [ -z "$PENNCNV_DIR" ] || [ "$PENNCNV_DIR" = "." ]; then
+      echo "ERROR: could not locate detect_cnv.pl inside the container image." >&2
+      exit 1
+    fi
+    export PATH="$PENNCNV_DIR:$PATH"
+
+    # hhall.hmm ships inside the same PennCNV install directory tree.
+    HMM_PATH="$(find "$PENNCNV_DIR" -iname 'hhall.hmm' 2>/dev/null | head -n1)"
+    if [ -z "$HMM_PATH" ]; then
+      # fall back to a broader search in case lib/ isn't directly under PENNCNV_DIR
+      HMM_PATH="$(find / -xdev -iname 'hhall.hmm' 2>/dev/null | head -n1)"
+    fi
+    if [ -z "$HMM_PATH" ]; then
+      echo "ERROR: could not locate hhall.hmm inside the container image." >&2
+      exit 1
+    fi
+
     detect_cnv.pl -test \
-      -hmm ~{hmm_path} \
+      -hmm "$HMM_PATH" \
       -pfb ~{pfb_file} \
       ~{"-gcmodel " + gcmodel_file} \
       -log ~{sample_id}.penncnv.log \
@@ -235,6 +266,13 @@ task CleanAndFilterCNV {
 
   command <<<
     set -euo pipefail
+    PENNCNV_DIR="$(dirname "$(find / -xdev -iname 'clean_cnv.pl' 2>/dev/null | head -n1)")"
+    if [ -z "$PENNCNV_DIR" ] || [ "$PENNCNV_DIR" = "." ]; then
+      echo "ERROR: could not locate clean_cnv.pl inside the container image." >&2
+      exit 1
+    fi
+    export PATH="$PENNCNV_DIR:$PATH"
+
     clean_cnv.pl combineseg ~{rawcnv_file} -signalfile ~{signal_file} > ~{sample_id}.merged.rawcnv
     filter_cnv.pl ~{sample_id}.merged.rawcnv -numsnp ~{numsnp_filter} -length ~{length_filter} -out ~{sample_id}.filtered.rawcnv
   >>>
