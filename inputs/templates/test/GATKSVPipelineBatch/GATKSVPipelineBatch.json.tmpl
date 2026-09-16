@@ -105,10 +105,11 @@
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.segdups": {{ reference_resources.segdups | tojson }},
 
   "GATKSVPipelineBatch.outlier_cutoff_table" : {{ test_batch.outlier_cutoff_table | tojson }},
+  "GATKSVPipelineBatch.training_intervals": {{ reference_resources.depth_training_bed | tojson }},
+  "GATKSVPipelineBatch.depth_exclusion_intervals": {{ reference_resources.bin_exclude | tojson }},
+  "GATKSVPipelineBatch.pesr_exclusion_intervals": {{ reference_resources.pesr_exclude_list | tojson }},
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.outlier_cutoff_nIQR": "999999",
-  "GATKSVPipelineBatch.GenotypeBatch.pesr_exclusion_intervals": {{ reference_resources.pesr_exclude_list | tojson }},
-  "GATKSVPipelineBatch.GenotypeBatch.depth_exclusion_intervals": {{ reference_resources.bin_exclude | tojson }},
-  "GATKSVPipelineBatch.GenotypeBatch.training_intervals": {{ reference_resources.depth_training_bed | tojson }},
+  "GATKSVPipelineBatch.GenotypeBatch.n_RD_genotype_bins": "100000",
 
   "GATKSVPipelineBatch.RegenotypeCNVs.n_RdTest_bins": "100000",
   "GATKSVPipelineBatch.RegenotypeCNVs.n_per_split": "5000",

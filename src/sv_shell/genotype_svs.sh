@@ -79,7 +79,8 @@ java "-Xmx${JVM_MAX_MEM}" -jar /opt/gatk.jar GenotypeSVs \
   --ploidy-table $(jq -r ".ploidy_table" "${input_json}") \
   --pesr-exclusion-intervals $(jq -r ".pesr_exclusion_intervals" "${input_json}") \
   --depth-exclusion-intervals $(jq -r ".depth_exclusion_intervals" "${input_json}") \
-  --rd-table $(jq -r ".rd_table" "${input_json}") \
+  --rd-depth-table $(jq -r ".rd_depth_table" "${input_json}") \
+  --rd-pesr-table $(jq -r ".rd_pesr_table" "${input_json}") \
   --pe-table $(jq -r ".pe_table" "${input_json}") \
   --sr-table $(jq -r ".sr_table" "${input_json}")
 
