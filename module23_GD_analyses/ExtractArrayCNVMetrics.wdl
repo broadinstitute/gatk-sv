@@ -17,6 +17,9 @@ version 1.0
 ##     sample, with a smoothed line on the CN panel
 ##   - plot everyone's smoothed CN together in one figure, colored by
 ##     carrier status (ref / mosaic / germline)
+##   - plot, per group, the median CN across that group's samples at each
+##     site with a shaded 95% (2.5th-97.5th percentile) band, one such
+##     median+band curve per group in a single figure
 
 workflow ExtractArrayCNVMetrics {
   input {
@@ -89,6 +92,16 @@ workflow ExtractArrayCNVMetrics {
       docker = python_docker,
   }
 
+  call PlotGroupCNSummary {
+    input:
+      tables = PrepareSampleSelection.selected_tables,
+      groups = PrepareSampleSelection.selected_groups,
+      region = region,
+      breakpoints = breakpoints,
+      output_basename = output_basename,
+      docker = python_docker,
+  }
+
   output {
     Array[File] per_sample_tables = ExtractPerSample.metrics_tsv
     Array[File] wide_matrices = PivotToWideMatrices.wide_matrices
@@ -96,6 +109,7 @@ workflow ExtractArrayCNVMetrics {
     Array[String] selected_groups = PrepareSampleSelection.selected_groups
     Array[File] baf_cn_plots = PlotSampleBAFCN.plot_png
     File group_cn_plot = PlotGroupCN.plot_png
+    File group_cn_summary_plot = PlotGroupCNSummary.plot_png
   }
 }
 
@@ -477,6 +491,117 @@ CODE
 
   output {
     File plot_png = "~{output_basename}.group_CN.png"
+  }
+
+  runtime {
+    docker: docker
+    cpu: 1
+    memory: "4 GiB"
+    disks: "local-disk 10 HDD"
+    preemptible: 2
+  }
+}
+
+task PlotGroupCNSummary {
+  input {
+    Array[File] tables
+    Array[String] groups
+    String region
+    Array[Int] breakpoints
+    String output_basename
+    String docker
+  }
+
+  command <<<
+    set -euo pipefail
+    pip install --quiet --no-cache-dir matplotlib numpy
+
+    python3 <<CODE
+import csv
+import re
+from collections import defaultdict
+
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
+
+region = "~{region}"
+core_start, core_end = (int(x) for x in re.match(r"chr\w+:(\d+)-(\d+)", region).groups())
+breakpoints = [~{sep=',' breakpoints}]
+
+tables = "~{sep=',' tables}".split(",")
+groups = "~{sep=',' groups}".split(",")
+
+GREY = "#8a8980"
+LIGHTBLUE = "#7fb2e8"
+BLUE = "#2a78d6"
+CORE_SHADE = "#eef3fa"
+GROUP_COLOR = {"ref": GREY, "mosaic": LIGHTBLUE, "germline": BLUE}
+GROUP_LABEL = {"ref": "Ref", "mosaic": "Mosaic", "germline": "Germline deletion"}
+GROUP_ZORDER = {"ref": 2, "mosaic": 3, "germline": 4}
+
+# pos -> list of per-sample CN values, one such dict per group
+by_group_pos = {g: defaultdict(list) for g in GROUP_COLOR}
+counts = {"ref": 0, "mosaic": 0, "germline": 0}
+
+for table, group in zip(tables, groups):
+    counts[group] += 1
+    with open(table) as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        for r in reader:
+            if r["LRR"] == ".":
+                continue
+            cn = 2 * (2 ** float(r["LRR"]))
+            by_group_pos[group][int(r["POS"])].append(cn)
+
+fig, ax = plt.subplots(figsize=(13, 5), dpi=150)
+all_x = []
+
+for g in ("ref", "mosaic", "germline"):
+    pos_to_vals = by_group_pos[g]
+    if not pos_to_vals:
+        continue
+    xs = sorted(pos_to_vals)
+    all_x.extend(xs)
+    medians = np.array([np.median(pos_to_vals[x]) for x in xs])
+    lo = np.array([np.percentile(pos_to_vals[x], 2.5) for x in xs])
+    hi = np.array([np.percentile(pos_to_vals[x], 97.5) for x in xs])
+    ax.fill_between(xs, lo, hi, color=GROUP_COLOR[g], alpha=0.2, zorder=GROUP_ZORDER[g], linewidth=0)
+    ax.plot(xs, medians, color=GROUP_COLOR[g], linewidth=1.5, zorder=GROUP_ZORDER[g] + 10)
+
+ax.axvspan(core_start, core_end, color=CORE_SHADE, zorder=0)
+for bp in breakpoints:
+    ax.axvline(bp, color="#52514e", linewidth=1, zorder=20)
+ax.axhline(2, color="#52514e", linewidth=1, alpha=0.4, zorder=1)
+
+ax.set_xlabel(f"Position on {region.split(':')[0]}")
+ax.set_ylabel("Estimated CN (2×2^LRR)")
+ax.set_ylim(0, 3)
+ax.set_xlim(min(all_x), max(all_x))
+ax.grid(axis="y", color="#e3e2dc", linewidth=1, zorder=0)
+ax.spines[["top", "right"]].set_visible(False)
+ax.set_title(
+    f"Median estimated CN with 95% band across {region} — "
+    f"ref (n={counts['ref']}), mosaic (n={counts['mosaic']}), germline (n={counts['germline']})"
+)
+
+legend_handles = [
+    Patch(facecolor=GROUP_COLOR[g], edgecolor="none", alpha=0.4, label=f"{GROUP_LABEL[g]} (median, 95% band)")
+    for g in ("ref", "mosaic", "germline")
+]
+legend_handles.append(Line2D([0], [0], color="#52514e", linewidth=1, label="Breakpoint"))
+ax.legend(handles=legend_handles, frameon=False, loc="upper right")
+
+fig.tight_layout()
+fig.savefig("~{output_basename}.group_CN_summary.png")
+CODE
+  >>>
+
+  output {
+    File plot_png = "~{output_basename}.group_CN_summary.png"
   }
 
   runtime {
