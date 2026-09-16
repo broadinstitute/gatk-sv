@@ -20,6 +20,15 @@ version 1.0
 ##   - plot, per group, the median CN across that group's samples at each
 ##     site with a shaded 95% (2.5th-97.5th percentile) band, one such
 ##     median+band curve per group in a single figure
+##
+## breakpoints (optional; default [] = no shading beyond the plain region
+## bounds) marks the CNV region's internal breakpoints (bp1..bp5, etc.) on
+## all three plots: the span between min(breakpoints) and max(breakpoints)
+## is shaded blue, everything else in the plotted window is shaded orange,
+## and a grey vertical line is drawn at each breakpoint. Example, hg38
+## 16p11.2 BP1-BP5:
+##   breakpoints = [28471484, 28592383, 29035178, 29324175, 30188531]
+##   (bp1=28471484, bp2=28592383, bp3=29035178, bp4=29324175, bp5=30188531)
 
 workflow ExtractArrayCNVMetrics {
   input {
@@ -35,7 +44,7 @@ workflow ExtractArrayCNVMetrics {
     Array[String] mosaic_carriers = []
     Int n_ref_samples = 10
     Int random_seed = 42
-    Array[Int] breakpoints = []
+    Array[Int] breakpoints = []  # optional; see breakpoints note above
     Int smoothing_window = 10
   }
 
