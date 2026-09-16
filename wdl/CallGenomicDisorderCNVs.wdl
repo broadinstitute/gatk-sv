@@ -24,6 +24,12 @@ workflow CallGenomicDisorderCNVs {
     File gtf
     File? truth_table
 
+    # Wide GATK-SV ploidy table (sample + one column per contig). This must be
+    # the same table given to IntegrateGDVcf: it is the authority on which
+    # sample/contig pairs are genotypable, and GD calls scored against any
+    # other ploidy cannot be encoded as GATK-SV genotypes downstream.
+    File ploidy_table
+
     Int rebinned_interval_size = 10000
     String sv_pipeline_docker
     String gatk_docker
@@ -67,6 +73,7 @@ workflow CallGenomicDisorderCNVs {
       gaps_bed = gaps_bed,
       gtf = gtf,
       truth_table = truth_table,
+      ploidy_table = ploidy_table,
       sv_pipeline_docker = sv_pipeline_docker,
       preprocess_args = preprocess_args,
       infer_args = infer_args,
@@ -101,6 +108,7 @@ task RunGenomicDisorderCNVs {
     File gaps_bed
     File gtf
     File? truth_table
+    File ploidy_table
     String sv_pipeline_docker
     String? preprocess_args
     String? infer_args
@@ -148,6 +156,7 @@ task RunGenomicDisorderCNVs {
       --par-bed ~{par_bed} \
       --gaps-bed ~{gaps_bed} \
       --gtf ~{gtf} \
+      --ploidy-table ~{ploidy_table} \
       --preprocess-args '~{default="" preprocess_args}' \
       --infer-args '~{default="" infer_args}' \
       --call-args '~{default="" call_args}' \
