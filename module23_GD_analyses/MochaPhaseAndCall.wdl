@@ -27,12 +27,26 @@ version 1.0
 ## same order as the `chromosomes` input array, with no dependence on the
 ## +scatter plugin or glob() ordering.
 ##
-## Requires two docker images NOT provided by plain bcftools:
-##   phase_docker  bcftools + SHAPEIT5's `phase_common` binary on PATH
-##                 (https://odelaneau.github.io/shapeit5)
-##   mocha_docker  bcftools built with the MoChA `+mocha` plugin
-##                 (https://github.com/freeseek/mocha#installation)
-## Neither is a stock bcftools image; you must build/supply these yourself.
+## Uses three docker images:
+##   bcftools_docker  plain bcftools, for PrepareSites/ConcatAndImportPhase.
+##                 Default: staphb/bcftools:1.19 (same as MochaPrepareData.wdl).
+##   phase_docker  bcftools is NOT enough here: needs SHAPEIT5's phase_common
+##                 binary on PATH. Default:
+##                 quay.io/biocontainers/shapeit5:5.1.1--h34261f4_2 (official
+##                 bioconda/biocontainers build; confirmed it has no bcftools,
+##                 hence the separate bcftools_docker above). Its phase_common
+##                 binary is installed as `SHAPEIT5_phase_common`, not
+##                 `phase_common` -- PhaseChromosome looks for either name.
+##   mocha_docker  bcftools built with the MoChA `+mocha` plugin. Default:
+##                 liangyu1/bcftools-mocha:v0.0.1 (bcftools 1.20, mocha
+##                 plugin build 2024-05-05) -- verified its `+mocha` flags
+##                 match this WDL's CallMocha command exactly, and it was
+##                 smoke-tested end-to-end against a synthetic phased VCF.
+##                 There is no current official MoChA docker image; avoid
+##                 cwhelan/mocha:v1.0 (bcftools 1.10.2, mocha plugin from
+##                 2020) since its `+mocha` uses older flag names (-r/--rules
+##                 instead of -g/--genome) that don't match this WDL's
+##                 command as written.
 ##
 ## Reference inputs (per MoChA's docs):
 ##   ref_panel_vcfs/ref_panel_vcf_idxs  one phasing reference panel BCF+idx
@@ -44,12 +58,14 @@ version 1.0
 ##                     MoChA estimates these from the VCF if omitted
 ##   cnp/mhc_reg/kir_reg  optional regions passed through to `+mocha`
 ##
-## NOTE: unlike MochaPrepareData.wdl (fully smoke-tested locally with
-## stock bcftools against synthetic data), phase_common and `bcftools
-## +mocha` are non-stock binaries not available in this environment, so
-## this WDL has only been validated with womtool (syntax/types), not
-## executed end-to-end. Double-check flags against your specific
-## phase_common/mocha build's --help before a production run.
+## NOTE on verification: `bcftools +mocha` (mocha_docker default image) was
+## smoke-tested end-to-end against a synthetic 2-sample phased BCF with
+## GT/BAF/LRR/ALLELE_A/ALLELE_B, confirming its flags match CallMocha's
+## command and that it runs to completion. SHAPEIT5_phase_common (phase_docker
+## default image) was confirmed present and runnable (--help), but
+## PhaseChromosome's full command (phase against a real reference panel) has
+## NOT been executed end-to-end -- double-check its output against a small
+## region before a full production run.
 
 workflow MochaPhaseAndCall {
   input {
@@ -74,8 +90,9 @@ workflow MochaPhaseAndCall {
     String? kir_reg
 
     String prefix = "mocha"
-    String phase_docker
-    String mocha_docker
+    String bcftools_docker = "staphb/bcftools:1.19"
+    String phase_docker = "quay.io/biocontainers/shapeit5:5.1.1--h34261f4_2"
+    String mocha_docker = "liangyu1/bcftools-mocha:v0.0.1"
 
     Int phase_cpu = 4
     Int phase_mem_gb = 16
@@ -88,7 +105,7 @@ workflow MochaPhaseAndCall {
       xcl_bcf = xcl_bcf,
       xcl_bcf_idx = xcl_bcf_idx,
       prefix = prefix,
-      docker = phase_docker,
+      docker = bcftools_docker,
   }
 
   scatter (i in range(length(chromosomes))) {
@@ -113,7 +130,7 @@ workflow MochaPhaseAndCall {
       unphased_bcf = unphased_bcf,
       unphased_bcf_idx = unphased_bcf_idx,
       prefix = prefix,
-      docker = phase_docker,
+      docker = bcftools_docker,
   }
 
   call CallMocha {
@@ -197,10 +214,18 @@ task PhaseChromosome {
   command <<<
     set -euo pipefail
 
+    # quay.io/biocontainers/shapeit5 installs this as `SHAPEIT5_phase_common`
+    # rather than `phase_common`; accept either name.
+    PHASE_BIN="$(command -v phase_common || command -v SHAPEIT5_phase_common || true)"
+    if [ -z "$PHASE_BIN" ]; then
+      echo "ERROR: could not find phase_common (or SHAPEIT5_phase_common) on PATH inside phase_docker." >&2
+      exit 1
+    fi
+
     chr_num=$(echo "~{chrom}" | sed 's/^chr//')
     zcat ~{genetic_map} | sed 's/^23/X/' | awk -v chr="$chr_num" '$1==chr {print $2,$3,$4}' > genetic_map.txt
 
-    phase_common \
+    "$PHASE_BIN" \
       --thread ~{cpu} \
       --input ~{sites_bcf} \
       --reference ~{ref_panel_vcf} \
