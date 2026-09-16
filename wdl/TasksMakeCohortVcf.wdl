@@ -346,103 +346,6 @@ task ConcatBeds {
   }
 }
 
-
-# Task to merge VID lists across shards
-task FilesToTarredFolder {
-  input {
-    Array[File] in_files
-    String? folder_name
-    String? tarball_prefix
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  String tar_folder_name = select_first([folder_name, "merged"])
-  String outfile_name = select_first([tarball_prefix, tar_folder_name]) + ".tar.gz"
-
-  # Since the input files are often/always compressed themselves, assume compression factor for tarring is 1.0
-  Float input_size = size(in_files, "GB")
-  RuntimeAttr runtime_default = object {
-    mem_gb: 2.0,
-    disk_gb: ceil(10.0 + input_size * 2.0),
-    cpu_cores: 1,
-    preemptible_tries: 3,
-    max_retries: 1,
-    boot_disk_gb: 10
-  }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  runtime {
-    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
-    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_base_mini_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-  }
-
-  command <<<
-    # Create final output directory
-    mkdir "~{tar_folder_name}"
-
-    while read VID_LIST; do
-      mv "$VID_LIST" "~{tar_folder_name}"
-    done < ~{write_lines(in_files)}
-
-    # Compress final output directory
-    tar -czvf "~{outfile_name}" "~{tar_folder_name}"
-  >>>
-
-  output {
-    File tarball = outfile_name
-  }
-}
-
-
-#Create input file for per-batch genotyping of predicted CPX CNV intervals
-task PasteFiles {
-  input {
-    Array[String] input_strings
-    Array[File] input_files
-    String outfile_name
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
-  # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size(input_files, "GB")
-  RuntimeAttr runtime_default = object {
-    mem_gb: 2.0,
-    disk_gb: ceil(10.0 + input_size * 2.0),
-    cpu_cores: 1,
-    preemptible_tries: 3,
-    max_retries: 1,
-    boot_disk_gb: 10
-  }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  runtime {
-    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
-    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_base_mini_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-  }
-
-  command <<<
-    set -eu -o pipefail
-
-    paste ~{sep=' ' input_files} \
-      > ~{outfile_name}
-  >>>
-
-  output {
-    File outfile = outfile_name
-  }
-}
-
 # Select a subset of vcf records by passing a filter command
 # records_filter must be a bcftools expression
 task FilterVcf {
@@ -732,7 +635,6 @@ task UpdateSrList {
   }
 }
 
-  
 task ShardVidsForClustering {
   input {
     File clustered_vcf
@@ -830,88 +732,6 @@ task ShardVidsForClustering {
   }
 }
 
-task MakeSitesOnlyVcf {
-  input {
-    File vcf
-    File vcf_index
-    String prefix
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr runtime_default = object {
-                                  mem_gb: 3.75,
-                                  disk_gb: ceil(10.0 + size(vcf, "GiB") * 1.2),
-                                  cpu_cores: 1,
-                                  preemptible_tries: 3,
-                                  max_retries: 1,
-                                  boot_disk_gb: 10
-                                }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_base_mini_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-  }
-
-  command <<<
-    set -euxo pipefail
-    bcftools view --no-version -G ~{vcf} -Oz -o ~{prefix}.vcf.gz
-    tabix ~{prefix}.vcf.gz
-  >>>
-
-  output {
-    File out = "~{prefix}.vcf.gz"
-    File out_index = "~{prefix}.vcf.gz.tbi"
-  }
-}
-
-
-task ReheaderVcf {
-  input {
-    File vcf
-    File vcf_index
-    File header
-    String prefix
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr runtime_default = object {
-                                  mem_gb: 3.75,
-                                  disk_gb: ceil(10.0 + size(vcf, "GiB") * 2.0),
-                                  cpu_cores: 1,
-                                  preemptible_tries: 3,
-                                  max_retries: 1,
-                                  boot_disk_gb: 10
-                                }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_base_mini_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-  }
-
-  command <<<
-    set -euxo pipefail
-    bcftools reheader -h ~{header} ~{vcf} > ~{prefix}.vcf.gz
-    tabix ~{prefix}.vcf.gz
-  >>>
-
-  output {
-    File out = "~{prefix}.vcf.gz"
-    File out_index = "~{prefix}.vcf.gz.tbi"
-  }
-}
-
 task PullVcfShard {
   input {
     File vcf
@@ -952,57 +772,6 @@ task PullVcfShard {
     File out = "~{output_prefix}.vcf.gz"
     File out_index = "~{output_prefix}.vcf.gz.tbi"
     Int count = read_int("count.txt")
-  }
-}
-
-task RenameVariantIds {
-  input {
-    File vcf
-    File? vcf_index
-    String vid_prefix
-    String file_prefix
-    Boolean? use_ssd
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  String disk_type = if (defined(use_ssd) && select_first([use_ssd])) then "SSD" else "HDD"
-  Float input_size = size(vcf, "GiB")
-  RuntimeAttr runtime_default = object {
-                                  mem_gb: 2.0,
-                                  disk_gb: ceil(10.0 + input_size * 2),
-                                  cpu_cores: 1,
-                                  preemptible_tries: 3,
-                                  max_retries: 1,
-                                  boot_disk_gb: 10
-                                }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} ~{disk_type}"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_base_mini_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-  }
-
-  command <<<
-    set -euo pipefail
-    zcat ~{vcf} \
-      | awk -F'\t' -v OFS='\t' -v i=0 '{if ($0~/^#/) {print; next} $3="prefix_"(i++); print}' \
-      | bgzip \
-      > ~{file_prefix}.vcf.gz
-    if ~{defined(vcf_index)}; then
-      tabix ~{file_prefix}.vcf.gz
-    else
-      touch ~{file_prefix}.vcf.gz
-    fi
-  >>>
-
-  output {
-    File out = "~{file_prefix}.vcf.gz"
-    File out_index = "~{file_prefix}.vcf.gz.tbi"
   }
 }
 
