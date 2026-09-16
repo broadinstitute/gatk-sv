@@ -296,13 +296,23 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 region = "~{region}"
-core_start, core_end = (int(x) for x in re.match(r"chr\w+:(\d+)-(\d+)", region).groups())
 breakpoints = [~{sep=',' breakpoints}]
 window = ~{smoothing_window}
+
+if breakpoints:
+    core_start, core_end = min(breakpoints), max(breakpoints)
+else:
+    core_start, core_end = (int(x) for x in re.match(r"chr\w+:(\d+)-(\d+)", region).groups())
 
 BLUE = "#2a78d6"
 ORANGE = "#eb6834"
 GREY = "#8a8980"
+
+
+def shade_zones(ax, xmin, xmax):
+    ax.axvspan(xmin, core_start, color=ORANGE, alpha=0.15, zorder=0)
+    ax.axvspan(core_start, core_end, color=BLUE, alpha=0.15, zorder=0)
+    ax.axvspan(core_end, xmax, color=ORANGE, alpha=0.15, zorder=0)
 
 
 def zone(x):
@@ -346,6 +356,9 @@ zones = [r[3] for r in rows]
 cn_smoothed = rolling_mean(np.array([r[2] for r in rows]), window)
 
 fig, (ax_baf, ax_cn) = plt.subplots(2, 1, figsize=(13, 7), dpi=150, sharex=True)
+
+shade_zones(ax_baf, min(xs), max(xs))
+shade_zones(ax_cn, min(xs), max(xs))
 
 for z in ("flank", "core"):
     color = BLUE if z == "core" else ORANGE
@@ -421,9 +434,13 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
 region = "~{region}"
-core_start, core_end = (int(x) for x in re.match(r"chr\w+:(\d+)-(\d+)", region).groups())
 breakpoints = [~{sep=',' breakpoints}]
 window = ~{smoothing_window}
+
+if breakpoints:
+    core_start, core_end = min(breakpoints), max(breakpoints)
+else:
+    core_start, core_end = (int(x) for x in re.match(r"chr\w+:(\d+)-(\d+)", region).groups())
 
 tables = "~{sep=',' tables}".split(",")
 samples = "~{sep=',' samples}".split(",")
@@ -432,8 +449,14 @@ groups = "~{sep=',' groups}".split(",")
 GREY = "#8a8980"
 LIGHTBLUE = "#7fb2e8"
 BLUE = "#2a78d6"
-CORE_SHADE = "#eef3fa"
+ORANGE = "#eb6834"
 GROUP_COLOR = {"ref": GREY, "mosaic": LIGHTBLUE, "germline": BLUE}
+
+
+def shade_zones(ax, xmin, xmax):
+    ax.axvspan(xmin, core_start, color=ORANGE, alpha=0.15, zorder=0)
+    ax.axvspan(core_start, core_end, color=BLUE, alpha=0.15, zorder=0)
+    ax.axvspan(core_end, xmax, color=ORANGE, alpha=0.15, zorder=0)
 GROUP_LABEL = {"ref": "Ref", "mosaic": "Mosaic", "germline": "Germline deletion"}
 GROUP_ZORDER = {"ref": 2, "mosaic": 3, "germline": 4}
 
@@ -461,7 +484,7 @@ for table, sample, group in zip(tables, samples, groups):
     counts[group] += 1
     ax.plot(xs, cn_smoothed, color=GROUP_COLOR[group], linewidth=0.6, alpha=0.5, zorder=GROUP_ZORDER[group])
 
-ax.axvspan(core_start, core_end, color=CORE_SHADE, zorder=0)
+shade_zones(ax, min(all_x), max(all_x))
 for bp in breakpoints:
     ax.axvline(bp, color="#52514e", linewidth=1, zorder=5)
 ax.axhline(2, color="#52514e", linewidth=1, alpha=0.4, zorder=1)
@@ -529,8 +552,12 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 region = "~{region}"
-core_start, core_end = (int(x) for x in re.match(r"chr\w+:(\d+)-(\d+)", region).groups())
 breakpoints = [~{sep=',' breakpoints}]
+
+if breakpoints:
+    core_start, core_end = min(breakpoints), max(breakpoints)
+else:
+    core_start, core_end = (int(x) for x in re.match(r"chr\w+:(\d+)-(\d+)", region).groups())
 
 tables = "~{sep=',' tables}".split(",")
 groups = "~{sep=',' groups}".split(",")
@@ -538,10 +565,16 @@ groups = "~{sep=',' groups}".split(",")
 GREY = "#8a8980"
 LIGHTBLUE = "#7fb2e8"
 BLUE = "#2a78d6"
-CORE_SHADE = "#eef3fa"
+ORANGE = "#eb6834"
 GROUP_COLOR = {"ref": GREY, "mosaic": LIGHTBLUE, "germline": BLUE}
 GROUP_LABEL = {"ref": "Ref", "mosaic": "Mosaic", "germline": "Germline deletion"}
 GROUP_ZORDER = {"ref": 2, "mosaic": 3, "germline": 4}
+
+
+def shade_zones(ax, xmin, xmax):
+    ax.axvspan(xmin, core_start, color=ORANGE, alpha=0.15, zorder=0)
+    ax.axvspan(core_start, core_end, color=BLUE, alpha=0.15, zorder=0)
+    ax.axvspan(core_end, xmax, color=ORANGE, alpha=0.15, zorder=0)
 
 # pos -> list of per-sample CN values, one such dict per group
 by_group_pos = {g: defaultdict(list) for g in GROUP_COLOR}
@@ -572,7 +605,7 @@ for g in ("ref", "mosaic", "germline"):
     ax.fill_between(xs, lo, hi, color=GROUP_COLOR[g], alpha=0.2, zorder=GROUP_ZORDER[g], linewidth=0)
     ax.plot(xs, medians, color=GROUP_COLOR[g], linewidth=1.5, zorder=GROUP_ZORDER[g] + 10)
 
-ax.axvspan(core_start, core_end, color=CORE_SHADE, zorder=0)
+shade_zones(ax, min(all_x), max(all_x))
 for bp in breakpoints:
     ax.axvline(bp, color="#52514e", linewidth=1, zorder=20)
 ax.axhline(2, color="#52514e", linewidth=1, alpha=0.4, zorder=1)
