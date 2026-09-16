@@ -8,7 +8,7 @@ workflow SubsetAndConcat {
     Array[File] vcfs
     File contigs_list
     String prefix
-    String bcftools_view_options = ""
+    String bcftools_view_options
     String sv_base_mini_docker
     String sv_pipeline_docker
 
@@ -66,7 +66,7 @@ task SubsetVcf {
     File vcf
     String contig
     String prefix
-    String bcftools_view_options = ""
+    String bcftools_view_options
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
