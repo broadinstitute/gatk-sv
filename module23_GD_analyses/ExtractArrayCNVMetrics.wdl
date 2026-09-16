@@ -13,8 +13,9 @@ version 1.0
 ## Given a list of germline CNV carriers and (optionally empty) mosaic CNV
 ## carriers, also select a random subset of n_ref_samples reference
 ## samples (anyone not in either carrier list) and, for that combined set:
-##   - plot a 2-panel BAF (top) / estimated-CN-from-LRR (bottom) figure per
-##     sample, with a smoothed line on the CN panel
+##   - plot a 3-panel BAF / estimated-CN-from-LRR / raw-LRR figure per
+##     sample, with a smoothed line on the CN panel. BAF points in
+##     [0, 0.15] or [0.85, 1] (near-homozygous) are colored light grey.
 ##   - plot everyone's smoothed CN together in one figure, colored by
 ##     carrier status (ref / mosaic / germline)
 ##   - plot, per group, the median CN across that group's samples at each
@@ -316,6 +317,7 @@ else:
 BLUE = "#2a78d6"
 ORANGE = "#eb6834"
 GREY = "#8a8980"
+LIGHTGREY = "#c9c8c3"
 
 
 def shade_zones(ax, xmin, xmax):
@@ -326,6 +328,10 @@ def shade_zones(ax, xmin, xmax):
 
 def zone(x):
     return "core" if core_start <= x <= core_end else "flank"
+
+
+def is_extreme_baf(b):
+    return b <= 0.15 or b >= 0.85
 
 
 def rolling_mean(arr, w):
@@ -356,26 +362,35 @@ with open("~{metrics_tsv}") as f:
             continue
         pos = int(r["POS"])
         baf = float(r["BAF"])
-        cn = 2 * (2 ** float(r["LRR"]))
-        rows.append((pos, baf, cn, zone(pos)))
+        lrr = float(r["LRR"])
+        cn = 2 * (2 ** lrr)
+        rows.append((pos, baf, cn, zone(pos), lrr))
 rows.sort()
 
 xs = [r[0] for r in rows]
 zones = [r[3] for r in rows]
 cn_smoothed = rolling_mean(np.array([r[2] for r in rows]), window)
 
-fig, (ax_baf, ax_cn) = plt.subplots(2, 1, figsize=(13, 7), dpi=150, sharex=True)
+fig, (ax_baf, ax_cn, ax_lrr) = plt.subplots(3, 1, figsize=(13, 10), dpi=150, sharex=True)
 
 shade_zones(ax_baf, min(xs), max(xs))
 shade_zones(ax_cn, min(xs), max(xs))
+shade_zones(ax_lrr, min(xs), max(xs))
 
 for z in ("flank", "core"):
     color = BLUE if z == "core" else ORANGE
-    zx = [r[0] for r in rows if r[3] == z]
-    zbaf = [r[1] for r in rows if r[3] == z]
-    zcn = [r[2] for r in rows if r[3] == z]
-    ax_baf.scatter(zx, zbaf, s=6, color=color, alpha=0.6, zorder=3)
+    zrows = [r for r in rows if r[3] == z]
+    zx_mid = [r[0] for r in zrows if not is_extreme_baf(r[1])]
+    zbaf_mid = [r[1] for r in zrows if not is_extreme_baf(r[1])]
+    zx_extreme = [r[0] for r in zrows if is_extreme_baf(r[1])]
+    zbaf_extreme = [r[1] for r in zrows if is_extreme_baf(r[1])]
+    zx = [r[0] for r in zrows]
+    zcn = [r[2] for r in zrows]
+    zlrr = [r[4] for r in zrows]
+    ax_baf.scatter(zx_mid, zbaf_mid, s=6, color=color, alpha=0.6, zorder=3)
+    ax_baf.scatter(zx_extreme, zbaf_extreme, s=6, color=LIGHTGREY, alpha=0.6, zorder=3)
     ax_cn.scatter(zx, zcn, s=6, color=color, alpha=0.35, zorder=2)
+    ax_lrr.scatter(zx, zlrr, s=6, color=color, alpha=0.35, zorder=2)
 
 for z, sx, sy in split_by_zone(xs, list(cn_smoothed), zones):
     ax_cn.plot(sx, sy, color=BLUE if z == "core" else ORANGE, linewidth=2, zorder=3)
@@ -383,20 +398,26 @@ for z, sx, sy in split_by_zone(xs, list(cn_smoothed), zones):
 for bp in breakpoints:
     ax_baf.axvline(bp, color=GREY, linewidth=1, zorder=2)
     ax_cn.axvline(bp, color=GREY, linewidth=1, zorder=2)
+    ax_lrr.axvline(bp, color=GREY, linewidth=1, zorder=2)
 ax_cn.axhline(2, color=GREY, linewidth=1, alpha=0.5, zorder=1)
+ax_lrr.axhline(0, color=GREY, linewidth=1, alpha=0.5, zorder=1)
 
 ax_baf.set_ylabel("BAF")
 ax_baf.set_ylim(-0.05, 1.05)
 ax_baf.grid(axis="y", color="#e3e2dc", linewidth=1, zorder=0)
 ax_baf.spines[["top", "right"]].set_visible(False)
-ax_baf.set_title(f"BAF and estimated copy number across {region} — sample ~{sample}")
+ax_baf.set_title(f"BAF, estimated copy number, and LRR across {region} — sample ~{sample}")
 
-ax_cn.set_xlabel(f"Position on {region.split(':')[0]}")
 ax_cn.set_ylabel("Estimated CN (2×2^LRR)")
 ax_cn.set_ylim(0, 3)
-ax_cn.set_xlim(min(xs), max(xs))
 ax_cn.grid(axis="y", color="#e3e2dc", linewidth=1, zorder=0)
 ax_cn.spines[["top", "right"]].set_visible(False)
+
+ax_lrr.set_xlabel(f"Position on {region.split(':')[0]}")
+ax_lrr.set_ylabel("LRR")
+ax_lrr.set_xlim(min(xs), max(xs))
+ax_lrr.grid(axis="y", color="#e3e2dc", linewidth=1, zorder=0)
+ax_lrr.spines[["top", "right"]].set_visible(False)
 
 fig.tight_layout()
 fig.savefig("~{sample}.BAF_CN.png")
