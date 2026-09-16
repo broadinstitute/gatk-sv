@@ -45,6 +45,10 @@ ARG BUILD_DEPS="git make cmake g++ gcc gfortran"
 ARG GATK_SV_GD_REPO
 ARG GATK_SV_GD_COMMIT
 ARG DEBIAN_FRONTEND=noninteractive
+# The setuptools cap below keeps pkg_resources importable. torch/triton require
+# setuptools>=77.0.3, which now resolves to 84.x — the release that dropped
+# pkg_resources — while the svtk/svtest/svqc console scripts are still the old
+# __import__('pkg_resources').require(...) style and fail without it.
 RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED_PACKAGES) && \
     apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends $BUILD_DEPS $(fix_spaces.sh $APT_REQUIRED_PACKAGES) && \
@@ -55,6 +59,7 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
     pip install -e /opt/svtest && \
     pip install -e /opt/svqc && \
     pip install -e /opt/gatk-sv-gd && \
+    pip install 'setuptools>=77.0.3,<81' && \
     apt-get -qqy remove --purge $APT_TRANSIENT_PACKAGES && \
     apt-get -qqy autoremove --purge && \
     apt-get -qqy clean && \
