@@ -10,7 +10,7 @@ workflow ShardedAnnotateVcf {
         String contig
         String prefix
 
-        File lps_tsv
+        File? lps_tsv
         File sample_pop_assignments
         File ped_file
         File par_bed
@@ -120,7 +120,7 @@ task ComputeAFs {
         File sample_pop_assignments
         File ped_file
         File par_bed
-        File lps_tsv
+        File? lps_tsv
         String prefix
         String docker
         RuntimeAttr? runtime_attr_override
@@ -132,7 +132,7 @@ task ComputeAFs {
         /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py "~{vcf}" stdout \
             ~{"-p " + sample_pop_assignments} \
             ~{"-f " + ped_file} \
-            ~{"-l " + lps_tsv} \
+            ~{if defined(lps_tsv) then "-l " + select_first([lps_tsv]) else ""} \
             ~{"--par " + par_bed} \
             | bgzip -c > "~{prefix}.vcf.gz"
 

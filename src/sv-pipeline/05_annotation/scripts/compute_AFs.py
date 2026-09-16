@@ -374,10 +374,6 @@ def main():
     # Get list of all samples in vcf
     samples_list = list(vcf.header.samples)
 
-    # Read list of all variant IDs in vcf
-    vcf_variant_ids = set(rec.id for rec in vcf.fetch())
-    vcf.reset()
-
     # Get lists of males and females
     parbt = pbt.BedTool('', from_string=True)
     famfile = [line.rstrip('\n') for line in open(args.famfile)]
@@ -398,28 +394,32 @@ def main():
             raise ValueError(f"Invalid label: '{label}'.")
 
     # Get LPS values
-    lps_dict = {}
-    lines = [line.rstrip('\n').rstrip('\r') for line in open(args.lpsfile) if line.strip()]
-    header = lines[-1].split('\t')
-    sample_names = header[2:]
-    for line in lines[:-1]:
-        fields = line.split('\t')
-        if len(fields) < 2:
-            continue
-        variant_id = fields[0]
-        if variant_id not in vcf_variant_ids:
-            continue
-        sample_values = fields[2:]
-        lps_dict[variant_id] = {}
-        for i, sample_name in enumerate(sample_names):
-            if i < len(sample_values):
-                val_str = sample_values[i].strip()
-                if val_str == '.' or val_str == '':
-                    lps_dict[variant_id][sample_name] = None
+    lps_dict = None
+    if args.lpsfile is not None:
+        vcf_variant_ids = set(rec.id for rec in vcf.fetch())
+        vcf.reset()
+        lps_dict = {}
+        lines = [line.rstrip('\n').rstrip('\r') for line in open(args.lpsfile) if line.strip()]
+        header = lines[-1].split('\t')
+        sample_names = header[2:]
+        for line in lines[:-1]:
+            fields = line.split('\t')
+            if len(fields) < 2:
+                continue
+            variant_id = fields[0]
+            if variant_id not in vcf_variant_ids:
+                continue
+            sample_values = fields[2:]
+            lps_dict[variant_id] = {}
+            for i, sample_name in enumerate(sample_names):
+                if i < len(sample_values):
+                    val_str = sample_values[i].strip()
+                    if val_str == '.' or val_str == '':
+                        lps_dict[variant_id][sample_name] = None
+                    else:
+                        lps_dict[variant_id][sample_name] = [int(v.strip()) for v in val_str.split(',')]
                 else:
-                    lps_dict[variant_id][sample_name] = [int(v.strip()) for v in val_str.split(',')]
-            else:
-                lps_dict[variant_id][sample_name] = None
+                    lps_dict[variant_id][sample_name] = None
 
     # Get PAR bed
     parbt = pbt.BedTool(args.par)
@@ -438,9 +438,10 @@ def main():
         '##INFO=<ID=freq_het,Number=1,Type=Float,Description="Heterozygous genotype frequency (biallelic sites only).">',
         '##INFO=<ID=freq_homalt,Number=1,Type=Float,Description="Homozygous alternate genotype frequency (biallelic sites only).">',
         '##INFO=<ID=AP_allele,Number=.,Type=Float,Description="Allele purity for each allele index (multiallelic sites only).">',
-        '##INFO=<ID=MC_allele,Number=.,Type=Integer,Description="Motif count for each allele index (multiallelic sites only).">',
-        '##INFO=<ID=LPS_allele,Number=.,Type=Integer,Description="Longest polymer sequence for each allele index (multiallelic sites only).">'
+        '##INFO=<ID=MC_allele,Number=.,Type=Integer,Description="Motif count for each allele index (multiallelic sites only).">'
     ]
+    if args.lpsfile is not None:
+        INFO_ADD.append('##INFO=<ID=LPS_allele,Number=.,Type=Integer,Description="Longest polymer sequence for each allele index (multiallelic sites only).">')
 
     # Define sex fields
     for sex in sexes:

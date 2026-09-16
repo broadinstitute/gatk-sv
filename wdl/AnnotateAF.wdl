@@ -14,7 +14,7 @@ workflow AnnotateAF {
         File sample_pop_assignments
         File ped_file
         File par_bed
-        File lps_tsv
+        File? lps_tsv
         Array[String]? strip_info_fields
 
         Int records_per_shard
@@ -30,13 +30,15 @@ workflow AnnotateAF {
     }
 
     scatter (contig in contigs) {
-        call SubsetLpsTsvToContig {
-            input:
-                tsv = lps_tsv,
-                contig = contig,
-                prefix = "~{prefix}.~{contig}",
-                docker = gatk_sv_lr_docker,
-                runtime_attr_override = runtime_attr_subset_tsv
+        if (defined(lps_tsv)) {
+            call SubsetLpsTsvToContig {
+                input:
+                    tsv = select_first([lps_tsv]),
+                    contig = contig,
+                    prefix = "~{prefix}.~{contig}",
+                    docker = gatk_sv_lr_docker,
+                    runtime_attr_override = runtime_attr_subset_tsv
+            }
         }
 
         call sharded_annotate_vcf.ShardedAnnotateVcf {
