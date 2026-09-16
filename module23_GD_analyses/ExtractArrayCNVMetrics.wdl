@@ -3,8 +3,9 @@ version 1.0
 ## Given one single-sample SNP-array VCF per sample and a region of
 ## interest, scatter across samples and run extract_array_cnv_metrics.sh
 ## per sample to pull out copy-number-relevant metrics (GT, BAF, LRR by
-## default). Aggregate the per-sample tables into one combined long-format
-## table (one row per variant x sample).
+## default). Pivot the per-sample long-format tables into one wide matrix
+## per metric: rows are sites, columns are samples, "." for a sample
+## missing at a site.
 ##
 ## extract_array_cnv_metrics.sh handles compression and indexing itself, so
 ## each input VCF can be plain, gzipped, or bgzipped, indexed or not.
@@ -17,6 +18,7 @@ workflow ExtractArrayCNVMetrics {
     Boolean extra_fields = false
     String output_basename = "array_cnv_metrics"
     String docker = "staphb/bcftools:1.19"
+    String python_docker = "python:3.11-slim"
   }
 
   scatter (vcf in vcfs) {
@@ -30,16 +32,16 @@ workflow ExtractArrayCNVMetrics {
     }
   }
 
-  call AggregateTables {
+  call PivotToWideMatrices {
     input:
       tables = ExtractPerSample.metrics_tsv,
       output_basename = output_basename,
-      docker = docker,
+      docker = python_docker,
   }
 
   output {
     Array[File] per_sample_tables = ExtractPerSample.metrics_tsv
-    File aggregated_table = AggregateTables.combined_tsv
+    Array[File] wide_matrices = PivotToWideMatrices.wide_matrices
   }
 }
 
@@ -74,7 +76,7 @@ task ExtractPerSample {
   }
 }
 
-task AggregateTables {
+task PivotToWideMatrices {
   input {
     Array[File] tables
     String output_basename
@@ -84,21 +86,54 @@ task AggregateTables {
   command <<<
     set -euo pipefail
 
-    files=(~{sep=" " tables})
-    head -n 1 "${files[0]}" > ~{output_basename}.tsv
-    for f in "${files[@]}"; do
-      tail -n +2 "$f" >> ~{output_basename}.tsv
-    done
+    python3 <<CODE
+import csv
+
+table_files = "~{sep=',' tables}".split(",")
+site_key_cols = ["CHROM", "POS", "ID", "REF", "ALT"]
+
+sites = set()
+samples = set()
+metric_cols = None
+data = {}
+
+for path in table_files:
+    with open(path) as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        if metric_cols is None:
+            metric_cols = [c for c in reader.fieldnames if c not in site_key_cols and c != "SAMPLE"]
+            for m in metric_cols:
+                data[m] = {}
+        for row in reader:
+            key = tuple(row[c] for c in site_key_cols)
+            sites.add(key)
+            sample = row["SAMPLE"]
+            samples.add(sample)
+            for m in metric_cols:
+                data[m].setdefault(key, {})[sample] = row[m]
+
+sorted_sites = sorted(sites, key=lambda k: (k[0], int(k[1])))
+sorted_samples = sorted(samples)
+
+for m in metric_cols:
+    out_path = f"~{output_basename}.{m}.tsv"
+    with open(out_path, "w") as out:
+        out.write("\t".join(site_key_cols + sorted_samples) + "\n")
+        for key in sorted_sites:
+            row_vals = list(key) + [data[m].get(key, {}).get(s, ".") for s in sorted_samples]
+            out.write("\t".join(row_vals) + "\n")
+    print(f"Wrote {out_path}: {len(sorted_sites)} sites x {len(sorted_samples)} samples")
+CODE
   >>>
 
   output {
-    File combined_tsv = "~{output_basename}.tsv"
+    Array[File] wide_matrices = glob("~{output_basename}.*.tsv")
   }
 
   runtime {
     docker: docker
     cpu: 1
-    memory: "2 GiB"
+    memory: "4 GiB"
     disks: "local-disk 20 HDD"
     preemptible: 2
   }
