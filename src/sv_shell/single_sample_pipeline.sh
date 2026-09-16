@@ -795,7 +795,8 @@ jq -n \
       "ploidy_table": $ploidy,
       "depth_exclusion_intervals": $inputs[0].bin_exclude,
       "pesr_exclusion_intervals": $inputs[0].pesr_exclude_intervals,
-      "rd_table": $inputs[0].genotyping_rd_table,
+      "rd_depth_table": $inputs[0].genotyping_rd_depth_table,
+      "rd_pesr_table": $inputs[0].genotyping_rd_pesr_table,
       "pe_table": $inputs[0].genotyping_pe_table,
       "sr_table": $inputs[0].genotyping_sr_table
   }' > "${genotype_svs_inputs_json_filename}"
@@ -876,7 +877,7 @@ jq -n \
     "cohort_name": $inputs[0].batch,
     "rf_cutoff_files": [$inputs[0].cutoffs],
     "batches": $inputs[0].batch,
-    "genotyping_rd_tables": $inputs[0].genotyping_rd_table,
+    "genotyping_rd_tables": $inputs[0].genotyping_rd_depth_table,
     "median_coverage_files": $gbe[0].median_cov,
     "max_shard_size_resolve": $inputs[0].max_shard_size_resolve,
     "chr_x": $inputs[0].chr_x,

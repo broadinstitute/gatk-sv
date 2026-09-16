@@ -52,6 +52,7 @@ workflows:
       branches:
         - main
         - mw_fix_single_sample_blocking
+        - mw_genotype_scale
       tags:
         - /.*/
 
@@ -62,6 +63,7 @@ workflows:
       branches:
         - main
         - mw_fix_single_sample_blocking
+        - mw_genotype_scale
       tags:
         - /.*/
 
@@ -81,6 +83,7 @@ workflows:
       branches:
         - main
         - mw_fix_single_sample_blocking
+        - mw_genotype_scale
       tags:
         - /.*/
 
@@ -91,6 +94,7 @@ workflows:
       branches:
         - main
         - mw_fix_single_sample_blocking
+        - mw_genotype_scale
       tags:
         - /.*/
 
@@ -101,6 +105,7 @@ workflows:
       branches:
         - main
         - mw_fix_single_sample_blocking
+        - mw_genotype_scale
       tags:
         - /.*/
 
@@ -263,6 +268,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_genotype_scale
       tags:
         - /.*/
 
@@ -290,5 +296,6 @@ workflows:
     filters:
       branches:
         - main
+        - mw_genotype_scale
       tags:
         - /.*/

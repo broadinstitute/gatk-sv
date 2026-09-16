@@ -268,7 +268,8 @@ task RunSVShell {
     Float pesr_interval_overlap
     String? pesr_clustering_algorithm
     File cutoffs
-    File genotyping_rd_table
+    File genotyping_rd_depth_table
+    File genotyping_rd_pesr_table
     File genotyping_pe_table
     File genotyping_sr_table
     Float clean_vcf_min_sr_background_fail_batches
@@ -404,7 +405,8 @@ task RunSVShell {
       --argjson pesr_interval_overlap ~{pesr_interval_overlap} \
       --arg pesr_clustering_algorithm "~{select_first([pesr_clustering_algorithm, ""])}" \
       --arg cutoffs "~{cutoffs}" \
-      --arg genotyping_rd_table "~{genotyping_rd_table}" \
+      --arg genotyping_rd_depth_table "~{genotyping_rd_depth_table}" \
+      --arg genotyping_rd_pesr_table "~{genotyping_rd_pesr_table}" \
       --arg genotyping_pe_table "~{genotyping_pe_table}" \
       --arg genotyping_sr_table "~{genotyping_sr_table}" \
       --arg bin_exclude "~{bin_exclude}" \
