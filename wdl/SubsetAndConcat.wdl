@@ -55,9 +55,9 @@ workflow SubsetAndConcat {
     Array[File] subset_vcfs = SubsetVcf.outvcf
     Array[File] subset_vcf_indexes = SubsetVcf.outvcf_index
     File concat_vcf = ConcatVcfs.concat_vcf
-    File concat_vcf_idx = ConcatVcfs.concat_vcf_idx
+    File concat_vcf_index = ConcatVcfs.concat_vcf_idx
     File sites_only_concat_vcf = ConcatSitesOnlyVcfs.concat_vcf
-    File sites_only_concat_vcf_idx = ConcatSitesOnlyVcfs.concat_vcf_idx
+    File sites_only_concat_vcf_index = ConcatSitesOnlyVcfs.concat_vcf_idx
   }
 }
 
