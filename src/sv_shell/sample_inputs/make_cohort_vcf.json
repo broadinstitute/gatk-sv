@@ -12,7 +12,7 @@
   "cohort_name": "NA12878",
   "contig_list": "/inputs/contig.fai",
   "cytobands": "/inputs/cytobands_hg38.bed.gz",
-  "genotyping_rd_tables": "/inputs/all_samples.rd_geno_params.tsv",
+  "genotyping_rd_tables": "/inputs/all_samples.rd_depth_geno_params.tsv",
   "depth_vcfs": "/intermediates/MakeCohortVcf_inputs/NA12878.genotype_batch.depth.vcf.gz",
   "disc_files": [
     "/intermediates/MakeCohortVcf_inputs/NA12878.pe.txt.gz"
