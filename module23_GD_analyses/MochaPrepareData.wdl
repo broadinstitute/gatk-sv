@@ -17,7 +17,9 @@ version 1.0
 ##                   Jukes-Cantor divergence column
 ##   call_rate_table tab-delimited sample_id \t call_rate (used to drop
 ##                   samples below call_rate_threshold before computing
-##                   ExcHet/F_MISSING for the exclusion list)
+##                   ExcHet/F_MISSING for the exclusion list). Optional --
+##                   if omitted, call rate (1 - missing genotype fraction)
+##                   is computed directly from each sample's own VCF.
 ##   extra_xcl_vcf  optional additional sites to exclude, merged in
 
 workflow MochaPrepareData {
@@ -25,7 +27,7 @@ workflow MochaPrepareData {
     Array[File] vcfs
     File dup
     File dup_idx
-    File call_rate_table
+    File? call_rate_table
     File? extra_xcl_vcf
     String prefix = "mocha"
     Float call_rate_threshold = 0.97
@@ -33,6 +35,25 @@ workflow MochaPrepareData {
     Int merge_cpu = 4
     Int merge_mem_gb = 16
   }
+
+  if (!defined(call_rate_table)) {
+    scatter (vcf in vcfs) {
+      call ComputeCallRate {
+        input:
+          vcf = vcf,
+          docker = docker,
+      }
+    }
+
+    call BuildCallRateTable {
+      input:
+        sample_ids = ComputeCallRate.sample_id,
+        call_rates = ComputeCallRate.call_rate,
+        docker = docker,
+    }
+  }
+
+  File final_call_rate_table = select_first([call_rate_table, BuildCallRateTable.call_rate_tsv])
 
   call MergeVcfs {
     input:
@@ -57,7 +78,7 @@ workflow MochaPrepareData {
       unphased_bcf_idx = PrepareUnphased.unphased_bcf_idx,
       dup = dup,
       dup_idx = dup_idx,
-      call_rate_table = call_rate_table,
+      call_rate_table = final_call_rate_table,
       call_rate_threshold = call_rate_threshold,
       extra_xcl_vcf = extra_xcl_vcf,
       prefix = prefix,
@@ -110,6 +131,67 @@ task MergeVcfs {
     cpu: cpu
     memory: "~{mem_gb} GiB"
     disks: "local-disk ~{disk_gb} HDD"
+    preemptible: 2
+  }
+}
+
+task ComputeCallRate {
+  input {
+    File vcf
+    String docker
+  }
+
+  Int disk_gb = ceil(size(vcf, "GB") * 2) + 10
+
+  command <<<
+    set -euo pipefail
+
+    sample=$(bcftools query -l ~{vcf} | head -n1)
+    echo "$sample" > sample_id.txt
+
+    bcftools query -f '[%GT\n]' ~{vcf} | awk '
+      { total++; if ($1 ~ /[0-9]/) called++ }
+      END { printf "%.6f", (total > 0 ? called / total : 0) }
+    ' > call_rate.txt
+  >>>
+
+  output {
+    String sample_id = read_string("sample_id.txt")
+    Float call_rate = read_float("call_rate.txt")
+  }
+
+  runtime {
+    docker: docker
+    cpu: 1
+    memory: "2 GiB"
+    disks: "local-disk ~{disk_gb} HDD"
+    preemptible: 2
+  }
+}
+
+task BuildCallRateTable {
+  input {
+    Array[String] sample_ids
+    Array[Float] call_rates
+    String docker
+  }
+
+  command <<<
+    set -euo pipefail
+
+    paste <(printf '%s\n' ~{sep=" " sample_ids}) <(printf '%s\n' ~{sep=" " call_rates}) \
+      > call_rate_table.tsv
+  >>>
+
+  output {
+    File call_rate_tsv = "call_rate_table.tsv"
+  }
+
+  runtime {
+    docker: docker
+    cpu: 1
+    memory: "2 GiB"
+    disks: "local-disk 10 HDD"
     preemptible: 2
   }
 }
