@@ -269,3 +269,23 @@ workflows:
         - main
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: CallGenomicDisorderCNVs
+    primaryDescriptorPath: /wdl/CallGenomicDisorderCNVs.wdl
+    filters:
+      branches:
+        - main
+        - mw_gd_ploidy_table
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: IntegrateGDVcf
+    primaryDescriptorPath: /wdl/IntegrateGDVcf.wdl
+    filters:
+      branches:
+        - main
+        - mw_gd_ploidy_table
+      tags:
+        - /.*/
