@@ -862,7 +862,8 @@ workflow GATKSVPipelineSingleSample {
       infer_args = gd_infer_args,
       call_args = gd_call_args,
       eval_args = gd_eval_args,
-      plot_args = gd_plot_args
+      plot_args = gd_plot_args,
+      ploidy_table = CreatePloidyTableFromPed.out
   }
 
   # Integrate GD calls into the filtered VCF
