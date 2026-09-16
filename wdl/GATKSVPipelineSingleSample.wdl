@@ -390,7 +390,8 @@ workflow GATKSVPipelineSingleSample {
     ############################################################
 
     File cutoffs
-    File genotyping_rd_table
+    File genotyping_rd_depth_table
+    File genotyping_rd_pesr_table
     File genotyping_pe_table
     File genotyping_sr_table
 
@@ -1209,7 +1210,8 @@ workflow GATKSVPipelineSingleSample {
       depth_exclusion_intervals_index = bin_exclude + ".tbi",
       pesr_exclusion_intervals = pesr_exclude_intervals,
       pesr_exclusion_intervals_index = pesr_exclude_intervals + ".tbi",
-      rd_table = genotyping_rd_table,
+      rd_depth_table = genotyping_rd_depth_table,
+      rd_pesr_table = genotyping_rd_pesr_table,
       pe_table = genotyping_pe_table,
       sr_table = genotyping_sr_table,
       gatk_docker = gatk_docker
@@ -1266,7 +1268,7 @@ workflow GATKSVPipelineSingleSample {
 
       rf_cutoff_files=[cutoffs],
       batches=[batch],
-      genotyping_rd_tables=[genotyping_rd_table],
+      genotyping_rd_tables=[genotyping_rd_depth_table],
       median_coverage_files=[GatherBatchEvidence.median_cov],
 
       max_shard_size_resolve=max_shard_size_resolve,
