@@ -19,8 +19,12 @@ version 1.0
 ##     format string in ExtractSignal if your pipeline names them differently.
 ##   - The VCF ID field is assumed to contain the marker/probe name used by your PFB/manifest.
 ##   - `bcftools_docker` needs bcftools installed; `penncnv_docker` needs PennCNV (perl scripts
-##     + compiled C binaries) installed. genomicslab/penncnv (DockerHub) is a reasonable default
-##     for the PennCNV steps, but does not include bcftools, hence the separate docker inputs.
+##     + compiled C binaries) installed.
+##   - The HMM model file (hhall.hmm) ships bundled inside the PennCNV install itself, so it is
+##     NOT a workflow input -- DetectCNV references it directly at `hmm_path` inside the
+##     container. Verify this path matches your chosen penncnv_docker image by running:
+##       docker run --rm <penncnv_docker> find / -name "*.hmm" 2>/dev/null
+##     and update the `hmm_path` default in the DetectCNV task below if it differs.
 ##   - If you already have a cohort PFB (and optionally a GC model) rather than building one from
 ##     scratch, set `precomputed_pfb_file` (and `precomputed_gcmodel_file`) and the workflow will
 ##     use those instead of running CompilePFB / CalcGCModel.
@@ -31,8 +35,6 @@ workflow PennCNVPipeline {
     Array[File] vcf_indices
     Array[String] sample_ids
 
-    File hmm_file
-
     # Optional: skip PFB/GC-model generation by supplying your own.
     File? precomputed_pfb_file
     File? precomputed_gcmodel_file
@@ -42,7 +44,7 @@ workflow PennCNVPipeline {
     String length_filter = "100k"
 
     String bcftools_docker = "staphb/bcftools:1.19"
-    String penncnv_docker = "genomicslab/penncnv:latest"
+    String penncnv_docker = "genomicslab/penncnv:1.0.5"
   }
 
   scatter (idx in range(length(vcfs))) {
@@ -84,7 +86,6 @@ workflow PennCNVPipeline {
         signal_file  = ExtractSignal.signal_file[idx],
         pfb_file     = pfb_file_final,
         gcmodel_file = gcmodel_file_final,
-        hmm_file     = hmm_file,
         sample_id    = sample_ids[idx],
         docker       = penncnv_docker
     }
@@ -190,15 +191,18 @@ task DetectCNV {
     File signal_file
     File pfb_file
     File? gcmodel_file
-    File hmm_file
     String sample_id
     String docker
+
+    # HMM model ships bundled inside the PennCNV install -- not exposed as a workflow input.
+    # Verify/update this path for whichever penncnv_docker image you actually use.
+    String hmm_path = "/opt/PennCNV/lib/hhall.hmm"
   }
 
   command <<<
     set -euo pipefail
     detect_cnv.pl -test \
-      -hmm ~{hmm_file} \
+      -hmm ~{hmm_path} \
       -pfb ~{pfb_file} \
       ~{"-gcmodel " + gcmodel_file} \
       -log ~{sample_id}.penncnv.log \
