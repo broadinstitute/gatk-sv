@@ -9,16 +9,14 @@ workflow Vapor {
     File bam_or_cram_file
     File bam_or_cram_index
 
-    # One of the following must be specified. May be single- or multi-sample.
-    File? bed_file
-    File? vcf_file
+    Array[File] bed_files  # per contig bed files
 
     Boolean save_plots  # Control whether plots are final output
 
     File ref_fasta
     File ref_fai
     File ref_dict
-    File contigs
+    File contig_list
 
     String vapor_docker
     String sv_base_mini_docker
@@ -33,45 +31,24 @@ workflow Vapor {
     File? NONE_FILE_ # Create a null file - do not use this input
   }
 
-  # Convert vcf to bed if provided
-  if (defined(vcf_file) && !defined(bed_file)) {
+  Array[String] contigs = read_lines(contig_list)
 
-    call utils.SubsetVcfToSample {
-      input:
-        vcf=select_first([vcf_file]),
-        vcf_idx=select_first([vcf_file]) + ".tbi",
-        sample=sample_id,
-        outfile_name=sample_id,
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override = runtime_attr_subset_sample
-    }
-
-    call utils.VcfToBed {
-      input:
-        vcf_file = SubsetVcfToSample.vcf_subset,
-        args = "-i SVLEN",
-        variant_interpretation_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_vcf_to_bed
-    }
-
-  }
-
-  scatter (contig in read_lines(contigs)) {
+  scatter (i in range(length(contigs))) {
 
     call PreprocessBedForVapor {
       input:
-        prefix = "~{sample_id}.~{contig}.preprocess",
-        contig = contig,
+        prefix = "~{sample_id}.~{contigs[i]}.preprocess",
+        contig = contigs[i],
         sample_to_extract = sample_id,
-        bed_file = select_first([bed_file, VcfToBed.bed_output]),
+        bed_file = bed_files[i],
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_split_vcf
     }
 
     call RunVaporWithCram {
       input:
-        prefix = "~{sample_id}.~{contig}",
-        contig = contig,
+        prefix = "~{sample_id}.~{contigs[i]}",
+        contig = contigs[i],
         bam_or_cram_file = bam_or_cram_file,
         bam_or_cram_index = bam_or_cram_index,
         bed = PreprocessBedForVapor.contig_bed,
