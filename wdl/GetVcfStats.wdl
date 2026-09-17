@@ -11,7 +11,7 @@ workflow GetVcfStats {
     Boolean count_per_sample = true
 
     String sites_query_string = "%ID\t%INFO/SVTYPE\t%FILTER\n"
-    String bcftools_preprocessing_options  # = "-i 'FILTER=\"PASS\" || FILTER=\"MULTIALLELIC\"'" for preprocessing prior to per-sample SV counting
+    String? bcftools_preprocessing_options  # = "-i 'FILTER=\"PASS\" || FILTER=\"MULTIALLELIC\"'" for preprocessing prior to per-sample SV counting
 
     File contigs_list
 
