@@ -11,7 +11,7 @@
 
 
 <link rel="search" type="application/opensearchdescription+xml" title="GATK-SV" href="/gatk-sv/opensearch.xml"><link rel="stylesheet" href="/gatk-sv/assets/css/styles.4b5ba934.css">
-<script src="/gatk-sv/assets/js/runtime~main.34e13251.js" defer="defer"></script>
+<script src="/gatk-sv/assets/js/runtime~main.955b7181.js" defer="defer"></script>
 <script src="/gatk-sv/assets/js/main.ab0dc710.js" defer="defer"></script>
 </head>
 <body>
@@ -50,6 +50,8 @@ completes, consuming the merged BAF and read-depth matrices. See the <a href="ht
 <p>Path to assembly gap regions (BED).</p>
 <h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="gtf"><code>gtf</code><a href="#gtf" class="hash-link" aria-label="Direct link to gtf" title="Direct link to gtf" translate="no">​</a></h4>
 <p>Path to gene annotation file (GTF).</p>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="ploidy_table"><code>ploidy_table</code><a href="#ploidy_table" class="hash-link" aria-label="Direct link to ploidy_table" title="Direct link to ploidy_table" translate="no">​</a></h4>
+<p>Wide GATK-SV ploidy table (a <code>sample</code> column plus one column per contig), as produced by <code>CreatePloidyTableFromPed</code>. This must be the <strong>same</strong> table passed to IntegrateGDVcf: it is the authority on per-contig ploidy, and calls scored against any other ploidy cannot be encoded as GATK-SV genotypes. A sample/contig pair with ploidy 0 — the allosomes of a <code>sex=0</code> sample, for example — is not genotypable, so no calls are emitted for it.</p>
 <h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="optional-flank_exclusion_intervals"><span style="background-color:var(--highlight-optional-arg-background-color);border-radius:2px;color:var(--highlight-optional-arg-text-color);padding:0.2rem">Optional</span> <code>flank_exclusion_intervals</code><a href="#optional-flank_exclusion_intervals" class="hash-link" aria-label="Direct link to optional-flank_exclusion_intervals" title="Direct link to optional-flank_exclusion_intervals" translate="no">​</a></h4>
 <p>Array of BED files defining intervals to exclude from flank analysis. Typically set to the same file as <code>segdup_bed</code>.</p>
 <h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="optional-rebinned_interval_size"><span style="background-color:var(--highlight-optional-arg-background-color);border-radius:2px;color:var(--highlight-optional-arg-text-color);padding:0.2rem">Optional</span> <code>rebinned_interval_size</code><a href="#optional-rebinned_interval_size" class="hash-link" aria-label="Direct link to optional-rebinned_interval_size" title="Direct link to optional-rebinned_interval_size" translate="no">​</a></h4>
