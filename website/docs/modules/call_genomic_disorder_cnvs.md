@@ -74,6 +74,9 @@ Path to assembly gap regions (BED).
 #### `gtf`
 Path to gene annotation file (GTF).
 
+#### `ploidy_table`
+Wide GATK-SV ploidy table (a `sample` column plus one column per contig), as produced by `CreatePloidyTableFromPed`. This must be the **same** table passed to IntegrateGDVcf: it is the authority on per-contig ploidy, and calls scored against any other ploidy cannot be encoded as GATK-SV genotypes. A sample/contig pair with ploidy 0 — the allosomes of a `sex=0` sample, for example — is not genotypable, so no calls are emitted for it.
+
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `flank_exclusion_intervals`
 Array of BED files defining intervals to exclude from flank analysis. Typically set to the same file as `segdup_bed`.
 

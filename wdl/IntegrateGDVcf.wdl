@@ -129,11 +129,21 @@ task PrepareGDCallsTask {
     # --- Combine per-batch ploidy tables (wide format, one row per sample) ---
     FIRST=1
     cat /dev/null > combined_ploidy.tsv
+    PLOIDY_HEADER=""
     for pt in ~{sep=" " ploidy_tables}; do
+      HEADER=$(head -n 1 "$pt")
       if [ $FIRST -eq 1 ]; then
+        PLOIDY_HEADER="$HEADER"
         cat "$pt" >> combined_ploidy.tsv
         FIRST=0
       else
+        # Differing contig columns would append rows that do not line up with
+        # the header the GD tools read, so fail here rather than emitting a
+        # table whose trailing contigs silently read back as ploidy 2.
+        if [ "$HEADER" != "$PLOIDY_HEADER" ]; then
+          echo "ERROR: ploidy table $pt header does not match the first table" >&2
+          exit 1
+        fi
         awk 'NR>1' "$pt" >> combined_ploidy.tsv
       fi
     done
