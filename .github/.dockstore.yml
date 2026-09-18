@@ -307,3 +307,13 @@ workflows:
         - eph_gds_by_contig
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: SanitizeHeaderAcrossContigs
+    primaryDescriptorPath: /wdl/SanitizeHeader.wdl
+    filters:
+      branches:
+        - main
+        - eph_gds_by_contig
+      tags:
+        - /.*/
