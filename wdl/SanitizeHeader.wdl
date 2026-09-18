@@ -21,6 +21,7 @@ workflow SanitizeHeaderAcrossContigs {
         vcf = vcfs[i],
         vcf_index = vcfs[i] + ".tbi",
         prefix = "~{prefix}.~{contigs[i]}.sanitized",
+        drop_fields=drop_fields,
         sv_pipeline_docker=sv_pipeline_docker
     }
   }
