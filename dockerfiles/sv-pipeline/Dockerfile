@@ -59,10 +59,7 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
     pip install -e /opt/svtest && \
     pip install -e /opt/svqc && \
     pip install -e /opt/gatk-sv-gd && \
-<<<<<<< HEAD
     pip install 'setuptools>=77.0.3,<81' && \
-=======
->>>>>>> 6c7e7118 (GD review notebook)
     apt-get -qqy remove --purge $APT_TRANSIENT_PACKAGES && \
     apt-get -qqy autoremove --purge && \
     apt-get -qqy clean && \
