@@ -145,7 +145,7 @@ task RunVaporWithCram {
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 15,
-    disk_gb: 30,
+    disk_gb: 10 + ceil(size([bed, bam_or_cram_file], "GiB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
