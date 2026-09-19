@@ -9,6 +9,7 @@ RED='\033[0;31m'
 BOLD_RED="\033[1;31m"
 GREEN='\033[0;32m'
 MAGENTA='\033[0;35m'
+YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
@@ -18,6 +19,10 @@ log_info() {
 
 log_success() {
   echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${GREEN} $1 ${NC}" | tee -a "${single_sample_pipeline_stdout}"
+}
+
+log_warning() {
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${YELLOW} $1 ${NC}" | tee -a "${single_sample_pipeline_stdout}"
 }
 
 log_error() {
@@ -166,6 +171,8 @@ fi
 ref_std_dragen_vcf_tar=$(jq -r '.ref_std_dragen_vcf_tar // empty' "$input_json")
 dragen_sv_vcf=$(jq -r '.dragen_sv_vcf // empty' "$input_json")
 dragen_cnv_vcf=$(jq -r '.dragen_cnv_vcf // empty' "$input_json")
+# Optional; identifies the DRAGEN-SV VCF version so svtk can select a matching standardizer.
+dragen_version=$(jq -r '.dragen_version // empty' "$input_json")
 primary_contigs_fai=$(jq -r ".primary_contigs_fai" "$input_json")
 min_svsize=$(jq -r ".min_svsize" "$input_json")
 
@@ -199,6 +206,10 @@ if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
     exit 1
   fi
 
+  if [[ -z "${dragen_version}" ]]; then
+    log_warning "use_dragen is true but dragen_version is not set; svtk will fall back to its default DRAGEN-SV standardizer."
+  fi
+
   if [[ "${run_manta}" == true ]]; then
     log_info "run_manta is ${run_manta}; however, since use_dragen is set true, we override run_manta=false"
     run_manta=false
@@ -210,11 +221,17 @@ if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
   # However, we don't have an easy way of checking if DRAGEN files are standardized,
   # and if a user misses standardization, it leads to confusing errors that are
   # hard to debug. Hence, we standardize input here to ensure SVShell always has standardized VCFs.
+  dragen_version_args=()
+  if [[ -n "${dragen_version}" ]]; then
+    dragen_version_args=(--dragen-version "${dragen_version}")
+  fi
+
   svtk standardize \
     --sample-names ${sample_id} \
     --prefix "dragen_${sample_id}" \
     --contigs "${primary_contigs_fai}" \
     --min-size "${min_svsize}" \
+    "${dragen_version_args[@]}" \
     "${dragen_sv_vcf}" \
     tmp.vcf \
     "dragen"
@@ -336,6 +353,7 @@ jq -n \
   --arg samples "${sample_id}" \
   --arg dragen_sv_vcf "${dragen_sv_vcf}" \
   --arg dragen_cnv_vcf "${dragen_cnv_vcf}" \
+  --arg dragen_version "${dragen_version}" \
   --argjson ref_samples "${ref_samples_json_array}" \
   --argjson ref_pe_disc "${ref_pesr_disc_files_json_array}" \
   --argjson ref_pe_split "${ref_pesr_split_files_json_array}" \
@@ -400,6 +418,7 @@ jq -n \
       allosomal_contigs: $inputs[0].allosomal_contigs,
       gcnv_qs_cutoff: $inputs[0].gcnv_qs_cutoff,
       dragen_vcfs: (if $dragen_sv_vcf != "" then [$dragen_sv_vcf] else [] end),
+      dragen_version: $dragen_version,
       manta_vcfs: (if $gse_outputs[0].manta_vcf != "" then [$gse_outputs[0].manta_vcf] else [] end),
       scramble_vcfs: (if $gse_outputs[0].scramble_vcf != "" then [$gse_outputs[0].scramble_vcf] else [] end),
       wham_vcfs: (if $gse_outputs[0].wham_vcf != "" then [$gse_outputs[0].wham_vcf] else [] end),
