@@ -87,9 +87,11 @@ def main(argv):
         # and add samples, then open and return header
         header = VCFStandardizer.get_header_from_template(template, sample_names_list)
 
-    # Tag source in header
+    # Tag source in header. The FORMAT field written by the standardizer may
+    # differ from the CLI source name (e.g. depth-based callers use 'depth').
+    algorithm = VCFStandardizer.subclasses[args.source].ALGORITHM or args.source
     meta = '##FORMAT=<ID={0},Number=1,Type=Integer,Description="Called by {1}">'
-    meta = meta.format(args.source, args.source.capitalize())
+    meta = meta.format(algorithm, algorithm.capitalize())
     header.add_line(meta)
     header.add_line('##source={0}'.format(args.source))
     header.add_line('##INFO=<ID=END2,Number=1,Type=Integer,Description="Position of breakpoint on CHR2">')

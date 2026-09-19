@@ -32,6 +32,12 @@ def any_called(record):
 class VCFStandardizer:
     subclasses = {}
 
+    # FORMAT/ALGORITHMS field name written for this standardizer's calls.
+    # Defaults to the registered source name; override in subclasses whose
+    # ALGORITHMS value differs from the CLI source name (e.g. depth-based
+    # callers use 'depth' regardless of the specific tool name).
+    ALGORITHM = None
+
     def __init__(self, raw_vcf, std_vcf, sample_names, prefix=None, min_size=50,
                  include_reference_sites=False, call_null_sites=False):
         """
@@ -88,6 +94,8 @@ class VCFStandardizer:
     def register(cls, source):
         def decorator(subclass):
             cls.subclasses[source] = subclass
+            if subclass.ALGORITHM is None:
+                subclass.ALGORITHM = source
             return subclass
         return decorator
 
@@ -116,7 +124,7 @@ class VCFStandardizer:
                     continue
 
             # Filter on chr2 if a breakend
-            if '[' in record.alts[0] or ']' in record.alts[0]:
+            if record.alts and ('[' in record.alts[0] or ']' in record.alts[0]):
                 chr2, end = parse_bnd_pos(record.alts[0])
                 if chr2 not in self.std_vcf.header.contigs:
                     continue
