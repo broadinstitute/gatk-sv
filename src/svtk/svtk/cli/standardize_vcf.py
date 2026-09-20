@@ -38,6 +38,11 @@ def main(argv):
                         'samples are called 0/0 or ./.')
     parser.add_argument('--standardizer', help='Path to python file with '
                         'custom standardizer definition. (Not yet supported.)')
+    parser.add_argument('--dragen-version', default=None,
+                        help='DRAGEN-SV VCF version, e.g. "v3.7.6". Only '
+                        'used when source=dragen. If set to "v3.7.6", uses '
+                        'the standardizer for that DRAGEN version instead of '
+                        'the default.')
     parser.add_argument('--contigs', type=argparse.FileType('r'),
                         help='Reference fasta index (.fai). If provided, '
                         'contigs in index will be used in VCF header. '
@@ -87,9 +92,14 @@ def main(argv):
         # and add samples, then open and return header
         header = VCFStandardizer.get_header_from_template(template, sample_names_list)
 
+    # Select DRAGEN-version-specific standardizer if requested.
+    standardizer_key = args.source
+    if args.source == 'dragen' and args.dragen_version == 'v3.7.6':
+        standardizer_key = 'dragen_v3.7.6'
+
     # Tag source in header. The FORMAT field written by the standardizer may
     # differ from the CLI source name (e.g. depth-based callers use 'depth').
-    algorithm = VCFStandardizer.subclasses[args.source].ALGORITHM or args.source
+    algorithm = VCFStandardizer.subclasses[standardizer_key].ALGORITHM or args.source
     meta = '##FORMAT=<ID={0},Number=1,Type=Integer,Description="Called by {1}">'
     meta = meta.format(algorithm, algorithm.capitalize())
     header.add_line(meta)
@@ -99,7 +109,7 @@ def main(argv):
     fout = VariantFile(args.fout, mode='w', header=header)
 
     standardizer = VCFStandardizer.create(
-        args.source, vcf, fout, sample_names_list,
+        standardizer_key, vcf, fout, sample_names_list,
         args.prefix, args.min_size, args.include_reference_sites,
         args.call_null_sites)
 
