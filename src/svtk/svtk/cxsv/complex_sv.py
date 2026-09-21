@@ -82,6 +82,8 @@ class ComplexSV:
                         r.info.pop('CPX_INTERVALS')
         elif self.cluster_type == 'CANDIDATE_TRANSLOCATION':
             self.resolve_translocation()
+        elif self.cluster_type == 'CANDIDATE_SINGLE_TLOC':
+            self.resolve_single_tloc()
         elif self.cluster_type == 'CANDIDATE_INSERTION':
             self.resolve_insertion()
         elif self.cluster_type == 'CANDIDATE_DISDUP':
@@ -116,7 +118,7 @@ class ComplexSV:
             self.set_cluster_type()
 
             if self.cluster_type in 'CANDIDATE_INVERSION CANDIDATE_TRANSLOCATION '.split() + \
-                'CANDIDATE_INSERTION RESOLVED_INSERTION'.split() \
+                'CANDIDATE_INSERTION RESOLVED_INSERTION CANDIDATE_SINGLE_TLOC'.split() \
                     and len(self.records) > 0:
                 if self.cluster_type == 'CANDIDATE_INVERSION':
                     self.resolve_inversion(SR_only_cutoff=SR_only_cutoff)
@@ -139,6 +141,8 @@ class ComplexSV:
                                 r.info.pop('CPX_INTERVALS')
                 elif self.cluster_type == 'CANDIDATE_TRANSLOCATION':
                     self.resolve_translocation()
+                elif self.cluster_type == 'CANDIDATE_SINGLE_TLOC':
+                    self.resolve_single_tloc()
                 elif self.cluster_type == 'CANDIDATE_INSERTION':
                     self.resolve_insertion()
                 elif self.cluster_type == 'RESOLVED_INSERTION':
@@ -281,6 +285,82 @@ class ComplexSV:
         self.vcf_record.alts = ('<{0}>'.format(self.svtype), )
         self.vcf_record.info['SVTYPE'] = self.svtype
         self.vcf_record.info['CPX_TYPE'] = self.cpx_type
+
+    def _is_single_tloc_candidate(self):
+        """
+        Check if the cluster is a single interchromosomal manta/dragen BND
+        that encodes both arms.
+
+        Manta and DRAGEN report tlocs as mated BND pairs; standardization
+        retains a single record per pair, with the mate's coordinates in
+        CHR2/END2. Such a record is fully specified and can be resolved
+        to a translocation on its own.
+        """
+        if len(self.records) != 1 or len(self.tlocs) != 1:
+            return False
+        rec = self.tlocs[0]
+        if rec.info['SVTYPE'] != 'BND' or 'END2' not in rec.info.keys():
+            return False
+        if 'ALGORITHMS' not in rec.info.keys():
+            return False
+        algs = rec.info['ALGORITHMS']
+        if isinstance(algs, str):
+            algs = (algs, )
+        return set(algs) & set('manta dragen'.split())
+
+    def resolve_single_tloc(self):
+        """
+        Resolve a single interchromosomal record that encodes both arms
+        (chrom/pos and CHR2/END2) into a translocation.
+
+        Manta and DRAGEN report tlocs as mated BND pairs; standardization
+        retains a single record per pair. Such a record is fully specified
+        and can be resolved without its mate. The strand-based
+        PP/QQ vs PQ/QP split used by the two-mate path is not reliable
+        here, since STRANDS on a standardized interchromosomal record is
+        local-first and not reoriented when coordinates are sorted to the
+        smaller chromosome. The cytoband arms are used instead, which is
+        also how downstream tloc processing labels CTX arms.
+        """
+        rec = self.tlocs[0]
+
+        def _unresolved(cpx_type):
+            self.svtype = 'UNR'
+            self.cpx_type = cpx_type
+            for r in self.records:
+                r.info['UNRESOLVED_TYPE'] = cpx_type
+
+        # Only antiparallel reciprocal breakends are auto-resolved; '++' and
+        # '--' records remain unresolved as before
+        if rec.info['STRANDS'] not in ('+-', '-+'):
+            self.cluster_type = 'STRAND_MISMATCH_TLOC'
+            _unresolved(self.cluster_type)
+            return
+        # Mirror the paired path's CTX_UNR demotion for breakend pairs
+        # without paired-end support (in the manta tloc workflow all input
+        # records are stamped with EVIDENCE=PE by mantatloccheck.sh)
+        if 'EVIDENCE' not in rec.info.keys() or 'PE' not in rec.info['EVIDENCE']:
+            _unresolved('CTX_UNR')
+            return
+        try:
+            armA, armB = get_arms(rec, self.cytobands)
+        except StopIteration:
+            # A breakpoint contig/position with no cytoband entry
+            _unresolved('CTX_UNR')
+            return
+        self.cpx_type = 'CTX_PP/QQ' if armA == armB else 'CTX_PQ/QP'
+        self.svtype = 'CTX'
+
+        # Setting alts removes END, so do it up front
+        self.vcf_record.alts = ('<{0}>'.format(self.svtype), )
+        self.vcf_record.info['SVTYPE'] = self.svtype
+        self.vcf_record.info['CPX_TYPE'] = self.cpx_type
+        self.vcf_record.chrom = rec.chrom
+        self.vcf_record.pos = rec.pos
+        self.vcf_record.info['CHR2'] = rec.info['CHR2']
+        self.vcf_record.info['END2'] = rec.info['END2']
+        self.vcf_record.stop = rec.info['END2']
+        self.vcf_record.info['SVLEN'] = -1
 
     def resolve_translocation(self):
         # Force to ++/-- or +-/-+ ordering
@@ -618,6 +698,8 @@ class ComplexSV:
                 elif len(self.inversions) > 0:
                     self.cluster_type = 'INVERSION_SINGLE_ENDER_' + \
                         self.inversions[0].info['STRANDS']
+                elif self._is_single_tloc_candidate():
+                    self.cluster_type = 'CANDIDATE_SINGLE_TLOC'
                 else:
                     self.cluster_type = 'SINGLE_ENDER'
         elif sum(class_counts) >= 2:
