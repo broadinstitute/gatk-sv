@@ -1039,34 +1039,41 @@ workflow GATKSVPipelineSingleSample {
 
   File combined_ped_file = select_first([GatherBatchEvidence.combined_ped_file])
 
-  # Call GenomicDisorderCNVs with case + reference panel data
-  call CallGenomicDisorderCNVs.CallGenomicDisorderCNVs as GD {
-    input:
-      batch = batch,
-      baf_matrix = ConcatBafCase.merged_baf,
-      high_res_rd_matrix = GatherBatchEvidence.merged_bincov,
-      reference_dict = reference_dict,
-      reference_fasta = reference_fasta,
-      gd_table = gd_table,
-      segdup_bed = segdup_bed,
-      centromere_bed = centromere_bed,
-      acrocentric_arm_bed = acrocentric_arm_bed,
-      custom_mask_bed = custom_mask_bed,
-      hard_inclusion_bed = hard_inclusion_bed,
-      flank_exclusion_intervals = select_first([flank_exclusion_intervals, [segdup_bed]]),
-      par_bed = par_bed,
-      gaps_bed = gaps_bed,
-      gtf = gtf,
-      truth_table = truth_table,
-      rebinned_interval_size = rebinned_interval_size,
-      sv_pipeline_docker = sv_pipeline_docker,
-      gatk_docker = gatk_docker,
-      preprocess_args = gd_preprocess_args,
-      infer_args = gd_infer_args,
-      call_args = gd_call_args,
-      eval_args = gd_eval_args,
-      plot_args = gd_plot_args,
-      ploidy_table = CreatePloidyTableFromPed.out
+  # Call GenomicDisorderCNVs with case + reference panel data.
+  # Skipped in trio de novo mode: GD consumes the merged depth matrix (which
+  # would now include parent samples) while its BAF matrix only covers the
+  # case + reference panel, an unvalidated combination; GD genomic-disorder
+  # CNVs are consequently absent from trio-mode final_vcf (run single-sample
+  # mode for GD calls). See docs/execution/single.md.
+  if (!is_trio_denovo) {
+    call CallGenomicDisorderCNVs.CallGenomicDisorderCNVs as GD {
+      input:
+        batch = batch,
+        baf_matrix = ConcatBafCase.merged_baf,
+        high_res_rd_matrix = GatherBatchEvidence.merged_bincov,
+        reference_dict = reference_dict,
+        reference_fasta = reference_fasta,
+        gd_table = gd_table,
+        segdup_bed = segdup_bed,
+        centromere_bed = centromere_bed,
+        acrocentric_arm_bed = acrocentric_arm_bed,
+        custom_mask_bed = custom_mask_bed,
+        hard_inclusion_bed = hard_inclusion_bed,
+        flank_exclusion_intervals = select_first([flank_exclusion_intervals, [segdup_bed]]),
+        par_bed = par_bed,
+        gaps_bed = gaps_bed,
+        gtf = gtf,
+        truth_table = truth_table,
+        rebinned_interval_size = rebinned_interval_size,
+        sv_pipeline_docker = sv_pipeline_docker,
+        gatk_docker = gatk_docker,
+        preprocess_args = gd_preprocess_args,
+        infer_args = gd_infer_args,
+        call_args = gd_call_args,
+        eval_args = gd_eval_args,
+        plot_args = gd_plot_args,
+        ploidy_table = CreatePloidyTableFromPed.out
+    }
   }
 
   # Integrate GD calls into the filtered VCF
@@ -1076,7 +1083,7 @@ workflow GATKSVPipelineSingleSample {
         vcf = FilterSample.out,
         vcf_index = FilterSample.out + ".tbi",
         prefix = sample_id,
-        gd_output_tarballs = [GD.gd_output_tarball],
+        gd_output_tarballs = select_all([GD.gd_output_tarball]),
         ploidy_tables = [CreatePloidyTableFromPed.out],
         gd_table = gd_table,
         par_bed = par_bed,
@@ -1790,7 +1797,6 @@ workflow GATKSVPipelineSingleSample {
     call moi.AnnotateModeOfInheritance as AnnotateModeOfInheritance {
       input:
         vcf = select_first([MergeStripyVcf.out, UpdateBreakendRepresentationAndRemoveFilters.out]),
-        vcf_idx = select_first([MergeStripyVcf.out_index, UpdateBreakendRepresentationAndRemoveFilters.out_idx]),
         prefix = sample_id + ".moi",
         case_sample = sample_id,
         mother_sample = mother_sample_id,
@@ -1815,7 +1821,8 @@ workflow GATKSVPipelineSingleSample {
       final_vcf = UpdateBreakendRepresentationAndRemoveFilters.out,
       genotyped_pesr_vcf = ConvertCNVsWithoutDepthSupportToBNDs.out_vcf,
       genotyped_depth_vcf = FilterDepth.out,
-      non_genotyped_unique_depth_calls_vcf = select_first([GetUniqueNonGenotypedDepthCalls.out]),
+      non_genotyped_unique_depth_calls_vcf = GetUniqueNonGenotypedDepthCalls.out,
+      extra_samples = if is_trio_denovo then select_all([mother_sample_id, father_sample_id]) else [],
       contig_list = primary_contigs_list,
       linux_docker = linux_docker,
       sv_pipeline_docker = sv_pipeline_docker
@@ -1856,8 +1863,8 @@ workflow GATKSVPipelineSingleSample {
 
     # These files contain any depth based calls made in the case sample that did not pass genotyping
     # in the case sample and do not match a depth-based call from the reference panel.
-    File? non_genotyped_unique_depth_calls = select_first([GetUniqueNonGenotypedDepthCalls.out])
-    File? non_genotyped_unique_depth_calls_idx = select_first([GetUniqueNonGenotypedDepthCalls.out_idx])
+    File non_genotyped_unique_depth_calls = GetUniqueNonGenotypedDepthCalls.out
+    File non_genotyped_unique_depth_calls_idx = GetUniqueNonGenotypedDepthCalls.out_idx
 
     # Mode of inheritance summary (trio de novo mode only)
     File? moi_summary = select_first([AnnotateModeOfInheritance.moi_summary])
@@ -1867,7 +1874,7 @@ workflow GATKSVPipelineSingleSample {
     File working_ped = select_first([GatherBatchEvidence.combined_ped_file])
 
     # Genomic Disorder CNV output (tarball containing all GD results)
-    File gd_output_tarball = GD.gd_output_tarball
+    File? gd_output_tarball = GD.gd_output_tarball  # null in trio de novo mode (GD skipped)
   }
 }
 
@@ -1991,6 +1998,27 @@ task ValidateTrioInputs {
       err "duplicate sample ids across case + mother + father: $(paste -sd, ~{samples_list})"
     fi
 
+    # Enabled callers must be runnable: either the caller docker or a
+    # precomputed case VCF is required (previously enforced implicitly by a
+    # select_first crash on the caller VCF array declaration).
+    if [ "~{use_manta}" = "true" ] && [ "~{defined(manta_docker)}" != "true" ] && [ "~{defined(case_manta_vcf)}" != "true" ]; then
+      err "use_manta requires manta_docker or case_manta_vcf"
+    fi
+    if [ "~{use_melt}" = "true" ] && [ "~{defined(melt_docker)}" != "true" ] && [ "~{defined(case_melt_vcf)}" != "true" ]; then
+      err "use_melt requires melt_docker or case_melt_vcf"
+    fi
+    if [ "~{use_scramble}" = "true" ] && [ "~{defined(scramble_docker)}" != "true" ] && [ "~{defined(case_scramble_vcf)}" != "true" ]; then
+      err "use_scramble requires scramble_docker or case_scramble_vcf"
+    fi
+    if [ "~{use_wham}" = "true" ] && [ "~{defined(wham_docker)}" != "true" ] && [ "~{defined(case_wham_vcf)}" != "true" ]; then
+      err "use_wham requires wham_docker or case_wham_vcf"
+    fi
+    # Scramble realigns an existing SV call set: it needs Dragen or Manta calls
+    # for the sample (GatherSampleEvidence: select_first([dragen_vcf, Manta.vcf, manta_vcf_input])).
+    if [ "~{use_scramble}" = "true" ] && [ "~{defined(dragen_vcf)}" != "true" ] && [ "~{defined(case_manta_vcf)}" != "true" ] && ! ( [ "~{use_manta}" = "true" ] && [ "~{defined(manta_docker)}" = "true" ] ); then
+      err "use_scramble requires input SV calls from Dragen (dragen_vcf) or Manta (manta_docker with use_manta, or case_manta_vcf)"
+    fi
+
     if [ "~{is_trio_denovo}" = "true" ]; then
       # Precomputed case caller calls would leave the provided parents without
       # those callers and break the per-caller sample<->VCF array alignment
@@ -2015,6 +2043,11 @@ task ValidateTrioInputs {
       # dockers are required in trio mode.
       if [ "~{use_manta}" = "true" ] && [ "~{defined(manta_docker)}" != "true" ]; then
         err "trio de novo mode requires manta_docker when use_manta is true"
+      fi
+      # Parents have no precomputed calls and no Dragen support in trio mode,
+      # so Scramble's required input call set can only come from Manta.
+      if [ "~{use_scramble}" = "true" ] && [ "~{use_manta}" != "true" ]; then
+        err "trio de novo mode requires use_manta when use_scramble is true (parent Scramble calls need a Manta input VCF)"
       fi
       if [ "~{use_melt}" = "true" ] && [ "~{defined(melt_docker)}" != "true" ]; then
         err "trio de novo mode requires melt_docker when use_melt is true"

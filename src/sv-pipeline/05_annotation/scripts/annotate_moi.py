@@ -129,11 +129,8 @@ def classify(case, mother, father, mother_provided, father_provided):
 
 
 def index_tabix(path):
-    """Index a bgzipped VCF, compatible with old and new pysam APIs."""
-    try:
-        pysam.tabix.index(path)  # pysam <= 0.19
-    except AttributeError:
-        pysam.tabix_index(path, preset="vcf")  # pysam >= 0.20
+    """Index a bgzipped VCF (same call used elsewhere in the pysam 0.15 image)."""
+    pysam.tabix_index(path, preset="vcf", force=True)
 
 
 def main():

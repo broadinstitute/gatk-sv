@@ -17,7 +17,6 @@ import "Structs.wdl"
 task AnnotateModeOfInheritance {
   input {
     File vcf          # bgzipped VCF
-    File vcf_idx      # tabix index at <vcf>.tbi
     String prefix     # output prefix; <prefix>.vcf.gz / <prefix>.vcf.gz.tbi / <prefix>.moi_summary.tsv
     String case_sample
     String? mother_sample
