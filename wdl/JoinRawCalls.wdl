@@ -41,6 +41,8 @@ workflow JoinRawCalls {
     String sv_pipeline_docker
 
     Float? java_mem_fraction
+    # Extra arguments appended to the SVCluster command line (e.g. "--low-mem --max-records-in-ram 500")
+    String? svcluster_additional_args
 
     RuntimeAttr? runtime_attr_create_ploidy
     RuntimeAttr? runtime_override_concat_input_vcfs
@@ -124,6 +126,7 @@ workflow JoinRawCalls {
         reference_fasta_fai=reference_fasta_fai,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
+        additional_args=svcluster_additional_args,
         variant_prefix="~{prefix}_~{contig}_",
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_svcluster
