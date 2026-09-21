@@ -11,8 +11,8 @@ workflow ShardedAnnotateVcf {
         String prefix
 
         File? lps_tsv
-        File sample_pop_assignments
-        File ped_file
+        File? sample_pop_assignments
+        File? ped_file
         File par_bed
         Array[String]? strip_info_fields
 
@@ -117,8 +117,8 @@ task StripInfoFields {
 task ComputeAFs {
     input {
         File vcf
-        File sample_pop_assignments
-        File ped_file
+        File? sample_pop_assignments
+        File? ped_file
         File par_bed
         File? lps_tsv
         String prefix

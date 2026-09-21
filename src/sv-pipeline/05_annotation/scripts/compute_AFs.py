@@ -176,7 +176,7 @@ def gather_allele_freqs(record, samples, males_set, females_set, parbt, pop_dict
             record.info['AN_grpmax'] = int(record.info['AN_{0}'.format(grp_label)])
             record.info['nhomalt_grpmax'] = int(record.info['nhomalt_{0}'.format(grp_label)])
 
-        return record
+    return record
 
 
 def calc_allele_freq(record, samples, prefix=None, hemi=False, lps_dict=None):
@@ -355,14 +355,15 @@ def main():
     )
     parser.add_argument('vcf', help='Input vcf. Also accepts "stdin" and "-".')
     parser.add_argument('fout', help='Output vcf. Also accepts "stdout" and "-".')
-    parser.add_argument('-p', '--popfile', help='Two-column file of samples & population assignments')
-    parser.add_argument('-f', '--famfile', help='Input .fam file (used for sex-specific AFs).')
+    parser.add_argument('-p', '--popfile', help='Two-column file of samples & population assignments. '
+                                                'If omitted, population-specific AFs are not computed.')
+    parser.add_argument('-f', '--famfile', help='Input .fam file (used for sex-specific AFs). '
+                                                'If omitted, sex-specific AFs are not computed.')
     parser.add_argument('-l', '--lpsfile', help='TSV file of LPS values per sample (for multiallelic sites).')
     parser.add_argument('--par', help='BED file of pseudoautosomal regions (used for sex-specific AFs).')
     args = parser.parse_args()
 
     # Define constants
-    sexes = ['XY', 'XX']
     sex_chroms = ['chrX', 'chrY']
 
     # Open input VCF
@@ -374,24 +375,33 @@ def main():
     # Get list of all samples in vcf
     samples_list = list(vcf.header.samples)
 
-    # Get lists of males and females
-    parbt = pbt.BedTool('', from_string=True)
-    famfile = [line.rstrip('\n') for line in open(args.famfile)]
-    males_set = set([line.split('\t')[1]
-                for line in famfile if line.split('\t')[4] == '1'])
-    males_set = set(s for s in samples_list if s in males_set)
-    females_set = set([line.split('\t')[1]
-                for line in famfile if line.split('\t')[4] == '2'])
-    females_set = set(s for s in samples_list if s in females_set)
+    # Get lists of males and females, if famfile provided
+    if args.famfile is not None:
+        sexes = ['XY', 'XX']
+        famfile = [line.rstrip('\n') for line in open(args.famfile)]
+        males_set = set([line.split('\t')[1]
+                    for line in famfile if line.split('\t')[4] == '1'])
+        males_set = set(s for s in samples_list if s in males_set)
+        females_set = set([line.split('\t')[1]
+                    for line in famfile if line.split('\t')[4] == '2'])
+        females_set = set(s for s in samples_list if s in females_set)
+    else:
+        sexes = []
+        males_set = set()
+        females_set = set()
 
-    # Get dictionary of populations
-    popfile = [line.rstrip('\n') for line in open(args.popfile)]
-    pop_dict = create_pop_dict(popfile)
-    pops = list(set(pop_dict.values()))
-    pops = sorted([p for p in pops if p != "."])
-    for label in pops:
-        if label not in ALLOWED_POPS:
-            raise ValueError(f"Invalid label: '{label}'.")
+    # Get dictionary of populations, if popfile provided
+    if args.popfile is not None:
+        popfile = [line.rstrip('\n') for line in open(args.popfile)]
+        pop_dict = create_pop_dict(popfile)
+        pops = list(set(pop_dict.values()))
+        pops = sorted([p for p in pops if p != "."])
+        for label in pops:
+            if label not in ALLOWED_POPS:
+                raise ValueError(f"Invalid label: '{label}'.")
+    else:
+        pop_dict = {}
+        pops = []
 
     # Get LPS values
     lps_dict = None
@@ -442,6 +452,8 @@ def main():
     ]
     if args.lpsfile is not None:
         INFO_ADD.append('##INFO=<ID=LPS_allele,Number=.,Type=Integer,Description="Longest polymer sequence for each allele index (multiallelic sites only).">')
+    if len(parbt) > 0:
+        INFO_ADD.append('##INFO=<ID=par,Number=0,Type=Flag,Description="Variant overlaps pseudoautosomal region.">')
 
     # Define sex fields
     for sex in sexes:
@@ -461,15 +473,14 @@ def main():
             INFO_ADD.append('##INFO=<ID=nhemialt_%s,Number=1,Type=Integer,Description="Number of %s samples with hemizygous alternate genotypes (biallelic sites only).">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=freq_hemiref_%s,Number=1,Type=Float,Description="%s hemizygous reference genotype frequency (biallelic sites only).">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=freq_hemialt_%s,Number=1,Type=Float,Description="%s hemizygous alternate genotype frequency (biallelic sites only).">' % (sex, sex))
-            if len(parbt) > 0:
-                INFO_ADD.append('##INFO=<ID=par,Number=0,Type=Flag,Description="Variant overlaps pseudoautosomal region.">')
-    
+
     # Define pop fields
-    INFO_ADD.append('##INFO=<ID=AN_grpmax,Number=1,Type=Integer,Description="Allele number for the grpmax population (biallelic sites only.">')
-    INFO_ADD.append('##INFO=<ID=AC_grpmax,Number=1,Type=Integer,Description="Allele count for the grpmax population (biallelic sites only.">')
-    INFO_ADD.append('##INFO=<ID=AF_grpmax,Number=1,Type=Float,Description="Maximum allele frequency across any population (biallelic sites only.">')
-    INFO_ADD.append('##INFO=<ID=grpmax,Number=1,Type=String,Description="Population label with maximum allele frequency (biallelic sites only).">')
-    INFO_ADD.append('##INFO=<ID=nhomalt_grpmax,Number=1,Type=Integer,Description="Number of homozygous-alternate genotypes in the grpmax population (biallelic sites only).">')
+    if len(pops) > 0:
+        INFO_ADD.append('##INFO=<ID=AN_grpmax,Number=1,Type=Integer,Description="Allele number for the grpmax population (biallelic sites only.">')
+        INFO_ADD.append('##INFO=<ID=AC_grpmax,Number=1,Type=Integer,Description="Allele count for the grpmax population (biallelic sites only.">')
+        INFO_ADD.append('##INFO=<ID=AF_grpmax,Number=1,Type=Float,Description="Maximum allele frequency across any population (biallelic sites only.">')
+        INFO_ADD.append('##INFO=<ID=grpmax,Number=1,Type=String,Description="Population label with maximum allele frequency (biallelic sites only).">')
+        INFO_ADD.append('##INFO=<ID=nhomalt_grpmax,Number=1,Type=Integer,Description="Number of homozygous-alternate genotypes in the grpmax population (biallelic sites only).">')
     for pop in pops:
         INFO_ADD.append('##INFO=<ID=AN_%s,Number=1,Type=Integer,Description="Total number of %s alleles genotyped.">' % (pop, pop))
         INFO_ADD.append('##INFO=<ID=AC_%s,Number=A,Type=Integer,Description="Number of non-reference %s alleles observed.">' % (pop, pop))

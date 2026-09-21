@@ -11,8 +11,8 @@ workflow AnnotateAF {
         Array[String] contigs
         String prefix
 
-        File sample_pop_assignments
-        File ped_file
+        File? sample_pop_assignments
+        File? ped_file
         File par_bed
         File? lps_tsv
         Array[String]? strip_info_fields
