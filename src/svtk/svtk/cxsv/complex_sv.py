@@ -14,7 +14,8 @@ from .cpx_tloc import classify_simple_translocation, classify_insertion
 
 
 class ComplexSV:
-    def __init__(self, records, cytobands, mei_bed, SR_only_cutoff):
+    def __init__(self, records, cytobands, mei_bed, SR_only_cutoff,
+                 resolve_single_tlocs=False):
         """
         Parameters
         ----------
@@ -23,11 +24,18 @@ class ComplexSV:
         cytobands : pysam.TabixFile
             Cytoband bed file (to classify interchromosomal)
         mei_bed : pybedtools.BedTool
+        resolve_single_tlocs : bool
+            If True, a single interchromosomal manta/dragen BND that encodes
+            both arms via CHR2/END2 is auto-resolved to CTX instead of being
+            left as an unresolved SINGLE_ENDER. Opt-in: defaults to False so
+            that svtk resolve consumers other than the manta tloc workflow
+            are unaffected.
         """
 
         self.records = records
         self.cytobands = cytobands
         self.mei_bed = mei_bed
+        self.resolve_single_tlocs = resolve_single_tlocs
         #  self.rdtest = rdtest
 
         self.organize_records()
@@ -338,9 +346,11 @@ class ComplexSV:
             for r in self.records:
                 r.info['UNRESOLVED_TYPE'] = self.cpx_type
 
-        # Mirror the paired path's CTX_UNR demotion for breakend pairs
-        # without paired-end support (in the manta tloc workflow all input
-        # records are stamped with EVIDENCE=PE by mantatloccheck.sh)
+        # Demote without paired-end support, mirroring the paired path's
+        # CTX_UNR demotion. The manta tloc workflow (mantatloccheck.sh)
+        # stamps every record it feeds to svtk resolve with EVIDENCE=PE,
+        # so within that workflow this gate only demotes records whose
+        # EVIDENCE was rewritten to something else upstream.
         if 'EVIDENCE' not in rec.info.keys() or 'PE' not in rec.info['EVIDENCE']:
             _unresolved('CTX_UNR')
             return
@@ -355,7 +365,7 @@ class ComplexSV:
             return
         try:
             armA, armB = get_arms(rec, self.cytobands)
-        except (StopIteration, ValueError):
+        except (StopIteration, ValueError, IndexError):
             # A breakpoint contig/position with no cytoband entry, or a
             # contig/region the tabix index cannot address
             _unresolved('CTX_UNR')
@@ -715,7 +725,7 @@ class ComplexSV:
                 elif len(self.inversions) > 0:
                     self.cluster_type = 'INVERSION_SINGLE_ENDER_' + \
                         self.inversions[0].info['STRANDS']
-                elif self._is_single_tloc_candidate():
+                elif self.resolve_single_tlocs and self._is_single_tloc_candidate():
                     self.cluster_type = 'CANDIDATE_SINGLE_TLOC'
                 else:
                     self.cluster_type = 'SINGLE_ENDER'
