@@ -98,11 +98,11 @@ inputs beyond their defaults.
 |`File?`|`stripy_vcf_output`|Single-sample STRipy VCF, present when STRipy is run by the workflow.|
 |`File`|`ploidy_matrix`|Matrix of contig ploidy estimates computed by GATK gCNV.|
 |`File`|`ploidy_plots`|Plots of contig ploidy generated from `ploidy_matrix`|
-|`File?`|`non_genotyped_unique_depth_calls`|This VCF file contains any depth based calls made in the case sample that did not pass genotyping checks and do not match a depth-based call from the reference panel. If very high sensitivity is desired, examine this file for additional large CNV calls. Single-case mode only; not present in trio de novo mode.|
-|`File?`|`non_genotyped_unique_depth_calls_idx`|Index file for `non_genotyped_unique_depth_calls`|
+|`File`|`non_genotyped_unique_depth_calls`|This VCF file contains any depth based calls made in the case sample that did not pass genotyping checks and do not match a depth-based call from the reference panel. If very high sensitivity is desired, examine this file for additional large CNV calls. Present in both single-case and trio de novo modes (case-only diagnostic).|
+|`File`|`non_genotyped_unique_depth_calls_idx`|Index file for `non_genotyped_unique_depth_calls`|
 |`File`|`pre_cleanup_vcf`|VCF output in a representation used internally in the pipeline. This file is less compliant with the VCF spec and is intended for debugging purposes.|
 |`File`|`pre_cleanup_vcf_idx`|Index file for `pre_cleanup_vcf`|
-|`File`|`gd_output_tarball`|Tarball containing Genomic Disorder CNV calling results (VCFs, plots, metrics). Contains results for all samples in the combined matrix; case-specific results can be extracted by filtering on the case sample name.|
+|`File?`|`gd_output_tarball`|Tarball containing Genomic Disorder CNV calling results (VCFs, plots, metrics). Contains results for all samples in the combined matrix; case-specific results can be extracted by filtering on the case sample name. Always null in trio de novo mode (GD is skipped there; see "Trio mode limitations").|
 
 #### Example time and cost run on sample data
 
@@ -175,12 +175,24 @@ These constraints are validated up front (the run fails immediately with a descr
   no longer align with samples.
 - Every enabled PESR caller requires its `*_docker` in trio mode (the parents are called
   from CRAM, unlike case-only runs where precomputed VCFs can substitute).
+- `use_manta` must be `true` when `use_scramble` is `true` in trio mode: parents have no
+  precomputed calls and no DRAGEN support, and Scramble realigns an existing Manta/Dragen
+  call set.
+- Genomic Disorder CNV calling (GD) is skipped in trio mode: `gd_output_tarball` is null
+  and `final_vcf` contains no GD-derived calls. GD consumes the merged depth matrix (now
+  including parents) while its BAF input covers only the case + reference panel, an
+  unvalidated combination. Run the usual single-sample mode when GD calls are needed.
 
-:::note
-STRipy (repeat-expansion) calls are made for the case only; parents have no genotype at
-STRipy records, so those records get `MOI_CONFIDENCE=UNCONFIRMED` (and are `DE_NOVO` only
-if the case genotype is non-reference).
-:::
+Other trio-mode effects to be aware of:
+
+- Metrics/QC variant counts (`metrics_file`, `qc_file`) and VCF allele annotations
+  (`AF`/`AN`/`AC`) are computed over all VCF samples and therefore include the parents;
+  counts run higher than the case-only thresholds in `qc_definitions` were tuned for, and
+  `AF` no longer represents the reference panel alone.
+- STRipy (repeat-expansion) calls are made for the case only. The merge step clears GT for
+  every sample on STRipy-added records, so those records are always
+  `MOI=UNASSESSABLE` / `MOI_CONFIDENCE=UNCONFIRMED`; a de novo repeat expansion cannot be
+  inferred from `final_vcf` MOI fields (inspect `stripy_vcf_output` directly).
 
 ### Mode of inheritance (MOI)
 
@@ -193,7 +205,9 @@ the case genotype with the provided parent genotypes:
   - `INHERITED_FROM_FATHER` — the case is non-reference and the father (but not the mother) is non-reference.
   - `INHERITED_FROM_BOTH` — the case is non-reference and both provided parents are non-reference.
   - `PARENT_ONLY` — the case is reference and at least one provided parent is non-reference.
-  - `UNASSESSABLE` — the case genotype is missing/unknown at that variant.
+  - `UNASSESSABLE` — the case genotype is missing/unknown at that variant, or no assayed
+    sample carries the allele (e.g. records retained for the `MULTIALLELIC` flag, or calls
+    present only in the reference panel).
 - `MOI_CONFIDENCE` — `CONFIRMED` when the determination does not depend on a parent that was
   not assayed (or whose genotype was missing), and `UNCONFIRMED` when a parent was not assayed
   or its genotype was missing (e.g. a `DE_NOVO` call in a half-trio, where the absent parent

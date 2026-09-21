@@ -629,26 +629,32 @@ task AddTrioSamplesToPed {
     cp ~{write_lines(sample_ids)} trio_samples.txt
 
     # Every trio member must have a ploidy sex assignment and must not already
-    # be present in the reference panel ped
-    while read -r sample; do
-      RECORD=$(gunzip -c ploidy_est/sample_sex_assignments.txt.gz | { grep -w "^$sample" || true; })
-      if [ -z "$RECORD" ]; then
+    # be present in the reference panel ped. Use exact tab-field matching
+    # (grep-style matching would false-positive on names that are prefixes of
+    # other sample names, e.g. "PROBAND" vs "PROBAND-M").
+    while read -r sample || [ -n "$sample" ]; do
+      SEX=$(gunzip -c ploidy_est/sample_sex_assignments.txt.gz | awk -F'\t' -v s="$sample" '$1 == s {print $2; exit}')
+      if [ -z "$SEX" ]; then
         >&2 echo "Error: Sample $sample not found in ploidy calls"
         exit 1
       fi
-      PED_SEX=$(echo "$RECORD" | cut -f2)
-      if [ "$PED_SEX" != "1" ] && [ "$PED_SEX" != "2" ]; then
-        >&2 echo "Error: ploidy-derived sex code '$PED_SEX' for sample $sample is not 1 (male) or 2 (female); cannot write a valid PED line"
+      if [ "$SEX" != "1" ] && [ "$SEX" != "2" ]; then
+        >&2 echo "Error: ploidy-derived sex code '$SEX' for sample $sample is not 1 (male) or 2 (female); cannot write a valid PED line"
         exit 1
       fi
       awk -v sample="$sample" '$2 == sample { print "ERROR: A sample with the name " sample " is already present in the ped file." > "/dev/stderr"; exit 1; }' < ~{ref_ped_file}
     done < trio_samples.txt
 
-    # Emit reference panel lines, then one PED line per trio member
+    # Emit reference panel lines, then one PED line per trio member. Parents
+    # carry "0" for their own parent columns (a sample cannot be its own parent).
     cat ~{ref_ped_file} > trio_combined_ped_file.ped
-    while read -r sample; do
-      SEX=$(gunzip -c ploidy_est/sample_sex_assignments.txt.gz | awk -v s="$sample" '$1 == s {print $2; exit}')
-      printf 'trio_denovo\t%s\t%s\t%s\t%s\t1\n' "$sample" "$FATHER_ID" "$MOTHER_ID" "$SEX" >> trio_combined_ped_file.ped
+    while read -r sample || [ -n "$sample" ]; do
+      SEX=$(gunzip -c ploidy_est/sample_sex_assignments.txt.gz | awk -F'\t' -v s="$sample" '$1 == s {print $2; exit}')
+      PED_FATHER="$FATHER_ID"
+      if [ "$sample" = "$FATHER_ID" ]; then PED_FATHER="0"; fi
+      PED_MOTHER="$MOTHER_ID"
+      if [ "$sample" = "$MOTHER_ID" ]; then PED_MOTHER="0"; fi
+      printf 'trio_denovo\t%s\t%s\t%s\t%s\t1\n' "$sample" "$PED_FATHER" "$PED_MOTHER" "$SEX" >> trio_combined_ped_file.ped
     done < trio_samples.txt
   >>>
 

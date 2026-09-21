@@ -112,7 +112,7 @@ task FilterVcfBySamplesGenotypeAndAddEvidenceAnnotation {
     # Build a bcftools -i condition that is true if any listed sample is alt:
     # GT[0]="alt" | GT[1]="alt" | ...
     condition=""
-    while read -r sid; do
+    while read -r sid || [ -n "$sid" ]; do
       idx=`gzip -cd ~{vcf_gz} | grep '^#CHROM' | cut -f10- | tr "\t" "\n" | awk -v s="$sid" '$1 == s {found=1; print NR - 1; exit} END { if (found != 1) { print "sample " s " not found" > "/dev/stderr"; exit 1; }}'`
       if [ -z "$condition" ]; then
         condition="GT[$idx]=\"alt\""
@@ -339,7 +339,7 @@ task FilterVcfForTrioSamplesGenotype {
     # Build a condition that is true if any listed sample is alt:
     # GT[0]="alt" | GT[1]="alt" | ...
     condition=""
-    while read -r sid; do
+    while read -r sid || [ -n "$sid" ]; do
       idx=`gzip -cd ~{vcf_gz} | grep '^#CHROM' | cut -f10- | tr "\t" "\n" | awk -v s="$sid" '$1 == s {found=1; print NR - 1; exit} END { if (found != 1) { print "sample " s " not found" > "/dev/stderr"; exit 1; }}'`
       if [ -z "$condition" ]; then
         condition="GT[$idx]=\"alt\""
