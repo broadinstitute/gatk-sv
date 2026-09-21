@@ -45,10 +45,14 @@ ARG BUILD_DEPS="git make cmake g++ gcc gfortran"
 ARG GATK_SV_GD_REPO
 ARG GATK_SV_GD_COMMIT
 ARG DEBIAN_FRONTEND=noninteractive
-# The setuptools cap below keeps pkg_resources importable. torch/triton require
-# setuptools>=77.0.3, which now resolves to 84.x — the release that dropped
-# pkg_resources — while the svtk/svtest/svqc console scripts are still the old
-# __import__('pkg_resources').require(...) style and fail without it.
+# The setuptools cap below keeps the vendored pkg_resources module importable for
+# anything in this image that still uses it. torch requires setuptools>=77.0.3, which
+# now resolves to 84.x, and pkg_resources was dropped from setuptools 82. Our own
+# packages no longer need it: svtk imported pkg_resources (svtk/__init__.py plus four
+# resource_filename() call sites), which made every svtk invocation die as soon as
+# setuptools floated; svtest and svqc never imported it. That is now pinned down by the
+# svtk import check below, so the cap is defence for third-party code, not a load-bearing
+# dependency of the pipeline.
 RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED_PACKAGES) && \
     apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends $BUILD_DEPS $(fix_spaces.sh $APT_REQUIRED_PACKAGES) && \
@@ -74,6 +78,13 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
 RUN svtk -h
 RUN svtest -h
 RUN svqc -h
+# svtk is imported by every svtk subcommand, so a single `import pkg_resources` in it
+# kills the whole tool once setuptools>=82 (which torch forces) drops that module.
+# Fail the build here rather than in the field, whatever setuptools is installed.
+RUN python -c "import sys; sys.modules['pkg_resources'] = None; import svtk.cli; print('svtk imports with pkg_resources unavailable')"
+# svtk resolves its own VCF template paths; a path that stops resolving is invisible to
+# -h and would only surface inside svtk standardize / rdtest2vcf / vcfcluster.
+RUN python -c "import os, sys, svtk; missing = [p for n in ('GRCh37_template.vcf', 'no_contigs_template.vcf', 'vcfcluster_template.vcf') for p in [svtk.resource_path('data', n)] if not os.path.exists(p)]; sys.exit('svtk package data missing: %s' % missing) if missing else print('svtk package data present')"
 RUN gatk-sv-gd -h
 RUN plink2 || true
 # the command should be installed, but has no help mode, and outputs an error if not used on data

@@ -14,7 +14,7 @@ maximum individual clustering distance across the libraries being analyzed.
 
 import heapq
 import re
-import pkg_resources
+from svtk import resource_path
 from svtk.svfile import SVFile, SVRecordCluster, SVRecord
 from svtk.genomeslink import GenomeSLINK
 from svtk.utils import samples_overlap
@@ -274,8 +274,7 @@ class VCFCluster(GenomeSLINK):
             return header
 
         # Read stock template
-        template = pkg_resources.resource_filename(
-            'svtk', 'data/vcfcluster_template.vcf')
+        template = resource_path('data', 'vcfcluster_template.vcf')
 
         # pysam can no longer open up a VCF header with FORMAT but no samples, so copy template to temporary file
         # and add samples, then open and return header

@@ -8,11 +8,11 @@
 
 import os
 import tempfile
-import pkg_resources
 import subprocess as sp
 from collections import namedtuple
 import numpy as np
 import pandas as pd
+from svtk import resource_path
 from .utils import get_called_samples
 
 
@@ -167,7 +167,10 @@ def call_rdtest(variants, bincov_file, medianfile, famfile, whitelist,
 
     bed = _make_rdtest_bed(variants)
 
-    RdTest = pkg_resources.resource_filename('svtk', 'RdTest/RdTest.R')
+    # NOTE: svtk does not ship RdTest/RdTest.R (the R script is installed to
+    # /opt/RdTest in the sv-pipeline image), so this path does not exist inside the
+    # package. Preserved as-is: this function has no callers in the pipeline.
+    RdTest = resource_path('RdTest', 'RdTest.R')
 
     if quiet:
         FNULL = open(os.devnull, 'w')
