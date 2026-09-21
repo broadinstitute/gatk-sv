@@ -136,7 +136,8 @@ def clusters_cleanup(clusters):
 
 
 def resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, resolved_record_namer, unresolved_record_namer,
-                       min_rescan_support=4, pe_blacklist=None, quiet=False, SR_only_cutoff=1000):
+                       min_rescan_support=4, pe_blacklist=None, quiet=False, SR_only_cutoff=1000,
+                       resolve_single_tlocs=False):
     """
     Resolve complex SV from CNV intervals and BCA breakpoints.
     Yields all resolved events, simple or complex, in sorted order.
@@ -195,13 +196,15 @@ def resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, resolved_record_name
         # if cxsv overlap pulled in unrelated insertions, keep them separate
         if all(r.info['SVTYPE'] == 'INS' for r in cluster):
             for record in cluster:
-                cpx = ComplexSV([record], cytobands, mei_bed, SR_only_cutoff)
+                cpx = ComplexSV([record], cytobands, mei_bed, SR_only_cutoff,
+                                resolve_single_tlocs=resolve_single_tlocs)
                 cpx_record_ids = cpx_record_ids.union(cpx.record_ids)
                 cpx.vcf_record.id = resolved_record_namer.get_next_id(cpx.vcf_record)
                 cpx_records.append(cpx.vcf_record)
             outcome = 'treated as separate unrelated insertions'
         else:
-            cpx = ComplexSV(cluster, cytobands, mei_bed, SR_only_cutoff)
+            cpx = ComplexSV(cluster, cytobands, mei_bed, SR_only_cutoff,
+                            resolve_single_tlocs=resolve_single_tlocs)
             cpx_record_ids = cpx_record_ids.union(cpx.record_ids)
             if cpx.svtype == 'UNR':
                 for record in cpx.records:
@@ -294,7 +297,7 @@ def cluster_cleanup(clusters_v2):
 def resolve_complex_sv_v2(resolve_INV, cytobands, disc_pairs,
                           mei_bed, resolved_record_namer, unresolved_record_namer,
                           min_rescan_support=4, pe_blacklist=None, quiet=False,
-                          SR_only_cutoff=1000):
+                          SR_only_cutoff=1000, resolve_single_tlocs=False):
     linked_INV = cluster_INV(resolve_INV)
     clusters_v2 = link_cpx_V2(linked_INV, cpx_dist=2000)
     clusters_v2 = cluster_cleanup(clusters_v2)
@@ -327,14 +330,16 @@ def resolve_complex_sv_v2(resolve_INV, cytobands, disc_pairs,
         # if cxsv overlap pulled in unrelated insertions, keep them separate
         if all(r.info['SVTYPE'] == 'INS' for r in cluster):
             for record in cluster:
-                cpx = ComplexSV([record], cytobands, mei_bed, SR_only_cutoff)
+                cpx = ComplexSV([record], cytobands, mei_bed, SR_only_cutoff,
+                                resolve_single_tlocs=resolve_single_tlocs)
                 cpx_record_ids_v2.update(cpx.record_ids)
                 cpx.vcf_record.id = resolved_record_namer.get_next_id(cpx.vcf_record)
                 cpx_records_v2.append(cpx.vcf_record)
                 # resolved_idx += 1
             outcome = 'treated as separate unrelated insertions'
         else:
-            cpx = ComplexSV(cluster, cytobands, mei_bed, SR_only_cutoff)
+            cpx = ComplexSV(cluster, cytobands, mei_bed, SR_only_cutoff,
+                            resolve_single_tlocs=resolve_single_tlocs)
             cpx_record_ids_v2.update(cpx.record_ids)
             if cpx.svtype == 'UNR':
                 for record in cpx.records:
@@ -390,6 +395,12 @@ def main(argv):
     parser.add_argument('--cytobands', help='Cytoband file. Required to '
                         'correctly classify interchromosomal events.',
                         required=True)
+    parser.add_argument('--resolve-single-tlocs', default=False, action='store_true',
+                        help='Auto-resolve single interchromosomal manta/dragen BND '
+                        'records that encode both breakpoints via CHR2/END2 into CTX '
+                        'translocations, instead of leaving them unresolved as '
+                        'SINGLE_ENDER. Used by the manta tloc prelim resolution '
+                        'workflow (mantatloccheck.sh). [Default: off]')
     parser.add_argument('--min-rescan-pe-support', type=int, default=4,
                         help='Minumum discordant pairs required during '
                         'single-ender rescan.')
@@ -457,7 +468,8 @@ def main(argv):
     unresolved_record_namer = RecordNamer(prefix=args.prefix + '_UNRES', num_digits=args.variant_id_digits)
 
     for record in resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, resolved_record_namer,
-                                     unresolved_record_namer, args.min_rescan_pe_support, blacklist, args.quiet):
+                                     unresolved_record_namer, args.min_rescan_pe_support, blacklist, args.quiet,
+                                     resolve_single_tlocs=args.resolve_single_tlocs):
         # Move members to existing variant IDs unless variant is complex
         if record.info['SVTYPE'] != 'CPX' and args.prefix not in record.id:
             # Don't alter MEMBERS if the prefix of record.id is already in MEMBERS
@@ -483,7 +495,8 @@ def main(argv):
     # RLC: As of Sept 19, 2018, only considering inversion single-enders in second-pass
     # due to too many errors in second-pass linking and variant reporting
     cpx_records_v2 = resolve_complex_sv_v2(resolve_INV, cytobands, disc_pairs, mei_bed, resolved_record_namer,
-                                           unresolved_record_namer, args.min_rescan_pe_support, blacklist, args.quiet)
+                                           unresolved_record_namer, args.min_rescan_pe_support, blacklist, args.quiet,
+                                           resolve_single_tlocs=args.resolve_single_tlocs)
 
     for record in cpx_records_v2:
         # Move members to existing variant IDs unless variant is complex
