@@ -305,8 +305,10 @@ class ComplexSV:
             return False
         algs = rec.info['ALGORITHMS']
         if isinstance(algs, str):
-            algs = (algs, )
-        return set(algs) & set('manta dragen'.split())
+            # pysam returns a bare string for a single-value Number=. field;
+            # also tolerate a comma-joined string
+            algs = algs.split(',')
+        return bool(set(algs) & set('manta dragen'.split()))
 
     def resolve_single_tloc(self):
         """
@@ -315,50 +317,65 @@ class ComplexSV:
 
         Manta and DRAGEN report tlocs as mated BND pairs; standardization
         retains a single record per pair. Such a record is fully specified
-        and can be resolved without its mate. The strand-based
-        PP/QQ vs PQ/QP split used by the two-mate path is not reliable
-        here, since STRANDS on a standardized interchromosomal record is
-        local-first and not reoriented when coordinates are sorted to the
-        smaller chromosome. The cytoband arms are used instead, which is
-        also how downstream tloc processing labels CTX arms.
+        and can be resolved without its mate.
+
+        The CPX_TYPE label is taken from the cytoband arms of the two
+        breakpoints (same arms -> CTX_PP/QQ, different arms -> CTX_PQ/QP),
+        which is also how downstream tloc processing labels CTX arms. The
+        record's strand class provides the expected label: antiparallel
+        ('+-'/'-+') predicts same-arm (PP/QQ) joins, congruent ('++'/'--')
+        predicts different-arm (PQ/QP) joins, and the class is invariant to
+        which reciprocal mate the standardizer kept and to the local-first
+        coordinate swap. Arms contradicting the strand class are demoted to
+        *_MISMATCH, mirroring the strand/arm agreement requirement that
+        resolve_translocation imposes on two-mate clusters.
         """
         rec = self.tlocs[0]
 
-        def _unresolved(cpx_type):
+        def _unresolved(cpx_type, mismatch=False):
             self.svtype = 'UNR'
-            self.cpx_type = cpx_type
+            self.cpx_type = cpx_type + '_MISMATCH' if mismatch else cpx_type
             for r in self.records:
-                r.info['UNRESOLVED_TYPE'] = cpx_type
+                r.info['UNRESOLVED_TYPE'] = self.cpx_type
 
-        # Only antiparallel reciprocal breakends are auto-resolved; '++' and
-        # '--' records remain unresolved as before
-        if rec.info['STRANDS'] not in ('+-', '-+'):
-            self.cluster_type = 'STRAND_MISMATCH_TLOC'
-            _unresolved(self.cluster_type)
-            return
         # Mirror the paired path's CTX_UNR demotion for breakend pairs
         # without paired-end support (in the manta tloc workflow all input
         # records are stamped with EVIDENCE=PE by mantatloccheck.sh)
         if 'EVIDENCE' not in rec.info.keys() or 'PE' not in rec.info['EVIDENCE']:
             _unresolved('CTX_UNR')
             return
+        strands = rec.info['STRANDS'] if 'STRANDS' in rec.info.keys() else None
+        if strands in ('+-', '-+'):
+            expected_cpx_type = 'CTX_PP/QQ'
+        elif strands in ('++', '--'):
+            expected_cpx_type = 'CTX_PQ/QP'
+        else:
+            self.cluster_type = 'STRAND_MISMATCH_TLOC'
+            _unresolved(self.cluster_type)
+            return
         try:
             armA, armB = get_arms(rec, self.cytobands)
-        except StopIteration:
-            # A breakpoint contig/position with no cytoband entry
+        except (StopIteration, ValueError):
+            # A breakpoint contig/position with no cytoband entry, or a
+            # contig/region the tabix index cannot address
             _unresolved('CTX_UNR')
             return
-        self.cpx_type = 'CTX_PP/QQ' if armA == armB else 'CTX_PQ/QP'
+        cpx_type = 'CTX_PP/QQ' if armA == armB else 'CTX_PQ/QP'
+        if cpx_type != expected_cpx_type:
+            # Arms contradict the strand class; the paired path refuses to
+            # resolve such a record as well
+            _unresolved(cpx_type, mismatch=True)
+            return
+        self.cpx_type = cpx_type
         self.svtype = 'CTX'
 
-        # Setting alts removes END, so do it up front
+        # Rebuild from the surviving record: after an SR-only shrink in the
+        # second pass it may differ from the record vcf_record was copied
+        # from originally. Setting alts removes END, so do it up front.
+        self.vcf_record = rec.copy()
         self.vcf_record.alts = ('<{0}>'.format(self.svtype), )
         self.vcf_record.info['SVTYPE'] = self.svtype
         self.vcf_record.info['CPX_TYPE'] = self.cpx_type
-        self.vcf_record.chrom = rec.chrom
-        self.vcf_record.pos = rec.pos
-        self.vcf_record.info['CHR2'] = rec.info['CHR2']
-        self.vcf_record.info['END2'] = rec.info['END2']
         self.vcf_record.stop = rec.info['END2']
         self.vcf_record.info['SVLEN'] = -1
 
