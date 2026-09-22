@@ -77,7 +77,6 @@ workflow DropSamplesAndRefresh {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  # Supply unique inputs (genetic ancestries, external AF files, GTF, GATK docker, etc) through subworkflow inputs
   call anno.AnnotateVcf {
     input:
       vcfs=ApplyNCRAndRefArtifactFilters.filtered_vcfs,
