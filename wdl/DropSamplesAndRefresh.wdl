@@ -36,6 +36,7 @@ workflow DropSamplesAndRefresh {
     Array[String] ref_populations
 
     # MainVcfQc
+    Boolean do_qc
     File primary_contigs_fai
     Int qc_sv_per_shard
 
@@ -150,46 +151,48 @@ workflow DropSamplesAndRefresh {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call stats.GetVcfStats {
-    input:
-      vcfs=SanitizeHeader.vcf_header_sanitized,
-      prefix=prefix,
-      contigs_list=primary_contigs_list,
-      sv_base_mini_docker=sv_base_mini_docker,
-      sv_pipeline_docker=sv_pipeline_docker
-  }
+  if (do_qc) {
+    call stats.GetVcfStats {
+      input:
+        vcfs=SanitizeHeader.vcf_header_sanitized,
+        prefix=prefix,
+        contigs_list=primary_contigs_list,
+        sv_base_mini_docker=sv_base_mini_docker,
+        sv_pipeline_docker=sv_pipeline_docker
+    }
 
-  # Supply unique inputs (ie primary contigs fai) directly to subworkflow
-  call qc.MainVcfQc as SiteQc {
-    input:
-      vcfs=SanitizeHeader.vcf_header_sanitized,
-      bcftools_preprocessing_options="-i 'FILTER=\"PASS\" || FILTER=\"MULTIALLELIC\"'",
-      prefix=prefix,
-      do_per_sample_qc=false,
-      samples_per_shard=600,
-      random_seed=9,
-      sv_per_shard=qc_sv_per_shard,
-      primary_contigs_fai=primary_contigs_fai,
-      sv_per_shard=qc_sv_per_shard,
-      sv_base_mini_docker=sv_base_mini_docker,
-      sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_qc_docker=sv_pipeline_docker
-  }
+    # Supply unique inputs (ie primary contigs fai) directly to subworkflow
+    call qc.MainVcfQc as SiteQc {
+      input:
+        vcfs=SanitizeHeader.vcf_header_sanitized,
+        bcftools_preprocessing_options="-i 'FILTER=\"PASS\" || FILTER=\"MULTIALLELIC\"'",
+        prefix=prefix,
+        do_per_sample_qc=false,
+        samples_per_shard=600,
+        random_seed=9,
+        sv_per_shard=qc_sv_per_shard,
+        primary_contigs_fai=primary_contigs_fai,
+        sv_per_shard=qc_sv_per_shard,
+        sv_base_mini_docker=sv_base_mini_docker,
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_qc_docker=sv_pipeline_docker
+    }
 
-  call qc.MainVcfQc as UnrelatedQc {
-    input:
-      vcfs=SanitizeUnrelated.vcf_header_sanitized,
-      bcftools_preprocessing_options="-i 'FILTER=\"PASS\" || FILTER=\"MULTIALLELIC\"'",
-      prefix="~{prefix}.unrelated",
-      do_per_sample_qc=false,
-      samples_per_shard=600,
-      random_seed=9,
-      sv_per_shard=qc_sv_per_shard,
-      primary_contigs_fai=primary_contigs_fai,
-      sv_per_shard=qc_sv_per_shard,
-      sv_base_mini_docker=sv_base_mini_docker,
-      sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_qc_docker=sv_pipeline_docker
+    call qc.MainVcfQc as UnrelatedQc {
+      input:
+        vcfs=SanitizeUnrelated.vcf_header_sanitized,
+        bcftools_preprocessing_options="-i 'FILTER=\"PASS\" || FILTER=\"MULTIALLELIC\"'",
+        prefix="~{prefix}.unrelated",
+        do_per_sample_qc=false,
+        samples_per_shard=600,
+        random_seed=9,
+        sv_per_shard=qc_sv_per_shard,
+        primary_contigs_fai=primary_contigs_fai,
+        sv_per_shard=qc_sv_per_shard,
+        sv_base_mini_docker=sv_base_mini_docker,
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_qc_docker=sv_pipeline_docker
+    }
   }
 
 
@@ -207,15 +210,15 @@ workflow DropSamplesAndRefresh {
     File sites_only_unrelated_vcf_index = ConcatUnrelated.concat_vcf_idx
 
     File? per_sample_sv_counts = GetVcfStats.sv_counts
-    File sites_info = GetVcfStats.sites_info
+    File? sites_info = GetVcfStats.sites_info
 
-    File sites_qc_tarball = SiteQc.sv_vcf_qc_output
-    File bed_file = SiteQc.vcf2bed_output
-    File duplicate_records = SiteQc.duplicate_records_output
-    File duplicate_counts_output = SiteQc.duplicate_counts_output
+    File? sites_qc_tarball = SiteQc.sv_vcf_qc_output
+    File? bed_file = SiteQc.vcf2bed_output
+    File? duplicate_records = SiteQc.duplicate_records_output
+    File? duplicate_counts_output = SiteQc.duplicate_counts_output
 
-    File unrelated_sites_qc_tarball = UnrelatedQc.sv_vcf_qc_output
-    File unrelated_bed_file = UnrelatedQc.vcf2bed_output
+    File? unrelated_sites_qc_tarball = UnrelatedQc.sv_vcf_qc_output
+    File? unrelated_bed_file = UnrelatedQc.vcf2bed_output
 
     Array[File] vid_rename_maps = ApplyNCRAndRefArtifactFilters.id_rename_maps
   }
