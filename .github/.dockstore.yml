@@ -33,6 +33,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_manta_tloc_autoresolve
       tags:
         - /.*/
 
