@@ -11,7 +11,7 @@ import "TasksMakeCohortVcf.wdl" as tasks
 workflow DropSamplesAndRefresh {
   input {
     Array[File] vcfs
-    File keep_samples
+    File? keep_samples
     File related_samples
     String prefix
 
@@ -45,18 +45,20 @@ workflow DropSamplesAndRefresh {
     String gatk_docker
   }
 
-  call subset.SubsetVcfBySamples as DropSamples {
-    input:
-      vcfs=vcfs,
-      list_of_samples=keep_samples,
-      remove_samples=false,
-      remove_private_sites=true,
-      sv_base_mini_docker=sv_base_mini_docker
+  if (defined(keep_samples)) {
+    call subset.SubsetVcfBySamples as DropSamples {
+      input:
+        vcfs=vcfs,
+        list_of_samples=select_first([keep_samples]),
+        remove_samples=false,
+        remove_private_sites=true,
+        sv_base_mini_docker=sv_base_mini_docker
+    }
   }
 
   call ncr.ApplyNCRAndRefArtifactFilters {
     input:
-      vcfs=DropSamples.vcfs_subset,
+      vcfs=select_first([DropSamples.vcfs_subset, vcfs]),
       apply_filters_script=apply_filters_script,
       primary_contigs_list=primary_contigs_list,
       cohort_id=prefix,
@@ -93,7 +95,7 @@ workflow DropSamplesAndRefresh {
       sv_pipeline_docker=sv_pipeline_docker
   }
 
-  call anno.AnnotateVcf as AnnotateUnrelated{
+  call anno.AnnotateVcf as AnnotateUnrelated {
     input:
       vcfs=SubsetToUnrelated.vcfs_subset,
       contig_list=primary_contigs_list,
