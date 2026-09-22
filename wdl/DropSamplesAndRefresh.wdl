@@ -31,9 +31,9 @@ workflow DropSamplesAndRefresh {
     File ped_file
     File par_bed
     File sample_pop_assignments
-    File ref_bed
-    File ref_prefix
-    Array[String] ref_populations
+    File? ref_bed
+    File? ref_prefix
+    Array[String]? ref_populations
 
     # MainVcfQc
     Boolean do_qc
