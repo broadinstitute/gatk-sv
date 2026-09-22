@@ -162,7 +162,6 @@ workflow DropSamplesAndRefresh {
         sv_pipeline_docker=sv_pipeline_docker
     }
 
-    # Supply unique inputs (ie primary contigs fai) directly to subworkflow
     call qc.MainVcfQc as SiteQc {
       input:
         vcfs=select_first([SanitizeHeader.vcf_header_sanitized, AnnotateVcf.annotated_vcfs]),
