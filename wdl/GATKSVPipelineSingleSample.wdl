@@ -634,7 +634,6 @@ workflow GATKSVPipelineSingleSample {
   Boolean is_trio_denovo = run_mother_evidence || run_father_evidence
 
   Array[String] trio_samples = select_all([sample_id, mother_sample_id, father_sample_id])
-  File raw_trio_samples_list = write_lines(trio_samples)
   Array[String] trio_extra_ped_samples = if is_trio_denovo then trio_samples else []
 
   # Fail fast on invalid trio de novo input combinations (parent id/CRAM must
@@ -645,7 +644,7 @@ workflow GATKSVPipelineSingleSample {
   # always executed.
   call ValidateTrioInputs {
     input:
-      samples_list = raw_trio_samples_list,
+      trio_samples = trio_samples,
       case_sample_id = sample_id,
       mother_sample_id = mother_sample_id,
       mother_cram = mother_cram,
@@ -1951,9 +1950,20 @@ task ConcatBaf {
 # Emits the input sample list unchanged only if all checks pass; every
 # downstream consumer of trio_samples_list depends on this file, so the task
 # is always executed.
+#
+# The sample list is materialized inside this task on purpose. A workflow-scope
+# write_lines() cannot be evaluated on a PAPIv2 backend, which has no local
+# filesystem to write the temp file to:
+#
+#   Failed to evaluate 'raw_trio_samples_list': Evaluating write_lines(...)
+#   failed: Could not build the path "write_lines_<hash>.tmp". It may refer to
+#   a filesystem not supported by this instance of Cromwell. Supported
+#   filesystems are: DRS, Google Cloud Storage, HTTP.
+#
+# Local Cromwell (and miniwdl) accept it, so the failure only appears on Terra.
 task ValidateTrioInputs {
   input {
-    File samples_list          # write_lines(trio_samples), case first
+    Array[String] trio_samples # case first, then mother, father
     String case_sample_id
     String? mother_sample_id
     File? mother_cram
@@ -1978,6 +1988,11 @@ task ValidateTrioInputs {
 
   command <<<
     set -euo pipefail
+
+    # Materialize the trio sample list here (case first); see the task comment
+    # for why this must not be a workflow-scope write_lines().
+    cat ~{write_lines(trio_samples)} > trio_samples.list
+
     errors=0
     err() { echo "ERROR: $1" >&2; errors=1; }
 
@@ -1994,8 +2009,8 @@ task ValidateTrioInputs {
     fi
 
     # Sample ids must be unique across case + mother + father
-    if ! awk 'seen[$0]++ { exit 1 }' ~{samples_list}; then
-      err "duplicate sample ids across case + mother + father: $(paste -sd, ~{samples_list})"
+    if ! awk 'seen[$0]++ { exit 1 }' trio_samples.list; then
+      err "duplicate sample ids across case + mother + father: $(paste -sd, trio_samples.list)"
     fi
 
     # Enabled callers must be runnable: either the caller docker or a
@@ -2061,7 +2076,7 @@ task ValidateTrioInputs {
     fi
 
     if [ "$errors" -ne 0 ]; then exit 1; fi
-    cp ~{samples_list} validated_samples.list
+    cp trio_samples.list validated_samples.list
   >>>
 
   output {
