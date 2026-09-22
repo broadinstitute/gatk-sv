@@ -263,6 +263,7 @@ workflows:
     filters:
       branches:
         - main
+        - trio_denovo_single_sample
       tags:
         - /.*/
 
