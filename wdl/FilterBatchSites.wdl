@@ -178,9 +178,8 @@ import pysam
 # First pass: parse true END values for BND/CTX from the raw VCF text.
 # pysam silently clamps END to POS when END < POS, which happens for
 # interchromosomal BNDs where END is on a different contig.
-###################
-# TODO : the END field correction is to support legacy VCFs temporarily; this should be removed before running on non-legacy files
-###################
+# TODO: the END field correction is to support legacy VCFs temporarily; this should be removed
+#       before running on non-legacy files
 bnd_end_dict = dict()
 with gzip.open("filtered.vcf.gz", 'rt') as f:
     for line in f:
@@ -204,11 +203,12 @@ with pysam.VariantFile("filtered.vcf.gz", 'r') as vcf_in:
     with pysam.VariantFile("filtered.updated_bnds.vcf.gz", 'w', header=header) as vcf_out:
         for record in vcf_in:
             record.translate(header)
-            if record.info.get('SVTYPE') == 'BND' and 'END2' not in record.info:
-                record.info['END2'] = bnd_end_dict.get(record.id, record.stop)
-                record.stop = record.pos
-            if record.info.get('SVTYPE') == 'BND' and 'CHR2' not in record.info:
-                record.info['CHR2'] = record.chrom
+            if record.info.get('SVTYPE') == 'BND':
+                if 'END2' not in record.info:
+                    record.info['END2'] = bnd_end_dict.get(record.id, record.stop)
+                    record.stop = record.pos
+                if 'CHR2' not in record.info:
+                    record.info['CHR2'] = record.chrom
             vcf_out.write(record)
 CODE
 

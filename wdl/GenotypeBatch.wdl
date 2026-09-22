@@ -313,8 +313,8 @@ task TrainSVGenotyping {
 
     for required_var in PEQ SRQ PESR_SEP DEPTH_SEP; do
       if [[ -z "${!required_var}" ]]; then
-      echo "Failed to extract required cutoff ${required_var} from ~{rf_cutoffs}" >&2
-      exit 1
+        echo "Failed to extract required cutoff ${required_var} from ~{rf_cutoffs}" >&2
+        exit 1
       fi
     done
 
@@ -413,6 +413,7 @@ task ValidateSRCutoffs {
     # leaves ${REJECTED} empty and would otherwise wave an unverifiable cutoff grid through to
     # genotyping -- the exact silent-zero-cutoff failure this gate exists to catch.
     MISSING=""
+    DEGENERATE=""
     for KEY in rare_selection_status common_selection_status; do
       if ! awk -F'\t' -v k="${KEY}" '$1 == k { found = 1 } END { exit !found }' ~{sr_cutoff_diagnostics}; then
         MISSING="${MISSING} ${KEY}"
@@ -424,21 +425,24 @@ task ValidateSRCutoffs {
       echo "The grid cannot be verified (empty or partial diagnostics), so the cutoffs may be the" >&2
       echo "0.0 fallback, which makes the frequency predicate a tautology and disables SR" >&2
       echo "background filtering. Inspect the sr_cutoff_diagnostics output and the training log." >&2
-      if ~{if fail_on_degenerate_sr_cutoffs then "true" else "false"}; then
-        exit 1
-      fi
-      echo "fail_on_degenerate_sr_cutoffs is false; continuing with unfiltered SR genotypes." >&2
+      DEGENERATE=1
     elif [ -n "${REJECTED}" ]; then
       echo "SR frequency cutoff selection was rejected: ${REJECTED}" >&2
       awk -F'\t' '$1 ~ /_selection_rejection_reason$/ {print $2}' ~{sr_cutoff_diagnostics} >&2
       echo "Cutoffs fell back to 0.0, which makes the frequency predicate a tautology and" >&2
       echo "disables SR background filtering. Inspect the sr_cutoff_diagnostics output." >&2
+      DEGENERATE=1
+    else
+      echo "SR frequency cutoff selection OK for both frequency bins."
+    fi
+
+    # One gate for both failure modes: an unverifiable grid and a rejected grid mean the same thing
+    # to the genotyping scatter, so the decision belongs in one place.
+    if [ -n "${DEGENERATE}" ]; then
       if ~{if fail_on_degenerate_sr_cutoffs then "true" else "false"}; then
         exit 1
       fi
       echo "fail_on_degenerate_sr_cutoffs is false; continuing with unfiltered SR genotypes." >&2
-    else
-      echo "SR frequency cutoff selection OK for both frequency bins."
     fi
   >>>
 

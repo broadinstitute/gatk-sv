@@ -28,7 +28,7 @@ def adjudicate_BAF(metrics, labeler, name):
         name), index=False, sep='\t')
     testable.to_csv('{0}_DEL_testable.txt'.format(name), index=False, sep='\t')
 
-    features = 'BAF_HET_RATIO BAF_DEL_LOGLIK'.split()
+    features = ['BAF_HET_RATIO', 'BAF_DEL_LOGLIK']
     cutoffs = {'indep': ['BAF_HET_RATIO'], 'dep': ['BAF_DEL_LOGLIK']}
 
     del_cutoffs = rf_classify(metrics, trainable, testable, features,
