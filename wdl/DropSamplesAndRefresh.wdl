@@ -22,8 +22,8 @@ workflow DropSamplesAndRefresh {
     File apply_filters_script
 
     # SanitizeHeader
-    String drop_fields
-    File sample_id_rename_map
+    String? drop_fields
+    File? sample_id_rename_map
 
     # AnnotateVcf
     File protein_coding_gtf
@@ -118,8 +118,8 @@ workflow DropSamplesAndRefresh {
       input:
         vcfs=AnnotateVcf.annotated_vcfs,
         prefix=prefix,
-        drop_fields=drop_fields,
-        sample_id_rename_map=sample_id_rename_map,
+        drop_fields=select_first([drop_fields]),
+        sample_id_rename_map=select_first([sample_id_rename_map]),
         primary_contigs_list=primary_contigs_list,
         sv_pipeline_docker=sv_pipeline_docker
     }
@@ -128,8 +128,8 @@ workflow DropSamplesAndRefresh {
       input:
         vcfs=AnnotateUnrelated.annotated_vcfs,
         prefix="~{prefix}.unrelated",
-        drop_fields=drop_fields,
-        sample_id_rename_map=sample_id_rename_map,
+        drop_fields=select_first([drop_fields]),
+        sample_id_rename_map=select_first([sample_id_rename_map]),
         primary_contigs_list=primary_contigs_list,
         sv_pipeline_docker=sv_pipeline_docker
     }
