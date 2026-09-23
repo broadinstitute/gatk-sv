@@ -9,14 +9,16 @@ workflow Vapor {
     File bam_or_cram_file
     File bam_or_cram_index
 
-    Array[File] bed_files  # per contig bed files
+    # One of the following must be specified. May be single- or multi-sample.
+    File? bed_file
+    File? vcf_file
 
     Boolean save_plots = false  # Draw the per-SV dot plots and return them as a final output (roughly doubles vapor's runtime)
 
     File ref_fasta
     File ref_fai
     File ref_dict
-    File contig_list
+    File contigs
 
     String vapor_docker
     String sv_base_mini_docker
@@ -31,24 +33,45 @@ workflow Vapor {
     File? NONE_FILE_ # Create a null file - do not use this input
   }
 
-  Array[String] contigs = read_lines(contig_list)
+  # Convert vcf to bed if provided
+  if (defined(vcf_file) && !defined(bed_file)) {
 
-  scatter (i in range(length(contigs))) {
+    call utils.SubsetVcfToSample {
+      input:
+        vcf=select_first([vcf_file]),
+        vcf_idx=select_first([vcf_file]) + ".tbi",
+        sample=sample_id,
+        outfile_name=sample_id,
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_subset_sample
+    }
+
+    call utils.VcfToBed {
+      input:
+        vcf_file = SubsetVcfToSample.vcf_subset,
+        args = "-i SVLEN",
+        variant_interpretation_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_vcf_to_bed
+    }
+
+  }
+
+  scatter (contig in read_lines(contigs)) {
 
     call PreprocessBedForVapor {
       input:
-        prefix = "~{sample_id}.~{contigs[i]}.preprocess",
-        contig = contigs[i],
+        prefix = "~{sample_id}.~{contig}.preprocess",
+        contig = contig,
         sample_to_extract = sample_id,
-        bed_file = bed_files[i],
+        bed_file = select_first([bed_file, VcfToBed.bed_output]),
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_split_vcf
     }
 
     call RunVaporWithCram {
       input:
-        prefix = "~{sample_id}.~{contigs[i]}",
-        contig = contigs[i],
+        prefix = "~{sample_id}.~{contig}",
+        contig = contig,
         bam_or_cram_file = bam_or_cram_file,
         bam_or_cram_index = bam_or_cram_index,
         bed = PreprocessBedForVapor.contig_bed,
