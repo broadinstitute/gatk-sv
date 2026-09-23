@@ -41,7 +41,7 @@ RUN apt-get -qqy update --fix-missing && \
     samtools --help && \
     bcftools --help
 
-############### stage 1: other commonly used bioinformatics utilities 
+############### stage 1: other commonly used bioinformatics utilities
 FROM ubuntu:18.04
 
 ENV HOME=/root
@@ -136,13 +136,24 @@ RUN apt-get update --fix-missing && \
     apt-get -y autoremove && \
     apt-get  -y autoclean
 
-# install vapor
-RUN pip3 install --no-cache-dir Cython && \
-    cd /opt && \
-    git clone https://github.com/mills-lab/vapor.git && \
-    cd /opt/vapor/ && \
-    git checkout 5e322b5 && \
-    pip3 install -e .
+# install vapor (optimized version, talkowski-lab/vapor) into its own Python 3.9 environment.
+# Ubuntu 18.04 provides neither Python >= 3.9 nor the glibc that current pysam wheels need, so the
+# interpreter and pysam come from conda-forge/bioconda through micromamba; the other libraries are
+# installed at the versions pinned in vapor's requirements.txt (the versions it was tested with).
+ARG VAPOR_REPO=https://github.com/talkowski-lab/vapor
+ARG VAPOR_COMMIT=19e3812000f1553557eda45a37fa396b118b372c
+ENV MAMBA_ROOT_PREFIX=/opt/micromamba
+RUN apt-get update && apt-get install -y --no-install-recommends bzip2 ca-certificates curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xj -C /usr/local bin/micromamba && \
+    micromamba create -y -p /opt/vapor-env -c conda-forge -c bioconda python=3.9 pip pysam=0.24.1 && \
+    micromamba clean -a -y
+RUN mkdir -p /opt/vapor && \
+    curl -Ls ${VAPOR_REPO}/archive/${VAPOR_COMMIT}.tar.gz | tar -xz -C /opt/vapor --strip-components=1 && \
+    /opt/vapor-env/bin/pip install --no-cache-dir -r /opt/vapor/requirements.txt && \
+    /opt/vapor-env/bin/pip install --no-cache-dir --no-deps /opt/vapor && \
+    ln -sf /opt/vapor-env/bin/vapor /usr/local/bin/vapor && \
+    vapor bed --help | head -3
 
-
-
+# parallelism comes from `vapor bed --threads`; one BLAS/OpenMP thread per worker process
+ENV OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
