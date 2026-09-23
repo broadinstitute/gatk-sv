@@ -68,15 +68,6 @@ workflow DropSamplesAndRefresh {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call subset.SubsetVcfBySamples as SubsetToUnrelated {
-    input:
-      vcfs=ApplyNCRAndRefArtifactFilters.filtered_vcfs,
-      list_of_samples=related_samples,
-      remove_samples=true,
-      remove_private_sites=true,
-      sv_base_mini_docker=sv_base_mini_docker
-  }
-
   call anno.AnnotateVcf {
     input:
       vcfs=ApplyNCRAndRefArtifactFilters.filtered_vcfs,
@@ -95,22 +86,53 @@ workflow DropSamplesAndRefresh {
       sv_pipeline_docker=sv_pipeline_docker
   }
 
-  call anno.AnnotateVcf as AnnotateUnrelated {
-    input:
-      vcfs=SubsetToUnrelated.vcfs_subset,
-      contig_list=primary_contigs_list,
-      prefix="~{prefix}.unrelated",
-      protein_coding_gtf=protein_coding_gtf,
-      ped_file=ped_file,
-      par_bed=par_bed,
-      sample_pop_assignments=sample_pop_assignments,
-      ref_bed=ref_bed,
-      ref_prefix=ref_prefix,
-      population=ref_populations,
-      sv_per_shard=anno_sv_per_shard,
-      gatk_docker=gatk_docker,
-      sv_base_mini_docker=sv_base_mini_docker,
-      sv_pipeline_docker=sv_pipeline_docker
+  if (defined(related_samples)) {
+    call subset.SubsetVcfBySamples as SubsetToUnrelated {
+      input:
+        vcfs=ApplyNCRAndRefArtifactFilters.filtered_vcfs,
+        list_of_samples=related_samples,
+        remove_samples=true,
+        remove_private_sites=true,
+        sv_base_mini_docker=sv_base_mini_docker
+    }
+
+    call anno.AnnotateVcf as AnnotateUnrelated {
+      input:
+        vcfs=SubsetToUnrelated.vcfs_subset,
+        contig_list=primary_contigs_list,
+        prefix="~{prefix}.unrelated",
+        protein_coding_gtf=protein_coding_gtf,
+        ped_file=ped_file,
+        par_bed=par_bed,
+        sample_pop_assignments=sample_pop_assignments,
+        ref_bed=ref_bed,
+        ref_prefix=ref_prefix,
+        population=ref_populations,
+        sv_per_shard=anno_sv_per_shard,
+        gatk_docker=gatk_docker,
+        sv_base_mini_docker=sv_base_mini_docker,
+        sv_pipeline_docker=sv_pipeline_docker
+    }
+
+    if (defined(drop_fields) && defined(sample_id_rename_map)) {
+      call sanitize.SanitizeHeader as SanitizeUnrelated {
+        input:
+          vcfs=AnnotateUnrelated.annotated_vcfs,
+          prefix="~{prefix}.unrelated",
+          drop_fields=select_first([drop_fields]),
+          sample_id_rename_map=select_first([sample_id_rename_map]),
+          primary_contigs_list=primary_contigs_list,
+          sv_pipeline_docker=sv_pipeline_docker
+      }
+    }
+
+    call tasks.ConcatVcfs as ConcatUnrelated {
+      input:
+        vcfs=select_first([SanitizeUnrelated.vcf_header_sanitized, AnnotateUnrelated.annotated_vcfs]),
+        outfile_prefix="~{prefix}.unrelated.sites_only",
+        sites_only=true,
+        sv_base_mini_docker=sv_base_mini_docker
+    }
   }
 
   if (defined(drop_fields) && defined(sample_id_rename_map)) {
@@ -118,16 +140,6 @@ workflow DropSamplesAndRefresh {
       input:
         vcfs=AnnotateVcf.annotated_vcfs,
         prefix=prefix,
-        drop_fields=select_first([drop_fields]),
-        sample_id_rename_map=select_first([sample_id_rename_map]),
-        primary_contigs_list=primary_contigs_list,
-        sv_pipeline_docker=sv_pipeline_docker
-    }
-
-    call sanitize.SanitizeHeader as SanitizeUnrelated {
-      input:
-        vcfs=AnnotateUnrelated.annotated_vcfs,
-        prefix="~{prefix}.unrelated",
         drop_fields=select_first([drop_fields]),
         sample_id_rename_map=select_first([sample_id_rename_map]),
         primary_contigs_list=primary_contigs_list,
@@ -143,13 +155,6 @@ workflow DropSamplesAndRefresh {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call tasks.ConcatVcfs as ConcatUnrelated {
-    input:
-      vcfs=select_first([SanitizeUnrelated.vcf_header_sanitized, AnnotateUnrelated.annotated_vcfs]),
-      outfile_prefix="~{prefix}.unrelated.sites_only",
-      sites_only=true,
-      sv_base_mini_docker=sv_base_mini_docker
-  }
 
   if (do_qc) {
     call stats.GetVcfStats {
@@ -177,20 +182,22 @@ workflow DropSamplesAndRefresh {
         sv_pipeline_qc_docker=sv_pipeline_docker
     }
 
-    call qc.MainVcfQc as UnrelatedQc {
-      input:
-        vcfs=select_first([SanitizeUnrelated.vcf_header_sanitized, AnnotateUnrelated.annotated_vcfs]),
-        bcftools_preprocessing_options="-i 'FILTER=\"PASS\" || FILTER=\"MULTIALLELIC\"'",
-        prefix="~{prefix}.unrelated",
-        do_per_sample_qc=false,
-        samples_per_shard=600,
-        random_seed=9,
-        sv_per_shard=qc_sv_per_shard,
-        primary_contigs_fai=primary_contigs_fai,
-        sv_per_shard=qc_sv_per_shard,
-        sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_qc_docker=sv_pipeline_docker
+    if (defined(related_samples)) {
+      call qc.MainVcfQc as UnrelatedQc {
+        input:
+          vcfs=select_first([SanitizeUnrelated.vcf_header_sanitized, AnnotateUnrelated.annotated_vcfs]),
+          bcftools_preprocessing_options="-i 'FILTER=\"PASS\" || FILTER=\"MULTIALLELIC\"'",
+          prefix="~{prefix}.unrelated",
+          do_per_sample_qc=false,
+          samples_per_shard=600,
+          random_seed=9,
+          sv_per_shard=qc_sv_per_shard,
+          primary_contigs_fai=primary_contigs_fai,
+          sv_per_shard=qc_sv_per_shard,
+          sv_base_mini_docker=sv_base_mini_docker,
+          sv_pipeline_docker=sv_pipeline_docker,
+          sv_pipeline_qc_docker=sv_pipeline_docker
+      }
     }
   }
 
@@ -199,14 +206,14 @@ workflow DropSamplesAndRefresh {
     Array[File] refreshed_vcfs = select_first([SanitizeHeader.vcf_header_sanitized, AnnotateVcf.annotated_vcfs])
     Array[File] refreshed_vcf_indexes = select_first([SanitizeHeader.vcf_header_sanitized_index, AnnotateVcf.annotated_vcf_indexes])
 
-    Array[File] unrelated_vcfs = select_first([SanitizeUnrelated.vcf_header_sanitized, AnnotateUnrelated.annotated_vcfs])
-    Array[File] unrelated_vcf_indexes = select_first([SanitizeUnrelated.vcf_header_sanitized_index, AnnotateUnrelated.annotated_vcf_indexes])
+    Array[File]? unrelated_vcfs = select_first([SanitizeUnrelated.vcf_header_sanitized, AnnotateUnrelated.annotated_vcfs])
+    Array[File]? unrelated_vcf_indexes = select_first([SanitizeUnrelated.vcf_header_sanitized_index, AnnotateUnrelated.annotated_vcf_indexes])
 
     File sites_only_vcf = ConcatVcfs.concat_vcf
     File sites_only_vcf_index = ConcatVcfs.concat_vcf_idx
 
-    File sites_only_unrelated_vcf = ConcatUnrelated.concat_vcf
-    File sites_only_unrelated_vcf_index = ConcatUnrelated.concat_vcf_idx
+    File? sites_only_unrelated_vcf = ConcatUnrelated.concat_vcf
+    File? sites_only_unrelated_vcf_index = ConcatUnrelated.concat_vcf_idx
 
     File? per_sample_sv_counts = GetVcfStats.sv_counts
     File? sites_info = GetVcfStats.sites_info
