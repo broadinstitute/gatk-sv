@@ -286,30 +286,26 @@ task TrainSVGenotyping {
   command <<<
     set -euo pipefail
 
-    PEQ=$(awk -F '\t' 'NR==1 {for(i=1;i<=NF;i++) col[$i]=i; next}
-               {if ($col["metric"]=="PEQ") print $col["cutoff"]}' \
-          ~{rf_cutoffs} | head -n 1)
-    SRQ=$(awk -F '\t' 'NR==1 {for(i=1;i<=NF;i++) col[$i]=i; next}
-               {if ($col["metric"]=="SRQ") print $col["cutoff"]}' \
-          ~{rf_cutoffs} | head -n 1)
-
-    PESR_SEP=$(awk -F'\t' 'NR==1 {for(i=1;i<=NF;i++) col[$i]=i; next}
-                 {
-                   if (toupper($col["algtype"])=="PESR" &&
-                     ($col["min_svsize"] + 0)==1000 &&
-                     toupper($col["metric"])=="RD_MEDIAN_SEPARATION") {
-                     print $col["cutoff"]
-                   }
-                 }' \
-            ~{rf_cutoffs} | sort -nr | head -n 1)
-    DEPTH_SEP=$(awk -F'\t' 'NR==1 {for(i=1;i<=NF;i++) col[$i]=i; next}
-                {
-                  if (toupper($col["algtype"])=="DEPTH" &&
-                    toupper($col["metric"])=="RD_MEDIAN_SEPARATION") {
-                    print $col["cutoff"]
-                  }
-                }' \
-             ~{rf_cutoffs} | sort -nr | head -n 1)
+    # One pass over the cutoffs table emits `<name>\t<cutoff>` for each of the four queries below.
+    # Selection per query is unchanged from the four-program version: first match wins for PEQ/SRQ,
+    # and the separators still go through `sort -nr | head -n 1` fed with the bare cutoff column, so
+    # the bytes reaching sort are identical. Case handling is preserved exactly - PEQ/SRQ match the
+    # metric literally, the separators match it upper-cased (as the original awk did).
+    QUERIES=$(awk -F'\t' '
+      NR==1 { for (i = 1; i <= NF; i++) col[$i] = i; next }
+      {
+        metric = $col["metric"]
+        algtype = toupper($col["algtype"])
+        if (metric == "PEQ") print "PEQ\t" $col["cutoff"]
+        if (metric == "SRQ") print "SRQ\t" $col["cutoff"]
+        if (toupper(metric) == "RD_MEDIAN_SEPARATION" && algtype == "PESR" &&
+            ($col["min_svsize"] + 0) == 1000) print "PESR_SEP\t" $col["cutoff"]
+        if (toupper(metric) == "RD_MEDIAN_SEPARATION" && algtype == "DEPTH") print "DEPTH_SEP\t" $col["cutoff"]
+      }' ~{rf_cutoffs})
+    PEQ=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "PEQ" { print $2; exit }')
+    SRQ=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "SRQ" { print $2; exit }')
+    PESR_SEP=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "PESR_SEP" { print $2 }' | sort -nr | head -n 1)
+    DEPTH_SEP=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "DEPTH_SEP" { print $2 }' | sort -nr | head -n 1)
 
     for required_var in PEQ SRQ PESR_SEP DEPTH_SEP; do
       if [[ -z "${!required_var}" ]]; then
