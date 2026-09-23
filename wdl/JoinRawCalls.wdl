@@ -28,6 +28,8 @@ workflow JoinRawCalls {
 
     File ped_file
 
+    String contig
+
     File contig_list
     File reference_fasta
     File reference_fasta_fai
@@ -108,41 +110,29 @@ workflow JoinRawCalls {
     }
   }
 
-  scatter (contig in read_lines(contig_list)) {
-    call tasks_cluster.SVCluster {
-      input:
-        vcfs=FormatVcfForGatk.gatk_formatted_vcf,
-        ploidy_table=CreatePloidyTableFromPed.out,
-        output_prefix="~{prefix}.join_raw_calls.~{contig}",
-        contig=contig,
-        fast_mode=true,
-        algorithm="SINGLE_LINKAGE",
-        pesr_sample_overlap=0,
-        mixed_sample_overlap=0,
-        depth_sample_overlap=0,
-        reference_fasta=reference_fasta,
-        reference_fasta_fai=reference_fasta_fai,
-        reference_dict=reference_dict,
-        java_mem_fraction=java_mem_fraction,
-        variant_prefix="~{prefix}_~{contig}_",
-        gatk_docker=gatk_docker,
-        runtime_attr_override=runtime_attr_svcluster
-    }
-  }
-
-  call tasks_cohort.ConcatVcfs {
+  call tasks_cluster.SVCluster {
     input:
-      vcfs=SVCluster.out,
-      vcfs_idx=SVCluster.out_index,
-      naive=true,
-      outfile_prefix="~{prefix}.join_raw_calls",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_concat_vcfs_pesr
+      vcfs=FormatVcfForGatk.gatk_formatted_vcf,
+      ploidy_table=CreatePloidyTableFromPed.out,
+      output_prefix="~{prefix}.join_raw_calls.~{contig}",
+      contig=contig,
+      fast_mode=true,
+      algorithm="SINGLE_LINKAGE",
+      pesr_sample_overlap=0,
+      mixed_sample_overlap=0,
+      depth_sample_overlap=0,
+      reference_fasta=reference_fasta,
+      reference_fasta_fai=reference_fasta_fai,
+      reference_dict=reference_dict,
+      java_mem_fraction=java_mem_fraction,
+      variant_prefix="~{prefix}_~{contig}_",
+      gatk_docker=gatk_docker,
+      runtime_attr_override=runtime_attr_svcluster
   }
 
   output {
-    File joined_raw_calls_vcf = ConcatVcfs.concat_vcf
-    File joined_raw_calls_vcf_index = ConcatVcfs.concat_vcf_idx
+    File joined_raw_calls_vcf = SVCluster.out
+    File joined_raw_calls_vcf_index = SVCluster.out_index
     File ploidy_table = CreatePloidyTableFromPed.out
   }
 }
