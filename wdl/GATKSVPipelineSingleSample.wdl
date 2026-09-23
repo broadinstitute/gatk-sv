@@ -647,9 +647,9 @@ workflow GATKSVPipelineSingleSample {
       trio_samples = trio_samples,
       case_sample_id = sample_id,
       mother_sample_id = mother_sample_id,
-      mother_cram = mother_cram,
+      has_mother_cram = defined(mother_cram),
       father_sample_id = father_sample_id,
-      father_cram = father_cram,
+      has_father_cram = defined(father_cram),
       is_trio_denovo = is_trio_denovo,
       dragen_vcf = dragen_vcf,
       case_manta_vcf = case_manta_vcf,
@@ -1961,14 +1961,25 @@ task ConcatBaf {
 #   filesystems are: DRS, Google Cloud Storage, HTTP.
 #
 # Local Cromwell (and miniwdl) accept it, so the failure only appears on Terra.
+# The parents' CRAMs are deliberately NOT inputs of this task: it only needs
+# to know whether they were supplied. A File input is localized (downloaded)
+# into the task's working directory before the command runs, so declaring
+# mother_cram/father_cram here copied both whole-genome CRAMs - tens of GB -
+# onto the task's 10 GB local disk. The job then died in localization before
+# the command ever started, with no stdout/stderr:
+#
+#   Task ...ValidateTrioInputs:NA:2 failed. The job was stopped before the
+#   command finished. Check GCP Batch job logs for details.
+#
+# Pass Booleans computed at the call site instead; nothing is localized.
 task ValidateTrioInputs {
   input {
     Array[String] trio_samples # case first, then mother, father
     String case_sample_id
     String? mother_sample_id
-    File? mother_cram
+    Boolean has_mother_cram
     String? father_sample_id
-    File? father_cram
+    Boolean has_father_cram
     Boolean is_trio_denovo
     File? dragen_vcf
     File? case_manta_vcf
@@ -2001,10 +2012,10 @@ task ValidateTrioInputs {
     fi
 
     # Each parent CRAM and its sample id must be provided together
-    if [ "~{defined(mother_cram)}" != "~{defined(mother_sample_id)}" ]; then
+    if [ "~{has_mother_cram}" != "~{defined(mother_sample_id)}" ]; then
       err "mother_cram and mother_sample_id must be provided together"
     fi
-    if [ "~{defined(father_cram)}" != "~{defined(father_sample_id)}" ]; then
+    if [ "~{has_father_cram}" != "~{defined(father_sample_id)}" ]; then
       err "father_cram and father_sample_id must be provided together"
     fi
 
