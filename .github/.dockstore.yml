@@ -263,6 +263,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_fix_single_sample_blocking
       tags:
         - /.*/
 
@@ -290,5 +291,6 @@ workflows:
     filters:
       branches:
         - main
+        - mw_fix_single_sample_blocking
       tags:
         - /.*/
