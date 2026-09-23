@@ -11,7 +11,7 @@ workflow Vapor {
 
     Array[File] bed_files  # per contig bed files
 
-    Boolean save_plots  # Control whether plots are final output
+    Boolean save_plots = false  # Draw the per-SV dot plots and return them as a final output (roughly doubles vapor's runtime)
 
     File ref_fasta
     File ref_fai
@@ -52,6 +52,7 @@ workflow Vapor {
         bam_or_cram_file = bam_or_cram_file,
         bam_or_cram_index = bam_or_cram_index,
         bed = PreprocessBedForVapor.contig_bed,
+        save_plots = save_plots,
         ref_fasta = ref_fasta,
         ref_fai = ref_fai,
         ref_dict = ref_dict,
@@ -135,6 +136,7 @@ task RunVaporWithCram {
     String bam_or_cram_file
     String bam_or_cram_index
     File bed
+    Boolean save_plots
     File ref_fasta
     File ref_fai
     File ref_dict
@@ -181,6 +183,7 @@ task RunVaporWithCram {
       --reference ~{ref_fasta} \
       --PB-supp 0 \
       --threads ~{vapor_threads} \
+      ~{if save_plots then "" else "--no-plots"} \
       --pacbio-input ~{contig}.bam
 
     tar -czf ~{prefix}.~{contig}.tar.gz ~{prefix}.~{contig}
