@@ -159,6 +159,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_jrc_contig
       tags:
         - /.*/
 
