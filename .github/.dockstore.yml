@@ -37,6 +37,18 @@ workflows:
       tags:
         - /.*/
 
+  # VALIDATION HARNESS ONLY -- not production, imported by nothing. Derived from
+  # GatherBatchEvidence's tloc path (UntarFiles -> ResolveManta) so the flag can be A/B'd
+  # against a frozen production run for ~1% of a full step-04 rerun. Removed after the A/B.
+  - subclass: WDL
+    name: TlocResolveOnly
+    primaryDescriptorPath: /wdl/TlocResolveOnly.wdl
+    filters:
+      branches:
+        - mw_manta_tloc_autoresolve
+      tags:
+        - /.*/
+
   - subclass: WDL
     name: ClusterBatch
     primaryDescriptorPath: /wdl/ClusterBatch.wdl
