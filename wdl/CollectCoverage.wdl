@@ -131,15 +131,23 @@ task CondenseReadCounts {
         fi
       fi
 
-      existing_sample_id=$(zcat ~{counts} | awk -F "\t" '/^@RG/ {
-          for (i = 1; i <= NF; ++i) {
-            if ($i ~ /^SM:/) {
-              sub(/^SM:/, "", $i)
-              print $i
-              exit
+      # No early `exit` here. This runs under `set -o pipefail`, and a real
+      # whole-genome counts file carries the sequence dictionary inline, so the
+      # first @RG can sit thousands of header lines in. awk would then close the
+      # pipe while zcat still had ~130 MB to write, zcat took SIGPIPE, and the
+      # task died with exit 141 (`CondenseReadCounts: Job exit code 141`).
+      # Stop after the first @RG with a flag instead, so awk drains the pipe.
+      existing_sample_id=$(zcat ~{counts} | awk -F "\t" '
+          /^@RG/ && !found {
+            for (i = 1; i <= NF; ++i) {
+              if ($i ~ /^SM:/) {
+                sub(/^SM:/, "", $i)
+                print $i
+                found = 1
+                break
+              }
             }
-          }
-        }')
+          }')
 
       output_sample_id="${existing_sample_id}"
       emit_picard=true
