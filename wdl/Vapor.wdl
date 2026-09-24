@@ -7,7 +7,7 @@ workflow Vapor {
   input {
     String sample_id
     File bam_or_cram_file
-    File bam_or_cram_index
+    File? bam_or_cram_index  # optional; if not given, samtools finds the index next to the BAM/CRAM (.bai/.csi/.crai)
 
     Array[File] bed_files  # per contig bed files
 
@@ -134,7 +134,7 @@ task RunVaporWithCram {
     String prefix
     String contig
     String bam_or_cram_file
-    String bam_or_cram_index
+    String? bam_or_cram_index
     File bed
     Boolean save_plots
     File ref_fasta
@@ -167,8 +167,13 @@ task RunVaporWithCram {
     set -Eeuo pipefail
 
     # localize cram files
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-    samtools view -@ ~{vapor_threads} -h -b -T ~{ref_fasta} -o ~{contig}.bam ~{bam_or_cram_file} ~{contig}
+    # assign before exporting so that a failing gcloud call stops the task (export would mask it)
+    GCS_OAUTH_TOKEN=$(gcloud auth application-default print-access-token)
+    export GCS_OAUTH_TOKEN
+    # with an index given, -X makes samtools use it; otherwise samtools infers the index from the file name
+    samtools view -@ ~{vapor_threads} -h -b -T ~{ref_fasta} -o ~{contig}.bam \
+      ~{if defined(bam_or_cram_index) then "-X " + bam_or_cram_file + " " + select_first([bam_or_cram_index]) else bam_or_cram_file} \
+      ~{contig}
     # CSI index with 1 kb bins: same reads as a BAI index, but region queries in very deep
     # regions scan far fewer records (about 5x faster read fetching on the chr1 test data)
     samtools index -@ ~{vapor_threads} -c -m 10 ~{contig}.bam
@@ -192,7 +197,7 @@ task RunVaporWithCram {
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: vapor_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])

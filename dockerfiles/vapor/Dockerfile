@@ -5,8 +5,10 @@
 FROM ubuntu:22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG SAMTOOLS_VERSION=1.9
-ARG BCFTOOLS_VERSION=1.9
+# htslib 1.9 cannot fetch remote (gs://, https://) indexes with the libcurl in Ubuntu 22.04
+# ("Failed to close remote file"); current releases can
+ARG SAMTOOLS_VERSION=1.24
+ARG BCFTOOLS_VERSION=1.24
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy dist-upgrade && \
     apt-get -qqy install --no-install-recommends \
@@ -24,11 +26,11 @@ RUN apt-get -qqy update --fix-missing && \
                  zlib1g-dev && \
     wget https://github.com/samtools/samtools/releases/download/${SAMTOOLS_VERSION}/samtools-${SAMTOOLS_VERSION}.tar.bz2 && \
     tar xjf samtools-${SAMTOOLS_VERSION}.tar.bz2 && \
-    cd samtools-${SAMTOOLS_VERSION} && ./configure --without-curses --enable-libcurl CFLAGS="-g -O2 -fcommon" && make -s all all-htslib && make install install-htslib && cd - && \
+    cd samtools-${SAMTOOLS_VERSION} && ./configure --without-curses --enable-libcurl && make -s all all-htslib && make install install-htslib && cd - && \
     rm -rf samtools-${SAMTOOLS_VERSION}* && \
     wget https://github.com/samtools/bcftools/releases/download/${BCFTOOLS_VERSION}/bcftools-${BCFTOOLS_VERSION}.tar.bz2 && \
     tar xjf bcftools-${BCFTOOLS_VERSION}.tar.bz2 && \
-    cd bcftools-${BCFTOOLS_VERSION} && ./configure --without-curses CFLAGS="-g -O2 -fcommon" && make -s && make install && cd - && \
+    cd bcftools-${BCFTOOLS_VERSION} && ./configure --without-curses && make -s && make install && cd - && \
     rm -rf bcftools-${BCFTOOLS_VERSION}* && \
     apt-get -qqy purge autoconf automake bzip2 gcc make wget && \
     apt-get -qqy clean && \
