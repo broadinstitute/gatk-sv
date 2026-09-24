@@ -6,7 +6,7 @@ For each variant the most severe VEP annotation is selected
 IMPACT are collapsed: Consequence values are joined with "&", unique SYMBOL
 values with ",".
 
-Output columns (40 total):
+Output columns (40 total, plus any --extra-info-fields appended at the end):
   #CHROM  START  END  ID  REF  ALT  QUAL  FILTER
   allele_type  allele_length  SOURCE  REGION  TRID  dbGaP_ID
   gnomAD_V4_match_type  gnomAD_V4_match_ID  gnomAD_V4_match_source
@@ -18,15 +18,22 @@ Output columns (40 total):
   PREDICTED_PARTIAL_DISPERSED_DUP  PREDICTED_PARTIAL_EXON_DUP  PREDICTED_PROMOTER
   PREDICTED_TSS_DUP  PREDICTED_UTR
   vep_Consequence  vep_IMPACT  vep_SYMBOL
+  [extra INFO fields, in the order given to --extra-info-fields]
 
 Usage:
     python3 vcf_to_bed_vep_parsed.py <input.vcf[.gz]> [output.bed]
+        [--extra-info-fields FIELD1,FIELD2,...]
+
+--extra-info-fields lets you pull additional site-level INFO fields straight
+through into extra BED columns (e.g. nhomref,nhet,nhomalt), without having to
+hardcode them in FIELDS. Each name must match an INFO ID already present in
+the VCF header/records; missing values are written as ".".
 
 If output is omitted, replaces .vcf.gz/.vcf with .vep_parsed.bed.
 """
 
+import argparse
 import gzip
-import sys
 import os
 
 # INFO fields to extract (in order); these become columns 9-37
@@ -97,11 +104,13 @@ def best_vep(vep_str):
     return consequence, best_impact, symbol
 
 
-def vcf_to_bed(infile, outfile):
+def vcf_to_bed(infile, outfile, extra_info_fields=None):
+    extra_info_fields = extra_info_fields or []
     header_cols = (
         ["#CHROM", "START", "END", "ID", "REF", "ALT", "QUAL", "FILTER"]
         + FIELDS
         + ["vep_Consequence", "vep_IMPACT", "vep_SYMBOL"]
+        + extra_info_fields
     )
 
     opener = gzip.open if infile.endswith(".gz") else open
@@ -119,12 +128,14 @@ def vcf_to_bed(infile, outfile):
 
             info_vals = [info.get(f, ".") for f in FIELDS]
             csq, impact, symbol = best_vep(info.get("vep", "."))
+            extra_vals = [info.get(f, ".") for f in extra_info_fields]
 
             fout.write(
                 "\t".join(
                     [chrom, str(start), str(end), vid, ref, alt, qual, filt]
                     + info_vals
                     + [csq, impact, symbol]
+                    + extra_vals
                 )
                 + "\n"
             )
@@ -132,12 +143,25 @@ def vcf_to_bed(infile, outfile):
     print(f"Saved: {outfile}", flush=True)
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Convert annotated VCF(.gz) to BED with parsed VEP columns.",
+    )
+    parser.add_argument("input_vcf", help="Annotated input VCF(.gz)")
+    parser.add_argument("output_bed", nargs="?", default=None,
+                         help="Output BED path (default: replace .vcf.gz/.vcf with .vep_parsed.bed)")
+    parser.add_argument("--extra-info-fields", default="",
+                         help="Comma-separated list of additional INFO field names to append as "
+                              "extra BED columns, e.g. nhomref,nhet,nhomalt")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        sys.exit(__doc__)
-    infile = sys.argv[1]
-    if len(sys.argv) >= 3:
-        outfile = sys.argv[2]
+    args = parse_args()
+
+    infile = args.input_vcf
+    if args.output_bed:
+        outfile = args.output_bed
     else:
         base = infile
         for ext in (".vcf.gz", ".vcf.bgz", ".vcf"):
@@ -145,4 +169,6 @@ if __name__ == "__main__":
                 base = base[: -len(ext)]
                 break
         outfile = base + ".vep_parsed.bed"
-    vcf_to_bed(infile, outfile)
+
+    extra_fields = [f.strip() for f in args.extra_info_fields.split(",") if f.strip()]
+    vcf_to_bed(infile, outfile, extra_info_fields=extra_fields)

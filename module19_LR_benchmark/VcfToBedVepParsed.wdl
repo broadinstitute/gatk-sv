@@ -3,9 +3,10 @@ version 1.0
 ## VcfToBedVepParsed
 ## Converts a list of annotated VCF(.gz) files to BED format, splitting the VEP
 ## INFO field into three columns (vep_Consequence, vep_IMPACT, vep_SYMBOL).
-## Scatters over all input VCFs in parallel, then concatenates into one BED.
+## Scatters over all input VCFs in parallel, then concatenates into one BED,
+## sorts it, and bgzips + tabix-indexes the final merged BED.
 ##
-## Output columns (40):
+## Output columns (40, plus any extra_info_fields appended at the end):
 ##   #CHROM START END ID REF ALT QUAL FILTER
 ##   allele_type allele_length SOURCE REGION TRID dbGaP_ID
 ##   gnomAD_V4_match_type gnomAD_V4_match_ID gnomAD_V4_match_source AF AC AN
@@ -16,6 +17,15 @@ version 1.0
 ##   PREDICTED_PARTIAL_DISPERSED_DUP PREDICTED_PARTIAL_EXON_DUP PREDICTED_PROMOTER
 ##   PREDICTED_TSS_DUP PREDICTED_UTR
 ##   vep_Consequence vep_IMPACT vep_SYMBOL
+##   [extra_info_fields, e.g. nhomref nhet nhomalt]
+##
+## extra_info_fields (optional): comma-separated list of additional site-level
+## INFO field names to pull straight through into extra BED columns, e.g.
+##   extra_info_fields = "nhomref,nhet,nhomalt"
+## for a VCF annotated with:
+##   ##INFO=<ID=nhomref,Number=1,Type=Integer,Description="Number of samples with homozygous reference genotypes (biallelic sites only).">
+##   ##INFO=<ID=nhet,Number=1,Type=Integer,Description="Number of samples with heterozygous genotypes (biallelic sites only).">
+##   ##INFO=<ID=nhomalt,Number=1,Type=Integer,Description="Number of samples with homozygous alternate genotypes (biallelic sites only).">
 
 workflow VcfToBedVepParsed {
 
@@ -23,7 +33,9 @@ workflow VcfToBedVepParsed {
         Array[File]  input_vcfs          # list of annotated VCF(.gz) files
         File         script              # vcf_to_bed_vep_parsed.py
         String       output_basename     # prefix for the merged output BED
+        String       extra_info_fields = ""  # comma-separated extra INFO field names, e.g. "nhomref,nhet,nhomalt"
         String       docker = "python:3.11-slim"
+        String       htslib_docker = "staphb/htslib:1.19"  # needs bgzip + tabix
         Int          mem_gb        = 8
         Int          cpu           = 2
         Int          disk_gb       = 100
@@ -34,13 +46,14 @@ workflow VcfToBedVepParsed {
     scatter (vcf in input_vcfs) {
         call ConvertVcfToBed {
             input:
-                vcf          = vcf,
-                script       = script,
-                docker       = docker,
-                mem_gb       = mem_gb,
-                cpu          = cpu,
-                disk_gb      = disk_gb,
-                preemptible  = preemptible
+                vcf               = vcf,
+                script            = script,
+                extra_info_fields = extra_info_fields,
+                docker            = docker,
+                mem_gb            = mem_gb,
+                cpu               = cpu,
+                disk_gb           = disk_gb,
+                preemptible       = preemptible
         }
 
         call ExtractIdFilter {
@@ -78,8 +91,21 @@ workflow VcfToBedVepParsed {
             preemptible     = preemptible
     }
 
+    # ── sort + bgzip + tabix-index the merged BED ────────────────────────────
+    call BgzipTabixBed {
+        input:
+            bed             = ConcatBeds.merged_bed,
+            output_basename = output_basename,
+            docker          = htslib_docker,
+            mem_gb          = mem_gb,
+            cpu             = cpu,
+            disk_gb         = disk_gb,
+            preemptible     = preemptible
+    }
+
     output {
-        File merged_bed        = ConcatBeds.merged_bed
+        File merged_bed_gz     = BgzipTabixBed.bed_gz
+        File merged_bed_gz_tbi = BgzipTabixBed.bed_gz_tbi
         File merged_id_filter  = ConcatIdFilter.merged_id_filter
     }
 
@@ -95,6 +121,7 @@ task ConvertVcfToBed {
     input {
         File    vcf
         File    script
+        String  extra_info_fields
         String  docker
         Int     mem_gb
         Int     cpu
@@ -108,7 +135,8 @@ task ConvertVcfToBed {
 
     command <<<
         set -euo pipefail
-        python3 ~{script} ~{vcf} ~{out_bed}
+        python3 ~{script} ~{vcf} ~{out_bed} \
+            ~{if extra_info_fields != "" then "--extra-info-fields " + extra_info_fields else ""}
     >>>
 
     output {
@@ -238,6 +266,48 @@ task ConcatIdFilter {
 
     output {
         File merged_id_filter = merged
+    }
+
+    runtime {
+        docker:      docker
+        memory:      mem_gb + " GB"
+        cpu:         cpu
+        disks:       "local-disk " + disk_gb + " HDD"
+        preemptible: preemptible
+    }
+}
+
+# ── Task: sort, bgzip, and tabix-index the merged BED ────────────────────────
+task BgzipTabixBed {
+
+    input {
+        File    bed
+        String  output_basename
+        String  docker
+        Int     mem_gb
+        Int     cpu
+        Int     disk_gb
+        Int     preemptible
+    }
+
+    String out_bed_gz = output_basename + ".vep_parsed.bed.gz"
+
+    command <<<
+        set -euo pipefail
+
+        # Keep the "#CHROM..." header as a leading comment line (tabix's
+        # default meta-char is '#', so it's skipped on indexing), sort the
+        # data rows by chrom/start/end, then bgzip + tabix as BED.
+        head -1 ~{bed} > sorted.bed
+        tail -n +2 ~{bed} | sort -k1,1 -k2,2n -k3,3n >> sorted.bed
+
+        bgzip -c sorted.bed > ~{out_bed_gz}
+        tabix -p bed ~{out_bed_gz}
+    >>>
+
+    output {
+        File bed_gz     = out_bed_gz
+        File bed_gz_tbi = out_bed_gz + ".tbi"
     }
 
     runtime {
