@@ -44,6 +44,9 @@ workflow DropSamplesAndRefresh {
     String sv_pipeline_docker
     String sv_base_mini_docker
     String gatk_docker
+
+    Array[File]? NONE_ARRAY
+    File? NONE_FILE
   }
 
   if (defined(keep_samples)) {
@@ -206,8 +209,8 @@ workflow DropSamplesAndRefresh {
     Array[File] refreshed_vcfs = select_first([SanitizeHeader.vcf_header_sanitized, AnnotateVcf.annotated_vcfs])
     Array[File] refreshed_vcf_indexes = select_first([SanitizeHeader.vcf_header_sanitized_index, AnnotateVcf.annotated_vcf_indexes])
 
-    Array[File]? unrelated_vcfs = select_first([SanitizeUnrelated.vcf_header_sanitized, AnnotateUnrelated.annotated_vcfs])
-    Array[File]? unrelated_vcf_indexes = select_first([SanitizeUnrelated.vcf_header_sanitized_index, AnnotateUnrelated.annotated_vcf_indexes])
+    Array[File]? unrelated_vcfs = if defined(related_samples) then select_first([SanitizeUnrelated.vcf_header_sanitized, AnnotateUnrelated.annotated_vcfs]) else NONE_ARRAY
+    Array[File]? unrelated_vcf_indexes = if defined(related_samples) then select_first([SanitizeUnrelated.vcf_header_sanitized_index, AnnotateUnrelated.annotated_vcf_indexes]) else NONE_ARRAY
 
     File sites_only_vcf = ConcatVcfs.concat_vcf
     File sites_only_vcf_index = ConcatVcfs.concat_vcf_idx
