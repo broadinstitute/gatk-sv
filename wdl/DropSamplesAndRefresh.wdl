@@ -12,7 +12,7 @@ workflow DropSamplesAndRefresh {
   input {
     Array[File] vcfs
     File? keep_samples
-    File related_samples
+    File? related_samples
     String prefix
 
     File primary_contigs_list
@@ -90,7 +90,7 @@ workflow DropSamplesAndRefresh {
     call subset.SubsetVcfBySamples as SubsetToUnrelated {
       input:
         vcfs=ApplyNCRAndRefArtifactFilters.filtered_vcfs,
-        list_of_samples=related_samples,
+        list_of_samples=select_first([related_samples]),
         remove_samples=true,
         remove_private_sites=true,
         sv_base_mini_docker=sv_base_mini_docker
