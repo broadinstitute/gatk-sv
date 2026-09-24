@@ -1,0 +1,23 @@
+{
+  "ComputeSvSnvLd.snv_vcf": "gs://REPLACE_ME/snv_calls.vcf.gz",
+  "ComputeSvSnvLd.sv_vcf": "gs://REPLACE_ME/sv_calls.vcf.gz",
+  "ComputeSvSnvLd.sample_pop_map": "gs://REPLACE_ME/sample_population_map.tsv",
+
+  "ComputeSvSnvLd.repeatmasker_bed": "gs://REPLACE_ME/module18_annotate_genomic_context/references/hg38.RM.sorted.merged.bed.gz",
+  "ComputeSvSnvLd.segdup_bed": "gs://REPLACE_ME/module18_annotate_genomic_context/references/hg38.SD.sorted.merged.bed.gz",
+  "ComputeSvSnvLd.simplerepeat_bed": "gs://REPLACE_ME/module18_annotate_genomic_context/references/hg38.SR.sorted.merged.bed.gz",
+  "ComputeSvSnvLd.annotate_genomic_context_script": "gs://REPLACE_ME/module18_annotate_genomic_context/annotate_genomic_context.sh",
+  "ComputeSvSnvLd.annotate_genomic_context_helper_r": "gs://REPLACE_ME/module18_annotate_genomic_context/annotate_genomic_context_helper.R",
+
+  "ComputeSvSnvLd.output_prefix": "kage_1kg_sv_snv_ld",
+  "ComputeSvSnvLd.staging_gcs_dir": "gs://REPLACE_ME/compute_ld/tmp",
+
+  "ComputeSvSnvLd.sv_af_threshold": 0.005,
+  "ComputeSvSnvLd.snv_af_threshold": 0.005,
+  "ComputeSvSnvLd.sv_mac_threshold": 2,
+  "ComputeSvSnvLd.window_size": 1000000,
+  "ComputeSvSnvLd.strong_ld_rsq": 0.8,
+
+  "ComputeSvSnvLd.hail_docker": "hailgenetics/hail:0.2.132",
+  "ComputeSvSnvLd.rdpesr_benchmark_docker": "talkowski/sv_benchmark"
+}
