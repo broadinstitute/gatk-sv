@@ -304,7 +304,8 @@ AddRetroDelFilters_out="${cohort_name}.retro_del_filtered.vcf.gz"
 python /opt/sv-pipeline/04_variant_resolution/scripts/add_retro_del_filters.py \
   "${AddHighFDRFilters_out}" \
   "${intron_reference}" \
-  "${AddRetroDelFilters_out}"
+  "${AddRetroDelFilters_out}" \
+  --all-contigs
 
 
 # FinalCleanup

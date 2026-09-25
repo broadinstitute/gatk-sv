@@ -62,7 +62,7 @@ task BuildWGDMatrix {
   command <<<
 
     set -eu
-    zcat ~{bincov_matrix} | head -n 1 > header.txt
+    zcat ~{bincov_matrix} | head -n 1 > header.txt || true
     sed -i 's/#//g' header.txt
     
     set -o pipefail

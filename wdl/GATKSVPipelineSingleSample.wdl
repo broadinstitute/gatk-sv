@@ -390,7 +390,8 @@ workflow GATKSVPipelineSingleSample {
     ############################################################
 
     File cutoffs
-    File genotyping_rd_table
+    File genotyping_rd_depth_table
+    File genotyping_rd_pesr_table
     File genotyping_pe_table
     File genotyping_sr_table
 
@@ -687,6 +688,7 @@ workflow GATKSVPipelineSingleSample {
       sd_locs_vcf = sd_locs_vcf,
       ref_panel_baf = ref_panel_baf,
       ref_panel_baf_index = ref_panel_baf_index,
+      reference_dict = reference_dict,
       sample_id = sample_id,
       batch = batch,
       sv_pipeline_docker = sv_pipeline_docker
@@ -1208,7 +1210,8 @@ workflow GATKSVPipelineSingleSample {
       depth_exclusion_intervals_index = bin_exclude + ".tbi",
       pesr_exclusion_intervals = pesr_exclude_intervals,
       pesr_exclusion_intervals_index = pesr_exclude_intervals + ".tbi",
-      rd_table = genotyping_rd_table,
+      rd_depth_table = genotyping_rd_depth_table,
+      rd_pesr_table = genotyping_rd_pesr_table,
       pe_table = genotyping_pe_table,
       sr_table = genotyping_sr_table,
       gatk_docker = gatk_docker
@@ -1265,7 +1268,7 @@ workflow GATKSVPipelineSingleSample {
 
       rf_cutoff_files=[cutoffs],
       batches=[batch],
-      genotyping_rd_tables=[genotyping_rd_table],
+      genotyping_rd_tables=[genotyping_rd_depth_table],
       median_coverage_files=[GatherBatchEvidence.median_cov],
 
       max_shard_size_resolve=max_shard_size_resolve,
@@ -1632,6 +1635,7 @@ task ConcatBaf {
     File sd_locs_vcf
     File ref_panel_baf
     File ref_panel_baf_index
+    File reference_dict
     String sample_id
     String batch
     String sv_pipeline_docker
@@ -1663,7 +1667,18 @@ task ConcatBaf {
 
     echo "~{sample_id}" > samples.list
 
-    /gatk/gatk --java-options "-Xmx2g" PrintSVEvidence \
+    # This task runs in sv_pipeline_docker, which carries GATK as the jar baked into
+    # sv-base (dockerfiles/sv-base/Dockerfile sets GATK_JAR=/opt/gatk.jar). The
+    # /gatk/gatk wrapper exists only in the standalone gatk_docker image, so it is not
+    # on PATH here and the call dies with exit 127. Same launcher as MatrixQC.wdl
+    # PESRBAF_QC, which also runs PrintSVEvidence in sv_pipeline_docker.
+    #
+    # --sequence-dictionary is required: BAF evidence files carry no header dictionary
+    # (BafEvidenceCodec.readActualHeader returns null), so without it PrintSVEvidence
+    # aborts with "No dictionary found. Provide one as --sequence-dictionary or
+    # --reference." Every other PrintSVEvidence call site in this repo passes one.
+    java -Xmx2g -jar ${GATK_JAR} PrintSVEvidence \
+      --sequence-dictionary ~{reference_dict} \
       -F evidence.list \
       --sample-names samples.list \
       -O "~{batch}.baf.txt.gz"

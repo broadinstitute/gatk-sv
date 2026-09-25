@@ -169,25 +169,58 @@ task FilterAnnotateVcf {
     <(sed -e '1d' ~{scores} | fgrep -e INV -e BND -e INS | awk '($3!="NA" && $3>=0.5)' | cut -f1 | fgrep -w -f - <(zcat ~{vcf}) | sed -e 's/SVTYPE=DEL/SVTYPE=BND/' -e 's/SVTYPE=DUP/SVTYPE=BND/' -e 's/<DEL>/<BND>/' -e 's/<DUP>/<BND>/') \
       | cat <(sed -n -e '/^#/p' <(zcat ~{vcf})) - \
       | bcftools sort -Oz -o filtered.vcf.gz
+    tabix -p vcf filtered.vcf.gz
 
     python3 <<CODE
-    import pysam
+import gzip
+import pysam
 
-    with pysam.VariantFile("filtered.vcf.gz", 'r') as vcf_in, pysam.VariantFile("filtered.updated_bnds.vcf.gz", 'w', header=vcf_in.header) as vcf_out:
-      for record in vcf_in:
-        if record.info.get('SVTYPE') == 'BND' and 'END2' not in record.info:
-          record.info['END2'] = record.stop
-          record.stop = record.pos
-        if record.info.get('SVTYPE') == 'BND' and 'CHR2' not in record.info:
-          record.info['CHR2'] = record.chrom
-        vcf_out.write(record)
-    CODE
+# First pass: parse true END values for BND/CTX from the raw VCF text.
+# pysam silently clamps END to POS when END < POS, which happens for
+# interchromosomal BNDs where END is on a different contig.
+# TODO: the END field correction is to support legacy VCFs temporarily; this should be removed
+#       before running on non-legacy files
+bnd_end_dict = dict()
+with gzip.open("filtered.vcf.gz", 'rt') as f:
+    for line in f:
+        if line.startswith('#'):
+            continue
+        cols = line.split('\t', 8)
+        info = cols[7]
+        if 'SVTYPE=BND' not in info and 'SVTYPE=CTX' not in info:
+            continue
+        vid = cols[2]
+        end_fields = [x for x in info.split(';') if x.startswith('END=')]
+        bnd_end_dict[vid] = int(end_fields[0].replace('END=', '')) if end_fields else int(cols[1])
+
+with pysam.VariantFile("filtered.vcf.gz", 'r') as vcf_in:
+    header = vcf_in.header.copy()
+    if 'END2' not in header.info:
+        header.add_line('##INFO=<ID=END2,Number=1,Type=Integer,Description="Position of breakpoint on CHR2">')
+    if 'CHR2' not in header.info:
+        header.add_line('##INFO=<ID=CHR2,Number=1,Type=String,Description="Chromosome for END2 coordinate">')
+
+    with pysam.VariantFile("filtered.updated_bnds.vcf.gz", 'w', header=header) as vcf_out:
+        for record in vcf_in:
+            record.translate(header)
+            if record.info.get('SVTYPE') == 'BND':
+                if 'END2' not in record.info:
+                    record.info['END2'] = bnd_end_dict.get(record.id, record.stop)
+                    record.stop = record.pos
+                if 'CHR2' not in record.info:
+                    record.info['CHR2'] = record.chrom
+            vcf_out.write(record)
+CODE
 
     /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.updated_bnds.vcf.gz ~{metrics} ~{cutoffs} stdout \
       | bcftools sort -Oz -o filtered.corrected_coords.vcf.gz
 
-    /opt/sv-pipeline/03_variant_filtering/scripts/annotate_RF_evidence.py filtered.corrected_coords.vcf.gz ~{scores} ~{prefix}.with_evidence.vcf
-    bgzip ~{prefix}.with_evidence.vcf
+    /opt/sv-pipeline/03_variant_filtering/scripts/annotate_RF_evidence.py filtered.corrected_coords.vcf.gz ~{scores} ~{prefix}.raw.with_evidence.vcf
+    bgzip ~{prefix}.raw.with_evidence.vcf
+
+    # Filter WHAM deletions, which are needed for adjudication but are usually enriched for false positives
+    bcftools view -e 'ALGORITHMS=="wham" && SVTYPE=="DEL"' ~{prefix}.raw.with_evidence.vcf.gz -Oz -o ~{prefix}.with_evidence.vcf.gz
+    tabix ~{prefix}.with_evidence.vcf.gz
 
   >>>
   runtime {
