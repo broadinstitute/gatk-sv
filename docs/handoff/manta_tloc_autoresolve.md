@@ -4,6 +4,8 @@
 workflow receipt timestamps `2026-09-21T14:31Z` for the same session's work — clocks agree).
 No prior handoff doc exists for this repo; numbering starts here.
 
+> **SUPERSEDED IN PART (2026-09-25) — read `002_manta_tloc_autoresolve_pr_and_terra_ab.md`.** The title's remaining work is done: **PR #968 is open** (onto #966's branch, 3 files), and the flag-on production-stack path that this doc listed as untested has now been run twice and PASSes (3 samples on the real `sv-pipeline` image; 156 samples on Terra). Also stale: merge-base with `main` is no longer `4bc70a69` — the branch was rebased onto `mw_fix_single_sample_blocking` (`4419315c`), and `test_single_tloc.py` was decided *out* of the PR, not in.
+
 Session arc: implemented the "Manta tloc insertions should be automatically resolved" TODO on
 branch `mw_manta_tloc_autoresolve`, then ran a three-lane adversarial subagent review that found
 two majors (strand-class semantics) and one blocker (blast radius), all fixed and pushed.
@@ -86,11 +88,10 @@ git ls-remote origin refs/heads/mw_manta_tloc_autoresolve   # must equal local H
 | `test_single_tloc.py` | exactly 19 `PASS` lines, zero `FAIL`, final `ALL PASS` (two `NOTE …` lines about pysam ≥0.22 `stop<POS` clamp are normal on the local venv) | regression in resolve_single_tloc semantics or harness drift |
 | remote vs local head | `ls-remote` sha == `git rev-parse HEAD` | a push was lost / branch moved elsewhere |
 | flag-off e2e (real CLI, manta single BNDs) | 0 resolved records; every input `UNRESOLVED_TYPE=SINGLE_ENDER` | opt-in gate leaked; blast-radius bug reintroduced |
-| flag-on docker e2e (NOT run yet) | same-arm `+-`→`CTX_PP/QQ`; cross-arm `++`→`CTX_PQ/QP`; `+-`-cross-arm → `CTX_PQ/QP_MISMATCH`; wham stays `SINGLE_ENDER`; no POSTHOC duplicates | production-stack divergence (pysam 0.15.4 path untested locally) |
+| flag-on docker e2e (**RUN 2026-09-23, PASS** — see 002 §1b/§1c: 3 samples on the built image, 156 on Terra; `CTX` 172/160/155 docker, +27,267 cohort; zero other label moved) | same-arm `+-`→`CTX_PP/QQ`; cross-arm `++`→`CTX_PQ/QP`; `+-`-cross-arm → `CTX_PQ/QP_MISMATCH`; wham stays `SINGLE_ENDER`; no POSTHOC duplicates | production-stack divergence (pysam 0.15.4 path untested locally) |
 | `git merge-base HEAD origin/main` | currently `4bc70a69`; `origin/main` is 8 commits ahead at handoff | if merged past, PR diff changes — re-review touched files |
 
-**Cost / time / size:** pipeline runtime impact — **not measured**; needs a docker rebuild from
-this branch (dockerfiles/sv-pipeline-virtual-env pins pysam==0.15.4).
+**Cost / time / size:** pipeline runtime impact — **now measured (2026-09-23), was not measured when this line was written**: +2.4% cpu-VM-minutes on the tloc task (392.5 -> 402.1 for 156 samples) and +2.8% cohort complex output; full step-04 rerun is 31,206 VM-minutes, its `TinyResolve` alone 339. See 002 §1c. (Relevant because dockerfiles/sv-pipeline-virtual-env pins pysam==0.15.4.)
 
 ## 5. Gotchas found (hit this session, with the error text)
 
@@ -152,11 +153,11 @@ jobs, no external services touched.
 
 ## Open items / next steps
 
-- [ ] Decide whether `test_single_tloc.py` joins the PR (recommended: yes — `git add` in the
+- [x] DECIDED 2026-09-23: **no test file in the PR** (owner decision; this repo has no python test directory to follow — `find` for `test_*.py` hits only my own untracked file), evidence goes in the description; harness stays untracked. Offered as `src/svtk/svtk/test/` if reviewers ask. Original recommendation, now overridden: yes — `git add` in the
       worktree, amend or new commit, push; verifies: file listed in `git show --stat HEAD`).
-- [ ] Open PR from `mw_manta_tloc_autoresolve` (base `main` @ `e1909d2f`, 8 ahead of merge-base
+- [x] DONE 2026-09-23 as **PR #968**, but not this shape: opened from a separate branch `mw_manta_tloc_autoresolve_pr` stacked onto `mw_fix_single_sample_blocking` (#966), because this branch is rebased onto that unmerged branch and a PR to main would have carried its 8 files too; harness WDL + docs/handoff excluded (002 §1a). Original text: Open PR from `mw_manta_tloc_autoresolve` (base `main` @ `e1909d2f`, 8 ahead of merge-base
       `4bc70a69` — decide rebase vs leave; if rebasing, re-run the harness afterwards).
-- [ ] Rebuild sv-pipeline docker from this branch and run one TinyResolve/ResolveManta shard
+- [x] DONE 2026-09-23 — Rebuilt sv-pipeline docker from this branch and ran the whole TinyResolve/ResolveManta set end-to-end; flag-on behavior confirmed as §4 row 4 predicted (002 §1b/§1c). Original text: Rebuild sv-pipeline docker from this branch and run one TinyResolve/ResolveManta shard
       end-to-end; expect flag-on behavior per §4 row 4 (this is the only untested production path).
 - [ ] Follow-up ticket (pre-existing, now dormant behind the flag):
       `src/sv-pipeline/scripts/single_sample/update_variant_representations.py` CTX→4×BND expansion
