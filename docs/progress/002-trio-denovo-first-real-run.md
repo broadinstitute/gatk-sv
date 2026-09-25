@@ -405,21 +405,30 @@ Not touched, deliberately: the shared baseline workspace
 
 - Run 5 `3d7f4e75-4eba-4d70-9f93-f7f8454f2ebe` / wf `41a320cb-0929-4372-a8cf-e621d4d28e47`, submitted
   `2026-09-25T15:40:54Z`: **`Running`**, 33 calls `Done` + `MakeCohortVcf` `Running`, cost **$0.00**,
-  ~3 h 15 m elapsed at handoff. Submission-level status reads `Submitted` while its workflow reads
+  ~3 h 30 m elapsed at handoff. Submission-level status reads `Submitted` while its workflow reads
   `Running` — that lag is normal here, trust the workflow.
+  **Liveness confirmed on the bucket, not on metadata** (which had served the same 641 532-byte
+  snapshot twice, 10 min apart): `call-MakeCohortVcf/` holds 1 object (`script`) and **no `stdout`**,
+  i.e. the task is executing now. Expect the back half to run for real — §7 item 5.
   **No outcome is assumed.** Re-run the §8 command; expect §9's corrected cost/duration rows.
 - Workspace submissions total **5**, all mine (`6da799b0`, `79b10bb0`, `57b1b186`, `ffe3c189` Done;
   `3d7f4e75` active). Re-listed with `curl` at handoff precisely because `list_submissions` returns
   `[]` (§10) and because I needed to rule out a parallel agent submitting into this sandbox — there is
   none. Note each finished submission stores the config under a per-submission snapshot name
   (`single-sample-trio-a0e10b99_B0EJFlC5SLk`), so do not mistake those for extra configs.
-- `wt/trio-denovo`: clean, head == remote == `4ba78d4b` **plus this doc's commit**, `ahead=0 behind=0`.
+- `wt/trio-denovo`: clean. Code head `4ba78d4b` (last WDL change); docs commits on top — `c7161978`
+  (this doc) then the correction commit that records this line. Local head == `origin/trio_denovo_single_sample`
+  at every check made this session; re-verify per §8 rather than trusting the sha here.
 - `wt/fix-ss-blocking`: clean, head `04fa5142`, == remote (another agent's branch, untouched here).
 - `wt/jrc_args`: **ahead=2, nothing pushed**; `wt/tloc-pr`: **no upstream, never pushed** — neither is
   mine; both are other agents' work and were left alone.
-- `gatk-sv-testkit`: **DIRTY** with changes this session did not make — `docs/setup.md`,
-  `scripts/probe_fixes.py`, `scripts/selftest.sh` modified, head `cdb6444`, `ahead=0`. Quarantined:
-  not committed, not reverted. Someone must account for them.
+- `gatk-sv-testkit`: was **DIRTY** at freeze time with changes this session did not make —
+  `docs/setup.md`, `scripts/probe_fixes.py`, `scripts/selftest.sh`. This session committed **only**
+  `docs/terra-head-to-head.md` (path-scoped, `d63c771`) and never staged, reverted or reviewed the
+  foreign files. **They were committed by their author mid-session** as `d958e8b` ("selftest: a
+  skipped probe no longer satisfies the pinned count, and says what to install"), so at handoff the
+  worktree is **clean**, `ahead=0`, local head == `origin/main` == `d63c771`. §14 #9 closed on that
+  evidence rather than being carried forward as a guess.
 - `gatk-sv` main worktree: dirty only with untracked tool dirs (`.claude/`, `.serena/`, `.tokensave/`,
   `wt/`), head `e1909d2f` == `origin/main`.
 - Compute: zero `gsv-*` instances in `broad-dsde-methods`.
@@ -447,7 +456,10 @@ Not touched, deliberately: the shared baseline workspace
       verdict here; if it is still `Running`, do not report it as done. Its MOI table must match
       §1 exactly — if `RefineComplexVariants`/`AnnotateModeOfInheritance` re-ran (which §7 item 5 says
       it did), any difference in the counts is a real finding about run-to-run reproducibility, not noise.
-- [ ] **9. Account for the dirty `gatk-sv-testkit` files** in §13 (not this session's work).
+- [x] **9. Account for the dirty `gatk-sv-testkit` files** in §13 — **resolved without this session's
+      involvement**: their author committed them as `d958e8b` while this session was writing the doc;
+      the worktree is clean at handoff. Left checked-out here so the next session can confirm nobody
+      is still editing them.
 - [ ] **10. RD cutoffs are still not quotable** — the only full-interval run is this trio run, whose
       QC is not validated (item 5), and cutoffs are meaningless without a baseline comparison.
 - [ ] **11. Report the tool defects** — `terra-monitor/scripts/twatch.py --diagnose` → HTTP 405;
