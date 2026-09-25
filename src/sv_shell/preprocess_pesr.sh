@@ -10,7 +10,8 @@ function StandardizeVCFs() {
   local _contigs=$4
   local _min_svsize=$5
   local _prefix=$6
-
+  # Optional extra arguments forwarded verbatim to `svtk standardize`.
+  local _extra_args=("${@:7}")
 
   echo "----------- Starting StandardizeVCFs -------------"
   echo "_raw_vcfs: ${_raw_vcfs[@]}"
@@ -19,6 +20,7 @@ function StandardizeVCFs() {
   echo "_contigs: ${_contigs}"
   echo "_min_svsize: ${_min_svsize}"
   echo "_prefix: ${_prefix}"
+  echo "_extra_args: ${_extra_args[*]}"
   echo "-------------------------------------------------"
 
   #  vcfs=(~{sep=" " raw_vcfs})
@@ -35,6 +37,7 @@ function StandardizeVCFs() {
       --prefix "${_caller}_${sample_id}" \
       --contigs "${_contigs}" \
       --min-size "${min_svsize}" \
+      "${_extra_args[@]}" \
       "${vcf}" \
       tmp.vcf \
       "${_caller}"
@@ -77,6 +80,8 @@ echo "Preprocess PE-SR Working directory: ${working_dir}"
 
 samples=($(jq -r '.samples[]' "$input_json"))
 dragen_vcfs=($(jq -r '.dragen_vcfs[] // ""' "$input_json"))
+# Optional; selects a DRAGEN-version-specific standardizer in svtk (e.g. "v3.7.6").
+dragen_version=$(jq -r '.dragen_version // empty' "$input_json")
 manta_vcfs=($(jq -r '.manta_vcfs[] // ""' "$input_json"))
 scramble_vcfs=($(jq -r '.scramble_vcfs[] // ""' "$input_json"))
 wham_vcfs=($(jq -r '.wham_vcfs[] // ""' "$input_json"))
@@ -102,7 +107,11 @@ if (( "${#dragen_vcfs[@]}" > 0 )); then
   working_dir="$(realpath ${working_dir})"
   cd "${working_dir}"
 
-  StandardizeVCFs "dragen_vcfs" "samples" "${algorithm}" "${contigs}" "${min_svsize}" "${prefix}"
+  dragen_version_args=()
+  if [[ -n "${dragen_version}" ]]; then
+    dragen_version_args=(--dragen-version "${dragen_version}")
+  fi
+  StandardizeVCFs "dragen_vcfs" "samples" "${algorithm}" "${contigs}" "${min_svsize}" "${prefix}" "${dragen_version_args[@]}"
 
   dragen_out="${working_dir}/${prefix}.tar.gz"
   dragen_out_output="${output_dir}/$(basename "${dragen_out}")"

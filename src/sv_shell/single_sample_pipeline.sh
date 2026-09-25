@@ -9,6 +9,7 @@ RED='\033[0;31m'
 BOLD_RED="\033[1;31m"
 GREEN='\033[0;32m'
 MAGENTA='\033[0;35m'
+YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
@@ -18,6 +19,10 @@ log_info() {
 
 log_success() {
   echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${GREEN} $1 ${NC}" | tee -a "${single_sample_pipeline_stdout}"
+}
+
+log_warning() {
+  echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${YELLOW} $1 ${NC}" | tee -a "${single_sample_pipeline_stdout}"
 }
 
 log_error() {
@@ -165,6 +170,9 @@ fi
 
 ref_std_dragen_vcf_tar=$(jq -r '.ref_std_dragen_vcf_tar // empty' "$input_json")
 dragen_sv_vcf=$(jq -r '.dragen_sv_vcf // empty' "$input_json")
+dragen_cnv_vcf=$(jq -r '.dragen_cnv_vcf // empty' "$input_json")
+# Optional; identifies the DRAGEN-SV VCF version so svtk can select a matching standardizer.
+dragen_version=$(jq -r '.dragen_version // empty' "$input_json")
 primary_contigs_fai=$(jq -r ".primary_contigs_fai" "$input_json")
 min_svsize=$(jq -r ".min_svsize" "$input_json")
 
@@ -198,22 +206,33 @@ if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
     exit 1
   fi
 
+  if [[ -z "${dragen_version}" ]]; then
+    log_warning "use_dragen is true but dragen_version is not set; svtk will fall back to its default DRAGEN-SV standardizer."
+  fi
+
   if [[ "${run_manta}" == true ]]; then
     log_info "run_manta is ${run_manta}; however, since use_dragen is set true, we override run_manta=false"
     run_manta=false
   fi
 
+  # The raw DRAGEN-SV VCF is passed downstream as-is. It is standardized exactly once,
+  # in preprocess_pesr.sh (via gather_batch_evidence.sh), alongside the other PE/SR callers.
+  # Do not standardize it here: svtk standardize is not idempotent and re-standardizing
+  # a standardized VCF corrupts END/SVLEN of DEL records.
+  # The DRAGEN-CNV VCF is only consumed by merge_depth.sh, which expects it standardized,
+  # so it is standardized here.
   svtk standardize \
     --sample-names ${sample_id} \
     --prefix "dragen_${sample_id}" \
     --contigs "${primary_contigs_fai}" \
     --min-size "${min_svsize}" \
-    "${dragen_sv_vcf}" \
+    "${dragen_cnv_vcf}" \
     tmp.vcf \
-    "dragen"
+    "dragen_cnv"
 
-  dragen_sv_vcf=$(realpath "std.dragen.${sample_id}.vcf.gz")
-  bcftools sort tmp.vcf -Oz -o "${dragen_sv_vcf}"
+  dragen_cnv_vcf=$(realpath "std.dragen.cnv.${sample_id}.vcf.gz")
+  bcftools sort tmp.vcf -Oz -o "${dragen_cnv_vcf}"
+  tabix -p vcf "${dragen_cnv_vcf}"
   rm tmp.vcf
 fi
 
@@ -312,7 +331,9 @@ jq -n \
   --slurpfile gse_outputs "${gather_sample_evidence_outputs_json}" \
   --slurpfile eqc_outputs "${evidence_qc_outputs_json_filename}" \
   --arg samples "${sample_id}" \
-  --arg dragen_vcf "${dragen_sv_vcf}" \
+  --arg dragen_sv_vcf "${dragen_sv_vcf}" \
+  --arg dragen_cnv_vcf "${dragen_cnv_vcf}" \
+  --arg dragen_version "${dragen_version}" \
   --argjson ref_samples "${ref_samples_json_array}" \
   --argjson ref_pe_disc "${ref_pesr_disc_files_json_array}" \
   --argjson ref_pe_split "${ref_pesr_split_files_json_array}" \
@@ -376,7 +397,8 @@ jq -n \
       ref_copy_number_autosomal_contigs: $inputs[0].ref_copy_number_autosomal_contigs,
       allosomal_contigs: $inputs[0].allosomal_contigs,
       gcnv_qs_cutoff: $inputs[0].gcnv_qs_cutoff,
-      dragen_vcfs: (if $dragen_vcf != "" then [$dragen_vcf] else [] end),
+      dragen_vcfs: (if $dragen_sv_vcf != "" then [$dragen_sv_vcf] else [] end),
+      dragen_version: $dragen_version,
       manta_vcfs: (if $gse_outputs[0].manta_vcf != "" then [$gse_outputs[0].manta_vcf] else [] end),
       scramble_vcfs: (if $gse_outputs[0].scramble_vcf != "" then [$gse_outputs[0].scramble_vcf] else [] end),
       wham_vcfs: (if $gse_outputs[0].wham_vcf != "" then [$gse_outputs[0].wham_vcf] else [] end),
@@ -391,8 +413,7 @@ jq -n \
       ref_panel_median_cov: $inputs[0].ref_panel_median_cov,
       sample_median_cov: $eqc_outputs[0].bincov_median,
       "cytobands": $inputs[0].cytobands,
-      "dragen_cnv_vcf": $inputs[0].dragen_cnv_vcf,
-      "dragen_cnv_vcf_index": $inputs[0].dragen_cnv_vcf_index
+      "dragen_cnv_vcf": $dragen_cnv_vcf
   }' > "${gather_batch_evidence_inputs_json_filename}"
 
 bash /opt/sv_shell/gather_batch_evidence.sh \
@@ -401,6 +422,7 @@ bash /opt/sv_shell/gather_batch_evidence.sh \
   "${gather_batch_evidence_output_dir}"
 
 log_success "Successfully finished gather batch evidence."
+
 
 # stripy
 # ----------------------------------------------------------------------------------------------------------------------

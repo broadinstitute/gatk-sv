@@ -432,6 +432,7 @@ jq -n \
   --argfile scramble_vcfs <(jq '.scramble_vcfs // ""' "${input_json}") \
   --argfile wham_vcfs <(jq '.wham_vcfs // ""' "${input_json}") \
   --argfile dragen_vcfs <(jq '.dragen_vcfs // []' "${input_json}") \
+  --arg dragen_version "$(jq -r '.dragen_version // empty' "${input_json}")" \
   --argfile contigs <(jq '.primary_contigs_fai' "${input_json}") \
   --argfile min_svsize <(jq '.min_svsize' "${input_json}") \
   --arg batch "${batch}" \
@@ -441,6 +442,7 @@ jq -n \
       "scramble_vcfs": $scramble_vcfs,
       "wham_vcfs": $wham_vcfs,
       "dragen_vcfs": $dragen_vcfs,
+      "dragen_version": $dragen_version,
       "contigs": $contigs,
       "min_svsize": $min_svsize,
       "batch": $batch
