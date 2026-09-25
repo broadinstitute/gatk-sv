@@ -215,32 +215,12 @@ if [[ -n "${dragen_sv_vcf}" && -f "${dragen_sv_vcf}" ]]; then
     run_manta=false
   fi
 
-  # Note that instead of standardizing here, the bash script
-  # can assume the user standardizes outside of this script
-  # and provides standardized dragen SV and CNV vcfs (e.g., the SVShell WDL can do this).
-  # However, we don't have an easy way of checking if DRAGEN files are standardized,
-  # and if a user misses standardization, it leads to confusing errors that are
-  # hard to debug. Hence, we standardize input here to ensure SVShell always has standardized VCFs.
-  dragen_version_args=()
-  if [[ -n "${dragen_version}" ]]; then
-    dragen_version_args=(--dragen-version "${dragen_version}")
-  fi
-
-  svtk standardize \
-    --sample-names ${sample_id} \
-    --prefix "dragen_${sample_id}" \
-    --contigs "${primary_contigs_fai}" \
-    --min-size "${min_svsize}" \
-    "${dragen_version_args[@]}" \
-    "${dragen_sv_vcf}" \
-    tmp.vcf \
-    "dragen"
-
-  dragen_sv_vcf=$(realpath "std.dragen.sv.${sample_id}.vcf.gz")
-  bcftools sort tmp.vcf -Oz -o "${dragen_sv_vcf}"
-  tabix -p vcf "${dragen_sv_vcf}"
-  rm tmp.vcf
-
+  # The raw DRAGEN-SV VCF is passed downstream as-is. It is standardized exactly once,
+  # in preprocess_pesr.sh (via gather_batch_evidence.sh), alongside the other PE/SR callers.
+  # Do not standardize it here: svtk standardize is not idempotent and re-standardizing
+  # a standardized VCF corrupts END/SVLEN of DEL records.
+  # The DRAGEN-CNV VCF is only consumed by merge_depth.sh, which expects it standardized,
+  # so it is standardized here.
   svtk standardize \
     --sample-names ${sample_id} \
     --prefix "dragen_${sample_id}" \
