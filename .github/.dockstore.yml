@@ -215,6 +215,7 @@ workflows:
         - main
         - vj-vapor-optimize
         - vj-vapor-optimize-off-latest-vapor-master
+        - vj-vapor-otimize-off-pinned
       tags:
         - /.*/
 

@@ -2,11 +2,13 @@
 # some basic bioinformatics utilities.
 
 ############### stage 0: build samtools and bcftools from source
-FROM ubuntu:18.04
+FROM ubuntu:22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG SAMTOOLS_VERSION=1.9
-ARG BCFTOOLS_VERSION=1.9
+# htslib 1.9 cannot fetch remote (gs://, https://) indexes with Ubuntu 22.04's libcurl; 1.24 can,
+# and supports samtools view -X for an explicitly given index
+ARG SAMTOOLS_VERSION=1.24
+ARG BCFTOOLS_VERSION=1.24
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy dist-upgrade && \
     apt-get -qqy install --no-install-recommends \
@@ -42,7 +44,7 @@ RUN apt-get -qqy update --fix-missing && \
     bcftools --help
 
 ############### stage 1: other commonly used bioinformatics utilities
-FROM ubuntu:18.04
+FROM ubuntu:22.04
 
 ENV HOME=/root
 
@@ -77,21 +79,21 @@ RUN apt-get -qqy update --fix-missing && \
 
 
 # install GCloud SDK
-ARG CLOUD_SDK_VERSION=239.0.0
+# google-cloud-sdk 239 is no longer published; the package is now google-cloud-cli (latest only)
 ARG GCLOUD_SDK_EXTRA_COMPONENTS
-ARG GCLOUD_SDK_TRANSIENT_DEP="curl gpg-agent gnupg python-pip python-setuptools "
+ARG GCLOUD_SDK_TRANSIENT_DEP="curl gpg-agent gnupg python3-pip python3-setuptools "
 ARG GCLOUD_SDK_DEPENDENCIES="lsb-release ${GCLOUD_SDK_TRANSIENT_DEP}"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy dist-upgrade && \
     apt-get -qqy install --no-install-recommends \
                  ${GCLOUD_SDK_DEPENDENCIES} && \
-    pip install -q -U --no-cache-dir \
+    pip3 install -q -U --no-cache-dir \
                 crcmod \
                 wheel && \
     export CLOUD_SDK_REPO="cloud-sdk-$(lsb_release -c -s)" && \
-    echo "deb https://packages.cloud.google.com/apt $CLOUD_SDK_REPO main" > /etc/apt/sources.list.d/google-cloud-sdk.list && \
-    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
+    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt $CLOUD_SDK_REPO main" > /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
     apt-get -qqy update && \
     apt-get -qqy install --no-install-recommends \
                  google-cloud-cli \
@@ -136,13 +138,25 @@ RUN apt-get update --fix-missing && \
     apt-get -y autoremove && \
     apt-get  -y autoclean
 
-# install vapor
-# rpy2 is listed in setup.py but never imported, and no rpy2 release installs on this image's
-# Python 3.6 without extra build dependencies, so install the other requirements and skip it
-# (a regular install: the editable-install launcher refuses to start when rpy2 is missing)
-RUN pip3 install --no-cache-dir Cython numpy scipy matplotlib scikit-learn && \
-    cd /opt && \
-    git clone https://github.com/talkowski-lab/vapor.git && \
-    cd /opt/vapor/ && \
-    git checkout efbfbf9f211242f36138a2c8f77fcf39d8f3f250 && \
-    pip3 install --no-deps .
+# install vapor (optimized, talkowski-lab/vapor at VAPOR_COMMIT) into its own Python 3.6 environment.
+# Scores depend on the numerical libraries, so they are pinned (requirements.txt) to the versions of the
+# original Ubuntu 18.04 / Python 3.6 image; Ubuntu 22.04 has no Python 3.6, so micromamba provides it.
+# The scoring module is compiled with Cython 0.29 like the original.
+ARG VAPOR_REPO=https://github.com/talkowski-lab/vapor.git
+ARG VAPOR_COMMIT=d7930417ebbb4ec1709a9dd5e4aa6fd9b0bc68a2
+ENV MAMBA_ROOT_PREFIX=/opt/micromamba
+RUN apt-get update && apt-get install -y --no-install-recommends bzip2 ca-certificates curl gcc git && \
+    rm -rf /var/lib/apt/lists/* && \
+    MAMBA_PLATFORM=$(case $(uname -m) in aarch64) echo linux-aarch64 ;; *) echo linux-64 ;; esac) && \
+    curl -Ls https://micro.mamba.pm/api/micromamba/${MAMBA_PLATFORM}/latest | tar -xj -C /usr/local bin/micromamba && \
+    micromamba create -y -p /opt/vapor-env -c conda-forge python=3.6 pip && \
+    micromamba clean -a -y && \
+    git clone ${VAPOR_REPO} /opt/vapor && \
+    cd /opt/vapor && git checkout ${VAPOR_COMMIT} && \
+    /opt/vapor-env/bin/pip install --no-cache-dir -r requirements.txt && \
+    CC=gcc LDSHARED="gcc -pthread -shared" /opt/vapor-env/bin/pip install --no-cache-dir --no-deps --no-build-isolation . && \
+    ln -sf /opt/vapor-env/bin/vapor /usr/local/bin/vapor && \
+    cd / && /opt/vapor-env/bin/python -c "import vapor_vali.Simple_function as m; print(m.__file__)"
+
+# parallelism comes from `vapor bed --threads`; one BLAS/OpenMP thread per worker process
+ENV OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
