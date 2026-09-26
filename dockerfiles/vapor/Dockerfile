@@ -140,9 +140,11 @@ RUN apt-get update --fix-missing && \
 # rpy2 is listed in setup.py but never imported, and no rpy2 release installs on this image's
 # Python 3.6 without extra build dependencies, so install the other requirements and skip it
 # (a regular install: the editable-install launcher refuses to start when rpy2 is missing)
-RUN pip3 install --no-cache-dir Cython numpy scipy matplotlib scikit-learn && \
+# Cython < 3: this code relies on Cython 0.29's default Python 2 semantics (e.g. integer division
+# in range(len(out)/2)); Cython 3 compiles it with Python 3 semantics and vapor crashes
+RUN pip3 install --no-cache-dir 'Cython<3' numpy scipy matplotlib scikit-learn && \
     cd /opt && \
     git clone https://github.com/talkowski-lab/vapor.git && \
     cd /opt/vapor/ && \
-    git checkout efbfbf9f211242f36138a2c8f77fcf39d8f3f250 && \
+    git checkout f7295c6e5a7b0e18bf1251fcf44badd43755a449 && \
     pip3 install --no-deps .
