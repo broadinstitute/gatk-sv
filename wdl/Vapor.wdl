@@ -7,11 +7,11 @@ workflow Vapor {
   input {
     String sample_id
     File bam_or_cram_file
-    File? bam_or_cram_index  # optional; if not given, samtools finds the index next to the BAM/CRAM (.bai/.csi/.crai)
+    File bam_or_cram_index
 
     Array[File] bed_files  # per contig bed files
 
-    Boolean save_plots = false  # Draw the per-SV dot plots and return them as a final output (roughly doubles vapor's runtime)
+    Boolean save_plots  # Control whether plots are final output
 
     File ref_fasta
     File ref_fai
@@ -52,7 +52,6 @@ workflow Vapor {
         bam_or_cram_file = bam_or_cram_file,
         bam_or_cram_index = bam_or_cram_index,
         bed = PreprocessBedForVapor.contig_bed,
-        save_plots = save_plots,
         ref_fasta = ref_fasta,
         ref_fai = ref_fai,
         ref_dict = ref_dict,
@@ -134,9 +133,8 @@ task RunVaporWithCram {
     String prefix
     String contig
     String bam_or_cram_file
-    String? bam_or_cram_index
+    String bam_or_cram_index
     File bed
-    Boolean save_plots
     File ref_fasta
     File ref_fai
     File ref_dict
@@ -145,7 +143,7 @@ task RunVaporWithCram {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 4,
+    cpu_cores: 1,
     mem_gb: 15,
     disk_gb: 10 + ceil(size([bed, bam_or_cram_file], "GiB")),
     boot_disk_gb: 10,
@@ -153,9 +151,6 @@ task RunVaporWithCram {
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  # vapor scores SVs in this many worker processes (output is identical for any value);
-  # samtools uses the same cores for CRAM decoding and BAM compression before vapor starts
-  Int vapor_threads = select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
 
   output {
     File vapor = "~{prefix}.~{contig}.vapor.gz"
@@ -167,16 +162,9 @@ task RunVaporWithCram {
     set -Eeuo pipefail
 
     # localize cram files
-    # assign before exporting so that a failing gcloud call stops the task (export would mask it)
-    GCS_OAUTH_TOKEN=$(gcloud auth application-default print-access-token)
-    export GCS_OAUTH_TOKEN
-    # with an index given, -X makes samtools use it; otherwise samtools infers the index from the file name
-    samtools view -@ ~{vapor_threads} -h -b -T ~{ref_fasta} -o ~{contig}.bam \
-      ~{if defined(bam_or_cram_index) then "-X " + bam_or_cram_file + " " + select_first([bam_or_cram_index]) else bam_or_cram_file} \
-      ~{contig}
-    # CSI index with 1 kb bins: same reads as a BAI index, but region queries in very deep
-    # regions scan far fewer records (about 5x faster read fetching on the chr1 test data)
-    samtools index -@ ~{vapor_threads} -c -m 10 ~{contig}.bam
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+    samtools view -h -T ~{ref_fasta} -o ~{contig}.bam ~{bam_or_cram_file} ~{contig}
+    samtools index ~{contig}.bam
 
     # run vapor
     mkdir ~{prefix}.~{contig}
@@ -187,23 +175,22 @@ task RunVaporWithCram {
       --output-file ~{prefix}.~{contig}.vapor \
       --reference ~{ref_fasta} \
       --PB-supp 0 \
-      --threads ~{vapor_threads} \
-      ~{if save_plots then "" else "--no-plots"} \
       --pacbio-input ~{contig}.bam
 
     tar -czf ~{prefix}.~{contig}.tar.gz ~{prefix}.~{contig}
-    bgzip -@ ~{vapor_threads} ~{prefix}.~{contig}.vapor
+    bgzip ~{prefix}.~{contig}.vapor
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: vapor_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
 # Merge shards after Vapor
 task ConcatVapor {
   input {

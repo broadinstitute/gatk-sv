@@ -214,6 +214,7 @@ workflows:
       branches:
         - main
         - vj-vapor-optimize
+        - from_version_pinned_in_gatk_sv
       tags:
         - /.*/
 
