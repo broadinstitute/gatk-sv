@@ -214,6 +214,7 @@ workflows:
       branches:
         - main
         - vj-vapor-optimize
+        - vj-vapor-optimize-off-latest-vapor-master
       tags:
         - /.*/
 
