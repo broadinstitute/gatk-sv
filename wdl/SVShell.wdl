@@ -27,6 +27,7 @@ workflow SVShell {
     File? dragen_cnv_vcf
     File? dragen_cnv_vcf_index
     File? ref_std_dragen_vcf_tar
+    String? dragen_version
   }
 
   Array[File] gcnv_model_tars = read_lines(gcnv_model_tars_list)
@@ -94,7 +95,8 @@ workflow SVShell {
       dragen_sv_vcf_index = dragen_sv_vcf_index,
       dragen_cnv_vcf = dragen_cnv_vcf,
       dragen_cnv_vcf_index = dragen_cnv_vcf_index,
-      ref_std_dragen_vcf_tar = ref_std_dragen_vcf_tar
+      ref_std_dragen_vcf_tar = ref_std_dragen_vcf_tar,
+      dragen_version = dragen_version
   }
 
 
@@ -155,6 +157,25 @@ workflow SVShell {
     }
   }
 
+  if (defined(dragen_cnv_vcf)) {
+    call StandardizeVcf as StandardizeDragenCnv {
+      input:
+        sample_id = sample_id,
+        vcf_path = select_first([dragen_cnv_vcf]),
+        caller = "dragen_cnv",
+        contigs_fai = primary_contigs_fai,
+        min_size = min_svsize,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+    call FormatVcfForGatk as FormatDragenCnv {
+      input:
+        sample_id = sample_id,
+        vcf_path = StandardizeDragenCnv.standardized_vcf,
+        ploidy_table = RunSVShell.ploidy_table,
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+  }
+
   output {
     File inputs_json = RunSVShell.inputs_json
     File outputs_json = RunSVShell.outputs_json
@@ -190,6 +211,8 @@ workflow SVShell {
     File? wham_vcf_formatted_index = FormatWham.formatted_vcf_index
     File? dragen_sv_vcf_formatted = FormatDragenSv.formatted_vcf
     File? dragen_sv_vcf_formatted_index = FormatDragenSv.formatted_vcf_index
+    File? dragen_cnv_vcf_formatted = FormatDragenCnv.formatted_vcf
+    File? dragen_cnv_vcf_formatted_index = FormatDragenCnv.formatted_vcf_index
   }
 }
 
@@ -313,6 +336,7 @@ task RunSVShell {
     File? dragen_cnv_vcf
     File? dragen_cnv_vcf_index
     File? ref_std_dragen_vcf_tar
+    String? dragen_version
 
     String sv_shell_docker
     RuntimeAttr? runtime_attr_override
@@ -461,6 +485,7 @@ task RunSVShell {
       --arg dragen_cnv_vcf "~{select_first([dragen_cnv_vcf, ""])}" \
       --arg dragen_cnv_vcf_index "~{select_first([dragen_cnv_vcf_index, ""])}" \
       --arg ref_std_dragen_vcf_tar "~{select_first([ref_std_dragen_vcf_tar, ""])}" \
+      --arg dragen_version "~{select_first([dragen_version, ""])}" \
       '$ARGS.named | with_entries(select(.value != "" and .value != null))' > "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json"
 
     bash /opt/sv_shell/single_sample_pipeline.sh \
