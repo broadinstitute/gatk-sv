@@ -126,7 +126,7 @@ task PrepareMatrixTables {
   RuntimeAttr default_attr = object {
     cpu_cores: 8,
     mem_gb: 52,
-    disk_gb: ceil(200 + size(snv_vcf, "GB") * 3 + size(sv_vcf, "GB") * 3),
+    disk_gb: ceil(200 + size(snv_vcf, "GB") * 3 + size(sv_vcf, "GB") * 8),
     boot_disk_gb: 20,
     preemptible_tries: 0,
     max_retries: 1
@@ -135,6 +135,28 @@ task PrepareMatrixTables {
 
   command <<<
     set -euo pipefail
+
+    # Some upstream SV panel VCFs (e.g. the 1KGP SV panel) have INFO/FORMAT
+    # header lines with Type before Number, e.g.
+    #   ##INFO=<ID=END2,Type=Integer,Number=1,Description="...">
+    # htsjdk (which Hail's VCF reader uses) strictly requires the order
+    # ID,Number,Type,Description and rejects the file otherwise. Repair the
+    # header into a plain (uncompressed) VCF rather than editing the shared
+    # source file.
+    python3 <<'FIXHDR'
+import gzip
+import re
+
+pat = re.compile(r'^(##(?:INFO|FORMAT)=<ID=[^,]+,)Type=([^,]+),Number=([^,]+),(.*)$')
+with gzip.open("~{sv_vcf}", "rt") as fin, open("sv_vcf_fixed.vcf", "w") as fout:
+    for line in fin:
+        if line.startswith("##INFO=") or line.startswith("##FORMAT="):
+            m = pat.match(line)
+            if m:
+                line = "{}Number={},Type={},{}".format(
+                    m.group(1), m.group(3), m.group(2), m.group(4))
+        fout.write(line)
+FIXHDR
 
     python <<CODE
 import hail as hl
@@ -151,8 +173,8 @@ def get_info_or_missing(mt, field, dtype):
 # SV VCF: infer SVTYPE/END/allele_length for TRGT tandem-repeat records that
 # lack standard SV INFO fields (allele_type == "trv"), same logic as the
 # source notebook. Harmless no-op if the SV VCF has no TRGT records.
-sv_mt = hl.import_vcf("~{sv_vcf}", reference_genome="GRCh38",
-                       array_elements_required=False, force_bgz=True)
+sv_mt = hl.import_vcf("sv_vcf_fixed.vcf", reference_genome="GRCh38",
+                       array_elements_required=False)
 
 sv_mt = sv_mt.annotate_rows(
     SVTYPE=get_info_or_missing(sv_mt, "SVTYPE", hl.tstr),
@@ -483,6 +505,13 @@ def process_ld(snv_mt_in, sv_mt_in, pop):
         snv_mt = snv_mt_in.filter_cols(snv_mt_in.POP == pop)
         sv_mt = sv_mt_in.filter_cols(sv_mt_in.POP == pop)
 
+    # Genotype correlation is undefined with <2 samples (zero variance);
+    # skip degenerate/singleton populations rather than let normalize()
+    # divide by zero.
+    if snv_mt.count_cols() < 2 or sv_mt.count_cols() < 2:
+        print("Skipping population {} on {}: fewer than 2 samples".format(pop, contig))
+        return
+
     snv_mt = hl.variant_qc(snv_mt)
     snv_mt = snv_mt.filter_rows(hl.min(snv_mt.variant_qc.AF) >= snv_af_threshold)
     snv_mt = snv_mt.checkpoint("snv_{}_{}.mt".format(pop, contig), overwrite=True)
@@ -556,7 +585,12 @@ def process_ld(snv_mt_in, sv_mt_in, pop):
 
 
 for pop in populations:
-    process_ld(snv_mt_contig, sv_mt_contig, pop)
+    try:
+        process_ld(snv_mt_contig, sv_mt_contig, pop)
+    except Exception as e:
+        # One degenerate/unexpected population shouldn't take down the
+        # results for every other population on this contig.
+        print("WARNING: process_ld failed for population {} on {}: {}".format(pop, contig, e))
 CODE
   >>>
 

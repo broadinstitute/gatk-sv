@@ -105,15 +105,15 @@ task ConcatBeds {
   command <<<
     set -eux
 
-    # note head -n1 stops reading early and sends SIGPIPE to zcat,
-    # so setting pipefail here would result in early termination
-    zcat ~{shard_bed_files[0]} | head -n1 > header.txt
+    # note head -n1 stops reading early and sends SIGPIPE to the upstream
+    # process, so setting pipefail here would result in early termination
+    cat ~{shard_bed_files[0]} | head -n1 > header.txt
 
     # no more early stopping
     set -o pipefail
 
     while read SPLIT; do
-      zcat $SPLIT | tail -n+2
+      cat $SPLIT | tail -n+2
     done < ~{write_lines(shard_bed_files)} \
       | cat header.txt - \
       | bgzip -c \
