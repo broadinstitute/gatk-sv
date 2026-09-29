@@ -301,10 +301,28 @@ CODE
 # ---------------------------------------------------------------------------------------------------------------------
 AddRetroDelFilters_out="${cohort_name}.retro_del_filtered.vcf.gz"
 
-python /opt/sv-pipeline/04_variant_resolution/scripts/add_retro_del_filters.py \
-  "${AddHighFDRFilters_out}" \
-  "${intron_reference}" \
-  "${AddRetroDelFilters_out}"
+# add_retro_del_filters.py requires --contig and only loads introns for that contig
+# (the WDL runs CleanVcfChromosome per-contig). This script processes the whole
+# genome in one VCF, so shard by contig, run the script per shard, and concatenate.
+# Contigs not in contig_list are dropped, matching the WDL's per-contig scatter.
+mkdir -p retro_del_shards
+retro_del_shards=()
+while read -r _contig _rest; do
+  [[ -z "${_contig}" ]] && continue
+  _shard_in="retro_del_shards/${_contig}.in.vcf.gz"
+  _shard_out="retro_del_shards/${_contig}.out.vcf.gz"
+  bcftools view --targets "${_contig}" "${AddHighFDRFilters_out}" -Oz -o "${_shard_in}"
+  python /opt/sv-pipeline/04_variant_resolution/scripts/add_retro_del_filters.py \
+    "${_shard_in}" \
+    "${intron_reference}" \
+    "${_shard_out}" \
+    --contig "${_contig}"
+  retro_del_shards+=("${_shard_out}")
+done < "${contig_list}"
+
+bcftools concat --no-version "${retro_del_shards[@]}" -Oz -o "${AddRetroDelFilters_out}"
+tabix -p vcf "${AddRetroDelFilters_out}"
+rm -rf retro_del_shards
 
 
 # FinalCleanup
