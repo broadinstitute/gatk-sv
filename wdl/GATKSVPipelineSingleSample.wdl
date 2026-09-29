@@ -874,6 +874,7 @@ workflow GATKSVPipelineSingleSample {
         vcf = FilterSample.out,
         vcf_index = FilterSample.out + ".tbi",
         prefix = sample_id,
+        sample_id = sample_id,
         gd_output_tarballs = [GD.gd_output_tarball],
         ploidy_tables = [CreatePloidyTableFromPed.out],
         gd_table = gd_table,
