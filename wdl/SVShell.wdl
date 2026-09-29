@@ -490,10 +490,6 @@ task RunSVShell {
       "${SV_SHELL_BASE_DIR}/single_sample_pipeline_inputs.json" \
       "${SV_SHELL_BASE_DIR}/single_sample_pipeline_outputs.json"
 
-#    # tar first: recursive cp of raw tree breaks on filenames with [ ] chars ("must match exactly one URL")
-#    tar -czf "${BASE_DIR}/wd.tar.gz" -C "$(dirname "${SV_SHELL_BASE_DIR}")" "$(basename "${SV_SHELL_BASE_DIR}")"
-#    gcloud storage cp "${BASE_DIR}/wd.tar.gz" "gs://broad-dsde-methods-vj/TMP-debug-svshell/~{sample_id}.wd.tar.gz"
-
     touch single_sample_pipeline_inputs.json
     touch single_sample_pipeline_outputs.json
     touch "~{final_vcf_filename}"
