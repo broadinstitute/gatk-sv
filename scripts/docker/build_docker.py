@@ -258,6 +258,9 @@ class ProjectBuilder:
             docker_dependencies={
                 "sv-pipeline": "SV_PIPELINE_IMAGE",
                 "wham": "WHAM_IMAGE"}
+        ),
+        "vapor": ImageDependencies(
+            git_dependencies="dockerfiles/vapor/*"
         )
     }
     non_public_images = frozenset({"melt"})
