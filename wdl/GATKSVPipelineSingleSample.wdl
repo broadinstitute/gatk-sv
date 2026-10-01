@@ -690,7 +690,8 @@ workflow GATKSVPipelineSingleSample {
       reference_dict = reference_dict,
       sample_id = sample_id,
       batch = batch,
-      sv_pipeline_docker = sv_pipeline_docker
+      sv_pipeline_docker = sv_pipeline_docker,
+      panel_samples = ref_samples
   }
 
   call evidenceqc.EvidenceQC as EvidenceQC {
@@ -1638,7 +1639,13 @@ task ConcatBaf {
     String sample_id
     String batch
     String sv_pipeline_docker
+    # Names present in ref_panel_baf. PrintSVEvidence writes only the samples listed by
+    # --sample-names, across every file given to -F, so naming just the case here drops
+    # the panel's columns from the merged matrix instead of merging them in.
+    Array[String] panel_samples = []
   }
+
+  Array[String] baf_samples = flatten([[sample_id], panel_samples])
 
   output {
     File merged_baf = "~{batch}.baf.txt.gz"
@@ -1664,7 +1671,11 @@ task ConcatBaf {
     echo "~{sample_id}.baf.txt.gz" > evidence.list
     echo "~{ref_panel_baf}" >> evidence.list
 
-    echo "~{sample_id}" > samples.list
+    # Case plus reference panel, one name per line, which is the shape cohort's
+    # MergeEvidence gets from write_lines(samples). Naming only the case left
+    # CallGenomicDisorderCNVs a one-sample BAF matrix while the RD matrix handed to the
+    # same call carries 157 sample columns.
+    mv ~{write_lines(baf_samples)} samples.list
 
     # This task runs in sv_pipeline_docker, which carries GATK as the jar baked into
     # sv-base (dockerfiles/sv-base/Dockerfile sets GATK_JAR=/opt/gatk.jar). The
