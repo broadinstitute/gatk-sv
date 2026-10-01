@@ -24,7 +24,10 @@ cat <(zcat $std_vcf|egrep ^##) \
 
 tabix -p vcf manta.vcf.gz
 
-svtk resolve manta.vcf.gz $id.manta.complex.vcf --mei-bed $meibed --cytobands $cytobands --discfile $discfile -u manta.unresolved.vcf
+# --resolve-single-tlocs: this workflow keeps one record per manta/dragen
+# MATEID pair (CHR2/END2 encode the mate), so single interchromosomal records
+# are auto-resolved to CTX here instead of being dropped as SINGLE_ENDER
+svtk resolve manta.vcf.gz $id.manta.complex.vcf --mei-bed $meibed --cytobands $cytobands --discfile $discfile --resolve-single-tlocs -u manta.unresolved.vcf
 
 
 bgzip $id.manta.complex.vcf
