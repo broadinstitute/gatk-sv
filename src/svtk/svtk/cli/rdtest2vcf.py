@@ -18,9 +18,9 @@ INFO fields, with specified constraints:
 import argparse
 import sys
 import os
+import pkg_resources
 from collections import namedtuple
 import pysam
-from svtk import resource_path
 from svtk.standardize import VCFStandardizer
 
 
@@ -116,7 +116,8 @@ def main(argv):
 
     # Add contigs to header if provided
     if args.contigs:
-        template = resource_path('data', 'no_contigs_template.vcf')
+        template = pkg_resources.resource_filename(
+            'svtk', 'data/no_contigs_template.vcf')
         # pysam can no longer open up a VCF header with FORMAT but no samples, so copy template to temporary file
         # and add samples, then open and return header
         header = VCFStandardizer.get_header_from_template(template, samples)
@@ -126,7 +127,8 @@ def main(argv):
             header.add_line(contig_line.format(**locals()))
     # Use GRCh37 by default
     else:
-        template = resource_path('data', 'GRCh37_template.vcf')
+        template = pkg_resources.resource_filename(
+            'svtk', 'data/GRCh37_template.vcf')
         # pysam can no longer open up a VCF header with FORMAT but no samples, so copy template to temporary file
         # and add samples, then open and return header
         header = VCFStandardizer.get_header_from_template(template, samples)
