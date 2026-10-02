@@ -22,12 +22,16 @@ import "TasksMakeCohortVcf.wdl" as tasks_cohort
 #   gd_table            - GD regions table (same file used for GD calling)
 #   par_bed             - PAR regions BED
 #   contig_list         - List of contigs to scatter over (one per line)
+#   sample_id           - Single-sample mode only: drop rows where this sample is
+#                         hom-ref and stamp EVIDENCE=RD where it is missing. Leave
+#                         unset for cohort runs, which keep the integrator's output.
 
 workflow IntegrateGDVcf {
   input {
     File vcf
     File vcf_index
     String prefix
+    String? sample_id
     Array[File] gd_output_tarballs
     Array[File] ploidy_tables  # TODO : use joint ploidy table from JoinRawCalls
     File gd_table
@@ -56,6 +60,7 @@ workflow IntegrateGDVcf {
         vcf = vcf,
         vcf_index = vcf_index,
         prefix = prefix,
+        sample_id = sample_id,
         contig = contig,
         combined_gd_calls = PrepareGDCallsTask.combined_gd_calls,
         combined_ploidy = PrepareGDCallsTask.combined_ploidy,
@@ -171,6 +176,7 @@ task IntegrateGDVcfTask {
     File vcf
     File vcf_index
     String prefix
+    String? sample_id
     String contig
     File combined_gd_calls
     File combined_ploidy
@@ -183,6 +189,10 @@ task IntegrateGDVcfTask {
   }
 
   Float vcf_size = size(vcf, "GiB")
+
+  String out_vcf = if defined(sample_id)
+    then "~{prefix}.~{contig}.integrate_gd.filtered.vcf.gz"
+    else "~{prefix}.~{contig}.integrate_gd.vcf.gz"
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
@@ -225,6 +235,55 @@ task IntegrateGDVcfTask {
       --temp-dir $(pwd) \
       ~{default="" integrate_args}
 
+    # --- Single-sample only: drop confident non-carriers, carry EVIDENCE -------
+    # Skipped when sample_id is unset, so cohort runs keep the integrator's VCF
+    # unchanged: filtering a multi-sample VCF on one sample's GT would drop sites
+    # carried by other samples.
+    #
+    # The integrator emits a row for every genomic-disorder locus it screened, and
+    # for loci the case does not carry it emits a hom-ref row that also loses the
+    # EVIDENCE INFO field present on every input row. A single-sample final VCF has
+    # no use for a row saying the case is not a carrier, and Final_VCF_Metrics
+    # (svtest) raises on any measured record missing EVIDENCE
+    # (src/svtest/svtest/utils/VCFUtils.py:45).
+    #
+    # Drop hom-ref only. No-call rows (./.) are kept: they record a call whose
+    # quality was questionable, not an absence of evidence, and discarding them
+    # would erase real results. In this file hom-ref is exactly the 5 integrator
+    # rows, while 301 no-call rows are not. GD calls are depth-derived, so the
+    # evidence class stamped on any surviving GD row is RD -- "RD" and "RD,PE,SR"
+    # are the only values this pipeline writes, and "RD" is within the allowed set
+    # of Final_VCF_Metrics.
+    #
+    # The header is read via `bcftools view -h` into a file rather than through a
+    # `gzip -cd | grep -q` pipeline: grep -q exits at the first match, the
+    # upstream writer then takes SIGPIPE, and pipefail turns that into exit 141.
+    # See 04fa5142; a `|| true` guard here would mask a genuine failure too.
+    if ~{if defined(sample_id) then "true" else "false"}; then
+      gd_out="~{prefix}.~{contig}.integrate_gd.vcf.gz"
+      gd_filtered="~{out_vcf}"
+      bcftools view -h "${gd_out}" > gd_header.txt
+      if ! grep -q '^##INFO=<ID=EVIDENCE,' gd_header.txt; then
+        echo "ERROR: ${gd_out} carries no EVIDENCE INFO header; refusing to stamp records" >&2
+        exit 1
+      fi
+      sampleIndex=`bcftools view -h "${gd_out}" | grep '^#CHROM' | cut -f10- | tr "\t" "\n" | awk '$1 == "~{sample_id}" {found=1; print NR - 1} END { if (found != 1) { print "sample not found"; exit 1; }}'`
+      bcftools view \
+          -e "GT[${sampleIndex}]=\"ref\"" \
+          -O v \
+          "${gd_out}" \
+      | awk \
+          '$0 ~ /^#/ { print $0; next; }
+          $8 ~ /EVIDENCE=/ { print $0; next; }
+          { for(i=1; i<8; ++i) printf "%s\t", $i;
+            printf "%s;EVIDENCE=RD", $8;
+            for(i=9; i<=NF; ++i) printf "\t%s", $i;
+            printf "\n"
+          }' \
+      | bgzip -c > "${gd_filtered}"
+      tabix -p vcf "${gd_filtered}"
+    fi
+
   >>>
 
   runtime {
@@ -239,7 +298,7 @@ task IntegrateGDVcfTask {
   }
 
   output {
-    File integrated_vcf = "~{prefix}.~{contig}.integrate_gd.vcf.gz"
-    File integrated_vcf_index = "~{prefix}.~{contig}.integrate_gd.vcf.gz.tbi"
+    File integrated_vcf = out_vcf
+    File integrated_vcf_index = "~{out_vcf}.tbi"
   }
 }

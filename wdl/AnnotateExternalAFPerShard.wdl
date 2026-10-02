@@ -180,7 +180,7 @@ task SplitRefBed {
     
     command <<<
         set -eu
-        zcat ~{bed} | head -1 > header
+        zcat ~{bed} | head -1 > header || true
         set -o pipefail
         cat header <(zcat ~{bed} | awk '{if ($1=="~{contig}" && $6=="DEL") print}') > ~{prefix}.~{contig}.DEL.bed
         cat header <(zcat ~{bed} | awk '{if ($1=="~{contig}" && $6=="DUP") print}') > ~{prefix}.~{contig}.DUP.bed
