@@ -26,7 +26,7 @@ workflow DropSamplesAndRefresh {
 
     # Subset samples
     File? keep_samples
-    String remove_samples = false
+    Boolean remove_samples = false
 
     # NCR
     File apply_filters_script
