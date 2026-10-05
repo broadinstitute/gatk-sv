@@ -213,6 +213,7 @@ workflows:
     filters:
       branches:
         - main
+        - vj-vapor-optimize
       tags:
         - /.*/
 
