@@ -22,6 +22,8 @@ workflow DropSamplesAndRefresh {
 
     Boolean rename_vids = true
 
+    Boolean concat_full = false
+
     # Subset samples
     File? keep_samples
     String remove_samples = false
@@ -162,6 +164,16 @@ workflow DropSamplesAndRefresh {
         sites_only=true,
         sv_base_mini_docker=sv_base_mini_docker
     }
+
+    if (concat_full) {
+      call tasks.ConcatVcfs as ConcatFullUnrelated {
+        input:
+          vcfs=select_first([SanitizeUnrelated.vcf_header_sanitized, AnnotateUnrelated.annotated_vcfs]),
+          outfile_prefix="~{prefix}.unrelated.full",
+          sites_only=false,
+          sv_base_mini_docker=sv_base_mini_docker
+      }
+    }
   }
 
   if (defined(drop_fields) && defined(sample_id_rename_map)) {
@@ -182,6 +194,16 @@ workflow DropSamplesAndRefresh {
       outfile_prefix="~{prefix}.sites_only",
       sites_only=true,
       sv_base_mini_docker=sv_base_mini_docker
+  }
+
+  if (concat_full) {
+    call tasks.ConcatVcfs as ConcatFull {
+      input:
+        vcfs=select_first([SanitizeHeader.vcf_header_sanitized, AnnotateVcf.annotated_vcfs]),
+        outfile_prefix="~{prefix}.full",
+        sites_only=false,
+        sv_base_mini_docker=sv_base_mini_docker
+    }
   }
 
 
@@ -235,8 +257,14 @@ workflow DropSamplesAndRefresh {
     Array[File] refreshed_vcfs = select_first([SanitizeHeader.vcf_header_sanitized, AnnotateVcf.annotated_vcfs])
     Array[File] refreshed_vcf_indexes = select_first([SanitizeHeader.vcf_header_sanitized_index, AnnotateVcf.annotated_vcf_indexes])
 
+    File? refreshed_vcf = ConcatFull.concat_vcf
+    File? refreshed_vcf_idx = ConcatFull.concat_vcf_idx
+
     Array[File]? unrelated_vcfs = if defined(related_samples) then select_first([SanitizeUnrelated.vcf_header_sanitized, AnnotateUnrelated.annotated_vcfs]) else NONE_ARRAY
     Array[File]? unrelated_vcf_indexes = if defined(related_samples) then select_first([SanitizeUnrelated.vcf_header_sanitized_index, AnnotateUnrelated.annotated_vcf_indexes]) else NONE_ARRAY
+
+    File? unrelated_vcf = ConcatFullUnrelated.concat_vcf
+    File? unrelated_vcf_idx = ConcatFullUnrelated.concat_vcf_idx
 
     File sites_only_vcf = ConcatVcfs.concat_vcf
     File sites_only_vcf_index = ConcatVcfs.concat_vcf_idx
