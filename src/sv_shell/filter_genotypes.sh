@@ -37,7 +37,9 @@ vcf=$(jq -r ".vcf" "$input_json")
 ploidy_table=$(jq -r ".ploidy_table" "$input_json")
 no_call_rate_cutoff=$(jq -r ".no_call_rate_cutoff" "$input_json")
 sl_cutoff_table=$(jq -r ".sl_cutoff_table" "$input_json")
-sl_filter_args=$(jq -r ".sl_filter_args" "$input_json")
+# Optional, as in FilterGenotypes.wdl. SVShell.wdl drops empty inputs, so an unset value
+# arrives as a missing key, which a bare `jq -r` would turn into the literal string "null".
+sl_filter_args=$(jq -r '.sl_filter_args // ""' "$input_json")
 header_drop_fields=$(jq -r '.header_drop_fields // "FILTER/LOW_QUALITY,FORMAT/TRUTH_CN_EQUAL,FORMAT/GT_FILTER,FORMAT/CONC_ST,INFO/STATUS,INFO/TRUTH_AC,INFO/TRUTH_AN,INFO/TRUTH_AF,INFO/TRUTH_VID,INFO/CNV_CONCORDANCE,INFO/GENOTYPE_CONCORDANCE,INFO/HET_PPV,INFO/HET_SENSITIVITY,INFO/HOMVAR_PPV,INFO/HOMVAR_SENSITIVITY,INFO/MINSL,INFO/NON_REF_GENOTYPE_CONCORDANCE,INFO/SL_MAX,INFO/SL_MEAN,INFO/VAR_PPV,INFO/VAR_SENSITIVITY,INFO/VAR_SPECIFICITY"' "$input_json")
 
 
