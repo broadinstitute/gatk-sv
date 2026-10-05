@@ -7,16 +7,24 @@ import "GetVcfStats.wdl" as stats
 import "MainVcfQc.wdl" as qc
 import "ApplyNCRAndRefArtifactFilters.wdl" as ncr
 import "TasksMakeCohortVcf.wdl" as tasks
+import "CollectQcVcfWide.wdl" as collect
 
 workflow DropSamplesAndRefresh {
   input {
     Array[File] vcfs
-    File? keep_samples
     File? related_samples
     String prefix
 
     File primary_contigs_list
     File ploidy_table
+
+    String? bcftools_preprocessing_options
+
+    Boolean rename_vids = true
+
+    # Subset samples
+    File? keep_samples
+    String remove_samples = false
 
     # NCR
     File apply_filters_script
@@ -47,25 +55,43 @@ workflow DropSamplesAndRefresh {
 
     Array[File]? NONE_ARRAY
     File? NONE_FILE
+    String? NONE_STRING
+  }
+
+  Array[String] contigs = read_lines(primary_contigs_list)
+
+  if (defined(bcftools_preprocessing_options)) {
+    scatter (i in range(length(contigs))) {
+      call collect.PreprocessVcf {
+        input:
+          vcf = vcfs[i],
+          prefix = "~{prefix}.preprocess.~{i}",
+          bcftools_preprocessing_options=bcftools_preprocessing_options,
+          sv_base_mini_docker = sv_base_mini_docker
+      }
+    }
   }
 
   if (defined(keep_samples)) {
     call subset.SubsetVcfBySamples as DropSamples {
       input:
-        vcfs=vcfs,
+        vcfs=select_first([PreprocessVcf.outvcf, vcfs]),
         list_of_samples=select_first([keep_samples]),
-        remove_samples=false,
+        remove_samples=remove_samples,
         remove_private_sites=true,
         sv_base_mini_docker=sv_base_mini_docker
     }
   }
 
+
+  String? cohort_id_ = if (rename_vids) then prefix else NONE_STRING
+
   call ncr.ApplyNCRAndRefArtifactFilters {
     input:
-      vcfs=select_first([DropSamples.vcfs_subset, vcfs]),
+      vcfs=select_first([DropSamples.vcfs_subset, PreprocessVcf.outvcf, vcfs]),
       apply_filters_script=apply_filters_script,
       primary_contigs_list=primary_contigs_list,
-      cohort_id=prefix,
+      cohort_id=cohort_id_,
       ploidy_table=ploidy_table,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_base_mini_docker=sv_base_mini_docker

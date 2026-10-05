@@ -6,7 +6,7 @@ workflow ApplyNCRAndRefArtifactFilters {
   input {
     Array[File] vcfs
     File primary_contigs_list
-    String cohort_id
+    String? cohort_id
     String label = "ncr_and_refartifact"
     File ploidy_table
 
