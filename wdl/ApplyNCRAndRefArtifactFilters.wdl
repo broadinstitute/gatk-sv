@@ -6,8 +6,8 @@ workflow ApplyNCRAndRefArtifactFilters {
   input {
     Array[File] vcfs
     File primary_contigs_list
+    String prefix
     String? cohort_id
-    String label = "ncr_and_refartifact"
     File ploidy_table
 
     Float? no_call_rate_cutoff
@@ -24,7 +24,7 @@ workflow ApplyNCRAndRefArtifactFilters {
     call per_contig.ApplyNCRAndRefArtifactFiltersPerContig {
       input:
         vcf = vcfs[i],
-        prefix = "~{cohort_id}.~{label}.~{contigs[i]}",
+        prefix = "~{prefix}.~{contigs[i]}",
         cohort_id = cohort_id,
         ploidy_table = ploidy_table,
         no_call_rate_cutoff=no_call_rate_cutoff,

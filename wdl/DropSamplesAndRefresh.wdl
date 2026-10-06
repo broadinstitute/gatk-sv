@@ -93,6 +93,7 @@ workflow DropSamplesAndRefresh {
       vcfs=select_first([DropSamples.vcfs_subset, PreprocessVcf.outvcf, vcfs]),
       apply_filters_script=apply_filters_script,
       primary_contigs_list=primary_contigs_list,
+      prefix = "~{prefix}.ncr_and_refartifact",
       cohort_id=cohort_id_,
       ploidy_table=ploidy_table,
       sv_pipeline_docker=sv_pipeline_docker,
