@@ -104,6 +104,8 @@ task ApplyFilters {
   command <<<
     set -euo pipefail
 
+    touch ~{cohort_id}.vid_map.tsv  # will only get created if cohort id provided for renaming VIDs
+
     python ~{select_first([apply_filters_script, "/opt/sv-pipeline/scripts/apply_ncr_and_ref_artifact_filters.py"])} \
       --vcf ~{vcf} \
       --out ~{prefix}.vcf.gz \
