@@ -131,11 +131,7 @@ task CondenseReadCounts {
         fi
       fi
 
-      # An awk that `exit`s closes the pipe while zcat is still writing, so zcat takes SIGPIPE
-      # (128+13 = 141) and `set -o pipefail` turns a header read that produced the right value into
-      # a failed task. The probe's real guard is the value check, not the pipeline status -- same
-      # reason `counts_first_line` and `rd_header` below already carry `|| true`. Only the large
-      # inputs trip it: a stream that drains into the pipe buffer before awk exits cannot SIGPIPE.
+      # awk exits early, so zcat can get SIGPIPE (rc 141) on large inputs; ignore it like the probes below
       existing_sample_id=$(zcat ~{counts} | awk -F "\t" '/^@RG/ {
           for (i = 1; i <= NF; ++i) {
             if ($i ~ /^SM:/) {

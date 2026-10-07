@@ -1639,9 +1639,7 @@ task ConcatBaf {
     String sample_id
     String batch
     String sv_pipeline_docker
-    # Names present in ref_panel_baf. PrintSVEvidence writes only the samples listed by
-    # --sample-names, across every file given to -F, so naming just the case here drops
-    # the panel's columns from the merged matrix instead of merging them in.
+    # Samples in ref_panel_baf, merged in alongside the case
     Array[String] panel_samples = []
   }
 
@@ -1671,22 +1669,10 @@ task ConcatBaf {
     echo "~{sample_id}.baf.txt.gz" > evidence.list
     echo "~{ref_panel_baf}" >> evidence.list
 
-    # Case plus reference panel, one name per line, which is the shape cohort's
-    # MergeEvidence gets from write_lines(samples). Naming only the case left
-    # CallGenomicDisorderCNVs a one-sample BAF matrix while the RD matrix handed to the
-    # same call carries 157 sample columns.
+    # PrintSVEvidence keeps only the samples named here, so list the panel as well as the case
     mv ~{write_lines(baf_samples)} samples.list
 
-    # This task runs in sv_pipeline_docker, which carries GATK as the jar baked into
-    # sv-base (dockerfiles/sv-base/Dockerfile sets GATK_JAR=/opt/gatk.jar). The
-    # /gatk/gatk wrapper exists only in the standalone gatk_docker image, so it is not
-    # on PATH here and the call dies with exit 127. Same launcher as MatrixQC.wdl
-    # PESRBAF_QC, which also runs PrintSVEvidence in sv_pipeline_docker.
-    #
-    # --sequence-dictionary is required: BAF evidence files carry no header dictionary
-    # (BafEvidenceCodec.readActualHeader returns null), so without it PrintSVEvidence
-    # aborts with "No dictionary found. Provide one as --sequence-dictionary or
-    # --reference." Every other PrintSVEvidence call site in this repo passes one.
+    # Text BAF files have no header dictionary, so --sequence-dictionary is required
     java -Xmx2g -jar ${GATK_JAR} PrintSVEvidence \
       --sequence-dictionary ~{reference_dict} \
       -F evidence.list \
