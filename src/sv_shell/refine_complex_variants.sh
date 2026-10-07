@@ -93,12 +93,9 @@ VcfToBed_bed_output="$(realpath "${vcf_basename}.bed.gz")"
 # ---------------------------------------------------------------------------------------------------------------------
 SplitCpxCtx_prefix=$(basename "${VcfToBed_bed_output}" .bed.gz)
 
-## The commented out lines in the following are from WDL, however, running them needs disabling pipefail.
-## The alternatives in the following use substitution that do not need disabling pipefail.
-# zcat ~{bed} | head -1 > ~{prefix}.cpx_ctx.bed
-# filterColumn=$(zcat "${VcfToBed_bed_output}" | head -1 | tr "\t" "\n" | awk '$1=="FILTER" {print NR}')
-head -1 < <(zcat "${VcfToBed_bed_output}") > ${SplitCpxCtx_prefix}.cpx_ctx.bed
-filterColumn=$(head -1 < <(zcat "${VcfToBed_bed_output}") | tr "\t" "\n" | awk '$1=="FILTER" {print NR}')
+zcat "${VcfToBed_bed_output}" | head -1 > "${SplitCpxCtx_prefix}.cpx_ctx.bed" || true
+
+filterColumn=$(zcat "${VcfToBed_bed_output}" | head -1 | tr "\t" "\n" | awk '$1=="FILTER" {print NR}' || true)
 
 zcat "${VcfToBed_bed_output}" | awk 'NR > 1' | { grep CPX || true; } | awk -v filter_column="${filterColumn}" '$filter_column !~ /UNRESOLVED/' >> "${SplitCpxCtx_prefix}.cpx_ctx.bed"
 

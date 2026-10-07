@@ -40,12 +40,7 @@ bincov_matrix=$(jq -r ".bincov_matrix" "${input_json}")
 
 # --- build matrix
 
-# Note that in the WDL version, 'set -eu' so zcat exiting
-# after head does not result in pipe fail. Since we want to
-# use 'set -Eeuo pipefail' consistently throughout all the
-# scripts, we're using '|| true' in the following to avoid
-# pipe fail. There are a few other alternatives, but this
-# is the easiest.
+# head exits early, so zcat can get SIGPIPE under pipefail; ignore it, as in WGD.wdl
 zcat "${bincov_matrix}" | head -n 1 > header.txt || true
 sed -i 's/#//g' header.txt
 
