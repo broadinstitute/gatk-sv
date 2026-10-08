@@ -198,7 +198,7 @@ workflows:
     filters:
       branches:
         - main
-        - aou_p3_vj_mutlti_contig_svconcordance
+        - aou_p3_vj_multi_contig_workflows
       tags:
         - /.*/
 
