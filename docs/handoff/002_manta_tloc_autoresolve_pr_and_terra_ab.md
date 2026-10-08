@@ -1,5 +1,11 @@
 # 002 — Manta tloc auto-resolve: PR #968 open, flag validated in docker (3 samples) and Terra (156 samples), both PASS
 
+> **Coordinates superseded by `003` (`docs/handoff/003_manta_tloc_rebase_onto_main.md`,
+> `2026-10-08`).** #966 squash-merged as `a55c498f` and both branches were rebased onto `main`, so every
+> SHA in §1/§2/§3 here is stale history. The validation evidence (§1b/§1c) still stands — the tloc code
+> is byte-identical across the rebase. **Do not `git reset --hard origin/<branch>` to "restore" a
+> worktree**; that throws away the rebase. Read `003` §1 first.
+
 **Handoff written:** `2026-09-25T16:29Z`. Clock agreement verified, not assumed:
 `date -u` = `terra (api.firecloud.org HTTP Date)` = `github` = `Fri, 25 Sep 2026 16:28:49 GMT`.
 The A/B evidence below was produced **2026-09-23** (Terra submission timestamps) — the session spans
@@ -132,7 +138,7 @@ ancestors) — but it cannot detect an interaction with them, and it is not prod
 | `twatch.py list --fresh` | no rows | a submission was started since; check cost before trusting the ledger |
 | `gcloud compute instances/disks list --filter name~'gsv-mw'` | both empty | someone provisioned compute; VM-minutes are the unit, never currency |
 | `test_single_tloc.py` | 19 `PASS`, 0 `FAIL`, `ALL PASS`, 2 `NOTE` (pysam ≥0.22 `stop<POS` clamp) | resolve semantics regressed, or harness drift |
-| `git ls-remote` vs local for both my branches | equal (78dd16ab / ad80380f) | a push was lost or the branch moved elsewhere |
+| `git ls-remote` vs local for both my branches | **SUPERSEDED — see `003` §4.** Tips moved to `eeb913b0`/`0ed9e243` by the `2026-10-08` rebase; expect local == remote at the *new* SHAs, not these | a push was lost or the branch moved elsewhere |
 | `freeze_copy.py verify` | `crc32c+size match: 317/317`, `FROZEN VERIFIED` | freeze mutated → re-runs would not be byte-comparable to production |
 | Dockstore probe | `201` | `404 Cannot get dockstore://…` = unpublished again, not "missing" |
 
