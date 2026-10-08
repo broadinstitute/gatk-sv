@@ -29,6 +29,8 @@ workflow JoinRawCalls {
     File ped_file
 
     File contig_list
+    # If provided, run SVCluster only on these contigs instead of all contigs in contig_list
+    Array[String]? svcluster_contigs
     File reference_fasta
     File reference_fasta_fai
     File reference_dict
@@ -108,7 +110,7 @@ workflow JoinRawCalls {
     }
   }
 
-  scatter (contig in read_lines(contig_list)) {
+  scatter (contig in select_first([svcluster_contigs, read_lines(contig_list)])) {
     call tasks_cluster.SVCluster {
       input:
         vcfs=FormatVcfForGatk.gatk_formatted_vcf,

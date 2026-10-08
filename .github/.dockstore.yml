@@ -159,6 +159,7 @@ workflows:
     filters:
       branches:
         - main
+        - v1.1.1-vj-join-raw-calls
       tags:
         - /.*/
 
