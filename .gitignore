@@ -15,3 +15,8 @@ src/svtk/svtk/utils/utils.pyc
 src/svtk/svtk/vcfcluster.pyc
 /inputs/build/
 /inputs/values/google_cloud.*.json
+
+# Nested git worktrees (git worktree add wt/<branch>). Their contents are other
+# checkouts, not this one's source: listing them makes every status noisy and one
+# `git add -A` would commit whole worktrees into the repo.
+/wt/
