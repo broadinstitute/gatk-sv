@@ -188,7 +188,7 @@ workflows:
     filters:
       branches:
         - main
-        - aou_p3_vj_refine_cpx_all_contigs
+        - aou_p3_vj_multi_contig_workflows
       tags:
         - /.*/
 
