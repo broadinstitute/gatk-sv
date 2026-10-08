@@ -302,10 +302,15 @@ task TrainSVGenotyping {
             ($col["min_svsize"] + 0) == 1000) print "PESR_SEP\t" $col["cutoff"]
         if (toupper(metric) == "RD_MEDIAN_SEPARATION" && algtype == "DEPTH") print "DEPTH_SEP\t" $col["cutoff"]
       }' ~{rf_cutoffs})
-    PEQ=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "PEQ" { print $2; exit }')
-    SRQ=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "SRQ" { print $2; exit }')
-    PESR_SEP=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "PESR_SEP" { print $2 }' | sort -nr | head -n 1)
-    DEPTH_SEP=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "DEPTH_SEP" { print $2 }' | sort -nr | head -n 1)
+    # `|| true` on each read: awk's `exit` and `head` close the pipe while the writer is still
+    # feeding it, so the writer can take SIGPIPE (141) and pipefail would fail a read that returned
+    # the right value. The guard that matters is the emptiness check below -- same reasoning as the
+    # header probes in CollectCoverage.wdl. Small here: $QUERIES is a few lines, so it drains into
+    # the pipe buffer before the reader exits and SIGPIPE cannot actually fire.
+    PEQ=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "PEQ" { print $2; exit }' || true)
+    SRQ=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "SRQ" { print $2; exit }' || true)
+    PESR_SEP=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "PESR_SEP" { print $2 }' | sort -nr | head -n 1 || true)
+    DEPTH_SEP=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "DEPTH_SEP" { print $2 }' | sort -nr | head -n 1 || true)
 
     for required_var in PEQ SRQ PESR_SEP DEPTH_SEP; do
       if [[ -z "${!required_var}" ]]; then
