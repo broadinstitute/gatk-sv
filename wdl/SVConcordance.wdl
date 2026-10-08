@@ -1,7 +1,6 @@
 version 1.0
 
 import "Structs.wdl"
-import "TasksMakeCohortVcf.wdl" as tasks_cohort
 
 workflow SVConcordance {
   input {
@@ -21,12 +20,10 @@ workflow SVConcordance {
     Array[File]? track_intervals
 
     String gatk_docker
-    String sv_base_mini_docker
 
     Float? java_mem_fraction
 
     RuntimeAttr? runtime_attr_sv_concordance
-    RuntimeAttr? runtime_override_concat_shards
   }
 
   Array[String] contigs = read_lines(contig_list)
@@ -49,19 +46,9 @@ workflow SVConcordance {
     }
   }
 
-  call tasks_cohort.ConcatVcfs {
-    input:
-      vcfs=SVConcordanceTask.out,
-      vcfs_idx=SVConcordanceTask.out_index,
-      naive=true,
-      outfile_prefix="~{output_prefix}.concordance",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_concat_shards
-  }
-
   output {
-    File concordance_vcf = ConcatVcfs.concat_vcf
-    File concordance_vcf_index = ConcatVcfs.concat_vcf_idx
+    Array[File] concordance_vcfs = SVConcordanceTask.out
+    Array[File] concordance_vcf_indexes = SVConcordanceTask.out_index
   }
 }
 
