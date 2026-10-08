@@ -273,7 +273,7 @@ task RunSVShell {
     File HERVK_reference
     File LINE1_reference
     File intron_reference
-    File? par_bed
+    File par_bed
     File rmsk
     File segdups
     Int gcnv_qs_cutoff
@@ -307,9 +307,11 @@ task RunSVShell {
     File protein_coding_gtf
     File noncoding_bed
     Int annotation_sv_per_shard
-    File? external_af_ref_bed
-    String? external_af_ref_bed_prefix
-    Array[String]? external_af_population
+    # Required: src/sv_shell/annotate_vcf.sh always runs external-AF annotation and ComputeAFs
+    # with --par, unlike the WDL AnnotateVcf where these are optional.
+    File external_af_ref_bed
+    String external_af_ref_bed_prefix
+    Array[String] external_af_population
     Int min_pe_cpx
     Int min_pe_ctx
     File gq_recalibrator_model_file
@@ -447,9 +449,9 @@ task RunSVShell {
       --arg protein_coding_gtf "~{protein_coding_gtf}" \
       --arg noncoding_bed "~{noncoding_bed}" \
       --argjson annotation_sv_per_shard ~{annotation_sv_per_shard} \
-      --arg external_af_ref_bed "~{select_first([external_af_ref_bed, ""])}" \
-      --arg external_af_ref_bed_prefix "~{select_first([external_af_ref_bed_prefix, ""])}" \
-      --argjson external_af_population "$(jq -R . < ~{write_lines(select_first([external_af_population, []]))} | jq -s .)" \
+      --arg external_af_ref_bed "~{external_af_ref_bed}" \
+      --arg external_af_ref_bed_prefix "~{external_af_ref_bed_prefix}" \
+      --argjson external_af_population "$(jq -R . < ~{write_lines(external_af_population)} | jq -s .)" \
       --argjson min_pe_cpx ~{min_pe_cpx} \
       --argjson min_pe_ctx ~{min_pe_ctx} \
       --arg gq_recalibrator_model_file "~{gq_recalibrator_model_file}" \

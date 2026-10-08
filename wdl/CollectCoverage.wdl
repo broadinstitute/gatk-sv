@@ -131,6 +131,7 @@ task CondenseReadCounts {
         fi
       fi
 
+      # awk exits early, so zcat can get SIGPIPE (rc 141) on large inputs; ignore it like the probes below
       existing_sample_id=$(zcat ~{counts} | awk -F "\t" '/^@RG/ {
           for (i = 1; i <= NF; ++i) {
             if ($i ~ /^SM:/) {
@@ -139,7 +140,7 @@ task CondenseReadCounts {
               exit
             }
           }
-        }')
+        }' || true)
 
       output_sample_id="${existing_sample_id}"
       emit_picard=true

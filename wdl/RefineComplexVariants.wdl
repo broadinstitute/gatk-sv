@@ -418,9 +418,9 @@ task SplitCpxCtx {
     command <<<
         set -eu
 
-        zcat ~{bed} | head -1 > ~{prefix}.cpx_ctx.bed
+        zcat ~{bed} | head -1 > ~{prefix}.cpx_ctx.bed || true
 
-        filterColumn=$(zcat ~{bed} | head -1 | tr "\t" "\n" | awk '$1=="FILTER" {print NR}')
+        filterColumn=$(zcat ~{bed} | head -1 | tr "\t" "\n" | awk '$1=="FILTER" {print NR}' || true)
 
         set -o pipefail
 
