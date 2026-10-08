@@ -6,8 +6,9 @@ import "TasksMakeCohortVcf.wdl" as tasks_cohort
 workflow SVConcordance {
   input {
     # Vcfs must be formatted using FormatVcfForGatk (if unsure, check for ECN FORMAT field)
-    File eval_vcf
-    File truth_vcf
+    # Per-contig vcfs, ordered to match contig_list
+    Array[File] eval_vcfs
+    Array[File] truth_vcfs
     String output_prefix
 
     File contig_list
@@ -28,13 +29,15 @@ workflow SVConcordance {
     RuntimeAttr? runtime_override_concat_shards
   }
 
-  scatter (contig in read_lines(contig_list)) {
+  Array[String] contigs = read_lines(contig_list)
+
+  scatter (i in range(length(contigs))) {
     call SVConcordanceTask {
       input:
-        eval_vcf=eval_vcf,
-        truth_vcf=truth_vcf,
-        output_prefix="~{output_prefix}.concordance.~{contig}",
-        contig=contig,
+        eval_vcf=eval_vcfs[i],
+        truth_vcf=truth_vcfs[i],
+        output_prefix="~{output_prefix}.concordance.~{contigs[i]}",
+        contig=contigs[i],
         clustering_config=clustering_config,
         stratification_config=stratification_config,
         track_names=track_names,
