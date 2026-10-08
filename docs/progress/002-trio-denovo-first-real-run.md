@@ -11,6 +11,68 @@ run"). This session is the first real-data execution.
 
 ---
 
+## 0. Rebase 2026-10-08: every SHA below moved
+
+Everything after this section was written before `main` moved. On 2026-10-08 the branch was rebased
+onto `origin/main` `743dd9d4` (`a55c498f` plus the bot's image-list update) and force-pushed with
+`--force-with-lease`: head `34dd0010` -> 10 commits on `main`, in two steps (the second one
+removed the two Dockstore commits, see the readonly rule below). Pre-rebase history is kept at
+`tmp/pre-rebase-34dd0010`, so the SHAs quoted below still resolve and none was rewritten in place. A
+SHA in this doc is a fact about a Terra run, not a pointer to current code, and §13 already says to
+re-verify rather than trust it.
+
+| pre-rebase | new | commit |
+|---|---|---|
+| `4419315c` | dropped | publish `mw_fix_single_sample_blocking` on Dockstore |
+| `b495befe` | `25d18997` | add trio de novo mode |
+| `056e88da` | `c809468d` | adversarial review fixes |
+| `df2ef88c` | `a8069c97` | subagent review fixes |
+| `5b1c0612` | `286f3044` | doc 001 handoff |
+| `e138b169` | `6583c570` | remove `validated_samples.list` |
+| `91ea18cf` | dropped | Dockstore branch filter |
+| `b0756590` | `859a6539` | trio list inside `ValidateTrioInputs` |
+| `6b666685` | `29eff125` | stop localizing parents' CRAMs |
+| `c7161978` | `08eb2a00` | this doc |
+| `34dd0010` | `07b017fe` | the §13 correction commit |
+| (this section) | this commit | the §0 record |
+
+Six commits left the branch:
+
+| dropped | why |
+|---|---|
+| `144a3fae` ConcatBaf | all three hunks already on `main` via `a55c498f`: the `File reference_dict` input, the call-site pass, and `java -jar ${GATK_JAR}` with `--sequence-dictionary` |
+| `9f2ebe25` workspace table | patch already upstream |
+| `4ba78d4b` CondenseReadCounts SIGPIPE | `main` fixed the same defect; see §14 #1 and #2 |
+| `8c70779b` drop `pkg_resources` | owner decision to keep `main`'s `pkg_resources` import and the `setuptools<81` cap. The work (5 files + the Dockerfile import gate) is kept at `tmp/pkg-resources-drop-b9139b5e`, not deleted |
+| `4419315c` publish `mw_fix_single_sample_blocking` on Dockstore | readonly file, see below. That branch was deleted from `origin` on 2026-10-08 anyway |
+| `91ea18cf` Dockstore branch filter | readonly file, see below |
+
+**`.github/.dockstore.yml` and `inputs/values/dockers.json` are readonly for PRs**, enforced by
+`.github/workflows/readonly_check.yaml` (`##[error]Readonly file modified: ...`, per #922; an earlier
+workstream hit it as `857419a0`). It red on the PR at `cf826e01` even though that commit was a
+*revert* moving the file back toward `main`, because the check names any file in the diff rather than
+asking whether the net change is empty. Two consequences for the next session: a restore commit does
+not fix it, so the commits touching those paths have to come out of history; and with `91ea18cf`
+gone, this branch no longer publishes its single-sample WDL to Dockstore, so Terra testing driven by
+a Dockstore-published descriptor has to come from `main` after merge or from a maintainer edit.
+
+Two claims below are wrong as written now. The headline's "3 blocking defects fixed" counts the
+CondenseReadCounts SIGPIPE fix, which this branch no longer carries, so 2 of the 3 are this branch's.
+And the `wdl/CollectCoverage.wdl` row in §13 is no longer a deliverable of this branch. Doc 001's
+SHAs (`8995b2d0`, `1763a774`, `a51ae8d6` on base `857419a0`) were already orphaned before this
+rebase, from the branch's earlier base; left as written.
+
+Static checks were re-run against the rebased tree (gatk-sv-testkit `0a56383` +dirty, measured
+`main`@`743dd9d4` vs `trio_denovo_single_sample`@`c49e2b9e`): no new WDL launchability findings, the
+`sv_shell` contract findings are identical to `main` (the same 7 unsupplied reads), 0 new jq nulls
+against `main`, `annotate_moi` tests 4/4 passed, and `wdl_reach` confirms `AnnotateModeOfInheritance`
+is reached from the single-sample workflow at `GATKSVPipelineSingleSample.wdl:1798` and reaches
+`annotate_moi.py`. Two gaps, both honest: the womtool required-input half is skipped on *both* refs
+(no `WOMTOOL_JAR`, local java is 11), and `svtk` was never imported locally (no local install; the
+cover is byte-identity with `main`).
+
+---
+
 ## 1. Headline: trio MOI annotation works
 
 Full-genome trio run (`ffe3c189-5997-4c66-8de2-ba3ec6d77d03`, workflow `d4456607-ad4e-4c13-8de2-cc877a104681`)
@@ -395,7 +457,7 @@ Not touched, deliberately: the shared baseline workspace
 | file | change | commit |
 |---|---|---|
 | `wdl/GATKSVPipelineSingleSample.wdl` | trio list materialized inside `ValidateTrioInputs`; CRAM inputs → Booleans | `b0756590`, `6b666685` |
-| `wdl/CollectCoverage.wdl` | `CondenseReadCounts` SIGPIPE guard (drop early `exit`) | `4ba78d4b` |
+| `wdl/CollectCoverage.wdl` | not a deliverable after the 2026-10-08 rebase: `main` `a55c498f` carries a SIGPIPE guard, this branch's variant was dropped | none |
 | `.github/.dockstore.yml` | `trio_denovo_single_sample` added to `SingleSamplePipeline` branch filter | `91ea18cf` |
 | repo root | removed accidentally committed `validated_samples.list` | `e138b169` |
 | `docs/progress/002-trio-denovo-first-real-run.md` | this doc | this commit |
@@ -435,15 +497,21 @@ Not touched, deliberately: the shared baseline workspace
 
 ## 14. Open items / next steps
 
-- [ ] **1. Reconcile the two SIGPIPE fixes** — `4ba78d4b` (drop `exit`, trio branch) vs `04fa5142`
-      (`|| true` ×6 + `scripts/test/test_sigpipe.sh`, `mw_fix_single_sample_blocking`). Decide before
-      either merges; the union (their breadth, my strictness) is defensible but must be one commit.
-- [ ] **2. Port the SIGPIPE fix to main** — `wdl/CollectCoverage.wdl:134` on `origin/main` is still
-      unfixed; any full-genome run reaches it (`Job exit code 141`).
+- [x] **1. Reconcile the two SIGPIPE fixes** — **closed by the 2026-10-08 rebase, but not as the
+      union asked for.** `main` `a55c498f` took the `|| true` form (3 sites in
+      `wdl/CollectCoverage.wdl`) and the trio variant `4ba78d4b` (drop `exit`) was dropped, so there
+      is one fix in one place. The strictness trade went the other way: `|| true` swallows every
+      failure of that pipeline, not just rc 141. See #13 for the test that did not come with it.
+- [x] **2. Port the SIGPIPE fix to main** — **done, and not by this branch.** `wdl/CollectCoverage.wdl`
+      on `origin/main` `a55c498f` now guards the header probes; verify with
+      `git log -1 -- wdl/CollectCoverage.wdl` on `main`.
 - [ ] **3. Fix defect D** — `AddTrioSamplesToPed` parents must emit `0` in both parent columns
       (`wdl/GatherBatchEvidence.wdl`); add an assertion that the emitted pedigree has no cycle.
 - [ ] **4. Same localization trap on the remaining `File?` inputs** of `ValidateTrioInputs`
-      (`dragen_vcf`, `case_*_vcf`) — Booleans instead, as done for the CRAMs.
+      (`dragen_vcf`, `case_*_vcf`) — Booleans instead, as done for the CRAMs. **Still open after the
+      rebase, and now counted:** `wdl_semantics.py` reports 5 `DEFINED-ONLY` findings on this branch
+      against 2 on `main`, exactly these inputs (`dragen_vcf`, `case_manta_vcf`, `case_melt_vcf`,
+      `case_scramble_vcf`, `case_wham_vcf`), each localized and never opened.
 - [ ] **5. Judge run 4's QC** — 10 PASS / 17 FAIL against the shipped `single_sample.qc_def`.
       Diff this run's QCDF against a v1.1.1 single-sample baseline QCDF to separate expected trio-mode
       drift from regression. Not done: no baseline QCDF was ever pulled.
@@ -470,3 +538,9 @@ Not touched, deliberately: the shared baseline workspace
       be verified by hand instead.
 - [ ] **12. Nothing on the `RunCNVNonGenotyper` `/gatk/gatk` claim** — that task has still never
       executed (GD skipped in trio mode). It is *untested*, not *fixed*; see §7 item 3.
+- [ ] **13. The SIGPIPE regression test has no branch of its own** — `scripts/test/test_sigpipe.sh`
+      came from `mw_fix_single_sample_blocking` (`04fa5142`, `083e9956`). `main` took the guard but
+      not the test (`git ls-tree -r main | grep -i sigpipe` is empty), and that branch was deleted
+      from `origin` on 2026-10-08. The commits are still reachable, through `mw_genotype_scale`
+      history and the `tmp/pre-rebase-62d7f80d` backup ref, but nothing owns them. Salvage if wanted:
+      `git branch tmp/salvage-test-sigpipe 083e9956`.
