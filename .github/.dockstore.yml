@@ -258,6 +258,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_pr971_dockstore_probe
       tags:
         - /.*/
 
