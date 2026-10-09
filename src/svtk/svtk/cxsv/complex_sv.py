@@ -14,7 +14,8 @@ from .cpx_tloc import classify_simple_translocation, classify_insertion
 
 
 class ComplexSV:
-    def __init__(self, records, cytobands, mei_bed, SR_only_cutoff):
+    def __init__(self, records, cytobands, mei_bed, SR_only_cutoff,
+                 resolve_single_tlocs=False):
         """
         Parameters
         ----------
@@ -23,11 +24,18 @@ class ComplexSV:
         cytobands : pysam.TabixFile
             Cytoband bed file (to classify interchromosomal)
         mei_bed : pybedtools.BedTool
+        resolve_single_tlocs : bool
+            If True, a single interchromosomal manta/dragen BND that encodes
+            both arms via CHR2/END2 is auto-resolved to CTX instead of being
+            left as an unresolved SINGLE_ENDER. Opt-in: defaults to False so
+            that svtk resolve consumers other than the manta tloc workflow
+            are unaffected.
         """
 
         self.records = records
         self.cytobands = cytobands
         self.mei_bed = mei_bed
+        self.resolve_single_tlocs = resolve_single_tlocs
         #  self.rdtest = rdtest
 
         self.organize_records()
@@ -82,6 +90,8 @@ class ComplexSV:
                         r.info.pop('CPX_INTERVALS')
         elif self.cluster_type == 'CANDIDATE_TRANSLOCATION':
             self.resolve_translocation()
+        elif self.cluster_type == 'CANDIDATE_SINGLE_TLOC':
+            self.resolve_single_tloc()
         elif self.cluster_type == 'CANDIDATE_INSERTION':
             self.resolve_insertion()
         elif self.cluster_type == 'CANDIDATE_DISDUP':
@@ -281,6 +291,128 @@ class ComplexSV:
         self.vcf_record.alts = ('<{0}>'.format(self.svtype), )
         self.vcf_record.info['SVTYPE'] = self.svtype
         self.vcf_record.info['CPX_TYPE'] = self.cpx_type
+
+    def _is_single_tloc_candidate(self):
+        """
+        Check if the cluster is a single interchromosomal manta/dragen BND
+        that encodes both arms.
+
+        Manta and DRAGEN report tlocs as mated BND pairs; standardization
+        retains a single record per pair, with the mate's coordinates in
+        CHR2/END2. Such a record is fully specified and can be resolved
+        to a translocation on its own.
+        """
+        if len(self.records) != 1 or len(self.tlocs) != 1:
+            return False
+        rec = self.tlocs[0]
+        if rec.info['SVTYPE'] != 'BND' or 'END2' not in rec.info.keys():
+            return False
+        if 'ALGORITHMS' not in rec.info.keys():
+            return False
+        algs = rec.info['ALGORITHMS']
+        if isinstance(algs, str):
+            # pysam returns a bare string for a single-value Number=. field;
+            # also tolerate a comma-joined string
+            algs = algs.split(',')
+        return bool(set(algs) & set('manta dragen'.split()))
+
+    def resolve_single_tloc(self):
+        """
+        Resolve a single interchromosomal record that encodes both arms
+        (chrom/pos and CHR2/END2) into a translocation.
+
+        Manta and DRAGEN report tlocs as mated BND pairs; standardization
+        retains a single record per pair. Such a record is fully specified
+        and can be resolved without its mate.
+
+        The CPX_TYPE label is taken from the cytoband arms of the two
+        breakpoints (same arms -> CTX_PP/QQ, different arms -> CTX_PQ/QP),
+        which is also how downstream tloc processing labels CTX arms.
+
+        The record's strand class is then used only as a plausibility filter
+        on that label: antiparallel ('+-'/'-+') demotes cross-arm labels,
+        congruent ('++'/'--') demotes same-arm labels, absent/unknown STRANDS
+        demotes to STRAND_MISMATCH_TLOC, and the demoted labels get a
+        *_MISMATCH suffix.
+
+        That filter is our own heuristic, not the contract the two-mate path
+        imposes. resolve_translocation never compares a strand class with
+        cytoband arms: ok_tloc_strands only requires the two mates' strand
+        classes to be complementary (++ with --, +- with -+), and
+        classify_simple_translocation derives the label from the two mates'
+        relative coordinates (CTX_UNR when no geometry fits). With one record
+        there is no reciprocal mate, so the strand class is being asked for
+        arm information it does not carry. Measured on a real standardized
+        manta sample (std_000.manta.HG00096): over all 554 interchromosomal
+        BND records the strand class matches the cytoband arm relation for 300
+        (54.2%, i.e. chance) and contradicts it for the other 254; run through
+        svtk resolve the filter gates 318 candidates and demotes 146 of them
+        (45.9%), leaving 172 CTX. Whether those 172 labels are right cannot be
+        checked on this input: 0 of the 554 records carry MATEID and 0 have a
+        reciprocal partner at the mirrored locus, so there is no truth set to
+        validate the survivors against.
+        """
+        rec = self.tlocs[0]
+
+        def _unresolved(cpx_type, mismatch=False):
+            self.svtype = 'UNR'
+            self.cpx_type = cpx_type + '_MISMATCH' if mismatch else cpx_type
+            for r in self.records:
+                r.info['UNRESOLVED_TYPE'] = self.cpx_type
+
+        # Demote without paired-end support, mirroring the paired path's
+        # CTX_UNR demotion. The manta tloc workflow (mantatloccheck.sh)
+        # stamps every record it feeds to svtk resolve with EVIDENCE=PE,
+        # so within that workflow this gate only demotes records whose
+        # EVIDENCE was rewritten to something else upstream.
+        if 'EVIDENCE' not in rec.info.keys() or 'PE' not in rec.info['EVIDENCE']:
+            _unresolved('CTX_UNR')
+            return
+        strands = rec.info['STRANDS'] if 'STRANDS' in rec.info.keys() else None
+        if strands in ('+-', '-+'):
+            expected_cpx_type = 'CTX_PP/QQ'
+        elif strands in ('++', '--'):
+            expected_cpx_type = 'CTX_PQ/QP'
+        else:
+            self.cluster_type = 'STRAND_MISMATCH_TLOC'
+            _unresolved(self.cluster_type)
+            return
+        try:
+            armA, armB = get_arms(rec, self.cytobands)
+        except (StopIteration, ValueError, IndexError):
+            # A breakpoint contig/position with no cytoband entry, or a
+            # contig/region the tabix index cannot address
+            _unresolved('CTX_UNR')
+            return
+        cpx_type = 'CTX_PP/QQ' if armA == armB else 'CTX_PQ/QP'
+        if cpx_type != expected_cpx_type:
+            # Arms contradict the strand class. This gate exists only here: it
+            # is a bet that a tloc join is more often same-arm when the record
+            # is antiparallel, worth 54.2% on real input (see above).
+            _unresolved(cpx_type, mismatch=True)
+            return
+        self.cpx_type = cpx_type
+        self.svtype = 'CTX'
+
+        # Rebuild from the surviving record: after an SR-only shrink in the
+        # second pass it may differ from the record vcf_record was copied
+        # from originally. Setting alts removes END, so do it up front.
+        self.vcf_record = rec.copy()
+        self.vcf_record.alts = ('<{0}>'.format(self.svtype), )
+        self.vcf_record.info['SVTYPE'] = self.svtype
+        self.vcf_record.info['CPX_TYPE'] = self.cpx_type
+        # END here is the mate's coordinate on CHR2, so it is informational
+        # only - CHR2/END2 carry the data. It is written below POS on 19,203 of
+        # the 27,274 CTX records this flag adds over 156 samples (70.4%), and
+        # htslib ignores an END below POS when reading, so readers see the
+        # record span as POS either way. The image pins pysam 0.15.4
+        # (dockerfiles/sv-pipeline-virtual-env/Dockerfile:34-40) precisely
+        # because newer pysam will not take END < POS: on pysam 0.24.1 the same
+        # assignment warns and clamps END up to POS, so measuring these records
+        # locally reads END == POS and never shows the END < POS that the
+        # shipped image writes.
+        self.vcf_record.stop = rec.info['END2']
+        self.vcf_record.info['SVLEN'] = -1
 
     def resolve_translocation(self):
         # Force to ++/-- or +-/-+ ordering
@@ -618,6 +750,8 @@ class ComplexSV:
                 elif len(self.inversions) > 0:
                     self.cluster_type = 'INVERSION_SINGLE_ENDER_' + \
                         self.inversions[0].info['STRANDS']
+                elif self.resolve_single_tlocs and self._is_single_tloc_candidate():
+                    self.cluster_type = 'CANDIDATE_SINGLE_TLOC'
                 else:
                     self.cluster_type = 'SINGLE_ENDER'
         elif sum(class_counts) >= 2:
