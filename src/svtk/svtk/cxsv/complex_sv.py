@@ -126,7 +126,7 @@ class ComplexSV:
             self.set_cluster_type()
 
             if self.cluster_type in 'CANDIDATE_INVERSION CANDIDATE_TRANSLOCATION '.split() + \
-                'CANDIDATE_INSERTION RESOLVED_INSERTION CANDIDATE_SINGLE_TLOC'.split() \
+                'CANDIDATE_INSERTION RESOLVED_INSERTION'.split() \
                     and len(self.records) > 0:
                 if self.cluster_type == 'CANDIDATE_INVERSION':
                     self.resolve_inversion(SR_only_cutoff=SR_only_cutoff)
@@ -149,8 +149,6 @@ class ComplexSV:
                                 r.info.pop('CPX_INTERVALS')
                 elif self.cluster_type == 'CANDIDATE_TRANSLOCATION':
                     self.resolve_translocation()
-                elif self.cluster_type == 'CANDIDATE_SINGLE_TLOC':
-                    self.resolve_single_tloc()
                 elif self.cluster_type == 'CANDIDATE_INSERTION':
                     self.resolve_insertion()
                 elif self.cluster_type == 'RESOLVED_INSERTION':
@@ -329,14 +327,30 @@ class ComplexSV:
 
         The CPX_TYPE label is taken from the cytoband arms of the two
         breakpoints (same arms -> CTX_PP/QQ, different arms -> CTX_PQ/QP),
-        which is also how downstream tloc processing labels CTX arms. The
-        record's strand class provides the expected label: antiparallel
-        ('+-'/'-+') predicts same-arm (PP/QQ) joins, congruent ('++'/'--')
-        predicts different-arm (PQ/QP) joins, and the class is invariant to
-        which reciprocal mate the standardizer kept and to the local-first
-        coordinate swap. Arms contradicting the strand class are demoted to
-        *_MISMATCH, mirroring the strand/arm agreement requirement that
-        resolve_translocation imposes on two-mate clusters.
+        which is also how downstream tloc processing labels CTX arms.
+
+        The record's strand class is then used only as a plausibility filter
+        on that label: antiparallel ('+-'/'-+') demotes cross-arm labels,
+        congruent ('++'/'--') demotes same-arm labels, absent/unknown STRANDS
+        demotes to STRAND_MISMATCH_TLOC, and the demoted labels get a
+        *_MISMATCH suffix.
+
+        That filter is our own heuristic, not the contract the two-mate path
+        imposes. resolve_translocation never compares a strand class with
+        cytoband arms: ok_tloc_strands only requires the two mates' strand
+        classes to be complementary (++ with --, +- with -+), and
+        classify_simple_translocation derives the label from the two mates'
+        relative coordinates (CTX_UNR when no geometry fits). With one record
+        there is no reciprocal mate, so the strand class is being asked for
+        arm information it does not carry. Measured on a real standardized
+        manta sample (std_000.manta.HG00096): over all 554 interchromosomal
+        BND records the strand class matches the cytoband arm relation for 300
+        (54.2%, i.e. chance) and contradicts it for the other 254; run through
+        svtk resolve the filter gates 318 candidates and demotes 146 of them
+        (45.9%), leaving 172 CTX. Whether those 172 labels are right cannot be
+        checked on this input: 0 of the 554 records carry MATEID and 0 have a
+        reciprocal partner at the mirrored locus, so there is no truth set to
+        validate the survivors against.
         """
         rec = self.tlocs[0]
 
@@ -372,8 +386,9 @@ class ComplexSV:
             return
         cpx_type = 'CTX_PP/QQ' if armA == armB else 'CTX_PQ/QP'
         if cpx_type != expected_cpx_type:
-            # Arms contradict the strand class; the paired path refuses to
-            # resolve such a record as well
+            # Arms contradict the strand class. This gate exists only here: it
+            # is a bet that a tloc join is more often same-arm when the record
+            # is antiparallel, worth 54.2% on real input (see above).
             _unresolved(cpx_type, mismatch=True)
             return
         self.cpx_type = cpx_type
@@ -386,6 +401,14 @@ class ComplexSV:
         self.vcf_record.alts = ('<{0}>'.format(self.svtype), )
         self.vcf_record.info['SVTYPE'] = self.svtype
         self.vcf_record.info['CPX_TYPE'] = self.cpx_type
+        # END here is the mate's coordinate on CHR2, so it is informational
+        # only - CHR2/END2 carry the data. It lands below POS on most resolved
+        # records (120 of the 172 CTX from std_000.manta.HG00096, 69.8%) and
+        # htslib ignores an END below POS when reading, so readers see the
+        # record span as POS either way. The image pins pysam 0.15.4
+        # (dockerfiles/sv-pipeline-virtual-env/Dockerfile:34-40) precisely
+        # because newer pysam will not take END < POS: on pysam 0.24.1 this
+        # same assignment warns and writes END clamped up to POS.
         self.vcf_record.stop = rec.info['END2']
         self.vcf_record.info['SVLEN'] = -1
 
