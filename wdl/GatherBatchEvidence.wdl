@@ -102,6 +102,7 @@ workflow GatherBatchEvidence {
     Boolean run_ploidy = false
 
     # Option to add first sample to the ped file (for single sample mode); run_ploidy must be true
+    # Ignored when extra_ped_samples is non-empty: trio mode always writes the case plus its parents
     Boolean append_first_sample_to_ped = false
 
     # Trio de novo: when set, ALL of these non-reference-panel samples are added
@@ -237,7 +238,9 @@ workflow GatherBatchEvidence {
       runtime_attr_override = runtime_attr_subset_ped
   }
 
-  if (append_first_sample_to_ped && length(extra_ped_samples) > 0) {
+  # Trio mode is decided by extra_ped_samples alone - the same condition the
+  # combined_ped_file output uses - so the task and the output can never disagree.
+  if (length(extra_ped_samples) > 0) {
     call AddTrioSamplesToPed as AddTrioSamplesToPed {
       input:
         ref_ped_file = SubsetPedFile.ped_subset_file,
@@ -589,9 +592,9 @@ task AddCaseSampleToPed {
 
 # Trio de novo variant of AddCaseSampleToPed.
 # Appends every non-reference-panel trio member (case and any provided parents)
-# to the reference panel ped, using sex assignments from the ploidy calls.
-# All samples share the family name "trio_denovo", with the father/mother PED
-# columns filled in when both parents are present.
+# to the reference panel ped, using the ploidy chrX copy number for the PED sex
+# column. All samples share the family name "trio_denovo", with the father/mother
+# PED columns filled in for the case and zeroed (founders) for the parents.
 task AddTrioSamplesToPed {
   input {
     File ref_ped_file
@@ -628,8 +631,8 @@ task AddTrioSamplesToPed {
     tar xzf ~{ploidy_plots} -C .
     cp ~{write_lines(sample_ids)} trio_samples.txt
 
-    # Every trio member must have a ploidy sex assignment and must not already
-    # be present in the reference panel ped. Use exact tab-field matching
+    # Every trio member must have a usable ploidy chrX copy number and must not
+    # already be present in the reference panel ped. Use exact tab-field matching
     # (grep-style matching would false-positive on names that are prefixes of
     # other sample names, e.g. "PROBAND" vs "PROBAND-M").
     while read -r sample || [ -n "$sample" ]; do
@@ -639,23 +642,41 @@ task AddTrioSamplesToPed {
         exit 1
       fi
       if [ "$SEX" != "1" ] && [ "$SEX" != "2" ]; then
-        >&2 echo "Error: ploidy-derived sex code '$SEX' for sample $sample is not 1 (male) or 2 (female); cannot write a valid PED line"
+        >&2 echo "Error: ploidy-derived chrX copy number '$SEX' for sample $sample is not 1 (male) or 2 (female); cannot write a valid PED line"
+        exit 1
+      fi
+      # Field 2 of sample_sex_assignments is the estimated chrX COPY NUMBER
+      # (see colnames in src/WGD/bin/estimatePloidy.R), not a PED sex code; it
+      # only looks like one because males are 1 and females 2. Enforce the
+      # declared role anyway: it is a deliberate hard stop, because swapping
+      # extra_ped_mother_sample_id and extra_ped_father_sample_id would pass the
+      # 1/2 check above and silently invert every INHERITED_FROM_* label
+      # downstream. A parent with an atypical sex chromosome complement (e.g.
+      # 45,X or 47,XXY) also stops the run here.
+      if [ "$MOTHER_ID" != "0" ] && [ "$sample" = "$MOTHER_ID" ] && [ "$SEX" != "2" ]; then
+        >&2 echo "Error: sample $sample is declared as the mother but its chrX copy number is '$SEX', expected 2; check extra_ped_mother_sample_id and extra_ped_father_sample_id"
+        exit 1
+      fi
+      if [ "$FATHER_ID" != "0" ] && [ "$sample" = "$FATHER_ID" ] && [ "$SEX" != "1" ]; then
+        >&2 echo "Error: sample $sample is declared as the father but its chrX copy number is '$SEX', expected 1; check extra_ped_mother_sample_id and extra_ped_father_sample_id"
         exit 1
       fi
       awk -v sample="$sample" '$2 == sample { print "ERROR: A sample with the name " sample " is already present in the ped file." > "/dev/stderr"; exit 1; }' < ~{ref_ped_file}
     done < trio_samples.txt
 
-    # Emit reference panel lines, then one PED line per trio member. Parents
-    # carry "0" for their own parent columns (a sample cannot be its own parent).
+    # Emit reference panel lines, then one PED line per trio member. The case
+    # names both parents; the parents themselves are written as founders
+    # (0 for both parent columns), otherwise F and M would close a 2-cycle.
     cat ~{ref_ped_file} > trio_combined_ped_file.ped
     while read -r sample || [ -n "$sample" ]; do
       SEX=$(gunzip -c ploidy_est/sample_sex_assignments.txt.gz | awk -F'\t' -v s="$sample" '$1 == s {print $2; exit}')
-      PED_FATHER="$FATHER_ID"
-      if [ "$sample" = "$FATHER_ID" ]; then PED_FATHER="0"; fi
-      PED_MOTHER="$MOTHER_ID"
-      if [ "$sample" = "$MOTHER_ID" ]; then PED_MOTHER="0"; fi
+      PED_FATHER="$FATHER_ID"; PED_MOTHER="$MOTHER_ID"
+      if [ "$sample" = "$FATHER_ID" ] || [ "$sample" = "$MOTHER_ID" ]; then PED_FATHER="0"; PED_MOTHER="0"; fi
       printf 'trio_denovo\t%s\t%s\t%s\t%s\t1\n' "$sample" "$PED_FATHER" "$PED_MOTHER" "$SEX" >> trio_combined_ped_file.ped
     done < trio_samples.txt
+
+    # Self-check on the finished file: every declared parent must be a founder.
+    awk -F'\t' -v f="$FATHER_ID" -v m="$MOTHER_ID" '($2 == f || $2 == m) && ($3 != "0" || $4 != "0") { print "ERROR: declared trio parent " $2 " is not a founder (father=" $3 ", mother=" $4 ")" > "/dev/stderr"; exit 1 }' < trio_combined_ped_file.ped
   >>>
 
   runtime {
