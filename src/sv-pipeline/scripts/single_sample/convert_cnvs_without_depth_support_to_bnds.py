@@ -8,6 +8,11 @@ them to BNDs. This task is ordinarily accomplished by Module 3 but in some cases
 Record-level decisions (drop / convert-to-BND) consider all "proband" samples given on the command line. In the
 single-sample pipeline that is just the case; in trio de novo mode it is case + provided parents, so that a variant
 supported by depth or PE/SR evidence in ANY proband is retained.
+
+Because retention AND the representation decision (keep as DEL/DUP, rewrite as BND, or drop) are made across all
+provided probands, a parent's evidence changes the CASE's variant representation: in trio mode a record that the case
+alone would have had rewritten to BND (or dropped) can stay DEL/DUP because a parent has depth support. The rewritten
+SVTYPE/CHR2/END2/SVLEN are INFO fields, i.e. record-level, so a rewrite applies to all samples on that record at once.
 """
 
 import argparse
@@ -90,10 +95,11 @@ def main():
         vcf = pysam.VariantFile(args.vcf)
     header = vcf.header
 
-    proband_samples = [s for s in args.proband_samples if s in vcf.header.samples]
-    if not proband_samples:
-        sys.exit("Error: none of the proband samples {} are present in the VCF "
-                 "samples {}".format(args.proband_samples, vcf.header.samples))
+    missing_samples = [s for s in args.proband_samples if s not in vcf.header.samples]
+    if missing_samples:
+        sys.exit("Error: proband sample(s) {} not found in {} "
+                 "(samples: {})".format(", ".join(missing_samples), args.vcf, list(vcf.header.samples)))
+    proband_samples = args.proband_samples
     min_size = args.min_size
 
     if args.outfile is None:

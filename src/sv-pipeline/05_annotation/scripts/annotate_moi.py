@@ -13,12 +13,17 @@ genotypes and add two INFO fields:
         INHERITED_FROM_FATHER     case is non-ref, father non-ref only
         INHERITED_FROM_BOTH       case is non-ref, both provided parents non-ref
         PARENT_ONLY             case is ref, at least one provided parent non-ref
-        UNASSESSABLE            case genotype missing/unknown
+        UNASSESSABLE            case genotype missing/unknown, or case is ref and
+                                every provided parent is ref (the record was
+                                retained for some other reason)
     MOI_CONFIDENCE (String):
-        CONFIRMED             determination does not depend on a parent that
-                                was not assayed (or whose genotype was missing)
-        UNCONFIRMED           a parent was not assayed (or its genotype was
-                                missing), so the call cannot be fully confirmed
+        CONFIRMED             both parents were provided and both had a
+                                genotype at this record, so the determination
+                                does not depend on an unassayed parent
+        UNCONFIRMED           a provided parent was not assayed (or its genotype
+                                was missing at this record), so the call cannot
+                                be fully confirmed. With one or zero parents
+                                provided every MOI is UNCONFIRMED.
 
 The case sample must be present in the VCF. Parents are optional, but a parent
 provided on the command line must be present in the VCF sample columns (the
@@ -44,13 +49,20 @@ import pysam
 MOI_INFO_LINE = (
     '##INFO=<ID=MOI,Number=1,Type=String,'
     'Description="Mode of inheritance relative to the case sample: '
-    'DE_NOVO|INHERITED_FROM_MOTHER|INHERITED_FROM_FATHER|INHERITED_FROM_BOTH|'
-    'PARENT_ONLY|UNASSESSABLE">'
+    'DE_NOVO=case non-ref and every provided parent ref; '
+    'INHERITED_FROM_MOTHER=case non-ref and mother non-ref only; '
+    'INHERITED_FROM_FATHER=case non-ref and father non-ref only; '
+    'INHERITED_FROM_BOTH=case non-ref and both provided parents non-ref; '
+    'PARENT_ONLY=case ref and at least one provided parent non-ref; '
+    'UNASSESSABLE=case genotype missing, or case ref with every provided parent '
+    'ref (record retained for another reason)">'
 )
 MOI_CONFIDENCE_INFO_LINE = (
     '##INFO=<ID=MOI_CONFIDENCE,Number=1,Type=String,'
-    'Description="Confidence in the MOI call: CONFIRMED when all relevant '
-    'parents were assayed, UNCONFIRMED when a parent was not assayed">'
+    'Description="Confidence in the MOI call: CONFIRMED when both parents were '
+    'provided and both had a genotype at this record, UNCONFIRMED when a parent '
+    'was not assayed or had a missing genotype at this record, whichever MOI '
+    'was returned">'
 )
 
 # sentinel states for a sample's genotype at a record
