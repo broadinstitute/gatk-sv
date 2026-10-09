@@ -1642,7 +1642,10 @@ workflow GATKSVPipelineSingleSample {
     }
   }
 
-  File final_calls_vcf = if is_trio_denovo then select_first([FilterVcfForTrioSamplesGenotype.out]) else select_first([FilterVcfForCaseSampleGenotype.out])
+  # Exactly one of the two aliased calls runs, so a select_first chain (the same
+  # shape main uses for its mutually-exclusive merge pair) avoids evaluating a
+  # select_first over the call the skipped branch never ran.
+  File final_calls_vcf = select_first([FilterVcfForTrioSamplesGenotype.out, FilterVcfForCaseSampleGenotype.out])
 
   call rcv.RefineComplexVariants {
     input:
@@ -1841,9 +1844,11 @@ workflow GATKSVPipelineSingleSample {
   }
 
   output {
-    # Final calls (MOI-annotated in trio de novo mode)
-    File final_vcf = if is_trio_denovo then select_first([AnnotateModeOfInheritance.out]) else select_first([MergeStripyVcf.out, UpdateBreakendRepresentationAndRemoveFilters.out])
-    File final_vcf_idx = if is_trio_denovo then select_first([AnnotateModeOfInheritance.out_index]) else select_first([MergeStripyVcf.out_index, UpdateBreakendRepresentationAndRemoveFilters.out_idx])
+    # Final calls (MOI-annotated in trio de novo mode). MOI's outputs are defined
+    # exactly when is_trio_denovo, so listing them first reproduces the ternary
+    # without a select_first over a conditionally-skipped call.
+    File final_vcf = select_first([AnnotateModeOfInheritance.out, MergeStripyVcf.out, UpdateBreakendRepresentationAndRemoveFilters.out])
+    File final_vcf_idx = select_first([AnnotateModeOfInheritance.out_index, MergeStripyVcf.out_index, UpdateBreakendRepresentationAndRemoveFilters.out_idx])
 
     # These files contain events reported in the internal VCF representation
     # They are less VCF-spec compliant but may be useful if components of the pipeline need to be re-run
@@ -1870,8 +1875,11 @@ workflow GATKSVPipelineSingleSample {
     File non_genotyped_unique_depth_calls = GetUniqueNonGenotypedDepthCalls.out
     File non_genotyped_unique_depth_calls_idx = GetUniqueNonGenotypedDepthCalls.out_idx
 
-    # Mode of inheritance summary (trio de novo mode only)
-    File? moi_summary = select_first([AnnotateModeOfInheritance.moi_summary])
+    # Mode of inheritance summary (trio de novo mode only). Referenced directly,
+    # NOT via select_first: AnnotateModeOfInheritance sits inside `if (is_trio_denovo)`,
+    # so in single-case mode its outputs resolve to None as soon as the conditional is
+    # skipped, and select_first([None]) fails the whole workflow before any task runs.
+    File? moi_summary = AnnotateModeOfInheritance.moi_summary
 
     # Working pedigree: reference panel + case (single-case mode) or reference
     # panel + case + provided parents (trio de novo mode)
