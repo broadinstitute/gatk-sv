@@ -165,7 +165,8 @@ single-case mode and no MOI annotation is added.
 
 ### Trio mode limitations
 
-These constraints are validated up front (the run fails immediately with a descriptive error):
+These constraints are validated up front, before any compute, and the run fails immediately
+with a descriptive error:
 
 - Each parent CRAM must be provided together with its `*_sample_id`, and the three sample
   ids must be distinct.
@@ -178,12 +179,19 @@ These constraints are validated up front (the run fails immediately with a descr
 - `use_manta` must be `true` when `use_scramble` is `true` in trio mode: parents have no
   precomputed calls and no DRAGEN support, and Scramble realigns an existing Manta/Dragen
   call set.
-- Genomic Disorder CNV calling (GD) is skipped in trio mode: `gd_output_tarball` is null
-  and `final_vcf` contains no GD-derived calls. GD consumes the merged depth matrix (now
-  including parents) while its BAF input covers only the case + reference panel, an
-  unvalidated combination. Run the usual single-sample mode when GD calls are needed.
-
 Other trio-mode effects to be aware of:
+
+- Genomic Disorder CNV calling (GD) is skipped in trio mode: `gd_output_tarball` is null
+  and `final_vcf` contains no GD-derived calls. Nothing errors here, so it is not a
+  validation: GD consumes the merged depth matrix (now including parents) while its BAF
+  input covers only the case + reference panel, an unvalidated combination, so the call is
+  simply not made. Run the usual single-sample mode when GD calls are needed.
+- A provided parent's sex chromosome copy number is checked against the role it was declared
+  with, during evidence gathering rather than up front: a declared mother must show chrX CN 2
+  and a declared father CN 1. The run stops there if the mother and father ids are
+  transposed in the sample table, and also if a parent has an atypical sex chromosome
+  complement (e.g. 45,X or 47,XXY); in that case the affected parent can be left out and the
+  run run as a half-trio.
 
 - Metrics/QC variant counts (`metrics_file`, `qc_file`) and VCF allele annotations
   (`AF`/`AN`/`AC`) are computed over all VCF samples and therefore include the parents;
@@ -200,7 +208,8 @@ In trio de novo mode, every record in `final_vcf` carries two INFO fields comput
 the case genotype with the provided parent genotypes:
 
 - `MOI` — one of:
-  - `DE_NOVO` — the case is non-reference and every provided parent is reference.
+  - `DE_NOVO` — the case is non-reference and every provided parent is reference or is not
+    called at that record.
   - `INHERITED_FROM_MOTHER` — the case is non-reference and the mother (but not the father) is non-reference.
   - `INHERITED_FROM_FATHER` — the case is non-reference and the father (but not the mother) is non-reference.
   - `INHERITED_FROM_BOTH` — the case is non-reference and both provided parents are non-reference.
@@ -208,10 +217,11 @@ the case genotype with the provided parent genotypes:
   - `UNASSESSABLE` — the case genotype is missing/unknown at that variant, or no assayed
     sample carries the allele (e.g. records retained for the `MULTIALLELIC` flag, or calls
     present only in the reference panel).
-- `MOI_CONFIDENCE` — `CONFIRMED` when the determination does not depend on a parent that was
-  not assayed (or whose genotype was missing), and `UNCONFIRMED` when a parent was not assayed
-  or its genotype was missing (e.g. a `DE_NOVO` call in a half-trio, where the absent parent
-  could not be checked).
+- `MOI_CONFIDENCE` — `CONFIRMED` only when both parents were provided and both had a
+  genotype at that record. Every other case is `UNCONFIRMED`, including labels read directly
+  off an assayed parent: a mother-only run reports `INHERITED_FROM_MOTHER`/`UNCONFIRMED`
+  because the absent father could not be checked. With one or zero parents provided, every
+  MOI value comes back `UNCONFIRMED`.
 
 :::note
 Because parent-only variants are retained, the final trio VCF includes variants called in any
@@ -224,5 +234,5 @@ trio member. Records that are present only in a parent are labeled `PARENT_ONLY`
 |---------|--------|--------------|
 |`File`|`final_vcf`|Trio call set. In addition to the standard annotation, every record carries the `MOI` and `MOI_CONFIDENCE` INFO fields.|
 |`File?`|`moi_summary`|Per-MOI record counts (one row per MOI value). Present only in trio de novo mode.|
-|`File`|`working_ped`|The working pedigree: reference panel + case (single-case mode) or reference panel + case + provided parents (trio de novo mode).|
+|`File`|`working_ped`|The working pedigree: reference panel + case (single-case mode) or reference panel + case + provided parents (trio de novo mode). Trio rows share the family name `trio_denovo`; the case names both provided parents, and each parent is written as a founder (0 in both parent columns).|
 

@@ -447,6 +447,8 @@ Reversible / verifiable, all made by this session:
 | config `single-sample-trio-a0e10b99` created, then `overwrite_workspace_config` × ~6 (last two removed `final_bed`, added `moi_summary`) | `terra.config_payload(ns,ws,ns,name)` |
 | 5 workflow submissions (§2), total **$26.50** | Job Manager / the §8 REST call |
 | durable files under `…/testkit/staging/` (payload, `workspace.tsv`, trio results dir, `gsvpeek.sh`) | `ls -l` that dir |
+| ponytail-review of PR #971, then the 2026-10-08 review-fix round: 3 commits (`886d93c7` pedigree + parent roles + trio guard, `5bffc79a` filter dedupe + header read, `ca635e74` CNV→BND abort + MOI header + new tests) plus the `single.md` pass, each cherry-picked from a private lane worktree (`pr971fix/lane{1,2,3}-*`) onto `6499b294` | `git log --oneline 6499b294..HEAD`; `git show <sha>`; undo with `git reset --hard 6499b294` |
+| pushed the review-fix round + this doc to `trio_denovo_single_sample` (plain fast-forward, no force) | `git ls-remote origin refs/heads/trio_denovo_single_sample` equals local `git rev-parse HEAD` |
 | `gatk-sv-testkit/docs/terra-head-to-head.md` §8 added (docs-only, path-scoped commit — the repo's other uncommitted files were left untouched) | `git -C …/gatk-sv-testkit log -1 --stat` |
 
 Not touched, deliberately: the shared baseline workspace
@@ -505,8 +507,21 @@ Not touched, deliberately: the shared baseline workspace
 - [x] **2. Port the SIGPIPE fix to main** — **done, and not by this branch.** `wdl/CollectCoverage.wdl`
       on `origin/main` `a55c498f` now guards the header probes; verify with
       `git log -1 -- wdl/CollectCoverage.wdl` on `main`.
-- [ ] **3. Fix defect D** — `AddTrioSamplesToPed` parents must emit `0` in both parent columns
-      (`wdl/GatherBatchEvidence.wdl`); add an assertion that the emitted pedigree has no cycle.
+- [x] **3. Fix defect D** — **fixed in the 2026-10-08 review-fix round** (`886d93c7`).
+      `AddTrioSamplesToPed` now writes both provided parents as founders (`0` in both parent
+      columns), so the full-trio PED is a pedigree instead of an `F`↔`M` 2-cycle. The task also
+      gained a self-check over the finished file that fails the task if a declared parent row is
+      not a founder, and a role check: a declared mother must show chrX CN 2, a declared father
+      CN 1 (field 2 of `sample_sex_assignments.txt.gz` is the chrX copy number per
+      `src/WGD/bin/estimatePloidy.R:643`, not a sex code, so the old 1-or-2 test could not tell
+      the parents apart — transposing the two ids used to pass and invert every `INHERITED_FROM_*`
+      label downstream). Verified by extracting the real command block out of the WDL and running
+      it against a synthetic panel PED + ploidy tarball for all three shapes (`CASE F M` /
+      `M 0 0` / `F 0 0`, mother-only `CASE 0 M` + `M 0 0`, father-only `CASE F 0` + `F 0 0`),
+      plus two negative runs (swapped ids → exit 1; founder logic reverted → the self-check exits
+      1). Half-trio rows are unchanged from before. `miniwdl check` exits 0.
+      Remaining gap: the harness lived in `/tmp`, so nothing in the repo pins these three row
+      sets — the in-task self-check is the durable guard, not a test.
 - [ ] **4. Same localization trap on the remaining `File?` inputs** of `ValidateTrioInputs`
       (`dragen_vcf`, `case_*_vcf`) — Booleans instead, as done for the CRAMs. **Still open after the
       rebase, and now counted:** `wdl_semantics.py` reports 5 `DEFINED-ONLY` findings on this branch
@@ -544,3 +559,18 @@ Not touched, deliberately: the shared baseline workspace
       from `origin` on 2026-10-08. The commits are still reachable, through `mw_genotype_scale`
       history and the `tmp/pre-rebase-62d7f80d` backup ref, but nothing owns them. Salvage if wanted:
       `git branch tmp/salvage-test-sigpipe 083e9956`.
+- [ ] **14. CI runs no tests at all** — `.github/workflows/pytest.yaml` installs pytest and then runs
+      only `tox -e lint`, which is bare flake8 (`tox.ini [testenv:lint]`). So `test_annotate_moi.py`
+      and the new `test_convert_cnvs_without_depth_support_to_bnds.py` are never collected: PR #971's
+      `Linting` check passed in 22 s without touching either. Both files were run locally, in a
+      throwaway venv with `pysam` + `pytest`, to get the 8 passing results. Fixing the runner is a
+      3-line change, but it gates every file in the repo and so is deliberately NOT part of this PR;
+      it needs its own branch and a decision about which test trees to enable.
+- [ ] **15. `sv_shell` silently ignores trio inputs** — `src/sv_shell/single_sample_pipeline.sh` has
+      no `mother_*`/`father_*` handling (its README scopes it to case mode), so an input JSON carrying
+      `mother_cram` + `mother_sample_id` is accepted, never read, and yields a case-only VCF with no
+      MOI and no error. Three lines next to the other input reads would turn that into a refusal. Out
+      of scope for PR #971 by provenance (`src/sv_shell/` is untouched by it); recorded so it is not
+      lost. Its copy of the case genotype filter is independent of the WDL dedupe in `5bffc79a`, so it
+      still names its output `.<base>.filter_by_<sample_id>_gt.vcf.gz` where the WDL now writes
+      `.<base>.filter_by_trio_gt.vcf.gz`.
