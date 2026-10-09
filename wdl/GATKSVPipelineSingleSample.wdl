@@ -1618,19 +1618,22 @@ workflow GATKSVPipelineSingleSample {
   }
 
   # Case-only filtering is skipped in trio de novo mode: the call set retains
-  # all variants across case + mother + father.
+  # all variants across case + mother + father. Both branches run the single
+  # genotype-filter task below, aliased so that the call names (and therefore
+  # the output references) stay as they were; outside trio mode
+  # trio_samples_list holds exactly one line, the case sample.
   if (!is_trio_denovo) {
-    call SingleSampleFiltering.FilterVcfForCaseSampleGenotype {
+    call SingleSampleFiltering.FilterVcfForTrioSamplesGenotype as FilterVcfForCaseSampleGenotype {
       input:
         vcf_gz=FilterVcfDepthLt5kb.out,
-        sample_id=sample_id,
+        samples_list=trio_samples_list,
         sv_base_mini_docker=sv_base_mini_docker
     }
   }
 
   if (is_trio_denovo) {
-    # Trio-mode equivalent of FilterVcfForCaseSampleGenotype: keeps the MULTIALLELIC
-    # cleanup but retains variants called in ANY trio member.
+    # Keeps the MULTIALLELIC cleanup but retains variants called in ANY trio
+    # member.
     call SingleSampleFiltering.FilterVcfForTrioSamplesGenotype as FilterVcfForTrioSamplesGenotype {
       input:
         vcf_gz=FilterVcfDepthLt5kb.out,
