@@ -297,7 +297,7 @@ def cluster_cleanup(clusters_v2):
 def resolve_complex_sv_v2(resolve_INV, cytobands, disc_pairs,
                           mei_bed, resolved_record_namer, unresolved_record_namer,
                           min_rescan_support=4, pe_blacklist=None, quiet=False,
-                          SR_only_cutoff=1000, resolve_single_tlocs=False):
+                          SR_only_cutoff=1000):
     linked_INV = cluster_INV(resolve_INV)
     clusters_v2 = link_cpx_V2(linked_INV, cpx_dist=2000)
     clusters_v2 = cluster_cleanup(clusters_v2)
@@ -330,16 +330,14 @@ def resolve_complex_sv_v2(resolve_INV, cytobands, disc_pairs,
         # if cxsv overlap pulled in unrelated insertions, keep them separate
         if all(r.info['SVTYPE'] == 'INS' for r in cluster):
             for record in cluster:
-                cpx = ComplexSV([record], cytobands, mei_bed, SR_only_cutoff,
-                                resolve_single_tlocs=resolve_single_tlocs)
+                cpx = ComplexSV([record], cytobands, mei_bed, SR_only_cutoff)
                 cpx_record_ids_v2.update(cpx.record_ids)
                 cpx.vcf_record.id = resolved_record_namer.get_next_id(cpx.vcf_record)
                 cpx_records_v2.append(cpx.vcf_record)
                 # resolved_idx += 1
             outcome = 'treated as separate unrelated insertions'
         else:
-            cpx = ComplexSV(cluster, cytobands, mei_bed, SR_only_cutoff,
-                            resolve_single_tlocs=resolve_single_tlocs)
+            cpx = ComplexSV(cluster, cytobands, mei_bed, SR_only_cutoff)
             cpx_record_ids_v2.update(cpx.record_ids)
             if cpx.svtype == 'UNR':
                 for record in cpx.records:
@@ -495,8 +493,7 @@ def main(argv):
     # RLC: As of Sept 19, 2018, only considering inversion single-enders in second-pass
     # due to too many errors in second-pass linking and variant reporting
     cpx_records_v2 = resolve_complex_sv_v2(resolve_INV, cytobands, disc_pairs, mei_bed, resolved_record_namer,
-                                           unresolved_record_namer, args.min_rescan_pe_support, blacklist, args.quiet,
-                                           resolve_single_tlocs=args.resolve_single_tlocs)
+                                           unresolved_record_namer, args.min_rescan_pe_support, blacklist, args.quiet)
 
     for record in cpx_records_v2:
         # Move members to existing variant IDs unless variant is complex
