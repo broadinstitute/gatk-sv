@@ -175,9 +175,12 @@ task FilterAnnotateVcf {
 import gzip
 import pysam
 
-# First pass: parse true END values for BND/CTX from the raw VCF text.
+# First pass: parse true END values for BND from the raw VCF text.
 # pysam silently clamps END to POS when END < POS, which happens for
 # interchromosomal BNDs where END is on a different contig.
+# SVTYPE=CTX is deliberately not collected: nothing upstream of this task produces it (the only CTX
+# producers are the CPX-resolution steps, which run after GenotypeBatch), and rewrite_SR_coords.py
+# below has no CTX branch either. Revisit both together if a CTX-bearing input ever has to work.
 # TODO: the END field correction is to support legacy VCFs temporarily; this should be removed
 #       before running on non-legacy files
 bnd_end_dict = dict()
@@ -187,7 +190,7 @@ with gzip.open("filtered.vcf.gz", 'rt') as f:
             continue
         cols = line.split('\t', 8)
         info = cols[7]
-        if 'SVTYPE=BND' not in info and 'SVTYPE=CTX' not in info:
+        if 'SVTYPE=BND' not in info:
             continue
         vid = cols[2]
         end_fields = [x for x in info.split(';') if x.startswith('END=')]
@@ -215,12 +218,15 @@ CODE
     /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.updated_bnds.vcf.gz ~{metrics} ~{cutoffs} stdout \
       | bcftools sort -Oz -o filtered.corrected_coords.vcf.gz
 
-    /opt/sv-pipeline/03_variant_filtering/scripts/annotate_RF_evidence.py filtered.corrected_coords.vcf.gz ~{scores} ~{prefix}.raw.with_evidence.vcf
-    bgzip ~{prefix}.raw.with_evidence.vcf
-
-    # Filter WHAM deletions, which are needed for adjudication but are usually enriched for false positives
-    bcftools view -e 'ALGORITHMS=="wham" && SVTYPE=="DEL"' ~{prefix}.raw.with_evidence.vcf.gz -Oz -o ~{prefix}.with_evidence.vcf.gz
-    tabix ~{prefix}.with_evidence.vcf.gz
+    # WHAM-only deletions are excluded from the genotyped and training site sets by
+    # GenotypeBatch.FilterWhamDeletions, which is the single spelling of that predicate; do not
+    # restate it here. This VCF feeds PlotSVCountsPerSample and FilterBatchSamples, which count SVs
+    # per sample to exclude outlier samples by n-IQR, and adjudication has already run on
+    # `metrics` upstream, so filtering here only skews sample exclusion - it cannot reach
+    # adjudication. It also cannot express "wham-only": ALGORITHMS is Number=., so
+    # ALGORITHMS=="wham" is true for manta+wham and wham+pesr DELs too.
+    /opt/sv-pipeline/03_variant_filtering/scripts/annotate_RF_evidence.py filtered.corrected_coords.vcf.gz ~{scores} ~{prefix}.with_evidence.vcf
+    bgzip ~{prefix}.with_evidence.vcf
 
   >>>
   runtime {

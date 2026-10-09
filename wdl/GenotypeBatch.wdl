@@ -71,7 +71,6 @@ workflow GenotypeBatch {
   call FilterWhamDeletions {
     input:
       vcf = vcf,
-      vcf_index = vcf + ".tbi",
       prefix = batch + ".wham_del_filtered",
       sv_base_mini_docker = sv_base_mini_docker
   }
@@ -82,7 +81,6 @@ workflow GenotypeBatch {
   call FilterWhamDeletions as FilterWhamDeletionsTraining {
     input:
       vcf = training_vcf,
-      vcf_index = training_vcf + ".tbi",
       prefix = batch + ".training.wham_del_filtered",
       sv_base_mini_docker = sv_base_mini_docker
   }
@@ -200,7 +198,6 @@ workflow GenotypeBatch {
 task FilterWhamDeletions {
   input {
     File vcf
-    File vcf_index
     String prefix
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
