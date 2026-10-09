@@ -402,13 +402,15 @@ class ComplexSV:
         self.vcf_record.info['SVTYPE'] = self.svtype
         self.vcf_record.info['CPX_TYPE'] = self.cpx_type
         # END here is the mate's coordinate on CHR2, so it is informational
-        # only - CHR2/END2 carry the data. It lands below POS on most resolved
-        # records (120 of the 172 CTX from std_000.manta.HG00096, 69.8%) and
+        # only - CHR2/END2 carry the data. It is written below POS on 19,203 of
+        # the 27,274 CTX records this flag adds over 156 samples (70.4%), and
         # htslib ignores an END below POS when reading, so readers see the
         # record span as POS either way. The image pins pysam 0.15.4
         # (dockerfiles/sv-pipeline-virtual-env/Dockerfile:34-40) precisely
-        # because newer pysam will not take END < POS: on pysam 0.24.1 this
-        # same assignment warns and writes END clamped up to POS.
+        # because newer pysam will not take END < POS: on pysam 0.24.1 the same
+        # assignment warns and clamps END up to POS, so measuring these records
+        # locally reads END == POS and never shows the END < POS that the
+        # shipped image writes.
         self.vcf_record.stop = rec.info['END2']
         self.vcf_record.info['SVLEN'] = -1
 
