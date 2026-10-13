@@ -98,7 +98,7 @@ task FilterBed {
         print $0
         next
     }
-    col && ($col == "PASS" || $col == "MULTIALLELIC") {
+    col && ($col == "PASS" || $col == "MULTIALLELIC" || $col == "." || $col == "") {
         print $0
     }' | bgzip -c > ~{outfile_name}
     tabix -p bed ~{outfile_name}
