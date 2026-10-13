@@ -1,0 +1,7 @@
+{
+  "ExtractCommonSamples.variant_file_1": "gs://YOUR_BUCKET/path/to/variants1.bed.gz",
+  "ExtractCommonSamples.variant_file_2": "gs://YOUR_BUCKET/path/to/variants2.vcf.gz",
+  "ExtractCommonSamples.bed_sample_col": "samples",
+  "ExtractCommonSamples.output_prefix": "cohort_common_samples",
+  "ExtractCommonSamples.bcftools_docker": "quay.io/biocontainers/bcftools:1.17--h3cc50cf_1"
+}
