@@ -7,14 +7,27 @@ import "BenchmarkIndividualVcfPerContig.wdl" as BenchmarkIndividualVcfPerContig
 import "SplitMultiallelicVcf.wdl" as SplitMultiallelicVcf
 
 
+# Query and ref callsets can each be given either as
+#   - one VCF (+ index) covering all contigs: each contig in `chromosomes` is extracted
+#     with bcftools view -r, as before; or
+#   - a list of per-contig VCFs (+ indexes), one per entry of `chromosomes`, in the same
+#     order: the list is checked against `chromosomes` (ValidateContigVcfList) and each
+#     VCF is used directly for its contig, with no extraction.
+# Give exactly one of query_vcf / query_vcfs (and of ref_vcf / ref_vcfs).
 workflow BenchmarkIndividualVcf{
     input{
-        File ref_vcf
-        File ref_vcf_idx
+        File? ref_vcf
+        File? ref_vcf_idx
+        Array[File]? ref_vcfs        # one per contig, same order as chromosomes
+        Array[File]? ref_vcf_idxs
+        String? ref_name             # output prefix; default from the (first) ref VCF name
         File? ref_filter_vcf
         File? ref_filter_vcf_idx
-        File query_vcf
-        File query_vcf_idx  
+        File? query_vcf
+        File? query_vcf_idx
+        Array[File]? query_vcfs      # one per contig, same order as chromosomes
+        Array[File]? query_vcf_idxs
+        String? query_name           # output prefix; default from the (first) query VCF name
         File? query_filter_vcf
         File? query_filter_vcf_idx
 
@@ -43,36 +56,86 @@ workflow BenchmarkIndividualVcf{
         Boolean run_split_multiallelic_ref = true
 
         RuntimeAttr? runtime_attr_split_multiallelic
+        RuntimeAttr? runtime_attr_validate_contig_vcfs
     }
 
-    String query_prefix = basename(query_vcf, ".vcf.gz")
-    String ref_prefix = basename(ref_vcf, ".vcf.gz")
+    String query_prefix = if defined(query_name) then select_first([query_name])
+                          else if defined(query_vcf) then basename(select_first([query_vcf]), ".vcf.gz")
+                          else basename(select_first([query_vcfs])[0], ".vcf.gz")
+    String ref_prefix = if defined(ref_name) then select_first([ref_name])
+                        else if defined(ref_vcf) then basename(select_first([ref_vcf]), ".vcf.gz")
+                        else basename(select_first([ref_vcfs])[0], ".vcf.gz")
+
+    # Per-contig VCF lists: check them against `chromosomes` once, before any per-contig work.
+    if (defined(query_vcfs)) {
+        Array[String] query_vcf_paths = select_first([query_vcfs])
+        call ValidateContigVcfList as validate_query_vcfs {
+            input:
+                vcf_paths = query_vcf_paths,
+                vcf_idxs = select_first([query_vcf_idxs]),
+                chromosomes = chromosomes,
+                label = "query",
+                docker_image = sv_pipeline_base_docker,
+                runtime_attr_override = runtime_attr_validate_contig_vcfs
+        }
+    }
+    if (defined(ref_vcfs)) {
+        Array[String] ref_vcf_paths = select_first([ref_vcfs])
+        call ValidateContigVcfList as validate_ref_vcfs {
+            input:
+                vcf_paths = ref_vcf_paths,
+                vcf_idxs = select_first([ref_vcf_idxs]),
+                chromosomes = chromosomes,
+                label = "ref",
+                docker_image = sv_pipeline_base_docker,
+                runtime_attr_override = runtime_attr_validate_contig_vcfs
+        }
+    }
 
     scatter (index in range(length(chromosomes))){
 
-        call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_query{
-            input:
-                input_vcf = query_vcf,
-                input_vcf_index = query_vcf_idx,
-                chromosome = chromosomes[index],
-                output_name = "~{query_prefix}.~{chromosomes[index]}.vcf.gz",
-                docker_image = sv_pipeline_base_docker  
-            }
+        # Single VCF: extract this contig. Per-contig list: use the index-th VCF as is.
+        if (!defined(query_vcfs)) {
+            call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_query{
+                input:
+                    input_vcf = select_first([query_vcf]),
+                    input_vcf_index = select_first([query_vcf_idx]),
+                    chromosome = chromosomes[index],
+                    output_name = "~{query_prefix}.~{chromosomes[index]}.vcf.gz",
+                    docker_image = sv_pipeline_base_docker
+                }
+        }
 
-        call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_ref{
-            input:
-                input_vcf = ref_vcf,
-                input_vcf_index = ref_vcf_idx,
-                chromosome = chromosomes[index],
-                output_name = "~{ref_prefix}.~{chromosomes[index]}.vcf.gz",
-                docker_image = sv_pipeline_base_docker  
-            }
+        if (!defined(ref_vcfs)) {
+            call LongReadGenotypeTasks.ExtractChromosomeVariants as extract_chrom_variants_ref{
+                input:
+                    input_vcf = select_first([ref_vcf]),
+                    input_vcf_index = select_first([ref_vcf_idx]),
+                    chromosome = chromosomes[index],
+                    output_name = "~{ref_prefix}.~{chromosomes[index]}.vcf.gz",
+                    docker_image = sv_pipeline_base_docker
+                }
+        }
+
+        # Referencing the validation output makes per-contig work wait until the list passed.
+        File query_chr_vcf = if select_first([validate_query_vcfs.passed, true]) && defined(query_vcfs)
+                             then select_first([query_vcfs])[index]
+                             else select_first([extract_chrom_variants_query.chr_vcf])
+        File query_chr_vcf_idx = if select_first([validate_query_vcfs.passed, true]) && defined(query_vcfs)
+                                 then select_first([query_vcf_idxs])[index]
+                                 else select_first([extract_chrom_variants_query.chr_vcf_idx])
+        File ref_chr_vcf = if select_first([validate_ref_vcfs.passed, true]) && defined(ref_vcfs)
+                           then select_first([ref_vcfs])[index]
+                           else select_first([extract_chrom_variants_ref.chr_vcf])
+        File ref_chr_vcf_idx = if select_first([validate_ref_vcfs.passed, true]) && defined(ref_vcfs)
+                               then select_first([ref_vcf_idxs])[index]
+                               else select_first([extract_chrom_variants_ref.chr_vcf_idx])
 
         if (run_split_multiallelic_query) {
           call SplitMultiallelicVcf.SplitMultiallelicVcf as split_multiallelic_query{
               input:
-                  vcf_gz       = extract_chrom_variants_query.chr_vcf,
-                  vcf_idx      = extract_chrom_variants_query.chr_vcf_idx,
+                  vcf_gz       = query_chr_vcf,
+                  vcf_idx      = query_chr_vcf_idx,
                   output_prefix = "~{query_prefix}.~{chromosomes[index]}.split",
                   docker_image = sv_pipeline_base_docker,
                   runtime_attr_override = runtime_attr_split_multiallelic
@@ -82,8 +145,8 @@ workflow BenchmarkIndividualVcf{
         if (run_split_multiallelic_ref) {
           call SplitMultiallelicVcf.SplitMultiallelicVcf as split_multiallelic_ref{
               input:
-                  vcf_gz       = extract_chrom_variants_ref.chr_vcf,
-                  vcf_idx      = extract_chrom_variants_ref.chr_vcf_idx,
+                  vcf_gz       = ref_chr_vcf,
+                  vcf_idx      = ref_chr_vcf_idx,
                   output_prefix = "~{ref_prefix}.~{chromosomes[index]}.split",
                   docker_image = sv_pipeline_base_docker,
                   runtime_attr_override = runtime_attr_split_multiallelic
@@ -92,19 +155,19 @@ workflow BenchmarkIndividualVcf{
 
         File query_vcf_for_benchmark = select_first([
           split_multiallelic_query.output_vcf_gz,
-          extract_chrom_variants_query.chr_vcf
+          query_chr_vcf
         ])
         File query_vcf_idx_for_benchmark = select_first([
           split_multiallelic_query.output_vcf_idx,
-          extract_chrom_variants_query.chr_vcf_idx
+          query_chr_vcf_idx
         ])
         File ref_vcf_for_benchmark = select_first([
           split_multiallelic_ref.output_vcf_gz,
-          extract_chrom_variants_ref.chr_vcf
+          ref_chr_vcf
         ])
         File ref_vcf_idx_for_benchmark = select_first([
           split_multiallelic_ref.output_vcf_idx,
-          extract_chrom_variants_ref.chr_vcf_idx
+          ref_chr_vcf_idx
         ])
 
         if (defined(query_filter_vcf) && defined(ref_filter_vcf)){
@@ -407,6 +470,105 @@ workflow BenchmarkIndividualVcf{
     Array[File] benchmark_figure = plot_comp_results.figure
   }
 
+}
+
+# Checks a per-contig VCF list against the contig list, reading only the indexes (the
+# VCFs are passed as paths, not localized): same length as `chromosomes`; each index
+# is named <vcf>.tbi or <vcf>.csi; and each VCF's index lists only its own contig
+# (an index with no contigs, i.e. an empty VCF, is allowed with a warning).
+task ValidateContigVcfList {
+    input {
+        Array[String] vcf_paths
+        Array[File] vcf_idxs
+        Array[String] chromosomes
+        String label
+        String docker_image
+        RuntimeAttr? runtime_attr_override
+    }
+
+    command <<<
+        set -euo pipefail
+
+        python3 <<'EOF'
+import gzip
+import os
+import struct
+import sys
+
+vcfs = [l.rstrip("\n") for l in open("~{write_lines(vcf_paths)}")]
+idxs = [l.rstrip("\n") for l in open("~{write_lines(vcf_idxs)}")]
+chroms = [l.rstrip("\n") for l in open("~{write_lines(chromosomes)}")]
+label = "~{label}"
+
+
+def index_contigs(path):
+    """Contig names stored in a .tbi, or in a .csi's tabix auxiliary block."""
+    with gzip.open(path, "rb") as f:
+        magic = f.read(4)
+        if magic == b"TBI\1":
+            f.read(4)                    # n_ref
+            aux = f.read(28)             # 7 int32: format, col_seq, col_beg, col_end, meta, skip, l_nm
+        elif magic == b"CSI\1":
+            f.read(8)                    # min_shift, depth
+            l_aux = struct.unpack("<i", f.read(4))[0]
+            if l_aux < 28:
+                return None              # no tabix-style auxiliary data with names
+            aux = f.read(28)             # same 7 int32 as .tbi, then the names
+        else:
+            sys.exit(f"{path}: not a .tbi or .csi index")
+        l_nm = struct.unpack("<i", aux[24:28])[0]
+        names = f.read(l_nm).split(b"\0")
+    return [n.decode() for n in names if n]
+
+
+errors = []
+if not (len(vcfs) == len(idxs) == len(chroms)):
+    errors.append(f"{label}: {len(vcfs)} VCFs, {len(idxs)} indexes, {len(chroms)} chromosomes; "
+                  "the per-contig lists must have one entry per chromosome, in the same order")
+else:
+    for vcf, idx, chrom in zip(vcfs, idxs, chroms):
+        vcf_base, idx_base = os.path.basename(vcf), os.path.basename(idx)
+        if idx_base not in (vcf_base + ".tbi", vcf_base + ".csi"):
+            errors.append(f"{label} {chrom}: index {idx_base} does not belong to {vcf_base}")
+            continue
+        contigs = index_contigs(idx)
+        if contigs is None:
+            print(f"WARNING: {label} {chrom}: {idx_base} has no contig names; contig not checked")
+        elif not contigs:
+            print(f"WARNING: {label} {chrom}: {vcf_base} has no records")
+        elif contigs != [chrom]:
+            errors.append(f"{label} {chrom}: {vcf_base} contains contigs {contigs}, expected only {chrom}")
+        else:
+            print(f"{label} {chrom}: {vcf_base} OK")
+
+if errors:
+    sys.exit("Per-contig VCF list does not match chromosomes:\n  " + "\n  ".join(errors))
+open("passed.txt", "w").write("true\n")
+EOF
+    >>>
+
+    output {
+        Boolean passed = read_boolean("passed.txt")
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1,
+        mem_gb: 2,
+        disk_gb: 10,
+        boot_disk_gb: 10,
+        preemptible_tries: 3,
+        max_retries: 1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+        docker: docker_image
+    }
 }
 
 task MergeTagVcf {
