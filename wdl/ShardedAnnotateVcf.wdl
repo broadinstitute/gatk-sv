@@ -81,21 +81,10 @@ workflow ShardedAnnotateVcf {
   scatter (i in range(length(ScatterVcf.shards))) {
     String shard_prefix = "~{prefix}.~{contig}.~{i}"
 
-    if (defined(sample_keep_list)) {
-      call util.SubsetVcfBySamplesList {
-        input:
-          vcf = ScatterVcf.shards[i],
-          list_of_samples = select_first([sample_keep_list]),
-          sv_base_mini_docker = sv_base_mini_docker,
-          runtime_attr_override = runtime_attr_subset_vcf_by_samples_list
-      }
-    }
-
     if (defined(sample_id_rename_map)) {
       call RenameVcfSamplesTask {
         input:
-          vcf = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
-          vcf_idx = SubsetVcfBySamplesList.vcf_subset_index,
+          vcf = ScatterVcf.shards[i],
           sample_id_rename_map = select_first([sample_id_rename_map]),
           prefix = shard_prefix,
           check_rename_all_samples = false,
@@ -104,10 +93,20 @@ workflow ShardedAnnotateVcf {
       }
     }
 
+    if (defined(sample_keep_list)) {
+      call util.SubsetVcfBySamplesList {
+        input:
+          vcf = select_first([RenameVcfSamplesTask.out, ScatterVcf.shards[i]]),
+          list_of_samples = select_first([sample_keep_list]),
+          sv_base_mini_docker = sv_base_mini_docker,
+          runtime_attr_override = runtime_attr_subset_vcf_by_samples_list
+      }
+    }
+
     if (defined (protein_coding_gtf) || defined (noncoding_bed)) {
       call func.AnnotateFunctionalConsequences {
         input:
-          vcf = select_first([RenameVcfSamplesTask.out, SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
+          vcf = select_first([SubsetVcfBySamplesList.vcf_subset, RenameVcfSamplesTask.out, ScatterVcf.shards[i]]),
           vcf_index = select_first([RenameVcfSamplesTask.out_index, SubsetVcfBySamplesList.vcf_subset_index]),
           prefix = shard_prefix,
           protein_coding_gtf = protein_coding_gtf,
