@@ -7,6 +7,14 @@ import "ExtractIndividualFromVCF.wdl" as ExtractIndividualFromVCF
 import "ExtractTriosFromVCFByGenomicContext.wdl" as ExtractTriosFromVCFByGenomicContext
 
 
+# Variants are split per sample into SNV, indel 1-20 bp, indel 21-49 bp and SV >= 50 bp
+# (SplitVariantsBySizeBenchmark), and each is benchmarked exactly once:
+#   SNV            : BenchmarkSNVs (exact CHROM/POS/REF/ALT match)
+#   indel 1-20 bp  : Truvari (-s 1 -S 1)
+#   SV >= 50 bp    : BenchmarkSVs (short_read_benchmark) or Truvari (-s 1 -S 1)
+#   indel 21-49 bp : pooled with the 1-20 bp indels (default) or, if
+#                    indel_21_49_use_sv_match = true, with the SVs >= 50 bp, and
+#                    matched with that set's method.
 workflow BenchmarkIndividualVcfPerContig{
   input{
     File ref_vcf
@@ -32,6 +40,7 @@ workflow BenchmarkIndividualVcfPerContig{
     File ref_dict
 
     Boolean short_read_benchmark = false
+    Boolean indel_21_49_use_sv_match = false   # false: 21-49 bp matched as indels; true: as SVs
 
     String? truvari_params
     String sv_base_mini_docker
@@ -123,6 +132,46 @@ workflow BenchmarkIndividualVcfPerContig{
         docker_image = sv_pipeline_base_docker
     }
 
+    # Indel set and SV set for this sample; the 21-49 bp indels join exactly one of them.
+    if (!indel_21_49_use_sv_match) {
+      call LongReadGenotypeTasks.ConcatVcfs as concat_indels_query{
+        input:
+          vcfs = [extract_individual_query.all_indel_1_20[index], extract_individual_query.all_indel_21_49[index]],
+          vcfs_idx = [extract_individual_query.all_indel_1_20_idx[index], extract_individual_query.all_indel_21_49_idx[index]],
+          outfile_prefix = "~{prefix_query}.~{sample_ids[index]}.indel_1_49",
+          sv_base_mini_docker = sv_base_mini_docker
+      }
+      call LongReadGenotypeTasks.ConcatVcfs as concat_indels_ref{
+        input:
+          vcfs = [extract_individual_ref.all_indel_1_20[index], extract_individual_ref.all_indel_21_49[index]],
+          vcfs_idx = [extract_individual_ref.all_indel_1_20_idx[index], extract_individual_ref.all_indel_21_49_idx[index]],
+          outfile_prefix = "~{prefix_ref}.~{sample_ids[index]}.indel_1_49",
+          sv_base_mini_docker = sv_base_mini_docker
+      }
+    }
+
+    if (indel_21_49_use_sv_match) {
+      call LongReadGenotypeTasks.ConcatVcfs as concat_svs_query{
+        input:
+          vcfs = [extract_individual_query.all_indel_21_49[index], extract_individual_query.all_sv_ge50[index]],
+          vcfs_idx = [extract_individual_query.all_indel_21_49_idx[index], extract_individual_query.all_sv_ge50_idx[index]],
+          outfile_prefix = "~{prefix_query}.~{sample_ids[index]}.sv_ge21",
+          sv_base_mini_docker = sv_base_mini_docker
+      }
+      call LongReadGenotypeTasks.ConcatVcfs as concat_svs_ref{
+        input:
+          vcfs = [extract_individual_ref.all_indel_21_49[index], extract_individual_ref.all_sv_ge50[index]],
+          vcfs_idx = [extract_individual_ref.all_indel_21_49_idx[index], extract_individual_ref.all_sv_ge50_idx[index]],
+          outfile_prefix = "~{prefix_ref}.~{sample_ids[index]}.sv_ge21",
+          sv_base_mini_docker = sv_base_mini_docker
+      }
+    }
+
+    File indel_query_vcf = select_first([concat_indels_query.concat_vcf, extract_individual_query.all_indel_1_20[index]])
+    File indel_ref_vcf = select_first([concat_indels_ref.concat_vcf, extract_individual_ref.all_indel_1_20[index]])
+    File sv_query_vcf = select_first([concat_svs_query.concat_vcf, extract_individual_query.all_sv_ge50[index]])
+    File sv_ref_vcf = select_first([concat_svs_ref.concat_vcf, extract_individual_ref.all_sv_ge50[index]])
+
     call LongReadGenotypeTasks.BenchmarkSNVs as truvari_bench_snvs{
       input:
           comp_vcf = extract_individual_query.all_snv_vcfs[index],
@@ -134,8 +183,8 @@ workflow BenchmarkIndividualVcfPerContig{
     call TruvariBench.CallTruvariBench as truvari_bench_indels{
       input:
           chromosomes = [chromosome],
-          comp_vcf  = extract_individual_query.all_indel_1_50[index],
-          truth_vcf = extract_individual_ref.all_indel_1_50[index],
+          comp_vcf  = indel_query_vcf,
+          truth_vcf = indel_ref_vcf,
           prefix = "~{sample_ids[index]}.indels",
           ref_dict = ref_dict, 
           truvari_params = "-s 1 -S 1"
@@ -144,8 +193,8 @@ workflow BenchmarkIndividualVcfPerContig{
     if (short_read_benchmark){
       call LongReadGenotypeTasks.BenchmarkSVs as truvari_bench_sv_sr{
         input:
-          comp_vcf  = extract_individual_query.all_sv_over30[index],
-          base_vcf  = extract_individual_ref.all_sv_over30[index],
+          comp_vcf  = sv_query_vcf,
+          base_vcf  = sv_ref_vcf,
           prefix = "~{sample_ids[index]}.SVs",
           benchmark_bash = benchmark_script_bash,
           banchmark_helper_R = banchmark_script_helper_R,
@@ -157,8 +206,8 @@ workflow BenchmarkIndividualVcfPerContig{
       call TruvariBench.CallTruvariBench as truvari_bench_sv_lr{
         input:
             chromosomes = [chromosome],
-            comp_vcf  = extract_individual_query.all_sv_over30[index],
-            truth_vcf = extract_individual_ref.all_sv_over30[index],
+            comp_vcf  = sv_query_vcf,
+            truth_vcf = sv_ref_vcf,
             prefix = "~{sample_ids[index]}.sv",
             ref_dict = ref_dict, 
             truvari_params = "-s 1 -S 1"

@@ -47,6 +47,10 @@ workflow BenchmarkIndividualVcf{
         File ref_dict
 
         Boolean short_read_benchmark = false
+        # Size classes benchmarked separately: SNV, indel 1-20 bp, indel 21-49 bp, SV >= 50 bp.
+        # false (default): 21-49 bp indels matched with the indel method (Truvari, as 1-20 bp);
+        # true: matched with the SV method (as SVs >= 50 bp).
+        Boolean indel_21_49_use_sv_match = false
 
         String? truvari_params
         String sv_base_mini_docker
@@ -216,6 +220,7 @@ workflow BenchmarkIndividualVcf{
                 segmental_duplicates = segmental_duplicates,
 
                 short_read_benchmark = short_read_benchmark,
+                indel_21_49_use_sv_match = indel_21_49_use_sv_match,
 
                 sample_ids = sample_ids,
                 ref_dict = ref_dict,
@@ -259,6 +264,7 @@ workflow BenchmarkIndividualVcf{
                 segmental_duplicates = segmental_duplicates,
 
                 short_read_benchmark = short_read_benchmark,
+                indel_21_49_use_sv_match = indel_21_49_use_sv_match,
 
                 sample_ids = sample_ids,
                 ref_dict = ref_dict,
@@ -303,6 +309,7 @@ workflow BenchmarkIndividualVcf{
                 segmental_duplicates = segmental_duplicates,
 
                 short_read_benchmark = short_read_benchmark,
+                indel_21_49_use_sv_match = indel_21_49_use_sv_match,
 
                 sample_ids = sample_ids,
                 ref_dict = ref_dict,
@@ -335,6 +342,7 @@ workflow BenchmarkIndividualVcf{
                 segmental_duplicates = segmental_duplicates,
 
                 short_read_benchmark = short_read_benchmark,
+                indel_21_49_use_sv_match = indel_21_49_use_sv_match,
 
                 sample_ids = sample_ids,
                 ref_dict = ref_dict,

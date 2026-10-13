@@ -2744,6 +2744,97 @@ task SplitVariantsBySize {
   }
 }
 
+# Benchmark size bins (BenchmarkIndividualVcf): SNV, indel 1-20 bp, indel 21-49 bp,
+# SV >= 50 bp. Size = |len(REF) - len(ALT)|; symbolic ALTs (e.g. <DEL>) are SVs.
+# Same-length multi-base substitutions (size 0, not SNVs) go to the 1-20 bp bin,
+# as they did in SplitVariantsBySize. Multi-allelic records are skipped (split them
+# first). SplitVariantsBySize (1-30 / 31-50 / >50 bins) is left as is for the
+# other workflows that use it.
+task SplitVariantsBySizeBenchmark {
+  input {
+    File input_vcf
+    String docker_image
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String prefix = basename(input_vcf, ".vcf.gz")
+  command <<<
+    set -euo pipefail
+
+    python3 <<CODE
+    import pysam
+
+    def size_bin(rec):
+        ref, alt = rec.ref, rec.alts[0]
+        if "<" in alt and ">" in alt:
+            return "SV_GE_50"
+        if len(ref) == 1 and len(alt) == 1:
+            return "SNV"
+        size = abs(len(ref) - len(alt))
+        if size <= 20:
+            return "INDEL_1_20"
+        if size <= 49:
+            return "INDEL_21_49"
+        return "SV_GE_50"
+
+    vcf_in = pysam.VariantFile("~{input_vcf}")
+    files = {"SNV": "snv", "INDEL_1_20": "indel_1_20", "INDEL_21_49": "indel_21_49", "SV_GE_50": "sv_ge50"}
+    outputs = {k: pysam.VariantFile(f"~{prefix}.{v}.vcf", "w", header=vcf_in.header) for k, v in files.items()}
+    counts = dict.fromkeys(files, 0)
+    n_multi = 0
+    for rec in vcf_in.fetch():
+        if not rec.alts or len(rec.alts) != 1:
+            n_multi += 1
+            continue
+        b = size_bin(rec)
+        outputs[b].write(rec)
+        counts[b] += 1
+    for f in outputs.values():
+        f.close()
+    vcf_in.close()
+    print("~{prefix}:", counts, f"skipped (not biallelic): {n_multi}")
+    CODE
+
+    for b in snv indel_1_20 indel_21_49 sv_ge50; do
+      bgzip "~{prefix}.${b}.vcf"
+      tabix -p vcf "~{prefix}.${b}.vcf.gz"
+    done
+  >>>
+
+  output {
+    File snv_vcf = "~{prefix}.snv.vcf.gz"
+    File indel_1_20_vcf = "~{prefix}.indel_1_20.vcf.gz"
+    File indel_21_49_vcf = "~{prefix}.indel_21_49.vcf.gz"
+    File sv_ge50_vcf = "~{prefix}.sv_ge50.vcf.gz"
+
+    File snv_vcf_idx = "~{prefix}.snv.vcf.gz.tbi"
+    File indel_1_20_vcf_idx = "~{prefix}.indel_1_20.vcf.gz.tbi"
+    File indel_21_49_vcf_idx = "~{prefix}.indel_21_49.vcf.gz.tbi"
+    File sv_ge50_vcf_idx = "~{prefix}.sv_ge50.vcf.gz.tbi"
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 15,
+    disk_gb: 20 + ceil(size(input_vcf, "GiB")*5),
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: docker_image
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task SplitVariantsByType {
   input {
     File input_vcf
