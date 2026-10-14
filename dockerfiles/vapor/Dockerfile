@@ -5,8 +5,6 @@
 FROM ubuntu:22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
-# htslib 1.9 cannot fetch remote (gs://, https://) indexes with Ubuntu 22.04's libcurl; 1.24 can,
-# and supports samtools view -X for an explicitly given index
 ARG SAMTOOLS_VERSION=1.24
 ARG BCFTOOLS_VERSION=1.24
 RUN apt-get -qqy update --fix-missing && \
