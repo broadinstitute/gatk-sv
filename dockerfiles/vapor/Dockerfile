@@ -136,9 +136,6 @@ RUN apt-get update --fix-missing && \
     apt-get  -y autoclean
 
 # install vapor (optimized, talkowski-lab/vapor at VAPOR_COMMIT) into its own Python 3.6 environment.
-# Scores depend on the numerical libraries, so they are pinned (requirements.txt) to the versions of the
-# original Ubuntu 18.04 / Python 3.6 image; Ubuntu 22.04 has no Python 3.6, so micromamba provides it.
-# The scoring module is compiled with Cython 0.29 like the original.
 ARG VAPOR_REPO=https://github.com/talkowski-lab/vapor.git
 ARG VAPOR_COMMIT=d7930417ebbb4ec1709a9dd5e4aa6fd9b0bc68a2
 ENV MAMBA_ROOT_PREFIX=/opt/micromamba
