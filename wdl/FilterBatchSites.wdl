@@ -218,15 +218,12 @@ CODE
     /opt/sv-pipeline/03_variant_filtering/scripts/rewrite_SR_coords.py filtered.updated_bnds.vcf.gz ~{metrics} ~{cutoffs} stdout \
       | bcftools sort -Oz -o filtered.corrected_coords.vcf.gz
 
-    # WHAM-only deletions are excluded from the genotyped and training site sets by
-    # GenotypeBatch.FilterWhamDeletions, which is the single spelling of that predicate; do not
-    # restate it here. This VCF feeds PlotSVCountsPerSample and FilterBatchSamples, which count SVs
-    # per sample to exclude outlier samples by n-IQR, and adjudication has already run on
-    # `metrics` upstream, so filtering here only skews sample exclusion - it cannot reach
-    # adjudication. It also cannot express "wham-only": ALGORITHMS is Number=., so
-    # ALGORITHMS=="wham" is true for manta+wham and wham+pesr DELs too.
-    /opt/sv-pipeline/03_variant_filtering/scripts/annotate_RF_evidence.py filtered.corrected_coords.vcf.gz ~{scores} ~{prefix}.with_evidence.vcf
-    bgzip ~{prefix}.with_evidence.vcf
+    /opt/sv-pipeline/03_variant_filtering/scripts/annotate_RF_evidence.py filtered.corrected_coords.vcf.gz ~{scores} ~{prefix}.raw.with_evidence.vcf
+    bgzip ~{prefix}.raw.with_evidence.vcf
+
+    # Filter WHAM deletions, which are needed for adjudication but are usually enriched for false positives
+    bcftools view -e 'ALGORITHMS=="wham" && SVTYPE=="DEL"' ~{prefix}.raw.with_evidence.vcf.gz -Oz -o ~{prefix}.with_evidence.vcf.gz
+    tabix ~{prefix}.with_evidence.vcf.gz
 
   >>>
   runtime {
