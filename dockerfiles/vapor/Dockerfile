@@ -79,7 +79,6 @@ RUN apt-get -qqy update --fix-missing && \
 
 
 # install GCloud SDK
-# google-cloud-sdk 239 is no longer published; the package is now google-cloud-cli (latest only)
 ARG GCLOUD_SDK_EXTRA_COMPONENTS
 ARG GCLOUD_SDK_TRANSIENT_DEP="curl gpg-agent gnupg python3-pip python3-setuptools "
 ARG GCLOUD_SDK_DEPENDENCIES="lsb-release ${GCLOUD_SDK_TRANSIENT_DEP}"
