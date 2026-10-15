@@ -105,6 +105,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_rdtest_unify
       tags:
         - /.*/
 
@@ -132,6 +133,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_rdtest_unify
       tags:
         - /.*/
 
@@ -222,6 +224,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_rdtest_unify
       tags:
         - /.*/
 
