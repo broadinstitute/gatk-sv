@@ -95,21 +95,19 @@ task RdTestPlot {
     fi
 
     paste ~{sep=" " median_files} > median_file.txt
-    bedtools merge -i cnvs.bed | cut -f1-3 > merged.bed
 
-    i=0
-    mkdir rd_subsets
-    while read FILE; do
-      OUT="rd_subsets/$i.bed.gz"
-      tabix -h $FILE -R merged.bed | bgzip > $OUT
-      tabix -p bed $OUT
-      i=$((i+1))
-    done<~{write_lines(rd_files)}
+    # Link full RD files (not subsets to the CNV intervals) so padded plot regions have coverage
+    mkdir rd_files
+    paste ~{write_lines(rd_files)} ~{write_lines(rd_file_indexes)} | awk '{print NR-1"\t"$0}' \
+      | while read -r i FILE INDEX; do
+        ln -s "$(realpath $FILE)" "rd_files/$i.bed.gz"
+        ln -s "$(realpath $INDEX)" "rd_files/$i.bed.gz.tbi"
+      done
 
-    Rscript /opt/RdTest/RdTestV2.R \
+    Rscript /opt/RdTest/RdTest.R \
       -b cnvs.bed \
       -n ~{prefix} \
-      -x rd_subsets \
+      -c rd_files \
       -m median_file.txt \
       -f ~{ped_file} \
       -p TRUE \

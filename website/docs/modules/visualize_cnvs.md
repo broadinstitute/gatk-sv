@@ -40,8 +40,9 @@ Minimum size in bases of variants to plot.
 #### `flags`
 Additional flags to pass to the [RdTest plotting script](https://github.com/broadinstitute/gatk-sv/blob/main/src/RdTest/RdTest.R).
 
-:::warning
-Due to a bug, the `flags` parameter must contain `-s 999999999` in order to properly plot variants over 1 Mb. 
+:::info
+Variants larger than `--verylargevariantsize` (default 1 Mb) are plotted using median depth in evenly spaced windows
+across the entire event. Use `--padding` to include flanking sequence, as a fraction of the variant length on each side.
 :::
 
 ### Outputs
