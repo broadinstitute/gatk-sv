@@ -209,6 +209,39 @@ rebin <- function(df, compression) {
   return(as.data.frame(cbind(Chr, Start, End, newvals)))
 }
 
+fillGapsInCoverageMatrixWithZeroCountBins <- function (cov1, BinSize, chromosome)
+{
+  ##Fill in any gaps between coverage bins with zero-count rows##
+  if (nrow(cov1) > 1) {
+    gapLengths <- sapply(2:nrow(cov1), function(i) { cov1$start[i] - cov1$end[i-1]})
+    if (any(gapLengths > 0)) {
+      gapStarts <- cov1$end[which(gapLengths > 0)]
+      gapEnds <- cov1$start[which(gapLengths > 0)+1]
+      zeroBinStarts <- unlist(lapply(1:length(gapStarts), function(i) { seq(gapStarts[i], gapEnds[i]-1, by=BinSize) }))
+      zeroBinEnds <- unlist(lapply(1:length(gapEnds),
+                                   function(i) {
+                                     c( if (gapStarts[i] + BinSize < gapEnds[i]) { seq(gapStarts[i] + BinSize, gapEnds[i]-1, by=BinSize) }, gapEnds[i])
+                                   }))
+      column_start = matrix(zeroBinStarts, ncol = 1)
+      column_end = matrix(zeroBinEnds, ncol = 1)
+      ncov_col = ncol(cov1)
+      null_model <-
+        cbind(chromosome, column_start, column_end, matrix(rep(0, times = nrow(column_start) *
+          (ncov_col - 3)), ncol = ncov_col - 3))
+      colnames(null_model) <- colnames(cov1)
+
+      cov1 <- rbind(cov1, null_model)
+
+      ##Use sapply to convert files to numeric only more than one column in cov1 matrix. If not matrix will already be numeric##
+      if (nrow(cov1) > 1) {
+        cov1[2:length(names(cov1))] <- lapply(cov1[2:length(names(cov1))], as.numeric)
+      } else {cov1<-data.frame(t(sapply(cov1,as.numeric)),check.names=FALSE)}
+      cov1 <- cov1[order(cov1[, 2]), ]
+    }
+  }
+  return(cov1)
+}
+
 
 #Reads coverage of specific queried region and compresses to a reasonable number of bins to create a region coverage matrix
 #sampleIDs is comma specficed list of samples##
@@ -227,62 +260,56 @@ loadData_old <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfi
       return("Failure")
     }
     #Find window bin size
-    BinSize <- cov1$end[1] - cov1$start[1]
-    
-    ##Find variants with with some missing bins because bincov blacklist##
-    if (nrow(cov1) < ((end - start) / BinSize)) {
-      Rfinal = round_any(end, BinSize, floor)
-      Rbeg = round_any(start, BinSize, ceiling)
-      column_start = matrix(seq(Rbeg, Rfinal, by = BinSize), ncol = 1)
-      column_end = matrix(seq(Rbeg + BinSize, Rfinal + BinSize, by = BinSize), ncol = 1)
-      ncov_col = ncol(cov1)
-      null_model <-
-        cbind(chr, column_start, column_end, matrix(rep(0, times = nrow(column_start) *
-                                                          (ncov_col - 3)), ncol = ncov_col - 3))
-      colnames(null_model) <- colnames(cov1)
-      covall <- rbind(cov1, null_model)
-      cov1 <- covall[!duplicated(covall[, 2]), ]
-      cov1 <- cov1[order(cov1[, 2]), ]
-      ##Use sapply to convert files to numeric only more than one column in cov1 matrix. If not matrix will already be numeric##  
-      if (nrow(cov1) > 1) {
-        cov1 <- data.frame(sapply(cov1, as.numeric), check.names = FALSE)
-      } else {cov1<-data.frame(t(sapply(cov1,as.numeric)),check.names=FALSE)}
-    }
-    
-    
+    BinSize <- median(cov1$end - cov1$start)
+
+    cov1 <- fillGapsInCoverageMatrixWithZeroCountBins(cov1, BinSize, chr)
+
     #Round down the number of used bins events for smaller events (e.g at 100 bp bins can't have 10 bins if event is less than 1kb)
-    if ((round_any(end, BinSize, floor) - round_any(start, BinSize, ceiling)) < bins * BinSize)
+    startAdjToInnerBinStart <- if (any(cov1$start >= start)) { cov1$start[which(cov1$start >= start)[1]] } else { min(cov1$start) }
+    endAdjToInnerBinEnd <- if (any(cov1$end <= end)) { cov1$end[max(which(cov1$end <= end))] } else { max(cov1$end) }
+
+    numInternalBins <- sum(cov1$start >= startAdjToInnerBinStart & cov1$end <= endAdjToInnerBinEnd)
+    if (numInternalBins < bins)
     {
-      bins = (round_any(end, BinSize, floor) - round_any(start, BinSize, ceiling)) /
-        BinSize
+      bins = numInternalBins
+
       if (bins <= 1)
       {
-        Rstart <- round_any(start, BinSize, floor)
-        Rend <- round_any(end, BinSize, ceiling)
+        # include all bins that overlap the start and end of the interval in Rstart and Rend
+        Rstart <- cov1$start[1]
+        Rend <- cov1$end[nrow(cov1)]
         compression = 1
       }
     }
-    
+
     #Round bins to ensure even compression (10 bins at 100bp should have a Rstart-Rend of 1kb)##
     if (!exists("compression"))
     {
       UnadjustedBins <-
-        (round_any(end, BinSize, floor) - round_any(start, BinSize, ceiling)) /
-        (bins * BinSize)
+        numInternalBins / bins
+
+      # Number of bins that need to be removed
       RemainderForRemoval <-
         ##Need to account for round error by trunc so add the decimal####
-      trunc(((
-        UnadjustedBins - trunc(UnadjustedBins)
-      ) * BinSize * bins / 2) + 0.000000001)
-      RemainderFront <-
-        round_any(RemainderForRemoval, BinSize, floor)
-      RemainderBack <-
-        round_any(RemainderForRemoval, BinSize, ceiling)
+        trunc(((
+          UnadjustedBins - trunc(UnadjustedBins)
+        ) * bins / 2) + 0.000000001)
+      BinsToRemoveFromFront <-
+        round_any(RemainderForRemoval, 1, floor)
+      BinsToRemoveFromBack <-
+        round_any(RemainderForRemoval, 1, ceiling)
+
+      startBinIdx <- which(cov1$start == startAdjToInnerBinStart)
+      endBinIdx <- which(cov1$end == endAdjToInnerBinEnd)
+
+      newStartBinIdx <- startBinIdx + BinsToRemoveFromFront
+      newEndBinIdx <- endBinIdx - BinsToRemoveFromBack
+
       Rstart <-
-        round_any(start, BinSize, ceiling) + RemainderFront
+        cov1$start[newStartBinIdx]
       Rend <-
-        round_any(end, BinSize, floor) - RemainderBack
-      compression <- (Rend - Rstart) / (BinSize * bins)
+        cov1$end[newEndBinIdx]
+      compression <- (newEndBinIdx - newStartBinIdx + 1) / (bins)
     }
     #Cut bins down to those required for compressed clean size based on Rstart and Rend##
     cov1<-cov1[which(cov1[,3]>Rstart & cov1[,2]<Rend ),]
@@ -423,62 +450,56 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragepath,medianfile,b
       return("Failure")
     }
     #Find window bin size
-    BinSize <- cov1$end[1] - cov1$start[1]
-    
-    ##Find variants with with some missing bins because bincov blacklist##
-    if (nrow(cov1) < ((end - start) / BinSize)) {
-      Rfinal = round_any(end, BinSize, floor)
-      Rbeg = round_any(start, BinSize, ceiling)
-      column_start = matrix(seq(Rbeg, Rfinal, by = BinSize), ncol = 1)
-      column_end = matrix(seq(Rbeg + BinSize, Rfinal + BinSize, by = BinSize), ncol = 1)
-      ncov_col = ncol(cov1)
-      null_model <-
-        cbind(chr, column_start, column_end, matrix(rep(0, times = nrow(column_start) *
-                                                          (ncov_col - 3)), ncol = ncov_col - 3))
-      colnames(null_model) <- colnames(cov1)
-      covall <- rbind(cov1, null_model)
-      cov1 <- covall[!duplicated(covall[, 2]), ]
-      cov1 <- cov1[order(cov1[, 2]), ]
-      ##Use sapply to convert files to numeric only more than one column in cov1 matrix. If not matrix will already be numeric##  
-      if (nrow(cov1) > 1) {
-        cov1 <- data.frame(sapply(cov1, as.numeric), check.names = FALSE)
-      } else {cov1<-data.frame(t(sapply(cov1,as.numeric)),check.names=FALSE)}
-    }
-    
-    
+    BinSize <- median(cov1$end - cov1$start)
+
+    cov1 <- fillGapsInCoverageMatrixWithZeroCountBins(cov1, BinSize, chr)
+
     #Round down the number of used bins events for smaller events (e.g at 100 bp bins can't have 10 bins if event is less than 1kb)
-    if ((round_any(end, BinSize, floor) - round_any(start, BinSize, ceiling)) < bins * BinSize)
+    startAdjToInnerBinStart <- if (any(cov1$start >= start)) { cov1$start[which(cov1$start >= start)[1]] } else { min(cov1$start) }
+    endAdjToInnerBinEnd <- if (any(cov1$end <= end)) { cov1$end[max(which(cov1$end <= end))] } else { max(cov1$end) }
+
+    numInternalBins <- sum(cov1$start >= startAdjToInnerBinStart & cov1$end <= endAdjToInnerBinEnd)
+    if (numInternalBins < bins)
     {
-      bins = (round_any(end, BinSize, floor) - round_any(start, BinSize, ceiling)) /
-        BinSize
+      bins = numInternalBins
+
       if (bins <= 1)
       {
-        Rstart <- round_any(start, BinSize, floor)
-        Rend <- round_any(end, BinSize, ceiling)
+        # include all bins that overlap the start and end of the interval in Rstart and Rend
+        Rstart <- cov1$start[1]
+        Rend <- cov1$end[nrow(cov1)]
         compression = 1
       }
     }
-    
+
     #Round bins to ensure even compression (10 bins at 100bp should have a Rstart-Rend of 1kb)##
     if (!exists("compression"))
     {
       UnadjustedBins <-
-        (round_any(end, BinSize, floor) - round_any(start, BinSize, ceiling)) /
-        (bins * BinSize)
+        numInternalBins / bins
+
+      # Number of bins that need to be removed
       RemainderForRemoval <-
         ##Need to account for round error by trunc so add the decimal####
-      trunc(((
-        UnadjustedBins - trunc(UnadjustedBins)
-      ) * BinSize * bins / 2) + 0.000000001)
-      RemainderFront <-
-        round_any(RemainderForRemoval, BinSize, floor)
-      RemainderBack <-
-        round_any(RemainderForRemoval, BinSize, ceiling)
+        trunc(((
+          UnadjustedBins - trunc(UnadjustedBins)
+        ) * bins / 2) + 0.000000001)
+      BinsToRemoveFromFront <-
+        round_any(RemainderForRemoval, 1, floor)
+      BinsToRemoveFromBack <-
+        round_any(RemainderForRemoval, 1, ceiling)
+
+      startBinIdx <- which(cov1$start == startAdjToInnerBinStart)
+      endBinIdx <- which(cov1$end == endAdjToInnerBinEnd)
+
+      newStartBinIdx <- startBinIdx + BinsToRemoveFromFront
+      newEndBinIdx <- endBinIdx - BinsToRemoveFromBack
+
       Rstart <-
-        round_any(start, BinSize, ceiling) + RemainderFront
+        cov1$start[newStartBinIdx]
       Rend <-
-        round_any(end, BinSize, floor) - RemainderBack
-      compression <- (Rend - Rstart) / (BinSize * bins)
+        cov1$end[newEndBinIdx]
+      compression <- (newEndBinIdx - newStartBinIdx + 1) / (bins)
     }
     #Cut bins down to those required for compressed clean size based on Rstart and Rend##
     cov1<-cov1[which(cov1[,3]>Rstart & cov1[,2]<Rend ),]
