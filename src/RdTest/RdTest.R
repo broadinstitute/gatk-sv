@@ -39,6 +39,64 @@ for (i in RPackages)
   }
 }
 
+pclt_kj <- function(scores, group) {
+  g <- group
+  bg_label <- 1
+  treat_label <- 0
+  n_control_before <- sum(g == bg_label, na.rm = TRUE)
+  n_treat_before <- sum(g == treat_label, na.rm = TRUE)
+ 
+  bg_idx <- g == bg_label
+  bg_scores <- scores[bg_idx]
+  cnvtype_opt <- getOption("rdtest_cnvtype", default = NA)
+  if (!is.na(cnvtype_opt) && cnvtype_opt == "DEL") {
+    keep_bg <- bg_scores <= 1.4
+  } else if (!is.na(cnvtype_opt) && cnvtype_opt == "DUP") {
+    keep_bg <- bg_scores >= 0.7
+  } else {
+    keep_bg <- rep(TRUE, length(bg_scores))
+  }
+  keep <- rep(TRUE, length(scores))
+  keep[bg_idx] <- keep_bg
+  if (sum(keep & bg_idx) >= 1) {
+    scores <- scores[keep]
+    group <- group[keep]
+    g <- g[keep]
+  }
+  n_control_after <- sum(g == bg_label, na.rm = TRUE)
+  n_treat_after <- sum(g == treat_label, na.rm = TRUE)
+
+  var_id <- getOption("rdtest_variant_id", default = NA)
+  var_start <- getOption("rdtest_variant_start", default = NA)
+  cat(paste0(
+    "RdTest permTS | CNVID=", var_id,
+    " | Control(before/after)=", n_control_before, "/", n_control_after,
+    " | Treat(before/after)=", n_treat_before, "/", n_treat_after,
+    "\n"
+  ))
+
+  tab <- table(group, scores)
+  m <- sum(tab[2, ])
+  n <- length(scores)
+  Grp1 <- dimnames(tab)[[1]][2]
+  grp <- rep(0, n)
+  grp[group == Grp1] <- 1
+  T0 <- sum(scores * grp)
+  SSE.scores <- sum((scores - mean(scores))^2)
+  SSE.grp <- sum((grp - mean(grp))^2)
+  Z <- sqrt(n - 1) * (T0 - n * mean(scores) * mean(grp)) /
+    sqrt(SSE.scores * SSE.grp)
+  p.lte <- pnorm(Z)
+  p.gte <- 1 - pnorm(Z)
+  p.twosidedAbs <- 1 - pchisq(Z^2, 1)
+  p.values <- c(p.twosided = min(1, 2 * min(p.lte, p.gte)), p.lte = p.lte, p.gte = p.gte, p.twosidedAbs = p.twosidedAbs)
+  out <- list(p.values = p.values, Z = Z)
+  out
+}
+
+## Assign in namespace to trigger override
+assignInNamespace("twosample.pclt", pclt_kj, ns="perm")
+
 ##build a list of command line options##
 list <- structure(NA, class = "result")
 "[<-.result" <- function(x, ..., value) {
@@ -647,9 +705,9 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
   b<-create_groups(genotype_matrix, cnv_matrix)$b
   ##Calculate one-sided z score##
   if (toupper(cnvtype) == "DEL") {
-    ztest.p <- pnorm((Treat - mean(Control)) / sd(Control))
+    ztest.p <- pnorm((Treat - median(Control)) / mad(Control, constant = 1.4826))
   } else{
-    ztest.p <- pnorm((mean(Control) - Treat) / sd(Control))
+    ztest.p <- pnorm((median(Control) - Treat) / mad(Control, constant = 1.4826))
   }
   ##Find the secondest worst p-value and record as an assement metric## 
   plist <- c()
@@ -661,9 +719,9 @@ onesamplezscore.median <- function(genotype_matrix,cnv_matrix,singlesample,cnvty
     Treat2 <-
       cnv_matrix[singlesample, column]
     if (toupper(cnvtype) == "DEL") {
-      single.p <- pnorm((Treat2 - mean(Control2)) / sd(Control2))
+      single.p <- pnorm((Treat2 - median(Control2)) / mad(Control2, constant = 1.4826))
     } else {
-      single.p <- pnorm((mean(Control2) - Treat2) / sd(Control2))
+      single.p <- pnorm((median(Control2) - Treat2) / mad(Control2, constant = 1.4826))
     }
     #store diffrent z p-value by column##
     plist[i] <- single.p
@@ -689,6 +747,7 @@ twosamplezscore.median <- function(genotype_matrix,cnv_matrix,cnvtype)
   Treat<-create_groups(genotype_matrix, cnv_matrix)$Treat
   a<-create_groups(genotype_matrix, cnv_matrix)$a
   b<-create_groups(genotype_matrix, cnv_matrix)$b
+  options(rdtest_cnvtype = toupper(cnvtype))
   if (toupper(cnvtype) == "DEL") {
     P_object <- permTS(Control, Treat, alternative = "greater", method = 'pclt')$p.value
   } else{ P_object <- permTS(Control, Treat, alternative = "less", method = 'pclt')$p.value }
