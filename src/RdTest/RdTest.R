@@ -113,7 +113,9 @@ option_list <- list(
   make_option(c("--outlierSampleIds"), type="character", default=NULL,
               help="Optional:Path to file containing outlier sample IDs", metavar="character"),
   make_option(c("--genomename"), type="character", default="hg38",
-              help="Name of genome reference for plots", metavar="character")
+              help="Name of genome reference for plots", metavar="character"),
+  make_option(c("-P", "--padding"), type="numeric", default=0,
+              help="Optional: Fraction of the variant interval to pad on each side in depth plots.", metavar="numeric")
 )
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -175,7 +177,7 @@ if (length(which(intervals[,3]-intervals[,2]<0 ))>0) {
   stop("INPUT ERROR: Improper input coordinates. End must be greater than start.")
 }
 
-if (file_test("-f", opt$coveragepat)) {
+if (file_test("-f", opt$coveragepath)) {
   #Make sure cov bed is linked to gzipped file and tabix ready##
   if (length(grep ("gz$",opt$coveragepath))<1)
   {
@@ -342,7 +344,7 @@ readCovFilePlainCommand <- function(coveragepath, chr, start, end) {
 readCovFile <- function(coveragepath, commandFunction, ...) {
     if (file_test("-f", coveragepath)) {
       cov1 <- tryCatch(
-        read.table(pipe(commandFunction(coveragepath, ...)),sep = "\t", header = TRUE, check.names = FALSE))
+        read.table(pipe(commandFunction(coveragepath, ...)),sep = "\t", header = TRUE, check.names = FALSE), error=function(e) NULL)
       return(cov1)
     } else if (file_test("-d", coveragepath)) {
       coveragefile_list <- list.files(coveragepath, pattern = '.gz$')
@@ -354,7 +356,10 @@ readCovFile <- function(coveragepath, commandFunction, ...) {
           if(coveragefile!=coveragefile_list[1]){
             print(paste0("reading ", coveragefile))
             cov2 <- read.table(pipe(commandFunction(file.path(coveragepath, coveragefile), ...)),sep = "\t", header = TRUE, check.names = FALSE)
-            cov1 <- cbind(cov1, cov2[,c(4:ncol(cov2))])
+            if (nrow(cov2) != nrow(cov1) || any(cov2[, 2] != cov1[, 2])) {
+              stop(paste0("Coverage bins in ", coveragefile, " do not match ", coveragefile_list[1]))
+            }
+            cov1 <- cbind(cov1, cov2[, c(4:ncol(cov2)), drop = FALSE])
           }
         }
       }
@@ -838,7 +843,8 @@ samprank_sep <- function(genotype_matrix,cnv_matrix,cnvtype,sample=NULL)
 }
 
 ##Plot of intensities across cohorts## 
-plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK,plotfamily,famfile,outFolder,genomeName)
+#start/end span the plotted (possibly padded) region; orig_start/orig_end are the event itself
+plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK,plotfamily,famfile,outFolder,genomeName,pad=0,orig_start=start,orig_end=end)
 {
   samplesPrior <- unlist(strsplit(as.character(sampleIDs),","))
   samplenames<-colnames(genotype_matrix)
@@ -848,7 +854,7 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   {cnv_matrix<-cbind(cnv_matrix,cnv_matrix[,1])}
   
   ##File Output##
-  jpeg(paste(outFolder,chr,"_",start,"_",end,"_",samplesPrior[1],"_",cnvID,"_",outputname,".jpg",sep=""),res=300, width=1800, height=1800)
+  jpeg(paste(outFolder,chr,"_",orig_start,"_",orig_end,"_",samplesPrior[1],"_",cnvID,"_",outputname,".jpg",sep=""),res=300, width=1800, height=1800)
   
   ##concatenate sample IDs if necessary##
   sampleIDs<-paste(sampleIDs,collapse=",")
@@ -856,10 +862,10 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   ##Limits number of sample Ids due to size limiations for readablity
   if(nchar(as.character(sampleIDs))>44){sampleIDsToDisplay<-paste(substr(sampleIDs,1,44),"...",sep="")}else{sampleIDsToDisplay<-sampleIDs}
   ##Title line 1##
-  main1=paste(chr,":",prettyNum(start,big.mark=","),"-",prettyNum(end,big.mark=",")," (", genomeName, ")",sep="")
+  main1=paste(chr,":",prettyNum(orig_start,big.mark=","),"-",prettyNum(orig_end,big.mark=",")," (", genomeName, ")",sep="")
   
   ###Add proper size abbr. for larger events
-  size=end-start
+  size=orig_end-orig_start
   if(size<10000){mysize<-prettyNum(paste("(",size," bp)",sep=""), big.mark = ",")}
   if(size>=10000){mysize<-prettyNum(paste("(",signif(size/1000,3)," kb)",sep=""), big.mark = ",")}
   if(size>=1000000){mysize<-prettyNum(paste("(",signif(size/1000000,3)," Mb)",sep=""), big.mark = ",")}
@@ -880,6 +886,7 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   
   ##Create matrix for plotting###
   columnstoshift <- which(rownames(cnv_matrix) %in% samplesPrior) 
+  ncarriers <- length(columnstoshift)
   ##Place Samples with CNV on top###
   plot_cnvmatrix<-cbind(t(cnv_matrix)[,-columnstoshift],t(cnv_matrix)[,columnstoshift])
   ##column shift diffrent for genotype matrix because cnvID,chr,start,end
@@ -891,7 +898,7 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   ##Blue if Dup; Red if Del
   if ( plotK == TRUE ) {
     #keep plot_colormatrix
-    main1=paste(chr,":",prettyNum(start,big.mark=","),"-",prettyNum(end,big.mark=",")," (", genomeName, ")",sep="")
+    main1=paste(chr,":",prettyNum(orig_start,big.mark=","),"-",prettyNum(orig_end,big.mark=",")," (", genomeName, ")",sep="")
     mainText = paste(main1, "\n", "Copy Estimate"," ", mysize, sep = "")  
     plot_linematrix[,5:ncol(plot_linematrix)]<-"0.5"
   } else if (toupper(cnvtype) == "DEL") {
@@ -918,6 +925,20 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
     ylab = "Intensity",
     lwd = plot_linematrix[1, 5:ncol(plot_linematrix)] 
   )
+  ##Shade the event within the padded region, then redraw carriers over the shading##
+  if (pad > 0) {
+    n_bins <- nrow(plot_cnvmatrix)
+    rect_index_left <- 1 + (n_bins - 1) * (orig_start - start) / (end - start)
+    rect_index_right <- 1 + (n_bins - 1) * (orig_end - start) / (end - start)
+    rect(rect_index_left, par("usr")[3], rect_index_right, par("usr")[4], col = adjustcolor("azure3", alpha.f = 0.3), border = NA)
+    if (ncarriers > 0) {
+      for (j in (ncol(plot_cnvmatrix) - ncarriers + 1):ncol(plot_cnvmatrix)) {
+        lines(1:n_bins, plot_cnvmatrix[, j],
+              col = plot_colormatrix[1, 4 + j],
+              lwd = as.numeric(plot_linematrix[1, 4 + j]))
+      }
+    }
+  }
   mtext(
     side = 1,
     text = paste( chr, " Position (bp)", sep = ""),
@@ -1285,7 +1306,27 @@ runRdTest<-function(bed)
   } 
   ##Plot JPG##
   if (opt$plot == TRUE){
-    plotJPG(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK=FALSE,plotfamily=FALSE,famfile,outFolder,opt$genomename)
+    plotted <- FALSE
+    if (opt$padding > 0) {
+      event_length <- end - start
+      padded_start <- max(0, floor(start - opt$padding * event_length))
+      padded_end <- ceiling(end + opt$padding * event_length)
+      padded_cnv_matrix <- loadData(chr, padded_start, padded_end, coveragepath, medianfile, bins,
+                                    verylargevariantsize, verylargevariantpoints, verylargevariantwindows, opt$SampleExcludeList,
+                                    opt$SampleIncludeList, if (exists("poorbincov")) poorbincov else NULL)[["cnv_matrix"]]
+      if (is.matrix(padded_cnv_matrix) && all(rownames(cnv_matrix) %in% rownames(padded_cnv_matrix))) {
+        ##keep the same samples in the same order as cnv_matrix (eg after outlier removal)##
+        padded_cnv_matrix <- padded_cnv_matrix[rownames(cnv_matrix), , drop = FALSE]
+        plotJPG(genotype_matrix,padded_cnv_matrix,chr,padded_start,padded_end,cnvID,sampleIDs,outputname,cnvtype,plotK=FALSE,plotfamily=FALSE,famfile,outFolder,opt$genomename,
+                pad=opt$padding,orig_start=start,orig_end=end)
+        plotted <- TRUE
+      } else {
+        warning(paste("Failed to load padded region for", cnvID, "at", chr, ":", padded_start, "-", padded_end, "; plotting without padding"))
+      }
+    }
+    if (!plotted) {
+      plotJPG(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK=FALSE,plotfamily=FALSE,famfile,outFolder,opt$genomename)
+    }
   }
   ##De Novo Module##
   if (opt$denovo == TRUE) {
@@ -1432,7 +1473,7 @@ intervals[, c(2:3)] <-
   })
 intervals <- data.frame(lapply(intervals, as.character), stringsAsFactors=FALSE)
 results<-alply(intervals,1,runRdTest)
-if(class(results)=="list") {
+if(is.list(results)) {
   results<-do.call(rbind,results)
 } else {
   results <- t(results)
