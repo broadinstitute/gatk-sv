@@ -96,6 +96,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_genotype_batch_training_terra
       tags:
         - /.*/
 
@@ -258,6 +259,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_genotype_batch_training_terra
       tags:
         - /.*/
 
@@ -285,5 +287,6 @@ workflows:
     filters:
       branches:
         - main
+        - mw_genotype_batch_training_terra
       tags:
         - /.*/
