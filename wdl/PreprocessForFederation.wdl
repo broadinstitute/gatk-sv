@@ -3,7 +3,7 @@ version 1.0
 import "Structs.wdl"
 import "ShardedAnnotateVcf.wdl" as sharded_annotate_vcf
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "FilterGenotypes.wdl" as filter
+
 
 
 workflow PreprocessForFederation {
@@ -43,6 +43,7 @@ workflow PreprocessForFederation {
         sample_keep_list = sample_keep_list,
         sample_id_rename_map = sample_id_rename_map,
         sample_pop_assignments=sample_pop_assignments,
+        header_drop_fields=header_drop_fields,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker
       }
@@ -69,21 +70,10 @@ workflow PreprocessForFederation {
       sv_pipeline_docker = sv_pipeline_docker
   }
 
-  if (defined (header_drop_fields)) {
-    call filter.SanitizeHeader {
-      input:
-        vcf = ReformatVcf.reformatted_vcf,
-        vcf_index = ReformatVcf.reformatted_vcf_idx,
-        drop_fields = select_first([header_drop_fields]),
-        prefix = "~{prefix}.sanitized",
-        sv_pipeline_docker = sv_pipeline_docker
-    }
-  }
-
 
   output {
-    File preprocessed_vcf = select_first([SanitizeHeader.out, ReformatVcf.reformatted_vcf])
-    File preprocessed_vcf_idx = select_first([SanitizeHeader.out_index, ReformatVcf.reformatted_vcf_idx])
+    File preprocessed_vcf = ReformatVcf.reformatted_vcf
+    File preprocessed_vcf_idx = ReformatVcf.reformatted_vcf_idx
   }
 }
 

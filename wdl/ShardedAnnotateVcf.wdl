@@ -5,6 +5,7 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "Utils.wdl" as util
 import "AnnotateFunctionalConsequences.wdl" as func
 import "AnnotateExternalAFPerShard.wdl" as eaf
+import "FilterGenotypes.wdl" as filter
 
 # Perform annotation per contig
 
@@ -38,6 +39,8 @@ workflow ShardedAnnotateVcf {
     File? ref_bed              # File with external allele frequencies
     String? ref_prefix         # prefix name for external AF call set (required if ref_bed set)
     Array[String]? population  # populations to annotate external AF for (required if ref_bed set)
+
+    String? header_drop_fields
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -121,7 +124,7 @@ workflow ShardedAnnotateVcf {
 
     call ApplyFilters {
       input:
-        vcf = select_first([AnnotateFunctionalConsequences.annotated_vcf, RenameVcfSamplesTask.out, SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
+        vcf = select_first([AnnotateFunctionalConsequences.annotated_vcf, SubsetVcfBySamplesList.vcf_subset, RenameVcfSamplesTask.out, ScatterVcf.shards[i]]),
         prefix = shard_prefix,
         no_call_rate_cutoff = no_call_rate_cutoff,
         ploidy_table = ploidy_table,
@@ -156,11 +159,22 @@ workflow ShardedAnnotateVcf {
         runtime_attr_override = runtime_attr_estimate_rd_cn_af
     }
 
+    if (defined (header_drop_fields)) {
+      call filter.SanitizeHeader {
+        input:
+          vcf = EstimateRdCnFrequency.rd_cn_freq_vcf,
+          vcf_index = EstimateRdCnFrequency.rd_cn_freq_vcf_idx,
+          drop_fields = select_first([header_drop_fields]),
+          prefix = "~{prefix}.sanitized",
+          sv_pipeline_docker = sv_pipeline_docker
+      }
+    }
+
     if (defined(ref_bed)) {
       call eaf.AnnotateExternalAFPerShard {
         input:
-          vcf = ComputeAFs.af_vcf,
-          vcf_idx = ComputeAFs.af_vcf_idx,
+          vcf = select_first([SanitizeHeader.out, EstimateRdCnFrequency.rd_cn_freq_vcf]),
+          vcf_idx = select_first([SanitizeHeader.out_index, EstimateRdCnFrequency.rd_cn_freq_vcf_idx]),
           split_ref_bed_del = select_first([SplitRefBed.del]),
           split_ref_bed_dup = select_first([SplitRefBed.dup]),
           split_ref_bed_ins = select_first([SplitRefBed.ins]),
@@ -180,8 +194,8 @@ workflow ShardedAnnotateVcf {
   }
 
   output {
-    Array[File] sharded_annotated_vcf = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf) else EstimateRdCnFrequency.rd_cn_freq_vcf
-    Array[File] sharded_annotated_vcf_idx = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi) else EstimateRdCnFrequency.rd_cn_freq_vcf
+    Array[File] sharded_annotated_vcf = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf) else (if (defined (header_drop_fields)) then select_all(SanitizeHeader.out) else EstimateRdCnFrequency.rd_cn_freq_vcf)
+    Array[File] sharded_annotated_vcf_idx = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi) else (if (defined (header_drop_fields)) then select_all(SanitizeHeader.out_index) else EstimateRdCnFrequency.rd_cn_freq_vcf)
   }
 }
 
