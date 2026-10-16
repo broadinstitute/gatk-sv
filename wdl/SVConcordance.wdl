@@ -131,7 +131,6 @@ task SVConcordanceTask {
     echo "JVM memory: $JVM_MAX_MEM"
 
     gatk --java-options "-Xmx${JVM_MAX_MEM}" SVConcordance \
-      ~{"-L " + contig} \
       --sequence-dictionary ~{reference_dict} \
       --eval ~{eval_vcf} \
       --truth ~{truth_vcf} \
