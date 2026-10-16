@@ -22,6 +22,8 @@ workflow SVConcordanceByContig {
     Array[String]? track_names
     Array[File]? track_intervals
 
+    String? additional_args
+
     String gatk_docker
     String sv_base_mini_docker
 
@@ -46,6 +48,7 @@ workflow SVConcordanceByContig {
         stratification_config=stratification_config,
         track_names=track_names,
         track_intervals=track_intervals,
+        additional_args=additional_args,
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
         sv_base_mini_docker=sv_base_mini_docker,
