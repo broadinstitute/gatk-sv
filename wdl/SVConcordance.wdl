@@ -1,6 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
+import "TasksMakeCohortVcf.wdl" as tasks_cohort
 
 workflow SVConcordance {
   input {
@@ -11,6 +12,7 @@ workflow SVConcordance {
     String output_prefix
 
     File contig_list
+    Int n_per_split = 10000
     File reference_dict
 
     # Stratification parameters
@@ -20,35 +22,63 @@ workflow SVConcordance {
     Array[File]? track_intervals
 
     String gatk_docker
+    String sv_base_mini_docker
 
     Float? java_mem_fraction
 
+    RuntimeAttr? runtime_attr_scatter_vcf
     RuntimeAttr? runtime_attr_sv_concordance
+    RuntimeAttr? runtime_attr_concat
   }
 
   Array[String] contigs = read_lines(contig_list)
 
   scatter (i in range(length(contigs))) {
-    call SVConcordanceTask {
+    call tasks_cohort.ScatterVcf {
       input:
-        eval_vcf=eval_vcfs[i],
-        truth_vcf=truth_vcfs[i],
-        output_prefix="~{output_prefix}.concordance.~{contigs[i]}",
+        vcf=eval_vcfs[i],
+        vcf_index=eval_vcfs[i] + ".tbi",
+        prefix="~{output_prefix}.~{contigs[i]}",
+        records_per_shard=n_per_split,
         contig=contigs[i],
-        clustering_config=clustering_config,
-        stratification_config=stratification_config,
-        track_names=track_names,
-        track_intervals=track_intervals,
-        reference_dict=reference_dict,
-        java_mem_fraction=java_mem_fraction,
-        gatk_docker=gatk_docker,
-        runtime_attr_override=runtime_attr_sv_concordance
+        sv_pipeline_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_scatter_vcf
+    }
+
+    # Run SVConcordance on each shard. Shards are unindexed, so no interval is passed;
+    # ScatterVcf has already restricted them to the contig.
+    scatter (j in range(length(ScatterVcf.shards))) {
+      call SVConcordanceTask {
+        input:
+          eval_vcf=ScatterVcf.shards[j],
+          truth_vcf=truth_vcfs[i],
+          output_prefix="~{output_prefix}.concordance.~{contigs[i]}.shard_~{j}",
+          clustering_config=clustering_config,
+          stratification_config=stratification_config,
+          track_names=track_names,
+          track_intervals=track_intervals,
+          reference_dict=reference_dict,
+          java_mem_fraction=java_mem_fraction,
+          gatk_docker=gatk_docker,
+          runtime_attr_override=runtime_attr_sv_concordance
+      }
+    }
+
+    # Gather shards within the contig
+    call tasks_cohort.ConcatVcfs {
+      input:
+        vcfs=SVConcordanceTask.out,
+        vcfs_idx=SVConcordanceTask.out_index,
+        naive=true,
+        outfile_prefix="~{output_prefix}.concordance.~{contigs[i]}",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_concat
     }
   }
 
   output {
-    Array[File] concordance_vcfs = SVConcordanceTask.out
-    Array[File] concordance_vcf_indexes = SVConcordanceTask.out_index
+    Array[File] concordance_vcfs = ConcatVcfs.concat_vcf
+    Array[File] concordance_vcf_indexes = ConcatVcfs.concat_vcf_idx
   }
 }
 
@@ -68,15 +98,6 @@ task SVConcordanceTask {
     Float? java_mem_fraction
     String gatk_docker
     RuntimeAttr? runtime_attr_override
-  }
-
-  parameter_meta {
-    truth_vcf: {
-                 localization_optional: true
-               }
-    eval_vcf:  {
-                 localization_optional: true
-               }
   }
 
   RuntimeAttr default_attr = object {
@@ -124,7 +145,7 @@ task SVConcordanceTask {
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
