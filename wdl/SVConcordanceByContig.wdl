@@ -6,7 +6,7 @@ import "SVConcordance.wdl" as svconcordance
 workflow SVConcordanceByContig {
   input {
     # Vcfs must be formatted using FormatVcfForGatk (if unsure, check for ECN FORMAT field)
-    # Per-contig vcfs, ordered to match contig_list. eval_vcfs must be indexed (.tbi)
+    # Per-contig vcfs, ordered to match contig_list
     Array[File] eval_vcfs
     Array[File] truth_vcfs
     String output_prefix
@@ -40,7 +40,6 @@ workflow SVConcordanceByContig {
         eval_vcf=eval_vcfs[i],
         truth_vcf=truth_vcfs[i],
         output_prefix="~{output_prefix}.~{contigs[i]}",
-        contig=contigs[i],
         reference_dict=reference_dict,
         n_per_split=n_per_split,
         clustering_config=clustering_config,

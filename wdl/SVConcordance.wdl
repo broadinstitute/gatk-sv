@@ -10,7 +10,6 @@ workflow SVConcordance {
     File truth_vcf
     String output_prefix
 
-    String? contig
     File reference_dict
 
     Int n_per_split = 10000
@@ -34,10 +33,8 @@ workflow SVConcordance {
   call tasks_cohort.ScatterVcf {
     input:
       vcf=eval_vcf,
-      vcf_index=eval_vcf + ".tbi",
       prefix=output_prefix,
       records_per_shard=n_per_split,
-      contig=contig,
       sv_pipeline_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_scatter_vcf
   }
