@@ -307,7 +307,14 @@ AddRetroDelFilters_out="${cohort_name}.retro_del_filtered.vcf.gz"
 # Contigs not in contig_list are dropped, matching the WDL's per-contig scatter.
 mkdir -p retro_del_shards
 retro_del_shards=()
-while read -r _contig _rest; do
+# The `|| [ -n "${_contig:-}" ]` is what keeps the last contig alive. contig_list is a
+# shipped .fai whose final line has no trailing newline; at EOF read returns false even
+# though it has just filled the variables, so a bare `while read` silently skipped chrY
+# (the last line) and every call on it. bash unsets the variables on a clean EOF, hence
+# the `:-` default, without which `set -u` would abort here instead. A contig the cohort
+# has no calls on yields a header-only shard, and the script exits 0 on that, so it needs
+# no special case here.
+while read -r _contig _rest || [ -n "${_contig:-}" ]; do
   [[ -z "${_contig}" ]] && continue
   _shard_in="retro_del_shards/${_contig}.in.vcf.gz"
   _shard_out="retro_del_shards/${_contig}.out.vcf.gz"
