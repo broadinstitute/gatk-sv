@@ -6,14 +6,14 @@ import "TasksMakeCohortVcf.wdl" as tasks_cohort
 workflow SVConcordance {
   input {
     # Vcfs must be formatted using FormatVcfForGatk (if unsure, check for ECN FORMAT field)
-    # Per-contig vcfs, ordered to match contig_list
-    Array[File] eval_vcfs
-    Array[File] truth_vcfs
+    File eval_vcf
+    File truth_vcf
     String output_prefix
 
-    File contig_list
-    Int n_per_split = 10000
+    String? contig
     File reference_dict
+
+    Int n_per_split = 10000
 
     # Stratification parameters
     File? clustering_config
@@ -31,54 +31,47 @@ workflow SVConcordance {
     RuntimeAttr? runtime_attr_concat
   }
 
-  Array[String] contigs = read_lines(contig_list)
+  call tasks_cohort.ScatterVcf {
+    input:
+      vcf=eval_vcf,
+      vcf_index=eval_vcf + ".tbi",
+      prefix=output_prefix,
+      records_per_shard=n_per_split,
+      contig=contig,
+      sv_pipeline_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_scatter_vcf
+  }
 
-  scatter (i in range(length(contigs))) {
-    call tasks_cohort.ScatterVcf {
+  scatter (i in range(length(ScatterVcf.shards))) {
+    call SVConcordanceTask {
       input:
-        vcf=eval_vcfs[i],
-        vcf_index=eval_vcfs[i] + ".tbi",
-        prefix="~{output_prefix}.~{contigs[i]}",
-        records_per_shard=n_per_split,
-        contig=contigs[i],
-        sv_pipeline_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_scatter_vcf
-    }
-
-    # Run SVConcordance on each shard. Shards are unindexed, so no interval is passed;
-    # ScatterVcf has already restricted them to the contig.
-    scatter (j in range(length(ScatterVcf.shards))) {
-      call SVConcordanceTask {
-        input:
-          eval_vcf=ScatterVcf.shards[j],
-          truth_vcf=truth_vcfs[i],
-          output_prefix="~{output_prefix}.concordance.~{contigs[i]}.shard_~{j}",
-          clustering_config=clustering_config,
-          stratification_config=stratification_config,
-          track_names=track_names,
-          track_intervals=track_intervals,
-          reference_dict=reference_dict,
-          java_mem_fraction=java_mem_fraction,
-          gatk_docker=gatk_docker,
-          runtime_attr_override=runtime_attr_sv_concordance
-      }
-    }
-
-    # Gather shards within the contig
-    call tasks_cohort.ConcatVcfs {
-      input:
-        vcfs=SVConcordanceTask.out,
-        vcfs_idx=SVConcordanceTask.out_index,
-        naive=true,
-        outfile_prefix="~{output_prefix}.concordance.~{contigs[i]}",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_concat
+        eval_vcf=ScatterVcf.shards[i],
+        truth_vcf=truth_vcf,
+        output_prefix="~{output_prefix}.concordance.shard_~{i}",
+        clustering_config=clustering_config,
+        stratification_config=stratification_config,
+        track_names=track_names,
+        track_intervals=track_intervals,
+        reference_dict=reference_dict,
+        java_mem_fraction=java_mem_fraction,
+        gatk_docker=gatk_docker,
+        runtime_attr_override=runtime_attr_sv_concordance
     }
   }
 
+  call tasks_cohort.ConcatVcfs {
+    input:
+      vcfs=SVConcordanceTask.out,
+      vcfs_idx=SVConcordanceTask.out_index,
+      naive=true,
+      outfile_prefix="~{output_prefix}.concordance",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_concat
+  }
+
   output {
-    Array[File] concordance_vcfs = ConcatVcfs.concat_vcf
-    Array[File] concordance_vcf_indexes = ConcatVcfs.concat_vcf_idx
+    File concordance_vcf = ConcatVcfs.concat_vcf
+    File concordance_vcf_index = ConcatVcfs.concat_vcf_idx
   }
 }
 
