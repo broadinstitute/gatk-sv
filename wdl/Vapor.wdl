@@ -9,16 +9,14 @@ workflow Vapor {
     File bam_or_cram_file
     File bam_or_cram_index
 
-    # One of the following must be specified. May be single- or multi-sample.
-    File? bed_file
-    File? vcf_file
+    Array[File] bed_files  # per contig bed files
 
-    Boolean save_plots  # Control whether plots are final output
+    Boolean save_plots = false  # Draw the per-SV dot plots and return them as a final output (off by default; plotting is a large part of vapor's runtime)
 
     File ref_fasta
     File ref_fai
     File ref_dict
-    File contigs
+    File contig_list
 
     String vapor_docker
     String sv_base_mini_docker
@@ -33,48 +31,28 @@ workflow Vapor {
     File? NONE_FILE_ # Create a null file - do not use this input
   }
 
-  # Convert vcf to bed if provided
-  if (defined(vcf_file) && !defined(bed_file)) {
+  Array[String] contigs = read_lines(contig_list)
 
-    call utils.SubsetVcfToSample {
-      input:
-        vcf=select_first([vcf_file]),
-        vcf_idx=select_first([vcf_file]) + ".tbi",
-        sample=sample_id,
-        outfile_name=sample_id,
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override = runtime_attr_subset_sample
-    }
-
-    call utils.VcfToBed {
-      input:
-        vcf_file = SubsetVcfToSample.vcf_subset,
-        args = "-i SVLEN",
-        variant_interpretation_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_vcf_to_bed
-    }
-
-  }
-
-  scatter (contig in read_lines(contigs)) {
+  scatter (i in range(length(contigs))) {
 
     call PreprocessBedForVapor {
       input:
-        prefix = "~{sample_id}.~{contig}.preprocess",
-        contig = contig,
+        prefix = "~{sample_id}.~{contigs[i]}.preprocess",
+        contig = contigs[i],
         sample_to_extract = sample_id,
-        bed_file = select_first([bed_file, VcfToBed.bed_output]),
+        bed_file = bed_files[i],
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_split_vcf
     }
 
     call RunVaporWithCram {
       input:
-        prefix = "~{sample_id}.~{contig}",
-        contig = contig,
+        prefix = "~{sample_id}.~{contigs[i]}",
+        contig = contigs[i],
         bam_or_cram_file = bam_or_cram_file,
         bam_or_cram_index = bam_or_cram_index,
         bed = PreprocessBedForVapor.contig_bed,
+        save_plots = save_plots,
         ref_fasta = ref_fasta,
         ref_fai = ref_fai,
         ref_dict = ref_dict,
@@ -112,7 +90,7 @@ task PreprocessBedForVapor {
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 3.75,
-                               disk_gb: 10,
+                               disk_gb: 15 + ceil(size(bed_file, "GiB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
                                max_retries: 1
@@ -158,6 +136,7 @@ task RunVaporWithCram {
     String bam_or_cram_file
     String bam_or_cram_index
     File bed
+    Boolean save_plots
     File ref_fasta
     File ref_fai
     File ref_dict
@@ -168,7 +147,7 @@ task RunVaporWithCram {
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 15,
-    disk_gb: 30,
+    disk_gb: 10 + ceil(size([bed, bam_or_cram_file], "GiB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -198,6 +177,7 @@ task RunVaporWithCram {
       --output-file ~{prefix}.~{contig}.vapor \
       --reference ~{ref_fasta} \
       --PB-supp 0 \
+      ~{if save_plots then "" else "--no-plots"} \
       --pacbio-input ~{contig}.bam
 
     tar -czf ~{prefix}.~{contig}.tar.gz ~{prefix}.~{contig}
