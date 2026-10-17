@@ -13,7 +13,7 @@ workflow SVConcordance {
     File reference_dict
 
     # Records per eval_vcf shard; set to -1 to skip sharding
-    Int n_per_split = 10000
+    Int n_per_split = -1
 
     # Stratification parameters
     File? clustering_config
