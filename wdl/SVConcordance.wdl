@@ -12,6 +12,7 @@ workflow SVConcordance {
 
     File reference_dict
 
+    # Records per eval_vcf shard; set to -1 to skip sharding
     Int n_per_split = 10000
 
     # Stratification parameters
@@ -32,20 +33,27 @@ workflow SVConcordance {
     RuntimeAttr? runtime_attr_concat
   }
 
-  call tasks_cohort.ScatterVcf {
-    input:
-      vcf=eval_vcf,
-      prefix=output_prefix,
-      records_per_shard=n_per_split,
-      sv_pipeline_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_scatter_vcf
+  File truth_vcf_index = truth_vcf + ".tbi"
+
+  if (n_per_split != -1) {
+    call tasks_cohort.ScatterVcf {
+      input:
+        vcf=eval_vcf,
+        prefix=output_prefix,
+        records_per_shard=n_per_split,
+        sv_pipeline_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_scatter_vcf
+    }
   }
 
-  scatter (i in range(length(ScatterVcf.shards))) {
+  Array[File] eval_vcf_shards = select_first([ScatterVcf.shards, [eval_vcf]])
+
+  scatter (i in range(length(eval_vcf_shards))) {
     call SVConcordanceTask {
       input:
-        eval_vcf=ScatterVcf.shards[i],
+        eval_vcf=eval_vcf_shards[i],
         truth_vcf=truth_vcf,
+        truth_vcf_index=truth_vcf_index,
         output_prefix="~{output_prefix}.concordance.shard_~{i}",
         clustering_config=clustering_config,
         stratification_config=stratification_config,
@@ -78,6 +86,7 @@ workflow SVConcordance {
 task SVConcordanceTask {
   input {
     File truth_vcf
+    File truth_vcf_index
     File eval_vcf
     String output_prefix
     File reference_dict

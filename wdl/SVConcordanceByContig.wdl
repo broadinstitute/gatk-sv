@@ -14,6 +14,7 @@ workflow SVConcordanceByContig {
     File contig_list
     File reference_dict
 
+    # Records per eval_vcf shard; set to -1 to skip sharding
     Int n_per_split = 10000
 
     # Stratification parameters

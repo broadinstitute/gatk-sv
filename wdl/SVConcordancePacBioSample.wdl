@@ -54,6 +54,7 @@ workflow SVConcordancePacBioSample {
     call conc.SVConcordanceTask {
       input:
         truth_vcf=PrepPacBioVcf.out,
+        truth_vcf_index=PrepPacBioVcf.out_index,
         eval_vcf=sample_vcf,
         output_prefix="~{prefix}.concordance.~{tool_names[i]}.~{sample_id}.unsorted",
         additional_args="--pesr-interval-overlap ~{pesr_interval_overlap} --pesr-size-similarity ~{pesr_size_similarity} --pesr-breakend-window ~{pesr_breakend_window}",
