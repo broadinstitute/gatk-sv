@@ -41,17 +41,20 @@ workflow SVConcordance {
         vcf=eval_vcf,
         prefix=output_prefix,
         records_per_shard=n_per_split,
+        index_shards=true,
         sv_pipeline_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_attr_scatter_vcf
     }
   }
 
   Array[File] eval_vcf_shards = select_first([ScatterVcf.shards, [eval_vcf]])
+  Array[File] eval_vcf_shard_indexes = select_first([ScatterVcf.shard_indexes, [eval_vcf + ".tbi"]])
 
   scatter (i in range(length(eval_vcf_shards))) {
     call SVConcordanceTask {
       input:
         eval_vcf=eval_vcf_shards[i],
+        eval_vcf_index=eval_vcf_shard_indexes[i],
         truth_vcf=truth_vcf,
         truth_vcf_index=truth_vcf_index,
         output_prefix="~{output_prefix}.concordance.shard_~{i}",
@@ -88,6 +91,7 @@ task SVConcordanceTask {
     File truth_vcf
     File truth_vcf_index
     File eval_vcf
+    File? eval_vcf_index
     String output_prefix
     File reference_dict
     String? contig
@@ -132,9 +136,22 @@ task SVConcordanceTask {
     JVM_MAX_MEM=$(getJavaMem MemTotal)
     echo "JVM memory: $JVM_MAX_MEM"
 
+    # The index may be localized to a different directory than the vcf (e.g. separate glob outputs),
+    # so link both into the working directory where GATK can find the index
+    EVAL_VCF="~{eval_vcf}"
+    if ~{defined(eval_vcf_index)}; then
+      if [ "$(basename "~{eval_vcf_index}")" != "$(basename "~{eval_vcf}").tbi" ]; then
+        echo "eval_vcf_index ~{eval_vcf_index} does not match eval_vcf ~{eval_vcf}" >&2
+        exit 1
+      fi
+      EVAL_VCF="eval.$(basename "~{eval_vcf}")"
+      ln -s "~{eval_vcf}" "$EVAL_VCF"
+      ln -s "~{eval_vcf_index}" "$EVAL_VCF.tbi"
+    fi
+
     gatk --java-options "-Xmx${JVM_MAX_MEM}" SVConcordance \
       --sequence-dictionary ~{reference_dict} \
-      --eval ~{eval_vcf} \
+      --eval "$EVAL_VCF" \
       --truth ~{truth_vcf} \
       -O ~{output_prefix}.vcf.gz \
       ~{if defined(clustering_config) then "--clustering-config " + clustering_config else ""} \

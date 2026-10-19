@@ -1015,6 +1015,7 @@ task ScatterVcf {
     Int records_per_shard
     Int? threads = 1
     String? contig
+    Boolean index_shards = false
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -1052,8 +1053,16 @@ task ScatterVcf {
       mv "$VCF" "~{prefix}.shard_${shard_no}.vcf.gz"
       i=$((i+1))
     done < vcfs.list
+
+    if ~{index_shards}; then
+      for VCF in "~{prefix}".shard_*.vcf.gz; do
+        tabix "$VCF"
+      done
+    fi
   >>>
   output {
     Array[File] shards = glob("~{prefix}.shard_*.vcf.gz")
+    # Empty unless index_shards is true; same order as shards
+    Array[File] shard_indexes = glob("~{prefix}.shard_*.vcf.gz.tbi")
   }
 }
