@@ -1,0 +1,7 @@
+gatk-sv-testkit A13 probe marker.
+
+Added so that a branch build of sv-pipeline produces an image whose digest differs from the base ref's,
+by a change that cannot collide with upstream content and cannot change behaviour: this file is copied into
+/opt/sv-pipeline by dockerfiles/sv-pipeline/Dockerfile and is read by nothing.
+
+Not for merge.
