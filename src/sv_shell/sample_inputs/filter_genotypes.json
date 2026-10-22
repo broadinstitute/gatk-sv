@@ -1,0 +1,10 @@
+{
+  "header_drop_fields": "FILTER/LOW_QUALITY,FORMAT/TRUTH_CN_EQUAL,FORMAT/GT_FILTER,FORMAT/CONC_ST,INFO/STATUS,INFO/TRUTH_AC,INFO/TRUTH_AN,INFO/TRUTH_AF,INFO/TRUTH_VID,INFO/CNV_CONCORDANCE,INFO/GENOTYPE_CONCORDANCE,INFO/HET_PPV,INFO/HET_SENSITIVITY,INFO/HOMVAR_PPV,INFO/HOMVAR_SENSITIVITY,INFO/MINSL,INFO/NON_REF_GENOTYPE_CONCORDANCE,INFO/SL_MAX,INFO/SL_MEAN,INFO/VAR_PPV,INFO/VAR_SENSITIVITY,INFO/VAR_SPECIFICITY",
+  "no_call_rate_cutoff": 0.05,
+  "output_prefix": "NA12878",
+  "ploidy_table": "/inputs/NA12878.ploidy.tsv",
+  "sl_cutoff_table": "/inputs/baseline_sl_cutoffs.tsv",
+  "sl_filter_args": "--gq-scale-factor 1.012072 --upper-sl-cap 1500 --lower-sl-cap -1000 --sl-shift 300",
+  "vcf": "/inputs/NA12878.concordance.gq_recalibrated.vcf.gz",
+  "vcf_index": "/inputs/NA12878.concordance.gq_recalibrated.vcf.gz.tbi"
+}

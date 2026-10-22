@@ -49,7 +49,7 @@ class Breakpoint:
         chrA = record.chrom
         posA = record.pos
         chrB = record.info['CHR2']
-        posB = record.stop
+        posB = record.info['END2'] if record.info['SVTYPE'] == 'BND' else record.stop
 
         name = record.id
         strands = record.info['STRANDS']

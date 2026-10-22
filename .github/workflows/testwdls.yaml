@@ -6,15 +6,25 @@ on:
       - main
     paths:
       - 'wdl/**'
+      - 'inputs/**'
+      - 'scripts/inputs/build_default_inputs.sh'
+      - 'scripts/test/terra_validation.py'
+      - 'scripts/test/miniwdl_validation.py'
+      - 'scripts/test/validate.sh'
   pull_request:
     branches:
       - main
     paths:
       - 'wdl/**'
+      - 'inputs/**'
+      - 'scripts/inputs/build_default_inputs.sh'
+      - 'scripts/test/terra_validation.py'
+      - 'scripts/test/miniwdl_validation.py'
+      - 'scripts/test/validate.sh'
 
 jobs:
   syntax_test_job:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     name: Check WDL Syntax
     strategy:
       matrix:
@@ -44,10 +54,7 @@ jobs:
           # Setup for running womtool
           pip install jinja2==3.1.2
           wget -O womtool.jar https://github.com/broadinstitute/cromwell/releases/download/84/womtool-84.jar
-          echo \
-            '{ "google_project_id": "my-google-project-id", "terra_billing_project_id": "my-terra-billing-project" }' \
-            > inputs/values/google_cloud.my_project.json
-          scripts/inputs/build_default_inputs.sh -d . -c google_cloud.my_project
+          scripts/inputs/build_default_inputs.sh -d .
 
       - name: Test with Miniwdl
         run: |

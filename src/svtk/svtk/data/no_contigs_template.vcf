@@ -2,7 +2,7 @@
 ##ALT=<ID=DEL,Description="Deletion">
 ##ALT=<ID=DUP,Description="Duplication">
 ##ALT=<ID=INV,Description="Inversion">
-##ALT=<ID=BND,Description="Translocation">
+##ALT=<ID=BND,Description="Breakend">
 ##FILTER=<ID=PASS,Description="All filters passed">
 ##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
 ##INFO=<ID=CHR2,Number=1,Type=String,Description="Chromosome for END coordinate">

@@ -1,0 +1,23 @@
+{
+  "contig": "chr1",
+  "cytobands": "/inputs/tmp/cytobands_hg38.bed.gz",
+  "disc_files": [
+    "/inputs/tmp/NA12878.pe.txt.gz"
+  ],
+  "generate_index": true,
+  "max_shard_size": 500,
+  "mei_bed": "/inputs/hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz",
+  "naive": false,
+  "pe_exclude_list": "/inputs/tmp/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz",
+  "precluster_distance": 50000000,
+  "precluster_overlap_frac": 0.1,
+  "prefix": "NA12878.chr1.inv_only",
+  "ref_dict": "/inputs/Homo_sapiens_assembly38.dict",
+  "rf_cutoff_files": [
+    "/inputs/tmp/all_samples.cutoffs"
+  ],
+  "sites_only": false,
+  "sort_vcf_list": false,
+  "variant_prefix": "NA12878_inv_",
+  "vcf": "/inputs/tmp/NA12878.chr1.inversions_only.vcf.gz"
+}

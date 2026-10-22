@@ -4,31 +4,49 @@ description: Docker Concepts and Execution Overview
 sidebar_position: 0
 ---
 
-To make the analysis process scalable, reproducible, and cost-efficient,
-GATK-SV is designed as a cloud-native pipeline, 
-meaning it runs on virtual machines (VMs) hosted in the cloud.
-These VMs are pre-configured with all the necessary tools, scripts, and settings 
-required to run the GATK-SV analysis reliably. 
+GATK-SV is a cloud-native pipeline, making it scalable and reproducible. 
+All of the tools, scripts, and settings required to run the pipeline are 
+packaged in multiple Docker images, which are built and hosted 
+on container registries and are ready to use in Terra workspaces. 
 
 
-To ensure that the analysis can be easily replicated and shared, 
-GATK-SV utilizes Docker technology. 
-Docker allows the tools and scripts, including all their dependencies and configurations, 
-to be packaged into a self-contained unit called a container. 
-This container can be deployed and run on different VMs in the cloud, 
-making the analysis process consistent and reproducible across multiple experiments or collaborations.
+There are two options for building, testing, and publishing GATK-SV 
+docker images: fully automated and manual. 
+GATK-SV Docker images are maintained through the automated approach, 
+which is built into CI/CD and builds, tests, and publishes images to 
+Google Container Registry (GCR) and Azure Container Registry (ACR). 
+However, if you are working on extending or improving the GATK-SV Docker images, 
+you may need to build them locally
+for testing or storing them on an alternative container registry. 
+In this section, we provide detailed guidelines on both approaches. 
+Specifically, this section covers the following topics:
 
 
-Docker containers are built from Docker images, 
-which serve as the blueprints or templates for creating containers.
-Dockerfiles are used to define the contents and behavior of a Docker image. 
-A Dockerfile is a text file that contains a series of instructions, 
-specifying the base image, adding dependencies, configuring settings, 
-and executing commands necessary to build the desired software environment within the container.
+- [Docker primer](#docker-primer)
+- [GATK-SV Docker images](./images)
+- [Automatic deployment](./automated)
+- [Manual deployment](./manual)
 
 
-The following figure is a high-level illustration depicting the relationship 
-between Dockerfiles, Docker images, Docker containers, and Cloud VMs.
+## Docker Primer
+
+Docker technology enables creating a reproducible environment for data analysis. 
+It enables defining an environment with all the tools, scripts, 
+and their dependencies installed and configured as needed to run a data analysis pipeline. 
+The following are the key components to define and run in this environment:
+
+
+- **Dockerfile**; a text file with instructions on installing and configuring tools, 
+  scripts, and their dependencies. It is mainly used to create reproducible Docker images.
+
+- **Docker image**; is a template generated from a Dockerfile and contains all 
+  the tools and scripts installed and configured as defined in a Dockerfile. 
+
+
+- **Docker container**; is an isolated runtime environment created based on a Docker image, 
+  which runs on a host machine (e.g., laptop or a virtual machine on the cloud) and can execute scripts. 
+
+The following figure illustrates the relationship between Dockerfiles, Docker images, and Docker containers:
 
 
 ```mermaid
@@ -59,24 +77,20 @@ flowchart LR
 ```
 
 
-The GATK-SV Docker setup is organized as follows:
 
- - **Dockerfile**: 
-   These files define the instructions for building the necessary tools and 
-   configurations required for the GATK-SV pipeline.
+Dockerfiles are text files, and GATK-SV stores them on 
+[GitHub](https://github.com/broadinstitute/gatk-sv/tree/main/dockerfiles) 
+for accessibility and version control. 
+Docker images are larger files (e.g., 1GiB) and should be hosted on container registries 
+accessible to runtime environments. GATK-SV stores images on Google Container Registry (GCR) 
+and Azure Container Registry (ACR) so they are accessible to the 
+workflow execution environment on the Terra platform. 
+Docker containers are ephemeral runtime environments, created on 
+virtual machines when the analysis starts, and are “purged” when the analysis finishes.
 
- - **Docker Images**: Docker images are automatically built based on each Dockerfile. 
-   These images are stored in both Azure Container Registry (ACR) and 
-   Google Cloud Container Registry (GCR). The images serve as self-contained 
-   packages that encapsulate all the tools needed for the GATK-SV pipeline.
 
- - **Docker Containers**: Cromwell, a workflow execution system, creates GATK-SV 
-   Docker containers on virtual machines within the Google Cloud Platform (GCP). 
-   These containers are instantiated based on the Docker images obtained 
-   from GCR. The GATK-SV data analysis tasks are then executed within 
-   these containers, providing a consistent and isolated environment.
-
-In summary, the GATK-SV Docker setup involves multiple Dockerfiles defining 
-the build instructions, resulting in Docker images that are stored in ACR and GCR. 
-These images are used to create Docker containers on GCP virtual machines through Cromwell, 
-where the GATK-SV data analysis takes place.
+:::tip Images hosted on ACR and GCR are identical
+The GATK-SV images hosted on GCR and ACR are identical. 
+We maintain these mirrored repositories to enable running GATK-SV on Terra 
+with both GCP and Azure (WIP) backends.
+:::

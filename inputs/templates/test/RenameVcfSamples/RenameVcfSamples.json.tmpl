@@ -1,8 +1,0 @@
-{
-  "RenameVcfSamples.vcf": {{ test_batch.clean_vcf | tojson }},
-  "RenameVcfSamples.prefix": {{ test_batch.name | tojson }},
-  "RenameVcfSamples.current_sample_ids": {{ test_batch.samples | tojson }},
-  "RenameVcfSamples.new_sample_ids": {{ test_batch.renamed_ids | tojson }},
-  "RenameVcfSamples.check_rename_all_samples": true,
-  "RenameVcfSamples.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
-}

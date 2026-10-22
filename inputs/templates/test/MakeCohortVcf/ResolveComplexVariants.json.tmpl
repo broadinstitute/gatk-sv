@@ -8,11 +8,10 @@
   "ResolveComplexVariants.max_shard_size" : 500,
   "ResolveComplexVariants.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
   "ResolveComplexVariants.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
-  "ResolveComplexVariants.sv_pipeline_hail_docker": {{ dockers.sv_pipeline_hail_docker | tojson }},
 
   "ResolveComplexVariants.cohort_name": {{ test_batch.name | tojson }},
   "ResolveComplexVariants.disc_files": [
-    {{ test_batch.merged_disc_file | tojson }}
+    {{ test_batch.merged_pe_file | tojson }}
   ],
   "ResolveComplexVariants.rf_cutoff_files": [
     {{ test_batch.cutoffs | tojson }}

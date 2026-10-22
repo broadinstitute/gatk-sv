@@ -1,0 +1,20 @@
+{
+  "Depth_DEL_beds": "/inputs/NA12878.DEL.bed.gz",
+  "Depth_DUP_beds": "/inputs/NA12878.DUP.bed.gz",
+  "PE_metrics": "/inputs/NA12878.pe.txt.gz",
+  "PE_metrics_indexes": "/inputs/NA12878.pe.txt.gz.tbi",
+  "batch_name_list": "NA12878",
+  "batch_sample_lists": "/inputs/samples.list",
+  "contig": null,
+  "generate_index": true,
+  "gzipped": false,
+  "min_pe_cpx": 3,
+  "min_pe_ctx": 3,
+  "n_per_split": 15000,
+  "naive": false,
+  "prefix": "NA12878",
+  "sites_only": false,
+  "sort_vcf_list": false,
+  "threads": 1,
+  "vcf": "/inputs/NA12878.cleaned.filter_depth_lt_5000.filter_by_NA12878_gt.vcf.gz"
+}

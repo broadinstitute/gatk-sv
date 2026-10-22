@@ -12,6 +12,7 @@ workflow TrainGqRecalibrator {
         Array[String] train_args = []
         String gatk_docker
         String samtools_cloud_docker
+        Int? preemptible_tries
     }
 
     call Utils.GetVcfSize {
@@ -30,7 +31,8 @@ workflow TrainGqRecalibrator {
             gq_recalibrator_model_file=gq_recalibrator_model_file,
             train_args=train_args,
             gatk_docker=gatk_docker,
-            num_entries=GetVcfSize.num_entries
+            num_entries=GetVcfSize.num_entries,
+            preemptible_tries=preemptible_tries
     }
 
     output {
@@ -48,10 +50,11 @@ task TrainGqRecalibratorTask {
         File? gq_recalibrator_model_file # can be passed to do extra rounds of training on existing model
         Array[String] train_args = []
         String gatk_docker
-        Int? num_entries
+        Float? num_entries
         Float mem_scale_vcf_size = 25.2
         Float mem_scale_num_entries = "3.7e-7"
         Float mem_gb_overhead = 1.5
+        Int preemptible_tries = 3
     }
 
     Int disk_gb = round(1000 + size([train_vcf, train_vcf_index, ped_file, truth_file], "GiB") +
@@ -68,7 +71,7 @@ task TrainGqRecalibratorTask {
     runtime {
         docker: gatk_docker
         cpu: 1
-        preemptible: 3
+        preemptible: preemptible_tries
         max_retries: 1
         memory: mem_gb + " GiB"
         disks: "local-disk " + disk_gb + " HDD"

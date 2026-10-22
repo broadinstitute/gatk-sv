@@ -1,14 +1,11 @@
 {
   "GATKSVPipelinePhase1.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
   "GATKSVPipelinePhase1.sv_base_docker": {{ dockers.sv_base_docker | tojson }},
-  "GATKSVPipelinePhase1.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
   "GATKSVPipelinePhase1.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
-  "GATKSVPipelinePhase1.sv_pipeline_rdtest_docker": {{ dockers.sv_pipeline_rdtest_docker | tojson }},
   "GATKSVPipelinePhase1.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
   "GATKSVPipelinePhase1.linux_docker" : {{ dockers.linux_docker | tojson }},
   "GATKSVPipelinePhase1.cnmops_docker": {{ dockers.cnmops_docker | tojson }},
   "GATKSVPipelinePhase1.gatk_docker": {{ dockers.gatk_docker | tojson }},
-  "GATKSVPipelinePhase1.condense_counts_docker" : {{ dockers.condense_counts_docker | tojson }},
   
   "GATKSVPipelinePhase1.cnmops_allo_file": {{ reference_resources.allosome_file | tojson }},
   "GATKSVPipelinePhase1.cnmops_exclude_list": {{ reference_resources.cnmops_exclude_list | tojson }},
@@ -17,6 +14,7 @@
   "GATKSVPipelinePhase1.genome_file": {{ reference_resources.genome_file | tojson }},
   "GATKSVPipelinePhase1.cytoband":{{ reference_resources.cytobands | tojson }},
   "GATKSVPipelinePhase1.mei_bed":{{ reference_resources.mei_bed | tojson }},
+  "GATKSVPipelinePhase1.primary_contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
 
   "GATKSVPipelinePhase1.matrix_qc_distance": "1000000",
   "GATKSVPipelinePhase1.min_svsize": "50",
@@ -33,13 +31,6 @@
   "GATKSVPipelinePhase1.depth_interval_overlap": "0.8",
   "GATKSVPipelinePhase1.depth_clustering_algorithm": "SINGLE_LINKAGE",
 
-  "GATKSVPipelinePhase1.BAF_split_size": "10000",
-  "GATKSVPipelinePhase1.RD_split_size": "10000",
-  "GATKSVPipelinePhase1.PE_split_size": "10000",
-  "GATKSVPipelinePhase1.SR_split_size": "1000",
-  "GATKSVPipelinePhase1.common_cnv_size_cutoff": "5000",
-  "GATKSVPipelinePhase1.allosome_contigs": {{ reference_resources.allosome_file | tojson }},
-  "GATKSVPipelinePhase1.autosome_contigs": {{ reference_resources.autosome_file | tojson }},
   "GATKSVPipelinePhase1.rmsk": {{ reference_resources.rmsk | tojson }},
   "GATKSVPipelinePhase1.segdups": {{ reference_resources.segdups | tojson }},
 
@@ -86,6 +77,6 @@
   "GATKSVPipelinePhase1.SD_files": {{ test_batch.SD_files | tojson }},
   "GATKSVPipelinePhase1.counts": {{ test_batch.counts | tojson }},
   "GATKSVPipelinePhase1.manta_vcfs": {{ test_batch.manta_vcfs | tojson }},
-  "GATKSVPipelinePhase1.melt_vcfs": {{ test_batch.melt_vcfs | tojson }},
+  "GATKSVPipelinePhase1.scramble_vcfs": {{ test_batch.scramble_vcfs | tojson }},
   "GATKSVPipelinePhase1.wham_vcfs": {{ test_batch.wham_vcfs | tojson }}
 }

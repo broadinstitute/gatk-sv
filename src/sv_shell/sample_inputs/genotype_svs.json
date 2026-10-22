@@ -1,0 +1,21 @@
+{
+  "depth_exclusion_intervals": "/inputs/bin_exclude.hg38.gatkcov.bed.gz",
+  "depth_exclusion_intervals_index": "/inputs/bin_exclude.hg38.gatkcov.bed.gz.tbi",
+  "median_coverage": "/intermediates/GatherBatchEvidence_outputs/NA12878_medianCov.transposed.bed",
+  "output_prefix": "NA12878.genotype_batch",
+  "pe_file": "/intermediates/GatherBatchEvidence_outputs/NA12878.pe.txt.gz",
+  "pe_file_index": "/intermediates/GatherBatchEvidence_outputs/NA12878.pe.txt.gz.tbi",
+  "pe_table": "/inputs/all_samples.pe_geno_params.tsv",
+  "pesr_exclusion_intervals": "/inputs/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz",
+  "pesr_exclusion_intervals_index": "/inputs/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz.tbi",
+  "ploidy_table": "/intermediates/CreatePloidyTableFromPed_outputs/NA12878.NA12878.ploidy.tsv",
+  "rd_file": "/intermediates/GatherBatchEvidence_outputs/NA12878.RD.txt.gz",
+  "rd_file_index": "/intermediates/GatherBatchEvidence_outputs/NA12878.RD.txt.gz.tbi",
+  "rd_table": "/inputs/all_samples.rd_geno_params.tsv",
+  "reference_dict": "/inputs/Homo_sapiens_assembly38.dict",
+  "sr_file": "/intermediates/GatherBatchEvidence_outputs/NA12878.sr.txt.gz",
+  "sr_file_index": "/intermediates/GatherBatchEvidence_outputs/NA12878.sr.txt.gz.tbi",
+  "sr_table": "/inputs/all_samples.sr_geno_params.tsv",
+  "vcf": "/intermediates/MergePesrDepthVcfs_outputs/NA12878.merge_pesr_depth.vcf.gz",
+  "vcf_index": "/intermediates/MergePesrDepthVcfs_outputs/NA12878.merge_pesr_depth.vcf.gz.tbi"
+}

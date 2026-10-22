@@ -11,14 +11,13 @@ workflow Regenotype {
     File coveragefile_idx
     File medianfile
     File? famfile
-    File RD_depth_sepcutoff
+    File genotyping_rd_table
     Int n_per_split
     Int n_RdTest_bins
     String batch
     File samples_list
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_rdtest_docker
     Array[String] samples = read_lines(samples_list)
 
     RuntimeAttr? runtime_attr_add_batch_samples
@@ -70,11 +69,11 @@ workflow Regenotype {
         medianfile=medianfile,
         famfile=famfile,
         samples=samples,
-        gt_cutoffs=RD_depth_sepcutoff,
+        gt_cutoffs=genotyping_rd_table,
         n_bins=n_RdTest_bins,
         prefix=basename(regeno, ".bed"),
         runtime_attr_override = runtime_attr_rd_test_gt_regeno,
-        sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker
+        sv_pipeline_docker=sv_pipeline_docker
     }
     call tasksgenotypebatch.IntegrateDepthGq as IntegrateGQRegeno {
       input:
@@ -98,7 +97,9 @@ workflow Regenotype {
     input:
       batch=batch,
       depth_vcf=depth_vcf,
+      depth_vcf_index=depth_vcf + ".tbi",
       regeno_vcfs=AddGenotypesRegeno.genotyped_vcf,
+      regeno_vcf_indexes=AddGenotypesRegeno.genotyped_vcf_index,
       bed=regeno_bed,
       runtime_attr_override = runtime_attr_concat_regenotyped_vcfs_g2,
       sv_base_mini_docker=sv_base_mini_docker
@@ -159,7 +160,7 @@ task RdTestGenotypeRegeno {
     Int n_bins
     String prefix
     Boolean generate_melted_genotypes
-    String sv_pipeline_rdtest_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -206,7 +207,7 @@ task RdTestGenotypeRegeno {
       -r ~{gt_cutoffs} \
       -y /opt/RdTest/bin_exclude.bed.gz \
       -g TRUE;
-    if [ ~{generate_melted_genotypes} == "true" ]; then
+    if [ ~{generate_melted_genotypes} == "true" ] && [ -f "~{prefix}.geno" ] && [ -f "~{prefix}.gq" ]; then
       /opt/sv-pipeline/04_variant_resolution/scripts/merge_RdTest_genotypes.py ~{prefix}.geno ~{prefix}.gq rd.geno.cnv.bed;
       sort -k1,1V -k2,2n rd.geno.cnv.bed | uniq | bgzip -c > rd.geno.cnv.bed.gz
     else
@@ -219,7 +220,7 @@ task RdTestGenotypeRegeno {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_rdtest_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -268,7 +269,9 @@ task ConcatReGenotypedVcfs {
   input {
     String batch
     File depth_vcf
+    File depth_vcf_index
     Array[File] regeno_vcfs
+    Array[File] regeno_vcf_indexes
     File bed
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
@@ -277,7 +280,7 @@ task ConcatReGenotypedVcfs {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75,
-    disk_gb: 10,
+    disk_gb: ceil(10 + size(depth_vcf, "GB") * 2 + size(regeno_vcfs, "GB") * 2),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -290,15 +293,13 @@ task ConcatReGenotypedVcfs {
     File regenotyped_vcf="~{batch}.regeno.vcf.gz"
   }
   command <<<
-    set -euo pipefail
-    vcf-concat ~{sep=' ' regeno_vcfs}  \
-      | vcf-sort -c \
-      | bgzip -c > ~{batch}.regeno.vcf.gz
-    cut -f 4 ~{bed} |awk '{print $0"\t"}'> varlist.txt
-    zcat ~{depth_vcf} |fgrep -f varlist.txt -v |bgzip -c > no_variant.vcf.gz
-    vcf-concat ~{batch}.regeno.vcf.gz no_variant.vcf.gz \
-      | vcf-sort -c \
-      | bgzip -c > ~{batch}.depth.regeno.vcf.gz
+    set -euxo pipefail
+    bcftools concat -a ~{sep=' ' regeno_vcfs} -Oz -o ~{batch}.regeno.vcf.gz
+    tabix ~{batch}.regeno.vcf.gz
+    cut -f 4 ~{bed} > varlist.txt
+    bcftools view -e 'ID=@varlist.txt' ~{depth_vcf} -Oz -o no_variant.vcf.gz
+    tabix no_variant.vcf.gz
+    bcftools concat -a ~{batch}.regeno.vcf.gz no_variant.vcf.gz -Oz -o ~{batch}.depth.regeno.vcf.gz
     tabix ~{batch}.depth.regeno.vcf.gz
   
   >>>

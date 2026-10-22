@@ -1103,7 +1103,7 @@ def _draw_extra_legend_axis(
     ax.set_yticks([])
     bbox = ax.get_tightbbox(renderer=fig.canvas.get_renderer())
     approximate_ax_width_chars = bbox.width / legend_font_size
-    wrap_width = approximate_ax_width_chars
+    wrap_width = int(approximate_ax_width_chars)
     for __ in range(advance_color_cycle):
         # unlabeled lines to advance color cycle
         ax.plot([numpy.nan, numpy.nan], [numpy.nan, numpy.nan])

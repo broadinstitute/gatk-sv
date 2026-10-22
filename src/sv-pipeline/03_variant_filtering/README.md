@@ -6,7 +6,7 @@ This workflow integrate, filters and genotypes the structural variation(SVs) cal
 
 ## Manual process
 #### Evidence aggragation
-a. To aggregate evidence for **pesr callers** (eg. delly, lumpy, manta, wham), for each `{source}` and `{chrom}`: 
+a. To aggregate evidence for **pesr callers** (eg. delly, dragen, lumpy, manta, wham), for each `{source}` and `{chrom}`: 
 ```
 python scripts/aggregate.py \
 	-r ../02_evidence_assessment/02a_rdtest/rdtest/{batch}.{source}.{chrom}.metrics \

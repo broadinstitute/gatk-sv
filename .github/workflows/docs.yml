@@ -15,12 +15,12 @@ jobs:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
         with:
           lfs: 'true'
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v6
         with:
-          node-version: '18.x'
+          node-version: '24.x'
       - name: Test Build
         run: |
             cd website
@@ -33,12 +33,12 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
         with:
           lfs: 'true'
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v6
         with:
-          node-version: '18.x'
+          node-version: '24.x'
       - name: Release to GitHub Pages
         env:
          USE_SSH: true

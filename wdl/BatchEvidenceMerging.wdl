@@ -158,11 +158,12 @@ task MergeEvidence {
     fi
 
     awk '/txt\.gz$/' evidence.list | while read fil; do
-      tabix -f -s1 -b2 -e2 $fil
+      tabix -f -0 -s1 -b2 -e2 $fil
     done
 
     /gatk/gatk --java-options "-Xmx~{java_heap_size_mb}m" PrintSVEvidence -F evidence.list --sample-names samples.list --sequence-dictionary ~{reference_dict} -O "~{batch}.~{evidence}.txt.gz"
 
+    tabix -f -0 -s1 -b2 -e2 "~{batch}.~{evidence}.txt.gz"
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -172,6 +173,7 @@ task MergeEvidence {
     docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -252,5 +254,6 @@ task SDtoBAF {
     docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }

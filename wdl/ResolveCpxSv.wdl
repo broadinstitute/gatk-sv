@@ -3,7 +3,6 @@ version 1.0
 # Author: Ryan Collins <rlcollins@g.harvard.edu>
 
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "HailMerge.wdl" as HailMerge
 
 #Resolve complex SV for a single chromosome
 workflow ResolveComplexSv {
@@ -23,11 +22,7 @@ workflow ResolveComplexSv {
     Int precluster_distance
     Float precluster_overlap_frac
 
-    Boolean use_hail
-    String? gcs_project
-
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
     String sv_base_mini_docker
 
     # overrides for local tasks
@@ -41,7 +36,6 @@ workflow ResolveComplexSv {
     RuntimeAttr? runtime_override_pull_vcf_shard
 
     RuntimeAttr? runtime_override_preconcat
-    RuntimeAttr? runtime_override_hail_merge
     RuntimeAttr? runtime_override_fix_header
   }
 
@@ -137,37 +131,20 @@ workflow ResolveComplexSv {
       }
     }
 
-    #Merge across shards
-    if (use_hail) {
-      call HailMerge.HailMerge as ConcatResolvedPerShardHail {
-        input:
-          vcfs=RestoreUnresolvedCnv.res,
-          prefix="~{prefix}.resolved",
-          gcs_project=gcs_project,
-          sv_base_mini_docker=sv_base_mini_docker,
-          sv_pipeline_docker=sv_pipeline_docker,
-          sv_pipeline_hail_docker=sv_pipeline_hail_docker,
-          runtime_override_preconcat=runtime_override_preconcat,
-          runtime_override_hail_merge=runtime_override_hail_merge,
-          runtime_override_fix_header=runtime_override_fix_header
-      }
-    }
-    if (!use_hail) {
-      call MiniTasks.ConcatVcfs as ConcatResolvedPerShard {
-        input:
-          vcfs=RestoreUnresolvedCnv.res,
-          vcfs_idx=RestoreUnresolvedCnv.res_idx,
-          allow_overlaps=true,
-          outfile_prefix="~{prefix}.resolved",
-          sv_base_mini_docker=sv_base_mini_docker,
-          runtime_attr_override=runtime_override_concat_resolved_per_shard
-      }
+    call MiniTasks.ConcatVcfs as ConcatResolvedPerShard {
+      input:
+        vcfs=RestoreUnresolvedCnv.res,
+        vcfs_idx=RestoreUnresolvedCnv.res_idx,
+        allow_overlaps=true,
+        outfile_prefix="~{prefix}.resolved",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_override_concat_resolved_per_shard
     }
   }
 
   output {
-    File resolved_vcf_merged = select_first([ConcatResolvedPerShard.concat_vcf, ConcatResolvedPerShardHail.merged_vcf, vcf])
-    File resolved_vcf_merged_idx = select_first([ConcatResolvedPerShard.concat_vcf_idx, ConcatResolvedPerShardHail.merged_vcf_index, vcf_idx])
+    File resolved_vcf_merged = select_first([ConcatResolvedPerShard.concat_vcf, vcf])
+    File resolved_vcf_merged_idx = select_first([ConcatResolvedPerShard.concat_vcf_idx, vcf_idx])
   }
 }
 
@@ -210,7 +187,7 @@ task GetSeCutoff {
 
     while read FILE; do
       /opt/sv-pipeline/04_variant_resolution/scripts/convert_poisson_p.py \
-        $( awk -F '\t' '{if ( $5=="PE_log_pval") print $2 }' $FILE | head -n1 )
+        $( awk -F '\t' '{if ( $5=="PEQ") print $2 }' $FILE | head -n1 )
     done < ~{write_lines(rf_cutoffs)} \
       | Rscript -e "cat(max(c(4,floor(quantile(as.numeric(scan('stdin',quiet=T)),probs=0.25)))),sep='\n')" \
       > median_cutoff.txt
@@ -347,7 +324,6 @@ task ResolvePrep {
 
         if [ -s regions.bed ]; then
           java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-                --skip-header \
                 --sequence-dictionary ~{ref_dict} \
                 --evidence-file $GS_PATH_TO_DISC_FILE \
                 -L regions.bed \
@@ -387,7 +363,7 @@ task ResolvePrep {
         > discfile.PE.txt.gz
     fi
 
-    tabix -s 1 -b 2 -e 2 -f discfile.PE.txt.gz
+    tabix -0 -s 1 -b 2 -e 2 -f discfile.PE.txt.gz
   >>>
 
   output {

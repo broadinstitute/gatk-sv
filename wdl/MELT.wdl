@@ -206,6 +206,7 @@ task GetMultipleMetrics {
     docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
   Int java_mem_mb = round(1024 * (select_first([runtime_attr.mem_gb, default_attr.mem_gb]) - java_mem_pad_gb))
 
@@ -334,6 +335,7 @@ task GetWgsMetrics {
     docker: genomes_in_the_cloud_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 
   command <<<
@@ -511,24 +513,6 @@ task RunMELT {
     # these locations should be stable
     MELT_DIR="/MELT"
 
-    # `cromwell_root` and `cromwell-executions` are the **default**
-    # root directory for cromwell deployments on GCP and Azure respectively.
-    # The last option, i.e., $PWD, is the fall back option if the
-    # default root directory of the cromwell instance was changed,
-    # however, it is not a reliable option as it fails on GCP.
-    # It does not seem Cromwell sets a runtime environment variable
-    # exposing the configured value of the root directory,
-    # which could have provided a portable solution for this.
-    # The following solution works with the Cromwell deployments
-    # we are currently using on GCP and Azure.
-    if [ -d "/cromwell_root" ]; then
-      CROMWELL_ROOT="/cromwell_root"
-    elif [ -d "/cromwell-executions" ]; then
-      CROMWELL_ROOT="/cromwell-executions"
-    else
-      CROMWELL_ROOT="$PWD"
-    fi
-
     # these locations may vary based on MELT version number, so find them:
     MELT_ROOT=$(find "$MELT_DIR" -name "MELT.jar" | xargs -n1 dirname)
     MELT_SCRIPT=$(ls "$MELT_DIR/run_MELT"*.sh)
@@ -541,7 +525,6 @@ task RunMELT {
       ~{read_length} \
       ~{insert_size} \
       "$MELT_ROOT" \
-      "$CROMWELL_ROOT" \
       ~{reference_version}
 
     cat "~{melt_standard_vcf_header}" \
@@ -564,5 +547,6 @@ task RunMELT {
     docker: melt_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }

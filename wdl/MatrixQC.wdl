@@ -155,12 +155,13 @@ task PESRBAF_QC {
         --evidence-file ~{matrix_file} \
         -L regions.bed \
         -O ~{print_ev_output}
+
+      tabix -f -0 -s1 -b2 -e2 ~{print_ev_output}
     else
       touch ~{print_ev_output}
       bgzip ~{print_ev_output}
+      tabix -f -0 -s 1 -b 2 -e 2 ~{print_ev_output}
     fi
-
-    tabix -f -s 1 -b 2 -e 2 ~{print_ev_output}
 
     /opt/sv-pipeline/00_preprocessing/misc_scripts/nonRD_matrix_QC.sh \
       -d ~{distance} \
@@ -179,6 +180,7 @@ task PESRBAF_QC {
     docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -238,9 +240,8 @@ task RD_QC {
     else
       touch local.RD.txt
       bgzip local.RD.txt
+      tabix -f -p bed ~{print_ev_output}
     fi
-
-    tabix -f -p bed ~{print_ev_output}
 
     /opt/sv-pipeline/00_preprocessing/misc_scripts/RD_matrix_QC.sh \
       -d ~{distance} \
@@ -259,6 +260,7 @@ task RD_QC {
     docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 
 }
@@ -305,6 +307,7 @@ task PlotMatrixQC {
     docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 

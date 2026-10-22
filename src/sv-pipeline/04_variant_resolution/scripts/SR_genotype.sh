@@ -16,7 +16,7 @@ whitelist=$6
 petrainfile=$7
 pegenotypes=$8
 
-sr_pval=$( awk -F'\t' '{if ( $5=="SR_sum_log_pval") print $2}' $RF_cutoffs | head -n 1)
+sr_pval=$( awk -F'\t' '{if ( $5=="SRQ") print $2}' $RF_cutoffs | head -n 1)
 sr_count=$(/opt/sv-pipeline/04_variant_resolution/scripts/convert_poisson_p.py $sr_pval)
 
 #Require both sides to have at least half of sr_count for training purposes

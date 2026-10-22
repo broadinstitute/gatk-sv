@@ -21,11 +21,12 @@ workflow MainVcfQc {
     String prefix
     Int sv_per_shard
     Int samples_per_shard
+    Boolean do_per_sample_qc = true
     Array[Array[String]]? site_level_comparison_datasets    # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to directory with one BED per population]
     Array[Array[String]]? sample_level_comparison_datasets  # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to per-sample tarballs]
     File primary_contigs_fai
     Int? random_seed
-    Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CleanVcf, use 999
+    Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CombineBatches, use 999
     Int? downsample_qc_per_sample  # Number of samples to use for per-sample QC. Default: 1000
 
     String sv_base_mini_docker
@@ -38,6 +39,8 @@ workflow MainVcfQc {
     RuntimeAttr? runtime_override_plot_qc_per_sample
     RuntimeAttr? runtime_override_plot_qc_per_family
     RuntimeAttr? runtime_override_per_sample_benchmark_plot
+    RuntimeAttr? runtime_override_identify_duplicates
+    RuntimeAttr? runtime_override_merge_duplicates
     RuntimeAttr? runtime_override_sanitize_outputs
 
     # overrides for MiniTasks or Utils
@@ -169,107 +172,130 @@ workflow MainVcfQc {
     }
   }
 
-  # Shard sample list
-  call MiniTasks.SplitUncompressed as SplitSamplesList {
-    input:
-      whole_file=CollectQcVcfWide.samples_list[0],
-      lines_per_shard=samples_per_shard,
-      shard_prefix="~{prefix}.list_shard.",
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_split_samples_list
-  }
-
-  # Collect per-sample VID lists for each sample shard
-  scatter ( shard in SplitSamplesList.shards ) {
-    call persample.CollectQcPerSample {
+  if (do_per_sample_qc) {
+    # Shard sample list
+    call MiniTasks.SplitUncompressed as SplitSamplesList {
       input:
-        vcfs=vcfs_for_qc,
-        vcf_format_has_cn=vcf_format_has_cn,
-        samples_list=shard,
-        prefix=prefix,
-        sv_base_mini_docker=sv_base_mini_docker,
+        whole_file=CollectQcVcfWide.samples_list[0],
+        lines_per_shard=samples_per_shard,
+        shard_prefix="~{prefix}.list_shard.",
         sv_pipeline_docker=sv_pipeline_docker,
-        runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample,
-        runtime_override_merge_sharded_per_sample_vid_lists=runtime_override_merge_sharded_per_sample_vid_lists
+        runtime_attr_override=runtime_override_split_samples_list
     }
-  }
-  
-  # Merge all VID lists into single output directory and tar it
-  call TarShardVidLists {
-    input:
-      in_tarballs=CollectQcPerSample.vid_lists,
-      folder_name="~{prefix}_perSample_VIDs_merged",
-      tarball_prefix="~{prefix}_perSample_VIDs",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_tar_shard_vid_lists
-  }
-  
-  Int max_gq_ = select_first([max_gq, 99])
-  # Plot per-sample stats
-  call PlotQcPerSample {
-    input:
-      vcf_stats=MergeVcfWideStats.merged_bed_file,
-      samples_list=CollectQcVcfWide.samples_list[0],
-      per_sample_tarball=TarShardVidLists.vid_lists,
-      prefix=prefix,
-      max_gq=max_gq_,
-      downsample_qc_per_sample=downsample_qc_per_sample,
-      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-      runtime_attr_override=runtime_override_plot_qc_per_sample
-  }
 
-  # Plot per-family stats if .ped file provided as input
-  if (defined(ped_file)) {
-    call PlotQcPerFamily {
+    # Collect per-sample VID lists for each sample shard
+    scatter ( shard in SplitSamplesList.shards ) {
+      call persample.CollectQcPerSample {
+        input:
+          vcfs=vcfs_for_qc,
+          vcf_format_has_cn=vcf_format_has_cn,
+          samples_list=shard,
+          prefix=prefix,
+          sv_base_mini_docker=sv_base_mini_docker,
+          sv_pipeline_docker=sv_pipeline_docker,
+          runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample,
+          runtime_override_merge_sharded_per_sample_vid_lists=runtime_override_merge_sharded_per_sample_vid_lists
+      }
+    }
+
+    # Merge all VID lists into single output directory and tar it
+    call TarShardVidLists {
+      input:
+        in_tarballs=CollectQcPerSample.vid_lists,
+        folder_name="~{prefix}_perSample_VIDs_merged",
+        tarball_prefix="~{prefix}_perSample_VIDs",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_override_tar_shard_vid_lists
+    }
+
+    Int max_gq_ = select_first([max_gq, 99])
+    # Plot per-sample stats
+    call PlotQcPerSample {
       input:
         vcf_stats=MergeVcfWideStats.merged_bed_file,
         samples_list=CollectQcVcfWide.samples_list[0],
-        ped_file=select_first([ped_file]),
-        max_trios=max_trios,
         per_sample_tarball=TarShardVidLists.vid_lists,
         prefix=prefix,
         max_gq=max_gq_,
+        downsample_qc_per_sample=downsample_qc_per_sample,
         sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-        runtime_attr_override=runtime_override_plot_qc_per_family
+        runtime_attr_override=runtime_override_plot_qc_per_sample
     }
-  }
 
-  # Collect and plot per-sample benchmarking vs. external callsets
-  if (defined(sample_level_comparison_datasets)) {
-    scatter ( comparison_dataset_info in select_first([sample_level_comparison_datasets, 
-                                                       [[], []]]) ) {
-      # Collect per-sample external benchmarking data
-      call samplebench.CollectPerSampleBenchmarking {
+    # Plot per-family stats if .ped file provided as input
+    if (defined(ped_file)) {
+      call PlotQcPerFamily {
         input:
           vcf_stats=MergeVcfWideStats.merged_bed_file,
           samples_list=CollectQcVcfWide.samples_list[0],
+          ped_file=select_first([ped_file]),
+          max_trios=max_trios,
           per_sample_tarball=TarShardVidLists.vid_lists,
-          comparison_tarball=comparison_dataset_info[1],
-          sample_renaming_tsv=sample_renaming_tsv,
           prefix=prefix,
-          contigs=contigs,
-          comparison_set_name=comparison_dataset_info[0],
-          samples_per_shard=samples_per_shard,
-          random_seed=random_seed,
-          sv_base_mini_docker=sv_base_mini_docker,
-          sv_pipeline_docker=sv_pipeline_docker,
+          max_gq=max_gq_,
           sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-          runtime_override_benchmark_samples=runtime_override_benchmark_samples,
-          runtime_override_split_shuffled_list=runtime_override_split_shuffled_list,
-          runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks
-      }
-
-      # Plot per-sample benchmarking results
-      call PlotPerSampleBenchmarking {
-        input:
-          per_sample_benchmarking_tarball=CollectPerSampleBenchmarking.benchmarking_results_tarball,
-          samples_list=CollectQcVcfWide.samples_list[0],
-          comparison_set_name=comparison_dataset_info[0],
-          prefix=prefix,
-          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-          runtime_attr_override=runtime_override_per_sample_benchmark_plot
+          runtime_attr_override=runtime_override_plot_qc_per_family
       }
     }
+
+    # Collect and plot per-sample benchmarking vs. external callsets
+    if (defined(sample_level_comparison_datasets)) {
+      scatter ( comparison_dataset_info in select_first([sample_level_comparison_datasets,
+                                                         [[], []]]) ) {
+        # Collect per-sample external benchmarking data
+        call samplebench.CollectPerSampleBenchmarking {
+          input:
+            vcf_stats=MergeVcfWideStats.merged_bed_file,
+            samples_list=CollectQcVcfWide.samples_list[0],
+            per_sample_tarball=TarShardVidLists.vid_lists,
+            comparison_tarball=comparison_dataset_info[1],
+            sample_renaming_tsv=sample_renaming_tsv,
+            prefix=prefix,
+            contigs=contigs,
+            comparison_set_name=comparison_dataset_info[0],
+            samples_per_shard=samples_per_shard,
+            random_seed=random_seed,
+            sv_base_mini_docker=sv_base_mini_docker,
+            sv_pipeline_docker=sv_pipeline_docker,
+            sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+            runtime_override_benchmark_samples=runtime_override_benchmark_samples,
+            runtime_override_split_shuffled_list=runtime_override_split_shuffled_list,
+            runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks
+        }
+
+        # Plot per-sample benchmarking results
+        call PlotPerSampleBenchmarking {
+          input:
+            per_sample_benchmarking_tarball=CollectPerSampleBenchmarking.benchmarking_results_tarball,
+            samples_list=CollectQcVcfWide.samples_list[0],
+            comparison_set_name=comparison_dataset_info[0],
+            prefix=prefix,
+            sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+            runtime_attr_override=runtime_override_per_sample_benchmark_plot
+        }
+      }
+    }
+  }
+
+  # Identify all duplicates
+  scatter(vcf in vcfs_for_qc) {
+    call IdentifyDuplicates {
+      input:
+        prefix=prefix,
+        vcf=vcf,
+        sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+        runtime_attr_override=runtime_override_identify_duplicates
+    }
+  }
+
+  # Merge duplicates
+  call MergeDuplicates {
+    input:
+      prefix=prefix,
+      tsv_records=IdentifyDuplicates.duplicate_records,
+      tsv_counts=IdentifyDuplicates.duplicate_counts,
+      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+      runtime_attr_override=runtime_override_merge_duplicates
   }
 
   # Sanitize all outputs
@@ -293,6 +319,8 @@ workflow MainVcfQc {
   output {
     File sv_vcf_qc_output = SanitizeOutputs.vcf_qc_tarball
     File vcf2bed_output = MergeVcf2Bed.merged_bed_file
+    File duplicate_records_output = MergeDuplicates.duplicate_records
+    File duplicate_counts_output = MergeDuplicates.duplicate_counts
   }
 }
 
@@ -529,8 +557,8 @@ task PlotQcPerFamily {
   }
   Int random_seed_ = select_first([random_seed, 0])
   RuntimeAttr runtime_default = object {
-    mem_gb: 7.75,
-    disk_gb: 50,
+    mem_gb: 15,
+    disk_gb: 100,
     cpu_cores: 1,
     preemptible_tries: 1,
     max_retries: 1,
@@ -718,7 +746,7 @@ task SanitizeOutputs {
     File vcf_stats_idx
     File plot_qc_vcfwide_tarball
     Array[File]? plot_qc_site_level_external_benchmarking_tarballs
-    File plot_qc_per_sample_tarball
+    File? plot_qc_per_sample_tarball
     File? plot_qc_per_family_tarball
     File? cleaned_fam_file
     Array[File]? plot_qc_per_sample_external_benchmarking_tarballs
@@ -727,11 +755,12 @@ task SanitizeOutputs {
   }
 
   # simple compress + tar workflow
-  Float isize_1 = size([samples_list, vcf_stats, vcf_stats_idx, plot_qc_vcfwide_tarball, plot_qc_per_sample_tarball], "GiB")
+  Float isize_1 = size([samples_list, vcf_stats, vcf_stats_idx, plot_qc_vcfwide_tarball], "GiB")
   Float isize_2 = size(select_first([plot_qc_site_level_external_benchmarking_tarballs, []]), "GiB")
   Float isize_3 = size(select_first([plot_qc_per_family_tarball, []]), "GiB")
   Float isize_4 = size(select_first([plot_qc_per_sample_external_benchmarking_tarballs, []]), "GiB")
-  Float input_size = isize_1 + isize_2 + isize_3 + isize_4
+  Float isize_5 = size(select_first([plot_qc_per_sample_tarball, []]), "GiB")
+  Float input_size = isize_1 + isize_2 + isize_3 + isize_4 + isize_5
   RuntimeAttr runtime_default = object {
     mem_gb: 2.0,
     disk_gb: ceil(10.0 + input_size * 5.0),
@@ -765,7 +794,9 @@ task SanitizeOutputs {
       dname="$( basename -s '.tar.gz' $tarball_fname )_site_level_benchmarking_plots/"
       mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/$dname
     done
-    mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/per_sample_plots/
+    if ~{defined(plot_qc_per_sample_tarball)}; then
+      mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/per_sample_plots/
+    fi
     if ~{defined(plot_qc_per_family_tarball)}; then
       mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/sv_inheritance_plots/
     fi
@@ -804,11 +835,13 @@ task SanitizeOutputs {
     fi
 
     # Process per-sample plots
-    tar -xzvf ~{plot_qc_per_sample_tarball}
-    cp ~{prefix}_perSample_plots/main_plots/* \
-      ~{prefix}_SV_VCF_QC_output/plots/main_plots/
-    cp ~{prefix}_perSample_plots/supporting_plots/per_sample_plots/* \
-      ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/per_sample_plots/
+    if ~{defined(plot_qc_per_sample_tarball)}; then
+      tar -xzvf ~{plot_qc_per_sample_tarball}
+      cp ~{prefix}_perSample_plots/main_plots/* \
+        ~{prefix}_SV_VCF_QC_output/plots/main_plots/
+      cp ~{prefix}_perSample_plots/supporting_plots/per_sample_plots/* \
+        ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/per_sample_plots/
+    fi
 
     # Process per-family plots
     if ~{defined(plot_qc_per_family_tarball)}; then
@@ -850,3 +883,103 @@ task SanitizeOutputs {
   }
 }
 
+
+# Identify all duplicates in a single file
+task IdentifyDuplicates {
+  input {
+    String prefix
+    File vcf
+    String sv_pipeline_qc_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String vcf_basename = basename(vcf, ".vcf.gz")
+  String full_prefix = "~{prefix}.~{vcf_basename}"
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: 10 + ceil(size(vcf, "GiB")),
+    cpu_cores: 1,
+    preemptible_tries: 1,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_qc_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+
+    echo "Processing ~{vcf} into ~{full_prefix}..."
+
+    python /opt/sv-pipeline/scripts/identify_duplicates.py \
+      --vcf ~{vcf} \
+      --fout ~{full_prefix}
+
+    echo "Finishing processing VCF."
+  >>>
+
+  output {
+    File duplicate_records = "~{full_prefix}_duplicate_records.tsv"
+    File duplicate_counts = "~{full_prefix}_duplicate_counts.tsv"
+  }
+}
+
+
+# Aggregate distinct duplicate summary files
+task MergeDuplicates {
+  input {
+    String prefix
+    Array[File] tsv_records
+    Array[File] tsv_counts
+    String sv_pipeline_qc_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: 5 + ceil(size(tsv_records, "GiB")) + ceil(size(tsv_counts, "GiB")),
+    cpu_cores: 1,
+    preemptible_tries: 1,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_qc_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+  
+  command <<<
+    set -euo pipefail
+
+    echo "Merging all TSV files into one..."
+
+    python /opt/sv-pipeline/scripts/merge_duplicates.py \
+      --records ~{sep=' ' tsv_records} \
+      --counts ~{sep=' ' tsv_counts} \
+      --fout "~{prefix}.agg"
+
+    echo "All TSVs processed."
+  >>>
+
+  output {
+    File duplicate_records = "~{prefix}.agg_duplicate_records.tsv"
+    File duplicate_counts = "~{prefix}.agg_duplicate_counts.tsv"
+  }
+}

@@ -14,6 +14,9 @@ workflow FormatVcfForGatk {
     File contig_list
     File? contigs_header  # Replaces vcf contig dictionary if provided
     String? formatter_args
+    # Variant ID lists for SR evidence flags. Adds as INFO field flags if provided
+    File? bothside_pass_list
+    File? background_fail_list
 
     String? chr_x
     String? chr_y
@@ -28,7 +31,6 @@ workflow FormatVcfForGatk {
     RuntimeAttr? runtime_attr_format
     RuntimeAttr? runtime_override_concat
     RuntimeAttr? runtime_override_preconcat_step1
-    RuntimeAttr? runtime_override_hail_merge_step1
     RuntimeAttr? runtime_override_fix_header_step1
   }
 
@@ -61,6 +63,8 @@ workflow FormatVcfForGatk {
         args=formatter_args,
         output_prefix="~{prefix}.format.shard_~{i}",
         contigs_header=contigs_header,
+        bothside_pass_list=bothside_pass_list,
+        background_fail_list=background_fail_list,
         script=svtk_to_gatk_script,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_format
@@ -89,6 +93,8 @@ task FormatVcf {
   input {
     File vcf
     File ploidy_table
+    File? bothside_pass_list
+    File? background_fail_list
     File? script
     String? args
     File? contigs_header  # Overwrites contig dictionary, in case they are out of order
@@ -119,6 +125,8 @@ task FormatVcf {
       --vcf ~{vcf} \
       --out tmp.vcf.gz \
       --ploidy-table ~{ploidy_table} \
+      ~{"--bothside-pass-list " + bothside_pass_list} \
+      ~{"--background-fail-list " + background_fail_list} \
       ~{args}
 
     if ~{defined(contigs_header)}; then

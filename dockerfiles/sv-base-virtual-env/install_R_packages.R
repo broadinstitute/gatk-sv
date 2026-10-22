@@ -14,7 +14,10 @@ if ( 0 == length(to.be.installed) ) {
 }
 
 # multiple repos, multiple retries when a package is not found
-repos <- c("http://lib.stat.cmu.edu/R/CRAN/", "https://cran.rstudio.com")
+# NOTE: the old primary mirror (http://lib.stat.cmu.edu/R/CRAN/) now redirects
+# plain HTTP to HTTPS / 403s, and with options(warn=2) an unreachable first repo
+# aborts the install even when a fallback mirror is listed. Use HTTPS CRAN CDN.
+repos <- c("https://cloud.r-project.org", "https://cran.rstudio.com")
 
 # install to default place, quietly, then leave
 install.packages(pkgs = to.be.installed, 

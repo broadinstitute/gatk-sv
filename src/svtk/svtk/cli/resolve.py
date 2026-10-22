@@ -106,13 +106,14 @@ def _cluster_INV_list(independent_INV):
     out = []
     rec = float('-inf')  # be sure to add first element
     for i in independent_INV:
+        end = i.info['END2'] if i.info['SVTYPE'] == 'BND' else i.stop
         if i.pos > rec:
             out.append([i])
-            rec = i.stop
+            rec = end
         else:
             out[-1].append(i)
-            if i.stop > rec:
-                rec = i.stop
+            if end > rec:
+                rec = end
     return out
 
 
@@ -278,7 +279,12 @@ def cluster_cleanup(clusters_v2):
     for i in range(len(clusters_v2)):
         info = clusters_v2[i]
         info_pos = '_'.join(sorted(
-            [','.join([str(k) for k in [j.pos, j.stop, j.info['SVTYPE']]]) for j in info]))
+            [','.join([str(k) for k in [
+                j.pos, 
+                j.info['END2'] if j.info['SVTYPE'] == 'BND' else j.stop, 
+                j.info['SVTYPE']
+            ]]) for j in info]
+        ))
         if info_pos not in cluster_info:
             cluster_info.append(info_pos)
             cluster_pos.append(i)

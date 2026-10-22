@@ -34,8 +34,11 @@ zcat $RD_melted_genotypes \
 awk -F'\t' '{if ($5=="DEL") print $4}' int.bed>depthonly.del.ids.txt
 awk -F'\t' '{if ($5=="DUP") print $4}' int.bed>depthonly.dup.ids.txt
 
+# In case of empty inputs
+touch genotype.indiv.txt
+touch genotype.variant.txt
 
-if [ $(cat depthonly.del.ids.txt|wc -l) -gt 0 ] 
+if [ $(cat depthonly.del.ids.txt|wc -l) -gt 0 ] && [ $(zcat rd_indiv_geno.txt.gz|wc -l) -gt 0 ]
 then
  zcat rd_indiv_geno.txt.gz \
   |fgrep -wf depthonly.del.ids.txt \
@@ -54,7 +57,7 @@ then
   >genotype.variant.txt
 fi
 
-if [ $(cat depthonly.dup.ids.txt|wc -l) -gt 0 ] 
+if [ $(cat depthonly.dup.ids.txt|wc -l) -gt 0 ] && [ $(zcat rd_indiv_geno.txt.gz|wc -l) -gt 0 ]
 then
  zcat rd_indiv_geno.txt.gz  \
   |fgrep -wf depthonly.dup.ids.txt \

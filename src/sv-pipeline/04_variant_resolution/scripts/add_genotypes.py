@@ -12,40 +12,7 @@ import pandas as pd
 import pysam
 
 
-def make_multiallelic_alts(record, max_CN, is_bca=False):
-    """
-    Add alts for CN states up to half of max observed total CN
-    """
-
-    max_haplo_CN = int(np.ceil(max_CN / 2))
-
-    if is_bca:
-        alts = tuple(['<CN1>'] +
-                     ['<CN{0}>'.format(i) for i in range(2, max_haplo_CN + 1)])
-    else:
-        alts = tuple(['<CN0>'] +
-                     ['<CN{0}>'.format(i) for i in range(2, max_haplo_CN + 1)])
-
-    stop = record.stop
-    record.alts = alts
-    record.stop = stop
-
-
-def make_evidence_int(ev):
-    ev = ev.split(',')
-
-    evidence = 0
-    if 'RD' in ev:
-        evidence += 1
-    if 'PE' in ev:
-        evidence += 2
-    if 'SR' in ev:
-        evidence += 4
-
-    return evidence
-
-
-def add_genotypes(record, genotypes, varGQ):
+def add_genotypes(samples, record, genotypes, varGQ):
     """
     Update formats and add genotypes
     """
@@ -59,22 +26,20 @@ def add_genotypes(record, genotypes, varGQ):
             del record.format[fmt]
 
     max_GT = genotypes['GT'].max()
-    is_bca = record.info['SVTYPE'] not in 'DEL DUP'.split()
-
-    if is_bca:
-        max_CN = max_GT
-    else:
-        max_CN = max_GT + 2
 
     if max_GT > 2:
-        record.info['MULTIALLELIC'] = True
-        make_multiallelic_alts(record, max_CN, is_bca)
+        record.alts = ('<CNV>',)
+        if record.info['SVTYPE'] != 'DUP':
+            msg = 'Invalid SVTYPE {0} for multiallelic record {1}'
+            msg = msg.format(record.info['SVTYPE'], record.id)
+            raise Exception(msg)
+        record.info['SVTYPE'] = 'CNV'
 
     cols = 'name sample GT GQ RD_CN RD_GQ PE_GT PE_GQ SR_GT SR_GQ EV'.split()
     gt_matrix = genotypes.reset_index()[cols].to_numpy()
 
     # update genotype and other data for each sample
-    for j, sample in enumerate(record.samples):
+    for j, sample in enumerate(samples):
         #  data = genotypes.iloc[j]
         data = gt_matrix[j]
 
@@ -85,27 +50,7 @@ def add_genotypes(record, genotypes, varGQ):
             raise Exception(msg)
 
         if max_GT > 2:
-            if record.info['SVTYPE'] == 'DEL':
-                msg = 'Invalid SVTYPE {0} for multiallelic genotype in record {1}'
-                msg = msg.format(record.info['SVTYPE'], record.id)
-                raise Exception(msg)
-
-            if is_bca:
-                idx1 = int(np.floor(data[2] / 2))
-                idx2 = int(np.ceil(data[2] / 2))
-            else:
-                # split copy state roughly evenly between haplotypes
-                idx1 = int(np.floor((data[2] + 2) / 2))
-                idx2 = int(np.ceil((data[2] + 2) / 2))
-
-                # if copy state is 1, assign reference genotype
-                if idx1 == 1:
-                    idx1 = 0
-                if idx2 == 1:
-                    idx2 = 0
-
-            record.samples[sample]['GT'] = (idx1, idx2)
-
+            record.samples[sample]['GT'] = (None, None)
         elif data[2] == 0:
             record.samples[sample]['GT'] = (0, 0)
         elif data[2] == 1:
@@ -121,11 +66,11 @@ def add_genotypes(record, genotypes, varGQ):
             else:
                 record.samples[sample][fmt] = int(data[i + 3])
 
-        record.samples[sample]['EV'] = make_evidence_int(data[10])
+        record.samples[sample]['EV'] = data[10]
 
     # Bug in pysam - sometimes gets rid of the first EV field
     data = gt_matrix[0]
-    record.samples[0]['EV'] = make_evidence_int(data[10])
+    record.samples[0]['EV'] = data[10]
 
 
 def update_vcf_header(header):
@@ -156,7 +101,7 @@ def update_vcf_header(header):
     header.add_line(
         '##FORMAT=<ID=SR_GQ,Number=1,Type=Integer,Description="Split read genotype quality">')
     header.add_line(
-        '##FORMAT=<ID=EV,Number=1,Type=Integer,Description="Classes of evidence supporting final genotype">')
+        '##FORMAT=<ID=EV,Number=1,Type=String,Description="Classes of evidence supporting final genotype">')
 
     header.add_line(
         '##INFO=<ID=MULTIALLELIC,Number=0,Type=Flag,Description="Multiallelic site">')
@@ -187,6 +132,10 @@ def main():
     genotypes = pd.read_table(args.genotypes, names=names, dtype={
         'sample': str}, sep='\s+')
     genotypes = genotypes.set_index('name sample'.split())
+
+    # Catch empty shard case
+    if genotypes.shape[0] == 0:
+        return
 
     # sort genotype table for faster indexing
     ids = [record.id for record in vcf]
@@ -224,7 +173,7 @@ def main():
             msg = 'Record {0} not present in varGQ file'.format(record.id)
             raise Exception(msg)
 
-        add_genotypes(record, gt, gq)
+        add_genotypes(samples, record, gt, gq)
         fout.write(str(record))
 
 

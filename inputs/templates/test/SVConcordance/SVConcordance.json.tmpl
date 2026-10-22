@@ -2,7 +2,7 @@
   "SVConcordance.gatk_docker": {{ dockers.gatk_docker | tojson }},
   "SVConcordance.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
 
-  "SVConcordance.eval_vcf" : {{ test_batch.gatk_formatted_vcf | tojson }},
+  "SVConcordance.eval_vcf" : {{ test_batch.complex_refined_vcf | tojson }},
   "SVConcordance.truth_vcf" : {{ test_batch.joined_raw_calls_vcf | tojson }},
 
   "SVConcordance.output_prefix": {{ test_batch.name | tojson }},

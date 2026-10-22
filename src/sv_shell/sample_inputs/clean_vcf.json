@@ -1,0 +1,13 @@
+{
+  "HERVK_reference": "/inputs/HERVK.sorted.bed.gz",
+  "LINE1_reference": "/inputs/LINE1.sorted.bed.gz",
+  "chr_x": "chrX",
+  "chr_y": "chrY",
+  "cohort_name": "NA12878",
+  "complex_genotype_vcf": "/intermediates/tmp/merged.vcf.gz",
+  "complex_resolve_background_fail_list": "/intermediates/tmp/NA12878.all.sr_background_fail.updated3.txt",
+  "complex_resolve_bothside_pass_list": "/intermediates/tmp/NA12878.all.sr_bothside_pass.updated3.txt",
+  "contig_list": "/intermediates/tmp/contig.fai",
+  "intron_reference": "/intermediates/tmp/gencode.v39.CDS.intron.tsv.gz",
+  "ped_file": "/intermediates/tmp/combined_ped_file.ped"
+}

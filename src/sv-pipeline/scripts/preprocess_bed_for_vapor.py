@@ -33,13 +33,13 @@ def handle_header(line, columns, fields, default_num_columns, sample_to_extract)
         for i, name in enumerate(fields[default_num_columns:]):
             columns[name] = default_num_columns + i
         if "SVLEN" not in columns:
-            logging.warning("SVLEN column not found. Will not be able to add SVLEN info to INS events")
+            raise ValueError("SVLEN column not found in header")
     else:
-        logging.warning("Header not found. Will not be able to add SVLEN info to INS events")
+        raise ValueError("Header not found. Header must exist and start with #")
         if len(fields) >= default_num_columns:
             columns['samples'] = default_num_columns  # if no header but extra fields, assume samples is next column
     if sample_to_extract is not None and "samples" not in columns:
-        logging.warning("Sample to extract provided but no samples column found")
+        raise ValueError("Sample to extract provided but no samples column found")
 
 
 def reformat(bed_in, bed_out, contig, sample_to_extract):
@@ -78,9 +78,9 @@ def reformat(bed_in, bed_out, contig, sample_to_extract):
                                  fields[columns["name"]], svtype_write]) + "\n")
 
     if not found_contig:
-        raise ValueError(f"Could not find any records for contig {contig} in the provided BED file")
+        logging.warning(f"Could not find any records for contig {contig} in the provided BED file")
     if sample_to_extract is not None and "samples" in columns and not found_sample:
-        raise ValueError(f"Could not find any records for sample {sample_to_extract} in the provided BED file")
+        logging.warning(f"Could not find any records for sample {sample_to_extract} in the provided BED file")
 
 
 def main():

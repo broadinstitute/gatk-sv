@@ -30,41 +30,60 @@ zcat $RD_melted_genotypes \
   |gzip \
   >rd_indiv_geno.txt.gz
 
-##Deletions, need to PE-SR genotypes to match RD format (2==ref)##
 ##PE##
-zcat $pegeno_indiv_file \
-  | { fgrep -wf <(awk '{if ($5=="DEL") print $4}' int.bed) || true; }  \
-  |awk '{if ($4>1) print $1"@"$2,$1,$2,$4,0,$5;else if ($4==1) print $1"@"$2,$1,$2,$4,1,$5 ;else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
-  |awk '!seen[$1"@"$2]++' \
-  >pe_indiv_geno.txt
-    
-##Duplications and other events, need to PE-SR genotypes to match RD (2==ref)##
-zcat $pegeno_indiv_file \
-  | { fgrep -wf <(awk '{if ($5!="DEL") print $4}' int.bed) || true; }  \
-  |awk '{if ($4>0) print $1"@"$2,$1,$2,$4,$4+2,$5 ;else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
-  |awk '!seen[$1"@"$2]++' \
-  >>pe_indiv_geno.txt
-sort -k1,1 pe_indiv_geno.txt|gzip>pe_indiv_geno.txt.gz
-
-rm pe_indiv_geno.txt
+zcat "$pegeno_indiv_file" | \
+awk -v OFS="\t" '
+  ARGIND==1 {
+    if ($5 == "DEL") {
+      del[$4]
+    } else {
+      nodel[$4]
+    }
+    next
+  }
+  ARGIND==2 {
+    if ($1 in del) {
+      ##Deletions, need to PE-SR genotypes to match RD format (2==ref)##
+      final_gt = ($4>1 ? 0 : ($4==1 ? 1 : 2))
+      print $1"@"$2, $1, $2, $4, final_gt, $5
+    } else if ($1 in nodel) {
+      ##Duplications and other events, need to PE-SR genotypes to match RD (2==ref)##
+      final_gt = ($4>0 ? $4+2 : 2)
+      print $1"@"$2, $1, $2, $4, final_gt, $5
+    }
+  }
+' int.bed - \
+| awk '!seen[$1]++' \
+| sort -k1,1 \
+| gzip > pe_indiv_geno.txt.gz
 
 ##SR##
-zcat $srgeno_indiv_file \
-  | { fgrep -wf <(awk '{if ($5=="DEL") print $4}' int.bed) || true; } \
-  |awk '{if ($4>1) print $1"@"$2,$1,$2,$4,0,$5;else if ($4==1) print $1"@"$2,$1,$2,$4,1,$5 ;else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
-  |awk '!seen[$1"@"$2]++' \
-  >sr_indiv_geno.txt
-    
-##Duplications and other events, need to PE-SR genotysrs to match RD (2==ref)##
-zcat $srgeno_indiv_file \
-  | { fgrep -wf <(awk '{if ($5!="DEL") print $4}' int.bed) || true; }  \
-  |awk '{if ($4>0) print $1"@"$2,$1,$2,$4,$4+2,$5 ;else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
-  |awk '!seen[$1"@"$2]++' \
-  >>sr_indiv_geno.txt
-  
-sort -k1,1 sr_indiv_geno.txt|gzip>sr_indiv_geno.txt.gz
+zcat "$srgeno_indiv_file" | \
+awk -v OFS="\t" '
+  ARGIND==1 {
+    if ($5 == "DEL") {
+      del[$4]
+    } else {
+      nodel[$4]
+    }
+    next
+  }
+  ARGIND==2 {
+    if ($1 in del) {
+      ##Deletions, need to PE-SR genotypes to match RD format (2==ref)##
+      final_gt = ($4>1 ? 0 : ($4==1 ? 1 : 2))
+      print $1"@"$2, $1, $2, $4, final_gt, $5
+    } else if ($1 in nodel) {
+      ##Duplications and other events, need to PE-SR genotysrs to match RD (2==ref)##
+      final_gt = ($4>0 ? $4+2 : 2)
+      print $1"@"$2, $1, $2, $4, final_gt, $5
+    }
+  }
+' int.bed - \
+| awk '!seen[$1]++' \
+| sort -k1,1 \
+| gzip > sr_indiv_geno.txt.gz
 
-rm sr_indiv_geno.txt
 
 ##check to make sure PE and SR are same size which they should be##
 
@@ -377,4 +396,3 @@ cat genotype.variant.txt \
   |awk '{if ($2==0) $2=1;if ($3==0) $3=1; if ($4==0) $4=1; if ($5==0) $5=1; print}' OFS="\t" \
   |gzip \
   >genotype.variant.txt.gz
-

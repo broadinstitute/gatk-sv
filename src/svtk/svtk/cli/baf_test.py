@@ -9,7 +9,7 @@ import sys
 ##########
 
 
-def preprocess(chrom, start, end, tbx, samples, window=None):
+def preprocess(chrom, start, end, tbx, samples, window=None, called_samples=None, outlier_sample_ids=None):
     """
     Report normalized BAFs in a set of samples across a desired region.
 
@@ -33,55 +33,63 @@ def preprocess(chrom, start, end, tbx, samples, window=None):
     called_bafs : pd.DataFrame
         BAF of each called SNP within CNV
     """
-
-    # Load and filter SNP sites
     if window is None:
         window = end - start
-    # records = tbx.fetch(chrom, start - window, end + window,parser=pysam.asTuple())
-    # sites = deque()
+
     bafs = deque()
     if window < 1000000:
         for record in tbx.fetch(chrom, max(1, start - window), end + window, parser=pysam.asTuple()):
             bafs.append(np.array(record))
     else:
-
         for record in tbx.fetch(chrom, max(1, start - 1000000), start, parser=pysam.asTuple()):
             bafs.append(np.array(record))
         for record in tbx.fetch(chrom, (start + end) // 2 - 500000, (start + end) // 2 + 500000, parser=pysam.asTuple()):
             bafs.append(np.array(record))
         for record in tbx.fetch(chrom, end, end + 1000000, parser=pysam.asTuple()):
             bafs.append(np.array(record))
-    bafs = np.array(bafs)
-    # if bafs.shape[0] == 0:
-    # return 0,0
-    bafs = pd.DataFrame(bafs)
+
+    bafs = pd.DataFrame(np.array(bafs))
     if bafs.empty:
-        return bafs, bafs
+        return bafs, bafs, called_samples
     bafs.columns = ['chr', 'pos', 'baf', 'sample']
+
+    if outlier_sample_ids and len(outlier_sample_ids) > 0:
+        # Create non-outlier sample lists
+        background_samples = list(set(samples) - set(called_samples))
+        non_outlier_called = [s for s in called_samples if s not in outlier_sample_ids]
+        non_outlier_background = [s for s in background_samples if s not in outlier_sample_ids]
+
+        # Exclude outlier samples only if non-outlier samples exist
+        if len(non_outlier_called) > 0:
+            called_samples = non_outlier_called
+        if len(non_outlier_background) > 0:
+            background_samples = non_outlier_background
+    
+        # Prune samples list
+        samples = list(set(called_samples) | set(background_samples))
+    
     bafs = bafs[bafs['sample'].isin(samples)]
-    # print(bafs)
+    
     if bafs.empty:
-        return bafs, bafs
+        return bafs, bafs, called_samples
+    
     bafs['pos'] = bafs.pos.astype(int)
     bafs['baf'] = bafs.baf.astype(float)
-    # print(bafqs)
     bafs.loc[bafs.pos <= start, 'region'] = 'before'
     bafs.loc[bafs.pos >= end, 'region'] = 'after'
     bafs.loc[(bafs.pos > start) & (bafs.pos < end), 'region'] = 'inside'
-    het_counts = bafs.groupby('sample region'.split()).size(
-    ).reset_index().rename(columns={0: 'count'})
-    het_counts = het_counts.pivot_table(
-        values='count', index='sample', columns='region', fill_value=0)
+    het_counts = bafs.groupby('sample region'.split()).size().reset_index().rename(columns={0: 'count'})
+    het_counts = het_counts.pivot_table(values='count', index='sample', columns='region', fill_value=0)
     het_counts = het_counts.reindex(samples).fillna(0).astype(int)
     cols = 'before inside after sample'.split()
     het_counts = het_counts.reset_index()
     for colname in cols:
         if colname not in het_counts.columns:
             het_counts[colname] = 0
-    # het_counts = het_counts.reset_index()[cols]
+
     # Report BAF for variants inside CNV
     called_bafs = bafs.loc[bafs.region == 'inside'].copy()
-    return het_counts, called_bafs
+    return het_counts, called_bafs, called_samples
 
 
 def main(argv):
@@ -93,7 +101,7 @@ def main(argv):
     parser.add_argument('file', help='Compiled snp file')
     parser.add_argument('-b', '--batch',)
     parser.add_argument('--index', help='Tabix index for remote bed')
-    # help='Samples')
+    parser.add_argument('--outlier-sample-ids', help='Path to file containing outlier sample IDs')
 
     # Print help if no arguments specified
     if len(argv) == 0:
@@ -125,6 +133,11 @@ def main(argv):
             raise Exception('Must provide tabix index with remote URL')
         tbx = pysam.TabixFile(args.file)
 
+    outlier_samples = set()
+    if args.outlier_sample_ids:
+        with open(args.outlier_sample_ids, 'r') as f:
+            outlier_samples = set(line.strip() for line in f)
+
     # this is necessary to avoid stochasticity in calculation of KS statistic
     np.random.seed(0)
     random_state = np.random.RandomState(0)
@@ -141,8 +154,11 @@ def main(argv):
                 samplelist = samples.split(',')
                 type = dat[5]
                 try:
-                    het_counts, called_bafs = preprocess(
-                        chrom, start, end, tbx, samples=splist)
+                    het_counts, called_bafs, samplelist = preprocess(
+                        chrom, start, end, tbx, samples=splist,
+                        outlier_sample_ids=outlier_samples,
+                        called_samples=samplelist
+                    )
                 except ValueError:
                     het_counts = pd.DataFrame()
                     called_bafs = pd.DataFrame()

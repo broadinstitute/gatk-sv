@@ -5,4 +5,7 @@ from .std_lumpy import LumpyStandardizer
 from .std_manta import MantaStandardizer
 from .std_melt import MeltStandardizer
 from .std_scramble import ScrambleStandardizer
+from .std_dragen import DragenStandardizer
+from .std_dragen_sv_v3_7_6 import DragenStandardizerV3_7_6
+from .std_dragen_cnv import DragenCnvStandardizer
 from .std_smoove import SmooveStandardizer

@@ -10,7 +10,6 @@ workflow CombineReassess {
     Array[File] vcfs 
     Int min_var_per_sample_outlier_threshold
     Float regeno_sample_overlap
-    String sv_pipeline_base_docker
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_vcf2bed
     RuntimeAttr? runtime_attr_merge_list_creassess
@@ -33,7 +32,7 @@ workflow CombineReassess {
       min_var_per_sample_outlier_threshold = min_var_per_sample_outlier_threshold,
       regeno_sample_overlap = regeno_sample_overlap,
       runtime_attr_override = runtime_attr_merge_list_creassess,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_docker = sv_pipeline_docker
   }
   output {
     File regeno_variants = MergeList.regeno_var
@@ -88,7 +87,7 @@ task MergeList {
     File regeno_sample_ids_lookup
     Int min_var_per_sample_outlier_threshold
     Float regeno_sample_overlap
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
@@ -175,7 +174,7 @@ task MergeList {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

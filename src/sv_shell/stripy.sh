@@ -1,0 +1,125 @@
+#!/bin/bash
+
+set -Exeuo pipefail
+
+# -------------------------------------------------------
+# ==================== Input & Setup ====================
+# -------------------------------------------------------
+
+
+input_json=${1}
+output_json_filename=${2-""}
+output_dir=${3:-""}
+
+input_json="$(realpath ${input_json})"
+
+if [ -z "${output_dir}" ]; then
+  output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_stripy_XXXXXXXX)
+else
+  mkdir -p "${output_dir}"
+fi
+output_dir="$(realpath ${output_dir})"
+
+if [ -z "${output_json_filename}" ]; then
+  output_json_filename="${output_dir}/output.json"
+else
+  output_json_filename="$(realpath ${output_json_filename})"
+fi
+
+working_dir=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/wd_stripy_XXXXXXXX"))
+cd "${working_dir}"
+echo "stripy Working directory: ${working_dir}"
+
+
+ped_file=$(jq -r ".ped_file" "$input_json")
+sample_name=$(jq -r ".sample_name" "$input_json")
+bam_or_cram_file=$(jq -r ".bam_or_cram_file" "$input_json")
+genome_build=$(jq -r '.genome_build // "hg38"' "$input_json")
+reference_fasta=$(jq -r ".reference_fasta" "$input_json")
+analysis=$(jq -r '.analysis // "standard"' "$input_json")
+locus=$(jq -r '.locus // "AFF2,AR,ARX_1,ARX_2,ATN1,ATXN1,ATXN10,ATXN2,ATXN3,ATXN7,ATXN8OS,BEAN1,C9ORF72,CACNA1A,CBL,CNBP,COMP,DAB1,DIP2B,DMD,DMPK,FGF14,FMR1,FOXL2,FXN,GIPC1,GLS,HOXA13_1,HOXA13_2,HOXA13_3,HOXD13,HTT,JPH3,LRP12,MARCHF6,NIPA1,NOP56,NOTCH2NLC,NUTM2B-AS1,PABPN1,PHOX2B,PPP2R2B,PRDM12,RAPGEF2,RFC1,RILPL1,RUNX2,SAMD12,SOX3,STARD7,TBP,TBX1,TCF4,TNRC6A,XYLT1,YEATS2,ZIC2,ZIC3"' "$input_json")
+
+
+# -------------------------------------------------------
+# ======================= Command =======================
+# -------------------------------------------------------
+
+# GetSampleSex
+# ---------------------------------------------------------------------------------------------------------------------
+unknown_sex="female"
+
+awk -F '\t' -v smp="${sample_name}" -v unk="${unknown_sex}" '{if ($2==smp) { if ($5 == 1) {print "male"} else if ($5 == 2) {print "female"} else {print unk}}}' "${ped_file}" > "${sample_name}.sex.txt"
+
+# Fail if the sample id wasn't found
+if ! [ -s "${sample_name}.sex.txt" ]; then
+  echo "ERROR: Sample ${sample_name} not found in ped file ${ped_file}"
+  exit 1
+fi
+
+GetSampleSex_out_file="$(realpath "${sample_name}.sex.txt")"
+GetSampleSex_out_string=$(cat "${GetSampleSex_out_file}")
+
+
+# RunStripy
+# ---------------------------------------------------------------------------------------------------------------------
+
+set +u
+source /opt/stripy-env/bin/activate
+set -u
+
+stripy_output_dir="STRipy_output"
+mkdir -p "${stripy_output_dir}"
+stripy \
+  --input "${bam_or_cram_file}" \
+  --sample-name "${sample_name}" \
+  --genome "${genome_build}" \
+  --reference "${reference_fasta}" \
+  --output "${stripy_output_dir}" \
+  --analysis "${analysis}" \
+  --output-json true \
+  --output-tsv true \
+  --output-html true \
+  --output-vcf true \
+  --verbose false \
+  --num-threads $(nproc) \
+  --locus "${locus}" \
+  --sex "${GetSampleSex_out_string}"
+
+deactivate
+
+
+# -------------------------------------------------------
+# ======================= Output ========================
+# -------------------------------------------------------
+
+json_path="${stripy_output_dir}/${sample_name}.json"
+tsv_path="${stripy_output_dir}/${sample_name}.tsv"
+html_path="${stripy_output_dir}/${sample_name}.html"
+vcf_path="${stripy_output_dir}/${sample_name}.vcf"
+
+json_path_output_dir="$(realpath "${output_dir}/$(basename "${json_path}")")"
+mv "${json_path}" "${json_path_output_dir}"
+
+tsv_path_output_dir="$(realpath "${output_dir}/$(basename "${tsv_path}")")"
+mv "${tsv_path}" "${tsv_path_output_dir}"
+
+html_path_output_dir="$(realpath "${output_dir}/$(basename "${html_path}")")"
+mv "${html_path}" "${html_path_output_dir}"
+
+vcf_path_output_dir="$(realpath "${output_dir}/$(basename "${vcf_path}")")"
+mv "${vcf_path}" "${vcf_path_output_dir}"
+
+
+jq -n \
+  --arg stripy_json "${json_path_output_dir}" \
+  --arg stripy_tsv "${tsv_path_output_dir}" \
+  --arg stripy_html "${html_path_output_dir}" \
+  --arg stripy_vcf "${vcf_path_output_dir}" \
+  '{
+      stripy_json: $stripy_json,
+      stripy_tsv: $stripy_tsv,
+      stripy_html: $stripy_html,
+      stripy_vcf: $stripy_vcf
+  }' > "${output_json_filename}"
+
+echo "Finished stripy, output json filename: ${output_json_filename}"

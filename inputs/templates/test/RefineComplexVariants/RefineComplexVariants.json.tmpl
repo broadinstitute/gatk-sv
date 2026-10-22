@@ -1,0 +1,17 @@
+{
+  "RefineComplexVariants.vcf": {{ test_batch.clean_vcf | tojson }},
+  "RefineComplexVariants.prefix": {{ test_batch.name | tojson }},
+
+  "RefineComplexVariants.batch_name_list": [{{ test_batch.name | tojson }}],
+  "RefineComplexVariants.batch_sample_lists": [ {{ test_batch.final_sample_list | tojson }} ],
+  "RefineComplexVariants.PE_metrics": [ {{ test_batch.merged_pe_file | tojson }} ],
+  "RefineComplexVariants.PE_metrics_indexes": [ {{ test_batch.merged_pe_file_index | tojson }} ],
+  "RefineComplexVariants.Depth_DEL_beds": [ {{ test_batch.del_bed | tojson }} ],
+  "RefineComplexVariants.Depth_DUP_beds": [ {{ test_batch.dup_bed | tojson }} ],
+
+  "RefineComplexVariants.n_per_split": "15000",
+
+  "RefineComplexVariants.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "RefineComplexVariants.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "RefineComplexVariants.linux_docker": {{ dockers.linux_docker | tojson }}
+}
