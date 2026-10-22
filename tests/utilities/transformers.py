@@ -5,7 +5,9 @@ import os
 import pathlib
 import pysam
 import shutil
+import re
 import subprocess
+import tarfile
 import tempfile
 import uuid
 
@@ -381,12 +383,21 @@ class IntervalListDownsampler(BaseTransformer):
     intervals in their first three columns; e.g., interval lists, and read counts files
     (`*.counts.tsv.gz`, created by GATK CollectReadCounts) which also have a columns header line.
     """
+    # If True, the intervals partially overlapping the target regions are clipped to the regions;
+    # otherwise, only the intervals entirely within the target regions are kept.
+    clip_intervals = True
+
     def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
         super().__init__(working_dir, callback, **kwargs)
 
     @staticmethod
     def get_supported_file_types() -> List[str]:
         return [".interval_list", ".tsv.gz"]
+
+    def is_kept(self, chr: str, start: int, end: int, regions: List[Region]) -> bool:
+        if self.clip_intervals:
+            return any(chr == r.chr and max(start, r.start) < min(end, r.end) for r in regions)
+        return any(chr == r.chr and r.start <= start and end <= r.end for r in regions)
 
     def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
         output_filename = self.get_output_filename(input_filename, output_prefix)
@@ -410,14 +421,16 @@ class IntervalListDownsampler(BaseTransformer):
                         header_lines_count += len(sequence_lines)
                 elif self.mini_reference is not None:
                     # Intervals are 1-based and closed.
-                    for start, end in self.mini_reference.clip_and_lift(cols[0], int(cols[1]) - 1, int(cols[2])):
+                    start, end = int(cols[1]) - 1, int(cols[2])
+                    if self.clip_intervals:
+                        lifted_intervals = self.mini_reference.clip_and_lift(cols[0], start, end)
+                    else:
+                        lifted_interval = self.mini_reference.lift(cols[0], start, end)
+                        lifted_intervals = [lifted_interval] if lifted_interval is not None else []
+                    for start, end in lifted_intervals:
                         output_file.write("\t".join([cols[0], str(start + 1), str(end)] + cols[3:]) + "\n")
-                else:
-                    chr, start, end = cols[0], int(cols[1]), int(cols[2])
-                    for region in regions:
-                        if chr == region.chr and max(start, region.start) < min(end, region.end):
-                            output_file.write(line)
-                            break
+                elif self.is_kept(cols[0], int(cols[1]) - 1, int(cols[2]), regions):
+                    output_file.write(line)
 
         if is_gz:
             output_gz_filename = output_filename + ".gz"
@@ -617,3 +630,130 @@ class SequenceDictDownsampler(BaseTransformer):
         output_filename = self.get_output_filename(input_filename, output_prefix)
         self.mini_reference.write_sequence_dict(output_filename)
         return self.callback(output_filename)
+
+
+class GcnvReadCountsDownsampler(IntervalListDownsampler):
+    """
+    Downsamples read counts files that are inputs to gCNV in case mode. Since gCNV requires
+    the intervals of the read counts to match the intervals of its models, only the intervals
+    entirely within the target regions are kept (as in `GcnvModelDownsampler`), instead of clipping them.
+    """
+    clip_intervals = False
+
+
+class GcnvModelDownsampler(BaseTransformer):
+    """
+    Downsamples a gCNV model tarball; i.e., a model shard created by GATK GermlineCNVCaller,
+    or a contig-ploidy model created by GATK DetermineGermlineContigPloidy, in cohort mode.
+
+    The model's intervals (`interval_list.tsv`) are subset to the intervals entirely within the target regions,
+    and the model's arrays are subset accordingly; i.e., the arrays whose first dimension is the number of
+    intervals (e.g., `mu_log_mean_bias_t.tsv`) are subset to the kept intervals, and the arrays whose first
+    dimension is the number of contigs (e.g., `mu_psi_j_log__.tsv`) are subset to the contigs of the kept
+    intervals, in the order they appear in `interval_list.tsv` (as gcnvkernel orders them).
+
+    Returns None (i.e., no output) if none of the model's intervals is within the target regions.
+    """
+    interval_list_filename = "interval_list.tsv"
+    contig_ploidy_prior_filename = "contig_ploidy_prior.tsv"
+
+    def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
+        super().__init__(working_dir, callback, **kwargs)
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        return [".tar.gz"]
+
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs):
+        with tempfile.TemporaryDirectory(prefix="tmp_gcnv_model_", dir=self.working_dir) as tmp_dir:
+            with tarfile.open(input_filename, "r:gz") as tar:
+                tar.extractall(tmp_dir)
+
+            kept_indices, kept_contigs, contigs = self.subset_interval_list(
+                os.path.join(tmp_dir, self.interval_list_filename), regions)
+            if len(kept_indices) == 0:
+                logging.info(f"Skipping {input_filename}, since none of its intervals is within the target regions.")
+                return None
+            kept_contig_indices = [contigs.index(c) for c in kept_contigs]
+
+            for filename in os.listdir(tmp_dir):
+                path = os.path.join(tmp_dir, filename)
+                if filename == self.contig_ploidy_prior_filename:
+                    self.subset_contig_ploidy_prior(path, kept_contigs)
+                elif filename.endswith(".tsv") and filename != self.interval_list_filename:
+                    self.subset_array(path, {len(contigs): kept_contig_indices, self.intervals_count: kept_indices})
+
+            output_filename = self.get_output_filename(input_filename, output_prefix)
+            with tarfile.open(output_filename, "w:gz") as tar:
+                tar.add(tmp_dir, arcname=".")
+        return self.callback(output_filename)
+
+    def subset_interval_list(self, filename: str, regions: List[Region]):
+        """
+        Subsets (and lifts over if a mini reference is given) the intervals in place, and returns the indices
+        of the kept intervals, the contigs of the kept intervals, and all the contigs, in the order they appear.
+        """
+        with open(filename, "r") as f:
+            lines = f.readlines()
+        kept_indices, kept_contigs, contigs = [], [], []
+        index = 0
+        with open(filename, "w") as f:
+            for line in lines:
+                cols = line.rstrip("\n").split("\t")
+                if line.startswith("@") or not cols[1].isdigit():
+                    if self.mini_reference is None or not line.startswith("@SQ"):
+                        f.write(line)
+                    if self.mini_reference is not None and line.startswith("@HD"):
+                        f.writelines(self.mini_reference.get_sam_header_sequence_lines())
+                    continue
+                if cols[0] not in contigs:
+                    contigs.append(cols[0])
+                # Intervals are 1-based and closed.
+                start, end = int(cols[1]) - 1, int(cols[2])
+                if self.mini_reference is not None:
+                    lifted_interval = self.mini_reference.lift(cols[0], start, end)
+                    if lifted_interval is not None:
+                        cols[1], cols[2] = str(lifted_interval[0] + 1), str(lifted_interval[1])
+                        f.write("\t".join(cols) + "\n")
+                        kept_indices.append(index)
+                elif any(cols[0] == r.chr and r.start <= start and end <= r.end for r in regions):
+                    f.write(line)
+                    kept_indices.append(index)
+                if kept_indices and kept_indices[-1] == index and cols[0] not in kept_contigs:
+                    kept_contigs.append(cols[0])
+                index += 1
+        self.intervals_count = index
+        if self.intervals_count == len(contigs):
+            raise ValueError(f"Cannot distinguish per-interval and per-contig arrays in {filename}.")
+        return kept_indices, kept_contigs, contigs
+
+    @staticmethod
+    def subset_array(filename: str, indices_by_size: dict):
+        """
+        Subsets the rows of an array serialized by gcnvkernel (i.e., a header with `@CO shape:(...)`,
+        `@CO dtype:...`, and a columns header line, followed by the rows) in place, given the indices
+        of the rows to keep for each possible size of the array's first dimension.
+        """
+        with open(filename, "r") as f:
+            lines = f.readlines()
+        shape_line_index = next(i for i, line in enumerate(lines) if line.startswith("@CO\tshape:"))
+        size = int(re.search(r"shape:\((\d+)", lines[shape_line_index]).group(1))
+        if size not in indices_by_size:
+            return
+        header_lines_count = next(i for i, line in enumerate(lines) if not line.startswith("@")) + 1
+        rows = lines[header_lines_count:]
+        if len(rows) != size:
+            raise ValueError(f"Expected {size} rows in {filename}, found {len(rows)}.")
+        indices = indices_by_size[size]
+        lines[shape_line_index] = re.sub(r"shape:\(\d+", f"shape:({len(indices)}", lines[shape_line_index])
+        with open(filename, "w") as f:
+            f.writelines(lines[:header_lines_count])
+            f.writelines(rows[i] for i in indices)
+
+    @staticmethod
+    def subset_contig_ploidy_prior(filename: str, contigs: List[str]):
+        with open(filename, "r") as f:
+            lines = f.readlines()
+        with open(filename, "w") as f:
+            f.write(lines[0])
+            f.writelines(line for line in lines[1:] if line.split("\t")[0] in contigs)

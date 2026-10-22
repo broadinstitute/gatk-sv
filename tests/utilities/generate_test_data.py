@@ -159,6 +159,23 @@ SUBJECT_WORKFLOW_INPUTS = {
             transformers.BedDownsampler,
             lambda bed_gz, bed_gz_tbi: {"cytobands": bed_gz}
         )
+    },
+    # Inputs of sv-shell's `src/sv_shell/cnv_germline_case.sh` (i.e., gCNV in case mode); see
+    # `gather_sample_evidence` for details. Note that `counts` are created by an upstream task
+    # (`condense_read_counts`). The gCNV model shards with no intervals within the target regions are dropped.
+    "cnv_germline_case": {
+        "counts": Handler(
+            transformers.GcnvReadCountsDownsampler,
+            lambda tsv_gz, tsv_gz_tbi: {"counts": tsv_gz}
+        ),
+        "contig_ploidy_model_tar": Handler(
+            transformers.GcnvModelDownsampler,
+            lambda x: {"contig_ploidy_model_tar": x}
+        ),
+        "gcnv_model_tars": Handler(
+            transformers.GcnvModelDownsampler,
+            lambda x: {"gcnv_model_tars": x}
+        )
     }
 }
 
@@ -172,7 +189,8 @@ WORKFLOW_INPUTS_TO_DROP = {
 }
 
 
-# The inputs that are the reference or its index files. When the reference is not downsampled
+# The workflows whose inputs are downsampled to a mini reference (see `transformers.MiniReference`),
+# and their inputs that are the reference or its index files. When the reference is not downsampled
 # (see `--skip-reference-downsampling`), these inputs are left unchanged (i.e., neither downsampled nor copied).
 REFERENCE_INPUTS = {
     "gather_sample_evidence": [
@@ -191,7 +209,8 @@ REFERENCE_INPUTS = {
     ],
     "cnmops": [
         "ref_dict"
-    ]
+    ],
+    "cnv_germline_case": []
 }
 
 
@@ -275,13 +294,12 @@ def get_local_files(workflow_inputs: dict) -> List[str]:
 
 def uses_mini_reference(workflow_inputs: dict, workflow_name: str = None) -> bool:
     """
-    Returns True if any of the inputs is a reference input (see `REFERENCE_INPUTS`) with a handler,
+    Returns True if the inputs belong to a workflow listed in `REFERENCE_INPUTS`,
     hence, the reference should be downsampled to a mini reference.
     """
     for k in workflow_inputs.keys():
-        key_workflow_name, input_var, _ = split_input_key(k, workflow_name)
-        if input_var in SUBJECT_WORKFLOW_INPUTS.get(key_workflow_name, {}) \
-                and is_reference_input(key_workflow_name, input_var):
+        key_workflow_name, _, _ = split_input_key(k, workflow_name)
+        if key_workflow_name in REFERENCE_INPUTS:
             return True
     return False
 
@@ -343,6 +361,16 @@ def update_workflow_json(
                 output_prefix=output_filename_prefix,
                 regions=regions
             ))
+
+        # A transformer returns None if the file has no data within the target regions,
+        # (e.g., a gCNV model shard), in which case, the file is dropped from the list.
+        updated_files = [x for x in updated_files if x is not None]
+        if len(updated_files) == 0:
+            if not isinstance(v, list):
+                raise ValueError(f"Input {k} has no data within the target regions.")
+            logging.warning(f"None of the files of input {k} has data within the target regions.")
+            updated_workflow_inputs[k] = []
+            continue
 
         for varname in updated_files[0].keys():
             filenames = [x[varname] for x in updated_files]
