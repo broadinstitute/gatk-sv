@@ -129,6 +129,36 @@ SUBJECT_WORKFLOW_INPUTS = {
             transformers.FaiDownsampler,
             lambda x: {"genome_file": x}
         )
+    },
+    # Inputs of sv-shell's `src/sv_shell/cnmops.sh`; see `gather_sample_evidence` for details.
+    # Note that `bincov_matrix` and `ped_file` are created by upstream tasks (`make_bincov_matrix`
+    # and `gather_batch_evidence`); `ped_file` is not downsampled, as it is not region-specific,
+    # but you may use `--output-subdir` to set where it is copied.
+    "cnmops": {
+        "bincov_matrix": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"bincov_matrix": bed_gz, "bincov_matrix_index": bed_gz_tbi}
+        ),
+        "chrom_file": Handler(
+            transformers.FaiDownsampler,
+            lambda x: {"chrom_file": x}
+        ),
+        "allo_file": Handler(
+            transformers.FaiDownsampler,
+            lambda x: {"allo_file": x}
+        ),
+        "exclude_list": Handler(
+            transformers.BedDownsampler,
+            lambda x: {"exclude_list": x}
+        ),
+        "ref_dict": Handler(
+            transformers.SequenceDictDownsampler,
+            lambda x: {"ref_dict": x}
+        ),
+        "cytobands": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"cytobands": bed_gz}
+        )
     }
 }
 
@@ -158,6 +188,9 @@ REFERENCE_INPUTS = {
     ],
     "evidence_qc": [
         "reference_dict"
+    ],
+    "cnmops": [
+        "ref_dict"
     ]
 }
 
@@ -258,12 +291,17 @@ def parse_output_subdir(value: str):
     return input_var, subdir
 
 
-def copy_local_file(working_dir: str, input_root: str, filename: str) -> str:
+def copy_local_file(working_dir: str, input_root: str, filename: str, output_subdir: str = None) -> str:
     """
-    Copies the given file to the working directory following the same directory hierarchy
-    as the file has relative to the `input_root` directory.
+    Copies the given file to the given subdirectory of the working directory if provided, otherwise,
+    following the same directory hierarchy as the file has relative to the `input_root` directory.
     """
-    relative_path = Path(filename).resolve().relative_to(Path(input_root).resolve())
+    if output_subdir is not None:
+        relative_path = Path(output_subdir).joinpath(Path(filename).name)
+    elif Path(filename).resolve().is_relative_to(Path(input_root).resolve()):
+        relative_path = Path(filename).resolve().relative_to(Path(input_root).resolve())
+    else:
+        relative_path = Path(filename).name
     output_filename = Path(working_dir).resolve().joinpath(relative_path)
     output_filename.parent.mkdir(parents=True, exist_ok=True)
     logging.info(f"Copying {filename} to {output_filename}.")
@@ -278,7 +316,9 @@ def is_reference_input(workflow_name: str, input_var: str) -> bool:
 def update_workflow_json(
         working_dir: str, input_filename: str, output_filename: str, output_filename_prefix: str,
         regions: List[Region], bucket_name: str = None, blob_name: str = None,
-        workflow_name: str = None, input_root: str = None, skip_reference_downsampling: bool = False):
+        workflow_name: str = None, input_root: str = None, skip_reference_downsampling: bool = False,
+        output_subdirs: dict = None):
+    output_subdirs = output_subdirs or {}
     with open(input_filename, "r") as f:
         workflow_inputs = json.load(f)
 
@@ -324,7 +364,7 @@ def update_workflow_json(
             logging.info(f"Leaving reference input {k} unchanged.")
         elif input_root is not None and isinstance(v, str) and os.path.isfile(v):
             # Local files without a handler are copied, so the output directory contains all the input files.
-            updated_workflow_inputs[k] = copy_local_file(working_dir, input_root, v)
+            updated_workflow_inputs[k] = copy_local_file(working_dir, input_root, v, output_subdirs.get(input_var))
         else:
             updated_workflow_inputs[k] = v
             logging.info(f"Leaving {k} unchanged.")
@@ -522,7 +562,8 @@ def main():
         blob_name=args.blob_name,
         workflow_name=args.workflow_name,
         input_root=input_root,
-        skip_reference_downsampling=args.skip_reference_downsampling)
+        skip_reference_downsampling=args.skip_reference_downsampling,
+        output_subdirs=dict(args.output_subdir))
 
     if mini_reference is not None:
         mini_reference.cleanup()
