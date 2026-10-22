@@ -61,8 +61,9 @@ SUBJECT_WORKFLOW_INPUTS = {
     # Inputs of sv-shell's `src/sv_shell/gather_sample_evidence.sh`.
     # sv-shell input JSON keys are not prefixed with a workflow name,
     # hence, the workflow name needs to be provided via `--workflow-name`.
-    # Since the reference is downsampled (see `transformers.MiniReference`),
-    # the coordinates in all the downsampled files are lifted over to the downsampled reference.
+    # Unless `--skip-reference-downsampling` is provided, the reference is downsampled
+    # (see `transformers.MiniReference`) and the coordinates in all the downsampled files
+    # are lifted over to the downsampled reference.
     "gather_sample_evidence": {
         "reference_fasta": Handler(
             transformers.ReferenceDownsampler,
@@ -112,6 +113,23 @@ WORKFLOW_INPUTS_TO_DROP = {
         "melt_docker",
         "melt_metrics_intervals",
         "melt_standard_vcf_header"
+    ]
+}
+
+
+# The inputs that are the reference or its index files. When the reference is not downsampled
+# (see `--skip-reference-downsampling`), these inputs are left unchanged (i.e., neither downsampled nor copied).
+REFERENCE_INPUTS = {
+    "gather_sample_evidence": [
+        "reference_fasta",
+        "reference_index",
+        "reference_dict",
+        "reference_bwa_alt",
+        "reference_bwa_amb",
+        "reference_bwa_ann",
+        "reference_bwa_bwt",
+        "reference_bwa_pac",
+        "reference_bwa_sa"
     ]
 }
 
@@ -210,10 +228,14 @@ def copy_local_file(working_dir: str, input_root: str, filename: str) -> str:
     return str(output_filename)
 
 
+def is_reference_input(workflow_name: str, input_var: str) -> bool:
+    return input_var in REFERENCE_INPUTS.get(workflow_name, [])
+
+
 def update_workflow_json(
         working_dir: str, input_filename: str, output_filename: str, output_filename_prefix: str,
         regions: List[Region], bucket_name: str = None, blob_name: str = None,
-        workflow_name: str = None, input_root: str = None):
+        workflow_name: str = None, input_root: str = None, skip_reference_downsampling: bool = False):
     with open(input_filename, "r") as f:
         workflow_inputs = json.load(f)
 
@@ -225,7 +247,7 @@ def update_workflow_json(
     for k, v in workflow_inputs.items():
         k_workflow_name, input_var, key_prefix = split_input_key(k, workflow_name)
         handler = SUBJECT_WORKFLOW_INPUTS.get(k_workflow_name, {}).get(input_var)
-        if handler is None:
+        if handler is None or (skip_reference_downsampling and is_reference_input(k_workflow_name, input_var)):
             continue
 
         logging.info(f"Processing input {k}.")
@@ -251,6 +273,9 @@ def update_workflow_json(
             continue
         if k_workflow_name in WORKFLOW_INPUTS_TO_DROP and input_var in WORKFLOW_INPUTS_TO_DROP[k_workflow_name]:
             logging.info(f"Dropping {k}.")
+        elif skip_reference_downsampling and is_reference_input(k_workflow_name, input_var):
+            updated_workflow_inputs[k] = v
+            logging.info(f"Leaving reference input {k} unchanged.")
         elif input_root is not None and isinstance(v, str) and os.path.isfile(v):
             # Local files without a handler are copied, so the output directory contains all the input files.
             updated_workflow_inputs[k] = copy_local_file(working_dir, input_root, v)
@@ -347,6 +372,17 @@ def main():
     )
 
     parser.add_argument(
+        "--skip-reference-downsampling",
+        action="store_true",
+        help="If provided, the reference is not downsampled; the reference inputs (e.g., the reference "
+             "FASTA, its index and dictionary, and its BWA index files) are left unchanged, and the "
+             "coordinates of the downsampled files are the same as those of the input files. "
+             "Otherwise, for the workflows that take a reference as input (e.g., sv-shell's "
+             "gather_sample_evidence), the reference is downsampled to the target regions "
+             "and the coordinates in all the downsampled files are lifted over to the downsampled reference."
+    )
+
+    parser.add_argument(
         "--input-root",
         help="Sets a directory containing the local input files referenced in the input JSON. "
              "The output files are written to the working directory following the same directory "
@@ -406,7 +442,7 @@ def main():
         input_root = os.path.commonpath([os.path.dirname(os.path.abspath(x)) for x in local_files])
 
     mini_reference = None
-    if uses_mini_reference(workflow_inputs, args.workflow_name):
+    if not args.skip_reference_downsampling and uses_mini_reference(workflow_inputs, args.workflow_name):
         logging.info(f"Creating a mini reference from the target regions of {args.reference_fasta}.")
         reference_fasta_local_filename = localize_file(
             args.reference_fasta, Path(args.working_dir).joinpath(Path(args.reference_fasta).name))
@@ -426,7 +462,8 @@ def main():
         bucket_name=args.bucket_name,
         blob_name=args.blob_name,
         workflow_name=args.workflow_name,
-        input_root=input_root)
+        input_root=input_root,
+        skip_reference_downsampling=args.skip_reference_downsampling)
 
     if mini_reference is not None:
         mini_reference.cleanup()
