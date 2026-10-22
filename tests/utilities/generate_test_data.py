@@ -3,6 +3,7 @@ import transformers
 import json
 import logging
 import os
+import shutil
 
 from pathlib import Path
 from dataclasses import dataclass
@@ -56,6 +57,52 @@ SUBJECT_WORKFLOW_INPUTS = {
             transformers.PrimaryContigsDownsampler,
             lambda bed_gz, bed_gz_tbi: {"manta_region_bed": bed_gz}
         )
+    },
+    # Inputs of sv-shell's `src/sv_shell/gather_sample_evidence.sh`.
+    # sv-shell input JSON keys are not prefixed with a workflow name,
+    # hence, the workflow name needs to be provided via `--workflow-name`.
+    # Since the reference is downsampled (see `transformers.MiniReference`),
+    # the coordinates in all the downsampled files are lifted over to the downsampled reference.
+    "gather_sample_evidence": {
+        "reference_fasta": Handler(
+            transformers.ReferenceDownsampler,
+            lambda fasta, fai, dict, alt, amb, ann, bwt, pac, sa: {
+                "reference_fasta": fasta, "reference_index": fai, "reference_dict": dict,
+                "reference_bwa_alt": alt, "reference_bwa_amb": amb, "reference_bwa_ann": ann,
+                "reference_bwa_bwt": bwt, "reference_bwa_pac": pac, "reference_bwa_sa": sa}
+        ),
+        "bam_or_cram_file": Handler(
+            transformers.CramDownsampler,
+            lambda cram, index: {"bam_or_cram_file": cram, "bam_or_cram_index": index}
+        ),
+        "preprocessed_intervals": Handler(
+            transformers.IntervalListDownsampler,
+            lambda x: {"preprocessed_intervals": x}
+        ),
+        "sd_locs_vcf": Handler(
+            transformers.VcfDownsampler,
+            lambda x: {"sd_locs_vcf": x}
+        ),
+        "primary_contigs_list": Handler(
+            transformers.PrimaryContigsDownsampler,
+            lambda x, _: {"primary_contigs_list": x}
+        ),
+        "primary_contigs_fai": Handler(
+            transformers.FaiDownsampler,
+            lambda x: {"primary_contigs_fai": x}
+        ),
+        "wham_include_list_bed_file": Handler(
+            transformers.BedDownsampler,
+            lambda x: {"wham_include_list_bed_file": x}
+        ),
+        "manta_region_bed": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"manta_region_bed": bed_gz, "manta_region_bed_index": bed_gz_tbi}
+        ),
+        "mei_bed": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"mei_bed": bed_gz}
+        )
     }
 }
 
@@ -83,13 +130,21 @@ def parse_target_regions(input_filename):
 
 
 def localize_file(input_filename, output_filename):
+    """
+    Returns the filename of a local copy of the given input file;
+    files that are already on the local filesystem are used in place.
+    """
+    if os.path.isfile(input_filename):
+        logging.info(f"File {input_filename} is a local file, skipping localization.")
+        return str(input_filename)
     if os.path.isfile(output_filename):
         logging.info(f"File {input_filename} exists locally, skipping localization.")
-        return
+        return str(output_filename)
     if input_filename.startswith("gs://"):
         logging.info(f"Localizing from GCP; blob: {input_filename} ...")
         download_blob_from_gs(input_filename, output_filename)
         logging.info(f"Finished localizing blob {input_filename}")
+        return str(output_filename)
     else:
         raise NotImplementedError()
 
@@ -99,7 +154,9 @@ def initialize_transformers(
         reference_fasta: str,
         reference_index: str,
         sequence_dict_filename: str,
-        picard_path: str):
+        picard_path: str,
+        input_root: str = None,
+        mini_reference: transformers.MiniReference = None):
     for _, inputs in SUBJECT_WORKFLOW_INPUTS.items():
         for _, handler in inputs.items():
             handler.transformer = handler.transformer(
@@ -108,36 +165,71 @@ def initialize_transformers(
                 reference_fasta=reference_fasta,
                 reference_index=reference_index,
                 sequence_dict_filename=sequence_dict_filename,
-                picard_path=picard_path
+                picard_path=picard_path,
+                input_root=input_root,
+                mini_reference=mini_reference
             )
+
+
+def split_input_key(key: str, workflow_name: str = None):
+    """
+    Returns the workflow name, the input variable name, and the prefix of the given input key.
+    """
+    if "." in key:
+        # Example of the following split:
+        # key="a.b.c" --> workflow_name="a.b", input_var="c"
+        key_workflow_name, input_var = key.rsplit(".", maxsplit=1)
+        return key_workflow_name, input_var, f"{key_workflow_name}."
+    # Keys of sv-shell input JSON files are not prefixed with a workflow name.
+    return workflow_name, key, ""
+
+
+def get_local_files(workflow_inputs: dict) -> List[str]:
+    return [v for v in workflow_inputs.values() if isinstance(v, str) and os.path.isfile(v)]
+
+
+def uses_mini_reference(workflow_inputs: dict, workflow_name: str = None) -> bool:
+    for k in workflow_inputs.keys():
+        key_workflow_name, input_var, _ = split_input_key(k, workflow_name)
+        handler = SUBJECT_WORKFLOW_INPUTS.get(key_workflow_name, {}).get(input_var)
+        if handler is not None and handler.transformer is transformers.ReferenceDownsampler:
+            return True
+    return False
+
+
+def copy_local_file(working_dir: str, input_root: str, filename: str) -> str:
+    """
+    Copies the given file to the working directory following the same directory hierarchy
+    as the file has relative to the `input_root` directory.
+    """
+    relative_path = Path(filename).resolve().relative_to(Path(input_root).resolve())
+    output_filename = Path(working_dir).resolve().joinpath(relative_path)
+    output_filename.parent.mkdir(parents=True, exist_ok=True)
+    logging.info(f"Copying {filename} to {output_filename}.")
+    shutil.copyfile(filename, output_filename)
+    return str(output_filename)
 
 
 def update_workflow_json(
         working_dir: str, input_filename: str, output_filename: str, output_filename_prefix: str,
-        regions: List[Region], bucket_name: str = None, blob_name: str = None):
+        regions: List[Region], bucket_name: str = None, blob_name: str = None,
+        workflow_name: str = None, input_root: str = None):
     with open(input_filename, "r") as f:
         workflow_inputs = json.load(f)
 
     updated_workflow_inputs = {}
 
+    # Inputs are processed in two passes: first the inputs with a handler, then the rest.
+    # Hence, the inputs set by the handler of another input (e.g., the index of a downsampled CRAM file)
+    # are not processed as unchanged inputs.
     for k, v in workflow_inputs.items():
-        # Example of the following split:
-        # k="a.b.c" --> workflow_name="a.b", input_var="c"
-        workflow_name, input_var = k.rsplit(".", maxsplit=1)
-
-        try:
-            handler = SUBJECT_WORKFLOW_INPUTS[workflow_name][input_var]
-        except KeyError:
-            if workflow_name in WORKFLOW_INPUTS_TO_DROP and input_var in WORKFLOW_INPUTS_TO_DROP[workflow_name]:
-                logging.info(f"Dropping {k}.")
-            else:
-                updated_workflow_inputs[k] = v
-                logging.info(f"Leaving {k} unchanged.")
+        k_workflow_name, input_var, key_prefix = split_input_key(k, workflow_name)
+        handler = SUBJECT_WORKFLOW_INPUTS.get(k_workflow_name, {}).get(input_var)
+        if handler is None:
             continue
 
         logging.info(f"Processing input {k}.")
-        workflow_input_local_filename = Path(working_dir).joinpath(Path(v).name)
-        localize_file(v, workflow_input_local_filename)
+        workflow_input_local_filename = localize_file(v, Path(working_dir).joinpath(Path(v).name))
         updated_files = handler.transformer.transform(
             input_filename=workflow_input_local_filename,
             output_prefix=output_filename_prefix,
@@ -145,13 +237,32 @@ def update_workflow_json(
         )
 
         for varname, filename in updated_files.items():
-            input_key = f"{workflow_name}.{varname}"
+            input_key = f"{key_prefix}{varname}"
             updated_workflow_inputs[input_key] = filename
             if bucket_name is not None and blob_name is not None:
                 logging.info(f"Uploading downsampled file {filename} to bucket {bucket_name}.")
                 blob = upload_to_gs_blob(filename, bucket_name, blob_name)
                 logging.info(f"Finished uploading {filename}.")
                 updated_workflow_inputs[input_key] = blob
+
+    for k, v in workflow_inputs.items():
+        k_workflow_name, input_var, _ = split_input_key(k, workflow_name)
+        if k in updated_workflow_inputs:
+            continue
+        if k_workflow_name in WORKFLOW_INPUTS_TO_DROP and input_var in WORKFLOW_INPUTS_TO_DROP[k_workflow_name]:
+            logging.info(f"Dropping {k}.")
+        elif input_root is not None and isinstance(v, str) and os.path.isfile(v):
+            # Local files without a handler are copied, so the output directory contains all the input files.
+            updated_workflow_inputs[k] = copy_local_file(working_dir, input_root, v)
+        else:
+            updated_workflow_inputs[k] = v
+            logging.info(f"Leaving {k} unchanged.")
+
+    # Keep the order of the inputs as in the input JSON.
+    ordered_keys = [k for k in workflow_inputs.keys() if k in updated_workflow_inputs]
+    ordered_keys += [k for k in updated_workflow_inputs.keys() if k not in workflow_inputs]
+    updated_workflow_inputs = {k: updated_workflow_inputs[k] for k in ordered_keys}
+
     logging.info(f"Creating output JSON {output_filename}.")
     with open(output_filename, "w") as f:
         json.dump(updated_workflow_inputs, f, indent=4)
@@ -180,7 +291,9 @@ def main():
                     "downsamples the inputs according to the defined rules (see `SUBJECT_WORKFLOW_INPUTS`), "
                     "pushes the downsampled files to a given cloud storage, and creates a new JSON "
                     "file with the updated downsampled inputs."
-                    "This script needs samtools version 1.19.2 or newer installed and added to PATH.",
+                    "This script needs samtools version 1.19.2 or newer installed and added to PATH; "
+                    "downsampling a reference (e.g., for sv-shell's gather_sample_evidence) "
+                    "also needs bwa installed and added to PATH.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument(
@@ -225,6 +338,23 @@ def main():
              "The script skips uploading to cloud if a value for this argument is not provided."
     )
 
+    parser.add_argument(
+        "--workflow-name",
+        choices=[k for k in SUBJECT_WORKFLOW_INPUTS.keys() if "." not in k],
+        help="Sets the workflow name for an input JSON whose keys are not prefixed with "
+             "a workflow name, e.g., the input JSON of an sv-shell script "
+             "(`gather_sample_evidence` for `src/sv_shell/gather_sample_evidence.sh`)."
+    )
+
+    parser.add_argument(
+        "--input-root",
+        help="Sets a directory containing the local input files referenced in the input JSON. "
+             "The output files are written to the working directory following the same directory "
+             "hierarchy as the input files have relative to this directory; the local input files "
+             "that are not downsampled are copied. The default value is the deepest common "
+             "directory of the local input files' directories."
+    )
+
     this_script_folder = os.path.dirname(os.path.abspath(__file__))
     gatk_sv_path = os.path.dirname(os.path.dirname(this_script_folder))
 
@@ -267,10 +397,25 @@ def main():
 
     Path(args.working_dir).mkdir(parents=True, exist_ok=True)
 
-    sequence_dict_local_filename = Path(args.working_dir).joinpath(Path(args.reference_dict).name)
-    localize_file(args.reference_dict, sequence_dict_local_filename)
+    with open(args.input_workflow_json, "r") as f:
+        workflow_inputs = json.load(f)
+
+    input_root = args.input_root
+    local_files = get_local_files(workflow_inputs)
+    if input_root is None and len(local_files) > 0:
+        input_root = os.path.commonpath([os.path.dirname(os.path.abspath(x)) for x in local_files])
+
+    mini_reference = None
+    if uses_mini_reference(workflow_inputs, args.workflow_name):
+        logging.info(f"Creating a mini reference from the target regions of {args.reference_fasta}.")
+        reference_fasta_local_filename = localize_file(
+            args.reference_fasta, Path(args.working_dir).joinpath(Path(args.reference_fasta).name))
+        mini_reference = transformers.MiniReference(reference_fasta_local_filename, regions, args.working_dir)
+
+    sequence_dict_local_filename = localize_file(
+        args.reference_dict, Path(args.working_dir).joinpath(Path(args.reference_dict).name))
     initialize_transformers(args.working_dir, args.reference_fasta, args.reference_fasta_index,
-                            sequence_dict_local_filename, args.picard_path)
+                            sequence_dict_local_filename, args.picard_path, input_root, mini_reference)
 
     update_workflow_json(
         working_dir=args.working_dir,
@@ -279,7 +424,12 @@ def main():
         output_filename_prefix=args.output_filename_prefix,
         regions=regions,
         bucket_name=args.bucket_name,
-        blob_name=args.blob_name)
+        blob_name=args.blob_name,
+        workflow_name=args.workflow_name,
+        input_root=input_root)
+
+    if mini_reference is not None:
+        mini_reference.cleanup()
 
     logging.info("All process finished successfully.")
 
