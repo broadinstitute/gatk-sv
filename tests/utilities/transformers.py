@@ -75,6 +75,19 @@ class MiniReference:
         return [{"SN": name, "LN": length, "M5": self.contig_md5s[name]}
                 for name, length in self.contig_lengths.items()]
 
+    def get_sam_header_sequence_lines(self) -> List[str]:
+        return [f"@SQ\tSN:{sq['SN']}\tLN:{sq['LN']}\tM5:{sq['M5']}\n" for sq in self.get_sam_header_sequences()]
+
+    def write_sequence_dict(self, filename: str):
+        """
+        Writes the sequence dictionary of the mini reference. The dictionary is written
+        from the mini reference (rather than its FASTA file), so the dictionaries created
+        for the inputs of different workflows are identical.
+        """
+        with open(filename, "w") as f:
+            f.write("@HD\tVN:1.6\n")
+            f.writelines(self.get_sam_header_sequence_lines())
+
     def lift(self, chr: str, start: int, end: int):
         """
         Returns the coordinates of the given interval on the mini reference,
@@ -104,7 +117,7 @@ class MiniReference:
 
 class BaseTransformer:
     def __init__(self, working_dir: str, callback: Callable[[str, ...], dict], input_root: str = None,
-                 mini_reference: MiniReference = None, **kwargs):
+                 mini_reference: MiniReference = None, output_subdir: str = None, **kwargs):
         # Convert the string to an ABS path and make sure it exists.
         self.working_dir = Path(working_dir).resolve(strict=True)
         self.callback = callback
@@ -113,6 +126,10 @@ class BaseTransformer:
         self.input_root = Path(input_root).resolve() if input_root else None
         # When set, the coordinates in the output files are lifted over to this reference.
         self.mini_reference = mini_reference
+        # When set, the output files are written to this subdirectory of the working directory
+        # (e.g., `intermediates_HG00512/gather_sample_evidence` for an output of an upstream task),
+        # regardless of the directory of the input file.
+        self.output_subdir = output_subdir
 
     @staticmethod
     def get_supported_file_types() -> List[str]:
@@ -125,7 +142,10 @@ class BaseTransformer:
     def get_output_filename(self, input_filename, output_prefix):
         output_dir = self.working_dir
         input_dir = Path(input_filename).resolve().parent
-        if self.input_root is not None and input_dir.is_relative_to(self.input_root):
+        if self.output_subdir is not None:
+            output_dir = output_dir.joinpath(self.output_subdir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+        elif self.input_root is not None and input_dir.is_relative_to(self.input_root):
             output_dir = output_dir.joinpath(input_dir.relative_to(self.input_root))
             output_dir.mkdir(parents=True, exist_ok=True)
         return str(output_dir.joinpath(f"{output_prefix}{Path(input_filename).name}"))
@@ -356,36 +376,56 @@ class VcfDownsampler(BaseTransformer):
 
 
 class IntervalListDownsampler(BaseTransformer):
+    """
+    Downsamples files with a SAM-style header (i.e., lines starting with `@`) and 1-based closed
+    intervals in their first three columns; e.g., interval lists, and read counts files
+    (`*.counts.tsv.gz`, created by GATK CollectReadCounts) which also have a columns header line.
+    """
     def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
         super().__init__(working_dir, callback, **kwargs)
 
     @staticmethod
     def get_supported_file_types() -> List[str]:
-        return [".interval_list"]
+        return [".interval_list", ".tsv.gz"]
 
     def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
         output_filename = self.get_output_filename(input_filename, output_prefix)
+        is_gz = Path(input_filename).suffix == ".gz"
+        if is_gz:
+            output_filename = output_filename.removesuffix(".gz")
+        header_lines_count = 0
         # Note that this algorithm is not efficient.
-        with open(input_filename, "r") as input_file, open(output_filename, "w") as output_file:
+        with gzip.open(input_filename, "rt") if is_gz else open(input_filename, "r") as input_file, \
+                open(output_filename, "w") as output_file:
             for line in input_file:
-                if line.startswith("@"):
+                cols = line.rstrip("\n").split("\t")
+                if line.startswith("@") or not cols[1].isdigit():
+                    # A SAM-style header line, or a columns header line (e.g., `CONTIG START END COUNT`).
                     if self.mini_reference is None or not line.startswith("@SQ"):
                         output_file.write(line)
+                        header_lines_count += 1
                     if self.mini_reference is not None and line.startswith("@HD"):
-                        for sq in self.mini_reference.get_sam_header_sequences():
-                            output_file.write(f"@SQ\tSN:{sq['SN']}\tLN:{sq['LN']}\tM5:{sq['M5']}\n")
+                        sequence_lines = self.mini_reference.get_sam_header_sequence_lines()
+                        output_file.writelines(sequence_lines)
+                        header_lines_count += len(sequence_lines)
                 elif self.mini_reference is not None:
                     # Intervals are 1-based and closed.
-                    cols = line.rstrip("\n").split("\t")
                     for start, end in self.mini_reference.clip_and_lift(cols[0], int(cols[1]) - 1, int(cols[2])):
                         output_file.write("\t".join([cols[0], str(start + 1), str(end)] + cols[3:]) + "\n")
                 else:
-                    cols = line.rstrip().split()
                     chr, start, end = cols[0], int(cols[1]), int(cols[2])
                     for region in regions:
                         if chr == region.chr and max(start, region.start) < min(end, region.end):
                             output_file.write(line)
                             break
+
+        if is_gz:
+            output_gz_filename = output_filename + ".gz"
+            pysam.tabix_compress(output_filename, output_gz_filename, force=True)
+            os.remove(output_filename)
+            pysam.tabix_index(output_gz_filename, seq_col=0, start_col=1, end_col=2,
+                              line_skip=header_lines_count, zerobased=False, force=True)
+            return self.callback(output_gz_filename, output_gz_filename + ".tbi")
         return self.callback(output_filename)
 
 
@@ -397,15 +437,41 @@ class BedDownsampler(BaseTransformer):
     def get_supported_file_types() -> List[str]:
         return [".bed", ".bed.gz"]
 
+    def read_lines(self, input_filename: str, regions: List[Region]):
+        """
+        Yields the lines of the given BED file. If the file is bgzipped and indexed,
+        it only yields the header lines and the lines overlapping the given regions.
+        """
+        if not (Path(input_filename).suffix == ".gz" and os.path.isfile(f"{input_filename}.tbi")):
+            # Note that this algorithm is not efficient.
+            with gzip.open(input_filename, "rt") if Path(input_filename).suffix == ".gz" \
+                    else open(input_filename, "r") as input_file:
+                yield from input_file
+            return
+
+        with pysam.TabixFile(input_filename) as tabix_file:
+            for line in tabix_file.header:
+                yield line + "\n"
+            for i, region in enumerate(regions):
+                if region.chr not in tabix_file.contigs:
+                    continue
+                for line in tabix_file.fetch(region.chr, region.start, region.end):
+                    cols = line.split("\t")
+                    start, end = int(cols[1]), int(cols[2])
+                    # Skip the lines already yielded for a previous region they overlap with.
+                    if any(r.chr == region.chr and max(start, r.start) < min(end, r.end) for r in regions[:i]):
+                        continue
+                    yield line + "\n"
+
     def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
         output_filename = self.get_output_filename(input_filename, output_prefix)
         is_gz = Path(input_filename).suffix == ".gz"
         if is_gz:
             output_filename = output_filename.removesuffix(".gz")
-        # Note that this algorithm is not efficient.
-        with gzip.open(input_filename, "rt") if is_gz else open(input_filename, "r") as input_file, \
-                open(output_filename, "w") as output_file:
-            for line in input_file:
+        # Regions are processed in the order of the mini reference, so the output is sorted accordingly.
+        ordered_regions = self.mini_reference.regions if self.mini_reference is not None else regions
+        with open(output_filename, "w") as output_file:
+            for line in self.read_lines(input_filename, ordered_regions):
                 if line.startswith("#"):
                     output_file.write(line)
                     continue
@@ -519,7 +585,7 @@ class ReferenceDownsampler(BaseTransformer):
         pysam.faidx(output_filename)
 
         dict_filename = str(Path(output_filename).with_suffix(".dict"))
-        pysam.dict("-o", dict_filename, output_filename)
+        self.mini_reference.write_sequence_dict(dict_filename)
 
         # The `-6` option names the index files as `<fasta>.64.*`, consistent with the GATK hg38 resource bundle.
         subprocess.run(["bwa", "index", "-6", output_filename], check=True, capture_output=True)
@@ -531,3 +597,23 @@ class ReferenceDownsampler(BaseTransformer):
             output_filename, f"{output_filename}.fai", dict_filename,
             f"{bwa_prefix}.alt", f"{bwa_prefix}.amb", f"{bwa_prefix}.ann",
             f"{bwa_prefix}.bwt", f"{bwa_prefix}.pac", f"{bwa_prefix}.sa")
+
+
+class SequenceDictDownsampler(BaseTransformer):
+    """
+    Writes the sequence dictionary of the mini reference built from the target regions;
+    the output filename follows the same naming as that of `ReferenceDownsampler`.
+    """
+    def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
+        super().__init__(working_dir, callback, **kwargs)
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        return [".dict"]
+
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
+        if self.mini_reference is None:
+            raise ValueError("Downsampling a sequence dictionary requires a mini reference.")
+        output_filename = self.get_output_filename(input_filename, output_prefix)
+        self.mini_reference.write_sequence_dict(output_filename)
+        return self.callback(output_filename)

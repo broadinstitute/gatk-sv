@@ -104,6 +104,31 @@ SUBJECT_WORKFLOW_INPUTS = {
             transformers.BedDownsampler,
             lambda bed_gz, bed_gz_tbi: {"mei_bed": bed_gz}
         )
+    },
+    # Inputs of sv-shell's `src/sv_shell/evidence_qc.sh`; see `gather_sample_evidence` for details.
+    # Note that `count_files` are outputs of `gather_sample_evidence`, hence, you may want to write
+    # their downsampled files to a separate directory using `--output-subdir`.
+    "evidence_qc": {
+        "count_files": Handler(
+            transformers.IntervalListDownsampler,
+            lambda tsv_gz, tsv_gz_tbi: {"count_files": tsv_gz}
+        ),
+        "bincov_matrix": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"bincov_matrix": bed_gz}
+        ),
+        "reference_dict": Handler(
+            transformers.SequenceDictDownsampler,
+            lambda x: {"reference_dict": x}
+        ),
+        "wgd_scoring_mask": Handler(
+            transformers.BedDownsampler,
+            lambda x: {"wgd_scoring_mask": x}
+        ),
+        "genome_file": Handler(
+            transformers.FaiDownsampler,
+            lambda x: {"genome_file": x}
+        )
     }
 }
 
@@ -130,6 +155,9 @@ REFERENCE_INPUTS = {
         "reference_bwa_bwt",
         "reference_bwa_pac",
         "reference_bwa_sa"
+    ],
+    "evidence_qc": [
+        "reference_dict"
     ]
 }
 
@@ -174,9 +202,11 @@ def initialize_transformers(
         sequence_dict_filename: str,
         picard_path: str,
         input_root: str = None,
-        mini_reference: transformers.MiniReference = None):
+        mini_reference: transformers.MiniReference = None,
+        output_subdirs: dict = None):
+    output_subdirs = output_subdirs or {}
     for _, inputs in SUBJECT_WORKFLOW_INPUTS.items():
-        for _, handler in inputs.items():
+        for input_var, handler in inputs.items():
             handler.transformer = handler.transformer(
                 working_dir=working_dir,
                 callback=handler.callback,
@@ -185,7 +215,8 @@ def initialize_transformers(
                 sequence_dict_filename=sequence_dict_filename,
                 picard_path=picard_path,
                 input_root=input_root,
-                mini_reference=mini_reference
+                mini_reference=mini_reference,
+                output_subdir=output_subdirs.get(input_var)
             )
 
 
@@ -203,16 +234,28 @@ def split_input_key(key: str, workflow_name: str = None):
 
 
 def get_local_files(workflow_inputs: dict) -> List[str]:
-    return [v for v in workflow_inputs.values() if isinstance(v, str) and os.path.isfile(v)]
+    values = []
+    for v in workflow_inputs.values():
+        values.extend(v if isinstance(v, list) else [v])
+    return [v for v in values if isinstance(v, str) and os.path.isfile(v)]
 
 
 def uses_mini_reference(workflow_inputs: dict, workflow_name: str = None) -> bool:
+    """
+    Returns True if any of the inputs is a reference input (see `REFERENCE_INPUTS`) with a handler,
+    hence, the reference should be downsampled to a mini reference.
+    """
     for k in workflow_inputs.keys():
         key_workflow_name, input_var, _ = split_input_key(k, workflow_name)
-        handler = SUBJECT_WORKFLOW_INPUTS.get(key_workflow_name, {}).get(input_var)
-        if handler is not None and handler.transformer is transformers.ReferenceDownsampler:
+        if input_var in SUBJECT_WORKFLOW_INPUTS.get(key_workflow_name, {}) \
+                and is_reference_input(key_workflow_name, input_var):
             return True
     return False
+
+
+def parse_output_subdir(value: str):
+    input_var, subdir = value.split("=", maxsplit=1)
+    return input_var, subdir
 
 
 def copy_local_file(working_dir: str, input_root: str, filename: str) -> str:
@@ -251,21 +294,24 @@ def update_workflow_json(
             continue
 
         logging.info(f"Processing input {k}.")
-        workflow_input_local_filename = localize_file(v, Path(working_dir).joinpath(Path(v).name))
-        updated_files = handler.transformer.transform(
-            input_filename=workflow_input_local_filename,
-            output_prefix=output_filename_prefix,
-            regions=regions
-        )
+        # An input can be a list of files (e.g., `count_files`), where each file is downsampled separately.
+        updated_files = []
+        for x in (v if isinstance(v, list) else [v]):
+            workflow_input_local_filename = localize_file(x, Path(working_dir).joinpath(Path(x).name))
+            updated_files.append(handler.transformer.transform(
+                input_filename=workflow_input_local_filename,
+                output_prefix=output_filename_prefix,
+                regions=regions
+            ))
 
-        for varname, filename in updated_files.items():
-            input_key = f"{key_prefix}{varname}"
-            updated_workflow_inputs[input_key] = filename
+        for varname in updated_files[0].keys():
+            filenames = [x[varname] for x in updated_files]
             if bucket_name is not None and blob_name is not None:
-                logging.info(f"Uploading downsampled file {filename} to bucket {bucket_name}.")
-                blob = upload_to_gs_blob(filename, bucket_name, blob_name)
-                logging.info(f"Finished uploading {filename}.")
-                updated_workflow_inputs[input_key] = blob
+                for i, filename in enumerate(filenames):
+                    logging.info(f"Uploading downsampled file {filename} to bucket {bucket_name}.")
+                    filenames[i] = upload_to_gs_blob(filename, bucket_name, blob_name)
+                    logging.info(f"Finished uploading {filename}.")
+            updated_workflow_inputs[f"{key_prefix}{varname}"] = filenames if isinstance(v, list) else filenames[0]
 
     for k, v in workflow_inputs.items():
         k_workflow_name, input_var, _ = split_input_key(k, workflow_name)
@@ -391,6 +437,18 @@ def main():
              "directory of the local input files' directories."
     )
 
+    parser.add_argument(
+        "--output-subdir",
+        action="append",
+        default=[],
+        type=parse_output_subdir,
+        help="Sets the subdirectory of the working directory where the downsampled files of an input "
+             "are written, formatted as `input_name=subdirectory`; e.g., "
+             "`count_files=intermediates_HG00512/gather_sample_evidence` for an input that is "
+             "the output of an upstream task. Can be provided multiple times. The inputs without "
+             "a subdirectory set follow the directory hierarchy of the input files (see `--input-root`)."
+    )
+
     this_script_folder = os.path.dirname(os.path.abspath(__file__))
     gatk_sv_path = os.path.dirname(os.path.dirname(this_script_folder))
 
@@ -451,7 +509,8 @@ def main():
     sequence_dict_local_filename = localize_file(
         args.reference_dict, Path(args.working_dir).joinpath(Path(args.reference_dict).name))
     initialize_transformers(args.working_dir, args.reference_fasta, args.reference_fasta_index,
-                            sequence_dict_local_filename, args.picard_path, input_root, mini_reference)
+                            sequence_dict_local_filename, args.picard_path, input_root, mini_reference,
+                            dict(args.output_subdir))
 
     update_workflow_json(
         working_dir=args.working_dir,
