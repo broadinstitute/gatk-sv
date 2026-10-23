@@ -1,0 +1,49 @@
+{
+  "allosomal_contigs": null,
+  "contig_ploidy_model_tar": "/test_inputs/reference_panel/downsampled_all_samples-contig-ploidy-model.tar.gz",
+  "count_entity_ids": [
+    "HG00512"
+  ],
+  "counts": [
+    "/test_inputs/intermediates_HG00512/condense_read_counts/downsampled_condensed_counts.HG00512.tsv.gz"
+  ],
+  "gcnv_active_class_padding_hybrid_mode": null,
+  "gcnv_adamax_beta_1": null,
+  "gcnv_adamax_beta_2": null,
+  "gcnv_caller_external_admixing_rate": null,
+  "gcnv_caller_internal_admixing_rate": null,
+  "gcnv_caller_update_convergence_threshold": null,
+  "gcnv_cnv_coherence_length": null,
+  "gcnv_convergence_snr_averaging_window": null,
+  "gcnv_convergence_snr_countdown_window": null,
+  "gcnv_convergence_snr_trigger_threshold": null,
+  "gcnv_copy_number_posterior_expectation_mode": null,
+  "gcnv_depth_correction_tau": null,
+  "gcnv_disable_annealing": null,
+  "gcnv_initial_temperature": null,
+  "gcnv_learning_rate": null,
+  "gcnv_log_emission_samples_per_round": null,
+  "gcnv_log_emission_sampling_median_rel_error": null,
+  "gcnv_log_emission_sampling_rounds": null,
+  "gcnv_mapping_error_rate": null,
+  "gcnv_max_advi_iter_first_epoch": null,
+  "gcnv_max_advi_iter_subsequent_epochs": null,
+  "gcnv_max_calling_iters": null,
+  "gcnv_max_copy_number": null,
+  "gcnv_max_training_epochs": null,
+  "gcnv_min_training_epochs": null,
+  "gcnv_model_tars": [
+    "/test_inputs/reference_panel/downsampled_all_samples-gcnv-model-shard-258.tar.gz",
+    "/test_inputs/reference_panel/downsampled_all_samples-gcnv-model-shard-274.tar.gz"
+  ],
+  "gcnv_num_thermal_advi_iters": null,
+  "gcnv_p_alt": null,
+  "gcnv_sample_psi_scale": null,
+  "ploidy_mapping_error_rate": null,
+  "ploidy_sample_psi_scale": null,
+  "ref_copy_number_autosomal_contigs": 2,
+  "runtime_attr_case": null,
+  "runtime_attr_explode": null,
+  "runtime_attr_ploidy": null,
+  "runtime_attr_postprocess": null
+}
