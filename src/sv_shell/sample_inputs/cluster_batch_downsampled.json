@@ -1,0 +1,22 @@
+{
+  "batch": "HG00512",
+  "manta_vcf_tar": "/test_inputs/intermediates_HG00512/single_sample_pipeline/downsampled_HG00512.manta_std.tar.gz",
+  "wham_vcf_tar": "/test_inputs/intermediates_HG00512/single_sample_pipeline/downsampled_HG00512.wham_std.tar.gz",
+  "scramble_vcf_tar": "/test_inputs/intermediates_HG00512/single_sample_pipeline/downsampled_HG00512.scramble_std.tar.gz",
+  "del_bed": "/test_inputs/intermediates_HG00512/single_sample_pipeline/downsampled_HG00512.DEL.bed.gz",
+  "dup_bed": "/test_inputs/intermediates_HG00512/single_sample_pipeline/downsampled_HG00512.DUP.bed.gz",
+  "ped_file": "/test_inputs/intermediates_HG00512/gather_batch_evidence/combined_ped_file.ped",
+  "contig_list": "/test_inputs/reference/downsampled_primary_contigs.list",
+  "reference_fasta": "/test_inputs/reference/downsampled_Homo_sapiens_assembly38.fasta",
+  "reference_fasta_fai": "/test_inputs/reference/downsampled_Homo_sapiens_assembly38.fasta.fai",
+  "reference_dict": "/test_inputs/reference/downsampled_Homo_sapiens_assembly38.dict",
+  "depth_exclude_intervals": "/test_inputs/reference/downsampled_depth_blacklist.sorted.bed.gz",
+  "depth_exclude_overlap_fraction": 0.5,
+  "depth_interval_overlap": 0.8,
+  "depth_clustering_algorithm": "SINGLE_LINKAGE",
+  "pesr_exclude_intervals": "/test_inputs/reference/downsampled_PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz",
+  "pesr_interval_overlap": 0.1,
+  "pesr_breakend_window": 300,
+  "pesr_clustering_algorithm": "SINGLE_LINKAGE",
+  "retain_female_chr_y": true
+}

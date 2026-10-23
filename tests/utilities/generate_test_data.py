@@ -176,6 +176,48 @@ SUBJECT_WORKFLOW_INPUTS = {
             transformers.GcnvModelDownsampler,
             lambda x: {"gcnv_model_tars": x}
         )
+    },
+    # Inputs of sv-shell's `src/sv_shell/cluster_batch.sh`; see `gather_sample_evidence` for details.
+    # Note that the VCF tarballs and the DEL/DUP beds are created by upstream tasks
+    # (in `single_sample_pipeline`, combining the outputs of `gather_batch_evidence` with the reference panel).
+    "cluster_batch": {
+        "reference_fasta": Handler(
+            transformers.ReferenceDownsampler,
+            lambda fasta, fai, dict, alt, amb, ann, bwt, pac, sa: {
+                "reference_fasta": fasta, "reference_fasta_fai": fai, "reference_dict": dict}
+        ),
+        "contig_list": Handler(
+            transformers.PrimaryContigsDownsampler,
+            lambda x, _: {"contig_list": x}
+        ),
+        "manta_vcf_tar": Handler(
+            transformers.SvVcfTarDownsampler,
+            lambda x: {"manta_vcf_tar": x}
+        ),
+        "wham_vcf_tar": Handler(
+            transformers.SvVcfTarDownsampler,
+            lambda x: {"wham_vcf_tar": x}
+        ),
+        "scramble_vcf_tar": Handler(
+            transformers.SvVcfTarDownsampler,
+            lambda x: {"scramble_vcf_tar": x}
+        ),
+        "del_bed": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"del_bed": bed_gz}
+        ),
+        "dup_bed": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"dup_bed": bed_gz}
+        ),
+        "depth_exclude_intervals": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"depth_exclude_intervals": bed_gz}
+        ),
+        "pesr_exclude_intervals": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"pesr_exclude_intervals": bed_gz}
+        )
     }
 }
 
@@ -210,7 +252,12 @@ REFERENCE_INPUTS = {
     "cnmops": [
         "ref_dict"
     ],
-    "cnv_germline_case": []
+    "cnv_germline_case": [],
+    "cluster_batch": [
+        "reference_fasta",
+        "reference_fasta_fai",
+        "reference_dict"
+    ]
 }
 
 

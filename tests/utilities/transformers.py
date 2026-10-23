@@ -757,3 +757,97 @@ class GcnvModelDownsampler(BaseTransformer):
         with open(filename, "w") as f:
             f.write(lines[0])
             f.writelines(line for line in lines[1:] if line.split("\t")[0] in contigs)
+
+
+class SvVcfTarDownsampler(BaseTransformer):
+    """
+    Downsamples a tarball of SV VCF files (e.g., the standardized Manta, Wham, or Scramble VCFs of a batch)
+    to the records entirely within the target regions, and lifts over their coordinates if a mini reference
+    is given. The VCFs are processed as text, since the END of a breakend (BND) record is a position on
+    another contig (i.e., the INFO field CHR2), which is also encoded in the ALT allele (e.g., `N[chr2:100[`).
+    """
+    bnd_alt_regex = re.compile(r"([\[\]])([^:\[\]]+):(\d+)([\[\]])")
+
+    def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
+        super().__init__(working_dir, callback, **kwargs)
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        return [".tar.gz"]
+
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
+        with tempfile.TemporaryDirectory(prefix="tmp_sv_vcf_tar_", dir=self.working_dir) as tmp_dir:
+            with tarfile.open(input_filename, "r:gz") as tar:
+                tar.extractall(tmp_dir)
+            for root, _, filenames in os.walk(tmp_dir):
+                for filename in filenames:
+                    if filename.endswith(".vcf.gz"):
+                        self.downsample_vcf(os.path.join(root, filename), regions)
+            output_filename = self.get_output_filename(input_filename, output_prefix)
+            with tarfile.open(output_filename, "w:gz") as tar:
+                tar.add(tmp_dir, arcname=".")
+        return self.callback(output_filename)
+
+    def lift_interval(self, chr: str, start: int, end: int, regions: List[Region]):
+        """
+        Returns the given 0-based half-open interval on the mini reference (or unchanged if no mini reference
+        is given) if it is entirely within a target region, otherwise None.
+        """
+        if self.mini_reference is not None:
+            return self.mini_reference.lift(chr, start, end)
+        if any(chr == r.chr and r.start <= start and end <= r.end for r in regions):
+            return start, end
+        return None
+
+    def downsample_vcf(self, filename: str, regions: List[Region]):
+        """
+        Downsamples the given bgzipped VCF file in place.
+        """
+        uncompressed_filename = filename.removesuffix(".gz")
+        with gzip.open(filename, "rt") as input_file, open(uncompressed_filename, "w") as output_file:
+            for line in input_file:
+                if line.startswith("##contig") and self.mini_reference is not None:
+                    continue
+                if line.startswith("#CHROM") and self.mini_reference is not None:
+                    for name, length in self.mini_reference.contig_lengths.items():
+                        output_file.write(f"##contig=<ID={name},length={length}>\n")
+                if line.startswith("#"):
+                    output_file.write(line)
+                    continue
+                lifted_line = self.lift_record(line.rstrip("\n").split("\t"), regions)
+                if lifted_line is not None:
+                    output_file.write(lifted_line + "\n")
+        os.remove(filename)
+        pysam.tabix_compress(uncompressed_filename, filename, force=True)
+        os.remove(uncompressed_filename)
+
+    def lift_record(self, cols: List[str], regions: List[Region]):
+        """
+        Returns the given VCF record with its coordinates lifted over, or None
+        if any of its positions are not within the target regions.
+        """
+        chr, pos = cols[0], int(cols[1])
+        info = [x.split("=", maxsplit=1) for x in cols[7].split(";")]
+        info_dict = {x[0]: x[1] for x in info if len(x) == 2}
+        end = int(info_dict.get("END", pos))
+
+        if info_dict.get("SVTYPE") == "BND":
+            # The END of a breakend is a position on CHR2.
+            lifted_pos = self.lift_interval(chr, pos - 1, pos, regions)
+            lifted_end = self.lift_interval(info_dict.get("CHR2", chr), end - 1, end, regions)
+            if lifted_pos is None or lifted_end is None:
+                return None
+            new_pos, new_end = lifted_pos[1], lifted_end[1]
+            # The position in the ALT allele (e.g., `N[chr2:100[`) is the END on CHR2.
+            cols[4] = self.bnd_alt_regex.sub(lambda m: f"{m.group(1)}{m.group(2)}:{new_end}{m.group(4)}", cols[4])
+        else:
+            lifted_interval = self.lift_interval(chr, pos - 1, max(pos, end), regions)
+            if lifted_interval is None:
+                return None
+            new_pos = lifted_interval[0] + 1
+            new_end = new_pos + (end - pos)
+
+        cols[1] = str(new_pos)
+        if "END" in info_dict:
+            cols[7] = ";".join(f"END={new_end}" if x[0] == "END" else "=".join(x) for x in info)
+        return "\t".join(cols)
