@@ -7,6 +7,7 @@ workflow SingleSampleMetrics {
   input {
     String name
     Array[String] ref_samples
+    Array[String] extra_samples = []   # trio de novo: parents (metrics VCFs carry their columns)
     String case_sample
     File? wgd_scores
     File? sample_pe
@@ -40,7 +41,7 @@ workflow SingleSampleMetrics {
     RuntimeAttr? runtime_attr_cat_metrics
   }
 
-  Array[String] samples = flatten([[case_sample], ref_samples])
+  Array[String] samples = flatten([[case_sample], ref_samples, extra_samples])
 
   if (defined(sample_sr)) {
     call tu.SRMetrics {

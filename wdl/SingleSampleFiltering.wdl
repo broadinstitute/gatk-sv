@@ -2,10 +2,13 @@ version 1.0
 
 import "Structs.wdl"
 
-task FilterVcfBySampleGenotypeAndAddEvidenceAnnotation {
+task FilterVcfBySamplesGenotypeAndAddEvidenceAnnotation {
+  # Retains every record genotyped (non-ref) in ANY of the samples listed in
+  # samples_list: the trio members in trio de novo mode, the case sample alone
+  # otherwise.
   input {
     File vcf_gz
-    String sample_id
+    File samples_list  # one sample ID per line
     String sv_base_mini_docker
     String evidence
     RuntimeAttr? runtime_attr_override
@@ -22,7 +25,7 @@ task FilterVcfBySampleGenotypeAndAddEvidenceAnnotation {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   String filebase = basename(vcf_gz, ".vcf.gz")
-  String outfile = "~{filebase}.~{sample_id}.vcf.gz"
+  String outfile = "~{filebase}.trio_merged.vcf.gz"
 
   output {
     File out = "~{outfile}"
@@ -30,28 +33,33 @@ task FilterVcfBySampleGenotypeAndAddEvidenceAnnotation {
   }
   command <<<
     set -euo pipefail
-    sampleIndex=`gzip -cd ~{vcf_gz} | grep '^#CHROM' | cut -f10- | tr "\t" "\n" | awk '$1 == "~{sample_id}" {found=1; print NR - 1} END { if (found != 1) { print "sample not found"; exit 1; }}'`
+    # Resolve the VCF sample columns once, before looping over the requested
+    # samples: bcftools query -l reads only the header, while grepping the
+    # #CHROM line out of the decompressed VCF rescans the whole file per name.
+    bcftools query -l ~{vcf_gz} > vcf_samples.list
+    # Build a bcftools -i condition that is true if any listed sample is alt:
+    # GT[0]="alt" | GT[1]="alt" | ...
+    condition=""
+    while read -r sid || [ -n "$sid" ]; do
+      idx=`awk -v s="$sid" '$1 == s {found=1; print NR - 1; exit} END { if (found != 1) { print "sample " s " not found" > "/dev/stderr"; exit 1; }}' vcf_samples.list`
+      if [ -z "$condition" ]; then
+        condition="GT[$idx]=\"alt\""
+      else
+        condition="$condition | GT[$idx]=\"alt\""
+      fi
+    done < ~{samples_list}
 
     echo '##INFO=<ID=EVIDENCE,Number=.,Type=String,Description="Classes of random forest support.">' > header_line.txt
 
-# a regression introduced in bcftools release 14.0 and present at least through 15.1, causes bcftools annotate to
-# NOT add the EVIDENCE field to info. Use a work-around until this regression is fixed:
-#    1) use bcftools to filter based on sample genotype and add the header line
-#    2) use awk to add EVIDENCE to INFO field (8th tab-delimited field)
-#
-#    ORIGINAL CODE, restore when bcftools is fixed:
-#    bcftools query -f "%CHROM\t%POS\t%REF\t%ALT\t~{evidence}\n" ~{vcf_gz} | bgzip -c > evidence_annotations.tab.gz
-#    tabix -s1 -b2 -e2 evidence_annotations.tab.gz
-#    bcftools annotate \
-#        -i "GT[${sampleIndex}]=\"alt\"" \
-#        -a evidence_annotations.tab.gz \
-#        -c CHROM,POS,REF,ALT,EVIDENCE \
-#        -h header_line.txt \
-#        -O z \
-#        -o ~{outfile} \
-#        ~{vcf_gz}
+# A regression introduced in bcftools release 14.0 and present at least through 15.1 causes bcftools
+# annotate to NOT add the EVIDENCE field to INFO. Use a work-around until this regression is fixed:
+#   1) use bcftools to filter based on sample genotype and add the header line
+#   2) use awk to add EVIDENCE to INFO field (8th tab-delimited field)
+# ORIGINAL CODE, restore when bcftools is fixed: build an EVIDENCE table with bcftools query, tabix it,
+# and apply it here with bcftools annotate -a <table> -c CHROM,POS,REF,ALT,EVIDENCE instead of the awk
+# pipe below.
     bcftools annotate \
-        -i "GT[${sampleIndex}]=\"alt\"" \
+        -i "$condition" \
         -h header_line.txt \
         -O v \
         ~{vcf_gz} \
@@ -76,7 +84,6 @@ task FilterVcfBySampleGenotypeAndAddEvidenceAnnotation {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
 
 task FilterVcfForShortDepthCalls {
   input {
@@ -185,12 +192,16 @@ task GetUniqueNonGenotypedDepthCalls {
   }
 }
 
-task FilterVcfForCaseSampleGenotype {
+task FilterVcfForTrioSamplesGenotype {
+  # Drops MULTIALLELIC filtered records unless at least one of the listed
+  # samples is genotyped as variant, so that variants called only in a parent
+  # are retained. Single-sample runs call this same task with a samples_list
+  # holding only the case sample: the genotype filter exists once so that the
+  # single-sample and trio call sets cannot drift apart.
   input {
     File vcf_gz
-    String sample_id
+    File samples_list  # one sample ID per line
     String sv_base_mini_docker
-
     RuntimeAttr? runtime_attr_override
   }
 
@@ -205,18 +216,32 @@ task FilterVcfForCaseSampleGenotype {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   String filebase = basename(vcf_gz, ".vcf.gz")
-  String outfile = "~{filebase}.filter_by_~{sample_id}_gt.vcf.gz"
+  String outfile = "~{filebase}.filter_by_trio_gt.vcf.gz"
 
   output {
     File out = "~{outfile}"
-    File out_idx = "~{outfile}.tbi"
+    File out_index = "~{outfile}.tbi"
   }
   command <<<
     set -euo pipefail
-    sampleIndex=`gzip -cd ~{vcf_gz} | grep '^#CHROM' | cut -f10- | tr "\t" "\n" | awk '$1 == "~{sample_id}" {found=1; print NR - 1} END { if (found != 1) { print "sample not found"; exit 1; }}'`
+    # Resolve the VCF sample columns once, before looping over the requested
+    # samples: bcftools query -l reads only the header, while grepping the
+    # #CHROM line out of the decompressed VCF rescans the whole file per name.
+    bcftools query -l ~{vcf_gz} > vcf_samples.list
+    # Build a condition that is true if any listed sample is alt:
+    # GT[0]="alt" | GT[1]="alt" | ...
+    condition=""
+    while read -r sid || [ -n "$sid" ]; do
+      idx=`awk -v s="$sid" '$1 == s {found=1; print NR - 1; exit} END { if (found != 1) { print "sample " s " not found" > "/dev/stderr"; exit 1; }}' vcf_samples.list`
+      if [ -z "$condition" ]; then
+        condition="GT[$idx]=\"alt\""
+      else
+        condition="$condition | GT[$idx]=\"alt\""
+      fi
+    done < ~{samples_list}
 
     bcftools filter \
-        -i "FILTER ~ \"MULTIALLELIC\" || GT[${sampleIndex}]=\"alt\"" \
+        -i "FILTER ~ \"MULTIALLELIC\" || $condition" \
         ~{vcf_gz} | bgzip -c > ~{outfile}
 
     tabix ~{outfile}
@@ -517,7 +542,7 @@ task ConvertCNVsWithoutDepthSupportToBNDs {
   input {
     File genotyped_pesr_vcf
     File allosome_file
-    String case_sample
+    Array[String] proband_samples  # case, plus provided parents in trio de novo mode
     File merged_famfile
     Int? min_length
     String sv_pipeline_docker
@@ -549,7 +574,7 @@ task ConvertCNVsWithoutDepthSupportToBNDs {
         ~{genotyped_pesr_vcf} \
         ~{allosome_file} \
         ~{merged_famfile} \
-        ~{case_sample} \
+        $(tr '\n' ' ' < ~{write_lines(proband_samples)}) \
         ~{default="1000" min_length} \
         -o ~{outfile}
 
