@@ -32,6 +32,8 @@ workflow GenotypeBatch {
     RuntimeAttr? runtime_attr_genotype
     RuntimeAttr? runtime_override_concat_shards
     RuntimeAttr? runtime_attr_regeno_coverage_medians
+
+    Boolean use_ssd = false
   }
 
   call TrainSVGenotyping {
@@ -55,7 +57,8 @@ workflow GenotypeBatch {
       pesr_exclusion_intervals_index = pesr_exclusion_intervals + ".tbi",
       rf_cutoffs = rf_cutoffs,
       gatk_docker = gatk_docker,
-      runtime_attr_override = runtime_attr_train
+      runtime_attr_override = runtime_attr_train,
+      use_ssd = use_ssd
   }
 
 
@@ -83,7 +86,8 @@ workflow GenotypeBatch {
         pe_table = TrainSVGenotyping.pe_table,
         sr_table = TrainSVGenotyping.sr_table,
         gatk_docker = gatk_docker,
-        runtime_attr_override = runtime_attr_genotype
+        runtime_attr_override = runtime_attr_genotype,
+        use_ssd = use_ssd
     }
   }
 
@@ -102,7 +106,8 @@ workflow GenotypeBatch {
       vcf = ConcatVcfs.concat_vcf,
       vcf_index = ConcatVcfs.concat_vcf_idx,
       prefix = batch + ".genotype_batch",
-      sv_base_mini_docker = sv_base_mini_docker
+      sv_base_mini_docker = sv_base_mini_docker,
+      use_ssd = use_ssd
   }
 
   call GenerateRegenoCoverageMedians {
@@ -110,7 +115,8 @@ workflow GenotypeBatch {
       vcf = SeparateDepthPesr.depth_vcf,
       prefix = "~{batch}.regeno_coverage_medians",
       sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_regeno_coverage_medians
+      runtime_attr_override = runtime_attr_regeno_coverage_medians,
+      use_ssd = use_ssd
   }
 
   output {
@@ -150,6 +156,8 @@ task TrainSVGenotyping {
     String gatk_docker
     Float? java_mem_fraction
     RuntimeAttr? runtime_attr_override
+
+    Boolean use_ssd = false
   }
 
   RuntimeAttr default_attr = object {
@@ -205,7 +213,7 @@ task TrainSVGenotyping {
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + if use_ssd then " SSD" else " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
@@ -239,6 +247,8 @@ task GenotypeSVs {
     String gatk_docker
     Float? java_mem_fraction
     RuntimeAttr? runtime_attr_override
+
+    Boolean use_ssd = false
   }
 
   parameter_meta {
@@ -318,7 +328,7 @@ task GenotypeSVs {
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + if use_ssd then " SSD" else " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
@@ -334,6 +344,7 @@ task SeparateDepthPesr {
     String prefix
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
+    Boolean use_ssd = false
   }
 
   RuntimeAttr default_attr = object {
@@ -364,7 +375,7 @@ task SeparateDepthPesr {
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + if use_ssd then " SSD" else " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
@@ -378,6 +389,7 @@ task SeparateDepthPesr {
         String prefix
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
+        Boolean use_ssd = false
     }
 
     RuntimeAttr default_attr = object {
@@ -407,7 +419,7 @@ task SeparateDepthPesr {
     runtime {
       cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
       memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + if use_ssd then " SSD" else " HDD"
       bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
       docker: sv_pipeline_docker
       preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
