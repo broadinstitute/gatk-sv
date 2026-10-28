@@ -639,6 +639,49 @@ def split_input_key(key: str, workflow_name: str = None):
     return workflow_name, key, ""
 
 
+def load_workflow_inputs(input_filename: str) -> dict:
+    """
+    Loads the given workflow JSON; the relative paths of local files in it
+    are resolved relative to the JSON file's directory.
+    """
+    with open(input_filename, "r") as f:
+        workflow_inputs = json.load(f)
+    base_dir = Path(input_filename).resolve().parent
+
+    def resolve(v):
+        if isinstance(v, list):
+            return [resolve(x) for x in v]
+        if isinstance(v, str) and not os.path.isabs(v) and base_dir.joinpath(v).is_file():
+            return str(base_dir.joinpath(v))
+        return v
+    return {k: resolve(v) for k, v in workflow_inputs.items()}
+
+
+def relocate_output_paths(output_filename: str, working_dir: str, output_root: str):
+    """
+    Replaces the working directory with the given root (e.g., `/test_inputs`, where the working directory is
+    mounted in a container) in the paths of the given output JSON, and of the list files it references.
+    """
+    working_dir = str(Path(working_dir).resolve())
+    relocate = lambda x: x.replace(working_dir, output_root.rstrip("/"))
+    with open(output_filename, "r") as f:
+        workflow_inputs = json.load(f)
+    for v in workflow_inputs.values():
+        for x in (v if isinstance(v, list) else [v]):
+            if isinstance(x, str) and x.startswith(working_dir) and x.endswith(".list") and os.path.isfile(x):
+                with open(x, "r") as f:
+                    content = f.read()
+                with open(x, "w") as f:
+                    f.write(relocate(content))
+    workflow_inputs = {
+        k: [relocate(x) if isinstance(x, str) else x for x in v] if isinstance(v, list)
+        else relocate(v) if isinstance(v, str) else v
+        for k, v in workflow_inputs.items()}
+    logging.info(f"Relocating the paths in {output_filename} from {working_dir} to {output_root}.")
+    with open(output_filename, "w") as f:
+        json.dump(workflow_inputs, f, indent=4)
+
+
 def get_local_files(workflow_inputs: dict) -> List[str]:
     values = []
     for v in workflow_inputs.values():
@@ -691,8 +734,7 @@ def update_workflow_json(
         workflow_name: str = None, input_root: str = None, skip_reference_downsampling: bool = False,
         output_subdirs: dict = None):
     output_subdirs = output_subdirs or {}
-    with open(input_filename, "r") as f:
-        workflow_inputs = json.load(f)
+    workflow_inputs = load_workflow_inputs(input_filename)
 
     updated_workflow_inputs = {}
 
@@ -863,6 +905,13 @@ def main():
     )
 
     parser.add_argument(
+        "--output-root-in-json",
+        help="Sets the path that replaces the working directory in the paths of the output JSON and of the "
+             "list files it references; e.g., `/test_inputs` when the working directory is mounted there "
+             "in the container that runs the workflow. The default is the working directory's path."
+    )
+
+    parser.add_argument(
         "--input-root",
         help="Sets a directory containing the local input files referenced in the input JSON. "
              "The output files are written to the working directory following the same directory "
@@ -954,8 +1003,7 @@ def main():
 
     Path(args.working_dir).mkdir(parents=True, exist_ok=True)
 
-    with open(args.input_workflow_json, "r") as f:
-        workflow_inputs = json.load(f)
+    workflow_inputs = load_workflow_inputs(args.input_workflow_json)
 
     input_root = args.input_root
     local_files = get_local_files(workflow_inputs)
@@ -988,6 +1036,9 @@ def main():
         input_root=input_root,
         skip_reference_downsampling=args.skip_reference_downsampling,
         output_subdirs=dict(args.output_subdir))
+
+    if args.output_root_in_json is not None:
+        relocate_output_paths(output_workflow_json, args.working_dir, args.output_root_in_json)
 
     if mini_reference is not None:
         mini_reference.cleanup()
