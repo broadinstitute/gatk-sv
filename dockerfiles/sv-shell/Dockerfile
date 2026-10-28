@@ -9,6 +9,10 @@ FROM $WHAM_IMAGE as wham_layer
 # note that gatk is installed in sv-base docker, which this docker image inherits.
 # however, the base images are currently being updated: https://github.com/broadinstitute/gatk-sv/pull/816
 # so as a temporary work-around we're re-installing gatk in this image using code in a specific branch.
+# the sha below must stay in step with the flags src/sv_shell/*.sh pass to /opt/gatk.jar: this image carries
+# its own gatk jar (genotype_svs.sh runs `java -jar /opt/gatk.jar GenotypeSVs`), so renaming or adding an
+# @Argument on the genotyper without moving this pin makes the single-sample stage die on an unrecognized
+# option. Keep it at the gatk mw_gatk_sv tip that the WDLs and sv_shell scripts are built against.
 # setting SHELL to bash in the following is needed for the `source` command in the following RUN,
 # since the default sh does not support `source`.
 FROM $SV_PIPELINE_IMAGE AS gatk_builder
@@ -23,7 +27,7 @@ RUN apt-get update && apt-get -qqy install --no-upgrade --no-install-recommends 
     GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git && \
     cd gatk && \
     git checkout mw_gatk_sv && \
-    git checkout 672d8557d82d17cefe972df5796ba719f0d7adbc && \
+    git checkout 36c8568c37b382fa58e3e2a057849978b7ff7fae && \
     mkdir -p /opt/gatk_miniconda3 && \
     wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.10.0-1-Linux-x86_64.sh -O /opt/gatk_miniconda3/miniconda.sh && \
     bash /opt/gatk_miniconda3/miniconda.sh -p /opt/gatk_miniconda3 -b -u && \
