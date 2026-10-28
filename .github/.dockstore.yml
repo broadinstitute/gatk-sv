@@ -287,3 +287,10 @@ workflows:
         - main
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: PlotGDMosaicDepth
+    primaryDescriptorPath: /wdl/PlotGDMosaicDepth.wdl
+    filters:
+      branches:
+        - eph_rd_plots
