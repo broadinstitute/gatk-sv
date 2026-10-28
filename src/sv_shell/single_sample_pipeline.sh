@@ -819,6 +819,7 @@ jq -n \
       "pesr_exclusion_intervals": $inputs[0].pesr_exclude_intervals,
       "rd_depth_table": $inputs[0].genotyping_rd_depth_table,
       "rd_pesr_table": $inputs[0].genotyping_rd_pesr_table,
+      "n_RD_genotype_bins": $inputs[0].n_RD_genotype_bins,
       "pe_table": $inputs[0].genotyping_pe_table,
       "sr_table": $inputs[0].genotyping_sr_table
   }' > "${genotype_svs_inputs_json_filename}"
