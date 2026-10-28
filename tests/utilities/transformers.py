@@ -59,6 +59,11 @@ class MiniReference:
                 self.contig_lengths[r.chr] = self.contig_lengths.get(r.chr, 0) + r.end - r.start
                 sequences[r.chr] = sequences.get(r.chr, "") + fasta.fetch(r.chr, r.start, r.end)
 
+        # The regions (and their offsets on the mini reference) per contig, for fast lookups.
+        self.regions_by_chr = {}
+        for region, offset in zip(self.regions, self.offsets):
+            self.regions_by_chr.setdefault(region.chr, []).append((region, offset))
+
         self.contig_md5s = {k: hashlib.md5(v.upper().encode()).hexdigest() for k, v in sequences.items()}
         self.working_dir = tempfile.mkdtemp(prefix="tmp_mini_reference_", dir=working_dir)
         self.fasta_filename = os.path.join(self.working_dir, Path(reference_fasta).name)
@@ -95,8 +100,8 @@ class MiniReference:
         Returns the coordinates of the given interval on the mini reference,
         or None if the interval is not entirely within a target region.
         """
-        for region, offset in zip(self.regions, self.offsets):
-            if chr == region.chr and region.start <= start and end <= region.end:
+        for region, offset in self.regions_by_chr.get(chr, []):
+            if region.start <= start and end <= region.end:
                 return offset + start - region.start, offset + end - region.start
         return None
 
@@ -105,9 +110,13 @@ class MiniReference:
         Returns the coordinates on the mini reference of the parts of the given interval
         overlapping target regions; the parts adjacent on the mini reference are merged.
         """
+        if start == end:
+            # A zero-length interval (e.g., the site of an insertion or a breakend) is lifted over as a point.
+            lifted_interval = self.lift(chr, start, start + 1)
+            return [] if lifted_interval is None else [(lifted_interval[0], lifted_interval[0])]
         lifted = []
-        for region, offset in zip(self.regions, self.offsets):
-            if chr == region.chr and max(start, region.start) < min(end, region.end):
+        for region, offset in self.regions_by_chr.get(chr, []):
+            if max(start, region.start) < min(end, region.end):
                 lifted_start = offset + max(start, region.start) - region.start
                 lifted_end = offset + min(end, region.end) - region.start
                 if lifted and lifted[-1][1] == lifted_start:
@@ -119,7 +128,8 @@ class MiniReference:
 
 class BaseTransformer:
     def __init__(self, working_dir: str, callback: Callable[[str, ...], dict], input_root: str = None,
-                 mini_reference: MiniReference = None, output_subdir: str = None, **kwargs):
+                 mini_reference: MiniReference = None, output_subdir: str = None,
+                 ref_panel_samples: List[str] = None, **kwargs):
         # Convert the string to an ABS path and make sure it exists.
         self.working_dir = Path(working_dir).resolve(strict=True)
         self.callback = callback
@@ -132,6 +142,19 @@ class BaseTransformer:
         # (e.g., `intermediates_HG00512/gather_sample_evidence` for an output of an upstream task),
         # regardless of the directory of the input file.
         self.output_subdir = output_subdir
+        # When set, the reference panel is subset to these samples (see `is_excluded_sample_file`).
+        self.ref_panel_samples = set(ref_panel_samples) if ref_panel_samples else None
+
+    def is_excluded_sample(self, sample_id: str) -> bool:
+        return self.ref_panel_samples is not None and sample_id not in self.ref_panel_samples
+
+    def is_excluded_sample_file(self, filename: str) -> bool:
+        """
+        Returns True if the reference panel is subset, and the given per-sample file (e.g., `HG00096.pe.txt.gz`
+        or `std_000.manta.HG00096.vcf.gz`) has none of the kept samples in its dot-separated name.
+        """
+        return self.ref_panel_samples is not None \
+            and self.ref_panel_samples.isdisjoint(Path(filename).name.split("."))
 
     @staticmethod
     def get_supported_file_types() -> List[str]:
@@ -578,6 +601,22 @@ class FaiDownsampler(BaseTransformer):
         return self.callback(output_filename)
 
 
+class CnmopsContigsFaiDownsampler(FaiDownsampler):
+    """
+    Downsamples a FASTA index of the contigs that cn.mops runs on (e.g., the `chrom_file` of sv-shell's cnmops),
+    as `FaiDownsampler` does, and if `cnmops_contigs` is given, further restricts it to those contigs.
+    Since cn.mops runs on each contig separately, restricting its contigs shortens its runtime.
+    """
+    def __init__(self, working_dir, callback: Callable[[str], dict], cnmops_contigs: List[str] = None, **kwargs):
+        super().__init__(working_dir, callback, **kwargs)
+        self.cnmops_contigs = cnmops_contigs
+
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
+        if self.cnmops_contigs:
+            regions = [r for r in regions if r.chr in self.cnmops_contigs]
+        return super().transform(input_filename, output_prefix, regions, **kwargs)
+
+
 class ReferenceDownsampler(BaseTransformer):
     """
     Writes the mini reference built from the target regions, and creates its index,
@@ -710,14 +749,11 @@ class GcnvModelDownsampler(BaseTransformer):
                     contigs.append(cols[0])
                 # Intervals are 1-based and closed.
                 start, end = int(cols[1]) - 1, int(cols[2])
-                if self.mini_reference is not None:
-                    lifted_interval = self.mini_reference.lift(cols[0], start, end)
-                    if lifted_interval is not None:
+                if any(cols[0] == r.chr and r.start <= start and end <= r.end for r in regions):
+                    if self.mini_reference is not None:
+                        lifted_interval = self.mini_reference.lift(cols[0], start, end)
                         cols[1], cols[2] = str(lifted_interval[0] + 1), str(lifted_interval[1])
-                        f.write("\t".join(cols) + "\n")
-                        kept_indices.append(index)
-                elif any(cols[0] == r.chr and r.start <= start and end <= r.end for r in regions):
-                    f.write(line)
+                    f.write("\t".join(cols) + "\n")
                     kept_indices.append(index)
                 if kept_indices and kept_indices[-1] == index and cols[0] not in kept_contigs:
                     kept_contigs.append(cols[0])
@@ -759,34 +795,30 @@ class GcnvModelDownsampler(BaseTransformer):
             f.writelines(line for line in lines[1:] if line.split("\t")[0] in contigs)
 
 
-class SvVcfTarDownsampler(BaseTransformer):
+class SvVcfDownsampler(BaseTransformer):
     """
-    Downsamples a tarball of SV VCF files (e.g., the standardized Manta, Wham, or Scramble VCFs of a batch)
-    to the records entirely within the target regions, and lifts over their coordinates if a mini reference
-    is given. The VCFs are processed as text, since the END of a breakend (BND) record is a position on
-    another contig (i.e., the INFO field CHR2), which is also encoded in the ALT allele (e.g., `N[chr2:100[`).
+    Downsamples a bgzipped SV VCF file (e.g., the genotyped PESR or depth VCFs of a batch) to the records
+    entirely within the target regions, and lifts over their coordinates if a mini reference is given.
+    The VCFs are processed as text, since the END of a breakend (BND) record is a position on another
+    contig (i.e., the INFO field CHR2), which may also be encoded in the ALT allele (e.g., `N[chr2:100[`).
     """
     bnd_alt_regex = re.compile(r"([\[\]])([^:\[\]]+):(\d+)([\[\]])")
+    # The intervals of complex SVs in the INFO fields CPX_INTERVALS and SOURCE (e.g., `DUP_chr1:100-200`).
+    cpx_interval_regex = re.compile(r"^([A-Za-z]+)_([^:]+):(\d+)-(\d+)$")
+    cpx_interval_info_fields = ["CPX_INTERVALS", "SOURCE"]
 
-    def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
+    def __init__(self, working_dir, callback: Callable[[str, str], dict], **kwargs):
         super().__init__(working_dir, callback, **kwargs)
 
     @staticmethod
     def get_supported_file_types() -> List[str]:
-        return [".tar.gz"]
+        return [".vcf.gz"]
 
     def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
-        with tempfile.TemporaryDirectory(prefix="tmp_sv_vcf_tar_", dir=self.working_dir) as tmp_dir:
-            with tarfile.open(input_filename, "r:gz") as tar:
-                tar.extractall(tmp_dir)
-            for root, _, filenames in os.walk(tmp_dir):
-                for filename in filenames:
-                    if filename.endswith(".vcf.gz"):
-                        self.downsample_vcf(os.path.join(root, filename), regions)
-            output_filename = self.get_output_filename(input_filename, output_prefix)
-            with tarfile.open(output_filename, "w:gz") as tar:
-                tar.add(tmp_dir, arcname=".")
-        return self.callback(output_filename)
+        output_filename = self.get_output_filename(input_filename, output_prefix)
+        self.downsample_vcf(input_filename, output_filename, regions)
+        pysam.tabix_index(output_filename, preset="vcf", force=True)
+        return self.callback(output_filename, output_filename + ".tbi")
 
     def lift_interval(self, chr: str, start: int, end: int, regions: List[Region]):
         """
@@ -799,12 +831,13 @@ class SvVcfTarDownsampler(BaseTransformer):
             return start, end
         return None
 
-    def downsample_vcf(self, filename: str, regions: List[Region]):
+    def downsample_vcf(self, input_filename: str, output_filename: str, regions: List[Region]):
         """
-        Downsamples the given bgzipped VCF file in place.
+        Downsamples the given bgzipped VCF file, and writes the output bgzipped;
+        the input and output files can be the same (i.e., downsampling in place).
         """
-        uncompressed_filename = filename.removesuffix(".gz")
-        with gzip.open(filename, "rt") as input_file, open(uncompressed_filename, "w") as output_file:
+        uncompressed_filename = output_filename.removesuffix(".gz") + ".tmp"
+        with gzip.open(input_filename, "rt") as input_file, open(uncompressed_filename, "w") as output_file:
             for line in input_file:
                 if line.startswith("##contig") and self.mini_reference is not None:
                     continue
@@ -817,8 +850,7 @@ class SvVcfTarDownsampler(BaseTransformer):
                 lifted_line = self.lift_record(line.rstrip("\n").split("\t"), regions)
                 if lifted_line is not None:
                     output_file.write(lifted_line + "\n")
-        os.remove(filename)
-        pysam.tabix_compress(uncompressed_filename, filename, force=True)
+        pysam.tabix_compress(uncompressed_filename, output_filename, force=True)
         os.remove(uncompressed_filename)
 
     def lift_record(self, cols: List[str], regions: List[Region]):
@@ -830,8 +862,35 @@ class SvVcfTarDownsampler(BaseTransformer):
         info = [x.split("=", maxsplit=1) for x in cols[7].split(";")]
         info_dict = {x[0]: x[1] for x in info if len(x) == 2}
         end = int(info_dict.get("END", pos))
+        updated_info = {}
 
-        if info_dict.get("SVTYPE") == "BND":
+        for field in self.cpx_interval_info_fields:
+            if field in info_dict:
+                lifted_intervals = []
+                for interval in info_dict[field].split(","):
+                    m = self.cpx_interval_regex.match(interval)
+                    if m is None:
+                        # e.g., the SOURCE of an insertion that is not a complex SV.
+                        lifted_intervals.append(interval)
+                        continue
+                    lifted_interval = self.lift_interval(m.group(2), int(m.group(3)) - 1, int(m.group(4)), regions)
+                    if lifted_interval is None:
+                        return None
+                    lifted_intervals.append(f"{m.group(1)}_{m.group(2)}:{lifted_interval[0] + 1}-{lifted_interval[1]}")
+                updated_info[field] = ",".join(lifted_intervals)
+
+        if "END2" in info_dict:
+            # GATK-style records with a second breakpoint at END2 on CHR2 (e.g., BND and CTX);
+            # the END of these records is on the same contig as POS.
+            lifted_interval = self.lift_interval(chr, pos - 1, max(pos, end), regions)
+            end2 = int(info_dict["END2"])
+            lifted_end2 = self.lift_interval(info_dict.get("CHR2", chr), end2 - 1, end2, regions)
+            if lifted_interval is None or lifted_end2 is None:
+                return None
+            new_pos = lifted_interval[0] + 1
+            new_end = new_pos + (end - pos)
+            updated_info["END2"] = str(lifted_end2[1])
+        elif info_dict.get("SVTYPE") == "BND":
             # The END of a breakend is a position on CHR2.
             lifted_pos = self.lift_interval(chr, pos - 1, pos, regions)
             lifted_end = self.lift_interval(info_dict.get("CHR2", chr), end - 1, end, regions)
@@ -849,5 +908,348 @@ class SvVcfTarDownsampler(BaseTransformer):
 
         cols[1] = str(new_pos)
         if "END" in info_dict:
-            cols[7] = ";".join(f"END={new_end}" if x[0] == "END" else "=".join(x) for x in info)
+            updated_info["END"] = str(new_end)
+        cols[7] = ";".join(f"{x[0]}={updated_info[x[0]]}" if x[0] in updated_info else "=".join(x) for x in info)
         return "\t".join(cols)
+
+
+class SvVcfTarDownsampler(SvVcfDownsampler):
+    """
+    Downsamples a tarball of SV VCF files (e.g., the standardized Manta, Wham, or Scramble VCFs of a batch);
+    see `SvVcfDownsampler` for details. If the reference panel is subset, the VCFs of the other samples are dropped.
+    """
+    def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
+        super().__init__(working_dir, callback, **kwargs)
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        return [".tar.gz"]
+
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
+        with tempfile.TemporaryDirectory(prefix="tmp_sv_vcf_tar_", dir=self.working_dir) as tmp_dir:
+            with tarfile.open(input_filename, "r:gz") as tar:
+                tar.extractall(tmp_dir)
+            for root, _, filenames in os.walk(tmp_dir):
+                for filename in filenames:
+                    if not filename.endswith(".vcf.gz"):
+                        continue
+                    vcf_filename = os.path.join(root, filename)
+                    if self.is_excluded_sample_file(filename):
+                        os.remove(vcf_filename)
+                        continue
+                    self.downsample_vcf(vcf_filename, vcf_filename, regions)
+            output_filename = self.get_output_filename(input_filename, output_prefix)
+            with tarfile.open(output_filename, "w:gz") as tar:
+                tar.add(tmp_dir, arcname=".")
+        return self.callback(output_filename)
+
+
+class PeEvidenceDownsampler(BaseTransformer):
+    """
+    Downsamples a bgzipped and indexed discordant pair (PE) evidence file (i.e., created by GATK
+    CollectSVEvidence, or merged for a batch), with the columns `contig, position, strand, mate contig,
+    mate position, mate strand, sample` (positions are 0-based), to the pairs with both ends within the target regions, and lifts
+    over both ends if a mini reference is given. Only the lines overlapping the target regions are read
+    using the file's index, hence, it is efficient for large (e.g., multi-gigabyte) files.
+    """
+    def __init__(self, working_dir, callback: Callable[[str, str], dict], **kwargs):
+        super().__init__(working_dir, callback, **kwargs)
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        return [".txt.gz"]
+
+    def lift_position(self, chr: str, pos: int, regions: List[Region]):
+        if self.mini_reference is not None:
+            lifted_interval = self.mini_reference.lift(chr, pos, pos + 1)
+            return None if lifted_interval is None else lifted_interval[0]
+        return pos if any(chr == r.chr and r.start <= pos < r.end for r in regions) else None
+
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
+        output_filename = self.get_output_filename(input_filename, output_prefix)
+        uncompressed_filename = output_filename.removesuffix(".gz")
+        # Regions are processed in the order of the mini reference, so the output is sorted accordingly.
+        ordered_regions = self.mini_reference.regions if self.mini_reference is not None else regions
+        with pysam.TabixFile(input_filename) as tabix_file, open(uncompressed_filename, "w") as output_file:
+            for region in ordered_regions:
+                if region.chr not in tabix_file.contigs:
+                    continue
+                for line in tabix_file.fetch(region.chr, region.start, region.end):
+                    cols = line.split("\t")
+                    pos = self.lift_position(cols[0], int(cols[1]), regions)
+                    mate_pos = self.lift_position(cols[3], int(cols[4]), regions)
+                    if pos is None or mate_pos is None:
+                        continue
+                    cols[1], cols[4] = str(pos), str(mate_pos)
+                    output_file.write("\t".join(cols) + "\n")
+        pysam.tabix_compress(uncompressed_filename, output_filename, force=True)
+        os.remove(uncompressed_filename)
+        pysam.tabix_index(output_filename, seq_col=0, start_col=1, end_col=1, force=True)
+        return self.callback(output_filename, output_filename + ".tbi")
+
+
+class IntronTableDownsampler(BaseTransformer):
+    """
+    Downsamples a gzipped table of introns (e.g., `gencode.v39.CDS.intron.tsv.gz`, used for annotating
+    SVs in CleanVcf) with the columns `contig, source, start, end, gene` (1-based closed intervals),
+    to the introns entirely within the target regions, and lifts them over if a mini reference is given.
+    """
+    def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
+        super().__init__(working_dir, callback, **kwargs)
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        return [".tsv.gz"]
+
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
+        output_filename = self.get_output_filename(input_filename, output_prefix)
+        uncompressed_filename = output_filename.removesuffix(".gz")
+        with gzip.open(input_filename, "rt") as input_file, open(uncompressed_filename, "w") as output_file:
+            for line in input_file:
+                cols = line.rstrip("\n").split("\t")
+                # Some coordinates are written in scientific notation (e.g., `4.2e+07`).
+                start, end = int(float(cols[2])) - 1, int(float(cols[3]))
+                if self.mini_reference is not None:
+                    lifted_interval = self.mini_reference.lift(cols[0], start, end)
+                    if lifted_interval is None:
+                        continue
+                    cols[2], cols[3] = str(lifted_interval[0] + 1), str(lifted_interval[1])
+                elif not any(cols[0] == r.chr and r.start <= start and end <= r.end for r in regions):
+                    continue
+                output_file.write("\t".join(cols) + "\n")
+        pysam.tabix_compress(uncompressed_filename, output_filename, force=True)
+        os.remove(uncompressed_filename)
+        return self.callback(output_filename)
+
+
+class PositionEvidenceDownsampler(BaseTransformer):
+    """
+    Downsamples a bgzipped and indexed evidence file whose first two columns are a contig and a 0-based
+    position, e.g., split read (SR) or site depth (SD) evidence files created by GATK CollectSVEvidence,
+    to the lines within the target regions, and lifts over the positions if a mini reference is given.
+    Only the lines overlapping the target regions are read using the file's index.
+    """
+    def __init__(self, working_dir, callback: Callable[[str, str], dict], **kwargs):
+        super().__init__(working_dir, callback, **kwargs)
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        return [".txt.gz"]
+
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
+        output_filename = self.get_output_filename(input_filename, output_prefix)
+        uncompressed_filename = output_filename.removesuffix(".gz")
+        # Regions are processed in the order of the mini reference, so the output is sorted accordingly.
+        ordered_regions = self.mini_reference.regions if self.mini_reference is not None else regions
+        with pysam.TabixFile(input_filename) as tabix_file, open(uncompressed_filename, "w") as output_file:
+            for region in ordered_regions:
+                if region.chr not in tabix_file.contigs:
+                    continue
+                for line in tabix_file.fetch(region.chr, region.start, region.end):
+                    cols = line.split("\t")
+                    pos = int(cols[1])
+                    if not region.start <= pos < region.end:
+                        continue
+                    if self.mini_reference is not None:
+                        cols[1] = str(self.mini_reference.lift(cols[0], pos, pos + 1)[0])
+                    output_file.write("\t".join(cols) + "\n")
+        pysam.tabix_compress(uncompressed_filename, output_filename, force=True)
+        os.remove(uncompressed_filename)
+        pysam.tabix_index(output_filename, seq_col=0, start_col=1, end_col=1, force=True)
+        return self.callback(output_filename, output_filename + ".tbi")
+
+
+class GtfDownsampler(BaseTransformer):
+    """
+    Downsamples a GTF file (e.g., `gencode.v47.basic.protein_coding.canonical.gtf`) to the genes entirely
+    within the target regions, keeping all the records (e.g., transcripts, exons, and CDS) of those genes,
+    and lifts them over if a mini reference is given. Genes are kept or dropped as a whole, so the
+    hierarchy of the records (gene, transcript, exon) of the kept genes is intact.
+    """
+    gene_id_regex = re.compile(r'gene_id "([^"]+)"')
+
+    def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
+        super().__init__(working_dir, callback, **kwargs)
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        return [".gtf"]
+
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
+        output_filename = self.get_output_filename(input_filename, output_prefix)
+        kept_genes = set()
+        with open(input_filename, "r") as input_file:
+            for line in input_file:
+                cols = line.split("\t")
+                if line.startswith("#") or cols[2] != "gene":
+                    continue
+                start, end = int(cols[3]) - 1, int(cols[4])
+                if any(cols[0] == r.chr and r.start <= start and end <= r.end for r in regions):
+                    kept_genes.add(self.gene_id_regex.search(cols[8]).group(1))
+
+        with open(input_filename, "r") as input_file, open(output_filename, "w") as output_file:
+            for line in input_file:
+                if line.startswith("#"):
+                    output_file.write(line)
+                    continue
+                cols = line.split("\t")
+                if self.gene_id_regex.search(cols[8]).group(1) not in kept_genes:
+                    continue
+                if self.mini_reference is not None:
+                    # Intervals are 1-based and closed.
+                    start, end = self.mini_reference.lift(cols[0], int(cols[3]) - 1, int(cols[4]))
+                    cols[3], cols[4] = str(start + 1), str(end)
+                output_file.write("\t".join(cols))
+        return self.callback(output_filename)
+
+
+class GcnvModelShardDownsampler(GcnvModelDownsampler):
+    """
+    Downsamples a gCNV model shard, as `GcnvModelDownsampler` does, and if `gcnv_contigs` is given, keeps only
+    the shard's intervals on those contigs; hence, the shards with no intervals on those contigs are dropped.
+    Since gCNV runs on each model shard separately, with a mostly fixed runtime per shard, fewer shards
+    shorten its runtime. Not to be used for the contig-ploidy model, which needs all the contigs.
+    """
+    def __init__(self, working_dir, callback: Callable[[str], dict], gcnv_contigs: List[str] = None, **kwargs):
+        super().__init__(working_dir, callback, **kwargs)
+        self.gcnv_contigs = gcnv_contigs
+
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs):
+        if self.gcnv_contigs:
+            regions = [r for r in regions if r.chr in self.gcnv_contigs]
+        return super().transform(input_filename, output_prefix, regions, **kwargs)
+
+
+class FileListDownsampler(BaseTransformer):
+    """
+    Downsamples a text file listing files (one path per line), e.g., the evidence files or the gCNV model
+    shards of a reference panel, by downsampling each of the listed files using `item_transformer`,
+    and writes a list of the downsampled files. The listed files that are not on the local filesystem
+    (e.g., paths in a container) are resolved by their names in the directory of the list file.
+    The listed files with no data within the target regions (i.e., `item_transformer` returns None)
+    are dropped from the list. If `per_sample` and the reference panel is subset, the files of the other
+    samples are dropped too.
+    """
+    item_transformer: type = None
+    per_sample: bool = False
+
+    def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
+        super().__init__(working_dir, callback, **kwargs)
+        self.item_transformer_instance = self.item_transformer(
+            working_dir=working_dir, callback=lambda *x: x[0], **kwargs)
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        return [".list"]
+
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
+        output_filename = self.get_output_filename(input_filename, output_prefix)
+        with open(input_filename, "r") as f:
+            filenames = [line.strip() for line in f if line.strip()]
+        downsampled_filenames = []
+        for filename in filenames:
+            if self.per_sample and self.is_excluded_sample_file(filename):
+                continue
+            if not os.path.isfile(filename):
+                filename = os.path.join(os.path.dirname(input_filename), os.path.basename(filename))
+            downsampled_filename = self.item_transformer_instance.transform(filename, output_prefix, regions)
+            if downsampled_filename is not None:
+                downsampled_filenames.append(downsampled_filename)
+        with open(output_filename, "w") as f:
+            f.writelines(x + "\n" for x in downsampled_filenames)
+        return self.callback(output_filename)
+
+
+class PeEvidenceListDownsampler(FileListDownsampler):
+    item_transformer = PeEvidenceDownsampler
+    per_sample = True
+
+
+class PositionEvidenceListDownsampler(FileListDownsampler):
+    item_transformer = PositionEvidenceDownsampler
+    per_sample = True
+
+
+class GcnvModelListDownsampler(FileListDownsampler):
+    item_transformer = GcnvModelShardDownsampler
+
+
+class SampleListDownsampler(BaseTransformer):
+    """
+    Subsets a text file with a sample ID per line (e.g., the samples of a reference panel), or a tab-delimited
+    file with a sample ID per row in column `sample_column` (e.g., a PED file), to the kept reference panel samples.
+    """
+    sample_column: int = 0
+
+    def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
+        super().__init__(working_dir, callback, **kwargs)
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        return [".list", ".txt"]
+
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
+        output_filename = self.get_output_filename(input_filename, output_prefix)
+        with open(input_filename, "r") as input_file, open(output_filename, "w") as output_file:
+            for line in input_file:
+                cols = line.rstrip("\n").split("\t")
+                if line.startswith("#") or not self.is_excluded_sample(cols[self.sample_column]):
+                    output_file.write(line)
+        return self.callback(output_filename)
+
+
+class PedDownsampler(SampleListDownsampler):
+    sample_column = 1
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        return [".ped"]
+
+
+class MedianCovDownsampler(BaseTransformer):
+    """
+    Subsets a table of the median coverage of samples (e.g., `medianCov.transposed.bed`, with a row of
+    sample IDs followed by a row of their median coverages) to the kept reference panel samples.
+    """
+    def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
+        super().__init__(working_dir, callback, **kwargs)
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        return [".bed"]
+
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
+        output_filename = self.get_output_filename(input_filename, output_prefix)
+        with open(input_filename, "r") as f:
+            rows = [line.rstrip("\n").split("\t") for line in f if line.strip()]
+        kept_indices = [i for i, sample_id in enumerate(rows[0]) if not self.is_excluded_sample(sample_id)]
+        with open(output_filename, "w") as f:
+            for row in rows:
+                f.write("\t".join(row[i] for i in kept_indices) + "\n")
+        return self.callback(output_filename)
+
+
+class BincovMatrixDownsampler(BedDownsampler):
+    """
+    Downsamples a bin coverage matrix (i.e., a BED file with a column of read counts per sample),
+    as `BedDownsampler` does, and subsets its columns to the kept reference panel samples.
+    """
+    def read_lines(self, input_filename: str, regions: List[Region]):
+        kept_indices = None
+        for line in super().read_lines(input_filename, regions):
+            cols = line.rstrip("\n").split("\t")
+            if kept_indices is None:
+                # The header line, e.g., `#Chr Start End HG00096 HG00129 ...`.
+                kept_indices = [i for i, x in enumerate(cols) if i < 3 or not self.is_excluded_sample(x)]
+            yield "\t".join(cols[i] for i in kept_indices) + "\n"
+
+
+class RefPanelDepthCallsDownsampler(BedDownsampler):
+    """
+    Downsamples the depth calls (DEL or DUP) of a reference panel, as `BedDownsampler` does,
+    and keeps only the calls of the kept reference panel samples (in the `sample` column).
+    """
+    def read_lines(self, input_filename: str, regions: List[Region]):
+        for line in super().read_lines(input_filename, regions):
+            if line.startswith("#") or not self.is_excluded_sample(line.split("\t")[4]):
+                yield line

@@ -33,8 +33,13 @@
   "gcnv_max_training_epochs": null,
   "gcnv_min_training_epochs": null,
   "gcnv_model_tars": [
+    "/test_inputs/reference_panel/downsampled_all_samples-gcnv-model-shard-230.tar.gz",
+    "/test_inputs/reference_panel/downsampled_all_samples-gcnv-model-shard-232.tar.gz",
     "/test_inputs/reference_panel/downsampled_all_samples-gcnv-model-shard-258.tar.gz",
-    "/test_inputs/reference_panel/downsampled_all_samples-gcnv-model-shard-274.tar.gz"
+    "/test_inputs/reference_panel/downsampled_all_samples-gcnv-model-shard-261.tar.gz",
+    "/test_inputs/reference_panel/downsampled_all_samples-gcnv-model-shard-274.tar.gz",
+    "/test_inputs/reference_panel/downsampled_all_samples-gcnv-model-shard-276.tar.gz",
+    "/test_inputs/reference_panel/downsampled_all_samples-gcnv-model-shard-284.tar.gz"
   ],
   "gcnv_num_thermal_advi_iters": null,
   "gcnv_p_alt": null,

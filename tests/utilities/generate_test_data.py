@@ -25,6 +25,10 @@ class Region:
 class Handler:
     transformer: Union[transformers.BaseTransformer, Type[transformers.BaseTransformer]]
     callback: Callable[[str, ...], dict]
+    # Set to True for inputs whose filenames are used by the tool (e.g., the genome tracks
+    # of GQ recalibration, whose filenames are the names of the features of a trained model),
+    # hence, the downsampled file is written with the same filename as the input.
+    keep_filename: bool = False
 
 
 SUBJECT_WORKFLOW_INPUTS = {
@@ -140,7 +144,7 @@ SUBJECT_WORKFLOW_INPUTS = {
             lambda bed_gz, bed_gz_tbi: {"bincov_matrix": bed_gz, "bincov_matrix_index": bed_gz_tbi}
         ),
         "chrom_file": Handler(
-            transformers.FaiDownsampler,
+            transformers.CnmopsContigsFaiDownsampler,
             lambda x: {"chrom_file": x}
         ),
         "allo_file": Handler(
@@ -173,7 +177,7 @@ SUBJECT_WORKFLOW_INPUTS = {
             lambda x: {"contig_ploidy_model_tar": x}
         ),
         "gcnv_model_tars": Handler(
-            transformers.GcnvModelDownsampler,
+            transformers.GcnvModelShardDownsampler,
             lambda x: {"gcnv_model_tars": x}
         )
     },
@@ -218,6 +222,268 @@ SUBJECT_WORKFLOW_INPUTS = {
             transformers.BedDownsampler,
             lambda bed_gz, bed_gz_tbi: {"pesr_exclude_intervals": bed_gz}
         )
+    },
+    # Inputs of sv-shell's `src/sv_shell/make_cohort_vcf.sh`; see `gather_sample_evidence` for details.
+    # Note that the genotyped VCFs, PE evidence, binned coverage, and median coverage are created by upstream
+    # tasks (`single_sample_pipeline` and `gather_batch_evidence`); the inputs without coordinates
+    # (e.g., the median coverage, clustering configs, and genotyping tables) are copied.
+    "make_cohort_vcf": {
+        "reference_fasta": Handler(
+            transformers.ReferenceDownsampler,
+            lambda fasta, fai, dict, alt, amb, ann, bwt, pac, sa: {
+                "reference_fasta": fasta, "reference_fasta_fai": fai, "reference_dict": dict}
+        ),
+        "pesr_vcfs": Handler(
+            transformers.SvVcfDownsampler,
+            lambda vcf_gz, vcf_gz_tbi: {"pesr_vcfs": vcf_gz}
+        ),
+        "depth_vcfs": Handler(
+            transformers.SvVcfDownsampler,
+            lambda vcf_gz, vcf_gz_tbi: {"depth_vcfs": vcf_gz}
+        ),
+        "disc_files": Handler(
+            transformers.PeEvidenceDownsampler,
+            lambda txt_gz, txt_gz_tbi: {"disc_files": txt_gz}
+        ),
+        "bincov_files": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"bincov_files": bed_gz}
+        ),
+        "contig_list": Handler(
+            transformers.FaiDownsampler,
+            lambda x: {"contig_list": x}
+        ),
+        "allosome_fai": Handler(
+            transformers.FaiDownsampler,
+            lambda x: {"allosome_fai": x}
+        ),
+        "primary_contigs_list": Handler(
+            transformers.PrimaryContigsDownsampler,
+            lambda x, _: {"primary_contigs_list": x}
+        ),
+        "cytobands": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"cytobands": bed_gz}
+        ),
+        "bin_exclude": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"bin_exclude": bed_gz}
+        ),
+        "mei_bed": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"mei_bed": bed_gz}
+        ),
+        "pe_exclude_list": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"pe_exclude_list": bed_gz}
+        ),
+        "HERVK_reference": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"HERVK_reference": bed_gz}
+        ),
+        "LINE1_reference": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"LINE1_reference": bed_gz}
+        ),
+        "track_bed_files": Handler(
+            transformers.BedDownsampler,
+            lambda x: {"track_bed_files": x}
+        ),
+        "intron_reference": Handler(
+            transformers.IntronTableDownsampler,
+            lambda x: {"intron_reference": x}
+        )
+    },
+    # Inputs of sv-shell's `src/sv_shell/single_sample_pipeline.sh` (non-DRAGEN mode); see `gather_sample_evidence`
+    # for details. The lists of reference panel files (e.g., `ref_pesr_disc_files_list`) are downsampled by
+    # downsampling each of the listed files. The inputs without coordinates (e.g., the reference panel's sample
+    # list, PED file, metrics, cutoffs, genotyping tables, and models) are copied.
+    "single_sample_pipeline": {
+        "reference_fasta": Handler(
+            transformers.ReferenceDownsampler,
+            lambda fasta, fai, dict, alt, amb, ann, bwt, pac, sa: {
+                "reference_fasta": fasta, "reference_index": fai, "reference_fasta_fai": fai, "reference_dict": dict,
+                "reference_bwa_alt": alt, "reference_bwa_amb": amb, "reference_bwa_ann": ann,
+                "reference_bwa_bwt": bwt, "reference_bwa_pac": pac, "reference_bwa_sa": sa}
+        ),
+        "bam_or_cram_file": Handler(
+            transformers.CramDownsampler,
+            lambda cram, index: {"bam_or_cram_file": cram, "bam_or_cram_index": index}
+        ),
+        "sample_bincov_matrix": Handler(
+            transformers.IntervalListDownsampler,
+            lambda tsv_gz, tsv_gz_tbi: {"sample_bincov_matrix": tsv_gz, "sample_bincov_matrix_idx": tsv_gz_tbi}
+        ),
+        "preprocessed_intervals": Handler(
+            transformers.IntervalListDownsampler,
+            lambda x: {"preprocessed_intervals": x}
+        ),
+        "sd_locs_vcf": Handler(
+            transformers.VcfDownsampler,
+            lambda x: {"sd_locs_vcf": x}
+        ),
+        "primary_contigs_list": Handler(
+            transformers.PrimaryContigsDownsampler,
+            lambda x, _: {"primary_contigs_list": x}
+        ),
+        "primary_contigs_fai": Handler(
+            transformers.FaiDownsampler,
+            lambda x: {"primary_contigs_fai": x}
+        ),
+        "autosome_file": Handler(
+            # In single_sample_pipeline, the autosomes are used only as the contigs that cn.mops runs on.
+            transformers.CnmopsContigsFaiDownsampler,
+            lambda x: {"autosome_file": x}
+        ),
+        "allosome_file": Handler(
+            transformers.FaiDownsampler,
+            lambda x: {"allosome_file": x}
+        ),
+        "genome_file": Handler(
+            transformers.FaiDownsampler,
+            lambda x: {"genome_file": x}
+        ),
+        "manta_region_bed": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"manta_region_bed": bed_gz, "manta_region_bed_index": bed_gz_tbi}
+        ),
+        "mei_bed": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"mei_bed": bed_gz}
+        ),
+        "wham_include_list_bed_file": Handler(
+            transformers.BedDownsampler,
+            lambda x: {"wham_include_list_bed_file": x}
+        ),
+        "cytobands": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"cytobands": bed_gz}
+        ),
+        "cnmops_exclude_list": Handler(
+            transformers.BedDownsampler,
+            lambda x: {"cnmops_exclude_list": x}
+        ),
+        "depth_exclude_list": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"depth_exclude_list": bed_gz}
+        ),
+        "pesr_exclude_intervals": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"pesr_exclude_intervals": bed_gz}
+        ),
+        "bin_exclude": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"bin_exclude": bed_gz}
+        ),
+        "HERVK_reference": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"HERVK_reference": bed_gz}
+        ),
+        "LINE1_reference": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"LINE1_reference": bed_gz}
+        ),
+        "wgd_scoring_mask": Handler(
+            transformers.BedDownsampler,
+            lambda x: {"wgd_scoring_mask": x}
+        ),
+        "rmsk": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"rmsk": bed_gz}
+        ),
+        "segdups": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"segdups": bed_gz}
+        ),
+        "noncoding_bed": Handler(
+            transformers.BedDownsampler,
+            lambda x: {"noncoding_bed": x}
+        ),
+        "par_bed": Handler(
+            transformers.BedDownsampler,
+            lambda x: {"par_bed": x}
+        ),
+        "external_af_ref_bed": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"external_af_ref_bed": bed_gz}
+        ),
+        "ref_panel_bincov_matrix": Handler(
+            transformers.BincovMatrixDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"ref_panel_bincov_matrix": bed_gz}
+        ),
+        "ref_panel_del_bed": Handler(
+            transformers.RefPanelDepthCallsDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"ref_panel_del_bed": bed_gz}
+        ),
+        "ref_panel_dup_bed": Handler(
+            transformers.RefPanelDepthCallsDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"ref_panel_dup_bed": bed_gz}
+        ),
+        "clustering_track_bed_files": Handler(
+            transformers.BedDownsampler,
+            lambda x: {"clustering_track_bed_files": x}
+        ),
+        "genome_tracks": Handler(
+            transformers.BedDownsampler,
+            lambda bed_gz, bed_gz_tbi: {"genome_tracks": bed_gz},
+            keep_filename=True
+        ),
+        "intron_reference": Handler(
+            transformers.IntronTableDownsampler,
+            lambda x: {"intron_reference": x}
+        ),
+        "protein_coding_gtf": Handler(
+            transformers.GtfDownsampler,
+            lambda x: {"protein_coding_gtf": x}
+        ),
+        "contig_ploidy_model_tar": Handler(
+            transformers.GcnvModelDownsampler,
+            lambda x: {"contig_ploidy_model_tar": x}
+        ),
+        "gcnv_model_tars_list": Handler(
+            transformers.GcnvModelListDownsampler,
+            lambda x: {"gcnv_model_tars_list": x}
+        ),
+        "ref_std_manta_vcf_tar": Handler(
+            transformers.SvVcfTarDownsampler,
+            lambda x: {"ref_std_manta_vcf_tar": x}
+        ),
+        "ref_std_wham_vcf_tar": Handler(
+            transformers.SvVcfTarDownsampler,
+            lambda x: {"ref_std_wham_vcf_tar": x}
+        ),
+        "ref_std_scramble_vcf_tar": Handler(
+            transformers.SvVcfTarDownsampler,
+            lambda x: {"ref_std_scramble_vcf_tar": x}
+        ),
+        "ref_pesr_disc_files_list": Handler(
+            transformers.PeEvidenceListDownsampler,
+            lambda x: {"ref_pesr_disc_files_list": x}
+        ),
+        "ref_pesr_split_files_list": Handler(
+            transformers.PositionEvidenceListDownsampler,
+            lambda x: {"ref_pesr_split_files_list": x}
+        ),
+        "ref_pesr_sd_files_list": Handler(
+            transformers.PositionEvidenceListDownsampler,
+            lambda x: {"ref_pesr_sd_files_list": x}
+        ),
+        "ref_panel_vcf": Handler(
+            transformers.SvVcfDownsampler,
+            lambda vcf_gz, vcf_gz_tbi: {"ref_panel_vcf": vcf_gz}
+        ),
+        "ref_samples_list": Handler(
+            transformers.SampleListDownsampler,
+            lambda x: {"ref_samples_list": x}
+        ),
+        "ref_ped_file": Handler(
+            transformers.PedDownsampler,
+            lambda x: {"ref_ped_file": x}
+        ),
+        "ref_panel_median_cov": Handler(
+            transformers.MedianCovDownsampler,
+            lambda x: {"ref_panel_median_cov": x}
+        )
     }
 }
 
@@ -228,6 +494,15 @@ WORKFLOW_INPUTS_TO_DROP = {
         "melt_metrics_intervals",
         "melt_standard_vcf_header"
     ]
+}
+
+
+# The inputs set to a fixed value in the downsampled workflow JSON, for the steps that are not tested.
+WORKFLOW_INPUTS_TO_SET = {
+    "single_sample_pipeline": {
+        # STRipy is slow and is not tested on the downsampled data.
+        "run_stripy": False
+    }
 }
 
 
@@ -257,6 +532,23 @@ REFERENCE_INPUTS = {
         "reference_fasta",
         "reference_fasta_fai",
         "reference_dict"
+    ],
+    "make_cohort_vcf": [
+        "reference_fasta",
+        "reference_fasta_fai",
+        "reference_dict"
+    ],
+    "single_sample_pipeline": [
+        "reference_fasta",
+        "reference_index",
+        "reference_fasta_fai",
+        "reference_dict",
+        "reference_bwa_alt",
+        "reference_bwa_amb",
+        "reference_bwa_ann",
+        "reference_bwa_bwt",
+        "reference_bwa_pac",
+        "reference_bwa_sa"
     ]
 }
 
@@ -272,6 +564,15 @@ def parse_target_regions(input_filename):
                     f"chr, start, and stop positions, found: {repr(line.strip())}")
             regions.append(Region(str(cols[0]), int(cols[1]), int(cols[2])))
     return regions
+
+
+def parse_ref_panel_samples(input_filename: str = None) -> List[str]:
+    if input_filename is None:
+        return None
+    with open(input_filename, "r") as f:
+        samples = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+    logging.info(f"Subsetting the reference panel to {len(samples)} samples.")
+    return samples
 
 
 def localize_file(input_filename, output_filename):
@@ -302,7 +603,10 @@ def initialize_transformers(
         picard_path: str,
         input_root: str = None,
         mini_reference: transformers.MiniReference = None,
-        output_subdirs: dict = None):
+        output_subdirs: dict = None,
+        cnmops_contigs: List[str] = None,
+        gcnv_contigs: List[str] = None,
+        ref_panel_samples: List[str] = None):
     output_subdirs = output_subdirs or {}
     for _, inputs in SUBJECT_WORKFLOW_INPUTS.items():
         for input_var, handler in inputs.items():
@@ -315,7 +619,10 @@ def initialize_transformers(
                 picard_path=picard_path,
                 input_root=input_root,
                 mini_reference=mini_reference,
-                output_subdir=output_subdirs.get(input_var)
+                output_subdir=output_subdirs.get(input_var),
+                cnmops_contigs=cnmops_contigs,
+                gcnv_contigs=gcnv_contigs,
+                ref_panel_samples=ref_panel_samples
             )
 
 
@@ -402,10 +709,14 @@ def update_workflow_json(
         # An input can be a list of files (e.g., `count_files`), where each file is downsampled separately.
         updated_files = []
         for x in (v if isinstance(v, list) else [v]):
-            workflow_input_local_filename = localize_file(x, Path(working_dir).joinpath(Path(x).name))
+            # Inputs downsampled with their filename unchanged are localized in a subdirectory,
+            # so the downsampled file does not overwrite its input.
+            localize_dir = Path(working_dir).joinpath("localized") if handler.keep_filename else Path(working_dir)
+            localize_dir.mkdir(parents=True, exist_ok=True)
+            workflow_input_local_filename = localize_file(x, localize_dir.joinpath(Path(x).name))
             updated_files.append(handler.transformer.transform(
                 input_filename=workflow_input_local_filename,
-                output_prefix=output_filename_prefix,
+                output_prefix="" if handler.keep_filename else output_filename_prefix,
                 regions=regions
             ))
 
@@ -440,9 +751,17 @@ def update_workflow_json(
         elif input_root is not None and isinstance(v, str) and os.path.isfile(v):
             # Local files without a handler are copied, so the output directory contains all the input files.
             updated_workflow_inputs[k] = copy_local_file(working_dir, input_root, v, output_subdirs.get(input_var))
+        elif input_root is not None and isinstance(v, list) and len(v) > 0 \
+                and all(isinstance(x, str) and os.path.isfile(x) for x in v):
+            updated_workflow_inputs[k] = [
+                copy_local_file(working_dir, input_root, x, output_subdirs.get(input_var)) for x in v]
         else:
             updated_workflow_inputs[k] = v
             logging.info(f"Leaving {k} unchanged.")
+
+    for k, v in WORKFLOW_INPUTS_TO_SET.get(workflow_name, {}).items():
+        logging.info(f"Setting {k} to {v}.")
+        updated_workflow_inputs[k] = v
 
     # Keep the order of the inputs as in the input JSON.
     ordered_keys = [k for k in workflow_inputs.keys() if k in updated_workflow_inputs]
@@ -564,6 +883,35 @@ def main():
              "a subdirectory set follow the directory hierarchy of the input files (see `--input-root`)."
     )
 
+    parser.add_argument(
+        "--cnmops-contigs",
+        nargs="+",
+        help="Sets the contigs that cn.mops runs on (i.e., the contigs kept in the `chrom_file` of cnmops and "
+             "the `autosome_file` of single_sample_pipeline), e.g., `chr16 chr20`. Since cn.mops runs on each "
+             "contig separately, fewer contigs shorten its runtime. The default is all the contigs of the "
+             "target regions in these files."
+    )
+
+    parser.add_argument(
+        "--gcnv-contigs",
+        nargs="+",
+        help="Sets the contigs that gCNV runs on, e.g., `chr16 chr20 chrX chrY`; i.e., only the intervals "
+             "on these contigs are kept in the gCNV model shards (`gcnv_model_tars` of cnv_germline_case "
+             "and `gcnv_model_tars_list` of single_sample_pipeline), and the shards with no such intervals "
+             "are dropped. Since gCNV runs on each model shard separately, fewer shards shorten its runtime. "
+             "The contig-ploidy model is not affected. The default is all the contigs of the target regions."
+    )
+
+    parser.add_argument(
+        "--ref-panel-samples",
+        help="Sets a file with the IDs of the reference panel samples to keep, one per line (e.g., "
+             "`sv_shell_ref_panel_samples.list`); i.e., the reference panel inputs of single_sample_pipeline "
+             "(the samples list, PED file, evidence files, standardized VCFs, bin coverage matrix, median "
+             "coverages, and depth calls) are subset to these samples. Since the batch steps (e.g., cn.mops "
+             "and clustering) scale with the number of samples, fewer samples shorten their runtime. "
+             "The default is all the samples."
+    )
+
     this_script_folder = os.path.dirname(os.path.abspath(__file__))
     gatk_sv_path = os.path.dirname(os.path.dirname(this_script_folder))
 
@@ -625,7 +973,8 @@ def main():
         args.reference_dict, Path(args.working_dir).joinpath(Path(args.reference_dict).name))
     initialize_transformers(args.working_dir, args.reference_fasta, args.reference_fasta_index,
                             sequence_dict_local_filename, args.picard_path, input_root, mini_reference,
-                            dict(args.output_subdir))
+                            dict(args.output_subdir), args.cnmops_contigs,
+                            args.gcnv_contigs, parse_ref_panel_samples(args.ref_panel_samples))
 
     update_workflow_json(
         working_dir=args.working_dir,
