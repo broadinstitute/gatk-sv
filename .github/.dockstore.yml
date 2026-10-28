@@ -293,4 +293,4 @@ workflows:
     primaryDescriptorPath: /wdl/PlotGDMosaicDepth.wdl
     filters:
       branches:
-        - eph_rd_plots
+        - eph_mosaic_gd_plots
