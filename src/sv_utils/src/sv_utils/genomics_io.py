@@ -932,8 +932,9 @@ def tsv_to_pandas(
         sort_intervals: bool (Default=False)
             If set to True, sort the intervals into canonical order
         header_start: str (Default='#')
-            Assume header starts with this string.
-            If set to empty string, assume first line is header (if require_header is True)
+            Assume header starts with this string (case-sensitive).
+            If set to empty string, assume first line is header (if require_header is True).
+            A leading '#' is stripped from the header; any other header_start is kept as part of the first column name.
         require_header: bool (Default=True)
             If set to True, throw error if a header (starting with header_start) is not present in the file.
             If False, use columns (if provided) to create a header) or else just integers
@@ -965,9 +966,14 @@ def tsv_to_pandas(
     with pysam.BGZFile(data_file, "rb") as f_in:
         file_start = f_in.read(len(header_start)) if header_start else "".encode(encoding)
         if require_header:
+            # case-sensitive comparison
             if header_start and file_start != header_start:
                 # require a header but one wasn't found
                 raise ValueError(f".bed ({data_file}) file does not start with {header_start.decode(encoding)} header")
+            # a leading '#' is a comment marker and is dropped. Any other header_start (e.g. "CHR") is part of the
+            # first column name, so put it back
+            file_start = file_start.decode(encoding)
+            buffer.write(file_start[1:] if file_start.startswith('#') else file_start)
         else:
             # don't require a header in the file, create one
             if columns is None:
@@ -1240,9 +1246,12 @@ def vcat_with_categoricals(
 
 def vapor_to_pandas(
         vapor_file: Text,
-        columns: Union[Sequence[Text], Mapping[Text, Text], None] = Default.load_vapor_columns
+        columns: Union[Sequence[Text], Mapping[Text, Text], None] = Default.load_vapor_columns,
+        header_start: str = Default.header_start,
+        require_header: bool = True
 ) -> pandas.DataFrame:
-    return bed_to_pandas(vapor_file, columns=columns, missing_value="")
+    return bed_to_pandas(vapor_file, columns=columns, missing_value="", header_start=header_start,
+                         require_header=require_header)
 
 
 def _get_all_properties(

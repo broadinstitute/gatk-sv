@@ -55,6 +55,14 @@ def read_list_file(path: str) -> Iterable[str]:
     return items
 
 
+def str_to_bool(value: str) -> bool:
+    if value.lower() in ("true", "t", "yes", "y", "1"):
+        return True
+    if value.lower() in ("false", "f", "no", "n", "0"):
+        return False
+    raise argparse.ArgumentTypeError(f"expected a boolean, got '{value}'")
+
+
 def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(
@@ -76,6 +84,12 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Maximum size CNV to trust vapor results for")
     parser.add_argument("--vapor-read-support-pos-thresh", type=int, default=2,
                         help="Min Number of supporting vapor reads required for positive example")
+    parser.add_argument("--vapor-require-header", type=str_to_bool, default=True,
+                        help="Whether VaPoR files have a header line (true/false). If false, columns are assumed to be "
+                             "in the default VaPoR order")
+    parser.add_argument("--vapor-header-start", type=str, default=genomics_io.Default.header_start,
+                        help="Case-sensitive prefix of the VaPoR header line (e.g. '#' or 'CHR'). Only used if "
+                             "--vapor-require-header is true")
     parser.add_argument("--irs-sample-batch-lists", type=str,
                         help="list of lists of samples used in each IRS test batch")
     parser.add_argument("--irs-contigs-file", type=str,
@@ -126,7 +140,11 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
         irs_contigs = None
 
     vapor_files = get_truth_overlap.get_vapor_files(arguments.vapor_json)
-    vapor_variants = {sample: genomics_io.vapor_to_pandas(vapor_files[sample]) for sample in vapor_files}
+    vapor_variants = {
+        sample: genomics_io.vapor_to_pandas(vapor_files[sample], header_start=arguments.vapor_header_start,
+                                            require_header=arguments.vapor_require_header)
+        for sample in vapor_files
+    }
     for sample in vapor_variants:
         variants_df = vapor_variants[sample]
         p_non_ref_old = get_truth_overlap.get_vapor_p_non_ref_old(variants_df)

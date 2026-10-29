@@ -33,6 +33,8 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     Int? vapor_max_cnv_size = 5000
     Float? vapor_min_precision = 0.999
     Int? vapor_pos_read_threshold = 2
+    Boolean vapor_require_header = true
+    String vapor_header_start = "#"  # case-sensitive prefix of the VaPoR header line, e.g. "CHR"
     Int? irs_min_cnv_size = 10000
     Float? irs_good_pvalue_threshold = 0.000001
     Int? irs_min_probes = 5
@@ -117,6 +119,8 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
       vapor_max_cnv_size=vapor_max_cnv_size,
       vapor_min_precision=vapor_min_precision,
       vapor_pos_read_threshold=vapor_pos_read_threshold,
+      vapor_require_header=vapor_require_header,
+      vapor_header_start=vapor_header_start,
       irs_min_cnv_size=irs_min_cnv_size,
       irs_good_pvalue_threshold=irs_good_pvalue_threshold,
       irs_min_probes=irs_min_probes,
@@ -403,6 +407,8 @@ task VaporAndIRSSupportReport {
     Int? vapor_max_cnv_size
     Float? vapor_min_precision
     Int? vapor_pos_read_threshold
+    Boolean vapor_require_header = true
+    String vapor_header_start = "#"
     Int? irs_min_cnv_size
     Float? irs_good_pvalue_threshold
     Int? irs_min_probes
@@ -457,6 +463,8 @@ task VaporAndIRSSupportReport {
       ~{"--irs-good-pvalue-threshold " + irs_good_pvalue_threshold} \
       --output-summary ~{output_prefix}.irs_vapor_support.summary.tsv \
       ~{"--vapor-read-support-pos-thresh " + vapor_pos_read_threshold} \
+      --vapor-require-header ~{vapor_require_header} \
+      --vapor-header-start '~{vapor_header_start}' \
       ~{if write_detail_report then "--output-detail ~{output_prefix}.irs_vapor_support.detail.tsv.gz" else ""}
   >>>
 
