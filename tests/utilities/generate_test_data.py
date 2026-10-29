@@ -592,7 +592,7 @@ def localize_file(input_filename, output_filename):
         logging.info(f"Finished localizing blob {input_filename}")
         return str(output_filename)
     else:
-        raise NotImplementedError()
+        raise FileNotFoundError(f"Input file {input_filename} is neither a local file nor a gs:// path.")
 
 
 def initialize_transformers(
