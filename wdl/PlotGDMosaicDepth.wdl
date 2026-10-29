@@ -41,7 +41,7 @@ workflow PlotGDMosaicDepth {
     Float depth_axis_min = 0.0
     Float depth_axis_max = 4.0
     String? plot_title
-    File? plot_mosaic_script
+    File plot_mosaic_script
 
     String output_prefix = "gd_mosaic_depth"
     String sv_pipeline_docker
@@ -144,7 +144,7 @@ task ClassifyBatch {
     File gd_output_tarball
     File gd_table
     String gd_id
-    File? plot_mosaic_script
+    File plot_mosaic_script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -161,8 +161,6 @@ task ClassifyBatch {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  String plot_mosaic_cmd = if defined(plot_mosaic_script) then "python3 " + select_first([plot_mosaic_script]) else "gatk-sv-gd plot-mosaic"
-
   command <<<
     set -euo pipefail
 
@@ -174,7 +172,7 @@ task ClassifyBatch {
       PLOIDY_ARG="--ploidy-table gd_outputs/preprocess/ploidy_estimates.tsv"
     fi
 
-    ~{plot_mosaic_cmd} classify \
+    python ~{plot_mosaic_script} classify \
       --batch '~{batch}' \
       --gd-table ~{gd_table} \
       --gd-id '~{gd_id}' \
@@ -211,7 +209,7 @@ task SelectSamples {
     Int n_non_carriers
     Int random_seed
     String output_prefix
-    File? plot_mosaic_script
+    File plot_mosaic_script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -226,12 +224,10 @@ task SelectSamples {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  String plot_mosaic_cmd = if defined(plot_mosaic_script) then "python3 " + select_first([plot_mosaic_script]) else "gatk-sv-gd plot-mosaic"
-
   command <<<
     set -euo pipefail
 
-    ~{plot_mosaic_cmd} select \
+    python ~{plot_mosaic_script} select \
       --classes ~{sep=" " classes} \
       --regions ~{sep=" " regions} \
       --mosaic-samples ~{write_lines(mosaic_samples)} \
@@ -269,7 +265,7 @@ task ExtractBatchDepth {
     File region
     File gd_table
     String gd_id
-    File? plot_mosaic_script
+    File plot_mosaic_script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -286,12 +282,10 @@ task ExtractBatchDepth {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  String plot_mosaic_cmd = if defined(plot_mosaic_script) then "python3 " + select_first([plot_mosaic_script]) else "gatk-sv-gd plot-mosaic"
-
   command <<<
     set -euo pipefail
 
-    ~{plot_mosaic_cmd} extract \
+    python ~{plot_mosaic_script} extract \
       --batch '~{batch}' \
       --gd-table ~{gd_table} \
       --gd-id '~{gd_id}' \
@@ -323,7 +317,7 @@ task PlotMosaicDepth {
     File region
     File gd_table
     String gd_id
-    File? plot_mosaic_script
+    File plot_mosaic_script
     File? segdup_bed
     Float fig_width_in
     Float fig_height_in
@@ -346,12 +340,10 @@ task PlotMosaicDepth {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  String plot_mosaic_cmd = if defined(plot_mosaic_script) then "python3 " + select_first([plot_mosaic_script]) else "gatk-sv-gd plot-mosaic"
-
   command <<<
     set -euo pipefail
 
-    ~{plot_mosaic_cmd} plot \
+    python ~{plot_mosaic_script} plot \
       --gd-table ~{gd_table} \
       --gd-id '~{gd_id}' \
       --selected ~{selected} \
