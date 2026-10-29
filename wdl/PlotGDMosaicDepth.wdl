@@ -3,9 +3,16 @@ version 1.0
 import "CollectCoverage.wdl" as cov
 import "Structs.wdl"
 
-# Publication panel of normalized read depth across a GD locus (or its whole
-# cluster), comparing mosaic carriers with random germline carriers and
-# non-carriers drawn from the same batches.
+# Normalized read depth across a GD locus (or its whole cluster) for mosaic
+# carriers, random germline carriers and random non-carriers drawn from the
+# same batches.
+#
+# Preprocessing and plotting are separate. Preprocessing always runs and
+# outputs everything needed to draw the plot: the selected samples with their
+# group (selected_samples), the plotted region (locus_region), and normalized
+# low-res depth for the selected samples at the locus/cluster, one table per
+# batch holding a mosaic carrier (normalized_depth_tables). The publication PDF is drawn from
+# those outputs only when make_plot is true.
 #
 # Inputs are per-batch outputs of CallGenomicDisorderCNVs. Arrays are indexed
 # together: batches[i] goes with gd_output_tarballs[i] and high_res_rd_matrices[i].
@@ -14,9 +21,8 @@ import "Structs.wdl"
 # the way plot.py normalizes it. Only the condensed low-res counts are plotted;
 # the high-res matrix is only the source for condensing.
 #
-# plot_mosaic_script, if given, replaces `gatk-sv-gd plot-mosaic` in the image
-# with `python3 <script>` (development override; the gatk_sv_gd package must
-# still be installed in the image).
+# plot_mosaic_script is plot_mosaic.py from gatk-sv-gd; the gatk_sv_gd package
+# must be installed in the image.
 workflow PlotGDMosaicDepth {
   input {
     String gd_id
@@ -35,6 +41,7 @@ workflow PlotGDMosaicDepth {
     Int n_non_carriers = 50
     Int random_seed = 42
 
+    Boolean make_plot = true
     Float fig_width_in = 2.0
     Float fig_height_in = 2.1
     Float flank_scale = 0.15
@@ -110,29 +117,35 @@ workflow PlotGDMosaicDepth {
     }
   }
 
-  call PlotMosaicDepth {
-    input:
-      depth_tables = select_all(ExtractBatchDepth.depth),
-      selected = SelectSamples.selected,
-      region = SelectSamples.region,
-      gd_table = gd_table,
-      gd_id = gd_id,
-      segdup_bed = segdup_bed,
-      fig_width_in = fig_width_in,
-      fig_height_in = fig_height_in,
-      flank_scale = flank_scale,
-      depth_axis_min = depth_axis_min,
-      depth_axis_max = depth_axis_max,
-      plot_title = plot_title,
-      output_prefix = output_prefix,
-      plot_mosaic_script = plot_mosaic_script,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_plot
+  Array[File] depth_tables = select_all(ExtractBatchDepth.depth)
+
+  if (make_plot) {
+    call PlotMosaicDepth {
+      input:
+        depth_tables = depth_tables,
+        selected = SelectSamples.selected,
+        region = SelectSamples.region,
+        gd_table = gd_table,
+        gd_id = gd_id,
+        segdup_bed = segdup_bed,
+        fig_width_in = fig_width_in,
+        fig_height_in = fig_height_in,
+        flank_scale = flank_scale,
+        depth_axis_min = depth_axis_min,
+        depth_axis_max = depth_axis_max,
+        plot_title = plot_title,
+        output_prefix = output_prefix,
+        plot_mosaic_script = plot_mosaic_script,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_plot
+    }
   }
 
   output {
-    File mosaic_depth_plot = PlotMosaicDepth.pdf
     File selected_samples = SelectSamples.selected
+    File locus_region = SelectSamples.region
+    Array[File] normalized_depth_tables = depth_tables
+    File? mosaic_depth_plot = PlotMosaicDepth.pdf
   }
 }
 
