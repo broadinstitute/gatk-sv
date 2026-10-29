@@ -97,7 +97,7 @@ workflow GatherSampleEvidence {
 
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
-    Boolean run_module_metrics = true
+    Boolean run_module_metrics = false
     File? primary_contigs_fai # required if run_module_metrics = true
     File? baseline_manta_vcf # baseline files are optional for metrics workflow
     File? baseline_wham_vcf
