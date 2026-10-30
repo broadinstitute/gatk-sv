@@ -6,7 +6,7 @@ For each variant the most severe VEP annotation is selected
 IMPACT are collapsed: Consequence values are joined with "&", unique SYMBOL
 values with ",".
 
-Output columns (40 total, plus any --extra-info-fields appended at the end):
+Output columns (40 fixed, then any --extra-info-fields, then auto-detected columns):
   #CHROM  START  END  ID  REF  ALT  QUAL  FILTER
   allele_type  allele_length  SOURCE  REGION  TRID  dbGaP_ID
   gnomAD_V4_match_type  gnomAD_V4_match_ID  gnomAD_V4_match_source
@@ -19,6 +19,9 @@ Output columns (40 total, plus any --extra-info-fields appended at the end):
   PREDICTED_TSS_DUP  PREDICTED_UTR
   vep_Consequence  vep_IMPACT  vep_SYMBOL
   [extra INFO fields, in the order given to --extra-info-fields]
+  [auto-detected INFO fields, in VCF header order: dbSNP_ID and every INFO ID
+   containing "_match_", if declared in the VCF header (##INFO=<ID=...>) and not
+   already one of the columns above]
 
 Usage:
     python3 vcf_to_bed_vep_parsed.py <input.vcf[.gz]> [output.bed]
@@ -28,6 +31,9 @@ Usage:
 through into extra BED columns (e.g. nhomref,nhet,nhomalt), without having to
 hardcode them in FIELDS. Each name must match an INFO ID already present in
 the VCF header/records; missing values are written as ".".
+
+Auto-detected columns depend on the VCF header, so VCFs with different INFO
+headers produce BEDs with different columns.
 
 If output is omitted, replaces .vcf.gz/.vcf with .vep_parsed.bed.
 """
@@ -51,6 +57,10 @@ FIELDS = [
 ]
 
 IMPACT_RANK = {"HIGH": 4, "MODERATE": 3, "LOW": 2, "MODIFIER": 1}
+
+# INFO fields appended automatically when declared in the VCF header
+AUTO_INFO_EXACT = ["dbSNP_ID"]
+AUTO_INFO_SUBSTRING = "_match_"
 
 
 def parse_info(info_str):
@@ -104,9 +114,18 @@ def best_vep(vep_str):
     return consequence, best_impact, symbol
 
 
+def auto_info_fields(header_info_ids, already):
+    """dbSNP_ID and every INFO ID containing "_match_" declared in the header, in
+    header order, skipping IDs already present in `already`."""
+    return [
+        i for i in header_info_ids
+        if (i in AUTO_INFO_EXACT or AUTO_INFO_SUBSTRING in i) and i not in already
+    ]
+
+
 def vcf_to_bed(infile, outfile, extra_info_fields=None):
     extra_info_fields = extra_info_fields or []
-    header_cols = (
+    fixed_cols = (
         ["#CHROM", "START", "END", "ID", "REF", "ALT", "QUAL", "FILTER"]
         + FIELDS
         + ["vep_Consequence", "vep_IMPACT", "vep_SYMBOL"]
@@ -115,10 +134,16 @@ def vcf_to_bed(infile, outfile, extra_info_fields=None):
 
     opener = gzip.open if infile.endswith(".gz") else open
     with opener(infile, "rt") as fin, open(outfile, "w") as fout:
-        fout.write("\t".join(header_cols) + "\n")
+        header_info_ids = []
+        auto_fields = None
         for line in fin:
+            if line.startswith("##INFO=<ID="):
+                header_info_ids.append(line[len("##INFO=<ID="):].split(",", 1)[0])
+                continue
             if line.startswith("#"):
                 continue
+            if auto_fields is None:
+                auto_fields = write_header(fout, fixed_cols, header_info_ids)
             cols = line.rstrip("\n").split("\t")
             chrom, pos, vid, ref, alt, qual, filt, info_str = cols[:8]
             start = int(pos) - 1  # 0-based BED start
@@ -129,6 +154,7 @@ def vcf_to_bed(infile, outfile, extra_info_fields=None):
             info_vals = [info.get(f, ".") for f in FIELDS]
             csq, impact, symbol = best_vep(info.get("vep", "."))
             extra_vals = [info.get(f, ".") for f in extra_info_fields]
+            auto_vals = [info.get(f, ".") for f in auto_fields]
 
             fout.write(
                 "\t".join(
@@ -136,11 +162,21 @@ def vcf_to_bed(infile, outfile, extra_info_fields=None):
                     + info_vals
                     + [csq, impact, symbol]
                     + extra_vals
+                    + auto_vals
                 )
                 + "\n"
             )
+        if auto_fields is None:  # VCF with no records: header only
+            auto_fields = write_header(fout, fixed_cols, header_info_ids)
 
+    print(f"Auto-detected INFO columns: {','.join(auto_fields) if auto_fields else 'none'}", flush=True)
     print(f"Saved: {outfile}", flush=True)
+
+
+def write_header(fout, fixed_cols, header_info_ids):
+    auto_fields = auto_info_fields(header_info_ids, set(fixed_cols))
+    fout.write("\t".join(fixed_cols + auto_fields) + "\n")
+    return auto_fields
 
 
 def parse_args():

@@ -6,7 +6,7 @@ version 1.0
 ## Scatters over all input VCFs in parallel, then concatenates into one BED,
 ## sorts it, and bgzips + tabix-indexes the final merged BED.
 ##
-## Output columns (40, plus any extra_info_fields appended at the end):
+## Output columns (40 fixed, then any extra_info_fields, then auto-detected columns):
 ##   #CHROM START END ID REF ALT QUAL FILTER
 ##   allele_type allele_length SOURCE REGION TRID dbGaP_ID
 ##   gnomAD_V4_match_type gnomAD_V4_match_ID gnomAD_V4_match_source AF AC AN
@@ -18,6 +18,12 @@ version 1.0
 ##   PREDICTED_TSS_DUP PREDICTED_UTR
 ##   vep_Consequence vep_IMPACT vep_SYMBOL
 ##   [extra_info_fields, e.g. nhomref nhet nhomalt]
+##   [auto-detected, in VCF header order: dbSNP_ID and every INFO field whose ID
+##    contains "_match_" (e.g. gnomAD_SV_match_ID), included only if declared in
+##    the VCF header and not already a column above]
+##
+## Auto-detected columns follow each VCF's header, so all input VCFs must declare
+## the same such INFO fields; ConcatBeds fails if the shard BED headers differ.
 ##
 ## extra_info_fields (optional): comma-separated list of additional site-level
 ## INFO field names to pull straight through into extra BED columns, e.g.
@@ -208,8 +214,20 @@ task ConcatBeds {
         BED_FILES=(~{sep=" " bed_files})
         OUT="~{merged}"
 
+        # Columns can differ between shards (auto-detected INFO columns follow
+        # each VCF's header); refuse to merge shards whose headers differ.
+        HEADER=$(head -1 "${BED_FILES[0]}")
+        for f in "${BED_FILES[@]}"; do
+            if [ "$(head -1 "$f")" != "$HEADER" ]; then
+                echo "ERROR: BED header of $f differs from ${BED_FILES[0]}:" >&2
+                echo "  $(head -1 "$f")" >&2
+                echo "  $HEADER" >&2
+                exit 1
+            fi
+        done
+
         # Write header from the first shard
-        head -1 "${BED_FILES[0]}" > "$OUT"
+        echo "$HEADER" > "$OUT"
 
         # Append data rows (skip header line 1) from every shard
         for f in "${BED_FILES[@]}"; do
