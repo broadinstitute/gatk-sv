@@ -666,7 +666,10 @@ def relocate_output_paths(output_filename: str, working_dir: str, output_root: s
     mounted in a container) in the paths of the given output JSON, and of the list files it references.
     """
     working_dir = str(Path(working_dir).resolve())
-    relocate = lambda x: x.replace(working_dir, output_root.rstrip("/"))
+
+    def relocate(x):
+        return x.replace(working_dir, output_root.rstrip("/"))
+
     with open(output_filename, "r") as f:
         workflow_inputs = json.load(f)
     for v in workflow_inputs.values():
