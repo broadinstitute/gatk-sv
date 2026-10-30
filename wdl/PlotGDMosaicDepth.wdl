@@ -4,14 +4,16 @@ import "CollectCoverage.wdl" as cov
 import "Structs.wdl"
 
 # Normalized read depth across a GD locus (or its whole cluster) for mosaic
-# carriers, random germline carriers and random non-carriers drawn from the
-# same batches.
+# carriers, random germline carriers and random non-carriers. Non-carriers come
+# from the mosaic carriers' batches; germline carriers do too, plus the fewest
+# extra batches needed to reach n_germline_carriers (or all that exist).
 #
 # Preprocessing and plotting are separate. Preprocessing always runs and
 # outputs everything needed to draw the plot: the selected samples with their
 # group (selected_samples), the plotted region (locus_region), and normalized
 # low-res depth for the selected samples at the locus/cluster, one table per
-# batch holding a mosaic carrier (normalized_depth_tables). The publication PDF is drawn from
+# batch contributing a selected sample (normalized_depth_tables; batches_used
+# lists them). The publication PDF is drawn from
 # those outputs only when make_plot is true.
 #
 # Inputs are per-batch outputs of CallGenomicDisorderCNVs. Arrays are indexed
@@ -87,10 +89,10 @@ workflow PlotGDMosaicDepth {
       runtime_attr_override = runtime_attr_select
   }
 
-  Array[String] has_mosaic = read_lines(SelectSamples.has_mosaic_flags)
+  Array[String] use_batch = read_lines(SelectSamples.use_batch_flags)
 
   scatter (i in range(length(batches))) {
-    if (has_mosaic[i] == "true") {
+    if (use_batch[i] == "true") {
       call cov.CondenseReadCounts {
         input:
           counts = high_res_rd_matrices[i],
@@ -143,6 +145,7 @@ workflow PlotGDMosaicDepth {
 
   output {
     File selected_samples = SelectSamples.selected
+    File selected_batches = SelectSamples.batches_used
     File locus_region = SelectSamples.region
     Array[File] normalized_depth_tables = depth_tables
     File? mosaic_depth_plot = PlotMosaicDepth.pdf
@@ -211,8 +214,11 @@ task ClassifyBatch {
   }
 }
 
-# Finds the batches holding the mosaic carriers, then draws random germline
-# carriers and non-carriers from those batches only.
+# Finds the batches holding the mosaic carriers and draws random non-carriers
+# from them. Draws min(n_germline_carriers, all available) germline carriers,
+# from the mosaic batches first; if those hold too few, the fewest additional
+# batches (random among ties) supply the rest. use_batch_flags has one
+# true/false per entry of regions, in order.
 task SelectSamples {
   input {
     Array[String] mosaic_samples
@@ -263,8 +269,8 @@ task SelectSamples {
   output {
     File selected = output_prefix + ".selected.tsv"
     File region = output_prefix + ".region.json"
-    # One "true"/"false" per entry of regions, in the same order.
-    File has_mosaic_flags = output_prefix + ".has_mosaic.txt"
+        File batches_used = output_prefix + ".batches.txt"
+    File use_batch_flags = output_prefix + ".use_batch.txt"
   }
 }
 

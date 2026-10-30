@@ -294,3 +294,10 @@ workflows:
     filters:
       branches:
         - eph_mosaic_gd_plots
+
+  - subclass: WDL
+    name: PlotGDModeDepth
+    primaryDescriptorPath: /wdl/PlotGDModeDepth.wdl
+    filters:
+      branches:
+        - eph_mosaic_gd_plots
