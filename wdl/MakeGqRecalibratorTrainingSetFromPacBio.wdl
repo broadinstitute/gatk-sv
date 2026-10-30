@@ -100,6 +100,8 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
       vapor_max_cnv_size=vapor_max_cnv_size,
       vapor_min_precision=vapor_min_precision,
       vapor_pos_read_threshold=vapor_pos_read_threshold,
+      vapor_require_header=vapor_require_header,
+      vapor_header_start=vapor_header_start,
       irs_min_cnv_size=irs_min_cnv_size,
       irs_good_pvalue_threshold=irs_good_pvalue_threshold,
       irs_min_probes=irs_min_probes,
@@ -263,6 +265,8 @@ task GetVariantListsFromVaporAndIRS {
     Int? vapor_pos_read_threshold
     Int? vapor_neg_read_threshold
     Int? vapor_neg_cov_read_threshold
+    Boolean vapor_require_header = true
+    String vapor_header_start = "#"
     Int? irs_min_cnv_size
     Float? irs_good_pvalue_threshold
     Float? irs_bad_pvalue_threshold
@@ -321,6 +325,8 @@ task GetVariantListsFromVaporAndIRS {
       ~{"--vapor-read-support-pos-thresh " + vapor_pos_read_threshold} \
       ~{"--vapor-read-support-neg-thresh " + vapor_neg_read_threshold} \
       ~{"--vapor-read-support-neg-cov-thresh " + vapor_neg_cov_read_threshold} \
+      --vapor-require-header ~{vapor_require_header} \
+      --vapor-header-start '~{vapor_header_start}' \
       --irs-output ~{output_prefix}.gq_recalibrator_labels.irs.json \
       --vapor-output ~{output_prefix}.gq_recalibrator_labels.vapor.json \
       ~{additional_args}

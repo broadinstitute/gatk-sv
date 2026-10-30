@@ -6,7 +6,7 @@ import gzip
 
 from pysam import VariantFile, VariantRecord
 
-from sv_utils import genomics_io, get_truth_overlap
+from sv_utils import common, genomics_io, get_truth_overlap
 from typing import List, Text, Optional, Dict, Iterable
 
 
@@ -55,14 +55,6 @@ def read_list_file(path: str) -> Iterable[str]:
     return items
 
 
-def str_to_bool(value: str) -> bool:
-    if value.lower() in ("true", "t", "yes", "y", "1"):
-        return True
-    if value.lower() in ("false", "f", "no", "n", "0"):
-        return False
-    raise argparse.ArgumentTypeError(f"expected a boolean, got '{value}'")
-
-
 def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(
@@ -84,7 +76,7 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Maximum size CNV to trust vapor results for")
     parser.add_argument("--vapor-read-support-pos-thresh", type=int, default=2,
                         help="Min Number of supporting vapor reads required for positive example")
-    parser.add_argument("--vapor-require-header", type=str_to_bool, default=True,
+    parser.add_argument("--vapor-require-header", type=common.argparse_bool, default=True,
                         help="Whether VaPoR files have a header line (true/false). If false, columns are assumed to be "
                              "in the default VaPoR order")
     parser.add_argument("--vapor-header-start", type=str, default=genomics_io.Default.header_start,

@@ -8,7 +8,7 @@ import pandas as pd
 
 from pysam import VariantFile, VariantRecord
 
-from sv_utils import genomics_io, get_truth_overlap
+from sv_utils import common, genomics_io, get_truth_overlap
 from typing import List, Text, Optional, Dict, Tuple, Iterable, Set, Mapping
 
 
@@ -18,7 +18,9 @@ def get_confident_variants_vapor(vapor_files: Optional[Dict[str, str]],
                                  strategy: str,
                                  read_strategy_good_support_threshold: int,
                                  read_strategy_bad_support_threshold: int,
-                                 read_strategy_bad_cov_threshold: int
+                                 read_strategy_bad_cov_threshold: int,
+                                 vapor_header_start: str = genomics_io.Default.header_start,
+                                 vapor_require_header: bool = True
                                  ) -> get_truth_overlap.ConfidentVariants:
     vapor_info = {
         sample_id:
@@ -28,7 +30,9 @@ def get_confident_variants_vapor(vapor_files: Optional[Dict[str, str]],
                                                               strategy=strategy,
                                                               read_strategy_good_support_threshold=read_strategy_good_support_threshold,
                                                               read_strategy_bad_support_threshold=read_strategy_bad_support_threshold,
-                                                              read_strategy_bad_cov_threshold=read_strategy_bad_cov_threshold)
+                                                              read_strategy_bad_cov_threshold=read_strategy_bad_cov_threshold,
+                                                              vapor_header_start=vapor_header_start,
+                                                              vapor_require_header=vapor_require_header)
         for sample_id, vapor_file in vapor_files.items()
     }
     return vapor_info
@@ -155,6 +159,12 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Max number of supporting vapor reads required for neg example")
     parser.add_argument("--vapor-read-support-neg-cov-thresh", type=int, default=5,
                         help="Max number of covering vapor reads required for neg example")
+    parser.add_argument("--vapor-require-header", type=common.argparse_bool, default=True,
+                        help="Whether VaPoR files have a header line (true/false). If false, columns are assumed to be "
+                             "in the default VaPoR order")
+    parser.add_argument("--vapor-header-start", type=str, default=genomics_io.Default.header_start,
+                        help="Case-sensitive prefix of the VaPoR header line (e.g. '#' or 'CHR'). Only used if "
+                             "--vapor-require-header is true")
     parser.add_argument("--irs-output", type=str, default="-",
                         help="File to output IRS results to. If omitted or set to '-', print to stdout")
     parser.add_argument("--vapor-output", type=str, default="-",
@@ -246,7 +256,9 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
         strategy=arguments.vapor_strategy,
         read_strategy_good_support_threshold=arguments.vapor_read_support_pos_thresh,
         read_strategy_bad_support_threshold=arguments.vapor_read_support_neg_thresh,
-        read_strategy_bad_cov_threshold=arguments.vapor_read_support_neg_cov_thresh
+        read_strategy_bad_cov_threshold=arguments.vapor_read_support_neg_cov_thresh,
+        vapor_header_start=arguments.vapor_header_start,
+        vapor_require_header=arguments.vapor_require_header
     )
     logging.info(f"Samples with confident Vapor variants: {len(vapor_confident_variants)}")
 

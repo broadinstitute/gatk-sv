@@ -1317,7 +1317,9 @@ def select_confident_vapor_variants(
         read_strategy_good_support_threshold: int,
         read_strategy_bad_support_threshold: int,
         read_strategy_bad_cov_threshold: int,
-        precision: float = Default.min_vapor_precision
+        precision: float = Default.min_vapor_precision,
+        vapor_header_start: str = genomics_io.Default.header_start,
+        vapor_require_header: bool = True
 ) -> SampleConfidentVariants:
     f"""
     Use provided the VaPoR file to select confident good/bad variants
@@ -1328,11 +1330,16 @@ def select_confident_vapor_variants(
             Set of variants for which we want to estimate the probability that they are non-REF
         precision: float (default={Default.min_vapor_precision})
             Threshold for deciding that that non-REF probability is high/low enough to be a good/bad variant.
+        vapor_header_start: str (default={genomics_io.Default.header_start})
+            Case-sensitive prefix of the VaPoR header line
+        vapor_require_header: bool (default=True)
+            Whether the VaPoR file has a header line
     Returns:
         sample_confident_variants: SampleConfidentVariants
             Object holding the confident variants for this sample
     """
-    vapor_data = genomics_io.vapor_to_pandas(vapor_file)
+    vapor_data = genomics_io.vapor_to_pandas(vapor_file, header_start=vapor_header_start,
+                                             require_header=vapor_require_header)
     if strategy == 'GQ':
         vapor_p_non_ref = get_vapor_p_non_ref_old(vapor_data)
     elif strategy == 'GT':
