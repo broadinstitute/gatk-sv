@@ -509,6 +509,9 @@ WORKFLOW_INPUTS_TO_SET = {
 # The workflows whose inputs are downsampled to a mini reference (see `transformers.MiniReference`),
 # and their inputs that are the reference or its index files. When the reference is not downsampled
 # (see `--skip-reference-downsampling`), these inputs are left unchanged (i.e., neither downsampled nor copied).
+# Index sidecars localized next to the gs:// inputs, e.g., `sample.cram.crai`.
+INDEX_SUFFIXES = [".crai", ".bai", ".tbi", ".csi"]
+
 REFERENCE_INPUTS = {
     "gather_sample_evidence": [
         "reference_fasta",
@@ -718,6 +721,8 @@ def copy_local_file(working_dir: str, input_root: str, filename: str, output_sub
     else:
         relative_path = Path(filename).name
     output_filename = Path(working_dir).resolve().joinpath(relative_path)
+    if output_filename.exists() and output_filename.samefile(filename):
+        return str(output_filename)
     output_filename.parent.mkdir(parents=True, exist_ok=True)
     logging.info(f"Copying {filename} to {output_filename}.")
     shutil.copyfile(filename, output_filename)
@@ -746,6 +751,9 @@ def update_workflow_json(
         handler = SUBJECT_WORKFLOW_INPUTS.get(k_workflow_name, {}).get(input_var)
         if handler is None or (skip_reference_downsampling and is_reference_input(k_workflow_name, input_var)):
             continue
+        if v is None or v == "" or v == []:
+            # Unset optional inputs (e.g., `wham_vcf_tar` when not using Wham) are kept unchanged in the second pass.
+            continue
 
         logging.info(f"Processing input {k}.")
         # An input can be a list of files (e.g., `count_files`), where each file is downsampled separately.
@@ -756,6 +764,8 @@ def update_workflow_json(
             localize_dir = Path(working_dir).joinpath("localized") if handler.keep_filename else Path(working_dir)
             localize_dir.mkdir(parents=True, exist_ok=True)
             workflow_input_local_filename = localize_file(x, localize_dir.joinpath(Path(x).name))
+            localize_index_file(x, workflow_input_local_filename, workflow_inputs.get(f"{key_prefix}bam_or_cram_index")
+                                if input_var == "bam_or_cram_file" else None)
             updated_files.append(handler.transformer.transform(
                 input_filename=workflow_input_local_filename,
                 output_prefix="" if handler.keep_filename else output_filename_prefix,
@@ -776,6 +786,8 @@ def update_workflow_json(
             filenames = [x[varname] for x in updated_files]
             if bucket_name is not None and blob_name is not None:
                 for i, filename in enumerate(filenames):
+                    if isinstance(handler.transformer, transformers.FileListDownsampler):
+                        upload_listed_files(filename, bucket_name, blob_name)
                     logging.info(f"Uploading downsampled file {filename} to bucket {bucket_name}.")
                     filenames[i] = upload_to_gs_blob(filename, bucket_name, blob_name)
                     logging.info(f"Finished uploading {filename}.")
@@ -824,10 +836,50 @@ def upload_to_gs_blob(filename, bucket_name, blob_name):
     return "gs://" + bucket_name + "/" + blob_name
 
 
+def upload_listed_files(list_filename, bucket_name, blob_name):
+    """
+    Uploads the files (and their indexes) listed in the given list file,
+    and rewrites the list with the paths of the uploaded files.
+    """
+    with open(list_filename, "r") as f:
+        filenames = [line.strip() for line in f if line.strip()]
+    uploaded_filenames = []
+    for filename in filenames:
+        logging.info(f"Uploading listed file {filename} to bucket {bucket_name}.")
+        uploaded_filenames.append(upload_to_gs_blob(filename, bucket_name, blob_name))
+        if os.path.isfile(filename + ".tbi"):
+            upload_to_gs_blob(filename + ".tbi", bucket_name, blob_name)
+    with open(list_filename, "w") as f:
+        f.writelines(x + "\n" for x in uploaded_filenames)
+
+
 def download_blob_from_gs(gs_link, local_filename):
     bucket_name, blob_name = gs_link.split("/", maxsplit=3)[2:]
     blob = storage.Client().bucket(bucket_name).blob(blob_name)
     blob.download_to_filename(local_filename)
+
+
+def localize_index_file(input_filename, local_filename, index_filename=None):
+    """
+    Downloads the index of the given gs:// input file next to its local copy, using the given
+    index if provided (e.g., `bam_or_cram_index`), otherwise, the first existing sidecar index.
+    """
+    if not str(input_filename).startswith("gs://"):
+        return
+    if any(os.path.isfile(f"{local_filename}{suffix}") for suffix in INDEX_SUFFIXES):
+        return
+    if index_filename:
+        suffix = next((x for x in INDEX_SUFFIXES if index_filename.endswith(x)), Path(index_filename).suffix)
+        logging.info(f"Localizing index {index_filename}.")
+        download_blob_from_gs(index_filename, f"{local_filename}{suffix}")
+        return
+    bucket_name, blob_name = input_filename.split("/", maxsplit=3)[2:]
+    for suffix in INDEX_SUFFIXES:
+        blob = storage.Client().bucket(bucket_name).blob(blob_name + suffix)
+        if blob.exists():
+            logging.info(f"Localizing index {input_filename}{suffix}.")
+            blob.download_to_filename(f"{local_filename}{suffix}")
+            return
 
 
 def main():

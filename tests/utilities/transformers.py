@@ -235,7 +235,7 @@ class CramDownsampler(BaseTransformer):
                                  reference_filename=output_reference_fasta) as output_cram_file:
             for region in regions:
                 for r1, r2 in self.read_pair_generator(
-                        input_filename, region=f"{region.chr}:{region.start}-{region.end}",
+                        input_filename, region=f"{region.chr}:{region.start + 1}-{region.end}",
                         reference_filename=self.local_reference_fasta, read_dict=reads_for_second_pass):
                     self.write_pair(output_cram_file, r1, r2)
 
@@ -342,6 +342,8 @@ class CramDownsampler(BaseTransformer):
         with pysam.AlignmentFile(filename, "rc", reference_filename=reference_filename) as cram:
             for read in tqdm(cram.fetch(), desc="Iterating on reads", unit=" read", dynamic_ncols=True,
                              bar_format="{desc}: {n:,} [{elapsed}] {rate_fmt}"):
+                if read.is_secondary or read.is_supplementary:
+                    continue
                 query_name = read.query_name
                 pair = discordant_reads.get(query_name)
                 if pair is not None:
@@ -354,7 +356,7 @@ class CramDownsampler(BaseTransformer):
                         yield pair[0], read
                     del discordant_reads[query_name]
         if len(discordant_reads) > 0:
-            logging.warning(f"Did not find discordant pairs for {len(read)} reads.")
+            logging.warning(f"Did not find discordant pairs for {len(discordant_reads)} reads.")
         logging.info("Finished linear scanning.")
 
 
@@ -394,7 +396,7 @@ class VcfDownsampler(BaseTransformer):
                         output_file.write(record)
                         continue
                     for region in regions:
-                        if record.contig == region.chr and region.start <= record.pos <= region.end:
+                        if record.contig == region.chr and region.start <= record.start < region.end:
                             output_file.write(record)
                             break
         return self.callback(output_filename)
@@ -891,14 +893,22 @@ class SvVcfDownsampler(BaseTransformer):
             new_end = new_pos + (end - pos)
             updated_info["END2"] = str(lifted_end2[1])
         elif info_dict.get("SVTYPE") == "BND":
-            # The END of a breakend is a position on CHR2.
+            # The END of a breakend is a position on CHR2 if set, otherwise, on the contig of POS.
             lifted_pos = self.lift_interval(chr, pos - 1, pos, regions)
             lifted_end = self.lift_interval(info_dict.get("CHR2", chr), end - 1, end, regions)
             if lifted_pos is None or lifted_end is None:
                 return None
             new_pos, new_end = lifted_pos[1], lifted_end[1]
-            # The position in the ALT allele (e.g., `N[chr2:100[`) is the END on CHR2.
-            cols[4] = self.bnd_alt_regex.sub(lambda m: f"{m.group(1)}{m.group(2)}:{new_end}{m.group(4)}", cols[4])
+            # The mate in the ALT allele (e.g., `N[chr2:100[`) is lifted on its own, since a breakend
+            # can encode its mate only in ALT (e.g., the output of `update_variant_representations.py`).
+            alt_match = self.bnd_alt_regex.search(cols[4])
+            if alt_match is not None:
+                alt_pos = int(alt_match.group(3))
+                lifted_alt = self.lift_interval(alt_match.group(2), alt_pos - 1, alt_pos, regions)
+                if lifted_alt is None:
+                    return None
+                cols[4] = self.bnd_alt_regex.sub(
+                    lambda m: f"{m.group(1)}{m.group(2)}:{lifted_alt[1]}{m.group(4)}", cols[4])
         else:
             lifted_interval = self.lift_interval(chr, pos - 1, max(pos, end), regions)
             if lifted_interval is None:
@@ -984,7 +994,7 @@ class PeEvidenceDownsampler(BaseTransformer):
                     output_file.write("\t".join(cols) + "\n")
         pysam.tabix_compress(uncompressed_filename, output_filename, force=True)
         os.remove(uncompressed_filename)
-        pysam.tabix_index(output_filename, seq_col=0, start_col=1, end_col=1, force=True)
+        pysam.tabix_index(output_filename, seq_col=0, start_col=1, end_col=1, zerobased=True, force=True)
         return self.callback(output_filename, output_filename + ".tbi")
 
 
@@ -1055,7 +1065,7 @@ class PositionEvidenceDownsampler(BaseTransformer):
                     output_file.write("\t".join(cols) + "\n")
         pysam.tabix_compress(uncompressed_filename, output_filename, force=True)
         os.remove(uncompressed_filename)
-        pysam.tabix_index(output_filename, seq_col=0, start_col=1, end_col=1, force=True)
+        pysam.tabix_index(output_filename, seq_col=0, start_col=1, end_col=1, zerobased=True, force=True)
         return self.callback(output_filename, output_filename + ".tbi")
 
 
