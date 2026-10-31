@@ -31,7 +31,7 @@ workflow PlotGDModeDepth {
     File gd_table
 
     Boolean make_plot = true
-    String dataset_label = "All batches"
+    String dataset_label
     Array[File] additional_mode_depth_tables = []
     Array[String] additional_dataset_labels = []
     Int min_mosaic_samples = 1
