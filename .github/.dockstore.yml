@@ -242,3 +242,13 @@ workflows:
         - main
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: CrossValidateGqRecalibrator
+    primaryDescriptorPath: /wdl/CrossValidateGqRecalibrator.wdl
+    filters:
+      branches:
+        - main
+        - vj-v1.1.1
+      tags:
+        - /.*/
