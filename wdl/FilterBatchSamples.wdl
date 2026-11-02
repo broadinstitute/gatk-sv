@@ -78,7 +78,7 @@ workflow FilterBatchSamples {
         input:
           vcf = select_first([vcfs[i]]),
           list_of_samples = CatOutliers.outliers_file,
-          outfile_name = "${batch}.${algorithms[i]}.outliers_removed.vcf.gz",
+          outfile_name = "~{batch}.~{algorithms[i]}.outliers_removed.vcf.gz",
           remove_samples = true,
           sv_base_mini_docker = sv_base_mini_docker,
           runtime_attr_override = runtime_attr_subset_vcf
@@ -96,8 +96,8 @@ workflow FilterBatchSamples {
   # Write new list of samples without outliers
   call filter_outliers.FilterSampleList {
     input:
-      original_samples = GetSampleIdsFromVcf.out_array,
-      outlier_samples = CatOutliers.outliers_list,
+      original_samples = GetSampleIdsFromVcf.out_file,
+      outlier_samples = CatOutliers.outliers_file,
       batch = batch,
       linux_docker = linux_docker,
       runtime_attr_override = runtime_attr_filter_samples
@@ -132,9 +132,7 @@ workflow FilterBatchSamples {
 
     File outlier_filtered_pesr_vcf = MergePesrVcfs.concat_vcf
     File outlier_filtered_pesr_vcf_index = MergePesrVcfs.concat_vcf_idx
-    Array[String] filtered_batch_samples_list = FilterSampleList.filtered_samples_list
     File filtered_batch_samples_file = FilterSampleList.filtered_samples_file
-    Array[String] outlier_samples_excluded = CatOutliers.outliers_list
     File outlier_samples_excluded_file = CatOutliers.outliers_file
   }
 }

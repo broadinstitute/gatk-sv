@@ -172,6 +172,15 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: ScoreGenotypes
+    primaryDescriptorPath: /wdl/ScoreGenotypes.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: FilterGenotypes
     primaryDescriptorPath: /wdl/FilterGenotypes.wdl
     filters:
@@ -226,8 +235,45 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: CallGenomicDisorderCNVs
+    primaryDescriptorPath: /wdl/CallGenomicDisorderCNVs.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: CrossValidateGqRecalibrator
+    primaryDescriptorPath: /wdl/CrossValidateGqRecalibrator.wdl
+    filters:
+      branches:
+        - main
+        - vj-v1.1.1
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: IntegrateGDVcf
+    primaryDescriptorPath: /wdl/IntegrateGDVcf.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: SingleSamplePipeline
     primaryDescriptorPath: /wdl/GATKSVPipelineSingleSample.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: StripyWorkflow
+    primaryDescriptorPath: /wdl/StripyWorkflow.wdl
     filters:
       branches:
         - main
@@ -244,11 +290,10 @@ workflows:
         - /.*/
 
   - subclass: WDL
-    name: CrossValidateGqRecalibrator
-    primaryDescriptorPath: /wdl/CrossValidateGqRecalibrator.wdl
+    name: SVShell
+    primaryDescriptorPath: /wdl/SVShell.wdl
     filters:
       branches:
         - main
-        - vj-v1.1.1
       tags:
         - /.*/

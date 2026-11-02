@@ -2,6 +2,8 @@
 # for the sv-pipeline, sv-pipeline-qc, and sv-pipeline-rdtest
 ARG SVBASE_IMAGE=sv-base:latest
 ARG VIRTUAL_ENV_IMAGE=sv-pipeline-virtual-env:latest
+ARG GATK_SV_GD_REPO=https://github.com/broadinstitute/gatk-sv-gd.git
+ARG GATK_SV_GD_COMMIT=e16f9a5f7129cadfedcb327c16b511088f7253b6
 
 ################# get alias for updating dependencies
 FROM $SVBASE_IMAGE as base
@@ -39,14 +41,25 @@ ENV PATH=/opt/WGD/bin:/opt/bin:$PATH
 # install any missing support libraries, along with libraries needed for build
 # Install svtk, svtest, svqc
 # purge transient (build) deps, leaving only the required packages
-ARG BUILD_DEPS="make cmake g++ gcc gfortran"
+ARG BUILD_DEPS="git make cmake g++ gcc gfortran"
+ARG GATK_SV_GD_REPO
+ARG GATK_SV_GD_COMMIT
 ARG DEBIAN_FRONTEND=noninteractive
+# The setuptools cap below keeps pkg_resources importable. torch/triton require
+# setuptools>=77.0.3, which now resolves to 84.x — the release that dropped
+# pkg_resources — while the svtk/svtest/svqc console scripts are still the old
+# __import__('pkg_resources').require(...) style and fail without it.
 RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED_PACKAGES) && \
     apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends $BUILD_DEPS $(fix_spaces.sh $APT_REQUIRED_PACKAGES) && \
+    GIT_LFS_SKIP_SMUDGE=1 git clone "$GATK_SV_GD_REPO" /opt/gatk-sv-gd && \
+    cd /opt/gatk-sv-gd && \
+    git checkout "$GATK_SV_GD_COMMIT" && \
     pip install -e /opt/svtk && \
     pip install -e /opt/svtest && \
     pip install -e /opt/svqc && \
+    pip install -e /opt/gatk-sv-gd && \
+    pip install 'setuptools>=77.0.3,<81' && \
     apt-get -qqy remove --purge $APT_TRANSIENT_PACKAGES && \
     apt-get -qqy autoremove --purge && \
     apt-get -qqy clean && \
@@ -61,22 +74,18 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
 RUN svtk -h
 RUN svtest -h
 RUN svqc -h
+RUN gatk-sv-gd -h
 RUN plink2 || true
 # the command should be installed, but has no help mode, and outputs an error if not used on data
 #RUN king
-
 
 # Compile and test classes from sv-pipeline
 # -Compile StitchFragmentedCNVs Java program
 # -Compile StitchFragmentedCNVs unit tests
 # -Compile VCFParser unit tests
-# -Compile and test CleanVCFPart1 Java program
-# -Compile and test CleanVCFPart1 unit tests
 ENV STITCH_JAR="/opt/sv-pipeline/java/build/StitchFragmentedCNVs.jar"
 ARG STITCH_UNIT_TEST_JAR="/opt/sv-pipeline/java/build/StitchFragmentedCNVsUnitTest.jar"
 ARG VCF_PARSER_UNIT_TEST_JAR="/opt/sv-pipeline/java/build/VCFParserUnitTest.jar"
-ENV CLEAN_VCF_PART_1_JAR="/opt/sv-pipeline/java/build/CleanVCFPart1.jar"
-ARG CLEAN_VCF_PART_1_UNIT_TEST_JAR="/opt/sv-pipeline/java/build/CleanVCFPart1UnitTest.jar"
 ARG BUILD_DEPS="openjdk-8-jdk"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED_PACKAGES) && \
@@ -97,14 +106,6 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
     echo "Running VCFParserUnitTest..." && \
     java -enableassertions -jar $VCF_PARSER_UNIT_TEST_JAR && \
     rm -rf build/classes/* $VCF_PARSER_UNIT_TEST_JAR && \
-    javac -d build/classes org/broadinstitute/svpipeline/CleanVCFPart1.java org/broadinstitute/svpipeline/VCFParser.java && \
-    jar cfe build/CleanVCFPart1.jar "org.broadinstitute.svpipeline.CleanVCFPart1" -C build/classes . && \
-    rm -rf build/classes/* && \
-    javac -d build/classes org/broadinstitute/svpipeline/CleanVCFPart1UnitTest.java org/broadinstitute/svpipeline/CleanVCFPart1.java org/broadinstitute/svpipeline/VCFParser.java && \
-    jar cfe build/CleanVCFPart1UnitTest.jar "org.broadinstitute.svpipeline.CleanVCFPart1UnitTest" -C build/classes . && \
-    echo "Running CleanVCFPart1UnitTest..." && \
-    java -enableassertions -jar $CLEAN_VCF_PART_1_UNIT_TEST_JAR && \
-    rm -rf build/classes/* $CLEAN_VCF_PART_1_UNIT_TEST_JAR && \
     apt-get -qqy remove --purge $APT_TRANSIENT_PACKAGES && \
     apt-get -qqy autoremove --purge && \
     apt-get -qqy clean && \

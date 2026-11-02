@@ -29,5 +29,9 @@ setup(
         'cython',
         'natsort',
         'pandas',
+        'scikit-learn',
+        # svtk/__init__.py uses pkg_resources (from setuptools) to get its own
+        # version; setuptools>=81 removed pkg_resources.
+        'setuptools<81',
     ]
 )

@@ -4,9 +4,6 @@ description: Docker Image Dependencies
 sidebar_position: 1
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 :::info
 This page provides a detailed explanation of Docker 
 images and their hierarchy. For information on the process 

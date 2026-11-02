@@ -113,7 +113,6 @@ workflow GatherSampleEvidence {
     String? scramble_docker
     String? wham_docker
     String gatk_docker
-    String? gatk_docker_pesr_override
     String genomes_in_the_cloud_docker
     String cloud_sdk_docker
 
@@ -210,7 +209,7 @@ workflow GatherSampleEvidence {
         sd_locs_vcf = sd_locs_vcf,
         primary_contigs_list = primary_contigs_list,
         preprocessed_intervals = preprocessed_intervals,
-        gatk_docker = select_first([gatk_docker_pesr_override, gatk_docker]),
+        gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_pesr
     }
   }
@@ -431,6 +430,7 @@ task LocalizeReads {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: "ubuntu:18.04"
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 
   Int disk_size = ceil(50 + size(reads_path, "GB"))
@@ -516,6 +516,7 @@ task CheckAligner {
     docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -562,6 +563,7 @@ task RealignSoftClippedReads {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 
   output {

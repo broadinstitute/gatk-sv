@@ -23,17 +23,6 @@ We provide options for building example inputs that you may use as a reference
 to configure a Terra workspace or Cromwell submissions (advanced) with your own data. 
 Please refer to [this page](/docs/advanced/build_inputs) for instructions on how to build these inputs.
 
-### MELT
-Important: The example input files contain MELT inputs that are NOT public 
-(see [Requirements](https://github.com/broadinstitute/gatk-sv#requirements)). These include:
-
-- `GATKSVPipelineSingleSample.melt_docker` and `GATKSVPipelineBatch.melt_docker` - MELT docker URI 
-(see [Docker readme](https://github.com/talkowski-lab/gatk-sv-v1/blob/master/dockerfiles/README.md))
-- `GATKSVPipelineSingleSample.ref_std_melt_vcfs` - Standardized MELT VCFs ([GatherBatchEvidence](/docs/modules/gbe))
-The input values are provided only as an example and are not publicly accessible. 
-- In order to include MELT, these values must be provided by the user. MELT can be 
-  disabled by deleting these inputs and setting `GATKSVPipelineBatch.use_melt` to false.
-
 ### Execution
 
 ```shell

@@ -2,6 +2,43 @@ ARG SV_PIPELINE_IMAGE=sv-pipeline:latest
 ARG WHAM_IMAGE=wham:latest
 
 FROM $WHAM_IMAGE as wham_layer
+
+# ---- GATK build stage --------------------------------------------------
+# Builds gatk.jar and the "gatk" conda env here, isolated from the final
+# image, so the full JDK, git, git-lfs, and gradle never ship at runtime.
+# note that gatk is installed in sv-base docker, which this docker image inherits.
+# however, the base images are currently being updated: https://github.com/broadinstitute/gatk-sv/pull/816
+# so as a temporary work-around we're re-installing gatk in this image using code in a specific branch.
+# setting SHELL to bash in the following is needed for the `source` command in the following RUN,
+# since the default sh does not support `source`.
+FROM $SV_PIPELINE_IMAGE AS gatk_builder
+ENV DEBIAN_FRONTEND noninteractive
+SHELL ["/bin/bash", "-c"]
+RUN apt-get update && apt-get -qqy install --no-upgrade --no-install-recommends --fix-missing \
+        git \
+        git-lfs \
+        openjdk-17-jdk \
+        libgomp1 \
+        wget && \
+    GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git && \
+    cd gatk && \
+    git checkout mw_gatk_sv && \
+    git checkout 672d8557d82d17cefe972df5796ba719f0d7adbc && \
+    mkdir -p /opt/gatk_miniconda3 && \
+    wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.10.0-1-Linux-x86_64.sh -O /opt/gatk_miniconda3/miniconda.sh && \
+    bash /opt/gatk_miniconda3/miniconda.sh -p /opt/gatk_miniconda3 -b -u && \
+    rm /opt/gatk_miniconda3/miniconda.sh && \
+    /opt/gatk_miniconda3/bin/conda config --append envs_dirs /opt/conda/envs && \
+    source /opt/gatk_miniconda3/bin/activate && \
+    conda config --set auto_update_conda false && \
+    conda config --set solver libmamba && \
+    ./gradlew localDevCondaEnv && \
+    ./gradlew localJar && \
+    cp ./build/libs/gatk.jar /opt/gatk.jar && \
+    cd / && rm -rf gatk ~/.gradle && \
+    conda clean -afy
+
+
 FROM $SV_PIPELINE_IMAGE
 
 ENV DEBIAN_FRONTEND noninteractive
@@ -10,7 +47,7 @@ ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get clean all && \
     apt-get update && \
     apt-get upgrade -y && \
-    apt-get install -y  \
+    apt-get install -y --no-install-recommends \
         autoconf \
         autogen \
         build-essential \
@@ -42,10 +79,17 @@ RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # install global r requirements
-RUN Rscript -e "install.packages('htmlwidgets', repos='http://cran.us.r-project.org')"
-RUN Rscript -e "install.packages('shiny', repos='http://cran.us.r-project.org')"
-RUN echo "r <- getOption('repos'); r['CRAN'] <- 'http://cran.us.r-project.org'; options(repos = r);" > ~/.Rprofile
-RUN Rscript -e "library(devtools); install_github('mhahsler/rBLAST')"
+# The CRAN mirror must be set before any install: cran.us.r-project.org now
+# redirects to lib.stat.cmu.edu, which returns HTTP 403, and install.packages()
+# only warns on a failed download, so the missing packages were not detected
+# until a later step tried to load them.
+ARG CRAN_REPO="https://cloud.r-project.org"
+RUN echo "options(repos = c(CRAN = '${CRAN_REPO}'))" > ~/.Rprofile
+RUN Rscript -e "install.packages(c('htmlwidgets', 'shiny', 'remotes'), repos='${CRAN_REPO}')"
+RUN Rscript -e "if (!requireNamespace('BiocManager', quietly=TRUE)) install.packages('BiocManager', repos='${CRAN_REPO}'); BiocManager::install('pwalign', ask=FALSE, update=FALSE)"
+RUN Rscript -e "remotes::install_github('mhahsler/rBLAST')"
+# fail the build here rather than at run time if any of the above silently failed
+RUN Rscript -e "invisible(lapply(c('htmlwidgets', 'shiny', 'remotes', 'BiocManager', 'pwalign', 'rBLAST'), library, character.only=TRUE))"
 
 # install bcftools and htslib
 ARG HTSLIB_VERSION="1.18"
@@ -72,7 +116,7 @@ RUN wget -q https://github.com/Illumina/manta/releases/download/v${MANTA_RELEASE
     rm -rf ${MANTA_INSTALL_DIR}share/demo
 
 # install scramble
-ARG SCRAMBLE_COMMIT="56b5ae849d16ec1fc83ea1426b0ffc356ee6d99c"
+ARG SCRAMBLE_COMMIT="d2f457f11bd6b656d4ca692d9484e7186f52639c"
 RUN mkdir /app && cd /app \
     && git clone https://github.com/mwalker174/scramble-gatk-sv.git \
     && cd scramble-gatk-sv \
@@ -90,7 +134,6 @@ CMD ["Rscript"]
 
 
 # Whamg Docker
-ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy dist-upgrade && \
     apt-get -qqy install --no-install-recommends \
@@ -102,5 +145,81 @@ RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy autoremove --purge && \
     apt-get -qqy clean
 COPY --from=wham_layer /bin/whamg /bin/
+
+
+# cnmops
+# Note that the following installation is different from the installation in cnmops docker
+# since that method does not compile on this docker.
+RUN mkdir -p /opt/R/4.5.0/lib/R/doc/html && \
+    R -e 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/focal/latest")); BiocManager::install(c("cn.mops", "rtracklayer", "XML"), update=FALSE, ask=FALSE)'
+
+
+# Install GATK
+# gatk.jar and its conda env are built in the gatk_builder stage above; only the
+# JRE needed to run the jar, the jar itself, and the conda env are brought in here.
+# Note: `conda env create` (invoked by `./gradlew localDevCondaEnv` in the gatk_builder
+# stage) places the named gatk env in the highest-priority writable envs_dirs entry.
+# Because that stage appends /opt/conda/envs to envs_dirs (so the same conda install can
+# later activate "gatk-sv" too), /opt/conda/envs outranks the default
+# /opt/gatk_miniconda3/envs -- so the "gatk" env actually lives at /opt/conda/envs/gatk,
+# not under /opt/gatk_miniconda3, and must be copied separately. The envs_dirs config
+# itself lives in /root/.condarc, which isn't part of /opt/gatk_miniconda3 either, so it
+# must be re-applied here too, otherwise the copied-over conda can't find "gatk-sv"
+# (needed by src/sv_shell scripts that `conda activate gatk-sv` after `conda activate gatk`).
+RUN apt-get update && apt-get -qqy install --no-upgrade --no-install-recommends --fix-missing openjdk-17-jre-headless && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+COPY --from=gatk_builder /opt/gatk.jar /opt/gatk.jar
+COPY --from=gatk_builder /opt/gatk_miniconda3 /opt/gatk_miniconda3
+COPY --from=gatk_builder /opt/conda/envs/gatk /opt/conda/envs/gatk
+RUN /opt/gatk_miniconda3/bin/conda config --append envs_dirs /opt/conda/envs && \
+    ln -s /opt/gatk_miniconda3/bin/conda /usr/local/bin/conda
+
+
+# stripy docker
+# copied from the stripy docker, the diff includes installing a separate pip env for stripy
+# so to install pysam==0.19.1 that the tool needs but base image has pysam==0.15.4.
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# Install ExpansionHunter (core dependency for STR analysis)
+ARG EXPANSIONHUNTER_VERSION=5.0.0
+RUN wget https://github.com/Illumina/ExpansionHunter/releases/download/v${EXPANSIONHUNTER_VERSION}/ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64.tar.gz \
+    && tar -xzf ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64.tar.gz \
+    && mv ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64/bin/ExpansionHunter /usr/local/bin/ \
+    && rm -rf ExpansionHunter-v${EXPANSIONHUNTER_VERSION}-linux_x86_64*
+
+# Install REViewer (for read visualization in STR analysis)
+ARG REVIEWER_VERSION=0.2.7
+RUN wget https://github.com/Illumina/REViewer/releases/download/v${REVIEWER_VERSION}/REViewer-v${REVIEWER_VERSION}-linux_x86_64.gz \
+    && gunzip REViewer-v${REVIEWER_VERSION}-linux_x86_64.gz \
+    && chmod +x REViewer-v${REVIEWER_VERSION}-linux_x86_64 \
+    && mv REViewer-v${REVIEWER_VERSION}-linux_x86_64 /usr/local/bin/REViewer
+
+# Clone STRipy-pipeline repository
+RUN git clone https://gitlab.com/andreassh/stripy-pipeline.git /opt/stripy-pipeline
+
+# Set working directory
+WORKDIR /opt/stripy-pipeline
+
+RUN python3 -m venv /opt/stripy-env
+RUN /opt/stripy-env/bin/pip install --no-cache-dir --upgrade pip && \
+    if [ -f requirements.txt ]; then /opt/stripy-env/bin/pip install --no-cache-dir -r requirements.txt; fi
+
+# Copy wrapper script, default config, and loci profiles
+COPY src/stripy/stripy /usr/local/bin/stripy
+COPY src/stripy/default-config.json /usr/local/bin/default-config.json
+COPY src/stripy/catalogs /opt/stripy-pipeline/scripts/catalogs
+COPY src/stripy/stripy_to_vcf.py /opt/stripy-pipeline/scripts/stripy_to_vcf.py
+
+# Make wrapper executable
+RUN chmod +x /usr/local/bin/stripy
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+COPY src/sv_shell /opt/sv_shell
+
+# SYSSTAT (SAR) configuration. Collect stats every 30 seconds (two measurements in 1min)
+RUN apt-get update && apt-get install -y --no-install-recommends cron sysstat && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    sed -i 's/ENABLED="false"/ENABLED="true"/' /etc/default/sysstat && \
+    sed -i 's|^5-55/10.*|* * * * * root command -v debian-sa1 > /dev/null \&\& debian-sa1 30 2|' /etc/cron.d/sysstat
 
 WORKDIR /

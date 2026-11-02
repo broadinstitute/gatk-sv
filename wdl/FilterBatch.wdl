@@ -17,7 +17,6 @@ workflow FilterBatch {
     File? wham_vcf
     
     File evidence_metrics
-    File evidence_metrics_common
 
     Int outlier_cutoff_nIQR
     File? outlier_cutoff_table
@@ -60,7 +59,6 @@ workflow FilterBatch {
       scramble_vcf = scramble_vcf,
       wham_vcf = wham_vcf,
       evidence_metrics = evidence_metrics,
-      evidence_metrics_common = evidence_metrics_common,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_adjudicate = runtime_attr_adjudicate,
       runtime_attr_rewrite_scores = runtime_attr_rewrite_scores,
@@ -112,7 +110,7 @@ workflow FilterBatch {
     call metrics.FilterBatchMetrics {
       input:
         name = batch,
-        samples = GetSampleIdsFromVcf.out_array,
+        sample_list = GetSampleIdsFromVcf.out_file,
         filtered_pesr_vcf = select_first([FilterBatchSamples.outlier_filtered_pesr_vcf]),
         filtered_depth_vcf = select_first([FilterBatchSamples.outlier_filtered_depth_vcf]),
         cutoffs = FilterBatchSites.cutoffs,
@@ -141,8 +139,6 @@ workflow FilterBatch {
     File RF_intermediate_files = FilterBatchSites.RF_intermediate_files
     Array[File] sv_counts = PlotSVCountsPerSample.sv_counts
     Array[File] sv_count_plots = PlotSVCountsPerSample.sv_count_plots
-    Array[String] outlier_samples_excluded = FilterBatchSamples.outlier_samples_excluded
-    Array[String] batch_samples_postOutlierExclusion = FilterBatchSamples.filtered_batch_samples_list
     File outlier_samples_excluded_file = FilterBatchSamples.outlier_samples_excluded_file
     File batch_samples_postOutlierExclusion_file = FilterBatchSamples.filtered_batch_samples_file
 

@@ -1,0 +1,13 @@
+{
+  "prefix": "NA12878",
+  "clustered_depth_vcf": "/intermediate/ClusterBatch_outputs/NA12878.cluster_batch.depth.vcf.gz",
+  "clustered_dragen_vcf": null,
+  "clustered_manta_vcf": "/intermediate/ClusterBatch_outputs/NA12878.cluster_batch.manta.vcf.gz",
+  "clustered_scramble_vcf": "/intermediate/ClusterBatch_outputs/NA12878.cluster_batch.scramble.vcf.gz",
+  "clustered_wham_vcf": "/intermediate/ClusterBatch_outputs/NA12878.cluster_batch.wham.vcf.gz",
+  "ped_file": "/intermediate/GatherBatchEvidence_outputs/combined_ped_file.ped",
+  "contig_list": "/inputs/primary_contigs.list",
+  "reference_fasta": "/inputs/Homo_sapiens_assembly38.fasta",
+  "reference_fasta_fai": "/inputs/Homo_sapiens_assembly38.fasta.fai",
+  "reference_dict": "/inputs/Homo_sapiens_assembly38.dict"
+}

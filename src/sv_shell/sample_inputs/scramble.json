@@ -1,0 +1,18 @@
+{
+	"sample_name": "RGP_1153_3",
+	"bam_or_cram_file": "/intermediates/scramble_test/RGP_1153_3.cram",
+	"bam_or_cram_index": "/intermediates/scramble_test/RGP_1153_3.cram.crai",
+	"original_bam_or_cram_file": "/intermediates/scramble_test/RGP_1153_3.cram",
+	"original_bam_or_cram_index": "/intermediates/scramble_test/RGP_1153_3.cram.crai",
+	"counts_file": "/intermediates/scramble_test/RGP_1153_3.counts.tsv.gz",
+	"input_vcf": "/intermediates/scramble_test/RGP_1153_3.manta.vcf.gz",
+	"reference_fasta": "/intermediates/scramble_test/Homo_sapiens_assembly38.fasta",
+	"reference_index": "/intermediates/scramble_test/Homo_sapiens_assembly38.fasta.fai",
+	"regions_list": "/intermediates/scramble_test/primary_contigs.list",
+	"alignment_score_cutoff": 90,
+	"mei_bed": "/intermediates/scramble_test/hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz",
+	"min_clipped_reads_fraction": 0.22,
+	"percent_align_cutoff": 70,
+	"part2_threads": 7,
+	"make_scramble_vcf_args": ""
+}

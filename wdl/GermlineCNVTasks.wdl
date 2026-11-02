@@ -57,6 +57,7 @@ task AnnotateIntervals {
       docker: gatk_docker
       preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
       maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+      noAddress: true
     }
 
     output {
@@ -138,6 +139,7 @@ task FilterIntervals {
       docker: gatk_docker
       preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
       maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+      noAddress: true
     }
 
     output {
@@ -204,6 +206,7 @@ task ScatterIntervals {
       docker: gatk_docker
       preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
       maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+      noAddress: true
     }
 
     output {
@@ -256,6 +259,7 @@ task ExplodePloidyCalls {
       docker: linux_docker
       preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
       maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+      noAddress: true
     }
 
     output {
@@ -327,6 +331,7 @@ task BundlePostprocessingInvariants {
       docker: sv_base_mini_docker
       preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
       maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+      noAddress: true
     }
 
     output {
@@ -410,6 +415,7 @@ task BundledPostprocessGermlineCNVCalls {
       docker: gatk_docker
       preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
       maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+      noAddress: true
     }
 
     output {
@@ -516,6 +522,7 @@ task PostprocessGermlineCNVCalls {
       docker: gatk_docker
       preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
       maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+      noAddress: true
     }
 
     output {

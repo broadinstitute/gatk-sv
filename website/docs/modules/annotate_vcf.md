@@ -1,7 +1,7 @@
 ---
 title: AnnotateVcf
 description: Annotate VCF
-sidebar_position: 20
+sidebar_position: 23
 slug: av
 ---
 
@@ -29,9 +29,9 @@ stateDiagram
   classDef thisModule font-weight:bold,stroke-width:0px,fill:#ff9900,color:white
   classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
 
-  fg: FilterGenotypes
+  igdv: IntegrateGDVcf
   avcf: AnnotateVcf
-  fg --> avcf
+  igdv --> avcf
   
   class avcf thisModule
   class fg inModules
@@ -66,6 +66,9 @@ annotates population-specific allele frequencies.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `sample_keep_list`
 If provided, subset samples to this list in the output VCF.
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `stripy_vcfs`
+Array of pre-merged multi-sample STRipy VCFs from [ClusterBatch](./cb). This merge is a simple post-processing step and is not optimized for large cohorts.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `ped_file`
 Family structures and sex assignments determined in [EvidenceQC](./eqc). See [PED file format](/docs/gs/inputs#ped-format). 

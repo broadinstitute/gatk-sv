@@ -187,6 +187,9 @@ class ProjectBuilder:
         "str": ImageDependencies(
             git_dependencies=("dockerfiles/str/*", "src/str/*")
         ),
+        "stripy": ImageDependencies(
+            git_dependencies=("dockerfiles/stripy/*", "src/stripy/*"),
+        ),
         "sv-base-mini": ImageDependencies(
             git_dependencies="dockerfiles/sv-base-mini/*"
         ),
@@ -245,17 +248,20 @@ class ProjectBuilder:
                 "samtools-cloud": "SAMTOOLS_CLOUD_IMAGE",
                 "sv-utils-env": "VIRTUAL_ENV_IMAGE"}
         ),
-        "denovo": ImageDependencies(
-            git_dependencies=("dockerfiles/denovo/*", "src/denovo/*"),
-            docker_dependencies={
-                "sv-pipeline": "SV_PIPELINE_IMAGE"}
-        ),
-        # "sv-shell": ImageDependencies(
-        #     git_dependencies=("dockerfiles/sv-shell/*", "src/sv_shell/*"),
+        # "denovo": ImageDependencies(
+        #     git_dependencies=("dockerfiles/denovo/*", "src/denovo/*"),
         #     docker_dependencies={
-        #         "sv-pipeline": "SV_PIPELINE_IMAGE",
-        #         "wham": "WHAM_IMAGE"}
-        # )
+        #         "sv-pipeline": "SV_PIPELINE_IMAGE"}
+        # ),
+        "sv-shell": ImageDependencies(
+            git_dependencies=("dockerfiles/sv-shell/*", "src/sv_shell/*"),
+            docker_dependencies={
+                "sv-pipeline": "SV_PIPELINE_IMAGE",
+                "wham": "WHAM_IMAGE"}
+        ),
+        "vapor": ImageDependencies(
+            git_dependencies="dockerfiles/vapor/*"
+        )
     }
     non_public_images = frozenset({"melt"})
     images_built_by_all = frozenset(dependencies.keys()).difference({"melt"})
@@ -318,6 +324,17 @@ class ProjectBuilder:
                 else 1 + max((self.get_build_priority(build_dep)[0] for build_dep in build_deps.keys()), default=0)
         return self.build_priority[target_name], target_name
 
+    def _skip_if_up_to_date(self, target: str) -> bool:
+        # If target's image is already built under the current --image-tag (and --no-force-rebuild
+        # is set), it will be skipped and never go through ImageBuilder.push()/update_current_image().
+        # Register its existing local image as "current" here so that any dependent image build uses
+        # it, instead of falling back to a possibly stale entry from the input dockers.json.
+        image_builder = ImageBuilder(target, self)
+        if image_builder.do_not_rebuild:
+            image_builder.update_current_image()
+            return True
+        return False
+
     def _add_image_prereqs(self, registry: ContainerRegistry, build_targets: Set[str]) -> Set[str]:
         # Ensure that image prerequisite that a target requires exists. If not, add them to targets to build.
         # (This should almost never happen unless someone has messed with dockers.json or added a brand-new image.)
@@ -343,7 +360,7 @@ class ProjectBuilder:
             registry,
             {
                 target for target in self.project_arguments.targets
-                if not ImageBuilder(target, self).do_not_rebuild
+                if not self._skip_if_up_to_date(target)
             }
         )
 
@@ -362,7 +379,7 @@ class ProjectBuilder:
                         image
                         for image, dependencies in self.dependencies.items()
                         if dependencies.depends_on(new_targets_to_build) and
-                        not ImageBuilder(image, self).do_not_rebuild
+                        not self._skip_if_up_to_date(image)
                     }.difference(targets_to_build)
                 )
 

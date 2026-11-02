@@ -1,5 +1,6 @@
 version 1.0
 
+import "FormatVcfForGatk.wdl" as format_vcf
 import "Genotype_2.wdl" as g2
 import "CombineReassess.wdl" as creassess
 import "Utils.wdl" as util
@@ -9,12 +10,13 @@ workflow RegenotypeCNVs {
     String sv_base_mini_docker
     String sv_pipeline_docker
     Array[File] depth_vcfs
-    File cohort_depth_vcf
+    File merge_batch_sites_vcf
     Array[File] batch_depth_vcfs
     Array[File] coveragefiles
     Array[File] coveragefile_idxs
     Array[File] medianfiles
-    Array[File] RD_depth_sepcutoffs
+    Array[File] genotyping_rd_table
+    Array[File] ploidy_tables
     Int n_per_split
     Int n_RdTest_bins
     Array[String] batches
@@ -26,6 +28,7 @@ workflow RegenotypeCNVs {
     Int min_var_per_sample_outlier_threshold = 3 # Threshold below which regeno SV count per sample should not be considered an outlier (need when counts are sparse)
     Float regeno_sample_overlap = 0.7 # Minimum sample overlap required between raw and regenotyped calls
 
+    RuntimeAttr? runtime_attr_extract_depth_vcf
     RuntimeAttr? runtime_attr_cluster_merged_depth_beds
     RuntimeAttr? runtime_attr_regeno_raw_combined_depth
     RuntimeAttr? runtime_attr_regeno_merged_depth
@@ -39,10 +42,10 @@ workflow RegenotypeCNVs {
     RuntimeAttr? runtime_attr_get_regeno
     RuntimeAttr? runtime_attr_get_median_subset
     RuntimeAttr? runtime_attr_median_intersect
+    RuntimeAttr? runtime_attr_svtk_to_gatk_vcf
     RuntimeAttr? runtime_attr_concat_regenotyped_vcfs
 
     # Genotype_2
-    RuntimeAttr? runtime_attr_subset_ped
     RuntimeAttr? runtime_attr_add_batch_samples
     RuntimeAttr? runtime_attr_get_regeno_g2
     RuntimeAttr? runtime_attr_split_beds
@@ -57,9 +60,18 @@ workflow RegenotypeCNVs {
     RuntimeAttr? runtime_attr_merge_list_creassess 
   }
 
+  call ExtractDepthVcf {
+    input:
+      vcf = merge_batch_sites_vcf,
+      vcf_index = merge_batch_sites_vcf + ".tbi",
+      prefix = "~{cohort}.cohort_depth",
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_extract_depth_vcf
+  }
+
   call ClusterMergedDepthBeds {
     input:
-      cohort_depth_vcf = cohort_depth_vcf,
+      cohort_depth_vcf = ExtractDepthVcf.out,
       cohort = cohort,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_cluster_merged_depth_beds
@@ -168,12 +180,12 @@ workflow RegenotypeCNVs {
         input:
           depth_vcf=depth_vcfs[i],
           regeno_bed= MergeList.master_regeno,
-          cohort_depth_vcf=cohort_depth_vcf,
+          cohort_depth_vcf=ExtractDepthVcf.out,
           batch_depth_vcf=batch_depth_vcfs[i],
           coveragefile=coveragefiles[i],
           coveragefile_idx=coveragefile_idxs[i],
           medianfile=medianfiles[i],
-          RD_depth_sepcutoff=RD_depth_sepcutoffs[i],
+          genotyping_rd_table=genotyping_rd_table[i],
           n_per_split=n_per_split,
           n_RdTest_bins=n_RdTest_bins,
           batch=batches[i],
@@ -206,11 +218,22 @@ workflow RegenotypeCNVs {
     
     if (CombineReassess.num_regeno_filtered > 0) {
       scatter (i in range(length(Genotype_2.genotyped_vcf))) {
+
+        call format_vcf.FormatVcf {
+          input:
+            vcf=Genotype_2.genotyped_vcf[i],
+            ploidy_table=ploidy_tables[i],
+            output_prefix=basename(Genotype_2.genotyped_vcf[i]) + ".reformatted",
+            args="--add-sr-pos",
+            sv_pipeline_docker=sv_pipeline_docker,
+            runtime_attr_override=runtime_attr_svtk_to_gatk_vcf
+        }
+
         call ConcatRegenotypedVcfs {
           input:
             depth_vcf=depth_vcfs[i],
             batch = batches[i],
-            regeno_vcf = Genotype_2.genotyped_vcf[i],
+            regeno_vcf = FormatVcf.out,
             regeno_variants = CombineReassess.regeno_variants,
             runtime_attr_override = runtime_attr_concat_regenotyped_vcfs,
             sv_pipeline_docker = sv_pipeline_docker
@@ -249,12 +272,24 @@ task ClusterMergedDepthBeds {
   }
   command <<<
     set -euo pipefail
-    svtk vcf2bed ~{cohort_depth_vcf} merged_depth.bed   # vcf2bed merge_vcfs, non_duplicated
+
+    # vcf2bed merge_vcfs, non_duplicated
+    svtk vcf2bed ~{cohort_depth_vcf} merged_depth.bed
+
+    # populate empty sample column with "." to avoid error in bedcluster
+    awk -F '\t' -v OFS='\t' '{ if ($6 == "") { $6="." }; print $0 }' merged_depth.bed > merged_depth.fixed.bed
+
     # split DELs and DUPs into separate, non-duplicated BED files. SVTYPE is 5th column of BED
-    awk -F "\t" -v OFS="\t" '{ if ($5 == "DEL") { print > "del.bed" } else if ($5 == "DUP") { print > "dup.bed" } }' merged_depth.bed 
-    svtk bedcluster del.bed | cut -f1-7 | awk '{print $0","}' > del.cluster.bed #cluster non_duplicated del
-    svtk bedcluster dup.bed | cut -f1-7 | awk '{print $0","}' > dup.cluster.bed #cluster non_duplicated dup
-    cat del.cluster.bed dup.cluster.bed | sort -k1,1V -k2,2n -k3,3n | fgrep -v "#" > ~{cohort}.regeno.merged_depth_clustered.bed #combine clusterd non-duplicated
+    awk -F "\t" -v OFS="\t" '{ if ($5 == "DEL") { print > "del.bed" } else if ($5 == "DUP") { print > "dup.bed" } }' merged_depth.fixed.bed
+
+    # cluster non_duplicated del
+    svtk bedcluster del.bed | cut -f1-7 | awk '{print $0","}' > del.cluster.bed
+
+    # cluster non_duplicated dup
+    svtk bedcluster dup.bed | cut -f1-7 | awk '{print $0","}' > dup.cluster.bed
+
+    # combine clustered non-duplicated
+    cat del.cluster.bed dup.cluster.bed | sort -k1,1V -k2,2n -k3,3n | fgrep -v "#" > ~{cohort}.regeno.merged_depth_clustered.bed
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -631,8 +666,8 @@ task GetMedianSubset {
       else:
         return open(filename, 'r')
 
-
     with _open("~{medians}") as inp, open("~{batch}_to_regeno.bed", 'w') as outp:
+      inp.readline()  # skip header line
       for line in inp:
         fields = line.strip().split('\t')
         # first 4 fields are variant info (chr, start, end, varID)
@@ -780,6 +815,47 @@ task ConcatRegenotypedVcfs {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task ExtractDepthVcf {
+  input {
+    File vcf
+    File vcf_index
+    String prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(50 + size(vcf, "GB") * 2),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euxo pipefail
+    bcftools view -i 'INFO/ALGORITHMS=="depth"' ~{vcf} -Oz -o ~{prefix}.vcf.gz
+    tabix ~{prefix}.vcf.gz
+  >>>
+
+  output {
+    File out = "~{prefix}.vcf.gz"
+    File out_index = "~{prefix}.vcf.gz.tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

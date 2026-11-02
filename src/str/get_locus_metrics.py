@@ -67,7 +67,7 @@ def call_reviewer(
           f"--locus {locus_id} " \
           f"--output-prefix {prefix}"
     result = subprocess.run(cmd, shell=True)
-    print(f"REViewer runtime: {time.time() - start_time :.2f} seconds")
+    print(f"REViewer runtime: {time.time() - start_time:.2f} seconds")
 
     # Expected filename of the reviewer outputs.
     ro_svg_filename = f"{prefix}.{locus_id}.svg"

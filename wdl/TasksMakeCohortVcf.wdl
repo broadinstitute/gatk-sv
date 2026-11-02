@@ -319,7 +319,7 @@ task ConcatBeds {
 
     # note head -n1 stops reading early and sends SIGPIPE to zcat,
     # so setting pipefail here would result in early termination
-    zcat ~{shard_bed_files[0]} | head -n1 > header.txt
+    zcat ~{shard_bed_files[0]} | head -n1 > header.txt || true
 
     # no more early stopping
     set -o pipefail

@@ -58,38 +58,43 @@ The following are the main pipeline outputs. For more information on the outputs
 The following workflows and Jupyter notebooks are included in this workspace, to be executed in this order:
 
 1. `01-GatherSampleEvidence`: Per-sample SV evidence collection, including calls from a configurable set of 
-algorithms (Manta, MELT, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
+algorithms (Manta, Scramble, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
 2. `02-EvidenceQC`: Dosage bias scoring and ploidy estimation, run on preliminary batches
 3. [Notebook] `SampleQC.ipynb`: Interactively perform sample QC and filtering using outputs from `02-EvidenceQC`
 4. [Notebook] `Batching.ipynb`: Create batches for subsequent steps. For cohorts >500 samples or smaller heterogeneous cohorts
-5. `03-TrainGCNV`: Per-batch training of a gCNV model for use in `04-GatherBatchEvidence`
-6. `04-GatherBatchEvidence`: Per-batch copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) 
+5. Optional `StripyWorkflow`: Per-sample STRipy repeat-expansion calling after the cohort PED file has been generated
+6. `03-TrainGCNV`: Per-batch training of a gCNV model for use in `04-GatherBatchEvidence`
+7. `04-GatherBatchEvidence`: Per-batch copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) 
 generation; call and evidence aggregation
-7. `05-ClusterBatch`: Per-batch variant clustering
-8. `06-GenerateBatchMetrics`: Per-batch metric generation
-9. `07-FilterBatchSites`: Per-batch variant filtering and plot SV counts per sample per SV type to enable choice of IQR 
+8. `05-ClusterBatch`: Per-batch variant clustering and optional STRipy VCF merging
+9. `06-GenerateBatchMetrics`: Per-batch metric generation
+10. `07-FilterBatchSites`: Per-batch variant filtering and plot SV counts per sample per SV type to enable choice of IQR 
 cutoff for outlier filtration in `08-FilterBatchSamples`
-10. `08-FilterBatchSamples`: Per-batch outlier sample filtration
-11. `09-MergeBatchSites`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
-12. `10-GenotypeBatch`: Per-batch genotyping of all sites in the cohort
-13. `11-RegenotypeCNVs`: Cohort-level genotype refinement of some depth calls
-14. `12-CombineBatches`: Cohort-level cross-batch integration and clustering
-15. `13-ResolveComplexVariants`: Complex variant resolution
-16. `14-GenotypeComplexVariants`: Complex variant re-genotyping
-17. `15-CleanVcf`: VCF cleanup
-18. `16-RefineComplexVariants`: Complex variant filtering and refinement
-19. `17-JoinRawCalls`: Raw call aggregation
-20. `18-SVConcordance`: Annotate genotype concordance with raw calls
-21. `19-FilterGenotypes`: Genotype filtering
-22. `20-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
+11. `08-FilterBatchSamples`: Per-batch outlier sample filtration
+12. `09-MergeBatchSites`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
+13. `10-GenotypeBatch`: Per-batch genotyping of all sites in the cohort
+14. `11-RegenotypeCNVs`: Cohort-level genotype refinement of some depth calls
+15. `12-CombineBatches`: Cohort-level cross-batch integration and clustering
+16. `13-ResolveComplexVariants`: Complex variant resolution
+17. `14-GenotypeComplexVariants`: Complex variant re-genotyping
+18. `15-CleanVcf`: VCF cleanup
+19. `16-RefineComplexVariants`: Complex variant filtering and refinement
+20. `17-JoinRawCalls`: Raw call aggregation
+21. `18-SVConcordance`: Annotate genotype concordance with raw calls
+22. `19-ScoreGenotypes`: Scores genotypes to optimize GQ recalibrator model
+23. `20-FilterGenotypes`: Apply genotype filtering using GQ recalibrator model
+24. `21-CallGenomicDisorderCNVs`: Generate per-batch GD CNV calls.
+25. `22-IntegrateGDVcf`: Integrate GD CNV calls into the cohort VCF.
+26. `23-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
 AF annotation with external population callsets
 
 Extra workflows (Not part of canonical pipeline, but included for your convenience. May require manual configuration):
 * `MainVcfQc`: Generate detailed call set QC plots
-* `PlotSVCountsPerSample`: Plot SV counts per sample per SV type. Recommended to run before `FilterOutlierSamples` 
+* `PlotSVCountsPerSample`: Plot SV counts per sample per SV type. Recommended to run before `FilterOutlierSamples`
   (configured with the single VCF you want to filter) to enable IQR cutoff choice.
 * `FilterOutlierSamples`: Filter outlier samples (in terms of SV counts) from a single VCF.
 * `VisualizeCnvs`: Plot multi-sample depth profiles for CNVs
+
 
 For detailed instructions on running the pipeline in Terra, see [workflow instructions](#instructions) below.
 
@@ -151,6 +156,40 @@ This file should have one line per sample, plus a header (first) line. The first
 [sample ID requirements](/docs/gs/inputs#sampleids). For an example sample set membership file, refer to
 [this one in the GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/templates/terra_workspaces/cohort_mode/sample_set_membership_1kgp.tsv.tmpl).
 
+### Managing storage
+
+To reduce the costly accumulation of data in the workspace, we recommend the following settings:
+
+* We recommend creating a Lifecycle Rule to delete objects in `submissions/intermediates` after 30 days.
+With this setting, intermediate files (those not present in the Terra data table, and not needed for any further 
+GATK-SV processing) will be deleted after 30 days (regardless of the submission's status). For successful 
+submissions, final workflow outputs will be retained in `submissions/final-outputs`.
+See [this article](https://support.terra.bio/hc/en-us/articles/31182203937179-Save-storage-costs-with-bucket-lifecycle-rules-Released-12-6-24) 
+for more information.
+* We recommend enabling automatic intermediate file deletion by checking the box labeled "Delete intermediate outputs" 
+at the top of the workflow launch page every time you start a workflow. With this option enabled, intermediate files 
+will be deleted automatically if the workflow succeeds. If the workflow fails, the outputs will be retained to enable 
+a re-run to pick up where it left off with call-caching. However, call-caching will not be possible for workflows that have 
+succeeded. For more information on this option, see 
+[this article](https://terra.bio/delete-intermediates-option-now-available-for-workflows-in-terra/). For guidance on 
+managing intermediate storage from failed workflows, or from workflows without the delete intermediates option enabled, 
+see the next bullet point.
+
+These two settings will help manage storage in the majority of situations. But if you need to manually manage storage,
+these strategies may be useful:
+
+ * One option is to manually delete large files, or directories containing failed workflow intermediates (after 
+re-running the workflow successfully to take advantage of call-caching) with the command 
+`gsutil -m rm gs://path/to/workflow/directory/**file_extension_to_delete` to delete all files with the given extension 
+for that workflow, or `gsutil -m rm -r gs://path/to/workflow/directory/` to delete an entire workflow directory 
+(only after you are done with all the files!). Note that this can take a very long time for larger workflows, which 
+may contain thousands of files.
+ * Another option is to use the `fiss mop` API call to delete all files that do not appear in one of the Terra data 
+tables (intermediate files). Always ensure that you are completely done with a step and you will not need to return 
+before using this option, as it will break call-caching. See 
+[this blog post](https://terra.bio/deleting-intermediate-workflow-outputs/) for more details. This can also be done 
+[via the command line](https://github.com/broadinstitute/fiss/wiki/MOP:-reducing-your-cloud-storage-footprint).
+
 ## Workflow instructions {#instructions}
 
 ### General recommendations
@@ -158,35 +197,13 @@ This file should have one line per sample, plus a header (first) line. The first
 * It is recommended to run each workflow first on one sample/batch to check that the method is properly configured 
 before you attempt to process all of your data.
 * We recommend enabling call-caching (on by default in each workflow configuration).
-* We recommend enabling automatic intermediate file deletion by checking the box labeled "Delete intermediate outputs" 
-at the top of the workflow launch page every time you start a workflow. With this option enabled, intermediate files 
-(those not present in the Terra data table, and not needed for any further GATK-SV processing) will be deleted 
-automatically if the workflow succeeds. If the workflow fails, the outputs will be retained to enable a re-run to 
-pick up where it left off with call-caching. However, call-caching will not be possible for workflows that have 
-succeeded. For more information on this option, see 
-[this article](https://terra.bio/delete-intermediates-option-now-available-for-workflows-in-terra/). For guidance on 
-managing intermediate storage from failed workflows, or from workflows without the delete intermediates option enabled, 
-see the next bullet point.
-* There are cases when you may need to manage storage in other ways: for workflows that failed (only delete files from 
-a failed workflow after a version has succeeded, to avoid disabling call-caching), for workflows without intermediate 
-file deletion enabled, or once you are done processing and want to delete files from earlier steps in the pipeline 
-that you no longer need.
-   * One option is to manually delete large files, or directories containing failed workflow intermediates (after 
-  re-running the workflow successfully to take advantage of call-caching) with the command 
-  `gsutil -m rm gs://path/to/workflow/directory/**file_extension_to_delete` to delete all files with the given extension 
-  for that workflow, or `gsutil -m rm -r gs://path/to/workflow/directory/` to delete an entire workflow directory 
-  (only after you are done with all the files!). Note that this can take a very long time for larger workflows, which 
-  may contain thousands of files.
-   * Another option is to use the `fiss mop` API call to delete all files that do not appear in one of the Terra data 
-  tables (intermediate files). Always ensure that you are completely done with a step and you will not need to return 
-  before using this option, as it will break call-caching. See 
-  [this blog post](https://terra.bio/deleting-intermediate-workflow-outputs/) for more details. This can also be done 
-  [via the command line](https://github.com/broadinstitute/fiss/wiki/MOP:-reducing-your-cloud-storage-footprint).
 * If your workflow fails, check the job manager for the error message. Most issues can be resolved by increasing the 
 memory or disk. Do not delete workflow log files until you are done troubleshooting. If call-caching is enabled, do not 
 delete any files from the failed workflow until you have run it successfully.
 * To display run costs, see [this article](https://support.terra.bio/hc/en-us/articles/360037862771#h_01EX5ED53HAZ59M29DRCG24CXY) 
 for one-time setup instructions for non-Broad users.
+* Consult the [Managing storage](#managing-storage) section before running any workflows.
+* For very large cohorts (more than a few thousand samples), refer to the documentation on [quotas](/docs/advanced/quotas).
 
 ### 01-GatherSampleEvidence
 
@@ -223,6 +240,9 @@ Read the documentation on batching [here](/docs/modules/eqc#batching).
 If necessary, follow the `Batching.ipynb` notebook step-by-step to divide samples into batches
 and create corresponding `sample_sets` for use in `03-TrainGCNV` and beyond.
 
+### Optional STRipy repeat-expansion calling {#stripy}
+
+After `02-EvidenceQC` and sample QC are complete, make sure `cohort_ped_file` in Workspace Data is set to the updated PED file containing sex assignments from sample QC.
 
 ### 03-TrainGCNV {#traingcnv}
 

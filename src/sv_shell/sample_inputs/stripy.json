@@ -1,0 +1,9 @@
+{
+  "analysis": null,
+  "bam_or_cram_file": "/inputs/NA12878.final.cram",
+  "genome_build": null,
+  "locus": null,
+  "ped_file": "/intermediates/GatherBatchEvidence_outputs/combined_ped_file.ped",
+  "reference_fasta": "/inputs/Homo_sapiens_assembly38.fasta",
+  "sample_name": "NA12878"
+}

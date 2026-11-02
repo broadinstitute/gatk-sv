@@ -4,10 +4,6 @@ description: Build and Publish Images
 sidebar_position: 2
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
-
 GATK-SV Docker images are automatically built, tested, and pushed to 
 container registries. An automated continuous 
 integration and continuous delivery (CI/CD) ensures the 
@@ -23,28 +19,7 @@ and Azure Container Registry (ACR), and updates their references.
 The latest Docker images are listed in the files below. 
 Detailed automated deployment is described in the following sections.
 
-<Tabs
- groupId="cr"
- defaultValue="gcr"
- values={[
-  { label: 'ACR', value: 'acr', },
-  { label: 'GCR', value: 'gcr', }
- ]
-}>
- <TabItem value="acr">
-
- 
- [gatk-sv/inputs/values/dockers_azure.json](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/dockers_azure.json)
- 
-
- </TabItem>
- <TabItem value="gcr">
-
- [gatk-sv/inputs/values/dockers.json](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/dockers.json)
- 
-
- </TabItem>
-</Tabs>
+[gatk-sv/inputs/values/dockers.json](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/dockers.json)
 
 
 :::info

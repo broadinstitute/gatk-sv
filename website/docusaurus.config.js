@@ -10,7 +10,6 @@ const config = {
   url: 'https://broadinstitute.github.io',
   baseUrl: '/gatk-sv/',
   onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'throw',
   //favicon: 'img/favicon.ico',
 
   // GitHub pages deployment config.
@@ -38,6 +37,10 @@ const config = {
         },*/
         theme: {
           customCss: require.resolve('./src/css/custom.css'),
+        },
+        gtag: {
+          trackingID: 'G-9DQEYKHD1M',
+          anonymizeIP: true,
         },
       }),
     ],
@@ -140,6 +143,9 @@ const config = {
   themes: ['@docusaurus/theme-mermaid'],
   markdown: {
     mermaid: true,
+    hooks: {
+      onBrokenMarkdownLinks: 'throw',
+    },
   }
 };
 

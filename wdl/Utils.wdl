@@ -41,6 +41,7 @@ task GetSampleIdsFromVcf {
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -85,6 +86,7 @@ task GetSampleIdsFromVcfArray {
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -126,6 +128,7 @@ task GetSampleIdsFromVcfTar {
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -163,6 +166,7 @@ task CountSamples {
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -206,6 +210,7 @@ task GetSampleIdsFromMedianCoverageFile {
     docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -238,6 +243,54 @@ task RunQC {
     docker: sv_pipeline_docker
     preemptible: preemptible_attempts
     maxRetries: 1
+    noAddress: true
+  }
+}
+
+task MergeStripyVcf {
+  input {
+    File? vcf
+    Array[File] stripy_vcfs
+    String output_prefix
+    File? script
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 0.9,
+                               disk_gb: ceil(10 + 3 * (size(select_all([vcf]), "GiB") + size(stripy_vcfs, "GiB"))),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File out = "~{output_prefix}.vcf.gz"
+    File out_index = "~{output_prefix}.vcf.gz.tbi"
+  }
+  command <<<
+
+    set -euo pipefail
+    python ~{default="/opt/sv-pipeline/scripts/merge_stripy_vcfs.py" script} \
+      ~{if defined(vcf) then "--main-vcf " + select_first([vcf]) else ""} \
+      --stripy-vcfs-list ~{write_lines(stripy_vcfs)} \
+      --out unsorted.vcf.gz
+    bcftools sort unsorted.vcf.gz -Oz -o ~{output_prefix}.vcf.gz
+    tabix ~{output_prefix}.vcf.gz
+
+  >>>
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
@@ -305,6 +358,7 @@ task GetFilteredSubsampledIndices {
     docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -366,6 +420,7 @@ task RandomSubsampleStringArray {
     docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -418,6 +473,7 @@ task GetSubsampledIndices {
     docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -462,6 +518,7 @@ task SubsetPedFile {
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -503,6 +560,7 @@ task ValidatePedFile {
     docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -547,6 +605,7 @@ task LocalizeCloudFileWithCredentials {
     docker: cloud_sdk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -576,6 +635,7 @@ task GetVcfSize {
         max_retries: 1
         memory: "2 GiB"
         disks: "local-disk " + disk_gb + " HDD"
+        noAddress: true
     }
 
     command <<<
@@ -630,6 +690,7 @@ task MaxInts {
         max_retries: 1
         memory: "1 GiB"
         disks: "local-disk 10 HDD"
+        noAddress: true
     }
 }
 
@@ -656,6 +717,7 @@ task WriteLines {
     docker: linux_docker
     preemptible: 3
     maxRetries: 1
+    noAddress: true
   }
 }
 
@@ -694,6 +756,7 @@ task TarFiles {
     docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -735,6 +798,7 @@ task UntarFiles {
     docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -780,6 +844,7 @@ task CombineTars {
     docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -846,6 +911,7 @@ task SubsetVcfBySamplesList {
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -912,6 +978,7 @@ task SubsetVcfToSample {
     docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -957,5 +1024,55 @@ task VcfToBed {
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
         docker: variant_interpretation_docker
+        noAddress: true
     }
+}
+
+task GetSampleSex {
+  input {
+    File ped_file
+    String sample_id
+    String unknown_sex
+    String linux_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 0.9,
+                               disk_gb: 10,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+
+    set -euo pipefail
+    awk -F '\t' '{if ($2=="~{sample_id}") { if ($5 == 1) {print "male"} else if ($5 == 2) {print "female"} else {print "~{unknown_sex}"}}}' ~{ped_file} > ~{sample_id}.sex.txt
+
+    # Fail if the sample id wasn't found
+    if ! [ -s ~{sample_id}.sex.txt ]; then
+      echo "ERROR: Sample ~{sample_id} not found in ped file ~{ped_file}"
+      exit 1
+    fi
+
+  >>>
+
+  output {
+    File out_file = "${sample_id}.sex.txt"
+    String out_string = read_string("${sample_id}.sex.txt")
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: linux_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
+  }
 }

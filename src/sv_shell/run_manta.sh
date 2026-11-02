@@ -6,6 +6,10 @@
 
 set -Exeuo pipefail
 
+if [ -z "${SV_SHELL_CLEAN_UP_WORKING_DIR:-}" ]; then
+  SV_SHELL_CLEAN_UP_WORKING_DIR=true
+fi
+
 sample_id=$1
 bam_or_cram_file=$2
 bam_or_cram_index=$3
@@ -32,9 +36,9 @@ echo "=============== Running manta"
 # > Each analysis must be configured in a separate directory.
 TMPDIR=`mktemp -d -p .` || exit 1
 
-working_dir=$(mktemp -d wd_manta_XXXXXXXX)
+working_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/wd_manta_XXXXXXXX)
 working_dir="$(realpath ${working_dir})"
-output_dir=$(mktemp -d output_manta_XXXXXXXX)
+output_dir=$(mktemp -d ${SV_SHELL_BASE_DIR}/output_manta_XXXXXXXX)
 output_dir="$(realpath ${output_dir})"
 cd "${working_dir}"
 
@@ -69,10 +73,11 @@ output_vcf_index_filename="$(realpath ${output_dir}/$sample_id.manta.vcf.gz.tbi)
 mv "${working_dir}/$sample_id.manta.vcf.gz" "${output_vcf_filename}"
 mv "${working_dir}/${sample_id}.manta.vcf.gz.tbi" "${output_vcf_index_filename}"
 
-outputs_filename="${output_dir}/outputs.json"
-outputs_json=$(jq -n \
+if [ "${SV_SHELL_CLEAN_UP_WORKING_DIR}" == "true" ]; then
+  rm -rf "${working_dir}"
+fi
+
+jq -n \
   --arg vcf "${output_vcf_filename}" \
   --arg vcf_idx "${output_vcf_index_filename}" \
-  '{vcf: $vcf, index: $vcf_idx}' )
-echo "${outputs_json}" > "${outputs_filename}"
-cp "${outputs_filename}" "${outputs_json_filename}"
+  '{vcf: $vcf, index: $vcf_idx}' > "${outputs_json_filename}"

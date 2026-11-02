@@ -181,6 +181,7 @@ task RunWhamgOnBam {
     docker: wham_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 
@@ -197,15 +198,6 @@ task RunWhamgOnCram {
     Float? pct_exc_total
     String wham_docker
     RuntimeAttr? runtime_attr_override
-  }
-
-  parameter_meta {
-    cram_file: {
-      localization_optional: true
-    }
-    cram_index: {
-      localization_optional: true
-    }
   }
 
   Array[String] chr_list = read_lines(primary_contigs_list)
@@ -303,6 +295,7 @@ task RunWhamgOnCram {
     docker: wham_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 }
 

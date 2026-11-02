@@ -1,9 +1,0 @@
-# Ignore data files
-srtest
-srtest_ttest/*
-logs/*
-srtest_*
-whitelists
-sex_lists/
-vcf_splits/
-split_logs

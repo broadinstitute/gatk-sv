@@ -491,7 +491,7 @@ def resolve_cpx_cnv_redundancies(
         path to input vcf
     output_vcf: Text
         path to write output vcf
-    min_cpx_reciprocal_overlap: float (default={Default.min_cpx_reciprocal_overlap,})
+    min_cpx_reciprocal_overlap: float (default={Default.min_cpx_reciprocal_overlap})
         Minimum reciprocal overlap with a CPX interval for a CNV interval to be clusterable.
     cnv_cpx_reciprocal_overlap: float (default={Default.cnv_cpx_reciprocal_overlap})
         Minimum reciprocal overlap between two intervals to be part of a cluster.

@@ -1,0 +1,12 @@
+{
+  "IntegrateGDVcf.vcf": {{ test_batch.genotype_filtered_vcf | tojson }},
+  "IntegrateGDVcf.vcf_index": {{ test_batch.genotype_filtered_vcf_index | tojson }},
+  "IntegrateGDVcf.prefix": {{ test_batch.name | tojson }},
+  "IntegrateGDVcf.gd_output_tarballs": [{{ test_batch.gd_output_tarball | tojson }}],
+  "IntegrateGDVcf.ploidy_tables": [{{ test_batch.ploidy_table | tojson }}],
+  "IntegrateGDVcf.gd_table": {{ reference_resources.gd_table | tojson }},
+  "IntegrateGDVcf.par_bed": {{ reference_resources.par_bed | tojson }},
+  "IntegrateGDVcf.contig_list": {{ reference_resources.primary_contigs_list | tojson }},
+  "IntegrateGDVcf.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "IntegrateGDVcf.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }}
+}

@@ -14,7 +14,7 @@ workflow ScatterCpxGenotyping {
     Int records_per_shard
     Array[String] batches
     Array[File] coverage_files
-    Array[File] rd_depth_sep_cutoff_files
+    Array[File] genotyping_rd_tables
     Array[File] ped_files
     Array[File] median_coverage_files
     Int n_per_split_small
@@ -68,7 +68,7 @@ workflow ScatterCpxGenotyping {
         vcf=shard,
         batches=batches,
         coverage_files=coverage_files,
-        rd_depth_sep_cutoff_files=rd_depth_sep_cutoff_files,
+        genotyping_rd_tables=genotyping_rd_tables,
         ped_files=ped_files,
         median_coverage_files=median_coverage_files,
         n_per_split_large=n_per_split_large,

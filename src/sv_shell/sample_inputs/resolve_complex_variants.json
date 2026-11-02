@@ -1,0 +1,18 @@
+{
+  "cohort_name": "NA12878",
+  "cluster_vcfs": "/inputs/NA12878.combine_batches.svtk_formatted.vcf.gz",
+  "cluster_bothside_pass_lists": "/inputs/NA12878.combine_batches.bothsides_sr_support.txt",
+  "cluster_background_fail_lists": "/inputs/NA12878.combine_batches.high_sr_background.txt",
+  "disc_files": [
+    "/inputs/NA12878.pe.txt.gz"
+  ],
+  "rf_cutoff_files": [
+    "/inputs/all_samples.cutoffs"
+  ],
+  "cytobands": "/inputs/cytobands_hg38.bed.gz",
+  "mei_bed": "/inputs/hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz",
+  "pe_exclude_list": "/inputs/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz",
+  "ref_dict": "/inputs/Homo_sapiens_assembly38.dict",
+  "contig_list": "/inputs/contig.fai",
+  "max_shard_size": 500
+}

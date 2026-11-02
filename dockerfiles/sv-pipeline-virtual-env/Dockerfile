@@ -20,7 +20,7 @@ RUN apt-get -qqy update --fix-missing && \
 # install conda packages
 # NOTE: need to use scipy=1.7.3 instead of scipy=1.8.0 because it makes hail angry
 ARG CONDA_PKGS="cython=0.29.28 numpy=1.22.3 pandas=1.4.2 scipy=1.7.3 scikit-learn=1.0.2 intervaltree=3.1.0 \
-                matplotlib=3.5.1 natsort=8.1.0 google-cloud-dataproc=4.0.2 seaborn=0.12.2"
+                matplotlib=3.5.1 natsort=8.1.0 google-cloud-dataproc=4.0.2 seaborn=0.12.2 pyro-ppl=1.9.1"
 RUN mamba install -qy --freeze-installed -n $CONDA_ENV_NAME -c conda-forge -c bioconda $CONDA_PKGS
 
 # copy in HTSLIB install so that pysam uses same version as is available in pipeline
@@ -72,7 +72,7 @@ ARG BUILD_DEPS="make cmake g++ gcc gfortran \
                 libbz2-dev libblas-dev libicu-dev liblapack-dev liblzma-dev libpcre2-dev zlib1g-dev \
                 pkg-config libcurl4-openssl-dev libssl-dev libatlas-base-dev libssh2-1-dev libssh2-1 \
                 libgit2-dev libfftw3-dev libjpeg8-dev libxml2-dev libfontconfig1-dev libharfbuzz-dev \
-                libfribidi-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev"
+                libfribidi-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev libuv1-dev"
 ARG RUN_DEPS="file bzip2 libssl3 libatlas3-base libssh2-1 libgit2-1.1 libfftw3-3 libjpeg8 libxml2"
 RUN export NEW_PACKAGES=$(diff_of_lists.sh "$RUN_DEPS" $APT_REQUIRED_PACKAGES) && \
     printf " $NEW_PACKAGES" | fix_spaces.sh >> $APT_REQUIRED_PACKAGES
@@ -80,7 +80,7 @@ RUN export NEW_PACKAGES=$(diff_of_lists.sh "$RUN_DEPS" $APT_REQUIRED_PACKAGES) &
 # install R packages
 ARG R_PACKAGES="assertthat beeswarm BH BSDA caret cli crayon DAAG data.table devtools digest dplyr e1071 fansi fpc \
                 generics gert glue HardyWeinberg hash latticeExtra magrittr metap mnormt nlme nloptr nnet \
-                numDeriv perm pillar pkgconfig plogr plyr purrr pwr R6 RColorBrewer Rcpp reshape reshape2 rlang ROCR \
+                numDeriv perm pillar pkgconfig plyr purrr pwr R6 RColorBrewer Rcpp reshape reshape2 rlang ROCR \
                 rpart stringi stringr survival tibble tidyr tidyselect utf8 vioplot withr zoo"
 ARG BIOCONDUCTOR_PKGS="SNPRelate multtest"
 ARG DEBIAN_FRONTEND=noninteractive

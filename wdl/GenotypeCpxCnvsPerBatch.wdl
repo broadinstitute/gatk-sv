@@ -12,7 +12,7 @@ workflow GenotypeCpxCnvsPerBatch {
   input {
     File bin_exclude
     File cpx_bed
-    File rd_depth_sep_cutoff
+    File genotyping_rd_table
     Int n_per_split_small
     Int n_per_split_large
     Int n_rd_test_bins
@@ -65,7 +65,7 @@ workflow GenotypeCpxCnvsPerBatch {
         median_file=median_file,
         ped_file=ped_file,
         samples_list=GetSampleIdsFromMedianCoverageFile.out_file,
-        gt_cutoffs=rd_depth_sep_cutoff,
+        gt_cutoffs=genotyping_rd_table,
         n_bins=n_rd_test_bins,
         prefix=basename(split_bed_file, ".bed"),
         ref_dict = ref_dict,

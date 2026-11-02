@@ -1,7 +1,0 @@
-baftest
-get_missing_cnv.sh
-logs
-scripts/__pycache__
-baftest_splits
-split_beds
-split_logs

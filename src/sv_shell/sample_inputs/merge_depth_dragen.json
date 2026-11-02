@@ -1,0 +1,15 @@
+{
+  "batch": "RGP_1153_3",
+  "contig_ploidy_calls": [""],
+  "defragment_max_dist": null,
+  "gcnv_qs_cutoff": 30,
+  "genotyped_segments_vcfs": [""],
+  "large_cnmops_del": "",
+  "large_cnmops_dup": "",
+  "samples": [
+    "RGP_1153_3"
+  ],
+  "std_cnmops_del": "",
+  "std_cnmops_dup": "",
+  "dragen_cnv_vcf": "/inputs/RGP_1153_3.cnv.vcf.gz"
+}

@@ -12,13 +12,12 @@ from collections import defaultdict
 import pysam
 
 
-def rename(vcf, fout, chrom=None, prefix='SV_pipeline'):
+def rename(vcf, fout, prefix='SV_pipeline'):
     indexes = defaultdict(int)
     fmt = '{prefix}_{svtype}_{chrom}_{idx}'
 
     for record in vcf:
-        if chrom is None:
-            chrom = record.chrom
+        chrom = record.chrom
         svtype = record.info['SVTYPE']
         indexes[svtype] += 1
         idx = indexes[svtype]
@@ -36,7 +35,6 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('vcf')
     parser.add_argument('fout')
-    parser.add_argument('--chrom')
     parser.add_argument('--prefix', default='SV_pipeline',
                         help='Tag prepended to all variant IDs')
 
@@ -52,7 +50,7 @@ def main():
     else:
         fout = pysam.VariantFile(args.fout, 'w', header=vcf.header)
 
-    rename(vcf, fout, args.chrom, args.prefix)
+    rename(vcf, fout, args.prefix)
 
 
 if __name__ == '__main__':

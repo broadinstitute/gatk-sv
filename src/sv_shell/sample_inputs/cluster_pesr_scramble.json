@@ -1,0 +1,19 @@
+{
+  "batch": "NA12878",
+  "caller": "scramble",
+  "clustering_algorithm": "SINGLE_LINKAGE",
+  "contig_list": "/inputs/primary_contigs.list",
+  "contig_subset_list": null,
+  "exclude_intervals": "/inputs/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz",
+  "java_mem_fraction": null,
+  "min_size": 50,
+  "pesr_breakend_window": 300,
+  "pesr_interval_overlap": 0.1,
+  "ploidy_table": "/inputs/NA12878.ploidy.FEMALE_chrY_1.tsv",
+  "reference_dict": "/inputs/Homo_sapiens_assembly38.dict",
+  "reference_fasta": "/inputs/Homo_sapiens_assembly38.fasta",
+  "reference_fasta_fai": "/inputs/Homo_sapiens_assembly38.fasta.fai",
+  "sort_vcf_list": false,
+  "vcf_tar": "/inputs/NA12878.scramble_std.tar.gz",
+  "vcfs": []
+}

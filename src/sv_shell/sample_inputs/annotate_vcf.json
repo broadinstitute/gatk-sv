@@ -1,0 +1,25 @@
+{
+  "contig_list": "/inputs/primary_contigs.list",
+  "external_af_population": [
+    "ALL",
+    "AFR",
+    "AMR",
+    "EAS",
+    "EUR",
+    "MID",
+    "FIN",
+    "ASJ",
+    "RMI",
+    "SAS",
+    "AMI"
+  ],
+  "external_af_ref_bed": "/inputs/gnomad_v4_SV.Freq.tsv.gz",
+  "external_af_ref_prefix": "gnomad_v4.1_sv",
+  "generate_index": true,
+  "naive": false,
+  "noncoding_bed": "/inputs/noncoding.sort.hg38.bed",
+  "par_bed": "/inputs/hg38.par.bed",
+  "prefix": "NA12878",
+  "protein_coding_gtf": "/inputs/gencode.v47.basic.protein_coding.canonical.gtf",
+  "vcf": "/inputs/NA12878.filter_genotypes.sanitized.sample_qc.vcf.gz"
+}

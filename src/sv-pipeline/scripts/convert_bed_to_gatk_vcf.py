@@ -49,9 +49,11 @@ def create_header(contigs: Set[Text],
         header.add_line(f"##contig=<ID={contig}>")
     header.add_line('##ALT=<ID=DEL,Description="Deletion">')
     header.add_line('##ALT=<ID=DUP,Description="Duplication">')
+    header.add_line('##ALT=<ID=CNV,Description="Copy number variant">')
     header.add_line('##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">')
     header.add_line('##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the structural variant">')
     header.add_line('##INFO=<ID=ALGORITHMS,Number=.,Type=String,Description="Source algorithms">')
+    header.add_line('##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="Length of affected segment on the reference">')
     header.add_line('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">')
     header.add_line('##FORMAT=<ID=CN,Number=1,Type=Integer,Description="Copy number">')
     header.add_line('##FORMAT=<ID=ECN,Number=1,Type=Integer,Description="Expected copy number for ref genotype">')
@@ -126,7 +128,7 @@ class CNVWriter:
         if self.contig_len_dict:
             end = min(self.contig_len_dict[contig], end)
         svtype = batch[0].svtype
-        if svtype != 'DEL' and svtype != 'DUP':
+        if svtype != 'DEL' and svtype != 'DUP' and svtype != 'CNV':
             raise ValueError(f"Unsupported SV type: {svtype}")
         alleles = ('N', '<' + svtype + '>')
         vcf_record = self.vcf_out.new_record(contig=contig, start=start, stop=end, alleles=alleles)
@@ -148,14 +150,16 @@ class CNVWriter:
                     genotype['GT'] = (1,)
                     if svtype == 'DEL':
                         genotype['CN'] = 0
-                    elif svtype == 'DUP':
+                    else:
+                        # Treat CNV and DUP the same
                         genotype['CN'] = 2
                 elif ploidy == 2:
                     # Mark as het for carrier status, but we don't know the actual genotype from the bed file
                     genotype['GT'] = (0, 1)
                     if svtype == 'DEL':
                         genotype['CN'] = 1
-                    elif svtype == 'DUP':
+                    else:
+                        # Treat CNV and DUP the same
                         genotype['CN'] = 3
             else:
                 genotype['CN'] = ploidy
