@@ -1,16 +1,23 @@
 version 1.0
 
+import "CollectCoverage.wdl" as cov
 import "Structs.wdl"
 
-# Most-common normalized read depth per sample at every NAHR-mediated GD locus.
+# Most-common normalized read depth per sample at every autosomal NAHR-mediated
+# GD locus (chrX and chrY loci are excluded).
 #
-# Inputs are per-batch outputs of CallGenomicDisorderCNVs (gd_output_tarballs,
-# parallel to batches). For each sample and locus, the normalized depth of each
-# locus body bin is rounded to the nearest 0.1, the most commonly observed
-# rounded value is found, and the median of the actual depths that rounded to
-# it is reported (flank bins are ignored). Expected values: non-carriers ~2,
-# germline het DEL carriers ~1 (het DUP ~3), mosaic carriers in between, and
-# carriers of an event covering only part of the locus ~2 or ~carrier value.
+# Inputs are per-batch coverage matrices, parallel to batches: give either
+# low_res_rd_matrices (used as is) or high_res_rd_matrices (condensed to low
+# resolution with CondenseReadCounts using reference_dict and
+# rebinned_interval_size; the low-res matrices are workflow outputs). Counts
+# are normalized as plot.py normalizes its raw-depth overlay: each sample's
+# counts are scaled so its autosomal median is CN 2. For each sample and locus,
+# the depth of each bin between the locus breakpoints is rounded to the nearest
+# 0.1, the most commonly observed rounded value is found, and the median of the
+# actual depths that rounded to it is reported. Expected values: non-carriers
+# ~2, germline het DEL carriers ~1 (het DUP ~3), mosaic carriers in between,
+# and carriers of an event covering only part of the locus ~2 or ~carrier
+# value.
 #
 # Preprocessing always runs and outputs the table needed to plot
 # (mode_depth_table, one row per batch/locus/sample), plus per-batch tables.
@@ -18,20 +25,24 @@ import "Structs.wdl"
 # script accepts several preprocessed tables, stacked with a shared x-axis:
 # add them with additional_mode_depth_tables / additional_dataset_labels.
 #
-# Loci are ordered as in gd_table, with DEL and DUP at one locus sharing an
-# x position. Only loci with probable mosaic carriers (median depth between 1.2
-# and 1.8, or between 2.2 and 2.8, by default) get an axis label.
+# Loci are ordered as in gd_table (NAHR == "yes" only), with DEL and DUP at one
+# locus sharing an x position. Only loci with probable mosaic carriers (median
+# depth between 1.2 and 1.8, or between 2.2 and 2.8, by default) get an axis
+# label.
 #
 # plot_mode_depth_script is plot_mode_depth.py from gatk-sv-gd; the gatk_sv_gd
 # package must be installed in the image.
 workflow PlotGDModeDepth {
   input {
     Array[String] batches
-    Array[File] gd_output_tarballs
+    Array[File]? low_res_rd_matrices
+    Array[File]? high_res_rd_matrices
+    File? reference_dict
+    Int rebinned_interval_size = 10000
     File gd_table
 
     Boolean make_plot = true
-    String dataset_label
+    String dataset_label = "All batches"
     Array[File] additional_mode_depth_tables = []
     Array[String] additional_dataset_labels = []
     Int min_mosaic_samples = 1
@@ -48,16 +59,37 @@ workflow PlotGDModeDepth {
 
     String output_prefix = "gd_mode_depth"
     String sv_pipeline_docker
+    String? gatk_docker
+    RuntimeAttr? runtime_attr_condense
     RuntimeAttr? runtime_attr_summarize
     RuntimeAttr? runtime_attr_merge
     RuntimeAttr? runtime_attr_plot
   }
 
+  Boolean use_low_res = defined(low_res_rd_matrices)
+  Array[File] low_res_inputs = select_first([low_res_rd_matrices, []])
+  Array[File] high_res_inputs = select_first([high_res_rd_matrices, []])
+
   scatter (i in range(length(batches))) {
+    if (!use_low_res) {
+      call cov.CondenseReadCounts {
+        input:
+          counts = high_res_inputs[i],
+          output_prefix = batches[i] + ".low_res",
+          sequence_dictionary = reference_dict,
+          min_interval_size = rebinned_interval_size,
+          max_interval_size = rebinned_interval_size,
+          gatk_docker = select_first([gatk_docker]),
+          runtime_attr_override = runtime_attr_condense
+      }
+    }
+
+    File low_res_counts = if use_low_res then low_res_inputs[i] else select_first([CondenseReadCounts.out])
+
     call SummarizeBatchModeDepth {
       input:
         batch = batches[i],
-        gd_output_tarball = gd_output_tarballs[i],
+        low_res_counts = low_res_counts,
         gd_table = gd_table,
         plot_mode_depth_script = plot_mode_depth_script,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -99,26 +131,30 @@ workflow PlotGDModeDepth {
   output {
     File mode_depth_table = MergeModeDepth.merged
     Array[File] batch_mode_depth_tables = SummarizeBatchModeDepth.mode_depth
+    # Low-res matrices made from high_res_rd_matrices (empty if low-res was given).
+    Array[File] condensed_low_res_matrices = select_all(CondenseReadCounts.out)
     File? mode_depth_plot = PlotModeDepth.pdf
   }
 }
 
-# Most-common (0.1-rounded) normalized depth per sample, as the median of its actual values, at each NAHR locus body.
+# Normalizes one batch's low-res counts as plot.py does and reports the
+# most-common depth (median of the values in the modal 0.1 bin) per sample and
+# autosomal NAHR locus.
 task SummarizeBatchModeDepth {
   input {
     String batch
-    File gd_output_tarball
+    File low_res_counts
     File gd_table
     File plot_mode_depth_script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  Int disk_gb = ceil(20 + 3 * size(gd_output_tarball, "GiB"))
+  Int disk_gb = ceil(20 + 3 * size(low_res_counts, "GiB"))
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 8.0,
+    mem_gb: 32.0,
     disk_gb: disk_gb,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -129,12 +165,10 @@ task SummarizeBatchModeDepth {
   command <<<
     set -euo pipefail
 
-    tar -xzf ~{gd_output_tarball} gd_outputs/infer/cn_posteriors.tsv.gz
-
     python ~{plot_mode_depth_script} summarize \
       --batch '~{batch}' \
       --gd-table ~{gd_table} \
-      --cn-posteriors gd_outputs/infer/cn_posteriors.tsv.gz \
+      --low-res-counts ~{low_res_counts} \
       --out '~{batch}.mode_depth.tsv.gz'
   >>>
 
