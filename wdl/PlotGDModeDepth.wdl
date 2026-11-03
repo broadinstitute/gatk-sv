@@ -9,7 +9,10 @@ import "Structs.wdl"
 # Inputs are per-batch coverage matrices, parallel to batches: give either
 # low_res_rd_matrices (used as is) or high_res_rd_matrices (condensed to low
 # resolution with CondenseReadCounts using reference_dict and
-# rebinned_interval_size; the low-res matrices are workflow outputs). Counts
+# rebinned_interval_size; the low-res matrices are workflow outputs). When
+# high_res_rd_matrices are given (bgzipped, with a .tbi next to each, as for
+# CallGenomicDisorderCNVs) they are also queried for body intervals shorter
+# than 10x the low-res median bin size, as plot.py does. Counts
 # are normalized as plot.py normalizes its raw-depth overlay: each sample's
 # counts are scaled so its autosomal median is CN 2. For each sample and locus,
 # the depth of each bin between the locus breakpoints is rounded to the nearest
@@ -26,9 +29,10 @@ import "Structs.wdl"
 # add them with additional_mode_depth_tables / additional_dataset_labels.
 #
 # Loci are ordered as in gd_table (NAHR == "yes" only), with DEL and DUP at one
-# locus sharing an x position. Only loci with probable mosaic carriers (median
-# depth between 1.2 and 1.8, or between 2.2 and 2.8, by default) get an axis
-# label.
+# locus sharing an x position. With flag_mosaics (default true), loci with
+# probable mosaic carriers (median depth between 1.2 and 1.8, or between 2.2
+# and 2.8, by default) get a purple band and are the only loci labeled; with
+# flag_mosaics false nothing is highlighted and every locus is labeled.
 #
 # plot_mode_depth_script is plot_mode_depth.py from gatk-sv-gd; the gatk_sv_gd
 # package must be installed in the image.
@@ -45,6 +49,7 @@ workflow PlotGDModeDepth {
     String dataset_label = "All batches"
     Array[File] additional_mode_depth_tables = []
     Array[String] additional_dataset_labels = []
+    Boolean flag_mosaics = true
     Int min_mosaic_samples = 1
     Float mosaic_del_min = 1.2
     Float mosaic_del_max = 1.8
@@ -69,6 +74,7 @@ workflow PlotGDModeDepth {
   Boolean use_low_res = defined(low_res_rd_matrices)
   Array[File] low_res_inputs = select_first([low_res_rd_matrices, []])
   Array[File] high_res_inputs = select_first([high_res_rd_matrices, []])
+  Boolean use_high_res = defined(high_res_rd_matrices)
 
   scatter (i in range(length(batches))) {
     if (!use_low_res) {
@@ -84,12 +90,19 @@ workflow PlotGDModeDepth {
       }
     }
 
+    if (use_high_res) {
+      File hr_counts = high_res_inputs[i]
+      File hr_index = high_res_inputs[i] + ".tbi"
+    }
+
     File low_res_counts = if use_low_res then low_res_inputs[i] else select_first([CondenseReadCounts.out])
 
     call SummarizeBatchModeDepth {
       input:
         batch = batches[i],
         low_res_counts = low_res_counts,
+        high_res_counts = hr_counts,
+        high_res_counts_index = hr_index,
         gd_table = gd_table,
         plot_mode_depth_script = plot_mode_depth_script,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -112,6 +125,7 @@ workflow PlotGDModeDepth {
         mode_depth_tables = flatten([[MergeModeDepth.merged], additional_mode_depth_tables]),
         dataset_labels = flatten([[dataset_label], additional_dataset_labels]),
         gd_table = gd_table,
+        flag_mosaics = flag_mosaics,
         min_mosaic_samples = min_mosaic_samples,
         mosaic_del_min = mosaic_del_min,
         mosaic_del_max = mosaic_del_max,
@@ -144,13 +158,15 @@ task SummarizeBatchModeDepth {
   input {
     String batch
     File low_res_counts
+    File? high_res_counts
+    File? high_res_counts_index
     File gd_table
     File plot_mode_depth_script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  Int disk_gb = ceil(20 + 3 * size(low_res_counts, "GiB"))
+  Int disk_gb = ceil(20 + 3 * size(low_res_counts, "GiB") + size(high_res_counts, "GiB"))
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
@@ -169,6 +185,7 @@ task SummarizeBatchModeDepth {
       --batch '~{batch}' \
       --gd-table ~{gd_table} \
       --low-res-counts ~{low_res_counts} \
+      ~{if defined(high_res_counts) then "--high-res-counts " + high_res_counts else ""} \
       --out '~{batch}.mode_depth.tsv.gz'
   >>>
 
@@ -234,6 +251,7 @@ task PlotModeDepth {
     Array[File] mode_depth_tables
     Array[String] dataset_labels
     File gd_table
+    Boolean flag_mosaics
     Int min_mosaic_samples
     Float mosaic_del_min
     Float mosaic_del_max
@@ -266,6 +284,7 @@ task PlotModeDepth {
       --gd-table ~{gd_table} \
       --data ~{sep=" " mode_depth_tables} \
       --labels ~{sep=" " dataset_labels} \
+      ~{if flag_mosaics then "--flag-mosaics" else "--no-flag-mosaics"} \
       --min-mosaic-samples ~{min_mosaic_samples} \
       --mosaic-del-min ~{mosaic_del_min} \
       --mosaic-del-max ~{mosaic_del_max} \
