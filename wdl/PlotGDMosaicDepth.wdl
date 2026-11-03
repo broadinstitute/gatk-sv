@@ -16,12 +16,21 @@ import "Structs.wdl"
 # lists them). The publication PDF is drawn from
 # those outputs only when make_plot is true.
 #
+# Samples with abnormal depth in the flanks or in cluster intervals outside the
+# target GD (median of max_flank_deviation from ploidy over flank_window_bins
+# consecutive bins) are left out of the germline and non-carrier comparators;
+# a mosaic sample with such depth is kept, with a warning. This needs the
+# low-res counts of every batch: give low_res_rd_matrices (condensed counts,
+# e.g. condensed_low_res_matrices from a previous run) or leave it unset and
+# every batch's high-res matrix is condensed.
+#
 # Inputs are per-batch outputs of CallGenomicDisorderCNVs. Arrays are indexed
-# together: batches[i] goes with gd_output_tarballs[i] and high_res_rd_matrices[i].
-# Use the same gd_table, reference_dict, rebinned_interval_size and
-# high_res_rd_matrix given to CallGenomicDisorderCNVs so depth is normalized
-# the way plot.py normalizes it. Only the condensed low-res counts are plotted;
-# the high-res matrix is only the source for condensing.
+# together: batches[i] goes with gd_output_tarballs[i], low_res_rd_matrices[i]
+# and high_res_rd_matrices[i]. Use the same gd_table, reference_dict,
+# rebinned_interval_size and high_res_rd_matrix given to
+# CallGenomicDisorderCNVs so depth is normalized the way plot.py normalizes it.
+# Only the condensed low-res counts are plotted; the high-res matrix is only
+# the source for condensing, and is not needed when low_res_rd_matrices is set.
 #
 # plot_mosaic_script is plot_mosaic.py from gatk-sv-gd; the gatk_sv_gd package
 # must be installed in the image.
@@ -32,7 +41,8 @@ workflow PlotGDMosaicDepth {
 
     Array[String] batches
     Array[File] gd_output_tarballs
-    Array[File] high_res_rd_matrices
+    Array[File]? low_res_rd_matrices
+    Array[File]? high_res_rd_matrices
 
     File gd_table
     File reference_dict
@@ -42,6 +52,8 @@ workflow PlotGDMosaicDepth {
     Int n_germline_carriers = 10
     Int n_non_carriers = 50
     Int random_seed = 42
+    Float max_flank_deviation = 0.5
+    Int flank_window_bins = 3
 
     Boolean make_plot = true
     Float fig_width_in = 2.0
@@ -62,11 +74,33 @@ workflow PlotGDMosaicDepth {
     RuntimeAttr? runtime_attr_plot
   }
 
+  Boolean use_low_res = defined(low_res_rd_matrices)
+  Array[File] low_res_inputs = select_first([low_res_rd_matrices, []])
+  Array[File] high_res_inputs = select_first([high_res_rd_matrices, []])
+
   scatter (i in range(length(batches))) {
+    if (!use_low_res) {
+      call cov.CondenseReadCounts {
+        input:
+          counts = high_res_inputs[i],
+          output_prefix = batches[i] + ".low_res",
+          sequence_dictionary = reference_dict,
+          min_interval_size = rebinned_interval_size,
+          max_interval_size = rebinned_interval_size,
+          gatk_docker = gatk_docker,
+          runtime_attr_override = runtime_attr_condense
+      }
+    }
+
+    File low_res_counts = if use_low_res then low_res_inputs[i] else select_first([CondenseReadCounts.out])
+
     call ClassifyBatch {
       input:
         batch = batches[i],
         gd_output_tarball = gd_output_tarballs[i],
+        low_res_counts = low_res_counts,
+        max_flank_deviation = max_flank_deviation,
+        flank_window_bins = flank_window_bins,
         gd_table = gd_table,
         gd_id = gd_id,
         plot_mosaic_script = plot_mosaic_script,
@@ -93,21 +127,10 @@ workflow PlotGDMosaicDepth {
 
   scatter (i in range(length(batches))) {
     if (use_batch[i] == "true") {
-      call cov.CondenseReadCounts {
-        input:
-          counts = high_res_rd_matrices[i],
-          output_prefix = batches[i] + ".low_res",
-          sequence_dictionary = reference_dict,
-          min_interval_size = rebinned_interval_size,
-          max_interval_size = rebinned_interval_size,
-          gatk_docker = gatk_docker,
-          runtime_attr_override = runtime_attr_condense
-      }
-
       call ExtractBatchDepth {
         input:
           batch = batches[i],
-          low_res_counts = CondenseReadCounts.out,
+          low_res_counts = low_res_counts[i],
           selected = SelectSamples.selected,
           region = SelectSamples.region,
           gd_table = gd_table,
@@ -146,6 +169,8 @@ workflow PlotGDMosaicDepth {
   output {
     File selected_samples = SelectSamples.selected
     File selected_batches = SelectSamples.batches_used
+    # Low-res matrices made from high_res_rd_matrices (empty if low-res was given).
+    Array[File] condensed_low_res_matrices = select_all(CondenseReadCounts.out)
     File locus_region = SelectSamples.region
     Array[File] normalized_depth_tables = depth_tables
     File? mosaic_depth_plot = PlotMosaicDepth.pdf
@@ -153,11 +178,15 @@ workflow PlotGDMosaicDepth {
 }
 
 # Labels every sample at the locus's cluster as germline carrier of gd_id,
-# non-carrier of all GDs in the cluster, or other.
+# non-carrier of all GDs in the cluster, or other; also flags samples with
+# abnormal depth in the flanks / other cluster intervals.
 task ClassifyBatch {
   input {
     String batch
     File gd_output_tarball
+    File low_res_counts
+    Float max_flank_deviation
+    Int flank_window_bins
     File gd_table
     String gd_id
     File plot_mosaic_script
@@ -165,7 +194,7 @@ task ClassifyBatch {
     RuntimeAttr? runtime_attr_override
   }
 
-  Int disk_gb = ceil(20 + 3 * size(gd_output_tarball, "GiB"))
+  Int disk_gb = ceil(20 + 3 * size(gd_output_tarball, "GiB") + 2 * size(low_res_counts, "GiB"))
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
@@ -195,6 +224,9 @@ task ClassifyBatch {
       --calls gd_outputs/call/gd_cnv_calls.tsv.gz \
       --cn-posteriors gd_outputs/infer/cn_posteriors.tsv.gz \
       ${PLOIDY_ARG} \
+      --low-res-counts ~{low_res_counts} \
+      --max-flank-deviation ~{max_flank_deviation} \
+      --min-region-bins ~{flank_window_bins} \
       --out-prefix '~{batch}'
   >>>
 
