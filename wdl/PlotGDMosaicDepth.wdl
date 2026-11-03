@@ -17,8 +17,12 @@ import "Structs.wdl"
 # those outputs only when make_plot is true.
 #
 # Samples with abnormal depth in the flanks or in cluster intervals outside the
-# target GD (median of max_flank_deviation from ploidy over flank_window_bins
-# consecutive bins) are left out of the germline and non-carrier comparators;
+# target GD (at least flank_min_deviant_bins of any flank_window_bins
+# consecutive usable bins differ from the batch median of same-ploidy samples
+# by more than max_flank_deviation, in the same direction) are left out. Bins
+# overlapping a segdup (segdup_bed) and bins where more than
+# flank_max_population_fraction of the batch deviates (common polymorphism)
+# are ignored of the germline and non-carrier comparators;
 # a mosaic sample with such depth is kept, with a warning. This needs the
 # low-res counts of every batch: give low_res_rd_matrices (condensed counts,
 # e.g. condensed_low_res_matrices from a previous run) or leave it unset and
@@ -52,8 +56,10 @@ workflow PlotGDMosaicDepth {
     Int n_germline_carriers = 10
     Int n_non_carriers = 50
     Int random_seed = 42
-    Float max_flank_deviation = 0.5
-    Int flank_window_bins = 3
+    Float max_flank_deviation = 0.4
+    Int flank_window_bins = 5
+    Int flank_min_deviant_bins = 3
+    Float flank_max_population_fraction = 0.05
 
     Boolean make_plot = true
     Float fig_width_in = 2.0
@@ -101,6 +107,9 @@ workflow PlotGDMosaicDepth {
         low_res_counts = low_res_counts,
         max_flank_deviation = max_flank_deviation,
         flank_window_bins = flank_window_bins,
+        flank_min_deviant_bins = flank_min_deviant_bins,
+        flank_max_population_fraction = flank_max_population_fraction,
+        segdup_bed = segdup_bed,
         gd_table = gd_table,
         gd_id = gd_id,
         plot_mosaic_script = plot_mosaic_script,
@@ -169,8 +178,7 @@ workflow PlotGDMosaicDepth {
   output {
     File selected_samples = SelectSamples.selected
     File selected_batches = SelectSamples.batches_used
-    # Low-res matrices made from high_res_rd_matrices (empty if low-res was given).
-    Array[File] condensed_low_res_matrices = select_all(CondenseReadCounts.out)
+    Array[File] condensed_low_res_matrices = if use_low_res then low_res_inputs else select_all(CondenseReadCounts.out)
     File locus_region = SelectSamples.region
     Array[File] normalized_depth_tables = depth_tables
     File? mosaic_depth_plot = PlotMosaicDepth.pdf
@@ -187,6 +195,9 @@ task ClassifyBatch {
     File low_res_counts
     Float max_flank_deviation
     Int flank_window_bins
+    Int flank_min_deviant_bins
+    Float flank_max_population_fraction
+    File? segdup_bed
     File gd_table
     String gd_id
     File plot_mosaic_script
@@ -226,7 +237,10 @@ task ClassifyBatch {
       ${PLOIDY_ARG} \
       --low-res-counts ~{low_res_counts} \
       --max-flank-deviation ~{max_flank_deviation} \
-      --min-region-bins ~{flank_window_bins} \
+      --flank-window-bins ~{flank_window_bins} \
+      --flank-min-deviant-bins ~{flank_min_deviant_bins} \
+      --flank-max-population-fraction ~{flank_max_population_fraction} \
+      ~{if defined(segdup_bed) then "--segdup-bed " + segdup_bed else ""} \
       --out-prefix '~{batch}'
   >>>
 

@@ -28,8 +28,9 @@ import "Structs.wdl"
 # script accepts several preprocessed tables, stacked with a shared x-axis:
 # add them with additional_mode_depth_tables / additional_dataset_labels.
 #
-# Loci are ordered as in gd_table (NAHR == "yes" only), with DEL and DUP at one
-# locus sharing an x position. With flag_mosaics (default true), loci with
+# Every distinct GD interval (chr, start, end) is its own locus, not its cluster
+# (NAHR == "yes" only), ordered as in gd_table, with DEL and DUP of one interval
+# sharing an x position. With flag_mosaics (default true), loci with
 # probable mosaic carriers (median depth between 1.2 and 1.8, or between 2.2
 # and 2.8, by default) get a purple band and are the only loci labeled; with
 # flag_mosaics false nothing is highlighted and every locus is labeled.
@@ -145,8 +146,7 @@ workflow PlotGDModeDepth {
   output {
     File mode_depth_table = MergeModeDepth.merged
     Array[File] batch_mode_depth_tables = SummarizeBatchModeDepth.mode_depth
-    # Low-res matrices made from high_res_rd_matrices (empty if low-res was given).
-    Array[File] condensed_low_res_matrices = select_all(CondenseReadCounts.out)
+    Array[File] condensed_low_res_matrices = select_first([CondenseReadCounts.out, low_res_rd_matrices, []])
     File? mode_depth_plot = PlotModeDepth.pdf
   }
 }
