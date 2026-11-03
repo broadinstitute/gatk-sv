@@ -13,6 +13,7 @@ workflow TrainGqRecalibrator {
         String gatk_docker
         String samtools_cloud_docker
         Int? preemptible_tries
+        RuntimeAttr? runtime_attr_train_gq_recalibrator
     }
 
     call Utils.GetVcfSize {
@@ -32,7 +33,8 @@ workflow TrainGqRecalibrator {
             train_args=train_args,
             gatk_docker=gatk_docker,
             num_entries=GetVcfSize.num_entries,
-            preemptible_tries=preemptible_tries
+            preemptible_tries=preemptible_tries,
+            runtime_attr_override=runtime_attr_train_gq_recalibrator
     }
 
     output {
@@ -53,8 +55,9 @@ task TrainGqRecalibratorTask {
         Float? num_entries
         Float mem_scale_vcf_size = 25.2
         Float mem_scale_num_entries = "3.7e-7"
-        Float mem_gb_overhead = 1.5
+        Float mem_gb_overhead = 150  # headroom outside the java heap for native xgboost and the JVM itself
         Int preemptible_tries = 3
+        RuntimeAttr? runtime_attr_override
     }
 
     Int disk_gb = round(1000 + size([train_vcf, train_vcf_index, ped_file, truth_file], "GiB") +
@@ -68,13 +71,25 @@ task TrainGqRecalibratorTask {
         then basename(select_first([gq_recalibrator_model_file]))
         else "gq_recalibrator.model"
 
+    RuntimeAttr default_attr = object {
+                                   cpu_cores: 1,
+                                   mem_gb: mem_gb,
+                                   disk_gb: disk_gb,
+                                   boot_disk_gb: 10,
+                                   preemptible_tries: preemptible_tries,
+                                   max_retries: 0
+                               }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     runtime {
         docker: gatk_docker
-        cpu: 1
-        preemptible: preemptible_tries
-        max_retries: 1
-        memory: mem_gb + " GiB"
-        disks: "local-disk " + disk_gb + " HDD"
+#        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+#        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        predefinedMachineType: "m1-ultramem-40"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 
     command <<<
@@ -100,6 +115,7 @@ task TrainGqRecalibratorTask {
           --genome-track ~{sep=" --genome-track " genome_tracks} \
           --model-file ~{model_file_name} \
           --n-threads-xgboost $NUM_PHYSICAL_CPUS \
+          --temp-dir "$(pwd)" \
           ~{sep=' ' train_args}
     >>>
 

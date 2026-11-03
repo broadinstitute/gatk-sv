@@ -33,6 +33,8 @@ workflow CrossValidateGqRecalibrator {
         File? pre_computed_pickled_variant_properties
         File? pre_computed_pickled_original_scores
         CrossValidationVcfs? pre_computed_cross_validation_vcfs
+        RuntimeAttr? runtime_attr_train_gq_recalibrator
+        RuntimeAttr? runtime_attr_cross_train_gq_recalibrator_fold
     }
 
     call TrainGqRecalibrator.TrainGqRecalibrator {
@@ -43,7 +45,8 @@ workflow CrossValidateGqRecalibrator {
             genome_tracks=genome_tracks,
             train_args=train_args,
             gatk_docker=gatk_docker,
-            samtools_cloud_docker=samtools_cloud_docker
+            samtools_cloud_docker=samtools_cloud_docker,
+            runtime_attr_train_gq_recalibrator=runtime_attr_train_gq_recalibrator
     }
 
     call RecalibrateGq.RecalibrateGq as DirectGqRecalibrator {
@@ -81,7 +84,8 @@ workflow CrossValidateGqRecalibrator {
                 genome_tracks=genome_tracks,
                 train_args=train_args,
                 gatk_docker=gatk_docker,
-                samtools_cloud_docker=samtools_cloud_docker
+                samtools_cloud_docker=samtools_cloud_docker,
+                runtime_attr_train_gq_recalibrator=runtime_attr_cross_train_gq_recalibrator_fold
         }
 
         call RecalibrateGq.RecalibrateGq as CrossGqRecalibrator {
