@@ -212,6 +212,16 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: ScoreGenotypesByContig
+    primaryDescriptorPath: /wdl/ScoreGenotypesByContig.wdl
+    filters:
+      branches:
+        - main
+        - aou_p3_vj_multi_contig_workflows
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: FilterGenotypes
     primaryDescriptorPath: /wdl/FilterGenotypes.wdl
     filters:
