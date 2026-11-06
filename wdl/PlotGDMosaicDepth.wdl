@@ -8,6 +8,10 @@ import "Structs.wdl"
 # from the mosaic carriers' batches; germline carriers do too, plus the fewest
 # extra batches needed to reach n_germline_carriers (or all that exist).
 #
+# include_samples (optional, one sample ID per line) restricts plotting to
+# those samples: comparators are drawn only from the list, and mosaic samples
+# outside it are dropped with a warning.
+#
 # Preprocessing and plotting are separate. Preprocessing always runs and
 # outputs everything needed to draw the plot: the selected samples with their
 # group (selected_samples), the plotted region (locus_region), and normalized
@@ -42,6 +46,7 @@ workflow PlotGDMosaicDepth {
   input {
     String gd_id
     Array[String] mosaic_samples
+    File? include_samples
 
     Array[String] batches
     Array[File] gd_output_tarballs
@@ -121,6 +126,7 @@ workflow PlotGDMosaicDepth {
   call SelectSamples {
     input:
       mosaic_samples = mosaic_samples,
+      include_samples = include_samples,
       classes = ClassifyBatch.classes,
       regions = ClassifyBatch.region,
       n_germline_carriers = n_germline_carriers,
@@ -268,6 +274,7 @@ task ClassifyBatch {
 task SelectSamples {
   input {
     Array[String] mosaic_samples
+    File? include_samples
     Array[File] classes
     Array[File] regions
     Int n_germline_carriers
@@ -296,6 +303,7 @@ task SelectSamples {
       --classes ~{sep=" " classes} \
       --regions ~{sep=" " regions} \
       --mosaic-samples ~{write_lines(mosaic_samples)} \
+      ~{if defined(include_samples) then "--include-samples " + include_samples else ""} \
       --n-germline ~{n_germline_carriers} \
       --n-non-carrier ~{n_non_carriers} \
       --seed ~{random_seed} \
@@ -420,7 +428,7 @@ task PlotMosaicDepth {
       --flank-scale ~{flank_scale} \
       --ymin ~{depth_axis_min} \
       --ymax ~{depth_axis_max} \
-      ~{if defined(plot_title) then "--title '" + select_first([plot_title, ""]) + "'" else ""} \
+      ~{if defined(plot_title) then "--title '" + sub(select_first([plot_title, ""]), "'", "'\\''") + "'" else ""} \
       --out-pdf '~{output_prefix}.pdf'
   >>>
 
