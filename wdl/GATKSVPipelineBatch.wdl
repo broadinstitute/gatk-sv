@@ -90,6 +90,10 @@ workflow GATKSVPipelineBatch {
     File? outlier_cutoff_table
     File qc_definitions
 
+    File training_intervals
+    File depth_exclusion_intervals
+    File pesr_exclusion_intervals
+
     # Run module metrics - all modules on by default for batch WDL
     Boolean? run_sampleevidence_metrics
     Boolean? run_batchevidence_metrics = true  # GatherBatchEvidenceMetrics is off by default standalone but on for batch WDL
@@ -314,6 +318,7 @@ workflow GATKSVPipelineBatch {
   call genotypebatch.GenotypeBatch as GenotypeBatch {
     input:
       vcf=MergePesrDepthVcfs.concat_vcf,
+      training_vcf=select_first([GATKSVPipelinePhase1.filtered_pesr_vcf]),
       batch=name,
       rf_cutoffs=GATKSVPipelinePhase1.cutoffs,
       median_coverage=GATKSVPipelinePhase1.median_cov,
@@ -321,7 +326,10 @@ workflow GATKSVPipelineBatch {
       pe_file=GATKSVPipelinePhase1.merged_PE,
       sr_file=GATKSVPipelinePhase1.merged_SR,
       reference_dict=reference_dict,
-        ploidy_table=CreatePloidyTableFromPed.out,
+      training_intervals=training_intervals,
+      ploidy_table=CreatePloidyTableFromPed.out,
+      depth_exclusion_intervals=depth_exclusion_intervals,
+      pesr_exclusion_intervals=pesr_exclusion_intervals,
       contig_list = primary_contigs_list,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -337,8 +345,8 @@ workflow GATKSVPipelineBatch {
       medianfiles=[GATKSVPipelinePhase1.median_cov],
       coveragefiles=[GATKSVPipelinePhase1.merged_bincov],
       coveragefile_idxs=[GATKSVPipelinePhase1.merged_bincov_index],
-      genotyping_rd_table=[select_first([GenotypeBatch.genotyping_rd_table])],
-        ploidy_tables=[CreatePloidyTableFromPed.out],
+      genotyping_rd_table=[select_first([GenotypeBatch.genotyping_rd_depth_table])],
+      ploidy_tables=[CreatePloidyTableFromPed.out],
       contig_list=primary_contigs_list,
       regeno_coverage_medians=[GenotypeBatch.regeno_coverage_medians],
       sv_base_mini_docker=sv_base_mini_docker,
@@ -366,7 +374,7 @@ workflow GATKSVPipelineBatch {
       cohort_name=name,
       rf_cutoff_files=[GATKSVPipelinePhase1.cutoffs],
       batches=[name],
-      genotyping_rd_tables=[select_first([GenotypeBatch.genotyping_rd_table])],
+      genotyping_rd_tables=[select_first([GenotypeBatch.genotyping_rd_depth_table])],
       median_coverage_files=[GATKSVPipelinePhase1.median_cov],
       run_module_metrics = run_makecohortvcf_metrics,
       primary_contigs_list = primary_contigs_list,
@@ -553,9 +561,11 @@ workflow GATKSVPipelineBatch {
     File regeno_coverage_medians = GenotypeBatch.regeno_coverage_medians
     File regenotyped_depth_vcf = RegenotypeCNVs.regenotyped_depth_vcfs[0]
 
-    File genotyping_rd_table = GenotypeBatch.genotyping_rd_table
+    File genotyping_rd_depth_table = GenotypeBatch.genotyping_rd_depth_table
+    File genotyping_rd_pesr_table = GenotypeBatch.genotyping_rd_pesr_table
     File genotyping_pe_table = GenotypeBatch.genotyping_pe_table
     File genotyping_sr_table = GenotypeBatch.genotyping_sr_table
+    File genotyping_sr_cutoff_diagnostics = GenotypeBatch.genotyping_sr_cutoff_diagnostics
 
     # CombineBatches
     Array[File] combined_vcfs = MakeCohortVcf.combined_vcfs
