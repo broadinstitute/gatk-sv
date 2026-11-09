@@ -49,7 +49,7 @@ OUTPUT=$PWD/downsampled_data
 Download the raw inputs (~49 GB).
 
 ```shell
-gcloud storage rsync -r gs://broad-dsde-methods-vj/sv-shell-downsampling-inputs $INPUTS
+gcloud storage rsync -r gs://gatk-sv-ref-panel-1kg-v1-1/sv-shell-downsampling-inputs $INPUTS
 ```
 
 Generate the downsampled inputs in `$OUTPUT` and their input JSON (~10 min).
