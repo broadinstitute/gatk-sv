@@ -301,3 +301,10 @@ workflows:
     filters:
       branches:
         - eph_mosaic_gd_plots
+
+  - subclass: WDL
+    name: NominateMosaicGDCarriers
+    primaryDescriptorPath: /wdl/NominateMosaicGDCarriers.wdl
+    filters:
+      branches:
+        - eph_mosaic_gd_plots

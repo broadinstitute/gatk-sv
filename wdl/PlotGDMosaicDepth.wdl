@@ -8,6 +8,16 @@ import "Structs.wdl"
 # from the mosaic carriers' batches; germline carriers do too, plus the fewest
 # extra batches needed to reach n_germline_carriers (or all that exist).
 #
+# Germline carriers include those of the DEL and DUP at the target locus (the
+# partner GD_ID differs only in "DEL"/"DUP"), plotted in one color on one
+# legend line with separate DEL and DUP counts. n_germline_carriers is the total
+# over both types: a type with 3 or fewer carriers is included whole, otherwise
+# the types share the total in proportion to their cohort frequency, each with
+# at least 3. Mosaic carriers are typed DEL/DUP by median depth over the locus
+# (below/above ploidy) and their counts are listed by type when both occur.
+# When fewer germline carriers (of a type) or non-carriers are plotted than are
+# eligible in the cohort, the legend reads e.g. "Germline DEL (n=20, selected)".
+#
 # include_samples (optional, one sample ID per line) restricts plotting to
 # those samples: comparators are drawn only from the list, and mosaic samples
 # outside it are dropped with a warning.
