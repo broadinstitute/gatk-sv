@@ -26,10 +26,11 @@ import "Structs.wdl"
 #      the interval's cluster. Bins overlapping a segmental duplication, and bins
 #      where more than flank_max_population_fraction of the batch deviates, are
 #      ignored (the PlotGDMosaicDepth procedure).
-#   3. Batch recentering (recenter): the batch's median depth over the interval
-#      is scaled to CN 2 so locus-wide shifts (GC, mappability) shared by the
-#      batch are not mistaken for mosaicism; median_depth is the recentered
-#      value and raw_median_depth the unscaled one.
+#   3. Chromosome normalization (chrom_normalize): each sample is further scaled
+#      so its median depth over the interval's whole chromosome is CN 2, which
+#      removes sample- and chromosome-specific shifts (e.g. a chromosome-wide
+#      copy change or coverage bias); median_depth is the normalized value and
+#      raw_median_depth the value before this step.
 #   4. Candidate test: the median depth over the interval, excluding bins that
 #      overlap a segmental duplication by at least 1 bp, must lie in
 #      [del_min, del_max] (default 1.2-1.8, mosaic DEL) or [dup_min, dup_max]
@@ -71,7 +72,7 @@ workflow NominateMosaicGDCarriers {
     Float dup_max = 2.8
     Int min_interval_bins = 1
     Boolean nahr_only = true
-    Boolean recenter = true
+    Boolean chrom_normalize = true
     Float min_consistent_fraction = 0.7
     Float consistency_margin = 0.1
     Boolean collapse_cluster = true
@@ -132,7 +133,7 @@ workflow NominateMosaicGDCarriers {
         dup_max = dup_max,
         min_interval_bins = min_interval_bins,
         nahr_only = nahr_only,
-        recenter = recenter,
+        chrom_normalize = chrom_normalize,
         min_consistent_fraction = min_consistent_fraction,
         consistency_margin = consistency_margin,
         collapse_cluster = collapse_cluster,
@@ -192,7 +193,7 @@ task NominateBatch {
     Float dup_max
     Int min_interval_bins
     Boolean nahr_only
-    Boolean recenter
+    Boolean chrom_normalize
     Float min_consistent_fraction
     Float consistency_margin
     Boolean collapse_cluster
@@ -245,7 +246,7 @@ task NominateBatch {
       --dup-min ~{dup_min} --dup-max ~{dup_max} \
       --min-bins ~{min_interval_bins} \
       ~{if nahr_only then "--nahr-only" else "--no-nahr-only"} \
-      ~{if recenter then "--recenter" else "--no-recenter"} \
+      ~{if chrom_normalize then "--chrom-normalize" else "--no-chrom-normalize"} \
       --min-consistent-fraction ~{min_consistent_fraction} \
       --consistency-margin ~{consistency_margin} \
       ~{if collapse_cluster then "--collapse-cluster" else "--no-collapse-cluster"} \
