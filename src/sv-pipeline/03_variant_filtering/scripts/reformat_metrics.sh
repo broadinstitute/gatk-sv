@@ -17,9 +17,6 @@ metricfile=$2
   ##remove chr X and Y \
   ##get rid of straggler header line## \
 
-  # BAF p-value/log-scale and inf handling moved to aggregate/preprocess. Do not re-add a sign flip
-  # for BAF_DEL_LOGLIK here: the producer (GATK BafHetRatioTester) already negates the log-likelihood.
-
 cat ${@:3} \
   > $metricfile
 

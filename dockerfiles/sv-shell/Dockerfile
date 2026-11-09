@@ -9,10 +9,6 @@ FROM $WHAM_IMAGE as wham_layer
 # note that gatk is installed in sv-base docker, which this docker image inherits.
 # however, the base images are currently being updated: https://github.com/broadinstitute/gatk-sv/pull/816
 # so as a temporary work-around we're re-installing gatk in this image using code in a specific branch.
-# the sha below must stay in step with the flags src/sv_shell/*.sh pass to /opt/gatk.jar: this image carries
-# its own gatk jar (genotype_svs.sh runs `java -jar /opt/gatk.jar GenotypeSVs`), so renaming or adding an
-# @Argument on the genotyper without moving this pin makes the single-sample stage die on an unrecognized
-# option. Keep it at the gatk mw_gatk_sv tip that the WDLs and sv_shell scripts are built against.
 # setting SHELL to bash in the following is needed for the `source` command in the following RUN,
 # since the default sh does not support `source`.
 FROM $SV_PIPELINE_IMAGE AS gatk_builder

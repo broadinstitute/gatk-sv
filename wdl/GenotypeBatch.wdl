@@ -11,32 +11,10 @@ workflow GenotypeBatch {
     # but we should add an option to subset to just retained samples in case of sample filtering
     File vcf
 
-    # Sites used to train the PE/SR genotyping models: normally this batch's own FilterBatch PESR
-    # calls. Deliberately separate from `vcf`, which is the (potentially cohort-wide) set of sites
-    # to genotype.
-    #
-    # These should not be the same file when `vcf` is cohort-wide. The SR frequency cutoff optimizer
-    # learns recovery-fraction thresholds by contrasting variants that have depth/PE support against
-    # those that do not. Cohort-wide sites absent from this batch contribute background-only
-    # fractions to both classes, which erases the separation the optimizer needs. On one AoU batch
-    # that drove the pass:fail ratio from ~1:10 to ~1:26 and collapsed all four cutoffs to zero,
-    # silently disabling SR background filtering.
-    #
-    # Only PE and SR training read this VCF. RD is trained from `training_intervals` plus the depth
-    # matrix, and its depth-only vs PESR split comes from separation constraints rather than from
-    # the VCF, so a PESR-only training VCF is sufficient here.
+    # Batch's own filtered PESR calls for PE/SR model training; should not be the cohort-wide vcf
     File training_vcf
 
     File training_intervals
-    # RD genotyping bin count, used for BOTH training and apply so cutoffs are fitted on the same
-    # values they are applied to. v1.1.1 fitted and applied RD with -i 100000 (its GenotypeBatch.wdl:25
-    # n_RD_genotype_bins -> TrainRDGenotyping.wdl:53 -> TasksGenotypeBatch.wdl:359 -i ~{n_bins}), and
-    # RdTest.R:388-401 clamps that to each interval's own bin count, i.e. no rebinning at all. The Java
-    # default is 10 (TrainSVGenotyping.java:238, which mirrors RdTest.R:81's *dead* -i default that the
-    # WDL always overrode) while GenotypeSVs.java:239 defaults to 100000, so with no caller passing this
-    # argument RD cutoffs were fitted on 10-bin-resampled depth and applied to full-resolution depth.
-    # Effect on the frozen v1.1.1 156-sample cohort (curated loci, real bin_exclude, otherwise identical):
-    # state-0 sd 1.58x baseline at 10 bins vs 1.000x (equal to 14 s.f.) at 100000 bins.
     Int n_RD_genotype_bins = 100000
     File median_coverage
     File rd_file
@@ -53,9 +31,6 @@ workflow GenotypeBatch {
     String? training_args
     String? genotype_args
 
-    # Fail the workflow if SR frequency cutoff training produced a degenerate grid, which
-    # silently resolves to zero cutoffs and disables SR background filtering. Set false to let
-    # a diagnostic run complete and inspect genotyping_sr_cutoff_diagnostics anyway.
     Boolean fail_on_degenerate_sr_cutoffs = true
 
     String gatk_docker
@@ -94,10 +69,6 @@ workflow GenotypeBatch {
       runtime_attr_override = runtime_attr_train
   }
 
-  # TrainSVGenotyping cannot fail on a degenerate SR cutoff grid: Cromwell delocalizes task
-  # outputs only on success, so failing there would strand the diagnostics needed to explain it.
-  # Enforcement therefore happens here, after the diagnostics have been copied out. Gates the
-  # genotyping scatter so a doomed run does not pay for every contig shard.
   call ValidateSRCutoffs {
     input:
       sr_table = TrainSVGenotyping.sr_table,
@@ -130,7 +101,6 @@ workflow GenotypeBatch {
         rd_pesr_table = TrainSVGenotyping.rd_pesr_table,
         n_RD_genotype_bins = n_RD_genotype_bins,
         pe_table = TrainSVGenotyping.pe_table,
-        # Via ValidateSRCutoffs so the scatter cannot start on a rejected cutoff grid
         sr_table = ValidateSRCutoffs.validated_sr_table,
         genotype_args = genotype_args,
         gatk_docker = gatk_docker,
@@ -220,11 +190,6 @@ task TrainSVGenotyping {
   command <<<
     set -euo pipefail
 
-    # One pass over the cutoffs table emits `<name>\t<cutoff>` for each of the four queries below.
-    # Selection per query is unchanged from the four-program version: first match wins for PEQ/SRQ,
-    # and the separators still go through `sort -nr | head -n 1` fed with the bare cutoff column, so
-    # the bytes reaching sort are identical. Case handling is preserved exactly - PEQ/SRQ match the
-    # metric literally, the separators match it upper-cased (as the original awk did).
     QUERIES=$(awk -F'\t' '
       NR==1 { for (i = 1; i <= NF; i++) col[$i] = i; next }
       {
@@ -236,11 +201,6 @@ task TrainSVGenotyping {
             ($col["min_svsize"] + 0) == 1000) print "PESR_SEP\t" $col["cutoff"]
         if (toupper(metric) == "RD_MEDIAN_SEPARATION" && algtype == "DEPTH") print "DEPTH_SEP\t" $col["cutoff"]
       }' ~{rf_cutoffs})
-    # `|| true` on each read: awk's `exit` and `head` close the pipe while the writer is still
-    # feeding it, so the writer can take SIGPIPE (141) and pipefail would fail a read that returned
-    # the right value. The guard that matters is the emptiness check below -- same reasoning as the
-    # header probes in CollectCoverage.wdl. Small here: $QUERIES is a few lines, so it drains into
-    # the pipe buffer before the reader exits and SIGPIPE cannot actually fire.
     PEQ=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "PEQ" { print $2; exit }' || true)
     SRQ=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "SRQ" { print $2; exit }' || true)
     PESR_SEP=$(printf '%s\n' "$QUERIES" | awk -F'\t' '$1 == "PESR_SEP" { print $2 }' | sort -nr | head -n 1 || true)
@@ -262,8 +222,7 @@ task TrainSVGenotyping {
     }
     JVM_MAX_MEM=$(getJavaMem MemTotal)
 
-    # TrainSVGenotyping writes SR cutoff diagnostics on a best-effort basis. Pre-create the
-    # file so a diagnostics failure cannot fail the task on a missing output.
+    # Diagnostics are best-effort; ensure the output exists
     touch ~{output_name}.sr_cutoff_diagnostics.txt
 
     gatk --java-options "-Xmx${JVM_MAX_MEM}" TrainSVGenotyping \
@@ -308,13 +267,7 @@ task TrainSVGenotyping {
   }
 }
 
-# Enforce that SR frequency cutoff training found real signal.
-#
-# TrainSVGenotyping only reports a degenerate cutoff grid, it does not fail on one, because
-# Cromwell delocalizes task outputs solely on success and failing there would leave the
-# diagnostics report on the worker. This task runs after that report has been copied out, so it
-# can fail loudly while the evidence remains retrievable. It passes sr_table through so the
-# genotyping scatter depends on it and cannot start on rejected cutoffs.
+# Separate from TrainSVGenotyping so diagnostics are delocalized before failing
 task ValidateSRCutoffs {
   input {
     File sr_table
@@ -339,14 +292,9 @@ task ValidateSRCutoffs {
 
     cp ~{sr_table} validated.sr_geno_params.tsv
 
-    # Status keys are written by SplitReadEvidenceGenotyper.appendSelectionStatus
     REJECTED=$(awk -F'\t' '$1 ~ /_selection_status$/ && $2 != "OK" {print $1"="$2}' \
                  ~{sr_cutoff_diagnostics} || true)
 
-    # Both records must be present, not merely free of a non-OK value. TrainSVGenotyping pre-creates
-    # this file so that a diagnostics write cannot fail the task, so an empty or half-written file
-    # leaves ${REJECTED} empty and would otherwise wave an unverifiable cutoff grid through to
-    # genotyping -- the exact silent-zero-cutoff failure this gate exists to catch.
     MISSING=""
     DEGENERATE=""
     for KEY in rare_selection_status common_selection_status; do
@@ -356,23 +304,16 @@ task ValidateSRCutoffs {
     done
 
     if [ -n "${MISSING}" ]; then
-      echo "SR cutoff diagnostics is missing required status record(s):${MISSING}" >&2
-      echo "The grid cannot be verified (empty or partial diagnostics), so the cutoffs may be the" >&2
-      echo "0.0 fallback, which makes the frequency predicate a tautology and disables SR" >&2
-      echo "background filtering. Inspect the sr_cutoff_diagnostics output and the training log." >&2
+      echo "SR cutoff diagnostics missing status record(s):${MISSING}; see sr_cutoff_diagnostics" >&2
       DEGENERATE=1
     elif [ -n "${REJECTED}" ]; then
-      echo "SR frequency cutoff selection was rejected: ${REJECTED}" >&2
+      echo "SR cutoff selection rejected: ${REJECTED}; see sr_cutoff_diagnostics" >&2
       awk -F'\t' '$1 ~ /_selection_rejection_reason$/ {print $2}' ~{sr_cutoff_diagnostics} >&2
-      echo "Cutoffs fell back to 0.0, which makes the frequency predicate a tautology and" >&2
-      echo "disables SR background filtering. Inspect the sr_cutoff_diagnostics output." >&2
       DEGENERATE=1
     else
       echo "SR frequency cutoff selection OK for both frequency bins."
     fi
 
-    # One gate for both failure modes: an unverifiable grid and a rejected grid mean the same thing
-    # to the genotyping scatter, so the decision belongs in one place.
     if [ -n "${DEGENERATE}" ]; then
       if ~{if fail_on_degenerate_sr_cutoffs then "true" else "false"}; then
         exit 1
@@ -420,12 +361,7 @@ task GenotypeSVs {
     File pe_table
     File sr_table
 
-    # Depth is resampled into this many bins per variant on both sides of the model: TrainSVGenotyping
-    # fits the RD cutoffs on it and GenotypeSVs recomputes the depth value with it at apply time.
-    # Passing it to the fit alone would train and apply at different resolutions whenever the
-    # workflow-level default is overridden (the defaults are equal, so behavior is unchanged today).
     Int n_RD_genotype_bins = 100000
-
     String gatk_docker
     String? genotype_args
     Float? java_mem_fraction

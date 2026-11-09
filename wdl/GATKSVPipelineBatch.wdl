@@ -90,13 +90,6 @@ workflow GATKSVPipelineBatch {
     File? outlier_cutoff_table
     File qc_definitions
 
-    # Required by GenotypeBatch; WDL gives File inputs no default, so the pipeline must take them
-    # from its caller. Production (cohort-mode) sources, inputs/values/resources_hg38.json:
-    #   training_intervals        = depth_training_bed   (gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/train_hg38_reviewed_final.bed)
-    #   depth_exclusion_intervals = bin_exclude          (gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.gatkcov.bed.gz)
-    #   pesr_exclusion_intervals  = pesr_exclude_list    (gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz)
-    # GenotypeBatch.ploidy_table is not taken from the caller: it is derived from the ped below by
-    # the existing CreatePloidyTableFromPed call.
     File training_intervals
     File depth_exclusion_intervals
     File pesr_exclusion_intervals
@@ -325,7 +318,6 @@ workflow GATKSVPipelineBatch {
   call genotypebatch.GenotypeBatch as GenotypeBatch {
     input:
       vcf=MergePesrDepthVcfs.concat_vcf,
-      # PE/SR cutoff training uses this batch's own PESR calls, not the sites being genotyped
       training_vcf=select_first([GATKSVPipelinePhase1.filtered_pesr_vcf]),
       batch=name,
       rf_cutoffs=GATKSVPipelinePhase1.cutoffs,
