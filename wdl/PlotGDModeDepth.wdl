@@ -35,8 +35,11 @@ import "Structs.wdl"
 # and 2.8, by default) get a purple band and are the only loci labeled; with
 # flag_mosaics false nothing is highlighted and every locus is labeled.
 #
-# plot_mode_depth_script is plot_mode_depth.py from gatk-sv-gd; the gatk_sv_gd
-# package must be installed in the image.
+# Which gatk_sv_gd code runs (first match wins): gatk_sv_gd_src, a tarball of the
+# package made with `tar czf gatk_sv_gd_src.tar.gz -C gatk-sv-gd/src gatk_sv_gd`
+# (put on PYTHONPATH ahead of the image's copy, so no image rebuild is needed to
+# test changes); else plot_mode_depth_script, a single script (it still imports the rest of the
+# package from the image); else the gatk_sv_gd package installed in the image.
 workflow PlotGDModeDepth {
   input {
     Array[String] batches
@@ -61,7 +64,9 @@ workflow PlotGDModeDepth {
     Float depth_axis_min = 0.0
     Float depth_axis_max = 4.0
 
-    File plot_mode_depth_script
+    File? plot_mode_depth_script
+
+    File? gatk_sv_gd_src
 
     String output_prefix = "gd_mode_depth"
     String sv_pipeline_docker
@@ -106,6 +111,7 @@ workflow PlotGDModeDepth {
         high_res_counts_index = hr_index,
         gd_table = gd_table,
         plot_mode_depth_script = plot_mode_depth_script,
+        gatk_sv_gd_src = gatk_sv_gd_src,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_summarize
     }
@@ -116,6 +122,7 @@ workflow PlotGDModeDepth {
       tables = SummarizeBatchModeDepth.mode_depth,
       output_prefix = output_prefix,
       plot_mode_depth_script = plot_mode_depth_script,
+      gatk_sv_gd_src = gatk_sv_gd_src,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_merge
   }
@@ -138,6 +145,7 @@ workflow PlotGDModeDepth {
         depth_axis_max = depth_axis_max,
         output_prefix = output_prefix,
         plot_mode_depth_script = plot_mode_depth_script,
+        gatk_sv_gd_src = gatk_sv_gd_src,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_plot
     }
@@ -146,7 +154,7 @@ workflow PlotGDModeDepth {
   output {
     File mode_depth_table = MergeModeDepth.merged
     Array[File] batch_mode_depth_tables = SummarizeBatchModeDepth.mode_depth
-    Array[File] condensed_low_res_matrices = select_first([CondenseReadCounts.out, low_res_rd_matrices, []])
+    Array[File] condensed_low_res_matrices = if use_low_res then low_res_inputs else select_all(CondenseReadCounts.out)
     File? mode_depth_plot = PlotModeDepth.pdf
   }
 }
@@ -161,7 +169,8 @@ task SummarizeBatchModeDepth {
     File? high_res_counts
     File? high_res_counts_index
     File gd_table
-    File plot_mode_depth_script
+    File? plot_mode_depth_script
+    File? gatk_sv_gd_src
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -181,7 +190,21 @@ task SummarizeBatchModeDepth {
   command <<<
     set -euo pipefail
 
-    python ~{plot_mode_depth_script} summarize \
+    GD_SRC='~{if defined(gatk_sv_gd_src) then gatk_sv_gd_src else ""}'
+    GD_SCRIPT='~{if defined(plot_mode_depth_script) then plot_mode_depth_script else ""}'
+    if [ -n "$GD_SRC" ]; then
+      mkdir -p gd_pkg
+      tar xzf "$GD_SRC" -C gd_pkg
+      test -d gd_pkg/gatk_sv_gd || { echo "ERROR: gatk_sv_gd_src must contain a top-level gatk_sv_gd/ directory" >&2; exit 1; }
+      export PYTHONPATH="$PWD/gd_pkg${PYTHONPATH:+:$PYTHONPATH}"
+      GD_PY=(python -m gatk_sv_gd.plot_mode_depth)
+    elif [ -n "$GD_SCRIPT" ]; then
+      GD_PY=(python "$GD_SCRIPT")
+    else
+      GD_PY=(python -m gatk_sv_gd.plot_mode_depth)
+    fi
+
+    "${GD_PY[@]}" summarize \
       --batch '~{batch}' \
       --gd-table ~{gd_table} \
       --low-res-counts ~{low_res_counts} \
@@ -208,7 +231,8 @@ task MergeModeDepth {
   input {
     Array[File] tables
     String output_prefix
-    File plot_mode_depth_script
+    File? plot_mode_depth_script
+    File? gatk_sv_gd_src
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -226,7 +250,21 @@ task MergeModeDepth {
   command <<<
     set -euo pipefail
 
-    python ~{plot_mode_depth_script} merge \
+    GD_SRC='~{if defined(gatk_sv_gd_src) then gatk_sv_gd_src else ""}'
+    GD_SCRIPT='~{if defined(plot_mode_depth_script) then plot_mode_depth_script else ""}'
+    if [ -n "$GD_SRC" ]; then
+      mkdir -p gd_pkg
+      tar xzf "$GD_SRC" -C gd_pkg
+      test -d gd_pkg/gatk_sv_gd || { echo "ERROR: gatk_sv_gd_src must contain a top-level gatk_sv_gd/ directory" >&2; exit 1; }
+      export PYTHONPATH="$PWD/gd_pkg${PYTHONPATH:+:$PYTHONPATH}"
+      GD_PY=(python -m gatk_sv_gd.plot_mode_depth)
+    elif [ -n "$GD_SCRIPT" ]; then
+      GD_PY=(python "$GD_SCRIPT")
+    else
+      GD_PY=(python -m gatk_sv_gd.plot_mode_depth)
+    fi
+
+    "${GD_PY[@]}" merge \
       --inputs ~{sep=" " tables} \
       --out '~{output_prefix}.mode_depth.tsv.gz'
   >>>
@@ -262,7 +300,8 @@ task PlotModeDepth {
     Float depth_axis_min
     Float depth_axis_max
     String output_prefix
-    File plot_mode_depth_script
+    File? plot_mode_depth_script
+    File? gatk_sv_gd_src
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -280,7 +319,21 @@ task PlotModeDepth {
   command <<<
     set -euo pipefail
 
-    python ~{plot_mode_depth_script} plot \
+    GD_SRC='~{if defined(gatk_sv_gd_src) then gatk_sv_gd_src else ""}'
+    GD_SCRIPT='~{if defined(plot_mode_depth_script) then plot_mode_depth_script else ""}'
+    if [ -n "$GD_SRC" ]; then
+      mkdir -p gd_pkg
+      tar xzf "$GD_SRC" -C gd_pkg
+      test -d gd_pkg/gatk_sv_gd || { echo "ERROR: gatk_sv_gd_src must contain a top-level gatk_sv_gd/ directory" >&2; exit 1; }
+      export PYTHONPATH="$PWD/gd_pkg${PYTHONPATH:+:$PYTHONPATH}"
+      GD_PY=(python -m gatk_sv_gd.plot_mode_depth)
+    elif [ -n "$GD_SCRIPT" ]; then
+      GD_PY=(python "$GD_SCRIPT")
+    else
+      GD_PY=(python -m gatk_sv_gd.plot_mode_depth)
+    fi
+
+    "${GD_PY[@]}" plot \
       --gd-table ~{gd_table} \
       --data ~{sep=" " mode_depth_tables} \
       --labels ~{sep=" " dataset_labels} \

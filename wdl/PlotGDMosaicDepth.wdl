@@ -50,8 +50,11 @@ import "Structs.wdl"
 # Only the condensed low-res counts are plotted; the high-res matrix is only
 # the source for condensing, and is not needed when low_res_rd_matrices is set.
 #
-# plot_mosaic_script is plot_mosaic.py from gatk-sv-gd; the gatk_sv_gd package
-# must be installed in the image.
+# Which gatk_sv_gd code runs (first match wins): gatk_sv_gd_src, a tarball of the
+# package made with `tar czf gatk_sv_gd_src.tar.gz -C gatk-sv-gd/src gatk_sv_gd`
+# (put on PYTHONPATH ahead of the image's copy, so no image rebuild is needed to
+# test changes); else plot_mosaic_script, a single script (it still imports the rest of the
+# package from the image); else the gatk_sv_gd package installed in the image.
 workflow PlotGDMosaicDepth {
   input {
     String gd_id
@@ -83,7 +86,8 @@ workflow PlotGDMosaicDepth {
     Float depth_axis_min = 0.0
     Float depth_axis_max = 4.0
     String? plot_title
-    File plot_mosaic_script
+    File? plot_mosaic_script
+    File? gatk_sv_gd_src
 
     String output_prefix = "gd_mosaic_depth"
     String sv_pipeline_docker
@@ -128,6 +132,7 @@ workflow PlotGDMosaicDepth {
         gd_table = gd_table,
         gd_id = gd_id,
         plot_mosaic_script = plot_mosaic_script,
+        gatk_sv_gd_src = gatk_sv_gd_src,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_classify
     }
@@ -144,6 +149,7 @@ workflow PlotGDMosaicDepth {
       random_seed = random_seed,
       output_prefix = output_prefix,
       plot_mosaic_script = plot_mosaic_script,
+      gatk_sv_gd_src = gatk_sv_gd_src,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_select
   }
@@ -161,6 +167,7 @@ workflow PlotGDMosaicDepth {
           gd_table = gd_table,
           gd_id = gd_id,
           plot_mosaic_script = plot_mosaic_script,
+          gatk_sv_gd_src = gatk_sv_gd_src,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_extract
       }
@@ -186,6 +193,7 @@ workflow PlotGDMosaicDepth {
         plot_title = plot_title,
         output_prefix = output_prefix,
         plot_mosaic_script = plot_mosaic_script,
+        gatk_sv_gd_src = gatk_sv_gd_src,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_plot
     }
@@ -216,7 +224,8 @@ task ClassifyBatch {
     File? segdup_bed
     File gd_table
     String gd_id
-    File plot_mosaic_script
+    File? plot_mosaic_script
+    File? gatk_sv_gd_src
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -244,7 +253,21 @@ task ClassifyBatch {
       PLOIDY_ARG="--ploidy-table gd_outputs/preprocess/ploidy_estimates.tsv"
     fi
 
-    python ~{plot_mosaic_script} classify \
+    GD_SRC='~{if defined(gatk_sv_gd_src) then gatk_sv_gd_src else ""}'
+    GD_SCRIPT='~{if defined(plot_mosaic_script) then plot_mosaic_script else ""}'
+    if [ -n "$GD_SRC" ]; then
+      mkdir -p gd_pkg
+      tar xzf "$GD_SRC" -C gd_pkg
+      test -d gd_pkg/gatk_sv_gd || { echo "ERROR: gatk_sv_gd_src must contain a top-level gatk_sv_gd/ directory" >&2; exit 1; }
+      export PYTHONPATH="$PWD/gd_pkg${PYTHONPATH:+:$PYTHONPATH}"
+      GD_PY=(python -m gatk_sv_gd.plot_mosaic)
+    elif [ -n "$GD_SCRIPT" ]; then
+      GD_PY=(python "$GD_SCRIPT")
+    else
+      GD_PY=(python -m gatk_sv_gd.plot_mosaic)
+    fi
+
+    "${GD_PY[@]}" classify \
       --batch '~{batch}' \
       --gd-table ~{gd_table} \
       --gd-id '~{gd_id}' \
@@ -291,7 +314,8 @@ task SelectSamples {
     Int n_non_carriers
     Int random_seed
     String output_prefix
-    File plot_mosaic_script
+    File? plot_mosaic_script
+    File? gatk_sv_gd_src
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -309,7 +333,21 @@ task SelectSamples {
   command <<<
     set -euo pipefail
 
-    python ~{plot_mosaic_script} select \
+    GD_SRC='~{if defined(gatk_sv_gd_src) then gatk_sv_gd_src else ""}'
+    GD_SCRIPT='~{if defined(plot_mosaic_script) then plot_mosaic_script else ""}'
+    if [ -n "$GD_SRC" ]; then
+      mkdir -p gd_pkg
+      tar xzf "$GD_SRC" -C gd_pkg
+      test -d gd_pkg/gatk_sv_gd || { echo "ERROR: gatk_sv_gd_src must contain a top-level gatk_sv_gd/ directory" >&2; exit 1; }
+      export PYTHONPATH="$PWD/gd_pkg${PYTHONPATH:+:$PYTHONPATH}"
+      GD_PY=(python -m gatk_sv_gd.plot_mosaic)
+    elif [ -n "$GD_SCRIPT" ]; then
+      GD_PY=(python "$GD_SCRIPT")
+    else
+      GD_PY=(python -m gatk_sv_gd.plot_mosaic)
+    fi
+
+    "${GD_PY[@]}" select \
       --classes ~{sep=" " classes} \
       --regions ~{sep=" " regions} \
       --mosaic-samples ~{write_lines(mosaic_samples)} \
@@ -348,7 +386,8 @@ task ExtractBatchDepth {
     File region
     File gd_table
     String gd_id
-    File plot_mosaic_script
+    File? plot_mosaic_script
+    File? gatk_sv_gd_src
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -368,7 +407,21 @@ task ExtractBatchDepth {
   command <<<
     set -euo pipefail
 
-    python ~{plot_mosaic_script} extract \
+    GD_SRC='~{if defined(gatk_sv_gd_src) then gatk_sv_gd_src else ""}'
+    GD_SCRIPT='~{if defined(plot_mosaic_script) then plot_mosaic_script else ""}'
+    if [ -n "$GD_SRC" ]; then
+      mkdir -p gd_pkg
+      tar xzf "$GD_SRC" -C gd_pkg
+      test -d gd_pkg/gatk_sv_gd || { echo "ERROR: gatk_sv_gd_src must contain a top-level gatk_sv_gd/ directory" >&2; exit 1; }
+      export PYTHONPATH="$PWD/gd_pkg${PYTHONPATH:+:$PYTHONPATH}"
+      GD_PY=(python -m gatk_sv_gd.plot_mosaic)
+    elif [ -n "$GD_SCRIPT" ]; then
+      GD_PY=(python "$GD_SCRIPT")
+    else
+      GD_PY=(python -m gatk_sv_gd.plot_mosaic)
+    fi
+
+    "${GD_PY[@]}" extract \
       --batch '~{batch}' \
       --gd-table ~{gd_table} \
       --gd-id '~{gd_id}' \
@@ -400,7 +453,8 @@ task PlotMosaicDepth {
     File region
     File gd_table
     String gd_id
-    File plot_mosaic_script
+    File? plot_mosaic_script
+    File? gatk_sv_gd_src
     File? segdup_bed
     Float fig_width_in
     Float fig_height_in
@@ -426,7 +480,21 @@ task PlotMosaicDepth {
   command <<<
     set -euo pipefail
 
-    python ~{plot_mosaic_script} plot \
+    GD_SRC='~{if defined(gatk_sv_gd_src) then gatk_sv_gd_src else ""}'
+    GD_SCRIPT='~{if defined(plot_mosaic_script) then plot_mosaic_script else ""}'
+    if [ -n "$GD_SRC" ]; then
+      mkdir -p gd_pkg
+      tar xzf "$GD_SRC" -C gd_pkg
+      test -d gd_pkg/gatk_sv_gd || { echo "ERROR: gatk_sv_gd_src must contain a top-level gatk_sv_gd/ directory" >&2; exit 1; }
+      export PYTHONPATH="$PWD/gd_pkg${PYTHONPATH:+:$PYTHONPATH}"
+      GD_PY=(python -m gatk_sv_gd.plot_mosaic)
+    elif [ -n "$GD_SCRIPT" ]; then
+      GD_PY=(python "$GD_SCRIPT")
+    else
+      GD_PY=(python -m gatk_sv_gd.plot_mosaic)
+    fi
+
+    "${GD_PY[@]}" plot \
       --gd-table ~{gd_table} \
       --gd-id '~{gd_id}' \
       --selected ~{selected} \

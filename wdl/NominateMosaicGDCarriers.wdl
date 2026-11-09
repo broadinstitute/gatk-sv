@@ -38,8 +38,13 @@ import "Structs.wdl"
 # Outputs: candidate_table (gd_id, sample, batch, median_depth, plus mosaic_type,
 # interval coordinates, svtype and n_bins), and an interval_summary table (per
 # batch and interval: samples, bins, samples dropped for abnormal depth, and
-# candidates). nominate_mosaic_script is nominate_mosaic.py from gatk-sv-gd; the
-# gatk_sv_gd package must be installed in the image.
+# candidates).
+#
+# Which gatk_sv_gd code runs (first match wins): gatk_sv_gd_src, a tarball of the
+# package made with `tar czf gatk_sv_gd_src.tar.gz -C gatk-sv-gd/src gatk_sv_gd`
+# (put on PYTHONPATH ahead of the image's copy, so no image rebuild is needed to
+# test changes); else nominate_mosaic_script, a single script (it still imports the rest of the
+# package from the image); else the gatk_sv_gd package installed in the image.
 workflow NominateMosaicGDCarriers {
   input {
     Array[String] batches
@@ -61,7 +66,9 @@ workflow NominateMosaicGDCarriers {
     Int flank_min_deviant_bins = 3
     Float flank_max_population_fraction = 0.05
 
-    File nominate_mosaic_script
+    File? nominate_mosaic_script
+
+    File? gatk_sv_gd_src
 
     String output_prefix = "gd_mosaic_candidates"
     String sv_pipeline_docker
@@ -116,6 +123,7 @@ workflow NominateMosaicGDCarriers {
         flank_min_deviant_bins = flank_min_deviant_bins,
         flank_max_population_fraction = flank_max_population_fraction,
         nominate_mosaic_script = nominate_mosaic_script,
+        gatk_sv_gd_src = gatk_sv_gd_src,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_nominate
     }
@@ -127,6 +135,7 @@ workflow NominateMosaicGDCarriers {
       out_name = output_prefix + ".candidates.tsv.gz",
       columns = "gd_id,sample,batch,median_depth,mosaic_type,chr,start,end,svtype,n_bins",
       nominate_mosaic_script = nominate_mosaic_script,
+      gatk_sv_gd_src = gatk_sv_gd_src,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_merge
   }
@@ -137,6 +146,7 @@ workflow NominateMosaicGDCarriers {
       out_name = output_prefix + ".interval_summary.tsv.gz",
       columns = "batch,gd_id,chr,start,end,n_samples,n_bins,n_abnormal,n_candidates",
       nominate_mosaic_script = nominate_mosaic_script,
+      gatk_sv_gd_src = gatk_sv_gd_src,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_merge
   }
@@ -168,7 +178,8 @@ task NominateBatch {
     Int flank_window_bins
     Int flank_min_deviant_bins
     Float flank_max_population_fraction
-    File nominate_mosaic_script
+    File? nominate_mosaic_script
+    File? gatk_sv_gd_src
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -188,7 +199,21 @@ task NominateBatch {
   command <<<
     set -euo pipefail
 
-    python ~{nominate_mosaic_script} nominate \
+    GD_SRC='~{if defined(gatk_sv_gd_src) then gatk_sv_gd_src else ""}'
+    GD_SCRIPT='~{if defined(nominate_mosaic_script) then nominate_mosaic_script else ""}'
+    if [ -n "$GD_SRC" ]; then
+      mkdir -p gd_pkg
+      tar xzf "$GD_SRC" -C gd_pkg
+      test -d gd_pkg/gatk_sv_gd || { echo "ERROR: gatk_sv_gd_src must contain a top-level gatk_sv_gd/ directory" >&2; exit 1; }
+      export PYTHONPATH="$PWD/gd_pkg${PYTHONPATH:+:$PYTHONPATH}"
+      GD_PY=(python -m gatk_sv_gd.nominate_mosaic)
+    elif [ -n "$GD_SCRIPT" ]; then
+      GD_PY=(python "$GD_SCRIPT")
+    else
+      GD_PY=(python -m gatk_sv_gd.nominate_mosaic)
+    fi
+
+    "${GD_PY[@]}" nominate \
       --batch '~{batch}' \
       --gd-table ~{gd_table} \
       --low-res-counts ~{low_res_counts} \
@@ -229,7 +254,8 @@ task MergeTables {
     Array[File] tables
     String out_name
     String columns
-    File nominate_mosaic_script
+    File? nominate_mosaic_script
+    File? gatk_sv_gd_src
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -249,7 +275,21 @@ task MergeTables {
   command <<<
     set -euo pipefail
 
-    python ~{nominate_mosaic_script} merge \
+    GD_SRC='~{if defined(gatk_sv_gd_src) then gatk_sv_gd_src else ""}'
+    GD_SCRIPT='~{if defined(nominate_mosaic_script) then nominate_mosaic_script else ""}'
+    if [ -n "$GD_SRC" ]; then
+      mkdir -p gd_pkg
+      tar xzf "$GD_SRC" -C gd_pkg
+      test -d gd_pkg/gatk_sv_gd || { echo "ERROR: gatk_sv_gd_src must contain a top-level gatk_sv_gd/ directory" >&2; exit 1; }
+      export PYTHONPATH="$PWD/gd_pkg${PYTHONPATH:+:$PYTHONPATH}"
+      GD_PY=(python -m gatk_sv_gd.nominate_mosaic)
+    elif [ -n "$GD_SCRIPT" ]; then
+      GD_PY=(python "$GD_SCRIPT")
+    else
+      GD_PY=(python -m gatk_sv_gd.nominate_mosaic)
+    fi
+
+    "${GD_PY[@]}" merge \
       --input-list ~{write_lines(tables)} \
       --columns '~{columns}' \
       --out '~{out_name}'
