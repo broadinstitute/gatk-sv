@@ -26,11 +26,21 @@ import "Structs.wdl"
 #      the interval's cluster. Bins overlapping a segmental duplication, and bins
 #      where more than flank_max_population_fraction of the batch deviates, are
 #      ignored (the PlotGDMosaicDepth procedure).
-#   3. Candidate test: the median normalized depth over the interval, excluding
-#      bins that overlap a segmental duplication by at least 1 bp, must lie in
+#   3. Batch recentering (recenter): the batch's median depth over the interval
+#      is scaled to CN 2 so locus-wide shifts (GC, mappability) shared by the
+#      batch are not mistaken for mosaicism; median_depth is the recentered
+#      value and raw_median_depth the unscaled one.
+#   4. Candidate test: the median depth over the interval, excluding bins that
+#      overlap a segmental duplication by at least 1 bp, must lie in
 #      [del_min, del_max] (default 1.2-1.8, mosaic DEL) or [dup_min, dup_max]
-#      (default 2.2-2.8, mosaic DUP), and at least min_interval_bins bins must
-#      remain.
+#      (default 2.2-2.8, mosaic DUP), at least min_interval_bins bins must
+#      remain, and at least min_consistent_fraction (0.7) of those bins must
+#      lie on the event side of 2 by more than consistency_margin (0.1), which
+#      rejects partial events and spikes (consistent_fraction column).
+#   5. Collapse (collapse_cluster): a sample nominated at several intervals of
+#      one cluster (nested or overlapping intervals) keeps the best-supported
+#      one (highest consistent_fraction, then most bins);
+#      n_cluster_intervals counts the intervals it was nominated at.
 # chrX and chrY intervals are skipped. DEL and DUP rows of one interval share one
 # depth; a candidate is reported under the GD_ID whose svtype matches the
 # direction of its depth (the interval's first GD_ID if none does).
@@ -61,6 +71,10 @@ workflow NominateMosaicGDCarriers {
     Float dup_max = 2.8
     Int min_interval_bins = 1
     Boolean nahr_only = true
+    Boolean recenter = true
+    Float min_consistent_fraction = 0.7
+    Float consistency_margin = 0.1
+    Boolean collapse_cluster = true
     Float max_flank_deviation = 0.4
     Int flank_window_bins = 5
     Int flank_min_deviant_bins = 3
@@ -118,6 +132,10 @@ workflow NominateMosaicGDCarriers {
         dup_max = dup_max,
         min_interval_bins = min_interval_bins,
         nahr_only = nahr_only,
+        recenter = recenter,
+        min_consistent_fraction = min_consistent_fraction,
+        consistency_margin = consistency_margin,
+        collapse_cluster = collapse_cluster,
         max_flank_deviation = max_flank_deviation,
         flank_window_bins = flank_window_bins,
         flank_min_deviant_bins = flank_min_deviant_bins,
@@ -133,7 +151,7 @@ workflow NominateMosaicGDCarriers {
     input:
       tables = NominateBatch.candidates,
       out_name = output_prefix + ".candidates.tsv.gz",
-      columns = "gd_id,sample,batch,median_depth,mosaic_type,chr,start,end,svtype,n_bins",
+      columns = "gd_id,sample,batch,median_depth,mosaic_type,chr,start,end,svtype,n_bins,cluster,raw_median_depth,consistent_fraction,n_cluster_intervals",
       nominate_mosaic_script = nominate_mosaic_script,
       gatk_sv_gd_src = gatk_sv_gd_src,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -144,7 +162,7 @@ workflow NominateMosaicGDCarriers {
     input:
       tables = NominateBatch.interval_summary,
       out_name = output_prefix + ".interval_summary.tsv.gz",
-      columns = "batch,gd_id,chr,start,end,n_samples,n_bins,n_abnormal,n_candidates",
+      columns = "batch,gd_id,chr,start,end,n_samples,n_bins,batch_median_depth,n_abnormal,n_candidates",
       nominate_mosaic_script = nominate_mosaic_script,
       gatk_sv_gd_src = gatk_sv_gd_src,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -174,6 +192,10 @@ task NominateBatch {
     Float dup_max
     Int min_interval_bins
     Boolean nahr_only
+    Boolean recenter
+    Float min_consistent_fraction
+    Float consistency_margin
+    Boolean collapse_cluster
     Float max_flank_deviation
     Int flank_window_bins
     Int flank_min_deviant_bins
@@ -223,6 +245,10 @@ task NominateBatch {
       --dup-min ~{dup_min} --dup-max ~{dup_max} \
       --min-bins ~{min_interval_bins} \
       ~{if nahr_only then "--nahr-only" else "--no-nahr-only"} \
+      ~{if recenter then "--recenter" else "--no-recenter"} \
+      --min-consistent-fraction ~{min_consistent_fraction} \
+      --consistency-margin ~{consistency_margin} \
+      ~{if collapse_cluster then "--collapse-cluster" else "--no-collapse-cluster"} \
       --max-deviation ~{max_flank_deviation} \
       --window-bins ~{flank_window_bins} \
       --min-deviant-bins ~{flank_min_deviant_bins} \
