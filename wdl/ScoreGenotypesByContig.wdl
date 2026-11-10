@@ -20,6 +20,8 @@ workflow ScoreGenotypesByContig {
     String gatk_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
+
+    RuntimeAttr? runtime_attr_recalibrate_gq
   }
 
   Array[String] contigs = read_lines(contig_list)
@@ -34,7 +36,8 @@ workflow ScoreGenotypesByContig {
         genome_tracks=genome_tracks,
         gatk_docker=gatk_docker,
         sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_docker=sv_pipeline_docker
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_recalibrate_gq=runtime_attr_recalibrate_gq
     }
   }
 

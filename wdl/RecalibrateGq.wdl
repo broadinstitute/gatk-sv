@@ -1,5 +1,6 @@
 version 1.0
 
+import "Structs.wdl"
 import "TrainGqRecalibrator.wdl" as TrainGqRecalibrator
 import "TasksMakeCohortVcf.wdl" as tasks_cohort
 import "Utils.wdl" as Utils
@@ -17,6 +18,7 @@ workflow RecalibrateGq {
         String sv_pipeline_docker
         Float recalibrate_gq_mem_gb_java = 9.0
         Float recalibrate_gq_mem_gb_overhead = 1.5
+        RuntimeAttr? runtime_attr_recalibrate_gq
     }
 
     call tasks_cohort.ScatterVcf {
@@ -36,7 +38,8 @@ workflow RecalibrateGq {
                 recalibrate_gq_args=recalibrate_gq_args,
                 gatk_docker=gatk_docker,
                 mem_gb_java=recalibrate_gq_mem_gb_java,
-                mem_gb_overhead=recalibrate_gq_mem_gb_overhead
+                mem_gb_overhead=recalibrate_gq_mem_gb_overhead,
+                runtime_attr_override=runtime_attr_recalibrate_gq
         }
     }
 
@@ -64,20 +67,30 @@ task RecalibrateGqTask {
         String gatk_docker
         Float mem_gb_java = 9.0
         Float mem_gb_overhead = 1.5
+        RuntimeAttr? runtime_attr_override
     }
 
-    Int disk_gb = round(100 + 2 * size([vcf, gq_recalibrator_model_file], "GiB") + size(genome_tracks, "GiB"))
-    Float mem_gb = mem_gb_java + mem_gb_overhead
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1,
+        mem_gb: mem_gb_java + mem_gb_overhead,
+        disk_gb: round(100 + 2 * size([vcf, gq_recalibrator_model_file], "GiB") + size(genome_tracks, "GiB")),
+        boot_disk_gb: 10,
+        preemptible_tries: 3,
+        max_retries: 1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     String input_vcf_filename = basename(vcf)
     String filtered_vcf_name = sub(sub(input_vcf_filename, ".gz", ""), ".vcf", "_gq_recalibrated.vcf.gz")
 
     runtime {
         docker: gatk_docker
-        cpu: 1
-        preemptible: 3
-        max_retries: 1
-        memory: mem_gb + " GiB"
-        disks: "local-disk " + disk_gb + " HDD"
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 
     command <<<
