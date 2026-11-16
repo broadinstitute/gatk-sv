@@ -149,6 +149,9 @@ gcnv_model_tars_json_array=$(printf '%s\n' "${gcnv_model_tars[@]}" | jq -R . | j
 collect_coverage=true
 collect_pesr=true
 
+# Optional; set to false to skip STRipy (e.g., in tests on downsampled data). Defaults to true.
+run_stripy=$(jq -r 'if .run_stripy == null then true else .run_stripy end' "$input_json")
+
 # '// empty' returns in an empty string if the key is null
 ref_std_scramble_vcf_tar=$(jq -r '.ref_std_scramble_vcf_tar // empty' "$input_json")
 run_scramble=false
@@ -431,22 +434,27 @@ stripy_output_dir=$(realpath $(mktemp -d "${SV_SHELL_BASE_DIR}/output_stripy_XXX
 stripy_inputs_json="${stripy_output_dir}/inputs.json"
 stripy_outputs_json="${stripy_output_dir}/outputs.json"
 
-jq -n \
-  --slurpfile inputs "${input_json}" \
-  --slurpfile gbe "${gather_batch_evidence_outputs_json_filename}" \
-  '{
-    "bam_or_cram_file": $inputs[0].bam_or_cram_file,
-    "sample_name": $inputs[0].sample_id,
-    "ped_file": $gbe[0].combined_ped_file,
-    "reference_fasta": $inputs[0].reference_fasta
-  }' > "${stripy_inputs_json}"
+if [[ "${run_stripy}" == "true" ]]; then
+  jq -n \
+    --slurpfile inputs "${input_json}" \
+    --slurpfile gbe "${gather_batch_evidence_outputs_json_filename}" \
+    '{
+      "bam_or_cram_file": $inputs[0].bam_or_cram_file,
+      "sample_name": $inputs[0].sample_id,
+      "ped_file": $gbe[0].combined_ped_file,
+      "reference_fasta": $inputs[0].reference_fasta
+    }' > "${stripy_inputs_json}"
 
-bash /opt/sv_shell/stripy.sh \
-  "${stripy_inputs_json}" \
-  "${stripy_outputs_json}" \
-  "${stripy_output_dir}"
+  bash /opt/sv_shell/stripy.sh \
+    "${stripy_inputs_json}" \
+    "${stripy_outputs_json}" \
+    "${stripy_output_dir}"
 
-log_success "Successfully finished stripy."
+  log_success "Successfully finished stripy."
+else
+  echo '{}' > "${stripy_outputs_json}"
+  log_success "Skipped stripy."
+fi
 
 # CombineTars
 # ----------------------------------------------------------------------------------------------------------------------
@@ -1244,21 +1252,25 @@ tabix "${UpdateBreakendRepresentationAndRemoveFilters_out}"
 # utils.MergeStripyVcf
 # ----------------------------------------------------------------------------------------------------------------------
 cd "${working_dir}"
-stripy_vcfs_list="$(realpath "${working_dir}/stripy_vcfs.list")"
-jq -r '.stripy_vcf // empty' "$stripy_outputs_json" > "${stripy_vcfs_list}"
-if ! [ -s "${stripy_vcfs_list}" ]; then
-  echo "STRipy did not produce a VCF output" >&2
-  exit 1
-fi
-
-python /opt/sv-pipeline/scripts/merge_stripy_vcfs.py \
-  --main-vcf "${UpdateBreakendRepresentationAndRemoveFilters_out}" \
-  --stripy-vcfs-list "${stripy_vcfs_list}" \
-  --out unsorted.vcf.gz
-
 MergeStripyVcf_out="$(realpath "${sample_id}.gatk_sv.vcf.gz")"
-bcftools sort unsorted.vcf.gz -Oz -o "${MergeStripyVcf_out}"
-tabix "${MergeStripyVcf_out}"
+if [[ "${run_stripy}" == "true" ]]; then
+  stripy_vcfs_list="$(realpath "${working_dir}/stripy_vcfs.list")"
+  jq -r '.stripy_vcf // empty' "$stripy_outputs_json" > "${stripy_vcfs_list}"
+  if ! [ -s "${stripy_vcfs_list}" ]; then
+    echo "STRipy did not produce a VCF output" >&2
+    exit 1
+  fi
+
+  python /opt/sv-pipeline/scripts/merge_stripy_vcfs.py \
+    --main-vcf "${UpdateBreakendRepresentationAndRemoveFilters_out}" \
+    --stripy-vcfs-list "${stripy_vcfs_list}" \
+    --out unsorted.vcf.gz
+
+  bcftools sort unsorted.vcf.gz -Oz -o "${MergeStripyVcf_out}"
+else
+  cp "${UpdateBreakendRepresentationAndRemoveFilters_out}" "${MergeStripyVcf_out}"
+fi
+tabix -f "${MergeStripyVcf_out}"
 
 
 # SingleSampleMetrics
