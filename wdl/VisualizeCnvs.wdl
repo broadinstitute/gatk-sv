@@ -586,7 +586,17 @@ task MapFromArrays {
     set -o nounset
     set -o pipefail
 
-    paste '~{write_lines(keys)}' '~{write_lines(values)}' > map.tsv
+    keys='~{write_lines(keys)}'
+    values='~{write_lines(values)}'
+
+    n_keys=$(wc -l < "${keys}")
+    n_values=$(wc -l < "${values}")
+    if [[ "${n_keys}" -ne "${n_values}" ]]; then
+      echo "ERROR: got ${n_keys} keys but ${n_values} values; the arrays must have the same length and order" >&2
+      exit 1
+    fi
+
+    paste "${keys}" "${values}" > map.tsv
   >>>
 
   output {
