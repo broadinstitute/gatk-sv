@@ -591,6 +591,10 @@ task MapFromArrays {
 
     n_keys=$(wc -l < "${keys}")
     n_values=$(wc -l < "${values}")
+    if [[ "${n_keys}" -eq 0 ]]; then
+      echo "ERROR: got empty keys and values arrays; at least one batch is required" >&2
+      exit 1
+    fi
     if [[ "${n_keys}" -ne "${n_values}" ]]; then
       echo "ERROR: got ${n_keys} keys but ${n_values} values; the arrays must have the same length and order" >&2
       exit 1
