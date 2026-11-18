@@ -1,10 +1,14 @@
 {
-  "VisualizeCnvs.vcf_or_bed": "${this.filtered_vcf}",
-  "VisualizeCnvs.prefix": "${this.sample_set_set_id}",
-  "VisualizeCnvs.median_files": "${this.sample_sets.median_cov}",
-  "VisualizeCnvs.rd_files": "${this.sample_sets.merged_bincov}",
-  "VisualizeCnvs.ped_file": "${workspace.cohort_ped_file}",
+  "VisualizeCnvs.vcfs": "${[this.filtered_vcf]}",
+  "VisualizeCnvs.plot_prefix": "${this.sample_set_set_id}",
   "VisualizeCnvs.min_size": 50000,
-  "VisualizeCnvs.flags": "--sizefilter 999999999 --padding 0.25",
+
+  "VisualizeCnvs.batch_name_list": "${this.sample_sets.sample_set_id}",
+  "VisualizeCnvs.batch_sample_lists": "${this.sample_sets.filtered_batch_samples_file}",
+  "VisualizeCnvs.medians_files": "${this.sample_sets.median_cov}",
+  "VisualizeCnvs.bincov_files": "${this.sample_sets.merged_bincov}",
+  "VisualizeCnvs.bincov_index_files": "${this.sample_sets.merged_bincov_index}",
+
+  "VisualizeCnvs.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
   "VisualizeCnvs.sv_pipeline_docker": "${workspace.sv_pipeline_docker}"
 }

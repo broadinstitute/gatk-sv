@@ -1,5 +1,7 @@
 version 1.0
 
+import "Structs.wdl"
+
 # Plots CNV depth profiles across batches
 workflow VisualizeCnvs {
   input {
@@ -18,14 +20,27 @@ workflow VisualizeCnvs {
     # padding to use around CNV when plotting, as fraction of CNV length
     Float padding = 0.5
 
-    File sample_table # TSV with sample_id, sample_set_id
-    Array[String] sample_set_ids
+    # Batch (sample set) IDs and their sample lists, one sample ID per line.
+    # All arrays of batch data must match the order of batch_name_list.
+    Array[String] batch_name_list
+    Array[File] batch_sample_lists
     Array[File] medians_files
     Array[File] bincov_files
     Array[File] bincov_index_files
 
-    String base_docker
-    String r_docker
+    String sv_base_mini_docker
+    String sv_pipeline_docker
+
+    RuntimeAttr? runtime_attr_extract_cnvs
+    RuntimeAttr? runtime_attr_make_bincov_query_manifests
+    RuntimeAttr? runtime_attr_make_bincov_map
+    RuntimeAttr? runtime_attr_make_bincov_index_map
+    RuntimeAttr? runtime_attr_make_medians_map
+    RuntimeAttr? runtime_attr_subset_bincov_matrix
+    RuntimeAttr? runtime_attr_make_bincov_subset_map
+    RuntimeAttr? runtime_attr_shard_variants
+    RuntimeAttr? runtime_attr_make_plots
+    RuntimeAttr? runtime_attr_merge_plot_tars
   }
 
   if (!defined(cnvs)) {
@@ -35,7 +50,8 @@ workflow VisualizeCnvs {
           vcf = vcf,
           variant_ids = variant_ids,
           min_size = min_size,
-          base_docker = base_docker
+          sv_base_mini_docker = sv_base_mini_docker,
+          runtime_attr_override = runtime_attr_extract_cnvs
       }
     }
   }
@@ -44,29 +60,34 @@ workflow VisualizeCnvs {
     input:
       cnvs = select_first([cnvs, ExtractCnvs.cnvs]),
       padding = padding,
-      sample_table = sample_table,
-      r_docker = r_docker
+      batch_name_list = batch_name_list,
+      batch_sample_lists = batch_sample_lists,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_make_bincov_query_manifests
   }
 
   call MapFromArrays as MakeBincovMap {
     input:
-      keys = sample_set_ids,
+      keys = batch_name_list,
       values = bincov_files,
-      base_docker = base_docker
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_make_bincov_map
   }
 
   call MapFromArrays as MakeBincovIndexMap {
     input:
-      keys = sample_set_ids,
+      keys = batch_name_list,
       values = bincov_index_files,
-      base_docker = base_docker
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_make_bincov_index_map
   }
 
   call MapFromArrays as MakeMediansMap {
     input:
-      keys = sample_set_ids,
+      keys = batch_name_list,
       values = medians_files,
-      base_docker = base_docker
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_make_medians_map
   }
 
   scatter (f in MakeBincovQueryManifests.manifests) {
@@ -78,7 +99,8 @@ workflow VisualizeCnvs {
         bincov = MakeBincovMap.m[batch],
         bincov_index = MakeBincovIndexMap.m[batch],
         medians = MakeMediansMap.m[batch],
-        r_docker = r_docker
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_subset_bincov_matrix
     }
   }
 
@@ -86,16 +108,18 @@ workflow VisualizeCnvs {
     input:
       keys = SubsetBincovMatrix.batch_out,
       values = SubsetBincovMatrix.subsets,
-      base_docker = base_docker
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_make_bincov_subset_map
   }
 
   call ShardVariants {
     input:
       variants = MakeBincovQueryManifests.merged_cnvs,
-      sample_table = sample_table,
+      sample_table = MakeBincovQueryManifests.sample_table,
       variants_per_shard = variants_per_shard,
       bincov_subset_map = write_map(MakeBincovSubsetMap.m),
-      base_docker = base_docker
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_shard_variants
   }
 
   scatter (i in range(length(ShardVariants.shards))) {
@@ -105,8 +129,9 @@ workflow VisualizeCnvs {
         batches = ShardVariants.batches[i],
         one_sample_per_plot = one_sample_per_plot,
         bincov_tars = read_lines(ShardVariants.bincov_paths[i]),
-        sample_table = sample_table,
-        r_docker = r_docker
+        sample_table = MakeBincovQueryManifests.sample_table,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_make_plots
     }
   }
 
@@ -114,7 +139,8 @@ workflow VisualizeCnvs {
     input:
       plot_tars = MakePlots.plots,
       plot_prefix = plot_prefix,
-      base_docker = base_docker
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_merge_plot_tars
   }
 
   output {
@@ -127,19 +153,30 @@ task ExtractCnvs {
     File vcf
     File? variant_ids
     Int min_size
-    String base_docker
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
   }
 
   Float disk_size = size(vcf, "GB") * 3 + 16
 
+  RuntimeAttr default_attr = object {
+    cpu_cores: 2,
+    mem_gb: 4.0,
+    disk_gb: ceil(disk_size),
+    boot_disk_gb: 8,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
   runtime {
-    bootDiskSizeGb: 8
-    cpu: 2
-    disks: "local-disk ${ceil(disk_size)} HDD"
-    docker: base_docker
-    maxRetries: 1
-    memory: "4 GiB"
-    preemptible: 3
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 
   command <<<
@@ -174,20 +211,32 @@ task MakeBincovQueryManifests {
   input {
     Array[File] cnvs
     Float padding
-    File sample_table
-    String r_docker
+    Array[String] batch_name_list
+    Array[File] batch_sample_lists
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
   }
 
-  Float disk_size = (size(cnvs, "GB") + size(sample_table, "GB")) * 3 + 30
+  Float disk_size = (size(cnvs, "GB") + size(batch_sample_lists, "GB")) * 3 + 30
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 4.0,
+    disk_gb: ceil(disk_size),
+    boot_disk_gb: 8,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   runtime {
-    bootDiskSizeGb: 8
-    cpu: 1
-    disks: "local-disk ${ceil(disk_size)} HDD"
-    docker: r_docker
-    maxRetries: 1
-    memory: "4 GiB"
-    preemptible: 3
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 
   command <<<
@@ -196,18 +245,32 @@ task MakeBincovQueryManifests {
     set -o pipefail
 
     cnvs='~{write_lines(cnvs)}'
-    sample_table='~{sample_table}'
+    batch_names='~{write_lines(batch_name_list)}'
+    batch_sample_lists='~{write_lines(batch_sample_lists)}'
     padding=~{padding}
+
+    if [[ $(wc -l < "${batch_names}") -ne $(wc -l < "${batch_sample_lists}") ]]; then
+      echo "batch_name_list and batch_sample_lists must have the same length" >&2
+      exit 1
+    fi
+
+    # Build a headerless two-column TSV of sample ID and batch ID
+    sample_table='sample_table.tsv'
+    : > "${sample_table}"
+    while IFS=$'\t' read -r batch samples_file; do
+      awk -F'\t' -v batch="${batch}" 'NF > 0 { print $1 "\t" batch }' "${samples_file}" >> "${sample_table}"
+    done < <(paste "${batch_names}" "${batch_sample_lists}")
 
     cat "${cnvs}" | xargs cat > merged_cnvs.tsv
 
     mkdir manifests
-    Rscript /opt/gatk-sv-utils/scripts/batch_variants.R merged_cnvs.tsv \
+    Rscript /opt/sv-pipeline/scripts/batch_variants.R merged_cnvs.tsv \
       "${sample_table}" manifests "${padding}"
   >>>
 
   output {
     File merged_cnvs = "merged_cnvs.tsv"
+    File sample_table = "sample_table.tsv"
     Array[File] manifests = glob("manifests/*.rdx")
   }
 }
@@ -219,7 +282,8 @@ task SubsetBincovMatrix {
     File bincov
     File bincov_index
     File medians
-    String r_docker
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
   }
 
   Float disk_size = size(bincov, "GB") * 2
@@ -227,14 +291,24 @@ task SubsetBincovMatrix {
     + size(medians, "GB")
     + 16
 
+  RuntimeAttr default_attr = object {
+    cpu_cores: 2,
+    mem_gb: 4.0,
+    disk_gb: ceil(disk_size),
+    boot_disk_gb: 8,
+    preemptible_tries: 2,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
   runtime {
-    bootDiskSizeGb: 8
-    cpu: 2
-    disks: "local-disk ${ceil(disk_size)} HDD"
-    docker: r_docker
-    maxRetries: 1
-    memory: "4 GiB"
-    preemptible: 2
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 
   command <<<
@@ -248,7 +322,7 @@ task SubsetBincovMatrix {
     medians='~{medians}'
 
     mkdir "${batch}"
-    Rscript /opt/gatk-sv-utils/scripts/subset_bincov.R "${manifest}" \
+    Rscript /opt/sv-pipeline/scripts/subset_bincov.R "${manifest}" \
       "${bincov}" "${medians}" "${batch}"
 
     tar -cvf "${batch}.tar" "${batch}"
@@ -266,7 +340,8 @@ task ShardVariants {
     File sample_table
     Int variants_per_shard
     File bincov_subset_map
-    String base_docker
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
   }
 
   Float disk_size = size(variants, "GB") * 3
@@ -274,14 +349,24 @@ task ShardVariants {
     + size(bincov_subset_map, "GB")
     + 16
 
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 2.0,
+    disk_gb: ceil(disk_size),
+    boot_disk_gb: 8,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
   runtime {
-    bootDiskSizeGb: 8
-    cpu: 1
-    disks: "local-disk ${ceil(disk_size)} HDD"
-    docker: base_docker
-    maxRetries: 1
-    memory: "2 GiB"
-    preemptible: 3
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 
   command <<<
@@ -351,7 +436,8 @@ task MakePlots {
     Boolean one_sample_per_plot
     Array[File] bincov_tars
     File sample_table
-    String r_docker
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
   }
 
   Int variant_count = length(read_lines(variants))
@@ -361,14 +447,24 @@ task MakePlots {
     + size(batches, "GB")
   Float disk_size = input_size + variant_count * 0.01 + 16
 
+  RuntimeAttr default_attr = object {
+    cpu_cores: 2,
+    mem_gb: 4.0,
+    disk_gb: ceil(disk_size),
+    boot_disk_gb: 8,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
   runtime {
-    bootDiskSizeGb: 8
-    cpu: 2
-    disks: "local-disk ${ceil(disk_size)} HDD"
-    docker: r_docker
-    maxRetries: 1
-    memory: "4 GiB"
-    preemptible: 3
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 
   command <<<
@@ -388,7 +484,7 @@ task MakePlots {
       printf '%s\t%s\n' "${batch}" "${bn}" >> bincov_map.tsv
     done < <(paste "${batches}" "${bincov_tars}")
 
-    Rscript /opt/gatk-sv-utils/scripts/visualize_cnvs.R \
+    Rscript /opt/sv-pipeline/scripts/visualize_cnvs.R \
       "${variants}" \
       "${sample_table}" \
       bincov_map.tsv \
@@ -407,19 +503,30 @@ task MergePlotTars {
   input {
     Array[File] plot_tars
     String plot_prefix
-    String base_docker
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
   }
 
   Float disk_size = size(plot_tars, "GB") * 3 + 16
 
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1.0,
+    disk_gb: ceil(disk_size),
+    boot_disk_gb: 8,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
   runtime {
-    bootDiskSizeGb: 8
-    cpu: 1
-    disks: "local-disk ${ceil(disk_size)} HDD"
-    docker: base_docker
-    maxRetries: 1
-    memory: "1 GiB"
-    preemptible: 3
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 
   command <<<
@@ -450,17 +557,28 @@ task MapFromArrays {
   input {
     Array[String] keys
     Array[String] values
-    String base_docker
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
   }
 
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1.0,
+    disk_gb: 16,
+    boot_disk_gb: 8,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
   runtime {
-    bootDiskSizeGb: 8
-    cpu: 1
-    disks: "local-disk 16 HDD"
-    docker: base_docker
-    maxRetries: 1
-    memory: "1 GiB"
-    preemptible: 3
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 
   command <<<

@@ -82,7 +82,7 @@ ARG R_PACKAGES="assertthat beeswarm BH BSDA caret cli crayon DAAG data.table dev
                 generics gert glue HardyWeinberg hash latticeExtra magrittr metap mnormt nlme nloptr nnet \
                 numDeriv perm pillar pkgconfig plyr purrr pwr R6 RColorBrewer Rcpp reshape reshape2 rlang ROCR \
                 rpart stringi stringr survival tibble tidyr tidyselect utf8 vioplot withr zoo"
-ARG BIOCONDUCTOR_PKGS="SNPRelate multtest"
+ARG BIOCONDUCTOR_PKGS="SNPRelate multtest GenomicRanges Rsamtools"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED_PACKAGES) && \
     apt-get -qqy update --fix-missing && \
