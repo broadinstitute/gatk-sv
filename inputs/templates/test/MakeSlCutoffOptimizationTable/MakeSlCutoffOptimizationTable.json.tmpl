@@ -1,0 +1,8 @@
+{
+  "MakeSlCutoffOptimizationTable.vcfs": [{{ test_batch.aou_recalibrated_vcf | tojson }}],
+  "MakeSlCutoffOptimizationTable.truth_json": {{ test_batch.recalibrate_gq_truth_json | tojson }},
+  "MakeSlCutoffOptimizationTable.output_prefix": {{ test_batch.name | tojson }},
+
+  "MakeSlCutoffOptimizationTable.linux_docker": {{ dockers.linux_docker | tojson }},
+  "MakeSlCutoffOptimizationTable.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
+}
