@@ -73,7 +73,7 @@ ARG BUILD_DEPS="make cmake g++ gcc gfortran curl \
                 pkg-config libcurl4-openssl-dev libssl-dev libatlas-base-dev libssh2-1-dev libssh2-1 \
                 libgit2-dev libfftw3-dev libjpeg8-dev libxml2-dev libfontconfig1-dev libharfbuzz-dev \
                 libfribidi-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev libuv1-dev"
-ARG RUN_DEPS="file bzip2 libssl3 libatlas3-base libssh2-1 libgit2-1.1 libfftw3-3 libjpeg8 libxml2"
+ARG RUN_DEPS="file bzip2 libssl3 libatlas3-base libssh2-1 libgit2-1.1 libfftw3-3 libjpeg8 libxml2 libuv1"
 RUN export NEW_PACKAGES=$(diff_of_lists.sh "$RUN_DEPS" $APT_REQUIRED_PACKAGES) && \
     printf " $NEW_PACKAGES" | fix_spaces.sh >> $APT_REQUIRED_PACKAGES
 
@@ -100,7 +100,6 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
     install_deprecated_R_package.sh "https://cran.r-project.org/src/contrib/Archive/Matrix/Matrix_1.6-5.tar.gz" && \
     install_R_packages.R $R_PACKAGES && \
     Rscript -e "options(warn = 2); remotes::install_github('talkowski-lab/gorilla', ref = '$GORILLA_COMMIT', upgrade = 'never', dependencies = FALSE)" && \
-    Rscript -e "library(gorilla)" && \
     cd /tmp && \
     curl -fsSL https://github.com/samtools/htslib/releases/download/${GORILLA_HTSLIB_VERSION}/htslib-${GORILLA_HTSLIB_VERSION}.tar.bz2 | tar -xj && \
     cd htslib-${GORILLA_HTSLIB_VERSION} && \
@@ -108,9 +107,10 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
     make -s -j $(nproc) && \
     make -s install && \
     cd / && \
-    $GORILLA_HTSLIB_DIR/bin/tabix --version && \
     apt-get -qqy remove --purge $APT_TRANSIENT_PACKAGES && \
     apt-get -qqy autoremove --purge && \
+    Rscript -e "library(gorilla)" && \
+    $GORILLA_HTSLIB_DIR/bin/tabix --version && \
     apt-get -qqy clean && \
     rm -rf /tmp/* \
            /var/tmp/* \
