@@ -244,6 +244,16 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: CallGenomicDisorderCNVsMultiBatch
+    primaryDescriptorPath: /wdl/CallGenomicDisorderCNVsMultiBatch.wdl
+    filters:
+      branches:
+        - main
+        - xz_gd_multibatch
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: IntegrateGDVcf
     primaryDescriptorPath: /wdl/IntegrateGDVcf.wdl
     filters:
