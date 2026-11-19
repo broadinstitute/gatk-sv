@@ -227,6 +227,16 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: VisualizeCnvEvidence
+    primaryDescriptorPath: /wdl/VisualizeCnvEvidence.wdl
+    filters:
+      branches:
+        - main
+        - vj-viz-cnv
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: MakeGqRecalibratorTrainingSetFromPacBio
     primaryDescriptorPath: /wdl/MakeGqRecalibratorTrainingSetFromPacBio.wdl
     filters:
