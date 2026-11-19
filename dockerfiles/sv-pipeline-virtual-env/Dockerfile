@@ -82,7 +82,7 @@ ARG R_PACKAGES="assertthat beeswarm BH BSDA caret cli crayon DAAG data.table dev
                 generics gert glue HardyWeinberg hash latticeExtra magrittr metap mnormt nlme nloptr nnet \
                 numDeriv perm pillar pkgconfig plyr purrr pwr R6 RColorBrewer Rcpp reshape reshape2 rlang ROCR \
                 rpart stringi stringr survival tibble tidyr tidyselect utf8 vioplot withr zoo \
-                matrixStats gargle httr"
+                matrixStats gargle httr remotes"
 ARG BIOCONDUCTOR_PKGS="SNPRelate multtest GenomicRanges Rsamtools"
 # gorilla plots SV evidence (used by VisualizeCnvEvidence)
 ARG GORILLA_COMMIT="c423a4835251a3f87ec8f02822a1ef8230061e12"
