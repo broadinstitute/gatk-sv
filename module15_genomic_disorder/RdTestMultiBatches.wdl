@@ -11,6 +11,7 @@ workflow RdTestMultiBatches {
 		String prefix
 		File sample_batch_list
 		File Rdtest_V2_script
+		Float flank = 0.0
 		String sv_pipeline_base_docker
 	}
 
@@ -19,6 +20,7 @@ workflow RdTestMultiBatches {
 		input:
 			rdtest_bed = rdtest_bed,
 			sample_batch_list = sample_batch_list,
+			flank = flank,
 			sv_pipeline_base_docker = sv_pipeline_base_docker
 	}
 
@@ -38,6 +40,7 @@ workflow RdTestMultiBatches {
 			rd_metrics_folder = RemoteTabixRdMetrics.rd_metrics_folder,
 			rd_median_file = CollectRdMedian.rd_median_file,
 			Rdtest_V2_script  = Rdtest_V2_script,
+			flank = flank,
 			sv_pipeline_base_docker = sv_pipeline_base_docker
 
 	}
@@ -55,6 +58,7 @@ task RdTest {
     File rd_metrics_folder
     File rd_median_file
     File Rdtest_V2_script
+    Float flank = 0.0
     String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -91,6 +95,7 @@ task RdTest {
       -p TRUE \
       -o rd_plots/ \
       -s 10000000000 \
+      ~{if flank > 0 then "--flank " + flank else ""} \
       ~{whitelist_arg}
 
     tar czvf ~{prefix}.tar.gz rd_plots
@@ -116,6 +121,7 @@ task RemoteTabixRdMetrics {
   input {
     File rdtest_bed
     File sample_batch_list
+    Float flank = 0.0
     String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -144,7 +150,8 @@ task RemoteTabixRdMetrics {
 
     cut -f5 ~{rdtest_bed} | sed -e 's/,/\n/g' | sort | uniq > sample_list
     grep -wf sample_list ~{sample_batch_list} | cut -f2 | sort | uniq > batch_list
-    awk '{print $1, $2-100000, $3+100000}' ~{rdtest_bed} | sed -e 's/ /\t/g' | sort -k1,1 -k2,2n | bedtools merge -i - > rdtest.bed
+    # pad each region by 100 kb, or by flank x size + 10 kb when that is larger (RdTest --flank plots)
+    awk -v f=~{flank} '{p = int(($3 - $2) * f) + 10000; if (p < 100000) p = 100000; s = $2 - p; if (s < 0) s = 0; print $1, s, $3 + p}' ~{rdtest_bed} | sed -e 's/ /\t/g' | sort -k1,1 -k2,2n | bedtools merge -i - > rdtest.bed
     mkdir rd_metrics_folder/
     
     #paste -d ' ' <(sed -e "s/^/    tabix -h -R /" batch_list | sed -e 's/$/ | bgzip -c >/') <(sed -e 's/\//\t/g' batch_list | awk '{print $NF}' | sed -e 's/^/rd_metrics_folder\//') | sed -e 's/^/GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` \ \\\n/' > remote_tabix.sh
