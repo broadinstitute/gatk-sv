@@ -578,48 +578,93 @@ task GetRegenotype {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euxo pipefail
+
+   
     n_samp=~{n_samples_cohort}
     max_af=~{regeno_max_allele_freq}
     min_count=~{regeno_allele_count_threshold}
+
+    
     svtk vcf2bed ~{depth_genotyped_vcf} ~{Batch}.bed
-    sample=$(fgrep -v "#" ~{Batch}.bed|awk '{if($6!="" )print $6}' |head -n1|cut -d"," -f1)||true
-    # restrict to variants originating in this batch
-    fgrep "~{Batch}"_ ~{regeno_raw_combined_depth} > ~{Batch}.origin.raw_combined_depth.bed
-    rm ~{regeno_raw_combined_depth} ~{depth_genotyped_vcf}
-    # construct variant identifier string chr_start_end_svtype since varIDs may have changed
+
+    
+    fgrep "~{Batch}_" ~{regeno_raw_combined_depth} > ~{Batch}.origin.raw_combined_depth.bed
+
+    
     python3 <<CODE
-    in_files = ["~{Batch}.bed", "~{Batch}.origin.raw_combined_depth.bed"]
-    out_files = ["match_~{Batch}.bed", "match_~{Batch}.origin.raw_combined_depth.bed"]
-    for in_file, out_file in zip(in_files, out_files):
-      with open(in_file, 'r') as IN, open(out_file, 'w') as OUT:
-        for line in IN:
-          fields = line.strip().split('\t')
-          identifier = "_".join(fields[0:3] + [fields[4]])
-          OUT.write(identifier + "\t" + line)
-    CODE
-    # sort & join on variant identifier to get sample IDs pre- and post-genotyping in one file
-    sort -k1,1 match_~{Batch}.bed > sort_~{Batch}.bed
-    sort -k1,1 match_~{Batch}.origin.raw_combined_depth.bed > sort_~{Batch}.origin.raw_combined_depth.bed
-    join sort_~{Batch}.bed sort_~{Batch}.origin.raw_combined_depth.bed -1 1 -2 1 -o 1.2,1.3,1.4,1.5,1.6,1.7,2.7 > unsorted_f3.txt
-    sort -k4,4 unsorted_f3.txt > f3.txt
-    rm match_~{Batch}.bed sort_~{Batch}.bed match_~{Batch}.origin.raw_combined_depth.bed sort_~{Batch}.origin.raw_combined_depth.bed unsorted_f3.txt
-    # extract variants with samples lost or gained after genotyping
-    while read line;do
-        string=$(echo "$line" | cut -d" " -f6 |sed 's/,/|/g')
-        string2=$(echo "$line" | cut -d" " -f7 |sed 's/,/|/g')
-        echo "$line" |sed -r "s/$string|,//g" |awk -v OFS="\t" '{if ($3-$2>10000 && $6!="" && $5!="CN0")print $1,$2,$3,$4,$5}' >> missing_RF.bed
-        echo "$line" |sed -r "s/$string2|,//g" |awk -v OFS="\t" '{if ($3-$2>10000 && $6!="" && $5!="CN0")print $1,$2,$3,$4,$5}' >> missing_RF.bed
-    done < f3.txt
-    sort -u missing_RF.bed > test.txt ; mv test.txt missing_RF.bed
-    # VF<0.01 (or provided value) filter for missing sample variants, or AC<=3 (or provided value) if cohort is small
-    while read chr start end variant type; do
-     varid=$variant: #varid should be single variants
-     num=$(fgrep -m1 $varid ~{regeno_sample_counts_lookup}|cut -f8)
-     if python -c "exit(0 if (((float($num) / float($n_samp)) < float($max_af)) or (int($num) <= int($min_count))) else 1)"; then
-        printf "$chr\t$start\t$end\t$variant\t$sample\t$type\n" >> ~{Batch}.to_regeno.bed # modify this to suit intput for Rdtest
-     fi
-    done < missing_RF.bed 
-  >>>
+import sys
+
+batch = "~{Batch}"
+n_samples_cohort = int("~{n_samples_cohort}")
+max_af = float("~{regeno_max_allele_freq}")
+min_count = int("~{regeno_allele_count_threshold}")
+
+bed_file = f"{batch}.bed"
+origin_file = f"{batch}.origin.raw_combined_depth.bed"
+sample_counts_file = "~{regeno_sample_counts_lookup}"
+
+
+def build_variant_map(filepath):
+    variant_map = {}
+    with open(filepath) as f:
+        for line in f:
+            if line.startswith("#") or not line.strip():
+                continue
+            fields = line.strip().split('\t')
+            identifier = "_".join(fields[0:3] + [fields[4]])
+            variant_map[identifier] = fields
+    return variant_map
+
+bed_map = build_variant_map(bed_file)
+origin_map = build_variant_map(origin_file)
+
+
+joined_lines = []
+for var_id in bed_map:
+    if var_id in origin_map:
+        bed_fields = bed_map[var_id]
+        origin_samples = origin_map[var_id][5] if len(origin_map[var_id]) > 5 else ""
+        joined_lines.append([var_id] + bed_fields + [origin_samples])
+
+
+missing_variants = set()
+for line in joined_lines:
+    line = line + [""] * (8 - len(line))
+    identifier, chrom, start, end, var, typ, samples_post, samples_pre = line[:8]
+
+    post_set = set(samples_post.split(",")) if samples_post else set()
+    pre_set = set(samples_pre.split(",")) if samples_pre else set()
+
+    missing_in_post = pre_set - post_set
+    missing_in_pre = post_set - pre_set
+
+    if int(end) - int(start) > 10000 and typ != "CN0":
+        if missing_in_post or missing_in_pre:
+            missing_variants.add((chrom, start, end, var, typ))
+
+
+sample_counts = {}
+with open(sample_counts_file) as f:
+    for line in f:
+        parts = line.strip().split('\t')
+        if len(parts) >= 8:
+            var_id = parts[0]
+            count = parts[7]
+            sample_counts[var_id] = count
+
+
+sample = next((fields[5].split(",")[0] for fields in bed_map.values() if len(fields) > 5 and fields[5]), "NA")
+
+
+with open(f"{batch}.to_regeno.bed", "w") as out:
+    for chrom, start, end, var, typ in sorted(missing_variants):
+        var_lookup = f"{var}:"
+        num = int(sample_counts.get(var_lookup, 0))
+        af = num / n_samples_cohort if n_samples_cohort else 0
+        if af < max_af or num <= min_count:
+            out.write(f"{chrom}\t{start}\t{end}\t{var}\t{sample}\t{typ}\n")
+CODE
+>>>
   output {
     File regeno_bed="~{Batch}.to_regeno.bed"
   }
