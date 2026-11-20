@@ -217,8 +217,8 @@ workflows:
         - /.*/
 
   - subclass: WDL
-    name: VisualizeCnvs
-    primaryDescriptorPath: /wdl/VisualizeCnvs.wdl
+    name: PlotCnvReadDepth
+    primaryDescriptorPath: /wdl/PlotCnvReadDepth.wdl
     filters:
       branches:
         - main
@@ -227,8 +227,8 @@ workflows:
         - /.*/
 
   - subclass: WDL
-    name: VisualizeCnvEvidence
-    primaryDescriptorPath: /wdl/VisualizeCnvEvidence.wdl
+    name: PlotCnvPeSrRdEvidence
+    primaryDescriptorPath: /wdl/PlotCnvPeSrRdEvidence.wdl
     filters:
       branches:
         - main

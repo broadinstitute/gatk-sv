@@ -5,7 +5,7 @@ import "Structs.wdl"
 # Plots the PE, SR, and RD evidence of CNV carriers, one plot per variant and
 # carrier sample. Adapted from VisualizeDeNovoSVs in
 # https://github.com/talkowski-lab/gatk-sv-utils.
-workflow VisualizeCnvEvidence {
+workflow PlotCnvPeSrRdEvidence {
   input {
     Array[File] vcfs
     # TSV of variants to plot instead of extracting them from vcfs. The first

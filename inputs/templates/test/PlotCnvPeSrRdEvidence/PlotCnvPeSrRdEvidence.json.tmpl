@@ -1,0 +1,15 @@
+{
+  "PlotCnvPeSrRdEvidence.vcfs": [{{ test_batch.annotated_vcf | tojson }}],
+  "PlotCnvPeSrRdEvidence.plot_prefix": {{ test_batch.name | tojson }},
+  "PlotCnvPeSrRdEvidence.min_size": 5000,
+
+  "PlotCnvPeSrRdEvidence.batch_name_list": [{{ test_batch.name | tojson }}],
+  "PlotCnvPeSrRdEvidence.batch_sample_lists": [{{ test_batch.final_sample_list | tojson }}],
+  "PlotCnvPeSrRdEvidence.pe_files": [{{ test_batch.merged_pe_file | tojson }}],
+  "PlotCnvPeSrRdEvidence.sr_files": [{{ test_batch.merged_sr_file | tojson }}],
+  "PlotCnvPeSrRdEvidence.bincov_files": [{{ test_batch.merged_rd_file | tojson }}],
+  "PlotCnvPeSrRdEvidence.medians_files": [{{ test_batch.medianfile | tojson }}],
+
+  "PlotCnvPeSrRdEvidence.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "PlotCnvPeSrRdEvidence.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
+}

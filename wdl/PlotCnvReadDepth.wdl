@@ -3,7 +3,7 @@ version 1.0
 import "Structs.wdl"
 
 # Plots CNV depth profiles across batches
-workflow VisualizeCnvs {
+workflow PlotCnvReadDepth {
   input {
     Array[File] vcfs
     # tab-delimited files of CNVs

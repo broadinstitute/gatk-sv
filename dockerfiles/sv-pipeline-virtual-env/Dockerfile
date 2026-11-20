@@ -84,7 +84,7 @@ ARG R_PACKAGES="assertthat beeswarm BH BSDA caret cli crayon DAAG data.table dev
                 rpart stringi stringr survival tibble tidyr tidyselect utf8 vioplot withr zoo \
                 matrixStats gargle httr remotes"
 ARG BIOCONDUCTOR_PKGS="SNPRelate multtest GenomicRanges Rsamtools"
-# gorilla plots SV evidence (used by VisualizeCnvEvidence)
+# gorilla plots SV evidence (used by PlotCnvPeSrRdEvidence)
 ARG GORILLA_COMMIT="c423a4835251a3f87ec8f02822a1ef8230061e12"
 # gorilla streams evidence files with the system tabix, which needs GCS support
 # and the fixes for silently dropped records from remote files (htslib >= 1.23.2).
