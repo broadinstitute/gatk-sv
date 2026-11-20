@@ -32,8 +32,8 @@ def process_metadata(vcf, outlier_sample_ids):
         called_samples[svtype] = defaultdict(list)
 
     stats_int = ['SR1POS', 'SR2POS']
-    stats_float = ['BAF_KS_Q', 'SR1Q', 'SR1CS', 'SR2Q', 'SR2CS', 'SRQ', 'SRCS', 'BAF_HET_RATIO', 'BAF_KS_STAT',
-                   'PEQ', 'PECS', 'PESRQ', 'PESRCS', 'RDQ', 'RD_P2', 'RD_MEDIAN_SEPARATION']
+    stats_float = ['BAF_KS_Q', 'SR1Q', 'SR1CS', 'SR2Q', 'SR2CS', 'SRQ', 'SRCS', 'BAF_HET_RATIO', 'BAF_DEL_LOGLIK',
+                   'BAF_KS_STAT', 'PEQ', 'PECS', 'PESRQ', 'PESRCS', 'RDQ', 'RD_P2', 'RD_MEDIAN_SEPARATION']
     metadata = deque()
     for variant in vcf:
         chrom = variant.chrom

@@ -24,7 +24,7 @@ KEY_PREFIX = "metrics_"
 
 EXPECTED_COLUMNS = ["name", "chrom", "start", "end", "svtype", "svsize", "vf", "rmsk", "poor_region_cov", "SR1Q",
                     "SR1CS", "SR2Q", "SR2CS", "SRQ", "SRCS", "SR1POS", "SR2POS", "PEQ", "PECS", "PESRQ", "PESRCS",
-                    "BAF_HET_RATIO", "BAF_KS_STAT", "BAF_KS_Q", "is_outlier_specific", "RDQ", "RD_P2", "RD_MEDIAN_SEPARATION"]
+                    "BAF_HET_RATIO", "BAF_DEL_LOGLIK", "BAF_KS_STAT", "BAF_KS_Q", "is_outlier_specific", "RDQ", "RD_P2", "RD_MEDIAN_SEPARATION"]
 
 EXPECTED_TYPES = ["DEL", "DUP", "INS", "INV", "BND"]
 
@@ -56,7 +56,7 @@ def main(argv):
 
     # Columns used as features for adjudication in module 03
     feature_cols = ["poor_region_cov", "is_outlier_specific",
-                    "SRQ", "SRCS", "PEQ", "PECS", "PESRQ", "PESRCS", "BAF_HET_RATIO", "BAF_KS_Q", "BAF_KS_STAT",
+                    "SRQ", "SRCS", "PEQ", "PECS", "PESRQ", "PESRCS", "BAF_HET_RATIO", "BAF_DEL_LOGLIK", "BAF_KS_Q", "BAF_KS_STAT",
                     "RDQ", "RD_P2", "RD_MEDIAN_SEPARATION"]
 
     # Read file
