@@ -1,0 +1,15 @@
+{
+  "FilterOutlierSamplesFinal.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "FilterOutlierSamplesFinal.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+
+  "FilterOutlierSamplesFinal.N_IQR_cutoff": "1",
+
+  "FilterOutlierSamplesFinal.autosomes_list": {{ reference_resources.autosome_file | tojson }},
+  "FilterOutlierSamplesFinal.contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
+
+  "FilterOutlierSamplesFinal.vcfs" : {{ test_batch.combined_vcfs | tojson }},
+  "FilterOutlierSamplesFinal.prefix": {{ test_batch.name | tojson }},
+  "FilterOutlierSamplesFinal.additional_samples_to_remove": "gs://broad-dsde-methods-eph/ref_panel_1kg.to_remove.txt",
+  "FilterOutlierSamplesFinal.plot_counts": "true",
+  "FilterOutlierSamplesFinal.filter_vcf": "true"
+}
