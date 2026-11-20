@@ -93,7 +93,8 @@ Extra workflows (Not part of canonical pipeline, but included for your convenien
 * `PlotSVCountsPerSample`: Plot SV counts per sample per SV type. Recommended to run before `FilterOutlierSamples`
   (configured with the single VCF you want to filter) to enable IQR cutoff choice.
 * `FilterOutlierSamples`: Filter outlier samples (in terms of SV counts) from a single VCF.
-* `VisualizeCnvs`: Plot multi-sample depth profiles for CNVs
+* `PlotCnvReadDepth`: Plot multi-sample depth profiles for CNVs
+* `PlotCnvPeSrRdEvidence`: Plot PE, SR, and RD evidence for each CNV carrier
 
 
 For detailed instructions on running the pipeline in Terra, see [workflow instructions](#instructions) below.

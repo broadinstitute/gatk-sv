@@ -1,0 +1,14 @@
+{
+  "PlotCnvReadDepth.vcfs": [{{ test_batch.clean_vcf | tojson }}],
+  "PlotCnvReadDepth.plot_prefix": {{ test_batch.name | tojson }},
+  "PlotCnvReadDepth.min_size": 50000,
+
+  "PlotCnvReadDepth.batch_name_list": [{{ test_batch.name | tojson }}],
+  "PlotCnvReadDepth.batch_sample_lists": [{{ test_batch.final_sample_list | tojson }}],
+  "PlotCnvReadDepth.medians_files": [{{ test_batch.medianfile | tojson }}],
+  "PlotCnvReadDepth.bincov_files": [{{ test_batch.merged_rd_file | tojson }}],
+  "PlotCnvReadDepth.bincov_index_files": [{{ test_batch.merged_rd_file_index | tojson }}],
+
+  "PlotCnvReadDepth.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "PlotCnvReadDepth.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
+}

@@ -68,12 +68,12 @@ ENV PATH=$CONDA_ENV_BIN:$PATH
 ENV CONDA_ENV_NAME=$CONDA_ENV_NAME
 
 # update the lists of transient (needed for install) and support (needed for runtime) packages
-ARG BUILD_DEPS="make cmake g++ gcc gfortran \
+ARG BUILD_DEPS="make cmake g++ gcc gfortran curl \
                 libbz2-dev libblas-dev libicu-dev liblapack-dev liblzma-dev libpcre2-dev zlib1g-dev \
                 pkg-config libcurl4-openssl-dev libssl-dev libatlas-base-dev libssh2-1-dev libssh2-1 \
                 libgit2-dev libfftw3-dev libjpeg8-dev libxml2-dev libfontconfig1-dev libharfbuzz-dev \
                 libfribidi-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev libuv1-dev"
-ARG RUN_DEPS="file bzip2 libssl3 libatlas3-base libssh2-1 libgit2-1.1 libfftw3-3 libjpeg8 libxml2"
+ARG RUN_DEPS="file bzip2 libssl3 libatlas3-base libssh2-1 libgit2-1.1 libfftw3-3 libjpeg8 libxml2 libuv1"
 RUN export NEW_PACKAGES=$(diff_of_lists.sh "$RUN_DEPS" $APT_REQUIRED_PACKAGES) && \
     printf " $NEW_PACKAGES" | fix_spaces.sh >> $APT_REQUIRED_PACKAGES
 
@@ -81,8 +81,16 @@ RUN export NEW_PACKAGES=$(diff_of_lists.sh "$RUN_DEPS" $APT_REQUIRED_PACKAGES) &
 ARG R_PACKAGES="assertthat beeswarm BH BSDA caret cli crayon DAAG data.table devtools digest dplyr e1071 fansi fpc \
                 generics gert glue HardyWeinberg hash latticeExtra magrittr metap mnormt nlme nloptr nnet \
                 numDeriv perm pillar pkgconfig plyr purrr pwr R6 RColorBrewer Rcpp reshape reshape2 rlang ROCR \
-                rpart stringi stringr survival tibble tidyr tidyselect utf8 vioplot withr zoo"
-ARG BIOCONDUCTOR_PKGS="SNPRelate multtest"
+                rpart stringi stringr survival tibble tidyr tidyselect utf8 vioplot withr zoo \
+                matrixStats gargle httr remotes"
+ARG BIOCONDUCTOR_PKGS="SNPRelate multtest GenomicRanges Rsamtools"
+# gorilla plots SV evidence (used by PlotCnvPeSrRdEvidence)
+ARG GORILLA_COMMIT="c423a4835251a3f87ec8f02822a1ef8230061e12"
+# gorilla streams evidence files with the system tabix, which needs GCS support
+# and the fixes for silently dropped records from remote files (htslib >= 1.23.2).
+# It is installed separately from the samtools/htslib in sv-base-mini.
+ARG GORILLA_HTSLIB_VERSION="1.24.1"
+ARG GORILLA_HTSLIB_DIR=/opt/htslib
 ARG DEBIAN_FRONTEND=noninteractive
 RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED_PACKAGES) && \
     apt-get -qqy update --fix-missing && \
@@ -91,8 +99,18 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
     install_deprecated_R_package.sh "https://cran.r-project.org/src/contrib/Archive/MASS/MASS_7.3-58.tar.gz" && \
     install_deprecated_R_package.sh "https://cran.r-project.org/src/contrib/Archive/Matrix/Matrix_1.6-5.tar.gz" && \
     install_R_packages.R $R_PACKAGES && \
+    Rscript -e "options(warn = 2); remotes::install_github('talkowski-lab/gorilla', ref = '$GORILLA_COMMIT', upgrade = 'never', dependencies = FALSE)" && \
+    cd /tmp && \
+    curl -fsSL https://github.com/samtools/htslib/releases/download/${GORILLA_HTSLIB_VERSION}/htslib-${GORILLA_HTSLIB_VERSION}.tar.bz2 | tar -xj && \
+    cd htslib-${GORILLA_HTSLIB_VERSION} && \
+    ./configure --quiet --prefix=$GORILLA_HTSLIB_DIR --enable-libcurl --enable-gcs --without-libdeflate && \
+    make -s -j $(nproc) && \
+    make -s install && \
+    cd / && \
     apt-get -qqy remove --purge $APT_TRANSIENT_PACKAGES && \
     apt-get -qqy autoremove --purge && \
+    Rscript -e "library(gorilla)" && \
+    $GORILLA_HTSLIB_DIR/bin/tabix --version && \
     apt-get -qqy clean && \
     rm -rf /tmp/* \
            /var/tmp/* \

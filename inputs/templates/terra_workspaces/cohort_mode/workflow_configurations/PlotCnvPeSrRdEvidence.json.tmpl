@@ -1,0 +1,15 @@
+{
+  "PlotCnvPeSrRdEvidence.vcfs": "${[this.annotated_vcf]}",
+  "PlotCnvPeSrRdEvidence.plot_prefix": "${this.sample_set_set_id}",
+  "PlotCnvPeSrRdEvidence.min_size": 5000,
+
+  "PlotCnvPeSrRdEvidence.batch_name_list": "${this.sample_sets.sample_set_id}",
+  "PlotCnvPeSrRdEvidence.batch_sample_lists": "${this.sample_sets.filtered_batch_samples_file}",
+  "PlotCnvPeSrRdEvidence.pe_files": "${this.sample_sets.merged_PE}",
+  "PlotCnvPeSrRdEvidence.sr_files": "${this.sample_sets.merged_SR}",
+  "PlotCnvPeSrRdEvidence.bincov_files": "${this.sample_sets.merged_bincov}",
+  "PlotCnvPeSrRdEvidence.medians_files": "${this.sample_sets.median_cov}",
+
+  "PlotCnvPeSrRdEvidence.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
+  "PlotCnvPeSrRdEvidence.sv_pipeline_docker": "${workspace.sv_pipeline_docker}"
+}

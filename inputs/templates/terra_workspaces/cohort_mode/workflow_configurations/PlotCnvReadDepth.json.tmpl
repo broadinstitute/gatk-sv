@@ -1,0 +1,14 @@
+{
+  "PlotCnvReadDepth.vcfs": "${[this.annotated_vcf]}",
+  "PlotCnvReadDepth.plot_prefix": "${this.sample_set_set_id}",
+  "PlotCnvReadDepth.min_size": 50000,
+
+  "PlotCnvReadDepth.batch_name_list": "${this.sample_sets.sample_set_id}",
+  "PlotCnvReadDepth.batch_sample_lists": "${this.sample_sets.filtered_batch_samples_file}",
+  "PlotCnvReadDepth.medians_files": "${this.sample_sets.median_cov}",
+  "PlotCnvReadDepth.bincov_files": "${this.sample_sets.merged_bincov}",
+  "PlotCnvReadDepth.bincov_index_files": "${this.sample_sets.merged_bincov_index}",
+
+  "PlotCnvReadDepth.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
+  "PlotCnvReadDepth.sv_pipeline_docker": "${workspace.sv_pipeline_docker}"
+}

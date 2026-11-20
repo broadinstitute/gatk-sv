@@ -6,7 +6,8 @@
 ARG MINIBASE_IMAGE=sv-base-mini:latest
 ARG VIRTUAL_ENV_IMAGE=samtoolscloud-virtual-env:latest
 # available gsutil versions here: https://cloud.google.com/sdk/docs/release-notes
-ARG CLOUD_SDK_VERSION=414.0.0-0
+ARG CLOUD_SDK_VERSION=414.0.0
+ARG GOOGLE_CLOUD_INSTALL_DIR=/usr/lib/google-cloud-sdk
 ARG CONDA_ENV_NAME="gatk-sv"
 ARG CONDA_INSTALL_DIR=/opt/conda
 ################## install google-cloud-cli into a copy of the virtual image
@@ -18,22 +19,20 @@ RUN apt-get -qqy update --fix-missing && \
                  apt-transport-https ca-certificates wget curl gnupg2 libssl3 \
                  libfontconfig1-dev
 
-# Google cloud SDK is installed using the documentation in the following link.
-# https://cloud.google.com/sdk/docs/install#deb
+# Google Cloud CLI is installed from the versioned archive, as described in the following link.
+# https://cloud.google.com/sdk/docs/downloads-versioned-archives
+# The apt repository only keeps recent releases, so pinned versions eventually disappear from it.
 ARG CLOUD_SDK_VERSION
+ARG GOOGLE_CLOUD_INSTALL_DIR
+ENV CLOUDSDK_CONFIG=$GOOGLE_CLOUD_INSTALL_DIR
+ENV PATH=$GOOGLE_CLOUD_INSTALL_DIR/bin:$PATH
 
-RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" \
-    | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
-    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
-    | apt-key --keyring /usr/share/keyrings/cloud.google.gpg  add - && \
-    apt-get update -y && \
-    apt-get install google-cloud-sdk=$CLOUD_SDK_VERSION -y && \
+RUN mkdir -p $GOOGLE_CLOUD_INSTALL_DIR && \
+    curl -fsSL https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${CLOUD_SDK_VERSION}-linux-x86_64.tar.gz \
+    | tar -xz --strip-components=1 -C $GOOGLE_CLOUD_INSTALL_DIR && \
     gcloud config set core/disable_usage_reporting true && \
     gcloud config set component_manager/disable_update_check true && \
     gcloud config set metrics/environment github_docker_image
-
-ENV GOOGLE_CLOUD_INSTALL_DIR=/usr/lib/google-cloud-sdk
-ENV CLOUDSDK_CONFIG=$GOOGLE_CLOUD_INSTALL_DIR
 
 # clean up some stuff we don't need
 #    -anthoscli  (Anthos)
@@ -48,7 +47,8 @@ COPY --from=prep_virtual_env $CONDA_ENV_PATH $CONDA_ENV_PATH
 # copy google-cloud-cli
 ARG GOOGLE_CLOUD_INSTALL_DIR
 COPY --from=prep_virtual_env $GOOGLE_CLOUD_INSTALL_DIR $GOOGLE_CLOUD_INSTALL_DIR
-ENV PATH=/opt/google-cloud-sdk/bin:$CONDA_ENV_PATH/bin:$PATH
+ENV CLOUDSDK_CONFIG=$GOOGLE_CLOUD_INSTALL_DIR
+ENV PATH=$GOOGLE_CLOUD_INSTALL_DIR/bin:$CONDA_ENV_PATH/bin:$PATH
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends libfontconfig1-dev && \
