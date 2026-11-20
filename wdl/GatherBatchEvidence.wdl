@@ -102,7 +102,14 @@ workflow GatherBatchEvidence {
     Boolean run_ploidy = false
 
     # Option to add first sample to the ped file (for single sample mode); run_ploidy must be true
+    # Ignored when extra_ped_samples is non-empty: trio mode always writes the case plus its parents
     Boolean append_first_sample_to_ped = false
+
+    # Trio de novo: when set, ALL of these non-reference-panel samples are added
+    # to the ped instead of just samples[0] (run_ploidy must be true)
+    Array[String] extra_ped_samples = []
+    String? extra_ped_mother_sample_id
+    String? extra_ped_father_sample_id
 
     Int gcnv_qs_cutoff              # QS filtering cutoff
     Float? defragment_max_dist
@@ -231,7 +238,21 @@ workflow GatherBatchEvidence {
       runtime_attr_override = runtime_attr_subset_ped
   }
 
-  if (append_first_sample_to_ped) {
+  # Trio mode is decided by extra_ped_samples alone - the same condition the
+  # combined_ped_file output uses - so the task and the output can never disagree.
+  if (length(extra_ped_samples) > 0) {
+    call AddTrioSamplesToPed as AddTrioSamplesToPed {
+      input:
+        ref_ped_file = SubsetPedFile.ped_subset_file,
+        ploidy_plots = select_first([Ploidy.ploidy_plots]),
+        sample_ids = extra_ped_samples,
+        mother_sample_id = extra_ped_mother_sample_id,
+        father_sample_id = extra_ped_father_sample_id,
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = add_sample_to_ped_runtime_attr
+    }
+  }
+  if (append_first_sample_to_ped && length(extra_ped_samples) == 0) {
     call AddCaseSampleToPed {
       input:
         ref_ped_file = SubsetPedFile.ped_subset_file,
@@ -241,6 +262,10 @@ workflow GatherBatchEvidence {
         runtime_attr_override = add_sample_to_ped_runtime_attr
     }
   }
+
+  # Ped that includes the non-reference-panel samples: the trio (case + provided
+  # parents) in trio de novo mode, or just the case in single-case mode.
+  File combined_ped_file_ = select_first([AddTrioSamplesToPed.combined_ped_file, AddCaseSampleToPed.combined_ped_file, SubsetPedFile.ped_subset_file])
 
   call bem.BatchEvidenceMerging as BatchEvidenceMerging {
     input:
@@ -268,7 +293,7 @@ workflow GatherBatchEvidence {
       bincov_matrix = merged_bincov_,
       bincov_matrix_index = merged_bincov_idx_,
       chrom_file = cnmops_chrom_file,
-      ped_file = select_first([AddCaseSampleToPed.combined_ped_file, SubsetPedFile.ped_subset_file]),
+      ped_file = combined_ped_file_,
       exclude_list = cnmops_exclude_list,
       allo_file = cnmops_allo_file,
       ref_dict = ref_dict,
@@ -292,7 +317,7 @@ workflow GatherBatchEvidence {
       bincov_matrix = merged_bincov_,
       bincov_matrix_index = merged_bincov_idx_,
       chrom_file = cnmops_chrom_file,
-      ped_file = select_first([AddCaseSampleToPed.combined_ped_file, SubsetPedFile.ped_subset_file]),
+      ped_file = combined_ped_file_,
       exclude_list = cnmops_exclude_list,
       allo_file = cnmops_allo_file,
       ref_dict = ref_dict,
@@ -478,7 +503,9 @@ workflow GatherBatchEvidence {
     File? batch_ploidy_matrix = Ploidy.ploidy_matrix
     File? batch_ploidy_plots = Ploidy.ploidy_plots
 
-    File? combined_ped_file = AddCaseSampleToPed.combined_ped_file
+    # Preserve the original semantics: null unless a PED line was appended for
+    # the non-reference-panel samples (case-only or trio).
+    File? combined_ped_file = if (length(extra_ped_samples) > 0) then AddTrioSamplesToPed.combined_ped_file else AddCaseSampleToPed.combined_ped_file
 
     File merged_dels = MergeDepth.del
     File merged_dups = MergeDepth.dup
@@ -549,6 +576,107 @@ task AddCaseSampleToPed {
 
     awk -v sample=~{sample_id} '$2 == sample { print "ERROR: A sample with the name "sample" is already present in the ped file." > "/dev/stderr"; exit 1; }' < ~{ref_ped_file}
     awk -v sample=~{sample_id} -v sex=$SEX '{print} END {OFS="\t"; print "case_sample",sample,"0","0",sex,"1" }' < ~{ref_ped_file} > combined_ped_file.ped
+  >>>
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
+  }
+}
+
+# Trio de novo variant of AddCaseSampleToPed.
+# Appends every non-reference-panel trio member (case and any provided parents)
+# to the reference panel ped, using the ploidy chrX copy number for the PED sex
+# column. All samples share the family name "trio_denovo", with the father/mother
+# PED columns filled in for the case and zeroed (founders) for the parents.
+task AddTrioSamplesToPed {
+  input {
+    File ref_ped_file
+    File ploidy_plots
+    Array[String] sample_ids  # ordered, e.g. [case, mother, father]
+    String? mother_sample_id
+    String? father_sample_id
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 2,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  String mother_id = select_first([mother_sample_id, "0"])
+  String father_id = select_first([father_sample_id, "0"])
+
+  output {
+    File combined_ped_file = "trio_combined_ped_file.ped"
+  }
+
+  command <<<
+    set -euo pipefail
+    export MOTHER_ID="~{mother_id}"
+    export FATHER_ID="~{father_id}"
+
+    tar xzf ~{ploidy_plots} -C .
+    cp ~{write_lines(sample_ids)} trio_samples.txt
+
+    # Every trio member must have a usable ploidy chrX copy number and must not
+    # already be present in the reference panel ped. Use exact tab-field matching
+    # (grep-style matching would false-positive on names that are prefixes of
+    # other sample names, e.g. "PROBAND" vs "PROBAND-M").
+    while read -r sample || [ -n "$sample" ]; do
+      SEX=$(gunzip -c ploidy_est/sample_sex_assignments.txt.gz | awk -F'\t' -v s="$sample" '$1 == s {print $2; exit}')
+      if [ -z "$SEX" ]; then
+        >&2 echo "Error: Sample $sample not found in ploidy calls"
+        exit 1
+      fi
+      if [ "$SEX" != "1" ] && [ "$SEX" != "2" ]; then
+        >&2 echo "Error: ploidy-derived chrX copy number '$SEX' for sample $sample is not 1 (male) or 2 (female); cannot write a valid PED line"
+        exit 1
+      fi
+      # Field 2 of sample_sex_assignments is the estimated chrX COPY NUMBER
+      # (see colnames in src/WGD/bin/estimatePloidy.R), not a PED sex code; it
+      # only looks like one because males are 1 and females 2. Enforce the
+      # declared role anyway: it is a deliberate hard stop, because swapping
+      # extra_ped_mother_sample_id and extra_ped_father_sample_id would pass the
+      # 1/2 check above and silently invert every INHERITED_FROM_* label
+      # downstream. A parent with an atypical sex chromosome complement (e.g.
+      # 45,X or 47,XXY) also stops the run here.
+      if [ "$MOTHER_ID" != "0" ] && [ "$sample" = "$MOTHER_ID" ] && [ "$SEX" != "2" ]; then
+        >&2 echo "Error: sample $sample is declared as the mother but its chrX copy number is '$SEX', expected 2; check extra_ped_mother_sample_id and extra_ped_father_sample_id"
+        exit 1
+      fi
+      if [ "$FATHER_ID" != "0" ] && [ "$sample" = "$FATHER_ID" ] && [ "$SEX" != "1" ]; then
+        >&2 echo "Error: sample $sample is declared as the father but its chrX copy number is '$SEX', expected 1; check extra_ped_mother_sample_id and extra_ped_father_sample_id"
+        exit 1
+      fi
+      awk -v sample="$sample" '$2 == sample { print "ERROR: A sample with the name " sample " is already present in the ped file." > "/dev/stderr"; exit 1; }' < ~{ref_ped_file}
+    done < trio_samples.txt
+
+    # Emit reference panel lines, then one PED line per trio member. The case
+    # names both parents; the parents themselves are written as founders
+    # (0 for both parent columns), otherwise F and M would close a 2-cycle.
+    cat ~{ref_ped_file} > trio_combined_ped_file.ped
+    while read -r sample || [ -n "$sample" ]; do
+      SEX=$(gunzip -c ploidy_est/sample_sex_assignments.txt.gz | awk -F'\t' -v s="$sample" '$1 == s {print $2; exit}')
+      PED_FATHER="$FATHER_ID"; PED_MOTHER="$MOTHER_ID"
+      if [ "$sample" = "$FATHER_ID" ] || [ "$sample" = "$MOTHER_ID" ]; then PED_FATHER="0"; PED_MOTHER="0"; fi
+      printf 'trio_denovo\t%s\t%s\t%s\t%s\t1\n' "$sample" "$PED_FATHER" "$PED_MOTHER" "$SEX" >> trio_combined_ped_file.ped
+    done < trio_samples.txt
+
+    # Self-check on the finished file: every declared parent must be a founder.
+    awk -F'\t' -v f="$FATHER_ID" -v m="$MOTHER_ID" '($2 == f || $2 == m) && ($3 != "0" || $4 != "0") { print "ERROR: declared trio parent " $2 " is not a founder (father=" $3 ", mother=" $4 ")" > "/dev/stderr"; exit 1 }' < trio_combined_ped_file.ped
   >>>
 
   runtime {

@@ -27,6 +27,7 @@ import "Utils.wdl" as utils
 import "CallGenomicDisorderCNVs.wdl" as CallGenomicDisorderCNVs
 import "IntegrateGDVcf.wdl" as IntegrateGDVcf
 import "Structs.wdl"
+import "AnnotateModeOfInheritance.wdl" as moi
 
 # GATK SV Pipeline single sample mode
 # Runs GatherSampleEvidence, EvidenceQC, GatherBatchEvidence, ClusterBatch, FilterBatch.MergePesrVcfs, GenotypeBatch, 
@@ -42,6 +43,24 @@ workflow GATKSVPipelineSingleSample {
     String batch
     String sample_id
     File ref_samples_list
+
+    ############################################################
+    ## Trio de novo (optional parent CRAMs)
+    ############################################################
+    # Providing a mother and/or father CRAM enables trio de novo mode:
+    #   - parent calls are made with the same callers as the case and merged
+    #     into the shared call set
+    #   - the final VCF retains ALL variants across case + mother + father
+    #   - every variant is annotated with mode of inheritance (INFO fields
+    #     MOI and MOI_CONFIDENCE) as the final step
+    # sample ids must match the sample names inside the parent CRAMs
+    String? mother_sample_id   # required if mother_cram is provided
+    File? mother_cram
+    File? mother_cram_index
+    String? father_sample_id   # required if father_cram is provided
+    File? father_cram
+    File? father_cram_index
+    RuntimeAttr? runtime_attr_moi  # runtime overrides for the MOI annotation task
 
     # Define raw callers to use
     # Overrides presence of case_*_vcf parameters below
@@ -607,6 +626,48 @@ workflow GATKSVPipelineSingleSample {
 
   Boolean run_sampleevidence = defined(manta_docker_) || defined(melt_docker_) || defined(scramble_docker_) || defined(wham_docker_) || collect_coverage || collect_pesr
 
+  # ---------------------------------------------------------------
+  ## Trio de novo mode: active when a parent CRAM is provided
+  # ---------------------------------------------------------------
+  Boolean run_mother_evidence = defined(mother_cram)
+  Boolean run_father_evidence = defined(father_cram)
+  Boolean is_trio_denovo = run_mother_evidence || run_father_evidence
+
+  Array[String] trio_samples = select_all([sample_id, mother_sample_id, father_sample_id])
+  Array[String] trio_extra_ped_samples = if is_trio_denovo then trio_samples else []
+
+  # Fail fast on invalid trio de novo input combinations (parent id/CRAM must
+  # be paired, no duplicate sample ids, no precomputed case caller VCFs or
+  # DRAGEN calls, dockers required for all enabled callers, ...). The output
+  # sample list is the input list passed through unchanged, and every
+  # downstream consumer of trio_samples_list depends on it, so this task is
+  # always executed.
+  call ValidateTrioInputs {
+    input:
+      trio_samples = trio_samples,
+      case_sample_id = sample_id,
+      mother_sample_id = mother_sample_id,
+      has_mother_cram = defined(mother_cram),
+      father_sample_id = father_sample_id,
+      has_father_cram = defined(father_cram),
+      is_trio_denovo = is_trio_denovo,
+      dragen_vcf = dragen_vcf,
+      case_manta_vcf = case_manta_vcf,
+      case_melt_vcf = case_melt_vcf,
+      case_scramble_vcf = case_scramble_vcf,
+      case_wham_vcf = case_wham_vcf,
+      use_manta = use_manta,
+      use_melt = use_melt,
+      use_scramble = use_scramble,
+      use_wham = use_wham,
+      manta_docker = manta_docker,
+      melt_docker = melt_docker,
+      scramble_docker = scramble_docker,
+      wham_docker = wham_docker,
+      sv_base_mini_docker = sv_base_mini_docker
+  }
+  File trio_samples_list = ValidateTrioInputs.validated_samples_list
+
   if (run_sampleevidence) {
     call sampleevidence.GatherSampleEvidence as GatherSampleEvidence {
       input:
@@ -675,10 +736,146 @@ workflow GATKSVPipelineSingleSample {
     }
   }
 
+  # Parent evidence generation for trio de novo mode
+  if (run_mother_evidence) {
+    call sampleevidence.GatherSampleEvidence as GatherMotherEvidence {
+      input:
+        bam_or_cram_file=select_first([mother_cram]),
+        bam_or_cram_index=mother_cram_index,
+        sample_id=select_first([mother_sample_id]),
+        collect_coverage = true,
+        collect_pesr = true,
+        primary_contigs_list=primary_contigs_list,
+        reference_bwa_alt=reference_bwa_alt,
+        reference_bwa_amb=reference_bwa_amb,
+        reference_bwa_ann=reference_bwa_ann,
+        reference_bwa_bwt=reference_bwa_bwt,
+        reference_bwa_pac=reference_bwa_pac,
+        reference_bwa_sa=reference_bwa_sa,
+        reference_fasta=reference_fasta,
+        reference_index=reference_index,
+        reference_dict=reference_dict,
+        reference_version=reference_version,
+        preprocessed_intervals=preprocessed_intervals,
+        manta_region_bed=manta_region_bed,
+        manta_region_bed_index=manta_region_bed_index,
+        manta_jobs_per_cpu=manta_jobs_per_cpu,
+        manta_mem_gb_per_job=manta_mem_gb_per_job,
+        sd_locs_vcf=sd_locs_vcf,
+        melt_standard_vcf_header=melt_standard_vcf_header,
+        melt_metrics_intervals=melt_metrics_intervals,
+        insert_size=insert_size,
+        read_length=read_length,
+        coverage=coverage,
+        metrics_intervals=metrics_intervals,
+        pf_reads_improper_pairs=pf_reads_improper_pairs,
+        pct_chimeras=pct_chimeras,
+        total_reads=total_reads,
+        mei_bed=mei_bed,
+        scramble_alignment_score_cutoff = scramble_alignment_score_cutoff,
+        scramble_percent_align_cutoff = scramble_percent_align_cutoff,
+        scramble_min_clipped_reads_fraction = scramble_min_clipped_reads_fraction,
+        scramble_part2_threads = scramble_part2_threads,
+        scramble_vcf_script = scramble_vcf_script,
+        wham_include_list_bed_file=wham_include_list_bed_file,
+        run_module_metrics = false,
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_base_mini_docker=sv_base_mini_docker,
+        manta_docker=manta_docker_,
+        melt_docker=melt_docker_,
+        scramble_docker=scramble_docker_,
+        wham_docker=wham_docker_,
+        gatk_docker=gatk_docker,
+        genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
+        samtools_cloud_docker=samtools_cloud_docker,
+        cloud_sdk_docker = cloud_sdk_docker,
+        runtime_attr_localize_reads=runtime_attr_localize_reads,
+        runtime_attr_manta=runtime_attr_manta,
+        runtime_attr_melt_coverage=runtime_attr_melt_coverage,
+        runtime_attr_melt_metrics=runtime_attr_melt_metrics,
+        runtime_attr_melt=runtime_attr_melt,
+        runtime_attr_scramble_part1=runtime_attr_scramble_part1,
+        runtime_attr_scramble_part2=runtime_attr_scramble_part2,
+        runtime_attr_pesr=runtime_attr_pesr,
+        runtime_attr_wham=runtime_attr_wham
+    }
+  }
+
+  if (run_father_evidence) {
+    call sampleevidence.GatherSampleEvidence as GatherFatherEvidence {
+      input:
+        bam_or_cram_file=select_first([father_cram]),
+        bam_or_cram_index=father_cram_index,
+        sample_id=select_first([father_sample_id]),
+        collect_coverage = true,
+        collect_pesr = true,
+        primary_contigs_list=primary_contigs_list,
+        reference_bwa_alt=reference_bwa_alt,
+        reference_bwa_amb=reference_bwa_amb,
+        reference_bwa_ann=reference_bwa_ann,
+        reference_bwa_bwt=reference_bwa_bwt,
+        reference_bwa_pac=reference_bwa_pac,
+        reference_bwa_sa=reference_bwa_sa,
+        reference_fasta=reference_fasta,
+        reference_index=reference_index,
+        reference_dict=reference_dict,
+        reference_version=reference_version,
+        preprocessed_intervals=preprocessed_intervals,
+        manta_region_bed=manta_region_bed,
+        manta_region_bed_index=manta_region_bed_index,
+        manta_jobs_per_cpu=manta_jobs_per_cpu,
+        manta_mem_gb_per_job=manta_mem_gb_per_job,
+        sd_locs_vcf=sd_locs_vcf,
+        melt_standard_vcf_header=melt_standard_vcf_header,
+        melt_metrics_intervals=melt_metrics_intervals,
+        insert_size=insert_size,
+        read_length=read_length,
+        coverage=coverage,
+        metrics_intervals=metrics_intervals,
+        pf_reads_improper_pairs=pf_reads_improper_pairs,
+        pct_chimeras=pct_chimeras,
+        total_reads=total_reads,
+        mei_bed=mei_bed,
+        scramble_alignment_score_cutoff = scramble_alignment_score_cutoff,
+        scramble_percent_align_cutoff = scramble_percent_align_cutoff,
+        scramble_min_clipped_reads_fraction = scramble_min_clipped_reads_fraction,
+        scramble_part2_threads = scramble_part2_threads,
+        scramble_vcf_script = scramble_vcf_script,
+        wham_include_list_bed_file=wham_include_list_bed_file,
+        run_module_metrics = false,
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_base_mini_docker=sv_base_mini_docker,
+        manta_docker=manta_docker_,
+        melt_docker=melt_docker_,
+        scramble_docker=scramble_docker_,
+        wham_docker=wham_docker_,
+        gatk_docker=gatk_docker,
+        genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
+        samtools_cloud_docker=samtools_cloud_docker,
+        cloud_sdk_docker = cloud_sdk_docker,
+        runtime_attr_localize_reads=runtime_attr_localize_reads,
+        runtime_attr_manta=runtime_attr_manta,
+        runtime_attr_melt_coverage=runtime_attr_melt_coverage,
+        runtime_attr_melt_metrics=runtime_attr_melt_metrics,
+        runtime_attr_melt=runtime_attr_melt,
+        runtime_attr_scramble_part1=runtime_attr_scramble_part1,
+        runtime_attr_scramble_part2=runtime_attr_scramble_part2,
+        runtime_attr_pesr=runtime_attr_pesr,
+        runtime_attr_wham=runtime_attr_wham
+    }
+  }
+
   File case_counts_file_ = select_first([case_counts_file, GatherSampleEvidence.coverage_counts])
   File case_pe_file_ = select_first([case_pe_file, GatherSampleEvidence.pesr_disc])
   File case_sr_file_ = select_first([case_sr_file, GatherSampleEvidence.pesr_split])
   File case_sd_file_ = select_first([case_sd_file, GatherSampleEvidence.pesr_sd])
+
+  # Trio evidence arrays: case first, then provided parents (matches trio_samples order).
+  # select_all drops any undefined (unprovided parent) entries, preserving order.
+  Array[File] trio_counts = select_all([case_counts_file_, GatherMotherEvidence.coverage_counts, GatherFatherEvidence.coverage_counts])
+  Array[File] trio_pe = select_all([case_pe_file_, GatherMotherEvidence.pesr_disc, GatherFatherEvidence.pesr_disc])
+  Array[File] trio_sr = select_all([case_sr_file_, GatherMotherEvidence.pesr_split, GatherFatherEvidence.pesr_split])
+  Array[File] trio_sd = select_all([case_sd_file_, GatherMotherEvidence.pesr_sd, GatherFatherEvidence.pesr_sd])
 
   call ConcatBaf as ConcatBafCase {
     input:
@@ -716,17 +913,18 @@ workflow GATKSVPipelineSingleSample {
   if (use_dragen && defined(dragen_vcf)) {
     Array[File] dragen_vcfs_ = [select_first([dragen_vcf])]
   }
+  # caller VCF arrays: case first, then provided parents (matches trio_samples order)
   if (use_manta) {
-    Array[File] manta_vcfs_ = [select_first([case_manta_vcf, GatherSampleEvidence.manta_vcf])]
+    Array[File] manta_vcfs_ = select_all([case_manta_vcf, GatherSampleEvidence.manta_vcf, GatherMotherEvidence.manta_vcf, GatherFatherEvidence.manta_vcf])
   }
   if (use_melt) {
-    Array[File] melt_vcfs_ = [select_first([case_melt_vcf, GatherSampleEvidence.melt_vcf])]
+    Array[File] melt_vcfs_ = select_all([case_melt_vcf, GatherSampleEvidence.melt_vcf, GatherMotherEvidence.melt_vcf, GatherFatherEvidence.melt_vcf])
   }
   if (use_scramble) {
-    Array[File] scramble_vcfs_ = [select_first([case_scramble_vcf, GatherSampleEvidence.scramble_vcf])]
+    Array[File] scramble_vcfs_ = select_all([case_scramble_vcf, GatherSampleEvidence.scramble_vcf, GatherMotherEvidence.scramble_vcf, GatherFatherEvidence.scramble_vcf])
   }
   if (use_wham) {
-    Array[File] wham_vcfs_ = [select_first([case_wham_vcf, GatherSampleEvidence.wham_vcf])]
+    Array[File] wham_vcfs_ = select_all([case_wham_vcf, GatherSampleEvidence.wham_vcf, GatherMotherEvidence.wham_vcf, GatherFatherEvidence.wham_vcf])
   }
 
   Array[String] ref_samples = read_lines(ref_samples_list)
@@ -739,24 +937,24 @@ workflow GATKSVPipelineSingleSample {
   call batchevidence.GatherBatchEvidence as GatherBatchEvidence {
     input:
       batch=batch,
-      samples=[sample_id],
+      samples=trio_samples,
       ref_panel_samples=ref_samples,
       run_matrix_qc=false,
       ped_file=ref_ped_file,
       genome_file=genome_file,
       primary_contigs_fai=primary_contigs_fai,
       ref_dict=reference_dict,
-      counts=[case_counts_file_],
+      counts=trio_counts,
       ref_panel_bincov_matrix=ref_panel_bincov_matrix,
       bincov_matrix=EvidenceQC.bincov_matrix,
       bincov_matrix_index=EvidenceQC.bincov_matrix_index,
-      PE_files=[case_pe_file_],
+      PE_files=trio_pe,
       cytoband=cytobands,
       mei_bed=mei_bed,
       ref_panel_PE_files=ref_pesr_disc_files,
-      SR_files=[case_sr_file_],
+      SR_files=trio_sr,
       ref_panel_SR_files=ref_pesr_split_files,
-      SD_files=[case_sd_file_],
+      SD_files=trio_sd,
       ref_panel_SD_files=ref_pesr_sd_files,
       sd_locs_vcf=sd_locs_vcf,
       contig_ploidy_model_tar = contig_ploidy_model_tar,
@@ -764,6 +962,9 @@ workflow GATKSVPipelineSingleSample {
       gatk4_jar_override = gatk4_jar_override,
       run_ploidy = true,
       append_first_sample_to_ped = true,
+      extra_ped_samples = trio_extra_ped_samples,
+      extra_ped_mother_sample_id = mother_sample_id,
+      extra_ped_father_sample_id = father_sample_id,
       gcnv_p_alt = gcnv_p_alt,
       gcnv_cnv_coherence_length = gcnv_cnv_coherence_length,
       gcnv_max_copy_number = gcnv_max_copy_number,
@@ -838,34 +1039,41 @@ workflow GATKSVPipelineSingleSample {
 
   File combined_ped_file = select_first([GatherBatchEvidence.combined_ped_file])
 
-  # Call GenomicDisorderCNVs with case + reference panel data
-  call CallGenomicDisorderCNVs.CallGenomicDisorderCNVs as GD {
-    input:
-      batch = batch,
-      baf_matrix = ConcatBafCase.merged_baf,
-      high_res_rd_matrix = GatherBatchEvidence.merged_bincov,
-      reference_dict = reference_dict,
-      reference_fasta = reference_fasta,
-      gd_table = gd_table,
-      segdup_bed = segdup_bed,
-      centromere_bed = centromere_bed,
-      acrocentric_arm_bed = acrocentric_arm_bed,
-      custom_mask_bed = custom_mask_bed,
-      hard_inclusion_bed = hard_inclusion_bed,
-      flank_exclusion_intervals = select_first([flank_exclusion_intervals, [segdup_bed]]),
-      par_bed = par_bed,
-      gaps_bed = gaps_bed,
-      gtf = gtf,
-      truth_table = truth_table,
-      rebinned_interval_size = rebinned_interval_size,
-      sv_pipeline_docker = sv_pipeline_docker,
-      gatk_docker = gatk_docker,
-      preprocess_args = gd_preprocess_args,
-      infer_args = gd_infer_args,
-      call_args = gd_call_args,
-      eval_args = gd_eval_args,
-      plot_args = gd_plot_args,
-      ploidy_table = CreatePloidyTableFromPed.out
+  # Call GenomicDisorderCNVs with case + reference panel data.
+  # Skipped in trio de novo mode: GD consumes the merged depth matrix (which
+  # would now include parent samples) while its BAF matrix only covers the
+  # case + reference panel, an unvalidated combination; GD genomic-disorder
+  # CNVs are consequently absent from trio-mode final_vcf (run single-sample
+  # mode for GD calls). See docs/execution/single.md.
+  if (!is_trio_denovo) {
+    call CallGenomicDisorderCNVs.CallGenomicDisorderCNVs as GD {
+      input:
+        batch = batch,
+        baf_matrix = ConcatBafCase.merged_baf,
+        high_res_rd_matrix = GatherBatchEvidence.merged_bincov,
+        reference_dict = reference_dict,
+        reference_fasta = reference_fasta,
+        gd_table = gd_table,
+        segdup_bed = segdup_bed,
+        centromere_bed = centromere_bed,
+        acrocentric_arm_bed = acrocentric_arm_bed,
+        custom_mask_bed = custom_mask_bed,
+        hard_inclusion_bed = hard_inclusion_bed,
+        flank_exclusion_intervals = select_first([flank_exclusion_intervals, [segdup_bed]]),
+        par_bed = par_bed,
+        gaps_bed = gaps_bed,
+        gtf = gtf,
+        truth_table = truth_table,
+        rebinned_interval_size = rebinned_interval_size,
+        sv_pipeline_docker = sv_pipeline_docker,
+        gatk_docker = gatk_docker,
+        preprocess_args = gd_preprocess_args,
+        infer_args = gd_infer_args,
+        call_args = gd_call_args,
+        eval_args = gd_eval_args,
+        plot_args = gd_plot_args,
+        ploidy_table = CreatePloidyTableFromPed.out
+    }
   }
 
   # Integrate GD calls into the filtered VCF
@@ -876,7 +1084,7 @@ workflow GATKSVPipelineSingleSample {
         vcf_index = FilterSample.out + ".tbi",
         prefix = sample_id,
         sample_id = sample_id,
-        gd_output_tarballs = [GD.gd_output_tarball],
+        gd_output_tarballs = select_all([GD.gd_output_tarball]),
         ploidy_tables = [CreatePloidyTableFromPed.out],
         gd_table = gd_table,
         par_bed = par_bed,
@@ -1042,60 +1250,60 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_exclude_intervals_pesr=runtime_attr_exclude_intervals_pesr_cluster_batch
   }
 
-  # Pull out clustered calls from this sample only
-  call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDepth {
+  # Pull out clustered calls from the case (and provided parents in trio de novo mode)
+  call SingleSampleFiltering.FilterVcfBySamplesGenotypeAndAddEvidenceAnnotation as FilterDepth {
     input :
       vcf_gz=ClusterBatch.clustered_depth_vcf,
-      sample_id=sample_id,
+      samples_list=trio_samples_list,
       evidence="RD",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_filter_vcf_by_id
   }
   if (use_dragen && defined(dragen_vcf)) {
-    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDragen {
+    call SingleSampleFiltering.FilterVcfBySamplesGenotypeAndAddEvidenceAnnotation as FilterDragen {
         input :
             vcf_gz=select_first([ClusterBatch.clustered_dragen_vcf]),
-            sample_id=sample_id,
+            samples_list=trio_samples_list,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
             runtime_attr_override=runtime_attr_filter_vcf_by_id
     }
   }
   if (use_manta) {
-    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterManta {
+    call SingleSampleFiltering.FilterVcfBySamplesGenotypeAndAddEvidenceAnnotation as FilterManta {
         input :
             vcf_gz=select_first([ClusterBatch.clustered_manta_vcf]),
-            sample_id=sample_id,
+            samples_list=trio_samples_list,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
             runtime_attr_override=runtime_attr_filter_vcf_by_id
     }
   }
   if (use_melt) {
-    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterMelt {
+    call SingleSampleFiltering.FilterVcfBySamplesGenotypeAndAddEvidenceAnnotation as FilterMelt {
         input :
             vcf_gz=select_first([ClusterBatch.clustered_melt_vcf]),
-            sample_id=sample_id,
+            samples_list=trio_samples_list,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
             runtime_attr_override=runtime_attr_filter_vcf_by_id
     }
   }
   if (use_scramble) {
-    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterScramble {
+    call SingleSampleFiltering.FilterVcfBySamplesGenotypeAndAddEvidenceAnnotation as FilterScramble {
         input :
             vcf_gz=select_first([ClusterBatch.clustered_scramble_vcf]),
-            sample_id=sample_id,
+            samples_list=trio_samples_list,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
             runtime_attr_override=runtime_attr_filter_vcf_by_id
     }
   }
   if (use_wham) {
-    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterWham {
+    call SingleSampleFiltering.FilterVcfBySamplesGenotypeAndAddEvidenceAnnotation as FilterWham {
         input :
             vcf_gz=select_first([ClusterBatch.clustered_wham_vcf]),
-            sample_id=sample_id,
+            samples_list=trio_samples_list,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
             runtime_attr_override=runtime_attr_filter_vcf_by_id
@@ -1230,7 +1438,7 @@ workflow GATKSVPipelineSingleSample {
       genotyped_pesr_vcf=SeparateDepthPesr.pesr_vcf,
       allosome_file=allosome_file,
       merged_famfile=combined_ped_file,
-      case_sample=sample_id,
+      proband_samples=trio_samples,
       sv_pipeline_docker=sv_pipeline_docker
   }
 
@@ -1397,6 +1605,9 @@ workflow GATKSVPipelineSingleSample {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
+  # Case-specific diagnostic: large depth calls that are unique (absent from
+  # the reference panel) and not genotyped alt in the case. Runs in both
+  # modes (it is a case-only diagnostic, but downstream metrics consume it).
   call SingleSampleFiltering.GetUniqueNonGenotypedDepthCalls {
     input:
       vcf_gz=select_first([MakeCohortVcf.complex_genotype_vcf]),
@@ -1406,17 +1617,39 @@ workflow GATKSVPipelineSingleSample {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call SingleSampleFiltering.FilterVcfForCaseSampleGenotype {
-    input:
-      vcf_gz=FilterVcfDepthLt5kb.out,
-      sample_id=sample_id,
-      sv_base_mini_docker=sv_base_mini_docker
+  # Case-only filtering is skipped in trio de novo mode: the call set retains
+  # all variants across case + mother + father. Both branches run the single
+  # genotype-filter task below, aliased so that the call names (and therefore
+  # the output references) stay as they were; outside trio mode
+  # trio_samples_list holds exactly one line, the case sample.
+  if (!is_trio_denovo) {
+    call SingleSampleFiltering.FilterVcfForTrioSamplesGenotype as FilterVcfForCaseSampleGenotype {
+      input:
+        vcf_gz=FilterVcfDepthLt5kb.out,
+        samples_list=trio_samples_list,
+        sv_base_mini_docker=sv_base_mini_docker
+    }
   }
 
+  if (is_trio_denovo) {
+    # Keeps the MULTIALLELIC cleanup but retains variants called in ANY trio
+    # member.
+    call SingleSampleFiltering.FilterVcfForTrioSamplesGenotype as FilterVcfForTrioSamplesGenotype {
+      input:
+        vcf_gz=FilterVcfDepthLt5kb.out,
+        samples_list=trio_samples_list,
+        sv_base_mini_docker=sv_base_mini_docker
+    }
+  }
+
+  # Exactly one of the two aliased calls runs, so a select_first chain (the same
+  # shape main uses for its mutually-exclusive merge pair) avoids evaluating a
+  # select_first over the call the skipped branch never ran.
+  File final_calls_vcf = select_first([FilterVcfForTrioSamplesGenotype.out, FilterVcfForCaseSampleGenotype.out])
 
   call rcv.RefineComplexVariants {
     input:
-      vcf=FilterVcfForCaseSampleGenotype.out,
+      vcf=final_calls_vcf,
       prefix=sample_id,
       batch_name_list=[sample_id],
       batch_sample_lists=[GetSampleIdsFromVcf.out_file],
@@ -1564,6 +1797,22 @@ workflow GATKSVPipelineSingleSample {
     }
   }
 
+  # Mode of inheritance annotation: final step in trio de novo mode only. It runs
+  # after breakend cleanup and the optional STRipy merge so that every variant in
+  # the final VCF (case + mother + father) carries the MOI / MOI_CONFIDENCE INFO fields.
+  if (is_trio_denovo) {
+    call moi.AnnotateModeOfInheritance as AnnotateModeOfInheritance {
+      input:
+        vcf = select_first([MergeStripyVcf.out, UpdateBreakendRepresentationAndRemoveFilters.out]),
+        prefix = sample_id + ".moi",
+        case_sample = sample_id,
+        mother_sample = mother_sample_id,
+        father_sample = father_sample_id,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_moi
+    }
+  }
+
   # SingleSampleMetrics does not currently tolerate STRipy records, so metrics and QC intentionally use the
   # final-cleanup VCF before optional STRipy records are appended to the workflow's final_vcf output.
   call SingleSampleMetrics.SingleSampleMetrics {
@@ -1575,11 +1824,12 @@ workflow GATKSVPipelineSingleSample {
       sample_pe = case_pe_file,
       sample_sr = case_sr_file,
       sample_counts = case_counts_file,
-      cleaned_vcf = FilterVcfForCaseSampleGenotype.out,
+      cleaned_vcf = final_calls_vcf,
       final_vcf = UpdateBreakendRepresentationAndRemoveFilters.out,
       genotyped_pesr_vcf = ConvertCNVsWithoutDepthSupportToBNDs.out_vcf,
       genotyped_depth_vcf = FilterDepth.out,
       non_genotyped_unique_depth_calls_vcf = GetUniqueNonGenotypedDepthCalls.out,
+      extra_samples = if is_trio_denovo then select_all([mother_sample_id, father_sample_id]) else [],
       contig_list = primary_contigs_list,
       linux_docker = linux_docker,
       sv_pipeline_docker = sv_pipeline_docker
@@ -1594,9 +1844,11 @@ workflow GATKSVPipelineSingleSample {
   }
 
   output {
-    # Final calls
-    File final_vcf = select_first([MergeStripyVcf.out, UpdateBreakendRepresentationAndRemoveFilters.out])
-    File final_vcf_idx = select_first([MergeStripyVcf.out_index, UpdateBreakendRepresentationAndRemoveFilters.out_idx])
+    # Final calls (MOI-annotated in trio de novo mode). MOI's outputs are defined
+    # exactly when is_trio_denovo, so listing them first reproduces the ternary
+    # without a select_first over a conditionally-skipped call.
+    File final_vcf = select_first([AnnotateModeOfInheritance.out, MergeStripyVcf.out, UpdateBreakendRepresentationAndRemoveFilters.out])
+    File final_vcf_idx = select_first([AnnotateModeOfInheritance.out_index, MergeStripyVcf.out_index, UpdateBreakendRepresentationAndRemoveFilters.out_idx])
 
     # These files contain events reported in the internal VCF representation
     # They are less VCF-spec compliant but may be useful if components of the pipeline need to be re-run
@@ -1623,8 +1875,18 @@ workflow GATKSVPipelineSingleSample {
     File non_genotyped_unique_depth_calls = GetUniqueNonGenotypedDepthCalls.out
     File non_genotyped_unique_depth_calls_idx = GetUniqueNonGenotypedDepthCalls.out_idx
 
+    # Mode of inheritance summary (trio de novo mode only). Referenced directly,
+    # NOT via select_first: AnnotateModeOfInheritance sits inside `if (is_trio_denovo)`,
+    # so in single-case mode its outputs resolve to None as soon as the conditional is
+    # skipped, and select_first([None]) fails the whole workflow before any task runs.
+    File? moi_summary = AnnotateModeOfInheritance.moi_summary
+
+    # Working pedigree: reference panel + case (single-case mode) or reference
+    # panel + case + provided parents (trio de novo mode)
+    File working_ped = select_first([GatherBatchEvidence.combined_ped_file])
+
     # Genomic Disorder CNV output (tarball containing all GD results)
-    File gd_output_tarball = GD.gd_output_tarball
+    File? gd_output_tarball = GD.gd_output_tarball  # null in trio de novo mode (GD skipped)
   }
 }
 
@@ -1690,5 +1952,163 @@ task ConcatBaf {
     preemptible: 3
     maxRetries: 1
     noAddress: true
+  }
+}
+
+# Fail-fast validation of trio de novo input combinations.
+# Emits the input sample list unchanged only if all checks pass; every
+# downstream consumer of trio_samples_list depends on this file, so the task
+# is always executed.
+#
+# The sample list is materialized inside this task on purpose. A workflow-scope
+# write_lines() cannot be evaluated on a PAPIv2 backend, which has no local
+# filesystem to write the temp file to:
+#
+#   Failed to evaluate 'raw_trio_samples_list': Evaluating write_lines(...)
+#   failed: Could not build the path "write_lines_<hash>.tmp". It may refer to
+#   a filesystem not supported by this instance of Cromwell. Supported
+#   filesystems are: DRS, Google Cloud Storage, HTTP.
+#
+# Local Cromwell (and miniwdl) accept it, so the failure only appears on Terra.
+# The parents' CRAMs are deliberately NOT inputs of this task: it only needs
+# to know whether they were supplied. A File input is localized (downloaded)
+# into the task's working directory before the command runs, so declaring
+# mother_cram/father_cram here copied both whole-genome CRAMs - tens of GB -
+# onto the task's 10 GB local disk. The job then died in localization before
+# the command ever started, with no stdout/stderr:
+#
+#   Task ...ValidateTrioInputs:NA:2 failed. The job was stopped before the
+#   command finished. Check GCP Batch job logs for details.
+#
+# Pass Booleans computed at the call site instead; nothing is localized.
+task ValidateTrioInputs {
+  input {
+    Array[String] trio_samples # case first, then mother, father
+    String case_sample_id
+    String? mother_sample_id
+    Boolean has_mother_cram
+    String? father_sample_id
+    Boolean has_father_cram
+    Boolean is_trio_denovo
+    File? dragen_vcf
+    File? case_manta_vcf
+    File? case_melt_vcf
+    File? case_scramble_vcf
+    File? case_wham_vcf
+    Boolean use_manta
+    Boolean use_melt
+    Boolean use_scramble
+    Boolean use_wham
+    String? manta_docker
+    String? melt_docker
+    String? scramble_docker
+    String? wham_docker
+    String sv_base_mini_docker
+  }
+
+  command <<<
+    set -euo pipefail
+
+    # Materialize the trio sample list here (case first); see the task comment
+    # for why this must not be a workflow-scope write_lines().
+    cat ~{write_lines(trio_samples)} > trio_samples.list
+
+    errors=0
+    err() { echo "ERROR: $1" >&2; errors=1; }
+
+    if [ -z "~{case_sample_id}" ]; then
+      err "case sample_id must not be empty"
+    fi
+
+    # Each parent CRAM and its sample id must be provided together
+    if [ "~{has_mother_cram}" != "~{defined(mother_sample_id)}" ]; then
+      err "mother_cram and mother_sample_id must be provided together"
+    fi
+    if [ "~{has_father_cram}" != "~{defined(father_sample_id)}" ]; then
+      err "father_cram and father_sample_id must be provided together"
+    fi
+
+    # Sample ids must be unique across case + mother + father
+    if ! awk 'seen[$0]++ { exit 1 }' trio_samples.list; then
+      err "duplicate sample ids across case + mother + father: $(paste -sd, trio_samples.list)"
+    fi
+
+    # Enabled callers must be runnable: either the caller docker or a
+    # precomputed case VCF is required (previously enforced implicitly by a
+    # select_first crash on the caller VCF array declaration).
+    if [ "~{use_manta}" = "true" ] && [ "~{defined(manta_docker)}" != "true" ] && [ "~{defined(case_manta_vcf)}" != "true" ]; then
+      err "use_manta requires manta_docker or case_manta_vcf"
+    fi
+    if [ "~{use_melt}" = "true" ] && [ "~{defined(melt_docker)}" != "true" ] && [ "~{defined(case_melt_vcf)}" != "true" ]; then
+      err "use_melt requires melt_docker or case_melt_vcf"
+    fi
+    if [ "~{use_scramble}" = "true" ] && [ "~{defined(scramble_docker)}" != "true" ] && [ "~{defined(case_scramble_vcf)}" != "true" ]; then
+      err "use_scramble requires scramble_docker or case_scramble_vcf"
+    fi
+    if [ "~{use_wham}" = "true" ] && [ "~{defined(wham_docker)}" != "true" ] && [ "~{defined(case_wham_vcf)}" != "true" ]; then
+      err "use_wham requires wham_docker or case_wham_vcf"
+    fi
+    # Scramble realigns an existing SV call set: it needs Dragen or Manta calls
+    # for the sample (GatherSampleEvidence: select_first([dragen_vcf, Manta.vcf, manta_vcf_input])).
+    if [ "~{use_scramble}" = "true" ] && [ "~{defined(dragen_vcf)}" != "true" ] && [ "~{defined(case_manta_vcf)}" != "true" ] && ! ( [ "~{use_manta}" = "true" ] && [ "~{defined(manta_docker)}" = "true" ] ); then
+      err "use_scramble requires input SV calls from Dragen (dragen_vcf) or Manta (manta_docker with use_manta, or case_manta_vcf)"
+    fi
+
+    if [ "~{is_trio_denovo}" = "true" ]; then
+      # Precomputed case caller calls would leave the provided parents without
+      # those callers and break the per-caller sample<->VCF array alignment
+      # that call preprocessing requires; in trio mode every member must be
+      # called from BAM/CRAM with the same callers.
+      if [ "~{defined(dragen_vcf)}" = "true" ]; then
+        err "trio de novo mode does not support precomputed dragen_vcf calls; provide parent CRAMs only"
+      fi
+      if [ "~{defined(case_manta_vcf)}" = "true" ]; then
+        err "trio de novo mode does not support precomputed case_manta_vcf calls (parents would lack Manta calls)"
+      fi
+      if [ "~{defined(case_melt_vcf)}" = "true" ]; then
+        err "trio de novo mode does not support precomputed case_melt_vcf calls (parents would lack MELT calls)"
+      fi
+      if [ "~{defined(case_scramble_vcf)}" = "true" ]; then
+        err "trio de novo mode does not support precomputed case_scramble_vcf calls (parents would lack Scramble calls)"
+      fi
+      if [ "~{defined(case_wham_vcf)}" = "true" ]; then
+        err "trio de novo mode does not support precomputed case_wham_vcf calls (parents would lack WHAM calls)"
+      fi
+      # All enabled PESR callers must run on every trio member, so their
+      # dockers are required in trio mode.
+      if [ "~{use_manta}" = "true" ] && [ "~{defined(manta_docker)}" != "true" ]; then
+        err "trio de novo mode requires manta_docker when use_manta is true"
+      fi
+      # Parents have no precomputed calls and no Dragen support in trio mode,
+      # so Scramble's required input call set can only come from Manta.
+      if [ "~{use_scramble}" = "true" ] && [ "~{use_manta}" != "true" ]; then
+        err "trio de novo mode requires use_manta when use_scramble is true (parent Scramble calls need a Manta input VCF)"
+      fi
+      if [ "~{use_melt}" = "true" ] && [ "~{defined(melt_docker)}" != "true" ]; then
+        err "trio de novo mode requires melt_docker when use_melt is true"
+      fi
+      if [ "~{use_scramble}" = "true" ] && [ "~{defined(scramble_docker)}" != "true" ]; then
+        err "trio de novo mode requires scramble_docker when use_scramble is true"
+      fi
+      if [ "~{use_wham}" = "true" ] && [ "~{defined(wham_docker)}" != "true" ]; then
+        err "trio de novo mode requires wham_docker when use_wham is true"
+      fi
+    fi
+
+    if [ "$errors" -ne 0 ]; then exit 1; fi
+    cp trio_samples.list validated_samples.list
+  >>>
+
+  output {
+    File validated_samples_list = "validated_samples.list"
+  }
+
+  runtime {
+    cpu: 1
+    memory: "2 GiB"
+    disks: "local-disk 10 HDD"
+    docker: sv_base_mini_docker
+    preemptible: 3
+    maxRetries: 1
   }
 }
