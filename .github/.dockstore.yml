@@ -181,6 +181,16 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: MakeSlCutoffOptimizationTable
+    primaryDescriptorPath: /wdl/MakeSlCutoffOptimizationTable.wdl
+    filters:
+      branches:
+        - main
+        - genotype-filtering-notebook-infile
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: FilterGenotypes
     primaryDescriptorPath: /wdl/FilterGenotypes.wdl
     filters:

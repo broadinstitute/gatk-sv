@@ -1,0 +1,22 @@
+{
+  "MakeSlCutoffOptimizationTable.vcfs": [{{ test_batch.aou_recalibrated_vcf | tojson }}],
+  "MakeSlCutoffOptimizationTable.truth_json": {{ test_batch.recalibrate_gq_truth_json | tojson }},
+  "MakeSlCutoffOptimizationTable.output_prefix": {{ test_batch.name | tojson }},
+
+  "MakeSlCutoffOptimizationTable.region_names": ["SD", "RM", "SR"],
+  "MakeSlCutoffOptimizationTable.region_files": [
+    {{ reference_resources.recalibrate_gq_genome_track_segdup | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_repeatmasker | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_simple_repeats | tojson }}
+  ],
+  "MakeSlCutoffOptimizationTable.region_file_indexes": [
+    {{ reference_resources.recalibrate_gq_genome_track_segdup_index | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_repeatmasker_index | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_simple_repeats_index | tojson }}
+  ],
+  "MakeSlCutoffOptimizationTable.reference_dict": {{ reference_resources.reference_dict | tojson }},
+
+  "MakeSlCutoffOptimizationTable.linux_docker": {{ dockers.linux_docker | tojson }},
+  "MakeSlCutoffOptimizationTable.gatk_docker": {{ dockers.gatk_docker | tojson }},
+  "MakeSlCutoffOptimizationTable.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
+}
