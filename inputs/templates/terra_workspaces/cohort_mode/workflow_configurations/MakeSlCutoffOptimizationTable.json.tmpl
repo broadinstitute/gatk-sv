@@ -3,6 +3,20 @@
   "MakeSlCutoffOptimizationTable.truth_json": "${this.gq_recalibrator_training_json}",
   "MakeSlCutoffOptimizationTable.output_prefix": "${this.sample_set_set_id}",
 
+  "MakeSlCutoffOptimizationTable.region_names": ["SD", "RM", "SR"],
+  "MakeSlCutoffOptimizationTable.region_files": [
+    {{ reference_resources.recalibrate_gq_genome_track_segdup | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_repeatmasker | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_simple_repeats | tojson }}
+  ],
+  "MakeSlCutoffOptimizationTable.region_file_indexes": [
+    {{ reference_resources.recalibrate_gq_genome_track_segdup_index | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_repeatmasker_index | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_simple_repeats_index | tojson }}
+  ],
+  "MakeSlCutoffOptimizationTable.reference_dict": "${workspace.reference_dict}",
+
   "MakeSlCutoffOptimizationTable.linux_docker": "${workspace.linux_docker}",
+  "MakeSlCutoffOptimizationTable.gatk_docker": "${workspace.gatk_docker}",
   "MakeSlCutoffOptimizationTable.sv_pipeline_docker": "${workspace.sv_pipeline_docker}"
 }

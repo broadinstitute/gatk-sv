@@ -2,11 +2,13 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as tasks_cohort
+import "GenerateBatchMetrics.wdl" as gbm
 
 workflow MakeSlCutoffOptimizationTable {
 
   input {
     Array[File] vcfs
+    Array[File]? vcf_indexes  # Defaults to "<vcf>.tbi"; only used if region_names is non-empty
     File truth_json
     String output_prefix
 
@@ -17,24 +19,54 @@ workflow MakeSlCutoffOptimizationTable {
 
     String? make_vcf_table_args
 
+    # Genomic context annotation with GATK SVRegionOverlap. Skipped if region_names is empty.
+    # For each track NAME, columns NUM_END_OVERLAPS_<NAME> and OVERLAP_FRAC_<NAME> are appended to the tables
+    # (NAME is converted to upper-case by the tool).
+    Array[File] region_files = []
+    Array[File] region_file_indexes = []
+    Array[String] region_names = []
+    File? reference_dict  # Required if region_names is non-empty
+    String? gatk_docker   # Required if region_names is non-empty
+
     String sv_pipeline_docker
     String linux_docker
 
+    RuntimeAttr? runtime_attr_region_overlap
     RuntimeAttr? runtime_attr_make_vcf_table
     RuntimeAttr? runtime_attr_concat_vcf_tables
     RuntimeAttr? runtime_attr_concat_class_label_sl_tables
     RuntimeAttr? runtime_attr_concat_downsampled_vcf_tables
   }
 
+  Boolean annotate_regions = length(region_names) > 0
+
   scatter (i in range(length(vcfs))) {
+    if (annotate_regions) {
+      File default_vcf_index = vcfs[i] + ".tbi"
+      File vcf_index_ = if defined(vcf_indexes) then select_first([vcf_indexes])[i] else default_vcf_index
+      call gbm.SVRegionOverlap {
+        input:
+          vcf = vcfs[i],
+          vcf_index = vcf_index_,
+          reference_dict = select_first([reference_dict]),
+          output_prefix = "~{output_prefix}.region_overlap_shard_~{i}",
+          region_files = region_files,
+          region_file_indexes = region_file_indexes,
+          region_names = region_names,
+          gatk_docker = select_first([gatk_docker]),
+          runtime_attr_override = runtime_attr_region_overlap
+      }
+    }
+
     call MakeVcfTable {
       input:
-        vcf = vcfs[i],
+        vcf = select_first([SVRegionOverlap.out, vcfs[i]]),
         truth_json = truth_json,
         sample_list = sample_list,
         labeled_only = labeled_only,
         downsample_factor = downsample_factor,
         args = make_vcf_table_args,
+        region_names = region_names,
         output_prefix = "~{output_prefix}.vcf_table_shard_~{i}",
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_make_vcf_table
@@ -86,6 +118,7 @@ task MakeVcfTable {
     Boolean labeled_only
     Int? downsample_factor
     String? args
+    Array[String] region_names = []
     String output_prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -123,12 +156,61 @@ task MakeVcfTable {
       TRUTH_JSON="truth.subset.json"
     fi
 
+    # Appends SVRegionOverlap INFO fields to a table, matched on the VID column
+    cat > add_region_overlap_columns.py <<'CODE'
+    import gzip
+    import math
+    import sys
+    import pysam
+
+    vcf_path, table_path, out_path = sys.argv[1:4]
+    names = [n.upper() for n in sys.argv[4:]]
+    fields = []
+    for n in names:
+        fields += ["NUM_END_OVERLAPS_" + n, "OVERLAP_FRAC_" + n]
+
+    def fmt(val):
+        if val is None:
+            return "None"
+        if isinstance(val, float) and math.isnan(val):
+            return "NaN"
+        if isinstance(val, tuple):
+            return ",".join(str(x) for x in val)
+        return str(val)
+
+    values = dict()
+    with pysam.VariantFile(vcf_path) as vcf:
+        missing = [f for f in fields if f not in vcf.header.info]
+        if missing:
+            sys.stderr.write("INFO fields not found in VCF header: " + ", ".join(missing) + "\n")
+            sys.exit(1)
+        for r in vcf:
+            values[r.id] = [fmt(r.info.get(f, None)) for f in fields]
+
+    default = ["None"] * len(fields)
+    with gzip.open(table_path, "rt") as fin, gzip.open(out_path, "wt") as fout:
+        header = fin.readline().rstrip("\n").split("\t")
+        vid_col = header.index("VID")
+        fout.write("\t".join(header + fields) + "\n")
+        for line in fin:
+            tokens = line.rstrip("\n").split("\t")
+            fout.write("\t".join(tokens + values.get(tokens[vid_col], default)) + "\n")
+    CODE
+
+    function add_region_overlap_columns() {
+      if ~{length(region_names) > 0}; then
+        python3 add_region_overlap_columns.py ~{vcf} "$1" "$1.tmp.gz" ~{sep=" " region_names}
+        mv "$1.tmp.gz" "$1"
+      fi
+    }
+
     python /opt/sv-pipeline/scripts/make_sl_table.py \
       --vcf ~{vcf} \
       --truth-json $TRUTH_JSON \
       --out ~{output_prefix}.tsv.gz \
       ~{if labeled_only then "--labeled-only" else ""} \
       ~{args}
+    add_region_overlap_columns ~{output_prefix}.tsv.gz
 
     zcat ~{output_prefix}.tsv.gz \
       | awk -F'\t' -v OFS='\t' '
@@ -153,6 +235,7 @@ task MakeVcfTable {
         --downsample-factor ~{default="1" downsample_factor} \
         ~{if labeled_only then "--labeled-only" else ""} \
         ~{args}
+      add_region_overlap_columns ~{output_prefix}.downsampled.tsv.gz
     fi
   >>>
   runtime {
