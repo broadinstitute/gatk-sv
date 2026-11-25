@@ -8,6 +8,10 @@ import "Structs.wdl"
 # from the mosaic carriers' batches; germline carriers do too, plus the fewest
 # extra batches needed to reach n_germline_carriers (or all that exist).
 #
+# mosaic_samples may be left empty: the plot then shows only germline carriers
+# (drawn from the fewest batches holding enough of them) and non-carriers (from
+# those same batches), with the same ploidy rule and no Mosaic legend line.
+#
 # Germline carriers include those of the DEL and DUP at the target locus (the
 # partner GD_ID differs only in "DEL"/"DUP"), plotted in one color on one
 # legend line with separate DEL and DUP counts. n_germline_carriers is the total
@@ -58,7 +62,7 @@ import "Structs.wdl"
 workflow PlotGDMosaicDepth {
   input {
     String gd_id
-    Array[String] mosaic_samples
+    Array[String] mosaic_samples = []
     File? include_samples
 
     Array[String] batches
