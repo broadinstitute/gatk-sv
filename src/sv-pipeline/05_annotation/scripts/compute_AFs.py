@@ -56,11 +56,11 @@ def update_sex_freqs(record, pop=None):
         f_prefix = 'FEMALE'
 
     m_an = record.info.get('AN_' + m_prefix, 0)
-    m_ac = sum(record.info.get('AC_' + m_prefix, 0))
+    m_ac = sum(record.info.get('AC_' + m_prefix, (0,)))
     # m_af = sum(record.info.get('AF_' + m_prefix, 0))
 
     f_an = record.info.get('AN_' + f_prefix , 0)
-    f_ac = sum(record.info.get('AC_' + f_prefix , 0))
+    f_ac = sum(record.info.get('AC_' + f_prefix , (0,)))
     # f_af = sum(record.info.get('AF_' + f_prefix , 0))
 
     adj_an = m_an + f_an
